@@ -812,8 +812,6 @@ private struct StopCard: View {
 
 // MARK: - MapLibre
 
-/// The map file's extent (MAP_BOUNDS in apps/api/src/map.ts), with room to spare.
-private let panLimit = (west: 103.735, south: 1.26, east: 103.85, north: 1.352)
 /// Further than this from campus (in degrees, about 3 km), the map opens on campus, not on you.
 private let nearCampusDeg = 0.027
 
@@ -859,7 +857,10 @@ private struct CampusMapView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> MLNMapView {
         let view = SizedMapView(frame: .zero, styleURL: style)
-        view.sized = { [weak coordinator = context.coordinator] in coordinator?.frameCampus() }
+        view.sized = { [weak coordinator = context.coordinator] in
+            coordinator?.frameCampus()
+            coordinator?.keepOnMap()
+        }
         view.delegate = context.coordinator
         view.compass.isHidden = true
         view.zoomControls.isHidden = true
@@ -948,10 +949,37 @@ private struct CampusMapView: NSViewRepresentable {
             Task { await map.tilesFailed(failed) }
         }
 
-        /// Never far off campus: the map file ends a little way out.
+        /// The window stays on the street map (PanLimit): a drag off it is
+        /// refused. A zoom goes ahead, and one out by an edge is brought back
+        /// once it ends (keepOnMap), as is a drag that heads back on.
         func mapView(_ mapView: MLNMapView, shouldChangeFrom oldCamera: MLNMapCamera, to newCamera: MLNMapCamera) -> Bool {
-            let c = newCamera.centerCoordinate
-            return c.longitude > panLimit.west && c.longitude < panLimit.east && c.latitude > panLimit.south && c.latitude < panLimit.north
+            let zoom = mapView.zoomLevel + log2(oldCamera.altitude / newCamera.altitude)
+            if abs(zoom - mapView.zoomLevel) > 0.001 { return true }
+            let box = centreBox(mapView, zoom: zoom)
+            let off = offBy(newCamera.centerCoordinate, box)
+            return off == 0 || off < offBy(oldCamera.centerCoordinate, box)
+        }
+
+        func mapView(_ mapView: MLNMapView, regionDidChangeAnimated animated: Bool) { keepOnMap() }
+
+        /// Back onto the street map after a zoom out by its edge or a bigger window,
+        /// and no further out than the window full of map.
+        func keepOnMap() {
+            guard let view, view.bounds.width > 0, view.bounds.height > 0 else { return }
+            view.minimumZoomLevel = max(13, PanLimit.minZoom(width: view.bounds.width, height: view.bounds.height))
+            let box = centreBox(view, zoom: view.zoomLevel)
+            let c = view.centerCoordinate
+            guard offBy(c, box) > 1e-9 else { return }
+            view.setCenter(CLLocationCoordinate2D(latitude: min(max(c.latitude, box[1]), box[3]), longitude: min(max(c.longitude, box[0]), box[2])), animated: true)
+        }
+
+        private func centreBox(_ view: MLNMapView, zoom: Double) -> [Double] {
+            PanLimit.centre(width: view.bounds.width, height: view.bounds.height, zoom: zoom)
+        }
+
+        /// How far (in degrees, the larger way) `c` is outside `box`; 0 inside it.
+        private func offBy(_ c: CLLocationCoordinate2D, _ box: [Double]) -> Double {
+            max(box[0] - c.longitude, c.longitude - box[2], box[1] - c.latitude, c.latitude - box[3], 0)
         }
 
         // MARK: layers

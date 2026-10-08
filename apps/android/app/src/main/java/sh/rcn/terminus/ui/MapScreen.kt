@@ -49,6 +49,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.LongState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -147,6 +148,7 @@ import sh.rcn.terminus.Lang
 import sh.rcn.terminus.LiveBus
 import sh.rcn.terminus.Locator
 import sh.rcn.terminus.MapGeoJson
+import sh.rcn.terminus.PanLimit
 import sh.rcn.terminus.MapStop
 import sh.rcn.terminus.Quiet
 import sh.rcn.terminus.R
@@ -154,6 +156,8 @@ import sh.rcn.terminus.Slides
 import sh.rcn.terminus.Spoken
 import sh.rcn.terminus.BusStrip
 import kotlin.math.abs
+import kotlin.math.floor
+import kotlin.math.max
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.gestures.Orientation
@@ -162,8 +166,6 @@ import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.layout.layout
 
-/** The map file's extent (MAP_BOUNDS in apps/api/src/map.ts), with room to spare. */
-private val PAN_LIMIT = BoundingBox(west = 103.735, south = 1.26, east = 103.85, north = 1.352)
 /** Further than this from campus (in degrees, about 3 km), the map opens on campus, not on you. */
 private const val NEAR_CAMPUS_DEG = 0.027
 
@@ -476,13 +478,27 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
     val mapLabel = stringResource(R.string.a11y_map)
     val listLabel = stringResource(R.string.a11y_show_list)
     val openStop = (ui.sheet as? MapSheet.Stop)?.code
+    // The screen stays on the street map (PanLimit). Worked out again as the
+    // zoom changes, rounded down to a 16th: never past the edge, at the cost
+    // of a few pixels short of it.
+    val limits by remember(state) {
+        derivedStateOf {
+            val view = state.viewport
+            val w = view?.size?.width?.value?.toDouble() ?: 0.0
+            val h = view?.size?.height?.value?.toDouble() ?: 0.0
+            if (view == null || w <= 0 || h <= 0) return@derivedStateOf CameraConstraints(minZoom = 13.0, maxZoom = 19.0, boundingBox = box(PanLimit.EXTENT))
+            val min = max(13.0, PanLimit.minZoom(w, h))
+            val zoom = floor(max(min, view.cameraPosition.zoom) * 16) / 16
+            CameraConstraints(minZoom = min, maxZoom = 19.0, boundingBox = box(PanLimit.centre(w, h, zoom)))
+        }
+    }
     MaplibreMap(
         state = state,
         modifier = Modifier.fillMaxSize().semantics {
             contentDescription = mapLabel
             customActions = listOf(CustomAccessibilityAction(listLabel) { actions.showList(selected, openStop); true })
         },
-        cameraConstraints = CameraConstraints(minZoom = 13.0, maxZoom = 19.0, boundingBox = PAN_LIMIT),
+        cameraConstraints = limits,
         // A TextureView, not a SurfaceView: the map fades with the tab around it.
         uiOptions = MapUiOptions { renderMode = AndroidRenderMode.Texture },
         interactions = MapInteractions {

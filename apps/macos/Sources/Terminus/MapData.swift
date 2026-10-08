@@ -5,6 +5,41 @@ import Foundation
 // so it's tested without a map (MapDataTests); the same as the phone's
 // MapData.kt.
 
+/// How far the map pans and zooms out, so the window stays on the street
+/// map: past the map file's edge there's nothing to draw. MapLibre Native
+/// limits only the camera's centre, so the centre's box is the map less half
+/// the window on every side, and the map zooms out only until the window is
+/// full of it. Sizes in points, as the map's zoom counts them (512 a tile).
+/// The same as the phone's PanLimit; the web's map limits the whole screen itself.
+enum PanLimit {
+    /// The map file's extent (MAP_BOUNDS in apps/api/src/map.ts): west, south, east, north.
+    static let extent = [103.755, 1.28, 103.83, 1.332]
+    private static let tile = 512.0
+
+    /// The furthest out a `width` by `height` window can zoom and still be full of map.
+    static func minZoom(width: Double, height: Double) -> Double {
+        max(log2(width / (tile * (x(extent[2]) - x(extent[0])))), log2(height / (tile * (y(extent[1]) - y(extent[3])))))
+    }
+
+    /// [west, south, east, north] of where the centre may go at `zoom`; a point mid-map on a side the window is wider than.
+    static func centre(width: Double, height: Double, zoom: Double) -> [Double] {
+        let world = tile * pow(2, zoom)
+        let (west, east) = inset(x(extent[0]), x(extent[2]), by: width / 2 / world)
+        let (top, bottom) = inset(y(extent[3]), y(extent[1]), by: height / 2 / world)
+        return [lon(west), lat(bottom), lon(east), lat(top)]
+    }
+
+    private static func inset(_ a: Double, _ b: Double, by: Double) -> (Double, Double) {
+        b - a > 2 * by ? (a + by, b - by) : ((a + b) / 2, (a + b) / 2)
+    }
+
+    // Web Mercator, as a fraction of the world: x east, y south.
+    private static func x(_ lon: Double) -> Double { (lon + 180) / 360 }
+    private static func y(_ lat: Double) -> Double { (1 - log(tan(.pi / 4 + lat * .pi / 360)) / .pi) / 2 }
+    private static func lon(_ x: Double) -> Double { x * 360 - 180 }
+    private static func lat(_ y: Double) -> Double { atan(sinh(.pi * (1 - 2 * y))) * 180 / .pi }
+}
+
 /// A stop on the map, with the services that call there.
 struct MapStop: Hashable {
     let code: String
