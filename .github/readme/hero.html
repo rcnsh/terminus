@@ -1,0 +1,147 @@
+<!doctype html>
+<!--
+  The README's banner: every client at once, standing on the live campus map
+  under the app's sky (day in light mode, night in dark). Made from the real
+  screenshots in apps/web/public/assets/shots and .github/readme, in the
+  site's own fonts and sky colours (assets/sky.css).
+  Re-render after changing it or the screenshots:  node .github/readme/hero.mjs
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../apps/web/public/assets/site.css">
+<style>
+  @font-face { font-family: 'Inter'; font-weight: 400 700; src: url(../../apps/web/public/assets/fonts/inter-latin.woff2) format('woff2'); }
+  @font-face { font-family: 'Space Grotesk'; font-weight: 500 700; src: url(../../apps/web/public/assets/fonts/space-grotesk-latin.woff2) format('woff2'); }
+
+  /* The day sky (sky.css [data-sky="day"]) and, in dark mode, the night's. */
+  :root {
+    --s0: #5ea8e5; --s1: #8ec4ec; --s2: #c7e2f4; --s3: #e3f0f8; --h-far: #9fbcae; --h-tree: #4f6f58; --h-near: #c9d6c8;
+    --ink: #1c1917; --muted: #36312d; --accent: #9a3412; --chip: rgb(255 255 255 / 0.7); --chip-ink: #1c1917;
+    --shadow: rgb(28 25 23 / 0.35);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --s0: #121a33; --s1: #181a30; --s2: #24243a; --s3: #2e2a44; --h-far: #191826; --h-tree: #121110; --h-near: #1a1918;
+      --ink: #f5f3f0; --muted: #e7e5e4; --accent: #fb923c; --chip: rgb(0 0 0 / 0.45); --chip-ink: #f5f3f0;
+      --shadow: rgb(0 0 0 / 0.7);
+    }
+  }
+  html, body { margin: 0; width: 1280px; height: 720px; overflow: hidden; }
+  .hero {
+    position: relative; width: 1280px; height: 720px; overflow: hidden; color: var(--ink);
+    background: linear-gradient(var(--s0) 0, var(--s1) 26%, var(--s2) 40%, var(--s3) 47%);
+  }
+
+  /* The night: stars and the moon, hidden by day. */
+  .night { display: none; }
+  @media (prefers-color-scheme: dark) { .night { display: block; } }
+  .star { position: absolute; width: 2.4px; height: 2.4px; border-radius: 50%; background: #fff; }
+  .moon { position: absolute; top: 40px; left: 800px; width: 40px; height: 40px; border-radius: 50%; box-shadow: -11px 7px 0 0 #fde9c9; }
+
+  /* The ground: the real campus map with D2 picked, laid flat and running
+     back to the horizon. */
+  .ground {
+    position: absolute; left: 50%; bottom: -40px; width: 2000px; height: 760px; margin-left: -1000px;
+    transform-origin: 50% 100%; transform: perspective(900px) rotateX(52deg);
+    background: center 58% / 2000px auto no-repeat;
+    -webkit-mask-image: linear-gradient(transparent 0, #000 22%);
+  }
+  .ground { background-image: url(../../apps/web/public/assets/shots/map-light.webp); }
+  @media (prefers-color-scheme: dark) { .ground { background-image: url(../../apps/web/public/assets/shots/map-dark.webp); } }
+  .horizon { position: absolute; left: 0; top: 232px; width: 1280px; height: 110px; }
+  .horizon .far { fill: var(--h-far); }
+  .horizon .tree { fill: var(--h-tree); }
+  .horizon .near { fill: url(#fade); }
+
+  .copy { position: absolute; left: 72px; top: 52px; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand img { width: 40px; height: 40px; border-radius: 10px; }
+  .brand .wordmark { font-size: 1.75rem; color: var(--ink); }
+  .brand .wordmark b { color: var(--accent); }
+  h1 { margin: 22px 0 0; font: 700 3.6rem/1 var(--display); letter-spacing: -0.04em; }
+  h1 em { font-style: normal; color: var(--accent); }
+  .lede { margin: 12px 0 0; max-width: 400px; font: 500 1.05rem/1.5 var(--font); color: var(--muted); }
+
+  /* The clients, standing on the map. */
+  .thing { position: absolute; }
+  .thing .shot { display: block; box-shadow: 0 30px 60px -18px var(--shadow), 0 0 0 1px rgb(255 255 255 / 0.08); }
+  .thing::after {
+    content: ''; position: absolute; left: 8%; right: 8%; bottom: -26px; height: 26px; border-radius: 50%;
+    background: radial-gradient(closest-side, var(--shadow), transparent); z-index: -1;
+  }
+  .tag {
+    position: absolute; left: 50%; transform: translateX(-50%); white-space: nowrap; padding: 7px 13px; border-radius: 999px;
+    background: var(--chip); color: var(--chip-ink); font: 600 0.8rem/1 var(--font);
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  }
+  /* Just the widget: its card is 830x455 of the 900x563 shot, at 35,55. */
+  .home { left: 72px; top: 340px; width: 370px; height: 203px; }
+  .home .crop { width: 370px; height: 203px; overflow: hidden; border-radius: 22px; box-shadow: 0 30px 60px -18px var(--shadow); }
+  .home .shot { width: 401px; margin: -24.5px 0 0 -15.6px; box-shadow: none; }
+  .home .tag { bottom: -46px; }
+  .mac { left: 500px; top: 196px; width: 280px; }
+  .mac .shot { width: 280px; border-radius: 16px; }
+  .mac .tag { bottom: -46px; }
+  .phone { right: 110px; top: 60px; width: 250px; padding: 9px; border-radius: 46px; background: #0c0a09; }
+  .phone .shot { width: 100%; border-radius: 38px; box-shadow: none; }
+  .phone { box-shadow: 0 40px 80px -20px var(--shadow), 0 0 0 1px rgb(255 255 255 / 0.1) inset; }
+  .phone .tag { top: -38px; }
+  .thing .shot.dark { display: none; }
+  @media (prefers-color-scheme: dark) { .thing .shot.light { display: none; } .thing .shot.dark { display: block; } }
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="night">
+    <i class="moon"></i>
+    <i class="star" style="left:120px;top:30px"></i><i class="star" style="left:300px;top:22px"></i>
+    <i class="star" style="left:470px;top:40px;opacity:.6"></i><i class="star" style="left:640px;top:18px"></i>
+    <i class="star" style="left:700px;top:120px;opacity:.7"></i><i class="star" style="left:880px;top:34px;opacity:.5"></i>
+    <i class="star" style="left:540px;top:150px;opacity:.6"></i><i class="star" style="left:860px;top:190px"></i>
+    <i class="star" style="left:1240px;top:28px;opacity:.7"></i><i class="star" style="left:640px;top:230px;opacity:.5"></i>
+    <i class="star" style="left:30px;top:250px;opacity:.6"></i><i class="star" style="left:420px;top:262px;opacity:.5"></i>
+  </div>
+
+  <div class="ground"></div>
+  <svg class="horizon" viewBox="0 0 1280 110" preserveAspectRatio="none">
+    <defs><linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0.35" stop-color="var(--h-far)" stop-opacity="0.9"/><stop offset="1" stop-color="var(--h-far)" stop-opacity="0"/>
+    </linearGradient></defs>
+    <path class="far" d="M0 50C90 38 170 30 260 40S420 62 520 50 700 26 800 34 980 58 1080 46 1220 30 1280 36V70H0Z"/>
+    <path class="far" d="M360 46h18v-18h-18zM1010 50h14v-24h-14z"/>
+    <g class="tree">
+      <path d="M118 52v-14M98 38q20-12 40 0z"/><ellipse cx="118" cy="36" rx="22" ry="6"/><rect x="116" y="36" width="4" height="16"/>
+      <ellipse cx="452" cy="44" rx="18" ry="5"/><rect x="450" y="44" width="3.5" height="12"/>
+      <ellipse cx="926" cy="36" rx="22" ry="6"/><rect x="924" y="36" width="4" height="16"/>
+      <ellipse cx="1190" cy="34" rx="18" ry="5"/><rect x="1188" y="34" width="3.5" height="13"/>
+    </g>
+    <path class="near" d="M0 56C120 50 240 60 400 58S700 48 880 54 1160 62 1280 56V110H0Z"/>
+  </svg>
+
+  <div class="copy">
+    <div class="brand"><img src="../../apps/web/public/assets/mark.svg" alt=""><span class="wordmark">termi<b>nus</b></span></div>
+    <h1>Know when to <em>run</em>.</h1>
+    <p class="lede">Your NUS timetable in, one answer out: which shuttle, from which stop, and when to leave.</p>
+  </div>
+
+  <div class="thing home">
+    <div class="crop">
+      <img class="shot light" src="../../apps/web/public/assets/shots/widget-light.webp" alt="">
+      <img class="shot dark" src="../../apps/web/public/assets/shots/widget-dark.webp" alt="">
+    </div>
+    <span class="tag">On your home screen</span>
+  </div>
+  <div class="thing mac">
+    <img class="shot light" src="../../apps/web/public/assets/shots/mac-light.webp" alt="">
+    <img class="shot dark" src="../../apps/web/public/assets/shots/mac-dark.webp" alt="">
+    <span class="tag">In your menu bar</span>
+  </div>
+  <div class="thing phone">
+    <img class="shot light" src="now-light.webp" alt="">
+    <img class="shot dark" src="now-dark.webp" alt="">
+    <span class="tag">On the web, on any phone</span>
+  </div>
+</div>
+</body>
+</html>
