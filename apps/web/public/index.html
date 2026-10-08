@@ -96,11 +96,30 @@
   .after-hero > .section-title:first-child { margin-top: 0; }
   .lede-sm { color: var(--muted); margin-top: 8px; max-width: 36rem; }
 
-  /* What it does, each shown as the app shows it. */
-  .does { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 28px; }
-  .does > div { display: grid; grid-template-rows: auto 1fr; gap: 16px; padding: 18px; border-radius: 24px; background: var(--surface-2); }
+  /* Below the hero, the services' route lines run faintly behind the page,
+     as on a transit map: edge to edge, fading out at the top and bottom. */
+  body { overflow-x: clip; }
+  .after-hero { position: relative; isolation: isolate; }
+  .routes { position: absolute; z-index: -1; top: 40px; left: calc(50% - 50vw); width: 100vw; height: 1500px; opacity: 0.16; pointer-events: none;
+    -webkit-mask: linear-gradient(transparent, #000 15%, #000 70%, transparent); mask: linear-gradient(transparent, #000 15%, #000 70%, transparent); }
+  .routes circle { fill: var(--bg); stroke: var(--ink); stroke-width: 4; }
+
+  /* What it does, each shown as the app shows it: a grid of cards of
+     different sizes, the trip itself the widest. */
+  .does { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; margin-top: 28px; }
+  .does > div { display: grid; grid-template-rows: auto 1fr; gap: 16px; padding: 18px; border-radius: 24px; background: color-mix(in srgb, var(--surface-2) 88%, transparent); border: 1px solid var(--line); backdrop-filter: blur(6px); }
   .does h3 { font-size: 1.1rem; margin-bottom: 4px; }
   .does p { color: var(--muted); font-size: 0.95rem; }
+  .does .wide { grid-column: span 4; grid-template-columns: 1fr 1fr; grid-template-rows: auto; align-items: center; }
+  .does .narrow { grid-column: span 2; }
+  .does .half { grid-column: span 3; }
+  .does .map { padding: 0; overflow: hidden; grid-template-rows: auto 1fr; }
+  .does .map img { display: block; width: 100%; height: auto; aspect-ratio: 2400 / 1290; object-fit: cover; object-position: 50% 0; border-bottom: 1px solid var(--line); }
+  .does .map > div { padding: 0 18px 18px; }
+  .stats { grid-column: 1 / -1; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: auto !important; align-items: start; padding: 26px 28px !important; background: linear-gradient(135deg, color-mix(in srgb, #fb923c 22%, var(--surface-2)), var(--surface-2) 70%) !important; }
+  .stats div { display: grid; gap: 4px; }
+  .stats b { font: 700 2.6rem/1 var(--display); letter-spacing: -0.03em; color: var(--accent); }
+  .stats span { color: var(--muted); font-size: 0.9rem; }
   .show { display: grid; align-content: center; min-height: 170px; padding: 14px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); font-size: 14px; }
   .week { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; font-size: 0.75rem; }
   .week b { text-align: center; color: var(--muted); font-weight: 600; }
@@ -125,12 +144,10 @@
   .road i.live { background: var(--svc); }
   .road i.later { opacity: 0.35; }
 
-  /* Set up: the setup's own progress, a route line. */
-  .setup { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 36px; }
-  .setup::before { content: ''; position: absolute; top: 9px; left: 11px; right: calc(25% - 11px); height: 4px; border-radius: 2px; background: var(--accent); }
-  .setup > div { position: relative; padding-right: 20px; }
-  .setup > div::before { content: ''; display: block; width: 22px; height: 22px; box-sizing: border-box; border-radius: 50%; border: 5px solid var(--accent); background: var(--bg); margin-bottom: 16px; }
-  .setup > div:last-child::before { border-width: 7px; }
+  /* Set up: four numbered cards, each number on a service's colour. */
+  .setup { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-top: 28px; counter-reset: step; }
+  .setup > div { padding: 18px; border-radius: 20px; background: color-mix(in srgb, var(--surface-2) 88%, transparent); border: 1px solid var(--line); }
+  .setup > div::before { counter-increment: step; content: counter(step); display: grid; place-items: center; width: 34px; height: 34px; margin-bottom: 14px; border-radius: 10px; background: var(--svc); color: var(--svc-ink, #fff); font: 800 1rem/1 var(--display); }
   .setup h3 { font-size: 1.05rem; margin-bottom: 4px; }
   .setup p { color: var(--muted); font-size: 0.93rem; }
 
@@ -177,11 +194,16 @@
     .hero-copy { padding-bottom: 28px; }
     .hero-phone { margin-bottom: -300px; }
     .after-hero { padding-top: 300px; }
-    .does, .places { grid-template-columns: minmax(0, 1fr); }
-    .setup { grid-template-columns: minmax(0, 1fr); gap: 22px; }
-    .setup::before { top: 11px; bottom: 30px; left: 9px; right: auto; width: 4px; height: auto; }
-    .setup > div { display: grid; grid-template-columns: 22px 1fr; column-gap: 16px; }
-    .setup > div::before { grid-row: span 2; margin: 0; }
+    .places { grid-template-columns: minmax(0, 1fr); }
+    .does > div { grid-column: 1 / -1 !important; }
+    .does .wide { grid-template-columns: minmax(0, 1fr); }
+    .stats b { font-size: 2rem; }
+    .setup { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  }
+  @media (max-width: 520px) {
+    .setup { grid-template-columns: minmax(0, 1fr); }
+    .stats { grid-template-columns: minmax(0, 1fr); padding: 20px !important; gap: 14px; }
+    .stats div { grid-template-columns: 4.2rem minmax(0, 1fr); align-items: baseline; gap: 12px; }
   }
   .nav-links .gh svg { display: block; }
 </style>
@@ -277,20 +299,19 @@
   <p class="dl-foot"><span>Free.<span id="dl-version"></span></span><a href="#install" id="dl-install">How to install</a></p>
 </div>
 <main class="wrap after-hero">
+  <svg class="routes" viewBox="0 0 1200 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true" fill="none" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <path stroke="#d32f2f" d="M-20 180 C180 140 260 260 420 230 S640 90 820 150 S1080 300 1220 240"/>
+    <path stroke="#8e44c9" d="M60 920 C120 700 300 640 380 520 S520 300 700 330 S960 520 1240 460"/>
+    <path stroke="#34a853" d="M-40 600 C200 620 260 760 480 780 S800 640 980 700 S1160 860 1240 880"/>
+    <path stroke="#2b9ad6" d="M300 -20 C320 120 220 260 300 380 S560 520 600 700 S520 880 560 940"/>
+    <path stroke="#f57c1f" d="M900 -20 C860 120 960 220 900 360 S760 560 880 660 S1100 700 1240 640"/>
+    <path stroke="#ec4fa0" d="M-20 380 C140 400 200 300 320 320 S460 440 600 420"/>
+    <circle cx="420" cy="230" r="9"/><circle cx="380" cy="520" r="9"/><circle cx="700" cy="330" r="9"/><circle cx="480" cy="780" r="9"/><circle cx="900" cy="360" r="9"/><circle cx="300" cy="380" r="9"/><circle cx="880" cy="660" r="9"/><circle cx="820" cy="150" r="9"/>
+  </svg>
   <h2 class="section-title">What it does</h2>
   <p class="lede-sm">When you need to be out the door to catch the bus.</p>
   <section class="does">
-    <div>
-      <div class="show" aria-hidden="true">
-        <div class="week">
-          <b>Mon</b><b>Tue</b><b>Wed</b><b>Thu</b><b>Fri</b>
-          <span>CS2030</span><span>GEA1000</span><span>CS2030</span><span class="off">Recess</span><span>MA1521</span>
-          <span>MA1521</span><span class="off">—</span><span>GEA1000</span><span class="off">—</span><span>CS2040</span>
-        </div>
-      </div>
-      <div><h3>Follows your timetable</h3><p>Import from NUSMods once. It knows teaching weeks, recess, exams and public holidays, and sends you home in long gaps.</p></div>
-    </div>
-    <div>
+    <div class="wide">
       <div class="show" aria-hidden="true">
         <p class="pn-lead">Leave in <em>6 min</em></p>
         <ol class="steps">
@@ -300,7 +321,17 @@
       </div>
       <div><h3>Leave at the right time</h3><p>The latest bus that still gets you there, walks along campus paths at your pace, and a bus earlier when yours is usually busy.</p></div>
     </div>
-    <div>
+    <div class="narrow">
+      <div class="show" aria-hidden="true">
+        <div class="week">
+          <b>Mon</b><b>Tue</b><b>Wed</b><b>Thu</b><b>Fri</b>
+          <span>CS2030</span><span>GEA1000</span><span>CS2030</span><span class="off">Recess</span><span>MA1521</span>
+          <span>MA1521</span><span class="off">—</span><span>GEA1000</span><span class="off">—</span><span>CS2040</span>
+        </div>
+      </div>
+      <div><h3>Follows your timetable</h3><p>Import from NUSMods once. It knows teaching weeks, recess, exams and public holidays, and sends you home in long gaps.</p></div>
+    </div>
+    <div class="half">
       <div class="show" aria-hidden="true">
         <div class="sign">
           <div class="sign-plate"><svg class="plate-bus" viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="3" width="15" height="15" rx="3"/><path d="M4.5 11h15M8 21v-3M16 21v-3"/><circle cx="8.5" cy="14.5" r="1" fill="currentColor"/><circle cx="15.5" cy="14.5" r="1" fill="currentColor"/></svg><strong>Kent Ridge MRT</strong><span class="plate-walk">3 min walk</span></div>
@@ -310,14 +341,26 @@
       </div>
       <div><h3>The right side of the road</h3><p>It picks the stop going your way, even when the one across the road is closer. Or check anywhere with one tap.</p></div>
     </div>
+    <div class="half map">
+      <picture>
+        <source srcset="/assets/shots/map-dark.webp" media="(prefers-color-scheme: dark)">
+        <img src="/assets/shots/map-light.webp" width="2400" height="1400" loading="lazy" alt="The campus map: the D2's route across NUS, with three D2 buses on it and a button for each service.">
+      </picture>
+      <div><h3>Every bus on the map</h3><p>Each shuttle that's out, on its route across campus, in the app, on your Mac and on the web.</p></div>
+    </div>
+    <div class="stats">
+      <div><b>8</b><span>shuttle services</span></div>
+      <div><b>Live</b><span>times from NUS's shuttle feed</span></div>
+      <div><b>0</b><span>passwords to set up</span></div>
+    </div>
   </section>
 
   <h2 class="section-title">Set up in two minutes</h2>
   <section class="setup">
-    <div><h3>Install</h3><p>The Android app, the Mac menu bar app, or straight on the web. No account or password to set up.</p></div>
-    <div><h3>Add your timetable</h3><p>Paste your NUSMods share link.</p></div>
-    <div><h3>Your stop and pace</h3><p>Pick where you live and how fast you walk.</p></div>
-    <div><h3>Glance</h3><p>It updates throughout the day and stays quiet in the evening.</p></div>
+    <div style="--svc:#f57c1f;--svc-ink:#1c1917"><h3>Install</h3><p>The Android app, the Mac menu bar app, or straight on the web. No account or password to set up.</p></div>
+    <div style="--svc:#34a853;--svc-ink:#1c1917"><h3>Add your timetable</h3><p>Paste your NUSMods share link.</p></div>
+    <div style="--svc:#8e44c9"><h3>Your stop and pace</h3><p>Pick where you live and how fast you walk.</p></div>
+    <div style="--svc:#2b9ad6;--svc-ink:#1c1917"><h3>Glance</h3><p>It updates throughout the day and stays quiet in the evening.</p></div>
   </section>
 
   <h2 class="section-title">On your phone, your Mac and the web</h2>
