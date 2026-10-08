@@ -29,7 +29,7 @@ import { BEAM, ROAD_SCALE, WHEELS, arch, busParts, nearY, signX } from '/account
  * waits meanwhile (`hold`), the most it stretches, and how much of the pull
  * the header and the chips follow (`lead`).
  */
-export const PULL = { arm: 84, hold: 84, max: 170, lead: 0.12 };
+export const PULL = { arm: 84, hold: 40, max: 170, lead: 0.12 };
 /** The shortest a refresh shows for, from letting go: long enough to see the bus leave. */
 export const MIN_SHOW_MS = 700;
 /** How long the pill says how it went, before the sky closes. */
