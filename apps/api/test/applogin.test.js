@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, readdirSync } from 'node:fs';
 
-import { installGlobals, makeCtx, makeDurableObjects, makeEnv, makeFetch } from './_stubs.mjs';
+import { installGlobals, makeCtx, makeDurableObjects, makeEnv, makeFetch, makeKV } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
-import { clientFrom } from '../src/accounts.ts';
+import { clientFrom, versionBelow } from '../src/accounts.ts';
 import { choicesFor, hasSetup } from '../src/applogin.ts';
 import { housekeeping } from '../src/monitor.ts';
 import { endOfDayMs, sgtDate } from '../src/trip.ts';
@@ -313,6 +313,57 @@ test('the client header names the platform and version; the User-Agent is only a
   assert.deepEqual(clientFrom(req({ 'x-terminus-client': 'ios/0.1', 'user-agent': 'CFNetwork' })), { platform: 'ios', client: 'ios/0.1' });
   assert.deepEqual(clientFrom(req({ 'x-terminus-client': 'toaster/1', 'user-agent': 'Dalvik/2.1' })), { platform: 'android', client: null });
   assert.deepEqual(clientFrom(req({ 'user-agent': 'terminus/1 CFNetwork/1' })), { platform: 'mac', client: null });
+});
+
+test('versions compare by number, a pre-release before its release', () => {
+  assert.equal(versionBelow('2.5.9', '2.6.0'), true);
+  assert.equal(versionBelow('2.6.0', '2.6.0'), false);
+  assert.equal(versionBelow('2.10.0', '2.6.0'), false);
+  assert.equal(versionBelow('2.6', '2.6.0'), false);
+  assert.equal(versionBelow('2.6.0-beta.3', '2.6.0'), true);
+  assert.equal(versionBelow('2.6.0-beta.3', '2.6.0-beta.4'), true);
+  assert.equal(versionBelow('2.6.0-beta.10', '2.6.0-beta.4'), false);
+  assert.equal(versionBelow('2.6.0', '2.6.0-beta.4'), false);
+  assert.equal(versionBelow('2.7.0-beta.1', '2.6.0'), false);
+  // Unreadable on either side: never refused.
+  assert.equal(versionBelow('nightly', '2.6.0'), false);
+  assert.equal(versionBelow('1.0.0', 'soon'), false);
+});
+
+test('an app older than config:minClient is told to update; everyone else is served', async () => {
+  const { env } = setup();
+  const as = (client) => ({ token, headers: client ? { 'x-terminus-client': client } : {} });
+  // No minimum set: an old app is served.
+  const token = await anon(env);
+  assert.equal((await call(env, '/me/profile', as('android/1.0.0'))).status, 200);
+
+  const strict = { ...env, KV: makeKV({ 'config:minClient': { android: '2.6.0' } }) };
+  const old = await call(strict, '/me/profile', as('android/2.5.9'));
+  assert.equal(old.status, 426);
+  assert.deepEqual(await old.json(), { error: 'Update terminus to keep using it.', update: true });
+  assert.equal((await call(strict, '/me/profile', as('android-beta/2.6.0-beta.3'))).status, 426);
+  assert.equal((await call(strict, '/me/profile', as('android/2.6.0'))).status, 200);
+  assert.equal((await call(strict, '/me/profile', as('android-play/2.7.1'))).status, 200);
+  // No header (the web app, API users), or a platform with no minimum.
+  assert.equal((await call(strict, '/me/profile', as(null))).status, 200);
+  assert.equal((await call(strict, '/me/profile', as('mac/1.0.0'))).status, 200);
+  // Signing out still works.
+  assert.equal((await call(strict, '/auth/logout', { ...as('android/2.5.9'), method: 'POST' })).status, 200);
+});
+
+test('the bus answers refuse an old app too, in Chinese for zh', async () => {
+  const { env } = setup();
+  const token = await anon(env);
+  const strict = { ...env, KV: makeKV({ 'config:minClient': { mac: '2.6.0' } }) };
+  delete strict[Symbol.for('terminus.testOpen')];
+  const old = await call(strict, '/campus', { token, headers: { 'x-terminus-client': 'mac/2.5.0', 'accept-language': 'zh-CN' } });
+  assert.equal(old.status, 426);
+  assert.deepEqual(await old.json(), { error: '请更新 terminus 以继续使用。', update: true });
+  assert.equal((await call(strict, '/campus', { token, headers: { 'x-terminus-client': 'mac/2.6.0' } })).status, 200);
+  // A bad value in KV is no minimum at all.
+  const typo = { ...strict, KV: makeKV() };
+  await typo.KV.put('config:minClient', '{android: 2.6');
+  assert.equal((await call(typo, '/campus', { token, headers: { 'x-terminus-client': 'mac/1.0.0' } })).status, 200);
 });
 
 test('the approval page keeps its three numbers distinct, with the right one among them', () => {

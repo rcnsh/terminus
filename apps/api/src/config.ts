@@ -25,8 +25,9 @@ export const TTL = {
   /** After a refused call, a fresh token is minted at most once per this in
    *  a data centre: the calls in between retry with it, or not at all. */
   remintGapS: 60,
-  /** How long an isolate trusts the version string it read from KV. A new
-   *  one written to config:appVersion is live everywhere within this. */
+  /** How long an isolate trusts the version strings it read from KV. A new
+   *  one written to config:appVersion or config:minClient is live
+   *  everywhere within this. */
   versionMemoMs: 60_000,
   /** Per upstream call. A hung NUS must not hang the widget. */
   upstreamTimeoutMs: 5_000,

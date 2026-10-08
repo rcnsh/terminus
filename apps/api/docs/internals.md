@@ -324,6 +324,26 @@ Apps send `x-terminus-client: <platform>[-<flavour>]/<version>` (for example
 platform is guessed from the User-Agent, which counts any CFNetwork client as
 the Mac.
 
+**Oldest app still served.** KV `config:minClient` holds the oldest version
+served per platform, as JSON: `{"android":"2.6.0","mac":"2.6.0"}`. A missing
+key, a missing platform or JSON that won't parse means no minimum. Each
+isolate reads it once a minute (`TTL.versionMemoMs`, as `config:appVersion`),
+so a change is live everywhere within that, with no deploy. On the routes an
+app reaches with its token (the bus answers, and `/me/*` once signed in), a
+request whose `x-terminus-client` names that platform with an older version
+gets HTTP 426 and `{"error": "Update terminus to keep using it.", "update":
+true}` (the error in Chinese for `zh`). Versions compare by number, and a
+pre-release comes before its release: `2.6.0-beta.3` is older than `2.6.0`.
+A request without the header (the website, API keys), or with a version that
+can't be read, is never refused. Sign-in, pairing and signing out answer
+before the check. The apps take a 426 as "update required": they stop
+polling, back off for hours, and offer the update (Play or the website on
+Android, Sparkle on the Mac).
+
+```bash
+pnpm exec cf kv keys put config:minClient --namespace-id <KV id in cloudflare.config.ts> --body '{"android":"2.6.0","mac":"2.6.0"}'
+```
+
 - `GET /me/next` is the widget's one call. It picks the destination from the
   timetable (see `planFor` in [src/profile.ts](../src/profile.ts)) or from
   `?place=`/`?to=`, and returns the usual answer plus `dest` and `places`.

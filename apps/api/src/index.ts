@@ -29,7 +29,7 @@ import { docsPageFor, openApiJson } from './openapi.ts';
 import { phaseAt, sgtMinute } from './pagesky.ts';
 import { CORS, clientKey, coordsFrom, json, jsonCached, numParam, withSecurityHeaders } from './http.ts';
 import { type MeDeps, handleMe } from './me.ts';
-import { accountsConfigured } from './accounts.ts';
+import { UPDATE_REQUIRED, accountsConfigured, clientOutdated } from './accounts.ts';
 import { readUpstream, runCron, statusRecords } from './monitor.ts';
 import { ltaConfigured } from './lta.ts';
 import { calendarThrough } from './calendar.ts';
@@ -432,6 +432,8 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
           'www-authenticate': 'Bearer realm="terminus"',
         });
       }
+      // As under /me: an app older than config:minClient is told to update.
+      if (caller.kind === 'account' && (await clientOutdated(env, req, nowMs))) return json(UPDATE_REQUIRED, 426);
     }
     const dl = await handleDownload(url.pathname, env, url);
     if (dl) return dl;
