@@ -116,17 +116,10 @@ It updates through the day and goes quiet in the evening. The app has four tabs:
 
 ## How it fits together
 
-```
-NUS shuttle feed ────────┐
-LTA DataMall (optional) ─┤
-NUSMods timetables ──────┤
-NUS calendar, holidays ──┼──▶ Cloudflare Worker (apps/api)
-OpenStreetMap paths ─────┤          │
-Protomaps street map ────┘          │
-                                    ├──▶ Android widget
-                                    ├──▶ Mac menu bar
-                                    └──▶ Website
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/readme/diagram-dark.webp">
+  <img alt="How it fits together. Live, when someone asks (cached): the NUS shuttle feed (arrivals 15 s a stop, live buses 5 s a service), LTA DataMall (public buses, for accounts that turn them on) and NUSMods (your timetable). Refreshed weekly: the NUS calendar and public holidays, OpenStreetMap walking paths and route lines, and the Protomaps street map. All feed one Cloudflare Worker (apps/api), which does all the thinking and keeps D1, the edge cache, Durable Objects, KV and R2, a cron and email. It sends the same card from /me/next, and push, to the Android app and widgets, the Mac menu bar app, and the website and web app." src=".github/readme/diagram-light.webp" width="100%">
+</picture>
 
 The Worker does all the thinking, and caches the NUS feed for 15 seconds per stop. Every client shows the same ready-made card
 from `/me/next` (when to leave, which bus, when you arrive) and only counts

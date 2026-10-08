@@ -1,0 +1,144 @@
+<!doctype html>
+<!--
+  The README's "How it fits together": where the Worker's data comes from,
+  what it keeps, and the clients it answers. Light by default, dark with #dark.
+  Re-render after changing it:  sh .github/readme/diagram.sh
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: 'Inter'; font-weight: 400 700; src: url(../../apps/web/public/assets/fonts/inter-latin.woff2) format('woff2'); }
+  @font-face { font-family: 'Space Grotesk'; font-weight: 500 700; src: url(../../apps/web/public/assets/fonts/space-grotesk-latin.woff2) format('woff2'); }
+
+  /* The site's own tokens (assets/site.css), light and dark. */
+  :root {
+    --bg: #fafaf9; --surface: #ffffff; --surface-2: #f5f4f2; --ink: #1c1917; --muted: #6b6560; --faint: #a8a29e;
+    --line: #e7e5e2; --wire: #c9c4be; --accent: #c2410c; --accent-soft: #fff1e6; --shadow: rgb(28 25 23 / 0.08);
+    --font: 'Inter', system-ui, sans-serif; --display: 'Space Grotesk', 'Inter', sans-serif;
+    --mono: ui-monospace, 'SF Mono', Menlo, monospace;
+  }
+  .dark {
+    --bg: #0f0e0d; --surface: #1a1816; --surface-2: #211f1c; --ink: #f2efeb; --muted: #a39d97; --faint: #6b6560;
+    --line: #2c2926; --wire: #4a4541; --accent: #fb923c; --accent-soft: #2a1a10; --shadow: rgb(0 0 0 / 0.4);
+  }
+  html, body { margin: 0; }
+  body { width: 1280px; height: 572px; background: var(--bg); color: var(--ink); font-family: var(--font); position: relative; overflow: hidden; }
+  .abs { position: absolute; }
+
+  .head { top: 36px; font: 600 12px/1 var(--font); letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
+  .group { font: 600 13px/1 var(--font); color: var(--muted); display: flex; align-items: center; gap: 8px; }
+  .group svg { flex: none; }
+
+  .card {
+    box-sizing: border-box; background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: 0 1px 2px var(--shadow), 0 8px 24px -14px var(--shadow);
+  }
+  .src { left: 48px; width: 344px; height: 58px; padding: 0 16px; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+  .src b { font: 600 15px/1.1 var(--font); }
+  .src span { font: 400 13px/1.2 var(--font); color: var(--muted); }
+  .src.weekly { background: var(--surface-2); box-shadow: none; }
+
+  .worker { left: 472px; top: 100px; width: 336px; height: 434px; padding: 22px 22px 18px; display: flex; flex-direction: column; border: 1.5px solid var(--accent); }
+  .worker .title { display: flex; align-items: center; gap: 12px; }
+  .worker .title img { width: 34px; height: 34px; }
+  .worker h2 { margin: 0; font: 700 21px/1.1 var(--display); letter-spacing: -0.02em; }
+  .worker code { font: 500 12.5px/1 var(--mono); color: var(--muted); }
+  .worker p { margin: 14px 0 0; font: 400 14px/1.45 var(--font); color: var(--muted); }
+  .worker p strong { color: var(--ink); font-weight: 600; }
+  .keeps { margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .keep { background: var(--surface-2); border-radius: 10px; padding: 9px 11px; }
+  .keep b { display: block; font: 600 13px/1.1 var(--font); }
+  .keep span { display: block; margin-top: 3px; font: 400 12px/1.3 var(--font); color: var(--muted); }
+  .out { margin-top: auto; padding-top: 14px; border-top: 1px solid var(--line); font: 500 13px/1.4 var(--font); color: var(--muted); }
+  .out code { font: 600 12.5px/1 var(--mono); color: var(--accent); }
+
+  .client { left: 888px; width: 344px; height: 92px; padding: 0 18px; display: flex; align-items: center; gap: 16px; }
+  .client .icon { flex: none; width: 44px; height: 44px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; }
+  .client b { display: block; font: 600 15.5px/1.15 var(--font); }
+  .client span { display: block; margin-top: 4px; font: 400 13px/1.3 var(--font); color: var(--muted); }
+  .note { left: 888px; width: 344px; top: 470px; font: 400 13.5px/1.5 var(--font); color: var(--muted); text-align: left; }
+  .note strong { color: var(--ink); font-weight: 600; }
+
+  .pill { font: 600 11.5px/1 var(--font); color: var(--accent); background: var(--bg); padding: 4px 6px; border-radius: 6px; white-space: nowrap; }
+  svg.wires { position: absolute; inset: 0; }
+  .live { stroke: var(--accent); }
+  .wk { stroke: var(--wire); stroke-dasharray: 5 5; }
+  .tip { fill: var(--accent); }
+</style>
+</head>
+<body>
+<script>if (location.hash === '#dark') document.documentElement.className = 'dark';</script>
+
+<svg class="wires" width="1280" height="572" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Sources into the spine at x 432, then into the Worker at y 317. -->
+  <path class="live" d="M392 129 H420 Q432 129 432 141 V317" />
+  <path class="live" d="M392 197 H420 Q432 197 432 209" />
+  <path class="live" d="M392 265 H420 Q432 265 432 277" />
+  <path class="wk" d="M432 493 V327" />
+  <path class="wk" d="M392 369 H420 Q432 369 432 357" />
+  <path class="wk" d="M392 437 H420 Q432 437 432 425" />
+  <path class="wk" d="M392 505 H420 Q432 505 432 493" />
+  <path class="live" d="M432 317 H462" />
+  <path class="tip" d="M470 317 l-9 -5.5 v11 z" />
+  <!-- The Worker out to every client. -->
+  <path class="live" d="M808 317 H836 Q848 317 848 305 V188 Q848 176 860 176 H878" />
+  <path class="live" d="M848 305 V292 H878" />
+  <path class="live" d="M836 317 Q848 317 848 329 V396 Q848 408 860 408 H878" />
+  <path class="tip" d="M886 176 l-9 -5.5 v11 z" />
+  <path class="tip" d="M886 292 l-9 -5.5 v11 z" />
+  <path class="tip" d="M886 408 l-9 -5.5 v11 z" />
+</svg>
+
+<div class="abs head" style="left:48px">Where the data comes from</div>
+<div class="abs head" style="left:472px">Where the answer is worked out</div>
+<div class="abs head" style="left:888px">Where you see it</div>
+
+<div class="abs group" style="left:48px;top:72px">
+  <svg width="22" height="4"><path class="live" d="M1 2 H21" stroke-width="2.5" stroke-linecap="round"/></svg>
+  Live, when someone asks (cached)
+</div>
+<div class="abs card src" style="top:100px"><b>NUS shuttle feed</b><span>Arrivals, 15 s a stop · live buses, 5 s a service</span></div>
+<div class="abs card src" style="top:168px"><b>LTA DataMall</b><span>Public buses, for accounts that turn them on</span></div>
+<div class="abs card src" style="top:236px"><b>NUSMods</b><span>Your timetable, when you import it</span></div>
+
+<div class="abs group" style="left:48px;top:312px">
+  <svg width="22" height="4"><path class="wk" d="M1 2 H21" stroke-width="2.5" stroke-linecap="round"/></svg>
+  Refreshed weekly
+</div>
+<div class="abs card src weekly" style="top:340px"><b>NUS calendar and public holidays</b><span>NUSMods' calendar, data.gov.sg</span></div>
+<div class="abs card src weekly" style="top:408px"><b>OpenStreetMap</b><span>Walking paths and the route lines</span></div>
+<div class="abs card src weekly" style="top:476px"><b>Protomaps</b><span>The campus street map, served from R2</span></div>
+
+<div class="abs card worker">
+  <div class="title">
+    <img src="../../apps/web/public/assets/mark.svg" alt="">
+    <div><h2>Cloudflare Worker</h2><code>apps/api</code></div>
+  </div>
+  <p><strong>Does all the thinking:</strong> which stop, which bus, walk or ride, and when to leave.</p>
+  <div class="keeps">
+    <div class="keep"><b>D1</b><span>Accounts, sessions, setups</span></div>
+    <div class="keep"><b>Edge cache</b><span>Feed answers, live buses</span></div>
+    <div class="keep"><b>Durable Objects</b><span>Each trip, timelapse days</span></div>
+    <div class="keep"><b>KV and R2</b><span>Config, calendar; map, app files</span></div>
+    <div class="keep"><b>Cron</b><span>Feed health, every 15 min</span></div>
+    <div class="keep"><b>Email</b><span>Sign-in codes and links</span></div>
+  </div>
+  <div class="out">Every client gets the same ready card from <code>/me/next</code>, and a push when it's time to go.</div>
+</div>
+
+<div class="abs card client" style="top:130px">
+  <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M10.5 18.5h3"/></svg></div>
+  <div><b>Android app and widgets</b><span>Home-screen widgets, the map · push by FCM</span></div>
+</div>
+<div class="abs card client" style="top:246px">
+  <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4.5" width="16" height="11" rx="1.5"/><path d="M2 19.5h20"/></svg></div>
+  <div><b>Mac menu bar app</b><span>The next bus in the menu bar, the map in a window</span></div>
+</div>
+<div class="abs card client" style="top:362px">
+  <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="16" rx="2.5"/><path d="M2.5 8.5h19"/><path d="M5.5 6.3h.01M8 6.3h.01"/></svg></div>
+  <div><b>Website and web app</b><span>Installable, with the map · Web Push</span></div>
+</div>
+<div class="abs note"><strong>Clients only count down the clock,</strong> so no screen shows a stale "4 min", and they never drift apart.</div>
+</body>
+</html>
