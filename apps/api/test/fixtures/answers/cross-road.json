@@ -122,6 +122,7 @@
     "remind": true,
     "suggestion": null,
     "ride": null,
+    "gone": false,
     "walkTo": {
       "name": "Opp KR MRT",
       "lat": 1.294962,

@@ -1258,14 +1258,14 @@ export async function tripCardFor(
   day: DayRecord | null,
   nowMs: number,
   savePlanLocal: (key: string, plan: Boarded) => Promise<void>,
-): Promise<{ key: string | null; phase: string; remind: boolean; wakeAt: number | null } | null> {
+): Promise<{ key: string | null; phase: string; gone: boolean; remind: boolean; wakeAt: number | null } | null> {
   if (!env.DB) return null;
   const profile = await getProfile(env.DB, userId, deps.graph);
   if (!classesOn(profile, nowMs).length) return null;
   const prefs = await prefsFor(env.DB, userId, profile, nowMs);
   const url = new URL('https://terminus.internal/me/next');
   const { body, trip } = await nextWithTrip(url, env, ctx, nowMs, unlogged(deps), profile, day, userId, prefs, { savePlan: savePlanLocal });
-  return { key: trip.key, phase: body.card.phase, remind: body.card.remind !== false, wakeAt: nextPhaseAt(body, trip, nowMs) };
+  return { key: trip.key, phase: body.card.phase, gone: body.card.gone, remind: body.card.remind !== false, wakeAt: nextPhaseAt(body, trip, nowMs) };
 }
 
 const CHOICES = ['accept', 'dismiss', 'undo'] as const;

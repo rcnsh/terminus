@@ -108,7 +108,7 @@
     "note": null,
     "estimate": null,
     "phase": "heading",
-    "phaseText": "On your way",
+    "phaseText": "If you missed it, here's the next way there.",
     "glance": "D2 09:16",
     "line": "The 09:06 has left · next D2 09:16, ~11 min late",
     "actions": [
@@ -123,6 +123,7 @@
     "remind": true,
     "suggestion": null,
     "ride": null,
+    "gone": true,
     "walkTo": {
       "name": "PGP",
       "lat": 1.291765,

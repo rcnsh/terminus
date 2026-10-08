@@ -482,7 +482,14 @@ the account went can't store its trip again.
     answer is the next way there, the phase `heading` (never `due`: you
     may be on board), and the card's line says only that the plan's bus
     has left ("The 09:06 has left · next D2 09:16"; `TripView.gone`).
-    That is true whether you caught it or not, so nothing is asked.
+    That is true whether you caught it or not, so nothing is asked. The
+    card says so in `card.gone`, and its `phaseText` is "If you missed
+    it, here's the next way there.", so the headline's "Leave in 2 min"
+    for the next bus reads right on every client. Notifications never say
+    "Leave now" then: Android's leave notification and live update and
+    the web's push are titled with the line, quietly, and the Mac clears
+    its "Leave now". The Trip object pushes (quietly) when `gone` changes,
+    though the phase stays `heading`, so the phones update.
 
   A short ride may never be seen: by the time the bus is beyond a walk,
   you're nearly there, and the destination ends the trip. A location in

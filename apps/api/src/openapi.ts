@@ -2448,6 +2448,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                         arrive: { type: 'string', format: 'date-time' },
                       },
                     },
+                    gone: { type: 'boolean', description: 'The planned bus has left and nothing says whether you are on it: `line` says it has gone and gives the next way there. Notify with that line, quietly, never "Leave now".' },
                     walkTo: {
                       type: ['object', 'null'],
                       description: 'Where to walk to now, for a maps app: the stop to catch the bus at, or the destination’s stop on foot. Null on the bus, at the stop, once there, and with nothing to catch.',

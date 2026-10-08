@@ -93,6 +93,7 @@
       "board": "2026-08-27T01:06:00Z",
       "arrive": "2026-08-27T01:15:30Z"
     },
+    "gone": false,
     "walkTo": null,
     "notice": null,
     "h12": false,

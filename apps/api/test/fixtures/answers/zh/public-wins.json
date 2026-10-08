@@ -113,6 +113,7 @@
     "remind": true,
     "suggestion": null,
     "ride": null,
+    "gone": false,
     "walkTo": {
       "name": "IT",
       "lat": 1.297204,

@@ -88,12 +88,15 @@ struct NextAnswer: Decodable {
         let journey: Journey?
         /// On the bus: the stops from boarding to getting off.
         let ride: Ride?
+        /// The planned bus has left and nothing says whether you're on it:
+        /// `line` says so and gives the next way there. Never "Leave now".
+        let gone: Bool
 
         static let kinds: Set = ["class", "trip", "nearby", "rest", "arrived", "setup", "free"]
 
         enum CodingKeys: String, CodingKey {
             case kind, staleAt, crowd, quality, leaveBy, leaveVia, `catch`, arrive, late, goNow, note, estimate, phase, phaseText, glance, line, actions, warning, nextChangeAt, remind, suggestion, notice, upcoming
-            case title, heading, remindAt, journey, ride
+            case title, heading, remindAt, journey, ride, gone
         }
 
         init(from d: Decoder) throws {
@@ -127,6 +130,7 @@ struct NextAnswer: Decodable {
             remindAt = s(.remindAt)
             journey = try? c.decodeIfPresent(Journey.self, forKey: .journey)
             ride = try? c.decodeIfPresent(Ride.self, forKey: .ride)
+            gone = (try? c.decodeIfPresent(Bool.self, forKey: .gone)) == true
         }
     }
 
