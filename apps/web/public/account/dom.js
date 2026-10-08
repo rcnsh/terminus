@@ -7,6 +7,12 @@
 export const t = (en, ...args) => (globalThis.window?.i18n ? window.i18n.t(en, ...args) : en.replace(/\{(\d+)\}/g, (_, i) => String(args[i] ?? '')));
 export const locale = () => globalThis.window?.i18n?.locale;
 
+/**
+ * Lines read by a screen reader as sentences, each stopped as the page's
+ * language writes it: ". " in English, "。" in Chinese.
+ */
+export const sentences = (parts) => parts.filter(Boolean).join(globalThis.window?.i18n?.lang === 'zh' ? '。' : '. ');
+
 /** Why the browser gave no location (a GeolocationPositionError), in the page's language: its own message is English. */
 export function locationError(err) {
   if (err?.code === 1) return t('Location is off for this site. Choose your stop instead.');
