@@ -72,17 +72,24 @@ export async function send(path, { timeoutMs = SEND_TIMEOUT_MS, ...init } = {}) 
 
 /** Where the web app keeps the places searched for (app/app.js). */
 export const ADDED_PLACES_KEY = 'added-places';
+/**
+ * The account language this browser last applied or saved (assets/i18n.js's
+ * followAccount): the account's, not the browser's. The browser's own
+ * choice is `terminus-lang`, which stays.
+ */
+const LANG_APPLIED_KEY = 'terminus-lang-applied';
 
 /**
  * Signing out, or the account deleted or signed out elsewhere: what this
  * browser kept of the account goes, so the next person to sign in here
- * doesn't see it. That's the places searched for, and the push
- * subscription (the server has already dropped its address). The look
- * (language, theme, clock) is the browser's and stays.
+ * doesn't see it. That's the places searched for, the account's language
+ * as last applied here, and the push subscription (the server has already
+ * dropped its address). The look (language, theme, clock, card style) is
+ * the browser's and stays.
  */
 export async function forgetAccountHere() {
   try {
-    globalThis.localStorage?.removeItem(ADDED_PLACES_KEY);
+    for (const k of [ADDED_PLACES_KEY, LANG_APPLIED_KEY]) globalThis.localStorage?.removeItem(k);
   } catch {
     // Storage blocked: nothing was kept.
   }
@@ -95,6 +102,18 @@ export async function forgetAccountHere() {
     // No service worker, or push never set up.
   });
   await Promise.race([unsubscribe, new Promise((r) => setTimeout(r, 2000))]);
+}
+
+/**
+ * A 401 in the web app: it was signed out, or deleted, elsewhere. What this
+ * browser kept of it goes, then it's off to sign in on the account page and
+ * back to the app. In the installed app on iOS this is its own sign-in: its
+ * storage is separate from Safari's. Throws, so the caller stops there.
+ */
+export async function signedOut() {
+  await forgetAccountHere();
+  globalThis.location?.replace('/account/?next=/app/');
+  throw new Error('signed out');
 }
 
 /**

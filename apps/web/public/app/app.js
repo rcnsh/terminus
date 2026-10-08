@@ -13,7 +13,7 @@
 // they were fetched, so the page can say it's showing old times.
 
 import { Fill, Icon, MARK, Rich, announce, focusSoon, html, render, store, useEffect, useRef, useState, useStore } from '/assets/ui.js';
-import { ADDED_PLACES_KEY, api, clock, forgetAccountHere, hour12, inkOn, send, serverNow, t } from '/account/dom.js';
+import { ADDED_PLACES_KEY, api, clock, hour12, inkOn, send, serverNow, signedOut, t } from '/account/dom.js';
 import { Card, InSky, Message, Report, Say, isStale, signal } from '/account/preview.js';
 import { Celestial, Horizon, useNowSky, useSkyPhase } from '/account/sky.js';
 import { Toast, campus, lists, loadCampus, loadProfile, profile, reloadProfile, toast, walkSpeed } from '/account/profile.js';
@@ -118,14 +118,7 @@ function removeAdded(x) {
 /** GET a JSON route; `cached` is when the service worker's copy was fetched, if that's what came back. */
 async function get(path) {
   const res = await send(path, { credentials: 'same-origin', headers: { 'accept-language': window.i18n?.header ?? 'en' } });
-  if (res.status === 401) {
-    // Sign in on the account page, then come back here. In the installed app
-    // on iOS this is its own sign-in: its storage is separate from Safari's.
-    // It was signed out, or deleted, elsewhere: what this browser kept of it goes.
-    await forgetAccountHere();
-    location.replace('/account/?next=/app/');
-    throw new Error('signed out');
-  }
+  if (res.status === 401) await signedOut();
   if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status });
   const cached = res.headers.get('x-terminus-cached');
   return { data: await res.json(), cached: cached ? Number(cached) : null };
