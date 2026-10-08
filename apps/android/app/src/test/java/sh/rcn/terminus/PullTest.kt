@@ -179,14 +179,21 @@ class PullTest {
         assertEquals(PullOutcome.Updated, m.result)
         assertTrue(m.good)
         assertFalse(m.lit)
-        // Said for a second, and no longer than it takes the bus to be back.
-        m.run(900)
+        // Said for a second, then the sky closes whether or not the bus is back.
+        m.run(800)
         assertEquals(PullMotion.Phase.Shown, m.phase)
-        m.run(Pull.RESULT_MAX_MS.toInt() - 900 + 50)
+        m.run(250)
         assertEquals(PullMotion.Phase.Closing, m.phase)
+        // The sky shuts first; the bus drives on home at its own pace, the scene still on the horizon.
+        var frames = 0
+        while (m.pull > 0f && frames++ < 120) m.step(1 / 60f)
+        assertEquals(0f, m.pull, 0f)
+        assertTrue(m.open)
         assertEquals(PullMotion.Drive.Return, m.drive)
+        assertTrue(kotlin.math.abs(m.busX - road.home!!) > 1f)
         assertEquals(0, m.colour)
-        m.run(1_000)
+        assertFalse(m.good)
+        m.run(2_000)
         assertEquals(PullMotion.Phase.Idle, m.phase)
         assertEquals(0f, m.pull, 0.001f)
         // Back where the card has it.
