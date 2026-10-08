@@ -117,3 +117,15 @@ test('every 401 in the web app goes through signedOut, so none skips forgetting 
     assert.doesNotMatch(src, /location\.replace\('\/account\//, f);
   }
 });
+
+test('a 429 from the app quiets the app, never a sign-out', async () => {
+  const sent = [];
+  globalThis.fetch = async (path) => {
+    sent.push(path);
+    return new Response('{}', { status: path === '/me/next' ? 429 : 200, headers: { 'retry-after': '60', 'content-type': 'application/json' } });
+  };
+  await send('/me/next');
+  await assert.rejects(send('/me/day'), { status: 429 });
+  assert.equal((await send('/auth/logout', { method: 'POST' })).status, 200);
+  assert.deepEqual(sent, ['/me/next', '/auth/logout']);
+});

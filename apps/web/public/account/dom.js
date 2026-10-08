@@ -22,7 +22,10 @@ export function locationError(err) {
 
 // After a 429, nothing is sent until the server's Retry-After has passed:
 // a page that keeps polling at full speed only keeps the limit tripped.
-let quietUntil = 0;
+// Signing in, out and pairing have their own limits on the server, so their
+// own wait here: a 429 from the app's polling must never stop a sign-out.
+const quietUntil = { app: 0, auth: 0 };
+const scopeOf = (path) => (/^\/(auth|pair)(\/|$|\?)/.test(path) ? 'auth' : 'app');
 
 /**
  * How long a call may take, unless its caller says otherwise. Wi-Fi that
@@ -56,7 +59,8 @@ const unreachable = () => new Error(t("Couldn't reach terminus. Check your conne
  * Gives up after `timeoutMs` (SEND_TIMEOUT_MS), reading the body included.
  */
 export async function send(path, { timeoutMs = SEND_TIMEOUT_MS, ...init } = {}) {
-  if (Date.now() < quietUntil) throw Object.assign(new Error(t('terminus is busy. Try again in a minute.')), { status: 429 });
+  const scope = scopeOf(String(path));
+  if (Date.now() < quietUntil[scope]) throw Object.assign(new Error(t('terminus is busy. Try again in a minute.')), { status: 429 });
   // No answer in time, or none at all (offline: the browser's own "Failed
   // to fetch" or "Load failed", in English whatever the page's language).
   const res = await fetch(path, { signal: timeout(timeoutMs), ...init }).catch((err) => {
@@ -65,7 +69,7 @@ export async function send(path, { timeoutMs = SEND_TIMEOUT_MS, ...init } = {}) 
   noteServerDate(res);
   if (res.status === 429) {
     const s = Number(res.headers.get('retry-after'));
-    quietUntil = Date.now() + Math.min(Number.isFinite(s) && s > 0 ? s : 60, 300) * 1000;
+    quietUntil[scope] = Date.now() + Math.min(Number.isFinite(s) && s > 0 ? s : 60, 300) * 1000;
   }
   return res;
 }
