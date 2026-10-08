@@ -47,7 +47,7 @@ import { handleTimelapse } from './timelapse.ts';
 import { scopeCache } from './edgecache.ts';
 
 import { GRAPH, GRAPH_PUBLIC, twinOf } from './graph.ts';
-import { isBeta, markBeta, movedPage, siteOrigin } from './site.ts';
+import { isBeta, linkOrigin, markBeta, movedPage } from './site.ts';
 import { answerFor, arrivedAnswer, collectArrivals, needsSetupAnswer } from './answer.ts';
 import { langOfRequest, m, withLang } from './i18n.ts';
 
@@ -432,7 +432,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
         return json({ error: caller?.kind === 'key' ? 'too many requests for this key, slow down' : 'too many requests, slow down' }, 429, { 'retry-after': '60' });
       }
       if (!caller) {
-        return json({ error: m().needsKey(siteOrigin(env)) }, 401, {
+        return json({ error: m().needsKey(linkOrigin(env)) }, 401, {
           'www-authenticate': 'Bearer realm="terminus"',
         });
       }

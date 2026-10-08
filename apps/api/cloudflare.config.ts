@@ -16,6 +16,16 @@ const BETA = {
 	kv: "5bd33589cdfc43c0bb324d158edd46ba",
 };
 
+// NUS Wi-Fi resets connections to terminus.run (checked 9 October 2026):
+// its firewall blocks a domain registered that recently. Until it lets it
+// through, the old address is the one handed out (emailed links:
+// LINK_ORIGIN), and its pages aren't sent on to terminus.run (MOVE_PAGES
+// unset, so off). Once terminus.run loads on campus Wi-Fi, drop
+// movingOff and set MOVE_PAGES to "on".
+const movingOff = (oldOrigin: string) => ({
+	LINK_ORIGIN: bindings.text(oldOrigin),
+});
+
 function site(mode: string | undefined) {
 	if (mode === undefined || mode === "production") {
 		return {
@@ -34,6 +44,7 @@ function site(mode: string | undefined) {
 			// the beta, so the two sites never poll twice.
 			env: {
 				TIMELAPSE_ENABLED: bindings.text("on"),
+				...movingOff("https://terminus.rcn.sh"),
 			},
 		};
 	}
@@ -52,6 +63,7 @@ function site(mode: string | undefined) {
 			PUBLIC_ORIGIN: bindings.text("https://beta.terminus.run"),
 			AE_DATASET: bindings.text("terminus_beta"),
 			TIMELAPSE_ENABLED: bindings.text("off"),
+			...movingOff("https://beta.terminus.rcn.sh"),
 		},
 	};
 }

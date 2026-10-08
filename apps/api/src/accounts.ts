@@ -9,7 +9,7 @@
 import { exportOutcomes } from './outcomes.ts';
 import type { Env } from './types.ts';
 import { DEVICE_IDLE_MS } from './monitor.ts';
-import { mailName, siteOrigin } from './site.ts';
+import { linkOrigin, mailName } from './site.ts';
 import { m } from './i18n.ts';
 import { TTL } from './config.ts';
 
@@ -797,7 +797,7 @@ export async function mailDeviceAdded(env: Env, email: string | null, name: stri
   const t = m();
   const device = name.trim() || t.aDevice;
   const when = t.singaporeTime(new Date(nowMs + 8 * 3_600_000).toISOString().replace('T', ' ').slice(0, 16));
-  const site = siteOrigin(env);
+  const site = linkOrigin(env);
   await sendMail(env, {
     from: { email: env.EMAIL_FROM, name: mailName(env) },
     to: email,

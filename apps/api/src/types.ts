@@ -64,6 +64,10 @@ export interface Env {
   RL_PAIR?: RateLimit;
   /** The site's own origin, set on the beta (site.ts). Unset: https://terminus.run. */
   PUBLIC_ORIGIN?: string;
+  /** Where links handed to people point (emails, error text), if not PUBLIC_ORIGIN (site.ts linkOrigin). */
+  LINK_ORIGIN?: string;
+  /** "on": pages opened on the old address go to the new one (site.ts movedPage). */
+  MOVE_PAGES?: string;
   /** The Analytics Engine dataset the dashboard queries. Unset: terminus. */
   AE_DATASET?: string;
   /** LTA DataMall account key, for public buses (lta.ts). Unset: no public buses. */

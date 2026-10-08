@@ -757,6 +757,14 @@ search engines move the old address's pages over but a browser asks again
 after a day, and moving back is an edit to `MOVED`, not something browsers
 keep for good.
 
+That redirect is off for now, as NUS Wi-Fi resets connections to
+terminus.run (a domain that new trips its firewall): `movedPage` only runs
+with `MOVE_PAGES` set to `on`. Links handed to people (sign-in and
+new-device emails, the "create a key" error) come from `linkOrigin`:
+`LINK_ORIGIN`, set to the old address, else the site's own. Once
+terminus.run loads on campus Wi-Fi, `movingOff` in `cloudflare.config.ts`
+goes and `MOVE_PAGES` is set.
+
 Email goes out through Cloudflare Email Sending from `EMAIL_FROM`. That
 needs the Workers Paid plan and the sender's domain onboarded under Email
 Service > Email Sending in the dashboard: terminus.run is, and the old

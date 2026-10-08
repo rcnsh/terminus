@@ -12,7 +12,7 @@
  */
 
 import type { Env } from './types.ts';
-import { mailName, siteOrigin } from './site.ts';
+import { linkOrigin, mailName } from './site.ts';
 import { m } from './i18n.ts';
 import { sendMail } from './accounts.ts';
 
@@ -125,7 +125,7 @@ export async function mailFeedback(env: Env, id: string, f: FeedbackInput, nowMs
     ...(f.reason ? [`What was wrong: ${REASONS[f.reason]}`] : []),
     ...(f.note ? [`They said: ${f.note}`] : []),
     '',
-    `Report ${id}. Who sent it${f.context ? ' and the answer they saw' : ''}: the dashboard at ${siteOrigin(env)}/admin.`,
+    `Report ${id}. Who sent it${f.context ? ' and the answer they saw' : ''}: the dashboard at ${linkOrigin(env)}/admin.`,
   ].join('\n');
   await sendMail(env, {
     from: { email: env.EMAIL_FROM, name: mailName(env) },

@@ -1516,7 +1516,8 @@ test('/line is as old as its stop row: a kept board is not "Updated 0 s ago"', a
 });
 
 test('a page opened on the old address goes to terminus.run; the apps and the updater stay', async () => {
-  const at = async (host, path, accept, env = makeEnv(), method = 'GET') => {
+  const on = () => ({ ...makeEnv(), MOVE_PAGES: 'on' });
+  const at = async (host, path, accept, env = on(), method = 'GET') => {
     const ctx = makeCtx();
     const res = await worker.fetch(new Request(`https://${host}${path}`, { method, headers: accept ? { accept } : {} }), env, ctx);
     await ctx.settle();
@@ -1534,13 +1535,15 @@ test('a page opened on the old address goes to terminus.run; the apps and the up
   for (const [path, accept] of [['/me/next', 'application/json'], ['/campus', 'application/json'], ['/download/appcast.xml', html], ['/.well-known/assetlinks.json', html], ['/map/style.json', html], ['/robots.txt', html], ['/download/latest.json', null]]) {
     assert.notEqual((await at('terminus.rcn.sh', path, accept)).status, 301, path);
   }
-  assert.notEqual((await at('terminus.rcn.sh', '/auth/code', html, makeEnv(), 'POST')).status, 301, 'only GET and HEAD');
+  assert.notEqual((await at('terminus.rcn.sh', '/auth/code', html, on(), 'POST')).status, 301, 'only GET and HEAD');
   // The new address itself, and an address that isn't ours, are never redirected.
   assert.notEqual((await at('terminus.run', '/', html)).status, 301);
   assert.notEqual((await at('bus.example.test', '/', html)).status, 301);
   // The beta sends its own old address to itself, and never the stable one's.
-  const beta = { ...makeEnv(), PUBLIC_ORIGIN: 'https://beta.terminus.run' };
+  const beta = { ...on(), PUBLIC_ORIGIN: 'https://beta.terminus.run' };
   assert.equal((await at('beta.terminus.rcn.sh', '/account/', html, beta)).headers.get('location'), 'https://beta.terminus.run/account/');
   assert.notEqual((await at('terminus.rcn.sh', '/', html, beta)).status, 301);
   assert.notEqual((await at('beta.terminus.rcn.sh', '/', html)).status, 301);
+  // Off unless MOVE_PAGES is "on": while NUS Wi-Fi refuses terminus.run, the old address serves its pages.
+  assert.notEqual((await at('terminus.rcn.sh', '/account/', html, makeEnv())).status, 301);
 });
