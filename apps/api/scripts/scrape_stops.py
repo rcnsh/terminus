@@ -5,7 +5,7 @@ Scrape the static NUS ISB stop graph into data/stops.json.
 Stop locations, route order and operating hours change a few times a year, not
 a few times a minute, so this runs weekly in CI and the result is bundled into
 the Worker. Fetching it per request would add latency and an upstream
-dependency to every tile tap.
+dependency to every answer.
 
 The `routes` ordering is what makes direction resolution work. It is the part
 to get right; everything else in this file is bookkeeping.
@@ -43,6 +43,8 @@ REQUIRED = [
 
 # Mirrors src/auth.ts.
 AUTH_PATH = "/get-access-token"
+# The feed's replies are a few KB; anything near this is not the feed.
+MAX_BYTES = 5_000_000
 
 # ServiceDescription is not exposed on the bus proxy, so there is no call that
 # lists the services. Route codes come from the current graph plus this list;
@@ -131,17 +133,34 @@ def app_headers() -> dict:
     return h
 
 
+class NoRedirects(urllib.request.HTTPRedirectHandler):
+    """urllib sends every header again to wherever a redirect points, http
+    included, and these carry the feed's keys and token. The feed never
+    redirects, so a redirect is refused rather than followed."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise urllib.error.HTTPError(req.full_url, code, "redirect refused", headers, fp)
+
+
+OPENER = urllib.request.build_opener(NoRedirects)
+
+
 def post_json(url: str, headers: dict, body: dict) -> dict:
     data = json.dumps(body).encode("utf-8")
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
     path = urllib.parse.urlsplit(url).path
     try:
-        with urllib.request.urlopen(req, timeout=30) as res:
-            return json.loads(res.read().decode("utf-8"))
+        with OPENER.open(req, timeout=30) as res:
+            raw = res.read(MAX_BYTES + 1)
     except urllib.error.HTTPError as exc:
-        raise SystemExit(f"POST {path} -> HTTP {exc.code}") from exc
+        # Only the status: the redirect's target or the base URL may be private.
+        refused = " (redirect refused)" if 300 <= exc.code < 400 else ""
+        raise SystemExit(f"POST {path} -> HTTP {exc.code}{refused}") from exc
     except urllib.error.URLError as exc:
         raise SystemExit(f"POST {path} -> unreachable ({exc.reason})") from exc
+    if len(raw) > MAX_BYTES:
+        raise SystemExit(f"POST {path} -> more than {MAX_BYTES} bytes; not the feed's usual reply")
+    return json.loads(raw.decode("utf-8"))
 
 
 def device_id() -> str:
@@ -275,7 +294,7 @@ def scrape(session: dict, route_codes: list) -> dict:
         # Confirmed shape: {"name": "COM3", "caption": "COM 3",
         #  "ShortName": "COM 3", "latitude": ..., "longitude": ...}
         # `name` is the CODE and `caption` is the human label -- not the other
-        # way round. ShortName is already abbreviated the way a tile wants
+        # way round. ShortName is already abbreviated the way a widget wants
         # ("Opp KR MRT"), so it is the display name.
         code = norm_code(first(s, "name", "busstopcode", "code", "BusStopCode", default=""))
         short = str(first(s, "ShortName", "shortname", "caption", default="")).strip()

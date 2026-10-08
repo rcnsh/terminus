@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Publish a GitHub release for a tagged version, with the APKs (one per CPU
 # type from 2.1) and the Mac DMG attached, the hand-written highlights in
 # RELEASE_NOTES.md (when it's for this version) and the commits since the
@@ -16,9 +16,12 @@
 #   scripts/github-release.sh 1.3.8          # publish
 #   scripts/github-release.sh 1.3.8 --notes  # print the notes only
 #   CHANNEL=beta scripts/github-release.sh 2.0.1-beta.1
-set -eu
+set -euo pipefail
 cd "$(dirname "$0")/.."
 VERSION="${1:?usage: [CHANNEL=beta] scripts/github-release.sh <version> [--notes]}"
+# It names the tag and the files: a version, as release.sh and release-beta.sh check.
+VERSION_RE='^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9]+)?)?$'
+[[ $VERSION =~ $VERSION_RE ]] || { echo "$VERSION isn't a version like 2.1.0 or 2.1.1-beta.1"; exit 1; }
 TAG="v$VERSION"
 CHANNEL="${CHANNEL:-}"
 DIR="build/release/$VERSION"
@@ -29,10 +32,17 @@ git rev-parse -q --verify "refs/tags/$TAG" >/dev/null || { echo "no tag $TAG"; e
 [ -f "$APK" ] && [ -f "$MAC" ] || { echo "missing $APK or $MAC"; exit 1; }
 
 # A release lists the commits since the previous release, past its betas.
-case "$VERSION" in
-  *-*) PREV=$(git describe --tags --abbrev=0 "$TAG^" 2>/dev/null || true) ;;
-  *) PREV=$(git describe --tags --abbrev=0 --exclude '*-*' "$TAG^" 2>/dev/null || true) ;;
-esac
+# No previous tag only for the very first: otherwise a failed lookup would
+# publish the first release's notes instead of the changes.
+EXCLUDE='*-*'
+case "$VERSION" in *-*) EXCLUDE='' ;; esac
+EARLIER=$(git tag -l 'v*' --merged "$TAG^")
+if [ -n "$EXCLUDE" ]; then EARLIER=$(printf '%s\n' "$EARLIER" | grep -v -- - || true); fi
+PREV=""
+if [ -n "$EARLIER" ]; then
+  PREV=$(git describe --tags --abbrev=0 --match 'v*' ${EXCLUDE:+--exclude "$EXCLUDE"} "$TAG^") ||
+    { echo "couldn't find the tag before $TAG"; exit 1; }
+fi
 NOTES="$DIR/notes.md"
 python3 scripts/release-notes.py "$VERSION" "$TAG" "$PREV" "$APK" "$MAC" "$CHANNEL" > "$NOTES"
 

@@ -7,27 +7,42 @@ on:
     - cron: "0 3 * * 1"
   workflow_dispatch:
 
+# Three jobs, so no job holds both third-party code and something worth
+# stealing. Anything running in a job can read every secret mapped into it,
+# whichever step gets them, so:
+#   scrape  has the feed and DataMall secrets, runs only this repo's Python
+#           (standard library only), and can't push;
+#   test    runs the npm dev dependencies, with no secrets and no push;
+#   commit  can push, and runs no npm code at all.
+# The data travels between them as an artifact, checked against the hashes
+# the scrape job took, so what's pushed is exactly what was scraped and tested.
 permissions:
-  contents: write
+  contents: read
+
+# One refresh at a time; a second waits rather than cancelling one that may
+# be mid-push.
+concurrency:
+  group: scrape
+  cancel-in-progress: false
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      sha: ${{ steps.head.outputs.sha }}
+      sums: ${{ steps.sums.outputs.sums }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # No token left in .git/config: the scrapers, the parsers of what
-          # they fetch and the test suite's dependencies all run before the
-          # commit, and none of them should be able to push to main. Only the
-          # last step gets the token.
+          # No token left in .git/config: this job never pushes.
           persist-credentials: false
 
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "24"
-          cache: pnpm
+      # The test and commit jobs check out this same commit, so the data is
+      # tested and committed on the code that made it, even if main moves.
+      - name: Note the commit
+        id: head
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -48,6 +63,7 @@ jobs:
       # often busy: on failure the committed shapes stay, and the API draws a
       # route whose stops changed as straight lines until next week.
       - name: Route shapes
+        id: shapes
         continue-on-error: true
         run: python3 apps/api/scripts/route_shapes.py
 
@@ -55,14 +71,109 @@ jobs:
       # key, the LTA_ACCOUNT_KEY secret). Without the key, or with DataMall
       # down, the committed public.json stays.
       - name: Public buses
+        id: lta
         continue-on-error: true
         env:
           LTA_ACCOUNT_KEY: ${{ secrets.LTA_ACCOUNT_KEY }}
         run: python3 apps/api/scripts/scrape_lta.py
 
       # Semester dates (NUSMods) and public holidays (MOM). No credentials.
+      # On failure the committed calendar stays: the Worker's cron also
+      # fetches it into KV weekly (src/calendarsync.ts), so it needn't hold
+      # up the stop graph.
       - name: Refresh calendar
+        id: calendar
+        continue-on-error: true
         run: python3 apps/api/scripts/fetch_calendar.py
+
+      # The three steps above fail quietly; say so on the run's page.
+      - name: Note what wasn't refreshed
+        if: steps.shapes.outcome == 'failure' || steps.lta.outcome == 'failure' || steps.calendar.outcome == 'failure'
+        env:
+          SHAPES: ${{ steps.shapes.outcome }}
+          LTA: ${{ steps.lta.outcome }}
+          CALENDAR: ${{ steps.calendar.outcome }}
+          HAS_LTA_KEY: ${{ secrets.LTA_ACCOUNT_KEY != '' }}
+        run: |
+          if [ "$SHAPES" = failure ]; then
+            echo "::warning title=route shapes::not refreshed (Overpass busy?); shapes.json stays as committed"
+          fi
+          if [ "$LTA" = failure ] && [ "$HAS_LTA_KEY" != true ]; then
+            echo "::warning title=public buses::not refreshed: the LTA_ACCOUNT_KEY secret is missing; public.json stays as committed"
+          elif [ "$LTA" = failure ]; then
+            echo "::warning title=public buses::not refreshed (DataMall down?); public.json stays as committed"
+          fi
+          if [ "$CALENDAR" = failure ]; then
+            echo "::warning title=calendar::not refreshed; calendar.json stays as committed (the cron still fetches it into KV)"
+          fi
+
+      # A job's outputs can only be set by that job, so the later jobs check
+      # the artifact against these: nothing else in the run can swap the data.
+      - name: Hash the data
+        id: sums
+        working-directory: apps/api/data
+        run: |
+          {
+            echo "sums<<END_OF_SUMS"
+            sha256sum stops.json calendar.json shapes.json public.json
+            echo "END_OF_SUMS"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: scraped-data
+          path: |
+            apps/api/data/stops.json
+            apps/api/data/calendar.json
+            apps/api/data/shapes.json
+            apps/api/data/public.json
+          if-no-files-found: error
+          retention-days: 3
+
+  test:
+    needs: scrape
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      changed: ${{ steps.diff.outputs.changed }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.scrape.outputs.sha }}
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: scraped-data
+          path: apps/api/data
+
+      - name: Check the data is what was scraped
+        working-directory: apps/api/data
+        env:
+          SUMS: ${{ needs.scrape.outputs.sums }}
+        run: printf '%s\n' "$SUMS" | sha256sum --strict -c -
+
+      # Before any dependency is installed, so none can change the answer.
+      - name: Compare with what's committed
+        id: diff
+        run: |
+          if git diff --quiet -- apps/api/data/stops.json apps/api/data/calendar.json apps/api/data/shapes.json apps/api/data/public.json; then
+            echo "stop graph, shapes, public buses and calendar unchanged"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
 
       # A bad graph is worse than a stale one, so the suite gates the commit.
       # The golden answers (test/fixtures/answers) are worked out on the real
@@ -76,26 +187,82 @@ jobs:
           fi
 
       # Well-formed but wrong (stops gone, off-campus coordinates, a huge
-      # file) is caught here: this pushes to main with no review.
+      # file) is caught here: this pushes to main with no review. It
+      # compares with HEAD, the commit the data was scraped on.
       - name: Sanity-check against what's committed
         run: python3 apps/api/scripts/check_scraped.py
 
-      - name: Commit if changed
+  commit:
+    needs: [scrape, test]
+    if: needs.test.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.scrape.outputs.sha }}
+          # Only the push step gets the token, for that one command.
+          persist-credentials: false
+
+      # The push step checks .git/config is still this, so nothing unpacked
+      # since (the artifact, say) can point the push elsewhere (a proxy, an
+      # insteadOf) or add a filter to it.
+      - name: Fingerprint git config
+        id: gitconfig
+        run: echo "sum=$(sha256sum .git/config | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: scraped-data
+          path: apps/api/data
+
+      - name: Check the data is what was scraped and tested
+        working-directory: apps/api/data
+        env:
+          SUMS: ${{ needs.scrape.outputs.sums }}
+        run: printf '%s\n' "$SUMS" | sha256sum --strict -c -
+
+      # git runs with no hooks, none of the runner's global or system config,
+      # and .git/config as it was after checkout. Only the data files may
+      # differ, and the commit goes straight onto the commit that was tested:
+      # no rebase, which would put untested code under the new data on main.
+      - name: Commit and push
         env:
           PUSH_TOKEN: ${{ github.token }}
+          CONFIG_SUM: ${{ steps.gitconfig.outputs.sum }}
+          BASE: ${{ needs.scrape.outputs.sha }}
+          GIT_CONFIG_GLOBAL: /dev/null
+          GIT_CONFIG_NOSYSTEM: "1"
         run: |
-          if git diff --quiet -- apps/api/data/stops.json apps/api/data/calendar.json apps/api/data/shapes.json apps/api/data/public.json; then
+          DATA="apps/api/data/stops.json apps/api/data/calendar.json apps/api/data/shapes.json apps/api/data/public.json"
+          only_data() { for f in $1; do case " $DATA " in *" $f "*) ;; *) return 1 ;; esac; done; }
+          g() { git -c core.hooksPath=/dev/null -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" "$@"; }
+          [ "$(sha256sum .git/config | cut -d' ' -f1)" = "$CONFIG_SUM" ] || { echo "::error::.git/config changed since checkout"; exit 1; }
+          [ "$(git rev-parse HEAD)" = "$BASE" ] || { echo "::error::checked out something other than the scraped commit"; exit 1; }
+          only_data "$(git status --porcelain --untracked-files=all | cut -c4-)" || { echo "::error::files other than the data changed"; exit 1; }
+          if git diff --quiet -- $DATA; then
             echo "stop graph, shapes, public buses and calendar unchanged"
             exit 0
           fi
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apps/api/data/stops.json apps/api/data/calendar.json apps/api/data/shapes.json apps/api/data/public.json
-          git commit -m "chore(data): refresh stop graph, shapes, public buses and calendar"
-          # main may have moved during the scrape; the data files are only
-          # changed here, so this rebases cleanly.
-          # The same header actions/checkout would have stored, for these two
+          g add $DATA
+          only_data "$(git diff --cached --name-only)" || { echo "::error::files other than the data are staged"; exit 1; }
+          g commit -q -m "chore(data): refresh stop graph, shapes, public buses and calendar"
+          sha=$(git rev-parse HEAD)
+          [ "$(git rev-parse "$sha^")" = "$BASE" ] || { echo "::error::the commit's parent isn't the commit that was tested"; exit 1; }
+          only_data "$(git diff --name-only "$BASE" "$sha")" || { echo "::error::the commit changes more than the data"; exit 1; }
+          # The same header actions/checkout would have stored, for these
           # commands only.
           auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$PUSH_TOKEN" | base64 -w0)"
-          git -c http.https://github.com/.extraheader="$auth" pull --rebase origin main
-          git -c http.https://github.com/.extraheader="$auth" push
+          remote_main() { g -c http.https://github.com/.extraheader="$auth" ls-remote origin refs/heads/main | cut -f1; }
+          moved() { echo "::warning title=not pushed::main moved since the scrape (or the run wasn't on main), so the new data wasn't pushed. Run the workflow again."; }
+          [ "$(remote_main)" = "$BASE" ] || { moved; exit 0; }
+          # By hash, and a fast-forward only (no force): if main moves after
+          # the check above, GitHub refuses the push.
+          if ! g -c http.https://github.com/.extraheader="$auth" push -q origin "$sha:refs/heads/main"; then
+            [ "$(remote_main)" = "$BASE" ] || { moved; exit 0; }
+            echo "::error::push to main failed"
+            exit 1
+          fi
+          echo "pushed $sha"

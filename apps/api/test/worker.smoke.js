@@ -229,26 +229,36 @@ test('/openapi.json and /docs are built once and sent the same', async () => {
   assert.equal(await res.text(), openApiJson(BASE));
 });
 
+test('the apps and the API docs carry the same version and build number', async () => {
+  // A release bumps them together: a mismatch ships an app that says one
+  // version and updates as another.
+  const { readFileSync } = await import('node:fs');
+  const gradle = readFileSync(new URL('../../android/app/build.gradle.kts', import.meta.url), 'utf8');
+  const plist = readFileSync(new URL('../../macos/Support/Info.plist', import.meta.url), 'utf8');
+  // Exactly one match each, so a second definition can't hide behind the first.
+  const only = (text, re, what) => {
+    const all = [...text.matchAll(re)];
+    assert.equal(all.length, 1, `${what}: expected one, found ${all.length}`);
+    return all[0][1];
+  };
+  // The literals in defaultConfig; the beta build's `versionCode = it.toInt()` is no number.
+  const versionName = only(gradle, /\bversionName = "([^"]+)"/g, 'versionName in apps/android/app/build.gradle.kts');
+  const versionCode = only(gradle, /\bversionCode = (\d+)\b/g, 'versionCode in apps/android/app/build.gradle.kts');
+  const macVersion = only(plist, /<key>CFBundleShortVersionString<\/key>\s*<string>([^<]+)<\/string>/g, 'CFBundleShortVersionString in apps/macos/Support/Info.plist');
+  const macBuild = only(plist, /<key>CFBundleVersion<\/key>\s*<string>([^<]+)<\/string>/g, 'CFBundleVersion in apps/macos/Support/Info.plist');
+  assert.equal(API_VERSION, versionName, 'API_VERSION in src/openapi.ts matches versionName in apps/android/app/build.gradle.kts');
+  assert.equal(API_VERSION, macVersion, 'API_VERSION in src/openapi.ts matches CFBundleShortVersionString in apps/macos/Support/Info.plist');
+  assert.equal(macBuild, versionCode, 'CFBundleVersion in apps/macos/Support/Info.plist matches versionCode in apps/android/app/build.gradle.kts');
+});
+
 test('the OpenAPI spec documents exactly the routes that exist', async () => {
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4, COM3: D2_IN_4 } });
   const { res } = await call('/openapi.json', { fetchImpl });
   assert.equal(res.status, 200);
   const spec = await res.json();
   assert.equal(spec.openapi, '3.1.0');
-  // The docs' version is the apps' version: bump all three together.
-  const { readFileSync } = await import('node:fs');
-  const gradle = readFileSync(new URL('../../android/app/build.gradle.kts', import.meta.url), 'utf8');
-  const plist = readFileSync(new URL('../../macos/Support/Info.plist', import.meta.url), 'utf8');
-  const android = gradle.match(/versionName = "([^"]+)"/)?.[1];
-  const mac = plist.match(/<key>CFBundleShortVersionString<\/key>\s*<string>([^<]+)<\/string>/)?.[1];
+  // The docs' version is the apps' version (the test above keeps them in step).
   assert.equal(spec.info.version, API_VERSION);
-  assert.equal(API_VERSION, android, 'API_VERSION in src/openapi.ts matches versionName in apps/android/app/build.gradle.kts');
-  assert.equal(API_VERSION, mac, 'API_VERSION in src/openapi.ts matches CFBundleShortVersionString in apps/macos/Support/Info.plist');
-  // And the build numbers, which release.sh also checks: Sparkle compares the Mac's.
-  const androidCode = gradle.match(/versionCode = (\d+)/)?.[1];
-  const macBuild = plist.match(/<key>CFBundleVersion<\/key>\s*<string>([^<]+)<\/string>/)?.[1];
-  assert.ok(androidCode, 'versionCode found in build.gradle.kts');
-  assert.equal(macBuild, androidCode, 'CFBundleVersion in apps/macos/Support/Info.plist matches versionCode in apps/android/app/build.gradle.kts');
   assert.equal(spec.servers[0].url, BASE, 'try-it requests go to whoever serves the docs');
 
   // Every method on every path, with path parameters as `*`: the account
@@ -1428,6 +1438,17 @@ test('search engines get robots.txt and a sitemap of real pages; the beta asks n
   assert.match(robots, /^User-agent: \*$/m);
   assert.match(robots, /^Sitemap: https:\/\/terminus\.rcn\.sh\/sitemap\.xml$/m);
   assert.doesNotMatch(robots, /^Disallow: \/$/m, 'the stable site is open to search');
+  // The answers (keyed: no `security` of their own in the spec) are not for
+  // search; the docs that describe them are.
+  const { openApiSpec } = await import('../src/openapi.ts');
+  const keyed = Object.entries(openApiSpec(BASE).paths).filter(([, item]) => item.get && item.get.security === undefined).map(([p]) => p);
+  assert.ok(keyed.includes('/next') && keyed.includes('/stops/pairs'));
+  const disallowed = [...robots.matchAll(/^Disallow: (\S+)$/gm)].map((m) => m[1]);
+  for (const p of keyed) assert.ok(disallowed.includes(p), `robots.txt disallows ${p}`);
+  assert.ok(disallowed.includes('/timelapse/'));
+  for (const p of ['/docs', '/openapi.json', '/llms.txt', '/status/', '/status.json']) {
+    assert.ok(!disallowed.some((d) => p.startsWith(d)), `${p} stays open to search`);
+  }
   const { res } = await call('/sitemap.xml');
   assert.equal(res.status, 200);
   const locs = [...(await res.text()).matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => new URL(m[1]).pathname);

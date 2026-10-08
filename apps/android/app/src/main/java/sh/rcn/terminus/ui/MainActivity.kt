@@ -426,7 +426,7 @@ private fun Tabs(
                     // Edge to edge, the insets inside its scrolling, so the sky can reach the top.
                     Tab.Now -> Box(Modifier.fillMaxSize().consumeWindowInsets(inner).imePadding()) {
                         // A stop tapped in Nearby: open on the map, with its sheet.
-                        MainScreen(state, vm, insets = inner, signedIn = acct.email != null, onAddEmail = onAddEmail, onOpenStop = { code -> map.showStop(code); onTab(Tab.Map) })
+                        MainScreen(state, vm, insets = inner, email = acct.email, onAddEmail = onAddEmail, onOpenStop = { code -> map.showStop(code); onTab(Tab.Map) })
                     }
                 }
             }
@@ -459,8 +459,6 @@ private fun RemovedBar(removed: DayItem?, error: String?, host: SnackbarHostStat
 private fun fadeThrough(): ContentTransform =
     (fadeIn(tween(210, delayMillis = 90, easing = LinearOutSlowInEasing)) + scaleIn(tween(210, delayMillis = 90, easing = LinearOutSlowInEasing), initialScale = 0.92f))
         .togetherWith(fadeOut(tween(90, easing = FastOutLinearInEasing)))
-
-/** The account's limit on saved places (PROFILE_LIMITS.places in the API). */
 
 /** Android 12 has no per-app language: the activity starts again in the chosen one (Lang.wrap). */
 private fun recreateOn12(ctx: Context) {

@@ -1,5 +1,9 @@
-# Keeps the pinned GitHub Actions (by commit SHA) and the npm dev
-# dependencies current: a PR when there's something new, a week at a time.
+# Keeps the pinned GitHub Actions (by commit SHA), the npm dev dependencies,
+# the Android app's Gradle dependencies and the Mac app's Swift packages
+# current: a PR per ecosystem when there's something new, a week at a time.
+#
+# Every ecosystem has a cooldown: a new release sits a few days first, as a
+# compromised version is usually caught and pulled within that.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -13,6 +17,8 @@ updates:
     commit-message:
       prefix: ci
       include: scope
+    cooldown:
+      default-days: 5
   - package-ecosystem: npm
     directory: /
     schedule:
@@ -24,7 +30,35 @@ updates:
     commit-message:
       prefix: chore
       include: scope
-    # Let a new release sit a few days first: a compromised version is
-    # usually caught and pulled within that.
+    cooldown:
+      default-days: 5
+  # The version catalog (gradle/libs.versions.toml), the build scripts and
+  # the Gradle wrapper.
+  - package-ecosystem: gradle
+    directory: /apps/android
+    schedule:
+      interval: weekly
+    groups:
+      android:
+        patterns: ["*"]
+    # "build(deps): bump ...".
+    commit-message:
+      prefix: build
+      include: scope
+    cooldown:
+      default-days: 5
+  # Package.swift and Package.resolved (Sparkle); CI builds with exactly
+  # the resolved versions.
+  - package-ecosystem: swift
+    directory: /apps/macos
+    schedule:
+      interval: weekly
+    groups:
+      mac:
+        patterns: ["*"]
+    # "build(deps): bump ...".
+    commit-message:
+      prefix: build
+      include: scope
     cooldown:
       default-days: 5

@@ -3,10 +3,17 @@
 import { MAX_FIX_ACC_M, TTL } from './config.ts';
 import { errorText } from './i18n.ts';
 
+/**
+ * Open to any origin, with the headers the API reads: an API key (x-api-key)
+ * or a token, and if-match on PUT /me/profile. A page on another origin
+ * sees only safelisted response headers unless they are exposed: the
+ * profile's etag (sent back as if-match) and a 429's retry-after.
+ */
 export const CORS = {
   'access-control-allow-origin': '*',
-  'access-control-allow-headers': 'content-type, authorization, x-terminus-client',
+  'access-control-allow-headers': 'content-type, authorization, x-api-key, if-match, x-terminus-client',
   'access-control-allow-methods': 'GET,POST,PUT,DELETE,OPTIONS',
+  'access-control-expose-headers': 'etag, retry-after',
 };
 
 export function json(body: unknown, status = 200, extra: Record<string, string> = {}): Response {
@@ -37,7 +44,7 @@ export function jsonCached(body: unknown, maxAge: number, scope: 'public' | 'pri
 /**
  * LANDMINE: Number(null) === 0 and Number('') === 0, not NaN. A missing lat
  * silently resolves to the Gulf of Guinea and reports "no stop nearby"
- * instead of falling back to the configured origin.
+ * instead of falling back to `?from=` or the profile's home stop.
  */
 export function numParam(url: URL, key: string): number | null {
   const raw = url.searchParams.get(key);
@@ -150,8 +157,10 @@ const CSP_BASE = [
   "font-src 'self'",
   "img-src 'self' data: blob:",
   "connect-src 'self' https://cloudflareinsights.com",
-  // MapLibre draws the map in web workers it starts from blob: URLs.
-  "worker-src 'self' blob:",
+  // MapLibre draws the map in web workers it starts from its own same-origin
+  // file (/vendor/maplibre-gl@…/maplibre-gl-worker.mjs); it makes a blob:
+  // URL only for a worker on another origin, which ours never is.
+  "worker-src 'self'",
   "object-src 'none'",
   "base-uri 'none'",
   "form-action 'self'",
@@ -165,10 +174,28 @@ const DOCS_EXTRA: Record<string, string> = {
   'img-src': 'https:',
   'font-src': `data: ${ELEMENTS}/`,
 };
-const CSP_DOCS = CSP_BASE.map((d) => {
-  const extra = DOCS_EXTRA[d.split(' ')[0]];
-  return extra ? `${d} ${extra}` : d;
-}).join('; ');
+/**
+ * What the timelapse page (admin/timelapse/) adds: Mediabunny, its video
+ * encoder, starts its workers from blob: URLs of code it carries inline.
+ * No other page needs blob: workers, so only this one may start them.
+ */
+const TIMELAPSE_EXTRA: Record<string, string> = {
+  'worker-src': 'blob:',
+};
+const widen = (extra: Record<string, string>): string =>
+  CSP_BASE.map((d) => {
+    const more = extra[d.split(' ')[0]];
+    return more ? `${d} ${more}` : d;
+  }).join('; ');
+const CSP_DOCS = widen(DOCS_EXTRA);
+const CSP_TIMELAPSE = widen(TIMELAPSE_EXTRA);
+
+/** The CSP for the page at this path. */
+export function cspFor(path: string): string {
+  if (path === '/docs') return CSP_DOCS;
+  if (path.startsWith('/admin/timelapse/')) return CSP_TIMELAPSE;
+  return CSP_SITE;
+}
 
 export function withSecurityHeaders(res: Response, path: string): Response {
   const out = new Response(res.body, res);
@@ -178,7 +205,7 @@ export function withSecurityHeaders(res: Response, path: string): Response {
   // Sign-in and pairing URLs carry a token or a code: never send them on.
   h.set('referrer-policy', path.startsWith('/auth/') || path.startsWith('/pair') ? 'no-referrer' : 'strict-origin-when-cross-origin');
   if ((h.get('content-type') ?? '').includes('text/html')) {
-    h.set('content-security-policy', path === '/docs' ? CSP_DOCS : CSP_SITE);
+    h.set('content-security-policy', cspFor(path));
     h.set('x-frame-options', 'DENY');
     h.set('permissions-policy', 'geolocation=(self), camera=(), microphone=()');
   }

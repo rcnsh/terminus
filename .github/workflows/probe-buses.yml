@@ -9,7 +9,7 @@ on:
         description: "How long to poll"
         default: "3"
       services:
-        description: "Services, space-separated"
+        description: "Services, space-separated (at most 6)"
         default: "A1 A2 D1 D2"
       every:
         description: "Seconds between polls of each service (at least 5)"
@@ -47,10 +47,18 @@ jobs:
           EVERY: ${{ inputs.every }}
           TRACE: ${{ inputs.trace }}
         working-directory: apps/api/scripts
-        # SERVICES unquoted on purpose: one argument per service.
+        # SERVICES unquoted on purpose: one argument per service. Each must
+        # be a plain service name, so the input can't pass an option (or a
+        # glob); after `--` too, and probe_buses.py checks again.
         run: |
+          set -f
+          for s in $SERVICES; do
+            case "$s" in
+              *[!A-Za-z0-9]*) echo "::error::not a service name: $s"; exit 1 ;;
+            esac
+          done
           if [ "$TRACE" = true ]; then set -- --trace trace.jsonl; fi
-          python3 probe_buses.py --minutes "$MINUTES" --every "$EVERY" "$@" $SERVICES > report.md
+          python3 probe_buses.py --minutes "$MINUTES" --every "$EVERY" "$@" -- $SERVICES > report.md
           if [ "$TRACE" = true ]; then echo "--- trace ---"; cat trace.jsonl; echo "--- end trace ---"; fi
           cat report.md >> "$GITHUB_STEP_SUMMARY"
           # Also as one annotation, readable through the API without the logs.

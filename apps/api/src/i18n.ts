@@ -715,6 +715,7 @@ export const ERRORS_ZH: Record<string, string> = {
   "no release yet": "还没有发布版本",
   "release file missing": "找不到发布文件",
   "say what went wrong": "请说说哪里出了问题",
+  "reason is not one of the choices": "reason 不是可选的原因之一",
   "seen must be a short list of names": "seen 必须是一个简短的名称列表",
   "share must be a NUSMods link": "share 必须是 NUSMods 链接",
   "term must be {acadYear: \"2026/2027\", semester: 1-4}": "term 必须是 {acadYear: \"2026/2027\", semester: 1-4}",

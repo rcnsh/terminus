@@ -30,8 +30,8 @@ import sh.rcn.terminus.widget.isOld
 import sh.rcn.terminus.widget.redrawWidgets
 
 /**
- * The live notification: during a trip, from "time to go" until you're there
- * (phase 3), a silent ongoing notification with the next bus and a ticking
+ * The live notification: during a trip, from "time to go" until you're
+ * there, a silent ongoing notification with the next bus and a ticking
  * countdown, refreshed every 30 s (2 min with the screen off), and the
  * widgets redrawn with it.
  *

@@ -43,6 +43,11 @@ SAME_SHELTER_M = 20
 # stops, the stops opposite the terminal. Not Pasir Panjang Road or the AYE,
 # 250 m and more away: this is about the campus, not the island.
 RADIUS_M = 200
+# BusRoutes, the largest dataset, is about 26,000 rows: 53 pages of 500. A
+# dataset that keeps going far past that is a server answering in a loop.
+MAX_PAGES = 200
+# A page of 500 rows is about 200 KB.
+MAX_BYTES = 5_000_000
 
 
 def load_dev_vars() -> None:
@@ -60,27 +65,42 @@ def load_dev_vars() -> None:
             os.environ[key] = value
 
 
+class NoRedirects(urllib.request.HTTPRedirectHandler):
+    """urllib sends every header again to wherever a redirect points, http
+    included, and the AccountKey is one of them. DataMall answers its static
+    datasets directly, so a redirect is refused rather than followed."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise urllib.error.HTTPError(req.full_url, code, "redirect refused", headers, fp)
+
+
+OPENER = urllib.request.build_opener(NoRedirects)
+
+
 def get_json(path: str) -> dict:
     req = urllib.request.Request(BASE + path, headers={"AccountKey": os.environ["LTA_ACCOUNT_KEY"], "Accept": "application/json"})
     try:
-        with urllib.request.urlopen(req, timeout=30) as res:
-            return json.loads(res.read().decode("utf-8"))
+        with OPENER.open(req, timeout=30) as res:
+            raw = res.read(MAX_BYTES + 1)
     except urllib.error.HTTPError as exc:
-        raise SystemExit(f"GET {path} -> HTTP {exc.code}") from exc
+        refused = " (redirect refused)" if 300 <= exc.code < 400 else ""
+        raise SystemExit(f"GET {path} -> HTTP {exc.code}{refused}") from exc
     except urllib.error.URLError as exc:
         raise SystemExit(f"GET {path} -> unreachable ({exc.reason})") from exc
+    if len(raw) > MAX_BYTES:
+        raise SystemExit(f"GET {path} -> more than {MAX_BYTES} bytes; not a page of 500 rows")
+    return json.loads(raw.decode("utf-8"))
 
 
 def dataset(name: str) -> list:
     """A whole static dataset: 500 rows a page, until a short page."""
     rows: list = []
-    skip = 0
-    while True:
-        page = get_json(f"{name}?$skip={skip}").get("value") or []
+    for page_no in range(MAX_PAGES):
+        page = get_json(f"{name}?$skip={page_no * 500}").get("value") or []
         rows.extend(page)
         if len(page) < 500:
             return rows
-        skip += 500
+    raise SystemExit(f"{name}: still going after {MAX_PAGES} pages; not the dataset it should be")
 
 
 def metres(lat1: float, lon1: float, lat2: float, lon2: float) -> float:

@@ -100,7 +100,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
             // read once outside the composition would stay stale.
             val version = currentState(VERSION) ?: 0L
             val snap = snaps.get(version) { Snap(store) }
-            // This widget's own choice (phase 8.3): the timetable, Nearby or a place.
+            // This widget's own choice: the timetable, Nearby or a place.
             val state = ModeState(
                 Mode.of(currentState(WidgetModes.MODE), currentState(WidgetModes.MODE_LABEL)),
                 currentState(WidgetModes.MODE_AT),
@@ -273,7 +273,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         Footer(ctx, fetchedAt, error, roomy)
                     }
                     answer.card?.phase == "riding" && answer.card.ride != null -> {
-                        // On the bus (phase 6): where you get off and when, the
+                        // On the bus: where you get off and when, the
                         // next stop, and how far along the ride the bus is.
                         val ride = answer.card.ride
                         val now = ServerClock.now()
@@ -434,9 +434,9 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
     }
 
     /**
-     * The bottom of a large widget: the row that switches what it shows
-     * (phase 8.3), pushed to the foot, then (with [gap]) a little room above
-     * the footer. Nothing here asks what happened on the trip. None on a
+     * The bottom of a large widget: the row that switches what it shows,
+     * pushed to the foot, then (with [gap]) a little room above the footer.
+     * Nothing here asks what happened on the trip. None on a
      * compact widget.
      */
     @Composable
@@ -458,7 +458,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
     private fun ModeChips(ctx: Context, b: Bottom) {
         val colors = GlanceTheme.colors
         // Gaps as padding, not Spacers: a Glance Row holds at most 10 children,
-        // and a wide widget fits six buttons.
+        // and a wide widget fits up to WidgetModes.MAX_BUTTONS of them.
         Row(modifier = GlanceModifier.fillMaxWidth()) {
             b.chips.forEachIndexed { i, m ->
                 val on = m.id == b.mode.id

@@ -26,7 +26,7 @@ import sh.rcn.terminus.widget.finishAsync
  * again later. A last alarm at the leave time turns the notification into
  * "Leave now", unless it was dismissed.
  *
- * From then on (phase 3) the same notification follows the trip, updated in
+ * From then on the same notification follows the trip, updated in
  * place and never posted again once dismissed: the ride, or the next way
  * there after a missed bus. It never asks what happened: that comes from
  * the plan and the phone's location. Its one button, before you've left, is
@@ -175,7 +175,7 @@ object LeaveAlerts {
         // Which trip the heads-up was for: a class by its start, which stays put
         // while its leave time moves with the buses.
         val trip = classAt ?: remindAt
-        // "On it", "Missed it" or "Not going" was just answered for the trip on
+        // "Not going" was just answered for the trip on
         // screen: its notification follows, even though the plan (and its
         // leave time) has moved on.
         val following = trip != null && state.notifiedFor != 0L && state.notifiedFor == trip && showing

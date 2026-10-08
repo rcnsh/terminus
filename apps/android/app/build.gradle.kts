@@ -36,8 +36,10 @@ android {
     }
 
     // The release key lives outside the repo: its path and passwords come
-    // from ~/.gradle/gradle.properties (TERMINUS_*). Without them (anyone
-    // else building from source) release builds fall back to the debug key.
+    // from ~/.gradle/gradle.properties (TERMINUS_*). Without them (CI, or
+    // anyone else building from source) release builds come out unsigned
+    // (app-*-release-unsigned.apk), never signed with the debug key, so a
+    // build that missed the key can't pass for a release.
     val keystore = providers.gradleProperty("TERMINUS_KEYSTORE").orNull
     signingConfigs {
         if (keystore != null) {
@@ -55,10 +57,10 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release")
         }
     }
-    // Chinese can be chosen in the app (phase 10), whatever the phone's language,
+    // Chinese can be chosen in the app, whatever the phone's language,
     // so Play must not leave it out of an English phone's download.
     bundle {
         language { enableSplit = false }
@@ -92,16 +94,28 @@ android {
     }
 }
 
+// `-PapiBase` points a debug build's API elsewhere: `./gradlew
+// -PapiBase=http://localhost:8787 installStableDebug` plus `adb reverse
+// tcp:8787 tcp:8787` uses the dev stub. Debug builds only, so a stray
+// property (say, in ~/.gradle/gradle.properties) can never ship a release
+// that talks to a laptop.
+val apiBase = providers.gradleProperty("apiBase").orNull
+androidComponents {
+    onVariants(selector().withBuildType("debug")) { variant ->
+        if (apiBase != null) {
+            variant.buildConfigFields?.put("API_BASE", com.android.build.api.variant.BuildConfigField("String", "\"$apiBase\"", "-PapiBase"))
+        }
+    }
+}
+
 /**
  * One channel's site and name. SITE is where links go (the account page,
- * pairing QR codes); API_BASE is the same unless `-PapiBase` points a debug
- * build elsewhere: `./gradlew -PapiBase=http://localhost:8787
- * installStableDebug` plus `adb reverse tcp:8787 tcp:8787` uses the dev stub.
+ * pairing QR codes); API_BASE is the same, except in a debug build given
+ * `-PapiBase` (above).
  */
 fun com.android.build.api.dsl.ApplicationProductFlavor.site(site: String, packageName: String, name: String) {
     buildConfigField("String", "SITE", "\"$site\"")
-    val apiBase = project.providers.gradleProperty("apiBase").orElse(site).get()
-    buildConfigField("String", "API_BASE", "\"$apiBase\"")
+    buildConfigField("String", "API_BASE", "\"$site\"")
     manifestPlaceholders["siteHost"] = site.removePrefix("https://")
     resValue("string", "app_name", name)
     // Push: this package's Firebase app from google-services.json (not in
@@ -128,6 +142,13 @@ fun firebaseConfig(json: File, packageName: String): Map<String, String> {
     )
 }
 
+// Every configuration's resolved versions are pinned in gradle.lockfile, so
+// a dependency can't change under a build without a diff to review. After
+// changing a version, write it again with the commands in the README.
+dependencyLocking {
+    lockAllConfigurations()
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
@@ -148,4 +169,33 @@ dependencies {
     implementation(libs.firebase.messaging)
     testImplementation(libs.junit)
     testImplementation(libs.org.json)
+
+    // Lint runs from its own classpath, which brings in older versions of
+    // these, each with a published advisory; as for the plugins' classpath in
+    // ../build.gradle.kts, lint runs with the fixed ones.
+    constraints {
+        "androidLintTool"("org.bouncycastle:bcprov-jdk18on:1.85") { because("GHSA-9pwp-9qqc-pr26, GHSA-qp49-qgx5-5m26, GHSA-c3fc-8qff-9hwx") }
+        "androidLintTool"("org.bouncycastle:bcpkix-jdk18on:1.85") { because("GHSA-wg6q-6289-32hp; matches bcprov") }
+        "androidLintTool"("org.bouncycastle:bcutil-jdk18on:1.85") { because("matches bcprov") }
+        "androidLintTool"("org.apache.commons:commons-lang3:3.18.0") { because("GHSA-j288-q9x7-2f5v") }
+        "androidLintTool"("org.apache.httpcomponents:httpclient:4.5.14") { because("GHSA-7r82-7xv7-xcpj") }
+    }
+}
+
+// Resolves every configuration of the app, for `--write-locks` and
+// `--write-verification-metadata` (see the README): the build tasks alone
+// leave many unresolved (the other variants', the Android tests').
+tasks.register("resolveAll") {
+    description = "Resolves every resolvable configuration, to write gradle.lockfile and verification-metadata.xml."
+    notCompatibleWithConfigurationCache("reads the project's configurations when it runs")
+    doLast {
+        configurations.filter { it.isCanBeResolved }.forEach { configuration ->
+            val failed = configuration.incoming.resolutionResult.allDependencies
+                .filterIsInstance<org.gradle.api.artifacts.result.UnresolvedDependencyResult>()
+            check(failed.isEmpty()) { "${configuration.name}: ${failed.joinToString { "${it.attempted}: ${it.failure.message}" }}" }
+            // The files too, so their checksums are written; lenient because
+            // some configurations hold more than one kind of artefact.
+            configuration.incoming.artifactView { lenient(true) }.files.files
+        }
+    }
 }

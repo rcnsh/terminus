@@ -61,7 +61,7 @@ jobs:
 
   android:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
@@ -76,14 +76,29 @@ jobs:
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
       # Lint and the JVM unit tests (which parse apps/api/test/fixtures/answers).
-      # Release signing isn't needed: debug tasks only.
       - run: ./gradlew :app:lintStableDebug :app:testStableDebugUnitTest :app:compileBetaDebugKotlin --console=plain
+        working-directory: apps/android
+      # What release.sh and release-beta.sh ship: R8 and resource shrinking
+      # run only here, so a missing keep rule would otherwise first show in a
+      # released app. With no keystore on the runner, both sign with the
+      # debug key; the beta takes the default version without -PbetaVersion.
+      - run: ./gradlew :app:assembleStableRelease :app:assembleBetaRelease --console=plain
         working-directory: apps/android
 
   mac:
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: swift build && swift test
+      # MapLibre is a committed binary, linked into the app: a changed zip
+      # must come with a changed hash, in the same reviewed diff.
+      - run: shasum -a 256 -c MapLibre.xcframework.zip.sha256
+        working-directory: apps/macos/Vendor
+      # Exactly the versions in Package.resolved: a package that moved its
+      # tag, or a stale lock file, fails here rather than resolving afresh.
+      - run: swift build --force-resolved-versions && swift test --force-resolved-versions
+        working-directory: apps/macos
+      # The optimised build that build.sh (and so a release) makes, with its
+      # flags: the debug build can pass where it fails.
+      - run: swift build -c release --arch arm64 --force-resolved-versions
         working-directory: apps/macos

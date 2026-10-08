@@ -6,9 +6,11 @@
 #
 # With CHANNEL=beta (and BETA_VERSION, BETA_BUILD; scripts/release-beta.sh
 # sets them) it packages "terminus beta.app" as
-# build/release/beta/<version>/terminus-<version>.dmg instead.
+# build/release/beta/<version>/terminus-<version>.dmg instead. RELEASES
+# moves build/release elsewhere (a dry run's build/dry-run).
 #
-# scripts/release.sh runs this with the terminus self-signed certificate,
+# scripts/release.sh and scripts/release-beta.sh run this with the terminus
+# self-signed certificate,
 # from the login keychain. That certificate is not trusted by macOS
 # and the app is not notarised, so Gatekeeper still asks on first open; what
 # the signature buys is the same code identity on every version, so macOS
@@ -19,14 +21,15 @@ cd "$(dirname "$0")/.."
 ROOT=$(pwd)
 
 CHANNEL=${CHANNEL:-stable}
+RELEASES=${RELEASES:-$ROOT/build/release}
 if [ "$CHANNEL" = beta ]; then
   VERSION="${BETA_VERSION:?BETA_VERSION is needed for a beta}"
-  OUT="$ROOT/build/release/beta/$VERSION"
+  OUT="$RELEASES/beta/$VERSION"
   NAME="terminus beta"
   ID=sh.rcn.terminus.beta
 else
   VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' apps/macos/Support/Info.plist)
-  OUT="$ROOT/build/release/$VERSION"
+  OUT="$RELEASES/$VERSION"
   NAME=terminus
   ID=sh.rcn.terminus
 fi
@@ -44,6 +47,18 @@ echo "== mac $VERSION ($CHANNEL)"
 APP="apps/macos/build/$NAME.app"
 # Every nested framework and helper too, not just the app's own seal.
 codesign --verify --deep --strict "$APP"
+# The hardened runtime on the app and everything inside it that runs (build.sh).
+for code in "$APP" "$APP/Contents/Frameworks/Sparkle.framework" "$APP/Contents/Frameworks/MapLibre.framework" \
+  "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate" "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app"; do
+  if ! codesign -dv "$code" 2>&1 | grep -q '^CodeDirectory .*flags=.*runtime'; then
+    echo "$code isn't signed with the hardened runtime" >&2
+    exit 1
+  fi
+done
+if [ "${PUBLISH:-}" = true ] && codesign -dv "$APP" 2>&1 | grep -q '^Signature=adhoc'; then
+  echo "$APP is signed ad-hoc; refusing to package a release to publish" >&2
+  exit 1
+fi
 DR=$(codesign -d -r- "$APP" 2>&1 | grep designated)
 echo "$DR"
 # Signed with a certificate, the app must name it: macOS ties the app's

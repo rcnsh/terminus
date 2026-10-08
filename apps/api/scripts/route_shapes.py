@@ -28,17 +28,18 @@ import math
 import pathlib
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUT = ROOT / "data" / "shapes.json"
-MIRRORS = [
-    "https://overpass-api.de/api/interpreter",
-    "https://overpass.kumi.systems/api/interpreter",
-    "https://overpass.private.coffee/api/interpreter",
-]
+# The Overpass project's own instance only: what it answers is committed to
+# main unreviewed, so no third-party mirror gets a say in it.
+OVERPASS = "https://overpass-api.de/api/interpreter"
+# The roads in BBOX are a few MB of JSON; a reply this big is not them.
+MAX_BYTES = 100_000_000
 # South, west, north, east: every stop (Botanic Gardens included) plus a margin.
 BBOX = (1.282, 103.760, 1.330, 103.826)
 DRIVABLE = "motorway|trunk|primary|secondary|tertiary|unclassified|residential|service|living_street|busway|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link|road"
@@ -50,20 +51,37 @@ SIMPLIFY_M = 2.0
 ODD_RATIO, ODD_EXTRA_M = 2.5, 400
 
 
+class HttpsRedirects(urllib.request.HTTPRedirectHandler):
+    """Follows a redirect only to https: what comes back is committed."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if urllib.parse.urlsplit(newurl).scheme != "https":
+            raise urllib.error.HTTPError(req.full_url, code, "redirect to plain http refused", headers, fp)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+OPENER = urllib.request.build_opener(HttpsRedirects)
+
+
 def fetch(query: str) -> dict:
-    """The public Overpass servers are often busy (504, 429): each mirror, a few times."""
+    """The public Overpass server is often busy (504, 429): a few tries, further apart each time."""
     body = urllib.parse.urlencode({"data": query}).encode()
     last = None
-    for attempt in range(3):
-        for url in MIRRORS:
-            req = urllib.request.Request(url, data=body, headers={"User-Agent": "terminus-route-shapes"})
-            try:
-                with urllib.request.urlopen(req, timeout=180) as res:
-                    return json.loads(res.read())
-            except Exception as exc:  # noqa: BLE001
-                last = exc
-                print(f"  {url}: {exc}", file=sys.stderr)
-        time.sleep(20 * (attempt + 1))
+    for attempt in range(4):
+        req = urllib.request.Request(OVERPASS, data=body, headers={"User-Agent": "terminus-route-shapes"})
+        try:
+            with OPENER.open(req, timeout=180) as res:
+                raw = res.read(MAX_BYTES + 1)
+            if len(raw) > MAX_BYTES:
+                raise SystemExit(f"Overpass sent more than {MAX_BYTES} bytes; not writing")
+            return json.loads(raw)
+        except SystemExit:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            last = exc
+            print(f"  {OVERPASS}: {exc}", file=sys.stderr)
+        if attempt < 3:
+            time.sleep(20 * (attempt + 1))
     raise SystemExit(f"Overpass unreachable: {last}")
 
 
@@ -215,11 +233,23 @@ def main():
         for p in problems:
             print(f"  - {p}", file=sys.stderr)
         raise SystemExit(1)
-    OUT.write_text(json.dumps({
+    shapes = {
         "generated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "source": "OpenStreetMap roads (c) OpenStreetMap contributors, ODbL, via scripts/route_shapes.py",
         "routes": routes,
-    }, separators=(",", ":")) + "\n")
+    }
+    # Only write when something other than the timestamp changed, so the
+    # weekly workflow doesn't commit a timestamp-only "refresh".
+    if OUT.exists():
+        try:
+            previous = json.loads(OUT.read_text())
+        except ValueError:
+            previous = None
+        strip = lambda g: {k: v for k, v in g.items() if k != "generated"}
+        if isinstance(previous, dict) and strip(previous) == strip(shapes):
+            print(f"route shapes unchanged; left {OUT.relative_to(ROOT.parent.parent)} as is")
+            return
+    OUT.write_text(json.dumps(shapes, separators=(",", ":")) + "\n")
     print(f"wrote {OUT.relative_to(ROOT.parent.parent)}: {OUT.stat().st_size // 1024} KB")
 
 

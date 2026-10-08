@@ -4,7 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The widget's places (phase 8.3): favourites by recent use, then the places added from "Go somewhere else". */
+/** The widget's places: favourites by recent use, then the places added from "Go somewhere else". */
 class DestinationsTest {
     init { TestStrings.install() }
 

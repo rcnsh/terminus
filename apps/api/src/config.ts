@@ -1,6 +1,6 @@
 /**
- * Tuning constants. Leave them alone until segment travel-time logging
- * (analytics.ts) gives them measured values.
+ * Tuning constants, set by hand. RIDE.secondsPerHop is a guess; the feed's
+ * own predictions are the way to check it (docs/analytics.md).
  */
 
 import type { Quality } from './types.ts';
@@ -78,7 +78,7 @@ export const RIDE = {
    * error. It is good enough to separate a 2-hop ride from a 14-hop ride
    * (the wrong-side-of-the-road case, which is the whole point) and not good
    * enough to separate a 4-hop from a 5-hop. `stop.confidence` reports which
-   * situation you are in. Phase 2 replaces this with a measured table.
+   * situation you are in.
    */
   secondsPerHop: 95,
   /**

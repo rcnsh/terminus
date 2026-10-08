@@ -5,7 +5,7 @@ import org.json.JSONObject
 import kotlin.math.pow
 
 /**
- * Where you go (phase 8.3), for the app's tabs and the widget's buttons:
+ * Where you go, for the app's tabs and the widget's buttons:
  * favourites, ranked by how often you've asked for them lately, then the
  * places added from "Go somewhere else", newest first. Both the counts and
  * the added places stay on the phone, never sent anywhere.
