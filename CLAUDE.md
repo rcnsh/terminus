@@ -493,6 +493,36 @@ scripts/              release.sh, release-beta.sh (+ release-lib.sh, their share
   - Server-side changes, the website included, are live for everyone once
     deployed. Android and Mac changes need an app release.
 - **Releasing.**
+  - **Which version.** Whenever a release, a beta or a version bump comes
+    up, work the version out this way and say why, rather than guessing or
+    taking the next number. Compare against the last stable tag,
+    `T=$(git describe --tags --abbrev=0 --exclude='*-beta*')`. App code
+    means `apps/android/app/src/main`, `apps/macos/Sources` and
+    `apps/macos/Support`.
+    1. **No release:** nothing in app code changed
+       (`git diff --quiet $T HEAD -- <app code>`). Server and website
+       changes only need `pnpm run deploy`; docs, tests, CI and scripts
+       need nothing.
+    2. **Major** (`x+1.0.0`): only for a break: an app no longer updated
+       stops working, users must sign in or set up again, a feature is
+       removed, or an endpoint in `/docs` changes incompatibly. Ask the
+       owner first; this is rare.
+    3. **Minor** (`x.y+1.0`): any `feat` commit touching app code
+       (`git log --format=%s $T..HEAD -- <app code> | grep '^feat'`), or
+       anything a user would notice as new. Goes through a beta first.
+    4. **Patch** (`x.y.z+1`): everything else, that is fixes, wording and
+       performance in the apps. May go straight to stable when small or
+       urgent.
+  - **Betas** are named after the stable version they become: a minor's
+    betas are `x.y+1.0-beta.n`, never a patch's number. Cut at most one a
+    day, batched, not one per commit; quick iteration uses debug builds and
+    the dev stub. After the first beta of a version, only fixes join it;
+    new features wait for the next minor. A beta soaks for at least one
+    full campus day before it becomes stable, and the stable release is the
+    exact commit of the last beta. Anything newer means another beta first
+    (a hotfix patch is the exception).
+  - Before running either script, tell the owner the version, which rule
+    picked it and the commits that decided it.
   - Bump Android `versionName`/`versionCode` (`apps/android/app/build.gradle.kts`),
     the Mac `CFBundleShortVersionString`/`CFBundleVersion`
     (`apps/macos/Support/Info.plist`) and `API_VERSION` (`apps/api/src/openapi.ts`,
