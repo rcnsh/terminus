@@ -101,6 +101,7 @@ import sh.rcn.terminus.LineItem
 import sh.rcn.terminus.Locator
 import sh.rcn.terminus.Pins
 import sh.rcn.terminus.Stopped
+import sh.rcn.terminus.Quiet
 import sh.rcn.terminus.R
 import sh.rcn.terminus.ServerClock
 import sh.rcn.terminus.Spoken
@@ -150,7 +151,7 @@ internal fun BusesScreen(
     }
 }
 
-/** Runs [refresh] now and every 15 s while this is on screen and the app is in front. */
+/** Runs [refresh] now and every 15 s (longer while the server asked for a wait) while this is on screen and the app is in front. */
 @Composable
 private fun Refreshing(vararg keys: Any?, refresh: suspend () -> Unit) {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -159,7 +160,7 @@ private fun Refreshing(vararg keys: Any?, refresh: suspend () -> Unit) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             while (true) {
                 latest()
-                delay(REFRESH_MS)
+                delay(maxOf(REFRESH_MS, Quiet.waitMs()))
             }
         }
     }
@@ -554,14 +555,12 @@ private fun BoardCard(board: Board?, failed: Boolean, colors: Map<String, Long>,
                 if (!board.available) Text(stringResource(R.string.buses_feed_down), color = c.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
                 // The services not running come after the ones that are, as the API sorts them.
                 val rows = board.rows.filter { it.running } + board.rows.filter { !it.running }
-                val now = ticking()
                 for ((i, row) in rows.withIndex()) {
                     if (i > 0 || !board.available) HorizontalDivider(color = c.outlineVariant)
                     val color = row.color?.let(::parseColor) ?: colors[row.svc] ?: GREY
                     // A public bus has no line page: /line is the shuttles'.
                     val open = if (row.paid) null else ({ onRow(row) })
-                    val stopped = Stopped.of(row.running, row.stopped, row.resumesAtMs, now)
-                    if (stopped != null) StoppedRowView(row, color, stopped, open) else BoardRowView(row, color, open)
+                    if (row.running) BoardRowView(row, color, open) else StoppedRow(row, color, open)
                 }
             }
         }
@@ -602,6 +601,13 @@ private fun BoardRowView(row: BoardRow, color: Long, onClick: (() -> Unit)?) {
             thenText(row)?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant, textAlign = TextAlign.End, modifier = Modifier.padding(top = 4.dp)) }
         }
     }
+}
+
+/** A row not running: only these follow the clock (when it's back), so the rest of the board isn't redrawn every second. */
+@Composable
+private fun StoppedRow(row: BoardRow, color: Long, onClick: (() -> Unit)?) {
+    val stopped = Stopped.of(row.running, row.stopped, row.resumesAtMs, ticking())
+    if (stopped != null) StoppedRowView(row, color, stopped, onClick) else BoardRowView(row, color, onClick)
 }
 
 /**
