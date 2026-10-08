@@ -67,6 +67,9 @@ class AnswerTest {
                     )) {
                         if (sent.has(key) && !sent.isNull(key)) assertNotNull("$name: card.$key", got)
                     }
+                    // So does a change of bus, read leniently inside them.
+                    sent.optJSONObject("journey")?.optJSONObject("change")?.let { assertNotNull("$name: journey.change", card.journey?.change) }
+                    sent.optJSONObject("ride")?.optJSONObject("change")?.let { assertNotNull("$name: ride.change", card.ride?.change) }
                     assertEquals("$name: card.actions", sent.optJSONArray("actions")?.length() ?: 0, card.actions.size)
                     // The headline is the server's Chinese; some are only a bus and a time, so the line under it counts too.
                     if (zh) assertTrue("$name is in Chinese: ${a.label}", hasCjk(a.label) || hasCjk(a.detail))
@@ -368,6 +371,36 @@ class AnswerTest {
         assertEquals("UTown", ride.stops.last())
         assertTrue(ride.arriveMs > ride.boardMs)
         assertEquals("Next: Opp HSSML · 6 stops to go", ride.nextText(ride.boardMs))
+    }
+
+    @Test fun aTripThatChangesBusesCarriesTheSecondBus() {
+        val j = golden("change-class").card!!.journey!!
+        assertEquals("K", j.bus!!.svc)
+        // An app that draws one bus still reads the change in its words.
+        assertEquals("14 min, then P", j.ride)
+        assertEquals("14 min ride · change at Kent Vale to the 09:42 P · 14 min ride", JourneyText.ride(j))
+        val c = j.change!!
+        assertEquals("Kent Vale", c.from)
+        assertEquals("P", c.bus.svc)
+        assertEquals(ms("2026-08-27T01:42:00Z"), c.boardAtMs)
+        assertEquals("14 min ride · off at Kent Vale", c.firstRideText)
+        assertEquals("Change at Kent Vale · 5 min wait", c.changeText)
+        assertNull(c.walk)
+        // A journey from a server before changes has none.
+        assertNull(golden("class-bus").card!!.journey!!.change)
+    }
+
+    @Test fun onTheFirstBusTheSecondIsSaidNearTheChange() {
+        val ride = golden("change-riding").card!!.ride!!
+        assertEquals("R2", ride.svc)
+        assertEquals("Kent Vale", ride.stops.last())
+        val change = ride.change!!
+        assertEquals("P", change.svc)
+        assertEquals("Then P at 09:42 from Kent Vale", change.text)
+        // Early in the ride the line has no room for it; getting off, it does.
+        assertFalse(ride.nextText(ride.boardMs).contains("Then P"))
+        assertEquals("Getting off at Kent Vale · Then P at 09:42 from Kent Vale", ride.nextText(ride.arriveMs))
+        assertEquals("Getting off at Kent Vale", ride.nextText(ride.arriveMs, withChange = false))
     }
 
     @Test fun aClassToARoomWalksOnFromItsStop() {

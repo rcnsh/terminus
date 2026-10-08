@@ -272,7 +272,14 @@ data class Upcoming(val whenText: String, val title: String, val where: String, 
  * clock: stops are taken as evenly spaced between the board and arrival times
  * (the arrival is live when the server knows the bus's plate).
  */
-data class Ride(val svc: String, val stops: List<String>, val boardMs: Long, val arriveMs: Long) {
+data class Ride(
+    val svc: String,
+    val stops: List<String>,
+    val boardMs: Long,
+    val arriveMs: Long,
+    /** The bus you change to where this one drops you; [stops] is this bus's alone. */
+    val change: RideChange? = null,
+) {
     /** 0 to 1 along the ride. */
     fun progress(now: Long): Float = ((now - boardMs).toFloat() / (arriveMs - boardMs)).coerceIn(0f, 1f)
 
@@ -293,19 +300,39 @@ data class Ride(val svc: String, val stops: List<String>, val boardMs: Long, val
             val names = (0 until stops.length()).map { stops.optJSONObject(it)?.optStringOrNull("name") ?: return null }
             val board = o.optStringOrNull("board")?.let(::parseInstant) ?: return null
             val arrive = o.optStringOrNull("arrive")?.let(::parseInstant) ?: return null
-            return Ride(svc, names, board, arrive).takeIf { names.size >= 2 && arrive > board }
+            val change = o.optJSONObject("change")?.let { lenient { RideChange.parse(it) } }
+            return Ride(svc, names, board, arrive, change).takeIf { names.size >= 2 && arrive > board }
         }
     }
 
-    /** "Next: Opp NUSS · 3 stops to go", the same in the notification and the widget. */
-    fun nextText(now: Long): String {
+    /**
+     * "Next: Opp NUSS · 3 stops to go", the same in the notification and the
+     * widget. Nearing the stop to change at, the second bus too ("· Then P
+     * at 09:42 from Kent Vale"); before that the line has no room for it.
+     * Without [withChange] for a screen that shows the change on a line of its own.
+     */
+    fun nextText(now: Long, withChange: Boolean = true): String {
         val next = nextStop(now)
         val left = stopsLeft(now)
-        return when {
+        val text = when {
             next == null || left == 0 -> L.s(R.string.getting_off_at, stops.last())
             left == 1 -> L.s(R.string.next_where_off, stops.last())
             else -> L.s(R.string.next_stops_to_go, next, left)
         }
+        return if (withChange && change != null && left <= 1) "$text · ${change.text}" else text
+    }
+}
+
+/** `ride.change`: the second bus of a trip that changes, worded on the server ("Then P from Kent Vale at 9:42"). */
+data class RideChange(val svc: String, val color: Long, val stop: String, val board: String?, val text: String) {
+    companion object {
+        fun parse(o: JSONObject): RideChange? = RideChange(
+            svc = o.optStringOrNull("svc") ?: return null,
+            color = parseColor(o.optStringOrNull("color")),
+            stop = o.optStringOrNull("stop").orEmpty(),
+            board = o.optStringOrNull("board"),
+            text = o.optStringOrNull("text") ?: return null,
+        )
     }
 }
 
@@ -345,6 +372,8 @@ data class Journey(
     val why: String? = null,
     /** The server's words for the card, each null from an older server (JourneyText words them then). */
     val text: JourneyWords = JourneyWords(),
+    /** A change of bus on the way: [bus] is the first, this the second. */
+    val change: JourneyChange? = null,
 ) {
     /** Where you're going, short enough for the end of a line: "GEA1000", not "GEA1000 @ UTown". */
     val place: String get() = text.place ?: to.substringBefore(" @ ")
@@ -386,6 +415,8 @@ data class Journey(
                     backup = o.optStringOrNull("backupText"),
                     summary = o.optStringOrNull("summary"),
                 ),
+                // A change that can't be read leaves the first bus, whose words name the change.
+                change = o.optJSONObject("change")?.takeIf { bus != null }?.let { lenient { JourneyChange.parse(it) } },
             )
         }
     }
@@ -409,6 +440,46 @@ data class JourneyWords(
     val backup: String? = null,
     val summary: String? = null,
 )
+
+/**
+ * `journey.change`: where the first bus drops you ([from]) and the second
+ * goes from ([stop], across the road when [walk] is set), the wait, the
+ * second bus and the rides on each, worded on the server.
+ */
+data class JourneyChange(
+    val from: String,
+    val stop: String,
+    /** When the first bus gets to [from]. */
+    val reach: String,
+    val walk: String?,
+    val wait: String?,
+    val bus: JourneyBus,
+    val boardAtMs: Long,
+    /** Time on the second bus, and on the first ("6 min", "8 min"). */
+    val ride: String,
+    val firstRide: String,
+    /** "8 min ride · off at Kent Vale", "Change at Kent Vale · 3 min wait", "6 min ride". */
+    val firstRideText: String,
+    val changeText: String,
+    val rideText: String,
+) {
+    companion object {
+        fun parse(o: JSONObject): JourneyChange? = JourneyChange(
+            from = o.optStringOrNull("from") ?: return null,
+            stop = o.optStringOrNull("stop") ?: return null,
+            reach = o.optStringOrNull("reach").orEmpty(),
+            walk = o.optStringOrNull("walk"),
+            wait = o.optStringOrNull("wait"),
+            bus = o.optJSONObject("bus")?.let(JourneyBus::parse) ?: return null,
+            boardAtMs = o.optStringOrNull("boardAt")?.let(::parseInstant) ?: return null,
+            ride = o.optStringOrNull("ride").orEmpty(),
+            firstRide = o.optStringOrNull("firstRide").orEmpty(),
+            firstRideText = o.optStringOrNull("firstRideText").orEmpty(),
+            changeText = o.optStringOrNull("changeText") ?: return null,
+            rideText = o.optStringOrNull("rideText").orEmpty(),
+        )
+    }
+}
 
 /** A bus in the journey: its service, colour (as painted on the bus, ARGB), stop and time. */
 /** `paid`: a public bus, with a fare, unlike the free shuttle. */

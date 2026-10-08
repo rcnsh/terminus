@@ -551,7 +551,10 @@ internal fun Pill(text: String, color: Color) {
     )
 }
 
-/** On the bus: a bar from boarding to getting off, and "Next: Opp NUSS · 3 stops to go". */
+/**
+ * On the bus: a bar from boarding to getting off, and "Next: Opp NUSS · 3
+ * stops to go"; on a trip that changes, the second bus under it.
+ */
 @Composable
 private fun RideProgress(ride: Ride) {
     val now by produceState(ServerClock.now(), ride) {
@@ -564,5 +567,8 @@ private fun RideProgress(ride: Ride) {
         progress = { ride.progress(now) },
         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
     )
-    Text(ride.nextText(now), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 4.dp, bottom = 4.dp))
+    Text(ride.nextText(now, withChange = false), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 4.dp, bottom = 4.dp))
+    ride.change?.let {
+        Text(it.text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 4.dp))
+    }
 }
