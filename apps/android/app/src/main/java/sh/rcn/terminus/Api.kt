@@ -823,7 +823,8 @@ class Api(private val token: String?, private val fast: Boolean = false, private
      */
     suspend fun notice(): Map<String, String>? {
         val n = request("GET", "/me/notice").optJSONObject("notice") ?: return null
-        return listOf("title", "body", "zhTitle", "zhBody").associateWith { n.optString(it) }
+        // Only the fields sent: a missing one is absent, not "".
+        return listOf("title", "body", "zhTitle", "zhBody").mapNotNull { k -> n.optStringOrNull(k)?.let { k to it } }.toMap()
     }
 
     /** Classes with a bus earlier or no reminders, and how many trips are remembered. */

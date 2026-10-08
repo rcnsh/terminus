@@ -137,6 +137,35 @@ class MapDataTest {
         assertNull(path.aheadBy(between, atStop.copy(along = 5_000.0)))
     }
 
+    @Test fun aLoopWhoseEndsDoNotMeetStillSlidesOnPastItsStart() {
+        // Like A1 at KRB: out east about 1.1 km, then back west on the other
+        // side of the road, ending some 40 m from where it started. The loop
+        // comes from /campus, not from where the line ends.
+        val campus = JSONObject(
+            """{"stops": [], "routes": {
+              "A1": {"seq": ["KRB"], "loop": true, "line": [[103.0, 1.0], [103.01, 1.0], [103.01, 1.0004], [103.0, 1.0004]]},
+              "K": {"seq": ["PGP"], "loop": false, "line": [[103.0, 1.0], [103.01, 1.0], [103.01, 1.0004], [103.0, 1.0004]]}}}""",
+        )
+        val (map, _) = CampusMap.parse(campus)
+        val loop = map.routes.getValue("A1").path
+        val (aLat, aLon) = loop.pointAt(0.0)
+        val (zLat, zLon) = loop.pointAt(loop.total - 1e-9)
+        assertTrue("the ends are apart", RoutePath.haversine(aLat, aLon, zLat, zLon) > 40)
+        assertTrue(loop.closed)
+        fun at(path: RoutePath, m: Double) = path.pointAt(m).let { (lat, lon) -> LiveBus("b1", lat, lon, 90.0, true, null, null, along = m) }
+        val (end, start) = at(loop, loop.total - 20) to at(loop, 30.0)
+        assertEquals("on round past the start, not back", 50.0, loop.aheadBy(end, start)!!, 1e-6)
+        val s = Slides { 1_000 }
+        s.update(listOf(end), loop, 0)
+        s.update(listOf(start), loop, 5_000)
+        assertTrue(s.moving(5_500))
+        assertEquals("half way, at its start", 5.0, s.at(5_500)[0].along!!, 1e-6)
+        // A line that doesn't loop: back at the start, it jumps.
+        val oneWay = map.routes.getValue("K").path
+        assertFalse(oneWay.closed)
+        assertNull(oneWay.aheadBy(at(oneWay, oneWay.total - 20), at(oneWay, 30.0)))
+    }
+
     @Test fun theSameAnswerOverAndOverKeepsTheMapFresh() {
         // A bus waiting at a stop for 30 s: the same answer every 5 s. Then it
         // moves, and slides there rather than jumping as if the map were stale.

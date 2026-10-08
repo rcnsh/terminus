@@ -327,13 +327,19 @@ test('phases follow the clock until a signal says otherwise', () => {
 });
 
 test('a service with published hours ends at its window close, across midnight too', () => {
-  const graph = { ...GRAPH, serviceHours: { D2: { weekday: ['07:00', '23:00'] }, N: { weekday: ['19:00', '01:00'] } } };
+  // The real K: 07:04 to 23:04 on weekdays, but only until 19:04 on Saturdays.
+  assert.deepEqual([GRAPH.serviceHours.K.weekday, GRAPH.serviceHours.K.saturday], [['07:04', '23:04'], ['07:04', '19:04']]);
   // Thursday 22:30 SGT.
   const at2230 = Date.UTC(2026, 7, 27, 14, 30);
-  assert.equal(serviceEndsAt(graph, 'D2', at2230), Date.UTC(2026, 7, 27, 15, 0));
-  assert.equal(serviceEndsAt(graph, 'N', at2230), Date.UTC(2026, 7, 27, 17, 0), '01:00 tomorrow');
-  assert.equal(serviceEndsAt(graph, 'D2', Date.UTC(2026, 7, 27, 15, 30)), null, 'not running');
-  assert.equal(serviceEndsAt(graph, 'X', at2230), null, 'hours unknown');
+  assert.equal(serviceEndsAt(GRAPH, 'K', at2230), Date.UTC(2026, 7, 27, 15, 4));
+  assert.equal(serviceEndsAt(GRAPH, 'K', Date.UTC(2026, 7, 27, 15, 30)), null, 'not running');
+  // Saturday 18:30, and 19:30 when it has stopped.
+  assert.equal(serviceEndsAt(GRAPH, 'K', Date.UTC(2026, 7, 29, 10, 30)), Date.UTC(2026, 7, 29, 11, 4));
+  assert.equal(serviceEndsAt(GRAPH, 'K', Date.UTC(2026, 7, 29, 11, 30)), null, 'Saturday: ended at 19:04');
+  // No real service runs past midnight; one that did ends tomorrow.
+  const late = { ...GRAPH, serviceHours: { D2: { weekday: ['19:00', '01:00'] } } };
+  assert.equal(serviceEndsAt(late, 'D2', at2230), Date.UTC(2026, 7, 27, 17, 0), '01:00 tomorrow');
+  assert.equal(serviceEndsAt(late, 'X', at2230), null, 'hours unknown');
 });
 
 test('with every class today skipped, the day is free and "next" is not a skipped class', async () => {
@@ -1004,6 +1010,18 @@ test("seen at the destination, the trip is over for every device, without anyone
   assert.equal(onMac.leave, null, 'no trip home or next class while early for this one');
 });
 
+test('arriving early at the class, the phone says "You\'re there" straight away, not "You\'re here" first', async () => {
+  const { phone, next, clock } = await setup();
+  clock(FROZEN_NOW + 50 * 60_000); // 09:50, before GEA1000 at 10:00
+  const first = await next(phone, atStop('UTOWN'));
+  assert.equal(first.label, "You're there");
+  assert.match(first.detail, /^GEA1000 @ UTown starts /);
+  const again = await next(phone, atStop('UTOWN'));
+  assert.equal(again.label, first.label);
+  assert.equal(again.detail, first.detail);
+  assert.equal(again.card.phase, 'arrived');
+});
+
 test("polling at the stop while the bus's time moves a little keeps the plan on that bus, and the ride is on it", async () => {
   const { phone, next, clock } = await setup();
   const first = await next(phone, atStop('PGP'));
@@ -1173,4 +1191,55 @@ test('needsWatch: any sooner wake is booked, however little sooner; a later or e
   assert.equal(needsWatch({ ...day, watch: undefined }, now + 90_000, now), true, 'nothing pending');
   assert.equal(needsWatch({ ...day, watch: now - 1 }, now + 90_000, now), true, 'the pending wake has passed');
   assert.equal(needsWatch(null, now + 90_000, now), true);
+});
+
+test('"On it" with no bus in the plan (a walk) means you have set off', async () => {
+  // The class is a short walk from home: the plan is on foot.
+  const t = await setup({ home: { stops: ['PGP'] }, manual: [cls(600, 'PGPR', 'Gym @ PGPR')] });
+  const a = await t.next(t.phone);
+  assert.equal(a.leave?.svc ?? null, null, 'walking, no bus');
+  assert.equal((await t.signal(t.phone, { kind: 'boarded' })).status, 200);
+  const rec = Object.values((await loadDay(t.env, userOf(t.env), FROZEN_NOW)).trips)[0];
+  assert.equal(rec.kind, 'left');
+  assert.equal(rec.boarded, undefined);
+});
+
+test('/me/choice refuses what is not a choice, and a trip that is not today', async () => {
+  const { call, phone } = await setup();
+  const choose = async (body) => call('/me/choice', { method: 'POST', token: phone, body });
+  for (const body of [{}, { id: `earlier:${FIRST}` }, { id: `earlier:${FIRST}`, choice: 'maybe' }, { id: `louder:${FIRST}`, choice: 'accept' }, { trip: FIRST, choice: 'accept' }, { pref: 'quiet', choice: 'accept' }, { trip: 'x'.repeat(81), pref: 'quiet', choice: 'accept' }]) {
+    const r = await choose(body);
+    assert.equal(r.status, 400, JSON.stringify(body));
+    assert.match((await r.json()).error, /send id/);
+  }
+  const r = await choose({ trip: '1:600:UTOWN', pref: 'quiet', choice: 'accept' });
+  assert.equal(r.status, 400);
+  assert.equal((await r.json()).error, 'no such trip today');
+});
+
+test('a profile change that keeps losing to another device gives up with 409 after three tries', async () => {
+  const { env, call, phone } = await setup();
+  // Another device saves between every read and write.
+  const prepare = env.DB.prepare;
+  let tries = 0;
+  env.DB.prepare = (sql) => {
+    if (sql.startsWith('UPDATE profiles SET json = ?, updated = ? WHERE user_id = ? AND updated = ?')) {
+      tries++;
+      env.DB._db.prepare('UPDATE profiles SET updated = updated + 1').run();
+    }
+    return prepare(sql);
+  };
+  const r = await call('/me/once', { method: 'POST', token: phone, body: { to: 'COM3', atMin: 14 * 60 } });
+  env.DB.prepare = prepare;
+  assert.equal(r.status, 409);
+  assert.match((await r.json()).error, /changed on another device/);
+  assert.equal(tries, 3);
+});
+
+test('the Trip object answers 404 to a path it does not know', async () => {
+  installGlobals(makeFetch({}));
+  const trips = makeDurableObjects(Trip);
+  assert.equal((await trips.get('u1').fetch('https://trip/nope')).status, 404);
+  assert.equal((await trips.get('u1').fetch('https://trip/day', { method: 'POST', body: '{}' })).status, 404);
+  assert.equal((await trips.get('u1').fetch('https://trip/nope', { method: 'POST', body: '{}' })).status, 404);
 });

@@ -1,0 +1,153 @@
+{
+  "stop": {
+    "code": "PGP",
+    "name": "PGP",
+    "confidence": 0.97
+  },
+  "quality": "live",
+  "asOf": "2026-08-27T14:40:00.000Z",
+  "arrivals": [
+    {
+      "svc": "D2",
+      "etaS": 240,
+      "crowd": "low",
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "D2",
+      "etaS": 840,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "A1",
+      "etaS": 540,
+      "crowd": "low",
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "A1",
+      "etaS": 1140,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    }
+  ],
+  "label": "D2 · 4 分钟",
+  "detail": "PGP · 步行 1 分钟 · 约 14 分钟到家 · 拥挤程度：低",
+  "alt": null,
+  "departsAt": "2026-08-27T14:44:00Z",
+  "arriveAt": "2026-08-27T14:53:30Z",
+  "bus": {
+    "svc": "D2",
+    "stop": "PGP",
+    "stopCode": "PGP",
+    "walkS": 89,
+    "rideS": 570,
+    "board": "2026-08-27T14:44:00Z",
+    "arrive": "2026-08-27T14:53:30Z",
+    "estimated": false,
+    "toStop": "UTown"
+  },
+  "altBus": null,
+  "leave": {
+    "at": "2026-08-27T14:42:11Z",
+    "estimated": false,
+    "svc": "D2",
+    "stop": "PGP",
+    "stopCode": "PGP",
+    "board": "2026-08-27T14:44:00Z",
+    "arrive": "2026-08-27T14:53:30Z",
+    "note": null,
+    "walkS": 89,
+    "rideS": 570,
+    "toStop": "UTown"
+  },
+  "mode": "trip",
+  "dest": {
+    "to": "UTOWN",
+    "label": "家",
+    "why": "home"
+  },
+  "timing": null,
+  "places": [
+    {
+      "key": "mrt",
+      "label": "KR MRT"
+    },
+    {
+      "key": "deck",
+      "label": "The Deck"
+    }
+  ],
+  "warning": "PGP 的末班 D2 还有 20 分钟",
+  "refreshAt": "2026-08-27T16:00:00Z",
+  "walkSpeedMs": 1.3,
+  "card": {
+    "kind": "trip",
+    "staleAt": "2026-08-27T14:44:30Z",
+    "crowd": "拥挤程度：低",
+    "quality": null,
+    "leaveBy": "22:44 的 D2",
+    "leaveVia": "在 PGP 搭 22:44 的 D2",
+    "catch": null,
+    "arrive": null,
+    "catchLine": null,
+    "late": false,
+    "goNow": null,
+    "note": null,
+    "estimate": null,
+    "phase": "waiting",
+    "phaseText": "在车站",
+    "glance": "D2 22:44",
+    "line": "在 PGP 搭 22:44 的 D2",
+    "actions": [],
+    "warning": "PGP 的末班 D2 还有 20 分钟",
+    "nextChangeAt": "2026-08-27T14:42:11Z",
+    "remind": true,
+    "suggestion": null,
+    "ride": null,
+    "walkTo": null,
+    "notice": null,
+    "h12": false,
+    "journey": {
+      "leave": "22:42",
+      "walk": null,
+      "bus": {
+        "svc": "D2",
+        "color": "#8e44c9",
+        "stop": "PGP",
+        "board": "22:44"
+      },
+      "boardAt": "2026-08-27T14:44:00Z",
+      "ride": "10 分钟",
+      "off": null,
+      "to": "家",
+      "toStop": "UTown",
+      "arrive": "22:53",
+      "walkEnd": null,
+      "arriveStop": "22:53",
+      "slack": null,
+      "live": true,
+      "backup": null,
+      "why": null,
+      "title": "回家",
+      "place": "家",
+      "byText": null,
+      "walkText": null,
+      "rideText": "乘车 10 分钟",
+      "walkEndText": null,
+      "arriveText": "22:53 到达",
+      "arriveWhere": "在 UTown",
+      "backupText": null,
+      "summary": "在 PGP 搭 22:44 的 D2"
+    },
+    "upcoming": null,
+    "title": "D2 · 22:44",
+    "heading": "回家",
+    "remindAt": null
+  }
+}

@@ -359,9 +359,9 @@ test('a feed failing round after round is asked less and less often, and as usua
   globalThis.fetch = down;
   await start(h);
   await runUntil(h, FROZEN_NOW + 10 * 60_000 - 1);
-  // Rounds at 0, 30, 90, 210, 450 s: 2, 4, then 8 times pollMs apart.
-  const services = RUNNING.length;
-  assert.ok(down.counts.shuttle <= 5 * services, `asked ${down.counts.shuttle} times in ten minutes`);
+  // Rounds at 0, 60, 180 and 420 s: 2, 4, then 8 times pollMs apart, one
+  // request each (the first service's, which opens the breaker for the rest).
+  assert.equal(down.counts.shuttle, 4, `asked ${down.counts.shuttle} times in ten minutes`);
   assert.equal((await status(h)).state, 'polling', 'an outage still is not an idle day');
   // Back up: the next round answers, and the one after is pollMs later again.
   const up = makeFetch({ buses: { D2: [busOn('D2', 400)] } });

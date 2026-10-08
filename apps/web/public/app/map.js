@@ -26,7 +26,7 @@ const ARRIVALS_MS = 15_000;
 /** How long a bus takes to slide [m] metres along the road: a steady 100 m
  *  a second, so a longer stretch takes longer, from 1 s for a short hop to
  *  4 s, done before the next answer (every 5 s). As the Android app. */
-const slideMs = (m) => Math.max(1_000, Math.min(4_000, (m / 100) * 1_000));
+export const slideMs = (m) => Math.max(1_000, Math.min(4_000, (m / 100) * 1_000));
 /** Further than this along its line in one answer (back from a hidden tab),
  *  a bus jumps instead of sliding. */
 const SLIDE_MAX_M = 1_500;
@@ -486,7 +486,8 @@ function moveTo(buses) {
   const stale = wall - lastAnswer > STALE_MS;
   lastAnswer = wall;
   const reduce = reducedMotion();
-  const path = pathOf(campusData.get()?.routes[selected.get()]?.line);
+  const route = campusData.get()?.routes[selected.get()];
+  const path = pathOf(route?.line, route?.loop);
   shown.set(new Map(buses.map((b) => [b.id, b])));
   const next = new Map();
   for (const raw of buses) {
@@ -515,7 +516,7 @@ function frameAt(now) {
  * line (a stop's dot, and beside it), so it moves from one to the other as
  * it goes.
  */
-function positionAt(g, now) {
+export function positionAt(g, now) {
   if (!g.from) return g.to;
   const k = Math.max(0, Math.min(1, (now - g.start) / g.ms));
   if (k === 1) return g.to;
@@ -525,7 +526,7 @@ function positionAt(g, now) {
   const [a, b] = [pointAt(path, from.along), pointAt(path, to.along)];
   return {
     ...to,
-    along: path.closed ? (((from.along + d * e) % path.total) + path.total) % path.total : from.along + d * e,
+    along: path.loop ? (((from.along + d * e) % path.total) + path.total) % path.total : from.along + d * e,
     lat: at.lat + (from.lat - a.lat) * (1 - e) + (to.lat - b.lat) * e,
     lon: at.lon + (from.lon - a.lon) * (1 - e) + (to.lon - b.lon) * e,
     heading: at.bearing,
@@ -534,19 +535,19 @@ function positionAt(g, now) {
 }
 
 /* A route line measured as the API measures it (haversine, metres from its
-   start at each point), so a bus's `along` is a place on it. */
+   start at each point), so a bus's `along` is a place on it. Whether it's a
+   loop comes from /campus, as the API places buses: a loop's line needn't end
+   exactly where it starts (A1's ends are some 40 m apart at KRB). */
 
 const paths = new WeakMap();
 
-function pathOf(line) {
+export function pathOf(line, loop) {
   if (!line || line.length < 2) return null;
   let p = paths.get(line);
   if (!p) {
     const cum = [0];
     for (let i = 1; i < line.length; i++) cum.push(cum[i - 1] + haversineM(line[i - 1][1], line[i - 1][0], line[i][1], line[i][0]));
-    const total = cum[cum.length - 1];
-    const [a, z] = [line[0], line[line.length - 1]];
-    p = { line, cum, total, closed: haversineM(a[1], a[0], z[1], z[0]) < 5 };
+    p = { line, cum, total: cum[cum.length - 1], loop: Boolean(loop) };
     paths.set(line, p);
   }
   return p;
@@ -555,17 +556,17 @@ function pathOf(line) {
 /** Metres on along [path] from bus [f] to bus [b], round a loop past its
  *  start; null when it isn't on ahead (the same place, behind, a long way,
  *  or a line kept from before the route changed). */
-function aheadBy(path, f, b) {
+export function aheadBy(path, f, b) {
   if (f.along == null || b.along == null || path.total <= 0 || f.along > path.total + 1 || b.along > path.total + 1) return null;
   let d = b.along - f.along;
-  if (path.closed && d < -path.total / 2) d += path.total;
+  if (path.loop && d < -path.total / 2) d += path.total;
   return d > 0 && d <= SLIDE_MAX_M ? d : null;
 }
 
 /** The point [m] metres along [path], and the road's direction there. */
-function pointAt(path, m) {
+export function pointAt(path, m) {
   const { line, cum, total } = path;
-  m = path.closed ? ((m % total) + total) % total : Math.max(0, Math.min(total, m));
+  m = path.loop ? ((m % total) + total) % total : Math.max(0, Math.min(total, m));
   let lo = 0,
     hi = cum.length - 1;
   while (hi - lo > 1) {
@@ -600,7 +601,8 @@ function markOpen(b) {
   openBus = b;
   if (!map?.getSource('stretch')) return;
   map.setFilter('bus-on', ['==', ['get', 'id'], b?.id ?? '']);
-  const path = b?.stretch && pathOf(campusData.get()?.routes[b.svc]?.line);
+  const route = campusData.get()?.routes[b?.svc];
+  const path = b?.stretch && pathOf(route?.line, route?.loop);
   const line = path ? sliceOf(path, b.stretch.from, b.stretch.to) : null;
   map.getSource('stretch').setData(line ? { type: 'Feature', properties: { color: b.color }, geometry: { type: 'LineString', coordinates: line } } : empty);
   map.setPaintProperty('route-on', 'line-opacity', line ? 0.2 : 1);
