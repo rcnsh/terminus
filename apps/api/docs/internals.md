@@ -327,6 +327,8 @@ the Mac.
 - `GET /me/next` is the widget's one call. It picks the destination from the
   timetable (see `planFor` in [src/profile.ts](../src/profile.ts)) or from
   `?place=`/`?to=`, and returns the usual answer plus `dest` and `places`.
+  A `place` or `to` that names nothing it knows is ignored: the answer is
+  the timetable's.
 - `GET /me/nearby` lists departures at up to three stops near you, each with
   its service's colour (`color`, as on the buses and the map). Each row
   (as on `/stops/{code}`) has the next bus in `etaS` and the ones after it
