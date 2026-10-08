@@ -102,7 +102,7 @@ It updates through the day and goes quiet in the evening. The app has three tabs
 <br>
 
 - **Android:** open the downloaded file and allow your browser to install apps when asked. Play Protect may ask you to confirm, since it isn't from the Play Store.
-- **Mac:** open the disk image and drag terminus to Applications.
+- **Mac:** open the disk image and drag terminus to Applications. The first time you open it, macOS stops it, as it isn't from an identified developer: choose Done, then Open Anyway in System Settings, under Privacy & Security.
 
 </details>
 
