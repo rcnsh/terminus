@@ -139,11 +139,10 @@ internal fun BusesScreen(
     vm.publicBuses = publicBuses
     vm.pinLimit = pinLimit
     LaunchedEffect(Unit) { vm.loadCampus() }
-    val top = state.stack.lastOrNull()
-    BackHandler(enabled = top != null) { vm.back() }
     // The sky runs up under the status bar; each page keeps the room for it inside its band.
     val bar = insets.calculateTopPadding()
-    Box(Modifier.fillMaxSize().padding(bottom = insets.calculateBottomPadding())) {
+    // Each stop or line opened slides over the last, and a back gesture can seek between them.
+    PageStack(state.stack, onBack = vm::back, Modifier.fillMaxSize().padding(bottom = insets.calculateBottomPadding())) { top ->
         when (top) {
             null -> Home(state, vm, pins, onPin, bar)
             is BusRoute.Stop -> StopRoute(state, vm, top.code, pins, onPin, bar)

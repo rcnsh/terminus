@@ -3,20 +3,9 @@ package sh.rcn.terminus.ui
 import android.content.Intent
 import android.graphics.Bitmap
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.SeekableTransitionState
-import androidx.compose.animation.core.rememberTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -59,7 +48,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -72,7 +60,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -90,13 +77,13 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.set
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
-import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import sh.rcn.terminus.BuildConfig
@@ -152,8 +139,16 @@ internal fun SettingsScreen(
     onSignedOut: () -> Unit,
     onClose: () -> Unit,
 ) {
-    LaunchedEffect(Unit) { account.refresh() }
-    LaunchedEffect(state.email) { if (state.email != null) account.loadDevices() }
+    // On opening, and again each time the app comes back while Settings is
+    // open: a device added or a change made on another one shows here.
+    LifecycleResumeEffect(Unit) {
+        account.refresh()
+        onPauseOrDispose {}
+    }
+    LifecycleResumeEffect(state.email) {
+        if (state.email != null) account.loadDevices()
+        onPauseOrDispose {}
+    }
     LaunchedEffect(Unit) { account.loadChoices() }
     LaunchedEffect(Unit) { account.loadCampus() }
 
@@ -161,32 +156,8 @@ internal fun SettingsScreen(
     // A NUSMods link shared into the app: straight to Timetable, to import it.
     LaunchedEffect(state.sharedLink) { if (state.sharedLink != null) open = SettingsPage.Timetable }
     LaunchedEffect(Unit) { toList.collect { open = null } }
-    // The list and its pages are one transition that a back gesture can
-    // seek, as Android's own apps do: the list is drawn under the page from
-    // the start, sliding and fading in as the page goes, rather than the
-    // page moving over nothing. Let go, and it carries on from there.
-    val pages = remember { SeekableTransitionState(open) }
-    val scope = rememberCoroutineScope()
-    LaunchedEffect(open) { pages.animateTo(open) }
-    // How far a back gesture has gone, for the page to shrink as it follows.
-    // Kept after the gesture completes, so it leaves at the size it was let go.
-    var backProgress by remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(open) { if (open != null) backProgress = 0f }
+    // A page's own back is PageStack's, which a back gesture can seek; the list's leaves Settings.
     BackHandler(enabled = open == null, onBack = onClose)
-    PredictiveBackHandler(enabled = open != null) { events ->
-        val page = open
-        try {
-            events.collect {
-                backProgress = it.progress
-                pages.seekTo(it.progress, targetState = null)
-            }
-            open = null
-        } catch (e: CancellationException) {
-            backProgress = 0f
-            scope.launch { pages.animateTo(page) }
-            throw e
-        }
-    }
 
     // Edge to edge, the insets inside, so the list's sky can reach the top.
     val top = insets.calculateTopPadding()
@@ -200,39 +171,11 @@ internal fun SettingsScreen(
                 }
             }
         }
-        rememberTransition(pages, label = "settings page").AnimatedContent(
-            transitionSpec = {
-                if (targetState != null) {
-                    (slideInHorizontally(tween(300, easing = FastOutSlowInEasing)) { it } + fadeIn(tween(300)))
-                        .togetherWith(slideOutHorizontally(tween(300, easing = FastOutSlowInEasing)) { -it / 4 } + fadeOut(tween(200)))
-                } else {
-                    // Back: the page stays solid as it slides off, so a back gesture
-                    // holds a page, not a ghost of one; the list fades up behind it.
-                    ((slideInHorizontally(tween(300, easing = FastOutSlowInEasing)) { -it / 4 } + fadeIn(tween(300)))
-                        .togetherWith(slideOutHorizontally(tween(300, easing = FastOutSlowInEasing)) { it }))
-                        .apply { targetContentZIndex = -1f }
-                }
-            },
-            modifier = Modifier.weight(1f),
-        ) { page ->
+        PageStack(listOfNotNull(open), onBack = { open = null }, Modifier.weight(1f)) { page ->
             if (page == null) {
                 SettingsList(state, main, if (state.message != null) 0.dp else top, bottom) { open = it }
             } else {
-                Column(
-                    Modifier.fillMaxSize().graphicsLayer {
-                        // Following the back gesture (the transition slides it): the page
-                        // shrinks a little into a card with rounded corners and a shadow,
-                        // lifted off the list behind it.
-                        val scale = 1f - backProgress * 0.1f
-                        scaleX = scale
-                        scaleY = scale
-                        if (backProgress > 0f) {
-                            shape = RoundedCornerShape((backProgress * 5f).coerceAtMost(1f) * 28.dp.toPx())
-                            clip = true
-                            shadowElevation = 8.dp.toPx()
-                        }
-                    }.background(MaterialTheme.colorScheme.background).padding(bottom = bottom),
-                ) {
+                Column(Modifier.fillMaxSize().padding(bottom = bottom)) {
                     // The title in a slim band of the list's sky, scrolling away with the page; the page itself plain.
                     val phase = skyPhase()
                     val band = if (state.message != null) 0.dp else top
