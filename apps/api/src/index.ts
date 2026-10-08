@@ -257,7 +257,9 @@ async function handleLine(url: URL, env: Env, ctx: ExecutionContext, nowMs: numb
     buses: busesOnLine(route.seq, route.loop, placed),
     ...(code ? { stop: { code, index, row: boardAt(GRAPH, idx, code, sa, nowMs, { stopped: true }).find((r) => r.svc === svc) ?? null } } : {}),
     available: Boolean(live),
-    asOf: new Date(live?.stale ? live.fetchedAt : nowMs).toISOString(),
+    // As old as the oldest thing on the page: the buses, and your stop's row,
+    // which can come from a kept or stale board.
+    asOf: new Date(Math.min(live?.stale ? live.fetchedAt : nowMs, code ? boardAsOf([sa], nowMs) : nowMs)).toISOString(),
   }, 200, { 'cache-control': 'private, max-age=5' });
 }
 

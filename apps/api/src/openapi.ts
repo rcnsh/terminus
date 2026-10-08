@@ -2091,7 +2091,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               },
             },
             available: { type: 'boolean', description: 'False when the live feed could not be reached.' },
-            asOf: { type: 'string', format: 'date-time' },
+            asOf: { type: 'string', format: 'date-time', description: 'How old the oldest thing on the page is: the buses, or the `stop` row when its board was kept or stale. For "Updated 5 s ago"; the row’s `etaS` already counts from the request.' },
           },
         },
         Buses: {
