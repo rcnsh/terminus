@@ -192,6 +192,32 @@ class AnswerTest {
         assertEquals(a.refreshAtMs, Refresher.nextRefreshAt(a, fetched, fetched, widget = false))
     }
 
+    @Test fun refreshDoesNotChaseTheLeaveTimeOrTheRidesStops() {
+        // Past the card's change, the leave-by is next on screen, but the network
+        // waits for the plan's own moment: "Leave now" is a redraw.
+        val a = golden("class-bus")
+        val now = ms("2026-08-27T01:10:00Z")
+        assertEquals(a.refreshAtMs, Refresher.nextRefreshAt(a, ms(a.asOf), now))
+        assertEquals(a.leaveAtMs, Refresher.redrawAt(a, now))
+        // On the bus: the next stop is a redraw; the network waits for the plan's moment.
+        val r = golden("riding")
+        val ride = r.card!!.ride!!
+        assertEquals(r.refreshAtMs, Refresher.nextRefreshAt(r, ms(r.asOf), ride.boardMs))
+        assertEquals(RideStyle.nextRedrawAt(ride, ride.boardMs), Refresher.redrawAt(r, ride.boardMs))
+    }
+
+    @Test fun theFloorLeavesTheNetworkAloneWhileOnTrack() {
+        val a = golden("rest")
+        val now = ms(a.asOf)
+        val alarm = a.card!!.nextChangeAtMs!!
+        assertTrue(Refresher.onTrack(a, null, alarm, now))
+        // Failing, no alarm ahead, past staleAt, or nothing kept: it fetches.
+        assertFalse(Refresher.onTrack(a, "Offline", alarm, now))
+        assertFalse(Refresher.onTrack(a, null, now - 1, now))
+        assertFalse(Refresher.onTrack(a, null, alarm + 60_000, a.card.staleAtMs!!))
+        assertFalse(Refresher.onTrack(null, null, alarm, now))
+    }
+
     @Test fun aBrokenPartOfTheCardIsLeftOutAndTheRestStands() {
         val json = goldenJson("class-room")
         val card = json.getJSONObject("card")
