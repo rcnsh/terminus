@@ -35,16 +35,16 @@ const ENDS_SOON_MS = 2 * 3600_000;
 /** Where in the tab: its home, a stop's board, or a service's line. From the address. */
 const route = store({ kind: 'home' });
 /** The stop nearest you: { status: 'loading' | 'ready' | 'none', code, distM, fromHome }. */
-const nearest = store({ status: 'loading' });
+export const nearest = store({ status: 'loading' });
 /**
  * Each stop's board as last fetched, by code: { stop, board, available, at,
  * asOf, error }. `at` is when this browser fetched it (Date.now(), for
  * fetching again); `asOf` when the server's answer is from (its clock, ms),
  * older than `at` when it served a board it had kept.
  */
-const boards = store(new Map());
+export const boards = store(new Map());
 /** The stops showing the board across the road, by the page's own stop. */
-const across = store(new Set());
+export const across = store(new Set());
 /** Which of the home's pages is on screen. */
 const active = store(0);
 /** A stop to scroll the home to, once it's drawn (a search result that has a page). */
@@ -79,9 +79,9 @@ const colorOf = (svc) => campus.get()?.routes[svc]?.color ?? '#8a939c';
 const svcVars = (color) => `--svc:${color};--svc-ink:${inkOn(color)}`;
 const pins = () => profile.get()?.pinnedStops ?? [];
 /** The stop across the road from `code`, from its board, else the campus's map. */
-const oppositeOf = (code) => boards.get().get(code)?.stop?.opposite ?? stopOf(code)?.opposite ?? null;
+export const oppositeOf = (code) => boards.get().get(code)?.stop?.opposite ?? stopOf(code)?.opposite ?? null;
 /** The stop whose board a page shows: its own, or the one across the road. */
-const shownCode = (code) => (across.get().has(code) && oppositeOf(code)) || code;
+export const shownCode = (code) => (across.get().has(code) && oppositeOf(code)) || code;
 
 /** When answer `data` is from, on the server's clock: its `asOf`, else now. */
 const asOfMs = (data) => Date.parse(data?.asOf ?? '') || serverNow();
@@ -155,7 +155,7 @@ const lineKey = () => {
 /* ---------- the home's pages ---------- */
 
 /** Page 1 is the nearest stop (or finding it), then each pinned stop not already there. */
-function pagesOf(n, pinned) {
+export function pagesOf(n, pinned) {
   const list = [n.status === 'ready' ? { kind: 'nearest', code: n.code } : { kind: n.status === 'loading' ? 'loading' : 'find' }];
   for (const code of pinned) if (code !== n.code) list.push({ kind: 'pinned', code });
   return list;
@@ -191,7 +191,7 @@ function showBoard(code) {
   if (!b?.at || Date.now() - b.at > REFRESH_MS) loadBoard(shownCode(code));
 }
 
-async function togglePin(code) {
+export async function togglePin(code) {
   if (!profile.get()) await reloadProfile().catch(() => {});
   if (!profile.get()) return toast(t("Couldn't pin that. Check your connection."), { error: true });
   if (pins().includes(code)) {
@@ -209,7 +209,7 @@ async function togglePin(code) {
 
 /* ---------- moving around the tab ---------- */
 
-function parse(hash) {
+export function parse(hash) {
   const [, kind, a, b] = hash.split('/').map(decodeURIComponent);
   if (kind === 'stop' && a) return { kind: 'stop', code: a };
   if (kind === 'line' && a) return { kind: 'line', svc: a, stop: b || null };
@@ -265,8 +265,8 @@ function openStop(code) {
     go(`#buses/stop/${encodeURIComponent(code)}`);
   }
 }
-const lineHash = (svc, stop) => `#buses/line/${encodeURIComponent(svc)}${stop ? `/${encodeURIComponent(stop)}` : ''}`;
-const stopParent = (code) => (homePages().some((p) => p.code === code) ? '#buses' : `#buses/stop/${encodeURIComponent(code)}`);
+export const lineHash = (svc, stop) => `#buses/line/${encodeURIComponent(svc)}${stop ? `/${encodeURIComponent(stop)}` : ''}`;
+export const stopParent = (code) => (homePages().some((p) => p.code === code) ? '#buses' : `#buses/stop/${encodeURIComponent(code)}`);
 
 /* ---------- drawing ---------- */
 
