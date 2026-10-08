@@ -143,7 +143,7 @@
     <string name="ends">结束</string>
     <string name="estimated_gap">~ 根据通常的班次间隔估计</string>
     <string name="eta_ended">已停运</string>
-    <string name="exact_off">terminus 的“闹钟和提醒”已关闭。提醒可能会晚几分钟，实时通知也可能延迟开始。</string>
+    <string name="exact_off">terminus 的“闹钟和提醒”已关闭。提醒可能会晚几分钟，实时通知也可能要等你打开应用才会开始。</string>
     <string name="favourites_hint">在应用、小组件和 Mac 菜单栏中一键可达。每周都去的地方，可以加到课表里。</string>
     <string name="finding_stop">正在找最近的车站…</string>
     <string name="follow_device">跟随手机设置</string>

@@ -143,7 +143,7 @@
     <string name="ends">Ends</string>
     <string name="estimated_gap">~ estimated from the usual time between buses</string>
     <string name="eta_ended">ended</string>
-    <string name="exact_off">\"Alarms &amp; reminders\" is off for terminus. Reminders may arrive a few minutes late, and the live notification may start late.</string>
+    <string name="exact_off">\"Alarms &amp; reminders\" is off for terminus. Reminders may arrive a few minutes late, and the live notification may not start until you open the app.</string>
     <string name="favourites_hint">Available in one tap from the app, the widget and the Mac\'s menu bar. To go somewhere every week, add it to your timetable.</string>
     <string name="finding_stop">Finding the nearest stop…</string>
     <string name="follow_device">Follow this phone</string>
