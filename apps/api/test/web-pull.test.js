@@ -69,7 +69,10 @@ test('the words say what letting go does, then how it went, in English and Chine
   useLang('zh');
   assert.equal(pullWords('pull'), '下拉刷新');
   assert.equal(pullWords('fresh'), '已是最新');
+  assert.equal(pullWords('fresh', 9), '已是最新，9 秒后更新');
   useLang('en');
+  assert.equal(pullWords('fresh', 9), 'Up to date, next update in 9 s', 'says when new times come, so the age still counting reads right');
+  assert.equal(pullWords('fresh', null), 'Up to date');
   assert.equal(pullWords('armed'), 'Let go to refresh');
   assert.equal(pullWords('failed'), "Couldn't update");
 });
@@ -83,7 +86,7 @@ test('Buses fetches again on a pull only when its times are old enough to change
   try {
     B.nearest.set({ status: 'ready', code: 'YIH', distM: 40 });
     B.boards.set(new Map([['YIH', { stop: { code: 'YIH' }, board: [], at: Date.now() - 2_000 }]]));
-    assert.equal(await B.pullRefresh(), 'fresh');
+    assert.deepEqual(await B.pullRefresh(), { state: 'fresh', inS: null }, 'no timed refresh due with the tab not shown');
     assert.equal(calls, 0, 'times 2 s old: the server would send the same ones');
 
     B.boards.set(new Map([['YIH', { stop: { code: 'YIH' }, board: [], at: Date.now() - PULL_FRESH_MS - 1 }]]));

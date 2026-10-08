@@ -152,16 +152,23 @@ internal fun BusesScreen(
     }
 }
 
-/** Runs [refresh] now and every 15 s (longer while the server asked for a wait) while this is on screen and the app is in front. */
+/**
+ * Runs [refresh] now and every 15 s (longer while the server asked for a
+ * wait) while this is on screen and the app is in front, telling [next] when
+ * it runs again (for a pull's "next update in 9 s").
+ */
 @Composable
-private fun Refreshing(vararg keys: Any?, refresh: suspend () -> Unit) {
+private fun Refreshing(vararg keys: Any?, next: (Long) -> Unit, refresh: suspend () -> Unit) {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val latest by rememberUpdatedState(refresh)
+    val nextAt by rememberUpdatedState(next)
     LaunchedEffect(*keys) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             while (true) {
                 latest()
-                delay(maxOf(BusTimes.REFRESH_MS, Quiet.waitMs()))
+                val wait = maxOf(BusTimes.REFRESH_MS, Quiet.waitMs())
+                nextAt(System.currentTimeMillis() + wait)
+                delay(wait)
             }
         }
     }
@@ -206,7 +213,7 @@ private fun Home(state: BusesUi, vm: BusesViewModel, pins: List<String>, onPin: 
     // The band, then the board or the search's results, scroll as one, so the
     // sky goes up with the page rather than staying over it.
     val scroll = rememberScrollState()
-    BusPull(boardLivery(state, inView), ::hillScene, enabled = query.isBlank(), onRefresh = { vm.pullPage(inView) }) { pull ->
+    BusPull(boardLivery(state, inView), ::hillScene, enabled = query.isBlank(), onRefresh = { vm.pullPage(inView) }, nextUpdateAt = { vm.pageNextAt(inView) }) { pull ->
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
         // The dots' line has room for the moon on the right.
@@ -240,7 +247,7 @@ private fun Home(state: BusesUi, vm: BusesViewModel, pins: List<String>, onPin: 
         // The page in view only: swiping past one doesn't ask for it. The
         // nearest stop's twin comes with it, so across the road costs nothing more.
         val first = boards.settledPage == 0
-        Refreshing(if (first) null else shown, first, state.across) { vm.refreshPage(if (first) null else shown) }
+        Refreshing(if (first) null else shown, first, state.across, next = { vm.nextTimedAt = it }) { vm.refreshPage(if (first) null else shown) }
         HorizontalPager(boards, Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top, key = { pages.getOrNull(it) ?: "nearest" }) { i ->
             val code = pages.getOrNull(i)
             val next = pages.getOrNull(i + 1)?.let { stopName(state, it) }
@@ -403,10 +410,10 @@ private fun NoNearest(state: BusesUi, vm: BusesViewModel) {
 /** A stop opened from the search or a line: its page, with Back. */
 @Composable
 private fun StopRoute(state: BusesUi, vm: BusesViewModel, code: String, pins: List<String>, onPin: (String) -> Unit, top: Dp) {
-    Refreshing(code, state.across) { vm.refreshPage(code) }
+    Refreshing(code, state.across, next = { vm.nextTimedAt = it }) { vm.refreshPage(code) }
     val phase = skyPhase()
     val scroll = rememberScrollState()
-    BusPull(boardLivery(state, code), ::hillScene, onRefresh = { vm.pullPage(code) }) { pull ->
+    BusPull(boardLivery(state, code), ::hillScene, onRefresh = { vm.pullPage(code) }, nextUpdateAt = { vm.pageNextAt(code) }) { pull ->
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
         // Back, and the stop, in the sky, as on the tab's own pages; it scrolls away with the board.
@@ -904,7 +911,7 @@ private const val GREY = 0xFF8A939CL
 @Composable
 private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, onShowOnMap: (String) -> Unit, top: Dp) {
     val key = lineKey(route.svc, route.from)
-    Refreshing(key) { vm.refreshLine(route.svc, route.from) }
+    Refreshing(key, next = { vm.nextTimedAt = it }) { vm.refreshLine(route.svc, route.from) }
     val now = ticking()
     // Refreshes failing: your stop's time counted down, not passed off as live.
     val line = state.lines[key]?.aged(now)
@@ -930,7 +937,7 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
     }
     val phase = skyPhase()
     // Pulled down, the line asks again, its bus in the service's colour.
-    BusPull(color, ::hillScene, onRefresh = { vm.pullLine(route.svc, route.from) }) { pull ->
+    BusPull(color, ::hillScene, onRefresh = { vm.pullLine(route.svc, route.from) }, nextUpdateAt = { vm.lineNextAt(route.svc, route.from) }) { pull ->
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
     // Back, the service and how many buses it has out, in the sky, scrolling away with the line.

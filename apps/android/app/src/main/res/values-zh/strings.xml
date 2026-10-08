@@ -612,5 +612,6 @@
     <string name="pull_let_go">松开刷新</string>
     <string name="pull_updated">刚刚更新</string>
     <string name="pull_up_to_date">已是最新</string>
+    <string name="pull_up_to_date_next_s">已是最新，%1$d 秒后更新</string>
     <string name="pull_failed">无法更新</string>
 </resources>

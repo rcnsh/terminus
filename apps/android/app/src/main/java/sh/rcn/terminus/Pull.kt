@@ -89,6 +89,13 @@ object Pull {
     /** Ask the server, or not: never within [FRESH_MS] of the last answer that came back ([lastOkMs], null for none). */
     fun shouldFetch(lastOkMs: Long?, nowMs: Long): Boolean = lastOkMs == null || nowMs - lastOkMs !in 0 until FRESH_MS
 
+    /**
+     * The pill's "next update in 9 s" for an [PullOutcome.UpToDate] pull:
+     * whole seconds until [atMs], when the screen's timed refresh brings new
+     * times, at least 1; null with none due (or one already past).
+     */
+    fun inS(atMs: Long?, nowMs: Long): Int? = atMs?.takeIf { it > nowMs }?.let { ((it - nowMs + 999) / 1000).toInt().coerceAtLeast(1) }
+
     /** How a pull went: whether it asked, and whether the answer came. */
     fun outcome(fetched: Boolean, ok: Boolean): PullOutcome = when {
         !fetched -> PullOutcome.UpToDate

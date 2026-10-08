@@ -16,7 +16,8 @@
 // Touch only: with a mouse there's the timed refresh, and pulling is never
 // the only way to new times. One fetch per pull, of what the tab asks for
 // anyway, and none when its times are under PULL_FRESH_MS old (timing.js):
-// the API would answer from its cache, so the pill says "Up to date".
+// the API would answer from its cache, so the pill says "Up to date", and on
+// Buses when the timed refresh brings new times.
 //
 // The numbers are pure and tested (web-pull.test.js). The drawing moves a
 // few SVG nodes over the horizon each frame, only while the sky is pulled.
@@ -67,8 +68,12 @@ export function groundAt(x, low) {
   return { y: Math.max(a, b) - 2, tilt: (Math.atan2(b - a, 18.5) * 180) / Math.PI };
 }
 
-/** The words in the pill: pulling, ready to let go, checking, or how it went ('updated', 'fresh', 'failed'). */
-export function pullWords(state) {
+/**
+ * The words in the pill: pulling, ready to let go, checking, or how it went
+ * ('updated', 'fresh', 'failed'). `inS`, with 'fresh': the seconds until the
+ * timed refresh brings new times, when the tab knows.
+ */
+export function pullWords(state, inS = null) {
   switch (state) {
     case 'armed':
       return t('Let go to refresh');
@@ -77,7 +82,7 @@ export function pullWords(state) {
     case 'updated':
       return t('Updated just now');
     case 'fresh':
-      return t('Up to date');
+      return inS ? t('Up to date, next update in {0} s', inS) : t('Up to date');
     case 'failed':
       return t("Couldn't update");
     default:
@@ -129,7 +134,8 @@ function busOf(horizon) {
 /**
  * The sky's stretch, the pill and the bus on the horizon. `enabled()`: the
  * tab on screen can be pulled. `refresh()`: fetches it again, resolving to
- * how it went ('updated', 'fresh' or 'failed'). `colours()`: the services'
+ * how it went ('updated', 'fresh' or 'failed', or { state, inS } as
+ * pullWords takes them). `colours()`: the services'
  * colours, for the buses looping past.
  */
 export function PullToRefresh({ enabled, refresh, colours }) {
@@ -167,9 +173,9 @@ export function PullToRefresh({ enabled, refresh, colours }) {
     let track = null;
     let said = '';
 
-    const say = (state) => {
+    const say = (state, inS = null) => {
       hint.className = `pull-hint is-${state}`;
-      const text = pullWords(state);
+      const text = pullWords(state, inS);
       if (words.textContent !== text) words.textContent = text;
       // Heard once each: checking, then how it went.
       if (state !== 'pull' && state !== 'armed' && said !== state) {
@@ -217,7 +223,7 @@ export function PullToRefresh({ enabled, refresh, colours }) {
       armed = false;
       released = modeAt = performance.now();
       say('busy');
-      const settle = (r) => (result = r);
+      const settle = (r) => (result = typeof r === 'string' ? { state: r } : r);
       props.current.refresh().then(settle, () => settle('failed'));
     }
 
@@ -246,14 +252,14 @@ export function PullToRefresh({ enabled, refresh, colours }) {
       // The answer's back, and the bus has been seen leaving: say how it went, then close up.
       if (st.page === 'hold' && result && !shownAt && now - released >= MIN_SHOW_MS) {
         shownAt = now;
-        say(result);
+        say(result.state, result.inS);
       }
       if (shownAt && now - shownAt >= RESULT_MS) {
         shownAt = 0;
         st.page = 'closing';
       }
       sign.classList.toggle('on', armed || st.mode === 'board' || (st.page === 'hold' && calm));
-      sign.classList.toggle('done', st.page === 'hold' && Boolean(shownAt) && result !== 'failed');
+      sign.classList.toggle('done', st.page === 'hold' && Boolean(shownAt) && result?.state !== 'failed');
 
       // The bus.
       let doorOpen = 0;
