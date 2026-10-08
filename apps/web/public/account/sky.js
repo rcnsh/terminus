@@ -138,9 +138,14 @@ function Lane({ colours, vw, y, back = false, go, first = false }) {
   // The shuttle on the road (its colour and speed), or null between them.
   const [trip, setTrip] = useState(null);
   const started = useRef(false);
+  // Counted out once at pulling out and back once when it's off the road (or
+  // the lane goes), however often `go` changes meanwhile.
   useEffect(() => {
-    if (trip) return () => void driving--;
-    if (!go) return;
+    if (!trip) return;
+    return () => void driving--;
+  }, [Boolean(trip)]);
+  useEffect(() => {
+    if (trip || !go) return;
     let t;
     const pullOut = () => {
       if (driving >= MAX_DRIVING) return void (t = setTimeout(pullOut, 1000 + Math.random() * 2000));
