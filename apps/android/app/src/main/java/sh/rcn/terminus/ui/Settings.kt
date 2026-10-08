@@ -17,19 +17,15 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -72,10 +68,8 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.platform.LocalContext
@@ -83,7 +77,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -260,11 +253,10 @@ internal fun SettingsScreen(
 }
 
 /**
- * Settings at a glance, in three levels: who you are; your day, drawn as a
- * route down the card (home stop, classes, hours, pace), each stop a row
- * opening its page, what isn't set yet in the accent; then the
- * rest as tiles, each saying what's set. Notifications all off shows in
- * amber: it's the setting that changes the most. About is under them.
+ * Settings at a glance: who you are, then the rest as tiles, each saying
+ * what's set. What isn't set yet (a home stop, classes) says what to do, in
+ * the accent; notifications all off shows in amber: it's the setting that
+ * changes the most. About is under them.
  * The title is in the same slim band of the sky as each page's, so opening
  * one doesn't change the top; the list is plain under it and scrolls, as a
  * page does. [top] and [bottom]: the status bar's and the tab bar's room.
@@ -324,40 +316,25 @@ private fun Initial(email: String, size: Dp, fontSize: TextUnit) {
     }
 }
 
-/** Under the horizon: your day as a route, the tiles, and About. */
+/** Under the horizon: the tiles, and About. */
 @Composable
 private fun SettingsGround(state: AccountState, ui: UiState, profile: ProfileDoc?, onOpen: (SettingsPage) -> Unit) {
     val c = MaterialTheme.colorScheme
     val muted = c.onSurfaceVariant
-    // Your day, as a route on its side: each stop a row opening its page.
-    val shape = RoundedCornerShape(18.dp)
-    Column(
-        Modifier.padding(top = 12.dp).fillMaxWidth().clip(shape).background(c.surface)
-            .border(1.dp, c.outlineVariant, shape).padding(top = 14.dp, bottom = 4.dp),
-    ) {
-        Label(stringResource(R.string.heading_your_day), Modifier.padding(horizontal = 14.dp).semantics { heading() })
-        val h12 = hour12(LocalContext.current)
-        val time = { m: Int -> minuteClock(m, h12) }
-        val home = profile?.homeStops?.firstOrNull()?.let { code -> state.campus?.stopName(code) ?: code }
-        val classes = profile?.let { it.trips.size + it.manual.size }
-        DayRoute(
-            listOf(
-                DayStop(stringResource(R.string.home_stop), home ?: stringResource(R.string.choose_your_stop), home == null && profile != null, SettingsPage.Trips),
-                DayStop(
-                    stringResource(R.string.timetable),
-                    if (classes == 0 && !state.needsReimport) stringResource(R.string.import_from_nusmods) else summary(SettingsPage.Timetable, state, ui).orEmpty(),
-                    classes == 0 || state.needsReimport,
-                    SettingsPage.Timetable,
-                ),
-                DayStop(stringResource(R.string.show_buses_between), profile?.let { "${time(it.dayStartMin)} – ${time(it.dayEndMin)}" }.orEmpty(), false, SettingsPage.Trips),
-                DayStop(stringResource(R.string.walking_pace), profile?.let { stringResource(paceName(it.walkPace)) }.orEmpty(), false, SettingsPage.Trips),
-            ),
-            onOpen,
-        )
+    // What isn't set yet says what to do, in the accent: no home stop, no
+    // classes, or a link for a semester that's over.
+    val todo = { page: SettingsPage ->
+        profile != null && when (page) {
+            SettingsPage.Trips -> profile.homeStops.isEmpty()
+            SettingsPage.Timetable -> state.needsReimport || profile.trips.size + profile.manual.size == 0
+            else -> false
+        }
     }
-    // The rest, as tiles.
+    // Everything, as tiles.
     TwoColumns(
         listOf(
+            SettingsPage.Trips to R.drawable.ic_pin,
+            SettingsPage.Timetable to R.drawable.ic_calendar,
             SettingsPage.Favourites to R.drawable.ic_heart,
             SettingsPage.Notifications to R.drawable.ic_bell,
             SettingsPage.Language to R.drawable.ic_globe,
@@ -378,8 +355,16 @@ private fun SettingsGround(state: AccountState, ui: UiState, profile: ProfileDoc
                 else -> summary(page, state, ui)
             }
             val off = page == SettingsPage.Notifications && !ui.leaveAlerts && !ui.liveUpdates
+            val ask = todo(page)
             said?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall, color = if (off) c.tertiary else muted, fontWeight = if (off) FontWeight.SemiBold else null, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (off) c.tertiary else if (ask) c.primary else muted,
+                    fontWeight = if (off || ask) FontWeight.SemiBold else null,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }
@@ -390,55 +375,6 @@ private fun SettingsGround(state: AccountState, ui: UiState, profile: ProfileDoc
     Spacer(Modifier.height(16.dp))
 }
 
-/** One stop on the day's route: what it is, what's set ([todo]: nothing yet, in the accent), and the page it opens. */
-private data class DayStop(val label: String, val value: String, val todo: Boolean, val page: SettingsPage)
-
-/**
- * Your day's stops down a line, each a row with a chevron like the rest of
- * Settings, so they read as things to tap. The line runs dot to dot: from
- * the first dot down, and into the last.
- */
-@Composable
-private fun DayRoute(stops: List<DayStop>, onOpen: (SettingsPage) -> Unit) {
-    val c = MaterialTheme.colorScheme
-    Column(Modifier.padding(top = 4.dp)) {
-        stops.forEachIndexed { i, stop ->
-            Row(
-                Modifier.fillMaxWidth().height(IntrinsicSize.Min).clickable(role = Role.Button) { onOpen(stop.page) }.padding(horizontal = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Canvas(Modifier.width(16.dp).fillMaxHeight()) {
-                    val x = size.width / 2
-                    val y = size.height / 2
-                    val w = 3.dp.toPx()
-                    if (i > 0) drawLine(c.primary, Offset(x, 0f), Offset(x, y), w)
-                    if (i < stops.lastIndex) drawLine(c.primary, Offset(x, y), Offset(x, size.height), w)
-                    val r = 7.dp.toPx()
-                    drawCircle(c.surface, r, Offset(x, y))
-                    drawCircle(c.primary, r - 1.75.dp.toPx(), Offset(x, y), style = Stroke(3.5.dp.toPx()))
-                }
-                Column(Modifier.weight(1f).padding(start = 12.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f).padding(vertical = 10.dp)) {
-                            Text(stop.label, style = MaterialTheme.typography.bodySmall, color = c.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(
-                                stop.value,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = if (stop.todo) c.primary else c.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        Icon(painterResource(R.drawable.ic_chevron), contentDescription = null, tint = c.onSurfaceVariant)
-                    }
-                    if (i < stops.lastIndex) RowDivider()
-                }
-            }
-        }
-    }
-}
-
 /** What's set on a page, in a line: the same words the list had. */
 @Composable
 private fun summary(page: SettingsPage, state: AccountState, ui: UiState): String? {
@@ -446,9 +382,12 @@ private fun summary(page: SettingsPage, state: AccountState, ui: UiState): Strin
     return when (page) {
         SettingsPage.Trips -> profile?.let {
             val home = it.homeStops.firstOrNull()?.let { code -> state.campus?.stopName(code) ?: code }
-            listOf(home ?: stringResource(R.string.no_home_stop), stringResource(R.string.pace_summary, stringResource(paceName(it.walkPace)))).joinToString(" · ")
+            if (home == null) stringResource(R.string.choose_your_stop) else "$home · ${stringResource(R.string.pace_summary, stringResource(paceName(it.walkPace)))}"
         }
-        SettingsPage.Timetable -> if (state.needsReimport) stringResource(R.string.reimport_needed) else profile?.let { classCount(it.trips.size + it.manual.size) }
+        SettingsPage.Timetable -> if (state.needsReimport) stringResource(R.string.reimport_needed) else profile?.let {
+            val n = it.trips.size + it.manual.size
+            if (n == 0) stringResource(R.string.import_from_nusmods) else classCount(n)
+        }
         SettingsPage.Favourites -> profile?.let { p -> p.places.joinToString(stringResource(R.string.list_sep)) { it.label }.ifEmpty { stringResource(R.string.none_yet) } }
         SettingsPage.Notifications -> listOfNotNull(
             if (ui.leaveAlerts) stringResource(R.string.short_leave_alerts) else null,

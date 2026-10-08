@@ -44,26 +44,7 @@
 .settings-row.set-account { padding: 14px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); }
 .set-account .avatar { display: grid; place-items: center; width: 44px; height: 44px; flex: none; border-radius: 50%; background: var(--accent); color: var(--bg); font: 800 1.1rem var(--display); }
 .set-account .row-title { font-weight: 700; overflow-wrap: anywhere; }
-/* Your day as a route down the card: home stop, classes, hours, pace, each a
-   row opening its page. The line runs dot to dot, through every row's dot. */
-.set-day { padding: 14px 0 2px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); overflow: hidden; }
-.set-day .eyebrow { margin: 0 14px; }
-.day-route { margin-top: 4px; }
-.settings-row.day-stop { position: relative; padding: 0 14px; border: 0; }
-.day-stop .day-dot { position: relative; align-self: stretch; width: 16px; flex: none; }
-.day-stop .day-dot::before { content: ''; position: absolute; left: 6.5px; top: 0; bottom: 0; width: 3px; background: var(--accent); }
-.day-stop:first-child .day-dot::before { top: 50%; }
-.day-stop:last-child .day-dot::before { bottom: 50%; }
-.day-stop .day-dot::after { content: ''; position: absolute; left: 1px; top: 50%; width: 14px; height: 14px; margin-top: -7px; box-sizing: border-box; border-radius: 50%; border: 3.5px solid var(--accent); background: var(--surface); }
-.day-stop:hover .day-dot::after { background: var(--accent-soft); }
-.day-stop[aria-current] .day-dot::after { background: var(--accent); }
-/* The divider starts after the dot, so the line reads unbroken. */
-.day-stop .row-text { align-self: stretch; align-content: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
-.day-stop:last-child .row-text { border-bottom: 0; }
-.day-stop .row-sum { font-size: 0.8rem; }
-.day-stop strong { overflow-wrap: anywhere; font-size: 0.93rem; }
-.day-stop strong.todo { color: var(--accent); }
-/* The rest as tiles, two to a row. */
+/* Settings as tiles, two to a row. */
 .set-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .set-tile { display: grid; align-content: start; gap: 2px; min-height: 112px; padding: 14px; text-align: left; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 18px; cursor: pointer; }
 .set-tile:hover { border-color: var(--line-strong); }
@@ -71,6 +52,7 @@
 .set-tile .row-title { font-weight: 700; }
 .set-tile .row-sum { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .set-tile .row-sum.off { color: var(--warn-ink); font-weight: 600; }
+.set-tile .row-sum.todo { color: var(--accent); font-weight: 600; }
 .set-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .settings-row.inline { cursor: default; flex-wrap: wrap; }
 .settings-row.inline:hover { background: none; }
@@ -175,7 +157,6 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
   .style-choice.on .widget { border-color: Highlight; }
   .journey .line .ride .rail::after, .route-line .bar { forced-color-adjust: none; background: CanvasText; }
   .ob-tile.on, .ob-pace.on { border-color: Highlight; }
-  .day-stop[aria-current] .day-dot::after { forced-color-adjust: none; background: Highlight; }
 }
 @media (prefers-reduced-motion: reduce) { .switch, .switch::after { transition: none; } }
 
