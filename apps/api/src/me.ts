@@ -709,7 +709,7 @@ export const ME_ROUTES: MeRoute[] = [
               arrive: l.arrive && shift ? isoSeconds(Date.parse(l.arrive) + shift) : l.arrive,
               ...(l.off ? { off: l.off } : {}),
               ...(l.stopCode ? { stopCode: l.stopCode } : {}),
-              ...(now.answer.dest?.to ? { alightCode: l.offCode ?? now.answer.dest.to } : {}),
+              ...(now.answer.dest?.to ? { alightCode: l.offCode ?? l.toCode ?? now.answer.dest.to } : {}),
               ...(plate ? { plate } : {}),
             },
           };

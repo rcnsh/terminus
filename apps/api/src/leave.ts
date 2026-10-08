@@ -69,7 +69,7 @@ const unranked = ({ ms: _ms, worth: _worth, opens: _opens, ...leave }: Ranked): 
 /** `off` only when there is one, so answers without a crossing are unchanged; `toStop` likewise. */
 const offOf = (leg: { off?: { code: string; name: string }; to?: { code: string; name: string } }) => ({
   ...(leg.off ? { off: shortStop(leg.off.name), offCode: leg.off.code } : {}),
-  ...(leg.to ? { toStop: shortStop(leg.to.name) } : {}),
+  ...(leg.to ? { toStop: shortStop(leg.to.name), toCode: leg.to.code } : {}),
 });
 
 export function leaveBy(f: LeaveInput): Leave | null {

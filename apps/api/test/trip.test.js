@@ -1287,3 +1287,19 @@ test('the Trip object answers 404 to a path it does not know', async () => {
   assert.equal((await trips.get('u1').fetch('https://trip/day', { method: 'POST', body: '{}' })).status, 404);
   assert.equal((await trips.get('u1').fetch('https://trip/nope', { method: 'POST', body: '{}' })).status, 404);
 });
+
+test('home is every home stop: from BIZ 2 the A1 to PGP, not a walk because it skips PGP Foyer', async () => {
+  // The last class ends at 10:00 by BIZ 2; home is PGP Foyer first, PGP second.
+  const feed = { BIZ2: [{ name: 'A1', arrivalTime: '3', nextArrivalTime: '9', passengers: 'low' }] };
+  const t = await setup({ home: { stops: ['PGPR', 'PGP'] }, manual: [{ ...cls(540, 'BIZ2', 'GEX1015 @ LT17'), endMin: 600 }] }, { feed });
+  t.clock(FROZEN_NOW + 61 * 60_000); // 10:01, the class is over
+  const a = await t.next(t.phone);
+  assert.equal(a.dest.label, 'Home');
+  assert.equal(a.leave?.svc, 'A1', 'the A1 calls at PGP, two stops on');
+  assert.equal(a.leave.toCode, 'PGP');
+  assert.equal(a.leave.offCode, undefined, 'no crossing');
+  // On it, the ride is followed to PGP, where it stops, not PGP Foyer.
+  const on = await (await t.signal(t.phone, { kind: 'boarded' })).json();
+  assert.equal(on.card.phase, 'riding');
+  assert.equal(on.card.ride.stops.at(-1).code, 'PGP');
+});

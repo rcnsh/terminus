@@ -69,6 +69,7 @@
     "walkS": 2,
     "rideS": 327,
     "toStop": "Opp KR MRT",
+    "toCode": "KR-MRT-OPP",
     "paid": true
   },
   "mode": "trip",

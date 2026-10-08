@@ -180,13 +180,15 @@ export async function tripAnswer(
   // A food court with several stops: the walk from each, for whichever the bus gets you off at.
   const lm = venueM ? null : landmark(dest.to);
   const endWalkByStopS = lm && Object.keys(lm.stops).length > 1 ? Object.fromEntries(Object.entries(lm.stops).map(([code, m]) => [code, Math.round(m / speed)])) : undefined;
-  // A place served by several stops arrives at whichever is quicker.
+  // A place served by several stops arrives at whichever is quicker. Home is
+  // every home stop: an A1 to PGP gets you home as well as a D2 to PGP Foyer.
   const target = targetStops(dest.to);
+  const homeTrip = dest.why === 'home' || dest.why === 'gap-home';
   const input: ResolveInput = {
     lat,
     lon,
     to: target.to,
-    toAlso: target.also,
+    toAlso: homeTrip ? (profile.home?.stops ?? []).filter((s) => s !== target.to) : target.also,
     originCode: lat === null && dest.from ? targetStops(dest.from).to : null,
     preferStops: profile.home?.stops ?? [],
     originWalkS: lat === null ? originWalkS(dest, homeStop, profile.homeWalkMin, speed) : 0,
