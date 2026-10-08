@@ -191,6 +191,16 @@ func theNextClassComesWithTheCard(name: String) throws {
     #expect(FlowPills.spoken(d2) == "D2: 4 min, 14 min")
 }
 
+/// An older server's row, worded on the Mac: the map's stop card uses
+/// this too, so 4 min 30 s is "5 min" in both, not "4 min" on the map.
+@Test func aRowsTimeRoundsToTheNearestMinute() {
+    #expect(FlowPills.eta(BoardRow(svc: "D2", etaS: 270, quality: "live")) == "5 min")
+    #expect(FlowPills.eta(BoardRow(svc: "D2", etaS: 269, quality: "live")) == "4 min")
+    #expect(FlowPills.eta(BoardRow(svc: "D2", etaS: 50, quality: "live")) == "1 min")
+    #expect(FlowPills.eta(BoardRow(svc: "D2", etaS: 44, quality: "live")) == "now")
+    #expect(FlowPills.eta(BoardRow(svc: "D2", etaS: 270, quality: "scheduled")) == "~5 min")
+}
+
 @Test func aTimetableGuessInNearbyIsNeverShownAsLive() {
     #expect(FlowPills.eta(etaS: 360, quality: "live") == "6 min")
     #expect(FlowPills.eta(etaS: 360, quality: "scheduled") == "~6 min")
