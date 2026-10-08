@@ -164,6 +164,7 @@ function Ride({ ride }) {
     <div class="ride">
       <progress max="100" value=${Math.round(done * 100)} aria-label=${t('Ride progress')}></progress>
       <div class="detail">${text}</div>
+      ${ride.change && html`<div class="detail">${ride.change.text}</div>`}
     </div>
   `;
 }
