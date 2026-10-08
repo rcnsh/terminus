@@ -6,7 +6,8 @@ import os
 /// Updates through Sparkle: checks the appcast every few hours, downloads a
 /// new version in the background and installs it when the popover, Settings
 /// and Setup are closed, relaunching straight into it. Each update is checked
-/// against the EdDSA key in Info.plist (SUPublicEDKey) and against this app's
+/// against the EdDSA key in Info.plist (SUPublicEDKey), before the disk image
+/// is even opened (SUVerifyUpdateBeforeExtraction), and against this app's
 /// code signature, so only a release signed with both the update key and the
 /// terminus certificate installs.
 ///
