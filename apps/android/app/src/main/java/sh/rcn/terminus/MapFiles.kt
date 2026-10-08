@@ -100,7 +100,7 @@ object MapFiles {
         // A copy cut short (the app killed mid-write, before writes were whole) is no copy.
         val kept = runCatching { file.readText() }.getOrNull()?.takeIf(::isJson)
         val text = kept?.takeIf { fresh(file) }
-            ?: fetchStyle("${BuildConfig.API_BASE}/map/style.json?theme=$theme&lang=$lang", file)
+            ?: fetchStyle("${Servers.base}/map/style.json?theme=$theme&lang=$lang", file)
             ?: kept
             ?: return@withContext null
         val tiles = current(dir, readMeta(dir))
@@ -217,7 +217,7 @@ object MapFiles {
 
     /** Asks for the map file; on a 200 with room for it, copies it into [into], stopping if [job] is cancelled. */
     private fun fetchTiles(ctx: Context, dir: File, job: Job?, etag: String?, into: File): Fetched {
-        val conn = URL("${BuildConfig.API_BASE}/map/$TILES").openConnection() as HttpURLConnection
+        val conn = URL("${Servers.base}/map/$TILES").openConnection() as HttpURLConnection
         try {
             conn.connectTimeout = 8_000
             conn.readTimeout = 30_000

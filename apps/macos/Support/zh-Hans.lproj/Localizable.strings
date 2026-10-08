@@ -408,3 +408,9 @@
 "That sign-in was already used. Send a new one." = "这次登录已经用过了。请重新发送。";
 "That code expired. Choose Add a device for a new one." = "这个配对代码已过期。请选择“添加设备”获取新的代码。";
 "Update terminus to keep using it." = "请更新 terminus 以继续使用。";
+
+"Developer" = "开发者";
+"Server" = "服务器";
+"Which server this app talks to. Only terminus's own are here. terminus starts again to switch, and the dev stub keeps its own sign-in." = "这个应用连接的服务器。这里只有 terminus 自己的。切换时 terminus 会重新启动，开发用的模拟服务器有自己的登录。";
+"%@ (default)" = "%@（默认）";
+"%@ (dev stub on this Mac)" = "%@（这台 Mac 上的模拟服务器）";

@@ -345,6 +345,8 @@ struct ChoicesSection: View {
 /// What terminus is, that it isn't NUS's, where its data comes from, and links.
 struct AboutPane: View {
     private let version = Api.version ?? "dev"
+    @State private var developer = Servers.menuShown
+    @State private var clicks = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -352,7 +354,16 @@ struct AboutPane: View {
                 .fixedSize(horizontal: false, vertical: true)
             Hint(L("terminus is an independent student project, not affiliated with NUS. Bus times come from NUS's shuttle feed. Walking routes and the map use data from OpenStreetMap contributors."))
             Hint(L("Use terminus in line with the NUS Acceptable Use Policy for IT Resources."))
+            // Clicked seven times, it shows the developer menu, as Android's build number does.
             Hint(L("Version %@", version))
+                .onTapGesture {
+                    guard !developer else { return }
+                    clicks += 1
+                    if clicks >= Servers.unlockClicks {
+                        Servers.unlockMenu()
+                        developer = true
+                    }
+                }
             Flow(spacing: 8) {
                 link(L("Get the apps"), "\(Api.site)/")
                 link(L("Status"), "\(Api.site)/status")
@@ -362,11 +373,39 @@ struct AboutPane: View {
                 link(L("Map data"), "https://www.openstreetmap.org/copyright")
                 link(L("NUS Acceptable Use Policy"), "https://nus.edu.sg/registrar/docs/info/registration-guides/aup-form.pdf")
             }
+            if developer { DeveloperSection() }
         }
     }
 
     private func link(_ title: String, _ url: String) -> some View {
         Button(title) { NSWorkspace.shared.open(URL(string: url)!) }
+    }
+}
+
+/// Which server terminus talks to, from the ones built in (Servers). It
+/// starts again on the one chosen.
+private struct DeveloperSection: View {
+    @State private var chosen = Api.base
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Divider().padding(.vertical, 4)
+            Text(L("Developer")).font(.headline)
+            Picker(L("Server"), selection: $chosen) {
+                ForEach(Array(Servers.choices.enumerated()), id: \.element) { i, base in
+                    Text(label(base, first: i == 0)).tag(base)
+                }
+            }
+            .pickerStyle(.radioGroup)
+            .onChange(of: chosen) { _, base in Servers.choose(base) }
+            Hint(L("Which server this app talks to. Only terminus's own are here. terminus starts again to switch, and the dev stub keeps its own sign-in."))
+        }
+    }
+
+    private func label(_ base: String, first: Bool) -> String {
+        let host = base.replacingOccurrences(of: "https://", with: "").replacingOccurrences(of: "http://", with: "")
+        if Servers.isLocal(base) { return L("%@ (dev stub on this Mac)", host) }
+        return first ? L("%@ (default)", host) : host
     }
 }
 

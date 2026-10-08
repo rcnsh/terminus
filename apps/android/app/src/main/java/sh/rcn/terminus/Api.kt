@@ -939,7 +939,7 @@ class Api(private val token: String?, private val fast: Boolean = false, private
             if (Outdated.gated(method, path) && Outdated.holding()) throw UpdateRequired(L.s(R.string.update_required))
             // Asked to slow down: nothing goes out until Retry-After is up.
             if (Quiet.blocked(path)) throw ApiError(429, L.s(R.string.busy_try_again))
-            val conn = URL(BuildConfig.API_BASE + path).openConnection() as HttpURLConnection
+            val conn = URL(Servers.base + path).openConnection() as HttpURLConnection
             try {
                 // Fast (widgets, a push, an alarm's broadcast, the live
                 // notification) must finish inside the ~10 s a broadcast or a

@@ -183,6 +183,7 @@ class TerminusApp : Application() {
     override fun onCreate() {
         super.onCreate()
         L.init(this)
+        Servers.init(this)
         ServerClock.init(this)
         Quiet.init(this)
         Outdated.init(this)

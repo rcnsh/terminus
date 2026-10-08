@@ -64,6 +64,7 @@ import sh.rcn.terminus.DayItem
 import sh.rcn.terminus.L
 import sh.rcn.terminus.Lang
 import sh.rcn.terminus.R
+import sh.rcn.terminus.Servers
 import sh.rcn.terminus.Store
 import sh.rcn.terminus.Target
 import sh.rcn.terminus.nusmodsLink
@@ -131,8 +132,9 @@ class MainActivity : ComponentActivity() {
             return
         }
         val data = intent?.data ?: return
-        // https://terminus.run/pair?code=… (or the beta's) from the account page's QR code.
-        if (data.scheme == "https" && data.host == BuildConfig.SITE.toUri().host && data.path?.startsWith("/pair") == true) {
+        // https://terminus.run/pair?code=… (or the beta's, or either's old
+        // address) from the account page's QR code.
+        if (data.scheme == "https" && data.host in Servers.siteHosts && data.path?.startsWith("/pair") == true) {
             val code = data.getQueryParameter("code")?.filter { it.isLetterOrDigit() }?.uppercase()
             if (code != null && code.length == 6 && !vm.state.value.paired) vm.checkPairLink(code)
             return

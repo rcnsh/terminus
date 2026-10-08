@@ -63,7 +63,9 @@ has_sign_identity
 SPARKLE_KEY="$HOME/.terminus/sparkle-ed25519.key"
 [ -f "$SPARKLE_KEY" ] || die "no Sparkle key at $SPARKLE_KEY"
 
-SITE=https://terminus.run
+# The address the apps are built to call and the appcast's links: the
+# old one, kept for good (Servers.kt), not terminus.run, which people see.
+SITE=https://terminus.rcn.sh
 BUCKET=terminus-downloads
 # A dry run builds apart, so it never wipes the files a stopped release
 # needs to finish (github-release.sh reads build/release/<version>).

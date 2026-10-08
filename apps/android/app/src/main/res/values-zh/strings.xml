@@ -440,6 +440,12 @@
     <string name="about_independent">terminus 是一个独立的学生项目，与 NUS 没有关联。实时巴士时间来自 NUS。步行路线和地图使用 OpenStreetMap 贡献者的数据。</string>
     <string name="about_aup">使用 terminus 时，请遵守 NUS 的 IT 资源可接受使用政策。</string>
     <string name="about_version">版本 %1$s</string>
+    <string name="developer">开发者</string>
+    <string name="developer_server_hint">这个应用连接的服务器。这里只有 terminus 自己的。切换到开发用的模拟服务器或从它切回时，两边的登录各自保留。</string>
+    <string name="developer_on">开发者设置已打开，在“关于”的底部。</string>
+    <string name="server_default">默认</string>
+    <string name="server_stub_reverse">你电脑上的模拟服务器，通过 adb reverse</string>
+    <string name="server_stub_emulator">你电脑上的模拟服务器，从模拟器连接</string>
     <string name="status">状态</string>
     <string name="privacy">隐私</string>
     <string name="api_docs">API 文档</string>
