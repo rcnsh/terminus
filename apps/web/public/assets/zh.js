@@ -10,7 +10,7 @@ window.TERMINUS_ZH = {
  "1 class had a venue we couldn't place. Pick the nearest stop, or skip it:": "有 1 节课的地点我们无法确定。选择最近的车站，或跳过：",
  "1 online lesson skipped.": "跳过了 1 节网课。",
  "<strong>Android:</strong> open the downloaded file and allow your browser to install apps when asked. It's installed directly, not from the Play Store, so Play Protect may ask you to confirm.": "<strong>Android：</strong>打开下载的文件，提示时允许浏览器安装应用。它是直接安装的，不经过 Play 商店，所以 Play 保护机制可能会要求你确认。",
- "<strong>Mac:</strong> open the downloaded disk image and drag terminus to Applications. After that it keeps itself up to date.": "<strong>Mac：</strong>打开下载的磁盘映像，把 terminus 拖到“应用程序”。之后它会自动更新。",
+ "<strong>Mac:</strong> open the downloaded disk image and drag terminus to Applications. The first time you open it, macOS stops it, as it isn't from an identified developer: choose Done, then Open Anyway in System Settings, under Privacy &amp; Security. After that it keeps itself up to date.": "<strong>Mac：</strong>打开下载的磁盘映像，把 terminus 拖到“应用程序”。第一次打开时，macOS 会拦下它，因为它不是来自已识别的开发者：选择“完成”，然后在“系统设置”的“隐私与安全性”里选择“仍要打开”。之后它会自动更新。",
  "A class no longer in your timetable": "已不在你课表里的课",
  "A reminder before it's time to leave, then updates on your bus as your trip goes on.": "在该出发时提醒你，并在行程中更新你的巴士动态。",
  "A widget that keeps itself up to date, with your favourites one tap away, and a live notification when it’s time to go.": "一个会自动更新的小组件，收藏一点就到；该出发时，还有实时通知提醒你。",
