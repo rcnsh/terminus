@@ -441,6 +441,34 @@ export function serviceResumesAt(graph: Graph, svc: string, nowMs: number): numb
 }
 
 /**
+ * How close to its time a feed time for a service that hasn't opened yet is
+ * believed. Outside its hours NUS's feed still lists times hours ahead that
+ * don't match the published start (an A2 at 09:16, when its hours start at
+ * 07:15); this close, it is the first buses getting ready.
+ */
+export const FIRST_BUS_LEAD_S = 30 * 60;
+
+/**
+ * `svc`'s feed times as they can be believed (times from `fetchedAt`).
+ * Outside its hours, a time at or after the service next opens is no bus on
+ * the road: dropped, or kept as a timetable time when it is within
+ * FIRST_BUS_LEAD_S of now. A time before the opening is a bus still out from
+ * the day that just ended, and stays as it is.
+ */
+export function beforeOpening(graph: Graph, svc: string, rows: Arrival[], fetchedAt: number, nowMs: number): Arrival[] {
+  if (!rows.length || inService(graph, svc, nowMs)) return rows;
+  const opens = serviceResumesAt(graph, svc, nowMs);
+  if (opens === null) return rows;
+  const out: Arrival[] = [];
+  for (const a of rows) {
+    const at = a.etaS == null ? null : fetchedAt + a.etaS * 1000;
+    if (at === null || at < opens) out.push(a);
+    else if (at - nowMs <= FIRST_BUS_LEAD_S * 1000) out.push({ ...a, scheduled: true });
+  }
+  return out;
+}
+
+/**
  * Pick the boardable rows when one service reports under several berths.
  *
  * Returns everything unchanged for the ordinary single-berth stop. When the
@@ -617,7 +645,7 @@ export function boardAt(
     // that much older: counted from now, as scoreOptions does, and a bus
     // whose time is well past is gone, not "now".
     const ageS = feed && available ? Math.max(0, (nowMs - feed.fetchedAt) / 1000) : 0;
-    const etas = usable
+    const etas = beforeOpening(graph, svc, usable, feed?.fetchedAt ?? nowMs, nowMs)
       .filter((a) => a.etaS != null && (a.etaS as number) - ageS >= -BOARD_GONE_S)
       .map((a) => ({ ...a, etaS: Math.max(0, Math.round((a.etaS as number) - ageS)) }))
       .sort((a, b) => a.etaS - b.etaS);
@@ -730,14 +758,14 @@ export function scoreOptions(
       // the -E run (route P starts at a bare KV, with no -S to prefer).
       const { usable, ambiguousBerth } = resolveBerths(forSvc);
 
-      const etas = usable
-        .filter((a) => a.etaS != null)
-        .sort((a, b) => (a.etaS as number) - (b.etaS as number));
-
       // The feed this service's arrivals came from: at a shelter the shuttle
       // and public buses share, each feed's own fetch time and state.
       const pub = isPublic(graph, leg.svc);
       const feed = feedFor(sa, pub);
+
+      const etas = beforeOpening(graph, leg.svc, usable, feed?.fetchedAt ?? nowMs, nowMs)
+        .filter((a) => a.etaS != null)
+        .sort((a, b) => (a.etaS as number) - (b.etaS as number));
       // Times here count from when the arrivals were fetched (departsAt is
       // fetchedAt + boardS), so the walk counts from then too: a bus that
       // left while a cached or stale answer aged can't be caught.

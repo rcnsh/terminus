@@ -14,7 +14,7 @@
 
 import type { ArriveBy, Candidate, Graph, Leave, ScoredOption, StopArrivals } from './types.ts';
 import { PUBLIC, WALK } from './config.ts';
-import { feedFor, headwayFor, inService, legRideS, resolveBerths, serviceResumesAt } from './resolve.ts';
+import { beforeOpening, feedFor, headwayFor, inService, legRideS, resolveBerths, serviceResumesAt } from './resolve.ts';
 import { isPublic, svcName } from './public.ts';
 import { ON_TIME_SLACK_S } from './profile.ts';
 import { isoSeconds, shortStop } from './format.ts';
@@ -154,7 +154,7 @@ function forLeg(leg: Leg, sa: StopArrivals | undefined, graph: Graph, arriveBy: 
   // however exact.
   const live =
     sa && feed && feed.available !== false
-      ? resolveBerths(sa.arrivals.filter((a) => a.svc === leg.svc)).usable
+      ? beforeOpening(graph, leg.svc, resolveBerths(sa.arrivals.filter((a) => a.svc === leg.svc)).usable, feed.fetchedAt, nowMs)
           .filter((a) => a.etaS != null)
           .map((a) => ({ at: feed.fetchedAt + (a.etaS as number) * 1000, estimated: a.scheduled === true, stale: feed.stale && !a.scheduled }))
           .sort((a, b) => a.at - b.at)

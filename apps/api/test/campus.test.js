@@ -6,7 +6,7 @@ import realGraph from '../data/stops.json' with { type: 'json' };
 import venuesJson from '../data/venues.json' with { type: 'json' };
 
 import { buildCampusMap, buildDestinations, friendlyLabel, ROUTE_COLORS, shapeFor } from '../src/campus.ts';
-import { boardAsOf, boardAt, indexGraph, serviceResumesAt, stoppedReason, towardsFrom } from '../src/resolve.ts';
+import { beforeOpening, boardAsOf, boardAt, FIRST_BUS_LEAD_S, indexGraph, serviceResumesAt, stoppedReason, towardsFrom } from '../src/resolve.ts';
 import { GRAPH as REAL, GRAPH_PUBLIC } from '../src/graph.ts';
 import { haversineM } from '../src/geo.ts';
 
@@ -327,6 +327,46 @@ test('boardAt with stopped: services outside their hours come last, greyed, unle
   assert.equal(r1Live.running, true);
   assert.equal(r1Live.etaS, 300);
   assert.equal('stopped' in r1Live, false);
+});
+
+test('before a service opens, the feed\'s times hours ahead are not shown as live buses', () => {
+  const idx = indexGraph(REAL);
+  // Thursday 8 October, 01:13: A2 and D2 open at 07:15. NUS's feed still
+  // lists them, hours ahead and off their hours (an A2 at 09:16): no bus.
+  const night = sgtAt(8, 1, 13);
+  const sa = (nowMs, arrivals) => ({ code: 'PGPR', arrivals, fetchedAt: nowMs, stale: false, available: true });
+  const far = sa(night, [
+    { svc: 'A2', etaS: 29_004, crowd: null, plate: 'PA1', berth: null },
+    { svc: 'D2', etaS: 29_514, crowd: null, plate: 'PD1', berth: null },
+  ]);
+  const rows = boardAt(REAL, idx, 'PGPR', far, night, { stopped: true });
+  for (const svc of ['A2', 'D2']) {
+    const r = rows.find((x) => x.svc === svc);
+    assert.equal(r.running, false, svc);
+    assert.equal(r.stopped, 'notYet');
+    assert.equal(r.resumesAt, iso(sgtAt(8, 7, 15)), 'from its hours, as K is');
+  }
+  assert.ok(!boardAt(REAL, idx, 'PGPR', far, night).some((r) => r.svc === 'A2'), 'left out of a board without stopped ones');
+
+  // A bus still out from the night before (due before the opening) is live.
+  const late = boardAt(REAL, idx, 'PGPR', sa(night, [{ svc: 'A2', etaS: 120, crowd: null, plate: 'PA1', berth: null }]), night);
+  assert.equal(late.find((r) => r.svc === 'A2').quality, 'live');
+
+  // 07:05, the first A2 due at 07:20: shown, but as the timetable's time.
+  const early = sgtAt(8, 7, 5);
+  const first = boardAt(REAL, idx, 'PGPR', sa(early, [{ svc: 'A2', etaS: 900, crowd: null, plate: 'PA1', berth: null }]), early)
+    .find((r) => r.svc === 'A2');
+  assert.equal(first.running, true);
+  assert.equal(first.quality, 'scheduled');
+  assert.equal(first.eta, '~15 min');
+
+  // The rule itself: kept up to the lead, dropped past it, untouched while it runs.
+  const at = (etaS) => [{ svc: 'A2', etaS, crowd: null, plate: null, berth: null }];
+  const open = sgtAt(8, 7, 15);
+  assert.equal(beforeOpening(REAL, 'A2', at(open / 1000 - early / 1000 + FIRST_BUS_LEAD_S), early, early).length, 0, 'past the lead');
+  assert.equal(beforeOpening(REAL, 'A2', at(FIRST_BUS_LEAD_S), early, early)[0].scheduled, true, 'at the lead');
+  const noon = sgtAt(8, 12);
+  assert.deepEqual(beforeOpening(REAL, 'A2', at(29_004), noon, noon), at(29_004), 'running: the feed as it is');
 });
 
 test('food courts are in the search, each with both of its stops', () => {
