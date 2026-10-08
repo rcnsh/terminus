@@ -31,7 +31,13 @@ scripts use it too. Both addresses stay attached to each Worker
 (`test/deploy.test.js`). The apps' developer menu (Settings, About: always
 in debug and beta builds, after seven taps on the version in a stable
 release) switches between the addresses built in and, in debug builds, the
-dev stub, never a typed one (`Servers.kt`, `Servers` in `Api.swift`).
+dev stub, never a typed one (`Servers.kt`, `Servers` in `Api.swift`). A page
+a browser opens on the old address is redirected to terminus.run
+(`movedPage` in `src/site.ts`); what the apps ask for is not. Sign-in email
+comes from login@terminus.run. The privacy contact stays privacy@rcn.sh,
+the domain kept for good, so personal requests never go to a lapsed
+terminus.run. So every `terminus.rcn.sh` and `rcn.sh` left in the repo is
+on purpose: don't find-and-replace them.
 
 ## The rules that matter most
 
@@ -237,7 +243,8 @@ apps/api/
   src/admin.ts        /admin/stats for the dashboard; analytics.ts logs to Analytics Engine
   src/feedback.ts     "This was wrong" reports, stored and emailed to the operator
   src/downloads.ts    App downloads from R2 (latest.json, the APKs, the DMG, the appcast)
-  src/landing.ts, site.ts, pagesky.ts  The landing page; stable or beta; the small pages' sky
+  src/landing.ts, site.ts, pagesky.ts  The landing page; stable or beta, and the old address's
+                      redirect (movedPage); the small pages' sky
   src/types.ts        Env (the bindings) and the shared types
   src/openapi.ts      OpenAPI 3.1 spec + docs page (a test fails if routes drift from it)
   src/http.ts         JSON helpers, CORS, security headers (CSP lives here)
@@ -285,13 +292,14 @@ apps/web/public/
   sw.js               Service worker: offline app shell and map
 apps/android/app/src/main/java/sh/rcn/terminus/
   Api.kt              API client and answer types
+  Servers.kt          Which server the app calls (the developer menu's choices); JVM-tested
   MapData.kt          Map data, GeoJSON, RoutePath + Slides (bus animation); JVM-tested
   MapFiles.kt         Street map file kept for offline
   ui/                 Screens (MainScreen, MapScreen, Settings, Onboarding, ...)
   widget/             Glance widgets and their refresh schedule
   LeaveAlerts.kt, LiveService.kt, Push.kt   Notifications and FCM
 apps/macos/
-  Sources/Terminus/   Api.swift, AppModel.swift (state/refresh/pairing), views, Updater.swift,
+  Sources/Terminus/   Api.swift (with Servers, the server it calls), AppModel.swift (state/refresh/pairing), views, Updater.swift,
                       MapWindow.swift + MapData.swift + MapFiles.swift (the map window)
   Vendor/             MapLibre.xcframework.zip, from scripts/vendor-maplibre-mac.sh
   Support/            Info.plist (version, SUPublicEDKey), zh-Hans strings, app icons
