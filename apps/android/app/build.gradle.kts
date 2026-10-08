@@ -174,10 +174,10 @@ dependencies {
     // these, each with a published advisory; as for the plugins' classpath in
     // ../build.gradle.kts, lint runs with the fixed ones.
     constraints {
-        "androidLintTool"("org.bouncycastle:bcprov-jdk18on:1.85") { because("GHSA-9pwp-9qqc-pr26, GHSA-qp49-qgx5-5m26, GHSA-c3fc-8qff-9hwx") }
-        "androidLintTool"("org.bouncycastle:bcpkix-jdk18on:1.85") { because("GHSA-wg6q-6289-32hp; matches bcprov") }
-        "androidLintTool"("org.bouncycastle:bcutil-jdk18on:1.85") { because("matches bcprov") }
-        "androidLintTool"("org.apache.commons:commons-lang3:3.18.0") { because("GHSA-j288-q9x7-2f5v") }
+        "androidLintTool"("org.bouncycastle:bcprov-jdk18on:1.86") { because("GHSA-9pwp-9qqc-pr26, GHSA-qp49-qgx5-5m26, GHSA-c3fc-8qff-9hwx") }
+        "androidLintTool"("org.bouncycastle:bcpkix-jdk18on:1.86") { because("GHSA-wg6q-6289-32hp; matches bcprov") }
+        "androidLintTool"("org.bouncycastle:bcutil-jdk18on:1.86") { because("matches bcprov") }
+        "androidLintTool"("org.apache.commons:commons-lang3:3.21.0") { because("GHSA-j288-q9x7-2f5v") }
         "androidLintTool"("org.apache.httpcomponents:httpclient:4.5.14") { because("GHSA-7r82-7xv7-xcpj") }
     }
 }
