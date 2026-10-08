@@ -33,6 +33,10 @@ BUILD=$(git rev-list --count HEAD)
 BETA_D1=$(sed -n '/^const BETA = {/,/^};/s/.*d1: "\(.*\)".*/\1/p' apps/api/cloudflare.config.ts)
 [ -n "$BETA_D1" ] || [ $DRY -eq 1 ] || { echo "the beta's D1 id isn't in apps/api/cloudflare.config.ts yet"; exit 1; }
 grep -q "^TERMINUS_KEYSTORE=" "$HOME/.gradle/gradle.properties" 2>/dev/null || { echo "Android release key not configured (TERMINUS_KEYSTORE)"; exit 1; }
+# The terminus certificate, as scripts/release.sh: build.sh would otherwise
+# sign ad-hoc without it, and the beta app would lose its permissions.
+export SIGN_IDENTITY=C4EE234DA75ED3CD7699A31394C276801F93C4A9
+security find-identity -p codesigning | grep -q "$SIGN_IDENTITY" || { echo "the terminus certificate isn't in the keychain: import ~/.terminus/mac-signing.p12"; exit 1; }
 SPARKLE_KEY="$HOME/.terminus/sparkle-ed25519.key"
 [ -f "$SPARKLE_KEY" ] || { echo "no Sparkle key at $SPARKLE_KEY"; exit 1; }
 # What's released must be what's committed (untracked files don't count).
@@ -72,7 +76,7 @@ cp "$APKS/app-beta-armeabi-v7a-release.apk" "$OUT/terminus-$VERSION-armv7.apk"
 cp "$APKS/app-beta-x86_64-release.apk" "$OUT/terminus-$VERSION-x86_64.apk"
 
 echo "== mac"
-CHANNEL=beta BETA_VERSION="$VERSION" BETA_BUILD="$BUILD" scripts/package-mac.sh
+CHANNEL=beta BETA_VERSION="$VERSION" BETA_BUILD="$BUILD" PUBLISH=true scripts/package-mac.sh
 DMG="$OUT/terminus-$VERSION.dmg"
 SIG=$("$ROOT/apps/macos/.build/artifacts/sparkle/Sparkle/bin/sign_update" --ed-key-file "$SPARKLE_KEY" -p "$DMG")
 printf '%s' "$SIG" | grep -q . || { echo "sign_update gave no signature"; exit 1; }
