@@ -138,7 +138,7 @@ but KV is optional at run time: `/health` says what's missing.
 | `GET /timelapse/days` | The days the timelapse recorder has kept (closed ones from R2; today's while it records, and any of the past week's still held by a recorder that hasn't written it to R2 yet) and what it's doing today. Needs `x-health-token`: the operator's, or `TIMELAPSE_TOKEN`, which opens `/timelapse/*` and nothing else. |
 | `GET /timelapse/days/<date>` | One recorded day as gzipped JSON (see "The timelapse recorder"). A closed day never changes and is cached for a year; today's is built from what the recorder holds so far, `no-store` (503 if its recorder doesn't answer within 10 s). Needs `x-health-token` (operator or timelapse token). |
 | `GET /account` | The account page ([apps/web](../../web)), served as static assets. |
-| `POST /auth/login`, `/auth/code`, `/pair`, `/me/*` | Accounts. See below. `POST /me/feedback` is "Is this wrong?": the answer the user saw and a note, kept with the account for a year (`FEEDBACK_KEEP_DAYS`, the cron) and its note emailed to `ALERT_EMAIL`, without the address or the answer (they'd outlive the account in an inbox; the dashboard has both). It needs a note, and an account with an email: an anonymous one gets 403. |
+| `POST /auth/login`, `/auth/code`, `/pair`, `/me/*` | Accounts. See below. `POST /me/feedback` is "Is this wrong?": the answer the user saw and what was wrong (a `reason` from the sheet's chips, `REASONS` in `src/feedback.ts`, a note, or both), kept with the account for a year (`FEEDBACK_KEEP_DAYS`, the cron) and its note emailed to `ALERT_EMAIL`, without the address or the answer (they'd outlive the account in an inbox; the dashboard has both). It needs a reason or a note (feedback, `kind: other`, always a note), and an account with an email: an anonymous one gets 403. |
 
 `/next`, `/trip`, `/arrivals`, `/buses`, `/line`, `/campus` and `/stops/pairs` need an API key
 (made on the account page, sent as `x-api-key`, or as a bearer token) or a signed-in
@@ -654,7 +654,7 @@ route moves it from the answer into the card (`profile.ts` `upcomingClass`).
 Setup and deploys: `pnpm run deploy` (and `deploy:beta`) applies the
 database's pending migrations, then deploys. The code reads columns from
 recent migrations (`magic_links.code_tries` from 0009, `feedback.reply_to`
-from 0010), so a Worker deployed to a database without them answers 500.
+from 0010, `feedback.reason` from 0014), so a Worker deployed to a database without them answers 500.
 By hand, the same first step is:
 
 ```bash
@@ -755,8 +755,11 @@ Settings. It uses the same routes as the account page, with the session cookie.
 - **Now.** A search button at the end of the chips opens "Go somewhere
   else" (account/search-box.js, ranked by search.js, over `/campus`'s
   destinations); a pick shows its card under a chip of its own. "Is this
-  wrong?" under the card sends it to `/me/feedback` (account/preview.js
-  `Report`), except for Nearby. A stop's name in Nearby opens it on the map
+  wrong?" under the card opens a bottom sheet (account/preview.js
+  `Report`, a modal `<dialog>`): the answer it's about, the reasons as
+  chips, a note, and who the reply goes to. It sends to `/me/feedback`
+  and then says so in the sheet, which is the only confirmation; Android's
+  sheet is the same. Not for Nearby. A stop's name in Nearby opens it on the map
   (MapTab's `focus` in map.js).
 - **Theme.** Appearance's switch chooses light, dark or the device's own, for this
   browser only (`localStorage` `terminus-theme`). `assets/theme.js`, in every

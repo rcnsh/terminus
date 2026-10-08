@@ -5,7 +5,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -63,12 +62,10 @@ data class UiState(
     val leaveAlerts: Boolean = false,
     /** The live notification during your day. */
     val liveUpdates: Boolean = false,
-    /** An "Is this wrong?" report on its way, why it failed, and where it was sent for. */
+    /** An "Is this wrong?" report on its way, why it failed, and whether it went: its sheet says so. */
     val reportSending: Boolean = false,
     val reportResult: String? = null,
-    val reportedFor: Target? = null,
-    /** The card's `line` when the report went: once the card says something else, it's another answer. */
-    val reportedLine: String? = null,
+    val reportSent: Boolean = false,
     /** Today's timeline (/me/day), for under the planned answer. */
     val day: DayPlan? = null,
     /** Just swiped off Today, offered back with Undo in a bar at the foot of the screen. */
@@ -83,13 +80,7 @@ data class UiState(
     val signalling: Boolean = false,
 ) {
     val answer: NextAnswer? get() = answers[target]
-
-    /** "✓ Reported, thanks" in place of "Is this wrong?": only on the tab and answer it was sent for. */
-    val reportShown: Boolean get() = reportedFor == target && answer?.card?.line == reportedLine
 }
-
-/** How long "✓ Reported, thanks" stays before "Is this wrong?" comes back. */
-private const val REPORTED_SHOWN_MS = 6_000L
 
 data class PendingPair(val code: String, val account: String)
 
@@ -240,15 +231,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * "Is this wrong?": sends `answer` (the raw answer that was on screen when
-     * the dialog opened; the 30 s refresh may have replaced it since) and the
-     * note. Once sent, `target` is marked reported; a failure is said instead.
+     * the sheet opened; the 30 s refresh may have replaced it since) with a
+     * `reason` (REPORT_REASONS), a note, or both. Once sent, the sheet says
+     * so; a failure is said in the sheet instead.
      */
-    fun report(note: String, answer: String?, target: Target, appVersion: String) {
+    fun report(reason: String?, note: String, answer: String?, appVersion: String) {
         val token = store.token ?: return
         _state.update { it.copy(reportSending = true, reportResult = null) }
         viewModelScope.launch {
             val failure = try {
-                Api(token).report(note.trim(), answer?.let { org.json.JSONObject(it) }, appVersion)
+                Api(token).report(reason, note.trim(), answer?.let { org.json.JSONObject(it) }, appVersion)
                 null
             } catch (e: CancellationException) {
                 throw e
@@ -257,25 +249,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: Exception) {
                 L.s(R.string.report_failed)
             }
-            if (failure != null) {
-                _state.update { it.copy(reportSending = false, reportResult = failure) }
-                return@launch
-            }
-            // The answer on screen now, not the one reported: the card may have moved on while
-            // the dialog was open, and the tick should still show that it went.
-            _state.update { it.copy(reportSending = false, reportedFor = target, reportedLine = it.answers[target]?.card?.line) }
-            // The tick is a moment's acknowledgement; then the link is back for the next answer.
-            reportClearJob?.cancel()
-            reportClearJob = viewModelScope.launch {
-                delay(REPORTED_SHOWN_MS)
-                _state.update { it.copy(reportedFor = null, reportedLine = null) }
-            }
+            _state.update { it.copy(reportSending = false, reportResult = failure, reportSent = failure == null) }
         }
     }
 
-    private var reportClearJob: Job? = null
-
-    fun clearReportResult() = _state.update { it.copy(reportResult = null) }
+    /** A fresh sheet: no failure or "sent" from the last one. */
+    fun reportOpened() = _state.update { it.copy(reportResult = null, reportSent = false) }
 
     /**
      * A card button: "Not going", "Not on campus today", "Back on campus" or

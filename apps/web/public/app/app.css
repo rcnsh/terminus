@@ -17,9 +17,9 @@ body.app { padding-bottom: env(safe-area-inset-bottom); }
 .app-card.loading .card-foot { margin-top: 23rem; }
 .app-card .updated { font-size: 0.8rem; }
 .app-card .updated:empty { display: none; }
-.app-card .updated:has(+ :is(.report-open, .report-done))::after { content: '·'; margin-left: 6px; }
-/* The report's form and its message under them, each on a line of its own. */
-.app-card .card-foot > :not(.report-open, .report-done, .updated) { flex-basis: 100%; }
+.app-card .updated:has(+ .report-open)::after { content: '·'; margin-left: 6px; }
+/* Anything else under them (the report's sheet is out of the flow), on a line of its own. */
+.app-card .card-foot > :not(.report-open, .report-sheet, .updated) { flex-basis: 100%; }
 .app-card .card-foot > p { order: 1; margin: 0; }
 body.is-offline .app-card .widget { opacity: 0.6; }
 /* The day plan's next thing, offline: still the thing to do, so not dimmed (the banner says offline). */

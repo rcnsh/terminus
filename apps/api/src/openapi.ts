@@ -1110,26 +1110,31 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Account'],
           summary: 'Report a wrong answer',
           description:
-            'Sends the answer you were looking at, with a note saying what was wrong, for checking against what the buses did. Only for an account with an email (signed in), so the operator can reply. Kept with your account for a year (in the export, deleted with it); the note alone is emailed to the operator, without your address or the answer. Up to ten a day.',
+            'Sends the answer you were looking at, with what was wrong (a reason from the list, a note, or both), for checking against what the buses did. Only for an account with an email (signed in), so the operator can reply. Kept with your account for a year (in the export, deleted with it); the note alone is emailed to the operator, without your address or the answer. Up to ten a day.',
           operationId: 'sendFeedback',
           security: [{ bearer: [] }, { cookie: [] }],
           requestBody: jsonBody(
             {
               type: 'object',
-              required: ['platform', 'note'],
+              required: ['platform'],
               properties: {
                 kind: { type: 'string', enum: ['wrong', 'other'], default: 'wrong' },
-                note: { type: 'string', minLength: 1, maxLength: 1000, description: 'What was wrong, or what you would like. Required.' },
+                reason: {
+                  type: 'string',
+                  enum: ['never-came', 'times-off', 'wrong-stop', 'walk-longer', 'wrong-class'],
+                  description: 'What was wrong with the answer, as the apps offer it: the bus never came, the times were off, the wrong stop, a longer walk, the wrong class. Only with kind wrong.',
+                },
+                note: { type: 'string', maxLength: 1000, description: 'What was wrong, or what you would like. Required unless there is a reason.' },
                 platform: { type: 'string', enum: ['android', 'mac', 'web'] },
                 appVersion: { type: 'string', maxLength: 20 },
                 context: { type: 'object', description: 'The answer as shown (a /me/next response), up to 16 KB.' },
               },
             },
-            { kind: 'wrong', note: 'The D2 never came', platform: 'web', context: { label: 'D2 · 4 min' } },
+            { kind: 'wrong', reason: 'never-came', note: 'Waited 20 min at COM3', platform: 'web', context: { label: 'D2 · 4 min' } },
           ),
           responses: {
             '201': ok({ type: 'object', properties: { ok: { type: 'boolean' }, id: { type: 'string' } } }),
-            '400': errorResponse('Missing or invalid field (an empty note, too); the message names it.'),
+            '400': errorResponse('Missing or invalid field (no reason and an empty note, too); the message names it.'),
             '401': errorResponse('No valid session.'),
             '403': errorResponse('An anonymous account: sign in with an email first.'),
             '429': { ...errorResponse('Ten reports already today, or too many requests from this account.'), headers: RETRY_AFTER },
@@ -1350,6 +1355,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                     properties: {
                       created: { type: 'string', format: 'date-time' },
                       kind: { type: 'string' },
+                      reason: { type: ['string', 'null'], description: 'What was wrong, from the list in POST /me/feedback.' },
                       note: { type: 'string' },
                       platform: { type: 'string' },
                       appVersion: { type: ['string', 'null'] },

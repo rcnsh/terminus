@@ -869,9 +869,13 @@ class Api(private val token: String?, private val fast: Boolean = false, private
     /** The released version, from /download/latest.json. */
     suspend fun latestVersion(): String = request("GET", "/download/latest.json").getString("version")
 
-    /** "Is this wrong?": the answer as the server sent it, and a note (required). Needs an account with an email. */
-    suspend fun report(note: String, answer: JSONObject?, appVersion: String) {
+    /**
+     * "Is this wrong?": the answer as the server sent it, with a reason (one of
+     * REPORT_REASONS), a note, or both. Needs an account with an email.
+     */
+    suspend fun report(reason: String?, note: String, answer: JSONObject?, appVersion: String) {
         val body = JSONObject().put("kind", "wrong").put("note", note).put("platform", "android").put("appVersion", appVersion)
+        reason?.let { body.put("reason", it) }
         answer?.let { body.put("context", it) }
         request("POST", "/me/feedback", body)
     }
