@@ -57,7 +57,7 @@ class OfflineDayTest {
         assertEquals("R2 from PGP", first.how)
         // Planned a while ago: an estimate, so "~" even on a live time. A walk reads as a line of its own.
         val walk = OfflineDay.lines(OfflineDay.next(day, ms("2026-08-27T05:10:00Z"))!!, hhmm)
-        assertEquals("Leave by ~13:39", walk.big)
+        assertEquals("Leave by ~13:41", walk.big)
         assertEquals("Walk", walk.how)
         val home = OfflineDay.lines(OfflineDay.next(day, ms("2026-08-27T07:30:00Z"))!!, hhmm)
         assertEquals("15:00", home.head)

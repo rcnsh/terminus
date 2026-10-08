@@ -181,7 +181,7 @@ const CASES = {
   'nearby-list': [{ home: { stops: ['PGP'] } }, `/me/nearby?${DORM}`],
   // The day the apps keep for when they're offline (see offline-day.json):
   // a class, a long gap home, a class, the way home.
-  'day': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown'), cls(840, 'COM3', 'CS2030 @ COM1', 'COM1')], places }, '/me/day'],
+  'day': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown'), cls(840, 'COM3', 'CS2030 @ COM4', 'COM4')], places }, '/me/day'],
   // At the PGP stop at 09:05, "On it" for the D2 due in a minute to a 09:15
   // class: its plate (SBS1234A) is picked from the feed at the tap, and the
   // feed's time for that bus at UTown (09:15) is the arrival, said as live.
