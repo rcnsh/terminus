@@ -47,3 +47,16 @@ private func answer(departsIn: TimeInterval? = nil, changesIn: TimeInterval? = n
     #expect(isNewer("2.1.0-beta.10", than: "2.1.0-beta.9"))
     #expect(!isNewer("2.1.0-beta.9", than: "2.1.0-beta.10"))
 }
+
+/// "Go later today at…" starts half an hour on, on a five-minute mark, and never past 23:55.
+@Test func goLaterStartsHalfAnHourOnToday() {
+    var cal = Calendar(identifier: .gregorian)
+    cal.timeZone = .campus
+    let at = { (h: Int, m: Int) in cal.date(from: DateComponents(year: 2026, month: 8, day: 27, hour: h, minute: m))! }
+    #expect(GoLater.soon(now: at(9, 2)) == at(9, 35))
+    #expect(GoLater.soon(now: at(9, 0)) == at(9, 30))
+    #expect(GoLater.soon(now: at(23, 20)) == at(23, 50))
+    #expect(GoLater.soon(now: at(23, 27)) == at(23, 55))
+    // Half an hour on is past midnight: still today.
+    #expect(GoLater.soon(now: at(23, 40)) == at(23, 55))
+}
