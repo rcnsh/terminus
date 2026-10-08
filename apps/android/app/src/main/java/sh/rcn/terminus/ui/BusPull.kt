@@ -99,9 +99,6 @@ import kotlin.math.roundToInt
  * PullMotion (Pull.kt); the web's pull draws the same.
  */
 
-/** The accent the bus is painted in when the screen has no service of its own. */
-private const val ACCENT = 0xFFFB923CL
-
 /** P's grey, left out of the buses going round: it would look like no service at all. */
 private const val GREY = 0xFF8A939CL
 
@@ -119,7 +116,8 @@ internal class PullView(val motion: PullMotion) {
 
     /** The pill's words; null at rest, so it's only composed while pulling. */
     var hint by mutableStateOf<PullHint?>(null)
-    var livery = ACCENT
+    /** The bus's paint; with no service of its own, the horizon's shuttle ([SHUTTLE]). */
+    var livery = SHUTTLE
     var others: List<Long> = emptyList()
 
     /** The motion, read so that whatever reads it redraws (or lays out again) each frame. */
@@ -130,6 +128,9 @@ internal class PullView(val motion: PullMotion) {
 
     /** The bus's paint: the screen's own service, else the one going round. */
     fun colour(m: PullMotion) = Color(if (m.colour == 0) livery else others.getOrElse(m.colour - 1) { livery })
+
+    /** The stripe along its bottom: white on a service's colour, red on the shuttle. */
+    fun band(m: PullMotion) = if (m.colour == 0 && livery == SHUTTLE) SHUTTLE_BAND else Color.White.copy(alpha = 0.85f)
 }
 
 /** The pull around what's shown; null where there's none (Settings' bands). */
@@ -138,7 +139,7 @@ internal val LocalPull = staticCompositionLocalOf<PullView?> { null }
 /**
  * [content] with pull to refresh: [onRefresh] asks again (or not, inside
  * [Pull.FRESH_MS]) and says how it went. The bus is in [livery] (null: the
- * accent); others go round in the other services' colours. [scene] gives the
+ * horizon's shuttle); others go round in the other services' colours. [scene] gives the
  * horizon's places for the screen's width in dp. [content] lays out the
  * room ([PullRoom]) and draws the horizon with the [PullView] it's given
  * (also in [LocalPull]). Off when not [enabled].
@@ -155,7 +156,7 @@ internal fun BusPull(
     val view = LocalView.current
     val density = LocalDensity.current.density
     val calm = animationsOff()
-    val own = livery ?: ACCENT
+    val own = livery ?: SHUTTLE
     val others = remember(own) { LIVERY.map { it.second }.filter { it != own && it != GREY } }
     val ask by rememberUpdatedState(onRefresh)
     val on by rememberUpdatedState(enabled)
@@ -427,7 +428,7 @@ private fun DrawScope.pullBus(v: PullView, m: PullMotion, p: Palette, top: Float
                 if (lights && m.drive != PullMotion.Drive.Follow) {
                     drawPath(Path().apply { at(38f, 9f).let { moveTo(it.x, it.y) }; at(60f, 6f).let { lineTo(it.x, it.y) }; at(60f, 13f).let { lineTo(it.x, it.y) }; close() }, MOON, alpha = 0.14f)
                 }
-                shuttle(o, d, v.colour(m), if (band) Color.White.copy(alpha = 0.85f) else null, p.window, wheels = false)
+                shuttle(o, d, v.colour(m), if (band) v.band(m) else null, p.window, wheels = false)
                 if (m.door > 0f) drawRoundRect(Color(0xFFFBBF24), at(32f, 2.5f), Size(2.8f * d, 8.2f * d), CornerRadius(0.6f * d), alpha = m.door)
             }
         }

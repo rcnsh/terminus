@@ -702,6 +702,9 @@ body.pulled .pull { visibility: visible; }
 @keyframes pull-halo { from { opacity: 0.45; transform: scale(0.8); } to { opacity: 0; transform: scale(1.6); } }
 .pull .body { fill: var(--svc); }
 .pull .band { fill: #fff; opacity: 0.85; }
+/* No service on screen: the horizon's own shuttle, as the sky draws it. */
+.pull .shuttle .body { fill: #24211e; }
+.pull .shuttle .band { fill: #d32f2f; opacity: 1; }
 .pull .win { fill: var(--h-win, #dbeafe); }
 .pull .dim { opacity: 0.6; }
 .pull .lamp { fill: #fef3c7; }
