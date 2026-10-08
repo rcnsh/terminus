@@ -128,7 +128,8 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
             hasLocation = Locator.hasForeground(ctx)
             while (true) {
                 vm.load()
-                delay(POLL_MS)
+                // Never sooner than a 429's or a 503's Retry-After.
+                delay(maxOf(POLL_MS, sh.rcn.terminus.Quiet.waitMs()))
             }
         }
     }
@@ -156,12 +157,20 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
         SkyInk(shown, light) { Column {
         TabHeader { HeaderWordmark() }
 
-        state.update?.let { v ->
+        // Refused as too old (426): the way to update, from where it was installed.
+        if (state.updateRequired) {
+            Card(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+                Row(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.update_required), modifier = Modifier.weight(1f))
+                    TextButton(onClick = { ctx.openUpdate() }) { Text(stringResource(R.string.update)) }
+                }
+            }
+        } else state.update?.let { v ->
             Card(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
                 Row(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(stringResource(R.string.update_out, v), modifier = Modifier.weight(1f))
                     // The APK built for this phone's CPU (the site falls back to arm64).
-                    TextButton(onClick = { ctx.openWeb("${BuildConfig.SITE}/download/android?abi=${android.os.Build.SUPPORTED_ABIS.firstOrNull().orEmpty()}") }) { Text(stringResource(R.string.update)) }
+                    TextButton(onClick = { ctx.openUpdate() }) { Text(stringResource(R.string.update)) }
                 }
             }
         }

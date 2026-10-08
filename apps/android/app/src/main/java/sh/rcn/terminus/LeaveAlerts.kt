@@ -221,13 +221,16 @@ object LeaveAlerts {
         try {
             // Fast timeouts: a broadcast has about ten seconds in all.
             val json = Api(token, fast = true, hour12 = hour12(ctx)).signal("skipped", trip)
-            ctx.getSystemService(NotificationManager::class.java)?.cancel(NOTIFICATION_ID)
             val now = System.currentTimeMillis()
-            store.saveAnswer(json, now)
-            Refresher.scheduleNext(ctx, NextAnswer.parse(json), now)
+            // Read before it's kept: one this version can't read leaves the last good one.
+            val answer = store.saveAnswer(json, now)
+            ctx.getSystemService(NotificationManager::class.java)?.cancel(NOTIFICATION_ID)
+            Refresher.scheduleNext(ctx, answer, now)
             sh.rcn.terminus.widget.redrawWidgets(ctx)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
+        } catch (e: ApiError) {
+            if (e.status == 401) Session.rejected(ctx, token)
         } catch (e: Exception) {
             // Left showing, button and all.
         }

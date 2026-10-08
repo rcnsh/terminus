@@ -239,6 +239,21 @@ internal fun <T> ValueRow(
 /** Opens [url] in the browser, out of the app. */
 internal fun Context.openWeb(url: String) = startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
 
+/**
+ * Where this install updates: its Play listing (the Play Store app, else the
+ * web page), or the website's APK built for this phone's CPU (the site falls
+ * back to arm64).
+ */
+internal fun Context.openUpdate() {
+    if (installedFromPlay(this)) {
+        val market = Intent(Intent.ACTION_VIEW, "market://details?id=$packageName".toUri())
+        if (runCatching { startActivity(market) }.isSuccess) return
+        openWeb("https://play.google.com/store/apps/details?id=$packageName")
+    } else {
+        openWeb("${sh.rcn.terminus.BuildConfig.SITE}/download/android?abi=${android.os.Build.SUPPORTED_ABIS.firstOrNull().orEmpty()}")
+    }
+}
+
 /** The system's page for this app, where a permission refused twice can still be allowed. */
 internal fun Context.openAppSettings() =
     startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)))

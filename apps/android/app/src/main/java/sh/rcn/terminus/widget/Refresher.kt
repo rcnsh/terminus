@@ -33,6 +33,9 @@ import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.OfflineDay
 import sh.rcn.terminus.ParseError
 import sh.rcn.terminus.Push
+import sh.rcn.terminus.Quiet
+import sh.rcn.terminus.Session
+import sh.rcn.terminus.UpdateRequired
 import sh.rcn.terminus.R
 import sh.rcn.terminus.RideStyle
 import sh.rcn.terminus.ServerClock
@@ -95,26 +98,29 @@ object Refresher {
             val api = Api(token, fast, hour12(ctx))
             val json = api.nextJson(Target.Plan, loc?.latitude, loc?.longitude, Locator.accOf(loc))
             val now = System.currentTimeMillis()
-            store.saveAnswer(json, now)
+            // Read before it's kept: one this version can't read leaves the last good one.
+            val answer = store.saveAnswer(json, now)
             if (extras) keepDay(api, store, loc, now)
             store.lastError = null
-            scheduleNext(ctx, NextAnswer.parse(json), now)
+            scheduleNext(ctx, answer, now)
             // No push address sent yet (a new session, or a new Firebase
             // token), or not sent again for a while (Push.due).
             if (Push.due(store)) Push.register(ctx)
+        } catch (e: UpdateRequired) {
+            // Not tried again: nothing changes until the app is updated (Outdated holds requests for hours).
+            store.lastError = e.message
+            armFromCache(ctx, store)
         } catch (e: ApiError) {
-            // Only the token this request was sent with is dead: one stored
-            // since (signed in again meanwhile) stays.
-            if (e.status == 401 && store.token != token) return
             if (e.status == 401) {
-                store.token = null
-                cancel(ctx)
+                // Signed out everywhere on this phone, the widget saying why;
+                // unless the token was replaced meanwhile (signed in again).
+                if (!Session.rejected(ctx, token)) return
             } else {
                 armFromCache(ctx, store)
                 armOfflineRedraw(ctx, store)
                 retryLater(ctx, store)
+                store.lastError = e.message
             }
-            store.lastError = if (e.status == 401) L.s(R.string.device_removed) else e.message
         } catch (e: ParseError) {
             store.lastError = L.s(R.string.unexpected_answer)
             armFromCache(ctx, store)
@@ -140,7 +146,13 @@ object Refresher {
     private suspend fun keepDay(api: Api, store: Store, loc: android.location.Location?, now: Long) {
         val kept = store.lastDay()
         if (kept == null || kept.first.date != OfflineDay.sgtDate(now) || now - kept.second > DAY_MAX_AGE_MS) {
-            runCatching { store.saveDay(api.dayJson(loc?.latitude, loc?.longitude, Locator.accOf(loc)), now) }
+            try {
+                store.saveDay(api.dayJson(loc?.latitude, loc?.longitude, Locator.accOf(loc)), now)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Kept as it was: offline, or a plan this version can't read.
+            }
         }
     }
 
@@ -176,7 +188,8 @@ object Refresher {
         store.refreshFailures = failures + 1
         val now = ServerClock.now()
         val pending = store.lastAnswer()?.let { (answer, fetchedAt) -> nextRefreshAt(answer, ServerClock.fromDevice(fetchedAt), now, widget = widgetCount(ctx) > 0) }
-        val at = listOfNotNull(now + retryDelay(failures), pending).min()
+        // Never before a 429's Retry-After is up: the request would only be refused here.
+        val at = maxOf(listOfNotNull(now + retryDelay(failures), pending).min(), now + Quiet.remainingMs())
         ctx.getSystemService(AlarmManager::class.java)?.setWhileIdle(ServerClock.toDevice(at), alarmIntent(ctx))
     }
 
