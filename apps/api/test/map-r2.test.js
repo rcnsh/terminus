@@ -124,3 +124,25 @@ test('a map file replaced since its pieces were cached is served new, never mixe
   assert.deepEqual(await body(again), fresh.slice(0, 100));
   assert.equal(again.headers.get('content-range'), `bytes 0-99/${SIZE}`);
 });
+
+test('the stable site and the beta share one edge cache but never serve each other its map files', async () => {
+  const stableFont = bytesOf(5);
+  const betaFont = bytesOf(6);
+  const { get: stable } = setup(new Map([['map/fonts/Noto Sans Regular/0-255.pbf', stableFont], ['map/campus.pmtiles', bytesOf(8)]]));
+  // Same cache (installed by setup above), the beta's own bucket.
+  const betaEnv = { ...makeEnv(), PUBLIC_ORIGIN: 'https://beta.terminus.rcn.sh', DOWNLOADS: makeBucket(async (key) => new Map([['map/fonts/Noto Sans Regular/0-255.pbf', betaFont], ['map/campus.pmtiles', bytesOf(9)]]).get(key)) };
+  const beta = async (path, headers = {}) => {
+    const ctx = makeCtx();
+    const res = await worker.fetch(new Request(BASE + path, { headers }), betaEnv, ctx);
+    await ctx.settle();
+    return res;
+  };
+  const font = '/map/fonts/Noto%20Sans%20Regular/0-255.pbf';
+  assert.deepEqual(await body(await stable(font)), stableFont);
+  assert.deepEqual(await body(await beta(font)), betaFont, 'the beta reads its own font, not the stable one cached');
+  assert.deepEqual(await body(await stable(font)), stableFont);
+  const stableTag = (await stable('/map/campus.pmtiles', { range: 'bytes=0-9' })).headers.get('etag');
+  const betaTag = (await beta('/map/campus.pmtiles', { range: 'bytes=0-9' })).headers.get('etag');
+  assert.notEqual(stableTag, betaTag, 'each site has its own map file');
+  assert.equal((await stable('/map/campus.pmtiles', { range: 'bytes=0-9' })).headers.get('etag'), stableTag);
+});

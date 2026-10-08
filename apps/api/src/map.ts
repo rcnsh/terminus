@@ -24,6 +24,7 @@
 import { layers, namedFlavor } from '@protomaps/basemaps';
 import type { Env } from './types.ts';
 import { CORS, clientKey, json } from './http.ts';
+import { cacheBase } from './edgecache.ts';
 
 const PREFIX = 'map/';
 const TILES = 'campus.pmtiles';
@@ -134,7 +135,7 @@ const heads = new Map<string, Head>();
 export const forgetHeads = () => heads.clear();
 
 /** Where the data centre keeps the last head R2 gave. */
-const headId = (key: string) => new Request(`https://terminus.internal/map-head/${encodeURIComponent(key)}`);
+const headId = (key: string) => new Request(`${cacheBase()}/map-head/${encodeURIComponent(key)}`);
 /**
  * The edge keeps what it learnt far longer than it trusts it: an older look
  * is still worth having when R2 may not be read, or fails.
@@ -270,7 +271,7 @@ async function edgePart(
   const { offset, length } = range ?? { offset: 0, length: head.size };
   if (length > MAX_CACHED_BYTES) return fromR2();
 
-  const id = new Request(`https://terminus.internal/map/${encodeURIComponent(key)}?etag=${encodeURIComponent(head.etag)}&bytes=${offset}-${length}`);
+  const id = new Request(`${cacheBase()}/map/${encodeURIComponent(key)}?etag=${encodeURIComponent(head.etag)}&bytes=${offset}-${length}`);
   let body: ReadableStream | ArrayBuffer | null;
   const hit = await cache.match(id).catch(() => undefined);
   // Kept under this ETag and range, so exactly `length` bytes.
@@ -321,7 +322,7 @@ async function edgeFile(
   const cache = typeof caches === 'undefined' ? null : caches.default;
   const fromR2 = async () => ((await mayRead()) ? servePart(req, bucket, key, type, maxAgeS) : slowDown());
   if (!cache || req.headers.has('range') || otherConditions(req)) return fromR2();
-  const id = new Request(`https://terminus.internal/map/file/${encodeURIComponent(key)}`);
+  const id = new Request(`${cacheBase()}/map/file/${encodeURIComponent(key)}`);
   const hit = await cache.match(id).catch(() => undefined);
   const etag = hit?.headers.get('etag');
   const size = hit?.headers.get('content-length');
