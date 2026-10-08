@@ -13,6 +13,12 @@
 # up until the live site's API is this version, and the Mac build is above
 # the live appcast's.
 #
+# Once v<version> is pushed a second run stops at "already tagged". Should
+# an upload after it fail, finish by hand from apps/api, with the files in
+# build/release/<version>: put appcast.xml, then latest.json, into
+# terminus-downloads (pnpm exec wrangler r2 object put ... --remote, as
+# r2() below), then run scripts/github-release.sh <version>.
+#
 # Signs with the keys on this Mac, as scripts/release-beta.sh does: the
 # Android release key in ~/.gradle/gradle.properties (TERMINUS_*), the
 # terminus certificate in the login keychain (~/.terminus/mac-signing.p12)
@@ -152,6 +158,8 @@ r2 "releases/$VERSION/terminus-$VERSION.dmg" "$DMG" application/x-apple-diskimag
 echo "== tag v$VERSION"
 git tag -a "v$VERSION" -m "terminus $VERSION"
 git push -q origin "v$VERSION"
+# From here a re-run stops at the tag: say how to finish instead.
+trap '[ $? -eq 0 ] || echo "v$VERSION is tagged but not all of it went up: upload what is left from $OUT (appcast.xml, then latest.json), then run scripts/github-release.sh $VERSION; see the top of this script"' EXIT
 r2 appcast.xml "$OUT/appcast.xml" "application/xml; charset=utf-8"
 # latest.json last, so /download/* never points at a file that isn't there yet.
 r2 latest.json "$OUT/latest.json" application/json
