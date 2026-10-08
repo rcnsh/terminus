@@ -45,8 +45,11 @@ if [ "$CHANNEL" = beta ]; then
   PB "Set :CFBundleIdentifier $ID"
   PB "Set :CFBundleName $NAME"
   PB "Set :CFBundleDisplayName $NAME"
-  PB "Set :SUFeedURL https://beta.terminus.run/download/appcast.xml"
+  # Updates and requests go to the address kept for good; people see the
+  # other (Servers in Api.swift).
+  PB "Set :SUFeedURL https://beta.terminus.rcn.sh/download/appcast.xml"
   PB "Add :TerminusSite string https://beta.terminus.run"
+  PB "Add :TerminusAPI string https://beta.terminus.rcn.sh"
   # Its own version line, from scripts/release-beta.sh. Sparkle compares the build.
   if [ -n "${BETA_VERSION:-}" ]; then PB "Set :CFBundleShortVersionString $BETA_VERSION"; fi
   if [ -n "${BETA_BUILD:-}" ]; then PB "Set :CFBundleVersion $BETA_BUILD"; fi

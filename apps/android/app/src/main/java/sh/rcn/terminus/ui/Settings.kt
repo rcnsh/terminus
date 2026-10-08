@@ -38,6 +38,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -50,6 +51,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -96,6 +98,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import sh.rcn.terminus.BuildConfig
@@ -110,13 +113,13 @@ import sh.rcn.terminus.LeaveAlerts
 import sh.rcn.terminus.LiveService
 import sh.rcn.terminus.ProfileDoc
 import sh.rcn.terminus.R
+import sh.rcn.terminus.Servers
 import sh.rcn.terminus.Store
 import sh.rcn.terminus.Theme
 import sh.rcn.terminus.Trip
 import sh.rcn.terminus.WEEKDAYS
 import sh.rcn.terminus.dayShort
 import sh.rcn.terminus.hour12
-import kotlin.coroutines.cancellation.CancellationException
 
 /** Settings' pages, in the order the list shows them. */
 internal enum class SettingsPage(val title: Int) {
@@ -570,6 +573,8 @@ private fun SettingsPageContent(
 @Composable
 private fun AboutPage() {
     val ctx = LocalContext.current
+    var developer by remember { mutableStateOf(Servers.menuUnlocked(ctx)) }
+    var taps by remember { mutableIntStateOf(0) }
     val host = BuildConfig.SITE.removePrefix("https://").removePrefix("http://")
     // Each link's name, where it goes, and that place as shown under the name.
     val links = listOf(
@@ -586,7 +591,19 @@ private fun AboutPage() {
             BrandMark(Modifier.size(44.dp))
             Column(Modifier.padding(start = 12.dp)) {
                 Text("terminus", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Hint(stringResource(R.string.about_version, BuildConfig.VERSION_NAME))
+                // Tapped seven times, it shows the developer menu, as Android's own build number does.
+                Hint(
+                    stringResource(R.string.about_version, BuildConfig.VERSION_NAME),
+                    Modifier.clickable(interactionSource = null, indication = null) {
+                        if (developer) return@clickable
+                        taps++
+                        if (taps >= Servers.UNLOCK_TAPS) {
+                            Servers.unlockMenu(ctx)
+                            developer = true
+                            android.widget.Toast.makeText(ctx, L.s(R.string.developer_on), android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                )
             }
         }
         Text(stringResource(R.string.about_what), modifier = Modifier.padding(top = 14.dp))
@@ -599,6 +616,55 @@ private fun AboutPage() {
             LinkRow(stringResource(title), { ctx.openWeb(url) }, sub = where, away = true)
         }
     }
+    if (developer) DeveloperGroup()
+}
+
+/**
+ * Which server the app talks to, from the ones built in (Servers). Moving to
+ * or from the dev stub sets the sign-in aside, so the app starts again.
+ */
+@Composable
+private fun DeveloperGroup() {
+    val ctx = LocalContext.current
+    var chosen by remember { mutableStateOf(Servers.base) }
+    Group(stringResource(R.string.developer), stringResource(R.string.developer_server_hint)) {
+        Servers.choices.forEachIndexed { i, base ->
+            if (i > 0) RowDivider()
+            val sub = when {
+                base.contains("10.0.2.2") -> stringResource(R.string.server_stub_emulator)
+                Servers.isLocal(base) -> stringResource(R.string.server_stub_reverse)
+                i == 0 -> stringResource(R.string.server_default)
+                else -> null
+            }
+            ServerRow(base.substringAfter("://"), sub, base == chosen) {
+                if (base == chosen) return@ServerRow
+                val restart = Servers.choose(ctx, base)
+                chosen = base
+                if (restart) ctx.restartApp()
+            }
+        }
+    }
+}
+
+@Composable
+private fun ServerRow(host: String, sub: String?, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().selectable(selected, role = Role.RadioButton, onClick = onClick).heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(host, style = MaterialTheme.typography.bodyLarge)
+            sub?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+        RadioButton(selected = selected, onClick = null)
+    }
+}
+
+/** A new session (the dev stub's, or the site's again): start from the top, as after signing in. */
+private fun android.content.Context.restartApp() {
+    val launch = packageManager.getLaunchIntentForPackage(packageName) ?: return
+    startActivity(android.content.Intent.makeRestartActivityTask(launch.component))
+    Runtime.getRuntime().exit(0)
 }
 
 /** The longest note the server takes; the counter turns amber from [FEEDBACK_NEAR]. */

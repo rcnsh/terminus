@@ -109,15 +109,19 @@ androidComponents {
 }
 
 /**
- * One channel's site and name. SITE is where links go (the account page,
- * pairing QR codes); API_BASE is the same, except in a debug build given
- * `-PapiBase` (above).
+ * One channel's site and name. SITE is the address people see, where links
+ * go (the account page, pairing QR codes). API_BASE is where the app's
+ * requests go: the site's old address, the one kept for good, so an app
+ * never updated keeps working if SITE moves; or, in a debug build given
+ * `-PapiBase` (above), that. SERVERS are the others the developer menu
+ * offers (Servers.kt).
  */
 fun com.android.build.api.dsl.ApplicationProductFlavor.site(site: String, packageName: String, name: String, oldHost: String) {
     buildConfigField("String", "SITE", "\"$site\"")
-    buildConfigField("String", "API_BASE", "\"$site\"")
+    buildConfigField("String", "API_BASE", "\"https://$oldHost\"")
+    buildConfigField("String", "SERVERS", "\"https://$oldHost $site\"")
     manifestPlaceholders["siteHost"] = site.removePrefix("https://")
-    // The site's old address, whose pairing links still open the app.
+    // The old address, which the app calls, and whose pairing links open it.
     manifestPlaceholders["oldSiteHost"] = oldHost
     resValue("string", "app_name", name)
     // Push: this package's Firebase app from google-services.json (not in

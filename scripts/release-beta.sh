@@ -38,7 +38,8 @@ VERSION="${1:?usage: scripts/release-beta.sh <version, e.g. 2.0.1-beta.1> [--dry
 DRY=0
 [ "${2:-}" = "--dry-run" ] && DRY=1
 . scripts/release-lib.sh
-SITE=https://beta.terminus.run
+# As in release.sh: the address the apps call, kept for good.
+SITE=https://beta.terminus.rcn.sh
 BUCKET=terminus-beta-downloads
 
 # Not `echo | grep`: grep passes a version with a newline in it if any one

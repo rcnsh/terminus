@@ -285,17 +285,44 @@ class Store(context: Context) {
         true
     }
 
-    /** Signing out: the account's things go; the phone's language, theme and the intent key stay. */
+    /**
+     * Signing out: the account's things go; the phone's language, theme, the
+     * intent key, the server chosen (Servers) and a sign-in set aside for
+     * the other side of the dev stub stay.
+     */
     fun clear() = synchronized(Store) {
-        val keep = listOf(KEY_LANG, KEY_THEME, KEY_INTENT).associateWith { prefs.getString(it, null) }
+        val keep = listOf(KEY_LANG, KEY_THEME, KEY_INTENT, Servers.KEY_SERVER, KEY_TOKEN_SITE, KEY_TOKEN_LOCAL).associateWith { prefs.getString(it, null) }
+        val menu = prefs.getBoolean(Servers.KEY_MENU, false)
         prefs.edit(commit = true) {
             clear()
             for ((k, v) in keep) if (v != null) putString(k, v)
+            if (menu) putBoolean(Servers.KEY_MENU, true)
         }
         cached = null
         loaded = true
         // The shortcuts named the old account's places.
         runCatching { Shortcuts.update(app, emptyList()) }
+    }
+
+    /**
+     * Crossing between the site and the dev stub (Servers.choose): this
+     * side's token is set aside, still encrypted, the account's things go as
+     * on signing out, and the other side's token, if one was set aside,
+     * comes back. So the stub never gets the real account's token.
+     */
+    fun swapSession(toLocal: Boolean) = synchronized(Store) {
+        val (away, back) = if (toLocal) KEY_TOKEN_SITE to KEY_TOKEN_LOCAL else KEY_TOKEN_LOCAL to KEY_TOKEN_SITE
+        val mine = prefs.getString(KEY_TOKEN, null)
+        val theirs = prefs.getString(back, null)
+        clear()
+        prefs.edit(commit = true) {
+            if (mine != null) putString(away, mine) else remove(away)
+            remove(back)
+            if (theirs != null) putString(KEY_TOKEN, theirs)
+        }
+        // Read again, through the Keystore, on next use.
+        cached = null
+        loaded = false
     }
 
     private fun key(): SecretKey = synchronized(Store) {
@@ -338,6 +365,9 @@ class Store(context: Context) {
         private const val KEY_LATEST = "latest-version"
         private const val ALIAS = "terminus-token"
         private const val KEY_TOKEN = "token"
+        /** A token set aside while the app talks to the other side of the dev stub (swapSession). */
+        private const val KEY_TOKEN_SITE = "token-site"
+        private const val KEY_TOKEN_LOCAL = "token-local"
         private const val KEY_INTENT = "intent-key"
         private const val KEY_DAY = "day"
         private const val KEY_DAY_AT = "day-fetched"

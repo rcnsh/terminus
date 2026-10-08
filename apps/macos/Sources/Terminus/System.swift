@@ -35,10 +35,13 @@ enum TokenStore {
     /// with no file, it isn't asked again on every refresh and map poll.
     nonisolated(unsafe) private static var keychainDone = false
 
-    /// The beta, and a build pointed at a local API (TERMINUS_API_BASE), keep
-    /// their own token, so neither signs this Mac out of the real one.
+    /// The beta, and the dev stub (the developer menu, or TERMINUS_API_BASE),
+    /// keep their own token, so neither signs this Mac out of the real one,
+    /// and the real one is never sent to the stub. The site's two addresses
+    /// are one server, with one token.
     private static var folderName: String {
-        Api.base == Api.stableSite ? "terminus" : Api.base == Api.site ? "terminus-beta" : "terminus-dev"
+        let site = Servers.choices.filter { !Servers.isLocal($0) }
+        return !site.contains(Api.base) ? "terminus-dev" : Api.isBeta ? "terminus-beta" : "terminus"
     }
 
     static var fileURL: URL {

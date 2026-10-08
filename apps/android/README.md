@@ -19,8 +19,8 @@ Android 12 or later.
 ## Run it
 
 ```bash
-./gradlew :app:installStableDebug                                   # against terminus.run
-./gradlew :app:installBetaDebug                                     # against beta.terminus.run
+./gradlew :app:installStableDebug                                   # against terminus.rcn.sh (shown as terminus.run)
+./gradlew :app:installBetaDebug                                     # against beta.terminus.rcn.sh
 ./gradlew :app:installStableDebug -PapiBase=http://localhost:8787   # against the dev stub (debug builds only)
 adb reverse tcp:8787 tcp:8787                                       # so the phone can reach it
 ./gradlew :app:lintStableDebug :app:testStableDebugUnitTest :app:compileBetaDebugKotlin   # what CI runs, with the
@@ -32,6 +32,12 @@ There are two apps from the same code (product flavors). **stable** is
 `sh.rcn.terminus.beta`, "terminus beta", with the icon inverted and BETA by
 the name. It uses `beta.terminus.run` and its own accounts, and installs
 beside the stable app.
+
+Settings, About, Developer switches the server among the ones built in: the
+site's two addresses and, in a debug build, the dev stub (through `adb
+reverse`, or from the emulator). It's always there in debug and beta builds;
+in a stable release, tap the version seven times. The stub keeps its own
+sign-in, so a real account's token never goes to it.
 
 ### Dependencies are locked and checked
 

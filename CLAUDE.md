@@ -21,9 +21,17 @@ Clients are thin:
 | Mac menu bar app | `apps/macos` | SwiftUI, Sparkle updates, MapLibre Native (map window) |
 
 Live at https://terminus.run (API docs at `/docs`); beta at
-https://beta.terminus.run. The old addresses (terminus.rcn.sh and the beta's)
-still answer, for apps installed before the move. It's an independent
-student project, not affiliated with NUS.
+https://beta.terminus.run. It's an independent student project, not
+affiliated with NUS.
+
+terminus.run is the address people see; the apps call terminus.rcn.sh (and
+beta.terminus.rcn.sh), the one kept for good, so an app never updated keeps
+working if the site moves again. The Mac's update feed and the release
+scripts use it too. Both addresses stay attached to each Worker
+(`test/deploy.test.js`). The apps' developer menu (Settings, About: always
+in debug and beta builds, after seven taps on the version in a stable
+release) switches between the addresses built in and, in debug builds, the
+dev stub, never a typed one (`Servers.kt`, `Servers` in `Api.swift`).
 
 ## The rules that matter most
 

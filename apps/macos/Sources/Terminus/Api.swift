@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 struct Place: Decodable, Hashable {
@@ -856,16 +857,86 @@ func sentence(_ text: String) -> String {
     return s.unicodeScalars.contains { (0x4E00...0x9FFF).contains($0.value) } ? s + "。" : s + "."
 }
 
+/// Which server the app talks to. Only ever one built in: the site's own
+/// two addresses, and in a debug build the local dev stub. The developer menu
+/// (Settings, About) picks one; nothing can add one, so it can't send the
+/// token anywhere but our own servers.
+///
+/// The default is terminus.rcn.sh, not the address people see
+/// (terminus.run): it's the one kept for good, so a Mac that's never updated
+/// keeps working whichever address the site moves to.
+enum Servers {
+    /// The default: TerminusAPI in the beta build's Info.plist (build.sh), else the stable site's.
+    static let defaultBase = Bundle.main.object(forInfoDictionaryKey: "TerminusAPI") as? String ?? "https://terminus.rcn.sh"
+    static let stub = "http://localhost:8787"
+    private static let key = "server"
+    private static let menuKey = "developerMenu"
+
+    /// [defaultBase] first, then the address people see, then in a debug build the stub.
+    static func all(default base: String, site: String, debug: Bool) -> [String] {
+        var out: [String] = []
+        for s in [base, site] + (debug ? [stub] : []) where !out.contains(s) { out.append(s) }
+        return out
+    }
+
+    /// The saved choice if it's still one of [all], else the default: a server
+    /// dropped from the app, or anything else written into its preferences
+    /// (any app running as you can), is never used.
+    static func pick(_ saved: String?, from all: [String]) -> String {
+        if let saved, all.contains(saved) { return saved }
+        return all[0]
+    }
+
+    /// Plain HTTP to this Mac: the dev stub (apps/api/scripts/dev-stub.mjs).
+    static func isLocal(_ base: String) -> Bool {
+        guard let u = URL(string: base), u.scheme == "http", let host = u.host?.lowercased() else { return false }
+        return host == "localhost" || host == "127.0.0.1"
+    }
+
+    /// The menu shows in debug and beta builds; in a stable release, once the
+    /// version in About is clicked [unlockClicks] times.
+    static func menuAlways(debug: Bool, beta: Bool) -> Bool { debug || beta }
+    static let unlockClicks = 7
+
+    static var isDebug: Bool {
+        #if DEBUG
+        return true
+        #else
+        return false
+        #endif
+    }
+
+    static var choices: [String] { all(default: defaultBase, site: Api.site, debug: isDebug) }
+    static var current: String { pick(UserDefaults.standard.string(forKey: key), from: choices) }
+    static var menuShown: Bool { menuAlways(debug: isDebug, beta: Api.isBeta) || UserDefaults.standard.bool(forKey: menuKey) }
+    static func unlockMenu() { UserDefaults.standard.set(true, forKey: menuKey) }
+
+    /// Saves [base] and starts terminus again on it. The stub keeps its own
+    /// sign-in (TokenStore), so the real account's token never goes to it.
+    @MainActor static func choose(_ base: String) {
+        guard choices.contains(base), base != Api.base else { return }
+        UserDefaults.standard.set(base, forKey: key)
+        let app = Bundle.main.bundleURL
+        guard app.pathExtension == "app" else { NSApp.terminate(nil); return }
+        let config = NSWorkspace.OpenConfiguration()
+        config.createsNewApplicationInstance = true
+        NSWorkspace.shared.openApplication(at: app, configuration: config) { _, _ in
+            DispatchQueue.main.async { NSApp.terminate(nil) }
+        }
+    }
+}
+
 struct Api {
     static let stableSite = "https://terminus.run"
-    /// The site this app belongs to: terminus.run, or the beta's
-    /// (TerminusSite in the beta build's Info.plist; see build.sh).
+    /// The site this app belongs to, as people see it: terminus.run, or the
+    /// beta's (TerminusSite in the beta build's Info.plist; see build.sh).
     static let site = Bundle.main.object(forInfoDictionaryKey: "TerminusSite") as? String ?? stableSite
     /// The site as people type it, for text.
     static var siteHost: String { site.replacingOccurrences(of: "https://", with: "") }
     static var isBeta: Bool { site != stableSite }
-    /// Override with TERMINUS_API_BASE=http://localhost:8787 for the local dev stub (apps/api/scripts/dev-stub.mjs).
-    static let base = devOverride("TERMINUS_API_BASE") ?? site
+    /// Where requests go: the server chosen (Servers), or TERMINUS_API_BASE=http://localhost:8787
+    /// for the local dev stub (apps/api/scripts/dev-stub.mjs).
+    static let base = devOverride("TERMINUS_API_BASE") ?? Servers.current
 
     /// An environment override for local development: any URL in a debug
     /// build, only this Mac (localhost, 127.0.0.1) in a release one, so the

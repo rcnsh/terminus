@@ -440,6 +440,12 @@
     <string name="about_independent">terminus is an independent student project, not affiliated with NUS. Live bus times come from NUS. Walking routes and the map use data from OpenStreetMap contributors.</string>
     <string name="about_aup">Use terminus in line with the NUS Acceptable Use Policy for IT Resources.</string>
     <string name="about_version">Version %1$s</string>
+    <string name="developer">Developer</string>
+    <string name="developer_server_hint">Which server this app talks to. Only terminus\'s own are here. Switching to or from the dev stub keeps each one\'s sign-in apart.</string>
+    <string name="developer_on">Developer settings are on, at the bottom of About.</string>
+    <string name="server_default">Default</string>
+    <string name="server_stub_reverse">Dev stub on your computer, through adb reverse</string>
+    <string name="server_stub_emulator">Dev stub on your computer, from the emulator</string>
     <string name="status">Status</string>
     <string name="privacy">Privacy</string>
     <string name="api_docs">API docs</string>
