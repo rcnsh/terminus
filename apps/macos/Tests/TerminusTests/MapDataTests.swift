@@ -173,7 +173,7 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
 @Test func busesSayWhichStopTheyAreAt() throws {
     let list = try #require(BusList.parse(Data("""
     {"svc": "D2", "available": true, "buses": [
-      {"id": "a", "plate": "PD726D", "lat": 1.0, "lon": 103.0, "along": 812.5, "heading": 90, "moving": true, "crowd": null, "at": {"code": "COM3", "name": "COM 3"}, "slot": 1, "stretch": null, "nextStop": {"code": "BIZ2", "name": "BIZ 2"}},
+      {"id": "a", "plate": "PD726D", "lat": 1.0, "lon": 103.0, "along": 812.5, "heading": 90, "moving": true, "crowd": null, "at": {"code": "COM3", "name": "COM 3"}, "slot": 1, "stretch": null, "nextStop": {"code": "BIZ2", "name": "BIZ 2"}, "upcoming": [{"code": "BIZ2", "name": "BIZ 2"}, {"code": "", "name": ""}, {"code": "PGP", "name": "Prince George's Park"}], "towards": {"code": "PGP", "name": "Prince George's Park"}},
       {"id": "b", "lat": 1.0, "lon": 103.0, "along": 900, "heading": 90, "moving": true, "crowd": null, "at": null, "slot": 0, "stretch": {"from": 812.5, "to": 1100, "last": {"code": "COM3", "name": "COM 3"}}, "nextStop": null}]}
     """.utf8)))
     #expect(list.buses[0].at == "COM 3")
@@ -183,6 +183,13 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
     #expect(list.buses[1].plate == nil, "an older API: no plate")
     #expect(list.buses[0].stretch == nil, "at a stop: no stretch")
     #expect(list.buses[1].stretch == Stretch(from: 812.5, to: 1100, last: "COM 3"))
+    #expect(list.buses[0].upcoming == ["BIZ 2", "Prince George's Park"], "the stops ahead, next first; a nameless one dropped")
+    #expect(list.buses[0].towards == "Prince George's Park")
+    #expect(list.buses[1].upcoming == [], "an older API: no stops ahead")
+    #expect(list.buses[1].towards == nil)
+    let end = try #require(BusList.parse(Data(#"{"svc": "A1", "available": true, "buses": [{"id": "c", "lat": 1.0, "lon": 103.0, "upcoming": [], "towards": {"code": "KR-MRT", "name": "KR MRT"}}]}"#.utf8)))
+    #expect(end.buses[0].upcoming == [], "past a one-way line's end")
+    #expect(end.buses[0].towards == "KR MRT")
 }
 
 @Test func aClickedBusShowsTheStretchItIsOn() throws {

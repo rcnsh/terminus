@@ -1,14 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="close">Close</string>
-    <string name="crowd_high">High</string>
-    <string name="crowd_low">Low</string>
-    <string name="crowd_medium">Medium</string>
     <string name="map_about">~%1$s</string>
     <string name="map_arriving">Arriving</string>
     <string name="map_bus_at">At %1$s</string>
-    <string name="map_bus_between">Between %1$s and %2$s</string>
-    <string name="map_bus_title">%1$s bus</string>
+    <string name="map_bus_next">Next: %1$s</string>
+    <string name="map_bus_towards">Towards %1$s</string>
+    <string name="map_bus_moving">Moving</string>
+    <string name="map_bus_stopped">Stopped</string>
+    <string name="map_bus_seats_free">Seats free</string>
+    <string name="map_bus_stops_ahead">Stops ahead</string>
+    <string name="map_bus_passed">passed</string>
+    <string name="map_bus_next_tag">next</string>
+    <string name="map_bus_here">here</string>
+    <string name="map_bus_on_its_way">On its way</string>
+    <string name="map_bus_more">+%1$d more</string>
     <string name="map_buses">%1$d buses on %2$s</string>
     <string name="map_buses_unavailable">Live buses aren\'t available right now.</string>
     <string name="map_buses_stale">Bus positions may be out of date</string>
@@ -16,10 +22,8 @@
     <string name="map_downloading">Downloading the street map (about 4 MB)…</string>
     <string name="map_finding_buses">Finding %1$s buses…</string>
     <string name="map_go_there">Go there</string>
-    <string name="map_crowding">Crowding</string>
     <string name="map_min">%1$d min</string>
     <string name="map_needs_connection">The map needs a connection the first time.</string>
-    <string name="map_next_stop">Next stop</string>
     <string name="map_no_buses">No %1$s buses running right now.</string>
     <string name="map_no_buses_due">No buses due</string>
     <string name="map_no_times">No times right now</string>
