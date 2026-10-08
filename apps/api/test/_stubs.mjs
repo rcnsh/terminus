@@ -12,10 +12,13 @@ import { DatabaseSync } from 'node:sqlite';
  */
 export function makeCache() {
   const store = new Map();
+  // An HTTP cache never sees a URL's #fragment (no request carries one), so
+  // neither does this one: two keys that differ only after # are one entry.
+  const keyOf = (req) => (typeof req === 'string' ? req : req.url).split('#')[0];
   return {
     _store: store,
     async match(req) {
-      const key = typeof req === 'string' ? req : req.url;
+      const key = keyOf(req);
       const e = store.get(key);
       if (!e) return undefined;
       if (e.expiresAt <= Date.now()) {
@@ -25,7 +28,7 @@ export function makeCache() {
       return new Response(e.body, { headers: e.headers });
     },
     async put(req, res) {
-      const key = typeof req === 'string' ? req : req.url;
+      const key = keyOf(req);
       // Bytes, not text: the map's pieces are binary.
       const body = await res.arrayBuffer();
       const cc = res.headers.get('cache-control') || '';
@@ -37,7 +40,7 @@ export function makeCache() {
       });
     },
     async delete(req) {
-      return store.delete(typeof req === 'string' ? req : req.url);
+      return store.delete(keyOf(req));
     },
     /** Put a value in directly, bypassing the Worker. */
     seed(url, value, maxAgeS = 300) {
