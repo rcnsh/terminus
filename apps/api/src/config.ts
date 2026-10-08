@@ -1,7 +1,6 @@
 /**
- * Tuning constants, set by hand. RIDE.secondsPerHop is only the fallback for
- * a service (or an hour of it) with fewer than MIN_RIDES measured rides
- * (ridetimes.ts).
+ * Tuning constants, set by hand. RIDE.secondsPerHop is a guess; the feed's
+ * own predictions are the way to check it (docs/analytics.md).
  */
 
 import type { Quality } from './types.ts';
@@ -78,8 +77,7 @@ export const RIDE = {
    * error. It is good enough to separate a 2-hop ride from a 14-hop ride
    * (the wrong-side-of-the-road case, which is the whole point) and not good
    * enough to separate a 4-hop from a 5-hop. `stop.confidence` reports which
-   * situation you are in. Once a service has MIN_RIDES measured rides, the
-   * planner uses ridetimes.ts's table instead (hopSecondsFor).
+   * situation you are in.
    */
   secondsPerHop: 95,
   /**
