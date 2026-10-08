@@ -1,0 +1,166 @@
+{
+  "stop": {
+    "code": "IT",
+    "name": "IT",
+    "confidence": 0.97
+  },
+  "quality": "live",
+  "asOf": "2026-08-27T01:00:00.000Z",
+  "arrivals": [
+    {
+      "svc": "A2",
+      "etaS": 900,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "A2",
+      "etaS": 1500,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "95",
+      "etaS": 120,
+      "crowd": "low",
+      "plate": null,
+      "berth": null
+    }
+  ],
+  "label": "95 · 2 分钟",
+  "detail": "IT · 就在这里 · 约 7 分钟到 Opp KR MRT · 拥挤程度：低 · 公共巴士 · 或 A2，15 分钟后",
+  "alt": "A2 · 15 分钟 · IT",
+  "departsAt": "2026-08-27T01:02:00Z",
+  "arriveAt": "2026-08-27T01:07:27Z",
+  "bus": {
+    "svc": "95",
+    "stop": "IT",
+    "stopCode": "IT",
+    "walkS": 2,
+    "rideS": 327,
+    "board": "2026-08-27T01:02:00Z",
+    "arrive": "2026-08-27T01:07:27Z",
+    "estimated": false,
+    "toStop": "Opp KR MRT",
+    "paid": true
+  },
+  "altBus": {
+    "svc": "A2",
+    "stop": "IT",
+    "stopCode": "IT",
+    "walkS": 2,
+    "rideS": 570,
+    "board": "2026-08-27T01:15:00Z",
+    "arrive": "2026-08-27T01:24:30Z",
+    "estimated": false,
+    "toStop": "Opp KR MRT"
+  },
+  "leave": {
+    "at": "2026-08-27T01:01:38Z",
+    "estimated": false,
+    "svc": "95",
+    "stop": "IT",
+    "stopCode": "IT",
+    "board": "2026-08-27T01:02:00Z",
+    "arrive": "2026-08-27T01:07:27Z",
+    "note": null,
+    "walkS": 2,
+    "rideS": 327,
+    "toStop": "Opp KR MRT",
+    "paid": true
+  },
+  "mode": "trip",
+  "dest": {
+    "to": "KR-MRT-OPP",
+    "label": "Opp KR MRT",
+    "why": "place"
+  },
+  "timing": null,
+  "places": [
+    {
+      "key": "mrt",
+      "label": "KR MRT"
+    },
+    {
+      "key": "deck",
+      "label": "The Deck"
+    }
+  ],
+  "walkSpeedMs": 1.3,
+  "card": {
+    "kind": "trip",
+    "staleAt": "2026-08-27T01:02:30Z",
+    "crowd": "拥挤程度：低",
+    "quality": null,
+    "leaveBy": "09:01 前出发",
+    "leaveVia": "在 IT 搭 09:02 的 95 ($)",
+    "catch": null,
+    "arrive": null,
+    "catchLine": null,
+    "late": false,
+    "goNow": null,
+    "note": null,
+    "estimate": null,
+    "phase": "idle",
+    "phaseText": null,
+    "glance": "95 09:02",
+    "line": "95 · 2 分钟 · IT",
+    "actions": [],
+    "warning": null,
+    "nextChangeAt": "2026-08-27T01:02:30Z",
+    "remind": true,
+    "suggestion": null,
+    "ride": null,
+    "walkTo": {
+      "name": "IT",
+      "lat": 1.297204,
+      "lon": 103.772688
+    },
+    "notice": null,
+    "h12": false,
+    "journey": {
+      "leave": "09:01",
+      "walk": null,
+      "bus": {
+        "svc": "95",
+        "color": "#8b98a6",
+        "stop": "IT",
+        "board": "09:02",
+        "paid": true
+      },
+      "boardAt": "2026-08-27T01:02:00Z",
+      "ride": "5 分钟",
+      "off": null,
+      "to": "Opp KR MRT",
+      "toStop": "Opp KR MRT",
+      "arrive": "09:07",
+      "walkEnd": null,
+      "arriveStop": "09:07",
+      "slack": null,
+      "live": true,
+      "backup": {
+        "svc": "A2",
+        "color": "#d9a000",
+        "stop": "IT",
+        "board": "09:15"
+      },
+      "why": null,
+      "title": "去 Opp KR MRT",
+      "place": "Opp KR MRT",
+      "byText": "09:01 前出发",
+      "walkText": null,
+      "rideText": "乘车 5 分钟",
+      "walkEndText": null,
+      "arriveText": "09:07 到达",
+      "arriveWhere": "在 Opp KR MRT",
+      "backupText": "或在 IT 搭 09:15 的 A2",
+      "summary": "在 IT 搭 09:02 的 95 ($)"
+    },
+    "upcoming": null,
+    "title": "95 · 09:02",
+    "heading": "去 Opp KR MRT",
+    "remindAt": null
+  }
+}

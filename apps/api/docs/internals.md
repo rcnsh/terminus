@@ -23,8 +23,14 @@ places to fix every bug.
 This document is about the API. The clients (Android, Mac, the website) are
 the other folders in `apps/`; the Worker serves the website too, so `GET /` is
 the landing page and `GET /docs` the API documentation. The OpenAPI spec lives
-in [src/openapi.ts](../src/openapi.ts) and a test fails if a route and the spec
-drift apart.
+in [src/openapi.ts](../src/openapi.ts). worker.smoke.js fails if a route and
+the spec drift apart; [test/openapi.test.js](../test/openapi.test.js) calls
+every operation, its success and its error cases, and fails when a status
+isn't listed in its `responses`, a body doesn't fit its schema or carries a
+key the schema doesn't name, an example or a golden answer doesn't fit, a
+route's `security` says something other than whether it answers 401, or a
+schema goes unused. Its schema checker (`test/_schema.mjs`) knows only the
+parts of JSON Schema the spec uses.
 
 The website's own pages (the landing page, `/status/`, `/privacy/` and the
 full policy at `/privacy/policy/`, `/pair/`, and the not-found page) wear
@@ -126,7 +132,7 @@ but KV is optional at run time: `/health` says what's missing.
 | `GET /map/fonts/…`, `/map/sprites/…` | The map's label glyphs and icons, from R2. |
 | `GET /download/android`, `/download/mac` | The current app downloads from R2, as `latest.json` there names them. `?abi=` picks an Android APK by CPU type; `/download/appcast.xml` is the Mac app's Sparkle feed, `/download/latest.json` the version list, `/download/releases/<version>/<file>` a versioned file. `latest.json` and the appcast are read from R2 on every request, so a release is live the moment it's uploaded. |
 | `GET /stops/pairs` | Each stop with its twin across the road, and where the buses on each side go next. Cached hard. |
-| `GET /health` | Graph age and which config is present, never values (`config.pushAndroid` and `config.pushWeb`: push set up with a usable key). For the operator only (`x-health-token`): `?probe=1` mints a real token and says what came back, and `?versions=1` says what the version updater would find today (see "The version string is a kill switch"). |
+| `GET /health` | Graph age, how long the calendar lasts, the feed as the cron last saw it (`upstream`) and which config is present, never values (`config.pushAndroid` and `config.pushWeb`: push set up with a usable key). 503, with the same body, when the feed is confirmed down, the cron has stopped or the calendar has run out. With the operator's `x-health-token`, `?probe=1` mints a real token and says what came back, and `?versions=1` says what the version updater would find today in the app stores (see "The version string is a kill switch"); without it both are ignored. |
 | `GET /status.json` | Whether NUS's feed is up, as the 15-minute check saw it, and the last 20 outages, read from KV at most once a minute per isolate. Two failed checks in a row confirm an outage and two good ones end it, so a feed that answers every other time stays down; the outage ends at the first of the two. The [status page](../../web/public/status) shows it. |
 | `GET /admin/stats` | The operator dashboard's data (accounts, devices by app, sign-ups, reports, feed; answers and errors per day, and the timelapse recorder's polls by what they cost NUS, from Analytics Engine when `ANALYTICS_TOKEN` and `CF_ACCOUNT_ID` are set). Needs `x-health-token`; anything else gets a 404. |
 | `GET /timelapse/days` | The days the timelapse recorder has kept (closed ones from R2; today's while it records, and any of the past week's still held by a recorder that hasn't written it to R2 yet) and what it's doing today. Needs `x-health-token`: the operator's, or `TIMELAPSE_TOKEN`, which opens `/timelapse/*` and nothing else. |
@@ -135,7 +141,9 @@ but KV is optional at run time: `/health` says what's missing.
 | `POST /auth/login`, `/auth/code`, `/pair`, `/me/*` | Accounts. See below. `POST /me/feedback` is "Is this wrong?": the answer the user saw and a note, kept with the account for a year (`FEEDBACK_KEEP_DAYS`, the cron) and its note emailed to `ALERT_EMAIL`, without the address or the answer (they'd outlive the account in an inbox; the dashboard has both). It needs a note, and an account with an email: an anonymous one gets 403. |
 
 `/next`, `/trip`, `/arrivals`, `/buses`, `/line`, `/campus` and `/stops/pairs` need an API key
-(made on the account page, sent as `x-api-key`) or a signed-in session. They're
+(made on the account page, sent as `x-api-key`, or as a bearer token) or a signed-in
+session or device; without one they answer 401 with `WWW-Authenticate`. A key opens
+these routes only: on `/me/*` it is not a session, and gets 401. They're
 limited by who's asking: a signed-in account by account (`RL_ME`, `acct:`),
 an API key by key (`RL_PUBLIC`, `key:`), and a request with neither by IP.
 On campus Wi-Fi hundreds of students share one IP, and the map alone asks
@@ -348,6 +356,8 @@ the Mac.
 - `GET /me/next` is the widget's one call. It picks the destination from the
   timetable (see `planFor` in [src/profile.ts](../src/profile.ts)) or from
   `?place=`/`?to=`, and returns the usual answer plus `dest` and `places`.
+  A `place` or `to` that names nothing it knows is ignored: the answer is
+  the timetable's.
 - `GET /me/nearby` lists departures at up to three stops near you, plus the
   nearest one's twin across the road when it isn't among them (so up to
   four), each with
@@ -1076,7 +1086,8 @@ ranks ahead of a guess, whatever the minutes say. A stale answer keeps its
 **original** `asOf` timestamp. A three-minute-
 old answer labelled as such beats a spinner, and beats an empty tile that
 reads as "no buses". Only a real arrival becomes `stale`; a headway guess
-from an old answer stays `scheduled`. Arrival times count from when they were
+from an old answer stays `scheduled`. A stale bus's leg (`bus`, `altBus`) is
+`estimated`, as a guess's is, so its times are drawn with a `~`. Arrival times count from when they were
 fetched, so a bus that has left since then (by the walk to it) is never
 offered as catchable.
 
@@ -1399,6 +1410,9 @@ second, so a longer stretch takes longer: from 1 s for a short hop to
 4 s, done before the next answer, 5 s on (a typical slide, half of a
 421 m stretch, takes about 2 s); with reduced motion, after 15 s without an answer, or to a place
 it can't reach along the line (behind it, or over 1.5 km on), it jumps.
+On a loop it slides on past the line's start, as the API places it. Clients
+take that from `/campus`'s `loop`, not from where the line ends: A1's and
+A2's lines end some 40 m from where they start at KRB.
 A tapped bus is ringed. Between stops, its `stretch` is drawn over the
 route, wider, with the rest of the route faded well back, and its card
 says "Between LT13 and COM 3".

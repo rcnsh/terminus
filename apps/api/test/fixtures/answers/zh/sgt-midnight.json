@@ -1,0 +1,65 @@
+{
+  "label": "06:00 开始一天",
+  "detail": "下一节：CS2030 @ COM1，今天 10:00",
+  "alt": null,
+  "stop": {
+    "code": "",
+    "name": "",
+    "confidence": 0
+  },
+  "quality": "ended",
+  "asOf": "2026-08-27T16:20:00.000Z",
+  "arrivals": [],
+  "mode": "rest",
+  "dest": null,
+  "places": [
+    {
+      "key": "mrt",
+      "label": "KR MRT"
+    },
+    {
+      "key": "deck",
+      "label": "The Deck"
+    }
+  ],
+  "refreshAt": "2026-08-27T22:00:00Z",
+  "walkSpeedMs": 1.3,
+  "card": {
+    "kind": "rest",
+    "staleAt": "2026-08-27T22:00:00Z",
+    "crowd": null,
+    "quality": null,
+    "leaveBy": null,
+    "leaveVia": null,
+    "catch": null,
+    "arrive": null,
+    "catchLine": null,
+    "late": false,
+    "goNow": null,
+    "note": null,
+    "estimate": null,
+    "phase": "idle",
+    "phaseText": null,
+    "glance": "06:00 起",
+    "line": "06:00 开始一天 · 下一节：CS2030 @ COM1，今天 10:00",
+    "actions": [],
+    "warning": null,
+    "nextChangeAt": "2026-08-27T22:00:00Z",
+    "remind": true,
+    "suggestion": null,
+    "ride": null,
+    "walkTo": null,
+    "notice": null,
+    "h12": false,
+    "journey": null,
+    "upcoming": {
+      "when": "今天",
+      "title": "CS2030，10:00 开始",
+      "where": "在 COM 3",
+      "off": null
+    },
+    "title": "06:00 开始一天",
+    "heading": null,
+    "remindAt": null
+  }
+}

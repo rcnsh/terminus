@@ -23,27 +23,29 @@ data class MapStop(val code: String, val name: String, val lat: Double, val lon:
     val fullName: String get() = longName ?: name
 }
 
-/** A service: its colour (ARGB) and its path along the roads, as [lon, lat] pairs. */
-data class MapRoute(val svc: String, val color: Long, val line: List<DoubleArray>) {
+/** A service: its colour (ARGB), its path along the roads as [lon, lat] pairs, and whether it's a loop. */
+data class MapRoute(val svc: String, val color: Long, val line: List<DoubleArray>, val loop: Boolean = false) {
     /** [west, south, east, north] of the line. */
     fun bounds(): DoubleArray = doubleArrayOf(line.minOf { it[0] }, line.minOf { it[1] }, line.maxOf { it[0] }, line.maxOf { it[1] })
 
     /** The line measured for sliding buses along it. */
-    val path: RoutePath by lazy { RoutePath(line) }
+    val path: RoutePath by lazy { RoutePath(line, loop) }
 }
 
 /**
  * A route line measured as the API measures it (haversine, metres from its
- * start at each point), so a bus's `along` is a place on it.
+ * start at each point), so a bus's `along` is a place on it. [closed] is the
+ * service's `loop` from /campus, as the API places buses: a loop's line
+ * needn't end exactly where it starts (A1's ends are some 40 m apart at KRB).
  */
-class RoutePath(private val line: List<DoubleArray>) {
+class RoutePath(private val line: List<DoubleArray>, loop: Boolean = false) {
     private val cum = DoubleArray(line.size).also { c ->
         for (i in 1 until line.size) c[i] = c[i - 1] + haversine(line[i - 1][1], line[i - 1][0], line[i][1], line[i][0])
     }
     val total: Double = cum.lastOrNull() ?: 0.0
 
-    /** Ends where it starts: a bus can slide on past the start. */
-    val closed: Boolean = line.size >= 2 && haversine(line.first()[1], line.first()[0], line.last()[1], line.last()[0]) < 5
+    /** A loop: a bus can slide on past the start. */
+    val closed: Boolean = loop && line.size >= 2
 
     /** The point [m] metres along, as (lat, lon, the road's bearing there). */
     fun pointAt(m: Double): Triple<Double, Double, Double> {
@@ -150,7 +152,7 @@ data class CampusMap(
             val routes = r.keys().asSequence().associateWith { svc ->
                 val x = r.getJSONObject(svc)
                 val line = x.optJSONArray("line") ?: JSONArray()
-                MapRoute(svc, parseColor(x.optString("color")), (0 until line.length()).map { i -> line.getJSONArray(i).let { p -> doubleArrayOf(p.getDouble(0), p.getDouble(1)) } })
+                MapRoute(svc, parseColor(x.optString("color")), (0 until line.length()).map { i -> line.getJSONArray(i).let { p -> doubleArrayOf(p.getDouble(0), p.getDouble(1)) } }, x.optBoolean("loop"))
             }.filterValues { it.line.size >= 2 }
             return CampusMap(stops, routes, serviceCodes(r), stopAliases(o.optJSONArray("destinations"))) to core
         }

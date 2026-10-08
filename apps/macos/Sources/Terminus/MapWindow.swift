@@ -707,14 +707,9 @@ private struct StopCard: View {
         .onChange(of: stop.code) { sent = false }
     }
 
-    /// The server's "4 min" ("now", "~6 min"); worded here only for an older server's row.
-    private func eta(_ r: BoardRow) -> String {
-        if let e = r.eta { return e }
-        let s = r.etaS ?? 0
-        if s < 60 { return L("Arriving") }
-        let min = L("%@ min", String(s / 60))
-        return r.quality == "scheduled" ? L("~%@", min) : min
-    }
+    /// The server's "4 min" ("now", "~6 min"); for an older server's row,
+    /// worded as the popover's Nearby words it, so the two never differ.
+    private func eta(_ r: BoardRow) -> String { FlowPills.eta(r) }
 }
 
 // MARK: - MapLibre

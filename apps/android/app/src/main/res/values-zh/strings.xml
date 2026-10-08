@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="close">关闭</string>
-    <string name="map_about">约 %1$s</string>
     <string name="map_arriving">即将到站</string>
     <string name="map_bus_at">在 %1$s</string>
     <string name="map_bus_next">下一站：%1$s</string>
@@ -22,7 +21,6 @@
     <string name="map_downloading">正在下载街道地图（约 4 MB）…</string>
     <string name="map_finding_buses">正在查找 %1$s 巴士…</string>
     <string name="map_go_there">去这里</string>
-    <string name="map_min">%1$d 分钟</string>
     <string name="map_needs_connection">第一次打开地图需要联网。</string>
     <string name="map_no_buses">%1$s 现在没有巴士在运行。</string>
     <string name="map_no_buses_due">暂时没有巴士</string>

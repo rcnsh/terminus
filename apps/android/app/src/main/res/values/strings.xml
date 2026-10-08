@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="close">Close</string>
-    <string name="map_about">~%1$s</string>
     <string name="map_arriving">Arriving</string>
     <string name="map_bus_at">At %1$s</string>
     <string name="map_bus_next">Next: %1$s</string>
@@ -22,7 +21,6 @@
     <string name="map_downloading">Downloading the street map (about 4 MB)…</string>
     <string name="map_finding_buses">Finding %1$s buses…</string>
     <string name="map_go_there">Go there</string>
-    <string name="map_min">%1$d min</string>
     <string name="map_needs_connection">The map needs a connection the first time.</string>
     <string name="map_no_buses">No %1$s buses running right now.</string>
     <string name="map_no_buses_due">No buses due</string>

@@ -79,41 +79,64 @@ final class LeaveNotifier: NSObject, UNUserNotificationCenterDelegate {
         generation += 1
         reworded = false
         let card = plan.card
-        let phase = card?.phase ?? "idle"
-        let trip = tripKey(plan)
-
-        // Past the leave-by the phase is "heading" by the clock: "Leave now"
-        // stays up (the heads-up it replaces goes).
-        if phase == "heading" {
+        switch Self.step(plan, soonTrip: defaults.string(forKey: "soonTrip"), soonAt: defaults.double(forKey: "soonAt"), now: now) {
+        case .heading:
             center.removePendingNotificationRequests(withIdentifiers: [Self.soonID, Self.nowID])
             center.removeDeliveredNotifications(withIdentifiers: [Self.soonID])
-            return
-        }
-        // At the stop, on the bus, missed, there, or not going: the reminders are over.
-        if phase != "idle" && phase != "due" {
+        case .over:
             clearLeave()
             center.removeDeliveredNotifications(withIdentifiers: [Self.askID])
-            return
-        }
-        guard card?.remind != false, let trip, let soonAt = card?.remindAt.flatMap(parseISODate), let leaveAt = plan.leaveAt, leaveAt > now else {
+        case .clear:
             clearLeave()
-            return
+        case let .schedule(clearFirst, trip, soon, leaveAt):
+            if clearFirst { clearLeave() }
+            if let soon {
+                defaults.set(trip, forKey: "soonTrip")
+                defaults.set(max(soon, now).timeIntervalSince1970, forKey: "soonAt")
+                schedule(Self.soonID, at: soon, now: now, title: card?.leaveBy ?? card?.title ?? plan.label, plan: plan)
+            }
+            schedule(Self.nowID, at: leaveAt, now: now, title: L("Leave now"), plan: plan)
+        }
+    }
+
+    /// What `update` does with a plan.
+    enum Step: Equatable {
+        /// Past the leave-by: the heads-up goes, "Leave now" stays up.
+        case heading
+        /// At the stop, on the bus, missed, there or not going: every reminder goes, and the old question.
+        case over
+        /// No reminder for this plan: the leave reminders go.
+        case clear
+        /// Clear the last trip's reminders first if `clearFirst`; then the
+        /// heads-up at `soon` (nil: it has gone for this trip already) and
+        /// "Leave now" at `leaveAt`.
+        case schedule(clearFirst: Bool, trip: String, soon: Date?, leaveAt: Date)
+    }
+
+    /// The choice `update` makes, apart from macOS so it can be tested.
+    /// `soonTrip` and `soonAt` (seconds since 1970) are the trip the
+    /// heads-up was last scheduled for, and when.
+    nonisolated static func step(_ plan: NextAnswer, soonTrip: String?, soonAt lastSoonAt: Double, now: Date) -> Step {
+        let card = plan.card
+        let phase = card?.phase ?? "idle"
+        // Past the leave-by the phase is "heading" by the clock: "Leave now"
+        // stays up (the heads-up it replaces goes).
+        if phase == "heading" { return .heading }
+        // At the stop, on the bus, missed, there, or not going: the reminders are over.
+        if phase != "idle" && phase != "due" { return .over }
+        guard card?.remind != false, let trip = tripKey(plan), let soonAt = card?.remindAt.flatMap(parseISODate), let leaveAt = plan.leaveAt, leaveAt > now else {
+            return .clear
         }
         // A different trip (the last one skipped or over): its reminders go.
-        if let last = defaults.string(forKey: "soonTrip"), last != trip { clearLeave() }
+        let clearFirst = soonTrip != nil && soonTrip != trip
         // The heads-up goes once per trip: once it has gone, a leave-by that
         // moves later doesn't bring it back.
-        let soonDone = defaults.string(forKey: "soonTrip") == trip && defaults.double(forKey: "soonAt") <= now.timeIntervalSince1970
-        if !soonDone {
-            defaults.set(trip, forKey: "soonTrip")
-            defaults.set(max(soonAt, now).timeIntervalSince1970, forKey: "soonAt")
-            schedule(Self.soonID, at: soonAt, now: now, title: card?.leaveBy ?? card?.title ?? plan.label, plan: plan)
-        }
-        schedule(Self.nowID, at: leaveAt, now: now, title: L("Leave now"), plan: plan)
+        let soonDone = soonTrip == trip && lastSoonAt <= now.timeIntervalSince1970
+        return .schedule(clearFirst: clearFirst, trip: trip, soon: soonDone ? nil : soonAt, leaveAt: leaveAt)
     }
 
     /// The trip a notification is about: the key the card's buttons carry.
-    private func tripKey(_ plan: NextAnswer) -> String? {
+    private nonisolated static func tripKey(_ plan: NextAnswer) -> String? {
         plan.card?.actions?.first?.trip
     }
 

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { calendarThrough, importedClassRuns, sgtDate, termDay, termsForImport } from '../src/calendar.ts';
+import { BUNDLED, calendarThrough, importedClassRuns, sgtDate, termDay, termsForImport } from '../src/calendar.ts';
 import { DEFAULT_PROFILE, classesOn, needsReimport, nextClass, reimportReason, restDetail } from '../src/profile.ts';
 
 // Fixed calendar, so these tests don't move when data/calendar.json refreshes.
@@ -145,10 +145,41 @@ test('a calendar without the next academic year stops before its first semester 
   assert.deepEqual(termsForImport(1, at('2027-08-12'), data), [{ acadYear: '2027/2028', semester: 1 }, SEM1]);
 });
 
-test('the real calendar covers the next 60 days', () => {
-  // Fails when data/calendar.json has not been refreshed: the moment to redeploy.
+test('the real calendar covers the next 60 days, and warns from 120', (t) => {
+  // Fails when data/calendar.json has not been refreshed: the moment to
+  // redeploy. scrape.yml refreshes it weekly from NUSMods, so from 120 days
+  // out the test output says so first, without failing the scrape.
   const now = Date.now();
   for (let d = 0; d <= 60; d += 5) assert.notEqual(termDay(now + d * 86_400_000).kind, 'unknown');
+  const left = (Date.parse(`${calendarThrough(BUNDLED)}T00:00:00+08:00`) - now) / 86_400_000;
+  if (left < 120) t.diagnostic(`warning: data/calendar.json runs out in ${Math.floor(left)} days (${calendarThrough(BUNDLED)}); has NUSMods published the next academic year?`);
+});
+
+test('the real calendar lists the semester after today’s', () => {
+  // So the next semester's first day is never "unknown". With the real
+  // clock: it fails once the last listed semester starts.
+  const today = sgtDate(Date.now());
+  const started = BUNDLED.semesters.filter((s) => s.start <= today);
+  assert.ok(started.length > 0, `nothing in data/calendar.json has started by ${today}`);
+  const next = BUNDLED.semesters.find((s) => s.start > today);
+  const now = started.at(-1);
+  assert.ok(next, `data/calendar.json ends with ${now.acadYear} semester ${now.semester}: refresh it (scripts/fetch_calendar.py)`);
+});
+
+test('the real calendar: semesters in order, none listed twice, each 1 to 4', () => {
+  const seen = new Set();
+  let was = '';
+  for (const s of BUNDLED.semesters) {
+    const key = `${s.acadYear} ${s.semester}`;
+    assert.ok(!seen.has(key), `${key} is listed twice`);
+    seen.add(key);
+    assert.match(s.acadYear, /^(\d{4})\/(\d{4})$/);
+    assert.equal(Number(s.acadYear.slice(5)), Number(s.acadYear.slice(0, 4)) + 1, s.acadYear);
+    assert.ok([1, 2, 3, 4].includes(s.semester), key);
+    assert.match(s.start, /^\d{4}-\d{2}-\d{2}$/, key);
+    assert.ok(s.start > was, `${key} starts ${s.start}, not after the one before (${was})`);
+    was = s.start;
+  }
 });
 
 test('the rest message says why today is empty', () => {
