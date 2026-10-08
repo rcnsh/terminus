@@ -1,6 +1,6 @@
 // The README's pictures, light and dark, from the real site run by the dev
-// stub: the banner (the landing page's hero, under the day and the night sky),
-// the web app's Now and Buses tabs, and the map with D2 picked.
+// stub: the web app's Now and Buses tabs, and the map with D2 picked. The
+// banner is composed from them afterwards: node .github/readme/hero.mjs
 //
 //   node .github/readme/shots.mjs
 //
@@ -58,13 +58,6 @@ try {
   const phone = { width: 390, height: 844 };
 
   for (const scheme of ['light', 'dark']) {
-    // The landing page draws its own clock-free phone, so its sky can be any hour.
-    await shoot(scheme, {
-      name: 'banner', to: '.github/readme', viewport: { width: 1280, height: 900 }, path: '/', signedIn: false,
-      at: scheme === 'light' ? '2026-10-08T10:00:00+08:00' : '2026-10-08T21:00:00+08:00',
-      act: (page) => page.addStyleTag({ content: '.nav-links, .cta, .cta-note, .install, .drive-toggle { display: none !important; } .hero-copy { padding-bottom: 120px; }' }),
-      clip: async (page) => { const box = await page.locator('.phone').boundingBox(); return { x: 0, y: 0, width: 1280, height: Math.ceil(box.y + box.height + 32) }; },
-    });
     await shoot(scheme, { name: 'now', to: '.github/readme', viewport: phone, path: '/app/' });
     await shoot(scheme, { name: 'buses', to: '.github/readme', viewport: phone, path: '/app/', act: tab('Buses') });
     await shoot(scheme, {
