@@ -174,7 +174,8 @@ struct AnswerDetail: View {
 
     /// The journey's title, then a row a step: the walk (and by when), the
     /// ride, the walk at the end, getting there, and the bus to fall back on.
-    /// Every word is the server's.
+    /// A trip that changes buses has the first ride, the change and the
+    /// second ride in place of the one. Every word is the server's.
     struct JourneyRows: View {
         let journey: NextAnswer.Journey
 
@@ -182,7 +183,13 @@ struct AnswerDetail: View {
             let j = journey
             Text(j.title).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
             if let walk = j.walkText { Row(icon: "figure.walk", text: [walk, j.byText].compactMap { $0 }.joined(separator: " · ")) }
-            if let ride = j.rideText { Row(icon: "bus.fill", text: [j.bus?.svc, ride].compactMap { $0 }.joined(separator: " · ")).fontWeight(.semibold) }
+            if let c = j.change {
+                Row(icon: "bus.fill", text: [j.bus?.svc, c.firstRideText].compactMap { $0 }.joined(separator: " · ")).fontWeight(.semibold)
+                Row(icon: "arrow.triangle.swap", text: c.changeText)
+                Row(icon: "bus.fill", text: [c.bus.svc, c.rideText].joined(separator: " · ")).fontWeight(.semibold)
+            } else if let ride = j.rideText {
+                Row(icon: "bus.fill", text: [j.bus?.svc, ride].compactMap { $0 }.joined(separator: " · ")).fontWeight(.semibold)
+            }
             if let end = j.walkEndText { Row(icon: "figure.walk", text: end) }
             if let arrive = j.arriveText { Row(icon: "flag.checkered", text: [arrive, j.arriveWhere].compactMap { $0 }.joined(separator: " · ")) }
             if let backup = j.backupText { Row(icon: "bus", text: backup).foregroundStyle(.secondary) }
@@ -234,10 +241,12 @@ struct AnswerDetail: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                    // A trip that changes: the second bus, where this one drops you.
+                    if let change = ride.change { Text(change.text).font(.caption).foregroundStyle(.secondary) }
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(L("Ride progress"))
-                .accessibilityValue(Self.spoken(ride.stops.map(\.name), passed: passed))
+                .accessibilityValue([Self.spoken(ride.stops.map(\.name), passed: passed), ride.change?.text].compactMap { $0 }.joined(separator: " "))
             }
         }
 

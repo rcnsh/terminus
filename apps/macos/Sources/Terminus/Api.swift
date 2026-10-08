@@ -151,8 +151,19 @@ struct NextAnswer: Decodable {
         /// The bus to catch, for its service and colour beside the ride.
         let bus: Bus?
         struct Bus: Decodable { let svc: String; let color: String? }
+        /// A change of bus on the way: `bus` is the first, this the second.
+        /// One this version can't read leaves `rideText`, which names the change.
+        let change: Change?
+        /// "14 min ride · off at Kent Vale", "Change at Kent Vale · 5 min wait",
+        /// "14 min ride": the first bus's line, the change, the second bus's line.
+        struct Change: Decodable {
+            let bus: Bus
+            let firstRideText: String
+            let changeText: String
+            let rideText: String
+        }
 
-        enum CodingKeys: String, CodingKey { case title, byText, walkText, rideText, walkEndText, arriveText, arriveWhere, backupText, summary, bus }
+        enum CodingKeys: String, CodingKey { case title, byText, walkText, rideText, walkEndText, arriveText, arriveWhere, backupText, summary, bus, change }
 
         init(from d: Decoder) throws {
             let c = try d.container(keyedBy: CodingKeys.self)
@@ -167,6 +178,7 @@ struct NextAnswer: Decodable {
             backupText = s(.backupText)
             summary = s(.summary)
             bus = try? c.decodeIfPresent(Bus.self, forKey: .bus)
+            change = bus == nil ? nil : try? c.decodeIfPresent(Change.self, forKey: .change)
         }
     }
 
@@ -179,8 +191,12 @@ struct NextAnswer: Decodable {
         let stops: [Stop]
         let board: String
         let arrive: String
+        /// The bus you change to where this one drops you ("Then P at 09:42
+        /// from Kent Vale"); `stops` are this bus's alone.
+        let change: Change?
+        struct Change: Decodable { let svc: String; let text: String }
 
-        enum CodingKeys: String, CodingKey { case svc, stops, board, arrive }
+        enum CodingKeys: String, CodingKey { case svc, stops, board, arrive, change }
 
         init(from d: Decoder) throws {
             let c = try d.container(keyedBy: CodingKeys.self)
@@ -188,6 +204,7 @@ struct NextAnswer: Decodable {
             stops = c.lenientList(Stop.self, forKey: .stops) ?? []
             board = try c.decode(String.self, forKey: .board)
             arrive = try c.decode(String.self, forKey: .arrive)
+            change = try? c.decodeIfPresent(Change.self, forKey: .change)
             // Fewer than two stops: there's no ride to draw.
             guard stops.count >= 2 else { throw DecodingError.dataCorruptedError(forKey: .stops, in: c, debugDescription: "a ride needs two stops") }
         }
