@@ -135,6 +135,9 @@ node apps/api/scripts/dev-stub.mjs    # local Worker on :8787 with a fake feed a
   starts the clock there (a Wednesday 21:30 in Singapore: R1 and R2 have
   stopped); `POST /__stub/at?t=<ISO>` moves it later.
 
+It listens on loopback only; `STUB_HOST=0.0.0.0` opens it to the network
+(a phone on the same Wi-Fi), and `PORT` moves it from 8787.
+
 It serves `apps/web/public` from disk, so a reload shows your change. Use it
 with a headless browser (Playwright plus Chromium) to check web UI changes,
 and take screenshots for UI changes. The admin dashboard token is `dev`.
@@ -255,7 +258,7 @@ apps/macos/
   Support/            Info.plist (version, SUPublicEDKey), zh-Hans strings
 scripts/              release.sh, release-beta.sh (+ release-lib.sh, their shared checks;
                       verify-sparkle.swift), github-release.sh, package-mac.sh,
-                      appcast.py, release-notes.py, map-tiles.sh,
+                      appcast.py, release-notes.py, map-tiles.sh (+ map-tiles.lock),
                       vendor-map.sh, vendor-maplibre-mac.sh, vendor-preact.sh,
                       vendor-mediabunny.sh
 .github/workflows/    ci.yml, scrape.yml (weekly data),
@@ -268,9 +271,14 @@ scripts/              release.sh, release-beta.sh (+ release-lib.sh, their share
 - **Data graph.** `data/stops.json` (stops, route order, operating hours) is
   scraped weekly by `scrape.yml` → `scripts/scrape_stops.py`, along with
   `shapes.json` (route lines from OpenStreetMap via Overpass) and
-  `calendar.json`. The workflow runs the tests and `check_scraped.py`,
-  commits as `github-actions[bot]`, rebases onto main, tests the rebased
-  tree again (its push doesn't trigger CI) and pushes that commit. A failed
+  `calendar.json`. The workflow is three jobs: `scrape` holds the feed
+  secrets and runs only the repo's standard-library Python; `test` runs the
+  tests and `check_scraped.py` with no secrets; `commit`, the only job that
+  can push, runs no npm code and fast-forwards main to a data-only commit
+  on top of the tested one (if main moved, it pushes nothing: run it
+  again). `check_scraped.py` compares with HEAD and fails on a stop moved
+  over 100 m, a changed stop order, any item lost from a list under 20,
+  odd names, or a moved semester; such a change is committed by hand. A failed
   shapes, public-buses or calendar refresh keeps the committed file and
   shows as a warning on the run. The data is bundled into the
   Worker, so a data change needs a deploy. The calendar is the exception:
@@ -343,7 +351,13 @@ scripts/              release.sh, release-beta.sh (+ release-lib.sh, their share
 - **Map.** `/campus` returns stops and route lines. The street map is a
   PMTiles extract on R2, in each site's own downloads bucket
   (`terminus-downloads`, `terminus-beta-downloads`), uploaded by the
-  `map tiles` workflow or `scripts/map-tiles.sh` (`CHANNEL=stable|beta|both`). The style is Protomaps basemaps without
+  `map tiles` workflow or `scripts/map-tiles.sh` (`CHANNEL=stable|beta|both`).
+  What goes up is pinned in `scripts/map-tiles.lock` (the Protomaps build,
+  the basemaps-assets commit, SHA-256s of the cut and of every font and
+  icon); nothing uploads unless it matches. To refresh: `scripts/map-tiles.sh
+  --update`, review and commit the lock, then run the workflow within a few
+  days (Protomaps keeps a build about a week). Its schedule only checks for
+  a newer build. The style is Protomaps basemaps without
   points of interest, with every URL on our own domain.
 
 ## English and Chinese
@@ -431,6 +445,13 @@ scripts/              release.sh, release-beta.sh (+ release-lib.sh, their share
     live and the commands that finish it.
   - Betas use `scripts/release-beta.sh <x.y.z-beta.n>`, on the same Mac,
     with the same checks: also from `origin/main` with CI passed.
+  - Both start from the lockfiles: they delete `node_modules` and
+    `apps/macos/.build`, then install with `--frozen-lockfile` and
+    `--force-resolved-versions`. The Sparkle key only goes to a `sign_update`
+    matching `SIGN_UPDATE_SHA256` in `scripts/release-lib.sh`; a Sparkle bump
+    means updating `SPARKLE_VERSION` and that hash (check the new zip
+    against the checksum in Sparkle's `Package.swift` first). The appcast
+    itself is signed too, and nothing may edit it afterwards.
   - Agents don't create GitHub releases or tags by hand; the scripts do.
 - **Signing keys.** The Android keystore (`~/.gradle/gradle.properties`
   `TERMINUS_*`), the Mac certificate (in the login keychain, from
@@ -457,7 +478,11 @@ scripts/              release.sh, release-beta.sh (+ release-lib.sh, their share
   `web-sw.test.js` fails when an import changes and the list doesn't. Load
   what isn't needed at first with `import()` (the map, Settings). Every word
   goes through `t()` (see below). External code only goes in `vendor/`, via its
-  script. The CSP is in `src/http.ts`; new origins need adding there.
+  script, which pins each npm tarball's integrity; `vendor/SHA256SUMS`
+  records every vendored file and `vendor.test.js` fails when one changes
+  without its script. The CSP is in `src/http.ts`; new origins need adding
+  there. Workers come from `'self'` only; blob: workers are allowed on
+  `/admin/timelapse/` alone (Mediabunny), via `cspFor()`.
 - **Kotlin:** keep logic that can be tested on the JVM out of composables
   (see `MapData.kt`).
 

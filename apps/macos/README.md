@@ -29,7 +29,7 @@ PNGs and quits, for checking layout without clicking around.
 | `Sources/Terminus/AppModel.swift` | State, refresh timing and pairing |
 | `Sources/Terminus/*View*.swift`, `Header`, `Tabs`, `Search`, `Footer` | The popover |
 | `Sources/Terminus/MapWindow.swift`, `MapData.swift`, `MapFiles.swift` | The map window: MapLibre, live buses, the street map kept on disk |
-| `Vendor/MapLibre.xcframework.zip` | MapLibre Native for macOS, built by [`scripts/vendor-maplibre-mac.sh`](../../scripts/vendor-maplibre-mac.sh) |
+| `Vendor/MapLibre.xcframework.zip` | MapLibre Native for macOS, built by [`scripts/vendor-maplibre-mac.sh`](../../scripts/vendor-maplibre-mac.sh) from a pinned tag and commit; its SHA-256 is in `MapLibre.xcframework.zip.sha256`, which CI checks |
 | `Support/` | `Info.plist` and the app icon |
 
 Releases are built, signed and packaged as a DMG on the owner's Mac by
@@ -50,6 +50,14 @@ it once the popover, Settings and Setup are all closed (or at quit). An update i
 with the update key (`SUPublicEDKey` in `Support/Info.plist`) and the app with
 the terminus certificate. `TERMINUS_APPCAST=<url>` points a build at a test feed. A release build only takes
 this and `TERMINUS_API_BASE` when they point at this Mac (localhost or 127.0.0.1).
+
+Everything is signed with the hardened runtime. The self-signed certificate
+has no Team ID, so library validation would refuse even our own re-signed
+frameworks: the app alone gets `com.apple.security.cs.disable-library-validation`
+(`Support/Terminus.entitlements`), plus the location entitlement the runtime
+needs. `SUVerifyUpdateBeforeExtraction` makes Sparkle check the DMG's
+signature before opening it. Releases also sign the appcast, so a later
+version can set `SURequireSignedFeed`.
 
 `./build.sh` signs with that certificate too if it's in your keychain, and
 ad-hoc otherwise. An ad-hoc build is a new identity every time, so macOS asks

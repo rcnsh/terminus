@@ -237,11 +237,22 @@ The calendar keeps itself up to date without a deploy
 bundled at deploy time, and the scrape workflow refreshes it weekly, but a
 bundled file only changes when someone deploys. So the cron also fetches the
 same two sources once a week. The copy must pass checks:
-- dates are real, and every semester starts on a Monday;
-- there are terms 1 to 4 and at least 4 semesters and 5 holidays.
+- dates are real (2026-02-30 is refused), and every semester starts on a
+  Monday inside its own academic year (1 July of its first year to 31 July
+  of its second);
+- there are terms 1 to 4 and at least 4 semesters and 5 holidays;
+- holiday names are plain letters, digits, spaces and ordinary punctuation,
+  under 80 characters.
+
+It is also compared with what's answered now (KV merged with the bundled
+copy): a known semester moved by more than 3 days, or more than 3 future
+holidays dropped at once, is refused and the old calendar kept. To accept a
+real move, deploy a corrected `calendar.json`; being newer, it wins.
 
 A copy that passes is merged over what's known and kept in KV
-(`calendar:data`). After a failure the cron tries again the next day, and the
+(`calendar:data`). Merging adds, except that a future holiday the newer copy
+covers and no longer lists is removed, so one added upstream by mistake
+doesn't stay. After a failure the cron tries again the next day, and the
 error is in the Worker's logs as `cron calendar`.
 
 Every request, and the Trip object, reads that copy at most every 10 minutes
@@ -1015,9 +1026,24 @@ operating hours change a few times a year. `pnpm scrape` rebuilds
 The proxy has no `ServiceDescription`, so the route codes to fetch come from
 the existing graph plus `KNOWN_ROUTES` in the script; a new service with an
 unlisted code needs adding there. The **scrape stop graph** workflow
-(`.github/workflows/scrape.yml`) runs the same scrape every Monday with the
-feed secrets, tests the result and commits it to `main`; a deploy then puts
-it live.
+(`.github/workflows/scrape.yml`) runs the same scrape every Monday in three
+jobs: `scrape` holds the feed and DataMall secrets and runs only the repo's
+standard-library Python; `test` runs the test suite and `check_scraped.py`
+on the scraped files, with no secrets; `commit` is the only job that can
+push, runs no npm code, and fast-forwards `main` to a commit of just the
+data files on top of the commit that was scraped and tested. If `main`
+moved during the run, nothing is pushed and the run says to run it again. A
+deploy then puts the data live.
+
+The scrapers that send keys (`scrape_stops.py`, `scrape_lta.py`) refuse
+every redirect, since urllib re-sends every header to wherever one points;
+the others follow https redirects only. Each caps the bytes it reads per
+reply, and `scrape_lta.py` the pages per dataset. `route_shapes.py` asks
+only overpass-api.de. `check_scraped.py` compares with HEAD: a stop moved
+over 100 m, a changed stop order on an existing route, any item lost from a
+list under 20, a name with odd characters or a web address, a moved
+semester or more than 3 future holidays gone all fail, and such a change is
+committed by hand.
 
 **Route lines follow the roads.** `scripts/route_shapes.py` routes each
 service stop to stop along OpenStreetMap's drivable roads (one-way streets
@@ -1032,8 +1058,21 @@ until the next run. The NUS feed has no route shapes of its own.
 build of OpenStreetMap, from zoom 12 up (the clients never zoom out past
 13), and uploads it, with Noto Sans glyphs and the light
 and dark icons, under `map/` in each site's downloads bucket (stable and
-beta have their own; the workflow does both by default). Twice a year is
-plenty; run it by hand once after a first deploy.
+beta have their own; the workflow does both by default).
+
+Every client's MapLibre parses these files natively, so what goes up is
+pinned in `scripts/map-tiles.lock`: the build date, bbox and minzoom, the
+`pmtiles` version, the cut's SHA-256 and size, the basemaps-assets commit,
+and one SHA-256 over the sorted `<sha256>  <path>` lines of the 776 font and
+icon files. `pmtiles extract` is deterministic for a given build and
+version, so a normal run cuts the locked build again and refuses to upload
+unless every value matches. `--update` takes the newest build and rewrites
+the lock without uploading; the owner commits it, then uploads within a few
+days, since Protomaps keeps a build only about a week (once it's gone, R2
+keeps serving the last upload). The workflow's manual run builds and checks
+without the token, then uploads in a separate step that downloads nothing;
+its twice-yearly schedule only runs `--check`, which fails as a reminder
+when a newer build exists.
 
 **Public buses are more services at the same stops** ([`public.ts`](../src/public.ts),
 [`lta.ts`](../src/lta.ts), `data/public.json`). Singapore's public buses stop
