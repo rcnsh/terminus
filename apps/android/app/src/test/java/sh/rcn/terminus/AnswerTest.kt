@@ -28,10 +28,48 @@ class AnswerTest {
 
     private fun ms(iso: String) = Instant.parse(iso).toEpochMilli()
 
+    /**
+     * Every golden there is, English and Chinese, by the endpoint it answers:
+     * /me/nearby has `stops`, /me/day `items`, the rest are /me/next. A
+     * new fixture is read without being listed here.
+     */
+    private fun everyGolden(): List<Pair<String, JSONObject>> {
+        val dir = listOf("../../api/test/fixtures/answers", "../api/test/fixtures/answers").map(::File).first { it.isDirectory }
+        return listOf(dir, File(dir, "zh")).flatMap { d ->
+            d.listFiles { f -> f.extension == "json" }.orEmpty().sortedBy { it.name }.map { f ->
+                (if (d == dir) f.nameWithoutExtension else "zh/${f.nameWithoutExtension}") to JSONObject(f.readText())
+            }
+        }
+    }
+
+    private fun hasCjk(s: String) = s.any { Character.UnicodeScript.of(it.code) == Character.UnicodeScript.HAN }
+
     @Test fun everyGoldenAnswerParses() {
-        for (name in listOf("class-bus", "class-walk", "class-late", "class-from-dorm", "class-room", "class-started", "place", "landmark", "room", "arrived", "free", "rest", "home", "home-reached", "evening-home", "setup", "riding", "scheduled", "no-timetable")) {
-            val a = golden(name)
-            assertNotNull("$name has a card", a.card)
+        val all = everyGolden()
+        assertTrue("found the goldens", all.size >= 40)
+        for ((name, json) in all) {
+            val zh = name.startsWith("zh/")
+            when {
+                json.has("stops") -> assertTrue(name, parseNearby(json).isNotEmpty())
+                json.has("items") -> assertTrue(name, DayPlan.parse(json).items.isNotEmpty())
+                else -> {
+                    val a = NextAnswer.parse(json)
+                    assertNotNull("$name has a card", a.card)
+                    val card = a.card!!
+                    // The card's parts are read leniently, so a part that no longer
+                    // parses would just vanish: each one sent must come through.
+                    val sent = json.getJSONObject("card")
+                    for ((key, got) in listOf(
+                        "journey" to card.journey, "ride" to card.ride, "upcoming" to card.upcoming,
+                        "suggestion" to card.suggestion, "walkTo" to card.walkTo,
+                    )) {
+                        if (sent.has(key) && !sent.isNull(key)) assertNotNull("$name: card.$key", got)
+                    }
+                    assertEquals("$name: card.actions", sent.optJSONArray("actions")?.length() ?: 0, card.actions.size)
+                    // The headline is the server's Chinese; some are only a bus and a time, so the line under it counts too.
+                    if (zh) assertTrue("$name is in Chinese: ${a.label}", hasCjk(a.label) || hasCjk(a.detail))
+                }
+            }
         }
     }
 
