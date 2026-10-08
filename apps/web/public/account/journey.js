@@ -44,7 +44,9 @@ export const styleHint = (s) =>
   })[s];
 
 /** Whole seconds until it's time to leave, or null once it is (or with no time to leave by). */
-function secondsToLeave(a, j, now) {
+export function secondsToLeave(a, j, now) {
+  // At the stop there's nothing left to leave for, as on Android.
+  if (a.card.phase === 'waiting') return null;
   const at = a.leave ? Date.parse(a.leave.at) : null;
   if (at == null || j.leave == null || now >= at) return null;
   return Math.floor((at - now) / 1000);
@@ -69,7 +71,7 @@ export function leaveIn(a, j, now) {
  * for "Leave now" and at the stop. web-i18n.test.js checks each is inside its
  * headline in Chinese too.
  */
-function leaveTime(a, j, now) {
+export function leaveTime(a, j, now) {
   if (a.card.phase === 'waiting') return null;
   const left = secondsToLeave(a, j, now);
   if (left === null) return null;
@@ -112,35 +114,35 @@ export function spokenJourney(a, now) {
 }
 
 /** The server's line `key` when it sent the journey's lines, else `old()`. */
-const said = (j, key, old) => (j[key] !== undefined ? j[key] : old());
+export const said = (j, key, old) => (j[key] !== undefined ? j[key] : old());
 
 /** "by 4:01 PM" under the countdown, until it's time to go. */
-const by = (a, j, now) => (a.card.phase !== 'waiting' && a.leave && j.leave && now < Date.parse(a.leave.at) ? said(j, 'byText', () => t('by {0}', j.leave)) : null);
+export const by = (a, j, now) => (a.card.phase !== 'waiting' && a.leave && j.leave && now < Date.parse(a.leave.at) ? said(j, 'byText', () => t('by {0}', j.leave)) : null);
 
 /** "To GEA1000 @ UTown · starts 10:00": a class's start is what the arrival and slack are about. */
-const to = (a, j) => said(j, 'title', () => [t('To {0}', j.to), a.card.kind === 'class' && a.timing ? t('starts {0}', clock(a.timing.classAt)) : null].filter(Boolean).join(' · '));
+export const to = (a, j) => said(j, 'title', () => [t('To {0}', j.to), a.card.kind === 'class' && a.timing ? t('starts {0}', clock(a.timing.classAt)) : null].filter(Boolean).join(' · '));
 
 /** "Arrive 4:08 PM", with a class's "9 min early". */
-const arrive = (j) => said(j, 'arriveText', () => (j.arrive ? [t('Arrive {0}', j.arrive), j.slack].filter(Boolean).join(' · ') : null));
+export const arrive = (j) => said(j, 'arriveText', () => (j.arrive ? [t('Arrive {0}', j.arrive), j.slack].filter(Boolean).join(' · ') : null));
 
 /** Under the arrival: "2 min walk from UTown", or "at UTown". */
-const arriveWhere = (j) => said(j, 'arriveWhere', () => (j.walkEnd ? t('{0} walk from {1}', j.walkEnd, j.toStop) : t('at {0}', j.toStop)));
+export const arriveWhere = (j) => said(j, 'arriveWhere', () => (j.walkEnd ? t('{0} walk from {1}', j.walkEnd, j.toStop) : t('at {0}', j.toStop)));
 
 /** "3 min walk" to the stop (or the whole way on foot), and "2 min walk" on from where you get off. */
-const walkText = (j) => said(j, 'walkText', () => (j.walk ? t('{0} walk', j.walk) : null));
-const walkEndText = (j) => said(j, 'walkEndText', () => (j.walkEnd ? t('{0} walk', j.walkEnd) : null));
+export const walkText = (j) => said(j, 'walkText', () => (j.walk ? t('{0} walk', j.walk) : null));
+export const walkEndText = (j) => said(j, 'walkEndText', () => (j.walkEnd ? t('{0} walk', j.walkEnd) : null));
 
 /** "8 min ride · off at Opp NUSS". */
-const rideText = (j) => said(j, 'rideText', () => [j.ride && t('{0} ride', j.ride), j.off && t('off at {0}', j.off)].filter(Boolean).join(' · ') || null);
+export const rideText = (j) => said(j, 'rideText', () => [j.ride && t('{0} ride', j.ride), j.off && t('off at {0}', j.off)].filter(Boolean).join(' · ') || null);
 
 /** "Or A1 at 4:05 PM from PGP"; for a class, the sooner bus to go now on. On foot, the bus it beats: "D1 would be 16 min". */
-const backup = (a, j) =>
+export const backup = (a, j) =>
   said(j, 'backupText', () =>
     !j.bus ? j.why : j.backup ? (a.card.kind === 'class' ? t('Or go now: {0} at {1} from {2}', named(j.backup), j.backup.board, j.backup.stop) : t('Or {0} at {1} from {2}', named(j.backup), j.backup.board, j.backup.stop)) : null,
   );
 
 /** "in 4 min" to the bus leaving, or null once it has (or on foot, with no bus). */
-function busIn(j, now) {
+export function busIn(j, now) {
   if (!j.boardAt) return null;
   const left = Math.floor((Date.parse(j.boardAt) - now) / 1000);
   if (left <= 0) return null;

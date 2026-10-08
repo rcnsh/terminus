@@ -51,9 +51,6 @@ export interface TripView {
   suggestion?: Suggestion | null;
   /** Today was set to "Not on campus" (phase 8.3): offer "Back on campus". */
   away?: boolean;
-  /** The phone is following this trip by location (phase 8.1): nobody is
-   *  asked what happened, it's worked out. */
-  followed?: boolean;
   /** A trip this request's location says is over (home, in your
    *  residence, or at the destination): the caller records it as reached. */
   reached?: string;
@@ -217,9 +214,6 @@ export interface Card {
    *  arrival times (the arrival live when the bus's plate is known), for a
    *  progress bar. Null otherwise. */
   ride: Ride | null;
-  /** The phase was worked out from the phone's location, not tapped (phase
-   *  8.1): "Looks like you're on the bus". */
-  detected: boolean;
   /** Where to walk to now, for a maps app's walking directions: the stop to
    *  catch the bus at, or the destination's stop when the answer is to walk.
    *  Null on the bus, at the stop, once there, and with nothing to catch. */
@@ -273,7 +267,7 @@ function staleAtOf(a: MeAnswer, kind: CardKind): number | null {
   return marks.length ? Math.min(...marks) : null;
 }
 
-type V2 = 'phase' | 'phaseText' | 'glance' | 'line' | 'actions' | 'warning' | 'nextChangeAt' | 'remind' | 'suggestion' | 'ride' | 'detected' | 'walkTo';
+type V2 = 'phase' | 'phaseText' | 'glance' | 'line' | 'actions' | 'warning' | 'nextChangeAt' | 'remind' | 'suggestion' | 'ride' | 'walkTo';
 type V1 = Omit<Card, V2 | 'notice' | 'h12' | 'journey' | 'upcoming' | 'title' | 'heading' | 'remindAt'>;
 
 /**
@@ -523,22 +517,17 @@ function v1(a: MeAnswer, h12: boolean): V1 {
   } else {
     card.catchLine = card.catch;
   }
-  // The headline bus, when it isn't the one to wait for.
+  // The headline bus, when it isn't the one to wait for. A guessed time
+  // gets there at a guessed time too.
   const timed = a.departsAt && a.quality !== 'unknown' && a.quality !== 'ended';
   const same = timed && l.board && Math.abs(Date.parse(l.board) - Date.parse(a.departsAt!)) < 60_000;
   if (timed && !same) {
-    card.goNow = m().goNow(a.bus?.paid ? named({ svc, paid: true }) : svc, approx(roughly(a), at(a.departsAt!)), a.timing.reachAt ? at(a.timing.reachAt) : null);
+    card.goNow = m().goNow(a.bus?.paid ? named({ svc, paid: true }) : svc, approx(roughly(a), at(a.departsAt!)), a.timing.reachAt ? approx(roughly(a), at(a.timing.reachAt)) : null);
   }
   card.note = l.note ?? null;
   card.estimate = l.estimated ? m().estimateNote : null;
   return card;
 }
-
-/** The same, when the phone's location said so rather than a tap. */
-const DETECTED_TEXT: Partial<Record<Phase, () => string>> = {
-  riding: () => m().detectedRiding,
-  missed: () => m().detectedMissed,
-};
 
 const PHASE_TEXT: Record<Phase, (() => string) | null> = {
   idle: null,
@@ -573,7 +562,7 @@ export function nextPhaseAt(a: MeAnswer, trip: TripView, nowMs: number, leaveGap
   const marks: number[] = [];
   const l = a.leave ?? null;
   const plan = trip.plan ?? null;
-  if (plan?.board && !answered(trip)) marks.push(Date.parse(plan.board), Date.parse(plan.board) + ASSUME_MS);
+  if (plan?.board && !trip.rec) marks.push(Date.parse(plan.board), Date.parse(plan.board) + ASSUME_MS);
   // The leave-by's marks, no sooner than `leaveGapMs` from now (see LEAVE_GAP_MS).
   if (l?.at) for (const t of [Date.parse(l.at) - DUE_MS, Date.parse(l.at)]) if (t > nowMs) marks.push(Math.max(t, nowMs + leaveGapMs));
   if (a.timing?.classAt) marks.push(Date.parse(a.timing.classAt) + LATE_GRACE_MIN * 60_000);
@@ -590,9 +579,6 @@ export function nextPhaseAt(a: MeAnswer, trip: TripView, nowMs: number, leaveGap
  * heading) by up to this much; the Trip object and the Mac wait 30 s too.
  */
 export const LEAVE_GAP_MS = 30_000;
-
-/** Someone said what happened (or detection did); having been at the stop isn't that. */
-const answered = (trip: TripView) => trip.rec !== undefined && trip.rec.kind !== 'waiting';
 
 /** A stop's short name, from its code. */
 const stopName = (code: string | null | undefined) => {
@@ -632,7 +618,6 @@ function v2(
   const est = (iso: string) => approx(l?.estimated, at(iso));
   const svc = l?.svc ?? null;
   const phase = trip.phase;
-  const detected = trip.rec?.detected === true && (phase === 'riding' || phase === 'missed');
   // "D2 9:41", or the walk when there's no bus.
   const busGlance = (leave: Leave) => (svc ? `${svc} ${leave.board ? short(leave.board) : m().now}` : m().walkNow);
 
@@ -641,7 +626,8 @@ function v2(
   // A clock time, never "4 min": a glance (the Mac's menu bar, a tile) can
   // sit unrefreshed for minutes, and a clock time stays true until the bus
   // leaves. The label as it is when there's no time to give.
-  let glance = timedAt(a) ? `${a.label.split(' · ')[0]} ${approx(roughly(a), short(a.departsAt!))}` : a.label.replace(' · ', ' ');
+  // With no bus at all, the walk: "No bus · walk 27 min" cut to fit read "No bus walk ".
+  let glance = timedAt(a) ? `${a.label.split(' · ')[0]} ${approx(roughly(a), short(a.departsAt!))}` : (a.quality === 'ended' && a.foot ? m().walkLabel(mins(a.foot.s)) : a.label).replace(' · ', ' ');
   if (card.kind === 'rest') {
     const from = slotOf(a.label, m().dayStarts);
     glance = from ? m().fromGlance(from) : m().doneToday;
@@ -693,7 +679,7 @@ function v2(
 
   return {
     phase,
-    phaseText: ((detected ? DETECTED_TEXT[phase] : null) ?? PHASE_TEXT[phase])?.() ?? null,
+    phaseText: PHASE_TEXT[phase]?.() ?? null,
     glance,
     line,
     actions,
@@ -702,7 +688,6 @@ function v2(
     remind: trip.remind !== false,
     suggestion: trip.suggestion ?? null,
     ride: phase === 'riding' && onBus ? rideOf(onBus) : null,
-    detected,
     walkTo: walkToOf(a, card.kind, phase),
   };
 }

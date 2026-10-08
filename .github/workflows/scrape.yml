@@ -176,8 +176,15 @@ jobs:
           python-version: "3.12"
 
       # A bad graph is worse than a stale one, so the suite gates the commit.
+      # The golden answers (test/fixtures/answers) are worked out on the real
+      # graph, so a changed stop or route can change them with nothing wrong.
       - name: Test against the new graph
-        run: pnpm install --frozen-lockfile && pnpm test
+        run: |
+          pnpm install --frozen-lockfile
+          if ! pnpm test; then
+            echo "::error title=Tests fail on the new data::If only golden.test.js fails, the answers moved with the stops. Run the scrape locally, then UPDATE_GOLDEN=1 pnpm test in apps/api, review the fixture diff and commit the data and the goldens together."
+            exit 1
+          fi
 
       # Well-formed but wrong (stops gone, off-campus coordinates, a huge
       # file) is caught here: this pushes to main with no review. It

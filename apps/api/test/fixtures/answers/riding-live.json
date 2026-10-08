@@ -1,0 +1,105 @@
+{
+  "label": "On the D2",
+  "detail": "Off at UTown · arrive 09:15 · just in time",
+  "alt": null,
+  "stop": {
+    "code": "",
+    "name": "",
+    "confidence": 0
+  },
+  "quality": "live",
+  "asOf": "2026-08-27T01:05:00.000Z",
+  "arrivals": [],
+  "arriveAt": "2026-08-27T01:15:00Z",
+  "mode": "trip",
+  "dest": {
+    "to": "UTOWN",
+    "label": "GEA1000 @ UTown",
+    "why": "class"
+  },
+  "timing": {
+    "status": "tight",
+    "text": "Arrive 09:15 · just in time",
+    "classAt": "2026-08-27T01:15:00Z",
+    "reachAt": "2026-08-27T01:15:00Z"
+  },
+  "places": [
+    {
+      "key": "mrt",
+      "label": "KR MRT"
+    },
+    {
+      "key": "deck",
+      "label": "The Deck"
+    }
+  ],
+  "refreshAt": "2026-08-27T01:15:00Z",
+  "walkSpeedMs": 1.3,
+  "card": {
+    "kind": "trip",
+    "staleAt": "2026-08-27T01:15:00Z",
+    "crowd": null,
+    "quality": null,
+    "leaveBy": null,
+    "leaveVia": null,
+    "catch": null,
+    "arrive": null,
+    "catchLine": null,
+    "late": false,
+    "goNow": null,
+    "note": null,
+    "estimate": null,
+    "phase": "riding",
+    "phaseText": "On the bus",
+    "glance": "Off 09:15",
+    "line": "On the D2 · off at UTown 09:15",
+    "actions": [],
+    "warning": null,
+    "nextChangeAt": "2026-08-27T01:15:00Z",
+    "remind": true,
+    "suggestion": null,
+    "ride": {
+      "svc": "D2",
+      "stops": [
+        {
+          "code": "PGP",
+          "name": "PGP"
+        },
+        {
+          "code": "KR-MRT",
+          "name": "KR MRT"
+        },
+        {
+          "code": "LT27",
+          "name": "LT 27"
+        },
+        {
+          "code": "UHALL",
+          "name": "UHall"
+        },
+        {
+          "code": "UHC-OPP",
+          "name": "Opp UHC"
+        },
+        {
+          "code": "MUSEUM",
+          "name": "Museum"
+        },
+        {
+          "code": "UTOWN",
+          "name": "UTown"
+        }
+      ],
+      "board": "2026-08-27T01:06:00Z",
+      "arrive": "2026-08-27T01:15:00Z"
+    },
+    "walkTo": null,
+    "notice": null,
+    "h12": false,
+    "journey": null,
+    "upcoming": null,
+    "title": "On the D2",
+    "heading": "Next class · GEA1000 @ UTown",
+    "remindAt": null
+  }
+}

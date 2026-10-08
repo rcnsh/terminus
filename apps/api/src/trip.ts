@@ -54,11 +54,8 @@ export interface Boarded {
   stopCode?: string;
   alightCode?: string;
   plate?: string;
-  /** ISO: when the bus left, estimated from the fix that noticed you on it
-   *  (detect.ts). Only for measuring the ride (ridetimes.ts). */
-  departed?: string;
   /** A public bus, with a fare, and the graph's route for it when its number
-   *  can't name it (`151/1`); detection follows it in the public graph. */
+   *  can't name it (`151/1`). */
   paid?: true;
   route?: string;
 }
@@ -126,12 +123,8 @@ export function rideOf(b: Boarded): Ride | null {
 
 /** The latest signal about one trip today. */
 export interface TripRecord {
-  kind: Exclude<SignalKind, 'location' | 'reset' | 'away' | 'back'> | 'waiting';
+  kind: Exclude<SignalKind, 'location' | 'reset' | 'away' | 'back'>;
   at: number;
-  /** Worked out from the phone's location, not tapped (phase 8.1). */
-  detected?: boolean;
-  /** A detected miss at the boarding stop, rather than at home. */
-  atStop?: boolean;
   /** Skipped by "Not on campus today" (phase 8.3); "Back on campus" undoes all of them. */
   away?: boolean;
   /** The trip's name, for "Undo: going to CS2030". */
@@ -149,10 +142,6 @@ export interface DayRecord {
    *  and frozen once it left, so "On the 9:41 D2?" is still about that bus
    *  after the answer has moved on to the next one. */
   plans?: Record<string, Boarded>;
-  /** When the phone last sent a location during a trip (epoch ms, kept to the
-   *  minute): while it's recent, the trip is being followed and nobody is
-   *  asked what happened (card.ts). Never where. */
-  followed?: number;
   /** When the object next wakes to push (epoch ms), or absent when it
    *  won't: the Worker asks again only when that would be sooner
    *  (needsWatch). Push only. */
@@ -178,18 +167,9 @@ export interface TripUpdate {
   deleteAt: number;
   /** Trip records; null deletes one. */
   items?: Array<{ key: string; rec: TripRecord | null }>;
-  followed?: number;
   plans?: Record<string, Boarded>;
   /** Wake at `at` (no later than a wake already pending) to push the card. */
   watch?: { userId: string; at: number };
-}
-
-/** A trip is being followed by location while its last fix is this recent (fixes come every 20 s). */
-export const FOLLOWED_MS = 90_000;
-
-/** Whether the phone is following today's trip by location right now. */
-export function isFollowed(day: DayRecord | null, nowMs: number): boolean {
-  return day?.followed !== undefined && nowMs - day.followed < FOLLOWED_MS && nowMs >= day.followed - 60_000;
 }
 
 /** Heads-up window: the trip is "due" this long before its leave-by. */
@@ -252,7 +232,6 @@ export function phaseFor(a: MeAnswer, rec: TripRecord | undefined, nowMs: number
     const s = indexGraph(GRAPH).byCode.get(code);
     if (s && haversineM(at.lat, at.lon, s.lat, s.lon) <= AT_STOP_M) return 'waiting';
   }
-  if (rec?.kind === 'waiting') return 'waiting';
   if (rec?.kind === 'left') return 'heading';
   if (leaveAt === null) return 'idle';
   if (nowMs >= leaveAt) return 'heading';
@@ -303,7 +282,7 @@ export async function loadDay(env: Env, userId: string, nowMs: number): Promise<
     const res = await ask(s, `day?date=${sgtDate(nowMs)}`);
     if (!res.ok) return null;
     const day = (await res.json()) as DayRecord | null;
-    return day && (Object.keys(day.trips).length || Object.keys(day.plans ?? {}).length || day.watch || day.followed) ? day : null;
+    return day && (Object.keys(day.trips).length || Object.keys(day.plans ?? {}).length || day.watch) ? day : null;
   } catch (err) {
     // The answer works without trip state; a failure only loses the phase.
     console.error('trip state unavailable', err instanceof Error ? err.name : typeof err);

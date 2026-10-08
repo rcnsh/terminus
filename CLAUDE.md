@@ -202,7 +202,7 @@ apps/api/
   src/accounts.ts     Sign-in codes/links, sessions, anonymous accounts, pairing (D1)
   src/applogin.ts     App sign-in approved from the email (RFC 8628-like)
   src/trip.ts, tripdo.ts  Per-user Durable Object with today's trip signals
-  src/detect.ts, outcomes.ts, ridetimes.ts  Ride detection, measured ride times
+  src/outcomes.ts     How each trip went (taps, Not going) and what it suggests
   src/monitor.ts      15-minute cron: feed health, incidents, housekeeping
   src/feedwatch.ts    The beta's feed health, from breaker trips its traffic noted
   src/openapi.ts      OpenAPI 3.1 spec + docs page (a test fails if routes drift from it)

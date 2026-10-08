@@ -194,7 +194,7 @@ struct MapWindow: View {
                 Group {
                     switch sheet {
                     case .stop(let code): if let stop = campus.stop(code) { StopCard(stop: stop, map: map, campus: campus, app: app) }
-                    case .bus: if let bus = map.openBus { BusCard(bus: bus, svc: map.selected ?? "") { map.sheet = nil } }
+                    case .bus: if let bus = map.openBus { BusCard(bus: bus, svc: map.selected ?? "", hex: campus.color(map.selected)) { map.sheet = nil } }
                     }
                 }
                 .frame(width: 320)
@@ -399,88 +399,242 @@ private struct SvcTag: View {
     }
 }
 
-/// The card over the map's corner, for a stop or a bus.
+/// The card over the map's corner, for a stop.
 private struct MapCard<Content: View>: View {
     let title: String
-    var sub: String?
-    var badge: String?
     let close: () -> Void
     @ViewBuilder let content: () -> Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text(title).font(.system(size: 15, weight: .semibold)).accessibilityAddTraits(.isHeader)
-                        // A bus's number plate by its name, like the plate on the bus.
-                        if let badge {
-                            Text(badge)
-                                .font(.system(size: 11, weight: .medium, design: .monospaced))
-                                .foregroundStyle(.secondary)
-                                .padding(.horizontal, 5)
-                                .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(.secondary.opacity(0.5)))
-                        }
-                    }
-                    if let sub { Text(sub).font(.system(size: 12)).foregroundStyle(.secondary) }
-                }
+                Text(title).font(.system(size: 15, weight: .semibold)).accessibilityAddTraits(.isHeader)
                 Spacer()
-                Button(action: close) { Image(systemName: "xmark").font(.system(size: 11, weight: .semibold)) }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                    .help(L("Close"))
-                    .accessibilityLabel(L("Close"))
+                CloseButton(close: close)
             }
             content()
         }
-        .padding(14)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .shadow(color: .black.opacity(0.18), radius: 8, y: 2)
+        .mapCard()
         // It opens away from where the click (or the list) was: say which.
         .announced(title)
     }
 }
 
-private struct BusCard: View {
-    let bus: LiveBus
-    let svc: String
+private struct CloseButton: View {
     let close: () -> Void
 
     var body: some View {
-        let sub: String? = if let at = bus.at {
-            L("At %@", at)
-        } else if let st = bus.stretch, let next = bus.nextStop {
-            L("Between %1$@ and %2$@", st.last, next)
-        } else {
-            nil
-        }
-        MapCard(title: L("%@ bus", svc), sub: sub, badge: bus.plate, close: close) {
-            if let next = bus.nextStop { Line(label: L("Next stop"), value: next) }
-            if let crowd = crowdWord(bus.crowd) { Line(label: L("Crowding"), value: crowd) }
-        }
-    }
-
-    private func crowdWord(_ c: String?) -> String? {
-        switch c {
-        case "low": L("Low")
-        case "medium": L("Medium")
-        case "high": L("High")
-        default: nil
-        }
+        Button(action: close) { Image(systemName: "xmark").font(.system(size: 11, weight: .semibold)) }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .help(L("Close"))
+            .accessibilityLabel(L("Close"))
     }
 }
 
-private struct Line: View {
-    let label: String
-    let value: String
+private extension View {
+    /// A card's fill and shadow over the map.
+    func mapCard() -> some View {
+        self
+            .padding(14)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .shadow(color: .black.opacity(0.18), radius: 8, y: 2)
+    }
+}
+
+/// A clicked bus: where it is and where it's going, its plate, whether it's
+/// moving and how full it is; then, opened, the stops still ahead on a strip
+/// of its line. Every stop is the server's (`at`, `stretch`, `upcoming`).
+struct BusCard: View {
+    let bus: LiveBus
+    let svc: String
+    /// The service's colour, as on its line.
+    let hex: String
+    let close: () -> Void
+    @State var open = false
+
+    /// Stops shown after the next one before "+N more".
+    static let shownAfterNext = 4
 
     var body: some View {
-        HStack {
-            Text(label).font(.system(size: 12))
-            Spacer()
-            Text(value).font(.system(size: 12, weight: .semibold))
+        let tint = Color(hex: hex) ?? .gray
+        let title = bus.at.map { L("At %@", $0) } ?? bus.nextStop.map { L("Next: %@", $0) } ?? L("%@ bus", svc)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                Text(svc)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(inkOn(hex))
+                    .frame(minWidth: 26)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 5)
+                    .background(tint, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    .accessibilityLabel(L("%@ bus", svc))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.system(size: 15, weight: .semibold)).accessibilityAddTraits(.isHeader)
+                    if let to = bus.towards { Text(L("Towards %@", to)).font(.system(size: 12)).foregroundStyle(.secondary) }
+                }
+                Spacer()
+                CloseButton(close: close)
+            }
+            info
+            if !stops.isEmpty {
+                Button { withAnimation(.easeInOut(duration: 0.2)) { open.toggle() } } label: {
+                    HStack(spacing: 4) {
+                        Text(L("Stops ahead"))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .bold))
+                            .rotationEffect(.degrees(open ? 90 : 0))
+                            .accessibilityHidden(true)
+                    }
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityValue(open ? L("Expanded") : L("Collapsed"))
+                if open {
+                    strip(tint)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+            }
         }
+        .clipped()
+        .mapCard()
+        // It opens away from where the click (or the list) was: say which.
+        .announced(L("%@: %@", svc, title))
+    }
+
+    /// Plate, moving or stopped, and the crowd meter, one line.
+    private var info: some View {
+        HStack(spacing: 10) {
+            if let plate = bus.plate {
+                Text(plate)
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(.secondary.opacity(0.5)))
+            }
+            HStack(spacing: 5) {
+                Circle().fill(.secondary).frame(width: 6, height: 6).accessibilityHidden(true)
+                Text(bus.moving ? L("Moving") : L("Stopped"))
+            }
+            if let (filled, color, word) = crowd {
+                HStack(alignment: .bottom, spacing: 5) {
+                    HStack(alignment: .bottom, spacing: 2) {
+                        ForEach(0..<3, id: \.self) { i in
+                            RoundedRectangle(cornerRadius: 1)
+                                .fill(i < filled ? color : Color.secondary.opacity(0.3))
+                                .frame(width: 4, height: [6, 10, 14][i])
+                        }
+                    }
+                    // The word says it; the bars are for the eye.
+                    .accessibilityHidden(true)
+                    Text(word)
+                }
+            }
+        }
+        .font(.system(size: 12))
+        .foregroundStyle(.secondary)
         .accessibilityElement(children: .combine)
+    }
+
+    private var crowd: (Int, Color, String)? {
+        switch bus.crowd {
+        case "low": (1, .good, L("Seats free"))
+        case "medium": (2, .warn, L("Busy"))
+        case "high": (3, .bad, L("Packed"))
+        default: nil
+        }
+    }
+
+    /// The stops ahead, the next first: the server's list, or (an older API)
+    /// just its next stop.
+    private var stops: [String] {
+        if !bus.upcoming.isEmpty { return bus.upcoming }
+        return bus.nextStop.map { [$0] } ?? []
+    }
+
+    enum Kind { case passed, between, here, next, ahead }
+    struct Row { let name: String; let kind: Kind }
+
+    /// The strip's rows, top to bottom: the stop it passed and itself on the
+    /// way, or the stop it's at; then the next stop and a few after it.
+    var rows: [Row] {
+        var r: [Row] = []
+        if let at = bus.at {
+            r.append(Row(name: at, kind: .here))
+        } else if let last = bus.stretch?.last {
+            r.append(Row(name: last, kind: .passed))
+            r.append(Row(name: L("On its way"), kind: .between))
+        }
+        for (i, s) in stops.prefix(1 + Self.shownAfterNext).enumerated() { r.append(Row(name: s, kind: i == 0 ? .next : .ahead)) }
+        return r
+    }
+
+    private func strip(_ tint: Color) -> some View {
+        let rows = rows
+        let more = stops.count - (1 + Self.shownAfterNext)
+        let grey = Color.secondary.opacity(0.4)
+        return VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
+                // Grey down to the bus, its colour on from there.
+                let above: Color? = i == 0 ? nil : (row.kind == .between ? grey : tint)
+                let below: Color? = i == rows.count - 1 ? nil : (row.kind == .passed ? grey : tint)
+                HStack(spacing: 10) {
+                    ZStack {
+                        VStack(spacing: 0) {
+                            Rectangle().fill(above ?? .clear)
+                            Rectangle().fill(below ?? .clear)
+                        }
+                        .frame(width: 3)
+                        marker(row.kind, tint)
+                    }
+                    .frame(width: 16)
+                    .accessibilityHidden(true)
+                    Text(row.name)
+                        .font(.system(size: row.kind == .next ? 13 : 12, weight: row.kind == .next ? .semibold : .regular))
+                        .foregroundStyle(row.kind == .passed || row.kind == .between ? .secondary : .primary)
+                        .lineLimit(1)
+                    Spacer(minLength: 6)
+                    if let tag = tag(row.kind, last: i == rows.count - 1, more: more) {
+                        Text(tag)
+                            .font(.system(size: 11, weight: row.kind == .next ? .semibold : .regular))
+                            .foregroundStyle(row.kind == .next || row.kind == .here ? .primary : .secondary)
+                    }
+                }
+                .frame(height: row.kind == .between ? 20 : 24)
+                .opacity(row.kind == .passed ? 0.6 : 1)
+                .accessibilityElement(children: .combine)
+            }
+        }
+    }
+
+    private func tag(_ kind: Kind, last: Bool, more: Int) -> String? {
+        switch kind {
+        case .passed: L("passed")
+        case .here: L("here")
+        case .next: last && more > 0 ? L("+%@ more", "\(more)") : L("next")
+        case .ahead: last && more > 0 ? L("+%@ more", "\(more)") : nil
+        case .between: nil
+        }
+    }
+
+    @ViewBuilder private func marker(_ kind: Kind, _ tint: Color) -> some View {
+        switch kind {
+        case .between, .here:
+            // The bus: its colour in a white ring.
+            Circle().fill(tint).frame(width: 10, height: 10)
+                .padding(2.5)
+                .background(Circle().fill(.white))
+                .shadow(color: .black.opacity(0.25), radius: 1)
+        case .passed:
+            Circle().strokeBorder(Color.secondary, lineWidth: 2).background(Circle().fill(.background)).frame(width: 9, height: 9)
+        case .next:
+            Circle().strokeBorder(tint, lineWidth: 3).background(Circle().fill(.background)).frame(width: 12, height: 12)
+        case .ahead:
+            Circle().strokeBorder(tint, lineWidth: 2).background(Circle().fill(.background)).frame(width: 8, height: 8)
+        }
     }
 }
 
@@ -553,14 +707,9 @@ private struct StopCard: View {
         .onChange(of: stop.code) { sent = false }
     }
 
-    /// The server's "4 min" ("now", "~6 min"); worded here only for an older server's row.
-    private func eta(_ r: BoardRow) -> String {
-        if let e = r.eta { return e }
-        let s = r.etaS ?? 0
-        if s < 60 { return L("Arriving") }
-        let min = L("%@ min", String(s / 60))
-        return r.quality == "scheduled" ? L("~%@", min) : min
-    }
+    /// The server's "4 min" ("now", "~6 min"); for an older server's row,
+    /// worded as the popover's Nearby words it, so the two never differ.
+    private func eta(_ r: BoardRow) -> String { FlowPills.eta(r) }
 }
 
 // MARK: - MapLibre
