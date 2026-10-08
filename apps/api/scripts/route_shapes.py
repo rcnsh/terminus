@@ -215,11 +215,23 @@ def main():
         for p in problems:
             print(f"  - {p}", file=sys.stderr)
         raise SystemExit(1)
-    OUT.write_text(json.dumps({
+    shapes = {
         "generated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "source": "OpenStreetMap roads (c) OpenStreetMap contributors, ODbL, via scripts/route_shapes.py",
         "routes": routes,
-    }, separators=(",", ":")) + "\n")
+    }
+    # Only write when something other than the timestamp changed, so the
+    # weekly workflow doesn't commit a timestamp-only "refresh".
+    if OUT.exists():
+        try:
+            previous = json.loads(OUT.read_text())
+        except ValueError:
+            previous = None
+        strip = lambda g: {k: v for k, v in g.items() if k != "generated"}
+        if isinstance(previous, dict) and strip(previous) == strip(shapes):
+            print(f"route shapes unchanged; left {OUT.relative_to(ROOT.parent.parent)} as is")
+            return
+    OUT.write_text(json.dumps(shapes, separators=(",", ":")) + "\n")
     print(f"wrote {OUT.relative_to(ROOT.parent.parent)}: {OUT.stat().st_size // 1024} KB")
 
 
