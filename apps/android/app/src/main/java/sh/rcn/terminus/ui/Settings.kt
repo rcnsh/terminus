@@ -107,8 +107,10 @@ import sh.rcn.terminus.Device
 import sh.rcn.terminus.L
 import sh.rcn.terminus.Lang
 import sh.rcn.terminus.LeaveAlerts
+import sh.rcn.terminus.LiveService
 import sh.rcn.terminus.ProfileDoc
 import sh.rcn.terminus.R
+import sh.rcn.terminus.Store
 import sh.rcn.terminus.Theme
 import sh.rcn.terminus.Trip
 import sh.rcn.terminus.WEEKDAYS
@@ -676,22 +678,33 @@ private fun NotificationSettings(main: MainViewModel) {
     val ui by main.state.collectAsStateWithLifecycle()
     // "Alarms & reminders" is allowed in system settings; check again on return.
     var exact by remember { mutableStateOf(LeaveAlerts.canBeExact(ctx)) }
+    // Turned on here, but off in the phone's settings (all of the app's
+    // notifications, or the one's channel): said, with the way there.
+    val blocked = {
+        val store = Store(ctx)
+        (store.leaveAlerts && !LeaveAlerts.canNotify(ctx, LeaveAlerts.CHANNEL)) || (store.liveUpdates && !LeaveAlerts.canNotify(ctx, LiveService.CHANNEL))
+    }
+    var off by remember { mutableStateOf(blocked()) }
     LaunchedEffect(Unit) {
-        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { exact = LeaveAlerts.canBeExact(ctx) }
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            exact = LeaveAlerts.canBeExact(ctx)
+            off = blocked()
+        }
     }
     val openSettings = { ctx.openAppSettings() }
+    if (off) Column { Refused(stringResource(R.string.notifications_off), openSettings, inCard = false) }
     Group(stringResource(R.string.heading_before_class), stringResource(R.string.notify_leave_more)) {
         NotifyToggle(
             stringResource(R.string.notify_leave),
             stringResource(R.string.notify_leave_short),
-            ui.leaveAlerts, main::setLeaveAlerts, openSettings, inCard = true,
+            ui.leaveAlerts, main::setLeaveAlerts, openSettings, inCard = true, channel = LeaveAlerts.CHANNEL,
         )
     }
     Group(stringResource(R.string.heading_during_trip), stringResource(R.string.during_trip_hint)) {
         NotifyToggle(
             stringResource(R.string.live_notification),
             stringResource(R.string.live_notification_short),
-            ui.liveUpdates, main::setLiveUpdates, openSettings, inCard = true,
+            ui.liveUpdates, main::setLiveUpdates, openSettings, inCard = true, channel = LiveService.CHANNEL,
         )
         RowDivider()
         DetectToggle(ui.detectTrips, main::setDetectTrips, openSettings, hint = stringResource(R.string.detect_short), inCard = true)

@@ -1,6 +1,7 @@
 package sh.rcn.terminus.widget
 
 import android.app.AlarmManager
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.content.BroadcastReceiver
@@ -80,16 +81,18 @@ object Refresher {
      * Fetch the planned answer, cache it, and redraw every widget. With
      * [extras] off (a push, whose handler has seconds), only the answer:
      * today's plan for offline and the widgets showing a place or Nearby
-     * follow in a job (ExtrasWorker).
+     * follow in a job (ExtrasWorker). Returns the fresh answer, or null
+     * when there's none (signed out, offline, refused).
      */
-    suspend fun refresh(ctx: Context, fast: Boolean = false, extras: Boolean = true) {
+    suspend fun refresh(ctx: Context, fast: Boolean = false, extras: Boolean = true): NextAnswer? {
         val store = Store(ctx)
         val token = store.token
         if (token == null) {
             store.lastError = null
             redrawWidgets(ctx)
-            return
+            return null
         }
+        var fresh: NextAnswer? = null
         // Android gives the background no location (the app doesn't ask for
         // "Allow all the time"), so this is a fix only while the app is open.
         // Without one, the API follows the timetable and the trip's state.
@@ -100,12 +103,14 @@ object Refresher {
             val now = System.currentTimeMillis()
             // Read before it's kept: one this version can't read leaves the last good one.
             val answer = store.saveAnswer(json, now)
+            fresh = answer
             if (extras) keepDay(api, store, loc, now)
             store.lastError = null
             scheduleNext(ctx, answer, now)
-            // No push address sent yet (a new session, or a new Firebase
-            // token), or not sent again for a while (Push.due).
-            if (Push.due(store)) Push.register(ctx)
+            // No push address sent for this session yet (a new session, or a
+            // new Firebase token), not sent again for a while (Push.due), or
+            // one to take back (alerts off, or notifications blocked).
+            if (Push.stale(ctx)) Push.sync(ctx)
         } catch (e: UpdateRequired) {
             // Not tried again: nothing changes until the app is updated (Outdated holds requests for hours).
             store.lastError = e.message
@@ -114,7 +119,7 @@ object Refresher {
             if (e.status == 401) {
                 // Signed out everywhere on this phone, the widget saying why;
                 // unless the token was replaced meanwhile (signed in again).
-                if (!Session.rejected(ctx, token)) return
+                if (!Session.rejected(ctx, token)) return null
             } else {
                 armFromCache(ctx, store)
                 armOfflineRedraw(ctx, store)
@@ -137,6 +142,7 @@ object Refresher {
         // Widgets showing a place or Nearby (phase 8.3) keep counting down too.
         if (extras) runCatching { WidgetModes.refreshChosen(ctx) } else queueExtras(ctx)
         redrawWidgets(ctx)
+        return fresh
     }
 
     /**
@@ -215,7 +221,7 @@ object Refresher {
     }
 
     /** Offline when a leave check fires: the last answer's time beats no heads-up. */
-    private fun armFromCache(ctx: Context, store: Store) {
+    fun armFromCache(ctx: Context, store: Store = Store(ctx)) {
         store.lastAnswer()?.let { (answer, _) -> LeaveAlerts.arm(ctx, answer) }
     }
 
@@ -243,8 +249,13 @@ object Refresher {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-    /** Anything on screen, or on the lock screen, that needs this chain. */
-    fun active(ctx: Context): Boolean = widgetCount(ctx) > 0 || Store(ctx).let { (it.leaveAlerts || it.liveUpdates) && it.paired }
+    /**
+     * Anything on screen, or on the lock screen, that needs this chain: a
+     * widget, or a leave alert or live notification that can be seen.
+     */
+    fun active(ctx: Context): Boolean = widgetCount(ctx) > 0 || Store(ctx).let {
+        it.paired && ((it.leaveAlerts && LeaveAlerts.canNotify(ctx, LeaveAlerts.CHANNEL)) || (it.liveUpdates && LeaveAlerts.canNotify(ctx, LiveService.CHANNEL)))
+    }
 
     /**
      * When this answer next needs a network refresh, on the server's clock
@@ -365,17 +376,26 @@ internal fun retryDelay(failures: Int): Long = (60_000L shl failures.coerceIn(0,
  * The refresh alarm, plus the system events after which the widget's
  * pre-drawn text is wrong: a reboot or app update (alarms are gone, the cache
  * is old), and a clock, timezone or locale change (times were formatted
- * before it).
+ * before it). Also notifications blocked or allowed again in the phone's
+ * settings: the alerts, the live notification and push follow.
  */
 class RefreshReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
             Refresher.ACTION_REFRESH, Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED,
             AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED -> {
-                // Boot or update: the live notification comes back if it was on.
-                if (intent.action != Refresher.ACTION_REFRESH) LiveService.start(context)
+                val store = Store(context)
+                // Mid-trip (the process may have died with the live notification):
+                // an exact alarm is a moment Android lets it start. Boot or
+                // update: it comes back if it was on, and stops if there's no trip.
+                val trip = store.lastAnswer()?.first?.card?.phase in LiveService.TRIP_PHASES
+                val live = (intent.action != Refresher.ACTION_REFRESH || trip) && LiveService.start(context)
                 if (Refresher.active(context)) {
-                    Refresher.refreshSoon(context)
+                    // Alarms are gone after a reboot or update: the cached answer's
+                    // heads-up is armed now, in case the refresh waits for a network.
+                    if (intent.action != Refresher.ACTION_REFRESH) Refresher.armFromCache(context, store)
+                    // The live notification fetches the answer itself.
+                    if (!live) Refresher.refreshSoon(context)
                     Refresher.schedule(context)
                     finishAsync(Dispatchers.Default) { Refresher.redrawWhileWaiting(context) }
                 }
@@ -386,8 +406,25 @@ class RefreshReceiver : BroadcastReceiver() {
                 val store = Store(context)
                 if (store.lastError != null) Refresher.armOfflineRedraw(context, store)
             }
-            Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED, Intent.ACTION_LOCALE_CHANGED -> finishAsync(Dispatchers.Default) {
+            // The clock moved: how far it is from the server's is learnt again
+            // from a fresh answer, which re-arms the alarms by it.
+            Intent.ACTION_TIME_CHANGED -> {
+                if (Refresher.active(context)) Refresher.refreshSoon(context)
+                finishAsync(Dispatchers.Default) { redrawWidgets(context) }
+            }
+            Intent.ACTION_TIMEZONE_CHANGED, Intent.ACTION_LOCALE_CHANGED -> finishAsync(Dispatchers.Default) {
                 redrawWidgets(context)
+            }
+            NotificationManager.ACTION_APP_BLOCK_STATE_CHANGED, NotificationManager.ACTION_NOTIFICATION_CHANNEL_BLOCK_STATE_CHANGED -> {
+                Push.sync(context)
+                if (Refresher.active(context)) {
+                    Refresher.schedule(context)
+                    // Re-arms (or stops) the leave alerts by the new state.
+                    Refresher.refreshSoon(context)
+                    if (LeaveAlerts.canNotify(context, LiveService.CHANNEL)) LiveService.start(context) else LiveService.stop(context)
+                } else {
+                    Refresher.cancel(context)
+                }
             }
         }
     }

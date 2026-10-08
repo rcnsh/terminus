@@ -201,6 +201,15 @@ class Store(context: Context) {
         get() = prefs.getString(KEY_PUSH, null)
         set(value) = prefs.edit { putString(KEY_PUSH, value) }
 
+    /**
+     * Which session [pushToken] was sent with ([Push.tag] of the token): a
+     * new session (signed in, paired, signed in again) has none on the
+     * server yet, whatever this phone sent before.
+     */
+    var pushFor: String?
+        get() = prefs.getString(KEY_PUSH_FOR, null)
+        set(value) = prefs.edit { putString(KEY_PUSH_FOR, value) }
+
     /** When the server last took [pushToken], epoch ms. */
     var pushSentAt: Long
         get() = prefs.getLong(KEY_PUSH_AT, 0)
@@ -327,6 +336,7 @@ class Store(context: Context) {
         private const val KEY_EMAIL = "email"
         private const val KEY_PUSH = "push-token"
         private const val KEY_PUSH_AT = "push-sent-at"
+        private const val KEY_PUSH_FOR = "push-for"
         private const val KEY_PUSH_HEARD = "push-heard-at"
         private const val KEY_REFRESH_FAILS = "refresh-failures"
         private const val KEY_ALERTED = "leave-alerted"

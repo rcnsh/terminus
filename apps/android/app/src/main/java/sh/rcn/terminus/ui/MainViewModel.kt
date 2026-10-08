@@ -23,6 +23,7 @@ import sh.rcn.terminus.Locator
 import sh.rcn.terminus.NearbyStop
 import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.Place
+import sh.rcn.terminus.Push
 import sh.rcn.terminus.ServerClock
 import sh.rcn.terminus.Store
 import sh.rcn.terminus.Target
@@ -114,7 +115,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (!paired && store.hasLeftovers()) Session.clearLocal(app)
         val last = if (paired) store.lastAnswer() else null
         _state = MutableStateFlow(
-            UiState(paired = paired, places = last?.first?.places.orEmpty(), added = store.addedPlaces, leaveAlerts = store.leaveAlerts && LeaveAlerts.canNotify(app), liveUpdates = store.liveUpdates && LeaveAlerts.canNotify(app), detectTrips = store.detectTrips && Locator.hasPrecise(app), day = store.lastDay()?.first, swipeHint = !store.swipedToday, swipePeek = !store.swipedToday && store.swipePeeks < SWIPE_PEEKS, pairError = signedOut, updateRequired = Outdated.required)
+            UiState(paired = paired, places = last?.first?.places.orEmpty(), added = store.addedPlaces, leaveAlerts = store.leaveAlerts && LeaveAlerts.canNotify(app, LeaveAlerts.CHANNEL), liveUpdates = store.liveUpdates && LeaveAlerts.canNotify(app, LiveService.CHANNEL), detectTrips = store.detectTrips && Locator.hasPrecise(app), day = store.lastDay()?.first, swipeHint = !store.swipedToday, swipePeek = !store.swipedToday && store.swipePeeks < SWIPE_PEEKS, pairError = signedOut, updateRequired = Outdated.required)
                 .let { s -> seen(last)?.let { (a, at) -> s.copy(answers = mapOf(Target.Plan to a), fetchedAt = at) } ?: s },
         )
         // Signed out by a refused token while open (here, the widget, a push): the welcome screen, saying why.
@@ -151,6 +152,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 _state.update { it.copy(paired = true, pairing = false) }
                 Refresher.schedule(getApplication())
+                // A new session: this phone's push address goes to it.
+                Push.sync(getApplication())
                 load()
             } catch (e: ApiError) {
                 _state.update { it.copy(pairing = false, pairError = e.message) }
@@ -194,6 +197,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // Nothing else needs the chain without a widget.
             if (!Refresher.active(ctx)) Refresher.cancel(ctx)
         }
+        // Push is only asked for while it has something to show.
+        Push.sync(ctx)
     }
 
     /** Turned on only after notification permission was granted. */
@@ -208,6 +213,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             LiveService.stop(ctx)
             if (!Refresher.active(ctx)) Refresher.cancel(ctx)
         }
+        Push.sync(ctx)
         // The widget's refresh button comes and goes with this setting.
         viewModelScope.launch { redrawWidgets(ctx) }
     }
@@ -253,7 +259,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun signedIn() {
         _state.update { it.copy(paired = true, pairError = null, answers = emptyMap(), rawAnswers = emptyMap()) }
         Refresher.schedule(getApplication())
+        // A new session: this phone's push address goes to it.
+        Push.sync(getApplication())
         load(restart = true)
+    }
+
+    /**
+     * Back in the app: notifications may have been blocked or allowed in the
+     * phone's settings meanwhile. The switches, the alerts' alarms, the live
+     * notification and push follow.
+     */
+    fun recheckNotifications() {
+        val ctx = getApplication<Application>()
+        val leave = store.leaveAlerts && LeaveAlerts.canNotify(ctx, LeaveAlerts.CHANNEL)
+        val live = store.liveUpdates && LeaveAlerts.canNotify(ctx, LiveService.CHANNEL)
+        val was = _state.value
+        if (was.leaveAlerts != leave || was.liveUpdates != live) {
+            _state.update { it.copy(leaveAlerts = leave, liveUpdates = live) }
+            if (Refresher.active(ctx)) {
+                Refresher.schedule(ctx)
+                store.lastAnswer()?.let { (a, at) -> Refresher.scheduleNext(ctx, a, at) }
+            }
+            if (live) LiveService.start(ctx) else LiveService.stop(ctx)
+        }
+        if (store.paired) Push.sync(ctx)
     }
 
     /** The account was deleted on the server, or this phone removed from it: only local state is left to clear. */
