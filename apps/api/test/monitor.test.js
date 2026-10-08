@@ -195,6 +195,19 @@ test('a feed that answers every other check stays down: no "up" and "down" by tu
   assert.equal(await feedDownSince(e, 20_000), 3000);
 });
 
+test('the card stops saying "down" at the first good check; the email waits for the second', async () => {
+  const e = env();
+  await confirmedDown(e);
+  const back = 4000 + 900_000;
+  await checkUpstream(e, back, ok);
+  assert.equal((await readUpstream(e)).up, false, 'not yet confirmed back');
+  assert.equal(e.EMAIL.sent.length, 1, 'no "recovered" email yet');
+  assert.equal(await feedDownSince(e, back + 60_000), null, 'but no notice on the card');
+  await checkUpstream(e, back + 900_000, fail('network'));
+  assert.equal(await feedDownSince(e, back + 960_000), 3000, 'down again at the next failed check');
+  assert.equal(e.EMAIL.sent.length, 1, 'and no emails by turns');
+});
+
 test('a state that cannot be saved sends no email, rather than the same one every run', async () => {
   const e = env();
   await checkUpstream(e, 1000, ok);

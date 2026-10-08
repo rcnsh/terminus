@@ -89,9 +89,18 @@ export const DEVICE_IDLE_MS = 90 * 86_400_000;
 /** One bad check is often a blip (NUS answers some requests with a 400);
  *  two in a row, 15 minutes apart, is an outage. */
 export const FAILS_TO_ALERT = 2;
-/** And two good ones in a row to be back, so a feed that answers every other
- *  check stays down rather than emailing "down" and "up" by turns. */
+/** And two good ones in a row to be confirmed back, so a feed that answers
+ *  every other check sends no "down" and "up" emails by turns, nor opens an
+ *  incident each time. What users see follows the last check (answering). */
 export const OKS_TO_RECOVER = 2;
+
+/**
+ * Whether the feed is answering, as users are told it (the card's notice,
+ * /status.json, /health): confirmed up, or its last check good. Waiting for
+ * the second good check is for the email and the incident record; the
+ * notice would otherwise say "down" for 15 minutes with the feed back.
+ */
+export const answering = (u: UpstreamState): boolean => u.up || (u.oks ?? 0) > 0;
 /** How long an operator email may take to send. */
 export const MAIL_TIMEOUT_MS = 15_000;
 /** Warn this long before calendar.json runs out. */
@@ -146,13 +155,13 @@ async function recordIncident(env: Env, state: UpstreamState, nowMs: number): Pr
 const DOWN_MEMO_MS = 60_000;
 const downMemo = new WeakMap<object, { at: number; since: number | null }>();
 
-/** When the monitor confirmed the feed down, or null while it's up (or never checked). */
+/** When the monitor confirmed the feed down, or null while it's answering (or never checked). */
 export async function feedDownSince(env: Env, nowMs: number): Promise<number | null> {
   if (!env.KV) return null;
   const kept = downMemo.get(env.KV);
   if (kept && nowMs - kept.at < DOWN_MEMO_MS && nowMs >= kept.at) return kept.since;
   const u = await readUpstream(env);
-  const since = u && !u.up ? u.since : null;
+  const since = u && !answering(u) ? u.since : null;
   downMemo.set(env.KV, { at: nowMs, since });
   return since;
 }
