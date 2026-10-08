@@ -53,9 +53,6 @@ let saveTimer = null;
 /** Counts edits: a save's reply doesn't replace edits made while it was on its way. */
 let edits = 0;
 
-/** A change waiting to be saved: reloading now would lose it. */
-export const savePending = () => saveTimer !== null;
-
 export async function loadProfile() {
   profile.set(await api('/me/profile'));
   return profile.get();

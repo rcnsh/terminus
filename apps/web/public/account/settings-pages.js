@@ -816,6 +816,7 @@ function Pairing({ count, reload }) {
   useEffect(() => {
     let timer = null;
     let gone = false;
+    let cleanup = () => {};
     (async () => {
       let made;
       try {
@@ -836,26 +837,36 @@ function Pairing({ count, reload }) {
         qr.current.innerHTML = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
       }
       const before = await reload().catch(() => count);
-      const tick = async () => {
-        const left = Math.max(0, Math.round((made.expires - Date.now()) / 1000));
-        if (!left) {
-          clearInterval(timer);
-          if (qr.current) qr.current.replaceChildren();
-          setState({ text: t('Expired'), hint: t('Get a new code to pair.') });
-          return;
+      let done = false;
+      const end = (text, hint) => {
+        done = true;
+        clearInterval(timer);
+        document.removeEventListener('visibilitychange', paired);
+        if (qr.current) qr.current.replaceChildren();
+        setState({ text, hint });
+      };
+      // The code goes once a device has used it: the devices are asked every
+      // 4 s, but not while the page is hidden (a tab left open would ask for
+      // the code's whole ten minutes), and at once when it's shown again.
+      const paired = async () => {
+        if (done || gone || document.hidden) return;
+        if ((await reload().catch(() => before)) > before && !done && !gone) {
+          end(t('Paired'), t('That device is now signed in.'));
+          lists.set((n) => n + 1);
         }
+      };
+      document.addEventListener('visibilitychange', paired);
+      cleanup = () => document.removeEventListener('visibilitychange', paired);
+      const tick = () => {
+        const left = Math.max(0, Math.round((made.expires - Date.now()) / 1000));
+        if (!left) return end(t('Expired'), t('Get a new code to pair.'));
+        if (done) return;
         setState({
           code: made.code,
           text: `${made.code.slice(0, 3)} ${made.code.slice(3)}`,
           hint: t("Scan with your phone's camera, or type the code in the app. Expires in {0}.", `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`),
         });
-        // The code goes once a device has used it.
-        if (left % 4 === 0 && (await reload().catch(() => before)) > before) {
-          clearInterval(timer);
-          if (qr.current) qr.current.replaceChildren();
-          setState({ text: t('Paired'), hint: t('That device is now signed in.') });
-          lists.set((n) => n + 1);
-        }
+        if (left % 4 === 0) paired();
       };
       tick();
       timer = setInterval(tick, 1000);
@@ -863,6 +874,7 @@ function Pairing({ count, reload }) {
     return () => {
       gone = true;
       clearInterval(timer);
+      cleanup();
     };
   }, []);
   return html`
@@ -908,7 +920,8 @@ export function Language() {
               try {
                 await saveNow((x) => (x.lang = v));
               } catch (err) {
-                toast(t('Not saved. {0}', err.message));
+                // It stays until closed, as every other problem does.
+                toast(err.status ? t('Not saved. {0}', err.message) : t('Not saved. Check your connection.'), { error: true });
                 setLangTry((n) => n + 1);
                 return;
               }
