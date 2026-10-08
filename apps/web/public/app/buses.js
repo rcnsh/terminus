@@ -23,9 +23,8 @@ const REFRESH_MS = 15_000;
 /** As many stops as the profile keeps pinned (its `limits`; 8 before it has loaded). */
 const pinMax = () => limit('pinnedStops', 8);
 /**
- * Times older than this have missed a refresh at least (the API's own
- * answers are at most 15 s old): counted down here from when they were
- * true, and no longer shown as live.
+ * Times fetched longer ago than this have missed a refresh at least:
+ * counted down here from when they came, and no longer shown as live.
  */
 const OLD_MS = 2 * REFRESH_MS;
 /** "Runs until" shows for a service ending within this long. */
@@ -39,9 +38,11 @@ const route = store({ kind: 'home' });
 export const nearest = store({ status: 'loading' });
 /**
  * Each stop's board as last fetched, by code: { stop, board, available, at,
- * asOf, error }. `at` is when this browser fetched it (Date.now(), for
- * fetching again); `asOf` when the server's answer is from (its clock, ms),
- * older than `at` when it served a board it had kept.
+ * got, asOf, error }. `at` is when this browser fetched it (Date.now(), for
+ * fetching again) and `got` the same on the server's clock, which the times
+ * are counted from: the server has counted them down to its own now.
+ * `asOf` is when the feed's answer is from (its clock, ms), older than `got`
+ * when it served one it had kept; it's only for "Updated 5 s ago".
  */
 export const boards = store(new Map());
 /** The stops showing the board across the road, by the page's own stop. */
@@ -50,7 +51,7 @@ export const across = store(new Set());
 const active = store(0);
 /** A stop to scroll the home to, once it's drawn (a search result that has a page). */
 const wantPage = store(null);
-/** The line on screen: { key, data, at, asOf } or { key, error }. */
+/** The line on screen: { key, data, at, got, asOf } or { key, error }. */
 const line = store(null);
 /** Now on the server's clock (dom.js), every few seconds, for "Updated 5 s ago". */
 const tick = store(serverNow());
@@ -87,7 +88,7 @@ function keep(code, entry) {
 }
 
 /** One stop's board. A failure keeps the board already there, saying it couldn't update. */
-async function loadBoard(code) {
+export async function loadBoard(code) {
   // The public buses there too, when the account has them on.
   const pub = profile.get()?.publicBuses ? '&public=1' : '';
   // A call that hung (the phone asleep) can end after a newer one: it
@@ -98,7 +99,7 @@ async function loadBoard(code) {
     // stopped=1: the services not running now are listed too, greyed.
     const data = await getJSON(`/arrivals?stop=${encodeURIComponent(code)}${pub}&stopped=1`);
     if (newer()) return;
-    keep(code, { stop: { ...data.stop, opposite: data.stop.opposite ?? stopOf(code)?.opposite ?? null }, board: data.board, available: data.available !== false, at: Date.now(), asOf: asOfMs(data) });
+    keep(code, { stop: { ...data.stop, opposite: data.stop.opposite ?? stopOf(code)?.opposite ?? null }, board: data.board, available: data.available !== false, at: Date.now(), got: serverNow(), asOf: asOfMs(data) });
   } catch (err) {
     if (err.message === 'signed out' || newer()) return;
     const was = boards.get().get(code);
@@ -122,7 +123,8 @@ async function findNearest({ ask = false } = {}) {
     const first = data.stops?.[0];
     if (!first) return nearest.set({ status: 'none' });
     const asOf = asOfMs(data);
-    for (const s of data.stops) keep(s.stop.code, { stop: { ...s.stop, opposite: s.opposite ?? null, oppositeAcross: s.oppositeAcross, oppositeName: s.oppositeName }, board: s.board, available: s.available, at: Date.now(), asOf });
+    const got = serverNow();
+    for (const s of data.stops) keep(s.stop.code, { stop: { ...s.stop, opposite: s.opposite ?? null, oppositeAcross: s.oppositeAcross, oppositeName: s.oppositeName }, board: s.board, available: s.available, at: Date.now(), got, asOf });
     nearest.set({ status: 'ready', code: first.stop.code, distM: first.distM, fromHome: !at });
   } catch (err) {
     if (err.message === 'signed out') return;
@@ -135,7 +137,7 @@ async function loadLine(svc, stop) {
   const key = `${svc}/${stop ?? ''}`;
   try {
     const data = await getJSON(`/line?svc=${encodeURIComponent(svc)}${stop ? `&stop=${encodeURIComponent(stop)}` : ''}`);
-    if (lineKey() === key) line.set({ key, data, at: Date.now(), asOf: asOfMs(data) });
+    if (lineKey() === key) line.set({ key, data, at: Date.now(), got: serverNow(), asOf: asOfMs(data) });
   } catch (err) {
     if (err.message === 'signed out' || lineKey() !== key) return;
     const was = line.get()?.key === key ? line.get() : null;
@@ -275,13 +277,15 @@ const BUS = '<rect x="5" y="3.5" width="14" height="13.5" rx="3"/><path d="M5 10
 const PIN = '<path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.3"/>';
 
 /**
- * Row `r` from an answer as of `asOf`, as it stands at `now` (both on the
- * server's clock). Once the answer is OLD_MS old (refreshes failing), its
- * times are counted down from then, a bus long due has no time, and a live
- * time says "Last known": nothing old passes for live.
+ * Row `r` from an answer this browser got at `got`, as it stands at `now`
+ * (both on the server's clock). The server counts its times down to when it
+ * answered, so they're counted from `got`, never from the feed's `asOf`
+ * (that would take the same seconds off twice). Once the answer is OLD_MS
+ * old (refreshes failing), its times are counted down, a bus long due has
+ * no time, and a live time says "Last known": nothing old passes for live.
  */
-function aged(r, asOf, now) {
-  const s = (now - asOf) / 1000;
+export function aged(r, got, now) {
+  const s = (now - got) / 1000;
   if (r?.etaS == null || !(s * 1000 > OLD_MS)) return r;
   const left = r.etaS - s;
   return {
@@ -318,7 +322,7 @@ function Board({ code }) {
   const ending = b.board.filter((r) => r.endsAt && Date.parse(r.endsAt) > now && Date.parse(r.endsAt) - now <= ENDS_SOON_MS);
   return html`
     ${b.board.length
-      ? html`<div class="card bt-board">${b.board.map((r) => html`<${Row} key=${r.svc} r=${aged(r, b.asOf, now)} now=${now} onPick=${(svc) => go(lineHash(svc, code))} />`)}</div>`
+      ? html`<div class="card bt-board">${b.board.map((r) => html`<${Row} key=${r.svc} r=${aged(r, b.got, now)} now=${now} onPick=${(svc) => go(lineHash(svc, code))} />`)}</div>`
       : html`<p class="hint bt-empty">${b.available ? t('No buses due') : t('No times right now')}</p>`}
     <div class="bt-foot">
       <div class="bt-ends">${ending.map((r) => html`<div key=${r.svc}><${Chip} svc=${r.svc} color=${r.color} cls="small" /> ${t('Runs until {0}', clock(r.endsAt))}</div>`)}</div>
@@ -623,7 +627,7 @@ function LinePage({ svc, stop }) {
                 ${here.map((b) => html`<span class="bt-bus-info" key=${b.id}><${Plate} b=${b} /></span>`)}
                 ${s.services?.length > 0 && html`<span class="bt-others">${s.services.map((x) => html`<${Chip} key=${x} svc=${x} cls="tiny" />`)}</span>`}
               </span>
-              ${isMine && html`<${YourTime} r=${aged(data.stop.row, mine.asOf, now)} />`}
+              ${isMine && html`<${YourTime} r=${aged(data.stop.row, mine.got, now)} />`}
             </button>
           </li>
           ${between.map(

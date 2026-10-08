@@ -118,3 +118,35 @@ test('up to 8 stops pinned (or as many as the profile allows), then a message an
     mock.timers.reset();
   }
 });
+
+test('a board kept by the server (asOf minutes old) is counted down from when it came, not from asOf again', async () => {
+  const D = await web('account/dom.js');
+  const realFetch = globalThis.fetch;
+  const asOf = new Date(D.serverNow() - 5 * 60_000).toISOString();
+  // The server has already counted its times down to its own now.
+  const row = { svc: 'D1', etaS: 300, eta: '5 min', quality: 'live', later: [{ etaS: 900 }] };
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ asOf, stop: { code: 'YIH', name: 'YIH' }, available: true, board: [row] }), { headers: { 'content-type': 'application/json' } });
+  try {
+    B.boards.set(new Map());
+    await B.loadBoard('YIH');
+    const b = B.boards.get().get('YIH');
+    assert.equal(b.asOf, Date.parse(asOf), 'asOf is kept for "Updated 5 min ago"');
+    // Just fetched: the server's times as they are, live.
+    assert.deepEqual(B.aged(b.board[0], b.got, b.got + 1_000), row);
+    // Refreshes failing for 40 s: 40 s off, once, and no longer live.
+    const old = B.aged(b.board[0], b.got, b.got + 40_000);
+    assert.equal(old.etaS, 260);
+    assert.equal(old.quality, 'stale');
+    assert.equal(old.old, true);
+    assert.deepEqual(old.later, [{ etaS: 860 }]);
+    // A failed refresh keeps when the board last came.
+    globalThis.fetch = async () => new Response('{}', { status: 503, headers: { 'content-type': 'application/json' } });
+    await B.loadBoard('YIH');
+    assert.equal(B.boards.get().get('YIH').got, b.got);
+    assert.ok(B.boards.get().get('YIH').error);
+  } finally {
+    globalThis.fetch = realFetch;
+    B.boards.set(new Map());
+  }
+});
