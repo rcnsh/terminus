@@ -6,8 +6,9 @@
  * hidden tab.
  *
  * For a machine of its own (a VPS), not the repo's tests: it needs
- * Playwright and its Chromium where it runs (npm i playwright, then
- * npx playwright install --with-deps chromium). Slow: on one small CPU with
+ * Playwright and its Chromium where it runs (npm i playwright@1.63.0, then
+ * npx playwright install --with-deps chromium; a pinned version, so a new
+ * release never runs with the token untried). Slow: on one small CPU with
  * software WebGL a frame takes about 6 s, so a 60 s video is about 3 hours.
  *
  *   TIMELAPSE_TOKEN=... node render-timelapse.mjs --date 2026-10-08 \
@@ -15,7 +16,9 @@
  *     [--from 07:00] [--to 00:00] [--out ./videos] [--base https://terminus.rcn.sh]
  *
  * The token is TIMELAPSE_TOKEN (it opens /timelapse/* and nothing else), or
- * a file named by TIMELAPSE_TOKEN_FILE. It is never printed. Waits up to
+ * a file named by TIMELAPSE_TOKEN_FILE. It is never printed, and only sent
+ * over https (plain http only to localhost, for the dev stub), to --base
+ * itself: not after a redirect elsewhere. Waits up to
  * --wait-min minutes (default 30) for the day to be written, if the render
  * starts just as the recording closes. Exits 0 with the file's path, else 1.
  */
@@ -46,6 +49,18 @@ const fail = (msg) => {
 };
 
 if (!/^\d{4}-\d{2}-\d{2}$/.test(o.date ?? '')) fail('--date YYYY-MM-DD is required');
+// The token goes to --base, so it must be the real site over TLS, or this machine.
+let base;
+try {
+  base = new URL(o.base);
+} catch {
+  fail(`--base ${o.base} is not a URL`);
+}
+const LOOPBACK = ['localhost', '127.0.0.1', '[::1]'];
+if (base.protocol !== 'https:' && !(base.protocol === 'http:' && LOOPBACK.includes(base.hostname))) {
+  fail('--base must be https:// (or http://localhost, for the dev stub), so the token is never sent in the clear');
+}
+const BASE = base.origin;
 const token = (process.env.TIMELAPSE_TOKEN || (process.env.TIMELAPSE_TOKEN_FILE ? readFileSync(process.env.TIMELAPSE_TOKEN_FILE, 'utf8') : '')).trim();
 if (!token) fail('no token: set TIMELAPSE_TOKEN or TIMELAPSE_TOKEN_FILE');
 
@@ -56,7 +71,7 @@ if (!Number.isFinite(waitMin) || waitMin < 0) fail('--wait-min must be a number 
 const until = Date.now() + waitMin * 60_000;
 for (;;) {
   // Bounded: a request that hangs would stall the wait for good.
-  const res = await fetch(`${o.base}/timelapse/days`, { headers: { 'x-health-token': token }, signal: AbortSignal.timeout(30_000) }).catch((err) => ({ ok: false, status: err.message }));
+  const res = await fetch(`${BASE}/timelapse/days`, { headers: { 'x-health-token': token }, redirect: 'error', signal: AbortSignal.timeout(30_000) }).catch((err) => ({ ok: false, status: err.message }));
   if (res.ok) {
     const { days } = await res.json();
     const day = days.find((d) => d.date === o.date);
@@ -81,7 +96,9 @@ try {
   const context = await browser.newContext({ serviceWorkers: 'block', acceptDownloads: true, viewport: { width: 1280, height: 1000 } });
   const page = await context.newPage();
   page.on('pageerror', (e) => log('page error:', e.message));
-  await page.goto(`${o.base}/admin/timelapse/`);
+  await page.goto(`${BASE}/admin/timelapse/`);
+  // The token is typed into the page: only if it is still --base's.
+  if (new URL(page.url()).origin !== BASE) throw new Error(`${BASE}/admin/timelapse/ went to ${new URL(page.url()).origin}`);
   await page.fill('#token', token);
   await page.click('text=Unlock');
   const ready = () => page.waitForFunction(() => !document.querySelector('.controls button.accent')?.disabled, null, { timeout: 300_000 });

@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Release a beta: everything at beta.terminus.rcn.sh, from this commit.
 #
 #   scripts/release-beta.sh 2.0.1-beta.1 --dry-run   # tests and builds, nothing uploaded
@@ -22,10 +22,12 @@
 # both files and the commits since the previous tag. A release's version
 # already has its own, from scripts/release.sh.
 #
+# Each run starts from the lockfiles, as scripts/release.sh does.
+#
 # A dry run builds into build/dry-run/beta/<version>; a release into
 # build/release/beta/<version>. If a release stops after it starts deploying,
 # it says what's live and the commands that finish it.
-set -eu
+set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT=$(pwd)
 VERSION="${1:?usage: scripts/release-beta.sh <version, e.g. 2.0.1-beta.1> [--dry-run]}"
@@ -35,7 +37,10 @@ DRY=0
 SITE=https://beta.terminus.rcn.sh
 BUCKET=terminus-beta-downloads
 
-echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?$' || die "a beta version looks like 2.0.1-beta.1 (or a release's, 2.0.1)"
+# Not `echo | grep`: grep passes a version with a newline in it if any one
+# line matches, and it names a directory that's deleted, R2 keys and the tag.
+VERSION_RE='^[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?$'
+[[ $VERSION =~ $VERSION_RE ]] || die "a beta version looks like 2.0.1-beta.1 (or a release's, 2.0.1)"
 [ "$(uname -s)" = Darwin ] || die "releases run on a Mac: the Mac app is built and signed here"
 BUILD=$(git rev-list --count HEAD)
 BETA_D1=$(sed -n '/^const BETA = {/,/^};/s/.*d1: "\(.*\)".*/\1/p' apps/api/cloudflare.config.ts)
@@ -45,7 +50,7 @@ no_api_base
 # The terminus certificate, as for stable: the beta app keeps its own
 # permissions and login item across updates only with the same code identity.
 export SIGN_IDENTITY=C4EE234DA75ED3CD7699A31394C276801F93C4A9
-security find-identity -p codesigning | grep -q "$SIGN_IDENTITY" || die "the terminus certificate isn't in the keychain: import ~/.terminus/mac-signing.p12"
+has_sign_identity
 SPARKLE_KEY="$HOME/.terminus/sparkle-ed25519.key"
 [ -f "$SPARKLE_KEY" ] || die "no Sparkle key at $SPARKLE_KEY"
 BETA=0
@@ -96,6 +101,7 @@ OUT="$RELEASES/beta/$VERSION"
 rm -rf "$OUT"
 mkdir -p "$OUT"
 echo "== terminus beta $VERSION (build $BUILD, $(git rev-parse --short HEAD))"
+fresh_deps
 
 echo "== tests"
 if ! pnpm --silent check >"$ROOT/build/test.log" 2>&1; then
@@ -137,11 +143,13 @@ echo "== mac"
 # Set here, whatever the shell has: they make package-mac.sh build the beta.
 CHANNEL=beta BETA_VERSION="$VERSION" BETA_BUILD="$BUILD" RELEASES="$RELEASES" PUBLISH=true scripts/package-mac.sh
 DMG="$OUT/terminus-$VERSION.dmg"
-SIG=$("$ROOT/apps/macos/.build/artifacts/sparkle/Sparkle/bin/sign_update" --ed-key-file "$SPARKLE_KEY" -p "$DMG")
-printf '%s' "$SIG" | grep -q . || die "sign_update gave no signature"
+sign_update_tool
+SIG=$("$SIGN_UPDATE" --ed-key-file "$SPARKLE_KEY" -p "$DMG")
+[ -n "$SIG" ] || die "sign_update gave no signature"
 sparkle_signed "apps/macos/build/terminus beta.app" "$SIG" "$DMG"
 MIN_OS=$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' apps/macos/Support/Info.plist)
 python3 scripts/appcast.py "$VERSION" "$BUILD" "$MIN_OS" "$SIG" "$DMG" "$SITE" beta > "$OUT/appcast.xml"
+sign_appcast "$OUT/appcast.xml"
 
 python3 - "$VERSION" "$APK" "$DMG" > "$OUT/latest.json" <<'EOF'
 import datetime, hashlib, json, os, sys

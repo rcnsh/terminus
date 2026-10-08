@@ -3,6 +3,12 @@
  *
  *   node scripts/dev-stub.mjs            # http://localhost:8787
  *
+ * It answers this machine only (127.0.0.1 and ::1): its admin token is
+ * "dev", it prints sign-in codes, and it may hold real keys from .dev.vars.
+ * STUB_HOST=0.0.0.0 (or ::) opens it to the network, for a phone on the
+ * same Wi-Fi; adb reverse and the emulator don't need it. PORT moves it
+ * from 8787.
+ *
  * Runs the real Worker code in Node with:
  *   - a stubbed NUS feed: every service arrives every 12 minutes, offset per
  *     service, moving with the real clock (so countdowns and dimming behave)
@@ -359,12 +365,28 @@ async function serve(req, res) {
   }
 }
 
-http.createServer(serve).listen(PORT, () => console.log(`dev API with fake buses on http://localhost:${PORT} (pairing codes TEST67, TEST78, TEST89)`));
+// Loopback only unless STUB_HOST says otherwise; both families, since
+// "localhost" may be either. A Mac or container without IPv6 has no ::1.
+const HOSTS = process.env.STUB_HOST ? [process.env.STUB_HOST] : ['127.0.0.1', '::1'];
+const listen = (server, port, ready) => {
+  let up = 0;
+  for (const host of HOSTS) {
+    const s = server();
+    s.on('error', (err) => {
+      if (host === '::1' && HOSTS.length > 1 && err.code === 'EADDRNOTAVAIL') return;
+      throw err;
+    });
+    s.listen(port, host, () => up++ || ready());
+  }
+};
+const where = process.env.STUB_HOST ? ` (listening on ${process.env.STUB_HOST}, open to the network)` : '';
+listen(() => http.createServer(serve), PORT, () => console.log(`dev API with fake buses on http://localhost:${PORT}${where} (pairing codes TEST67, TEST78, TEST89)`));
 // STUB_TLS=<dir with localhost.key and localhost.pem>: the same stub over
 // HTTPS on PORT + 1, for browsers that need a real secure origin (Web Push on
-// iOS). Trust the certificate's CA in the device first.
+// iOS). Trust the certificate's CA in the device first; a phone also needs
+// STUB_HOST to reach it.
 if (process.env.STUB_TLS) {
   const tls = process.env.STUB_TLS;
   const [key, cert] = await Promise.all([readFile(path.join(tls, 'localhost.key')), readFile(path.join(tls, 'localhost.pem'))]);
-  https.createServer({ key, cert }, serve).listen(PORT + 1, () => console.log(`and over HTTPS on https://localhost:${PORT + 1}`));
+  listen(() => https.createServer({ key, cert }, serve), PORT + 1, () => console.log(`and over HTTPS on https://localhost:${PORT + 1}`));
 }
