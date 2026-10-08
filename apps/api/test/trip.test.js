@@ -1339,3 +1339,54 @@ test('needsWatch: any sooner wake is booked, however little sooner; a later or e
   assert.equal(needsWatch({ ...day, watch: now - 1 }, now + 90_000, now), true, 'the pending wake has passed');
   assert.equal(needsWatch(null, now + 90_000, now), true);
 });
+
+test('"On it" with no bus in the plan (a walk) means you have set off', async () => {
+  // The class is a short walk from home: the plan is on foot.
+  const t = await setup({ home: { stops: ['PGP'] }, manual: [cls(600, 'PGPR', 'Gym @ PGPR')] });
+  const a = await t.next(t.phone);
+  assert.equal(a.leave?.svc ?? null, null, 'walking, no bus');
+  assert.equal((await t.signal(t.phone, { kind: 'boarded' })).status, 200);
+  const rec = Object.values((await loadDay(t.env, userOf(t.env), FROZEN_NOW)).trips)[0];
+  assert.equal(rec.kind, 'left');
+  assert.equal(rec.boarded, undefined);
+});
+
+test('/me/choice refuses what is not a choice, and a trip that is not today', async () => {
+  const { call, phone } = await setup();
+  const choose = async (body) => call('/me/choice', { method: 'POST', token: phone, body });
+  for (const body of [{}, { id: `earlier:${FIRST}` }, { id: `earlier:${FIRST}`, choice: 'maybe' }, { id: `louder:${FIRST}`, choice: 'accept' }, { trip: FIRST, choice: 'accept' }, { pref: 'quiet', choice: 'accept' }, { trip: 'x'.repeat(81), pref: 'quiet', choice: 'accept' }]) {
+    const r = await choose(body);
+    assert.equal(r.status, 400, JSON.stringify(body));
+    assert.match((await r.json()).error, /send id/);
+  }
+  const r = await choose({ trip: '1:600:UTOWN', pref: 'quiet', choice: 'accept' });
+  assert.equal(r.status, 400);
+  assert.equal((await r.json()).error, 'no such trip today');
+});
+
+test('a profile change that keeps losing to another device gives up with 409 after three tries', async () => {
+  const { env, call, phone } = await setup();
+  // Another device saves between every read and write.
+  const prepare = env.DB.prepare;
+  let tries = 0;
+  env.DB.prepare = (sql) => {
+    if (sql.startsWith('UPDATE profiles SET json = ?, updated = ? WHERE user_id = ? AND updated = ?')) {
+      tries++;
+      env.DB._db.prepare('UPDATE profiles SET updated = updated + 1').run();
+    }
+    return prepare(sql);
+  };
+  const r = await call('/me/once', { method: 'POST', token: phone, body: { to: 'COM3', atMin: 14 * 60 } });
+  env.DB.prepare = prepare;
+  assert.equal(r.status, 409);
+  assert.match((await r.json()).error, /changed on another device/);
+  assert.equal(tries, 3);
+});
+
+test('the Trip object answers 404 to a path it does not know', async () => {
+  installGlobals(makeFetch({}));
+  const trips = makeDurableObjects(Trip);
+  assert.equal((await trips.get('u1').fetch('https://trip/nope')).status, 404);
+  assert.equal((await trips.get('u1').fetch('https://trip/day', { method: 'POST', body: '{}' })).status, 404);
+  assert.equal((await trips.get('u1').fetch('https://trip/nope', { method: 'POST', body: '{}' })).status, 404);
+});
