@@ -762,10 +762,12 @@ func retryAfterS(_ header: String?, now: Date = Date()) -> TimeInterval? {
 
 /// A 426: this version is older than the server still serves (the
 /// `config:minClient` minimum). Every request with a token would be refused
-/// the same way until it's updated, so none goes out for hours: Sparkle's
-/// update is what fixes it, and a relaunch into it starts afresh.
+/// the same way until it's updated, so none goes out for half an hour:
+/// Sparkle's update is what fixes it, and a relaunch into it starts afresh.
+/// Then one asks again, in case the minimum was lowered meanwhile; a reply
+/// that isn't a 426 ends it. Signing in and out (`/auth/…`) still go.
 enum Outdated {
-    static let holdS: TimeInterval = 6 * 3600
+    static let holdS: TimeInterval = 30 * 60
 
     private static let lock = NSLock()
     nonisolated(unsafe) private static var untilDate = Date.distantPast
