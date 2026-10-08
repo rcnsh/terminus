@@ -5,7 +5,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
-/** Chinese (phase 10): every string has a translation, with the same blanks to fill, and none is left in the code. */
+/** Chinese: every string has a translation, with the same blanks to fill, and none is left in the code. */
 class StringsTest {
     private val en = TestStrings.read("values")
     private val zh = TestStrings.read("values-zh")

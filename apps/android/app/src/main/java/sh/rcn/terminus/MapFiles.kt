@@ -31,8 +31,8 @@ object MapFiles {
     /**
      * `/campus`: the kept copy while it's fresh; then from the network, sent
      * with the kept copy's ETag so an unchanged one costs no download; the
-     * kept copy without a connection. Opening the Map or Buses tab used to
-     * fetch it whole every time.
+     * kept copy without a connection. Opening the Map or Buses tab doesn't
+     * fetch it whole each time.
      */
     suspend fun campus(ctx: Context, api: Api): JSONObject? = withContext(Dispatchers.IO) {
         val file = File(dir(ctx), "campus.json")
@@ -102,8 +102,8 @@ object MapFiles {
 
     /**
      * Downloads the map file if it isn't here or wasn't checked this week
-     * (only when it changed: by its ETag). Quiet on failure; the map then
-     * streams it, and the next visit tries again.
+     * (only when it changed: by its ETag). Quiet on failure; the map is then
+     * plain (routes and stops, [withoutBaseMap]), and the next visit tries again.
      */
     suspend fun keepTiles(ctx: Context) = withContext(Dispatchers.IO) {
         val tiles = File(dir(ctx), TILES)

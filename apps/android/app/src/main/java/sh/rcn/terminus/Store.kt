@@ -104,7 +104,7 @@ class Store(context: Context) {
         get() = prefs.getBoolean(KEY_LIVE, false)
         set(value) = prefs.edit { putBoolean(KEY_LIVE, value) }
 
-    /** "Notice when I board" (phase 8.1): during a trip the live notification sends the location. Off until turned on. */
+    /** "Notice when I board": during a trip the live notification sends the location. Off until turned on. */
     var detectTrips: Boolean
         get() = prefs.getBoolean(KEY_DETECT, false)
         set(value) = prefs.edit { putBoolean(KEY_DETECT, value) }
@@ -134,7 +134,7 @@ class Store(context: Context) {
         get() = prefs.getLong(KEY_LEAVE_NOTIFIED, 0)
         set(value) = prefs.edit { putLong(KEY_LEAVE_NOTIFIED, value) }
 
-    /** The last moment the trip notification made a sound for ("leave:<class>", "ask:<trip>"). */
+    /** The last moment the trip notification made a sound for ("leave:<class>"). */
     var leaveAlertedMoment: String?
         get() = prefs.getString(KEY_ALERTED, null)
         set(value) = prefs.edit { putString(KEY_ALERTED, value) }

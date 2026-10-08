@@ -75,7 +75,7 @@ data class NextAnswer(
     val goNowLine: String? get() = card?.goNow
     /** "Crowding: low" / "Crowding: medium" / "Crowding: high". */
     val crowdText: String? get() = card?.crowd?.takeUnless { detail.contains(it, ignoreCase = true) }
-    /** "Timetable estimate", "Live data a few minutes old", "No live data". */
+    /** "Timetable estimate", "Live times are a few minutes old", "No live data". */
     val qualityText: String? get() = card?.quality
 
     /** Other trips: "Leave by 09:38 · catch the 09:41 D2 at PGP". */
@@ -636,7 +636,7 @@ class ApiError(val status: Int, message: String) : IOException(sentence(message)
 internal fun sentence(text: String): String {
     if (text.isEmpty()) return text
     val s = text.replaceFirstChar { it.uppercaseChar() }
-    // Chinese (phase 10) ends with a full-width stop.
+    // Chinese ends with a full-width stop.
     val cjk = s.any { it in '\u4e00'..'\u9fff' }
     return if (s.last() in ".!?。！？") s else if (cjk) "$s。" else "$s."
 }
@@ -796,7 +796,7 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         return request("POST", "/me/signal" + if (hour12) "?h12=1" else "", body)
     }
 
-    /** A one-off trip later today (phase 8.3): planned like a class. Answers with the new /me/next. */
+    /** A one-off trip later today: planned like a class. Answers with the new /me/next. */
     suspend fun once(target: Target, atMin: Int): JSONObject {
         val body = JSONObject().put("atMin", atMin)
         when (target) {

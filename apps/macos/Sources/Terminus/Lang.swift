@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-/// The Mac app in English or Simplified Chinese (phase 10).
+/// The Mac app in English or Simplified Chinese.
 ///
 /// macOS picks the app's language when it starts: the app's own choice
 /// (`AppleLanguages` in its defaults, which Settings → Language sets, as does

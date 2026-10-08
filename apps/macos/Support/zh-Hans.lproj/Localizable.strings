@@ -1,4 +1,4 @@
-/* Simplified Chinese for the Mac app (phase 10), keyed by the English it replaces. Generated with the rest of the translations; place and bus names stay English. */
+/* Simplified Chinese for the Mac app, keyed by the English it replaces. Generated with the rest of the translations; place and bus names stay English. */
 
 " or " = " 或 ";
 "%@ added" = "已添加 %@";
