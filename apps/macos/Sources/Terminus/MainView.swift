@@ -15,7 +15,16 @@ struct Main: View {
         VStack(alignment: .leading, spacing: 12) {
             Header(model: model)
 
-            if let v = model.update {
+            if model.updateRequired {
+                // Refused as too old (426): nothing refreshes until it's updated.
+                Banner(icon: "exclamationmark.arrow.circlepath", tint: Color.bad, text: L("Update terminus to keep using it.")) {
+                    if Updater.shared.running {
+                        Button(L("Update")) { Updater.shared.checkNow() }
+                    } else {
+                        Button(L("Download")) { NSWorkspace.shared.open(URL(string: "\(Api.site)/download/mac")!) }
+                    }
+                }
+            } else if let v = model.update {
                 Banner(icon: "arrow.down.circle.fill", tint: .orange, text: L("terminus %@ is out", v)) {
                     // Sparkle usually gets there first; this is for when it hasn't
                     // yet, or can't (a copy outside Applications).

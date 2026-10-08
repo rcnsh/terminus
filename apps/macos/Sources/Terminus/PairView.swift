@@ -22,6 +22,17 @@ struct Pair: View {
             }
             .card()
 
+            // Signed out by the server, not by hand: why, whichever way back in is chosen.
+            if let r = model.signedOutReason {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange).accessibilityHidden(true)
+                    Text(r).font(.callout).fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .card(padding: 10)
+                .announced(r)
+            }
+
             if let w = model.signInWaiting {
                 waiting(w.email, w.match)
             } else if useCode {
