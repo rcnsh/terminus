@@ -31,7 +31,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 export type Lang = 'en' | 'zh';
-export const LANGS: readonly Lang[] = ['en', 'zh'];
 /** What a profile can say: a language, or follow each device. */
 export type LangPref = Lang | 'auto';
 export const LANG_PREFS: readonly LangPref[] = ['auto', 'en', 'zh'];
@@ -143,8 +142,6 @@ const en = {
   endsHere: 'Ends here',
 
   // Clock and lateness (clock.ts)
-  am: 'AM',
-  pm: 'PM',
   /** "6:36 PM", with a no-break space so a line never ends between the two. */
   clock12: ((hm: string, pm: boolean) => `${hm}\u00a0${pm ? 'PM' : 'AM'}`) as Fn<[string, boolean]>,
   earlyBy: ((n: number) => `${n} min early`) as Fn<[number]>,
@@ -436,8 +433,6 @@ const zh: Msgs = {
   towardsTwo: (next, end) => zs`经${next}，开往${end}`,
   endsHere: '本站为终点站',
 
-  am: '上午',
-  pm: '下午',
   clock12: (hm, pm) => `${pm ? '下午' : '上午'}\u00a0${hm}`,
   earlyBy: (n) => `早到 ${n} 分钟`,
   justInTime: '刚好赶上',
