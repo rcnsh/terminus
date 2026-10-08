@@ -670,35 +670,34 @@ body.sky-dusk .horizon :is(.lit, .beam), body.sky-night .horizon :is(.lit, .beam
   body.sky:not(.on-map, .on-settings, .on-buses) > .nav, body.sky .app-chips:not(.map-pills), body.sky .where-box, body.sky .sky-head { --surface: var(--k-bg); --surface-2: var(--k-bg); --k-chip: var(--k-bg); }
 }
 
-/* Pull to refresh (pull.js): the strip of road above the page, there only
-   while the page is pulled down off it. The page itself (the header, the tab
-   and Now's sky) comes down by --pull. No browser pull of its own (Chrome's
-   reloads the page, and Safari's bounce would fight this one). */
+/* Pull to refresh (pull.js): the sky stretches. The room above the words
+   grows by --stretch, so Now's sky (down to its horizon) and a page's own
+   sky get taller with it; the header, the chips and the search box follow a
+   little (--lead). No browser pull of its own (Chrome's reloads the page,
+   and Safari's bounce would fight this one). */
 html { overscroll-behavior-y: none; }
-.pull { position: fixed; z-index: 1; inset: 0 0 auto; height: 104px; overflow: hidden; pointer-events: none; visibility: hidden;
-  transform: translateY(calc(var(--pull, 0px) - 104px)); background: linear-gradient(var(--s0, #5ea8e5), var(--s1, #8ec4ec)); }
-/* The page's edge, a soft shadow on the road. */
-.pull::after { content: ''; position: absolute; inset: auto 0 0; height: 10px; background: linear-gradient(transparent, rgb(0 0 0 / 0.12)); }
+body.pulled .sky-head { padding-top: calc(var(--room) + var(--stretch, 0px)); }
+body.pulled .celestial { height: calc(var(--room) + var(--stretch, 0px)); }
+body.pulled > .nav, body.pulled .app-chips:not(.map-pills), body.pulled .bt-sky-top > * { translate: 0 var(--lead, 0px); }
+/* While a pull's bus drives, the horizon's own buses step aside; they're back where the answer puts them once it closes. */
+.horizon :is(.coming, .parked, .driving) { transition: opacity 0.3s; }
+body.pull-drive .horizon :is(.coming, .parked, .driving) { opacity: 0; transition: none; }
+@media (prefers-reduced-motion: reduce) { .horizon :is(.coming, .parked, .driving) { transition: none; } }
+.pull { position: fixed; z-index: 1; inset: 0; pointer-events: none; visibility: hidden; }
 body.pulled .pull { visibility: visible; }
-body.pulled > .nav, body.pulled #root > main:not([hidden]), body.pulled.sky::before { translate: 0 var(--pull); }
-/* The Buses sky's reach above the page, for an overscroll: here it would cover the road. */
-body.pulled .bt-sky-top::before { display: none; }
-.pull > svg { position: absolute; left: 0; bottom: 0; display: block; }
-.pull .p-far { fill: var(--h-far, #9fbcae); opacity: 0.75; }
-.pull .p-tree { fill: var(--h-tree, #4f6f58); }
-.pull .p-ground { fill: var(--bg); }
-.pull .p-road { stroke: var(--line-strong); stroke-width: 1.5; stroke-dasharray: 6 6; }
+/* Over the horizon on screen, in its own numbers (pull.js sets where). */
+.pull-scene { position: fixed; display: block; overflow: visible; }
 .pull .p-sign line { stroke: var(--h-post, #1c1917); stroke-width: 1.6; }
 .pull .p-sign :is(.plate, .glyph) { fill: var(--h-post, #1c1917); transition: fill 0.2s; }
 .pull .p-sign .mark { fill: var(--h-post-ink, #fafaf9); }
 .pull .p-sign .halo { fill: var(--accent-bright); opacity: 0; }
 /* Your stop lights up as the bus reaches it, and goes green when it's done. */
-.pull .p-sign.lit .plate { fill: var(--accent-bright); }
-.pull .p-sign.lit .halo { opacity: 0.3; }
+.pull .p-sign.on .plate { fill: var(--accent-bright); }
+.pull .p-sign.on .halo { opacity: 0.3; }
 .pull .p-sign.done .plate { fill: var(--good); }
 .pull .p-sign.done .halo { opacity: 0; }
 @media (prefers-reduced-motion: no-preference) {
-  .pull .p-sign.lit .halo { animation: pull-halo 0.9s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+  .pull .p-sign.on .halo { animation: pull-halo 0.9s ease-out infinite; transform-box: fill-box; transform-origin: center; }
 }
 @keyframes pull-halo { from { opacity: 0.45; transform: scale(0.8); } to { opacity: 0; transform: scale(1.6); } }
 .pull .body { fill: var(--svc); }
@@ -711,12 +710,13 @@ body.pulled .bt-sky-top::before { display: none; }
 .pull :is(.hub, .spoke) { fill: #8a847d; }
 .pull .arch { fill: rgb(0 0 0 / 0.35); }
 .pull .p-door { fill: #fbbf24; opacity: 0; }
-.pull .p-honk { fill: none; stroke: var(--k-ink, var(--ink)); stroke-width: 0.8; stroke-linecap: round; }
-.pull .p-puffs { fill: #fff; }
+.pull .p-honk { fill: none; stroke: var(--ink); stroke-width: 0.8; stroke-linecap: round; }
+.pull .p-puffs { fill: var(--line-strong); }
 /* Its headlight at dusk and at night, as on the horizon. */
 .pull .beam { display: none; fill: #fde9c9; opacity: 0.12; }
 body.sky-dusk .pull .beam, body.sky-night .pull .beam { display: inline; }
-.pull-hint { position: absolute; top: 26px; left: 50%; translate: -50% 0; display: flex; align-items: center; gap: 6px; margin: 0; padding: 4px 12px 4px 9px;
+/* The pill, in the sky's own ink, in the room the stretch opened. */
+.pull-hint { position: fixed; left: 50%; translate: -50% 0; display: flex; align-items: center; gap: 6px; margin: 0; padding: 4px 12px 4px 9px;
   border-radius: 999px; background: var(--k-chip, rgb(255 255 255 / 0.65)); color: var(--k-ink, var(--ink)); font-size: 0.8125rem; font-weight: 600; white-space: nowrap; }
 .pull-hint svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; transition: rotate 0.2s; }
 .pull-hint.is-armed svg { rotate: 180deg; }

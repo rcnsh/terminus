@@ -59,6 +59,8 @@ import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import sh.rcn.terminus.Pull
+import sh.rcn.terminus.PullScene
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.roundToInt
@@ -215,7 +217,7 @@ private val STARS = listOf(
 )
 
 /** How much bigger than its numbers the horizon with the road is drawn: the bus and your stop are the picture. */
-private const val ROAD_SCALE = 1.25f
+internal const val ROAD_SCALE = 1.25f
 
 /** The strip at the foot of the sky where the horizon is drawn: its 92 dp, [ROAD_SCALE] times. */
 internal val HORIZON = 115.dp
@@ -223,12 +225,23 @@ internal val HORIZON = 115.dp
 /** The hour's sky from the top down to [end] px, where it meets the horizon. */
 private fun skyBrush(p: Palette, end: Float) = Brush.verticalGradient(0f to p.sky[0], 0.5f to p.sky[1], 0.86f to p.sky[2], 1f to p.sky[3], endY = end)
 
-/** The sky behind Now's content, down to the horizon, once something on it has said where that is. */
-internal fun Modifier.skyBehind(sky: SkyState, page: Color): Modifier = drawBehind {
+/**
+ * The sky behind Now's content, down to the horizon, once something on it
+ * has said where that is. Stretched by a [pull], the gradient runs on down
+ * to the horizon's new place and the pull plays on its road.
+ */
+internal fun Modifier.skyBehind(sky: SkyState, page: Color, pull: PullView? = null): Modifier = drawBehind {
     val end = sky.end ?: return@drawBehind
     val p = sky.palette
     drawRect(skyBrush(p, end), size = Size(size.width, end))
-    horizon(end - HORIZON.toPx(), page, p, sky.phase, sky.road, sky.depth(1.dp.toPx()).far * 1.dp.toPx(), ROAD_SCALE)
+    horizon(end - HORIZON.toPx(), page, p, sky.phase, sky.road, sky.depth(1.dp.toPx()).far * 1.dp.toPx(), ROAD_SCALE, pull = pull)
+}
+
+/** The scene for a pull on Now's horizon, [width] dp across: your stop's sign, and where the card has your bus. */
+internal fun roadScene(width: Float, road: Road): PullScene {
+    val w = width / ROAD_SCALE
+    val sign = Pull.roadSign(w)
+    return PullScene(w, sign, road.bus?.takeIf { road.stop }?.let { Pull.roadBus(sign, it.far) })
 }
 
 /**
@@ -243,12 +256,13 @@ internal fun SkyHead(room: Dp = 34.dp, content: @Composable ColumnScope.() -> Un
         Column(verticalArrangement = Arrangement.spacedBy(4.dp), content = content)
         return
     }
+    val pull = LocalPull.current
     SkyInk(true, sky.palette.lightInk) {
-        Column(
-            Modifier.fillMaxWidth().drawBehind { celestial(sky.phase, room.toPx(), sky.depth(1.dp.toPx())) }.padding(top = room),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-            content = content,
-        )
+        // Pulled down, the room grows ([PullRoom]) and the stars spread over it; the moon keeps its size.
+        Column(Modifier.fillMaxWidth().drawBehind { celestial(sky.phase, room.toPx() + (pull?.read()?.pull ?: 0f) * 1.dp.toPx(), room.toPx(), sky.depth(1.dp.toPx())) }) {
+            PullRoom(room, above = 14.dp)
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp), content = content)
+        }
     }
 }
 
@@ -269,9 +283,9 @@ internal fun SkyGround(road: Road = Road()) {
  * Lagging behind the page as it scrolls, by [depth], and fading behind the
  * words.
  */
-private fun DrawScope.celestial(phase: Phase, room: Float, depth: Parallax) {
+private fun DrawScope.celestial(phase: Phase, room: Float, moonRoom: Float, depth: Parallax) {
     if (phase != Phase.NIGHT || depth.fade <= 0f) return
-    translate(top = depth.sky * 1.dp.toPx()) { starsAndMoon(room, depth.fade) }
+    translate(top = depth.sky * 1.dp.toPx()) { starsAndMoon(room, depth.fade, moonRoom) }
 }
 
 /*
@@ -281,7 +295,7 @@ private fun DrawScope.celestial(phase: Phase, room: Float, depth: Parallax) {
  * (sky.js Horizon).
  */
 private fun farY(x: Float) = 30f + 6f * sin(x / 47f + 0.6f) + 4f * sin(x / 19f + 2.1f)
-private fun nearY(x: Float) = 52f + 3f * sin(x / 61f + 1.3f) + 1.5f * sin(x / 27f)
+internal fun nearY(x: Float) = 52f + 3f * sin(x / 61f + 1.3f) + 1.5f * sin(x / 27f)
 
 /** The lowest point of the far hills between [lo] and [hi] dp, where the city shows above them. */
 private fun dip(lo: Float, hi: Float): Float {
@@ -299,9 +313,10 @@ private fun dip(lo: Float, hi: Float): Float {
  * hill is [page]'s own colour, so the sky meets the ground instead of fading
  * into the page. On the road, [road]'s sign and bus, or a shuttle going by.
  * Drawn [scale] times its numbers; [far] is in pixels. [withSun]: false for
- * just the hills (the band at the top of Settings and its pages).
+ * just the hills (the band at the top of Settings and its pages). While
+ * [pull] is open, its sign and bus are on the road instead ([pullRoad]).
  */
-private fun DrawScope.horizon(top: Float, page: Color, p: Palette, phase: Phase, road: Road, far: Float, scale: Float = 1f, withSun: Boolean = true) {
+private fun DrawScope.horizon(top: Float, page: Color, p: Palette, phase: Phase, road: Road, far: Float, scale: Float = 1f, withSun: Boolean = true, pull: PullView? = null) {
     val d = 1.dp.toPx() * scale
     val lights = phase == Phase.DUSK || phase == Phase.NIGHT
     val w = size.width / d
@@ -331,7 +346,7 @@ private fun DrawScope.horizon(top: Float, page: Color, p: Palette, phase: Phase,
     fun across(f: Float) = (w * f).roundToInt().toFloat()
     // Your stop's sign left of the flag; the flag right of anything on the
     // road; the city clear of the flag and of the screen's edge.
-    val sx = if (road.stop) minOf(across(0.7f), across(0.74f) - 7) else 0f
+    val sx = Pull.roadSign(w)
     val flag = across(0.76f)
     // The far layer sinks behind the near hill as Now scrolls ([far]), kept to the strip.
     clipRect(top = top, bottom = top + 92 * d) { translate(top = far) {
@@ -382,6 +397,10 @@ private fun DrawScope.horizon(top: Float, page: Color, p: Palette, phase: Phase,
     ridge(::nearY, page)
     drawLine(p.road, at(0f, 70f), at(w, 70f), 1.5f * d, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6 * d, 6 * d)))
     fun bus(x: Float, paint: Color, band: Color?, dim: Int = -1) = shuttle(at(x, 57f), d, paint, band, p.window, dim)
+    if (pull?.read()?.open == true) {
+        pullRoad(pull, p, top, d, sx, ownSign = road.stop, live = road.bus?.live != false, lights = lights)
+        return
+    }
     if (road.stop) {
         // The sign: a bus on it, as on a real one.
         drawLine(p.post, at(sx, 70f), at(sx, 44f), 1.6f * d)
@@ -393,7 +412,7 @@ private fun DrawScope.horizon(top: Float, page: Color, p: Palette, phase: Phase,
     if (bus != null && road.stop) {
         // Your bus pulls up just short of the sign.
         val colour = Color(bus.color)
-        val x = (sx - 44 - bus.far.coerceIn(0f, 1f) * (sx - 56)).roundToInt().toFloat()
+        val x = Pull.roadBus(sx, bus.far)
         bus(x, colour, if (bus.live) Color.White.copy(alpha = 0.85f) else null)
     } else if (road.shuttle) {
         // A shuttle going by, heading right, its headlights on after dark: A1's red along the bottom.
@@ -491,10 +510,10 @@ internal fun DrawScope.shuttleWheel(c: Offset, d: Float, turn: Float? = null) {
 }
 
 /** The stars across the room above the words, and the moon among them. */
-internal fun DrawScope.starsAndMoon(room: Float, alpha: Float = 1f) {
+internal fun DrawScope.starsAndMoon(room: Float, alpha: Float = 1f, moonRoom: Float = room) {
     for ((x, y, a, r) in STARS) drawCircle(Color.White.copy(alpha = a * alpha), r.dp.toPx(), Offset(size.width * x, room * 0.85f * y / 1.05f + 4.dp.toPx()))
-    val r = minOf(28.dp.toPx(), room * 0.3f)
-    crescent(Offset(size.width - 16.dp.toPx() - r, room * 0.48f), r, alpha)
+    val r = minOf(28.dp.toPx(), moonRoom * 0.3f)
+    crescent(Offset(size.width - 16.dp.toPx() - r, moonRoom * 0.48f), r, alpha)
 }
 
 private operator fun FloatArray.component4() = this[3]
@@ -650,6 +669,7 @@ private val LOW_STARS = listOf(
 internal fun SkyBand(phase: Phase, top: Dp, moonLow: Boolean = false, moonLine: Boolean = moonLow, padded: Boolean = true, moon: Boolean = true, content: @Composable () -> Unit) {
     val page = MaterialTheme.colorScheme.background
     val p = palette(phase, page.luminance() < 0.5f)
+    val pull = LocalPull.current
     NightStatusBar(p.lightInk)
     Column(
         Modifier.fillMaxWidth().drawBehind {
@@ -672,6 +692,8 @@ internal fun SkyBand(phase: Phase, top: Dp, moonLow: Boolean = false, moonLine: 
             clipRect(top = end - LOW.toPx(), bottom = end) {
                 // Just the hills: the sun stays for Now's horizon.
                 horizon(strip, page, p, phase, Road(shuttle = false), 0f, withSun = false)
+                // Pulled down (the Buses tab): a sign grows out of the near hill and a bus drives to it.
+                if (pull?.read()?.open == true) pullHill(pull, p, strip, d, size.width / d, lights = phase == Phase.DUSK || phase == Phase.NIGHT)
             }
         },
     ) {
