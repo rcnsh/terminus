@@ -221,6 +221,14 @@ always asks this way) it's listed after every running row, by name, with
 
 A service the feed still gives a time for stays a running row, whatever its
 hours say: the feed is what's on the road. Unknown hours count as running.
+The exception is a time at or after the service next opens
+(`beforeOpening`): overnight NUS's feed lists times hours ahead that don't
+match the published start (an A2 at 09:16 when its hours start at 07:15),
+so such a time is dropped, and the row says when the hours open, as for a
+service with no time. Within `FIRST_BUS_LEAD_S` (30 min) of now it is kept
+as `scheduled` ("~15 min"), the first buses getting ready. A time before
+the opening is a bus still out from the night before, and stays live. The
+Now card and leave times read the feed through the same function.
 The Now tab, the map and the widgets don't ask, so their boards are as
 before. `/line` also says it for the service itself: `running`, `stopped`
 and `resumesAt` at the top (null while it runs).

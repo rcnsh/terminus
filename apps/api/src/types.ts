@@ -112,8 +112,8 @@ export interface Arrival {
   ends?: true;
   /**
    * The time is from the operator's timetable, not a bus on the road (a
-   * public bus LTA reports as unmonitored). Absent for a live time, and for
-   * every shuttle: the shuttle feed only lists buses it sees.
+   * public bus LTA reports as unmonitored, or a shuttle's first bus before
+   * its hours open: see beforeOpening()). Absent for a live time.
    */
   scheduled?: true;
 }
