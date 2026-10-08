@@ -92,8 +92,9 @@ class Store(context: Context) {
             val kept = prefs.getLong(KEY_ASKED, 0)
             if (askedAtMs < kept && kept <= System.currentTimeMillis()) lastAnswer()?.let { return it.first }
             // A fresh answer from anywhere (the app, the live notification, a
-            // skip) ends a run of failed refreshes, so the back-off starts over.
-            prefs.edit { putString(KEY_ANSWER, json.toString()).putLong(KEY_FETCHED, fetchedAtMs).putLong(KEY_ASKED, askedAtMs).putInt(KEY_REFRESH_FAILS, 0) }
+            // skip) ends a run of failed refreshes, so the back-off starts over,
+            // and the widget no longer says Offline over it.
+            prefs.edit { putString(KEY_ANSWER, json.toString()).putLong(KEY_FETCHED, fetchedAtMs).putLong(KEY_ASKED, askedAtMs).putInt(KEY_REFRESH_FAILS, 0).remove(KEY_ERROR) }
             // The app shortcuts follow the saved places (a no-op when they
             // haven't changed). Inside the lock: a sign-out's [clear] empties
             // them, and must not be undone by an answer kept just before it.

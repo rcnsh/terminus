@@ -70,8 +70,58 @@ class BusesTest {
         assertEquals(listOf("Central Library"), board.rows.single().towards)
     }
 
-    @Test fun theMapsBoardKeepsOnlyRowsWithATime() {
-        assertEquals(listOf("K", "151"), StopBoard.parse(arrivals).rows.map { it.svc })
+    @Test fun aFreshBoardIsShownAsItCame() {
+        val got = 1_000_000L
+        val b = Board.parse(arrivals).copy(gotMs = got)
+        // Within two refreshes, as the server counted it: not counted again here.
+        assertEquals(b, b.aged(got + BusTimes.OLD_MS))
+        assertEquals("live", b.aged(got + 20_000).rows[0].quality)
+        // Not known when it came (an older caller): as it is.
+        val unknown = Board.parse(arrivals)
+        assertEquals(unknown, unknown.aged(got + 600_000))
+    }
+
+    @Test fun anOldBoardIsCountedDownAndNotLive() {
+        val got = 1_000_000L
+        val b = Board.parse(arrivals).copy(gotMs = got).aged(got + 40_000)
+        val k = b.rows[0]
+        // K was 40 s away with buses 560 and 1260 s away: 40 s on, exactly 40 s less.
+        assertEquals(0, k.etaS)
+        assertEquals("stale", k.quality)
+        assertNull("the server's words from then", k.eta)
+        assertNull(k.laterText)
+        assertEquals(listOf(520, 1220), k.later.map { it.etaS })
+        // A timetabled time stays timetabled, counted down too.
+        val p = b.rows[2]
+        assertEquals(260, p.etaS)
+        assertEquals("scheduled", p.quality)
+        // No time to count: as it was.
+        assertNull(b.rows[1].etaS)
+        assertEquals("scheduled", b.rows[1].quality)
+    }
+
+    @Test fun busesLongPastHaveNoTime() {
+        val got = 1_000_000L
+        val k = Board.parse(arrivals).copy(gotMs = got).aged(got + 101_000).rows[0]
+        // 40 s away 101 s ago: over a minute past, so no time; still not live.
+        assertNull(k.etaS)
+        assertEquals("stale", k.quality)
+        // 99 s ago, a minute past at most: "Arriving" at 0 rather than nothing.
+        assertEquals(0, Board.parse(arrivals).copy(gotMs = got).aged(got + 99_000).rows[0].etaS)
+        // Later buses gone by are dropped.
+        val far = Board.parse(arrivals).copy(gotMs = got).aged(got + 600_000).rows[0]
+        assertEquals(listOf(660), far.later.map { it.etaS })
+    }
+
+    @Test fun aLineCountsYourStopsTimeDownToo() {
+        val got = 1_000_000L
+        val here = Board.parse(arrivals).rows[0]
+        val line = Line("K", 0, null, listOf(LineStop("YIH", "YIH", emptyList())), emptyList(), LineHere("YIH", 0, here), true, null, gotMs = got)
+        assertEquals(line, line.aged(got + 30_000))
+        val row = line.aged(got + 45_000).here?.row
+        assertEquals(0, row?.etaS)
+        assertEquals("stale", row?.quality)
+        assertEquals(listOf(515, 1215), row?.later?.map { it.etaS })
     }
 
     @Test fun timesComeOnlyFromTheApi() {

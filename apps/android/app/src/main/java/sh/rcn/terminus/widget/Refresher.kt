@@ -278,7 +278,8 @@ object Refresher {
         val failures = store.refreshFailures
         store.refreshFailures = failures + 1
         val at = retryAt(System.currentTimeMillis(), failures, Quiet.waitMs())
-        ctx.getSystemService(AlarmManager::class.java)?.setWhileIdle(at, alarmIntent(ctx))
+        // Waking the phone only for the leave alerts and the live notification.
+        ctx.getSystemService(AlarmManager::class.java)?.setWhileIdle(at, alarmIntent(ctx), wake = notifying(ctx, store))
         store.refreshAlarmAt = at
         return at
     }
@@ -322,7 +323,8 @@ object Refresher {
         val day = if (store.lastError != null) OfflineDay.nextChangeAt(store.lastDay()?.first, now) else null
         val at = listOfNotNull(answer?.let { redrawAt(it, now) }, day).minOrNull()?.let { ServerClock.toDevice(it) + 1_000 }
         if (at == null || (before != null && at >= before)) am.cancel(redrawIntent(ctx))
-        else am.setWhileIdle(at, redrawIntent(ctx))
+        // Only the widget looks: it can wait for the screen to come on.
+        else am.setWhileIdle(at, redrawIntent(ctx), wake = false)
     }
 
     private fun redrawIntent(ctx: Context): PendingIntent =
@@ -338,7 +340,24 @@ object Refresher {
      */
     fun active(ctx: Context): Boolean = Store(ctx).let {
         // Signed out, a widget only says so: nothing to fetch for it.
-        it.paired && (widgetCount(ctx) > 0 || (it.leaveAlerts && LeaveAlerts.canNotify(ctx, LeaveAlerts.CHANNEL)) || (it.liveUpdates && LeaveAlerts.canNotify(ctx, LiveService.CHANNEL)))
+        it.paired && (widgetCount(ctx) > 0 || notifying(ctx, it))
+    }
+
+    /** The leave alerts or the live notification are on and can show: the refresh may wake the phone for them. */
+    private fun notifying(ctx: Context, store: Store): Boolean =
+        (store.leaveAlerts && LeaveAlerts.canNotify(ctx, LeaveAlerts.CHANNEL)) || (store.liveUpdates && LeaveAlerts.canNotify(ctx, LiveService.CHANNEL))
+
+    /**
+     * The refresh alarms for [answer] (server clock, as [nextRefreshAt]):
+     * the widget's ([widget]), which doesn't wake the phone, and, for the
+     * leave alerts and the live notification ([notifying]), one at the
+     * server's own moments that does. Only the waking one when it comes
+     * first: it refreshes the widget too. Null: none of that kind.
+     */
+    internal fun refreshAlarms(answer: NextAnswer, fetchedAt: Long, now: Long, widget: Boolean, notifying: Boolean): Pair<Long?, Long?> {
+        val wakeAt = if (notifying) nextRefreshAt(answer, fetchedAt, now, widget = false) else null
+        val at = if (widget) nextRefreshAt(answer, fetchedAt, now, widget = true) else null
+        return (if (at != null && wakeAt != null && wakeAt <= at) null else at) to wakeAt
     }
 
     /**
@@ -388,13 +407,16 @@ object Refresher {
         LeaveAlerts.arm(ctx, answer)
         if (!active(ctx)) return
         val widget = widgetCount(ctx) > 0
-        val at = ServerClock.toDevice(nextRefreshAt(answer, ServerClock.fromDevice(fetchedAt), ServerClock.now(), widget))
+        val store = Store(ctx)
+        val (widgetAt, wakeAt) = refreshAlarms(answer, ServerClock.fromDevice(fetchedAt), ServerClock.now(), widget, notifying(ctx, store))
+            .let { (a, b) -> a?.let(ServerClock::toDevice) to b?.let(ServerClock::toDevice) }
         val am = ctx.getSystemService(AlarmManager::class.java) ?: return
         // Honoured in Doze (at most every ~9 min there). Without "Alarms &
         // reminders" allowed it's inexact, and the system may run it a few
         // minutes late; the widget shows a clock time, which stays true until then.
-        am.setWhileIdle(at, alarmIntent(ctx))
-        val store = Store(ctx)
+        if (widgetAt != null) am.setWhileIdle(widgetAt, alarmIntent(ctx), wake = false) else am.cancel(alarmIntent(ctx))
+        if (wakeAt != null) am.setWhileIdle(wakeAt, wakeIntent(ctx)) else am.cancel(wakeIntent(ctx))
+        val at = listOfNotNull(widgetAt, wakeAt).min()
         store.refreshAlarmAt = at
         if (widget) armRedraw(ctx, store, answer, before = at)
     }
@@ -429,6 +451,7 @@ object Refresher {
         }
         ctx.getSystemService(AlarmManager::class.java)?.run {
             cancel(alarmIntent(ctx))
+            cancel(wakeIntent(ctx))
             cancel(redrawIntent(ctx))
             cancel(WidgetModes.alarmIntent(ctx))
         }
@@ -448,7 +471,10 @@ object Refresher {
             cancelUniqueWork(WORK)
             cancelUniqueWork(WORK_BEFORE)
         }
-        ctx.getSystemService(AlarmManager::class.java)?.cancel(alarmIntent(ctx))
+        ctx.getSystemService(AlarmManager::class.java)?.run {
+            cancel(alarmIntent(ctx))
+            cancel(wakeIntent(ctx))
+        }
         Store(ctx).refreshAlarmAt = 0
     }
 
@@ -461,6 +487,14 @@ object Refresher {
     private fun alarmIntent(ctx: Context): PendingIntent =
         PendingIntent.getBroadcast(
             ctx, 0,
+            Intent(ctx, RefreshReceiver::class.java).setAction(ACTION_REFRESH),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+    /** The refresh that wakes the phone ([refreshAlarms]): the same refresh, its own alarm. */
+    private fun wakeIntent(ctx: Context): PendingIntent =
+        PendingIntent.getBroadcast(
+            ctx, 9,
             Intent(ctx, RefreshReceiver::class.java).setAction(ACTION_REFRESH),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )

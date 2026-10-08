@@ -119,13 +119,8 @@ class LiveService : Service() {
             if (Outdated.holding() || !store.paired) break
             val answer = store.lastAnswer()?.first
             if (answer == null || answer.mode == "rest" || answer.card?.phase !in TRIP_PHASES) {
-                // Between trips: come back when the next one is due, the card changes (a
-                // trip that isn't a class has no remindAt), or the plan changes.
-                val now = ServerClock.now()
-                listOfNotNull(answer?.card?.remindAtMs, answer?.card?.nextChangeAtMs, answer?.refreshAtMs)
-                    .filter { it > now }
-                    .minOrNull()
-                    ?.let { wakeAt(this, ServerClock.toDevice(it)) }
+                // Between trips: come back when the next one is due or the plan changes.
+                betweenTripsWakeAt(answer, ServerClock.now())?.let { wakeAt(this, ServerClock.toDevice(it)) }
                 break
             }
             nm?.notify(NOTIFICATION_ID, build(this, answer))
@@ -170,6 +165,8 @@ class LiveService : Service() {
         private const val SCREEN_OFF_MS = 120_000L
         /** An answer this new is used as it is when the loop starts. */
         private const val FRESH_MS = 10_000L
+        /** Between trips, the soonest the service is woken again. */
+        internal const val MIN_WAKE_MS = 60_000L
         const val ACTION_STOP = "sh.rcn.terminus.LIVE_STOP"
         const val ACTION_START = "sh.rcn.terminus.LIVE_START"
         /** Started by a push: the card changed, so the answer is fetched even if just kept. */
@@ -212,11 +209,31 @@ class LiveService : Service() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
 
-        /** What the header counts down to: getting off, leaving for a class, or the bus. */
+        /**
+         * Between trips, when the service looks again (server clock): the next
+         * class's reminder or the server's `refreshAt` (the plan changes),
+         * never within [MIN_WAKE_MS]. Not the card's `nextChangeAt`, which
+         * moves at every departure and would wake the phone many times an
+         * hour for nothing; a trip without a reminder starts with its push.
+         */
+        internal fun betweenTripsWakeAt(answer: NextAnswer?, now: Long): Long? =
+            listOfNotNull(answer?.card?.remindAtMs, answer?.refreshAtMs)
+                .filter { it > now }
+                .minOrNull()
+                ?.coerceAtLeast(now + MIN_WAKE_MS)
+
+        /**
+         * What the header counts down to: getting off, leaving for a class, or
+         * the bus. At the stop (`waiting`) there's nowhere to leave: the bus the
+         * card's headline names (its journey's), as the in-app card counts.
+         */
         internal fun countdownAt(answer: NextAnswer): Long? {
             val card = answer.card
             return when {
                 card?.phase == "riding" && card.ride != null -> card.ride.arriveMs
+                card?.phase == "waiting" && card.journey?.boardAtMs != null -> card.journey?.boardAtMs
+                // A class's leave-by is behind you at the stop: no countdown to it.
+                card?.phase == "waiting" && answer.isClassPlan -> null
                 answer.isClassPlan -> answer.leaveAtMs
                 else -> answer.departsAtMs?.takeIf { answer.quality != "unknown" }
             }
@@ -281,7 +298,7 @@ class LiveService : Service() {
                     .setStyle(Notification.BigTextStyle().bigText(listOfNotNull(unconfirmed, catch, answer.leaveNote.takeIf { unconfirmed == null }, answer.goNowLine.takeIf { unconfirmed == null }).joinToString("\n")))
                     .setSubText(listOfNotNull(answer.destLabel, answer.classAtMs?.let { L.s(R.string.starts_at, fmt(it)) }).joinToString(" · "))
                 // A class card can come without a leave time: no countdown then.
-                return b.countdownTo(answer.leaveAtMs.takeIf { unconfirmed == null }, now).build()
+                return b.countdownTo(countdownAt(answer).takeIf { unconfirmed == null }, now).build()
             }
             val title = if (answer.arrived) answer.label else answer.clockLabel(fmt)
             val leave = answer.leaveText(now).takeIf { unconfirmed == null }
@@ -290,7 +307,7 @@ class LiveService : Service() {
                 .setStyle(Notification.BigTextStyle().bigText(listOfNotNull(unconfirmed ?: leave, answer.detail).joinToString("\n")))
             (answer.destLabel ?: if (answer.mode == "nearby") L.s(R.string.chip_nearby) else null)?.let { b.setSubText(it) }
             // The system ticks this down; nothing to redraw between refreshes.
-            return b.countdownTo(answer.departsAtMs?.takeIf { answer.quality != "unknown" && unconfirmed == null }, now).build()
+            return b.countdownTo(countdownAt(answer).takeIf { unconfirmed == null }, now).build()
         }
     }
 }

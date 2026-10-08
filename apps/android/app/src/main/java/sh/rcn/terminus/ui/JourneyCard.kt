@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
+import sh.rcn.terminus.BusTimes
 import sh.rcn.terminus.CardStyle
 import sh.rcn.terminus.Journey
 import sh.rcn.terminus.JourneyText
@@ -390,7 +391,7 @@ private fun RoadLine(journey: Journey, now: Long) {
     val n = (left / 60f).roundToInt()
     val text = when {
         left <= 0 -> stringResource(R.string.journey_from, bus.stop)
-        left < 60 -> stringResource(R.string.road_arriving, bus.stop)
+        left < BusTimes.ARRIVING_S -> stringResource(R.string.road_arriving, bus.stop)
         journey.live -> stringResource(R.string.road_reaches, bus.stop, n)
         else -> stringResource(R.string.road_reaches_about, bus.stop, n)
     }

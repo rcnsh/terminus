@@ -67,11 +67,6 @@ class MapDataTest {
         assertFalse(BusList.parse(JSONObject("""{"svc": "K", "available": false, "buses": []}""")).available)
     }
 
-    @Test fun boardDropsRowsWithNoTime() {
-        val b = StopBoard.parse(JSONObject("""{"available": true, "board": [{"svc": "D2", "etaS": 240, "quality": "live"}, {"svc": "D1", "etaS": null, "quality": "none"}]}"""))
-        assertEquals(listOf("D2"), b.rows.map { it.svc })
-    }
-
     @Test fun geoJsonForTheMap() {
         val (campus, _) = CampusMap.parse(campusJson)
         val stops = JSONObject(MapGeoJson.stops(campus)).getJSONArray("features")

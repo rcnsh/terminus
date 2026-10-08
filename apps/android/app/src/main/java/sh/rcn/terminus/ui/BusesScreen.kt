@@ -113,9 +113,6 @@ import sh.rcn.terminus.parseColor
 import sh.rcn.terminus.searchBuses
 import sh.rcn.terminus.busesTabIndex
 
-/** How often the page in view is refreshed: the API's own cache, so sooner shows nothing new. */
-private const val REFRESH_MS = 15_000L
-
 /**
  * The Buses tab: a search, then pages to swipe between, the nearest stop
  * and each pinned one, each with its board. A row opens its service's
@@ -161,7 +158,7 @@ private fun Refreshing(vararg keys: Any?, refresh: suspend () -> Unit) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             while (true) {
                 latest()
-                delay(maxOf(REFRESH_MS, Quiet.waitMs()))
+                delay(maxOf(BusTimes.REFRESH_MS, Quiet.waitMs()))
             }
         }
     }
@@ -537,8 +534,10 @@ private fun Segmented(options: List<String>, selected: Int, modifier: Modifier =
 
 /** The board: a row per service, sorted as the API sorts them. */
 @Composable
-private fun BoardCard(board: Board?, failed: Boolean, colors: Map<String, Long>, onRow: (BoardRow) -> Unit) {
+private fun BoardCard(got: Board?, failed: Boolean, colors: Map<String, Long>, onRow: (BoardRow) -> Unit) {
     val c = MaterialTheme.colorScheme
+    // Refreshes failing: the times counted down, none passed off as live.
+    val board = got?.aged(ticking())
     val shape = RoundedCornerShape(18.dp)
     Column(Modifier.fillMaxWidth().clip(shape).background(c.surface).border(1.dp, c.outlineVariant, shape)) {
         when {
@@ -866,9 +865,10 @@ private const val GREY = 0xFF8A939CL
 private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, onShowOnMap: (String) -> Unit, top: Dp) {
     val key = lineKey(route.svc, route.from)
     Refreshing(key) { vm.refreshLine(route.svc, route.from) }
-    val line = state.lines[key]
-    val c = MaterialTheme.colorScheme
     val now = ticking()
+    // Refreshes failing: your stop's time counted down, not passed off as live.
+    val line = state.lines[key]?.aged(now)
+    val c = MaterialTheme.colorScheme
     val ctx = LocalContext.current
     val h12 = remember { hour12(ctx) }
     val color = line?.color ?: state.campus?.routes?.get(route.svc)?.color ?: GREY

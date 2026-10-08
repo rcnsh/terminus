@@ -300,7 +300,7 @@ object WidgetModes {
         val am = ctx.getSystemService(AlarmManager::class.java) ?: return
         val now = System.currentTimeMillis()
         val at = if (Store(ctx).paired) chosen(ctx, now).mapNotNull { redrawAt(it.mode, it.at, it.fetchedAt, it.answer, now) }.minOrNull() else null
-        if (at == null) am.cancel(alarmIntent(ctx)) else am.setWhileIdle(at + 1_000, alarmIntent(ctx))
+        if (at == null) am.cancel(alarmIntent(ctx)) else am.setWhileIdle(at + 1_000, alarmIntent(ctx), wake = false)
     }
 
     /**

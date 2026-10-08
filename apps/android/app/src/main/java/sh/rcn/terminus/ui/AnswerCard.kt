@@ -100,8 +100,10 @@ internal fun AnswerCard(
         }
         if (answer.mode == "rest" || answer.isFree || answer.arrived) {
             // Nothing to catch: said plainly, with no bus to mistake for advice.
+            // The server's buttons still show, as on the web: "Undo" when the
+            // class just taken off was the day's last, "Back on campus".
             DayDone(answer, night = answer.mode == "rest", onPlace)
-            if (answer.mode != "rest") Actions(answer, onAction, busy, onSuggestion)
+            Actions(answer, onAction, busy, onSuggestion)
             return@Column
         }
         // What comes before any answer, in the sky with its top.

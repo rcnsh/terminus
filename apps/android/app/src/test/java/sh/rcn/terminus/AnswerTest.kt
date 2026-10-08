@@ -223,6 +223,22 @@ class AnswerTest {
         assertEquals(a.refreshAtMs, Refresher.nextRefreshAt(a, fetched, fetched, widget = false))
     }
 
+    @Test fun onlyTheServersMomentsWakeThePhone() {
+        val a = golden("class-bus")
+        val fetched = ms(a.asOf)
+        val change = a.card!!.nextChangeAtMs!!
+        val plan = a.refreshAtMs!!
+        assertTrue("the card changes before the plan does", change < plan)
+        // A widget only: its refresh waits for the screen; nothing wakes the phone.
+        assertEquals(change to null, Refresher.refreshAlarms(a, fetched, fetched, widget = true, notifying = false))
+        // Leave alerts or the live notification only: the plan's moment, waking it.
+        assertEquals(null to plan, Refresher.refreshAlarms(a, fetched, fetched, widget = false, notifying = true))
+        // Both: the widget's moment doesn't wake it, the plan's still does.
+        assertEquals(change to plan, Refresher.refreshAlarms(a, fetched, fetched, widget = true, notifying = true))
+        // Past the card's change the plan's moment is the widget's next too: one alarm, waking.
+        assertEquals(null to plan, Refresher.refreshAlarms(a, fetched, change + 1, widget = true, notifying = true))
+    }
+
     @Test fun refreshDoesNotChaseTheLeaveTimeOrTheRidesStops() {
         // Past the card's change, the leave-by is next on screen, but the network
         // waits for the plan's own moment: "Leave now" is a redraw.

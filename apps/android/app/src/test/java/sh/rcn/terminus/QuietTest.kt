@@ -60,12 +60,14 @@ class QuietTest {
         assertEquals(0, Quiet.waitMs())
     }
 
-    @Test fun refusedAsTooOldHoldsForHoursThenTriesOnce() {
+    @Test fun refusedAsTooOldHoldsHalfAnHourThenTriesOnce() {
         assertFalse(Outdated.holding())
         Outdated.refused()
         assertTrue(Outdated.required)
         assertTrue(Outdated.holding())
-        now += 6 * 3_600_000L
+        now += 29 * 60_000L
+        assertTrue(Outdated.holding())
+        now += 60_000L
         assertFalse(Outdated.holding())
         Outdated.served()
         assertFalse(Outdated.required)
