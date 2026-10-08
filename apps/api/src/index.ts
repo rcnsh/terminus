@@ -30,7 +30,7 @@ import { phaseAt, sgtMinute } from './pagesky.ts';
 import { CORS, clientKey, coordsFrom, json, jsonCached, numParam, withSecurityHeaders } from './http.ts';
 import { type MeDeps, handleMe } from './me.ts';
 import { UPDATE_REQUIRED, accountsConfigured, clientOutdated } from './accounts.ts';
-import { answering, readUpstream, runCron, statusRecords } from './monitor.ts';
+import { answering, answeringSince, readUpstream, runCron, statusRecords } from './monitor.ts';
 import { ltaConfigured } from './lta.ts';
 import { calendarThrough } from './calendar.ts';
 import { llmsTxt, robotsTxt, SITEMAP } from './seo.ts';
@@ -287,7 +287,7 @@ async function handleStatus(env: Env, nowMs: number): Promise<Response> {
   return json(
     {
       feed: u ? (answering(u) ? 'up' : 'down') : 'unknown',
-      since: u ? iso(u.since) : null,
+      since: u ? iso(answeringSince(u)) : null,
       checkedAt: u ? iso(u.checkedAt) : null,
       // Checks every 15 minutes; if they've stopped, what's above is old news.
       checking: u ? nowMs - u.checkedAt <= CRON_STALE_MS : false,
@@ -345,7 +345,7 @@ async function handleHealth(req: Request, url: URL, env: Env, nowMs: number): Pr
         pushWeb: webPushEnabled(env),
       },
       // From the cron probe: whether the NUS feed answered, and since when.
-      upstream: u ? { up: u.up, since: new Date(u.since).toISOString(), checkedAt: new Date(u.checkedAt).toISOString(), cronStale } : null,
+      upstream: u ? { up: answering(u), since: new Date(answeringSince(u)).toISOString(), checkedAt: new Date(u.checkedAt).toISOString(), cronStale } : null,
       auth: probe ? await probeAuth(env, nowMs) : undefined,
       versions: versions ? await versionLookup(env, nowMs) : undefined,
     },
