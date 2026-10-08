@@ -39,6 +39,7 @@ import json
 import math
 import statistics
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import date
@@ -105,10 +106,30 @@ def haversine(a, b):
     return 2 * r * math.asin(min(1, math.sqrt(s)))
 
 
+# The footpaths around Kent Ridge are a few MB from Overpass, NUSMods' rooms
+# about one: a reply this big is not what was asked for.
+MAX_BYTES = 100_000_000
+
+
+class HttpsRedirects(urllib.request.HTTPRedirectHandler):
+    """Follows a redirect only to https: what comes back is committed."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if urllib.parse.urlsplit(newurl).scheme != "https":
+            raise urllib.error.HTTPError(req.full_url, code, "redirect to plain http refused", headers, fp)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+OPENER = urllib.request.build_opener(HttpsRedirects)
+
+
 def fetch(url, data=None):
     req = urllib.request.Request(url, data=data, headers={"user-agent": "terminus walk_routes.py (student project)"})
-    with urllib.request.urlopen(req, timeout=180) as r:
-        return r.read()
+    with OPENER.open(req, timeout=180) as r:
+        raw = r.read(MAX_BYTES + 1)
+    if len(raw) > MAX_BYTES:
+        raise SystemExit(f"{urllib.parse.urlsplit(url).netloc} sent more than {MAX_BYTES} bytes")
+    return raw
 
 
 def download():
