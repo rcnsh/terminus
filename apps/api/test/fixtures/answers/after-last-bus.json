@@ -1,0 +1,100 @@
+{
+  "label": "No bus · walk 27 min",
+  "detail": "Services ended · 27 min walk to Home",
+  "alt": null,
+  "stop": {
+    "code": "UTOWN",
+    "name": "UTown",
+    "confidence": 0
+  },
+  "quality": "ended",
+  "asOf": "2026-08-27T15:10:00.000Z",
+  "arrivals": [],
+  "departsAt": null,
+  "arriveAt": "2026-08-27T15:37:08Z",
+  "foot": {
+    "s": 1628,
+    "why": "Services ended for the night"
+  },
+  "leave": null,
+  "mode": "trip",
+  "dest": {
+    "to": "PGP",
+    "label": "Home",
+    "why": "home"
+  },
+  "timing": null,
+  "places": [
+    {
+      "key": "mrt",
+      "label": "KR MRT"
+    },
+    {
+      "key": "deck",
+      "label": "The Deck"
+    }
+  ],
+  "warning": null,
+  "refreshAt": "2026-08-27T16:00:00Z",
+  "walkSpeedMs": 1.3,
+  "card": {
+    "kind": "trip",
+    "staleAt": "2026-08-27T15:25:00Z",
+    "crowd": null,
+    "quality": null,
+    "leaveBy": null,
+    "leaveVia": null,
+    "catch": null,
+    "arrive": null,
+    "catchLine": null,
+    "late": false,
+    "goNow": null,
+    "note": null,
+    "estimate": null,
+    "phase": "idle",
+    "phaseText": null,
+    "glance": "No bus walk ",
+    "line": "No bus · walk 27 min · Services ended",
+    "actions": [],
+    "warning": null,
+    "nextChangeAt": "2026-08-27T15:25:00Z",
+    "remind": true,
+    "suggestion": null,
+    "ride": null,
+    "detected": false,
+    "walkTo": null,
+    "notice": null,
+    "h12": false,
+    "journey": {
+      "leave": null,
+      "walk": "27 min",
+      "bus": null,
+      "boardAt": null,
+      "ride": null,
+      "off": null,
+      "to": "Home",
+      "toStop": "PGP",
+      "arrive": "23:37",
+      "walkEnd": null,
+      "arriveStop": "23:37",
+      "slack": null,
+      "live": false,
+      "backup": null,
+      "why": "Services ended for the night",
+      "title": "To Home",
+      "place": "Home",
+      "byText": null,
+      "walkText": "27 min walk",
+      "rideText": null,
+      "walkEndText": null,
+      "arriveText": "Arrive 23:37",
+      "arriveWhere": "at PGP",
+      "backupText": "Services ended for the night",
+      "summary": "27 min walk · Services ended for the night"
+    },
+    "upcoming": null,
+    "title": "No bus · walk 27 min",
+    "heading": "Heading home",
+    "remindAt": null
+  }
+}
