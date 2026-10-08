@@ -962,7 +962,7 @@ theirs (KRB, COM3, Kent Vale), where the feed lists the run that ends under an
 `-E` berth; a public loop ends at its interchange, which can be off campus
 between its last campus stop and its first. Riding on past it is the next run,
 so it costs a headway (`reach().through`). Rides are `RIDE.secondsPerHop` a
-stop, or the measured figure, but no faster than `RIDE.longHopMs` over a long
+stop, but no faster than `RIDE.longHopMs` over a long
 stretch: route P's stops are kilometres apart.
 
 **Every time counts from now.** A stop's arrivals count from when they were
