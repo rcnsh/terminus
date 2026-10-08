@@ -34,14 +34,19 @@ export function useCalendar(data: CalendarData | null): void {
 }
 
 /**
- * [a] and [b] together: every semester and holiday either has, with [b]'s
- * where both have one (the same semester, or a holiday on the same date).
- * A source that drops an old year never loses it here.
+ * [a] and [b] together, [b] the newer: every semester either has, with
+ * [b]'s where both have one, and every holiday [b] has. [a]'s other holidays
+ * stay when they're past (after [nowMs]) or outside the dates [b] covers, so
+ * a source that drops an old year never loses it here. A holiday to come
+ * that [b] covers and no longer lists was taken back upstream, and goes.
  */
-export function mergeCalendars(a: CalendarData, b: CalendarData): CalendarData {
+export function mergeCalendars(a: CalendarData, b: CalendarData, nowMs: number = Date.now()): CalendarData {
   const sems = new Map(a.semesters.map((s) => [`${s.acadYear} ${s.semester}`, s]));
   for (const s of b.semesters) sems.set(`${s.acadYear} ${s.semester}`, s);
-  const days = new Map(a.holidays.map((h) => [h.date, h]));
+  const today = sgtDate(nowMs);
+  const covered = holidaySpan(b);
+  const kept = a.holidays.filter((h) => h.date <= today || !covered || h.date < covered[0] || h.date > covered[1]);
+  const days = new Map(kept.map((h) => [h.date, h]));
   for (const h of b.holidays) days.set(h.date, h);
   const generated = [a.generated, b.generated].filter(Boolean).sort().at(-1);
   return {
@@ -49,6 +54,13 @@ export function mergeCalendars(a: CalendarData, b: CalendarData): CalendarData {
     semesters: [...sems.values()].sort((x, y) => x.start.localeCompare(y.start) || x.semester - y.semester),
     holidays: [...days.values()].sort((x, y) => x.date.localeCompare(y.date)),
   };
+}
+
+/** The first and last holiday dates a calendar lists, or null with none. */
+export function holidaySpan(c: CalendarData): [string, string] | null {
+  if (!c.holidays.length) return null;
+  const dates = c.holidays.map((h) => h.date).sort();
+  return [dates[0], dates[dates.length - 1]];
 }
 
 const DAY_MS = 86_400_000;

@@ -9,10 +9,11 @@
  * on data.gov.sg. A copy that passes the checks is merged over what's known
  * and kept in KV; every instance reads it from there (loadCalendar), merged
  * with the bundled copy, so a source that drops a year loses nothing and a
- * broken one changes nothing.
+ * broken one changes nothing. A holiday to come that the source takes back
+ * goes (a few at a time); a semester already known never moves this way.
  */
 
-import { BUNDLED, type CalendarData, currentCalendar, mergeCalendars, useCalendar } from './calendar.ts';
+import { BUNDLED, type CalendarData, currentCalendar, holidaySpan, mergeCalendars, sgtDate, useCalendar } from './calendar.ts';
 import type { Env } from './types.ts';
 
 export const NUSMODS_CALENDAR =
@@ -29,13 +30,21 @@ const RETRY_MS = 86_400_000;
 /** How long an instance answers from its copy before reading KV again. */
 const RELOAD_MS = 10 * 60_000;
 const FETCH_TIMEOUT_MS = 15_000;
+/**
+ * How far a semester known already may move in one fetch. Semesters start on
+ * a Monday, so a real move is a week or more and none gets past this: a
+ * human checks it and deploys the corrected calendar.json, which then wins.
+ */
+const MAX_SHIFT_DAYS = 3;
+/** Holidays to come one fetch may take back (a corrected mistake); a year has about a dozen. */
+const MAX_TAKEN_BACK = 3;
 
 let loadedAt = -Infinity;
 
 /** The bundled calendar with [kept] merged in: the newer one wins where they differ. */
-export function withBundled(kept: CalendarData | null): CalendarData {
+export function withBundled(kept: CalendarData | null, nowMs: number = Date.now()): CalendarData {
   if (!kept) return BUNDLED;
-  return (kept.generated ?? '') >= (BUNDLED.generated ?? '') ? mergeCalendars(BUNDLED, kept) : mergeCalendars(kept, BUNDLED);
+  return (kept.generated ?? '') >= (BUNDLED.generated ?? '') ? mergeCalendars(BUNDLED, kept, nowMs) : mergeCalendars(kept, BUNDLED, nowMs);
 }
 
 /**
@@ -48,7 +57,7 @@ export async function loadCalendar(env: Pick<Env, 'KV'> | null, nowMs: number = 
   loadedAt = nowMs;
   try {
     const kept = (await env.KV.get(CALENDAR_DATA_KEY, 'json')) as CalendarData | null;
-    if (kept && valid(kept)) useCalendar(withBundled(kept));
+    if (kept && valid(kept)) useCalendar(withBundled(kept, nowMs));
   } catch {
     // Keep answering from what's loaded.
   }
@@ -60,25 +69,60 @@ export function resetCalendar(): void {
   useCalendar(null);
 }
 
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const isDate = (s: unknown): s is string => typeof s === 'string' && DATE.test(s) && !Number.isNaN(Date.parse(`${s}T00:00:00Z`));
+const DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
+/** A real YYYY-MM-DD date: Date.parse takes 2026-02-30 as 2 March, so the parts must come back the same. */
+export function isDate(s: unknown): s is string {
+  const m = typeof s === 'string' ? DATE.exec(s) : null;
+  if (!m) return false;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  return d.getUTCFullYear() === Number(m[1]) && d.getUTCMonth() + 1 === Number(m[2]) && d.getUTCDate() === Number(m[3]);
+}
 
-/** Whether a calendar holds what the app relies on: real dates, terms 1-4, and enough of both. */
+/**
+ * A holiday's name, shown as it is: letters (Chinese too), digits, spaces
+ * and everyday punctuation, under 80 characters. No '<', no control
+ * characters, no ':' and no web address. check_scraped.py has the same rule.
+ */
+const NAME = /^[\p{L}\p{M}\p{N} '’&().,/+-]+$/u;
+const DOMAIN = /www\.|[a-z0-9]\.[a-z]{2,}/i;
+export const plainName = (s: unknown): s is string => typeof s === 'string' && s.trim().length > 0 && s.length < 80 && NAME.test(s) && !DOMAIN.test(s);
+
+/**
+ * Whether a calendar holds what the app relies on: real dates, terms 1-4
+ * each starting on a Monday inside its own academic year (1 July of its
+ * first year to 31 July of its second), and enough of both.
+ * check_scraped.py checks calendar.json by the same rules.
+ */
 export function valid(c: CalendarData): boolean {
   if (!c || !Array.isArray(c.semesters) || !Array.isArray(c.holidays)) return false;
   if (c.semesters.length < 4 || c.holidays.length < 5) return false;
-  const semOk = c.semesters.every(
-    (s) =>
-      typeof s.acadYear === 'string' &&
-      /^\d{4}\/\d{4}$/.test(s.acadYear) &&
-      Number(s.acadYear.slice(5)) === Number(s.acadYear.slice(0, 4)) + 1 &&
-      [1, 2, 3, 4].includes(s.semester) &&
-      isDate(s.start) &&
-      // Every semester starts on a Monday.
-      new Date(`${s.start}T00:00:00Z`).getUTCDay() === 1,
-  );
-  const dayOk = c.holidays.every((h) => isDate(h.date) && typeof h.name === 'string' && h.name.length > 0 && h.name.length < 80);
+  const semOk = c.semesters.every((s) => {
+    const ay = typeof s?.acadYear === 'string' ? /^(\d{4})\/(\d{4})$/.exec(s.acadYear) : null;
+    if (!ay || Number(ay[2]) !== Number(ay[1]) + 1 || ![1, 2, 3, 4].includes(s.semester) || !isDate(s.start)) return false;
+    return new Date(`${s.start}T00:00:00Z`).getUTCDay() === 1 && s.start >= `${ay[1]}-07-01` && s.start <= `${ay[2]}-07-31`;
+  });
+  const dayOk = c.holidays.every((h) => isDate(h?.date) && plainName(h.name));
   return semOk && dayOk;
+}
+
+/** Semesters [old] has that [fetched] starts more than MAX_SHIFT_DAYS away, as "2026/2027 1: 2026-08-10 to 2026-08-24". */
+export function movedSemesters(old: CalendarData, fetched: CalendarData): string[] {
+  const was = new Map(old.semesters.map((s) => [`${s.acadYear} ${s.semester}`, s.start]));
+  const out: string[] = [];
+  for (const s of fetched.semesters) {
+    const before = was.get(`${s.acadYear} ${s.semester}`);
+    if (before && Math.abs(Date.parse(`${s.start}T00:00:00Z`) - Date.parse(`${before}T00:00:00Z`)) > MAX_SHIFT_DAYS * 86_400_000) out.push(`${s.acadYear} ${s.semester}: ${before} to ${s.start}`);
+  }
+  return out;
+}
+
+/** Holidays to come in [old], inside the dates [fetched] covers, that [fetched] no longer lists. */
+export function takenBack(old: CalendarData, fetched: CalendarData, nowMs: number): string[] {
+  const span = holidaySpan(fetched);
+  if (!span) return [];
+  const today = sgtDate(nowMs);
+  const listed = new Set(fetched.holidays.map((h) => h.date));
+  return old.holidays.filter((h) => h.date > today && h.date >= span[0] && h.date <= span[1] && !listed.has(h.date)).map((h) => h.date);
 }
 
 /**
@@ -139,12 +183,20 @@ export async function refreshCalendar(env: Pick<Env, 'KV'>, nowMs: number): Prom
       // Unreadable: nothing worth keeping.
     }
     const before = kept && valid(kept) ? kept : null;
-    const next = mergeCalendars(before ?? { semesters: [], holidays: [] }, fetched);
+    // Checked against what's answered from now, the bundled copy included:
+    // a semester known already doesn't move, and few holidays to come go.
+    // Either is thrown (for the cron's log), and the old calendar stays.
+    const current = withBundled(before, nowMs);
+    const moved = movedSemesters(current, fetched);
+    if (moved.length) throw new Error(`fetched calendar moves semesters (${moved.join('; ')}); kept the old one`);
+    const gone = takenBack(current, fetched, nowMs);
+    if (gone.length > MAX_TAKEN_BACK) throw new Error(`fetched calendar drops ${gone.length} holidays to come (${gone.join(', ')}); kept the old one`);
+    const next = mergeCalendars(before ?? { semesters: [], holidays: [] }, fetched, nowMs);
     await env.KV.put(CALENDAR_NEXT_KEY, String(nowMs + EVERY_MS));
     const same = before && JSON.stringify(before.semesters) === JSON.stringify(next.semesters) && JSON.stringify(before.holidays) === JSON.stringify(next.holidays);
     if (same) return 'unchanged';
     await env.KV.put(CALENDAR_DATA_KEY, JSON.stringify(next));
-    useCalendar(withBundled(next));
+    useCalendar(withBundled(next, nowMs));
     return 'updated';
   } catch (err) {
     await env.KV.put(CALENDAR_NEXT_KEY, String(nowMs + RETRY_MS)).catch(() => {});
