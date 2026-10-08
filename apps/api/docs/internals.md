@@ -336,9 +336,10 @@ true}` (the error in Chinese for `zh`). Versions compare by number, and a
 pre-release comes before its release: `2.6.0-beta.3` is older than `2.6.0`.
 A request without the header (the website, API keys), or with a version that
 can't be read, is never refused. Sign-in, pairing and signing out answer
-before the check. The apps take a 426 as "update required": they stop
-polling, back off for hours, and offer the update (Play or the website on
-Android, Sparkle on the Mac).
+before the check, and an outdated app may still `DELETE /me/push` and
+`DELETE /me`, so it can stop its pushes or delete its account. The apps
+take a 426 as "update required": they stop polling, back off for hours,
+and offer the update (Play or the website on Android, Sparkle on the Mac).
 
 ```bash
 pnpm exec cf kv keys put config:minClient --namespace-id <KV id in cloudflare.config.ts> --body '{"android":"2.6.0","mac":"2.6.0"}'
