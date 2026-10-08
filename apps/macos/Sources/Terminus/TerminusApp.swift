@@ -82,7 +82,9 @@ private struct MenuBarLabel: View {
         let icon = model.resting ? "moon.zzz.fill" : "bus.fill"
         Group {
             if let title {
-                Label(title, systemImage: icon).labelStyle(.titleAndIcon)
+                // One Text with the symbol inline: a Label gets the status
+                // button's wide image-to-title gap, which looks detached.
+                Text("\(Image(systemName: icon)) \(Text(verbatim: title))")
             } else {
                 Image(systemName: icon)
             }
