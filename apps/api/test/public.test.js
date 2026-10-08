@@ -17,6 +17,7 @@ import { leaveOf } from '../src/trip.ts';
 import { onRoute } from '../src/detect.ts';
 import { leaveBy } from '../src/leave.ts';
 import { DEFAULT_HEADWAY_S, PUBLIC, RIDE, WALK } from '../src/config.ts';
+import pub from '../data/public.json' with { type: 'json' };
 
 const idx = indexGraph(GRAPH_PUBLIC);
 const stop = (code) => idx.byCode.get(code);
@@ -25,14 +26,19 @@ const key = (e) => ({ ...makeEnv(), LTA_ACCOUNT_KEY: 'test-account-key', ...e })
 test('the public graph keeps every shuttle stop and route, and adds the public ones', () => {
   for (const s of GRAPH.stops) assert.ok(idx.byCode.has(s.code), s.code);
   for (const svc of Object.keys(GRAPH.routes)) assert.deepEqual(GRAPH_PUBLIC.routes[svc], GRAPH.routes[svc]);
-  // A shared shelter: the shuttle's code, with LTA's alongside.
-  assert.equal(stop('CLB').publicCode, '16181');
-  assert.equal(publicCodeOf(stop('CLB')), '16181');
+  // A shared shelter: the shuttle's code, with LTA's alongside (as
+  // scrape_lta.py found it, so a renumbered shelter doesn't fail this).
+  const clb = Object.keys(pub.merged).find((k) => pub.merged[k] === 'CLB');
+  assert.match(clb ?? '', /^\d{5}$/, 'public.json: no LTA code for Central Library');
+  assert.equal(stop('CLB').publicCode, clb);
+  assert.equal(publicCodeOf(stop('CLB')), clb);
   assert.equal(shuttleCalls(stop('CLB')), true);
   // Kent Ridge Terminal's public stop on Clementi Road: a stop of its own.
-  assert.equal(stop('16009').public, true);
-  assert.equal(publicCodeOf(stop('16009')), '16009');
-  assert.equal(shuttleCalls(stop('16009')), false);
+  const krt = pub.stops.find((s) => s.near === 'KRB')?.code;
+  assert.ok(krt, 'public.json: no public stop by Kent Ridge Terminal');
+  assert.equal(stop(krt).public, true);
+  assert.equal(publicCodeOf(stop(krt)), krt);
+  assert.equal(shuttleCalls(stop(krt)), false);
   // A shuttle-only stop has no public code.
   assert.equal(publicCodeOf(stop('PGP')), null);
   // The plain graph knows nothing of any of this.
@@ -49,7 +55,8 @@ test('a two-way service is two routes that show as one name; a loop is itself', 
   assert.ok(!isPublic(GRAPH_PUBLIC, 'D2'));
   assert.ok(!isPublic(GRAPH, '95'));
   assert.equal(GRAPH_PUBLIC.public['151/1'].svc, '151');
-  assert.equal(GRAPH_PUBLIC.public['95'].operator, 'SBST');
+  assert.ok(GRAPH_PUBLIC.public['95'].operator);
+  assert.equal(GRAPH_PUBLIC.public['95'].operator, pub.public['95'].operator);
 });
 
 test('ride time on a public bus is the metres along its route, the long way round included', () => {
