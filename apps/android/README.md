@@ -20,9 +20,10 @@ Android 12 or later.
 ```bash
 ./gradlew :app:installStableDebug                                   # against terminus.rcn.sh
 ./gradlew :app:installBetaDebug                                     # against beta.terminus.rcn.sh
-./gradlew :app:installStableDebug -PapiBase=http://localhost:8787   # against the dev stub
+./gradlew :app:installStableDebug -PapiBase=http://localhost:8787   # against the dev stub (debug builds only)
 adb reverse tcp:8787 tcp:8787                                       # so the phone can reach it
-./gradlew :app:lintStableDebug :app:testStableDebugUnitTest         # what CI runs
+./gradlew :app:lintStableDebug :app:testStableDebugUnitTest         # what CI runs, with the
+./gradlew :app:assembleStableRelease :app:assembleBetaRelease       # release builds (R8)
 ```
 
 There are two apps from the same code (product flavors). **stable** is
