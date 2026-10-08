@@ -23,10 +23,12 @@ if [ "$CHANNEL" = beta ]; then
   VERSION="${BETA_VERSION:?BETA_VERSION is needed for a beta}"
   OUT="$ROOT/build/release/beta/$VERSION"
   NAME="terminus beta"
+  ID=sh.rcn.terminus.beta
 else
   VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' apps/macos/Support/Info.plist)
   OUT="$ROOT/build/release/$VERSION"
   NAME=terminus
+  ID=sh.rcn.terminus
 fi
 DMG="$OUT/terminus-$VERSION.dmg"
 mkdir -p "$OUT"
@@ -40,8 +42,27 @@ fi
 echo "== mac $VERSION ($CHANNEL)"
 (cd apps/macos && ./build.sh >/dev/null)
 APP="apps/macos/build/$NAME.app"
-codesign --verify --strict "$APP"
-codesign -d -r- "$APP" 2>&1 | grep designated
+# Every nested framework and helper too, not just the app's own seal.
+codesign --verify --deep --strict "$APP"
+DR=$(codesign -d -r- "$APP" 2>&1 | grep designated)
+echo "$DR"
+# Signed with a certificate, the app must name it: macOS ties the app's
+# permissions and login item to this requirement, and a release with another
+# would lose them on every Mac. The leaf's SHA-1 comes from the identity
+# itself (a hash already, or looked up by name), not a copy kept here.
+if [ -n "${SIGN_IDENTITY:-}" ]; then
+  if echo "$SIGN_IDENTITY" | grep -Eq '^[0-9A-Fa-f]{40}$'; then
+    LEAF=$SIGN_IDENTITY
+  else
+    LEAF=$(security find-identity -p codesigning ${SIGN_KEYCHAIN:+"$SIGN_KEYCHAIN"} | grep -F "\"$SIGN_IDENTITY\"" | awk 'NR==1 { print $2 }')
+  fi
+  LEAF=$(echo "$LEAF" | tr 'A-F' 'a-f')
+  [ -n "$LEAF" ] || { echo "can't find the certificate for $SIGN_IDENTITY" >&2; exit 1; }
+  echo "$DR" | grep -Fq "identifier \"$ID\"" && echo "$DR" | grep -Fq "certificate leaf = H\"$LEAF\"" || {
+    echo "the app's designated requirement isn't $ID signed by certificate $LEAF; refusing to package it" >&2
+    exit 1
+  }
+fi
 
 STAGE=$(mktemp -d)
 trap 'rm -rf "$STAGE"' EXIT
