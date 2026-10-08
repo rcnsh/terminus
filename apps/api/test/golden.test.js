@@ -1,25 +1,40 @@
 /**
  * Golden answers: the exact JSON /me/next and /me/nearby return for a set of
- * fixed situations, on the frozen test clock and a fake feed. Refactors must
+ * fixed situations, each on its own frozen clock and fake feed. Refactors must
  * reproduce them byte for byte; a deliberate change is re-recorded with
  *
- *   UPDATE_GOLDEN=1 pnpm test
+ *   UPDATE_GOLDEN=1 pnpm test          every case
+ *   UPDATE_GOLDEN=stale pnpm test      only the cases named (comma-separated)
  *
- * and shows up as a diff in test/fixtures/answers/. The Android and Mac unit
- * tests parse these same files, so a change in shape fails there too.
+ * and shows up as a diff in test/fixtures/answers/. A fixture that's missing
+ * fails rather than being written, and so does one no case makes: a case
+ * that quietly records whatever it got would pin a wrong answer as the spec.
+ * The Android and Mac unit tests parse these same files, so a change in
+ * shape fails there too.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-import { installGlobals, makeCtx, makeDurableObjects, makeEnv, makeFetch } from './_stubs.mjs';
+import { FROZEN_NOW, installGlobals, makeCtx, makeDurableObjects, makeEnv, makeFetch, makeKV } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
 import { Trip } from '../src/tripdo.ts';
+import { forgetTable } from '../src/ridetimes.ts';
 
 const DIR = new URL('./fixtures/answers/', import.meta.url);
-const UPDATE = process.env.UPDATE_GOLDEN === '1';
+const ZH_DIR = new URL('./zh/', DIR);
 const BASE = 'https://bus.example.test';
+
+/** UPDATE_GOLDEN=1 re-records every case; any other value names the cases to re-record. */
+const UPDATE_RAW = process.env.UPDATE_GOLDEN ?? '';
+const UPDATE_ALL = UPDATE_RAW === '1' || UPDATE_RAW === 'true';
+const UPDATE_ONLY = new Set(UPDATE_ALL || !UPDATE_RAW ? [] : UPDATE_RAW.split(',').map((s) => s.trim()).filter(Boolean));
+const updating = (name) => UPDATE_ALL || UPDATE_ONLY.has(name);
+
+const MIN = 60_000;
+/** A Singapore wall-clock time as epoch ms: sgtAt('2026-08-27', '09:00'). */
+const sgtAt = (date, hhmm) => Date.parse(`${date}T${hhmm}:00+08:00`);
 
 // Every service at every stop: D2 in 4 and 14 min, A1 in 9, R2 in 6.
 const FEED = {};
@@ -33,12 +48,25 @@ for (const code of ['PGP', 'PGPR', 'COM3', 'UTOWN', 'KR-MRT', 'KR-MRT-OPP', 'CLB
 }
 
 /**
- * An account with `profile`, signed in on the web. `feed` replaces the fake
- * feed; `trips` binds the trip engine, for a case that has a trip under way.
+ * An account with `profile`, signed in on the web, and a way to ask it things.
+ *
+ * - `at`: the clock to start on (epoch ms; Thursday 09:00 SGT by default).
+ * - `feed`: the NUS feed's arrivals by stop, in place of FEED.
+ * - `upstream`: anything else makeFetch takes (`fail`, `publicStops`, `buses`...).
+ * - `kv`: KV seeded with these keys (a measured ride-time table, say).
+ * - `trips`: binds the trip engine, for a case with signals.
+ *
+ * The returned `get(path)` answers the parsed JSON; `get.post` sends a
+ * signal; `get.at(ms)` / `get.advance(ms)` move the clock; `get.upstream(opts)`
+ * swaps the fake upstream (the feed going down after a good reading).
  */
-async function account(profile, { feed = FEED, trips = false } = {}) {
-  installGlobals(makeFetch({ byStop: feed }));
-  const env = { ...makeEnv(), DB: makeD1(), EMAIL: makeEmail(), EMAIL_FROM: 'x@example.test', ...(trips ? { TRIPS: makeDurableObjects(Trip) } : {}) };
+async function account(profile, { at = FROZEN_NOW, feed = FEED, upstream = {}, kv = {}, trips = false } = {}) {
+  let now = at;
+  installGlobals(makeFetch({ byStop: feed, ...upstream }), now);
+  Date.now = () => now;
+  // The measured ride-time table is held per isolate for a while: each case reads its own.
+  forgetTable();
+  const env = { ...makeEnv(makeKV(kv)), DB: makeD1(), EMAIL: makeEmail(), EMAIL_FROM: 'x@example.test', ...(trips ? { TRIPS: makeDurableObjects(Trip) } : {}) };
   const call = async (path, init = {}) => {
     const ctx = makeCtx();
     const res = await worker.fetch(new Request(BASE + path, init), env, ctx);
@@ -50,10 +78,21 @@ async function account(profile, { feed = FEED, trips = false } = {}) {
   const cookie = verify.headers.get('set-cookie').split(';')[0];
   const put = await call('/me/profile', { method: 'PUT', headers: { cookie, 'content-type': 'application/json' }, body: JSON.stringify(profile) });
   assert.equal(put.status, 200, await put.clone().text());
-  const get = (path) => call(path, { headers: { cookie } }).then((r) => r.json());
+  const get = (path) => get.raw(path).then((r) => r.json());
+  get.raw = (path) => call(path, { headers: { cookie } });
   get.post = async (path, body) => {
     const res = await call(path, { method: 'POST', headers: { cookie, origin: BASE, 'content-type': 'application/json' }, body: JSON.stringify(body) });
     assert.equal(res.status, 200, await res.clone().text());
+    return res.json();
+  };
+  get.at = (ms) => {
+    now = ms;
+  };
+  get.advance = (ms) => {
+    now += ms;
+  };
+  get.upstream = (opts) => {
+    globalThis.fetch = makeFetch(opts);
   };
   return get;
 }
@@ -105,20 +144,32 @@ const CASES = {
 // same answers, every word the server writes in Chinese.
 const RUNS = [
   ['', {}, DIR],
-  ['zh ', { lang: 'zh' }, new URL('./zh/', DIR)],
+  ['zh ', { lang: 'zh' }, ZH_DIR],
 ];
 
 for (const [name, [profile, path, opts = {}]] of Object.entries(CASES)) for (const [tag, extra, dir] of RUNS) {
   test(`golden: ${tag}${name}`, async () => {
     const get = await account({ ...profile, ...extra }, opts);
     await opts.before?.(get);
-    const body = await get(path);
+    const res = await get.raw(path);
+    const body = await res.json();
+    assert.equal(res.status, opts.status ?? 200, JSON.stringify(body));
     const file = new URL(`${name}.json`, dir);
     const text = JSON.stringify(body, null, 2) + '\n';
-    if (UPDATE || !fs.existsSync(file)) {
+    if (updating(name)) {
       fs.writeFileSync(file, text);
       return;
     }
-    assert.equal(text, fs.readFileSync(file, 'utf8'), `${name} changed; if on purpose, UPDATE_GOLDEN=1 pnpm test`);
+    assert.ok(fs.existsSync(file), `no fixture for ${tag}${name}; record it with UPDATE_GOLDEN=${name} pnpm test and review it`);
+    assert.equal(text, fs.readFileSync(file, 'utf8'), `${name} changed; if on purpose, UPDATE_GOLDEN=${name} pnpm test`);
   });
 }
+
+test('golden: every fixture belongs to a case', () => {
+  for (const dir of [DIR, ZH_DIR]) {
+    const orphans = fs.readdirSync(dir).filter((f) => f.endsWith('.json') && !Object.hasOwn(CASES, f.slice(0, -'.json'.length)));
+    // Re-recording everything clears out what no case makes any more.
+    if (UPDATE_ALL) for (const f of orphans) fs.unlinkSync(new URL(f, dir));
+    else assert.deepEqual(orphans, [], `fixtures no case makes, in ${dir.pathname}: delete them, or UPDATE_GOLDEN=1 pnpm test`);
+  }
+});
