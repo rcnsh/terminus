@@ -1390,6 +1390,9 @@ second, so a longer stretch takes longer: from 1 s for a short hop to
 4 s, done before the next answer, 5 s on (a typical slide, half of a
 421 m stretch, takes about 2 s); with reduced motion, after 15 s without an answer, or to a place
 it can't reach along the line (behind it, or over 1.5 km on), it jumps.
+On a loop it slides on past the line's start, as the API places it. Clients
+take that from `/campus`'s `loop`, not from where the line ends: A1's and
+A2's lines end some 40 m from where they start at KRB.
 A tapped bus is ringed. Between stops, its `stretch` is drawn over the
 route, wider, with the rest of the route faded well back, and its card
 says "Between LT13 and COM 3".

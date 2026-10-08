@@ -10,6 +10,11 @@
   scrape changes `data/stops.json`.
 - `answers/`: golden answers (`UPDATE_GOLDEN=1 pnpm test` rewrites them),
   read by the Android and Mac tests too; `answers/zh/` the Chinese.
+- `bus-trace.jsonl`: 15 minutes of the real live-bus feed for A1, A2, D1
+  and D2 (3 October 2026, the probe workflow with `trace`), which
+  `buses.test.js` replays; `bus-trace-routes.json`: those services' stops,
+  routes and shapes as they were then, so the replay doesn't move with the
+  weekly scrape.
 - `offline-day.json`: what each app shows offline from a kept day plan, for
   the API, Android and Mac tests.
 - `lta-BusArrival-*.json`: real LTA DataMall `v3/BusArrival` replies for two
