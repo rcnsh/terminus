@@ -13,10 +13,11 @@
 // icons (/map/*), routes and stops (/campus), buses (/buses), arrivals
 // (/arrivals). The service worker keeps all but the live ones for offline.
 
-import { focusSoon, html, reducedMotion, store, useEffect, useLayoutEffect, useMemo, useRef, useState, useStore } from '/assets/ui.js';
+import { Icon, focusSoon, html, reducedMotion, store, useEffect, useLayoutEffect, useMemo, useRef, useState, useStore } from '/assets/ui.js';
 import { inkOn, send, t } from '/account/dom.js';
 import { haversineM, loadCampus, profile, reloadProfile, saveNow, withPlace } from '/account/profile.js';
 import { MAPLIBRE, PMTILES } from '/app/map-files.js';
+import { Row } from '/app/board.js';
 
 /** Live buses refresh this often while a pill is on (the API caches 5 s). */
 const BUSES_MS = 5_000;
@@ -676,17 +677,9 @@ function directions(s) {
 
 /** How crowded a bus is, as the feed says: low, medium or high. */
 const crowdWord = (c) => ({ low: t('Low'), medium: t('Medium'), high: t('High') })[c] ?? null;
-const mins = (s) => Math.round(s / 60);
-/** The server's words for when ("4 min", "~6 min", "now"); worded here only for an older server's answer. */
-const when = (b) => b.eta ?? (b.etaS < 60 ? t('Arriving') : b.quality === 'scheduled' ? t('~{0}', t('{0} min', mins(b.etaS))) : t('{0} min', mins(b.etaS)));
 
-/** A public bus (`paid`) has its own colour from the board, and a $ for its fare. */
-function SvcTag({ svc, onClick, color, paid }) {
-  const style = color ? `--svc:${color};--svc-ink:${inkOn(color)}` : svcVars(svc);
-  return onClick
-    ? html`<button type="button" class="svc-tag" style=${style} aria-label=${t('Show {0} on the map', svc)} onClick=${onClick}>${svc}</button>`
-    : html`<span class="svc-tag" style=${style}>${svc}${paid && html`<span class="fare" role="img" aria-label=${t('Public bus, fare applies')}>$</span>`}</span>`;
-}
+/** A service here, when there are no times to list it by: tapped, its line on the map. */
+const SvcTag = ({ svc, onClick }) => html`<button type="button" class="svc-tag" style=${svcVars(svc)} aria-label=${t('Show {0} on the map', svc)} onClick=${onClick}>${svc}</button>`;
 
 function Pills() {
   const campus = useStore(campusData);
@@ -816,12 +809,22 @@ function BusSheet({ id, box }) {
   `;
 }
 
-/** A stop: what's coming (refreshed while open), its services, and ways to go there. */
+/** The rows a stop's sheet shows before "Show more", so the map stays in view. */
+const PEEK_ROWS = 3;
+const WALKER = '<circle cx="13" cy="4" r="2" fill="currentColor"/><path d="M12 8l-2 6-3 7M10 14l3 3v4M7 12l2-4h3l2 3 3 1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
+const STAR = '<path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>';
+
+/**
+ * A stop: its board as the Buses tab has it (refreshed while open), the first
+ * few rows until asked for the rest, and ways to go there. A row tapped shows
+ * its service on the map.
+ */
 function StopSheet({ code, box, onGoTo, onSaved, active }) {
   const campus = useStore(campusData);
   const p = useStore(profile);
   const stop = campus?.stops.find((s) => s.code === code);
   const [board, setBoard] = useState(null);
+  const [all, setAll] = useState(false);
   const [saveMsg, setSaveMsg] = useState(null);
   const [saving, setSaving] = useState(false);
   // The profile has been asked for (it may still fail): until then, which buses to ask for isn't known.
@@ -830,6 +833,7 @@ function StopSheet({ code, box, onGoTo, onSaved, active }) {
   // Fresh each time: a favourite may have been added or removed elsewhere since.
   useEffect(() => {
     setSaveMsg(null);
+    setAll(false);
     reloadProfile()
       .catch(() => {})
       .finally(() => setAsked(true));
@@ -854,9 +858,10 @@ function StopSheet({ code, box, onGoTo, onSaved, active }) {
     };
     const load = async () => {
       try {
-        const data = await getJSON(`/arrivals?stop=${encodeURIComponent(code)}${pub ? '&public=1' : ''}`);
+        // stopped=1: the services not running now too, greyed, so every service here has its row.
+        const data = await getJSON(`/arrivals?stop=${encodeURIComponent(code)}${pub ? '&public=1' : ''}&stopped=1`);
         if (gone) return;
-        const list = data.available ? data.board.filter((b) => b.etaS !== null) : [];
+        const list = data.available ? data.board : [];
         setBoard(list.length ? { list } : { text: data.available ? t('No buses due') : t('No times right now') });
       } catch (err) {
         if (gone || err.message === 'signed out') return;
@@ -895,27 +900,27 @@ function StopSheet({ code, box, onGoTo, onSaved, active }) {
       setSaving(false);
     }
   };
+  const rows = board?.list ?? [];
+  const more = rows.length - PEEK_ROWS;
+  const sub = stop.longName && stop.longName !== stop.name ? stop.longName : null;
   return html`
-    <${Frame} id=${`stop-${code}`} title=${stop.name} box=${box}>
-      <div class="sheet-rows">
-        ${!board && html`<div class="hint">${t('Checking…')}</div>`}
-        ${board?.text && html`<div class="hint">${board.text}</div>`}
-        ${board?.list?.map(
-          (b) => html`
-            <div class="sheet-row" key=${`${b.svc}-${b.etaS}`}>
-              <${SvcTag} svc=${b.svc} color=${b.paid ? b.color : null} paid=${b.paid} />
-              <span class="when">${when(b)}${b.crowd && html`<span class="crowd">${t('Crowding: {0}', crowdWord(b.crowd).toLowerCase())}</span>`}</span>
-            </div>
-          `,
-        )}
-      </div>
-      <p class="sheet-label">${t('Services here')}</p>
-      <div class="svc-tags">${stop.services.map((svc) => html`<${SvcTag} svc=${svc} key=${svc} onClick=${() => choose(svc)} />`)}</div>
+    <${Frame} id=${`stop-${code}`} title=${stop.name} sub=${sub} box=${box}>
+      ${!board && html`<div class="hint">${t('Checking…')}</div>`}
+      ${board?.text && html`<div class="hint">${board.text}</div>`}
+      ${rows.length > 0 &&
+      html`
+        <div class="sheet-board" id="sheet-board">
+          ${(all || more <= 1 ? rows : rows.slice(0, PEEK_ROWS)).map((r) => html`<${Row} key=${r.svc} r=${r} onPick=${choose} />`)}
+        </div>
+        ${more > 1 && html`<button type="button" class="sheet-more" aria-expanded=${String(all)} aria-controls="sheet-board" onClick=${() => setAll(!all)}>${all ? t('Show fewer') : t('Show {0} more', more)}</button>`}
+      `}
+      ${board?.text && html`<div class="svc-tags">${stop.services.map((svc) => html`<${SvcTag} svc=${svc} key=${svc} onClick=${() => choose(svc)} />`)}</div>`}
       <div class="sheet-actions">
         <button type="button" class="btn small accent" onClick=${() => onGoTo({ code: stop.code, name: stop.name, place: same?.key ?? null })}>${t('Go there')}</button>
-        <a class="btn small ghost" href=${directions(stop)} target="_blank" rel="noopener">${t('Walking directions')}</a>
-        <button type="button" class="btn small ghost" disabled=${Boolean(same) || saving} onClick=${save}>${same ? t('In your favourites') : (saveMsg ?? t('Add to favourites'))}</button>
+        <a class="btn small ghost icon" href=${directions(stop)} target="_blank" rel="noopener" aria-label=${t('Walking directions')} title=${t('Walking directions')}><${Icon} paths=${WALKER} /></a>
+        <button type="button" class=${`btn small ghost icon${same ? ' on' : ''}`} disabled=${Boolean(same) || saving} onClick=${save} aria-label=${same ? t('In your favourites') : t('Add to favourites')} title=${same ? t('In your favourites') : t('Add to favourites')}><${Icon} paths=${STAR} /></button>
       </div>
+      ${saveMsg && html`<p class="hint" role="alert">${saveMsg}</p>`}
     <//>
   `;
 }

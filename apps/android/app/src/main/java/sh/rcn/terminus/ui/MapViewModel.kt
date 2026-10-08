@@ -11,11 +11,11 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import sh.rcn.terminus.Api
 import sh.rcn.terminus.ApiError
+import sh.rcn.terminus.Board
 import sh.rcn.terminus.CampusMap
 import sh.rcn.terminus.LiveBus
 import sh.rcn.terminus.Locator
 import sh.rcn.terminus.MapFiles
-import sh.rcn.terminus.StopBoard
 import sh.rcn.terminus.Store
 
 /** What the pill's status line says about the live buses. */
@@ -51,8 +51,8 @@ data class MapUi(
     val sheet: MapSheet? = null,
     /** A stop opened from elsewhere (Nearby on Now), for the map to move to once. */
     val focus: String? = null,
-    /** The open stop's board; null while it loads. */
-    val board: StopBoard? = null,
+    /** The open stop's board, the services not running now too; null while it loads. */
+    val board: Board? = null,
     /** True when the board couldn't be fetched at all (offline). */
     val boardFailed: Boolean = false,
     /** Where the phone is, only with location already allowed. */
@@ -177,12 +177,12 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun refreshBoard() {
         val code = (_state.value.sheet as? MapSheet.Stop)?.code ?: return
         try {
-            val board = api().arrivals(code)
+            val board = api().board(code)
             if ((_state.value.sheet as? MapSheet.Stop)?.code == code) _state.update { it.copy(board = board, boardFailed = false) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: ApiError) {
-            if ((_state.value.sheet as? MapSheet.Stop)?.code == code) _state.update { it.copy(board = StopBoard(false, emptyList())) }
+            if ((_state.value.sheet as? MapSheet.Stop)?.code == code) _state.update { it.copy(board = Board(code, "", null, false, emptyList(), null)) }
         } catch (e: Exception) {
             if ((_state.value.sheet as? MapSheet.Stop)?.code == code) _state.update { it.copy(boardFailed = true) }
         }
