@@ -42,6 +42,10 @@ object LeaveAlerts {
     private const val CHECK_AHEAD_MS = 2 * 60_000L
     /** An alarm this close to remindAt (or a moment late) posts at once. */
     private const val POST_SLACK_MS = 1_000L
+    /** With nothing to say yet (no bus to catch), checked again at most this often... */
+    private const val RETRY_GAP_MS = 2 * 60_000L
+    /** ...and only this long past remindAt: then the trip counts as done, as a shown heads-up would. */
+    private const val GIVE_UP_MS = 10 * 60_000L
 
     const val ACTION_CHECK = "sh.rcn.terminus.LEAVE_CHECK"
     const val ACTION_NOW = "sh.rcn.terminus.LEAVE_NOW"
@@ -120,19 +124,24 @@ object LeaveAlerts {
         }
         cancelAlarm(ctx, ACTION_CHECK)
         // Fresh times in hand, but not yet: the heads-up goes at remindAt, so
-        // "5 minutes before you need to leave" is true when it comes.
-        if (remindAt > now + POST_SLACK_MS) {
+        // "5 minutes before you need to leave" is true when it comes. Only
+        // with exact alarms: an inexact one after the inexact check could
+        // land past the leave time, so then it goes now, as the check lands.
+        if (remindAt > now + POST_SLACK_MS && canBeExact(ctx)) {
             setAlarm(ctx, ACTION_POST, remindAt)
             return
         }
         cancelAlarm(ctx, ACTION_POST)
-        // Marked only once shown: with no leave time to say (no bus to
-        // catch), the card's next change tries again.
+        // Marked once shown: with no leave time to say (no bus to catch),
+        // the card's next change tries again, every couple of minutes at
+        // most, until the reminder is well past.
         if (post(ctx, answer, now)) {
             store.leaveNotifiedFor = trip
             if (leaveAt != null && leaveAt > now) setAlarm(ctx, ACTION_NOW, leaveAt)
+        } else if (now - remindAt > GIVE_UP_MS) {
+            store.leaveNotifiedFor = trip
         } else {
-            card?.nextChangeAtMs?.takeIf { it > now }?.let { setAlarm(ctx, ACTION_CHECK, it + 2_000) }
+            card?.nextChangeAtMs?.takeIf { it > now }?.let { setAlarm(ctx, ACTION_CHECK, maxOf(it + 2_000, now + RETRY_GAP_MS)) }
         }
     }
 
