@@ -253,8 +253,6 @@ export function candidateStops(graph: Graph, input: ResolveInput): Candidate[] {
       }
       // Where to get off: the stop that gets you there soonest, crossing included.
       let best: { hops: number; crossS: number; code: string; rideS?: number } | null = null;
-      // Seconds a stop on this service: measured when there are enough rides (ridetimes.ts).
-      const perHop = input.hopS?.(svc) ?? RIDE.secondsPerHop;
       // A public bus rides by the metres along its route (public.ts): its
       // campus stops can be a long way round the island apart.
       const pub = isPublic(graph, svc);
@@ -264,7 +262,7 @@ export function candidateStops(graph: Graph, input: ResolveInput): Candidate[] {
         if (!r) continue;
         const m = pub ? rideMetres(idx, svc, stop.code, t.code) : null;
         const stops = m === null ? rideStops(idx, svc, stop.code, t.code) : null;
-        let rideS = m !== null ? publicRideS(m) : stops ? shuttleRideS(idx, stops, perHop) : r.hops * perHop;
+        let rideS = m !== null ? publicRideS(m) : stops ? shuttleRideS(idx, stops, RIDE.secondsPerHop) : r.hops * RIDE.secondsPerHop;
         // Past the terminal it's the next run: about a headway's wait there.
         if (r.through) rideS += headwayFor(graph, svc);
         const cand = { hops: r.hops, crossS: t.crossS, code: t.code, ...(rideS !== r.hops * RIDE.secondsPerHop ? { rideS } : {}) };

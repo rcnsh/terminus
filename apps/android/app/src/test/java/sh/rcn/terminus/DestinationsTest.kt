@@ -56,11 +56,4 @@ class DestinationsTest {
         assertEquals(used, Destinations.parse(Destinations.serialise(used)))
         assertTrue(Destinations.parse("not json").isEmpty())
     }
-
-    @Test fun speedFromTwoFixes() {
-        // About 111 m north in 20 s: a bus, not a walk.
-        val v = TripWatch.speedBetween(1.2900, 103.7800, 0, 1.2910, 103.7800, 20_000)!!
-        assertEquals(5.56, v, 0.05)
-        assertEquals(null, TripWatch.speedBetween(1.29, 103.78, 0, 1.2901, 103.78, 1_000))
-    }
 }

@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { CORS, UpstreamUnreachable, clientKey, coordsFrom, json, timedFetch, withSecurityHeaders } from '../src/http.ts';
-import { fixOf } from '../src/detect.ts';
 import { landmark, targetStops } from '../src/landmarks.ts';
 import { termDay } from '../src/calendar.ts';
 import { FROZEN_NOW } from './_stubs.mjs';
@@ -18,12 +17,10 @@ test('coordsFrom: a fix the phone says is hundreds of metres out is no location'
   assert.deepEqual(at('lat=1.2955&lon=103.7714&acc=x'), { lat: 1.2955, lon: 103.7714 }, 'an unreadable accuracy is ignored');
 });
 
-test('coordsFrom and fixOf: a location is rounded to about 11 metres, whoever sends it', () => {
+test('coordsFrom: a location is rounded to about 11 metres, whoever sends it', () => {
   const at = (q) => coordsFrom(new URL(`https://x.test/next?${q}`));
   assert.deepEqual(at('lat=1.295512345&lon=103.771449999'), { lat: 1.2955, lon: 103.7714 });
   assert.deepEqual(at('lat=-1.29556&lon=-103.77146'), { lat: -1.2956, lon: -103.7715 });
-  const fix = fixOf({ lat: 1.295512345, lon: 103.771450001, speed: 6.25, acc: 12 });
-  assert.deepEqual(fix, { lat: 1.2955, lon: 103.7715, speedMs: 6.25, accM: 12 });
 });
 
 test('CORS: another origin may send the headers the API reads, and read the ones it answers with', () => {

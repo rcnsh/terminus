@@ -142,6 +142,11 @@ export interface LiveBus {
    *  so a map can show the stretch; null at a stop. */
   stretch: { from: number; to: number; last: { code: string; name: string } } | null;
   nextStop: { code: string; name: string } | null;
+  /** The stops still ahead on its line, nextStop first, to where the line
+   *  ends (a loop: back at its first stop); [] past a one-way line's end. */
+  upcoming: { code: string; name: string }[];
+  /** Where its line ends: a loop's first stop, a one-way line's last. */
+  towards: { code: string; name: string };
 }
 
 /** Where a bus is on its line: metres along, the point, and the road's bearing there. */
@@ -420,6 +425,8 @@ export async function placeBuses(
   if (!shape) return { buses: [], tracks: next };
   const total = cumulative(shape.line).at(-1) ?? 0;
   const stopOf = (k: number | null) => (k == null ? null : { code: shape.stops[k], name: byCode.get(shape.stops[k])?.name ?? shape.stops[k] });
+  /** From stop [k] to the line's end; a loop's end is its first stop again, listed last. */
+  const upcomingOf = (k: number | null) => (k == null ? [] : shape.stops.slice(k).map((_, i) => stopOf(k + i)!));
 
   // Each bus on its line: where its reading is, and which stop or stretch that is.
   const found: { b: RawBus; id: string; along: number; section: Section; key: string; was?: Track['shown'] }[] = [];
@@ -474,6 +481,8 @@ export async function placeBuses(
         slot: k != null ? i : 0,
         stretch: k == null ? { from: round(shape.at[from], 10), to: round(shape.at[to!], 10), last: stopOf(from)! } : null,
         nextStop: stopOf(nextOf(shape, f.section, loop)),
+        upcoming: upcomingOf(nextOf(shape, f.section, loop)),
+        towards: stopOf(shape.stops.length - 1)!,
       });
     });
   }
