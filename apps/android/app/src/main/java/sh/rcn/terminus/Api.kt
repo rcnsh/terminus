@@ -988,6 +988,12 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         request("POST", "/me/feedback", body)
     }
 
+    /** A stop suggestion: the stop the person uses for a building, and why. Needs an account with an email. */
+    suspend fun suggestStop(venue: String, stop: String, why: String, appVersion: String) {
+        val body = JSONObject().put("kind", "stop").put("venue", venue).put("stop", stop).put("note", why).put("platform", "android").put("appVersion", appVersion)
+        request("POST", "/me/feedback", body)
+    }
+
     /** Download my data: everything the account holds, as the account page gives it. */
     suspend fun export(): JSONObject = request("GET", "/me/export")
 

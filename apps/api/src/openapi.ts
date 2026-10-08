@@ -1110,7 +1110,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Account'],
           summary: 'Report a wrong answer',
           description:
-            'Sends the answer you were looking at, with what was wrong (a reason from the list, a note, or both), for checking against what the buses did. Only for an account with an email (signed in), so the operator can reply. Kept with your account for a year (in the export, deleted with it); the note alone is emailed to the operator, without your address or the answer. Up to ten a day.',
+            'Sends the answer you were looking at, with what was wrong (a reason from the list, a note, or both), for checking against what the buses did. With kind `stop`, suggests the stop students use for a building instead (`venue`, `stop`, and why in `note`, which may be empty); it is kept as feedback with the reason `better-stop`. Only for an account with an email (signed in), so the operator can reply. Kept with your account for a year (in the export, deleted with it); the note alone is emailed to the operator, without your address or the answer. Up to ten a day.',
           operationId: 'sendFeedback',
           security: [{ bearer: [] }, { cookie: [] }],
           requestBody: jsonBody(
@@ -1118,13 +1118,15 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               type: 'object',
               required: ['platform'],
               properties: {
-                kind: { type: 'string', enum: ['wrong', 'other'], default: 'wrong' },
+                kind: { type: 'string', enum: ['wrong', 'other', 'stop'], default: 'wrong', description: 'A wrong answer, a note about anything, or a stop suggestion.' },
                 reason: {
                   type: 'string',
                   enum: ['never-came', 'times-off', 'wrong-stop', 'walk-longer', 'wrong-class'],
                   description: 'What was wrong with the answer, as the apps offer it: the bus never came, the times were off, the wrong stop, a longer walk, the wrong class. Only with kind wrong.',
                 },
-                note: { type: 'string', maxLength: 1000, description: 'What was wrong, or what you would like. Required unless there is a reason.' },
+                note: { type: 'string', maxLength: 1000, description: 'What was wrong, or what you would like. Required unless there is a reason or it is a stop suggestion.' },
+                venue: { type: 'string', description: 'With kind stop: the building, or a room in it (`LT21`, `COM1-0208`).' },
+                stop: { type: 'string', description: 'With kind stop: the code of the stop you use for it (`S17`).' },
                 platform: { type: 'string', enum: ['android', 'mac', 'web'] },
                 appVersion: { type: 'string', maxLength: 20 },
                 context: { type: 'object', description: 'The answer as shown (a /me/next response), up to 16 KB.' },
@@ -1134,7 +1136,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           ),
           responses: {
             '201': ok({ type: 'object', properties: { ok: { type: 'boolean' }, id: { type: 'string' } } }),
-            '400': errorResponse('Missing or invalid field (no reason and an empty note, too); the message names it.'),
+            '400': errorResponse('Missing or invalid field (no reason and an empty note, too; a building or stop not known, or the stop the building has already); the message names it.'),
             '401': errorResponse('No valid session.'),
             '403': errorResponse('An anonymous account: sign in with an email first.'),
             '429': { ...errorResponse('Ten reports already today, or too many requests from this account.'), headers: RETRY_AFTER },

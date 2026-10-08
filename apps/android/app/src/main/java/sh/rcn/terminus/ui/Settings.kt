@@ -622,7 +622,7 @@ private const val FEEDBACK_NEAR = 900
  * from, the note, then a counter and Send. Only an account with an email can
  * send one, so there's someone to reply to; without one, the page asks for an
  * email instead. A wrong answer is better sent from under the card, so the
- * card below says so.
+ * card below says so. Under that, a stop suggestion ([StopSuggestion]).
  */
 @Composable
 private fun FeedbackPage(state: AccountState, account: AccountViewModel, onAddEmail: () -> Unit) {
@@ -678,6 +678,51 @@ private fun FeedbackPage(state: AccountState, account: AccountViewModel, onAddEm
                     Text(stringResource(R.string.feedback_wrong_title), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
                     Hint(stringResource(R.string.feedback_wrong_hint), Modifier.padding(top = 2.dp))
                 }
+            }
+        }
+        StopSuggestion(state, account)
+    }
+}
+
+/**
+ * "A better stop for a building": the building (searched for, as on the
+ * main screen), the stop you use for it and why, sent as a stop suggestion.
+ * The map's nearest stop is sometimes the one nobody uses (a climb, no
+ * crossing); only someone who walks it knows.
+ */
+@Composable
+private fun StopSuggestion(state: AccountState, account: AccountViewModel) {
+    val buildings = remember(state.campus) { state.campus?.destinations.orEmpty().filter { it.kind == "building" } }
+    val stops = remember(state.campus) { state.campus?.stops.orEmpty().sortedBy { it.name }.map { it.code to it.name } }
+    var building by remember { mutableStateOf<Destination?>(null) }
+    var stop by rememberSaveable { mutableStateOf<String?>(null) }
+    var why by rememberSaveable { mutableStateOf("") }
+    Column(Modifier.padding(top = 8.dp)) {
+        Group(stringResource(R.string.suggest_title), stringResource(R.string.suggest_hint)) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                WherePicker(stringResource(R.string.suggest_building), buildings, building) { building = it }
+                Choice(stringResource(R.string.suggest_stop), stops, stop, { stop = it }, blank = stringResource(R.string.choose_stop))
+                OutlinedTextField(
+                    value = why,
+                    onValueChange = { why = it.take(FEEDBACK_MAX) },
+                    label = { Text(stringResource(R.string.suggest_why)) },
+                    placeholder = { Text(stringResource(R.string.suggest_why_placeholder)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                InkButton(
+                    stringResource(R.string.suggest_send),
+                    {
+                        val b = building ?: return@InkButton
+                        val s = stop ?: return@InkButton
+                        account.suggestStop(b.code, s, why) {
+                            building = null
+                            stop = null
+                            why = ""
+                        }
+                    },
+                    enabled = building != null && stop != null && !state.busy,
+                )
             }
         }
     }

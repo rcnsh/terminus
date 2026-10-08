@@ -1282,6 +1282,39 @@ test('feedback: a reason picked from the sheet is enough on its own, said in wor
   assert.deepEqual(stats.feedback.latest.map((f) => f.reason).sort(), ['The bus never came', 'The times were off']);
 });
 
+test('feedback: a stop suggestion names a building and its stop, and the email carries the entry for venue-stops.json', async () => {
+  const { env, email, db } = setup();
+  env.ALERT_EMAIL = 'ops@example.test';
+  env.HEALTH_TOKEN = 'operator-secret';
+  const cookie = await signIn(env, email);
+  const post = (body) => call(env, '/me/feedback', { method: 'POST', cookie, body });
+  // A room stands for its building, and why can be left out.
+  assert.equal((await post({ kind: 'stop', venue: 'com1-0208', stop: 'CLB', note: 'The bridge goes straight there', platform: 'web' })).status, 201);
+  const sent = email.sent.at(-1);
+  assert.equal(sent.subject, 'terminus stop suggestion: COM1 from CLB');
+  assert.match(sent.text, /Building: COM1\nThe stop they use: .+ \(CLB\)\nIts stops now: COM3, CLB/);
+  assert.ok(sent.text.includes('"COM1": {"stops":["CLB"],"why":"The bridge goes straight there"}'), sent.text);
+  assert.equal((await post({ kind: 'stop', venue: 'LT21', stop: 'UHALL', platform: 'android' })).status, 201, 'no note needed');
+  assert.deepEqual(
+    db._db.prepare('SELECT kind, reason, note, context FROM feedback ORDER BY created, rowid').all().map((r) => [r.kind, r.reason, r.note, JSON.parse(r.context).venue]),
+    [['other', 'better-stop', 'The bridge goes straight there', 'COM1'], ['other', 'better-stop', '', 'LT21']],
+  );
+  const refused = async (body, why) => {
+    const res = await post({ kind: 'stop', platform: 'web', ...body });
+    assert.equal(res.status, 400, why);
+    return (await res.json()).error;
+  };
+  assert.match(await refused({ venue: 'NOWHERE', stop: 'CLB' }, 'a building the table knows'), /like LT21/);
+  assert.equal(await refused({ venue: 'LT21', stop: 'NOPE' }, 'a stop on the map'), 'choose a stop');
+  assert.match(await refused({ venue: 'LT21', stop: 'S17' }, 'its stop already'), /already/);
+  assert.match(await refused({ venue: 'LT21', stop: 'LT27' }, 'the stop across the road from it'), /already/);
+  const stats = await (await worker.fetch(new Request(BASE + '/admin/stats', { headers: { 'x-health-token': 'operator-secret' } }), env, makeCtx())).json();
+  assert.deepEqual(stats.feedback.latest.map((f) => [f.reason, f.answer]).sort(), [
+    ['A better stop for a building', `COM1: use ${GRAPH.stops.find((x) => x.code === 'CLB').name}`],
+    ['A better stop for a building', `LT21: use ${GRAPH.stops.find((x) => x.code === 'UHALL').name}`],
+  ]);
+});
+
 test('feedback: an account without an email is asked to sign in, and nothing is kept or emailed', async () => {
   const { env, email, db } = setup();
   env.ALERT_EMAIL = 'ops@example.test';

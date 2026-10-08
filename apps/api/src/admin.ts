@@ -9,7 +9,7 @@
 
 import type { Env } from './types.ts';
 import { answering, answeringSince, readIncidents, readUpstream } from './monitor.ts';
-import { REASONS, summarize } from './feedback.ts';
+import { BETTER_STOP, BETTER_STOP_TEXT, REASONS, summarize } from './feedback.ts';
 
 const DAY = 86_400_000;
 
@@ -149,7 +149,7 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
         created: new Date(f.created).toISOString(),
         kind: f.kind,
         // In words: the dashboard is the operator's, in English.
-        reason: f.reason ? (REASONS[f.reason as keyof typeof REASONS] ?? f.reason) : null,
+        reason: f.reason ? (f.reason === BETTER_STOP ? BETTER_STOP_TEXT : (REASONS[f.reason as keyof typeof REASONS] ?? f.reason)) : null,
         note: f.note,
         platform: f.platform,
         appVersion: f.appVersion,

@@ -415,3 +415,13 @@
 "Which server this app talks to. Only terminus's own are here. terminus starts again to switch, and the dev stub keeps its own sign-in." = "这个应用连接的服务器。这里只有 terminus 自己的。切换时 terminus 会重新启动，开发用的模拟服务器有自己的登录。";
 "%@ (default)" = "%@（默认）";
 "%@ (dev stub on this Mac)" = "%@（这台 Mac 上的模拟服务器）";
+
+/* Send feedback: a better stop for a building */
+"A better stop for a building" = "某栋楼更好的车站";
+"Building" = "大楼";
+"The stop you use" = "你用的车站";
+"Why (optional)" = "原因（选填）";
+"A path leads straight there" = "有条小路直通那里";
+"Suggest this stop" = "推荐这个车站";
+"If we send you to a stop you never use for a building, tell us the one you do." = "如果我们为某栋楼推荐的车站你从来不用，告诉我们你用的是哪个。";
+"Thanks. We’ll walk it and change the stop if it’s better." = "谢谢。我们会去走一趟，如果更好就换成这个车站。";
