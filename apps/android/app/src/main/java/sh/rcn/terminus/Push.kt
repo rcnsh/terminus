@@ -114,7 +114,13 @@ class TerminusApp : Application() {
         super.onCreate()
         L.init(this)
         ServerClock.init(this)
+        Quiet.init(this)
+        Outdated.init(this)
         Push.init(this)
+        // The token is read once per process, through the Keystore: started
+        // here, off the main thread, so the first screen rarely waits for it.
+        val app = this
+        Thread { Store(app).token }.start()
     }
 }
 

@@ -539,7 +539,7 @@ private fun SettingsPageContent(
                 Hint(stringResource(R.string.not_signed_in_hint))
                 InkButton(stringResource(R.string.add_email), onAddEmail)
             } else {
-                Devices(state, account, onSignedOut)
+                Devices(state, account, main, onSignedOut)
             }
         }
         SettingsPage.Language -> Groups {
@@ -807,7 +807,7 @@ private fun AccountSection(state: AccountState, account: AccountViewModel, main:
 
 /** Your devices, each removable (this phone signs out), then Add a device. */
 @Composable
-private fun Devices(state: AccountState, account: AccountViewModel, onSignedOut: () -> Unit) {
+private fun Devices(state: AccountState, account: AccountViewModel, main: MainViewModel, onSignedOut: () -> Unit) {
     var removing by remember { mutableStateOf<Device?>(null) }
     val devices = state.devices
     if (devices == null) {
@@ -841,7 +841,7 @@ private fun Devices(state: AccountState, account: AccountViewModel, onSignedOut:
             onDismissRequest = { removing = null },
             title = { Text(stringResource(R.string.remove_device_title, d.name)) },
             text = { Text(if (d.current) stringResource(R.string.remove_this_phone) else stringResource(R.string.remove_other)) },
-            confirmButton = { TextButton(onClick = { removing = null; account.removeDevice(d) { onSignedOut() } }) { Text(stringResource(R.string.remove)) } },
+            confirmButton = { TextButton(onClick = { removing = null; account.removeDevice(d) { main.signedOut(); onSignedOut() } }) { Text(stringResource(R.string.remove)) } },
             dismissButton = { TextButton(onClick = { removing = null }) { Text(stringResource(R.string.cancel)) } },
         )
     }

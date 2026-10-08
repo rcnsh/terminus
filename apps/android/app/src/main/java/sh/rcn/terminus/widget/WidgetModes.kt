@@ -197,6 +197,12 @@ object WidgetModes {
                 Mode.Timetable -> JSONObject()
             }
         }
+        when (val e = result.exceptionOrNull()) {
+            // Replaced or stopped: nothing to record.
+            is kotlinx.coroutines.CancellationException -> throw e
+            // The token refused: the phone signs out (the widget says why), and this place goes with the rest.
+            is ApiError -> if (e.status == 401 && sh.rcn.terminus.Session.rejected(ctx, token)) return
+        }
         updateAppWidgetState(ctx, id) {
             result.onSuccess { json ->
                 it[MODE_JSON] = json.toString()

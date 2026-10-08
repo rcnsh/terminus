@@ -5,6 +5,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import sh.rcn.terminus.widget.Refresher
@@ -28,11 +29,34 @@ class AnswerTest {
 
     private fun ms(iso: String) = Instant.parse(iso).toEpochMilli()
 
+    /** Every golden, English and Chinese, each read as what it is: a new one is checked here without being listed. */
     @Test fun everyGoldenAnswerParses() {
-        for (name in listOf("class-bus", "class-walk", "class-late", "class-from-dorm", "class-room", "class-started", "place", "landmark", "room", "arrived", "free", "rest", "home", "home-reached", "evening-home", "setup", "riding", "scheduled", "no-timetable")) {
-            val a = golden(name)
-            assertNotNull("$name has a card", a.card)
+        val dir = listOf("../../api/test/fixtures/answers", "../api/test/fixtures/answers").map(::File).first { it.isDirectory }
+        val files = dir.walk().filter { it.extension == "json" }.toList()
+        assertTrue("goldens found", files.size > 20)
+        for (f in files) {
+            val json = JSONObject(f.readText())
+            when (f.name) {
+                "day.json" -> assertTrue("${f.path} has items", DayPlan.parse(json).items.isNotEmpty())
+                "nearby-list.json" -> assertTrue("${f.path} has stops", parseNearby(json).isNotEmpty())
+                else -> assertNotNull("${f.path} has a card", NextAnswer.parse(json).card)
+            }
         }
+    }
+
+    @Test fun aReplyOfTheWrongShapeIsAParseErrorNotOffline() {
+        // Read as offline before: "Couldn't reach terminus" for a server that answered.
+        assertThrows(ParseError::class.java) { parseNearby(JSONObject("""{"stops":[{"board":[]}]}""")) }
+        assertThrows(ParseError::class.java) { Campus.parse(JSONObject("{}")) }
+        assertThrows(ParseError::class.java) { DayPlan.parse(JSONObject("""{"items":[1]}""")) }
+        assertThrows(ParseError::class.java) { ImportResult.parse(JSONObject("{}")) }
+    }
+
+    @Test fun anythingButALiveTimeIsApproximate() {
+        val a = golden("place").copy(card = null)
+        val fmt = { _: Long -> "09:42" }
+        assertEquals("${a.label.substringBefore(" · ")} · 09:42", a.copy(quality = "live").clockLabel(fmt))
+        for (q in listOf("scheduled", "stale", "something-new")) assertEquals("${a.label.substringBefore(" · ")} · ~09:42", a.copy(quality = q).clockLabel(fmt))
     }
 
     @Test fun classCardLinesComeFromTheServer() {

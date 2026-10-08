@@ -96,15 +96,23 @@ class LiveService : Service() {
     private suspend fun sendFix(store: Store): Boolean {
         val fix = watch?.fix(System.currentTimeMillis()) ?: return false
         val token = store.token ?: return false
-        return runCatching { Api(token, fast = true, hour12 = hour12(this)).signal("location", null, fix.lat, fix.lon, fix.speedMs, fix.accM) }
-            .onSuccess { json ->
-                val now = System.currentTimeMillis()
-                store.saveAnswer(json, now)
-                store.lastError = null
-                Refresher.scheduleNext(this, NextAnswer.parse(json), now)
-                redrawWidgets(this)
-            }
-            .isSuccess
+        return try {
+            val json = Api(token, fast = true, hour12 = hour12(this)).signal("location", null, fix.lat, fix.lon, fix.speedMs, fix.accM)
+            val now = System.currentTimeMillis()
+            // Read before it's kept (a ParseError lands below): the last good answer stays.
+            val answer = store.saveAnswer(json, now)
+            store.lastError = null
+            Refresher.scheduleNext(this, answer, now)
+            redrawWidgets(this)
+            true
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: ApiError) {
+            if (e.status == 401) Session.rejected(this, token)
+            false
+        } catch (e: Exception) {
+            false
+        }
     }
 
     private suspend fun run() {
@@ -114,6 +122,8 @@ class LiveService : Service() {
         while (scope.isActive) {
             if (!store.liveUpdates || !store.paired) break
             if (!sendFix(store)) Refresher.refresh(this)
+            // Refused as too old: no more asking until the app is updated.
+            if (Outdated.holding() || !store.paired) break
             val answer = store.lastAnswer()?.first
             if (answer == null || answer.mode == "rest" || answer.card?.phase !in TRIP_PHASES) {
                 // Between trips: come back when the next one is due, the card changes (a
@@ -127,7 +137,8 @@ class LiveService : Service() {
             }
             nm?.notify(NOTIFICATION_ID, build(this, answer, watching = watch != null))
             // Following by location: every fix counts, screen on or off.
-            val wait = if (watch != null) WATCH_MS else if (power?.isInteractive != false) SCREEN_ON_MS else SCREEN_OFF_MS
+            // Never sooner than a 429's or a 503's Retry-After.
+            val wait = maxOf(if (watch != null) WATCH_MS else if (power?.isInteractive != false) SCREEN_ON_MS else SCREEN_OFF_MS, Quiet.waitMs())
             // The header's countdown runs on past zero ("-1:20") until it's
             // rebuilt: rebuilt just after it ends, without a fetch.
             val end = countdownAt(answer)?.let { it - ServerClock.now() + 1_000 }?.takeIf { it in 1 until wait }
