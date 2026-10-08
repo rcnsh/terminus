@@ -68,8 +68,11 @@ affiliated with NUS.
    alarm for anything else that calls NUS.
 
    Two other scheduled reads exist, small and bounded; don't grow them.
-   The 15-minute cron's health check asks NUS for one stop and LTA for one
-   stop each run, past the cache on purpose (`src/monitor.ts`). Each push
+   The stable Worker's 15-minute cron health check asks NUS for one stop
+   and LTA for one stop each run, past the cache on purpose
+   (`src/monitor.ts`). The beta's cron doesn't: it reads the breaker trips
+   its own traffic noted (`src/feedwatch.ts`), and calls NUS only to try a
+   new version string while NUS is refusing the beta. Each push
    user's Trip object (`src/tripdo.ts`) wakes at most every 30 s to
    recompute the card, asking for its stops through the cache.
 3. **`normalize()` / `normalizeBuses()` in `src/fms.ts` are the only code that
@@ -104,9 +107,12 @@ node apps/api/scripts/dev-stub.mjs    # local Worker on :8787 with a fake feed a
 - CI's `api` job also runs `pnpm exec cf deploy --dry-run` in `apps/api` to
   catch modules workerd won't load.
 - Website JS: CI runs `node --check` on every file in `apps/web/public`.
-- Android (CI): `./gradlew :app:lintStableDebug :app:testStableDebugUnitTest :app:compileBetaDebugKotlin`
-  in `apps/android` (Java 21).
-- Mac (CI, macOS runner): `swift build && swift test` in `apps/macos`.
+- Android (CI): `./gradlew :app:lintStableDebug :app:testStableDebugUnitTest :app:compileBetaDebugKotlin`,
+  then `:app:assembleStableRelease :app:assembleBetaRelease` (R8 and
+  resource shrinking, debug-signed without the keystore) in `apps/android`
+  (Java 21).
+- Mac (CI, macOS runner): `swift build && swift test`, then
+  `swift build -c release --arch arm64` in `apps/macos`.
 - In a Linux cloud container without the Android SDK or Xcode, you can't
   build those apps. Check pure-Kotlin logic another way if you can (for
   example `MapData.kt` with its JUnit test, using a standalone `kotlinc`
@@ -195,6 +201,7 @@ apps/api/
   src/trip.ts, tripdo.ts  Per-user Durable Object with today's trip signals
   src/detect.ts, outcomes.ts, ridetimes.ts  Ride detection, measured ride times
   src/monitor.ts      15-minute cron: feed health, incidents, housekeeping
+  src/feedwatch.ts    The beta's feed health, from breaker trips its traffic noted
   src/openapi.ts      OpenAPI 3.1 spec + docs page (a test fails if routes drift from it)
   src/http.ts         JSON helpers, CORS, security headers (CSP lives here)
   src/seo.ts          robots.txt, the sitemap, /llms.txt for AI agents (the beta asks not to be crawled)
@@ -204,7 +211,7 @@ apps/api/
                       public.json (public buses), calendar.json, walks.json,
                       venues/rooms/landmarks/residences
   migrations/         D1 schema, numbered NNNN_name.sql
-  scripts/            dev-stub.mjs; scrapers (scrape_stops.py, scrape_lta.py,
+  scripts/            dev-stub.mjs; predeploy.mjs (first step of a deploy); scrapers (scrape_stops.py, scrape_lta.py,
                       route_shapes.py, fetch_calendar.py, walk_routes.py,
                       check_scraped.py);
                       probe_buses.py (feed update-rate probe); record_buses.mjs (checks /buses on a live site);
@@ -246,7 +253,8 @@ apps/macos/
                       MapWindow.swift + MapData.swift + MapFiles.swift (the map window)
   Vendor/             MapLibre.xcframework.zip, from scripts/vendor-maplibre-mac.sh
   Support/            Info.plist (version, SUPublicEDKey), zh-Hans strings
-scripts/              release.sh, release-beta.sh, github-release.sh, package-mac.sh,
+scripts/              release.sh, release-beta.sh (+ release-lib.sh, their shared checks;
+                      verify-sparkle.swift), github-release.sh, package-mac.sh,
                       appcast.py, release-notes.py, map-tiles.sh,
                       vendor-map.sh, vendor-maplibre-mac.sh, vendor-preact.sh,
                       vendor-mediabunny.sh
@@ -260,8 +268,11 @@ scripts/              release.sh, release-beta.sh, github-release.sh, package-ma
 - **Data graph.** `data/stops.json` (stops, route order, operating hours) is
   scraped weekly by `scrape.yml` → `scripts/scrape_stops.py`, along with
   `shapes.json` (route lines from OpenStreetMap via Overpass) and
-  `calendar.json`. The workflow runs the tests and `check_scraped.py`, then
-  commits to main as `github-actions[bot]`. The data is bundled into the
+  `calendar.json`. The workflow runs the tests and `check_scraped.py`,
+  commits as `github-actions[bot]`, rebases onto main, tests the rebased
+  tree again (its push doesn't trigger CI) and pushes that commit. A failed
+  shapes, public-buses or calendar refresh keeps the committed file and
+  shows as a warning on the run. The data is bundled into the
   Worker, so a data change needs a deploy. The calendar is the exception:
   the cron also fetches it weekly into KV (`src/calendarsync.ts`), so it
   doesn't run out when nobody deploys.
@@ -378,8 +389,11 @@ scripts/              release.sh, release-beta.sh, github-release.sh, package-ma
 
 - **Deploying.** `main` is **not** auto-deployed.
   - Deploy from `apps/api` with `pnpm run deploy` (not `pnpm deploy`, which
-    is a pnpm built-in). It applies the stable D1's pending migrations, then
-    runs `cf deploy`, and needs `CLOUDFLARE_API_TOKEN`.
+    is a pnpm built-in). It first runs `scripts/predeploy.mjs`, which
+    refuses unmerged files, conflict markers or uncommitted changes in
+    `apps/api` and `apps/web/public` and runs `pnpm check`; then it applies
+    the stable D1's pending migrations and runs `cf deploy`. It needs
+    `CLOUDFLARE_API_TOKEN`.
   - The beta is `pnpm run deploy:beta`, with its own D1, KV and R2; it
     applies the beta D1's migrations the same way.
   - By hand, a migration is applied **before** deploying:
@@ -389,6 +403,11 @@ scripts/              release.sh, release-beta.sh, github-release.sh, package-ma
     until the deploy lands: no renames, drops or `NOT NULL` without a default.
     Change a column in steps (expand, backfill, contract; see
     `docs/internals.md`), and never edit a migration already applied.
+    `test/deploy.test.js` enforces this: an `ALTER TABLE` that drops,
+    renames or adds `NOT NULL` without a default fails unless the file has a
+    `-- contract:` line, and applied migrations are locked by hash in
+    `test/fixtures/migrations.sha256` (append a new one's line once it's
+    applied to both databases).
   - `wrangler` is only installed in `apps/api`, so run wrangler/R2 commands
     from there.
   - Server-side changes, the website included, are live for everyone once
@@ -397,13 +416,21 @@ scripts/              release.sh, release-beta.sh, github-release.sh, package-ma
   - Bump Android `versionName`/`versionCode` (`apps/android/app/build.gradle.kts`),
     the Mac `CFBundleShortVersionString`/`CFBundleVersion`
     (`apps/macos/Support/Info.plist`) and `API_VERSION` (`apps/api/src/openapi.ts`,
-    the version on the API docs) together. A test fails if they differ.
-  - Push `main`, then run `scripts/release.sh --dry-run` and
-    `scripts/release.sh` on the owner's Mac. It tests; builds the signed
-    split APKs and the signed Mac DMG with its Sparkle appcast; uploads them
-    and `latest.json` to R2; tags and pushes `v<version>`; and publishes the
-    GitHub release. Nothing waits for an approval.
-  - Betas use `scripts/release-beta.sh <x.y.z-beta.n>`, on the same Mac.
+    the version on the API docs) together. A test fails if the versions
+    differ, or if `versionCode` and `CFBundleVersion` do.
+  - Push `main`, wait for CI to pass, then run `scripts/release.sh --dry-run`
+    and `scripts/release.sh` on the owner's Mac. It refuses a commit that
+    isn't `origin/main` or whose CI hasn't passed, a build number not above
+    the live one, an APK not signed with the key in `assetlinks.json`, a
+    Sparkle signature that doesn't verify with `SUPublicEDKey`, an ad-hoc
+    signed Mac app, or an `apiBase` Gradle property. Then it tests; builds
+    the signed split APKs and the signed Mac DMG with its Sparkle appcast;
+    uploads them and `latest.json` to R2; tags and pushes `v<version>`; and
+    publishes the GitHub release. Nothing waits for an approval. A dry run
+    builds into `build/dry-run/`; a release that stops partway prints what's
+    live and the commands that finish it.
+  - Betas use `scripts/release-beta.sh <x.y.z-beta.n>`, on the same Mac,
+    with the same checks: also from `origin/main` with CI passed.
   - Agents don't create GitHub releases or tags by hand; the scripts do.
 - **Signing keys.** The Android keystore (`~/.gradle/gradle.properties`
   `TERMINUS_*`), the Mac certificate (in the login keychain, from
