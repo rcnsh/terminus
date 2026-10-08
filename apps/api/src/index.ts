@@ -30,7 +30,7 @@ import { phaseAt, sgtMinute } from './pagesky.ts';
 import { CORS, clientKey, coordsFrom, json, jsonCached, numParam, withSecurityHeaders } from './http.ts';
 import { type MeDeps, handleMe } from './me.ts';
 import { UPDATE_REQUIRED, accountsConfigured, clientOutdated } from './accounts.ts';
-import { readUpstream, runCron, statusRecords } from './monitor.ts';
+import { answering, readUpstream, runCron, statusRecords } from './monitor.ts';
 import { ltaConfigured } from './lta.ts';
 import { calendarThrough } from './calendar.ts';
 import { llmsTxt, robotsTxt, SITEMAP } from './seo.ts';
@@ -286,7 +286,7 @@ async function handleStatus(env: Env, nowMs: number): Promise<Response> {
   const iso = (ms: number | null) => (ms == null ? null : new Date(ms).toISOString());
   return json(
     {
-      feed: u ? (u.up ? 'up' : 'down') : 'unknown',
+      feed: u ? (answering(u) ? 'up' : 'down') : 'unknown',
       since: u ? iso(u.since) : null,
       checkedAt: u ? iso(u.checkedAt) : null,
       // Checks every 15 minutes; if they've stopped, what's above is old news.
@@ -312,7 +312,7 @@ async function handleHealth(req: Request, url: URL, env: Env, nowMs: number): Pr
   const daysLeft = Math.floor((Date.parse(`${through}T00:00:00Z`) - nowMs) / 86_400_000);
   // Unhealthy means something an operator must act on. No record yet (a
   // fresh deploy before the first cron run) is not that.
-  const ok = u?.up !== false && cronStale !== true && daysLeft > 0;
+  const ok = (!u || answering(u)) && cronStale !== true && daysLeft > 0;
   // The probe spends an upstream call, so only the operator gets it.
   const operator = isOperator(env, req);
   const probe = operator && url.searchParams.get('probe') === '1';
