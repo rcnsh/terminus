@@ -56,9 +56,9 @@
     {
       "kind": "class",
       "key": "4:840:COM3",
-      "label": "CS2030 @ COM1",
-      "title": "CS2030 @ COM1",
-      "line": "约 13:37 前出发 · 在 PGP 搭 A1",
+      "label": "CS2030 @ COM4",
+      "title": "CS2030 @ COM4",
+      "line": "13:41 前出发 · 步行",
       "status": "later",
       "from": "PGP",
       "fromName": "PGP",
@@ -66,27 +66,22 @@
       "toName": "COM 3",
       "startsAt": "2026-08-27T06:00:00Z",
       "endsAt": "2026-08-27T07:00:00Z",
-      "venue": "COM1",
+      "venue": "COM4",
       "removable": true,
       "leave": {
-        "at": "2026-08-27T05:37:40Z",
-        "estimated": true,
-        "svc": "A1",
-        "stop": "PGP",
-        "stopCode": "PGP",
-        "board": "2026-08-27T05:43:00Z",
-        "arrive": "2026-08-27T05:56:03Z",
-        "note": null,
-        "walkS": 300,
-        "rideS": 570,
-        "toStop": "CLB",
-        "toCode": "CLB"
+        "at": "2026-08-27T05:41:05Z",
+        "estimated": false,
+        "svc": null,
+        "stop": null,
+        "board": null,
+        "arrive": "2026-08-27T05:57:00Z",
+        "note": null
       },
       "timing": {
         "status": "on-time",
-        "text": "约 09:16 到达 · 早到 283 分钟",
+        "text": "09:15 到达 · 早到 284 分钟",
         "classAt": "2026-08-27T06:00:00Z",
-        "reachAt": "2026-08-27T01:16:51Z"
+        "reachAt": "2026-08-27T01:15:55Z"
       }
     },
     {
