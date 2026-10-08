@@ -1,0 +1,61 @@
+{
+  "label": "No classes today",
+  "detail": "Your timetable is for Sem 1 2026/27 · import this semester's in Settings",
+  "alt": null,
+  "stop": {
+    "code": "",
+    "name": "",
+    "confidence": 0
+  },
+  "quality": "ended",
+  "asOf": "2026-12-08T01:00:00.000Z",
+  "arrivals": [],
+  "mode": "free",
+  "dest": null,
+  "places": [
+    {
+      "key": "mrt",
+      "label": "KR MRT"
+    },
+    {
+      "key": "deck",
+      "label": "The Deck"
+    }
+  ],
+  "refreshAt": "2026-12-08T10:00:00Z",
+  "walkSpeedMs": 1.3,
+  "card": {
+    "kind": "free",
+    "staleAt": "2026-12-08T10:00:00Z",
+    "crowd": null,
+    "quality": null,
+    "leaveBy": null,
+    "leaveVia": null,
+    "catch": null,
+    "arrive": null,
+    "catchLine": null,
+    "late": false,
+    "goNow": null,
+    "note": null,
+    "estimate": null,
+    "phase": "idle",
+    "phaseText": null,
+    "glance": "No classes",
+    "line": "No classes today · Your timetable is for Sem 1 2026/27",
+    "actions": [],
+    "warning": null,
+    "nextChangeAt": "2026-12-08T10:00:00Z",
+    "remind": true,
+    "suggestion": null,
+    "ride": null,
+    "detected": false,
+    "walkTo": null,
+    "notice": null,
+    "h12": false,
+    "journey": null,
+    "upcoming": null,
+    "title": "No classes today",
+    "heading": null,
+    "remindAt": null
+  }
+}

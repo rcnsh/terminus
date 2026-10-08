@@ -1,0 +1,171 @@
+{
+  "stop": {
+    "code": "PGP",
+    "name": "PGP",
+    "confidence": 0.75
+  },
+  "quality": "live",
+  "asOf": "2026-08-27T01:01:00.000Z",
+  "arrivals": [
+    {
+      "svc": "D2",
+      "etaS": 420,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "D2",
+      "etaS": 1020,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    }
+  ],
+  "label": "D2 · 7 min",
+  "detail": "PGP · 5 min walk · GEA1000 @ UTown in ~17 min · or R2 in ~11 min",
+  "alt": "R2 · ~11 min · PGP",
+  "departsAt": "2026-08-27T01:08:00Z",
+  "arriveAt": "2026-08-27T01:17:30Z",
+  "bus": {
+    "svc": "D2",
+    "stop": "PGP",
+    "stopCode": "PGP",
+    "walkS": 300,
+    "rideS": 570,
+    "board": "2026-08-27T01:08:00Z",
+    "arrive": "2026-08-27T01:17:30Z",
+    "estimated": false,
+    "toStop": "UTown"
+  },
+  "altBus": {
+    "svc": "R2",
+    "stop": "PGP",
+    "stopCode": "PGP",
+    "walkS": 300,
+    "rideS": 570,
+    "board": "2026-08-27T01:12:20Z",
+    "arrive": "2026-08-27T01:21:50Z",
+    "estimated": true,
+    "toStop": "UTown"
+  },
+  "leave": {
+    "at": "2026-08-27T01:00:00Z",
+    "estimated": false,
+    "svc": "D2",
+    "stop": "PGP",
+    "board": "2026-08-27T01:06:00Z",
+    "arrive": "2026-08-27T01:15:30Z",
+    "note": null,
+    "stopCode": "PGP",
+    "offCode": "UTOWN",
+    "walkS": 300,
+    "rideS": 570,
+    "toStop": "UTown",
+    "stale": true
+  },
+  "mode": "trip",
+  "dest": {
+    "to": "UTOWN",
+    "label": "GEA1000 @ UTown",
+    "why": "class"
+  },
+  "timing": {
+    "status": "late",
+    "text": "~3 min late",
+    "classAt": "2026-08-27T01:15:00Z",
+    "reachAt": "2026-08-27T01:17:30Z"
+  },
+  "places": [
+    {
+      "key": "mrt",
+      "label": "KR MRT"
+    },
+    {
+      "key": "deck",
+      "label": "The Deck"
+    }
+  ],
+  "refreshAt": "2026-08-27T01:15:00Z",
+  "walkSpeedMs": 1.3,
+  "card": {
+    "kind": "class",
+    "staleAt": "2026-08-27T01:08:30Z",
+    "crowd": null,
+    "quality": null,
+    "leaveBy": "Leave by 09:00",
+    "leaveVia": "catch the 09:06 D2 at PGP",
+    "catch": "Catch the 09:06 D2 at PGP",
+    "arrive": "Arrive 09:15 · just in time",
+    "catchLine": "Catch the 09:06 D2 at PGP · arrive 09:15, just in time",
+    "late": true,
+    "goNow": "Or go now: D2 at 09:08 · arrive 09:17",
+    "note": null,
+    "estimate": null,
+    "phase": "heading",
+    "phaseText": "On your way",
+    "glance": "D2 09:06",
+    "line": "D2 09:06 at PGP · arrive 09:15 · just in time",
+    "actions": [
+      {
+        "id": "skipped",
+        "label": "Not going",
+        "trip": "4:555:UTOWN"
+      }
+    ],
+    "warning": null,
+    "nextChangeAt": "2026-08-27T01:06:00Z",
+    "remind": true,
+    "suggestion": null,
+    "ride": null,
+    "detected": false,
+    "walkTo": {
+      "name": "PGP",
+      "lat": 1.291765,
+      "lon": 103.780419
+    },
+    "notice": null,
+    "h12": false,
+    "journey": {
+      "leave": null,
+      "walk": "5 min",
+      "bus": {
+        "svc": "D2",
+        "color": "#8e44c9",
+        "stop": "PGP",
+        "board": "09:06"
+      },
+      "boardAt": "2026-08-27T01:06:00Z",
+      "ride": "10 min",
+      "off": null,
+      "to": "GEA1000 @ UTown",
+      "toStop": "UTown",
+      "arrive": "09:15",
+      "walkEnd": null,
+      "arriveStop": "09:15",
+      "slack": "just in time",
+      "live": false,
+      "backup": {
+        "svc": "D2",
+        "color": "#8e44c9",
+        "stop": "PGP",
+        "board": "09:08"
+      },
+      "why": null,
+      "title": "To GEA1000 @ UTown · starts 09:15",
+      "place": "GEA1000",
+      "byText": null,
+      "walkText": "5 min walk",
+      "rideText": "10 min ride",
+      "walkEndText": null,
+      "arriveText": "Arrive 09:15 · just in time",
+      "arriveWhere": "at UTown",
+      "backupText": "Or go now: D2 at 09:08 from PGP",
+      "summary": "arrive 09:15 · D2 09:06 at PGP"
+    },
+    "upcoming": null,
+    "title": "D2 · 09:08",
+    "heading": "Next class · GEA1000 @ UTown",
+    "remindAt": null
+  }
+}

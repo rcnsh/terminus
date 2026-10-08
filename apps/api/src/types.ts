@@ -162,7 +162,7 @@ export interface BusLeg {
   /** When it leaves the stop, and when you reach the destination stop, ISO. Null with no time. */
   board: string | null;
   arrive: string | null;
-  /** Rests on a headway, not a live time. */
+  /** Not a live time: a headway or timetable guess, or an old reading from a stale feed. */
   estimated: boolean;
   /** Where to get off, when the bus only stops across the road from the destination. */
   off?: string;

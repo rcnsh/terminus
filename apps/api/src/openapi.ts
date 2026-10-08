@@ -827,7 +827,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           parameters: [
             ...coordParams,
             { name: 'place', in: 'query', description: 'Key of a favourite (one of `places`).', schema: { type: 'string' }, example: 'mrt' },
-            { name: 'to', in: 'query', description: 'Any stop code or NUSMods venue code.', schema: { type: 'string' }, example: 'COM3' },
+            { name: 'to', in: 'query', description: 'Any stop code or NUSMods venue code. One that names nothing known is ignored, as an unknown `place` is.', schema: { type: 'string' }, example: 'COM3' },
             h12Param,
             langParam,
           ],
@@ -1891,7 +1891,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             rideS: { type: 'integer', description: 'Seconds on the bus.' },
             board: { type: ['string', 'null'], format: 'date-time', description: 'When the bus leaves the stop. Null with no time.' },
             arrive: { type: ['string', 'null'], format: 'date-time', description: 'When you reach the destination stop. Null with no time.' },
-            estimated: { type: 'boolean', description: 'Based on the usual gap between buses rather than a live time.' },
+            estimated: { type: 'boolean', description: 'Not a live time: based on the usual gap between buses or a timetable, or an old reading while the feed is down. Show it with a `~`.' },
             off: { type: 'string', description: 'Where to get off, when the bus only stops across the road from the destination. Absent otherwise.' },
             toStop: { type: 'string', description: 'Where you get off, short name: the destination stop this bus calls at, or `off`.' },
             endWalkS: { type: 'integer', description: 'Seconds on foot from where you get off to the place itself (a room, a building, a food court), which `arrive` does not count. Absent for a stop.' },

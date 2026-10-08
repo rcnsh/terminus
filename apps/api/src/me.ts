@@ -363,18 +363,18 @@ interface MeRoute {
 
 /**
  * The plate of the `svc` bus at `stopCode` right now: the one due soonest,
- * within a few minutes (at the tap it's pulling in or just leaving). Empty
- * when the feed has no plates or no such bus is near, so the ride falls back
- * to the estimate.
+ * within a few minutes (at the tap it's pulling in or just leaving), and
+ * when it's due there (`at`, ISO). Empty when the feed has no plates or no
+ * such bus is near, so the ride falls back to the estimate.
  */
-async function plateAt(env: Env, ctx: ExecutionContext, deps: MeDeps, stopCode: string | undefined, svc: string, nowMs: number): Promise<{ plate?: string }> {
+async function plateAt(env: Env, ctx: ExecutionContext, deps: MeDeps, stopCode: string | undefined, svc: string, nowMs: number): Promise<{ plate?: string; at?: string }> {
   if (!stopCode) return {};
   try {
     const sa = (await deps.collectArrivals(env, ctx, [stopCode], nowMs)).get(stopCode);
     const near = (sa?.arrivals ?? [])
       .filter((x) => x.svc === svc && x.plate && x.etaS !== null && x.etaS <= PLATE_WINDOW_S)
       .sort((x, y) => x.etaS! - y.etaS!)[0];
-    return near?.plate ? { plate: near.plate } : {};
+    return near?.plate && sa ? { plate: near.plate, at: isoSeconds(sa.fetchedAt + near.etaS! * 1000) } : {};
   } catch {
     return {};
   }
@@ -407,7 +407,8 @@ function nextBusFrom(graph: Graph, missed: Boarded | null, fix: Fix, nowMs: numb
 async function plateOnBoard(env: Env, ctx: ExecutionContext, deps: MeDeps, b: Boarded, nowMs: number): Promise<{ plate?: string }> {
   if (!b.stopCode || !b.alightCode) return {};
   const stops = rideStops(indexGraph(deps.graph), b.svc, b.stopCode, b.alightCode);
-  return plateAt(env, ctx, deps, stops?.[1], b.svc, nowMs);
+  const { plate } = await plateAt(env, ctx, deps, stops?.[1], b.svc, nowMs);
+  return plate ? { plate } : {};
 }
 
 /**
@@ -775,12 +776,16 @@ export const ME_ROUTES: MeRoute[] = [
           rec = current && fix ? await recordFromFix({ env, ctx, deps, userId: session.user.id, now, prev: day?.trips[key], label, fix, homeStops: profile.home?.stops ?? [], nowMs }) : undefined;
           break;
         }
-        case 'boarded':
+        case 'boarded': {
           // No bus to be on (a walk, or an old card): you've set off.
           if (!l?.svc) {
             rec = { kind: 'left', at: nowMs, label };
             break;
           }
+          // The bus pulling in now, which may be one before or after the
+          // plan's: its times are the plan's moved to when it's due here.
+          const { plate, at: boardAt } = await plateAt(env, ctx, deps, l.stopCode, l.svc, nowMs);
+          const shift = boardAt && l.board ? Date.parse(boardAt) - Date.parse(l.board) : 0;
           rec = {
             kind,
             at: nowMs,
@@ -788,15 +793,16 @@ export const ME_ROUTES: MeRoute[] = [
             boarded: {
               svc: l.svc,
               stop: l.stop ?? '',
-              board: l.board,
-              arrive: l.arrive,
+              board: boardAt ?? l.board,
+              arrive: l.arrive && shift ? isoSeconds(Date.parse(l.arrive) + shift) : l.arrive,
               ...(l.off ? { off: l.off } : {}),
               ...(l.stopCode ? { stopCode: l.stopCode } : {}),
               ...(now.answer.dest?.to ? { alightCode: l.offCode ?? now.answer.dest.to } : {}),
-              ...(await plateAt(env, ctx, deps, l.stopCode, l.svc, nowMs)),
+              ...(plate ? { plate } : {}),
             },
           };
           break;
+        }
         case 'missed':
           rec = { kind, at: nowMs, label, missed: l?.board ?? null };
           break;

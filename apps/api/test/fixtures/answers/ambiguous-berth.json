@@ -1,0 +1,159 @@
+{
+  "stop": {
+    "code": "COM3",
+    "name": "COM 3",
+    "confidence": 0.5
+  },
+  "quality": "live",
+  "asOf": "2026-08-27T01:00:00.000Z",
+  "arrivals": [
+    {
+      "svc": "D2",
+      "etaS": 180,
+      "crowd": null,
+      "plate": null,
+      "berth": "COM3-D2-E",
+      "ends": true
+    },
+    {
+      "svc": "D2",
+      "etaS": 780,
+      "crowd": null,
+      "plate": null,
+      "berth": "COM3-D2-E",
+      "ends": true
+    }
+  ],
+  "label": "D2 · 3 min",
+  "detail": "COM 3 · right here · UTown in ~16 min · walking 18 min · direction unconfirmed · or R2 in ~9 min",
+  "alt": "R2 · ~9 min · Opp HSSML",
+  "departsAt": "2026-08-27T01:03:00Z",
+  "arriveAt": "2026-08-27T01:15:40Z",
+  "bus": {
+    "svc": "D2",
+    "stop": "COM 3",
+    "stopCode": "COM3",
+    "walkS": 3,
+    "rideS": 760,
+    "board": "2026-08-27T01:03:00Z",
+    "arrive": "2026-08-27T01:15:40Z",
+    "estimated": false,
+    "toStop": "UTown"
+  },
+  "altBus": {
+    "svc": "R2",
+    "stop": "Opp HSSML",
+    "stopCode": "HSSML-OPP",
+    "walkS": 160,
+    "rideS": 475,
+    "board": "2026-08-27T01:09:00Z",
+    "arrive": "2026-08-27T01:16:55Z",
+    "estimated": true,
+    "toStop": "UTown"
+  },
+  "leave": {
+    "at": "2026-08-27T01:02:37Z",
+    "estimated": false,
+    "svc": "D2",
+    "stop": "COM 3",
+    "stopCode": "COM3",
+    "board": "2026-08-27T01:03:00Z",
+    "arrive": "2026-08-27T01:15:40Z",
+    "note": null,
+    "walkS": 3,
+    "rideS": 760,
+    "toStop": "UTown"
+  },
+  "mode": "trip",
+  "dest": {
+    "to": "UTOWN",
+    "label": "UTown",
+    "why": "place"
+  },
+  "timing": null,
+  "places": [
+    {
+      "key": "mrt",
+      "label": "KR MRT"
+    },
+    {
+      "key": "deck",
+      "label": "The Deck"
+    }
+  ],
+  "walkSpeedMs": 1.3,
+  "card": {
+    "kind": "trip",
+    "staleAt": "2026-08-27T01:03:30Z",
+    "crowd": null,
+    "quality": null,
+    "leaveBy": "Leave by 09:02",
+    "leaveVia": "catch the 09:03 D2 at COM 3",
+    "catch": null,
+    "arrive": null,
+    "catchLine": null,
+    "late": false,
+    "goNow": null,
+    "note": null,
+    "estimate": null,
+    "phase": "idle",
+    "phaseText": null,
+    "glance": "D2 09:03",
+    "line": "D2 · 3 min · COM 3",
+    "actions": [],
+    "warning": null,
+    "nextChangeAt": "2026-08-27T01:03:30Z",
+    "remind": true,
+    "suggestion": null,
+    "ride": null,
+    "detected": false,
+    "walkTo": {
+      "name": "COM 3",
+      "lat": 1.294431,
+      "lon": 103.775217
+    },
+    "notice": null,
+    "h12": false,
+    "journey": {
+      "leave": "09:02",
+      "walk": null,
+      "bus": {
+        "svc": "D2",
+        "color": "#8e44c9",
+        "stop": "COM 3",
+        "board": "09:03"
+      },
+      "boardAt": "2026-08-27T01:03:00Z",
+      "ride": "13 min",
+      "off": null,
+      "to": "UTown",
+      "toStop": "UTown",
+      "arrive": "09:15",
+      "walkEnd": null,
+      "arriveStop": "09:15",
+      "slack": null,
+      "live": true,
+      "backup": {
+        "svc": "R2",
+        "color": "#34a853",
+        "stop": "Opp HSSML",
+        "board": "~09:09"
+      },
+      "why": null,
+      "title": "To UTown",
+      "place": "UTown",
+      "byText": "by 09:02",
+      "walkText": null,
+      "rideText": "13 min ride",
+      "walkEndText": null,
+      "arriveText": "Arrive 09:15",
+      "arriveWhere": "at UTown",
+      "backupText": "Or R2 at ~09:09 from Opp HSSML",
+      "summary": "D2 09:03 at COM 3"
+    },
+    "upcoming": null,
+    "title": "D2 · 09:03",
+    "heading": "Going to UTown",
+    "remindAt": null
+  }
+}
