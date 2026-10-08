@@ -47,7 +47,7 @@ import { handleTimelapse } from './timelapse.ts';
 import { scopeCache } from './edgecache.ts';
 
 import { GRAPH, GRAPH_PUBLIC, twinOf } from './graph.ts';
-import { isBeta, markBeta, siteOrigin } from './site.ts';
+import { isBeta, markBeta, movedPage, siteOrigin } from './site.ts';
 import { answerFor, arrivedAnswer, collectArrivals, needsSetupAnswer } from './answer.ts';
 import { langOfRequest, m, withLang } from './i18n.ts';
 
@@ -395,6 +395,8 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
   const nowMs = Date.now();
 
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
+  const moved = movedPage(req, env);
+  if (moved) return moved;
   // The calendar the cron keeps fresh in KV (calendarsync.ts), read every few minutes.
   await loadCalendar(env, nowMs);
 
