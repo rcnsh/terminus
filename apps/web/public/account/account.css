@@ -341,7 +341,11 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
    stays, with × to close it, so it can be clicked. */
 .toast { position: fixed; z-index: 25; bottom: 18px; right: 18px; max-width: calc(100vw - 36px); display: flex; align-items: center; gap: 6px; margin: 0; padding: 8px 14px; border-radius: 18px; background: var(--ink); color: var(--bg); font-size: 0.85rem; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
 .toast.show { opacity: 1; }
-.toast.error.show { pointer-events: auto; }
+.toast.error.show, .toast.has-action.show { pointer-events: auto; }
+/* Undo: a pill in the toast's own colours, readable on it in either theme. */
+.toast-action { flex: none; margin: -4px -6px -4px 6px; padding: 3px 12px; border: 1px solid currentColor; border-radius: 999px; background: none; color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
+.toast-action:hover { background: color-mix(in srgb, var(--bg) 14%, transparent); }
+.toast-action:focus-visible { outline-color: var(--bg); outline-offset: -2px; }
 .toast-close { flex: none; margin: -6px -8px -6px 0; padding: 4px 10px; border: 0; border-radius: 999px; background: none; color: inherit; font: inherit; font-size: 1.1rem; line-height: 1; cursor: pointer; }
 .toast-close:focus-visible { outline-color: var(--bg); outline-offset: -2px; }
 

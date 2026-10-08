@@ -141,12 +141,35 @@ class ProfileDoc(val json: JSONObject) {
         json.put("places", list)
     }
 
-    fun removePlace(key: String) {
+    /** Takes a favourite off, with its usual times; what's returned puts them back ([restorePlace]). */
+    fun removePlace(key: String): RemovedPlace? {
         // The JSON objects themselves, so fields this version doesn't know about survive.
-        val a = json.optJSONArray("places") ?: return
-        json.put("places", JSONArray((0 until a.length()).map { a.getJSONObject(it) }.filter { it.optString("key") != key }))
-        val u = json.optJSONArray("usual") ?: return
-        json.put("usual", JSONArray((0 until u.length()).map { u.getJSONObject(it) }.filter { it.optString("place") != key }))
+        val a = json.optJSONArray("places") ?: return null
+        val all = (0 until a.length()).map { a.getJSONObject(it) }
+        val index = all.indexOfFirst { it.optString("key") == key }
+        if (index < 0) return null
+        json.put("places", JSONArray(all.filterIndexed { i, _ -> i != index }))
+        val u = json.optJSONArray("usual")
+        val usual = if (u == null) emptyList() else (0 until u.length()).map { u.getJSONObject(it) }
+        if (u != null) json.put("usual", JSONArray(usual.filter { it.optString("place") != key }))
+        return RemovedPlace(index, JSONObject(all[index].toString()), usual.filter { it.optString("place") == key }.map { JSONObject(it.toString()) })
+    }
+
+    /**
+     * Undo for [removePlace]: back in its old place in the list, with its
+     * usual times. Not when the list is full, or the stop is a favourite again.
+     */
+    fun restorePlace(r: RemovedPlace) {
+        val now = places
+        if (now.size >= limits.places || now.any { it.to == r.place.optString("to") || it.key == r.place.optString("key") }) return
+        val a = json.optJSONArray("places") ?: JSONArray()
+        val all = (0 until a.length()).map { a.getJSONObject(it) }.toMutableList()
+        all.add(r.index.coerceAtMost(all.size), r.place)
+        json.put("places", JSONArray(all))
+        if (r.usual.isEmpty()) return
+        val u = json.optJSONArray("usual") ?: JSONArray()
+        r.usual.forEach { u.put(it) }
+        json.put("usual", u)
     }
 
     /** Saved places at a usual time: each a trip that day, like a class. */
@@ -171,6 +194,11 @@ class ProfileDoc(val json: JSONObject) {
 }
 
 data class SavedPlace(val key: String, val label: String, val to: String)
+
+/** A favourite just removed, kept for Undo: where it was in the list, and its usual times. */
+class RemovedPlace(val index: Int, val place: JSONObject, val usual: List<JSONObject>) {
+    val label: String get() = place.optString("label")
+}
 
 /** A saved place at a usual time: day 0 = Sunday, minutes past midnight, Singapore time. */
 data class UsualTime(val place: String, val day: Int, val atMin: Int)

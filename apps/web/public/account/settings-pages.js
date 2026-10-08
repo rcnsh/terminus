@@ -2,7 +2,7 @@
 // out and moves between them). Each saves as it changes, through the shared
 // profile (profile.js).
 
-import { Rich, html, noteRow, reducedMotion, refocusAfterRemove, store, useEffect, useMemo, useRef, useState, useStore } from '../assets/ui.js';
+import { Rich, html, noteRow, reducedMotion, refocusAfterRemove, store, useEffect, useLayoutEffect, useMemo, useRef, useState, useStore } from '../assets/ui.js';
 import { api, clock, clockOpts, forgetAccountHere, locale, locationError, spaced, t } from './dom.js';
 import { Journey, STYLES, cardStyle, setCardStyle, styleHint, styleName } from './journey.js';
 import {
@@ -19,8 +19,10 @@ import {
   stopName,
   stopsByName,
   stopsNear,
+  restorePlace,
   toast,
   withPlace,
+  withoutPlace,
 } from './profile.js';
 import { SearchBox } from './search-box.js';
 import { Celestial, Horizon } from './sky.js';
@@ -687,10 +689,16 @@ function addFavourite(to, label) {
 export function Favourites() {
   const p = useStore(profile);
   const search = useRef(null);
+  // The favourites as last drawn: one not among them is new (added, or back
+  // with Undo), and unfolds (Place). Nothing is new the first time.
+  const drawn = useRef(null);
+  useEffect(() => {
+    drawn.current = new Set(p.places.map((x) => x.key));
+  });
   return html`
     <div class="trips">
       <${Group} title=${t('Your favourites')} hint=${t('Available in one tap from the app, the widget and the menu bar. To go somewhere every week, add it to your timetable.')}>
-        ${p.places.length > 0 && html`<ul class="list group-body">${p.places.map((place) => html`<${Place} key=${place.key} place=${place} />`)}</ul>`}
+        ${p.places.length > 0 && html`<ul class="list group-body">${p.places.map((place) => html`<${Place} key=${place.key} place=${place} arriving=${drawn.current !== null && !drawn.current.has(place.key)} />`)}</ul>`}
         <form
           id="place-form"
           class="field"
@@ -724,28 +732,73 @@ export function Favourites() {
   `;
 }
 
-/** A favourite: its name, where it goes, and Remove (which takes its usual times too). */
-function Place({ place }) {
+/** How long a favourite takes to fold away; it's removed once it has. */
+const FOLD_MS = 220;
+
+/**
+ * A favourite: its name, where it goes, and Remove (which takes its usual
+ * times too, with Undo). It comes and goes gently rather than in one frame:
+ * one `arriving` (added since the page drew) unfolds with a soft wash of the
+ * accent, and Remove folds it away before it goes, so the list doesn't jump.
+ */
+function Place({ place, arriving }) {
+  const row = useRef(null);
+  const [leaving, setLeaving] = useState(false);
+  useLayoutEffect(() => {
+    if (!arriving || reducedMotion()) return;
+    const el = row.current;
+    const h = el.offsetHeight;
+    const wash = getComputedStyle(el).getPropertyValue('--accent-soft').trim();
+    el.animate(
+      [
+        { height: '0px', paddingTop: '0px', paddingBottom: '0px', opacity: 0 },
+        { height: `${h}px`, paddingTop: '', paddingBottom: '', opacity: 1 },
+      ],
+      { duration: 260, easing: 'cubic-bezier(0.4, 0, 0.2, 1)' },
+    );
+    // Out to the card's edges (the list's 16px padding), fading after a moment.
+    const edges = (c) => `-16px 0 ${c}, 16px 0 ${c}`;
+    el.animate(
+      [
+        { backgroundColor: wash, boxShadow: edges(wash) },
+        { backgroundColor: wash, boxShadow: edges(wash), offset: 0.4 },
+        { backgroundColor: 'transparent', boxShadow: edges('transparent') },
+      ],
+      { duration: 1500, easing: 'ease-out' },
+    );
+  }, []);
+  const remove = (e) => {
+    if (leaving) return;
+    setLeaving(true);
+    // The list's last one gone, the search box to add another is next.
+    const refocus = noteRow(e.currentTarget);
+    const go = () => {
+      let removed = null;
+      edit((x) => {
+        removed = withoutPlace(x, place.key);
+      });
+      refocus(document.querySelector('#place-form input'));
+      if (removed) toast(t('{0} removed from favourites', place.label), { action: { label: t('Undo'), run: () => edit((x) => restorePlace(x, removed)) } });
+    };
+    if (reducedMotion()) return go();
+    const el = row.current;
+    el.animate(
+      [
+        { height: `${el.offsetHeight}px`, opacity: 1 },
+        { opacity: 0, offset: 0.7 },
+        { height: '0px', paddingTop: '0px', paddingBottom: '0px', borderTopWidth: '0px', opacity: 0 },
+      ],
+      { duration: FOLD_MS, easing: 'cubic-bezier(0.4, 0, 0.2, 1)', fill: 'forwards' },
+    ).finished.then(go, go);
+  };
   return html`
-    <li class="place">
+    <li class="place" ref=${row}>
       <div class="place-row">
         <span>
           <strong>${place.label}</strong>
           ${place.label === stopName(place.to) ? '' : html`<span class="meta">${` → ${stopName(place.to)}`}</span>`}
         </span>
-        <button
-          type="button"
-          class="remove"
-          aria-label=${t('Remove {0}', place.label)}
-          onClick=${(e) => {
-            // The list's last one gone, the search box to add another is next.
-            refocusAfterRemove(e.currentTarget, document.querySelector('#place-form input'));
-            edit((x) => {
-              x.places = x.places.filter((y) => y.key !== place.key);
-              x.usual = (x.usual ?? []).filter((u) => u.place !== place.key);
-            });
-          }}
-        >${t('Remove')}</button>
+        <button type="button" class="remove" aria-label=${t('Remove {0}', place.label)} onClick=${remove}>${t('Remove')}</button>
       </div>
     </li>
   `;

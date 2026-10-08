@@ -41,6 +41,22 @@ class ProfileTest {
     }
 
     @Test
+    fun `undoing a removed favourite puts it back where it was, with its usual times`() {
+        val p = ProfileDoc(JSONObject("""{"places":[{"key":"a","label":"A","to":"COM3"},{"key":"b","label":"B","to":"KR-MRT","icon":"x"},{"key":"c","label":"C","to":"PGP"}],"usual":[{"place":"b","day":1,"atMin":600},{"place":"c","day":2,"atMin":540}]}"""))
+        val removed = p.removePlace("b")!!
+        assertEquals(listOf("a", "c"), p.places.map { it.key })
+        assertEquals(listOf("c"), p.usual.map { it.place })
+        p.restorePlace(removed)
+        assertEquals(listOf("a", "b", "c"), p.places.map { it.key })
+        assertEquals("x", p.json.getJSONArray("places").getJSONObject(1).getString("icon"))
+        assertEquals(setOf("b", "c"), p.usual.map { it.place }.toSet())
+        // Not twice, and not over the same stop added again meanwhile.
+        p.restorePlace(removed)
+        assertEquals(3, p.places.size)
+        assertNull(p.removePlace("nope"))
+    }
+
+    @Test
     fun `no stops means no home, and a setup needs somewhere to go or start`() {
         val p = ProfileDoc(JSONObject())
         assertFalse(p.hasSetup)

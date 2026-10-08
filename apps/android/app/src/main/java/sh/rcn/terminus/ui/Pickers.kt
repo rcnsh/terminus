@@ -21,6 +21,7 @@ import androidx.compose.material3.TimePickerDefaults
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -81,6 +82,7 @@ internal fun WherePicker(
     destinations: List<Destination>,
     picked: Destination?,
     pinned: List<Destination> = emptyList(),
+    leaving: String? = null,
     onPick: (Destination?) -> Unit,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
@@ -114,26 +116,33 @@ internal fun WherePicker(
         }
         for ((i, d) in (top + rest).withIndex()) {
             if (i == top.size && top.isNotEmpty()) HorizontalDivider(thickness = 2.dp)
-            Column(
-                Modifier.fillMaxWidth().clickable(role = Role.Button) {
-                    query = ""
-                    onPick(d)
-                }.padding(vertical = 8.dp),
-            ) {
-                Text(d.label)
-                Text(
-                    when (d.kind) {
-                        "timetable" -> d.detail.orEmpty()
-                        "stop" -> stringResource(R.string.bus_stop)
-                        "landmark" -> d.detail ?: stringResource(R.string.place)
-                        "building" -> stringResource(R.string.building)
-                        else -> stringResource(R.string.room_code, d.code)
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            // [leaving], just picked, folds away before it goes from the list.
+            key(d.code) {
+                FoldRow(shown = d.code != leaving, arriving = false) {
+                    Column {
+                        Column(
+                            Modifier.fillMaxWidth().clickable(role = Role.Button) {
+                                query = ""
+                                onPick(d)
+                            }.padding(vertical = 8.dp),
+                        ) {
+                            Text(d.label)
+                            Text(
+                                when (d.kind) {
+                                    "timetable" -> d.detail.orEmpty()
+                                    "stop" -> stringResource(R.string.bus_stop)
+                                    "landmark" -> d.detail ?: stringResource(R.string.place)
+                                    "building" -> stringResource(R.string.building)
+                                    else -> stringResource(R.string.room_code, d.code)
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        HorizontalDivider()
+                    }
+                }
             }
-            HorizontalDivider()
         }
     }
 }

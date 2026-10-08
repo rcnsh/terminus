@@ -156,7 +156,7 @@ struct SettingsPaneView: View {
             case .timetable:
                 TimetablePane(app: app, setup: setup)
             case .favourites:
-                favourites
+                FavouritesPane(app: app, setup: setup)
             case .notifications:
                 Toggle(isOn: Binding(get: { app.leaveAlerts }, set: { app.setLeaveAlerts($0) })) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -202,26 +202,6 @@ struct SettingsPaneView: View {
         // The import's answer replaces the profile, so nothing that edits it
         // takes a click until it's in (SetupModel.edit refuses them meanwhile).
         .disabled(setup.importing)
-    }
-
-    @ViewBuilder private var favourites: some View {
-        Hint(L("Available in one tap from the menu bar, the phone app and its widget."))
-        if setup.places.isEmpty {
-            Text(L("None yet")).foregroundStyle(.secondary)
-        }
-        ForEach(setup.places, id: \.key) { p in
-            HStack {
-                Label(p.label, systemImage: "star.fill").labelStyle(.titleAndIcon)
-                Spacer()
-                Button(L("Remove")) { setup.removePlace(p.key) }
-                    .buttonStyle(.link)
-                    .accessibilityLabel(L("Remove %@", p.label))
-            }
-        }
-        if setup.places.count < setup.maxPlaces {
-            FavouriteSearch(app: app, setup: setup)
-        }
-        Hint(L("To go somewhere every week, add it to your timetable."))
     }
 
     @ViewBuilder private var account: some View {
@@ -281,10 +261,91 @@ struct SettingsPaneView: View {
     private func openAccountPage() { NSWorkspace.shared.open(URL(string: "\(Api.site)/account/#account")!) }
 }
 
+/**
+ Favourites, each with Remove, then the search to add one. Rows come and go
+ gently rather than in one frame, as on the phone and the web: a new one (or
+ one back with Undo) fades in with a moment's wash of the accent, and a
+ removed one fades and the list closes up, with Undo under it for a while.
+ */
+private struct FavouritesPane: View {
+    @Bindable var app: AppModel
+    let setup: SetupModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The one just added or put back, washed in the accent for a moment.
+    @State private var fresh: String?
+    @State private var removed: SetupModel.RemovedPlace?
+    @State private var undoTimer: Task<Void, Never>?
+
+    var body: some View {
+        Hint(L("Available in one tap from the menu bar, the phone app and its widget."))
+        if setup.places.isEmpty {
+            Text(L("None yet")).foregroundStyle(.secondary)
+        }
+        ForEach(setup.places, id: \.key) { p in
+            HStack {
+                Label(p.label, systemImage: "star.fill").labelStyle(.titleAndIcon)
+                Spacer()
+                Button(L("Remove")) { remove(p.key) }
+                    .buttonStyle(.link)
+                    .accessibilityLabel(L("Remove %@", p.label))
+            }
+            .background(Color.brand.opacity(p.key == fresh ? 0.14 : 0).padding(.horizontal, -8).padding(.vertical, -3))
+            .transition(.opacity)
+        }
+        if let removed {
+            HStack(spacing: 8) {
+                Hint(L("%@ removed from favourites", removed.label))
+                Button(L("Undo")) { undo() }.buttonStyle(.link)
+            }
+            .transition(.opacity)
+        }
+        if setup.places.count < setup.maxPlaces {
+            FavouriteSearch(app: app, setup: setup, motion: motion) { arrived($0) }
+        }
+        Hint(L("To go somewhere every week, add it to your timetable."))
+    }
+
+    private var motion: Animation? { reduceMotion ? nil : .easeInOut(duration: 0.22) }
+
+    private func remove(_ key: String) {
+        withAnimation(motion) { removed = setup.removePlace(key) }
+        undoTimer?.cancel()
+        undoTimer = Task {
+            try? await Task.sleep(for: .seconds(6))
+            if Task.isCancelled { return }
+            withAnimation(motion) { removed = nil }
+        }
+    }
+
+    private func undo() {
+        guard let r = removed else { return }
+        undoTimer?.cancel()
+        withAnimation(motion) {
+            setup.restorePlace(r)
+            removed = nil
+        }
+        if let key = r.place["key"] as? String { arrived(key) }
+    }
+
+    /// The wash on a row just arrived, fading after a moment.
+    private func arrived(_ key: String) {
+        guard !reduceMotion else { return }
+        fresh = key
+        Task {
+            try? await Task.sleep(for: .milliseconds(600))
+            withAnimation(.easeOut(duration: 0.9)) { if fresh == key { fresh = nil } }
+        }
+    }
+}
+
 /// Adding a favourite: the same search as the popover's, a pick adds it.
 private struct FavouriteSearch: View {
     @Bindable var app: AppModel
     let setup: SetupModel
+    /// How the lists change as one is added: the pick leaves the suggestions as it joins the favourites.
+    let motion: Animation?
+    /// The new favourite's key.
+    let onAdded: (String) -> Void
     @State private var query = ""
     @State private var note: String?
 
@@ -305,7 +366,8 @@ private struct FavouriteSearch: View {
                 ForEach(list, id: \.self) { d in
                     Button {
                         query = ""
-                        note = setup.addPlace(d).map { L("Already a favourite: %@", $0) }
+                        withAnimation(motion) { note = setup.addPlace(d).map { L("Already a favourite: %@", $0) } }
+                        if note == nil, let key = setup.places.first(where: { $0.to == d.goesTo })?.key { onAdded(key) }
                     } label: {
                         DestinationLabel(destination: d)
                     }

@@ -51,12 +51,14 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -109,6 +111,7 @@ import sh.rcn.terminus.LeaveAlerts
 import sh.rcn.terminus.LiveService
 import sh.rcn.terminus.ProfileDoc
 import sh.rcn.terminus.R
+import sh.rcn.terminus.RemovedPlace
 import sh.rcn.terminus.Servers
 import sh.rcn.terminus.Store
 import sh.rcn.terminus.Theme
@@ -1059,17 +1062,44 @@ private fun Favourites(profile: ProfileDoc, campus: Campus?, account: AccountVie
         campus?.stops?.firstOrNull { it.code == code }?.name ?: campus?.destinations?.firstOrNull { it.code == code && it.kind == "landmark" }?.label ?: code
     }
     var note by remember { mutableStateOf<String?>(null) }
+    // Rows fold away before they go and unfold as they come (FoldRow), so
+    // adding or removing is seen happening rather than the list jumping.
+    val drawn = rememberDrawn()
+    var leaving by remember { mutableStateOf(setOf<String>()) }
+    var picked by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val notices = LocalNotices.current
     Group(stringResource(R.string.heading_your_favourites), note ?: stringResource(R.string.favourites_hint)) {
         for (p in profile.places) {
-            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(p.label, style = MaterialTheme.typography.bodyLarge)
-                    // Where it goes, when the name doesn't already say (a building's stop, or a name from before favourites).
-                    if (campus != null && p.label != stopName(p.to)) Hint(stringResource(R.string.stop_suffix, stopName(p.to)))
+            key(p.key) {
+                FoldRow(shown = p.key !in leaving, arriving = drawn) {
+                    Column {
+                        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(p.label, style = MaterialTheme.typography.bodyLarge)
+                                // Where it goes, when the name doesn't already say (a building's stop, or a name from before favourites).
+                                if (campus != null && p.label != stopName(p.to)) Hint(stringResource(R.string.stop_suffix, stopName(p.to)))
+                            }
+                            RemoveButton({
+                                if (p.key in leaving) return@RemoveButton
+                                leaving = leaving + p.key
+                                scope.afterFold {
+                                    var removed: RemovedPlace? = null
+                                    account.edit { removed = it.removePlace(p.key) }
+                                    leaving = leaving - p.key
+                                    // Undo in the bar at the foot, as for a class swiped off Today.
+                                    val r = removed ?: return@afterFold
+                                    scope.launch {
+                                        val undo = notices?.showSnackbar(Notice(L.s(R.string.favourite_removed, r.label), actionLabel = L.s(R.string.undo)))
+                                        if (undo == SnackbarResult.ActionPerformed) account.edit { it.restorePlace(r) }
+                                    }
+                                }
+                            })
+                        }
+                        RowDivider()
+                    }
                 }
-                RemoveButton({ account.edit { it.removePlace(p.key) } })
             }
-            RowDivider()
         }
         if (profile.places.size < profile.limits.places) {
             // The stops your classes go to come first, each saying which classes use it.
@@ -1079,16 +1109,23 @@ private fun Favourites(profile: ProfileDoc, campus: Campus?, account: AccountVie
                 .map { (to, classes) -> Destination(to, stopName(to), to, "timetable", detail = classes.map { it.label.substringBefore(" @ ") }.distinct().joinToString(L.s(R.string.list_sep))) }
                 .sortedBy { it.label }
             Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                WherePicker(stringResource(R.string.add_favourite), campus?.destinations.orEmpty(), null, timetable) { d ->
-                    if (d == null) return@WherePicker
+                WherePicker(stringResource(R.string.add_favourite), campus?.destinations.orEmpty(), null, timetable, leaving = picked) { d ->
+                    if (d == null || picked != null) return@WherePicker
                     // No name to type: it's called what was picked, short, as it reads on a button.
                     val to = if (d.kind == "landmark") d.code else d.stopCode
                     val same = profile.places.firstOrNull { it.to == to }
                     if (same != null) {
                         note = L.s(R.string.already_favourite, same.label)
-                    } else {
-                        note = null
-                        account.edit { it.addPlace(if (d.kind == "building" || d.kind == "room") d.code else d.label, to) }
+                        return@WherePicker
+                    }
+                    note = null
+                    val add = { account.edit { it.addPlace(if (d.kind == "building" || d.kind == "room") d.code else d.label, to) } }
+                    // One of your timetable's stops folds out of that list first; a searched one has gone with the search.
+                    if (timetable.none { it.code == d.code }) return@WherePicker add()
+                    picked = d.code
+                    scope.afterFold {
+                        add()
+                        picked = null
                     }
                 }
             }
