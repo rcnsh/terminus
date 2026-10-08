@@ -121,6 +121,26 @@ class PullTest {
         assertNull(m.result)
     }
 
+    @Test fun onlyATouchThatStartsAtTheTopPulls() {
+        val m = motion()
+        // Scrolling up into the top and on: the rest of that drag doesn't pull.
+        m.touch()
+        m.contentScrolled()
+        assertFalse(m.drag(400f))
+        assertEquals(PullMotion.Phase.Idle, m.phase)
+        assertEquals(0f, m.pull, 0.001f)
+        // A new touch, at the top: it pulls.
+        m.touch()
+        m.drag(400f)
+        assertEquals(PullMotion.Phase.Drag, m.phase)
+        assertTrue(m.armed)
+        // Pushed back past the top, the content scrolls: down again in the same touch doesn't pull.
+        m.drag(-1_000f)
+        m.contentScrolled()
+        m.drag(400f)
+        assertEquals(PullMotion.Phase.Idle, m.phase)
+    }
+
     @Test fun theBusBoardsThenDrivesOffAndOthersGoRound() {
         val m = motion()
         m.drag(400f)

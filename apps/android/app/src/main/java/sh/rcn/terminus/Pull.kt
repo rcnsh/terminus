@@ -292,13 +292,29 @@ class PullMotion(var scene: PullScene, var others: Int, var calm: Boolean = fals
     /** Can a finger take the sky now: at rest, or on its way back. */
     val canGrab: Boolean get() = phase == Phase.Idle || phase == Phase.Cancel
 
+    /** The content has scrolled since the finger went down, so this touch can't start a pull. */
+    private var scrolled = false
+
+    /**
+     * A finger went down. A pull only starts from a touch that began with
+     * the content at its top: scrolling up into the top and on doesn't pull.
+     */
+    fun touch() {
+        scrolled = false
+    }
+
+    /** The content scrolled under this touch. */
+    fun contentScrolled() {
+        if (phase != Phase.Drag) scrolled = true
+    }
+
     /**
      * The finger moved [dy] dp (down positive) with the content at its top;
      * true when this crossed into armed, for a tick. Taken back up, the sky
      * goes first, then the content scrolls.
      */
     fun drag(dy: Float): Boolean {
-        if (!canGrab && phase != Phase.Drag) return false
+        if (phase != Phase.Drag && (!canGrab || scrolled)) return false
         if (phase != Phase.Drag) {
             if (phase == Phase.Idle) {
                 busX = scene.from
