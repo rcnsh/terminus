@@ -21,6 +21,8 @@ import argparse
 import datetime as dt
 import json
 import pathlib
+import urllib.error
+import urllib.parse
 import urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -33,11 +35,29 @@ HOLIDAYS = (
     "?resource_id=d_8ef23381f9417e4d4254ee8b4dcdb176&limit=1000"
 )
 
+# Both replies are tens of KB; one this big is not the calendar.
+MAX_BYTES = 5_000_000
+
+
+class HttpsRedirects(urllib.request.HTTPRedirectHandler):
+    """Follows a redirect only to https: what comes back is committed."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if urllib.parse.urlsplit(newurl).scheme != "https":
+            raise urllib.error.HTTPError(req.full_url, code, "redirect to plain http refused", headers, fp)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+OPENER = urllib.request.build_opener(HttpsRedirects)
+
 
 def get_json(url: str):
     req = urllib.request.Request(url, headers={"user-agent": "terminus-calendar/1.0"})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        return json.load(r)
+    with OPENER.open(req, timeout=30) as r:
+        raw = r.read(MAX_BYTES + 1)
+    if len(raw) > MAX_BYTES:
+        raise SystemExit(f"{urllib.parse.urlsplit(url).netloc} sent more than {MAX_BYTES} bytes")
+    return json.loads(raw)
 
 
 def main() -> None:
