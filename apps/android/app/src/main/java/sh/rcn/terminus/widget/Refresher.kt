@@ -158,7 +158,8 @@ object Refresher {
             val now = System.currentTimeMillis()
             // Read before it's kept: one this version can't read leaves the last
             // good one, and one overtaken by a newer answer gives way to it.
-            val answer = store.saveAnswer(json, now, asked)
+            // Signed out while it was out: the old account's, so none of it is kept.
+            val answer = store.saveAnswer(json, now, sentWith = token, askedAtMs = asked) ?: return null to false
             fresh = answer
             store.lastError = null
             scheduleNext(ctx, answer, now)
@@ -232,10 +233,11 @@ object Refresher {
      * Today's plan, kept for when the phone goes offline (OfflineDay): when
      * the one kept is another day's or an hour old.
      */
-    private suspend fun keepDay(api: Api, store: Store, loc: android.location.Location?, now: Long) {
+    private suspend fun keepDay(token: String, api: Api, store: Store, loc: android.location.Location?, now: Long) {
         if (dayDue(store, now)) {
             try {
-                store.saveDay(api.dayJson(loc?.latitude, loc?.longitude, Locator.accOf(loc)), now)
+                // Not kept when [token] has been signed out meanwhile.
+                store.saveDay(api.dayJson(loc?.latitude, loc?.longitude, Locator.accOf(loc)), now, sentWith = token)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -249,7 +251,7 @@ object Refresher {
         val store = Store(ctx)
         val token = store.token ?: return
         val loc = Locator.lastKnown(ctx)
-        keepDay(Api(token, hour12 = hour12(ctx)), store, loc, System.currentTimeMillis())
+        keepDay(token, Api(token, hour12 = hour12(ctx)), store, loc, System.currentTimeMillis())
         chosen(ctx)
         WidgetModes.armChosen(ctx)
         redrawWidgets(ctx)

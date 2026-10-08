@@ -327,7 +327,8 @@ object LeaveAlerts {
             val json = Api(token, fast = true, hour12 = hour12(ctx)).signal("skipped", trip)
             val now = System.currentTimeMillis()
             // Read before it's kept: one this version can't read leaves the last good one.
-            val answer = store.saveAnswer(json, now)
+            // Signed out meanwhile: nothing more to do for that account.
+            val answer = store.saveAnswer(json, now, sentWith = token) ?: return
             ctx.getSystemService(NotificationManager::class.java)?.cancel(NOTIFICATION_ID)
             Refresher.scheduleNext(ctx, answer, now)
             sh.rcn.terminus.widget.redrawWidgets(ctx)

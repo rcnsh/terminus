@@ -78,30 +78,42 @@ class Store(context: Context) {
      * [askedAtMs]: when its request went out. One asked for before the
      * answer already kept (a slow widget refresh overtaken by the app's)
      * isn't kept, and the newer one is returned in its place.
+     *
+     * [sentWith]: the token the request went with. Null, and nothing kept,
+     * when it's no longer this phone's (signed out, or into another account,
+     * while the request was out): a sign-out clears [KEY_ASKED] too, so
+     * only this keeps the old account's answer and places off the phone.
      */
-    fun saveAnswer(json: JSONObject, fetchedAtMs: Long, askedAtMs: Long = fetchedAtMs): NextAnswer {
+    fun saveAnswer(json: JSONObject, fetchedAtMs: Long, sentWith: String, askedAtMs: Long = fetchedAtMs): NextAnswer? {
         val answer = NextAnswer.parse(json)
         synchronized(Store) {
+            if (token != sentWith) return null
             // One "asked" later than now is from before the phone's clock went back: not newer.
             val kept = prefs.getLong(KEY_ASKED, 0)
             if (askedAtMs < kept && kept <= System.currentTimeMillis()) lastAnswer()?.let { return it.first }
             // A fresh answer from anywhere (the app, the live notification, a
             // skip) ends a run of failed refreshes, so the back-off starts over.
             prefs.edit { putString(KEY_ANSWER, json.toString()).putLong(KEY_FETCHED, fetchedAtMs).putLong(KEY_ASKED, askedAtMs).putInt(KEY_REFRESH_FAILS, 0) }
+            // The app shortcuts follow the saved places (a no-op when they
+            // haven't changed). Inside the lock: a sign-out's [clear] empties
+            // them, and must not be undone by an answer kept just before it.
+            runCatching { Shortcuts.update(app, answer.places) }
         }
-        // The app shortcuts follow the saved places (a no-op when they haven't changed).
-        runCatching { Shortcuts.update(app, answer.places) }
         return answer
     }
 
     /**
      * Today's plan (/me/day) as last fetched, for when the phone is offline
      * (OfflineDay), and the plan read from it; one this version can't read
-     * throws [ParseError] and isn't kept.
+     * throws [ParseError] and isn't kept. Null, and nothing kept, when
+     * [sentWith] is no longer this phone's token, as for [saveAnswer].
      */
-    fun saveDay(json: JSONObject, fetchedAtMs: Long): DayPlan {
+    fun saveDay(json: JSONObject, fetchedAtMs: Long, sentWith: String): DayPlan? {
         val day = DayPlan.parse(json)
-        prefs.edit { putString(KEY_DAY, json.toString()).putLong(KEY_DAY_AT, fetchedAtMs) }
+        synchronized(Store) {
+            if (token != sentWith) return null
+            prefs.edit { putString(KEY_DAY, json.toString()).putLong(KEY_DAY_AT, fetchedAtMs) }
+        }
         return day
     }
 

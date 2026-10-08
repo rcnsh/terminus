@@ -190,13 +190,16 @@ object WidgetModes {
             armChosen(ctx)
             return
         }
-        request(ctx, mode, fresh)?.let { record(ctx, id, mode, it) }
+        request(ctx, mode, fresh)?.let { (token, result) -> record(ctx, id, mode, token, result) }
         redrawWidgets(ctx)
         armChosen(ctx)
     }
 
-    /** What [mode] shows, asked for once; null when there's nothing to record (signed out, or the token refused). */
-    private suspend fun request(ctx: Context, mode: Mode, fresh: Boolean): Result<JSONObject>? {
+    /**
+     * What [mode] shows, asked for once, with the token it was asked with;
+     * null when there's nothing to record (signed out, or the token refused).
+     */
+    private suspend fun request(ctx: Context, mode: Mode, fresh: Boolean): Pair<String, Result<JSONObject>>? {
         val store = Store(ctx)
         val token = store.token ?: return null
         val loc = if (fresh) Locator.current(ctx) else Locator.lastKnown(ctx)
@@ -214,11 +217,18 @@ object WidgetModes {
             // The token refused: the phone signs out (the widget says why), and this place goes with the rest.
             is ApiError -> if (e.status == 401 && sh.rcn.terminus.Session.rejected(ctx, token)) return null
         }
-        return result
+        return token to result
     }
 
-    private suspend fun record(ctx: Context, id: GlanceId, mode: Mode, result: Result<JSONObject>) {
+    /**
+     * [result] on the widget, unless [sentWith] has been signed out since it
+     * was asked for: a sign-out clears the token before it forgets the
+     * widgets' places, and both go through the widget's state in turn, so
+     * the old account's answer can't land after it.
+     */
+    private suspend fun record(ctx: Context, id: GlanceId, mode: Mode, sentWith: String, result: Result<JSONObject>) {
         updateAppWidgetState(ctx, id) {
+            if (Store(ctx).token != sentWith) return@updateAppWidgetState
             result.onSuccess { json ->
                 it[MODE_JSON] = json.toString()
                 it[MODE_FETCHED] = System.currentTimeMillis()
@@ -277,8 +287,8 @@ object WidgetModes {
     suspend fun refreshChosen(ctx: Context, staleOnly: Boolean = false) {
         val now = System.currentTimeMillis()
         for ((_, same) in due(chosen(ctx, now), now, staleOnly).groupBy { it.mode.id }) {
-            val result = request(ctx, same.first().mode, fresh = false) ?: return
-            for (c in same) record(ctx, c.id, c.mode, result)
+            val (token, result) = request(ctx, same.first().mode, fresh = false) ?: return
+            for (c in same) record(ctx, c.id, c.mode, token, result)
         }
     }
 
