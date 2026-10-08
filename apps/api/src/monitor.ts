@@ -5,6 +5,11 @@
  * 10009) or the proxy changes. Every client degrades to "live times
  * unavailable", which is honest but silent, so this emails the operator on
  * each change of state: once when it breaks, once when it recovers.
+ *
+ * Only the stable Worker asks NUS and LTA itself. The beta reads the same
+ * state machine from its own traffic's failures (feedwatch.ts), so the two
+ * sites don't double the scheduled load, and logs its alerts rather than
+ * emailing them.
  */
 
 import { KEEP_DAYS } from './outcomes.ts';
@@ -13,7 +18,7 @@ import type { Env } from './types.ts';
 import { fetchArrivals } from './fms.ts';
 import { fetchPublicArrivals, ltaConfigured } from './lta.ts';
 import { GRAPH_PUBLIC } from './graph.ts';
-import { KV_APP_VERSION, UpstreamRejected } from './auth.ts';
+import { KV_APP_VERSION, UpstreamRejected, appVersion } from './auth.ts';
 import { autoUpdateVersion, type AutoResult } from './appversion.ts';
 import { calendarThrough, semesterSoon, termFrom, termName } from './calendar.ts';
 import { loadCalendar, refreshCalendar } from './calendarsync.ts';
@@ -27,6 +32,7 @@ import { sgt } from './config.ts';
 import { isBeta } from './site.ts';
 import { ensureRecorder } from './timelapse.ts';
 import { logCronError } from './analytics.ts';
+import { type Feed, lastTrip, tripError } from './feedwatch.ts';
 
 export interface UpstreamState {
   /** Confirmed state: it takes FAILS_TO_ALERT failed checks in a row to go down. */
@@ -70,9 +76,13 @@ export interface Incident {
   cause: 'version' | 'feed';
 }
 const CALENDAR_KEY = 'monitor:calendar-alert';
-/** The KV namespace in cloudflare.config.ts, for the fix commands in alerts
- *  (a test keeps the two in step). */
-export const KV_NAMESPACE_ID = '1f88f570f6e04f78aa2888ee7aa78e6a';
+/** Each site's KV namespace in cloudflare.config.ts, for the fix commands in
+ *  alerts (a test keeps them in step). */
+export const KV_NAMESPACE_IDS = { stable: '1f88f570f6e04f78aa2888ee7aa78e6a', beta: '5bd33589cdfc43c0bb324d158edd46ba' } as const;
+/** The KV namespace of the site the alert is about: its fix goes there. */
+export const kvNamespaceId = (env: Env): string => (isBeta(env) ? KV_NAMESPACE_IDS.beta : KV_NAMESPACE_IDS.stable);
+/** How often the cron runs: a failure the beta noted within this long counts as this run's check. */
+export const CHECK_EVERY_MS = 15 * 60_000;
 export const UNIVUS_PLAY_URL = 'https://play.google.com/store/apps/details?id=sg.edu.nus.univus';
 /** A stop served by several routes almost all day. */
 export const PROBE_STOP = 'COM3';
@@ -275,14 +285,14 @@ export async function checkUpstream(
   return { state, changed };
 }
 
-/** What to do about a failure, from its upstream code. */
-export function adviceFor(reason: string | null): string {
+/** What to do about a failure, from its upstream code; the commands name the KV namespace `kv`. */
+export function adviceFor(reason: string | null, kv: string = KV_NAMESPACE_IDS.stable): string {
   if (!reason) return '';
   if (/10009/.test(reason)) {
     return [
       'uNivUS has a new release and the old version string is refused.',
       `Find the new versionName and versionCode (the release is at ${UNIVUS_PLAY_URL}), then from apps/api:`,
-      `  pnpm exec cf kv keys put ${KV_APP_VERSION} --namespace-id ${KV_NAMESPACE_ID} --body univus_android_<versionName>_<versionCode>`,
+      `  pnpm exec cf kv keys put ${KV_APP_VERSION} --namespace-id ${kv} --body univus_android_<versionName>_<versionCode>`,
       'It takes effect within a minute, with no deploy. The NEXTBUS_APP_VERSION secret is only the fallback while that key is unset.',
     ].join('\n');
   }
@@ -294,7 +304,8 @@ export function adviceFor(reason: string | null): string {
 /**
  * Emails the operator; false, sending nothing, without email set up. Alerts
  * about the NUS feed and the calendar come from the stable Worker only: the
- * beta shares both, and one email is enough.
+ * beta shares both, and one email is enough. The beta's feed alerts go to
+ * its logs instead (`alert`, `switchedAlert`).
  */
 async function mailOperator(env: Env, subject: string, text: string): Promise<boolean> {
   if (!env.EMAIL || !env.EMAIL_FROM || !env.ALERT_EMAIL || isBeta(env)) return false;
@@ -318,21 +329,30 @@ async function alert(env: Env, s: UpstreamState, kind: 'up' | 'down'): Promise<v
   const subject = kind === 'up' ? 'terminus: NUS bus feed recovered' : 'terminus: NUS bus feed is down';
   const text = kind === 'up'
     ? `The NUS bus feed is answering again as of ${when}. Live times are back.`
-    : `The NUS bus feed stopped answering at ${when}.\n\nError: ${s.reason}\n\n${s.auto ? `Tried automatically: ${s.auto}.\n\n` : ''}${adviceFor(s.reason)}\n\nUntil then every answer says "live times unavailable".${s.detail ? `\n\nNUS's full response:\n${s.detail}` : ''}`;
-  await mailOperator(env, subject, text);
+    : `The NUS bus feed stopped answering at ${when}.\n\nError: ${s.reason}\n\n${s.auto ? `Tried automatically: ${s.auto}.\n\n` : ''}${adviceFor(s.reason, kvNamespaceId(env))}\n\nUntil then every answer says "live times unavailable".${s.detail ? `\n\nNUS's full response:\n${s.detail}` : ''}`;
+  await tellOperator(env, subject, text);
 }
 
 async function switchedAlert(env: Env, r: Extract<AutoResult, { status: 'switched' }>): Promise<void> {
   const name = /univus_android_(.+)_\d+$/.exec(r.to)?.[1] ?? r.to;
-  await mailOperator(
+  await tellOperator(
     env,
     `terminus: switched to uNivUS ${name} automatically`,
     [
       `NUS started refusing ${r.from || 'the old version string'}, so a new uNivUS is out. terminus found ${r.to}, NUS accepted it, and it is now in ${KV_APP_VERSION}.`,
       'Nothing to do. To undo it, from apps/api:',
-      `  pnpm exec cf kv keys delete ${KV_APP_VERSION} --namespace-id ${KV_NAMESPACE_ID}`,
+      `  pnpm exec cf kv keys delete ${KV_APP_VERSION} --namespace-id ${kvNamespaceId(env)}`,
     ].join('\n\n'),
   );
+}
+
+/** A feed alert: emailed from the stable site, logged on the beta, which emails no one. */
+async function tellOperator(env: Env, subject: string, text: string): Promise<void> {
+  if (isBeta(env)) {
+    console.error(`beta: ${subject}\n${text}`);
+    return;
+  }
+  await mailOperator(env, subject, text);
 }
 
 /**
@@ -627,6 +647,20 @@ export async function checkPublicFeed(
   return state;
 }
 
+/**
+ * The beta's probe, which asks no one: it fails as the last breaker trip its
+ * own traffic noted (feedwatch.ts), when that was since the last run. A NUS
+ * refusal of a version switched away from since says nothing of the one sent now.
+ */
+export function sawTrip(env: Env, feed: Feed, nowMs: number): () => Promise<void> {
+  return async () => {
+    const seen = await lastTrip(env, feed);
+    if (!seen || seen.at > nowMs || nowMs - seen.at >= CHECK_EVERY_MS) return;
+    if (feed === 'nus' && seen.version !== undefined && seen.version !== (await appVersion(env, nowMs))) return;
+    throw tripError(seen);
+  };
+}
+
 /** Each step on its own: a KV failure must not stop D1 cleanup, and the reverse. */
 export async function runCron(env: Env, nowMs: number): Promise<void> {
   const step = async (name: string, fn: () => Promise<unknown>) => {
@@ -638,8 +672,23 @@ export async function runCron(env: Env, nowMs: number): Promise<void> {
       logCronError(env, name);
     }
   };
-  await step('upstream', () => checkUpstream(env, nowMs));
-  await step('public feed', () => checkPublicFeed(env, nowMs));
+  if (isBeta(env)) {
+    // No call to NUS or LTA: the stable site's checks are the scheduled
+    // load, and the beta's own traffic says how the feeds treat it. Its
+    // status page, card notice and automatic version update run on that.
+    // While down, each run counts on the dashboard, as nothing is emailed.
+    await step('upstream', async () => {
+      const { state } = await checkUpstream(env, nowMs, sawTrip(env, 'nus', nowMs));
+      if (!state.up) {
+        console.error('beta: NUS feed down', state.reason);
+        logCronError(env, 'feed down');
+      }
+    });
+    await step('public feed', () => checkPublicFeed(env, nowMs, sawTrip(env, 'lta', nowMs)));
+  } else {
+    await step('upstream', () => checkUpstream(env, nowMs));
+    await step('public feed', () => checkPublicFeed(env, nowMs));
+  }
   await step('calendar', async () => {
     await loadCalendar(env, nowMs);
     try {

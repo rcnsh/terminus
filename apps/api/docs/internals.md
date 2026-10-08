@@ -607,8 +607,11 @@ route moves it from the answer into the card (`profile.ts` `upcomingClass`).
   POST uses up the link. Outlook's link scanner opens links before the user
   does, so a GET that spent the token would break NUS addresses.
 
-Setup and deploys: `pnpm run deploy` (and `deploy:beta`) applies the
-database's pending migrations, then deploys. The code reads columns from
+Setup and deploys: `pnpm run deploy` (and `deploy:beta`) first runs
+`scripts/predeploy.mjs`, which refuses a tree with unmerged files, conflict
+markers or changes not committed in `apps/api` or `apps/web/public` (a deploy
+ships the files on disk, not the commit), then runs `pnpm check`. Only then
+does it apply the database's pending migrations, and deploy. The code reads columns from
 recent migrations (`magic_links.code_tries` from 0009, `feedback.reply_to`
 from 0010), so a Worker deployed to a database without them answers 500.
 By hand, the same first step is:
@@ -632,7 +635,18 @@ five), or adding `NOT NULL` without a default, breaks the running code. Do those
    it.
 
 The beta takes each step first. Old migration files are never edited:
-D1 records them by name and won't run one again.
+D1 records them by name and won't run one again. `test/deploy.test.js`
+checks all of this: migrations are numbered 0001 up with no gap, an
+`ALTER TABLE` neither drops nor renames nor adds a `NOT NULL` column without
+a `DEFAULT` (a contract step says so with a `-- contract:` line; 0002 and 0006
+predate the rule), and each migration listed in
+`test/fixtures/migrations.sha256` still has its hash. Once a new migration has
+been applied to both databases, append its line (from `apps/api/migrations`,
+`shasum -a 256 <file> >> ../test/fixtures/migrations.sha256`). The same
+test loads `cloudflare.config.ts` in both modes and checks the beta shares no
+database, KV, bucket, rate-limit namespace, dataset, Worker or domain with
+the stable site, and that the release and map scripts upload to each site's
+bucket.
 
 Email goes out through Cloudflare Email Sending from `EMAIL_FROM`. That
 needs the Workers Paid plan and terminus.rcn.sh onboarded under Email Service >
@@ -1073,8 +1087,9 @@ stays live, and the other way round. DataMall is called like NUS is: one
 call per stop per 15 s through the edge cache (`edgecache.ts`, which both
 feeds now use), a failed stop not asked again for `failMemoS`, a refused
 key (401), a 429, a 5xx or no answer at all (a timeout, a failed
-connection) tripping a breaker for `breakerS`. The cron probes it once a
-run for `/status.json` (`publicFeed`) and `/health`; it raises no alerts, since
+connection) tripping a breaker for `breakerS`. The stable cron probes it once a
+run for `/status.json` (`publicFeed`) and `/health` (the beta reads its own
+trips instead; see "The beta's checks" below); it raises no alerts, since
 the shuttle is the product and this is extra. LTA has no live train feed,
 so the MRT is not here; nor are live public buses on the map, which the
 per-stop feed cannot give without polling every stop. Contains information
@@ -1269,6 +1284,25 @@ one write a second to a key, so the state is written once a run: a delivered
 alert is noted under `monitor:alerted`, and the next run clears it from the
 state. Each run puts the outage list right if an earlier write of it failed.
 
+**The beta's checks.** Only the stable Worker's cron asks NUS and LTA (one
+stop each, past the cache). Both Workers run the cron, and the beta asking
+too would double that scheduled load for a site few people use. Instead,
+whenever a request on the beta trips a feed's breaker, the failure (with
+NUS's code, response and the version string it refused) is noted in the
+beta's KV (`monitor:seen`, `monitor:seen-public`; at most once a minute per
+isolate; [`src/feedwatch.ts`](../src/feedwatch.ts)). The beta's cron reads a
+note from the last 15 minutes as a failed check (`sawTrip`) and runs the same
+state machine on it, so its status page, the card's "down since" notice and
+`/health` follow its own traffic, and a note from a version since switched
+away from doesn't count. With no traffic there is nothing to note and the
+feeds read as up. A refused version (10009) runs the automatic update as on
+the stable site, so the beta keeps its own `config:appVersion` current; that
+tries a few candidates with NUS, only while NUS is refusing the beta. The
+beta emails no one: its alerts go to its logs as `beta: terminus: ...`, with
+the fix commands naming the beta's KV namespace (`KV_NAMESPACE_IDS`, kept in
+step with `cloudflare.config.ts` by a test), and each run while its feed is
+down is counted on its dashboard as the error `cron feed down`.
+
 ## Known weaknesses
 
 - `RIDE.secondsPerHop` is a **guessed constant** and the ranking inherits its
@@ -1393,8 +1427,8 @@ A day of every shuttle, for a timelapse video
 [`src/timelapsedo.ts`](../src/timelapsedo.ts)). It is the **only poller of
 the NUS feed** and the one exception to "don't add load on NUS"
 (CLAUDE.md, rule 2). Answers fetch because someone asked; the only other
-scheduled reads are the cron's health check (one stop from NUS and one from
-LTA every 15 minutes, past the cache) and each push user's Trip object
+scheduled reads are the stable cron's health check (one stop from NUS and one from
+LTA every 15 minutes, past the cache; the beta's cron asks neither) and each push user's Trip object
 (a card at most every 30 s, through the cache). It is bounded on every side:
 
 - **Rate.** Each service's live buses (`active-bus`, the map's call; the feed
@@ -1570,6 +1604,7 @@ src/residences.ts, src/landmarks.ts  Halls and named places served by several st
 src/push.ts       FCM to Android; src/webpush.ts Web Push to the web app
 src/monitor.ts    The cron: feed health, incidents, housekeeping, arming trips,
                   the new-semester reminder
+src/feedwatch.ts  The beta's feed checks, from the breaker trips of its own traffic
 src/appversion.ts Finding the new uNivUS version when NUS refuses the old one
 src/downloads.ts  /download/*: app files and the Mac appcast from R2
 src/admin.ts      /admin/stats; src/feedback.ts "Is this wrong?" reports
