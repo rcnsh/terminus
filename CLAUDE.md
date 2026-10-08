@@ -473,8 +473,9 @@ scripts/              release.sh, release-beta.sh (+ release-lib.sh, their share
     that stops partway prints what's live and the commands that finish it.
   - Betas use `scripts/release-beta.sh <x.y.z-beta.n>`, on the same Mac,
     with the same checks: also from `origin/main` with CI passed. It deploys
-    the beta Worker itself and uploads nothing until it answers with this
-    commit's API.
+    the beta Worker itself and uploads nothing until that deploy has
+    finished (a beta keeps `API_VERSION`, so the live API's version can't
+    tell the new Worker from the old).
   - Both start from the lockfiles: they delete `node_modules` and
     `apps/macos/.build`, then install with `--frozen-lockfile` and
     `--force-resolved-versions`. The Sparkle key only goes to a `sign_update`
