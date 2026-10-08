@@ -6,6 +6,7 @@
 import { html, render, useEffect, useState } from '/assets/ui.js';
 import { t, timeout } from '/account/dom.js';
 import { drawHorizon } from '/assets/sky-page.js';
+import { duration, month } from '/status/outages.js';
 
 const TZ = { timeZone: 'Asia/Singapore' };
 const LOCALE = window.i18n?.lang === 'zh' ? 'zh-CN' : 'en-SG';
@@ -14,17 +15,6 @@ const time = (iso) => new Date(iso).toLocaleTimeString(LOCALE, { ...TZ, hour: 'n
 
 /** The shuttle on the road: A1's red. */
 const RED = '#d32f2f';
-/** The server keeps this many outages (monitor.ts INCIDENTS_KEPT). */
-const KEPT = 20;
-const MONTH_MS = 30 * 86_400_000;
-
-function duration(ms) {
-  const m = Math.max(1, Math.round(ms / 60_000));
-  if (m < 60) return t('{0} min', m);
-  const h = Math.floor(m / 60);
-  if (h < 48) return m % 60 ? t('{0} h {1} min', h, m % 60) : t('{0} h', h);
-  return t('{0} days', Math.round(h / 24));
-}
 
 const CAUSE = {
   version: t('NUS released a new version of uNivUS and stopped accepting the old one'),
@@ -45,29 +35,6 @@ function now(s) {
     if (!s.checking) state.kind = 'paused';
   }
   return state;
-}
-
-/**
- * The last 30 days, from the outages kept: how many, and the share of the
- * time the feed answered. Only when the list reaches back that far (it keeps
- * the latest KEPT), so it never undercounts; otherwise null.
- */
-function month(incidents, nowMs) {
-  const from = nowMs - MONTH_MS;
-  const starts = incidents.map((i) => Date.parse(i.start));
-  if (incidents.length >= KEPT && Math.min(...starts) > from) return null;
-  let down = 0;
-  let count = 0;
-  for (const i of incidents) {
-    const a = Math.max(Date.parse(i.start), from);
-    const b = i.end ? Date.parse(i.end) : nowMs;
-    if (b <= from) continue;
-    count++;
-    down += b - a;
-  }
-  // Down for a moment still isn't 100%: one decimal, rounded down.
-  const live = Math.floor((1 - down / MONTH_MS) * 1000) / 10;
-  return { count, live };
 }
 
 function Head({ s, failed }) {
