@@ -311,17 +311,18 @@ object Refresher {
     /**
      * An alarm that only redraws, at the next moment the widget looks
      * different with no new answer: [answer]'s own ("Leave now", the next
-     * stop on the ride, going stale), and while refreshes are failing the
-     * offline line moving on through the day plan (the next class). Only
-     * moments before [before] (the refresh alarm, phone's clock), which
-     * redraws anyway and arms the next.
+     * stop on the ride, going stale), the sky's hour changing, and while
+     * refreshes are failing the offline line moving on through the day plan
+     * (the next class). Only moments before [before] (the refresh alarm,
+     * phone's clock), which redraws anyway and arms the next.
      */
     fun armRedraw(ctx: Context, store: Store, answer: NextAnswer? = store.lastAnswer()?.first, before: Long? = null) {
         val am = ctx.getSystemService(AlarmManager::class.java) ?: return
         if (widgetCount(ctx) == 0) return
         val now = ServerClock.now()
         val day = if (store.lastError != null) OfflineDay.nextChangeAt(store.lastDay()?.first, now) else null
-        val at = listOfNotNull(answer?.let { redrawAt(it, now) }, day).minOrNull()?.let { ServerClock.toDevice(it) + 1_000 }
+        val sky = ServerClock.fromDevice(nextPhaseAt(System.currentTimeMillis()))
+        val at = listOfNotNull(answer?.let { redrawAt(it, now) }, day, sky).minOrNull()?.let { ServerClock.toDevice(it) + 1_000 }
         if (at == null || (before != null && at >= before)) am.cancel(redrawIntent(ctx))
         // Only the widget looks: it can wait for the screen to come on.
         else am.setWhileIdle(at, redrawIntent(ctx), wake = false)

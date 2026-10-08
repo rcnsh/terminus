@@ -223,7 +223,7 @@ internal const val ROAD_SCALE = 1.25f
 internal val HORIZON = 115.dp
 
 /** The hour's sky from the top down to [end] px, where it meets the horizon. */
-private fun skyBrush(p: Palette, end: Float) = Brush.verticalGradient(0f to p.sky[0], 0.5f to p.sky[1], 0.86f to p.sky[2], 1f to p.sky[3], endY = end)
+internal fun skyBrush(p: Palette, end: Float) = Brush.verticalGradient(0f to p.sky[0], 0.5f to p.sky[1], 0.86f to p.sky[2], 1f to p.sky[3], endY = end)
 
 /**
  * The sky behind Now's content, down to the horizon, once something on it
@@ -324,7 +324,7 @@ private fun dip(lo: Float, hi: Float): Float {
  * just the hills (the band at the top of Settings and its pages). While
  * [pull] is open, its sign and bus are on the road instead ([pullRoad]).
  */
-private fun DrawScope.horizon(top: Float, page: Color, p: Palette, phase: Phase, road: Road, far: Float, scale: Float = 1f, withSun: Boolean = true, pull: PullView? = null) {
+internal fun DrawScope.horizon(top: Float, page: Color, p: Palette, phase: Phase, road: Road, far: Float, scale: Float = 1f, withSun: Boolean = true, pull: PullView? = null) {
     val d = 1.dp.toPx() * scale
     val lights = phase == Phase.DUSK || phase == Phase.NIGHT
     val w = size.width / d
@@ -521,11 +521,14 @@ internal fun DrawScope.shuttleWheel(c: Offset, d: Float, turn: Float? = null) {
     }
 }
 
-/** The stars across the room above the words, and the moon among them. */
-internal fun DrawScope.starsAndMoon(room: Float, alpha: Float = 1f, moonRoom: Float = room) {
+/**
+ * The stars across the room above the words, and the moon among them: at the
+ * right, or centred on [moonAt] (a widget keeps it clear of its button).
+ */
+internal fun DrawScope.starsAndMoon(room: Float, alpha: Float = 1f, moonRoom: Float = room, moonAt: Offset? = null) {
     for ((x, y, a, r) in STARS) drawCircle(Color.White.copy(alpha = a * alpha), r.dp.toPx(), Offset(size.width * x, room * 0.85f * y / 1.05f + 4.dp.toPx()))
     val r = minOf(28.dp.toPx(), moonRoom * 0.3f)
-    crescent(Offset(size.width - 16.dp.toPx() - r, moonRoom * 0.48f), r, alpha)
+    crescent(moonAt ?: Offset(size.width - 16.dp.toPx() - r, moonRoom * 0.48f), r, alpha)
 }
 
 private operator fun FloatArray.component4() = this[3]

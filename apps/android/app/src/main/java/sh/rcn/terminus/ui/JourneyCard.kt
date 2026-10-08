@@ -372,7 +372,7 @@ private fun dueIn(journey: Journey, now: Long): Int = journey.boardAtMs?.let { (
  * sooner it's due. On foot, an empty road. As the web draws it (journey.js
  * onTheRoad).
  */
-private fun roadFor(journey: Journey, now: Long): Road {
+internal fun roadFor(journey: Journey, now: Long): Road {
     val bus = journey.bus ?: return Road(shuttle = false)
     return Road(true, RoadBus(bus.color, dueIn(journey, now).coerceAtLeast(0) / 900f, journey.live), shuttle = false)
 }

@@ -143,7 +143,6 @@
     <string name="done">完成</string>
     <string name="email_me_code">给我发验证码</string>
     <string name="ends">结束</string>
-    <string name="estimated_gap">~ 根据通常的班次间隔估计</string>
     <string name="eta_ended">已停运</string>
     <string name="exact_off">terminus 的“闹钟和提醒”已关闭。提醒可能会晚几分钟，实时通知也可能要等你打开应用才会开始。</string>
     <string name="favourites_hint">在应用、小组件和 Mac 菜单栏中一键可达。每周都去的地方，可以加到课表里。</string>
@@ -227,7 +226,6 @@
     <string name="n_imported">已导入 %1$d 节课。</string>
     <string name="n_min">%1$d 分钟</string>
     <string name="name_eg_gym">名称，例如“健身房”</string>
-    <string name="nearby_line">附近 · %1$s · %2$s</string>
     <string name="next_stops_to_go">下一站：%1$s · 还有 %2$d 站</string>
     <string name="next_where_off">下一站：%1$s，在这里下车</string>
     <string name="no_answer_yet">还没有答案</string>
@@ -303,6 +301,7 @@
     <string name="preview_arrive">09:52 到达 · 早到 8 分钟</string>
     <string name="preview_detail">PGP · 步行 3 分钟 · 约 9 分钟到 COM3</string>
     <string name="preview_heading">下一节课 · CS2030 @ COM1</string>
+    <string name="preview_leave">9:39 前出发</string>
     <string name="qr_desc">配对代码 %1$s 的二维码</string>
     <string name="refresh">刷新</string>
     <string name="refreshing">正在刷新</string>
@@ -361,7 +360,6 @@
     <string name="starts">开始</string>
     <string name="starts_at">%1$s 开始</string>
     <string name="step_of">第 %1$d 步，共 %2$d 步</string>
-    <string name="stop_departures">%1$s：%2$s</string>
     <string name="stop_suffix">%1$s 站</string>
     <string name="sunday">星期日</string>
     <string name="sunday_short">周日</string>
@@ -495,7 +493,6 @@
     <string name="road_reaches">%2$d 分钟后到达 %1$s</string>
     <string name="road_reaches_about">约 %2$d 分钟后到达 %1$s</string>
     <string name="journey_ride">乘车 %1$s</string>
-    <string name="journey_arrive_place">到达 %1$s</string>
     <string name="journey_arrive_time">%1$s 到达</string>
     <string name="journey_at">在 %1$s</string>
     <string name="journey_walk_from">从 %2$s 步行 %1$s</string>

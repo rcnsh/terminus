@@ -1,19 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- What "Next bus" looks like, for the widget picker. -->
+<!-- What "Next bus" looks like, for the widget picker: the bar at noon. Sample times are a picture, not UI copy. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     tools:ignore="HardcodedText,UselessLeaf"
     android:layout_width="match_parent" android:layout_height="match_parent"
-    android:orientation="vertical" android:gravity="center_vertical"
-    android:background="@drawable/widget_preview_bg"
-    android:paddingHorizontal="14dp" android:paddingVertical="8dp">
-    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-        android:text="@string/preview_heading" android:textSize="12sp"
-        android:textColor="@color/brand_muted" android:maxLines="1" />
-    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-        android:text="D2 · 09:42" android:textSize="20sp" android:textStyle="bold"
-        android:textColor="@color/brand_ink" />
-    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-        android:text="@string/preview_detail" android:textSize="12sp"
-        android:textColor="@color/brand_muted" android:maxLines="1" />
+    android:orientation="horizontal" android:gravity="center_vertical"
+    android:background="@drawable/widget_preview_bar"
+    android:paddingHorizontal="12dp">
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="D2"
+        android:textSize="16sp" android:textStyle="bold" android:textColor="#FFFFFF"
+        android:background="@drawable/widget_preview_badge" android:paddingHorizontal="8dp" android:paddingVertical="4dp"
+        android:layout_marginEnd="10dp" />
+    <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="vertical">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="@string/preview_leave" android:textSize="20sp" android:textStyle="bold"
+        android:textColor="@color/brand_ink" android:maxLines="1" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="@string/preview_detail" android:textSize="12sp"
+            android:textColor="@color/brand_sky_muted" android:maxLines="1" />
+    </LinearLayout>
 </LinearLayout>
