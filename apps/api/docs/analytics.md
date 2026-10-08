@@ -34,9 +34,8 @@ GROUP BY stop, svc ORDER BY n DESC
 
 ## Is `RIDE.secondsPerHop` any good?
 
-It is 95, a guess, and it is what the ranking uses wherever measured ride
-times don't cover a service and hour yet (detected rides, `src/ridetimes.ts`;
-see internals.md, "Measured ride times"). The walk comparison fires more often than
+It is 95, a guess, and it is what the ranking uses for every shuttle ride.
+The walk comparison fires more often than
 expected on the real graph, which is either correct (this campus is walkable)
 or a sign the constant is too high.
 
@@ -54,7 +53,7 @@ ORDER BY plate, timestamp
 For a plate seen at stop A then stop B, the travel time A→B is roughly
 `(timestamp_B + eta_B) - (timestamp_A + eta_A)`: each row predicts an absolute
 arrival instant, and the difference between two of them is a segment time.
-Bucket by hour of day and you have a table to check the measured ride times
+Bucket by hour of day and you have a table to check `RIDE.secondsPerHop`
 against. Nothing in the Worker reads it.
 
 ## Crowding
@@ -83,13 +82,14 @@ A lot of `unknown` means upstream is flaky or auth is failing. A lot of
 
 ## What the timelapse recorder costs NUS
 
-The recorder (`src/timelapse.ts`) is the only poller of the feed,
-so every poll writes a `timelapse` row: `blob2` says what it cost
+The recorder (`src/timelapse.ts`) is the only code that polls the feed's
+live buses on a schedule (the 15-minute health check reads one stop's
+arrivals), so every poll writes a `timelapse` row: `blob2` says what it cost
 (`upstream` a real request to NUS that was answered, `error` one that
 failed, `hit` an answer the edge cache already had, `stale` and `failed`
 nothing new without asking, `skipped` the breaker was open), and each
-request past the first inside a poll (a fresh token, a second call) adds a
-`retry` row, so requests to NUS are `upstream` + `error` + `retry`;
+request past the first inside a poll (a token minted for it, a second call)
+adds a `retry` row, so requests to NUS are `upstream` + `error` + `retry`;
 `blob3` the service, `double1` the buses the feed reported. The dashboard
 shows the same per day.
 
@@ -99,15 +99,17 @@ FROM terminus WHERE blob1 = 'timelapse'
 GROUP BY day, outcome ORDER BY day
 ```
 
-`upstream` plus `error` per day is the recorder's real extra load. At the defaults it is
-at most 17,280 (8 services, one poll each per 30 s, 18 hours), and less on
-the days the services keep shorter hours.
+`upstream` plus `error` plus `retry` per day is the recorder's real extra
+load. The polls themselves are at most 17,280 a day at the defaults (8
+services, one poll each per 30 s, 18 hours), and fewer on the days the
+services keep shorter hours.
 
 ## Trip signals
 
 Each trip signal (`/me/signal`: on the bus, missed, not going, arrived,
-and the rest) writes a `signal` row: `blob2` is the kind, and nothing
-else, so it counts how often each is used, never by whom or where.
+and the rest) writes a `signal` row: `blob2` is the kind, `double1` is 1
+and `index1` is `signal`. Nothing else, so it counts how
+often each is used, never by whom or where.
 
 ```sql
 SELECT blob2 AS signal, SUM(_sample_interval) AS n

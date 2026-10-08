@@ -39,11 +39,13 @@ const SCRIPTS = [
   'app/buses.js',
   'app/map.js',
   'app/offline.js',
+  'app/timing.js',
   'assets/landing.js',
   'assets/sky-page.js',
   'assets/theme.js',
   'assets/ui.js',
   'status/status.js',
+  'status/outages.js',
   'pair/pair.js',
 ];
 

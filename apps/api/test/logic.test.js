@@ -28,6 +28,7 @@ import { arrivalsProblem, busesProblem, crowdFromLoad, hasList, normalize, norma
 import { buildAnswer, clampLabel, fitsTile, mins, shortStop, walkVerdict } from '../src/format.ts';
 import { LABEL_MAX, WALK } from '../src/config.ts';
 import { apiKeyHeaders, authUrl, extractSession, jwtExpMs, proxyHeaders } from '../src/auth.ts';
+import { GRAPH as BUNDLED_GRAPH } from '../src/graph.ts';
 
 const GRAPH = graphJson;
 const NOW = Date.UTC(2026, 7, 27, 1, 0, 0); // Thu 09:00 SGT
@@ -53,7 +54,7 @@ const OPPKRMRT = { code: 'OPPKRMRT', name: 'Opp Kent Ridge MRT', lat: 1.29497, l
 const KR = { code: 'KR-MRT', name: 'KR MRT', lat: 1.29482, lon: 103.784413 };
 const KR_OPP = { code: 'KR-MRT-OPP', name: 'Opp KR MRT', lat: 1.294962, lon: 103.784556 };
 
-/** Two strictly linear routes: one side reaches UTown, the other cannot. */
+/** Two strictly linear routes, for reach() on a line that doesn't loop: one side reaches UTown, the other cannot. */
 const PAIR_GRAPH = {
   generated: NOW,
   stops: [
@@ -71,63 +72,67 @@ const PAIR_GRAPH = {
   loops: { NORTH: false, SOUTH: false },
 };
 
-test('standing on Opp Kent Ridge MRT heading to UTown returns the FURTHER stop', () => {
-  // Exactly on top of the wrong-direction stop. Distance says OPPKRMRT.
-  const input = { lat: OPPKRMRT.lat, lon: OPPKRMRT.lon, to: 'UTOWN', originCode: null };
+// Opp KR MRT to Central Library, on the frozen real graph: only A1 goes
+// there, and only from KR MRT across the road; D2 from Opp KR MRT never
+// reaches it.
+const TO_CLB = { lat: KR_OPP.lat, lon: KR_OPP.lon, to: 'CLB', originCode: null };
 
-  const dOpp = haversineM(input.lat, input.lon, OPPKRMRT.lat, OPPKRMRT.lon);
-  const dKr = haversineM(input.lat, input.lon, KRMRT.lat, KRMRT.lon);
-  assert.ok(dKr > dOpp, 'precondition: KRMRT is the further stop');
+test('standing on Opp KR MRT heading to Central Library returns the FURTHER stop', () => {
+  // Exactly on top of the wrong-direction stop. Distance says KR-MRT-OPP.
+  const dOpp = haversineM(TO_CLB.lat, TO_CLB.lon, KR_OPP.lat, KR_OPP.lon);
+  const dKr = haversineM(TO_CLB.lat, TO_CLB.lon, KR.lat, KR.lon);
+  assert.ok(dKr > dOpp, 'precondition: KR-MRT is the further stop');
   assert.ok(dKr < 60, 'precondition: the pair is within GPS error of each other');
 
-  const cands = candidateStops(PAIR_GRAPH, input);
+  const cands = candidateStops(GRAPH, TO_CLB);
   assert.deepEqual(
     cands.map((c) => c.stop.code),
-    ['KRMRT'],
-    'the near stop is dropped because nothing from it reaches UTown',
+    ['KR-MRT'],
+    'the near stop is dropped because nothing from it reaches Central Library',
   );
 
   const options = scoreOptions(
-    PAIR_GRAPH,
+    GRAPH,
     cands,
     arrivalsFor(
       Object.fromEntries([
-        sa('KRMRT', [{ svc: 'NORTH', etaS: 300, crowd: 'low', plate: 'PA1' }]),
-        sa('OPPKRMRT', [{ svc: 'SOUTH', etaS: 60, crowd: 'low', plate: 'PA2' }]),
+        sa('KR-MRT', [{ svc: 'A1', etaS: 300, crowd: 'low', plate: 'PA1' }]),
+        sa('KR-MRT-OPP', [{ svc: 'D2', etaS: 60, crowd: 'low', plate: 'PA2' }]),
       ]),
     ),
     NOW,
   );
 
-  assert.equal(options[0].stop.code, 'KRMRT');
+  assert.equal(options[0].stop.code, 'KR-MRT');
+  assert.equal(options[0].svc, 'A1');
   // ...even though the wrong-side bus is arriving four minutes sooner.
 });
 
 test('when every listed bus leaves too soon, the guess is a bus you can still reach', () => {
-  const input = { lat: OPPKRMRT.lat, lon: OPPKRMRT.lon, to: 'UTOWN', originCode: null };
   // Twenty minutes' walk to the stop; the one bus listed is in two.
-  const cands = candidateStops(PAIR_GRAPH, input).map((c) => ({ ...c, walkS: 1200 }));
-  const [best] = scoreOptions(PAIR_GRAPH, cands, arrivalsFor(Object.fromEntries([sa('KRMRT', [{ svc: 'NORTH', etaS: 120, crowd: null, plate: null }])])), NOW);
+  const cands = candidateStops(GRAPH, TO_CLB).map((c) => ({ ...c, walkS: 1200 }));
+  const [best] = scoreOptions(GRAPH, cands, arrivalsFor(Object.fromEntries([sa('KR-MRT', [{ svc: 'A1', etaS: 120, crowd: null, plate: null }])])), NOW);
+  assert.equal(best.svc, 'A1');
   assert.equal(best.quality, 'scheduled');
   assert.ok(best.boardS >= 1200, `boards at ${best.boardS}s, before the walk is done`);
 });
 
 test('a bus that left while the answer aged is not offered as catchable', () => {
-  const input = { lat: OPPKRMRT.lat, lon: OPPKRMRT.lon, to: 'UTOWN', originCode: null };
-  const cands = candidateStops(PAIR_GRAPH, input).map((c) => ({ ...c, walkS: 0 }));
+  const cands = candidateStops(GRAPH, TO_CLB).map((c) => ({ ...c, walkS: 0 }));
   // Fetched four minutes ago (now stale), when the bus was two minutes out.
-  const old = arrivalsFor(Object.fromEntries([sa('KRMRT', [{ svc: 'NORTH', etaS: 120, crowd: null, plate: null }], NOW - 240_000, true)]));
-  const [best] = scoreOptions(PAIR_GRAPH, cands, old, NOW);
+  const old = arrivalsFor(Object.fromEntries([sa('KR-MRT', [{ svc: 'A1', etaS: 120, crowd: null, plate: null }], NOW - 240_000, true)]));
+  const [best] = scoreOptions(GRAPH, cands, old, NOW);
+  assert.equal(best.svc, 'A1');
   assert.notEqual(best.quality, 'stale', 'the bus has gone; only a guess is left');
   assert.ok(best.fetchedAt + best.boardS * 1000 >= NOW, 'never a departure in the past');
 });
 
 test('a headway guess from a stale stop stays a guess, not "stale" (measured)', () => {
-  const input = { lat: OPPKRMRT.lat, lon: OPPKRMRT.lon, to: 'UTOWN', originCode: null };
-  const cands = candidateStops(PAIR_GRAPH, input);
-  // The feed's last answer for this stop is old, and had no NORTH bus in it.
-  const old = arrivalsFor(Object.fromEntries([sa('KRMRT', [], NOW - 120_000, true)]));
-  const [best] = scoreOptions(PAIR_GRAPH, cands, old, NOW);
+  const cands = candidateStops(GRAPH, TO_CLB);
+  // The feed's last answer for this stop is old, and had no A1 in it.
+  const old = arrivalsFor(Object.fromEntries([sa('KR-MRT', [], NOW - 120_000, true)]));
+  const [best] = scoreOptions(GRAPH, cands, old, NOW);
+  assert.equal(best.svc, 'A1');
   assert.equal(best.quality, 'scheduled');
 });
 
@@ -1001,6 +1006,26 @@ test('the hours template covers every service in the real graph', () => {
   }
 });
 
+test('every real service has hours for every day, or says it does not run: none is left to "assume running"', () => {
+  // The bundled graph, with data/service-hours.json merged in. A typo there
+  // ("7.15", "") is dropped by the merge and quietly reads as running all day.
+  const hhmm = /^([01]\d|2[0-3]):[0-5]\d$/;
+  for (const svc of Object.keys(BUNDLED_GRAPH.routes)) {
+    const h = BUNDLED_GRAPH.serviceHours?.[svc];
+    assert.ok(h, `no hours for ${svc}`);
+    for (const day of ['weekday', 'saturday', 'sunday']) {
+      const w = h[day];
+      assert.ok(w !== undefined, `${svc}.${day} is missing or malformed in data/service-hours.json`);
+      if (w === null) continue;
+      assert.equal(w.length, 2, `${svc}.${day}`);
+      for (const t of w) assert.match(t, hhmm, `${svc}.${day}: write HH:MM, two digits each`);
+    }
+  }
+  // Every service runs on weekdays; K, P, R1 and R2 don't run on Sundays.
+  for (const svc of Object.keys(BUNDLED_GRAPH.routes)) assert.notEqual(BUNDLED_GRAPH.serviceHours[svc].weekday, null, svc);
+  for (const svc of ['K', 'P', 'R1', 'R2']) assert.equal(BUNDLED_GRAPH.serviceHours[svc].sunday, null, svc);
+});
+
 test('an unfilled template entry means "unknown", never "ended all day"', () => {
   const merged = mergeServiceHours({}, serviceHoursJson);
   // Placeholders must not survive the merge as real windows.
@@ -1099,6 +1124,10 @@ test('a bus list whose values changed is a changed feed, not "no buses"', () => 
   ]) assert.match(busesProblem({ activebus: rows }), /no bus has a plate and a position it can read/, JSON.stringify(rows));
   // One readable bus among them is a board.
   assert.equal(busesProblem({ activebus: [{ vehplate: 'PD1', lat: null, lng: null }, { vehplate: 'PD2', ...at }] }), null);
+  // Every bus with no fix yet is real; one among rows it can't read is not.
+  assert.equal(busesProblem({ activebus: [{ vehplate: 'PD1', lat: 0, lng: 0 }, { vehplate: 'PD2', lat: '0', lng: '0' }] }), null);
+  assert.match(busesProblem({ activebus: [{ vehplate: 'PD1', lat: 0, lng: 0 }, { vehplate: 'PD2', lat: at.lng, lng: at.lat }] }), /no bus has a plate and a position it can read/, 'a fix-less bus beside a swapped one');
+  assert.match(busesProblem({ activebus: [{ vehplate: 'PD1', lat: 0, lng: 0 }, { vehplate: 'PD2', lat: '1,2949', lng: '103,7735' }] }), /no bus has a plate and a position it can read/);
 });
 
 test('a list under a name it does not know is only a list of rows, never the hints beside it', () => {

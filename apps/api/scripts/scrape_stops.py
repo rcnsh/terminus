@@ -5,7 +5,7 @@ Scrape the static NUS ISB stop graph into data/stops.json.
 Stop locations, route order and operating hours change a few times a year, not
 a few times a minute, so this runs weekly in CI and the result is bundled into
 the Worker. Fetching it per request would add latency and an upstream
-dependency to every tile tap.
+dependency to every answer.
 
 The `routes` ordering is what makes direction resolution work. It is the part
 to get right; everything else in this file is bookkeeping.
@@ -275,7 +275,7 @@ def scrape(session: dict, route_codes: list) -> dict:
         # Confirmed shape: {"name": "COM3", "caption": "COM 3",
         #  "ShortName": "COM 3", "latitude": ..., "longitude": ...}
         # `name` is the CODE and `caption` is the human label -- not the other
-        # way round. ShortName is already abbreviated the way a tile wants
+        # way round. ShortName is already abbreviated the way a widget wants
         # ("Opp KR MRT"), so it is the display name.
         code = norm_code(first(s, "name", "busstopcode", "code", "BusStopCode", default=""))
         short = str(first(s, "ShortName", "shortname", "caption", default="")).strip()

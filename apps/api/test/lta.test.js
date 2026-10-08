@@ -11,6 +11,7 @@ import { installGlobals, ltaPayload, makeCtx, makeEnv, makeFetch, FROZEN_NOW } f
 import { LtaRefused, fetchPublicArrivals, getPublicArrivals, normalizePublic, parseLoad, publicProblem, routeFor } from '../src/lta.ts';
 import { GRAPH_PUBLIC } from '../src/graph.ts';
 import { TTL } from '../src/config.ts';
+import pub from '../data/public.json' with { type: 'json' };
 
 const fixture = (name) => JSON.parse(fs.readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
 // The captures were taken at 17:28 SGT on 2026-10-06.
@@ -48,10 +49,15 @@ test('a two-way service is told apart by the stop it is at, else by where the bu
   // The 151 calls at the Museum only towards the terminal, at IT only away from it.
   assert.equal(routeFor(GRAPH_PUBLIC, 'MUSEUM', '151', null), '151/1');
   assert.equal(routeFor(GRAPH_PUBLIC, 'IT', '151', null), '151/2');
-  // At Kent Ridge Terminal's public stop both directions call: the destination tells.
-  assert.equal(routeFor(GRAPH_PUBLIC, '16009', '151', '16009'), '151/1');
-  assert.equal(routeFor(GRAPH_PUBLIC, '16009', '151', '64009'), '151/2');
-  assert.equal(routeFor(GRAPH_PUBLIC, '16009', '151', null), null);
+  // At Kent Ridge Terminal's public stop both directions call: the
+  // destination tells. The codes are as scrape_lta.py found them.
+  const both = pub.routes['151/1'].filter((c) => pub.routes['151/2'].includes(c));
+  assert.equal(both.length, 1, `the 151's two directions share ${both.join(', ') || 'no stop'}`);
+  const [there, back] = [pub.public['151/1'].dest, pub.public['151/2'].dest];
+  assert.notEqual(there, back);
+  assert.equal(routeFor(GRAPH_PUBLIC, both[0], '151', there), '151/1');
+  assert.equal(routeFor(GRAPH_PUBLIC, both[0], '151', back), '151/2');
+  assert.equal(routeFor(GRAPH_PUBLIC, both[0], '151', null), null);
   // A loop is one route, named after itself.
   assert.equal(routeFor(GRAPH_PUBLIC, 'CLB', '95', '16009'), '95');
   // A service the graph doesn't know, or one that doesn't call here, is nobody's.

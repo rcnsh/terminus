@@ -12,9 +12,53 @@ private func golden(_ name: String) throws -> NextAnswer {
     return try JSONDecoder().decode(NextAnswer.self, from: data)
 }
 
-@Test(arguments: ["class-bus", "class-walk", "class-late", "class-from-dorm", "class-started", "class-room", "place", "landmark", "room", "arrived", "free", "rest", "home", "home-reached", "evening-home", "setup", "riding", "scheduled", "no-timetable"])
-func everyGoldenAnswerDecodesWithACard(name: String) throws {
-    #expect(try golden(name).card != nil)
+/// Every golden there is, English and Chinese ("zh/free"), found in the
+/// directory: a new one is read without being listed here.
+func goldenNames() -> [String] {
+    let dir = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("../api/test/fixtures/answers").standardized
+    let names = { (sub: String) in
+        ((try? FileManager.default.contentsOfDirectory(atPath: dir.appendingPathComponent(sub).path)) ?? [])
+            .filter { $0.hasSuffix(".json") }
+            .map { (sub.isEmpty ? "" : "\(sub)/") + String($0.dropLast(5)) }
+    }
+    return (names("") + names("zh")).sorted()
+}
+
+@Test func theGoldensAreFound() {
+    #expect(goldenNames().count >= 40)
+}
+
+/// By the endpoint each answers: /me/nearby has `stops`, /me/day `items`,
+/// the rest are /me/next with a card. The card's parts are read leniently,
+/// so one that no longer decodes would just vanish: each one sent must
+/// come through.
+@Test(arguments: goldenNames())
+func everyGoldenAnswerDecodes(name: String) throws {
+    let dir = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("../api/test/fixtures/answers").standardized
+    let data = try Data(contentsOf: dir.appendingPathComponent("\(name).json"))
+    let json = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+    if json["stops"] != nil {
+        struct R: Decodable { let stops: [NearbyStop] }
+        #expect(try !JSONDecoder().decode(R.self, from: data).stops.isEmpty)
+        return
+    }
+    if json["items"] != nil {
+        #expect(try !JSONDecoder().decode(DayPlan.self, from: data).items.isEmpty)
+        return
+    }
+    let a = try JSONDecoder().decode(NextAnswer.self, from: data)
+    let card = try #require(a.card, "\(name) has a card")
+    let sent = try #require(json["card"] as? [String: Any])
+    let present = { (key: String) in sent[key] != nil && !(sent[key] is NSNull) }
+    if present("journey") { #expect(card.journey != nil, "card.journey") }
+    if present("ride") { #expect(card.ride != nil, "card.ride") }
+    if present("upcoming") { #expect(card.upcoming != nil, "card.upcoming") }
+    if present("suggestion") { #expect(card.suggestion != nil, "card.suggestion") }
+    #expect(card.actions?.count ?? 0 == (sent["actions"] as? [Any])?.count ?? 0, "card.actions")
 }
 
 @Test func crowdIsShownOnceWhenTheDetailSaysIt() throws {
@@ -147,6 +191,16 @@ func theNextClassComesWithTheCard(name: String) throws {
     #expect(FlowPills.spoken(d2) == "D2: 4 min, 14 min")
 }
 
+/// An older server's row, worded on the Mac: the map's stop card uses
+/// this too, so 4 min 30 s is "5 min" in both, not "4 min" on the map.
+@Test func aRowsTimeRoundsToTheNearestMinute() {
+    #expect(FlowPills.eta(BoardRow(svc: "D2", etaS: 270, quality: "live")) == "5 min")
+    #expect(FlowPills.eta(BoardRow(svc: "D2", etaS: 269, quality: "live")) == "4 min")
+    #expect(FlowPills.eta(BoardRow(svc: "D2", etaS: 50, quality: "live")) == "1 min")
+    #expect(FlowPills.eta(BoardRow(svc: "D2", etaS: 44, quality: "live")) == "now")
+    #expect(FlowPills.eta(BoardRow(svc: "D2", etaS: 270, quality: "scheduled")) == "~5 min")
+}
+
 @Test func aTimetableGuessInNearbyIsNeverShownAsLive() {
     #expect(FlowPills.eta(etaS: 360, quality: "live") == "6 min")
     #expect(FlowPills.eta(etaS: 360, quality: "scheduled") == "~6 min")
@@ -219,6 +273,21 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
     #expect(unknown.card?.leaveBy == "Leave by ~09:36")
     let number = try goldenEdited("place") { o in editCard(&o) { $0["kind"] = 3 } }
     #expect(number.card?.kind == "trip")
+}
+
+/// A newer server's phase and quality: the answer shows, no trip is
+/// followed for it, and its times aren't shown as live.
+@Test func anUnknownPhaseAndQualityAreNeitherATripNorLive() throws {
+    let a = try goldenEdited("class-bus") { o in
+        o["quality"] = "predicted"
+        editCard(&o) { $0["phase"] = "boarding" }
+    }
+    #expect(a.card?.phase == "boarding")
+    #expect(a.quality == "predicted")
+    #expect(!a.tripUnderWay)
+    #expect(a.leaveHeadline(now: .distantPast) == "Leave by ~09:36")
+    #expect(Header.dotColor(a.quality, error: false, nearby: false) == .gray)
+    #expect(Header.dotColor("live", error: false, nearby: false) == .green)
 }
 
 @Test func theDestinationNeedsNoCode() throws {

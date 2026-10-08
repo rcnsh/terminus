@@ -1,0 +1,121 @@
+{
+  "label": "无巴士 · 步行 15 分钟",
+  "detail": "已停运 · 步行 15 分钟到 CS2030 @ COM1",
+  "alt": null,
+  "stop": {
+    "code": "PGP",
+    "name": "PGP",
+    "confidence": 0
+  },
+  "quality": "ended",
+  "asOf": "2026-08-27T16:20:00.000Z",
+  "arrivals": [],
+  "departsAt": null,
+  "arriveAt": "2026-08-27T16:34:52Z",
+  "foot": {
+    "s": 892,
+    "why": "今晚已停运"
+  },
+  "leave": {
+    "at": "2026-08-27T16:20:00Z",
+    "estimated": false,
+    "svc": null,
+    "stop": null,
+    "board": null,
+    "arrive": "2026-08-27T16:34:52Z",
+    "note": null
+  },
+  "mode": "trip",
+  "dest": {
+    "to": "COM3",
+    "label": "CS2030 @ COM1",
+    "why": "class"
+  },
+  "timing": {
+    "status": "late",
+    "text": "约迟到 5 分钟",
+    "classAt": "2026-08-27T16:30:00Z",
+    "reachAt": "2026-08-27T16:34:52Z"
+  },
+  "places": [
+    {
+      "key": "mrt",
+      "label": "KR MRT"
+    },
+    {
+      "key": "deck",
+      "label": "The Deck"
+    }
+  ],
+  "refreshAt": "2026-08-27T16:30:00Z",
+  "walkSpeedMs": 1.3,
+  "card": {
+    "kind": "class",
+    "staleAt": "2026-08-27T16:30:00Z",
+    "crowd": null,
+    "quality": null,
+    "leaveBy": "00:20 前出发",
+    "leaveVia": null,
+    "catch": "走过去",
+    "arrive": "00:34 到达 · 约迟到 5 分钟",
+    "catchLine": "走过去 · 00:34 到达，约迟到 5 分钟",
+    "late": true,
+    "goNow": null,
+    "note": null,
+    "estimate": null,
+    "phase": "heading",
+    "phaseText": "在路上",
+    "glance": "现在走",
+    "line": "现在走过去 · 00:34 到达 · 约迟到 5 分钟",
+    "actions": [
+      {
+        "id": "skipped",
+        "label": "不去了",
+        "trip": "5:30:COM3"
+      }
+    ],
+    "warning": null,
+    "nextChangeAt": "2026-08-27T16:30:00Z",
+    "remind": true,
+    "suggestion": null,
+    "ride": null,
+    "walkTo": {
+      "name": "COM 3",
+      "lat": 1.294431,
+      "lon": 103.775217
+    },
+    "notice": null,
+    "h12": false,
+    "journey": {
+      "leave": null,
+      "walk": "15 分钟",
+      "bus": null,
+      "boardAt": null,
+      "ride": null,
+      "off": null,
+      "to": "CS2030 @ COM1",
+      "toStop": "COM 3",
+      "arrive": "00:34",
+      "walkEnd": null,
+      "arriveStop": "00:34",
+      "slack": "约迟到 5 分钟",
+      "live": false,
+      "backup": null,
+      "why": "今晚已停运",
+      "title": "去 CS2030 @ COM1 · 00:30 开始",
+      "place": "CS2030",
+      "byText": null,
+      "walkText": "步行 15 分钟",
+      "rideText": null,
+      "walkEndText": null,
+      "arriveText": "00:34 到达 · 约迟到 5 分钟",
+      "arriveWhere": "在 COM 3",
+      "backupText": "今晚已停运",
+      "summary": "00:34 到达 · 步行 15 分钟 · 今晚已停运"
+    },
+    "upcoming": null,
+    "title": "无巴士 · 步行 15 分钟",
+    "heading": "下一节课 · CS2030 @ COM1",
+    "remindAt": null
+  }
+}

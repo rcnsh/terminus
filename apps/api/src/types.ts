@@ -162,7 +162,7 @@ export interface BusLeg {
   /** When it leaves the stop, and when you reach the destination stop, ISO. Null with no time. */
   board: string | null;
   arrive: string | null;
-  /** Rests on a headway, not a live time. */
+  /** Not a live time: a headway or timetable guess, or an old reading from a stale feed. */
   estimated: boolean;
   /** Where to get off, when the bus only stops across the road from the destination. */
   off?: string;
@@ -375,8 +375,8 @@ export interface Leg {
   svc: string;
   /** Stops ridden from the boarding stop to the destination. */
   hops: number;
-  /** Seconds on the bus, when measured ride times say (ridetimes.ts); else
-   *  hops times RIDE.secondsPerHop. */
+  /** Seconds on the bus: by the stops' distances on a shuttle, by metres
+   *  along the route on a public bus (see shuttleRideS, publicRideS). */
   rideS?: number;
   /** Seconds to walk across from where the bus stops to the destination's
    *  side of the road, when it only calls at the twin. Absent when it's 0. */
@@ -485,9 +485,6 @@ export interface ResolveInput {
   endWalkByStopS?: Record<string, number>;
   /** Where the room or building itself is, when known: within WALK.atVenueM of it you're there. */
   destAt?: { lat: number; lon: number } | null;
-  /** Seconds per stop on a service, from measured rides (ridetimes.ts).
-   *  RIDE.secondsPerHop where it has nothing. */
-  hopS?: (svc: string) => number | null;
   /** Count the public buses at the stops too (the profile's `publicBuses`). */
   publicBuses?: boolean;
   /**

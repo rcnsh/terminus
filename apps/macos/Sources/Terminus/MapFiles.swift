@@ -2,7 +2,7 @@ import Foundation
 
 /// What the map keeps on the Mac so it works offline after the first look:
 /// the stops and routes (`/campus`), the map's style in each theme and
-/// language used, and the whole campus map file (about 4 MB). MapLibre
+/// language used, and the whole campus map file (about 3 MB). MapLibre
 /// doesn't cache PMTiles it streams, so the file is downloaded once, checked
 /// weekly for a newer one, and read from disk (`pmtiles://file://…`); until
 /// then the map is plain. Fonts and icons go through MapLibre's own cache.
@@ -87,17 +87,22 @@ enum MapFiles {
     /// Quiet on failure; the next look tries again.
     @discardableResult
     static func keepTiles() async throws -> Bool {
+        try await keepTiles(in: dir, now: Date().timeIntervalSince1970) { try await URLSession.shared.download(for: $0) }
+    }
+
+    /// `keepTiles()` in `dir` at `now` (seconds since 1970); `fetch` downloads
+    /// a request to a file, as URLSession's `download(for:)` does.
+    static func keepTiles(in dir: URL, now: TimeInterval, fetch: (URLRequest) async throws -> (URL, URLResponse)) async throws -> Bool {
         let file = dir.appendingPathComponent(tiles)
         let meta = dir.appendingPathComponent("\(tiles).json")
         let kept = (try? Data(contentsOf: meta)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
-        let now = Date().timeIntervalSince1970
         let has = FileManager.default.fileExists(atPath: file.path)
         if has, let checked = kept?["checked"] as? Double, now - checked < checkS { return false }
         var req = URLRequest(url: URL(string: "\(Api.base)/map/\(tiles)")!, timeoutInterval: 30)
         req.setValue(Api.client, forHTTPHeaderField: "x-terminus-client")
         let etag = kept?["etag"] as? String ?? ""
         if has, !etag.isEmpty { req.setValue(etag, forHTTPHeaderField: "if-none-match") }
-        let (tmp, resp) = try await URLSession.shared.download(for: req)
+        let (tmp, resp) = try await fetch(req)
         let http = resp as? HTTPURLResponse
         var fresh = false
         switch http?.statusCode {

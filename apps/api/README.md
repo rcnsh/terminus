@@ -4,13 +4,17 @@ The Cloudflare Worker behind terminus. It reads the NUS shuttle feed, works out
 which bus you should catch, and serves the answer to every client. It also
 serves the website in [`apps/web`](../web).
 
-- **Answers:** `/me/next` (the widget's one call) and `/me/nearby`, plus keyed
-  `/next`, `/trip` and `/arrivals`. Docs at [terminus.rcn.sh/docs](https://terminus.rcn.sh/docs).
+- **Answers:** `/me/next` (the widget's one call) and `/me/nearby`, plus the
+  keyed routes `/next`, `/trip`, `/arrivals`, `/buses`, `/line`, `/campus` and
+  `/stops/pairs` (an API key or a signed-in session). Docs at [terminus.rcn.sh/docs](https://terminus.rcn.sh/docs).
 - **The campus map:** `/campus` (stops, and routes along the roads), `/buses`
   (a service's live buses) and `/map/*` (the street map, its style, fonts and
   icons from R2).
 - **Accounts:** sign-in by emailed code or link, device pairing, profiles in D1.
-- **Cron:** every 15 minutes, checks the NUS feed is up and emails if it isn't.
+- **Cron:** every 15 minutes, checks the NUS feed (and LTA DataMall, when set
+  up) is up and emails if it isn't, keeps the academic calendar current, and
+  does the housekeeping: old sign-in codes, unused anonymous accounts and the
+  like.
 
 ## Run it
 
@@ -28,7 +32,8 @@ the terminal.
 ## Deploy
 
 ```bash
-pnpm run deploy                    # cf deploy (not `pnpm deploy`, a pnpm built-in)
+pnpm run deploy                    # D1 migrations, then cf deploy (not `pnpm deploy`, a pnpm built-in)
+pnpm run deploy:beta               # the same for beta.terminus.rcn.sh, with its own D1, KV and R2
 ```
 
 The config is [`cloudflare.config.ts`](cloudflare.config.ts). The website

@@ -362,7 +362,7 @@ private fun SettingsGround(state: AccountState, ui: UiState, profile: ProfileDoc
                 SettingsPage.Language, SettingsPage.Appearance -> displaySummary(page, state)
                 else -> summary(page, state, ui)
             }
-            val off = page == SettingsPage.Notifications && !ui.leaveAlerts && !ui.liveUpdates && !ui.detectTrips
+            val off = page == SettingsPage.Notifications && !ui.leaveAlerts && !ui.liveUpdates
             said?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = if (off) c.tertiary else muted, fontWeight = if (off) FontWeight.SemiBold else null, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
@@ -438,7 +438,6 @@ private fun summary(page: SettingsPage, state: AccountState, ui: UiState): Strin
         SettingsPage.Notifications -> listOfNotNull(
             if (ui.leaveAlerts) stringResource(R.string.short_leave_alerts) else null,
             if (ui.liveUpdates) stringResource(R.string.short_live) else null,
-            if (ui.detectTrips) stringResource(R.string.short_detect) else null,
         ).joinToString(stringResource(R.string.list_sep)).ifEmpty { stringResource(R.string.all_off) }
         SettingsPage.Devices -> when {
             state.email == null -> stringResource(R.string.devices_need_email)
@@ -664,9 +663,9 @@ private fun FeedbackPage(state: AccountState, account: AccountViewModel, onAddEm
 }
 
 /**
- * Leave alerts, the live notification and noticing when you board: on this
- * phone only, in two groups (before class, during a trip), each row with a
- * short line and the details under the group. Exact alarms are asked for
+ * Leave alerts and the live notification: on this phone only, in two
+ * groups (before class, during a trip), each row with a short line and the
+ * details under the group. Exact alarms are asked for
  * when either notification is on.
  */
 @Composable
@@ -693,8 +692,6 @@ private fun NotificationSettings(main: MainViewModel) {
             stringResource(R.string.live_notification_short),
             ui.liveUpdates, main::setLiveUpdates, openSettings, inCard = true,
         )
-        RowDivider()
-        DetectToggle(ui.detectTrips, main::setDetectTrips, openSettings, hint = stringResource(R.string.detect_short), inCard = true)
     }
     if ((ui.leaveAlerts || ui.liveUpdates) && !exact) {
         Column {
@@ -1092,7 +1089,7 @@ private fun ClockPills(profile: ProfileDoc?, account: AccountViewModel) {
     )
 }
 
-/** Auto (the phone's), English or 中文 (phase 10). The languages are named in themselves. */
+/** Auto (the phone's), English or 中文. The languages are named in themselves. */
 @Composable
 private fun LanguagePicker(account: AccountViewModel) {
     val ctx = LocalContext.current

@@ -23,27 +23,29 @@ data class MapStop(val code: String, val name: String, val lat: Double, val lon:
     val fullName: String get() = longName ?: name
 }
 
-/** A service: its colour (ARGB) and its path along the roads, as [lon, lat] pairs. */
-data class MapRoute(val svc: String, val color: Long, val line: List<DoubleArray>) {
+/** A service: its colour (ARGB), its path along the roads as [lon, lat] pairs, and whether it's a loop. */
+data class MapRoute(val svc: String, val color: Long, val line: List<DoubleArray>, val loop: Boolean = false) {
     /** [west, south, east, north] of the line. */
     fun bounds(): DoubleArray = doubleArrayOf(line.minOf { it[0] }, line.minOf { it[1] }, line.maxOf { it[0] }, line.maxOf { it[1] })
 
     /** The line measured for sliding buses along it. */
-    val path: RoutePath by lazy { RoutePath(line) }
+    val path: RoutePath by lazy { RoutePath(line, loop) }
 }
 
 /**
  * A route line measured as the API measures it (haversine, metres from its
- * start at each point), so a bus's `along` is a place on it.
+ * start at each point), so a bus's `along` is a place on it. [closed] is the
+ * service's `loop` from /campus, as the API places buses: a loop's line
+ * needn't end exactly where it starts (A1's ends are some 40 m apart at KRB).
  */
-class RoutePath(private val line: List<DoubleArray>) {
+class RoutePath(private val line: List<DoubleArray>, loop: Boolean = false) {
     private val cum = DoubleArray(line.size).also { c ->
         for (i in 1 until line.size) c[i] = c[i - 1] + haversine(line[i - 1][1], line[i - 1][0], line[i][1], line[i][0])
     }
     val total: Double = cum.lastOrNull() ?: 0.0
 
-    /** Ends where it starts: a bus can slide on past the start. */
-    val closed: Boolean = line.size >= 2 && haversine(line.first()[1], line.first()[0], line.last()[1], line.last()[0]) < 5
+    /** A loop: a bus can slide on past the start. */
+    val closed: Boolean = loop && line.size >= 2
 
     /** The point [m] metres along, as (lat, lon, the road's bearing there). */
     fun pointAt(m: Double): Triple<Double, Double, Double> {
@@ -150,7 +152,7 @@ data class CampusMap(
             val routes = r.keys().asSequence().associateWith { svc ->
                 val x = r.getJSONObject(svc)
                 val line = x.optJSONArray("line") ?: JSONArray()
-                MapRoute(svc, parseColor(x.optString("color")), (0 until line.length()).map { i -> line.getJSONArray(i).let { p -> doubleArrayOf(p.getDouble(0), p.getDouble(1)) } })
+                MapRoute(svc, parseColor(x.optString("color")), (0 until line.length()).map { i -> line.getJSONArray(i).let { p -> doubleArrayOf(p.getDouble(0), p.getDouble(1)) } }, x.optBoolean("loop"))
             }.filterValues { it.line.size >= 2 }
             return CampusMap(stops, routes, serviceCodes(r), stopAliases(o.optJSONArray("destinations"))) to core
         }
@@ -198,6 +200,11 @@ data class LiveBus(
     val slot: Int = 0,
     /** Between stops, the stretch of its line it's somewhere on; null at a stop or from an older API. */
     val stretch: Stretch? = null,
+    /** The stops still ahead on its line, [nextStop] first, to where the line
+     *  ends; empty past a one-way line's end or from an older API. */
+    val upcoming: List<String> = emptyList(),
+    /** Where its line ends (a loop's first stop); null from an older API. */
+    val towards: String? = null,
     val ox: Double = 0.0,
     val oy: Double = 0.0,
 ) {
@@ -209,6 +216,37 @@ data class LiveBus(
         /** As the web map (apps/web/public/app/map.js). */
         const val AT_STOP_SIDE_DP = 22.0
         const val AT_STOP_STEP_DP = 26.0
+    }
+}
+
+/**
+ * A tapped bus's stops, as its sheet lists them, from what `/buses` said
+ * (the server walks the line, not the app): the stop it [passed] (between
+ * stops) or the one it's [here] at, its [next], then [after] it at most
+ * [AFTER] more, and how many [more] there are past those.
+ */
+data class BusStrip(val passed: String?, val here: String?, val next: String?, val after: List<String>, val more: Int) {
+    /** Between stops: the bus is drawn on the line after [passed], not at a stop. */
+    val between: Boolean get() = here == null
+
+    /** Anything ahead of the bus to list. */
+    val any: Boolean get() = next != null
+
+    companion object {
+        const val AFTER = 4
+
+        fun of(bus: LiveBus): BusStrip {
+            // An older API has nextStop but no upcoming.
+            val ahead = bus.upcoming.ifEmpty { listOfNotNull(bus.nextStop) }
+            val rest = ahead.drop(1)
+            return BusStrip(
+                passed = if (bus.at == null) bus.stretch?.last else null,
+                here = bus.at,
+                next = ahead.firstOrNull(),
+                after = rest.take(AFTER),
+                more = (rest.size - AFTER).coerceAtLeast(0),
+            )
+        }
     }
 }
 
@@ -247,6 +285,10 @@ data class BusList(val svc: String, val available: Boolean, val buses: List<Live
                             val last = st.optJSONObject("last")?.optString("name")?.ifEmpty { null }
                             if (from != null && to != null && last != null) Stretch(from, to, last) else null
                         },
+                        upcoming = b.optJSONArray("upcoming")?.let { u ->
+                            (0 until u.length()).mapNotNull { j -> u.optJSONObject(j)?.optString("name")?.ifEmpty { null } }
+                        }.orEmpty(),
+                        towards = b.optJSONObject("towards")?.optString("name")?.ifEmpty { null },
                     )
                 },
                 stale = o.optBoolean("stale", false),

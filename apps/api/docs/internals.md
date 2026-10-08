@@ -23,8 +23,14 @@ places to fix every bug.
 This document is about the API. The clients (Android, Mac, the website) are
 the other folders in `apps/`; the Worker serves the website too, so `GET /` is
 the landing page and `GET /docs` the API documentation. The OpenAPI spec lives
-in [src/openapi.ts](../src/openapi.ts) and a test fails if a route and the spec
-drift apart.
+in [src/openapi.ts](../src/openapi.ts). worker.smoke.js fails if a route and
+the spec drift apart; [test/openapi.test.js](../test/openapi.test.js) calls
+every operation, its success and its error cases, and fails when a status
+isn't listed in its `responses`, a body doesn't fit its schema or carries a
+key the schema doesn't name, an example or a golden answer doesn't fit, a
+route's `security` says something other than whether it answers 401, or a
+schema goes unused. Its schema checker (`test/_schema.mjs`) knows only the
+parts of JSON Schema the spec uses.
 
 The website's own pages (the landing page, `/status/`, `/privacy/` and the
 full policy at `/privacy/policy/`, `/pair/`, and the not-found page) wear
@@ -53,8 +59,10 @@ English in `data-t`, which `i18n.js` words in Chinese.
 ```bash
 pnpm install
 pnpm test         # zero credentials, zero network
-pnpm typecheck
-pnpm dev          # cf dev, needs .dev.vars for live data
+pnpm check        # the tests, then tsc --noEmit
+cd apps/api
+pnpm typecheck    # tsc --noEmit alone; only in apps/api
+pnpm dev          # cf dev, needs .dev.vars for live data; only in apps/api
 ```
 
 ## Configuration
@@ -76,13 +84,17 @@ student's credentials.
 | `NEXTBUS_PROXY_API_KEY` | Sent as `x-api-key` to the proxy |
 | `NEXTBUS_APP_VERSION` | Current uNivUS release, e.g. `univus_android_2.59.2_140`. **Must track the Play Store**; KV `config:appVersion` overrides it (see below) |
 | `NEXTBUS_HTD_API` / `NEXTBUS_APP_API` | The two auth headers for the token mint |
+| `NEXTBUS_DEVICE_ID` | Optional; any 16 hex characters. Unset: one is made and kept in KV (`auth:deviceid`), so NUS sees one install |
 | `NEXTBUS_REQUESTED_BY` / `NEXTBUS_SECURED_REQUEST` | Optional; the server does not require them |
 
-Names match `hewliyang/nus-nextbus-web`'s `.env.example`.
+The `NEXTBUS_*` names match `hewliyang/nus-nextbus-web`'s `.env.example`.
 
 Deploy. The Worker's config is [cloudflare.config.ts](../cloudflare.config.ts)
 (the website directory is in [wrangler.config.ts](../wrangler.config.ts), which
-`cf` builds with):
+`cf` builds with). It names a D1 database, a KV namespace and an R2 bucket
+(`terminus-downloads`) for each site, so a new account creates those first
+and puts their ids there. The recipe below covers the KV namespace and the
+feed's secrets only:
 
 ```bash
 pnpm exec cf kv namespaces create --title terminus   # put the id in cloudflare.config.ts
@@ -91,6 +103,17 @@ for k in NEXTBUS_AUTH_BASE NEXTBUS_APP_VERSION NEXTBUS_HTD_API NEXTBUS_APP_API N
 done
 pnpm run deploy
 ```
+
+The other secrets are set the same way. Declared with `bindings.secret()` in
+cloudflare.config.ts, besides the six above: `ALERT_EMAIL` (where outage
+alerts and feedback go), `HEALTH_TOKEN` (the operator's `x-health-token`),
+`TURNSTILE_SECRET` (Turnstile on sign-in; unset, the check is skipped),
+`FCM_SERVICE_ACCOUNT` (push to Android) and `VAPID_PRIVATE_KEY` (Web Push).
+Not declared, so a site deploys without them: `LTA_ACCOUNT_KEY` (public
+buses), `ANALYTICS_TOKEN` (the dashboard's Analytics Engine charts, with
+`CF_ACCOUNT_ID`, which is in the config) and `TIMELAPSE_TOKEN` (opens
+`/timelapse/*` only). Everything in [src/types.ts](../src/types.ts)'s `Env`
+but KV is optional at run time: `/health` says what's missing.
 
 ## Endpoints
 
@@ -104,21 +127,23 @@ pnpm run deploy
 | `GET /buses?svc=<service>` | One service's live buses for the map: the stop each is at (within 40 m along its route) or the two it's between, where to draw it (the stop's dot, or a point on the route line between the stops), the road's heading there, crowding and the next stop; between stops, the stretch of route it's on. A bus away from its route is left out. One upstream call per service per 5 s; each bus with its number plate. |
 | `GET /line?svc=<service>[&stop=<code>]` | One service's whole line, for the Buses tab's service page: its stops in route order (a loop's first stop not listed again at the end), each with the other shuttle services there; its buses from `/buses`, each by index into that list (`at` a stop, or `after` the stop it passed); with `stop`, that stop's index and the service's board row there (a stopped row too); whether the service is running now, and if not why and when it's back (`running`, `stopped`, `resumesAt`). One `/buses` read, plus one `/arrivals` read with `stop`, both through their caches. No times are worked out for the other stops. 400 for an unknown service or a stop it doesn't call at. |
 | `GET /campus` | Stops (with the services that call there), each route's path along the roads, the services' colours, destination search data, and the residences for "Where do you live?" (PGP and UTown Residence, where most students live, first and marked `common`; the pickers show them in their own group), each with its walk to its nearest stop in metres (`walkM`) and in whole minutes at the normal pace (`walkMin`, never under 1). Written once per isolate, with an ETag: a client revalidating gets a 304. |
-| `GET /map/campus.pmtiles` | The campus street map from R2, by byte range (PMTiles). Open, like the website. Each piece is kept in the edge cache under the file's ETag and its byte range, so R2 is read once per piece per data centre; the ETag itself is looked up at most every 5 minutes per data centre, so a new upload is seen within 5 minutes. Fonts and icons never change at their path (new icons get a new folder, like `v4`), so they're kept by path alone, with no look at R2. When R2 fails, cached pieces are still served (the last ETag R2 gave stays in the edge cache, and R2 is asked again every 30 s) and the rest are 503 with `Retry-After`; 416 is only for a range past the file's end. |
+| `GET /map/campus.pmtiles` | The campus street map from R2, by byte range (PMTiles). Open, like the website. Each piece is kept in the edge cache under the file's ETag and its byte range, so R2 is read once per piece per data centre; the ETag itself is looked up at most every 5 minutes per data centre, so a new upload is seen within 5 minutes. Fonts and icons never change at their path (new icons get a new folder, like `v4`), so they're kept by path alone, with no look at R2. When R2 fails, cached pieces are still served (the last ETag R2 gave stays in the edge cache, and R2 is asked again every 30 s) and the rest are 503 with `Retry-After: 60`; 416 is only for a range past the file's end. |
 | `GET /map/style.json?theme=&lang=` | The map's MapLibre style, light or dark, English or Chinese: Protomaps' map without its points of interest, every URL on this domain. |
 | `GET /map/fonts/…`, `/map/sprites/…` | The map's label glyphs and icons, from R2. |
 | `GET /download/android`, `/download/mac` | The current app downloads from R2, as `latest.json` there names them. `?abi=` picks an Android APK by CPU type; `/download/appcast.xml` is the Mac app's Sparkle feed, `/download/latest.json` the version list, `/download/releases/<version>/<file>` a versioned file. `latest.json` and the appcast are read from R2 on every request, so a release is live the moment it's uploaded. |
 | `GET /stops/pairs` | Each stop with its twin across the road, and where the buses on each side go next. Cached hard. |
-| `GET /health` | Graph age and which config is present, never values (`config.pushAndroid` and `config.pushWeb`: push set up with a usable key). `?probe=1` tests auth. |
+| `GET /health` | Graph age, how long the calendar lasts, the feed as the cron last saw it (`upstream`) and which config is present, never values (`config.pushAndroid` and `config.pushWeb`: push set up with a usable key). 503, with the same body, when the feed is confirmed down, the cron has stopped or the calendar has run out. With the operator's `x-health-token`, `?probe=1` mints a real token and says what came back, and `?versions=1` says what the version updater would find today in the app stores (see "The version string is a kill switch"); without it both are ignored. |
 | `GET /status.json` | Whether NUS's feed is up, as the 15-minute check saw it, and the last 20 outages, read from KV at most once a minute per isolate. Two failed checks in a row confirm an outage and two good ones end it, so a feed that answers every other time stays down; the outage ends at the first of the two. The [status page](../../web/public/status) shows it. |
-| `GET /admin/stats` | The operator dashboard's data (accounts, devices by app, sign-ups, reports, feed; answers and errors per day from Analytics Engine when `ANALYTICS_TOKEN` is set, and the timelapse recorder's polls by what they cost NUS). Needs `x-health-token`; anything else gets a 404. |
-| `GET /timelapse/days` | The days the timelapse recorder has kept (closed ones from R2, today's while it records) and what it's doing today. Needs `x-health-token`: the operator's, or `TIMELAPSE_TOKEN`, which opens `/timelapse/*` and nothing else. |
+| `GET /admin/stats` | The operator dashboard's data (accounts, devices by app, sign-ups, reports, feed; answers and errors per day, and the timelapse recorder's polls by what they cost NUS, from Analytics Engine when `ANALYTICS_TOKEN` and `CF_ACCOUNT_ID` are set). Needs `x-health-token`; anything else gets a 404. |
+| `GET /timelapse/days` | The days the timelapse recorder has kept (closed ones from R2; today's while it records, and any of the past week's still held by a recorder that hasn't written it to R2 yet) and what it's doing today. Needs `x-health-token`: the operator's, or `TIMELAPSE_TOKEN`, which opens `/timelapse/*` and nothing else. |
 | `GET /timelapse/days/<date>` | One recorded day as gzipped JSON (see "The timelapse recorder"). A closed day never changes and is cached for a year; today's is built from what the recorder holds so far, `no-store` (503 if its recorder doesn't answer within 10 s). Needs `x-health-token` (operator or timelapse token). |
 | `GET /account` | The account page ([apps/web](../../web)), served as static assets. |
-| `POST /auth/login`, `/auth/code`, `/pair`, `/me/*` | Accounts. See below. `POST /me/feedback` is "Is this wrong?": the answer the user saw and a note, kept with the account for a year (`FEEDBACK_KEEP_DAYS`, the cron) and its note emailed to `ALERT_EMAIL`, without the address or the answer (they'd outlive the account in an inbox; the dashboard has both). It needs a note, and an account with an email: an anonymous one gets 403. |
+| `POST /auth/login`, `/auth/code`, `/pair`, `/me/*` | Accounts. See below. `POST /me/feedback` is "Is this wrong?": the answer the user saw and what was wrong (a `reason` from the sheet's chips, `REASONS` in `src/feedback.ts`, a note, or both), kept with the account for a year (`FEEDBACK_KEEP_DAYS`, the cron) and its note emailed to `ALERT_EMAIL`, without the address or the answer (they'd outlive the account in an inbox; the dashboard has both). It needs a reason or a note (feedback, `kind: other`, always a note), and an account with an email: an anonymous one gets 403. |
 
 `/next`, `/trip`, `/arrivals`, `/buses`, `/line`, `/campus` and `/stops/pairs` need an API key
-(made on the account page, sent as `x-api-key`) or a signed-in session. They're
+(made on the account page, sent as `x-api-key`, or as a bearer token) or a signed-in
+session or device; without one they answer 401 with `WWW-Authenticate`. A key opens
+these routes only: on `/me/*` it is not a session, and gets 401. They're
 limited by who's asking: a signed-in account by account (`RL_ME`, `acct:`),
 an API key by key (`RL_PUBLIC`, `key:`), and a request with neither by IP.
 On campus Wi-Fi hundreds of students share one IP, and the map alone asks
@@ -127,8 +152,10 @@ in for 30 s (`recentCallerFor` in `src/access.ts`), so a poll doesn't
 look the session up in D1 again: a session signed out or a key revoked can
 still see the buses that long, and nothing else. `/health`, `/status.json`, `/admin/stats`,
 `/timelapse/*` and `/download/*` stay limited by IP. `/map/*` is limited by IP only where it
-reads R2 (`RL_MAP`, 300 a minute): a piece already in the edge cache is
-never refused, so a lecture hall can open the map at once.
+reads R2 (`RL_MAP`, 300 a minute; past it, 429 with `Retry-After: 60`): a
+piece already in the edge cache is never refused, since the file's last
+known ETag stands in when its look at R2 would be over the limit, so a
+lecture hall can open the map at once.
 
 When D1 can't be reached, checking the key or session behind a keyed
 route is tried once more, then answered 503 with `Retry-After: 30`
@@ -238,7 +265,8 @@ bundled at deploy time, and the scrape workflow refreshes it weekly, but a
 bundled file only changes when someone deploys. So the cron also fetches the
 same two sources once a week. The copy must pass checks:
 - dates are real, and every semester starts on a Monday;
-- there are terms 1 to 4 and at least 4 semesters and 5 holidays.
+- each semester's number is 1 to 4, its academic year is two years in a
+  row, and there are at least 4 semesters and 5 holidays.
 
 A copy that passes is merged over what's known and kept in KV
 (`calendar:data`). After a failure the cron tries again the next day, and the
@@ -277,12 +305,13 @@ get one of three ways:
   (`users.email` is NULL), so the app is useful before any sign-in. Limited
   per IP (`RL_AUTH`) and globally (`RL_ANON`); the cron deletes anonymous
   accounts unused for 60 days (`users.last_seen`). That sweep, with expired
-  sessions, idle devices, old trip outcomes and crowd sightings, runs once a
+  sessions, idle devices, old trip outcomes, crowd sightings and feedback
+  older than `FEEDBACK_KEEP_DAYS` (365), runs once a
   Singapore day (KV `housekeeping:day`), since each reads a whole table;
   expired sign-in links and codes go every run.
 - **Sign-in approved from the email** ([src/applogin.ts](../src/applogin.ts),
   modelled on RFC 8628). `POST /auth/app/start {email, name}` returns
-  `{request, poll, match}` and emails a 6-character code (in the subject
+  `{request, poll, match, expires}` and emails a 6-character code (in the subject
   too: filters hold back link-only mail) and a link. Typed into the app,
   `POST /auth/app/code {request, poll, code}` answers with the token; five
   wrong codes kill the request. Reading mail on another device, the link's
@@ -296,7 +325,7 @@ get one of three ways:
   one field underneath: a paste spreads over them, keeping only the code
   from around it (`codeEdit`, SignInCode.kt).
   The app polls `POST /auth/app/poll {request, poll}` every 3 s and gets
-  `{status: 'approved', token, outcome}` once. The poll secret, the link
+  `{status: 'approved', token, email, outcome}` once. The poll secret, the link
   and the code are all different, so the app that starts a request can't confirm it. Sent
   with the anonymous token, the device's account is kept (`added-email`) or
   folded into the email's account: dropped if it had no setup (`signed-in`),
@@ -327,7 +356,11 @@ the Mac.
 - `GET /me/next` is the widget's one call. It picks the destination from the
   timetable (see `planFor` in [src/profile.ts](../src/profile.ts)) or from
   `?place=`/`?to=`, and returns the usual answer plus `dest` and `places`.
-- `GET /me/nearby` lists departures at up to three stops near you, each with
+  A `place` or `to` that names nothing it knows is ignored: the answer is
+  the timetable's.
+- `GET /me/nearby` lists departures at up to three stops near you, plus the
+  nearest one's twin across the road when it isn't among them (so up to
+  four), each with
   its service's colour (`color`, as on the buses and the map). Each row
   (as on `/stops/{code}`) has the next bus in `etaS` and the ones after it
   the feed knows in `later`, each with its own quality; Nearby draws them
@@ -353,18 +386,21 @@ the Mac.
 `card.phase` is `idle`, `due` (5 min before the leave-by), `heading`,
 `waiting` (at the boarding stop), `riding`, `missed` or `arrived`. The
 phase comes from the answer and the day's signals: `POST /me/signal` with
-`boarded`, `missed`, `skipped`, `left`, `arrived`, `location` or `reset`,
-for the trip in progress or the `trip` key a card action or `/me/day`
+`boarded`, `missed`, `skipped`, `left`, `arrived`, `location`, `reset`,
+`away` or `back`, for the trip in progress or the `trip` key a card action or `/me/day`
 names. Clients show `card.actions` as buttons and never decide them.
 
 The signals live in a Durable Object per user (`Trip` in
 [src/trip.ts](../src/trip.ts), bound as `TRIPS`, keyed by user id, created
 in Asia with `locationHint: 'apac'`). It's
-only touched on a day with classes, keeps that day's signals and nothing
-else (a location is reduced to what it means: at the stop, or arrived), and
-an alarm deletes everything at the next Singapore midnight. A request reads
+only touched on a day with classes and keeps only that day: its signals
+(`DayRecord.trips`), the bus each trip's plan is for (`plans`), the wake
+pending for push (`watch`), and push's own bookkeeping (who to push to,
+the wake owed, what was last pushed). A location is never kept: it's
+reduced to what it means, arrived. An alarm deletes everything at the
+next Singapore midnight. A request reads
 the day once and sends everything it changes in one `POST /update`
-(`updateTrip`): a signal with being followed, or a reached trip, a plan and
+(`updateTrip`): a signal, or a reached trip, a plan and
 a watch. The object writes only what changed and sets its alarm only when
 the time moves. Deleting an account empties it at once (`clearTrip`, tried
 twice), and so does signing an anonymous account into another one, or the
@@ -378,14 +414,17 @@ the account went can't store its trip again.
   day's record (`DayRecord.plans`): from the moment the trip is due, or
   earlier when it was planned from the phone's location (`Boarded.located`).
   Every device then says that bus (the card, the notifications, Today in
-  `/me/day`), and it's the bus detection watches. A device without a location
+  `/me/day`). A device without a location
   (the widget, the background refresh, the Mac, the web) shows the phone's
   plan rather than one of its own from where the timetable puts you; a
   located answer replaces it. The same service from the same stop within
   three minutes is the same bus (live times move a little each answer), so
-  it isn't saved again. From 15 minutes before its leave-by (at the stop, and the
-  heads-up), the bus you were told stays the plan while it still gets you there on time, even if a fresh answer would
-  prefer another; only one that would now make you late gives way. The plan freezes at its leave-by, or when its bus
+  it isn't saved again, unless its time was an estimate and is now live.
+  For a class whose plan was made from the phone's location, from 15
+  minutes before its leave-by (at the stop, and the heads-up), the bus you
+  were told stays the plan while it still gets you there on time, even if a
+  fresh answer would prefer another; only one that would now make you late
+  gives way. The plan freezes at its leave-by, or when its bus
   leaves if that comes first: after that the answer would name later buses
   (and, from a moving bus, other stops), but the trip, the card and the ride
   stay about this one, until a miss, when the card shows the next way there.
@@ -399,10 +438,13 @@ the account went can't store its trip again.
 - **The card asks no questions.** It has none in it (the apps can still
   send `boarded`, `missed` and `arrived` signals). Three minutes
   after the departure the phase is taken as `riding` (`TripView.assumed`),
-  and the phone's location corrects it: at the boarding stop, or standing
-  still off the bus's road, makes it `missed` (detect.ts); in your residence
-  ends a trip home, and at the destination ends the trip (`reached`, recorded
-  as `arrived` for every device). Nothing is recorded for an assumption.
+  unless this request's location still has you at the boarding stop, which
+  makes it `missed`. A location in your residence ends a trip home, and at
+  the destination ends the trip (`reached`, recorded as `arrived` for every
+  device). Nothing is recorded for an assumption. There is no ride
+  detection: the phone sends no location during a trip, and the `location`
+  signal older Android apps still send is answered like `/me/next` from
+  there and records nothing.
 - **The ride from the feed.** Boarding records the plate of the bus due at
   the boarding stop within five minutes; while riding, the same plate in the
   alighting stop's arrivals gives the arrival (quality `live`). Without a
@@ -413,14 +455,16 @@ the account went can't store its trip again.
   only where to get off; ten minutes after the arrival (`RIDE_GRACE_MS`)
   you're taken to be there.
 - **Outcomes** ([src/outcomes.ts](../src/outcomes.ts), `trip_outcomes`, 35
-  days): what detection saw (boarded, missed, arrived) and "Not going",
+  days): what was said (boarded, missed, arrived, from older apps' taps or
+  the phone reaching the destination) and "Not going",
   with the day it happened (`at` is that day's start, never the moment:
   migration 0012);
   three misses of one class in 30 days suggest a bus earlier (`ArriveBy.oneEarlier`);
   three skips in a row offer to stop reminders (`card.remind: false`). Choices
   are `trip_prefs`; a turned-down suggestion waits 30 days.
 - **Push** ([src/push.ts](../src/push.ts), [src/tripdo.ts](../src/tripdo.ts)).
-  When `FCM_SERVICE_ACCOUNT` is set, a card served on a class day asks the
+  When push is set up (`pushEnabled`: `FCM_SERVICE_ACCOUNT` or
+  `VAPID_PRIVATE_KEY` usable), a card served on a class day asks the
   Trip object to wake at `nextPhaseAt` (due, leave-by, departure, +3 min,
   class start, ride end; not at `staleAt`). At each wake it works out the card
   again, nudges the user's devices (`sessions.push_token`) if the phase
@@ -613,7 +657,7 @@ markers or changes not committed in `apps/api` or `apps/web/public` (a deploy
 ships the files on disk, not the commit), then runs `pnpm check`. Only then
 does it apply the database's pending migrations, and deploy. The code reads columns from
 recent migrations (`magic_links.code_tries` from 0009, `feedback.reply_to`
-from 0010), so a Worker deployed to a database without them answers 500.
+from 0010, `feedback.reason` from 0014), so a Worker deployed to a database without them answers 500.
 By hand, the same first step is:
 
 ```bash
@@ -625,7 +669,7 @@ while the old Worker is still serving, and if the deploy after it fails, the
 old Worker keeps serving on the new schema. So a migration may only add:
 new tables, new indexes, new columns that are nullable or have a `DEFAULT`.
 Renaming or dropping a table or column (0002 renamed one; 0006 rebuilt
-five), or adding `NOT NULL` without a default, breaks the running code. Do those in steps, one deploy each:
+`users` and the five tables that reference it), or adding `NOT NULL` without a default, breaks the running code. Do those in steps, one deploy each:
 
 1. **Expand.** Add the new column or table; deploy code that writes both the
    old and the new and reads the new, falling back to the old.
@@ -725,8 +769,11 @@ Settings. It uses the same routes as the account page, with the session cookie.
 - **Now.** A search button at the end of the chips opens "Go somewhere
   else" (account/search-box.js, ranked by search.js, over `/campus`'s
   destinations); a pick shows its card under a chip of its own. "Is this
-  wrong?" under the card sends it to `/me/feedback` (account/preview.js
-  `Report`), except for Nearby. A stop's name in Nearby opens it on the map
+  wrong?" under the card opens a bottom sheet (account/preview.js
+  `Report`, a modal `<dialog>`): the answer it's about, the reasons as
+  chips, a note, and who the reply goes to. It sends to `/me/feedback`
+  and then says so in the sheet, which is the only confirmation; Android's
+  sheet is the same. Not for Nearby. A stop's name in Nearby opens it on the map
   (MapTab's `focus` in map.js).
 - **Theme.** Appearance's switch chooses light, dark or the device's own, for this
   browser only (`localStorage` `terminus-theme`). `assets/theme.js`, in every
@@ -809,67 +856,14 @@ Settings. It uses the same routes as the account page, with the session cookie.
   `trips:armed` does. The mark is saved before the batch is sent, so a mark
   that can't be saved sends nothing rather than the batch every run. A user
   no device took (push itself failing, say) goes on `term:retry` and is
-  tried again on the next eight runs, while the batches carry on, so one
+  tried again on the next runs, up to eight attempts in all
+  (`REMIND_TRIES`), while the batches carry on, so one
   phone that can't be reached holds up no one. Each run stamps the mark
   with its time and the list it leaves with the same, so a list that
   couldn't be saved is set aside rather than sent to again. A retried
   user's profile is read afresh: imported since, they're skipped; with a
   new language, they're told in it. A tap opens the timetable settings on the web, and the
   app on Android. The Mac app has no push, so it isn't told.
-
-### Every trip, detected
-
-**Detection (`detect.ts`).** During a trip the Android app sends
-`POST /me/signal` `{kind: 'location', lat, lon, speed, acc}` about every
-20 seconds, from the live notification's foreground service. Each fix is
-judged and dropped; only what it means is kept on the trip record, marked
-`detected`:
-
-- **On the bus:** at least 4 m/s, within 60 m (plus the fix's accuracy, up to
-  60 m) of the straight lines between the planned service's stops from the
-  boarding stop to the one you get off at, having had a `waiting` record (a
-  fix at the boarding stop) in the last 30 minutes, from two minutes before
-  the bus's departure. The record gets `departed`, the departure estimated
-  from the fix (now, less the distance from the stop at that speed), and the
-  plate of the service's first bus due at the next stop.
-- **Missed:** three minutes after the planned departure, below 1.5 m/s, and
-  still within 80 m of the boarding stop or still in your residence. A miss
-  at the stop (`atStop`) lets the next bus from it be noticed the same way,
-  whichever service it is.
-- **There:** on the bus (tapped, detected or assumed), within 100 m of the
-  stop you get off at, either side of the road; or the answer planned from the
-  fix says you're at the destination: within 45 s on foot of its stop (either
-  side), or within 80 m (`WALK.atVenueM`) of the room or building itself,
-  whose position `data/rooms.json` and `data/venues.json` carry from the
-  NUSMods room map. A lecture theatre can be 100 m from its stop, so the stop
-  alone missed someone sitting in it.
-
-A tap always wins: detection only changes a trip nobody has answered, or one
-it answered itself, except that it notices the end of a ride someone said they
-were on.
-
-As the card asks nothing, detection corrects a wrong guess: taken to be on the bus
-(detected, or nobody said) but standing still more than twice the corridor
-off its road is a miss, and the plan moves on to the next way there. Each fix
-also notes the time on the day's record (`followed`, at most once a minute).
-Anything detected has `detected: true` ("Looks like you're on the bus"). The
-cards offer only plans ("Not going", "Not on campus today"). A `waiting` record (a fix at the stop) is not an answer: after the
-departure only a location at the stop now counts as missed. Analytics counts
-`detected:<kind>` signals separately from taps.
-
-**Measured ride times (`ridetimes.ts`).** A ride detection saw start and
-end is one row in `ride_times` (migration 0008): service, stops, hops,
-seconds, hour and kind of day, plate. No user, device or location. Rides
-under 30 s or over 300 s a stop are dropped as mistakes, and so are rides
-from accounts under 3 days old and a second ride on the same service in the
-same hour from one account (a short-lived KV mark named by a hash of the
-account, service and hour, so neither the rows nor the mark name a user). Taps never count:
-they are minutes out either way. Once a day from 04:00 the cron prunes rows
-older than 120 days and writes seconds per stop to KV (`ride:hops`): per
-service with at least 10 rides, and per hour of the day with 10 of its own,
-the median seconds per stop, clamped to 45 to 240 s. `answerFor` reads it (cached ten minutes per isolate)
-and passes `hopS` to the resolver, so a leg's `rideS` is measured where the
-table has the service and `RIDE.secondsPerHop` elsewhere.
 
 **When a class really ends.** NUS classes end about half an hour before the
 timetable's end time, to leave time to get to the next one. `endOf` takes
@@ -892,7 +886,7 @@ home isn't an outcome.
 
 **More than class trips.** Today's trips are `classesOn(profile)`:
 the imported and hand-entered classes, plus two kinds that are planned the
-same way (leave-by, push, detection, "Not going"):
+same way (leave-by, push, "Not going"):
 
 - `profile.usual`: a saved place at a usual time, `{place, day, atMin}`,
   kept apart from `places` so an older app rewriting the places can't drop it.
@@ -1003,8 +997,11 @@ data centre; with neither, no retry. So a code that keeps coming back costs
 one call per key per `failMemoS`.
 
 **KV holds small, slow-changing state; arrivals stay in the edge cache.** The guest token
-and device id, the `config:appVersion` override, the monitor's view of the
-feed and its incidents, measured ride times (`ride:hops`) and a few
+and device id, the `config:appVersion` override and the `config:timelapse`
+switch, the fetched calendar (`calendar:data`), the monitor's view of the
+NUS feed and its incidents, of DataMall (`monitor:public`) and of the
+version updater's tries (`monitor:autoversion`), the cron's place in its
+batches (`trips:armed`, `term:reminded`), sign-in codes and a few
 short-lived marks. KV writes are rate-limited and propagation is eventual,
 which is wrong for 15-second data: arrivals and live buses live in the edge
 cache.
@@ -1043,13 +1040,16 @@ serves. `scripts/scrape_lta.py` takes LTA DataMall's stops, routes and
 services, keeps the stops within 200 m of a shuttle stop (the campus, not
 Pasir Panjang Road or the AYE) and trims each public service to its stops
 there; the weekly scrape runs it, with the `LTA_ACCOUNT_KEY` secret, and
-`check_scraped.py` checks the result. `withPublic()` merges it into a second
-graph, `GRAPH_PUBLIC`: a public stop within 20 m of a shuttle stop is that
-stop, which gains a `publicCode`; one further off is a stop of its own under
+`check_scraped.py` checks the result. The script also decides which public
+stops are a shuttle stop's shelter: within 20 m (`SAME_SHELTER_M`), the
+nearest, one per shuttle stop, kept as `merged` in the file. `withPublic()`
+builds a second graph from it, `GRAPH_PUBLIC`: a merged stop is the shuttle
+stop, which gains a `publicCode`; any other is a stop of its own under
 LTA's five-digit code. Everything built from `GRAPH` alone (the map, the
 search, the stop pairs) is untouched, and so are the golden answers: the
 public graph is used only when a profile's `publicBuses` is on (off by
-default, a switch in every client's Settings) or `?public=1` is sent.
+default, a switch in every client's Settings), when `?public=1` is sent, or
+for `/arrivals` at a stop only public buses call at.
 
 Three things about public buses are their own. A two-way service is two
 routes, `151/1` and `151/2`, and shows as `151` (`svcName()`); LTA's
@@ -1061,8 +1061,8 @@ Holland Village between Opp Kent Ridge MRT and Kent Ridge MRT). And a fare
 counts: a public bus is the headline only when it beats the free bus by
 `PUBLIC.fareWorthS`, and otherwise is the alternative; its leg carries
 `paid: true`, the detail says "public bus", and the clients draw a `$` on
-its badge. Only a time LTA marks `Monitored: 1` is `live`; any other value
-(0, `false`, missing, renamed) is the operator's timetable, `scheduled`, so
+its badge. Only a time LTA marks `Monitored` as `1`, `true` or `"1"` is
+`live`; any other value (0, `false`, missing, renamed) is the operator's timetable, `scheduled`, so
 a change in how the field is written can't pass a timetabled time off as
 live. The leave-by keeps a timetabled time estimated too
 (`leave.estimated`). A leave-by from a stale feed, or a plan an earlier
@@ -1095,11 +1095,17 @@ so the MRT is not here; nor are live public buses on the map, which the
 per-stop feed cannot give without polling every stop. Contains information
 from LTA DataMall accessed via the Singapore Open Data Licence.
 
-**Failures show in `quality`.** `quality` walks `live → scheduled → stale →
-ended`. A stale answer keeps its **original** `asOf` timestamp. A three-minute-
+**Failures show in `quality`.** A time is `live` (from the feed now),
+`stale` (from the feed's last good answer), `scheduled` (a headway guess
+inside operating hours, or, for a public bus, LTA's timetable) or `unknown`
+(no time at all: the feed couldn't be reached); `ended` means the services
+have stopped. A measured time (`live` or `stale`, `isMeasured`) always
+ranks ahead of a guess, whatever the minutes say. A stale answer keeps its
+**original** `asOf` timestamp. A three-minute-
 old answer labelled as such beats a spinner, and beats an empty tile that
 reads as "no buses". Only a real arrival becomes `stale`; a headway guess
-from an old answer stays `scheduled`. Arrival times count from when they were
+from an old answer stays `scheduled`. A stale bus's leg (`bus`, `altBus`) is
+`estimated`, as a guess's is, so its times are drawn with a `~`. Arrival times count from when they were
 fetched, so a bus that has left since then (by the walk to it) is never
 offered as catchable.
 
@@ -1108,13 +1114,19 @@ offered as catchable.
 `test/fixtures/` holds real captured responses and `test/fixtures/README.md`
 records what they establish. Three findings changed the code:
 
-**The list key is `timings` under an `etas` envelope, not `shuttles`.**
-`normalize()` returned an empty array on real data until a fixture proved it.
+**The list key depends on who wraps it.** The feed itself lists arrivals
+under `shuttles` (the raw `connectx-ShuttleService-COM3.json`, and the bus
+proxy's `data`); `bus.hewliyang.com`'s proxy, where most stop fixtures come
+from, puts them under `timings` in an `etas` envelope. `normalize()` returned
+an empty array on those captures until a fixture proved it, and now reads
+both (`ARRIVAL_LIST_KEYS`).
 
-**Crowding is a headcount, not a bucket.** `arrivalTime_capacity` /
-`arrivalTime_ridership` against 88-seat buses, so `88/88` means "you
-are not getting on this one" rather than a vague "high". Some vehicles report
-neither field, and an absent field is not an empty bus.
+**Crowding is a headcount, not a bucket.** In hewliyang's captures,
+`arrivalTime_capacity` / `arrivalTime_ridership` against 88-seat buses, so
+`88/88` means "you are not getting on this one" rather than a vague "high".
+The raw feed has `passengers` per row and `px` per arrival instead, `"-"`
+when unknown; `normalize()` reads either. Some vehicles report nothing, and
+an absent field is not an empty bus.
 
 **A terminus reports the same service under two berth codes.** COM3 is the
 D1/D2 terminus and returns both `COM3-D2-S` (a run starting there) and
@@ -1137,7 +1149,7 @@ minutes in the past alongside a positive `arrivalTime`. It is not used.
 `normalize()` and `normalizeBuses()` treat anything they can't read as
 missing, never as zero: an `arrivalTime` that is negative or looks like a
 clock time ("-3", "12:30") is no time; `eta_s` is a number or a string of
-digits, so a blank, `false` or `[]` there is no time rather than "arriving
+digits (a decimal point allowed, rounded to whole seconds), so a blank, `false` or `[]` there is no time rather than "arriving
 now"; a time more than a week away (`MAX_ETA_S`: an epoch, a changed unit)
 is no time; and a live bus with a blank or null latitude, longitude or
 direction has no position or heading, rather than sitting at latitude 0 or
@@ -1254,19 +1266,21 @@ Four things that will bite you:
   intermittently answer 400 "Contradictory scheme headers" (2 of 6 mints in a
   direct A/B, 0 of 6 without).
 
-The three API keys (`X-HTD-API`, `X-APP-API`, the proxy's `x-api-key`) are the
-only secrets. Everything else in `.dev.vars.example` is a URL or a version.
+The feed's secrets are its three API keys (`X-HTD-API`, `X-APP-API`, the
+proxy's `x-api-key`); the rest of its settings are URLs, the version, the
+optional device id and two optional headers. `.dev.vars.example` also has
+`LTA_ACCOUNT_KEY`, DataMall's key, which is as secret as the three.
 
 ## Analytics
 
 Every answer someone asks for (`/next`, `/trip`, `/me/next`) writes one
-decision row, plus one row per timed arrival, to a Workers Analytics Engine
-dataset. Answers the server works out for itself are not logged
+decision row, plus one row per timed arrival (eight at most,
+`MAX_ARRIVAL_ROWS`), to a Workers Analytics Engine dataset. Answers the server works out for itself are not logged
 (`log: false`): the Trip object's wakes, and each class's leave-by on
 `/me/day`. They would cost rows and count as answers on the dashboard. Two purposes: checking whether the direction
 algorithm is right, which nothing else measures, and inter-stop
 travel times from the feed's own predictions (`plate` is the join key), a
-cross-check on the ride times detection measures. Queries and
+check on `RIDE.secondsPerHop`. Queries and
 the schema contract are in [docs/analytics.md](analytics.md).
 
 Logging is a no-op without the binding and swallows its own errors. A logging
@@ -1309,16 +1323,21 @@ down is counted on its dashboard as the error `cron feed down`.
   error. It separates a 2-hop ride from a 14-hop ride, which is the case that
   matters; it does not reliably separate 4 hops from 5. `stop.confidence`
   reports which situation you are in: below ~0.6, the answer is little better
-  than a coin flip. Measured ride times replace it per
-  service and hour once enough rides have been detected; until then, and for
-  services nobody rides with detection on, it is still the guess.
-- `quality: 'scheduled'` has no timetable behind it. It means "inside operating
-  hours, feed gave nothing, here is a headway estimate". It is the weakest rung
-  of the ladder and it is labelled as such.
-- The `-S` / `-E` rule rests on one captured stop. If any NUS route uses a
-  different berth convention, `resolveBerths()` will fall through to the
-  ambiguous branch and cap confidence, which is the safe direction to fail,
-  but it wants a second terminus in the fixtures to confirm.
+  than a coin flip. The feed's own predictions are the way to check it
+  ([docs/analytics.md](analytics.md)).
+- For a shuttle, `quality: 'scheduled'` has no timetable behind it. It means
+  "inside operating hours, feed gave nothing, here is a headway estimate".
+  (For a public bus it is LTA's own timetable.) It is the weakest rung that
+  still gives a time, and it is labelled as such; only `unknown`, with no
+  time at all, is weaker.
+- The `-E` rule rests on one captured stop's arrivals. `stops.json` has `-E`
+  berths at all three shuttle termini (`KRB-A1-E`, `KRB-A2-E`, `COM3-D1-E`,
+  `COM3-D2-E`, `KV-P-E`), but only COM3's arrivals are in the fixtures.
+  `resolveBerths()` drops every row that ends here rather than preferring
+  `-S`, since route P starts at a bare `KV`. If a terminus spells its berths
+  differently in the arrivals, it falls through to the ambiguous branch and
+  caps confidence, which is the safe direction to fail, but it wants a
+  second terminus in the fixtures to confirm.
 - Most stop fixtures come from `bus.hewliyang.com`'s proxy, not the feed
   directly: the rows are passthrough, the envelope is his. One raw ConnectX
   `ShuttleService` body (`connectx-ShuttleService-COM3.json`) confirms the
@@ -1330,7 +1349,8 @@ down is counted on its dashboard as the error `cron feed down`.
 The Android widget and app ([apps/android](../../android)), the Mac menu bar app
 ([apps/macos](../../macos)) and the website ([apps/web](../../web)) all use `/me/next`.
 The Android app, the web app and the Mac (in a window of its own) also have
-the campus map: `/campus`, `/buses`, `/arrivals` and `/map/*`. The apps
+the campus map: `/campus`, `/buses`, `/arrivals` and `/map/*`. The Buses
+tab (web and Android) opens a service's whole line with `/line`. The apps
 download `campus.pmtiles` once and read it from disk, since MapLibre Native
 fails the whole style when one streamed piece fails. The Mac's MapLibre is
 built from source (`scripts/vendor-maplibre-mac.sh`; no macOS build is
@@ -1370,7 +1390,11 @@ it is in the route:
   detour), or on a service with no line, isn't shown.
 
 `heading` is the way the road runs at the place it's drawn, and `nextStop`
-the stop after the one it's at, or the one it's heading to.
+the stop after the one it's at, or the one it's heading to. `upcoming`
+lists the stops still ahead, `nextStop` first, to where the line ends
+(round a loop, back at its first stop), and `towards` is that end: the
+map's bus sheet says "Towards COM 3" and lists the stops from these, so no
+client walks the route itself.
 
 The hard part is the side of the road. Most of D1, D2 and K, and parts of
 the others, use one road both ways, and the two directions of the line are
@@ -1384,7 +1408,11 @@ the bus could have driven to since (from 50 m back, for GPS error, to
 100 m + 20 m/s ahead), and the other side of the road is never one of
 them. Among those places, a stretch running the way it's heading comes
 first, then the least distance driven. A position a little behind the
-track leaves the bus where it was, so `along` never goes back.
+track leaves the bus where it was, so `along` never goes back. One up to
+500 m behind (`HOLD_BACK_M`), with nowhere ahead it could be, holds it
+where it was for up to 2 minutes (`HOLD_BACK_MS`), or as long as its track
+lasts at the end of a loop: A1 and A2 leave Kent Ridge Bus Terminal along
+the road they came in by before they join the start of their line.
 
 A track lasts ten minutes from the last time the feed reported the bus,
 moved or not: a bus standing still at a terminus for longer keeps its side.
@@ -1394,8 +1422,9 @@ at, if it's clearly nearer one stop than its twin across the road; otherwise
 on the nearer side. A track that started wrong gives way when the bus is
 seen moving the other way twice in a row; one odd heading doesn't move it.
 A tracked bus that strays more than 50 m off its line for under 30 s (a GPS
-jump) stays at its last place; longer (the depot, a detour), it's drawn
-where the feed puts it, with no `along` and no next stop.
+jump) stays at its last place; longer (`HOLD_OFF_MS`: the depot, a
+detour), its track is dropped and it's left out of the answer until it's
+back on its line.
 
 The tracks live in the edge cache with the placed answer, keyed by service
 (`trackedBuses`). Each feed update is placed once per data centre, and every
@@ -1410,12 +1439,17 @@ positions.
 Clients draw a bus at a stop just beside its dot, on the kerb side (left
 of the way it's going: buses drive on the left), so the dot stays in sight,
 and the ones behind it (`slot` 1, 2) one bus further back along the road
-each. The offset is in pixels, so it looks the same at every zoom. When a
+each. The offset is in pixels at full size (zoom 17) and shrinks with the
+bus's icon as the map zooms out (web `BUS_SIZE` in map.js, Android
+`busSize`, Mac `iconScale`). When a
 bus's place changes, it slides there along the route line at a steady 100 m a
 second, so a longer stretch takes longer: from 1 s for a short hop to
 4 s, done before the next answer, 5 s on (a typical slide, half of a
 421 m stretch, takes about 2 s); with reduced motion, after 15 s without an answer, or to a place
 it can't reach along the line (behind it, or over 1.5 km on), it jumps.
+On a loop it slides on past the line's start, as the API places it. Clients
+take that from `/campus`'s `loop`, not from where the line ends: A1's and
+A2's lines end some 40 m from where they start at KRB.
 A tapped bus is ringed. Between stops, its `stretch` is drawn over the
 route, wider, with the rest of the route faded well back, and its card
 says "Between LT13 and COM 3".
@@ -1576,9 +1610,15 @@ src/timelapse.ts  The timelapse recorder's rules, day file and /timelapse/days
 src/timelapsedo.ts  The recorder's Durable Object: one per Singapore day
 src/map.ts        /map/*: the street map file, its style, fonts and icons
 src/pairs.ts      /stops/pairs
-src/analytics.ts  Analytics Engine decision + arrival logging
+src/analytics.ts  Analytics Engine logging: decisions and arrivals, errors
+                  (logError, logCronError), timelapse polls (logPoll)
 src/openapi.ts    OpenAPI 3.1 spec and the Elements docs page
-src/http.ts       JSON responses, query parsing
+src/http.ts       JSON responses, query parsing, CORS, security headers and
+                  the CSP, timedFetch (upstream calls under a timeout)
+src/types.ts      Env (bindings and secrets) and the API's shared types
+src/landing.ts    The landing page, with the version and Account written in
+src/pagesky.ts    The band of sky on the Worker's small pages and /docs
+src/async-hooks.d.ts  Types for node:async_hooks, the one Node API used
 src/seo.ts        robots.txt, the sitemap and /llms.txt (a guide for AI agents); the beta asks not to be crawled
 src/accounts.ts   Sign-in codes and links, sessions, anonymous accounts, pairing codes (D1)
 src/applogin.ts   App sign-in approved from the email
@@ -1593,9 +1633,7 @@ src/answer.ts     The answer engine: stops near you, their arrivals, the best bu
 src/card.ts       The card every client shows, worded once
 src/leave.ts      When to set off; src/clock.ts clock times and lateness
 src/plan.ts       Which bus a trip is about: one plan for every device
-src/detect.ts     What a location says about the trip
 src/outcomes.ts   What happened to each planned trip, and what it suggests
-src/ridetimes.ts  Measured ride times
 src/crowd.ts      Full buses: a packed bus can pass a stop
 src/walk.ts       Walking along campus paths (data/walks.json)
 src/graph.ts      The stop graph, with hand-kept fixes
@@ -1610,7 +1648,11 @@ src/downloads.ts  /download/*: app files and the Mac appcast from R2
 src/admin.ts      /admin/stats; src/feedback.ts "Is this wrong?" reports
 src/i18n.ts       Every server string in English and Chinese
 src/site.ts       Which Worker this is: stable or beta
+data/             Bundled JSON: stops.json, shapes.json, public.json,
+                  calendar.json, walks.json, venues, rooms, landmarks, residences
 migrations/       D1 schema
+scripts/          dev-stub.mjs, the scrapers, probes and render-timelapse.mjs
+test/             *.test.js, worker.smoke.js, fixtures/ (captures, golden answers)
 ```
 
 `normalize()` in `fms.ts` is the only function that touches the raw FMS shape.
@@ -1635,10 +1677,16 @@ noticed (an alert) rather than read as an empty board. The same goes for
 
 ## Acceptable use
 
-This reads a public, unauthenticated endpoint the uNivUS app itself uses,
-at roughly one request per stop per 15 seconds, and, for the timelapse
-recorder only, each service's bus positions at most once per 30 seconds
-inside fixed hours, behind a kill switch. Use it in line with the
+This reads the public guest-token endpoint the uNivUS app itself uses to
+show Bus Arrival without a sign-in (a guest JWT plus the app's
+`x-api-key`; no NUSNET account). On request, that's at most one call per
+stop per 15 seconds, and one per service per 5 seconds for live buses while
+someone has the map open. On a schedule: the 15-minute health check (one
+stop), each push user's Trip object (through the same caches), and the
+timelapse recorder, each service's bus positions at most once per 30
+seconds inside fixed hours, behind a kill switch. Public buses come from
+LTA DataMall, one call per stop per 15 seconds, plus one stop per health
+check. Use it in line with the
 [NUS Acceptable Use Policy for IT Resources](https://nus.edu.sg/registrar/docs/info/registration-guides/aup-form.pdf).
 Do not commit captured credentials, do not use NUSNET credentials with it, and
 do not raise the request rate.

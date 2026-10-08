@@ -75,7 +75,7 @@ data class NextAnswer(
     val goNowLine: String? get() = card?.goNow
     /** "Crowding: low" / "Crowding: medium" / "Crowding: high". */
     val crowdText: String? get() = card?.crowd?.takeUnless { detail.contains(it, ignoreCase = true) }
-    /** "Timetable estimate", "Live data a few minutes old", "No live data". */
+    /** "Timetable estimate", "Live times are a few minutes old", "No live data". */
     val qualityText: String? get() = card?.quality
 
     /** Other trips: "Leave by 09:38 · catch the 09:41 D2 at PGP". */
@@ -636,7 +636,7 @@ class ApiError(val status: Int, message: String) : IOException(sentence(message)
 internal fun sentence(text: String): String {
     if (text.isEmpty()) return text
     val s = text.replaceFirstChar { it.uppercaseChar() }
-    // Chinese (phase 10) ends with a full-width stop.
+    // Chinese ends with a full-width stop.
     val cjk = s.any { it in '\u4e00'..'\u9fff' }
     return if (s.last() in ".!?。！？") s else if (cjk) "$s。" else "$s."
 }
@@ -786,17 +786,13 @@ class Api(private val token: String?, private val fast: Boolean = false, private
     }
 
     /** Something that happened on the trip ("boarded", "missed", ...). Answers with the new /me/next. */
-    suspend fun signal(kind: String, trip: String?, lat: Double? = null, lon: Double? = null, speed: Double? = null, acc: Double? = null): JSONObject {
+    suspend fun signal(kind: String, trip: String?): JSONObject {
         val body = JSONObject().put("kind", kind)
         trip?.let { body.put("trip", it) }
-        if (lat != null && lon != null) body.put("lat", coord(lat).toDouble()).put("lon", coord(lon).toDouble())
-        // What the server needs to tell a bus from a walk (detect.ts), rounded.
-        speed?.let { body.put("speed", Math.round(it * 10) / 10.0) }
-        acc?.let { body.put("acc", Math.round(it).toDouble()) }
         return request("POST", "/me/signal" + if (hour12) "?h12=1" else "", body)
     }
 
-    /** A one-off trip later today (phase 8.3): planned like a class. Answers with the new /me/next. */
+    /** A one-off trip later today: planned like a class. Answers with the new /me/next. */
     suspend fun once(target: Target, atMin: Int): JSONObject {
         val body = JSONObject().put("atMin", atMin)
         when (target) {
@@ -827,7 +823,8 @@ class Api(private val token: String?, private val fast: Boolean = false, private
      */
     suspend fun notice(): Map<String, String>? {
         val n = request("GET", "/me/notice").optJSONObject("notice") ?: return null
-        return listOf("title", "body", "zhTitle", "zhBody").associateWith { n.optString(it) }
+        // Only the fields sent: a missing one is absent, not "".
+        return listOf("title", "body", "zhTitle", "zhBody").mapNotNull { k -> n.optStringOrNull(k)?.let { k to it } }.toMap()
     }
 
     /** Classes with a bus earlier or no reminders, and how many trips are remembered. */
@@ -872,9 +869,13 @@ class Api(private val token: String?, private val fast: Boolean = false, private
     /** The released version, from /download/latest.json. */
     suspend fun latestVersion(): String = request("GET", "/download/latest.json").getString("version")
 
-    /** "Is this wrong?": the answer as the server sent it, and a note (required). Needs an account with an email. */
-    suspend fun report(note: String, answer: JSONObject?, appVersion: String) {
+    /**
+     * "Is this wrong?": the answer as the server sent it, with a reason (one of
+     * REPORT_REASONS), a note, or both. Needs an account with an email.
+     */
+    suspend fun report(reason: String?, note: String, answer: JSONObject?, appVersion: String) {
         val body = JSONObject().put("kind", "wrong").put("note", note).put("platform", "android").put("appVersion", appVersion)
+        reason?.let { body.put("reason", it) }
         answer?.let { body.put("context", it) }
         request("POST", "/me/feedback", body)
     }
