@@ -760,7 +760,11 @@ keep for good.
 Email goes out through Cloudflare Email Sending from `EMAIL_FROM`. That
 needs the Workers Paid plan and the sender's domain onboarded under Email
 Service > Email Sending in the dashboard: terminus.run is, and the old
-address, login@terminus.rcn.sh, stays an allowed sender.
+address, login@terminus.rcn.sh, stays an allowed sender. Replies, and any
+other mail to terminus.run, reach the operator through Email Routing's
+catch-all (dashboard only, not in this repo). Sending uses its own
+subdomain, cf-bounce.terminus.run, so the two don't share records. The
+contact addresses people are given stay on rcn.sh (CLAUDE.md).
 
 ### The web app
 
