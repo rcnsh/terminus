@@ -303,7 +303,7 @@ export function Horizon({ stop = false, bus = null, shuttle = true, drive = null
                 <path class="beam" d=${BEAM} />
                 ${busParts('body', 'band', 3)}
               </g>`
-            : html`<g transform=${`translate(${passing} 57)`}>
+            : html`<g class="shuttle" transform=${`translate(${passing} 57)`}>
                 <path class="beam" d=${BEAM} />
                 ${busParts('bus', 'stripe', 3)}
               </g>`)}

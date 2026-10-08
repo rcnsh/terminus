@@ -9,8 +9,9 @@
 // Then the pill says how it went and the sky springs back. The Android app
 // does the same, by the same numbers.
 //
-// While a bus drives here, the horizon's own (the card's bus, one passing)
-// is hidden, and it's back where the answer puts it once the sky closes.
+// The bus that drives is the horizon's own (the card's bus, one parked or
+// passing), taken from where it stands: it's hidden while this one drives,
+// and back where the answer puts it once the sky closes.
 //
 // Touch only: with a mouse there's the timed refresh, and pulling is never
 // the only way to new times. One fetch per pull, of what the tab asks for
@@ -106,19 +107,22 @@ function onScreen(sel) {
   return null;
 }
 
+/** The horizon's own bus: the card's, one parked, or the shuttle going by. */
+const OWN = '.coming, .parked, .shuttle';
+
 /**
  * The horizon's own bus, if it shows one: where it is along the road and
- * its colour. Else the colour of the first service on the tab (a board's
- * first row, a line), or null: the horizon's own shuttle, dark with A1's red
- * along the bottom, as it is when nothing's coming.
+ * its colour (null for the shuttle, dark with A1's red along the bottom).
+ * Else the colour of the first service on the tab (a board's first row, a
+ * line), or null: the shuttle's look.
  */
 function busOf(horizon) {
-  const own = horizon?.querySelector('.coming, .parked');
+  const own = horizon?.querySelector(OWN);
   const at = own?.getAttribute('transform')?.match(/translate\(\s*(-?[\d.]+)/);
   const colour = (el) => el?.style.getPropertyValue('--svc').trim();
   return {
     from: at ? Number(at[1]) : OFF_LEFT,
-    colour: colour(own) || colour(onScreen('[style*="--svc"]')) || null,
+    colour: own ? colour(own) || null : colour(onScreen('[style*="--svc"]')) || null,
   };
 }
 
@@ -191,7 +195,7 @@ export function PullToRefresh({ enabled, refresh, colours }) {
       const vw = Math.round(w / k);
       const { from, colour } = busOf(horizon);
       // With less motion, Now's own bus stays where it is and only the sign lights; a horizon without one gets a bus standing at the stop.
-      const own = Boolean(horizon?.querySelector('.coming, .parked'));
+      const own = Boolean(horizon?.querySelector(OWN));
       hz = { el: horizon, low, k, vw, from, own, signed: Boolean(horizon?.querySelector('.sign')), drive: !calm || !own };
       scene.setAttribute('viewBox', low ? `0 6 ${vw} 52` : `0 0 ${vw} 92`);
       page.classList.toggle('pull-drive', !calm);
