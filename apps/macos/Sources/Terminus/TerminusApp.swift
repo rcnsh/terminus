@@ -138,8 +138,8 @@ struct Ticking<Content: View>: View {
 
 struct Popover: View {
     @Bindable var model: AppModel
-    /// Drives the opening animation. The popover's window is the only one
-    /// this app has, so its key state is exactly "the popover is open".
+    /// Drives the opening animation, from the key state of the popover's own
+    /// window (`window`): Setup, Settings and the map are windows of their own.
     @State private var shown: Bool
     @State private var window: NSWindow?
     /// The content is taller than the screen, so it scrolls.
@@ -187,7 +187,8 @@ struct Popover: View {
         .background(GeometryReader { g in Color.clear.preference(key: ContentHeight.self, value: g.size.height) })
         .onPreferenceChange(ContentHeight.self) { h in fit(height: h) }
         // A snapshot has no window, and ImageRenderer can't draw an NSView.
-        .background { if !model.isSnapshot { WindowReader { if window !== $0 { window = $0 } } } }
+        // Updater tells it apart from the windows that hold back an install.
+        .background { if !model.isSnapshot { WindowReader { if window !== $0 { window = $0; Updater.shared.popoverWindow = $0 } } } }
         // Opening is a plain fade of the whole popover; nothing moves.
         .opacity(shown ? 1 : 0)
         .frame(maxHeight: .infinity, alignment: .top)

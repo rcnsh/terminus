@@ -39,6 +39,9 @@
 "Cancel" = "取消";
 "Check for updates (move to Applications first)" = "检查更新（请先移到“应用程序”）";
 "Check for updates…" = "检查更新…";
+"Check for updates automatically" = "自动检查更新";
+"Install updates automatically" = "自动安装更新";
+"Updates install when no terminus window is open. Turned off, terminus asks first." = "没有打开 terminus 的窗口时才安装更新。关闭后，terminus 会先询问你。";
 "Check your email" = "查看你的邮箱";
 "Checking…" = "正在查询…";
 "Choose a stop" = "选择车站";

@@ -219,6 +219,12 @@ struct SettingsPaneView: View {
             Updater.shared.checkNow()
         }
         .disabled(!Updater.shared.running)
+        // Sparkle's own preferences; with no updater (outside Applications) there's nothing to set.
+        Toggle(L("Check for updates automatically"), isOn: Binding(get: { Updater.shared.checksAutomatically }, set: { Updater.shared.setChecksAutomatically($0) }))
+            .disabled(!Updater.shared.running)
+        Toggle(L("Install updates automatically"), isOn: Binding(get: { Updater.shared.installsAutomatically }, set: { Updater.shared.setInstallsAutomatically($0) }))
+            .disabled(!Updater.shared.running || !Updater.shared.checksAutomatically)
+        Hint(L("Updates install when no terminus window is open. Turned off, terminus asks first."))
         Divider().padding(.vertical, 8)
         if app.anonymous || setup.me?.anonymous == true {
             Text(L("No email")).fontWeight(.medium)
