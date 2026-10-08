@@ -7,10 +7,12 @@ import os
 /// Updates through Sparkle: checks the appcast every few hours, downloads a
 /// new version in the background and installs it once the popover and every
 /// window (Settings, Setup, the map) are closed, relaunching straight into
-/// it. What lets an update install is its EdDSA signature, checked against
-/// the key in Info.plist (SUPublicEDKey): with a valid one, Sparkle accepts a
-/// changed code signature too, so that key alone vouches for a release.
-/// Stable and beta share it; each app only reads its own feed (SUFeedURL).
+/// it. Each update is checked against the EdDSA key in Info.plist
+/// (SUPublicEDKey), before the disk image is even opened
+/// (SUVerifyUpdateBeforeExtraction), and against this app's code signature,
+/// so only a release signed with both the update key and the terminus
+/// certificate installs. Stable and beta share the key; each app only reads
+/// its own feed (SUFeedURL).
 ///
 /// Only runs from a built app in Applications: `swift run` has no bundle to
 /// replace, and a translocated copy (opened from Downloads or the DMG) can't

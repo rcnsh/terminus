@@ -60,7 +60,7 @@ class ProfileDoc(val json: JSONObject) {
         get() = json.optJSONArray("pinnedStops")?.strings().orEmpty()
         set(v) { json.put("pinnedStops", JSONArray(v.distinct().take(limits.pinnedStops))) }
 
-    /** The account's language (phase 10): auto, en or zh. */
+    /** The account's language: auto, en or zh. */
     var lang: String
         get() = json.optString("lang", "auto")
         set(v) { json.put("lang", v) }
@@ -149,7 +149,7 @@ class ProfileDoc(val json: JSONObject) {
         json.put("usual", JSONArray((0 until u.length()).map { u.getJSONObject(it) }.filter { it.optString("place") != key }))
     }
 
-    /** Saved places at a usual time (phase 8.3): each a trip that day, like a class. */
+    /** Saved places at a usual time: each a trip that day, like a class. */
     val usual: List<UsualTime>
         get() {
             val a = json.optJSONArray("usual") ?: return emptyList()

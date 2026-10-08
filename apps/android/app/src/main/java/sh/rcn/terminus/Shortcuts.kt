@@ -8,7 +8,7 @@ import androidx.core.graphics.drawable.IconCompat
 import sh.rcn.terminus.ui.MainActivity
 
 /**
- * Long-press on the app icon (phase 6): Next, each saved place, and Nearby,
+ * Long-press on the app icon: Next, each saved place, and Nearby,
  * opening the app on that answer through the same terminus:// links the
  * widget's chips use. Rebuilt only when the places change.
  */

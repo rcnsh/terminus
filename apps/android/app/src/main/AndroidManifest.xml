@@ -111,7 +111,7 @@
         <receiver
             android:name=".LeaveReceiver"
             android:exported="false" />
-        <!-- Push (phase 3): the server says the card changed. Only with Play services. -->
+        <!-- Push: the server says the card changed. Only with Play services. -->
         <service
             android:name=".PushService"
             android:exported="false">

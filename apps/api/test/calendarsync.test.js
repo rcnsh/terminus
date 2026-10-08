@@ -146,3 +146,90 @@ test('the cron refreshes the calendar, and warns only when even the fetched one 
   assert.equal(await checkCalendar(env, july + 21 * DAY), false);
   assert.equal(sent.length, 0);
 });
+
+/** The holidays fixture without the records on [dates]. */
+const without = (...dates) => ({ result: { records: holidays.result.records.filter((r) => !dates.includes(r.date)) } });
+/** NUSMods with one semester's start moved. */
+const moving = (ay, sem, start) => ({ ...withNextYear, [ay]: { ...withNextYear[ay], [sem]: { start } } });
+/** 10:00 SGT on a YYYY-MM-DD date. */
+const on = (date) => Date.parse(`${date}T02:00:00Z`);
+
+test('valid() reads dates strictly, and each semester inside its own academic year', () => {
+  const good = fromSources(nusmods, holidays, NOW);
+  assert.ok(valid(good));
+  const day = (date) => ({ ...good, holidays: [...good.holidays, { date, name: 'Holiday' }] });
+  assert.equal(valid(day('2026-02-30')), false, '30 February is no date');
+  assert.equal(valid(day('2026-13-01')), false);
+  assert.equal(valid(day('2027-02-29')), false, '2027 is no leap year');
+  assert.ok(valid(day('2028-02-29')));
+  const sem = (s) => ({ ...good, semesters: [...good.semesters, s] });
+  // 10 August 2026 is a Monday, but in 2026/2027, not 2027/2028.
+  assert.equal(valid(sem({ acadYear: '2027/2028', semester: 1, start: '2026-08-10' })), false);
+  assert.equal(valid(sem({ acadYear: '2025/2026', semester: 4, start: '2026-08-10' })), false, 'after 31 July of its second year');
+  assert.ok(valid(sem({ acadYear: '2026/2027', semester: 4, start: '2027-06-21' })));
+});
+
+test('valid() takes only plain holiday names', () => {
+  const good = fromSources(nusmods, holidays, NOW);
+  const named = (name) => valid({ ...good, holidays: [...good.holidays, { date: '2027-12-26', name }] });
+  assert.ok(named("Hari Raya Puasa (Observed)"));
+  assert.ok(named('New Year’s Day'));
+  assert.ok(named('春节'));
+  assert.equal(named('<img src=x onerror=alert(1)>'), false);
+  assert.equal(named('Free rides: https://example.com'), false);
+  assert.equal(named('Visit example.com'), false);
+  assert.equal(named('Day\u0000off'), false);
+  assert.equal(named(' '), false);
+  assert.equal(named('x'.repeat(80)), false);
+});
+
+test('a semester known already that moves is refused, and the old calendar stays', async () => {
+  const env = makeEnv(makeKV());
+  globalThis.fetch = sources();
+  await refreshCalendar(env, NOW);
+  const kept = await env.KV.get(CALENDAR_DATA_KEY);
+  // Semester 2 two weeks later than NUSMods said before.
+  globalThis.fetch = sources({ cal: moving('2026/2027', 2, [2027, 1, 25]) });
+  await assert.rejects(refreshCalendar(env, NOW + 7 * DAY), /moves semesters \(2026\/2027 2: 2027-01-11 to 2027-01-25\)/);
+  assert.equal(await env.KV.get(CALENDAR_DATA_KEY), kept);
+  assert.equal(Number(await env.KV.get(CALENDAR_NEXT_KEY)), NOW + 8 * DAY, 'tried again the next day');
+  // A semester only fetched before (2027/2028) is held to it as well.
+  globalThis.fetch = sources({ cal: moving('2027/2028', 1, [2027, 8, 2]) });
+  await assert.rejects(refreshCalendar(env, NOW + 8 * DAY), /2027\/2028 1/);
+  // With nothing in KV, against the bundled copy.
+  resetCalendar();
+  const fresh = makeEnv(makeKV());
+  globalThis.fetch = sources({ cal: moving('2026/2027', 1, [2026, 8, 3]) });
+  await assert.rejects(refreshCalendar(fresh, NOW), /2026\/2027 1/);
+  assert.equal(await fresh.KV.get(CALENDAR_DATA_KEY), null);
+  assert.equal(calendarSource(), 'bundled');
+});
+
+test('a holiday to come that the source takes back goes; past ones stay', async () => {
+  const env = makeEnv(makeKV());
+  globalThis.fetch = sources();
+  await refreshCalendar(env, NOW);
+  assert.equal(termDay(on('2026-11-09')).holiday, 'Deepavali (Observed)');
+  // Taken back upstream, with National Day (Observed), already past.
+  globalThis.fetch = sources({ days: without('2026-11-09', '2026-08-10') });
+  assert.equal(await refreshCalendar(env, NOW + 7 * DAY), 'updated');
+  assert.equal(termDay(on('2026-11-09')).holiday, null);
+  assert.equal(termDay(on('2026-08-10')).holiday, 'National Day (Observed)');
+  assert.equal(termDay(on('2026-11-08')).holiday, 'Deepavali');
+  // Another instance, reading KV over the bundled copy, agrees.
+  resetCalendar();
+  await loadCalendar(env, NOW + 7 * DAY);
+  assert.equal(termDay(on('2026-11-09')).holiday, null);
+  assert.equal(termDay(on('2026-08-10')).holiday, 'National Day (Observed)');
+});
+
+test('many holidays to come taken back at once is refused', async () => {
+  const env = makeEnv(makeKV());
+  globalThis.fetch = sources();
+  await refreshCalendar(env, NOW);
+  const kept = await env.KV.get(CALENDAR_DATA_KEY);
+  globalThis.fetch = sources({ days: without('2026-11-08', '2026-11-09', '2026-12-25', '2027-01-01') });
+  await assert.rejects(refreshCalendar(env, NOW + 7 * DAY), /drops 4 holidays to come/);
+  assert.equal(await env.KV.get(CALENDAR_DATA_KEY), kept);
+  assert.equal(termDay(on('2026-12-25')).holiday, 'Christmas Day');
+});

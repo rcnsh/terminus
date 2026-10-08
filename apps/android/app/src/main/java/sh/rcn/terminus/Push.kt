@@ -22,7 +22,7 @@ import sh.rcn.terminus.ui.MainActivity
 import sh.rcn.terminus.widget.Refresher
 
 /**
- * Push, phase 3: the server says when the card changes, so the phone doesn't
+ * Push: the server says when the card changes, so the phone doesn't
  * have to keep asking.
  *
  * Firebase Cloud Messaging, only on a phone with Google Play services and a

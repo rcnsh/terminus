@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!--
+  The app's exceptions to the hardened runtime (build.sh signs with
+  options runtime). Only the app gets these; the frameworks and Sparkle's
+  helpers are signed without any.
+
+  disable-library-validation: library validation loads only frameworks
+  with the app's Team ID, and the terminus certificate is self-signed, so
+  it has none and even our own re-signed Sparkle and MapLibre are refused
+  ("different Team IDs"). Without it the app doesn't start. It lets the
+  app load a framework signed by anyone, so a swapped framework in the
+  bundle would load; the rest of the runtime still holds (no
+  DYLD_INSERT_LIBRARIES, no unsigned executable memory, no debugger
+  attaching). A Developer ID certificate, with a Team ID, would let this go.
+
+  personal-information.location: the hardened runtime denies Core Location
+  without it; the app starts from the stop nearest the user.
+-->
+<dict>
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+	<key>com.apple.security.personal-information.location</key>
+	<true/>
+</dict>
+</plist>

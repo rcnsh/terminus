@@ -190,9 +190,9 @@ object Refresher {
             store.lastError = L.s(R.string.offline)
             failed(ctx, store)
         }
-        // Widgets showing a place or Nearby (phase 8.3) keep counting down too;
-        // not after a failure, which they would only repeat once each. With
-        // [extras], the caller runs them (and redraws) once the lock is free.
+        // Widgets showing a place or Nearby keep counting down too; not after
+        // a failure, which they would only repeat once each. With [extras],
+        // the caller runs them (and redraws) once the lock is free.
         if (fresh != null && extras) return fresh to true
         if (fresh != null && extrasDue(ctx, store)) queueExtras(ctx)
         WidgetModes.armChosen(ctx)

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { makeKV } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import { readFileSync } from 'node:fs';
-import { DEVICE_IDLE_MS, INCIDENTS_KEPT, KV_NAMESPACE_ID, MAIL_TIMEOUT_MS, adviceFor, checkCalendar, checkUpstream, feedDownSince, housekeeping, readIncidents, readUpstream, runCron } from '../src/monitor.ts';
+import { DEVICE_IDLE_MS, INCIDENTS_KEPT, KV_NAMESPACE_IDS, MAIL_TIMEOUT_MS, adviceFor, checkCalendar, checkUpstream, feedDownSince, housekeeping, readIncidents, readUpstream, runCron } from '../src/monitor.ts';
 import { UpstreamRejected } from '../src/auth.ts';
 import { cardFor } from '../src/card.ts';
 import { withLang } from '../src/i18n.ts';
@@ -278,7 +278,10 @@ test('each alert goes once, with KV taking one write a second to a key', async (
       await checkUpstream(e, 1000 * (i + 1), probe);
     }
     console.error = quiet;
-    assert.deepEqual(errors, [], beta ? 'beta' : 'stable');
+    // The beta logs its alerts in place of the email; nothing else is an error.
+    const alerts = errors.filter((l) => l.startsWith('beta: '));
+    assert.deepEqual(errors.filter((l) => !alerts.includes(l)), [], beta ? 'beta' : 'stable');
+    assert.deepEqual(alerts.map((l) => l.match(/down|recovered/)[0]), beta ? ['down', 'recovered'] : []);
     assert.deepEqual(e.EMAIL.sent.map((m) => m.subject.match(/down|recovered/)[0]), beta ? [] : ['down', 'recovered']);
     assert.equal((await readUpstream(e)).pending, null);
   }
@@ -334,11 +337,19 @@ test('no alert address configured: records state, sends nothing', async () => {
   assert.equal((await readUpstream(e)).up, false);
 });
 
-test('the beta records state but leaves the alerts to the stable site', async () => {
+test('the beta records state but leaves the alerts to the stable site, logging its own', async () => {
   const e = { ...env(), PUBLIC_ORIGIN: 'https://beta.terminus.rcn.sh' };
-  for (let t = 1000; t <= 10_000; t += 1000) await checkUpstream(e, t, fail('network'));
+  const logged = [];
+  const orig = console.error;
+  console.error = (...a) => logged.push(a.join(' '));
+  try {
+    for (let t = 1000; t <= 10_000; t += 1000) await checkUpstream(e, t, fail('network'));
+  } finally {
+    console.error = orig;
+  }
   assert.equal(e.EMAIL.sent.length, 0);
   assert.equal((await readUpstream(e)).up, false);
+  assert.equal(logged.filter((l) => l.startsWith('beta: terminus: NUS bus feed is down')).length, 1, 'once, as the email would be');
 });
 
 test('advice names the likely fix per upstream code', () => {
@@ -464,10 +475,27 @@ test('a refusal that echoes our request back has its credentials blanked before 
   }
 });
 
-test('the KV namespace in the alert commands is the stable one in cloudflare.config.ts', () => {
-  const config = readFileSync(new URL('../cloudflare.config.ts', import.meta.url), 'utf8');
-  const id = /name: "terminus",[\s\S]*?\bkv: "([0-9a-f]+)"/.exec(config)?.[1];
-  assert.equal(KV_NAMESPACE_ID, id);
+test('the KV namespaces in the alert commands are each site’s in cloudflare.config.ts', async () => {
+  const { default: config } = await import('../cloudflare.config.ts');
+  assert.equal(KV_NAMESPACE_IDS.stable, config({ mode: undefined }).worker.env.KV.id);
+  assert.equal(KV_NAMESPACE_IDS.beta, config({ mode: 'beta' }).worker.env.KV.id);
+  assert.notEqual(KV_NAMESPACE_IDS.stable, KV_NAMESPACE_IDS.beta);
+});
+
+test('the alert names the KV namespace of the site it is about', () => {
+  assert.ok(adviceFor('code=10009').includes(`--namespace-id ${KV_NAMESPACE_IDS.stable} `));
+  assert.ok(adviceFor('code=10009', KV_NAMESPACE_IDS.beta).includes(`--namespace-id ${KV_NAMESPACE_IDS.beta} `));
+});
+
+test('the stable site emails the fix with its own KV namespace', async () => {
+  const e = env();
+  const refused = fail('auth rejected: code=10009 msg=We have a new release of uNivUS');
+  const noFix = async () => ({ status: 'failed', note: 'nothing new to try' });
+  await checkUpstream(e, 1000, refused, noFix);
+  await checkUpstream(e, 2000, refused, noFix);
+  assert.equal(e.EMAIL.sent.length, 1);
+  assert.ok(e.EMAIL.sent[0].text.includes(`--namespace-id ${KV_NAMESPACE_IDS.stable} `));
+  assert.ok(!e.EMAIL.sent[0].text.includes(KV_NAMESPACE_IDS.beta));
 });
 
 test('the card says when the feed is down, on an answer without a live time', async () => {

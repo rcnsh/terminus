@@ -195,7 +195,7 @@ class Store(context: Context) {
         get() = prefs.getLong(KEY_LEAVE_NOTIFIED, 0)
         set(value) = prefs.edit { putLong(KEY_LEAVE_NOTIFIED, value) }
 
-    /** The last moment the trip notification made a sound for ("leave:<class>", "ask:<trip>"). */
+    /** The last moment the trip notification made a sound for ("leave:<class>"). */
     var leaveAlertedMoment: String?
         get() = prefs.getString(KEY_ALERTED, null)
         set(value) = prefs.edit { putString(KEY_ALERTED, value) }

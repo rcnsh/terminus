@@ -3,7 +3,7 @@
  *
  * Two reasons this exists, and the second is the one that matters.
  *
- * 1. Nothing else measures whether the direction algorithm is RIGHT. The tile
+ * 1. Nothing else measures whether the direction algorithm is RIGHT. The app
  *    will happily send you across the road with confidence 0.97 forever and
  *    never once tell you it was wrong. Logging the decision means you can go
  *    back and check.
