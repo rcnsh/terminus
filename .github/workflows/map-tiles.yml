@@ -1,9 +1,15 @@
-# The street map's files onto R2 (scripts/map-tiles.sh). Run by hand from the
-# Actions tab, or let it refresh itself twice a year for new buildings and
-# paths. Runs in the `release` environment, which waits for a reviewer
-# (the schedule too). The CLOUDFLARE_API_TOKEN secret is meant to live in
-# that environment, not the repository; CLOUDFLARE_ACCOUNT_ID is a variable
-# and not secret.
+# The street map's files onto R2 (scripts/map-tiles.sh). What goes up is
+# pinned in scripts/map-tiles.lock, which only a commit changes.
+#
+# - Run by hand (Actions tab, Run workflow): builds exactly what the lock
+#   pins, refuses if a hash differs, and uploads. Runs in the `release`
+#   environment, which waits for a reviewer. The CLOUDFLARE_API_TOKEN secret
+#   is meant to live in that environment, not the repository;
+#   CLOUDFLARE_ACCOUNT_ID is a variable and not secret.
+# - The schedule, twice a year, only checks for a newer Protomaps build and
+#   fails if there is one, as a reminder: run `scripts/map-tiles.sh --update`
+#   on a Mac, commit the lock, then run this by hand within a few days (a
+#   build is kept about a week). It has no token and uploads nothing.
 name: map tiles
 
 on:
@@ -22,7 +28,19 @@ permissions:
   contents: read
 
 jobs:
+  check:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Is there a newer map than the lock's?
+        run: scripts/map-tiles.sh --check
+
   upload:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # The R2 token should be a secret of this environment: only jobs that
@@ -31,16 +49,22 @@ jobs:
     environment: release
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24"
       - run: pnpm install --frozen-lockfile
-      # The token only in this step, not in pnpm install's lifecycle scripts.
-      - name: Build and upload
+      # Downloads and cuts the map without the token, and stops here unless
+      # every file matches the lock.
+      - name: Build and check against the lock
+        run: scripts/map-tiles.sh --dry-run
+      # The token only in this step, which downloads nothing: it checks the
+      # built files against the lock again and uploads them.
+      - name: Upload
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          # The schedule has no inputs: both sites.
-          CHANNEL: ${{ inputs.channel || 'both' }}
-        run: scripts/map-tiles.sh
+          CHANNEL: ${{ inputs.channel }}
+        run: scripts/map-tiles.sh --upload
