@@ -896,6 +896,11 @@ Settings. It uses the same routes as the account page, with the session cookie.
   once by itself. The sign-in code is typed there; the emailed link would open
   in Safari. `/account/?next=/app/` comes back to the app after sign-in, and
   `/account/?add=1&next=/app/` adds an email from the app's Settings.
+  Opening `/app/` with no session cookie is redirected there by the Worker
+  (`signInFirst()`, on `Sec-Fetch-Dest: document`), so the app never flashes
+  up before sign-in; the service worker's own fetch of `/app/` still gets
+  the page. A session ended elsewhere still reaches the app, whose first 401
+  sends it on (`signedOut()` in `dom.js`).
 - **Offline.** `/sw.js` fetches the app's files network-first and keeps a
   copy for offline (`SHELL_FILES`; `web-sw.test.js` fails if a module the app
   imports at startup is missing from it). On a slow connection it uses the

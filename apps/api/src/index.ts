@@ -29,7 +29,7 @@ import { docsPageFor, openApiJson } from './openapi.ts';
 import { phaseAt, sgtMinute } from './pagesky.ts';
 import { CORS, clientKey, coordsFrom, json, jsonCached, numParam, withSecurityHeaders } from './http.ts';
 import { type MeDeps, handleMe } from './me.ts';
-import { UPDATE_REQUIRED, accountsConfigured, clientOutdated } from './accounts.ts';
+import { UPDATE_REQUIRED, accountsConfigured, clientOutdated, hasSessionCookie } from './accounts.ts';
 import { answering, answeringSince, readUpstream, runCron, statusRecords } from './monitor.ts';
 import { ltaConfigured } from './lta.ts';
 import { calendarThrough } from './calendar.ts';
@@ -268,6 +268,20 @@ async function handleLine(url: URL, env: Env, ctx: ExecutionContext, nowMs: numb
  * the not-found page (web/public/not-found/), still with a 404; anything
  * else, a script or a client, gets what the website answered.
  */
+/**
+ * Opening the web app with no session goes straight to sign-in, before any
+ * page is drawn, rather than the app flashing up and then leaving on its
+ * first 401. Only a page being opened (a document, whether the browser or
+ * the service worker passing it on asks): the service worker keeping its
+ * copy of the app still gets the app. A session that has ended but left its
+ * cookie is still sent on by the app itself (signedOut()).
+ */
+export function signInFirst(req: Request, url: URL): boolean {
+  return (url.pathname === '/app/' || url.pathname === '/app')
+    && req.headers.get('sec-fetch-dest') === 'document'
+    && !hasSessionCookie(req);
+}
+
 async function sitePage(req: Request, assets: Fetcher): Promise<Response> {
   const res = await assets.fetch(req);
   if (res.status !== 404 || !(req.headers.get('accept') ?? '').includes('text/html')) return res;
@@ -496,6 +510,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
         // Everything else is the website; the landing page with its version and account link.
         if (env.ASSETS && (req.method === 'GET' || req.method === 'HEAD')) {
           if (url.pathname === '/') return markBeta(await landingPage(req, env.ASSETS, env, nowMs, ctx), env);
+          if (signInFirst(req, url)) return new Response(null, { status: 302, headers: { location: '/account/?next=/app/', 'cache-control': 'no-store' } });
           return markBeta(await sitePage(req, env.ASSETS), env);
         }
         return json({ error: 'not found' }, 404);
