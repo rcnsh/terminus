@@ -53,6 +53,40 @@ test('security headers: every response; CSP on HTML only; /docs may load unpkg',
   assert.equal(withSecurityHeaders(new Response(''), '/auth/verify').headers.get('referrer-policy'), 'no-referrer');
 });
 
+test('the CSP: blob: workers only on the timelapse page, whose video encoder starts them', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const workers = (path) => {
+    const page = withSecurityHeaders(new Response('<p>', { headers: { 'content-type': 'text/html' } }), path);
+    return page.headers.get('content-security-policy').split('; ').find((d) => d.startsWith('worker-src '));
+  };
+  for (const path of ['/', '/app/', '/account/', '/admin/', '/docs', '/status/']) {
+    assert.equal(workers(path), "worker-src 'self'", path);
+  }
+  assert.equal(workers('/admin/timelapse/'), "worker-src 'self' blob:");
+  // The rest of the timelapse page's policy is the site's.
+  const site = withSecurityHeaders(new Response('<p>', { headers: { 'content-type': 'text/html' } }), '/app/');
+  const tl = withSecurityHeaders(new Response('<p>', { headers: { 'content-type': 'text/html' } }), '/admin/timelapse/');
+  const others = (h) => h.get('content-security-policy').split('; ').filter((d) => !d.startsWith('worker-src '));
+  assert.deepEqual(others(tl.headers), others(site.headers));
+
+  // Why: MapLibre starts its worker from its own file when that file is on
+  // the page's origin (a blob: only for another origin), and the map loads
+  // it from /vendor/; Mediabunny makes its workers from blob: URLs.
+  const pub = new URL('../../web/public/', import.meta.url);
+  const files = await readFile(new URL('app/map-files.js', pub), 'utf8');
+  const mlDir = /MAPLIBRE = '\/(vendor\/maplibre-gl%40[0-9.]+\/)'/.exec(files)?.[1];
+  assert.ok(mlDir, 'the map loads MapLibre from our own origin');
+  const ml = await readFile(new URL(`${decodeURIComponent(mlDir)}maplibre-gl.mjs`, pub), 'utf8');
+  assert.match(ml, /\.origin!==\w+\.origin/, 'MapLibre checks whether its worker is on another origin');
+  assert.match(ml, /new Worker\(\w+,\{type:`module`\}\)/, 'and starts a same-origin one from its file');
+  assert.doesNotMatch(await readFile(new URL('app/map.js', pub), 'utf8'), /workerUrl|WORKER_URL/, 'the map leaves the worker where it is');
+  const tlJs = await readFile(new URL('admin/timelapse/timelapse.js', pub), 'utf8');
+  const mbFile = /'\/(vendor\/mediabunny%40[^']+)'/.exec(tlJs)?.[1];
+  assert.ok(mbFile);
+  const mb = await readFile(new URL(decodeURIComponent(mbFile), pub), 'utf8');
+  assert.match(mb, /URL\.createObjectURL\(new Blob\(/, 'Mediabunny makes its workers from blob: URLs');
+});
+
 test('the CSP allows the CDNs only for the files the site loads from them, not whole hosts', async () => {
   const { readFile } = await import('node:fs/promises');
   const page = withSecurityHeaders(new Response('<p>', { headers: { 'content-type': 'text/html' } }), '/account/');

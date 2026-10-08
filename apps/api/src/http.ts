@@ -150,8 +150,10 @@ const CSP_BASE = [
   "font-src 'self'",
   "img-src 'self' data: blob:",
   "connect-src 'self' https://cloudflareinsights.com",
-  // MapLibre draws the map in web workers it starts from blob: URLs.
-  "worker-src 'self' blob:",
+  // MapLibre draws the map in web workers it starts from its own same-origin
+  // file (/vendor/maplibre-gl@…/maplibre-gl-worker.mjs); it makes a blob:
+  // URL only for a worker on another origin, which ours never is.
+  "worker-src 'self'",
   "object-src 'none'",
   "base-uri 'none'",
   "form-action 'self'",
@@ -165,10 +167,28 @@ const DOCS_EXTRA: Record<string, string> = {
   'img-src': 'https:',
   'font-src': `data: ${ELEMENTS}/`,
 };
-const CSP_DOCS = CSP_BASE.map((d) => {
-  const extra = DOCS_EXTRA[d.split(' ')[0]];
-  return extra ? `${d} ${extra}` : d;
-}).join('; ');
+/**
+ * What the timelapse page (admin/timelapse/) adds: Mediabunny, its video
+ * encoder, starts its workers from blob: URLs of code it carries inline.
+ * No other page needs blob: workers, so only this one may start them.
+ */
+const TIMELAPSE_EXTRA: Record<string, string> = {
+  'worker-src': 'blob:',
+};
+const widen = (extra: Record<string, string>): string =>
+  CSP_BASE.map((d) => {
+    const more = extra[d.split(' ')[0]];
+    return more ? `${d} ${more}` : d;
+  }).join('; ');
+const CSP_DOCS = widen(DOCS_EXTRA);
+const CSP_TIMELAPSE = widen(TIMELAPSE_EXTRA);
+
+/** The CSP for the page at this path. */
+export function cspFor(path: string): string {
+  if (path === '/docs') return CSP_DOCS;
+  if (path.startsWith('/admin/timelapse/')) return CSP_TIMELAPSE;
+  return CSP_SITE;
+}
 
 export function withSecurityHeaders(res: Response, path: string): Response {
   const out = new Response(res.body, res);
@@ -178,7 +198,7 @@ export function withSecurityHeaders(res: Response, path: string): Response {
   // Sign-in and pairing URLs carry a token or a code: never send them on.
   h.set('referrer-policy', path.startsWith('/auth/') || path.startsWith('/pair') ? 'no-referrer' : 'strict-origin-when-cross-origin');
   if ((h.get('content-type') ?? '').includes('text/html')) {
-    h.set('content-security-policy', path === '/docs' ? CSP_DOCS : CSP_SITE);
+    h.set('content-security-policy', cspFor(path));
     h.set('x-frame-options', 'DENY');
     h.set('permissions-policy', 'geolocation=(self), camera=(), microphone=()');
   }
