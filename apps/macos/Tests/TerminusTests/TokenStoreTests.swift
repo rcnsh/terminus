@@ -41,6 +41,21 @@ import Testing
         #expect(TokenStore.read() == nil)
     }
 
+    /// A file that's there but can't be read isn't "signed out": only a missing one is.
+    @Test func anUnreadableFileIsNotSignedOut() throws {
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: TokenStore.fileURL.path)
+            cleanUp()
+        }
+        #expect(TokenStore.write("kept-token"))
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: TokenStore.fileURL.path)
+        #expect(TokenStore.read() == nil)
+        #expect(TokenStore.exists)
+        let missing = dir.appendingPathComponent("nothing-here")
+        #expect(throws: (any Error).self) { try String(contentsOf: missing, encoding: .utf8) }
+        do { _ = try String(contentsOf: missing, encoding: .utf8) } catch { #expect(TokenStore.isMissing(error)) }
+    }
+
     /// Kept in the keychain by 1.3.8 to 2.0.0-beta.4: moved to the file once, and the keychain item goes.
     @Test func aKeychainTokenMovesToTheFileOnce() throws {
         defer { cleanUp() }
