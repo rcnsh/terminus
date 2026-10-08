@@ -110,7 +110,7 @@ export function spokenJourney(a, now) {
         ? t('Leave in {0} min', Math.max(1, Math.round(left / 60)))
         : (a.card.leaveBy ?? t('Leave in {0} min', Math.round(left / 300) * 5));
   const bus = j.bus ? `${named(j.bus)} ${t('from {0}', j.bus.stop)} ${j.bus.board}` : walkText(j);
-  return sentences([to(a, j), head, bus, a.card.late ? arrive(j) : null]);
+  return sentences([to(a, j), head, bus, j.change?.changeText, j.change && secondBus(j.change), a.card.late ? arrive(j) : null]);
 }
 
 /** The server's line `key` when it sent the journey's lines, else `old()`. */
@@ -159,6 +159,8 @@ const LiveTags = ({ live, crowd }) => html`${live && html`<span class="tag live"
 const Badge = ({ bus, big = false }) => html`<span class=${big ? 'bus-badge big' : 'bus-badge'} style=${{ background: bus.color, color: inkOn(bus.color) }}>${bus.svc}${bus.paid ? html`<span class="fare" role="img" aria-label=${t('Public bus, fare applies')}>$</span>` : ''}</span>`;
 /** The service in running text: "95 ($)" for a public bus. */
 const named = (bus) => (bus.paid ? `${bus.svc} ($)` : bus.svc);
+/** A change of bus's second bus, as the first is said: "P from Kent Vale 9:42". */
+const secondBus = (c) => `${named(c.bus)} ${t('from {0}', c.stop)} ${c.bus.board}`;
 
 /** Someone walking, for a trip on foot where a bus would have its badge. */
 const WALKER =
@@ -232,7 +234,8 @@ const place = (j) => j.place ?? j.to.split(' @ ')[0];
 
 /** Route: you, the stop and where you're going on a line, the times under each point. */
 function Route({ a, j, now, late, top }) {
-  const under = [by(a, j, now), arrive(j)].filter(Boolean).join(' · ');
+  // With a change of bus the line has no room for the walk to the stop: said here.
+  const under = [by(a, j, now), j.change && walkText(j), arrive(j)].filter(Boolean).join(' · ');
   return html`
     ${top(html`
       <div class="where">${to(a, j)}</div>
@@ -253,21 +256,23 @@ const WalkLine = ({ j }) => html`
   </div>
 `;
 
-/** By bus: you, the stop, where you get off, and the walk on to the place. */
+/**
+ * By bus: you, the stop, where you get off, and the walk on to the place.
+ * With a change of bus the line starts at the stop: a phone has room for
+ * three points, and the walk to the stop is in the leave time above it.
+ */
 function BusLine({ a, j }) {
   return html`
     <div class=${j.walkEnd ? 'route-line walk-on' : 'route-line'} role="img" aria-label=${routeLabel(a, j)}>
       ${j.walk &&
+      !j.change &&
       html`
         <${Point} name=${t('You')} time=${j.leave ?? t('now')} you />
         <div class="stretch walk"><span class="above"></span><span class="bar"></span><span class="takes">${j.walk}</span></div>
       `}
       <${Point} name=${j.bus.stop} time=${j.bus.board} />
-      <div class="stretch ride">
-        <span class="above"><${Badge} bus=${j.bus} /></span>
-        <span class="bar" style=${{ background: j.bus.color }}></span>
-        <span class="takes">${j.ride}</span>
-      </div>
+      <${RideStretch} bus=${j.bus} takes=${j.change ? j.change.firstRide : j.ride} />
+      ${j.change && html`<${ChangeStretch} c=${j.change} />`}
       <${Point} name=${j.toStop} time=${(j.walkEnd ? j.arriveStop : j.arrive) ?? ''} />
       ${j.walkEnd &&
       html`
@@ -278,11 +283,35 @@ function BusLine({ a, j }) {
   `;
 }
 
+/** A ride on the line, in its bus's colour with its badge above. */
+const RideStretch = ({ bus, takes }) => html`
+  <div class="stretch ride">
+    <span class="above"><${Badge} bus=${bus} /></span>
+    <span class="bar" style=${{ background: bus.color }}></span>
+    <span class="takes">${takes}</span>
+  </div>
+`;
+
+/**
+ * A change of bus on the line: the stop the first bus drops you at (when the
+ * first bus gets there), across the road to the second's stop when it isn't
+ * the same one, and the ride on the second bus.
+ */
+const ChangeStretch = ({ c }) => html`
+  <${Point} name=${c.from} time=${c.walk ? c.reach : c.bus.board} />
+  ${c.walk &&
+  html`
+    <div class="stretch walk"><span class="above"></span><span class="bar"></span><span class="takes">${c.walk}</span></div>
+    <${Point} name=${c.stop} time=${c.bus.board} />
+  `}
+  <${RideStretch} bus=${c.bus} takes=${c.ride} />
+`;
+
 /** The line read out: the same as Steps says it. */
 const routeLabel = (a, j) =>
   !j.bus
     ? [`${t('Walk to {0}', place(j))} (${walkText(j) ?? j.walk})`, arrive(j)].filter(Boolean).join(', ')
-    : [j.walk && `${t('Walk to {0}', j.bus.stop)} (${j.walk})`, `${named(j.bus)} ${t('from {0}', j.bus.stop)} ${j.bus.board}`, j.walkEnd && `${t('Walk to {0}', place(j))} (${j.walkEnd})`, arrive(j)]
+    : [j.walk && `${t('Walk to {0}', j.bus.stop)} (${j.walk})`, `${named(j.bus)} ${t('from {0}', j.bus.stop)} ${j.bus.board}`, j.change?.changeText, j.change && secondBus(j.change), j.walkEnd && `${t('Walk to {0}', place(j))} (${j.walkEnd})`, arrive(j)]
     .filter(Boolean)
     .join(', ');
 
@@ -305,7 +334,15 @@ function Ticket({ a, j, now, late, top }) {
             <div class="ticket-time">${j.bus.board}${soon && html` <span>${soon}</span>`}</div>
             <div>${[t('from {0}', j.bus.stop), walkText(j)].filter(Boolean).join(' · ')}</div>
           </div>
-        </div>`
+        </div>
+        ${j.change &&
+        html`<div class="ticket-bus">
+          <${Badge} bus=${j.change.bus} />
+          <div>
+            <div>${j.change.changeText}</div>
+            <div>${[j.change.bus.board, t('from {0}', j.change.stop)].join(' · ')}</div>
+          </div>
+        </div>`}`
       : html`<div class="ticket-bus">
           <${WalkBadge} />
           <div>
@@ -360,8 +397,12 @@ function Steps({ a, j, now, late, top }) {
         dot=${j.walk ? 'stop' : 'start'}
         line="ride"
         color=${j.bus.color}
-        below=${rideText(j) ?? ''}
+        below=${j.change ? j.change.firstRideText : (rideText(j) ?? '')}
         ><span class="bus-line"><strong>${j.bus.stop}</strong><${Badge} bus=${j.bus} />${soon && html`<small>${soon}</small>`}</span><//
+      >`}
+      ${j.change &&
+      html`<${LinePoint} time=${j.change.bus.board} dot="stop" line="ride" color=${j.change.bus.color} below=${[j.change.changeText, j.change.rideText].join(' · ')}
+        ><span class="bus-line"><strong>${j.change.stop}</strong><${Badge} bus=${j.change.bus} /></span><//
       >`}
       ${j.bus && j.walkEnd && html`<${LinePoint} time=${j.arriveStop ?? ''} dot="stop" line="walk" below=${walkEndText(j)}><strong>${j.toStop}</strong><//>`}
       <${LinePoint} time=${j.arrive ?? ''} dot="end" late=${Boolean(late)}><strong>${!j.bus || j.walkEnd ? place(j) : j.toStop}</strong><//>
