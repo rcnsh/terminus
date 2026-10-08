@@ -1503,3 +1503,14 @@ test('AI agents get /llms.txt: a short guide whose endpoints and links are real'
   const docs = await (await call('/docs')).res.text();
   assert.match(docs, /<noscript>[^]*href="\/openapi.json"[^]*href="\/llms.txt"[^]*<\/noscript>/);
 });
+
+test('/line is as old as its stop row: a kept board is not "Updated 0 s ago"', async () => {
+  const fetchedAt = Date.now() - 185_000;
+  const dead = makeFetch({ fail: true });
+  const cache = installGlobals(dead);
+  cache.seed(ARRIVALS_KEY('YIH'), { code: 'YIH', arrivals: [{ svc: 'D1', etaS: 240, crowd: 'low', plate: 'PA1234A' }], fetchedAt, stale: false });
+  const { res } = await call('/line?svc=D1&stop=YIH', { fetchImpl: dead, cache });
+  assert.equal(res.status, 200);
+  const line = await res.json();
+  assert.equal(Date.parse(line.asOf), fetchedAt);
+});
