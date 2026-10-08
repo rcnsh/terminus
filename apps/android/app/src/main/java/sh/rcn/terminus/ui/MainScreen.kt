@@ -161,17 +161,19 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
     val light = sky.palette.lightInk
     NightStatusBar(shown && light)
     CompositionLocalProvider(LocalSky provides sky) { Box(Modifier.fillMaxSize()) {
-    // Pulled down at the top, what's shown (the card or Nearby) is asked for again, the bus in its service's colour.
-    BusPull(sky.road.bus?.color, insets.calculateTopPadding(), sky.phase, onRefresh = vm::pull) { Column(
+    // Pulled down at the top, what's shown (the card or Nearby) is asked for
+    // again: the sky stretches, and your bus drives to your stop on its horizon.
+    BusPull(sky.road.bus?.takeIf { sky.road.stop }?.color, scene = { roadScene(it, sky.road) }, onRefresh = vm::pull) { pull -> Column(
         Modifier
             .fillMaxSize()
             .verticalScroll(scroll)
             .onGloballyPositioned { sky.contentTop = it.positionInRoot().y }
-            .skyBehind(sky, page)
+            .skyBehind(sky, page, pull)
             .padding(top = insets.calculateTopPadding(), bottom = insets.calculateBottomPadding())
             .padding(horizontal = 16.dp),
     ) {
-        SkyInk(shown, light) { Column {
+        // The header and chips come down a little with a pull; the room opens under them.
+        SkyInk(shown, light) { Column(Modifier.pullLead(pull)) {
         TabHeader { HeaderWordmark() }
 
         // Refused as too old (426): the way to update, from where it was installed.

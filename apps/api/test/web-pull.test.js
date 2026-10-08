@@ -1,6 +1,6 @@
 /**
  * Pull to refresh in the web app (apps/web/public/app/pull.js): how far the
- * page follows a finger, where the bus is on the road, the words, and the
+ * sky stretches for a finger, where the bus is on the horizon, the words, and the
  * Buses tab fetching again only when its times are old enough to change.
  */
 import test from 'node:test';
@@ -8,12 +8,13 @@ import assert from 'node:assert/strict';
 import { useLang, web } from './_web.mjs';
 
 useLang('en');
-const { PULL, busAt, pullWords, rubber, stopAt } = await web('app/pull.js');
+const { OFF_LEFT, PULL, busAt, groundAt, pullWords, rubber, stopAt } = await web('app/pull.js');
 const { PULL_FRESH_MS } = await web('app/timing.js');
+const { signX } = await web('account/sky.js');
 const B = await web('app/buses.js');
 const { t } = await web('account/dom.js');
 
-test('the page follows the finger less the further it goes, and never past its most', () => {
+test('the sky follows the finger less the further it goes, and never past its most', () => {
   assert.equal(rubber(0), 0);
   assert.equal(rubber(-40), 0, 'a finger moving up is no pull');
   let last = 0;
@@ -23,23 +24,38 @@ test('the page follows the finger less the further it goes, and never past its m
     last = p;
   }
   assert.ok(rubber(10_000) <= PULL.max);
-  // Arming takes a deliberate pull: more finger than page, but not a long reach.
+  // Arming takes a deliberate pull: more finger than sky, but not a long reach.
   const raw = [...Array(400).keys()].find((r) => rubber(r) >= PULL.arm);
   assert.ok(raw > PULL.arm && raw < 160, `armed after ${raw} px`);
 });
 
-test('the bus comes in from off the left and reaches the stop just as the pull arms', () => {
-  for (const w of [360, 390, 430, 800]) {
-    assert.ok(busAt(0, w) < 0, 'off screen before the pull');
-    assert.equal(busAt(PULL.arm, w), stopAt(w));
-    assert.equal(busAt(PULL.max, w), stopAt(w), 'and stays there pulled further');
-    let last = -Infinity;
-    for (let p = 0; p <= PULL.arm; p += 7) {
-      assert.ok(busAt(p, w) > last, 'only ever forwards');
-      last = busAt(p, w);
+test('the bus drives from where the horizon had it to your stop, reaching it just as the pull arms', () => {
+  // Horizons as wide as phones and a laptop, in their own numbers (Now's is drawn 1.25 times bigger).
+  for (const vw of [288, 312, 344, 640]) {
+    const stop = stopAt(vw);
+    assert.ok(stop + 38 < signX(vw), 'it pulls up short of the sign');
+    for (const from of [OFF_LEFT, 56, stop]) {
+      assert.equal(busAt(0, from, vw), from, 'it starts where it was');
+      assert.equal(busAt(PULL.arm, from, vw), stop);
+      assert.equal(busAt(PULL.max, from, vw), stop, 'and stays there pulled further');
+      let last = -Infinity;
+      for (let p = 0; p <= PULL.arm; p += 7) {
+        assert.ok(busAt(p, from, vw) >= last, 'only ever forwards');
+        last = busAt(p, from, vw);
+      }
     }
-    // The bus (38 long, drawn PULL.scale bigger) stops short of the sign and on the road.
-    assert.ok(stopAt(w) + 38 * PULL.scale < w * 0.75 && stopAt(w) > 0);
+    // A bus already past the stop waits where it is.
+    assert.equal(busAt(PULL.arm, stop + 10, vw), stop + 10);
+  }
+});
+
+test('on a low horizon the bus stands on the hill, tilted with it; on Now the road', () => {
+  assert.deepEqual(groundAt(120, false), { y: 70, tilt: 0 });
+  for (let x = -40; x < 400; x += 13) {
+    const g = groundAt(x, true);
+    // The low horizon shows y 6 to 58: the hilltop is inside it, and never steep.
+    assert.ok(g.y > 40 && g.y < 58, `ground at ${x}`);
+    assert.ok(Math.abs(g.tilt) < 25, `tilt at ${x}`);
   }
 });
 

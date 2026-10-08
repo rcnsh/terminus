@@ -103,6 +103,8 @@ import sh.rcn.terminus.Locator
 import sh.rcn.terminus.Pins
 import sh.rcn.terminus.Stopped
 import sh.rcn.terminus.Quiet
+import sh.rcn.terminus.Pull
+import sh.rcn.terminus.PullScene
 import sh.rcn.terminus.R
 import sh.rcn.terminus.ServerClock
 import sh.rcn.terminus.Spoken
@@ -198,15 +200,17 @@ private fun Home(state: BusesUi, vm: BusesViewModel, pins: List<String>, onPin: 
     val scope = rememberCoroutineScope()
     val phase = skyPhase()
     // Pulled down, the page in view asks again, as its 15 s refresh does; not while searching.
+    // The sky stretches over the stop's name, and its first service's bus drives to a sign on the hill.
     val inView = pages.getOrNull(boards.settledPage)
-    BusPull(boardLivery(state, inView), top, phase, chipLow = true, enabled = query.isBlank(), onRefresh = { vm.pullPage(inView) }) {
+    BusPull(boardLivery(state, inView), ::hillScene, enabled = query.isBlank(), onRefresh = { vm.pullPage(inView) }) { pull ->
     Column(Modifier.fillMaxSize()) {
         // The dots' line has room for the moon on the right.
         // Searching, just the field over the hills, so the results start right under it.
         SkyBand(phase, top, moonLow = true, moonLine = query.isBlank() && pages.size <= 1, padded = false, moon = query.isBlank()) {
             Column {
-                SearchBox(query, { query = it }, Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                SearchBox(query, { query = it }, Modifier.pullLead(pull).padding(horizontal = 16.dp, vertical = 8.dp))
                 if (query.isBlank()) {
+                    PullRoom(above = 8.dp, below = 8.dp)
                     // Every header composed, so the band is as tall as the longest name and doesn't jump.
                     HorizontalPager(heads, Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top, beyondViewportPageCount = pages.size, key = { pages.getOrNull(it) ?: "nearest" }) { i ->
                         Box(Modifier.padding(horizontal = 16.dp)) { PageHeader(state, i, pages.getOrNull(i), pins, vm, onPin) }
@@ -244,6 +248,9 @@ private fun Home(state: BusesUi, vm: BusesViewModel, pins: List<String>, onPin: 
     }
     }
 }
+
+/** The scene for a pull on the Buses tab's low horizon, [width] dp across: the sign on the near hill, the bus in from the left. */
+private fun hillScene(width: Float) = PullScene(width, Pull.hillSign(width))
 
 /**
  * The pull's bus for the page of stop [code] (null: the nearest stop): the
@@ -390,12 +397,13 @@ private fun NoNearest(state: BusesUi, vm: BusesViewModel) {
 private fun StopRoute(state: BusesUi, vm: BusesViewModel, code: String, pins: List<String>, onPin: (String) -> Unit, top: Dp) {
     Refreshing(code, state.across) { vm.refreshPage(code) }
     val phase = skyPhase()
-    BusPull(boardLivery(state, code), top, phase, chipLow = true, onRefresh = { vm.pullPage(code) }) {
+    BusPull(boardLivery(state, code), ::hillScene, onRefresh = { vm.pullPage(code) }) { pull ->
     Column(Modifier.fillMaxSize()) {
         // Back, and the stop, in the sky, as on the tab's own pages.
         SkyBand(phase, top, moonLow = true) {
             Column {
-                BackRow(stringResource(R.string.back)) { vm.back() }
+                BackRow(stringResource(R.string.back), Modifier.pullLead(pull)) { vm.back() }
+                PullRoom(below = 8.dp)
                 val label = if (code in pins) stringResource(R.string.buses_pinned) else null
                 StopHeader(state, vm, code, label, label, nearest = false, pins = pins, onPin = onPin)
             }
@@ -408,8 +416,8 @@ private fun StopRoute(state: BusesUi, vm: BusesViewModel, code: String, pins: Li
 }
 
 @Composable
-private fun BackRow(text: String, trailing: @Composable () -> Unit = {}, onBack: () -> Unit) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+private fun BackRow(text: String, modifier: Modifier = Modifier, trailing: @Composable () -> Unit = {}, onBack: () -> Unit) {
+    Row(modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
         Row(
             Modifier.weight(1f, fill = false).clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button, onClick = onBack).padding(vertical = 8.dp, horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -908,12 +916,13 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
     }
     val phase = skyPhase()
     // Pulled down, the line asks again, its bus in the service's colour.
-    BusPull(color, top, phase, chipLow = true, onRefresh = { vm.pullLine(route.svc, route.from) }) {
+    BusPull(color, ::hillScene, onRefresh = { vm.pullLine(route.svc, route.from) }) { pull ->
     Column(Modifier.fillMaxSize()) {
     // Back, the service and how many buses it has out, in the sky; the line on the page.
     SkyBand(phase, top, moonLow = true) { Column {
         BackRow(
             route.from?.let { stopName(state, it) } ?: stringResource(R.string.back),
+            Modifier.pullLead(pull),
             trailing = {
                 TextButton(onClick = { onShowOnMap(route.svc) }) {
                     Icon(painterResource(R.drawable.ic_tab_map), contentDescription = null, modifier = Modifier.size(18.dp))
@@ -921,6 +930,7 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
                 }
             },
         ) { vm.back() }
+        PullRoom(below = 8.dp)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.padding(top = 8.dp)) {
             SvcChip(route.svc, color, big = true)
             Column {

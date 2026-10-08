@@ -49,7 +49,7 @@ export const Celestial = ({ band = false }) => html`
  * page shows more hills rather than stretched ones.
  */
 const farY = (x) => 30 + 6 * Math.sin(x / 47 + 0.6) + 4 * Math.sin(x / 19 + 2.1);
-const nearY = (x) => 52 + 3 * Math.sin(x / 61 + 1.3) + 1.5 * Math.sin(x / 27);
+export const nearY = (x) => 52 + 3 * Math.sin(x / 61 + 1.3) + 1.5 * Math.sin(x / 27);
 /** The lowest point of the far hills between `lo` and `hi` px, where the city shows above them. */
 const dip = (lo, hi) => {
   let best = lo;
@@ -102,7 +102,9 @@ export const busParts = (fill, band, dim = -1, wheels = true) => html`
 `;
 
 /** How much bigger than its numbers the horizon with the road is drawn: the bus and your stop are the picture. */
-const ROAD_SCALE = 1.25;
+export const ROAD_SCALE = 1.25;
+/** Where your stop's sign stands across a horizon `vw` wide (in its own numbers): left of the flag. */
+export const signX = (vw) => Math.min(Math.round(vw * 0.7), Math.round(vw * 0.74) - 7);
 
 /** The driving shuttles paused (the button on each road with them): all of them at once. */
 const paused = store(false);
@@ -230,7 +232,7 @@ export function Horizon({ stop = false, bus = null, shuttle = true, drive = null
   const at = (f) => Math.round(vw * f);
   // Your stop's sign left of the flag; the flag right of anything on the
   // road; the city clear of the flag and the edge.
-  const sx = stop ? Math.min(at(0.7), at(0.74) - 7) : 0;
+  const sx = stop ? signX(vw) : 0;
   const [b1, b2, flag] = [at(0.18), at(0.62), at(0.76)];
   const mbs = dip(Math.max(at(0.8) - 40, flag + 30), Math.min(at(0.8) + 40, vw - 29));
   const city = farY(mbs) + 3;
