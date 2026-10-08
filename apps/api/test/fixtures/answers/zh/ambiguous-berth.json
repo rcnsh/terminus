@@ -1,0 +1,158 @@
+{
+  "stop": {
+    "code": "COM3",
+    "name": "COM 3",
+    "confidence": 0.5
+  },
+  "quality": "live",
+  "asOf": "2026-08-27T01:00:00.000Z",
+  "arrivals": [
+    {
+      "svc": "D2",
+      "etaS": 180,
+      "crowd": null,
+      "plate": null,
+      "berth": "COM3-D2-E",
+      "ends": true
+    },
+    {
+      "svc": "D2",
+      "etaS": 780,
+      "crowd": null,
+      "plate": null,
+      "berth": "COM3-D2-E",
+      "ends": true
+    }
+  ],
+  "label": "D2 · 3 分钟",
+  "detail": "COM 3 · 就在这里 · 约 16 分钟到 UTown · 步行要 18 分钟 · 方向未确认 · 或 R2，约 9 分钟后",
+  "alt": "R2 · 约 9 分钟 · Opp HSSML",
+  "departsAt": "2026-08-27T01:03:00Z",
+  "arriveAt": "2026-08-27T01:15:40Z",
+  "bus": {
+    "svc": "D2",
+    "stop": "COM 3",
+    "stopCode": "COM3",
+    "walkS": 3,
+    "rideS": 760,
+    "board": "2026-08-27T01:03:00Z",
+    "arrive": "2026-08-27T01:15:40Z",
+    "estimated": false,
+    "toStop": "UTown"
+  },
+  "altBus": {
+    "svc": "R2",
+    "stop": "Opp HSSML",
+    "stopCode": "HSSML-OPP",
+    "walkS": 160,
+    "rideS": 475,
+    "board": "2026-08-27T01:09:00Z",
+    "arrive": "2026-08-27T01:16:55Z",
+    "estimated": true,
+    "toStop": "UTown"
+  },
+  "leave": {
+    "at": "2026-08-27T01:02:37Z",
+    "estimated": false,
+    "svc": "D2",
+    "stop": "COM 3",
+    "stopCode": "COM3",
+    "board": "2026-08-27T01:03:00Z",
+    "arrive": "2026-08-27T01:15:40Z",
+    "note": null,
+    "walkS": 3,
+    "rideS": 760,
+    "toStop": "UTown"
+  },
+  "mode": "trip",
+  "dest": {
+    "to": "UTOWN",
+    "label": "UTown",
+    "why": "place"
+  },
+  "timing": null,
+  "places": [
+    {
+      "key": "mrt",
+      "label": "KR MRT"
+    },
+    {
+      "key": "deck",
+      "label": "The Deck"
+    }
+  ],
+  "walkSpeedMs": 1.3,
+  "card": {
+    "kind": "trip",
+    "staleAt": "2026-08-27T01:03:30Z",
+    "crowd": null,
+    "quality": null,
+    "leaveBy": "09:02 前出发",
+    "leaveVia": "在 COM 3 搭 09:03 的 D2",
+    "catch": null,
+    "arrive": null,
+    "catchLine": null,
+    "late": false,
+    "goNow": null,
+    "note": null,
+    "estimate": null,
+    "phase": "idle",
+    "phaseText": null,
+    "glance": "D2 09:03",
+    "line": "D2 · 3 分钟 · COM 3",
+    "actions": [],
+    "warning": null,
+    "nextChangeAt": "2026-08-27T01:03:30Z",
+    "remind": true,
+    "suggestion": null,
+    "ride": null,
+    "walkTo": {
+      "name": "COM 3",
+      "lat": 1.294431,
+      "lon": 103.775217
+    },
+    "notice": null,
+    "h12": false,
+    "journey": {
+      "leave": "09:02",
+      "walk": null,
+      "bus": {
+        "svc": "D2",
+        "color": "#8e44c9",
+        "stop": "COM 3",
+        "board": "09:03"
+      },
+      "boardAt": "2026-08-27T01:03:00Z",
+      "ride": "13 分钟",
+      "off": null,
+      "to": "UTown",
+      "toStop": "UTown",
+      "arrive": "09:15",
+      "walkEnd": null,
+      "arriveStop": "09:15",
+      "slack": null,
+      "live": true,
+      "backup": {
+        "svc": "R2",
+        "color": "#34a853",
+        "stop": "Opp HSSML",
+        "board": "约 09:09"
+      },
+      "why": null,
+      "title": "去 UTown",
+      "place": "UTown",
+      "byText": "09:02 前出发",
+      "walkText": null,
+      "rideText": "乘车 13 分钟",
+      "walkEndText": null,
+      "arriveText": "09:15 到达",
+      "arriveWhere": "在 UTown",
+      "backupText": "或在 Opp HSSML 搭约 09:09 的 R2",
+      "summary": "在 COM 3 搭 09:03 的 D2"
+    },
+    "upcoming": null,
+    "title": "D2 · 09:03",
+    "heading": "去 UTown",
+    "remindAt": null
+  }
+}

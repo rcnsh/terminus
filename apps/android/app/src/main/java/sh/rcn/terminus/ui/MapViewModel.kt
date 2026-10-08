@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import sh.rcn.terminus.Api
 import sh.rcn.terminus.ApiError
+import sh.rcn.terminus.Board
 import sh.rcn.terminus.CampusMap
 import sh.rcn.terminus.LiveBus
 import sh.rcn.terminus.Locator
@@ -21,7 +22,6 @@ import sh.rcn.terminus.MapFiles
 import sh.rcn.terminus.MapGeoJson
 import sh.rcn.terminus.ParseError
 import sh.rcn.terminus.Session
-import sh.rcn.terminus.StopBoard
 import sh.rcn.terminus.Store
 
 /** What the pill's status line says about the live buses. */
@@ -60,8 +60,8 @@ data class MapUi(
     val sheet: MapSheet? = null,
     /** A stop opened from elsewhere (Nearby on Now), for the map to move to once. */
     val focus: String? = null,
-    /** The open stop's board; null while it loads. */
-    val board: StopBoard? = null,
+    /** The open stop's board, the services not running now too; null while it loads. */
+    val board: Board? = null,
     /** True when the board couldn't be fetched at all (offline). */
     val boardFailed: Boolean = false,
     /** True when the server answered, but not with the board (down, or busy). */
@@ -225,7 +225,7 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
         val token = store.token ?: return
         fun open() = (_state.value.sheet as? MapSheet.Stop)?.code == code
         try {
-            val board = api(token).arrivals(code)
+            val board = api(token).board(code)
             if (open()) _state.update { it.copy(board = board, boardFailed = false, boardError = false) }
         } catch (e: CancellationException) {
             throw e
@@ -233,7 +233,7 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
             when (e.status) {
                 401 -> Session.rejected(getApplication(), token)
                 // A stop the server doesn't know: no times, which is true.
-                404 -> if (open()) _state.update { it.copy(board = StopBoard(false, emptyList()), boardFailed = false, boardError = false) }
+                404 -> if (open()) _state.update { it.copy(board = Board(code, "", null, false, emptyList(), null), boardFailed = false, boardError = false) }
                 // Down or busy: not "no times", which would say no buses are coming.
                 else -> if (open()) _state.update { it.copy(boardError = true, boardFailed = false) }
             }

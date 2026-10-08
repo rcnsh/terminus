@@ -29,17 +29,47 @@ class AnswerTest {
 
     private fun ms(iso: String) = Instant.parse(iso).toEpochMilli()
 
-    /** Every golden, English and Chinese, each read as what it is: a new one is checked here without being listed. */
-    @Test fun everyGoldenAnswerParses() {
+    /**
+     * Every golden there is, English and Chinese, by the endpoint it answers:
+     * /me/nearby has `stops`, /me/day `items`, the rest are /me/next. A
+     * new fixture is read without being listed here.
+     */
+    private fun everyGolden(): List<Pair<String, JSONObject>> {
         val dir = listOf("../../api/test/fixtures/answers", "../api/test/fixtures/answers").map(::File).first { it.isDirectory }
-        val files = dir.walk().filter { it.extension == "json" }.toList()
-        assertTrue("goldens found", files.size > 20)
-        for (f in files) {
-            val json = JSONObject(f.readText())
-            when (f.name) {
-                "day.json" -> assertTrue("${f.path} has items", DayPlan.parse(json).items.isNotEmpty())
-                "nearby-list.json" -> assertTrue("${f.path} has stops", parseNearby(json).isNotEmpty())
-                else -> assertNotNull("${f.path} has a card", NextAnswer.parse(json).card)
+        return listOf(dir, File(dir, "zh")).flatMap { d ->
+            d.listFiles { f -> f.extension == "json" }.orEmpty().sortedBy { it.name }.map { f ->
+                (if (d == dir) f.nameWithoutExtension else "zh/${f.nameWithoutExtension}") to JSONObject(f.readText())
+            }
+        }
+    }
+
+    private fun hasCjk(s: String) = s.any { Character.UnicodeScript.of(it.code) == Character.UnicodeScript.HAN }
+
+    @Test fun everyGoldenAnswerParses() {
+        val all = everyGolden()
+        assertTrue("found the goldens", all.size >= 40)
+        for ((name, json) in all) {
+            val zh = name.startsWith("zh/")
+            when {
+                json.has("stops") -> assertTrue(name, parseNearby(json).isNotEmpty())
+                json.has("items") -> assertTrue(name, DayPlan.parse(json).items.isNotEmpty())
+                else -> {
+                    val a = NextAnswer.parse(json)
+                    assertNotNull("$name has a card", a.card)
+                    val card = a.card!!
+                    // The card's parts are read leniently, so a part that no longer
+                    // parses would just vanish: each one sent must come through.
+                    val sent = json.getJSONObject("card")
+                    for ((key, got) in listOf(
+                        "journey" to card.journey, "ride" to card.ride, "upcoming" to card.upcoming,
+                        "suggestion" to card.suggestion, "walkTo" to card.walkTo,
+                    )) {
+                        if (sent.has(key) && !sent.isNull(key)) assertNotNull("$name: card.$key", got)
+                    }
+                    assertEquals("$name: card.actions", sent.optJSONArray("actions")?.length() ?: 0, card.actions.size)
+                    // The headline is the server's Chinese; some are only a bus and a time, so the line under it counts too.
+                    if (zh) assertTrue("$name is in Chinese: ${a.label}", hasCjk(a.label) || hasCjk(a.detail))
+                }
             }
         }
     }
@@ -427,5 +457,27 @@ class AnswerTest {
         // Anything else is just where you're going.
         val p = golden("place")
         assertEquals("To KR MRT", JourneyText.to(p, p.card!!.journey!!) { "10:00" })
+    }
+
+    /**
+     * A newer server's phase and quality this version doesn't know: the
+     * answer still shows, no trip is followed for it, and its times are
+     * never called live.
+     */
+    @Test fun anUnknownPhaseAndQualityAreNeitherATripNorLive() {
+        val json = goldenJson("class-bus").put("quality", "predicted")
+        json.getJSONObject("card").put("phase", "boarding")
+        val a = NextAnswer.parse(json)
+        assertEquals("boarding", a.card?.phase)
+        assertEquals("predicted", a.quality)
+        assertEquals("Leave by ~09:36", a.leaveHeadline(0))
+        assertFalse(a.card?.phase in LiveService.TRIP_PHASES)
+        // A place chosen on a widget isn't taken back for it.
+        val utown = sh.rcn.terminus.widget.Mode.To(Destinations.Dest("place:utown", "UTown"))
+        val now = a.leaveAtMs!!
+        assertEquals(utown, sh.rcn.terminus.widget.WidgetModes.effective(utown, now - 10 * 60_000, a, rowShown = true, now = now))
+        // Said as a plain time, not "live".
+        assertEquals(Spoken.eta(300, "unknown"), Spoken.eta(300, a.quality))
+        assertFalse(Spoken.eta(300, a.quality)!!.contains("live"))
     }
 }

@@ -77,6 +77,23 @@ object Push {
         Store(ctx).paired && (follows(ctx) || LeaveAlerts.canNotify(ctx, TermReminder.CHANNEL))
 
     /**
+     * What push's timing reads from [Store]: the token sent, when the server
+     * took it, when a push last arrived, and the [tag]s of the session it was
+     * sent with ([sentFor]) and of the session now ([session]).
+     */
+    data class State(
+        val token: String?,
+        val sentAt: Long,
+        val heardAt: Long,
+        val sentFor: String? = null,
+        val session: String? = null,
+    ) {
+        companion object {
+            fun of(store: Store) = State(store.pushToken, store.pushSentAt, store.pushHeardAt, store.pushFor, store.token?.let { Push.tag(it) })
+        }
+    }
+
+    /**
      * A card push only moves the leave alert and the live notification on
      * (the widgets keep their own alarms): with neither on and seen, it's
      * left alone rather than fetched for.
@@ -95,10 +112,10 @@ object Push {
      * No token sent for this session yet (a new sign-in or pairing, whatever
      * was sent before it), or not for [RESEND_MS].
      */
-    fun due(store: Store, now: Long = System.currentTimeMillis()): Boolean {
-        val session = store.token ?: return false
-        return store.pushToken == null || store.pushFor != tag(session) || now - store.pushSentAt >= RESEND_MS
-    }
+    fun due(store: Store, now: Long = System.currentTimeMillis()): Boolean = store.token != null && due(State.of(store), now)
+
+    fun due(state: State, now: Long): Boolean =
+        state.token == null || state.sentFor != state.session || now - state.sentAt >= RESEND_MS
 
     /** [sync] would change something: a token to send, or one to take back. */
     fun stale(ctx: Context): Boolean = if (wanted(ctx)) due(Store(ctx)) else Store(ctx).pushToken != null
@@ -151,11 +168,14 @@ object Push {
      */
     fun active(ctx: Context): Boolean {
         val store = Store(ctx)
-        val now = System.currentTimeMillis()
-        val session = store.token ?: return false
-        return store.pushToken != null && store.pushFor == tag(session) &&
-            now - store.pushSentAt < TRUST_MS && now - store.pushHeardAt < TRUST_MS && available(ctx)
+        return store.token != null && active(State.of(store), System.currentTimeMillis()) && available(ctx)
     }
+
+    /** [active], apart from whether this phone can have push at all. */
+    fun active(state: State, now: Long): Boolean =
+        state.token != null && state.sentFor == state.session &&
+            now - state.sentAt < TRUST_MS && now - state.heardAt < TRUST_MS
+
 }
 
 /** Firebase is ready before anything else runs, including a push that starts the process. */
@@ -215,12 +235,19 @@ object TermReminder {
         return runCatching { Api(token, fast = true).notice() }.getOrNull()
     }
 
+    /**
+     * The title and body in the app's language, from the push (an older
+     * server) or /me/notice; null with no title to show, rather than a
+     * blank notification.
+     */
+    fun words(data: Map<String, String>, zh: Boolean): Pair<String, String>? {
+        val title = (if (zh) data["zhTitle"] else data["title"])?.takeIf { it.isNotBlank() } ?: return null
+        return title to (if (zh) data["zhBody"] else data["body"]).orEmpty()
+    }
+
     fun post(ctx: Context, data: Map<String, String>) {
         if (!LeaveAlerts.canNotify(ctx, CHANNEL)) return
-        val zh = Lang.current(ctx) == Lang.ZH
-        // A reminder without words (a field missing from the server's) isn't shown blank.
-        val title = (if (zh) data["zhTitle"] else data["title"])?.takeIf { it.isNotBlank() } ?: return
-        val body = (if (zh) data["zhBody"] else data["body"]).orEmpty()
+        val (title, body) = words(data, Lang.current(ctx) == Lang.ZH) ?: return
         val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL, L.s(R.string.channel_term), NotificationManager.IMPORTANCE_DEFAULT).apply {

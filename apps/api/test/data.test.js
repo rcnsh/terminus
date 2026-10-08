@@ -61,8 +61,10 @@ test('public.json: every route runs through known stops, with a distance at each
     assert.ok(p && p.svc && p.operator && p.origin && p.dest, `${key} is not described`);
     assert.equal(key.split('/')[0], p.svc);
     assert.equal(typeof pub.loops[key], 'boolean');
-    if (pub.loops[key]) assert.equal(seq[0], seq[seq.length - 1], `loop ${key} does not close`);
+    // A loop ends where it starts; a one-way route (151/1) ends elsewhere.
+    assert.equal(pub.loops[key], seq[0] === seq[seq.length - 1], `${key}: loop ${pub.loops[key]}, from ${seq[0]} to ${seq.at(-1)}`);
   }
+  assert.ok(Object.values(pub.loops).includes(true) && Object.values(pub.loops).includes(false), 'public.json has loops and one-way routes');
   // The services that matter for the campus are there.
   for (const key of ['95', '151/1', '151/2', '96']) assert.ok(pub.routes[key], key);
   // A stop of its own is called at by something.
@@ -84,4 +86,60 @@ test('public.json: hours are HH:MM windows and headways are minutes-scale second
     assert.ok(pub.routes[key], `headway for unknown ${key}`);
     assert.ok(s >= 120 && s <= 3600, `${key}: ${s} s`);
   }
+});
+
+test('stop codes are unique: in stops.json, in public.json, and between them', () => {
+  const dupes = (list) => list.filter((c, i) => list.indexOf(c) !== i);
+  assert.deepEqual(dupes(stops.stops.map((s) => s.code)), [], 'stops.json');
+  assert.deepEqual(dupes(pub.stops.map((s) => s.code)), [], 'public.json');
+  assert.deepEqual(dupes([...stops.stops, ...pub.stops].map((s) => s.code)), [], 'a public stop with a shuttle stop’s code');
+});
+
+import { ROUTE_COLORS, shapeFor } from '../src/campus.ts';
+import { GRAPH } from '../src/graph.ts';
+import { pointAlong } from '../src/buses.ts';
+import { haversineM } from '../src/geo.ts';
+import opposites from '../data/opposites.json' with { type: 'json' };
+
+test('every shuttle service has its own colour', () => {
+  for (const svc of Object.keys(stops.routes)) assert.match(ROUTE_COLORS[svc] ?? '', /^#[0-9a-f]{6}$/, `no colour for ${svc} in ROUTE_COLORS (src/campus.ts)`);
+  assert.equal(new Set(Object.values(ROUTE_COLORS)).size, Object.keys(ROUTE_COLORS).length, 'two services share a colour');
+});
+
+test('a service is a loop exactly when it ends where it starts, and a loop’s line ends near its start', () => {
+  // The API places buses with the loop flag, and the maps take it from
+  // /campus: the line's ends needn't meet (A1's are some 40 m apart at KRB),
+  // but further apart than this and a bus going round would jump.
+  assert.deepEqual(Object.keys(stops.loops).sort(), Object.keys(stops.routes).sort());
+  for (const [svc, seq] of Object.entries(stops.routes)) {
+    assert.equal(stops.loops[svc], seq[0] === seq.at(-1), `${svc}: loop ${stops.loops[svc]}, from ${seq[0]} to ${seq.at(-1)}`);
+    const line = shapeFor(svc, seq)?.line;
+    if (!stops.loops[svc] || !line) continue;
+    const [a, z] = [line[0], line.at(-1)];
+    assert.ok(haversineM(a[1], a[0], z[1], z[0]) < 60, `${svc}'s line ends ${Math.round(haversineM(a[1], a[0], z[1], z[0]))} m from its start`);
+  }
+  assert.ok(Object.values(stops.loops).includes(false), 'some service (K, R1, R2) is one way');
+});
+
+test('opposites.json: each stop in one pair at most, and each pair two sides of one road', () => {
+  const listed = opposites.pairs.flat();
+  assert.deepEqual(unknown([...listed, ...opposites.nearby.flat()]), [], 'opposites.json names an unknown stop');
+  assert.deepEqual(listed.filter((c, i) => listed.indexOf(c) !== i), [], 'a stop in two pairs');
+  for (const [a, b] of [...opposites.pairs, ...opposites.nearby]) assert.notEqual(a, b);
+  // Every twin the graph ends up with, scraped or listed: the buses at one
+  // drive the other way from the buses at the other, never the same way.
+  const ways = (code) =>
+    Object.entries(GRAPH.routes).flatMap(([svc, seq]) => {
+      const shape = shapeFor(svc, seq);
+      return shape ? shape.stops.flatMap((c, k) => (c === code && pointAlong(shape, shape.at[k] + 5).bearing != null ? [[svc, pointAlong(shape, shape.at[k] + 5).bearing]] : [])) : [];
+    });
+  const apart = (x, y) => Math.min(Math.abs(x - y), 360 - Math.abs(x - y));
+  let pairs = 0;
+  for (const s of GRAPH.stops) {
+    if (!s.opposite || s.code > s.opposite) continue;
+    pairs++;
+    assert.equal(GRAPH.stops.find((x) => x.code === s.opposite)?.opposite, s.code, `${s.code} and ${s.opposite} are not each other's twin`);
+    for (const [p, x] of ways(s.code)) for (const [q, y] of ways(s.opposite)) assert.ok(apart(x, y) > 90, `${s.code} (${p}, ${Math.round(x)}°) and ${s.opposite} (${q}, ${Math.round(y)}°) are on the same side`);
+  }
+  assert.ok(pairs >= opposites.pairs.length, `${pairs} twins in the graph`);
 });

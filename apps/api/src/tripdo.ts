@@ -105,7 +105,7 @@ export class Trip {
   }
 
   /**
-   * Applies every change one request carries (signals, followed, plans, a
+   * Applies every change one request carries (signals, plans, a
    * watch) in one read and at most one write of the day, and sets the
    * alarm only when its time moves: most requests change one thing or
    * nothing, and each write and alarm is billed.
@@ -120,10 +120,6 @@ export class Trip {
       if (rec && !(key in next.trips) && Object.keys(next.trips).length >= MAX_DAY_TRIPS) continue;
       if (rec) next.trips[key] = rec;
       else delete next.trips[key];
-      changed = true;
-    }
-    if (u.followed !== undefined && next.followed !== u.followed) {
-      next.followed = u.followed;
       changed = true;
     }
     if (u.plans && Object.keys(u.plans).length) {
@@ -328,8 +324,6 @@ function updateOf(path: string, body: unknown): TripUpdate | null {
       return { ...base, plans: { [b.key as string]: b.plan as Boarded } };
     case '/watch':
       return { ...base, watch: { userId: b.userId as string, at: b.at as number } };
-    case '/followed':
-      return { ...base, followed: b.at as number };
     default:
       return null;
   }

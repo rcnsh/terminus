@@ -68,7 +68,6 @@ data class UiState(
     val leaveAlerts: Boolean = false,
     /** The live notification during your day. */
     val liveUpdates: Boolean = false,
-    val detectTrips: Boolean = false,
     /** An "Is this wrong?" report on its way, why it failed, and where it was sent for. */
     val reportSending: Boolean = false,
     val reportResult: String? = null,
@@ -115,7 +114,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (!paired && store.hasLeftovers()) Session.clearLocal(app)
         val last = if (paired) store.lastAnswer() else null
         _state = MutableStateFlow(
-            UiState(paired = paired, places = last?.first?.places.orEmpty(), added = store.addedPlaces, leaveAlerts = store.leaveAlerts && LeaveAlerts.canNotify(app, LeaveAlerts.CHANNEL), liveUpdates = store.liveUpdates && LeaveAlerts.canNotify(app, LiveService.CHANNEL), detectTrips = store.detectTrips && Locator.hasPrecise(app), day = store.lastDay()?.first, swipeHint = !store.swipedToday, swipePeek = !store.swipedToday && store.swipePeeks < SWIPE_PEEKS, pairError = signedOut, updateRequired = Outdated.required)
+            UiState(paired = paired, places = last?.first?.places.orEmpty(), added = store.addedPlaces, leaveAlerts = store.leaveAlerts && LeaveAlerts.canNotify(app, LeaveAlerts.CHANNEL), liveUpdates = store.liveUpdates && LeaveAlerts.canNotify(app, LiveService.CHANNEL), day = store.lastDay()?.first, swipeHint = !store.swipedToday, swipePeek = !store.swipedToday && store.swipePeeks < SWIPE_PEEKS, pairError = signedOut, updateRequired = Outdated.required)
                 .let { s -> seen(last)?.let { (a, at) -> s.copy(answers = mapOf(Target.Plan to a), fetchedAt = at) } ?: s },
         )
         // Signed out by a refused token while open (here, the widget, a push): the welcome screen, saying why.
@@ -244,13 +243,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _state.update { it.copy(error = L.s(R.string.cant_add)) }
             }
         }
-    }
-
-    /** "Notice when I board". Needs the live notification, so turning it on turns that on too. */
-    fun setDetectTrips(on: Boolean) {
-        store.detectTrips = on
-        _state.update { it.copy(detectTrips = on) }
-        if (on && !store.liveUpdates) setLiveUpdates(true) else if (on) LiveService.watch(getApplication()) else LiveService.start(getApplication())
     }
 
     fun dismissPairLink() = _state.update { it.copy(pendingPair = null) }

@@ -52,8 +52,6 @@ class LiveService : Service() {
     private val wake = Channel<Unit>(Channel.CONFLATED)
     /** A push said the card changed: the next turn fetches, however new the kept answer. */
     @Volatile private var force = false
-    /** Following the trip by location ("Notice when I board"), when a tap started it. */
-    @Volatile private var watch: TripWatch? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -73,21 +71,9 @@ class LiveService : Service() {
         // Must be in the foreground within seconds of starting, before any fetch.
         val store = Store(this)
         val cached = store.lastAnswer()
-        val wantWatch = when (intent?.action) {
-            ACTION_UNWATCH -> false
-            ACTION_WATCH -> true
-            else -> watch != null
-        } && store.detectTrips && Locator.hasPrecise(this)
-        if (!wantWatch) stopWatching()
-        // The location type only when a tap started this (the app, the
-        // notification, the widget): from an alarm or a push Android refuses it.
-        // On Android 12 and 13 the plain startForeground (foreground() with no
-        // type) takes every type in the manifest, location included; started
-        // from the background it simply gets no location there.
-        val watching = wantWatch && runCatching { foreground(cached?.first, location = true) }.isSuccess
         // Restarted by the system after it stopped the app (START_STICKY), Android
         // can refuse a foreground service at all: then stop, rather than crash.
-        if (!watching && runCatching { foreground(cached?.first, location = false) }.isFailure) {
+        if (runCatching { foreground(cached?.first) }.isFailure) {
             stopSelf()
             return START_NOT_STICKY
         }
@@ -95,49 +81,21 @@ class LiveService : Service() {
         // can see isn't worth a request every 30 s. (In the foreground first
         // all the same: a started service that isn't crashes the app.)
         if (!LeaveAlerts.canNotify(this, CHANNEL)) {
-            stopWatching()
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
             return START_NOT_STICKY
         }
-        if (watching && watch == null) watch = TripWatch(this).takeIf { it.start() }
         if (loop?.isActive != true) loop = scope.launch { run() } else wake.trySend(Unit)
         return START_STICKY
     }
 
-    private fun foreground(answer: NextAnswer?, location: Boolean) {
-        val n = build(this, answer, watching = location)
-        var type = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0
-        if (location) type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+    private fun foreground(answer: NextAnswer?) {
+        val n = build(this, answer)
         // The special-use type exists from Android 14; before that the plain call.
-        if (type == 0) startForeground(NOTIFICATION_ID, n) else startForeground(NOTIFICATION_ID, n, type)
-    }
-
-    private fun stopWatching() {
-        watch?.stop()
-        watch = null
-    }
-
-    /** Sends the latest fix as a location signal (the server works out the trip from it); false when there's none. */
-    private suspend fun sendFix(store: Store): Boolean {
-        val fix = watch?.fix(System.currentTimeMillis()) ?: return false
-        val token = store.token ?: return false
-        return try {
-            val json = Api(token, fast = true, hour12 = hour12(this)).signal("location", null, fix.lat, fix.lon, fix.speedMs, fix.accM)
-            val now = System.currentTimeMillis()
-            // Read before it's kept (a ParseError lands below): the last good answer stays.
-            val answer = store.saveAnswer(json, now)
-            store.lastError = null
-            Refresher.scheduleNext(this, answer, now)
-            redrawWidgets(this)
-            true
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: ApiError) {
-            if (e.status == 401) Session.rejected(this, token)
-            false
-        } catch (e: Exception) {
-            false
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(NOTIFICATION_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        } else {
+            startForeground(NOTIFICATION_ID, n)
         }
     }
 
@@ -154,7 +112,7 @@ class LiveService : Service() {
             // An answer fetched a moment ago (the leave check that started this)
             // isn't asked for again; after a push it is: the card changed since.
             val fresh = !pushed && store.lastAnswer()?.second?.let { System.currentTimeMillis() - it in 0 until FRESH_MS } == true
-            if (!sendFix(store) && !fresh) {
+            if (!fresh) {
                 if (Refresher.refresh(this, force = pushed) != null) failures = 0 else failures++
             }
             // Refused as too old: no more asking until the app is updated.
@@ -170,17 +128,16 @@ class LiveService : Service() {
                     ?.let { wakeAt(this, ServerClock.toDevice(it)) }
                 break
             }
-            nm?.notify(NOTIFICATION_ID, build(this, answer, watching = watch != null))
-            // Following by location: every fix counts, screen on or off.
+            nm?.notify(NOTIFICATION_ID, build(this, answer))
             // Never sooner than a 429's or a 503's Retry-After, nor than the back-off.
-            val every = if (watch != null) WATCH_MS else if (power?.isInteractive != false) SCREEN_ON_MS else SCREEN_OFF_MS
+            val every = if (power?.isInteractive != false) SCREEN_ON_MS else SCREEN_OFF_MS
             val wait = maxOf(every, liveBackoffMs(failures), Quiet.waitMs())
             // The header's countdown runs on past zero ("-1:20") until it's
             // rebuilt: rebuilt just after it ends, without a fetch.
             val end = countdownAt(answer)?.let { it - ServerClock.now() + 1_000 }?.takeIf { it in 1 until wait }
             if (end != null) {
                 if (pause(end)) continue
-                nm?.notify(NOTIFICATION_ID, build(this, store.lastAnswer()?.first ?: answer, watching = watch != null))
+                nm?.notify(NOTIFICATION_ID, build(this, store.lastAnswer()?.first ?: answer))
                 pause(wait - end)
             } else {
                 pause(wait)
@@ -192,7 +149,6 @@ class LiveService : Service() {
             if (lastStartId != handledStartId && scope.isActive) {
                 loop = scope.launch { run() }
             } else {
-                stopWatching()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelfResult(handledStartId)
             }
@@ -203,7 +159,6 @@ class LiveService : Service() {
     private suspend fun pause(ms: Long): Boolean = withTimeoutOrNull(ms) { wake.receive() } != null
 
     override fun onDestroy() {
-        stopWatching()
         scope.cancel()
         super.onDestroy()
     }
@@ -213,14 +168,10 @@ class LiveService : Service() {
         private const val NOTIFICATION_ID = 2
         private const val SCREEN_ON_MS = 30_000L
         private const val SCREEN_OFF_MS = 120_000L
-        /** A location to the server this often while following a trip. */
-        private const val WATCH_MS = 20_000L
         /** An answer this new is used as it is when the loop starts. */
         private const val FRESH_MS = 10_000L
         const val ACTION_STOP = "sh.rcn.terminus.LIVE_STOP"
         const val ACTION_START = "sh.rcn.terminus.LIVE_START"
-        const val ACTION_WATCH = "sh.rcn.terminus.LIVE_WATCH"
-        const val ACTION_UNWATCH = "sh.rcn.terminus.LIVE_UNWATCH"
         /** Started by a push: the card changed, so the answer is fetched even if just kept. */
         private const val EXTRA_FORCE = "force"
         /** From "time to go" until you're there. */
@@ -237,19 +188,6 @@ class LiveService : Service() {
             if (!store.liveUpdates || !store.paired || !LeaveAlerts.canNotify(ctx, CHANNEL)) return false
             val intent = Intent(ctx, LiveService::class.java).putExtra(EXTRA_FORCE, force)
             return runCatching { ctx.startForegroundService(intent) }.isSuccess
-        }
-
-        /**
-         * Starts (or upgrades) the live notification to follow the trip by
-         * location. Only from a tap: the app coming to the front, a button on
-         * the notification or the widget. Android lets a foreground service
-         * take the location then, and not from an alarm or a push.
-         */
-        fun watch(ctx: Context) {
-            val store = Store(ctx)
-            if (!store.detectTrips || !store.liveUpdates || !store.paired || !LeaveAlerts.canNotify(ctx, CHANNEL) || !Locator.hasPrecise(ctx)) return
-            if (store.lastAnswer()?.first?.card?.phase !in TRIP_PHASES) return
-            runCatching { ctx.startForegroundService(Intent(ctx, LiveService::class.java).setAction(ACTION_WATCH)) }
         }
 
         fun stop(ctx: Context) {
@@ -275,7 +213,7 @@ class LiveService : Service() {
             )
 
         /** What the header counts down to: getting off, leaving for a class, or the bus. */
-        private fun countdownAt(answer: NextAnswer): Long? {
+        internal fun countdownAt(answer: NextAnswer): Long? {
             val card = answer.card
             return when {
                 card?.phase == "riding" && card.ride != null -> card.ride.arriveMs
@@ -284,7 +222,7 @@ class LiveService : Service() {
             }
         }
 
-        private fun build(ctx: Context, answer: NextAnswer?, watching: Boolean = false): Notification {
+        private fun build(ctx: Context, answer: NextAnswer?): Notification {
             val nm = ctx.getSystemService(NotificationManager::class.java)
             nm?.createNotificationChannel(
                 NotificationChannel(CHANNEL, L.s(R.string.channel_live), NotificationManager.IMPORTANCE_LOW).apply {
@@ -308,15 +246,6 @@ class LiveService : Service() {
                 .setContentIntent(open)
                 .setCategory(Notification.CATEGORY_STATUS)
             b.addAction(Notification.Action.Builder(null, L.s(R.string.turn_off), stop).build())
-            // "Notice when I board": on while following, offered while not (a tap is what lets it start).
-            if (Store(ctx).detectTrips && Locator.hasPrecise(ctx)) {
-                val action = if (watching) ACTION_UNWATCH else ACTION_WATCH
-                val pi = PendingIntent.getForegroundService(
-                    ctx, if (watching) 6 else 7, Intent(ctx, LiveService::class.java).setAction(action),
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-                )
-                b.addAction(Notification.Action.Builder(null, if (watching) L.s(R.string.stop_following) else L.s(R.string.follow_trip), pi).build())
-            }
             if (answer == null) return b.setContentTitle("terminus").setContentText(L.s(R.string.checking)).build()
             // During a trip, a Live Update (Android 16 QPR1, API 36.1): kept at
             // the top of the shade and on the lock screen, with the card's

@@ -74,15 +74,18 @@ enum MapFiles {
     }
 
     /// What's kept about the map file: its name, ETag and when it was last checked.
-    private static var meta: URL { dir.appendingPathComponent("\(tiles).json") }
-    private static func readMeta() -> [String: Any]? {
-        (try? Data(contentsOf: meta)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+    private static func meta(in dir: URL) -> URL { dir.appendingPathComponent("\(tiles).json") }
+    private static func readMeta(in dir: URL) -> [String: Any]? {
+        (try? Data(contentsOf: meta(in: dir))).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
     }
 
-    /// The map file in use, when there is one. Before files were named by
-    /// download it was `campus.pmtiles`, and that name still counts.
-    static var current: URL? {
-        let name = readMeta()?["file"] as? String ?? tiles
+    /// The map file in use, when there is one.
+    static var current: URL? { currentTiles(in: dir) }
+
+    /// The map file in use in `dir`. Before files were named by download it
+    /// was `campus.pmtiles`, and that name still counts.
+    static func currentTiles(in dir: URL) -> URL? {
+        let name = readMeta(in: dir)?["file"] as? String ?? tiles
         let file = dir.appendingPathComponent(name)
         return FileManager.default.fileExists(atPath: file.path) ? file : nil
     }
@@ -106,9 +109,9 @@ enum MapFiles {
 
     /// The map file and what's kept about it, gone: MapLibre couldn't read
     /// it. The map is plain until the next look downloads it again.
-    static func dropTiles() {
-        if let file = current { try? FileManager.default.removeItem(at: file) }
-        try? FileManager.default.removeItem(at: meta)
+    static func dropTiles(in dir: URL = MapFiles.dir) {
+        if let file = currentTiles(in: dir) { try? FileManager.default.removeItem(at: file) }
+        try? FileManager.default.removeItem(at: meta(in: dir))
     }
 
     /// A style has loaded: once it's one reading the current map file, the
@@ -154,16 +157,21 @@ enum MapFiles {
     /// Quiet on failure; the next look tries again.
     @discardableResult
     static func keepTiles() async throws -> Bool {
+        try await keepTiles(in: dir, now: Date().timeIntervalSince1970) { try await URLSession.shared.download(for: $0) }
+    }
+
+    /// `keepTiles()` in `dir` at `now` (seconds since 1970); `fetch` downloads
+    /// a request to a file, as URLSession's `download(for:)` does.
+    static func keepTiles(in dir: URL, now: TimeInterval, fetch: (URLRequest) async throws -> (URL, URLResponse)) async throws -> Bool {
         let fm = FileManager.default
-        let kept = readMeta()
-        let file = current
-        let now = Date().timeIntervalSince1970
+        let kept = readMeta(in: dir)
+        let file = currentTiles(in: dir)
         if file != nil, let checked = kept?["checked"] as? Double, now - checked < checkS { return false }
         var req = URLRequest(url: URL(string: "\(Api.base)/map/\(tiles)")!, timeoutInterval: 30)
         req.setValue(Api.client, forHTTPHeaderField: "x-terminus-client")
         let etag = kept?["etag"] as? String ?? ""
         if file != nil, !etag.isEmpty { req.setValue(etag, forHTTPHeaderField: "if-none-match") }
-        let (tmp, resp) = try await URLSession.shared.download(for: req)
+        let (tmp, resp) = try await fetch(req)
         // Whatever isn't moved into place below goes: the system leaves it otherwise.
         defer { try? fm.removeItem(at: tmp) }
         let http = resp as? HTTPURLResponse
@@ -173,7 +181,7 @@ enum MapFiles {
         case 304:
             // Kept from before files were checked: one that isn't a map goes.
             if let file, !looksLikeTiles(file) {
-                dropTiles()
+                dropTiles(in: dir)
                 throw ApiError(status: 0, message: "not a map file")
             }
         case 200:
@@ -194,7 +202,7 @@ enum MapFiles {
             throw ApiError(status: http?.statusCode ?? 0, message: "HTTP \(http?.statusCode ?? 0)")
         }
         let tag = http?.value(forHTTPHeaderField: "etag") ?? etag
-        if let bytes = try? JSONSerialization.data(withJSONObject: ["file": name, "etag": tag, "checked": now]) { try? bytes.write(to: meta, options: .atomic) }
+        if let bytes = try? JSONSerialization.data(withJSONObject: ["file": name, "etag": tag, "checked": now]) { try? bytes.write(to: meta(in: dir), options: .atomic) }
         return fresh
     }
 

@@ -143,11 +143,6 @@ class Store(context: Context) {
         get() = prefs.getBoolean(KEY_LIVE, false)
         set(value) = prefs.edit { putBoolean(KEY_LIVE, value) }
 
-    /** "Notice when I board" (phase 8.1): during a trip the live notification sends the location. Off until turned on. */
-    var detectTrips: Boolean
-        get() = prefs.getBoolean(KEY_DETECT, false)
-        set(value) = prefs.edit { putBoolean(KEY_DETECT, value) }
-
     /** The in-app setup is still to do (a new account); cleared when it's finished or skipped. */
     var needsSetup: Boolean
         get() = prefs.getBoolean(KEY_NEEDS_SETUP, false)
@@ -342,7 +337,6 @@ class Store(context: Context) {
         private const val KEY_ERROR = "error"
         private const val KEY_LEAVE_ALERTS = "leave-alerts"
         private const val KEY_LIVE = "live-updates"
-        private const val KEY_DETECT = "detect-trips"
         private const val KEY_DEST_USE = "destination-uses"
         private const val KEY_ADDED = "added-places"
         private const val KEY_LEAVE_NOTIFIED = "leave-notified"
