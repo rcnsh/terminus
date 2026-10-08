@@ -292,8 +292,9 @@ test('a failed poll records nothing, but a request that reached NUS still counts
   globalThis.fetch = makeFetch({ raw: { code: '00000', msg: '', data: { somethingNew: 1 } } });
   await start(h);
   await h.ns.fireDue(FROZEN_NOW);
-  // It asked, and the request failed: an `error`, counted with the requests.
-  assert.deepEqual(h.ae.rows('timelapse').map((r) => r.blobs[1]), ['error']);
+  // It asked, and the request failed: an `error`, counted with the requests,
+  // as is the token it minted first (the recorder's first poll, cold).
+  assert.deepEqual(h.ae.rows('timelapse').map((r) => r.blobs[1]), ['retry', 'error']);
   assert.equal((await status(h)).samples, 0);
   // The same service again within failMemoS isn't asked: `failed`, no request.
   const inst = h.ns.instances.get(DATE);
@@ -303,7 +304,7 @@ test('a failed poll records nothing, but a request that reached NUS still counts
   await h.ns.get(DATE).fetch(`https://timelapse.internal/status?date=${DATE}`);
   h.ns.alarms.set(DATE, FROZEN_NOW + 1_000);
   await h.ns.fireDue(FROZEN_NOW + 1_000);
-  assert.deepEqual(h.ae.rows('timelapse').map((r) => r.blobs[1]), ['error', 'failed']);
+  assert.deepEqual(h.ae.rows('timelapse').map((r) => r.blobs[1]), ['retry', 'error', 'failed']);
 });
 
 test('a poll that throws after asking is a failed poll: the round goes on, and that service is not asked again sooner', async () => {
@@ -379,8 +380,9 @@ test('a retry inside a poll is counted as the request to NUS it is', async () =>
   const feed = makeFetch({ buses: { [RUNNING[0]]: [busOn('D2', 400)] }, reject: 1, rejectCode: '10008' });
   globalThis.fetch = feed;
   await h.ns.fireDue(FROZEN_NOW);
-  // A refused call, a fresh token, and the call again: three requests.
-  assert.deepEqual(h.ae.rows('timelapse').map((r) => r.blobs[1]), ['retry', 'retry', 'upstream']);
+  // A token (none yet), a refused call, a fresh token, and the call again:
+  // four requests.
+  assert.deepEqual(h.ae.rows('timelapse').map((r) => r.blobs[1]), ['retry', 'retry', 'retry', 'upstream']);
 });
 
 test('no service is asked twice within pollMs, even when the next round has fewer services', async () => {

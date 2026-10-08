@@ -226,11 +226,15 @@ export function mintWith(env: Env, version: string, nowMs: number = Date.now()):
  * `force` skips BOTH caches and mints. Clearing only the in-memory memo is not
  * enough: the next call would read the same rejected token straight back out
  * of KV, so a "retry with a fresh token" would silently reuse the stale one.
+ *
+ * [onMint] is told when this call itself asks NUS for a token: not for a
+ * token from the memo or KV, nor one another call is already minting, nor
+ * while a failed mint keeps the auth host quiet.
  */
 export async function getSession(
   env: Env,
   nowMs: number = Date.now(),
-  { force = false }: { force?: boolean } = {},
+  { force = false, onMint }: { force?: boolean; onMint?: () => void } = {},
 ): Promise<Session> {
   if (!authConfigured(env)) throw new Error('auth not configured');
   const version = await appVersion(env, nowMs);
@@ -256,6 +260,7 @@ export async function getSession(
   if (!inflight) {
     inflight = (async () => {
       if (await flagged(mintFailedKey())) throw new Error('token mint failed a moment ago');
+      onMint?.();
       return mint(env, nowMs, version).catch(async (err) => {
         // A version refused after the switch away from it is this isolate's
         // alone: the others, minting with the new one, needn't wait.
@@ -279,7 +284,7 @@ const remintedKey = () => `${cacheBase()}/reminted`;
  * that, a fresh mint, but at most one per remintGapS in this data centre: a
  * refusal that a new token didn't cure won't be cured by another, and a
  * mint per refused call would multiply the load just when NUS is unhappy.
- * [onMint] is told when it mints.
+ * [onMint] is told when it asks NUS for a token (getSession).
  */
 export async function renewSession(env: Env, nowMs: number, rejected: Session, onMint?: () => void): Promise<Session | null> {
   const version = await appVersion(env, nowMs);
@@ -293,8 +298,7 @@ export async function renewSession(env: Env, nowMs: number, rejected: Session, o
   }
   if (await flagged(remintedKey())) return null;
   await flag(remintedKey(), 'reminted', TTL.remintGapS);
-  onMint?.();
-  return getSession(env, nowMs, { force: true }).catch(() => null);
+  return getSession(env, nowMs, { force: true, onMint }).catch(() => null);
 }
 
 async function mint(env: Env, nowMs: number, version: string): Promise<Session> {
