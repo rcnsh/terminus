@@ -342,7 +342,6 @@
     <string name="sign_out">退出登录</string>
     <string name="sign_out_text">应用和小组件将不再显示你的课表。你的账户和设置会保留，可用 %1$s 重新登录。</string>
     <string name="sign_out_title">在这部手机上退出登录？</string>
-    <string name="signed_in_as">已登录：%1$s</string>
     <string name="signed_out_removed">这部手机已从你的账户退出登录。请用你的邮箱重新登录。</string>
     <string name="signin_cancelled">登录已在邮件中取消。如果是你取消的，请重新发送。</string>
     <string name="skip_setup">跳过设置</string>
