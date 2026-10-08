@@ -142,7 +142,7 @@ const statements = (sql) => sql.replace(/--[^\n]*/g, '').split(';').map((s) => s
 /** What in a migration would break the Worker still running during a deploy (docs/internals.md, "additive"). */
 function notAdditive(sql) {
   return statements(sql).filter((s) => {
-    if (/^DROP (TABLE|COLUMN)\b/i.test(s)) return true;
+    if (/^DROP (TABLE|COLUMN|VIEW)\b/i.test(s)) return true;
     if (!/^ALTER TABLE\b/i.test(s)) return false;
     if (/\b(DROP|RENAME)\b/i.test(s)) return true;
     return /\bADD\b/i.test(s) && /\bNOT NULL\b/i.test(s) && !/\bDEFAULT\b/i.test(s);
@@ -159,6 +159,7 @@ test('migrations only add, unless one says it is the contract step', () => {
   assert.ok(notAdditive('ALTER TABLE a RENAME TO b;').length);
   assert.ok(notAdditive('ALTER TABLE a ADD COLUMN b TEXT NOT NULL;').length);
   assert.ok(notAdditive('DROP TABLE a;').length);
+  assert.ok(notAdditive('DROP VIEW a;').length);
   assert.deepEqual(notAdditive("ALTER TABLE a ADD COLUMN b TEXT NOT NULL DEFAULT '';\nALTER TABLE a ADD COLUMN c INTEGER;\nCREATE TABLE d (e TEXT NOT NULL);\nDROP INDEX f;"), []);
   for (const f of migrationFiles()) {
     if (BEFORE_THE_RULE.includes(f)) continue;
