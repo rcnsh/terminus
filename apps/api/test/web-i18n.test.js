@@ -45,6 +45,7 @@ const SCRIPTS = [
   'assets/theme.js',
   'assets/ui.js',
   'status/status.js',
+  'status/outages.js',
   'pair/pair.js',
 ];
 
