@@ -37,3 +37,23 @@ function fromMarkup(el) {
 
 for (const el of document.querySelectorAll('[data-horizon]')) drawHorizon(el, fromMarkup(el));
 for (const el of document.querySelectorAll('[data-stars]')) render(html`<${NightSky} />`, el);
+
+// Scrolled past the top, a laptop's trackpad (and a phone) pulls the page
+// down and shows the colour behind it, which would be the page's own (near
+// black, or white): a band above the sky. Behind the top half of a page that
+// opens under the sky, that colour is the sky's top instead, so the sky
+// carries on; past halfway down it stays the page's, under the footer.
+const top = document.body.firstElementChild;
+if (top?.classList.contains('sky-panel')) {
+  const root = document.documentElement;
+  const paint = () => {
+    const high = window.scrollY <= (root.scrollHeight - window.innerHeight) / 2;
+    root.style.backgroundColor = high ? getComputedStyle(top).getPropertyValue('--s0') : '';
+  };
+  paint();
+  addEventListener('scroll', paint, { passive: true });
+  addEventListener('resize', paint);
+  // The sky's colour changes with the hour (sky-phase.js) and the theme.
+  new MutationObserver(paint).observe(root, { attributes: true, attributeFilter: ['data-sky', 'data-theme'] });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', paint);
+}
