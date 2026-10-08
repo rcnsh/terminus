@@ -293,9 +293,13 @@ class LiveService : Service() {
                 // A class: count down to leaving, not to the next bus. Unconfirmed,
                 // the leave time as it was, not "Leave now" for a bus that's gone.
                 val catch = answer.catchLine
-                b.setContentTitle(if (unconfirmed != null) card?.leaveBy ?: answer.leaveHeadline(now) else answer.leaveHeadline(now))
-                    .setContentText(unconfirmed ?: catch)
-                    .setStyle(Notification.BigTextStyle().bigText(listOfNotNull(unconfirmed, catch, answer.leaveNote.takeIf { unconfirmed == null }, answer.goNowLine.takeIf { unconfirmed == null }).joinToString("\n")))
+                // Its bus gone with nothing known: the card's line, never "Leave now"
+                // to someone who may be on it; the next bus is for if you missed it.
+                val gone = card?.gone == true && card.line != null
+                val head = if (gone) card?.line else if (unconfirmed != null) card?.leaveBy ?: answer.leaveHeadline(now) else answer.leaveHeadline(now)
+                b.setContentTitle(head)
+                    .setContentText(unconfirmed ?: if (gone) card?.phaseText ?: catch else catch)
+                    .setStyle(Notification.BigTextStyle().bigText(listOfNotNull(unconfirmed, card?.phaseText.takeIf { gone }, catch, answer.leaveNote.takeIf { unconfirmed == null }, answer.goNowLine.takeIf { unconfirmed == null }).joinToString("\n")))
                     .setSubText(listOfNotNull(answer.destLabel, answer.classAtMs?.let { L.s(R.string.starts_at, fmt(it)) }).joinToString(" · "))
                 // A class card can come without a leave time: no countdown then.
                 return b.countdownTo(countdownAt(answer).takeIf { unconfirmed == null }, now).build()

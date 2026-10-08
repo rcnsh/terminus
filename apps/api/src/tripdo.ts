@@ -39,6 +39,9 @@ const MAX_RETRY_GAP_MS = 8 * 60_000;
 interface Pushed {
   key: string | null;
   phase: string;
+  /** The card's `gone`: the phase stays `heading` when the bus leaves, but
+   *  the phones' "Leave now" must give way to it. */
+  gone?: boolean;
 }
 
 /** What a wake found: when to wake next (null: stop). */
@@ -237,10 +240,10 @@ export class Trip {
     if (!card) return stop;
 
     const last = (await this.storage.get<Pushed>('pushed')) ?? null;
-    const now: Pushed = { key: card.key, phase: card.phase };
+    const now: Pushed = { key: card.key, phase: card.phase, ...(card.gone ? { gone: true } : {}) };
     // Only what was actually pushed counts: one device having fetched a card
     // says nothing about the others. Nothing to say yet is never the first push.
-    const changed = last ? last.key !== now.key || last.phase !== now.phase : now.phase !== 'idle';
+    const changed = last ? last.key !== now.key || last.phase !== now.phase || Boolean(last.gone) !== Boolean(now.gone) : now.phase !== 'idle';
     if (changed) {
       // Wake the phone for what the user should see: time to go, a missed bus.
       // With reminders off too: these are what start the live notification on

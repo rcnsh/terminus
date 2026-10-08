@@ -148,6 +148,13 @@ class AnswerTest {
         assertNotNull(card.nextChangeAtMs)
     }
 
+    @Test fun aBusGoneWithNothingKnownSaysSoNotLeaveNow() {
+        val card = golden("bus-gone").card!!
+        assertTrue(card.gone)
+        assertTrue(card.line!!.startsWith("The 09:06 has left"))
+        assertFalse(golden("class-late").card!!.gone)
+    }
+
     @Test fun staleFollowsTheServer() {
         val a = golden("class-bus")
         val at = a.card!!.staleAtMs!!

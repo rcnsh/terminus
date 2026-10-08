@@ -39,6 +39,7 @@
     "remind": true,
     "suggestion": null,
     "ride": null,
+    "gone": false,
     "walkTo": null,
     "notice": null,
     "h12": false,

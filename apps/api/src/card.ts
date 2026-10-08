@@ -221,6 +221,11 @@ export interface Card {
    *  arrival times (the arrival live when the bus's plate is known), for a
    *  progress bar. Null otherwise. */
   ride: Ride | null;
+  /** The planned bus has left and nothing says whether you're on it (no
+   *  location saw you, on it or at the stop): `line` says it has gone and
+   *  the next way there. A notification says that line, quietly, never
+   *  "Leave now": you may be on board. */
+  gone: boolean;
   /** Where to walk to now, for a maps app's walking directions: the stop to
    *  catch the bus at, or the destination's stop when the answer is to walk.
    *  Null on the bus, at the stop, once there, and with nothing to catch. */
@@ -274,7 +279,7 @@ function staleAtOf(a: MeAnswer, kind: CardKind): number | null {
   return marks.length ? Math.min(...marks) : null;
 }
 
-type V2 = 'phase' | 'phaseText' | 'glance' | 'line' | 'actions' | 'warning' | 'nextChangeAt' | 'remind' | 'suggestion' | 'ride' | 'walkTo';
+type V2 = 'phase' | 'phaseText' | 'glance' | 'line' | 'actions' | 'warning' | 'nextChangeAt' | 'remind' | 'suggestion' | 'ride' | 'gone' | 'walkTo';
 type V1 = Omit<Card, V2 | 'notice' | 'h12' | 'journey' | 'upcoming' | 'title' | 'heading' | 'remindAt'>;
 
 /**
@@ -629,6 +634,8 @@ function v2(
   const busGlance = (leave: Leave) => (svc ? `${svc} ${leave.board ? short(leave.board) : m().now}` : m().walkNow);
 
   // One line and a glance per phase; outside a trip, the answer's own words.
+  // When the plan's bus left, while nothing says whether you're on it (see Card.gone).
+  const goneAt = trip.gone && phase === 'heading' && trip.key && l ? (trip.plan?.board ?? null) : null;
   let line = a.detail ? `${a.label} · ${a.detail.split(' · ')[0]}` : a.label;
   // A clock time, never "4 min": a glance (the Mac's menu bar, a tile) can
   // sit unrefreshed for minutes, and a clock time stays true until the bus
@@ -658,9 +665,9 @@ function v2(
     }
     // The plan's bus gone and nothing saying whether you're on it: the next
     // way there, worded so it's true either way.
-    if (trip.gone && trip.plan?.board && phase === 'heading') {
+    if (goneAt) {
       const next = svc ? `${svc}${l.board ? ` ${est(l.board)}` : ''}` : m().walk;
-      line = m().missedLine(m().busLeft(at(trip.plan.board)), next, a.timing?.status === 'late' ? a.timing.text : null);
+      line = m().missedLine(m().busLeft(at(goneAt)), next, a.timing?.status === 'late' ? a.timing.text : null);
     }
   }
   const onBus = trip.rec?.boarded ?? (trip.assumed ? trip.plan : null);
@@ -692,7 +699,8 @@ function v2(
 
   return {
     phase,
-    phaseText: PHASE_TEXT[phase]?.() ?? null,
+    // Gone: the headline is the next bus, which is only for you if you missed it.
+    phaseText: goneAt ? m().phaseGone : (PHASE_TEXT[phase]?.() ?? null),
     glance,
     line,
     actions,
@@ -701,6 +709,7 @@ function v2(
     remind: trip.remind !== false,
     suggestion: trip.suggestion ?? null,
     ride: phase === 'riding' && onBus ? rideOf(onBus) : null,
+    gone: goneAt !== null,
     walkTo: walkToOf(a, card.kind, phase),
   };
 }

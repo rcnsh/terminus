@@ -374,7 +374,9 @@ async function notifyFromCard(urgent, fetched) {
   const c = a.card;
   let title;
   let body;
-  if (c.phase === 'riding' || c.phase === 'missed') {
+  // The bus gone with nothing known (`gone`): its line, never "Leave now" to
+  // someone who may be on it.
+  if (c.phase === 'riding' || c.phase === 'missed' || c.gone) {
     title = c.line ?? a.label;
     body = a.detail ?? '';
   } else {

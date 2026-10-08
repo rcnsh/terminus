@@ -108,7 +108,7 @@
     "note": null,
     "estimate": null,
     "phase": "heading",
-    "phaseText": "在路上",
+    "phaseText": "如果错过了，这是下一种到达方式。",
     "glance": "D2 09:16",
     "line": "09:06 那班已开走 · 下一班 D2 09:16，约迟到 11 分钟",
     "actions": [
@@ -123,6 +123,7 @@
     "remind": true,
     "suggestion": null,
     "ride": null,
+    "gone": true,
     "walkTo": {
       "name": "PGP",
       "lat": 1.291765,

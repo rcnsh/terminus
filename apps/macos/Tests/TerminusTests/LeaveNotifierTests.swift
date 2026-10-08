@@ -7,13 +7,13 @@ private let now = Date(timeIntervalSince1970: 1_790_000_000)
 
 private func iso(_ d: Date) -> String { ISO8601DateFormatter().string(from: d) }
 
-private func plan(trip: String = "4:600:UTOWN", leaveIn: TimeInterval, phase: String = "idle", remind: Bool = true, reminder: Bool = true) throws -> NextAnswer {
+private func plan(trip: String = "4:600:UTOWN", leaveIn: TimeInterval, phase: String = "idle", remind: Bool = true, reminder: Bool = true, gone: Bool = false) throws -> NextAnswer {
     let leaveAt = now.addingTimeInterval(leaveIn)
     let remindAt = reminder ? "\"\(iso(leaveAt.addingTimeInterval(-300)))\"" : "null"
     let json = """
     {"label":"R2 · 09:42","detail":"","quality":"live","mode":"trip",
      "leave":{"at":"\(iso(leaveAt))","svc":"R2","stop":"PGP"},
-     "card":{"kind":"class","phase":"\(phase)","remind":\(remind),"remindAt":\(remindAt),
+     "card":{"kind":"class","phase":"\(phase)","remind":\(remind),"remindAt":\(remindAt),"gone":\(gone),
        "actions":[{"id":"skipped","label":"Not going","trip":"\(trip)"}]}}
     """
     return try JSONDecoder().decode(NextAnswer.self, from: Data(json.utf8))
@@ -45,6 +45,8 @@ private func plan(trip: String = "4:600:UTOWN", leaveIn: TimeInterval, phase: St
 
 @Test func phasesAndMissingRemindersEndThem() throws {
     #expect(LeaveNotifier.step(try plan(leaveIn: -60, phase: "heading"), soonTrip: nil, soonAt: 0, now: now) == .heading)
+    // The bus gone and nothing known: "Leave now" goes too, as you may be on it.
+    #expect(LeaveNotifier.step(try plan(leaveIn: -60, phase: "heading", gone: true), soonTrip: nil, soonAt: 0, now: now) == .over)
     for phase in ["waiting", "riding", "missed", "arrived", "skipped"] {
         #expect(LeaveNotifier.step(try plan(leaveIn: 600, phase: phase), soonTrip: nil, soonAt: 0, now: now) == .over, "\(phase)")
     }

@@ -173,6 +173,9 @@ data class Card(
     val suggestion: Suggestion? = null,
     /** On the bus: the stops from boarding to getting off, for a progress bar. */
     val ride: Ride? = null,
+    /** The planned bus has left and nothing says whether you're on it: [line]
+     *  says so and gives the next way there. Notified with that, never "Leave now". */
+    val gone: Boolean = false,
     /** Where to walk to now (the bus's stop, or the destination on foot), for walking directions. */
     val walkTo: WalkTo? = null,
     /** "NUS's live bus times have been down since 9:14 AM", above the answer. */
@@ -216,6 +219,7 @@ data class Card(
             remind = o.optBoolean("remind", true),
             suggestion = o.optJSONObject("suggestion")?.let { lenient { Suggestion.parse(it) } },
             ride = o.optJSONObject("ride")?.let { lenient { Ride.parse(it) } },
+            gone = o.optBoolean("gone", false),
             walkTo = o.optJSONObject("walkTo")?.let { lenient { WalkTo.parse(it) } },
             journey = o.optJSONObject("journey")?.let { lenient { Journey.parse(it) } },
             upcoming = o.optJSONObject("upcoming")?.let { lenient { Upcoming.parse(it) } },

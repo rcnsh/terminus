@@ -103,7 +103,8 @@ final class LeaveNotifier: NSObject, UNUserNotificationCenterDelegate {
     enum Step: Equatable {
         /// Past the leave-by: the heads-up goes, "Leave now" stays up.
         case heading
-        /// At the stop, on the bus, missed, there or not going: every reminder goes, and the old question.
+        /// At the stop, on the bus, missed, there, not going, or the bus gone
+        /// with nothing known: every reminder goes, and the old question.
         case over
         /// No reminder for this plan: the leave reminders go.
         case clear
@@ -119,6 +120,8 @@ final class LeaveNotifier: NSObject, UNUserNotificationCenterDelegate {
     nonisolated static func step(_ plan: NextAnswer, soonTrip: String?, soonAt lastSoonAt: Double, now: Date) -> Step {
         let card = plan.card
         let phase = card?.phase ?? "idle"
+        // The bus gone with nothing known: you may be on it, so no "Leave now".
+        if card?.gone == true { return .over }
         // Past the leave-by the phase is "heading" by the clock: "Leave now"
         // stays up (the heads-up it replaces goes).
         if phase == "heading" { return .heading }

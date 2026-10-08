@@ -158,10 +158,16 @@ test('nothing is pushed to ask about the bus, and nothing says you are on it unl
   clock(Date.parse(plan.board) + 30_000);
   await TRIPS.fireAlarms();
   assert.ok(fcm.sent.every((m) => !('ask' in m.data)), 'never a question');
-  // No answer, and the object has no location: not taken to be on it.
+  // No answer, and the object has no location: not taken to be on it. The
+  // phase stays "heading", but the card is now "has left": pushed, quietly,
+  // so the phones drop their "Leave now".
+  const sentBefore = fcm.sent.length;
   clock(Date.parse(plan.board) + 4 * 60_000);
   await TRIPS.fireAlarms();
   assert.ok(fcm.sent.every((m) => m.data.phase !== 'riding'), 'never on the bus without a location seeing it');
+  assert.deepEqual(fcm.sent.slice(sentBefore).map((m) => [m.data.phase, m.android.priority]), [['heading', 'NORMAL']]);
+  await TRIPS.fireAlarms();
+  assert.equal(fcm.sent.length, sentBefore + 1, 'once');
   // An older app's tap still reaches the user's other phones (quietly); this one doesn't need telling.
   await call('/me/push', { method: 'POST', token: tablet, body: { token: 'fcm-tablet' } });
   const before = fcm.sent.length;

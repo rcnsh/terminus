@@ -204,7 +204,7 @@ object LeaveAlerts {
     /** Whether [post] has something to say for this answer: a heads-up without a leave time is left unsaid. */
     private fun sayable(answer: NextAnswer, now: Long): Boolean {
         val phase = answer.card?.phase
-        return phase == "riding" || phase == "missed" || answer.leaveHeadline(now) != null
+        return phase == "riding" || phase == "missed" || answer.card?.gone == true || answer.leaveHeadline(now) != null
     }
 
     /** Turning alerts off, or unpairing. */
@@ -248,10 +248,13 @@ object LeaveAlerts {
         val fmt = { ms: Long -> clock(ctx, ms) }
         val card = answer.card
         // The words follow the trip: the ride or the next way there; before
-        // that, when to leave.
+        // that, when to leave. Its bus gone with nothing known: the card's
+        // line ("The 9:06 has left · next D2 9:16"), never "Leave now" to
+        // someone who may be on it.
         val ride = card?.ride?.takeIf { card.phase == "riding" }
+        val after = card?.phase == "riding" || card?.phase == "missed" || card?.gone == true
         val (title, said) = when {
-            card?.phase == "riding" || card?.phase == "missed" -> (card.line ?: answer.label) to answer.detail
+            after -> (card?.line ?: answer.label) to answer.detail
             else -> (answer.leaveHeadline(now) ?: return false) to (answer.catchLine ?: answer.destLabel.orEmpty())
         }
         val store = Store(ctx)
@@ -269,7 +272,7 @@ object LeaveAlerts {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         // Sound for the heads-up, once; quiet for the rest.
-        val moment = if (card?.phase == "riding" || card?.phase == "missed") store.leaveAlertedMoment else "leave:${answer.classAtMs}"
+        val moment = if (after) store.leaveAlertedMoment else "leave:${answer.classAtMs}"
         val alert = moment != store.leaveAlertedMoment
         store.leaveAlertedMoment = moment
         val n = android.app.Notification.Builder(ctx, CHANNEL)
