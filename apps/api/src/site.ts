@@ -13,6 +13,14 @@ export const siteOrigin = (env: Env): string => env.PUBLIC_ORIGIN || STABLE_ORIG
 
 export const isBeta = (env: Env): boolean => siteOrigin(env) !== STABLE_ORIGIN;
 
+/**
+ * Where links handed to people point: sign-in links, the new-device email,
+ * an error's "create a key at". LINK_ORIGIN when set, for while some
+ * networks refuse terminus.run (NUS Wi-Fi resets connections to a domain
+ * that new), so a link tapped on campus still opens; else the site's own.
+ */
+export const linkOrigin = (env: Env): string => env.LINK_ORIGIN || siteOrigin(env);
+
 /** The site's old addresses, and where each one's pages now live. */
 const MOVED: Record<string, string> = {
   'terminus.rcn.sh': STABLE_ORIGIN,
@@ -34,6 +42,8 @@ const STAYS = ['/download/', '/.well-known/', '/map/', '/robots.txt'];
  * moving back is a change here, not something cached for good.
  */
 export function movedPage(req: Request, env: Env): Response | null {
+  // Off unless MOVE_PAGES is "on" (cloudflare.config.ts says why).
+  if (env.MOVE_PAGES !== 'on') return null;
   if (req.method !== 'GET' && req.method !== 'HEAD') return null;
   const url = new URL(req.url);
   const to = MOVED[url.hostname];

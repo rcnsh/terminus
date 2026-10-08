@@ -31,10 +31,16 @@ scripts use it too. Both addresses stay attached to each Worker
 (`test/deploy.test.js`). The apps' developer menu (Settings, About: always
 in debug and beta builds, after seven taps on the version in a stable
 release) switches between the addresses built in and, in debug builds, the
-dev stub, never a typed one (`Servers.kt`, `Servers` in `Api.swift`). A page
-a browser opens on the old address is redirected to terminus.run
-(`movedPage` in `src/site.ts`); what the apps ask for is not. Sign-in email
-comes from login@terminus.run. The privacy contact stays privacy@rcn.sh,
+dev stub, never a typed one (`Servers.kt`, `Servers` in `Api.swift`).
+
+**NUS Wi-Fi refuses terminus.run for now** (its firewall resets connections
+to so new a domain; found 9 October 2026). Until it loads on campus Wi-Fi,
+emailed links point at terminus.rcn.sh (`LINK_ORIGIN`, `linkOrigin` in
+`src/site.ts`) and the old address's pages are not redirected to
+terminus.run (`movedPage`, off unless `MOVE_PAGES` is `on`). Both are set
+in `cloudflare.config.ts` (`movingOff`), which says how to undo them. Sign-in
+email still comes from login@terminus.run: mail doesn't pass the campus
+firewall. The privacy contact stays privacy@rcn.sh,
 the domain kept for good, so personal requests never go to a lapsed
 terminus.run. So every `terminus.rcn.sh` and `rcn.sh` left in the repo is
 on purpose: don't find-and-replace them.

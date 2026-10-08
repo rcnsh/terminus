@@ -315,6 +315,18 @@ test('on the beta, emails come from "terminus beta" and link to the beta site', 
   assert.doesNotMatch(email.sent.at(-1).text, /https:\/\/terminus\.run/);
 });
 
+test('with LINK_ORIGIN, emailed links go there: the old address, while NUS Wi-Fi refuses terminus.run', async () => {
+  const { env, email } = setup();
+  env.LINK_ORIGIN = 'https://terminus.rcn.sh';
+  // Sign-in links point at the request's own origin here (a .test host
+  // counts as local), so the new-device email, which always uses the site's, shows it.
+  const cookie = await signIn(env, email);
+  const { code } = await (await call(env, '/me/pair-code', { method: 'POST', cookie })).json();
+  await call(env, '/pair', { method: 'POST', body: { code, name: 'Pixel' } });
+  assert.match(email.sent.at(-1).text, /https:\/\/terminus\.rcn\.sh\/account/);
+  assert.doesNotMatch(email.sent.at(-1).text, /https:\/\/terminus\.run/);
+});
+
 test('/me needs a session', async () => {
   const { env } = setup();
   assert.equal((await call(env, '/me')).status, 401);

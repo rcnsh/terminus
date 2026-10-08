@@ -67,7 +67,7 @@ import { residenceStops } from './residences.ts';
 import { MAX_KEYS, createKey, listKeys, revokeKey } from './access.ts';
 import { footM, paceSpeed } from './walk.ts';
 import { clientKey, coordsFrom, json } from './http.ts';
-import { siteOrigin } from './site.ts';
+import { linkOrigin } from './site.ts';
 import { LANG_PREFS, lang, m, useProfileLang } from './i18n.ts';
 import { bandCss, bandHtml, phaseAt, sgtMinute } from './pagesky.ts';
 
@@ -113,12 +113,13 @@ const MAX_BODY_BYTES = 64 * 1024;
 
 /**
  * Where emailed links point. The request's own origin only for local
- * development; otherwise always this Worker's site (stable or beta), whatever
- * hostname the request came in on (a workers.dev preview).
+ * development; otherwise always this Worker's site (stable or beta, as
+ * site.ts linkOrigin says), whatever hostname the request came in on (a
+ * workers.dev preview).
  */
-function linkOrigin(url: URL, env: Env): string {
+function emailOrigin(url: URL, env: Env): string {
   const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname.endsWith('.test');
-  return local ? url.origin : siteOrigin(env);
+  return local ? url.origin : linkOrigin(env);
 }
 
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -912,7 +913,7 @@ export async function handleMe(
     if (human === 'failed') return json({ error: 'the human check failed, try again' }, 400);
     let outcome;
     try {
-      outcome = await requestLink(env, db, email, linkOrigin(url, env), nowMs, body?.next === '/app/');
+      outcome = await requestLink(env, db, email, emailOrigin(url, env), nowMs, body?.next === '/app/');
     } catch (err) {
       // The error text can carry the recipient: log its kind only.
       console.error('sign-in email failed', err instanceof Error ? err.name : typeof err);
@@ -1011,7 +1012,7 @@ export async function handleMe(
     if (current?.user.email) return json({ error: 'this device is already signed in' }, 409);
     let started;
     try {
-      started = await startAppLogin(env, db, { email, name: deviceName(body), client: clientWith(req, body), anonUserId: current?.user.id ?? null }, linkOrigin(url, env), nowMs);
+      started = await startAppLogin(env, db, { email, name: deviceName(body), client: clientWith(req, body), anonUserId: current?.user.id ?? null }, emailOrigin(url, env), nowMs);
     } catch (err) {
       console.error('sign-in email failed', err instanceof Error ? err.name : typeof err);
       return json({ error: 'could not send the email, try again later' }, 502);
