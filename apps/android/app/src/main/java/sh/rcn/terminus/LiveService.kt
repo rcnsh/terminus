@@ -50,6 +50,8 @@ class LiveService : Service() {
     @Volatile private var handledStartId = 0
     /** A start while the loop runs (a push: the card changed) fetches now rather than at the next turn. */
     private val wake = Channel<Unit>(Channel.CONFLATED)
+    /** A push said the card changed: the next turn fetches, however new the kept answer. */
+    @Volatile private var force = false
     /** Following the trip by location ("Notice when I board"), when a tap started it. */
     @Volatile private var watch: TripWatch? = null
 
@@ -67,6 +69,7 @@ class LiveService : Service() {
             return START_NOT_STICKY
         }
         lastStartId = startId
+        if (intent?.getBooleanExtra(EXTRA_FORCE, false) == true) force = true
         // Must be in the foreground within seconds of starting, before any fetch.
         val store = Store(this)
         val cached = store.lastAnswer()
@@ -146,11 +149,13 @@ class LiveService : Service() {
         var failures = 0
         while (scope.isActive) {
             handledStartId = lastStartId
+            val pushed = force.also { force = false }
             if (!store.liveUpdates || !store.paired || !LeaveAlerts.canNotify(this, CHANNEL)) break
-            // An answer fetched a moment ago (the leave check that started this) isn't asked for again.
-            val fresh = store.lastAnswer()?.second?.let { System.currentTimeMillis() - it in 0 until FRESH_MS } == true
+            // An answer fetched a moment ago (the leave check that started this)
+            // isn't asked for again; after a push it is: the card changed since.
+            val fresh = !pushed && store.lastAnswer()?.second?.let { System.currentTimeMillis() - it in 0 until FRESH_MS } == true
             if (!sendFix(store) && !fresh) {
-                if (Refresher.refresh(this) != null) failures = 0 else failures++
+                if (Refresher.refresh(this, force = pushed) != null) failures = 0 else failures++
             }
             // Refused as too old: no more asking until the app is updated.
             if (Outdated.holding() || !store.paired) break
@@ -216,6 +221,8 @@ class LiveService : Service() {
         const val ACTION_START = "sh.rcn.terminus.LIVE_START"
         const val ACTION_WATCH = "sh.rcn.terminus.LIVE_WATCH"
         const val ACTION_UNWATCH = "sh.rcn.terminus.LIVE_UNWATCH"
+        /** Started by a push: the card changed, so the answer is fetched even if just kept. */
+        private const val EXTRA_FORCE = "force"
         /** From "time to go" until you're there. */
         val TRIP_PHASES = setOf("due", "heading", "waiting", "riding", "missed")
 
@@ -223,11 +230,13 @@ class LiveService : Service() {
          * Starts the live notification when it's on and can be seen. False when
          * it isn't, or Android refused the start (from the background, outside
          * the moments it allows: a high-priority push, an exact alarm, boot).
+         * [force] (a push) fetches at once, past the answer kept a moment ago.
          */
-        fun start(ctx: Context): Boolean {
+        fun start(ctx: Context, force: Boolean = false): Boolean {
             val store = Store(ctx)
             if (!store.liveUpdates || !store.paired || !LeaveAlerts.canNotify(ctx, CHANNEL)) return false
-            return runCatching { ctx.startForegroundService(Intent(ctx, LiveService::class.java)) }.isSuccess
+            val intent = Intent(ctx, LiveService::class.java).putExtra(EXTRA_FORCE, force)
+            return runCatching { ctx.startForegroundService(intent) }.isSuccess
         }
 
         /**
