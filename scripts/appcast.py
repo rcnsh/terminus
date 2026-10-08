@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The Sparkle appcast for one Mac release: one item, the new version.
 
-    scripts/appcast.py <version> <build> <min-os> <ed-signature> <dmg> <site>
+    scripts/appcast.py <version> <build> <min-os> <ed-signature> <dmg> <site> <stable|beta>
 
 Sparkle compares <build> (CFBundleVersion). The DMG is named by its path
 under <site>/download/, as /download/releases/<version>/ serves it.
@@ -9,10 +9,12 @@ under <site>/download/, as /download/releases/<version>/ serves it.
 import email.utils, os, sys
 from xml.sax.saxutils import escape, quoteattr
 
-version, build, min_os, sig, dmg, site = sys.argv[1:]
+version, build, min_os, sig, dmg, site, channel = sys.argv[1:]
+if channel not in ('stable', 'beta'):
+    sys.exit(f'the channel is stable or beta, not {channel!r}')
 url = f'{site}/download/releases/{version}/terminus-{version}.dmg'
-title = 'terminus beta' if 'beta.' in site else 'terminus'
-notes = f'https://github.com/rcnsh/terminus/releases/tag/v{version}' if title == 'terminus' else site
+title = 'terminus beta' if channel == 'beta' else 'terminus'
+notes = site if channel == 'beta' else f'https://github.com/rcnsh/terminus/releases/tag/v{version}'
 # Every value escaped, attributes quoted: none of these should ever hold
 # '<' or '&', but an appcast that breaks would stop every Mac updating.
 title_x, site_x, notes_x = escape(title), escape(site), escape(notes)

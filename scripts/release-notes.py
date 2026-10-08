@@ -33,6 +33,12 @@ def git(*args: str) -> str:
     return subprocess.run(['git', *args], capture_output=True, text=True, check=True).stdout
 
 
+def escape_html(s: str) -> str:
+    """'<', '>' and '&' as text, outside `code`, where GitHub shows them as typed."""
+    parts = re.split(r'(`[^`]*`)', s)
+    return ''.join(p if p.startswith('`') else p.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;') for p in parts)
+
+
 def sha(path: str) -> str:
     return hashlib.sha256(open(path, 'rb').read()).hexdigest()
 
@@ -59,6 +65,9 @@ def notes(version: str, tag: str, prev: str, apk: str, mac: str, channel: str = 
     highlights = open('RELEASE_NOTES.md').read() if os.path.exists('RELEASE_NOTES.md') else ''
     first, _, rest = highlights.partition('\n')
     has_highlights = first.strip() == f'<!-- {version} -->'
+    marker = re.fullmatch(r'<!--\s*(.*?)\s*-->', first.strip())
+    if marker and not has_highlights:
+        print(f'warning: RELEASE_NOTES.md is for {marker[1]}, not {version}; its highlights are left out', file=sys.stderr)
     if has_highlights:
         out.append(rest.strip() + '\n')
 
@@ -80,7 +89,7 @@ def notes(version: str, tag: str, prev: str, apk: str, mac: str, channel: str = 
                 continue  # the version bump itself
             if s.startswith('[ImgBot]') or s == 'optimize images':
                 continue  # image compression, nothing to see
-            s = s[:1].upper() + s[1:]
+            s = escape_html(s[:1].upper() + s[1:])
             # The first sentence of each commit subject.
             changes.append('- ' + re.split(r'(?<=[a-z0-9)`"])\. (?=[A-Z`])', s, maxsplit=1)[0].rstrip('.'))
         if changes:
