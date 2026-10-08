@@ -861,7 +861,7 @@ private struct PairCodeCard: View {
                 // A character at a time: read as a word, "K7Q" is mumbled.
                 .accessibilityLabel(L("Pairing code") + L(", ") + code.map(String.init).joined(separator: " "))
             Text(L("Or scan this with a phone's camera:")).font(.callout)
-            if let qr = qrImage("\(Api.site)/pair?code=\(code)") {
+            if let qr = qrImage("\(Api.linkBase)/pair?code=\(code)") {
                 Image(nsImage: qr).interpolation(.none).resizable().frame(width: 160, height: 160)
                     .accessibilityLabel(L("QR code for pairing code %@", code))
             }

@@ -258,7 +258,7 @@ struct SettingsPaneView: View {
         }
     }
 
-    private func openAccountPage() { NSWorkspace.shared.open(URL(string: "\(Api.site)/account/#account")!) }
+    private func openAccountPage() { NSWorkspace.shared.open(URL(string: "\(Api.linkBase)/account/#account")!) }
 }
 
 /**

@@ -950,6 +950,11 @@ struct Api {
     static let site = Bundle.main.object(forInfoDictionaryKey: "TerminusSite") as? String ?? stableSite
     /// The site as people type it, for text.
     static var siteHost: String { site.replacingOccurrences(of: "https://", with: "") }
+    /// Where links open (the account page, downloads, pairing QR codes): the
+    /// old address, kept for good like the API's, so a Mac never updated
+    /// keeps working if the site moves, and because NUS Wi-Fi refuses
+    /// terminus.run for now. The server sends those pages on to [site] once it can.
+    static let linkBase = Servers.defaultBase
     static var isBeta: Bool { site != stableSite }
     /// Where requests go: the server chosen (Servers), or TERMINUS_API_BASE=http://localhost:8787
     /// for the local dev stub (apps/api/scripts/dev-stub.mjs).

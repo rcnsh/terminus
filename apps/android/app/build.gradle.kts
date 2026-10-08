@@ -109,16 +109,19 @@ androidComponents {
 }
 
 /**
- * One channel's site and name. SITE is the address people see, where links
- * go (the account page, pairing QR codes). API_BASE is where the app's
- * requests go: the site's old address, the one kept for good, so an app
- * never updated keeps working if SITE moves; or, in a debug build given
- * `-PapiBase` (above), that. SERVERS are the others the developer menu
- * offers (Servers.kt).
+ * One channel's site and name. SITE is the address people see, the one
+ * the app's text names. API_BASE is where the app's requests go: the site's
+ * old address, the one kept for good, so an app never updated keeps working
+ * if SITE moves; or, in a debug build given `-PapiBase` (above), that.
+ * LINK_BASE is where links open (the account page, downloads, pairing QR
+ * codes): the old address too, for the same reason, and because NUS Wi-Fi
+ * refuses terminus.run for now; the server sends those pages on to SITE once
+ * it can. SERVERS are the others the developer menu offers (Servers.kt).
  */
 fun com.android.build.api.dsl.ApplicationProductFlavor.site(site: String, packageName: String, name: String, oldHost: String) {
     buildConfigField("String", "SITE", "\"$site\"")
     buildConfigField("String", "API_BASE", "\"https://$oldHost\"")
+    buildConfigField("String", "LINK_BASE", "\"https://$oldHost\"")
     buildConfigField("String", "SERVERS", "\"https://$oldHost $site\"")
     manifestPlaceholders["siteHost"] = site.removePrefix("https://")
     // The old address, which the app calls, and whose pairing links open it.
