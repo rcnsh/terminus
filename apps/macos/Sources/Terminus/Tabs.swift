@@ -54,40 +54,55 @@ struct Tabs: View {
             ForEach(Array(all.enumerated()), id: \.element.0) { i, entry in
                 let (tab, title, icon) = entry
                 let on = tab == current
-                Button {
-                    withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85)) { choose(tab) }
-                } label: {
-                    Label(title, systemImage: icon)
-                        .font(.system(size: 12, weight: on ? .semibold : .medium))
-                        .labelStyle(TabLabelStyle(icons: icons))
-                        .foregroundStyle(on ? .primary : .secondary)
-                        .fixedSize()
-                        .padding(.horizontal, inset)
-                        .padding(.vertical, 6)
-                        .frame(maxWidth: .infinity)
-                        .background {
-                            if on {
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(.primary.opacity(0.12))
-                                    .matchedGeometryEffect(id: "pill", in: pill)
-                            }
-                        }
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(title)
-                .accessibilityValue(L("Tab %@ of %@", "\(i + 1)", "\(all.count)"))
-                .accessibilityAddTraits(on ? .isSelected : [])
-                .id(tab)
-                // An added place's ×: off the tabs, as on the phone.
-                if case .code(let c, _) = tab, let p = model.added.first(where: { $0.code == c }) {
-                    Button { model.removeAdded(p) } label: {
-                        Image(systemName: "xmark").font(.system(size: 10, weight: .bold)).foregroundStyle(.secondary).padding(.trailing, 4)
+                // An added place carries its own ×, inside its tab, so it reads
+                // as removing that place rather than closing the row.
+                let added: AppModel.AddedPlace? = if case .code(let c, _) = tab { model.added.first(where: { $0.code == c }) } else { nil }
+                HStack(spacing: 0) {
+                    Button {
+                        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85)) { choose(tab) }
+                    } label: {
+                        Label(title, systemImage: icon)
+                            .font(.system(size: 12, weight: on ? .semibold : .medium))
+                            .labelStyle(TabLabelStyle(icons: icons))
+                            .foregroundStyle(on ? .primary : .secondary)
+                            .fixedSize()
+                            .padding(.leading, inset)
+                            .padding(.trailing, added == nil ? inset : 5)
+                            .padding(.vertical, 6)
+                            .frame(maxWidth: added == nil ? .infinity : nil)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .help(L("Remove %@", p.label))
-                    .accessibilityLabel(L("Remove %@", p.label))
+                    .accessibilityLabel(title)
+                    .accessibilityValue(L("Tab %@ of %@", "\(i + 1)", "\(all.count)"))
+                    .accessibilityAddTraits(on ? .isSelected : [])
+                    if let p = added {
+                        Button { model.removeAdded(p) } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                                .padding(.trailing, max(inset - 3, 4))
+                                .padding(.vertical, 6)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .help(L("Remove %@", p.label))
+                        .accessibilityLabel(L("Remove %@", p.label))
+                    }
                 }
+                .frame(maxWidth: .infinity)
+                .background {
+                    if on {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(.primary.opacity(0.12))
+                            .matchedGeometryEffect(id: "pill", in: pill)
+                    } else if added != nil {
+                        // Outlined when not chosen, so the × is seen to belong to this tab.
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .strokeBorder(.primary.opacity(0.1))
+                    }
+                }
+                .id(tab)
             }
         }
         .padding(3)
