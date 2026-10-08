@@ -2,7 +2,7 @@
 // out and moves between them). Each saves as it changes, through the shared
 // profile (profile.js).
 
-import { Rich, html, noteRow, refocusAfterRemove, store, useEffect, useMemo, useRef, useState, useStore } from '../assets/ui.js';
+import { Rich, html, noteRow, reducedMotion, refocusAfterRemove, store, useEffect, useMemo, useRef, useState, useStore } from '../assets/ui.js';
 import { api, clock, clockOpts, forgetAccountHere, locale, locationError, spaced, t } from './dom.js';
 import { Journey, STYLES, cardStyle, setCardStyle, styleHint, styleName } from './journey.js';
 import {
@@ -597,6 +597,12 @@ function AddClass() {
   const [end, setEnd] = useState('');
   const [label, setLabel] = useState('');
   const endBox = useRef(null);
+  const form = useRef(null);
+  // The form opens below the list, often off the screen: scroll just far
+  // enough to show all of it, so opening it visibly does something.
+  useEffect(() => {
+    if (open) form.current?.scrollIntoView({ block: 'nearest', behavior: reducedMotion() ? 'auto' : 'smooth' });
+  }, [open]);
   const submit = (e) => {
     e.preventDefault();
     const to = resolveWhere(picked.current, where.current.input.value);
@@ -616,7 +622,7 @@ function AddClass() {
   return html`
     <button type="button" class="add-row" aria-expanded=${open} onClick=${() => setOpen(!open)}>${t('Add a class or commitment by hand')}</button>
     ${open &&
-    html`<div class="group-body add-form">
+    html`<div class="group-body add-form" ref=${form}>
       <form class="grid" onSubmit=${submit}>
         <label>${t('Day')}
           <select name="day" required value=${day} onChange=${(e) => setDay(e.currentTarget.value)}>

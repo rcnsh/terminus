@@ -83,6 +83,8 @@ struct TimetablePane: View {
     @State private var link = ""
     @State private var importOpen = false
     @State private var adding = false
+    @Environment(\.settingsScroll) private var scroll
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -99,6 +101,16 @@ struct TimetablePane: View {
             classes
             DisclosureGroup(L("Add a class or commitment by hand"), isExpanded: $adding) {
                 AddClassForm(app: app, setup: setup) { adding = false }.padding(.top, 6)
+            }
+            .id(Self.addID)
+            // It opens below the list, often past the window's edge: scroll just
+            // far enough to show all of it, once it has opened.
+            .onChange(of: adding) { _, open in
+                guard open else { return }
+                Task {
+                    try? await Task.sleep(for: .milliseconds(200))
+                    withAnimation(reduceMotion ? nil : .default) { scroll?.scrollTo(Self.addID) }
+                }
             }
             DisclosureGroup(L("Import from NUSMods"), isExpanded: $importOpen) {
                 VStack(alignment: .leading, spacing: 6) {
@@ -123,6 +135,8 @@ struct TimetablePane: View {
             importOpen = setup.classes.isEmpty || setup.me?.needsReimport == true
         }
     }
+
+    private static let addID = "add-class"
 
     private var summary: String? {
         let n = setup.classes.count
