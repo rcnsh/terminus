@@ -12,9 +12,53 @@ private func golden(_ name: String) throws -> NextAnswer {
     return try JSONDecoder().decode(NextAnswer.self, from: data)
 }
 
-@Test(arguments: ["class-bus", "class-walk", "class-late", "class-from-dorm", "class-started", "class-room", "place", "landmark", "room", "arrived", "free", "rest", "home", "home-reached", "evening-home", "setup", "riding", "scheduled", "no-timetable"])
-func everyGoldenAnswerDecodesWithACard(name: String) throws {
-    #expect(try golden(name).card != nil)
+/// Every golden there is, English and Chinese ("zh/free"), found in the
+/// directory: a new one is read without being listed here.
+func goldenNames() -> [String] {
+    let dir = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("../api/test/fixtures/answers").standardized
+    let names = { (sub: String) in
+        ((try? FileManager.default.contentsOfDirectory(atPath: dir.appendingPathComponent(sub).path)) ?? [])
+            .filter { $0.hasSuffix(".json") }
+            .map { (sub.isEmpty ? "" : "\(sub)/") + String($0.dropLast(5)) }
+    }
+    return (names("") + names("zh")).sorted()
+}
+
+@Test func theGoldensAreFound() {
+    #expect(goldenNames().count >= 40)
+}
+
+/// By the endpoint each answers: /me/nearby has `stops`, /me/day `items`,
+/// the rest are /me/next with a card. The card's parts are read leniently,
+/// so one that no longer decodes would just vanish: each one sent must
+/// come through.
+@Test(arguments: goldenNames())
+func everyGoldenAnswerDecodes(name: String) throws {
+    let dir = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("../api/test/fixtures/answers").standardized
+    let data = try Data(contentsOf: dir.appendingPathComponent("\(name).json"))
+    let json = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+    if json["stops"] != nil {
+        struct R: Decodable { let stops: [NearbyStop] }
+        #expect(try !JSONDecoder().decode(R.self, from: data).stops.isEmpty)
+        return
+    }
+    if json["items"] != nil {
+        #expect(try !JSONDecoder().decode(DayPlan.self, from: data).items.isEmpty)
+        return
+    }
+    let a = try JSONDecoder().decode(NextAnswer.self, from: data)
+    let card = try #require(a.card, "\(name) has a card")
+    let sent = try #require(json["card"] as? [String: Any])
+    let present = { (key: String) in sent[key] != nil && !(sent[key] is NSNull) }
+    if present("journey") { #expect(card.journey != nil, "card.journey") }
+    if present("ride") { #expect(card.ride != nil, "card.ride") }
+    if present("upcoming") { #expect(card.upcoming != nil, "card.upcoming") }
+    if present("suggestion") { #expect(card.suggestion != nil, "card.suggestion") }
+    #expect(card.actions?.count ?? 0 == (sent["actions"] as? [Any])?.count ?? 0, "card.actions")
 }
 
 @Test func crowdIsShownOnceWhenTheDetailSaysIt() throws {
