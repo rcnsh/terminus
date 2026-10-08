@@ -59,6 +59,13 @@ test('the beta shares no database, store, bucket, limit, dataset, Worker or doma
   }
 });
 
+test('each site answers on its address and its old one, which installed apps still call', () => {
+  // A deploy detaches any custom domain missing here, so a lost line takes
+  // the old address, and every app built with it, offline at once.
+  assert.deepEqual(STABLE.domains, ['terminus.run', 'terminus.rcn.sh']);
+  assert.deepEqual(BETA.domains, ['beta.terminus.run', 'beta.terminus.rcn.sh']);
+});
+
 test('the beta knows it is the beta, and writes its analytics to its own dataset', () => {
   // site.ts isBeta reads PUBLIC_ORIGIN; admin.ts queries AE_DATASET.
   assert.equal(STABLE.env.PUBLIC_ORIGIN, undefined);
