@@ -92,16 +92,28 @@ android {
     }
 }
 
+// `-PapiBase` points a debug build's API elsewhere: `./gradlew
+// -PapiBase=http://localhost:8787 installStableDebug` plus `adb reverse
+// tcp:8787 tcp:8787` uses the dev stub. Debug builds only, so a stray
+// property (say, in ~/.gradle/gradle.properties) can never ship a release
+// that talks to a laptop.
+val apiBase = providers.gradleProperty("apiBase").orNull
+androidComponents {
+    onVariants(selector().withBuildType("debug")) { variant ->
+        if (apiBase != null) {
+            variant.buildConfigFields?.put("API_BASE", com.android.build.api.variant.BuildConfigField("String", "\"$apiBase\"", "-PapiBase"))
+        }
+    }
+}
+
 /**
  * One channel's site and name. SITE is where links go (the account page,
- * pairing QR codes); API_BASE is the same unless `-PapiBase` points a debug
- * build elsewhere: `./gradlew -PapiBase=http://localhost:8787
- * installStableDebug` plus `adb reverse tcp:8787 tcp:8787` uses the dev stub.
+ * pairing QR codes); API_BASE is the same, except in a debug build given
+ * `-PapiBase` (above).
  */
 fun com.android.build.api.dsl.ApplicationProductFlavor.site(site: String, packageName: String, name: String) {
     buildConfigField("String", "SITE", "\"$site\"")
-    val apiBase = project.providers.gradleProperty("apiBase").orElse(site).get()
-    buildConfigField("String", "API_BASE", "\"$apiBase\"")
+    buildConfigField("String", "API_BASE", "\"$site\"")
     manifestPlaceholders["siteHost"] = site.removePrefix("https://")
     resValue("string", "app_name", name)
     // Push: this package's Firebase app from google-services.json (not in
