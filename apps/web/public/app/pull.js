@@ -10,8 +10,10 @@
 // does the same, by the same numbers.
 //
 // The bus that drives is the horizon's own (the card's bus, one parked or
-// passing), taken from where it stands: it's hidden while this one drives,
-// and back where the answer puts it once the sky closes.
+// passing), taken from where it stands: it's hidden while this one drives.
+// The sky closes a second after the pill says how it went, without waiting
+// for the bus, which comes back in from the left at its own pace to where
+// the answer puts the horizon's own, and hands over to it there.
 //
 // Touch only: with a mouse there's the timed refresh, and pulling is never
 // the only way to new times. One fetch per pull, of what the tab asks for
@@ -20,7 +22,8 @@
 // Buses when the timed refresh brings new times.
 //
 // The numbers are pure and tested (web-pull.test.js). The drawing moves a
-// few SVG nodes over the horizon each frame, only while the sky is pulled.
+// few SVG nodes over the horizon each frame, only while the sky is pulled
+// or the bus is on its way back.
 
 import { announce, html, reducedMotion, useEffect, useRef } from '/assets/ui.js';
 import { t } from '/account/dom.js';
@@ -152,9 +155,10 @@ export function PullToRefresh({ enabled, refresh, colours }) {
     const page = document.body;
 
     // `page`: idle, drag (following the finger), cancel (springing back
-    // unarmed), hold (waiting at PULL.hold), closing. `mode`: what the bus is
-    // doing: follow (the pull), board, go (pulling away), loop (others
-    // passing), gone.
+    // unarmed), hold (waiting at PULL.hold), closing (then the bus finishing
+    // its way back with the sky shut). `mode`: what the bus is doing: follow
+    // (the pull), board, go (pulling away), loop (others passing), back
+    // (coming home).
     const st = { page: 'idle', mode: 'follow', pull: 0, v: 0, x: 0, lastX: 0, busV: 0, smV: 0, smA: 0, tilt: 0, tiltV: 0, kneel: 0, kneelV: 0, wheel: 0, dist: 0 };
     // The horizon on screen, and what's on it: its width in its own numbers, low or not, its own sign, where the bus came from.
     let hz = null;
@@ -202,7 +206,7 @@ export function PullToRefresh({ enabled, refresh, colours }) {
       const { from, colour } = busOf(horizon);
       // With less motion, Now's own bus stays where it is and only the sign lights; a horizon without one gets a bus standing at the stop.
       const own = Boolean(horizon?.querySelector(OWN));
-      hz = { el: horizon, low, k, vw, from, own, signed: Boolean(horizon?.querySelector('.sign')), drive: !calm || !own };
+      hz = { el: horizon, low, k, vw, from, colour, own, signed: Boolean(horizon?.querySelector('.sign')), drive: !calm || !own };
       scene.setAttribute('viewBox', low ? `0 6 ${vw} 52` : `0 0 ${vw} 92`);
       page.classList.toggle('pull-drive', !calm);
       Object.assign(st, { page: 'drag', mode: 'follow', v: 0, busV: 0, tilt: 0, tiltV: 0, kneel: 0, kneelV: 0, smV: 0, smA: 0 });
@@ -227,6 +231,13 @@ export function PullToRefresh({ enabled, refresh, colours }) {
       props.current.refresh().then(settle, () => settle('failed'));
     }
 
+    /** Where the bus comes back to: where the horizon has its own now (the answer may have moved it), else your stop. */
+    function home() {
+      if (!hz.own) return stopAt(hz.vw);
+      const { from } = busOf(hz.el);
+      return from === OFF_LEFT ? stopAt(hz.vw) : from;
+    }
+
     function step(dt, now) {
       const { vw, low, from } = hz;
       const stop = stopAt(vw);
@@ -237,7 +248,11 @@ export function PullToRefresh({ enabled, refresh, colours }) {
         else [st.pull, st.v] = spring(st.pull, st.v, to, st.page === 'closing' ? 240 : 190, st.page === 'closing' ? 31 : 26, dt);
         if (st.page !== 'hold' && st.pull < 0.4 && Math.abs(st.v) < 5) {
           st.pull = 0;
-          st.page = 'idle';
+          st.v = 0;
+          // The sky doesn't wait for the bus, nor the bus for the sky: it drives on home, unhurried.
+          // Without a bus of the horizon's own, it went with the sign as the sky closed.
+          const back = calm || !hz.drive || !hz.own || st.page === 'cancel' || (st.mode === 'back' && Math.abs(st.x - home()) < 1);
+          if (back) st.page = 'idle';
         }
       }
       const nowArmed = st.page === 'drag' && st.pull >= PULL.arm;
@@ -280,12 +295,20 @@ export function PullToRefresh({ enabled, refresh, colours }) {
           if (st.mode === 'go') st.busV += 900 * dt;
           st.x += st.busV * dt;
           if (st.x > vw + 20) {
-            // Off the right edge: another service comes round while it's still checking.
-            if (st.page === 'hold' && !shownAt && loop.length) {
-              paint(loop[next++ % loop.length]);
+            // Off the right edge: another service comes round while it's still checking, else the horizon's own coming back.
+            if (st.page === 'hold' && !shownAt) {
+              paint(loop.length ? loop[next++ % loop.length] : hz.colour);
               Object.assign(st, { mode: 'loop', x: OFF_LEFT, lastX: OFF_LEFT, busV: 340 });
-            } else st.mode = 'gone';
+            } else {
+              paint(hz.colour);
+              Object.assign(st, { mode: 'back', x: OFF_LEFT - 10, lastX: OFF_LEFT - 10, busV: 0 });
+            }
           }
+        } else if (st.mode === 'back') {
+          // Eases in to its place, from off the left.
+          const to = home();
+          st.x += (to - st.x) * (1 - Math.exp(-dt * 6));
+          if (Math.abs(st.x - to) < 0.05) st.x = to;
         }
         // Suspension: the body pitches with its acceleration and settles on a spring; it kneels at the stop.
         const v = (st.x - st.lastX) / Math.max(dt, 1 / 240);
@@ -315,7 +338,8 @@ export function PullToRefresh({ enabled, refresh, colours }) {
       const { el: horizon, low, vw, own, signed, drive } = hz;
       page.style.setProperty('--stretch', `${Math.round(p)}px`);
       page.style.setProperty('--lead', `${Math.round(p * PULL.lead)}px`);
-      page.classList.toggle('pulled', p > 0.5);
+      // Still over the horizon with the sky shut while the bus comes back.
+      page.classList.toggle('pulled', p > 0.5 || st.page === 'closing');
       // The scene over the horizon on screen, wherever the stretch has put it.
       const r = horizon?.getBoundingClientRect();
       if (r) Object.assign(scene.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
@@ -330,7 +354,8 @@ export function PullToRefresh({ enabled, refresh, colours }) {
       const g = groundAt(st.x, low);
       const bob = calm ? 0 : st.kneel + 0.25 * Math.sin(st.dist / 5) * clamp(Math.abs(st.smV) / 200);
       bus.setAttribute('transform', `translate(${st.x.toFixed(2)} ${(g.y - 13.2).toFixed(2)}) rotate(${g.tilt.toFixed(2)} 19 13)`);
-      bus.style.opacity = !drive ? 0 : calm && !own ? shown.toFixed(3) : 1;
+      // Without a bus of the horizon's own, it sinks away with the sign as the sky closes.
+      bus.style.opacity = !drive ? 0 : !own && calm ? shown.toFixed(3) : !own && st.page === 'closing' ? clamp((p - 6) / 34).toFixed(3) : 1;
       body.setAttribute('transform', `translate(0 ${bob.toFixed(3)}) rotate(${(calm ? 0 : st.tilt).toFixed(3)} 7.5 12)`);
       for (const [i, wh] of wheels.entries()) wh.setAttribute('transform', `translate(${WHEELS[i]} 12) rotate(${((st.wheel * 180) / Math.PI) % 360})`);
       puffs.replaceChildren(
