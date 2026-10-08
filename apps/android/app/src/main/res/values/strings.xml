@@ -612,5 +612,6 @@
     <string name="pull_let_go">Let go to refresh</string>
     <string name="pull_updated">Updated just now</string>
     <string name="pull_up_to_date">Up to date</string>
+    <string name="pull_up_to_date_next_s">Up to date, next update in %1$d s</string>
     <string name="pull_failed">Couldn\'t update</string>
 </resources>

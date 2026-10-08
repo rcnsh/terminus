@@ -14,6 +14,7 @@ import kotlinx.coroutines.withContext
 import sh.rcn.terminus.Api
 import sh.rcn.terminus.ApiError
 import sh.rcn.terminus.Board
+import sh.rcn.terminus.BusTimes
 import sh.rcn.terminus.CampusMap
 import sh.rcn.terminus.Line
 import sh.rcn.terminus.Locator
@@ -136,6 +137,25 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
         }
         return Pull.outcome(fetched = true, ok = (answeredAt[key] ?: 0) >= start)
     }
+
+    /** When the screen's timed refresh next runs (BusesScreen's `Refreshing`), for a pull that asked nothing. */
+    var nextTimedAt: Long? = null
+
+    /**
+     * When the timed refresh brings new times for [key]: at its next run,
+     * or the one after when that's too soon after [key] was last asked
+     * ([MIN_GAP_MS]) and it will skip it. Null with none due.
+     */
+    private fun nextUpdateAt(key: String): Long? {
+        val at = nextTimedAt?.takeIf { it > System.currentTimeMillis() } ?: return null
+        return if (at - (asked[key] ?: 0) < MIN_GAP_MS) at + BusTimes.REFRESH_MS else at
+    }
+
+    /** When new times come for the page for [code] (null: the nearest stop), for its pull. */
+    fun pageNextAt(code: String?): Long? = nextUpdateAt(pageBoard(code) ?: NEAREST)
+
+    /** When new times come for a service's line, for its pull. */
+    fun lineNextAt(svc: String, from: String?): Long? = nextUpdateAt("line:${lineKey(svc, from)}")
 
     /** The page for [code] (null: the nearest stop) pulled down. */
     suspend fun pullPage(code: String?): PullOutcome = pulled(pageBoard(code) ?: NEAREST) { refreshPage(code, force = true) }

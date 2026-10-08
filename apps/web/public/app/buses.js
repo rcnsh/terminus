@@ -171,6 +171,8 @@ const homePages = () => pagesOf(nearest.get(), pins());
 
 /** A timed refresh still on its way: the next one waits for it, rather than piling up on a slow connection. */
 let pending = null;
+/** When the next timed refresh runs (Date.now()), for a pull that brought nothing new to say; 0 while the tab is hidden. */
+let nextTimedAt = 0;
 
 /**
  * The board on screen, fetched again: the page shown, the stop's own page, or
@@ -194,7 +196,10 @@ function refreshNow() {
 /**
  * Pulled down to refresh (pull.js): what's on screen fetched again, the
  * nearest stop found again too (you may have moved), unless its times came
- * under PULL_FRESH_MS ago. How it went: 'updated', 'fresh' or 'failed'.
+ * under PULL_FRESH_MS ago. How it went: 'updated', 'failed', or
+ * { state: 'fresh', inS }: nothing asked, and the timed refresh brings new
+ * times in `inS` seconds (null if none is due), so "Updated 9 s ago" still
+ * counting doesn't read as the pull having failed.
  */
 export async function pullRefresh() {
   const r = route.get();
@@ -205,7 +210,7 @@ export async function pullRefresh() {
     return code ? boards.get().get(shownCode(code)) : null;
   };
   const was = shown();
-  if (was?.at && !was.error && Date.now() - was.at < PULL_FRESH_MS) return 'fresh';
+  if (was?.at && !was.error && Date.now() - was.at < PULL_FRESH_MS) return { state: 'fresh', inS: nextTimedAt ? Math.max(1, Math.ceil((nextTimedAt - Date.now()) / 1000)) : null };
   const asked = Date.now();
   // The nearest stop's page, or the page still finding it: found again, its board with it.
   if (page && page.kind !== 'pinned') {
@@ -700,7 +705,11 @@ export function BusesTab({ visible, here }) {
     const now = route.get();
     if (now.kind === 'stop') showBoard(now.code);
     else if (now.kind === 'line') loadLine(now.svc, now.stop);
-    const timer = setInterval(() => document.visibilityState === 'visible' && refresh(), REFRESH_MS);
+    nextTimedAt = Date.now() + REFRESH_MS;
+    const timer = setInterval(() => {
+      nextTimedAt = Date.now() + REFRESH_MS;
+      if (document.visibilityState === 'visible') refresh();
+    }, REFRESH_MS);
     const clockTimer = setInterval(() => tick.set(serverNow()), 5_000);
     const back = () => {
       if (document.visibilityState !== 'visible') return;
@@ -709,6 +718,7 @@ export function BusesTab({ visible, here }) {
     };
     document.addEventListener('visibilitychange', back);
     return () => {
+      nextTimedAt = 0;
       clearInterval(timer);
       clearInterval(clockTimer);
       document.removeEventListener('visibilitychange', back);

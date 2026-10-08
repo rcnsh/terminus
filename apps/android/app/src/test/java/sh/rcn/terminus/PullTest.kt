@@ -66,6 +66,14 @@ class PullTest {
         assertEquals(700L, Pull.minShowMs(PullOutcome.Updated))
     }
 
+    @Test fun upToDateSaysWhenTheNextTimesCome() {
+        val now = 1_000_000L
+        assertEquals(9, Pull.inS(now + 8_200, now))
+        assertEquals(1, Pull.inS(now + 30, now))
+        assertNull("no timed refresh due", Pull.inS(null, now))
+        assertNull("one already past says nothing", Pull.inS(now - 1, now))
+    }
+
     @Test fun theHorizonsPlacesAreTheOnesItDraws() {
         // Your stop's sign left of the flag (at 0.76 across), the bus short of it.
         assertTrue(sign < width * 0.76f - 6)

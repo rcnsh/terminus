@@ -616,6 +616,7 @@ window.TERMINUS_ZH = {
  "Pull to refresh": "下拉刷新",
  "Let go to refresh": "松开刷新",
  "Up to date": "已是最新",
+ "Up to date, next update in {0} s": "已是最新，{0} 秒后更新",
  "Couldn't update": "无法更新",
  "Tap a service to see its whole line.": "点一条线路，查看它经过的所有车站。",
  "No line to show for {0}.": "{0} 没有可显示的路线。",

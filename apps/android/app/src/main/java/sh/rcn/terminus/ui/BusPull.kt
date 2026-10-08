@@ -120,6 +120,8 @@ internal class PullView(val motion: PullMotion) {
 
     /** The pill's words; null at rest, so it's only composed while pulling. */
     var hint by mutableStateOf<PullHint?>(null)
+    /** With [PullHint.UpToDate]: the seconds until new times come, when the screen knows ([Pull.inS]). */
+    var nextInS by mutableStateOf<Int?>(null)
     /** The bus's paint; with no service of its own, the horizon's shuttle ([SHUTTLE]). */
     var livery = SHUTTLE
     var others: List<Long> = emptyList()
@@ -142,7 +144,9 @@ internal val LocalPull = staticCompositionLocalOf<PullView?> { null }
 
 /**
  * [content] with pull to refresh: [onRefresh] asks again (or not, inside
- * [Pull.FRESH_MS]) and says how it went. The bus is in [livery] (null: the
+ * [Pull.FRESH_MS]) and says how it went; when it didn't ask, [nextUpdateAt]
+ * (null: unknown) is when the screen's timed refresh brings new times, for
+ * the pill to say. The bus is in [livery] (null: the
  * horizon's shuttle); others go round in the other services' colours. [scene] gives the
  * horizon's places for the screen's width in dp. [content] lays out the
  * room ([PullRoom]) and draws the horizon with the [PullView] it's given
@@ -154,6 +158,7 @@ internal fun BusPull(
     scene: (Float) -> PullScene,
     onRefresh: suspend () -> PullOutcome,
     modifier: Modifier = Modifier,
+    nextUpdateAt: () -> Long? = { null },
     enabled: Boolean = true,
     content: @Composable (PullView) -> Unit,
 ) {
@@ -163,6 +168,7 @@ internal fun BusPull(
     val own = livery ?: SHUTTLE
     val others = remember(own) { LIVERY.map { it.second }.filter { it != own && it != GREY } }
     val ask by rememberUpdatedState(onRefresh)
+    val nextAt by rememberUpdatedState(nextUpdateAt)
     val on by rememberUpdatedState(enabled)
     val sceneOf by rememberUpdatedState(scene)
     val scope = rememberCoroutineScope()
@@ -227,6 +233,7 @@ internal fun BusPull(
                             } catch (_: Exception) {
                                 PullOutcome.Failed
                             }
+                            pv.nextInS = if (outcome == PullOutcome.UpToDate) Pull.inS(nextAt(), System.currentTimeMillis()) else null
                             motion.done(outcome)
                             kick()
                         }
@@ -288,7 +295,7 @@ internal fun PullRoom(base: Dp = 0.dp, above: Dp = 0.dp, below: Dp = 0.dp) {
         return
     }
     val hint = pv.hint
-    Layout(content = { if (hint != null) Pill(hint, pv.motion.calm) }, modifier = Modifier.fillMaxWidth()) { measurables, constraints ->
+    Layout(content = { if (hint != null) Pill(hint, pv.motion.calm, pv.nextInS) }, modifier = Modifier.fillMaxWidth()) { measurables, constraints ->
         val m = pv.read()
         val pills = measurables.map { it.measure(Constraints()) }
         val room = (base.toPx() + m.pull * density).roundToInt()
@@ -312,12 +319,12 @@ internal fun PullRoom(base: Dp = 0.dp, above: Dp = 0.dp, below: Dp = 0.dp) {
  * for "Couldn't update". Only what changes on its own is read out.
  */
 @Composable
-private fun Pill(hint: PullHint, calm: Boolean) {
+private fun Pill(hint: PullHint, calm: Boolean, nextInS: Int?) {
     val ink = LocalContentColor.current
     val tones = LocalSkyTones.current
     val chip = tones?.chip ?: MaterialTheme.colorScheme.surfaceVariant
     val good = tones?.good ?: GOOD
-    val words = stringResource(
+    val words = if (hint == PullHint.UpToDate && nextInS != null) stringResource(R.string.pull_up_to_date_next_s, nextInS) else stringResource(
         when (hint) {
             PullHint.Pull -> R.string.pull_to_refresh
             PullHint.LetGo -> R.string.pull_let_go
