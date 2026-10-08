@@ -70,4 +70,22 @@ class QuietTest {
         Outdated.served()
         assertFalse(Outdated.required)
     }
+
+    /** As the server: signing in or out and leaving still go to an outdated app. */
+    @Test fun anOutdatedAppCanStillSignOutAndLeave() {
+        assertTrue(Outdated.gated("GET", "/me/next"))
+        assertTrue(Outdated.gated("GET", "/me/next?lat=1.29"))
+        assertTrue(Outdated.gated("POST", "/me/push"))
+        assertTrue(Outdated.gated("GET", "/me"))
+        assertFalse(Outdated.gated("DELETE", "/me/push"))
+        assertFalse(Outdated.gated("DELETE", "/me"))
+        assertFalse(Outdated.gated("POST", "/auth/logout"))
+        assertFalse(Outdated.gated("POST", "/auth/anon"))
+        assertFalse(Outdated.gated("POST", "/pair"))
+        assertFalse(Outdated.gated("POST", "/pair/check"))
+        assertFalse(Outdated.gated("GET", "/download/latest.json"))
+        assertTrue(Outdated.gated("GET", "/campus"))
+        assertTrue(Outdated.gated("GET", "/buses?svc=A1"))
+        assertTrue(Outdated.gated("POST", "/me/pair-code"))
+    }
 }
