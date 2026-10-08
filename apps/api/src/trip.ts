@@ -146,12 +146,12 @@ export interface DayRecord {
   date: string;
   trips: Record<string, TripRecord>;
   /** The bus each trip's plan said to catch, kept from when the trip was due
-   *  and frozen once it left, so "On the 9:41 D2?" is still about that bus
-   *  after the answer has moved on to the next one. */
+   *  and frozen once it left, so a trip taken to be on that bus ("On the
+   *  D2") stays about it after the answer has moved on to the next one. */
   plans?: Record<string, Boarded>;
   /** When the phone last sent a location during a trip (epoch ms, kept to the
-   *  minute): while it's recent, the trip is being followed and nobody is
-   *  asked what happened (card.ts). Never where. */
+   *  minute): while it's recent, the trip is being followed by location
+   *  (card.ts). Never where. */
   followed?: number;
   /** When the object next wakes to push (epoch ms), or absent when it
    *  won't: the Worker asks again only when that would be sooner

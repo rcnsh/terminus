@@ -412,7 +412,7 @@ const ARM_AT_ONCE = 20;
  * A Trip object only wakes (and pushes) after a request asks it to, and a
  * web app on the Home Screen makes none unless it's opened; the Android app
  * does from its background refresh. Asked here each morning, it works out
- * the card, wakes at the next change (time to go, the question), and keeps
+ * the card, wakes at the next change (time to go, the bus leaving), and keeps
  * going for the day; on a day without classes it just stops.
  */
 export async function armTrips(env: Env, nowMs: number, batch = ARM_BATCH): Promise<number> {

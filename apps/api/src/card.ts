@@ -41,7 +41,7 @@ export interface TripView {
   undo?: { key: string; label: string | null } | null;
   /** The bus the plan says to catch, kept once the answer has moved on to riding. */
   plan?: Boarded | null;
-  /** The phase is the plan's, not something anyone said (no answer to the question). */
+  /** The phase is the plan's, not something detection saw (nothing said otherwise once its bus left). */
   assumed?: boolean;
   /** The plan's bus differs from the one remembered for this trip (the caller saves it). */
   planChanged?: boolean;
@@ -51,8 +51,8 @@ export interface TripView {
   suggestion?: Suggestion | null;
   /** Today was set to "Not on campus" (phase 8.3): offer "Back on campus". */
   away?: boolean;
-  /** The phone is following this trip by location (phase 8.1): nobody is
-   *  asked what happened, it's worked out. */
+  /** The phone is following this trip by location (phase 8.1): what
+   *  happened is worked out from where it is. */
   followed?: boolean;
   /** A trip this request's location says is over (home, in your
    *  residence, or at the destination): the caller records it as reached. */
@@ -563,9 +563,9 @@ function slotOf(text: string, make: (t: string) => string): string | null {
 }
 
 /**
- * When the trip's phase or its question next changes by itself: due, the
- * leave-by, the bus leaving (the question), "no answer means on it", the
- * class starting, the ride ending. Null outside a trip. The Trip object
+ * When the trip's phase next changes by itself: due, the leave-by, the
+ * planned bus leaving, taken to be on it (ASSUME_MS later, when nothing
+ * said otherwise), the class starting, the ride ending. Null outside a trip. The Trip object
  * wakes at this to push; the card's nextChangeAt also counts going stale.
  */
 export function nextPhaseAt(a: MeAnswer, trip: TripView, nowMs: number, leaveGapMs = 0): number | null {
