@@ -533,6 +533,10 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 .compose-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 8px 8px 16px; border-top: 1px solid var(--line); }
 .compose-count { color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; transition: color 0.2s; }
 .compose-count.near { color: var(--warn); }
+/* A stop suggestion's fields each take the row's width, as its stop menu does. */
+.stop-suggestion .field-control { flex-basis: 100%; }
+.stop-suggestion .field-control > input, .stop-suggestion .field-control > select { width: 100%; }
+.stop-suggestion .compose-msg:empty { display: none; }
 .compose-msg { margin: 10px 4px 0; }
 .compose-wrong { display: flex; gap: 12px; align-items: flex-start; margin-top: 20px; padding: 14px 16px; }
 .compose-wrong svg { flex: none; width: 20px; height: 20px; margin-top: 2px; fill: none; stroke: var(--muted); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }

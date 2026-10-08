@@ -132,11 +132,20 @@ export function venueStops(venue: string): { to: string; also: string[]; walkM: 
 function venueEntry(venue: string): VenueEntry | null {
   const v = venue.trim().toUpperCase();
   if (VENUES.venues[v]) return VENUES.venues[v];
-  const building = v.split('-')[0];
-  if (VENUES.venues[building]) return VENUES.venues[building];
+  const code = venueBuilding(v);
+  return code ? VENUES.venues[code] : null;
+}
+
+/**
+ * The building a venue is in, as data/src/venue-stops.json names it: `LT21`
+ * for `LT21-0001` or `lt21`. Null for a code the table doesn't know.
+ */
+export function venueBuilding(venue: string): string | null {
+  const building = venue.trim().toUpperCase().split('-')[0];
+  if (VENUES.venues[building]) return building;
   // Trailing digits sometimes distinguish rooms in a bare code (COM1 vs COM12).
   const stripped = building.replace(/\d+$/, '');
-  if (stripped && VENUES.venues[stripped]) return VENUES.venues[stripped];
+  if (stripped && VENUES.venues[stripped]) return stripped;
   return null;
 }
 

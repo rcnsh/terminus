@@ -855,7 +855,12 @@ Settings. It uses the same routes as the account page, with the session cookie.
   to leave" is under Notifications. Send feedback posts a note to `/me/feedback`
   as `kind: 'other'`; a wrong answer is better reported from under the card,
   which attaches it. The page is laid out as a message (From, the note, a
-  counter and Send). Feedback and wrong-answer reports both need a note and
+  counter and Send). Under it, "A better stop for a building" takes
+  a building (or a room in it), the stop you use and why, as `kind: 'stop'`
+  with `venue` and `stop`: kept as feedback with the reason `better-stop`
+  and the suggestion as its `context`, and emailed with the entry for
+  `data/src/venue-stops.json`, ready to check and paste. A building the
+  table doesn't know, or the stop (or its twin) it has already, is refused. Feedback and wrong-answer reports both need a note and
   an account with an email, so the operator's inbox only gets reports that
   say something, from someone who can be answered; an anonymous account is
   asked to sign in instead. (`reply_to` on old feedback rows is from when an
@@ -1520,7 +1525,7 @@ down is counted on its dashboard as the error `cron feed down`.
   walk from the room's usual stop, not the one you get off at. And path
   length can't tell an easy walk from a hard one: a stop the map wrongly
   prefers needs an entry in `data/src/venue-stops.json`, found by someone
-  who walks it.
+  who walks it: the apps' Send feedback page asks for these.
 
 - `RIDE.secondsPerHop` is a **guessed constant** and the ranking inherits its
   error. It separates a 2-hop ride from a 14-hop ride, which is the case that

@@ -371,6 +371,16 @@ final class SetupModel {
         }
     }
 
+    /// A stop suggestion: the stop the person uses for a building. Nil when it went, else why not.
+    func suggestStop(_ building: String, stop: String, why: String) async -> String? {
+        do {
+            try await api.suggestStop(venue: building.trimmingCharacters(in: .whitespaces), stop: stop, why: why.trimmingCharacters(in: .whitespacesAndNewlines))
+            return nil
+        } catch {
+            return failureMessage(error, otherwise: L("Couldn't reach terminus. Try again in a moment."))
+        }
+    }
+
     /// Download my data: the export, saved where the person picks.
     func export() async {
         do {

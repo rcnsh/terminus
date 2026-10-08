@@ -1292,7 +1292,7 @@ const NOTE_WARN = 900;
  * from, the note, then a counter and Send. Only an account with an email can
  * send one (so there's someone to reply to); without one, the page asks for
  * an email instead. A wrong answer is better sent from under the card, with
- * the answer.
+ * the answer. Under it, a stop suggestion (StopSuggestion).
  */
 export function Feedback({ me, onAddEmail }) {
   const [note, setNote] = useState('');
@@ -1349,6 +1349,61 @@ export function Feedback({ me, onAddEmail }) {
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 5.5h15v10h-8l-4 3.5v-3.5h-3z" /><path d="M12 8.5v3M12 13.6v.1" /></svg>
         <p><span class="row-title">${t('A wrong answer?')}</span><span class="hint">${t('Press “Is this wrong?” under it, so we see what you saw.')}</span></p>
       </div>
+    </form>
+    <${StopSuggestion} />
+  `;
+}
+
+/**
+ * "A better stop for a building": the building (typed, or picked
+ * from the campus's), the stop you use for it and why, sent to
+ * /me/feedback as `kind: 'stop'`. The map's nearest stop is sometimes the
+ * one nobody uses (a climb, no crossing); only someone who walks it knows.
+ */
+function StopSuggestion() {
+  const c = useStore(campus);
+  const buildings = useMemo(() => (c?.destinations ?? []).filter((d) => d.kind === 'building').sort((a, b) => a.code.localeCompare(b.code)), [c]);
+  const [venue, setVenue] = useState('');
+  const [stop, setStop] = useState('');
+  const [why, setWhy] = useState('');
+  const [msg, setMsg] = useState('');
+  const [sending, setSending] = useState(false);
+  const ready = !sending && venue.trim() !== '' && stop !== '';
+  const send = async (e) => {
+    e.preventDefault();
+    if (!ready) return;
+    setSending(true);
+    setMsg('');
+    try {
+      await api('/me/feedback', { method: 'POST', body: { kind: 'stop', venue: venue.trim(), stop, note: why.trim(), platform: 'web' } });
+      setVenue('');
+      setStop('');
+      setWhy('');
+      setMsg(t('Thanks. We’ll walk it and change the stop if it’s better.'));
+    } catch (err) {
+      setMsg(err.message);
+    } finally {
+      setSending(false);
+    }
+  };
+  return html`
+    <form class="stop-suggestion" onSubmit=${send}>
+      <${Group} id="suggest-title" title=${t('A better stop for a building')} hint=${t('If we send you to a stop you never use for a building, tell us the one you do.')}>
+        <${Field} id="suggest-venue" label=${t('Building')} sub=${t('As on your timetable, like LT21')}>
+          <input id="suggest-venue" list="suggest-buildings" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="40" placeholder=${'LT21'} value=${venue} onInput=${(e) => (setVenue(e.currentTarget.value), setMsg(''))} />
+          <datalist id="suggest-buildings">${buildings.map((b) => html`<option key=${b.code} value=${b.code}>${b.label}</option>`)}</datalist>
+        <//>
+        <${Field} id="suggest-stop" label=${t('The stop you use')}>
+          <${StopSelect} id="suggest-stop" value=${stop} blank=${t('Choose a stop')} onChange=${(v) => (setStop(v), setMsg(''))} />
+        <//>
+        <${Field} id="suggest-why" label=${t('Why')} sub=${t('Optional')}>
+          <input id="suggest-why" maxlength="1000" placeholder=${t('A path leads straight there')} value=${why} onInput=${(e) => setWhy(e.currentTarget.value)} />
+        <//>
+        <div class="field suggest-foot">
+          <button type="submit" class="btn small" disabled=${!ready}>${sending ? t('Sending…') : t('Suggest this stop')}</button>
+        </div>
+      <//>
+      <p class="hint compose-msg" role="status">${msg}</p>
     </form>
   `;
 }

@@ -1123,9 +1123,16 @@ struct Api {
         try await feedback(kind: "other", note: note)
     }
 
+    /// A stop suggestion: the stop the person uses for a building, and why.
+    /// Needs an account with an email.
+    func suggestStop(venue: String, stop: String, why: String) async throws {
+        try await feedback(kind: "stop", note: why, extra: ["venue": venue, "stop": stop])
+    }
+
     /// A note to /me/feedback with this build's version, and for a report the answer it's about.
-    private func feedback(kind: String, note: String, reason: String? = nil, context: Any? = nil) async throws {
+    private func feedback(kind: String, note: String, reason: String? = nil, context: Any? = nil, extra: [String: String] = [:]) async throws {
         var body: [String: Any] = ["kind": kind, "note": note, "platform": "mac"]
+        body.merge(extra) { a, _ in a }
         if let reason { body["reason"] = reason }
         if let v = Api.version { body["appVersion"] = v }
         if let context { body["context"] = context }

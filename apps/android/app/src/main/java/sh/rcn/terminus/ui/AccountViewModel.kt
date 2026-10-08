@@ -474,6 +474,16 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** A stop suggestion: the stop the person uses for [venue], a building. */
+    fun suggestStop(venue: String, stop: String, why: String, onSent: () -> Unit) {
+        attempt({ it.copy(busy = false) }) {
+            _state.update { it.copy(busy = true) }
+            api().suggestStop(venue, stop, why.trim(), BuildConfig.VERSION_NAME)
+            _state.update { it.copy(busy = false, message = L.s(R.string.suggest_thanks)) }
+            onSent()
+        }
+    }
+
     /** Download my data, into the file the person picked. */
     fun exportTo(uri: android.net.Uri) {
         attempt {

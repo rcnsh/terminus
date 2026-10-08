@@ -426,7 +426,8 @@ private struct DeveloperSection: View {
 /// A note to the operator about anything, written like a message: who it's
 /// from, the note, then Send. Only an account with an email can send one, so
 /// there's someone to reply to; without one, the pane asks for an email. A
-/// wrong answer is better sent from under the card.
+/// wrong answer is better sent from under the card. Under that, a stop
+/// suggestion (`StopSuggestion`).
 struct FeedbackPane: View {
     let app: AppModel
     let setup: SetupModel
@@ -498,6 +499,7 @@ struct FeedbackPane: View {
             }
             .card(padding: 10)
             .accessibilityElement(children: .combine)
+            StopSuggestion(setup: setup)
         }
     }
 
@@ -554,6 +556,70 @@ struct FeedbackPane: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+}
+
+/// "A better stop for a building": the building, the stop you use for it and
+/// why, sent as a stop suggestion. The map's nearest stop is sometimes the
+/// one nobody uses (a climb, no crossing); only someone who walks it knows.
+struct StopSuggestion: View {
+    let setup: SetupModel
+    @State private var building = ""
+    @State private var stop = ""
+    @State private var why = ""
+    @State private var result: String?
+    @State private var sent = false
+    @State private var sending = false
+
+    private var canSend: Bool { !building.trimmingCharacters(in: .whitespaces).isEmpty && !stop.isEmpty && !sending }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(L("A better stop for a building")).font(.headline).padding(.horizontal, 4).accessibilityAddTraits(.isHeader)
+            VStack(alignment: .leading, spacing: 10) {
+                LabeledContent(L("Building")) {
+                    TextField(L("Building"), text: $building, prompt: Text(verbatim: "LT21"))
+                        .labelsHidden()
+                        .frame(maxWidth: 220)
+                }
+                LabeledContent(L("The stop you use")) {
+                    if let campus = setup.campus {
+                        StopMenu(campus: campus, label: L("The stop you use"), selection: stop, blank: L("Choose a stop")) { stop = $0 }
+                    } else {
+                        ProgressView().controlSize(.small)
+                    }
+                }
+                LabeledContent(L("Why (optional)")) {
+                    TextField(L("Why (optional)"), text: $why, prompt: Text(L("A path leads straight there")))
+                        .labelsHidden()
+                        .frame(maxWidth: 220)
+                }
+                HStack {
+                    Spacer()
+                    Button(L("Suggest this stop")) {
+                        sending = true
+                        result = nil
+                        Task {
+                            result = await setup.suggestStop(building, stop: stop, why: why)
+                            sent = result == nil
+                            if sent { building = ""; stop = ""; why = "" }
+                            sending = false
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!canSend)
+                }
+            }
+            .card(padding: 12)
+            .onChange(of: building) { _, _ in result = nil; sent = false }
+            .onChange(of: stop) { _, _ in result = nil; if !stop.isEmpty { sent = false } }
+            Text(L("If we send you to a stop you never use for a building, tell us the one you do."))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 4)
+            if sent { Text(L("Thanks. We’ll walk it and change the stop if it’s better.")).foregroundStyle(.secondary).padding(.horizontal, 4).announced(L("Thanks. We’ll walk it and change the stop if it’s better.")) }
+            if let result { Text(result).foregroundStyle(Color.bad).fixedSize(horizontal: false, vertical: true).padding(.horizontal, 4).announced(result) }
+        }
     }
 }
 
