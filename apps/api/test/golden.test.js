@@ -47,6 +47,14 @@ for (const code of ['PGP', 'PGPR', 'COM3', 'UTOWN', 'KR-MRT', 'KR-MRT-OPP', 'CLB
   ];
 }
 
+// Late on a weekday: only the services that run past 19:30 (R1, R2 and P have stopped).
+const LATE_FEED = {
+  PGP: [
+    { name: 'D2', arrivalTime: '4', nextArrivalTime: '14', passengers: 'low' },
+    { name: 'A1', arrivalTime: '9', nextArrivalTime: '19', passengers: 'low' },
+  ],
+};
+
 /**
  * An account with `profile`, signed in on the web, and a way to ask it things.
  *
@@ -103,6 +111,17 @@ const cls = (arriveByMin, to, label, venue = '') => ({ day: THU, arriveByMin, en
 const DORM = 'lat=1.2915&lon=103.7828'; // inside PGP
 const CLB = 'lat=1.2966&lon=103.7724';
 const AT_COM3 = 'lat=1.294431&lon=103.775217';
+const AT_UTOWN = 'lat=1.303876&lon=103.774621';
+const AT_PGP = 'lat=1.291765&lon=103.780419'; // the PGP bus stop
+const THU_DATE = '2026-08-27';
+
+/** An imported NUSMods timetable for semester 1 of 2026/27: a class at 10:00 on each of `days`, teaching weeks 1 to 13. */
+const nusmods = (...days) => ({
+  home: { stops: ['PGP'] },
+  term: { acadYear: '2026/2027', semester: 1 },
+  trips: days.map((day) => ({ day, arriveByMin: 600, endMin: 720, weeks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], to: 'UTOWN', label: 'GEA1000 @ UTown', venue: '' })),
+  places,
+});
 
 const CASES = {
   'class-bus': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')], places }, '/me/next'],
@@ -138,6 +157,52 @@ const CASES = {
   // The day the apps keep for when they're offline (see offline-day.json):
   // a class, a long gap home, a class, the way home.
   'day': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown'), cls(840, 'COM3', 'CS2030 @ COM1', 'COM1')], places }, '/me/day'],
+
+  // Monday 9 November 2026, Deepavali (observed): Sunday hours. At 08:30 the
+  // D2 starts at 09:00 and R2 (which runs from 08:20 on a weekday) not at all,
+  // so the 10:00 class's bus is the first D2.
+  'holiday-class': [{ home: { stops: ['PGP'] }, manual: [{ ...cls(600, 'UTOWN', 'GEA1000 @ UTown'), day: 1 }], places }, '/me/next', { at: sgtAt('2026-11-09', '08:30'), feed: {} }],
+  // The same holiday with an imported timetable: Monday's class doesn't run,
+  // it says why, and Tuesday's is next.
+  'holiday-nusmods': [nusmods(1, 2), '/me/next', { at: sgtAt('2026-11-09', '08:30'), feed: {} }],
+  // An imported timetable on a Thursday in week 3: the class runs, ending about half an hour early.
+  'nusmods-class': [nusmods(THU), '/me/next'],
+  // Its Tuesday class off for the recess (22 Sep), reading week (17 Nov),
+  // the exams (24 Nov) and the vacation (8 Dec), each said plainly.
+  'nusmods-recess': [nusmods(2), '/me/next', { at: sgtAt('2026-09-22', '09:00') }],
+  'nusmods-reading': [nusmods(2), '/me/next', { at: sgtAt('2026-11-17', '09:00') }],
+  'nusmods-exams': [nusmods(2), '/me/next', { at: sgtAt('2026-11-24', '09:00') }],
+  'nusmods-vacation': [nusmods(2), '/me/next', { at: sgtAt('2026-12-08', '09:00') }],
+  // Friday 00:20 in Singapore is still Thursday in UTC: Friday's 10:00 class
+  // is today's, not tomorrow's. No bus runs (nor does the feed list one).
+  'sgt-midnight': [{ home: { stops: ['PGP'] }, manual: [{ ...cls(600, 'COM3', 'CS2030 @ COM1'), day: 5 }], places }, '/me/next', { at: sgtAt('2026-08-28', '00:20'), feed: {} }],
+  // The same, with the class at 00:30: a 15-minute walk away, so late, and
+  // the card says when you'll get there, not when you would have.
+  'sgt-midnight-class': [{ home: { stops: ['PGP'] }, manual: [{ ...cls(30, 'COM3', 'CS2030 @ COM1'), day: 5 }], places }, '/me/next', { at: sgtAt('2026-08-28', '00:20'), feed: {} }],
+
+  // Thursday 23:10, on campus at UTown, home at PGP: every service has
+  // stopped (the feed lists nothing), so it's the walk home, said plainly.
+  'after-last-bus': [{ home: { stops: ['PGP'] }, places }, `/me/next?${AT_UTOWN}`, { at: sgtAt(THU_DATE, '23:10'), feed: {} }],
+  // Thursday 22:40, outside your day, at PGP with home at UTown: the D2
+  // home, warned that it stops running at 23:00.
+  'last-bus-warning': [{ home: { stops: ['UTOWN'] }, places }, `/me/next?${AT_PGP}`, { at: sgtAt(THU_DATE, '22:40'), feed: LATE_FEED }],
+  // Thursday 06:30, a class at UTown at 08:00, the feed empty: the first D2
+  // (07:15) is the way there, and the wait for it doesn't make walking win.
+  'before-first-bus': [{ home: { stops: ['PGP'] }, manual: [cls(480, 'UTOWN', 'GEA1000 @ UTown')], places }, '/me/next', { at: sgtAt(THU_DATE, '06:30'), feed: {} }],
+
+  // NUS's feed can't be reached and nothing is cached: no time is made up.
+  // Every bus is 'unknown', worded "no live times", and its leg has none.
+  'feed-down': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')], places }, '/me/next', { upstream: { fail: true } }],
+  // A good reading three minutes ago, then the feed fails: that reading,
+  // counted down to now, said to be three minutes old, as of when it was read.
+  'stale': [{ home: { stops: ['PGP'] }, places }, '/me/next?place=mrt', {
+    at: FROZEN_NOW - 3 * MIN,
+    before: async (get) => {
+      await get('/me/next?place=mrt');
+      get.advance(3 * MIN);
+      get.upstream({ fail: true });
+    },
+  }],
 };
 
 // Each case again with the account set to Chinese (phase 10), in zh/: the
