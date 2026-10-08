@@ -198,7 +198,7 @@ let tilesFetching = null;
 
 /**
  * The campus map file, in the byte ranges MapLibre asks for. The first time,
- * from the network as asked, while the whole file (about 4 MB) is kept in
+ * from the network as asked, while the whole file (about 3 MB) is kept in
  * the background; after that, from the kept copy, checked weekly for a newer
  * one. The Cache API can't keep partial (206) replies, hence the whole file.
  */

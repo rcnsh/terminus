@@ -183,7 +183,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * "Go later today" (phase 8.3): a one-off trip to the place on screen,
+     * "Go later today": a one-off trip to the place on screen,
      * planned like a class. The plan comes back, so show it.
      */
     fun goLater(atMin: Int) {
@@ -286,7 +286,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun clearReportResult() = _state.update { it.copy(reportResult = null) }
 
     /**
-     * A card button: "On the D2", "Missed it", "Not going". The server records
+     * A card button: "Not going", "Not on campus today", "Back on campus" or
+     * "Undo" (skipped, away, back, reset). The server records
      * it for every device and answers with the new planned answer. "Not going"
      * is a swipe off Today by another name, so it goes the same way: off the
      * list at once, with the same Undo bar.

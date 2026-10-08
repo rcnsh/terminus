@@ -6,7 +6,7 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 import java.time.Instant
 
-/** The ride on the bus (phase 6): parsed from card.ride, placed by the clock. */
+/** The ride on the bus: parsed from card.ride, placed by the clock. */
 class RideTest {
     init { TestStrings.install() }
 

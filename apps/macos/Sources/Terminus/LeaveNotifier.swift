@@ -5,7 +5,7 @@ import os
 
 private let log = Logger(subsystem: "sh.rcn.terminus", category: "notify")
 
-/// When to leave, as local notifications (phase 7): a heads-up at the card's
+/// When to leave, as local notifications: a heads-up at the card's
 /// `remindAt`, and "Leave now" at the leave-by. The server decides which trips
 /// get one (no `remindAt`, no reminder) and words them, like every other client. Nothing asks what happened afterwards: the trip
 /// follows the plan and the phone's location.

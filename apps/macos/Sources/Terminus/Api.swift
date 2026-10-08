@@ -720,7 +720,7 @@ func sentence(_ text: String) -> String {
     guard let first = text.first else { return text }
     let s = first.uppercased() + text.dropFirst()
     if ".!?。！？".contains(s.last!) { return s }
-    // Chinese (phase 10) ends with a full-width stop.
+    // Chinese ends with a full-width stop.
     return s.unicodeScalars.contains { (0x4E00...0x9FFF).contains($0.value) } ? s + "。" : s + "."
 }
 
@@ -732,7 +732,7 @@ struct Api {
     /// The site as people type it, for text.
     static var siteHost: String { site.replacingOccurrences(of: "https://", with: "") }
     static var isBeta: Bool { site != stableSite }
-    /// Override with TERMINUS_API_BASE=http://localhost:8787 for a local wrangler dev.
+    /// Override with TERMINUS_API_BASE=http://localhost:8787 for the local dev stub (apps/api/scripts/dev-stub.mjs).
     static let base = devOverride("TERMINUS_API_BASE") ?? site
 
     /// An environment override for local development: any URL in a debug
@@ -804,7 +804,7 @@ struct Api {
         try await feedback(kind: "wrong", note: note, context: answer.flatMap { try? JSONSerialization.jsonObject(with: $0) })
     }
 
-    // MARK: setup and devices (phase 7): the account page's routes, from the app
+    // MARK: setup and devices: the account page's routes, from the app
 
     /// The profile as the server keeps it, kept as JSON so fields this version
     /// doesn't know about survive a save.
@@ -879,7 +879,7 @@ struct Api {
         try JSONDecoder().decode(Me.self, from: await send("GET", "/me"))
     }
 
-    /// A one-off trip later today (phase 8.3), planned like a class. Answers with the new plan.
+    /// A one-off trip later today, planned like a class. Answers with the new plan.
     func once(_ target: Target, atMin: Int) async throws -> NextAnswer {
         var body: [String: Any] = ["atMin": atMin]
         switch target {

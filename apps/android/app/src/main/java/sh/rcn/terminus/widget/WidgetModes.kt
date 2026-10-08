@@ -43,7 +43,7 @@ import sh.rcn.terminus.Target
 import sh.rcn.terminus.hour12
 
 /**
- * What a widget shows (phase 8.3). The timetable's plan by default; a row of
+ * What a widget shows. The timetable's plan by default; a row of
  * buttons switches it, in place, to the buses near you or the quickest way
  * from where you are to one of the places you usually go. Each widget keeps
  * its own choice.

@@ -236,7 +236,7 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
         if (!state.showNearby && state.target == Target.Plan) state.day?.let {
             DayTimeline(it, state.swipeHint, state.swipePeek, vm::removeFromToday, vm::swipePeeked)
         }
-        // Somewhere else: going there later today, planned like a class (phase 8.3).
+        // Somewhere else: going there later today, planned like a class.
         if (!state.showNearby && state.target != Target.Plan && state.paired) {
             TimeButton(stringResource(R.string.go_later), null, vm::goLater, Modifier.padding(top = 8.dp), initial = ::soonOnCampus)
         }
@@ -336,7 +336,7 @@ internal fun NotifyToggle(title: String, hint: String, on: Boolean, onChange: (B
 }
 
 /**
- * "Notice when I board" (phase 8.1): the live notification follows the trip by
+ * "Notice when I board": the live notification follows the trip by
  * location. Needs notifications and precise location, asked for on the way to on.
  */
 @Composable

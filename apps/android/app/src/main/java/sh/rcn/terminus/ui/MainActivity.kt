@@ -460,8 +460,6 @@ private fun fadeThrough(): ContentTransform =
     (fadeIn(tween(210, delayMillis = 90, easing = LinearOutSlowInEasing)) + scaleIn(tween(210, delayMillis = 90, easing = LinearOutSlowInEasing), initialScale = 0.92f))
         .togetherWith(fadeOut(tween(90, easing = FastOutLinearInEasing)))
 
-/** The account's limit on saved places (PROFILE_LIMITS.places in the API). */
-
 /** Android 12 has no per-app language: the activity starts again in the chosen one (Lang.wrap). */
 private fun recreateOn12(ctx: Context) {
     if (android.os.Build.VERSION.SDK_INT < 33) (ctx as? android.app.Activity)?.recreate()
