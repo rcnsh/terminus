@@ -1,0 +1,13 @@
+# What scripts/map-tiles.sh uploads to R2. Written by --update; a normal
+# run uploads nothing unless what it builds matches every line. Protomaps
+# keeps a build about a week, so upload soon after committing this.
+build=20261007
+bbox=103.755,1.280,103.830,1.332
+minzoom=12
+pmtiles_version=1.31.2
+pmtiles_sha256=1ea23294cba14532c6dc3c3e47b62653956bf2482286b19bf1b219a472beb71a
+pmtiles_bytes=3373386
+assets_commit=028c18f713baecad011301ff7a69acc39bcc2ae7
+# SHA-256 over the sorted "<sha256>  <path>" lines of every font and icon file.
+assets_files=776
+assets_sha256=18233692b20fd43b35219589141635c1ee9c4f242c79d73c61f6c885e6ebd8e6
