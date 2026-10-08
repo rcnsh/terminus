@@ -449,10 +449,6 @@ body.on-map > .nav, body.on-map #tab-now { display: none; }
 .bus-stop.next .name { font-weight: 700; font-size: 1.05rem; }
 .bus-stop.next .tag, .bus-stop.here .tag { font-weight: 600; color: var(--ink); }
 .bus-stop.here .name { font-weight: 700; }
-.sheet-rows { display: grid; gap: 2px; }
-.sheet-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 0; font-variant-numeric: tabular-nums; }
-.sheet-row .when { font-weight: 600; }
-.sheet-row .crowd { color: var(--muted); font-size: 0.85rem; font-weight: 400; margin-left: 6px; }
 .svc-tag {
   display: inline-flex;
   align-items: center;

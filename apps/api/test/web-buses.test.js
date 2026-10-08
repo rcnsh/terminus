@@ -150,3 +150,21 @@ test('a board kept by the server (asOf minutes old) is counted down from when it
     B.boards.set(new Map());
   }
 });
+
+test('a failed refresh under times already shown says they could not be updated, not that there are none', () => {
+  assert.equal(B.failedWords(true, true), "Couldn't update. Trying again soon.");
+  assert.equal(B.failedWords(false, true), 'No times right now');
+  assert.equal(B.failedWords(true, false), 'Live times need a connection.');
+});
+
+test('an aged timetabled or live time keeps its "~", as the server words a guess', async () => {
+  const Board = await web('app/board.js');
+  const got = 1_000_000;
+  const sched = B.aged({ svc: 'A1', etaS: 400, eta: '~7 min', quality: 'scheduled', later: [{ etaS: 1_000, quality: 'scheduled' }, { etaS: 1_500, quality: 'live' }], laterText: 'then ~17, 25 min' }, got, got + 40_000);
+  assert.equal(sched.eta, null);
+  assert.equal(Board.etaText(sched.etaS, sched.quality), '~6 min');
+  assert.equal(Board.thenText(sched), 'then ~16, ~24 min');
+  const live = B.aged({ svc: 'D1', etaS: 400, eta: '7 min', quality: 'live', later: [] }, got, got + 40_000);
+  assert.equal(Board.etaText(live.etaS, live.quality), '~6 min');
+  assert.equal(Board.etaText(400, 'live'), '7 min');
+});

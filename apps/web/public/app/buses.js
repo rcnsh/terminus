@@ -87,6 +87,14 @@ function keep(code, entry) {
   boards.set((m) => new Map(m).set(code, entry));
 }
 
+/**
+ * Why times couldn't be fetched. With an answer already on screen (`shown`),
+ * that it couldn't be updated: "No times right now" under last known times
+ * would contradict them.
+ */
+export const failedWords = (shown, online = navigator.onLine) =>
+  !online ? t('Live times need a connection.') : shown ? t("Couldn't update. Trying again soon.") : t('No times right now');
+
 /** One stop's board. A failure keeps the board already there, saying it couldn't update. */
 export async function loadBoard(code) {
   // The public buses there too, when the account has them on.
@@ -103,7 +111,7 @@ export async function loadBoard(code) {
   } catch (err) {
     if (err.message === 'signed out' || newer()) return;
     const was = boards.get().get(code);
-    keep(code, { ...was, error: navigator.onLine ? t('No times right now') : t('Live times need a connection.') });
+    keep(code, { ...was, error: failedWords(Boolean(was?.board)) });
   }
 }
 
@@ -141,7 +149,7 @@ async function loadLine(svc, stop) {
   } catch (err) {
     if (err.message === 'signed out' || lineKey() !== key) return;
     const was = line.get()?.key === key ? line.get() : null;
-    const error = err.status === 400 ? t('No line to show for {0}.', svc) : navigator.onLine ? t('No times right now') : t('Live times need a connection.');
+    const error = err.status === 400 ? t('No line to show for {0}.', svc) : failedWords(Boolean(was?.data));
     line.set({ ...was, key, error });
   }
 }
@@ -282,7 +290,8 @@ const PIN = '<path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5
  * answered, so they're counted from `got`, never from the feed's `asOf`
  * (that would take the same seconds off twice). Once the answer is OLD_MS
  * old (refreshes failing), its times are counted down, a bus long due has
- * no time, and a live time says "Last known": nothing old passes for live.
+ * no time, and a live time says "Last known" (and "~", as a timetabled one
+ * keeps): nothing old passes for live.
  */
 export function aged(r, got, now) {
   const s = (now - got) / 1000;
@@ -296,7 +305,7 @@ export function aged(r, got, now) {
     etaS: left > -60 ? Math.max(0, left) : null,
     quality: r.quality === 'live' ? 'stale' : r.quality,
     laterText: null,
-    later: r.later?.map((x) => ({ ...x, etaS: x.etaS - s })).filter((x) => x.etaS > 0),
+    later: r.later?.map((x) => ({ ...x, etaS: x.etaS - s, ...(x.quality === 'live' ? { quality: 'stale' } : {}) })).filter((x) => x.etaS > 0),
   };
 }
 

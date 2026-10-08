@@ -15,6 +15,12 @@ const PEOPLE = '<circle cx="8.5" cy="7.5" r="2.8"/><circle cx="16" cy="7.5" r="2
 
 const mins = (s) => Math.max(1, Math.round(s / 60));
 
+/** Whether a time is a guess, a timetable's or counted down from an old reading: marked "~", as the server marks it. */
+const approx = (quality) => quality === 'scheduled' || quality === 'stale';
+
+/** "~6 min", "7 min": a time worded here, from a row aged on this page (buses.js aged) or an older server, as the server words it. */
+export const etaText = (etaS, quality) => (approx(quality) ? t('~{0}', t('{0} min', mins(etaS))) : t('{0} min', mins(etaS)));
+
 /** How full the first bus is, as the feed says; nothing when it doesn't. */
 export function Crowd({ crowd }) {
   if (!crowd) return null;
@@ -39,17 +45,15 @@ export function Quality({ r }) {
  */
 export function Big({ r }) {
   if (r.etaS == null) return html`<span class="bt-big none">${r.quality === 'unknown' ? t('No live times') : t('No time yet')}</span>`;
-  if (r.eta == null) {
-    if (r.etaS < 60) return html`<span class="bt-big now">${t('Arriving')}</span>`;
-    return html`<span class="bt-big">${mins(r.etaS)}<small>${t('min')}</small></span>`;
-  }
-  const parts = r.eta.split(/(\d+)/).filter(Boolean);
+  if (r.eta == null && r.etaS < 60) return html`<span class="bt-big now">${t('Arriving')}</span>`;
+  const parts = (r.eta ?? etaText(r.etaS, r.quality)).split(/(\d+)/).filter(Boolean);
   if (!parts.some((x) => /^\d+$/.test(x))) return html`<span class="bt-big now">${r.eta}</span>`;
   return html`<span class="bt-big">${parts.map((x) => (/^\d+$/.test(x) ? x : html`<small>${x}</small>`))}</span>`;
 }
 
 /** "then 12, ~20 min": the later buses the feed gave, a timetabled one marked, as the server words it. */
-export const thenText = (r) => r.laterText ?? (r.later?.length ? t('then {0} min', r.later.map((x) => mins(x.etaS)).join(t(', '))) : '');
+export const thenText = (r) =>
+  r.laterText ?? (r.later?.length ? t('then {0} min', r.later.map((x) => (approx(x.quality) ? t('~{0}', mins(x.etaS)) : mins(x.etaS))).join(t(', '))) : '');
 
 /** "to Central Library, Kent Vale" (the server's `toText`), the next stop in bold. */
 export function Towards({ r }) {

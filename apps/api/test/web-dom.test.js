@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 // that never answers, or a page that isn't the API's (a captive portal),
 // must fail, so the page says it couldn't update rather than waiting or
 // taking it for an answer.
-import { api, send, sentences } from '../../web/public/account/dom.js';
+import { api, quietMs, send, sentences } from '../../web/public/account/dom.js';
 
 globalThis.window ??= {};
 const realFetch = globalThis.fetch;
@@ -116,6 +116,31 @@ test('every 401 in the web app goes through signedOut, so none skips forgetting 
     assert.match(src, /status === 401\) await signedOut\(\);/, f);
     assert.doesNotMatch(src, /location\.replace\('\/account\//, f);
   }
+});
+
+test('an error with no words from the server is said plainly, not as an HTTP code', async () => {
+  globalThis.fetch = reply('<html>Bad gateway</html>', { status: 502, headers: { 'content-type': 'text/html' } });
+  await assert.rejects(api('/me'), { message: "Couldn't reach terminus. Try again in a moment.", status: 502 });
+});
+
+// Before the 429 test below, which leaves the app quiet for a minute. The
+// clock starts at 0 here, so the wait this sets is long over afterwards.
+test('a 503 with a Retry-After quiets its scope for that long, as a 429 does; one without does not', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: 0 });
+  const sent = [];
+  globalThis.fetch = async (path) => {
+    sent.push(path);
+    return new Response('{}', { status: 503, headers: path === '/me/day' ? {} : { 'retry-after': '30' } });
+  };
+  await send('/me/day');
+  assert.equal(quietMs('/me/next'), 0);
+  await send('/buses?svc=D1');
+  assert.equal(quietMs('/me/next'), 30_000);
+  assert.equal(quietMs('/auth/logout'), 0);
+  await assert.rejects(send('/me/next'), { status: 429 });
+  t.mock.timers.tick(30_000);
+  assert.equal(quietMs('/me/next'), 0);
+  assert.deepEqual(sent, ['/me/day', '/buses?svc=D1']);
 });
 
 test('a 429 from the app quiets the app, never a sign-out', async () => {

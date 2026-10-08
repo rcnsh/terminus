@@ -14,13 +14,21 @@
 // (/arrivals). The service worker keeps all but the live ones for offline.
 
 import { Icon, focusSoon, html, reducedMotion, store, useEffect, useLayoutEffect, useMemo, useRef, useState, useStore } from '/assets/ui.js';
-import { inkOn, send, signedOut, t } from '/account/dom.js';
+import { inkOn, quietMs, send, signedOut, t } from '/account/dom.js';
 import { haversineM, loadCampus, profile, reloadProfile, saveNow, withPlace } from '/account/profile.js';
 import { MAPLIBRE, PMTILES } from '/app/map-files.js';
 import { Row } from '/app/board.js';
 
 /** Live buses refresh this often while a pill is on (the API caches 5 s). */
 const BUSES_MS = 5_000;
+/** After failed polls the wait doubles from BUSES_MS up to this: a server in trouble isn't helped by more. */
+const BUSES_MAX_MS = 60_000;
+/**
+ * How long until the next poll for the buses, after `fails` failed polls in
+ * a row: 5 s, 10 s, 20 s… up to a minute, and never before `quiet` (ms, the
+ * server's Retry-After still to run: dom.js quietMs).
+ */
+export const busesWaitMs = (fails, quiet = 0) => Math.max(quiet, Math.min(BUSES_MAX_MS, BUSES_MS * 2 ** fails));
 /** A stop's arrivals refresh this often while its sheet is open (cached 15 s). */
 const ARRIVALS_MS = 15_000;
 /** How long a bus takes to slide [m] metres along the road: a steady 100 m
@@ -439,14 +447,38 @@ function choose(svc) {
   pollBuses();
 }
 
+/** Polls for the buses in a row that failed: each one doubles the wait before the next. */
+let busFails = 0;
+/** A poll on its way: only one at a time. */
+let busPolling = false;
+
 async function pollBuses() {
   clearTimeout(busTimer);
   const svc = selected.get();
-  if (!svc || !visible) return;
+  // The tab or page shown again while a poll is on its way would start a
+  // second loop beside the first: that poll arms the next one itself.
+  if (!svc || !visible || busPolling) return;
+  busPolling = true;
+  let got;
+  try {
+    got = await pollOnce(svc);
+  } finally {
+    busPolling = false;
+  }
+  if (got === 'signed out') return;
+  // Another service chosen while this one was on its way: its turn now.
+  if (svc !== selected.get()) return void pollBuses();
+  busFails = got === 'ok' ? 0 : busFails + 1;
+  // Not again once the map's tab is hidden while this one was on its way.
+  if (visible && document.visibilityState === 'visible') busTimer = setTimeout(pollBuses, busesWaitMs(busFails, quietMs('/buses')));
+}
+
+/** One poll for `svc`'s buses: 'ok', 'failed', 'signed out', or 'moved on' (another service chosen meanwhile). */
+async function pollOnce(svc) {
   try {
     // The next poll waits for this one: a call that hangs would stop the map, so it's given up on.
     const data = await getJSON(`/buses?svc=${encodeURIComponent(svc)}`, BUSES_TIMEOUT_MS);
-    if (svc !== selected.get()) return;
+    if (svc !== selected.get()) return 'moved on';
     // `stale`: the feed didn't answer, and these are where the buses last were.
     const old = data.available && data.stale === true;
     if (!data.available) status.set(t('Live buses aren’t available right now.'));
@@ -455,14 +487,15 @@ async function pollBuses() {
     else status.set(data.buses.length === 1 ? t('1 bus on {0}', svc) : t('{0} buses on {1}', data.buses.length, svc));
     dim(old);
     moveTo(data.buses.map((b) => ({ ...b, svc, color: colorOf(svc) })));
+    return 'ok';
   } catch (err) {
-    if (err.message === 'signed out' || svc !== selected.get()) return;
+    if (err.message === 'signed out') return 'signed out';
+    if (svc !== selected.get()) return 'moved on';
     status.set(navigator.onLine ? t('Live buses aren’t available right now.') : t('Live buses need a connection.'));
     // The buses drawn are from the last answer: faded once that's old, so they don't pass for live.
     if (Date.now() - lastAnswer > STALE_MS) dim(true);
+    return 'failed';
   }
-  // Not again once the map's tab is hidden while this one was on its way.
-  if (visible && document.visibilityState === 'visible') busTimer = setTimeout(pollBuses, BUSES_MS);
 }
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && visible && selected.get()) pollBuses();

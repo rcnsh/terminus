@@ -21,7 +21,7 @@ registerHooks({
   resolve: (spec, ctx, next) => next(/^\/(assets|account|app|vendor)\//.test(spec) ? new URL(`.${spec}`, PUBLIC).href : spec, ctx),
 });
 globalThis.document ??= { addEventListener() {} };
-const { aheadBy, pathOf, pointAt, positionAt, slideMs } = await import('../../web/public/app/map.js');
+const { aheadBy, busesWaitMs, pathOf, pointAt, positionAt, slideMs } = await import('../../web/public/app/map.js');
 
 const CAMPUS = buildCampusMap(GRAPH);
 const SERVICES = Object.keys(GRAPH.routes).filter((svc) => shapeFor(svc, GRAPH.routes[svc]));
@@ -121,4 +121,11 @@ test('on a one-way line, a bus back at the start jumps; it does not slide on rou
   const path = pathFor('K');
   assert.equal(path.loop, false);
   assert.equal(aheadBy(path, { along: path.total - 10 }, { along: 10 }), null);
+});
+
+test('failed polls for the buses back off from 5 s to a minute, never before the server says', () => {
+  assert.deepEqual([0, 1, 2, 3, 4, 9].map((n) => busesWaitMs(n)), [5_000, 10_000, 20_000, 40_000, 60_000, 60_000]);
+  // A Retry-After still running (dom.js quietMs) holds the next poll back.
+  assert.equal(busesWaitMs(0, 30_000), 30_000);
+  assert.equal(busesWaitMs(4, 90_000), 90_000);
 });

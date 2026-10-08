@@ -865,7 +865,11 @@ function NearbyCard({ stops }) {
               ? s.board.map(
                   (b) => html`
                     <div class="nearby-row" key=${b.svc}>
-                      <span class="svc-col"><span class="svc-tag" style=${b.color ? `--svc:${b.color};--svc-ink:${inkOn(b.color)}` : ''}>${b.svc}</span></span>
+                      <span class="svc-col"
+                        ><span class="svc-tag" style=${b.color ? `--svc:${b.color};--svc-ink:${inkOn(b.color)}` : ''}
+                          >${b.svc}${b.paid && html`<span class="fare" role="img" aria-label=${t('Public bus, fare applies')}>$</span>`}</span
+                        ></span
+                      >
                       <span class="road" style=${{ '--svc': b.color ?? 'var(--muted)' }} aria-hidden="true"
                         >${[...(b.later ?? []), ...(b.etaS != null ? [b] : [])].map((bus, j) => html`<${RoadBus} key=${bus === b ? 'next' : j} bus=${bus} next=${bus === b} />`)}</span
                       >

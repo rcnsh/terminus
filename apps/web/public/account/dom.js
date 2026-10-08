@@ -20,12 +20,16 @@ export function locationError(err) {
   return t("Couldn't find your location. Choose your stop instead.");
 }
 
-// After a 429, nothing is sent until the server's Retry-After has passed:
-// a page that keeps polling at full speed only keeps the limit tripped.
+// After a 429, or a 503 with a Retry-After (the server's database or map
+// in trouble), nothing is sent until that wait has passed: a page that
+// keeps polling at full speed only keeps the limit tripped, or the server down.
 // Signing in, out and pairing have their own limits on the server, so their
 // own wait here: a 429 from the app's polling must never stop a sign-out.
 const quietUntil = { app: 0, auth: 0 };
 const scopeOf = (path) => (/^\/(auth|pair)(\/|$|\?)/.test(path) ? 'auth' : 'app');
+
+/** How long until a call to `path` may be sent again (ms, 0 now): a poll waits at least this. */
+export const quietMs = (path) => Math.max(0, quietUntil[scopeOf(String(path))] - Date.now());
 
 /**
  * How long a call may take, unless its caller says otherwise. Wi-Fi that
@@ -54,8 +58,9 @@ export function timeout(ms) {
 const unreachable = () => new Error(t("Couldn't reach terminus. Check your connection."));
 
 /**
- * fetch(), unless the server asked this page to slow down: then it throws
- * at once, with status 429, until Retry-After (at most 5 minutes) is up.
+ * fetch(), unless the server asked this page to slow down (a 429, or a 503
+ * with a Retry-After): then it throws at once, with status 429, until
+ * Retry-After (at most 5 minutes) is up.
  * Gives up after `timeoutMs` (SEND_TIMEOUT_MS), reading the body included.
  */
 export async function send(path, { timeoutMs = SEND_TIMEOUT_MS, ...init } = {}) {
@@ -67,7 +72,8 @@ export async function send(path, { timeoutMs = SEND_TIMEOUT_MS, ...init } = {}) 
     throw ['TimeoutError', 'AbortError', 'TypeError'].includes(err?.name) ? unreachable() : err;
   });
   noteServerDate(res);
-  if (res.status === 429) {
+  // A 503 waits only when it says how long: one without (a proxy's) is just a failure.
+  if (res.status === 429 || (res.status === 503 && res.headers.has('retry-after'))) {
     const s = Number(res.headers.get('retry-after'));
     quietUntil[scope] = Date.now() + Math.min(Number.isFinite(s) && s > 0 ? s : 60, 300) * 1000;
   }
@@ -146,7 +152,8 @@ export async function api(path, { method = 'GET', body, timeoutMs = method === '
   } catch {
     // Not JSON: a captive portal's sign-in page, or a proxy's error page.
   }
-  if (!res.ok) throw Object.assign(new Error(sentence(data?.error) || `HTTP ${res.status}`), { status: res.status });
+  // No words from the server (a proxy's error page, a gateway's 502): plain words, in the page's language.
+  if (!res.ok) throw Object.assign(new Error(sentence(data?.error) || t("Couldn't reach terminus. Try again in a moment.")), { status: res.status });
   // A 200 that isn't the API's answer must not pass for one.
   if (data === null || typeof data !== 'object') throw unreachable();
   return data;
