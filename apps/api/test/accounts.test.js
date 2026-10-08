@@ -1240,6 +1240,32 @@ test('feedback: a wrong answer is kept with the account, its note emailed withou
   assert.equal(db._db.prepare('SELECT count(*) AS n FROM feedback').get().n, 0);
 });
 
+test('feedback: a reason picked from the sheet is enough on its own, said in words in the email and on the dashboard', async () => {
+  const { env, email, db } = setup();
+  env.ALERT_EMAIL = 'ops@example.test';
+  env.HEALTH_TOKEN = 'operator-secret';
+  const cookie = await signIn(env, email);
+  const post = (body) => call(env, '/me/feedback', { method: 'POST', cookie, body });
+  assert.equal((await post({ reason: 'never-came', platform: 'web', context: { label: 'D2 · 4 min' } })).status, 201);
+  const sent = email.sent.at(-1);
+  assert.equal(sent.subject, 'terminus wrong answer: The bus never came');
+  assert.match(sent.text, /What was wrong: The bus never came/);
+  assert.doesNotMatch(sent.text, /They said/, 'no note, so nothing they said');
+  assert.equal((await post({ reason: 'times-off', note: 'Seven minutes late', platform: 'web' })).status, 201, 'a reason and a note');
+  assert.match(email.sent.at(-1).text, /What was wrong: The times were off\n+They said: Seven minutes late/);
+  assert.deepEqual(
+    db._db.prepare('SELECT reason, note FROM feedback ORDER BY created, rowid').all().map((r) => [r.reason, r.note]),
+    [['never-came', ''], ['times-off', 'Seven minutes late']],
+  );
+  assert.equal((await post({ reason: 'bored', platform: 'web' })).status, 400, 'only the listed reasons');
+  assert.equal((await post({ reason: 7, note: 'x', platform: 'web' })).status, 400);
+  assert.equal((await post({ kind: 'other', reason: 'never-came', note: 'x', platform: 'web' })).status, 400, 'feedback has no reason');
+  const exported = await (await call(env, '/me/export', { cookie })).json();
+  assert.deepEqual(exported.feedback.map((f) => f.reason), ['never-came', 'times-off']);
+  const stats = await (await worker.fetch(new Request(BASE + '/admin/stats', { headers: { 'x-health-token': 'operator-secret' } }), env, makeCtx())).json();
+  assert.deepEqual(stats.feedback.latest.map((f) => f.reason).sort(), ['The bus never came', 'The times were off']);
+});
+
 test('feedback: an account without an email is asked to sign in, and nothing is kept or emailed', async () => {
   const { env, email, db } = setup();
   env.ALERT_EMAIL = 'ops@example.test';

@@ -9,7 +9,7 @@
 
 import type { Env } from './types.ts';
 import { readIncidents, readUpstream } from './monitor.ts';
-import { summarize } from './feedback.ts';
+import { REASONS, summarize } from './feedback.ts';
 
 const DAY = 86_400_000;
 
@@ -116,7 +116,7 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
       )
       .bind(d30),
     db.prepare(
-      `SELECT f.id, f.created, f.kind, f.note, f.platform, f.app_version AS appVersion, f.context, f.reply_to AS replyTo, u.email
+      `SELECT f.id, f.created, f.kind, f.reason, f.note, f.platform, f.app_version AS appVersion, f.context, f.reply_to AS replyTo, u.email
          FROM feedback f JOIN users u ON u.id = f.user_id ORDER BY f.created DESC LIMIT 25`,
     ),
   ]);
@@ -126,7 +126,7 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
   const devices = dev.results as Array<{ platform: string; total: number; active7: number }>;
   const clients = cli.results as Array<{ client: string; n: number }>;
   const signups = sign.results as Array<{ day: string; n: number }>;
-  const feedback = fb.results as Array<{ id: string; created: number; kind: string; note: string; platform: string; appVersion: string | null; context: string | null; replyTo: string | null; email: string | null }>;
+  const feedback = fb.results as Array<{ id: string; created: number; kind: string; reason: string | null; note: string; platform: string; appVersion: string | null; context: string | null; replyTo: string | null; email: string | null }>;
   const [total, new7, new30, anonymous, upgraded, upgraded30, installs30] = [users.total, users.new7, users.new30, users.anonymous, users.upgraded, users.upgraded30, users.installs30].map(n);
   const [withTimetable, withHome] = [profiles.withTimetable, profiles.withHome].map(n);
   const [active1, active7, web7] = [sessions.active1, sessions.active7, sessions.web7].map(n);
@@ -148,6 +148,8 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
         id: f.id,
         created: new Date(f.created).toISOString(),
         kind: f.kind,
+        // In words: the dashboard is the operator's, in English.
+        reason: f.reason ? (REASONS[f.reason as keyof typeof REASONS] ?? f.reason) : null,
         note: f.note,
         platform: f.platform,
         appVersion: f.appVersion,
