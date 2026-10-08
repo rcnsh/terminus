@@ -359,7 +359,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                   example: {
                     svc: 'D2',
                     color: '#8e44c9',
-                    buses: [{ id: '3f9a1c0b7e21', plate: 'PD726D', lat: 1.29497, lon: 103.77349, along: 1834.2, heading: 92, moving: true, crowd: 'low', at: null, slot: 0, stretch: { from: 1410.5, to: 2257.9, last: { code: 'LT13', name: 'LT13' } }, nextStop: { code: 'COM3', name: 'COM 3' } }],
+                    buses: [{ id: '3f9a1c0b7e21', plate: 'PD726D', lat: 1.29497, lon: 103.77349, along: 1834.2, heading: 92, moving: true, crowd: 'low', at: null, slot: 0, stretch: { from: 1410.5, to: 2257.9, last: { code: 'LT13', name: 'LT13' } }, nextStop: { code: 'COM3', name: 'COM 3' }, upcoming: [{ code: 'COM3', name: 'COM 3' }], towards: { code: 'COM3', name: 'COM 3' } }],
                     asOf: '2026-10-02T01:14:02.000Z',
                     available: true,
                     stale: false,
@@ -937,15 +937,11 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           description:
             'What happened on a trip, or a plan for today. Cards offer only plans: `skipped` (not going today), `away` ("Not on campus today", ' +
             'on an idle trip: every trip left today, not counted as outcomes) and `back` (undoes it), and `reset` (undo). Nothing asks what ' +
-            'happened: no answer is taken as on the planned bus a few minutes after it leaves, and the phone\'s location ' +
-            'corrects it. `boarded`, `missed`, `left` and `arrived` still work, for older apps. `trip` is the key from a card action ' +
-            'or /me/day; without it, the trip in progress. Recorded for the day on every device, and answered with the new `/me/next`. Deleted at the ' +
-            'end of the day. During a trip an app may send a `location` every 20 seconds or so, with `speed` (m/s) and `acc` (metres) when it has ' +
-            'them; only what it means is kept: waiting at the stop and then moving at bus speed along its road is taken as `boarded` (with the plate ' +
-            'of the bus, whose arrival at your stop then comes from the feed), still at the stop or at home a few minutes after the bus left, or ' +
-            'standing still off the road of the bus you were taken to be on, as `missed`, and reaching the stop you get off at as `arrived` ' +
-            '(`card.detected`). What was detected, and "Not going", is kept 35 days as the trip\'s outcome (in the export, deleted with the account); ' +
-            'repeated misses or skips produce a `card.suggestion`. A ride seen from start to end is kept, without who or where, as a measured ride time.',
+            'happened: no answer is taken as on the planned bus a few minutes after it leaves. `boarded`, `missed`, `left` and `arrived` ' +
+            'still work, for older apps. `trip` is the key from a card action or /me/day; without it, the trip in progress. Recorded for the day ' +
+            'on every device, and answered with the new `/me/next`. Deleted at the end of the day. `location` (with `lat` and `lon`), which older ' +
+            'Android apps send during a trip, records nothing: it is answered like `/me/next` from there. What was said, and "Not going", is kept ' +
+            '35 days as the trip\'s outcome (in the export, deleted with the account); repeated misses or skips produce a `card.suggestion`.',
           operationId: 'meSignal',
           security: [{ bearer: [] }, { cookie: [] }],
           parameters: [h12Param, langParam],
@@ -958,8 +954,6 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                 trip: { type: 'string' },
                 lat: { type: 'number' },
                 lon: { type: 'number' },
-                speed: { type: 'number', description: 'Metres per second, with a location.' },
-                acc: { type: 'number', description: 'Accuracy in metres, with a location.' },
               },
             },
             { kind: 'boarded', trip: '4:600:UTOWN' },
@@ -2089,7 +2083,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               type: 'array',
               items: {
                 type: 'object',
-                required: ['id', 'plate', 'lat', 'lon', 'along', 'heading', 'moving', 'crowd', 'at', 'slot', 'stretch', 'nextStop'],
+                required: ['id', 'plate', 'lat', 'lon', 'along', 'heading', 'moving', 'crowd', 'at', 'slot', 'stretch', 'nextStop', 'upcoming', 'towards'],
                 properties: {
                   id: { type: 'string', description: 'Stable for a bus while it runs.' },
                   plate: { type: 'string', example: 'PD726D', description: 'The bus’s number plate, as painted on it.' },
@@ -2117,6 +2111,16 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                   },
                   nextStop: {
                     type: ['object', 'null'],
+                    properties: { code: { type: 'string' }, name: { type: 'string' } },
+                  },
+                  upcoming: {
+                    type: 'array',
+                    description: 'The stops still ahead of the bus on its line, in order: `nextStop` first, then on to where the line ends (round a loop, back to its first stop). Empty past the end of a line that does not loop.',
+                    items: { type: 'object', properties: { code: { type: 'string' }, name: { type: 'string' } } },
+                  },
+                  towards: {
+                    type: 'object',
+                    description: 'Where the bus’s line ends: the first stop of a loop, the last stop of a line that does not loop.',
                     properties: { code: { type: 'string' }, name: { type: 'string' } },
                   },
                 },
@@ -2418,7 +2422,6 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                         arrive: { type: 'string', format: 'date-time' },
                       },
                     },
-                    detected: { type: 'boolean', description: 'The phase was worked out from the phone’s location, not tapped ("Looks like you’re on the bus").' },
                     walkTo: {
                       type: ['object', 'null'],
                       description: 'Where to walk to now, for a maps app: the stop to catch the bus at, or the destination’s stop on foot. Null on the bus, at the stop, once there, and with nothing to catch.',

@@ -96,6 +96,7 @@ enum Snapshots {
         renderSetup(to: dir)
         renderGoldens(to: dir)
         renderMapStatus(to: dir)
+        renderBusCards(to: dir)
         for (name, m) in cases {
             for (scheme, bg) in [(ColorScheme.dark, Color(white: 0.16)), (.light, Color(white: 0.95))] {
                 let view = Popover(model: m, startShown: true)
@@ -161,6 +162,30 @@ enum Snapshots {
             guard let img = r.nsImage, let tiff = img.tiffRepresentation,
                   let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else { continue }
             try? png.write(to: URL(fileURLWithPath: dir).appendingPathComponent("map-status-\(scheme == .dark ? "dark" : "light").png"))
+        }
+    }
+
+    /// A clicked bus's card, shut and opened, between stops and at one.
+    static func renderBusCards(to dir: String) {
+        let ahead = ["LT 13", "AS 5", "BIZ 2", "PGP", "Kent Ridge MRT", "LT 27", "S 17", "UHC", "UTown"]
+        var moving = LiveBus(id: "a", lat: 1.29, lon: 103.77, moving: true, crowd: "low", nextStop: "LT 13", plate: "PD539C")
+        moving.stretch = Stretch(from: 0, to: 300, last: "CLB")
+        moving.upcoming = ahead
+        moving.towards = "UTown"
+        var stopped = LiveBus(id: "b", lat: 1.29, lon: 103.77, moving: false, crowd: "high", nextStop: "BIZ 2", plate: "PD726D", at: "COM 3")
+        stopped.upcoming = ["BIZ 2", "PGP"]
+        stopped.towards = "Kent Ridge MRT"
+        let cards: [(String, LiveBus, String, Bool)] = [("between", moving, "D1", false), ("between-open", moving, "D1", true), ("at-open", stopped, "A1", true)]
+        for (name, bus, svc, open) in cards {
+            for (scheme, bg) in [(ColorScheme.dark, Color(white: 0.16)), (.light, Color(white: 0.85))] {
+                let hex = svc == "D1" ? "#C93BA4" : "#E0362F"
+                let view = BusCard(bus: bus, svc: svc, hex: hex, close: {}, open: open)
+                    .frame(width: 320)
+                    .padding(16)
+                    .background(bg)
+                    .environment(\.colorScheme, scheme)
+                write(view, scale: 2, to: dir, as: "map-bus-\(name)-\(scheme == .dark ? "dark" : "light")")
+            }
         }
     }
 

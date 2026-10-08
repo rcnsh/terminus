@@ -32,6 +32,7 @@ const APPLIED = {
   '0010_feedback_reply_to.sql': '41f3bf4861b355eb0a7d5a2f99f40c40efd6e3bddebe8a6946c8d2f932b1daff',
   '0011_lookup_indexes.sql': 'fa774c48c28348496f394dbdc04e109cbba28fc9487a3b571be2d4d96bf090e5',
   '0012_trip_outcome_days.sql': '1bab62b109e0ca18c850511b8de3cfc241789eb1e8df5e4350e0808faede5bf4',
+  '0013_forget_ride_times.sql': '94bc653364ec45efe2bd08b9966ced1fe0d185a48d82ea53a0c3507d6cc2dbf1',
 };
 
 /**

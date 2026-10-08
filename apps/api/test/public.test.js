@@ -14,7 +14,6 @@ import { boardAt, candidateStops, feedFor, inService, indexGraph, legRideS, reac
 import { collectArrivals, mergeFeeds } from '../src/answer.ts';
 import { planOfLeave } from '../src/plan.ts';
 import { leaveOf } from '../src/trip.ts';
-import { onRoute } from '../src/detect.ts';
 import { leaveBy } from '../src/leave.ts';
 import { DEFAULT_HEADWAY_S, PUBLIC, RIDE, WALK } from '../src/config.ts';
 import pub from '../data/public.json' with { type: 'json' };
@@ -352,7 +351,7 @@ test('turning public buses on never crowds a shuttle stop out of the candidates'
   assert.ok(withPub.length <= plain.length + 1);
 });
 
-test('a kept plan for a public bus keeps its fare mark and its route, and detection follows it', () => {
+test('a kept plan for a public bus keeps its fare mark and its route', () => {
   const cands = candidateStops(GRAPH_PUBLIC, { lat: 1.293619, lon: 103.771475, to: 'IT', originCode: null }).filter((c) => c.stop.code === '16009');
   assert.ok(cands.length, 'Kent Ridge Terminal public stop is a candidate');
   const byStop = new Map([['16009', arrivals('16009', [{ svc: '151/2', etaS: 240, crowd: null, plate: null, berth: null }])]]);
@@ -367,9 +366,4 @@ test('a kept plan for a public bus keeps its fare mark and its route, and detect
   const again = leaveOf(plan);
   assert.equal(again.paid, true);
   assert.equal(again.route, '151/2');
-  // On Kent Ridge Crescent between the terminal and IT: on the 151's way, in the public graph.
-  const fix = { lat: 1.2962, lon: 103.7714, accM: 20 };
-  assert.equal(onRoute(GRAPH_PUBLIC, plan, fix, 60), true);
-  // The shuttle graph can't follow it, which is why detection is given the public graph.
-  assert.equal(onRoute(GRAPH, plan, fix, 60), false);
 });

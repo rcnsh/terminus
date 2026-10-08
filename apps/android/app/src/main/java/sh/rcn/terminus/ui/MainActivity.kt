@@ -112,12 +112,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-        // In the front during a trip: the live notification can follow it by location from here on.
-        sh.rcn.terminus.LiveService.watch(this)
-    }
-
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handle(intent)

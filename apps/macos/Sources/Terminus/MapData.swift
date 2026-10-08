@@ -207,6 +207,11 @@ struct LiveBus: Hashable {
     var slot = 0
     /// Between stops, the stretch of its line it's somewhere on.
     var stretch: Stretch? = nil
+    /// The stops still ahead, the next first, to where its line ends, as the
+    /// server walks them; empty past a one-way line's end (or from an older API).
+    var upcoming: [String] = []
+    /// Where its line ends; nil from an older API.
+    var towards: String? = nil
     var ox = 0.0
     var oy = 0.0
 
@@ -246,7 +251,8 @@ struct BusList {
                 id: id, lat: lat, lon: lon, heading: num(b["heading"]), moving: b["moving"] as? Bool ?? false,
                 crowd: (b["crowd"] as? String).flatMap { $0.isEmpty ? nil : $0 }, nextStop: name(b["nextStop"]),
                 along: num(b["along"]), plate: (b["plate"] as? String).flatMap { $0.isEmpty ? nil : $0 },
-                at: name(b["at"]), slot: (b["slot"] as? Int) ?? 0, stretch: stretch
+                at: name(b["at"]), slot: (b["slot"] as? Int) ?? 0, stretch: stretch,
+                upcoming: (b["upcoming"] as? [Any] ?? []).compactMap(name), towards: name(b["towards"])
             )
         }
         return BusList(svc: svc, available: o["available"] as? Bool ?? false, stale: o["stale"] as? Bool ?? false, buses: buses)

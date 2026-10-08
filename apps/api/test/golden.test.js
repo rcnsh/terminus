@@ -20,7 +20,6 @@ import { FROZEN_NOW, installGlobals, makeCtx, makeDurableObjects, makeEnv, makeF
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
 import { Trip } from '../src/tripdo.ts';
-import { forgetTable } from '../src/ridetimes.ts';
 import { ASSUME_MS, RIDE_GRACE_MS } from '../src/trip.ts';
 
 const DIR = new URL('./fixtures/answers/', import.meta.url);
@@ -62,7 +61,7 @@ const LATE_FEED = {
  * - `at`: the clock to start on (epoch ms; Thursday 09:00 SGT by default).
  * - `feed`: the NUS feed's arrivals by stop, in place of FEED.
  * - `upstream`: anything else makeFetch takes (`fail`, `publicStops`, `buses`...).
- * - `kv`: KV seeded with these keys (a measured ride-time table, say).
+ * - `kv`: KV seeded with these keys.
  * - `trips`: binds the trip engine, for a case with signals.
  * - `env`: more bindings and secrets (LTA's key, for the public buses).
  *
@@ -74,8 +73,6 @@ async function account(profile, { at = FROZEN_NOW, feed = FEED, upstream = {}, k
   let now = at;
   installGlobals(makeFetch({ byStop: feed, ...upstream }), now);
   Date.now = () => now;
-  // The measured ride-time table is held per isolate for a while: each case reads its own.
-  forgetTable();
   const env = { ...makeEnv(makeKV(kv)), DB: makeD1(), EMAIL: makeEmail(), EMAIL_FROM: 'x@example.test', ...(trips ? { TRIPS: makeDurableObjects(Trip) } : {}), ...more };
   const call = async (path, init = {}) => {
     const ctx = makeCtx();
@@ -242,9 +239,6 @@ const CASES = {
   // on board). Walking must beat a live bus by WALK.beatsBusByS (120 s), and
   // level isn't beating it: the bus heads the card, the walk said as close.
   'walk-level': [{ places }, `/me/next?to=UTOWN&${AT_PGP}`, { feed: { PGP: [{ name: 'D2', _etas: [{ eta_s: 1264 }] }] } }],
-  // Measured ride times (the cron's table in KV): the D2 takes 60 s a stop
-  // and the R2 200 s, not the 95 s guess, so the D2 in 14 min beats the R2 in 6.
-  'measured-rides': [{ home: { stops: ['PGP'] }, places }, '/me/next?to=UTOWN', { kv: { 'ride:hops': { made: '2026-08-27T00:00:00.000Z', svcs: { D2: { n: 40, s: 60, hours: {} }, R2: { n: 40, s: 200, hours: {} } } } } }],
   // Standing at KR MRT for COM 3: the buses on this side go the long way
   // round, so the answer is the D2 from across the road, and it says so.
   // Each stop lists only the buses calling there.

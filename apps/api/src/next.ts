@@ -36,7 +36,7 @@ import { paceSpeed } from './walk.ts';
 import { coordsFrom } from './http.ts';
 import type { TripView } from './card.ts';
 import { NO_PREFS, type TripPrefs } from './outcomes.ts';
-import { ASSUME_MS, type Boarded, type DayRecord, RIDE_GRACE_MS, dayState, isFollowed, leaveOf, offStop, phaseFor, signalOf } from './trip.ts';
+import { ASSUME_MS, type Boarded, type DayRecord, RIDE_GRACE_MS, dayState, leaveOf, offStop, phaseFor, signalOf } from './trip.ts';
 import { choosePlan, planOfLeave } from './plan.ts';
 import { m } from './i18n.ts';
 
@@ -341,7 +341,6 @@ export async function planned(
   const trip: TripView = {
     ...p.trip,
     ...reachedOf(url, nowMs, profile, day, p),
-    ...(p.trip.key && isFollowed(day, nowMs) ? { followed: true } : {}),
     remind: !(p.trip.key && prefs.quiet.has(p.trip.key)),
     // Never in the middle of a trip.
     suggestion: p.trip.phase === 'idle' || p.trip.phase === 'arrived' ? prefs.suggestion : null,
@@ -436,8 +435,8 @@ async function plannedTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
   const stored = day?.plans?.[key];
   const made = planOfLeave(fresh.leave, located, dest.to);
   const { bus, save } = choosePlan({ stored, made, located, classAtMs: dest.trip ? classStartMs(dest.trip, nowMs) : null, nowMs });
-  // Every device says that bus: the card, the notifications and Today, and
-  // it's the one detection watches. A miss (said, or seen) is the exception:
+  // Every device says that bus: the card, the notifications and Today.
+  // A miss is the exception:
   // then the answer is the next way there. The plan's times are from an
   // earlier answer: never shown as live.
   const kept = bus && bus !== made && rec?.kind !== 'missed';
@@ -447,7 +446,7 @@ async function plannedTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
   const out = withPhase(home ? { ...answer, warning: lastBusWarning(deps.graph, answer, nowMs) } : answer, key);
   // Still in the day's last class: the way home is the answer, but that trip
   // hasn't started ("Time to get going" in the middle of a lecture), and
-  // nothing about its bus is assumed or followed until the class ends.
+  // nothing about its bus is assumed until the class ends.
   if (dest.why === 'home' && plan.lastEndMin !== undefined && sgt(nowMs).minutes < plan.lastEndMin && !out.trip.rec) {
     return { answer: out.answer, trip: { ...out.trip, phase: 'idle' } };
   }
@@ -457,9 +456,7 @@ async function plannedTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
   // Nobody said what happened and the bus left a while ago: the plan worked
   // (most people catch the bus they were told to), unless a location still
   // has you at its stop. Assumed, never recorded as a signal.
-  // Having been at the stop is not an answer about the bus.
-  const answered = out.trip.rec !== undefined && out.trip.rec.kind !== 'waiting';
-  if (!answered && bus && !answer.arrived && nowMs >= Date.parse(bus.board!) + ASSUME_MS) {
+  if (!out.trip.rec && bus && !answer.arrived && nowMs >= Date.parse(bus.board!) + ASSUME_MS) {
     // Still at the stop now (this request's location), not just earlier:
     // missed, and the answer is the next way there.
     if (phaseFor(answer, undefined, nowMs, at) === 'waiting') return { answer: fresh, trip: { ...out.trip, phase: 'missed', assumed: true, plan: bus, planChanged: false } };
@@ -502,7 +499,7 @@ function reachedOf(url: URL, nowMs: number, profile: Profile, day: DayRecord | n
   const key = p.trip.key;
   if (key && p.trip.phase === 'arrived' && p.answer.arrived) {
     const r = day?.trips[key];
-    return r && r.kind !== 'waiting' && r.kind !== 'boarded' ? {} : { reached: key };
+    return r && r.kind !== 'boarded' ? {} : { reached: key };
   }
   if (url.searchParams.get('place') || url.searchParams.get('to') || isResting(profile, nowMs)) return {};
   if (!atHome(lat, lon, profile.home?.stops ?? [])) return {};
