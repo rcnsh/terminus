@@ -69,15 +69,21 @@ object Push {
     private const val TRUST_MS = 24 * 60 * 60_000L
 
     /**
-     * A push only moves the leave alert and the live notification on (the
-     * widgets keep their own alarms), and the server sends some at high
-     * priority, which wakes the phone. So this phone asks for them only
-     * while one of the two is on and can be seen.
+     * Pushes are asked for while something they move on can be seen: the
+     * leave alert, the live notification, or the new semester's reminder,
+     * which only comes by push.
      */
-    fun wanted(ctx: Context): Boolean {
+    fun wanted(ctx: Context): Boolean =
+        Store(ctx).paired && (follows(ctx) || LeaveAlerts.canNotify(ctx, TermReminder.CHANNEL))
+
+    /**
+     * A card push only moves the leave alert and the live notification on
+     * (the widgets keep their own alarms): with neither on and seen, it's
+     * left alone rather than fetched for.
+     */
+    fun follows(ctx: Context): Boolean {
         val store = Store(ctx)
-        return store.paired &&
-            ((store.leaveAlerts && LeaveAlerts.canNotify(ctx, LeaveAlerts.CHANNEL)) || (store.liveUpdates && LeaveAlerts.canNotify(ctx, LiveService.CHANNEL)))
+        return (store.leaveAlerts && LeaveAlerts.canNotify(ctx, LeaveAlerts.CHANNEL)) || (store.liveUpdates && LeaveAlerts.canNotify(ctx, LiveService.CHANNEL))
     }
 
     /** Which session a token was sent with, without keeping the session token in plain prefs. */
@@ -183,13 +189,13 @@ class PushService : FirebaseMessagingService() {
             if (words != null) TermReminder.post(ctx, words)
             return
         }
-        if (message.data["kind"] != "card") return
         val ctx = applicationContext
+        if (message.data["kind"] != "card" || !Push.follows(ctx)) return
         // The live notification runs from "due" until you're there. Started
         // first: a high-priority push ("due", "missed") lets it start only
         // for a few seconds. It fetches the answer itself, and stops if the
         // trip is over.
-        if (message.data["phase"] in LiveService.TRIP_PHASES && LiveService.start(ctx)) return
+        if (message.data["phase"] in LiveService.TRIP_PHASES && LiveService.start(ctx, force = true)) return
         // A background thread with a few seconds to spare: only the answer
         // here, one request; the rest of a refresh follows in a job. Asked
         // for even just after another refresh: the card changed since.
