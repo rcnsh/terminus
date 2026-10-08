@@ -21,7 +21,7 @@ struct Main: View {
                     if Updater.shared.running {
                         Button(L("Update")) { Updater.shared.checkNow() }
                     } else {
-                        Button(L("Download")) { NSWorkspace.shared.open(URL(string: "\(Api.site)/download/mac")!) }
+                        Button(L("Download")) { NSWorkspace.shared.open(URL(string: "\(Api.linkBase)/download/mac")!) }
                     }
                 }
             } else if let v = model.update {
@@ -31,7 +31,7 @@ struct Main: View {
                     if Updater.shared.running {
                         Button(L("Update")) { Updater.shared.checkNow() }
                     } else {
-                        Button(L("Download")) { NSWorkspace.shared.open(URL(string: "\(Api.site)/download/mac")!) }
+                        Button(L("Download")) { NSWorkspace.shared.open(URL(string: "\(Api.linkBase)/download/mac")!) }
                     }
                 }
             }

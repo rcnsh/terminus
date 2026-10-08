@@ -250,7 +250,7 @@ internal fun Context.openUpdate() {
         if (runCatching { startActivity(market) }.isSuccess) return
         openWeb("https://play.google.com/store/apps/details?id=$packageName")
     } else {
-        openWeb("${sh.rcn.terminus.BuildConfig.SITE}/download/android?abi=${android.os.Build.SUPPORTED_ABIS.firstOrNull().orEmpty()}")
+        openWeb("${sh.rcn.terminus.BuildConfig.LINK_BASE}/download/android?abi=${android.os.Build.SUPPORTED_ABIS.firstOrNull().orEmpty()}")
     }
 }
 

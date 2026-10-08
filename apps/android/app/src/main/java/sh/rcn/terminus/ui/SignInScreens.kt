@@ -142,7 +142,7 @@ internal fun WelcomeScreen(busy: Boolean, message: String?, onStart: () -> Unit,
                 }
                 Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     TextButton(onClick = onPair) { Text(stringResource(R.string.pair_instead)) }
-                    TextButton(onClick = { ctx.openWeb("${BuildConfig.SITE}/privacy") }) {
+                    TextButton(onClick = { ctx.openWeb("${BuildConfig.LINK_BASE}/privacy") }) {
                         Text(stringResource(R.string.privacy), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }

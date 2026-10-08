@@ -521,12 +521,13 @@ private fun AboutPage() {
     var developer by remember { mutableStateOf(Servers.menuUnlocked(ctx)) }
     var taps by remember { mutableIntStateOf(0) }
     val host = BuildConfig.SITE.removePrefix("https://").removePrefix("http://")
-    // Each link's name, where it goes, and that place as shown under the name.
+    // Each link's name, where it goes (the old address: LINK_BASE), and that
+    // place as shown under the name (the address people know).
     val links = listOf(
-        Triple(R.string.get_apps, BuildConfig.SITE, host),
-        Triple(R.string.status, "${BuildConfig.SITE}/status", "$host/status"),
-        Triple(R.string.privacy, "${BuildConfig.SITE}/privacy", "$host/privacy"),
-        Triple(R.string.api_docs, "${BuildConfig.SITE}/docs", "$host/docs"),
+        Triple(R.string.get_apps, BuildConfig.LINK_BASE, host),
+        Triple(R.string.status, "${BuildConfig.LINK_BASE}/status", "$host/status"),
+        Triple(R.string.privacy, "${BuildConfig.LINK_BASE}/privacy", "$host/privacy"),
+        Triple(R.string.api_docs, "${BuildConfig.LINK_BASE}/docs", "$host/docs"),
         Triple(R.string.source_code, "https://github.com/rcnsh/terminus", "github.com/rcnsh/terminus"),
         Triple(R.string.map_data, "https://www.openstreetmap.org/copyright", "openstreetmap.org"),
         Triple(R.string.aup, "https://nus.edu.sg/registrar/docs/info/registration-guides/aup-form.pdf", "nus.edu.sg"),
@@ -804,7 +805,7 @@ private fun AccountSection(state: AccountState, account: AccountViewModel, main:
         LinkRow(stringResource(R.string.download_data), { export.launch("terminus-export.json") })
         if (email != null) {
             RowDivider()
-            LinkRow(stringResource(R.string.account_page), { ctx.openWeb("${BuildConfig.SITE}/account") }, sub = stringResource(R.string.account_page_sub), away = true)
+            LinkRow(stringResource(R.string.account_page), { ctx.openWeb("${BuildConfig.LINK_BASE}/account") }, sub = stringResource(R.string.account_page_sub), away = true)
         }
     }
     // An account with an email is deleted from the account page, signed in on the web (the server insists).
@@ -812,7 +813,7 @@ private fun AccountSection(state: AccountState, account: AccountViewModel, main:
         if (email == null) {
             LinkRow(stringResource(R.string.delete_account), { confirm = "delete" }, color = c.error)
         } else {
-            LinkRow(stringResource(R.string.delete_account), { ctx.openWeb("${BuildConfig.SITE}/account") }, away = true, color = c.error)
+            LinkRow(stringResource(R.string.delete_account), { ctx.openWeb("${BuildConfig.LINK_BASE}/account") }, away = true, color = c.error)
         }
     }
     when (confirm) {
@@ -899,7 +900,7 @@ private fun platformName(p: String?) = when (p) {
 @Composable
 private fun PairCodeDialog(code: String, onClose: () -> Unit) {
     val ctx = LocalContext.current
-    val link = "${BuildConfig.SITE}/pair?code=$code"
+    val link = "${BuildConfig.LINK_BASE}/pair?code=$code"
     val qr = remember(link) { qrBitmap(link, 480) }
     AlertDialog(
         onDismissRequest = onClose,

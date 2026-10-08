@@ -379,10 +379,10 @@ struct AboutPane: View {
                     }
                 }
             Flow(spacing: 8) {
-                link(L("Get the apps"), "\(Api.site)/")
-                link(L("Status"), "\(Api.site)/status")
-                link(L("Privacy"), "\(Api.site)/privacy")
-                link(L("API docs"), "\(Api.site)/docs")
+                link(L("Get the apps"), "\(Api.linkBase)/")
+                link(L("Status"), "\(Api.linkBase)/status")
+                link(L("Privacy"), "\(Api.linkBase)/privacy")
+                link(L("API docs"), "\(Api.linkBase)/docs")
                 link(L("Source code"), "https://github.com/rcnsh/terminus")
                 link(L("Map data"), "https://www.openstreetmap.org/copyright")
                 link(L("NUS Acceptable Use Policy"), "https://nus.edu.sg/registrar/docs/info/registration-guides/aup-form.pdf")
