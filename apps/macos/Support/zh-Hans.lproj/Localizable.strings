@@ -29,6 +29,7 @@
 "Allow terminus in System Settings → Notifications" = "请在“系统设置”→“通知”中允许 terminus";
 "Allowed." = "已允许。";
 "Already a favourite: %@" = "已在收藏中：%@";
+"%@ removed from favourites" = "已取消收藏 %@";
 "Also used for emails and on your other devices. Place and bus names stay in English, as on the signs." = "也用于邮件和你的其他设备。地点和巴士名称保持英文，与站牌一致。";
 "Appearance" = "外观";
 "Available in one tap from the menu bar, the phone app and its widget." = "在菜单栏、手机应用及其小组件中一键可用。";

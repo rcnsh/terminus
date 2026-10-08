@@ -30,6 +30,7 @@ window.TERMINUS_ZH = {
  "Allow for busy buses": "考虑巴士很挤的情况",
  "Allow location for this site to see the buses near you.": "允许这个网站使用定位，查看你附近的巴士。",
  "Already a favourite: {0}": "已经收藏了：{0}",
+ "{0} removed from favourites": "已取消收藏 {0}",
  "Also used for emails and on your other devices. Place and bus names stay in English, as on the signs.": "也用于邮件和你的其他设备。地点和巴士名称保持英文，与站牌一致。",
  "Android 12 or later": "Android 12 或更高版本",
  "Count the 95, 151 and other public buses at your stops too. They have a fare, so one is the answer only when it clearly saves time.": "也算上你车站的 95、151 等公共巴士。它们要收费，所以只有明显省时才会推荐。",

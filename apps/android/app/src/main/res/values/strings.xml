@@ -90,6 +90,7 @@
     <string name="allow_location">Allow location</string>
     <string name="allowed">Allowed.</string>
     <string name="already_favourite">Already a favourite: %1$s</string>
+    <string name="favourite_removed">%1$s removed from favourites</string>
     <string name="and">and</string>
     <string name="approx">~%1$s</string>
     <string name="arrive_at">arrive %1$s</string>

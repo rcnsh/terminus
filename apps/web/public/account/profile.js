@@ -25,11 +25,17 @@ export const toastText = store(null);
 export const TOAST_MS = 4_000;
 
 let toastTimer = null;
-/** Shows `text` at the bottom of the screen; `error`, something that went wrong, which stays until closed. */
-export function toast(text, { error = false } = {}) {
-  toastText.set({ text, error });
+/**
+ * Shows `text` at the bottom of the screen; `error`, something that went
+ * wrong, which stays until closed. `action` ({ label, run }) adds a button,
+ * Undo, and stays a little longer; a plain message ("Saved") doesn't replace
+ * it meanwhile, so the button isn't gone before it can be clicked.
+ */
+export function toast(text, { error = false, action = null } = {}) {
+  if (!error && !action && toastText.get()?.action) return;
+  toastText.set(action ? { text, error, action } : { text, error });
   clearTimeout(toastTimer);
-  if (!error) toastTimer = setTimeout(() => toastText.set(null), TOAST_MS);
+  if (!error) toastTimer = setTimeout(() => toastText.set(null), action ? TOAST_MS * 1.5 : TOAST_MS);
 }
 
 /** Where toast() shows: once per page. Its words are on a status line, so they're heard as well as seen. */
@@ -39,8 +45,17 @@ export function Toast() {
   const last = now ?? Toast.last ?? { text: '' };
   Toast.last = last;
   return html`
-    <div class=${`toast${now ? ' show' : ''}${last.error ? ' error' : ''}`}>
+    <div class=${`toast${now ? ' show' : ''}${last.error ? ' error' : ''}${last.action ? ' has-action' : ''}`}>
       <p role="status">${now ? now.text : ''}</p>
+      ${now?.action &&
+      html`<button
+        type="button"
+        class="toast-action"
+        onClick=${() => {
+          toastText.set(null);
+          now.action.run();
+        }}
+      >${now.action.label}</button>`}
       ${now?.error && html`<button type="button" class="toast-close" aria-label=${t('Close')} onClick=${() => toastText.set(null)}>×</button>`}
       ${!now && html`<p aria-hidden="true">${last.text}</p>`}
     </div>
@@ -180,4 +195,24 @@ export function withPlace(p, to, label) {
   while (p.places.some((x) => x.key === key)) key = `${key.slice(0, 21)}-${Math.floor(Math.random() * 90 + 10)}`;
   p.places.push({ key, label, to });
   return null;
+}
+
+/**
+ * Takes a favourite off, with its usual times. Returns what was taken, for
+ * restorePlace (Undo), or null if it wasn't there.
+ */
+export function withoutPlace(p, key) {
+  const index = p.places.findIndex((x) => x.key === key);
+  if (index < 0) return null;
+  const [place] = p.places.splice(index, 1);
+  const usual = (p.usual ?? []).filter((u) => u.place === key);
+  p.usual = (p.usual ?? []).filter((u) => u.place !== key);
+  return { index, place, usual };
+}
+
+/** Undo for withoutPlace: back where it was. Not when the list is full, or that stop is a favourite again. */
+export function restorePlace(p, { index, place, usual }) {
+  if (p.places.length >= (p.limits?.places ?? Infinity) || p.places.some((x) => x.to === place.to || x.key === place.key)) return;
+  p.places.splice(Math.min(index, p.places.length), 0, place);
+  if (usual.length) p.usual = [...(p.usual ?? []), ...usual];
 }

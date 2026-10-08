@@ -175,11 +175,36 @@ final class SetupModel {
         return nil
     }
 
-    /// A favourite gone, with its usual times.
-    func removePlace(_ key: String) {
+    /// A favourite just removed, kept for Undo: where it was, and its usual times.
+    struct RemovedPlace {
+        let index: Int
+        let place: [String: Any]
+        let usual: [[String: Any]]
+        var label: String { place["label"] as? String ?? "" }
+    }
+
+    /// A favourite gone, with its usual times; what's returned puts them back (restorePlace).
+    @discardableResult
+    func removePlace(_ key: String) -> RemovedPlace? {
+        let list = profile?["places"] as? [[String: Any]] ?? []
+        guard let index = list.firstIndex(where: { $0["key"] as? String == key }) else { return nil }
+        let usual = (profile?["usual"] as? [[String: Any]] ?? []).filter { $0["place"] as? String == key }
         edit {
             $0["places"] = ($0["places"] as? [[String: Any]] ?? []).filter { $0["key"] as? String != key }
             $0["usual"] = ($0["usual"] as? [[String: Any]] ?? []).filter { $0["place"] as? String != key }
+        }
+        return RemovedPlace(index: index, place: list[index], usual: usual)
+    }
+
+    /// Undo for removePlace: back where it was. Not when the list is full, or that stop is a favourite again.
+    func restorePlace(_ r: RemovedPlace) {
+        let now = places
+        guard now.count < maxPlaces, !now.contains(where: { $0.to == r.place["to"] as? String || $0.key == r.place["key"] as? String }) else { return }
+        edit {
+            var list = $0["places"] as? [[String: Any]] ?? []
+            list.insert(r.place, at: min(r.index, list.count))
+            $0["places"] = list
+            if !r.usual.isEmpty { $0["usual"] = ($0["usual"] as? [[String: Any]] ?? []) + r.usual }
         }
     }
 

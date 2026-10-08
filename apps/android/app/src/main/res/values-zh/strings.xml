@@ -90,6 +90,7 @@
     <string name="allow_location">允许定位</string>
     <string name="allowed">已允许。</string>
     <string name="already_favourite">已经收藏了：%1$s</string>
+    <string name="favourite_removed">已取消收藏 %1$s</string>
     <string name="and">到</string>
     <string name="approx">约 %1$s</string>
     <string name="arrive_at">%1$s 到达</string>
