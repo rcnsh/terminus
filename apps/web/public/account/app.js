@@ -54,7 +54,7 @@ const startAdding = () => {
 
 /* ---------- signing in ---------- */
 
-/** Cloudflare Turnstile, when the server has a site key: its check goes under the email box. */
+/** Cloudflare Turnstile, when the server has a site key. The widget is invisible, so its box takes no room. */
 function useTurnstile(box) {
   const token = useRef(null);
   const widget = useRef(null);

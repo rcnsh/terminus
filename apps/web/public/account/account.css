@@ -9,11 +9,9 @@
 .signin .hint.small { font-size: 0.85rem; margin-top: 10px; }
 .signin form label { margin-top: 20px; }
 .signin .btn.wide { margin-top: 16px; }
-.turnstile { margin-top: 14px; min-height: 65px; }
 .signin-or { display: flex; align-items: center; gap: 12px; margin-top: 2px; color: var(--muted); font-size: 0.85rem; }
 .signin-or::before, .signin-or::after { content: ''; flex: 1; border-top: 1px solid var(--line); }
 .signin .signin-or + .btn.wide { margin-top: 12px; }
-.turnstile:empty { display: none; }
 .form-error { color: var(--bad); font-size: 0.9rem; margin-top: 10px; min-height: 1.4em; }
 .sent-icon { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); margin-bottom: 16px; }
 #sent-step .btn { margin-top: 20px; }
