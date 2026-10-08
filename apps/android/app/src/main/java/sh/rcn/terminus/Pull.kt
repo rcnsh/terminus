@@ -65,11 +65,8 @@ object Pull {
     /** The short refresh played when nothing was asked ([PullOutcome.UpToDate]). */
     const val QUICK_MS = 600L
 
-    /** How long the pill says how it went before the sky closes. */
+    /** How long the pill says how it went before the sky closes: the bus finishes coming back on its own time. */
     const val RESULT_MS = 1_000L
-
-    /** The longest it waits on top of [RESULT_MS] for the bus to be back in its place. */
-    const val RESULT_MAX_MS = 1_600L
 
     /** Where a bus comes in from: off the left of the horizon. */
     const val START = -60f
@@ -190,7 +187,7 @@ class PullMotion(var scene: PullScene, var others: Int, var calm: Boolean = fals
         /** The answer's in and said, still at the hold. */
         Shown,
 
-        /** Closing up. */
+        /** Closing up, then the bus finishing its way back with the sky shut. */
         Closing,
     }
 
@@ -286,8 +283,8 @@ class PullMotion(var scene: PullScene, var others: Int, var calm: Boolean = fals
     /** The sign lit in the accent: armed, and while it asks. */
     val lit: Boolean get() = armed || phase == Phase.Busy
 
-    /** The sign green: the answer's in (or there was nothing new to ask for). */
-    val good: Boolean get() = (phase == Phase.Shown || phase == Phase.Closing) && result != null && result != PullOutcome.Failed
+    /** The sign green: the answer's in (or there was nothing new to ask for), until the sky's shut. */
+    val good: Boolean get() = (phase == Phase.Shown || (phase == Phase.Closing && pull > 0f)) && result != null && result != PullOutcome.Failed
 
     /** The bus dipping and rocking as it goes (units); none when calm. */
     val bob: Float
@@ -386,8 +383,7 @@ class PullMotion(var scene: PullScene, var others: Int, var calm: Boolean = fals
         if (phase == Phase.Busy) outcome?.let { if (sinceMs >= Pull.minShowMs(it)) show(it) }
         if (phase == Phase.Shown) {
             shownMs += dt * 1000
-            val home = calm || (drive == Drive.Return && abs(busX - scene.rest) < 1f)
-            if ((shownMs >= Pull.RESULT_MS && home) || shownMs >= Pull.RESULT_MAX_MS) phase = Phase.Closing
+            if (shownMs >= Pull.RESULT_MS) phase = Phase.Closing
         }
 
         // The stretch: with the finger, else to where the phase wants it.
@@ -402,7 +398,12 @@ class PullMotion(var scene: PullScene, var others: Int, var calm: Boolean = fals
                 pull = x
                 pullV = v
             }
-            if ((phase == Phase.Cancel || phase == Phase.Closing) && pull < 0.4f && abs(pullV) < 5f) rest()
+            if ((phase == Phase.Cancel || phase == Phase.Closing) && pull < 0.4f && abs(pullV) < 5f) {
+                pull = 0f
+                pullV = 0f
+                // The sky doesn't wait for the bus, nor the bus for the sky: it drives on home, unhurried.
+                if (phase == Phase.Cancel || busHome) rest()
+            }
         }
 
         door = 0f
@@ -410,6 +411,10 @@ class PullMotion(var scene: PullScene, var others: Int, var calm: Boolean = fals
         if (calm) stepCalm() else stepDriving(dt)
         puffs.removeAll { p -> p.age += dt; p.age >= 0.6f }
     }
+
+    /** The bus is where the horizon has its own (or, with none of the card's, faded with the sign): the scene can go. */
+    private val busHome: Boolean
+        get() = calm || scene.home == null || (drive == Drive.Return && abs(busX - scene.rest) < 1f)
 
     private fun show(o: PullOutcome) {
         phase = Phase.Shown
