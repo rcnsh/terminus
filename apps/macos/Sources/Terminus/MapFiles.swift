@@ -117,17 +117,20 @@ enum MapFiles {
     }
 
     /// A GET to the API with the app's headers; the body of a 200. It keeps
-    /// to the same Retry-After as the rest of the app (Quiet): the map polls
-    /// every few seconds, and asking through a 429 only keeps it tripped.
+    /// to the same Retry-After as the answers (Quiet) and stops with them on
+    /// a 426 (Outdated): the map polls every few seconds, and asking through
+    /// a 429 only keeps it tripped.
     static func get(_ path: String, token: String?) async throws -> Data {
-        if Date() < Quiet.until { throw ApiError(status: 429, message: "HTTP 429") }
+        if token != nil, Outdated.active { throw ApiError(status: 426, message: "HTTP 426") }
+        if Date() < Quiet.until(.app) { throw ApiError(status: 429, message: "HTTP 429") }
         var req = URLRequest(url: URL(string: Api.base + path)!, timeoutInterval: 10)
         req.setValue(Api.client, forHTTPHeaderField: "x-terminus-client")
         req.setValue(Lang.header, forHTTPHeaderField: "accept-language")
         if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "authorization") }
         let (data, resp) = try await URLSession.shared.data(for: req)
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
-        if status == 429 { Quiet.after((resp as? HTTPURLResponse)?.value(forHTTPHeaderField: "retry-after")) }
+        if status == 429 { Quiet.after((resp as? HTTPURLResponse)?.value(forHTTPHeaderField: "retry-after"), scope: .app) }
+        if status == 426 { Outdated.mark() }
         guard status == 200 else { throw ApiError(status: status, message: "HTTP \(status)") }
         return data
     }
