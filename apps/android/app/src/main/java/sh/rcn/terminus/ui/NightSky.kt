@@ -421,7 +421,7 @@ private fun DrawScope.horizon(top: Float, page: Color, p: Palette, phase: Phase,
             val beam = listOf(at(x + 38, 66f), at(x + 60, 63f), at(x + 60, 70f))
             drawPath(Path().apply { moveTo(beam[0].x, beam[0].y); beam.drop(1).forEach { lineTo(it.x, it.y) }; close() }, MOON.copy(alpha = 0.12f))
         }
-        bus(x, Color(0xFF24211E), Color(0xFFD32F2F), dim = 3)
+        bus(x, Color(SHUTTLE), SHUTTLE_BAND, dim = 3)
     }
 }
 
@@ -495,6 +495,10 @@ internal fun DrawScope.shuttle(o: Offset, d: Float, paint: Color, band: Color?, 
         if (wheels) shuttleWheel(pt(wx, 12f), d)
     }
 }
+
+/** The shuttle on the horizon when nothing's coming, and the pull's when the screen has no service: dark, with A1's red along the bottom. */
+internal const val SHUTTLE = 0xFF24211EL
+internal val SHUTTLE_BAND = Color(0xFFD32F2F)
 
 /** Across a [shuttle], in its units, where its wheels are. */
 internal val SHUTTLE_WHEELS = floatArrayOf(7.5f, 26f)

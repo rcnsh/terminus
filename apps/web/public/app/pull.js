@@ -109,7 +109,8 @@ function onScreen(sel) {
 /**
  * The horizon's own bus, if it shows one: where it is along the road and
  * its colour. Else the colour of the first service on the tab (a board's
- * first row, a line), or the accent.
+ * first row, a line), or null: the horizon's own shuttle, dark with A1's red
+ * along the bottom, as it is when nothing's coming.
  */
 function busOf(horizon) {
   const own = horizon?.querySelector('.coming, .parked');
@@ -117,7 +118,7 @@ function busOf(horizon) {
   const colour = (el) => el?.style.getPropertyValue('--svc').trim();
   return {
     from: at ? Number(at[1]) : OFF_LEFT,
-    colour: colour(own) || colour(onScreen('[style*="--svc"]')) || 'var(--accent-bright)',
+    colour: colour(own) || colour(onScreen('[style*="--svc"]')) || null,
   };
 }
 
@@ -173,7 +174,10 @@ export function PullToRefresh({ enabled, refresh, colours }) {
       }
     };
 
-    const paint = (colour) => bus.style.setProperty('--svc', colour);
+    const paint = (colour) => {
+      bus.classList.toggle('shuttle', !colour);
+      if (colour) bus.style.setProperty('--svc', colour);
+    };
 
     function begin() {
       calm = reducedMotion();
@@ -194,7 +198,7 @@ export function PullToRefresh({ enabled, refresh, colours }) {
       Object.assign(st, { page: 'drag', mode: 'follow', v: 0, busV: 0, tilt: 0, tiltV: 0, kneel: 0, kneelV: 0, smV: 0, smA: 0 });
       st.x = st.lastX = calm ? stopAt(vw) : busAt(st.pull, from, vw);
       paint(colour);
-      loop = props.current.colours().filter((c) => c.toLowerCase() !== colour.toLowerCase());
+      loop = props.current.colours().filter((c) => c.toLowerCase() !== colour?.toLowerCase());
       next = 0;
       smoke = [];
       say('pull');
