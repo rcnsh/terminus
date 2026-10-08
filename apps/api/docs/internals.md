@@ -1516,8 +1516,9 @@ On a loop it slides on past the line's start, as the API places it. Clients
 take that from `/campus`'s `loop`, not from where the line ends: A1's and
 A2's lines end some 40 m from where they start at KRB.
 A tapped bus is ringed. Between stops, its `stretch` is drawn over the
-route, wider, with the rest of the route faded well back, and its card
-says "Between LT13 and COM 3".
+route, wider, with the rest of the route faded well back. Its card says
+where it is ("At COM 3", or "Next: COM 3" between stops) and where it's
+going ("Towards Kent Ridge MRT"), with the stops ahead from `upcoming`.
 
 ### The timelapse recorder
 
