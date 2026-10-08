@@ -20,18 +20,11 @@ import { Toast, campus, lists, loadCampus, loadProfile, profile, reloadProfile, 
 import { SearchBox } from '/account/search-box.js';
 import { offlineNext } from '/app/offline.js';
 import { preloadMap } from '/app/map-files.js';
+import { REFRESH_MS, markWaitMs, slowRetryMs, staleText } from '/app/timing.js';
 
-/** The answer refreshes this often while the app is on screen (the API caches 15 s). */
-const REFRESH_MS = 30_000;
 /** How often the timed refresh asks for Today too: it moves slowly, and
  *  each one is an answer per class on the server. */
 const DAY_MS = 120_000;
-/** Sooner than that at the card's own marks (nextChangeAt, refreshAt), but never sooner than this from now. */
-const MARK_MIN_MS = 5_000;
-/** Nor sooner than this after the last refresh a mark brought: a leave-by
- *  that keeps sliding (a late bus) would otherwise ask every 5 s. The Mac
- *  app and the server's own trip engine wait 30 s too. */
-const MARK_GAP_MS = 30_000;
 
 const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 // iPadOS says it's a Mac; one with a touch screen is an iPad.
@@ -157,11 +150,11 @@ function stale(cachedAt, failed = false) {
   // often (8 s, 16 s), and only while Now is on screen. Past that the timed
   // refresh is soon enough: a struggling server isn't helped by more.
   if (navigator.onLine) {
-    banner.set(failed ? t("Couldn't update. Showing the update from {0}.", at) : t('Slow connection. Showing the update from {0}.', at));
+    banner.set(staleText(at, { online: true, failed }));
     clearTimeout(slowRetry);
-    const wait = 8_000 * 2 ** slowTries++;
-    if (wait < REFRESH_MS) slowRetry = setTimeout(() => nowShown() && refresh({ timed: true }), wait);
-  } else banner.set(t("You're offline. Showing the update from {0}.", at));
+    const wait = slowRetryMs(slowTries++);
+    if (wait !== null) slowRetry = setTimeout(() => nowShown() && refresh({ timed: true }), wait);
+  } else banner.set(staleText(at, { online: false }));
 }
 let slowRetry = null;
 let slowTries = 0;
@@ -181,11 +174,8 @@ let markTimer = null;
 let markAt = -Infinity;
 function atMarks(a) {
   clearTimeout(markTimer);
-  const asOf = Date.parse(a?.asOf ?? '');
-  const marks = [a?.card?.nextChangeAt, a?.refreshAt].map((x) => Date.parse(x ?? '')).filter((m) => Number.isFinite(m) && !(m <= asOf));
-  if (!marks.length) return;
-  const wait = Math.max(MARK_MIN_MS, markAt + MARK_GAP_MS - Date.now(), Math.min(...marks) - serverNow());
-  if (wait >= REFRESH_MS) return;
+  const wait = markWaitMs(a, { now: Date.now(), serverNow: serverNow(), markAt });
+  if (wait === null) return;
   markTimer = setTimeout(() => {
     if (!nowShown()) return;
     markAt = Date.now();

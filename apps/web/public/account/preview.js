@@ -18,10 +18,10 @@ export const isStale = (a) => (!a?.card ? true : a.card.staleAt ? serverNow() >=
 
 /** The only part that ticks: "Leave now" once leave.at passes. The words are the server's (card.ts);
  *  at the stop, the bus to wait for ("D2 at 9:41"), as it is. */
-const leaveHead = (a) => (a.card.phase !== 'waiting' && serverNow() >= Date.parse(a.leave.at) ? t('Leave now') : a.card.leaveBy);
+export const leaveHead = (a) => (a.card.phase !== 'waiting' && serverNow() >= Date.parse(a.leave.at) ? t('Leave now') : a.card.leaveBy);
 
 /** Other trips: "Leave by 09:38 · catch the 09:41 D2 at PGP". */
-const leaveText = (a) => [leaveHead(a), a.card.leaveVia].filter(Boolean).join(' · ');
+export const leaveText = (a) => [leaveHead(a), a.card.leaveVia].filter(Boolean).join(' · ');
 
 /** The time now, ticking every second; started afresh when `from` changes. */
 function useEverySecond(from) {

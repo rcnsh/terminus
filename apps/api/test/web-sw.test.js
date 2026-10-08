@@ -7,6 +7,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -23,6 +24,20 @@ function importsOf(file) {
   const src = read(file);
   return [...src.matchAll(/(?:^|[;\s])import\s*(?:[\w$*{}\s,]+?\s*from\s*)?(['"])([^'"]+)\1/gm)].map((m) => (m[2].startsWith('/') ? m[2] : path.posix.join(path.posix.dirname(file), m[2])));
 }
+
+/**
+ * The cache's name and the list it was made from, as they were last changed
+ * together. When SHELL_FILES changes, bump SHELL in sw.js too (so browsers
+ * drop the old copy and its files), then put both here.
+ */
+const SHELL_PIN = { shell: 'shell-v18', files: '6e96b5914455cf81' };
+
+test('the list of files kept for offline changes only with a new SHELL', () => {
+  const shell = /const SHELL = '([^']+)'/.exec(read('sw.js'))[1];
+  const files = crypto.createHash('sha256').update([...shellFiles()].sort().join('\n')).digest('hex').slice(0, 16);
+  if (files !== SHELL_PIN.files && shell === SHELL_PIN.shell) assert.fail(`SHELL_FILES changed: bump SHELL in sw.js, then set SHELL_PIN here to the new name and files: '${files}'`);
+  assert.deepEqual({ shell, files }, SHELL_PIN, `SHELL_PIN is out of date: set it to { shell: '${shell}', files: '${files}' }`);
+});
 
 test('every module the web app loads at startup is kept for offline', () => {
   const shell = shellFiles();
