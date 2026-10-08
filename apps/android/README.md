@@ -32,6 +32,30 @@ There are two apps from the same code (product flavors). **stable** is
 the name. It uses `beta.terminus.rcn.sh` and its own accounts, and installs
 beside the stable app.
 
+### Dependencies are locked and checked
+
+Every resolved version is pinned in `app/gradle.lockfile` (plus
+`buildscript-gradle.lockfile` and `settings-gradle.lockfile` for the plugins),
+and every downloaded file's SHA-256 is in `gradle/verification-metadata.xml`:
+a build fails on an artefact whose bytes or version changed. Each group comes
+only from the repository that publishes it (`settings.gradle.kts`), and the
+wrapper checks Gradle's own download (`distributionSha256Sum`). After changing
+a version in `gradle/libs.versions.toml` (or merging a Dependabot PR), write
+both again and review the diff:
+
+```bash
+./gradlew :app:resolveAll buildEnvironment --write-locks
+./gradlew :app:resolveAll buildEnvironment :app:lintStableDebug --write-verification-metadata sha256
+```
+
+Gradle only records what the machine it runs on downloads, and `aapt2` comes
+as one jar per system: after an Android Gradle Plugin bump, add the `-linux`
+(CI) and `-windows` jars' SHA-256 by hand, checked against the `.sha1` Google
+Maven publishes beside each, or CI fails verification.
+
+A release build without the `TERMINUS_*` key properties comes out unsigned,
+never signed with the debug key.
+
 The unit tests read the same answer fixtures as the API's tests
 (`apps/api/test/fixtures/answers`).
 
