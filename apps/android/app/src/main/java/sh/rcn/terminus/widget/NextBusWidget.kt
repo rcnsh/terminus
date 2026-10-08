@@ -143,7 +143,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         // Buttons for Timetable, Nearby and the usual places, as many as fit;
         // none on a compact widget, which then always shows the timetable.
         val now0 = System.currentTimeMillis()
-        val chips = if (large && paired) WidgetModes.chips(store, plan?.places.orEmpty(), added, LocalSize.current.width.value - 28f, now0) else emptyList()
+        val chips = if (large && paired) WidgetModes.chips(store.destinationUses(), plan?.places.orEmpty(), added, LocalSize.current.width.value - 28f, now0) else emptyList()
         val mode = WidgetModes.effective(chosen.mode, chosen.at, plan, chips.isNotEmpty(), now0)
         val bottom = Bottom(chips, mode, appWidgetId)
         val onTimetable = mode == Mode.Timetable
@@ -464,7 +464,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         val api = chosen.nearbyStops()
         val stops = api?.let { NearbySwap.order(it, chosen.swap, now) }
         val age = chosen.fetchedAt?.let { (now - it) / 1000 } ?: 0L
-        val old = age > NEARBY_OLD_S
+        val old = age * 1000 > WidgetModes.NEARBY_OLD_MS
         val first = stops?.firstOrNull()
         if (first == null) {
             Text(L.s(R.string.chip_nearby), style = muted, maxLines = 1)
@@ -521,9 +521,6 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
     }
 
     companion object {
-        /** Nearby's countdowns are guesses past this. */
-        private const val NEARBY_OLD_S = 180L
-
         /** The server's own words for a time are kept while they're this fresh; then the widget counts down itself. */
         private const val SERVER_ETA_S = 30L
 
@@ -598,7 +595,8 @@ class RefreshAction : ActionCallback {
         store.lastError = UPDATING
         redrawWidgets(context)
         try {
-            Refresher.refresh(context, fast = true)
+            // A tap's broadcast has seconds: the rest of a refresh follows in a job.
+            Refresher.refresh(context, fast = true, extras = false)
         } catch (e: kotlinx.coroutines.CancellationException) {
             // Stopped before an answer: "Updating…" mustn't stay, nor keep
             // the widget from its offline day plan.

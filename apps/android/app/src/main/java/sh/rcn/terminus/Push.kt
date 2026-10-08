@@ -191,8 +191,9 @@ class PushService : FirebaseMessagingService() {
         // trip is over.
         if (message.data["phase"] in LiveService.TRIP_PHASES && LiveService.start(ctx)) return
         // A background thread with a few seconds to spare: only the answer
-        // here, one request; the rest of a refresh follows in a job.
-        runBlocking { Refresher.refresh(ctx, fast = true, extras = false) }
+        // here, one request; the rest of a refresh follows in a job. Asked
+        // for even just after another refresh: the card changed since.
+        runBlocking { Refresher.refresh(ctx, fast = true, extras = false, force = true) }
     }
 }
 

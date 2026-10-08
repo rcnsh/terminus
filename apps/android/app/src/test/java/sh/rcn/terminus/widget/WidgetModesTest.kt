@@ -71,4 +71,17 @@ class WidgetModesTest {
         // Only Timetable and Nearby fit: they stay.
         assertEquals(listOf("Timetable", "Nearby"), WidgetModes.pick(all, com3, 175f).map { it.label })
     }
+
+    @Test fun aChosenWidgetIsRedrawnAsItsTimesAgeAndItsChoiceRunsOut() {
+        sh.rcn.terminus.ServerClock.reset()
+        // Nearby: when its times turn old, three minutes after they came.
+        assertEquals(now + WidgetModes.NEARBY_OLD_MS, WidgetModes.redrawAt(Mode.Nearby, now, now, null, now))
+        // A place: its leave-by turning into "Leave now", before the half hour is up.
+        val leaveAt = now + 10 * 60_000
+        val place = NextAnswer.parse(JSONObject(answer(leaveAt, "idle")))
+        assertEquals(leaveAt, WidgetModes.redrawAt(utown, now, now, place, now))
+        // Past it, the choice running out; then nothing.
+        assertEquals(now + WidgetModes.KEEP_MS, WidgetModes.redrawAt(utown, now, now, place, leaveAt))
+        assertEquals(null, WidgetModes.redrawAt(utown, now, now, place, now + WidgetModes.KEEP_MS))
+    }
 }

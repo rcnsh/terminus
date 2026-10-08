@@ -74,12 +74,21 @@ class Store(context: Context) {
      * the answer read from it. Read first: an answer this version can't read
      * throws [ParseError] and leaves the good one kept before it, and the
      * back-off, as they were.
+     *
+     * [askedAtMs]: when its request went out. One asked for before the
+     * answer already kept (a slow widget refresh overtaken by the app's)
+     * isn't kept, and the newer one is returned in its place.
      */
-    fun saveAnswer(json: JSONObject, fetchedAtMs: Long): NextAnswer {
+    fun saveAnswer(json: JSONObject, fetchedAtMs: Long, askedAtMs: Long = fetchedAtMs): NextAnswer {
         val answer = NextAnswer.parse(json)
-        // A fresh answer from anywhere (the app, the live notification, a
-        // skip) ends a run of failed refreshes, so the back-off starts over.
-        prefs.edit { putString(KEY_ANSWER, json.toString()).putLong(KEY_FETCHED, fetchedAtMs).putInt(KEY_REFRESH_FAILS, 0) }
+        synchronized(Store) {
+            // One "asked" later than now is from before the phone's clock went back: not newer.
+            val kept = prefs.getLong(KEY_ASKED, 0)
+            if (askedAtMs < kept && kept <= System.currentTimeMillis()) lastAnswer()?.let { return it.first }
+            // A fresh answer from anywhere (the app, the live notification, a
+            // skip) ends a run of failed refreshes, so the back-off starts over.
+            prefs.edit { putString(KEY_ANSWER, json.toString()).putLong(KEY_FETCHED, fetchedAtMs).putLong(KEY_ASKED, askedAtMs).putInt(KEY_REFRESH_FAILS, 0) }
+        }
         // The app shortcuts follow the saved places (a no-op when they haven't changed).
         runCatching { Shortcuts.update(app, answer.places) }
         return answer
@@ -220,6 +229,11 @@ class Store(context: Context) {
         get() = prefs.getLong(KEY_PUSH_HEARD, 0)
         set(value) = prefs.edit { putLong(KEY_PUSH_HEARD, value) }
 
+    /** When the refresh alarm is next due, epoch ms on the phone's clock (0: none armed). */
+    var refreshAlarmAt: Long
+        get() = prefs.getLong(KEY_REFRESH_ALARM, 0)
+        set(value) = prefs.edit { putLong(KEY_REFRESH_ALARM, value) }
+
     /** Background refreshes that failed in a row, for the back-off (Refresher). */
     var refreshFailures: Int
         get() = prefs.getInt(KEY_REFRESH_FAILS, 0)
@@ -339,6 +353,8 @@ class Store(context: Context) {
         private const val KEY_PUSH_FOR = "push-for"
         private const val KEY_PUSH_HEARD = "push-heard-at"
         private const val KEY_REFRESH_FAILS = "refresh-failures"
+        private const val KEY_REFRESH_ALARM = "refresh-alarm-at"
+        private const val KEY_ASKED = "answer-asked"
         private const val KEY_ALERTED = "leave-alerted"
         private const val KEY_SWIPED_TODAY = "swiped-today"
         private const val KEY_SWIPE_PEEKS = "swipe-peeks"
