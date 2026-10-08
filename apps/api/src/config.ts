@@ -110,6 +110,27 @@ export const PUBLIC = {
   fareWorthS: 180,
 } as const;
 
+/** Changing buses on the way (transfer.ts): one change at most, shuttles only. */
+export const TRANSFER: {
+  /** Change stops whose arrivals one answer may fetch, on top of the stops
+   *  near you: each is a call to NUS when the cache doesn't have it. */
+  maxFetch: number;
+  /** Off one bus and ready to board the next, a crossing of the road on top. */
+  changeBufferS: number;
+  /** What a change must save over the best single bus to be the answer
+   *  rather than it: getting off and waiting again is a bother of its own. */
+  worthS: number;
+  /** 'noDirect': only where no single bus goes there; 'beats': also where a
+   *  change beats the single bus by `worthS`; 'off': never. */
+  mode: 'off' | 'noDirect' | 'beats';
+} = {
+  maxFetch: 2,
+  changeBufferS: 60,
+  worthS: 240,
+  // Off until a trip can be followed onto its second bus (trip.ts).
+  mode: 'off',
+};
+
 /**
  * The timelapse recorder (timelapse.ts, timelapsedo.ts): the ONE poller of
  * the NUS feed. Answers fetch on demand; the cron's health check and the

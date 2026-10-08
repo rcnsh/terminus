@@ -583,7 +583,9 @@ test('an answer logs one decision row plus a row per timed arrival', async () =>
   assert.deepEqual(row.indexes, [a.stop.code]);
   assert.equal(row.doubles[6], a.stop.confidence);
   assert.equal(row.doubles[8], 0, 'no coordinates were sent');
-  assert.equal(row.doubles.length, 10);
+  assert.equal(row.doubles.length, 11);
+  assert.equal(row.blobs[9], '', 'one bus: no change stop');
+  assert.equal(row.doubles[10], -1, 'one bus: no wait at a change');
 
   // The segment-time seed: plate is the join key across stops.
   const arrivals = ae.rows('arrival');

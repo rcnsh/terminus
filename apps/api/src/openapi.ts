@@ -1873,6 +1873,27 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               type: 'integer',
               description: 'Without a class to aim at: seconds on foot from where you get off to the place itself (a room, a building, a food court), which `arrive` does not count. A class’s `arrive` is already at its room. Absent for a stop.',
             },
+            change: {
+              $ref: '#/components/schemas/BusChange',
+              description: 'A trip that changes buses: the second bus. `svc`, `stop`, `stopCode`, `board`, `walkS` and `rideS` are then the first bus; `arrive`, `toStop`, `toCode`, `off` and `offCode` the end of the trip. Absent on one bus.',
+            },
+          },
+        },
+        BusChange: {
+          type: 'object',
+          description: 'The second bus of a trip that changes buses: where the first drops you, where the second goes from, and when.',
+          required: ['svc', 'from', 'fromCode', 'stop', 'stopCode', 'reach', 'board', 'rideS', 'estimated'],
+          properties: {
+            svc: { type: 'string', example: 'P' },
+            from: { type: 'string', example: 'Kent Vale', description: 'Where the first bus drops you, short name.' },
+            fromCode: { type: 'string', example: 'KV' },
+            stop: { type: 'string', description: 'Where the second bus goes from: `from`, or the stop across the road from it.' },
+            stopCode: { type: 'string' },
+            crossS: { type: 'integer', description: 'Seconds on foot across the road from `from` to `stop`. Absent at the same stop.' },
+            reach: { type: ['string', 'null'], format: 'date-time', description: 'When the first bus gets to `from`. Null with no time.' },
+            board: { type: ['string', 'null'], format: 'date-time', description: 'When the second bus leaves `stop`. Null with no time.' },
+            rideS: { type: 'integer', description: 'Seconds on the second bus.' },
+            estimated: { type: 'boolean', description: 'The second bus’s time is not a live one. Show it with a `~`.' },
           },
         },
         Timing: {
@@ -1912,6 +1933,10 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             toStop: { type: 'string', description: 'Where you get off, short name: the destination stop this bus calls at, or `off`.' },
             endWalkS: { type: 'integer', description: 'Seconds on foot from where you get off to the place itself (a room, a building, a food court), which `arrive` does not count. Absent for a stop.' },
             paid: { type: 'boolean', enum: [true], description: 'A public bus (95, 151, …), with a fare, unlike the free shuttle. Absent for a shuttle.' },
+            change: {
+              $ref: '#/components/schemas/BusChange',
+              description: 'Where no single bus goes there: the bus to change to. The fields above are then the first bus, except `arrive`, `toStop` and `off`, which are the end of the trip. Absent on one bus.',
+            },
           },
         },
         Arrival: {

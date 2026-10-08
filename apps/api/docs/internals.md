@@ -1013,6 +1013,40 @@ another service, or the same one from another stop only when it gets you
 there within `WALK.mentionWithinS` of the best: across the road it's usually
 the same bus the wrong way round the loop.
 
+**Changing buses.** Where no single bus goes there, even from a stop a
+short walk away, the answer is a trip on two shuttles
+([`transfer.ts`](../src/transfer.ts)): the first to a stop the second
+calls at, getting off there or crossing to the stop across the road. One
+change at most, never onto the same service or onto a public bus. Which
+change stops to ask about is settled from the route data alone, before any
+fetch: each route is ranked by a timetable guess of the whole trip (half a
+headway's wait for each bus, plus `TRANSFER.changeBufferS` to get off and
+cross), and at most `TRANSFER.maxFetch` stops are fetched for them beyond
+those the answer fetches anyway, all in the one round, through the same
+15-second cache. Where no single bus goes, the stops near you that a change
+starts from stand in for the one the answer would have had. `scoreOptions`
+then times each route on the live arrivals: the first bus as any other, the
+second the first one you can catch once the first gets you there, a headway
+on from the last the feed lists when it lists none that late. The trip is
+as sure as its less sure bus (`worseOf`), so a guessed second bus makes the
+whole of it `scheduled` and never ranks it over a measured single bus. A
+change counts as `TRANSFER.worthS` of the trip when ranking, as a fare does.
+`TRANSFER.mode` `'noDirect'` offers a change only where no single bus
+goes; `'beats'` would also offer one where a single bus goes there but a
+change is faster by that much, once the answers have been watched
+(`docs/analytics.md`, "Changing buses"); `'off'` never does.
+
+The answer keeps one bus in every field clients already read: `bus`,
+`departsAt`, `leave.svc`/`stop`/`board` are the first bus, and `arriveAt`,
+`toStop` and `leave.arrive` the end of the trip. The second bus is in
+`change` (`BusChange` in the API docs), and the detail says it ("change at
+Kent Vale to P"), so an app that doesn't know about `change` still tells you
+to change. For a class, the leave-by (`forTransfer` in `leave.ts`) works
+back from the room: the latest second bus that gets you there on time, then
+the latest first bus that gets you to it, and the arrival forwards from that
+first bus; a change must leave you `TRANSFER.worthS` more time at home than
+a single bus to be the one.
+
 **A loop's run ends at its terminal.** The shuttle loops start and end at
 theirs (KRB, COM3, Kent Vale), where the feed lists the run that ends under an
 `-E` berth; a public loop ends at its interchange, which can be off campus

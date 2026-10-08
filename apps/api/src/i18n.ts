@@ -21,7 +21,7 @@
  * account 账户, trip 行程, location (the setting) 定位 (where you are 位置),
  * a bus that's often packed 很挤, crowding 拥挤程度 (low 低, medium 中,
  * high 高; on the Buses tab Seats 有座位, Busy 有点挤, Packed 很挤),
- * estimate 估计, live 实时, an email address 邮箱 ("添加邮箱"), an email
+ * estimate 估计, live 实时, change (buses) 换乘, an email address 邮箱 ("添加邮箱"), an email
  * sent 邮件. A space between Chinese and Latin letters or digits
  * ("9:41 的 D2"), none between two Chinese words ("搭约 9:41 的 D2"),
  * full-width punctuation in Chinese. The website and the apps follow the
@@ -104,6 +104,8 @@ const en = {
   shortWalk: 'short walk',
   rightHere: 'right here',
   offAt: ((stop: string) => `off at ${stop}`) as Fn<[string]>,
+  changeTo: ((stop: string, svc: string) => `change at ${stop} to ${svc}`) as Fn<[string, string]>,
+  changeAcross: ((stop: string, svc: string) => `change at ${stop} to ${svc} across the road`) as Fn<[string, string]>,
   destStops: ((dest: string, n: number) => `${dest}, ${n} stop${n === 1 ? '' : 's'}`) as Fn<[string, number]>,
   destIn: ((dest: string, t: string) => `${dest} in ~${t}`) as Fn<[string, string]>,
   atDest: ((dest: string) => `at ${dest}`) as Fn<[string]>,
@@ -404,6 +406,8 @@ const zh: Msgs = {
   shortWalk: '走几步',
   rightHere: '就在这里',
   offAt: (stop) => zs`在${stop}下车`,
+  changeTo: (stop, svc) => zs`在${stop}换乘${svc}`,
+  changeAcross: (stop, svc) => zs`在${stop}过马路换乘${svc}`,
   destStops: (dest, n) => `${zhTo(dest)}，${n} 站`,
   destIn: (dest, t) => zs`约${t}${zhTo(dest)}`,
   atDest: (dest) => zhTo(dest),

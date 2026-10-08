@@ -28,7 +28,8 @@ import type {
   Stop,
   StopArrivals,
 } from './types.ts';
-import { DEFAULT_HEADWAY_S, PUBLIC, RIDE, WALK, isMeasured, sgt } from './config.ts';
+import { DEFAULT_HEADWAY_S, PUBLIC, RIDE, TRANSFER, WALK, isMeasured, sgt } from './config.ts';
+import type { TransferRoute } from './transfer.ts';
 import { ROUTE_COLORS } from './campus.ts';
 import { haversineM } from './geo.ts';
 import { isPublic, publicRideS, rideMetres, svcName } from './public.ts';
@@ -762,6 +763,14 @@ export function boardAt(
   return out;
 }
 
+/** How sure each kind of time is, least first (see the degrade ladder in format.ts). */
+const SURE: Quality[] = ['unknown', 'scheduled', 'stale', 'live'];
+
+/** The less sure of two times. */
+export function worseOf(a: Quality, b: Quality): Quality {
+  return SURE.indexOf(a) <= SURE.indexOf(b) ? a : b;
+}
+
 /** One bus scored at its stop: when you board it and how sure that is (scoreLeg). */
 export interface ScoredLeg {
   /** Seconds from now. */
@@ -896,14 +905,61 @@ export function scoreOptions(
   /** `openBy`: a service not running yet that starts before this (epoch ms)
    *  is kept, its first bus guessed from its start. For a class: at 06:30 the
    *  08:00 class's bus is the D2 that starts at 07:15, not "Services ended". */
-  opts: { openBy?: number } = {},
+  /** `transfers`: trips with a change of bus to time as well (planTransfers),
+   *  their stops' arrivals in `arrivalsByStop` with the rest. */
+  opts: { openBy?: number; transfers?: TransferRoute[] } = {},
 ): ScoredOption[] {
   const out: ScoredOption[] = [];
+  const legOpts = opts.openBy !== undefined ? { openBy: opts.openBy } : {};
+
+  for (const r of opts.transfers ?? []) {
+    const s1 = scoreLeg(graph, r.leg1, arrivalsByStop.get(r.origin.code), nowMs, r.walkS + WALK.boardBufferS, legOpts);
+    if (!s1) continue;
+    // The second bus is the first you can catch once the first gets you
+    // there: off it, across the road if need be, and ready to board.
+    const reachS = s1.boardS + s1.rideS;
+    const s2 = scoreLeg(graph, r.leg2, arrivalsByStop.get(r.board.code), nowMs, reachS + r.crossS + TRANSFER.changeBufferS, legOpts);
+    if (!s2) continue;
+    out.push({
+      stop: r.origin,
+      svc: r.leg1.svc,
+      distM: r.distM,
+      walkS: r.walkS,
+      hops: r.leg1.hops + r.leg2.hops,
+      boardS: s1.boardS,
+      rideS: s1.rideS,
+      totalS: s2.boardS + s2.rideS,
+      // A trip is as sure as its less sure bus: a guessed second bus makes
+      // the whole of it a guess, never ranked over a measured single bus.
+      quality: worseOf(s1.quality, s2.quality),
+      arrival: s1.arrival,
+      fetchedAt: Math.min(s1.fetchedAt, s2.fetchedAt),
+      fromMs: nowMs,
+      ...(s1.opensInS > 0 ? { opensInS: Math.round(s1.opensInS) } : {}),
+      ambiguousBerth: s1.ambiguousBerth || s2.ambiguousBerth,
+      ...(r.leg2.off ? { off: r.leg2.off } : {}),
+      ...(r.leg2.to ? { to: r.leg2.to } : {}),
+      change: {
+        at: r.at,
+        stop: r.board,
+        crossS: r.crossS,
+        svc: r.leg2.svc,
+        hops: r.leg2.hops,
+        reachS,
+        boardS: s2.boardS,
+        rideS: s2.rideS,
+        quality: s2.quality,
+        arrival: s2.arrival,
+        fetchedAt: s2.fetchedAt,
+        ambiguousBerth: s2.ambiguousBerth,
+      },
+    });
+  }
 
   for (const c of candidates) {
     const sa = arrivalsByStop.get(c.stop.code);
     for (const leg of c.legs) {
-      const s = scoreLeg(graph, leg, sa, nowMs, c.walkS + WALK.boardBufferS, opts);
+      const s = scoreLeg(graph, leg, sa, nowMs, c.walkS + WALK.boardBufferS, legOpts);
       if (!s) continue;
       out.push({
         stop: c.stop,
@@ -930,14 +986,22 @@ export function scoreOptions(
   // Measurements beat estimates outright; within a tier, time to the place
   // itself decides, a public bus's fare counting as PUBLIC.fareWorthS of it:
   // it wins only when it clearly saves time over the free shuttle.
-  const costS = (o: ScoredOption) => o.totalS + endWalk(o) + (o.paid ? PUBLIC.fareWorthS : 0);
+  // A change of bus counts as TRANSFER.worthS of it, the same way.
+  const costS = (o: ScoredOption) => o.totalS + endWalk(o) + (o.paid ? PUBLIC.fareWorthS : 0) + (o.change ? TRANSFER.worthS : 0);
   out.sort(
     (a, b) =>
       Number(isMeasured(b.quality)) - Number(isMeasured(a.quality)) ||
       costS(a) - costS(b) ||
       a.walkS - b.walkS ||
-      a.svc.localeCompare(b.svc),
+      a.svc.localeCompare(b.svc) ||
+      (a.change?.svc ?? '').localeCompare(b.change?.svc ?? ''),
   );
+  // Likewise a change of bus that is measured over a single bus that is
+  // only a guess: unless it saves what the change is worth, the single bus.
+  if (out[0]?.change) {
+    const single = out.findIndex((o) => !o.change);
+    if (single > 0 && out[single].quality !== 'unknown' && costS(out[single]) <= costS(out[0])) out.unshift(...out.splice(single, 1));
+  }
   // A live public bus outranks a free bus that only has a headway guess by
   // tier, but the fare still has to be worth it: unless it beats the best
   // free option's time by what the fare is worth, the free bus is the answer.
@@ -959,9 +1023,13 @@ export function scoreOptions(
 export function pickAlt(options: ScoredOption[]): ScoredOption | null {
   const best = options[0];
   if (!best) return null;
+  // After a change of bus, the single bus it beat, when there is one; after
+  // a single bus, never a change, which it beat.
+  if (best.change) return options.find((o) => !o.change) ?? options.find((o) => o.svc !== best.svc || o.change?.svc !== best.change?.svc) ?? null;
+  const single = options.filter((o) => !o.change);
   return (
-    options.find((o) => o.svc !== best.svc) ??
-    options.find((o) => o.stop.code !== best.stop.code && o.totalS - best.totalS <= WALK.mentionWithinS) ??
+    single.find((o) => o.svc !== best.svc) ??
+    single.find((o) => o.stop.code !== best.stop.code && o.totalS - best.totalS <= WALK.mentionWithinS) ??
     null
   );
 }
@@ -976,7 +1044,9 @@ export function confidence(options: ScoredOption[], hasCoords: boolean, endWalk:
   const best = options[0];
   // Two passes of the same service through this stop and no way to tell which
   // one the ETA belongs to. No amount of margin elsewhere earns that back.
-  const ceiling = best.ambiguousBerth ? 0.5 : 0.97;
+  // A change of bus is two rides priced by RIDE.secondsPerHop, and a wait
+  // between them that is a guess unless the second bus is in the feed.
+  const ceiling = best.ambiguousBerth ? 0.5 : best.change ? 0.85 : 0.97;
   if (!hasCoords) return Math.min(0.75, ceiling); // exact stop, but only an assumption about where you are
   const other = options.find((o) => o.stop.code !== best.stop.code);
   if (!other) return Math.min(0.9, ceiling);
