@@ -417,7 +417,6 @@ body.on-map > .nav, body.on-map #tab-now { display: none; }
 .sheet-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 0; font-variant-numeric: tabular-nums; }
 .sheet-row .when { font-weight: 600; }
 .sheet-row .crowd { color: var(--muted); font-size: 0.85rem; font-weight: 400; margin-left: 6px; }
-.sheet-label { margin: 0; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .svc-tag {
   display: inline-flex;
   align-items: center;
@@ -438,6 +437,22 @@ button.svc-tag { cursor: pointer; }
 .svc-tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .sheet-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .sheet-actions .btn { flex: 1 1 auto; text-align: center; }
+/* Walking directions and favourite: icons beside Go there, which takes the rest of the row. */
+.sheet-actions .btn.icon { flex: none; display: inline-grid; place-items: center; width: 44px; padding: 0; }
+.sheet-actions .btn.icon svg { width: 20px; height: 20px; fill: none; }
+.sheet-actions .btn.icon.on svg { fill: var(--accent); color: var(--accent); }
+.sheet-actions .btn.icon.on:disabled { opacity: 1; }
+/* The Buses tab's board, smaller: rows edge to edge in the sheet, the time beside the words. */
+.sheet-board { margin: 0 -16px; border-block: 1px solid var(--line); }
+.sheet-board .bt-row { padding: 10px 16px; gap: 3px 12px; }
+.sheet-board .bt-chip { min-width: 40px; height: 26px; font-size: 0.85rem; border-radius: 7px; }
+.sheet-board .bt-dir { font-size: 0.9rem; }
+.sheet-board .bt-big { font-size: 1.6rem; }
+.sheet-board .bt-big.now { font-size: 1.15rem; }
+.sheet-board .bt-meta { padding-left: 52px; font-size: 0.75rem; }
+.sheet-board .bt-then { font-size: 0.78rem; }
+.sheet-more { justify-self: start; margin: -4px 0 0; padding: 6px 0; border: 0; background: none; color: var(--accent); font: 600 0.875rem var(--font); cursor: pointer; }
+@media (max-height: 420px) { .sheet-board { margin-inline: -14px; } .sheet-board .bt-row { padding-inline: 14px; } }
 .bus-line { display: flex; align-items: center; gap: 10px; }
 
 /* MapLibre's own controls, in the app's colours. */

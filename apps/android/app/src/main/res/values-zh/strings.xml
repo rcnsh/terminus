@@ -28,7 +28,8 @@
     <string name="map_recentre">回到校园</string>
     <string name="map_save_place">加入收藏</string>
     <string name="map_saved_as">已收藏</string>
-    <string name="map_services_here">经过这里的线路</string>
+    <string name="map_show_more">再显示 %1$d 条线路</string>
+    <string name="map_show_fewer">收起</string>
     <string name="map_times_need_connection">实时时间需要联网。</string>
     <string name="map_walking_directions">步行路线</string>
     <string name="tab_map">地图</string>

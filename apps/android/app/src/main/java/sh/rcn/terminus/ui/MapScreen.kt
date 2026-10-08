@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -32,13 +33,16 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -61,6 +65,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
@@ -651,54 +656,73 @@ private fun SheetRow(label: String, value: String) {
 /** Saving a stop as a place, from the account's profile (Settings' favourites). */
 internal class PlacesForMap(val savedAs: (code: String) -> String?, val full: () -> Boolean, val save: (code: String, name: String) -> Unit)
 
+/** The rows a stop's sheet shows before "Show more", so the map stays in view. */
+private const val PEEK_ROWS = 3
+
+/**
+ * A stop: its board as the Buses tab has it, the first few rows until asked
+ * for the rest, and ways to go there. A row tapped shows its service on the map.
+ */
 @Composable
 private fun StopSheet(stop: MapStop, ui: MapUi, campus: CampusMap, actions: MapActions) {
     val places = actions.places
     val ctx = LocalContext.current
-    SheetSurface(stop.name, null, actions.closeSheet) {
+    var all by remember(stop.code) { mutableStateOf(false) }
+    SheetSurface(stop.name, stop.longName?.takeIf { it != stop.name }, actions.closeSheet) {
         val board = ui.board
-        when {
-            ui.boardFailed -> Text(stringResource(R.string.map_times_need_connection), color = MaterialTheme.colorScheme.onSurfaceVariant)
-            board == null -> Text(stringResource(R.string.refreshing), color = MaterialTheme.colorScheme.onSurfaceVariant)
-            board.rows.isEmpty() -> Text(stringResource(if (board.available) R.string.map_no_buses_due else R.string.map_no_times), color = MaterialTheme.colorScheme.onSurfaceVariant)
-            else -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                for (r in board.rows) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        SvcTag(r.svc, campus.routes[r.svc]?.color?.color() ?: Color.Gray)
-                        Spacer(Modifier.weight(1f))
-                        // The server's words ("4 min", "~6 min", "now"); worked out here for an older server.
-                        val s = r.etaS ?: 0
-                        val min = stringResource(R.string.map_min, s / 60)
-                        // Said in words: "about 6 minutes, timetable", where the screen has "~6 min".
-                        val said = Spoken.eta(r.etaS, r.quality)
-                        Text(
-                            r.eta ?: when {
-                                s < 60 -> stringResource(R.string.map_arriving)
-                                r.quality == "scheduled" -> stringResource(R.string.map_about, min)
-                                else -> min
-                            },
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = if (said == null) Modifier else Modifier.semantics { contentDescription = said },
-                        )
-                    }
+        val note = when {
+            ui.boardFailed -> R.string.map_times_need_connection
+            board == null -> R.string.refreshing
+            board.rows.isEmpty() -> if (board.available) R.string.map_no_buses_due else R.string.map_no_times
+            else -> null
+        }
+        if (note != null || board == null) {
+            Text(stringResource(note ?: R.string.refreshing), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // No times to list them by: the services here, each showing its line.
+            if (note != R.string.refreshing) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for (svc in stop.services) SvcTag(svc, campus.routes[svc]?.color?.color() ?: Color.Gray) { if (ui.selected != svc) actions.choose(svc) }
+                }
+            }
+        } else {
+            val rows = runningFirst(board.rows)
+            val more = rows.size - PEEK_ROWS
+            val colors = remember(campus) { campus.routes.mapValues { it.value.color } }
+            // Edge to edge, as on the Buses tab: out past the sheet's own padding.
+            Column(Modifier.layout { m, c ->
+                val wide = c.maxWidth + 32.dp.roundToPx()
+                val p = m.measure(c.copy(minWidth = wide, maxWidth = wide))
+                layout(c.maxWidth, p.height) { p.place(-16.dp.roundToPx(), 0) }
+            }) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                BoardRows(
+                    if (all || more <= 1) rows else rows.take(PEEK_ROWS),
+                    colors,
+                    compact = true,
+                    clickLabel = { stringResource(R.string.on_the_map, it) },
+                ) { if (ui.selected != it.svc) actions.choose(it.svc) }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            }
+            if (more > 1) {
+                TextButton(onClick = { all = !all }, modifier = Modifier.offset(x = (-12).dp)) {
+                    Text(if (all) stringResource(R.string.map_show_fewer) else stringResource(R.string.map_show_more, more))
                 }
             }
         }
-        Text(stringResource(R.string.map_services_here), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            for (svc in stop.services) SvcTag(svc, campus.routes[svc]?.color?.color() ?: Color.Gray) { if (ui.selected != svc) actions.choose(svc) }
-        }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { actions.goThere(stop.code, stop.name) }) { Text(stringResource(R.string.map_go_there)) }
-            OutlinedButton(onClick = {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Button(onClick = { actions.goThere(stop.code, stop.name) }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.map_go_there)) }
+            OutlinedIconButton(onClick = {
                 val uri = "https://www.google.com/maps/dir/?api=1&destination=${stop.lat},${stop.lon}&travelmode=walking".toUri()
                 runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
-            }) { Text(stringResource(R.string.map_walking_directions)) }
-            val saved = places.savedAs(stop.code)
-            when {
-                saved != null -> OutlinedButton(onClick = {}, enabled = false) { Text(stringResource(R.string.map_saved_as)) }
-                places.full() -> OutlinedButton(onClick = {}, enabled = false) { Text(stringResource(R.string.map_places_full)) }
-                else -> OutlinedButton(onClick = { places.save(stop.code, stop.name) }) { Text(stringResource(R.string.map_save_place)) }
+            }) { Icon(painterResource(R.drawable.ic_walk), contentDescription = stringResource(R.string.map_walking_directions)) }
+            val saved = places.savedAs(stop.code) != null
+            val full = !saved && places.full()
+            OutlinedIconButton(onClick = { places.save(stop.code, stop.name) }, enabled = !saved && !full) {
+                Icon(
+                    painterResource(if (saved) R.drawable.ic_star_filled else R.drawable.ic_star),
+                    contentDescription = stringResource(if (saved) R.string.map_saved_as else if (full) R.string.map_places_full else R.string.map_save_place),
+                    tint = if (saved) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                )
             }
         }
         Spacer(Modifier.height(4.dp))

@@ -28,7 +28,8 @@
     <string name="map_recentre">Back to campus</string>
     <string name="map_save_place">Add to favourites</string>
     <string name="map_saved_as">In your favourites</string>
-    <string name="map_services_here">Services here</string>
+    <string name="map_show_more">Show %1$d more</string>
+    <string name="map_show_fewer">Show fewer</string>
     <string name="map_times_need_connection">Live times need a connection.</string>
     <string name="map_walking_directions">Walking directions</string>
     <string name="tab_map">Map</string>
