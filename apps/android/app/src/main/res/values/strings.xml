@@ -143,7 +143,6 @@
     <string name="done">Done</string>
     <string name="email_me_code">Email me a code</string>
     <string name="ends">Ends</string>
-    <string name="estimated_gap">~ estimated from the usual time between buses</string>
     <string name="eta_ended">ended</string>
     <string name="exact_off">\"Alarms &amp; reminders\" is off for terminus. Reminders may arrive a few minutes late, and the live notification may not start until you open the app.</string>
     <string name="favourites_hint">Available in one tap from the app, the widget and the Mac\'s menu bar. To go somewhere every week, add it to your timetable.</string>
@@ -227,7 +226,6 @@
     <string name="n_imported">%1$d classes imported.</string>
     <string name="n_min">%1$d min</string>
     <string name="name_eg_gym">Name, e.g. Gym</string>
-    <string name="nearby_line">Nearby · %1$s · %2$s</string>
     <string name="next_stops_to_go">Next: %1$s · %2$d stops to go</string>
     <string name="next_where_off">Next: %1$s, where you get off</string>
     <string name="no_answer_yet">No answer yet</string>
@@ -303,6 +301,7 @@
     <string name="preview_arrive">Arrive 09:52 · 8 min early</string>
     <string name="preview_detail">PGP · 3 min walk · COM3 ~9 min</string>
     <string name="preview_heading">Next class · CS2030 @ COM1</string>
+    <string name="preview_leave">Leave by 9:39</string>
     <string name="qr_desc">QR code for pairing code %1$s</string>
     <string name="refresh">Refresh</string>
     <string name="refreshing">Refreshing</string>
@@ -361,7 +360,6 @@
     <string name="starts">Starts</string>
     <string name="starts_at">starts %1$s</string>
     <string name="step_of">Step %1$d of %2$d</string>
-    <string name="stop_departures">%1$s: %2$s</string>
     <string name="stop_suffix">%1$s stop</string>
     <string name="sunday">Sunday</string>
     <string name="sunday_short">Sun</string>
@@ -495,7 +493,6 @@
     <string name="road_reaches">reaches %1$s in %2$d min</string>
     <string name="road_reaches_about">reaches %1$s in about %2$d min</string>
     <string name="journey_ride">%1$s ride</string>
-    <string name="journey_arrive_place">Arrive at %1$s</string>
     <string name="journey_arrive_time">Arrive %1$s</string>
     <string name="journey_at">at %1$s</string>
     <string name="journey_walk_from">%1$s walk from %2$s</string>

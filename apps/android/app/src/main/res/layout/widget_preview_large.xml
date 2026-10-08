@@ -1,35 +1,43 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- What "Next bus + places" looks like, for the widget picker. -->
+<!-- What "Next bus + favourites" looks like, for the widget picker: the trip at
+     noon, the leg on the ground, then the chips. Sample times are a picture, not UI copy. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     tools:ignore="HardcodedText,UselessLeaf"
     android:layout_width="match_parent" android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="@drawable/widget_preview_bg"
-    android:paddingHorizontal="14dp" android:paddingVertical="12dp">
+    android:paddingHorizontal="14dp" android:paddingTop="12dp" android:paddingBottom="8dp">
     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
         android:text="@string/preview_heading" android:textSize="12sp"
-        android:textColor="@color/brand_muted" android:maxLines="1" />
+        android:textColor="@color/brand_sky_muted" android:maxLines="1" />
     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-        android:text="D2 · 09:42" android:textSize="24sp" android:textStyle="bold"
-        android:textColor="@color/brand_ink" />
-    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-        android:text="@string/preview_detail" android:textSize="12sp"
-        android:textColor="@color/brand_muted" android:maxLines="1" />
+        android:text="@string/preview_leave" android:textSize="24sp" android:textStyle="bold"
+        android:textColor="@color/brand_ink" android:maxLines="1" />
     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
         android:text="@string/preview_arrive" android:textSize="12sp"
-        android:textColor="@color/brand_accent" />
-    <!-- Spacer: RemoteViews has no plain View. Sample text below is a picture, not UI copy. -->
+        android:textColor="@color/brand_sky_muted" android:maxLines="1" />
+    <!-- Spacer: RemoteViews has no plain View. -->
     <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" />
+    <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal"
+        android:gravity="center_vertical" android:layout_marginBottom="8dp">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="D2"
+            android:textSize="12sp" android:textStyle="bold" android:textColor="#FFFFFF"
+            android:background="@drawable/widget_preview_badge" android:paddingHorizontal="6dp" android:paddingVertical="1dp"
+            android:layout_marginEnd="7dp" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="@string/preview_detail" android:textSize="13sp"
+            android:textColor="@color/brand_ink" android:maxLines="1" />
+    </LinearLayout>
     <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal">
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="KR MRT"
-            android:textSize="12sp" android:background="@drawable/widget_preview_chip" android:paddingHorizontal="10dp" android:paddingVertical="5dp"
-            android:textColor="@color/brand_ink" android:layout_marginEnd="6dp" />
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="UTown"
-            android:textSize="12sp" android:background="@drawable/widget_preview_chip" android:paddingHorizontal="10dp" android:paddingVertical="5dp"
-            android:textColor="@color/brand_ink" android:layout_marginEnd="6dp" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/timetable"
+            android:textSize="12sp" android:textColor="@color/brand_page" android:background="@drawable/widget_preview_chip_on"
+            android:paddingHorizontal="12dp" android:paddingVertical="6dp" android:layout_marginEnd="6dp" />
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/chip_nearby"
-            android:textSize="12sp" android:background="@drawable/widget_preview_chip" android:paddingHorizontal="10dp" android:paddingVertical="5dp"
-            android:textColor="@color/brand_ink" />
+            android:textSize="12sp" android:textColor="@color/brand_ink" android:background="@drawable/widget_preview_chip"
+            android:paddingHorizontal="12dp" android:paddingVertical="6dp" android:layout_marginEnd="6dp" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="KR MRT"
+            android:textSize="12sp" android:textColor="@color/brand_ink" android:background="@drawable/widget_preview_chip"
+            android:paddingHorizontal="12dp" android:paddingVertical="6dp" />
     </LinearLayout>
 </LinearLayout>

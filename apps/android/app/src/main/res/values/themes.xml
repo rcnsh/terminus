@@ -5,10 +5,9 @@
     <color name="bg">#FAFAF9</color>
     <color name="icon_bg">#1C1917</color>
     <color name="icon_fg">#FB923C</color>
-    <!-- Brand tokens for the widget picker previews (see ui/Brand.kt). -->
+    <!-- Brand tokens for the widget picker previews: the widget at noon (widget/WidgetLook.kt). -->
     <color name="brand_ink">#1C1917</color>
-    <color name="brand_muted">#6B6560</color>
-    <color name="brand_accent">#C2410C</color>
-    <color name="brand_surface">#FFFFFF</color>
-    <color name="brand_chip">#F5F4F2</color>
+    <color name="brand_sky_muted">#36312D</color>
+    <color name="brand_page">#FAFAF9</color>
+    <color name="brand_chip">#F0EEEB</color>
 </resources>

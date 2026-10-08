@@ -6,6 +6,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
+import android.content.res.Configuration
 import android.graphics.drawable.Icon
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailabilityLight
@@ -20,6 +21,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import sh.rcn.terminus.ui.MainActivity
 import sh.rcn.terminus.widget.Refresher
+import sh.rcn.terminus.widget.redrawWidgets
 
 /**
  * Push: the server says when the card changes, so the phone doesn't
@@ -192,6 +194,23 @@ class TerminusApp : Application() {
         // here, off the main thread, so the first screen rarely waits for it.
         val app = this
         Thread { Store(app).token }.start()
+        nightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+    }
+
+    private var nightMode = 0
+
+    /**
+     * The phone's theme changed while the app is running: the widgets' sky
+     * is a picture drawn for one theme, so they're drawn again now rather
+     * than at their next redraw.
+     */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        val night = newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        if (night == nightMode) return
+        nightMode = night
+        val app = this
+        CoroutineScope(Dispatchers.Default).launch { redrawWidgets(app) }
     }
 }
 

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The bar for the picker: Now's noon sky, across. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <gradient android:angle="0" android:startColor="#5EA8E5" android:centerColor="#8EC4EC" android:endColor="#C7E2F4" />
+    <corners android:radius="24dp" />
+</shape>
