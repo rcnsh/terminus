@@ -34,3 +34,16 @@ private func answer(departsIn: TimeInterval? = nil, changesIn: TimeInterval? = n
     // A time already past doesn't count.
     #expect(AppModel.nextDelay(failures: 0, popoverOpen: false, resting: false, plan: try answer(changesIn: -5), now: now) == 300)
 }
+
+/// The check for a newer release: at most once a day, and only ever offering a newer one.
+@Test func theUpdateCheckIsDailyAndOnlyOffersNewer() {
+    let t = now.timeIntervalSince1970
+    #expect(AppModel.updateCheck(cached: "2.1.0", checkedAt: t - 3_600, current: "2.0.0", now: t) == ("2.1.0", false))
+    #expect(AppModel.updateCheck(cached: "2.1.0", checkedAt: t - 86_401, current: "2.0.0", now: t).fetch)
+    #expect(AppModel.updateCheck(cached: nil, checkedAt: 0, current: "2.0.0", now: t) == (nil, true))
+    // Updated since: the cached release is this one or older.
+    #expect(AppModel.updateCheck(cached: "2.0.0", checkedAt: t - 60, current: "2.0.0", now: t).update == nil)
+    #expect(AppModel.updateCheck(cached: "1.9.9", checkedAt: t - 60, current: "2.0.0", now: t).update == nil)
+    #expect(isNewer("2.1.0-beta.10", than: "2.1.0-beta.9"))
+    #expect(!isNewer("2.1.0-beta.9", than: "2.1.0-beta.10"))
+}
