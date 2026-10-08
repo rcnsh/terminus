@@ -21,6 +21,7 @@ import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
 import { Trip } from '../src/tripdo.ts';
 import { forgetTable } from '../src/ridetimes.ts';
+import { ASSUME_MS, RIDE_GRACE_MS } from '../src/trip.ts';
 
 const DIR = new URL('./fixtures/answers/', import.meta.url);
 const ZH_DIR = new URL('./zh/', DIR);
@@ -63,18 +64,19 @@ const LATE_FEED = {
  * - `upstream`: anything else makeFetch takes (`fail`, `publicStops`, `buses`...).
  * - `kv`: KV seeded with these keys (a measured ride-time table, say).
  * - `trips`: binds the trip engine, for a case with signals.
+ * - `env`: more bindings and secrets (LTA's key, for the public buses).
  *
  * The returned `get(path)` answers the parsed JSON; `get.post` sends a
  * signal; `get.at(ms)` / `get.advance(ms)` move the clock; `get.upstream(opts)`
  * swaps the fake upstream (the feed going down after a good reading).
  */
-async function account(profile, { at = FROZEN_NOW, feed = FEED, upstream = {}, kv = {}, trips = false } = {}) {
+async function account(profile, { at = FROZEN_NOW, feed = FEED, upstream = {}, kv = {}, trips = false, env: more = {} } = {}) {
   let now = at;
   installGlobals(makeFetch({ byStop: feed, ...upstream }), now);
   Date.now = () => now;
   // The measured ride-time table is held per isolate for a while: each case reads its own.
   forgetTable();
-  const env = { ...makeEnv(makeKV(kv)), DB: makeD1(), EMAIL: makeEmail(), EMAIL_FROM: 'x@example.test', ...(trips ? { TRIPS: makeDurableObjects(Trip) } : {}) };
+  const env = { ...makeEnv(makeKV(kv)), DB: makeD1(), EMAIL: makeEmail(), EMAIL_FROM: 'x@example.test', ...(trips ? { TRIPS: makeDurableObjects(Trip) } : {}), ...more };
   const call = async (path, init = {}) => {
     const ctx = makeCtx();
     const res = await worker.fetch(new Request(BASE + path, init), env, ctx);
@@ -113,7 +115,33 @@ const CLB = 'lat=1.2966&lon=103.7724';
 const AT_COM3 = 'lat=1.294431&lon=103.775217';
 const AT_UTOWN = 'lat=1.303876&lon=103.774621';
 const AT_PGP = 'lat=1.291765&lon=103.780419'; // the PGP bus stop
+const AT_IT = 'lat=1.297204&lon=103.772688';
+const AT_MUSEUM = 'lat=1.301081&lon=103.77369';
+const AT_KR_MRT = 'lat=1.29482&lon=103.784413';
 const THU_DATE = '2026-08-27';
+
+/** At 09:05, the D2 about to reach PGP, the feed giving its plate, and the same bus at UTown in 10 min. */
+const TAP_FEED = {
+  PGP: [{ name: 'D2', arrivalTime: '1', arrivalTime_veh_plate: 'SBS1234A', nextArrivalTime: '11', nextArrivalTime_veh_plate: 'SBS5678B' }],
+  UTOWN: [{ name: 'D2', arrivalTime: '10', arrivalTime_veh_plate: 'SBS1234A', nextArrivalTime: '20', nextArrivalTime_veh_plate: 'SBS5678B' }],
+};
+/** A signal's location: at the PGP bus stop. */
+const PGP_STOP = { lat: 1.291765, lon: 103.780419 };
+
+/** A class at 09:15 at UTown: too soon for anything but the next bus. */
+const soon = { home: { stops: ['PGP'] }, manual: [cls(555, 'UTOWN', 'GEA1000 @ UTown')], places };
+
+/** The D2 at PGP in 6 min, the feed giving its plate, and the same bus at UTown in 14; the R2 not for 20. */
+const PLATE_FEED = {
+  PGP: [
+    { name: 'D2', arrivalTime: '6', arrivalTime_veh_plate: 'SBS1234A', nextArrivalTime: '16', nextArrivalTime_veh_plate: 'SBS5678B' },
+    { name: 'R2', arrivalTime: '20', arrivalTime_veh_plate: 'SBS9012C' },
+  ],
+  UTOWN: [{ name: 'D2', arrivalTime: '14', arrivalTime_veh_plate: 'SBS1234A', nextArrivalTime: '24', nextArrivalTime_veh_plate: 'SBS5678B' }],
+};
+
+/** LTA DataMall's key, fake, so the public buses are asked for. */
+const LTA = { env: { LTA_ACCOUNT_KEY: 'test-account-key' } };
 
 /** An imported NUSMods timetable for semester 1 of 2026/27: a class at 10:00 on each of `days`, teaching weeks 1 to 13. */
 const nusmods = (...days) => ({
@@ -157,6 +185,93 @@ const CASES = {
   // The day the apps keep for when they're offline (see offline-day.json):
   // a class, a long gap home, a class, the way home.
   'day': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown'), cls(840, 'COM3', 'CS2030 @ COM1', 'COM1')], places }, '/me/day'],
+  // At the PGP stop at 09:05, "On it" for the D2 due in a minute to a 09:15
+  // class: its plate (SBS1234A) is picked from the feed at the tap, and the
+  // feed's time for that bus at UTown (09:15) is the arrival, said as live.
+  'riding-live': [soon, '/me/next', { trips: true, at: sgtAt(THU_DATE, '09:05'), feed: TAP_FEED, before: (get) => get.post('/me/signal', { kind: 'boarded', ...PGP_STOP }) }],
+  // Ten minutes after it got there, and the feed no longer lists it:
+  // you're taken to be in the class.
+  'riding-there': [soon, '/me/next', {
+    trips: true,
+    at: sgtAt(THU_DATE, '09:05'),
+    feed: TAP_FEED,
+    before: async (get) => {
+      await get.post('/me/signal', { kind: 'boarded', ...PGP_STOP });
+      get.at(sgtAt(THU_DATE, '09:15') + RIDE_GRACE_MS + MIN);
+      get.upstream({ byStop: FEED });
+    },
+  }],
+  // At 09:38 the 10:00 class's trip is due, and its plan, the R2 at 09:44,
+  // is kept. At 09:45, "Missed it": the card names the 09:44 and gives the
+  // next way there.
+  'missed': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')], places }, '/me/next', {
+    trips: true,
+    at: sgtAt(THU_DATE, '09:38'),
+    before: async (get) => {
+      await get('/me/next');
+      get.at(sgtAt(THU_DATE, '09:45'));
+      await get.post('/me/signal', { kind: 'missed' });
+    },
+  }],
+  // The phone planned the 09:06 D2 from home; nobody said anything, and three
+  // minutes after it left the Mac (no location) takes you to be on it.
+  'assumed-riding': [soon, '/me/next', {
+    trips: true,
+    feed: PLATE_FEED,
+    before: async (get) => {
+      await get(`/me/next?${DORM}`);
+      get.at(sgtAt(THU_DATE, '09:06') + ASSUME_MS + MIN);
+    },
+  }],
+  // The same plan, a minute later, and the feed now says that D2 is 2 min
+  // late: the widget keeps the phone's bus for the trip, not a bus of its own,
+  // its times from the plan, so not live.
+  'plan-kept': [soon, '/me/next', {
+    trips: true,
+    feed: PLATE_FEED,
+    before: async (get) => {
+      await get(`/me/next?${DORM}`);
+      get.advance(MIN);
+      get.upstream({ byStop: { PGP: [{ name: 'D2', arrivalTime: '7', nextArrivalTime: '17' }] } });
+    },
+  }],
+  // "Not going" to the 10:00 class: nothing left today, and an Undo.
+  'skipped-undo': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown'), { ...cls(600, 'COM3', 'CS2030 @ COM1'), day: 5 }], places }, '/me/next', { trips: true, before: (get) => get.post('/me/signal', { kind: 'skipped' }) }],
+  // "Not on campus today": said, with the way back.
+  'away': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown'), { ...cls(600, 'COM3', 'CS2030 @ COM1'), day: 5 }], places }, '/me/next', { trips: true, before: (get) => get.post('/me/signal', { kind: 'away' }) }],
+  // At PGP for UTown: the walk is 1714 s, the D2 1834 s (21:04 away, 9:30
+  // on board). Walking must beat a live bus by WALK.beatsBusByS (120 s), and
+  // level isn't beating it: the bus heads the card, the walk said as close.
+  'walk-level': [{ places }, `/me/next?to=UTOWN&${AT_PGP}`, { feed: { PGP: [{ name: 'D2', _etas: [{ eta_s: 1264 }] }] } }],
+  // Measured ride times (the cron's table in KV): the D2 takes 60 s a stop
+  // and the R2 200 s, not the 95 s guess, so the D2 in 14 min beats the R2 in 6.
+  'measured-rides': [{ home: { stops: ['PGP'] }, places }, '/me/next?to=UTOWN', { kv: { 'ride:hops': { made: '2026-08-27T00:00:00.000Z', svcs: { D2: { n: 40, s: 60, hours: {} }, R2: { n: 40, s: 200, hours: {} } } } } }],
+  // Standing at KR MRT for COM 3: the buses on this side go the long way
+  // round, so the answer is the D2 from across the road, and it says so.
+  // Each stop lists only the buses calling there.
+  'cross-road': [{ home: { stops: ['UTOWN'] }, places }, `/me/next?to=COM3&${AT_KR_MRT}`, {
+    feed: {
+      'KR-MRT': [{ name: 'D2', arrivalTime: '2', nextArrivalTime: '12' }, { name: 'A1', arrivalTime: '3', nextArrivalTime: '13' }, { name: 'K', arrivalTime: '5', nextArrivalTime: '20' }],
+      'KR-MRT-OPP': [{ name: 'D2', arrivalTime: '5', nextArrivalTime: '15' }, { name: 'A2', arrivalTime: '8', nextArrivalTime: '18' }, { name: 'K', arrivalTime: '7', nextArrivalTime: '22' }],
+    },
+  }],
+  // At COM 3 the feed lists the D2 only as runs ending there (COM3-D2-E):
+  // its time is shown, but which way it goes isn't known, and the card says so.
+  'ambiguous-berth': [{ home: { stops: ['PGP'] }, places }, `/me/next?to=UTOWN&${AT_COM3}`, { feed: { COM3: [{ name: 'D2', busStopCode: 'COM3-D2-E', arrivalTime: '3', nextArrivalTime: '13' }] } }],
+  // A destination that's no stop, room or place (a favourite since removed):
+  // ignored, so the day's own answer, not a free day's "No more classes".
+  'unknown-dest': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')], places }, '/me/next?to=XYZ'],
+  // The same, the A2 in 6 min and the 95 at 7:03: the 95's ride is 4 min
+  // shorter, so with its fare (3 min) it's level with the A2, and level isn't
+  // worth a fare: the free bus heads the card, the 95 is the other way.
+  'public-level': [{ home: { stops: ['PGP'] }, places, publicBuses: true }, `/me/next?to=KR-MRT-OPP&${AT_IT}`, { ...LTA, feed: { IT: [{ name: 'A2', arrivalTime: '6', nextArrivalTime: '16' }] }, upstream: { publicStops: { 16189: [{ ServiceNo: '95', buses: [{ etaS: 6 * 60 + 63, dest: '16009' }] }] } } }],
+  // At IT for College Green: only the 151 (its route 151/2) goes there, and
+  // LTA has its time from the timetable (Monitored 0): an estimate, named 151.
+  'public-timetabled': [{ home: { stops: ['PGP'] }, places, publicBuses: true }, `/me/next?to=CG&${AT_IT}`, { ...LTA, feed: {}, upstream: { publicStops: { 16189: [{ ServiceNo: '151', buses: [{ etaS: 240, dest: '64009', monitored: false }] }] } } }],
+
+  // Public buses on, at IT for Opp KR MRT: the 95 in 2 min beats the A2 in
+  // 15 by more than its fare is worth, so it heads the card, marked "($)".
+  'public-wins': [{ home: { stops: ['PGP'] }, places, publicBuses: true }, `/me/next?to=KR-MRT-OPP&${AT_IT}`, { ...LTA, feed: { IT: [{ name: 'A2', arrivalTime: '15', nextArrivalTime: '25' }] }, upstream: { publicStops: { 16189: [{ ServiceNo: '95', buses: [{ etaS: 120, dest: '16009' }] }] } } }],
 
   // Monday 9 November 2026, Deepavali (observed): Sunday hours. At 08:30 the
   // D2 starts at 09:00 and R2 (which runs from 08:20 on a weekday) not at all,
