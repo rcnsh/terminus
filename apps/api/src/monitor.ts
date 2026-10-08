@@ -101,6 +101,10 @@ export const OKS_TO_RECOVER = 2;
  * notice would otherwise say "down" for 15 minutes with the feed back.
  */
 export const answering = (u: UpstreamState): boolean => u.up || (u.oks ?? 0) > 0;
+
+/** Since when it's been as [answering] says: back since its first good
+ *  check while that's still to be confirmed, else the confirmed state's. */
+export const answeringSince = (u: UpstreamState): number => (!u.up && answering(u) && u.okSince ? u.okSince : u.since);
 /** How long an operator email may take to send. */
 export const MAIL_TIMEOUT_MS = 15_000;
 /** Warn this long before calendar.json runs out. */

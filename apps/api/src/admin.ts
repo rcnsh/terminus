@@ -8,7 +8,7 @@
  */
 
 import type { Env } from './types.ts';
-import { readIncidents, readUpstream } from './monitor.ts';
+import { answering, answeringSince, readIncidents, readUpstream } from './monitor.ts';
 import { REASONS, summarize } from './feedback.ts';
 
 const DAY = 86_400_000;
@@ -50,7 +50,7 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
   const [upstream, incidents, analytics] = await Promise.all([readUpstream(env), readIncidents(env), analyticsStats(env, fetchImpl)]);
   const out: Record<string, unknown> = {
     now: new Date(nowMs).toISOString(),
-    feed: upstream ? { up: upstream.up, since: new Date(upstream.since).toISOString(), checkedAt: new Date(upstream.checkedAt).toISOString() } : null,
+    feed: upstream ? { up: answering(upstream), since: new Date(answeringSince(upstream)).toISOString(), checkedAt: new Date(upstream.checkedAt).toISOString() } : null,
     incidents: incidents.slice(0, 5).map((i) => ({ start: new Date(i.start).toISOString(), end: i.end ? new Date(i.end).toISOString() : null, cause: i.cause })),
     analytics,
   };

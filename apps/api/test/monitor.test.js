@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { makeKV } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import { readFileSync } from 'node:fs';
-import { DEVICE_IDLE_MS, INCIDENTS_KEPT, KV_NAMESPACE_IDS, MAIL_TIMEOUT_MS, adviceFor, checkCalendar, checkUpstream, feedDownSince, housekeeping, readIncidents, readUpstream, runCron } from '../src/monitor.ts';
+import { DEVICE_IDLE_MS, INCIDENTS_KEPT, KV_NAMESPACE_IDS, MAIL_TIMEOUT_MS, adviceFor, answering, answeringSince, checkCalendar, checkUpstream, feedDownSince, housekeeping, readIncidents, readUpstream, runCron } from '../src/monitor.ts';
 import { UpstreamRejected } from '../src/auth.ts';
 import { cardFor } from '../src/card.ts';
 import { withLang } from '../src/i18n.ts';
@@ -203,6 +203,9 @@ test('the card stops saying "down" at the first good check; the email waits for 
   assert.equal((await readUpstream(e)).up, false, 'not yet confirmed back');
   assert.equal(e.EMAIL.sent.length, 1, 'no "recovered" email yet');
   assert.equal(await feedDownSince(e, back + 60_000), null, 'but no notice on the card');
+  const u = await readUpstream(e);
+  assert.equal(answering(u), true);
+  assert.equal(answeringSince(u), back, 'back since the good check, not down since the outage');
   await checkUpstream(e, back + 900_000, fail('network'));
   assert.equal(await feedDownSince(e, back + 960_000), 3000, 'down again at the next failed check');
   assert.equal(e.EMAIL.sent.length, 1, 'and no emails by turns');
