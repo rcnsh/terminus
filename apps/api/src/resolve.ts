@@ -179,32 +179,73 @@ function homeWalk(input: ResolveInput): HomeWalk | null {
   return { stops: input.preferStops, m: input.homeWalkS * (input.walkSpeedMs ?? WALK.speedMs) };
 }
 
+/** A stop a trip can end at, and the walk across the road from it when it's the twin. */
+export interface Target {
+  code: string;
+  crossS: number;
+}
+
+/**
+ * Every stop that serves the destination, and the far side of each road.
+ * Either side will do: arriving at "Opp UHC" gets you to UHC. Without this,
+ * a route that only serves the far side never counts, and the answer takes
+ * a longer bus to the exact stop. Getting off on the far side costs the walk
+ * back across, which is part of the journey.
+ */
+export function targetsFor(idx: GraphIndex, input: ResolveInput): Target[] {
+  if (!input.to) return [];
+  const speed = input.walkSpeedMs ?? WALK.speedMs;
+  return [input.to, ...(input.toAlso ?? [])].flatMap((code) => {
+    const s = idx.byCode.get(code);
+    if (!s) return [];
+    const twin = s.opposite ? idx.byCode.get(s.opposite) : undefined;
+    return [{ code, crossS: 0 }, ...(twin ? [{ code: twin.code, crossS: Math.round(stopFootM(twin, s) / speed) }] : [])];
+  });
+}
+
+/**
+ * `svc` from `fromCode` to whichever target gets you there soonest, the
+ * walk across the road included; null when it goes to none of them.
+ */
+export function bestLeg(graph: Graph, idx: GraphIndex, svc: string, fromCode: string, targets: Target[]): Leg | null {
+  let best: { hops: number; crossS: number; code: string; rideS?: number } | null = null;
+  // A public bus rides by the metres along its route (public.ts): its
+  // campus stops can be a long way round the island apart.
+  const pub = isPublic(graph, svc);
+  const cost = (b: { hops: number; crossS: number; rideS?: number }) => (b.rideS ?? b.hops * RIDE.secondsPerHop) + b.crossS;
+  for (const t of targets) {
+    const r = reach(idx, svc, fromCode, t.code);
+    if (!r) continue;
+    const m = pub ? rideMetres(idx, svc, fromCode, t.code) : null;
+    const stops = m === null ? rideStops(idx, svc, fromCode, t.code) : null;
+    let rideS = m !== null ? publicRideS(m) : stops ? shuttleRideS(idx, stops, RIDE.secondsPerHop) : r.hops * RIDE.secondsPerHop;
+    // Past the terminal it's the next run: about a headway's wait there.
+    if (r.through) rideS += headwayFor(graph, svc);
+    const cand = { hops: r.hops, crossS: t.crossS, code: t.code, ...(rideS !== r.hops * RIDE.secondsPerHop ? { rideS } : {}) };
+    if (!best || cost(cand) < cost(best)) best = cand;
+  }
+  if (!best) return null;
+  return { svc, hops: best.hops, ...(best.rideS !== undefined ? { rideS: best.rideS } : {}), ...(best.crossS ? { crossS: best.crossS, off: idx.byCode.get(best.code)! } : {}), to: idx.byCode.get(best.code)! };
+}
+
 /**
  * Stops worth fetching arrivals for. Bounded by WALK.maxCandidates so one
  * request never fans out into a dozen upstream calls.
+ *
+ * `any`: the stops near you whether or not a bus from them goes there, with
+ * the legs that do (often none). Where no single bus does, these are where a
+ * trip with a change of bus can start (transfer.ts).
  */
-export function candidateStops(graph: Graph, input: ResolveInput): Candidate[] {
+export function candidateStops(graph: Graph, input: ResolveInput, opts: { any?: boolean } = {}): Candidate[] {
   const idx = indexGraph(graph);
   const { to } = input;
 
-  // Either side of the road will do: arriving at "Opp UHC" gets you to UHC.
-  // Without this, a route that only serves the far side never counts, and
-  // the answer takes a longer bus to the exact stop. Getting off on the far
-  // side costs the walk back across, which is part of the journey.
-  // Every stop that serves the destination, and the far side of each road.
   const speed = input.walkSpeedMs ?? WALK.speedMs;
-  const targets: Array<{ code: string; crossS: number }> = to
-    ? [to, ...(input.toAlso ?? [])].flatMap((code) => {
-        const s = idx.byCode.get(code);
-        if (!s) return [];
-        const twin = s.opposite ? idx.byCode.get(s.opposite) : undefined;
-        return [{ code, crossS: 0 }, ...(twin ? [{ code: twin.code, crossS: Math.round(stopFootM(twin, s) / speed) }] : [])];
-      })
-    : [];
+  const targets = targetsFor(idx, input);
   const targetCodes = new Set(targets.map((t) => t.code));
   // A stop worth a fetch: some bus from it goes there (any stop, with no destination).
   const reaches = (stop: Stop) =>
-    !to || (!targetCodes.has(stop.code) && (idx.servingStop.get(stop.code) ?? []).some((svc) => targets.some((t) => reach(idx, svc, stop.code, t.code))));
+    !to || (!targetCodes.has(stop.code) && (opts.any || (idx.servingStop.get(stop.code) ?? []).some((svc) => targets.some((t) => reach(idx, svc, stop.code, t.code)))));
 
   // `startS`: without coordinates, the walk to where `footM` starts from.
   let base: Array<{ stop: Stop; distM: number; footM: number; startS?: number }>;
@@ -273,23 +314,8 @@ export function candidateStops(graph: Graph, input: ResolveInput): Candidate[] {
         continue;
       }
       // Where to get off: the stop that gets you there soonest, crossing included.
-      let best: { hops: number; crossS: number; code: string; rideS?: number } | null = null;
-      // A public bus rides by the metres along its route (public.ts): its
-      // campus stops can be a long way round the island apart.
-      const pub = isPublic(graph, svc);
-      const cost = (b: { hops: number; crossS: number; rideS?: number }) => (b.rideS ?? b.hops * RIDE.secondsPerHop) + b.crossS;
-      for (const t of targets) {
-        const r = reach(idx, svc, stop.code, t.code);
-        if (!r) continue;
-        const m = pub ? rideMetres(idx, svc, stop.code, t.code) : null;
-        const stops = m === null ? rideStops(idx, svc, stop.code, t.code) : null;
-        let rideS = m !== null ? publicRideS(m) : stops ? shuttleRideS(idx, stops, RIDE.secondsPerHop) : r.hops * RIDE.secondsPerHop;
-        // Past the terminal it's the next run: about a headway's wait there.
-        if (r.through) rideS += headwayFor(graph, svc);
-        const cand = { hops: r.hops, crossS: t.crossS, code: t.code, ...(rideS !== r.hops * RIDE.secondsPerHop ? { rideS } : {}) };
-        if (!best || cost(cand) < cost(best)) best = cand;
-      }
-      if (best) legs.push({ svc, hops: best.hops, ...(best.rideS !== undefined ? { rideS: best.rideS } : {}), ...(best.crossS ? { crossS: best.crossS, off: idx.byCode.get(best.code)! } : {}), to: idx.byCode.get(best.code)! });
+      const leg = bestLeg(graph, idx, svc, stop.code, targets);
+      if (leg) legs.push(leg);
     }
     // Starting from home or a room without coordinates: that walk comes
     // first, and a crossing to the far side's stop after it.
@@ -297,6 +323,7 @@ export function candidateStops(graph: Graph, input: ResolveInput): Candidate[] {
     return { stop, distM, walkS, legs };
   });
 
+  if (opts.any) return out;
   const useful = out.filter((c) => c.legs.length > 0);
   // If nothing here reaches the destination, keep the nearest stop so the
   // formatter can still offer a walk instead of a blank tile.
@@ -735,6 +762,124 @@ export function boardAt(
   return out;
 }
 
+/** One bus scored at its stop: when you board it and how sure that is (scoreLeg). */
+export interface ScoredLeg {
+  /** Seconds from now. */
+  boardS: number;
+  rideS: number;
+  quality: Quality;
+  arrival: Arrival | null;
+  fetchedAt: number;
+  /** Of `boardS`, the wait for the service to start; 0 when it's running. */
+  opensInS: number;
+  ambiguousBerth: boolean;
+  paid: boolean;
+}
+
+/**
+ * The bus of `leg`'s service you can board at the stop whose arrivals are
+ * `sa`, being there `earliestS` from now at the soonest. Null when there is
+ * none to catch: the service has ended, or doesn't start in time.
+ */
+export function scoreLeg(
+  graph: Graph,
+  leg: Leg,
+  sa: StopArrivals | undefined,
+  nowMs: number,
+  earliestS: number,
+  opts: { openBy?: number } = {},
+): ScoredLeg | null {
+  const forSvc = (sa?.arrivals ?? []).filter((a) => a.svc === leg.svc);
+
+  // At a terminus the feed splits one service into two berths: COM3-D2-S
+  // is the run STARTING here, COM3-D2-E is a run ENDING here. Only the
+  // first is boardable. Nothing orders them: whenever no bus is waiting
+  // to depart, the -E arrival is the sooner of the two, and the earliest
+  // ETA hands you a bus that terminates on arrival. resolveBerths drops
+  // the -E run (route P starts at a bare KV, with no -S to prefer).
+  const { usable, ambiguousBerth } = resolveBerths(forSvc);
+
+  // The feed this service's arrivals came from: at a shelter the shuttle
+  // and public buses share, each feed's own fetch time and state.
+  const pub = isPublic(graph, leg.svc);
+  const feed = feedFor(sa, pub);
+
+  const etas = beforeOpening(graph, leg.svc, usable, feed?.fetchedAt ?? nowMs, nowMs)
+    .filter((a) => a.etaS != null)
+    .sort((a, b) => (a.etaS as number) - (b.etaS as number));
+  // Times here count from when the arrivals were fetched (departsAt is
+  // fetchedAt + boardS), so the walk counts from then too: a bus that
+  // left while a cached or stale answer aged can't be caught.
+  const fetchedAt = feed?.fetchedAt ?? nowMs;
+  const ageS = Math.max(0, (nowMs - fetchedAt) / 1000);
+  const earliest = earliestS + ageS;
+  // A missing entry means we never reached the feed -- not that no bus is
+  // coming. Those are different answers and must not collapse into one.
+  // A service whose rows didn't read has no data, though the rest of the board does.
+  const available = feed !== undefined && feed.available !== false && !sa?.unread?.includes(leg.svc);
+  let boardS: number;
+  let quality: Quality;
+  let arrival = null;
+  // Waiting for the service to start, which you can do wherever you are.
+  let opensInS = 0;
+  // When the service stops today, for the guesses below: a bus guessed
+  // after it is no bus. Null when its hours are unknown or it isn't running.
+  const running = inService(graph, leg.svc, nowMs);
+  const endsAt = serviceEndsAt(graph, leg.svc, nowMs);
+  const pastEnd = (s: number) => endsAt !== null && fetchedAt + s * 1000 > endsAt;
+
+  // The first bus you can physically reach, not the first bus listed.
+  const catchable = etas.find((a) => (a.etaS as number) >= earliest);
+  if (catchable) {
+    boardS = catchable.etaS as number;
+    // A time from the operator's timetable (a public bus not yet on the
+    // road) is an estimate, however exact it looks.
+    quality = catchable.scheduled ? 'scheduled' : 'live';
+    arrival = catchable;
+  } else if (etas.length && running) {
+    // Every listed bus leaves before you can get there: the first one
+    // after the last listed, a headway apart, that you can reach. Not
+    // once the service has closed: the feed still lists its last buses,
+    // and there is no bus after them to guess (below).
+    const headway = headwayFor(graph, leg.svc);
+    boardS = (etas[etas.length - 1].etaS as number) + headway;
+    if (headway > 0 && boardS < earliest) boardS += Math.ceil((earliest - boardS) / headway) * headway;
+    if (pastEnd(boardS)) return null; // that was the last bus
+    quality = 'scheduled';
+  } else if (!running) {
+    // The published hours are ours, not the feed's, so this holds even
+    // when we have no data at all, or only buses you can't reach.
+    const opens = opts.openBy !== undefined ? serviceResumesAt(graph, leg.svc, nowMs) : null;
+    if (opens === null || opens > opts.openBy!) return null; // ended, or not started in time
+    // It starts before you need it: a bus somewhere in the headway after
+    // it does, or after you reach the stop, whichever is later.
+    const startS = (opens - fetchedAt) / 1000;
+    opensInS = Math.max(0, startS - earliest);
+    boardS = Math.max(earliest, startS) + headwayFor(graph, leg.svc) / 2;
+    quality = 'scheduled';
+  } else {
+    // You'd reach the stop after the last bus.
+    if (pastEnd(earliest)) return null;
+    // The feed answered and had nothing: a headway is the honest guess,
+    // no later than the last bus. Unreached: keep the option -- the
+    // graph still says this service goes where you are going -- but
+    // boardS here is only an ordering key. The formatter must never
+    // print a time for an 'unknown' option.
+    boardS = earliest + headwayFor(graph, leg.svc) / 2;
+    if (pastEnd(boardS)) boardS = (endsAt! - fetchedAt) / 1000;
+    quality = available ? 'scheduled' : 'unknown';
+  }
+
+  // Only a real arrival goes stale; a headway guess stays a guess, never
+  // ranked or worded as measured.
+  if (feed?.stale && quality === 'live') quality = 'stale';
+
+  // From now: the times above count from the fetch, and a cached or
+  // stale answer is that much older. Comparing them with a walk that
+  // starts now, or with another stop's fresher times, needs one clock.
+  return { boardS: Math.round(boardS - ageS), rideS: legRideS(leg), quality, arrival, fetchedAt, opensInS, ambiguousBerth, paid: pub };
+}
+
 /**
  * Convert candidates plus live arrivals into ranked options, all in seconds
  * from now. Options whose service has ended are dropped entirely, and so is
@@ -758,114 +903,26 @@ export function scoreOptions(
   for (const c of candidates) {
     const sa = arrivalsByStop.get(c.stop.code);
     for (const leg of c.legs) {
-      const forSvc = (sa?.arrivals ?? []).filter((a) => a.svc === leg.svc);
-
-      // At a terminus the feed splits one service into two berths: COM3-D2-S
-      // is the run STARTING here, COM3-D2-E is a run ENDING here. Only the
-      // first is boardable. Nothing orders them: whenever no bus is waiting
-      // to depart, the -E arrival is the sooner of the two, and the earliest
-      // ETA hands you a bus that terminates on arrival. resolveBerths drops
-      // the -E run (route P starts at a bare KV, with no -S to prefer).
-      const { usable, ambiguousBerth } = resolveBerths(forSvc);
-
-      // The feed this service's arrivals came from: at a shelter the shuttle
-      // and public buses share, each feed's own fetch time and state.
-      const pub = isPublic(graph, leg.svc);
-      const feed = feedFor(sa, pub);
-
-      const etas = beforeOpening(graph, leg.svc, usable, feed?.fetchedAt ?? nowMs, nowMs)
-        .filter((a) => a.etaS != null)
-        .sort((a, b) => (a.etaS as number) - (b.etaS as number));
-      // Times here count from when the arrivals were fetched (departsAt is
-      // fetchedAt + boardS), so the walk counts from then too: a bus that
-      // left while a cached or stale answer aged can't be caught.
-      const fetchedAt = feed?.fetchedAt ?? nowMs;
-      const ageS = Math.max(0, (nowMs - fetchedAt) / 1000);
-      const earliest = c.walkS + WALK.boardBufferS + ageS;
-      // A missing entry means we never reached the feed -- not that no bus is
-      // coming. Those are different answers and must not collapse into one.
-      // A service whose rows didn't read has no data, though the rest of the board does.
-      const available = feed !== undefined && feed.available !== false && !sa?.unread?.includes(leg.svc);
-      let boardS: number;
-      let quality: ScoredOption['quality'];
-      let arrival = null;
-      // Waiting for the service to start, which you can do wherever you are.
-      let opensInS = 0;
-      // When the service stops today, for the guesses below: a bus guessed
-      // after it is no bus. Null when its hours are unknown or it isn't running.
-      const running = inService(graph, leg.svc, nowMs);
-      const endsAt = serviceEndsAt(graph, leg.svc, nowMs);
-      const pastEnd = (s: number) => endsAt !== null && fetchedAt + s * 1000 > endsAt;
-
-      // The first bus you can physically reach, not the first bus listed.
-      const catchable = etas.find((a) => (a.etaS as number) >= earliest);
-      if (catchable) {
-        boardS = catchable.etaS as number;
-        // A time from the operator's timetable (a public bus not yet on the
-        // road) is an estimate, however exact it looks.
-        quality = catchable.scheduled ? 'scheduled' : 'live';
-        arrival = catchable;
-      } else if (etas.length && running) {
-        // Every listed bus leaves before you can get there: the first one
-        // after the last listed, a headway apart, that you can reach. Not
-        // once the service has closed: the feed still lists its last buses,
-        // and there is no bus after them to guess (below).
-        const headway = headwayFor(graph, leg.svc);
-        boardS = (etas[etas.length - 1].etaS as number) + headway;
-        if (headway > 0 && boardS < earliest) boardS += Math.ceil((earliest - boardS) / headway) * headway;
-        if (pastEnd(boardS)) continue; // that was the last bus
-        quality = 'scheduled';
-      } else if (!running) {
-        // The published hours are ours, not the feed's, so this holds even
-        // when we have no data at all, or only buses you can't reach.
-        const opens = opts.openBy !== undefined ? serviceResumesAt(graph, leg.svc, nowMs) : null;
-        if (opens === null || opens > opts.openBy!) continue; // ended, or not started in time
-        // It starts before you need it: a bus somewhere in the headway after
-        // it does, or after you reach the stop, whichever is later.
-        const startS = (opens - fetchedAt) / 1000;
-        opensInS = Math.max(0, startS - earliest);
-        boardS = Math.max(earliest, startS) + headwayFor(graph, leg.svc) / 2;
-        quality = 'scheduled';
-      } else {
-        // You'd reach the stop after the last bus.
-        if (pastEnd(earliest)) continue;
-        // The feed answered and had nothing: a headway is the honest guess,
-        // no later than the last bus. Unreached: keep the option -- the
-        // graph still says this service goes where you are going -- but
-        // boardS here is only an ordering key. The formatter must never
-        // print a time for an 'unknown' option.
-        boardS = earliest + headwayFor(graph, leg.svc) / 2;
-        if (pastEnd(boardS)) boardS = (endsAt! - fetchedAt) / 1000;
-        quality = available ? 'scheduled' : 'unknown';
-      }
-
-      // Only a real arrival goes stale; a headway guess stays a guess, never
-      // ranked or worded as measured.
-      if (feed?.stale && quality === 'live') quality = 'stale';
-
-      // From now: the times above count from the fetch, and a cached or
-      // stale answer is that much older. Comparing them with a walk that
-      // starts now, or with another stop's fresher times, needs one clock.
-      const fromNow = Math.round(boardS - ageS);
-      const rideS = legRideS(leg);
+      const s = scoreLeg(graph, leg, sa, nowMs, c.walkS + WALK.boardBufferS, opts);
+      if (!s) continue;
       out.push({
         stop: c.stop,
         svc: leg.svc,
         distM: c.distM,
         walkS: c.walkS,
         hops: leg.hops,
-        boardS: fromNow,
-        rideS,
-        totalS: fromNow + rideS,
-        quality,
-        arrival,
-        fetchedAt,
+        boardS: s.boardS,
+        rideS: s.rideS,
+        totalS: s.boardS + s.rideS,
+        quality: s.quality,
+        arrival: s.arrival,
+        fetchedAt: s.fetchedAt,
         fromMs: nowMs,
-        ...(opensInS > 0 ? { opensInS: Math.round(opensInS) } : {}),
-        ambiguousBerth,
+        ...(s.opensInS > 0 ? { opensInS: Math.round(s.opensInS) } : {}),
+        ambiguousBerth: s.ambiguousBerth,
         ...(leg.off ? { off: leg.off } : {}),
         ...(leg.to ? { to: leg.to } : {}),
-        ...(pub ? { paid: true as const } : {}),
+        ...(s.paid ? { paid: true as const } : {}),
       });
     }
   }
