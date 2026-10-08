@@ -17,7 +17,7 @@
  * The cache is one data centre's, shared by every isolate there, while the
  * in-flight map is one isolate's. So that a key going stale doesn't send
  * every isolate in a busy data centre to the feed at once, the one fetching
- * leaves a marker (`#pending`); the others serve their stale answer until
+ * leaves a marker (`<key>/pending`); the others serve their stale answer until
  * it's done. Without a stale answer they fetch too: a cold key has nothing
  * else to give.
  */
@@ -144,7 +144,9 @@ export async function cachedFetch<T extends { fetchedAt: number }>(o: CachedOpti
 
   // Another isolate here is fetching it already: its answer will be in the
   // cache in a moment, and the stale one does until then.
-  const pendingKey = new Request(`${o.key}#pending`);
+  // A path of its own, not a #fragment: the cache never sees a fragment, so
+  // `key#pending` would be the answer's own entry, overwritten and deleted.
+  const pendingKey = new Request(`${o.key}/pending`);
   if (stale && !o.inflight.has(o.key) && (await cache.match(pendingKey))) return stale;
 
   let job = o.inflight.get(o.key);
