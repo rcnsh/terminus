@@ -149,6 +149,14 @@ dependencyLocking {
     lockAllConfigurations()
 }
 
+// kotlin-stdlib-common is an empty module since Kotlin 1.9.20 (kotlin-stdlib
+// replaces it), and Gradle keeps it in the graph only while the lock pins
+// kotlin-stdlib: writing the locks drops it, and the next build then refuses
+// the lock it just wrote. Left out everywhere, both agree.
+configurations.configureEach {
+    exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-common")
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
