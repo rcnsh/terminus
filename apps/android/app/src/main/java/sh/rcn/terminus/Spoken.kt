@@ -26,7 +26,8 @@ object Spoken {
             return sentences(
                 answer.destLabel?.let { L.s(R.string.a11y_on_the_to, ride.svc, it) } ?: L.s(R.string.on_the, ride.svc),
                 L.s(R.string.a11y_off_at, ride.stops.last(), clock(ride.arriveMs)),
-                ride.nextText(now),
+                ride.nextText(now, withChange = false),
+                ride.change?.text,
                 answer.qualityText,
             )
         }
