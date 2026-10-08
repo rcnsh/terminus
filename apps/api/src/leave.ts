@@ -78,7 +78,10 @@ export function leaveBy(f: LeaveInput): Leave | null {
     if (!f.arriveBy) return null;
     const walkS = f.walkAllS + (f.walkEndS ?? f.arriveBy.venueWalkS);
     const at = f.arriveBy.atMs - (ON_TIME_SLACK_S + walkS) * 1000;
-    return { at: isoSeconds(at), estimated: false, svc: null, stop: null, board: null, arrive: isoSeconds(at + walkS * 1000), note: null };
+    // Past that already: leave now, and get there when a walk started now
+    // does, not when one started then would have (as for a bus, below).
+    const from = Math.max(at, f.nowMs);
+    return { at: isoSeconds(from), estimated: false, svc: null, stop: null, board: null, arrive: isoSeconds(from + walkS * 1000), note: null };
   }
 
   if (!f.arriveBy) {
