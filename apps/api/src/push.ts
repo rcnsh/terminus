@@ -6,9 +6,9 @@
  * A push is usually only a nudge. It says the card has changed (`kind:
  * 'card'` and the phase), and the app fetches /me/next itself, so the words
  * are never worked out twice and nothing sensitive travels through Google.
- * It's high priority only when the user should look: the trip is due with
- * its reminder on, or it was missed. A due trip with reminders off goes at
- * normal priority, since it has no notification to show. The new semester's reminder (`kind: 'term'`) is the same to
+ * It's high priority only when the user should look: the trip is due, or it
+ * was missed, whether or not its reminders are on, since Android starts the
+ * live notification from these. The new semester's reminder (`kind: 'term'`) is the same to
  * an app that can fetch its words (GET /me/notice): only to an older
  * Android app, which shows what it's sent, does it carry the words, in
  * English and Chinese (fetchesNotice). Web pushes are encrypted for the

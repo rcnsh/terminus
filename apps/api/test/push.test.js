@@ -139,13 +139,13 @@ test('the Trip object wakes when the phase changes and nudges the phone, once pe
   assert.equal(fcm.oauth, 1, 'the access token is reused');
 });
 
-test('time to go for a trip with reminders off is pushed without waking the phone', async () => {
+test('time to go wakes the phone with reminders off too: Android starts the live notification from it', async () => {
   const { call, phone, next, fcm, wakeUntil } = await setup();
   await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
   assert.equal((await call('/me/choice', { method: 'POST', token: phone, body: { trip: `${THU}:600:UTOWN`, pref: 'quiet', choice: 'accept' } })).status, 200);
   assert.equal((await next(phone)).card.remind, false);
   await wakeUntil(() => fcm.sent.some((m) => m.data.phase === 'due'));
-  assert.equal(fcm.sent.find((m) => m.data.phase === 'due').android.priority, 'NORMAL');
+  assert.equal(fcm.sent.find((m) => m.data.phase === 'due').android.priority, 'HIGH');
 });
 
 test('nothing is pushed to ask about the bus: after the departure the trip moves on by itself, quietly', async () => {
