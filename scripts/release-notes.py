@@ -113,6 +113,8 @@ def notes(version: str, tag: str, prev: str, apk: str, mac: str, channel: str = 
         f'- **Android:** open the APK and allow your browser to install apps when asked. Then open {name} and tap '
         f'**Get started**, or sign in if you already have an account. {keeps}\n'
         f'- **Mac:** open the disk image and drag {name} to Applications, then sign in with your email. '
+        'The first time, macOS stops it, as it isn\'t from an identified developer: choose Done, then '
+        '**Open Anyway** in System Settings, under Privacy & Security. '
         'Installed Mac apps update themselves.\n\n'
         '<details>\n<summary>SHA-256 checksums</summary>\n\n'
         '| File | SHA-256 |\n'

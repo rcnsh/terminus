@@ -276,6 +276,11 @@ extension KeyedDecodingContainer {
     func lenientList<T: Decodable>(_ type: T.Type, forKey key: Key) -> [T]? {
         (try? decodeIfPresent([Lossy<T>].self, forKey: key))?.compactMap(\.value)
     }
+
+    /// A whole number that may come as 95.5: rounded, or nil when it's missing or not a number.
+    func lenientInt(forKey key: Key) -> Int? {
+        (try? decodeIfPresent(Double.self, forKey: key))?.flatMap { $0.isFinite ? Int($0.rounded()) : nil }
+    }
 }
 
 /// The server's clock, as near as this Mac can tell. Times in answers
@@ -430,6 +435,18 @@ struct NearbyStop: Decodable, Identifiable {
     let available: Bool
     let board: [BoardRow]
     var id: String { stop.code }
+
+    enum CodingKeys: String, CodingKey { case stop, walkS, available, board }
+
+    /// Only the stop is required: a walk time sent as 95.5, or a row of the
+    /// board this version can't read, must not lose the whole list.
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        stop = try c.decode(Stop.self, forKey: .stop)
+        walkS = c.lenientInt(forKey: .walkS) ?? 0
+        available = (try? c.decodeIfPresent(Bool.self, forKey: .available)) ?? true
+        board = c.lenientList(BoardRow.self, forKey: .board) ?? []
+    }
 }
 
 struct Destination: Decodable, Hashable {
@@ -449,6 +466,22 @@ struct Destination: Decodable, Hashable {
     /// Where a favourite or a class added here goes: a landmark (a food
     /// court) itself, anything else its stop.
     var goesTo: String { kind == "landmark" ? code : stopCode }
+
+    enum CodingKeys: String, CodingKey { case code, label, stopCode, kind, walkM, aliases, stops, detail }
+
+    /// The four names are required; the rest are read on their own, so one
+    /// odd field (a fractional walkM) doesn't drop the place.
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        code = try c.decode(String.self, forKey: .code)
+        label = try c.decode(String.self, forKey: .label)
+        stopCode = try c.decode(String.self, forKey: .stopCode)
+        kind = try c.decode(String.self, forKey: .kind)
+        walkM = c.lenientInt(forKey: .walkM)
+        aliases = c.lenientList(String.self, forKey: .aliases)
+        stops = c.lenientList(String.self, forKey: .stops)
+        detail = try? c.decodeIfPresent(String.self, forKey: .detail)
+    }
 }
 
 /// The destination search, with the rules and cases every client is held to
@@ -657,6 +690,16 @@ struct DayPlan: Decodable {
     let note: String?
     /// The SGT day it's for (YYYY-MM-DD): a plan kept for offline is only used that day.
     let date: String?
+
+    enum CodingKeys: String, CodingKey { case items, note, date }
+
+    /// One entry this version can't read is left out, not the whole of today.
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        items = c.lenientList(Item.self, forKey: .items) ?? []
+        note = try? c.decodeIfPresent(String.self, forKey: .note)
+        date = try? c.decodeIfPresent(String.self, forKey: .date)
+    }
 }
 
 /// A button on the card: `id` is the signal to send, `trip` which trip it's about.
@@ -687,31 +730,72 @@ struct SignInPoll: Decodable {
     let outcome: String?
 }
 
-/// After a 429, every request from this Mac waits out the server's
-/// Retry-After, at most 5 minutes: asking again sooner only keeps the limit
-/// tripped, and each refused request still costs the server one.
+/// After a 429, every request of the same kind from this Mac waits out the
+/// server's Retry-After, at most 5 minutes: asking again sooner only keeps
+/// the limit tripped, and each refused request still costs the server one.
+/// Signing in and the answers are limited apart on the server, so they wait
+/// apart here: a mistyped code doesn't stop the menu bar, nor the other way.
 enum Quiet {
+    enum Scope { case signIn, app }
+
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var untilDates: [Scope: Date] = [:]
+
+    /// Sign-in and pairing (`/auth/…`, `/pair`), or everything else.
+    static func scope(_ path: String) -> Scope { path == "/pair" || path.hasPrefix("/auth/") ? .signIn : .app }
+
+    static func until(_ scope: Scope) -> Date { lock.withLock { untilDates[scope] ?? .distantPast } }
+
+    static func after(_ retryAfter: String?, scope: Scope, now: Date = Date()) {
+        let s = retryAfterS(retryAfter, now: now) ?? 60
+        lock.withLock { untilDates[scope] = now.addingTimeInterval(min(max(s, 1), 300)) }
+    }
+}
+
+/// Retry-After in seconds, from either form HTTP allows ("120", or a date);
+/// nil when it's missing or unreadable.
+func retryAfterS(_ header: String?, now: Date = Date()) -> TimeInterval? {
+    guard let h = header?.trimmingCharacters(in: .whitespaces), !h.isEmpty else { return nil }
+    if let s = Double(h) { return s > 0 ? s : nil }
+    return ServerClock.parseHTTPDate(h).map { $0.timeIntervalSince(now) }.flatMap { $0 > 0 ? $0 : nil }
+}
+
+/// A 426: this version is older than the server still serves (the
+/// `config:minClient` minimum). Every request with a token would be refused
+/// the same way until it's updated, so none goes out for half an hour:
+/// Sparkle's update is what fixes it, and a relaunch into it starts afresh.
+/// Then one asks again, in case the minimum was lowered meanwhile; a reply
+/// that isn't a 426 ends it. Signing in and out (`/auth/…`) still go.
+enum Outdated {
+    static let holdS: TimeInterval = 30 * 60
+
     private static let lock = NSLock()
     nonisolated(unsafe) private static var untilDate = Date.distantPast
 
-    static var until: Date { lock.withLock { untilDate } }
+    static var active: Bool { lock.withLock { Date() < untilDate } }
 
-    static func after(_ retryAfter: String?) {
-        let s = retryAfter.flatMap { Double($0.trimmingCharacters(in: .whitespaces)) }.flatMap { $0 > 0 ? $0 : nil } ?? 60
-        lock.withLock { untilDate = Date().addingTimeInterval(min(s, 300)) }
-    }
+    static func mark() { lock.withLock { untilDate = Date().addingTimeInterval(holdS) } }
 }
 
 struct ApiError: LocalizedError {
     let status: Int
     let message: String
+    /// Seconds the server asked to wait (Retry-After on a 429 or 503).
+    var retryAfter: TimeInterval? = nil
+    /// The reply's own `status`, when it has one ("denied" for a sign-in code tried too often).
+    var state: String? = nil
     var errorDescription: String? { message }
+    /// This version is too old for the server (426): only an update helps.
+    var updateRequired: Bool { status == 426 }
 }
 
 /// What to show for a failed request: the server's message when it answered,
-/// else `otherwise` (it couldn't be reached, by default).
+/// "can't read" when it answered with something this version doesn't
+/// understand, else `otherwise` (it couldn't be reached, by default).
 func failureMessage(_ error: Error, otherwise: String = L("Couldn't reach terminus. Check your connection and try again.")) -> String {
-    (error as? ApiError)?.message ?? otherwise
+    if let e = error as? ApiError { return e.message }
+    if error is DecodingError { return L("terminus sent something this version can't read.") }
+    return otherwise
 }
 
 /// The API's errors are lowercase phrases for API users ("not a valid NUSMods
@@ -973,8 +1057,12 @@ struct Api {
 
     /// The response body of a 2xx; anything else throws with the server's message.
     private func send(_ method: String, _ path: String, query: [URLQueryItem] = [], json: Data? = nil) async throws -> Data {
+        // Too old for the server: nothing with a token goes out until an update.
+        let scope = Quiet.scope(path)
+        if token != nil, scope == .app, Outdated.active { throw ApiError(status: 426, message: L("Update terminus to keep using it.")) }
         // Asked to slow down: nothing goes out until Retry-After is up.
-        if Date() < Quiet.until { throw ApiError(status: 429, message: L("terminus is busy. Try again in a minute.")) }
+        let quietUntil = Quiet.until(scope)
+        if Date() < quietUntil { throw ApiError(status: 429, message: L("terminus is busy. Try again in a minute."), retryAfter: quietUntil.timeIntervalSinceNow) }
         var comps = URLComponents(string: Api.base + path)!
         if !query.isEmpty { comps.queryItems = query }
         var req = URLRequest(url: comps.url!, timeoutInterval: 10)
@@ -990,13 +1078,22 @@ struct Api {
             req.httpBody = json
         }
         let (data, resp) = try await URLSession.shared.data(for: req)
-        let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
-        if let http = resp as? HTTPURLResponse { ServerClock.observe(http) }
-        if status == 429 { Quiet.after((resp as? HTTPURLResponse)?.value(forHTTPHeaderField: "retry-after")) }
+        let http = resp as? HTTPURLResponse
+        let status = http?.statusCode ?? 0
+        if let http { ServerClock.observe(http) }
+        let retryAfter = http?.value(forHTTPHeaderField: "retry-after")
+        if status == 429 { Quiet.after(retryAfter, scope: scope) }
+        if status == 426 { Outdated.mark() }
         guard (200..<300).contains(status) else {
-            let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
+            let o = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+            let msg = o?["error"] as? String
             // No message of its own (a proxy's or Cloudflare's HTML page): plain words, not a status code.
-            throw ApiError(status: status, message: msg.map(sentence) ?? L("Couldn't reach terminus. Try again in a moment."))
+            throw ApiError(
+                status: status,
+                message: status == 426 ? L("Update terminus to keep using it.") : msg.map(sentence) ?? L("Couldn't reach terminus. Try again in a moment."),
+                retryAfter: retryAfterS(retryAfter),
+                state: o?["status"] as? String
+            )
         }
         return data
     }

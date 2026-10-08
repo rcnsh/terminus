@@ -9,6 +9,15 @@
 # Bump versionName/versionCode (Android), CFBundleShortVersionString/
 # CFBundleVersion (apps/macos/Support/Info.plist) and API_VERSION
 # (apps/api/src/openapi.ts, the API docs) together first; a test checks.
+# Deploy the Worker first too, (cd apps/api && pnpm run deploy): nothing goes
+# up until the live site's API is this version, and the Mac build is above
+# the live appcast's.
+#
+# Once v<version> is pushed a second run stops at "already tagged". Should
+# an upload after it fail, finish by hand from apps/api, with the files in
+# build/release/<version>: put appcast.xml, then latest.json, into
+# terminus-downloads (pnpm exec wrangler r2 object put ... --remote, as
+# r2() below), then run scripts/github-release.sh <version>.
 #
 # Signs with the keys on this Mac, as scripts/release-beta.sh does: the
 # Android release key in ~/.gradle/gradle.properties (TERMINUS_*), the
@@ -50,8 +59,21 @@ if [ $DRY -eq 0 ]; then
   gh auth status >/dev/null 2>&1 || { echo "gh isn't signed in: gh auth login"; exit 1; }
 fi
 
+SITE=https://terminus.rcn.sh
+# What the live site says, before anything goes up: Sparkle only installs a
+# build above the appcast's, and this version's apps expect its API, so the
+# Worker is deployed first. A dry run reports and carries on.
+live_check() {
+  python3 scripts/release-check.py "$@" && return 0
+  [ $DRY -eq 1 ] && { echo "   (a release would stop here)"; return 0; }
+  exit 1
+}
+
 mkdir -p build
 echo "== terminus $VERSION (build $BUILD)"
+echo "== live site"
+live_check build "$SITE" "$BUILD"
+live_check api "$SITE" "$VERSION"
 echo "== tests"
 # Not `pnpm test && echo`: under set -e a failure on the left of && does not
 # stop the script, so a failing suite would still build, upload and tag.
@@ -91,7 +113,7 @@ SIG=$("$ROOT/apps/macos/.build/artifacts/sparkle/Sparkle/bin/sign_update" --ed-k
 printf '%s' "$SIG" | grep -q . || { echo "sign_update gave no signature"; exit 1; }
 MIN_OS=$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$PLIST")
 # The appcast: one item, the new version. Sparkle compares CFBundleVersion.
-python3 scripts/appcast.py "$VERSION" "$BUILD" "$MIN_OS" "$SIG" "$DMG" https://terminus.rcn.sh > "$OUT/appcast.xml"
+python3 scripts/appcast.py "$VERSION" "$BUILD" "$MIN_OS" "$SIG" "$DMG" "$SITE" > "$OUT/appcast.xml"
 
 # latest.json names every current file. Its top-level version is what the
 # apps compare to offer an update, so it moves with both downloads at once.
@@ -118,6 +140,11 @@ if [ $DRY -eq 1 ]; then
   exit 0
 fi
 
+# Again, as the build took a while: nothing changed on the site meanwhile.
+echo "== live site"
+live_check build "$SITE" "$BUILD"
+live_check api "$SITE" "$VERSION"
+
 echo "== upload"
 # Wrangler, not `cf r2 objects put`: cf percent-encodes the slashes in the
 # key, which R2 needs literal.
@@ -126,14 +153,17 @@ for f in "terminus-$VERSION.apk" "terminus-$VERSION-armv7.apk" "terminus-$VERSIO
   r2 "releases/$VERSION/$f" "$OUT/$f" application/vnd.android.package-archive
 done
 r2 "releases/$VERSION/terminus-$VERSION.dmg" "$DMG" application/x-apple-diskimage
+# The tag before the appcast: the appcast links to the tag's page on GitHub,
+# which exists once the tag is pushed (the release fills it in below).
+echo "== tag v$VERSION"
+git tag -a "v$VERSION" -m "terminus $VERSION"
+git push -q origin "v$VERSION"
+# From here a re-run stops at the tag: say how to finish instead.
+trap '[ $? -eq 0 ] || echo "v$VERSION is tagged but not all of it went up: upload what is left from $OUT (appcast.xml, then latest.json), then run scripts/github-release.sh $VERSION; see the top of this script"' EXIT
 r2 appcast.xml "$OUT/appcast.xml" "application/xml; charset=utf-8"
 # latest.json last, so /download/* never points at a file that isn't there yet.
 r2 latest.json "$OUT/latest.json" application/json
 
 echo "== GitHub"
-git tag -a "v$VERSION" -m "terminus $VERSION"
-git push -q origin "v$VERSION"
 scripts/github-release.sh "$VERSION"
 echo "== released $VERSION"
-echo "   deploy the Worker too if the API changed since the last deploy: (cd apps/api && pnpm run deploy)"
-echo "   (it applies any pending D1 migrations first; they must be additive, see apps/api/docs/internals.md)"

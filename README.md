@@ -102,7 +102,7 @@ It updates through the day and goes quiet in the evening. The app has three tabs
 <br>
 
 - **Android:** open the downloaded file and allow your browser to install apps when asked. Play Protect may ask you to confirm, since it isn't from the Play Store.
-- **Mac:** open the disk image and drag terminus to Applications.
+- **Mac:** open the disk image and drag terminus to Applications. The first time you open it, macOS stops it, as it isn't from an identified developer: choose Done, then Open Anyway in System Settings, under Privacy & Security.
 
 </details>
 
@@ -141,7 +141,8 @@ node apps/api/scripts/dev-stub.mjs    # local API with fake buses on :8787
 Self-hosting needs your own Cloudflare account (Workers, D1, KV, R2, Email
 Sending) and the NUS feed configuration described in
 [apps/api/docs/internals.md](apps/api/docs/internals.md). Releases run on a
-Mac with `scripts/release.sh`: the tests, the Android build as one APK per CPU
+Mac with `scripts/release.sh`, once the Worker serving that version is
+deployed: the tests, the Android build as one APK per CPU
 type, the signed Mac app and the appcast installed Macs update from, the
 uploads, the tag and the GitHub release. The campus map's street map goes onto R2 with the
 **map tiles** workflow (or `scripts/map-tiles.sh`). See [CONTRIBUTING.md](CONTRIBUTING.md).

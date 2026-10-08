@@ -16,19 +16,24 @@ import Security
 /// keychain prompt), and the keychain item is then deleted.
 enum TokenStore {
     /// Tests use their own keychain name; the app never changes it.
-    nonisolated(unsafe) static var service = "sh.rcn.terminus"
+    nonisolated(unsafe) static var service = "sh.rcn.terminus" { didSet { keychainDone = false } }
     private static let account = "device-token"
 
     private enum Lookup {
         case found(String)
         case missing
-        /// The keychain refused (locked, or the prompt was denied): the token
-        /// may well be there, so this is not "signed out".
-        case failed(OSStatus)
+        /// The file or the keychain couldn't be read (a permissions or disk
+        /// error, the keychain locked or its prompt denied): the token may
+        /// well be there, so this is not "signed out".
+        case failed
     }
 
     /// Tests point this at a temporary folder; the app never sets it.
-    nonisolated(unsafe) static var folder: URL?
+    nonisolated(unsafe) static var folder: URL? { didSet { keychainDone = false } }
+
+    /// The keychain has been looked in once (its token moved, or none there):
+    /// with no file, it isn't asked again on every refresh and map poll.
+    nonisolated(unsafe) private static var keychainDone = false
 
     /// The beta, and a build pointed at a local API (TERMINUS_API_BASE), keep
     /// their own token, so neither signs this Mac out of the real one.
@@ -42,12 +47,26 @@ enum TokenStore {
     }
 
     private static func lookup() -> Lookup {
-        if let s = try? String(contentsOf: fileURL, encoding: .utf8) {
-            let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            let t = try String(contentsOf: fileURL, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
             return t.isEmpty ? .missing : .found(t)
-        }
+        } catch where !isMissing(error) {
+            return .failed
+        } catch {}
         // The keychain item belongs to the real API's sign-in: a dev build leaves it alone.
-        return folderName == "terminus" ? migrateKeychain() : .missing
+        guard folderName == "terminus", !keychainDone else { return .missing }
+        let r = migrateKeychain()
+        if case .failed = r {} else { keychainDone = true }
+        return r
+    }
+
+    /// No such file: signed out. Anything else (no permission, a disk error)
+    /// says nothing about whether there's a token.
+    static func isMissing(_ error: Error) -> Bool {
+        let e = error as NSError
+        if e.domain == NSCocoaErrorDomain, e.code == NSFileReadNoSuchFileError { return true }
+        if e.domain == NSPOSIXErrorDomain, e.code == Int(ENOENT) { return true }
+        return (e.userInfo[NSUnderlyingErrorKey] as? NSError).map(isMissing) ?? false
     }
 
     static var exists: Bool {
@@ -116,7 +135,7 @@ enum TokenStore {
         case errSecItemNotFound:
             return .missing
         default:
-            return .failed(status)
+            return .failed
         }
     }
 
