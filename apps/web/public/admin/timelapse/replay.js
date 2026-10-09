@@ -134,7 +134,8 @@ function before(pts, t) {
 /**
  * Where [track]'s bus is at [t] on [path]: metres along, and how opaque it
  * is (0 to 1), or null when it isn't on the map then. After its last
- * reading it stays [holdMs] before it fades.
+ * reading it stays [holdMs] before it fades. A bus fading through a jump
+ * comes with `jumping`: it's out all along, only drawn fading.
  */
 export function placeAt(track, path, t, holdMs = 0) {
   const { pts } = track;
@@ -156,7 +157,7 @@ export function placeAt(track, path, t, holdMs = 0) {
   if (path.loop && path.total > 0 && d < -path.total / 2) d += path.total;
   // Further than it could have driven, or backwards a long way: it didn't
   // drive there, so it doesn't slide there. Out at one, in at the other.
-  if (Math.abs(d) > (MAX_SPEED_MS * dt) / 1000 + SLACK_M) return k < 0.5 ? at(a, 1 - 2 * k) : at(b, 2 * k - 1);
+  if (Math.abs(d) > (MAX_SPEED_MS * dt) / 1000 + SLACK_M) return { along: (k < 0.5 ? a : b).along, alpha: Math.abs(1 - 2 * k), jumping: true };
   return { along: a.along + d * k, alpha: 1 };
 }
 
@@ -169,16 +170,18 @@ export function busesAt(day, t) {
     const place = placeAt(track, route.path, t, day.pollMs ?? 0);
     if (!place) continue;
     const p = pointAt(route.path, place.along);
-    out.push({ key: track.key, svc: track.svc, plate: track.plate, color: route.color, lat: p.lat, lon: p.lon, heading: p.heading, alpha: place.alpha });
+    out.push({ key: track.key, svc: track.svc, plate: track.plate, color: route.color, lat: p.lat, lon: p.lon, heading: p.heading, alpha: place.alpha, jumping: place.jumping === true });
   }
   return out;
 }
 
-/** Buses on the map per service, counting only those more than half there
- *  (a fading bus isn't counted twice, or flickers the number). */
+/** Buses out per service. A bus fading in or out is counted once it's more
+ *  than half there, so a gap changes the number once each way; one fading
+ *  through a jump is counted throughout, or a service with one bus out
+ *  would blink to none at every jump (a one-way route's end, say). */
 export function countBySvc(buses) {
   const n = {};
-  for (const b of buses) if (b.alpha >= 0.5) n[b.svc] = (n[b.svc] ?? 0) + 1;
+  for (const b of buses) if (b.alpha >= 0.5 || b.jumping) n[b.svc] = (n[b.svc] ?? 0) + 1;
   return n;
 }
 
