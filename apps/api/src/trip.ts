@@ -19,10 +19,10 @@ import { haversineM } from './geo.ts';
 import { MAX_FIX_ACC_M, WALK, sgt } from './config.ts';
 import { sgtDate } from './calendar.ts';
 import { GRAPH } from './graph.ts';
-import { indexGraph, rideSpan, rideStops } from './resolve.ts';
+import { headwayFor, indexGraph, rideSpan, rideStops } from './resolve.ts';
 import { shapeFor } from './campus.ts';
 import { alongNear } from './buses.ts';
-import { shortStop } from './format.ts';
+import { isoSeconds, shortStop } from './format.ts';
 
 export type Phase = 'idle' | 'due' | 'heading' | 'waiting' | 'riding' | 'missed' | 'arrived';
 
@@ -163,19 +163,47 @@ export function secondBusOf(l: Pick<Leave, 'change' | 'arrive' | 'off' | 'offCod
   };
 }
 
+/**
+ * The second bus when you board a later first bus than planned (`shiftMs`
+ * after it): if that gets you to the change (`reach`, as planned) after the
+ * planned second bus, that one has gone, so a guess from when you get there,
+ * a bus within a headway, and the trip's end moved with it.
+ */
+export function laterChange(c: Boarded | undefined, reach: string | null | undefined, shiftMs: number): Boarded | undefined {
+  if (!c?.board || !reach || shiftMs <= 0) return c;
+  const there = Date.parse(reach) + shiftMs;
+  const by = there - Date.parse(c.board);
+  if (by <= 0) return c;
+  return { ...c, board: isoSeconds(there), ...(c.arrive ? { arrive: isoSeconds(Date.parse(c.arrive) + by) } : {}), estimated: true };
+}
+
 /** How long after the second bus's time it's taken to have left with you on it. */
 export const CHANGE_GRACE_MS = 30_000;
+
+/**
+ * The latest the second bus of a trip that changes buses can leave: its
+ * time, or a headway after it when that time is only a guess (there by
+ * then, and a bus within a headway).
+ */
+export function secondLeavesMs(c: Boarded): number | null {
+  if (!c.board) return null;
+  const at = Date.parse(c.board);
+  return c.estimated ? at + Math.max(60, headwayFor(GRAPH, c.svc)) * 1000 : at;
+}
 
 /**
  * Where a trip that changes buses is: on the first bus until it gets to the
  * change (`first`), at the change stop until the second bus has left
  * (`change`), then on the second. A trip on one bus is always `first`.
  * `firstLate`: the feed still has the first bus on its way to the change.
+ * The second bus's time should be the feed's where it has one (secondBus in
+ * next.ts), so a bus still due there keeps you at the change.
  */
 export function rideStage(b: Boarded, nowMs: number, firstLate = false): 'first' | 'change' | 'second' {
   if (!b.change) return 'first';
   if (firstLate || !b.arrive || nowMs < Date.parse(b.arrive)) return 'first';
-  if (!b.change.board || nowMs < Date.parse(b.change.board) + CHANGE_GRACE_MS) return 'change';
+  const leaves = secondLeavesMs(b.change);
+  if (leaves === null || nowMs < leaves + CHANGE_GRACE_MS) return 'change';
   return 'second';
 }
 

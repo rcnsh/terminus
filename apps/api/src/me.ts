@@ -49,7 +49,7 @@ import { CLOCK_PREFS, DEFAULT_PROFILE, PROFILE_LIMITS, type Profile, profileLimi
 import { hour12, planned, resolveTo } from './next.ts';
 import { dayPlan } from './day.ts';
 import { unlogged } from './answer.ts';
-import { type Boarded, type DayRecord, PLATE_WINDOW_S, SIGNALS, type TripRecord, type TripUpdate, clearTrip, isHomeKey, leaveOf, loadDay, needsWatch, saveSignals, secondBusOf, sgtDate, updateTrip } from './trip.ts';
+import { type Boarded, type DayRecord, PLATE_WINDOW_S, SIGNALS, type TripRecord, type TripUpdate, clearTrip, isHomeKey, laterChange, leaveOf, loadDay, needsWatch, saveSignals, secondBusOf, sgtDate, updateTrip } from './trip.ts';
 import { nudgeUser, pushEnabled, setPushToken } from './push.ts';
 import { WEB_PREFIX, parseSubscription, vapidPublicKey, webPushEnabled } from './webpush.ts';
 import { NO_PREFS, type PrefKind, type TripPrefs, clearHistory, clearOutcome, historySize, listPrefs, recordOutcome, setPref, tripPrefs } from './outcomes.ts';
@@ -723,7 +723,7 @@ export const ME_ROUTES: MeRoute[] = [
                   ...(l.stopCode ? { stopCode: l.stopCode } : {}),
                   alightCode: l.change.fromCode,
                   ...(plate ? { plate } : {}),
-                  ...(now.answer.dest?.to ? { change: secondBusOf(l, now.answer.dest.to) } : {}),
+                  ...(now.answer.dest?.to ? { change: laterChange(secondBusOf(l, now.answer.dest.to), l.change.reach, shift) } : {}),
                 }
               : {
                   svc: l.svc,
