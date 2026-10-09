@@ -33,13 +33,23 @@
   /* The page opens under Now's sky at this hour (sky.css) and ends on the
      campus's horizon. The phone in it is the app's Now, drawn in the page. */
   .top .nav { position: relative; z-index: 2; }
-  .top .nav-links .btn.soft { background: var(--surface); color: var(--ink); border-color: var(--line-strong); }
   .hero { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 40px; align-items: end; padding-top: 44px; }
-  .sky-chip .beta { margin: 0 0 0 4px; background: var(--accent-soft); color: var(--k-accent-small); }
   .hero h1 { font-size: clamp(2.8rem, 6.4vw, 4.8rem); line-height: 1.02; letter-spacing: -0.035em; margin-top: 18px; }
   .hero h1 em { font-style: normal; color: var(--accent); }
   .hero .lede { font-size: 1.15rem; color: var(--muted); margin: 18px 0 28px; max-width: 32rem; }
-  .cta { display: flex; flex-wrap: wrap; gap: 10px; }
+  /* Android first (the APK, or Google Play's own badge once the app is
+     there: src/landing.ts), then the web app and the Mac app as smaller
+     tiles. All three are the badge's height, so the row reads as one choice. */
+  .cta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .cta .get-android { height: 50px; min-height: 0; padding: 0 18px; border-radius: 8px; margin-right: 4px; }
+  .cta .play { display: block; margin-right: 4px; border-radius: 8px; line-height: 0; }
+  .cta .play img { display: block; width: 168px; height: 50px; }
+  .cta .play img + img, :root:lang(zh) .cta .play img:first-child { display: none; }
+  :root:lang(zh) .cta .play img + img { display: block; }
+  .tile { display: inline-grid; justify-items: center; align-content: center; gap: 3px; width: 66px; height: 50px; box-sizing: border-box; border-radius: 8px; border: 1px solid var(--line-strong);
+    background: color-mix(in srgb, var(--surface) 55%, transparent); backdrop-filter: blur(6px); color: var(--ink); text-decoration: none; font-size: 0.8rem; font-weight: 600; line-height: 1; }
+  .tile:hover { border-color: var(--ink); }
+  .tile svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .cta-note { margin-top: 14px; font-size: 0.85rem; color: var(--muted); }
   .hero-copy { padding-bottom: 56px; }
   .install { margin-top: 10px; font-size: 0.9rem; color: var(--muted); }
@@ -190,8 +200,10 @@
   .foot { margin-top: 0; border-top: 0; }
 
   @media (max-width: 860px) {
-    .hero { grid-template-columns: minmax(0, 1fr); padding-top: 20px; gap: 8px; }
-    .hero-copy { padding-bottom: 28px; }
+    .hero { grid-template-columns: minmax(0, 1fr); padding-top: 12px; gap: 8px; }
+    .hero-copy { padding-bottom: 6px; }
+    .hero h1 { font-size: 2.6rem; margin-top: 14px; }
+    .hero .lede { font-size: 1.02rem; margin: 12px 0 20px; }
     .hero-phone { margin-bottom: -300px; }
     .after-hero { padding-top: 300px; }
     .places { grid-template-columns: minmax(0, 1fr); }
@@ -226,20 +238,19 @@
       <button type="button" class="nav-menu hide-sm" id="dl-button" popovertarget="dl-menu" aria-expanded="false">Download<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
       <a href="/docs" class="hide-sm">API</a>
       <a href="https://github.com/rcnsh/terminus" class="hide-sm gh" aria-label="terminus on GitHub"><svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg></a>
-      <a class="btn small soft open-app" href="/app/">Open the app</a>
       <a class="btn small ghost" href="/account" id="account-link">Sign in</a>
     </nav>
   </header>
 
   <div class="wrap hero">
     <div class="hero-copy">
-      <p class="sky-chip">For the NUS internal shuttle <span class="beta">Public beta</span></p>
+      <p class="sky-chip">For the NUS internal shuttle</p>
       <h1>Know when to <em>run</em>.</h1>
-      <p class="lede">terminus reads your NUSMods timetable and tells you when to leave for your next class: which NUS shuttle bus, from which stop, and when walking is faster.</p>
+      <p class="lede">Reads your NUSMods timetable and tells you when to leave for class: which shuttle, from which stop, or whether to walk.</p>
       <div class="cta" id="download">
-        <a class="btn accent" href="/download/android">Get it for Android</a>
-        <a class="btn ghost" href="/download/mac">Download for Mac</a>
-        <a class="btn ghost" href="/app/">Use it on the web</a>
+        <a class="btn accent get-android" href="/download/android">Get it for Android</a>
+        <a class="tile" href="/app/"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3Z"/></svg>Web</a>
+        <a class="tile" href="/download/mac"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4.5" width="16" height="11" rx="1.5"/><path d="M2 19.5h20"/></svg>Mac</a>
       </div>
       <p class="cta-note">Free. Android 12 or later, macOS 14 or later on Apple silicon.<span id="version"></span></p>
       <details class="install" id="install">
@@ -404,7 +415,11 @@
   <div data-stars></div>
   <div class="wrap">
     <h2>Know when to leave for your next class.</h2>
-    <div class="cta"><a class="btn accent" href="/download/android">Get it for Android</a><a class="btn ghost" href="/download/mac">Download for Mac</a></div>
+    <div class="cta">
+        <a class="btn accent get-android" href="/download/android">Get it for Android</a>
+        <a class="tile" href="/app/"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3Z"/></svg>Web</a>
+        <a class="tile" href="/download/mac"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4.5" width="16" height="11" rx="1.5"/><path d="M2 19.5h20"/></svg>Mac</a>
+    </div>
   </div>
   <div data-horizon data-drive style="margin-top:28px"></div>
 </section>

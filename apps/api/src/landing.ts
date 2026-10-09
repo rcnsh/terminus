@@ -2,7 +2,9 @@
  * The landing page, with the two things it would otherwise fetch once open
  * written in before it's sent: the current release's version beside the
  * download buttons, and Account in place of Sign in for someone signed in.
- * Fetched by the page's script, both changed in front of the reader.
+ * Fetched by the page's script, both changed in front of the reader. And
+ * once the app is on Google Play (PLAY_URL), its Android buttons become
+ * Play's badge.
  *
  * A string fill rather than HTMLRewriter, so the tests and the dev stub
  * (Node, which has none) serve the same page. landing.test.js fails if
@@ -10,7 +12,7 @@
  */
 
 import type { Env } from './types.ts';
-import { RELEASE_VERSION, latestRelease } from './downloads.ts';
+import { PLAY_URL, RELEASE_VERSION, latestRelease } from './downloads.ts';
 import { authenticate } from './accounts.ts';
 import { matchesEtag } from './map.ts';
 import { isBeta } from './site.ts';
@@ -30,12 +32,38 @@ export async function latestVersion(env: Env): Promise<string | null> {
   }
 }
 
+/** Only a Google Play app page goes into the page. */
+const PLAY = /^https:\/\/play\.google\.com\/store\/apps\/details\?id=[\w.]+$/;
+
+/** index.html's Android button, as written: the APK. */
+export const APK_BUTTON = '<a class="btn accent get-android" href="/download/android">Get it for Android</a>';
+
+/** index.html's install step for the APK, which Google Play makes needless. */
+const APK_STEP = /\s*<li><strong>Android:<\/strong>[^]*?<\/li>/;
+
 /**
- * index.html with the version and the account link filled in. The version
- * carries its English for i18n.js (data-t), which words it in Chinese.
+ * Google Play's badge, in English and Chinese: the page's language shows one
+ * (index.html's CSS). Lazy, so the hidden one is never fetched.
  */
-export function fillLanding(html: string, opts: { version: string | null; signedIn: boolean }): string {
+function playBadge(url: string): string {
+  const img = (file: string) => `<img src="/assets/badges/${file}" alt="Get it on Google Play" width="168" height="50" loading="lazy">`;
+  return `<a class="play" href="${url}">${img('google-play.png')}${img('google-play-zh.png')}</a>`;
+}
+
+/**
+ * index.html with the version and the account link filled in, and with a
+ * Google Play page, every Android link going there. The version carries its
+ * English for i18n.js (data-t), which words it in Chinese.
+ */
+export function fillLanding(html: string, opts: { version: string | null; signedIn: boolean; play?: string | null }): string {
   let out = html;
+  if (opts.play && PLAY.test(opts.play)) {
+    out = out.replaceAll(APK_BUTTON, playBadge(opts.play));
+    out = out.replaceAll('href="/download/android"', `href="${opts.play}"`);
+    // The structured data's download link too, which names the site in full.
+    out = out.replaceAll('"https://terminus.run/download/android"', `"${opts.play}"`);
+    out = out.replace(APK_STEP, '');
+  }
   if (opts.version && VERSION.test(opts.version)) {
     const v = ` <span data-t="Version {0}." data-t-args='["${opts.version}"]'>Version ${opts.version}.</span>`;
     out = out.replace('<span id="version"></span>', `<span id="version">${v}</span>`);
@@ -47,11 +75,11 @@ export function fillLanding(html: string, opts: { version: string | null; signed
 
 /**
  * The page's ETag: weak, from everything that goes into it (the file's own
- * ETag, the version, signed in or not, and the beta's mark), so a browser
+ * ETag, the version, signed in or not, the beta's mark and the Play page), so a browser
  * revalidating gets a 304 only while what it has is what it would get.
  */
-export async function landingEtag(assetEtag: string, version: string | null, signedIn: boolean, beta: boolean): Promise<string> {
-  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify([assetEtag, version, signedIn, beta]))));
+export async function landingEtag(assetEtag: string, version: string | null, signedIn: boolean, beta: boolean, play: string | null = PLAY_URL): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify([assetEtag, version, signedIn, beta, play]))));
   return `W/"${Array.from(digest.slice(0, 12), (b) => b.toString(16).padStart(2, '0')).join('')}"`;
 }
 
@@ -84,6 +112,6 @@ export async function landingPage(req: Request, assets: Fetcher, env: Env, nowMs
       return new Response(null, { status: 304, headers });
     }
   }
-  const body = req.method === 'HEAD' ? null : fillLanding(await res.text(), { version, signedIn });
+  const body = req.method === 'HEAD' ? null : fillLanding(await res.text(), { version, signedIn, play: PLAY_URL });
   return new Response(body, { status: res.status, headers });
 }

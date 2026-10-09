@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 
 import { makeBucket } from './_stubs.mjs';
 import { makeD1 } from './_d1.mjs';
-import { fillLanding, landingEtag, landingPage } from '../src/landing.ts';
+import { APK_BUTTON, fillLanding, landingEtag, landingPage } from '../src/landing.ts';
 import { ensureUser, openSession, SESSION_COOKIE } from '../src/accounts.ts';
 
 const INDEX = await readFile(new URL('../../web/public/index.html', import.meta.url), 'utf8');
@@ -24,6 +24,21 @@ const downloads = (latest) => makeBucket(async (key) => (key === 'latest.json' &
 test('landing: index.html still has the markup the Worker fills', () => {
   for (const mark of ['<span id="version"></span>', '<span id="dl-version"></span>', 'id="account-link">Sign in</a>']) {
     assert.ok(INDEX.includes(mark), mark);
+  }
+  assert.equal(INDEX.split(APK_BUTTON).length - 1, 2, 'the Android button, at the top and the end');
+  assert.match(INDEX, /<li><strong>Android:<\/strong>/, 'the APK\'s install step');
+});
+
+test('landing: with a Google Play page, every Android link goes there', () => {
+  const play = 'https://play.google.com/store/apps/details?id=sh.rcn.terminus';
+  const out = fillLanding(INDEX, { version: null, signedIn: false, play });
+  assert.equal(out.split('<a class="play" href="' + play + '">').length - 1, 2, 'both Android buttons are the badge');
+  assert.ok(out.includes('src="/assets/badges/google-play.png"') && out.includes('src="/assets/badges/google-play-zh.png"'));
+  assert.ok(!out.includes('/download/android'), 'nothing offers the APK');
+  assert.ok(!out.includes('<strong>Android:</strong>'), 'no APK install step');
+  assert.ok(out.includes('<strong>Mac:</strong>'), 'the Mac\'s step stays');
+  for (const bad of ['https://example.com/', 'https://play.google.com/store/apps/details?id=x"><script>', 'javascript:alert(1)']) {
+    assert.equal(fillLanding(INDEX, { version: null, signedIn: false, play: bad }), INDEX, `${bad} is not a Play page`);
   }
 });
 
@@ -94,8 +109,9 @@ test('landing: a copy that is still what would be sent gets a 304; a change to a
     await landingEtag('"abc"', null, true, false),
     await landingEtag('"abc"', '2.4.2', false, false),
     await landingEtag('"abc"', '2.4.2', true, true),
+    await landingEtag('"abc"', '2.4.2', true, false, 'https://play.google.com/store/apps/details?id=sh.rcn.terminus'),
   ]);
-  assert.equal(etags.size, 5);
+  assert.equal(etags.size, 6);
 });
 
 test('landing: a new release shows on the very next request, with no wait', async () => {
