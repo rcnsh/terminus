@@ -455,14 +455,6 @@
     <string name="feedback_wrong_title">答案不对？</string>
     <string name="feedback_wrong_hint">请按它下面的“这不对？”，这样我们能看到你看到的内容。</string>
     <string name="feedback_thanks">谢谢，你的反馈已发送。</string>
-    <string name="suggest_title">某栋楼更好的车站</string>
-    <string name="suggest_hint">如果我们为某栋楼推荐的车站你从来不用，告诉我们你用的是哪个。</string>
-    <string name="suggest_building">大楼</string>
-    <string name="suggest_stop">你用的车站</string>
-    <string name="suggest_why">原因（选填）</string>
-    <string name="suggest_why_placeholder">有条小路直通那里</string>
-    <string name="suggest_send">推荐这个车站</string>
-    <string name="suggest_thanks">谢谢。我们会去走一趟，如果更好就换成这个车站。</string>
     <string name="report_needs_email">添加邮箱后才能反馈错误的结果，方便我们回复你。</string>
     <string name="feedback_needs_email">添加邮箱后才能发送反馈</string>
     <string name="feedback_needs_email_hint">这样我们才能回复你。你的设置会保持不变。</string>

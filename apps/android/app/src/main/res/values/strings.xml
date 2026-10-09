@@ -455,14 +455,6 @@
     <string name="feedback_wrong_title">A wrong answer?</string>
     <string name="feedback_wrong_hint">Press \"Is this wrong?\" under it, so we see what you saw.</string>
     <string name="feedback_thanks">Thanks. Your feedback was sent.</string>
-    <string name="suggest_title">A better stop for a building</string>
-    <string name="suggest_hint">If we send you to a stop you never use for a building, tell us the one you do.</string>
-    <string name="suggest_building">Building</string>
-    <string name="suggest_stop">The stop you use</string>
-    <string name="suggest_why">Why (optional)</string>
-    <string name="suggest_why_placeholder">A path leads straight there</string>
-    <string name="suggest_send">Suggest this stop</string>
-    <string name="suggest_thanks">Thanks. We’ll walk it and change the stop if it’s better.</string>
     <string name="report_needs_email">Add your email to report a wrong answer, so we can reply to you.</string>
     <string name="feedback_needs_email">Add your email to send feedback</string>
     <string name="feedback_needs_email_hint">So we can reply to you. Your setup stays as it is.</string>
