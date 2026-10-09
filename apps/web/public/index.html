@@ -214,8 +214,13 @@
   }
   @media (max-width: 520px) {
     .setup { grid-template-columns: minmax(0, 1fr); }
-    .stats { grid-template-columns: minmax(0, 1fr); padding: 20px !important; gap: 14px; }
-    .stats div { grid-template-columns: 4.2rem minmax(0, 1fr); align-items: baseline; gap: 12px; }
+    /* One row each, the figures sharing a column as wide as the widest,
+       so every label starts at the same place. */
+    .stats { grid-template-columns: auto minmax(0, 1fr); gap: 0 !important; padding: 6px 20px !important; }
+    .stats div { grid-column: 1 / -1; grid-template-columns: subgrid; align-items: baseline; gap: 18px; padding: 14px 0; }
+    .stats div + div { border-top: 1px solid var(--line); }
+    .stats b { font-size: 1.9rem; }
+    .stats span { font-size: 0.95rem; }
   }
   .nav-links .gh svg { display: block; }
 </style>
