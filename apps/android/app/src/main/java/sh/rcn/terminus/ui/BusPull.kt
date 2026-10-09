@@ -451,7 +451,7 @@ private fun DrawScope.pullBus(v: PullView, m: PullMotion, p: Palette, top: Float
                 if (lights && m.drive != PullMotion.Drive.Follow) {
                     drawPath(Path().apply { at(38f, 9f).let { moveTo(it.x, it.y) }; at(60f, 6f).let { lineTo(it.x, it.y) }; at(60f, 13f).let { lineTo(it.x, it.y) }; close() }, MOON, alpha = 0.14f)
                 }
-                shuttle(o, d, v.colour(m), if (band) v.band(m) else null, p.window, wheels = false)
+                shuttle(o, d, v.colour(m), if (band) v.band(m) else null, p.window, dim = 3, wheels = false)
                 if (m.door > 0f) drawRoundRect(Color(0xFFFBBF24), at(32f, 2.5f), Size(2.8f * d, 8.2f * d), CornerRadius(0.6f * d), alpha = m.door)
             }
         }
