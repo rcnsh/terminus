@@ -5,10 +5,12 @@
  * lists for them (many tutorials and labs start in week 2 or 3).
  *
  * data/calendar.json is built by scripts/fetch_calendar.py from NUSMods'
- * semester start dates and MOM's public holidays.
+ * semester start dates and MOM's public holidays. data/nus-days.json, kept
+ * by hand, adds NUS's own days off (Well-Being Days), which count as holidays.
  */
 
 import calendarJson from '../data/calendar.json' with { type: 'json' };
+import nusDaysJson from '../data/nus-days.json' with { type: 'json' };
 import { m } from './i18n.ts';
 import { SGT_MS } from './config.ts';
 
@@ -63,6 +65,18 @@ export function holidaySpan(c: CalendarData): [string, string] | null {
   return [dates[0], dates[dates.length - 1]];
 }
 
+/**
+ * NUS's own days off, kept by hand: no classes, Sunday/PH bus hours. Apart
+ * from the calendar so neither a refresh of calendar.json nor the cron's
+ * merge can drop one; every calendar answers with them.
+ */
+export const NUS_DAYS: CalendarData['holidays'] = nusDaysJson.days;
+
+/** The holiday or NUS day off on [date] (YYYY-MM-DD), by name, or null. */
+export function holidayOn(date: string, data: CalendarData = DATA): string | null {
+  return (data.holidays.find((h) => h.date === date) ?? NUS_DAYS.find((h) => h.date === date))?.name ?? null;
+}
+
 const DAY_MS = 86_400_000;
 
 /**
@@ -78,7 +92,7 @@ export interface TermDay {
   kind: WeekKind;
   /** Teaching week number (1-13, or 1-6 in special terms); null outside teaching weeks. */
   week: number | null;
-  /** Public holiday name, if today is one. */
+  /** Public holiday (or NUS day off) name, if today is one. */
   holiday: string | null;
 }
 
@@ -129,7 +143,7 @@ export function calendarThrough(data: CalendarData = DATA): string {
 
 export function termDay(nowMs: number, data: CalendarData = DATA): TermDay {
   const today = sgtDate(nowMs);
-  const holiday = data.holidays.find((h) => h.date === today)?.name ?? null;
+  const holiday = holidayOn(today, data);
   const dayStart = sgtMidnight(today);
   if (today > calendarThrough(data)) return { acadYear: null, semester: null, kind: 'unknown', week: null, holiday };
 

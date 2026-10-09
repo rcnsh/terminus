@@ -1,0 +1,13 @@
+{
+  "_help": [
+    "HAND-MAINTAINED. Neither the scrape nor the cron's calendar fetch writes this file.",
+    "",
+    "Days NUS gives off that aren't public holidays (Well-Being Days), so",
+    "they aren't in calendar.json. Each counts as a public holiday: no",
+    "classes, and the shuttles run their Sunday/PH hours. Add one when NUS",
+    "announces it (uNivUS's Bus Notifications), then deploy."
+  ],
+  "days": [
+    { "date": "2026-10-09", "name": "Well-Being Day" }
+  ]
+}

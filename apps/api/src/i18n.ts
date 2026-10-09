@@ -402,6 +402,7 @@ const HOLIDAYS_ZH: Record<string, string> = {
   "New Year's Day": '元旦',
   'Polling Day': '投票日',
   'Vesak Day': '卫塞节',
+  'Well-Being Day': '身心健康日',
 };
 
 const zh: Msgs = {
