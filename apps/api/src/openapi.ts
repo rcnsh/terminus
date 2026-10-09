@@ -139,7 +139,7 @@ const answerExample = {
 /** The apps' version (Android versionName, the Mac's CFBundleShortVersionString):
  *  the API and the apps are released together. A test fails when a version
  *  bump leaves this behind. */
-export const API_VERSION = '2.4.2';
+export const API_VERSION = '2.6.0';
 
 export function openApiSpec(origin: string): Record<string, unknown> {
   return withCommonErrors({
