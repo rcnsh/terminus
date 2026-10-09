@@ -63,16 +63,76 @@ const campusData = store(null);
 const selected = store(null);
 /** The line under the pills ("2 buses on A1"), or null. */
 const status = store(null);
-/** The open sheet: { stop: code } or { bus: id }, or null. */
+/**
+ * The open sheet, or null: { stop: code, from }, `from` the bus sheet it was
+ * opened from (which back returns to); or { bus: id, stops, all }, `stops`
+ * its stops ahead open and `all` of them shown, as when it's come back to.
+ */
 const sheet = store(null);
 /** What had the focus when the sheet opened, for it to go back to when the sheet closes. */
 let opener = null;
-/** A stop to centre in what its sheet leaves uncovered, once the sheet is drawn. */
+/**
+ * What to centre in what its sheet leaves uncovered, once the sheet is drawn:
+ * a stop's code, or { bus: id } (a bus gone back to from one of its stops).
+ */
 let centreOn = null;
+
+/**
+ * A stop's sheet opened from a bus has a step in the browser's history of
+ * its own (the same address, marked in its state), so a phone's Back goes
+ * back to the bus as Escape does. `onEntry`: that step is the one the
+ * browser is on. `skipPop`: the next popstate is the step being taken away
+ * (the sheet left another way), not someone going back.
+ */
+const BACK_MARK = 'mapBack';
+let onEntry = false;
+let skipPop = false;
+/** The browser is on the step now (not on one pushed over it since, as Go there's #now). */
+const atEntry = () => Boolean(history.state?.[BACK_MARK]);
+/** Takes the step away, the browser going back over it unseen (the address is the same). */
+function dropEntry() {
+  if (!onEntry) return;
+  onEntry = false;
+  if (!atEntry()) return;
+  skipPop = true;
+  history.back();
+}
+function onPop(e) {
+  const was = onEntry;
+  onEntry = Boolean(e.state?.[BACK_MARK]);
+  if (skipPop) {
+    skipPop = false;
+    return;
+  }
+  // Back from the stop: to its bus.
+  if (was && !onEntry) {
+    if (location.hash === '#map') toBus();
+    return;
+  }
+  // Come back (Back from another tab, Forward) to a step whose sheet has
+  // gone since: passed over, so Back is never a step that does nothing.
+  if (onEntry && !sheet.get()?.from) dropEntry();
+}
+// (Not in the tests, which run without a browser.)
+if (typeof window !== 'undefined') {
+  window.addEventListener('popstate', onPop);
+  // Reloaded on the step: the sheet it stood for is gone with the page.
+  if (history.state?.[BACK_MARK]) {
+    onEntry = true;
+    dropEntry();
+  }
+}
 
 /** Opens `what` ({ stop } or { bus }) in the sheet, or closes it (null). */
 function openSheet(what) {
   const was = sheet.get();
+  // Left the stop opened from a bus some other way (Close, another sheet,
+  // the Map tab again): its step goes too. Opened from a bus: a step of its own.
+  if (!what?.from) dropEntry();
+  else if (!atEntry()) {
+    history.pushState({ ...history.state, [BACK_MARK]: true }, '');
+    onEntry = true;
+  }
   if (what && !was) {
     const f = document.activeElement;
     opener = f && f !== document.body && !f.closest('.map-sheet') ? f : null;
@@ -86,10 +146,30 @@ function openSheet(what) {
   }
 }
 
-/** A stop opened from elsewhere (Nearby, the list of stops): its sheet, the map centred on it above the sheet. */
-function showStop(code) {
+/**
+ * A stop opened from elsewhere (Nearby, the list of stops, a bus's sheet):
+ * its sheet, the map centred on it above the sheet. `from`: the bus sheet
+ * it came from ({ bus, stops, all }), which back returns to.
+ */
+function showStop(code, from = null) {
   centreOn = code;
-  openSheet({ stop: code });
+  openSheet(from ? { stop: code, from } : { stop: code });
+}
+
+/**
+ * Back (Escape): from a stop opened from a bus, to that bus as it was if it's
+ * still on the map, the map moved to it; else closed. With its step on top
+ * of the history, through the history, as the phone's Back goes.
+ */
+function back() {
+  if (atEntry() && sheet.get()?.from) history.back();
+  else toBus();
+}
+function toBus() {
+  const from = sheet.get()?.from;
+  const to = from && shown.get().has(from.bus) ? from : null;
+  if (to) centreOn = { bus: to.bus };
+  openSheet(to);
 }
 /** Each bus as it last came from the API, by id (for its sheet). */
 const shown = store(new Map());
@@ -799,11 +879,18 @@ function Status() {
 }
 
 /**
- * The sheet's frame: the title, a line under it, and Close. Opened, the focus
- * is on its title (`id` changes with what it's about); Escape closes it.
+ * The frame a stop's sheet and a bus's share, so the two read alike: a grab
+ * handle; a `lead` tile beside the title, the line under it and Close; a line
+ * of `facts`; then the body (a SectionBand and its rows); then the `footer`'s
+ * buttons, kept in view under the rest, which scrolls however long it is.
+ * `onHandle`, when set, is what the handle does: dragged up it's called with
+ * true, down with false, tapped with null. Opened, the focus is on its
+ * title (`id` changes with what it's about); Escape goes back (see back()),
+ * and Close shuts it whatever it came from.
  */
-function Frame({ id, title, sub, lead, top, children, box }) {
+function Frame({ id, title, sub, lead, facts, onHandle, footer, children, box }) {
   const head = useRef(null);
+  const drag = useRef(null);
   useEffect(() => {
     head.current?.focus({ preventScroll: true });
   }, [id]);
@@ -819,6 +906,26 @@ function Frame({ id, title, sub, lead, top, children, box }) {
       tab.style.removeProperty('--sheet-h');
     };
   }, []);
+  // The handle; the section band does the same for a screen reader.
+  const handle = onHandle
+    ? html`
+        <div
+          class="sheet-grab live"
+          aria-hidden="true"
+          onPointerDown=${(e) => {
+            drag.current = e.clientY;
+            e.currentTarget.setPointerCapture(e.pointerId);
+          }}
+          onPointerUp=${(e) => {
+            if (drag.current == null) return;
+            const dy = e.clientY - drag.current;
+            drag.current = null;
+            onHandle(Math.abs(dy) < 12 ? null : dy < 0);
+          }}
+          onPointerCancel=${() => (drag.current = null)}
+        ></div>
+      `
+    : html`<div class="sheet-grab" aria-hidden="true"></div>`;
   return html`
     <section
       class="map-sheet"
@@ -827,17 +934,35 @@ function Frame({ id, title, sub, lead, top, children, box }) {
       onKeyDown=${(e) => {
         if (e.key !== 'Escape') return;
         e.stopPropagation();
-        openSheet(null);
+        back();
       }}
     >
-      ${top}
-      <div class="sheet-head">
-        ${lead}
-        <div class="sheet-titles"><h2 id="sheet-title" tabindex="-1" ref=${head}>${title}</h2>${sub && html`<p class="hint">${sub}</p>`}</div>
-        <button type="button" class="sheet-close" aria-label=${t('Close')} onClick=${() => openSheet(null)}>×</button>
+      <div class="sheet-scroll">
+        ${handle}
+        <div class="sheet-head">
+          ${lead}
+          <div class="sheet-titles"><h2 id="sheet-title" tabindex="-1" ref=${head}>${title}</h2>${sub && html`<p class="hint">${sub}</p>`}</div>
+          <button type="button" class="sheet-close" aria-label=${t('Close')} onClick=${() => openSheet(null)}>×</button>
+        </div>
+        ${facts && html`<div class="sheet-facts">${facts}</div>`}
+        <div class="sheet-body">${children}</div>
       </div>
-      ${children}
+      ${footer && html`<div class="sheet-foot sheet-actions">${footer}</div>`}
     </section>
+  `;
+}
+
+/**
+ * A grey band naming what's under it, the same on a stop's sheet ("Buses
+ * here") as on a bus's ("Stops ahead"). With `onToggle`, it opens and closes
+ * what's under it (`controls`), and a chevron says so.
+ */
+function SectionBand({ text, open = true, onToggle, controls }) {
+  if (!onToggle) return html`<h3 class="sheet-band">${text}</h3>`;
+  return html`
+    <button type="button" class="sheet-band" aria-expanded=${String(open)} aria-controls=${open ? controls : undefined} onClick=${onToggle}>
+      ${text}<${Icon} paths=${CHEVRON_DOWN} class="chev" />
+    </button>
   `;
 }
 
@@ -851,24 +976,30 @@ function CrowdMeter({ crowd }) {
 /** Stops after the next one shown in the bus's list before "+N more". */
 const AHEAD_SHOWN = 4;
 const CHEVRON_DOWN = '<path d="m6 9 6 6 6-6" />';
+const CHEVRON_END = '<path d="m9 6 6 6-6 6" />';
 
 /**
  * The bus's line from the stop it passed (or the one it's at) on through the
  * stops ahead, as the server lists them (`upcoming`): the client never walks
- * the route itself. An older server without `upcoming` gives its next stop only.
+ * the route itself. An older server without `upcoming` gives its next stop
+ * only. The first few after the next, unless `all` (or only one more is
+ * left); with more beyond them, the line fades out under the last. Passed,
+ * here and next are drawn on the line (grey, the bus, bold), not written
+ * beside it; a screen reader still hears the word. Each stop's row is a
+ * button that opens that stop (`onStop(code, name)`), a chevron at its end
+ * saying so; the bus's own row ("On its way") isn't.
  */
-function StopStrip({ b }) {
-  let ahead = b.upcoming ?? (b.nextStop ? [b.nextStop] : []);
-  if (b.at && ahead[0]?.code === b.at.code) ahead = ahead.slice(1);
+function StopStrip({ b, all, onStop }) {
+  const ahead = stopsAhead(b);
   const rows = [];
-  if (b.at) rows.push({ key: `at-${b.at.code}`, name: b.at.name, kind: 'here', tag: t('here') });
+  if (b.at) rows.push({ key: `at-${b.at.code}`, code: b.at.code, name: b.at.name, kind: 'here', said: t('here') });
   else if (b.stretch) {
-    rows.push({ key: `last-${b.stretch.last.code}`, name: b.stretch.last.name, kind: 'passed', tag: t('passed') });
+    rows.push({ key: `last-${b.stretch.last.code}`, code: b.stretch.last.code, name: b.stretch.last.name, kind: 'passed', said: t('passed') });
     rows.push({ key: 'bus', name: t('On its way'), kind: 'bus' });
   }
-  ahead.slice(0, AHEAD_SHOWN + 1).forEach((s, i) => rows.push({ key: `${i}-${s.code}`, name: s.name, kind: i === 0 ? 'next' : 'stop', tag: i === 0 ? t('next') : null }));
-  const more = ahead.length - (AHEAD_SHOWN + 1);
-  if (more > 0) rows.push({ key: 'more', name: t('+{0} more', more), kind: 'more' });
+  const shownAhead = all || hiddenAhead(b) <= 1 ? ahead : ahead.slice(0, AHEAD_SHOWN + 1);
+  shownAhead.forEach((s, i) => rows.push({ key: `${i}-${s.code}`, code: s.code, name: s.name, kind: i === 0 ? 'next' : 'stop', said: i === 0 ? t('next') : null }));
+  const fades = shownAhead.length < ahead.length;
   // The rail's colour above and below each row's dot: grey up to the bus, the route's colour after it.
   const grey = 'var(--line-strong)';
   const svc = 'var(--svc)';
@@ -876,29 +1007,47 @@ function StopStrip({ b }) {
     <ol class="bus-strip" id="bus-strip" style=${svcVars(b.svc)}>
       ${rows.map((r, i) => {
         const top = i === 0 ? 'transparent' : rows[i - 1].kind === 'passed' ? grey : svc;
-        const bottom = i === rows.length - 1 ? 'transparent' : r.kind === 'passed' ? grey : svc;
+        const bottom = i === rows.length - 1 && !fades ? 'transparent' : r.kind === 'passed' ? grey : svc;
+        const rail = html`<span class="rail" aria-hidden="true">${r.kind === 'bus' || r.kind === 'here' ? html`<span class="marker"><${Icon} paths=${CHEVRON_DOWN} /></span>` : html`<span class="dot"></span>`}</span>`;
+        const name = html`<span class="name">${r.name}${r.said && html`<span class="sr-only">, ${r.said}</span>`}</span>`;
         return html`
           <li key=${r.key} class=${`bus-stop ${r.kind}`} style=${`--top:${top};--bottom:${bottom}`}>
-            <span class="rail" aria-hidden="true">${r.kind === 'more' ? null : r.kind === 'bus' || r.kind === 'here' ? html`<span class="marker"><${Icon} paths=${CHEVRON_DOWN} /></span>` : html`<span class="dot"></span>`}</span>
-            <span class="name">${r.name}</span>
-            ${r.tag && html`<span class="tag">${r.tag}</span>`}
+            ${r.kind === 'bus'
+              ? html`<div class="bus-row">${rail}${name}</div>`
+              : html`
+                  <button type="button" class="bus-row" onClick=${() => onStop(r.code, r.name)}>
+                    ${rail}${name}<span class="sr-only">. ${t('Show this stop')}</span><${Icon} paths=${CHEVRON_END} class="go" />
+                  </button>
+                `}
           </li>
         `;
       })}
+      ${fades && html`<li key="fade" class="bus-stop fade" aria-hidden="true"><span class="rail"></span></li>`}
     </ol>
   `;
 }
 
+/** The stops ahead of bus [b], after the one it's at. */
+function stopsAhead(b) {
+  const ahead = b.upcoming ?? (b.nextStop ? [b.nextStop] : []);
+  return b.at && ahead[0]?.code === b.at.code ? ahead.slice(1) : ahead;
+}
+
+/** How many of bus [b]'s stops ahead the strip leaves out until asked: one alone is just shown. */
+const hiddenAhead = (b) => Math.max(0, stopsAhead(b).length - (AHEAD_SHOWN + 1));
+
 /**
- * A bus: its service, where it is and where it's heading, its plate, whether
- * it's moving and how full it is; opened up (a tap, or the handle dragged
- * up), the stops still ahead. Follows its updates while open.
+ * A bus: its service, where its line ends and where it is or is going next,
+ * its plate, whether it's moving and how full it is; opened up (a tap, or the
+ * handle dragged up), the stops still ahead. Its button opens the sheet of
+ * the stop it's at or coming to. Follows its updates while open.
  */
-function BusSheet({ id, box }) {
+function BusSheet({ id, box, stops = false, all: allAtFirst = false }) {
   const buses = useStore(shown);
+  const campus = useStore(campusData);
   const b = buses.get(id);
-  const [open, setOpen] = useState(false);
-  const drag = useRef(null);
+  const [open, setOpen] = useState(stops);
+  const [all, setAll] = useState(allAtFirst);
   useEffect(() => {
     if (!b) openSheet(null);
   }, [b]);
@@ -906,57 +1055,72 @@ function BusSheet({ id, box }) {
     markOpen(b ?? null);
   }, [b?.id, b?.stretch?.from, b?.stretch?.to, b?.svc]);
   useEffect(() => () => markOpen(null), []);
-  useEffect(() => setOpen(false), [id]);
   if (!b) return null;
-  // The handle: dragged up opens the list, down closes it; a tap toggles it.
-  const handle = html`
-    <div
-      class="sheet-grab"
-      aria-hidden="true"
-      onPointerDown=${(e) => {
-        drag.current = e.clientY;
-        e.currentTarget.setPointerCapture(e.pointerId);
-      }}
-      onPointerUp=${(e) => {
-        if (drag.current == null) return;
-        const dy = e.clientY - drag.current;
-        drag.current = null;
-        setOpen(Math.abs(dy) < 12 ? !open : dy < 0);
-      }}
-      onPointerCancel=${() => (drag.current = null)}
-    ></div>
-  `;
-  const pill = html`<span class="svc-tag bus-svc" style=${svcVars(b.svc)} aria-hidden="true">${b.svc}</span>`;
-  // The pill is the service to the eye; a screen reader hears it in the title.
+  const more = hiddenAhead(b);
+  const tile = html`<span class="sheet-tile bus-svc" style=${svcVars(b.svc)} aria-hidden="true">${b.svc}</span>`;
   const where = b.at ? t('At {0}', b.at.name) : b.nextStop ? t('Next: {0}', b.nextStop.name) : null;
-  const title = where ? html`<span class="sr-only">${t('{0} bus', b.svc)} </span>${where}` : t('{0} bus', b.svc);
+  // Where its line ends leads, as a stop's name does; where it is comes under.
+  const head = b.towards ? t('Towards {0}', b.towards.name) : where;
+  // The tile is the service to the eye; a screen reader hears it in the title.
+  const title = head ? html`<span class="sr-only">${t('{0} bus', b.svc)} </span>${head}` : t('{0} bus', b.svc);
+  const sub = b.towards ? where : null;
+  const stop = stopOfBus(campus, b);
+  // A stop opened from here: its sheet, the map on it, and back returns to this bus as it is.
+  const go = (code) => showStop(code, { bus: id, stops: open, all });
+  // A stop on its line by its code; from an older API, by name, the one nearest the bus.
+  const onStop = (code, name) => {
+    const s = (code && campus?.stops.find((x) => x.code === code)) || stopOfBus(campus, b, name);
+    if (s) go(s.code);
+  };
+  const facts = html`
+    <div class="bus-info">
+      ${b.plate && html`<span class="plate">${b.plate}</span>`}
+      ${b.moving != null && html`<span class="bus-moving"><span class="dot" aria-hidden="true"></span>${b.moving ? t('Moving') : t('Stopped')}</span>`}
+      <${CrowdMeter} crowd=${b.crowd} />
+    </div>
+  `;
+  const footer = stop && html`<button type="button" class="btn small ghost" onClick=${() => go(stop.code)}>${t('Show {0}', stop.name)}</button>`;
   return html`
-    <${Frame} id=${`bus-${id}`} title=${title} sub=${b.towards && t('Towards {0}', b.towards.name)} lead=${pill} top=${handle} box=${box}>
-      <div class="bus-info">
-        ${b.plate && html`<span class="plate">${b.plate}</span>`}
-        ${b.moving != null && html`<span class="bus-moving"><span class="dot" aria-hidden="true"></span>${b.moving ? t('Moving') : t('Stopped')}</span>`}
-        <${CrowdMeter} crowd=${b.crowd} />
-      </div>
-      <button type="button" class="bus-ahead" aria-expanded=${String(open)} aria-controls=${open ? 'bus-strip' : undefined} onClick=${() => setOpen(!open)}>
-        ${t('Stops ahead')}<${Icon} paths=${CHEVRON_DOWN} class="chev" />
-      </button>
-      ${open && html`<${StopStrip} b=${b} />`}
+    <${Frame} id=${`bus-${id}`} title=${title} sub=${sub} lead=${tile} facts=${facts} onHandle=${(up) => setOpen(up ?? !open)} footer=${footer} box=${box}>
+      <${SectionBand} text=${t('Stops ahead')} open=${open} onToggle=${() => setOpen(!open)} controls="bus-strip" />
+      ${open && html`<${StopStrip} b=${b} all=${all} onStop=${onStop} />`}
+      ${open && more > 1 && html`<button type="button" class="sheet-more" aria-expanded=${String(all)} aria-controls="bus-strip" onClick=${() => setAll(!all)}>${all ? t('Show fewer') : t('Show {0} more stops', more)}</button>`}
     <//>
   `;
+}
+
+/**
+ * The stop bus [b] is at or coming to (or the one called `name` on its line):
+ * of the stops with that name on its service, the one nearest the bus (one
+ * name can be either side of a road).
+ */
+export function stopOfBus(campus, b, name = (b.at ?? b.nextStop)?.name) {
+  if (!name || !campus || b.lat == null || b.lon == null) return null;
+  let best = null;
+  let bestM = Infinity;
+  for (const s of campus.stops) {
+    if (s.name !== name || !s.services?.includes(b.svc)) continue;
+    const m = haversineM(b.lat, b.lon, s.lat, s.lon);
+    if (m < bestM) [best, bestM] = [s, m];
+  }
+  return best;
 }
 
 /** The rows a stop's sheet shows before "Show more", so the map stays in view. */
 const PEEK_ROWS = 3;
 const WALKER = '<circle cx="13" cy="4" r="2" fill="currentColor"/><path d="M12 8l-2 6-3 7M10 14l3 3v4M7 12l2-4h3l2 3 3 1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
+const PIN = '<path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.3"/>';
 const STAR = '<path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>';
 
 /**
  * A stop: its board as the Buses tab has it (refreshed while open), the first
- * few rows until asked for the rest, and ways to go there. A row tapped shows
- * its service on the map.
+ * few rows until asked for the rest, and ways to go there. A row tapped picks
+ * its service on the map, and tapped again unpicks it, as its pill does.
  */
 function StopSheet({ code, box, onGoTo, onSaved, active }) {
   const campus = useStore(campusData);
+  // The service picked on the map: its row is washed in its colour, as its pill is pressed.
+  const picked = useStore(selected);
   const p = useStore(profile);
   const stop = campus?.stops.find((s) => s.code === code);
   const [board, setBoard] = useState(null);
@@ -1039,24 +1203,31 @@ function StopSheet({ code, box, onGoTo, onSaved, active }) {
   const rows = board?.list ?? [];
   const more = rows.length - PEEK_ROWS;
   const sub = stop.longName && stop.longName !== stop.name ? stop.longName : null;
+  // A stop's tile, where a bus's has its service: the two headers line up.
+  const tile = html`<span class="sheet-tile stop-tile" aria-hidden="true"><${Icon} paths=${PIN} /></span>`;
+  const footer = html`
+    <button type="button" class="btn small accent" onClick=${() => onGoTo({ code: stop.code, name: stop.name, place: same?.key ?? null })}>${t('Go there')}</button>
+    <a class="btn small ghost icon" href=${directions(stop)} target="_blank" rel="noopener" aria-label=${t('Walking directions')} title=${t('Walking directions')}><${Icon} paths=${WALKER} /></a>
+    <button type="button" class=${`btn small ghost icon${same ? ' on' : ''}`} disabled=${Boolean(same) || saving} onClick=${save} aria-label=${same ? t('In your favourites') : t('Add to favourites')} title=${same ? t('In your favourites') : t('Add to favourites')}><${Icon} paths=${STAR} /></button>
+    ${saveMsg && html`<p class="hint" role="alert">${saveMsg}</p>`}
+  `;
   return html`
-    <${Frame} id=${`stop-${code}`} title=${stop.name} sub=${sub} box=${box}>
-      ${!board && html`<div class="hint">${t('Checking…')}</div>`}
-      ${board?.text && html`<div class="hint">${board.text}</div>`}
+    <${Frame} id=${`stop-${code}`} title=${stop.name} sub=${sub} lead=${tile} footer=${footer} box=${box}>
+      <${SectionBand} text=${t('Buses here')} />
+      ${(!board || board.text) &&
+      html`
+        <div class="sheet-note">
+          <div class="hint">${board?.text ?? t('Checking…')}</div>
+          ${board?.text && html`<div class="svc-tags">${stop.services.map((svc) => html`<${SvcTag} svc=${svc} key=${svc} onClick=${() => choose(svc)} />`)}</div>`}
+        </div>
+      `}
       ${rows.length > 0 &&
       html`
         <div class="sheet-board" id="sheet-board">
-          ${(all || more <= 1 ? rows : rows.slice(0, PEEK_ROWS)).map((r) => html`<${Row} key=${r.svc} r=${r} onPick=${choose} />`)}
+          ${(all || more <= 1 ? rows : rows.slice(0, PEEK_ROWS)).map((r) => html`<${Row} key=${r.svc} r=${r} picked=${r.svc === picked} onPick=${(svc) => choose(svc === selected.get() ? null : svc)} />`)}
         </div>
         ${more > 1 && html`<button type="button" class="sheet-more" aria-expanded=${String(all)} aria-controls="sheet-board" onClick=${() => setAll(!all)}>${all ? t('Show fewer') : t('Show {0} more', more)}</button>`}
       `}
-      ${board?.text && html`<div class="svc-tags">${stop.services.map((svc) => html`<${SvcTag} svc=${svc} key=${svc} onClick=${() => choose(svc)} />`)}</div>`}
-      <div class="sheet-actions">
-        <button type="button" class="btn small accent" onClick=${() => onGoTo({ code: stop.code, name: stop.name, place: same?.key ?? null })}>${t('Go there')}</button>
-        <a class="btn small ghost icon" href=${directions(stop)} target="_blank" rel="noopener" aria-label=${t('Walking directions')} title=${t('Walking directions')}><${Icon} paths=${WALKER} /></a>
-        <button type="button" class=${`btn small ghost icon${same ? ' on' : ''}`} disabled=${Boolean(same) || saving} onClick=${save} aria-label=${same ? t('In your favourites') : t('Add to favourites')} title=${same ? t('In your favourites') : t('Add to favourites')}><${Icon} paths=${STAR} /></button>
-      </div>
-      ${saveMsg && html`<p class="hint" role="alert">${saveMsg}</p>`}
     <//>
   `;
 }
@@ -1092,12 +1263,17 @@ export function MapTab({ visible: on, focus, onFocused, onGoTo, onSaved }) {
   }, [focus, state]);
   useLayoutEffect(() => {
     const code = centreOn;
-    const stop = code && campusData.get()?.stops.find((s) => s.code === code);
-    if (!stop || open?.stop !== code || !map) return;
+    const bus = code?.bus;
+    // A bus: where it's drawn (or sliding to), else where it last came from the API.
+    const at = bus ? open?.bus === bus && (glides.get(bus)?.to ?? shown.get().get(bus)) : open?.stop === code && campusData.get()?.stops.find((s) => s.code === code);
+    if (!at || at.lat == null || !map) return;
     centreOn = null;
-    const go = () => map.easeTo({ center: [stop.lon, stop.lat], zoom: Math.max(map.getZoom(), 17), padding: { top: 70, bottom: (sheetBox.current?.offsetHeight ?? 0) + 20 }, duration: 600 });
+    const go = () => map.easeTo({ center: [at.lon, at.lat], zoom: Math.max(map.getZoom(), 17), padding: { top: 70, bottom: (sheetBox.current?.offsetHeight ?? 0) + 20 }, duration: 600 });
+    // Not loaded: the map is still being built (from Nearby), or a source is
+    // taking new data (a bus's sheet closing clears its ring), after which
+    // 'load' never comes again; 'idle' comes in either case.
     if (map.loaded()) go();
-    else map.once('load', go);
+    else map.once('idle', go);
   }, [open]);
 
   return html`
@@ -1110,6 +1286,6 @@ export function MapTab({ visible: on, focus, onFocused, onGoTo, onSaved }) {
       <${Status} />
     </div>
     ${open?.stop && html`<${StopSheet} code=${open.stop} box=${sheetBox} onGoTo=${onGoTo} onSaved=${onSaved} active=${on} />`}
-    ${open?.bus && html`<${BusSheet} id=${open.bus} box=${sheetBox} />`}
+    ${open?.bus && html`<${BusSheet} key=${open.bus} id=${open.bus} stops=${open.stops} all=${open.all} box=${sheetBox} />`}
   `;
 }

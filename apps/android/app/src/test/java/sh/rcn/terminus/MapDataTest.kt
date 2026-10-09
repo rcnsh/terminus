@@ -222,10 +222,12 @@ class MapDataTest {
         assertNull("an older API: no end", c.towards)
 
         // Between stops: the stop it passed, the next, four more, and a count.
-        assertEquals(BusStrip(passed = "CLB", here = null, next = "LT 13", after = listOf("AS 5", "BIZ 2", "S", "T"), more = 2), BusStrip.of(a))
+        assertEquals(BusStrip(passed = "CLB", here = null, next = "LT 13", after = listOf("AS 5", "BIZ 2", "S", "T"), more = 2, passedCode = "CLB", nextCode = "LT13", afterCodes = listOf("AS5", "BIZ2", "S", "T")), BusStrip.of(a))
         assertTrue(BusStrip.of(a).between)
+        // Opened out, every stop to the line's end, none left over.
+        assertEquals(BusStrip(passed = "CLB", here = null, next = "LT 13", after = listOf("AS 5", "BIZ 2", "S", "T", "U", "V"), more = 0, passedCode = "CLB", nextCode = "LT13", afterCodes = listOf("AS5", "BIZ2", "S", "T", "U", "V")), BusStrip.of(a, all = true))
         // At a stop: that stop, then what's ahead of it.
-        assertEquals(BusStrip(passed = null, here = "COM 3", next = "BIZ 2", after = listOf("UTown"), more = 0), BusStrip.of(b))
+        assertEquals(BusStrip(passed = null, here = "COM 3", next = "BIZ 2", after = listOf("UTown"), more = 0, hereCode = "COM3", nextCode = "BIZ2", afterCodes = listOf("UTOWN")), BusStrip.of(b))
         assertFalse(BusStrip.of(b).between)
         // An older API: just its next stop.
         assertEquals(BusStrip(passed = null, here = null, next = "LT 13", after = emptyList(), more = 0), BusStrip.of(c))

@@ -93,28 +93,52 @@ export function stoppedWords(stopped, resumesAt, now = serverNow()) {
   return [first, t('Back {0} at {1}', WEEKDAYS()[new Date(at + 8 * 3600_000).getUTCDay()], time)];
 }
 
+/** The "opens a page" mark at a row's end (mirrored right to left, app.css). */
+const NEXT = '<path d="m9 6 6 6-6 6"/>';
+
+/**
+ * How a row looks for what a tap on it does: `chevron`, it opens a page (the
+ * Buses tab); `picked` set, it picks its line on the map, and true when that
+ * line is the one picked there (washed in its colour, and pressed).
+ */
+function look(r, cls, chevron, picked) {
+  const on = picked === true;
+  return {
+    cls: `${cls}${chevron ? ' go' : ''}${on ? ' picked' : ''}`,
+    style: on ? svcVars(r.color ?? colorOf(r.svc)) : undefined,
+    pressed: picked == null ? undefined : String(on),
+    chev: chevron ? html`<${Icon} paths=${NEXT} class="bt-go" />` : null,
+  };
+}
+
 /** A service that isn't running: greyed, saying so where the minutes go, still opening its line. */
-function StoppedRow({ r, now, onPick }) {
+function StoppedRow({ r, now, onPick, chevron, picked }) {
   const [first, second] = stoppedWords(r.stopped, r.resumesAt, now);
+  const l = look(r, 'bt-row stopped', chevron, picked);
   // "Ends here" says nothing about a bus that isn't coming: no line then.
   return html`
-    <button type="button" class="bt-row stopped" onClick=${() => onPick(r.svc)}>
+    <button type="button" class=${l.cls} style=${l.style} aria-pressed=${l.pressed} onClick=${() => onPick(r.svc)}>
       <${Chip} svc=${r.svc} color=${r.color} cls="bt-chip muted" />
       <span class="bt-dir">${r.towards?.length ? html`<${Towards} r=${r} />` : ''}</span>
       <span class="bt-big none">${first}</span>
       <span class="bt-meta">${second}</span>
+      ${l.chev}
     </button>
   `;
 }
 
 /**
  * A service's row on a board. Tapped, `onPick(svc)`: the Buses tab opens its
- * line, the map shows it. A public bus has no line here. `now`, on the
+ * line (`chevron`, which says so), the map picks it (`picked`: whether it's
+ * the line picked there). A public bus has no line here. `now`, on the
  * server's clock, says "tomorrow" for a service that isn't running.
  */
-export function Row({ r, now = serverNow(), onPick }) {
-  if (r.running === false) return html`<${StoppedRow} r=${r} now=${now} onPick=${onPick} />`;
-  const cls = `bt-row${r.etaS != null && r.etaS < 60 && r.quality === 'live' ? ' soon' : ''}${r.old ? ' old' : ''}`;
+export function Row({ r, now = serverNow(), onPick, chevron = false, picked }) {
+  if (r.running === false) return html`<${StoppedRow} r=${r} now=${now} onPick=${onPick} chevron=${chevron} picked=${picked} />`;
+  // Due within the minute: tinted on the Buses tab. Not on the map, where a
+  // tinted row is the line picked there; the big minutes say it's soon.
+  const soon = picked == null && r.etaS != null && r.etaS < 60 && r.quality === 'live';
+  const cls = `bt-row${soon ? ' soon' : ''}${r.old ? ' old' : ''}`;
   const body = html`
     <${Chip} svc=${r.svc} color=${r.color} paid=${r.paid} cls="bt-chip" />
     <span class="bt-dir"><${Towards} r=${r} /></span>
@@ -123,5 +147,6 @@ export function Row({ r, now = serverNow(), onPick }) {
     <span class="bt-then">${thenText(r)}</span>
   `;
   if (r.paid) return html`<div class=${cls}>${body}</div>`;
-  return html`<button type="button" class=${cls} onClick=${() => onPick(r.svc)}>${body}</button>`;
+  const l = look(r, cls, chevron, picked);
+  return html`<button type="button" class=${l.cls} style=${l.style} aria-pressed=${l.pressed} onClick=${() => onPick(r.svc)}>${body}${l.chev}</button>`;
 }

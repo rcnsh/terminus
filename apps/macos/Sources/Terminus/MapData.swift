@@ -41,12 +41,14 @@ enum PanLimit {
 }
 
 /// A stop on the map, with the services that call there.
+/// `longName`: the full name ("Yusof Ishak House") where `name` is short ("YIH"); nil from an older server.
 struct MapStop: Hashable {
     let code: String
     let name: String
     let lat: Double
     let lon: Double
     let services: [String]
+    var longName: String? = nil
 }
 
 /// A service: its colour ("#e53935"), its path along the roads as [lon, lat] pairs, and whether it's a loop.
@@ -188,7 +190,7 @@ struct CampusMap {
         let stops: [MapStop] = s.compactMap { x in
             guard let code = x["code"] as? String, let lat = (x["lat"] as? NSNumber)?.doubleValue, let lon = (x["lon"] as? NSNumber)?.doubleValue else { return nil }
             if (x["core"] as? Bool) ?? true { core.insert(code) }
-            return MapStop(code: code, name: x["name"] as? String ?? code, lat: lat, lon: lon, services: x["services"] as? [String] ?? [])
+            return MapStop(code: code, name: x["name"] as? String ?? code, lat: lat, lon: lon, services: x["services"] as? [String] ?? [], longName: (x["longName"] as? String).flatMap { $0.isEmpty ? nil : $0 })
         }
         var routes: [String: MapRoute] = [:]
         for (svc, v) in r {
@@ -247,6 +249,13 @@ struct LiveBus: Hashable {
     var upcoming: [String] = []
     /// Where its line ends; nil from an older API.
     var towards: String? = nil
+    /// The codes of `at`, `nextStop`, the stretch's `last` and `upcoming`
+    /// (in step with it): one name can be a stop either side of a road. Nil
+    /// where the server didn't say (an older API).
+    var atCode: String? = nil
+    var nextStopCode: String? = nil
+    var passedCode: String? = nil
+    var upcomingCodes: [String?] = []
     var ox = 0.0
     var oy = 0.0
 
@@ -276,18 +285,24 @@ struct BusList {
         guard let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let svc = o["svc"] as? String else { return nil }
         func num(_ x: Any?) -> Double? { (x as? NSNumber)?.doubleValue }
         func name(_ x: Any?) -> String? { ((x as? [String: Any])?["name"] as? String).flatMap { $0.isEmpty ? nil : $0 } }
+        func code(_ x: Any?) -> String? { ((x as? [String: Any])?["code"] as? String).flatMap { $0.isEmpty ? nil : $0 } }
         let buses: [LiveBus] = (o["buses"] as? [[String: Any]] ?? []).compactMap { b in
             guard let id = b["id"] as? String, let lat = num(b["lat"]), let lon = num(b["lon"]) else { return nil }
             var stretch: Stretch?
             if let st = b["stretch"] as? [String: Any], let from = num(st["from"]), let to = num(st["to"]), let last = name(st["last"]) {
                 stretch = Stretch(from: from, to: to, last: last)
             }
+            // The stops ahead with a name; their codes in step with them.
+            let ahead = (b["upcoming"] as? [Any] ?? []).filter { name($0) != nil }
             return LiveBus(
                 id: id, lat: lat, lon: lon, heading: num(b["heading"]), moving: b["moving"] as? Bool ?? false,
                 crowd: (b["crowd"] as? String).flatMap { $0.isEmpty ? nil : $0 }, nextStop: name(b["nextStop"]),
                 along: num(b["along"]), plate: (b["plate"] as? String).flatMap { $0.isEmpty ? nil : $0 },
                 at: name(b["at"]), slot: (b["slot"] as? Int) ?? 0, stretch: stretch,
-                upcoming: (b["upcoming"] as? [Any] ?? []).compactMap(name), towards: name(b["towards"])
+                upcoming: ahead.compactMap(name), towards: name(b["towards"]),
+                atCode: code(b["at"]), nextStopCode: code(b["nextStop"]),
+                passedCode: stretch == nil ? nil : code((b["stretch"] as? [String: Any])?["last"]),
+                upcomingCodes: ahead.map(code)
             )
         }
         return BusList(svc: svc, available: o["available"] as? Bool ?? false, stale: o["stale"] as? Bool ?? false, buses: buses)

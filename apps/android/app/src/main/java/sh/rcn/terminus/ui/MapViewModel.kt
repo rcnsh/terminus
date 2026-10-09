@@ -36,8 +36,10 @@ sealed interface BusStatus {
 
 /** The sheet over the bottom of the map: a stop, or a bus. */
 sealed interface MapSheet {
-    data class Stop(val code: String) : MapSheet
-    data class Bus(val id: String) : MapSheet
+    /** [from]: the bus whose stops it was opened from, which back returns to. */
+    data class Stop(val code: String, val from: Bus? = null) : MapSheet
+    /** [stops]: its stops ahead open, and [all] of them, as when it's come back to from one of them. */
+    data class Bus(val id: String, val stops: Boolean = false, val all: Boolean = false) : MapSheet
 }
 
 data class MapUi(
@@ -62,6 +64,8 @@ data class MapUi(
     val sheet: MapSheet? = null,
     /** A stop opened from elsewhere (Nearby on Now), for the map to move to once. */
     val focus: String? = null,
+    /** A bus come back to from one of its stops, for the map to move back to once. */
+    val focusBus: String? = null,
     /** The open stop's board, the services not running now too; null while it loads. */
     val board: Board? = null,
     /** True when the board couldn't be fetched at all (offline). */
@@ -215,15 +219,24 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
 
     fun openStop(code: String) = _state.update { it.copy(sheet = MapSheet.Stop(code), board = null, boardFailed = false, boardError = false) }
 
-    /** A stop from Nearby: its sheet, and the map moved to it. Unknown codes are ignored. */
-    fun showStop(code: String) = _state.update {
+    /**
+     * A stop from Nearby, or from a bus's sheet ([from], which back returns
+     * to): its sheet, and the map moved to it. Unknown codes are ignored.
+     */
+    fun showStop(code: String, from: MapSheet.Bus? = null) = _state.update {
         if (it.campus != null && it.campus.stop(code) == null) it
-        else it.copy(sheet = MapSheet.Stop(code), board = null, boardFailed = false, boardError = false, focus = code)
+        else it.copy(sheet = MapSheet.Stop(code, from), board = null, boardFailed = false, boardError = false, focus = code, focusBus = null)
     }
 
     fun openBus(id: String) = _state.update { it.copy(sheet = MapSheet.Bus(id)) }
 
-    fun closeSheet() = _state.update { it.copy(sheet = null, board = null, focus = null) }
+    fun closeSheet() = _state.update { it.copy(sheet = null, board = null, focus = null, focusBus = null) }
+
+    /** Back: from a stop opened from a bus, to that bus if it's still on the map; else closed. */
+    fun back() = _state.update { s ->
+        val from = (s.sheet as? MapSheet.Stop)?.from?.takeIf { b -> s.buses.any { it.id == b.id } }
+        if (from != null) s.copy(sheet = from, board = null, focus = null, focusBus = from.id) else s.copy(sheet = null, board = null, focus = null, focusBus = null)
+    }
 
     private val _home = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     /** Each tap of the Map tab while on it, for the map to frame the whole campus again. */
@@ -231,7 +244,7 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
 
     /** The Map tab tapped while on it: back to how it opened, no pill on and no sheet open. */
     fun home() {
-        _state.update { it.copy(selected = null, buses = emptyList(), busesStale = false, busStatus = null, sheet = null, board = null, focus = null) }
+        _state.update { it.copy(selected = null, buses = emptyList(), busesStale = false, busStatus = null, sheet = null, board = null, focus = null, focusBus = null) }
         _home.tryEmit(Unit)
     }
 

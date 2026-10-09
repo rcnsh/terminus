@@ -246,6 +246,11 @@ data class LiveBus(
     val upcoming: List<String> = emptyList(),
     /** Where its line ends (a loop's first stop); null from an older API. */
     val towards: String? = null,
+    /** The codes of [at], [stretch]'s last stop and [upcoming], in step with
+     *  the names: a name can be a stop either side of a road. Null from an older API. */
+    val atCode: String? = null,
+    val passedCode: String? = null,
+    val upcomingCodes: List<String?> = emptyList(),
     val ox: Double = 0.0,
     val oy: Double = 0.0,
 ) {
@@ -266,7 +271,18 @@ data class LiveBus(
  * stops) or the one it's [here] at, its [next], then [after] it at most
  * [AFTER] more, and how many [more] there are past those.
  */
-data class BusStrip(val passed: String?, val here: String?, val next: String?, val after: List<String>, val more: Int) {
+data class BusStrip(
+    val passed: String?,
+    val here: String?,
+    val next: String?,
+    val after: List<String>,
+    val more: Int,
+    /** Each named stop's code, for opening its sheet: [after]'s in step with it; null where the API didn't say. */
+    val passedCode: String? = null,
+    val hereCode: String? = null,
+    val nextCode: String? = null,
+    val afterCodes: List<String?> = emptyList(),
+) {
     /** Between stops: the bus is drawn on the line after [passed], not at a stop. */
     val between: Boolean get() = here == null
 
@@ -276,16 +292,23 @@ data class BusStrip(val passed: String?, val here: String?, val next: String?, v
     companion object {
         const val AFTER = 4
 
-        fun of(bus: LiveBus): BusStrip {
+        /** [all]: every stop to where its line ends, not the first [AFTER] after the next. */
+        fun of(bus: LiveBus, all: Boolean = false): BusStrip {
             // An older API has nextStop but no upcoming.
             val ahead = bus.upcoming.ifEmpty { listOfNotNull(bus.nextStop) }
+            val codes = ahead.indices.map { bus.upcomingCodes.getOrNull(it) }
             val rest = ahead.drop(1)
+            val shown = if (all) rest.size else minOf(rest.size, AFTER)
             return BusStrip(
                 passed = if (bus.at == null) bus.stretch?.last else null,
                 here = bus.at,
                 next = ahead.firstOrNull(),
-                after = rest.take(AFTER),
-                more = (rest.size - AFTER).coerceAtLeast(0),
+                after = rest.take(shown),
+                more = rest.size - shown,
+                passedCode = if (bus.at == null) bus.passedCode else null,
+                hereCode = bus.atCode,
+                nextCode = codes.firstOrNull(),
+                afterCodes = codes.drop(1).take(shown),
             )
         }
     }
@@ -330,6 +353,13 @@ data class BusList(val svc: String, val available: Boolean, val buses: List<Live
                             (0 until u.length()).mapNotNull { j -> u.optJSONObject(j)?.optString("name")?.ifEmpty { null } }
                         }.orEmpty(),
                         towards = b.optJSONObject("towards")?.optString("name")?.ifEmpty { null },
+                        atCode = b.optJSONObject("at")?.optString("code")?.ifEmpty { null },
+                        passedCode = b.optJSONObject("stretch")?.optJSONObject("last")?.optString("code")?.ifEmpty { null },
+                        upcomingCodes = b.optJSONArray("upcoming")?.let { u ->
+                            // In step with [upcoming]: the same entries, those with a name.
+                            (0 until u.length()).mapNotNull { j -> u.optJSONObject(j)?.takeIf { it.optString("name").isNotEmpty() } }
+                                .map { it.optString("code").ifEmpty { null } }
+                        }.orEmpty(),
                     )
                 },
                 stale = o.optBoolean("stale", false),

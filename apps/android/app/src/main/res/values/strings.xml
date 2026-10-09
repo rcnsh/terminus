@@ -8,12 +8,14 @@
     <string name="map_bus_moving">Moving</string>
     <string name="map_bus_stopped">Stopped</string>
     <string name="map_bus_seats_free">Seats free</string>
+    <string name="map_buses_here">Buses here</string>
+    <string name="map_open_stop">Show this stop</string>
+    <string name="map_show_stop">Show %1$s</string>
     <string name="map_bus_stops_ahead">Stops ahead</string>
     <string name="map_bus_passed">passed</string>
     <string name="map_bus_next_tag">next</string>
     <string name="map_bus_here">here</string>
     <string name="map_bus_on_its_way">On its way</string>
-    <string name="map_bus_more">+%1$d more</string>
     <string name="map_buses">%1$d buses on %2$s</string>
     <string name="map_buses_unavailable">Live buses aren\'t available right now.</string>
     <string name="map_buses_stale">Bus positions may be out of date</string>
@@ -31,6 +33,7 @@
     <string name="map_save_place">Add to favourites</string>
     <string name="map_saved_as">In your favourites</string>
     <string name="map_show_more">Show %1$d more</string>
+    <string name="map_show_more_stops">Show %1$d more stops</string>
     <string name="map_show_fewer">Show fewer</string>
     <string name="map_times_need_connection">Live times need a connection.</string>
     <string name="map_times_failed">Couldn\'t load the times. Trying again.</string>

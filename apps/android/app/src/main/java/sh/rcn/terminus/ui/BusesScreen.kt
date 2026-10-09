@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -74,6 +75,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -612,6 +614,11 @@ internal fun runningFirst(rows: List<BoardRow>): List<BoardRow> = rows.filter { 
  * A board's rows with lines between them: the Buses tab's card, and smaller
  * ([compact]) the map's stop sheet, so a stop reads the same in both. A row
  * tapped is [onRow], said as [clickLabel] (its line, by default).
+ *
+ * The two do different things when tapped, so they look different too: on
+ * the Buses tab a row opens its line's page and has a chevron saying so;
+ * on the map ([picked] set) a row picks its line, and the line picked
+ * there ([picked]'s value) has its row washed in its colour.
  */
 @Composable
 internal fun BoardRows(
@@ -620,6 +627,7 @@ internal fun BoardRows(
     compact: Boolean = false,
     dividerFirst: Boolean = false,
     clickLabel: @Composable (String) -> String = { stringResource(R.string.a11y_open_line, it) },
+    picked: Picked? = null,
     onRow: (BoardRow) -> Unit,
 ) {
     val c = MaterialTheme.colorScheme
@@ -629,19 +637,39 @@ internal fun BoardRows(
         // A public bus has no line page: /line is the shuttles'.
         val open = if (row.paid) null else ({ onRow(row) })
         val label = clickLabel(row.svc)
-        if (row.running) BoardRowView(row, color, open, label, compact) else StoppedRow(row, color, open, label, compact)
+        val look = RowLook(chevron = picked == null && open != null, picked = picked?.let { it.svc == row.svc })
+        if (row.running) BoardRowView(row, color, open, label, compact, look) else StoppedRow(row, color, open, label, compact, look)
     }
 }
 
+/** On the map: the service picked there, null for none. */
+internal class Picked(val svc: String?)
+
+/** A row's chevron (it opens a page), and on the map whether its line is the one picked (null off the map). */
+private class RowLook(val chevron: Boolean, val picked: Boolean?)
+
+/** A row's ground: its line's colour, lightly, when picked on the map; else [base]. */
+private fun Modifier.rowGround(look: RowLook, color: Long, base: Color): Modifier =
+    background(if (look.picked == true) Color(color.toInt()).copy(alpha = 0.16f) else base)
+        .then(if (look.picked != null) Modifier.semantics { selected = look.picked } else Modifier)
+
+/** The "opens a page" mark, at a row's end. */
 @Composable
-private fun BoardRowView(row: BoardRow, color: Long, onClick: (() -> Unit)?, clickLabel: String, compact: Boolean) {
+private fun RowScope.RowChevron(look: RowLook) {
+    if (look.chevron) Icon(painterResource(R.drawable.ic_chevron), contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp).align(Alignment.CenterVertically))
+}
+
+@Composable
+private fun BoardRowView(row: BoardRow, color: Long, onClick: (() -> Unit)?, clickLabel: String, compact: Boolean, look: RowLook) {
     val c = MaterialTheme.colorScheme
     val arriving = row.etaS != null && row.etaS < BusTimes.ARRIVING_S
     Row(
         Modifier.fillMaxWidth()
-            .background(if (arriving) c.primaryContainer else Color.Transparent)
+            // Due within the minute: tinted on the Buses tab. Not on the map, where a
+            // tinted row is the line picked there; the big minutes say it's soon.
+            .rowGround(look, color, if (arriving && look.picked == null) c.primaryContainer else Color.Transparent)
             .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClickLabel = clickLabel, onClick = onClick) else Modifier)
-            .padding(horizontal = if (compact) 16.dp else 14.dp, vertical = if (compact) 10.dp else 14.dp),
+            .padding(start = if (compact) 16.dp else 14.dp, end = if (look.chevron) 8.dp else if (compact) 16.dp else 14.dp, top = if (compact) 10.dp else 14.dp, bottom = if (compact) 10.dp else 14.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         SvcChip(row.svc, color, paid = row.paid, small = compact)
@@ -666,14 +694,15 @@ private fun BoardRowView(row: BoardRow, color: Long, onClick: (() -> Unit)?, cli
             BigTime(row.etaS, row.quality, arriving, row.eta, size = if (compact) 26.sp else 34.sp)
             thenText(row)?.let { Text(it, style = if (compact) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant, textAlign = TextAlign.End, modifier = Modifier.padding(top = 4.dp)) }
         }
+        RowChevron(look)
     }
 }
 
 /** A row not running: only these follow the clock (when it's back), so the rest of the board isn't redrawn every second. */
 @Composable
-private fun StoppedRow(row: BoardRow, color: Long, onClick: (() -> Unit)?, clickLabel: String, compact: Boolean) {
+private fun StoppedRow(row: BoardRow, color: Long, onClick: (() -> Unit)?, clickLabel: String, compact: Boolean, look: RowLook) {
     val stopped = Stopped.of(row.running, row.stopped, row.resumesAtMs, ticking())
-    if (stopped != null) StoppedRowView(row, color, stopped, onClick, clickLabel, compact) else BoardRowView(row, color, onClick, clickLabel, compact)
+    if (stopped != null) StoppedRowView(row, color, stopped, onClick, clickLabel, compact, look) else BoardRowView(row, color, onClick, clickLabel, compact, look)
 }
 
 /**
@@ -681,14 +710,15 @@ private fun StoppedRow(row: BoardRow, color: Long, onClick: (() -> Unit)?, click
  * where the minutes go, why and when it's back. No time, no Live, no crowd.
  */
 @Composable
-private fun StoppedRowView(row: BoardRow, color: Long, stopped: Stopped, onClick: (() -> Unit)?, clickLabel: String, compact: Boolean) {
+private fun StoppedRowView(row: BoardRow, color: Long, stopped: Stopped, onClick: (() -> Unit)?, clickLabel: String, compact: Boolean, look: RowLook) {
     val c = MaterialTheme.colorScheme
     val ctx = LocalContext.current
     val (why, back) = stopped.lines(remember { hour12(ctx) })
     Row(
         Modifier.fillMaxWidth()
+            .rowGround(look, color, Color.Transparent)
             .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClickLabel = clickLabel, onClick = onClick) else Modifier)
-            .padding(horizontal = if (compact) 16.dp else 14.dp, vertical = if (compact) 8.dp else 12.dp),
+            .padding(start = if (compact) 16.dp else 14.dp, end = if (look.chevron) 8.dp else if (compact) 16.dp else 14.dp, top = if (compact) 8.dp else 12.dp, bottom = if (compact) 8.dp else 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -700,6 +730,7 @@ private fun StoppedRowView(row: BoardRow, color: Long, stopped: Stopped, onClick
             Text(why, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = c.onSurfaceVariant)
             back?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant) }
         }
+        RowChevron(look)
     }
 }
 

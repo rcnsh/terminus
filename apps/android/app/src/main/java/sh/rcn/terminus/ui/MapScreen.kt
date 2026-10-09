@@ -14,15 +14,16 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -33,6 +34,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -86,6 +88,7 @@ import androidx.compose.ui.semantics.expand
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpSize
@@ -166,7 +169,6 @@ import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.layout.layout
 
 /** Further than this from campus (in degrees, about 3 km), the map opens on campus, not on you. */
 private const val NEAR_CAMPUS_DEG = 0.027
@@ -208,8 +210,8 @@ internal fun MapScreen(map: MapViewModel, onGoThere: (code: String, name: String
     }
     // Your dot, every 20 s, only with location already allowed.
     LaunchedEffect(Unit) { lifecycle.every(20_000) { map.locate() } }
-    BackHandler(enabled = ui.sheet != null) { map.closeSheet() }
-    MapLayout(ui, dark, MapActions(map::choose, map::openStop, map::openBus, map::closeSheet, onGoThere, places, onShowList), home = map.homeTaps)
+    BackHandler(enabled = ui.sheet != null) { map.back() }
+    MapLayout(ui, dark, MapActions(map::choose, map::openStop, map::openBus, map::closeSheet, onGoThere, places, onShowList, map::showStop), home = map.homeTaps)
 }
 
 /** [block], then again every [ms] (longer while the server asked for a wait), while the app is in front. */
@@ -230,6 +232,8 @@ internal class MapActions(
     val places: PlacesForMap,
     /** The Buses tab, on the open stop or the chosen service's line: the map as a list, for a screen reader. */
     val showList: (svc: String?, stop: String?) -> Unit = { _, _ -> },
+    /** A stop's sheet with the map moved to it, from a bus's sheet ([from]), which back returns to. */
+    val showStop: (code: String, from: MapSheet.Bus?) -> Unit = { code, _ -> openStop(code) },
 )
 
 /** The map and everything over it, from [ui] alone. */
@@ -279,7 +283,7 @@ internal fun MapLayout(ui: MapUi, dark: Boolean, actions: MapActions, home: Flow
                         is MapSheet.Stop -> campus.stop(sheet.code)?.let { StopSheet(it, ui, campus, actions) }
                         is MapSheet.Bus -> ui.buses.firstOrNull { it.id == sheet.id }?.let { bus ->
                             val svc = ui.selected.orEmpty()
-                            BusSheet(bus, svc, campus.routes[svc]?.color?.color() ?: Color.Gray, actions.closeSheet)
+                            BusSheet(bus, svc, campus.routes[svc]?.color?.color() ?: Color.Gray, campus, actions, sheet)
                         }
                     }
                 }
@@ -457,6 +461,12 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
     LaunchedEffect(ui.focus) {
         val stop = ui.focus?.let { campus.stop(it) } ?: return@LaunchedEffect
         state.setCameraPosition(CameraPosition(target = Position(longitude = stop.lon, latitude = stop.lat - 0.0006), zoom = 17.0))
+    }
+    // Back from a stop to the bus it was opened from: the map follows, as
+    // it went to the stop, so the bus isn't left off screen.
+    LaunchedEffect(ui.focusBus) {
+        val bus = ui.focusBus?.let { id -> ui.buses.firstOrNull { it.id == id } } ?: return@LaunchedEffect
+        state.setCameraPosition(CameraPosition(target = Position(longitude = bus.lon, latitude = bus.lat - 0.0006), zoom = 17.0))
     }
     // Back to campus, from the button.
     LaunchedEffect(recentre) {
@@ -665,55 +675,32 @@ internal fun SvcTag(svc: String, color: Color, onClick: (() -> Unit)? = null) {
     else Surface(onClick = onClick, shape = shape, color = color, content = content)
 }
 
+/**
+ * The frame a stop's sheet and a bus's share, so the two read alike: a grab
+ * handle; a [lead] tile beside the [title], [sub] and close; a line of
+ * [facts]; then [body] (a [SectionBand] and its rows); then the [footer]'s
+ * buttons. [handle], when set, is what the grab handle and a drag on the
+ * header do: true opens, false closes.
+ */
 @Composable
-private fun SheetSurface(title: String, sub: String?, onClose: () -> Unit, content: @Composable () -> Unit) {
+private fun MapSheetFrame(
+    paneName: String,
+    focusKey: Any,
+    title: String,
+    sub: String?,
+    onClose: () -> Unit,
+    lead: @Composable () -> Unit,
+    facts: (@Composable () -> Unit)? = null,
+    handle: ((Boolean?) -> Unit)? = null,
+    footer: (@Composable RowScope.() -> Unit)? = null,
+    body: @Composable ColumnScope.() -> Unit,
+) {
+    val c = MaterialTheme.colorScheme
     // A pane of its own, named for what's in it, and a screen reader's focus
     // moved to its title when it opens or shows another stop or bus.
     val focus = remember { FocusRequester() }
-    LaunchedEffect(title) { runCatching { focus.requestFocus() } }
-    Surface(
-        modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp).semantics { paneTitle = title },
-        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 8.dp,
-    ) {
-        Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(verticalAlignment = Alignment.Top) {
-                Column(Modifier.weight(1f)) {
-                    Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.focusRequester(focus).focusable().semantics { heading() })
-                    sub?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                }
-                IconButton(onClick = onClose) {
-                    Icon(painterResource(R.drawable.ic_close), contentDescription = stringResource(R.string.close))
-                }
-            }
-            content()
-        }
-    }
-}
-
-/**
- * A tapped bus: its service, where it is or is going next, and where its line
- * ends; its plate, whether it's moving and how full it is; and, dragged or
- * tapped open, the stops ahead of it on a strip of its line. What's ahead is
- * the server's ([LiveBus.upcoming]): the app doesn't walk the route.
- */
-@Composable
-private fun BusSheet(bus: LiveBus, svc: String, color: Color, onClose: () -> Unit) {
-    val c = MaterialTheme.colorScheme
-    val strip = BusStrip.of(bus)
-    val title = when {
-        bus.at != null -> stringResource(R.string.map_bus_at, bus.at)
-        bus.nextStop != null -> stringResource(R.string.map_bus_next, bus.nextStop)
-        else -> stringResource(R.string.a11y_bus, svc)
-    }
-    var expanded by rememberSaveable(bus.id) { mutableStateOf(false) }
-    // A pane of its own, named for its bus, and a screen reader's focus moved
-    // to its title when it opens or shows another bus.
-    val focus = remember { FocusRequester() }
-    LaunchedEffect(bus.id) { runCatching { focus.requestFocus() } }
-    val paneName = stringResource(R.string.a11y_bus, svc)
-    // Dragged up past a few dp, the stops open; down, they close.
+    LaunchedEffect(focusKey) { runCatching { focus.requestFocus() } }
+    // Dragged up past a few dp, [handle] opens; down, it closes.
     var dragged by remember { mutableFloatStateOf(0f) }
     val drag = rememberDraggableState { dragged += it }
     val dragMin = with(LocalDensity.current) { 24.dp.toPx() }
@@ -723,43 +710,122 @@ private fun BusSheet(bus: LiveBus, svc: String, color: Color, onClose: () -> Uni
         color = c.surface,
         shadowElevation = 8.dp,
     ) {
-        Column(Modifier.verticalScroll(rememberScrollState()).animateContentSize()) {
-            Column(
-                Modifier.draggable(
-                    drag,
-                    Orientation.Vertical,
-                    enabled = strip.any,
-                    onDragStopped = {
-                        if (dragged < -dragMin) expanded = true else if (dragged > dragMin) expanded = false
-                        dragged = 0f
-                    },
-                ),
-            ) {
-                // The grab handle; the "Stops ahead" row does the same for a screen reader.
-                Box(
-                    Modifier.fillMaxWidth().height(20.dp).then(if (strip.any) Modifier.clearAndSetSemantics {}.clickable { expanded = !expanded } else Modifier),
-                    contentAlignment = Alignment.Center,
+        // The rows scroll; the footer's buttons stay in view under them.
+        Column(Modifier.animateContentSize()) {
+            Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
+                Column(
+                    Modifier.draggable(
+                        drag,
+                        Orientation.Vertical,
+                        enabled = handle != null,
+                        onDragStopped = {
+                            if (dragged < -dragMin) handle?.invoke(true) else if (dragged > dragMin) handle?.invoke(false)
+                            dragged = 0f
+                        },
+                    ),
                 ) {
-                    Box(Modifier.size(width = 36.dp, height = 4.dp).background(c.outlineVariant, RoundedCornerShape(2.dp)))
-                }
-                Row(Modifier.padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    SvcPill(svc, color)
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, modifier = Modifier.focusRequester(focus).focusable().semantics { heading() })
-                        bus.towards?.let { Text(stringResource(R.string.map_bus_towards, it), style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant) }
+                    // The grab handle; the section band does the same for a screen reader.
+                    Box(
+                        Modifier.fillMaxWidth().height(20.dp).then(if (handle != null) Modifier.clearAndSetSemantics {}.clickable { handle(null) } else Modifier),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Box(Modifier.size(width = 36.dp, height = 4.dp).background(c.outlineVariant, RoundedCornerShape(2.dp)))
                     }
-                    IconButton(onClick = onClose) {
-                        Icon(painterResource(R.drawable.ic_close), contentDescription = stringResource(R.string.close))
+                    Row(Modifier.padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        lead()
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, modifier = Modifier.focusRequester(focus).focusable().semantics { heading() })
+                            sub?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant) }
+                        }
+                        IconButton(onClick = onClose) {
+                            Icon(painterResource(R.drawable.ic_close), contentDescription = stringResource(R.string.close))
+                        }
+                    }
+                    if (facts != null) Box(Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp)) { facts() }
+                }
+                Spacer(Modifier.height(12.dp))
+                body()
+                if (footer == null) Spacer(Modifier.height(16.dp))
+            }
+            if (footer != null) {
+                HorizontalDivider(color = c.outlineVariant)
+                Row(
+                    Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    content = footer,
+                )
+            }
+        }
+    }
+}
+
+/** The tile that leads a sheet's header, the same size for a stop as for a bus. */
+@Composable
+private fun SheetTile(color: Color, said: String?, content: @Composable () -> Unit) {
+    Box(
+        Modifier.size(48.dp).background(color, RoundedCornerShape(12.dp)).then(if (said != null) Modifier.semantics { contentDescription = said } else Modifier),
+        contentAlignment = Alignment.Center,
+    ) { content() }
+}
+
+/**
+ * A tapped bus: its service, where its line ends and where it is or is going
+ * next; its plate, whether it's moving and how full it is; and, dragged or
+ * tapped open, the stops ahead of it on a strip of its line. What's ahead is
+ * the server's ([LiveBus.upcoming]): the app doesn't walk the route. Its
+ * button opens the sheet of the stop it's at or coming to.
+ */
+@Composable
+private fun BusSheet(bus: LiveBus, svc: String, color: Color, campus: CampusMap, actions: MapActions, sheet: MapSheet.Bus) {
+    var all by rememberSaveable(bus.id) { mutableStateOf(sheet.all) }
+    // How many stops the short list leaves out: what "Show more" adds and "Show
+    // fewer" takes away. One alone is just shown, as on a stop's sheet.
+    val hidden = BusStrip.of(bus).more.takeIf { it > 1 } ?: 0
+    val strip = BusStrip.of(bus, all = all || hidden == 0)
+    val where = when {
+        bus.at != null -> stringResource(R.string.map_bus_at, bus.at)
+        bus.nextStop != null -> stringResource(R.string.map_bus_next, bus.nextStop)
+        else -> null
+    }
+    // Where its line ends leads, as a stop's name does; where it is comes under.
+    val title = bus.towards?.let { stringResource(R.string.map_bus_towards, it) } ?: where ?: stringResource(R.string.a11y_bus, svc)
+    val sub = if (bus.towards != null) where else null
+    var expanded by rememberSaveable(bus.id) { mutableStateOf(sheet.stops) }
+    // A stop on its line by its code; from an older API, by name: the one on
+    // this service nearest the bus, as one name can be either side of a road.
+    fun stopFor(code: String?, name: String?): MapStop? = code?.let(campus::stop)
+        ?: name?.let { n -> campus.nearest(campus.stops.filter { it.name == n && svc in it.services }.map { it.code }, bus.lat, bus.lon)?.let(campus::stop) }
+    // A stop opened from here: its sheet, the map on it, and back returns to this bus as it is.
+    val open: (MapStop) -> Unit = { actions.showStop(it.code, MapSheet.Bus(bus.id, stops = expanded, all = all)) }
+    // The stop it's at or coming to.
+    val stop = if (bus.at != null) stopFor(strip.hereCode, bus.at) else stopFor(strip.nextCode, bus.nextStop)
+    MapSheetFrame(
+        paneName = stringResource(R.string.a11y_bus, svc),
+        focusKey = bus.id,
+        title = title,
+        sub = sub,
+        onClose = actions.closeSheet,
+        lead = { SvcPill(svc, color) },
+        facts = { BusFacts(bus) },
+        handle = if (strip.any) ({ open -> expanded = open ?: !expanded }) else null,
+        footer = stop?.let { s ->
+            { OutlinedButton(onClick = { open(s) }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.map_show_stop, s.name)) } }
+        },
+    ) {
+        if (strip.any) {
+            SectionBand(stringResource(R.string.map_bus_stops_ahead), expanded) { expanded = !expanded }
+            if (expanded) {
+                Spacer(Modifier.height(6.dp))
+                BusStripList(strip, color, ::stopFor, open)
+                if (hidden > 0) {
+                    TextButton(onClick = { all = !all }, modifier = Modifier.padding(start = 4.dp)) {
+                        Text(if (all) stringResource(R.string.map_show_fewer) else stringResource(R.string.map_show_more_stops, hidden))
                     }
                 }
-                BusFacts(bus)
+                Spacer(Modifier.height(6.dp))
             }
-            if (strip.any) {
-                StopsAheadToggle(expanded) { expanded = !expanded }
-                if (expanded) BusStripList(strip, color)
-            }
-            Spacer(Modifier.height(16.dp))
         }
     }
 }
@@ -767,8 +833,7 @@ private fun BusSheet(bus: LiveBus, svc: String, color: Color, onClose: () -> Uni
 /** A service's code, large, on its colour: the bus sheet's lead. */
 @Composable
 private fun SvcPill(svc: String, color: Color) {
-    val said = stringResource(R.string.a11y_bus, svc)
-    Box(Modifier.heightIn(min = 44.dp).widthIn(min = 48.dp).background(color, RoundedCornerShape(10.dp)).padding(horizontal = 10.dp).semantics { contentDescription = said }, contentAlignment = Alignment.Center) {
+    SheetTile(color, stringResource(R.string.a11y_bus, svc)) {
         Text(svc, color = inkOn(color), fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, maxLines = 1)
     }
 }
@@ -779,7 +844,6 @@ private fun BusFacts(bus: LiveBus) {
     val c = MaterialTheme.colorScheme
     val muted = c.onSurfaceVariant
     FlowRow(
-        Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
         itemVerticalAlignment = Alignment.CenterVertically,
@@ -828,22 +892,29 @@ private fun BusFacts(bus: LiveBus) {
     }
 }
 
-/** "Stops ahead", opening and closing the strip. */
+/**
+ * A grey band naming what's under it, the same on a stop's sheet ("Buses
+ * here") as on a bus's ("Stops ahead"). With [onToggle], it opens and closes
+ * what's under it, and a chevron says so.
+ */
 @Composable
-private fun StopsAheadToggle(expanded: Boolean, onToggle: () -> Unit) {
+private fun SectionBand(text: String, expanded: Boolean = true, onToggle: (() -> Unit)? = null) {
     val c = MaterialTheme.colorScheme
     val turn by animateFloatAsState(if (expanded) -90f else 90f, label = "chevron")
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     Row(
-        Modifier.padding(top = 6.dp).fillMaxWidth().heightIn(min = 48.dp)
-            .clickable(role = Role.Button, onClick = onToggle)
-            .semantics { if (expanded) collapse { onToggle(); true } else expand { onToggle(); true } }
+        Modifier.fillMaxWidth().heightIn(min = 44.dp).background(c.surfaceContainerHigh)
+            .then(
+                if (onToggle == null) Modifier.semantics { heading() }
+                else Modifier.clickable(role = Role.Button, onClick = onToggle)
+                    .semantics { if (expanded) collapse { onToggle(); true } else expand { onToggle(); true } },
+            )
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(stringResource(R.string.map_bus_stops_ahead), style = MaterialTheme.typography.labelLarge, color = c.onSurfaceVariant, modifier = Modifier.weight(1f))
+        Text(text, style = MaterialTheme.typography.labelLarge, color = c.onSurfaceVariant, modifier = Modifier.weight(1f))
         // The chevron is mirrored right to left, so it turns the other way there.
-        Icon(painterResource(R.drawable.ic_chevron), contentDescription = null, tint = c.onSurfaceVariant, modifier = Modifier.rotate(if (rtl) -turn else turn))
+        if (onToggle != null) Icon(painterResource(R.drawable.ic_chevron), contentDescription = null, tint = c.onSurfaceVariant, modifier = Modifier.rotate(if (rtl) -turn else turn))
     }
 }
 
@@ -852,46 +923,58 @@ private enum class StripMark { Passed, Bus, Here, Next, Ahead }
 
 /** The stops ahead of a bus as a strip of its line, the bus on it. */
 @Composable
-private fun BusStripList(strip: BusStrip, color: Color) {
+private fun BusStripList(strip: BusStrip, color: Color, stopFor: (code: String?, name: String) -> MapStop?, onStop: (MapStop) -> Unit) {
     val c = MaterialTheme.colorScheme
     val muted = c.onSurfaceVariant
     Column(Modifier.padding(horizontal = 16.dp)) {
+        val openLabel = stringResource(R.string.map_open_stop)
+        // Each row: what's on the line beside it, the stop's name and its code.
         val rows = buildList {
-            strip.passed?.let { add(StripMark.Passed to it) }
-            if (strip.between) add(StripMark.Bus to null) else add(StripMark.Here to strip.here)
-            strip.next?.let { add(StripMark.Next to it) }
-            for (s in strip.after) add(StripMark.Ahead to s)
+            strip.passed?.let { add(Triple(StripMark.Passed, it, strip.passedCode)) }
+            if (strip.between) add(Triple(StripMark.Bus, null, null)) else add(Triple(StripMark.Here, strip.here, strip.hereCode))
+            strip.next?.let { add(Triple(StripMark.Next, it, strip.nextCode)) }
+            strip.after.forEachIndexed { j, s -> add(Triple(StripMark.Ahead, s, strip.afterCodes.getOrNull(j))) }
         }
-        rows.forEachIndexed { i, (mark, name) ->
+        rows.forEachIndexed { i, (mark, name, code) ->
             val first = i == 0
             val last = i == rows.lastIndex && strip.more == 0
-            Row(Modifier.fillMaxWidth().height(if (mark == StripMark.Next) 34.dp else 30.dp).semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically) {
+            // Passed, here and next are drawn on the line (grey, the bus, bold),
+            // not written beside it; a screen reader still hears the word.
+            val said = when (mark) {
+                StripMark.Passed -> stringResource(R.string.map_bus_passed)
+                StripMark.Here -> stringResource(R.string.map_bus_here)
+                StripMark.Next -> stringResource(R.string.map_bus_next_tag)
+                else -> null
+            }
+            // A stop's row opens its sheet, and its chevron says so: only one found
+            // on the map, and not the bus's own row.
+            val stop = if (name != null && mark != StripMark.Bus) stopFor(code, name) else null
+            val tap = if (stop != null) Modifier.clickable(role = Role.Button, onClickLabel = openLabel) { onStop(stop) } else Modifier
+            Row(
+                Modifier.fillMaxWidth().height(if (mark == StripMark.Next || mark == StripMark.Here) 44.dp else 40.dp).then(tap)
+                    .semantics(mergeDescendants = true) { if (said != null) stateDescription = said },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 StripRail(color, mark, first, last)
                 Spacer(Modifier.width(10.dp))
                 when (mark) {
                     StripMark.Bus -> Text(stringResource(R.string.map_bus_on_its_way), style = MaterialTheme.typography.bodyMedium, color = muted, modifier = Modifier.weight(1f))
                     else -> Text(
                         name.orEmpty(),
-                        style = if (mark == StripMark.Next) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
-                        fontWeight = if (mark == StripMark.Next) FontWeight.Bold else null,
+                        style = if (mark == StripMark.Next || mark == StripMark.Here) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
+                        fontWeight = if (mark == StripMark.Next || mark == StripMark.Here) FontWeight.Bold else null,
                         color = if (mark == StripMark.Passed) muted.copy(alpha = 0.7f) else c.onSurface,
                         maxLines = 1,
                         modifier = Modifier.weight(1f),
                     )
                 }
-                when (mark) {
-                    StripMark.Passed -> Text(stringResource(R.string.map_bus_passed), style = MaterialTheme.typography.bodyMedium, color = muted.copy(alpha = 0.7f))
-                    StripMark.Here -> Text(stringResource(R.string.map_bus_here), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    StripMark.Next -> Text(stringResource(R.string.map_bus_next_tag), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    else -> Unit
-                }
+                if (stop != null) Icon(painterResource(R.drawable.ic_chevron), contentDescription = null, tint = muted, modifier = Modifier.size(18.dp))
             }
         }
         if (strip.more > 0) {
-            Row(Modifier.fillMaxWidth().height(24.dp), verticalAlignment = Alignment.CenterVertically) {
+            // The line fading out: it goes on, and the button under it shows the rest.
+            Row(Modifier.fillMaxWidth().height(16.dp).clearAndSetSemantics {}) {
                 StripRail(color, null, first = false, last = true)
-                Spacer(Modifier.width(10.dp))
-                Text(stringResource(R.string.map_bus_more, strip.more), style = MaterialTheme.typography.bodyMedium, color = muted)
             }
         }
     }
@@ -948,51 +1031,17 @@ private const val PEEK_ROWS = 3
 private fun StopSheet(stop: MapStop, ui: MapUi, campus: CampusMap, actions: MapActions) {
     val places = actions.places
     val ctx = LocalContext.current
+    val c = MaterialTheme.colorScheme
     var all by remember(stop.code) { mutableStateOf(false) }
-    SheetSurface(stop.name, stop.longName?.takeIf { it != stop.name }, actions.closeSheet) {
-        val board = ui.board
-        val note = when {
-            ui.boardFailed -> R.string.map_times_need_connection
-            // Down or busy: not "no times", which would say no buses are coming.
-            ui.boardError -> R.string.map_times_failed
-            board == null -> R.string.refreshing
-            board.rows.isEmpty() -> if (board.available) R.string.map_no_buses_due else R.string.map_no_times
-            else -> null
-        }
-        if (note != null || board == null) {
-            Text(stringResource(note ?: R.string.refreshing), color = MaterialTheme.colorScheme.onSurfaceVariant)
-            // No times to list them by: the services here, each showing its line.
-            if (note != R.string.refreshing) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    for (svc in stop.services) SvcTag(svc, campus.routes[svc]?.color?.color() ?: Color.Gray) { if (ui.selected != svc) actions.choose(svc) }
-                }
-            }
-        } else {
-            val rows = runningFirst(board.rows)
-            val more = rows.size - PEEK_ROWS
-            val colors = remember(campus) { campus.routes.mapValues { it.value.color } }
-            // Edge to edge, as on the Buses tab: out past the sheet's own padding.
-            Column(Modifier.layout { m, c ->
-                val wide = c.maxWidth + 32.dp.roundToPx()
-                val p = m.measure(c.copy(minWidth = wide, maxWidth = wide))
-                layout(c.maxWidth, p.height) { p.place(-16.dp.roundToPx(), 0) }
-            }) {
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                BoardRows(
-                    if (all || more <= 1) rows else rows.take(PEEK_ROWS),
-                    colors,
-                    compact = true,
-                    clickLabel = { stringResource(R.string.on_the_map, it) },
-                ) { if (ui.selected != it.svc) actions.choose(it.svc) }
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            }
-            if (more > 1) {
-                TextButton(onClick = { all = !all }, modifier = Modifier.offset(x = (-12).dp)) {
-                    Text(if (all) stringResource(R.string.map_show_fewer) else stringResource(R.string.map_show_more, more))
-                }
-            }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+    MapSheetFrame(
+        paneName = stop.name,
+        focusKey = stop.code,
+        title = stop.name,
+        sub = stop.longName?.takeIf { it != stop.name },
+        onClose = actions.closeSheet,
+        // A stop's tile, where a bus's has its service: the two headers line up.
+        lead = { SheetTile(c.surfaceVariant, null) { Icon(painterResource(R.drawable.ic_pin), contentDescription = null, tint = c.onSurface) } },
+        footer = {
             Button(onClick = { actions.goThere(stop.code, stop.name) }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.map_go_there)) }
             OutlinedIconButton(onClick = {
                 val uri = "https://www.google.com/maps/dir/?api=1&destination=${stop.lat},${stop.lon}&travelmode=walking".toUri()
@@ -1004,11 +1053,50 @@ private fun StopSheet(stop: MapStop, ui: MapUi, campus: CampusMap, actions: MapA
                 Icon(
                     painterResource(if (saved) R.drawable.ic_star_filled else R.drawable.ic_star),
                     contentDescription = stringResource(if (saved) R.string.map_saved_as else if (full) R.string.map_places_full else R.string.map_save_place),
-                    tint = if (saved) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                    tint = if (saved) c.primary else LocalContentColor.current,
                 )
             }
+        },
+    ) {
+        SectionBand(stringResource(R.string.map_buses_here))
+        val board = ui.board
+        val note = when {
+            ui.boardFailed -> R.string.map_times_need_connection
+            // Down or busy: not "no times", which would say no buses are coming.
+            ui.boardError -> R.string.map_times_failed
+            board == null -> R.string.refreshing
+            board.rows.isEmpty() -> if (board.available) R.string.map_no_buses_due else R.string.map_no_times
+            else -> null
         }
-        Spacer(Modifier.height(4.dp))
+        if (note != null || board == null) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(stringResource(note ?: R.string.refreshing), color = c.onSurfaceVariant)
+                // No times to list them by: the services here, each showing its line.
+                if (note != R.string.refreshing) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        for (svc in stop.services) SvcTag(svc, campus.routes[svc]?.color?.color() ?: Color.Gray) { if (ui.selected != svc) actions.choose(svc) }
+                    }
+                }
+            }
+        } else {
+            val rows = runningFirst(board.rows)
+            val more = rows.size - PEEK_ROWS
+            val colors = remember(campus) { campus.routes.mapValues { it.value.color } }
+            BoardRows(
+                if (all || more <= 1) rows else rows.take(PEEK_ROWS),
+                colors,
+                compact = true,
+                clickLabel = { stringResource(R.string.on_the_map, it) },
+                // A row picks its line here, as the pills do, and again unpicks it.
+                picked = Picked(ui.selected),
+            ) { actions.choose(if (ui.selected == it.svc) null else it.svc) }
+            if (more > 1) {
+                HorizontalDivider(color = c.outlineVariant)
+                TextButton(onClick = { all = !all }, modifier = Modifier.padding(start = 4.dp)) {
+                    Text(if (all) stringResource(R.string.map_show_fewer) else stringResource(R.string.map_show_more, more))
+                }
+            }
+        }
     }
 }
 

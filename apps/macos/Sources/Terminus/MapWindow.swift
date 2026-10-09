@@ -11,7 +11,18 @@ import SwiftUI
 /// times every 15 s, your dot every 20 s, and only while the window is open.
 @MainActor @Observable
 final class MapModel {
-    enum Sheet: Equatable { case stop(String), bus(String) }
+    /// The card over the map: a stop, or a bus. A stop opened from a bus's
+    /// card remembers that bus (`from`), which Esc goes back to.
+    enum Sheet: Equatable {
+        /// A bus's card as it was: its stops ahead open (`stops`), and every one of them (`all`).
+        struct Bus: Equatable {
+            let id: String
+            var stops = false
+            var all = false
+        }
+        case stop(String, from: Bus? = nil)
+        case bus(Bus)
+    }
     enum BusStatus: Equatable { case finding, running(Int), noneRunning, unavailable, offline, stale }
     struct Spot: Equatable { let lat: Double; let lon: Double }
 
@@ -40,7 +51,8 @@ final class MapModel {
     /// Zoom steps asked for by the buttons (and ⌘+, ⌘−), in total: the map
     /// zooms by the difference since it last looked.
     var zoomSteps = 0
-    /// A stop chosen from the list, which the map moves to; `focusCount` is
+    /// A stop chosen from the list, or the bus Esc goes back to, which the
+    /// map moves to; `focusCount` is
     /// bumped each time, so choosing it again moves there again.
     var focus: Spot?
     var focusCount = 0
@@ -76,8 +88,10 @@ final class MapModel {
         return e
     }
 
-    var openStop: String? { if case .stop(let c) = sheet { c } else { nil } }
-    var openBus: LiveBus? { if case .bus(let id) = sheet { buses.first { $0.id == id } } else { nil } }
+    var openStop: String? { if case .stop(let c, _) = sheet { c } else { nil } }
+    var openBus: LiveBus? { if case .bus(let b) = sheet { buses.first { $0.id == b.id } } else { nil } }
+    /// How the open bus's card was left, for it to open the same way.
+    var openBusSheet: Sheet.Bus? { if case .bus(let b) = sheet { b } else { nil } }
 
     /// The campus and the style for this theme and language, then the street
     /// map file in the background (the style again once it's here).
@@ -124,6 +138,8 @@ final class MapModel {
         heardAt = nil
         busStatus = selected == nil ? nil : .finding
         if case .bus = sheet { sheet = nil }
+        // That bus is gone with its service: Esc on its stop's card just closes.
+        if case .stop(let code, _?) = sheet { sheet = .stop(code) }
     }
 
     /// A failed poll keeps the buses drawn and says so, as the web map does:
@@ -168,24 +184,41 @@ final class MapModel {
         heardAt = Date()
         busAnswers += 1
         busStatus = !list.available ? .unavailable : list.stale ? .stale : list.buses.isEmpty ? .noneRunning : .running(list.buses.count)
-        if case .bus(let id) = sheet, !buses.contains(where: { $0.id == id }) { sheet = nil }
+        if case .bus(let b) = sheet, !buses.contains(where: { $0.id == b.id }) { sheet = nil }
         return false
     }
 
-    func open(stop code: String) {
-        guard openStop != code else { return }
-        sheet = .stop(code)
+    /// A stop's card; `from`, the bus card it was opened from, which Esc returns to.
+    func open(stop code: String, from: Sheet.Bus? = nil) {
+        guard openStop != code else { sheet = .stop(code, from: from); return }
+        sheet = .stop(code, from: from)
         board = nil
         boardFailed = false
     }
 
-    func open(bus id: String) { sheet = .bus(id) }
+    func open(bus id: String) { sheet = .bus(Sheet.Bus(id: id)) }
 
-    /// A stop from the list (no mouse needed): its card, and the map moved onto it.
-    func pick(stop: MapStop) {
-        open(stop: stop.code)
+    /// A stop from the list (no mouse needed) or from a bus's card (`from`):
+    /// its card, and the map moved onto it.
+    func pick(stop: MapStop, from: Sheet.Bus? = nil) {
+        open(stop: stop.code, from: from)
         focus = Spot(lat: stop.lat, lon: stop.lon)
         focusCount += 1
+    }
+
+    /// Esc: from a stop opened from a bus, back to that bus's card as it was,
+    /// if the bus is still on the map, and the map moved back onto the bus
+    /// as it moved onto the stop; otherwise the card closes.
+    func back() {
+        if case .stop(_, let from?) = sheet, let bus = buses.first(where: { $0.id == from.id }) {
+            sheet = .bus(from)
+            focus = Spot(lat: bus.lat, lon: bus.lon)
+            focusCount += 1
+        } else {
+            sheet = nil
+        }
+        board = nil
+        boardFailed = false
     }
 
     /// The open stop's times. A failed refresh drops the last ones, as the
@@ -276,8 +309,15 @@ struct MapWindow: View {
             if let campus = map.campus, let sheet = map.sheet {
                 Group {
                     switch sheet {
-                    case .stop(let code): if let stop = campus.stop(code) { StopCard(stop: stop, map: map, campus: campus, app: app) }
-                    case .bus: if let bus = map.openBus { BusCard(bus: bus, svc: map.selected ?? "", hex: campus.color(map.selected)) { map.sheet = nil } }
+                    case .stop(let code, _): if let stop = campus.stop(code) { StopCard(stop: stop, map: map, campus: campus, app: app) }
+                    case .bus:
+                        if let bus = map.openBus {
+                            let svc = map.selected ?? ""
+                            let was = map.openBusSheet
+                            BusCard(bus: bus, svc: svc, hex: campus.color(svc), stop: BusCard.stop(for: bus, svc: svc, in: campus), campus: campus, show: { map.pick(stop: $0, from: $1) }, close: { map.sheet = nil }, open: was?.stops ?? false, all: was?.all ?? false)
+                                // A fresh card for each bus: one bus's stops list open isn't another's.
+                                .id(bus.id)
+                        }
                     }
                 }
                 .frame(width: 320)
@@ -294,7 +334,8 @@ struct MapWindow: View {
         }
         .frame(minWidth: 560, minHeight: 440)
         .background(WindowReader { if window !== $0 { window = $0 } })
-        .onExitCommand { map.sheet = nil }
+        // Back a step (to the bus a stop was opened from); the × closes outright.
+        .onExitCommand { map.back() }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didChangeOcclusionStateNotification)) { n in
             if let w = n.object as? NSWindow, w === window, visible { shown += 1 }
         }
@@ -495,24 +536,114 @@ private struct SvcTag: View {
     }
 }
 
-/// The card over the map's corner, for a stop.
-private struct MapCard<Content: View>: View {
+/// The frame a stop's card and a bus's share, so the two read alike: a
+/// `lead` tile beside the title, `sub` and close; a line of `facts`; then
+/// `content` (a `SectionBand` and its rows), edge to edge; then the
+/// `footer`'s buttons under a divider.
+private struct MapCardFrame<Lead: View, Content: View>: View {
     let title: String
+    let sub: String?
+    /// Said when it opens, or shows another stop or bus.
+    let announce: String
     let close: () -> Void
+    var facts: AnyView? = nil
+    var footer: AnyView? = nil
+    @ViewBuilder let lead: () -> Lead
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top) {
-                Text(title).font(.system(size: 15, weight: .semibold)).accessibilityAddTraits(.isHeader)
-                Spacer()
+        VStack(alignment: .leading, spacing: 0) {
+            // Taller than the room it has, the header and rows scroll; the
+            // footer's buttons stay in view under them.
+            ViewThatFits(in: .vertical) {
+                scrolled
+                ScrollView(.vertical) { scrolled }
+            }
+            if let footer {
+                Divider()
+                HStack(spacing: 8) { footer }
+                    .controlSize(.small)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    // The rows give up the room, never the buttons.
+                    .layoutPriority(1)
+            } else {
+                Spacer().frame(height: 14)
+            }
+        }
+        .background(.regularMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .shadow(color: .black.opacity(0.18), radius: 8, y: 2)
+        // It opens away from where the click (or the list) was: say which.
+        .announced(announce)
+    }
+
+    /// Everything above the footer: the header, `facts` and `content`.
+    private var scrolled: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center, spacing: 12) {
+                lead()
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.system(size: 15, weight: .semibold)).accessibilityAddTraits(.isHeader)
+                    if let sub { Text(sub).font(.system(size: 12)).foregroundStyle(.secondary) }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 CloseButton(close: close)
             }
-            content()
+            .padding([.horizontal, .top], 14)
+            if let facts { facts.padding(.horizontal, 14).padding(.top, 10) }
+            content().padding(.top, 12)
         }
-        .mapCard()
-        // It opens away from where the click (or the list) was: say which.
-        .announced(title)
+    }
+}
+
+/// The tile that leads a card's header, the same size for a stop as for a bus.
+private struct CardTile<Content: View>: View {
+    let fill: Color
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        content()
+            .frame(width: 48, height: 48)
+            .background(fill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+/// A grey band naming what's under it, the same on a stop's card ("Buses
+/// here") as on a bus's ("Stops ahead"). With `toggle`, it opens and closes
+/// what's under it, and a chevron says so.
+private struct SectionBand: View {
+    let text: String
+    var open = true
+    var toggle: (() -> Void)? = nil
+
+    var body: some View {
+        if let toggle {
+            Button(action: toggle) { band }
+                .buttonStyle(.plain)
+                .accessibilityValue(open ? L("Expanded") : L("Collapsed"))
+        } else {
+            band.accessibilityAddTraits(.isHeader)
+        }
+    }
+
+    private var band: some View {
+        HStack(spacing: 4) {
+            Text(text)
+            Spacer(minLength: 6)
+            if toggle != nil {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .bold))
+                    .rotationEffect(.degrees(open ? 90 : 0))
+                    .accessibilityHidden(true)
+            }
+        }
+        .font(.system(size: 12, weight: .medium))
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 14)
+        .frame(maxWidth: .infinity, minHeight: 30)
+        .background(Color.primary.opacity(0.06))
+        .contentShape(Rectangle())
     }
 }
 
@@ -528,76 +659,106 @@ private struct CloseButton: View {
     }
 }
 
-private extension View {
-    /// A card's fill and shadow over the map.
-    func mapCard() -> some View {
-        self
-            .padding(14)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .shadow(color: .black.opacity(0.18), radius: 8, y: 2)
-    }
-}
-
-/// A clicked bus: where it is and where it's going, its plate, whether it's
-/// moving and how full it is; then, opened, the stops still ahead on a strip
-/// of its line. Every stop is the server's (`at`, `stretch`, `upcoming`).
+/// A clicked bus: where its line ends and where it is or is going next, its
+/// plate, whether it's moving and how full it is; then, opened, the stops
+/// still ahead on a strip of its line. Every stop is the server's (`at`,
+/// `stretch`, `upcoming`). Its button opens the card of the stop it's at or
+/// coming to, as each stop's row does; Esc comes back here from it.
 struct BusCard: View {
     let bus: LiveBus
     let svc: String
     /// The service's colour, as on its line.
     let hex: String
+    /// The stop it's at or coming to (`stop(for:svc:in:)`), for "Show …".
+    var stop: MapStop? = nil
+    /// For the stops ahead's own cards; without it, the rows open nothing.
+    var campus: CampusMap? = nil
+    /// Opens a stop's card, with this card as it is now to come back to.
+    var show: (MapStop, MapModel.Sheet.Bus) -> Void = { _, _ in }
     let close: () -> Void
     @State var open = false
+    /// Every stop to where its line ends, not just the first few.
+    @State var all = false
 
     /// Stops shown after the next one before "+N more".
     static let shownAfterNext = 4
 
+    /// The stop a bus is at or coming to.
+    static func stop(for bus: LiveBus, svc: String, in campus: CampusMap) -> MapStop? {
+        bus.at != nil ? stop(code: bus.atCode, name: bus.at, for: bus, svc: svc, in: campus)
+            : stop(code: bus.nextStopCode ?? bus.upcomingCodes.first ?? nil, name: bus.nextStop, for: bus, svc: svc, in: campus)
+    }
+
+    /// A stop on a bus's line: by its code; from an older API, by name: the
+    /// one on its own line nearest the bus (one name can be either side of a road).
+    static func stop(code: String?, name: String?, for bus: LiveBus, svc: String, in campus: CampusMap) -> MapStop? {
+        if let code, let s = campus.stop(code) { return s }
+        guard let name else { return nil }
+        let codes = campus.stops.filter { $0.name == name && $0.services.contains(svc) }.map(\.code)
+        guard !codes.isEmpty else { return nil }
+        return campus.nearest(codes, lat: bus.lat, lon: bus.lon).flatMap(campus.stop)
+    }
+
+    /// This card as it is now, for Esc to come back to from a stop's card.
+    private var now: MapModel.Sheet.Bus { MapModel.Sheet.Bus(id: bus.id, stops: open, all: all) }
+
     var body: some View {
         let tint = Color(hex: hex) ?? .gray
-        let title = bus.at.map { L("At %@", $0) } ?? bus.nextStop.map { L("Next: %@", $0) } ?? L("%@ bus", svc)
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 10) {
-                Text(svc)
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(inkOn(hex))
-                    .frame(minWidth: 26)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 5)
-                    .background(tint, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-                    .accessibilityLabel(L("%@ bus", svc))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.system(size: 15, weight: .semibold)).accessibilityAddTraits(.isHeader)
-                    if let to = bus.towards { Text(L("Towards %@", to)).font(.system(size: 12)).foregroundStyle(.secondary) }
-                }
-                Spacer()
-                CloseButton(close: close)
+        let where_ = bus.at.map { L("At %@", $0) } ?? bus.nextStop.map { L("Next: %@", $0) }
+        // Where its line ends leads, as a stop's name does; where it is comes under.
+        let title = bus.towards.map { L("Towards %@", $0) } ?? where_ ?? L("%@ bus", svc)
+        let sub = bus.towards != nil ? where_ : nil
+        MapCardFrame(
+            title: title,
+            sub: sub,
+            announce: L("%@: %@", svc, title),
+            close: close,
+            facts: AnyView(info),
+            footer: stop.map { s in
+                AnyView(
+                    // Secondary: "Go there" on a stop's card is the one prominent button.
+                    Button(L("Show %@", s.name)) { show(s, now) }
+                        .buttonStyle(.bordered)
+                )
             }
-            info
+        ) {
+            CardTile(fill: tint) {
+                Text(svc)
+                    .font(.system(size: 18, weight: .heavy))
+                    .foregroundStyle(inkOn(hex))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .padding(.horizontal, 4)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(L("%@ bus", svc))
+        } content: {
             if !stops.isEmpty {
-                Button { withAnimation(.easeInOut(duration: 0.2)) { open.toggle() } } label: {
-                    HStack(spacing: 4) {
-                        Text(L("Stops ahead"))
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 9, weight: .bold))
-                            .rotationEffect(.degrees(open ? 90 : 0))
-                            .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 0) {
+                    SectionBand(text: L("Stops ahead"), open: open) {
+                        withAnimation(.easeInOut(duration: 0.2)) { open.toggle() }
                     }
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityValue(open ? L("Expanded") : L("Collapsed"))
-                if open {
-                    strip(tint)
+                    if open {
+                        VStack(alignment: .leading, spacing: 2) {
+                            strip(tint)
+                            if past > 1 {
+                                Button(all ? L("Show fewer") : L("Show %@ more stops", "\(more)")) {
+                                    withAnimation(.easeInOut(duration: 0.2)) { all.toggle() }
+                                }
+                                .buttonStyle(.link)
+                                .font(.system(size: 12, weight: .medium))
+                                .padding(.leading, 26)
+                                .padding(.top, 2)
+                            }
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
                         .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
                 }
+                .clipped()
             }
         }
-        .clipped()
-        .mapCard()
-        // It opens away from where the click (or the list) was: say which.
-        .announced(L("%@: %@", svc, title))
     }
 
     /// Plate, moving or stopped, and the crowd meter, one line.
@@ -651,68 +812,111 @@ struct BusCard: View {
         return bus.nextStop.map { [$0] } ?? []
     }
 
+    /// Their codes, in step with `stops`; nil where the server didn't say.
+    private var stopCodes: [String?] {
+        if !bus.upcoming.isEmpty { return bus.upcoming.indices.map { bus.upcomingCodes.indices.contains($0) ? bus.upcomingCodes[$0] : nil } }
+        return bus.nextStop == nil ? [] : [bus.nextStopCode]
+    }
+
     enum Kind { case passed, between, here, next, ahead }
-    struct Row { let name: String; let kind: Kind }
+    /// A row of the strip: a stop (`code` when the server gave it), or the bus on its way.
+    struct Row { let name: String; let kind: Kind; var code: String? = nil }
+
+    /// Stops past the first few. Just one is shown rather than hidden behind
+    /// a button, as on the stop's card.
+    private var past: Int { max(0, stops.count - (1 + Self.shownAfterNext)) }
+
+    /// Stops ahead not shown: none once all are, or when only one would be.
+    var more: Int { all || past <= 1 ? 0 : past }
 
     /// The strip's rows, top to bottom: the stop it passed and itself on the
-    /// way, or the stop it's at; then the next stop and a few after it.
+    /// way, or the stop it's at; then the next stop and a few after it (or
+    /// every one, with `all`).
     var rows: [Row] {
         var r: [Row] = []
         if let at = bus.at {
-            r.append(Row(name: at, kind: .here))
+            r.append(Row(name: at, kind: .here, code: bus.atCode))
         } else if let last = bus.stretch?.last {
-            r.append(Row(name: last, kind: .passed))
+            r.append(Row(name: last, kind: .passed, code: bus.passedCode))
             r.append(Row(name: L("On its way"), kind: .between))
         }
-        for (i, s) in stops.prefix(1 + Self.shownAfterNext).enumerated() { r.append(Row(name: s, kind: i == 0 ? .next : .ahead)) }
+        let shown = more == 0 ? stops[...] : stops.prefix(1 + Self.shownAfterNext)
+        let codes = stopCodes
+        for (i, s) in shown.enumerated() { r.append(Row(name: s, kind: i == 0 ? .next : .ahead, code: codes[i])) }
         return r
     }
 
     private func strip(_ tint: Color) -> some View {
         let rows = rows
-        let more = stops.count - (1 + Self.shownAfterNext)
+        let more = more
         let grey = Color.secondary.opacity(0.4)
         return VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
-                // Grey down to the bus, its colour on from there.
-                let above: Color? = i == 0 ? nil : (row.kind == .between ? grey : tint)
-                let below: Color? = i == rows.count - 1 ? nil : (row.kind == .passed ? grey : tint)
-                HStack(spacing: 10) {
-                    ZStack {
-                        VStack(spacing: 0) {
-                            Rectangle().fill(above ?? .clear)
-                            Rectangle().fill(below ?? .clear)
-                        }
-                        .frame(width: 3)
-                        marker(row.kind, tint)
-                    }
+                // Grey down to the bus, its colour on from there; on past the
+                // last row when more stops follow.
+                let above: Color? = i == 0 ? nil : (row.kind == .between || row.kind == .here ? grey : tint)
+                let below: Color? = i == rows.count - 1 && more == 0 ? nil : (row.kind == .passed ? grey : tint)
+                // A stop's row opens its card, and its chevron says so; the bus's own row doesn't.
+                if row.kind != .between, let campus, let s = Self.stop(code: row.code, name: row.name, for: bus, svc: svc, in: campus) {
+                    Button { show(s, now) } label: { line(row, tint, above: above, below: below, chevron: true) }
+                        .buttonStyle(.plain)
+                        .accessibilityHint(L("Show this stop"))
+                } else {
+                    line(row, tint, above: above, below: below, chevron: false)
+                }
+            }
+            if more > 0 {
+                // The line fading out: it goes on, and the button under it shows the rest.
+                LinearGradient(colors: [tint, tint.opacity(0)], startPoint: .top, endPoint: .bottom)
+                    .frame(width: 3, height: 14)
                     .frame(width: 16)
                     .accessibilityHidden(true)
-                    Text(row.name)
-                        .font(.system(size: row.kind == .next ? 13 : 12, weight: row.kind == .next ? .semibold : .regular))
-                        .foregroundStyle(row.kind == .passed || row.kind == .between ? .secondary : .primary)
-                        .lineLimit(1)
-                    Spacer(minLength: 6)
-                    if let tag = tag(row.kind, last: i == rows.count - 1, more: more) {
-                        Text(tag)
-                            .font(.system(size: 11, weight: row.kind == .next ? .semibold : .regular))
-                            .foregroundStyle(row.kind == .next || row.kind == .here ? .primary : .secondary)
-                    }
-                }
-                .frame(height: row.kind == .between ? 20 : 24)
-                .opacity(row.kind == .passed ? 0.6 : 1)
-                .accessibilityElement(children: .combine)
             }
         }
     }
 
-    private func tag(_ kind: Kind, last: Bool, more: Int) -> String? {
+    /// One row of the strip: its piece of the line with the stop's dot or the
+    /// bus, the name, and a chevron when it opens the stop's card.
+    private func line(_ row: Row, _ tint: Color, above: Color?, below: Color?, chevron: Bool) -> some View {
+        let bold = row.kind == .next || row.kind == .here
+        return HStack(spacing: 10) {
+            ZStack {
+                VStack(spacing: 0) {
+                    Rectangle().fill(above ?? .clear)
+                    Rectangle().fill(below ?? .clear)
+                }
+                .frame(width: 3)
+                marker(row.kind, tint)
+            }
+            .frame(width: 16)
+            .accessibilityHidden(true)
+            // Passed, here and next are drawn on the line (grey, the
+            // bus, bold), not written beside it; VoiceOver hears the word.
+            Text(row.name)
+                .font(.system(size: bold ? 13 : 12, weight: bold ? .bold : .regular))
+                .foregroundStyle(row.kind == .passed || row.kind == .between ? .secondary : .primary)
+                .lineLimit(1)
+            Spacer(minLength: 6)
+            if chevron {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+            }
+        }
+        .frame(height: row.kind == .between ? 20 : 24)
+        .opacity(row.kind == .passed ? 0.6 : 1)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(said(row.kind) ?? "")
+    }
+
+    private func said(_ kind: Kind) -> String? {
         switch kind {
         case .passed: L("passed")
         case .here: L("here")
-        case .next: last && more > 0 ? L("+%@ more", "\(more)") : L("next")
-        case .ahead: last && more > 0 ? L("+%@ more", "\(more)") : nil
-        case .between: nil
+        case .next: L("next")
+        case .ahead, .between: nil
         }
     }
 
@@ -734,75 +938,115 @@ struct BusCard: View {
     }
 }
 
-private struct StopCard: View {
+/// A clicked stop: its buses due, each showing its line when clicked; then
+/// going there, walking there, in the footer.
+struct StopCard: View {
     let stop: MapStop
     let map: MapModel
     let campus: CampusMap
     let app: AppModel
-    @State private var sent = false
+    @State var sent = false
 
     var body: some View {
-        MapCard(title: stop.name, close: { map.sheet = nil }) {
-            Group {
-                if let refused = map.refused {
-                    Text(refused.text).foregroundStyle(.secondary)
-                } else if map.boardFailed {
-                    Text(app.online ? L("No times right now") : L("Live times need a connection.")).foregroundStyle(.secondary)
-                } else if let board = map.board {
-                    if board.rows.isEmpty {
-                        Text(board.available ? L("No buses due") : L("No times right now")).foregroundStyle(.secondary)
-                    } else {
-                        VStack(spacing: 5) {
-                            ForEach(board.rows, id: \.svc) { r in
-                                HStack {
-                                    SvcTag(svc: r.svc, hex: campus.color(r.svc))
-                                    Spacer()
-                                    Text(eta(r)).font(.system(size: 12, weight: .semibold)).monospacedDigit()
-                                }
-                                // "D2: about 6 min", one element a row.
-                                .accessibilityElement(children: .ignore)
-                                .accessibilityLabel(spokenTimes(L("%@: %@", r.svc, eta(r))))
-                            }
-                        }
-                    }
-                } else {
-                    Text(L("Refreshing")).foregroundStyle(.secondary)
-                }
+        MapCardFrame(
+            title: stop.name,
+            sub: stop.longName.flatMap { $0 == stop.name ? nil : $0 },
+            announce: stop.name,
+            close: { map.sheet = nil },
+            footer: AnyView(footer)
+        ) {
+            // A stop's tile, where a bus's has its service: the two headers line up.
+            CardTile(fill: Color.secondary.opacity(0.18)) {
+                Image(systemName: "mappin.and.ellipse")
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(.primary)
             }
-            .font(.system(size: 12))
-            SectionLabel(text: L("Services here"))
-            HStack(spacing: 5) {
-                ForEach(stop.services, id: \.self) { svc in
-                    Button { if map.selected != svc { map.choose(svc) } } label: {
-                        SvcTag(svc: svc, hex: campus.color(svc))
-                    }
-                    .buttonStyle(.plain)
-                    .help(L("%@: show its line and live buses", svc))
-                }
+            .accessibilityHidden(true)
+        } content: {
+            VStack(alignment: .leading, spacing: 0) {
+                SectionBand(text: L("Buses here"))
+                rows.font(.system(size: 12))
             }
-            HStack(spacing: 8) {
-                if sent {
-                    // The popover can't be opened for you: say where it went.
-                    Label(L("Added to terminus in the menu bar"), systemImage: "checkmark")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                } else {
-                    Button(L("Go there")) {
-                        app.goSomewhere(code: stop.code, label: stop.name)
-                        sent = true
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.brand)
-                }
-                Button(L("Walking directions")) {
-                    // Apple Maps, the Mac's own, as the web app does on Apple devices.
-                    let url = "https://maps.apple.com/?daddr=\(stop.lat),\(stop.lon)&dirflg=w"
-                    if let u = URL(string: url) { NSWorkspace.shared.open(u) }
-                }
-            }
-            .controlSize(.small)
         }
         .onChange(of: stop.code) { sent = false }
+    }
+
+    @ViewBuilder private var rows: some View {
+        if let board = map.board, !board.rows.isEmpty, map.refused == nil, !map.boardFailed {
+            VStack(spacing: 0) {
+                ForEach(Array(board.rows.enumerated()), id: \.element.svc) { i, r in
+                    if i > 0 { Divider().padding(.leading, 14) }
+                    let picked = map.selected == r.svc
+                    // A row picks its line, as the pills do, and again unpicks it
+                    // (`choose` toggles). It opens no page, so it has no chevron;
+                    // the picked line's row is washed in its colour.
+                    Button { map.choose(r.svc) } label: {
+                        HStack {
+                            SvcTag(svc: r.svc, hex: campus.color(r.svc))
+                            Spacer()
+                            Text(eta(r)).font(.system(size: 12, weight: .semibold)).monospacedDigit()
+                        }
+                        .padding(.horizontal, 14)
+                        .frame(minHeight: 30)
+                        .background(picked ? (Color(hex: campus.color(r.svc)) ?? .gray).opacity(0.16) : .clear)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(picked ? L("%@: hide its line", r.svc) : L("%@: show its line and live buses", r.svc))
+                    // "D2: about 6 min", one element a row.
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(spokenTimes(L("%@: %@", r.svc, eta(r))))
+                    .accessibilityAddTraits(picked ? [.isButton, .isSelected] : .isButton)
+                }
+            }
+            .padding(.top, 4)
+        } else {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(note).foregroundStyle(.secondary)
+                // No times to list them by: the services here, each showing its line.
+                if map.board != nil || map.boardFailed || map.refused != nil {
+                    HStack(spacing: 5) {
+                        ForEach(stop.services, id: \.self) { svc in
+                            Button { if map.selected != svc { map.choose(svc) } } label: {
+                                SvcTag(svc: svc, hex: campus.color(svc))
+                            }
+                            .buttonStyle(.plain)
+                            .help(L("%@: show its line and live buses", svc))
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+        }
+    }
+
+    private var note: String {
+        if let refused = map.refused { return refused.text }
+        if map.boardFailed { return app.online ? L("No times right now") : L("Live times need a connection.") }
+        guard let board = map.board else { return L("Refreshing") }
+        return board.available ? L("No buses due") : L("No times right now")
+    }
+
+    @ViewBuilder private var footer: some View {
+        if sent {
+            // The popover can't be opened for you: say where it went.
+            Label(L("Added to terminus in the menu bar"), systemImage: "checkmark")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+        } else {
+            Button(L("Go there")) {
+                app.goSomewhere(code: stop.code, label: stop.name)
+                sent = true
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.brand)
+        }
+        Button(L("Walking directions")) {
+            // Apple Maps, the Mac's own, as the web app does on Apple devices.
+            let url = "https://maps.apple.com/?daddr=\(stop.lat),\(stop.lon)&dirflg=w"
+            if let u = URL(string: url) { NSWorkspace.shared.open(u) }
+        }
     }
 
     /// The server's "4 min" ("now", "~6 min"); for an older server's row,
@@ -1211,7 +1455,7 @@ private struct CampusMapView: NSViewRepresentable {
                 zoomedSteps = map.zoomSteps
                 view.setZoomLevel(min(max(to, view.minimumZoomLevel), view.maximumZoomLevel), animated: !still)
             }
-            // A stop chosen from the list: onto it, with a street or two round it.
+            // A stop chosen from the list (or the bus Esc went back to): onto it, with a street or two round it.
             if map.focusCount != focused, let f = map.focus {
                 focused = map.focusCount
                 let d = 0.0015
