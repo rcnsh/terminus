@@ -307,8 +307,7 @@
     <string name="refreshing">正在刷新</string>
     <string name="remove">移除</string>
     <string name="remove_device_title">移除 %1$s？</string>
-    <string name="remove_from_today">从今天移除</string>
-    <string name="swipe_to_remove">滑动可移除</string>
+    <string name="remove_from_today">从今天移除 %1$s</string>
     <string name="remove_other">该设备将退出登录，你会收到一封确认邮件。</string>
     <string name="remove_tab">移除 %1$s</string>
     <string name="remove_this_phone">这部手机会退出登录。</string>

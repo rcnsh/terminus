@@ -77,14 +77,8 @@ data class UiState(
     val reportSent: Boolean = false,
     /** Today's timeline (/me/day), for under the planned answer. */
     val day: DayPlan? = null,
-    /** Just swiped off Today, offered back with Undo in a bar at the foot of the screen. */
-    val removed: DayItem? = null,
-    /** Why a swipe off Today didn't take, in the same bar rather than the footer. */
-    val removeError: String? = null,
-    /** "Swipe to remove" beside Today's heading, until a row has been swiped. */
-    val swipeHint: Boolean = false,
-    /** The first removable row nudges aside once, the first time Today is shown. */
-    val swipePeek: Boolean = false,
+    /** Just taken off Today: its row says so where it was, with Undo (or why it didn't go). */
+    val removed: TodayNote? = null,
     /** A card button's signal on its way. */
     val signalling: Boolean = false,
     /** The server no longer serves this version (426): the update is offered in place of the answer's error. */
@@ -92,6 +86,14 @@ data class UiState(
 ) {
     val answer: NextAnswer? get() = answers[target]
 }
+
+/**
+ * An entry just taken off Today, kept in its place as a row saying so
+ * ("GEA1000 removed from today · Undo"), or, [failed], why it's still there.
+ * [before] is the entry that followed it (null: it was last), so a refresh
+ * meanwhile doesn't move the row; [at] is where it was, should that one go too.
+ */
+data class TodayNote(val item: DayItem, val at: Int, val before: String?, val failed: Boolean = false)
 
 data class PendingPair(val code: String, val account: String)
 
@@ -116,7 +118,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (!paired && store.hasLeftovers()) Session.clearLocal(app)
         val last = if (paired) store.lastAnswer() else null
         _state = MutableStateFlow(
-            UiState(paired = paired, places = last?.first?.places.orEmpty(), added = store.addedPlaces, leaveAlerts = store.leaveAlerts && LeaveAlerts.canNotify(app, LeaveAlerts.CHANNEL), liveUpdates = store.liveUpdates && LeaveAlerts.canNotify(app, LiveService.CHANNEL), day = store.lastDay()?.first, swipeHint = !store.swipedToday, swipePeek = !store.swipedToday && store.swipePeeks < SWIPE_PEEKS, pairError = signedOut, updateRequired = Outdated.required)
+            UiState(paired = paired, places = last?.first?.places.orEmpty(), added = store.addedPlaces, leaveAlerts = store.leaveAlerts && LeaveAlerts.canNotify(app, LeaveAlerts.CHANNEL), liveUpdates = store.liveUpdates && LeaveAlerts.canNotify(app, LiveService.CHANNEL), day = store.lastDay()?.first, pairError = signedOut, updateRequired = Outdated.required)
                 .let { s -> seen(last)?.let { (a, at) -> s.copy(answers = mapOf(Target.Plan to a), fetchedAt = at) } ?: s },
         )
         // Signed out by a refused token while open (here, the widget, a push): the welcome screen, saying why.
@@ -346,12 +348,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * A card button: "Not going", "Not on campus today", "Back on campus" or
      * "Undo" (skipped, away, back, reset). The server records
      * it for every device and answers with the new planned answer. "Not going"
-     * is a swipe off Today by another name, so it goes the same way: off the
-     * list at once, with the same Undo bar.
+     * is the × on Today by another name, so it goes the same way: off the
+     * list at once, with Undo in its place.
      */
     fun signal(action: CardAction) {
         val token = store.token ?: return
-        if (action.id == "skipped") _state.value.day?.items?.firstOrNull { it.key == action.trip }?.let { removeFromToday(it, swiped = false); return }
+        if (action.id == "skipped") _state.value.day?.items?.firstOrNull { it.key == action.trip }?.let { removeFromToday(it); return }
         if (_state.value.signalling) return
         _state.update { it.copy(signalling = true, error = null) }
         viewModelScope.launch(account) {
@@ -403,36 +405,39 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Swiped off Today, or "Not going" on the card: taken off today, whatever
-     * it is (a timetabled class, one you added, a one-off trip, the trip
-     * home). Gone from the list at once, with Undo for a few seconds.
+     * The × on Today (or a swipe), or "Not going" on the card: taken off
+     * today, whatever it is (a timetabled class, one you added, a one-off
+     * trip, the trip home). Gone from the list at once, its row saying so with
+     * Undo. Should the server refuse, it's back, with why just above it.
      */
-    fun removeFromToday(item: DayItem, swiped: Boolean = true) {
+    fun removeFromToday(item: DayItem) {
         val token = store.token ?: return
+        val items = _state.value.day?.items.orEmpty()
+        val at = items.indexOfFirst { it.key == item.key }.coerceAtLeast(0)
         _state.update { s ->
-            s.copy(day = s.day?.let { d -> d.copy(items = d.items.filter { it.key != item.key }) }, removed = item, removeError = null)
+            s.copy(day = s.day?.let { d -> d.copy(items = d.items.filter { it.key != item.key }) }, removed = TodayNote(item, at, items.getOrNull(at + 1)?.key))
         }
         viewModelScope.launch(account) {
             val ctx = getApplication<Application>()
             try {
-                if (applyPlan(ctx, Api(token, hour12 = hour12(ctx)).signal("skipped", item.key), token) && swiped) {
-                    store.swipedToday = true
-                    _state.update { it.copy(swipeHint = false, swipePeek = false) }
-                }
+                applyPlan(ctx, Api(token, hour12 = hour12(ctx)).signal("skipped", item.key), token)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 if (e is ApiError && rejected(e, token)) return@launch
-                _state.update { it.copy(removed = null, removeError = (e as? ApiError)?.message ?: L.s(R.string.cant_remove)) }
+                _state.update { s ->
+                    val back = s.day?.let { d -> if (d.items.any { it.key == item.key }) d else d.copy(items = d.items.toMutableList().apply { add(at.coerceAtMost(size), item) }) }
+                    s.copy(day = back, removed = TodayNote(item, at, before = item.key, failed = true))
+                }
             }
             dayJob?.cancel()
             loadDay()
         }
     }
 
-    /** Undo on the bar: back on today's list. */
+    /** Undo on its row: back on today's list. */
     fun undoRemove() {
-        val item = _state.value.removed ?: return
+        val item = _state.value.removed?.takeIf { !it.failed }?.item ?: return
         val token = store.token ?: return
         _state.update { it.copy(removed = null) }
         viewModelScope.launch(account) {
@@ -448,16 +453,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** The Undo bar has gone (timed out or swiped away): only for the entry it was for, not a newer one that replaced it. */
-    fun dismissRemoved(key: String) = _state.update { if (it.removed?.key == key) it.copy(removed = null) else it }
-
-    fun dismissRemoveError() = _state.update { it.copy(removeError = null) }
-
-    /** The row has nudged aside once: one fewer to go. */
-    fun swipePeeked() {
-        store.swipePeeks += 1
-        _state.update { it.copy(swipePeek = false) }
-    }
+    /** Its time is up: only for the entry it was for, not a newer one that replaced it. */
+    fun dismissRemoved(key: String) = _state.update { if (it.removed?.item?.key == key) it.copy(removed = null) else it }
 
     /**
      * A new plan from /me/signal, asked for with [token]: shown, cached for
@@ -682,5 +679,3 @@ private const val NEARBY = "nearby"
 /** Today is fetched again with the answer once it's this old. */
 private const val DAY_MAX_AGE_MS = 120_000L
 
-/** How many times, at most, a Today row nudges aside to show it can be swiped: once is enough with the label beside the heading. */
-private const val SWIPE_PEEKS = 1
