@@ -349,6 +349,9 @@ async function serve(req, res) {
   const outHeaders = Object.fromEntries(out.headers);
   const cookies = out.headers.getSetCookie();
   if (cookies.length) outHeaders['set-cookie'] = cookies.map((c) => c.replace(`${DEV_COOKIE}=`, 'tm_dev=').replace(/; Secure/i, ''));
+  // The apps set their clock by Date, so it's the stub's time: a real one
+  // would make every answer from a moved clock look hours old.
+  outHeaders.date = new Date(stubNow()).toUTCString();
   res.writeHead(out.status, outHeaders);
   res.end(Buffer.from(await out.arrayBuffer()));
   if (email.sent.length) {
