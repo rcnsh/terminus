@@ -7,7 +7,9 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -222,6 +224,16 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
     fun openBus(id: String) = _state.update { it.copy(sheet = MapSheet.Bus(id)) }
 
     fun closeSheet() = _state.update { it.copy(sheet = null, board = null, focus = null) }
+
+    private val _home = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    /** Each tap of the Map tab while on it, for the map to frame the whole campus again. */
+    val homeTaps: SharedFlow<Unit> = _home
+
+    /** The Map tab tapped while on it: back to how it opened, no pill on and no sheet open. */
+    fun home() {
+        _state.update { it.copy(selected = null, buses = emptyList(), busesStale = false, busStatus = null, sheet = null, board = null, focus = null) }
+        _home.tryEmit(Unit)
+    }
 
     suspend fun refreshBoard() {
         val code = (_state.value.sheet as? MapSheet.Stop)?.code ?: return

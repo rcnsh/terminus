@@ -99,6 +99,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import org.maplibre.compose.camera.CameraAnimation
 import org.maplibre.compose.camera.CameraPosition
 import org.maplibre.compose.expressions.ast.Expression
@@ -207,7 +209,7 @@ internal fun MapScreen(map: MapViewModel, onGoThere: (code: String, name: String
     // Your dot, every 20 s, only with location already allowed.
     LaunchedEffect(Unit) { lifecycle.every(20_000) { map.locate() } }
     BackHandler(enabled = ui.sheet != null) { map.closeSheet() }
-    MapLayout(ui, dark, MapActions(map::choose, map::openStop, map::openBus, map::closeSheet, onGoThere, places, onShowList))
+    MapLayout(ui, dark, MapActions(map::choose, map::openStop, map::openBus, map::closeSheet, onGoThere, places, onShowList), home = map.homeTaps)
 }
 
 /** [block], then again every [ms] (longer while the server asked for a wait), while the app is in front. */
@@ -232,11 +234,13 @@ internal class MapActions(
 
 /** The map and everything over it, from [ui] alone. */
 @Composable
-internal fun MapLayout(ui: MapUi, dark: Boolean, actions: MapActions) {
+internal fun MapLayout(ui: MapUi, dark: Boolean, actions: MapActions, home: Flow<Unit> = emptyFlow()) {
     val campus = ui.campus
     val style = ui.style
-    // "Back to campus": bumped by the button, watched by the map.
+    // "Back to campus": bumped by the button and by the Map tab tapped again
+    // ([home]), watched by the map.
     var recentre by remember { mutableIntStateOf(0) }
+    LaunchedEffect(home) { home.collect { recentre++ } }
     Box(Modifier.fillMaxSize()) {
         when {
             campus != null && style != null -> CampusMapView(ui, campus, style, dark, actions, recentre)

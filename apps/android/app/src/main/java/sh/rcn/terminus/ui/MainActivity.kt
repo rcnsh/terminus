@@ -353,6 +353,8 @@ private fun Tabs(
                             if (t == Tab.Settings && tab == Tab.Settings) settingsAgain.tryEmit(Unit)
                             // Buses tapped while on it: back to its home, from a line or a stop.
                             if (t == Tab.Buses && tab == Tab.Buses) buses.home()
+                            // Map tapped while on it: the whole campus, nothing open or chosen.
+                            if (t == Tab.Map && tab == Tab.Map) map.home()
                             onTab(t)
                         },
                         icon = { Icon(painterResource(icon), contentDescription = null) },
