@@ -38,7 +38,6 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -61,8 +60,6 @@ import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.MutableSharedFlow
 import sh.rcn.terminus.BuildConfig
-import sh.rcn.terminus.DayItem
-import sh.rcn.terminus.L
 import sh.rcn.terminus.Lang
 import sh.rcn.terminus.R
 import sh.rcn.terminus.Servers
@@ -339,7 +336,6 @@ private fun Tabs(
     val snackbars = remember { SnackbarHostState() }
     // Settings tapped while already on it: back to its list of all settings.
     val settingsAgain = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
-    RemovedBar(state.removed, state.removeError, snackbars, vm)
     Scaffold(
         snackbarHost = { SnackbarHost(snackbars) { NoticeBar(it) } },
         bottomBar = {
@@ -439,27 +435,6 @@ private fun Tabs(
                 }
             }
         }
-    }
-}
-
-/**
- * After a swipe off Today: "GEA1000 removed from today · Undo" in a bar at
- * the foot of the screen, above the tabs, for a few seconds (NoticeBar); and
- * why a swipe didn't take, the same way, marked in red. A second swipe
- * replaces the bar.
- */
-@Composable
-private fun RemovedBar(removed: DayItem?, error: String?, host: SnackbarHostState, vm: MainViewModel) {
-    val undo = stringResource(R.string.undo)
-    LaunchedEffect(removed?.key) {
-        val item = removed ?: return@LaunchedEffect
-        val result = host.showSnackbar(Notice(L.s(R.string.taken_off_today, item.shortName()), actionLabel = undo))
-        if (result == SnackbarResult.ActionPerformed) vm.undoRemove() else vm.dismissRemoved(item.key)
-    }
-    LaunchedEffect(error) {
-        if (error == null) return@LaunchedEffect
-        host.showSnackbar(Notice(error, error = true))
-        vm.dismissRemoveError()
     }
 }
 

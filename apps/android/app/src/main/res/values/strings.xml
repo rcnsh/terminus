@@ -307,8 +307,7 @@
     <string name="refreshing">Refreshing</string>
     <string name="remove">Remove</string>
     <string name="remove_device_title">Remove %1$s?</string>
-    <string name="remove_from_today">Remove from today</string>
-    <string name="swipe_to_remove">Swipe to remove</string>
+    <string name="remove_from_today">Remove %1$s from today</string>
     <string name="remove_other">It will be signed out, and you\'ll receive an email confirming this.</string>
     <string name="remove_tab">Remove %1$s</string>
     <string name="remove_this_phone">This phone will be signed out.</string>
