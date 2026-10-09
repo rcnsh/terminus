@@ -531,7 +531,7 @@ window.TERMINUS_ZH = {
  "terminus is an independent student project, not affiliated with NUS. Bus times come from NUS's shuttle feed. Walking routes and the map use data from OpenStreetMap contributors.": "terminus 是一个独立的学生项目，与 NUS 没有关联。巴士时间来自 NUS 的校园巴士数据。步行路线和地图使用 OpenStreetMap 贡献者的数据。",
  "Use terminus in line with the NUS Acceptable Use Policy for IT Resources.": "使用 terminus 时，请遵守 NUS 的 IT 资源可接受使用政策。",
  "Before class": "上课前",
- "terminus reads your timetable and tells you when to leave for your next class: which shuttle, from which stop, and when walking is faster.": "terminus 读取你的课表，告诉你什么时候出发去上下一节课：搭哪班巴士、在哪个车站上车，以及什么时候走路更快。",
+ "terminus reads your NUSMods timetable and tells you when to leave for your next class: which NUS shuttle bus, from which stop, and when walking is faster.": "terminus 读取你的 NUSMods 课表，告诉你什么时候出发去上下一节课：搭哪班 NUS 校园巴士、在哪个车站上车，以及什么时候走路更快。",
  "Use it on the web": "在网页上使用",
  "To UTown · starts 10:00": "去 UTown · 10:00 开始",
  "Leave in <span class=\"accent-small\">6 min</span>": "<span class=\"accent-small\">6 分钟</span>后出发",
