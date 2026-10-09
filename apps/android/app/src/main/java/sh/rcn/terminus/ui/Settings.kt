@@ -41,6 +41,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -162,27 +163,26 @@ internal fun SettingsScreen(
     // Edge to edge, the insets inside, so the list's sky can reach the top.
     val top = insets.calculateTopPadding()
     val bottom = insets.calculateBottomPadding()
+    // What happened (a save that failed, an export made) floats in the bar at
+    // the foot, as Undo does, rather than pushing the page down under it.
+    val notices = LocalNotices.current
+    LaunchedEffect(state.message) {
+        val said = state.message ?: return@LaunchedEffect
+        notices?.showSnackbar(Notice(said, duration = SnackbarDuration.Long))
+        account.clearMessage()
+    }
     Column(Modifier.fillMaxSize()) {
-        state.message?.let {
-            Card(Modifier.fillMaxWidth().padding(top = top).padding(horizontal = 16.dp).padding(top = 8.dp)) {
-                Row(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(it, modifier = Modifier.weight(1f))
-                    TextButton(onClick = account::clearMessage) { Text(stringResource(R.string.ok)) }
-                }
-            }
-        }
         PageStack(listOfNotNull(open), onBack = { open = null }, Modifier.weight(1f)) { page ->
             if (page == null) {
-                SettingsList(state, main, if (state.message != null) 0.dp else top, bottom) { open = it }
+                SettingsList(state, main, top, bottom) { open = it }
             } else {
                 Column(Modifier.fillMaxSize().padding(bottom = bottom)) {
                     // The title in a slim band of the list's sky, scrolling away with the page; the page itself plain.
                     val phase = skyPhase()
-                    val band = if (state.message != null) 0.dp else top
                     val scroll = rememberScrollState()
                     Box(Modifier.weight(1f)) {
                         Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
-                            SkyBand(phase, band) {
+                            SkyBand(phase, top) {
                                 BackHeader(stringResource(page.title)) { open = null }
                             }
                             Column(Modifier.padding(horizontal = 16.dp)) {
@@ -190,7 +190,7 @@ internal fun SettingsScreen(
                                 Spacer(Modifier.height(32.dp))
                             }
                         }
-                        StatusStrip(phase, band, scroll)
+                        StatusStrip(phase, top, scroll)
                     }
                 }
             }
