@@ -60,7 +60,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameMillis
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Size
@@ -72,6 +74,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
@@ -91,6 +94,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -101,11 +105,18 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.takeWhile
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import org.maplibre.compose.camera.CameraAnimation
+import org.maplibre.compose.camera.CameraMoveReason
 import org.maplibre.compose.camera.CameraPosition
+import org.maplibre.compose.camera.CameraUpdate
 import org.maplibre.compose.expressions.ast.Expression
 import org.maplibre.compose.expressions.dsl.asDpOffset
 import org.maplibre.compose.expressions.dsl.asNumber
@@ -135,6 +146,7 @@ import org.maplibre.compose.layers.SymbolLayer
 import org.maplibre.compose.map.AndroidRenderMode
 import org.maplibre.compose.map.CameraConstraints
 import org.maplibre.compose.map.MapUiOptions
+import org.maplibre.compose.map.MapState
 import org.maplibre.compose.map.MaplibreMap
 import org.maplibre.compose.map.rememberMapState
 import org.maplibre.compose.map.renderMode
@@ -161,6 +173,8 @@ import sh.rcn.terminus.Slides
 import sh.rcn.terminus.Spoken
 import sh.rcn.terminus.BusStrip
 import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.pow
 import kotlin.math.floor
 import kotlin.math.max
 import androidx.compose.animation.animateContentSize
@@ -180,6 +194,16 @@ private fun Long.color() = Color(this.toInt())
 
 /** West, south, east, north (MapData's bounds) as a box for the camera. */
 private fun box(b: DoubleArray) = BoundingBox(west = b[0], south = b[1], east = b[2], north = b[3])
+
+/**
+ * How much of the map is covered, in px from its top and bottom edges: by
+ * the pills (and the status lines under them) and by the open sheet. Plain
+ * state read only when the map moves, so a sheet growing redraws nothing.
+ */
+private class MapCover {
+    var top by mutableIntStateOf(0)
+    var sheet by mutableIntStateOf(0)
+}
 
 /**
  * The Map tab: the campus's streets, every service's line in its colour,
@@ -214,6 +238,43 @@ internal fun MapScreen(map: MapViewModel, onGoThere: (code: String, name: String
     MapLayout(ui, dark, MapActions(map::choose, map::openStop, map::openBus, map::closeSheet, onGoThere, places, onShowList, map::showStop), home = map.homeTaps)
 }
 
+/**
+ * Close in on [lat], [lon] (zoom 17, or nearer if already), in the middle of
+ * what the pills and the sheet leave uncovered ([cover]), gliding there.
+ *
+ * The sheet is measured a frame after it opens, and grows when its rows
+ * arrive: for a moment after, the map follows it, so the place isn't left
+ * under it, unless a finger has moved the map since.
+ */
+@OptIn(FlowPreview::class)
+private suspend fun MapState.centreOn(lat: Double, lon: Double, cover: MapCover, density: Density) {
+    withFrameNanos {}
+    var moved = false
+    withTimeoutOrNull(CENTRE_FOLLOW_MS) {
+        snapshotFlow { cover.top to cover.sheet }
+            .debounce { if (moved) 200L else 0L }
+            .takeWhile { !moved || cameraMoveReason != CameraMoveReason.GESTURE }
+            .collectLatest { (top, sheet) ->
+                moved = true
+                val view = viewport ?: awaitViewport()
+                val h = view.size.height.value.toDouble()
+                val (topDp, sheetDp) = with(density) { top.toDp().value.toDouble() to sheet.toDp().value.toDouble() }
+                val zoom = max(view.cameraPosition.zoom, 17.0)
+                // How far above the map's middle the uncovered part's middle is,
+                // in dp, then in degrees of latitude at that zoom (the world is
+                // 512 dp round at zoom 0, its north-south scale cos(lat) of that).
+                val up = h / 2 - (topDp + h - sheetDp) / 2
+                val target = Position(longitude = lon, latitude = lat - up * 360 / (512 * 2.0.pow(zoom)) * cos(Math.toRadians(lat)))
+                // With animations off in the phone's settings, it jumps there.
+                if (ValueAnimator.areAnimatorsEnabled()) animateCamera(CameraUpdate(target = target, zoom = zoom), CameraAnimation.Ease())
+                else setCameraPosition(cameraPosition.copy(target = target, zoom = zoom))
+            }
+    }
+}
+
+/** How long after moving to a stop the map keeps it clear of its sheet as that grows. */
+private const val CENTRE_FOLLOW_MS = 2_500L
+
 /** [block], then again every [ms] (longer while the server asked for a wait), while the app is in front. */
 private suspend fun Lifecycle.every(ms: Long, block: suspend () -> Unit) = repeatOnLifecycle(Lifecycle.State.RESUMED) {
     while (true) {
@@ -245,9 +306,10 @@ internal fun MapLayout(ui: MapUi, dark: Boolean, actions: MapActions, home: Flow
     // ([home]), watched by the map.
     var recentre by remember { mutableIntStateOf(0) }
     LaunchedEffect(home) { home.collect { recentre++ } }
+    val cover = remember { MapCover() }
     Box(Modifier.fillMaxSize()) {
         when {
-            campus != null && style != null -> CampusMapView(ui, campus, style, dark, actions, recentre)
+            campus != null && style != null -> CampusMapView(ui, campus, style, dark, actions, recentre, cover)
             ui.failed -> Text(
                 stringResource(R.string.map_needs_connection),
                 modifier = Modifier.align(Alignment.Center).padding(32.dp),
@@ -256,7 +318,7 @@ internal fun MapLayout(ui: MapUi, dark: Boolean, actions: MapActions, home: Flow
             else -> CircularProgressIndicator(Modifier.align(Alignment.Center))
         }
         if (campus != null) {
-            Column(Modifier.statusBarsPadding().padding(top = 8.dp)) {
+            Column(Modifier.onSizeChanged { cover.top = it.height }.statusBarsPadding().padding(top = 8.dp)) {
                 Pills(campus, ui.selected, actions.choose)
                 ui.busStatus?.let { BusStatusLine(it, ui.selected.orEmpty()) }
                 // The feed is down: these are where the buses were last seen.
@@ -278,7 +340,7 @@ internal fun MapLayout(ui: MapUi, dark: Boolean, actions: MapActions, home: Flow
                 }
             }
             ui.sheet?.let { sheet ->
-                Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
+                Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { cover.sheet = it.height }) {
                     when (sheet) {
                         is MapSheet.Stop -> campus.stop(sheet.code)?.let { StopSheet(it, ui, campus, actions) }
                         is MapSheet.Bus -> ui.buses.firstOrNull { it.id == sheet.id }?.let { bus ->
@@ -293,7 +355,7 @@ internal fun MapLayout(ui: MapUi, dark: Boolean, actions: MapActions, home: Flow
 }
 
 @Composable
-private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boolean, actions: MapActions, recentre: Int) {
+private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boolean, actions: MapActions, recentre: Int, cover: MapCover) {
     val ctx = LocalContext.current
     val ink = if (dark) Color(0xFFF2EFEB) else Color(0xFF1C1917)
     val paper = if (dark) Color(0xFF1A1816) else Color.White
@@ -455,18 +517,17 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
             state.setCameraPosition(CameraPosition(target = Position(longitude = near.lon, latitude = near.lat), zoom = 17.0))
         }
     }
-    // A stop opened from Nearby: close in, and a little above the middle,
-    // so its sheet (over the lower part of the map) doesn't cover it. At
-    // zoom 17, 0.0006 degrees of latitude is about a sixth of the screen.
+    // A stop opened from Nearby or a bus's sheet: the map glides to it.
+    val density = LocalDensity.current
     LaunchedEffect(ui.focus) {
         val stop = ui.focus?.let { campus.stop(it) } ?: return@LaunchedEffect
-        state.setCameraPosition(CameraPosition(target = Position(longitude = stop.lon, latitude = stop.lat - 0.0006), zoom = 17.0))
+        state.centreOn(stop.lat, stop.lon, cover, density)
     }
     // Back from a stop to the bus it was opened from: the map follows, as
     // it went to the stop, so the bus isn't left off screen.
     LaunchedEffect(ui.focusBus) {
         val bus = ui.focusBus?.let { id -> ui.buses.firstOrNull { it.id == id } } ?: return@LaunchedEffect
-        state.setCameraPosition(CameraPosition(target = Position(longitude = bus.lon, latitude = bus.lat - 0.0006), zoom = 17.0))
+        state.centreOn(bus.lat, bus.lon, cover, density)
     }
     // Back to campus, from the button.
     LaunchedEffect(recentre) {
