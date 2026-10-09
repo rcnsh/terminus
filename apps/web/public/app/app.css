@@ -515,6 +515,10 @@ body.on-settings > .nav { display: none; }
 /* Its list's horizon runs the width of the window (and pages slide in from
    the window's edge), clipped by the page rather than the column. */
 body.app { overflow-x: clip; }
+/* Set on the root too: otherwise CSS hands body's clip to the window, where
+   it becomes hidden, body clips nothing, and a page mid-slide widens the
+   window (mobile browsers then show a sideways scrollbar). */
+html { overflow-x: clip; }
 .settings-tab .settings { overflow-x: visible; }
 body.app > .nav { height: var(--header-h); padding-top: 0; padding-bottom: 0; }
 .settings-tab .settings-title, .settings-tab .page-head { display: flex; align-items: center; height: var(--header-h); margin-bottom: -4px; }
