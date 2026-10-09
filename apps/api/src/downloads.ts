@@ -20,6 +20,14 @@
 import type { Env } from './types.ts';
 import { json } from './http.ts';
 
+/**
+ * The Android app's Google Play page, once it's published there; null until
+ * then. While null, the landing page offers the APK (/download/android);
+ * once set, its Android buttons become Google Play's badge and its links go
+ * to Play (fillLanding in landing.ts). The APK stays served either way.
+ */
+export const PLAY_URL: string | null = null;
+
 interface ReleaseFile {
   file: string;
   sha256: string;

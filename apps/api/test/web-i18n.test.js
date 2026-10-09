@@ -192,7 +192,7 @@ test('the Chinese is Chinese', () => {
 // changes, its old key must go, or the two drift apart unnoticed. A key is
 // used by t() in any script, as a quoted word a script passes to t() later
 // (the days of the week), as text or an attribute on a page, as a whole
-// element's HTML there, or as a data-t the server writes into a page.
+// element's HTML there, or as a data-t or alt the server writes into a page.
 test('every translation is still used', () => {
   const dict = zh();
   const scripts = [];
@@ -216,7 +216,7 @@ test('every translation is still used', () => {
     for (const m of src.matchAll(/<title>([^<]+)<\/title>|<meta name="description" content="([^"]+)"/g)) used.add(norm(m[1] ?? m[2]));
     for (const k of htmlKeysOn(dict, page)) used.add(k);
   }
-  for (const m of fs.readFileSync(new URL('../src/landing.ts', import.meta.url), 'utf8').matchAll(/data-t="([^"]+)"/g)) used.add(m[1]);
+  for (const m of fs.readFileSync(new URL('../src/landing.ts', import.meta.url), 'utf8').matchAll(/(?:data-t|alt)="([^"]+)"/g)) used.add(m[1]);
   const stale = Object.keys(dict).filter((k) => !used.has(k));
   assert.deepEqual(stale, []);
 });
