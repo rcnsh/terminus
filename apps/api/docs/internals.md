@@ -1237,6 +1237,12 @@ at `NOTO_CJK_TAG`), turned into glyphs by Stadia Maps' `build_pbf_glyphs`
 in the script. They go into the same three fonts, so the style names no
 other. A client downloads only the ranges its labels use.
 
+A range is kept for 30 days by its URL, at the edge, in the apps' map
+caches and in the web app's service worker, so changed fonts need a new
+URL: the style's glyphs URL ends `?v=` and `GLYPHS` in `src/map.ts`, bumped
+when the fonts on R2 change (v2 brought the Chinese), and the edge keeps the
+versioned range apart from the old.
+
 Every client's MapLibre parses these files natively, so what goes up is
 pinned in `scripts/map-tiles.lock`: the build date, bbox and minzoom, the
 `pmtiles` version, the cut's SHA-256 and size, the basemaps-assets commit,

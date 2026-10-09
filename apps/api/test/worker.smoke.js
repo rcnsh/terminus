@@ -1242,6 +1242,22 @@ test('when R2 fails, map pieces in the edge cache are still served and the rest 
   }
 });
 
+test('new fonts reach maps that kept the old: the style names a glyph version the cache keeps apart', async () => {
+  const style = await (await call('/map/style.json', { fetchImpl: makeFetch({}) })).res.json();
+  const v = new URL(style.glyphs.replace('{fontstack}', 'x').replace('{range}', '0-255')).searchParams.get('v');
+  assert.ok(v, 'the glyphs URL carries a version');
+  const files = new Map([['map/fonts/Noto Sans Regular/19968-20223.pbf', 'EMPTY']]);
+  const env = { ...makeEnv(), DOWNLOADS: rangedBucket(files) };
+  const cache = installGlobals(makeFetch({}));
+  const get = async (p) => (await (await call(p, { env, cache })).res).text();
+  const old = '/map/fonts/Noto%20Sans%20Regular/19968-20223.pbf';
+  assert.equal(await get(old), 'EMPTY');
+  files.set('map/fonts/Noto Sans Regular/19968-20223.pbf', '汉字');
+  assert.equal(await get(old), 'EMPTY', 'the old URL is kept by path, as before');
+  assert.equal(await get(`${old}?v=${v}`), '汉字', 'the versioned URL is a new entry: the filled range');
+  assert.equal(await get(`${old}?v=nope`), 'EMPTY', 'a made-up version is the old URL');
+});
+
 test('reads from R2 for the map are limited per IP; pieces in the edge cache are not', async () => {
   const files = new Map([
     ['map/fonts/Noto Sans Medium/256-511.pbf', 'GLYPHS'],
