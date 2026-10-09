@@ -204,7 +204,8 @@ private fun Today(items: List<DayItem>, inks: Inks) {
 }
 
 /**
- * The small square: the time to leave, big, under what it is ("Leave by"),
+ * The small square: the time to leave, big, under what it is ("Leave by")
+ * or with it on its line ("09:37 前出发"),
  * the hills under it, and the bus and its stop along the ground.
  */
 @Composable
@@ -232,8 +233,12 @@ internal fun SquareLayout(s: Scene, w: Float, h: Float) {
                 val head = face.tile?.label ?: face.journey?.place ?: face.heading
                 HeadRow(if (big != null && !face.bigFirst) face.bigLabel else head, s, sky, side = 28.dp)
                 if (big != null) {
-                    Text(big, style = TextStyle(color = color, fontWeight = FontWeight.Bold, fontSize = if (big.length > 6) 30.sp else 38.sp), maxLines = 1)
-                    if (face.bigFirst) face.bigLabel?.let { Small(it, sky.muted, 12.sp) }
+                    // A label after the time ("09:37 前出发") stays on its line:
+                    // a line under it would sit on the hills.
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text(big, style = TextStyle(color = color, fontWeight = FontWeight.Bold, fontSize = if (big.length > 6) 30.sp else 38.sp), maxLines = 1)
+                        if (face.bigFirst) face.bigLabel?.let { Small(it, sky.muted, 13.sp, modifier = GlanceModifier.padding(start = 4.dp, bottom = 7.dp)) }
+                    }
                 } else {
                     // No time in it ("Leave now", "No classes today"): the headline itself, as big as fits.
                     Text(face.headline, style = TextStyle(color = color, fontWeight = FontWeight.Bold, fontSize = if (face.headline.length <= 12) 28.sp else 20.sp), maxLines = 2)
