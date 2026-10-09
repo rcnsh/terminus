@@ -400,8 +400,6 @@ function pullTab() {
   return busesModule.get()?.pullRefresh?.() ?? Promise.resolve('failed');
 }
 const pullable = () => tab.get() === 'now' || (tab.get() === 'buses' && Boolean(busesModule.get()?.pullRefresh));
-/** The services' colours, for the buses that loop past a pull. */
-const serviceColours = () => Object.values(campus.get()?.routes ?? {}).map((r) => r.color).filter(Boolean);
 
 /** An answer from a card's button or Undo: shown, then everything fetched again so Today and its offline copy follow. */
 function answered(a) {
@@ -1252,7 +1250,7 @@ function App() {
     <main id="tab-buses" class="wrap buses-tab" hidden=${first !== 'buses'} ref=${keep('buses')}><h1 class="sr-only">${t('Buses')}</h1><${BusesArea} /></main>
     <main id="tab-map" class="map-tab" hidden=${first !== 'map'} ref=${keep('map')}><h1 class="sr-only">${t('Map')}</h1><${MapArea} /></main>
     <main id="tab-settings" class="wrap settings-tab" hidden=${first !== 'settings'} ref=${keep('settings')}><${SettingsArea} /></main>
-    <${PullToRefresh} enabled=${pullable} refresh=${pullTab} colours=${serviceColours} />
+    <${PullToRefresh} enabled=${pullable} refresh=${pullTab} />
     <${TabBar} />
     <${Toast} />
   `;

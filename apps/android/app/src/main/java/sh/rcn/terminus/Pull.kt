@@ -126,9 +126,6 @@ object Pull {
      */
     fun pillCentre(above: Float, room: Float, pull: Float): Float = (lead(pull) - above + room) / 2
 
-    /** The colour after [i] for a bus going round again: the others in turn, 1 to [others], never the first's (0). */
-    fun nextColour(i: Int, others: Int): Int = if (others <= 0) 0 else (i % others) + 1
-
     /** One step of a spring from [x] (moving at [v]) towards [target]: the new place and speed. */
     fun spring(x: Float, v: Float, target: Float, k: Float, c: Float, dt: Float): Pair<Float, Float> {
         val nv = v + (k * (target - x) - c * v) * dt
@@ -174,7 +171,7 @@ data class Puff(val x: Float, var age: Float = 0f)
  * [calm]: the phone's "Remove animations", so nothing drives, bounces or
  * puffs, and the sky returns without a spring.
  */
-class PullMotion(var scene: PullScene, var others: Int, var calm: Boolean = false) {
+class PullMotion(var scene: PullScene, var calm: Boolean = false) {
     enum class Phase {
         Idle, Drag,
 
@@ -191,7 +188,7 @@ class PullMotion(var scene: PullScene, var others: Int, var calm: Boolean = fals
         Closing,
     }
 
-    /** What the bus is doing: with the finger, at the stop, pulling away, others going round, coming back to its place. */
+    /** What the bus is doing: with the finger, at the stop, pulling away, going round again, coming back to its place. */
     enum class Drive { Follow, Boarding, Departing, Looping, Return }
 
     var phase = Phase.Idle
@@ -235,9 +232,6 @@ class PullMotion(var scene: PullScene, var others: Int, var calm: Boolean = fals
     private var dist = 0f
     private var t = 0f
 
-    /** Which livery the bus is in: 0 the screen's own, then the others in turn as they go round. */
-    var colour = 0
-        private set
     var door = 0f
         private set
     var honk = 0f
@@ -328,7 +322,6 @@ class PullMotion(var scene: PullScene, var others: Int, var calm: Boolean = fals
             drive = Drive.Follow
             // Caught on its way back: the finger takes it from where it is.
             raw = Pull.unrubber(pull)
-            colour = 0
             result = null
         }
         raw = (raw + dy).coerceAtLeast(0f)
@@ -474,7 +467,7 @@ class PullMotion(var scene: PullScene, var others: Int, var calm: Boolean = fals
         }
     }
 
-    /** The bus once it's let go: boards, honks, drives off, others go round until the answer's in, then it comes back. */
+    /** The bus once it's let go: boards, honks, drives off, goes round again until the answer's in, then it comes back. */
     private fun drive(dt: Float) {
         when (drive) {
             Drive.Follow -> Unit
@@ -503,18 +496,16 @@ class PullMotion(var scene: PullScene, var others: Int, var calm: Boolean = fals
         }
     }
 
-    /** Off the right: the next one in from the left, in the next livery while it asks, else the card's own coming back. */
+    /** Off the right: in again from the left, round once more while it asks, else coming back to its place. */
     private fun lap(cruise: Float) {
         busX = Pull.START - 10
         lastX = busX
         if (phase == Phase.Busy) {
             drive = Drive.Looping
             busV = cruise
-            colour = Pull.nextColour(colour, others)
         } else {
             drive = Drive.Return
             busV = 0f
-            colour = 0
         }
     }
 
@@ -534,7 +525,6 @@ class PullMotion(var scene: PullScene, var others: Int, var calm: Boolean = fals
         tiltV = 0f
         kneel = 0f
         kneelV = 0f
-        colour = 0
         outcome = null
     }
 }

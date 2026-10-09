@@ -5,7 +5,7 @@
 // A pill in the sky says what letting go does, and the horizon on screen
 // plays it out: a bus in its service's colour drives to your stop as you
 // pull, and once it's there, let go and it honks and pulls away while the
-// tab fetches again, other services looping past until the answer is back.
+// tab fetches again, going round again until the answer is back.
 // Then the pill says how it went and the sky springs back. The Android app
 // does the same, by the same numbers.
 //
@@ -138,14 +138,13 @@ function busOf(horizon) {
  * The sky's stretch, the pill and the bus on the horizon. `enabled()`: the
  * tab on screen can be pulled. `refresh()`: fetches it again, resolving to
  * how it went ('updated', 'fresh' or 'failed', or { state, inS } as
- * pullWords takes them). `colours()`: the services'
- * colours, for the buses looping past.
+ * pullWords takes them).
  */
-export function PullToRefresh({ enabled, refresh, colours }) {
+export function PullToRefresh({ enabled, refresh }) {
   const root = useRef(null);
   // The latest props, for the listeners set up once.
   const props = useRef(null);
-  props.current = { enabled, refresh, colours };
+  props.current = { enabled, refresh };
 
   useEffect(() => {
     const el = root.current;
@@ -157,7 +156,7 @@ export function PullToRefresh({ enabled, refresh, colours }) {
     // `page`: idle, drag (following the finger), cancel (springing back
     // unarmed), hold (waiting at PULL.hold), closing (then the bus finishing
     // its way back with the sky shut). `mode`: what the bus is doing: follow
-    // (the pull), board, go (pulling away), loop (others passing), back
+    // (the pull), board, go (pulling away), loop (round again), back
     // (coming home).
     const st = { page: 'idle', mode: 'follow', pull: 0, v: 0, x: 0, lastX: 0, busV: 0, smV: 0, smA: 0, tilt: 0, tiltV: 0, kneel: 0, kneelV: 0, wheel: 0, dist: 0 };
     // The horizon on screen, and what's on it: its width in its own numbers, low or not, its own sign, where the bus came from.
@@ -168,8 +167,6 @@ export function PullToRefresh({ enabled, refresh, colours }) {
     let modeAt = 0;
     let result = null;
     let shownAt = 0;
-    let loop = [];
-    let next = 0;
     let smoke = [];
     let smokeIn = 0;
     let frame = 0;
@@ -212,8 +209,6 @@ export function PullToRefresh({ enabled, refresh, colours }) {
       Object.assign(st, { page: 'drag', mode: 'follow', v: 0, busV: 0, tilt: 0, tiltV: 0, kneel: 0, kneelV: 0, smV: 0, smA: 0 });
       st.x = st.lastX = calm ? stopAt(vw) : busAt(st.pull, from, vw);
       paint(colour);
-      loop = props.current.colours().filter((c) => c.toLowerCase() !== colour?.toLowerCase());
-      next = 0;
       smoke = [];
       say('pull');
       run();
@@ -295,14 +290,9 @@ export function PullToRefresh({ enabled, refresh, colours }) {
           if (st.mode === 'go') st.busV += 900 * dt;
           st.x += st.busV * dt;
           if (st.x > vw + 20) {
-            // Off the right edge: another service comes round while it's still checking, else the horizon's own coming back.
-            if (st.page === 'hold' && !shownAt) {
-              paint(loop.length ? loop[next++ % loop.length] : hz.colour);
-              Object.assign(st, { mode: 'loop', x: OFF_LEFT, lastX: OFF_LEFT, busV: 340 });
-            } else {
-              paint(hz.colour);
-              Object.assign(st, { mode: 'back', x: OFF_LEFT - 10, lastX: OFF_LEFT - 10, busV: 0 });
-            }
+            // Off the right edge: the same bus round again while it's still checking, else coming back to its place.
+            if (st.page === 'hold' && !shownAt) Object.assign(st, { mode: 'loop', x: OFF_LEFT, lastX: OFF_LEFT, busV: 340 });
+            else Object.assign(st, { mode: 'back', x: OFF_LEFT - 10, lastX: OFF_LEFT - 10, busV: 0 });
           }
         } else if (st.mode === 'back') {
           // Eases in to its place, from off the left.
