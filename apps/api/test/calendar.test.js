@@ -50,6 +50,14 @@ test('public holidays are flagged', () => {
   assert.equal(termDay(at('2026-08-11'), CAL).holiday, null);
 });
 
+test("NUS's own days off count as holidays, whatever the calendar lists", () => {
+  // Well-Being Day: in data/nus-days.json, not in CAL or MOM's list.
+  assert.equal(termDay(at('2026-10-09'), CAL).holiday, 'Well-Being Day');
+  assert.equal(termDay(at('2026-10-09'), { ...CAL, holidays: [] }).holiday, 'Well-Being Day');
+  assert.equal(importedClassRuns(undefined, SEM1, at('2026-10-09'), CAL), false);
+  assert.equal(importedClassRuns(undefined, SEM1, at('2026-10-08'), CAL), true);
+});
+
 test('a week 3-13 lab does not run in weeks 1-2, recess or exams', () => {
   const weeks = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
   assert.equal(importedClassRuns(weeks, SEM1, at('2026-08-14'), CAL), false, 'week 1');

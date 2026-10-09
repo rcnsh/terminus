@@ -256,7 +256,11 @@ Per-user trips come from the account (`/me/next`): a NUSMods timetable
 imported with `POST /me/import`, plus classes entered by hand. Imported classes only
 count in the weeks they run ([src/calendar.ts](../src/calendar.ts), built from
 NUSMods' semester dates and MOM's public holidays by
-`scripts/fetch_calendar.py`). [`src/config.ts`](../src/config.ts) holds the cache
+`scripts/fetch_calendar.py`). NUS's own days off, such as Well-Being Days,
+aren't in either source: they're kept by hand in `data/nus-days.json` (add
+one when NUS announces it, then deploy) and count as public holidays, so
+classes don't run and the shuttles keep Sunday/PH hours. Neither the scrape
+nor the cron's merge touches that file. [`src/config.ts`](../src/config.ts) holds the cache
 TTLs and tuning constants.
 
 The profile is one JSON document per account, with a version (`updated`,

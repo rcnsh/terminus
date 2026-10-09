@@ -261,6 +261,7 @@ apps/api/
                       public.json (public buses), calendar.json, walks.json,
                       venues/rooms/landmarks/residences; hand-kept: service-hours.json,
                       opposites.json (stops across the road the scrape can't pair),
+                      nus-days.json (NUS's days off, e.g. Well-Being Days: holiday hours),
                       src/venue-stops.json (the stops students use for a building,
                       where the map's nearest is wrong; then run walk_routes.py)
   migrations/         D1 schema, numbered NNNN_name.sql
