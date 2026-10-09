@@ -61,22 +61,35 @@ if CommandLine.arguments.count > 2 {
     icon(180, to: "\(web)/apple-touch-icon.png")
 }
 
-// Feature graphic: the mark, the wordmark and the promise.
-render(1024, 500, to: "\(out)/feature-graphic.png") {
-    bg.setFill()
-    NSRect(x: 0, y: 0, width: 1024, height: 500).fill()
-    drawMark(at: CGPoint(x: 96, y: 150), unit: 3.1, height: 500)
+// Feature graphic: the mark, the wordmark, the promise, and that it's
+// unofficial, since NUS's name is on it in large type. Play shows one per
+// listing language, so there's an English and a Chinese one.
+func feature(_ promise: String, _ note: String, to path: String) {
+    render(1024, 500, to: path) {
+        bg.setFill()
+        NSRect(x: 0, y: 0, width: 1024, height: 500).fill()
+        drawMark(at: CGPoint(x: 96, y: 140), unit: 3.1, height: 500)
 
-    let word = NSMutableAttributedString(string: "terminus", attributes: [
-        .font: NSFont.systemFont(ofSize: 104, weight: .bold), .foregroundColor: paper, .kern: -2,
-    ])
-    word.addAttribute(.foregroundColor, value: orange, range: NSRange(location: 5, length: 3))
-    word.draw(at: NSPoint(x: 360, y: 500 - 118 - 124))
+        let word = NSMutableAttributedString(string: "terminus", attributes: [
+            .font: NSFont.systemFont(ofSize: 104, weight: .bold), .foregroundColor: paper, .kern: -2,
+        ])
+        word.addAttribute(.foregroundColor, value: orange, range: NSRange(location: 5, length: 3))
+        word.draw(at: NSPoint(x: 360, y: 500 - 104 - 124))
 
-    let para = NSMutableParagraphStyle()
-    para.lineSpacing = 6
-    let line = NSAttributedString(string: "When to leave for class,\nand which bus to catch.", attributes: [
-        .font: NSFont.systemFont(ofSize: 38, weight: .medium), .foregroundColor: muted, .paragraphStyle: para,
-    ])
-    line.draw(in: NSRect(x: 364, y: 500 - 262 - 110, width: 620, height: 110))
+        let para = NSMutableParagraphStyle()
+        para.lineSpacing = 6
+        let line = NSAttributedString(string: promise, attributes: [
+            .font: NSFont.systemFont(ofSize: 38, weight: .medium), .foregroundColor: muted, .paragraphStyle: para,
+        ])
+        line.draw(in: NSRect(x: 364, y: 500 - 248 - 110, width: 640, height: 110))
+
+        let small = NSAttributedString(string: note, attributes: [
+            .font: NSFont.systemFont(ofSize: 22, weight: .regular), .foregroundColor: muted.withAlphaComponent(0.6),
+        ])
+        small.draw(at: NSPoint(x: 366, y: 500 - 372 - 30))
+    }
 }
+feature("When to leave for class,\nand which NUS shuttle to catch.", "Unofficial · not affiliated with NUS",
+        to: "\(out)/feature-graphic.png")
+feature("什么时候出发上课，\n该搭哪班 NUS 校园巴士。", "非官方应用 · 与 NUS 无关联",
+        to: "\(out)/feature-graphic-zh.png")
