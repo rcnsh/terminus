@@ -97,6 +97,7 @@ enum Snapshots {
         renderGoldens(to: dir)
         renderMapStatus(to: dir)
         renderBusCards(to: dir)
+        renderStopCards(to: dir)
         for (name, m) in cases {
             for (scheme, bg) in [(ColorScheme.dark, Color(white: 0.16)), (.light, Color(white: 0.95))] {
                 let view = Popover(model: m, startShown: true)
@@ -170,16 +171,54 @@ enum Snapshots {
         var stopped = LiveBus(id: "b", lat: 1.29, lon: 103.77, moving: false, crowd: "high", nextStop: "BIZ 2", plate: "PD726D", at: "COM 3")
         stopped.upcoming = ["BIZ 2", "PGP"]
         stopped.towards = "Kent Ridge MRT"
-        let cards: [(String, LiveBus, String, Bool)] = [("between", moving, "D1", false), ("between-open", moving, "D1", true), ("at-open", stopped, "A1", true)]
-        for (name, bus, svc, open) in cards {
+        // Every stop named on the cards, so each row opens its stop (and shows its chevron).
+        let names = Set(ahead + ["CLB", "COM 3"])
+        let campus = CampusMap(stops: names.sorted().map { MapStop(code: $0, name: $0, lat: 1.29, lon: 103.77, services: ["A1", "D1"]) }, routes: [:], core: names)
+        let cards: [(String, LiveBus, String, Bool, Bool)] = [("between", moving, "D1", false, false), ("between-open", moving, "D1", true, false), ("between-all", moving, "D1", true, true), ("at-open", stopped, "A1", true, false)]
+        for (name, bus, svc, open, all) in cards {
             for (scheme, bg) in [(ColorScheme.dark, Color(white: 0.16)), (.light, Color(white: 0.85))] {
                 let hex = svc == "D1" ? "#C93BA4" : "#E0362F"
-                let view = BusCard(bus: bus, svc: svc, hex: hex, close: {}, open: open)
+                let stop = MapStop(code: "X", name: bus.at ?? bus.nextStop ?? "", lat: 1.29, lon: 103.77, services: [svc])
+                let view = BusCard(bus: bus, svc: svc, hex: hex, stop: stop, campus: campus, close: {}, open: open, all: all)
                     .frame(width: 320)
                     .padding(16)
                     .background(bg)
                     .environment(\.colorScheme, scheme)
-                write(view, scale: 2, to: dir, as: "map-bus-\(name)-\(scheme == .dark ? "dark" : "light")")
+                writeHosted(view, scale: 2, to: dir, as: "map-bus-\(name)-\(scheme == .dark ? "dark" : "light")")
+            }
+        }
+        // Every stop ahead in a short window: the stops scroll, "Show …" stays in view.
+        for (scheme, bg) in [(ColorScheme.dark, Color(white: 0.16)), (.light, Color(white: 0.85))] {
+            let stop = MapStop(code: "X", name: "LT 13", lat: 1.29, lon: 103.77, services: ["D1"])
+            let view = BusCard(bus: moving, svc: "D1", hex: "#C93BA4", stop: stop, campus: campus, close: {}, open: true, all: true)
+                .frame(width: 320, height: 300, alignment: .bottom)
+                .padding(16)
+                .background(bg)
+                .environment(\.colorScheme, scheme)
+            writeHosted(view, scale: 2, to: dir, as: "map-bus-between-short-\(scheme == .dark ? "dark" : "light")")
+        }
+    }
+
+    /// A clicked stop's card: with times, waiting for them, and with none due.
+    static func renderStopCards(to dir: String) {
+        let stop = MapStop(code: "YIH", name: "YIH", lat: 1.2988, lon: 103.7745, services: ["A1", "D1", "D2"], longName: "Yusof Ishak House")
+        let colors = ["A1": "#E0362F", "D1": "#C93BA4", "D2": "#6F3FB5"]
+        let campus = CampusMap(stops: [stop], routes: colors.mapValues { MapRoute(svc: "", color: $0, line: []) }, core: ["YIH"])
+        let app = AppModel(snapshot: true)
+        let rows = [BoardRow(svc: "A1", etaS: 60, quality: "live", eta: "1 min"), BoardRow(svc: "D1", etaS: 360, quality: "live", eta: "6 min"), BoardRow(svc: "D2", etaS: 840, quality: "scheduled", eta: "~14 min")]
+        // "picked": D1's line picked on the map, so its row is washed in its colour.
+        let cases: [(String, StopBoard?, String?)] = [("times", StopBoard(available: true, rows: rows), nil), ("picked", StopBoard(available: true, rows: rows), "D1"), ("none", StopBoard(available: true, rows: []), nil)]
+        for (name, board, picked) in cases {
+            let map = MapModel()
+            map.board = board
+            map.selected = picked
+            for (scheme, bg) in [(ColorScheme.dark, Color(white: 0.16)), (.light, Color(white: 0.85))] {
+                let view = StopCard(stop: stop, map: map, campus: campus, app: app)
+                    .frame(width: 320)
+                    .padding(16)
+                    .background(bg)
+                    .environment(\.colorScheme, scheme)
+                writeHosted(view, scale: 2, to: dir, as: "map-stop-\(name)-\(scheme == .dark ? "dark" : "light")")
             }
         }
     }
@@ -242,6 +281,24 @@ enum Snapshots {
                 .environment(\.colorScheme, scheme)
             write(view, scale: 3, to: dir, as: "showcase-\(scheme == .dark ? "dark" : "light")")
         }
+    }
+
+    /// `view` as `dir/name.png` drawn in a window, as AppKit draws it: the
+    /// buttons and scroll views `ImageRenderer` leaves as placeholders. The
+    /// window isn't key, so an accent button is drawn grey, as in a window
+    /// behind others.
+    private static func writeHosted(_ view: some View, scale: CGFloat, to dir: String, as name: String) {
+        let host = NSHostingView(rootView: view)
+        let size = host.fittingSize
+        host.frame = NSRect(origin: .zero, size: size)
+        let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView = host
+        host.layoutSubtreeIfNeeded()
+        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width * scale), pixelsHigh: Int(size.height * scale), bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { return }
+        rep.size = size
+        host.cacheDisplay(in: host.bounds, to: rep)
+        guard let png = rep.representation(using: .png, properties: [:]) else { return }
+        try? png.write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(name).png"))
     }
 
     /// `view` as `dir/name.png`; nothing if it can't be drawn.

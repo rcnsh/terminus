@@ -239,6 +239,13 @@ button.bt-row { cursor: pointer; }
 @media (hover: hover) { button.bt-row:hover { background: var(--surface-2); } }
 button.bt-row:focus-visible { outline-offset: -2px; }
 .bt-row.soon { background: var(--accent-soft); }
+/* A row that opens its line's page (the Buses tab): a chevron at its end says so. */
+.bt-row.go { grid-template-columns: auto minmax(0, 1fr) auto auto; grid-template-areas: "chip dir big go" "meta meta then go"; padding-inline-end: 8px; }
+.bt-go { grid-area: go; align-self: center; width: 20px; height: 20px; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.bt-go:dir(rtl) { transform: scaleX(-1); }
+/* On the map, the row of the line picked there: a wash of its colour, as its pill is pressed. */
+.bt-row.picked { background: color-mix(in srgb, var(--svc) 16%, transparent); }
+@media (hover: hover) { button.bt-row.picked:hover { background: color-mix(in srgb, var(--svc) 22%, transparent); } }
 /* Times that couldn't be refreshed: counted down, but faded so they don't pass for live. */
 .bt-row.old .bt-big, .bt-row.old .bt-then { opacity: 0.55; }
 .bt-chip { grid-area: chip; align-self: start; min-width: 46px; height: 32px; font: 700 0.95rem/1 var(--display); border-radius: 9px; }
@@ -271,7 +278,7 @@ button.bt-row:focus-visible { outline-offset: -2px; }
 .bt-chip.muted { background: color-mix(in srgb, var(--svc) 30%, var(--surface-2)); color: var(--ink); }
 .bt-row.stopped .bt-big.none { color: var(--muted); font-weight: 600; }
 /* No minutes after it: its line takes the row's width. */
-.bt-row.stopped .bt-meta { grid-column: 1 / -1; color: var(--muted); }
+.bt-row.stopped .bt-meta { grid-column: meta-start / then-end; color: var(--muted); }
 .bt-stopped-note { display: grid; gap: 2px; margin: 12px 0 0; padding: 10px 14px; border-radius: 12px; background: var(--surface-2); color: var(--muted); font-size: 0.85rem; }
 .bt-stopped-note span:first-child { color: var(--ink); font-weight: 600; font-size: 0.95rem; }
 
@@ -382,21 +389,21 @@ body.on-map > .nav, body.on-map #tab-now { display: none; }
   position: absolute;
   inset: auto 0 0 0;
   max-height: 62%;
-  overflow-y: auto;
-  padding: 16px 16px 18px;
+  /* The part above the footer scrolls (.sheet-scroll); the footer stays in view. */
+  overflow: hidden;
   background: var(--surface);
   border-radius: 18px 18px 0 0;
   box-shadow: 0 -2px 16px rgb(0 0 0 / 0.16);
   /* Over MapLibre's controls (z-index 2). */
   z-index: 3;
-  display: grid;
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
 }
 .map-sheet[hidden] { display: none; }
 /* A short window (a phone on its side, or zoomed in a long way): the sheet
    leaves more of the map, and MapLibre's buttons stay above it. */
 @media (max-height: 420px) {
-  .map-sheet { max-height: 50%; padding: 10px 14px 12px; gap: 8px; }
+  .map-sheet { max-height: 50%; }
   /* The buttons side by side, not stacked: they fit between the pills and the sheet. */
   .map .maplibregl-ctrl-bottom-right { display: flex; align-items: flex-end; }
   /* With the sheet open there's room for one: Back to campus (the keys and a pinch still zoom). */
@@ -408,17 +415,37 @@ body.on-map > .nav, body.on-map #tab-now { display: none; }
 @media (min-width: 700px) {
   .map-sheet { inset: auto auto 16px 16px; width: 360px; border-radius: 18px; max-height: calc(100% - 96px); }
 }
-.sheet-head { display: flex; align-items: start; justify-content: space-between; gap: 8px; }
+.sheet-head { display: flex; align-items: center; gap: 12px; padding: 0 10px 0 16px; }
 .sheet-head h2 { margin: 0; font: 600 1.15rem/1.25 var(--display); }
 .sheet-head .hint { margin: 2px 0 0; font-size: 0.85rem; }
 .sheet-titles { flex: 1; min-width: 0; }
 /* A bus's number plate, like the plate on the bus. */
 .map-sheet .plate { display: inline-block; padding: 1px 7px; border: 1px solid var(--line-strong); border-radius: 5px; font: 600 0.78rem/1.5 ui-monospace, Menlo, Consolas, monospace; letter-spacing: 0.05em; color: var(--muted); }
-.sheet-close { flex: none; width: 36px; height: 36px; margin: -6px -6px 0 0; border: 0; border-radius: 50%; background: var(--surface-2); color: var(--ink); font-size: 1.2rem; line-height: 1; cursor: pointer; }
-/* A bus: its service as a pill by the title, a handle to drag the stop list open. */
-.sheet-head .bus-svc { flex: none; min-width: 2.4em; padding: 6px 10px; border-radius: 10px; font: 700 1.25rem/1.15 var(--display); }
-.sheet-grab { justify-self: center; width: 56px; height: 20px; margin: -12px 0 -14px; cursor: grab; touch-action: none; position: relative; }
-.sheet-grab::before { content: ""; position: absolute; left: 10px; right: 10px; top: 7px; height: 4px; border-radius: 2px; background: var(--line-strong); opacity: 0.6; }
+.sheet-close { flex: none; width: 36px; height: 36px; border: 0; border-radius: 50%; background: var(--surface-2); color: var(--ink); font-size: 1.2rem; line-height: 1; cursor: pointer; }
+/* The tile that leads the header, the same size for a stop as for a bus:
+   a bus's service on its colour, a stop's pin on grey. */
+.sheet-tile { flex: none; display: grid; place-items: center; width: 48px; height: 48px; border-radius: 12px; }
+.sheet-tile.bus-svc { background: var(--svc); color: var(--svc-ink); font: 800 1.25rem/1 var(--display); white-space: nowrap; }
+.sheet-tile.stop-tile { background: var(--line); color: var(--ink); }
+.stop-tile svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
+/* The grab handle; a bus's drags its stop list open. */
+.sheet-grab { flex: none; height: 20px; position: relative; }
+.sheet-grab.live { cursor: grab; touch-action: none; }
+.sheet-grab::before { content: ""; position: absolute; left: calc(50% - 18px); width: 36px; top: 8px; height: 4px; border-radius: 2px; background: var(--line-strong); opacity: 0.6; }
+.sheet-facts { padding: 10px 16px 0; }
+.sheet-scroll { flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.sheet-body { margin-top: 12px; }
+.sheet-scroll:last-child .sheet-body { padding-bottom: 16px; }
+/* A grey band, edge to edge, naming what's under it; a bus's opens and closes its stops. */
+.sheet-band { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 44px; margin: 0; padding: 0 16px; border: 0; border-radius: 0; background: var(--surface-2); color: var(--muted); font: 600 0.875rem/1.2 var(--font); text-align: left; }
+button.sheet-band { cursor: pointer; }
+button.sheet-band:focus-visible { outline-offset: -2px; }
+.sheet-band .chev { flex: none; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform 0.15s; }
+.sheet-band[aria-expanded="true"] .chev { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .sheet-band .chev { transition: none; } }
+.sheet-note { display: grid; gap: 12px; padding: 16px; }
+.sheet-foot { flex: none; padding: 12px 16px; border-top: 1px solid var(--line); }
+.sheet-foot .hint { flex-basis: 100%; margin: 0; }
 .bus-info { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; font-size: 0.85rem; color: var(--muted); }
 .bus-moving, .bus-crowd { display: inline-flex; align-items: center; gap: 6px; }
 .bus-moving .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
@@ -431,25 +458,30 @@ body.on-map > .nav, body.on-map #tab-now { display: none; }
 .bus-crowd.low .bars i:nth-child(-n + 1) { background: var(--good); }
 .bus-crowd.medium .bars i:nth-child(-n + 2) { background: var(--warn); }
 .bus-crowd.high .bars i { background: var(--bad); }
-.bus-ahead { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 9px 12px; border: 0; border-radius: 10px; background: var(--surface-2); color: var(--ink); font: 600 0.9rem/1.2 var(--font); cursor: pointer; }
-.bus-ahead .chev { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform 0.15s; }
-.bus-ahead[aria-expanded="true"] .chev { transform: rotate(180deg); }
-@media (prefers-reduced-motion: reduce) { .bus-ahead .chev { transition: none; } }
 /* The stops ahead on a rail in the route's colour, grey up to the bus. */
-.bus-strip { list-style: none; margin: 0; padding: 0; }
-.bus-stop { display: grid; grid-template-columns: 24px 1fr auto; align-items: center; gap: 10px; min-height: 30px; }
+.bus-strip { list-style: none; margin: 0; padding: 6px 0; }
+/* Each stop's row is a button opening that stop, edge to edge, tall enough to tap; a chevron at its end says so. */
+.bus-stop .bus-row { display: grid; grid-template-columns: 24px 1fr auto; align-items: center; gap: 10px; width: 100%; min-height: 40px; margin: 0; padding: 0 16px; border: 0; border-radius: 0; background: none; color: inherit; font: inherit; text-align: start; }
+button.bus-row { cursor: pointer; }
+button.bus-row:hover { background: var(--surface-2); }
+button.bus-row:focus-visible { outline-offset: -2px; }
+.bus-row .go { width: 18px; height: 18px; fill: none; stroke: var(--faint); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.bus-row .go:dir(rtl) { transform: scaleX(-1); }
 .bus-stop .rail { position: relative; align-self: stretch; display: grid; place-items: center; }
 .bus-stop .rail::before { content: ""; position: absolute; top: 0; bottom: 0; left: calc(50% - 1.5px); width: 3px; background: linear-gradient(var(--top) 50%, var(--bottom) 50%); }
 .bus-stop .dot { position: relative; width: 10px; height: 10px; box-sizing: border-box; border-radius: 50%; border: 2.5px solid var(--svc); background: var(--surface); }
 .bus-stop .marker { position: relative; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--svc); box-shadow: 0 0 0 2px #fff, 0 0 0 3px rgb(0 0 0 / 0.15); }
 .bus-stop .marker svg { width: 12px; height: 12px; fill: none; stroke: var(--svc-ink); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
-.bus-stop .tag { font-size: 0.8rem; color: var(--muted); }
-.bus-stop.passed .name, .bus-stop.passed .tag { color: var(--faint); }
+.bus-stop.passed .name { color: var(--faint); }
 .bus-stop.passed .dot { border-color: var(--line-strong); }
-.bus-stop.bus .name, .bus-stop.more .name { font-size: 0.85rem; color: var(--muted); }
-.bus-stop.next .name { font-weight: 700; font-size: 1.05rem; }
-.bus-stop.next .tag, .bus-stop.here .tag { font-weight: 600; color: var(--ink); }
-.bus-stop.here .name { font-weight: 700; }
+.bus-stop.bus .bus-row { min-height: 30px; }
+.bus-stop.bus .name { font-size: 0.85rem; color: var(--muted); }
+/* Where the bus is and where it's going next, bold on a taller row. */
+.bus-stop.next .bus-row, .bus-stop.here .bus-row { min-height: 44px; }
+.bus-stop.next .name, .bus-stop.here .name { font-weight: 700; font-size: 1.05rem; }
+/* More stops beyond the last shown: the line fading out, the button under it shows them. */
+.bus-stop.fade { display: grid; grid-template-columns: 24px; min-height: 16px; padding-inline: 16px; }
+.bus-stop.fade .rail::before { background: linear-gradient(color-mix(in srgb, var(--svc) 35%, transparent), transparent); }
 .svc-tag {
   display: inline-flex;
   align-items: center;
@@ -476,7 +508,7 @@ button.svc-tag { cursor: pointer; }
 .sheet-actions .btn.icon.on svg { fill: var(--accent); color: var(--accent); }
 .sheet-actions .btn.icon.on:disabled { opacity: 1; }
 /* The Buses tab's board, smaller: rows edge to edge in the sheet, the time beside the words. */
-.sheet-board { margin: 0 -16px; border-block: 1px solid var(--line); }
+.sheet-board { margin: 0; }
 .sheet-board .bt-row { padding: 10px 16px; gap: 3px 12px; }
 .sheet-board .bt-chip { min-width: 40px; height: 26px; font-size: 0.85rem; border-radius: 7px; }
 .sheet-board .bt-dir { font-size: 0.9rem; }
@@ -484,8 +516,19 @@ button.svc-tag { cursor: pointer; }
 .sheet-board .bt-big.now { font-size: 1.15rem; }
 .sheet-board .bt-meta { padding-left: 52px; font-size: 0.75rem; }
 .sheet-board .bt-then { font-size: 0.78rem; }
-.sheet-more { justify-self: start; margin: -4px 0 0; padding: 6px 0; border: 0; background: none; color: var(--accent); font: 600 0.875rem var(--font); cursor: pointer; }
-@media (max-height: 420px) { .sheet-board { margin-inline: -14px; } .sheet-board .bt-row { padding-inline: 14px; } }
+.sheet-more { display: block; width: 100%; margin: 0; padding: 10px 16px; border: 0; border-top: 1px solid var(--line); background: none; text-align: left; color: var(--accent); font: 600 0.875rem var(--font); cursor: pointer; }
+/* A short window: the sheet's parts closer together (after the rules they tighten). */
+@media (max-height: 420px) {
+  .sheet-grab { height: 14px; }
+  .sheet-grab::before { top: 5px; }
+  .sheet-head { padding-left: 14px; }
+  .sheet-facts { padding: 6px 14px 0; }
+  .sheet-body { margin-top: 8px; }
+  .sheet-band, .bus-stop .bus-row, .bus-stop.fade, .sheet-note, .sheet-more { padding-inline: 14px; }
+  .sheet-note { padding-block: 10px; }
+  .sheet-foot { padding: 8px 14px; }
+  .sheet-board .bt-row { padding-inline: 14px; }
+}
 .bus-line { display: flex; align-items: center; gap: 10px; }
 
 /* MapLibre's own controls, in the app's colours. */

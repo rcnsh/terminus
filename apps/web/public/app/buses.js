@@ -362,7 +362,7 @@ function Board({ code }) {
   const ending = b.board.filter((r) => r.endsAt && Date.parse(r.endsAt) > now && Date.parse(r.endsAt) - now <= ENDS_SOON_MS);
   return html`
     ${b.board.length
-      ? html`<div class="card bt-board">${b.board.map((r) => html`<${Row} key=${r.svc} r=${aged(r, b.got, now)} now=${now} onPick=${(svc) => go(lineHash(svc, code))} />`)}</div>`
+      ? html`<div class="card bt-board">${b.board.map((r) => html`<${Row} key=${r.svc} r=${aged(r, b.got, now)} now=${now} chevron onPick=${(svc) => go(lineHash(svc, code))} />`)}</div>`
       : html`<p class="hint bt-empty">${b.available ? t('No buses due') : t('No times right now')}</p>`}
     <div class="bt-foot">
       <div class="bt-ends">${ending.map((r) => html`<div key=${r.svc}><${Chip} svc=${r.svc} color=${r.color} cls="small" /> ${t('Runs until {0}', clock(r.endsAt))}</div>`)}</div>
