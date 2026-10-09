@@ -28,9 +28,10 @@
 # with a commit from
 #   git ls-remote https://github.com/protomaps/basemaps-assets HEAD
 # The fonts and icons keep their paths, and the edge and browsers keep them
-# for 30 days (map.ts, edgeFile), so a changed font or icon isn't seen until
-# then: purge the zone's cache after uploading one, or move the icons to a
-# new folder (sprites/v5, with SPRITES in map.ts).
+# for 30 days by URL (map.ts, edgeFile), as do the apps' map caches, so a
+# changed font or icon isn't seen until then. With changed fonts, bump
+# GLYPHS in map.ts (the style's glyphs URL ends ?v=) and deploy after
+# uploading; move changed icons to a new folder (sprites/v5, with SPRITES).
 #
 # Each site reads the map from its own downloads bucket (cloudflare.config.ts).
 # A couple of times a year is plenty: it only picks up new buildings and

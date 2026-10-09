@@ -29,6 +29,12 @@ import { cacheBase } from './edgecache.ts';
 const PREFIX = 'map/';
 const TILES = 'campus.pmtiles';
 const SPRITES = 'v4';
+/**
+ * The glyphs' version, in the style's glyphs URL. Bumped when the fonts on
+ * R2 change (v2 filled in Chinese), so the edge, the apps and browsers,
+ * which keep a range for 30 days by its URL, ask for the new one.
+ */
+const GLYPHS = '2';
 /** The file covers this, and the map doesn't pan past it. [west, south, east, north] */
 export const MAP_BOUNDS = [103.755, 1.28, 103.83, 1.332] as const;
 const ATTRIBUTION = '<a href="https://www.openstreetmap.org/copyright">© OpenStreetMap</a> · <a href="https://protomaps.com">Protomaps</a>';
@@ -56,7 +62,7 @@ export function mapStyle(origin: string, theme: Theme, lang: 'en' | 'zh'): Recor
   return {
     version: 8,
     name: `terminus ${theme}`,
-    glyphs: `${origin}/map/fonts/{fontstack}/{range}.pbf`,
+    glyphs: `${origin}/map/fonts/{fontstack}/{range}.pbf?v=${GLYPHS}`,
     sprite: `${origin}/map/sprites/${SPRITES}/${theme}`,
     sources: {
       protomaps: {
@@ -102,10 +108,14 @@ export async function handleMap(req: Request, url: URL, env: Env, ctx?: Executio
     return json({ error: 'not found' }, 404);
   }
   // Fonts and icons never change at their path (a new set of icons gets a
-  // new folder, as v4 is), so they're kept by path alone.
-  const file = (key: string, type: string) => edgeFile(req, env.DOWNLOADS!, key, type, 30 * 86400, mayRead, ctx);
+  // new folder, as v4 is; new fonts a new ?v=), so they're kept by path alone.
+  const file = (key: string, type: string, cacheAs = key) => edgeFile(req, env.DOWNLOADS!, key, cacheAs, type, 30 * 86400, mayRead, ctx);
   const font = FONT.exec(decoded);
-  if (font && glyphRange(font[2])) return file(`${PREFIX}fonts/${font[1]}/${font[2]}.pbf`, 'application/x-protobuf');
+  if (font && glyphRange(font[2])) {
+    const key = `${PREFIX}fonts/${font[1]}/${font[2]}.pbf`;
+    // Any other v is the old URL, so a made-up one can't fill the cache.
+    return file(key, 'application/x-protobuf', url.searchParams.get('v') === GLYPHS ? `${key}?v=${GLYPHS}` : key);
+  }
 
   const sprite = SPRITE.exec(path);
   if (sprite) return file(`${PREFIX}sprites/${SPRITES}/${sprite[1]}${sprite[2] ?? ''}.${sprite[3]}`, sprite[3] === 'png' ? 'image/png' : 'application/json');
@@ -306,7 +316,8 @@ async function edgePart(
 
 /**
  * A file that never changes at its path (a font range, an icon sheet),
- * through the edge cache by path alone, with its ETag kept beside it: no
+ * through the edge cache by path alone (cacheAs, which names a version
+ * when the URL does), with its ETag kept beside it: no
  * look at R2 for what the cache has. A range, or a condition other than
  * If-None-Match (MapLibre sends neither for these), R2 answers.
  */
@@ -314,6 +325,7 @@ async function edgeFile(
   req: Request,
   bucket: R2Bucket,
   key: string,
+  cacheAs: string,
   type: string,
   maxAgeS: number,
   mayRead: () => Promise<boolean>,
@@ -322,7 +334,7 @@ async function edgeFile(
   const cache = typeof caches === 'undefined' ? null : caches.default;
   const fromR2 = async () => ((await mayRead()) ? servePart(req, bucket, key, type, maxAgeS) : slowDown());
   if (!cache || req.headers.has('range') || otherConditions(req)) return fromR2();
-  const id = new Request(`${cacheBase()}/map/file/${encodeURIComponent(key)}`);
+  const id = new Request(`${cacheBase()}/map/file/${encodeURIComponent(cacheAs)}`);
   const hit = await cache.match(id).catch(() => undefined);
   const etag = hit?.headers.get('etag');
   const size = hit?.headers.get('content-length');
