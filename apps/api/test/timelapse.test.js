@@ -903,6 +903,11 @@ test('a reading further on than a bus can drive is a jump: out at one place, in 
   const late = placeAt(track, path, FROZEN_NOW + 22_500);
   assert.equal(late.along, 3_000);
   assert.ok(Math.abs(late.alpha - 0.5) < 1e-9);
+  // Still out the whole way through: the count doesn't blink to none.
+  for (const t of [7_500, 14_000, 15_000, 16_000, 22_500]) assert.deepEqual(countBySvc(busesAt(day, FROZEN_NOW + t)), { D2: 1 }, `at +${t} ms`);
+  // A gap is a real absence: none out in the middle of it.
+  const gap = oneBus([[0, 500], [5 * 60_000, 700]]);
+  assert.deepEqual(countBySvc(busesAt(gap, FROZEN_NOW + 2.5 * 60_000)), {});
 });
 
 test("start and end times on the day's timeline: after midnight is the next morning", () => {

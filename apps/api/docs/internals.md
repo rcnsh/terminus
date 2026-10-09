@@ -1851,8 +1851,10 @@ read it with the same module. Between two readings a bus moves along its
 route line from one `along` to the next (forward past the end of a loop),
 not in a straight line. Readings more than 2 minutes apart are not joined:
 the bus fades out after the first and in before the next. A reading
-further on than a bus could have driven fades out and in too. After its
-last reading a bus stays for one poll, then fades. The page draws the map
+further on than a bus could have driven fades out and in too, but stays
+in the count of buses out throughout (`countBySvc`), so a service with
+one bus out doesn't blink to none at every jump (a one-way route's end).
+After its last reading a bus stays for one poll, then fades. The page draws the map
 at the video's exact size with `preserveDrawingBuffer` and no label fades.
 For each frame it sets the time, gives the buses' GeoJSON source their
 places, waits for the map's `idle`, and draws the map and the overlay
