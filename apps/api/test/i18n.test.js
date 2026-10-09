@@ -24,9 +24,9 @@ test('Accept-Language: the first supported language by preference', () => {
 });
 
 test('?lang= wins over the header; the profile wins over both', () => {
-  const req = new Request('https://x.test/next?lang=en', { headers: { 'accept-language': 'zh-CN' } });
+  const req = new Request('https://x.test/api/next?lang=en', { headers: { 'accept-language': 'zh-CN' } });
   assert.equal(langOfRequest(req), 'en');
-  assert.equal(langOfRequest(new Request('https://x.test/next', { headers: { 'accept-language': 'zh-CN' } })), 'zh');
+  assert.equal(langOfRequest(new Request('https://x.test/api/next', { headers: { 'accept-language': 'zh-CN' } })), 'zh');
   // The website's choice, for the pages the Worker serves itself.
   assert.equal(langOfRequest(new Request('https://x.test/auth/verify', { headers: { 'accept-language': 'en', cookie: 'a=1; terminus-lang=zh' } })), 'zh');
   withLang('en', () => {

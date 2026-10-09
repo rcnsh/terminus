@@ -250,7 +250,7 @@ async function refreshNow(timed) {
     const params = { ...(to.kind === 'place' ? { place: to.key } : to.kind === 'stop' ? { to: to.to } : {}), ...at };
     // Today gets the location too: its next class is planned from here, as the card is.
     const askDay = !timed || !lastPlan || Date.now() - planAt >= DAY_MS;
-    const [nextR, dayR] = await Promise.allSettled([get(`/me/next${query(params)}`), askDay ? get(`/me/day${query(at ?? {})}`) : Promise.resolve(lastPlan)]);
+    const [nextR, dayR] = await Promise.allSettled([get(`/api/me/next${query(params)}`), askDay ? get(`/api/me/day${query(at ?? {})}`) : Promise.resolve(lastPlan)]);
     if (mine !== generation) return;
     if (nextR.status === 'rejected' && nextR.reason?.message === 'signed out') return;
     const next = nextR.status === 'fulfilled' ? nextR.value : null;
@@ -372,7 +372,7 @@ async function refreshNearby(mine) {
   if (mine !== generation) return;
   if (!at) return card.set({ text: t('Allow location for this site to see the buses near you.') });
   try {
-    const { data } = await get(`/me/nearby${query(at)}`);
+    const { data } = await get(`/api/me/nearby${query(at)}`);
     if (mine !== generation) return;
     stale(null);
     fetchedAt = Date.now();
@@ -551,7 +551,7 @@ async function openSettings() {
   if (s.status === 'loading') return;
   settings.set({ status: 'loading', mod: null });
   try {
-    if (!me.get()) me.set((await get('/me')).data);
+    if (!me.get()) me.set((await get('/api/me')).data);
     // settings-pages.js too, at once: otherwise it's found only once settings.js arrives.
     const [mod] = await Promise.all([import('/account/settings.js'), import('/account/settings-pages.js'), loadProfile(), loadCampus()]);
     settings.set({ status: 'ready', mod });
@@ -585,7 +585,7 @@ function b64urlBytes(s) {
 /** Subscribes this browser (asking first if needed) and tells the server where to push. */
 async function subscribe() {
   const reg = await navigator.serviceWorker.ready;
-  const { key } = await api('/me/push/key');
+  const { key } = await api('/api/me/push/key');
   let sub = await reg.pushManager.getSubscription();
   // A subscription made with another server key can't be pushed to: make a new one.
   const was = sub?.options?.applicationServerKey;
@@ -594,7 +594,7 @@ async function subscribe() {
     sub = null;
   }
   sub ??= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64urlBytes(key) });
-  await api('/me/push', { method: 'POST', body: { subscription: sub.toJSON() } });
+  await api('/api/me/push', { method: 'POST', body: { subscription: sub.toJSON() } });
   // Ask for the card again now there's somewhere to push: a trip object that
   // woke before this found no one to tell, and waits for a request to watch again.
   refresh();
@@ -603,7 +603,7 @@ async function subscribe() {
 async function unsubscribe() {
   const reg = await navigator.serviceWorker.ready;
   await (await reg.pushManager.getSubscription())?.unsubscribe();
-  await api('/me/push', { method: 'DELETE' }).catch(() => {});
+  await api('/api/me/push', { method: 'DELETE' }).catch(() => {});
 }
 
 /**
@@ -963,7 +963,7 @@ const ALERT = '<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5v.01"/
 
 /**
  * Somewhere other than the plan: going there later, today or on one of the
- * next two days, planned like a class (POST /me/once). Settings' own rows:
+ * next two days, planned like a class (POST /api/me/once). Settings' own rows:
  * the day as pills, the time as a stepper in five minutes whose middle is
  * the browser's own time picker. A time already past is the server's to
  * refuse, and its message shows above the buttons.
@@ -1025,7 +1025,7 @@ function GoLater() {
     const where = to.kind === 'place' ? { place: to.key } : { to: to.to, label: to.label };
     setSending(true);
     try {
-      const a = await api(`/me/once${query()}`, { method: 'POST', body: { ...where, atMin: at, date } });
+      const a = await api(`/api/me/once${query()}`, { method: 'POST', body: { ...where, atMin: at, date } });
       target.set({ kind: 'plan' });
       card.set({ a });
       refresh();
@@ -1269,7 +1269,7 @@ async function start() {
   // the same token, so the card's requests sent with it are still good.
   // Offline it comes from the cache like everything else, or not at all.
   try {
-    me.set((await get('/me')).data);
+    me.set((await get('/api/me')).data);
   } catch (err) {
     if (err.message === 'signed out') return;
   }

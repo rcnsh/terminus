@@ -42,7 +42,7 @@ const page = store({ view: 'loading', me: null, adding: false, error: null });
 const set = (patch) => page.set((s) => ({ ...s, ...patch }));
 
 async function signOut() {
-  await api('/auth/logout', { method: 'POST' }).catch(() => {});
+  await api('/api/auth/logout', { method: 'POST' }).catch(() => {});
   await forgetAccountHere();
   location.reload();
 }
@@ -62,7 +62,7 @@ function useTurnstile(box) {
   useEffect(() => {
     let gone = false;
     (async () => {
-      const { turnstileSiteKey } = await api('/auth/config').catch(() => ({}));
+      const { turnstileSiteKey } = await api('/api/auth/config').catch(() => ({}));
       if (!turnstileSiteKey || gone) return;
       if (!window.turnstile) {
         await new Promise((resolve, reject) => {
@@ -117,7 +117,7 @@ function SignIn({ adding }) {
     setBusy(true);
     try {
       // From the web app: the emailed link brings them back to it too.
-      await api('/auth/login', { method: 'POST', body: { email: email.trim(), turnstile: turnstile.token.current, ...(NEXT ? { next: NEXT } : {}) } });
+      await api('/api/auth/login', { method: 'POST', body: { email: email.trim(), turnstile: turnstile.token.current, ...(NEXT ? { next: NEXT } : {}) } });
       setCode('');
       setCodeError('');
       setStep('sent');
@@ -133,7 +133,7 @@ function SignIn({ adding }) {
     setCodeError('');
     setBusy(true);
     try {
-      await api('/auth/code', { method: 'POST', body: { email: email.trim(), code: value } });
+      await api('/api/auth/code', { method: 'POST', body: { email: email.trim(), code: value } });
       // The session cookie is set; start over as signed in.
       location.reload();
     } catch (err) {
@@ -148,7 +148,7 @@ function SignIn({ adding }) {
     setError('');
     setBusy(true);
     try {
-      await api('/auth/anon/web', { method: 'POST', body: { turnstile: turnstile.token.current } });
+      await api('/api/auth/anon/web', { method: 'POST', body: { turnstile: turnstile.token.current } });
       // The session cookie is set; start over, which sets up first.
       location.reload();
     } catch (err) {
@@ -283,7 +283,7 @@ function Preview({ me }) {
   const saved = useStore(saves);
   const load = async () => {
     try {
-      const answer = await api(`/me/next${hour12() ? '?h12=1' : ''}`);
+      const answer = await api(`/api/me/next${hour12() ? '?h12=1' : ''}`);
       if (answer?.walkSpeedMs) walkSpeed.set(answer.walkSpeedMs);
       setA(answer);
       setFailed(false);
@@ -360,7 +360,7 @@ function afterSetup() {
 async function start() {
   let me;
   try {
-    me = await api('/me');
+    me = await api('/api/me');
   } catch (err) {
     if (err.status === 401) {
       // Signed out, or deleted, elsewhere: what this browser kept of it goes.

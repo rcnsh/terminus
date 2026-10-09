@@ -17,7 +17,7 @@ import java.net.URLEncoder
 
 data class Place(val key: String, val label: String)
 
-/** `/me/next`. label and detail are display-ready; show them verbatim. */
+/** `/api/me/next`. label and detail are display-ready; show them verbatim. */
 data class NextAnswer(
     val label: String,
     val detail: String,
@@ -534,7 +534,7 @@ data class CardAction(val id: String, val label: String, val trip: String) {
     }
 }
 
-/** `/me/day`: today's timeline. */
+/** `/api/me/day`: today's timeline. */
 data class DayItem(
     val kind: String,
     val key: String,
@@ -745,34 +745,34 @@ class Api(private val token: String?, private val fast: Boolean = false, private
 
     suspend fun pair(code: String, name: String): String {
         val body = JSONObject().put("code", code).put("name", name)
-        return parsing { request("POST", "/pair", body).getString("token") }
+        return parsing { request("POST", "/api/pair", body).getString("token") }
     }
 
     /** First launch: an account with no email, so the app works before any sign-in. */
     suspend fun anon(name: String): String =
-        parsing { request("POST", "/auth/anon", JSONObject().put("name", name).put("platform", "android")).getString("token") }
+        parsing { request("POST", "/api/auth/anon", JSONObject().put("name", name).put("platform", "android")).getString("token") }
 
-    suspend fun me(): Me = Me.parse(request("GET", "/me"))
+    suspend fun me(): Me = Me.parse(request("GET", "/api/me"))
 
     /** The whole profile as the server keeps it; edited and sent back whole. */
-    suspend fun profile(): JSONObject = request("GET", "/me/profile")
+    suspend fun profile(): JSONObject = request("GET", "/api/me/profile")
 
-    suspend fun saveProfile(profile: JSONObject): JSONObject = request("PUT", "/me/profile", profile)
+    suspend fun saveProfile(profile: JSONObject): JSONObject = request("PUT", "/api/me/profile", profile)
 
     /** Imports a NUSMods share link; the server replaces the imported classes only if it all worked. */
-    suspend fun import(share: String): ImportResult = parsing { ImportResult.parse(request("POST", "/me/import", JSONObject().put("share", share))) }
+    suspend fun import(share: String): ImportResult = parsing { ImportResult.parse(request("POST", "/api/me/import", JSONObject().put("share", share))) }
 
     /** Stops and residences, for the home and place pickers. */
-    suspend fun campus(): Campus = Campus.parse(request("GET", "/campus"))
+    suspend fun campus(): Campus = Campus.parse(request("GET", "/api/campus"))
 
     /**
-     * `/campus` as it came, with its ETag, for the map (MapData), which keeps
+     * `/api/campus` as it came, with its ETag, for the map (MapData), which keeps
      * a copy for offline. Null when [etag] says the kept copy is still current.
      */
     suspend fun campusJson(etag: String? = null): Pair<JSONObject, String?>? {
         var tag: String? = null
         val json = try {
-            request("GET", "/campus", ifNoneMatch = etag) { tag = it.getHeaderField("etag") }
+            request("GET", "/api/campus", ifNoneMatch = etag) { tag = it.getHeaderField("etag") }
         } catch (e: NotModified) {
             return null
         }
@@ -780,7 +780,7 @@ class Api(private val token: String?, private val fast: Boolean = false, private
     }
 
     /** One service's live buses, for the map. */
-    suspend fun buses(svc: String): BusList = parsing { BusList.parse(request("GET", "/buses?svc=${enc(svc)}")) }
+    suspend fun buses(svc: String): BusList = parsing { BusList.parse(request("GET", "/api/buses?svc=${enc(svc)}")) }
 
     /**
      * What's coming at one stop, for the Buses tab and the map's stop sheet:
@@ -789,39 +789,39 @@ class Api(private val token: String?, private val fast: Boolean = false, private
      * (the profile's `publicBuses`).
      */
     suspend fun board(stop: String, public: Boolean = false): Board =
-        parsing { Board.parse(request("GET", "/arrivals?stop=${enc(stop)}&stopped=1" + if (public) "&public=1" else "")) }
+        parsing { Board.parse(request("GET", "/api/arrivals?stop=${enc(stop)}&stopped=1" + if (public) "&public=1" else "")) }
 
     /** One service's whole line; with [stop], that stop's board row for it too. */
     suspend fun line(svc: String, stop: String? = null): Line =
-        parsing { Line.parse(request("GET", "/line?svc=${enc(svc)}" + (stop?.let { "&stop=${enc(it)}" } ?: ""))) }
+        parsing { Line.parse(request("GET", "/api/line?svc=${enc(svc)}" + (stop?.let { "&stop=${enc(it)}" } ?: ""))) }
 
     /** Starts a sign-in approved from the email; send it with this device's anonymous token to keep its setup. */
     suspend fun signInStart(email: String, name: String): SignInRequest {
-        val o = request("POST", "/auth/app/start", JSONObject().put("email", email).put("name", name))
+        val o = request("POST", "/api/auth/app/start", JSONObject().put("email", email).put("name", name))
         return parsing { SignInRequest(o.getString("request"), o.getString("poll"), o.getInt("match")) }
     }
 
     suspend fun signInPoll(r: SignInRequest): SignInPoll {
-        val o = request("POST", "/auth/app/poll", JSONObject().put("request", r.request).put("poll", r.poll))
+        val o = request("POST", "/api/auth/app/poll", JSONObject().put("request", r.request).put("poll", r.poll))
         return parsing { SignInPoll(o.getString("status"), o.optStringOrNull("token"), o.optStringOrNull("email"), o.optStringOrNull("outcome")) }
     }
 
     /** The code from the email, typed here. A wrong one throws with the server's message. */
     suspend fun signInCode(r: SignInRequest, code: String): SignInPoll {
-        val o = request("POST", "/auth/app/code", JSONObject().put("request", r.request).put("poll", r.poll).put("code", code))
+        val o = request("POST", "/api/auth/app/code", JSONObject().put("request", r.request).put("poll", r.poll).put("code", code))
         return parsing { SignInPoll(o.getString("status"), o.optStringOrNull("token"), o.optStringOrNull("email"), o.optStringOrNull("outcome")) }
     }
 
     /** After a "choose" outcome: which setup to keep. `anon` is the device's old token. */
     suspend fun merge(anon: String, keepDevice: Boolean) {
-        request("POST", "/auth/app/merge", JSONObject().put("anon", anon).put("keep", if (keepDevice) "device" else "account"))
+        request("POST", "/api/auth/app/merge", JSONObject().put("anon", anon).put("keep", if (keepDevice) "device" else "account"))
     }
 
     /** A code another device can pair with (accounts with an email only). */
-    suspend fun pairCode(): String = parsing { request("POST", "/me/pair-code", JSONObject()).getString("code") }
+    suspend fun pairCode(): String = parsing { request("POST", "/api/me/pair-code", JSONObject()).getString("code") }
 
     suspend fun devices(): List<Device> {
-        val o = request("GET", "/me/devices")
+        val o = request("GET", "/api/me/devices")
         return parsing {
             val list = o.getJSONArray("devices")
             (0 until list.length()).map {
@@ -835,12 +835,12 @@ class Api(private val token: String?, private val fast: Boolean = false, private
     }
 
     suspend fun removeDevice(id: String) {
-        request("DELETE", "/me/devices/${enc(id)}")
+        request("DELETE", "/api/me/devices/${enc(id)}")
     }
 
     /** Only for an account with no email: one with an email is deleted from the account page. */
     suspend fun deleteAccount() {
-        request("DELETE", "/me")
+        request("DELETE", "/api/me")
     }
 
     suspend fun next(target: Target, lat: Double?, lon: Double?, acc: Double? = null): NextAnswer =
@@ -862,7 +862,7 @@ class Api(private val token: String?, private val fast: Boolean = false, private
             // The card's clock times, in this phone's 12- or 24-hour style.
             if (hour12) add("h12=1")
         }
-        return request("GET", "/me/next" + query(q))
+        return request("GET", "/api/me/next" + query(q))
     }
 
     suspend fun nearby(lat: Double?, lon: Double?, acc: Double? = null): List<NearbyStop> = parseNearby(nearbyJson(lat, lon, acc))
@@ -871,11 +871,11 @@ class Api(private val token: String?, private val fast: Boolean = false, private
     suspend fun nearbyJson(lat: Double?, lon: Double?, acc: Double? = null, stopped: Boolean = false): JSONObject {
         val q = (if (lat != null && lon != null) listOfNotNull("lat=${coord(lat)}", "lon=${coord(lon)}", acc?.let { "acc=${Math.round(it)}" }) else emptyList()) +
             listOfNotNull("stopped=1".takeIf { stopped })
-        return request("GET", "/me/nearby" + query(q))
+        return request("GET", "/api/me/nearby" + query(q))
     }
 
     suspend fun destinations(): List<Destination> {
-        val o = request("GET", "/campus")
+        val o = request("GET", "/api/campus")
         return parsing {
             val list = o.getJSONArray("destinations")
             (0 until list.length()).map { parseDestination(list.getJSONObject(it)) }
@@ -886,7 +886,7 @@ class Api(private val token: String?, private val fast: Boolean = false, private
     suspend fun signal(kind: String, trip: String?): JSONObject {
         val body = JSONObject().put("kind", kind)
         trip?.let { body.put("trip", it) }
-        return request("POST", "/me/signal" + if (hour12) "?h12=1" else "", body)
+        return request("POST", "/api/me/signal" + if (hour12) "?h12=1" else "", body)
     }
 
     /** A one-off trip later today: planned like a class. Answers with the new /me/next. */
@@ -897,17 +897,17 @@ class Api(private val token: String?, private val fast: Boolean = false, private
             is Target.Code -> body.put("to", target.code).put("label", target.label)
             Target.Plan -> {}
         }
-        return request("POST", "/me/once" + if (hour12) "?h12=1" else "", body)
+        return request("POST", "/api/me/once" + if (hour12) "?h12=1" else "", body)
     }
 
     /** This phone's Firebase token, so the server can say when the card changes. */
     suspend fun registerPush(token: String) {
-        request("POST", "/me/push", JSONObject().put("token", token))
+        request("POST", "/api/me/push", JSONObject().put("token", token))
     }
 
     /** No more pushes to this session: nothing on the phone would show them. */
     suspend fun unregisterPush() {
-        request("DELETE", "/me/push")
+        request("DELETE", "/api/me/push")
     }
 
     /** A suggestion accepted or turned down (`id`), or a choice undone (`trip` and `pref`). */
@@ -916,7 +916,7 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         id?.let { body.put("id", it) }
         trip?.let { body.put("trip", it) }
         pref?.let { body.put("pref", it) }
-        return parseChoices(request("POST", "/me/choice", body))
+        return parseChoices(request("POST", "/api/me/choice", body))
     }
 
     /**
@@ -924,20 +924,20 @@ class Api(private val token: String?, private val fast: Boolean = false, private
      * one), or null when there's none: for a push that says only `kind: term`.
      */
     suspend fun notice(): Map<String, String>? {
-        val n = request("GET", "/me/notice").optJSONObject("notice") ?: return null
+        val n = request("GET", "/api/me/notice").optJSONObject("notice") ?: return null
         // Only the fields sent: a missing one is absent, not "".
         return listOf("title", "body", "zhTitle", "zhBody").mapNotNull { k -> n.optStringOrNull(k)?.let { k to it } }.toMap()
     }
 
     /** Classes with a bus earlier or no reminders, and how many trips are remembered. */
     suspend fun choices(): Pair<List<TripChoice>, Int> {
-        val o = request("GET", "/me/choices")
+        val o = request("GET", "/api/me/choices")
         return parseChoices(o) to o.optInt("history", 0)
     }
 
     /** "Clear trip history": forgets how each trip went; choices stay. */
     suspend fun clearHistory() {
-        request("DELETE", "/me/history")
+        request("DELETE", "/api/me/history")
     }
 
     private fun parseChoices(o: JSONObject): List<TripChoice> = parsing {
@@ -961,12 +961,12 @@ class Api(private val token: String?, private val fast: Boolean = false, private
             }
             if (hour12) add("h12=1")
         }
-        return request("GET", "/me/day" + if (q.isEmpty()) "" else "?" + q.joinToString("&"))
+        return request("GET", "/api/me/day" + if (q.isEmpty()) "" else "?" + q.joinToString("&"))
     }
 
     /** Whose account a pairing code belongs to (masked), without spending it. */
     suspend fun pairCheck(code: String): String =
-        parsing { request("POST", "/pair/check", JSONObject().put("code", code)).getString("account") }
+        parsing { request("POST", "/api/pair/check", JSONObject().put("code", code)).getString("account") }
 
     /** The released version, from /download/latest.json. */
     suspend fun latestVersion(): String = parsing { request("GET", "/download/latest.json").getString("version") }
@@ -979,21 +979,21 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         val body = JSONObject().put("kind", "wrong").put("note", note).put("platform", "android").put("appVersion", appVersion)
         reason?.let { body.put("reason", it) }
         answer?.let { body.put("context", it) }
-        request("POST", "/me/feedback", body)
+        request("POST", "/api/me/feedback", body)
     }
 
     /** Send feedback: a note about anything, emailed to the operator like "Is this wrong?". Needs an account with an email. */
     suspend fun feedback(note: String, appVersion: String) {
         val body = JSONObject().put("kind", "other").put("note", note).put("platform", "android").put("appVersion", appVersion)
-        request("POST", "/me/feedback", body)
+        request("POST", "/api/me/feedback", body)
     }
 
     /** Download my data: everything the account holds, as the account page gives it. */
-    suspend fun export(): JSONObject = request("GET", "/me/export")
+    suspend fun export(): JSONObject = request("GET", "/api/me/export")
 
     /** Ends this device's session on the server. */
     suspend fun logout() {
-        request("POST", "/auth/logout", JSONObject())
+        request("POST", "/api/auth/logout", JSONObject())
     }
 
     private suspend fun request(
@@ -1167,7 +1167,7 @@ object Quiet {
     /** How long a polling loop waits before asking again, at least: a 429's wait or a 503's. */
     fun waitMs(): Long = maxOf(remainingMs(), laterElapsed - elapsed(), 0)
 
-    internal fun auth(path: String) = path.startsWith("/auth/") || path.startsWith("/pair") || path.startsWith("/me/pair-code")
+    internal fun auth(path: String) = path.startsWith("/api/auth/") || path.startsWith("/api/pair") || path.startsWith("/api/me/pair-code")
 
     /** For tests. */
     internal fun reset() {
@@ -1208,20 +1208,20 @@ object Outdated {
 
     /**
      * Whether the server refuses this request to an outdated app, as
-     * apps/api checks it: an account's routes (`/me…`) and the answers it
+     * apps/api checks it: an account's routes (`/api/me…`) and the answers it
      * asks with its token (KEYED in index.ts). Not signing in or out
-     * (`/auth/…`, `/pair…`), the released version (`/download/…`), nor
+     * (`/api/auth/…`, `/api/pair…`), the released version (`/download/…`), nor
      * taking the device off pushes or deleting the account
-     * (`DELETE /me/push`, `DELETE /me`).
+     * (`DELETE /api/me/push`, `DELETE /api/me`).
      */
     fun gated(method: String, path: String): Boolean {
         val p = path.substringBefore('?')
-        if (method == "DELETE" && (p == "/me" || p == "/me/push")) return false
-        return p == "/me" || p.startsWith("/me/") || p in ANSWERS
+        if (method == "DELETE" && (p == "/api/me" || p == "/api/me/push")) return false
+        return p == "/api/me" || p.startsWith("/api/me/") || p in ANSWERS
     }
 
     /** The bus answers the server refuses an outdated app (KEYED in apps/api/src/index.ts). */
-    private val ANSWERS = setOf("/next", "/trip", "/arrivals", "/buses", "/line", "/campus", "/stops/pairs")
+    private val ANSWERS = setOf("/api/next", "/api/trip", "/api/arrivals", "/api/buses", "/api/line", "/api/campus", "/api/stops/pairs")
 
     fun refused() {
         at = wall()
@@ -1243,7 +1243,7 @@ object Outdated {
 /** `x-terminus-client`: platform and version. */
 val CLIENT = "android/${BuildConfig.VERSION_NAME}"
 
-/** `/me`: who this device is signed in as. */
+/** `/api/me`: who this device is signed in as. */
 data class Me(val email: String?, val anonymous: Boolean, val needsSetup: Boolean, val needsReimport: Boolean = false, val term: String? = null) {
     companion object {
         fun parse(o: JSONObject) = Me(
@@ -1300,7 +1300,7 @@ data class Campus(val stops: List<Stop>, val residences: List<Residence>, val de
     }
 }
 
-/** `/me/import`: what was found, what couldn't be placed, and for which semester. */
+/** `/api/me/import`: what was found, what couldn't be placed, and for which semester. */
 /** An imported class whose room couldn't be placed: the person picks its stop, or skips it. */
 data class Unplaced(val module: String, val venue: String, val day: Int, val arriveByMin: Int, val endMin: Int?, val offCampus: Boolean)
 

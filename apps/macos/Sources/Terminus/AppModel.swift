@@ -41,7 +41,7 @@ final class AppModel {
     private var signInTask: Task<Void, Never>?
     private var signInRequest: SignInRequest?
 
-    /// Started without an email (`/auth/anon`): an account of its own for this
+    /// Started without an email (`/api/auth/anon`): an account of its own for this
     /// Mac, as the phone's first launch. Adding an email keeps or merges it.
     var anonymous = UserDefaults.standard.bool(forKey: "anonymous") {
         didSet { UserDefaults.standard.set(anonymous, forKey: "anonymous") }

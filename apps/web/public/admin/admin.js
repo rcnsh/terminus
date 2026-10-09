@@ -40,7 +40,7 @@ async function load() {
   const t = memory ?? token();
   if (!t) return view.set({ locked: true, msg: '', stats: null, note: '' });
   // Given up on after a while: a hung call would leave old stats up with no word of it.
-  const res = await fetch('/admin/stats', { headers: { 'x-health-token': t }, cache: 'no-store', signal: AbortSignal.timeout?.(20_000) }).catch(() => null);
+  const res = await fetch('/api/admin/stats', { headers: { 'x-health-token': t }, cache: 'no-store', signal: AbortSignal.timeout?.(20_000) }).catch(() => null);
   if (!res) return view.set((v) => ({ ...v, note: "Couldn't reach terminus." }));
   if (res.status === 404) {
     forget();

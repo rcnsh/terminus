@@ -5,7 +5,7 @@ import { errorText } from './i18n.ts';
 
 /**
  * Open to any origin, with the headers the API reads: an API key (x-api-key)
- * or a token, and if-match on PUT /me/profile. A page on another origin
+ * or a token, and if-match on PUT /api/me/profile. A page on another origin
  * sees only safelisted response headers unless they are exposed: the
  * profile's etag (sent back as if-match) and a 429's retry-after.
  */

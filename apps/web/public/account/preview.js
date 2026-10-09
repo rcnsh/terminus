@@ -92,7 +92,7 @@ function SayCard({ a }) {
 }
 
 /** Sends a card's button (Not going, Undo, …) and returns the answer that comes back. */
-export const signal = (body) => api(`/me/signal${hour12() ? '?h12=1' : ''}`, { method: 'POST', body });
+export const signal = (body) => api(`/api/me/signal${hour12() ? '?h12=1' : ''}`, { method: 'POST', body });
 
 /**
  * "Leave by 6:36" and, under it, the one countdown on the card ("in 8 min"),
@@ -219,7 +219,7 @@ function Suggestion({ a, onChoice }) {
   const s = a.card?.suggestion ?? null;
   if (!s) return null;
   const choose = (choice) => async () => {
-    await api('/me/choice', { method: 'POST', body: { id: s.id, choice } });
+    await api('/api/me/choice', { method: 'POST', body: { id: s.id, choice } });
     // Settings lists the choices made.
     lists.set((n) => n + 1);
     onChoice?.();
@@ -396,7 +396,7 @@ export function Report({ answer, anonymous = false, email = null, onAddEmail = (
     setSending(true);
     setMsg('');
     try {
-      await api('/me/feedback', {
+      await api('/api/me/feedback', {
         method: 'POST',
         body: { kind: 'wrong', reason: reason ?? undefined, note: note.trim(), platform: 'web', context: reported ?? undefined },
       });

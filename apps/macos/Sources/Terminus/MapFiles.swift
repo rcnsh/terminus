@@ -1,7 +1,7 @@
 import Foundation
 
 /// What the map keeps on the Mac so it works offline after the first look:
-/// the stops and routes (`/campus`), the map's style in each theme and
+/// the stops and routes (`/api/campus`), the map's style in each theme and
 /// language used, and the whole campus map file (about 3 MB). MapLibre
 /// doesn't cache PMTiles it streams, so the file is downloaded once, checked
 /// weekly for a newer one, and read from disk (`pmtiles://file://…`); until
@@ -27,12 +27,12 @@ enum MapFiles {
         return d
     }
 
-    /// `/campus`: from the network, kept; the kept copy without a connection.
+    /// `/api/campus`: from the network, kept; the kept copy without a connection.
     /// A refusal (signed out, or this version too old) isn't hidden by the kept copy.
     static func campus(token: String?) async throws -> CampusMap? {
         let file = dir.appendingPathComponent("campus.json")
         do {
-            let data = try await get("/campus", token: token)
+            let data = try await get("/api/campus", token: token)
             if let map = CampusMap.parse(data) {
                 try? data.write(to: file)
                 return map

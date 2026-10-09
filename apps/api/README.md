@@ -4,10 +4,10 @@ The Cloudflare Worker behind terminus. It reads the NUS shuttle feed, works out
 which bus you should catch, and serves the answer to every client. It also
 serves the website in [`apps/web`](../web).
 
-- **Answers:** `/me/next` (the widget's one call) and `/me/nearby`, plus the
-  keyed routes `/next`, `/trip`, `/arrivals`, `/buses`, `/line`, `/campus` and
-  `/stops/pairs` (an API key or a signed-in session). Docs at [terminus.run/docs](https://terminus.run/docs).
-- **The campus map:** `/campus` (stops, and routes along the roads), `/buses`
+- **Answers:** `/api/me/next` (the widget's one call) and `/api/me/nearby`, plus the
+  keyed routes `/api/next`, `/api/trip`, `/api/arrivals`, `/api/buses`, `/api/line`, `/api/campus` and
+  `/api/stops/pairs` (an API key or a signed-in session). Docs at [terminus.run/docs](https://terminus.run/docs).
+- **The campus map:** `/api/campus` (stops, and routes along the roads), `/api/buses`
   (a service's live buses) and `/map/*` (the street map, its style, fonts and
   icons from R2).
 - **Accounts:** sign-in by emailed code or link, device pairing, profiles in D1.

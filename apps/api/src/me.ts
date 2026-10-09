@@ -390,7 +390,7 @@ async function plateAt(env: Env, ctx: ExecutionContext, deps: MeDeps, stopCode: 
 export const ME_ROUTES: MeRoute[] = [
   {
     method: 'DELETE',
-    path: '/me',
+    path: '/api/me',
     // From the account page; an anonymous account has no page, so its app can.
     run: async ({ env, db, session }) => {
       if (session.kind !== 'web' && session.user.email !== null) return json({ error: 'delete the account from the account page' }, 403);
@@ -402,7 +402,7 @@ export const ME_ROUTES: MeRoute[] = [
   },
   {
     method: 'GET',
-    path: '/me/export',
+    path: '/api/me/export',
     run: async ({ env, db, session, nowMs }) => {
       return json(await exportAccount(db, session.user, await loadDay(env, session.user.id, nowMs)), 200, {
         'content-disposition': 'attachment; filename="terminus-export.json"',
@@ -411,7 +411,7 @@ export const ME_ROUTES: MeRoute[] = [
   },
   {
     method: 'DELETE',
-    path: '/me/sessions',
+    path: '/api/me/sessions',
     access: 'web',
     run: async ({ db, session }) => {
       // Sign out everywhere, including this browser.
@@ -421,7 +421,7 @@ export const ME_ROUTES: MeRoute[] = [
   },
   {
     method: 'GET',
-    path: '/me',
+    path: '/api/me',
     run: async ({ req, nowMs, deps, db, session }) => {
       // Every page load asks /me first: a web session in use keeps going.
       const token = session.kind === 'web' ? tokenFrom(req) : null;
@@ -442,7 +442,7 @@ export const ME_ROUTES: MeRoute[] = [
   },
   {
     method: 'GET',
-    path: '/me/profile',
+    path: '/api/me/profile',
     run: async ({ deps, db, session }) => {
       // The limits ride along, so clients needn't hard-code them; a client
       // that sends the whole profile back sends them too, and they're ignored.
@@ -455,7 +455,7 @@ export const ME_ROUTES: MeRoute[] = [
   },
   {
     method: 'PUT',
-    path: '/me/profile',
+    path: '/api/me/profile',
     run: async ({ req, nowMs, deps, db, session }) => {
       const body = await readJson(req);
       if (!body) return json({ error: 'send the profile as JSON' }, 400);
@@ -474,7 +474,7 @@ export const ME_ROUTES: MeRoute[] = [
   },
   {
     method: 'POST',
-    path: '/me/once',
+    path: '/api/me/once',
     run: async ({ req, url, env, ctx, nowMs, deps, db, session }) => {
       // A one-off trip (phase 8.3): "Science library at 14:00 today". Planned
       // like a class on its day; "Not going" drops it. Answers with /me/next.
@@ -507,7 +507,7 @@ export const ME_ROUTES: MeRoute[] = [
   },
   {
     method: 'POST',
-    path: '/me/import',
+    path: '/api/me/import',
     run: async ({ env, req, nowMs, deps, db, session }) => {
       // Each import can fetch 15 modules from NUSMods: a few a minute per account, not 120.
       if (env.RL_AUTH && !(await env.RL_AUTH.limit({ key: `import:${session.user.id}` })).success) {
@@ -553,7 +553,7 @@ export const ME_ROUTES: MeRoute[] = [
   },
   {
     method: 'POST',
-    path: '/me/pair-code',
+    path: '/api/me/pair-code',
     access: 'email',
     run: async ({ nowMs, db, session }) => {
       return json(await createPairCode(db, session.user.id, nowMs));
@@ -561,14 +561,14 @@ export const ME_ROUTES: MeRoute[] = [
   },
   {
     method: 'GET',
-    path: '/me/keys',
+    path: '/api/me/keys',
     run: async ({ db, session }) => {
       return json({ keys: await listKeys(db, session.user.id) });
     },
   },
   {
     method: 'POST',
-    path: '/me/keys',
+    path: '/api/me/keys',
     access: 'web',
     run: async ({ req, nowMs, db, session }) => {
       // Made on the account page, not from a phone that happens to be paired.
@@ -582,7 +582,7 @@ export const ME_ROUTES: MeRoute[] = [
   },
   {
     method: 'DELETE',
-    path: '/me/keys/',
+    path: '/api/me/keys/',
     access: 'web',
     run: async ({ db, session, rest }) => {
       const ok = await revokeKey(db, session.user.id, rest);
@@ -591,14 +591,14 @@ export const ME_ROUTES: MeRoute[] = [
   },
   {
     method: 'GET',
-    path: '/me/devices',
+    path: '/api/me/devices',
     run: async ({ db, session }) => {
       return json({ devices: await listDevices(db, session.user.id, session.tokenHash) });
     },
   },
   {
     method: 'DELETE',
-    path: '/me/devices/',
+    path: '/api/me/devices/',
     access: 'email',
     run: async ({ db, session, rest }) => {
       const name = await revokeDevice(db, session.user.id, rest);
@@ -608,7 +608,7 @@ export const ME_ROUTES: MeRoute[] = [
   },
   {
     method: 'GET',
-    path: '/me/next',
+    path: '/api/me/next',
     run: async ({ url, env, ctx, nowMs, deps, db, session }) => {
       const profile = await getProfile(db, session.user.id, deps.graph);
       const [day, prefs] = await Promise.all([tripDay(env, session.user.id, profile, nowMs), prefsFor(db, session.user.id, profile, nowMs)]);
@@ -617,7 +617,7 @@ export const ME_ROUTES: MeRoute[] = [
   },
   {
     method: 'GET',
-    path: '/me/day',
+    path: '/api/me/day',
     run: async ({ url, env, ctx, nowMs, deps, db, session }) => {
       const profile = await getProfile(db, session.user.id, deps.graph);
       const [day, prefs] = await Promise.all([tripDay(env, session.user.id, profile, nowMs), prefsFor(db, session.user.id, profile, nowMs)]);
@@ -628,7 +628,7 @@ export const ME_ROUTES: MeRoute[] = [
   },
   {
     method: 'POST',
-    path: '/me/signal',
+    path: '/api/me/signal',
     run: async ({ req, url, env, ctx, nowMs, deps, db, session }) => {
       // "On the D2", "Missed it", "Not going", "I'm there": what
       // actually happened, for every device. Answers with the new /me/next.
@@ -760,7 +760,7 @@ export const ME_ROUTES: MeRoute[] = [
   },
   {
     method: 'POST',
-    path: '/me/push',
+    path: '/api/me/push',
     run: async ({ req, env, db, session }) => {
       // This device's push address: the Trip object nudges it when the card
       // changes. An app sends its Firebase token; the web app its Web Push
@@ -781,7 +781,7 @@ export const ME_ROUTES: MeRoute[] = [
   },
   {
     method: 'GET',
-    path: '/me/push/key',
+    path: '/api/me/push/key',
     run: async ({ env }) => {
       // What the web app subscribes with (applicationServerKey).
       const key = vapidPublicKey(env);
@@ -790,7 +790,7 @@ export const ME_ROUTES: MeRoute[] = [
   },
   {
     method: 'DELETE',
-    path: '/me/push',
+    path: '/api/me/push',
     run: async ({ db, session }) => {
       await setPushToken(db, session.tokenHash, null);
       return json({ ok: true });
@@ -798,7 +798,7 @@ export const ME_ROUTES: MeRoute[] = [
   },
   {
     method: 'POST',
-    path: '/me/choice',
+    path: '/api/me/choice',
     run: async ({ req, nowMs, deps, db, session }) => {
       // A suggestion accepted or turned down ({id, choice}), or an accepted
       // one undone from settings ({trip, pref, choice: 'undo'}).
@@ -820,7 +820,7 @@ export const ME_ROUTES: MeRoute[] = [
   },
   {
     method: 'GET',
-    path: '/me/notice',
+    path: '/api/me/notice',
     // The new semester's reminder, for an app that was pushed only its kind (push.ts).
     run: async ({ db, session, nowMs }) => {
       return json({ notice: termNoticeFor((await loadProfileJson(db, session.user.id)) as Parameters<typeof termNoticeFor>[0], nowMs) });
@@ -828,14 +828,14 @@ export const ME_ROUTES: MeRoute[] = [
   },
   {
     method: 'GET',
-    path: '/me/choices',
+    path: '/api/me/choices',
     run: async ({ db, session }) => {
       return json({ choices: await listPrefs(db, session.user.id), history: await historySize(db, session.user.id) });
     },
   },
   {
     method: 'DELETE',
-    path: '/me/history',
+    path: '/api/me/history',
     run: async ({ db, session }) => {
       // "Clear trip history": the outcomes go, the choices made from them stay.
       const cleared = await clearHistory(db, session.user.id);
@@ -844,7 +844,7 @@ export const ME_ROUTES: MeRoute[] = [
   },
   {
     method: 'POST',
-    path: '/me/feedback',
+    path: '/api/me/feedback',
     run: async ({ req, env, ctx, nowMs, db, session }) => {
       // Anonymous accounts are free to make, so reports come only from a known address.
       const email = session.user.email;
@@ -867,7 +867,7 @@ export const ME_ROUTES: MeRoute[] = [
   },
   {
     method: 'GET',
-    path: '/me/nearby',
+    path: '/api/me/nearby',
     run: async ({ url, env, ctx, nowMs, deps, db, session }) => {
       const profile = await getProfile(db, session.user.id, deps.graph);
       return nearbyFor(url, env, ctx, nowMs, deps, profile);
@@ -882,8 +882,10 @@ async function browserAnon(db: D1Database, req: Request, nowMs: number): Promise
 }
 
 /**
- * Routes under /auth, /pair and /me. Returns null for any other path so the
- * caller can fall through to the public routes.
+ * Routes under /api/auth, /api/pair and /api/me, and the two pages an email
+ * links to (/auth/verify, /auth/approve), which stay outside /api so a link
+ * already sent keeps working. Returns null for any other path so the caller
+ * can fall through to the public routes.
  */
 export async function handleMe(
   req: Request,
@@ -894,9 +896,8 @@ export async function handleMe(
   deps: MeDeps,
 ): Promise<Response | null> {
   const path = url.pathname;
-  // GET /pair is the page the pairing QR code opens (a phone without the
-  // app); only the POST is the API.
-  if (!(path.startsWith('/auth/') || (path === '/pair' && req.method === 'POST') || path === '/pair/check' || path === '/me' || path.startsWith('/me/'))) return null;
+  const emailed = path === '/auth/verify' || path === '/auth/approve';
+  if (!(emailed || path.startsWith('/api/auth/') || path === '/api/pair' || path === '/api/pair/check' || path === '/api/me' || path.startsWith('/api/me/'))) return null;
   const db = env.DB;
   if (!db) return json({ error: 'accounts are not configured' }, 503);
   // Changes made with the browser's session, or that start one, come from our
@@ -907,7 +908,7 @@ export async function handleMe(
   // Apps send no such header; a bearer token isn't sent by a browser on its own.
   const fetchSite = req.headers.get('sec-fetch-site');
   if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS' && fetchSite && fetchSite !== 'same-origin' && fetchSite !== 'none') {
-    const setsSession = path === '/auth/verify' || path === '/auth/approve' || path === '/auth/logout' || path === '/auth/code' || path === '/auth/anon/web';
+    const setsSession = path === '/auth/verify' || path === '/auth/approve' || path === '/api/auth/logout' || path === '/api/auth/code' || path === '/api/auth/anon/web';
     const bearer = req.headers.get('authorization')?.startsWith('Bearer ') || req.headers.has('x-api-key');
     if (setsSession || (!bearer && hasSessionCookie(req))) return json({ error: 'that request came from another site' }, 403);
   }
@@ -915,16 +916,16 @@ export async function handleMe(
   /* ---------- sign-in ---------- */
 
   // Pages and lookups that cost a D1 read but need no session.
-  if ((path === '/auth/verify' || path === '/auth/config') && env.RL_PUBLIC) {
+  if ((path === '/auth/verify' || path === '/api/auth/config') && env.RL_PUBLIC) {
     if (!(await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` })).success) return json({ error: 'too many requests, slow down' }, 429, retryAfter());
   }
 
-  if (path === '/auth/config' && req.method === 'GET') {
+  if (path === '/api/auth/config' && req.method === 'GET') {
     // What the sign-in form needs to render. Public by design.
     return json({ turnstileSiteKey: env.TURNSTILE_SECRET ? (env.TURNSTILE_SITE_KEY ?? null) : null });
   }
 
-  if (path === '/auth/login' && req.method === 'POST') {
+  if (path === '/api/auth/login' && req.method === 'POST') {
     if (await limited(env, req, 'login')) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
     const body = await readJson(req);
     const email = normalizeEmail(body?.email);
@@ -946,7 +947,7 @@ export async function handleMe(
     return json({ ok: true, message: m().checkEmail });
   }
 
-  if (path === '/auth/code' && req.method === 'POST') {
+  if (path === '/api/auth/code' && req.method === 'POST') {
     // The emailed code, typed on the page that asked for it.
     if (await limited(env, req, 'code')) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
     const body = await readJson(req);
@@ -993,7 +994,7 @@ export async function handleMe(
     }
   }
 
-  if (path === '/auth/anon' && req.method === 'POST') {
+  if (path === '/api/auth/anon' && req.method === 'POST') {
     // An app's first launch: an account with no email, so it's useful
     // before any sign-in. Apps can't run Turnstile, so: per IP, one global
     // ceiling, and the cron deletes the ones left unused.
@@ -1006,7 +1007,7 @@ export async function handleMe(
     return json({ token }, 201);
   }
 
-  if (path === '/auth/anon/web' && req.method === 'POST') {
+  if (path === '/api/auth/anon/web' && req.method === 'POST') {
     // "Use terminus without an email" on the website (an iPhone has no app):
     // the same account as an app's first launch, as a web session. A browser
     // can run Turnstile, so it does, on top of the app's limits.
@@ -1023,7 +1024,7 @@ export async function handleMe(
     return json({ ok: true }, 201, { 'set-cookie': sessionCookie(token, ACCOUNT_TTL.webSessionMs / 1000), 'cache-control': 'no-store' });
   }
 
-  if (path === '/auth/app/start' && req.method === 'POST') {
+  if (path === '/api/auth/app/start' && req.method === 'POST') {
     if (await limited(env, req, 'appstart')) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
     const body = await readJson(req);
     const email = normalizeEmail(body?.email);
@@ -1044,16 +1045,16 @@ export async function handleMe(
     return json({ ...started, expires: new Date(started.expires).toISOString() }, 201);
   }
 
-  if ((path === '/auth/app/poll' || path === '/auth/app/code') && req.method === 'POST') {
+  if ((path === '/api/auth/app/poll' || path === '/api/auth/app/code') && req.method === 'POST') {
     // Every 3 seconds while the app is waiting: a per-IP ceiling of its own.
     // A typed code is a guess, so it counts against the sign-in limit too.
     if (env.RL_PUBLIC && !(await env.RL_PUBLIC.limit({ key: `poll:${clientKey(req)}` })).success) {
       return json({ error: 'too many requests, slow down' }, 429, retryAfter(10));
     }
-    if (path === '/auth/app/code' && (await limited(env, req, 'appcode'))) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
+    if (path === '/api/auth/app/code' && (await limited(env, req, 'appcode'))) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
     const body = await readJson(req);
     if (typeof body?.request !== 'string' || typeof body?.poll !== 'string') return json({ error: 'send request and poll' }, 400);
-    if (path === '/auth/app/code') {
+    if (path === '/api/auth/app/code') {
       const code = normalizePairCode(body.code);
       const entered = code ? await enterCode(db, body.request, body.poll, code, nowMs) : 'wrong';
       if (entered === 'wrong') return json({ status: 'pending', error: "that code isn't right; check the email and try again" }, 400);
@@ -1105,7 +1106,7 @@ export async function handleMe(
     }
   }
 
-  if (path === '/pair/check' && req.method === 'POST') {
+  if (path === '/api/pair/check' && req.method === 'POST') {
     // Lets an app show whose account a code belongs to before spending it,
     // so a link someone sent you cannot quietly pair your phone to theirs.
     if (await limited(env, req, 'pair')) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
@@ -1117,7 +1118,7 @@ export async function handleMe(
     return json({ account: maskEmail(owner) });
   }
 
-  if (path === '/pair' && req.method === 'POST') {
+  if (path === '/api/pair' && req.method === 'POST') {
     if (await limited(env, req, 'pair')) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
     if (await pairBusy(env)) return json({ error: 'pairing is busy, try again in a minute' }, 429, retryAfter());
     const body = await readJson(req);
@@ -1135,12 +1136,12 @@ export async function handleMe(
 
   const session = await authenticate(db, req, nowMs, ctx);
 
-  if (path === '/auth/logout' && req.method === 'POST') {
+  if (path === '/api/auth/logout' && req.method === 'POST') {
     if (session) await endSession(db, session.tokenHash);
     return json({ ok: true }, 200, { 'set-cookie': sessionCookie('', 0) });
   }
 
-  if (path === '/auth/app/merge' && req.method === 'POST' && session) {
+  if (path === '/api/auth/app/merge' && req.method === 'POST' && session) {
     // After a sign-in where both the device and the account had a setup.
     const body = await readJson(req);
     const keep = body?.keep === 'device' ? 'device' : body?.keep === 'account' ? 'account' : null;
@@ -1161,7 +1162,7 @@ export async function handleMe(
   // stops asking, rather than breaking on an answer it can't read. It can
   // still take itself off pushes, and delete its account (an anonymous one
   // has no account page), as it can still sign out.
-  const leaving = req.method === 'DELETE' && (path === '/me/push' || path === '/me');
+  const leaving = req.method === 'DELETE' && (path === '/api/me/push' || path === '/api/me');
   if (!leaving && (await clientOutdated(env, req, nowMs))) return json(UPDATE_REQUIRED, 426);
 
   // Per account: generous for a widget, an app and a browser tab together.

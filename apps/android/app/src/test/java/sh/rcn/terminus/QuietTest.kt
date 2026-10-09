@@ -25,34 +25,34 @@ class QuietTest {
     }
 
     @Test fun aSignInLimitHoldsBackOnlySignIn() {
-        Quiet.after("/auth/app/start", "60")
-        assertTrue(Quiet.blocked("/auth/app/poll"))
-        assertTrue(Quiet.blocked("/pair/check"))
+        Quiet.after("/api/auth/app/start", "60")
+        assertTrue(Quiet.blocked("/api/auth/app/poll"))
+        assertTrue(Quiet.blocked("/api/pair/check"))
         // The widget's answers still go out.
-        assertFalse(Quiet.blocked("/me/next"))
+        assertFalse(Quiet.blocked("/api/me/next"))
         assertEquals(0, Quiet.remainingMs())
     }
 
     @Test fun anAppWideLimitHoldsEverythingUntilRetryAfter() {
-        Quiet.after("/me/next", "30")
-        assertTrue(Quiet.blocked("/me/next"))
-        assertTrue(Quiet.blocked("/auth/app/start"))
+        Quiet.after("/api/me/next", "30")
+        assertTrue(Quiet.blocked("/api/me/next"))
+        assertTrue(Quiet.blocked("/api/auth/app/start"))
         assertEquals(30_000, Quiet.remainingMs())
         now += 30_000
-        assertFalse(Quiet.blocked("/me/next"))
+        assertFalse(Quiet.blocked("/api/me/next"))
     }
 
     @Test fun waitsAreCappedAndDefaulted() {
-        Quiet.after("/me/next", "99999")
+        Quiet.after("/api/me/next", "99999")
         assertEquals(300_000, Quiet.remainingMs())
         Quiet.reset()
-        Quiet.after("/me/next", null)
+        Quiet.after("/api/me/next", null)
         assertEquals(60_000, Quiet.remainingMs())
     }
 
     @Test fun a503sRetryAfterSlowsThePollingWithoutBlocking() {
         Quiet.later("30")
-        assertFalse(Quiet.blocked("/me/next"))
+        assertFalse(Quiet.blocked("/api/me/next"))
         assertEquals(30_000, Quiet.waitMs())
         // Without one, nothing changes.
         Quiet.reset()
@@ -75,19 +75,19 @@ class QuietTest {
 
     /** As the server: signing in or out and leaving still go to an outdated app. */
     @Test fun anOutdatedAppCanStillSignOutAndLeave() {
-        assertTrue(Outdated.gated("GET", "/me/next"))
-        assertTrue(Outdated.gated("GET", "/me/next?lat=1.29"))
-        assertTrue(Outdated.gated("POST", "/me/push"))
-        assertTrue(Outdated.gated("GET", "/me"))
-        assertFalse(Outdated.gated("DELETE", "/me/push"))
-        assertFalse(Outdated.gated("DELETE", "/me"))
-        assertFalse(Outdated.gated("POST", "/auth/logout"))
-        assertFalse(Outdated.gated("POST", "/auth/anon"))
-        assertFalse(Outdated.gated("POST", "/pair"))
-        assertFalse(Outdated.gated("POST", "/pair/check"))
+        assertTrue(Outdated.gated("GET", "/api/me/next"))
+        assertTrue(Outdated.gated("GET", "/api/me/next?lat=1.29"))
+        assertTrue(Outdated.gated("POST", "/api/me/push"))
+        assertTrue(Outdated.gated("GET", "/api/me"))
+        assertFalse(Outdated.gated("DELETE", "/api/me/push"))
+        assertFalse(Outdated.gated("DELETE", "/api/me"))
+        assertFalse(Outdated.gated("POST", "/api/auth/logout"))
+        assertFalse(Outdated.gated("POST", "/api/auth/anon"))
+        assertFalse(Outdated.gated("POST", "/api/pair"))
+        assertFalse(Outdated.gated("POST", "/api/pair/check"))
         assertFalse(Outdated.gated("GET", "/download/latest.json"))
-        assertTrue(Outdated.gated("GET", "/campus"))
-        assertTrue(Outdated.gated("GET", "/buses?svc=A1"))
-        assertTrue(Outdated.gated("POST", "/me/pair-code"))
+        assertTrue(Outdated.gated("GET", "/api/campus"))
+        assertTrue(Outdated.gated("GET", "/api/buses?svc=A1"))
+        assertTrue(Outdated.gated("POST", "/api/me/pair-code"))
     }
 }

@@ -151,9 +151,9 @@ test('each address gets its way of fetching, and the live ones are left alone', 
   const SHELL = w.get('SHELL');
   const cases = [
     // The account's replies: the network first, the kept copy without it.
-    ['/me', ['networkFirst', null]],
-    ['/me/next?lat=1.3&lon=103.7&h12=1', ['networkFirst', null]],
-    ['/me/day', ['networkFirst', null]],
+    ['/api/me', ['networkFirst', null]],
+    ['/api/me/next?lat=1.3&lon=103.7&h12=1', ['networkFirst', null]],
+    ['/api/me/day', ['networkFirst', null]],
     // The app's files: from the network, the copy when it's slow.
     ['/app/', ['shellFile', '/app/']],
     ['/app/app.js', ['shellFile', '/app/app.js']],
@@ -165,23 +165,23 @@ test('each address gets its way of fetching, and the live ones are left alone', 
     ['/map/sprites/v4/light.png', ['cacheFirst', null]],
     ['/map/campus.pmtiles', ['tiles', null]],
     ['/app/map.js', ['networkThenKept', null]],
-    ['/campus', ['networkThenKept', null]],
+    ['/api/campus', ['networkThenKept', null]],
     ['/map/style.json', ['networkThenKept', null]],
     // Never kept: live times, other pages, the timelapse's encoder, other sites.
-    ['/arrivals?stop=COM3', null],
-    ['/buses?svc=A1', null],
-    ['/me/nearby', null],
-    ['/line?svc=D1', null],
+    ['/api/arrivals?stop=COM3', null],
+    ['/api/buses?svc=A1', null],
+    ['/api/me/nearby', null],
+    ['/api/line?svc=D1', null],
     ['/account/app.js', null],
     ['/vendor/mediabunny@1.61.3/mediabunny.min.mjs', null],
     ['https://elsewhere.example/app/app.js', null],
   ];
   for (const [path, expected] of cases) assert.deepEqual(way(path), expected, path);
   // Only GETs are kept; a POST to /me/next goes straight through.
-  assert.equal(way('/me/next', { method: 'POST', body: '{}' }), null);
+  assert.equal(way('/api/me/next', { method: 'POST', body: '{}' }), null);
   // Signing in or out goes through the worker, which empties the kept replies.
-  assert.deepEqual(way('/auth/logout', { method: 'POST' }), ['fetch']);
-  assert.equal(way('/auth/logout'), null);
+  assert.deepEqual(way('/api/auth/logout', { method: 'POST' }), ['fetch']);
+  assert.equal(way('/api/auth/logout'), null);
 });
 
 test('soonest: the network when it answers in time, else the kept copy, else the network after all', async () => {
@@ -208,12 +208,12 @@ test('soonest: the network when it answers in time, else the kept copy, else the
   await assert.rejects(ctx.soonest(Promise.reject(new TypeError('offline')), none, event(), wait), { message: 'offline' });
 });
 
-test('/me/next: kept with when it was fetched, and served after SLOW_MS when the network hangs', async () => {
+test('/api/me/next: kept with when it was fetched, and served after SLOW_MS when the network hangs', async () => {
   let answer = () => Promise.resolve(json({ label: 'fresh' }));
   const w = worker({ fetch: (req) => answer(req) });
   const zh = { headers: { 'accept-language': 'zh-Hans' } };
   const before = Date.now();
-  const first = await w.dispatch('/me/next?lat=1.3&lon=103.7', zh).responded;
+  const first = await w.dispatch('/api/me/next?lat=1.3&lon=103.7', zh).responded;
   assert.equal((await first.json()).label, 'fresh');
   assert.equal(first.headers.get('x-terminus-cached'), null, 'the live reply is not marked');
 
@@ -221,7 +221,7 @@ test('/me/next: kept with when it was fetched, and served after SLOW_MS when the
   const hang = held();
   answer = () => hang.promise;
   const started = Date.now();
-  const { responded, waits } = w.dispatch('/me/next?lat=1.31&lon=103.71', zh);
+  const { responded, waits } = w.dispatch('/api/me/next?lat=1.31&lon=103.71', zh);
   const res = await within(responded);
   const took = (Date.now() - started) * SPEED;
   assert.ok(took >= w.get('SLOW_MS') * 0.9, `waited ${took} ms (scaled)`);
@@ -232,49 +232,49 @@ test('/me/next: kept with when it was fetched, and served after SLOW_MS when the
   hang.release(json({ label: 'late' }));
   await within(Promise.all(waits));
   answer = () => Promise.reject(new TypeError('offline'));
-  assert.equal((await (await w.dispatch('/me/next', zh).responded).json()).label, 'late');
+  assert.equal((await (await w.dispatch('/api/me/next', zh).responded).json()).label, 'late');
 });
 
-test('/me/next: one copy per place, stop, clock and language, never one for another', async () => {
+test('/api/me/next: one copy per place, stop, clock and language, never one for another', async () => {
   let n = 0;
   let online = true;
   const w = worker({ fetch: (req) => (online ? Promise.resolve(json({ n: ++n, url: req.url })) : Promise.reject(new TypeError('offline'))) });
   const en = { headers: { 'accept-language': 'en' } };
-  await w.dispatch('/me/next?lat=1.3&lon=103.7&acc=10', en).responded;
-  await w.dispatch('/me/next?to=COM3', en).responded;
+  await w.dispatch('/api/me/next?lat=1.3&lon=103.7&acc=10', en).responded;
+  await w.dispatch('/api/me/next?to=COM3', en).responded;
   online = false;
   // Somewhere else, the same plan: its copy.
-  assert.equal((await (await w.dispatch('/me/next?lat=1.2&lon=103.8', en).responded).json()).n, 1);
+  assert.equal((await (await w.dispatch('/api/me/next?lat=1.2&lon=103.8', en).responded).json()).n, 1);
   // A stop's card never stands in for the plan's, nor the plan's for a stop's.
-  assert.equal((await (await w.dispatch('/me/next?to=COM3&lat=1', en).responded).json()).n, 2);
-  await assert.rejects(w.dispatch('/me/next?to=UTOWN', en).responded);
+  assert.equal((await (await w.dispatch('/api/me/next?to=COM3&lat=1', en).responded).json()).n, 2);
+  await assert.rejects(w.dispatch('/api/me/next?to=UTOWN', en).responded);
   // Another language or clock has no copy.
-  await assert.rejects(w.dispatch('/me/next', { headers: { 'accept-language': 'zh-Hans' } }).responded);
-  await assert.rejects(w.dispatch('/me/next?h12=1', en).responded);
+  await assert.rejects(w.dispatch('/api/me/next', { headers: { 'accept-language': 'zh-Hans' } }).responded);
+  await assert.rejects(w.dispatch('/api/me/next?h12=1', en).responded);
 });
 
-test('/me/next: a server error gives the kept copy; a 401 empties the kept replies', async () => {
+test('/api/me/next: a server error gives the kept copy; a 401 empties the kept replies', async () => {
   let status = 200;
   const w = worker({ fetch: () => Promise.resolve(status === 200 ? json({ ok: 1 }) : json({ error: 'x' }, { status })) });
-  await w.dispatch('/me/next').responded;
+  await w.dispatch('/api/me/next').responded;
   status = 503;
-  const res = await w.dispatch('/me/next').responded;
+  const res = await w.dispatch('/api/me/next').responded;
   assert.equal(res.status, 200);
   assert.ok(res.headers.get('x-terminus-cached'));
   status = 401;
-  assert.equal((await w.dispatch('/me/next').responded).status, 401);
+  assert.equal((await w.dispatch('/api/me/next').responded).status, 401);
   assert.equal(await w.caches.has(w.get('DATA')), false);
 });
 
 test('signing in or out empties the kept replies, and a reply on its way then is not kept', async () => {
-  for (const [method, path] of [['POST', '/auth/logout'], ['POST', '/auth/code'], ['POST', '/auth/verify'], ['POST', '/auth/anon/web'], ['DELETE', '/me/sessions'], ['DELETE', '/me']]) {
+  for (const [method, path] of [['POST', '/api/auth/logout'], ['POST', '/api/auth/code'], ['POST', '/auth/verify'], ['POST', '/api/auth/anon/web'], ['DELETE', '/api/me/sessions'], ['DELETE', '/api/me']]) {
     let hang = null;
-    const w = worker({ fetch: (req) => (hang && req.url.includes('/me/next') ? hang.promise : Promise.resolve(json({ who: 'a' }))) });
-    await w.dispatch('/me/next').responded;
+    const w = worker({ fetch: (req) => (hang && req.url.includes('/api/me/next') ? hang.promise : Promise.resolve(json({ who: 'a' }))) });
+    await w.dispatch('/api/me/next').responded;
     assert.ok(await w.caches.has(w.get('DATA')));
     // A refresh starts, then the account changes before it answers.
     hang = held();
-    const { responded, waits } = w.dispatch('/me/next');
+    const { responded, waits } = w.dispatch('/api/me/next');
     await new Promise((ok) => setImmediate(ok));
     await w.dispatch(path, { method }).responded;
     assert.equal(await w.caches.has(w.get('DATA')), false, `${method} ${path}`);

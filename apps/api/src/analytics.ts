@@ -144,8 +144,9 @@ export function logAnswer(env: Env, input: LogInput): void {
 export function logError(env: Env, path: string): void {
   if (!analyticsEnabled(env)) return;
   try {
-    // /me/devices/abc123 is one route, not one per device.
-    const route = path.split('/').slice(0, 3).join('/') || '/';
+    // /api/me/devices/abc123 is one route, not one per device.
+    const parts = path.split('/');
+    const route = parts.slice(0, parts[1] === 'api' ? 4 : 3).join('/') || '/';
     env.AE!.writeDataPoint({ blobs: ['error', route], doubles: [], indexes: ['error'] });
   } catch {
     // Same rule as above: logging never breaks a response.

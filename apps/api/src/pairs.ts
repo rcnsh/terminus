@@ -1,5 +1,5 @@
 /**
- * GET /stops/pairs -- every stop grouped with its twin across the road, and
+ * GET /api/stops/pairs -- every stop grouped with its twin across the road, and
  * which buses call at each side and where they go next.
  *
  * NUS stops come in directional pairs a few metres apart ("KR MRT" and

@@ -19,22 +19,22 @@ test('a call with no answer gives up after its time, with a sentence to show', a
   // Black-holed Wi-Fi: nothing comes back until the call is aborted.
   globalThis.fetch = (_, init) => new Promise((_, fail) => init.signal.addEventListener('abort', () => fail(init.signal.reason)));
   const started = Date.now();
-  await assert.rejects(send('/me/next', { timeoutMs: 50 }), { message: "Couldn't reach terminus. Check your connection." });
+  await assert.rejects(send('/api/me/next', { timeoutMs: 50 }), { message: "Couldn't reach terminus. Check your connection." });
   assert.ok(Date.now() - started < 2_000);
 });
 
 test('a 200 that is not JSON (a captive portal) is a failure, not an empty answer', async () => {
   globalThis.fetch = reply('<html><body>Sign in to the Wi-Fi</body></html>', { headers: { 'content-type': 'text/html' } });
-  await assert.rejects(api('/me'), { message: "Couldn't reach terminus. Check your connection." });
+  await assert.rejects(api('/api/me'), { message: "Couldn't reach terminus. Check your connection." });
 });
 
 test('JSON and an empty success still come through; an error keeps the server words', async () => {
   globalThis.fetch = reply('{"ok":true}');
-  assert.deepEqual(await api('/me'), { ok: true });
+  assert.deepEqual(await api('/api/me'), { ok: true });
   globalThis.fetch = reply(null, { status: 204 });
-  assert.deepEqual(await api('/me/history', { method: 'DELETE' }), {});
+  assert.deepEqual(await api('/api/me/history', { method: 'DELETE' }), {});
   globalThis.fetch = reply('{"error":"not a valid NUSMods share link"}', { status: 400 });
-  await assert.rejects(api('/me/import', { method: 'POST', body: {} }), { message: 'Not a valid NUSMods share link.', status: 400 });
+  await assert.rejects(api('/api/me/import', { method: 'POST', body: {} }), { message: 'Not a valid NUSMods share link.', status: 400 });
 });
 
 test('a 200 whose body stops part way is a failure, not an empty answer', async () => {
@@ -48,7 +48,7 @@ test('a 200 whose body stops part way is a failure, not an empty answer', async 
     });
     return Promise.resolve(new Response(body, { status: 200 }));
   };
-  await assert.rejects(api('/me/profile', { timeoutMs: 50 }), { message: "Couldn't reach terminus. Check your connection." });
+  await assert.rejects(api('/api/me/profile', { timeoutMs: 50 }), { message: "Couldn't reach terminus. Check your connection." });
 });
 
 test('a write waits longer than a read before giving up', async () => {
@@ -59,9 +59,9 @@ test('a write waits longer than a read before giving up', async () => {
   AbortSignal.timeout = (ms) => (asked.push(ms), new AbortController().signal);
   globalThis.fetch = () => Promise.resolve(new Response('{}', { status: 200 }));
   try {
-    await api('/me/import', { method: 'POST', body: {} });
-    await api('/me/profile', { method: 'PUT', body: {} });
-    await api('/me/profile');
+    await api('/api/me/import', { method: 'POST', body: {} });
+    await api('/api/me/profile', { method: 'PUT', body: {} });
+    await api('/api/me/profile');
   } finally {
     AbortSignal.timeout = real;
   }
@@ -72,7 +72,7 @@ test('a write waits longer than a read before giving up', async () => {
 
 test('no connection at all reads as a sentence, not the browser words', async () => {
   globalThis.fetch = () => Promise.reject(new TypeError('Failed to fetch'));
-  await assert.rejects(api('/me/profile', { method: 'PUT', body: {} }), { message: "Couldn't reach terminus. Check your connection." });
+  await assert.rejects(api('/api/me/profile', { method: 'PUT', body: {} }), { message: "Couldn't reach terminus. Check your connection." });
 });
 
 test('what a screen reader says is stopped as the page writes it: ". " in English, "。" in Chinese', () => {
@@ -120,7 +120,7 @@ test('every 401 in the web app goes through signedOut, so none skips forgetting 
 
 test('an error with no words from the server is said plainly, not as an HTTP code', async () => {
   globalThis.fetch = reply('<html>Bad gateway</html>', { status: 502, headers: { 'content-type': 'text/html' } });
-  await assert.rejects(api('/me'), { message: "Couldn't reach terminus. Try again in a moment.", status: 502 });
+  await assert.rejects(api('/api/me'), { message: "Couldn't reach terminus. Try again in a moment.", status: 502 });
 });
 
 // Before the 429 test below, which leaves the app quiet for a minute. The
@@ -130,27 +130,27 @@ test('a 503 with a Retry-After quiets its scope for that long, as a 429 does; on
   const sent = [];
   globalThis.fetch = async (path) => {
     sent.push(path);
-    return new Response('{}', { status: 503, headers: path === '/me/day' ? {} : { 'retry-after': '30' } });
+    return new Response('{}', { status: 503, headers: path === '/api/me/day' ? {} : { 'retry-after': '30' } });
   };
-  await send('/me/day');
-  assert.equal(quietMs('/me/next'), 0);
-  await send('/buses?svc=D1');
-  assert.equal(quietMs('/me/next'), 30_000);
-  assert.equal(quietMs('/auth/logout'), 0);
-  await assert.rejects(send('/me/next'), { status: 429 });
+  await send('/api/me/day');
+  assert.equal(quietMs('/api/me/next'), 0);
+  await send('/api/buses?svc=D1');
+  assert.equal(quietMs('/api/me/next'), 30_000);
+  assert.equal(quietMs('/api/auth/logout'), 0);
+  await assert.rejects(send('/api/me/next'), { status: 429 });
   t.mock.timers.tick(30_000);
-  assert.equal(quietMs('/me/next'), 0);
-  assert.deepEqual(sent, ['/me/day', '/buses?svc=D1']);
+  assert.equal(quietMs('/api/me/next'), 0);
+  assert.deepEqual(sent, ['/api/me/day', '/api/buses?svc=D1']);
 });
 
 test('a 429 from the app quiets the app, never a sign-out', async () => {
   const sent = [];
   globalThis.fetch = async (path) => {
     sent.push(path);
-    return new Response('{}', { status: path === '/me/next' ? 429 : 200, headers: { 'retry-after': '60', 'content-type': 'application/json' } });
+    return new Response('{}', { status: path === '/api/me/next' ? 429 : 200, headers: { 'retry-after': '60', 'content-type': 'application/json' } });
   };
-  await send('/me/next');
-  await assert.rejects(send('/me/day'), { status: 429 });
-  assert.equal((await send('/auth/logout', { method: 'POST' })).status, 200);
-  assert.deepEqual(sent, ['/me/next', '/auth/logout']);
+  await send('/api/me/next');
+  await assert.rejects(send('/api/me/day'), { status: 429 });
+  assert.equal((await send('/api/auth/logout', { method: 'POST' })).status, 200);
+  assert.deepEqual(sent, ['/api/me/next', '/api/auth/logout']);
 });

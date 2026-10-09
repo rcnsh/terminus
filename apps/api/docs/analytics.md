@@ -5,8 +5,8 @@
 Dataset: `terminus` (the beta's is `terminus_beta`). Positional schema lives
 in `src/analytics.ts`. It is the query contract, so it is append-only.
 
-An `answer` row is an answer someone asked for: `/next`, `/trip` or
-`/me/next`. The Trip object's wakes and `/me/day`'s leave-bys are not
+An `answer` row is an answer someone asked for: `/api/next`, `/api/trip` or
+`/api/me/next`. The Trip object's wakes and `/api/me/day`'s leave-bys are not
 logged, and neither are their `arrival` rows.
 
 ## Is the direction algorithm right?
@@ -123,7 +123,7 @@ services keep shorter hours.
 
 ## Trip signals
 
-Each trip signal (`/me/signal`: on the bus, missed, not going, arrived,
+Each trip signal (`/api/me/signal`: on the bus, missed, not going, arrived,
 and the rest) writes a `signal` row: `blob2` is the kind, `double1` is 1
 and `index1` is `signal`. Nothing else, so it counts how
 often each is used, never by whom or where.

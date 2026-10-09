@@ -82,7 +82,7 @@ async function api(path) {
   }
   const res = await fetch(path, { headers: { 'x-health-token': t } }).catch(() => null);
   if (!res) throw new Error("Couldn't reach terminus.");
-  if (res.status === 404 && path === '/timelapse/days') {
+  if (res.status === 404 && path === '/api/timelapse/days') {
     remember(null);
     memory = null;
     view.set((v) => ({ ...v, locked: true, msg: 'That token was not accepted.' }));
@@ -94,7 +94,7 @@ async function api(path) {
 
 async function loadDays() {
   try {
-    const res = await api('/timelapse/days');
+    const res = await api('/api/timelapse/days');
     if (!res) return;
     const { days, recording } = await res.json();
     view.set((v) => ({ ...v, locked: false, msg: '', days, recording, note: '' }));
@@ -109,7 +109,7 @@ async function loadDays() {
 async function pick(date) {
   view.set((v) => ({ ...v, date, day: null, loading: true, note: '', scrub: 0 }));
   try {
-    const res = await api(`/timelapse/days/${date}`);
+    const res = await api(`/api/timelapse/days/${date}`);
     if (!res) return;
     // The day file is gzipped JSON, as it's kept.
     const file = await new Response(res.body.pipeThrough(new DecompressionStream('gzip'))).json();

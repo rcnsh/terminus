@@ -31,13 +31,13 @@ final class MapModel {
     var failed = false
     var selected: String?
     var buses: [LiveBus] = []
-    /// Bumped by every answer from `/buses`, the same or not: each one plans
+    /// Bumped by every answer from `/api/buses`, the same or not: each one plans
     /// the slides again, so a bus that hasn't moved still counts as heard from.
     var busAnswers = 0
     /// The feed is down, or the last answer is old, and these are its last
     /// places: drawn faded.
     var busesStale = false
-    /// When `/buses` last answered (this Mac's clock).
+    /// When `/api/buses` last answered (this Mac's clock).
     private var heardAt: Date?
     var busStatus: BusStatus?
     var sheet: Sheet?
@@ -162,7 +162,7 @@ final class MapModel {
         let token = TokenStore.read()
         let list: BusList?
         do {
-            list = BusList.parse(try await MapFiles.get("/buses?svc=\(q)", token: token))
+            list = BusList.parse(try await MapFiles.get("/api/buses?svc=\(q)", token: token))
         } catch {
             if let e = Self.refusal(error) {
                 refuse(e, token: token, app: app)
@@ -230,7 +230,7 @@ final class MapModel {
         let token = TokenStore.read()
         var b: StopBoard?
         do {
-            b = StopBoard.parse(try await MapFiles.get("/arrivals?stop=\(q)", token: token))
+            b = StopBoard.parse(try await MapFiles.get("/api/arrivals?stop=\(q)", token: token))
         } catch {
             if let e = Self.refusal(error) {
                 refuse(e, token: token, app: app)

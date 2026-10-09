@@ -573,14 +573,14 @@ async function pollBuses() {
   if (svc !== selected.get()) return void pollBuses();
   busFails = got === 'ok' ? 0 : busFails + 1;
   // Not again once the map's tab is hidden while this one was on its way.
-  if (visible && document.visibilityState === 'visible') busTimer = setTimeout(pollBuses, busesWaitMs(busFails, quietMs('/buses')));
+  if (visible && document.visibilityState === 'visible') busTimer = setTimeout(pollBuses, busesWaitMs(busFails, quietMs('/api/buses')));
 }
 
 /** One poll for `svc`'s buses: 'ok', 'failed', 'signed out', or 'moved on' (another service chosen meanwhile). */
 async function pollOnce(svc) {
   try {
     // The next poll waits for this one: a call that hangs would stop the map, so it's given up on.
-    const data = await getJSON(`/buses?svc=${encodeURIComponent(svc)}`, BUSES_TIMEOUT_MS);
+    const data = await getJSON(`/api/buses?svc=${encodeURIComponent(svc)}`, BUSES_TIMEOUT_MS);
     if (svc !== selected.get()) return 'moved on';
     // `stale`: the feed didn't answer, and these are where the buses last were.
     const old = data.available && data.stale === true;
@@ -1228,7 +1228,7 @@ function StopSheet({ code, box, onGoTo, onSaved, active }) {
     const load = async () => {
       try {
         // stopped=1: the services not running now too, greyed, so every service here has its row.
-        const data = await getJSON(`/arrivals?stop=${encodeURIComponent(code)}${pub ? '&public=1' : ''}&stopped=1`);
+        const data = await getJSON(`/api/arrivals?stop=${encodeURIComponent(code)}${pub ? '&public=1' : ''}&stopped=1`);
         if (gone) return;
         const list = data.available ? data.board : [];
         setBoard(list.length ? { list } : { text: data.available ? t('No buses due') : t('No times right now') });

@@ -23,7 +23,7 @@ test('the dashboard asks Analytics Engine with the token, and says so when it fa
 });
 
 test('operator check: needs the configured token, exactly', () => {
-  const req = (t) => new Request('https://x.test/admin/stats', { headers: t ? { 'x-health-token': t } : {} });
+  const req = (t) => new Request('https://x.test/api/admin/stats', { headers: t ? { 'x-health-token': t } : {} });
   assert.equal(isOperator({ HEALTH_TOKEN: 'abc' }, req('abc')), true);
   assert.equal(isOperator({ HEALTH_TOKEN: 'abc' }, req('abd')), false);
   assert.equal(isOperator({ HEALTH_TOKEN: 'abc' }, req('abcd')), false);

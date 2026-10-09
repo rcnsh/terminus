@@ -287,7 +287,7 @@ export async function ensureRecorder(env: Env, nowMs: number): Promise<void> {
 /* /timelapse/days                                                     */
 /* ------------------------------------------------------------------ */
 
-const DAY_PATH = /^\/timelapse\/days\/(\d{4}-\d{2}-\d{2})$/;
+const DAY_PATH = /^\/api\/timelapse\/days\/(\d{4}-\d{2}-\d{2})$/;
 
 /** What the recorder says about the day it holds (timelapsedo.ts /status). */
 export interface RecorderStatus {
@@ -298,18 +298,18 @@ export interface RecorderStatus {
 
 
 /**
- * GET /timelapse/days and /timelapse/days/:date, for the operator or a
+ * GET /api/timelapse/days and /api/timelapse/days/:date, for the operator or a
  * holder of TIMELAPSE_TOKEN only (anything else is a 404, as /admin/stats).
  * A closed day is its file from R2, unchanged from then on, so it's cached
  * for a year; today's is built from what the recorder holds so far, and not
  * cached.
  */
 export async function handleTimelapse(req: Request, url: URL, env: Env, nowMs: number): Promise<Response | null> {
-  if (!url.pathname.startsWith('/timelapse/')) return null;
+  if (!url.pathname.startsWith('/api/timelapse/')) return null;
   if (!canReadTimelapse(env, req) || req.method !== 'GET') return json({ error: 'not found' }, 404);
   if (!env.DOWNLOADS) return json({ error: 'timelapse storage is not configured' }, 503);
 
-  if (url.pathname === '/timelapse/days') {
+  if (url.pathname === '/api/timelapse/days') {
     const days: { date: string; closed: boolean; bytes: number | null; samples: number | null }[] = [];
     let cursor: string | undefined;
     do {

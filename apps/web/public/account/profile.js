@@ -69,14 +69,14 @@ let saveTimer = null;
 let edits = 0;
 
 export async function loadProfile() {
-  profile.set(await api('/me/profile'));
+  profile.set(await api('/api/me/profile'));
   return profile.get();
 }
 
 /** The profile afresh (it may have changed on the map or another device), unless a change here is waiting. */
 export async function reloadProfile() {
   if (saveTimer) return;
-  const p = await api('/me/profile');
+  const p = await api('/api/me/profile');
   if (!saveTimer) profile.set(p);
 }
 
@@ -94,7 +94,7 @@ export function edit(change) {
     saveTimer = null;
     const mine = edits;
     try {
-      const saved = await api('/me/profile', { method: 'PUT', body: profile.get() });
+      const saved = await api('/api/me/profile', { method: 'PUT', body: profile.get() });
       if (mine === edits) profile.set(saved);
       toast(t('Saved'));
       saves.set((n) => n + 1);
@@ -111,14 +111,14 @@ export async function saveNow(change) {
   const next = structuredClone(profile.get());
   change?.(next);
   edits++;
-  const saved = await api('/me/profile', { method: 'PUT', body: next });
+  const saved = await api('/api/me/profile', { method: 'PUT', body: next });
   profile.set(saved);
   saves.set((n) => n + 1);
   return saved;
 }
 
 export async function loadCampus() {
-  if (!campus.get()) campus.set(await api('/campus'));
+  if (!campus.get()) campus.set(await api('/api/campus'));
   return campus.get();
 }
 
