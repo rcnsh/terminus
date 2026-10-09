@@ -7,10 +7,10 @@ against `apps/api/scripts/dev-stub.mjs` (fake buses and a test account, no real 
 
 ## App name (30 characters max)
 
-NUS is left out of the name, so it doesn't look like an official NUS app. The descriptions say it's for NUS and that it isn't affiliated.
+The name says "for NUS" rather than leading with NUS, so it reads as an app that works with NUS's buses, not one made by NUS (Play's impersonation policy). The short description says it's unofficial, and the full one that it isn't affiliated. If Play rejects the name anyway, fall back to `terminus: campus bus planner`.
 
 ```
-terminus: campus bus planner
+terminus: bus planner for NUS
 ```
 
 ## Short description (80 characters max)
@@ -70,7 +70,7 @@ Add it in Play Console under Store presence → Main store listing → Manage tr
 App name:
 
 ```
-terminus：校园巴士出行助手
+terminus：适用于 NUS 的巴士出行助手
 ```
 
 Short description:
