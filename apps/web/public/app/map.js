@@ -188,7 +188,7 @@ async function build(container) {
         b.setAttribute('aria-label', t('Back to campus'));
         // A constant, never data.
         b.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/></svg>';
-        b.onclick = () => map.fitBounds(fit, { padding: CAMPUS_PADDING, duration: 600 });
+        b.onclick = toCampus;
         this.box.append(b);
         return this.box;
       },
@@ -209,6 +209,27 @@ async function build(container) {
   }
   startOnMe();
   followMe();
+}
+
+/**
+ * The whole campus in view: "Back to campus", and the Map tab tapped again.
+ * The room a stop's sheet left at the bottom (showStop's easeTo) goes too, or
+ * the campus would sit above the middle.
+ */
+function toCampus() {
+  const to = map?.cameraForBounds(fit, { padding: CAMPUS_PADDING });
+  if (to) map.flyTo({ ...to, padding: { top: 0, bottom: 0, left: 0, right: 0 }, duration: 600 });
+}
+
+/**
+ * The Map tab tapped while on it: back to how it opened, the whole campus
+ * with no sheet open and no service chosen.
+ */
+export function home() {
+  centreOn = null;
+  openSheet(null);
+  if (selected.get()) choose(null);
+  toCampus();
 }
 
 function boundsOf(points) {

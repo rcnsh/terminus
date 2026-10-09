@@ -1203,6 +1203,13 @@ const TABBAR = [
   },
 ];
 
+/** Map tapped while on it: back to the whole campus, nothing open or chosen, as on the phone. */
+function mapAgain(e) {
+  if (tab.get() !== 'map' || location.hash !== '#map') return;
+  e.preventDefault();
+  mapModule.get()?.home();
+}
+
 function TabBar() {
   const now = useStore(tab) ?? tabInAddress();
   return html`
@@ -1216,6 +1223,7 @@ function TabBar() {
             aria-current=${now === x.id ? 'page' : undefined}
             onPointerDown=${x.id === 'map' ? preloadMap : undefined}
             onPointerEnter=${x.id === 'map' ? preloadMap : undefined}
+            onClick=${x.id === 'map' ? mapAgain : undefined}
           >
             <${Icon} paths=${x.icon} />
             <span>${x.label()}</span>
