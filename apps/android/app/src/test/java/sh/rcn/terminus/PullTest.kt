@@ -16,7 +16,7 @@ class PullTest {
     /** The Buses tab's low hills: no bus of the card's. */
     private val hill = PullScene(393f, Pull.hillSign(393f))
 
-    private fun motion(scene: PullScene = road, calm: Boolean = false) = PullMotion(scene, others = 6, calm = calm)
+    private fun motion(scene: PullScene = road, calm: Boolean = false) = PullMotion(scene, calm = calm)
 
     /** Steps [ms] of frames at 60 a second. */
     private fun PullMotion.run(ms: Int) = repeat(ms * 60 / 1000) { step(1 / 60f) }
@@ -100,11 +100,6 @@ class PullTest {
         assertEquals(road.home!!, m.busX, 0.5f)
     }
 
-    @Test fun theOtherBusesGoRoundInTurnNeverInTheFirstsColour() {
-        assertEquals(listOf(1, 2, 3, 1, 2), generateSequence(0) { Pull.nextColour(it, 3) }.drop(1).take(5).toList())
-        assertEquals(0, Pull.nextColour(0, 0))
-    }
-
     @Test fun armedItTicksOnceAndLettingGoAsks() {
         val m = motion()
         var ticks = 0
@@ -149,7 +144,7 @@ class PullTest {
         assertEquals(PullMotion.Phase.Idle, m.phase)
     }
 
-    @Test fun theBusBoardsThenDrivesOffAndOthersGoRound() {
+    @Test fun theBusBoardsThenDrivesOffAndGoesRoundAgain() {
         val m = motion()
         m.drag(400f)
         m.release()
@@ -162,7 +157,6 @@ class PullTest {
         assertTrue(m.puffs.isNotEmpty())
         m.run(1_500)
         assertEquals(PullMotion.Drive.Looping, m.drive)
-        assertTrue(m.colour > 0)
     }
 
     @Test fun theAnswerIsSaidThenTheCardsBusComesBackAndItCloses() {
@@ -191,7 +185,6 @@ class PullTest {
         assertTrue(m.open)
         assertEquals(PullMotion.Drive.Return, m.drive)
         assertTrue(kotlin.math.abs(m.busX - road.home!!) > 1f)
-        assertEquals(0, m.colour)
         assertFalse(m.good)
         m.run(2_000)
         assertEquals(PullMotion.Phase.Idle, m.phase)
