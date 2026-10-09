@@ -879,18 +879,29 @@ function Status() {
 }
 
 /**
+ * A sheet's drag, in CSS pixels (and pixels a millisecond): past `start` it's
+ * a drag, not a tap; `open` up opens what the handle holds; down past
+ * `close`, or flicked past `open`, it closes.
+ */
+const DRAG = { start: 12, open: 24, close: 96, flick: 0.8 };
+
+/**
  * The frame a stop's sheet and a bus's share, so the two read alike: a grab
  * handle; a `lead` tile beside the title, the line under it and Close; a line
  * of `facts`; then the body (a SectionBand and its rows); then the `footer`'s
  * buttons, kept in view under the rest, which scrolls however long it is.
- * `onHandle`, when set, is what the handle does: dragged up it's called with
- * true, down with false, tapped with null. Opened, the focus is on its
- * title (`id` changes with what it's about); Escape goes back (see back()),
- * and Close shuts it whatever it came from.
+ * The handle does what it promises: dragged down from it or the header, the
+ * sheet follows the finger and closes as Close does, or springs back if let
+ * go short. `onHandle`, when set, comes first: dragged up it's called with
+ * true, down with false, the handle tapped with null, and it returns whether
+ * it changed anything (a bus's stops closed before the sheet). Opened, the
+ * focus is on its title (`id` changes with what it's about); Escape goes
+ * back (see back()), and Close shuts it whatever it came from.
  */
 function Frame({ id, title, sub, lead, facts, onHandle, footer, children, box }) {
   const head = useRef(null);
   const drag = useRef(null);
+  const dragged = useRef(false);
   useEffect(() => {
     head.current?.focus({ preventScroll: true });
   }, [id]);
@@ -907,25 +918,77 @@ function Frame({ id, title, sub, lead, facts, onHandle, footer, children, box })
     };
   }, []);
   // The handle; the section band does the same for a screen reader.
+  // Tapped, on its click (after the tap, so the sheet growing under the
+  // finger doesn't put the click on a row); not the click a drag ends in.
   const handle = onHandle
     ? html`
         <div
           class="sheet-grab live"
           aria-hidden="true"
-          onPointerDown=${(e) => {
-            drag.current = e.clientY;
-            e.currentTarget.setPointerCapture(e.pointerId);
+          onClick=${() => {
+            if (dragged.current) dragged.current = false;
+            else onHandle(null);
           }}
-          onPointerUp=${(e) => {
-            if (drag.current == null) return;
-            const dy = e.clientY - drag.current;
-            drag.current = null;
-            onHandle(Math.abs(dy) < 12 ? null : dy < 0);
-          }}
-          onPointerCancel=${() => (drag.current = null)}
         ></div>
       `
     : html`<div class="sheet-grab" aria-hidden="true"></div>`;
+  // A drag on the handle or the header (not the rows, which scroll): down,
+  // the sheet follows the finger; let go, onHandle, then the sheet, decide.
+  const follow = (dy) => {
+    const el = box.current;
+    if (!el) return;
+    el.classList.toggle('dragging', dy != null);
+    el.style.transform = dy ? `translateY(${dy}px)` : '';
+  };
+  const grab = {
+    onPointerDown: (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      dragged.current = false;
+      drag.current = { id: e.pointerId, y: e.clientY, moved: false, trail: [{ y: e.clientY, t: e.timeStamp }] };
+    },
+    onPointerMove: (e) => {
+      const d = drag.current;
+      if (!d || d.id !== e.pointerId) return;
+      // A mouse let go outside before it became a drag: over.
+      if (e.pointerType === 'mouse' && !(e.buttons & 1)) {
+        drag.current = null;
+        return;
+      }
+      const dy = e.clientY - d.y;
+      if (!d.moved) {
+        if (Math.abs(dy) < DRAG.start) return;
+        // A drag now, not a tap: the pointer is the header's until let go (no click on Close).
+        d.moved = true;
+        try {
+          e.currentTarget.setPointerCapture(e.pointerId);
+        } catch {
+          // The pointer's already gone: its up still ends the drag.
+        }
+      }
+      d.trail.push({ y: e.clientY, t: e.timeStamp });
+      while (d.trail.length > 2 && e.timeStamp - d.trail[0].t > 100) d.trail.shift();
+      follow(Math.max(0, dy));
+    },
+    onPointerUp: (e) => {
+      const d = drag.current;
+      if (!d || d.id !== e.pointerId) return;
+      drag.current = null;
+      if (!d.moved) return;
+      dragged.current = true;
+      const dy = e.clientY - d.y;
+      const first = d.trail[0];
+      const speed = e.timeStamp > first.t ? (e.clientY - first.y) / (e.timeStamp - first.t) : 0;
+      const down = dy > DRAG.close || (dy > DRAG.open && speed > DRAG.flick);
+      // Closing: as Close does (its history step too), from where the finger left it.
+      if (down && !onHandle?.(false)) return openSheet(null);
+      follow(null);
+      if (dy < -DRAG.open) onHandle?.(true);
+    },
+    onPointerCancel: () => {
+      drag.current = null;
+      follow(null);
+    },
+  };
   return html`
     <section
       class="map-sheet"
@@ -938,13 +1001,15 @@ function Frame({ id, title, sub, lead, facts, onHandle, footer, children, box })
       }}
     >
       <div class="sheet-scroll">
-        ${handle}
-        <div class="sheet-head">
-          ${lead}
-          <div class="sheet-titles"><h2 id="sheet-title" tabindex="-1" ref=${head}>${title}</h2>${sub && html`<p class="hint">${sub}</p>`}</div>
-          <button type="button" class="sheet-close" aria-label=${t('Close')} onClick=${() => openSheet(null)}>×</button>
+        <div class="sheet-top" ...${grab}>
+          ${handle}
+          <div class="sheet-head">
+            ${lead}
+            <div class="sheet-titles"><h2 id="sheet-title" tabindex="-1" ref=${head}>${title}</h2>${sub && html`<p class="hint">${sub}</p>`}</div>
+            <button type="button" class="sheet-close" aria-label=${t('Close')} onClick=${() => openSheet(null)}>×</button>
+          </div>
+          ${facts && html`<div class="sheet-facts">${facts}</div>`}
         </div>
-        ${facts && html`<div class="sheet-facts">${facts}</div>`}
         <div class="sheet-body">${children}</div>
       </div>
       ${footer && html`<div class="sheet-foot sheet-actions">${footer}</div>`}
@@ -1081,7 +1146,11 @@ function BusSheet({ id, box, stops = false, all: allAtFirst = false }) {
   `;
   const footer = stop && html`<button type="button" class="btn small ghost" onClick=${() => go(stop.code)}>${t('Show {0}', stop.name)}</button>`;
   return html`
-    <${Frame} id=${`bus-${id}`} title=${title} sub=${sub} lead=${tile} facts=${facts} onHandle=${(up) => setOpen(up ?? !open)} footer=${footer} box=${box}>
+    <${Frame} id=${`bus-${id}`} title=${title} sub=${sub} lead=${tile} facts=${facts} onHandle=${(up) => {
+        const next = up ?? !open;
+        if (next !== open) setOpen(next);
+        return next !== open;
+      }} footer=${footer} box=${box}>
       <${SectionBand} text=${t('Stops ahead')} open=${open} onToggle=${() => setOpen(!open)} controls="bus-strip" />
       ${open && html`<${StopStrip} b=${b} all=${all} onStop=${onStop} />`}
       ${open && more > 1 && html`<button type="button" class="sheet-more" aria-expanded=${String(all)} aria-controls="bus-strip" onClick=${() => setAll(!all)}>${all ? t('Show fewer') : t('Show {0} more stops', more)}</button>`}

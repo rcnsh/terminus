@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -97,6 +98,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -175,10 +177,13 @@ import sh.rcn.terminus.BusStrip
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.pow
+import kotlin.math.roundToInt
 import kotlin.math.floor
 import kotlin.math.max
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -740,8 +745,13 @@ internal fun SvcTag(svc: String, color: Color, onClick: (() -> Unit)? = null) {
  * The frame a stop's sheet and a bus's share, so the two read alike: a grab
  * handle; a [lead] tile beside the [title], [sub] and close; a line of
  * [facts]; then [body] (a [SectionBand] and its rows); then the [footer]'s
- * buttons. [handle], when set, is what the grab handle and a drag on the
- * header do: true opens, false closes.
+ * buttons.
+ *
+ * The grab handle does what it promises: dragged down, the sheet follows
+ * the finger and closes, as a bottom sheet does. [handle], when set, comes
+ * first: a drag up or a tap on the handle opens what it holds (true, or
+ * null to toggle), and a drag down closes that (false) before the sheet,
+ * returning whether it changed anything.
  */
 @Composable
 private fun MapSheetFrame(
@@ -752,7 +762,7 @@ private fun MapSheetFrame(
     onClose: () -> Unit,
     lead: @Composable () -> Unit,
     facts: (@Composable () -> Unit)? = null,
-    handle: ((Boolean?) -> Unit)? = null,
+    handle: ((Boolean?) -> Boolean)? = null,
     footer: (@Composable RowScope.() -> Unit)? = null,
     body: @Composable ColumnScope.() -> Unit,
 ) {
@@ -761,12 +771,19 @@ private fun MapSheetFrame(
     // moved to its title when it opens or shows another stop or bus.
     val focus = remember { FocusRequester() }
     LaunchedEffect(focusKey) { runCatching { focus.requestFocus() } }
-    // Dragged up past a few dp, [handle] opens; down, it closes.
+    // Up past a few dp, [handle] opens; down far enough or flung, [handle]
+    // closes, else the sheet does. While dragging down the sheet follows the
+    // finger, and springs back if let go short.
     var dragged by remember { mutableFloatStateOf(0f) }
+    var dragging by remember { mutableStateOf(false) }
     val drag = rememberDraggableState { dragged += it }
-    val dragMin = with(LocalDensity.current) { 24.dp.toPx() }
+    val density = LocalDensity.current
+    val dragMin = with(density) { 24.dp.toPx() }
+    val closeMin = with(density) { 96.dp.toPx() }
+    val flingMin = with(density) { 800.dp.toPx() }
+    val follow by animateFloatAsState(if (dragging) dragged.coerceAtLeast(0f) else 0f, if (dragging) snap() else spring(), label = "sheet")
     Surface(
-        modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp).semantics { paneTitle = paneName },
+        modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp).offset { IntOffset(0, follow.roundToInt()) }.semantics { paneTitle = paneName },
         shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
         color = c.surface,
         shadowElevation = 8.dp,
@@ -778,9 +795,13 @@ private fun MapSheetFrame(
                     Modifier.draggable(
                         drag,
                         Orientation.Vertical,
-                        enabled = handle != null,
-                        onDragStopped = {
-                            if (dragged < -dragMin) handle?.invoke(true) else if (dragged > dragMin) handle?.invoke(false)
+                        onDragStarted = { dragging = true },
+                        onDragStopped = { velocity ->
+                            when {
+                                dragged < -dragMin -> handle?.invoke(true)
+                                dragged > closeMin || (dragged > dragMin && velocity > flingMin) -> if (handle?.invoke(false) != true) onClose()
+                            }
+                            dragging = false
                             dragged = 0f
                         },
                     ),
@@ -870,7 +891,10 @@ private fun BusSheet(bus: LiveBus, svc: String, color: Color, campus: CampusMap,
         onClose = actions.closeSheet,
         lead = { SvcPill(svc, color) },
         facts = { BusFacts(bus) },
-        handle = if (strip.any) ({ open -> expanded = open ?: !expanded }) else null,
+        handle = if (strip.any) ({ open ->
+            val next = open ?: !expanded
+            (next != expanded).also { expanded = next }
+        }) else null,
         footer = stop?.let { s ->
             { OutlinedButton(onClick = { open(s) }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.map_show_stop, s.name)) } }
         },

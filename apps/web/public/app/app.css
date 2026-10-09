@@ -398,7 +398,11 @@ body.on-map > .nav, body.on-map #tab-now { display: none; }
   z-index: 3;
   display: flex;
   flex-direction: column;
+  /* Let go short of closing (map.js Frame), it springs back. */
+  transition: transform 0.2s ease-out;
 }
+.map-sheet.dragging { transition: none; }
+@media (prefers-reduced-motion: reduce) { .map-sheet { transition: none; } }
 .map-sheet[hidden] { display: none; }
 /* A short window (a phone on its side, or zoomed in a long way): the sheet
    leaves more of the map, and MapLibre's buttons stay above it. */
@@ -428,9 +432,11 @@ body.on-map > .nav, body.on-map #tab-now { display: none; }
 .sheet-tile.bus-svc { background: var(--svc); color: var(--svc-ink); font: 800 1.25rem/1 var(--display); white-space: nowrap; }
 .sheet-tile.stop-tile { background: var(--line); color: var(--ink); }
 .stop-tile svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
-/* The grab handle; a bus's drags its stop list open. */
+/* The grab handle: dragged down, the sheet closes; a bus's, up, opens its stops. */
 .sheet-grab { flex: none; height: 20px; position: relative; }
-.sheet-grab.live { cursor: grab; touch-action: none; }
+.sheet-grab.live { cursor: grab; }
+/* The handle and header drag the sheet down (map.js Frame), so a finger there doesn't scroll or select. */
+.sheet-top { touch-action: none; user-select: none; -webkit-user-select: none; }
 .sheet-grab::before { content: ""; position: absolute; left: calc(50% - 18px); width: 36px; top: 8px; height: 4px; border-radius: 2px; background: var(--line-strong); opacity: 0.6; }
 .sheet-facts { padding: 10px 16px 0; }
 .sheet-scroll { flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
