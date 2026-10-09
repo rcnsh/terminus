@@ -16,13 +16,13 @@ terminus: campus bus planner
 ## Short description (80 characters max)
 
 ```
-When to leave for class, and which campus bus to catch, from your timetable.
+When to leave for class, and which NUS shuttle bus to catch. Unofficial.
 ```
 
 ## Full description (4000 characters max)
 
 ```
-terminus tells you when to leave for your next class, and which campus bus to catch to get there on time.
+terminus tells you when to leave for your next class at NUS, and which NUS shuttle bus to catch to get there on time. It works only with the NUS campus shuttles.
 
 Import your NUSMods timetable once. From then on, terminus plans the whole trip: the walk to the stop, the bus's live arrival, the ride, and the walk to your classroom. You get one answer: "Leave by 9:01 · catch the 9:06 R2 at PGP · arrive 9:16, 14 min early".
 
@@ -76,13 +76,13 @@ terminus：校园巴士出行助手
 Short description:
 
 ```
-根据你的课表，告诉你什么时候出发上课、该搭哪一班校园巴士。
+根据你的课表，告诉你什么时候出发上课、该搭哪一班 NUS 校园巴士。非官方应用。
 ```
 
 Full description:
 
 ```
-terminus 告诉你什么时候该出发去上下一节课，以及该搭哪一班校园巴士才能准时到。
+terminus 告诉你什么时候该出发去上 NUS 的下一节课，以及该搭哪一班 NUS 校园巴士才能准时到。只适用于 NUS 校园巴士。
 
 只要导入一次 NUSMods 课表，terminus 就会规划整段行程：走到车站、巴士的实时到站时间、乘车，以及走到教室。你会得到一个答案：“9:01 前出发 · 在 PGP 搭 9:06 的 R2 · 9:16 到，早 14 分钟”。
 
