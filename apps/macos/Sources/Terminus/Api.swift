@@ -6,7 +6,7 @@ struct Place: Decodable, Hashable {
     let label: String
 }
 
-/// `/me/next`. label and detail are display-ready; show them verbatim.
+/// `/api/me/next`. label and detail are display-ready; show them verbatim.
 struct NextAnswer: Decodable {
     struct Stop: Decodable { let code: String; let name: String }
     struct Dest: Decodable { let to: String?; let label: String; let why: String }
@@ -564,7 +564,7 @@ enum Target: Hashable {
     case code(String, label: String)
 }
 
-/// `/campus`: every stop, and the residences with the stops that serve them.
+/// `/api/campus`: every stop, and the residences with the stops that serve them.
 struct Campus: Decodable {
     struct Stop: Decodable, Hashable { let code: String; let name: String; let lat: Double?; let lon: Double? }
     /// `common`: where most students live (PGP, UTown Residence), shown first in the pickers.
@@ -607,7 +607,7 @@ struct Unplaced: Hashable {
     let offCampus: Bool
 }
 
-/// `/me/import`: what was found, what couldn't be placed, and for which semester.
+/// `/api/me/import`: what was found, what couldn't be placed, and for which semester.
 struct ImportResult {
     let profile: [String: Any]
     let classes: Int
@@ -636,7 +636,7 @@ struct ImportResult {
     }
 }
 
-/// `/me`: who this Mac is signed in as.
+/// `/api/me`: who this Mac is signed in as.
 struct Me: Decodable {
     let email: String?
     let anonymous: Bool?
@@ -652,7 +652,7 @@ struct TripChoice: Decodable, Hashable {
     let label: String?
 }
 
-/// `/me/choices`: those classes, and how many trips are remembered.
+/// `/api/me/choices`: those classes, and how many trips are remembered.
 struct Choices: Decodable {
     let choices: [TripChoice]
     let history: Int
@@ -667,7 +667,7 @@ struct Device: Decodable, Identifiable, Hashable {
     let current: Bool?
 }
 
-/// `/me/day`: today's classes and the trips home, and where each stands.
+/// `/api/me/day`: today's classes and the trips home, and where each stands.
 struct DayPlan: Decodable {
     struct Item: Decodable, Identifiable {
         struct Leave: Decodable { let at: String; let estimated: Bool?; let svc: String?; let stop: String? }
@@ -775,9 +775,9 @@ enum Quiet {
     nonisolated(unsafe) private static var untilDates: [Scope: Date] = [:]
     nonisolated(unsafe) private static var laterDate = Date.distantPast
 
-    /// Sign-in and pairing (`/auth/…`, `/pair`, `/me/pair-code`), or everything else.
+    /// Sign-in and pairing (`/api/auth/…`, `/api/pair`, `/api/me/pair-code`), or everything else.
     static func scope(_ path: String) -> Scope {
-        path == "/pair" || path == "/me/pair-code" || path.hasPrefix("/auth/") ? .signIn : .app
+        path == "/api/pair" || path == "/api/me/pair-code" || path.hasPrefix("/api/auth/") ? .signIn : .app
     }
 
     static func until(_ scope: Scope) -> Date { lock.withLock { untilDates[scope] ?? .distantPast } }
@@ -828,19 +828,19 @@ enum Outdated {
     static func mark() { lock.withLock { untilDate = Date().addingTimeInterval(holdS) } }
 
     /// Whether the server refuses this request to an outdated app, as
-    /// apps/api checks it: an account's routes (`/me…`) and the answers it
+    /// apps/api checks it: an account's routes (`/api/me…`) and the answers it
     /// asks with its token (KEYED in index.ts). Not signing in or out
-    /// (`/auth/…`, `/pair…`), the released version (`/download/…`), nor
+    /// (`/api/auth/…`, `/api/pair…`), the released version (`/download/…`), nor
     /// deleting the account or taking the device off pushes
-    /// (`DELETE /me`, `DELETE /me/push`).
+    /// (`DELETE /api/me`, `DELETE /api/me/push`).
     static func gated(_ method: String, _ path: String) -> Bool {
         let p = path.split(separator: "?", maxSplits: 1).first.map(String.init) ?? path
-        if method == "DELETE" && (p == "/me" || p == "/me/push") { return false }
-        return p == "/me" || p.hasPrefix("/me/") || answers.contains(p)
+        if method == "DELETE" && (p == "/api/me" || p == "/api/me/push") { return false }
+        return p == "/api/me" || p.hasPrefix("/api/me/") || answers.contains(p)
     }
 
     /// The bus answers the server refuses an outdated app (KEYED in apps/api/src/index.ts).
-    private static let answers: Set<String> = ["/next", "/trip", "/arrivals", "/buses", "/line", "/campus", "/stops/pairs"]
+    private static let answers: Set<String> = ["/api/next", "/api/trip", "/api/arrivals", "/api/buses", "/api/line", "/api/campus", "/api/stops/pairs"]
 }
 
 struct ApiError: LocalizedError {
@@ -983,23 +983,23 @@ struct Api {
 
     func pair(code: String, name: String) async throws -> String {
         struct R: Decodable { let token: String }
-        let r: R = try await request("POST", "/pair", body: ["code": code, "name": name])
+        let r: R = try await request("POST", "/api/pair", body: ["code": code, "name": name])
         return r.token
     }
 
     /// Starts a sign-in approved from the email, on any device. The Mac shows `match`.
     func signInStart(email: String, name: String) async throws -> SignInRequest {
-        try await request("POST", "/auth/app/start", body: ["email": email, "name": name])
+        try await request("POST", "/api/auth/app/start", body: ["email": email, "name": name])
     }
 
     /// pending, approved (with a token, once), denied or expired.
     func signInPoll(_ r: SignInRequest) async throws -> SignInPoll {
-        try await request("POST", "/auth/app/poll", body: ["request": r.request, "poll": r.poll])
+        try await request("POST", "/api/auth/app/poll", body: ["request": r.request, "poll": r.poll])
     }
 
     /// The code from the email, typed here. A wrong one throws with the server's message.
     func signInCode(_ r: SignInRequest, code: String) async throws -> SignInPoll {
-        try await request("POST", "/auth/app/code", body: ["request": r.request, "poll": r.poll, "code": code])
+        try await request("POST", "/api/auth/app/code", body: ["request": r.request, "poll": r.poll, "code": code])
     }
 
     func next(_ target: Target, lat: Double?, lon: Double?, acc: Double? = nil) async throws -> NextAnswer {
@@ -1009,19 +1009,19 @@ struct Api {
         case .place(let key): q.append(URLQueryItem(name: "place", value: key))
         case .code(let code, _): q.append(URLQueryItem(name: "to", value: code))
         }
-        return try await answer("GET", "/me/next", query: q + Self.h12)
+        return try await answer("GET", "/api/me/next", query: q + Self.h12)
     }
 
     /// Something that happened on the trip; answers with the new planned answer.
     func signal(_ action: CardAction) async throws -> NextAnswer {
         let body: [String: Any] = ["kind": action.id, "trip": action.trip]
-        return try await answer("POST", "/me/signal", query: Self.h12, json: try JSONSerialization.data(withJSONObject: body))
+        return try await answer("POST", "/api/me/signal", query: Self.h12, json: try JSONSerialization.data(withJSONObject: body))
     }
 
     /// A suggestion accepted or turned down.
     func choice(id: String, accept: Bool) async throws {
         let body: [String: Any] = ["id": id, "choice": accept ? "accept" : "dismiss"]
-        _ = try await send("POST", "/me/choice", json: try JSONSerialization.data(withJSONObject: body))
+        _ = try await send("POST", "/api/me/choice", json: try JSONSerialization.data(withJSONObject: body))
     }
 
     /// "Is this wrong?": the answer as it came from the server, with a reason
@@ -1036,74 +1036,74 @@ struct Api {
     /// The profile as the server keeps it, kept as JSON so fields this version
     /// doesn't know about survive a save.
     func profile() async throws -> Data {
-        try await send("GET", "/me/profile")
+        try await send("GET", "/api/me/profile")
     }
 
     /// Saves the whole profile; answers with it as saved.
     func saveProfile(_ profile: Data) async throws -> Data {
-        try await send("PUT", "/me/profile", json: profile)
+        try await send("PUT", "/api/me/profile", json: profile)
     }
 
     /// Imports a NUSMods share link; the server replaces the imported classes only if it all worked.
     /// The import's answer as JSON (see ImportResult).
     func importTimetable(_ share: String) async throws -> Data {
-        try await send("POST", "/me/import", json: JSONSerialization.data(withJSONObject: ["share": share]))
+        try await send("POST", "/api/me/import", json: JSONSerialization.data(withJSONObject: ["share": share]))
     }
 
     /// Stops and residences, for the home picker.
     func campus() async throws -> Campus {
-        try JSONDecoder().decode(Campus.self, from: await send("GET", "/campus"))
+        try JSONDecoder().decode(Campus.self, from: await send("GET", "/api/campus"))
     }
 
     /// A pairing code for another device (accounts with an email only).
     func pairCode() async throws -> String {
         struct R: Decodable { let code: String }
-        return try JSONDecoder().decode(R.self, from: await send("POST", "/me/pair-code", json: Data("{}".utf8))).code
+        return try JSONDecoder().decode(R.self, from: await send("POST", "/api/me/pair-code", json: Data("{}".utf8))).code
     }
 
     func devices() async throws -> [Device] {
         struct R: Decodable { let devices: [Device] }
-        return try JSONDecoder().decode(R.self, from: await send("GET", "/me/devices")).devices
+        return try JSONDecoder().decode(R.self, from: await send("GET", "/api/me/devices")).devices
     }
 
     /// The owner is emailed about every removal.
     func removeDevice(_ id: String) async throws {
         let safe = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
-        _ = try await send("DELETE", "/me/devices/\(safe)")
+        _ = try await send("DELETE", "/api/me/devices/\(safe)")
     }
 
     /// Today at a glance: each class with its leave-by, and the trips home.
     /// With a location, the next class is planned from there, as the card is.
     func day(lat: Double? = nil, lon: Double? = nil, acc: Double? = nil) async throws -> DayPlan {
-        try JSONDecoder().decode(DayPlan.self, from: try await send("GET", "/me/day", query: Self.coords(lat, lon, acc) + Self.h12))
+        try JSONDecoder().decode(DayPlan.self, from: try await send("GET", "/api/me/day", query: Self.coords(lat, lon, acc) + Self.h12))
     }
 
     func nearby(lat: Double?, lon: Double?, acc: Double? = nil) async throws -> [NearbyStop] {
         struct R: Decodable { let stops: [NearbyStop] }
-        let r: R = try await request("GET", "/me/nearby", query: Self.coords(lat, lon, acc))
+        let r: R = try await request("GET", "/api/me/nearby", query: Self.coords(lat, lon, acc))
         return r.stops
     }
 
     func destinations() async throws -> [Destination] {
         struct R: Decodable { let destinations: [Destination] }
-        let r: R = try await request("GET", "/campus")
+        let r: R = try await request("GET", "/api/campus")
         return r.destinations
     }
 
     /// Starts without an email: an account of its own for this Mac, as the phone's first launch.
     func anon(name: String) async throws -> String {
         struct R: Decodable { let token: String }
-        let r: R = try await request("POST", "/auth/anon", body: ["name": name, "platform": "mac"])
+        let r: R = try await request("POST", "/api/auth/anon", body: ["name": name, "platform": "mac"])
         return r.token
     }
 
     /// After adding an email where both had a setup: keep the account's, or this Mac's.
     func merge(anon: String, keepDevice: Bool) async throws {
-        _ = try await send("POST", "/auth/app/merge", json: JSONSerialization.data(withJSONObject: ["anon": anon, "keep": keepDevice ? "device" : "account"]))
+        _ = try await send("POST", "/api/auth/app/merge", json: JSONSerialization.data(withJSONObject: ["anon": anon, "keep": keepDevice ? "device" : "account"]))
     }
 
     func me() async throws -> Me {
-        try JSONDecoder().decode(Me.self, from: await send("GET", "/me"))
+        try JSONDecoder().decode(Me.self, from: await send("GET", "/api/me"))
     }
 
     /// A one-off trip later today, planned like a class. Answers with the new plan.
@@ -1114,7 +1114,7 @@ struct Api {
         case .place(let key): body["place"] = key
         case .code(let code, let label): body["to"] = code; body["label"] = label
         }
-        return try await answer("POST", "/me/once", query: Self.h12, json: try JSONSerialization.data(withJSONObject: body))
+        return try await answer("POST", "/api/me/once", query: Self.h12, json: try JSONSerialization.data(withJSONObject: body))
     }
 
     /// Send feedback: a note about anything, emailed to the operator like "Is this wrong?".
@@ -1130,31 +1130,31 @@ struct Api {
         if let reason { body["reason"] = reason }
         if let v = Api.version { body["appVersion"] = v }
         if let context { body["context"] = context }
-        _ = try await send("POST", "/me/feedback", json: try JSONSerialization.data(withJSONObject: body))
+        _ = try await send("POST", "/api/me/feedback", json: try JSONSerialization.data(withJSONObject: body))
     }
 
     /// Download my data: everything the account holds, as JSON.
     func export() async throws -> Data {
-        try await send("GET", "/me/export")
+        try await send("GET", "/api/me/export")
     }
 
     func choices() async throws -> Choices {
-        try JSONDecoder().decode(Choices.self, from: await send("GET", "/me/choices"))
+        try JSONDecoder().decode(Choices.self, from: await send("GET", "/api/me/choices"))
     }
 
     /// A class's "one bus earlier" or "no reminders" undone.
     func undoChoice(trip: String, pref: String) async throws {
-        _ = try await send("POST", "/me/choice", json: JSONSerialization.data(withJSONObject: ["choice": "undo", "trip": trip, "pref": pref]))
+        _ = try await send("POST", "/api/me/choice", json: JSONSerialization.data(withJSONObject: ["choice": "undo", "trip": trip, "pref": pref]))
     }
 
     /// Clear trip history: the outcomes go; the choices made from them stay.
     func clearHistory() async throws {
-        _ = try await send("DELETE", "/me/history")
+        _ = try await send("DELETE", "/api/me/history")
     }
 
     /// An account without an email: everything goes. (One with an email is deleted on the account page.)
     func deleteAccount() async throws {
-        _ = try await send("DELETE", "/me")
+        _ = try await send("DELETE", "/api/me")
     }
 
     /// The released version, from /download/latest.json.
@@ -1167,7 +1167,7 @@ struct Api {
     /// Ends this device's session on the server.
     func logout() async throws {
         struct R: Decodable {}
-        let _: R = try await request("POST", "/auth/logout", body: [:])
+        let _: R = try await request("POST", "/api/auth/logout", body: [:])
     }
 
     /// `acc` is how far out the fix may be (fixUncertaintyM): the server

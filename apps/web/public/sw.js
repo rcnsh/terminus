@@ -8,8 +8,8 @@
 //   the copy first: they never change there.
 // - Chinese (assets/zh.js) is kept once a page asks for it, not before: only
 //   Chinese readers load it.
-// - /me, /me/next and /me/day go to the network first. The last good reply
-//   is kept, and served when the network is down, marked with
+// - /api/me, /api/me/next and /api/me/day go to the network first. The last good
+//   reply is kept, and served when the network is down, marked with
 //   x-terminus-cached (when it was fetched) so the page can say so.
 // - Signing in or out, deleting the account, or a 401 empties the kept
 //   replies: they belong to one account and must not outlive it, or reach
@@ -65,15 +65,15 @@ const SHELL_FILES = [
 ];
 /** The Chinese words: kept with the app's files, but only for a browser that reads them. */
 const ZH = '/assets/zh.js';
-const DATA_PATHS = new Set(['/me', '/me/next', '/me/day']);
+const DATA_PATHS = new Set(['/api/me', '/api/me/next', '/api/me/day']);
 // Each changes whose account this browser is signed in to.
 const SIGN_OUT = [
-  ['POST', '/auth/logout'],
-  ['POST', '/auth/code'],
+  ['POST', '/api/auth/logout'],
+  ['POST', '/api/auth/code'],
   ['POST', '/auth/verify'],
-  ['POST', '/auth/anon/web'],
-  ['DELETE', '/me/sessions'],
-  ['DELETE', '/me'],
+  ['POST', '/api/auth/anon/web'],
+  ['DELETE', '/api/me/sessions'],
+  ['DELETE', '/api/me'],
 ];
 
 self.addEventListener('install', (event) => {
@@ -121,7 +121,7 @@ self.addEventListener('fetch', (event) => {
   // The timelapse page's video encoder (admin/timelapse/) is the operator's, not the map's: never kept.
   else if (url.pathname.startsWith('/vendor/mediabunny')) return;
   else if (url.pathname.startsWith('/vendor/') || url.pathname.startsWith('/map/fonts/') || url.pathname.startsWith('/map/sprites/')) event.respondWith(cacheFirst(req));
-  else if (url.pathname === '/app/map.js' || url.pathname === '/campus' || url.pathname === '/map/style.json') event.respondWith(networkThenKept(req, event));
+  else if (url.pathname === '/app/map.js' || url.pathname === '/api/campus' || url.pathname === '/map/style.json') event.respondWith(networkThenKept(req, event));
 });
 
 /** On a slow connection, how long to wait for the network before using the
@@ -351,7 +351,7 @@ async function notifyFromCard(urgent, fetched) {
   let a = fetched ?? null;
   if (!a) {
     try {
-      const res = await fetch(`/me/next${HOUR12 ? '?h12=1' : ''}`, { credentials: 'same-origin', signal: AbortSignal.timeout?.(PUSH_CARD_MS) });
+      const res = await fetch(`/api/me/next${HOUR12 ? '?h12=1' : ''}`, { credentials: 'same-origin', signal: AbortSignal.timeout?.(PUSH_CARD_MS) });
       a = res.ok ? await res.json() : null;
     } catch {
       a = null;
@@ -414,7 +414,7 @@ self.addEventListener('notificationclick', (event) => {
 /** Takes a class off today from the notification, then tells an open app to show the new plan. */
 async function skipTrip(trip) {
   try {
-    const res = await fetch(`/me/signal${HOUR12 ? '?h12=1' : ''}`, {
+    const res = await fetch(`/api/me/signal${HOUR12 ? '?h12=1' : ''}`, {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'content-type': 'application/json' },

@@ -31,9 +31,9 @@ const tmp = mkdtempSync(join(tmpdir(), 'readme-shots-'));
 const browser = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
 try {
   const signIn = await browser.newContext();
-  await signIn.request.post(`${origin}/auth/login`, { data: { email } });
+  await signIn.request.post(`${origin}/api/auth/login`, { data: { email } });
   await until(() => /sign-in code: (\w{6})/.test(out));
-  await signIn.request.post(`${origin}/auth/code`, { data: { email, code: out.match(/sign-in code: (\w{6})/)[1] } });
+  await signIn.request.post(`${origin}/api/auth/code`, { data: { email, code: out.match(/sign-in code: (\w{6})/)[1] } });
   const storageState = await signIn.storageState();
   await signIn.close();
 

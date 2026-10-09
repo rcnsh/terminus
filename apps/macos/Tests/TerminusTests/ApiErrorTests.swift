@@ -19,13 +19,13 @@ import Testing
 
 /// A mistyped sign-in code doesn't silence the menu bar, nor the other way round.
 @Test func signingInAndTheAnswersWaitApart() {
-    #expect(Quiet.scope("/auth/app/code") == .signIn)
-    #expect(Quiet.scope("/auth/anon") == .signIn)
-    #expect(Quiet.scope("/pair") == .signIn)
-    #expect(Quiet.scope("/me/next") == .app)
+    #expect(Quiet.scope("/api/auth/app/code") == .signIn)
+    #expect(Quiet.scope("/api/auth/anon") == .signIn)
+    #expect(Quiet.scope("/api/pair") == .signIn)
+    #expect(Quiet.scope("/api/me/next") == .app)
     // A pairing code is part of pairing, as on Android: its 429 doesn't stop the menu bar.
-    #expect(Quiet.scope("/me/pair-code") == .signIn)
-    #expect(Quiet.scope("/me/pair") == .app)
+    #expect(Quiet.scope("/api/me/pair-code") == .signIn)
+    #expect(Quiet.scope("/api/me/pair") == .app)
 
     let appBefore = Quiet.until(.app)
     Quiet.after("120", scope: .signIn)
@@ -58,18 +58,18 @@ import Testing
 
 /// As the server: signing in or out and leaving still go to an outdated app.
 @Test func anOutdatedAppCanStillSignOutAndLeave() {
-    #expect(Outdated.gated("GET", "/me/next"))
-    #expect(Outdated.gated("GET", "/me"))
-    #expect(Outdated.gated("POST", "/me/history"))
-    #expect(!Outdated.gated("DELETE", "/me"))
-    #expect(!Outdated.gated("DELETE", "/me/push"))
-    #expect(!Outdated.gated("POST", "/auth/logout"))
-    #expect(!Outdated.gated("POST", "/pair"))
-    #expect(!Outdated.gated("POST", "/pair/check"))
+    #expect(Outdated.gated("GET", "/api/me/next"))
+    #expect(Outdated.gated("GET", "/api/me"))
+    #expect(Outdated.gated("POST", "/api/me/history"))
+    #expect(!Outdated.gated("DELETE", "/api/me"))
+    #expect(!Outdated.gated("DELETE", "/api/me/push"))
+    #expect(!Outdated.gated("POST", "/api/auth/logout"))
+    #expect(!Outdated.gated("POST", "/api/pair"))
+    #expect(!Outdated.gated("POST", "/api/pair/check"))
     #expect(!Outdated.gated("GET", "/download/latest.json"))
-    #expect(Outdated.gated("GET", "/campus"))
-    #expect(Outdated.gated("GET", "/buses?svc=A1"))
-    #expect(Outdated.gated("POST", "/me/pair-code"))
+    #expect(Outdated.gated("GET", "/api/campus"))
+    #expect(Outdated.gated("GET", "/api/buses?svc=A1"))
+    #expect(Outdated.gated("POST", "/api/me/pair-code"))
 }
 
 @Test func aReplyThisVersionCantReadIsntCalledOffline() {

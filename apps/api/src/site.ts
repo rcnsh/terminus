@@ -6,6 +6,8 @@
  */
 
 import type { Env } from './types.ts';
+import { UPDATE_REQUIRED } from './accounts.ts';
+import { CORS, json } from './http.ts';
 
 export const STABLE_ORIGIN = 'https://terminus.run';
 
@@ -29,10 +31,10 @@ const MOVED: Record<string, string> = {
 
 /**
  * What keeps answering on an old address, for what calls it there rather
- * than a person: the Mac's updates and the downloads, Android's app-link
- * check, the map's files and crawlers' rules.
+ * than a person: the API, the Mac's updates and the downloads, Android's
+ * app-link check, the map's files and crawlers' rules.
  */
-const STAYS = ['/download/', '/.well-known/', '/map/', '/robots.txt'];
+const STAYS = ['/api/', '/download/', '/.well-known/', '/map/', '/robots.txt'];
 
 /**
  * A page opened on an old address goes to the same page on the new one.
@@ -52,6 +54,30 @@ export function movedPage(req: Request, env: Env): Response | null {
   if (!(req.headers.get('accept') ?? '').includes('text/html')) return null;
   if (STAYS.some((p) => url.pathname === p || url.pathname.startsWith(p))) return null;
   return new Response(null, { status: 301, headers: { location: `${to}${url.pathname}${url.search}`, 'cache-control': 'public, max-age=86400' } });
+}
+
+/** The API's old paths, before it moved under /api (3.0). */
+const OLD_API = new Set(['/me', '/next', '/trip', '/arrivals', '/buses', '/line', '/campus', '/stops/pairs', '/health', '/status.json', '/admin/stats', '/openapi.json', '/pair/check']);
+const OLD_API_UNDER = ['/me/', '/auth/', '/timelapse/'];
+
+/**
+ * A call to the API at its old path. An app (it says which in
+ * x-terminus-client) is one from before 3.0: a 426 has it show "update",
+ * as config:minClient does, rather than fail on a 404. Anyone else (an API
+ * key's script, a page open since before) is sent to the new path with a
+ * 308, which keeps the method and body. The two emailed pages under /auth/
+ * and the pairing page (GET /pair) never moved, so they aren't this.
+ */
+export function movedApi(req: Request, url: URL): Response | null {
+  const path = url.pathname;
+  const reading = req.method === 'GET' || req.method === 'HEAD';
+  const old =
+    OLD_API.has(path)
+    || (path === '/pair' && !reading)
+    || (OLD_API_UNDER.some((p) => path.startsWith(p)) && path !== '/auth/verify' && path !== '/auth/approve');
+  if (!old) return null;
+  if (req.headers.has('x-terminus-client')) return json(UPDATE_REQUIRED, 426);
+  return new Response(null, { status: 308, headers: { location: `/api${path}${url.search}`, 'cache-control': 'no-store', ...CORS } });
 }
 
 /** The sender's name on every email, so a beta email is never mistaken for the real one. */

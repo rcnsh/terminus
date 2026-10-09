@@ -30,7 +30,7 @@ async function call(path, { fetchImpl, env, cache, headers } = {}) {
 }
 
 test('query parsing does not turn a missing lat into the Gulf of Guinea', () => {
-  const u = new URL(`${BASE}/next?lon=103.7&empty=&bad=abc`);
+  const u = new URL(`${BASE}/api/next?lon=103.7&empty=&bad=abc`);
   assert.equal(numParam(u, 'lat'), null, 'Number(null) === 0, so this must be checked explicitly');
   assert.equal(numParam(u, 'empty'), null, "Number('') === 0 too");
   assert.equal(numParam(u, 'bad'), null);
@@ -38,15 +38,15 @@ test('query parsing does not turn a missing lat into the Gulf of Guinea', () => 
 
   // One coordinate without the other is not a position.
   assert.deepEqual(coordsFrom(u), { lat: null, lon: null });
-  assert.deepEqual(coordsFrom(new URL(`${BASE}/next?lat=1.29&lon=103.77`)), { lat: 1.29, lon: 103.77 });
-  assert.deepEqual(coordsFrom(new URL(`${BASE}/next?lat=999&lon=103.77`)), { lat: null, lon: null });
+  assert.deepEqual(coordsFrom(new URL(`${BASE}/api/next?lat=1.29&lon=103.77`)), { lat: 1.29, lon: 103.77 });
+  assert.deepEqual(coordsFrom(new URL(`${BASE}/api/next?lat=999&lon=103.77`)), { lat: null, lon: null });
 });
 
-test('/next with nothing at all prompts setup, not a fabricated destination', async () => {
+test('/api/next with nothing at all prompts setup, not a fabricated destination', async () => {
   // No coordinates, no ?to=. A stranger must not be shown someone
   // else's hardcoded commute -- the old single-user prior is gone.
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4, COM3: D2_IN_4 } });
-  const { res } = await call('/next', { fetchImpl });
+  const { res } = await call('/api/next', { fetchImpl });
   assert.equal(res.status, 200);
   const a = await res.json();
 
@@ -63,7 +63,7 @@ test('/next with nothing at all prompts setup, not a fabricated destination', as
 
 test('the answer is a valid Answer and its label fits the contract', async () => {
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
-  const { res } = await call('/trip?to=UTOWN&from=PGP', { fetchImpl });
+  const { res } = await call('/api/trip?to=UTOWN&from=PGP', { fetchImpl });
   const a = await res.json();
 
   assert.ok(a.label.length <= LABEL_MAX, `label too long: ${a.label}`);
@@ -93,11 +93,11 @@ test('repeat calls within the TTL produce exactly one upstream call', async () =
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
   const cache = installGlobals(fetchImpl);
 
-  await call('/trip?to=UTOWN&from=PGP', { fetchImpl, cache });
+  await call('/api/trip?to=UTOWN&from=PGP', { fetchImpl, cache });
   assert.equal(fetchImpl.counts.shuttle, 1);
 
-  await call('/trip?to=UTOWN&from=PGP', { fetchImpl, cache });
-  await call('/trip?to=UTOWN&from=PGP', { fetchImpl, cache });
+  await call('/api/trip?to=UTOWN&from=PGP', { fetchImpl, cache });
+  await call('/api/trip?to=UTOWN&from=PGP', { fetchImpl, cache });
   assert.equal(fetchImpl.counts.shuttle, 1, 'the 15 s edge cache absorbed the repeats');
 });
 
@@ -108,9 +108,9 @@ test('a cache-busting ?t= does not defeat the cache', async () => {
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
   const cache = installGlobals(fetchImpl);
 
-  await call('/trip?to=UTOWN&from=PGP&t=1', { fetchImpl, cache });
-  await call('/trip?to=UTOWN&from=PGP&t=2', { fetchImpl, cache });
-  await call('/trip?to=UTOWN&from=PGP&t=3', { fetchImpl, cache });
+  await call('/api/trip?to=UTOWN&from=PGP&t=1', { fetchImpl, cache });
+  await call('/api/trip?to=UTOWN&from=PGP&t=2', { fetchImpl, cache });
+  await call('/api/trip?to=UTOWN&from=PGP&t=3', { fetchImpl, cache });
   assert.equal(fetchImpl.counts.shuttle, 1);
 });
 
@@ -127,7 +127,7 @@ test('a dead upstream returns quality "stale" with the original timestamp', asyn
 
   // Reading the cached Response twice would throw here and turn "upstream is
   // down" into "the Worker is down". It must not.
-  const { res } = await call('/trip?to=UTOWN&from=PGP', { fetchImpl: dead, cache });
+  const { res } = await call('/api/trip?to=UTOWN&from=PGP', { fetchImpl: dead, cache });
   assert.equal(res.status, 200, 'upstream being down is not a Worker error');
 
   const a = await res.json();
@@ -141,7 +141,7 @@ test('a dead upstream returns quality "stale" with the original timestamp', asyn
 
 test('a dead upstream with a cold cache says so instead of inventing a time', async () => {
   const dead = makeFetch({ fail: true });
-  const { res } = await call('/trip?to=UTOWN&from=PGP', { fetchImpl: dead });
+  const { res } = await call('/api/trip?to=UTOWN&from=PGP', { fetchImpl: dead });
   assert.equal(res.status, 200, 'upstream being down is not a Worker error');
 
   const a = await res.json();
@@ -160,16 +160,16 @@ test('a stop the feed answered for is scheduled, not unknown', async () => {
   // Feed reachable, but every service reports "-": no bus, which is real
   // information and earns a headway estimate.
   const quiet = makeFetch({ byStop: { PGP: [{ name: 'D2', arrivalTime: '-', nextArrivalTime: '-' }] } });
-  const { res } = await call('/trip?to=UTOWN&from=PGP', { fetchImpl: quiet });
+  const { res } = await call('/api/trip?to=UTOWN&from=PGP', { fetchImpl: quiet });
   const a = await res.json();
   assert.equal(a.quality, 'scheduled');
   assert.match(a.label, /^D2 · ~\d+ min$/);
   assert.match(a.detail, /estimated/);
 });
 
-test('/health reports what is configured without leaking any of it', async () => {
+test('/api/health reports what is configured without leaking any of it', async () => {
   const fetchImpl = makeFetch({});
-  const { res } = await call('/health', { fetchImpl });
+  const { res } = await call('/api/health', { fetchImpl });
   const h = await res.json();
   assert.equal(h.ok, true);
   assert.equal(h.config.auth, true);
@@ -181,20 +181,20 @@ test('/health reports what is configured without leaking any of it', async () =>
 
   const body = JSON.stringify(h);
   for (const secret of ['test-htd', 'test-app', 'test-proxy-key', 'example.test']) {
-    assert.ok(!body.includes(secret), `/health leaked ${secret}`);
+    assert.ok(!body.includes(secret), `/api/health leaked ${secret}`);
   }
 });
 
 test('an unknown destination is a 400 that says what to send', async () => {
   const fetchImpl = makeFetch({});
-  const { res } = await call('/trip?to=narnia&from=PGP', { fetchImpl });
+  const { res } = await call('/api/trip?to=narnia&from=PGP', { fetchImpl });
   assert.equal(res.status, 400);
   assert.match((await res.json()).error, /stop or venue code/);
 });
 
-test('/trip accepts a NUSMods venue code', async () => {
+test('/api/trip accepts a NUSMods venue code', async () => {
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
-  const { res } = await call('/trip?to=COM1-0212&from=PGP', { fetchImpl });
+  const { res } = await call('/api/trip?to=COM1-0212&from=PGP', { fetchImpl });
   assert.equal(res.status, 200);
 });
 
@@ -204,7 +204,7 @@ test('/docs is the API documentation, rendered from /openapi.json', async () => 
   assert.equal(res.status, 200);
   assert.ok(res.headers.get('content-type').startsWith('text/html'));
   const html = await res.text();
-  assert.match(html, /<elements-api[^>]+apiDescriptionUrl="\/openapi.json"/);
+  assert.match(html, /<elements-api[^>]+apiDescriptionUrl="\/api\/openapi.json"/);
 
   // `/` is the static landing page, served by the assets layer before the Worker runs.
   for (const gone of ['/', '/manifest.webmanifest', '/sw.js', '/icon.svg', '/vapid', '/subscribe', '/nope']) {
@@ -213,7 +213,7 @@ test('/docs is the API documentation, rendered from /openapi.json', async () => 
   }
 });
 
-test('/openapi.json and /docs are built once and sent the same', async () => {
+test('/api/openapi.json and /docs are built once and sent the same', async () => {
   const { openApiJson, openApiSpec, docsPageFor, docsPage } = await import('../src/openapi.ts');
   const a = openApiJson(BASE);
   assert.equal(openApiJson(BASE), a, 'the same string, not rebuilt');
@@ -222,7 +222,7 @@ test('/openapi.json and /docs are built once and sent the same', async () => {
   for (let i = 0; i < 20; i++) openApiJson(`https://h${i}.test`);
   assert.deepEqual(JSON.parse(openApiJson(BASE)), openApiSpec(BASE), 'many origins: still right');
   assert.equal(docsPageFor('dusk'), docsPage('dusk'));
-  const { res } = await call('/openapi.json');
+  const { res } = await call('/api/openapi.json');
   assert.equal(res.headers.get('content-type'), 'application/json; charset=utf-8');
   assert.equal(res.headers.get('cache-control'), 'public, max-age=300');
   assert.equal(res.headers.get('access-control-allow-origin'), '*');
@@ -253,7 +253,7 @@ test('the apps and the API docs carry the same version and build number', async 
 
 test('the OpenAPI spec documents exactly the routes that exist', async () => {
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4, COM3: D2_IN_4 } });
-  const { res } = await call('/openapi.json', { fetchImpl });
+  const { res } = await call('/api/openapi.json', { fetchImpl });
   assert.equal(res.status, 200);
   const spec = await res.json();
   assert.equal(spec.openapi, '3.1.0');
@@ -269,9 +269,9 @@ test('the OpenAPI spec documents exactly the routes that exist', async () => {
     .sort();
   const routed = [
     ...ME_ROUTES.map((r) => `${r.method} ${r.path.endsWith('/') ? r.path + '*' : r.path}`),
-    ...['/next', '/trip', '/arrivals', '/buses', '/line', '/campus', '/stops/pairs', '/health', '/status.json', '/admin/stats', '/docs', '/openapi.json', '/timelapse/days', '/timelapse/days/*'].map((p) => `GET ${p}`),
-    ...['/auth/config', '/auth/verify', '/auth/approve'].map((p) => `GET ${p}`),
-    ...['/auth/login', '/auth/code', '/auth/verify', '/auth/anon', '/auth/anon/web', '/auth/app/start', '/auth/app/poll', '/auth/app/code', '/auth/app/merge', '/auth/approve', '/auth/logout', '/pair', '/pair/check'].map((p) => `POST ${p}`),
+    ...['/api/next', '/api/trip', '/api/arrivals', '/api/buses', '/api/line', '/api/campus', '/api/stops/pairs', '/api/health', '/api/status.json', '/api/admin/stats', '/docs', '/api/openapi.json', '/api/timelapse/days', '/api/timelapse/days/*'].map((p) => `GET ${p}`),
+    ...['/api/auth/config', '/auth/verify', '/auth/approve'].map((p) => `GET ${p}`),
+    ...['/api/auth/login', '/api/auth/code', '/auth/verify', '/api/auth/anon', '/api/auth/anon/web', '/api/auth/app/start', '/api/auth/app/poll', '/api/auth/app/code', '/api/auth/app/merge', '/auth/approve', '/api/auth/logout', '/api/pair', '/api/pair/check'].map((p) => `POST ${p}`),
     ...['/map/style.json', '/map/campus.pmtiles', '/map/fonts/*/*.pbf', '/map/sprites/v4/*'].map((p) => `GET ${p}`),
     ...['/download/latest.json', '/download/android', '/download/mac', '/download/appcast.xml', '/download/releases/*/*'].map((p) => `GET ${p}`),
   ].sort();
@@ -297,22 +297,22 @@ test('the OpenAPI spec documents exactly the routes that exist', async () => {
 });
 test('standing at the destination answers "You\'re here", not an ended walk', async () => {
   const fetchImpl = makeFetch({ byStop: { COM3: D2_IN_4 } });
-  const { res } = await call('/trip?to=COM3&lat=1.294431&lon=103.775217', { fetchImpl });
+  const { res } = await call('/api/trip?to=COM3&lat=1.294431&lon=103.775217', { fetchImpl });
   const body = await res.json();
   assert.equal(body.label, "You're here");
   assert.equal(body.quality, 'live');
   assert.doesNotMatch(body.detail, /now walk/);
 });
 
-test('/next opened in a browser returns JSON, not a redirect to a page that no longer exists', async () => {
+test('/api/next opened in a browser returns JSON, not a redirect to a page that no longer exists', async () => {
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
-  const { res } = await call('/next', { fetchImpl, headers: { accept: 'text/html' } });
+  const { res } = await call('/api/next', { fetchImpl, headers: { accept: 'text/html' } });
   assert.equal(res.status, 200);
   assert.ok(res.headers.get('content-type').startsWith('application/json'));
 });
-test('/campus serves the static map + destination search data, cached hard', async () => {
+test('/api/campus serves the static map + destination search data, cached hard', async () => {
   const fetchImpl = makeFetch({});
-  const { res } = await call('/campus', { fetchImpl });
+  const { res } = await call('/api/campus', { fetchImpl });
   assert.equal(res.status, 200);
   assert.match(res.headers.get('cache-control'), /max-age=3600/);
   const body = await res.json();
@@ -322,9 +322,9 @@ test('/campus serves the static map + destination search data, cached hard', asy
   assert.equal(fetchImpl.counts.shuttle, 0, 'a static payload never touches the upstream feed');
 });
 
-test('/arrivals reports one stop\'s board without needing a destination', async () => {
+test('/api/arrivals reports one stop\'s board without needing a destination', async () => {
   const fetchImpl = makeFetch({ byStop: { COM3: D2_IN_4 } });
-  const { res } = await call('/arrivals?stop=com3', { fetchImpl }); // lowercase, like a URL a user might paste
+  const { res } = await call('/api/arrivals?stop=com3', { fetchImpl }); // lowercase, like a URL a user might paste
   assert.equal(res.status, 200);
   const body = await res.json();
   assert.equal(body.stop.code, 'COM3');
@@ -334,9 +334,9 @@ test('/arrivals reports one stop\'s board without needing a destination', async 
   assert.ok(Number.isFinite(d2.etaS));
 });
 
-test('/arrivals names the stop across the road, and each row says where it goes', async () => {
+test('/api/arrivals names the stop across the road, and each row says where it goes', async () => {
   const fetchImpl = makeFetch({ byStop: { YIH: [{ name: 'K', arrivalTime: '3', nextArrivalTime: '12', passengers: 'high' }] } });
-  const body = await (await call('/arrivals?stop=YIH', { fetchImpl })).res.json();
+  const body = await (await call('/api/arrivals?stop=YIH', { fetchImpl })).res.json();
   assert.deepEqual(body.stop, { code: 'YIH', name: 'YIH', longName: 'Yusof Ishak House', opposite: 'YIH-OPP', oppositeAcross: true, oppositeName: 'Opp Yusof Ishak House' });
   const k = body.board.find((r) => r.svc === 'K');
   assert.deepEqual(k.towards, ['Central Library', "Prince George's Park Foyer"]);
@@ -344,24 +344,24 @@ test('/arrivals names the stop across the road, and each row says where it goes'
   assert.equal(k.crowd, 'high');
   assert.ok(k.endsAt === null || Number.isFinite(Date.parse(k.endsAt)));
   // A stop with no twin says so.
-  const utown = await (await call('/arrivals?stop=UTOWN', { fetchImpl: makeFetch({}) })).res.json();
+  const utown = await (await call('/api/arrivals?stop=UTOWN', { fetchImpl: makeFetch({}) })).res.json();
   assert.equal(utown.stop.opposite, null);
   assert.equal(utown.stop.oppositeName, null);
   // PGP's Foyer is near it, not across the road: named, not "Across the road".
-  const pgp = await (await call('/arrivals?stop=PGP', { fetchImpl: makeFetch({}) })).res.json();
+  const pgp = await (await call('/api/arrivals?stop=PGP', { fetchImpl: makeFetch({}) })).res.json();
   assert.equal(pgp.stop.opposite, 'PGPR');
   assert.equal(pgp.stop.oppositeAcross, false);
   assert.equal(pgp.stop.oppositeName, "Prince George's Park Foyer");
 });
 
-test('/arrivals?stopped=1 adds the services not running, after the others; without it nothing changes but `running`', async () => {
+test('/api/arrivals?stopped=1 adds the services not running, after the others; without it nothing changes but `running`', async () => {
   const fetchImpl = makeFetch({ byStop: { PGP: [{ name: 'K', arrivalTime: '2', passengers: 'low' }] } });
   const cache = installGlobals(fetchImpl);
   Date.now = () => Date.UTC(2026, 9, 7, 13, 30); // Wednesday 21:30 in Singapore: R1 and R2 have finished
-  const plain = await (await call('/arrivals?stop=PGP', { fetchImpl, cache })).res.json();
+  const plain = await (await call('/api/arrivals?stop=PGP', { fetchImpl, cache })).res.json();
   assert.ok(plain.board.every((r) => r.running === true && !('stopped' in r)));
   assert.ok(!plain.board.some((r) => r.svc === 'R1'));
-  const all = await (await call('/arrivals?stop=PGP&stopped=1', { fetchImpl, cache })).res.json();
+  const all = await (await call('/api/arrivals?stop=PGP&stopped=1', { fetchImpl, cache })).res.json();
   assert.deepEqual(all.board.slice(0, plain.board.length), plain.board);
   const off = all.board.slice(plain.board.length);
   assert.deepEqual(off.map((r) => [r.svc, r.running, r.stopped, r.resumesAt]), [
@@ -371,9 +371,9 @@ test('/arrivals?stopped=1 adds the services not running, after the others; witho
   assert.equal(fetchImpl.counts.shuttle, 1, 'the same cached read');
 });
 
-test('/arrivals on an unknown stop is a 400, not a fabricated empty board', async () => {
+test('/api/arrivals on an unknown stop is a 400, not a fabricated empty board', async () => {
   const fetchImpl = makeFetch({});
-  const { res } = await call('/arrivals?stop=narnia', { fetchImpl });
+  const { res } = await call('/api/arrivals?stop=narnia', { fetchImpl });
   assert.equal(res.status, 400);
   assert.equal(fetchImpl.counts.shuttle, 0);
 });
@@ -384,7 +384,7 @@ const D2_BUSES = [
   { vehplate: 'PD999Z', lat: 1.3015, lng: 103.7605, speed: 0, direction: 10, loadInfo: { crowdLevel: 'low' } },
 ];
 
-test('/buses shows each bus on its route at a stop or between two, with its number plate; one off its route is left out', async () => {
+test('/api/buses shows each bus on its route at a stop or between two, with its number plate; one off its route is left out', async () => {
   const shape = (await import('../data/shapes.json', { with: { type: 'json' } })).default.routes.D2;
   // Put the first bus a third of the way along D2's line, heading along it.
   const i = Math.floor(shape.line.length / 3);
@@ -394,7 +394,7 @@ test('/buses shows each bus on its route at a stop or between two, with its numb
   const buses = [{ ...D2_BUSES[0], lat: (aLat + bLat) / 2, lng: (aLon + bLon) / 2, direction: (heading + 360) % 360 }, D2_BUSES[1]];
   const fetchImpl = makeFetch({ buses: { D2: buses } });
   const cache = installGlobals(fetchImpl);
-  const { res } = await call('/buses?svc=d2', { fetchImpl, cache });
+  const { res } = await call('/api/buses?svc=d2', { fetchImpl, cache });
   assert.equal(res.status, 200);
   const body = await res.json();
   assert.equal(body.svc, 'D2');
@@ -415,24 +415,24 @@ test('/buses shows each bus on its route at a stop or between two, with its numb
   assert.equal(fetchImpl.requests[0].body.route_code, 'D2');
 
   // A second look within 10 s is served from the cache.
-  await call('/buses?svc=D2', { fetchImpl, cache });
+  await call('/api/buses?svc=D2', { fetchImpl, cache });
   assert.equal(fetchImpl.counts.shuttle, 1);
 });
 
-test('/buses: an unknown service is a 400; an unreachable feed is unavailable, not empty', async () => {
+test('/api/buses: an unknown service is a 400; an unreachable feed is unavailable, not empty', async () => {
   const none = makeFetch({});
-  const { res: bad } = await call('/buses?svc=Z9', { fetchImpl: none });
+  const { res: bad } = await call('/api/buses?svc=Z9', { fetchImpl: none });
   assert.equal(bad.status, 400);
   assert.equal(none.counts.shuttle, 0);
 
-  const { res } = await call('/buses?svc=K', { fetchImpl: makeFetch({ fail: true }) });
+  const { res } = await call('/api/buses?svc=K', { fetchImpl: makeFetch({ fail: true }) });
   assert.equal(res.status, 200);
   const body = await res.json();
   assert.equal(body.available, false);
   assert.deepEqual(body.buses, []);
 });
 
-test('/line: a service’s stops in order, its buses on them, and with a stop that stop’s row; one read of each feed', async () => {
+test('/api/line: a service’s stops in order, its buses on them, and with a stop that stop’s row; one read of each feed', async () => {
   const shape = (await import('../data/shapes.json', { with: { type: 'json' } })).default.routes.D1;
   // A D1 bus a third of the way along the line between two of its points, heading along it.
   const i = Math.floor(shape.line.length / 3);
@@ -444,7 +444,7 @@ test('/line: a service’s stops in order, its buses on them, and with a stop th
     byStop: { YIH: [{ name: 'D1', arrivalTime: '6', nextArrivalTime: '18', passengers: 'medium' }] },
   });
   const cache = installGlobals(fetchImpl);
-  const { res } = await call('/line?svc=d1&stop=yih', { fetchImpl, cache });
+  const { res } = await call('/api/line?svc=d1&stop=yih', { fetchImpl, cache });
   assert.equal(res.status, 200);
   assert.equal(res.headers.get('cache-control'), 'private, max-age=5');
   const body = await res.json();
@@ -463,7 +463,7 @@ test('/line: a service’s stops in order, its buses on them, and with a stop th
   const [bus] = body.buses;
   assert.equal(bus.plate, 'PD418C');
   assert.equal(bus.crowd, 'low');
-  const map = (await (await call('/buses?svc=D1', { fetchImpl, cache })).res.json()).buses[0];
+  const map = (await (await call('/api/buses?svc=D1', { fetchImpl, cache })).res.json()).buses[0];
   assert.equal(bus.id, map.id);
   // A third of the way along a stretch of road: between two stops, after Opp YIH.
   assert.equal(map.at, null, 'between stops on the map');
@@ -473,28 +473,28 @@ test('/line: a service’s stops in order, its buses on them, and with a stop th
 
   // Without a stop: no `stop`, and no arrivals read.
   const plain = makeFetch({ buses: { D1: [] } });
-  const bare = await (await call('/line?svc=D1', { fetchImpl: plain })).res.json();
+  const bare = await (await call('/api/line?svc=D1', { fetchImpl: plain })).res.json();
   assert.equal('stop' in bare, false);
   assert.deepEqual(bare.buses, []);
   assert.equal(plain.counts.shuttle, 1);
 });
 
-test('/line says whether the service is running, and its row at the stop comes even when it is not', async () => {
+test('/api/line says whether the service is running, and its row at the stop comes even when it is not', async () => {
   const fetchImpl = makeFetch({ buses: { R1: [] } });
   const cache = installGlobals(fetchImpl);
   Date.now = () => Date.UTC(2026, 9, 10, 1); // Saturday 09:00 in Singapore: no R1 at weekends
-  const body = await (await call('/line?svc=R1&stop=PGP', { fetchImpl, cache })).res.json();
+  const body = await (await call('/api/line?svc=R1&stop=PGP', { fetchImpl, cache })).res.json();
   assert.equal(body.running, false);
   assert.equal(body.stopped, 'noService');
   assert.equal(body.resumesAt, '2026-10-11T23:40:00.000Z', 'Monday 07:40');
   assert.equal(body.endsAt, null);
   assert.deepEqual([body.stop.row.svc, body.stop.row.running, body.stop.row.stopped], ['R1', false, 'noService']);
   Date.now = () => Date.UTC(2026, 9, 7, 4); // Wednesday noon
-  const on = await (await call('/line?svc=R1', { fetchImpl, cache })).res.json();
+  const on = await (await call('/api/line?svc=R1', { fetchImpl, cache })).res.json();
   assert.deepEqual([on.running, on.stopped, on.resumesAt], [true, null, null]);
 });
 
-test('/line: a bus still out after hours means the service is running, never "stopped" over a moving bus', async () => {
+test('/api/line: a bus still out after hours means the service is running, never "stopped" over a moving bus', async () => {
   const shape = (await import('../data/shapes.json', { with: { type: 'json' } })).default.routes.R1;
   const i = Math.floor(shape.line.length / 3);
   const [aLon, aLat] = shape.line[i];
@@ -503,25 +503,25 @@ test('/line: a bus still out after hours means the service is running, never "st
   const fetchImpl = makeFetch({ buses: { R1: [{ vehplate: 'PD500A', lat: (aLat + bLat) / 2, lng: (aLon + bLon) / 2, speed: 30, direction: (heading + 360) % 360 }] } });
   const cache = installGlobals(fetchImpl);
   Date.now = () => Date.UTC(2026, 9, 7, 11, 45); // Wednesday 19:45 in Singapore: R1's hours end at 19:30
-  const body = await (await call('/line?svc=R1', { fetchImpl, cache })).res.json();
+  const body = await (await call('/api/line?svc=R1', { fetchImpl, cache })).res.json();
   assert.equal(body.buses.length, 1);
   assert.deepEqual([body.running, body.stopped, body.resumesAt], [true, null, null]);
 });
 
-test('/line: an unknown service or a stop it doesn’t call at is a 400, and costs nothing upstream', async () => {
+test('/api/line: an unknown service or a stop it doesn’t call at is a 400, and costs nothing upstream', async () => {
   const none = makeFetch({});
-  const { res: svc } = await call('/line?svc=Z9', { fetchImpl: none });
+  const { res: svc } = await call('/api/line?svc=Z9', { fetchImpl: none });
   assert.equal(svc.status, 400);
   assert.equal((await svc.json()).error, 'unknown service');
-  const { res: stop } = await call('/line?svc=D1&stop=PGP', { fetchImpl: none });
+  const { res: stop } = await call('/api/line?svc=D1&stop=PGP', { fetchImpl: none });
   assert.equal(stop.status, 400);
   assert.equal((await stop.json()).error, 'stop not on this service');
-  const { res: zh } = await call('/line?svc=D1&stop=PGP', { fetchImpl: none, headers: { 'accept-language': 'zh-CN' } });
+  const { res: zh } = await call('/api/line?svc=D1&stop=PGP', { fetchImpl: none, headers: { 'accept-language': 'zh-CN' } });
   assert.equal((await zh.json()).error, '这条线路不经过这个车站');
   assert.equal(none.counts.shuttle, 0);
 
   // An unreachable feed: unavailable, no buses, and the row is unknown rather than made up.
-  const down = await (await call('/line?svc=K&stop=YIH', { fetchImpl: makeFetch({ fail: true }) })).res.json();
+  const down = await (await call('/api/line?svc=K&stop=YIH', { fetchImpl: makeFetch({ fail: true }) })).res.json();
   assert.equal(down.available, false);
   assert.deepEqual(down.buses, []);
   assert.ok(down.stop.row === null || down.stop.row.etaS === null);
@@ -532,7 +532,7 @@ test('walking is offered end to end when it beats the bus', async () => {
   // four stops of riding loses to that, and the endpoint must be willing to
   // say so rather than dutifully reporting the bus.
   const slow = makeFetch({ byStop: { COM3: [{ name: 'D1', arrivalTime: '14', passengers: 'low' }] } });
-  const { res } = await call('/trip?to=UTOWN&lat=1.29466&lon=103.77441', { fetchImpl: slow });
+  const { res } = await call('/api/trip?to=UTOWN&lat=1.29466&lon=103.77441', { fetchImpl: slow });
   const a = await res.json();
 
   assert.match(a.label, /^Walk · \d+ min$/);
@@ -545,16 +545,16 @@ test('walking is offered end to end when it beats the bus', async () => {
 test('the destination stop is never offered as somewhere to catch a bus', async () => {
   const f = makeFetch({ byStop: { COM3: [{ name: 'D1', arrivalTime: '3' }] } });
   // Standing on COM3 with COM3 as the destination.
-  const { res } = await call('/trip?to=COM3&lat=1.29466&lon=103.77441', { fetchImpl: f });
+  const { res } = await call('/api/trip?to=COM3&lat=1.29466&lon=103.77441', { fetchImpl: f });
   const a = await res.json();
   assert.notEqual(a.stop.code, 'COM3', 'boarding at your destination is not an option');
 });
 
-test('/trip with no location needs a starting stop, not someone else\'s default', async () => {
+test('/api/trip with no location needs a starting stop, not someone else\'s default', async () => {
   const f = makeFetch({ byStop: { PGP: [{ name: 'D2', arrivalTime: '5' }] } });
-  const bare = await call('/trip?to=UTOWN', { fetchImpl: f });
+  const bare = await call('/api/trip?to=UTOWN', { fetchImpl: f });
   assert.equal(bare.res.status, 400);
-  const { res } = await call('/trip?to=UTOWN&from=PGP', { fetchImpl: f });
+  const { res } = await call('/api/trip?to=UTOWN&from=PGP', { fetchImpl: f });
   assert.equal(res.status, 200);
   assert.equal((await res.json()).stop.code, 'PGP');
 });
@@ -566,7 +566,7 @@ test('/trip with no location needs a starting stop, not someone else\'s default'
 test('an answer logs one decision row plus a row per timed arrival', async () => {
   const ae = makeAnalytics();
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
-  const { res } = await call('/trip?to=UTOWN&from=PGP', { fetchImpl, env: makeEnv(makeKV(), ae) });
+  const { res } = await call('/api/trip?to=UTOWN&from=PGP', { fetchImpl, env: makeEnv(makeKV(), ae) });
   const a = await res.json();
 
   const answers = ae.rows('answer');
@@ -605,7 +605,7 @@ test('an answer logs one decision row plus a row per timed arrival', async () =>
 test('logging is a no-op without the binding, and never breaks an answer', async () => {
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
   // makeEnv omits AE by default.
-  const { res } = await call('/trip?to=UTOWN&from=PGP', { fetchImpl });
+  const { res } = await call('/api/trip?to=UTOWN&from=PGP', { fetchImpl });
   assert.equal(res.status, 200);
   assert.match((await res.json()).label, /^D2 · /);
 });
@@ -617,17 +617,17 @@ test('a thrown analytics binding cannot take down a response', async () => {
     },
   };
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
-  const { res } = await call('/trip?to=UTOWN&from=PGP', { fetchImpl, env: makeEnv(makeKV(), hostile) });
+  const { res } = await call('/api/trip?to=UTOWN&from=PGP', { fetchImpl, env: makeEnv(makeKV(), hostile) });
   assert.equal(res.status, 200, 'losing a metric is not worth losing an answer');
   assert.match((await res.json()).label, /^D2 · /);
 });
 
-test('/next with coordinates but no timetable shows nearby buses, no invented destination', async () => {
+test('/api/next with coordinates but no timetable shows nearby buses, no invented destination', async () => {
   // Standing near COM3, no timetable. The honest answer is "what is coming at
   // your nearest stop", with no destination and so no walk/ride computation.
   const fetchImpl = makeFetch({ byStop: { COM3: D2_IN_4 } });
   // COM3 coordinates.
-  const { res } = await call('/next?lat=1.29443&lon=103.77522', { fetchImpl });
+  const { res } = await call('/api/next?lat=1.29443&lon=103.77522', { fetchImpl });
   assert.equal(res.status, 200);
   const a = await res.json();
   assert.ok(a.stop.code.length > 0, 'a real nearby stop');
@@ -644,7 +644,7 @@ test('/next with coordinates but no timetable shows nearby buses, no invented de
 
 test('arrivals come from a POST to the bus proxy, authenticated like uNivUS 2.59.2', async () => {
   const fetchImpl = makeFetch({ byStop: { COM3: D2_IN_4 } });
-  const { res } = await call('/arrivals?stop=COM3', { fetchImpl });
+  const { res } = await call('/api/arrivals?stop=COM3', { fetchImpl });
   assert.equal(res.status, 200);
   assert.equal((await res.json()).available, true);
 
@@ -661,7 +661,7 @@ test('arrivals come from a POST to the bus proxy, authenticated like uNivUS 2.59
 
 test('a rejected proxy call retries once with a genuinely fresh token', async () => {
   const fetchImpl = makeFetch({ byStop: { COM3: D2_IN_4 }, reject: 1, rejectCode: '10008' });
-  const { res } = await call('/arrivals?stop=COM3', { fetchImpl });
+  const { res } = await call('/api/arrivals?stop=COM3', { fetchImpl });
   assert.equal((await res.json()).available, true, 'the retry succeeded');
 
   assert.equal(fetchImpl.counts.shuttle, 2);
@@ -674,7 +674,7 @@ test('a rejected proxy call retries once with a genuinely fresh token', async ()
 
 test('a proxy that keeps rejecting degrades to unknown, not a fake "no bus"', async () => {
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 }, reject: 99, rejectCode: '10008' });
-  const { res } = await call('/trip?to=UTOWN&from=PGP', { fetchImpl });
+  const { res } = await call('/api/trip?to=UTOWN&from=PGP', { fetchImpl });
   assert.equal(res.status, 200);
   const a = await res.json();
   // 'scheduled' would claim the feed answered and had no bus. It never answered.
@@ -684,11 +684,11 @@ test('a proxy that keeps rejecting degrades to unknown, not a fake "no bus"', as
 
 test('a refused app version (10009) does not re-mint, and trips a breaker for every stop', async () => {
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 }, reject: 99 });
-  const { cache } = await call('/arrivals?stop=PGP', { fetchImpl });
+  const { cache } = await call('/api/arrivals?stop=PGP', { fetchImpl });
   assert.equal(fetchImpl.counts.shuttle, 1, 'a fresh token cannot fix a version refusal');
   const mints = fetchImpl.counts.auth;
   for (const stop of ['PGP', 'COM3', 'UTOWN', 'KR-MRT']) {
-    const { res } = await call(`/arrivals?stop=${stop}`, { fetchImpl, cache });
+    const { res } = await call(`/api/arrivals?stop=${stop}`, { fetchImpl, cache });
     assert.equal((await res.json()).available, false);
   }
   assert.equal(fetchImpl.counts.shuttle, 1, 'the breaker kept every stop off the feed');
@@ -700,19 +700,19 @@ test('the version string comes from config:appVersion in KV, else the secret', a
   const kv = makeKV();
   await kv.put('config:appVersion', NEW);
   const fetchImpl = makeFetch({ byStop: { COM3: D2_IN_4 } });
-  await call('/arrivals?stop=COM3', { fetchImpl, env: makeEnv(kv) });
+  await call('/api/arrivals?stop=COM3', { fetchImpl, env: makeEnv(kv) });
   assert.equal(fetchImpl.mints[0].version, NEW, 'the token is minted with it');
   assert.equal(fetchImpl.requests[0].body.version, NEW, 'and the proxy call carries it');
 
   const plain = makeFetch({ byStop: { COM3: D2_IN_4 } });
-  await call('/arrivals?stop=COM3', { fetchImpl: plain });
+  await call('/api/arrivals?stop=COM3', { fetchImpl: plain });
   assert.equal(plain.mints[0].version, '0.0.0-test', 'no key: the secret');
 
   // A typo in KV would fail every call, so it is ignored.
   const typo = makeKV();
   await typo.put('config:appVersion', '2.60.0');
   const guarded = makeFetch({ byStop: { COM3: D2_IN_4 } });
-  await call('/arrivals?stop=COM3', { fetchImpl: guarded, env: makeEnv(typo) });
+  await call('/api/arrivals?stop=COM3', { fetchImpl: guarded, env: makeEnv(typo) });
   assert.equal(guarded.mints[0].version, '0.0.0-test');
 });
 
@@ -721,15 +721,15 @@ test('a new version written to KV is live within a minute, with a token minted f
   const kv = makeKV();
   const env = makeEnv(kv);
   const fetchImpl = makeFetch({ byStop: { COM3: D2_IN_4 } });
-  const { cache } = await call('/arrivals?stop=COM3', { fetchImpl, env });
+  const { cache } = await call('/api/arrivals?stop=COM3', { fetchImpl, env });
   await kv.put('config:appVersion', NEW);
 
   Date.now = () => FROZEN_NOW + 30_000;
-  await call('/arrivals?stop=COM3', { fetchImpl, env, cache });
+  await call('/api/arrivals?stop=COM3', { fetchImpl, env, cache });
   assert.equal(fetchImpl.mints.length, 1, 'inside the minute, the old version and its token carry on');
 
   Date.now = () => FROZEN_NOW + 61_000;
-  await call('/arrivals?stop=COM3', { fetchImpl, env, cache });
+  await call('/api/arrivals?stop=COM3', { fetchImpl, env, cache });
   assert.equal(fetchImpl.mints.length, 2, "the old version's token is not reused");
   assert.equal(fetchImpl.mints[1].version, NEW);
   assert.equal(fetchImpl.requests.at(-1).body.version, NEW);
@@ -737,9 +737,9 @@ test('a new version written to KV is live within a minute, with a token minted f
 
 test('a refused token mint (10009) trips the breaker too, instead of minting for every stop', async () => {
   const fetchImpl = makeFetch({ mintReject: '10009' });
-  const { cache } = await call('/arrivals?stop=PGP', { fetchImpl });
+  const { cache } = await call('/api/arrivals?stop=PGP', { fetchImpl });
   for (const stop of ['COM3', 'UTOWN']) {
-    const { res } = await call(`/arrivals?stop=${stop}`, { fetchImpl, cache });
+    const { res } = await call(`/api/arrivals?stop=${stop}`, { fetchImpl, cache });
     assert.equal((await res.json()).available, false);
   }
   assert.equal(fetchImpl.counts.auth, 1);
@@ -749,11 +749,11 @@ test('a refused token mint (10009) trips the breaker too, instead of minting for
 test('a NUS host answering 429 or 5xx is not retried, and quiets every stop', async () => {
   for (const status of [429, 503]) {
     const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4, COM3: D2_IN_4 }, proxyStatus: status });
-    const { cache } = await call('/arrivals?stop=PGP', { fetchImpl });
+    const { cache } = await call('/api/arrivals?stop=PGP', { fetchImpl });
     assert.equal(fetchImpl.counts.shuttle, 1, `${status}: no second call`);
     assert.equal(fetchImpl.counts.auth, 1, `${status}: no fresh token for it`);
     for (const stop of ['COM3', 'UTOWN']) {
-      const { res } = await call(`/arrivals?stop=${stop}`, { fetchImpl, cache });
+      const { res } = await call(`/api/arrivals?stop=${stop}`, { fetchImpl, cache });
       assert.equal((await res.json()).available, false);
     }
     assert.equal(fetchImpl.counts.shuttle, 1, `${status}: the breaker kept every stop off the feed`);
@@ -768,9 +768,9 @@ test('a NUS host that never answers, or cannot be reached, quiets every stop', a
   try {
     for (const opts of [{ hang: true }, { fail: true }]) {
       const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4, COM3: D2_IN_4 }, ...opts });
-      const { cache } = await call('/arrivals?stop=PGP', { fetchImpl });
+      const { cache } = await call('/api/arrivals?stop=PGP', { fetchImpl });
       for (const stop of ['COM3', 'UTOWN']) {
-        const { res } = await call(`/arrivals?stop=${stop}`, { fetchImpl, cache });
+        const { res } = await call(`/api/arrivals?stop=${stop}`, { fetchImpl, cache });
         assert.equal((await res.json()).available, false);
       }
       assert.equal(fetchImpl.counts.shuttle, 1, `${Object.keys(opts)[0]}: the breaker kept every stop off the feed`);
@@ -784,9 +784,9 @@ test('a failed token mint is not tried again by every stop that wants one', asyn
   // 400: the NUS load balancer's intermittent "Contradictory scheme headers".
   for (const mintStatus of [400, 503]) {
     const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 }, mintStatus });
-    const { cache } = await call('/arrivals?stop=PGP', { fetchImpl });
+    const { cache } = await call('/api/arrivals?stop=PGP', { fetchImpl });
     for (const stop of ['COM3', 'UTOWN', 'KR-MRT']) {
-      const { res } = await call(`/arrivals?stop=${stop}`, { fetchImpl, cache });
+      const { res } = await call(`/api/arrivals?stop=${stop}`, { fetchImpl, cache });
       assert.equal((await res.json()).available, false);
     }
     assert.equal(fetchImpl.counts.auth, 1, `${mintStatus}: one mint, not one per stop`);
@@ -797,15 +797,15 @@ test('a failed token mint is not tried again by every stop that wants one', asyn
 test('a refusal a fresh token did not cure is not met with another mint per stop', async () => {
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 }, reject: 99, rejectCode: '10008' });
   const env = makeEnv();
-  const { cache } = await call('/arrivals?stop=PGP', { fetchImpl, env });
+  const { cache } = await call('/api/arrivals?stop=PGP', { fetchImpl, env });
   assert.equal(fetchImpl.counts.auth, 2, 'the first refusal gets a fresh token');
   assert.equal(fetchImpl.counts.shuttle, 2);
-  await call('/arrivals?stop=COM3', { fetchImpl, env, cache });
+  await call('/api/arrivals?stop=COM3', { fetchImpl, env, cache });
   assert.equal(fetchImpl.counts.auth, 2, 'within remintGapS, no second mint');
   assert.equal(fetchImpl.counts.shuttle, 3, 'and no retry with the token already refused');
   // A minute on, one more fresh token may be tried.
   Date.now = () => FROZEN_NOW + 61_000;
-  await call('/arrivals?stop=UTOWN', { fetchImpl, env, cache });
+  await call('/api/arrivals?stop=UTOWN', { fetchImpl, env, cache });
   assert.equal(fetchImpl.counts.auth, 3);
   assert.equal(fetchImpl.counts.shuttle, 5);
 });
@@ -813,12 +813,12 @@ test('a refusal a fresh token did not cure is not met with another mint per stop
 test("a refused token is retried with another isolate's newer one from KV, without a mint", async () => {
   const kv = makeKV();
   const env = makeEnv(kv);
-  const { cache } = await call('/arrivals?stop=PGP', { fetchImpl: makeFetch({ byStop: { PGP: D2_IN_4 } }), env });
+  const { cache } = await call('/api/arrivals?stop=PGP', { fetchImpl: makeFetch({ byStop: { PGP: D2_IN_4 } }), env });
   // Another isolate has since minted: its token is in KV, this one's memo is older.
   const newer = { token: 'another-isolate-token-0123456789', userid: 'U2', domain: 'PUBLIC', expMs: FROZEN_NOW + 3_600_000, version: '0.0.0-test' };
   await kv.put('auth:session', JSON.stringify(newer));
   const fetchImpl = makeFetch({ byStop: { COM3: D2_IN_4 }, reject: 1, rejectCode: '10008' });
-  const { res } = await call('/arrivals?stop=COM3', { fetchImpl, env, cache });
+  const { res } = await call('/api/arrivals?stop=COM3', { fetchImpl, env, cache });
   assert.equal((await res.json()).available, true);
   assert.equal(fetchImpl.counts.auth, 0, 'no mint');
   assert.equal(fetchImpl.requests[1].body.token, newer.token);
@@ -830,12 +830,12 @@ test('while another isolate fetches a stale stop, the stale answer is served wit
   const old = { code: 'PGP', arrivals: [{ svc: 'D2', etaS: 240, crowd: null, plate: null }], fetchedAt: Date.now() - 20_000, stale: false };
   cache.seed(ARRIVALS_KEY('PGP'), old);
   cache.seed(`${ARRIVALS_KEY('PGP')}/pending`, 'fetching', 20);
-  const { res } = await call('/arrivals?stop=PGP', { fetchImpl, cache });
+  const { res } = await call('/api/arrivals?stop=PGP', { fetchImpl, cache });
   assert.equal((await res.json()).available, true);
   assert.equal(fetchImpl.counts.shuttle, 0, 'the other fetch fills the cache');
   // Its marker gone, the next request fetches, and clears its own marker after.
   await cache.delete(`${ARRIVALS_KEY('PGP')}/pending`);
-  await call('/arrivals?stop=PGP', { fetchImpl, cache });
+  await call('/api/arrivals?stop=PGP', { fetchImpl, cache });
   assert.equal(fetchImpl.counts.shuttle, 1);
   assert.equal(await cache.match(`${ARRIVALS_KEY('PGP')}/pending`), undefined);
 });
@@ -858,12 +858,12 @@ test("the beta's cache keys are its own: the stable site's breaker doesn't quiet
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
   const cache = installGlobals(fetchImpl);
   cache.seed('https://terminus.internal/breaker', 'refused', 60);
-  const { res } = await call('/arrivals?stop=PGP', { fetchImpl, env: beta, cache });
+  const { res } = await call('/api/arrivals?stop=PGP', { fetchImpl, env: beta, cache });
   assert.equal((await res.json()).available, true, "the stable site's breaker isn't the beta's");
   assert.ok(cache._store.has('https://beta.terminus.internal/arrivals/PGP'));
   assert.ok(!cache._store.has(ARRIVALS_KEY('PGP')));
   // The stable site, with its breaker open, still asks nothing.
-  const { res: stable } = await call('/arrivals?stop=PGP', { fetchImpl, cache });
+  const { res: stable } = await call('/api/arrivals?stop=PGP', { fetchImpl, cache });
   assert.equal((await stable.json()).available, false);
   assert.equal(fetchImpl.counts.shuttle, 1);
   scopeCache(makeEnv());
@@ -871,9 +871,9 @@ test("the beta's cache keys are its own: the stable site's breaker doesn't quiet
 
 test('a failed stop is not asked again straight away', async () => {
   const dead = makeFetch({ fail: true });
-  const { cache } = await call('/arrivals?stop=PGP', { fetchImpl: dead });
-  await call('/arrivals?stop=PGP', { fetchImpl: dead, cache });
-  await call('/trip?to=UTOWN&from=PGP', { fetchImpl: dead, cache });
+  const { cache } = await call('/api/arrivals?stop=PGP', { fetchImpl: dead });
+  await call('/api/arrivals?stop=PGP', { fetchImpl: dead, cache });
+  await call('/api/trip?to=UTOWN&from=PGP', { fetchImpl: dead, cache });
   assert.equal(dead.counts.shuttle, 1);
 });
 
@@ -882,7 +882,7 @@ test('concurrent requests for a cold stop share one upstream call', async () => 
   installGlobals(fetchImpl);
   const env = makeEnv();
   const ctx = makeCtx();
-  const reqs = Array.from({ length: 10 }, () => worker.fetch(new Request(`${BASE}/arrivals?stop=PGP`), env, ctx));
+  const reqs = Array.from({ length: 10 }, () => worker.fetch(new Request(`${BASE}/api/arrivals?stop=PGP`), env, ctx));
   const out = await Promise.all(reqs);
   await ctx.settle();
   assert.ok(out.every((r) => r.status === 200));
@@ -899,7 +899,7 @@ test('a hung feed times out; with a stale answer on hand it is served instead', 
   const cache = installGlobals(hung);
   cache.seed(ARRIVALS_KEY('PGP'), { code: 'PGP', arrivals: [{ svc: 'D2', etaS: 240, crowd: null, plate: null }], fetchedAt: Date.now() - 60_000, stale: false });
   const t0 = performance.now();
-  const { res } = await call('/arrivals?stop=PGP', { fetchImpl: hung, cache });
+  const { res } = await call('/api/arrivals?stop=PGP', { fetchImpl: hung, cache });
   const ms = performance.now() - t0;
   assert.equal((await res.json()).available, true);
   assert.ok(ms < 2_000, `took ${ms}ms`);
@@ -909,14 +909,14 @@ test('a hung feed times out; with a stale answer on hand it is served instead', 
 
 test('a feed that says OK but has no arrivals list is a failure, not "no bus"', async () => {
   const odd = makeFetch({ raw: { code: '00000', msg: '', data: { somethingNew: 'x' } } });
-  const { res } = await call('/arrivals?stop=PGP', { fetchImpl: odd });
+  const { res } = await call('/api/arrivals?stop=PGP', { fetchImpl: odd });
   assert.equal((await res.json()).available, false);
 });
 
 test('a feed whose rows changed shape is a failure the monitor sees, not every bus turned into an estimate', async () => {
   // A rename upstream: the list is there, but its rows say routeName, not name.
   const raw = { code: '00000', msg: '', data: { etas: { timings: [{ routeName: 'D2', arrivalTime: '3', nextArrivalTime: '15' }] } } };
-  const { res } = await call('/arrivals?stop=PGP', { fetchImpl: makeFetch({ raw }) });
+  const { res } = await call('/api/arrivals?stop=PGP', { fetchImpl: makeFetch({ raw }) });
   const body = await res.json();
   assert.equal(body.available, false);
   assert.ok(body.board.length > 0 && body.board.every((x) => x.quality === 'unknown'), 'no headway guess passed off as the board');
@@ -1039,10 +1039,10 @@ test('downloads serve whatever latest.json points at', async () => {
   assert.equal((await get('/download/releases/2.0.0-Beta/terminus-2.0.0-Beta.apk')).status, 404);
 });
 
-test('/status.json: the feed state and outages, public and cached', async () => {
+test('/api/status.json: the feed state and outages, public and cached', async () => {
   const kv = makeKV();
   const env = makeEnv(kv);
-  let res = (await call('/status.json', { fetchImpl: makeFetch({}), env })).res;
+  let res = (await call('/api/status.json', { fetchImpl: makeFetch({}), env })).res;
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), { feed: 'unknown', since: null, checkedAt: null, checking: false, incidents: [], publicFeed: 'unknown', publicSince: null });
 
@@ -1054,11 +1054,11 @@ test('/status.json: the feed state and outages, public and cached', async () => 
   let reads = 0;
   const get = kv.get.bind(kv);
   kv.get = (...a) => (reads++, get(...a));
-  res = (await call('/status.json', { env, cache })).res;
+  res = (await call('/api/status.json', { env, cache })).res;
   assert.equal((await res.json()).feed, 'unknown', 'kept for a minute');
   assert.equal(reads, 0);
   Date.now = () => now + 60_000;
-  res = (await call('/status.json', { env, cache })).res;
+  res = (await call('/api/status.json', { env, cache })).res;
   assert.equal(reads, 3);
   assert.equal(res.headers.get('cache-control'), 'public, max-age=60');
   const s = await res.json();
@@ -1069,19 +1069,19 @@ test('/status.json: the feed state and outages, public and cached', async () => 
   assert.ok(!JSON.stringify(s).includes('secret detail'), 'no error text');
 });
 
-test('/health: no probe without the operator token, 503 when the feed is confirmed down', async () => {
+test('/api/health: no probe without the operator token, 503 when the feed is confirmed down', async () => {
   const fetchImpl = makeFetch({});
   const kv = makeKV();
   const env = makeEnv(kv);
-  const { res } = await call('/health?probe=1', { fetchImpl, env });
+  const { res } = await call('/api/health?probe=1', { fetchImpl, env });
   const h = await res.json();
   assert.equal(h.auth, undefined, 'probe ignored without HEALTH_TOKEN');
   assert.ok(h.calendar.daysLeft > 0);
   await kv.put('monitor:upstream', JSON.stringify({ up: false, since: Date.now() - 1000, checkedAt: Date.now() - 1000, reason: 'x' }));
-  const down = await call('/health', { fetchImpl, env });
+  const down = await call('/api/health', { fetchImpl, env });
   assert.equal(down.res.status, 503);
   await kv.put('monitor:upstream', JSON.stringify({ up: true, since: 0, checkedAt: Date.now() - 3_600_000, reason: null }));
-  const stale = await (await call('/health', { fetchImpl, env })).res.json();
+  const stale = await (await call('/api/health', { fetchImpl, env })).res.json();
   assert.equal(stale.upstream.cronStale, true);
   assert.equal(stale.ok, false);
 });
@@ -1095,7 +1095,7 @@ test('the entry module exports no plain values (workerd rejects the module, and 
 
 test('every response carries nosniff and HSTS; HTML gets a CSP, /docs one that allows unpkg', async () => {
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
-  const api = (await call('/next?to=UTOWN&from=PGP', { fetchImpl })).res;
+  const api = (await call('/api/next?to=UTOWN&from=PGP', { fetchImpl })).res;
   assert.equal(api.headers.get('x-content-type-options'), 'nosniff');
   assert.match(api.headers.get('strict-transport-security'), /max-age=/);
   assert.equal(api.headers.get('content-security-policy'), null, 'JSON needs no CSP');
@@ -1355,22 +1355,22 @@ test('a piece of the map in the edge cache is served even once R2 may not be rea
   assert.equal((await get('/map/campus.pmtiles', { range: 'bytes=8-11' })).status, 429);
 });
 
-test('/campus is the same bytes every time, with an ETag a client can revalidate with', async () => {
+test('/api/campus is the same bytes every time, with an ETag a client can revalidate with', async () => {
   const cache = installGlobals(makeFetch({}));
-  const first = (await call('/campus', { cache })).res;
+  const first = (await call('/api/campus', { cache })).res;
   assert.equal(first.status, 200);
   const etag = first.headers.get('etag');
   assert.match(etag, /^"[0-9a-f]{24}"$/);
   const body = await first.text();
   assert.ok(JSON.parse(body).stops.length > 20);
 
-  const again = (await call('/campus', { cache })).res;
+  const again = (await call('/api/campus', { cache })).res;
   assert.equal(again.headers.get('etag'), etag);
   assert.equal(await again.text(), body);
-  const kept = (await call('/campus', { cache, headers: { 'if-none-match': `W/${etag}` } })).res;
+  const kept = (await call('/api/campus', { cache, headers: { 'if-none-match': `W/${etag}` } })).res;
   assert.equal(kept.status, 304);
   assert.equal(await kept.text(), '');
-  assert.equal((await call('/campus', { cache, headers: { 'if-none-match': '"old"' } })).res.status, 200);
+  assert.equal((await call('/api/campus', { cache, headers: { 'if-none-match': '"old"' } })).res.status, 200);
 });
 
 test('/map/style.json is a quiet light or dark map with every URL on our own domain', async () => {
@@ -1439,7 +1439,7 @@ test('files served without the Worker get the same headers from _headers', async
   // Pages, and everything the Worker itself answers, still reach it.
   for (const path of files.filter((f) => f.endsWith('.html'))) assert.ok(!skips(path.replace(/index\.html$/, '')), `${path} reaches the Worker`);
   const routes = Object.keys(openApiSpec(BASE).paths).map((p) => p.replace(/\{[^}]+\}/g, 'x'));
-  for (const path of [...routes, '/', '/map/style.json', '/map/campus.pmtiles', '/map/fonts/Noto%20Sans%20Regular/0-255.pbf', '/map/sprites/v4/light.png', '/map/sprites/v4/light.json', '/download/latest.json', '/robots.txt', '/llms.txt', '/status.json']) {
+  for (const path of [...routes, '/', '/map/style.json', '/map/campus.pmtiles', '/map/fonts/Noto%20Sans%20Regular/0-255.pbf', '/map/sprites/v4/light.png', '/map/sprites/v4/light.json', '/download/latest.json', '/robots.txt', '/llms.txt', '/api/status.json']) {
     assert.ok(!skips(path), `${path} reaches the Worker`);
   }
   // Only the versioned /vendor/ folders, and the fonts, are kept without asking.
@@ -1460,13 +1460,17 @@ test('search engines get robots.txt and a sitemap of real pages; the beta asks n
   // search; the docs that describe them are.
   const { openApiSpec } = await import('../src/openapi.ts');
   const keyed = Object.entries(openApiSpec(BASE).paths).filter(([, item]) => item.get && item.get.security === undefined).map(([p]) => p);
-  assert.ok(keyed.includes('/next') && keyed.includes('/stops/pairs'));
-  const disallowed = [...robots.matchAll(/^Disallow: (\S+)$/gm)].map((m) => m[1]);
-  for (const p of keyed) assert.ok(disallowed.includes(p), `robots.txt disallows ${p}`);
-  assert.ok(disallowed.includes('/timelapse/'));
-  for (const p of ['/docs', '/openapi.json', '/llms.txt', '/status/', '/status.json']) {
-    assert.ok(!disallowed.some((d) => p.startsWith(d)), `${p} stays open to search`);
-  }
+  assert.ok(keyed.includes('/api/next') && keyed.includes('/api/stops/pairs'));
+  // As search engines read it: the longest rule matching a path decides,
+  // and an Allow wins a tie.
+  const rules = [...robots.matchAll(/^(Allow|Disallow): (\S+)$/gm)].map((m) => ({ allow: m[1] === 'Allow', path: m[2] }));
+  const open = (p) => {
+    const hits = rules.filter((r) => p.startsWith(r.path)).sort((a, b) => b.path.length - a.path.length || Number(b.allow) - Number(a.allow));
+    return hits.length === 0 || hits[0].allow;
+  };
+  for (const p of keyed) assert.ok(!open(p), `robots.txt disallows ${p}`);
+  for (const p of ['/api/timelapse/days', '/api/me/next', '/api/auth/login', '/auth/verify', '/pair']) assert.ok(!open(p), `robots.txt disallows ${p}`);
+  for (const p of ['/', '/docs', '/api/openapi.json', '/llms.txt', '/status/', '/api/status.json']) assert.ok(open(p), `${p} stays open to search`);
   const { res } = await call('/sitemap.xml');
   assert.equal(res.status, 200);
   const locs = [...(await res.text()).matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => new URL(m[1]).pathname);
@@ -1498,7 +1502,7 @@ test('AI agents get /llms.txt: a short guide whose endpoints and links are real'
   const text = await res.text();
   assert.match(text, /^# terminus\n\n> /, 'a title, then a one-paragraph summary');
   assert.match(text, /API key/);
-  const spec = await (await call('/openapi.json', { fetchImpl })).res.json();
+  const spec = await (await call('/api/openapi.json', { fetchImpl })).res.json();
   const ops = new Set(Object.values(spec.paths).flatMap((item) => Object.values(item).map((op) => op.operationId)));
   const links = [...text.matchAll(/\]\(([^)]+)\)/g)].map((m) => new URL(m[1]));
   assert.ok(links.length >= 8);
@@ -1519,18 +1523,48 @@ test('AI agents get /llms.txt: a short guide whose endpoints and links are real'
   }
   // Without JavaScript, the docs page points at both.
   const docs = await (await call('/docs')).res.text();
-  assert.match(docs, /<noscript>[^]*href="\/openapi.json"[^]*href="\/llms.txt"[^]*<\/noscript>/);
+  assert.match(docs, /<noscript>[^]*href="\/api\/openapi.json"[^]*href="\/llms.txt"[^]*<\/noscript>/);
 });
 
-test('/line is as old as its stop row: a kept board is not "Updated 0 s ago"', async () => {
+test('/api/line is as old as its stop row: a kept board is not "Updated 0 s ago"', async () => {
   const fetchedAt = Date.now() - 185_000;
   const dead = makeFetch({ fail: true });
   const cache = installGlobals(dead);
   cache.seed(ARRIVALS_KEY('YIH'), { code: 'YIH', arrivals: [{ svc: 'D1', etaS: 240, crowd: 'low', plate: 'PA1234A' }], fetchedAt, stale: false });
-  const { res } = await call('/line?svc=D1&stop=YIH', { fetchImpl: dead, cache });
+  const { res } = await call('/api/line?svc=D1&stop=YIH', { fetchImpl: dead, cache });
   assert.equal(res.status, 200);
   const line = await res.json();
   assert.equal(Date.parse(line.asOf), fetchedAt);
+});
+
+test('the API before 3.0, at its old paths: an app is told to update, anyone else is sent to /api', async () => {
+  const at = async (path, { method = 'GET', headers = {} } = {}) => {
+    const ctx = makeCtx();
+    const res = await worker.fetch(new Request(BASE + path, { method, headers }), makeEnv(), ctx);
+    await ctx.settle();
+    return res;
+  };
+  const app = { 'x-terminus-client': 'android/2.6.0' };
+  for (const [method, path] of [['GET', '/me/next'], ['GET', '/me'], ['DELETE', '/me/push'], ['POST', '/auth/anon'], ['POST', '/auth/app/start'], ['POST', '/pair'], ['POST', '/pair/check'], ['GET', '/next?stop=PGP'], ['GET', '/campus'], ['GET', '/buses?svc=D2'], ['GET', '/stops/pairs'], ['GET', '/timelapse/days'], ['GET', '/health']]) {
+    const res = await at(path, { method, headers: app });
+    assert.equal(res.status, 426, `${method} ${path} from an old app`);
+    assert.deepEqual(await res.json(), { error: 'Update terminus to keep using it.', update: true });
+    const other = await at(path, { method });
+    assert.equal(other.status, 308, `${method} ${path} from anyone else`);
+    assert.equal(other.headers.get('location'), `/api${path}`, 'the query goes with it');
+  }
+  // The pages never moved: the two an email links to, the pairing page, the docs and the site.
+  for (const path of ['/auth/verify?t=abc', '/auth/approve?r=abc', '/pair?code=K7QX4M', '/docs', '/', '/account/']) {
+    const res = await at(path, { headers: app });
+    assert.ok(res.status !== 426 && res.status !== 308, `${path} is a page (${res.status})`);
+  }
+  // Nor did the downloads (the Mac's update feed) or the map.
+  for (const path of ['/download/latest.json', '/map/style.json']) {
+    const res = await at(path, { headers: app });
+    assert.ok(res.status !== 426 && res.status !== 308, path);
+  }
+  // A path that only starts like one is not one.
+  assert.notEqual((await at('/meet', { headers: app })).status, 426);
 });
 
 test('a page opened on the old address goes to terminus.run; the apps and the updater stay', async () => {
@@ -1550,10 +1584,10 @@ test('a page opened on the old address goes to terminus.run; the apps and the up
     assert.equal(res.headers.get('cache-control'), 'public, max-age=86400');
   }
   // What the apps, the Mac's updater and Android's link check ask for there is answered there.
-  for (const [path, accept] of [['/me/next', 'application/json'], ['/campus', 'application/json'], ['/download/appcast.xml', html], ['/.well-known/assetlinks.json', html], ['/map/style.json', html], ['/robots.txt', html], ['/download/latest.json', null]]) {
+  for (const [path, accept] of [['/api/me/next', 'application/json'], ['/api/campus', 'application/json'], ['/download/appcast.xml', html], ['/.well-known/assetlinks.json', html], ['/map/style.json', html], ['/robots.txt', html], ['/download/latest.json', null]]) {
     assert.notEqual((await at('terminus.rcn.sh', path, accept)).status, 301, path);
   }
-  assert.notEqual((await at('terminus.rcn.sh', '/auth/code', html, on(), 'POST')).status, 301, 'only GET and HEAD');
+  assert.notEqual((await at('terminus.rcn.sh', '/api/auth/code', html, on(), 'POST')).status, 301, 'only GET and HEAD');
   // The new address itself, and an address that isn't ours, are never redirected.
   assert.notEqual((await at('terminus.run', '/', html)).status, 301);
   assert.notEqual((await at('bus.example.test', '/', html)).status, 301);

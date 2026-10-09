@@ -71,7 +71,7 @@ if (!Number.isFinite(waitMin) || waitMin < 0) fail('--wait-min must be a number 
 const until = Date.now() + waitMin * 60_000;
 for (;;) {
   // Bounded: a request that hangs would stall the wait for good.
-  const res = await fetch(`${BASE}/timelapse/days`, { headers: { 'x-health-token': token }, redirect: 'error', signal: AbortSignal.timeout(30_000) }).catch((err) => ({ ok: false, status: err.message }));
+  const res = await fetch(`${BASE}/api/timelapse/days`, { headers: { 'x-health-token': token }, redirect: 'error', signal: AbortSignal.timeout(30_000) }).catch((err) => ({ ok: false, status: err.message }));
   if (res.ok) {
     const { days } = await res.json();
     const day = days.find((d) => d.date === o.date);
@@ -83,9 +83,9 @@ for (;;) {
     if (!day && Date.now() > until) fail(`${o.date} was not recorded (days: ${days.map((d) => d.date).join(', ') || 'none'})`);
     log(`${o.date} ${day ? 'not closed yet' : 'not listed yet'}; waiting`);
   } else if (Date.now() > until) {
-    fail(`/timelapse/days answered ${res.status}`);
+    fail(`/api/timelapse/days answered ${res.status}`);
   } else {
-    log(`/timelapse/days answered ${res.status}; waiting`);
+    log(`/api/timelapse/days answered ${res.status}; waiting`);
   }
   await new Promise((r) => setTimeout(r, 60_000));
 }

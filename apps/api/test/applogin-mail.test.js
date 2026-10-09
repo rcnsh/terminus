@@ -24,7 +24,7 @@ test('a sign-in email that fails to send is a 502, and trying again at once is a
   const start = async () => {
     const ctx = makeCtx();
     const res = await worker.fetch(
-      new Request(`${BASE}/auth/app/start`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'student@u.nus.edu', name: 'Pixel 8' }) }),
+      new Request(`${BASE}/api/auth/app/start`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'student@u.nus.edu', name: 'Pixel 8' }) }),
       env,
       ctx,
     );

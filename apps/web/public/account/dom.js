@@ -26,7 +26,7 @@ export function locationError(err) {
 // Signing in, out and pairing have their own limits on the server, so their
 // own wait here: a 429 from the app's polling must never stop a sign-out.
 const quietUntil = { app: 0, auth: 0 };
-const scopeOf = (path) => (/^\/(auth|pair)(\/|$|\?)/.test(path) ? 'auth' : 'app');
+const scopeOf = (path) => (/^\/api\/(auth|pair)(\/|$|\?)/.test(path) ? 'auth' : 'app');
 
 /** How long until a call to `path` may be sent again (ms, 0 now): a poll waits at least this. */
 export const quietMs = (path) => Math.max(0, quietUntil[scopeOf(String(path))] - Date.now());

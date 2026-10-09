@@ -70,27 +70,27 @@ test('no limit on the feeds is below what CLAUDE.md and internals.md promise', (
 /* Freshness windows                                                   */
 /* ------------------------------------------------------------------ */
 
-test('/trip asks NUS once per stop per 15 s: not again at 14.9 s, again at 15.1 s', async () => {
+test('/api/trip asks NUS once per stop per 15 s: not again at 14.9 s, again at 15.1 s', async () => {
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
   installGlobals(fetchImpl);
-  await at(FROZEN_NOW, '/trip?to=UTOWN&from=PGP');
+  await at(FROZEN_NOW, '/api/trip?to=UTOWN&from=PGP');
   assert.equal(fetchImpl.counts.shuttle, 1);
-  await at(FROZEN_NOW + 14_900, '/trip?to=UTOWN&from=PGP');
+  await at(FROZEN_NOW + 14_900, '/api/trip?to=UTOWN&from=PGP');
   assert.equal(fetchImpl.counts.shuttle, 1, 'still fresh at 14.9 s');
-  await at(FROZEN_NOW + 15_100, '/trip?to=UTOWN&from=PGP');
+  await at(FROZEN_NOW + 15_100, '/api/trip?to=UTOWN&from=PGP');
   assert.equal(fetchImpl.counts.shuttle, 2, 'asked again once 15 s have passed');
 });
 
-test('/buses asks NUS once per service per 5 s: not again at 4.9 s, again at 5.1 s', async () => {
+test('/api/buses asks NUS once per service per 5 s: not again at 4.9 s, again at 5.1 s', async () => {
   const fetchImpl = makeFetch({ buses: { D1: [D1_BUS] } });
   installGlobals(fetchImpl);
   const busCalls = () => fetchImpl.requests.filter((r) => r.url.endsWith('/active-bus')).length;
-  const first = await at(FROZEN_NOW, '/buses?svc=D1');
+  const first = await at(FROZEN_NOW, '/api/buses?svc=D1');
   assert.equal((await first.json()).available, true);
   assert.equal(busCalls(), 1);
-  await at(FROZEN_NOW + 4_900, '/buses?svc=D1');
+  await at(FROZEN_NOW + 4_900, '/api/buses?svc=D1');
   assert.equal(busCalls(), 1, 'still fresh at 4.9 s');
-  await at(FROZEN_NOW + 5_100, '/buses?svc=D1');
+  await at(FROZEN_NOW + 5_100, '/api/buses?svc=D1');
   assert.equal(busCalls(), 2, 'asked again once 5 s have passed');
 });
 
@@ -124,15 +124,15 @@ test('a tripped breaker keeps every stop off the feed for the whole 60 s, and on
   const down = makeFetch({ proxyStatus: 503 });
   installGlobals(down);
   const env = makeEnv();
-  await at(FROZEN_NOW, '/arrivals?stop=PGP', { fetchImpl: down, env });
+  await at(FROZEN_NOW, '/api/arrivals?stop=PGP', { fetchImpl: down, env });
   assert.equal(down.counts.shuttle, 1);
   // NUS is back, but the breaker isn't closed yet. A stop of its own each
   // time, so no stop's own failure memo is what's holding it.
   const up = makeFetch({ byStop: { COM3: D2_IN_4, UTOWN: D2_IN_4 } });
-  const held = await at(FROZEN_NOW + 59_000, '/arrivals?stop=COM3', { fetchImpl: up, env });
+  const held = await at(FROZEN_NOW + 59_000, '/api/arrivals?stop=COM3', { fetchImpl: up, env });
   assert.equal((await held.json()).available, false);
   assert.equal(up.counts.shuttle, 0, 'nothing asked at 59 s');
-  const open = await at(FROZEN_NOW + 61_000, '/arrivals?stop=UTOWN', { fetchImpl: up, env });
+  const open = await at(FROZEN_NOW + 61_000, '/api/arrivals?stop=UTOWN', { fetchImpl: up, env });
   assert.equal((await open.json()).available, true);
   assert.equal(up.counts.shuttle, 1, 'exactly one call once it closes');
 });
@@ -142,9 +142,9 @@ test('every 5xx trips the breaker, 500 and 599 as much as 503', async () => {
     const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4, COM3: D2_IN_4 }, proxyStatus: status });
     installGlobals(fetchImpl);
     const env = makeEnv();
-    await at(FROZEN_NOW, '/arrivals?stop=PGP', { fetchImpl, env });
+    await at(FROZEN_NOW, '/api/arrivals?stop=PGP', { fetchImpl, env });
     for (const stop of ['COM3', 'UTOWN']) {
-      const res = await at(FROZEN_NOW + 1_000, `/arrivals?stop=${stop}`, { fetchImpl, env });
+      const res = await at(FROZEN_NOW + 1_000, `/api/arrivals?stop=${stop}`, { fetchImpl, env });
       assert.equal((await res.json()).available, false);
     }
     assert.equal(fetchImpl.counts.shuttle, 1, `${status}: the breaker kept every other stop off the feed`);
@@ -162,7 +162,7 @@ test("a fresh isolate uses the token another isolate kept in KV: no mint", async
   const env = makeEnv(makeKV({ 'auth:session': kept }));
   const fetchImpl = makeFetch({ byStop: { COM3: D2_IN_4 } });
   installGlobals(fetchImpl);
-  const res = await at(FROZEN_NOW, '/arrivals?stop=COM3', { fetchImpl, env });
+  const res = await at(FROZEN_NOW, '/api/arrivals?stop=COM3', { fetchImpl, env });
   assert.equal((await res.json()).available, true);
   assert.equal(fetchImpl.counts.auth, 0, 'no mint');
   assert.equal(fetchImpl.requests[0].body.token, kept.token);
@@ -208,13 +208,13 @@ test('the token mint answering 200 with a web page: no other stop mints for fail
   installGlobals(fetchImpl);
   const env = makeEnv();
   for (const [dt, stop] of [[0, 'PGP'], [5_000, 'COM3'], [(TTL.failMemoS - 1) * 1000, 'UTOWN']]) {
-    const res = await at(FROZEN_NOW + dt, `/arrivals?stop=${stop}`, { fetchImpl, env });
+    const res = await at(FROZEN_NOW + dt, `/api/arrivals?stop=${stop}`, { fetchImpl, env });
     assert.equal((await res.json()).available, false, stop);
   }
   assert.equal(base.counts.auth, 1, 'one mint, not one per stop');
   assert.equal(base.counts.shuttle, 0);
   // A stop not asked yet: the others' own memos are still set.
-  await at(FROZEN_NOW + (TTL.failMemoS + 1) * 1000, '/arrivals?stop=KR-MRT', { fetchImpl, env });
+  await at(FROZEN_NOW + (TTL.failMemoS + 1) * 1000, '/api/arrivals?stop=KR-MRT', { fetchImpl, env });
   assert.equal(base.counts.auth, 2, 'tried again once failMemoS has passed');
 });
 

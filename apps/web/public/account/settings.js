@@ -41,7 +41,7 @@ const TITLES = {
 };
 
 async function signOut() {
-  await api('/auth/logout', { method: 'POST' }).catch(() => {});
+  await api('/api/auth/logout', { method: 'POST' }).catch(() => {});
   await forgetAccountHere();
   location.reload();
 }

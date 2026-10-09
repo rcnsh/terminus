@@ -675,7 +675,7 @@ export async function authenticate(
 
 /**
  * Slides a web session's expiry forward when it has less than
- * webRenewBelowMs left (GET /me calls it on each page load). True when it
+ * webRenewBelowMs left (GET /api/me calls it on each page load). True when it
  * did, and the cookie should be sent again with the new lifetime. An idle
  * session ends webSessionMs (30 days) after it was last renewed: between
  * 23 and 30 days after its last use.

@@ -9,7 +9,7 @@ import { FROZEN_NOW } from './_stubs.mjs';
 const req = (ip) => new Request('https://x.test/', { headers: ip ? { 'cf-connecting-ip': ip } : {} });
 
 test('coordsFrom: a fix the phone says is hundreds of metres out is no location', () => {
-  const at = (q) => coordsFrom(new URL(`https://x.test/me/next?${q}`));
+  const at = (q) => coordsFrom(new URL(`https://x.test/api/me/next?${q}`));
   assert.deepEqual(at('lat=1.2955&lon=103.7714'), { lat: 1.2955, lon: 103.7714 });
   assert.deepEqual(at('lat=1.2955&lon=103.7714&acc=35'), { lat: 1.2955, lon: 103.7714 }, 'a usual fix');
   assert.deepEqual(at('lat=1.2955&lon=103.7714&acc=200'), { lat: 1.2955, lon: 103.7714 }, 'at the limit');
@@ -18,7 +18,7 @@ test('coordsFrom: a fix the phone says is hundreds of metres out is no location'
 });
 
 test('coordsFrom: a location is rounded to about 11 metres, whoever sends it', () => {
-  const at = (q) => coordsFrom(new URL(`https://x.test/next?${q}`));
+  const at = (q) => coordsFrom(new URL(`https://x.test/api/next?${q}`));
   assert.deepEqual(at('lat=1.295512345&lon=103.771449999'), { lat: 1.2955, lon: 103.7714 });
   assert.deepEqual(at('lat=-1.29556&lon=-103.77146'), { lat: -1.2956, lon: -103.7715 });
 });
@@ -26,7 +26,7 @@ test('coordsFrom: a location is rounded to about 11 metres, whoever sends it', (
 test('CORS: another origin may send the headers the API reads, and read the ones it answers with', () => {
   const list = (v) => v.split(',').map((h) => h.trim());
   const allowed = list(CORS['access-control-allow-headers']);
-  // x-api-key: how the docs say to call the API from a page; if-match: PUT /me/profile.
+  // x-api-key: how the docs say to call the API from a page; if-match: PUT /api/me/profile.
   for (const h of ['content-type', 'authorization', 'x-api-key', 'if-match', 'x-terminus-client']) assert.ok(allowed.includes(h), h);
   // Neither is safelisted, so a page could not read them without this.
   const res = json({ error: 'too many requests, slow down' }, 429, { 'retry-after': '60' });
@@ -45,7 +45,7 @@ test('rate-limit keys: IPv4 as is, IPv6 by its /64', () => {
 });
 
 test('security headers: every response; CSP on HTML only; /docs may load unpkg', () => {
-  const json = withSecurityHeaders(new Response('{}', { headers: { 'content-type': 'application/json' } }), '/next');
+  const json = withSecurityHeaders(new Response('{}', { headers: { 'content-type': 'application/json' } }), '/api/next');
   assert.equal(json.headers.get('x-content-type-options'), 'nosniff');
   assert.equal(json.headers.get('content-security-policy'), null);
   const page = withSecurityHeaders(new Response('<p>', { headers: { 'content-type': 'text/html' } }), '/account/');

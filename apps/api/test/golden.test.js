@@ -81,10 +81,10 @@ async function account(profile, { at = FROZEN_NOW, feed = FEED, upstream = {}, k
     await ctx.settle();
     return res;
   };
-  await call('/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'you@u.nus.edu' }) });
+  await call('/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'you@u.nus.edu' }) });
   const verify = await call('/auth/verify', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: `t=${env.EMAIL.lastToken()}` });
   const cookie = verify.headers.get('set-cookie').split(';')[0];
-  const put = await call('/me/profile', { method: 'PUT', headers: { cookie, 'content-type': 'application/json' }, body: JSON.stringify(profile) });
+  const put = await call('/api/me/profile', { method: 'PUT', headers: { cookie, 'content-type': 'application/json' }, body: JSON.stringify(profile) });
   assert.equal(put.status, 200, await put.clone().text());
   const get = (path) => get.raw(path).then((r) => r.json());
   get.raw = (path) => call(path, { headers: { cookie } });
@@ -166,75 +166,75 @@ const nusmods = (...days) => ({
 });
 
 const CASES = {
-  'class-bus': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')], places }, '/me/next'],
-  'class-walk': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'COM3', 'CS2030 @ COM1', 'COM1')], places }, `/me/next?${CLB}`],
-  'class-late': [{ home: { stops: ['PGP'] }, manual: [cls(545, 'UTOWN', 'GEA1000 @ UTown')], places }, '/me/next'],
-  'class-from-dorm': [{ home: { stops: ['PGPR', 'PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')], places }, `/me/next?${DORM}`],
-  'place': [{ home: { stops: ['PGP'] }, places }, '/me/next?place=mrt'],
-  'landmark': [{ home: { stops: ['PGP'] }, places }, '/me/next?place=deck'],
+  'class-bus': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')], places }, '/api/me/next'],
+  'class-walk': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'COM3', 'CS2030 @ COM1', 'COM1')], places }, `/api/me/next?${CLB}`],
+  'class-late': [{ home: { stops: ['PGP'] }, manual: [cls(545, 'UTOWN', 'GEA1000 @ UTown')], places }, '/api/me/next'],
+  'class-from-dorm': [{ home: { stops: ['PGPR', 'PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')], places }, `/api/me/next?${DORM}`],
+  'place': [{ home: { stops: ['PGP'] }, places }, '/api/me/next?place=mrt'],
+  'landmark': [{ home: { stops: ['PGP'] }, places }, '/api/me/next?place=deck'],
   // A class in a room a walk from its stop: the leave-by aims at the room, and the card shows the walk on.
-  'class-room': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown', 'TP-SR2')], places }, '/me/next'],
+  'class-room': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown', 'TP-SR2')], places }, '/api/me/next'],
   // A room searched for (its code, as search sends it): the bus to its stop, then the walk on to the room.
-  'room': [{ home: { stops: ['PGP'] }, places }, '/me/next?to=LT3'],
-  'arrived': [{ home: { stops: ['PGP'] }, places }, `/me/next?to=COM3&${AT_COM3}`],
+  'room': [{ home: { stops: ['PGP'] }, places }, '/api/me/next?to=LT3'],
+  'arrived': [{ home: { stops: ['PGP'] }, places }, `/api/me/next?to=COM3&${AT_COM3}`],
   // A day with no classes: said plainly, with the next one; no bus headline.
-  'free': [{ home: { stops: ['PGP'] }, manual: [{ ...cls(600, 'COM3', 'CS2030 @ COM1'), day: 5 }], places }, `/me/next?${CLB}`],
+  'free': [{ home: { stops: ['PGP'] }, manual: [{ ...cls(600, 'COM3', 'CS2030 @ COM1'), day: 5 }], places }, `/api/me/next?${CLB}`],
   // 2.1: a class that started 10 minutes ago is still where you're going.
-  'class-started': [{ home: { stops: ['PGP'] }, manual: [cls(530, 'UTOWN', 'GEA1000 @ UTown')], places }, '/me/next'],
+  'class-started': [{ home: { stops: ['PGP'] }, manual: [cls(530, 'UTOWN', 'GEA1000 @ UTown')], places }, '/api/me/next'],
   // 2.1: an hour after the last class, with no location, you're home.
-  'home-reached': [{ home: { stops: ['PGP'] }, manual: [cls(390, 'COM3', 'CS2030 @ COM1')], places }, '/me/next'],
+  'home-reached': [{ home: { stops: ['PGP'] }, manual: [cls(390, 'COM3', 'CS2030 @ COM1')], places }, '/api/me/next'],
   // 2.1: outside your day, on campus and not at home: the way home, not a moon.
-  'evening-home': [{ home: { stops: ['PGP'] }, dayStartMin: 600, dayEndMin: 1200, places }, `/me/next?${CLB}`],
-  'rest': [{ home: { stops: ['PGP'] }, dayStartMin: 600, dayEndMin: 1200, manual: [cls(780, 'COM3', 'CS2030 @ COM1')], places }, '/me/next'],
-  'home': [{ home: { stops: ['PGPR', 'PGP'] }, manual: [cls(420, 'COM3', 'CS2030 @ COM1')], places }, `/me/next?${DORM}`],
+  'evening-home': [{ home: { stops: ['PGP'] }, dayStartMin: 600, dayEndMin: 1200, places }, `/api/me/next?${CLB}`],
+  'rest': [{ home: { stops: ['PGP'] }, dayStartMin: 600, dayEndMin: 1200, manual: [cls(780, 'COM3', 'CS2030 @ COM1')], places }, '/api/me/next'],
+  'home': [{ home: { stops: ['PGPR', 'PGP'] }, manual: [cls(420, 'COM3', 'CS2030 @ COM1')], places }, `/api/me/next?${DORM}`],
   // A class to go to, but no home stop and no location: nowhere to start from.
-  'setup': [{ manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')], places }, '/me/next'],
+  'setup': [{ manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')], places }, '/api/me/next'],
   // A new account with nothing in it: no timetable yet, said plainly.
-  'no-timetable': [{}, '/me/next'],
+  'no-timetable': [{}, '/api/me/next'],
   // On the bus to a class: the ride, with its stops, in place of the journey.
-  'riding': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')], places }, '/me/next', { trips: true, before: (get) => get.post('/me/signal', { kind: 'boarded' }) }],
+  'riding': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')], places }, '/api/me/next', { trips: true, before: (get) => get.post('/api/me/signal', { kind: 'boarded' }) }],
   // No single bus goes from PGP to College Green: the trip changes to P.
-  'change-class': [toCG, '/me/next', { feed: CHANGE_FEED }],
+  'change-class': [toCG, '/api/me/next', { feed: CHANGE_FEED }],
   // At 09:20, "On it" for the K: on it to Kent Vale, where you change to P.
-  'change-riding': [toCG, '/me/next', { trips: true, at: sgtAt(THU_DATE, '09:20'), feed: CHANGE_FEED, before: (get) => get.post('/me/signal', { kind: 'boarded' }) }],
+  'change-riding': [toCG, '/api/me/next', { trips: true, at: sgtAt(THU_DATE, '09:20'), feed: CHANGE_FEED, before: (get) => get.post('/api/me/signal', { kind: 'boarded' }) }],
   // Off the K at Kent Vale, a minute after it got there: at the stop for the P.
-  'change-at-stop': [toCG, '/me/next', {
+  'change-at-stop': [toCG, '/api/me/next', {
     trips: true,
     at: sgtAt(THU_DATE, '09:20'),
     feed: CHANGE_FEED,
     before: async (get) => {
-      const { card } = await get.post('/me/signal', { kind: 'boarded' });
+      const { card } = await get.post('/api/me/signal', { kind: 'boarded' });
       get.at(Date.parse(card.ride.arrive) + MIN);
     },
   }],
   // Once the P has left: on it to College Green.
-  'change-riding-second': [toCG, '/me/next', {
+  'change-riding-second': [toCG, '/api/me/next', {
     trips: true,
     at: sgtAt(THU_DATE, '09:20'),
     feed: CHANGE_FEED,
     before: async (get) => {
-      const { card } = await get.post('/me/signal', { kind: 'boarded' });
+      const { card } = await get.post('/api/me/signal', { kind: 'boarded' });
       get.at(Date.parse(card.ride.change.board) + CHANGE_GRACE_MS + MIN);
     },
   }],
   // The feed answers with no buses at all: every time is a timetable estimate, marked "~".
-  'scheduled': [{ home: { stops: ['PGP'] }, places }, '/me/next?place=mrt', { feed: {} }],
-  'nearby-list': [{ home: { stops: ['PGP'] } }, `/me/nearby?${DORM}`],
+  'scheduled': [{ home: { stops: ['PGP'] }, places }, '/api/me/next?place=mrt', { feed: {} }],
+  'nearby-list': [{ home: { stops: ['PGP'] } }, `/api/me/nearby?${DORM}`],
   // The day the apps keep for when they're offline (see offline-day.json):
   // a class, a long gap home, a class, the way home.
-  'day': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown'), cls(840, 'COM3', 'CS2030 @ COM4', 'COM4')], places }, '/me/day'],
+  'day': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown'), cls(840, 'COM3', 'CS2030 @ COM4', 'COM4')], places }, '/api/me/day'],
   // At the PGP stop at 09:05, "On it" for the D2 due in a minute to a 09:15
   // class: its plate (SBS1234A) is picked from the feed at the tap, and the
   // feed's time for that bus at UTown (09:15) is the arrival, said as live.
-  'riding-live': [soon, '/me/next', { trips: true, at: sgtAt(THU_DATE, '09:05'), feed: TAP_FEED, before: (get) => get.post('/me/signal', { kind: 'boarded', ...PGP_STOP }) }],
+  'riding-live': [soon, '/api/me/next', { trips: true, at: sgtAt(THU_DATE, '09:05'), feed: TAP_FEED, before: (get) => get.post('/api/me/signal', { kind: 'boarded', ...PGP_STOP }) }],
   // Ten minutes after it got there, and the feed no longer lists it:
   // you're taken to be in the class.
-  'riding-there': [soon, '/me/next', {
+  'riding-there': [soon, '/api/me/next', {
     trips: true,
     at: sgtAt(THU_DATE, '09:05'),
     feed: TAP_FEED,
     before: async (get) => {
-      await get.post('/me/signal', { kind: 'boarded', ...PGP_STOP });
+      await get.post('/api/me/signal', { kind: 'boarded', ...PGP_STOP });
       get.at(sgtAt(THU_DATE, '09:15') + RIDE_GRACE_MS + MIN);
       get.upstream({ byStop: FEED });
     },
@@ -242,61 +242,61 @@ const CASES = {
   // At 09:38 the 10:00 class's trip is due, and its plan, the R2 at 09:44,
   // is kept. At 09:45, "Missed it": the card names the 09:44 and gives the
   // next way there.
-  'missed': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')], places }, '/me/next', {
+  'missed': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')], places }, '/api/me/next', {
     trips: true,
     at: sgtAt(THU_DATE, '09:38'),
     before: async (get) => {
-      await get('/me/next');
+      await get('/api/me/next');
       get.at(sgtAt(THU_DATE, '09:45'));
-      await get.post('/me/signal', { kind: 'missed' });
+      await get.post('/api/me/signal', { kind: 'missed' });
     },
   }],
   // The phone planned the 09:06 D2 from home; nobody said anything, and
   // three minutes after it left the phone is on the D2's road, further on
   // than a walk: the Mac (no location) takes you to be on it too.
-  'assumed-riding': [soon, '/me/next', {
+  'assumed-riding': [soon, '/api/me/next', {
     trips: true,
     feed: PLATE_FEED,
     before: async (get) => {
-      await get(`/me/next?${DORM}`);
+      await get(`/api/me/next?${DORM}`);
       get.at(sgtAt(THU_DATE, '09:06') + ASSUME_MS + MIN);
-      await get(`/me/next${onRideQuery('D2', 'PGP', 'UTOWN', rideLength('D2', 'PGP', 'UTOWN') - 400)}`);
+      await get(`/api/me/next${onRideQuery('D2', 'PGP', 'UTOWN', rideLength('D2', 'PGP', 'UTOWN') - 400)}`);
     },
   }],
   // The same, with no location since: the card can't know whether you're on
   // it. The 09:06 has left, and the next way there.
-  'bus-gone': [soon, '/me/next', {
+  'bus-gone': [soon, '/api/me/next', {
     trips: true,
     feed: PLATE_FEED,
     before: async (get) => {
-      await get(`/me/next?${DORM}`);
+      await get(`/api/me/next?${DORM}`);
       get.at(sgtAt(THU_DATE, '09:06') + ASSUME_MS + MIN);
     },
   }],
   // The same plan, a minute later, and the feed now says that D2 is 2 min
   // late: the widget keeps the phone's bus for the trip, not a bus of its own,
   // its times from the plan, so not live.
-  'plan-kept': [soon, '/me/next', {
+  'plan-kept': [soon, '/api/me/next', {
     trips: true,
     feed: PLATE_FEED,
     before: async (get) => {
-      await get(`/me/next?${DORM}`);
+      await get(`/api/me/next?${DORM}`);
       get.advance(MIN);
       get.upstream({ byStop: { PGP: [{ name: 'D2', arrivalTime: '7', nextArrivalTime: '17' }] } });
     },
   }],
   // "Not going" to the 10:00 class: nothing left today, and an Undo.
-  'skipped-undo': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown'), { ...cls(600, 'COM3', 'CS2030 @ COM1'), day: 5 }], places }, '/me/next', { trips: true, before: (get) => get.post('/me/signal', { kind: 'skipped' }) }],
+  'skipped-undo': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown'), { ...cls(600, 'COM3', 'CS2030 @ COM1'), day: 5 }], places }, '/api/me/next', { trips: true, before: (get) => get.post('/api/me/signal', { kind: 'skipped' }) }],
   // "Not on campus today": said, with the way back.
-  'away': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown'), { ...cls(600, 'COM3', 'CS2030 @ COM1'), day: 5 }], places }, '/me/next', { trips: true, before: (get) => get.post('/me/signal', { kind: 'away' }) }],
+  'away': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown'), { ...cls(600, 'COM3', 'CS2030 @ COM1'), day: 5 }], places }, '/api/me/next', { trips: true, before: (get) => get.post('/api/me/signal', { kind: 'away' }) }],
   // At PGP for UTown: the walk is 1714 s, the D2 1834 s (21:04 away, 9:30
   // on board). Walking must beat a live bus by WALK.beatsBusByS (120 s), and
   // level isn't beating it: the bus heads the card, the walk said as close.
-  'walk-level': [{ places }, `/me/next?to=UTOWN&${AT_PGP}`, { feed: { PGP: [{ name: 'D2', _etas: [{ eta_s: 1264 }] }] } }],
+  'walk-level': [{ places }, `/api/me/next?to=UTOWN&${AT_PGP}`, { feed: { PGP: [{ name: 'D2', _etas: [{ eta_s: 1264 }] }] } }],
   // Standing at KR MRT for COM 3: the buses on this side go the long way
   // round, so the answer is the D2 from across the road, and it says so.
   // Each stop lists only the buses calling there.
-  'cross-road': [{ home: { stops: ['UTOWN'] }, places }, `/me/next?to=COM3&${AT_KR_MRT}`, {
+  'cross-road': [{ home: { stops: ['UTOWN'] }, places }, `/api/me/next?to=COM3&${AT_KR_MRT}`, {
     feed: {
       'KR-MRT': [{ name: 'D2', arrivalTime: '2', nextArrivalTime: '12' }, { name: 'A1', arrivalTime: '3', nextArrivalTime: '13' }, { name: 'K', arrivalTime: '5', nextArrivalTime: '20' }],
       'KR-MRT-OPP': [{ name: 'D2', arrivalTime: '5', nextArrivalTime: '15' }, { name: 'A2', arrivalTime: '8', nextArrivalTime: '18' }, { name: 'K', arrivalTime: '7', nextArrivalTime: '22' }],
@@ -304,63 +304,63 @@ const CASES = {
   }],
   // At COM 3 the feed lists the D2 only as runs ending there (COM3-D2-E):
   // its time is shown, but which way it goes isn't known, and the card says so.
-  'ambiguous-berth': [{ home: { stops: ['PGP'] }, places }, `/me/next?to=UTOWN&${AT_COM3}`, { feed: { COM3: [{ name: 'D2', busStopCode: 'COM3-D2-E', arrivalTime: '3', nextArrivalTime: '13' }] } }],
+  'ambiguous-berth': [{ home: { stops: ['PGP'] }, places }, `/api/me/next?to=UTOWN&${AT_COM3}`, { feed: { COM3: [{ name: 'D2', busStopCode: 'COM3-D2-E', arrivalTime: '3', nextArrivalTime: '13' }] } }],
   // A destination that's no stop, room or place (a favourite since removed):
   // ignored, so the day's own answer, not a free day's "No more classes".
-  'unknown-dest': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')], places }, '/me/next?to=XYZ'],
+  'unknown-dest': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')], places }, '/api/me/next?to=XYZ'],
   // The same, the A2 in 6 min and the 95 at 7:03: the 95's ride is 4 min
   // shorter, so with its fare (3 min) it's level with the A2, and level isn't
   // worth a fare: the free bus heads the card, the 95 is the other way.
-  'public-level': [{ home: { stops: ['PGP'] }, places, publicBuses: true }, `/me/next?to=KR-MRT-OPP&${AT_IT}`, { ...LTA, feed: { IT: [{ name: 'A2', arrivalTime: '6', nextArrivalTime: '16' }] }, upstream: { publicStops: { 16189: [{ ServiceNo: '95', buses: [{ etaS: 6 * 60 + 63, dest: '16009' }] }] } } }],
+  'public-level': [{ home: { stops: ['PGP'] }, places, publicBuses: true }, `/api/me/next?to=KR-MRT-OPP&${AT_IT}`, { ...LTA, feed: { IT: [{ name: 'A2', arrivalTime: '6', nextArrivalTime: '16' }] }, upstream: { publicStops: { 16189: [{ ServiceNo: '95', buses: [{ etaS: 6 * 60 + 63, dest: '16009' }] }] } } }],
   // At IT for College Green: only the 151 (its route 151/2) goes there, and
   // LTA has its time from the timetable (Monitored 0): an estimate, named 151.
-  'public-timetabled': [{ home: { stops: ['PGP'] }, places, publicBuses: true }, `/me/next?to=CG&${AT_IT}`, { ...LTA, feed: {}, upstream: { publicStops: { 16189: [{ ServiceNo: '151', buses: [{ etaS: 240, dest: '64009', monitored: false }] }] } } }],
+  'public-timetabled': [{ home: { stops: ['PGP'] }, places, publicBuses: true }, `/api/me/next?to=CG&${AT_IT}`, { ...LTA, feed: {}, upstream: { publicStops: { 16189: [{ ServiceNo: '151', buses: [{ etaS: 240, dest: '64009', monitored: false }] }] } } }],
 
   // Public buses on, at IT for Opp KR MRT: the 95 in 2 min beats the A2 in
   // 15 by more than its fare is worth, so it heads the card, marked "($)".
-  'public-wins': [{ home: { stops: ['PGP'] }, places, publicBuses: true }, `/me/next?to=KR-MRT-OPP&${AT_IT}`, { ...LTA, feed: { IT: [{ name: 'A2', arrivalTime: '15', nextArrivalTime: '25' }] }, upstream: { publicStops: { 16189: [{ ServiceNo: '95', buses: [{ etaS: 120, dest: '16009' }] }] } } }],
+  'public-wins': [{ home: { stops: ['PGP'] }, places, publicBuses: true }, `/api/me/next?to=KR-MRT-OPP&${AT_IT}`, { ...LTA, feed: { IT: [{ name: 'A2', arrivalTime: '15', nextArrivalTime: '25' }] }, upstream: { publicStops: { 16189: [{ ServiceNo: '95', buses: [{ etaS: 120, dest: '16009' }] }] } } }],
 
   // Monday 9 November 2026, Deepavali (observed): Sunday hours. At 08:30 the
   // D2 starts at 09:00 and R2 (which runs from 08:20 on a weekday) not at all,
   // so the 10:00 class's bus is the first D2.
-  'holiday-class': [{ home: { stops: ['PGP'] }, manual: [{ ...cls(600, 'UTOWN', 'GEA1000 @ UTown'), day: 1 }], places }, '/me/next', { at: sgtAt('2026-11-09', '08:30'), feed: {} }],
+  'holiday-class': [{ home: { stops: ['PGP'] }, manual: [{ ...cls(600, 'UTOWN', 'GEA1000 @ UTown'), day: 1 }], places }, '/api/me/next', { at: sgtAt('2026-11-09', '08:30'), feed: {} }],
   // The same holiday with an imported timetable: Monday's class doesn't run,
   // it says why, and Tuesday's is next.
-  'holiday-nusmods': [nusmods(1, 2), '/me/next', { at: sgtAt('2026-11-09', '08:30'), feed: {} }],
+  'holiday-nusmods': [nusmods(1, 2), '/api/me/next', { at: sgtAt('2026-11-09', '08:30'), feed: {} }],
   // An imported timetable on a Thursday in week 3: the class runs, ending about half an hour early.
-  'nusmods-class': [nusmods(THU), '/me/next'],
+  'nusmods-class': [nusmods(THU), '/api/me/next'],
   // Its Tuesday class off for the recess (22 Sep), reading week (17 Nov),
   // the exams (24 Nov) and the vacation (8 Dec), each said plainly.
-  'nusmods-recess': [nusmods(2), '/me/next', { at: sgtAt('2026-09-22', '09:00') }],
-  'nusmods-reading': [nusmods(2), '/me/next', { at: sgtAt('2026-11-17', '09:00') }],
-  'nusmods-exams': [nusmods(2), '/me/next', { at: sgtAt('2026-11-24', '09:00') }],
-  'nusmods-vacation': [nusmods(2), '/me/next', { at: sgtAt('2026-12-08', '09:00') }],
+  'nusmods-recess': [nusmods(2), '/api/me/next', { at: sgtAt('2026-09-22', '09:00') }],
+  'nusmods-reading': [nusmods(2), '/api/me/next', { at: sgtAt('2026-11-17', '09:00') }],
+  'nusmods-exams': [nusmods(2), '/api/me/next', { at: sgtAt('2026-11-24', '09:00') }],
+  'nusmods-vacation': [nusmods(2), '/api/me/next', { at: sgtAt('2026-12-08', '09:00') }],
   // Friday 00:20 in Singapore is still Thursday in UTC: Friday's 10:00 class
   // is today's, not tomorrow's. No bus runs (nor does the feed list one).
-  'sgt-midnight': [{ home: { stops: ['PGP'] }, manual: [{ ...cls(600, 'COM3', 'CS2030 @ COM1'), day: 5 }], places }, '/me/next', { at: sgtAt('2026-08-28', '00:20'), feed: {} }],
+  'sgt-midnight': [{ home: { stops: ['PGP'] }, manual: [{ ...cls(600, 'COM3', 'CS2030 @ COM1'), day: 5 }], places }, '/api/me/next', { at: sgtAt('2026-08-28', '00:20'), feed: {} }],
   // The same, with the class at 00:30: a 15-minute walk away, so late, and
   // the card says when you'll get there, not when you would have.
-  'sgt-midnight-class': [{ home: { stops: ['PGP'] }, manual: [{ ...cls(30, 'COM3', 'CS2030 @ COM1'), day: 5 }], places }, '/me/next', { at: sgtAt('2026-08-28', '00:20'), feed: {} }],
+  'sgt-midnight-class': [{ home: { stops: ['PGP'] }, manual: [{ ...cls(30, 'COM3', 'CS2030 @ COM1'), day: 5 }], places }, '/api/me/next', { at: sgtAt('2026-08-28', '00:20'), feed: {} }],
 
   // Thursday 23:10, on campus at UTown, home at PGP: every service has
   // stopped (the feed lists nothing), so it's the walk home, said plainly.
-  'after-last-bus': [{ home: { stops: ['PGP'] }, places }, `/me/next?${AT_UTOWN}`, { at: sgtAt(THU_DATE, '23:10'), feed: {} }],
+  'after-last-bus': [{ home: { stops: ['PGP'] }, places }, `/api/me/next?${AT_UTOWN}`, { at: sgtAt(THU_DATE, '23:10'), feed: {} }],
   // Thursday 22:40, outside your day, at PGP with home at UTown: the D2
   // home, warned that it stops running at 23:00.
-  'last-bus-warning': [{ home: { stops: ['UTOWN'] }, places }, `/me/next?${AT_PGP}`, { at: sgtAt(THU_DATE, '22:40'), feed: LATE_FEED }],
+  'last-bus-warning': [{ home: { stops: ['UTOWN'] }, places }, `/api/me/next?${AT_PGP}`, { at: sgtAt(THU_DATE, '22:40'), feed: LATE_FEED }],
   // Thursday 06:30, a class at UTown at 08:00, the feed empty: the first D2
   // (07:15) is the way there, and the wait for it doesn't make walking win.
-  'before-first-bus': [{ home: { stops: ['PGP'] }, manual: [cls(480, 'UTOWN', 'GEA1000 @ UTown')], places }, '/me/next', { at: sgtAt(THU_DATE, '06:30'), feed: {} }],
+  'before-first-bus': [{ home: { stops: ['PGP'] }, manual: [cls(480, 'UTOWN', 'GEA1000 @ UTown')], places }, '/api/me/next', { at: sgtAt(THU_DATE, '06:30'), feed: {} }],
 
   // NUS's feed can't be reached and nothing is cached: no time is made up.
   // Every bus is 'unknown', worded "no live times", and its leg has none.
-  'feed-down': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')], places }, '/me/next', { upstream: { fail: true } }],
+  'feed-down': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')], places }, '/api/me/next', { upstream: { fail: true } }],
   // A good reading three minutes ago, then the feed fails: that reading,
   // counted down to now, said to be three minutes old, as of when it was read.
-  'stale': [{ home: { stops: ['PGP'] }, places }, '/me/next?place=mrt', {
+  'stale': [{ home: { stops: ['PGP'] }, places }, '/api/me/next?place=mrt', {
     at: FROZEN_NOW - 3 * MIN,
     before: async (get) => {
-      await get('/me/next?place=mrt');
+      await get('/api/me/next?place=mrt');
       get.advance(3 * MIN);
       get.upstream({ fail: true });
     },

@@ -783,7 +783,7 @@ test('the tables are made once, /status counts nothing, and an empty recorder as
 /* The routes                                                          */
 /* ------------------------------------------------------------------ */
 
-test('/timelapse/days: operator only, today while recording, closed days from R2 cached for a year', async () => {
+test('/api/timelapse/days: operator only, today while recording, closed days from R2 cached for a year', async () => {
   const h = harness({ buses: { D2: [busOn('D2', 400)] } });
   await start(h);
   await runUntil(h, FROZEN_NOW + 30_000 - 1);
@@ -791,27 +791,27 @@ test('/timelapse/days: operator only, today while recording, closed days from R2
     const ctx = { waitUntil() {}, passThroughOnException() {} };
     return worker.fetch(new Request(`https://bus.example.test${path}`, { headers: token ? { 'x-health-token': token } : {} }), h.env, ctx);
   };
-  assert.equal((await call('/timelapse/days', null)).status, 404);
-  assert.equal((await call('/timelapse/days', 'wrong')).status, 404);
-  assert.equal((await call(`/timelapse/days/${DATE}`, null)).status, 404);
+  assert.equal((await call('/api/timelapse/days', null)).status, 404);
+  assert.equal((await call('/api/timelapse/days', 'wrong')).status, 404);
+  assert.equal((await call(`/api/timelapse/days/${DATE}`, null)).status, 404);
 
-  const list = await (await call('/timelapse/days')).json();
+  const list = await (await call('/api/timelapse/days')).json();
   assert.deepEqual(list.days, [{ date: DATE, closed: false, bytes: null, samples: RUNNING.length }]);
   assert.deepEqual(list.recording, { date: DATE, enabled: true, state: 'polling', samples: RUNNING.length });
 
-  const open = await call(`/timelapse/days/${DATE}`);
+  const open = await call(`/api/timelapse/days/${DATE}`);
   assert.equal(open.status, 200);
   assert.equal(open.headers.get('cache-control'), 'no-store', 'still changing');
   assert.equal((await gunzip(new Uint8Array(await open.arrayBuffer()))).samples.length, RUNNING.length);
 
   await h.bucket.put('timelapse/2026-08-26.json.gz', new Uint8Array([31, 139, 8, 0]));
-  const closed = await call('/timelapse/days/2026-08-26');
+  const closed = await call('/api/timelapse/days/2026-08-26');
   assert.equal(closed.status, 200);
   assert.equal(closed.headers.get('content-type'), 'application/gzip');
   assert.match(closed.headers.get('cache-control'), /max-age=31536000, immutable/);
-  assert.equal((await call('/timelapse/days/2026-08-25')).status, 404);
-  assert.equal((await call('/timelapse/days/nonsense')).status, 404);
-  const both = await (await call('/timelapse/days')).json();
+  assert.equal((await call('/api/timelapse/days/2026-08-25')).status, 404);
+  assert.equal((await call('/api/timelapse/days/nonsense')).status, 404);
+  const both = await (await call('/api/timelapse/days')).json();
   assert.deepEqual(both.days.map((d) => [d.date, d.closed]), [[DATE, false], ['2026-08-26', true]]);
 });
 
@@ -919,7 +919,7 @@ test("an earlier day stays in the list while its write to R2 is being retried", 
   const next = sgt('2026-08-30', '09:00');
   Date.now = () => next;
   const ctx = { waitUntil() {}, passThroughOnException() {} };
-  const res = await worker.fetch(new Request('https://bus.example.test/timelapse/days', { headers: { 'x-health-token': 'op' } }), h.env, ctx);
+  const res = await worker.fetch(new Request('https://bus.example.test/api/timelapse/days', { headers: { 'x-health-token': 'op' } }), h.env, ctx);
   const { days } = await res.json();
   assert.deepEqual(days.map((d) => [d.date, d.closed, d.samples]), [[DATE, false, RUNNING.length]]);
 });
@@ -943,10 +943,10 @@ test('a recorder that never answers holds up neither the cron nor the routes for
   };
   const ctx = { waitUntil() {}, passThroughOnException() {} };
   const get = (path) => worker.fetch(new Request(`https://bus.example.test${path}`, { headers: { 'x-health-token': 'op' } }), env, ctx);
-  const day = await settled(get(`/timelapse/days/${DATE}`));
+  const day = await settled(get(`/api/timelapse/days/${DATE}`));
   assert.equal(day.status, 503);
   assert.equal(day.headers.get('retry-after'), '60');
-  const list = await settled(get('/timelapse/days'));
+  const list = await settled(get('/api/timelapse/days'));
   assert.equal(list.status, 200);
   assert.deepEqual((await list.json()).days, []);
   await assert.rejects(settled(ensureRecorder(env, FROZEN_NOW)), /did not answer/);
@@ -959,12 +959,12 @@ test('TIMELAPSE_TOKEN opens the timelapse routes and nothing else', async () => 
     const ctx = { waitUntil() {}, passThroughOnException() {} };
     return worker.fetch(new Request(`https://bus.example.test${path}`, { headers: { 'x-health-token': token } }), env, ctx);
   };
-  assert.equal((await call('/timelapse/days', 'render-only')).status, 200);
-  assert.equal((await call('/timelapse/days', 'op')).status, 200, 'the operator still can');
-  assert.equal((await call('/admin/stats', 'render-only')).status, 404, 'not the dashboard');
-  assert.equal((await (await call('/health?probe=1', 'render-only')).json()).auth, undefined, 'nor the auth probe');
+  assert.equal((await call('/api/timelapse/days', 'render-only')).status, 200);
+  assert.equal((await call('/api/timelapse/days', 'op')).status, 200, 'the operator still can');
+  assert.equal((await call('/api/admin/stats', 'render-only')).status, 404, 'not the dashboard');
+  assert.equal((await (await call('/api/health?probe=1', 'render-only')).json()).auth, undefined, 'nor the auth probe');
   // Unset, it opens nothing.
   const none = { ...h.env, TIMELAPSE_TOKEN: undefined };
   const ctx = { waitUntil() {}, passThroughOnException() {} };
-  assert.equal((await worker.fetch(new Request('https://bus.example.test/timelapse/days', { headers: { 'x-health-token': '' } }), none, ctx)).status, 404);
+  assert.equal((await worker.fetch(new Request('https://bus.example.test/api/timelapse/days', { headers: { 'x-health-token': '' } }), none, ctx)).status, 404);
 });

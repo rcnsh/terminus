@@ -47,7 +47,7 @@ import { handleTimelapse } from './timelapse.ts';
 import { scopeCache } from './edgecache.ts';
 
 import { GRAPH, GRAPH_PUBLIC, twinOf } from './graph.ts';
-import { isBeta, linkOrigin, markBeta, movedPage } from './site.ts';
+import { isBeta, linkOrigin, markBeta, movedApi, movedPage } from './site.ts';
 import { answerFor, arrivedAnswer, collectArrivals, needsSetupAnswer } from './answer.ts';
 import { langOfRequest, m, withLang } from './i18n.ts';
 
@@ -144,7 +144,7 @@ async function probeAuth(env: Env, nowMs: number): Promise<Record<string, unknow
 }
 
 /**
- * GET /campus -- static map + search data for the Map and Plan tabs. Pure
+ * GET /api/campus -- static map + search data for the Map and Plan tabs. Pure
  * function of the bundled stop graph: it only changes when a deploy ships a
  * new scrape. So it's written once per isolate, with an ETag of its own
  * bytes, and a client that already has it (the browser revalidating after
@@ -166,7 +166,7 @@ async function handleCampus(req: Request): Promise<Response> {
 }
 
 /**
- * GET /arrivals?stop=<code> -- what is coming at one stop, for the map's
+ * GET /api/arrivals?stop=<code> -- what is coming at one stop, for the map's
  * tap-a-stop popover. Goes through the same per-stop 15s edge cache as
  * /next, so a map open does not cost more than checking that one stop would
  * on its own -- there is no bulk "every stop at once" fetch anywhere.
@@ -198,7 +198,7 @@ async function handleArrivals(url: URL, env: Env, ctx: ExecutionContext, nowMs: 
 }
 
 /**
- * GET /buses?svc=<service> -- where that service's buses are now, for the
+ * GET /api/buses?svc=<service> -- where that service's buses are now, for the
  * map. One upstream call per service per 5 s however many people watch it
  * (getBuses). Like /arrivals, an unreachable feed is `available: false`, not
  * an error and not "no buses".
@@ -218,7 +218,7 @@ async function handleBuses(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
 }
 
 /**
- * GET /line?svc=<service>[&stop=<code>] -- one service's whole line, for a
+ * GET /api/line?svc=<service>[&stop=<code>] -- one service's whole line, for a
  * service's page: its stops in route order, its buses placed on that list,
  * and with `stop`, that service's board row there. Costs what /buses does,
  * plus one /arrivals read with `stop`, both through their caches. No times
@@ -385,7 +385,7 @@ async function versionLookup(env: Env, nowMs: number): Promise<Record<string, un
 const ME_DEPS: MeDeps = { graph: GRAPH, publicGraph: GRAPH_PUBLIC, answerFor, collectArrivals };
 
 /** Routes that need an API key or a signed-in account. */
-const KEYED = ['/next', '/trip', '/arrivals', '/buses', '/line', '/campus', '/stops/pairs'];
+const KEYED = ['/api/next', '/api/trip', '/api/arrivals', '/api/buses', '/api/line', '/api/campus', '/api/stops/pairs'];
 
 export default {
   async scheduled(_event: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
@@ -409,7 +409,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
   const nowMs = Date.now();
 
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
-  const moved = movedPage(req, env);
+  const moved = movedPage(req, env) ?? movedApi(req, url);
   if (moved) return moved;
   // The calendar the cron keeps fresh in KV (calendarsync.ts), read every few minutes.
   await loadCalendar(env, nowMs);
@@ -421,7 +421,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
     // NUS; this protects the Worker from being a free proxy, and D1/R2 from
     // being a free bill.
     const keyed = KEYED.includes(url.pathname);
-    if (env.RL_PUBLIC && (url.pathname === '/health' || url.pathname === '/status.json' || url.pathname === '/admin/stats' || url.pathname.startsWith('/download/') || url.pathname.startsWith('/timelapse/'))) {
+    if (env.RL_PUBLIC && (url.pathname === '/api/health' || url.pathname === '/api/status.json' || url.pathname === '/api/admin/stats' || url.pathname.startsWith('/download/') || url.pathname.startsWith('/api/timelapse/'))) {
       const { success } = await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` });
       if (!success) return json({ error: 'too many requests, slow down' }, 429, { 'retry-after': '60' });
     }
@@ -433,7 +433,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
       // /buses, which the map asks every 5 s: who it is, remembered a little
       // while (recentCallerFor says what that costs). D1 failing there is
       // the 503 the catch below gives.
-      const { caller, down } = url.pathname === '/buses' ? { caller: await recentCallerFor(env, req, nowMs, ctx), down: false } : await callerOrDown(env, req, nowMs, ctx);
+      const { caller, down } = url.pathname === '/api/buses' ? { caller: await recentCallerFor(env, req, nowMs, ctx), down: false } : await callerOrDown(env, req, nowMs, ctx);
       if (down) {
         logError(env, url.pathname);
         return json({ error: ACCOUNTS_DOWN }, 503, { 'retry-after': '30' });
@@ -476,35 +476,35 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
       case '/sitemap.xml':
         if (isBeta(env)) return json({ error: 'not found' }, 404);
         return new Response(SITEMAP, { headers: { 'content-type': 'application/xml; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
-      case '/openapi.json':
+      case '/api/openapi.json':
         // servers[] is this request's origin, so the docs' "Send API Request"
         // hits whichever deployment is serving them.
         // Built once per origin (openApiJson); the headers are jsonCached's.
         return new Response(openApiJson(url.origin), {
           headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=300', ...CORS },
         });
-      case '/next':
+      case '/api/next':
         return await handleNext(url, env, ctx, nowMs);
-      case '/trip':
+      case '/api/trip':
         return await handleTrip(url, env, ctx, nowMs);
-      case '/health':
+      case '/api/health':
         return await handleHealth(req, url, env, nowMs);
-      case '/status.json':
+      case '/api/status.json':
         return await handleStatus(env, nowMs);
-      case '/admin/stats':
+      case '/api/admin/stats':
         // The dashboard's data: operator only, never cached.
         if (!isOperator(env, req)) return json({ error: 'not found' }, 404);
         return json(await adminStats(env, nowMs), 200, { 'cache-control': 'no-store' });
-      case '/campus':
+      case '/api/campus':
         return await handleCampus(req);
-      case '/stops/pairs':
+      case '/api/stops/pairs':
         // Static like /campus: changes only with a new scrape.
         return jsonCached((stopPairsMemo ??= stopPairs(GRAPH)), 3600, 'private');
-      case '/arrivals':
+      case '/api/arrivals':
         return await handleArrivals(url, env, ctx, nowMs);
-      case '/buses':
+      case '/api/buses':
         return await handleBuses(url, env, ctx, nowMs);
-      case '/line':
+      case '/api/line':
         return await handleLine(url, env, ctx, nowMs);
       default:
         // Everything else is the website; the landing page with its version and account link.

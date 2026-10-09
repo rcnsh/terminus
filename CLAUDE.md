@@ -45,9 +45,15 @@ the domain kept for good, so personal requests never go to a lapsed
 terminus.run. So every `terminus.rcn.sh` and `rcn.sh` left in the repo is
 on purpose: don't find-and-replace them.
 
+Every API route is under `/api` (`/api/me/next`, `/api/campus`). The
+pages, `/download/*` and `/map/*` stay at the root, as do the two pages a
+sign-in email links to (`/auth/verify`, `/auth/approve`). A call to an old
+root path gets 426 from an app, 308 from anything else (`movedApi` in
+`src/site.ts`). A new route goes under `/api`.
+
 ## The rules that matter most
 
-1. **The server computes the answer.** `/me/next`
+1. **The server computes the answer.** `/api/me/next`
    returns a ready-made card (labels, times, which bus). Clients only count
    down the clock. Never move logic into a client: four clients would then
    drift apart.
@@ -191,7 +197,7 @@ stops still draw.
   (`ERR_TOO_MANY_RETRIES`) and its trust store may predate the proxy's
   certificate. Route the page's requests through Node instead
   (`context.route` with `fetch`, run with `NODE_USE_ENV_PROXY=1`), and use
-  a temporary anonymous account (`POST /auth/anon`, then `DELETE /me`).
+  a temporary anonymous account (`POST /api/auth/anon`, then `DELETE /api/me`).
 - The container has Chromium only (`/opt/pw-browsers/chromium`), no WebKit;
   don't run `playwright install`. For Safari, use a one-off workflow
   (Playwright WebKit on Linux, or an iOS Simulator on a macOS runner).
@@ -214,12 +220,12 @@ stops still draw.
 ```
 apps/api/
   src/index.ts        Router; most endpoints live here or in me.ts
-  src/me.ts           /auth, /pair, /me/* (accounts)
-  src/next.ts         /me/next: the plan, free days, riding, the trip's phase
+  src/me.ts           /api/auth, /api/pair, /api/me/* (accounts)
+  src/next.ts         /api/me/next: the plan, free days, riding, the trip's phase
   src/answer.ts       The answer engine: stops near you, arrivals, the best option, worded
   src/card.ts         What every client shows, worded once (the card's lines)
   src/plan.ts, leave.ts  Which bus a trip is about; when to set off
-  src/profile.ts      The saved setup (validated) and the planner; day.ts is /me/day
+  src/profile.ts      The saved setup (validated) and the planner; day.ts is /api/me/day
   src/nusmods.ts      NUSMods timetable import
   src/walk.ts         Walking times along campus paths (walks.json)
   src/crowd.ts        Full buses, tallied as the Worker answers
@@ -232,10 +238,10 @@ apps/api/
   src/edgecache.ts    Fetch through the edge cache, stale on failure, breaker: both feeds
   src/auth.ts         Guest token mint, KV memo, app-version breaker
   src/appversion.ts   Tracks the uNivUS app version the feed demands
-  src/buses.ts        /buses: live buses placed on their route line (see below)
+  src/buses.ts        /api/buses: live buses placed on their route line (see below)
   src/timelapse.ts, timelapsedo.ts  The timelapse recorder (rule 2's one exception)
-                      and /timelapse/days; one Durable Object per Singapore day
-  src/campus.ts       /campus: stops, route lines, colours, destination search
+                      and /api/timelapse/days; one Durable Object per Singapore day
+  src/campus.ts       /api/campus: stops, route lines, colours, destination search
   src/map.ts          /map/*: PMTiles street map, style, fonts, sprites from R2
   src/accounts.ts     Sign-in codes/links, sessions, anonymous accounts, pairing (D1)
   src/applogin.ts     App sign-in approved from the email (RFC 8628-like)
@@ -246,7 +252,7 @@ apps/api/
   src/calendarsync.ts The academic calendar, refreshed into KV by the cron
   src/push.ts, webpush.ts  Push: FCM to Android, Web Push to the installed web app
   src/access.ts       Who may call the keyed routes (an API key or a session)
-  src/admin.ts        /admin/stats for the dashboard; analytics.ts logs to Analytics Engine
+  src/admin.ts        /api/admin/stats for the dashboard; analytics.ts logs to Analytics Engine
   src/feedback.ts     "This was wrong" reports, stored and emailed to the operator
   src/downloads.ts    App downloads from R2 (latest.json, the APKs, the DMG, the appcast)
   src/landing.ts, site.ts, pagesky.ts  The landing page; stable or beta, and the old address's
@@ -268,7 +274,7 @@ apps/api/
   scripts/            dev-stub.mjs; predeploy.mjs (first step of a deploy); scrapers (scrape_stops.py, scrape_lta.py,
                       route_shapes.py, fetch_calendar.py, walk_routes.py,
                       check_scraped.py);
-                      probe_buses.py (feed update-rate probe); record_buses.mjs (checks /buses on a live site);
+                      probe_buses.py (feed update-rate probe); record_buses.mjs (checks /api/buses on a live site);
                       render-timelapse.mjs (renders a recorded day headless, e.g. on a VPS);
                       vapid-key.mjs (makes the Web Push key, once)
   test/               *.test.js + worker.smoke.js; _stubs.mjs, _d1.mjs (D1 on node:sqlite)
@@ -280,7 +286,7 @@ apps/web/public/
   index.html          Landing page
   account/            The account page (app.js): sign-in, onboarding.js, settings.js +
                       settings-pages.js (Settings, shared with the app), preview.js (the
-                      card), profile.js (the profile and /campus, shared), search.js
+                      card), profile.js (the profile and /api/campus, shared), search.js
                       (ranking, tested) + search-box.js; journey.js (the card styles,
                       as on Android); dom.js has t, api, clock; sky.js (Now's sky
                       and horizon), daylight.js (its colours by the hour), livery.js
@@ -369,7 +375,7 @@ scripts/              release.sh, release-beta.sh (+ release-lib.sh, their share
   token: anonymous on first launch, then sign-in approved from the email, or
   pairing codes. Rate limits are Workers rate-limit bindings (`RL_*`). The
   cron deletes anonymous accounts unused for 60 days.
-- **Live buses (`/buses`, `src/buses.ts`).** NUS's feed moves a bus about
+- **Live buses (`/api/buses`, `src/buses.ts`).** NUS's feed moves a bus about
   every 15–20 s (measured with the `probe live-bus feed` workflow).
   - Many routes use the same road both ways, so the two directions of the
     line are metres apart (often on the same points) and GPS can't choose.
@@ -415,7 +421,7 @@ scripts/              release.sh, release-beta.sh (+ release-lib.sh, their share
   the day to R2 (`timelapse/YYYY-MM-DD.json.gz`) at the close.
   `/admin/timelapse/` replays a day (`replay.js`, which the tests share) and
   exports a video with Mediabunny, frame by frame. Details in internals.md.
-- **Map.** `/campus` returns stops and route lines. The street map is a
+- **Map.** `/api/campus` returns stops and route lines. The street map is a
   PMTiles extract on R2, in each site's own downloads bucket
   (`terminus-downloads`, `terminus-beta-downloads`), uploaded by the
   `map tiles` workflow or `scripts/map-tiles.sh` (`CHANNEL=stable|beta|both`).

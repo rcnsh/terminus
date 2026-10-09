@@ -82,24 +82,24 @@ test('scheduled() runs the cron: the feed health check is recorded', async () =>
   assert.equal(up.checkedAt, Date.now(), 'checked on this run');
 });
 
-test('/health?probe=1 for the operator: a token through the ordinary path, never the token itself', async () => {
+test('/api/health?probe=1 for the operator: a token through the ordinary path, never the token itself', async () => {
   installGlobals(makeFetch());
   const env = { ...makeEnv(), HEALTH_TOKEN: 'op-secret' };
-  const first = (await (await call(env, '/health?probe=1', { 'x-health-token': 'op-secret' })).json()).auth;
+  const first = (await (await call(env, '/api/health?probe=1', { 'x-health-token': 'op-secret' })).json()).auth;
   assert.equal(first.ok, true);
   assert.equal(first.cached, false);
   assert.match(first.expiresIn, /^\d+h$/);
-  const again = (await (await call(env, '/health?probe=1', { 'x-health-token': 'op-secret' })).json()).auth;
+  const again = (await (await call(env, '/api/health?probe=1', { 'x-health-token': 'op-secret' })).json()).auth;
   assert.equal(again.cached, true, 'the second goes through the cache');
   assert.ok(!JSON.stringify(again).includes(await env.KV.get('auth:session')), 'the token is never shown');
   // A wrong token is no operator.
-  assert.equal((await (await call(env, '/health?probe=1', { 'x-health-token': 'guess' })).json()).auth, undefined);
+  assert.equal((await (await call(env, '/api/health?probe=1', { 'x-health-token': 'guess' })).json()).auth, undefined);
   // Not configured: says so rather than trying.
   const bare = { ...makeEnv(), HEALTH_TOKEN: 'op-secret', NEXTBUS_AUTH_BASE: undefined };
-  assert.deepEqual((await (await call(bare, '/health?probe=1', { 'x-health-token': 'op-secret' })).json()).auth, { ok: false, reason: 'auth not configured' });
+  assert.deepEqual((await (await call(bare, '/api/health?probe=1', { 'x-health-token': 'op-secret' })).json()).auth, { ok: false, reason: 'auth not configured' });
 });
 
-test('/health?versions=1 for the operator: what the version update would find today', async () => {
+test('/api/health?versions=1 for the operator: what the version update would find today', async () => {
   const base = makeFetch();
   installGlobals(async (input, init) => {
     const url = String(typeof input === 'string' ? input : input.url);
@@ -108,13 +108,13 @@ test('/health?versions=1 for the operator: what the version update would find to
     return base(input, init);
   });
   const env = { ...makeEnv(makeKV({})), HEALTH_TOKEN: 'op-secret', NEXTBUS_APP_VERSION: 'univus_android_2.59.2_140' };
-  const v = (await (await call(env, '/health?versions=1', { 'x-health-token': 'op-secret' })).json()).versions;
+  const v = (await (await call(env, '/api/health?versions=1', { 'x-health-token': 'op-secret' })).json()).versions;
   assert.equal(v.current, 'univus_android_2.59.2_140');
   assert.equal(v.play, '2.60.0');
   assert.equal(v.apkcombo, 'univus_android_2.60.0_141');
   assert.deepEqual(v.errors, []);
   assert.ok(v.wouldTry.length > 0 && v.wouldTry.every((s) => s.startsWith('univus_android_2.60.0_')), JSON.stringify(v.wouldTry));
-  assert.equal((await (await call(env, '/health?versions=1')).json()).versions, undefined, 'not without the token');
+  assert.equal((await (await call(env, '/api/health?versions=1')).json()).versions, undefined, 'not without the token');
 });
 
 test('opening the web app signed out goes straight to sign-in; signed in, or the service worker\'s copy, is the app', async () => {

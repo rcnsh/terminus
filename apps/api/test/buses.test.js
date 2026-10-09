@@ -347,7 +347,7 @@ test('replaying 15 minutes of the real feed: no bus changes side, and none is sh
   assert.ok(atStops > 100 && between > 100, `shown at stops ${atStops} times, between ${between}`);
 });
 
-test('/line: D1’s stops in route order, its loop’s first stop not listed again, each with the other services there', () => {
+test('/api/line: D1’s stops in route order, its loop’s first stop not listed again, each with the other services there', () => {
   const idx = indexGraph(GRAPH);
   const stops = lineStops(idx, 'D1');
   assert.deepEqual(stops.map((s) => s.code), ['COM3', 'HSSML-OPP', 'NUSS-OPP', 'LT13-OPP', 'IT', 'YIH-OPP', 'MUSEUM', 'UTOWN', 'YIH', 'CLB', 'LT13', 'AS5', 'BIZ2']);
@@ -361,7 +361,7 @@ test('/line: D1’s stops in route order, its loop’s first stop not listed aga
   assert.equal(k.at(-1).code, 'PGPR');
 });
 
-test('/line: a real D1 bus between YIH and Central Library is after YIH; one at a stop is at it', async () => {
+test('/api/line: a real D1 bus between YIH and Central Library is after YIH; one at a stop is at it', async () => {
   const shape = SHAPES.D1;
   const route = indexGraph(GRAPH).routes.get('D1');
   const k = shape.stops.indexOf('YIH');
@@ -380,7 +380,7 @@ test('/line: a real D1 bus between YIH and Central Library is after YIH; one at 
   assert.equal(by.PD1.id, buses.find((b) => b.plate === 'PD1').id, 'the same id as on the map');
 });
 
-test('/line: after a loop’s last stop the bus is heading back to its first; a stop listed twice is the visit before its next stop', () => {
+test('/api/line: after a loop’s last stop the bus is heading back to its first; a stop listed twice is the visit before its next stop', () => {
   const name = (code) => ({ code, name: code });
   const between = (last, next) => ({ at: null, stretch: { from: 0, to: 1, last: name(last) }, nextStop: name(next) });
   const loop = ['COM3', 'A', 'B'];

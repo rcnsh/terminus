@@ -36,29 +36,29 @@ async function setup() {
     await ctx.settle();
     return res;
   };
-  await call('/auth/login', { method: 'POST', body: { email: 'you@u.nus.edu' } });
+  await call('/api/auth/login', { method: 'POST', body: { email: 'you@u.nus.edu' } });
   const verify = await worker.fetch(
     new Request(`${BASE}/auth/verify`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: `t=${env.EMAIL.lastToken()}` }),
     env,
     makeCtx(),
   );
   const cookie = verify.headers.get('set-cookie').split(';')[0];
-  assert.equal((await call('/me/profile', { method: 'PUT', cookie, body: PROFILE })).status, 200);
+  assert.equal((await call('/api/me/profile', { method: 'PUT', cookie, body: PROFILE })).status, 200);
   ae.events.length = 0;
   return { env, ae, call, cookie };
 }
 
-test('/me/day plans every class without logging each as an answer', async () => {
+test('/api/me/day plans every class without logging each as an answer', async () => {
   const { ae, call, cookie } = await setup();
-  const day = await (await call('/me/day', { cookie })).json();
+  const day = await (await call('/api/me/day', { cookie })).json();
   assert.ok(day.items.some((i) => i.leave?.at), 'the leave-bys were worked out');
   assert.equal(ae.rows('answer').length, 0);
   assert.equal(ae.rows('arrival').length, 0);
 });
 
-test('/me/next, which someone asked for, is still logged', async () => {
+test('/api/me/next, which someone asked for, is still logged', async () => {
   const { ae, call, cookie } = await setup();
-  assert.equal((await call('/me/next', { cookie })).status, 200);
+  assert.equal((await call('/api/me/next', { cookie })).status, 200);
   assert.ok(ae.rows('answer').length >= 1);
 });
 

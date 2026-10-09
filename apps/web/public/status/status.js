@@ -80,7 +80,7 @@ function Status() {
     const load = async () => {
       try {
         // Given up on after a while, so a hung call says it failed rather than loading for ever.
-        const res = await fetch('/status.json', { cache: 'no-store', signal: timeout(15_000) });
+        const res = await fetch('/api/status.json', { cache: 'no-store', signal: timeout(15_000) });
         if (!res.ok) throw new Error(String(res.status));
         setS(await res.json());
         setFailed(false);

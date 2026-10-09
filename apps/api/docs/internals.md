@@ -8,7 +8,7 @@ with one takes six taps: open the app, find the stop, pick the correct side of
 the road, read a table, work out which service goes where you are going.
 
 ```
-GET /next  ->  { "label": "D2 · 4 min",
+GET /api/next  ->  { "label": "D2 · 4 min",
                  "detail": "Opp KR MRT · right here · COM3 ~6 min · crowding: low · or A1 9 min",
                  "alt":    "A1 · 9 min · Kent Ridge MRT",
                  "quality": "live", ... }
@@ -114,46 +114,60 @@ pass counts only for the `signin` action on the Worker's own
 Not declared, so a site deploys without them: `LTA_ACCOUNT_KEY` (public
 buses), `ANALYTICS_TOKEN` (the dashboard's Analytics Engine charts, with
 `CF_ACCOUNT_ID`, which is in the config) and `TIMELAPSE_TOKEN` (opens
-`/timelapse/*` only). Everything in [src/types.ts](../src/types.ts)'s `Env`
-but KV is optional at run time: `/health` says what's missing.
+`/api/timelapse/*` only). Everything in [src/types.ts](../src/types.ts)'s `Env`
+but KV is optional at run time: `/api/health` says what's missing.
 
 ## Endpoints
+
+Every API route is under `/api` (since 3.0). What stays at the root is
+for people or for what can't change: the pages (the site, `/docs`, the
+pairing page `GET /pair`, and the two an email links to, `/auth/verify`
+and `/auth/approve`, so a link already sent keeps working), the downloads
+(the Mac's Sparkle feed is built into every copy) and the map's files.
+
+The old root paths (before 3.0) aren't served. `movedApi` in
+[src/site.ts](../src/site.ts) answers them: a request with
+`x-terminus-client` is an app from before 3.0, so it gets the 426
+`config:minClient` gives (the app shows "update" rather than an error);
+anything else (a script with an API key, a page open since before) gets a
+308 to the same path under `/api`, which keeps the method and body. Once no
+2.x app is left, these can go.
 
 | Route | |
 | --- | --- |
 | `GET /docs` | API documentation (Stoplight Elements), with a live "Send API Request" panel. |
-| `GET /openapi.json` | The OpenAPI 3.1 description the docs render. Source: [src/openapi.ts](../src/openapi.ts). |
-| `GET /next` | The answer. `?to=` names a stop or venue code; `?lat&lon` alone gives the next buses at your nearest stop. With neither it returns a "Set up" answer rather than inventing a destination. |
-| `GET /trip?to=<stop\|venue>&lat&lon` | The answer for a stop or venue code. Without coordinates, `&from=<stop>` sets the origin. |
-| `GET /arrivals?stop=<code>` | One stop's board, through the same per-stop cache, with the stop across the road (`stop.opposite`, as `/me/nearby` gives it). See "Board rows" below. |
-| `GET /buses?svc=<service>` | One service's live buses for the map: the stop each is at (within 40 m along its route) or the two it's between, where to draw it (the stop's dot, or a point on the route line between the stops), the road's heading there, crowding and the next stop; between stops, the stretch of route it's on. A bus away from its route is left out. One upstream call per service per 5 s; each bus with its number plate. |
-| `GET /line?svc=<service>[&stop=<code>]` | One service's whole line, for the Buses tab's service page: its stops in route order (a loop's first stop not listed again at the end), each with the other shuttle services there; its buses from `/buses`, each by index into that list (`at` a stop, or `after` the stop it passed); with `stop`, that stop's index and the service's board row there (a stopped row too); whether the service is running now, and if not why and when it's back (`running`, `stopped`, `resumesAt`). One `/buses` read, plus one `/arrivals` read with `stop`, both through their caches. No times are worked out for the other stops. 400 for an unknown service or a stop it doesn't call at. |
-| `GET /campus` | Stops (with the services that call there), each route's path along the roads, the services' colours, destination search data, and the residences for "Where do you live?" (PGP and UTown Residence, where most students live, first and marked `common`; the pickers show them in their own group), each with its walk to its nearest stop in metres (`walkM`) and in whole minutes at the normal pace (`walkMin`, never under 1). Written once per isolate, with an ETag: a client revalidating gets a 304. |
+| `GET /api/openapi.json` | The OpenAPI 3.1 description the docs render. Source: [src/openapi.ts](../src/openapi.ts). |
+| `GET /api/next` | The answer. `?to=` names a stop or venue code; `?lat&lon` alone gives the next buses at your nearest stop. With neither it returns a "Set up" answer rather than inventing a destination. |
+| `GET /api/trip?to=<stop\|venue>&lat&lon` | The answer for a stop or venue code. Without coordinates, `&from=<stop>` sets the origin. |
+| `GET /api/arrivals?stop=<code>` | One stop's board, through the same per-stop cache, with the stop across the road (`stop.opposite`, as `/api/me/nearby` gives it). See "Board rows" below. |
+| `GET /api/buses?svc=<service>` | One service's live buses for the map: the stop each is at (within 40 m along its route) or the two it's between, where to draw it (the stop's dot, or a point on the route line between the stops), the road's heading there, crowding and the next stop; between stops, the stretch of route it's on. A bus away from its route is left out. One upstream call per service per 5 s; each bus with its number plate. |
+| `GET /api/line?svc=<service>[&stop=<code>]` | One service's whole line, for the Buses tab's service page: its stops in route order (a loop's first stop not listed again at the end), each with the other shuttle services there; its buses from `/api/buses`, each by index into that list (`at` a stop, or `after` the stop it passed); with `stop`, that stop's index and the service's board row there (a stopped row too); whether the service is running now, and if not why and when it's back (`running`, `stopped`, `resumesAt`). One `/api/buses` read, plus one `/api/arrivals` read with `stop`, both through their caches. No times are worked out for the other stops. 400 for an unknown service or a stop it doesn't call at. |
+| `GET /api/campus` | Stops (with the services that call there), each route's path along the roads, the services' colours, destination search data, and the residences for "Where do you live?" (PGP and UTown Residence, where most students live, first and marked `common`; the pickers show them in their own group), each with its walk to its nearest stop in metres (`walkM`) and in whole minutes at the normal pace (`walkMin`, never under 1). Written once per isolate, with an ETag: a client revalidating gets a 304. |
 | `GET /map/campus.pmtiles` | The campus street map from R2, by byte range (PMTiles). Open, like the website. Each piece is kept in the edge cache under the file's ETag and its byte range, so R2 is read once per piece per data centre; the ETag itself is looked up at most every 5 minutes per data centre, so a new upload is seen within 5 minutes. Fonts and icons never change at their path (new icons get a new folder, like `v4`), so they're kept by path alone, with no look at R2. When R2 fails, cached pieces are still served (the last ETag R2 gave stays in the edge cache, and R2 is asked again every 30 s) and the rest are 503 with `Retry-After: 60`; 416 is only for a range past the file's end. |
 | `GET /map/style.json?theme=&lang=` | The map's MapLibre style, light or dark, English or Chinese: Protomaps' map without its points of interest, every URL on this domain. |
 | `GET /map/fonts/…`, `/map/sprites/…` | The map's label glyphs and icons, from R2. |
 | `GET /download/android`, `/download/mac` | The current app downloads from R2, as `latest.json` there names them. `?abi=` picks an Android APK by CPU type; `/download/appcast.xml` is the Mac app's Sparkle feed, `/download/latest.json` the version list, `/download/releases/<version>/<file>` a versioned file. `latest.json` and the appcast are read from R2 on every request, so a release is live the moment it's uploaded. |
-| `GET /stops/pairs` | Each stop with its twin across the road, and where the buses on each side go next. Cached hard. |
-| `GET /health` | Graph age, how long the calendar lasts, the feed as the cron last saw it (`upstream`) and which config is present, never values (`config.pushAndroid` and `config.pushWeb`: push set up with a usable key). 503, with the same body, when the feed is confirmed down, the cron has stopped or the calendar has run out. With the operator's `x-health-token`, `?probe=1` mints a real token and says what came back, and `?versions=1` says what the version updater would find today in the app stores (see "The version string is a kill switch"); without it both are ignored. |
-| `GET /status.json` | Whether NUS's feed is up, as the 15-minute check saw it, and the last 20 outages, read from KV at most once a minute per isolate. Two failed checks in a row confirm an outage and two good ones end it, so a feed that answers every other time sends no emails by turns; the outage ends at the first of the two. `feed` (like `/health` and the card's notice) follows the last check, though: one good check and it says `up` again, rather than "down" for 15 minutes with the feed back. The [status page](../../web/public/status) shows it. |
-| `GET /admin/stats` | The operator dashboard's data (accounts, devices by app, sign-ups, reports, feed; answers and errors per day, and the timelapse recorder's polls by what they cost NUS, from Analytics Engine when `ANALYTICS_TOKEN` and `CF_ACCOUNT_ID` are set). Needs `x-health-token`; anything else gets a 404. |
-| `GET /timelapse/days` | The days the timelapse recorder has kept (closed ones from R2; today's while it records, and any of the past week's still held by a recorder that hasn't written it to R2 yet) and what it's doing today. Needs `x-health-token`: the operator's, or `TIMELAPSE_TOKEN`, which opens `/timelapse/*` and nothing else. |
-| `GET /timelapse/days/<date>` | One recorded day as gzipped JSON (see "The timelapse recorder"). A closed day never changes and is cached for a year; today's is built from what the recorder holds so far, `no-store` (503 if its recorder doesn't answer within 10 s). Needs `x-health-token` (operator or timelapse token). |
+| `GET /api/stops/pairs` | Each stop with its twin across the road, and where the buses on each side go next. Cached hard. |
+| `GET /api/health` | Graph age, how long the calendar lasts, the feed as the cron last saw it (`upstream`) and which config is present, never values (`config.pushAndroid` and `config.pushWeb`: push set up with a usable key). 503, with the same body, when the feed is confirmed down, the cron has stopped or the calendar has run out. With the operator's `x-health-token`, `?probe=1` mints a real token and says what came back, and `?versions=1` says what the version updater would find today in the app stores (see "The version string is a kill switch"); without it both are ignored. |
+| `GET /api/status.json` | Whether NUS's feed is up, as the 15-minute check saw it, and the last 20 outages, read from KV at most once a minute per isolate. Two failed checks in a row confirm an outage and two good ones end it, so a feed that answers every other time sends no emails by turns; the outage ends at the first of the two. `feed` (like `/api/health` and the card's notice) follows the last check, though: one good check and it says `up` again, rather than "down" for 15 minutes with the feed back. The [status page](../../web/public/status) shows it. |
+| `GET /api/admin/stats` | The operator dashboard's data (accounts, devices by app, sign-ups, reports, feed; answers and errors per day, and the timelapse recorder's polls by what they cost NUS, from Analytics Engine when `ANALYTICS_TOKEN` and `CF_ACCOUNT_ID` are set). Needs `x-health-token`; anything else gets a 404. |
+| `GET /api/timelapse/days` | The days the timelapse recorder has kept (closed ones from R2; today's while it records, and any of the past week's still held by a recorder that hasn't written it to R2 yet) and what it's doing today. Needs `x-health-token`: the operator's, or `TIMELAPSE_TOKEN`, which opens `/api/timelapse/*` and nothing else. |
+| `GET /api/timelapse/days/<date>` | One recorded day as gzipped JSON (see "The timelapse recorder"). A closed day never changes and is cached for a year; today's is built from what the recorder holds so far, `no-store` (503 if its recorder doesn't answer within 10 s). Needs `x-health-token` (operator or timelapse token). |
 | `GET /account` | The account page ([apps/web](../../web)), served as static assets. |
-| `POST /auth/login`, `/auth/code`, `/pair`, `/me/*` | Accounts. See below. `POST /me/feedback` is "Is this wrong?": the answer the user saw and what was wrong (a `reason` from the sheet's chips, `REASONS` in `src/feedback.ts`, a note, or both), kept with the account for a year (`FEEDBACK_KEEP_DAYS`, the cron) and its note emailed to `ALERT_EMAIL`, without the address or the answer (they'd outlive the account in an inbox; the dashboard has both). It needs a reason or a note (feedback, `kind: other`, always a note), and an account with an email: an anonymous one gets 403. |
+| `POST /api/auth/login`, `/api/auth/code`, `/api/pair`, `/api/me/*` | Accounts. See below. `POST /api/me/feedback` is "Is this wrong?": the answer the user saw and what was wrong (a `reason` from the sheet's chips, `REASONS` in `src/feedback.ts`, a note, or both), kept with the account for a year (`FEEDBACK_KEEP_DAYS`, the cron) and its note emailed to `ALERT_EMAIL`, without the address or the answer (they'd outlive the account in an inbox; the dashboard has both). It needs a reason or a note (feedback, `kind: other`, always a note), and an account with an email: an anonymous one gets 403. |
 
-`/next`, `/trip`, `/arrivals`, `/buses`, `/line`, `/campus` and `/stops/pairs` need an API key
+`/api/next`, `/api/trip`, `/api/arrivals`, `/api/buses`, `/api/line`, `/api/campus` and `/api/stops/pairs` need an API key
 (made on the account page, sent as `x-api-key`, or as a bearer token) or a signed-in
 session or device; without one they answer 401 with `WWW-Authenticate`. A key opens
-these routes only: on `/me/*` it is not a session, and gets 401. They're
+these routes only: on `/api/me/*` it is not a session, and gets 401. They're
 limited by who's asking: a signed-in account by account (`RL_ME`, `acct:`),
 an API key by key (`RL_PUBLIC`, `key:`), and a request with neither by IP.
 On campus Wi-Fi hundreds of students share one IP, and the map alone asks
-for buses every 5 s. For `/buses` only, each isolate remembers who it let
+for buses every 5 s. For `/api/buses` only, each isolate remembers who it let
 in for 30 s (`recentCallerFor` in `src/access.ts`), so a poll doesn't
 look the session up in D1 again: a session signed out or a key revoked can
-still see the buses that long, and nothing else. `/health`, `/status.json`, `/admin/stats`,
-`/timelapse/*` and `/download/*` stay limited by IP. `/map/*` is limited by IP only where it
+still see the buses that long, and nothing else. `/api/health`, `/api/status.json`, `/api/admin/stats`,
+`/api/timelapse/*` and `/download/*` stay limited by IP. `/map/*` is limited by IP only where it
 reads R2 (`RL_MAP`, 300 a minute; past it, 429 with `Retry-After: 60`): a
 piece already in the edge cache is never refused, since the file's last
 known ETag stands in when its look at R2 would be over the limit, so a
@@ -161,7 +175,7 @@ lecture hall can open the map at once.
 
 When D1 can't be reached, checking the key or session behind a keyed
 route is tried once more, then answered 503 with `Retry-After: 30`
-(`callerOrDown` in access.ts); a D1 outage anywhere else under `/me` is a
+(`callerOrDown` in access.ts); a D1 outage anywhere else under `/api/me` is a
 503 too (`d1Unavailable`), so the apps try again rather than report a
 fault. A fault in the query itself (a missing column, a bad binding, too
 many variables) stays a 500, so a bug doesn't read as "try again".
@@ -188,7 +202,7 @@ What the bill depends on, and the guards against it:
 
 ### Board rows
 
-`/arrivals`, `/me/nearby` and `/line` (`stop.row`) share one row per service
+`/api/arrivals`, `/api/me/nearby` and `/api/line` (`stop.row`) share one row per service
 (`boardAt` in `src/resolve.ts`): the next bus (`etaS`, `quality`), the ones
 after it the feed knows (`later`), and
 
@@ -211,7 +225,7 @@ oldest fetch the board used (`boardAsOf`), so the apps' "Updated N ago" is
 as old as the times are.
 
 A service outside its hours (`inService`) with no time from the feed is
-left off the board. With `?stopped=1` (`/arrivals`, `/me/nearby`; `/line`
+left off the board. With `?stopped=1` (`/api/arrivals`, `/api/me/nearby`; `/api/line`
 always asks this way) it's listed after every running row, by name, with
 `running: false`, no time (`quality: ended`), and
 
@@ -232,7 +246,7 @@ as `scheduled` ("~15 min"), the first buses getting ready. A time before
 the opening is a bus still out from the night before, and stays live. The
 Now card and leave times read the feed through the same function.
 The Now tab, the map and the widgets don't ask, so their boards are as
-before. `/line` also says it for the service itself: `running`, `stopped`
+before. `/api/line` also says it for the service itself: `running`, `stopped`
 and `resumesAt` at the top (null while it runs).
 
 Only the feed's own times are given: a later bus the feed doesn't report
@@ -252,8 +266,8 @@ themselves, and drifted):
 
 ## Personalisation
 
-Per-user trips come from the account (`/me/next`): a NUSMods timetable
-imported with `POST /me/import`, plus classes entered by hand. Imported classes only
+Per-user trips come from the account (`/api/me/next`): a NUSMods timetable
+imported with `POST /api/me/import`, plus classes entered by hand. Imported classes only
 count in the weeks they run ([src/calendar.ts](../src/calendar.ts), built from
 NUSMods' semester dates and MOM's public holidays by
 `scripts/fetch_calendar.py`). NUS's own days off, such as Well-Being Days,
@@ -264,12 +278,12 @@ nor the cron's merge touches that file. [`src/config.ts`](../src/config.ts) hold
 TTLs and tuning constants.
 
 The profile is one JSON document per account, with a version (`updated`,
-which every save moves forward). `POST /me/once` and `POST /me/import`
+which every save moves forward). `POST /api/me/once` and `POST /api/me/import`
 change part of it: they save only if the version is still the one they read,
 and otherwise read it again and redo the change (three tries, then 409), so
 a one-off trip added on one phone isn't lost to a save from another.
-`PUT /me/profile` replaces the whole document; the version is its `ETag`
-(`GET /me/profile` sends it, `"0"` before the first save). A client that
+`PUT /api/me/profile` replaces the whole document; the version is its `ETag`
+(`GET /api/me/profile` sends it, `"0"` before the first save). A client that
 sends it back as `If-Match` is refused with 412 if another device saved
 since; without it, as the apps installed today send, the last save wins.
 
@@ -301,7 +315,7 @@ per instance and merges it with the bundled one; the newer wins where they
 differ. A year a source drops is kept from the copy before, and a broken reply is
 not merged.
 
-`/health` says which is in use (`calendar.source`: `bundled` or `fetched`)
+`/api/health` says which is in use (`calendar.source`: `bundled` or `fetched`)
 and how far it goes. The "calendar runs out soon" email only comes when even
 the fetched copy is within 45 days of its end, that is when NUSMods doesn't
 list the next academic year yet. The end is three weeks past the last
@@ -325,7 +339,7 @@ Request bodies are read with a hard cap as they arrive (`readCapped`, 64 KB
 for JSON), whether or not they declare a length. Apps hold a device token (`Authorization: Bearer`), which they
 get one of three ways:
 
-- **`POST /auth/anon`** on first launch: an account with no email
+- **`POST /api/auth/anon`** on first launch: an account with no email
   (`users.email` is NULL), so the app is useful before any sign-in. Limited
   per IP (`RL_AUTH`) and globally (`RL_ANON`); the cron deletes anonymous
   accounts unused for 60 days (`users.last_seen`). That sweep, with expired
@@ -334,10 +348,10 @@ get one of three ways:
   Singapore day (KV `housekeeping:day`), since each reads a whole table;
   expired sign-in links and codes go every run.
 - **Sign-in approved from the email** ([src/applogin.ts](../src/applogin.ts),
-  modelled on RFC 8628). `POST /auth/app/start {email, name}` returns
+  modelled on RFC 8628). `POST /api/auth/app/start {email, name}` returns
   `{request, poll, match, expires}` and emails a 6-character code (in the subject
   too: filters hold back link-only mail) and a link. Typed into the app,
-  `POST /auth/app/code {request, poll, code}` answers with the token; five
+  `POST /api/auth/app/code {request, poll, code}` answers with the token; five
   wrong codes kill the request. Reading mail on another device, the link's
   page (`GET /auth/approve?r=`) offers three numbers; picking the one the
   app shows (`match`) approves, a wrong one or "This wasn't me" kills it.
@@ -348,27 +362,27 @@ get one of three ways:
   and colours the web app's). The Android app takes the code in six boxes,
   one field underneath: a paste spreads over them, keeping only the code
   from around it (`codeEdit`, SignInCode.kt).
-  The app polls `POST /auth/app/poll {request, poll}` every 3 s and gets
+  The app polls `POST /api/auth/app/poll {request, poll}` every 3 s and gets
   `{status: 'approved', token, email, outcome}` once. The poll secret, the link
   and the code are all different, so the app that starts a request can't confirm it. Sent
   with the anonymous token, the device's account is kept (`added-email`) or
   folded into the email's account: dropped if it had no setup (`signed-in`),
   moved if the account had none (`moved-setup`), otherwise the app asks and
-  calls `POST /auth/app/merge {anon, keep: 'account'|'device'}` (`choose`).
+  calls `POST /api/auth/app/merge {anon, keep: 'account'|'device'}` (`choose`).
   Works on every client, including the Mac, which can't take universal
   links without a paid Apple team.
-- **A pairing code** from `/me/pair-code`, made on the account page or in a
-  signed-in app, redeemed with `POST /pair`. A guess is tried against every
+- **A pairing code** from `/api/me/pair-code`, made on the account page or in a
+  signed-in app, redeemed with `POST /api/pair`. A guess is tried against every
   live code at once, so besides the per-IP limit (`RL_AUTH`, shared by
-  `/pair` and `/pair/check`) there's one ceiling for everyone (`RL_PAIR`,
+  `/api/pair` and `/api/pair/check`) there's one ceiling for everyone (`RL_PAIR`,
   60 a minute): an attacker with an IPv6 range can't spread guesses over
   thousands of addresses.
 
 A device added with a pairing code emails the account's owner: it's the one
 way in that doesn't go through the inbox, and it's what lets a signed-in app
-make codes (`/me/pair-code`). Signing in from the email sends nothing more
+make codes (`/api/me/pair-code`). Signing in from the email sends nothing more
 (the owner has just used the inbox), and neither does removing a device
-(`DELETE /me/devices/<id>`), which exposes nothing. API keys and signing out everywhere
+(`DELETE /api/me/devices/<id>`), which exposes nothing. API keys and signing out everywhere
 stay on the account page; so does deleting an account, except an anonymous
 one, which has no page and is deleted from its app.
 
@@ -382,15 +396,15 @@ served per platform, as JSON: `{"android":"2.6.0","mac":"2.6.0"}`. A missing
 key, a missing platform or JSON that won't parse means no minimum. Each
 isolate reads it once a minute (`TTL.versionMemoMs`, as `config:appVersion`),
 so a change is live everywhere within that, with no deploy. On the routes an
-app reaches with its token (the bus answers, and `/me/*` once signed in), a
+app reaches with its token (the bus answers, and `/api/me/*` once signed in), a
 request whose `x-terminus-client` names that platform with an older version
 gets HTTP 426 and `{"error": "Update terminus to keep using it.", "update":
 true}` (the error in Chinese for `zh`). Versions compare by number, and a
 pre-release comes before its release: `2.6.0-beta.3` is older than `2.6.0`.
 A request without the header (the website, API keys), or with a version that
 can't be read, is never refused. Sign-in, pairing and signing out answer
-before the check, and an outdated app may still `DELETE /me/push` and
-`DELETE /me`, so it can stop its pushes or delete its account. The apps
+before the check, and an outdated app may still `DELETE /api/me/push` and
+`DELETE /api/me`, so it can stop its pushes or delete its account. The apps
 take a 426 as "update required": they stop polling, back off for hours,
 and offer the update (Play or the website on Android, Sparkle on the Mac).
 
@@ -398,12 +412,12 @@ and offer the update (Play or the website on Android, Sparkle on the Mac).
 pnpm exec cf kv keys put config:minClient --namespace-id <KV id in cloudflare.config.ts> --body '{"android":"2.6.0","mac":"2.6.0"}'
 ```
 
-- `GET /me/next` is the widget's one call. It picks the destination from the
+- `GET /api/me/next` is the widget's one call. It picks the destination from the
   timetable (see `planFor` in [src/profile.ts](../src/profile.ts)) or from
   `?place=`/`?to=`, and returns the usual answer plus `dest` and `places`.
   A `place` or `to` that names nothing it knows is ignored: the answer is
   the timetable's.
-- `GET /me/nearby` lists departures at up to three stops near you, plus the
+- `GET /api/me/nearby` lists departures at up to three stops near you, plus the
   nearest one's twin across the road when it isn't among them (so up to
   four), each with
   its service's colour (`color`, as on the buses and the map). Each row
@@ -415,24 +429,24 @@ pnpm exec cf kv keys put config:minClient --namespace-id <KV id in cloudflare.co
   (LTA's code), repeats dropped. A pinned stop gone from a new scrape is
   dropped on read, with the other pins kept.
 - The profile comes with `limits` wherever it's sent (GET and PUT
-  `/me/profile`, the import, the merge): the most pinned stops (8), places
+  `/api/me/profile`, the import, the merge): the most pinned stops (8), places
   (12) and home stops (3), the longest class and favourite names (60, 24),
   the home walk's range (0 to 30 minutes) and the list sizes, all from
   `PROFILE_LIMITS`, the numbers `parseProfile` enforces. The apps size their
   fields and pickers from it instead of keeping copies; sent back with the
   profile, it's ignored.
-- On a day with no classes (or none left), `/me/next` says so (`mode: free`)
+- On a day with no classes (or none left), `/api/me/next` says so (`mode: free`)
   with the next class, and no bus: a bus you have no reason to take reads
-  like advice. Departures near you are `/me/nearby`.
+  like advice. Departures near you are `/api/me/nearby`.
 
 ### The trip engine
 
-`/me/next` also says where today's trip is, the same on every device:
+`/api/me/next` also says where today's trip is, the same on every device:
 `card.phase` is `idle`, `due` (5 min before the leave-by), `heading`,
 `waiting` (at the boarding stop), `riding`, `missed` or `arrived`. The
-phase comes from the answer and the day's signals: `POST /me/signal` with
+phase comes from the answer and the day's signals: `POST /api/me/signal` with
 `boarded`, `missed`, `skipped`, `left`, `arrived`, `location`, `reset`,
-`away` or `back`, for the trip in progress or the `trip` key a card action or `/me/day`
+`away` or `back`, for the trip in progress or the `trip` key a card action or `/api/me/day`
 names. Clients show `card.actions` as buttons and never decide them.
 
 The signals live in a Durable Object per user (`Trip` in
@@ -450,7 +464,7 @@ a watch. The object writes only what changed and sets its alarm only when
 the time moves. Deleting an account empties it at once (`clearTrip`, tried
 twice), and so does signing an anonymous account into another one, or the
 cron deleting an idle one. An emptied object keeps only a `gone` mark until
-midnight and refuses every write, so a `/me/next` already under way when
+midnight and refuses every write, so a `/api/me/next` already under way when
 the account went can't store its trip again.
 
 A trip that changes buses goes `riding` (the first bus, its ride ending at
@@ -479,7 +493,7 @@ object at the change and once the second bus has gone.
   day's record (`DayRecord.plans`): from the moment the trip is due, or
   earlier when it was planned from the phone's location (`Boarded.located`).
   Every device then says that bus (the card, the notifications, Today in
-  `/me/day`). A device without a location
+  `/api/me/day`). A device without a location
   (the widget, the background refresh, the Mac, the web) shows the phone's
   plan rather than one of its own from where the timetable puts you; a
   located answer replaces it. The same service from the same stop within
@@ -530,7 +544,7 @@ object at the change and once the second bus has gone.
   your residence ends a trip home, and at the destination ends the trip
   (`reached`, recorded as `arrived` for every device). Nothing is recorded
   as an outcome for a seen ride. The `location` signal older Android apps
-  still send is answered like `/me/next` from there and records nothing.
+  still send is answered like `/api/me/next` from there and records nothing.
 - **The ride from the feed.** Boarding records the plate of the bus due at
   the boarding stop within five minutes; while riding, the same plate in the
   alighting stop's arrivals gives the arrival (quality `live`). Without a
@@ -562,7 +576,7 @@ object at the change and once the second bus has gone.
   nothing, since the object plans its next wake afresh each time it wakes. A nudge is a data message, `{kind: 'card', phase}`, high
   priority for due and missed, reminders on or off (Android starts the live
   notification from them, which it may do from the background only for a
-  high-priority message); the app fetches /me/next
+  high-priority message); the app fetches /api/me/next
   itself. A tap nudges the user's other devices at once. The object's single
   alarm is the sooner of the next wake and midnight (`deleteAt`).
   - A phase counts as pushed once a device got it (or none could be sent
@@ -586,7 +600,7 @@ object at the change and once the second bus has gone.
     (`TRIP_TIMEOUT_MS`): the card is answered without its trip state, as
     when the object fails.
   - A push secret that's set but won't parse turns that push off; it's
-    logged once per isolate, and `/health` says which push is usable
+    logged once per isolate, and `/api/health` says which push is usable
     (`config.pushAndroid`, `config.pushWeb`).
 
 The planner ([src/profile.ts](../src/profile.ts), `planFor`):
@@ -608,14 +622,14 @@ decimal places, about 11 metres, as it is read (`roundCoord` in http.ts,
 used by `coordsFrom` and `fixOf`), whoever sends it: the apps round too,
 but a script with an API key needn't.
 
-`GET /me/day` is today's timeline, worked out with the same planner. A
+`GET /api/me/day` is today's timeline, worked out with the same planner. A
 class you're on the bus to carries `onBus` (the bus, where to get off, the
 arrival) instead of a leave-by that has passed. Each row comes worded:
 `title` (the class, or "Home, from UTown") and `line`, its second line
 ("Leave by ~09:38 · D2 from PGP", with "~5 min late" when it will be; "On
 the D2 · off at UTown · arrive 09:52"; "Not going"), null once it's done or
 with nothing to say yet (`dayLine` in `src/day.ts`). Apps send it the same
-`lat`/`lon` as `/me/next`, and the next class is planned from there, so Today
+`lat`/`lon` as `/api/me/next`, and the next class is planned from there, so Today
 and the card agree even on the first load, when both are asked at once and
 the card's plan isn't saved yet. (Without it, Today planned from the home
 stop and its walk from Settings, the card from where you were, and they
@@ -696,7 +710,7 @@ tomorrow's buses aren't known, and a guess there would read as a plan.
 `detail` still says the same in a line, for the widgets and the Mac. The
 route moves it from the answer into the card (`profile.ts` `upcomingClass`).
 - Tokens are stored as SHA-256 hashes. A web session lasts 30 days from its
-  last use: `GET /me` pushes the expiry back 30 days, and sends the cookie
+  last use: `GET /api/me` pushes the expiry back 30 days, and sends the cookie
   again, once fewer than 23 days are left. However much it's used, a web
   session of an account with an email ends 180 days after sign-in (one with
   no email keeps it: it has no other way back in). Device tokens last until
@@ -709,8 +723,8 @@ route moves it from the answer into the card (`profile.ts` `upcomingClass`).
   request, so requests arriving together send one email. The emailed code's
   wrong guesses are counted on the link's row (`magic_links.code_tries`,
   migration 0009), five at most.
-- `POST /auth/verify`, `/auth/approve`, `/auth/logout`, `/auth/code` and
-  `/auth/anon/web`, and any other change sent with the session cookie and no
+- `POST /auth/verify`, `/auth/approve`, `/api/auth/logout`, `/api/auth/code` and
+  `/api/auth/anon/web`, and any other change sent with the session cookie and no
   bearer token, are refused when `Sec-Fetch-Site` says another site sent
   them. So no page elsewhere can sign a visitor in to an account it holds a
   link or code for, or out of theirs. Another subdomain of terminus.run (the beta)
@@ -819,7 +833,7 @@ Settings. It uses the same routes as the account page, with the session cookie.
   written: no build step, so the service worker keeps exact files and the
   API's tests import the plain modules (`search.js`, `offline.js`). htm needs
   no `eval`, so the CSP stays `script-src 'self'`. State several parts share
-  is a `store()`: the profile and `/campus` (`account/profile.js`), and in
+  is a `store()`: the profile and `/api/campus` (`account/profile.js`), and in
   the app what the card is for, the card, Today and the push switch (top of
   `app/app.js`). The tabs are shown and hidden by the fade itself, not by
   Preact, so it can swap them between its halves; MapLibre is driven
@@ -862,7 +876,7 @@ Settings. It uses the same routes as the account page, with the session cookie.
   the top; it turns with the phone's clock each minute, whatever tab is on
   screen. The installed app on an iPhone, which has
   no browser swipe, goes back on a swipe from the left edge. "Notify me when
-  to leave" is under Notifications. Send feedback posts a note to `/me/feedback`
+  to leave" is under Notifications. Send feedback posts a note to `/api/me/feedback`
   as `kind: 'other'`; a wrong answer is better reported from under the card,
   which attaches it. The page is laid out as a message (From, the note, a
   counter and Send). Under it, "A better stop for a building" takes
@@ -884,11 +898,11 @@ Settings. It uses the same routes as the account page, with the session cookie.
   `Clock`) so the times it writes itself, and the widgets, match; `auto`
   follows the device.
 - **Now.** A search button at the end of the chips opens "Go somewhere
-  else" (account/search-box.js, ranked by search.js, over `/campus`'s
+  else" (account/search-box.js, ranked by search.js, over `/api/campus`'s
   destinations); a pick shows its card under a chip of its own. "Is this
   wrong?" under the card opens a bottom sheet (account/preview.js
   `Report`, a modal `<dialog>`): the answer it's about, the reasons as
-  chips, a note, and who the reply goes to. It sends to `/me/feedback`
+  chips, a note, and who the reply goes to. It sends to `/api/me/feedback`
   and then says so in the sheet, which is the only confirmation; Android's
   sheet is the same. Not for Nearby. A stop's name in Nearby opens it on the map
   (MapTab's `focus` in map.js).
@@ -918,7 +932,7 @@ Settings. It uses the same routes as the account page, with the session cookie.
   with the kept copy's ETag isn't written again. Vendored files (their
   version in their folder) come from the copy first. `assets/zh.js` is kept
   only once a page asks for it (or the browser is set to Chinese), and the
-  map's cache drops an old MapLibre or PMTiles once a new one is kept. `/me`, `/me/next` and `/me/day` are
+  map's cache drops an old MapLibre or PMTiles once a new one is kept. `/api/me`, `/api/me/next` and `/api/me/day` are
   also network-first, and the last good reply is kept (one per route, place
   and `to`, so a searched stop's card never stands in for the plan's). When the network
   is down, the kept reply comes back with `x-terminus-cached` (when it was
@@ -926,17 +940,17 @@ Settings. It uses the same routes as the account page, with the session cookie.
   account or a 401 empties the kept replies.
 - **Offline, all day.** Once the kept answer has gone stale (its bus has
   left, or 15 minutes have passed) and the network is still down, every app
-  falls back to the day plan it kept from `/me/day`: the next class's
+  falls back to the day plan it kept from `/api/me/day`: the next class's
   leave-by and how ("Leave by ~13:38 · walk"), "Leave now" once that has
   passed, then the trip home. The rule is the same on all three
   (`app/offline.js`, `OfflineDay.kt`, `OfflineDay.swift`): skip what was done
   or taken off when the plan was fetched, a class 15 minutes after it starts,
   and a trip home at its end (or an hour after it starts); only a plan for
   today counts. All three are tested against `test/fixtures/offline-day.json`
-  on the `/me/day` golden. The Android widget's background refresh fetches
-  `/me/day` hourly to keep the plan current, and arms a redraw alarm (no
+  on the `/api/me/day` golden. The Android widget's background refresh fetches
+  `/api/me/day` hourly to keep the plan current, and arms a redraw alarm (no
   network needed) for the moment the offline line next changes.
-- **Push.** `POST /me/push` with `{subscription}` keeps the browser's Web Push
+- **Push.** `POST /api/me/push` with `{subscription}` keeps the browser's Web Push
   subscription on the session as `web:` plus its JSON, next to where an
   Android session keeps its FCM token. So the Trip object's nudges reach both,
   through `push.ts` and `webpush.ts`. Each push is VAPID-signed with
@@ -957,11 +971,11 @@ Settings. It uses the same routes as the account page, with the session cookie.
   woke before the subscription existed is asked again.
 - **What a push shows.** A web push must show a notification (iOS insists).
   So the web app isn't pushed an idle card, or a trip with reminders off. The
-  service worker fetches `/me/next` and words the notification as the Android
+  service worker fetches `/api/me/next` and words the notification as the Android
   app does: the ride, or the next way there after a missed bus; otherwise
   when to leave. Nothing asks what happened. Its one button, before you've
   left, is the card's "Not going": the service worker posts
-  `/me/signal` `{kind: 'skipped'}` itself, without opening the app (the
+  `/api/me/signal` `{kind: 'skipped'}` itself, without opening the app (the
   Android notification has the same button). A tap elsewhere opens the app.
 - **A new semester.** In the week before semester 1 or 2 starts
   (`semesterSoon` in calendar.ts), from 10:00 Singapore time, the cron
@@ -970,7 +984,7 @@ Settings. It uses the same routes as the account page, with the session cookie.
   zhBody}`, worded by the server in both languages, since the device picks
   its own. Android from 2.5.0 (`fetchesNotice`, by the session's
   `x-terminus-client`) is sent only `{kind: 'term'}` and fetches the words
-  from `GET /me/notice`, so they don't pass through Google; older versions
+  from `GET /api/me/notice`, so they don't pass through Google; older versions
   can only show what they're sent. Web pushes are encrypted for the browser
   and keep the words. Anyone who has already imported the new semester, or has never
   imported one, is skipped. It goes once per semester, 400 users a run, with
@@ -991,11 +1005,11 @@ Settings. It uses the same routes as the account page, with the session cookie.
 timetable's end time, to leave time to get to the next one. `endOf` takes
 NUSMods classes (tagged `nusmods` by `classesOn`, never stored) as ending
 `ENDS_EARLY_MIN` (30) minutes early, never less than 15 minutes after they
-start: the trip home, gaps long enough to go home in, `/me/day`'s `endsAt`
+start: the trip home, gaps long enough to go home in, `/api/me/day`'s `endsAt`
 and "In CS2030 till ~11:30" all follow. Classes entered by hand, usual times
 and one-off trips end when they say.
 
-**Taking something off today.** Every `/me/day` entry not done yet is
+**Taking something off today.** Every `/api/me/day` entry not done yet is
 `removable`. The apps take it off with `skipped` and its key (swipe on
 Android, × in the web app and on the Mac), then show Undo for a few seconds
 (Android in a bar at the foot of the screen, the others where the entry was),
@@ -1016,7 +1030,7 @@ same way (leave-by, push, "Not going"):
   timetable by hand); ones already saved are listed in Timetable, where they
   can be removed, and go with their place when it's removed.
 - `profile.once`: a one-off trip on a date, `{date, arriveByMin, to, label}`,
-  added with `POST /me/once` and dropped once its date has passed.
+  added with `POST /api/me/once` and dropped once its date has passed.
 
 Each counts as an hour there, for what the planner does next. On an idle trip
 the card also offers `away` ("Not on campus today"), which records every trip
@@ -1274,7 +1288,7 @@ LTA's five-digit code. Everything built from `GRAPH` alone (the map, the
 search, the stop pairs) is untouched, and so are the golden answers: the
 public graph is used only when a profile's `publicBuses` is on (off by
 default, a switch in every client's Settings), when `?public=1` is sent, or
-for `/arrivals` at a stop only public buses call at.
+for `/api/arrivals` at a stop only public buses call at.
 
 Three things about public buses are their own. A two-way service is two
 routes, `151/1` and `151/2`, and shows as `151` (`svcName()`); LTA's
@@ -1313,7 +1327,7 @@ call per stop per 15 s through the edge cache (`edgecache.ts`, which both
 feeds now use), a failed stop not asked again for `failMemoS`, a refused
 key (401), a 429, a 5xx or no answer at all (a timeout, a failed
 connection) tripping a breaker for `breakerS`. The stable cron probes it once a
-run for `/status.json` (`publicFeed`) and `/health` (the beta reads its own
+run for `/api/status.json` (`publicFeed`) and `/api/health` (the beta reads its own
 trips instead; see "The beta's checks" below); it raises no alerts, since
 the shuttle is the product and this is extra. LTA has no live train feed,
 so the MRT is not here; nor are live public buses on the map, which the
@@ -1464,7 +1478,7 @@ too; a refusal of a version `config:appVersion` no longer holds opens neither
 the breaker nor the mint memo, nor quiets its stop or service for
 `failMemoS`, so it doesn't stop the isolates already
 sending the new one, and that isolate forgets its old version. To see what it would
-find today, without calling NUS: `GET /health?versions=1` with the
+find today, without calling NUS: `GET /api/health?versions=1` with the
 `x-health-token` header.
 
 ## Auth, confirmed
@@ -1502,11 +1516,11 @@ optional device id and two optional headers. `.dev.vars.example` also has
 
 ## Analytics
 
-Every answer someone asks for (`/next`, `/trip`, `/me/next`) writes one
+Every answer someone asks for (`/api/next`, `/api/trip`, `/api/me/next`) writes one
 decision row, plus one row per timed arrival (eight at most,
 `MAX_ARRIVAL_ROWS`), to a Workers Analytics Engine dataset. Answers the server works out for itself are not logged
 (`log: false`): the Trip object's wakes, and each class's leave-by on
-`/me/day`. They would cost rows and count as answers on the dashboard. Two purposes: checking whether the direction
+`/api/me/day`. They would cost rows and count as answers on the dashboard. Two purposes: checking whether the direction
 algorithm is right, which nothing else measures, and inter-stop
 travel times from the feed's own predictions (`plate` is the join key), a
 check on `RIDE.secondsPerHop`. Queries and
@@ -1536,7 +1550,7 @@ beta's KV (`monitor:seen`, `monitor:seen-public`; at most once a minute per
 isolate; [`src/feedwatch.ts`](../src/feedwatch.ts)). The beta's cron reads a
 note from the last 15 minutes as a failed check (`sawTrip`) and runs the same
 state machine on it, so its status page, the card's "down since" notice and
-`/health` follow its own traffic, and a note from a version since switched
+`/api/health` follow its own traffic, and a note from a version since switched
 away from doesn't count. With no traffic there is nothing to note and the
 feeds read as up. A refused version (10009) runs the automatic update as on
 the stable site, so the beta keeps its own `config:appVersion` current; that
@@ -1548,8 +1562,8 @@ down is counted on its dashboard as the error `cron feed down`.
 
 ## Known weaknesses
 
-- **A room's other stops are used by the account's trips only** (`/me/next`,
-  `/me/day`). The public `/next?to=` and `/trip?to=` keep one stop per
+- **A room's other stops are used by the account's trips only** (`/api/me/next`,
+  `/api/me/day`). The public `/api/next?to=` and `/api/trip?to=` keep one stop per
   building: they count no walk from the stop to the room, so a second stop
   would look as near as the first. On the bus, the arrival line counts the
   walk from the room's usual stop, not the one you get off at. And path
@@ -1585,10 +1599,10 @@ down is counted on its dashboard as the error `cron feed down`.
 ## Clients
 
 The Android widget and app ([apps/android](../../android)), the Mac menu bar app
-([apps/macos](../../macos)) and the website ([apps/web](../../web)) all use `/me/next`.
+([apps/macos](../../macos)) and the website ([apps/web](../../web)) all use `/api/me/next`.
 The Android app, the web app and the Mac (in a window of its own) also have
-the campus map: `/campus`, `/buses`, `/arrivals` and `/map/*`. The Buses
-tab (web and Android) opens a service's whole line with `/line`. The apps
+the campus map: `/api/campus`, `/api/buses`, `/api/arrivals` and `/map/*`. The Buses
+tab (web and Android) opens a service's whole line with `/api/line`. The apps
 download `campus.pmtiles` once and read it from disk, since MapLibre Native
 fails the whole style when one streamed piece fails. The Mac's MapLibre is
 built from source (`scripts/vendor-maplibre-mac.sh`; no macOS build is
@@ -1622,7 +1636,7 @@ you signed in.
 
 ### Live buses on the map
 
-`/buses` shows each bus at a stop or between two (`src/buses.ts`). The feed
+`/api/buses` shows each bus at a stop or between two (`src/buses.ts`). The feed
 gives a position, a speed and a heading every 15–20 s per bus (the reply's
 own time stamp changes that often, for every bus at once, however often
 it's asked): too far apart, and too noisy, to draw a bus where it really
@@ -1708,7 +1722,7 @@ second, so a longer stretch takes longer: from 1 s for a short hop to
 421 m stretch, takes about 2 s); with reduced motion, after 15 s without an answer, or to a place
 it can't reach along the line (behind it, or over 1.5 km on), it jumps.
 On a loop it slides on past the line's start, as the API places it. Clients
-take that from `/campus`'s `loop`, not from where the line ends: A1's and
+take that from `/api/campus`'s `loop`, not from where the line ends: A1's and
 A2's lines end some 40 m from where they start at KRB.
 A tapped bus is ringed. Between stops, its `stretch` is drawn over the
 route, wider, with the rest of the route faded well back. Its card says
@@ -1731,7 +1745,7 @@ LTA every 15 minutes, past the cache; the beta's cron asks neither) and each pus
   by default and never below `MIN_POLL_MS`, 15 s (`pollInterval()` enforces
   it). The services are spread across the interval: with eight running, one
   every 3.75 s rather than all at once. Arrivals are never polled.
-- **Path.** Through `getBuses()` and `trackedPlacement()`, exactly as `/buses`
+- **Path.** Through `getBuses()` and `trackedPlacement()`, exactly as `/api/buses`
   asks: the 5 s edge cache, one fetch in flight per service, `failMemoS`
   after a failure and the breaker after a refusal. When the map has just
   asked for a service, the poll is a cache hit and costs NUS nothing. With
@@ -1815,7 +1829,7 @@ bucket) as `timelapse/YYYY-MM-DD.json.gz` (`DayFile`), deletes everything,
 its alarm included, and costs nothing from then on. If anything on the
 way fails (R2, or the object's own storage) it keeps the day and tries
 again 10 minutes later, for a week after the close; meanwhile
-`/timelapse/days` still lists it (the recorders of the past week are asked
+`/api/timelapse/days` still lists it (the recorders of the past week are asked
 too). Past the week the day is given up and the storage deleted. Once a
 day, at the cron's first run after the window opens, the recorders of the
 past eight days are asked to start: one holding a day whose alarm is gone
@@ -1825,7 +1839,7 @@ retries ran to a week after its close, later than the last morning that
 asked it. Asking about a day nobody recorded
 creates no storage. `/download/*`
 serves only release files, so the days are reachable only through
-`/timelapse/days`, with the operator token or `TIMELAPSE_TOKEN`. The second
+`/api/timelapse/days`, with the operator token or `TIMELAPSE_TOKEN`. The second
 opens these routes and nothing else, so the machine that renders the videos
 unattended (`scripts/render-timelapse.mjs`, on a VPS) never holds the
 dashboard's key.
@@ -1865,12 +1879,12 @@ src/config.ts     Cache TTLs and tuning constants
 src/calendar.ts   NUS teaching weeks and public holidays
 src/calendarsync.ts  The calendar fetched weekly by the cron into KV, between deploys
 src/nusmods.ts    NUSMods share URL -> trips
-src/campus.ts     /campus: stops, route lines and colours, destination search
-src/buses.ts      /buses: live buses placed on their route, next stop; /line's stops and buses
-src/timelapse.ts  The timelapse recorder's rules, day file and /timelapse/days
+src/campus.ts     /api/campus: stops, route lines and colours, destination search
+src/buses.ts      /api/buses: live buses placed on their route, next stop; /api/line's stops and buses
+src/timelapse.ts  The timelapse recorder's rules, day file and /api/timelapse/days
 src/timelapsedo.ts  The recorder's Durable Object: one per Singapore day
 src/map.ts        /map/*: the street map file, its style, fonts and icons
-src/pairs.ts      /stops/pairs
+src/pairs.ts      /api/stops/pairs
 src/analytics.ts  Analytics Engine logging: decisions and arrivals, errors
                   (logError, logCronError), timelapse polls (logPoll)
 src/openapi.ts    OpenAPI 3.1 spec and the Elements docs page
@@ -1885,9 +1899,9 @@ src/accounts.ts   Sign-in codes and links, sessions, anonymous accounts, pairing
 src/applogin.ts   App sign-in approved from the email
 src/access.ts     API keys, and who may call the keyed routes
 src/profile.ts    Profile validation and the where-next planner
-src/me.ts         /auth, /pair and /me routes
-src/next.ts       /me/next's answer: the plan, free days, riding, the trip's phase
-src/day.ts        /me/day, today's timeline
+src/me.ts         /api/auth, /api/pair and /api/me routes
+src/next.ts       /api/me/next's answer: the plan, free days, riding, the trip's phase
+src/day.ts        /api/me/day, today's timeline
 src/trip.ts       Trip phases, and the per-user Durable Object with today's signals
 src/tripdo.ts     The Trip object's wakes and push
 src/answer.ts     The answer engine: stops near you, their arrivals, the best bus
@@ -1906,7 +1920,7 @@ src/monitor.ts    The cron: feed health, incidents, housekeeping, arming trips,
 src/feedwatch.ts  The beta's feed checks, from the breaker trips of its own traffic
 src/appversion.ts Finding the new uNivUS version when NUS refuses the old one
 src/downloads.ts  /download/*: app files and the Mac appcast from R2
-src/admin.ts      /admin/stats; src/feedback.ts "Is this wrong?" reports
+src/admin.ts      /api/admin/stats; src/feedback.ts "Is this wrong?" reports
 src/i18n.ts       Every server string in English and Chinese
 src/site.ts       Which Worker this is: stable or beta
 data/             Bundled JSON: stops.json, shapes.json, public.json,

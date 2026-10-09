@@ -1,5 +1,5 @@
 /**
- * GET /me/day: today's timeline, worked out with the planner /me/next uses.
+ * GET /api/me/day: today's timeline, worked out with the planner /me/next uses.
  * Each class with where you set off from and its leave-by, the trips home in
  * long gaps and after the last class, and where each stands now. Clients
  * cache it, so they have the day's shape offline or between refreshes; the

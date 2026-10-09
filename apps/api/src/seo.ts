@@ -19,24 +19,22 @@ ${SITEMAP_PAGES.map((p) => `  <url><loc>${STABLE_ORIGIN}${p}</loc></url>`).join(
 </urlset>
 `;
 
-/** The answers, which need an API key (KEYED in index.ts): nothing there for search. */
-const KEYED_ROUTES = ['/next', '/trip', '/arrivals', '/buses', '/line', '/campus', '/stops/pairs'];
-
 /** robots.txt: everything public on the stable site, with its sitemap; nothing on the beta. */
 export function robotsTxt(env: Env): string {
   if (isBeta(env)) return 'User-agent: *\nDisallow: /\n';
   return [
     'User-agent: *',
     'Allow: /',
-    // The API and account routes answer people and apps, not search. The
-    // docs (/docs, /openapi.json, /llms.txt) and the status page stay open.
-    'Disallow: /me',
+    // The API and the account pages answer people and apps, not search.
+    // The docs (/docs, /api/openapi.json, /llms.txt) and the status page
+    // and its data stay open: the longer rule wins.
+    'Allow: /api/openapi.json',
+    'Allow: /api/status.json',
+    'Disallow: /api/',
     'Disallow: /auth/',
     'Disallow: /admin',
     'Disallow: /pair',
     'Disallow: /download/',
-    'Disallow: /timelapse/',
-    ...KEYED_ROUTES.map((p) => `Disallow: ${p}`),
     '',
     `Sitemap: ${STABLE_ORIGIN}/sitemap.xml`,
     '',
@@ -54,7 +52,7 @@ export function llmsTxt(origin: string): string {
 
 > terminus tells NUS students which internal shuttle bus to catch, from which stop, and when to leave for their next class (or whether walking is faster). It reads their NUSMods timetable and NUS's live shuttle feed. It's a free, independent student project, not affiliated with NUS.
 
-The answers are ready-made text: \`/next\` and \`/trip\` return a \`label\` (such as \`D2 · 4 min\`) and a one-line \`detail\` to show as they are. Every answer has a \`quality\`: \`live\` from NUS's feed, \`scheduled\` (an estimate from how often the bus runs, when the feed has no live time) and so on. Don't present an estimate as live.
+The answers are ready-made text: \`/api/next\` and \`/api/trip\` return a \`label\` (such as \`D2 · 4 min\`) and a one-line \`detail\` to show as they are. Every answer has a \`quality\`: \`live\` from NUS's feed, \`scheduled\` (an estimate from how often the bus runs, when the feed has no live time) and so on. Don't present an estimate as live.
 
 NUS stops come in pairs on opposite sides of the road, a few metres apart (\`KR-MRT\` and \`KR-MRT-OPP\`). The API picks the side from the route order and says when to cross the road.
 
@@ -62,22 +60,22 @@ NUS stops come in pairs on opposite sides of the road, a few metres apart (\`KR-
 
 - Answers need an API key. A person signs in at ${origin}/account, creates one under API keys, and gives it to you. Only they can create one. Send it in the \`x-api-key\` header or as a bearer token.
 - Each key may make 60 requests a minute. Arrivals are cached 15 s per stop and live buses 5 s per service, so asking more often gets the same answer. Please don't poll many stops in bulk: every miss reaches NUS's own feed.
-- Stops are codes such as \`COM3\`, \`UTOWN\` and \`KR-MRT\`; \`/campus\` lists them all, with their names and services. A destination can also be a NUSMods room code such as \`COM1-0212\`.
+- Stops are codes such as \`COM3\`, \`UTOWN\` and \`KR-MRT\`; \`/api/campus\` lists them all, with their names and services. A destination can also be a NUSMods room code such as \`COM1-0212\`.
 
 ## Endpoints
 
-- [GET /trip?to=UTOWN&from=PGP](${origin}/docs#/operations/getTrip): which bus to catch to a stop or a NUSMods room (\`COM1-0212\`), from a stop or a position (\`lat\`, \`lon\`), and when to leave
-- [GET /next?lat=1.294962&lon=103.784556](${origin}/docs#/operations/getNext): the next buses at the stop nearest a position; with \`to\`, the same answer as \`/trip\`
-- [GET /arrivals?stop=COM3](${origin}/docs#/operations/getArrivals): every service's next buses at one stop
-- [GET /buses?svc=D2](${origin}/docs#/operations/getBuses): one service's live buses for a map, each at a stop or between two
-- [GET /line?svc=D1&stop=YIH](${origin}/docs#/operations/getLine): one service's stops in order, its buses on them, and its next bus at one stop
-- [GET /campus](${origin}/docs#/operations/getCampus): stops, route lines and colours, and destinations to search
-- [GET /stops/pairs](${origin}/docs#/operations/getStopPairs): every stop with its twin across the road, and where each side's buses go next
-- [GET /status.json](${origin}/status.json): whether NUS's feed is working, without a key
+- [GET /api/trip?to=UTOWN&from=PGP](${origin}/docs#/operations/getTrip): which bus to catch to a stop or a NUSMods room (\`COM1-0212\`), from a stop or a position (\`lat\`, \`lon\`), and when to leave
+- [GET /api/next?lat=1.294962&lon=103.784556](${origin}/docs#/operations/getNext): the next buses at the stop nearest a position; with \`to\`, the same answer as \`/api/trip\`
+- [GET /api/arrivals?stop=COM3](${origin}/docs#/operations/getArrivals): every service's next buses at one stop
+- [GET /api/buses?svc=D2](${origin}/docs#/operations/getBuses): one service's live buses for a map, each at a stop or between two
+- [GET /api/line?svc=D1&stop=YIH](${origin}/docs#/operations/getLine): one service's stops in order, its buses on them, and its next bus at one stop
+- [GET /api/campus](${origin}/docs#/operations/getCampus): stops, route lines and colours, and destinations to search
+- [GET /api/stops/pairs](${origin}/docs#/operations/getStopPairs): every stop with its twin across the road, and where each side's buses go next
+- [GET /api/status.json](${origin}/api/status.json): whether NUS's feed is working, without a key
 
 ## Reference
 
-- [OpenAPI 3.1 spec](${origin}/openapi.json): every endpoint, parameter and answer, with examples
+- [OpenAPI 3.1 spec](${origin}/api/openapi.json): every endpoint, parameter and answer, with examples
 - [API docs](${origin}/docs): the same spec, rendered (needs JavaScript)
 - [Status](${origin}/status/): the feed's health and past outages
 - [Privacy](${origin}/privacy/): what's stored, and how to delete it

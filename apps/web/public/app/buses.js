@@ -106,7 +106,7 @@ export async function loadBoard(code) {
   const newer = () => boards.get().get(code)?.at > asked;
   try {
     // stopped=1: the services not running now are listed too, greyed.
-    const data = await getJSON(`/arrivals?stop=${encodeURIComponent(code)}${pub}&stopped=1`);
+    const data = await getJSON(`/api/arrivals?stop=${encodeURIComponent(code)}${pub}&stopped=1`);
     if (newer()) return;
     keep(code, { stop: { ...data.stop, opposite: data.stop.opposite ?? stopOf(code)?.opposite ?? null }, board: data.board, available: data.available !== false, at: Date.now(), got: serverNow(), asOf: asOfMs(data) });
   } catch (err) {
@@ -128,7 +128,7 @@ async function findNearest({ ask = false } = {}) {
   if (ask && !at) toast(t('Location is off for this site. Search for a stop instead.'), { error: true });
   try {
     const q = `?${new URLSearchParams({ ...at, stopped: '1' })}`;
-    const data = await getJSON(`/me/nearby${q}`);
+    const data = await getJSON(`/api/me/nearby${q}`);
     const first = data.stops?.[0];
     if (!first) return nearest.set({ status: 'none' });
     const asOf = asOfMs(data);
@@ -145,7 +145,7 @@ async function findNearest({ ask = false } = {}) {
 async function loadLine(svc, stop) {
   const key = `${svc}/${stop ?? ''}`;
   try {
-    const data = await getJSON(`/line?svc=${encodeURIComponent(svc)}${stop ? `&stop=${encodeURIComponent(stop)}` : ''}`);
+    const data = await getJSON(`/api/line?svc=${encodeURIComponent(svc)}${stop ? `&stop=${encodeURIComponent(stop)}` : ''}`);
     if (lineKey() === key) line.set({ key, data, at: Date.now(), got: serverNow(), asOf: asOfMs(data) });
   } catch (err) {
     if (err.message === 'signed out' || lineKey() !== key) return;

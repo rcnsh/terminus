@@ -48,22 +48,22 @@ async function setup(profile = PROFILE, { trips = true, feed = FEED } = {}) {
     await ctx.settle();
     return res;
   };
-  await call('/auth/login', { method: 'POST', body: { email: 'you@u.nus.edu' } });
+  await call('/api/auth/login', { method: 'POST', body: { email: 'you@u.nus.edu' } });
   const verify = await worker.fetch(
     new Request(`${BASE}/auth/verify`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: `t=${env.EMAIL.lastToken()}` }),
     env,
     makeCtx(),
   );
   const cookie = verify.headers.get('set-cookie').split(';')[0];
-  assert.equal((await call('/me/profile', { method: 'PUT', cookie, body: profile })).status, 200);
+  assert.equal((await call('/api/me/profile', { method: 'PUT', cookie, body: profile })).status, 200);
   const pair = async (name) => {
-    const { code } = await (await call('/me/pair-code', { method: 'POST', cookie })).json();
-    return (await (await call('/pair', { method: 'POST', body: { code, name } })).json()).token;
+    const { code } = await (await call('/api/me/pair-code', { method: 'POST', cookie })).json();
+    return (await (await call('/api/pair', { method: 'POST', body: { code, name } })).json()).token;
   };
   const phone = await pair('Pixel');
   const mac = await pair('MacBook');
-  const next = async (token, q = '') => (await call(`/me/next${q}`, { token })).json();
-  const signal = async (token, body) => call('/me/signal', { method: 'POST', token, body });
+  const next = async (token, q = '') => (await call(`/api/me/next${q}`, { token })).json();
+  const signal = async (token, body) => call('/api/me/signal', { method: 'POST', token, body });
   return { env, call, cookie, phone, mac, next, signal, TRIPS, clock };
 }
 
@@ -83,15 +83,15 @@ test("times follow the account's 12- or 24-hour choice on every device, else eac
   assert.match(auto24.card.leaveBy, /\b\d{2}:\d{2}$/);
   assert.equal(auto12.card.h12, true);
   assert.match(auto12.card.leaveBy, /\d:\d{2}\s[AP]M$/);
-  assert.equal((await call('/me/profile', { method: 'PUT', cookie, body: { ...PROFILE, clock: '12' } })).status, 200);
+  assert.equal((await call('/api/me/profile', { method: 'PUT', cookie, body: { ...PROFILE, clock: '12' } })).status, 200);
   const chose12 = await next(phone);
   assert.equal(chose12.card.h12, true);
   assert.equal(chose12.card.leaveBy, auto12.card.leaveBy);
-  assert.equal((await call('/me/profile', { method: 'PUT', cookie, body: { ...PROFILE, clock: '24' } })).status, 200);
+  assert.equal((await call('/api/me/profile', { method: 'PUT', cookie, body: { ...PROFILE, clock: '24' } })).status, 200);
   const chose24 = await next(phone, '?h12=1');
   assert.equal(chose24.card.h12, false);
   assert.equal(chose24.card.leaveBy, auto24.card.leaveBy);
-  assert.equal((await call('/me/profile', { method: 'PUT', cookie, body: { ...PROFILE, clock: 'am/pm' } })).status, 400);
+  assert.equal((await call('/api/me/profile', { method: 'PUT', cookie, body: { ...PROFILE, clock: 'am/pm' } })).status, 400);
 });
 
 test('"On the R2" on the phone puts the Mac on the bus too', async () => {
@@ -183,7 +183,7 @@ test('sitting in the lecture theatre counts as there, though its stop is 90 m aw
   assert.equal((await next(phone, `?to=LT11&${IN_LT11}`)).arrived, true);
 });
 
-test('/me/signal: needs the Durable Object, a known kind, and a trip', async () => {
+test('/api/me/signal: needs the Durable Object, a known kind, and a trip', async () => {
   const noTrips = await setup(PROFILE, { trips: false });
   assert.equal((await noTrips.signal(noTrips.phone, { kind: 'boarded' })).status, 503);
   const { phone, signal } = await setup();
@@ -192,7 +192,7 @@ test('/me/signal: needs the Durable Object, a known kind, and a trip', async () 
   assert.equal((await free.signal(free.phone, { kind: 'boarded' })).status, 409, 'nothing to be on today');
 });
 
-test('/me/next without any classes today never wakes a Durable Object', async () => {
+test('/api/me/next without any classes today never wakes a Durable Object', async () => {
   const { phone, next, TRIPS } = await setup({ home: { stops: ['PGP'] } });
   const a = await next(phone);
   assert.equal(a.mode, 'free');
@@ -213,9 +213,9 @@ test("the day's signals are deleted at the end of the day, and yesterday's never
   assert.equal(inst.storage._map.size, 0);
 });
 
-test('/me/day: each class with where you set off, the leave-by, and the trip home', async () => {
+test('/api/me/day: each class with where you set off, the leave-by, and the trip home', async () => {
   const { phone, call, signal } = await setup({ ...PROFILE, gapHours: 0.5 });
-  let day = await (await call('/me/day', { token: phone })).json();
+  let day = await (await call('/api/me/day', { token: phone })).json();
   assert.equal(day.date, sgtDate(FROZEN_NOW));
   assert.deepEqual(day.items.map((i) => [i.kind, i.status]), [['class', 'next'], ['home', 'later'], ['class', 'later'], ['home', 'later']]);
   const [first, gap, second] = day.items;
@@ -229,24 +229,24 @@ test('/me/day: each class with where you set off, the leave-by, and the trip hom
 
   // On the bus: the bus and where to get off, not a leave-by that has passed.
   await signal(phone, { kind: 'boarded', trip: FIRST });
-  day = await (await call('/me/day', { token: phone })).json();
+  day = await (await call('/api/me/day', { token: phone })).json();
   assert.equal(day.items[0].leave, undefined);
   assert.equal(day.items[0].onBus.svc, first.leave.svc);
   assert.ok(day.items[0].onBus.off, 'where to get off');
   assert.equal(day.items[2].onBus, undefined, 'only the trip you are on');
 
   await signal(phone, { kind: 'skipped', trip: FIRST });
-  day = await (await call('/me/day', { token: phone })).json();
+  day = await (await call('/api/me/day', { token: phone })).json();
   assert.equal(day.items.some((i) => i.key === FIRST), false, 'taken off today: not listed');
 });
 
-test('/me/day: the next class planned from where the device is, as the card plans it', async () => {
+test('/api/me/day: the next class planned from where the device is, as the card plans it', async () => {
   const { phone, call, next } = await setup();
   // Near Kent Ridge MRT, not at home: a different stop and walk from the home stop's.
   const here = '?lat=1.2950&lon=103.7846';
   // Today first, as an app asks both at once: before the card has saved its plan.
-  const located = await (await call(`/me/day${here}`, { token: phone })).json();
-  const unlocated = await (await call('/me/day', { token: phone })).json();
+  const located = await (await call(`/api/me/day${here}`, { token: phone })).json();
+  const unlocated = await (await call('/api/me/day', { token: phone })).json();
   const card = await next(phone, here);
   assert.equal(card.leave.stop, located.items[0].leave.stop);
   assert.equal(card.leave.at, located.items[0].leave.at, 'Today says the leave-by the card does');
@@ -255,9 +255,9 @@ test('/me/day: the next class planned from where the device is, as the card plan
   assert.deepEqual(located.items.at(-2).leave, unlocated.items.at(-2).leave);
 });
 
-test('/me/day: anything not done yet can be taken off today, the trip home too, and put back', async () => {
+test('/api/me/day: anything not done yet can be taken off today, the trip home too, and put back', async () => {
   const t = await setup({ ...PROFILE, gapHours: 0.5 });
-  const list = async () => (await (await t.call('/me/day', { token: t.phone })).json()).items;
+  const list = async () => (await (await t.call('/api/me/day', { token: t.phone })).json()).items;
   let items = await list();
   assert.deepEqual(items.map((i) => i.removable), [true, true, true, true]);
   const gap = items.find((i) => i.key.startsWith('gap-home:'));
@@ -283,11 +283,11 @@ test('/me/day: anything not done yet can be taken off today, the trip home too, 
   assert.equal((await list()).at(-1).kind, 'home');
 });
 
-test('/me/day: a one-off trip later today can be taken off before it is the next trip, and put back', async () => {
+test('/api/me/day: a one-off trip later today can be taken off before it is the next trip, and put back', async () => {
   const t = await setup();
   // 18:00, after both classes: the card is about the first class, not this.
-  assert.equal((await t.call('/me/once', { method: 'POST', token: t.phone, body: { to: 'UTOWN', atMin: 1080, label: 'Dinner' } })).status, 200);
-  const list = async () => (await (await t.call('/me/day', { token: t.phone })).json()).items;
+  assert.equal((await t.call('/api/me/once', { method: 'POST', token: t.phone, body: { to: 'UTOWN', atMin: 1080, label: 'Dinner' } })).status, 200);
+  const list = async () => (await (await t.call('/api/me/day', { token: t.phone })).json()).items;
   const once = (await list()).find((i) => i.label === 'Dinner');
   assert.equal(once.removable, true);
   assert.notEqual((await t.next(t.phone)).dest.label, 'Dinner');
@@ -298,17 +298,17 @@ test('/me/day: a one-off trip later today can be taken off before it is the next
   assert.equal((await list()).some((i) => i.key === once.key), true, 'put back');
 });
 
-test('/me/day: what is done cannot be taken off', async () => {
+test('/api/me/day: what is done cannot be taken off', async () => {
   const t = await setup();
   await t.signal(t.phone, { kind: 'arrived', trip: FIRST });
-  const items = (await (await t.call('/me/day', { token: t.phone })).json()).items;
+  const items = (await (await t.call('/api/me/day', { token: t.phone })).json()).items;
   assert.equal(items.find((i) => i.key === FIRST).removable, false);
   assert.equal(items.find((i) => i.key === SECOND).removable, true);
 });
 
-test('/me/day on a free day says what is next', async () => {
+test('/api/me/day on a free day says what is next', async () => {
   const { phone, call } = await setup({ home: { stops: ['PGP'] }, manual: [{ ...cls(600, 'COM3', 'CS2030 @ COM1'), day: 5 }] });
-  const day = await (await call('/me/day', { token: phone })).json();
+  const day = await (await call('/api/me/day', { token: phone })).json();
   assert.deepEqual(day.items, []);
   assert.equal(day.note, 'Next: CS2030 @ COM1, tomorrow 10:00');
 });
@@ -596,27 +596,27 @@ test('old "no answer" rows change nothing, and the old question routes are gone'
   for (let d = 1; d <= 5; d++) seed(env, `${d}:600:UTOWN`, d, 'none');
   const a = await next(phone);
   assert.equal('ask' in a.card || 'askMuted' in a.card, false);
-  assert.equal('askMuted' in (await (await call('/me/choices', { token: phone })).json()), false);
-  assert.equal((await call('/me/ask', { method: 'POST', token: phone })).status, 404);
+  assert.equal('askMuted' in (await (await call('/api/me/choices', { token: phone })).json()), false);
+  assert.equal((await call('/api/me/ask', { method: 'POST', token: phone })).status, 404);
 });
 
 test('clearing the trip history forgets the outcomes and drops the suggestion, but keeps choices', async () => {
   const { env, call, phone, next } = await setup();
   for (let d = 1; d <= 5; d++) seed(env, `${d}:600:UTOWN`, d, 'none');
   for (const d of [7, 14, 21]) seed(env, FIRST, d, 'missed');
-  await call('/me/choice', { method: 'POST', token: phone, body: { trip: SECOND, pref: 'quiet', choice: 'accept' } });
-  let r = await (await call('/me/choices', { token: phone })).json();
+  await call('/api/me/choice', { method: 'POST', token: phone, body: { trip: SECOND, pref: 'quiet', choice: 'accept' } });
+  let r = await (await call('/api/me/choices', { token: phone })).json();
   assert.equal(r.history, 8);
 
-  const res = await call('/me/history', { method: 'DELETE', token: phone });
+  const res = await call('/api/me/history', { method: 'DELETE', token: phone });
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), { ok: true, cleared: 8 });
-  r = await (await call('/me/choices', { token: phone })).json();
+  r = await (await call('/api/me/choices', { token: phone })).json();
   assert.equal(r.history, 0);
   assert.deepEqual(r.choices.map((c) => [c.trip, c.pref]), [[SECOND, 'quiet']], 'choices stay');
   const a = await next(phone);
   assert.equal(a.card.suggestion, null);
-  assert.equal((await call('/me/history', { method: 'DELETE' })).status, 401);
+  assert.equal((await call('/api/me/history', { method: 'DELETE' })).status, 401);
 });
 
 test('three misses of a class in a month suggest a bus earlier; accepting it moves the leave-by, undoing it moves it back', async () => {
@@ -626,7 +626,7 @@ test('three misses of a class in a month suggest a bus earlier; accepting it mov
   assert.equal(before.card.suggestion.id, `earlier:${FIRST}`);
   assert.match(before.card.suggestion.text, /missed the bus to GEA1000 @ UTown 3 times this month/);
 
-  const res = await call('/me/choice', { method: 'POST', token: phone, body: { id: before.card.suggestion.id, choice: 'accept' } });
+  const res = await call('/api/me/choice', { method: 'POST', token: phone, body: { id: before.card.suggestion.id, choice: 'accept' } });
   assert.equal(res.status, 200);
   assert.deepEqual((await res.json()).choices.map((c) => [c.trip, c.pref, c.label]), [[FIRST, 'earlier', 'GEA1000 @ UTown']]);
   const after = await next(phone);
@@ -634,7 +634,7 @@ test('three misses of a class in a month suggest a bus earlier; accepting it mov
   assert.ok(Date.parse(after.leave.at) < Date.parse(before.leave.at), 'a bus earlier');
   assert.equal(after.leave.note, 'One bus earlier, as you chose for this class');
 
-  await call('/me/choice', { method: 'POST', token: phone, body: { trip: FIRST, pref: 'earlier', choice: 'undo' } });
+  await call('/api/me/choice', { method: 'POST', token: phone, body: { trip: FIRST, pref: 'earlier', choice: 'undo' } });
   assert.equal((await next(phone)).leave.at, before.leave.at);
 });
 
@@ -644,7 +644,7 @@ test('"Not going" three weeks running offers to stop reminders; accepting turns 
   const before = await next(phone);
   assert.equal(before.card.suggestion.id, `quiet:${FIRST}`);
   assert.equal(before.card.remind, true);
-  await call('/me/choice', { method: 'POST', token: phone, body: { id: before.card.suggestion.id, choice: 'accept' } });
+  await call('/api/me/choice', { method: 'POST', token: phone, body: { id: before.card.suggestion.id, choice: 'accept' } });
   const after = await next(phone);
   assert.equal(after.card.remind, false);
   assert.equal(after.dest.label, 'GEA1000 @ UTown', 'the class is still planned');
@@ -661,7 +661,7 @@ test('a suggestion turned down is not offered again, and never during a trip', a
   clock(Date.parse(first.leave.at) - 60_000);
   assert.equal((await next(phone)).card.suggestion, null, 'not while the trip is due');
   clock(FROZEN_NOW);
-  await call('/me/choice', { method: 'POST', token: phone, body: { id: `earlier:${FIRST}`, choice: 'dismiss' } });
+  await call('/api/me/choice', { method: 'POST', token: phone, body: { id: `earlier:${FIRST}`, choice: 'dismiss' } });
   assert.equal((await next(phone)).card.suggestion, null);
 });
 
@@ -691,10 +691,10 @@ test('migration 0012 rounds the trip history already kept to the start of its da
 test('trip outcomes are in the export and go with the account', async () => {
   const { env, call, cookie, phone, signal } = await setup();
   await signal(phone, { kind: 'missed' });
-  const exported = await (await call('/me/export', { cookie })).json();
+  const exported = await (await call('/api/me/export', { cookie })).json();
   assert.deepEqual(exported.tripOutcomes.map((o) => [o.trip, o.outcome]), [[FIRST, 'missed']]);
   assert.equal(exported.today.trips[FIRST].kind, 'missed', "today's trip, from the Trip object");
-  assert.equal((await call('/me', { method: 'DELETE', cookie })).status, 200);
+  assert.equal((await call('/api/me', { method: 'DELETE', cookie })).status, 200);
   assert.equal(env.DB._db.prepare('SELECT COUNT(*) AS n FROM trip_outcomes').get().n, 0);
 });
 
@@ -705,7 +705,7 @@ test("a deleted account's trip state goes at once, and a request still under way
   const inst = TRIPS.instances.get(userId);
   assert.ok(inst.storage._map.has('day'));
 
-  assert.equal((await call('/me', { method: 'DELETE', cookie })).status, 200);
+  assert.equal((await call('/api/me', { method: 'DELETE', cookie })).status, 200);
   const obj = TRIPS.get(TRIPS.idFromName(userId));
   const post = (path, body) => obj.fetch(`https://trip/${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   const date = sgtDate(FROZEN_NOW);
@@ -833,36 +833,36 @@ test('a saved place with a usual time is a trip on that day, like a class', asyn
 
 test('a one-off trip today is planned like a class, and past ones are dropped', async () => {
   const t = await setup({ home: { stops: ['PGP'] } });
-  const bad = await t.call('/me/once', { method: 'POST', token: t.phone, body: { to: 'COM3', atMin: 8 * 60 } });
+  const bad = await t.call('/api/me/once', { method: 'POST', token: t.phone, body: { to: 'COM3', atMin: 8 * 60 } });
   assert.equal(bad.status, 400, '08:00 has passed at 09:00');
-  const res = await t.call('/me/once', { method: 'POST', token: t.phone, body: { to: 'COM3', atMin: 14 * 60, label: 'Project meeting' } });
+  const res = await t.call('/api/me/once', { method: 'POST', token: t.phone, body: { to: 'COM3', atMin: 14 * 60, label: 'Project meeting' } });
   assert.equal(res.status, 200);
   const a = await res.json();
   assert.equal(a.dest.label, 'Project meeting');
   assert.equal(a.card.actions[0].id, 'skipped');
-  const profile = await (await t.call('/me/profile', { cookie: t.cookie })).json();
+  const profile = await (await t.call('/api/me/profile', { cookie: t.cookie })).json();
   assert.deepEqual(profile.once, [{ date: sgtDate(FROZEN_NOW), arriveByMin: 840, to: 'COM3', label: 'Project meeting' }]);
   // Tomorrow it's gone from the plan, and a save drops it.
   t.clock(FROZEN_NOW + DAY);
   assert.notEqual((await t.next(t.phone)).dest?.label, 'Project meeting');
-  const saved = await (await t.call('/me/profile', { method: 'PUT', cookie: t.cookie, body: profile })).json();
+  const saved = await (await t.call('/api/me/profile', { method: 'PUT', cookie: t.cookie, body: profile })).json();
   assert.deepEqual(saved.once, []);
 });
 
 test('usual times and one-offs are checked like the rest of the profile', async () => {
   const t = await setup();
-  const put = (body) => t.call('/me/profile', { method: 'PUT', cookie: t.cookie, body: { ...PROFILE, ...body } });
+  const put = (body) => t.call('/api/me/profile', { method: 'PUT', cookie: t.cookie, body: { ...PROFILE, ...body } });
   assert.equal((await put({ usual: [{ place: 'Gym!', day: 1, atMin: 60 }] })).status, 400);
   assert.equal((await put({ usual: [{ place: 'gym', day: 9, atMin: 60 }] })).status, 400);
   assert.equal((await put({ once: [{ date: 'tomorrow', arriveByMin: 60, to: 'COM3', label: 'x' }] })).status, 400);
   assert.equal((await put({ once: [{ date: '2026-08-28', arriveByMin: 60, to: 'NOWHERE', label: 'x' }] })).status, 400);
-  assert.equal((await t.call('/me/once', { method: 'POST', token: t.phone, body: { to: 'NOWHERE', atMin: 900 } })).status, 400);
-  assert.equal((await t.call('/me/once', { method: 'POST', token: t.phone, body: { to: 'COM3', atMin: 900, date: '2026-12-01' } })).status, 400, 'more than a week ahead');
+  assert.equal((await t.call('/api/me/once', { method: 'POST', token: t.phone, body: { to: 'NOWHERE', atMin: 900 } })).status, 400);
+  assert.equal((await t.call('/api/me/once', { method: 'POST', token: t.phone, body: { to: 'COM3', atMin: 900, date: '2026-12-01' } })).status, 400, 'more than a week ahead');
 });
 
 test('a one-off trip to a saved place, by its key', async () => {
   const t = await setup({ home: { stops: ['PGP'] }, places: [{ key: 'gym', label: 'Gym', to: 'UHALL' }] });
-  const a = await (await t.call('/me/once', { method: 'POST', token: t.phone, body: { place: 'gym', atMin: 11 * 60 } })).json();
+  const a = await (await t.call('/api/me/once', { method: 'POST', token: t.phone, body: { place: 'gym', atMin: 11 * 60 } })).json();
   assert.equal(a.dest.label, 'Gym');
   assert.equal(a.dest.to, 'UHALL');
 });
@@ -891,7 +891,7 @@ test('a NUSMods class ends half an hour before its timetable end: the day, "till
   // 10:00-12:00 from NUSMods: really out by about 11:30.
   // Home at PGPR: the D2 from UTown gets there without its terminal (COM3), where the run ends.
   const t = await setup({ home: { stops: ['PGPR'] }, trips: [{ day: THU, arriveByMin: 600, endMin: 720, to: 'UTOWN', label: 'GEA1000 @ UTown', venue: '' }] });
-  const day = await (await t.call('/me/day', { token: t.phone })).json();
+  const day = await (await t.call('/api/me/day', { token: t.phone })).json();
   const cls = day.items.find((i) => i.kind === 'class');
   assert.equal(Date.parse(cls.endsAt), FROZEN_NOW + 150 * 60_000, 'ends 11:30');
   await t.signal(t.phone, { kind: 'arrived', trip: FIRST });
@@ -904,7 +904,7 @@ test('a NUSMods class ends half an hour before its timetable end: the day, "till
 
 test('a class entered by hand ends when it says', async () => {
   const t = await setup({ home: { stops: ['PGP'] }, manual: [{ ...cls(600, 'UTOWN', 'GEA1000 @ UTown'), endMin: 720 }] });
-  const day = await (await t.call('/me/day', { token: t.phone })).json();
+  const day = await (await t.call('/api/me/day', { token: t.phone })).json();
   assert.equal(Date.parse(day.items.find((i) => i.kind === 'class').endsAt), FROZEN_NOW + 180 * 60_000, 'ends 12:00');
 });
 
@@ -932,7 +932,7 @@ test('a middle class taken off today leaves one trip home in the gap, not one fo
   const t = await setup(MIDDAY);
   t.clock(FROZEN_NOW + 30 * 60_000); // 09:30
   await t.signal(t.phone, { kind: 'skipped', trip: MIDDAY_KEY });
-  const items = (await (await t.call('/me/day', { token: t.phone })).json()).items;
+  const items = (await (await t.call('/api/me/day', { token: t.phone })).json()).items;
   const keys = items.map((i) => i.key);
   assert.equal(new Set(keys).size, keys.length, `no entry twice: ${keys.join(', ')}`);
   assert.deepEqual(items.map((i) => i.kind), ['class', 'home', 'class', 'home']);
@@ -1009,7 +1009,7 @@ test('a class whose bus was missed is not where the next one is planned from', a
   const a = await next(phone);
   assert.equal(a.dest.label, 'CS2030 @ COM1');
   assert.notEqual(a.leave?.stopCode, 'UTOWN');
-  const day = await (await call('/me/day', { token: phone })).json();
+  const day = await (await call('/api/me/day', { token: phone })).json();
   assert.equal(day.items.find((x) => x.key === SECOND).from, 'PGP');
 });
 
@@ -1018,7 +1018,7 @@ test("Today's next class says the bus the card says", async () => {
   const first = await next(phone, atStop('PGP'));
   clock(Date.parse(first.leave.at) - 60_000);
   const due = await next(phone, atStop(first.leave.stopCode));
-  const day = await (await call('/me/day', { token: phone })).json();
+  const day = await (await call('/api/me/day', { token: phone })).json();
   const item = day.items.find((x) => x.key === FIRST);
   assert.equal(item.leave.board, due.leave.board);
   assert.equal(item.leave.svc, due.leave.svc);
@@ -1116,7 +1116,7 @@ test('a plan and a watch sent together both stick (the Trip object reads the day
   assert.equal(day.watch, FROZEN_NOW + 60_000);
 });
 
-test('/me/day follows the plan once its bus has left: the same leave-by, then the next way there, or on the bus once seen on it', async () => {
+test('/api/me/day follows the plan once its bus has left: the same leave-by, then the next way there, or on the bus once seen on it', async () => {
   const { phone, call, next, clock } = await setup();
   // Planned from where the phone is (PGP), so it's the trip's plan.
   const planned = await next(phone, '?lat=1.291765&lon=103.780419');
@@ -1125,20 +1125,20 @@ test('/me/day follows the plan once its bus has left: the same leave-by, then th
 
   // The bus has just left: still the plan's leave-by, not a new one.
   clock(board + 60_000);
-  let day = await (await call('/me/day', { token: phone })).json();
+  let day = await (await call('/api/me/day', { token: phone })).json();
   assert.equal(day.items[0].leave?.board, planned.leave.board);
 
   // A few minutes on, nothing seen: not the bus that left, and not on it.
   clock(board + ASSUME_MS + 60_000);
   assert.equal((await next(phone)).card.phase, 'heading');
-  day = await (await call('/me/day', { token: phone })).json();
+  day = await (await call('/api/me/day', { token: phone })).json();
   assert.equal(day.items[0].onBus, undefined);
   assert.notEqual(day.items[0].leave?.board, planned.leave.board);
 
   // Seen on its road: the card says you're on that bus; so does Today.
   const { svc, stopCode } = planned.leave;
   assert.equal((await next(phone, onRideQuery(svc, stopCode, 'UTOWN', rideLength(svc, stopCode, 'UTOWN') - 300))).card.phase, 'riding');
-  day = await (await call('/me/day', { token: phone })).json();
+  day = await (await call('/api/me/day', { token: phone })).json();
   assert.equal(day.items[0].onBus?.svc, svc);
   assert.equal(day.items[0].leave, undefined);
 });
@@ -1149,7 +1149,7 @@ test('choices are capped per account, the oldest dropped first', async () => {
   for (let i = 0; i < MAX_PREFS + 5; i++) {
     env.DB._db.prepare("INSERT INTO trip_prefs (user_id, trip_key, pref, label, set_at) SELECT user_id, ?, 'quiet', NULL, ? FROM sessions LIMIT 1").run(`k${i}`, i);
   }
-  await call('/me/choice', { method: 'POST', token: phone, body: { trip: FIRST, pref: 'quiet', choice: 'accept' } });
+  await call('/api/me/choice', { method: 'POST', token: phone, body: { trip: FIRST, pref: 'quiet', choice: 'accept' } });
   const rows = env.DB._db.prepare('SELECT trip_key FROM trip_prefs ORDER BY set_at').all().map((r) => r.trip_key);
   assert.equal(rows.length, MAX_PREFS);
   assert.equal(rows.at(-1), FIRST);
@@ -1159,11 +1159,11 @@ test('choices are capped per account, the oldest dropped first', async () => {
 test('a trip key that is no class of yours and no trip home is refused', async () => {
   const { call, phone } = await setup();
   for (const trip of ['x', '9:9:NOWHERE', `${'a'.repeat(70)}`]) {
-    assert.equal((await call('/me/choice', { method: 'POST', token: phone, body: { trip, pref: 'quiet', choice: 'accept' } })).status, 400, trip);
-    assert.equal((await call('/me/signal', { method: 'POST', token: phone, body: { kind: 'skipped', trip } })).status, 400, trip);
+    assert.equal((await call('/api/me/choice', { method: 'POST', token: phone, body: { trip, pref: 'quiet', choice: 'accept' } })).status, 400, trip);
+    assert.equal((await call('/api/me/signal', { method: 'POST', token: phone, body: { kind: 'skipped', trip } })).status, 400, trip);
   }
-  assert.equal((await call('/me/choice', { method: 'POST', token: phone, body: { trip: FIRST, pref: 'quiet', choice: 'accept' } })).status, 200);
-  assert.equal((await call('/me/signal', { method: 'POST', token: phone, body: { kind: 'skipped', trip: 'home:660' } })).status, 200);
+  assert.equal((await call('/api/me/choice', { method: 'POST', token: phone, body: { trip: FIRST, pref: 'quiet', choice: 'accept' } })).status, 200);
+  assert.equal((await call('/api/me/signal', { method: 'POST', token: phone, body: { kind: 'skipped', trip: 'home:660' } })).status, 200);
 });
 
 test('a day keeps at most so many trip records', async () => {
@@ -1248,9 +1248,9 @@ test('"On it" with no bus in the plan (a walk) means you have set off', async ()
   assert.equal(rec.boarded, undefined);
 });
 
-test('/me/choice refuses what is not a choice, and a trip that is not today', async () => {
+test('/api/me/choice refuses what is not a choice, and a trip that is not today', async () => {
   const { call, phone } = await setup();
-  const choose = async (body) => call('/me/choice', { method: 'POST', token: phone, body });
+  const choose = async (body) => call('/api/me/choice', { method: 'POST', token: phone, body });
   for (const body of [{}, { id: `earlier:${FIRST}` }, { id: `earlier:${FIRST}`, choice: 'maybe' }, { id: `louder:${FIRST}`, choice: 'accept' }, { trip: FIRST, choice: 'accept' }, { pref: 'quiet', choice: 'accept' }, { trip: 'x'.repeat(81), pref: 'quiet', choice: 'accept' }]) {
     const r = await choose(body);
     assert.equal(r.status, 400, JSON.stringify(body));
@@ -1273,7 +1273,7 @@ test('a profile change that keeps losing to another device gives up with 409 aft
     }
     return prepare(sql);
   };
-  const r = await call('/me/once', { method: 'POST', token: phone, body: { to: 'COM3', atMin: 14 * 60 } });
+  const r = await call('/api/me/once', { method: 'POST', token: phone, body: { to: 'COM3', atMin: 14 * 60 } });
   env.DB.prepare = prepare;
   assert.equal(r.status, 409);
   assert.match((await r.json()).error, /changed on another device/);

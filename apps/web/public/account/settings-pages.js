@@ -329,7 +329,7 @@ function Choices() {
   const version = useStore(lists);
   const [r, setR] = useState(null);
   const load = () =>
-    api('/me/choices')
+    api('/api/me/choices')
       .then(setR)
       .catch(() => setR((was) => was ?? { failed: true }));
   useEffect(() => {
@@ -351,7 +351,7 @@ function Choices() {
               class="btn small ghost"
               aria-label=${t('Undo for {0}', name(c))}
               onClick=${async () => {
-                await api('/me/choice', { method: 'POST', body: { trip: c.trip, pref: c.pref, choice: 'undo' } });
+                await api('/api/me/choice', { method: 'POST', body: { trip: c.trip, pref: c.pref, choice: 'undo' } });
                 lists.set((n) => n + 1);
               }}
             >${t('Undo')}</button>
@@ -371,7 +371,7 @@ function Choices() {
               type="button"
               onClick=${async () => {
                 if (!confirm(t("Clear your trip history? Your settings won't change."))) return;
-                await api('/me/history', { method: 'DELETE' });
+                await api('/api/me/history', { method: 'DELETE' });
                 toast(t('Trip history cleared'));
                 lists.set((n) => n + 1);
               }}
@@ -418,7 +418,7 @@ export function Timetable({ me }) {
     e.preventDefault();
     setMsg(t('Importing…'));
     try {
-      const r = await api('/me/import', { method: 'POST', body: { share } });
+      const r = await api('/api/me/import', { method: 'POST', body: { share } });
       profile.set(r.profile);
       setTerm(r.term);
       const n = r.profile.trips.length;
@@ -825,7 +825,7 @@ export function Devices({ me }) {
   const [devices, setDevices] = useState(null);
   const [pairing, setPairing] = useState(null);
   const load = async () => {
-    const { devices: list } = await api('/me/devices');
+    const { devices: list } = await api('/api/me/devices');
     setDevices(list);
     deviceCount.set(list.length);
     return list.length;
@@ -850,7 +850,7 @@ export function Devices({ me }) {
                 onClick=${async (e) => {
                   // Noted before the wait: by the time the list is back, the row has gone.
                   const refocus = noteRow(e.currentTarget);
-                  await api(`/me/devices/${d.id}`, { method: 'DELETE' });
+                  await api(`/api/me/devices/${d.id}`, { method: 'DELETE' });
                   await load();
                   refocus(() => document.querySelector('.add-device'));
                 }}
@@ -879,7 +879,7 @@ function Pairing({ count, reload }) {
     (async () => {
       let made;
       try {
-        made = await api('/me/pair-code', { method: 'POST' });
+        made = await api('/api/me/pair-code', { method: 'POST' });
       } catch (err) {
         setState({ text: '', hint: err.message });
         return;
@@ -1113,7 +1113,7 @@ export function Account({ me, inApp, onAddEmail, onSignOut }) {
   const [msg, setMsg] = useState('');
   const everywhere = async () => {
     if (!confirm(t('Sign out of every browser and device, including this one?'))) return;
-    await api('/me/sessions', { method: 'DELETE' });
+    await api('/api/me/sessions', { method: 'DELETE' });
     await forgetAccountHere();
     location.reload();
   };
@@ -1121,7 +1121,7 @@ export function Account({ me, inApp, onAddEmail, onSignOut }) {
     const typed = prompt(t('This deletes your account, timetable, favourites and paired devices immediately. Type DELETE to confirm.'));
     if (typed !== 'DELETE') return;
     try {
-      await api('/me', { method: 'DELETE' });
+      await api('/api/me', { method: 'DELETE' });
       await forgetAccountHere();
       location.href = '/';
     } catch (err) {
@@ -1146,7 +1146,7 @@ export function Account({ me, inApp, onAddEmail, onSignOut }) {
         </div>
       <//></div>`}
       <${Group} title=${t('Your data')}>
-        <a class="settings-row" href="/me/export" download><span class="row-text"><span class="row-title">${t('Download my data')}</span></span>${chev}</a>
+        <a class="settings-row" href="/api/me/export" download><span class="row-text"><span class="row-title">${t('Download my data')}</span></span>${chev}</a>
         <button type="button" class="settings-row" onClick=${everywhere}><span class="row-text"><span class="row-title">${t('Sign out everywhere')}</span></span>${chev}</button>
       <//>
       <${Keys} />
@@ -1166,7 +1166,7 @@ function Keys() {
   const [name, setName] = useState('');
   const [msg, setMsg] = useState('');
   const load = () =>
-    api('/me/keys')
+    api('/api/me/keys')
       .then((r) => setKeys(r.keys))
       .catch(() => setMsg(t("Couldn't load your API keys. Check your connection.")));
   useEffect(() => {
@@ -1189,7 +1189,7 @@ function Keys() {
                   // Noted before the wait: by the time the list is back, the row has gone.
                   const refocus = noteRow(e.currentTarget);
                   if (!confirm(t('Revoke "{0}"? Anything using it stops working straight away.', k.name))) return;
-                  await api(`/me/keys/${k.id}`, { method: 'DELETE' });
+                  await api(`/api/me/keys/${k.id}`, { method: 'DELETE' });
                   setMade(null);
                   await load();
                   refocus(() => document.querySelector('.keys-name'));
@@ -1204,7 +1204,7 @@ function Keys() {
             e.preventDefault();
             setMsg('');
             try {
-              const r = await api('/me/keys', { method: 'POST', body: { name: name.trim() } });
+              const r = await api('/api/me/keys', { method: 'POST', body: { name: name.trim() } });
               setName('');
               setMade(r.key);
               load();
@@ -1303,7 +1303,7 @@ export function Feedback({ me, onAddEmail }) {
     if (!note.trim()) return setMsg(t('Write something first.'));
     setSending(true);
     try {
-      await api('/me/feedback', { method: 'POST', body: { kind: 'other', note: note.trim(), platform: 'web' } });
+      await api('/api/me/feedback', { method: 'POST', body: { kind: 'other', note: note.trim(), platform: 'web' } });
       setNote('');
       setMsg(t('Thanks. Your feedback was sent.'));
     } catch (err) {

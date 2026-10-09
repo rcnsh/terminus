@@ -9,7 +9,7 @@
  * It's high priority only when the user should look: the trip is due, or it
  * was missed, whether or not its reminders are on, since Android starts the
  * live notification from these. The new semester's reminder (`kind: 'term'`) is the same to
- * an app that can fetch its words (GET /me/notice): only to an older
+ * an app that can fetch its words (GET /api/me/notice): only to an older
  * Android app, which shows what it's sent, does it carry the words, in
  * English and Chinese (fetchesNotice). Web pushes are encrypted for the
  * browser, so they always carry them.
@@ -156,7 +156,7 @@ export async function remindUser(env: Env, userId: string, notice: Notice, nowMs
   );
 }
 
-/** The first Android version that fetches the reminder's words itself (GET /me/notice). */
+/** The first Android version that fetches the reminder's words itself (GET /api/me/notice). */
 export const NOTICE_FETCH_FROM = [2, 5, 0] as const;
 
 /** Whether the app behind this session (its x-terminus-client, "android/2.5.0") fetches the reminder's words. */
@@ -247,7 +247,7 @@ async function toAndroid(env: Env, a: ServiceAccount, fcm: Fcm, to: { push_token
       body: JSON.stringify({
         message: {
           token: to.push_token,
-          // An app that fetches the words itself is sent only the kind (GET /me/notice).
+          // An app that fetches the words itself is sent only the kind (GET /api/me/notice).
           data: msg.fcmBare && fetchesNotice(to.client) ? msg.fcmBare : msg.fcm,
           android: { priority: msg.urgent ? 'HIGH' : 'NORMAL', ttl: `${msg.ttlS}s`, collapse_key: msg.collapse },
         },

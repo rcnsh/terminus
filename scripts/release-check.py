@@ -4,7 +4,7 @@
     scripts/release-check.py api <site> <version>      # the Worker is new enough
 
 api: the apps of a version expect its API. The Worker's version is the one
-in its OpenAPI spec (/openapi.json, API_VERSION); it must be at least
+in its OpenAPI spec (/api/openapi.json, API_VERSION); it must be at least
 <version>.
 
 Prints what it found; exits 1 when the release must not go up, 2 when the
@@ -35,7 +35,7 @@ def semver(v):
 
 def check_api(site, version):
     try:
-        live = json.loads(fetch(f'{site}/openapi.json'))['info']['version']
+        live = json.loads(fetch(f'{site}/api/openapi.json'))['info']['version']
     except Exception as e:  # noqa: BLE001
         print(f"couldn't read the API version at {site}: {e}")
         return 2

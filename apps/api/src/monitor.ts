@@ -515,7 +515,7 @@ export function termNotice(term: { acadYear: string; semester: number }, start: 
  * The reminder a profile is due now, in the words its language setting asks
  * for (both when it follows the device), or null: no semester starting
  * within the week, no timetable, or the new one already imported. The cron
- * pushes it; GET /me/notice gives it to an app that was pushed only its kind.
+ * pushes it; GET /api/me/notice gives it to an app that was pushed only its kind.
  */
 export function termNoticeFor(p: { trips?: unknown; term?: { acadYear: string; semester: number } | null; lang?: unknown } | null, nowMs: number): Notice | null {
   const soon = semesterSoon(nowMs);

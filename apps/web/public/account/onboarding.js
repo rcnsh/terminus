@@ -165,7 +165,7 @@ function TimetableStep({ nav }) {
   const [msg, setMsg] = useState(trips ? (trips === 1 ? t('1 class already imported.') : t('{0} classes already imported.', trips)) : '');
   const doImport = async () => {
     setMsg(t('Importing…'));
-    const r = await api('/me/import', { method: 'POST', body: { share: share.trim() } });
+    const r = await api('/api/me/import', { method: 'POST', body: { share: share.trim() } });
     profile.set(r.profile);
     setImported(true);
     const n = r.profile.trips.length;

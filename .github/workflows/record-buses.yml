@@ -1,6 +1,6 @@
 name: record live buses
 
-# Run by hand after a deploy: records what /buses shows the map for a few
+# Run by hand after a deploy: records what /api/buses shows the map for a few
 # minutes, with a throwaway anonymous account, and checks no bus switches to
 # the other side of the road or jumps (apps/api/scripts/record_buses.mjs).
 # The report is the run's summary, and an annotation. Needs no secrets.

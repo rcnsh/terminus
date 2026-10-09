@@ -66,7 +66,7 @@ test('an analytics write that throws is swallowed by every logger', () => {
   const env = { AE: { writeDataPoint: () => (tries++, (() => { throw new Error('AE quota'); })()) } };
   const answer = { stop: { code: 'PGP', confidence: 1 }, quality: 'live', arrivals: [{ svc: 'D2', etaS: 60 }], label: 'x' };
   assert.doesNotThrow(() => logAnswer(env, { answer, best: null, dest: 'UTOWN', hadCoords: false, walkAllS: null }));
-  assert.doesNotThrow(() => logError(env, '/me/devices/abc'));
+  assert.doesNotThrow(() => logError(env, '/api/me/devices/abc'));
   assert.doesNotThrow(() => logCronError(env, 'upstream'));
   assert.doesNotThrow(() => logPoll(env, 'upstream', 'D2', 3));
   assert.equal(tries, 4, 'each one tried to write');

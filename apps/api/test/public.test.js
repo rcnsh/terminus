@@ -219,7 +219,7 @@ test('collectArrivals asks each stop of the feeds that call there', async () => 
 
 const BASE = 'https://bus.example.test';
 
-test('/next?public=1 names the public bus, says it is one, and marks its leg paid; without it nothing changes', async () => {
+test('/api/next?public=1 names the public bus, says it is one, and marks its leg paid; without it nothing changes', async () => {
   const fetch = makeFetch({
     byStop: { IT: [{ name: 'A2', arrivalTime: '9', nextArrivalTime: '19' }] },
     publicStops: { 16189: [{ ServiceNo: '95', buses: [{ etaS: 90, dest: '16009', load: 'SDA' }] }] },
@@ -232,7 +232,7 @@ test('/next?public=1 names the public bus, says it is one, and marks its leg pai
     await ctx.settle();
     return res.json();
   };
-  const pub = await ask(`/next?lat=${AT_IT.lat}&lon=${AT_IT.lon}&to=KR-MRT&public=1`);
+  const pub = await ask(`/api/next?lat=${AT_IT.lat}&lon=${AT_IT.lon}&to=KR-MRT&public=1`);
   assert.match(pub.label, /^95 · /);
   assert.match(pub.detail, /public bus/);
   assert.match(pub.detail, /crowding: medium/);
@@ -243,13 +243,13 @@ test('/next?public=1 names the public bus, says it is one, and marks its leg pai
   assert.equal(pub.leave?.svc ?? '95', '95');
   // The raw arrivals are named as the buses are, not by route key.
   assert.ok(pub.arrivals.every((a) => !a.svc.includes('/')));
-  const plain = await ask(`/next?lat=${AT_IT.lat}&lon=${AT_IT.lon}&to=KR-MRT`);
+  const plain = await ask(`/api/next?lat=${AT_IT.lat}&lon=${AT_IT.lon}&to=KR-MRT`);
   assert.match(plain.label, /^A2 · /);
   assert.ok(!plain.detail.includes('public bus'));
   assert.equal(plain.bus.paid, undefined);
 });
 
-test('/arrivals lists public buses at a public stop, and at a shared shelter only when asked', async () => {
+test('/api/arrivals lists public buses at a public stop, and at a shared shelter only when asked', async () => {
   const fetch = makeFetch({
     byStop: { CLB: [{ name: 'A1', arrivalTime: '5', nextArrivalTime: '15' }] },
     publicStops: { 16181: [{ ServiceNo: '95', buses: [{ etaS: 240, dest: '16009' }] }], 16009: [{ ServiceNo: '151', buses: [{ etaS: 120, dest: '64009' }, { etaS: 900, dest: '64009', monitored: false }] }] },
@@ -262,16 +262,16 @@ test('/arrivals lists public buses at a public stop, and at a shared shelter onl
     await ctx.settle();
     return [res.status, await res.json()];
   };
-  const [s1, own] = await ask('/arrivals?stop=16009');
+  const [s1, own] = await ask('/api/arrivals?stop=16009');
   assert.equal(s1, 200);
   assert.equal(own.stop.name, 'Kent Ridge Ter');
   // Both directions of the 151 start or end here: the one with a bus, and the other as a guess.
   assert.deepEqual(own.board.filter((r) => r.svc === '151').map((r) => [r.etaS, r.quality, r.paid]), [[120, 'live', true], [null, 'scheduled', true]]);
-  const [, shared] = await ask('/arrivals?stop=CLB&public=1');
+  const [, shared] = await ask('/api/arrivals?stop=CLB&public=1');
   assert.deepEqual(shared.board.map((r) => r.svc).filter((s) => s === '95' || s === 'A1').sort(), ['95', 'A1']);
-  const [, plain] = await ask('/arrivals?stop=CLB');
+  const [, plain] = await ask('/api/arrivals?stop=CLB');
   assert.ok(!plain.board.some((r) => r.svc === '95'));
-  const [s4] = await ask('/arrivals?stop=99999');
+  const [s4] = await ask('/api/arrivals?stop=99999');
   assert.equal(s4, 400);
 });
 
@@ -288,22 +288,22 @@ test('an account with publicBuses on gets public buses on /me/next and /me/nearb
     await ctx.settle();
     return res;
   };
-  await call('/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'you@u.nus.edu' }) });
+  await call('/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'you@u.nus.edu' }) });
   const verify = await call('/auth/verify', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: `t=${env.EMAIL.lastToken()}` });
   const cookie = verify.headers.get('set-cookie').split(';')[0];
-  const put = async (profile) => call('/me/profile', { method: 'PUT', headers: { cookie, 'content-type': 'application/json' }, body: JSON.stringify(profile) });
+  const put = async (profile) => call('/api/me/profile', { method: 'PUT', headers: { cookie, 'content-type': 'application/json' }, body: JSON.stringify(profile) });
   const get = (path) => call(path, { headers: { cookie } }).then((r) => r.json());
   const places = [{ key: 'mrt', label: 'KR MRT', to: 'KR-MRT' }];
 
   assert.equal((await put({ home: { stops: ['PGP'] }, places, publicBuses: 'yes' })).status, 400);
   assert.equal((await put({ home: { stops: ['PGP'] }, places })).status, 200);
-  const off = await get(`/me/next?place=mrt&lat=${AT_IT.lat}&lon=${AT_IT.lon}`);
+  const off = await get(`/api/me/next?place=mrt&lat=${AT_IT.lat}&lon=${AT_IT.lon}`);
   assert.match(off.label, /^A2 · /);
-  assert.equal((await get('/me/profile')).publicBuses, false);
+  assert.equal((await get('/api/me/profile')).publicBuses, false);
 
   assert.equal((await put({ home: { stops: ['PGP'] }, places, publicBuses: true })).status, 200);
-  assert.equal((await get('/me/profile')).publicBuses, true);
-  const on = await get(`/me/next?place=mrt&lat=${AT_IT.lat}&lon=${AT_IT.lon}`);
+  assert.equal((await get('/api/me/profile')).publicBuses, true);
+  const on = await get(`/api/me/next?place=mrt&lat=${AT_IT.lat}&lon=${AT_IT.lon}`);
   assert.match(on.label, /^95 · /);
   assert.equal(on.bus.paid, true);
   assert.equal(on.card.journey.bus.svc, '95');
@@ -313,7 +313,7 @@ test('an account with publicBuses on gets public buses on /me/next and /me/nearb
   // The card's words name it with its fare too, for the clients that show only them (the Mac, notifications).
   assert.equal(on.leave.paid, true);
   assert.match(on.card.leaveVia, /\b95 \(\$\) at /);
-  const nearby = await get(`/me/nearby?lat=${AT_IT.lat}&lon=${AT_IT.lon}`);
+  const nearby = await get(`/api/me/nearby?lat=${AT_IT.lat}&lon=${AT_IT.lon}`);
   const it = nearby.stops.find((s) => s.stop.code === 'IT');
   const row = it.board.find((r) => r.svc === '95');
   assert.deepEqual([row.etaS, row.paid, row.color], [90, true, null]);
