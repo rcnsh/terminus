@@ -262,7 +262,7 @@ test('late whatever you do: the first bus you can catch, then the first second b
 
 /* Following a trip that changes buses (trip.ts, plan.ts). */
 
-import { CHANGE_GRACE_MS, leaveOf, rideStage, secondBusOf, tripEnd } from '../src/trip.ts';
+import { CHANGE_GRACE_MS, laterChange, leaveOf, rideStage, secondBusOf, secondLeavesMs, tripEnd } from '../src/trip.ts';
 import { planOfLeave, sameBus } from '../src/plan.ts';
 
 /** A leave-by for K at PGP to Kent Vale, then P to College Green. */
@@ -318,4 +318,32 @@ test('a trip that changes buses is on the first bus, at the change, then on the 
   assert.equal(rideStage(plan, board + CHANGE_GRACE_MS), 'second');
   const { change: _c, ...single } = plan;
   assert.equal(rideStage(single, board * 2), 'first');
+});
+
+test('a guessed second bus keeps you at the change for a headway, and a later one from the feed for as long as it is due', () => {
+  const plan = planOfLeave(TWO_BUS_LEAVE, true, 'CG');
+  const board = Date.parse(TWO_BUS_LEAVE.change.board);
+  const guess = { ...plan, change: { ...plan.change, estimated: true } };
+  const latest = secondLeavesMs(guess.change);
+  assert.ok(latest > board + 60_000, 'a guess leaves by a headway after it');
+  assert.equal(rideStage(guess, board + CHANGE_GRACE_MS), 'change');
+  assert.equal(rideStage(guess, latest + CHANGE_GRACE_MS - 1), 'change');
+  assert.equal(rideStage(guess, latest + CHANGE_GRACE_MS), 'second');
+  const due = { ...plan, change: { ...plan.change, board: new Date(board + 120_000).toISOString() } };
+  assert.equal(rideStage(due, board + CHANGE_GRACE_MS), 'change', 'the feed still has the second bus due');
+});
+
+test('boarding a later first bus that misses the planned second one moves the second to when you get there, as a guess', () => {
+  const plan = planOfLeave(TWO_BUS_LEAVE, true, 'CG');
+  const reach = TWO_BUS_LEAVE.change.reach;
+  assert.equal(laterChange(plan.change, reach, 0), plan.change);
+  assert.equal(laterChange(plan.change, reach, 60_000), plan.change, 'still there before the planned bus');
+  const shift = 10 * 60_000;
+  const moved = laterChange(plan.change, reach, shift);
+  const there = Date.parse(reach) + shift;
+  assert.equal(Date.parse(moved.board), there);
+  assert.equal(moved.estimated, true);
+  assert.equal(Date.parse(moved.arrive), Date.parse(plan.change.arrive) + there - Date.parse(plan.change.board));
+  const late = { ...plan, arrive: new Date(there).toISOString(), change: moved };
+  assert.equal(rideStage(late, there + CHANGE_GRACE_MS), 'change', 'not on the second bus the moment you get off the first');
 });

@@ -11,7 +11,7 @@
 
 import type { BusLeg, Crowd, Dest, Leave, MeAnswer, Quality } from './types.ts';
 import { clockAt, slackText } from './clock.ts';
-import { ASSUME_MS, type Boarded, CHANGE_GRACE_MS, DUE_MS, type Phase, RIDE_GRACE_MS, type Ride, type TripRecord, isHomeKey, offStop, rideOf, tripEnd } from './trip.ts';
+import { ASSUME_MS, type Boarded, CHANGE_GRACE_MS, DUE_MS, type Phase, RIDE_GRACE_MS, type Ride, type TripRecord, isHomeKey, offStop, rideOf, secondLeavesMs, tripEnd } from './trip.ts';
 import { LATE_GRACE_MIN } from './profile.ts';
 import type { Suggestion } from './outcomes.ts';
 import { GRAPH } from './graph.ts';
@@ -664,7 +664,8 @@ export function nextPhaseAt(a: MeAnswer, trip: TripView, nowMs: number, leaveGap
   const c = twoBus?.change;
   if (twoBus && c) {
     if (twoBus.arrive) marks.push(Date.parse(twoBus.arrive));
-    if (c.board) marks.push(Date.parse(c.board) + CHANGE_GRACE_MS, Date.parse(c.board) + ASSUME_MS);
+    const leaves = secondLeavesMs(c);
+    if (leaves !== null) marks.push(leaves + CHANGE_GRACE_MS, leaves + ASSUME_MS);
     const end = tripEnd(twoBus);
     if (end) marks.push(Date.parse(end) + RIDE_GRACE_MS);
   }

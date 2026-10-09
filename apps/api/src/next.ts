@@ -37,7 +37,7 @@ import { paceSpeed } from './walk.ts';
 import { coordsFrom } from './http.ts';
 import type { TripView } from './card.ts';
 import { NO_PREFS, type TripPrefs } from './outcomes.ts';
-import { ASSUME_MS, AT_STOP_M, type Boarded, CHANGE_GRACE_MS, type DayRecord, type Phase, RIDE_GRACE_MS, dayState, leaveOf, offStop, phaseFor, rideStage, seenOnBus, signalOf, tripEnd } from './trip.ts';
+import { ASSUME_MS, AT_STOP_M, type Boarded, CHANGE_GRACE_MS, type DayRecord, type Phase, RIDE_GRACE_MS, dayState, leaveOf, offStop, phaseFor, rideStage, secondLeavesMs, seenOnBus, signalOf, tripEnd } from './trip.ts';
 import { SAME_BUS_MS, choosePlan, planOfLeave } from './plan.ts';
 import { m } from './i18n.ts';
 
@@ -418,7 +418,11 @@ async function secondBus(env: Env, ctx: ExecutionContext, deps: MeDeps, b: Board
   const feed = rideFeed(sa, c);
   const planned = Date.parse(c.board);
   const times = feed && sa ? sa.arrivals.filter((x) => x.svc === c.svc && x.etaS !== null).map((x) => feed.fetchedAt + x.etaS! * 1000) : [];
-  const same = times.filter((t) => Math.abs(t - planned) <= SAME_BUS_MS).sort((x, y) => Math.abs(x - planned) - Math.abs(y - planned))[0];
+  // A guessed time stands for whichever bus comes first within a headway of it.
+  const latest = secondLeavesMs(c)!;
+  const same = c.estimated
+    ? times.filter((t) => t >= planned - SAME_BUS_MS && t <= latest).sort((x, y) => x - y)[0]
+    : times.filter((t) => Math.abs(t - planned) <= SAME_BUS_MS).sort((x, y) => Math.abs(x - planned) - Math.abs(y - planned))[0];
   if (same === undefined) return { change: c, live: false };
   const shift = same - planned;
   const { estimated: _guess, ...rest } = c;
@@ -622,21 +626,22 @@ async function plannedTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
     const c = b.change;
     if (c) {
       // Before the second bus leaves, the feed can say the first is still on its way.
-      const before = !c.board || nowMs < Date.parse(c.board) + CHANGE_GRACE_MS;
+      const leaves = secondLeavesMs(c);
+      const before = leaves === null || nowMs < leaves + CHANGE_GRACE_MS;
       const live = before ? await liveArrival(env, ctx, deps, b, nowMs) : null;
-      const stage = rideStage(b, nowMs, live !== null);
-      if (stage === 'first') {
+      if (rideStage(b, nowMs, live !== null) === 'first') {
         const cur = live ? { ...b, arrive: live } : b;
         return { answer: ridingAnswer(nowMs, dest, cur, live !== null, places, h12, profile), b: cur, phase: 'riding' };
       }
-      if (stage === 'change') {
-        const second = await secondBus(env, ctx, deps, b, nowMs);
-        const cur = { ...b, change: second.change };
-        return { answer: changeAnswer(nowMs, dest, cur, second.live, places, h12, profile), b: cur, phase: 'waiting' };
-      }
+      // Off the first bus: the feed at the change stop says whether the
+      // second bus has left, not the plan's time alone.
+      const second = await secondBus(env, ctx, deps, b, nowMs);
+      const cur = { ...b, change: second.change };
+      if (rideStage(cur, nowMs) === 'change') return { answer: changeAnswer(nowMs, dest, cur, second.live, places, h12, profile), b: cur, phase: 'waiting' };
+      const gone = secondLeavesMs(cur.change);
       const s = c.stopCode ? indexGraph(GRAPH).byCode.get(c.stopCode) : undefined;
-      if (s && lat !== null && lon !== null && haversineM(lat, lon, s.lat, s.lon) <= AT_STOP_M && nowMs >= Date.parse(c.board!) + ASSUME_MS) return 'missed';
-      return riding(c);
+      if (s && gone !== null && lat !== null && lon !== null && haversineM(lat, lon, s.lat, s.lon) <= AT_STOP_M && nowMs >= gone + ASSUME_MS) return 'missed';
+      return riding(cur.change);
     }
     const live = await liveArrival(env, ctx, deps, b, nowMs);
     const cur = live ? { ...b, arrive: live } : b;

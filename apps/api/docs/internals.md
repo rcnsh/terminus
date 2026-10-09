@@ -460,9 +460,15 @@ second, with no phase of its own, so an app that knows nothing of changes
 still shows each part right. The plan and the `boarded` record are the
 first bus with the second in `change` (`Boarded.change`); `rideStage()`
 says which part you're on, from the clock, and from the feed while it still
-has the first bus on its way to the change. At the change stop the second
-bus's time is read from the feed there, the same bus only (within
-`SAME_BUS_MS`), so a later one never keeps the trip waiting. Still at the
+has the first bus on its way to the change. Off the first bus, the second
+bus's time is read from the feed at the change stop, and that time decides
+when it has left: a bus still due there keeps you at the change. The same
+bus only (within `SAME_BUS_MS`), so a later one never keeps the trip
+waiting; but a guessed time (`estimated`) stands for the first bus within a
+headway of it, and with nothing in the feed it's taken to have left only a
+headway after the guess (`secondLeavesMs`). Boarding a later first bus that
+gets to the change after the planned second bus makes the second a guess
+from when you get there (`laterChange`). Still at the
 change stop `ASSUME_MS` after the second bus left: missed, and the answer
 is the next way there from where you are. `nextPhaseAt` wakes the Trip
 object at the change and once the second bus has gone.
