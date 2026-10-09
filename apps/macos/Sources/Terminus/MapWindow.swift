@@ -1204,7 +1204,7 @@ private struct CampusMapView: NSViewRepresentable {
             return off == 0 || off < offBy(oldCamera.centerCoordinate, box)
         }
 
-        func mapView(_ mapView: MLNMapView, regionDidChangeAnimated animated: Bool) { keepOnMap() }
+        func mapView(_ mapView: MLNMapView, cameraDidChangeAnimated animated: Bool) { keepOnMap() }
 
         /// Back onto the street map after a zoom out by its edge or a bigger window,
         /// and no further out than the window full of map.
