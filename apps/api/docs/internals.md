@@ -1228,10 +1228,19 @@ build of OpenStreetMap, from zoom 12 up (the clients never zoom out past
 and dark icons, under `map/` in each site's downloads bucket (stable and
 beta have their own; the workflow does both by default).
 
+Protomaps' Noto Sans has no Chinese, so on the Chinese map every Chinese
+name drew as empty space on Android (the web draws Chinese in the device's
+own fonts, `localIdeographFontFamily`, which the Android map can't). The
+script fills each range Protomaps leaves empty from Noto Sans SC (noto-cjk
+at `NOTO_CJK_TAG`), turned into glyphs by Stadia Maps' `build_pbf_glyphs`
+(`GLYPHS_VERSION`); the tool and both fonts are checked against SHA-256s
+in the script. They go into the same three fonts, so the style names no
+other. A client downloads only the ranges its labels use.
+
 Every client's MapLibre parses these files natively, so what goes up is
 pinned in `scripts/map-tiles.lock`: the build date, bbox and minzoom, the
 `pmtiles` version, the cut's SHA-256 and size, the basemaps-assets commit,
-and one SHA-256 over the sorted `<sha256>  <path>` lines of the 776 font and
+the noto-cjk tag and `build_pbf_glyphs` version, and one SHA-256 over the sorted `<sha256>  <path>` lines of the 776 font and
 icon files. `pmtiles extract` is deterministic for a given build and
 version, so a normal run cuts the locked build again and refuses to upload
 unless every value matches. `--update` takes the newest build and rewrites

@@ -2,7 +2,8 @@
 # The street map's files, onto R2 under map/ (served by apps/api/src/map.ts):
 #   campus.pmtiles   the campus cut from a Protomaps daily build of
 #                    OpenStreetMap, zoom 12 and up (about 3.3 MB)
-#   fonts/           Noto Sans label glyphs (Regular, Medium, Italic)
+#   fonts/           Noto Sans label glyphs (Regular, Medium, Italic), with
+#                    Chinese from Noto Sans SC where Noto Sans has none
 #   sprites/v4/      the light and dark map icons
 #
 # What goes up is pinned in scripts/map-tiles.lock: the Protomaps build, the
@@ -62,6 +63,14 @@ BBOX=103.755,1.280,103.830,1.332
 # for offline use and never drawn. 12 is a level to spare.
 MINZOOM=12
 PMTILES_VERSION=1.31.2
+# Chinese place names: Protomaps' Noto Sans has no Chinese, and the web's
+# answer (the device's own fonts, localIdeographFontFamily) isn't open to
+# the Android map. So the ranges Protomaps leaves empty are drawn from Noto
+# Sans SC (noto-cjk, at this tag) by Stadia Maps' build_pbf_glyphs.
+NOTO_CJK_TAG=Sans2.004
+NOTO_SC_REGULAR_SHA256=faa6c9df652116dde789d351359f3d7e5d2285a2b2a1f04a2d7244df706d5ea9
+NOTO_SC_MEDIUM_SHA256=7633f5a016d4dd95e685a69633d818aabc4644c4b08e26bd35b1b30c45ed5dda
+GLYPHS_VERSION=cli-v1.5.1
 LOCK=scripts/map-tiles.lock
 OUT="$PWD/build/map"
 
@@ -109,7 +118,7 @@ verify_out() {
   hash_out
   bad=0
   for k in bbox:"$BBOX" minzoom:"$MINZOOM" pmtiles_version:"$PMTILES_VERSION" \
-    build:"$build" assets_commit:"$ASSETS_COMMIT" \
+    build:"$build" assets_commit:"$ASSETS_COMMIT" noto_cjk_tag:"$NOTO_CJK_TAG" glyphs_version:"$GLYPHS_VERSION" \
     pmtiles_sha256:"$got_pmtiles_sha256" pmtiles_bytes:"$got_pmtiles_bytes" \
     assets_files:"$got_assets_files" assets_sha256:"$got_assets_sha256"; do
     key=${k%%:*}; val=${k#*:}
@@ -227,6 +236,44 @@ for f in "Noto Sans Regular" "Noto Sans Medium" "Noto Sans Italic"; do
   [ "$n" -eq 256 ] || { echo "$f has $n glyph files, expected 256"; exit 1; }
 done
 
+# Chinese, into the same three fonts, so the style needs no other font:
+# every range Protomaps leaves empty (its file is just the font's name, under
+# 100 bytes) and Noto Sans SC fills. Medium from Medium; Regular and Italic
+# from Regular, as Chinese has no italic. The tool's binary and both fonts
+# are checked against the SHA-256s here; a new version needs new ones.
+case "$(uname -s)-$(uname -m)" in
+  Linux-x86_64) file=build_pbf_glyphs.x86_64-unknown-linux-gnu
+    sum=8eb1a6e4e5a2977dbdb107a41dddf7d590866d160e86057c8ad5571fed5a004b ;;
+  # An Intel build, run by Rosetta on Apple silicon.
+  Darwin-*) file=build_pbf_glyphs.x86_64-apple-darwin
+    sum=445155e45c3f6f6d05499d13caf865ad9a8008152e41aa93e5775082ea372469 ;;
+  *) echo "no build_pbf_glyphs $GLYPHS_VERSION for $(uname -s)-$(uname -m)"; exit 1 ;;
+esac
+mkdir -p "$WORK/glyphs/src" "$WORK/glyphs/out"
+curl -fsSL -o "$WORK/glyphs/build_pbf_glyphs" "https://github.com/stadiamaps/sdf_font_tools/releases/download/$GLYPHS_VERSION/$file"
+got=$(sha256 "$WORK/glyphs/build_pbf_glyphs")
+[ "$got" = "$sum" ] || { echo "$file has SHA-256 $got, expected $sum; not running it"; exit 1; }
+chmod +x "$WORK/glyphs/build_pbf_glyphs"
+for w in Regular:$NOTO_SC_REGULAR_SHA256 Medium:$NOTO_SC_MEDIUM_SHA256; do
+  font="NotoSansSC-${w%%:*}.otf"
+  curl -fsSL -o "$WORK/glyphs/src/$font" "https://github.com/notofonts/noto-cjk/raw/$NOTO_CJK_TAG/Sans/SubsetOTF/SC/$font"
+  got=$(sha256 "$WORK/glyphs/src/$font")
+  [ "$got" = "${w#*:}" ] || { echo "$font has SHA-256 $got, expected ${w#*:}"; exit 1; }
+done
+"$WORK/glyphs/build_pbf_glyphs" "$WORK/glyphs/src" "$WORK/glyphs/out" >/dev/null
+filled=0
+for pair in "Noto Sans Regular:NotoSansSC-Regular" "Noto Sans Medium:NotoSansSC-Medium" "Noto Sans Italic:NotoSansSC-Regular"; do
+  for sc in "$WORK/glyphs/out/${pair#*:}"/*.pbf; do
+    ours="$OUT/fonts/${pair%%:*}/$(basename "$sc")"
+    if [ "$(wc -c <"$ours")" -lt 100 ] && [ "$(wc -c <"$sc")" -ge 100 ]; then
+      cp "$sc" "$ours"; filled=$((filled + 1))
+    fi
+  done
+done
+# Each font gets the CJK ideographs (82 ranges) and more; far fewer and it went wrong.
+[ "$filled" -ge 300 ] || { echo "Noto Sans SC filled only $filled glyph ranges; not uploading"; exit 1; }
+echo "Chinese: $filled glyph ranges from Noto Sans SC"
+
 if [ "$MODE" = update ]; then
   hash_out
   cat >"$LOCK" <<EOF
@@ -240,6 +287,8 @@ pmtiles_version=$PMTILES_VERSION
 pmtiles_sha256=$got_pmtiles_sha256
 pmtiles_bytes=$got_pmtiles_bytes
 assets_commit=$ASSETS_COMMIT
+noto_cjk_tag=$NOTO_CJK_TAG
+glyphs_version=$GLYPHS_VERSION
 # SHA-256 over the sorted "<sha256>  <path>" lines of every font and icon file.
 assets_files=$got_assets_files
 assets_sha256=$got_assets_sha256

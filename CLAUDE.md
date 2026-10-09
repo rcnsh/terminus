@@ -420,8 +420,9 @@ scripts/              release.sh, release-beta.sh (+ release-lib.sh, their share
   (`terminus-downloads`, `terminus-beta-downloads`), uploaded by the
   `map tiles` workflow or `scripts/map-tiles.sh` (`CHANNEL=stable|beta|both`).
   What goes up is pinned in `scripts/map-tiles.lock` (the Protomaps build,
-  the basemaps-assets commit, SHA-256s of the cut and of every font and
-  icon); nothing uploads unless it matches. To refresh: `scripts/map-tiles.sh
+  the basemaps-assets commit, the Noto Sans SC tag that fills in Chinese,
+  SHA-256s of the cut and of every font and icon); nothing uploads unless
+  it matches. To refresh: `scripts/map-tiles.sh
   --update`, review and commit the lock, then run the workflow within a few
   days (Protomaps keeps a build about a week). Its schedule only checks for
   a newer build. The style is Protomaps basemaps without
