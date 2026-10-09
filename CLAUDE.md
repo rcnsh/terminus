@@ -515,9 +515,12 @@ scripts/              release.sh, release-beta.sh (+ release-lib.sh, their share
        performance in the apps. May go straight to stable when small or
        urgent.
   - **Betas** are named after the stable version they become: a minor's
-    betas are `x.y+1.0-beta.n`, never a patch's number. Cut at most one a
-    day, batched, not one per commit; quick iteration uses debug builds and
-    the dev stub. After the first beta of a version, only fixes join it;
+    betas are `x.y+1.0-beta.n`, never a patch's number. Cut one whenever
+    there's something worth testing on real phones, as often as that is: a
+    fix to a bug in the last beta goes out straight away rather than waiting
+    for a quiet day. Batch what's ready rather than one per commit; quick
+    iteration before that uses debug builds and the dev stub. After the
+    first beta of a version, only fixes join it;
     new features wait for the next minor. A beta soaks for at least one
     full campus day before it becomes stable, and the stable release is the
     exact commit of the last beta. Anything newer means another beta first
