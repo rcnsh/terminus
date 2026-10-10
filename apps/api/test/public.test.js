@@ -168,6 +168,24 @@ test('a timetabled public bus ranks as an estimate, below any live bus', () => {
   assert.equal(board.find((r) => r.svc === 'A1').paid, undefined);
 });
 
+test('a stop board lists the campus buses before the public ones, sooner or not', () => {
+  // A live 95 in a minute still goes below an A1 in fifteen.
+  const sa = arrivals('CLB', [
+    { svc: 'A1', etaS: 900, crowd: null, plate: 'PA1', berth: null },
+    { svc: '95', etaS: 60, crowd: null, plate: 'P95', berth: null },
+  ]);
+  const board = boardAt(GRAPH_PUBLIC, idx, 'CLB', sa, FROZEN_NOW, { stopped: true });
+  const running = board.filter((r) => r.running);
+  const firstPaid = running.findIndex((r) => r.paid);
+  assert.ok(firstPaid > 0, 'a public bus is on the board, below a campus one');
+  assert.ok(running.slice(firstPaid).every((r) => r.paid), running.map((r) => r.svc).join(' '));
+  // Not running: the same order, after every bus that is.
+  const stopped = board.filter((r) => !r.running);
+  const firstStoppedPaid = stopped.findIndex((r) => r.paid);
+  if (firstStoppedPaid >= 0) assert.ok(stopped.slice(firstStoppedPaid).every((r) => r.paid), stopped.map((r) => r.svc).join(' '));
+  assert.ok(board.slice(0, running.length).every((r) => r.running));
+});
+
 test('two feeds at one shelter keep their own state: one down does not read as the other saying "no bus"', () => {
   const shuttle = arrivals('CLB', [{ svc: 'A1', etaS: 300, crowd: null, plate: 'PA1', berth: null }], { fetchedAt: FROZEN_NOW - 10_000 });
   const merged = mergeFeeds('CLB', FROZEN_NOW, shuttle, null);

@@ -756,6 +756,8 @@ export function boardAt(
     (a, b) =>
       // Not running: after every service that is, by name.
       Number(a.running === false) - Number(b.running === false) ||
+      // Public buses after the campus ones: the free bus is what most want.
+      Number(a.paid === true) - Number(b.paid === true) ||
       Number(isMeasured(b.quality)) - Number(isMeasured(a.quality)) ||
       (a.etaS ?? Infinity) - (b.etaS ?? Infinity) ||
       a.svc.localeCompare(b.svc),
