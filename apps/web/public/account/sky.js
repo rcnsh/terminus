@@ -56,10 +56,16 @@ const dip = (lo, hi) => {
   for (let x = lo; x <= hi; x += 2) if (farY(x) > farY(best)) best = x;
   return best;
 };
-const ridge = (w, y) => {
-  let d = `M0 92L0 ${y(0).toFixed(1)}`;
+/**
+ * A hill along `y`, filled down to `foot`. The far hills stop a little under
+ * the near one's ridge (at most 56.5) rather than at the strip's bottom: two
+ * edges on one line blur together as the tab zooms in, and the far colour
+ * showed in a line under the road.
+ */
+const ridge = (w, y, foot = 92) => {
+  let d = `M0 ${foot}L0 ${y(0).toFixed(1)}`;
   for (let x = 4; x < w + 4; x += 4) d += `L${x} ${y(x).toFixed(1)}`;
-  return `${d}L${w} 92Z`;
+  return `${d}L${w} ${foot}Z`;
 };
 
 /** The flag's five stars, in a ring around its middle (px). */
@@ -253,7 +259,7 @@ export function Horizon({ stop = false, bus = null, shuttle = true, drive = null
           ${[-13, -2, 9].map((x) => html`<path d=${`M${mbs + x} ${city}L${mbs + x + 1} ${city - 26}H${mbs + x + 5}L${mbs + x + 6} ${city}Z`} />`)}
           <path d=${`M${mbs - 15} ${city - 28}L${mbs + 25} ${city - 29.2}L${mbs + 23} ${city - 26}H${mbs - 14}Z`} />
         </g>`}
-        <path class="far" d=${ridge(vw, farY)} />
+        <path class="far" d=${ridge(vw, farY, 64)} />
         <rect class="far" x=${b1 - 8} y=${farY(b1) - 14} width="16" height="20" />
         <rect class="lit dim" x=${b1 - 3} y=${farY(b1) - 9} width="3" height="3" />
         <rect class="far" x=${b2 - 13} y=${farY(b2) - 22} width="26" height="28" />
@@ -313,19 +319,34 @@ export function Horizon({ stop = false, bus = null, shuttle = true, drive = null
 }
 
 /**
- * Keeps `name` (a CSS variable on the page) at the bottom of `on`'s horizon,
- * down the page, while it's on screen; kept as it was while it's hidden or
- * between one horizon and the next.
+ * Where `el`'s top is down the page as laid out, whatever transform is on it
+ * or above it: the sky is drawn by the tab and zooms with it as it fades in,
+ * so it wants the places before the zoom.
  */
-function useSkyEnd(on, name) {
+function layoutTop(el) {
+  let y = 0;
+  for (let n = el; n; n = n.offsetParent) y += n.offsetTop;
+  return y;
+}
+
+/**
+ * Keeps the page's --sky-end at the bottom of `on`'s horizon, down the page,
+ * and --sky-top at the top of the tab it's in (which draws the sky up from
+ * there to the window's top, app.css), while it's on screen; kept as they
+ * were while it's hidden or between one horizon and the next.
+ */
+function useSkyEnd(on) {
   const els = useStore(grounds[on]);
   useLayoutEffect(() => {
     if (!els.length) return;
     const body = document.body;
     const place = () => {
       // The one on screen: hidden ones (another tab, a closed page) have no size.
-      const r = els.map((el) => el.getBoundingClientRect()).find((x) => x.height);
-      if (r) body.style.setProperty(name, `${Math.round(r.bottom + window.scrollY)}px`);
+      const el = els.find((x) => x.offsetHeight);
+      if (!el) return;
+      body.style.setProperty('--sky-end', `${Math.round(layoutTop(el) + el.offsetHeight)}px`);
+      const tab = el.closest('main');
+      if (tab) body.style.setProperty('--sky-top', `${Math.round(layoutTop(tab))}px`);
     };
     place();
     const seen = new ResizeObserver(place);
@@ -360,8 +381,8 @@ export function useSkyPhase() {
 }
 
 /**
- * Now's sky, for as long as Now's card area is there: the page's
- * background from the top down to the horizon on screen, in the hour's
+ * Now's sky, for as long as Now's card area is there: from the window's
+ * top down to the horizon on screen, behind Now's tab, in the hour's
  * `phase` (app.css, body.sky). It stays put while the card changes, until
  * the next horizon says where it ends. The header and the chips take the
  * sky's colours over it, and so does the browser's own bar while Now is the
@@ -388,12 +409,13 @@ export function useNowSky(phase) {
       meta.remove();
       body.classList.remove('sky', ...PHASES.map((p) => `sky-${p}`));
       body.style.removeProperty('--sky-end');
+      body.style.removeProperty('--sky-top');
     };
   }, []);
   useLayoutEffect(() => {
     for (const p of PHASES) document.body.classList.toggle(`sky-${p}`, p === phase);
   }, [phase]);
-  useSkyEnd('now', '--sky-end');
+  useSkyEnd('now');
   // Depth as the page scrolls (daylight.js parallax): the moon, the stars and
   // the far hills lag behind, as CSS variables on the page (app.css), so a
   // card that comes in as the chips switch has them at once. Off for anyone
