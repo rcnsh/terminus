@@ -532,7 +532,6 @@
     <string name="journey_leave">Leave</string>
     <string name="going_anyway">Going somewhere anyway?</string>
     <string name="plan_trip">Plan a trip</string>
-    <string name="feedback_short">Tell us what\'s wrong, or what you\'d like</string>
     <!-- Settings' pages as one family (SettingsParts.kt) -->
     <string name="heading_from_nusmods">From NUSMods</string>
     <string name="heading_your_favourites">Your favourites</string>
