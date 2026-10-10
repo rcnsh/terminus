@@ -475,6 +475,22 @@ const TABS = ['now', 'buses', 'map', 'settings'];
 const views = {};
 /** Counts switches: a fade that finishes after a newer tap is left to that one. */
 let switches = 0;
+
+/**
+ * What the page shows for tab `next` around the tab itself: the window's
+ * title, as the bar along the bottom says it, and the body's class, which
+ * hides the header and Now's sky where the tab draws its own top.
+ */
+function markTab(next) {
+  document.title = t('{0} · terminus', TABBAR.find((x) => x.id === next).label());
+  document.body.classList.toggle('on-map', next === 'map');
+  document.body.classList.toggle('on-settings', next === 'settings');
+  document.body.classList.toggle('on-buses', next === 'buses');
+}
+
+/** /api/me, asked for once however many want it first (start, Settings opened straight away). */
+let meAsked = null;
+const askMe = () => (meAsked ??= get('/api/me').then((r) => r.data));
 /** Where Now and Settings were scrolled to, for coming back. */
 const scrolled = {};
 
@@ -518,11 +534,7 @@ async function showTab() {
   }
   for (const n of TABS) views[n].hidden = n !== next;
   tab.set(next);
-  // The window's title says the tab, as the bar along the bottom does.
-  document.title = t('{0} · terminus', TABBAR.find((x) => x.id === next).label());
-  document.body.classList.toggle('on-map', next === 'map');
-  document.body.classList.toggle('on-settings', next === 'settings');
-  document.body.classList.toggle('on-buses', next === 'buses');
+  markTab(next);
   window.scrollTo(0, scrolled[next] ?? 0);
   if (animate) fadeIn(views[next]);
   if (next === 'map') {
@@ -551,7 +563,7 @@ async function openSettings() {
   if (s.status === 'loading') return;
   settings.set({ status: 'loading', mod: null });
   try {
-    if (!me.get()) me.set((await get('/api/me')).data);
+    if (!me.get()) me.set(await askMe());
     // settings-pages.js too, at once: otherwise it's found only once settings.js arrives.
     const [mod] = await Promise.all([import('/account/settings.js'), import('/account/settings-pages.js'), loadProfile(), loadCampus()]);
     settings.set({ status: 'ready', mod });
@@ -1304,7 +1316,15 @@ async function start() {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
   // A tap on a notification with the app already open: show the new card.
   navigator.serviceWorker?.addEventListener('message', (e) => e.data?.kind === 'refresh' && refresh());
+  // The tab in the address as it will look from the first frame: drawn
+  // first (App) but marked only by showTab(), after the awaits below, a tab
+  // with its own top (Settings) showed under the header and Now's sky, then
+  // jumped up.
+  const opening = tabInAddress();
+  markTab(opening);
   render(html`<${App} />`, document.getElementById('root'));
+  // Settings' code and the account alongside the card, not after /me.
+  if (opening === 'settings') openSettings();
   // The plan from last time at once, if it still holds (a look in the cache),
   // then the new one asked for alongside /me rather than after it.
   await drawSeen();
@@ -1313,7 +1333,7 @@ async function start() {
   // the same token, so the card's requests sent with it are still good.
   // Offline it comes from the cache like everything else, or not at all.
   try {
-    me.set((await get('/api/me')).data);
+    me.set(await askMe());
   } catch (err) {
     if (err.message === 'signed out') return;
   }
