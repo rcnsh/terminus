@@ -192,13 +192,14 @@ test('app sign-in: "this wasn\'t me" cancels it and stops app sign-ins to the ad
   const sent = email.sent.length;
   for (const addr of [ME, ME.replace('@', '+x@')]) {
     const again = await call(env, '/api/auth/app/start', { method: 'POST', body: { email: addr, name: 'Pixel' } });
-    assert.equal(again.status, 429);
-    assert.equal(again.headers.get('retry-after'), '3600');
+    // Not a 429, which the apps take as "wait" and would hold back pairing with.
+    assert.equal(again.status, 403);
+    assert.equal(again.headers.get('retry-after'), null);
     assert.match((await again.json()).error, /turned down recently/);
   }
   assert.equal(email.sent.length, sent, 'nothing more is emailed');
   // Only that address is held.
-  assert.notEqual((await call(env, '/api/auth/app/start', { method: 'POST', body: { email: 'other@u.nus.edu', name: 'Pixel' } })).status, 429);
+  assert.equal((await call(env, '/api/auth/app/start', { method: 'POST', body: { email: 'other@u.nus.edu', name: 'Pixel' } })).status, 201);
 });
 
 test('app sign-in: a wrong number does not hold the address', async () => {

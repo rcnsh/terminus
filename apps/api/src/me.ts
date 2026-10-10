@@ -1041,7 +1041,9 @@ export async function handleMe(
     }
     if (started === 'cooldown') return json({ error: 'an email was sent to that address a moment ago; wait a minute and try again' }, 429, retryAfter());
     if (started === 'busy') return json({ error: 'sign-in is busy, try again in a minute' }, 429, retryAfter());
-    if (started === 'held') return json({ error: 'a sign-in to that address was turned down recently, so the app cannot ask again for a few hours; pair this device from the website instead' }, 429, retryAfter(3_600));
+    // Not a 429: the apps take a 429 as "wait", and hold back pairing too,
+    // which is the way in this tells them to use.
+    if (started === 'held') return json({ error: 'a sign-in to that address was turned down recently, so the app cannot ask again for a few hours; pair this device from the website instead' }, 403);
     return json({ ...started, expires: new Date(started.expires).toISOString() }, 201);
   }
 
