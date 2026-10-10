@@ -1,10 +1,8 @@
-<!-- 3.1.0 -->
-### terminus 3.1
+<!-- 3.2.0 -->
+### terminus 3.2
 
-**Settings, as a list.** Your account at the top, then your trips, timetable, favourites and notifications; then language, appearance and devices; then feedback. Each row says what's set, and what isn't set yet says what to do. The same on Android and the website.
+**Crash reports.** When terminus crashes, it sends what broke and the app version, so it can be fixed. Never who you are or where. Turn it off with **Send crash reports** in Settings, on Android, the Mac and the website.
 
-**On the website,** a wide screen shows the page you're on beside the list, and wider still your widget too. On a phone, a bar at the bottom shows what your widget says right now: tap it for the whole card.
+**Signing in an app from the email** now asks you to type the number the app shows, rather than pick one of three. If it wasn't you, **This wasn't me** stops sign-ins to your address for 6 hours.
 
-**Smoother:** Settings opens as its own shape rather than "Loading…", doesn't jump between pages, and opens in place on a reload. Now's sky no longer flashes a line under the road when you come back to it.
-
-**On the map,** a service that has stopped for the day no longer squeezes its row on a stop's board.
+**Nicer emails:** sign-in codes and the rest now come in the site's colours, with the code large and the link as a button.
