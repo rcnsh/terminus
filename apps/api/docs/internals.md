@@ -735,6 +735,12 @@ route moves it from the answer into the card (`profile.ts` `upcomingClass`).
   request, so requests arriving together send one email. The emailed code's
   wrong guesses are counted on the link's row (`magic_links.code_tries`,
   migration 0009), five at most.
+- Every email (sign-in, a device added, feedback, the operator's alerts) is
+  plain text with an HTML version from `src/mail.ts`, built with react-email
+  (written with htm, as the sources have no JSX build step). The plain text
+  is written where each is sent and stays the one the tests read. `mail.ts`
+  is loaded with `import()` (`mail` in accounts.ts): React and its renderer
+  are most of the Worker's size, and most requests send no email.
 - `POST /auth/verify`, `/auth/approve`, `/api/auth/logout`, `/api/auth/code` and
   `/api/auth/anon/web`, and any other change sent with the session cookie and no
   bearer token, are refused when `Sec-Fetch-Site` says another site sent

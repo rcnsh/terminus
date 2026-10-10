@@ -23,11 +23,11 @@ import { autoUpdateVersion, type AutoResult } from './appversion.ts';
 import { calendarThrough, semesterSoon, termFrom, termName } from './calendar.ts';
 import { loadCalendar, refreshCalendar } from './calendarsync.ts';
 import { pruneCrowdSeen } from './crowd.ts';
-import { ACCOUNT_TTL } from './accounts.ts';
+import { ACCOUNT_TTL, mail } from './accounts.ts';
 import { type Notice, pushEnabled, remindUser } from './push.ts';
 import { m, withLang } from './i18n.ts';
 import { clearTrip, sgtDate, watchTrip } from './trip.ts';
-import { isBeta } from './site.ts';
+import { isBeta, linkOrigin } from './site.ts';
 import { ensureRecorder } from './timelapse.ts';
 import { logCronError } from './analytics.ts';
 import { recordActive } from './usage.ts';
@@ -322,7 +322,8 @@ export function adviceFor(reason: string | null, kv: string = KV_NAMESPACE_IDS.s
  */
 async function mailOperator(env: Env, subject: string, text: string): Promise<boolean> {
   if (!env.EMAIL || !env.EMAIL_FROM || !env.ALERT_EMAIL || isBeta(env)) return false;
-  const send = env.EMAIL.send({ from: { email: env.EMAIL_FROM, name: 'terminus' }, to: env.ALERT_EMAIL, subject, text });
+  const html = await (await mail()).operatorHtml({ origin: linkOrigin(env), beta: false, subject, text });
+  const send = env.EMAIL.send({ from: { email: env.EMAIL_FROM, name: 'terminus' }, to: env.ALERT_EMAIL, subject, text, html });
   // Bounded, so a send that hangs can't hold up the rest of the cron. Timed
   // out, it counts as failed: an alert stays pending and goes again next run.
   let timer: ReturnType<typeof setTimeout> | undefined;

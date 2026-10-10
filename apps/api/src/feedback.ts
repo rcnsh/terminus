@@ -15,9 +15,9 @@
  */
 
 import type { Env } from './types.ts';
-import { linkOrigin, mailName } from './site.ts';
+import { isBeta, linkOrigin, mailName } from './site.ts';
 import { m } from './i18n.ts';
-import { sendMail } from './accounts.ts';
+import { mail, sendMail } from './accounts.ts';
 import { venueBuilding, venueStops } from './nusmods.ts';
 import { GRAPH } from './graph.ts';
 
@@ -35,6 +35,8 @@ export const FEEDBACK_KEEP_DAYS = 365;
 
 const PLATFORMS = ['android', 'mac', 'web'] as const;
 type Platform = (typeof PLATFORMS)[number];
+/** As the operator's email names them. */
+const PLATFORM_NAMES: Record<Platform, string> = { android: 'Android', mac: 'Mac', web: 'Web' };
 
 /** What was wrong with an answer, as the apps' chips offer it; the email and the dashboard say it in words. */
 export const REASONS = {
@@ -171,11 +173,25 @@ export async function mailFeedback(env: Env, id: string, f: FeedbackInput, nowMs
     ...(s ? [`If it's right, add this to apps/api/data/src/venue-stops.json and run scripts/walk_routes.py:`, '', venueStopsEntry(s, f.note), ''] : []),
     `Report ${id}. Who sent it${f.context ? ' and the answer they saw' : ''}: the dashboard at ${linkOrigin(env)}/admin.`,
   ].join('\n');
+  const subject = s ? `terminus stop suggestion: ${s.venue} from ${s.stop}` : oneLine(`terminus ${f.kind === 'wrong' ? 'wrong answer' : 'feedback'}: ${(f.note || (f.reason && f.reason !== BETTER_STOP ? REASONS[f.reason] : '')).slice(0, 60)}`);
   await sendMail(env, {
     from: { email: env.EMAIL_FROM, name: mailName(env) },
     to: env.ALERT_EMAIL,
-    subject: s ? `terminus stop suggestion: ${s.venue} from ${s.stop}` : oneLine(`terminus ${f.kind === 'wrong' ? 'wrong answer' : 'feedback'}: ${(f.note || (f.reason && f.reason !== BETTER_STOP ? REASONS[f.reason] : '')).slice(0, 60)}`),
+    subject,
     text,
+    html: await (await mail()).feedbackHtml({
+      origin: linkOrigin(env),
+      beta: isBeta(env),
+      id,
+      what,
+      from: `${PLATFORM_NAMES[f.platform]}${f.appVersion ? ` ${f.appVersion}` : ''}`,
+      at: nowMs,
+      reason: !s && f.reason && f.reason !== BETTER_STOP ? REASONS[f.reason] : null,
+      note: f.note,
+      details: s ? [['Building', s.venue], ['The stop they use', `${s.stopName} (${s.stop})`], ['Its stops now', s.now.join(', ') || 'none']] : [],
+      entry: s ? venueStopsEntry(s, f.note) : null,
+      withAnswer: !!f.context,
+    }),
   });
 }
 

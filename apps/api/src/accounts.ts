@@ -9,7 +9,7 @@
 import { exportOutcomes } from './outcomes.ts';
 import type { Env } from './types.ts';
 import { DEVICE_IDLE_MS } from './monitor.ts';
-import { linkOrigin, mailName } from './site.ts';
+import { isBeta, linkOrigin, mailName } from './site.ts';
 import { m } from './i18n.ts';
 import { TTL } from './config.ts';
 
@@ -197,6 +197,10 @@ export async function requestLink(env: Env, db: D1Database, email: string, origi
   return 'sent';
 }
 
+/** The emails' HTML (mail.ts). Loaded only when an email goes out: React
+ *  and its renderer are most of the Worker, and most requests send none. */
+export const mail = () => import('./mail.ts');
+
 /** How long an email may take to send before it counts as failed. */
 export const MAIL_TIMEOUT_MS = 20_000;
 
@@ -241,11 +245,7 @@ ${t.codeOrLinkText}
 ${link}
 
 ${why}`,
-    html: `<p>${t.codeIsHtml}</p>
-<p style="font-size:28px;font-weight:700;letter-spacing:4px;font-family:ui-monospace,Menlo,monospace">${code}</p>
-<p>${t.codeTypeWeb}</p>
-<p>${t.codeOrLinkHtml(link)}</p>
-<p style="color:#666;font-size:13px">${why}</p>`,
+    html: await (await mail()).signInHtml({ origin: linkOrigin(env), beta: isBeta(env), code, link, why }),
   });
 }
 
@@ -807,6 +807,7 @@ export async function mailDeviceAdded(env: Env, email: string | null, name: stri
     to: email,
     subject: t.deviceAddedSubject(device),
     text: t.deviceAddedText(device, when, site),
+    html: await (await mail()).deviceAddedHtml({ origin: site, beta: isBeta(env), device, when, site }),
   });
 }
 
