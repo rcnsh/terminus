@@ -1235,7 +1235,7 @@ function Keys() {
               }}
             >${t('Copy')}</button>
           </div>
-          <p class="hint">${t('Try it:')} <code>${`curl -H "x-api-key: ${made}" "${location.origin}/arrivals?stop=COM3"`}</code></p>
+          <p class="hint">${t('Try it:')} <code>${`curl -H "x-api-key: ${made}" "${location.origin}/api/arrivals?stop=COM3"`}</code></p>
         </div>`}
       </div>
       <p class="hint group-hint" role="status">${msg}</p>
