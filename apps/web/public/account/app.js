@@ -276,12 +276,13 @@ function SignIn({ adding }) {
 
 /* ---------- signed in ---------- */
 
-/** The widget's answer and how to fetch it again, shared by the preview and its bar (Peek). */
+/** The widget's answer and how to fetch it again: the preview's, which its bar (Peek) shows too. */
 const latest = store({ a: null, load: null });
 
 /** "Your widget right now": /me/next as the widget shows it, so changes in Settings show up. */
 function Preview({ me }) {
-  const [a, setA] = useState(null);
+  const { a } = useStore(latest);
+  const setA = (x) => latest.set({ a: x, load });
   const [failed, setFailed] = useState(false);
   const saved = useStore(saves);
   const load = async () => {
@@ -290,11 +291,9 @@ function Preview({ me }) {
       if (answer?.walkSpeedMs) walkSpeed.set(answer.walkSpeedMs);
       setA(answer);
       setFailed(false);
-      latest.set({ a: answer, load });
     } catch {
       setA(null);
       setFailed(true);
-      latest.set({ a: null, load });
     }
   };
   useEffect(() => {
@@ -305,7 +304,7 @@ function Preview({ me }) {
     <section class="side-preview">
       <p class="eyebrow">${t('Your widget right now')}</p>
       ${a
-        ? html`<${Card} a=${a} onAnswer=${(x) => (setA(x), latest.set({ a: x, load }))} onChoice=${load} chips />`
+        ? html`<${Card} a=${a} onAnswer=${setA} onChoice=${load} chips />`
         : failed
           ? html`<${Message} text=${t('Preview unavailable right now.')}><button type="button" class="link-btn" onClick=${load}>${t('Try again')}</button><//>`
           : html`<${Message} text="…" quiet />`}
@@ -323,6 +322,13 @@ function Preview({ me }) {
 function Peek() {
   const { a, load } = useStore(latest);
   const [open, setOpen] = useState(false);
+  // Escape closes it, as a tap on the page behind does.
+  useEffect(() => {
+    if (!open) return;
+    const key = (e) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('keydown', key);
+    return () => document.removeEventListener('keydown', key);
+  }, [open]);
   if (!a) return null;
   return html`
     <div class=${open ? 'peek open' : 'peek'} onClick=${(e) => e.target === e.currentTarget && setOpen(false)}>

@@ -475,6 +475,8 @@ const TABS = ['now', 'buses', 'map', 'settings'];
 const views = {};
 /** Counts switches: a fade that finishes after a newer tap is left to that one. */
 let switches = 0;
+/** Where Now and Settings were scrolled to, for coming back. */
+const scrolled = {};
 
 /**
  * What the page shows for tab `next` around the tab itself: the window's
@@ -488,11 +490,19 @@ function markTab(next) {
   document.body.classList.toggle('on-buses', next === 'buses');
 }
 
-/** /api/me, asked for once however many want it first (start, Settings opened straight away). */
+/**
+ * /api/me, asked for once by whichever wants it first (start(), or Settings
+ * opened straight away); asked again after a failure, so a later try can work.
+ */
 let meAsked = null;
-const askMe = () => (meAsked ??= get('/api/me').then((r) => r.data));
-/** Where Now and Settings were scrolled to, for coming back. */
-const scrolled = {};
+const askMe = () =>
+  (meAsked ??= get('/api/me').then(
+    (r) => r.data,
+    (err) => {
+      meAsked = null;
+      throw err;
+    },
+  ));
 
 const tabInAddress = () => (location.hash === '#map' ? 'map' : location.hash.startsWith('#settings') ? 'settings' : location.hash.startsWith('#buses') ? 'buses' : 'now');
 
@@ -1223,7 +1233,7 @@ function SettingsSkeleton() {
       ${wide &&
       html`<div class="settings-pages" aria-hidden="true">
         <div class="settings-page">
-          <div class="page-head"><h2 class="skel-line title" aria-hidden="true"></h2></div>
+          <div class="page-head"><h2 class="skel-line title"></h2></div>
           <div class="skel-block" style="height: 132px"></div>
           <div class="skel-block" style="height: 180px"></div>
         </div>
@@ -1316,10 +1326,9 @@ async function start() {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
   // A tap on a notification with the app already open: show the new card.
   navigator.serviceWorker?.addEventListener('message', (e) => e.data?.kind === 'refresh' && refresh());
-  // The tab in the address as it will look from the first frame: drawn
-  // first (App) but marked only by showTab(), after the awaits below, a tab
-  // with its own top (Settings) showed under the header and Now's sky, then
-  // jumped up.
+  // The tab in the address is marked before the first frame: showTab() comes
+  // only after the awaits below, and until then a tab with its own top
+  // (Settings) would show under the header and Now's sky.
   const opening = tabInAddress();
   markTab(opening);
   render(html`<${App} />`, document.getElementById('root'));

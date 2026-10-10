@@ -84,10 +84,9 @@ function summaries({ p, me, notifyOn, devices, imported }) {
  * leave", for Notifications, and `notifyOn` whether it's on. `side` goes above
  * the list (the account page's preview), or in a column of its own on a wide
  * screen; `Peek` (a component) is its bar along the foot of a page on a
- * phone. `onAddEmail` and `onSignOut` are
- * Account's buttons; by default, the web app's. `sky`: the list's title and
- * each page's in a slim band of Now's sky, ending on the low hills (sky.js),
- * on a phone; the web app's.
+ * phone. `onAddEmail` and `onSignOut` are Account's buttons; by default, the
+ * web app's. `sky`: the list's title and each page's in a slim band of Now's
+ * sky, ending on the low hills (sky.js), on a phone; the web app's.
  */
 export function Settings({ me, inApp = false, Notify = null, notifyOn = false, side = null, Peek = null, sky = false, onAddEmail = addEmailFromApp, onSignOut = signOut }) {
   const p = useStore(profile);
@@ -104,8 +103,7 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
   const listHash = inApp ? '#settings' : '';
   const pageHash = inApp ? '#settings/' : '#';
   const groups = GROUPS.map((g) => g.filter((x) => x !== 'notifications' || Notify));
-  const tiles = groups.flat();
-  const pages = ['account', 'trips', 'timetable', ...tiles, ...FOOT];
+  const pages = ['account', ...groups.flat(), ...FOOT];
 
   // The account's language (phase 10): one chosen on another device is used
   // here; one chosen here before the account had one goes to the account.
