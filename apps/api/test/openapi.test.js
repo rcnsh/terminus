@@ -349,6 +349,7 @@ const CASES = [
   ['POST /api/auth/app/start', 201, { body: { email: 'app@u.nus.edu', name: 'MacBook Air' } }],
   ['POST /api/auth/app/start', 201, { auth: 'anon', body: { email: 'app@u.nus.edu' }, why: 'keeping the app’s setup' }],
   ['POST /api/auth/app/start', 400, { body: { email: 'nope' } }],
+  ['POST /api/auth/app/start', 403, { before: async (w) => { await startApp(w, 'held@u.nus.edu'); await w.call('/auth/approve', { method: 'POST', form: { r: w.approveLink, n: 'none' } }); }, body: { email: 'held@u.nus.edu' }, why: 'turned down with “This wasn’t me”' }],
   ['POST /api/auth/app/start', 409, { auth: 'device', body: { email: 'app@u.nus.edu' } }],
   ['POST /api/auth/app/start', 429, { block: ['RL_AUTH'], body: { email: 'app@u.nus.edu' } }],
   ['POST /api/auth/app/start', 429, { before: (w) => startApp(w), body: { email: 'app@u.nus.edu' }, why: 'an email a moment ago' }],

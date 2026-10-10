@@ -672,7 +672,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           description:
             'Emails a code to type into the app, and a link to approve it from another device by typing the number the app shows (returned here). ' +
             'Send the anonymous token (if the app has one) as `Authorization: Bearer` to keep its setup. Then poll `/api/auth/app/poll`. ' +
-            'One email per address per minute; a request lasts 15 minutes. After “This wasn’t me” on the approval page, the address takes no app sign-ins for 6 hours (429).',
+            'One email per address per minute; a request lasts 15 minutes. After “This wasn’t me” on the approval page, the address takes no app sign-ins for 6 hours (403).',
           operationId: 'appStart',
           // The anonymous token is optional.
           security: [{}, { bearer: [] }],
@@ -690,8 +690,9 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               properties: { request: { type: 'string' }, poll: { type: 'string' }, match: { type: 'integer', example: 47 }, expires: { type: 'string', format: 'date-time' } },
             }),
             '400': errorResponse('Not an email address.'),
+            '403': errorResponse('The address turned an app sign-in down in the last 6 hours (“This wasn’t me”). Pair the device from the website instead.'),
             '409': errorResponse('This device is already signed in.'),
-            '429': { ...errorResponse('An email went to this address in the last minute, too many attempts, too many app sign-in emails for everyone this minute, or the address turned a request down in the last 6 hours (then `Retry-After` is 3600).'), headers: RETRY_AFTER },
+            '429': { ...errorResponse('An email went to this address in the last minute, too many attempts, or too many app sign-in emails for everyone this minute.'), headers: RETRY_AFTER },
             '502': errorResponse('The email could not be sent. Try again later.', { error: 'could not send the email, try again later' }),
           },
         },
