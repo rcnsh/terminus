@@ -532,7 +532,6 @@
     <string name="journey_leave">出发</string>
     <string name="going_anyway">还是要去别的地方？</string>
     <string name="plan_trip">规划行程</string>
-    <string name="feedback_short">告诉我们哪里有问题，或你想要什么</string>
     <!-- Settings' pages as one family (SettingsParts.kt) -->
     <string name="heading_from_nusmods">来自 NUSMods</string>
     <string name="heading_your_favourites">你的收藏</string>

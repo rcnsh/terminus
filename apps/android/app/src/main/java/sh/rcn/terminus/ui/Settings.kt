@@ -70,6 +70,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
@@ -199,7 +200,7 @@ internal fun SettingsScreen(
 }
 
 /**
- * Settings at a glance: who you are, then the rest as tiles, each saying
+ * Settings at a glance: who you are, then the rest as rows in groups, each saying
  * what's set. What isn't set yet (a home stop, classes) says what to do, in
  * the accent; notifications all off shows in amber: it's the setting that
  * changes the most. About is under them.
@@ -221,7 +222,6 @@ private fun SettingsList(state: AccountState, main: MainViewModel, top: Dp, bott
             Column(Modifier.padding(horizontal = 16.dp)) {
                 Spacer(Modifier.height(12.dp))
                 AccountTile(state, ui, onOpen)
-                Spacer(Modifier.height(20.dp))
                 SettingsGround(state, ui, profile, onOpen)
             }
         }
@@ -262,7 +262,27 @@ private fun Initial(email: String, size: Dp, fontSize: TextUnit) {
     }
 }
 
-/** Under the horizon: the tiles, and About. */
+/**
+ * The pages, a row each in three groups (what your trips use, this device,
+ * then feedback), with About under them, as the website lists them. Each row
+ * has its icon, and what's set on the right.
+ */
+private val GROUPS = listOf(
+    listOf(
+        SettingsPage.Trips to R.drawable.ic_pin,
+        SettingsPage.Timetable to R.drawable.ic_calendar,
+        SettingsPage.Favourites to R.drawable.ic_heart,
+        SettingsPage.Notifications to R.drawable.ic_bell,
+    ),
+    listOf(
+        SettingsPage.Language to R.drawable.ic_globe,
+        SettingsPage.Appearance to R.drawable.ic_contrast,
+        SettingsPage.Devices to R.drawable.ic_devices,
+    ),
+    listOf(SettingsPage.Feedback to R.drawable.ic_chat),
+)
+
+/** Under the horizon: the groups of pages, and About. */
 @Composable
 private fun SettingsGround(state: AccountState, ui: UiState, profile: ProfileDoc?, onOpen: (SettingsPage) -> Unit) {
     val c = MaterialTheme.colorScheme
@@ -276,45 +296,47 @@ private fun SettingsGround(state: AccountState, ui: UiState, profile: ProfileDoc
             else -> false
         }
     }
-    // Everything, as tiles.
-    TwoColumns(
-        listOf(
-            SettingsPage.Trips to R.drawable.ic_pin,
-            SettingsPage.Timetable to R.drawable.ic_calendar,
-            SettingsPage.Favourites to R.drawable.ic_heart,
-            SettingsPage.Notifications to R.drawable.ic_bell,
-            SettingsPage.Language to R.drawable.ic_globe,
-            SettingsPage.Appearance to R.drawable.ic_contrast,
-            SettingsPage.Devices to R.drawable.ic_devices,
-            SettingsPage.Feedback to R.drawable.ic_chat,
-        ),
-        Modifier.padding(top = 12.dp),
-        gap = 10.dp,
-    ) { (page, icon), mod ->
-        LinkTile({ onOpen(page) }, mod.heightIn(min = 112.dp)) {
-            Icon(painterResource(icon), contentDescription = null, tint = c.primary, modifier = Modifier.size(22.dp))
-            Spacer(Modifier.weight(1f).heightIn(min = 14.dp))
-            Text(stringResource(page.title), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-            val said = when (page) {
-                SettingsPage.Feedback -> stringResource(R.string.feedback_short)
-                SettingsPage.Language, SettingsPage.Appearance -> displaySummary(page, state)
-                else -> summary(page, state, ui)
-            }
-            val off = page == SettingsPage.Notifications && !ui.leaveAlerts && !ui.liveUpdates
-            val ask = todo(page)
-            said?.let {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (off) c.tertiary else if (ask) c.primary else muted,
-                    fontWeight = if (off || ask) FontWeight.SemiBold else null,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
+    Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        for (group in GROUPS) {
+            Group(null) {
+                group.forEachIndexed { i, (page, icon) ->
+                    if (i > 0) RowDivider()
+                    Row(
+                        Modifier.fillMaxWidth().clickable(role = Role.Button) { onOpen(page) }.heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(Modifier.size(32.dp).background(c.primaryContainer, RoundedCornerShape(9.dp)), contentAlignment = Alignment.Center) {
+                            Icon(painterResource(icon), contentDescription = null, tint = c.primary, modifier = Modifier.size(18.dp))
+                        }
+                        Spacer(Modifier.width(14.dp))
+                        Text(stringResource(page.title), style = MaterialTheme.typography.bodyLarge, maxLines = 1)
+                        Spacer(Modifier.width(12.dp))
+                        // Send feedback says what it's for on its page: beside it there's no room.
+                        val said = when (page) {
+                            SettingsPage.Feedback -> null
+                            SettingsPage.Language, SettingsPage.Appearance -> displaySummary(page, state)
+                            else -> summary(page, state, ui)
+                        }
+                        val off = page == SettingsPage.Notifications && !ui.leaveAlerts && !ui.liveUpdates
+                        val ask = todo(page)
+                        Text(
+                            said.orEmpty(),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (off) c.tertiary else if (ask) c.primary else muted,
+                            fontWeight = if (off || ask) FontWeight.SemiBold else null,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.End,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Icon(painterResource(R.drawable.ic_chevron), contentDescription = null, tint = muted, modifier = Modifier.size(20.dp))
+                    }
+                }
             }
         }
     }
-    // About, as a link under the tiles.
+    // About, as a link under the groups.
     Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.Center) {
         TextButton(onClick = { onOpen(SettingsPage.About) }) { Text(stringResource(R.string.about)) }
     }
