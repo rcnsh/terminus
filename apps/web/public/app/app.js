@@ -12,7 +12,7 @@
 // when the network is down; those replies carry x-terminus-cached with when
 // they were fetched, so the page can say it's showing old times.
 
-import { Fill, Icon, MARK, Rich, announce, focusSoon, html, render, store, useEffect, useRef, useState, useStore } from '/assets/ui.js';
+import { Fill, Icon, MARK, Rich, announce, focusSoon, html, render, store, useEffect, useMedia, useRef, useState, useStore } from '/assets/ui.js';
 import { ADDED_PLACES_KEY, api, clock, hour12, inkOn, send, serverNow, signedOut, t } from '/account/dom.js';
 import { Card, InSky, Message, Report, Say, isStale, signal } from '/account/preview.js';
 import { Celestial, Horizon, useNowSky, useSkyPhase } from '/account/sky.js';
@@ -1177,12 +1177,56 @@ function MapArea() {
   return html`<${mod.MapTab} visible=${now === 'map'} focus=${focus} onFocused=${() => stopToShow.set(null)} onGoTo=${goToStop} onSaved=${refresh} />`;
 }
 
+/** A row of the list as a shape: an icon, a name and what's set. */
+const SkeletonRows = ({ n }) => html`
+  <div class="set-group">
+    ${Array.from({ length: n }, (_, i) => html`<div class="settings-row set-item" key=${i}><span class="set-ico skel"></span><span class="row-text"><span class="row-title skel-line"></span><span class="row-sum skel-line short"></span></span></div>`)}
+  </div>
+`;
+
+/**
+ * Settings before its code arrives: its title (in the sky's band on a phone,
+ * as the list has), then the list's shapes, and beside them a page's when
+ * side by side, so nothing moves when Settings takes its place.
+ */
+function SettingsSkeleton() {
+  const wide = useMedia('(min-width: 900px)');
+  useEffect(() => {
+    if (wide) return;
+    document.body.classList.add('set-sky');
+    return () => document.body.classList.remove('set-sky');
+  }, [wide]);
+  const title = html`<h1 class="settings-title">${t('Settings')}</h1>`;
+  return html`
+    <div class="settings skeleton" aria-busy="true">
+      <div class="settings-side">
+        ${wide ? title : html`<div class="page-band"><div class="sky-head"><${Celestial} band />${title}</div><${Horizon} on=${null} low /></div>`}
+        <div class="settings-groups" aria-hidden="true">
+          <div class="settings-row set-account"><span class="avatar skel"></span><span class="row-text"><span class="row-title skel-line"></span><span class="row-sum skel-line short"></span></span></div>
+          <${SkeletonRows} n=${4} />
+          <${SkeletonRows} n=${3} />
+          <${SkeletonRows} n=${1} />
+        </div>
+      </div>
+      ${wide &&
+      html`<div class="settings-pages" aria-hidden="true">
+        <div class="settings-page">
+          <div class="page-head"><h2 class="skel-line title" aria-hidden="true"></h2></div>
+          <div class="skel-block" style="height: 132px"></div>
+          <div class="skel-block" style="height: 180px"></div>
+        </div>
+      </div>`}
+      <p class="sr-only" role="status">${t('Loading…')}</p>
+    </div>
+  `;
+}
+
 function SettingsArea() {
   const s = useStore(settings);
   const who = useStore(me);
   const notify = useStore(push);
   if (s.status === 'failed') return html`<p class="hint">${t('Settings need a connection.')}</p>`;
-  if (s.status !== 'ready') return html`<p class="hint">${t('Loading…')}</p>`;
+  if (s.status !== 'ready') return html`<${SettingsSkeleton} />`;
   const Settings = s.mod.Settings;
   // "Notify me when to leave" in Settings, under Notifications, where this browser can do it.
   const canNotify = pushable && !(iPhone && !standalone);
