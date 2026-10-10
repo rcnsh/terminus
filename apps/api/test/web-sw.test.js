@@ -131,3 +131,16 @@ test('the map libraries named in app/map-files.js are the vendored ones', () => 
   }
   for (const f of ['app/map.js', 'admin/timelapse/timelapse.js']) assert.doesNotMatch(read(f), /maplibre-gl%40\d|pmtiles%40\d/, f);
 });
+
+test('the Now tab looks for the kept card where sw.js keeps it', () => {
+  const kept = /caches\.match\(`\$\{location\.origin\}([^?`]+)\?/.exec(read('app/app.js'))?.[1];
+  const data = /const DATA_PATHS = new Set\(\[([^\]]*)\]\)/.exec(read('sw.js'))[1];
+  assert.ok(kept, 'keptCard() no longer reads the cache the way this test expects');
+  assert.ok([...data.matchAll(/'([^']+)'/g)].some((m) => m[1] === kept), `app.js looks for ${kept}, which sw.js never keeps`);
+});
+
+test('the API key example in Settings calls a route under /api', () => {
+  const paths = [...read('account/settings-pages.js').matchAll(/curl [^`]*?\$\{location\.origin\}([^?"]+)/g)].map((m) => m[1]);
+  assert.ok(paths.length, 'no curl example found');
+  for (const p of paths) assert.match(p, /^\/api\//, `${p} is an old root path: it answers 308, which curl doesn't follow`);
+});

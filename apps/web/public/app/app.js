@@ -309,8 +309,8 @@ async function keptCard(to) {
   if (hour12()) q.set('h12', '1');
   q.set('lang', window.i18n?.header ?? 'en');
   try {
-    // Only sw.js's data cache holds /me/next, whatever its version.
-    const res = await caches.match(`${location.origin}/me/next?${q}`);
+    // Only sw.js's data cache holds /api/me/next, whatever its version.
+    const res = await caches.match(`${location.origin}/api/me/next?${q}`);
     return res ? await res.json() : null;
   } catch {
     return null;
