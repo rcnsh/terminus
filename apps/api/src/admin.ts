@@ -1,6 +1,7 @@
 /**
  * The operator dashboard's data (/admin/stats, shown by apps/web/public/admin).
- * Operator only: the x-health-token header must match HEALTH_TOKEN.
+ * Operator only: the x-health-token header holds HEALTH_TOKEN, or a session
+ * from signing in with a passkey (passkey.ts).
  *
  * Counts come from D1 and KV. With ANALYTICS_TOKEN and CF_ACCOUNT_ID set it
  * also queries Analytics Engine for answers and errors per day; without them
@@ -10,10 +11,17 @@
 import type { Env } from './types.ts';
 import { answering, answeringSince, readIncidents, readUpstream } from './monitor.ts';
 import { BETTER_STOP, BETTER_STOP_TEXT, REASONS, summarize } from './feedback.ts';
+import { sessionOk } from './passkey.ts';
 
 const DAY = 86_400_000;
 
-export function isOperator(env: Env, req: Request): boolean {
+/** HEALTH_TOKEN itself, or an operator session that hasn't run out. */
+export async function isOperator(env: Env, req: Request, nowMs = Date.now()): Promise<boolean> {
+  return holdsHealthToken(env, req) || (await sessionOk(env.HEALTH_TOKEN, req.headers.get('x-health-token'), nowMs));
+}
+
+/** HEALTH_TOKEN itself, which a session can't stand in for: adding a passkey needs it. */
+export function holdsHealthToken(env: Env, req: Request): boolean {
   return sentToken(req, env.HEALTH_TOKEN);
 }
 
@@ -23,8 +31,8 @@ export function isOperator(env: Env, req: Request): boolean {
  * and nothing else, so a machine that renders the videos (a VPS, unattended)
  * never holds the key to the dashboard, its reports and their emails.
  */
-export function canReadTimelapse(env: Env, req: Request): boolean {
-  return isOperator(env, req) || sentToken(req, env.TIMELAPSE_TOKEN);
+export async function canReadTimelapse(env: Env, req: Request, nowMs = Date.now()): Promise<boolean> {
+  return sentToken(req, env.TIMELAPSE_TOKEN) || (await isOperator(env, req, nowMs));
 }
 
 /** The x-health-token header holds `token`; never true when the token is unset. */

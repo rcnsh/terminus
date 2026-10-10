@@ -306,7 +306,7 @@ export interface RecorderStatus {
  */
 export async function handleTimelapse(req: Request, url: URL, env: Env, nowMs: number): Promise<Response | null> {
   if (!url.pathname.startsWith('/api/timelapse/')) return null;
-  if (!canReadTimelapse(env, req) || req.method !== 'GET') return json({ error: 'not found' }, 404);
+  if (req.method !== 'GET' || !(await canReadTimelapse(env, req, nowMs))) return json({ error: 'not found' }, 404);
   if (!env.DOWNLOADS) return json({ error: 'timelapse storage is not configured' }, 503);
 
   if (url.pathname === '/api/timelapse/days') {

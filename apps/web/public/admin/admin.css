@@ -4,6 +4,8 @@ h2 { font-size: 1.05rem; margin: 0 0 14px; }
 code { font-size: 0.85em; }
 .unlock { max-width: 28rem; display: grid; gap: 8px; }
 .unlock label { font-weight: 600; }
+.unlock .add { display: grid; gap: 8px; border-top: 1px solid var(--line); padding-top: 14px; margin-top: 4px; }
+.unlock .add input { flex: 1; min-width: 0; }
 .row { display: flex; gap: 8px; }
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr)); gap: 12px; margin: 12px 0 16px; }
 .tile { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }

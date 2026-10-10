@@ -36,8 +36,8 @@ async function assert429(res, retryAfter) {
   assert.ok((await res.json()).error);
 }
 
-test('RL_PUBLIC caps /health, /status.json, /admin/stats, downloads and timelapse days per IP', async () => {
-  for (const path of ['/api/health', '/api/status.json', '/api/admin/stats', '/download/terminus.apk', '/api/timelapse/days']) {
+test('RL_PUBLIC caps /health, /status.json, /admin/*, downloads and timelapse days per IP', async () => {
+  for (const path of ['/api/health', '/api/status.json', '/api/admin/stats', '/api/admin/passkey/challenge', '/download/terminus.apk', '/api/timelapse/days']) {
     const rl = refusing();
     const { call } = setup({ RL_PUBLIC: rl });
     await assert429(await call(path), '60');

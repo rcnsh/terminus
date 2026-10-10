@@ -1,7 +1,9 @@
-// The operator dashboard: /admin/stats, with the HEALTH_TOKEN kept in this
-// tab's sessionStorage only. English only: it's for the operator.
+// The operator dashboard: /admin/stats, opened with a passkey (passkey.js),
+// whose session is kept in this tab's sessionStorage only. Adding a passkey
+// takes the HEALTH_TOKEN. English only: it's for the operator.
 
-import { html, render, store, useEffect, useRef, useStore } from '/assets/ui.js';
+import { html, render, store, useRef, useState, useStore } from '/assets/ui.js';
+import { addPasskey, passkeysWork, signIn } from '/admin/passkey.js';
 
 const KEY = 'terminus-operator-token';
 const TZ = { timeZone: 'Asia/Singapore' };
@@ -44,7 +46,7 @@ async function load() {
   if (!res) return view.set((v) => ({ ...v, note: "Couldn't reach terminus." }));
   if (res.status === 404) {
     forget();
-    return view.set({ locked: true, msg: 'That token was not accepted.', stats: null, note: '' });
+    return view.set({ locked: true, msg: 'Signed out. Sign in again.', stats: null, note: '' });
   }
   if (!res.ok) return view.set((v) => ({ ...v, note: `The stats answered ${res.status}.` }));
   try {
@@ -225,28 +227,46 @@ function Dashboard({ s, note }) {
   `;
 }
 
+/** Keeps the session and opens the dashboard; or says what went wrong. */
+async function unlockWith(get, setBusy) {
+  setBusy(true);
+  view.set((v) => ({ ...v, msg: '' }));
+  try {
+    memory = await get();
+    remember(memory);
+    await load();
+  } catch (err) {
+    view.set((v) => ({ ...v, msg: err.message }));
+  } finally {
+    setBusy(false);
+  }
+}
+
 function Unlock({ msg }) {
   const box = useRef(null);
-  useEffect(() => box.current?.focus(), []);
+  const [busy, setBusy] = useState(false);
+  if (!passkeysWork()) return html`<p class="card hint">This browser can’t use passkeys. Open the dashboard in a current Chrome, Safari or Firefox.</p>`;
   return html`
-    <form
-      class="card unlock"
-      onSubmit=${(e) => {
-        e.preventDefault();
-        memory = box.current.value.trim();
-        remember(memory);
-        box.current.value = '';
-        load();
-      }}
-    >
-      <label for="token">Operator token</label>
-      <p class="hint">The <code>HEALTH_TOKEN</code> secret. Kept in this tab only, until you close it.</p>
-      <div class="row">
-        <input id="token" ref=${box} type="password" autocomplete="off" required />
-        <button type="submit" class="btn accent">Open</button>
-      </div>
+    <div class="card unlock">
+      <button type="button" class="btn accent" disabled=${busy} onClick=${() => unlockWith(signIn, setBusy)}>Sign in with a passkey</button>
       <p class="hint" role="status">${msg}</p>
-    </form>
+      <form
+        class="add"
+        onSubmit=${(e) => {
+          e.preventDefault();
+          const token = box.current.value.trim();
+          box.current.value = '';
+          unlockWith(() => addPasskey(token, navigator.userAgentData?.platform || navigator.platform || ''), setBusy);
+        }}
+      >
+        <label for="token">Add a passkey on this device</label>
+        <p class="hint">Needs the <code>HEALTH_TOKEN</code> secret, once. It isn’t kept.</p>
+        <div class="row">
+          <input id="token" ref=${box} type="password" autocomplete="off" placeholder="Operator token" required />
+          <button type="submit" class="btn" disabled=${busy}>Add passkey</button>
+        </div>
+      </form>
+    </div>
   `;
 }
 

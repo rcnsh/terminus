@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import { FROZEN_NOW, installGlobals, makeBucket, makeCtx, makeDurableObjects, makeEnv, makeFetch, makeKV } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import { validate } from './_schema.mjs';
+import { makeAuthenticator } from './_passkey.mjs';
 import worker from '../src/index.ts';
 import { Trip } from '../src/tripdo.ts';
 import { API_VERSION, openApiSpec } from '../src/openapi.ts';
@@ -231,6 +232,18 @@ const etagOf = (path) => async (w) => {
   w.etag = (await w.call(path, { auth: 'cookie' })).headers.get('etag');
 };
 const cross = { 'sec-fetch-site': 'cross-site' };
+const challengeOf = async (w) => (await (await w.call('/api/admin/passkey/challenge')).json()).challenge;
+/** A new passkey, made but not yet kept, in `w.made`. */
+const passkey = async (w) => {
+  w.authenticator = await makeAuthenticator({ origin: BASE });
+  w.made = await w.authenticator.create(await challengeOf(w));
+};
+/** A kept passkey, and its answer to a fresh challenge in `w.assertion`. */
+const signedIn = async (w) => {
+  await passkey(w);
+  await w.call('/api/admin/passkey/register', { method: 'POST', auth: 'operator', body: w.made });
+  w.assertion = await w.authenticator.get(await challengeOf(w));
+};
 
 /**
  * [operation, status, options]: options as send() takes them, plus `path`
@@ -277,6 +290,22 @@ const CASES = [
   ['GET /api/admin/stats', 200, { auth: 'operator' }],
   ['GET /api/admin/stats', 404, {}],
   ['GET /api/admin/stats', 429, { auth: 'operator', block: ['RL_PUBLIC'] }],
+  ['GET /api/admin/passkey/challenge', 200, {}],
+  ['GET /api/admin/passkey/challenge', 200, { auth: 'operator', path: '/api/admin/passkey/challenge?register=1', why: 'to add a passkey' }],
+  ['GET /api/admin/passkey/challenge', 404, { path: '/api/admin/passkey/challenge?register=1', why: 'to add one, without the token' }],
+  ['GET /api/admin/passkey/challenge', 404, { before: (w) => delete w.env.HEALTH_TOKEN }],
+  ['GET /api/admin/passkey/challenge', 429, { block: ['RL_PUBLIC'] }],
+  ['POST /api/admin/passkey/register', 201, { auth: 'operator', before: passkey, body: (w) => w.made }],
+  ['POST /api/admin/passkey/register', 400, { auth: 'operator', body: { id: 'x' } }],
+  ['POST /api/admin/passkey/register', 403, { auth: 'operator', before: passkey, body: (w) => ({ ...w.made, id: 'AAAA' }) }],
+  ['POST /api/admin/passkey/register', 404, { before: passkey, body: (w) => w.made }],
+  ['POST /api/admin/passkey/register', 409, { auth: 'operator', before: async (w) => { await passkey(w); await w.env.KV.put('operator:passkeys', JSON.stringify(Array.from({ length: 20 }, (_, i) => ({ id: `k${i}`, rpId: 'x', alg: -7, key: 'x', name: '', created: '' })))); }, body: (w) => w.made }],
+  ['POST /api/admin/passkey/register', 429, { auth: 'operator', block: ['RL_PUBLIC'], body: {} }],
+  ['POST /api/admin/passkey/signin', 200, { before: signedIn, body: (w) => w.assertion }],
+  ['POST /api/admin/passkey/signin', 400, { body: {} }],
+  ['POST /api/admin/passkey/signin', 403, { before: async (w) => { await passkey(w); w.assertion = await w.authenticator.get(await challengeOf(w)); }, body: (w) => w.assertion, why: 'a passkey never kept' }],
+  ['POST /api/admin/passkey/signin', 404, { before: (w) => delete w.env.HEALTH_TOKEN, body: {} }],
+  ['POST /api/admin/passkey/signin', 429, { block: ['RL_PUBLIC'], body: {} }],
   ['GET /api/timelapse/days', 200, { auth: 'operator' }],
   ['GET /api/timelapse/days', 404, {}],
   ['GET /api/timelapse/days', 429, { auth: 'operator', block: ['RL_PUBLIC'] }],

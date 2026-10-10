@@ -1591,6 +1591,88 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           },
         },
       },
+      '/api/admin/passkey/challenge': {
+        get: {
+          tags: ['Service'],
+          summary: 'A passkey challenge, for the operator’s pages',
+          description:
+            'A fresh WebAuthn challenge (base64url, good for five minutes), the relying party id (this request’s host: each address keeps its own passkeys) and the COSE algorithms accepted. With `register=1`, for adding a passkey: needs the operator token itself in `x-health-token` (answers 404 without it, before any passkey is made), and lists the passkeys kept for this host in `exclude`. Answers 404 when the operator token is not configured on the server.',
+          operationId: 'passkeyChallenge',
+          security: [],
+          parameters: [{ name: 'register', in: 'query', description: 'Set to `1` for a challenge to add a passkey with.', schema: { type: 'string', enum: ['1'] } }],
+          responses: {
+            '200': ok(
+              {
+                type: 'object',
+                required: ['challenge', 'rpId', 'algs'],
+                properties: {
+                  challenge: { type: 'string' },
+                  rpId: { type: 'string' },
+                  algs: { type: 'array', items: { type: 'integer' } },
+                  exclude: { type: 'array', items: { type: 'string' }, description: 'With `register=1`: the ids of the passkeys kept for this host.' },
+                },
+              },
+              { challenge: 'AAABkx3T9QBp2kq0Vf8mX7c1n4WbQe5yRzLhJtU0', rpId: 'terminus.run', algs: [-8, -7, -257] },
+            ),
+            '404': errorResponse('The operator token is not configured; or, with `register=1`, not sent.'),
+          },
+        },
+      },
+      '/api/admin/passkey/register': {
+        post: {
+          tags: ['Service'],
+          summary: 'Add a passkey for the operator’s pages',
+          description:
+            'Keeps a new passkey, made with a challenge from `/api/admin/passkey/challenge`, and answers with an operator session, as signing in does. Needs the operator token itself in `x-health-token` (a session will not do): answers 404 without it. `key` is the public key as the browser gives it (`getPublicKey()`, SPKI) and `alg` its COSE algorithm; the user must have been verified (a fingerprint, a face or the device’s PIN).',
+          operationId: 'passkeyRegister',
+          security: [{ operator: [] }],
+          requestBody: jsonBody({
+            type: 'object',
+            required: ['id', 'key', 'alg', 'clientData', 'authData'],
+            properties: {
+              id: { type: 'string', description: 'The credential id, base64url.' },
+              key: { type: 'string', description: 'The public key, SPKI, base64url.' },
+              alg: { type: 'integer', enum: [-8, -7, -257] },
+              clientData: { type: 'string', description: '`clientDataJSON`, base64url.' },
+              authData: { type: 'string', description: '`getAuthenticatorData()`, base64url.' },
+              name: { type: 'string', maxLength: 60, description: 'What the device is, for telling passkeys apart.' },
+            },
+          }),
+          responses: {
+            '201': { ...ok({ $ref: '#/components/schemas/OperatorSession' }), description: 'Kept; signed in.' },
+            '400': errorResponse('Something missing, or a kind of key not accepted.'),
+            '403': errorResponse('The challenge ran out, or the passkey was not made for this site, or without verifying the user.'),
+            '404': errorResponse('No operator token, or the wrong one.'),
+            '409': errorResponse('Twenty passkeys are kept already.'),
+          },
+        },
+      },
+      '/api/admin/passkey/signin': {
+        post: {
+          tags: ['Service'],
+          summary: 'Sign in to the operator’s pages with a passkey',
+          description:
+            'Checks a WebAuthn assertion for a challenge from `/api/admin/passkey/challenge` against the passkeys kept for this host, and answers with an operator session: sent in `x-health-token`, it opens what the operator token does (except adding a passkey) for 12 hours. Changing the operator token ends every session.',
+          operationId: 'passkeySignIn',
+          security: [],
+          requestBody: jsonBody({
+            type: 'object',
+            required: ['id', 'clientData', 'authData', 'signature'],
+            properties: {
+              id: { type: 'string', description: 'The credential id, base64url.' },
+              clientData: { type: 'string', description: '`clientDataJSON`, base64url.' },
+              authData: { type: 'string', description: '`authenticatorData`, base64url.' },
+              signature: { type: 'string', description: 'The signature, base64url.' },
+            },
+          }),
+          responses: {
+            '200': ok({ $ref: '#/components/schemas/OperatorSession' }),
+            '400': errorResponse('Something missing.'),
+            '403': errorResponse('Not a passkey kept for this site, or the challenge ran out, or the signature does not check.'),
+            '404': errorResponse('The operator token is not configured.'),
+          },
+        },
+      },
       '/api/timelapse/days': {
         get: {
           tags: ['Service'],
@@ -1788,7 +1870,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             'A device token (from `/api/pair`, `/api/auth/anon` or an app’s sign-in), on every route that takes a bearer token. On the answer routes (Answers and Stops) an API key works too; on `/api/me` routes it does not: an API key opens only the answers.',
         },
         cookie: { type: 'apiKey', in: 'cookie', name: '__Host-tm_s', description: 'Set by signing in on the account page.' },
-        operator: { type: 'apiKey', in: 'header', name: 'x-health-token', description: 'The operator token (HEALTH_TOKEN), for the dashboard.' },
+        operator: { type: 'apiKey', in: 'header', name: 'x-health-token', description: 'The operator token (HEALTH_TOKEN), or a session from signing in with a passkey, for the dashboard.' },
       },
       schemas: {
         Quality: quality,
@@ -2620,6 +2702,14 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             since: { type: 'string', format: 'date-time' },
           },
         },
+        OperatorSession: {
+          type: 'object',
+          required: ['session', 'expires'],
+          properties: {
+            session: { type: 'string', description: 'Send it in `x-health-token`, as the operator token.' },
+            expires: { type: 'string', format: 'date-time' },
+          },
+        },
         Health: {
           type: 'object',
           required: ['ok', 'now', 'sgt', 'graph', 'calendar', 'config', 'upstream'],
@@ -2803,14 +2893,14 @@ type Operation = { security?: Record<string, unknown>[]; responses?: Record<stri
  * - on `/api/me` routes, "sign in first" (401), the account's limit (429), and a
  *   change sent with the session cookie from another site (403);
  * - the per-IP limit (429, with `Retry-After`) on the public routes that read
- *   storage: /api/health, /api/status.json, /api/admin/stats, /download/* and
+ *   storage: /api/health, /api/status.json, /api/admin/*, /download/* and
  *   /api/timelapse/*.
  */
 function withCommonErrors(spec: Record<string, unknown>): Record<string, unknown> {
   const paths = spec.paths as Record<string, Record<string, Operation>>;
   for (const [path, ops] of Object.entries(paths)) {
     const session = path === '/api/me' || path.startsWith('/api/me/') || path === '/api/auth/app/merge';
-    const limitedByIp = ['/api/health', '/api/status.json', '/api/admin/stats'].includes(path) || path.startsWith('/download/') || path.startsWith('/api/timelapse/');
+    const limitedByIp = ['/api/health', '/api/status.json'].includes(path) || path.startsWith('/api/admin/') || path.startsWith('/download/') || path.startsWith('/api/timelapse/');
     for (const [method, op] of Object.entries(ops)) {
       if (!op || typeof op !== 'object' || !op.responses) continue;
       const r = op.responses;
