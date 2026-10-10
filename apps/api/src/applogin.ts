@@ -26,7 +26,7 @@
  */
 
 import type { Env } from './types.ts';
-import { mailName } from './site.ts';
+import { isBeta, linkOrigin, mailName } from './site.ts';
 import {
   type Client,
   type Live,
@@ -45,6 +45,7 @@ import {
   profileFor,
   removeAnonymous,
   saveProfileJson,
+  mail,
   sendMail,
   sessionFor,
   userFor,
@@ -172,11 +173,7 @@ ${t.codeOtherDeviceText(device)}
 ${link}
 
 ${why}`,
-    html: `<p>${t.codeIsHtml}</p>
-<p style="font-size:28px;font-weight:700;letter-spacing:4px;font-family:ui-monospace,Menlo,monospace">${code}</p>
-<p>${t.codeTypeApp(`<strong>${escapeHtml(device)}</strong>`)}</p>
-<p>${t.codeOtherDeviceHtml(link, escapeHtml(device))}</p>
-<p style="color:#666;font-size:13px">${t.codeWhyApp(site, escapeHtml(device))}</p>`,
+    html: await (await mail()).signInHtml({ origin: linkOrigin(env), beta: isBeta(env), code, link, device, why }),
   });
 }
 
@@ -210,8 +207,6 @@ export async function enterCode(db: D1Database, id: string, poll: string, code: 
   await db.prepare("UPDATE login_requests SET status = 'denied' WHERE id = ? AND status IN ('pending', 'blocked')").bind(id).run();
   return 'denied';
 }
-
-const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 export interface Approvable {
   device: string;
