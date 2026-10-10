@@ -518,7 +518,8 @@ button.svc-tag { cursor: pointer; }
 .sheet-board .bt-row { padding: 10px 16px; gap: 3px 12px; }
 .sheet-board .bt-chip { min-width: 40px; height: 26px; font-size: 0.85rem; border-radius: 7px; }
 .sheet-board .bt-dir { font-size: 0.9rem; }
-.sheet-board .bt-big { font-size: 1.6rem; }
+/* Only the minutes: a stopped service's words keep their own small size. */
+.sheet-board .bt-big:not(.none) { font-size: 1.6rem; }
 .sheet-board .bt-big.now { font-size: 1.15rem; }
 .sheet-board .bt-meta { padding-left: 52px; font-size: 0.75rem; }
 .sheet-board .bt-then { font-size: 0.78rem; }
