@@ -200,10 +200,10 @@ internal fun SettingsScreen(
 }
 
 /**
- * Settings at a glance: who you are, then the rest as rows in groups, each saying
- * what's set. What isn't set yet (a home stop, classes) says what to do, in
- * the accent; notifications all off shows in amber: it's the setting that
- * changes the most. About is under them.
+ * Settings at a glance: who you are, then the rest as rows in groups, each
+ * saying what's set. What isn't set yet (a home stop, classes) says what to
+ * do, in the accent; notifications all off shows in amber: it's the setting
+ * that changes the most. About is under them.
  * The title is in the same slim band of the sky as each page's, so opening
  * one doesn't change the top; the list is plain under it and scrolls, as a
  * page does. [top] and [bottom]: the status bar's and the tab bar's room.
@@ -263,9 +263,8 @@ private fun Initial(email: String, size: Dp, fontSize: TextUnit) {
 }
 
 /**
- * The pages, a row each in three groups (what your trips use, this device,
- * then feedback), with About under them, as the website lists them. Each row
- * has its icon, and what's set on the right.
+ * The pages in the list, with their icons: three groups (what your trips use,
+ * this device, then feedback), as the website lists them.
  */
 private val GROUPS = listOf(
     listOf(

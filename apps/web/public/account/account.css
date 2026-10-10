@@ -67,7 +67,6 @@
 .settings.skeleton .avatar.skel, .settings.skeleton .set-ico.skel { background: var(--surface-2); }
 .settings.skeleton .settings-row { cursor: default; }
 .settings.skeleton .settings-row:hover { background: none; }
-.settings.skeleton .set-item .row-text { align-items: center; }
 .skel-block { border: 1px solid var(--line); border-radius: 18px; background: var(--surface); }
 @keyframes skel-pulse { 50% { opacity: 0.45; } }
 @media (prefers-reduced-motion: reduce) { .skel, .skel-line { animation: none; } }
@@ -229,7 +228,6 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 @media (min-width: 1100px) {
   body:has(.settings.has-rail) .wrap { max-width: 84rem; }
   .settings.has-rail { grid-template-columns: 17rem minmax(0, 1fr) minmax(20rem, 24rem); gap: 32px; }
-  .settings.has-rail .settings-side { min-width: 0; }
   .settings-rail { position: sticky; top: 16px; display: grid; gap: 12px; align-content: start; min-width: 0; }
 }
 
