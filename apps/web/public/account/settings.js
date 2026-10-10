@@ -1,7 +1,8 @@
 // Settings: the signed-in part of the account page (/account/), and the web
 // app's Settings tab (/app/#settings). Your account, then everything else as
-// tiles, each opening its page (settings-pages.js): one at a time
-// on a phone, sliding in from the side; side by side on a wide screen. The
+// a list in groups, each row opening its page (settings-pages.js): one at a
+// time on a phone, sliding in from the side; side by side on a wide screen,
+// with the account page's widget in a third column on a wider one. The
 // address names the page (#trips, or #settings/trips in the web app), so
 // Back and a reload keep it.
 
@@ -12,8 +13,8 @@ import { About, Account, Appearance, Devices, Feedback, Favourites, Language, Pa
 import { cardStyle, styleName } from './journey.js';
 import { Celestial, Horizon } from './sky.js';
 
-/** The pages shown as tiles, two to a row, with their icons. */
-const TILES = ['trips', 'timetable', 'favourites', 'notifications', 'language', 'appearance', 'devices', 'feedback'];
+/** The pages in the list, in groups (what your trips use, this device, then feedback), with their icons. */
+const GROUPS = [['trips', 'timetable', 'favourites', 'notifications'], ['language', 'appearance', 'devices'], ['feedback']];
 const ICONS = {
   trips: '<path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/>',
   timetable: '<rect x="4" y="5.5" width="16" height="14.5" rx="2"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>',
@@ -25,7 +26,7 @@ const ICONS = {
   feedback: '<path d="M4.5 5.5h15v10h-8l-4 3.5v-3.5h-3z"/>',
 };
 const CHEVRON = '<path d="m9 6 6 6-6 6" />';
-/** Pages opened from the links under the tiles. */
+/** Pages opened from the links under the list. */
 const FOOT = ['about'];
 const TITLES = {
   trips: t('Your trips'),
@@ -81,12 +82,14 @@ function summaries({ p, me, notifyOn, devices, imported }) {
  * answer on Now, has no header (so Sign out is in Account), and keeps its tab
  * in the address. `Notify` (a component) is the app's "Notify me when to
  * leave", for Notifications, and `notifyOn` whether it's on. `side` goes above
- * the list (the account page's preview). `onAddEmail` and `onSignOut` are
+ * the list (the account page's preview), or in a column of its own on a wide
+ * screen; `Peek` (a component) is its bar along the foot of a page on a
+ * phone. `onAddEmail` and `onSignOut` are
  * Account's buttons; by default, the web app's. `sky`: the list's title and
  * each page's in a slim band of Now's sky, ending on the low hills (sky.js),
  * on a phone; the web app's.
  */
-export function Settings({ me, inApp = false, Notify = null, notifyOn = false, side = null, sky = false, onAddEmail = addEmailFromApp, onSignOut = signOut }) {
+export function Settings({ me, inApp = false, Notify = null, notifyOn = false, side = null, Peek = null, sky = false, onAddEmail = addEmailFromApp, onSignOut = signOut }) {
   const p = useStore(profile);
   const devices = useStore(deviceCount);
   const imported = useStore(importDone) > 0;
@@ -94,10 +97,14 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
   useStore(theme);
   useStore(cardStyle);
   const wide = useMedia('(min-width: 900px)');
+  // Room for the widget beside the page, rather than above the list.
+  const roomy = useMedia('(min-width: 1100px)');
+  const rail = Boolean(side) && roomy;
   const hash = useHash();
   const listHash = inApp ? '#settings' : '';
   const pageHash = inApp ? '#settings/' : '#';
-  const tiles = TILES.filter((x) => x !== 'notifications' || Notify);
+  const groups = GROUPS.map((g) => g.filter((x) => x !== 'notifications' || Notify));
+  const tiles = groups.flat();
   const pages = ['account', 'trips', 'timetable', ...tiles, ...FOOT];
 
   // The account's language (phase 10): one chosen on another device is used
@@ -298,31 +305,36 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
   `;
 
   return html`
-    <div class=${shown !== null ? 'settings page-open' : 'settings'} ref=${root}>
+    <div class=${['settings', shown !== null && 'page-open', rail && 'has-rail'].filter(Boolean).join(' ')} ref=${root}>
       <div class=${onSide ? 'settings-side leaving' : 'settings-side'} style=${onSide ? { top: `${leaving.shift}px` } : undefined} ref=${side_}>
-        ${side}
+        ${!rail && side}
         ${skyHere
           ? html`<div class="page-band"><div class="sky-head"><${Celestial} band /><h1 class="settings-title">${t('Settings')}</h1></div><${Horizon} on=${null} low /></div>`
           : html`<h1 class="settings-title">${t('Settings')}</h1>`}
         <nav class="settings-groups" aria-label=${t('Settings')}>
           ${account}
-          <div class="set-tiles">
-            ${tiles.map(
-              (id) => html`<button
-                type="button"
-                class="set-tile"
-                data-page=${id}
-                key=${id}
-                ref=${(n) => (rows[id] = n)}
-                aria-current=${shown === id ? 'page' : undefined}
-                onClick=${() => (shown === id ? null : openPage(id))}
-              >
-                <${Icon} paths=${ICONS[id]} />
-                <span class="row-title">${TITLES[id]}</span>
-                <span class=${id === 'notifications' && !notifyOn ? 'row-sum off' : todo[id] ? 'row-sum todo' : 'row-sum'}>${sum[id]}</span>
-              </button>`,
-            )}
-          </div>
+          ${groups.map(
+            (g, i) => html`<div class="set-group" key=${i}>
+              ${g.map(
+                (id) => html`<button
+                  type="button"
+                  class="settings-row set-item"
+                  data-page=${id}
+                  key=${id}
+                  ref=${(n) => (rows[id] = n)}
+                  aria-current=${shown === id ? 'page' : undefined}
+                  onClick=${() => (shown === id ? null : openPage(id))}
+                >
+                  <span class="set-ico" aria-hidden="true"><${Icon} paths=${ICONS[id]} /></span>
+                  <span class="row-text">
+                    <span class="row-title">${TITLES[id]}</span>
+                    <span class=${id === 'notifications' && !notifyOn ? 'row-sum off' : todo[id] ? 'row-sum todo' : 'row-sum'}>${sum[id]}</span>
+                  </span>
+                  <${Icon} paths=${CHEVRON} class="chev" />
+                </button>`,
+              )}
+            </div>`,
+          )}
           <p class="settings-foot">
             ${FOOT.map(
               (id) => html`<a
@@ -353,6 +365,8 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
         ${page('about', html`<${About} />`)}
         ${page('feedback', html`<${Feedback} me=${me} onAddEmail=${onAddEmail} />`)}
       </div>
+      ${rail && html`<aside class="settings-rail">${side}</aside>`}
+      ${Peek && !wide && shown && html`<${Peek} key=${shown} />`}
     </div>
   `;
 }

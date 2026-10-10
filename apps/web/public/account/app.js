@@ -276,6 +276,9 @@ function SignIn({ adding }) {
 
 /* ---------- signed in ---------- */
 
+/** The widget's answer and how to fetch it again, shared by the preview and its bar (Peek). */
+const latest = store({ a: null, load: null });
+
 /** "Your widget right now": /me/next as the widget shows it, so changes in Settings show up. */
 function Preview({ me }) {
   const [a, setA] = useState(null);
@@ -287,9 +290,11 @@ function Preview({ me }) {
       if (answer?.walkSpeedMs) walkSpeed.set(answer.walkSpeedMs);
       setA(answer);
       setFailed(false);
+      latest.set({ a: answer, load });
     } catch {
       setA(null);
       setFailed(true);
+      latest.set({ a: null, load });
     }
   };
   useEffect(() => {
@@ -300,12 +305,33 @@ function Preview({ me }) {
     <section class="side-preview">
       <p class="eyebrow">${t('Your widget right now')}</p>
       ${a
-        ? html`<${Card} a=${a} onAnswer=${setA} onChoice=${load} chips />`
+        ? html`<${Card} a=${a} onAnswer=${(x) => (setA(x), latest.set({ a: x, load }))} onChoice=${load} chips />`
         : failed
           ? html`<${Message} text=${t('Preview unavailable right now.')}><button type="button" class="link-btn" onClick=${load}>${t('Try again')}</button><//>`
           : html`<${Message} text="…" quiet />`}
       <${Report} answer=${a} anonymous=${me.anonymous === true} email=${me.email ?? null} onAddEmail=${startAdding} />
     </section>
+  `;
+}
+
+/**
+ * The widget along the foot of a Settings page on a phone, where the preview
+ * at the top of the list is out of sight: the trip in one line (the server's
+ * card.line, as a compact widget shows it), opening to the whole
+ * card, so a change made on the page shows straight away.
+ */
+function Peek() {
+  const { a, load } = useStore(latest);
+  const [open, setOpen] = useState(false);
+  if (!a) return null;
+  return html`
+    <div class=${open ? 'peek open' : 'peek'} onClick=${(e) => e.target === e.currentTarget && setOpen(false)}>
+      ${open && html`<div class="peek-card"><${Card} a=${a} onAnswer=${(x) => latest.set({ a: x, load })} onChoice=${load} chips /></div>`}
+      <button type="button" class="peek-bar" aria-expanded=${open} onClick=${() => setOpen(!open)}>
+        <span class="peek-text"><span class="eyebrow">${t('Your widget right now')}</span><span class="peek-title">${a.card?.line ?? a.card?.title ?? a.label}</span></span>
+        <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d=${open ? 'm6 9 6 6 6-6' : 'm6 15 6-6 6 6'} /></svg>
+      </button>
+    </div>
   `;
 }
 
@@ -336,7 +362,7 @@ function AccountPage() {
   return html`
     ${adding && html`<${SignIn} adding=${true} />`}
     <div id="app" hidden=${adding}>
-      <${Settings} me=${me} side=${html`<${Preview} me=${me} />`} onAddEmail=${startAdding} onSignOut=${signOut} />
+      <${Settings} me=${me} side=${html`<${Preview} me=${me} />`} Peek=${Peek} onAddEmail=${startAdding} onSignOut=${signOut} />
     </div>
     <${Toast} />
   `;
