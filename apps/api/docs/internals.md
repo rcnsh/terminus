@@ -229,6 +229,11 @@ out. A live time from a stale feed is `stale`. The response's `asOf` is the
 oldest fetch the board used (`boardAsOf`), so the apps' "Updated N ago" is
 as old as the times are.
 
+Rows come in the order every client shows them: running before not
+running; within each, the campus buses before the public ones (`paid`), so
+a 95 due in a minute still sits below an A1 due in fifteen; then live or
+stale times before guesses, soonest first, then by name.
+
 A service outside its hours (`inService`) with no time from the feed is
 left off the board. With `?stopped=1` (`/api/arrivals`, `/api/me/nearby`; `/api/line`
 always asks this way) it's listed after every running row, by name, with
