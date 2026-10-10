@@ -253,6 +253,9 @@ apps/api/
   src/push.ts, webpush.ts  Push: FCM to Android, Web Push to the installed web app
   src/access.ts       Who may call the keyed routes (an API key or a session)
   src/admin.ts        /api/admin/stats for the dashboard; analytics.ts logs to Analytics Engine
+  src/collect.ts      The dashboard's switches for the statistics below, all off until turned on
+  src/usage.ts, eta.ts, apperrors.ts  Daily active counts; the feed's arrival times against
+                      the timelapse; crash reports (/api/errors), scrubbed, with no one on them
   src/feedback.ts     "This was wrong" reports, stored and emailed to the operator
   src/downloads.ts    App downloads from R2 (latest.json, the APKs, the DMG, the appcast)
   src/landing.ts, site.ts, pagesky.ts  The landing page; stable or beta, and the old address's

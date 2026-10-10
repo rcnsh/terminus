@@ -15,7 +15,7 @@ import javax.crypto.spec.GCMParameterSpec
 
 /**
  * The app's own settings and state on this phone: Store's, and Lang's,
- * Theme's and CardStyle's keys beside them, which a sign-out keeps
+ * Theme's, CardStyle's and CrashReports' keys beside them, which a sign-out keeps
  * ([Store.clear]).
  */
 internal fun terminusPrefs(ctx: Context): SharedPreferences = ctx.applicationContext.getSharedPreferences("terminus", Context.MODE_PRIVATE)
@@ -283,10 +283,13 @@ class Store(context: Context) {
     fun clear() = synchronized(Store) {
         val keep = listOf(KEY_LANG, KEY_THEME, KEY_INTENT, Servers.KEY_SERVER, KEY_TOKEN_SITE, KEY_TOKEN_LOCAL).associateWith { prefs.getString(it, null) }
         val menu = prefs.getBoolean(Servers.KEY_MENU, false)
+        // This phone's choice, not the account's.
+        val crashReports = prefs.getBoolean(CrashReports.KEY_ENABLED, true)
         prefs.edit(commit = true) {
             clear()
             for ((k, v) in keep) if (v != null) putString(k, v)
             if (menu) putBoolean(Servers.KEY_MENU, true)
+            if (!crashReports) putBoolean(CrashReports.KEY_ENABLED, false)
         }
         cached = null
         loaded = true

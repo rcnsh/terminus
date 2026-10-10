@@ -547,6 +547,8 @@
     <string name="time_format_hint_auto">For every time terminus shows, here, on your Mac and on the web. Auto follows this phone.</string>
     <string name="heading_signed_in">Signed in</string>
     <string name="heading_your_data">Your data</string>
+    <string name="crash_reports">Send crash reports</string>
+    <string name="crash_reports_hint">When terminus crashes, send what broke and the app version. Never who you are or where.</string>
     <string name="account_page_sub">API keys, and signing out everywhere</string>
     <string name="heading_more">More</string>
     <string name="get_apps">Get the apps</string>

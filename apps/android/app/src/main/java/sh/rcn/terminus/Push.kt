@@ -186,6 +186,8 @@ class TerminusApp : Application() {
         super.onCreate()
         L.init(this)
         Servers.init(this)
+        // Crashes are written down from here on; earlier ones are sent now, in the background.
+        CrashReports.install(this)
         ServerClock.init(this)
         Quiet.init(this)
         Outdated.init(this)

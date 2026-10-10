@@ -12,8 +12,10 @@ test('the dashboard asks Analytics Engine with the token, and says so when it fa
   };
   const env = { KV: makeKV(), ANALYTICS_TOKEN: 'ae-token', CF_ACCOUNT_ID: 'acct' };
   const s = await adminStats(env, Date.now(), fetchImpl);
-  assert.equal(asked.length, 4);
+  assert.equal(asked.length, 7);
   assert.match(asked[3].sql, /blob1 = 'timelapse'/, "the recorder's polls, by what they cost NUS");
+  assert.match(asked[4].sql, /blob1 = 'active'/, 'the daily active counts');
+  assert.match(asked[5].sql, /blob1 = 'apperror'/, 'the error reports, by fingerprint');
   assert.ok(asked.every((a) => a.url === 'https://api.cloudflare.com/client/v4/accounts/acct/analytics_engine/sql' && a.auth === 'Bearer ae-token'));
   assert.ok(asked.every((a) => /FROM terminus/.test(a.sql)));
   assert.deepEqual(s.analytics.daily, [{ day: '2026-09-30', kind: 'answer', n: 12 }]);

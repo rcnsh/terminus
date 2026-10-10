@@ -172,7 +172,7 @@ function sgtTime(ms: number): string {
   return `${hm}, ${d.getUTCDate()} ${month}`;
 }
 
-async function readJson(req: Request): Promise<Record<string, unknown> | null> {
+export async function readJson(req: Request): Promise<Record<string, unknown> | null> {
   // The exact type, not one that merely mentions it: `text/plain;
   // x=application/json` is a type a page on another site can send without
   // asking first, cookie and all.

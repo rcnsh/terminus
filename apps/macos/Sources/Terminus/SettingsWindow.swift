@@ -154,6 +154,7 @@ struct SettingsPaneView: View {
     @Bindable var app: AppModel
     let setup: SetupModel
     @AppStorage(Appearance.key) private var theme = "auto"
+    @AppStorage(CrashReporter.key) private var sendCrashReports = true
     @State private var confirmDelete = false
     @State private var confirmSignOut = false
 
@@ -231,6 +232,13 @@ struct SettingsPaneView: View {
         Toggle(L("Install updates automatically"), isOn: Binding(get: { Updater.shared.installsAutomatically }, set: { Updater.shared.setInstallsAutomatically($0) }))
             .disabled(!Updater.shared.running || !Updater.shared.checksAutomatically)
         Hint(L("Updates install when no terminus window is open. Turned off, terminus asks first."))
+        Toggle(isOn: $sendCrashReports) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L("Send crash reports"))
+                Hint(L("When terminus crashes, send what broke and the app version. Never who you are or where."))
+            }
+        }
+        .padding(.top, 8)
         Divider().padding(.vertical, 8)
         if app.anonymous || setup.me?.anonymous == true {
             Text(L("No email")).fontWeight(.medium)

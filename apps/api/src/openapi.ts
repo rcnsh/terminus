@@ -1585,9 +1585,63 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                 signups: { type: 'array', items: { type: 'object', properties: { day: { type: 'string' }, n: { type: 'integer' } } } },
                 apiKeys: { type: 'object', additionalProperties: { type: 'integer' } },
                 feedback: { type: 'object', description: 'Reports in the last week, and the latest 25 with their notes and answers.' },
+                collect: {
+                  type: 'object',
+                  description: 'Which of the extra statistics are being collected: set with POST /api/admin/collect.',
+                  properties: { active: { type: 'boolean' }, eta: { type: 'boolean' }, errors: { type: 'boolean' } },
+                },
+                eta: { type: ['object', 'null'], description: 'How close the feed’s arrival times came to when the buses did come, over the last 14 scored days: overall, by how far ahead, by service and by hour. null without storage.' },
               },
             }),
             '404': errorResponse('No operator token, or the wrong one.'),
+          },
+        },
+      },
+      '/api/admin/collect': {
+        post: {
+          tags: ['Service'],
+          summary: 'Turn one of the operator’s statistics on or off',
+          description:
+            'The switches for what terminus collects beyond its answers: `active` (how many accounts used it each day, by app and version, counted from the sessions already kept), `eta` (the feed’s arrival times against when the timelapse recorder saw each bus arrive) and `errors` (crash and error reports from the apps and the website, POST /api/errors). Each is off until turned on. Answers every switch. Answers 404 without the operator token.',
+          operationId: 'adminCollect',
+          security: [{ operator: [] }],
+          requestBody: jsonBody({
+            type: 'object',
+            required: ['name', 'on'],
+            properties: { name: { type: 'string', enum: ['active', 'eta', 'errors'] }, on: { type: 'boolean' } },
+          }),
+          responses: {
+            '200': ok({ type: 'object', properties: { active: { type: 'boolean' }, eta: { type: 'boolean' }, errors: { type: 'boolean' } } }),
+            '400': errorResponse('No such switch, or `on` is not true or false.'),
+            '404': errorResponse('No operator token, or the wrong one.'),
+          },
+        },
+      },
+      '/api/errors': {
+        post: {
+          tags: ['Service'],
+          summary: 'Report a crash or an error in an app or the website',
+          description:
+            'What broke, never who it broke for: no account, session, device or install id is asked for or kept. The message and stack are scrubbed of URL queries, email addresses, home folder names, coordinates, long numbers and token-like strings before they are kept, for three months. Each app has a switch to stop sending them. Answers 204 whether or not the report was kept (it is dropped while the operator has `errors` off).',
+          operationId: 'reportError',
+          security: [],
+          requestBody: jsonBody({
+            type: 'object',
+            required: ['platform', 'version', 'type'],
+            properties: {
+              platform: { type: 'string', enum: ['android', 'mac', 'ios', 'web'] },
+              version: { type: 'string', maxLength: 32, description: 'The app’s version, e.g. `3.1.0`.' },
+              os: { type: 'string', maxLength: 40, description: 'The system or browser and its major version, e.g. `Android 15`, `macOS 26`, `Chrome 140`.' },
+              type: { type: 'string', maxLength: 120, description: 'The error’s type, e.g. `java.lang.IllegalStateException` or `TypeError`.' },
+              message: { type: 'string', description: 'The error’s message; the first 300 characters are kept.' },
+              stack: { type: 'string', description: 'The stack trace; the first 40 lines are kept.' },
+              fatal: { type: 'boolean', description: 'true for a crash that ended the app.' },
+            },
+          }),
+          responses: {
+            '204': { description: 'Received.' },
+            '400': errorResponse('Not a report: platform, version or type missing or not allowed.'),
+            '429': { ...errorResponse('Too many requests from this address.'), headers: RETRY_AFTER },
           },
         },
       },

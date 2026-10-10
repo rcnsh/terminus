@@ -26,6 +26,7 @@ import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -39,6 +40,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.SnackbarDuration
@@ -92,6 +94,7 @@ import sh.rcn.terminus.BuildConfig
 import sh.rcn.terminus.Campus
 import sh.rcn.terminus.CardStyle
 import sh.rcn.terminus.Clock
+import sh.rcn.terminus.CrashReports
 import sh.rcn.terminus.Destination
 import sh.rcn.terminus.Device
 import sh.rcn.terminus.L
@@ -771,6 +774,14 @@ private fun AccountSection(state: AccountState, account: AccountViewModel, main:
             RowDivider()
             LinkRow(stringResource(R.string.account_page), { ctx.openWeb("${BuildConfig.LINK_BASE}/account") }, sub = stringResource(R.string.account_page_sub), away = true)
         }
+        RowDivider()
+        // Kept on this phone, not in the account: it's about this app's crashes.
+        var crashReports by remember { mutableStateOf(CrashReports.enabled(ctx)) }
+        FieldRow(
+            stringResource(R.string.crash_reports),
+            Modifier.toggleable(value = crashReports, role = Role.Switch) { on -> CrashReports.setEnabled(ctx, on); crashReports = on },
+            sub = stringResource(R.string.crash_reports_hint),
+        ) { Switch(checked = crashReports, onCheckedChange = null) }
     }
     // An account with an email is deleted from the account page, signed in on the web (the server insists).
     Group(null) {

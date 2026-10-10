@@ -271,7 +271,7 @@ test('the OpenAPI spec documents exactly the routes that exist', async () => {
     ...ME_ROUTES.map((r) => `${r.method} ${r.path.endsWith('/') ? r.path + '*' : r.path}`),
     ...['/api/next', '/api/trip', '/api/arrivals', '/api/buses', '/api/line', '/api/campus', '/api/stops/pairs', '/api/health', '/api/status.json', '/api/admin/stats', '/api/admin/passkey/challenge', '/docs', '/api/openapi.json', '/api/timelapse/days', '/api/timelapse/days/*'].map((p) => `GET ${p}`),
     ...['/api/auth/config', '/auth/verify', '/auth/approve'].map((p) => `GET ${p}`),
-    ...['/api/auth/login', '/api/auth/code', '/auth/verify', '/api/auth/anon', '/api/auth/anon/web', '/api/auth/app/start', '/api/auth/app/poll', '/api/auth/app/code', '/api/auth/app/merge', '/auth/approve', '/api/auth/logout', '/api/pair', '/api/pair/check', '/api/admin/passkey/register', '/api/admin/passkey/signin'].map((p) => `POST ${p}`),
+    ...['/api/auth/login', '/api/auth/code', '/auth/verify', '/api/auth/anon', '/api/auth/anon/web', '/api/auth/app/start', '/api/auth/app/poll', '/api/auth/app/code', '/api/auth/app/merge', '/auth/approve', '/api/auth/logout', '/api/pair', '/api/pair/check', '/api/admin/passkey/register', '/api/admin/passkey/signin', '/api/admin/collect', '/api/errors'].map((p) => `POST ${p}`),
     ...['/map/style.json', '/map/campus.pmtiles', '/map/fonts/*/*.pbf', '/map/sprites/v4/*'].map((p) => `GET ${p}`),
     ...['/download/latest.json', '/download/android', '/download/mac', '/download/appcast.xml', '/download/releases/*/*'].map((p) => `GET ${p}`),
   ].sort();

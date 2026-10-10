@@ -20,7 +20,7 @@
 //   the pieces MapLibre asks for. So the campus map works offline after the
 //   first look. Live buses and arrivals are never kept.
 
-const SHELL = 'shell-v20';
+const SHELL = 'shell-v21';
 const DATA = 'data-v3';
 const MAP = 'map-v1';
 const TILES = '/map/campus.pmtiles';
@@ -52,6 +52,7 @@ const SHELL_FILES = [
   '/account/search-box.js',
   '/account/account.css',
   '/assets/site.css',
+  '/assets/errors.js',
   '/assets/theme.js',
   '/assets/i18n.js',
   '/assets/sky-phase.js',

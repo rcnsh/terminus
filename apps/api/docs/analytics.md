@@ -133,6 +133,53 @@ SELECT blob2 AS signal, SUM(_sample_interval) AS n
 FROM terminus WHERE blob1 = 'signal' GROUP BY signal ORDER BY n DESC
 ```
 
+## The operator's switches
+
+Three more kinds of statistics are collected only once switched on, on the
+dashboard (`POST /api/admin/collect`, KV `config:collect:<name>`, `src/collect.ts`).
+All start off, and KV failing to answer reads as off.
+
+### Active accounts (`active`)
+
+Once a Singapore day, the first cron run after midnight counts the accounts
+whose sessions were used in the last 1, 7 and 30 days (`src/usage.ts`), in
+all, by app (`web`, `android`, `mac`, `ios`, `unknown`; `api` counts keys
+used) and by version (devices, from `x-terminus-client`). Only the totals
+are written: `blob2` scope, `blob3` name, `blob4` the day, `double1..3` the
+three windows.
+
+```sql
+SELECT blob4 AS day, blob3 AS app, max(double1) AS daily, max(double2) AS weekly
+FROM terminus WHERE blob1 = 'active' AND blob2 = 'app'
+GROUP BY day, app ORDER BY day
+```
+
+### Arrival-time accuracy (`eta`)
+
+No rows of its own: the cron joins a closed day's `arrival` rows (what the
+feed said, with the plate) with the timelapse recording of the same day
+(where each plate was along its line every 30 s), and keeps the result in
+R2 as `eta/YYYY-MM-DD.json` (`src/eta.ts`): per prediction, the service,
+how far ahead it was, how much later than said the bus came, and the hour.
+It needs the recorder on, the downloads bucket and `ANALYTICS_TOKEN`; it
+calls nobody but Analytics Engine. A bus counts as arrived 25 m before its
+stop's mark on the line, interpolated between readings; the answer is good
+to about 15 s.
+
+### Crash reports (`errors`)
+
+`POST /api/errors` (`src/apperrors.ts`), from the apps and the website, one
+row each: `blob2` platform, `blob3` version, `blob4` fingerprint, `blob5`
+type, `blob6` message, `blob7` stack, `blob8` OS or browser, `double2` 1
+for a crash that ended the app. While switched off, reports are answered
+and dropped.
+
+```sql
+SELECT blob4 AS fingerprint, blob5 AS type, blob3 AS version, SUM(_sample_interval) AS n
+FROM terminus WHERE blob1 = 'apperror' AND timestamp > NOW() - INTERVAL '7' DAY
+GROUP BY fingerprint, type, version ORDER BY n DESC
+```
+
 ## What the rows hold about people
 
 None holds an account, email, IP address or coordinates, and none is
@@ -142,3 +189,10 @@ the caller when the app sent a location, `double6` is the walk to it, and
 time, that is a rough idea of where someone was and where they were
 going. The privacy policy says so; don't add anything finer.
 
+`active` rows are totals only; nothing in them names or follows an account.
+An `apperror` row holds no account, session, device or install id, and the
+address it came from is used only for the rate limit; its message and stack
+are scrubbed of URL queries, email addresses, home folder names, coordinates,
+long numbers and token-like strings (`scrub()`). Each app has a switch to
+stop sending them. The ETA files hold no stop and no plate, only service,
+lead time, error and hour.

@@ -30,6 +30,8 @@ import { clearTrip, sgtDate, watchTrip } from './trip.ts';
 import { isBeta } from './site.ts';
 import { ensureRecorder } from './timelapse.ts';
 import { logCronError } from './analytics.ts';
+import { recordActive } from './usage.ts';
+import { recordEta } from './eta.ts';
 import { type Feed, lastTrip, tripError } from './feedwatch.ts';
 
 export interface UpstreamState {
@@ -727,4 +729,9 @@ export async function runCron(env: Env, nowMs: number): Promise<void> {
   // Starts the day's timelapse recorder in the morning (it runs itself after that).
   await step('timelapse', () => ensureRecorder(env, nowMs));
   await step('term', () => remindTerm(env, nowMs));
+  // The operator's statistics, each only while switched on (collect.ts):
+  // the day's active counts once a day, and a closed day's arrival times
+  // against where the recorder saw the buses.
+  await step('usage', () => recordActive(env, nowMs));
+  await step('eta', () => recordEta(env, nowMs));
 }
