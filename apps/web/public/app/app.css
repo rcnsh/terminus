@@ -630,14 +630,22 @@ body.sky-dusk { --s0: #2c3566; --s1: #4a4275; --s2: #6c4260; --s3: #e08a62; --h-
 :root[data-theme="dark"] body.sky-day { --s0: #173350; --s1: #1f4262; --s2: #2d5674; --s3: #3f6b86; --h-far: #20384a; --h-tree: #132330; --h-city: #35506a; --h-win: #b9c7d6; }
 :root[data-theme="dark"] body.sky-golden { --s0: #1f3550; --s1: #334356; --s2: #5e4a37; --s3: #9a6a3c; --h-far: #3a3326; --h-tree: #1a1712; --h-city: #4d4536; --sun: #f3d29a; --h-win: #b9c7d6; }
 :root[data-theme="dark"] body.sky-dusk { --s0: #1a1c3a; --s1: #322b54; --s2: #6c4260; --s3: #b8644f; --h-far: #2b2340; --h-tree: #17121f; --h-city: #4f4266; --sun: #f0915e; }
-/* On Now, down to its horizon. Buses, Map and Settings are drawn over a hidden Now,
-   which keeps its sky. Until sky.js has measured where the horizon is, about
-   where "Checking…" puts it, so the first frame is already under the sky. */
+/* On Now, from the window's top down to its horizon; until sky.js has
+   measured where that is, about where "Checking…" puts it, so the first
+   frame is already under the sky. Now's tab draws it, reaching up behind the
+   header and out to the window's sides, so it fades and zooms with its hills
+   when the tab changes (drawn behind the page, it showed through the fading
+   hills), with the header kept over it. It stops inside the near hill, solid
+   for the strip's bottom 40 px or so, so their edges never meet on one line
+   and blur together in the zoom. */
 body.sky { --end: var(--sky-end, 22.5rem); }
-body.sky:not(.on-map, .on-settings, .on-buses)::before {
-  content: ''; position: absolute; z-index: -1; inset: 0 0 auto 0; height: var(--end); pointer-events: none;
+body.sky #tab-now { position: relative; }
+body.sky #tab-now::before {
+  content: ''; position: absolute; z-index: -1; top: calc(-1 * var(--sky-top, var(--header-h, 0px))); left: calc(50% - 50vw); width: 100vw;
+  height: calc(var(--end) - 24px); pointer-events: none;
   background: linear-gradient(var(--s0) 0, var(--s1) calc(var(--end) * 0.5), var(--s2) calc(var(--end) * 0.86), var(--s3) var(--end));
 }
+body.sky > .nav { position: relative; z-index: 1; }
 body.sky:not(.on-map, .on-settings, .on-buses) > .nav, body.sky .app-chips:not(.map-pills), body.sky .where-box, body.sky .sky-head {
   --bg: var(--k-bg); --surface: var(--k-surface); --surface-2: var(--k-surface-2); --ink: var(--k-ink); --muted: var(--k-muted); --faint: var(--k-faint);
   --line: var(--k-line); --line-strong: var(--k-line-strong); --accent: var(--k-accent); --accent-soft: var(--k-accent-soft);
