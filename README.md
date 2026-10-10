@@ -22,6 +22,9 @@ catch, and will I make it?** It knows teaching weeks and holidays, picks the sto
 on the right side of the road, and says when walking is faster. On your home
 screen, in your menu bar and on the web, under a sky that follows the hour.
 
+How it was built, and why it runs on one Cloudflare Worker:
+[Building terminus](https://rcn.sh/blog/building-terminus).
+
 ## On your phone, your Mac and the web
 
 The same answer on your home screen, in your menu bar and on the web, in light or dark.
@@ -132,22 +135,156 @@ down the clock itself, so no screen ever shows a stale "4 min".
 | [`apps/android`](apps/android) | Home-screen widgets (compact and with places) and the app: Now, Buses, the campus map, Settings. |
 | [`apps/macos`](apps/macos) | Menu bar app, with the campus map in a window. |
 
-## Running it
+More in [ARCHITECTURE.md](ARCHITECTURE.md), and in depth in
+[apps/api/docs/internals.md](apps/api/docs/internals.md).
+
+## Quickstart
+
+Node 22.18 or later and pnpm (the version is pinned in `package.json`).
 
 ```bash
 pnpm install
-pnpm check                            # tests and typecheck
-node apps/api/scripts/dev-stub.mjs    # local API with fake buses on :8787
+pnpm check                            # API tests and typecheck: no network, no keys
+pnpm lint                             # oxlint; warnings fail
+node apps/api/scripts/dev-stub.mjs    # the Worker and website with fake buses on :8787
 ```
 
-Self-hosting needs your own Cloudflare account (Workers, D1, KV, R2, Durable
-Objects, Analytics Engine, Workers rate limiting, Email Sending) and the NUS feed configuration described in
-[apps/api/docs/internals.md](apps/api/docs/internals.md). Releases run on a
-Mac with `scripts/release.sh`, once the Worker serving that version is
-deployed: the tests, the Android build as one APK per CPU
-type, the signed Mac app and the appcast installed Macs update from, the
-uploads, the tag and the GitHub release. The campus map's street map goes onto R2 with the
-**map tiles** workflow (or `scripts/map-tiles.sh`). See [CONTRIBUTING.md](CONTRIBUTING.md).
+Open http://localhost:8787 and sign in as `you@u.nus.edu` with the code the
+stub prints. The stub needs no keys. Its options (`PORT`, `STUB_HOST`,
+`STUB_NOW`, `STUB_HOURS`, `STUB_TLS`, `CLASS_IN_MIN`) are described at the
+top of [`apps/api/scripts/dev-stub.mjs`](apps/api/scripts/dev-stub.mjs).
+
+Against the live NUS feed, with `cf dev`:
+
+```bash
+cd apps/api
+cp .dev.vars.example .dev.vars        # fill in; never commit it
+pnpm dev
+```
+
+## Configuration
+
+The Worker's config is [`apps/api/cloudflare.config.ts`](apps/api/cloudflare.config.ts):
+one config, two Workers (`terminus`, and `terminus-beta` with `--mode beta`),
+each with its own D1, KV, R2 bucket, rate-limit namespaces and Analytics
+Engine dataset. [`wrangler.config.ts`](apps/api/wrangler.config.ts) only sets
+the website directory (`../web/public`). Every binding is typed in
+[`src/types.ts`](apps/api/src/types.ts) (`Env`); only `KV` is required at run
+time, and `/api/health` says what's missing.
+
+Secrets go in `apps/api/.dev.vars` locally (template:
+[`.dev.vars.example`](apps/api/.dev.vars.example)) and on the Worker with
+`cf workers secrets update`. Their values aren't in this repository.
+
+| Secret | Declared | What |
+| --- | --- | --- |
+| `NEXTBUS_AUTH_BASE` | yes | uNivUS host for the guest token |
+| `NEXTBUS_PROXY_BASE` | yes | uNivUS bus proxy |
+| `NEXTBUS_PROXY_API_KEY` | yes | Sent as `x-api-key` to the proxy |
+| `NEXTBUS_HTD_API`, `NEXTBUS_APP_API` | yes | Headers for the token request |
+| `NEXTBUS_APP_VERSION` | yes | Current uNivUS release string. KV `config:appVersion` overrides it |
+| `ALERT_EMAIL` | yes | Where outage alerts and feedback go |
+| `HEALTH_TOKEN` | yes | Operator token (`x-health-token`): dashboard, `/api/health?probe=1` |
+| `TURNSTILE_SECRET` | yes | Turnstile on web sign-in. Unset: the check is skipped |
+| `FCM_SERVICE_ACCOUNT` | yes | Firebase service account JSON, for Android push |
+| `VAPID_PRIVATE_KEY` | yes | Web Push key, a P-256 JWK (`scripts/vapid-key.mjs`) |
+| `LTA_ACCOUNT_KEY` | no | LTA DataMall key, for public buses. Unset: shuttles only |
+| `ANALYTICS_TOKEN` | no | Lets the dashboard query Analytics Engine |
+| `TIMELAPSE_TOKEN` | no | Opens `/api/timelapse/*` for the machine that renders videos |
+| `NEXTBUS_DEVICE_ID` | no | 16 hex characters. Unset: one is made and kept in KV |
+| `NEXTBUS_REQUESTED_BY`, `NEXTBUS_SECURED_REQUEST` | no | Sent if set; not required upstream |
+
+"Declared" secrets are listed with `bindings.secret()` in the config, so
+`cf deploy` keeps them. The others are optional, so a site deploys without them.
+
+Plain variables, set in the config:
+
+| Variable | What |
+| --- | --- |
+| `EMAIL_FROM` | Sender for sign-in mail (a domain onboarded to Email Sending) |
+| `TURNSTILE_SITE_KEY`, `TURNSTILE_HOSTNAMES` | Turnstile's public key, and the hostnames a pass must come from |
+| `CF_ACCOUNT_ID` | Account owning the Analytics Engine dataset |
+| `PUBLIC_ORIGIN` | The site's origin. Set on the beta; default `https://terminus.run` |
+| `LINK_ORIGIN` | Origin for links in emails, if not `PUBLIC_ORIGIN` |
+| `MOVE_PAGES` | `on`: pages on the old address redirect to the new one |
+| `AE_DATASET` | Analytics Engine dataset the dashboard reads. Default `terminus` |
+| `TIMELAPSE_ENABLED` | `on` lets the timelapse recorder poll (KV `config:timelapse` overrides) |
+
+Bindings:
+
+| Binding | Type |
+| --- | --- |
+| `DB` | D1: accounts, sessions, profiles ([`migrations/`](apps/api/migrations)) |
+| `KV` | KV: tokens, calendar, feed state, runtime config |
+| `DOWNLOADS` | R2: app builds, `latest.json`, the appcast, the street map, timelapse days |
+| `TRIPS`, `TIMELAPSE`, `FEED_GATE` | Durable Objects (`Trip`, `TimelapseRecorder`, `FeedGate`) |
+| `AE` | Analytics Engine dataset |
+| `EMAIL` | Email Sending |
+| `RL_AUTH`, `RL_PUBLIC`, `RL_ME`, `RL_MAIL`, `RL_ANON`, `RL_PAIR`, `RL_MAP` | Workers rate limiting |
+| `ASSETS` | The website, `apps/web/public` |
+
+Runtime switches in KV, changed without a deploy: `config:appVersion`,
+`config:minClient` (oldest app version served) and `config:timelapse`.
+
+## Deployment
+
+`main` isn't deployed automatically. From `apps/api`, signed in with
+`cf auth login`:
+
+```bash
+pnpm run deploy         # stable: terminus.run
+pnpm run deploy:beta    # beta: beta.terminus.run
+```
+
+Use `pnpm run deploy`, not `pnpm deploy`, which is a pnpm built-in. Each runs
+[`scripts/predeploy.mjs`](apps/api/scripts/predeploy.mjs) (refuses
+uncommitted changes in `apps/api` or `apps/web/public`, then runs
+`pnpm check`), applies pending D1 migrations with `cf d1 migrations apply`,
+then runs `cf deploy` (`--mode beta` for the beta). Migrations must be
+additive; see [internals.md](apps/api/docs/internals.md).
+
+Check a deploy builds without sending anything:
+
+```bash
+pnpm exec cf deploy --dry-run
+```
+
+On a new Cloudflare account, create the resources, put their ids and names
+in `cloudflare.config.ts`, then set the secrets:
+
+```bash
+pnpm exec cf d1 create --name terminus
+pnpm exec cf kv namespaces create --title terminus
+pnpm exec cf r2 buckets create --name terminus-downloads
+pnpm exec cf workers secrets update NEXTBUS_AUTH_BASE --worker terminus --type secret_text --text '…'
+```
+
+Email Sending needs the Workers Paid plan and the sender's domain onboarded
+under Email Service in the dashboard. The custom domains in the config are
+mine; change them, and `EMAIL_FROM` with them.
+
+## Clients
+
+| | Build | Details |
+| --- | --- | --- |
+| Android | `cd apps/android && ./gradlew :app:installStableDebug` | [apps/android](apps/android/README.md) |
+| Mac | `cd apps/macos && ./build.sh` | [apps/macos](apps/macos/README.md) |
+| Web | none: served from `apps/web/public` by the Worker | [apps/web](apps/web/README.md) |
+
+Point a debug client at the dev stub: `-PapiBase=http://localhost:8787` plus
+`adb reverse tcp:8787 tcp:8787` on Android, `TERMINUS_API_BASE=http://localhost:8787`
+on the Mac.
+
+Releases run on my Mac with `scripts/release.sh` (betas:
+`scripts/release-beta.sh <x.y.z-beta.n>`), once the Worker serving that
+version is deployed. It runs the tests; builds one Android APK per CPU type
+and the signed Mac DMG with its Sparkle appcast; uploads them to R2; then
+tags the commit and publishes the GitHub release. `--dry-run` builds into
+`build/dry-run/`. The signing keys live off the repo, so a build without
+them comes out unsigned (Android) or ad-hoc signed (Mac). The campus street
+map goes to R2 with the **map tiles** workflow or `scripts/map-tiles.sh`.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) to send a change.
 
 <br>
 
