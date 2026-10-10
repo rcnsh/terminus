@@ -165,7 +165,15 @@ test('app sign-in: the email carries a link, never the number; the page asks for
   // stranger in one time in three.
   assert.match(page, /<input class="number" id="n" name="n" inputmode="numeric"/);
   assert.doesNotMatch(page, /name="n" value="\d+"/);
-  assert.doesNotMatch(page.replace(/<[^>]*>/g, ' '), new RegExp(`\\b${s.match}\\b`), 'the page never shows the number');
+  // What a person reads: not the inline CSS (its 50% and 86%), nor when it
+  // was requested (the frozen clock's 27 Aug), which would match one random
+  // number in thirty and fail with nothing shown.
+  const read = page
+    .replace(/<(style|script)\b[^>]*>[\s\S]*?<\/\1>/g, ' ')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/Requested [^.]*\./, ' ');
+  assert.match(read, /Sign in to terminus on MacBook Air\?/, 'the words are still checked');
+  assert.doesNotMatch(read, new RegExp(`\\b${s.match}\\b`), 'the page never shows the number');
   // Opening the page twice (a mail scanner, then the user) changes nothing.
   assert.equal((await call(env, `/auth/approve?r=${lastLink(email)}`)).status, 200);
   assert.equal((await (await call(env, '/api/auth/app/poll', { method: 'POST', body: s })).json()).status, 'pending');
