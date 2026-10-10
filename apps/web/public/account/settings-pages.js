@@ -1148,6 +1148,7 @@ export function Account({ me, inApp, onAddEmail, onSignOut }) {
       <${Group} title=${t('Your data')}>
         <a class="settings-row" href="/api/me/export" download><span class="row-text"><span class="row-title">${t('Download my data')}</span></span>${chev}</a>
         <button type="button" class="settings-row" onClick=${everywhere}><span class="row-text"><span class="row-title">${t('Sign out everywhere')}</span></span>${chev}</button>
+        <${ErrorReports} />
       <//>
       <${Keys} />
       <section class="trips-group">
@@ -1255,6 +1256,28 @@ const ABOUT_LINKS = () => [
   { title: t('Map data'), href: 'https://www.openstreetmap.org/copyright', where: 'openstreetmap.org' },
   { title: t('NUS Acceptable Use Policy'), href: 'https://nus.edu.sg/registrar/docs/info/registration-guides/aup-form.pdf', where: 'nus.edu.sg' },
 ];
+
+/** Whether this browser sends error reports (/assets/errors.js keeps the choice), as a row of Your data, as in the apps. */
+function ErrorReports() {
+  const reports = globalThis.terminusErrorReports;
+  const [on, setOn] = useState(reports?.on ?? true);
+  if (!reports) return null;
+  return html`
+      <${Field} id="error-reports" label=${t('Send crash reports')} sub=${t('When terminus crashes, send what broke and the app version. Never who you are or where. Only in this browser.')}>
+        <input
+          id="error-reports"
+          class="switch"
+          type="checkbox"
+          role="switch"
+          checked=${on}
+          onChange=${(e) => {
+            reports.set(e.currentTarget.checked);
+            setOn(e.currentTarget.checked);
+          }}
+        />
+      <//>
+  `;
+}
 
 /** The app's mark and name, what it does and where its data comes from, then its links, as on Android. */
 export function About() {

@@ -4,14 +4,19 @@
  * from signing in with a passkey (passkey.ts).
  *
  * Counts come from D1 and KV. With ANALYTICS_TOKEN and CF_ACCOUNT_ID set it
- * also queries Analytics Engine for answers and errors per day; without them
- * those parts are null and the page says how to turn them on.
+ * also queries Analytics Engine for answers and errors per day, the daily
+ * active counts and the apps' error reports; without them those parts are
+ * null and the page says how to turn them on. `collect` is the switches for
+ * what's collected (collect.ts), `eta` the arrival times scored (eta.ts).
  */
 
 import type { Env } from './types.ts';
 import { answering, answeringSince, readIncidents, readUpstream } from './monitor.ts';
 import { BETTER_STOP, BETTER_STOP_TEXT, REASONS, summarize } from './feedback.ts';
 import { sessionOk } from './passkey.ts';
+import { aeSql } from './analytics.ts';
+import { collectState } from './collect.ts';
+import { etaSummary } from './eta.ts';
 
 const DAY = 86_400_000;
 
@@ -55,12 +60,20 @@ export function timingSafeEqual(given: string, secret: string): boolean {
 
 export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetch = fetch): Promise<Record<string, unknown>> {
   const db = env.DB;
-  const [upstream, incidents, analytics] = await Promise.all([readUpstream(env), readIncidents(env), analyticsStats(env, fetchImpl)]);
+  const [upstream, incidents, analytics, collect, eta] = await Promise.all([
+    readUpstream(env),
+    readIncidents(env),
+    analyticsStats(env, fetchImpl),
+    collectState(env),
+    etaSummary(env, nowMs).catch((err) => ({ error: err instanceof Error ? err.message : String(err) })),
+  ]);
   const out: Record<string, unknown> = {
     now: new Date(nowMs).toISOString(),
     feed: upstream ? { up: answering(upstream), since: new Date(answeringSince(upstream)).toISOString(), checkedAt: new Date(upstream.checkedAt).toISOString() } : null,
     incidents: incidents.slice(0, 5).map((i) => ({ start: new Date(i.start).toISOString(), end: i.end ? new Date(i.end).toISOString() : null, cause: i.cause })),
     analytics,
+    collect,
+    eta,
   };
   if (!db) return out;
 
@@ -170,22 +183,16 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
   };
 }
 
-/** Answers, their quality, and errors per day for 14 days, and the timelapse
- *  recorder's polls by what each cost NUS (logPoll), from Analytics Engine's SQL API. */
+/** Answers, their quality, and errors per day for 14 days, the timelapse
+ *  recorder's polls by what each cost NUS (logPoll), the daily active counts
+ *  (usage.ts) and the apps' error reports (apperrors.ts), from Analytics
+ *  Engine's SQL API. */
 async function analyticsStats(env: Env, fetchImpl: typeof fetch): Promise<Record<string, unknown> | null> {
   if (!env.ANALYTICS_TOKEN || !env.CF_ACCOUNT_ID) return null;
-  const sql = async (q: string) => {
-    const res = await fetchImpl(`https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/analytics_engine/sql`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${env.ANALYTICS_TOKEN}` },
-      body: q,
-    });
-    if (!res.ok) throw new Error(`Analytics Engine answered ${res.status}`);
-    return ((await res.json()) as { data: Record<string, unknown>[] }).data;
-  };
+  const sql = (q: string) => aeSql(env, q, fetchImpl);
   const dataset = env.AE_DATASET || 'terminus';
   try {
-    const [daily, quality, errors, timelapse] = await Promise.all([
+    const [daily, quality, errors, timelapse, active, appErrors, appErrorVersions] = await Promise.all([
       // _sample_interval: each row may stand for several, at high volume.
       sql(`SELECT toDate(timestamp) AS day, blob1 AS kind, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '14' DAY AND blob1 IN ('answer', 'error')
@@ -196,9 +203,44 @@ async function analyticsStats(env: Env, fetchImpl: typeof fetch): Promise<Record
            WHERE timestamp > NOW() - INTERVAL '7' DAY AND blob1 = 'error' GROUP BY route ORDER BY n DESC LIMIT 10`),
       sql(`SELECT toDate(timestamp) AS day, blob2 AS outcome, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '14' DAY AND blob1 = 'timelapse' GROUP BY day, outcome ORDER BY day`),
+      // One row per day and name: max() in case a day was ever counted twice.
+      sql(`SELECT blob4 AS day, blob2 AS scope, blob3 AS name, max(double1) AS d1, max(double2) AS d7, max(double3) AS d30 FROM ${dataset}
+           WHERE timestamp > NOW() - INTERVAL '31' DAY AND blob1 = 'active' GROUP BY day, scope, name ORDER BY day`),
+      sql(`SELECT blob4 AS fingerprint, blob2 AS platform, blob5 AS type, blob6 AS message, blob7 AS stack,
+                  SUM(_sample_interval) AS n, SUM(_sample_interval * double2) AS fatal, max(timestamp) AS last FROM ${dataset}
+           WHERE timestamp > NOW() - INTERVAL '7' DAY AND blob1 = 'apperror'
+           GROUP BY fingerprint, platform, type, message, stack ORDER BY n DESC LIMIT 25`),
+      sql(`SELECT blob4 AS fingerprint, blob3 AS version, blob8 AS os, SUM(_sample_interval) AS n FROM ${dataset}
+           WHERE timestamp > NOW() - INTERVAL '7' DAY AND blob1 = 'apperror'
+           GROUP BY fingerprint, version, os ORDER BY n DESC LIMIT 200`),
     ]);
-    return { daily, quality, errors, timelapse };
+    return { daily, quality, errors, timelapse, active, appErrors: groupErrors(appErrors, appErrorVersions) };
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };
   }
+}
+
+/**
+ * The week's error reports by fingerprint, most first: one message and
+ * stack for each (the commonest, as reports of one crash vary in their
+ * numbers), and the versions and systems it came from.
+ */
+export function groupErrors(rows: Record<string, unknown>[], versions: Record<string, unknown>[]): Record<string, unknown>[] {
+  const out = new Map<string, { fingerprint: string; platform: string; type: string; message: string; stack: string; n: number; fatal: number; last: string; top: number; versions: { version: string; os: string; n: number }[] }>();
+  for (const r of rows) {
+    const fp = String(r.fingerprint);
+    const n = Number(r.n);
+    const e = out.get(fp);
+    const last = String(r.last);
+    if (!e) {
+      out.set(fp, { fingerprint: fp, platform: String(r.platform), type: String(r.type), message: String(r.message), stack: String(r.stack), n, fatal: Number(r.fatal), last, top: n, versions: [] });
+      continue;
+    }
+    e.n += n;
+    e.fatal += Number(r.fatal);
+    if (last > e.last) e.last = last;
+    if (n > e.top) Object.assign(e, { message: String(r.message), stack: String(r.stack), top: n });
+  }
+  for (const v of versions) out.get(String(v.fingerprint))?.versions.push({ version: String(v.version), os: String(v.os), n: Number(v.n) });
+  return [...out.values()].sort((a, b) => b.n - a.n).map(({ top: _top, ...e }) => e);
 }

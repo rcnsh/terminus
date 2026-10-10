@@ -135,6 +135,141 @@ function Timelapse({ an }) {
   `;
 }
 
+/** What each switch collects, in a line: the operator turns each on here (collect.ts). */
+const COLLECT = [
+  ['active', 'Active accounts', 'How many accounts used terminus each day, by app and version. Counted from the sessions already kept; only the totals are stored.'],
+  ['eta', 'Arrival-time accuracy', 'The feed’s “in 4 min” against when the timelapse recorder saw the bus arrive. No user data. Needs the recorder on.'],
+  ['errors', 'Crash reports', 'Crashes and errors from the apps and the website, with no account, device or address. Each app has a switch to stop sending them.'],
+];
+
+function Collect({ on }) {
+  const [state, setState] = useState(on ?? {});
+  const [busy, setBusy] = useState('');
+  const [msg, setMsg] = useState('');
+  const flip = async (name) => {
+    setBusy(name);
+    setMsg('');
+    try {
+      const res = await fetch('/api/admin/collect', {
+        method: 'POST',
+        headers: { 'x-health-token': memory ?? token(), 'content-type': 'application/json' },
+        body: JSON.stringify({ name, on: !state[name] }),
+      });
+      if (!res.ok) throw new Error(`The switch answered ${res.status}.`);
+      setState(await res.json());
+    } catch (err) {
+      setMsg(err.message);
+    } finally {
+      setBusy('');
+    }
+  };
+  return html`
+    <table>
+      <tbody>
+        ${COLLECT.map(
+          ([name, title, what]) => html`<tr>
+            <td><strong>${title}</strong><div class="hint">${what}</div></td>
+            <td><strong class=${state[name] ? 'good' : ''}>${state[name] ? 'Collecting' : 'Off'}</strong></td>
+            <td><button type="button" class="btn small" disabled=${busy === name} onClick=${() => flip(name)}>${state[name] ? 'Turn off' : 'Turn on'}</button></td>
+          </tr>`,
+        )}
+      </tbody>
+    </table>
+    <p class="hint" role="status">${msg || 'Everything here is off until turned on. The cron counts and scores once a day, after midnight.'}</p>
+  `;
+}
+
+const names = { android: 'Android', mac: 'Mac', ios: 'iPhone', web: 'Website', api: 'API keys', unknown: 'Not seen since pairing' };
+
+/** The daily active counts (usage.ts): accounts a day for 30 days, then the latest day by app and version. */
+function Active({ an }) {
+  if (!an) return html`<p class="hint">Needs ANALYTICS_TOKEN, as the answers do.</p>`;
+  if (an.error || !an.active) return null;
+  if (!an.active.length) return html`<p class="hint">No days counted yet. Turn on Active accounts above; the first count comes after midnight.</p>`;
+  const all = new Map(an.active.filter((r) => r.scope === 'all').map((r) => [r.day, Number(r.d1)]));
+  const latest = an.active.reduce((d, r) => (r.day > d ? r.day : d), '');
+  const on = (scope) => an.active.filter((r) => r.scope === scope && r.day === latest).sort((a, b) => b.d7 - a.d7);
+  const rows = (scope, label) => html`
+    <table>
+      <thead><tr><th>${label}</th><th>Day</th><th>Week</th><th>Month</th></tr></thead>
+      <tbody>${on(scope).map((r) => html`<tr><td>${scope === 'app' ? (names[r.name] ?? r.name) : html`<code>${r.name}</code>`}</td><td>${fmt(r.d1)}</td><td>${fmt(r.d7)}</td><td>${fmt(r.d30)}</td></tr>`)}</tbody>
+    </table>
+  `;
+  return html`
+    <${Bars} rows=${lastDays(30).map((d) => ({ label: d.slice(5), n: all.get(d) ?? 0 }))} />
+    <p class="hint">${`Accounts that used terminus each day. Latest, ${latest}: the last 1, 7 and 30 days.`}</p>
+    <div class="split">
+      ${rows('app', 'App (accounts)')}
+      ${rows('version', 'Version (devices)')}
+    </div>
+  `;
+}
+
+/** "+42 s" / "−1 min 5 s": how much later than said the bus came. */
+const late = (s) => {
+  if (s == null) return '—';
+  const a = Math.abs(s);
+  const text = a < 60 ? `${a} s` : `${Math.floor(a / 60)} min${a % 60 ? ` ${a % 60} s` : ''}`;
+  return s === 0 ? '0 s' : `${s > 0 ? '+' : '−'}${text}`;
+};
+const pctOf = (x) => (x == null ? '—' : `${Math.round(x * 100)}%`);
+
+/** How good the feed's arrival times were (eta.ts), over the days scored. */
+function Eta({ eta }) {
+  if (!eta) return html`<p class="hint">Needs the downloads bucket, where the recorder keeps its days.</p>`;
+  if (eta.error) return html`<p class="bad">${eta.error}</p>`;
+  if (!eta.days.length) return html`<p class="hint">No days scored yet. Turn on Arrival-time accuracy above; it needs the timelapse recorder on and ANALYTICS_TOKEN. A day is scored the night after.</p>`;
+  const o = eta.overall;
+  const head = html`<tr><th></th><th>Scored</th><th>Typical</th><th>Within 1 min</th><th>Over 2 min late</th><th>Over 1 min early</th></tr>`;
+  const row = (label, r) => html`<tr><td>${label}</td><td>${fmt(r.n)}</td><td>${late(r.medianS)}</td><td>${pctOf(r.within1)}</td><td>${pctOf(r.late2)}</td><td>${pctOf(r.early1)}</td></tr>`;
+  const matched = eta.days.reduce((t, d) => t + d.matched, 0);
+  const predictions = eta.days.reduce((t, d) => t + d.predictions, 0);
+  return html`
+    <section class="tiles">
+      <${Tile} n=${pctOf(o.within1)} k="within a minute of what it said" />
+      <${Tile} n=${late(o.medianS)} k="typical error (+ is later than said)" />
+      <${Tile} n=${pctOf(o.late2)} k="over 2 minutes late" />
+    </section>
+    <p class="hint">${`${fmt(matched)} of ${fmt(predictions)} predictions found their bus, over ${eta.days.length} day${eta.days.length === 1 ? '' : 's'}. Good to about 15 s either way.`}</p>
+    <table>
+      <thead>${head}</thead>
+      <tbody>${eta.horizons.map((h) => row(`Said ${h.label}`, h))}</tbody>
+    </table>
+    <div class="split">
+      <table>
+        <thead><tr><th>Service</th><th>Scored</th><th>Typical</th><th>Within 1 min</th></tr></thead>
+        <tbody>${eta.services.map((r) => html`<tr><td>${r.svc}</td><td>${fmt(r.n)}</td><td>${late(r.medianS)}</td><td>${pctOf(r.within1)}</td></tr>`)}</tbody>
+      </table>
+      <table>
+        <thead><tr><th>Hour</th><th>Scored</th><th>Typical</th><th>Within 1 min</th></tr></thead>
+        <tbody>${eta.hours.map((r) => html`<tr><td>${`${String(r.hour).padStart(2, '0')}:00`}</td><td>${fmt(r.n)}</td><td>${late(r.medianS)}</td><td>${pctOf(r.within1)}</td></tr>`)}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+/** An Analytics Engine time ("2026-10-10 04:05:06", UTC) as ISO. */
+const aeIso = (x) => (/[zZ]$|[+-]\d\d:?\d\d$/.test(String(x)) ? String(x) : `${String(x).replace(' ', 'T')}Z`);
+
+/** The week's crash and error reports by fingerprint (apperrors.ts). */
+function AppErrors({ an }) {
+  if (!an) return html`<p class="hint">Needs ANALYTICS_TOKEN, as the answers do.</p>`;
+  if (an.error || !an.appErrors) return null;
+  if (!an.appErrors.length) return html`<p class="hint">No reports this week.</p>`;
+  return html`
+    <ul class="list reports">
+      ${an.appErrors.map(
+        (e) => html`<li key=${e.fingerprint}>
+          <div class="meta">${`${names[e.platform] ?? e.platform} · ${fmt(e.n)} report${e.n === 1 ? '' : 's'}${e.fatal ? `, ${fmt(e.fatal)} crashed the app` : ''} · last ${when(aeIso(e.last))}`}</div>
+          <div class="note"><b>${e.type}</b>${e.message ? `: ${e.message}` : ''}</div>
+          <div class="meta">${e.versions.map((v) => `${v.version}${v.os ? ` on ${v.os}` : ''} × ${fmt(v.n)}`).join(' · ')}</div>
+          ${e.stack && html`<details><summary>Stack</summary><pre>${e.stack}</pre></details>`}
+        </li>`,
+      )}
+    </ul>
+  `;
+}
+
 function Dashboard({ s, note }) {
   const a = s.accounts ?? {};
   /** " (40%)": `n` as a share of `d`, or nothing without a `d`. */
@@ -143,7 +278,6 @@ function Dashboard({ s, note }) {
   // Accounts in the apps: installs, how many finished setup, how many added an email.
   const ap = s.apps ?? {};
   const byDay = new Map((s.signups ?? []).map((r) => [r.day, r.n]));
-  const names = { android: 'Android', mac: 'Mac', ios: 'iPhone', unknown: 'Not seen since pairing' };
   const fb = s.feedback ?? { latest: [], last7d: 0 };
   return html`
     <p class="hint">${note || `As of ${when(s.now)} (Singapore time).`}</p>
@@ -201,6 +335,22 @@ function Dashboard({ s, note }) {
         <p class="hint"><a href="/status">Public status page</a></p>
       </section>
     </div>
+    <section class="card">
+      <h2>What’s collected</h2>
+      <${Collect} on=${s.collect} />
+    </section>
+    <section class="card">
+      <h2>Active accounts, last 30 days</h2>
+      <${Active} an=${s.analytics} />
+    </section>
+    <section class="card">
+      <h2>Arrival times, last 14 days</h2>
+      <${Eta} eta=${s.eta} />
+    </section>
+    <section class="card">
+      <h2>Crash reports, this week</h2>
+      <${AppErrors} an=${s.analytics} />
+    </section>
     <section class="card">
       <h2>Timelapse recorder, last 14 days</h2>
       <${Timelapse} an=${s.analytics} />

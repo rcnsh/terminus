@@ -24,6 +24,8 @@ import { buildCampusMap, buildDestinations, ROUTE_COLORS } from './campus.ts';
 import { busesOnLine, lineStops, trackedBuses } from './buses.ts';
 import { stopPairs } from './pairs.ts';
 import { adminStats, holdsHealthToken, isOperator } from './admin.ts';
+import { handleCollect } from './collect.ts';
+import { handleAppError } from './apperrors.ts';
 import { handlePasskey } from './passkey.ts';
 import { analyticsEnabled, logError } from './analytics.ts';
 import { docsPageFor, openApiJson } from './openapi.ts';
@@ -422,7 +424,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
     // NUS; this protects the Worker from being a free proxy, and D1/R2 from
     // being a free bill.
     const keyed = KEYED.includes(url.pathname);
-    if (env.RL_PUBLIC && (url.pathname === '/api/health' || url.pathname === '/api/status.json' || url.pathname === '/api/admin/stats' || url.pathname.startsWith('/api/admin/passkey/') || url.pathname.startsWith('/download/') || url.pathname.startsWith('/api/timelapse/'))) {
+    if (env.RL_PUBLIC && (url.pathname === '/api/health' || url.pathname === '/api/status.json' || url.pathname === '/api/admin/stats' || url.pathname === '/api/admin/collect' || url.pathname === '/api/errors' || url.pathname.startsWith('/api/admin/passkey/') || url.pathname.startsWith('/download/') || url.pathname.startsWith('/api/timelapse/'))) {
       const { success } = await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` });
       if (!success) return json({ error: 'too many requests, slow down' }, 429, { 'retry-after': '60' });
     }
@@ -498,6 +500,12 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
         // The dashboard's data: operator only, never cached.
         if (!(await isOperator(env, req, nowMs))) return json({ error: 'not found' }, 404);
         return json(await adminStats(env, nowMs), 200, { 'cache-control': 'no-store' });
+      case '/api/admin/collect':
+        // The dashboard's switches for what's collected (collect.ts).
+        return await handleCollect(req, env, nowMs);
+      case '/api/errors':
+        // Crash and error reports from the apps and the website, with no one's name on them.
+        return await handleAppError(req, env);
       case '/api/campus':
         return await handleCampus(req);
       case '/api/stops/pairs':

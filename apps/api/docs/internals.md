@@ -150,7 +150,9 @@ anything else (a script with an API key, a page open since before) gets a
 | `GET /api/stops/pairs` | Each stop with its twin across the road, and where the buses on each side go next. Cached hard. |
 | `GET /api/health` | Graph age, how long the calendar lasts, the feed as the cron last saw it (`upstream`) and which config is present, never values (`config.pushAndroid` and `config.pushWeb`: push set up with a usable key). 503, with the same body, when the feed is confirmed down, the cron has stopped or the calendar has run out. With the operator's `x-health-token`, `?probe=1` mints a real token and says what came back, and `?versions=1` says what the version updater would find today in the app stores (see "The version string is a kill switch"); without it both are ignored. |
 | `GET /api/status.json` | Whether NUS's feed is up, as the 15-minute check saw it, and the last 20 outages, read from KV at most once a minute per isolate. Two failed checks in a row confirm an outage and two good ones end it, so a feed that answers every other time sends no emails by turns; the outage ends at the first of the two. `feed` (like `/api/health` and the card's notice) follows the last check, though: one good check and it says `up` again, rather than "down" for 15 minutes with the feed back. The [status page](../../web/public/status) shows it. |
-| `GET /api/admin/stats` | The operator dashboard's data (accounts, devices by app, sign-ups, reports, feed; answers and errors per day, and the timelapse recorder's polls by what they cost NUS, from Analytics Engine when `ANALYTICS_TOKEN` and `CF_ACCOUNT_ID` are set). Needs `x-health-token` (`HEALTH_TOKEN` or a passkey session); anything else gets a 404. |
+| `GET /api/admin/stats` | The operator dashboard's data (accounts, devices by app, sign-ups, reports, feed; answers and errors per day, and the timelapse recorder's polls by what they cost NUS, the daily active counts and the week's crash reports, from Analytics Engine when `ANALYTICS_TOKEN` and `CF_ACCOUNT_ID` are set; `collect`, the switches below; `eta`, arrival times scored). Needs `x-health-token` (`HEALTH_TOKEN` or a passkey session); anything else gets a 404. |
+| `POST /api/admin/collect` | `{name, on}`: turns one of the operator's statistics on or off (`active`, `eta`, `errors`; see Analytics). Operator only, like `/api/admin/stats`. |
+| `POST /api/errors` | A crash or error report from an app or the website: platform, version, OS, type, message, stack, `fatal`. No account or device id; scrubbed, then kept in Analytics Engine while `errors` is on, dropped otherwise. Always 204 for a well-formed report. Limited per IP (`RL_PUBLIC`). |
 | `GET /api/admin/passkey/challenge` | A WebAuthn challenge for the operator's pages, signed with a key made from `HEALTH_TOKEN` (nothing stored), good for five minutes. With `?register=1` it needs `HEALTH_TOKEN` (checked before the browser makes a passkey) and lists the host's kept passkeys to exclude. See "Operator passkeys". |
 | `POST /api/admin/passkey/register` | Keeps a new passkey and signs in. Needs `HEALTH_TOKEN` itself in `x-health-token` (a session won't do); 404 without it. |
 | `POST /api/admin/passkey/signin` | Checks a passkey assertion and answers with an operator session (12 hours). |
@@ -1587,6 +1589,37 @@ beta emails no one: its alerts go to its logs as `beta: terminus: ...`, with
 the fix commands naming the beta's KV namespace (`KV_NAMESPACE_IDS`, kept in
 step with `cloudflare.config.ts` by a test), and each run while its feed is
 down is counted on its dashboard as the error `cron feed down`.
+
+**The operator's switches.** Three statistics are collected only once
+turned on, on the dashboard (`src/collect.ts`, KV `config:collect:<name>`,
+off when unset or unreadable):
+
+- `active` ([`src/usage.ts`](../src/usage.ts)): the first cron run after
+  Singapore midnight counts accounts with a session used in the last 1, 7
+  and 30 days, in all, by app and devices by version, and writes only the
+  totals (KV `usage:day` marks the day done). D1 alone only knows "now";
+  these rows give the dashboard its month.
+- `eta` ([`src/eta.ts`](../src/eta.ts)): the cron scores the newest closed
+  recording day not yet scored, one a run, by joining its `arrival` rows
+  (read back through Analytics Engine's SQL API) with the timelapse file:
+  `passingsOf` reads when each plate passed 25 m before each stop along its
+  line, interpolated between readings (gaps over 2 minutes and impossible
+  speeds skipped; a one-way route's first stop is a start, not an arrival);
+  `scoreEtas` gives each prediction its plate's first arrival, counting one
+  cached answer once. The result is `eta/YYYY-MM-DD.json` in the downloads
+  bucket, read for the last 14 days by the dashboard. A day recorded on a
+  route line this deploy doesn't have is skipped for that service. It makes
+  no call to NUS.
+- `errors` ([`src/apperrors.ts`](../src/apperrors.ts)): `POST /api/errors`.
+  The Android app saves an uncaught crash to a file and sends it on the next
+  start; the Mac app sends MetricKit's crash diagnostics and saved
+  Objective-C exceptions on the next launch; the website's
+  `/assets/errors.js` reports uncaught errors and rejections from its own
+  scripts, five a page at most. None sends a token, cookie or device id,
+  and each has a switch (Settings, Account; the website's account page) to
+  stop. The server scrubs the message and stack (`scrub()`), fingerprints
+  the top five frames without line numbers, and for the website fills in
+  its own `API_VERSION`.
 
 ## Known weaknesses
 

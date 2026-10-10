@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             exit(0)
         }
         #endif
+        CrashReporter.shared.start()
         MainActor.assumeIsolated {
             Appearance.apply()
             _ = AppModel.shared

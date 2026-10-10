@@ -547,6 +547,8 @@
     <string name="time_format_hint_auto">terminus 显示的所有时间都用这个格式，这里、Mac 和网页上都是。“自动”跟随这部手机。</string>
     <string name="heading_signed_in">已登录</string>
     <string name="heading_your_data">你的数据</string>
+    <string name="crash_reports">发送崩溃报告</string>
+    <string name="crash_reports_hint">terminus 崩溃时，发送出错的内容和应用版本，不会包含你是谁或你在哪里。</string>
     <string name="account_page_sub">API 密钥，以及在所有设备上退出登录</string>
     <string name="heading_more">更多</string>
     <string name="get_apps">下载应用</string>

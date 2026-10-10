@@ -43,6 +43,8 @@
 "Check for updates automatically" = "自动检查更新";
 "Install updates automatically" = "自动安装更新";
 "Updates install when no terminus window is open. Turned off, terminus asks first." = "没有打开 terminus 的窗口时才安装更新。关闭后，terminus 会先询问你。";
+"Send crash reports" = "发送崩溃报告";
+"When terminus crashes, send what broke and the app version. Never who you are or where." = "terminus 崩溃时，发送出错的内容和应用版本，不会包含你是谁或你在哪里。";
 "Check your email" = "查看你的邮箱";
 "Checking…" = "正在查询…";
 "Choose a stop" = "选择车站";
