@@ -66,6 +66,7 @@ export { GRAPH, answerFor, arrivedAnswer, collectArrivals, coordsFrom, numParam 
 export { Trip } from './tripdo.ts';
 // The timelapse recorder (one per Singapore day), bound as TIMELAPSE.
 export { TimelapseRecorder } from './timelapsedo.ts';
+export { FeedGate } from './feedgate.ts';
 
 /** `?to=` as a stop code or a NUSMods venue code; `?from=` as an origin stop. */
 function resolveDestination(url: URL) {

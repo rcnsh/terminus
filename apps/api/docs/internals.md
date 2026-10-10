@@ -358,8 +358,15 @@ get one of three ways:
   too: filters hold back link-only mail) and a link. Typed into the app,
   `POST /api/auth/app/code {request, poll, code}` answers with the token; five
   wrong codes kill the request. Reading mail on another device, the link's
-  page (`GET /auth/approve?r=`) offers three numbers; picking the one the
-  app shows (`match`) approves, a wrong one or "This wasn't me" kills it.
+  page (`GET /auth/approve?r=`) asks for the number the app shows
+  (`match`): typed right, it approves; a wrong one or "This wasn't me" kills
+  it. Typed rather than picked from a few, so someone tapping whatever is
+  offered lets a stranger in 1 time in 90, not 1 in 3; and "This wasn't me"
+  stops app sign-ins to the address for 6 hours (`held:` in KV,
+  `LOGIN_TTL.heldMs`), so a stranger can't keep asking until a guess lands.
+  App sign-in emails spend their own key of `RL_MAIL` (`mail:app`): the
+  apps can't run Turnstile, and using that ceiling up must leave the
+  website's sign-in working.
   That page, like the Worker's other small pages (`page()` in me.ts), has
   a band of the hour's sky across its card, as Settings' pages do in the
   apps: no script, so the hour is the server's, in Singapore
@@ -1174,8 +1181,21 @@ exception is the timelapse recorder (below): one bounded, switchable poller
 of live bus positions, through the same cache. It is not a pattern for
 anything else (CLAUDE.md, rule 2).
 
-The cache is one Cloudflare data centre's, shared by its isolates, so "one
-call per stop per 15 s" holds per data centre. Within it, concurrent misses
+The cache is one Cloudflare data centre's, shared by its isolates, so on
+its own "one call per stop per 15 s" would hold per data centre: traffic
+spread across many (a botnet) would multiply it. So a miss asks the **feed
+gate** first ([src/feedgate.ts](../src/feedgate.ts), `FEED_GATE`): one
+Durable Object per key (`arrivals/<stop>`, `buses/<service>`,
+`public/<LTA stop>`), in Asia. The first to ask in a window may call the
+feed and hands its answer back; anyone else in that window, from any data
+centre, gets that answer or waits up to `GATE_WAIT_MS` for it, and never
+calls the feed. A failed call holds its window too. Nothing to share yet
+(`GateBusy`) serves the stale answer, and neither quiets the key nor trips
+the breaker, since it says nothing of the next call. An unreachable or slow
+gate is skipped, leaving the data centre's own limits: failing shut would
+take every answer down with it. The gate keeps its claim and answer in
+storage, since an idle object may leave memory between windows; it is
+billed only while it answers. Within a data centre, concurrent misses
 in one isolate share a fetch (the in-flight map), and the isolate fetching
 leaves a `#pending` marker beside the key: other isolates serve their stale
 answer until it's done rather than fetch too. A cold key with nothing stale
@@ -1937,6 +1957,7 @@ src/fms.ts        ShuttleService client + defensive response normalisation
 src/lta.ts        LTA DataMall client: the public buses at a stop
 src/public.ts     Public buses in the graph (GRAPH_PUBLIC), route keys, ride metres
 src/edgecache.ts  Fetch through the edge cache, stale on failure, breaker: both feeds
+src/feedgate.ts   One feed call per key per window across every data centre (FeedGate)
 src/auth.ts       Public token, lazy refresh, KV + in-memory memo
 src/config.ts     Cache TTLs and tuning constants
 src/calendar.ts   NUS teaching weeks and public holidays

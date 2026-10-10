@@ -12,6 +12,7 @@ import type { Arrival, Crowd, Env, StopArrivals } from './types.ts';
 import { MAX_ETA_S, TTL } from './config.ts';
 import { UpstreamUnreachable, timedFetch } from './http.ts';
 import { cacheBase, cachedFetch, flagged } from './edgecache.ts';
+import { GateBusy, throughGate } from './feedgate.ts';
 import { noteTrip } from './feedwatch.ts';
 import { UpstreamHttpError, UpstreamRejected, getSession, markIfOutdated, mintWith, proxyEnvelope, proxyHeaders, renewSession } from './auth.ts';
 import type { Session } from './auth.ts';
@@ -569,7 +570,7 @@ export async function getArrivals(
     nowMs,
     key: `${cacheBase()}/arrivals/${encodeURIComponent(code)}`,
     failKey: `${cacheBase()}/failed/${encodeURIComponent(code)}`,
-    fetch: () => fetchArrivals(env, code, nowMs),
+    fetch: () => throughGate(env, ctx, `arrivals/${code}`, TTL.arrivalsMs, () => fetchArrivals(env, code, nowMs)),
     freshMs: TTL.arrivalsMs,
     staleMaxS: TTL.staleMaxS,
     failMemoS: TTL.failMemoS,
@@ -608,8 +609,10 @@ export function tripsBreaker(err: unknown): boolean {
 }
 
 /** Whether a failure quiets its stop or service for failMemoS: all but a
- *  refusal of a version already switched away from, as with the breaker. */
-const notOutdated = (err: unknown): boolean => !(err instanceof UpstreamRejected && err.outdated);
+ *  refusal of a version already switched away from, as with the breaker,
+ *  and the gate having nothing to share yet (feedgate.ts), which says
+ *  nothing of the next call. */
+const notOutdated = (err: unknown): boolean => !(err instanceof UpstreamRejected && err.outdated) && !(err instanceof GateBusy);
 
 /** The shuttle feed's breaker: such a failure stops every call for breakerS. */
 const BREAKER = {
@@ -714,7 +717,7 @@ export async function getBuses(env: Env, ctx: ExecutionContext, svc: string, now
     nowMs,
     key: `${cacheBase()}/buses/${encodeURIComponent(svc)}`,
     failKey: `${cacheBase()}/failed-buses/${encodeURIComponent(svc)}`,
-    fetch: () => fetchActiveBuses(env, svc, nowMs, onUpstream),
+    fetch: () => throughGate(env, ctx, `buses/${svc}`, TTL.busesMs, () => fetchActiveBuses(env, svc, nowMs, onUpstream)),
     freshMs: TTL.busesMs,
     staleMaxS: TTL.staleMaxS,
     failMemoS: TTL.failMemoS,

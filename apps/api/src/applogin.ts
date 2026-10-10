@@ -2,7 +2,7 @@
  * Signing in an app, confirmed from the email (modelled on RFC 8628, device
  * authorisation). The app starts a request and the email carries two ways to
  * confirm it: a code to type into the app, and a link, for reading mail on
- * another device, to a page that asks which number the app shows. The app
+ * another device, to a page that asks for the number the app shows. The app
  * polls and picks up its token once either is done.
  *
  * Why a code first: university filters (NUS's among them) hold back mail
@@ -14,8 +14,12 @@
  * on a different device from the one they are signing in.
  *
  * Why the number: without it anyone could type your address into their app
- * and you might approve an email you weren't expecting. Choosing the number
+ * and you might approve an email you weren't expecting. Typing the number
  * your own screen shows proves you are looking at the device being signed in.
+ * Typed, not chosen from a few: someone tapping whatever is offered would
+ * let a stranger in one time in three. "This wasn't me" also stops app
+ * sign-ins to the address for a while (LOGIN_TTL.heldMs), so a stranger
+ * can't keep asking until someone confused gets it right.
  *
  * The app holds `poll`; the email holds different secrets (`code`, `link`),
  * so the app that started a request can never confirm it by itself.
@@ -55,7 +59,16 @@ export const LOGIN_TTL = {
   cooldownMs: ACCOUNT_TTL.linkCooldownMs,
   /** Wrong codes before the request dies. */
   codeTries: ACCOUNT_TTL.codeTries,
+  /** After "this wasn't me", how long the address takes no app sign-ins. */
+  heldMs: 6 * 3_600_000,
 } as const;
+
+const heldKey = async (email: string) => `held:${await hashToken(inboxKey(email))}`;
+
+/** "This wasn't me": no app sign-in to this address for LOGIN_TTL.heldMs. */
+export async function holdAppLogins(env: Env, email: string): Promise<void> {
+  await env.KV.put(await heldKey(email), '1', { expirationTtl: LOGIN_TTL.heldMs / 1000 }).catch(() => {});
+}
 
 export interface StartInput {
   email: string;
@@ -79,11 +92,13 @@ function randomMatch(): number {
 
 /**
  * Starts a request and emails the approval link. 'cooldown' when this address
- * was sent an email in the last minute. A blocked address gets a request that
- * looks the same and never completes, so the reply doesn't reveal the blocklist.
+ * was sent an email in the last minute; 'held' after its owner said a request
+ * wasn't theirs. A blocked address gets a request that looks the same and
+ * never completes, so the reply doesn't reveal the blocklist.
  */
-export async function startAppLogin(env: Env, db: D1Database, input: StartInput, origin: string, nowMs: number): Promise<Started | 'cooldown' | 'busy'> {
+export async function startAppLogin(env: Env, db: D1Database, input: StartInput, origin: string, nowMs: number): Promise<Started | 'cooldown' | 'busy' | 'held'> {
   const { email } = input;
+  if (await env.KV.get(await heldKey(email)).catch(() => null)) return 'held';
   const inbox = inboxKey(email);
   const coolKey = `mail:${await hashToken(inbox)}`;
   const recent = await db
@@ -94,7 +109,7 @@ export async function startAppLogin(env: Env, db: D1Database, input: StartInput,
   const blocked = await db.prepare('SELECT 1 FROM blocklist WHERE email IN (?, ?)').bind(email, inbox).first();
   // Everyone's ceiling, after the cooldown so a repeat can't spend it. A
   // blocked address spends it too, so a busy minute doesn't reveal it.
-  if (!(await takeGlobalMail(env))) return 'busy';
+  if (!(await takeGlobalMail(env, 'app'))) return 'busy';
   // A blocked address is sent nothing, so it spends nothing of its inbox's.
   if (!blocked && !(await takeMailBudget(env, inbox, nowMs))) return 'cooldown';
 
@@ -201,8 +216,6 @@ const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt
 export interface Approvable {
   device: string;
   created: number;
-  /** Three numbers, the right one among them, in an order fixed per request. */
-  choices: number[];
 }
 
 /**
@@ -212,42 +225,27 @@ export interface Approvable {
 export async function approvable(db: D1Database, link: string, nowMs: number): Promise<Approvable | null> {
   const linkHash = await hashToken(link);
   const row = await db
-    .prepare("SELECT match, device_name, created FROM login_requests WHERE link_hash = ? AND status = 'pending' AND expires >= ?")
+    .prepare("SELECT device_name, created FROM login_requests WHERE link_hash = ? AND status = 'pending' AND expires >= ?")
     .bind(linkHash, nowMs)
-    .first<{ match: number; device_name: string; created: number }>();
+    .first<{ device_name: string; created: number }>();
   if (!row) return null;
-  return { device: row.device_name, created: row.created, choices: choicesFor(row.match, linkHash) };
+  return { device: row.device_name, created: row.created };
 }
 
 /**
- * Two decoys from the link's hash, so a reload shows the same three numbers
- * in the same order: a page that reshuffled would look like a different request.
+ * The approver's answer. The right number approves; a wrong number, or
+ * "this wasn't me" (null), kills the request. Works once. The address
+ * comes back with the answer, for holdAppLogins.
  */
-export function choicesFor(match: number, seedHex: string): number[] {
-  const seed = [...seedHex.matchAll(/../g)].map((m) => parseInt(m[0], 16));
-  const out = [match];
-  for (let i = 0; out.length < 3; i++) {
-    const n = 10 + (((seed[i % seed.length] << 8) | seed[(i + 1) % seed.length]) + i) % 90;
-    if (!out.includes(n)) out.push(n);
-  }
-  const at = seed[seed.length - 1] % 3;
-  [out[0], out[at]] = [out[at], out[0]];
-  return out;
-}
-
-/**
- * The approver's choice. The right number approves; a wrong number, or
- * "this wasn't me" (null), kills the request. Works once.
- */
-export async function decide(db: D1Database, link: string, picked: number | null, nowMs: number): Promise<'approved' | 'denied' | 'expired'> {
+export async function decide(db: D1Database, link: string, typed: number | null, nowMs: number): Promise<{ status: 'approved' | 'denied' | 'expired'; email?: string }> {
   const row = await db
     .prepare(
       `UPDATE login_requests SET status = CASE WHEN match = ? THEN 'approved' ELSE 'denied' END
-        WHERE link_hash = ? AND status = 'pending' AND expires >= ? RETURNING status, device_name`,
+        WHERE link_hash = ? AND status = 'pending' AND expires >= ? RETURNING status, email`,
     )
-    .bind(picked ?? -1, await hashToken(link), nowMs)
-    .first<{ status: 'approved' | 'denied' }>();
-  return row?.status ?? 'expired';
+    .bind(typed ?? -1, await hashToken(link), nowMs)
+    .first<{ status: 'approved' | 'denied'; email: string }>();
+  return row ? { status: row.status, email: row.email } : { status: 'expired' };
 }
 
 /** How a finished sign-in left the accounts. */

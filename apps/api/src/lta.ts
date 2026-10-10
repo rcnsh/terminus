@@ -19,6 +19,7 @@ import type { Arrival, Crowd, Env, Graph, StopArrivals } from './types.ts';
 import { MAX_ETA_S, TTL } from './config.ts';
 import { UpstreamUnreachable, timedFetch } from './http.ts';
 import { cacheBase, cachedFetch } from './edgecache.ts';
+import { GateBusy, throughGate } from './feedgate.ts';
 import { noteTrip } from './feedwatch.ts';
 import { indexGraph } from './resolve.ts';
 
@@ -195,11 +196,13 @@ export async function getPublicArrivals(env: Env, ctx: ExecutionContext, graph: 
     nowMs,
     key: `${cacheBase()}/public/${encodeURIComponent(ltaCode)}`,
     failKey: `${cacheBase()}/failed-public/${encodeURIComponent(ltaCode)}`,
-    fetch: () => fetchPublicArrivals(env, graph, code, ltaCode, nowMs),
+    fetch: () => throughGate(env, ctx, `public/${ltaCode}`, TTL.arrivalsMs, () => fetchPublicArrivals(env, graph, code, ltaCode, nowMs)),
     freshMs: TTL.arrivalsMs,
     staleMaxS: TTL.staleMaxS,
     failMemoS: TTL.failMemoS,
     raceMs: TTL.staleRaceMs,
+    // Nothing to share from the gate yet says nothing of the next call.
+    memoes: (err) => !(err instanceof GateBusy),
     breaker: {
       key: `${cacheBase()}/breaker-public`,
       trips: (err) => err instanceof LtaRefused || err instanceof UpstreamUnreachable,
