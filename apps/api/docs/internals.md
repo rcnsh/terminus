@@ -150,7 +150,10 @@ anything else (a script with an API key, a page open since before) gets a
 | `GET /api/stops/pairs` | Each stop with its twin across the road, and where the buses on each side go next. Cached hard. |
 | `GET /api/health` | Graph age, how long the calendar lasts, the feed as the cron last saw it (`upstream`) and which config is present, never values (`config.pushAndroid` and `config.pushWeb`: push set up with a usable key). 503, with the same body, when the feed is confirmed down, the cron has stopped or the calendar has run out. With the operator's `x-health-token`, `?probe=1` mints a real token and says what came back, and `?versions=1` says what the version updater would find today in the app stores (see "The version string is a kill switch"); without it both are ignored. |
 | `GET /api/status.json` | Whether NUS's feed is up, as the 15-minute check saw it, and the last 20 outages, read from KV at most once a minute per isolate. Two failed checks in a row confirm an outage and two good ones end it, so a feed that answers every other time sends no emails by turns; the outage ends at the first of the two. `feed` (like `/api/health` and the card's notice) follows the last check, though: one good check and it says `up` again, rather than "down" for 15 minutes with the feed back. The [status page](../../web/public/status) shows it. |
-| `GET /api/admin/stats` | The operator dashboard's data (accounts, devices by app, sign-ups, reports, feed; answers and errors per day, and the timelapse recorder's polls by what they cost NUS, from Analytics Engine when `ANALYTICS_TOKEN` and `CF_ACCOUNT_ID` are set). Needs `x-health-token`; anything else gets a 404. |
+| `GET /api/admin/stats` | The operator dashboard's data (accounts, devices by app, sign-ups, reports, feed; answers and errors per day, and the timelapse recorder's polls by what they cost NUS, from Analytics Engine when `ANALYTICS_TOKEN` and `CF_ACCOUNT_ID` are set). Needs `x-health-token` (`HEALTH_TOKEN` or a passkey session); anything else gets a 404. |
+| `GET /api/admin/passkey/challenge` | A WebAuthn challenge for the operator's pages, signed with a key made from `HEALTH_TOKEN` (nothing stored), good for five minutes. With `?register=1` it needs `HEALTH_TOKEN` (checked before the browser makes a passkey) and lists the host's kept passkeys to exclude. See "Operator passkeys". |
+| `POST /api/admin/passkey/register` | Keeps a new passkey and signs in. Needs `HEALTH_TOKEN` itself in `x-health-token` (a session won't do); 404 without it. |
+| `POST /api/admin/passkey/signin` | Checks a passkey assertion and answers with an operator session (12 hours). |
 | `GET /api/timelapse/days` | The days the timelapse recorder has kept (closed ones from R2; today's while it records, and any of the past week's still held by a recorder that hasn't written it to R2 yet) and what it's doing today. Needs `x-health-token`: the operator's, or `TIMELAPSE_TOKEN`, which opens `/api/timelapse/*` and nothing else. |
 | `GET /api/timelapse/days/<date>` | One recorded day as gzipped JSON (see "The timelapse recorder"). A closed day never changes and is cached for a year; today's is built from what the recorder holds so far, `no-store` (503 if its recorder doesn't answer within 10 s). Needs `x-health-token` (operator or timelapse token). |
 | `GET /account` | The account page ([apps/web](../../web)), served as static assets. |
@@ -1480,6 +1483,31 @@ the breaker nor the mint memo, nor quiets its stop or service for
 sending the new one, and that isolate forgets its old version. To see what it would
 find today, without calling NUS: `GET /api/health?versions=1` with the
 `x-health-token` header.
+
+## Operator passkeys
+
+The dashboard (`/admin/`) and the timelapse page open with a passkey
+(`src/passkey.ts`, `apps/web/public/admin/passkey.js`). Adding one needs
+`HEALTH_TOKEN`, typed once on that device; signing in with it answers an
+operator session, `op1.<expiry ms>.<HMAC>`, which the pages send in
+`x-health-token` where the token went and which `isOperator()` accepts for
+12 hours. Only `POST /api/admin/passkey/register` insists on the token
+itself, so a session can't add passkeys.
+
+- Nothing is stored but the passkeys, in KV `operator:passkeys` (id, host,
+  algorithm, SPKI public key, name). The challenge (its expiry, 16 random
+  bytes, a MAC) and the session are signed with a key made from
+  `HEALTH_TOKEN`, so there's no KV read-after-write to wait on, and
+  rotating the token ends every session at once.
+- A passkey belongs to the host it was made on (the WebAuthn rpId):
+  terminus.run, terminus.rcn.sh and the beta each want their own.
+- The browser hands over the public key as SPKI (`getPublicKey()`), so no
+  CBOR is read; attestation is `none`, since the token is what vouches for
+  a new passkey. User verification is required. ES256 (DER signatures
+  turned into raw r‖s for WebCrypto), Ed25519 and RS256 are accepted.
+- To remove a lost device's passkey, edit `operator:passkeys` in KV; to
+  remove every passkey and session, delete the key and rotate
+  `HEALTH_TOKEN`. Scripts and `curl` still send `HEALTH_TOKEN` as before.
 
 ## Auth, confirmed
 

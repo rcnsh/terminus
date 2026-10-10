@@ -23,7 +23,8 @@ import { boardAsOf, boardAt, displayName, indexGraph, serviceEndsAt, serviceResu
 import { buildCampusMap, buildDestinations, ROUTE_COLORS } from './campus.ts';
 import { busesOnLine, lineStops, trackedBuses } from './buses.ts';
 import { stopPairs } from './pairs.ts';
-import { adminStats, isOperator } from './admin.ts';
+import { adminStats, holdsHealthToken, isOperator } from './admin.ts';
+import { handlePasskey } from './passkey.ts';
 import { analyticsEnabled, logError } from './analytics.ts';
 import { docsPageFor, openApiJson } from './openapi.ts';
 import { phaseAt, sgtMinute } from './pagesky.ts';
@@ -330,7 +331,7 @@ async function handleHealth(req: Request, url: URL, env: Env, nowMs: number): Pr
   // fresh deploy before the first cron run) is not that.
   const ok = (!u || answering(u)) && cronStale !== true && daysLeft > 0;
   // The probe spends an upstream call, so only the operator gets it.
-  const operator = isOperator(env, req);
+  const operator = await isOperator(env, req, nowMs);
   const probe = operator && url.searchParams.get('probe') === '1';
   // Reads the Play and APKCombo pages (no NUS calls), to see what the
   // automatic version update would find today.
@@ -421,7 +422,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
     // NUS; this protects the Worker from being a free proxy, and D1/R2 from
     // being a free bill.
     const keyed = KEYED.includes(url.pathname);
-    if (env.RL_PUBLIC && (url.pathname === '/api/health' || url.pathname === '/api/status.json' || url.pathname === '/api/admin/stats' || url.pathname.startsWith('/download/') || url.pathname.startsWith('/api/timelapse/'))) {
+    if (env.RL_PUBLIC && (url.pathname === '/api/health' || url.pathname === '/api/status.json' || url.pathname === '/api/admin/stats' || url.pathname.startsWith('/api/admin/passkey/') || url.pathname.startsWith('/download/') || url.pathname.startsWith('/api/timelapse/'))) {
       const { success } = await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` });
       if (!success) return json({ error: 'too many requests, slow down' }, 429, { 'retry-after': '60' });
     }
@@ -458,6 +459,8 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
     // A recorded day of buses: operator only, like /admin/stats.
     const timelapse = await handleTimelapse(req, url, env, nowMs);
     if (timelapse) return timelapse;
+    // Passkeys for the operator's pages: adding one needs HEALTH_TOKEN itself.
+    if (url.pathname.startsWith('/api/admin/passkey/')) return await handlePasskey(req, url, env, nowMs, holdsHealthToken(env, req));
     // The street map: open like the website, and served from R2 or built.
     const map = await handleMap(req, url, env, ctx);
     if (map) return map;
@@ -493,7 +496,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
         return await handleStatus(env, nowMs);
       case '/api/admin/stats':
         // The dashboard's data: operator only, never cached.
-        if (!isOperator(env, req)) return json({ error: 'not found' }, 404);
+        if (!(await isOperator(env, req, nowMs))) return json({ error: 'not found' }, 404);
         return json(await adminStats(env, nowMs), 200, { 'cache-control': 'no-store' });
       case '/api/campus':
         return await handleCampus(req);

@@ -22,13 +22,13 @@ test('the dashboard asks Analytics Engine with the token, and says so when it fa
   assert.deepEqual(down.analytics, { error: 'Analytics Engine answered 403' });
 });
 
-test('operator check: needs the configured token, exactly', () => {
+test('operator check: needs the configured token, exactly', async () => {
   const req = (t) => new Request('https://x.test/api/admin/stats', { headers: t ? { 'x-health-token': t } : {} });
-  assert.equal(isOperator({ HEALTH_TOKEN: 'abc' }, req('abc')), true);
-  assert.equal(isOperator({ HEALTH_TOKEN: 'abc' }, req('abd')), false);
-  assert.equal(isOperator({ HEALTH_TOKEN: 'abc' }, req('abcd')), false);
-  assert.equal(isOperator({ HEALTH_TOKEN: 'abc' }, req(null)), false);
-  assert.equal(isOperator({}, req('')), false, 'no token configured: nobody');
+  assert.equal(await isOperator({ HEALTH_TOKEN: 'abc' }, req('abc')), true);
+  assert.equal(await isOperator({ HEALTH_TOKEN: 'abc' }, req('abd')), false);
+  assert.equal(await isOperator({ HEALTH_TOKEN: 'abc' }, req('abcd')), false);
+  assert.equal(await isOperator({ HEALTH_TOKEN: 'abc' }, req(null)), false);
+  assert.equal(await isOperator({}, req('')), false, 'no token configured: nobody');
 });
 
 test('the token compare gets every length and prefix right', () => {

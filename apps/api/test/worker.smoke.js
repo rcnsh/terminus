@@ -269,9 +269,9 @@ test('the OpenAPI spec documents exactly the routes that exist', async () => {
     .sort();
   const routed = [
     ...ME_ROUTES.map((r) => `${r.method} ${r.path.endsWith('/') ? r.path + '*' : r.path}`),
-    ...['/api/next', '/api/trip', '/api/arrivals', '/api/buses', '/api/line', '/api/campus', '/api/stops/pairs', '/api/health', '/api/status.json', '/api/admin/stats', '/docs', '/api/openapi.json', '/api/timelapse/days', '/api/timelapse/days/*'].map((p) => `GET ${p}`),
+    ...['/api/next', '/api/trip', '/api/arrivals', '/api/buses', '/api/line', '/api/campus', '/api/stops/pairs', '/api/health', '/api/status.json', '/api/admin/stats', '/api/admin/passkey/challenge', '/docs', '/api/openapi.json', '/api/timelapse/days', '/api/timelapse/days/*'].map((p) => `GET ${p}`),
     ...['/api/auth/config', '/auth/verify', '/auth/approve'].map((p) => `GET ${p}`),
-    ...['/api/auth/login', '/api/auth/code', '/auth/verify', '/api/auth/anon', '/api/auth/anon/web', '/api/auth/app/start', '/api/auth/app/poll', '/api/auth/app/code', '/api/auth/app/merge', '/auth/approve', '/api/auth/logout', '/api/pair', '/api/pair/check'].map((p) => `POST ${p}`),
+    ...['/api/auth/login', '/api/auth/code', '/auth/verify', '/api/auth/anon', '/api/auth/anon/web', '/api/auth/app/start', '/api/auth/app/poll', '/api/auth/app/code', '/api/auth/app/merge', '/auth/approve', '/api/auth/logout', '/api/pair', '/api/pair/check', '/api/admin/passkey/register', '/api/admin/passkey/signin'].map((p) => `POST ${p}`),
     ...['/map/style.json', '/map/campus.pmtiles', '/map/fonts/*/*.pbf', '/map/sprites/v4/*'].map((p) => `GET ${p}`),
     ...['/download/latest.json', '/download/android', '/download/mac', '/download/appcast.xml', '/download/releases/*/*'].map((p) => `GET ${p}`),
   ].sort();
@@ -282,8 +282,9 @@ test('the OpenAPI spec documents exactly the routes that exist', async () => {
   // prod. Account routes are exercised in accounts.test.js.
   for (const [path, item] of Object.entries(spec.paths)) {
     // Account routes have their own security; `security: []` means open (health).
-    // The map and downloads need R2, and are tested on their own.
-    if (!item.get || item.get.security?.length || path.includes('{') || !['Answers', 'Stops', 'Service'].includes(item.get.tags[0])) continue;
+    // The map and downloads need R2, and are tested on their own; the
+    // operator's passkey challenge needs HEALTH_TOKEN (openapi.test.js).
+    if (!item.get || item.get.security?.length || path.includes('{') || path.startsWith('/api/admin/') || !['Answers', 'Stops', 'Service'].includes(item.get.tags[0])) continue;
     const q = new URLSearchParams();
     // `from` is only conditionally required (no location), so fill it too.
     for (const p of item.get.parameters ?? []) if (p.required || p.name === 'from') q.set(p.name, String(p.example));

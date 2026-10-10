@@ -13,7 +13,8 @@
 // the app's interactive map, with its stores, sheets and live polling. This
 // one is fixed to the video's size, drawn once per frame, and never moves.
 
-import { html, render, store, useEffect, useRef, useStore } from '/assets/ui.js';
+import { html, render, store, useEffect, useRef, useState, useStore } from '/assets/ui.js';
+import { passkeysWork, signIn } from '/admin/passkey.js';
 import { busesAt, clockAt, countBySvc, decodeDay, timeOn } from '/admin/timelapse/replay.js';
 import { MAPLIBRE, PMTILES } from '/app/map-files.js';
 
@@ -85,7 +86,7 @@ async function api(path) {
   if (res.status === 404 && path === '/api/timelapse/days') {
     remember(null);
     memory = null;
-    view.set((v) => ({ ...v, locked: true, msg: 'That token was not accepted.' }));
+    view.set((v) => ({ ...v, locked: true, msg: 'Signed out, or that token was not accepted.' }));
     return null;
   }
   if (!res.ok) throw new Error(res.status === 404 ? 'Nothing was recorded that day.' : `The server answered ${res.status}.`);
@@ -501,23 +502,39 @@ const mb = (n) => `${(n / 1_048_576).toFixed(1)} MB`;
 function Unlock() {
   const v = useStore(view);
   const input = useRef(null);
+  const [busy, setBusy] = useState(false);
+  const open = (t) => {
+    memory = t;
+    remember(t);
+    return loadDays();
+  };
   const submit = (e) => {
     e.preventDefault();
     const t = input.current.value.trim();
-    if (!t) return;
-    memory = t;
-    remember(t);
-    loadDays();
+    if (t) open(t);
+  };
+  const passkey = async () => {
+    setBusy(true);
+    view.set((x) => ({ ...x, msg: '' }));
+    try {
+      await open(await signIn());
+    } catch (err) {
+      view.set((x) => ({ ...x, msg: err.message }));
+    } finally {
+      setBusy(false);
+    }
   };
   return html`
     <form class="unlock" onSubmit=${submit}>
-      <label for="token">Operator token</label>
+      ${passkeysWork() && html`<button class="btn accent" type="button" disabled=${busy} onClick=${passkey}>Sign in with a passkey</button>`}
+      <p class="hint">A passkey is added on <a href="/admin/">the dashboard</a>.</p>
+      <label for="token">Timelapse token</label>
       <div class="row">
         <input id="token" ref=${input} type="password" autocomplete="off" />
-        <button class="btn accent" type="submit">Unlock</button>
+        <button class="btn" type="submit">Unlock</button>
       </div>
       ${v.msg && html`<p class="bad">${v.msg}</p>`}
-      <p class="hint">The HEALTH_TOKEN secret, as on the dashboard, or TIMELAPSE_TOKEN, which opens only this page.</p>
+      <p class="hint">TIMELAPSE_TOKEN, which opens only this page.</p>
     </form>
   `;
 }
