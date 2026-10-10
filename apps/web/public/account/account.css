@@ -21,7 +21,7 @@
    at a time, sliding; from 900px (as `wide` in settings.js) side by side. */
 .settings { position: relative; overflow-x: clip; padding-top: 8px; }
 .settings-side { display: grid; gap: 16px; align-content: start; min-width: 0; }
-.settings-side .eyebrow { margin-bottom: 10px; }
+.settings-side .eyebrow, .settings-rail .eyebrow { margin-bottom: 10px; }
 .settings-list { padding: 0; overflow: hidden; }
 .settings-row {
   display: flex; align-items: center; gap: 12px; width: 100%;
@@ -38,20 +38,38 @@
 .settings-row .chev, .page-back svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .settings-row .chev { color: var(--muted); }
 .settings-groups { display: grid; gap: 12px; }
-/* Your account at the top, as a tile of its own. */
+/* Your account at the top, in a card of its own. */
 .settings-row.set-account { padding: 14px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); }
 .set-account .avatar { display: grid; place-items: center; width: 44px; height: 44px; flex: none; border-radius: 50%; background: var(--accent); color: var(--bg); font: 800 1.1rem var(--display); }
-.set-account .row-title { font-weight: 700; overflow-wrap: anywhere; }
-/* Settings as tiles, two to a row. */
-.set-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.set-tile { display: grid; align-content: start; gap: 2px; min-height: 112px; padding: 14px; text-align: left; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 18px; cursor: pointer; }
-.set-tile:hover { border-color: var(--line-strong); }
-.set-tile svg { width: 22px; height: 22px; margin-bottom: auto; padding-bottom: 14px; box-sizing: content-box; fill: none; stroke: var(--accent); color: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.set-tile .row-title { font-weight: 700; }
-.set-tile .row-sum { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.set-tile .row-sum.off { color: var(--warn-ink); font-weight: 600; }
-.set-tile .row-sum.todo { color: var(--accent); font-weight: 600; }
-.set-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* A long email on one line, cut short, rather than broken mid-word. */
+.set-account .row-title { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Every other page as a row in a group, with its icon, and what it has set on
+   the right; side by side (from 900px), under its name, as a sidebar. */
+.set-group { border: 1px solid var(--line); border-radius: 18px; background: var(--surface); overflow: hidden; }
+.set-item { min-height: 56px; }
+.set-item .row-text { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.set-item .row-title { flex: none; }
+.set-item .row-sum { min-width: 0; text-align: right; }
+.set-item .row-sum.off { color: var(--warn-ink); font-weight: 600; }
+.set-item .row-sum.todo { color: var(--accent); font-weight: 600; }
+/* Send feedback says what it's for under its name in the sidebar; beside it on a phone there's no room. */
+@media (max-width: 899.98px) { .set-item[data-page="feedback"] .row-sum { display: none; } }
+.set-ico { display: grid; place-items: center; width: 32px; height: 32px; flex: none; border-radius: 9px; background: var(--accent-soft); color: var(--accent); }
+.set-ico svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+/* The widget along the foot of a page on a phone (app.js Peek), opening to the whole card. */
+.peek { position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 5; display: grid; gap: 8px; max-height: calc(100dvh - 24px); }
+.peek-card { overflow-y: auto; padding: 4px; }
+.peek-bar { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 16px; border: 1px solid var(--line); border-radius: 16px; background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: var(--shadow); font: inherit; color: var(--ink); text-align: left; cursor: pointer; }
+.peek-bar:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.peek-text { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.peek-text .eyebrow { margin: 0; font-size: 0.7rem; }
+.peek-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.peek-bar .chev { width: 20px; height: 20px; flex: none; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+/* Open, the page behind steps back. */
+.peek.open::before { content: ""; position: fixed; inset: 0; z-index: -1; background: rgb(0 0 0 / 0.45); }
+/* Room under a page's last row for the bar. */
+.settings.page-open:has(.peek) .settings-page:not(.leaving) { padding-bottom: 88px; }
+@media (min-width: 900px) { .peek { display: none; } }
 .settings-row.inline { cursor: default; flex-wrap: wrap; }
 .settings-row.inline:hover { background: none; }
 /* About: the words, then its links as rows like the list's. */
@@ -180,9 +198,24 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
   .settings-side { position: sticky; top: 16px; }
   .page-back { display: none; }
   .page-head { margin-left: 0; }
-  .settings-row[aria-current], .set-tile[aria-current] { background: var(--accent-soft); }
-  .set-tile[aria-current], .settings-row.set-account[aria-current] { border-color: var(--accent); }
+  .settings-row[aria-current] { background: var(--accent-soft); }
+  .settings-row.set-account[aria-current] { border-color: var(--accent); }
   .settings-row[aria-current] .chev { color: var(--accent); }
+  /* The list as a sidebar: plain rows, what each has set under its name, groups apart by a rule. */
+  .set-group { border: 0; border-radius: 0; background: none; overflow: visible; display: grid; gap: 2px; }
+  .set-group + .set-group { border-top: 1px solid var(--line); padding-top: 12px; }
+  .set-item { border: 0; border-radius: 12px; padding: 8px 10px; min-height: 0; }
+  .set-item .row-text { display: grid; gap: 1px; }
+  .set-item .row-sum { text-align: left; font-size: 0.8rem; }
+  .set-item .chev { display: none; }
+  .set-item[aria-current] { box-shadow: inset 3px 0 0 var(--accent); }
+}
+/* Wider still, on the account page: the list, the page, and the widget it changes, side by side. */
+@media (min-width: 1100px) {
+  body:has(.settings.has-rail) .wrap { max-width: 84rem; }
+  .settings.has-rail { grid-template-columns: 17rem minmax(0, 1fr) minmax(20rem, 24rem); gap: 32px; }
+  .settings.has-rail .settings-side { min-width: 0; }
+  .settings-rail { position: sticky; top: 16px; display: grid; gap: 12px; align-content: start; min-width: 0; }
 }
 
 /* A card's own heading; not the Now card's headline (when to go, Done for
@@ -395,7 +428,8 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 @media (max-width: 560px) { .ob-apps { grid-template-columns: 1fr; } }
 
 /* The account page arrives after setup, and the "new" card on older accounts. */
-#app:not([hidden]) { animation: ob-appear 0.3s var(--ob-ease) both; }
+/* Backwards, not both: a transform kept after it would hold the widget's bar (.peek) to #app, not the screen. */
+#app:not([hidden]) { animation: ob-appear 0.3s var(--ob-ease) backwards; }
 @keyframes ob-appear { from { opacity: 0; transform: translateY(6px); } }
 
 @media (prefers-reduced-motion: reduce) {
