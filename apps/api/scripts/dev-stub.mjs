@@ -51,6 +51,7 @@ import path from 'node:path';
 import { installGlobals, makeBucket, makeDurableObjects, makeEnv, makeCtx, shuttlePayload } from '../test/_stubs.mjs';
 import { Trip } from '../src/tripdo.ts';
 import { TimelapseRecorder } from '../src/timelapsedo.ts';
+import { FeedGate } from '../src/feedgate.ts';
 import { ensureRecorder, inWindow, nextOpen } from '../src/timelapse.ts';
 import { SESSION_COOKIE as DEV_COOKIE } from '../src/accounts.ts';
 import { API_VERSION } from '../src/openapi.ts';
@@ -249,10 +250,11 @@ let env;
 const TRIPS = makeDurableObjects(Trip, () => env);
 // The timelapse recorder, in-process too, on the fake feed.
 const TIMELAPSE = makeDurableObjects(TimelapseRecorder, () => env);
+const FEED_GATE = makeDurableObjects(FeedGate);
 // Web Push: a fresh VAPID key each run (browsers subscribed to an old one just subscribe again).
 const vapid = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
 const VAPID = JSON.stringify(await crypto.subtle.exportKey('jwk', vapid.privateKey));
-env = { ...makeEnv(), LTA_ACCOUNT_KEY: 'dev', [Symbol.for('terminus.testOpen')]: false, DB: db, EMAIL: email, EMAIL_FROM: 'login@example.test', ASSETS, DOWNLOADS, HEALTH_TOKEN: 'dev', TRIPS, TIMELAPSE, TIMELAPSE_ENABLED: 'on', VAPID_PRIVATE_KEY: VAPID, ...(FCM ? { FCM_SERVICE_ACCOUNT: FCM } : {}) };
+env = { ...makeEnv(), LTA_ACCOUNT_KEY: 'dev', [Symbol.for('terminus.testOpen')]: false, DB: db, EMAIL: email, EMAIL_FROM: 'login@example.test', ASSETS, DOWNLOADS, HEALTH_TOKEN: 'dev', TRIPS, TIMELAPSE, FEED_GATE, TIMELAPSE_ENABLED: 'on', VAPID_PRIVATE_KEY: VAPID, ...(FCM ? { FCM_SERVICE_ACCOUNT: FCM } : {}) };
 console.log(FCM ? 'push: on (Firebase project from .private/)' : 'push: off (no .private/fcm-service-account.json)');
 setInterval(() => {
   const due = [...TRIPS.alarms.values()].filter((at) => at <= stubNow()).length;

@@ -76,6 +76,9 @@ export interface Env {
   LTA_ACCOUNT_KEY?: string;
   /** The timelapse recorder: one Durable Object per Singapore day (timelapsedo.ts). */
   TIMELAPSE?: DurableObjectNamespace;
+  /** One Durable Object per feed key, holding each to one upstream call per
+   *  window across every data centre (feedgate.ts). Absent: per data centre only. */
+  FEED_GATE?: DurableObjectNamespace;
   /** "on" lets the timelapse recorder poll; anything else, or unset, is off.
    *  KV config:timelapse overrides it without a deploy (timelapse.ts). */
   TIMELAPSE_ENABLED?: string;

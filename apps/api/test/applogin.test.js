@@ -6,8 +6,8 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { installGlobals, makeCtx, makeDurableObjects, makeEnv, makeFetch, makeKV } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
-import { clientFrom, versionBelow } from '../src/accounts.ts';
-import { choicesFor, hasSetup } from '../src/applogin.ts';
+import { clientFrom, hashToken, inboxKey, versionBelow } from '../src/accounts.ts';
+import { hasSetup } from '../src/applogin.ts';
 import { housekeeping } from '../src/monitor.ts';
 import { endOfDayMs, sgtDate } from '../src/trip.ts';
 import { Trip } from '../src/tripdo.ts';
@@ -148,7 +148,7 @@ test('anonymous accounts: a per-IP limit and one global ceiling', async () => {
   assert.equal((await call(perIp, '/api/auth/anon', { method: 'POST', body: {} })).status, 429);
 });
 
-test('app sign-in: the email carries a link, never the number; the page offers three numbers', async () => {
+test('app sign-in: the email carries a link, never the number; the page asks for it to be typed', async () => {
   const { env, email } = setup();
   const s = await (await call(env, '/api/auth/app/start', { method: 'POST', body: { email: ME, name: 'MacBook Air' } })).json();
   assert.ok(s.request && s.poll && s.match >= 10 && s.match <= 99);
@@ -161,12 +161,13 @@ test('app sign-in: the email carries a link, never the number; the page offers t
 
   const page = await (await call(env, `/auth/approve?r=${lastLink(email)}`)).text();
   assert.match(page, /Sign in to terminus on MacBook Air\?/);
-  const shown = [...page.matchAll(/name="n" value="(\d+)"/g)].map((m) => Number(m[1]));
-  assert.equal(shown.length, 3);
-  assert.ok(shown.includes(s.match));
+  // A box to type into, never numbers to pick from: picking would let a
+  // stranger in one time in three.
+  assert.match(page, /<input class="number" id="n" name="n" inputmode="numeric"/);
+  assert.doesNotMatch(page, /name="n" value="\d+"/);
+  assert.doesNotMatch(page.replace(/<[^>]*>/g, ' '), new RegExp(`\\b${s.match}\\b`), 'the page never shows the number');
   // Opening the page twice (a mail scanner, then the user) changes nothing.
-  const again = await (await call(env, `/auth/approve?r=${lastLink(email)}`)).text();
-  assert.deepEqual([...again.matchAll(/name="n" value="(\d+)"/g)].map((m) => Number(m[1])), shown);
+  assert.equal((await call(env, `/auth/approve?r=${lastLink(email)}`)).status, 200);
   assert.equal((await (await call(env, '/api/auth/app/poll', { method: 'POST', body: s })).json()).status, 'pending');
 });
 
@@ -181,11 +182,38 @@ test('app sign-in: a wrong number kills the request', async () => {
   assert.equal((await call(env, '/auth/approve', { method: 'POST', form: { r: lastLink(email), n: String(s.match) } })).status, 400);
 });
 
-test('app sign-in: "this wasn\'t me" cancels it', async () => {
+test('app sign-in: "this wasn\'t me" cancels it and stops app sign-ins to the address for a while', async () => {
   const { env, email } = setup();
   const s = await (await call(env, '/api/auth/app/start', { method: 'POST', body: { email: ME, name: 'Pixel' } })).json();
   assert.equal((await call(env, '/auth/approve', { method: 'POST', form: { r: lastLink(email), n: 'none' } })).status, 200);
   assert.equal((await (await call(env, '/api/auth/app/poll', { method: 'POST', body: s })).json()).status, 'denied');
+  // A stranger can't keep asking until someone confused types a lucky number,
+  // whichever form of the address they use.
+  const sent = email.sent.length;
+  for (const addr of [ME, ME.replace('@', '+x@')]) {
+    const again = await call(env, '/api/auth/app/start', { method: 'POST', body: { email: addr, name: 'Pixel' } });
+    assert.equal(again.status, 429);
+    assert.equal(again.headers.get('retry-after'), '3600');
+    assert.match((await again.json()).error, /turned down recently/);
+  }
+  assert.equal(email.sent.length, sent, 'nothing more is emailed');
+  // Only that address is held.
+  assert.notEqual((await call(env, '/api/auth/app/start', { method: 'POST', body: { email: 'other@u.nus.edu', name: 'Pixel' } })).status, 429);
+});
+
+test('app sign-in: a wrong number does not hold the address', async () => {
+  const { env, email } = setup();
+  const s = await (await call(env, '/api/auth/app/start', { method: 'POST', body: { email: ME, name: 'Pixel' } })).json();
+  await call(env, '/auth/approve', { method: 'POST', form: { r: lastLink(email), n: String(s.match === 99 ? 98 : s.match + 1) } });
+  assert.equal(await env.KV.get(`held:${await hashToken(inboxKey(ME))}`), null);
+});
+
+test('app sign-in emails spend a ceiling of their own, apart from the website\'s', async () => {
+  const keys = [];
+  const { env } = setup();
+  env.RL_MAIL = { limit: async ({ key }) => (keys.push(key), { success: true }) };
+  await call(env, '/api/auth/app/start', { method: 'POST', body: { email: ME, name: 'Pixel' } });
+  assert.deepEqual(keys, ['mail:app']);
 });
 
 test('app sign-in: the token is handed out once, and only for the right poll secret', async () => {
@@ -368,18 +396,6 @@ test('the bus answers refuse an old app too, in Chinese for zh', async () => {
   const typo = { ...strict, KV: makeKV() };
   await typo.KV.put('config:minClient', '{android: 2.6');
   assert.equal((await call(typo, '/api/campus', { token, headers: { 'x-terminus-client': 'mac/1.0.0' } })).status, 200);
-});
-
-test('the approval page keeps its three numbers distinct, with the right one among them', () => {
-  for (let i = 0; i < 200; i++) {
-    const seed = [...crypto.getRandomValues(new Uint8Array(32))].map((b) => b.toString(16).padStart(2, '0')).join('');
-    const match = 10 + (i % 90);
-    const c = choicesFor(match, seed);
-    assert.equal(new Set(c).size, 3);
-    assert.ok(c.includes(match));
-    assert.ok(c.every((n) => n >= 10 && n <= 99));
-    assert.deepEqual(choicesFor(match, seed), c);
-  }
 });
 
 test('a setup worth keeping has somewhere to go or somewhere to start', () => {

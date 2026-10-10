@@ -128,9 +128,13 @@ export type LinkOutcome = 'sent' | 'blocked' | 'cooldown' | 'busy';
  * not be able to spend the whole email quota or the sender's reputation.
  * Taken only when an email is about to go, so requests that send nothing
  * (an address in its cooldown) can't use it up and block everyone's sign-in.
+ *
+ * The apps' sign-in has a ceiling of its own (`app`): it can't run Turnstile,
+ * so scripts reach it more cheaply, and spending it must leave the website's
+ * sign-in working.
  */
-export async function takeGlobalMail(env: Env): Promise<boolean> {
-  return !env.RL_MAIL || (await env.RL_MAIL.limit({ key: 'mail:global' })).success;
+export async function takeGlobalMail(env: Env, scope: 'web' | 'app' = 'web'): Promise<boolean> {
+  return !env.RL_MAIL || (await env.RL_MAIL.limit({ key: scope === 'app' ? 'mail:app' : 'mail:global' })).success;
 }
 
 /**

@@ -64,9 +64,11 @@ root path gets 426 from an app, 308 from anything else (`movedApi` in
    or key, a 429 or 5xx from a NUS host, or no answer at all (a timeout,
    a failed connection), opens the breaker; a failed token mint isn't
    tried again for `failMemoS`; a refused call is retried once, with a
-   token minted at most once a minute (`remintGapS`). These limits hold
-   per Cloudflare data centre, whose cache every isolate there shares.
-   The same goes for LTA DataMall, the public buses' feed (`src/lta.ts`):
+   token minted at most once a minute (`remintGapS`). The cache is per
+   Cloudflare data centre, so a miss asks the feed gate
+   (`src/feedgate.ts`, one Durable Object per stop or service) first: one
+   call per key per window across every data centre. Don't route a feed
+   call around it. The same goes for LTA DataMall, the public buses' feed (`src/lta.ts`):
    one call per stop per 15 s, through the same cache
    (`src/edgecache.ts`).
 
@@ -236,6 +238,7 @@ apps/api/
   src/graph.ts        The stop graph: stops.json with hand-kept hours and opposites; GRAPH_PUBLIC
   src/public.ts       Public buses in the graph: withPublic, route keys, ride metres
   src/edgecache.ts    Fetch through the edge cache, stale on failure, breaker: both feeds
+  src/feedgate.ts     The feed gate: one feed call per key per window, every data centre
   src/auth.ts         Guest token mint, KV memo, app-version breaker
   src/appversion.ts   Tracks the uNivUS app version the feed demands
   src/buses.ts        /api/buses: live buses placed on their route line (see below)

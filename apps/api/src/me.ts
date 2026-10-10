@@ -5,7 +5,7 @@
  */
 
 import { mailFeedback, parseFeedback, saveFeedback } from './feedback.ts';
-import { approvable, decide, enterCode, mergeAnonymous, pollAppLogin, startAppLogin } from './applogin.ts';
+import { approvable, decide, enterCode, holdAppLogins, mergeAnonymous, pollAppLogin, startAppLogin } from './applogin.ts';
 import type { Answer, Env, Graph, MeAnswer, ResolveInput, StopArrivals } from './types.ts';
 import {
   ACCOUNT_TTL,
@@ -99,9 +99,8 @@ const page = (title: string, inner: string) => {
 <link rel="stylesheet" href="/assets/site.css">
 <style>.box{max-width:25rem;margin:10vh auto 0;padding:32px 28px;overflow:hidden}.band .brand img{width:28px;height:28px}.box h1{font-size:1.6rem;margin-bottom:8px}.box .btn{width:100%;margin-top:20px}
 .when{color:var(--muted)}.box .eyebrow{display:block;margin:24px 4px 8px;line-height:1.4}.box .hint.after{margin:8px 4px 0;font-size:.85rem}.box .hint.center{margin-top:4px;text-align:center;font-size:.85rem}
-.choices{display:flex;gap:8px;padding:10px;border:1px solid var(--line);border-radius:16px;background:var(--bg)}
-.box .choices .btn{flex:1;margin:0;min-height:60px;padding:0;border-radius:12px;background:var(--surface-2);color:var(--ink);border-color:var(--line);font:700 1.6rem/1 var(--display);font-variant-numeric:tabular-nums}
-.box .choices .btn:hover,.box .choices .btn:focus-visible{transform:none;border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.number{display:block;width:100%;box-sizing:border-box;min-height:64px;padding:0 12px;border:1px solid var(--line);border-radius:16px;background:var(--bg);color:var(--ink);text-align:center;font:700 2rem/1 var(--display);letter-spacing:.3em;font-variant-numeric:tabular-nums}
+.number:focus-visible{outline:none;border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
 .linkbtn{display:block;margin:22px auto 0;background:none;border:0;color:var(--ink);text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--muted);font:500 .95rem var(--font);cursor:pointer}
 ${bandCss(phase)}</style>
 </head><body><main class="wrap"><div class="card box">${bandHtml(phase)}${inner}</div></main></body></html>`;
@@ -1042,6 +1041,7 @@ export async function handleMe(
     }
     if (started === 'cooldown') return json({ error: 'an email was sent to that address a moment ago; wait a minute and try again' }, 429, retryAfter());
     if (started === 'busy') return json({ error: 'sign-in is busy, try again in a minute' }, 429, retryAfter());
+    if (started === 'held') return json({ error: 'a sign-in to that address was turned down recently, so the app cannot ask again for a few hours; pair this device from the website instead' }, 429, retryAfter(3_600));
     return json({ ...started, expires: new Date(started.expires).toISOString() }, 201);
   }
 
@@ -1075,16 +1075,16 @@ export async function handleMe(
       const a = link ? await approvable(db, link, nowMs) : null;
       if (!a) return html(page(m().pageRequestExpired, m().approveExpiredHtml), 400);
       const device = escapeHtml(a.device || m().aDevice);
-      const buttons = a.choices
-        .map((n) => `<button type="submit" name="n" value="${n}" class="btn">${n}</button>`)
-        .join('');
-      // The question, when it was asked, then the three numbers under a
-      // heading, saying what a choice does; "This wasn't me" quietly under them.
+      // The question, when it was asked, then a box for the number the
+      // device shows, saying what a wrong one does; "This wasn't me"
+      // quietly under it. Typed, not picked: see applogin.ts.
       return html(page(m().pageApprove, `<h1>${m().approveTitle(device)}</h1>
 <p class="when">${m().approveWhen(escapeHtml(sgtTime(a.created)))}</p>
-<h2 class="eyebrow" id="pick">${m().approveNumber(device)}</h2>
-<form method="post" action="/auth/approve"><input type="hidden" name="r" value="${link}"><div class="choices" role="group" aria-labelledby="pick">${buttons}</div></form>
+<form method="post" action="/auth/approve"><input type="hidden" name="r" value="${link}">
+<label class="eyebrow" for="n">${m().approveNumber(device)}</label>
+<input class="number" id="n" name="n" inputmode="numeric" pattern="[0-9]{2}" maxlength="2" autocomplete="off" required autofocus>
 <p class="hint after">${m().approveRule}</p>
+<button type="submit" class="btn accent">${m().approveButton}</button></form>
 <form method="post" action="/auth/approve"><input type="hidden" name="r" value="${link}"><button type="submit" name="n" value="none" class="linkbtn">${m().notMe}</button></form>
 <p class="hint center">${m().notMeHint}</p>`));
     }
@@ -1092,14 +1092,16 @@ export async function handleMe(
       if (await limited(env, req, 'approve')) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
       const form = await readForm(req);
       const r = form?.get('r');
-      const n = Number(form?.get('n'));
-      const out = typeof r === 'string' ? await decide(db, r, Number.isInteger(n) ? n : null, nowMs) : 'expired';
-      if (out === 'approved') return html(page(m().pageApproved, m().approvedHtml));
-      if (out === 'denied') {
-        const picked = form?.get('n') !== 'none';
+      const typed = (form?.get('n') ?? '').trim();
+      const n = /^[0-9]{1,3}$/.test(typed) ? Number(typed) : null;
+      const out = typeof r === 'string' ? await decide(db, r, n, nowMs) : { status: 'expired' as const };
+      if (out.status === 'approved') return html(page(m().pageApproved, m().approvedHtml));
+      if (out.status === 'denied') {
+        const notMe = typed === 'none';
+        if (notMe && out.email) await holdAppLogins(env, out.email);
         return html(
-          page(m().pageCancelled, m().cancelledHtml(picked)),
-          picked ? 400 : 200,
+          page(m().pageCancelled, m().cancelledHtml(!notMe)),
+          notMe ? 200 : 400,
         );
       }
       return html(page(m().pageRequestExpired, m().approveExpiredHtml), 400);

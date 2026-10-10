@@ -106,10 +106,12 @@ export default defineConfig(({ mode }) => {
 				s.oldDomain,
 			],
 			// The trip engine: one Durable Object per user with today's trip signals,
-			// and the timelapse recorder, one per Singapore day (src/timelapsedo.ts).
+			// the timelapse recorder, one per Singapore day (src/timelapsedo.ts),
+			// and the feed gate, one per stop or service (src/feedgate.ts).
 			exports: {
 				Trip: exports.durableObject({ storage: "sqlite" }),
 				TimelapseRecorder: exports.durableObject({ storage: "sqlite" }),
+				FeedGate: exports.durableObject({ storage: "sqlite" }),
 			},
 			triggers: [
 				triggers.scheduled({
@@ -130,6 +132,10 @@ export default defineConfig(({ mode }) => {
 				TIMELAPSE: bindings.durableObject({
 					worker: s.name,
 					exportName: "TimelapseRecorder",
+				}),
+				FEED_GATE: bindings.durableObject({
+					worker: s.name,
+					exportName: "FeedGate",
 				}),
 				AE: bindings.analyticsEngineDataset({
 					name: s.dataset,

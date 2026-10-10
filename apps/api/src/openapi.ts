@@ -670,9 +670,9 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Account'],
           summary: 'Sign in an app, approved from the email',
           description:
-            'Emails a code to type into the app, and a link to approve it from another device by picking the number the app shows (returned here). ' +
+            'Emails a code to type into the app, and a link to approve it from another device by typing the number the app shows (returned here). ' +
             'Send the anonymous token (if the app has one) as `Authorization: Bearer` to keep its setup. Then poll `/api/auth/app/poll`. ' +
-            'One email per address per minute; a request lasts 15 minutes.',
+            'One email per address per minute; a request lasts 15 minutes. After “This wasn’t me” on the approval page, the address takes no app sign-ins for 6 hours (429).',
           operationId: 'appStart',
           // The anonymous token is optional.
           security: [{}, { bearer: [] }],
@@ -691,7 +691,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             }),
             '400': errorResponse('Not an email address.'),
             '409': errorResponse('This device is already signed in.'),
-            '429': { ...errorResponse('An email went to this address in the last minute, too many attempts, or too many sign-in emails for everyone this minute.'), headers: RETRY_AFTER },
+            '429': { ...errorResponse('An email went to this address in the last minute, too many attempts, too many app sign-in emails for everyone this minute, or the address turned a request down in the last 6 hours (then `Retry-After` is 3600).'), headers: RETRY_AFTER },
             '502': errorResponse('The email could not be sent. Try again later.', { error: 'could not send the email, try again later' }),
           },
         },
@@ -1519,11 +1519,11 @@ export function openApiSpec(origin: string): Record<string, unknown> {
         },
         post: {
           tags: ['Account'],
-          summary: 'Pick the number',
-          description: 'The page’s form: the right number approves the app’s sign-in (its next `/api/auth/app/poll` gets the token); a wrong one, or `none`, cancels it. Only from the site’s own pages.',
+          summary: 'Type the number',
+          description: 'The page’s form: the right number approves the app’s sign-in (its next `/api/auth/app/poll` gets the token); a wrong one, or `none`, cancels it (`none` also stops app sign-ins to the address for 6 hours). Only from the site’s own pages.',
           operationId: 'approve',
           security: [],
-          requestBody: { required: true, content: { 'application/x-www-form-urlencoded': { schema: { type: 'object', required: ['r', 'n'], properties: { r: { type: 'string' }, n: { type: 'string', description: 'The number picked, or `none`.' } } } } } },
+          requestBody: { required: true, content: { 'application/x-www-form-urlencoded': { schema: { type: 'object', required: ['r', 'n'], properties: { r: { type: 'string' }, n: { type: 'string', description: 'The number typed, or `none`.' } } } } } },
           responses: {
             '200': { description: 'Approved, or cancelled with `none`.', content: { 'text/html': {} } },
             '400': { description: 'The wrong number (the sign-in is cancelled), or the request has expired.', content: { 'text/html': {} } },
