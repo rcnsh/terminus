@@ -562,6 +562,9 @@ button.svc-tag { cursor: pointer; }
 .settings-tab { padding-bottom: 32px; }
 body.on-settings > .nav { display: none; }
 .settings-tab .settings { padding-top: 0; }
+/* The list starts at the very top here, so it sticks there: at 16px (as on the
+   account page, under its header) it moved down beside a page taller than it. */
+.settings-tab .settings-side { top: 0; }
 /* Its list's horizon runs the width of the window (and pages slide in from
    the window's edge), clipped by the page rather than the column. */
 body.app { overflow-x: clip; }
