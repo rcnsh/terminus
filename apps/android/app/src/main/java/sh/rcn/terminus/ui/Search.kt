@@ -20,6 +20,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import sh.rcn.terminus.Target
 import sh.rcn.terminus.SearchRank
@@ -79,7 +81,7 @@ private fun SearchField(state: UiState, vm: MainViewModel, query: String, q: Str
                     groups[d.kind].orEmpty().uppercase(),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+                    modifier = Modifier.padding(top = 12.dp, bottom = 4.dp).semantics { heading() },
                 )
             }
             val meta = when (d.kind) {

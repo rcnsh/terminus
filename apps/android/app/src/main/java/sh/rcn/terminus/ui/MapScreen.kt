@@ -172,7 +172,6 @@ import sh.rcn.terminus.MapStop
 import sh.rcn.terminus.Quiet
 import sh.rcn.terminus.R
 import sh.rcn.terminus.Slides
-import sh.rcn.terminus.Spoken
 import sh.rcn.terminus.BusStrip
 import kotlin.math.abs
 import kotlin.math.cos
@@ -729,7 +728,7 @@ private fun StatusChip(text: String, busy: Boolean = false) {
 /** White or near-black, whichever reads on a service's colour ([Ink]). */
 internal fun inkOn(c: Color): Color = Color(Ink.on(c.toArgb().toLong() and 0xFFFFFFFFL))
 
-/** A service's code on its colour, as on the bus. Also Nearby's, on Now. */
+/** A service's code on its colour, as on the bus: a stop's services, in its sheet. */
 @Composable
 internal fun SvcTag(svc: String, color: Color, onClick: (() -> Unit)? = null) {
     val shape = RoundedCornerShape(7.dp)
@@ -1081,11 +1080,12 @@ private fun StripRail(color: Color, mark: StripMark?, first: Boolean, last: Bool
         // Above the bus (the passed stop's row, and the bus's own top half) is grey.
         val above = if (mark == StripMark.Passed || mark == StripMark.Bus || mark == StripMark.Here) been else color
         val below = if (mark == StripMark.Passed) been else color
-        if (!first) drawLine(above, Offset(x, 0f), Offset(x, y), w)
+        // Just the line, fading out: drawn faint alone, not over a solid one.
         if (mark == null) {
-            drawLine(color.copy(alpha = 0.35f), Offset(x, 0f), Offset(x, size.height / 2), w)
+            if (!first) drawLine(color.copy(alpha = 0.35f), Offset(x, 0f), Offset(x, size.height / 2), w)
             return@Canvas
         }
+        if (!first) drawLine(above, Offset(x, 0f), Offset(x, y), w)
         if (!last) drawLine(below, Offset(x, y), Offset(x, size.height), w)
         when (mark) {
             StripMark.Bus, StripMark.Here -> {
@@ -1199,7 +1199,7 @@ private class RingIcon(private val ink: Color) : Painter() {
     override fun hashCode() = ink.hashCode()
 }
 
-/** A bus on the map: a disc of [fill], 11 dp across the middle, ringed 2.5 dp in [ring]. */
+/** A bus on the map: a disc of [fill], 22 dp across the middle, ringed 2.5 dp in [ring]. */
 private class BusIcon(private val fill: Color, private val ring: Color) : Painter() {
     override val intrinsicSize: Size = Size.Unspecified
 

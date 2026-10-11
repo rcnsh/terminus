@@ -30,6 +30,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import sh.rcn.terminus.Destination
 import sh.rcn.terminus.R
@@ -38,7 +40,7 @@ import sh.rcn.terminus.hhmm12
 import sh.rcn.terminus.hour12
 import sh.rcn.terminus.rankDestinations
 
-/** One choice from a list, as a dropdown field. `null` is the blank option; [headings] go before the option at their index. */
+/** One choice from a list, as a dropdown field. `null` is the blank option. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun <T> Choice(
@@ -47,7 +49,6 @@ internal fun <T> Choice(
     selected: T?,
     onSelect: (T?) -> Unit,
     blank: String? = null,
-    headings: Map<Int, String> = emptyMap(),
     modifier: Modifier = Modifier.fillMaxWidth(),
 ) {
     var open by rememberSaveable { mutableStateOf(false) }
@@ -63,9 +64,7 @@ internal fun <T> Choice(
         )
         ExposedDropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             if (blank != null) DropdownMenuItem(text = { Text(blank) }, onClick = { onSelect(null); open = false })
-            for ((i, option) in options.withIndex()) {
-                headings[i]?.let { Label(it, Modifier.padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 4.dp)) }
-                val (value, text) = option
+            for ((value, text) in options) {
                 DropdownMenuItem(text = { Text(text) }, onClick = { onSelect(value); open = false })
             }
         }
@@ -111,7 +110,7 @@ internal fun WherePicker(
                 stringResource(R.string.in_your_timetable).uppercase(),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+                modifier = Modifier.padding(top = 12.dp, bottom = 4.dp).semantics { heading() },
             )
         }
         for ((i, d) in (top + rest).withIndex()) {
@@ -157,7 +156,8 @@ internal fun TimeButton(label: String, minutes: Int?, onPick: (Int) -> Unit, mod
     val h12 = hour12(LocalContext.current)
     var open by rememberSaveable { mutableStateOf(false) }
     OutlinedButton(onClick = { open = true }, modifier = modifier) {
-        Text(if (minutes == null) label else "$label ${minuteClock(minutes, h12)}")
+        // No label (a pair of times with "and" between): just the time, with no space before it.
+        Text(if (minutes == null) label else listOf(label, minuteClock(minutes, h12)).filter { it.isNotEmpty() }.joinToString(" "))
     }
     if (open) {
         val m = remember { minutes ?: initial() }

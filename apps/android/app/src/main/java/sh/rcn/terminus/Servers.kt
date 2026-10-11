@@ -2,6 +2,7 @@ package sh.rcn.terminus
 
 import android.content.Context
 import androidx.core.content.edit
+import java.io.IOException
 import java.net.ConnectException
 import java.net.NoRouteToHostException
 import java.net.SocketException
@@ -109,6 +110,26 @@ internal object Servers {
             else -> at to now + DETOUR_MS
         }
     }
+
+    /**
+     * [call] with each of [tries] in turn, the next only when one couldn't be
+     * reached ([unreached]); the one that answered goes to [answered]. For
+     * what doesn't go through Api's request (crash reports, the map files),
+     * so it falls back to the backup the same way.
+     */
+    fun <T> through(tries: List<String>, method: String, answered: (String) -> Unit, call: (String) -> T): T {
+        for ((i, base) in tries.withIndex()) {
+            try {
+                return call(base).also { answered(base) }
+            } catch (e: IOException) {
+                if (i == tries.lastIndex || !unreached(e, method)) throw e
+            }
+        }
+        error("no server to try")
+    }
+
+    /** [through] the addresses requests go to now ([tries]). */
+    fun <T> through(method: String, call: (String) -> T): T = through(tries(), method, { answered(it) }, call)
 
     fun init(ctx: Context) {
         current = pick(terminusPrefs(ctx).getString(KEY_SERVER, null), choices)

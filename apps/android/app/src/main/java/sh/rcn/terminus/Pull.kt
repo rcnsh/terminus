@@ -240,7 +240,10 @@ class PullMotion(var scene: PullScene, var calm: Boolean = false) {
     /** The bus's opacity: faded in where it stands rather than drives (calm, with no bus of the card's). */
     var alpha = 1f
         private set
-    val puffs = mutableListOf<Puff>()
+    private val puffing = mutableListOf<Puff>()
+
+    /** The puffs behind the bus, for drawing. */
+    val puffs: List<Puff> get() = puffing
     private var puffEvery = 0f
 
     /** Whether anything still moves (a frame is wanted). */
@@ -402,7 +405,7 @@ class PullMotion(var scene: PullScene, var calm: Boolean = false) {
         door = 0f
         honk = 0f
         if (calm) stepCalm() else stepDriving(dt)
-        puffs.removeAll { p -> p.age += dt; p.age >= 0.6f }
+        puffing.removeAll { p -> p.age += dt; p.age >= 0.6f }
     }
 
     /** The bus is where the horizon has its own (or, with none of the card's, faded with the sign): the scene can go. */
@@ -462,7 +465,7 @@ class PullMotion(var scene: PullScene, var calm: Boolean = false) {
             puffEvery -= dt
             if (puffEvery <= 0f) {
                 puffEvery = 0.07f
-                puffs += Puff(busX - 2f)
+                puffing += Puff(busX - 2f)
             }
         }
     }

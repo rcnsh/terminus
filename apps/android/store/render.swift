@@ -9,7 +9,7 @@ let orange = NSColor(srgbRed: 0xFB / 255, green: 0x92 / 255, blue: 0x3C / 255, a
 let paper = NSColor(srgbRed: 0xFA / 255, green: 0xFA / 255, blue: 0xF9 / 255, alpha: 1)
 let muted = NSColor(srgbRed: 0xD6 / 255, green: 0xD3 / 255, blue: 0xD1 / 255, alpha: 1)
 
-/// The mark in its own 64×71 box (bar, pole, dot), top-left at `origin`, `unit` points per unit.
+/// The mark in its own 64×64 box (bar, pole, dot), top-left at `origin`, `unit` points per unit.
 func drawMark(at origin: CGPoint, unit u: CGFloat, height canvasH: CGFloat) {
     // AppKit's origin is bottom-left; the vector's is top-left.
     func r(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ h: CGFloat) -> CGRect {

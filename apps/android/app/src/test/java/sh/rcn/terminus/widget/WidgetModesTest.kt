@@ -49,6 +49,10 @@ class WidgetModesTest {
         assertEquals(Mode.Timetable, WidgetModes.effective(utown, now - 10 * 60_000, plan, rowShown = true, now = now))
         // Chosen during it: the choice stands.
         assertEquals(utown, WidgetModes.effective(utown, now - 30_000, plan, rowShown = true, now = now))
+        // The phone's clock 5 minutes fast: the trip turned due 5 minutes later
+        // on it, so a choice made 3 minutes ago (phone time) came before it.
+        val fast = 5 * 60_000L
+        assertEquals(Mode.Timetable, WidgetModes.effective(utown, now + fast - 3 * 60_000, plan, rowShown = true, now = now + fast) { it + fast })
     }
 
     private fun answer(leaveAt: Long, phase: String) = """{

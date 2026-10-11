@@ -91,6 +91,8 @@ class BusesTest {
         assertNull("the server's words from then", k.eta)
         assertNull(k.laterText)
         assertEquals(listOf(520, 1220), k.later.map { it.etaS })
+        // The later buses too: a live one is no longer live, a timetabled one stays so.
+        assertEquals(listOf("stale", "scheduled"), k.later.map { it.quality })
         // A timetabled time stays timetabled, counted down too.
         val p = b.rows[2]
         assertEquals(260, p.etaS)
@@ -139,7 +141,7 @@ class BusesTest {
     @Test fun onlyServicesEndingWithinTwoHoursSayWhen() {
         val now = java.time.Instant.parse("2026-10-07T14:00:00Z").toEpochMilli()
         val rows = listOf(
-            BoardRow("D1", 60, "live", endsAtMs = now + 75 * 60_000),
+            BoardRow("D1", 60, "live", endsAtMs = now + 80 * 60_000),
             BoardRow("D1", 600, "live", endsAtMs = now + 75 * 60_000),
             BoardRow("R1", 60, "live", endsAtMs = now + 30 * 60_000),
             BoardRow("A1", 60, "live", endsAtMs = now + 3 * 3_600_000),
@@ -147,6 +149,8 @@ class BusesTest {
             BoardRow("D2", 60, "live"),
         )
         assertEquals(listOf("R1", "D1"), BusTimes.endingSoon(rows, now).map { it.first })
+        // A service on two rows says the sooner of its ends.
+        assertEquals(now + 75 * 60_000, BusTimes.endingSoon(rows, now).last().second)
     }
 
     @Test fun campusTimeIsSingapores() {

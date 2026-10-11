@@ -19,7 +19,8 @@ object Spoken {
      */
     fun summary(paired: Boolean, answer: NextAnswer?, error: String?, now: Long, withHead: Boolean = true, clock: (Long) -> String): String {
         if (!paired) return L.s(R.string.a11y_not_paired)
-        if (answer == null) return L.s(R.string.a11y_loading, error ?: L.s(R.string.a11y_loading_word))
+        // The sentence's own stop ends it: an error that has one ("Can't reach terminus.") loses it, not read twice.
+        if (answer == null) return L.s(R.string.a11y_loading, (error ?: L.s(R.string.a11y_loading_word)).trimEnd('.', '。'))
         val old = isOld(answer, now)
         val ride = answer.card?.ride?.takeIf { answer.card.phase == "riding" }
         if (ride != null) {

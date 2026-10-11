@@ -74,6 +74,33 @@ class ServersTest {
     }
 
     @Test
+    fun throughTriesTheBackupOnlyWhenTheFirstWasNeverReached() {
+        val answered = mutableListOf<String>()
+        val asked = mutableListOf<String>()
+        val got = Servers.through(site, "POST", { answered += it }) { base ->
+            asked += base
+            if (base == site[0]) throw UnknownHostException("terminus.run") else 204
+        }
+        assertEquals(204, got)
+        assertEquals(site, asked)
+        assertEquals(listOf(site[1]), answered)
+
+        // Reached but cut off: a POST may have arrived, so it isn't sent again.
+        asked.clear()
+        answered.clear()
+        try {
+            Servers.through(site, "POST", { answered += it }) { base ->
+                asked += base
+                throw SocketException("Connection reset")
+            }
+            error("should have thrown")
+        } catch (_: SocketException) {
+        }
+        assertEquals(listOf(site[0]), asked)
+        assertEquals(emptyList<String>(), answered)
+    }
+
+    @Test
     fun theMenuIsAlwaysThereInDebugAndBetaBuilds() {
         assertTrue(Servers.menuAlways(debug = true, flavor = "stable"))
         assertTrue(Servers.menuAlways(debug = false, flavor = "beta"))

@@ -149,6 +149,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun viewOf(s: UiState): Any = if (s.showNearby) NEARBY else s.target
 
     fun pair(code: String) {
+        // Once at a time: the sixth character pairs, and Done straight after mustn't send the code again.
+        if (_state.value.pairing) return
         _state.update { it.copy(pairing = true, pairError = null, pendingPair = null) }
         viewModelScope.launch {
             try {
@@ -224,7 +226,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         Push.sync(ctx)
         // The widget's refresh button comes and goes with this setting.
-        viewModelScope.launch { redrawWidgets(ctx) }
+        redrawLater(ctx)
     }
 
     /**
@@ -361,7 +363,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val json = Api(token, hour12 = hour12(ctx)).signal(action.id, action.trip)
                 val now = System.currentTimeMillis()
-                val answer = store.saveAnswer(json, now, sentWith = token) ?: return@launch
+                val answer = store.saveAnswer(json, now, sentWith = token) ?: run {
+                    // Signed out, or into another account, meanwhile: nothing to show, but the buttons work again.
+                    _state.update { it.copy(signalling = false) }
+                    return@launch
+                }
                 Refresher.scheduleNext(ctx, answer, now)
                 redrawWidgets(ctx)
                 _state.update {
@@ -413,7 +419,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun removeFromToday(item: DayItem) {
         val token = store.token ?: return
         val items = _state.value.day?.items.orEmpty()
-        val at = items.indexOfFirst { it.key == item.key }.coerceAtLeast(0)
+        // Already gone from the list (removed a moment ago): nothing to take off.
+        val at = items.indexOfFirst { it.key == item.key }.takeIf { it >= 0 } ?: return
         _state.update { s ->
             s.copy(day = s.day?.let { d -> d.copy(items = d.items.filter { it.key != item.key }) }, removed = TodayNote(item, at, items.getOrNull(at + 1)?.key))
         }
@@ -423,6 +430,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 applyPlan(ctx, Api(token, hour12 = hour12(ctx)).signal("skipped", item.key), token)
             } catch (e: CancellationException) {
                 throw e
+            } catch (_: ParseError) {
+                // The server took it (a 2xx), with a reply this version can't
+                // read: it's off the list, as today's reload below shows.
             } catch (e: Exception) {
                 if (e is ApiError && rejected(e, token)) return@launch
                 _state.update { s ->
@@ -465,7 +475,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val now = System.currentTimeMillis()
         val answer = store.saveAnswer(json, now, sentWith = token) ?: return false
         Refresher.scheduleNext(ctx, answer, now)
-        viewModelScope.launch { redrawWidgets(ctx) }
+        redrawLater(ctx)
         _state.update { it.copy(answers = it.answers + (Target.Plan to answer), rawAnswers = it.rawAnswers + (Target.Plan to json.toString()), fetchedAt = now) }
         return true
     }
@@ -539,7 +549,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (added == store.addedPlaces) return
         store.addedPlaces = added
         _state.update { it.copy(added = added) }
-        viewModelScope.launch { redrawWidgets(getApplication()) }
+        redrawLater(getApplication())
+    }
+
+    /**
+     * The widgets redrawn in the background. Glance can throw (a widget
+     * removed while they're gone through): the next refresh redraws them,
+     * so that mustn't crash the app.
+     */
+    private fun redrawLater(ctx: Application) {
+        viewModelScope.launch {
+            try {
+                redrawWidgets(ctx)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+            }
+        }
     }
 
     fun showNearby() {

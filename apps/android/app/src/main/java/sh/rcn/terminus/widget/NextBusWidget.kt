@@ -147,7 +147,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         // The big widget's chips share their row with ↻.
         val chipsWidth = w - 28f - if (shape == WidgetShape.DAY) 44f else 0f
         val chips = if (chipsWanted) WidgetModes.chips(snap.uses, plan?.places.orEmpty(), snap.added, chipsWidth, now0) else emptyList()
-        val mode = WidgetModes.effective(chosen.mode, chosen.at, plan, chips.isNotEmpty(), now0)
+        val mode = WidgetModes.effective(chosen.mode, chosen.at, plan, chips.isNotEmpty(), now0, ServerClock::toDevice)
         val onTimetable = mode == Mode.Timetable
         // What's shown: the plan, or this widget's own answer for a place.
         val answer = when (mode) {
@@ -244,9 +244,6 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
             }
             return Frame(offline, refreshButton, tap)
         }
-
-        /** The server's own words for a time are kept while they're this fresh; then the widget counts down itself. */
-        private const val SERVER_ETA_S = 30L
 
         /** "D2 3 min · A1 7 min": the server's words while fresh, then counted down by `ageS`. */
         fun departures(s: NearbyStop, ageS: Long, n: Int, skip: Int = 0): String =
