@@ -186,6 +186,7 @@
     <string name="importing">Importing…</string>
     <string name="in_min">in %1$d min</string>
     <string name="in_min_s">in %1$d min %2$d s</string>
+    <string name="in_s">in %1$d s</string>
     <string name="in_your_timetable">In your timetable</string>
     <string name="is_this_wrong">Is this wrong?</string>
     <string name="language">Language</string>

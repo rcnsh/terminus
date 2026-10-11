@@ -429,6 +429,8 @@ class AnswerTest {
     fun `the server's errors are shown as sentences`() {
         assertEquals("Not a valid NUSMods share link.", ApiError(400, "not a valid NUSMods share link").message)
         assertEquals("Nothing imported: no stop. Your timetable was not changed.", sentence("Nothing imported: no stop. Your timetable was not changed."))
+        // The name is lower case, even first.
+        assertEquals("terminus is busy, try again in a minute.", sentence("terminus is busy, try again in a minute"))
     }
 
     @Test fun theJourneyComesFromTheServer() {

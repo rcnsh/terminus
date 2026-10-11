@@ -32,6 +32,7 @@ import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import sh.rcn.terminus.CardStyle
 import sh.rcn.terminus.Journey
+import sh.rcn.terminus.JourneyBus
 import sh.rcn.terminus.JourneyText
 import sh.rcn.terminus.L
 import sh.rcn.terminus.NextAnswer
@@ -86,7 +87,7 @@ private fun Steps(journey: Journey, inks: Inks, page: ColorProvider) {
             Step(journey.leave ?: L.s(R.string.journey_now), Dot.YOU, Rail.WALK, L.s(R.string.journey_leave), JourneyText.walk(journey), null, inks, page)
         }
         if (bus != null) {
-            Step(bus.board, Dot.STOP, Rail.Ride(bus.color), bus.stop, JourneyText.ride(journey), bus.let { Triple(it.svc, it.color, JourneyText.busIn(journey, now)) }, inks, page)
+            Step(bus.board, Dot.STOP, Rail.Ride(bus.color), bus.stop, JourneyText.ride(journey), bus to JourneyText.busIn(journey, now), inks, page)
         }
         val there = if (bus != null) journey.toStop.ifEmpty { journey.place } else journey.place
         Step(journey.arriveStop ?: journey.arrive.orEmpty(), Dot.THERE, null, there, lastUnder(journey), null, inks, page, last = true)
@@ -101,7 +102,7 @@ private sealed interface Rail {
 }
 
 @Composable
-private fun Step(time: String, dot: Dot, rail: Rail?, name: String, under: String?, bus: Triple<String, Long, String?>?, inks: Inks, page: ColorProvider, last: Boolean = false) {
+private fun Step(time: String, dot: Dot, rail: Rail?, name: String, under: String?, bus: Pair<JourneyBus, String?>?, inks: Inks, page: ColorProvider, last: Boolean = false) {
     Row(GlanceModifier.fillMaxWidth().height(if (last && under == null) STEP - 12.dp else STEP), verticalAlignment = Alignment.Top) {
         Text(time, style = TextStyle(color = inks.ink, fontSize = 13.sp, fontWeight = FontWeight.Medium), maxLines = 1, modifier = GlanceModifier.width(52.dp * widen()))
         Column(GlanceModifier.width(16.dp).padding(top = 3.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -124,9 +125,9 @@ private fun Step(time: String, dot: Dot, rail: Rail?, name: String, under: Strin
         Column(GlanceModifier.defaultWeight()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(name, style = TextStyle(color = inks.ink, fontSize = 13.sp, fontWeight = FontWeight.Bold), maxLines = 1)
-                bus?.let { (svc, color, inAt) ->
+                bus?.let { (b, inAt) ->
                     Spacer(GlanceModifier.width(6.dp))
-                    Badge(svc, color)
+                    Badge(b.svc, b.color, b.paid)
                     inAt?.let { Spacer(GlanceModifier.width(6.dp)); Small(it, inks.muted, 11.sp) }
                 }
             }
@@ -151,7 +152,7 @@ private fun Route(journey: Journey, inks: Inks) {
             return@Row
         }
         Point(bus.stop, bus.board, inks.ink, w, inks)
-        Stretch(journey.ride.orEmpty(), bus.svc to bus.color, solid(bus.color), 4.dp, inks)
+        Stretch(journey.ride.orEmpty(), bus, solid(bus.color), 4.dp, inks)
         if (four) {
             Point(journey.toStop, journey.arriveStop ?: "", inks.ink, w, inks)
             Stretch(journey.walkEnd, null, inks.muted, 2.dp, inks)
@@ -177,11 +178,11 @@ private fun Point(name: String, time: String, dot: ColorProvider, width: Dp, ink
 
 /** Between two points: the walk's minutes, or the bus and its ride, over a bar. */
 @Composable
-private fun RowScope.Stretch(caption: String, svc: Pair<String, Long>?, color: ColorProvider, thick: Dp, inks: Inks) {
+private fun RowScope.Stretch(caption: String, bus: JourneyBus?, color: ColorProvider, thick: Dp, inks: Inks) {
     Column(GlanceModifier.defaultWeight(), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(GlanceModifier.height(CAPTION), verticalAlignment = Alignment.CenterVertically) {
-            svc?.let {
-                Badge(it.first, it.second)
+            bus?.let {
+                Badge(it.svc, it.color, it.paid)
                 Spacer(GlanceModifier.width(4.dp))
             }
             Text(caption, style = TextStyle(color = inks.muted, fontSize = 11.sp), maxLines = 1)
@@ -199,8 +200,10 @@ private fun Ticket(answer: NextAnswer, journey: Journey, inks: Inks) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         val side = 48.dp
         if (bus != null) {
-            Box(GlanceModifier.size(side).cornerRadius(12.dp).background(solid(bus.color)), contentAlignment = Alignment.Center) {
-                Text(bus.svc, style = TextStyle(color = solid(sh.rcn.terminus.Ink.on(bus.color)), fontWeight = FontWeight.Bold, fontSize = 18.sp), maxLines = 1)
+            // A public bus's "$" widens it past the square, as in the app.
+            val shape = if (bus.paid) GlanceModifier.height(side).padding(horizontal = 8.dp) else GlanceModifier.size(side)
+            Box(shape.cornerRadius(12.dp).background(solid(bus.color)), contentAlignment = Alignment.Center) {
+                Text(if (bus.paid) "${bus.svc} $" else bus.svc, style = TextStyle(color = solid(sh.rcn.terminus.Ink.on(bus.color)), fontWeight = FontWeight.Bold, fontSize = 18.sp), maxLines = 1)
             }
         } else {
             Box(GlanceModifier.size(side).cornerRadius(12.dp).background(inks.chip), contentAlignment = Alignment.Center) {

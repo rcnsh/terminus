@@ -186,6 +186,7 @@
     <string name="importing">正在导入…</string>
     <string name="in_min">%1$d 分钟后</string>
     <string name="in_min_s">%1$d 分 %2$d 秒后</string>
+    <string name="in_s">%1$d 秒后</string>
     <string name="in_your_timetable">在你的课表里</string>
     <string name="is_this_wrong">这不对？</string>
     <string name="language">语言</string>

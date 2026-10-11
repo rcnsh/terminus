@@ -1020,7 +1020,7 @@ private fun AddClass(destinations: List<Destination>, account: AccountViewModel,
                     val s = start
                     val w = where
                     if (s != null && w != null) {
-                        account.edit { it.addManual(Trip(day, s, end?.takeIf { e -> e > s }, w.stopCode, label.trim(), "")) }
+                        account.edit { it.addManual(Trip(day, s, end?.takeIf { e -> e > s }, if (w.kind == "landmark") w.code else w.stopCode, label.trim(), "")) }
                         onDone()
                     }
                 },

@@ -109,6 +109,7 @@ import sh.rcn.terminus.Quiet
 import sh.rcn.terminus.Pull
 import sh.rcn.terminus.PullScene
 import sh.rcn.terminus.R
+import sh.rcn.terminus.SearchRank
 import sh.rcn.terminus.ServerClock
 import sh.rcn.terminus.Spoken
 import sh.rcn.terminus.hhmm
@@ -336,7 +337,7 @@ private fun SearchBox(query: String, onQuery: (String) -> Unit, modifier: Modifi
 private fun SearchResults(state: BusesUi, query: String, onPick: (BusHit) -> Unit) {
     val campus = state.campus
     val index = remember(campus) { campus?.let(::busesTabIndex).orEmpty() }
-    val hits = remember(index, query) { searchBuses(query, index) }
+    val hits = remember(index, query) { SearchRank.grouped(searchBuses(query, index)) { it is BusHit.Service } }
     val colors = campus?.routes?.mapValues { it.value.color }.orEmpty()
     // In the tab's own scroll, under the field.
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
