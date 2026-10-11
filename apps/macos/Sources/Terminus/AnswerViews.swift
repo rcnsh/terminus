@@ -225,8 +225,9 @@ struct AnswerDetail: View {
                             }
                             Image(systemName: "bus.fill")
                                 .font(.system(size: 10, weight: .bold))
-                                // With no service colour the disc is the brand's (Color.brand), in this appearance.
-                                .foregroundStyle(color.map(inkOn) ?? inkOn(rgb: scheme == .dark ? Color.brandRGB.dark : Color.brandRGB.light))
+                                // With no service colour, or one that can't be read, the disc
+                                // is the brand's (Color.brand), in this appearance: ink for that.
+                                .foregroundStyle(inkOn(rgb: color.flatMap(hexRGB) ?? (scheme == .dark ? Color.brandRGB.dark : Color.brandRGB.light)))
                                 .frame(width: 16, height: 16)
                                 .background(Circle().fill(tint))
                                 .offset(x: w * done - 4)
