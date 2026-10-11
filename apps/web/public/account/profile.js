@@ -116,7 +116,7 @@ export async function saveNow(change) {
   saveTimer = null;
   const next = structuredClone(profile.get());
   change?.(next);
-  edits++;
+  const mine = ++edits;
   saving++;
   let saved;
   try {
@@ -124,7 +124,14 @@ export async function saveNow(change) {
   } finally {
     saving--;
   }
-  profile.set(saved);
+  // An edit made while this was on its way is newer: it stays, with this
+  // change on it too, so its own save a moment later carries both.
+  if (mine === edits) profile.set(saved);
+  else if (change) {
+    const both = structuredClone(profile.get());
+    change(both);
+    profile.set(both);
+  }
   saves.set((n) => n + 1);
   return saved;
 }
