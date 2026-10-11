@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 import { leaveBy } from '../src/leave.ts';
 import { DEFAULT_PROFILE, parseProfile } from '../src/profile.ts';
 import { WALK, RIDE } from '../src/config.ts';
+import { footS } from '../src/format.ts';
+import { venueStops } from '../src/nusmods.ts';
 
 const NOW = Date.UTC(2026, 8, 29, 1, 0); // 09:00 SGT
 const MIN = 60_000;
@@ -164,4 +166,33 @@ test('for a class, a stop further off must buy back more than its walk: walking 
   assert.equal(leaveBy({ ...f, walkWeight: 1 }).stopCode, 'FAR', 'minutes as they are: the later leave');
   assert.equal(leaveBy(f).stopCode, 'NEAR', 'in the heat: 100 s at home is not worth 340 s more walking');
   assert.equal(WALK.sunWeight, 1.5);
+});
+
+test('for a class in a room two stops serve, the walk on from each stop counts sunWeight times, as in the ranking', () => {
+  // COM1, served by COM3 and CLB: the real walks from each to the room.
+  const room = venueStops('COM1');
+  const walkByStopS = Object.fromEntries(Object.entries(room.walkM).map(([code, m]) => [code, Math.round(m / 1.3)]));
+  const extraS = walkByStopS.CLB - walkByStopS.COM3;
+  assert.ok(extraS > 20, `CLB is further from COM1: ${extraS} s`);
+  const now = Date.UTC(2026, 7, 27, 1, 0);
+  const stop = (code) => ({ code, name: code, lat: 0, lon: 0 });
+  const rideS = 4 * RIDE.secondsPerHop;
+  const opt = (svc, to, boardS) => ({
+    stop: stop('HOME'), svc, distM: 100, walkS: 100, hops: 4, boardS, rideS, totalS: boardS + rideS,
+    quality: 'live', arrival: null, fetchedAt: now, fromMs: now, ambiguousBerth: false, to: stop(to),
+  });
+  // To COM3, the bus at 26:40; to CLB, 10 s later, for extraS more on foot at the other end.
+  const toCom3 = opt('D1', 'COM3', 1600);
+  const toClb = opt('D2', 'CLB', 1610);
+  const endWalk = (o) => walkByStopS[o.to.code];
+  const sa = { code: 'HOME', arrivals: [{ svc: 'D1', etaS: 1600, crowd: null, plate: null, berth: null }, { svc: 'D2', etaS: 1610, crowd: null, plate: null, berth: null }], fetchedAt: now, stale: false, available: true };
+  const f = {
+    options: [toCom3, toClb], candidates: [], graph: { stops: [], routes: {}, headwayS: { D1: 3600, D2: 3600 } }, byStop: new Map([['HOME', sa]]), walkAllS: null, nowMs: now, endWalk,
+    arriveBy: { atMs: now + 40 * 60_000, venueWalkS: walkByStopS.COM3, walkByStopS, fullBusMargin: false },
+  };
+  assert.equal(leaveBy({ ...f, walkWeight: 1 }).toCode, 'CLB', 'minutes as they are: the later leave');
+  // The ranking's cost, with the walk from the stop to the room weighed too.
+  const cost = (o) => o.totalS + endWalk(o) + (WALK.sunWeight - 1) * footS(o, endWalk(o));
+  assert.ok(cost(toCom3) < cost(toClb), 'the ranking prefers COM3');
+  assert.equal(leaveBy(f).toCode, 'COM3', 'in the heat: 10 s at home is not worth the longer walk from CLB');
 });

@@ -77,6 +77,9 @@ const fareMs = (leg: { paid?: true }) => (leg.paid ? PUBLIC.fareWorthS * 1000 : 
 /** `paid` only on a public bus, so shuttle answers are unchanged; with it the route key a two-way service's number can't name. */
 const paidOf = (leg: { svc: string; paid?: true }) => (leg.paid ? { paid: true as const, ...(leg.svc !== svcName(leg.svc) ? { route: leg.svc } : {}) } : {});
 
+/** On to the room from the stop a leg gets you to: a room two stops serve is further from one. */
+const venueWalkOf = (arriveBy: ArriveBy, leg: Leg) => arriveBy.walkByStopS?.[(leg.change?.to ?? leg.to)?.code ?? ''] ?? arriveBy.venueWalkS;
+
 /** A leave-by with what ranked it (see leaveBy), and without. */
 type Ranked = Leave & { ms: number; worth: number; opens: boolean };
 const unranked = ({ ms: _ms, worth: _worth, opens: _opens, ...leave }: Ranked): Leave => leave;
@@ -122,8 +125,9 @@ export function leaveBy(f: LeaveInput): Leave | null {
     // How late it lets you leave, less what a fare is worth: a public bus
     // must buy clearly more time at home than the free one to be the answer.
     // A change of bus likewise, by what the change is worth; and a longer
-    // walk to a stop further off by more than the minutes it takes.
-    const extraFootMs = ((f.walkWeight ?? WALK.sunWeight) - 1) * (leg.walkS + (leg.change?.crossS ?? 0)) * 1000;
+    // walk, to a stop further off or on from the stop to the room, by more
+    // than the minutes it takes, as the options are ranked (scoreOptions).
+    const extraFootMs = ((f.walkWeight ?? WALK.sunWeight) - 1) * (leg.walkS + (leg.change?.crossS ?? 0) + venueWalkOf(f.arriveBy, leg)) * 1000;
     const worth = r.ms - fareMs(leg) - (leg.change ? TRANSFER.worthS * 1000 : 0) - extraFootMs;
     const out: Ranked = { at: isoSeconds(r.ms), estimated: r.estimated, ...(r.stale ? { stale: true as const } : {}), svc: svcName(leg.svc), stop: shortStop(leg.stop.name), stopCode: leg.stop.code, board: isoSeconds(r.board), arrive: isoSeconds(r.arrive), note: r.note, walkS: leg.walkS, rideS: leg.rideS, ...offOf(leg), ...paidOf(leg), ...(r.change ? { change: r.change } : {}), ms: r.ms, worth, opens: r.opens === true };
     // The latest on-time departure wins; if nothing is on time, the soonest.
@@ -164,8 +168,7 @@ const PROJECT_MS = 86_400_000;
 function forLeg(leg: Leg, sa: StopArrivals | undefined, graph: Graph, arriveBy: ArriveBy, nowMs: number, risk?: CrowdRisk): LegLeave | null {
   const headway = Math.max(60, headwayFor(graph, leg.svc)) * 1000;
   const walk = leg.walkS * 1000 + BUFFER_MS;
-  // On to the room from the stop this bus gets you to: a room two stops serve is further from one.
-  const venueWalkS = arriveBy.walkByStopS?.[leg.to?.code ?? ''] ?? arriveBy.venueWalkS;
+  const venueWalkS = venueWalkOf(arriveBy, leg);
   const latestBoard = arriveBy.atMs - (ON_TIME_SLACK_S + venueWalkS + leg.rideS) * 1000;
   const arriveAfter = (boardMs: number) => boardMs + (leg.rideS + venueWalkS) * 1000;
   // A guessed bus only while the service runs, by its published hours.
@@ -302,7 +305,7 @@ function lastBus(graph: Graph, svc: string, live: ReturnType<typeof liveBuses>, 
  */
 function forTransfer(leg: Leg, sa1: StopArrivals | undefined, sa2: StopArrivals | undefined, graph: Graph, arriveBy: ArriveBy, nowMs: number): LegLeave | null {
   const t = leg.change!;
-  const venueWalkS = arriveBy.walkByStopS?.[t.to?.code ?? ''] ?? arriveBy.venueWalkS;
+  const venueWalkS = venueWalkOf(arriveBy, leg);
   const walk = leg.walkS * 1000 + BUFFER_MS;
   const ride1 = leg.rideS * 1000;
   const change = (t.crossS + TRANSFER.changeBufferS) * 1000;
