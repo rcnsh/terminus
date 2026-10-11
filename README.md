@@ -1,7 +1,7 @@
 <a href="https://terminus.run">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset=".github/readme/banner-dark.webp">
-    <img alt="terminus: know when to run. Your NUS timetable in, one answer out: which shuttle, from which stop, and when to leave. Every client stands on the live campus map, with the D2 line and its buses running back to the horizon under the sky: the Android widget on your home screen (leave by 9:39 AM, walk to PGP, R2 to UTown), the Mac menu bar app (leave by 9:41, catch the 9:45 D2 at PGP) and the web app on a phone (leave in 19 minutes, live)." src=".github/readme/banner-light.webp" width="100%">
+    <img alt="terminus: never run for a bus again. Your NUS timetable in, one answer out: which shuttle, from which stop, and when to leave. Every client stands on the live campus map, with the D2 line and its buses running back to the horizon under the sky: the Android widget on your home screen (leave by 9:39 AM, walk to PGP, R2 to UTown), the Mac menu bar app (leave by 9:41, catch the 9:45 D2 at PGP) and the web app on a phone (leave in 19 minutes, live)." src=".github/readme/banner-light.webp" width="100%">
   </picture>
 </a>
 

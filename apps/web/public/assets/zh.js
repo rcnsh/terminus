@@ -133,7 +133,7 @@ window.TERMINUS_ZH = {
  "This link is for {0}, which has ended. Copy this semester's link from NUSMods and import it below.": "此链接属于已结束的 {0}。请从 NUSMods 复制本学期的链接并在下方导入。",
  "Kept for 35 days and used only to spot classes you often miss or skip.": "保留 35 天，仅用于发现你经常错过或跳过的课。",
  "Key name": "密钥名称",
- "Know when to <em>run</em>.": "知道什么时候该<em>跑</em>。",
+ "Never <em>run</em> for a bus again.": "再也不用<em>跑</em>着赶车。",
  "Language": "语言",
  "Language and time": "语言和时间",
  "Time format": "时间格式",
