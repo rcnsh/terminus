@@ -728,7 +728,8 @@ class UpdateRequired(message: String) : ApiError(426, message)
 /** "not a valid NUSMods share link" -> "Not a valid NUSMods share link." */
 internal fun sentence(text: String): String {
     if (text.isEmpty()) return text
-    val s = text.replaceFirstChar { it.uppercaseChar() }
+    // "terminus" is written lower case, even starting a sentence.
+    val s = if (text.startsWith("terminus")) text else text.replaceFirstChar { it.uppercaseChar() }
     // Chinese ends with a full-width stop.
     val cjk = s.any { it in '\u4e00'..'\u9fff' }
     return if (s.last() in ".!?。！？") s else if (cjk) "$s。" else "$s."

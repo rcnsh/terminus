@@ -359,7 +359,11 @@ internal fun ClassPlan(answer: NextAnswer) {
     val left = if (answer.card?.phase == "waiting") 0 else (at - now) / 1000
     if (left > 0) {
         Text(
-            if (left >= 120) stringResource(R.string.in_min, ((left + 30) / 60).toInt()) else stringResource(R.string.in_min_s, (left / 60).toInt(), (left % 60).toInt()),
+            when {
+                left >= 120 -> stringResource(R.string.in_min, ((left + 30) / 60).toInt())
+                left >= 60 -> stringResource(R.string.in_min_s, (left / 60).toInt(), (left % 60).toInt())
+                else -> stringResource(R.string.in_s, left.toInt())
+            },
             style = MaterialTheme.typography.titleSmall,
             color = smallAccent(),
         )
@@ -512,7 +516,8 @@ internal fun Countdown(answer: NextAnswer) {
     val text = when {
         left > 60 -> stringResource(R.string.leaves_in_min_s, (left / 60).toInt(), (left % 60).toInt())
         left > 0 -> stringResource(R.string.leaves_in_s, left.toInt())
-        else -> stringResource(R.string.left_ago, ((-left + 59) / 60).toInt())
+        // Gone: a minute ago from the moment it left, never "0 min ago", as on the Mac.
+        else -> stringResource(R.string.left_ago, maxOf(1, ((-left + 59) / 60).toInt()))
     }
     Text(text, style = MaterialTheme.typography.titleSmall, color = if (left > 0) smallAccent() else MaterialTheme.colorScheme.onSurfaceVariant)
 }

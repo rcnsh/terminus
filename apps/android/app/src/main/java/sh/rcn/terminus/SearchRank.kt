@@ -61,4 +61,11 @@ object SearchRank {
             .take(max)
             .map { it.first }
     }
+
+    /**
+     * [ranked] gathered under one heading a kind, so none repeats: the groups
+     * in the order of each one's best result, rank order kept inside each.
+     */
+    fun <T, K> grouped(ranked: List<T>, kind: (T) -> K): List<T> =
+        ranked.groupBy(kind).values.flatten()
 }

@@ -55,4 +55,19 @@ class SearchTest {
             assertEquals("\"$q\": ${c.optString("why")}", c.getJSONArray("expect").strings(), searchBuses(q, index, b.getInt("limit")).map(::id))
         }
     }
+    @Test fun eachKindIsOneGroupInTheOrderOfItsBestResult() {
+        val index = listOf(
+            Destination("COM3", "COM 3", "COM3", "stop"),
+            Destination("COM1", "COM1", "COM1", "building"),
+            Destination("OPP-COM", "Opp COM", "OPP-COM", "stop"),
+            Destination("LT27", "LT27", "S17", "landmark"),
+        )
+        val ranked = rankDestinations(index, "com")
+        // Ranked alone, the stops come either side of the building.
+        assertEquals(listOf("stop:COM3", "building:COM1", "stop:OPP-COM"), ranked.map { "${it.kind}:${it.code}" })
+        assertEquals(listOf("stop:COM3", "stop:OPP-COM", "building:COM1"), SearchRank.grouped(ranked) { it.kind }.map { "${it.kind}:${it.code}" })
+        // A group's place is its best result's: here the building's, first.
+        val buildingFirst = listOf("building:COM1", "stop:COM3", "building:COM2", "stop:OPP")
+        assertEquals(listOf("building:COM1", "building:COM2", "stop:COM3", "stop:OPP"), SearchRank.grouped(buildingFirst) { it.substringBefore(':') })
+    }
 }

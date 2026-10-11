@@ -84,6 +84,10 @@ object JourneyText {
     fun busIn(journey: Journey, now: Long): String? {
         val left = ((journey.boardAtMs ?: return null) - now) / 1000
         if (left <= 0) return null
-        return if (left >= 120) L.s(R.string.in_min, ((left + 30) / 60).toInt()) else L.s(R.string.in_min_s, (left / 60).toInt(), (left % 60).toInt())
+        return when {
+            left >= 120 -> L.s(R.string.in_min, ((left + 30) / 60).toInt())
+            left >= 60 -> L.s(R.string.in_min_s, (left / 60).toInt(), (left % 60).toInt())
+            else -> L.s(R.string.in_s, left.toInt())
+        }
     }
 }

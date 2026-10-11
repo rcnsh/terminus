@@ -214,11 +214,19 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
             throw e
         } catch (e: ApiError) {
             if (refused(e, token)) return
+            // Busy or down (429, 5xx, or a Retry-After hold): like no
+            // network, the board already shown stays.
+            if (e.status == 429 || e.status >= 500) return keepNearest()
             // No location and no home stop: nothing to call nearest.
             _state.update { it.copy(nearest = null, nearestState = if (e.status == 400) Nearest.None else Nearest.Failed) }
         } catch (e: Exception) {
-            _state.update { it.copy(nearestState = if (it.nearest == null) Nearest.Failed else it.nearestState) }
+            keepNearest()
         }
+    }
+
+    /** A failed ask that says nothing about the stop: keep the board shown, if there is one. */
+    private fun keepNearest() {
+        _state.update { it.copy(nearestState = if (it.nearest == null) Nearest.Failed else it.nearestState) }
     }
 
     suspend fun refreshBoard(code: String, force: Boolean = false) {

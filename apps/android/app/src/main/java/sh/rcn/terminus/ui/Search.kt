@@ -22,6 +22,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import sh.rcn.terminus.Target
+import sh.rcn.terminus.SearchRank
 import sh.rcn.terminus.rankDestinations
 import androidx.compose.ui.res.stringResource
 import sh.rcn.terminus.R
@@ -63,7 +64,7 @@ private fun SearchField(state: UiState, vm: MainViewModel, query: String, q: Str
     )
     if (q.isEmpty()) return
     // Once per query, not on every recomposition (the screen refreshes every 30 s).
-    val matches = remember(state.destinations, q) { rankDestinations(state.destinations, q) }
+    val matches = remember(state.destinations, q) { SearchRank.grouped(rankDestinations(state.destinations, q)) { it.kind } }
     val stopName = { code: String -> state.destinations.firstOrNull { it.kind == "stop" && it.code == code }?.label ?: code }
     val groups = mapOf("stop" to stringResource(R.string.group_stops), "landmark" to stringResource(R.string.group_places), "building" to stringResource(R.string.group_buildings), "room" to stringResource(R.string.group_rooms))
     Column {
