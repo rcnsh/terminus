@@ -22,6 +22,7 @@ import sh.rcn.terminus.Device
 import sh.rcn.terminus.ImportResult
 import sh.rcn.terminus.L
 import sh.rcn.terminus.Lang
+import sh.rcn.terminus.Me
 import sh.rcn.terminus.ParseError
 import sh.rcn.terminus.ProfileDoc
 import sh.rcn.terminus.R
@@ -158,14 +159,7 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
                 val me = Api(token).me()
                 store.email = me.email
                 store.anonymous = me.anonymous
-                // Unknown since sign-in: settled now, and setup shown only if /me says so.
-                if (store.setupUnknown) {
-                    store.setupUnknown = false
-                    if (me.needsSetup) {
-                        store.needsSetup = true
-                        _state.update { it.copy(setupDue = true) }
-                    }
-                }
+                settle(me)
                 _state.update { it.copy(email = me.email, needsReimport = me.needsReimport, term = me.term) }
             } catch (e: Exception) {
                 // Said below, with the profile, unless it signed the phone out.
@@ -184,6 +178,37 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
                 if (_state.value.profile == null) _state.update { it.copy(message = message) }
             }
             loadCampus()
+        }
+    }
+
+    /** Unknown since sign-in: settled now, and setup shown only if /me says so. */
+    private fun settle(me: Me) {
+        if (!store.setupUnknown) return
+        store.setupUnknown = false
+        if (me.needsSetup) {
+            store.needsSetup = true
+            _state.update { it.copy(setupDue = true) }
+        }
+    }
+
+    private var settleJob: Job? = null
+
+    /**
+     * Whether the account needs setup, while sign-in left it unknown: /me
+     * alone, one ask at a time, rather than the whole of [refresh] (the
+     * profile and the campus too) each time an answer comes through.
+     */
+    fun settleSetup() {
+        val token = store.token ?: return
+        if (!store.setupUnknown || settleJob?.isActive == true) return
+        settleJob = viewModelScope.launch {
+            try {
+                settle(Api(token).me())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Still unknown: the next answer that comes through asks again.
+            }
         }
     }
 
