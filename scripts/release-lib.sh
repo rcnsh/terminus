@@ -4,7 +4,7 @@
 # script that sources them. Both run under bash with pipefail, so a failure
 # anywhere in a pipeline stops the release too.
 
-die() { echo "$*"; exit 1; }
+die() { echo "$*" >&2; exit 1; }
 
 # The same on both: under --dry-run a check that can't pass yet only warns.
 warn_or_die() {
