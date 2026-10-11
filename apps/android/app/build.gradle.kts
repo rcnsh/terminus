@@ -142,12 +142,15 @@ fun firebaseConfig(json: File, packageName: String): Map<String, String> {
     val client = (root["client"] as List<Map<String, Any?>>).firstOrNull {
         ((it["client_info"] as Map<String, Any?>)["android_client_info"] as Map<String, Any?>)["package_name"] == packageName
     } ?: return empty
-    return mapOf(
-        "FIREBASE_APP_ID" to (client["client_info"] as Map<String, Any?>)["mobilesdk_app_id"].toString(),
-        "FIREBASE_API_KEY" to ((client["api_key"] as List<Map<String, Any?>>).first())["current_key"].toString(),
-        "FIREBASE_PROJECT_ID" to project["project_id"].toString(),
-        "FIREBASE_SENDER_ID" to project["project_number"].toString(),
-    )
+    val values = mapOf(
+        "FIREBASE_APP_ID" to (client["client_info"] as Map<String, Any?>)["mobilesdk_app_id"],
+        "FIREBASE_API_KEY" to (client["api_key"] as List<Map<String, Any?>>?)?.firstOrNull()?.get("current_key"),
+        "FIREBASE_PROJECT_ID" to project["project_id"],
+        "FIREBASE_SENDER_ID" to project["project_number"],
+    ).mapValues { it.value?.toString().orEmpty() }
+    // A field missing (a malformed file) leaves push off, as with no file,
+    // rather than building in the word "null" as if it were a value.
+    return if (values.values.any { it.isEmpty() }) empty else values
 }
 
 // Every configuration's resolved versions are pinned in gradle.lockfile, so

@@ -8,7 +8,7 @@
  *   An object emptied early (the account was deleted) keeps only a `gone`
  *   mark until then, and refuses every write: a request already under way
  *   when the account went can't store the user's trip again.
- * - **Push (phase 3):** when the Worker has sent a card with a
+ * - **Push:** when the Worker has sent a card with a
  *   `nextChangeAt`, the object wakes then, works out the card again, and
  *   nudges the user's phones (push.ts) if the trip or its phase changed.
  *   It keeps waking at each new `nextChangeAt` while there's a trip and a

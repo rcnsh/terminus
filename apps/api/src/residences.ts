@@ -50,14 +50,16 @@ function inside(lat: number, lon: number, ring: Array<[number, number]>): boolea
   return hit;
 }
 
-/** Metres from a point to the nearest edge of a ring (flat-earth, fine at this scale). */
+/** Metres from a point to the nearest edge of a ring (flat-earth, fine at this
+ *  scale). The edge from the last point back to the first counts too, as in
+ *  `inside`, so an outline that doesn't repeat its first point is closed. */
 function edgeM(lat: number, lon: number, ring: Array<[number, number]>): number {
   const mLat = 111_320;
   const mLon = 111_320 * Math.cos((lat * Math.PI) / 180);
   let best = Infinity;
-  for (let i = 0; i + 1 < ring.length; i++) {
-    const ax = (ring[i][1] - lon) * mLon, ay = (ring[i][0] - lat) * mLat;
-    const bx = (ring[i + 1][1] - lon) * mLon, by = (ring[i + 1][0] - lat) * mLat;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const ax = (ring[j][1] - lon) * mLon, ay = (ring[j][0] - lat) * mLat;
+    const bx = (ring[i][1] - lon) * mLon, by = (ring[i][0] - lat) * mLat;
     const dx = bx - ax, dy = by - ay;
     const t = Math.max(0, Math.min(1, -(ax * dx + ay * dy) / (dx * dx + dy * dy || 1)));
     best = Math.min(best, Math.hypot(ax + t * dx, ay + t * dy));

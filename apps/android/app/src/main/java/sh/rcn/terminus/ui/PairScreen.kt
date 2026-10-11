@@ -52,12 +52,12 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import sh.rcn.terminus.BuildConfig
+import sh.rcn.terminus.CODE_LENGTH
 import sh.rcn.terminus.R
+import sh.rcn.terminus.codeEdit
 
 /** The site as people type it: terminus.run, or the beta's. */
 private val SITE_HOST = BuildConfig.SITE.removePrefix("https://")
-
-private const val CODE_LENGTH = 6
 
 /**
  * Pair with a code from a signed-in phone or the account page. The code is
@@ -82,7 +82,8 @@ internal fun PairScreen(state: UiState, onPair: (String) -> Unit, onBack: () -> 
             BasicTextField(
                 value = code,
                 onValueChange = { v ->
-                    val clean = v.filter { it.isLetterOrDigit() }.uppercase().take(CODE_LENGTH)
+                    // As the sign-in code's boxes: a pasted "Your code is 7KQ2XM" gives 7KQ2XM.
+                    val clean = codeEdit(code, v)
                     // The sixth character, typed or pasted, pairs.
                     val full = clean.length == CODE_LENGTH && code.length < CODE_LENGTH
                     code = clean
@@ -90,7 +91,7 @@ internal fun PairScreen(state: UiState, onPair: (String) -> Unit, onBack: () -> 
                 },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { if (code.length == CODE_LENGTH) onPair(code) }),
+                keyboardActions = KeyboardActions(onDone = { if (code.length == CODE_LENGTH && !state.pairing) onPair(code) }),
                 modifier = Modifier.fillMaxWidth().padding(top = 28.dp).focusRequester(focus).semantics { contentDescription = label },
                 decorationBox = { field ->
                     Box {

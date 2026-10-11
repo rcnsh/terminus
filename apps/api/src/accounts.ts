@@ -157,6 +157,7 @@ export async function requestLink(env: Env, db: D1Database, email: string, origi
   // Per inbox too, so +tags and dots cannot mail one person over and over.
   const coolKey = `mail:${await hashToken(inbox)}`;
   if (await env.KV.get(coolKey).catch(() => null)) return 'cooldown';
+  if (!(await mailBudgetLeft(env, inbox, nowMs))) return 'cooldown';
   if (!(await takeGlobalMail(env))) return 'busy';
   if (!(await takeMailBudget(env, inbox, nowMs))) return 'cooldown';
 
@@ -414,12 +415,20 @@ export const MAILS_PER_HOUR = 10;
  * a minute at a time, which the cooldown alone allows.
  */
 export async function takeMailBudget(env: Env, inbox: string, nowMs: number): Promise<boolean> {
-  const key = `mailhour:${await hashToken(inbox)}:${Math.floor(nowMs / 3_600_000)}`;
+  const key = await mailHourKey(inbox, nowMs);
   const n = Number((await env.KV.get(key).catch(() => null)) ?? 0);
   if (n >= MAILS_PER_HOUR) return false;
   await env.KV.put(key, String(n + 1), { expirationTtl: 3_700 }).catch(() => {});
   return true;
 }
+
+/** Whether the inbox has an email left this hour, spending none: checked
+ *  before the global ceiling, so an inbox over its budget doesn't spend it. */
+export async function mailBudgetLeft(env: Env, inbox: string, nowMs: number): Promise<boolean> {
+  return Number((await env.KV.get(await mailHourKey(inbox, nowMs)).catch(() => null)) ?? 0) < MAILS_PER_HOUR;
+}
+
+const mailHourKey = async (inbox: string, nowMs: number) => `mailhour:${await hashToken(inbox)}:${Math.floor(nowMs / 3_600_000)}`;
 
 async function signInCodeKey(email: string): Promise<string> {
   return `code:${await hashToken(email)}`;
@@ -531,9 +540,10 @@ const minClientMemos = new WeakMap<object, { value: Record<string, string>; atMs
  * Null for anything else, which is never refused.
  */
 function versionParts(v: string): { core: number[]; pre: number[] | null } | null {
-  const m = /^(\d+(?:\.\d+)*)(?:-[a-z]*\.?(\d+(?:\.\d+)*)?)?(?:\+.*)?$/.exec(v.trim().toLowerCase());
+  // Build metadata (`+build-1`) is ignored, its `-` too.
+  const m = /^(\d+(?:\.\d+)*)(-[a-z]*\.?(\d+(?:\.\d+)*)?)?(?:\+.*)?$/.exec(v.trim().toLowerCase());
   if (!m) return null;
-  const pre = v.includes('-') ? (m[2] ?? '0').split('.').map(Number) : null;
+  const pre = m[2] ? (m[3] ?? '0').split('.').map(Number) : null;
   return { core: m[1].split('.').map(Number), pre };
 }
 

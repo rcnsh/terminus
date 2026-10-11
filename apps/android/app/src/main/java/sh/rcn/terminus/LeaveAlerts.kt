@@ -272,7 +272,9 @@ object LeaveAlerts {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         // Sound for the heads-up, once; quiet for the rest.
-        val moment = if (after) store.leaveAlertedMoment else "leave:${answer.classAtMs}"
+        // A trip with no class (home, a place): told apart by where it goes
+        // and its day in Singapore, which stay put while the trip goes on.
+        val moment = if (after) store.leaveAlertedMoment else "leave:${answer.classAtMs ?: "${answer.destLabel}:${answer.leaveAtMs?.let(::sgDate)}"}"
         val alert = moment != store.leaveAlertedMoment
         store.leaveAlertedMoment = moment
         val n = android.app.Notification.Builder(ctx, CHANNEL)
@@ -406,3 +408,6 @@ class LeaveReceiver : BroadcastReceiver() {
         }
     }
 }
+
+/** The Singapore date of [ms], as YYYY-MM-DD. */
+private fun sgDate(ms: Long): String = java.time.Instant.ofEpochMilli(ms).atZone(java.time.ZoneId.of("Asia/Singapore")).toLocalDate().toString()

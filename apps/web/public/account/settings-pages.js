@@ -3,7 +3,7 @@
 // profile (profile.js).
 
 import { Rich, html, noteRow, reducedMotion, refocusAfterRemove, store, useEffect, useLayoutEffect, useMemo, useRef, useState, useStore } from '../assets/ui.js';
-import { api, clock, clockOpts, forgetAccountHere, locale, locationError, spaced, t } from './dom.js';
+import { api, clock, clockOpts, forgetAccountHere, locale, locationError, serverNow, spaced, t } from './dom.js';
 import { Journey, STYLES, cardStyle, setCardStyle, styleHint, styleName } from './journey.js';
 import {
   campus,
@@ -354,7 +354,11 @@ function Choices() {
               class="btn small ghost"
               aria-label=${t('Undo for {0}', name(c))}
               onClick=${async () => {
-                await api('/api/me/choice', { method: 'POST', body: { trip: c.trip, pref: c.pref, choice: 'undo' } });
+                try {
+                  await api('/api/me/choice', { method: 'POST', body: { trip: c.trip, pref: c.pref, choice: 'undo' } });
+                } catch (err) {
+                  return toast(err.message, { error: true });
+                }
                 lists.set((n) => n + 1);
               }}
             >${t('Undo')}</button>
@@ -374,7 +378,11 @@ function Choices() {
               type="button"
               onClick=${async () => {
                 if (!confirm(t("Clear your trip history? Your settings won't change."))) return;
-                await api('/api/me/history', { method: 'DELETE' });
+                try {
+                  await api('/api/me/history', { method: 'DELETE' });
+                } catch (err) {
+                  return toast(err.message, { error: true });
+                }
                 toast(t('Trip history cleared'));
                 lists.set((n) => n + 1);
               }}
@@ -439,7 +447,9 @@ export function Timetable({ me }) {
 
   // Keyed by what doesn't change when it's edited (not its stop), so a row stays open while its stop is changed.
   const seenKeys = new Map();
-  const all = [...p.trips.map((c) => ({ c, list: 'trips' })), ...p.manual.map((c) => ({ c, list: 'manual' }))].map((r) => {
+  // `nth`: which of the classes just like it (same day, time, name and stop) it is, so a row edits its own.
+  const nth = (list, c, i) => list.slice(0, i).filter((y) => same(y, c)).length;
+  const all = [...p.trips.map((c, i) => ({ c, list: 'trips', nth: nth(p.trips, c, i) })), ...p.manual.map((c, i) => ({ c, list: 'manual', nth: nth(p.manual, c, i) }))].map((r) => {
     const base = `${r.list}-${r.c.day}-${r.c.arriveByMin}-${r.c.label}`;
     const n = seenKeys.get(base) ?? 0;
     seenKeys.set(base, n + 1);
@@ -474,7 +484,7 @@ export function Timetable({ me }) {
           ${DAY_ORDER.map((day) => {
             const rows = [...all.filter((r) => r.c.day === day), ...usual.filter((r) => r.u.day === day)].sort((a, b) => (a.c?.arriveByMin ?? a.u.atMin) - (b.c?.arriveByMin ?? b.u.atMin));
             if (!rows.length) return null;
-            return html`<div class="day" key=${`d${day}`}>${DAYS[day]}</div>${rows.map((r) => (r.u ? html`<${UsualRow} key=${r.key} u=${r.u} />` : html`<${ClassRow} key=${r.key} c=${r.c} list=${r.list} />`))}`;
+            return html`<div class="day" key=${`d${day}`}>${DAYS[day]}</div>${rows.map((r) => (r.u ? html`<${UsualRow} key=${r.key} u=${r.u} />` : html`<${ClassRow} key=${r.key} c=${r.c} list=${r.list} nth=${r.nth} />`))}`;
           })}
         </div>`}
         <${AddClass} />
@@ -486,10 +496,27 @@ export function Timetable({ me }) {
 /** Bumped after an import: the list's "Re-import needed" goes. */
 export const importDone = store(0);
 
-/** One class: its name, then when and from which stop; opened, the stop to change and Remove. */
-function ClassRow({ c, list }) {
+/**
+ * A class's weeks when it isn't every week, each run of them: "wk 1–6",
+ * "wk 1, 3, 5, 7, 9, 11", "wk 1–3, 8–13", as the Mac app lists them. None
+ * for 13 or more (every week).
+ */
+export function weeksText(weeks) {
+  if (!Array.isArray(weeks) || !weeks.length || weeks.length >= 13) return '';
+  const runs = [];
+  for (const w of [...weeks].sort((a, b) => a - b)) {
+    const last = runs.at(-1);
+    if (last && w <= last[1] + 1) last[1] = Math.max(last[1], w);
+    else runs.push([w, w]);
+  }
+  const zh = globalThis.window?.i18n?.lang === 'zh';
+  return t('wk {0}', runs.map(([a, b]) => (a === b ? String(a) : `${a}–${b}`)).join(zh ? '，' : ', '));
+}
+
+/** One class: its name, then when and from which stop; opened, the stop to change and Remove. `nth`: which of the classes just like it. */
+function ClassRow({ c, list, nth }) {
   const time = c.endMin ? clockSpan(c.arriveByMin, c.endMin) : clockMin(c.arriveByMin);
-  const weeks = Array.isArray(c.weeks) && c.weeks.length < 13 ? ` · ${t('wk {0}–{1}', c.weeks[0], c.weeks.at(-1))}` : '';
+  const weeks = weeksText(c.weeks) && ` · ${weeksText(c.weeks)}`;
   return html`
     <details class="cls">
       <summary>
@@ -504,7 +531,7 @@ function ClassRow({ c, list }) {
           aria-label=${t('Stop for {0}', c.label)}
           onChange=${(v) =>
             edit((x) => {
-              const at = x[list].find((y) => same(y, c));
+              const at = x[list].filter((y) => same(y, c))[nth];
               if (at) at.to = v;
             })}
         />
@@ -514,7 +541,11 @@ function ClassRow({ c, list }) {
           aria-label=${t('Remove {0}', c.label)}
           onClick=${(e) => {
             refocusAfterRemove(e.currentTarget, e.currentTarget.closest('.trips-group')?.querySelector('h3'));
-            edit((x) => (x[list] = x[list].filter((y) => !same(y, c))));
+            // This one only, not every class just like it.
+            edit((x) => {
+              const at = x[list].filter((y) => same(y, c))[nth];
+              x[list] = x[list].filter((y) => y !== at);
+            });
           }}
         >${t('Remove')}</button>
       </div>
@@ -809,7 +840,11 @@ function Place({ place, arriving }) {
 
 /* ---------- Devices ---------- */
 
-/** The QR code library, from cdnjs, the first time a code is shown. */
+/**
+ * The QR code library, from cdnjs, the first time a code is shown. Its
+ * address is the one the CSP allows (QR_LIB in the API's src/http.ts;
+ * http.test.js fails if the two differ).
+ */
 function loadQr() {
   if (window.qrcode) return Promise.resolve();
   return new Promise((resolve, reject) => {
@@ -853,8 +888,12 @@ export function Devices({ me }) {
                 onClick=${async (e) => {
                   // Noted before the wait: by the time the list is back, the row has gone.
                   const refocus = noteRow(e.currentTarget);
-                  await api(`/api/me/devices/${d.id}`, { method: 'DELETE' });
-                  await load();
+                  try {
+                    await api(`/api/me/devices/${d.id}`, { method: 'DELETE' });
+                  } catch (err) {
+                    return toast(err.message, { error: true });
+                  }
+                  await load().catch(() => {});
                   refocus(() => document.querySelector('.add-device'));
                 }}
               >${t('Remove')}</button>
@@ -920,7 +959,8 @@ function Pairing({ count, reload }) {
       document.addEventListener('visibilitychange', paired);
       cleanup = () => document.removeEventListener('visibilitychange', paired);
       const tick = () => {
-        const left = Math.max(0, Math.round((made.expires - Date.now()) / 1000));
+        // The server's clock: `expires` is its time, and this device's may be off.
+        const left = Math.max(0, Math.round((made.expires - serverNow()) / 1000));
         if (!left) return end(t('Expired'), t('Get a new code to pair.'));
         if (done) return;
         setState({
@@ -961,8 +1001,9 @@ export const CLOCKS = () => [
 /** Each as a row of pills: Auto follows this browser. The languages are named in themselves. */
 export function Language() {
   const p = useStore(profile);
-  // Bumped when a language isn't saved, so its pills are drawn again on the one still in use.
+  // Bumped when a language or clock isn't saved, so its pills are drawn again on the one still in use.
   const [langTry, setLangTry] = useState(0);
+  const [clockTry, setClockTry] = useState(0);
   return html`
     <div class="trips">
       <${Group} title=${t('Language')} id="lang-label" hint=${t('Also used for emails and on your other devices. Place and bus names stay in English, as on the signs.')}>
@@ -996,12 +1037,17 @@ export function Language() {
       <${Group} title=${t('Time format')} id="clock-label" hint=${t('For every time terminus shows, here and on your other devices. Auto follows this browser.')}>
         <div class="field">
           <${Pills}
+            key=${clockTry}
             name="clock"
             value=${p?.clock ?? 'auto'}
             options=${[['auto', t('Auto')], ...CLOCKS().map((c) => [c.value, c.label])]}
             labelledBy="clock-label"
             full
-            onChange=${(v) => saveNow((x) => (x.clock = v)).catch((err) => toast(err.status ? t('Not saved. {0}', err.message) : t('Not saved. Check your connection.'), { error: true }))}
+            onChange=${(v) =>
+              saveNow((x) => (x.clock = v)).catch((err) => {
+                toast(err.status ? t('Not saved. {0}', err.message) : t('Not saved. Check your connection.'), { error: true });
+                setClockTry((n) => n + 1);
+              })}
           />
         </div>
       <//>
@@ -1116,7 +1162,11 @@ export function Account({ me, inApp, onAddEmail, onSignOut }) {
   const [msg, setMsg] = useState('');
   const everywhere = async () => {
     if (!confirm(t('Sign out of every browser and device, including this one?'))) return;
-    await api('/api/me/sessions', { method: 'DELETE' });
+    try {
+      await api('/api/me/sessions', { method: 'DELETE' });
+    } catch (err) {
+      return toast(err.message, { error: true });
+    }
     await forgetAccountHere();
     location.reload();
   };
@@ -1193,7 +1243,12 @@ function Keys() {
                   // Noted before the wait: by the time the list is back, the row has gone.
                   const refocus = noteRow(e.currentTarget);
                   if (!confirm(t('Revoke "{0}"? Anything using it stops working straight away.', k.name))) return;
-                  await api(`/api/me/keys/${k.id}`, { method: 'DELETE' });
+                  setMsg('');
+                  try {
+                    await api(`/api/me/keys/${k.id}`, { method: 'DELETE' });
+                  } catch (err) {
+                    return setMsg(err.message);
+                  }
                   setMade(null);
                   await load();
                   refocus(() => document.querySelector('.keys-name'));

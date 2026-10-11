@@ -106,7 +106,10 @@ def emit(name, text):
         path.write_text(text)
         return
     strip = lambda t: "\n".join(l for l in t.replace('","', '",\n"').splitlines() if '"generated"' not in l)
-    old = path.read_text() if path.exists() else ""
+    if not path.exists():
+        _differs.append(name)
+        return
+    old = path.read_text()
     if strip(json.dumps(json.loads(old), sort_keys=True, indent=0)) != strip(json.dumps(json.loads(text), sort_keys=True, indent=0)):
         _differs.append(name)
 
@@ -437,10 +440,15 @@ def main():
 
     marks = {}
     for code, lm in LANDMARKS.items():
+        unknown = [stop for stop in lm["stops"] if stop not in stop_pt]
+        if unknown:
+            sys.exit(f"data/src/landmarks.json: {code} names stops not in stops.json: {', '.join(unknown)}")
         walks = {}
         for stop in lm["stops"]:
             m = routed(stop, lm["at"])
             walks[stop] = round(m if m is not None else haversine(lm["at"], stop_pt[stop]))
+        # Best first: the app's first choice of stop for it (landmarks.ts).
+        walks = dict(sorted(walks.items(), key=lambda kv: kv[1]))
         marks[code] = {"name": lm["name"], "kind": lm["kind"], "aliases": lm["aliases"], "stops": walks}
     emit("landmarks.json", json.dumps({
         "generated": date.today().isoformat(),
@@ -462,6 +470,9 @@ def main():
             pts = [pt for a in areas for pt in a]
             centre = (statistics.fmean(p[0] for p in pts), statistics.fmean(p[1] for p in pts))
             walks = sorted((m, c) for c in stop_pt if (m := routed(c, centre)) is not None)
+            if not walks:
+                print(f"  {code}: no stop reachable on foot")
+                continue
             best = walks[0][0]
             serving = {c: round(m) for m, c in walks if m <= best + 150}
             serving = dict(list(serving.items())[:2])

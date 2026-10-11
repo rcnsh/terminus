@@ -181,8 +181,11 @@ if (REAL_HOURS) {
 
 const db = makeD1();
 const email = makeEmail();
-const today = new Date(realNow() + 8 * 3_600_000).getUTCDay();
-const inAnHour = Math.min(1425, Math.floor(((realNow() + 8 * 3_600_000) % 86_400_000) / 60_000) + Number(process.env.CLASS_IN_MIN ?? 50));
+// The test class, CLASS_IN_MIN (50) minutes from the stub's clock (STUB_NOW
+// included), in Singapore time: late at night, on the next day.
+const classAt = new Date(stubNow() + 8 * 3_600_000 + Number(process.env.CLASS_IN_MIN ?? 50) * 60_000);
+const today = classAt.getUTCDay();
+const inAnHour = classAt.getUTCHours() * 60 + classAt.getUTCMinutes();
 const profile = {
   home: { stops: ['PGP'] },
   gapHours: 2,
@@ -213,7 +216,13 @@ const WEB = new URL('../../web/public/', import.meta.url).pathname;
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.mjs': 'text/javascript', '.svg': 'image/svg+xml', '.json': 'application/json' };
 const ASSETS = {
   async fetch(req) {
-    const p = decodeURIComponent(new URL(req.url).pathname);
+    let p;
+    try {
+      p = decodeURIComponent(new URL(req.url).pathname);
+    } catch {
+      // Not a path at all ("/%E0"): as missing as any other.
+      return new Response('not found', { status: 404 });
+    }
     let file = path.join(WEB, p);
     if (!file.startsWith(WEB)) return new Response('not found', { status: 404 });
     try {
@@ -318,7 +327,12 @@ async function serve(req, res) {
     return res.end(`recorded ${minutes} min (${polls} polls); now ${new Date(stubNow()).toISOString()}\n`);
   }
   if (req.method === 'POST' && req.url.startsWith('/__stub/skip')) {
-    skipMs += Number(new URL(req.url, 'http://x').searchParams.get('min') ?? 0) * 60_000;
+    const min = Number(new URL(req.url, 'http://x').searchParams.get('min') ?? 0);
+    if (!Number.isFinite(min)) {
+      res.writeHead(400, { 'content-type': 'text/plain' });
+      return res.end('min must be a number of minutes\n');
+    }
+    skipMs += min * 60_000;
     res.writeHead(200, { 'content-type': 'text/plain' });
     return res.end(`now ${new Date(stubNow()).toISOString()}\n`);
   }

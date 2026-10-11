@@ -434,7 +434,8 @@ private fun DrawScope.pullBus(v: PullView, m: PullMotion, p: Palette, top: Float
     fun at(bx: Float, by: Float) = Offset(o.x + bx * d, o.y + by * d)
     val angle = if (slope) (atan2(ground(x + 30) - ground(x + 8), 22f) * 180f / PI.toFloat()) else 0f
     val faded = m.alpha < 1f
-    if (faded) drawIntoCanvas { it.saveLayer(Rect(at(-4f, -6f), at(66f, 18f)), Paint().apply { alpha = m.alpha }) }
+    // Room round the bus for its slope, bob and tilt, so no corner is cut off while it fades.
+    if (faded) drawIntoCanvas { it.saveLayer(Rect(at(-14f, -22f), at(76f, 32f)), Paint().apply { alpha = m.alpha }) }
     rotate(angle, pivot = at(19f, 13f)) {
         translate(top = m.bob * d) {
             rotate(m.tilt, pivot = at(7.5f, 12f)) {

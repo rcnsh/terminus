@@ -223,7 +223,7 @@ enum Snapshots {
         }
     }
 
-    /// The setup steps and the devices window, from sample data.
+    /// The setup steps, the devices list and Settings' panes, from sample data.
     static func renderSetup(to dir: String) {
         let campusJSON = """
         {"stops":[{"code":"PGP","name":"Prince George's Park","lat":1.2917,"lon":103.7803},{"code":"COM3","name":"COM 3","lat":1.2948,"lon":103.7747},{"code":"UTOWN","name":"University Town","lat":1.3036,"lon":103.7747}],

@@ -236,8 +236,14 @@ internal fun <T> ValueRow(
     }
 }
 
-/** Opens [url] in the browser, out of the app. */
-internal fun Context.openWeb(url: String) = startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
+/** Opens [url] in the browser, out of the app; with no browser on the phone, says so rather than crashing. */
+internal fun Context.openWeb(url: String) {
+    try {
+        startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
+    } catch (_: android.content.ActivityNotFoundException) {
+        android.widget.Toast.makeText(this, sh.rcn.terminus.L.s(R.string.no_browser), android.widget.Toast.LENGTH_SHORT).show()
+    }
+}
 
 /**
  * Where this install updates: its Play listing (the Play Store app, else the

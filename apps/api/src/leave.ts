@@ -171,23 +171,12 @@ function forLeg(leg: Leg, sa: StopArrivals | undefined, graph: Graph, arriveBy: 
   // A guessed bus only while the service runs, by its published hours.
   const runs = (ms: number) => inService(graph, leg.svc, ms);
 
-  // The feed this service came from, at a shelter two feeds answer for.
-  const feed = feedFor(sa, Boolean(leg.paid));
-  // Each time keeps what it is: a public bus's timetabled one (LTA's
-  // Monitored 0) is an estimate, and one from a stale feed an old reading,
-  // however exact.
-  const live =
-    sa && feed && feed.available !== false
-      ? beforeOpening(graph, leg.svc, resolveBerths(sa.arrivals.filter((a) => a.svc === leg.svc)).usable, feed.fetchedAt, nowMs)
-          .filter((a) => a.etaS != null)
-          .map((a) => ({ at: feed.fetchedAt + (a.etaS as number) * 1000, estimated: a.scheduled === true, stale: feed.stale && !a.scheduled }))
-          .sort((a, b) => a.at - b.at)
-      : [];
+  const live = liveBuses(leg.svc, Boolean(leg.paid), sa, graph, nowMs);
 
   if (!live.length) {
     // No live times: arrive a whole headway early and a bus is sure to come.
     // With no live times the bus is somewhere in that headway: `board` is
-    // when you reach the stop. Often packed change: one more headway early.
+    // when you reach the stop. Often packed: one more headway early.
     const crowd = crowdCheck(leg, latestBoard, arriveBy, risk);
     const back = crowd.earlier || arriveBy.oneEarlier ? 2 : 1;
     const note = crowd.note ?? (arriveBy.oneEarlier ? m().oneEarlierNote : null);
@@ -199,7 +188,7 @@ function forLeg(leg: Leg, sa: StopArrivals | undefined, graph: Graph, arriveBy: 
       if (!runs(board)) board = serviceResumesAt(graph, leg.svc, board) ?? board;
       return { ms: board - walk, board, arrive: arriveAfter(by), estimated: true, stale: false, late: false, note };
     }
-    // Too late for that, or it isn't running change: at the stop as soon as you
+    // Too late for that, or it isn't running then: at the stop as soon as you
     // can be while it runs, never in the past, and a bus within a headway.
     board = nowMs + walk;
     const starts = runs(board) ? null : serviceResumesAt(graph, leg.svc, board);
@@ -251,7 +240,12 @@ interface Bus {
   opens?: true;
 }
 
-/** A service's buses at a stop: its live times, each as it can be believed (see forLeg). */
+/**
+ * A service's buses at a stop: its live times, from the feed this service
+ * came from (at a shelter two feeds answer for). Each time keeps what it is:
+ * a public bus's timetabled one (LTA's Monitored 0) is an estimate, and one
+ * from a stale feed an old reading, however exact.
+ */
 function liveBuses(svc: string, paid: boolean, sa: StopArrivals | undefined, graph: Graph, nowMs: number): Array<{ at: number; estimated: boolean; stale: boolean }> {
   const feed = feedFor(sa, paid);
   if (!sa || !feed || feed.available === false) return [];

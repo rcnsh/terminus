@@ -22,6 +22,13 @@ object Locator {
     /** How far a fix drifts per second of age: a walking pace. */
     private const val DRIFT_M_PER_S = 1.3
 
+    /**
+     * A fix that doesn't say how good it is: taken as rough (past the API's
+     * 200 m, MAX_FIX_ACC_M), so it neither wins over one that does nor is
+     * planned from as if it were precise.
+     */
+    private const val UNKNOWN_ACC_M = 1_000.0
+
     /** The providers to ask, best first. */
     private val PROVIDERS = listOf(LocationManager.FUSED_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER)
 
@@ -33,7 +40,7 @@ object Locator {
      */
     fun uncertaintyM(loc: Location, nowMs: Long = System.currentTimeMillis()): Double {
         val ageS = ((nowMs - loc.time).coerceAtLeast(0)) / 1000.0
-        return (if (loc.hasAccuracy()) loc.accuracy.toDouble() else 0.0) + ageS * DRIFT_M_PER_S
+        return (if (loc.hasAccuracy()) loc.accuracy.toDouble() else UNKNOWN_ACC_M) + ageS * DRIFT_M_PER_S
     }
 
     /** `uncertaintyM` of a fix, rounded, for the API; null without one. */

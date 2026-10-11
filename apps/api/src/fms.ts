@@ -82,6 +82,8 @@ const BUS_LIST_KEYS = ['activebus', 'activeBus', 'ActiveBus', 'buses'];
 const BUS_PLATE_KEYS = ['vehplate', 'veh_plate', 'vehiclePlate', 'plate'];
 
 const NO_BUS = new Set(['-', '--', '', 'n.a.', 'na', 'n/a', 'nil', 'null', 'undefined', '?']);
+/** "Lv", "left", "dep...": the bus has gone (lower-cased). */
+const departed = (low: string): boolean => low.startsWith('lv') || low.startsWith('left') || low.startsWith('dep');
 
 /**
  * Minutes-as-string -> seconds.
@@ -98,7 +100,7 @@ export function parseEtaS(v: unknown): number | null {
   const low = s.toLowerCase();
   if (NO_BUS.has(low)) return null;
   if (low.startsWith('arr')) return 0;
-  if (low.startsWith('lv') || low.startsWith('left') || low.startsWith('dep')) return null;
+  if (departed(low)) return null;
   // A minus or a clock time isn't minutes to go: stripping the rest would
   // read "-3" as 3 min and "12:30" as 1230 min.
   if (/[-:]/.test(s)) return null;
@@ -133,7 +135,7 @@ export function parseSeconds(v: unknown): number | null {
 function saysNoBus(v: unknown): boolean {
   if (typeof v !== 'string') return false;
   const low = v.trim().toLowerCase();
-  return NO_BUS.has(low) || low.startsWith('lv') || low.startsWith('left') || low.startsWith('dep');
+  return NO_BUS.has(low) || departed(low);
 }
 
 /**
@@ -160,7 +162,8 @@ export function parseCrowd(v: unknown): Crowd | null {
  * to be explicit or an absent field reads as an empty bus.
  */
 export function crowdFromLoad(capacity: unknown, ridership: unknown): Crowd | null {
-  if (capacity == null || ridership == null) return null;
+  // A blank count is no count, not an empty bus (Number('') is 0 too).
+  if (capacity == null || ridership == null || (typeof ridership === 'string' && !ridership.trim())) return null;
   const cap = Number(capacity);
   const rid = Number(ridership);
   if (!Number.isFinite(cap) || cap <= 0 || !Number.isFinite(rid) || rid < 0) return null;
@@ -576,7 +579,7 @@ export async function getArrivals(
     failMemoS: TTL.failMemoS,
     raceMs: TTL.staleRaceMs,
     memoes: notOutdated,
-    breaker: { ...BREAKER, onTrip: (err) => noteTrip(env, 'nus', err, nowMs) },
+    breaker: { ...breaker(), onTrip: (err) => noteTrip(env, 'nus', err, nowMs) },
     inflight,
   });
   return withEnds(sa);
@@ -614,19 +617,14 @@ export function tripsBreaker(err: unknown): boolean {
  *  nothing of the next call. */
 const notOutdated = (err: unknown): boolean => !(err instanceof UpstreamRejected && err.outdated) && !(err instanceof GateBusy);
 
-/** The shuttle feed's breaker: such a failure stops every call for breakerS. */
-const BREAKER = {
-  get key() {
-    return `${cacheBase()}/breaker`;
-  },
-  trips: tripsBreaker,
-  maxAgeS: TTL.breakerS,
-};
+/** The shuttle feed's breaker: such a failure stops every call for breakerS.
+ *  Made at each call: its key depends on the site (cacheBase). */
+const breaker = () => ({ key: `${cacheBase()}/breaker`, trips: tripsBreaker, maxAgeS: TTL.breakerS });
 
 /** Whether the feed's breaker is open here: NUS refused us a moment ago, and
  *  nothing should ask it again until it closes. */
 export async function breakerOpen(): Promise<boolean> {
-  return flagged(BREAKER.key);
+  return flagged(breaker().key);
 }
 
 /** One upstream fetch per stop per isolate, however many requests want it. */
@@ -722,7 +720,7 @@ export async function getBuses(env: Env, ctx: ExecutionContext, svc: string, now
     staleMaxS: TTL.staleMaxS,
     failMemoS: TTL.failMemoS,
     memoes: notOutdated,
-    breaker: { ...BREAKER, onTrip: (err) => noteTrip(env, 'nus', err, nowMs) },
+    breaker: { ...breaker(), onTrip: (err) => noteTrip(env, 'nus', err, nowMs) },
     inflight: inflightBuses,
   });
 }

@@ -235,6 +235,18 @@ class MapDataTest {
         assertFalse(BusStrip.of(d).any)
     }
 
+    @Test fun aStretchIntoALoopsLastStopEndsThereNotAtItsStart() {
+        // A loop whose line doesn't quite close (as A1's at KRB), and its last
+        // stop measured a little past the line's end (4568 m on a 4567.2 m line).
+        val line = listOf(doubleArrayOf(103.0, 1.0), doubleArrayOf(103.001, 1.0), doubleArrayOf(103.001, 1.001), doubleArrayOf(103.0, 1.0003))
+        val path = RoutePath(line, loop = true)
+        for (b in listOf(path.total, path.total + 0.8)) {
+            val stretch = path.slice(path.total - 50, b)!!
+            assertEquals(103.0, stretch.last()[0], 1e-12)
+            assertEquals("the line's last point, not its first", 1.0003, stretch.last()[1], 1e-12)
+        }
+    }
+
     @Test fun aTappedBusShowsTheStretchItIsOn() {
         // East, then north: an L with its corner at (103.001, 1.0).
         val path = RoutePath(listOf(doubleArrayOf(103.0, 1.0), doubleArrayOf(103.001, 1.0), doubleArrayOf(103.001, 1.001)))

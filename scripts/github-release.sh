@@ -21,15 +21,15 @@ cd "$(dirname "$0")/.."
 VERSION="${1:?usage: [CHANNEL=beta] scripts/github-release.sh <version> [--notes]}"
 # It names the tag and the files: a version, as release.sh and release-beta.sh check.
 VERSION_RE='^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9]+)?)?$'
-[[ $VERSION =~ $VERSION_RE ]] || { echo "$VERSION isn't a version like 2.1.0 or 2.1.1-beta.1"; exit 1; }
+[[ $VERSION =~ $VERSION_RE ]] || { echo "$VERSION isn't a version like 2.1.0 or 2.1.1-beta.1" >&2; exit 1; }
 TAG="v$VERSION"
 CHANNEL="${CHANNEL:-}"
 DIR="build/release/$VERSION"
 if [ "$CHANNEL" = beta ]; then DIR="build/release/beta/$VERSION"; fi
 APK="$DIR/terminus-$VERSION.apk"
 MAC="$DIR/terminus-$VERSION.dmg"
-git rev-parse -q --verify "refs/tags/$TAG" >/dev/null || { echo "no tag $TAG"; exit 1; }
-[ -f "$APK" ] && [ -f "$MAC" ] || { echo "missing $APK or $MAC"; exit 1; }
+git rev-parse -q --verify "refs/tags/$TAG" >/dev/null || { echo "no tag $TAG" >&2; exit 1; }
+[ -f "$APK" ] && [ -f "$MAC" ] || { echo "missing $APK or $MAC" >&2; exit 1; }
 
 # A release lists the commits since the previous release, past its betas.
 # No previous tag only for the very first: otherwise a failed lookup would
@@ -41,7 +41,7 @@ if [ -n "$EXCLUDE" ]; then EARLIER=$(printf '%s\n' "$EARLIER" | grep -v -- - || 
 PREV=""
 if [ -n "$EARLIER" ]; then
   PREV=$(git describe --tags --abbrev=0 --match 'v*' ${EXCLUDE:+--exclude "$EXCLUDE"} "$TAG^") ||
-    { echo "couldn't find the tag before $TAG"; exit 1; }
+    { echo "couldn't find the tag before $TAG" >&2; exit 1; }
 fi
 NOTES="$DIR/notes.md"
 python3 scripts/release-notes.py "$VERSION" "$TAG" "$PREV" "$APK" "$MAC" "$CHANNEL" > "$NOTES"

@@ -1,9 +1,9 @@
 /**
- * Every word the server writes, in English and Simplified Chinese (phase 10).
+ * Every word the server writes, in English and Simplified Chinese.
  *
  * The language is per request: the profile's `lang` when it isn't "auto",
- * else `?lang=`, else the request's Accept-Language (any zh* is Chinese),
- * else English. It's carried in an AsyncLocalStorage set once at the top of
+ * else `?lang=`, else the website's `terminus-lang` cookie, else the
+ * request's Accept-Language (any zh* is Chinese), else English. It's carried in an AsyncLocalStorage set once at the top of
  * the request, so the formatters call `m()` instead of passing a language
  * through every function. Outside a request (tests, the cron) it's English,
  * and the English output is exactly what it was before this file existed.
@@ -219,6 +219,8 @@ const en = {
   undoTo: ((label: string) => `Undo: going to ${label}`) as Fn<[string]>,
   /** Undo for a skipped trip with no name. */
   undoTrip: 'Undo: not going',
+  /** What a landmark is, under its name in the search ("Food court", from landmarks.json). */
+  landmarkKind: ((kind: string) => kind) as Fn<[string]>,
   // The small line above the card (card.heading)
   headClass: ((label: string) => `Next class · ${label}`) as Fn<[string]>,
   headGap: ((label: string) => `Long gap · ${label}`) as Fn<[string]>,
@@ -523,6 +525,7 @@ const zh: Msgs = {
   undoHome: '撤销：回家',
   undoTo: (label) => zs`撤销：去${label}`,
   undoTrip: '撤销：不去了',
+  landmarkKind: (kind) => ({ 'Food court': '食阁' })[kind] ?? kind,
   headClass: (label) => `下一节课 · ${label}`,
   headGap: (label) => `空档较长 · ${label === '家' ? '回家' : label}`,
   headHome: '回家',

@@ -168,18 +168,19 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
                 // A new file, the first or a newer version under a name of its own: the style points at it.
                 val shown = styleKey
                 if (after != null && after != before && shown != null) {
-                    MapFiles.style(ctx, shown.first, shown.second)?.let { style -> _state.update { it.copy(style = style) } }
+                    // Only if the theme and language are still the ones it was built for: a change meanwhile drew its own.
+                    MapFiles.style(ctx, shown.first, shown.second)?.let { style -> if (styleKey == shown) _state.update { it.copy(style = style) } }
                 }
             }
         }
     }
 
-    /** One pill at a time; the same one again turns it off. */
     /** A service from the Buses tab: its pill on, never toggled off. */
     fun show(svc: String) {
         if (_state.value.selected != svc) choose(svc)
     }
 
+    /** One pill at a time; the same one again turns it off. */
     fun choose(svc: String?) {
         val next = if (svc == _state.value.selected) null else svc
         _state.update { it.copy(selected = next, buses = emptyList(), busesStale = false, busStatus = if (next == null) null else BusStatus.Finding, sheet = (it.sheet as? MapSheet.Stop)) }

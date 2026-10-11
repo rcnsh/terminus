@@ -204,5 +204,5 @@ export async function refreshCalendar(env: Pick<Env, 'KV'>, nowMs: number): Prom
   }
 }
 
-/** For the logs and /health: how far the calendar answered from goes. */
+/** For the logs and /api/health: whether answers use the bundled calendar or a fetched copy. */
 export const calendarSource = (): 'bundled' | 'fetched' => (currentCalendar() === BUNDLED ? 'bundled' : 'fetched');

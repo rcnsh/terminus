@@ -22,6 +22,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -417,8 +418,9 @@ object Refresher {
         // minutes late; the widget shows a clock time, which stays true until then.
         if (widgetAt != null) am.setWhileIdle(widgetAt, alarmIntent(ctx), wake = false) else am.cancel(alarmIntent(ctx))
         if (wakeAt != null) am.setWhileIdle(wakeAt, wakeIntent(ctx)) else am.cancel(wakeIntent(ctx))
-        val at = listOfNotNull(widgetAt, wakeAt).min()
-        store.refreshAlarmAt = at
+        // Neither: nothing needs a refresh any more (stopped since [active] was asked), so none is armed.
+        val at = listOfNotNull(widgetAt, wakeAt).minOrNull()
+        store.refreshAlarmAt = at ?: 0
         if (widget) armRedraw(ctx, store, answer, before = at)
     }
 
@@ -631,7 +633,8 @@ class RefreshReceiver : BroadcastReceiver() {
  */
 internal fun BroadcastReceiver.finishAsync(dispatcher: CoroutineDispatcher, block: suspend () -> Unit) {
     val pending = goAsync()
-    CoroutineScope(dispatcher).launch {
+    // A failure the block didn't catch ends the broadcast, not the app: the next alarm or tap tries again.
+    CoroutineScope(dispatcher + CoroutineExceptionHandler { _, _ -> }).launch {
         try {
             block()
         } finally {

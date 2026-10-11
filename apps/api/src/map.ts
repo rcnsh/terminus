@@ -124,6 +124,8 @@ export async function handleMap(req: Request, url: URL, env: Env, ctx?: Executio
 
 /** A range of 256 glyphs, as MapLibre asks for them ("512-767"): anything else is no file, so not worth an R2 read. */
 export function glyphRange(range: string): boolean {
+  // Written as MapLibre writes it: no padding, no empty start ("0256-0511", "-255").
+  if (!/^(?:0|[1-9]\d*)-[1-9]\d*$/.test(range)) return false;
   const [start, end] = range.split('-').map(Number);
   return start % 256 === 0 && end === start + 255 && end <= 65_535;
 }
@@ -276,7 +278,7 @@ async function edgePart(
   if (otherConditions(req)) return fromR2();
 
   const range = rangeOf(req.headers.get('range'), head.size);
-  if (range === 'unsatisfiable') return new Response(null, { status: 416, headers: { 'content-range': `bytes */${head.size}` } });
+  if (range === 'unsatisfiable') return new Response(null, { status: 416, headers: { 'content-range': `bytes */${head.size}`, ...PART_CORS } });
   if (range === 'other') return fromR2();
   const { offset, length } = range ?? { offset: 0, length: head.size };
   if (length > MAX_CACHED_BYTES) return fromR2();
@@ -358,7 +360,12 @@ async function edgeFile(
   if (!obj) return json({ error: 'not found' }, 404);
   const headers = partHeaders(type, maxAgeS, obj.httpEtag);
   headers.set('content-length', String(obj.size));
-  if (obj.size > MAX_CACHED_BYTES) return matchesEtag(req, obj.httpEtag) ? new Response(null, { status: 304, headers }) : new Response(obj.body, { headers });
+  if (obj.size > MAX_CACHED_BYTES) {
+    if (!matchesEtag(req, obj.httpEtag)) return new Response(obj.body, { headers });
+    await obj.body.cancel();
+    headers.delete('content-length');
+    return new Response(null, { status: 304, headers });
+  }
   const bytes = await obj.arrayBuffer();
   const kept = { 'content-type': type, 'cache-control': `public, max-age=${maxAgeS}`, etag: obj.httpEtag, 'content-length': String(bytes.byteLength) };
   const put = cache.put(id, new Response(bytes.slice(0), { headers: kept })).catch(() => {});
@@ -375,15 +382,26 @@ async function edgeFile(
 export const matchesEtag = (req: Request, etag: string) =>
   req.headers.get('if-none-match')?.split(',').some((t) => t.trim().replace(/^W\//, '') === etag) ?? false;
 
+/** Open to any page, as every answer for the map's files is, the errors too. */
+const PART_CORS = { 'access-control-allow-origin': '*', 'access-control-expose-headers': 'etag, content-range, content-length' };
+
 function partHeaders(type: string, maxAgeS: number, httpEtag: string): Headers {
   return new Headers({
     'content-type': type,
     'cache-control': `public, max-age=${maxAgeS}`,
     etag: httpEtag,
     'accept-ranges': 'bytes',
-    'access-control-allow-origin': '*',
-    'access-control-expose-headers': 'etag, content-range, content-length',
+    ...PART_CORS,
   });
+}
+
+/** Whether If-Match (a strong comparison: a weak W/ tag never matches) or
+ *  If-Unmodified-Since refuses this object. */
+function preconditionFailed(req: Request, obj: R2Object): boolean {
+  const ifMatch = req.headers.get('if-match');
+  if (ifMatch && !ifMatch.split(',').some((t) => t.trim() === '*' || t.trim() === obj.httpEtag)) return true;
+  const since = Date.parse(req.headers.get('if-unmodified-since') ?? '');
+  return !ifMatch && Number.isFinite(since) && obj.uploaded.getTime() > since + 999;
 }
 
 /**
@@ -398,13 +416,19 @@ async function servePart(req: Request, bucket: R2Bucket, key: string, type: stri
   } catch (e) {
     // A range R2 can't satisfy (past the end) is the client's mistake;
     // anything else is R2 failing, and the file is fine.
-    if (ranged && /range|satisf/i.test(String((e as Error)?.message ?? e))) return new Response(null, { status: 416 });
+    if (ranged && /range|satisf/i.test(String((e as Error)?.message ?? e))) {
+      // The file's size, as the edge path's 416 says it, when R2 will tell.
+      const size = (await bucket.head(key).catch(() => null))?.size;
+      return new Response(null, { status: 416, headers: { ...(size != null ? { 'content-range': `bytes */${size}` } : {}), ...PART_CORS } });
+    }
     return unavailable();
   }
   if (!obj) return json({ error: 'not found' }, 404);
   const headers = partHeaders(type, maxAgeS, obj.httpEtag);
-  // onlyIf failed: the client's copy is current.
-  if (!('body' in obj)) return new Response(null, { status: 304, headers });
+  // onlyIf failed: the client's copy is current (If-None-Match,
+  // If-Modified-Since), or it isn't the copy the client meant to change
+  // (If-Match, If-Unmodified-Since), which is 412, not 304.
+  if (!('body' in obj)) return new Response(null, { status: preconditionFailed(req, obj) ? 412 : 304, headers });
   const range = obj.range as { offset?: number; length?: number; suffix?: number } | undefined;
   if (ranged && range) {
     const offset = range.suffix != null ? obj.size - range.suffix : (range.offset ?? 0);

@@ -4,9 +4,10 @@
 import { html } from '../assets/ui.js';
 
 /**
- * The services' colours, for the livery: before sign-in there's no /campus to
- * ask, so they're here, mirroring the API's ROUTE_COLORS (src/campus.ts).
- * The landing page's driving shuttles wear them too (sky-page.js).
+ * The services' colours, for the livery: before sign-in there's no
+ * /api/campus to ask, so they're here, mirroring the API's ROUTE_COLORS
+ * (src/campus.ts; web-journey.test.js keeps them the same). The landing
+ * page's driving shuttles wear them too (sky-page.js).
  */
 export const LIVERY = [
   ['A1', '#d32f2f'], ['A2', '#d9a000'], ['D1', '#ec4fa0'], ['D2', '#8e44c9'],

@@ -32,7 +32,7 @@ export function holdsHealthToken(env: Env, req: Request): boolean {
 
 /**
  * Whoever may read the timelapse days: the operator, or a holder of
- * TIMELAPSE_TOKEN, sent in the same header. That token opens /timelapse/*
+ * TIMELAPSE_TOKEN, sent in the same header. That token opens /api/timelapse/*
  * and nothing else, so a machine that renders the videos (a VPS, unattended)
  * never holds the key to the dashboard, its reports and their emails.
  */

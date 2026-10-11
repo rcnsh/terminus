@@ -111,7 +111,7 @@ final class AppModel {
     var reportResult: String?
     /// The last report went: "✓ Reported, thanks" under the answer, where the form was.
     var reportSent = false
-    /// The card's line when it went: once the card says something else, it's another answer.
+    /// The card's line the report is about (when the form opened): once the card says something else, it's another answer.
     private var reportSentLine: String?
     private var reportClear: Task<Void, Never>?
     /// The tick shows for a few seconds, and only beside the answer it was sent from.
@@ -513,6 +513,7 @@ final class AppModel {
             if let d { day = d } else { dayFetched = nil }
             return nil
         } catch {
+            guard gen == session else { return nil }
             return failureMessage(error, otherwise: L("Couldn't add it. Check your connection."))
         }
     }
@@ -766,6 +767,7 @@ final class AppModel {
 
     func startReport() {
         reported = showNearby ? nil : shown?.raw
+        reportSentLine = shown?.card?.line
         reportReason = nil
         reportNote = ""
         reportResult = nil
@@ -790,7 +792,6 @@ final class AppModel {
                 try await Api(token: TokenStore.read()).report(reason: reason, note: note, answer: reported)
                 reporting = false
                 reportSent = true
-                reportSentLine = shown?.card?.line
                 // A moment's acknowledgement, then "Is this wrong?" is back for the next answer.
                 reportClear?.cancel()
                 reportClear = Task {

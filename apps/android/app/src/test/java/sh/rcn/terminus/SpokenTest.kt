@@ -68,6 +68,7 @@ class SpokenTest {
 
     @Test fun noInstructionsInTheSentence() {
         assertEquals("terminus. This phone isn't paired yet.", Spoken.summary(false, null, null, 0, clock = clock))
+        assertEquals("one full stop, not two", "terminus. Can't reach terminus.", Spoken.summary(true, null, "Can't reach terminus.", 0, clock = clock))
         assertFalse(Spoken.summary(true, golden("place"), null, 0, clock = clock).contains("Double tap"))
     }
 

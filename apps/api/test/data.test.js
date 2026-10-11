@@ -25,6 +25,13 @@ test('every stop code in the walking data is a real stop', () => {
   assert.deepEqual(unknown(Object.values(venues.venues).map((v) => v.stop)), [], 'venues.json');
 });
 
+test('a landmark lists its stops nearest first: the first is the one a trip there aims for', () => {
+  for (const [code, l] of Object.entries(landmarks.landmarks)) {
+    const m = Object.values(l.stops);
+    assert.deepEqual(m, [...m].sort((a, b) => a - b), code);
+  }
+});
+
 test('every stop has a walking detour, so a new stop is not a straight line', () => {
   assert.deepEqual([...codes].filter((c) => !(c in walks.detour)), [], 're-run scripts/walk_routes.py');
 });

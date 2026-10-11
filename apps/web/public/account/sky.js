@@ -150,11 +150,16 @@ function Lane({ colours, vw, y, back = false, go, first = false }) {
   const [trip, setTrip] = useState(null);
   const started = useRef(false);
   // Counted out once at pulling out and back once when it's off the road (or
-  // the lane goes), however often `go` changes meanwhile.
-  useEffect(() => {
-    if (!trip) return;
-    return () => void driving--;
-  }, [Boolean(trip)]);
+  // the lane goes, even before its shuttle is drawn), however often `go`
+  // changes meanwhile.
+  const out = useRef(false);
+  const release = () => {
+    if (!out.current) return;
+    out.current = false;
+    driving--;
+  };
+  useEffect(() => (trip ? release : undefined), [Boolean(trip)]);
+  useEffect(() => release, []);
   useEffect(() => {
     if (trip || !go) return;
     let t;
@@ -163,6 +168,7 @@ function Lane({ colours, vw, y, back = false, go, first = false }) {
       const pick = colours.filter((c) => c !== lastColour);
       lastColour = pick[Math.floor(Math.random() * pick.length)];
       driving++;
+      out.current = true;
       setTrip({ colour: lastColour, speed: 38 + Math.random() * 14 });
     };
     const wait = first && !started.current ? 0 : (back && !started.current ? 4000 : 1500) + Math.random() * 8000;

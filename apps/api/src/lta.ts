@@ -106,6 +106,9 @@ const monitored = (v: unknown) => v === 1 || v === true || (typeof v === 'string
  */
 export function normalizePublic(raw: unknown, stopCode: string, graph: Graph, nowMs: number): Arrival[] {
   const out: Arrival[] = [];
+  // Buses of a known service that match neither direction (a short working
+  // to somewhere else): left out rather than guessed, and logged.
+  const unplaced = new Set<string>();
   const services = (raw as { Services?: unknown })?.Services;
   if (!Array.isArray(services)) return out;
   for (const s of services) {
@@ -118,7 +121,10 @@ export function normalizePublic(raw: unknown, stopCode: string, graph: Graph, no
       if (typeof at !== 'number') continue;
       const b = row[slot] as Record<string, unknown>;
       const svc = routeFor(graph, stopCode, serviceNo, b.DestinationCode == null ? null : String(b.DestinationCode));
-      if (!svc) continue;
+      if (!svc) {
+        if (routesHere(graph, stopCode, serviceNo).length) unplaced.add(`${serviceNo} to ${String(b.DestinationCode ?? '?')}`);
+        continue;
+      }
       // Seconds from now. A bus a minute gone is gone; one just due is "now".
       const etaS = Math.round((at - nowMs) / 1000);
       if (etaS < -60) continue;
@@ -132,7 +138,18 @@ export function normalizePublic(raw: unknown, stopCode: string, graph: Graph, no
       });
     }
   }
+  if (unplaced.size && warnDue(stopCode, nowMs)) console.warn(`DataMall at ${stopCode}: buses matching neither direction left out: ${[...unplaced].slice(0, 4).join(', ')}`);
   return out;
+}
+
+/** When each stop last logged buses left out, in this isolate: once an hour each. */
+const warnedAt = new Map<string, number>();
+const WARN_EVERY_MS = 3_600_000;
+function warnDue(stopCode: string, nowMs: number): boolean {
+  const last = warnedAt.get(stopCode);
+  if (last !== undefined && nowMs - last < WARN_EVERY_MS) return false;
+  warnedAt.set(stopCode, nowMs);
+  return true;
 }
 
 /**

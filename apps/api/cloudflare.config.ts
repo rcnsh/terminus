@@ -213,7 +213,7 @@ export default defineConfig(({ mode }) => {
 				ASSETS: bindings.assets(),
 				ALERT_EMAIL: bindings.secret(),
 				HEALTH_TOKEN: bindings.secret(),
-				// TIMELAPSE_TOKEN, which opens /timelapse/* only for the VPS that renders
+				// TIMELAPSE_TOKEN, which opens /api/timelapse/* only for the VPS that renders
 				// the videos (scripts/render-timelapse.mjs), is an optional secret like
 				// ANALYTICS_TOKEN: not declared, so a site without one (the beta) deploys.
 				NEXTBUS_APP_API: bindings.secret(),

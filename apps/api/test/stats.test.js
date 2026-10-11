@@ -222,6 +222,22 @@ test('each prediction is scored against its own plate at its own stop, and a cac
   assert.deepEqual(statsOf([90, -45, 10, 200]), { n: 4, medianS: 50, within1: 0.5, late2: 0.25, early1: 0 });
 });
 
+test('a sampled prediction counts for the rows it stands for', () => {
+  const day = dayWith([{ plate: 'PA2B', svc: 'K', from: 0, speed: 8, readings: 40 }]);
+  const stop = SHAPES.K.stops[2];
+  const came = passingsOf(day).find((p) => p.stop === stop).t;
+  const { scored, predictions, matched } = scoreEtas(
+    [
+      { t: open + 30_000, svc: 'K', plate: 'PA2B', stop, etaS: Math.round((came - open - 30_000) / 1000), w: 4 },
+      { t: open + 60_000, svc: 'K', plate: 'PZ9Z', stop, etaS: 120, w: 2 },
+    ],
+    passingsOf(day),
+  );
+  assert.equal(predictions, 6);
+  assert.equal(matched, 4);
+  assert.equal(scored.length, 1, 'the rows themselves stay a sample');
+});
+
 test('the cron scores a closed day once, from the recording and Analytics Engine, only while switched on', async () => {
   const day = dayWith([{ plate: 'PA2B', svc: 'K', from: 0, speed: 8, readings: 40 }]);
   const stop = SHAPES.K.stops[2];

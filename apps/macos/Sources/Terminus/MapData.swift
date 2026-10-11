@@ -1,7 +1,7 @@
 import Foundation
 
-// The map window's data: stops and routes from `/campus`, live buses from
-// `/buses`, and the GeoJSON the map draws from them. Plain JSON in and out,
+// The map window's data: stops and routes from `/api/campus`, live buses from
+// `/api/buses`, and the GeoJSON the map draws from them. Plain JSON in and out,
 // so it's tested without a map (MapDataTests); the same as the phone's
 // MapData.kt.
 
@@ -76,7 +76,7 @@ struct MapRoute {
 
 /// A route line measured as the API measures it (haversine, metres from its
 /// start at each point), so a bus's `along` is a place on it. `closed` is the
-/// service's `loop` from /campus, as the API places buses: a loop's line
+/// service's `loop` from /api/campus, as the API places buses: a loop's line
 /// needn't end exactly where it starts (A1's ends are some 40 m apart at KRB).
 struct RoutePath {
     private let line: [[Double]]
@@ -182,7 +182,7 @@ struct CampusMap {
         return [pts.map(\.lon).min()!, pts.map(\.lat).min()!, pts.map(\.lon).max()!, pts.map(\.lat).max()!]
     }
 
-    /// The stops and routes from `/campus`; nil when it isn't that.
+    /// The stops and routes from `/api/campus`; nil when it isn't that.
     static func parse(_ data: Data) -> CampusMap? {
         guard let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let s = o["stops"] as? [[String: Any]], let r = o["routes"] as? [String: Any] else { return nil }
@@ -222,7 +222,7 @@ struct Stretch: Hashable {
     let last: String
 }
 
-/// A bus on the map, as `/buses` gives it: an id stable while it runs, and its
+/// A bus on the map, as `/api/buses` gives it: an id stable while it runs, and its
 /// number plate. It's at a stop (`at`, drawn at the stop's dot) or between two
 /// (drawn on its line); `ox` and `oy` are how far from that point it's drawn,
 /// in points at full size, turned with the road: beside the dot at a stop.
@@ -309,7 +309,7 @@ struct BusList {
     }
 }
 
-/// A stop's board from `/arrivals`. `available` false: no times from the feed.
+/// A stop's board from `/api/arrivals`. `available` false: no times from the feed.
 struct StopBoard {
     let available: Bool
     let rows: [BoardRow]

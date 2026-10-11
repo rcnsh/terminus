@@ -192,11 +192,27 @@ struct TimetablePane: View {
         }
     }
 
-    /// " · wk 1–6" for a class that runs only some weeks.
+    /// " · weeks 1–6" for a class that runs only some weeks.
     private func weeksText(_ weeks: [Int]?) -> String {
-        guard let w = weeks, w.count < 13, let a = w.first, let b = w.last else { return "" }
-        return " · " + L("weeks %@–%@", "\(a)", "\(b)")
+        weeksLabel(weeks).map { " · " + $0 } ?? ""
     }
+}
+
+/// The weeks a class runs, each run of weeks in a row as one: "weeks 1–6",
+/// "weeks 1, 3, 5, 7, 9, 11" (odd weeks), "weeks 1–3, 8–13". Nil for 13 or
+/// more weeks (every week) or none.
+func weeksLabel(_ weeks: [Int]?) -> String? {
+    let w = Array(Set(weeks ?? [])).sorted()
+    guard !w.isEmpty, w.count < 13 else { return nil }
+    var runs: [String] = []
+    var start = w[0], last = w[0]
+    for n in w.dropFirst() + [Int.min] {
+        if n == last + 1 { last = n; continue }
+        runs.append(start == last ? "\(start)" : "\(start)–\(last)")
+        start = n
+        last = n
+    }
+    return L("weeks %@", runs.joined(separator: L(", ")))
 }
 
 /// A day, a start and end, a name and where: a class or anything weekly.
@@ -258,8 +274,12 @@ struct WhereField: View {
     @Binding var picked: Destination?
 
     private var suggestions: [Destination] {
-        let favs = setup.places.compactMap { p in app.destinations.first { $0.code == p.to || ($0.kind == "stop" && $0.code == p.to) } }
-        let classStops = Array(Set(setup.classes.map(\.to))).compactMap { to in app.destinations.first { $0.kind == "stop" && $0.code == to } }
+        // A favourite goes to a stop or a landmark (Destination.goesTo): the stop
+        // first, so a building sharing its code doesn't show in its place.
+        let favs = setup.places.compactMap { p in
+            app.destinations.first { $0.kind == "stop" && $0.code == p.to } ?? app.destinations.first { $0.kind == "landmark" && $0.code == p.to }
+        }
+        let classStops = Array(Set(setup.classes.map(\.to))).sorted().compactMap { to in app.destinations.first { $0.kind == "stop" && $0.code == to } }
         var seen = Set<String>()
         return (favs + classStops).filter { seen.insert($0.code).inserted }.prefix(8).map { $0 }
     }
@@ -411,7 +431,7 @@ private struct DeveloperSection: View {
                 }
             }
             .pickerStyle(.radioGroup)
-            .onChange(of: chosen) { _, base in Servers.choose(base) }
+            .onChange(of: chosen) { _, base in Servers.choose(base) { chosen = Api.base } }
             Hint(L("Which server this app talks to. Only terminus's own are here. terminus starts again to switch, and the dev stub keeps its own sign-in."))
         }
     }

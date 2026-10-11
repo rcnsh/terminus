@@ -356,8 +356,8 @@ internal fun BoardLayout(s: Scene, w: Float, h: Float, stops: List<NearbyStop>?,
     }
 }
 
-/** The server's words for a time are kept while they're this fresh; then the widget counts down itself. */
-private const val SERVER_ETA_S = 30L
+/** The server's words for a time are kept while they're this fresh; then the widget counts down itself (here and in NextBusWidget). */
+internal const val SERVER_ETA_S = 30L
 
 /** One service at the stop: its badge, where it goes with Live and how full, and its minutes. */
 @Composable
