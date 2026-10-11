@@ -109,9 +109,25 @@ def emit(name, text):
     if not path.exists():
         _differs.append(name)
         return
-    old = path.read_text()
-    if strip(json.dumps(json.loads(old), sort_keys=True, indent=0)) != strip(json.dumps(json.loads(text), sort_keys=True, indent=0)):
+    old, new = json.loads(path.read_text()), json.loads(text)
+    # Keys sorted, so a reordered file still matches; but a `stops` mapping's
+    # order is part of what it says (nearest first, the building's own first).
+    if strip(json.dumps(old, sort_keys=True, indent=0)) != strip(json.dumps(new, sort_keys=True, indent=0)) or stop_orders(old) != stop_orders(new):
         _differs.append(name)
+
+
+def stop_orders(o, at=""):
+    """Every `stops` mapping's keys in order, by where it is in the file."""
+    found = {}
+    if isinstance(o, dict):
+        for k, v in o.items():
+            if k == "stops" and isinstance(v, dict):
+                found[f"{at}/{k}"] = list(v)
+            found.update(stop_orders(v, f"{at}/{k}"))
+    elif isinstance(o, list):
+        for i, v in enumerate(o):
+            found.update(stop_orders(v, f"{at}/{i}"))
+    return found
 
 
 def haversine(a, b):
