@@ -344,7 +344,6 @@ button.bt-row:focus-visible { outline-offset: -2px; }
 body.on-map { overflow: hidden; }
 body.on-map > .nav, body.on-map #tab-now { display: none; }
 .map-tab { position: fixed; inset: 0 0 calc(var(--tabbar-h) + env(safe-area-inset-bottom)) 0; background: var(--bg); }
-.map-tab[hidden] { display: none; }
 /* Sized, not positioned: MapLibre makes it position: relative. */
 .map { width: 100%; height: 100%; }
 .map-top {
@@ -400,7 +399,6 @@ body.on-map > .nav, body.on-map #tab-now { display: none; }
 }
 .map-sheet.dragging { transition: none; }
 @media (prefers-reduced-motion: reduce) { .map-sheet { transition: none; } }
-.map-sheet[hidden] { display: none; }
 /* A short window (a phone on its side, or zoomed in a long way): the sheet
    leaves more of the map, and MapLibre's buttons stay above it. */
 @media (max-height: 420px) {
