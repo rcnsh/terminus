@@ -177,7 +177,7 @@ Play Console → App content → Foreground service permissions. Two permissions
 
 **Location** (`WidgetModeService`):
 
-- Description: "Tapping Nearby or a place on the home screen widget takes one location fix to show the buses near the user or the quickest way from where they are. It starts only from the user's tap, and the app never requests background location."
+- Description: "Tapping Nearby or a place on the home screen widget, or refresh on the Buses near you widget, takes one location fix to show the buses near the user or the quickest way from where they are. It starts only from the user's tap, and the app never requests background location."
 - Impact if deferred or stopped: "A widget tap would show buses near the user's home instead of where they are."
 - Video: `build/play/fgs-location.mp4`.
 

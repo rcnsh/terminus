@@ -26,6 +26,8 @@ import sh.rcn.terminus.Session
 import sh.rcn.terminus.Store
 import sh.rcn.terminus.parseInstant
 import sh.rcn.terminus.parseNearby
+import sh.rcn.terminus.widget.NearbyShared
+import sh.rcn.terminus.widget.redrawWidgets
 
 /** A page opened over the tab's home: a stop's board, or a service's line. */
 sealed interface BusRoute {
@@ -196,6 +198,8 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
         val loc = Locator.lastKnown(ctx, maxAgeMs = 60_000) ?: Locator.current(ctx)
         try {
             val json = api(token).nearbyJson(loc?.latitude, loc?.longitude, Locator.accOf(loc), stopped = true)
+            // The Nearby widgets draw this board too: kept for them, and they're redrawn.
+            if (runCatching { store.saveNearby(json, System.currentTimeMillis(), sentWith = token) }.getOrNull() != null && NearbyShared.wanted(ctx)) redrawWidgets(ctx)
             val asOf = json.optString("asOf").takeIf { it.isNotEmpty() }?.let(::parseInstant)
             val got = ServerClock.now()
             val stops = parseNearby(json).map { Board.of(it, asOf).copy(gotMs = got) }

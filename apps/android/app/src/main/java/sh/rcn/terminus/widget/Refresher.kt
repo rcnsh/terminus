@@ -229,7 +229,7 @@ object Refresher {
 
     /** Whether a job for [extras] would do anything: else it would only redraw every widget again. */
     private suspend fun extrasDue(ctx: Context, store: Store): Boolean =
-        dayDue(store, System.currentTimeMillis()) || WidgetModes.anyDue(ctx)
+        dayDue(store, System.currentTimeMillis()) || WidgetModes.anyDue(ctx) || NearbyShared.due(ctx)
 
     /**
      * Today's plan, kept for when the phone goes offline (OfflineDay): when
@@ -255,6 +255,7 @@ object Refresher {
         val loc = Locator.lastKnown(ctx)
         keepDay(token, Api(token, hour12 = hour12(ctx)), store, loc, System.currentTimeMillis())
         chosen(ctx)
+        NearbyShared.refreshIfDue(ctx)
         WidgetModes.armChosen(ctx)
         redrawWidgets(ctx)
     }
@@ -484,7 +485,7 @@ object Refresher {
 
     fun widgetCount(ctx: Context): Int {
         val mgr = AppWidgetManager.getInstance(ctx) ?: return 0
-        return listOf(NextBusWidgetReceiver::class.java, PlacesWidgetReceiver::class.java)
+        return listOf(NextBusWidgetReceiver::class.java, PlacesWidgetReceiver::class.java, NearbyWidgetReceiver::class.java)
             .sumOf { mgr.getAppWidgetIds(ComponentName(ctx, it)).size }
     }
 
@@ -600,7 +601,10 @@ class RefreshReceiver : BroadcastReceiver() {
             // A widget showing a place or Nearby: redrawn as its times age, a
             // place's answer fetched again once it's stale; then its next moment.
             Refresher.ACTION_REDRAW_CHOSEN -> finishAsync(Dispatchers.IO) {
-                if (Store(context).paired && Refresher.online(context)) Refresher.chosen(context, staleOnly = true)
+                if (Store(context).paired && Refresher.online(context)) {
+                    Refresher.chosen(context, staleOnly = true)
+                    NearbyShared.refreshIfDue(context)
+                }
                 redrawWidgets(context)
                 WidgetModes.armChosen(context)
             }

@@ -5,16 +5,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.glance.ColorFilter
 import androidx.glance.GlanceModifier
-import androidx.glance.Image
-import androidx.glance.ImageProvider
 import androidx.glance.LocalContext
 import androidx.glance.action.Action
-import androidx.glance.action.actionParametersOf
-import androidx.glance.action.clickable
-import androidx.glance.appwidget.action.actionRunCallback
-import androidx.glance.appwidget.cornerRadius
 import androidx.glance.background
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
@@ -27,24 +20,16 @@ import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
 import androidx.glance.layout.width
-import androidx.glance.semantics.contentDescription
-import androidx.glance.semantics.semantics
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
-import androidx.glance.text.TextAlign
 import androidx.glance.text.TextStyle
-import sh.rcn.terminus.BoardRow
 import sh.rcn.terminus.DayItem
 import sh.rcn.terminus.DayPlan
 import sh.rcn.terminus.L
-import sh.rcn.terminus.NearbyStop
 import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.OfflineDay
 import sh.rcn.terminus.R
 import sh.rcn.terminus.ServerClock
-import sh.rcn.terminus.parseColor
-import sh.rcn.terminus.ui.Road
-import sh.rcn.terminus.ui.eta
 
 /**
  * The widget's layout by its size on the home screen: a bar one row tall,
@@ -81,6 +66,8 @@ internal class Scene(
     val day: () -> DayPlan?,
     /** The card style chosen in Settings. */
     val style: String,
+    /** The nearest stop's buses for the big widget, read only when shown; null when there's no recent board. */
+    val nearby: () -> NearbyView? = { null },
 )
 
 private val PAD = 14.dp
@@ -154,11 +141,18 @@ internal fun DayLayout(s: Scene, w: Float, h: Float) {
     val bitmap = skyBitmap(ctx, s.look, w, skyH, 50f / 92f, face.road, moon = Offset(34f, 80f))
     val journey = face.journey?.takeIf { s.answer?.card?.phase != "riding" }
     val bodyH = journey?.let { journeyHeight(it, s.style).value } ?: if (face.leg != null) 30f else 0f
-    val left = h - skyH - bodyH - 12f
+    var left = h - skyH - bodyH - 12f
+    // The nearest stop's next two buses, under the trip, when they fit; then today's timetable.
+    val wall = System.currentTimeMillis()
+    val nearby = if (left >= NEARBY_PAIR_HEAD_DP + NEARBY_PAIR_DP) s.nearby()?.takeIf { it.buses(wall).isNotEmpty() } else null
+    if (nearby != null) left -= NEARBY_PAIR_HEAD_DP + NEARBY_PAIR_DP
     // Today's timetable: what's still to come, a line each, as many as fit under a heading.
     val now = ServerClock.now()
+    val upcoming = s.day()?.takeIf { it.date == null || it.date == OfflineDay.sgtDate(now) }?.items?.filter { it.status in UPCOMING }.orEmpty()
     val rows = ((left - 30f) / 30f).toInt().coerceIn(0, 6)
-    val today = if (rows > 0) s.day()?.takeIf { it.date == null || it.date == OfflineDay.sgtDate(now) }?.items?.filter { it.status in UPCOMING }?.take(rows).orEmpty() else emptyList()
+    val today = upcoming.take(rows)
+    // Nothing left of today: the room goes to two more of the stop's buses.
+    val nearbyRows = if (nearby != null && today.isEmpty() && left >= NEARBY_PAIR_DP && nearby.buses(wall).size > 2) 2 else 1
     Box(GlanceModifier.fillMaxSize()) {
         SkyImage(bitmap, skyH.dp)
         Column(GlanceModifier.fillMaxSize().padding(horizontal = PAD)) {
@@ -179,6 +173,7 @@ internal fun DayLayout(s: Scene, w: Float, h: Float) {
                 journey != null -> WidgetJourney(s.answer!!, journey, s.style, ground, s.look.pageColor)
                 face.leg != null -> LegRow(face.leg, ground)
             }
+            nearby?.let { NearbyPair(it, ground, wall, nearbyRows) }
             if (today.isNotEmpty()) Today(today, ground)
         }
     }
@@ -277,128 +272,5 @@ internal fun BarLayout(s: Scene, w: Float, h: Float) {
     }
 }
 
-/**
- * Nearby, as the Buses tab's board: the nearest stop's name big on the sky
- * (the one across the road a tap away), then each service with its badge,
- * where it goes, Live and how full it is, and its minutes big at the end.
- */
-@Composable
-internal fun BoardLayout(s: Scene, w: Float, h: Float, stops: List<NearbyStop>?, all: List<NearbyStop>?, swap: NearbySwap.Swap?, fetchedAt: Long?, error: String?, json: String?) {
-    val ctx = LocalContext.current
-    val sky = s.look.sky
-    val ground = s.look.ground
-    val now = System.currentTimeMillis()
-    val age = fetchedAt?.let { (now - it) / 1000 } ?: 0L
-    val old = age * 1000 > WidgetModes.NEARBY_OLD_MS
-    val first = stops?.firstOrNull()
-    val day = h >= 290f
-    val chipsH = if (s.chips.isNotEmpty() && !day) 46f else 0f
-    val textH = 10f + (if (day) 40f else 0f) + 40f + (if (day) 30f else 24f)
-    val skyH = textH + 26f
-    val bitmap = skyBitmap(ctx, s.look, w, skyH, 34f / 92f, Road(stop = true, shuttle = false), moon = Offset(if (day) 90f else 110f, if (day) 70f else 28f))
-    val rows = ((h - skyH - chipsH - 8f) / 52f).toInt().coerceAtLeast(0)
-    Box(GlanceModifier.fillMaxSize()) {
-        SkyImage(bitmap, skyH.dp)
-        Column(GlanceModifier.fillMaxSize().padding(horizontal = PAD)) {
-            Column(GlanceModifier.fillMaxWidth().height(skyH.dp).padding(top = 10.dp)) {
-                if (day) {
-                    Row(GlanceModifier.fillMaxWidth().height(40.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(GlanceModifier.defaultWeight()) { ModeChips(s.chips, s.showing, sky, s.chipAction) }
-                        s.refresh?.let { RefreshButton(it, sky) }
-                    }
-                }
-                val walk = first?.let { if (it.walkS < 60) L.s(R.string.here) else L.s(R.string.min_walk, (it.walkS + 30) / 60) }
-                val other = first?.let { NearbySwap.offer(all.orEmpty(), swap, now, listOf(it.code)) }
-                Row(GlanceModifier.fillMaxWidth().height(40.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Small(listOfNotNull(L.s(R.string.chip_nearby), walk).joinToString(" · "), sky.muted, 12.sp, modifier = GlanceModifier.defaultWeight())
-                    if (other != null) SwapButton(other, all!!.first().code, sky)
-                    if (!day) s.refresh?.let { RefreshButton(it, sky) }
-                }
-                val name = when {
-                    first != null -> first.longName ?: first.name
-                    error == UPDATING || json == null -> L.s(R.string.checking)
-                    else -> error ?: L.s(R.string.no_stops_near)
-                }
-                Text(name, style = TextStyle(color = sky.ink, fontWeight = FontWeight.Bold, fontSize = if (day) 22.sp else 19.sp), maxLines = 1)
-            }
-            if (first != null) {
-                val board = first.board.filter { it.etaS != null }
-                when {
-                    error == UPDATING -> Small(L.s(R.string.updating), ground.muted, modifier = GlanceModifier.padding(top = 8.dp))
-                    old -> Small(L.s(R.string.old_times), ground.muted, modifier = GlanceModifier.padding(top = 8.dp))
-                    board.isEmpty() -> Small(if (first.available) L.s(R.string.no_buses_due) else L.s(R.string.no_live_data), ground.muted, modifier = GlanceModifier.padding(top = 8.dp))
-                }
-                if (!old && error != UPDATING) {
-                    val shown = board.take(rows)
-                    Column(GlanceModifier.fillMaxWidth()) {
-                        shown.forEachIndexed { i, r -> BoardLine(r, age, i > 0, ground) }
-                    }
-                    // Room left: the next stop's buses under its name, as the Buses tab lists them.
-                    val more = ((rows * 52f - shown.size * 52f - 30f) / 52f).toInt()
-                    val next = stops.drop(1).firstOrNull { st -> st.board.any { it.etaS != null } }
-                    if (more > 0 && next != null) {
-                        val nextWalk = if (next.walkS < 60) L.s(R.string.here) else L.s(R.string.min_walk, (next.walkS + 30) / 60)
-                        Box(GlanceModifier.fillMaxWidth().height(30.dp).padding(top = 8.dp)) {
-                            Small("${next.longName ?: next.name} · $nextWalk", ground.muted, 12.sp, bold = true)
-                        }
-                        Column(GlanceModifier.fillMaxWidth()) {
-                            next.board.filter { it.etaS != null }.take(more).forEachIndexed { i, r -> BoardLine(r, age, i > 0, ground) }
-                        }
-                    }
-                }
-            }
-            if (chipsH > 0f) {
-                Spacer(GlanceModifier.defaultWeight())
-                ModeChips(s.chips, s.showing, ground, s.chipAction)
-                Spacer(GlanceModifier.height(8.dp))
-            }
-        }
-    }
-}
-
-/** The server's words for a time are kept while they're this fresh; then the widget counts down itself (here and in NextBusWidget). */
+/** The server's words for a time are kept while they're this fresh; then the widget counts down itself (BaseWidget.departures). */
 internal const val SERVER_ETA_S = 30L
-
-/** One service at the stop: its badge, where it goes with Live and how full, and its minutes. */
-@Composable
-private fun BoardLine(r: BoardRow, ageS: Long, rule: Boolean, inks: Inks) {
-    val left = (r.etaS!! - ageS).toInt()
-    val eta = r.eta?.takeIf { ageS < SERVER_ETA_S } ?: eta(left.coerceAtLeast(0), r.quality)
-    val crowd = when (r.crowd) {
-        "low" -> L.s(R.string.buses_seats) to inks.good
-        "medium" -> L.s(R.string.buses_busy) to inks.muted
-        "high" -> L.s(R.string.buses_packed) to inks.late
-        else -> null
-    }
-    if (rule) Box(GlanceModifier.fillMaxWidth().height(1.dp).background(inks.line)) {}
-    Row(GlanceModifier.fillMaxWidth().height(51.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(GlanceModifier.width(46.dp)) { Badge(r.svc, r.color?.let(::parseColor) ?: 0xFF8A939C, r.paid, big = true) }
-        Column(GlanceModifier.defaultWeight()) {
-            Small(r.toText ?: r.towards.joinToString(", ").ifEmpty { if (r.endsHere) L.s(R.string.buses_ends_here) else r.svc }, inks.ink, 13.sp)
-            Row(GlanceModifier.padding(top = 3.dp)) {
-                if (r.quality == "live") PillText("● " + L.s(R.string.journey_live), inks.good, inks) else PillText(L.s(R.string.buses_scheduled), inks.muted, inks)
-                crowd?.let { (word, color) -> Spacer(GlanceModifier.width(5.dp)); PillText(word, color, inks) }
-            }
-        }
-        Column(horizontalAlignment = Alignment.End) {
-            Text(eta, style = TextStyle(color = inks.ink, fontWeight = FontWeight.Bold, fontSize = 20.sp, textAlign = TextAlign.End), maxLines = 1)
-            r.laterText?.let { Text(it, style = TextStyle(color = inks.muted, fontSize = 11.sp, textAlign = TextAlign.End), maxLines = 1) }
-        }
-    }
-}
-
-/** Shows the stop across the road first, or the nearest one again. */
-@Composable
-private fun SwapButton(other: NearbyStop, nearest: String, inks: Inks) {
-    Box(
-        GlanceModifier
-            .size(40.dp)
-            .semantics { contentDescription = L.s(R.string.nearby_swap, other.name) }
-            .clickable(actionRunCallback<SwapAction>(actionParametersOf(SwapAction.FROM to nearest, SwapAction.TO to other.code))),
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(GlanceModifier.size(32.dp).cornerRadius(16.dp).background(inks.chip), contentAlignment = Alignment.Center) {
-            Image(ImageProvider(R.drawable.ic_swap), contentDescription = null, colorFilter = ColorFilter.tint(inks.ink), modifier = GlanceModifier.size(16.dp))
-        }
-    }
-}

@@ -127,6 +127,31 @@ class Store(context: Context) {
         return day to prefs.getLong(KEY_DAY_AT, 0)
     }
 
+    /**
+     * The buses near you (/api/nearby) as last fetched, for the Nearby widget
+     * and the big widget's next buses: one board for every widget, whoever
+     * fetched it (a widget's ↻, the background refresh, the Buses tab).
+     * One this version can't read throws [ParseError] and isn't kept; nothing
+     * is kept when [sentWith] is no longer this phone's token.
+     */
+    fun saveNearby(json: JSONObject, fetchedAtMs: Long, sentWith: String): List<NearbyStop>? {
+        val stops = parseNearby(json)
+        synchronized(Store) {
+            if (token != sentWith) return null
+            prefs.edit { putString(KEY_NEARBY, json.toString()).putLong(KEY_NEARBY_AT, fetchedAtMs).remove(KEY_NEARBY_ERROR) }
+        }
+        return stops
+    }
+
+    /** The kept board as JSON, and when it was fetched (the phone's clock); null when there's none. */
+    val nearbyJson: String? get() = prefs.getString(KEY_NEARBY, null)
+    val nearbyFetchedAt: Long get() = prefs.getLong(KEY_NEARBY_AT, 0)
+
+    /** Why the last fetch of the board failed ([sh.rcn.terminus.widget.UPDATING] while one is under way); null when it didn't. */
+    var nearbyError: String?
+        get() = prefs.getString(KEY_NEARBY_ERROR, null)
+        set(value) = prefs.edit { putString(KEY_NEARBY_ERROR, value) }
+
     fun lastAnswer(): Pair<NextAnswer, Long>? {
         val raw = prefs.getString(KEY_ANSWER, null) ?: return null
         val answer = runCatching { NextAnswer.parse(JSONObject(raw)) }.getOrNull() ?: return null
@@ -199,7 +224,7 @@ class Store(context: Context) {
      * Anything of an account kept with no token to go with it: a sign-out
      * that stopped halfway, or a token whose key was lost.
      */
-    fun hasLeftovers(): Boolean = !paired && !prefs.contains(KEY_TOKEN) && listOf(KEY_ANSWER, KEY_DAY, KEY_EMAIL, KEY_ADDED, KEY_DEST_USE, KEY_PUSH, KEY_ANON).any(prefs::contains)
+    fun hasLeftovers(): Boolean = !paired && !prefs.contains(KEY_TOKEN) && listOf(KEY_ANSWER, KEY_DAY, KEY_NEARBY, KEY_EMAIL, KEY_ADDED, KEY_DEST_USE, KEY_PUSH, KEY_ANON).any(prefs::contains)
 
     /** The class (its start, epoch ms) the last heads-up was for: one per class. */
     var leaveNotifiedFor: Long
@@ -372,6 +397,9 @@ class Store(context: Context) {
         private const val KEY_INTENT = "intent-key"
         private const val KEY_DAY = "day"
         private const val KEY_DAY_AT = "day-fetched"
+        private const val KEY_NEARBY = "nearby"
+        private const val KEY_NEARBY_AT = "nearby-fetched"
+        private const val KEY_NEARBY_ERROR = "nearby-error"
         /** Lang.kt's key, in the same file. */
         private const val KEY_LANG = "lang"
         /** Theme.kt's key: Android keeps the night mode itself, so this must outlive a sign-out too. */

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "Now 9:41" on a Nearby widget. A TextClock ticks by itself, so the widget
+     isn't redrawn every minute to keep it right; the widget sets its words,
+     colours, size, format and time zone (NowClock). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content" android:layout_height="wrap_content"
+    android:orientation="horizontal" android:gravity="center_vertical">
+    <TextView android:id="@+id/now_label"
+        android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:layout_marginEnd="4dp" android:maxLines="1" />
+    <TextClock android:id="@+id/now_clock"
+        android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:textStyle="bold" android:maxLines="1" />
+</LinearLayout>

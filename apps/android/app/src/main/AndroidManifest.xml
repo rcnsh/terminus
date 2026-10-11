@@ -89,6 +89,17 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/places_widget_info" />
         </receiver>
+        <receiver
+            android:name=".widget.NearbyWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_nearby_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/nearby_widget_info" />
+        </receiver>
         <!-- The widget's refresh alarm, and the system events after which its
              pre-drawn text is wrong. System broadcasts reach it unexported. -->
         <receiver
