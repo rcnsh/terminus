@@ -184,9 +184,11 @@ class ProfileDoc(val json: JSONObject) {
             return (0 until a.length()).map { a.getJSONObject(it).let { u -> UsualTime(u.getString("place"), u.getInt("day"), u.getInt("atMin")) } }
         }
 
-
+    /** Takes a usual time off; the others stay as they came, with any field a newer server added. */
     fun removeUsual(u: UsualTime) {
-        json.put("usual", JSONArray(usual.filter { it != u }.map { JSONObject().put("place", it.place).put("day", it.day).put("atMin", it.atMin) }))
+        val a = json.optJSONArray("usual") ?: return
+        val kept = (0 until a.length()).map { a.getJSONObject(it) }.filter { UsualTime(it.getString("place"), it.getInt("day"), it.getInt("atMin")) != u }
+        json.put("usual", JSONArray(kept))
     }
 
     private fun trips(field: String): List<Trip> {
