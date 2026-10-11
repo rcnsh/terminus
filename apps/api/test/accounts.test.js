@@ -319,7 +319,7 @@ test('on the beta, emails come from "terminus beta" and link to the beta site', 
   assert.doesNotMatch(email.sent.at(-1).text, /https:\/\/terminus\.run/);
 });
 
-test('with LINK_ORIGIN, emailed links go there: the old address, while NUS Wi-Fi refuses terminus.run', async () => {
+test('with LINK_ORIGIN, emailed links go there: the old address, if a network refuses terminus.run', async () => {
   const { env, email } = setup();
   env.LINK_ORIGIN = 'https://terminus.rcn.sh';
   // Sign-in links point at the request's own origin here (a .test host

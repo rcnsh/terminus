@@ -17,9 +17,9 @@ export const isBeta = (env: Env): boolean => siteOrigin(env) !== STABLE_ORIGIN;
 
 /**
  * Where links handed to people point: sign-in links, the new-device email,
- * an error's "create a key at". LINK_ORIGIN when set, for while some
- * networks refuse terminus.run (NUS Wi-Fi resets connections to a domain
- * that new), so a link tapped on campus still opens; else the site's own.
+ * an error's "create a key at". LINK_ORIGIN when set, for if a network
+ * refuses terminus.run (NUS Wi-Fi reset connections to it in October 2026),
+ * so a link tapped there still opens; else the site's own.
  */
 export const linkOrigin = (env: Env): string => env.LINK_ORIGIN || siteOrigin(env);
 
@@ -38,8 +38,8 @@ const STAYS = ['/api/', '/download/', '/.well-known/', '/map/', '/robots.txt'];
 
 /**
  * A page opened on an old address goes to the same page on the new one.
- * Only a browser's GET for HTML: the apps call the old address on purpose
- * (it's the one kept for good) and ask for JSON, so they're never sent
+ * Only a browser's GET for HTML: apps before 3.2.1 call the old address,
+ * and newer ones fall back to it, asking for JSON, so they're never sent
  * on. A 301, for search engines, that browsers keep for a day only, so
  * moving back is a change here, not something cached for good.
  */
