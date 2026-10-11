@@ -155,8 +155,9 @@ export function venueBuilding(venue: string): string | null {
  */
 export function venueAt(venue: string): { lat: number; lon: number } | null {
   const v = venue.trim().toUpperCase();
-  const e = ROOMS.rooms[v] ?? venueEntry(v);
-  return e?.lat !== undefined && e.lon !== undefined ? { lat: e.lat, lon: e.lon } : null;
+  // A room the map lists without a position still has its building's.
+  for (const e of [ROOMS.rooms[v], venueEntry(v)]) if (e?.lat !== undefined && e.lon !== undefined) return { lat: e.lat, lon: e.lon };
+  return null;
 }
 
 export interface ImportedTrip {
