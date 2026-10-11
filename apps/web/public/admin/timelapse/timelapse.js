@@ -17,6 +17,7 @@ import { html, render, store, useEffect, useRef, useState, useStore } from '/ass
 import { passkeysWork, signIn } from '/admin/passkey.js';
 import { busesAt, clockAt, countBySvc, decodeDay, timeOn } from '/admin/timelapse/replay.js';
 import { MAPLIBRE, PMTILES } from '/app/map-files.js';
+import { inkOn } from '/account/dom.js';
 
 // "@" spelled %40, as in app/map-files.js: the static assets redirect the "@" form.
 const MEDIABUNNY = '/vendor/mediabunny%401.61.3/mediabunny.min.mjs';
@@ -322,17 +323,6 @@ async function frameAt(t) {
   g.drawImage(overlay, 0, 0);
 }
 
-/** Black or white, whichever reads on [hex]. */
-function inkOn(hex) {
-  const n = parseInt(hex.slice(1), 16);
-  const lin = (v) => {
-    const c = v / 255;
-    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-  };
-  const l = 0.2126 * lin(n >> 16) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
-  return l > 0.36 ? '#1c1917' : '#ffffff';
-}
-
 /** The clock, the date, buses per service and the wordmark, on a clear canvas. */
 function drawOverlay(t, counts) {
   const { day, theme } = view.get();
@@ -429,12 +419,17 @@ async function preview() {
   if (!r || !map || setting || view.get().job?.running) return;
   wanted = r.a + (r.b - r.a) * view.get().scrub;
   if (drawing) return;
-  while (wanted !== null) {
-    const t = wanted;
-    wanted = null;
-    drawing = frameAt(t);
-    await drawing;
+  try {
+    while (wanted !== null) {
+      const t = wanted;
+      wanted = null;
+      drawing = frameAt(t);
+      await drawing;
+    }
+  } finally {
+    // A frame that failed mustn't leave the preview (and the export, which waits for it) stuck on it.
     drawing = null;
+    wanted = null;
   }
   view.set((v) => ({ ...v }));
 }
@@ -457,7 +452,8 @@ async function exportVideo() {
   try {
     // The map first: a frame needs its layers in place.
     await setting;
-    await drawing;
+    // The preview's frame out of the way; if it failed, that was the preview's problem, not this video's.
+    await drawing?.catch(() => {});
     const { BufferTarget, CanvasSource, Mp4OutputFormat, Output, QUALITY_HIGH, WebMOutputFormat, canEncodeVideo } = await import(MEDIABUNNY);
     const opts = { width: w, height: h, frameRate: FPS, quality: QUALITY_HIGH };
     // H.264 in MP4 where the browser can; VP9 in WebM where it can't.
@@ -578,8 +574,9 @@ function Studio() {
   const busy = Boolean(v.job?.running);
   const set = (patch, redraw = 'frame') => {
     view.set((x) => ({ ...x, ...patch }));
-    if (redraw === 'setup') setUp().then(preview, (err) => view.set((x) => ({ ...x, note: err.message })));
-    else preview();
+    const failed = (err) => view.set((x) => ({ ...x, note: err.message }));
+    if (redraw === 'setup') setUp().then(preview).catch(failed);
+    else preview().catch(failed);
   };
   const r = range();
 

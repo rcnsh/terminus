@@ -1,4 +1,4 @@
-// The status page: /status.json, in Singapore time, checked every minute.
+// The status page: /api/status.json, in Singapore time, checked every minute.
 // The feed's state is drawn on the sky's road (sky-page.js): a live shuttle
 // when NUS's feed answers, the same bus in outline when the apps are
 // showing timetable estimates, as the apps draw a guess.
@@ -21,18 +21,22 @@ const CAUSE = {
   feed: t("NUS's live bus times weren't available"),
 };
 
-/** The headline, the line under it, the chip and the bus on the road, from /status.json. */
+/**
+ * The headline, the line under it, the chip and the bus on the road, from
+ * /api/status.json. `checked`: when it was last checked, kept apart from the
+ * rest, which is read out as it changes; that changes every check.
+ */
 function now(s) {
-  let state = { kind: 'off', headline: t('No checks yet'), detail: '', chip: '', bus: null };
+  let state = { kind: 'off', headline: t('No checks yet'), detail: '', checked: '', chip: '', bus: null };
   if (s.feed === 'up') {
     state = { kind: 'up', headline: t('Live bus times are working'), detail: s.since ? t('Up since {0}.', dateTime(s.since)) : '', chip: t('Live'), bus: { color: RED, far: 0.4, live: true } };
   } else if (s.feed === 'down') {
     state = { kind: 'down', headline: t("NUS's live feed is down"), detail: t("Since {0}. The apps show estimated times until it's restored.", dateTime(s.since)), chip: t('Estimates only'), bus: { color: RED, far: 0.7, live: false } };
   }
-  if (s.checkedAt) {
-    const note = s.checking ? t('Last checked {0}.', time(s.checkedAt)) : t('Status checks have paused. Last check: {0}.', dateTime(s.checkedAt));
-    state.detail = `${state.detail} ${note}`.trim();
-    if (!s.checking) state.kind = 'paused';
+  if (s.checkedAt && s.checking) state.checked = t('Last checked {0}.', time(s.checkedAt));
+  else if (s.checkedAt) {
+    state.detail = `${state.detail} ${t('Status checks have paused. Last check: {0}.', dateTime(s.checkedAt))}`.trim();
+    state.kind = 'paused';
   }
   return state;
 }
@@ -40,9 +44,12 @@ function now(s) {
 function Head({ s, failed }) {
   const head = failed ? { kind: 'off', headline: t("Couldn't load the status"), detail: t('Try again in a minute.'), chip: '' } : s ? now(s) : { kind: 'off', headline: t('Checking…'), detail: '', chip: '' };
   return html`
-    <p class="eyebrow">${t('Status')}</p>
-    <h1>${head.headline}</h1>
-    ${head.detail && html`<p>${head.detail}</p>`}
+    <div aria-live="polite">
+      <p class="eyebrow">${t('Status')}</p>
+      <h1>${head.headline}</h1>
+      ${head.detail && html`<p>${head.detail}</p>`}
+    </div>
+    ${head.checked && html`<p class="checked">${head.checked}</p>`}
     ${head.chip && html`<span class=${`sky-chip ${head.kind}`}><span class="dot"></span>${head.chip}</span>`}
   `;
 }
@@ -89,8 +96,14 @@ function Status() {
       }
     };
     load();
-    const id = setInterval(load, 60_000);
-    return () => clearInterval(id);
+    // Not while the page is hidden; at once when it's shown again.
+    const id = setInterval(() => document.hidden || load(), 60_000);
+    const shown = () => document.hidden || load();
+    document.addEventListener('visibilitychange', shown);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', shown);
+    };
   }, []);
   // The road under the headline: your stop's sign, and the feed's bus coming to it.
   const bus = !failed && s ? now(s).bus : null;

@@ -51,9 +51,12 @@ export function Big({ r }) {
   return html`<span class="bt-big">${parts.map((x) => (/^\d+$/.test(x) ? x : html`<small>${x}</small>`))}</span>`;
 }
 
+/** How many later buses "then …" names, as the server's (THEN_MAX in the API's src/resolve.ts). */
+export const THEN_MAX = 3;
+
 /** "then 12, ~20 min": the later buses the feed gave, a timetabled one marked, as the server words it. */
 export const thenText = (r) =>
-  r.laterText ?? (r.later?.length ? t('then {0} min', r.later.map((x) => (approx(x.quality) ? t('~{0}', mins(x.etaS)) : mins(x.etaS))).join(t(', '))) : '');
+  r.laterText ?? (r.later?.length ? t('then {0} min', r.later.slice(0, THEN_MAX).map((x) => (approx(x.quality) ? t('~{0}', mins(x.etaS)) : mins(x.etaS))).join(t(', '))) : '');
 
 /** "to Central Library, Kent Vale" (the server's `toText`), the next stop in bold. */
 export function Towards({ r }) {

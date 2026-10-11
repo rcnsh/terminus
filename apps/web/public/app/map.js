@@ -193,6 +193,10 @@ let glide = null;
  * waits for the same build rather than starting a second map in the box.
  */
 let building = null;
+/** Failed downloads of MapLibre or PMTiles so far: each retry asks for them at a new address (see build). */
+let libFails = 0;
+/** The street map's style as last set, so a change that doesn't alter it (the device going dark while the user chose light) sets nothing. */
+let styled = null;
 /** The pmtiles: protocol, added once for the page. */
 let protocolAdded = false;
 /** The whole-campus view, for the button back to it. */
@@ -247,7 +251,19 @@ async function build(container) {
     css.href = href;
     document.head.append(css);
   }
-  const [maplibre, { Protocol }, data] = await Promise.all([import(`${MAPLIBRE}maplibre-gl.mjs`), import(PMTILES), loadCampus()]);
+  // Browsers keep a module that failed to load as failed for the page, so a
+  // retry asks for the libraries at a new address (the service worker keeps
+  // them under the plain one). MapLibre's shared half, which it imports
+  // itself, keeps its address: if that was the file that failed, only a
+  // reload fetches it again.
+  // Only after one of them failed: a build that failed for another reason (no
+  // campus offline) asks for the same, already loaded, files again.
+  const again = libFails ? `?retry=${libFails}` : '';
+  const libs = Promise.all([import(`${MAPLIBRE}maplibre-gl.mjs${again}`), import(`${PMTILES}${again}`)]).catch((err) => {
+    libFails += 1;
+    throw err;
+  });
+  const [[maplibre, { Protocol }], data] = await Promise.all([libs, loadCampus()]);
   ml = maplibre;
   campusData.set(data);
   if (!protocolAdded) ml.addProtocol('pmtiles', new Protocol({ metadata: true }).tile);
@@ -257,7 +273,7 @@ async function build(container) {
   fit = boundsOf(core.map((s) => [s.lon, s.lat]));
   map = new ml.Map({
     container,
-    style: styleUrl(),
+    style: (styled = styleUrl()),
     bounds: fit,
     fitBoundsOptions: { padding: CAMPUS_PADDING },
     // The screen stays on the map file, which covers only the campus area:
@@ -301,8 +317,13 @@ async function build(container) {
   );
   // Our layers again after every style load: the first, and each light/dark switch.
   map.on('style.load', addLayers);
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => map.setStyle(styleUrl()));
-  document.addEventListener('themechange', () => map.setStyle(styleUrl()));
+  const restyle = () => {
+    if (styleUrl() === styled) return;
+    styled = styleUrl();
+    map.setStyle(styled);
+  };
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', restyle);
+  document.addEventListener('themechange', restyle);
   map.on('click', onClick);
   for (const layer of ['stops', 'stop-names', 'buses']) {
     map.on('mouseenter', layer, () => (map.getCanvas().style.cursor = 'pointer'));
@@ -898,7 +919,8 @@ function StopList() {
 
 function Status() {
   const text = useStore(status);
-  return html`<div class="map-status" role="status" hidden=${!text}>${text ?? ''}</div>`;
+  // Always in the page (only out of sight while empty), so its first words are announced too.
+  return html`<div class=${text ? 'map-status' : 'sr-only'} role="status">${text ?? ''}</div>`;
 }
 
 /**

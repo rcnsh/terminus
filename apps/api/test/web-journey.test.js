@@ -202,3 +202,9 @@ test("an answer from before the server sent its lines is worded here as the serv
     if (a.leave?.at && j.leave) assert.equal(J.by(a, old, Date.parse(a.leave.at) - 60_000), j.byText, `${name} byText`);
   }
 });
+
+test('the livery (drawn before sign-in, with no /api/campus to ask) has the API\'s colours', async () => {
+  const { LIVERY } = await web('account/livery.js');
+  const { ROUTE_COLORS } = await import('../src/campus.ts');
+  assert.deepEqual(Object.fromEntries(LIVERY), ROUTE_COLORS);
+});

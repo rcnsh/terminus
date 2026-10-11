@@ -17,16 +17,23 @@ const SPEED = 100;
 
 const keyOf = (req) => (typeof req === 'string' ? new URL(req, ORIGIN).href : req.url);
 
-/** One cache: replies by address, each match a fresh copy, as the browser's. */
+/** What a request says for a header a reply varies by. */
+const said = (req, name) => (typeof req === 'string' ? null : req.headers.get(name));
+
+/** One cache: replies by address, each match a fresh copy, as the browser's; a reply's Vary on Accept-Language honoured unless ignoreVary. */
 function memoryCache() {
   const kept = new Map();
+  const asked = new Map();
   return {
     kept,
-    async match(req) {
-      return kept.get(keyOf(req))?.clone();
+    async match(req, opts = {}) {
+      const res = kept.get(keyOf(req));
+      if (res && !opts.ignoreVary && /accept-language/i.test(res.headers.get('vary') ?? '') && said(req, 'accept-language') !== asked.get(keyOf(req))) return undefined;
+      return res?.clone();
     },
     async put(req, res) {
       kept.set(keyOf(req), res.clone());
+      asked.set(keyOf(req), said(req, 'accept-language'));
     },
     async delete(req) {
       return kept.delete(keyOf(req));
@@ -309,4 +316,32 @@ test("installing keeps every app file, and Chinese only for a browser that reads
     for (const f of w.get('SHELL_FILES')) assert.ok(kept.includes(f), f);
     assert.equal(kept.includes('/assets/zh.js'), withZh, language);
   }
+});
+
+test('the map\'s versioned files: kept per version, and a retry is the same file', async () => {
+  const asked = [];
+  const w = worker({ fetch: async (req) => (asked.push(new URL(req.url).pathname + new URL(req.url).search), new Response('glyphs')) });
+  const glyphs = '/map/fonts/Noto%20Sans%20Regular/0-255.pbf';
+  await w.dispatch(`${glyphs}?v=1`).responded;
+  await w.dispatch(`${glyphs}?v=1`).responded;
+  // A new version of the glyphs is fetched, not answered with the old.
+  await w.dispatch(`${glyphs}?v=2`).responded;
+  assert.deepEqual(asked, [`${glyphs}?v=1`, `${glyphs}?v=2`]);
+  // A retry of a file kept already is answered from the copy.
+  const lib = '/vendor/maplibre-gl%406.11.2/maplibre-gl.mjs';
+  await w.dispatch(lib).responded;
+  await w.dispatch(`${lib}?retry=1`).responded;
+  assert.equal(asked.filter((p) => p.startsWith(lib)).length, 1);
+});
+
+test('offline, the campus kept in the other language is used rather than no map', async () => {
+  let online = true;
+  const w = worker({ fetch: async () => (online ? json({ stops: [] }, { headers: { 'content-type': 'application/json', vary: 'accept-language' } }) : Promise.reject(new TypeError('offline'))) });
+  const first = w.dispatch('/api/campus', { headers: { 'accept-language': 'en' } });
+  await within(first.responded);
+  await Promise.all(first.waits);
+  online = false;
+  const res = await within(w.dispatch('/api/campus', { headers: { 'accept-language': 'zh' } }).responded);
+  assert.ok(res.ok);
+  assert.deepEqual(await res.json(), { stops: [] });
 });
