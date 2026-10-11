@@ -248,11 +248,14 @@ private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel,
     // Asked again after each answer that came through, so a connection that
     // returns while the phone stays on Now settles it too.
     LaunchedEffect(state.paired, state.fetchedAt) {
-        if (state.paired && store.setupUnknown) account.refresh()
+        if (state.paired && store.setupUnknown) account.settleSetup()
     }
-    LaunchedEffect(acct.setupDue) {
-        if (acct.setupDue && state.paired && screen == Screen.Main) setup = true
-        if (acct.setupDue) account.setupShown()
+    // Not while signing in (the screen isn't Main): it waits until that's done.
+    LaunchedEffect(acct.setupDue, state.paired, screen) {
+        if (acct.setupDue && state.paired && screen == Screen.Main) {
+            setup = true
+            account.setupShown()
+        }
     }
     // Signed in and set up: Now · Buses · Map · Settings along the bottom.
     if (state.paired && !setup && screen == Screen.Main) {
