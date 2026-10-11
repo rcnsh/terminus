@@ -891,6 +891,11 @@ export function scoreLeg(
   return { boardS: Math.round(boardS - ageS), rideS: legRideS(leg), quality, arrival, fetchedAt, opensInS, ambiguousBerth, paid: pub };
 }
 
+/** What an option costs as the options are ranked, in seconds to the place itself (see scoreOptions). */
+function rankCostS(o: ScoredOption, endWalk: (o: ScoredOption) => number, walkWeight: number): number {
+  return o.totalS + endWalk(o) + (walkWeight - 1) * footS(o, endWalk(o)) + (o.paid ? PUBLIC.fareWorthS : 0) + (o.change ? TRANSFER.worthS : 0);
+}
+
 /**
  * Convert candidates plus live arrivals into ranked options, all in seconds
  * from now. Options whose service has ended are dropped entirely, and so is
@@ -992,9 +997,7 @@ export function scoreOptions(
   // it wins only when it clearly saves time over the free shuttle.
   // A change of bus counts as TRANSFER.worthS of it, the same way, and every
   // second on foot as more than a second at the stop (walkWeight).
-  const extraFoot = (opts.walkWeight ?? WALK.sunWeight) - 1;
-  const costS = (o: ScoredOption) =>
-    o.totalS + endWalk(o) + extraFoot * footS(o, endWalk(o)) + (o.paid ? PUBLIC.fareWorthS : 0) + (o.change ? TRANSFER.worthS : 0);
+  const costS = (o: ScoredOption) => rankCostS(o, endWalk, opts.walkWeight ?? WALK.sunWeight);
   out.sort(
     (a, b) =>
       Number(isMeasured(b.quality)) - Number(isMeasured(a.quality)) ||
@@ -1057,9 +1060,10 @@ export function confidence(options: ScoredOption[], hasCoords: boolean, endWalk:
   if (!hasCoords) return Math.min(0.75, ceiling); // exact stop, but only an assumption about where you are
   const other = options.find((o) => o.stop.code !== best.stop.code);
   if (!other) return Math.min(0.9, ceiling);
-  // The margin to the place itself, as the options are ranked (scoreOptions).
-  const costS = (o: ScoredOption) => o.totalS + endWalk(o) + (walkWeight - 1) * footS(o, endWalk(o));
-  const marginS = costS(other) - costS(best);
+  // The margin to the place itself, as the options are ranked (scoreOptions):
+  // a fare or a change of bus narrows it, since a ride-time guess that
+  // small could flip the ranking.
+  const marginS = rankCostS(other, endWalk, walkWeight) - rankCostS(best, endWalk, walkWeight);
   return Math.round(Math.max(0.5, Math.min(ceiling, 0.5 + marginS / 600)) * 100) / 100;
 }
 
