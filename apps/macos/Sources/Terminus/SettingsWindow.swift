@@ -526,6 +526,17 @@ struct TripsPane: View {
         }
         Divider()
         LabeledContent {
+            Toggle(L("Prefer the bus"), isOn: Binding(get: { setup.preferBus }, set: { setup.setPreferBus($0) }))
+                .toggleStyle(.switch)
+                .labelsHidden()
+        } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L("Prefer the bus"))
+                Hint(L("Wait a few minutes more for a bus rather than walk."))
+            }
+        }
+        Divider()
+        LabeledContent {
             Toggle(L("Allow for busy buses"), isOn: Binding(get: { setup.fullBusMargin }, set: { setup.setFullBusMargin($0) }))
                 .toggleStyle(.switch)
                 .labelsHidden()

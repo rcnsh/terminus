@@ -75,12 +75,23 @@ const live = (totalS) => ({ quality: 'live', totalS, boardS: 120, walkS: 60, svc
 
 test('walking exactly beatsBusByS faster than a live bus is mentioned, not recommended', () => {
   // "Must beat the bus by this much" (config.ts): by more than it, so a tie is the bus.
+  // Minutes on foot counted as they are (preferBus off): the margins alone.
   const bus = 900;
-  assert.equal(walkVerdict(bus - WALK.beatsBusByS, live(bus)), 'close');
-  assert.equal(walkVerdict(bus - WALK.beatsBusByS - 1, live(bus)), 'win');
+  assert.equal(walkVerdict(bus - WALK.beatsBusByS, live(bus), 0, 1), 'close');
+  assert.equal(walkVerdict(bus - WALK.beatsBusByS - 1, live(bus), 0, 1), 'win');
   // Within mentionWithinS of the bus is still worth mentioning; at it, not.
+  assert.equal(walkVerdict(bus + WALK.mentionWithinS - 1, live(bus), 0, 1), 'close');
+  assert.equal(walkVerdict(bus + WALK.mentionWithinS, live(bus), 0, 1), 'lose');
+});
+
+test('weighted for the heat: walking must beat the bus once its minutes count sunWeight times', () => {
+  // A 60 s walk to the stop: the bus's own walk is weighted too.
+  const bus = 900;
+  const edge = Math.floor((bus + (WALK.sunWeight - 1) * 60 - WALK.beatsBusByS) / WALK.sunWeight);
+  assert.equal(walkVerdict(edge, live(bus)), 'close');
+  assert.equal(walkVerdict(edge - 1, live(bus)), 'win');
+  // "Mentioned" is still in real minutes: the walk is offered as close.
   assert.equal(walkVerdict(bus + WALK.mentionWithinS - 1, live(bus)), 'close');
-  assert.equal(walkVerdict(bus + WALK.mentionWithinS, live(bus)), 'lose');
 });
 
 test('a public loop whose interchange is off campus: wrapping to its first campus stop rides on', () => {

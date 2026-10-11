@@ -87,6 +87,11 @@ class ProfileDoc(val json: JSONObject) {
         get() = json.optBoolean("publicBuses", false)
         set(v) { json.put("publicBuses", v) }
 
+    /** A minute on foot counts for more than one at the stop when choosing; on unless turned off. */
+    var preferBus: Boolean
+        get() = json.optBoolean("preferBus", true)
+        set(v) { json.put("preferBus", v) }
+
     var gapHours: Double
         get() = json.optDouble("gapHours", 2.0)
         set(v) { json.put("gapHours", v.coerceIn(0.5, 12.0)) }

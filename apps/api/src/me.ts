@@ -323,6 +323,7 @@ export function salvageProfile(p: Profile, ok: (code: string) => boolean, pinnab
     walkPace: p.walkPace ?? DEFAULT_PROFILE.walkPace,
     fullBusMargin: p.fullBusMargin ?? DEFAULT_PROFILE.fullBusMargin,
     publicBuses: p.publicBuses === true,
+    preferBus: p.preferBus !== false,
     ...(hours ? { dayStartMin: p.dayStartMin, dayEndMin: p.dayEndMin } : {}),
     seen: Array.isArray(p.seen) ? p.seen : [],
     home: p.home?.stops?.some(ok) ? { stops: p.home.stops.filter(ok) } : null,

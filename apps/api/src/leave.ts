@@ -37,6 +37,8 @@ export interface LeaveInput {
   walkEndS?: number;
   /** The walk on from where an option gets you off to the place itself (a room, a food court). */
   endWalk?: (o: ScoredOption) => number;
+  /** What a second on foot costs against one at home or at the stop (WALK.sunWeight). */
+  walkWeight?: number;
   nowMs: number;
   /** How often a bus is packed at a stop around a time; null when unknown. */
   crowdRisk?: CrowdRisk;
@@ -119,8 +121,10 @@ export function leaveBy(f: LeaveInput): Leave | null {
     if (!r) continue;
     // How late it lets you leave, less what a fare is worth: a public bus
     // must buy clearly more time at home than the free one to be the answer.
-    // A change of bus likewise, by what the change is worth.
-    const worth = r.ms - fareMs(leg) - (leg.change ? TRANSFER.worthS * 1000 : 0);
+    // A change of bus likewise, by what the change is worth; and a longer
+    // walk to a stop further off by more than the minutes it takes.
+    const extraFootMs = ((f.walkWeight ?? WALK.sunWeight) - 1) * (leg.walkS + (leg.change?.crossS ?? 0)) * 1000;
+    const worth = r.ms - fareMs(leg) - (leg.change ? TRANSFER.worthS * 1000 : 0) - extraFootMs;
     const out: Ranked = { at: isoSeconds(r.ms), estimated: r.estimated, ...(r.stale ? { stale: true as const } : {}), svc: svcName(leg.svc), stop: shortStop(leg.stop.name), stopCode: leg.stop.code, board: isoSeconds(r.board), arrive: isoSeconds(r.arrive), note: r.note, walkS: leg.walkS, rideS: leg.rideS, ...offOf(leg), ...paidOf(leg), ...(r.change ? { change: r.change } : {}), ms: r.ms, worth, opens: r.opens === true };
     // The latest on-time departure wins; if nothing is on time, the soonest.
     if (!r.late && (!onTime || worth > onTime.worth || (worth === onTime.worth && onTime.estimated && !r.estimated))) onTime = out;

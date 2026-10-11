@@ -244,6 +244,7 @@ export async function tripAnswer(
     originWalkS: origin?.walkS ?? 0,
     ...(profile.home ? { homeWalkS: profile.homeWalkMin * 60 } : {}),
     walkSpeedMs: speed,
+    ...(profile.preferBus === false ? { walkWeight: 1 } : {}),
     arriveBy: dest.trip && venueWalkS <= MAX_VENUE_WALK_S ? { atMs: classStartMs(dest.trip, nowMs), venueWalkS, ...(room?.also.length && endWalkByStopS ? { walkByStopS: endWalkByStopS } : {}), fullBusMargin: profile.fullBusMargin, ...(oneEarlier ? { oneEarlier } : {}) } : null,
     endWalkS,
     ...(endWalkByStopS ? { endWalkByStopS } : {}),

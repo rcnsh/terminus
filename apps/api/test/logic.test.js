@@ -692,6 +692,8 @@ const answerWith = (options, walkAllS, alt = null) =>
     nearestStop: null,
     destLabel: 'UTown',
     walkAllS,
+    // As they are: these pin the margins, not the heat (WALK.sunWeight, tested below).
+    walkWeight: 1,
     confidence: 0.9,
     arrivals: [],
     nowMs: NOW,
@@ -699,7 +701,7 @@ const answerWith = (options, walkAllS, alt = null) =>
 
 test('walking wins outright when it is genuinely faster', () => {
   const best = busOpt(); // 885 s by bus
-  assert.equal(walkVerdict(600, best), 'win');
+  assert.equal(walkVerdict(600, best, 0, 1), 'win');
 
   const a = answerWith([best], 600);
   assert.equal(a.label, 'Walk · 10 min');
@@ -715,7 +717,7 @@ test('walking wins outright when it is genuinely faster', () => {
 
 test('walking does not win on thirty seconds', () => {
   const best = busOpt({ boardS: 300, totalS: 585 });
-  assert.equal(walkVerdict(555, best), 'close', 'faster, but not by enough to be worth it');
+  assert.equal(walkVerdict(555, best, 0, 1), 'close', 'faster, but not by enough to be worth it');
   const a = answerWith([best], 555);
   assert.match(a.label, /^D2 · /);
   assert.match(a.detail, /walking 9 min/, 'mentioned, not recommended');
@@ -723,16 +725,16 @@ test('walking does not win on thirty seconds', () => {
 
 test('a walk that is much slower is not mentioned at all', () => {
   const best = busOpt({ boardS: 120, totalS: 405 });
-  assert.equal(walkVerdict(1800, best), 'lose');
+  assert.equal(walkVerdict(1800, best, 0, 1), 'lose');
   assert.ok(!/walk/.test(answerWith([best], 1800).detail));
 });
 
 test('no safety margin is needed to beat a guess', () => {
   // 60 s faster is not enough against a live time...
-  assert.equal(walkVerdict(825, busOpt()), 'close');
+  assert.equal(walkVerdict(825, busOpt(), 0, 1), 'close');
   // ...but it is enough against a headway estimate or against no data at all.
-  assert.equal(walkVerdict(825, busOpt({ quality: 'scheduled' })), 'win');
-  assert.equal(walkVerdict(825, busOpt({ quality: 'unknown' })), 'win');
+  assert.equal(walkVerdict(825, busOpt({ quality: 'scheduled' }), 0, 1), 'win');
+  assert.equal(walkVerdict(825, busOpt({ quality: 'unknown' }), 0, 1), 'win');
 });
 
 test('walking beats an unknown bus and says why', () => {

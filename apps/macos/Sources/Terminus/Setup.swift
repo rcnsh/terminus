@@ -75,6 +75,7 @@ final class SetupModel {
     var fullBusMargin: Bool { profile?["fullBusMargin"] as? Bool ?? true }
     /// Count the public buses (95, 151, ...) at the campus's stops too. Off until asked for: they have a fare.
     var publicBuses: Bool { profile?["publicBuses"] as? Bool ?? false }
+    var preferBus: Bool { profile?["preferBus"] as? Bool ?? true }
     /// The day's hours, in minutes after midnight, and the gap long enough to go home in.
     var dayStartMin: Int { profile?["dayStartMin"] as? Int ?? 360 }
     var dayEndMin: Int { profile?["dayEndMin"] as? Int ?? 1080 }
@@ -215,6 +216,7 @@ final class SetupModel {
     func setPace(_ pace: String) { edit { $0["walkPace"] = pace } }
     func setFullBusMargin(_ on: Bool) { edit { $0["fullBusMargin"] = on } }
     func setPublicBuses(_ on: Bool) { edit { $0["publicBuses"] = on } }
+    func setPreferBus(_ on: Bool) { edit { $0["preferBus"] = on } }
     /// The start stays before the end; a change that would cross them is refused.
     func setDayStart(_ min: Int) { if min < dayEndMin { edit { $0["dayStartMin"] = min } } }
     func setDayEnd(_ min: Int) { if min > dayStartMin { edit { $0["dayEndMin"] = min } } }

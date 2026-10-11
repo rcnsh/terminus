@@ -29,6 +29,8 @@ window.TERMINUS_ZH = {
  "Tap {0} at the bottom of Safari.": "点按 Safari 底部的{0}。",
  "Added {0} · used {1}": "{0} 添加 · {1} 使用过",
  "Allow for busy buses": "考虑巴士很挤的情况",
+ "Prefer the bus": "优先搭巴士",
+ "Wait a few minutes more for a bus rather than walk.": "宁可多等几分钟巴士，也不想步行。",
  "Allow location for this site to see the buses near you.": "允许这个网站使用定位，查看你附近的巴士。",
  "Already a favourite: {0}": "已经收藏了：{0}",
  "When terminus crashes, send what broke and the app version. Never who you are or where. Only in this browser.": "terminus 崩溃时，发送出错的内容和应用版本，不会包含你是谁或你在哪里。仅限这个浏览器。",

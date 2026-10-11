@@ -114,6 +114,8 @@ const AT_COM3 = 'lat=1.294431&lon=103.775217';
 const AT_UTOWN = 'lat=1.303876&lon=103.774621';
 const AT_PGP = 'lat=1.291765&lon=103.780419'; // the PGP bus stop
 const AT_IT = 'lat=1.297204&lon=103.772688';
+// The KR end of PGP: closest to PGP Foyer, whose buses go the long way round to KR MRT.
+const AT_PGP_KR_END = 'lat=1.2915&lon=103.783';
 const AT_KR_MRT = 'lat=1.29482&lon=103.784413';
 const THU_DATE = '2026-08-27';
 
@@ -293,6 +295,13 @@ const CASES = {
   // on board). Walking must beat a live bus by WALK.beatsBusByS (120 s), and
   // level isn't beating it: the bus heads the card, the walk said as close.
   'walk-level': [{ places }, `/api/me/next?to=UTOWN&${AT_PGP}`, { feed: { PGP: [{ name: 'D2', _etas: [{ eta_s: 1264 }] }] } }],
+  // At the KR end of PGP for KR MRT: a 13 min walk (772 s), or the D2 from
+  // PGP in 14 min, a 4 min walk back and one stop (935 s). Counting minutes
+  // as they are, walking wins by more than WALK.beatsBusByS; in the heat
+  // (WALK.sunWeight) it doesn't, so the bus heads the card, the walk said as
+  // close. With preferBus off, the walk.
+  'heat-bus': [{ places }, `/api/me/next?to=KR-MRT&${AT_PGP_KR_END}`, { feed: { PGP: [{ name: 'D2', arrivalTime: '14', nextArrivalTime: '24' }] } }],
+  'heat-walk': [{ places, preferBus: false }, `/api/me/next?to=KR-MRT&${AT_PGP_KR_END}`, { feed: { PGP: [{ name: 'D2', arrivalTime: '14', nextArrivalTime: '24' }] } }],
   // Standing at KR MRT for COM 3: the buses on this side go the long way
   // round, so the answer is the D2 from across the road, and it says so.
   // Each stop lists only the buses calling there.
