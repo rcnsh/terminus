@@ -1,8 +1,8 @@
-<!-- 3.2.0 -->
-### terminus 3.2
+<!-- 3.3.0 -->
+### terminus 3.3
 
-**Crash reports.** When terminus crashes, it sends what broke and the app version, so it can be fixed. Never who you are or where. Turn it off with **Send crash reports** in Settings, on Android, the Mac and the website.
+**Less walking in the sun.** When walking would get you there only a little sooner than the bus, terminus now suggests the bus: each minute on foot counts for more than a minute waiting at a sheltered stop. The times shown don't change. Turn it off with **Prefer the bus** in the Walking settings, on Android, the Mac and the website.
 
-**Signing in an app from the email** now asks you to type the number the app shows, rather than pick one of three. If it wasn't you, **This wasn't me** stops sign-ins to your address for 6 hours.
+**terminus.run.** The apps now call terminus.run, the project's own address. If they can't reach it, as on NUS Wi-Fi earlier this month, they try terminus.rcn.sh once instead.
 
-**Nicer emails:** sign-in codes and the rest now come in the site's colours, with the code large and the link as a button.
+**Fixes:** the map window, crash reports and the stop boards behave better, and the website shows an error when an action fails rather than doing nothing.
