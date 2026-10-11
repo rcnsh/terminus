@@ -19,8 +19,8 @@ Android 12 or later.
 ## Run it
 
 ```bash
-./gradlew :app:installStableDebug                                   # against terminus.rcn.sh (shown as terminus.run)
-./gradlew :app:installBetaDebug                                     # against beta.terminus.rcn.sh
+./gradlew :app:installStableDebug                                   # against terminus.run (terminus.rcn.sh as backup)
+./gradlew :app:installBetaDebug                                     # against beta.terminus.run
 ./gradlew :app:installStableDebug -PapiBase=http://localhost:8787   # against the dev stub (debug builds only)
 adb reverse tcp:8787 tcp:8787                                       # so the phone can reach it
 ./gradlew :app:lintStableDebug :app:testStableDebugUnitTest :app:compileBetaDebugKotlin   # what CI runs, with the

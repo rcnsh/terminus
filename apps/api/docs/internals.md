@@ -817,9 +817,10 @@ database, KV, bucket, rate-limit namespace, dataset, Worker or domain with
 the stable site, and that the release and map scripts upload to each site's
 bucket.
 
-Each Worker answers on two addresses: terminus.run, which people see, and
-terminus.rcn.sh, the one kept for good, which the apps call and the Mac's
-updates come from (the beta's likewise). A page a browser opens on the old
+Each Worker answers on two addresses: terminus.run, which people see and
+the apps call, and terminus.rcn.sh, the old one, which apps before 3.2.1
+call and which every app falls back to when terminus.run can't be reached
+(the beta's likewise). A page a browser opens on the old
 address is sent to the same path on the new one (`movedPage` in
 `src/site.ts`): a GET or HEAD asking for HTML, outside `/download/`,
 `/.well-known/`, `/map/` and `/robots.txt`. Anything asking for JSON, the
@@ -1704,12 +1705,23 @@ there.
 For local work, `node scripts/dev-stub.mjs` runs this Worker with a fake bus
 feed and a seeded test account.
 
-The apps call terminus.rcn.sh (the beta's: beta.terminus.rcn.sh), not
-terminus.run, which they show in links and text: the old address is the one
-kept for good, so an app never updated keeps working if the site moves.
-Android has the two as `API_BASE` and `SITE` in BuildConfig; the Mac as
-`Api.base` and `Api.site`, with `TerminusAPI` and `TerminusSite` in the
-beta's Info.plist. The Mac's Sparkle feed is on the old address too.
+The apps call terminus.run (the beta's: beta.terminus.run), the address
+people see, and open links there: the project's own domain, which goes with
+it if someone else takes it over. Android has it as `API_BASE`, `LINK_BASE`
+and `SITE` in BuildConfig; the Mac as `Api.base`, `Api.linkBase` and
+`Api.site`, with `TerminusAPI` and `TerminusSite` in the beta's
+Info.plist. The Mac's Sparkle feed is there too.
+
+The old address is the backup (`SERVERS` on Android, `TerminusBackup` on
+the Mac). A request that can't reach the chosen address at all goes once to
+the other, inside the same deadline (`Servers.order`): only when the server
+was never reached (no DNS answer, a refused connection, a TLS handshake cut
+off, as NUS Wi-Fi did to terminus.run in October 2026), so it can't arrive
+twice; a GET also after any other reset. Once the backup has answered, it
+goes first for 10 minutes, so a refused address doesn't slow every request.
+Apps before 3.2.1 call the old address, so it stays on the Worker; if the
+project changes hands, a small proxy on rcn.sh passing every request to
+terminus.run keeps them working until they're gone.
 
 Settings, About has a Developer group that picks the server from those built
 in (`Servers.kt`, `Servers` in `Api.swift`): the site's two addresses and,

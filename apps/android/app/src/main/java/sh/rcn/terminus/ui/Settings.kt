@@ -488,7 +488,7 @@ private fun AboutPage() {
     var developer by remember { mutableStateOf(Servers.menuUnlocked(ctx)) }
     var taps by remember { mutableIntStateOf(0) }
     val host = BuildConfig.SITE.removePrefix("https://").removePrefix("http://")
-    // Each link's name, where it goes (the old address: LINK_BASE), and that
+    // Each link's name, where it goes (LINK_BASE), and that
     // place as shown under the name (the address people know).
     val links = listOf(
         Triple(R.string.get_apps, BuildConfig.LINK_BASE, host),

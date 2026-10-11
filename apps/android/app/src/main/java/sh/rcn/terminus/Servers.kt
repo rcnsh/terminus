@@ -2,6 +2,12 @@ package sh.rcn.terminus
 
 import android.content.Context
 import androidx.core.content.edit
+import java.net.ConnectException
+import java.net.NoRouteToHostException
+import java.net.SocketException
+import java.net.UnknownHostException
+import javax.net.ssl.SSLException
+import javax.net.ssl.SSLHandshakeException
 
 /**
  * Which server the app talks to. Only ever one built into the app: the
@@ -9,9 +15,11 @@ import androidx.core.content.edit
  * local dev stub. The developer menu (Settings, About) picks one; nothing
  * can add one, so the menu can't send a token anywhere but our own servers.
  *
- * The default is terminus.rcn.sh, not the address people see
- * (terminus.run): it's the one kept for good, so an app that's never
- * updated keeps working whichever address the site moves to.
+ * The default is the address people see (terminus.run), the one that
+ * goes with the project if someone else takes it over. The other,
+ * terminus.rcn.sh, is the backup: a request that can't reach one at all
+ * goes to the other ([order]), so a network that refuses one of them (NUS
+ * Wi-Fi refused terminus.run in October 2026) doesn't stop the app.
  */
 internal object Servers {
     /** Plain HTTP to this phone or the emulator's host: the dev stub (scripts/dev-stub.mjs). */
@@ -30,6 +38,34 @@ internal object Servers {
 
     /** The saved choice if it's still one of [all], else the default: a server dropped from the app is never used again. */
     fun pick(saved: String?, all: List<String>): String = saved?.takeIf { it in all } ?: all.first()
+
+    /** The site's other address, for when [base] can't be reached. None for the stub. */
+    fun backup(base: String, all: List<String>): String? =
+        if (isLocal(base)) null else all.firstOrNull { it != base && !isLocal(it) }
+
+    /**
+     * Where a request goes, in turn: [base], then its [backup]. While a
+     * [detour] is on (the backup answered a moment ago when [base] didn't),
+     * the backup first, so a refused address doesn't slow every request.
+     */
+    fun order(base: String, all: List<String>, detour: String?): List<String> {
+        val other = backup(base, all) ?: return listOf(base)
+        return if (detour == other) listOf(other, base) else listOf(base, other)
+    }
+
+    /**
+     * Whether [e] means the server was never reached, so the request can go
+     * to the other address without arriving twice: no address for the name,
+     * a connection refused, or a TLS handshake cut off (a firewall resetting
+     * it). Any other reset only for a GET, which is safe to repeat; never a
+     * timeout or an answer from the server ([ApiError]).
+     */
+    fun unreached(e: Throwable, method: String): Boolean =
+        e is UnknownHostException || e is ConnectException || e is NoRouteToHostException || e is SSLHandshakeException ||
+            (method == "GET" && (e is SocketException || e is SSLException) && e !is ApiError)
+
+    /** How long requests go to the backup first, once it answered when the chosen address didn't. */
+    const val DETOUR_MS = 10 * 60_000L
 
     /**
      * The developer menu shows in debug and beta builds; in a stable
@@ -52,6 +88,27 @@ internal object Servers {
 
     /** Where requests go now. Read before [init] (it never is: TerminusApp runs first), the default. */
     val base: String get() = current ?: choices.first()
+
+    /** The backup and until when it goes first ([order]), after the chosen address couldn't be reached. */
+    @Volatile private var detour: Pair<String, Long>? = null
+
+    /** Where a request goes now, in turn ([order]). */
+    fun tries(now: Long = System.currentTimeMillis()): List<String> =
+        order(base, choices, detour?.takeIf { now < it.second }?.first)
+
+    /**
+     * [at] answered. The chosen address ends a detour; the backup starts one,
+     * which isn't stretched while it lasts, so the chosen address is tried
+     * first again within [DETOUR_MS].
+     */
+    fun answered(at: String, now: Long = System.currentTimeMillis()) {
+        val d = detour
+        detour = when {
+            at == base -> null
+            d != null && d.first == at && now < d.second -> d
+            else -> at to now + DETOUR_MS
+        }
+    }
 
     fun init(ctx: Context) {
         current = pick(terminusPrefs(ctx).getString(KEY_SERVER, null), choices)
@@ -77,6 +134,7 @@ internal object Servers {
         if (swap) Store(ctx).swapSession(toLocal = isLocal(to))
         terminusPrefs(ctx).edit(commit = true) { putString(KEY_SERVER, to) }
         current = to
+        detour = null
         return swap
     }
 

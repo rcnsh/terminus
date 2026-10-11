@@ -1011,21 +1011,32 @@ class Api(private val token: String?, private val fast: Boolean = false, private
             if (Outdated.gated(method, path) && Outdated.holding()) throw UpdateRequired(L.s(R.string.update_required))
             // Asked to slow down: nothing goes out until Retry-After is up.
             if (Quiet.blocked(path)) throw ApiError(429, L.s(R.string.busy_try_again))
-            val conn = URL(Servers.base + path).openConnection() as HttpURLConnection
             try {
                 // Fast (widgets, a push, an alarm's broadcast, the live
                 // notification) must finish inside the ~10 s a broadcast or a
                 // push handler gets. The timeouts below are per step (and per
                 // address tried, with none for the DNS lookup), so the whole
                 // exchange has a deadline of its own too, which also ends it
-                // when the caller is cancelled.
+                // when the caller is cancelled. The chosen address, then the
+                // site's other one if it couldn't be reached at all, inside
+                // the same deadline (Servers.order).
                 withTimeout(if (fast) FAST_DEADLINE_MS else DEADLINE_MS) {
-                    blocking(conn) { exchange(conn, method, path, body, ifNoneMatch, seen) }
+                    val tries = Servers.tries()
+                    for ((i, base) in tries.withIndex()) {
+                        val conn = URL(base + path).openConnection() as HttpURLConnection
+                        try {
+                            return@withTimeout blocking(conn) { exchange(conn, method, path, body, ifNoneMatch, seen) }
+                                .also { Servers.answered(base) }
+                        } catch (e: IOException) {
+                            if (i == tries.lastIndex || !Servers.unreached(e, method)) throw e
+                        } finally {
+                            conn.disconnect()
+                        }
+                    }
+                    error("no server to try")
                 }
             } catch (e: TimeoutCancellationException) {
                 throw java.net.SocketTimeoutException("no answer within the deadline")
-            } finally {
-                conn.disconnect()
             }
         }
 
