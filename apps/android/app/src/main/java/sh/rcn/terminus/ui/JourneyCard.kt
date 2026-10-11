@@ -285,7 +285,7 @@ private fun Steps(answer: NextAnswer, journey: Journey, now: Long, top: Top) {
             }
         }
         // The slack ("9 min early") is said once, under the headline, as on the web.
-        LinePoint(journey.arrive ?: "", Dot.END, null, null, late = late) {
+        LinePoint(journey.arrive ?: "", Dot.END, null, null) {
             Text(if (bus == null || journey.walkEnd != null) journey.place else journey.toStop, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         }
     }
@@ -312,7 +312,7 @@ private sealed interface Line {
  * long the stretch to the next point takes, which the line runs beside.
  */
 @Composable
-private fun LinePoint(time: String, dot: Dot, line: Line?, below: String?, late: Boolean = false, title: @Composable () -> Unit) {
+private fun LinePoint(time: String, dot: Dot, line: Line?, below: String?, title: @Composable () -> Unit) {
     val c = MaterialTheme.colorScheme
     Row(Modifier.height(IntrinsicSize.Min)) {
         // Wider with larger text, the same for every point so the line stays straight.
@@ -353,7 +353,7 @@ private fun LinePoint(time: String, dot: Dot, line: Line?, below: String?, late:
                 Text(
                     it,
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (late) c.error else c.onSurfaceVariant,
+                    color = c.onSurfaceVariant,
                     // A ride's stretch is longer: the line is the trip's backbone.
                     modifier = Modifier.padding(top = if (line is Line.Ride) 14.dp else 6.dp, bottom = if (line is Line.Ride) 14.dp else 0.dp),
                 )

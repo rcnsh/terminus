@@ -50,7 +50,6 @@ class LiveService : Service() {
     @Volatile private var handledStartId = 0
     /** A start while the loop runs (a push: the card changed) fetches now rather than at the next turn. */
     private val wake = Channel<Unit>(Channel.CONFLATED)
-    /** A push said the card changed: the next turn fetches, however new the kept answer. */
     /** A push asked for a fetch at once; read and cleared in one step, so one landing meanwhile isn't lost. */
     private val force = java.util.concurrent.atomic.AtomicBoolean(false)
 
