@@ -844,7 +844,8 @@ address, login@terminus.rcn.sh, stays an allowed sender. Replies, and any
 other mail to terminus.run, reach the operator through Email Routing's
 catch-all (dashboard only, not in this repo). Sending uses its own
 subdomain, cf-bounce.terminus.run, so the two don't share records. The
-contact addresses people are given stay on rcn.sh (CLAUDE.md).
+privacy contact, privacy@terminus.run, arrives the same way, so it goes
+with the domain if the project changes hands.
 
 ### The web app
 
