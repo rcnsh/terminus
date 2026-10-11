@@ -57,6 +57,14 @@ class ProfileTest {
     }
 
     @Test
+    fun `removing a usual time keeps the others as the server sent them`() {
+        val p = ProfileDoc(JSONObject("""{"usual":[{"place":"b","day":1,"atMin":600,"note":"gym"},{"place":"c","day":2,"atMin":540}]}"""))
+        p.removeUsual(UsualTime("c", 2, 540))
+        assertEquals(listOf("b"), p.usual.map { it.place })
+        assertEquals("gym", p.json.getJSONArray("usual").getJSONObject(0).getString("note"))
+    }
+
+    @Test
     fun `no stops means no home, and a setup needs somewhere to go or start`() {
         val p = ProfileDoc(JSONObject())
         assertFalse(p.hasSetup)
