@@ -26,7 +26,7 @@ import {
 } from '../src/resolve.ts';
 import { arrivalsProblem, arrivalsUnread, busesProblem, crowdFromLoad, hasList, normalize, normalizeBuses, parseCrowd, parseEtaS, parseSeconds, pickList, proxyOk, proxyUrl, unwrap } from '../src/fms.ts';
 import { buildAnswer, clampLabel, fitsTile, mins, shortStop, walkVerdict } from '../src/format.ts';
-import { LABEL_MAX, WALK } from '../src/config.ts';
+import { LABEL_MAX, PUBLIC, WALK } from '../src/config.ts';
 import { apiKeyHeaders, authUrl, extractSession, jwtExpMs, proxyHeaders } from '../src/auth.ts';
 import { GRAPH as BUNDLED_GRAPH } from '../src/graph.ts';
 
@@ -189,6 +189,13 @@ test('the walk on from the stop counts in the ranking: the bus to the nearer sid
   assert.equal(options[0].stop.code, 'KR-MRT-OPP');
   // And it's sure of that by the same measure: an hour's margin, not a coin flip.
   assert.ok(confidence(options, true, endWalk) > 0.9, 'confidence uses the time to the place, as the ranking does');
+});
+
+test('a fare narrows the stop margin as it does the ranking: a public bus just ahead is not a sure answer', () => {
+  const opt = (code, totalS, extra = {}) => ({ stop: { code, name: code, lat: 0, lon: 0 }, svc: 'X', walkS: 60, totalS, ambiguousBerth: false, ...extra });
+  // The public bus gets there 190 s sooner, which is only 10 s once its fare counts.
+  const options = [opt('A', 600, { paid: true }), opt('B', 600 + PUBLIC.fareWorthS + 10)];
+  assert.ok(confidence(options, true) < 0.6, `a 10 s margin is a coin flip: ${confidence(options, true)}`);
 });
 
 test('near PGP Foyer, trips it would reach the long way round board at PGP instead', () => {
