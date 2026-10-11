@@ -30,7 +30,14 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT=$(pwd)
 DRY=0
-[ "${1:-}" = "--dry-run" ] && DRY=1
+# Anything but --dry-run stops here: a mistyped one (--dryrun) would
+# otherwise publish a real release, and there's no prompt before it does.
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run) DRY=1 ;;
+    *) echo "usage: scripts/release.sh [--dry-run] (\"$arg\" isn't an option; the version comes from build.gradle.kts)"; exit 1 ;;
+  esac
+done
 # These pick the beta in package-mac.sh and github-release.sh; one left in
 # the shell from a beta would make this release a beta's.
 unset CHANNEL BETA_VERSION BETA_BUILD
