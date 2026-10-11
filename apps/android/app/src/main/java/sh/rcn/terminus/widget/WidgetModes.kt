@@ -247,7 +247,7 @@ object WidgetModes {
         val api = Api(token, fast = true, hour12 = hour12(ctx))
         val result = runCatching {
             when (mode) {
-                Mode.Nearby -> api.nearbyJson(loc?.latitude, loc?.longitude, Locator.accOf(loc))
+                Mode.Nearby -> api.nearbyJson(loc?.latitude, loc?.longitude, Locator.accOf(loc), stopped = true)
                 is Mode.To -> api.nextJson(mode.target, loc?.latitude, loc?.longitude, Locator.accOf(loc))
                 Mode.Timetable -> JSONObject()
             }
@@ -298,7 +298,7 @@ object WidgetModes {
         fun busGoes(now: Long): Long? {
             if (mode != Mode.Nearby || fetchedAt == null) return null
             val stops = json?.let { runCatching { parseNearby(JSONObject(it)) }.getOrNull() } ?: return null
-            return NearbyBoard.redrawAt(stops.take(2).flatMap { NearbyBoard.buses(it, fetchedAt, now) }, now)
+            return NearbyBoard.redrawAt(stops.take(2).flatMap { NearbyBoard.buses(it, fetchedAt, now, sh.rcn.terminus.ServerClock.skewMs) }, now)
         }
     }
 

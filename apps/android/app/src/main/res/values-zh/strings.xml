@@ -55,6 +55,10 @@
     <string name="nearby_old">时间可能已过时 · %1$s</string>
     <string name="nearby_tap_refresh">点按 ↻ 查看附近的巴士</string>
     <string name="nearby_next_buses">%1$s · 下一班巴士</string>
+    <string name="nearby_first">首班车</string>
+    <string name="nearby_first_tomorrow">明天首班车</string>
+    <string name="nearby_first_on">%1$s首班车</string>
+    <string name="nearby_first_spoken">现在没有巴士。首班车：%1$s</string>
     <string name="nearby_page_next">更多巴士</string>
     <string name="nearby_page_prev">更早的巴士</string>
     <string name="preview_nearby_now">现在 9:41 · 步行 2 分钟</string>

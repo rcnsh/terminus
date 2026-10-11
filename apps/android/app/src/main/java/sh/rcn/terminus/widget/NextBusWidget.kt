@@ -183,7 +183,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
 
         // TalkBack reads the widget as one sentence instead of fragments.
         val spoken = when {
-            mode == Mode.Nearby -> nearbySpoken(chosen.nearbyStops?.let { NearbySwap.order(it, chosen.swap, now0) }, chosen.fetchedAt, chosen.error)
+            mode == Mode.Nearby -> nearbySpoken(ctx, chosen.nearbyStops?.let { NearbySwap.order(it, chosen.swap, now0) }, chosen.fetchedAt, chosen.error)
             frame.offline != null -> OfflineDay.lines(frame.offline) { clock(ctx, it) }.let { Spoken.sentences(L.s(R.string.offline), it.head, it.big, it.how) }
             else -> spokenSummary(ctx, paired, answer, error)
         }
