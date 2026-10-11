@@ -10,6 +10,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.util.Log
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -633,8 +634,9 @@ class RefreshReceiver : BroadcastReceiver() {
  */
 internal fun BroadcastReceiver.finishAsync(dispatcher: CoroutineDispatcher, block: suspend () -> Unit) {
     val pending = goAsync()
-    // A failure the block didn't catch ends the broadcast, not the app: the next alarm or tap tries again.
-    CoroutineScope(dispatcher + CoroutineExceptionHandler { _, _ -> }).launch {
+    // A failure the block didn't catch ends the broadcast, not the app: the next
+    // alarm or tap tries again. Written to the log, so it can still be found.
+    CoroutineScope(dispatcher + CoroutineExceptionHandler { _, e -> Log.w("terminus", "widget broadcast failed", e) }).launch {
         try {
             block()
         } finally {
