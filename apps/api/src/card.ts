@@ -56,7 +56,7 @@ export interface TripView {
   remind?: boolean;
   /** Something terminus has learned and offers to change (outcomes.ts). */
   suggestion?: Suggestion | null;
-  /** Today was set to "Not on campus" (phase 8.3): offer "Back on campus". */
+  /** Today was set to "Not on campus": offer "Back on campus". */
   away?: boolean;
   /** A trip this request's location says is over (home, in your
    *  residence, or at the destination): the caller records it as reached. */
@@ -791,7 +791,7 @@ function v2(
     // follows the plan and, when the phone says, where you are. Only plans.
     // Not at a change of buses either: you're on your way.
     if (a.dest?.why === 'class' && phase !== 'arrived' && phase !== 'riding' && trip.rec?.kind !== 'boarded') actions.push({ id: 'skipped', label: m().notGoing, trip: key });
-    // Before the trip starts: the whole day off campus, every trip at once (phase 8.3).
+    // Before the trip starts: the whole day off campus, every trip at once.
     if (a.dest?.why === 'class' && phase === 'idle') actions.push({ id: 'away', label: m().notOnCampus, trip: key });
   }
   if (trip.away) actions.push({ id: 'back', label: m().backOnCampus, trip: 'day' });

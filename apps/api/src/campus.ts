@@ -1,23 +1,24 @@
 /**
- * Static campus data for the Map and Plan tabs: a real-coordinate projection
- * of every stop and route for the map, and a flat search index for the trip
- * planner's destination field.
+ * Static campus data for /api/campus: every stop and route line (on real
+ * coordinates, with each service's colour) for the map, and a flat search
+ * index of places for the destination search, in every client.
  *
  * Deliberately NOT a metro-schematic (idealized 45/90-degree lines): that
  * look needs hand-curated coordinates that go stale the moment the weekly
  * scrape changes a stop, which fights the "static graph, never hand-touched"
- * architecture the rest of this project is built on. This projects the real
+ * architecture the rest of this project is built on. This uses the real
  * lat/lon instead, so a scraped change just appears in the right place.
  *
- * Pre-rendered here, not in the client, for the same reason /next pre-renders
- * label/detail: one place computes it, every client (today just the page,
- * later anything else) draws it without redoing geometry.
+ * Built here, not in the clients, for the same reason /api/me/next words
+ * its card: one place computes it, and the web app, Android and the Mac
+ * draw it without redoing the work.
  */
 
 import venuesJson from '../data/venues.json' with { type: 'json' };
 import roomsJson from '../data/rooms.json' with { type: 'json' };
 import shapesJson from '../data/shapes.json' with { type: 'json' };
 import { allLandmarks } from './landmarks.ts';
+import { m } from './i18n.ts';
 import type { Graph, Stop } from './types.ts';
 
 const VENUES = venuesJson as { venues: Record<string, { stop: string; m: number }> };
@@ -166,6 +167,9 @@ export function buildCampusMap(graph: Graph): CampusMap {
   }
   const byCode = new Map(stops.map((s) => [s.code, s]));
 
+  // x/y and the viewBox are no longer drawn by any client (they all map from
+  // lat/lon); they stay in the response, deprecated in the spec, so an older
+  // client or a script reading /api/campus doesn't break.
   const projected: ProjectedStop[] = stops.map((s) => {
     const { x, y } = project(s);
     return { code: s.code, name: s.name, longName: s.longName ?? s.name, opposite: s.opposite ?? null, x, y, lat: s.lat, lon: s.lon, services: servicesAt.get(s.code) ?? [], core: isCore(s.code) };
@@ -324,7 +328,7 @@ export function buildDestinations(graph: Graph): Destination[] {
       stopCode: served[0],
       kind: 'landmark',
       stops: served,
-      detail: lm.kind,
+      detail: m().landmarkKind(lm.kind),
       walkM: Math.min(...served.map((c) => lm.stops[c])),
       aliases: lm.aliases,
     });

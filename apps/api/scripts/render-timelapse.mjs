@@ -15,7 +15,7 @@
  *     [--preset story|wide] [--theme dark|light] [--seconds 60] \
  *     [--from 07:00] [--to 00:00] [--out ./videos] [--base https://terminus.run]
  *
- * The token is TIMELAPSE_TOKEN (it opens /timelapse/* and nothing else), or
+ * The token is TIMELAPSE_TOKEN (it opens /api/timelapse/* and nothing else), or
  * a file named by TIMELAPSE_TOKEN_FILE. It is never printed, and only sent
  * over https (plain http only to localhost, for the dev stub), to --base
  * itself: not after a redirect elsewhere. Waits up to
@@ -61,6 +61,12 @@ if (base.protocol !== 'https:' && !(base.protocol === 'http:' && LOOPBACK.includ
   fail('--base must be https:// (or http://localhost, for the dev stub), so the token is never sent in the clear');
 }
 const BASE = base.origin;
+// The page clamps the length to 2 to 600 s; it sets how long the render may take.
+const seconds = Number(o.seconds);
+if (!Number.isFinite(seconds) || seconds < 2 || seconds > 600) fail('--seconds must be 2 to 600');
+// About 6 s a frame at 30 frames a second on a small VPS (see above); twice
+// that before giving up, and never under 12 hours.
+const RENDER_LIMIT_MS = Math.max(12 * 3_600_000, seconds * 30 * 12_000);
 const token = (process.env.TIMELAPSE_TOKEN || (process.env.TIMELAPSE_TOKEN_FILE ? readFileSync(process.env.TIMELAPSE_TOKEN_FILE, 'utf8') : '')).trim();
 if (!token) fail('no token: set TIMELAPSE_TOKEN or TIMELAPSE_TOKEN_FILE');
 
@@ -82,6 +88,9 @@ for (;;) {
     }
     if (!day && Date.now() > until) fail(`${o.date} was not recorded (days: ${days.map((d) => d.date).join(', ') || 'none'})`);
     log(`${o.date} ${day ? 'not closed yet' : 'not listed yet'}; waiting`);
+  } else if ([401, 403, 404].includes(res.status)) {
+    // The token was refused (the route answers 404 without a good one): waiting won't change that.
+    fail(`/api/timelapse/days answered ${res.status}: is the token right?`);
   } else if (Date.now() > until) {
     fail(`/api/timelapse/days answered ${res.status}`);
   } else {
@@ -101,7 +110,16 @@ try {
   if (new URL(page.url()).origin !== BASE) throw new Error(`${BASE}/admin/timelapse/ went to ${new URL(page.url()).origin}`);
   await page.fill('#token', token);
   await page.click('text=Unlock');
-  const ready = () => page.waitForFunction(() => !document.querySelector('.controls button.accent')?.disabled, null, { timeout: 300_000 });
+  // Ready once the Export button is there and on: a page without it isn't.
+  const ready = () =>
+    page.waitForFunction(
+      () => {
+        const b = document.querySelector('.controls button.accent');
+        return Boolean(b) && !b.disabled;
+      },
+      null,
+      { timeout: 300_000 },
+    );
   await page.waitForSelector('.controls select', { timeout: 120_000 });
   const pick = async (n, value) => {
     await page.selectOption(`.controls select >> nth=${n}`, value);
@@ -113,7 +131,7 @@ try {
   await pick(0, o.date);
   await pick(1, o.preset);
   await pick(2, o.theme);
-  await page.fill('.controls input[type=number]', o.seconds);
+  await page.fill('.controls input[type=number]', String(seconds));
   for (const [n, v] of [[0, o.from], [1, o.to]]) if (v) await page.fill(`.controls input[type=time] >> nth=${n}`, v);
   // The time inputs act on change.
   await page.locator('.controls input[type=time] >> nth=1').dispatchEvent('change');
@@ -129,7 +147,7 @@ try {
     const failed = await page.locator('.controls .bad').textContent({ timeout: 1_000 }).catch(() => null);
     if (failed) throw new Error(failed);
     log((await page.textContent('.progress .meta').catch(() => ''))?.trim() || 'starting');
-    if (Date.now() - started > 12 * 3_600_000) throw new Error('still rendering after 12 hours');
+    if (Date.now() - started > RENDER_LIMIT_MS) throw new Error(`still rendering after ${Math.round(RENDER_LIMIT_MS / 3_600_000)} hours`);
   }
   log((await page.textContent('.progress .meta'))?.trim());
   mkdirSync(o.out, { recursive: true });

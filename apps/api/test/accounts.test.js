@@ -1120,6 +1120,17 @@ test('/api/campus lists PGP and UTown Residence first, marked common, then the r
   assert.ok(residences.slice(2).every((r) => r.common === false));
 });
 
+test('/api/campus words a landmark\'s kind in the request\'s language, each with its own ETag', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  const en = await call(env, '/api/campus?lang=en', { cookie });
+  const zh = await call(env, '/api/campus?lang=zh', { cookie });
+  const deck = (body) => body.destinations.find((d) => d.code === 'THE-DECK');
+  assert.equal(deck(await en.json()).detail, 'Food court');
+  assert.equal(deck(await zh.json()).detail, '食阁');
+  assert.notEqual(en.headers.get('etag'), zh.headers.get('etag'));
+});
+
 test('/api/campus gives each residence its walk in minutes, at the normal pace, never under one', async () => {
   const { env, email } = setup();
   const cookie = await signIn(env, email);

@@ -1,4 +1,4 @@
-/** Environment bindings. Everything optional except KV, so /health can report
+/** Environment bindings. Everything optional except KV, so /api/health can report
  *  what is missing instead of the Worker failing to boot. */
 export interface Env {
   KV: KVNamespace;
@@ -39,13 +39,13 @@ export interface Env {
   TURNSTILE_HOSTNAMES?: string;
   /** Per-IP limit on the public answer routes. */
   RL_PUBLIC?: RateLimit;
-  /** Per-account limit on /me. */
+  /** Per-account limit on /api/me. */
   RL_ME?: RateLimit;
   /** Per-IP limit on the map's reads from R2 (not on pieces already in the edge cache). */
   RL_MAP?: RateLimit;
-  /** Unlocks /health?probe=1 and the /admin dashboard via the x-health-token header. Unset: neither. */
+  /** Unlocks /api/health?probe=1 and the /admin dashboard via the x-health-token header. Unset: neither. */
   HEALTH_TOKEN?: string;
-  /** Opens /timelapse/* only (same header), for a machine that renders the videos. Unset: operator only. */
+  /** Opens /api/timelapse/* only (same header), for a machine that renders the videos. Unset: operator only. */
   TIMELAPSE_TOKEN?: string;
   /** Optional. An API token with Account Analytics Read, so the dashboard can
    *  query Analytics Engine. Without it the dashboard skips those charts. */
@@ -209,11 +209,11 @@ export interface BusChange {
 }
 
 /* ------------------------------------------------------------------ */
-/* /me/next: the personal answer every client renders                  */
+/* /api/me/next: the personal answer every client renders              */
 /* ------------------------------------------------------------------ */
 
-/** What kind of answer: a trip somewhere, what's near you, or resting. */
-/** 'free': a day with no classes (or none left to plan): nothing to catch. */
+/** What kind of answer: a trip somewhere, what's near you, resting, or
+ *  'free': a day with no classes (or none left to plan), nothing to catch. */
 export type Mode = 'trip' | 'nearby' | 'rest' | 'free';
 /** Why you're going there. */
 export type Why = 'class' | 'home' | 'gap-home' | 'place';
@@ -241,7 +241,7 @@ export interface Timing {
 }
 
 /**
- * The /me/next response. Clients parse this in Api.kt, Api.swift and the
+ * The /api/me/next response. Clients parse this in Api.kt, Api.swift and the
  * account page; test/fixtures/answers holds one of each kind, checked by the
  * golden test here and parsed by the Android and Mac unit tests.
  */
@@ -577,7 +577,7 @@ export interface ResolveInput {
   publicBuses?: boolean;
   /**
    * false: not logged to Analytics Engine. For answers nobody asked for (the
-   * Trip object's wakes, each class's leave-by on /me/day), which would cost
+   * Trip object's wakes, each class's leave-by on /api/me/day), which would cost
    * rows and count as answers on the dashboard.
    */
   log?: boolean;

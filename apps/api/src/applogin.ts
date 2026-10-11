@@ -37,6 +37,7 @@ import {
   hasSetup,
   hashToken,
   inboxKey,
+  mailBudgetLeft,
   takeMailBudget,
   takeGlobalMail,
   loadProfileJson,
@@ -108,6 +109,9 @@ export async function startAppLogin(env: Env, db: D1Database, input: StartInput,
     .first();
   if (recent || (await env.KV.get(coolKey).catch(() => null))) return 'cooldown';
   const blocked = await db.prepare('SELECT 1 FROM blocklist WHERE email IN (?, ?)').bind(email, inbox).first();
+  // An inbox over its hourly budget is refused before the ceiling, so it
+  // spends nothing of everyone's.
+  if (!blocked && !(await mailBudgetLeft(env, inbox, nowMs))) return 'cooldown';
   // Everyone's ceiling, after the cooldown so a repeat can't spend it. A
   // blocked address spends it too, so a busy minute doesn't reveal it.
   if (!(await takeGlobalMail(env, 'app'))) return 'busy';

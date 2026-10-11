@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { DEFAULT_PROFILE, GAP_RETURN_MIN, MAX_VENUE_WALK_S, isResting, nextClass, parseProfile, planFor, restDetail, restLabel, timingFor, upcomingClass } from '../src/profile.ts';
+import { DEFAULT_PROFILE, GAP_RETURN_MIN, MAX_VENUE_WALK_S, PROFILE_LIMITS, isResting, nextClass, parseProfile, planFor, restDetail, restLabel, timingFor, upcomingClass } from '../src/profile.ts';
 import { withLang } from '../src/i18n.ts';
 
 const STOPS = new Set(['PGP', 'COM3', 'UTOWN', 'KR-MRT', 'LT27']);
@@ -97,6 +97,13 @@ test('parseProfile fills defaults and rejects bad input with a useful message', 
     assert.equal(r.ok, false, JSON.stringify(input));
     assert.match(r.error, re);
   }
+});
+
+test('the limit errors, written as literals for their translation, name the limits enforced', () => {
+  const pin = parseProfile({ pinnedStops: ['NOPE'] }, isStop);
+  assert.match(pin.error, new RegExp(`up to ${PROFILE_LIMITS.pinnedStops} `));
+  const walk = parseProfile({ homeWalkMin: -1 }, isStop);
+  assert.match(walk.error, new RegExp(`${PROFILE_LIMITS.homeWalkMin.min} to ${PROFILE_LIMITS.homeWalkMin.max} minutes`));
 });
 
 test('pinnedStops: known stops in the user’s order, repeats dropped, at most 8', () => {

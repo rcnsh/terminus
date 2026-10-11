@@ -7,7 +7,8 @@
  * src/buses.ts's TRACK_BACK_M of 50 m, plus 10 m of slack) and forward at
  * most 100 m + 20 m/s since, as src/buses.ts tracks it. A
  * jump outside that is a bus switching to the other side of the road, or
- * being drawn backwards. Prints a Markdown report.
+ * being drawn backwards. Prints a Markdown report, and exits 1 when a move
+ * is flagged.
  *
  * The load is one person watching the map: one /buses call per service
  * every 5 s, which the Worker caches 5 s per service anyway.
@@ -18,18 +19,27 @@
 import { writeFileSync } from 'node:fs';
 
 const args = process.argv.slice(2);
+const usage = (why) => {
+  console.error(`record_buses: ${why}`);
+  process.exit(2);
+};
 const opt = (name, fallback) => {
   const i = args.indexOf(`--${name}`);
-  return i < 0 ? fallback : args.splice(i, 2)[1];
+  if (i < 0) return fallback;
+  const v = args.splice(i, 2)[1];
+  if (v === undefined || v.startsWith('--')) usage(`--${name} needs a value`);
+  return v;
 };
 const SITE = opt('site', 'https://terminus.run').replace(/\/+$/, '');
 const MINUTES = Number(opt('minutes', '10'));
+if (!(MINUTES > 0 && MINUTES <= 60)) usage('--minutes is a number of minutes, more than 0 and at most 60');
 const OUT = opt('out', null);
 const SERVICES = args.length ? args : ['A1', 'A2', 'D1', 'D2'];
 const EVERY_MS = 5_000;
 const BACK_M = 60;
 const AHEAD_M = 100;
-const AHEAD_MS = 20;
+/** Metres a second on top of AHEAD_M (src/buses.ts TRACK_AHEAD_MPS). */
+const AHEAD_MPS = 20;
 /** A request the site hasn't answered in this long has failed: a hung one would stall the recording. */
 const TIMEOUT_MS = 15_000;
 const within = () => AbortSignal.timeout(TIMEOUT_MS);
@@ -115,7 +125,7 @@ function check({ routes, rows }) {
           const dt = (r.t - prev.t) / 1000;
           maxBack = Math.max(maxBack, -gone);
           if (dt > 0) maxRate = Math.max(maxRate, gone / dt);
-          if (gone < -BACK_M || gone > AHEAD_M + AHEAD_MS * dt) {
+          if (gone < -BACK_M || gone > AHEAD_M + AHEAD_MPS * dt) {
             bad.push({ svc, bus: id.slice(0, 6), at: new Date(r.t).toISOString().slice(11, 19), from: Math.round(prev.along), to: Math.round(r.along), gone: Math.round(gone), dt: Math.round(dt), colos: prev.colo === r.colo ? r.colo : `${prev.colo} → ${r.colo}` });
           }
         }
@@ -132,7 +142,7 @@ if (OUT) writeFileSync(OUT, JSON.stringify(trace));
 const { table, bad } = check(trace);
 const withSpeed = trace.rows.filter((r) => r.speed != null).length;
 console.log(`## Live buses on ${SITE}: ${MINUTES} min, every ${EVERY_MS / 1000} s\n`);
-console.log(`A *move* is a reading whose \`along\` differs from the bus's previous one on its line. A move is flagged when it goes back more than ${BACK_M} m, or forward more than ${AHEAD_M} m + ${AHEAD_MS} m/s since the previous one: a switch to the other side of the road, or a jump.\n`);
+console.log(`A *move* is a reading whose \`along\` differs from the bus's previous one on its line. A move is flagged when it goes back more than ${BACK_M} m, or forward more than ${AHEAD_M} m + ${AHEAD_MPS} m/s since the previous one: a switch to the other side of the road, or a jump.\n`);
 console.log('| service | buses | readings | off its line | moves | furthest back | fastest |');
 console.log('|---|---|---|---|---|---|---|');
 for (const line of table) console.log(line);
@@ -143,4 +153,6 @@ else if (!bad.length) console.log('\n**No flagged moves:** no bus switched sides
 else {
   console.log(`\n**${bad.length} flagged moves:**\n\n| service | bus | at (UTC) | from | to | moved | over | data centre |\n|---|---|---|---|---|---|---|---|`);
   for (const b of bad) console.log(`| ${b.svc} | ${b.bus} | ${b.at} | ${b.from} m | ${b.to} m | ${b.gone} m | ${b.dt} s | ${b.colos} |`);
+  // A failed check fails the run, so a red run is what says so.
+  process.exitCode = 1;
 }

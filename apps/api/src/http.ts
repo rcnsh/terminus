@@ -67,7 +67,7 @@ export const roundCoord = (x: number): number => Math.round(x * 10_000) / 10_000
  * rounded (roundCoord): a fix too rough to say where you are counts as none
  * (MAX_FIX_ACC_M).
  */
-export function coordsFrom(url: URL): { lat: number | null; lon: number | null } {
+export function coordsFrom(url: URL): { lat: number; lon: number } | { lat: null; lon: null } {
   const lat = numParam(url, 'lat');
   const lon = numParam(url, 'lon');
   if (lat === null || lon === null) return { lat: null, lon: null };
@@ -145,7 +145,9 @@ export async function timedFetch(what: string, url: string, init: RequestInit, m
  * any library ever published, and an old one can be made to run a page's
  * text as script, which would undo the CSP if HTML were ever injected.
  */
-/** The QR library on the account page (settings-pages.js loads it, with SRI). */
+/** The QR library on the account page (settings-pages.js loads it, with SRI,
+ *  from its own copy of this address: the website can't import the API's
+ *  modules, and web-settings.test.js keeps the two the same). */
 export const QR_LIB = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
 /** Stoplight Elements for /docs (openapi.ts), pinned so a release can't change the page underneath us. */
 export const ELEMENTS = 'https://unpkg.com/@stoplight/elements@9.0.25';

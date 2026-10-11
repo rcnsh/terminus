@@ -92,9 +92,12 @@ export function parseShareUrl(input: string): ShareUrl {
   return { semester, selections };
 }
 
+/** A term's academic year as NUSMods writes it in its URLs ("2026-2027"). */
+const nusmodsYear = (t: Term): string => t.acadYear.replace('/', '-');
+
 /** NUS academic year for a semester, as NUSMods writes it ("2026-2027"). */
 export function acadYear(nowMs: number, semester: number): string {
-  return termsForImport(semester, nowMs)[0].acadYear.replace('/', '-');
+  return nusmodsYear(termsForImport(semester, nowMs)[0]);
 }
 
 interface TimetableRow {
@@ -108,7 +111,7 @@ interface TimetableRow {
 }
 
 /** Venue code -> nearest ISB stop code. Tries the full code, then the building
- *  prefix ("AS3-0307" -> "AS3"), then progressively shorter prefixes. */
+ *  before the `-` ("AS3-0307" -> "AS3"), then that without its trailing digits. */
 export function venueToStop(venue: string): { stop: string; m: number } | null {
   const v = venueEntry(venue);
   return v ? { stop: v.stop, m: v.m } : null;
@@ -143,7 +146,8 @@ function venueEntry(venue: string): VenueEntry | null {
 export function venueBuilding(venue: string): string | null {
   const building = venue.trim().toUpperCase().split('-')[0];
   if (VENUES.venues[building]) return building;
-  // Trailing digits sometimes distinguish rooms in a bare code (COM1 vs COM12).
+  // Not in the table: try it without its trailing digits, a last resort for a
+  // building known only by its letters.
   const stripped = building.replace(/\d+$/, '');
   if (stripped && VENUES.venues[stripped]) return stripped;
   return null;
@@ -250,7 +254,7 @@ export async function resolveTrips(
   // A sem-1 link in July means the coming August. If NUSMods has nothing for
   // that year yet, the semester just gone is the next best reading.
   const terms = termsForImport(share.semester, nowMs);
-  const fetchTerm = (t: Term) => Promise.all(modules.map((m) => fetchModule(fetchImpl, apiBase, t.acadYear.replace('/', '-'), m, share.semester)));
+  const fetchTerm = (t: Term) => Promise.all(modules.map((m) => fetchModule(fetchImpl, apiBase, nusmodsYear(t), m, share.semester)));
   let term = terms[0];
   let fetched = await fetchTerm(term);
   if (terms[1] && fetched.every((f) => f.status === 'missing')) {

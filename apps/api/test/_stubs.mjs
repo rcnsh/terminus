@@ -318,7 +318,8 @@ export function makeBucket(readFrom) {
       const etag = etagOf(data);
       const base = { size: data.length, etag, httpEtag: `"${etag}"` };
       const cond = opts.onlyIf;
-      if (cond instanceof Headers ? cond.get('if-none-match') === base.httpEtag : cond?.etagMatches != null && cond.etagMatches !== etag) return base;
+      const ifMatch = cond instanceof Headers ? cond.get('if-match') : null;
+      if (cond instanceof Headers ? cond.get('if-none-match') === base.httpEtag || (ifMatch != null && ifMatch !== base.httpEtag) : cond?.etagMatches != null && cond.etagMatches !== etag) return base;
       let offset = 0;
       let length = data.length;
       let ranged = false;
