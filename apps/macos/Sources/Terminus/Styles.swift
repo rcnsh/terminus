@@ -23,7 +23,9 @@ extension Color {
 
     /// The site's accent (#c2410c light, #fb923c dark), so the menu bar app
     /// looks like the same product as the web and the widget.
-    static let brand = themed(light: 0xC2410C, dark: 0xFB923C)
+    static let brand = themed(light: brandRGB.light, dark: brandRGB.dark)
+    /// [brand]'s two colours as 0xRRGGBB, for what's worked out from them (the ink on it).
+    static let brandRGB: (light: UInt32, dark: UInt32) = (0xC2410C, 0xFB923C)
     /// "On time", matching the site's --good-ink.
     static let good = themed(light: 0x166534, dark: 0x4ADE80)
     /// Warning amber for "tight": a shade darker than the web's --warn in
@@ -111,11 +113,27 @@ struct SectionLabel: View {
 /// (WCAG contrast), as the web and Android pick it.
 func inkOn(_ hex: String) -> Color {
     guard let v = hexRGB(hex) else { return .white }
+    return inkOn(rgb: v)
+}
+
+/// [inkOn] for a colour as 0xRRGGBB.
+func inkOn(rgb v: UInt32) -> Color {
+    inkIsWhite(on: v) ? .white : Color(red: 0x1C / 255, green: 0x19 / 255, blue: 0x17 / 255)
+}
+
+/// Whether white reads better than #1c1917 on 0xRRGGBB: the larger WCAG
+/// contrast ratio, as Android's Ink.on works it out.
+func inkIsWhite(on v: UInt32) -> Bool {
+    func contrast(_ a: Double, _ b: Double) -> Double { (max(a, b) + 0.05) / (min(a, b) + 0.05) }
+    let l = luminance(v)
+    return contrast(l, 1) >= contrast(l, luminance(0x1C1917))
+}
+
+/// WCAG relative luminance of an sRGB colour, 0xRRGGBB.
+func luminance(_ v: UInt32) -> Double {
     func lin(_ c: UInt32) -> Double {
         let s = Double(c & 0xFF) / 255
         return s <= 0.04045 ? s / 12.92 : pow((s + 0.055) / 1.055, 2.4)
     }
-    let l = 0.2126 * lin(v >> 16) + 0.7152 * lin(v >> 8) + 0.0722 * lin(v)
-    // White has luminance 1; #1c1917 about 0.011.
-    return (1.05 / (l + 0.05)) >= ((l + 0.05) / 0.061) ? .white : Color(red: 0x1C / 255, green: 0x19 / 255, blue: 0x17 / 255)
+    return 0.2126 * lin(v >> 16) + 0.7152 * lin(v >> 8) + 0.0722 * lin(v)
 }

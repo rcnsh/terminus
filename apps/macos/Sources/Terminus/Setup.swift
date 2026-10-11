@@ -26,7 +26,7 @@ final class SetupModel {
     private(set) var unplaced: [Unplaced] = []
     /// Who's signed in (/me): the email, and whether the timetable needs importing again.
     private(set) var me: Me?
-    /// Classes with a bus earlier or no reminders, and the trips remembered (/me/choices).
+    /// Classes with a bus earlier or no reminders, and the trips remembered (/api/me/choices).
     private(set) var choices: Choices?
 
     private var api: Api { Api(token: TokenStore.read()) }
@@ -680,7 +680,7 @@ struct TimetableStep: View {
             .onSubmit { Task { await setup.importTimetable(link) } }
         Hint(L("In NUSMods: Timetable, then Share/Sync. Copy the link and paste it here."))
         Button(setup.importing ? L("Importing…") : L("Import")) { Task { await setup.importTimetable(link) } }
-            .disabled(link.trimmingCharacters(in: .whitespaces).isEmpty || setup.importing)
+            .disabled(link.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || setup.importing)
         if let r = setup.imported {
             Text(r.summary)
             UnplacedList(setup: setup)
@@ -875,13 +875,15 @@ private struct PairCodeCard: View {
     }
 
     /// Black on white with a quiet zone, whatever the theme: cameras read it best.
+    /// The standard four modules of it: Core Image's own one, and three more.
     private func qrImage(_ text: String) -> NSImage? {
         let f = CIFilter.qrCodeGenerator()
         f.message = Data(text.utf8)
         f.correctionLevel = "M"
-        guard let out = f.outputImage?.transformed(by: CGAffineTransform(scaleX: 8, y: 8)) else { return nil }
-        let framed = out.transformed(by: CGAffineTransform(translationX: 16, y: 16))
-            .composited(over: CIImage(color: .white).cropped(to: out.extent.insetBy(dx: -16, dy: -16).offsetBy(dx: 16, dy: 16)))
+        let scale: CGFloat = 8, margin = 3 * scale
+        guard let out = f.outputImage?.transformed(by: CGAffineTransform(scaleX: scale, y: scale)) else { return nil }
+        let framed = out.transformed(by: CGAffineTransform(translationX: margin, y: margin))
+            .composited(over: CIImage(color: .white).cropped(to: out.extent.insetBy(dx: -margin, dy: -margin).offsetBy(dx: margin, dy: margin)))
         guard let cg = CIContext().createCGImage(framed, from: framed.extent) else { return nil }
         return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
     }

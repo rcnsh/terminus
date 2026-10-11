@@ -2,7 +2,7 @@ import SwiftUI
 
 /// What the menu bar and the popover show when the Mac is offline and the
 /// last answer has gone stale: the next thing on the day plan kept from
-/// /me/day. The web and Android apps follow the same rule (app/offline.js,
+/// /api/me/day. The web and Android apps follow the same rule (app/offline.js,
 /// OfflineDay.kt), checked against the same cases
 /// (apps/api/test/fixtures/offline-day.json).
 enum OfflineDay {

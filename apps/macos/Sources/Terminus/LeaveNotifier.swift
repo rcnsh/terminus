@@ -40,7 +40,7 @@ final class LeaveNotifier: NSObject, UNUserNotificationCenterDelegate {
         set { defaults.set(newValue, forKey: "leaveAlerts") }
     }
 
-    /// At launch: button taps on a notification come here, even when they started the app.
+    /// At launch: notifications come here to be shown, even while the popover is open.
     func start() {
         // Run as a bare binary (snapshot renders, `swift run`) there's no bundle to notify for.
         guard Bundle.main.bundleURL.pathExtension == "app" else { return }

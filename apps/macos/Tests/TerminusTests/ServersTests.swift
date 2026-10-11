@@ -68,3 +68,40 @@ private let site = ["https://terminus.run", "https://terminus.rcn.sh"]
     #expect(Api.site == "https://terminus.run")
     #expect(Api.linkBase == "https://terminus.run")
 }
+
+/// What every request does with [Servers.tries] (the API's, the map's, crash
+/// reports): the next address only when the last was never reached.
+@Test func aRequestGoesToTheBackupOnlyWhenTheFirstWasNeverReached() async throws {
+    actor Asked { var list: [String] = []; func add(_ s: String) { list.append(s) } }
+    // Refused by a firewall: the backup answers, and is named as the one that did.
+    var asked = Asked()
+    let r = try await Servers.first(site, method: "GET") { base in
+        await asked.add(base)
+        if base == site[0] { throw URLError(.secureConnectionFailed) }
+        return "ok"
+    }
+    #expect(r.at == site[1] && r.result == "ok")
+    #expect(await asked.list == site)
+    // Reached, but slow: never sent elsewhere.
+    asked = Asked()
+    await #expect(throws: URLError.self) {
+        try await Servers.first(site, method: "GET") { base -> String in
+            await asked.add(base)
+            throw URLError(.timedOut)
+        }
+    }
+    #expect(await asked.list == [site[0]])
+    // A POST whose connection was lost may have arrived: not sent twice.
+    asked = Asked()
+    await #expect(throws: URLError.self) {
+        try await Servers.first(site, method: "POST") { base -> String in
+            await asked.add(base)
+            throw URLError(.networkConnectionLost)
+        }
+    }
+    #expect(await asked.list == [site[0]])
+    // Neither reached: the last error.
+    await #expect(throws: URLError(.cannotFindHost)) {
+        try await Servers.first(site, method: "GET") { _ -> String in throw URLError(.cannotFindHost) }
+    }
+}
