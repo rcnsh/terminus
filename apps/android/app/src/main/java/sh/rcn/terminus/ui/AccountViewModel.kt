@@ -67,6 +67,11 @@ data class AccountState(
     val term: String? = null,
     /** Imported classes whose room couldn't be placed, until each gets a stop or is skipped. */
     val unplaced: List<sh.rcn.terminus.Unplaced> = emptyList(),
+    /**
+     * /me, unanswered at sign-in, has since said the account was never set
+     * up: the app switches to setup ([setupShown] once it has).
+     */
+    val setupDue: Boolean = false,
 )
 
 /**
@@ -153,6 +158,14 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
                 val me = Api(token).me()
                 store.email = me.email
                 store.anonymous = me.anonymous
+                // Unknown since sign-in: settled now, and setup shown only if /me says so.
+                if (store.setupUnknown) {
+                    store.setupUnknown = false
+                    if (me.needsSetup) {
+                        store.needsSetup = true
+                        _state.update { it.copy(setupDue = true) }
+                    }
+                }
                 _state.update { it.copy(email = me.email, needsReimport = me.needsReimport, term = me.term) }
             } catch (e: Exception) {
                 // Said below, with the profile, unless it signed the phone out.
@@ -198,6 +211,8 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     private var confirmed: ProfileDoc? = null
     /** An edit still in its moment before saving. */
     private var waiting: ProfileDoc? = null
+    /** An edit on its way to the server, not yet answered. */
+    private var sending: ProfileDoc? = null
 
     /**
      * Changes the profile and saves it. Shown straight away and saved a
@@ -215,23 +230,30 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         saveJob = viewModelScope.launch {
             delay(400)
             waiting = null
+            sending = next
             val sent = store.token
             try {
                 val saved = ProfileDoc(Api(sent).saveProfile(next.json))
+                if (sending === next) sending = null
                 confirmed = saved
                 if (mine == edits) _state.update { it.copy(profile = saved) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                if (sending === next) sending = null
                 val message = failure(e, sent) ?: return@launch
                 if (mine == edits) _state.update { it.copy(profile = confirmed ?: current, message = L.s(R.string.not_saved, message)) }
             }
         }
     }
 
-    /** Leaving Settings straight after a tap: the change is still saved. */
+    /**
+     * Leaving Settings straight after a tap: the change is still saved, both
+     * one still waiting and one on its way (leaving cancels that request,
+     * and saving the same profile again is harmless).
+     */
     override fun onCleared() {
-        val unsaved = waiting ?: return
+        val unsaved = waiting ?: sending ?: return
         val api = api()
         CoroutineScope(Dispatchers.IO).launch { runCatching { api.saveProfile(unsaved.json) } }
     }
@@ -424,9 +446,14 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
                 store.email = email
                 store.anonymous = false
             }
-            // A new account, or one that was never set up, goes through setup.
+            // A new account, or one that was never set up, goes through setup:
+            // only on /me's word, asked once more after a moment. Unanswered,
+            // no setup now (its pickers save the whole profile, which could
+            // overwrite a real one); the next /me decides ([refresh]).
             val me = runCatching { Api(token).me() }.getOrNull()
+                ?: run { delay(1_000); runCatching { Api(token).me() }.getOrNull() }
             store.needsSetup = me?.needsSetup == true
+            store.setupUnknown = me == null
             _state.update { it.copy(signIn = null, busy = false, email = email) }
             refresh()
             onSignedIn()
@@ -478,10 +505,11 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     fun exportTo(uri: android.net.Uri) {
         attempt {
             val json = api().export().toString(2)
-            withContext(Dispatchers.IO) {
+            val written = withContext(Dispatchers.IO) {
                 getApplication<Application>().contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) }
             }
-            _state.update { it.copy(message = L.s(R.string.export_saved)) }
+            // No file to write to (the provider gave none): nothing was saved.
+            _state.update { it.copy(message = L.s(if (written != null) R.string.export_saved else R.string.export_not_saved)) }
         }
     }
 
@@ -526,9 +554,16 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** The app has switched to setup after [AccountState.setupDue]. */
+    fun setupShown() = _state.update { it.copy(setupDue = false) }
+
     /** After signing out: forget everything about the account. */
     fun reset() {
         pollJob?.cancel()
+        // A Settings edit still waiting or on its way belonged to the account that's gone.
+        saveJob?.cancel()
+        waiting = null
+        sending = null
         _state.value = AccountState()
     }
 }

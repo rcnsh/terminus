@@ -57,9 +57,13 @@ internal fun WidgetJourney(answer: NextAnswer, journey: Journey, style: String, 
 internal fun journeyHeight(journey: Journey, style: String): Dp = when (style) {
     CardStyle.TICKET -> 58.dp
     CardStyle.ROUTE -> 52.dp
-    // The last step is shorter with nothing under its name.
-    else -> STEP * (if (journey.bus != null) 3 else 2) - (if (lastUnder(journey) == null) 12.dp else 0.dp)
+    // The rows Steps draws: leave (only with a walk first), the bus, and
+    // where you end up; the last is shorter with nothing under its name.
+    else -> STEP * stepRows(journey) - (if (lastUnder(journey) == null) 12.dp else 0.dp)
 }
+
+/** How many steps [Steps] draws: leave when there's a walk first, the bus when there is one, and where you end up. */
+internal fun stepRows(journey: Journey): Int = (if (journey.walk != null) 1 else 0) + (if (journey.bus != null) 1 else 0) + 1
 
 /** Under the last step: "2 min walk from UTown", or a class's "9 min early". */
 private fun lastUnder(journey: Journey): String? = journey.walkEnd?.let { JourneyText.arriveWhere(journey) } ?: journey.slack

@@ -31,11 +31,13 @@ import sh.rcn.terminus.widget.isOld
  */
 @Composable
 internal fun OfflinePlanOr(offline: Boolean, answer: NextAnswer?, day: DayPlan?, content: @Composable () -> Unit) {
-    // Ticks, so "Leave by" turns into "Leave now" without a refresh to prompt it.
+    // Ticks while offline (only then is the kept plan shown), so "Leave by"
+    // turns into "Leave now" without a refresh to prompt it.
     val now by produceState(ServerClock.now(), offline, day) {
-        while (true) {
-            value = ServerClock.now()
+        value = ServerClock.now()
+        while (offline) {
             delay(15_000)
+            value = ServerClock.now()
         }
     }
     val pick = if (offline && (answer == null || isOld(answer, now))) OfflineDay.next(day, now) else null

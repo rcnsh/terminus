@@ -248,7 +248,7 @@ private inline fun <T> lenient(parse: () -> T?): T? = try {
 internal inline fun <T> parsing(read: () -> T): T = try {
     read()
 } catch (e: org.json.JSONException) {
-    throw ParseError(e.message ?: "unexpected answer")
+    throw ParseError(e.message ?: "unexpected answer", e)
 }
 
 /**
@@ -570,8 +570,10 @@ data class DayPlan(val items: List<DayItem>, val note: String?, val date: String
         fun parse(o: JSONObject): DayPlan = parsing {
             val a = o.optJSONArray("items") ?: JSONArray()
             DayPlan(
-                items = (0 until a.length()).map {
+                // An item without a time it starts can't be placed in the day: left out.
+                items = (0 until a.length()).mapNotNull {
                     val x = a.getJSONObject(it)
+                    val startsAtMs = parseInstant(x.optString("startsAt")) ?: return@mapNotNull null
                     val leave = x.optJSONObject("leave")
                     val timing = x.optJSONObject("timing")
                     val bus = x.optJSONObject("onBus")
@@ -582,7 +584,7 @@ data class DayPlan(val items: List<DayItem>, val note: String?, val date: String
                         status = x.optString("status"),
                         fromName = x.optStringOrNull("fromName"),
                         toName = x.optString("toName"),
-                        startsAtMs = parseInstant(x.optString("startsAt")) ?: 0,
+                        startsAtMs = startsAtMs,
                         endsAtMs = x.optStringOrNull("endsAt")?.let(::parseInstant),
                         leaveAtMs = leave?.optStringOrNull("at")?.let(::parseInstant),
                         leaveEstimated = leave?.optBoolean("estimated", false) ?: false,
@@ -736,7 +738,7 @@ internal fun sentence(text: String): String {
 }
 
 /** The answer arrived but isn't what this version understands. Not a network problem. */
-class ParseError(message: String) : Exception(message)
+class ParseError(message: String, cause: Throwable? = null) : Exception(message, cause)
 
 /** A conditional request's answer: what the app kept is still current. */
 class NotModified : Exception("not modified")
@@ -1025,8 +1027,9 @@ class Api(private val token: String?, private val fast: Boolean = false, private
                     for ((i, base) in tries.withIndex()) {
                         val conn = URL(base + path).openConnection() as HttpURLConnection
                         try {
-                            return@withTimeout blocking(conn) { exchange(conn, method, path, body, ifNoneMatch, seen) }
-                                .also { Servers.answered(base) }
+                            // Any reply counts as the server answering (an error status,
+                            // a 304 or a body this version can't read too), as on the Mac.
+                            return@withTimeout blocking(conn) { exchange(conn, method, path, body, ifNoneMatch, seen) { Servers.answered(base) } }
                         } catch (e: IOException) {
                             if (i == tries.lastIndex || !Servers.unreached(e, method)) throw e
                         } finally {
@@ -1047,6 +1050,7 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         body: JSONObject?,
         ifNoneMatch: String?,
         seen: ((HttpURLConnection) -> Unit)?,
+        reached: () -> Unit,
     ): JSONObject {
         conn.requestMethod = method
         // Fast: 2 s to connect plus 7 s to read stays under the broadcast's
@@ -1072,6 +1076,7 @@ class Api(private val token: String?, private val fast: Boolean = false, private
             conn.outputStream.use { it.write(body.toString().toByteArray()) }
         }
         val status = conn.responseCode
+        reached()
         // How far the phone's clock is out, from a reply fresh from the server.
         val cached = (conn.getHeaderField("age")?.trim()?.toLongOrNull() ?: 0) > 0 || conn.getHeaderField("cf-cache-status").equals("HIT", ignoreCase = true)
         ServerClock.observe(conn.getHeaderField("date"), System.currentTimeMillis(), cached)
@@ -1296,9 +1301,12 @@ data class Campus(val stops: List<Stop>, val residences: List<Residence>, val de
             val d = o.optJSONArray("destinations") ?: JSONArray()
             val routes = o.optJSONObject("routes")
             Campus(
-                stops = (0 until s.length()).map {
+                // A stop without a place (lat and lon) can't be on the map or measured to: left out, as WalkTo does.
+                stops = (0 until s.length()).mapNotNull {
                     val x = s.getJSONObject(it)
-                    Stop(x.getString("code"), x.optString("name", x.getString("code")), x.optDouble("lat"), x.optDouble("lon"), x.optJSONArray("services").stringList())
+                    val lat = x.optDouble("lat").takeIf { v -> v.isFinite() } ?: return@mapNotNull null
+                    val lon = x.optDouble("lon").takeIf { v -> v.isFinite() } ?: return@mapNotNull null
+                    Stop(x.getString("code"), x.optString("name", x.getString("code")), lat, lon, x.optJSONArray("services").stringList())
                 }.sortedBy { it.name },
                 residences = (0 until r.length()).map {
                     val x = r.getJSONObject(it)

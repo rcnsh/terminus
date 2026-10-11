@@ -51,7 +51,8 @@ class LiveService : Service() {
     /** A start while the loop runs (a push: the card changed) fetches now rather than at the next turn. */
     private val wake = Channel<Unit>(Channel.CONFLATED)
     /** A push said the card changed: the next turn fetches, however new the kept answer. */
-    @Volatile private var force = false
+    /** A push asked for a fetch at once; read and cleared in one step, so one landing meanwhile isn't lost. */
+    private val force = java.util.concurrent.atomic.AtomicBoolean(false)
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -67,7 +68,7 @@ class LiveService : Service() {
             return START_NOT_STICKY
         }
         lastStartId = startId
-        if (intent?.getBooleanExtra(EXTRA_FORCE, false) == true) force = true
+        if (intent?.getBooleanExtra(EXTRA_FORCE, false) == true) force.set(true)
         // Must be in the foreground within seconds of starting, before any fetch.
         val store = Store(this)
         val cached = store.lastAnswer()
@@ -85,7 +86,13 @@ class LiveService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        if (loop?.isActive != true) loop = scope.launch { run() } else wake.trySend(Unit)
+        if (loop?.isActive != true) {
+            // A wake left from the loop before isn't for this one: its first pause would end at once.
+            wake.tryReceive()
+            loop = scope.launch { run() }
+        } else {
+            wake.trySend(Unit)
+        }
         return START_STICKY
     }
 
@@ -107,7 +114,7 @@ class LiveService : Service() {
         var failures = 0
         while (scope.isActive) {
             handledStartId = lastStartId
-            val pushed = force.also { force = false }
+            val pushed = force.getAndSet(false)
             if (!store.liveUpdates || !store.paired || !LeaveAlerts.canNotify(this, CHANNEL)) break
             // An answer fetched a moment ago (the leave check that started this)
             // isn't asked for again; after a push it is: the card changed since.

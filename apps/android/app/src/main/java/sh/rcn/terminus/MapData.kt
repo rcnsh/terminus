@@ -89,8 +89,10 @@ class RoutePath(private val line: List<DoubleArray>, loop: Boolean = false) {
     val closed: Boolean = loop && line.size >= 2
 
     /** The point [m] metres along, as (lat, lon, the road's bearing there). */
-    fun pointAt(m: Double): Triple<Double, Double, Double> {
-        val at = wrap(m)
+    fun pointAt(m: Double): Triple<Double, Double, Double> = pointOn(wrap(m))
+
+    /** The point [at] metres along, already a place on the line (0 to [total]): not wrapped again. */
+    private fun pointOn(at: Double): Triple<Double, Double, Double> {
         var lo = 0
         var hi = cum.size - 1
         while (hi - lo > 1) {
@@ -108,7 +110,9 @@ class RoutePath(private val line: List<DoubleArray>, loop: Boolean = false) {
      *  points; null when that isn't a stretch of this line. */
     fun slice(a: Double, b: Double): List<DoubleArray>? {
         if (line.size < 2 || !(b > a) || a < 0 || b > total + 1) return null
-        fun end(m: Double) = pointAt(min(m, total)).let { (lat, lon) -> doubleArrayOf(lon, lat) }
+        // Held to the line's ends, never wrapped: on a loop, a stop at (or a
+        // little past) the line's end would otherwise come back to its start.
+        fun end(m: Double) = pointOn(m.coerceIn(0.0, total)).let { (lat, lon) -> doubleArrayOf(lon, lat) }
         return listOf(end(a)) + line.filterIndexed { i, _ -> cum[i] > a && cum[i] < b } + listOf(end(b))
     }
 

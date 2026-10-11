@@ -416,12 +416,12 @@ internal fun DrawScope.horizon(top: Float, page: Color, p: Palette, phase: Phase
         box(sx - 3.5f, 35.5f, 7f, 7.5f, p.postInk, 1.5f)
         box(sx - 2.5f, 36.5f, 5f, 3f, p.post, 0.5f)
     }
-    val bus = road.bus
-    if (bus != null && road.stop) {
+    val yours = road.bus
+    if (yours != null && road.stop) {
         // Your bus pulls up just short of the sign.
-        val colour = Color(bus.color)
-        val x = Pull.roadBus(sx, bus.far)
-        bus(x, colour, if (bus.live) Color.White.copy(alpha = 0.85f) else null)
+        val colour = Color(yours.color)
+        val x = Pull.roadBus(sx, yours.far)
+        bus(x, colour, if (yours.live) Color.White.copy(alpha = 0.85f) else null)
     } else if (road.shuttle) {
         // A shuttle going by, heading right, its headlights on after dark: A1's red along the bottom.
         val x = shuttleX(w)
@@ -530,8 +530,6 @@ internal fun DrawScope.starsAndMoon(room: Float, alpha: Float = 1f, moonRoom: Fl
     val r = minOf(28.dp.toPx(), moonRoom * 0.3f)
     crescent(moonAt ?: Offset(size.width - 16.dp.toPx() - r, moonRoom * 0.48f), r, alpha)
 }
-
-private operator fun FloatArray.component4() = this[3]
 
 /** A crescent moon centred at [c], of radius [r]: a disc with a slightly smaller one taken out up and to the right. */
 internal fun DrawScope.crescent(c: Offset, r: Float, alpha: Float = 1f) {

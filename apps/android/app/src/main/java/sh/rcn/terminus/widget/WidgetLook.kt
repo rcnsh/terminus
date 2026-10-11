@@ -90,13 +90,14 @@ internal class WidgetLook(val phase: Phase, val dark: Boolean) {
     }
 }
 
-/** Where the sky's hour changes, in minutes past midnight: dawn, day, the golden hour, dusk, night (phaseAt). */
-private val PHASE_STARTS = intArrayOf(390, 510, 990, 1125, 1180)
-
-/** Minutes from [minute] past midnight until the sky next changes, so the widget is redrawn then. */
+/**
+ * Minutes from [minute] past midnight until the sky next changes, so the
+ * widget is redrawn then: read from [phaseAt] itself, so the two can't
+ * disagree about the hours.
+ */
 internal fun minutesToNextPhase(minute: Int): Int {
-    val next = PHASE_STARTS.firstOrNull { it > minute } ?: (PHASE_STARTS.first() + 24 * 60)
-    return next - minute
+    val now = phaseAt(minute)
+    return (1..24 * 60).first { phaseAt((minute + it) % (24 * 60)) != now }
 }
 
 /** When the sky next changes, on the phone's clock (epoch ms), from [now]. */

@@ -96,7 +96,6 @@ import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import sh.rcn.terminus.BuildConfig
 import sh.rcn.terminus.LeaveAlerts
-import sh.rcn.terminus.LiveService
 import sh.rcn.terminus.Locator
 import sh.rcn.terminus.R
 import sh.rcn.terminus.Target
@@ -489,7 +488,8 @@ private fun ReportSheet(
                     val noteLabel = stringResource(R.string.report_note)
                     TextField(
                         value = note,
-                        onValueChange = { if (it.length <= 1000) note = it },
+                        // A paste past the limit is cut there, rather than ignored.
+                        onValueChange = { note = it.take(1000) },
                         placeholder = { Text(stringResource(R.string.report_placeholder)) },
                         minLines = 3,
                         maxLines = 6,

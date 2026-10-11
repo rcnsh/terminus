@@ -88,13 +88,13 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
         return true
     }
 
+    /** How many stops the profile may pin (its `limits`). */
+    var pinLimit = sh.rcn.terminus.Limits.DEFAULT.pinnedStops
+
     /**
      * The profile's "public buses": boards then have them too, as the web's
      * do. A change asks again at the next refresh rather than waiting out the gap.
      */
-    /** How many stops the profile may pin (its `limits`). */
-    var pinLimit = sh.rcn.terminus.Limits.DEFAULT.pinnedStops
-
     var publicBuses = false
         set(v) {
             if (field != v) asked.clear()

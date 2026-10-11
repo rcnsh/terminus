@@ -466,6 +466,8 @@
     <string name="feedback_needs_email_hint">So we can reply to you. Your setup stays as it is.</string>
     <string name="download_data">Download my data</string>
     <string name="export_saved">Your data was saved.</string>
+    <string name="no_browser">No app on this phone opens web links.</string>
+    <string name="export_not_saved">Your data couldn\'t be saved there.</string>
     <string name="unplaced_one">1 class had a venue we couldn\'t place. Pick the nearest stop, or skip it:</string>
     <string name="unplaced_n">%1$d classes had a venue we couldn\'t place. Pick the nearest stop, or skip it:</string>
     <string name="off_campus_paren"> (off campus)</string>

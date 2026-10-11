@@ -35,7 +35,6 @@ import sh.rcn.terminus.Api
 import sh.rcn.terminus.ApiError
 import sh.rcn.terminus.Destinations
 import sh.rcn.terminus.L
-import sh.rcn.terminus.LeaveAlerts
 import sh.rcn.terminus.LiveService
 import sh.rcn.terminus.Locator
 import sh.rcn.terminus.NextAnswer
@@ -114,12 +113,14 @@ object WidgetModes {
     /**
      * The mode to show now: the chosen one, unless it has run out or a trip
      * has become due since it was chosen (the timetable matters then).
+     * [chosenAt] and [now] are on the phone's clock ([MODE_AT] is); the
+     * plan's times are the server's, put on the phone's by [toDevice].
      */
-    fun effective(chosen: Mode, chosenAt: Long?, plan: NextAnswer?, rowShown: Boolean, now: Long): Mode {
+    fun effective(chosen: Mode, chosenAt: Long?, plan: NextAnswer?, rowShown: Boolean, now: Long, toDevice: (Long) -> Long = { it }): Mode {
         if (chosen == Mode.Timetable || !rowShown || chosenAt == null) return Mode.Timetable
         if (now - chosenAt > KEEP_MS) return Mode.Timetable
         // When the trip turned due: the server's reminder time, else its leave time.
-        val dueAt = plan?.card?.remindAtMs ?: plan?.leaveAtMs
+        val dueAt = (plan?.card?.remindAtMs ?: plan?.leaveAtMs)?.let(toDevice)
         if (dueAt != null && dueAt in (chosenAt + 1)..now && plan?.card?.phase in LiveService.TRIP_PHASES) return Mode.Timetable
         return chosen
     }
@@ -256,12 +257,15 @@ object WidgetModes {
 
     private suspend fun chosen(ctx: Context, now: Long): List<Chosen> {
         val mgr = GlanceAppWidgetManager(ctx)
+        val plan = Store(ctx).lastAnswer()?.first
         return listOf(NextBusWidget::class.java, PlacesWidget::class.java).flatMap { cls ->
             mgr.getGlanceIds(cls).mapNotNull { id ->
                 val prefs: Preferences = getAppWidgetState(ctx, PreferencesGlanceStateDefinition, id)
                 val mode = Mode.of(prefs[MODE], prefs[MODE_LABEL])
                 val at = prefs[MODE_AT] ?: return@mapNotNull null
-                if (mode == Mode.Timetable || now - at > KEEP_MS) null else Chosen(id, mode, at, prefs[MODE_FETCHED], prefs[MODE_JSON])
+                // Run out, or back on the timetable since a trip turned due ([effective]): nothing of its own to fetch.
+                if (effective(mode, at, plan, rowShown = true, now = now, toDevice = ServerClock::toDevice) == Mode.Timetable) null
+                else Chosen(id, mode, at, prefs[MODE_FETCHED], prefs[MODE_JSON])
             }
         }
     }
@@ -369,6 +373,12 @@ class WidgetModeService : Service() {
     }
 
     override fun onTimeout(startId: Int, fgsType: Int) {
+        stopSelf(startId)
+    }
+
+    /** Android 14's form of [onTimeout]: 15 calls the one above instead. */
+    @Deprecated("Android 15 calls onTimeout(startId, fgsType)")
+    override fun onTimeout(startId: Int) {
         stopSelf(startId)
     }
 
