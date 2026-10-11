@@ -143,9 +143,8 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         // the favourites widget, and on any big enough for your day. None on a
         // small one, which then always shows the timetable.
         val now0 = System.currentTimeMillis()
-        val chipsWanted = paired && shape.roomy && (large || shape == WidgetShape.DAY)
-        // The big widget's chips share their row with ↻.
-        val chipsWidth = w - 28f - if (shape == WidgetShape.DAY) 44f else 0f
+        val chipsWanted = paired && WidgetModes.rowWanted(shape, large)
+        val chipsWidth = WidgetModes.rowWidth(w, shape)
         val chips = if (chipsWanted) WidgetModes.chips(snap.uses, plan?.places.orEmpty(), snap.added, chipsWidth, now0) else emptyList()
         val mode = WidgetModes.effective(chosen.mode, chosen.at, plan, chips.isNotEmpty(), now0, ServerClock::toDevice)
         val onTimetable = mode == Mode.Timetable

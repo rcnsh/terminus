@@ -6,6 +6,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
@@ -13,7 +14,9 @@ import android.graphics.drawable.Icon
 import android.net.Uri
 import android.os.Build
 import android.os.IBinder
+import android.util.SizeF
 import androidx.core.net.toUri
+import androidx.core.os.BundleCompat
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -139,6 +142,34 @@ object WidgetModes {
         return labels.size
     }
 
+    /** Whether a widget of this shape has the row of buttons at all: [large] (the favourites widget), or tall enough for your day. */
+    internal fun rowWanted(shape: WidgetShape, large: Boolean): Boolean = shape.roomy && (large || shape == WidgetShape.DAY)
+
+    /** The row's width on a widget this wide: the big widget's buttons share it with ↻. */
+    internal fun rowWidth(widthDp: Float, shape: WidgetShape): Float = widthDp - 28f - if (shape == WidgetShape.DAY) 44f else 0f
+
+    /** Whether a widget this size shows the buttons, as it's drawn: wanted, and Timetable and Nearby fit ([pick]). */
+    internal fun rowShown(widthDp: Float, heightDp: Float, large: Boolean): Boolean {
+        val shape = WidgetShape.of(widthDp, heightDp)
+        return rowWanted(shape, large) && fitting(listOf(Mode.Timetable.label, Mode.Nearby.label), rowWidth(widthDp, shape)) == 2
+    }
+
+    /**
+     * Whether the widget shows the buttons at any of the sizes the home screen
+     * has given it (one each way up). True when it hasn't said, as before.
+     */
+    private fun rowShownAnySize(ctx: Context, id: GlanceId, large: Boolean): Boolean {
+        val options = AppWidgetManager.getInstance(ctx).getAppWidgetOptions(GlanceAppWidgetManager(ctx).getAppWidgetId(id))
+        val sizes = BundleCompat.getParcelableArrayList(options, AppWidgetManager.OPTION_APPWIDGET_SIZES, SizeF::class.java)
+        if (!sizes.isNullOrEmpty()) return sizes.any { rowShown(it.width, it.height, large) }
+        val minW = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
+        val maxH = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT)
+        val maxW = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH)
+        val minH = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
+        if (maxW == 0 || maxH == 0) return true
+        return rowShown(minW.toFloat(), maxH.toFloat(), large) || rowShown(maxW.toFloat(), minH.toFloat(), large)
+    }
+
     /** The buttons for a row this wide: Timetable and Nearby, then favourites and added places ([uses]: Store.destinationUses). None if those two don't fit. */
     fun chips(uses: Map<String, Destinations.Use>, places: List<Place>, added: List<Destinations.Dest>, widthDp: Float, now: Long = System.currentTimeMillis()): List<Mode> {
         val ranked = Destinations.rank(places, added, uses, now).map { Mode.To(it) }
@@ -258,13 +289,16 @@ object WidgetModes {
     private suspend fun chosen(ctx: Context, now: Long): List<Chosen> {
         val mgr = GlanceAppWidgetManager(ctx)
         val plan = Store(ctx).lastAnswer()?.first
-        return listOf(NextBusWidget::class.java, PlacesWidget::class.java).flatMap { cls ->
+        return listOf(NextBusWidget::class.java to false, PlacesWidget::class.java to true).flatMap { (cls, large) ->
             mgr.getGlanceIds(cls).mapNotNull { id ->
                 val prefs: Preferences = getAppWidgetState(ctx, PreferencesGlanceStateDefinition, id)
                 val mode = Mode.of(prefs[MODE], prefs[MODE_LABEL])
                 val at = prefs[MODE_AT] ?: return@mapNotNull null
-                // Run out, or back on the timetable since a trip turned due ([effective]): nothing of its own to fetch.
-                if (effective(mode, at, plan, rowShown = true, now = now, toDevice = ServerClock::toDevice) == Mode.Timetable) null
+                // Run out, back on the timetable since a trip turned due, or too
+                // small for the buttons, so showing the timetable ([effective]):
+                // nothing of its own to fetch.
+                val rowShown = mode != Mode.Timetable && rowShownAnySize(ctx, id, large)
+                if (effective(mode, at, plan, rowShown = rowShown, now = now, toDevice = ServerClock::toDevice) == Mode.Timetable) null
                 else Chosen(id, mode, at, prefs[MODE_FETCHED], prefs[MODE_JSON])
             }
         }

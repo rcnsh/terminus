@@ -5,6 +5,7 @@ import org.json.JSONObject
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.mutablePreferencesOf
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import sh.rcn.terminus.Destinations
@@ -40,6 +41,16 @@ class WidgetModesTest {
 
     @Test fun tooSmallForTheButtonsMeansTheTimetable() {
         assertEquals(Mode.Timetable, WidgetModes.effective(Mode.Nearby, now - 60_000, null, rowShown = false, now = now))
+    }
+
+    @Test fun theButtonsShowOnlyWhereTheWidgetHasRoomForThem() {
+        // A bar or a square never has them, on either widget.
+        assertFalse(WidgetModes.rowShown(400f, 100f, large = true))
+        assertFalse(WidgetModes.rowShown(200f, 200f, large = true))
+        // The trip: on the favourites widget only; tall enough for your day, on both.
+        assertTrue(WidgetModes.rowShown(300f, 200f, large = true))
+        assertFalse(WidgetModes.rowShown(300f, 200f, large = false))
+        assertTrue(WidgetModes.rowShown(300f, 300f, large = false))
     }
 
     @Test fun aTripThatBecomesDueTakesTheWidgetBack() {
