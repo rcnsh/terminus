@@ -561,6 +561,8 @@ export interface ResolveInput {
   homeWalkS?: number;
   /** Metres per second on foot (the user's pace). Defaults to WALK.speedMs. */
   walkSpeedMs?: number;
+  /** What a second on foot costs against one waiting or riding, in choices only. Defaults to WALK.sunWeight; 1 when the profile's `preferBus` is off. */
+  walkWeight?: number;
   /** Set for a class: leave-by then aims at this, not the next bus. */
   arriveBy?: ArriveBy | null;
   /** Seconds on foot from the stop you get off at to the destination itself

@@ -178,6 +178,12 @@ private fun WalkingGroup(profile: ProfileDoc, account: AccountViewModel) {
         }
         RowDivider()
         FieldRow(
+            stringResource(R.string.prefer_bus),
+            Modifier.toggleable(value = profile.preferBus, role = Role.Switch) { on -> account.edit { it.preferBus = on } },
+            sub = stringResource(R.string.prefer_bus_hint),
+        ) { Switch(checked = profile.preferBus, onCheckedChange = null) }
+        RowDivider()
+        FieldRow(
             stringResource(R.string.packed),
             Modifier.toggleable(value = profile.fullBusMargin, role = Role.Switch) { on -> account.edit { it.fullBusMargin = on } },
             sub = stringResource(R.string.busy_hint_short),

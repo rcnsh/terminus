@@ -67,6 +67,8 @@ export interface Profile {
   fullBusMargin: boolean;
   /** Count the public buses (95, 151, ...) at the campus's stops too. They have a fare, so off until asked for. */
   publicBuses: boolean;
+  /** A minute on foot counts for more than one at the stop (WALK.sunWeight); off, they count the same. */
+  preferBus: boolean;
   /** One-time screens already shown (the web onboarding, "new: walking pace"). */
   seen: string[];
   /** From the NUSMods import. Replaced wholesale on re-import. */
@@ -108,6 +110,7 @@ export const DEFAULT_PROFILE: Profile = {
   walkPace: 'normal',
   fullBusMargin: true,
   publicBuses: false,
+  preferBus: true,
   seen: [],
   trips: [],
   manual: [],
@@ -214,6 +217,11 @@ export function parseProfile(
   if (raw.publicBuses !== undefined) {
     if (typeof raw.publicBuses !== 'boolean') return { ok: false, error: 'publicBuses must be true or false' };
     p.publicBuses = raw.publicBuses;
+  }
+
+  if (raw.preferBus !== undefined) {
+    if (typeof raw.preferBus !== 'boolean') return { ok: false, error: 'preferBus must be true or false' };
+    p.preferBus = raw.preferBus;
   }
 
   if (raw.seen !== undefined) {

@@ -142,3 +142,26 @@ test('class: the latest leave across services, naming the bus and stop', () => {
   assert.equal(ms(l), NOW + 28 * MIN - 100_000 - BUF);
   assert.equal(l.estimated, false);
 });
+
+test('for a class, a stop further off must buy back more than its walk: walking counts sunWeight times', () => {
+  // Thursday 27 Aug 2026, 09:00 SGT; the class at 09:40.
+  const now = Date.UTC(2026, 7, 27, 1, 0);
+  const stop = (code) => ({ code, name: code, lat: 0, lon: 0 });
+  const opt = (code, walkS, boardS) => ({
+    stop: stop(code), svc: 'D2', distM: walkS, walkS, hops: 4, boardS, rideS: 4 * RIDE.secondsPerHop,
+    totalS: boardS + 4 * RIDE.secondsPerHop, quality: 'live', arrival: null, fetchedAt: now, fromMs: now, ambiguousBerth: false,
+  });
+  const arrivals = (code, etaS) => [code, { code, arrivals: [{ svc: 'D2', etaS, crowd: null, plate: null, berth: null }], fetchedAt: now, stale: false, available: true }];
+  // Near: a 1 min walk, the bus in 20 min. Far: a 7 min walk, the bus in
+  // 27:20, so you leave 100 s later for it, for 340 s more in the sun.
+  const near = opt('NEAR', 60, 1200);
+  const far = opt('FAR', 400, 1640);
+  const f = {
+    options: [near, far], candidates: [], graph: { stops: [], routes: {}, headwayS: { D2: 3600 } },
+    byStop: new Map([arrivals('NEAR', 1200), arrivals('FAR', 1640)]),
+    walkAllS: null, nowMs: now, arriveBy: { atMs: now + 40 * 60_000, venueWalkS: 0, fullBusMargin: false },
+  };
+  assert.equal(leaveBy({ ...f, walkWeight: 1 }).stopCode, 'FAR', 'minutes as they are: the later leave');
+  assert.equal(leaveBy(f).stopCode, 'NEAR', 'in the heat: 100 s at home is not worth 340 s more walking');
+  assert.equal(WALK.sunWeight, 1.5);
+});

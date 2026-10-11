@@ -1,0 +1,114 @@
+{
+  "stop": {
+    "code": "PGP",
+    "name": "PGP",
+    "confidence": 0.97
+  },
+  "quality": "live",
+  "asOf": "2026-08-27T01:00:00.000Z",
+  "arrivals": [
+    {
+      "svc": "D2",
+      "etaS": 840,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "D2",
+      "etaS": 1440,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    }
+  ],
+  "label": "步行 · 13 分钟",
+  "detail": "步行去 KR MRT · 搭 D2 要 16 分钟 · 从 PGP 出发",
+  "alt": "D2 · 14 分钟 · PGP",
+  "departsAt": null,
+  "arriveAt": "2026-08-27T01:12:52Z",
+  "foot": {
+    "s": 772,
+    "why": "搭 D2 要 16 分钟"
+  },
+  "leave": null,
+  "mode": "trip",
+  "dest": {
+    "to": "KR-MRT",
+    "label": "KR MRT",
+    "why": "place"
+  },
+  "timing": null,
+  "places": [
+    {
+      "key": "mrt",
+      "label": "KR MRT"
+    },
+    {
+      "key": "deck",
+      "label": "The Deck"
+    }
+  ],
+  "walkSpeedMs": 1.3,
+  "card": {
+    "kind": "trip",
+    "staleAt": "2026-08-27T01:15:00Z",
+    "crowd": null,
+    "quality": null,
+    "leaveBy": null,
+    "leaveVia": null,
+    "catch": null,
+    "arrive": null,
+    "catchLine": null,
+    "late": false,
+    "goNow": null,
+    "note": null,
+    "estimate": null,
+    "phase": "idle",
+    "phaseText": null,
+    "glance": "步行 13 分钟",
+    "line": "步行 · 13 分钟 · 步行去 KR MRT",
+    "actions": [],
+    "warning": null,
+    "nextChangeAt": "2026-08-27T01:15:00Z",
+    "remind": true,
+    "suggestion": null,
+    "ride": null,
+    "gone": false,
+    "walkTo": null,
+    "notice": null,
+    "h12": false,
+    "journey": {
+      "leave": null,
+      "walk": "13 分钟",
+      "bus": null,
+      "boardAt": null,
+      "ride": null,
+      "off": null,
+      "to": "KR MRT",
+      "toStop": "KR MRT",
+      "arrive": "09:12",
+      "walkEnd": null,
+      "arriveStop": "09:12",
+      "slack": null,
+      "live": false,
+      "backup": null,
+      "why": "搭 D2 要 16 分钟",
+      "change": null,
+      "title": "去 KR MRT",
+      "place": "KR MRT",
+      "byText": null,
+      "walkText": "步行 13 分钟",
+      "rideText": null,
+      "walkEndText": null,
+      "arriveText": "09:12 到达",
+      "arriveWhere": "在 KR MRT",
+      "backupText": "搭 D2 要 16 分钟",
+      "summary": "步行 13 分钟 · 搭 D2 要 16 分钟"
+    },
+    "upcoming": null,
+    "title": "步行 · 13 分钟",
+    "heading": "去 KR MRT",
+    "remindAt": null
+  }
+}

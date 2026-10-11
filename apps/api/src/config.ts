@@ -56,6 +56,14 @@ export const WALK = {
   /** Within this much of the bus, walking is worth mentioning, not recommending. */
   mentionWithinS: 240,
   /**
+   * What a second on foot costs against a second waiting or riding, when
+   * choosing between walking and the bus or between stops. Singapore is hot
+   * and humid: most people would rather wait five minutes at a sheltered stop
+   * than walk in the sun and get there a little sooner. Times shown stay real
+   * seconds; only the choice is weighted. The profile's `preferBus` off is 1.
+   */
+  sunWeight: 1.5,
+  /**
    * Within this of the room or building itself (its point on the NUSMods
    * room map) you're there, however far its stop is: a lecture theatre is
    * 40 m across, and a fix indoors is 20-50 m out.

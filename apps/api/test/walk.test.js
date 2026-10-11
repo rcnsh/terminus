@@ -38,7 +38,9 @@ test('profile: walkPace, fullBusMargin and seen', () => {
   assert.equal(DEFAULT_PROFILE.walkPace, 'normal');
   const p = parseProfile({ walkPace: 'fast', fullBusMargin: false, seen: ['onboarding', 'pace', 'pace'] }, ok).profile;
   assert.deepEqual([p.walkPace, p.fullBusMargin, p.seen], ['fast', false, ['onboarding', 'pace']]);
-  for (const bad of [{ walkPace: 'jog' }, { fullBusMargin: 'yes' }, { seen: 'pace' }, { seen: ['Not OK'] }]) {
+  assert.equal(d.preferBus, true, 'a minute in the heat counts for more by default');
+  assert.equal(parseProfile({ preferBus: false }, ok).profile.preferBus, false);
+  for (const bad of [{ walkPace: 'jog' }, { fullBusMargin: 'yes' }, { preferBus: 1 }, { seen: 'pace' }, { seen: ['Not OK'] }]) {
     assert.equal(parseProfile(bad, ok).ok, false, JSON.stringify(bad));
   }
 });

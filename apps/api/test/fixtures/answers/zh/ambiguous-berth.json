@@ -25,8 +25,8 @@
     }
   ],
   "label": "D2 · 3 分钟",
-  "detail": "COM 3 · 就在这里 · 约 16 分钟到 UTown · 步行要 18 分钟 · 方向未确认 · 或 R2，约 9 分钟后",
-  "alt": "R2 · 约 9 分钟 · Opp HSSML",
+  "detail": "COM 3 · 就在这里 · 约 16 分钟到 UTown · 步行要 18 分钟 · 方向未确认 · 或 D1，约 6 分钟后",
+  "alt": "D1 · 约 6 分钟 · COM 3",
   "departsAt": "2026-08-27T01:03:00Z",
   "arriveAt": "2026-08-27T01:15:40Z",
   "bus": {
@@ -41,13 +41,13 @@
     "toStop": "UTown"
   },
   "altBus": {
-    "svc": "R2",
-    "stop": "Opp HSSML",
-    "stopCode": "HSSML-OPP",
-    "walkS": 160,
-    "rideS": 475,
-    "board": "2026-08-27T01:09:00Z",
-    "arrive": "2026-08-27T01:16:55Z",
+    "svc": "D1",
+    "stop": "COM 3",
+    "stopCode": "COM3",
+    "walkS": 3,
+    "rideS": 665,
+    "board": "2026-08-27T01:06:23Z",
+    "arrive": "2026-08-27T01:17:28Z",
     "estimated": true,
     "toStop": "UTown"
   },
@@ -135,10 +135,10 @@
       "slack": null,
       "live": true,
       "backup": {
-        "svc": "R2",
-        "color": "#34a853",
-        "stop": "Opp HSSML",
-        "board": "约 09:09"
+        "svc": "D1",
+        "color": "#ec4fa0",
+        "stop": "COM 3",
+        "board": "约 09:06"
       },
       "why": null,
       "change": null,
@@ -150,7 +150,7 @@
       "walkEndText": null,
       "arriveText": "09:15 到达",
       "arriveWhere": "在 UTown",
-      "backupText": "或在 Opp HSSML 搭约 09:09 的 R2",
+      "backupText": "或在 COM 3 搭约 09:06 的 D1",
       "summary": "在 COM 3 搭 09:03 的 D2"
     },
     "upcoming": null,

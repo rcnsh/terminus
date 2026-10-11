@@ -34,7 +34,7 @@ import { ROUTE_COLORS } from './campus.ts';
 import { haversineM } from './geo.ts';
 import { isPublic, publicRideS, rideMetres, svcName } from './public.ts';
 import { footM, stopFootM } from './walk.ts';
-import { mins } from './format.ts';
+import { footS, mins } from './format.ts';
 import { listOf, m } from './i18n.ts';
 import { type HomeWalk, residenceStops } from './residences.ts';
 
@@ -909,7 +909,9 @@ export function scoreOptions(
    *  08:00 class's bus is the D2 that starts at 07:15, not "Services ended". */
   /** `transfers`: trips with a change of bus to time as well (planTransfers),
    *  their stops' arrivals in `arrivalsByStop` with the rest. */
-  opts: { openBy?: number; transfers?: TransferRoute[] } = {},
+  /** `walkWeight`: what a second on foot costs against one waiting or
+   *  riding (WALK.sunWeight), so a longer walk for a sooner bus must save more. */
+  opts: { openBy?: number; transfers?: TransferRoute[]; walkWeight?: number } = {},
 ): ScoredOption[] {
   const out: ScoredOption[] = [];
   const legOpts = opts.openBy !== undefined ? { openBy: opts.openBy } : {};
@@ -988,8 +990,11 @@ export function scoreOptions(
   // Measurements beat estimates outright; within a tier, time to the place
   // itself decides, a public bus's fare counting as PUBLIC.fareWorthS of it:
   // it wins only when it clearly saves time over the free shuttle.
-  // A change of bus counts as TRANSFER.worthS of it, the same way.
-  const costS = (o: ScoredOption) => o.totalS + endWalk(o) + (o.paid ? PUBLIC.fareWorthS : 0) + (o.change ? TRANSFER.worthS : 0);
+  // A change of bus counts as TRANSFER.worthS of it, the same way, and every
+  // second on foot as more than a second at the stop (walkWeight).
+  const extraFoot = (opts.walkWeight ?? WALK.sunWeight) - 1;
+  const costS = (o: ScoredOption) =>
+    o.totalS + endWalk(o) + extraFoot * footS(o, endWalk(o)) + (o.paid ? PUBLIC.fareWorthS : 0) + (o.change ? TRANSFER.worthS : 0);
   out.sort(
     (a, b) =>
       Number(isMeasured(b.quality)) - Number(isMeasured(a.quality)) ||
@@ -1041,7 +1046,7 @@ export function pickAlt(options: ScoredOption[]): ScoredOption | null {
  * option at a *different* stop. A tight margin means the hop-count guess in
  * RIDE.secondsPerHop is doing the deciding, which it is not good enough for.
  */
-export function confidence(options: ScoredOption[], hasCoords: boolean, endWalk: (o: ScoredOption) => number = () => 0): number {
+export function confidence(options: ScoredOption[], hasCoords: boolean, endWalk: (o: ScoredOption) => number = () => 0, walkWeight: number = WALK.sunWeight): number {
   if (!options.length) return 0;
   const best = options[0];
   // Two passes of the same service through this stop and no way to tell which
@@ -1053,7 +1058,8 @@ export function confidence(options: ScoredOption[], hasCoords: boolean, endWalk:
   const other = options.find((o) => o.stop.code !== best.stop.code);
   if (!other) return Math.min(0.9, ceiling);
   // The margin to the place itself, as the options are ranked (scoreOptions).
-  const marginS = other.totalS + endWalk(other) - (best.totalS + endWalk(best));
+  const costS = (o: ScoredOption) => o.totalS + endWalk(o) + (walkWeight - 1) * footS(o, endWalk(o));
+  const marginS = costS(other) - costS(best);
   return Math.round(Math.max(0.5, Math.min(ceiling, 0.5 + marginS / 600)) * 100) / 100;
 }
 

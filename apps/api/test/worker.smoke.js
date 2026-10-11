@@ -529,10 +529,11 @@ test('/api/line: an unknown service or a stop it doesn’t call at is a 400, and
 });
 
 test('walking is offered end to end when it beats the bus', async () => {
-  // Standing at COM3, UTown is a ~14 min walk. A D1 fourteen minutes out plus
-  // four stops of riding loses to that, and the endpoint must be willing to
-  // say so rather than dutifully reporting the bus.
-  const slow = makeFetch({ byStop: { COM3: [{ name: 'D1', arrivalTime: '14', passengers: 'low' }] } });
+  // Standing at COM3, UTown is a ~14 min walk. A D1 twenty minutes out plus
+  // four stops of riding loses to that, even with the walk's minutes counted
+  // for the heat, and the endpoint must be willing to say so rather than
+  // dutifully reporting the bus.
+  const slow = makeFetch({ byStop: { COM3: [{ name: 'D1', arrivalTime: '20', passengers: 'low' }] } });
   const { res } = await call('/api/trip?to=UTOWN&lat=1.29466&lon=103.77441', { fetchImpl: slow });
   const a = await res.json();
 

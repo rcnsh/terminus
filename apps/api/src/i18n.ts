@@ -743,6 +743,7 @@ export const ERRORS_ZH: Record<string, string> = {
   "downloads are not configured": "下载未配置",
   "fullBusMargin must be true or false": "fullBusMargin 必须是 true 或 false",
   "publicBuses must be true or false": "publicBuses 必须是 true 或 false",
+  "preferBus must be true or false": "preferBus 必须是 true 或 false",
   "pinnedStops must be up to 8 known stop codes": "pinnedStops 最多只能有 8 个已知的车站代码",
   "gapHours must be between 0.5 and 12": "gapHours 必须在 0.5 到 12 之间",
   "home must be {stops: [...]}": "home 必须是 {stops: [...]}",

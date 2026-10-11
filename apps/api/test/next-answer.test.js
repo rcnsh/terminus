@@ -236,9 +236,9 @@ test('a leave-by sliding just ahead of now asks for a refetch no sooner than 30 
 /* Fares. */
 
 test('walking is free: a public bus must beat it by its fare too', () => {
-  const pub = { totalS: 614, quality: 'live', paid: true };
-  assert.equal(walkVerdict(659, pub), 'win', 'a fare to save 45 s');
-  assert.equal(walkVerdict(659, { ...pub, paid: undefined }), 'close');
+  const pub = { totalS: 614, walkS: 0, quality: 'live', paid: true };
+  assert.equal(walkVerdict(659, pub, 0, 1), 'win', 'a fare to save 45 s');
+  assert.equal(walkVerdict(659, { ...pub, paid: undefined }, 0, 1), 'close');
 });
 
 test('a free bus with no times does not take the headline from a live public bus', () => {

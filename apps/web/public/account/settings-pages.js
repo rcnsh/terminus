@@ -310,6 +310,9 @@ export function Trips() {
           <span class="field-label" id="pace-label">${t('Walking pace')}<span class="field-sub">${pace.hint}</span></span>
           <${Pills} name="pace" value=${pace.value} options=${PACES().map((x) => [x.value, x.label])} onChange=${(v) => edit((y) => (y.walkPace = v))} labelledBy="pace-label" full />
         </div>
+        <${Field} id="prefer-bus" label=${t('Prefer the bus')} sub=${t('Wait a few minutes more for a bus rather than walk.')}>
+          <input id="prefer-bus" class="switch" type="checkbox" role="switch" checked=${p.preferBus !== false} onChange=${(e) => edit((x) => (x.preferBus = e.currentTarget.checked))} />
+        <//>
         <${Field} id="full-bus" label=${t('Allow for busy buses')} sub=${t('Aim one bus earlier when yours is often full.')}>
           <input id="full-bus" class="switch" type="checkbox" role="switch" checked=${p.fullBusMargin !== false} onChange=${(e) => edit((x) => (x.fullBusMargin = e.currentTarget.checked))} />
         <//>

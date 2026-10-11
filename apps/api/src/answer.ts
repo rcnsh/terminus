@@ -146,7 +146,9 @@ export async function answerFor(
   // food court's other stop can be further from it than its first.
   const endWalk = (o: ScoredOption) => input.endWalkByStopS?.[o.to?.code ?? input.to ?? ''] ?? input.endWalkS ?? 0;
   // For a class, a service that starts before it is a way there, not "ended".
+  const walkWeight = input.walkWeight ?? WALK.sunWeight;
   const options = scoreOptions(graph, cands, byStop, nowMs, endWalk, {
+    walkWeight,
     ...(input.arriveBy ? { openBy: input.arriveBy.atMs } : {}),
     ...(transfers.routes.length ? { transfers: transfers.routes } : {}),
   });
@@ -169,7 +171,8 @@ export async function answerFor(
     walkAllS,
     endWalk,
     walkEndS,
-    confidence: confidence(options, input.lat != null, endWalk),
+    walkWeight,
+    confidence: confidence(options, input.lat != null, endWalk, walkWeight),
     arrivals,
     nowMs,
   });
@@ -184,6 +187,7 @@ export async function answerFor(
     walkAllS: walking ? walkAllS : null,
     walkEndS,
     endWalk,
+    walkWeight,
     nowMs,
     crowdRisk,
   });

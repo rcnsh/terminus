@@ -21,6 +21,8 @@
 "Add where you live and your timetable" = "添加你住在哪里和你的课表";
 "Allow" = "允许";
 "Allow for busy buses" = "考虑巴士很挤的情况";
+"Prefer the bus" = "优先搭巴士";
+"Wait a few minutes more for a bus rather than walk." = "宁可多等几分钟巴士，也不想步行。";
 "Public buses" = "公共巴士";
 "Count the 95, 151 and other public buses at your stops too. They have a fare, so one is the answer only when it clearly saves time." = "也算上你车站的 95、151 等公共巴士。它们要收费，所以只有明显省时才会推荐。";
 "Public bus, fare applies" = "公共巴士，需付车费";

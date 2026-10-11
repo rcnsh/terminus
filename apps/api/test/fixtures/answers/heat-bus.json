@@ -1,0 +1,159 @@
+{
+  "stop": {
+    "code": "PGP",
+    "name": "PGP",
+    "confidence": 0.97
+  },
+  "quality": "live",
+  "asOf": "2026-08-27T01:00:00.000Z",
+  "arrivals": [
+    {
+      "svc": "D2",
+      "etaS": 840,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "D2",
+      "etaS": 1440,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    }
+  ],
+  "label": "D2 · 14 min",
+  "detail": "PGP · 4 min walk · KR MRT in ~16 min · walking 13 min · or A1 in ~11 min",
+  "alt": "A1 · ~11 min · PGP",
+  "departsAt": "2026-08-27T01:14:00Z",
+  "arriveAt": "2026-08-27T01:15:35Z",
+  "bus": {
+    "svc": "D2",
+    "stop": "PGP",
+    "stopCode": "PGP",
+    "walkS": 263,
+    "rideS": 95,
+    "board": "2026-08-27T01:14:00Z",
+    "arrive": "2026-08-27T01:15:35Z",
+    "estimated": false,
+    "toStop": "KR MRT"
+  },
+  "altBus": {
+    "svc": "A1",
+    "stop": "PGP",
+    "stopCode": "PGP",
+    "walkS": 263,
+    "rideS": 95,
+    "board": "2026-08-27T01:10:43Z",
+    "arrive": "2026-08-27T01:12:18Z",
+    "estimated": true,
+    "toStop": "KR MRT"
+  },
+  "leave": {
+    "at": "2026-08-27T01:09:17Z",
+    "estimated": false,
+    "svc": "D2",
+    "stop": "PGP",
+    "stopCode": "PGP",
+    "board": "2026-08-27T01:14:00Z",
+    "arrive": "2026-08-27T01:15:35Z",
+    "note": null,
+    "walkS": 263,
+    "rideS": 95,
+    "toStop": "KR MRT",
+    "toCode": "KR-MRT"
+  },
+  "mode": "trip",
+  "dest": {
+    "to": "KR-MRT",
+    "label": "KR MRT",
+    "why": "place"
+  },
+  "timing": null,
+  "places": [
+    {
+      "key": "mrt",
+      "label": "KR MRT"
+    },
+    {
+      "key": "deck",
+      "label": "The Deck"
+    }
+  ],
+  "walkSpeedMs": 1.3,
+  "card": {
+    "kind": "trip",
+    "staleAt": "2026-08-27T01:14:30Z",
+    "crowd": null,
+    "quality": null,
+    "leaveBy": "Leave by 09:09",
+    "leaveVia": "catch the 09:14 D2 at PGP",
+    "catch": null,
+    "arrive": null,
+    "catchLine": null,
+    "late": false,
+    "goNow": null,
+    "note": null,
+    "estimate": null,
+    "phase": "idle",
+    "phaseText": null,
+    "glance": "D2 09:14",
+    "line": "D2 · 14 min · PGP",
+    "actions": [],
+    "warning": null,
+    "nextChangeAt": "2026-08-27T01:14:30Z",
+    "remind": true,
+    "suggestion": null,
+    "ride": null,
+    "gone": false,
+    "walkTo": {
+      "name": "PGP",
+      "lat": 1.291765,
+      "lon": 103.780419
+    },
+    "notice": null,
+    "h12": false,
+    "journey": {
+      "leave": "09:09",
+      "walk": "4 min",
+      "bus": {
+        "svc": "D2",
+        "color": "#8e44c9",
+        "stop": "PGP",
+        "board": "09:14"
+      },
+      "boardAt": "2026-08-27T01:14:00Z",
+      "ride": "2 min",
+      "off": null,
+      "to": "KR MRT",
+      "toStop": "KR MRT",
+      "arrive": "09:15",
+      "walkEnd": null,
+      "arriveStop": "09:15",
+      "slack": null,
+      "live": true,
+      "backup": {
+        "svc": "A1",
+        "color": "#d32f2f",
+        "stop": "PGP",
+        "board": "~09:10"
+      },
+      "why": null,
+      "change": null,
+      "title": "To KR MRT",
+      "place": "KR MRT",
+      "byText": "by 09:09",
+      "walkText": "4 min walk",
+      "rideText": "2 min ride",
+      "walkEndText": null,
+      "arriveText": "Arrive 09:15",
+      "arriveWhere": "at KR MRT",
+      "backupText": "Or A1 at ~09:10 from PGP",
+      "summary": "Walk to PGP · D2 09:14"
+    },
+    "upcoming": null,
+    "title": "D2 · 09:14",
+    "heading": "Going to KR MRT",
+    "remindAt": null
+  }
+}

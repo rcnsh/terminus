@@ -2,7 +2,7 @@
   "stop": {
     "code": "IT",
     "name": "IT",
-    "confidence": 0.77
+    "confidence": 0.96
   },
   "quality": "live",
   "asOf": "2026-08-27T01:00:00.000Z",

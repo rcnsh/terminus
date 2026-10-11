@@ -1153,6 +1153,16 @@ stop. A place with several stops is walked to by whichever makes it shortest
 (`wholeWalk`). Walking is free: a public bus has to beat it by
 `PUBLIC.fareWorthS` as well.
 
+**A minute in the heat counts for more than a minute at the stop.** In every
+choice that trades walking for waiting or riding, each second on foot counts
+`WALK.sunWeight` (1.5) times: walking the whole way against the bus
+(`walkVerdict`, whose walks are the whole walk and the bus's walks to its stop,
+across the road at a change and on to the place), one stop against another
+(`scoreOptions`, `confidence`) and, for a class, which bus to leave for
+(`leaveBy`). Most people would rather wait five minutes in a shelter than walk
+in the sun and arrive a little sooner. Only the choice is weighted: every time
+shown is real. A profile's `preferBus` off sets the weight to 1.
+
 **In a residence, the walk is from the building, then from your room.** A
 location inside a residence's outline ([`residences.ts`](../src/residences.ts))
 starts from that residence's own stops, at the path distance from the

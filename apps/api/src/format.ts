@@ -100,6 +100,8 @@ export interface FormatInput {
   endWalk?: (o: ScoredOption) => number;
   /** The same from the stop the whole walk (`walkAllS`) ends at. */
   walkEndS?: number;
+  /** What a second on foot costs against one waiting or riding (walkVerdict). */
+  walkWeight?: number;
   confidence: number;
   arrivals: Arrival[];
   nowMs: number;
@@ -107,14 +109,21 @@ export interface FormatInput {
 
 export type WalkVerdict = 'win' | 'close' | 'lose';
 
+/** Seconds on foot in an option: to its stop, across the road at a change, and on from where it drops you (`endS`). */
+export function footS(o: ScoredOption, endS = 0): number {
+  return o.walkS + (o.change?.crossS ?? 0) + endS;
+}
+
 /**
  * Several trips on this campus are beaten outright on foot. Say so.
  *
  * No safety margin is required to beat a guess: if the best we have is a
  * headway estimate or no data at all, a known walking time is the better
- * answer the moment it is shorter.
+ * answer the moment it is shorter -- shorter once every second on foot, the
+ * whole walk's and the bus's own walks', counts `walkWeight` times
+ * (WALK.sunWeight): a wait at the stop beats a walk in the heat.
  */
-export function walkVerdict(walkAllS: number | null, best: ScoredOption | undefined, bestEndS = 0): WalkVerdict {
+export function walkVerdict(walkAllS: number | null, best: ScoredOption | undefined, bestEndS = 0, walkWeight: number = WALK.sunWeight): WalkVerdict {
   if (walkAllS == null || !best) return 'lose';
   const margin = isMeasured(best.quality) ? WALK.beatsBusByS : 0;
   // Both the whole way: `walkAllS` and the bus's `bestEndS` include the walk
@@ -122,7 +131,7 @@ export function walkVerdict(walkAllS: number | null, best: ScoredOption | undefi
   // the walk would wait out too; and a fare, as when ranking buses: walking
   // is free.
   const busS = best.totalS - (best.opensInS ?? 0) + bestEndS + (best.paid ? PUBLIC.fareWorthS : 0);
-  if (walkAllS + margin < busS) return 'win';
+  if (walkAllS * walkWeight + margin < busS + (walkWeight - 1) * footS(best, bestEndS)) return 'win';
   if (walkAllS < busS + WALK.mentionWithinS) return 'close';
   return 'lose';
 }
@@ -300,7 +309,7 @@ export function buildAnswer(f: FormatInput): Answer {
 
   const bestEndS = f.endWalk?.(best) ?? 0;
   const walkThereS = f.walkAllS != null ? f.walkAllS + (f.walkEndS ?? 0) : null;
-  const verdict = walkVerdict(walkThereS, best, bestEndS);
+  const verdict = walkVerdict(walkThereS, best, bestEndS, f.walkWeight);
 
   // `quality` still describes the bus data, because `asOf` and `arrivals`
   // still describe the feed. When it is 'unknown', that is precisely why
