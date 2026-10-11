@@ -147,3 +147,34 @@ test('a reload while a save is on its way keeps the change, not the server\'s co
     globalThis.fetch = realFetch;
   }
 });
+
+test('an edit made while a saveNow is on its way is kept, with the saved change on it too', async () => {
+  const realFetch = globalThis.fetch;
+  let answerSave;
+  const bodies = [];
+  globalThis.fetch = async (url, init) => {
+    bodies.push(JSON.parse(init.body));
+    // The first save waits; its reply is the profile as it went.
+    if (!answerSave) return new Promise((ok) => (answerSave = () => ok(new Response(init.body, { headers: { 'content-type': 'application/json' } }))));
+    return new Response(init.body, { headers: { 'content-type': 'application/json' } });
+  };
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    P.profile.set({ walkPace: 'normal', clock: '24' });
+    P.toastText.set(null);
+    const saving = P.saveNow((p) => (p.clock = '12'));
+    for (let i = 0; i < 50 && !answerSave; i++) await new Promise((ok) => setImmediate(ok));
+    // Meanwhile, a change elsewhere on the page.
+    P.edit((p) => (p.walkPace = 'fast'));
+    answerSave();
+    await saving;
+    assert.deepEqual(P.profile.get(), { walkPace: 'fast', clock: '12' }, 'the newer edit, not the reply from before it');
+    // The edit's own save carries both.
+    mock.timers.tick(400);
+    for (let i = 0; i < 50 && bodies.length < 2; i++) await new Promise((ok) => setImmediate(ok));
+    assert.deepEqual(bodies[1], { walkPace: 'fast', clock: '12' });
+  } finally {
+    mock.timers.reset();
+    globalThis.fetch = realFetch;
+  }
+});
