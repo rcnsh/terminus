@@ -48,8 +48,8 @@ for arg in "$@"; do
 done
 [ -n "$VERSION" ] || { echo "$USAGE"; exit 1; }
 . scripts/release-lib.sh
-# As in release.sh: the address the apps call, kept for good.
-SITE=https://beta.terminus.rcn.sh
+# As in release.sh: the address the apps call, the site's own.
+SITE=https://beta.terminus.run
 BUCKET=terminus-beta-downloads
 
 # Not `echo | grep`: grep passes a version with a newline in it if any one

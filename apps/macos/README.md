@@ -7,7 +7,7 @@ silicon.
 ## Run it
 
 ```bash
-swift run                                            # against terminus.rcn.sh (shown as terminus.run)
+swift run                                            # against terminus.run (terminus.rcn.sh as backup)
 TERMINUS_API_BASE=http://localhost:8787 swift run    # against the dev stub
 swift test                                           # tests on the API's answer fixtures
 ./build.sh                                           # build/terminus.app

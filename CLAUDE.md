@@ -24,13 +24,15 @@ Live at https://terminus.run (API docs at `/docs`); beta at
 https://beta.terminus.run. It's an independent student project, not
 affiliated with NUS.
 
-terminus.run is the address people see; the apps call terminus.rcn.sh (and
-beta.terminus.rcn.sh), the one kept for good, so an app never updated keeps
-working if the site moves again. The Mac's update feed and the release
-scripts use it too. Both addresses stay attached to each Worker
-(`test/deploy.test.js`). The apps' developer menu (Settings, About: always
-in debug and beta builds, after seven taps on the version in a stable
-release) switches between the addresses built in and, in debug builds, the
+terminus.run is the address people see and the one the apps call (from
+3.2.1; beta.terminus.run for the beta), with the Mac's update feed and the
+release scripts: it's the project's own domain, the one that goes with it
+if someone else takes it over. terminus.rcn.sh (and beta.terminus.rcn.sh),
+the owner's, is the backup: a request that can't reach one address at all
+tries the other once (`Servers.order`), and apps before 3.2.1 call it.
+Both addresses stay attached to each Worker (`test/deploy.test.js`). The
+apps' developer menu (Settings, About: always in debug and beta builds,
+after seven taps on the version in a stable release) switches between the addresses built in and, in debug builds, the
 dev stub, never a typed one (`Servers.kt`, `Servers` in `Api.swift`).
 
 Pages opened on the old address go to the same page on terminus.run
@@ -38,10 +40,9 @@ Pages opened on the old address go to the same page on terminus.run
 terminus.run (`linkOrigin`). From 9 to 11 October 2026 NUS Wi-Fi reset
 connections to terminus.run, and both were switched off;
 `cloudflare.config.ts` says how to do that again if a network refuses it. The
-privacy contact stays privacy@rcn.sh,
-the domain kept for good, so personal requests never go to a lapsed
-terminus.run. So every `terminus.rcn.sh` and `rcn.sh` left in the repo is
-on purpose: don't find-and-replace them.
+privacy contact is still privacy@rcn.sh (a handover moves it). So every
+`terminus.rcn.sh` and `rcn.sh` left in the repo is on purpose: don't
+find-and-replace them.
 
 Every API route is under `/api` (`/api/me/next`, `/api/campus`). The
 pages, `/download/*` and `/map/*` stay at the root, as do the two pages a

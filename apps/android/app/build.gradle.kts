@@ -110,21 +110,20 @@ androidComponents {
 
 /**
  * One channel's site and name. SITE is the address people see, the one
- * the app's text names. API_BASE is where the app's requests go: the site's
- * old address, the one kept for good, so an app never updated keeps working
- * if SITE moves; or, in a debug build given `-PapiBase` (above), that.
- * LINK_BASE is where links open (the account page, downloads, pairing QR
- * codes): the old address too, for the same reason, and because NUS Wi-Fi
- * refuses terminus.run for now; the server sends those pages on to SITE once
- * it can. SERVERS are the others the developer menu offers (Servers.kt).
+ * the app's text names, and the one requests go to (API_BASE) and links
+ * open (LINK_BASE): the project's own domain, which goes with it if someone
+ * else takes it over. In a debug build given `-PapiBase` (above), requests
+ * go there instead. SERVERS are the site's addresses the developer menu
+ * offers too (Servers.kt): SITE, then the old one, the backup a request
+ * tries when the chosen address can't be reached at all.
  */
 fun com.android.build.api.dsl.ApplicationProductFlavor.site(site: String, packageName: String, name: String, oldHost: String) {
     buildConfigField("String", "SITE", "\"$site\"")
-    buildConfigField("String", "API_BASE", "\"https://$oldHost\"")
-    buildConfigField("String", "LINK_BASE", "\"https://$oldHost\"")
-    buildConfigField("String", "SERVERS", "\"https://$oldHost $site\"")
+    buildConfigField("String", "API_BASE", "\"$site\"")
+    buildConfigField("String", "LINK_BASE", "\"$site\"")
+    buildConfigField("String", "SERVERS", "\"$site https://$oldHost\"")
     manifestPlaceholders["siteHost"] = site.removePrefix("https://")
-    // The old address, which the app calls, and whose pairing links open it.
+    // The old address, the backup, whose pairing links (from older apps) open it too.
     manifestPlaceholders["oldSiteHost"] = oldHost
     resValue("string", "app_name", name)
     // Push: this package's Firebase app from google-services.json (not in
