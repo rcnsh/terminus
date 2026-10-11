@@ -76,10 +76,14 @@ internal class NearbyView(
 ) {
     val first: NearbyStop? get() = stops?.firstOrNull()
 
-    /** Past [WidgetModes.NEARBY_OLD_MS]: the times are dimmed and the line above says so. */
-    fun old(now: Long): Boolean = fetchedAt == null || now - fetchedAt > WidgetModes.NEARBY_OLD_MS
+    /**
+     * Past [WidgetModes.NEARBY_OLD_MS]: the times are dimmed and the line
+     * above says so. First buses ([StopBus.first]) are a timetable's, so
+     * they don't go old.
+     */
+    fun old(now: Long): Boolean = (fetchedAt == null || now - fetchedAt > WidgetModes.NEARBY_OLD_MS) && buses(now).any { !it.first }
 
-    fun buses(now: Long): List<StopBus> = first?.let { NearbyBoard.buses(it, fetchedAt ?: 0L, now) }.orEmpty()
+    fun buses(now: Long): List<StopBus> = first?.let { NearbyBoard.buses(it, fetchedAt ?: 0L, now, ServerClock.skewMs) }.orEmpty()
 
     companion object {
         /** [stopsInApiOrder] ordered for [swap], as it's shown. */
@@ -163,7 +167,7 @@ private fun NearbyMini(look: WidgetLook, v: NearbyView, now: Long) {
             Spacer(GlanceModifier.width(7.dp))
             TimeText(b, ink, old, 20.sp)
         }
-        Small(nextLine(b, buses.take(1)), ink.ink, 11.sp)
+        if (b.first) Small(firstLabel(b), ink.muted, 11.sp) else Small(nextLine(b, buses.take(1)), ink.ink, 11.sp)
     }
 }
 
@@ -190,7 +194,7 @@ private fun NearbyBar(look: WidgetLook, v: NearbyView, now: Long, c: NearbyContr
                         TimeText(b, ink, old, 20.sp)
                     }
                     Small(nextLine(b, shown), ink.ink, 12.sp, modifier = GlanceModifier.padding(top = 2.dp))
-                    Small(laterLine(LocalContext.current, b), ink.muted, 11.sp)
+                    Small(subLine(LocalContext.current, b), ink.muted, 11.sp)
                 }
             }
             if (shown.size == 1) Spacer(GlanceModifier.defaultWeight())
@@ -208,7 +212,7 @@ private fun NearbySky(look: WidgetLook, w: Float, h: Float, skyH: Float, fit: Ne
     val buses = v.buses(now)
     val old = v.old(now)
     // The hills low, under the stop's name.
-    val bitmap = skyBitmap(ctx, look, w, skyH, 15f / 92f, Road(stop = true, shuttle = false), moon = Offset(110f, 20f))
+    val bitmap = skyBitmap(ctx, look, w, skyH, 15f / 92f, Road(stop = true, shuttle = false), moon = Offset(110f, 20f).takeIf { w >= 300f })
     // The twin across the road a tap away, unless it's the one shown already.
     val other = v.first?.let { NearbySwap.offer(v.all.orEmpty(), v.swap, now, listOf(it.code)) }
     val swap: (@Composable () -> Unit)? = other?.let { o -> { SwapButton(o, v.all!!.first().code, sky) } }
@@ -239,7 +243,9 @@ private fun NearbySky(look: WidgetLook, w: Float, h: Float, skyH: Float, fit: Ne
             val area = h - skyH
             val message = problem(v, buses)
             if (message != null) {
-                Small(message, ground.muted, 13.sp, lines = 2, modifier = GlanceModifier.padding(horizontal = PAD, vertical = 10.dp))
+                Box(GlanceModifier.fillMaxWidth().height((area - 8f).dp).padding(horizontal = PAD), contentAlignment = Alignment.Center) {
+                    Text(message, style = TextStyle(color = ground.muted, fontSize = 15.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center), maxLines = 3)
+                }
             } else if (fit.kind == NearbyFit.Kind.ROWS) {
                 BusRows(buses.take(fit.rows), ground, old, area)
             } else {
@@ -279,7 +285,7 @@ private fun Tiles(v: NearbyView, buses: List<StopBus>, fit: NearbyFit, inks: Ink
     // A few dp under a tile's smallest is fine: it leaves room for a later line seldom used.
     val spare = minOf(fit.rows - rows, ((room - STOP_HEAD_DP) / (NearbyFit.tileDp(cols) - 4f)).toInt() - rows)
     val next = if (spare > 0 && rest.isEmpty()) v.stops.orEmpty().drop(1).firstNotNullOfOrNull { st ->
-        NearbyBoard.buses(st, v.fetchedAt ?: 0L, now).takeIf { it.isNotEmpty() }?.let { st to it.take(spare * cols) }
+        NearbyBoard.buses(st, v.fetchedAt ?: 0L, now, ServerClock.skewMs).takeIf { it.isNotEmpty() }?.let { st to it.take(spare * cols) }
     } else null
     val nextRows = next?.let { (it.second.size + cols - 1) / cols } ?: 0
     // The 1 dp rules between rows count too.
@@ -383,7 +389,7 @@ private fun BusRows(buses: List<StopBus>, inks: Inks, old: Boolean, area: Float)
                 Box(GlanceModifier.width(44.dp)) { Badge(b.svc, b.color, b.paid, big = true) }
                 Column(GlanceModifier.defaultWeight()) {
                     Small(nextLine(b, buses), inks.ink, 13.sp, bold = true)
-                    if (b.later.isNotEmpty()) Small(laterLine(ctx, b), inks.muted, 11.sp)
+                    if (b.later.isNotEmpty() || b.first) Small(subLine(ctx, b), inks.muted, 11.sp)
                 }
                 TimeText(b, inks, old, 19.sp)
             }
@@ -457,6 +463,7 @@ internal const val NEARBY_PAIR_HEAD_DP = 22f
 
 @Composable
 private fun Pills(b: StopBus, inks: Inks) {
+    if (b.first) return PillText(firstLabel(b), inks.muted, inks)
     Row(verticalAlignment = Alignment.CenterVertically) {
         if (b.live) PillText("● " + L.s(R.string.journey_live), inks.good, inks) else PillText(L.s(R.string.buses_scheduled), inks.muted, inks)
         val crowd = when (b.crowd) {
@@ -490,7 +497,23 @@ private fun HRule(inks: Inks) {
     }
 }
 
-private fun timeText(ctx: Context, b: StopBus): String = (if (b.live) "" else "~") + shortClock(ctx, b.atMs)
+private fun timeText(ctx: Context, b: StopBus): String = (if (b.live || b.first) "" else "~") + shortClock(ctx, b.atMs)
+
+/** Under the next stop where there are no pills: the buses after it, or which first bus it is. */
+private fun subLine(ctx: Context, b: StopBus): String = if (b.first) firstLabel(b) else laterLine(ctx, b)
+
+/** "First bus"; "First bus tomorrow", "First bus Monday" when it isn't today, on campus. */
+private fun firstLabel(b: StopBus): String {
+    val zone = java.time.ZoneId.of(CAMPUS_ZONE)
+    fun day(ms: Long) = java.time.Instant.ofEpochMilli(ServerClock.fromDevice(ms)).atZone(zone).toLocalDate()
+    val on = day(b.atMs)
+    val days = java.time.temporal.ChronoUnit.DAYS.between(day(System.currentTimeMillis()), on)
+    return when {
+        days <= 0L -> L.s(R.string.nearby_first)
+        days == 1L -> L.s(R.string.nearby_first_tomorrow)
+        else -> L.s(R.string.nearby_first_on, sh.rcn.terminus.dayName(on.dayOfWeek.value % 7))
+    }
+}
 
 /** "Next Yusof Ishak House"; with where it ends when another bus shown stops there next too; "Ends here". */
 private fun nextLine(b: StopBus, shown: List<StopBus>): String {
@@ -555,10 +578,12 @@ internal fun shortClock(ctx: Context, deviceMs: Long): String =
         .format(Date(ServerClock.fromDevice(deviceMs)))
 
 /** Nearby, as a sentence for screen readers. */
-internal fun nearbySpoken(stops: List<NearbyStop>?, fetchedAt: Long?, error: String?): String {
+internal fun nearbySpoken(ctx: Context, stops: List<NearbyStop>?, fetchedAt: Long?, error: String?): String {
     val first = stops?.firstOrNull() ?: return L.s(R.string.a11y_nearby_none, error ?: L.s(R.string.a11y_checking))
     val age = fetchedAt?.let { (System.currentTimeMillis() - it) / 1000 } ?: 0L
-    val due = BaseWidget.departures(first, age, 3).replace(" · ", L.s(R.string.clause_sep)).ifEmpty { L.s(R.string.a11y_no_buses) }
+    val firsts = { NearbyBoard.buses(first, fetchedAt ?: 0L, System.currentTimeMillis(), ServerClock.skewMs).filter { it.first }.take(3) }
+    val due = BaseWidget.departures(first, age, 3).replace(" · ", L.s(R.string.clause_sep))
+        .ifEmpty { firsts().takeIf { it.isNotEmpty() }?.let { f -> L.s(R.string.nearby_first_spoken, f.joinToString(L.s(R.string.clause_sep)) { "${it.svc} ${shortClock(ctx, it.atMs)}" }) } ?: L.s(R.string.a11y_no_buses) }
     return L.s(R.string.a11y_nearby, first.name, Spoken.spell(due))
 }
 

@@ -25,6 +25,8 @@ internal data class StopBus(
     val endsHere: Boolean,
     /** The buses after it, epoch ms on the phone's clock. */
     val later: List<Long>,
+    /** The service's first bus when it starts again: none of the stop's services is running now. A timetable's time. */
+    val first: Boolean = false,
 )
 
 internal object NearbyBoard {
@@ -37,9 +39,32 @@ internal object NearbyBoard {
      * The services at [stop] with a time, soonest first, from a board
      * fetched at [fetchedAt] (the phone's clock, as [now]). A bus gone by
      * [now] gives way to the service's next one; a service with none left
-     * isn't shown.
+     * isn't shown. With none running at all, each service's first bus when
+     * it starts again ([StopBus.first]), from a board asked for with
+     * `stopped=1`; [skewMs] puts the server's times on the phone's clock.
      */
-    fun buses(stop: NearbyStop, fetchedAt: Long, now: Long): List<StopBus> = stop.board.mapNotNull { r ->
+    fun buses(stop: NearbyStop, fetchedAt: Long, now: Long, skewMs: Long = 0L): List<StopBus> =
+        running(stop, fetchedAt, now).ifEmpty { firsts(stop, now, skewMs) }
+
+    private fun firsts(stop: NearbyStop, now: Long, skewMs: Long): List<StopBus> = stop.board.mapNotNull { r ->
+        val at = (r.resumesAtMs ?: return@mapNotNull null) - skewMs
+        if (r.running || at <= now) return@mapNotNull null
+        StopBus(
+            svc = r.svc,
+            color = r.color?.let(::parseColor) ?: GREY,
+            paid = r.paid,
+            atMs = at,
+            live = false,
+            crowd = null,
+            next = r.towards.firstOrNull(),
+            end = r.towards.drop(1).lastOrNull(),
+            endsHere = r.endsHere,
+            later = emptyList(),
+            first = true,
+        )
+    }.sortedBy { it.atMs }
+
+    private fun running(stop: NearbyStop, fetchedAt: Long, now: Long): List<StopBus> = stop.board.mapNotNull { r ->
         val first = r.etaS ?: return@mapNotNull null
         val times = (listOf(Due(first, r.quality == "live", r.crowd)) + r.later.map { Due(it.etaS, it.quality == "live", null) })
             .map { it to fetchedAt + it.s * 1000L }

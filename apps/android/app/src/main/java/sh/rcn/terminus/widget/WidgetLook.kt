@@ -118,9 +118,9 @@ private const val MAX_SCALE = 2.5f
  * times its numbers, [road] on its road) whose near hill is the page's
  * colour, so the widget's ground carries on under it. At night the stars,
  * and a small moon centred at [moon]: dp in from the right edge and down
- * from the top, where a layout keeps it clear of its words.
+ * from the top, where a layout keeps it clear of its words; none with no room.
  */
-internal fun skyBitmap(ctx: Context, look: WidgetLook, widthDp: Float, heightDp: Float, scale: Float, road: Road, moon: Offset = Offset(34f, 66f)): Bitmap {
+internal fun skyBitmap(ctx: Context, look: WidgetLook, widthDp: Float, heightDp: Float, scale: Float, road: Road, moon: Offset? = Offset(34f, 66f)): Bitmap {
     val px = minOf(ctx.resources.displayMetrics.density, MAX_SCALE)
     val w = (widthDp * px).roundToInt().coerceAtLeast(1)
     val h = (heightDp * px).roundToInt().coerceAtLeast(1)
@@ -130,7 +130,7 @@ internal fun skyBitmap(ctx: Context, look: WidgetLook, widthDp: Float, heightDp:
         val strip = 92 * scale * px
         val top = size.height - strip
         // moonRoom sets the moon's size: a third of it, 10 dp across.
-        if (look.phase == Phase.NIGHT) starsAndMoon(top, moonRoom = 17 * px, moonAt = Offset(size.width - moon.x * px, moon.y * px))
+        if (look.phase == Phase.NIGHT) starsAndMoon(top, moonRoom = 17 * px, moonAt = moon?.let { Offset(size.width - it.x * px, it.y * px) } ?: Offset(-size.width, -size.height))
         horizon(top, look.page, look.palette, look.phase, road, 0f, scale)
     }
     return image.asAndroidBitmap()

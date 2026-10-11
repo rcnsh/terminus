@@ -81,6 +81,33 @@ class NearbyBoardTest {
         assertNull(NearbyBoard.redrawAt(emptyList(), fetched))
     }
 
+    private val night = NearbyStop(
+        "PGPF", "PGP Foyer", 240, true,
+        listOf(
+            BoardRow("A2", null, "", towards = listOf("TCOMS", "Kent Ridge Bus Terminal"), running = false, stopped = "notYet", resumesAtMs = fetched + 20_000_000),
+            BoardRow("K", null, "", endsHere = true, running = false, stopped = "notYet", resumesAtMs = fetched + 19_000_000),
+            BoardRow("E", null, "", running = false, stopped = "noService"),
+        ),
+    )
+
+    @Test fun withNothingRunningEachServicesFirstBusSoonestFirst() {
+        val buses = NearbyBoard.buses(night, fetched, fetched, skewMs = 2_000)
+        assertEquals(listOf("K", "A2"), buses.map { it.svc })
+        assertTrue(buses.all { it.first && !it.live })
+        // On the phone's clock: the server's time less how far ahead the server is.
+        assertEquals(fetched + 19_000_000 - 2_000, buses[0].atMs)
+        assertEquals("TCOMS", buses[1].next)
+    }
+
+    @Test fun aRunningBusHidesTheFirstBuses() {
+        val mixed = night.copy(board = night.board + BoardRow("D2", 300, "live", towards = listOf("TCOMS", "COM 3")))
+        assertEquals(listOf("D2"), NearbyBoard.buses(mixed, fetched, fetched).map { it.svc })
+    }
+
+    @Test fun aFirstBusPastIsntShown() {
+        assertEquals(listOf("A2"), NearbyBoard.buses(night, fetched, fetched + 19_500_000).map { it.svc })
+    }
+
     @Test fun pagesCountRound() {
         val buses = NearbyBoard.buses(utown, fetched, fetched)
         assertEquals(listOf("D1", "D2"), NearbyBoard.page(buses, 2, 0).buses.map { it.svc })

@@ -55,6 +55,10 @@
     <string name="nearby_old">Times may be old · %1$s</string>
     <string name="nearby_tap_refresh">Tap ↻ to see the buses near you</string>
     <string name="nearby_next_buses">Next buses · %1$s</string>
+    <string name="nearby_first">First bus</string>
+    <string name="nearby_first_tomorrow">First bus tomorrow</string>
+    <string name="nearby_first_on">First bus %1$s</string>
+    <string name="nearby_first_spoken">No buses now. First buses: %1$s</string>
     <string name="nearby_page_next">More buses</string>
     <string name="nearby_page_prev">Sooner buses</string>
     <string name="preview_nearby_now">Now 9:41 · 2 min walk</string>

@@ -92,7 +92,7 @@ class NearbyWidget : GlanceAppWidget() {
                 .appWidgetBackground()
                 .background(look.pageColor)
                 .cornerRadius(android.R.dimen.system_app_widget_background_radius)
-                .semantics { contentDescription = nearbySpoken(view.stops, board.fetchedAt, board.error) }
+                .semantics { contentDescription = nearbySpoken(ctx, view.stops, board.fetchedAt, board.error) }
                 .clickable(actionStartActivity(MainActivity.intentFor(ctx, nearby = true))),
         ) {
             NearbyLayout(look, size.width.value, size.height.value, view, controls)
@@ -160,7 +160,7 @@ internal object NearbyShared {
         try {
             val loc = if (fresh) Locator.current(ctx) else Locator.lastKnown(ctx)
             val error = try {
-                val json = Api(token, fast = tapped, hour12 = hour12(ctx)).nearbyJson(loc?.latitude, loc?.longitude, Locator.accOf(loc))
+                val json = Api(token, fast = tapped, hour12 = hour12(ctx)).nearbyJson(loc?.latitude, loc?.longitude, Locator.accOf(loc), stopped = true)
                 store.saveNearby(json, System.currentTimeMillis(), sentWith = token)
                 null
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -195,7 +195,7 @@ internal object NearbyShared {
         val at = store.nearbyFetchedAt.takeIf { it > 0L } ?: return null
         val stops = store.nearbyJson?.let { runCatching { parseNearby(JSONObject(it)) }.getOrNull() } ?: return null
         // The nearest two: a swap shows the twin, which is one of them.
-        val buses = stops.take(2).flatMap { NearbyBoard.buses(it, at, now) }
+        val buses = stops.take(2).flatMap { NearbyBoard.buses(it, at, now, sh.rcn.terminus.ServerClock.skewMs) }
         return listOfNotNull(at + WidgetModes.NEARBY_OLD_MS, NearbyBoard.redrawAt(buses, now)).filter { it > now }.minOrNull()
     }
 }
