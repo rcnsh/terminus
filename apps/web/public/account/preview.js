@@ -150,8 +150,13 @@ function Ride({ ride }) {
   const board = Date.parse(ride.board);
   const arrive = Date.parse(ride.arrive);
   useEffect(() => {
-    if (now >= arrive) return;
-    const timer = setInterval(() => setNow(serverNow()), 5_000);
+    if (serverNow() >= arrive) return;
+    // Stops once the ride is over: nothing on it changes after that.
+    const timer = setInterval(() => {
+      const at = serverNow();
+      setNow(at);
+      if (at >= arrive) clearInterval(timer);
+    }, 5_000);
     return () => clearInterval(timer);
   }, [ride.board, ride.arrive]);
   const hops = ride.stops.length - 1;
@@ -162,7 +167,7 @@ function Ride({ ride }) {
   const off = ride.stops[hops].name;
   const text = !next || left === 0 ? t('Getting off at {0}', off) : left === 1 ? t('Next: {0}, where you get off', off) : t('Next: {0} · {1} stops to go', next, left);
   return html`
-    <div class="ride">
+    <div class="ride-progress">
       <progress max="100" value=${Math.round(done * 100)} aria-label=${t('Ride progress')}></progress>
       <div class="detail">${text}</div>
       ${ride.change && html`<div class="detail">${ride.change.text}</div>`}
@@ -303,6 +308,14 @@ const Chips = ({ a }) => html`
  */
 export function Card({ a, onAnswer, onChoice, onPlace = null, chips = false, sky = false }) {
   const style = useStore(cardStyle);
+  // Drawn again when its times go stale (`staleAt`), even if nothing else changes by then.
+  const [, restale] = useState(0);
+  const staleAt = a.card?.staleAt ? Date.parse(a.card.staleAt) : null;
+  useEffect(() => {
+    if (!staleAt || serverNow() >= staleAt) return;
+    const timer = setTimeout(() => restale((n) => n + 1), staleAt - serverNow() + 50);
+    return () => clearTimeout(timer);
+  }, [staleAt]);
   const actions = html`<${Actions} a=${a} onAnswer=${onAnswer} onChoice=${onChoice} />`;
   const row = html`${chips && html`<${Chips} a=${a} />`}<${SayCard} a=${a} />`;
   // After your day, or no classes today: said plainly, with no bus to mistake

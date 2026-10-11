@@ -2,7 +2,7 @@
 // whose session is kept in this tab's sessionStorage only. Adding a passkey
 // takes the HEALTH_TOKEN. English only: it's for the operator.
 
-import { html, render, store, useRef, useState, useStore } from '/assets/ui.js';
+import { html, render, store, useEffect, useRef, useState, useStore } from '/assets/ui.js';
 import { addPasskey, passkeysWork, signIn } from '/admin/passkey.js';
 
 const KEY = 'terminus-operator-token';
@@ -144,6 +144,8 @@ const COLLECT = [
 
 function Collect({ on }) {
   const [state, setState] = useState(on ?? {});
+  // Refresh brings the switches as they are now (they may have been changed elsewhere).
+  useEffect(() => setState(on ?? {}), [on]);
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState('');
   const flip = async (name) => {
@@ -230,7 +232,7 @@ function Eta({ eta }) {
       <${Tile} n=${late(o.medianS)} k="typical error (+ is later than said)" />
       <${Tile} n=${pctOf(o.late2)} k="over 2 minutes late" />
     </section>
-    <p class="hint">${`${fmt(matched)} of ${fmt(predictions)} predictions found their bus, over ${eta.days.length} day${eta.days.length === 1 ? '' : 's'}. Good to about 15 s either way.`}</p>
+    <p class="hint">${`≈${fmt(matched)} of ≈${fmt(predictions)} predictions found their bus (estimates: busy days are sampled), over ${eta.days.length} day${eta.days.length === 1 ? '' : 's'}. Good to about 15 s either way.`}</p>
     <table>
       <thead>${head}</thead>
       <tbody>${eta.horizons.map((h) => row(`Said ${h.label}`, h))}</tbody>

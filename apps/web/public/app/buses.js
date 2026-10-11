@@ -2,8 +2,9 @@
 // along its line. Loaded the first time the tab is opened (app.js).
 //
 // Its home is a row of pages you swipe between: the stop nearest you
-// (/me/nearby), then each stop you've pinned (/arrivals). A service tapped on
-// a board opens its line (/line), and a stop on the line opens its board.
+// (/api/me/nearby), then each stop you've pinned (/api/arrivals). A service
+// tapped on a board opens its line (/api/line), and a stop on the line opens
+// its board.
 // Where you are in the tab is in the address (#buses, #buses/stop/YIH,
 // #buses/line/D1/YIH), so Back and a reload keep it.
 //
@@ -206,7 +207,8 @@ export async function pullRefresh() {
   const page = r.kind === 'home' ? homePages()[active.get()] : null;
   const shown = () => {
     if (r.kind === 'line') return line.get()?.key === lineKey() ? line.get() : null;
-    const code = r.kind === 'stop' ? r.code : page?.kind === 'nearest' ? nearest.get().code : page?.code;
+    // The nearest stop's page as it is now: the pull may have just found it (the page was still finding it).
+    const code = r.kind === 'stop' ? r.code : page && page.kind !== 'pinned' ? nearest.get().code : page?.code;
     return code ? boards.get().get(shownCode(code)) : null;
   };
   const was = shown();
@@ -247,7 +249,15 @@ export async function togglePin(code) {
 /* ---------- moving around the tab ---------- */
 
 export function parse(hash) {
-  const [, kind, a, b] = hash.split('/').map(decodeURIComponent);
+  // A stray % (an address typed or edited by hand) is kept as it is rather than throwing.
+  const decode = (part) => {
+    try {
+      return decodeURIComponent(part);
+    } catch {
+      return part;
+    }
+  };
+  const [, kind, a, b] = hash.split('/').map(decode);
   if (kind === 'stop' && a) return { kind: 'stop', code: a };
   if (kind === 'line' && a) return { kind: 'line', svc: a, stop: b || null };
   return { kind: 'home' };
@@ -278,7 +288,7 @@ function onHash() {
   // What was focused (a row, Back) has gone with the page: its heading takes
   // it. On the home, the heading of the page it's back on (Home puts the
   // pager there before this runs), without scrolling the pager to it.
-  if (location.hash.startsWith('#buses') && document.activeElement !== document.body) focusSoon(() => headOnScreen(next), { preventScroll: true });
+  if (document.activeElement !== document.body) focusSoon(() => headOnScreen(next), { preventScroll: true });
   if (next.kind === 'stop') showBoard(next.code);
   else if (next.kind === 'line') loadLine(next.svc, next.stop);
 }

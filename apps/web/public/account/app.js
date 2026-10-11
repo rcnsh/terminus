@@ -9,14 +9,14 @@ import { Card, Message, Report } from './preview.js';
 import { Toast, loadCampus, loadProfile, saves, walkSpeed } from './profile.js';
 import { Livery } from './livery.js';
 
-/** Settings and first-time setup ({ Settings, offerImport, Onboarding }), once loaded. */
+/** Settings and first-time setup ({ Settings, Onboarding }), once loaded. */
 const parts = store(null);
 let loading = null;
 function loadParts() {
   // With what those two import that the page hasn't loaded yet, asked for
   // alongside: otherwise each level is found only once the one above arrives.
   loading ??= Promise.all([import('./settings.js'), import('./onboarding.js'), import('./settings-pages.js'), import('./search-box.js'), import('./search.js')]).then(([s, o]) => {
-    parts.set({ Settings: s.Settings, offerImport: s.offerImport, Onboarding: o.Onboarding });
+    parts.set({ Settings: s.Settings, Onboarding: o.Onboarding });
   });
   return loading;
 }
@@ -26,12 +26,6 @@ const params = new URLSearchParams(location.search);
 const NEXT = params.get('next') === '/app/' ? '/app/' : null;
 /** Sent from the web app's Settings to add an email. */
 const ADD = params.get('add') === '1';
-
-/** A NUSMods link shared to the installed web app (manifest share_target). */
-function sharedLink() {
-  const text = [params.get('url'), params.get('text'), params.get('title')].filter(Boolean).join(' ');
-  return text.match(/https:\/\/nusmods\.com\/timetable\/\S+/)?.[0] ?? null;
-}
 
 /**
  * What the page shows: `loading`, `signin`, `onboarding`, `settings` or
@@ -379,14 +373,10 @@ function afterSetup() {
   const { me } = page.get();
   // From the web app to add an email: straight to the sign-in card.
   if (ADD && me.anonymous === true) return set({ view: 'settings', adding: true });
-  const shared = sharedLink();
-  // Signed in from the web app: back to it.
-  if (NEXT && !shared) return location.replace(NEXT);
+  // Signed in from the web app: back to it. (A NUSMods link shared to the
+  // installed app is offered there, app/app.js sharedLink.)
+  if (NEXT) return location.replace(NEXT);
   set({ view: 'settings' });
-  if (shared) {
-    history.replaceState(null, '', location.pathname);
-    parts.get().offerImport(shared);
-  }
 }
 
 async function start() {

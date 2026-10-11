@@ -25,6 +25,8 @@
   .state { padding-top: 36px; }
   .state h1 { font-size: clamp(2.1rem, 5vw, 3.2rem); letter-spacing: -0.035em; margin-top: 10px; }
   .state p { color: var(--muted); margin-top: 10px; max-width: 34rem; }
+  /* Close under the line above it; with no line under the headline, the usual gap. */
+  .state [aria-live]:has(h1 + p) + p.checked { margin-top: 2px; }
   .state .sky-chip { margin-top: 16px; }
   .state .sky-chip .dot { background: currentColor; }
   .state .up { color: var(--good); }
@@ -66,7 +68,7 @@
     <nav class="nav-links"><a class="btn small ghost" href="/account">Account</a></nav>
   </header>
   <!-- Whether the live feed is working, drawn by status.js; the road under it too. -->
-  <div class="wrap narrow state" id="state" aria-live="polite"><p class="eyebrow">Status</p><h1>Checking…</h1></div>
+  <div class="wrap narrow state" id="state"><div aria-live="polite"><p class="eyebrow">Status</p><h1>Checking…</h1></div></div>
   <div id="road" style="margin-top:12px"></div>
 </section>
 

@@ -3,7 +3,7 @@
  * preview.js and profile.js), on the real /campus answer, built from the
  * Worker's own modules and data.
  */
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { useLang, web } from './_web.mjs';
 import { buildCampusMap, buildDestinations } from '../src/campus.ts';
@@ -117,4 +117,33 @@ test('a favourite is called what was picked, keyed from its name, one per place'
   P.withPlace(p, 'UTOWN', '大学城');
   assert.equal(p.places[3].key, 'place');
   assert.equal(new Set(p.places.map((x) => x.key)).size, p.places.length);
+});
+
+test('a reload while a save is on its way keeps the change, not the server\'s copy from before it', async () => {
+  const realFetch = globalThis.fetch;
+  let answerSave;
+  globalThis.fetch = async (url, init) => {
+    // The save waits; a reload meanwhile gets the profile from before it.
+    if (init?.method === 'PUT') return new Promise((ok) => (answerSave = () => ok(new Response(init.body, { headers: { 'content-type': 'application/json' } }))));
+    return new Response(JSON.stringify({ walkPace: 'normal' }), { headers: { 'content-type': 'application/json' } });
+  };
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    P.profile.set({ walkPace: 'normal' });
+    P.toastText.set(null);
+    P.edit((p) => (p.walkPace = 'fast'));
+    // The edit's save sets off, and is still on its way when the reload comes back.
+    mock.timers.tick(400);
+    for (let i = 0; i < 50 && !answerSave; i++) await new Promise((ok) => setImmediate(ok));
+    await P.reloadProfile();
+    assert.equal(P.profile.get().walkPace, 'fast');
+    answerSave();
+    for (let i = 0; i < 50 && P.toastText.get()?.text !== 'Saved'; i++) await new Promise((ok) => setImmediate(ok));
+    assert.equal(P.profile.get().walkPace, 'fast');
+    await P.reloadProfile();
+    assert.equal(P.profile.get().walkPace, 'normal', 'once it has landed, a reload reads the server again');
+  } finally {
+    mock.timers.reset();
+    globalThis.fetch = realFetch;
+  }
 });

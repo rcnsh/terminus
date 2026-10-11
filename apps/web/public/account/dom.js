@@ -68,7 +68,9 @@ export async function send(path, { timeoutMs = SEND_TIMEOUT_MS, ...init } = {}) 
   if (Date.now() < quietUntil[scope]) throw Object.assign(new Error(t('terminus is busy. Try again in a minute.')), { status: 429 });
   // No answer in time, or none at all (offline: the browser's own "Failed
   // to fetch" or "Load failed", in English whatever the page's language).
-  const res = await fetch(path, { signal: timeout(timeoutMs), ...init }).catch((err) => {
+  // A caller's own signal stops it as well as the time limit, not instead of it.
+  const signal = init.signal && AbortSignal.any ? AbortSignal.any([init.signal, timeout(timeoutMs)]) : (init.signal ?? timeout(timeoutMs));
+  const res = await fetch(path, { ...init, signal }).catch((err) => {
     throw ['TimeoutError', 'AbortError', 'TypeError'].includes(err?.name) ? unreachable() : err;
   });
   noteServerDate(res);
@@ -250,6 +252,8 @@ export function inkOn(hex) {
   const lin = (c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
   const n = parseInt(m[1], 16);
   const lum = 0.2126 * lin(((n >> 16) & 255) / 255) + 0.7152 * lin(((n >> 8) & 255) / 255) + 0.0722 * lin((n & 255) / 255);
-  // Contrast with white (luminance 1) against with #1c1917 (about 0.011).
+  // Contrast with white (luminance 1) against contrast with #1c1917: its
+  // luminance is about 0.010, so 0.06 with the 0.05 both sides add; 0.061
+  // rounds that up a little.
   return (1.05 / (lum + 0.05)) >= (lum + 0.05) / 0.061 ? '#fff' : '#1c1917';
 }

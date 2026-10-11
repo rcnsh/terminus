@@ -67,17 +67,20 @@ export function Toast() {
 let saveTimer = null;
 /** Counts edits: a save's reply doesn't replace edits made while it was on its way. */
 let edits = 0;
+/** Saves on their way: until they're back, the server's copy may not have them yet. */
+let saving = 0;
 
 export async function loadProfile() {
   profile.set(await api('/api/me/profile'));
   return profile.get();
 }
 
-/** The profile afresh (it may have changed on the map or another device), unless a change here is waiting. */
+/** The profile afresh (it may have changed on the map or another device), unless a change here is waiting or being saved. */
 export async function reloadProfile() {
-  if (saveTimer) return;
+  if (saveTimer || saving) return;
+  const mine = edits;
   const p = await api('/api/me/profile');
-  if (!saveTimer) profile.set(p);
+  if (!saveTimer && !saving && mine === edits) profile.set(p);
 }
 
 /**
@@ -93,6 +96,7 @@ export function edit(change) {
   saveTimer = setTimeout(async () => {
     saveTimer = null;
     const mine = edits;
+    saving++;
     try {
       const saved = await api('/api/me/profile', { method: 'PUT', body: profile.get() });
       if (mine === edits) profile.set(saved);
@@ -100,6 +104,8 @@ export function edit(change) {
       saves.set((n) => n + 1);
     } catch (err) {
       toast(err.status ? t('Not saved. {0}', err.message) : t('Not saved. Check your connection.'), { error: true });
+    } finally {
+      saving--;
     }
   }, 400);
 }
@@ -111,7 +117,13 @@ export async function saveNow(change) {
   const next = structuredClone(profile.get());
   change?.(next);
   edits++;
-  const saved = await api('/api/me/profile', { method: 'PUT', body: next });
+  saving++;
+  let saved;
+  try {
+    saved = await api('/api/me/profile', { method: 'PUT', body: next });
+  } finally {
+    saving--;
+  }
   profile.set(saved);
   saves.set((n) => n + 1);
   return saved;

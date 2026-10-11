@@ -24,9 +24,17 @@
   /** The browser and its major version, e.g. "Chrome 140": nothing finer. */
   const browser = () => {
     const ua = navigator.userAgent;
-    const m = /(Edg|Firefox|Chrome)\/(\d+)/.exec(ua) ?? /Version\/(\d+).*Safari/.exec(ua);
-    if (!m) return '';
-    return m.length === 3 ? `${m[1] === 'Edg' ? 'Edge' : m[1]} ${m[2]}` : `Safari ${m[1]}`;
+    // The most particular first: Edge's names Chrome too, and Chrome's and Firefox's on iOS name Safari.
+    for (const [name, re] of [
+      ['Edge', /Edg(?:A|iOS)?\/(\d+)/],
+      ['Firefox', /(?:Firefox|FxiOS)\/(\d+)/],
+      ['Chrome', /(?:Chrome|CriOS)\/(\d+)/],
+      ['Safari', /Version\/(\d+).*Safari/],
+    ]) {
+      const m = re.exec(ua);
+      if (m) return `${name} ${m[1]}`;
+    }
+    return '';
   };
 
   /** Only errors in terminus's own scripts: an extension's or another site's aren't ours to fix. */
