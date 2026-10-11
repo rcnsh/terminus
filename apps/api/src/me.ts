@@ -491,7 +491,9 @@ export const ME_ROUTES: MeRoute[] = [
         const today = sgtDate(nowMs);
         const date = typeof body?.date === 'string' ? body.date : today;
         // A real day: 2026-10-45 passes the pattern and sorts inside the week.
-        const real = /^\d{4}-\d{2}-\d{2}$/.test(date) && new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) === date;
+        // 2026-13-01 is no date at all, and toISOString() would throw on it.
+        const day = Date.parse(`${date}T00:00:00Z`);
+        const real = /^\d{4}-\d{2}-\d{2}$/.test(date) && Number.isFinite(day) && new Date(day).toISOString().slice(0, 10) === date;
         if (!real || date < today || date > sgtDate(nowMs + 7 * 86_400_000)) return json({ error: 'date must be today or within the next week (YYYY-MM-DD)' }, 400);
         if (date === today && atMin <= sgt(nowMs).minutes) return json({ error: 'that time has passed today' }, 400);
         const label = typeof body?.label === 'string' && body.label.trim() ? body.label.trim().slice(0, PROFILE_LIMITS.label) : dest.label;
