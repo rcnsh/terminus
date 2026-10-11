@@ -34,9 +34,19 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT=$(pwd)
-VERSION="${1:?usage: scripts/release-beta.sh <version, e.g. 2.0.1-beta.1> [--dry-run]}"
+USAGE="usage: scripts/release-beta.sh <version, e.g. 2.0.1-beta.1> [--dry-run]"
+VERSION=
 DRY=0
-[ "${2:-}" = "--dry-run" ] && DRY=1
+# --dry-run anywhere; any other option, or a second version, stops here: a
+# mistyped one (--dryrun) would otherwise deploy and publish a real beta.
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run) DRY=1 ;;
+    -*) echo "$USAGE (\"$arg\" isn't an option)"; exit 1 ;;
+    *) [ -z "$VERSION" ] || { echo "$USAGE (one version only)"; exit 1; }; VERSION=$arg ;;
+  esac
+done
+[ -n "$VERSION" ] || { echo "$USAGE"; exit 1; }
 . scripts/release-lib.sh
 # As in release.sh: the address the apps call, kept for good.
 SITE=https://beta.terminus.rcn.sh
