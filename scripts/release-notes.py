@@ -97,9 +97,11 @@ def notes(version: str, tag: str, prev: str, apk: str, mac: str, channel: str = 
                 continue  # the version bump itself
             if s.startswith('[ImgBot]') or s == 'optimize images':
                 continue  # image compression, nothing to see
-            s = escape_text(s[:1].upper() + s[1:])
-            # The first sentence of each commit subject ("e.g." and "i.e." end none).
-            changes.append('- ' + re.split(r'(?<=[a-z0-9)`"])(?<!\be\.g)(?<!\bi\.e)\. (?=[A-Z`])', s, maxsplit=1)[0].rstrip('.'))
+            # The first sentence of each commit subject ("e.g." and "i.e." end
+            # none), found before it's capitalised, so a subject starting
+            # "e.g." is still one.
+            s = re.split(r'(?<=[a-z0-9)`"])(?<!\be\.g)(?<!\bi\.e)\. (?=[A-Z`])', s, maxsplit=1)[0].rstrip('.')
+            changes.append('- ' + escape_text(s[:1].upper() + s[1:]))
         if changes:
             body = '\n'.join(changes)
             if has_highlights:
