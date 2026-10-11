@@ -1597,6 +1597,6 @@ test('a page opened on the old address goes to terminus.run; the apps and the up
   assert.equal((await at('beta.terminus.rcn.sh', '/account/', html, beta)).headers.get('location'), 'https://beta.terminus.run/account/');
   assert.notEqual((await at('terminus.rcn.sh', '/', html, beta)).status, 301);
   assert.notEqual((await at('beta.terminus.rcn.sh', '/', html)).status, 301);
-  // Off unless MOVE_PAGES is "on": while NUS Wi-Fi refuses terminus.run, the old address serves its pages.
+  // Off unless MOVE_PAGES is "on" (off if a network refuses terminus.run): the old address serves its pages.
   assert.notEqual((await at('terminus.rcn.sh', '/account/', html, makeEnv())).status, 301);
 });
