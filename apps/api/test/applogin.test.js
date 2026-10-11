@@ -362,6 +362,9 @@ test('versions compare by number, a pre-release before its release', () => {
   assert.equal(versionBelow('2.6.0-beta.10', '2.6.0-beta.4'), false);
   assert.equal(versionBelow('2.6.0', '2.6.0-beta.4'), false);
   assert.equal(versionBelow('2.7.0-beta.1', '2.6.0'), false);
+  // Build metadata isn't a pre-release, whatever it holds.
+  assert.equal(versionBelow('2.6.0+build-1', '2.6.0'), false);
+  assert.equal(versionBelow('2.6.0-beta.3+build-1', '2.6.0'), true);
   // Unreadable on either side: never refused.
   assert.equal(versionBelow('nightly', '2.6.0'), false);
   assert.equal(versionBelow('1.0.0', 'soon'), false);
@@ -507,6 +510,18 @@ test('one inbox is sent at most ten sign-in emails an hour', async () => {
   assert.equal(await takeMailBudget(env, 'a@u.nus.edu', hour + 30 * 60_000), false);
   assert.equal(await takeMailBudget(env, 'b@u.nus.edu', hour), true, 'per inbox');
   assert.equal(await takeMailBudget(env, 'a@u.nus.edu', hour + 3_600_000), true, 'the next hour');
+});
+
+test('an inbox over its hourly budget does not spend the global email ceiling', async () => {
+  const { takeMailBudget, requestLink, inboxKey: inboxOf, MAILS_PER_HOUR } = await import('../src/accounts.ts');
+  const { env } = setup();
+  const now = Date.now();
+  for (let i = 0; i < MAILS_PER_HOUR; i++) await takeMailBudget(env, inboxOf(ME), now);
+  let spent = 0;
+  env.RL_MAIL = { limit: async () => (spent++, { success: true }) };
+  assert.equal(await requestLink(env, env.DB, ME, 'https://terminus.run', now), 'cooldown');
+  assert.equal((await call(env, '/api/auth/app/start', { method: 'POST', body: { email: ME, name: 'x' } })).status, 429);
+  assert.equal(spent, 0);
 });
 
 test('app sign-in: a repeat in the cooldown does not spend the global email ceiling', async () => {

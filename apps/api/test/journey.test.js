@@ -138,3 +138,18 @@ test('a planned trip home shows the planned bus, with the headline bus as its ba
   assert.equal(j.bus.svc, 'D2');
   assert.equal(j.backup.svc, 'A1');
 });
+
+test('a kept plan that changes buses never gives the change stop as where you get off', async () => {
+  const { leaveOf } = await import('../src/trip.ts');
+  const first = { svc: 'A1', stop: 'PGP', board: '2026-10-07T01:00:00Z', arrive: '2026-10-07T01:06:00Z', stopCode: 'PGP', alightCode: 'KR-MRT' };
+  // The second bus's off stop unknown: no off stop at all, rather than KR MRT.
+  const l = leaveOf({ ...first, change: { svc: 'D2', stop: 'Opp KR MRT', board: '2026-10-07T01:10:00Z', arrive: '2026-10-07T01:20:00Z', stopCode: 'KR-MRT-OPP' } });
+  assert.equal(l.arrive, '2026-10-07T01:20:00Z');
+  assert.equal(l.toStop, undefined);
+  assert.equal(l.offCode, undefined);
+  assert.equal(l.change.fromCode, 'KR-MRT');
+  // Known: the second bus's.
+  const k = leaveOf({ ...first, change: { svc: 'D2', stop: 'Opp KR MRT', board: '2026-10-07T01:10:00Z', arrive: '2026-10-07T01:20:00Z', stopCode: 'KR-MRT-OPP', alightCode: 'UTOWN' } });
+  assert.equal(k.offCode, 'UTOWN');
+  assert.equal(k.toStop, 'UTown');
+});

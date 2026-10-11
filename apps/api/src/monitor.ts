@@ -385,7 +385,10 @@ export async function housekeeping(db: D1Database, nowMs: number, daily = true, 
   ];
   // These read every row of large tables, and their limits are counted in
   // days, so once a day is enough. Sign-in already refuses an expired session.
+  // Where the anonymous accounts' DELETE ... RETURNING id lands in the batch.
+  let anonAt = -1;
   if (daily) {
+    anonAt = stmts.length;
     stmts.push(
       // The planner prefers the UNIQUE email index, which reads every anonymous account.
       db.prepare('DELETE FROM users INDEXED BY users_anon_idle WHERE email IS NULL AND last_seen < ? RETURNING id').bind(nowMs - ACCOUNT_TTL.anonIdleMs),
@@ -399,7 +402,7 @@ export async function housekeeping(db: D1Database, nowMs: number, daily = true, 
   }
   const out = await db.batch(stmts);
   if (!daily || !env) return;
-  const ids = ((out[3]?.results ?? []) as Array<{ id: string }>).map((r) => r.id);
+  const ids = ((out[anonAt]?.results ?? []) as Array<{ id: string }>).map((r) => r.id);
   for (let i = 0; i < ids.length; i += ARM_AT_ONCE) await Promise.all(ids.slice(i, i + ARM_AT_ONCE).map((id) => clearTrip(env, id)));
 }
 
@@ -451,6 +454,8 @@ const ARM_AT_ONCE = 20;
  */
 export async function armTrips(env: Env, nowMs: number, batch = ARM_BATCH): Promise<number> {
   if (!env.DB || !env.TRIPS || !pushEnabled(env)) return 0;
+  // At least one: an empty batch would never finish the day.
+  batch = Math.max(1, Math.floor(batch));
   const today = sgtDate(nowMs);
   const hour = new Date(nowMs + 8 * 3_600_000).getUTCHours();
   if (hour < ARM_FROM_HOUR) return 0;
@@ -482,7 +487,9 @@ export async function armTrips(env: Env, nowMs: number, batch = ARM_BATCH): Prom
     await env.KV.put(ARMED_KEY, done ? today : `${today} ${results[results.length - 1].user_id}`, { expirationTtl: 2 * 86_400 });
   }
   if (failed.length || kept) {
-    const keep = [...new Set([...failed, ...left.slice(batch)])].slice(0, ARM_BATCH);
+    // Everything this run asked can fail (the retried and the new, a batch
+    // each): all of it is kept, older leftovers past that dropped.
+    const keep = [...new Set([...failed, ...left.slice(batch)])].slice(0, 2 * batch);
     if (keep.length) await env.KV.put(ARM_RETRY_KEY, `${today} ${keep.join(' ')}`, { expirationTtl: 86_400 });
     else await env.KV.delete(ARM_RETRY_KEY);
     if (failed.length) console.error('trips not armed', failed.length);
@@ -541,6 +548,8 @@ export function termNoticeFor(p: { trips?: unknown; term?: { acadYear: string; s
  */
 export async function remindTerm(env: Env, nowMs: number, batch = ARM_BATCH): Promise<number> {
   if (!env.DB || !pushEnabled(env)) return 0;
+  // At least one: an empty batch would never finish the term's reminders.
+  batch = Math.max(1, Math.floor(batch));
   const soon = semesterSoon(nowMs);
   if (!soon || new Date(nowMs + 8 * 3_600_000).getUTCHours() < REMIND_FROM_HOUR) return 0;
   const id = `${soon.term.acadYear} ${soon.term.semester}`;

@@ -140,7 +140,7 @@ node apps/api/scripts/dev-stub.mjs    # local Worker on :8787 with a fake feed a
 - Website JS: CI runs `node --check` on every file in `apps/web/public`.
 - Android (CI): `./gradlew :app:lintStableDebug :app:testStableDebugUnitTest :app:compileBetaDebugKotlin`,
   then `:app:assembleStableRelease :app:assembleBetaRelease` (R8 and
-  resource shrinking, debug-signed without the keystore) in `apps/android`
+  resource shrinking, unsigned without the keystore) in `apps/android`
   (Java 21).
 - Android dependencies are locked and hash-checked. On a Dependabot Gradle
   PR, the `android deps` workflow writes the lockfiles and hashes and

@@ -55,7 +55,14 @@ const enc = new TextEncoder();
 let keyMemo: { token: string; key: Promise<CryptoKey> } | null = null;
 
 function hmacKey(token: string): Promise<CryptoKey> {
-  if (keyMemo?.token !== token) keyMemo = { token, key: crypto.subtle.importKey('raw', enc.encode(`terminus operator passkeys\n${token}`), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']) };
+  if (keyMemo?.token !== token) {
+    const key = crypto.subtle.importKey('raw', enc.encode(`terminus operator passkeys\n${token}`), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
+    // A refused import isn't kept: the next call tries again.
+    key.catch(() => {
+      if (keyMemo?.key === key) keyMemo = null;
+    });
+    keyMemo = { token, key };
+  }
   return keyMemo.key;
 }
 
@@ -100,7 +107,10 @@ export async function newSession(token: string, nowMs: number): Promise<{ sessio
 
 export async function sessionOk(token: string | undefined, given: string | null, nowMs: number): Promise<boolean> {
   if (!token || !given?.startsWith(SESSION_PREFIX)) return false;
-  const [exp, sig] = given.slice(SESSION_PREFIX.length).split('.');
+  // Exactly two parts: `.junk` after the mac is no session, however well signed.
+  const parts = given.slice(SESSION_PREFIX.length).split('.');
+  if (parts.length !== 2) return false;
+  const [exp, sig] = parts;
   const sigBytes = sig ? decode(sig) : null;
   if (!/^\d{13}$/.test(exp ?? '') || !sigBytes || Number(exp) <= nowMs) return false;
   return macOk(token, 'session', enc.encode(exp), sigBytes);

@@ -52,7 +52,8 @@ import { scopeCache } from './edgecache.ts';
 import { GRAPH, GRAPH_PUBLIC, twinOf } from './graph.ts';
 import { isBeta, linkOrigin, markBeta, movedApi, movedPage } from './site.ts';
 import { answerFor, arrivedAnswer, collectArrivals, needsSetupAnswer } from './answer.ts';
-import { langOfRequest, m, withLang } from './i18n.ts';
+import { lang, langOfRequest, m, withLang } from './i18n.ts';
+import type { Lang } from './i18n.ts';
 
 // Pure functions of the static GRAPH, computed once per isolate on first
 // use (not at module scope: every cold start would pay for them, ~1000
@@ -148,23 +149,31 @@ async function probeAuth(env: Env, nowMs: number): Promise<Record<string, unknow
 }
 
 /**
- * GET /api/campus -- static map + search data for the Map and Plan tabs. Pure
- * function of the bundled stop graph: it only changes when a deploy ships a
- * new scrape. So it's written once per isolate, with an ETag of its own
- * bytes, and a client that already has it (the browser revalidating after
- * max-age) gets a 304 instead of the 100 KB again.
+ * GET /api/campus -- static map + search data for the map and the
+ * destination search. Pure function of the bundled stop graph and the
+ * request's language (a landmark's kind is worded): it only changes when a
+ * deploy ships a new scrape. So it's written once per isolate and language,
+ * with an ETag of its own bytes, and a client that already has it (the
+ * browser revalidating after max-age) gets a 304 instead of the 100 KB again.
  */
-let campusBody: Promise<{ body: string; etag: string }> | null = null;
+const campusBodies = new Map<Lang, Promise<{ body: string; etag: string }>>();
 
 async function handleCampus(req: Request): Promise<Response> {
-  campusBody ??= (async () => {
-    const map = buildCampusMap(GRAPH);
-    const body = JSON.stringify({ viewBox: map.viewBox, stops: map.stops, routes: map.routes, destinations: buildDestinations(GRAPH), residences: residenceList() });
-    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(body)));
-    return { body, etag: `"${Array.from(digest.slice(0, 12)).map((b) => b.toString(16).padStart(2, '0')).join('')}"` };
-  })();
-  const { body, etag } = await campusBody;
-  const headers = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'private, max-age=3600', etag, ...CORS };
+  const l = lang();
+  let made = campusBodies.get(l);
+  if (!made) {
+    made = (async () => {
+      const map = buildCampusMap(GRAPH);
+      const body = JSON.stringify({ viewBox: map.viewBox, stops: map.stops, routes: map.routes, destinations: buildDestinations(GRAPH), residences: residenceList() });
+      const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(body)));
+      return { body, etag: `"${Array.from(digest.slice(0, 12)).map((b) => b.toString(16).padStart(2, '0')).join('')}"` };
+    })();
+    // A failure isn't kept: the next request builds it again.
+    made.catch(() => campusBodies.delete(l));
+    campusBodies.set(l, made);
+  }
+  const { body, etag } = await made;
+  const headers = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'private, max-age=3600', vary: 'accept-language', etag, ...CORS };
   if (matchesEtag(req, etag)) return new Response(null, { status: 304, headers });
   return new Response(body, { headers });
 }
@@ -268,11 +277,6 @@ async function handleLine(url: URL, env: Env, ctx: ExecutionContext, nowMs: numb
 }
 
 /**
- * A page of the website. One that isn't there, asked for by a browser, is
- * the not-found page (web/public/not-found/), still with a 404; anything
- * else, a script or a client, gets what the website answered.
- */
-/**
  * Opening the web app with no session goes straight to sign-in, before any
  * page is drawn, rather than the app flashing up and then leaving on its
  * first 401. Only a page being opened (a document, whether the browser or
@@ -286,6 +290,11 @@ export function signInFirst(req: Request, url: URL): boolean {
     && !hasSessionCookie(req);
 }
 
+/**
+ * A page of the website. One that isn't there, asked for by a browser, is
+ * the not-found page (web/public/not-found/), still with a 404; anything
+ * else, a script or a client, gets what the website answered.
+ */
 async function sitePage(req: Request, assets: Fetcher): Promise<Response> {
   const res = await assets.fetch(req);
   if (res.status !== 404 || !(req.headers.get('accept') ?? '').includes('text/html')) return res;

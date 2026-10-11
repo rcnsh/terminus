@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 
 import { FROZEN_NOW, installGlobals, makeBucket, makeCtx, makeEnv, makeFetch } from './_stubs.mjs';
 import worker from '../src/index.ts';
+import { glyphRange } from '../src/map.ts';
 
 const BASE = 'https://bus.example.test';
 const SIZE = 2000;
@@ -145,4 +146,33 @@ test('the stable site and the beta share one edge cache but never serve each oth
   const betaTag = (await beta('/map/campus.pmtiles', { range: 'bytes=0-9' })).headers.get('etag');
   assert.notEqual(stableTag, betaTag, 'each site has its own map file');
   assert.equal((await stable('/map/campus.pmtiles', { range: 'bytes=0-9' })).headers.get('etag'), stableTag);
+});
+
+test('with no edge cache, an If-Match that names another file is a 412, not a 304', async () => {
+  const { get } = setup(new Map([['map/campus.pmtiles', bytesOf(8)]]));
+  delete globalThis.caches;
+  const res = await get('/map/campus.pmtiles', { 'if-match': '"another"' });
+  assert.equal(res.status, 412);
+  assert.equal(res.headers.get('access-control-allow-origin'), '*');
+});
+
+test('a range past the end of the file is a 416 a page on another site can read', async () => {
+  const { get } = setup(new Map([['map/campus.pmtiles', bytesOf(9)]]));
+  const res = await get('/map/campus.pmtiles', { range: `bytes=${SIZE + 10}-` });
+  assert.equal(res.status, 416);
+  assert.equal(res.headers.get('access-control-allow-origin'), '*');
+});
+
+test('glyph ranges are asked for only as MapLibre writes them', () => {
+  for (const ok of ['0-255', '256-511', '65280-65535']) assert.equal(glyphRange(ok), true, ok);
+  for (const bad of ['0256-0511', '-255', '1-256', '256-510', '65536-65791', '0-0255']) assert.equal(glyphRange(bad), false, bad);
+});
+
+test('with no edge cache, R2 refusing a range past the end is a 416 that says the size', async () => {
+  const { get } = setup(new Map([['map/campus.pmtiles', bytesOf(10)]]));
+  delete globalThis.caches;
+  const res = await get('/map/campus.pmtiles', { range: `bytes=${SIZE + 10}-` });
+  assert.equal(res.status, 416);
+  assert.equal(res.headers.get('content-range'), `bytes */${SIZE}`);
+  assert.equal(res.headers.get('access-control-allow-origin'), '*');
 });

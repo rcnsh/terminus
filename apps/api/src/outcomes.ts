@@ -1,6 +1,6 @@
 /**
  * What happened to each planned trip, and what terminus learns from it
- * without being creepy about it (phase 3).
+ * without being creepy about it.
  *
  * One row per trip per day in `trip_outcomes`: what detection saw from the
  * phone's location (boarded, missed, arrived) or "Not going" (skipped). terminus
@@ -81,7 +81,9 @@ export async function setPref(db: D1Database, userId: string, key: string, pref:
       db
         .prepare('INSERT INTO trip_prefs (user_id, trip_key, pref, label, set_at) VALUES (?, ?, ?, ?, ?)')
         .bind(userId, key, choice === 'accept' ? pref : `no-${pref}`, label, nowMs),
-      // Accepting "leave earlier" starts the count again, so it isn't suggested twice.
+      // Either answer, accepting or turning it down, starts the count again
+      // (misses for "leave earlier", skips for "stop reminders"), so the same
+      // days can't suggest it twice; a turned-down one also waits DISMISS_DAYS.
       db.prepare('DELETE FROM trip_outcomes WHERE user_id = ? AND trip_key = ? AND outcome = ?').bind(userId, key, pref === 'earlier' ? 'missed' : 'skipped'),
       // The oldest go first past the cap.
       db

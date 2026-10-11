@@ -2,10 +2,11 @@
 """
 Scrape the static NUS ISB stop graph into data/stops.json.
 
-Stop locations, route order and operating hours change a few times a year, not
-a few times a minute, so this runs weekly in CI and the result is bundled into
-the Worker. Fetching it per request would add latency and an upstream
-dependency to every answer.
+Stop locations and route order change a few times a year, not a few times a
+minute, so this runs weekly in CI and the result is bundled into the Worker.
+Fetching it per request would add latency and an upstream dependency to every
+answer. The proxy publishes no operating hours: they're kept by hand in
+data/service-hours.json, and `serviceHours` here is always empty.
 
 The `routes` ordering is what makes direction resolution work. It is the part
 to get right; everything else in this file is bookkeeping.
@@ -267,19 +268,6 @@ def opposite_of(stop: dict, by_name: dict, codes: set) -> str | None:
     else:
         twin = f"Opp {clean}"
     return by_name.get(twin.lower())
-
-
-TIME_RE = re.compile(r"\b([0-2]?\d)[:.]([0-5]\d)\b")
-
-
-def parse_window(value):
-    """Pull an [open, close] pair out of whatever free text the feed carries."""
-    if not value:
-        return None
-    found = TIME_RE.findall(str(value))
-    if len(found) < 2:
-        return None
-    return [f"{int(h):02d}:{m}" for h, m in found[:2]]
 
 
 def scrape(session: dict, route_codes: list) -> dict:

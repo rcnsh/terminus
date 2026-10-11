@@ -110,7 +110,8 @@ def metres(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 def hhmm(v: str | None) -> str | None:
     """LTA's "0622" as "06:22"; "2400" is midnight; "-" and blanks are unknown."""
-    if not v or not v.strip().isdigit() or len(v.strip()) != 4:
+    v = (v or "").strip()
+    if not v.isdigit() or len(v) != 4:
         return None
     h, m = int(v[:2]), int(v[2:])
     if h == 24 and m == 0:
