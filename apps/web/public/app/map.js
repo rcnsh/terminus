@@ -187,6 +187,14 @@ let lastAnswer = -Infinity;
 /** The last answer's buses are last-known places (the feed didn't answer): drawn faded. */
 let dimmed = false;
 let glide = null;
+/**
+ * The map being built (MapLibre, the map file's reader and the campus
+ * fetched first): kept so the tab left and opened again before it's done
+ * waits for the same build rather than starting a second map in the box.
+ */
+let building = null;
+/** The pmtiles: protocol, added once for the page. */
+let protocolAdded = false;
 /** The whole-campus view, for the button back to it. */
 let fit = null;
 
@@ -222,15 +230,28 @@ async function allowed() {
 
 /* ---------- the map ---------- */
 
+/** The map, built once: a build already under way is the same one; a failed one is tried again. */
+function ensureMap(container) {
+  building ??= build(container).catch((err) => {
+    building = null;
+    throw err;
+  });
+  return building;
+}
+
 async function build(container) {
-  const css = document.createElement('link');
-  css.rel = 'stylesheet';
-  css.href = `${MAPLIBRE}maplibre-gl.css`;
-  document.head.append(css);
+  const href = `${MAPLIBRE}maplibre-gl.css`;
+  if (![...document.querySelectorAll('link[rel="stylesheet"]')].some((l) => l.getAttribute('href') === href)) {
+    const css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = href;
+    document.head.append(css);
+  }
   const [maplibre, { Protocol }, data] = await Promise.all([import(`${MAPLIBRE}maplibre-gl.mjs`), import(PMTILES), loadCampus()]);
   ml = maplibre;
   campusData.set(data);
-  ml.addProtocol('pmtiles', new Protocol({ metadata: true }).tile);
+  if (!protocolAdded) ml.addProtocol('pmtiles', new Protocol({ metadata: true }).tile);
+  protocolAdded = true;
 
   const core = data.stops.filter((s) => s.core);
   fit = boundsOf(core.map((s) => [s.lon, s.lat]));
@@ -339,6 +360,8 @@ async function startOnMe() {
 /** Your dot, kept up to date while the map is open; only with location already allowed. */
 async function followMe() {
   if (watchId !== null || !(await allowed()) || !visible) return;
+  // Asked again while allowed() was on its way: that call's watch is the one.
+  if (watchId !== null) return;
   watchId = navigator.geolocation.watchPosition(
     (p) => map.getSource('me')?.setData({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [p.coords.longitude, p.coords.latitude] } }),
     () => {},
@@ -1319,8 +1342,14 @@ export function MapTab({ visible: on, focus, onFocused, onGoTo, onSaved }) {
     if (map) return resume();
     visible = true;
     setState('loading');
-    build(container.current)
-      .then(() => setState('ready'))
+    // Left before the build finished, hide() has paused it (visible is false)
+    // and nothing more starts; back again, the same build is waited for and
+    // the map, sized while its tab was hidden, resumed once it's there.
+    ensureMap(container.current)
+      .then(() => {
+        setState('ready');
+        if (visible) resume();
+      })
       .catch((err) => setState(err.message === 'signed out' ? 'idle' : 'failed'));
   }, [on]);
 

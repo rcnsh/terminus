@@ -48,6 +48,8 @@ const walkMin = (m, speedMs) => Math.max(1, Math.round(m / speedMs / 60));
 
 /** What a result's group is called in the list. */
 export const groupOf = (d) => GROUP[d.kind] ?? t('Other places');
+/** Which group a result is in: its kind, or one group for every kind this page doesn't know. */
+export const groupKey = (d) => (Object.hasOwn(GROUP, d.kind) ? d.kind : '?');
 
 /** The line under a result: where it takes you. `stopName(code)` names a stop. */
 export function metaOf(d, stopName, speedMs = 1.3) {
@@ -60,7 +62,24 @@ export function metaOf(d, stopName, speedMs = 1.3) {
   return `${code}${t('{0} stop', stopName(d.stopCode))}${d.walkM != null ? t(', {0} min walk', walkMin(d.walkM, speedMs)) : ''}`;
 }
 
-/** The results for `query`: `pinned` first whenever they match, in their own group. */
+/**
+ * Ranked results as the box shows them, in groups: each kind's results
+ * together, the groups in the order of each one's best result, and rank
+ * order kept inside a group. So each heading shows once, however the scores
+ * interleave the kinds (never Stops, Buildings, Stops again). Pinned results
+ * come first, so their group leads. The apps group the same way.
+ */
+export function grouped(list) {
+  const groups = new Map();
+  for (const d of list) {
+    const k = groupKey(d);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(d);
+  }
+  return [...groups.values()].flat();
+}
+
+/** The results for `query`, ranked: `pinned` first whenever they match. The box shows them grouped(). */
 export function results(query, { source, suggestions, pinned = () => [] }) {
   const q = query.trim();
   if (!q) return suggestions();

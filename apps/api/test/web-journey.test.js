@@ -71,7 +71,7 @@ const android = {
     if (!j.boardAt) return null;
     const left = Math.trunc((Date.parse(j.boardAt) - now) / 1000);
     if (left <= 0) return null;
-    return left >= 120 ? t('in {0} min', Math.trunc((left + 30) / 60)) : t('in {0} min {1} s', Math.trunc(left / 60), left % 60);
+    return left >= 120 ? t('in {0} min', Math.trunc((left + 30) / 60)) : left >= 60 ? t('in {0} min {1} s', Math.trunc(left / 60), left % 60) : t('in {0} s', left);
   },
 };
 
@@ -164,7 +164,9 @@ test('the bus\'s "in 4 min": minutes and seconds under two minutes, gone once it
   useLang('en');
   assert.equal(J.busIn(j, board - 10 * 60_000), 'in 10 min');
   assert.equal(J.busIn(j, board - 119_000), 'in 1 min 59 s');
-  assert.equal(J.busIn(j, board - 30_000), 'in 0 min 30 s');
+  // Its last minute in seconds alone, never "in 0 min 30 s".
+  assert.equal(J.busIn(j, board - 30_000), 'in 30 s');
+  assert.equal(J.busIn(j, board - 60_000), 'in 1 min 0 s');
   assert.equal(J.busIn(j, board), null);
   assert.equal(J.busIn({ ...j, boardAt: null }, board), null);
 });

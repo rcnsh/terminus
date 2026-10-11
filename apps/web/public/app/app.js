@@ -549,14 +549,41 @@ async function showTab() {
   if (animate) fadeIn(views[next]);
   if (next === 'map') {
     // The map's code on its first opening, after the fade: the tab shows at once.
-    if (!mapModule.get()) mapModule.set(await import('/app/map.js'));
+    loadTab(mapModule, '/app/map.js');
   } else if (next === 'buses') {
-    if (!busesModule.get()) busesModule.set(await import('/app/buses.js').catch(() => ({ failed: true })));
+    loadTab(busesModule, '/app/buses.js');
   } else if (next === 'settings') {
     openSettings();
   } else if (from !== null) {
     // start() refreshes once it has drawn the first tab.
     refresh();
+  }
+}
+
+/** Failed imports of a tab's code so far, by path. */
+const importFails = new Map();
+/** Tabs whose code is on its way, by path. */
+const importing = new Set();
+
+/**
+ * A tab's code into [mod], unless it's there already or on its way. A failed
+ * import is `{ failed: true }` (the tab says it needs a connection), tried
+ * again the next time the tab opens or the connection comes back, showing
+ * Loading… meanwhile. Browsers keep a module that failed to load as failed
+ * for the page, so a retry asks for it at a new address.
+ */
+async function loadTab(mod, path) {
+  if ((mod.get() && !mod.get().failed) || importing.has(path)) return;
+  const fails = importFails.get(path) ?? 0;
+  importing.add(path);
+  mod.set(null);
+  try {
+    mod.set(await import(fails ? `${path}?retry=${fails}` : path));
+  } catch {
+    importFails.set(path, fails + 1);
+    mod.set({ failed: true });
+  } finally {
+    importing.delete(path);
   }
 }
 
@@ -1195,6 +1222,7 @@ function MapArea() {
   const mod = useStore(mapModule);
   const now = useStore(tab);
   const focus = useStore(stopToShow);
+  if (mod?.failed) return html`<p class="hint">${t('The map needs a connection the first time.')}</p>`;
   if (!mod) return null;
   return html`<${mod.MapTab} visible=${now === 'map'} focus=${focus} onFocused=${() => stopToShow.set(null)} onGoTo=${goToStop} onSaved=${refresh} />`;
 }
@@ -1356,7 +1384,12 @@ async function start() {
   setInterval(() => nowShown() && refresh({ timed: true }), REFRESH_MS);
   document.addEventListener('visibilitychange', () => nowShown() && refresh({ timed: true, back: true }));
   // Back online: every open page at once, so only the ones on screen.
-  window.addEventListener('online', () => nowShown() && refresh());
+  window.addEventListener('online', () => {
+    if (nowShown()) refresh();
+    // A tab whose code failed to load, on screen: try it again.
+    if (tab.get() === 'map' && mapModule.get()?.failed) loadTab(mapModule, '/app/map.js');
+    if (tab.get() === 'buses' && busesModule.get()?.failed) loadTab(busesModule, '/app/buses.js');
+  });
 }
 
 start();
