@@ -33,14 +33,12 @@ in debug and beta builds, after seven taps on the version in a stable
 release) switches between the addresses built in and, in debug builds, the
 dev stub, never a typed one (`Servers.kt`, `Servers` in `Api.swift`).
 
-**NUS Wi-Fi refuses terminus.run for now** (its firewall resets connections
-to so new a domain; found 9 October 2026). Until it loads on campus Wi-Fi,
-emailed links point at terminus.rcn.sh (`LINK_ORIGIN`, `linkOrigin` in
-`src/site.ts`) and the old address's pages are not redirected to
-terminus.run (`movedPage`, off unless `MOVE_PAGES` is `on`). Both are set
-in `cloudflare.config.ts` (`movingOff`), which says how to undo them. Sign-in
-email still comes from login@terminus.run: mail doesn't pass the campus
-firewall. The privacy contact stays privacy@rcn.sh,
+Pages opened on the old address go to the same page on terminus.run
+(`movedPage` in `src/site.ts`, on with `MOVE_PAGES`), and emailed links use
+terminus.run (`linkOrigin`). From 9 to 11 October 2026 NUS Wi-Fi reset
+connections to terminus.run, and both were switched off;
+`cloudflare.config.ts` says how to do that again if a network refuses it. The
+privacy contact stays privacy@rcn.sh,
 the domain kept for good, so personal requests never go to a lapsed
 terminus.run. So every `terminus.rcn.sh` and `rcn.sh` left in the repo is
 on purpose: don't find-and-replace them.
