@@ -494,7 +494,8 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
       case '/api/openapi.json':
         // servers[] is this request's origin, so the docs' "Send API Request"
         // hits whichever deployment is serving them.
-        // Built once per origin (openApiJson); the headers are jsonCached's.
+        // Built once per origin (openApiJson), already JSON, so the headers
+        // jsonCached would write are written here.
         return new Response(openApiJson(url.origin), {
           headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=300', ...CORS },
         });

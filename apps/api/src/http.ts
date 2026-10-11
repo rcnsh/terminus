@@ -147,7 +147,7 @@ export async function timedFetch(what: string, url: string, init: RequestInit, m
  */
 /** The QR library on the account page (settings-pages.js loads it, with SRI,
  *  from its own copy of this address: the website can't import the API's
- *  modules, and web-settings.test.js keeps the two the same). */
+ *  modules, and test/http.test.js keeps the two the same). */
 export const QR_LIB = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
 /** Stoplight Elements for /docs (openapi.ts), pinned so a release can't change the page underneath us. */
 export const ELEMENTS = 'https://unpkg.com/@stoplight/elements@9.0.25';

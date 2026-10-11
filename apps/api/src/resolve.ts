@@ -913,8 +913,8 @@ export function scoreOptions(
    *  is kept, its first bus guessed from its start. For a class: at 06:30 the
    *  08:00 class's bus is the D2 that starts at 07:15, not "Services ended".
    *  `transfers`: trips with a change of bus to time as well (planTransfers),
-   *  their stops' arrivals in `arrivalsByStop` with the rest. */
-  /** `walkWeight`: what a second on foot costs against one waiting or
+   *  their stops' arrivals in `arrivalsByStop` with the rest.
+   *  `walkWeight`: what a second on foot costs against one waiting or
    *  riding (WALK.sunWeight), so a longer walk for a sooner bus must save more. */
   opts: { openBy?: number; transfers?: TransferRoute[]; walkWeight?: number } = {},
 ): ScoredOption[] {

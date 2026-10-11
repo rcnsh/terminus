@@ -152,7 +152,8 @@ export class Trip {
     const nowMs = Date.now();
     await loadCalendar(this.env, nowMs);
     const deleteAt = await this.storage.get<number>('deleteAt');
-    // Midnight (or an object from before phase 3, which only knew midnight).
+    // Midnight (or an object with no deleteAt, from before it was kept, whose
+    // only alarm was midnight).
     if (deleteAt === undefined || nowMs >= deleteAt - 1000) {
       // The alarm first: deleteAll leaves it (see /clear), and a SQLite
       // object's deleteAll inside its alarm has failed without that.
