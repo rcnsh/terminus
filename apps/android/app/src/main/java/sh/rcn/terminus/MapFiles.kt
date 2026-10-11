@@ -100,7 +100,7 @@ object MapFiles {
         // A copy cut short (the app killed mid-write, before writes were whole) is no copy.
         val kept = runCatching { file.readText() }.getOrNull()?.takeIf(::isJson)
         val text = kept?.takeIf { fresh(file) }
-            ?: fetchStyle("${Servers.base}/map/style.json?theme=$theme&lang=$lang", file)
+            ?: fetchStyle("/map/style.json?theme=$theme&lang=$lang", file)
             ?: kept
             ?: return@withContext null
         val tiles = current(dir, readMeta(dir))
@@ -111,8 +111,8 @@ object MapFiles {
         }
     }
 
-    private suspend fun fetchStyle(url: String, file: File): String? = try {
-        get(url).takeIf(::isJson)?.also { writeWhole(file, it) }
+    private suspend fun fetchStyle(path: String, file: File): String? = try {
+        get(path).takeIf(::isJson)?.also { writeWhole(file, it) }
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
@@ -217,12 +217,13 @@ object MapFiles {
 
     /** Asks for the map file; on a 200 with room for it, copies it into [into], stopping if [job] is cancelled. */
     private fun fetchTiles(ctx: Context, dir: File, job: Job?, etag: String?, into: File): Fetched {
-        val conn = URL("${Servers.base}/map/$TILES").openConnection() as HttpURLConnection
+        val conn = connect("/map/$TILES") { c ->
+            c.connectTimeout = 8_000
+            c.readTimeout = 30_000
+            c.setRequestProperty("x-terminus-client", CLIENT)
+            etag?.let { c.setRequestProperty("if-none-match", it) }
+        }
         try {
-            conn.connectTimeout = 8_000
-            conn.readTimeout = 30_000
-            conn.setRequestProperty("x-terminus-client", CLIENT)
-            etag?.let { conn.setRequestProperty("if-none-match", it) }
             val code = conn.responseCode
             val length = conn.getHeaderField("content-length")?.toLongOrNull()
             if (code == 200) {
@@ -340,16 +341,39 @@ object MapFiles {
     private fun metered(ctx: Context): Boolean =
         ctx.getSystemService(android.net.ConnectivityManager::class.java)?.isActiveNetworkMetered ?: true
 
-    private fun get(url: String): String {
-        val conn = URL(url).openConnection() as HttpURLConnection
+    /** [path] on our server ([connect]). Any status is an answer; only a 200 is the file. */
+    private fun get(path: String): String {
+        val conn = connect(path) { c ->
+            c.connectTimeout = 6_000
+            c.readTimeout = 10_000
+            c.setRequestProperty("x-terminus-client", CLIENT)
+        }
         try {
-            conn.connectTimeout = 6_000
-            conn.readTimeout = 10_000
-            conn.setRequestProperty("x-terminus-client", CLIENT)
-            if (conn.responseCode != 200) error("HTTP ${conn.responseCode}")
+            val code = conn.responseCode
+            if (code != 200) error("HTTP $code")
             return conn.inputStream.bufferedReader().use { it.readText() }
         } finally {
             conn.disconnect()
         }
     }
+
+    /**
+     * [path] asked of our server until its status arrives: the chosen address,
+     * then the backup only if it couldn't be reached at all ([Servers.through]),
+     * and the one that answered noted then, as Api's requests do. The body is
+     * read from that connection by the caller: a failure there (a reset
+     * mid-download) isn't tried elsewhere, so megabytes aren't fetched twice.
+     */
+    private fun connect(path: String, setup: (HttpURLConnection) -> Unit): HttpURLConnection =
+        Servers.through("GET") { base ->
+            val conn = URL(base + path).openConnection() as HttpURLConnection
+            try {
+                setup(conn)
+                conn.responseCode
+                conn
+            } catch (e: Exception) {
+                conn.disconnect()
+                throw e
+            }
+        }
 }

@@ -1120,6 +1120,17 @@ test('/api/campus lists PGP and UTown Residence first, marked common, then the r
   assert.ok(residences.slice(2).every((r) => r.common === false));
 });
 
+test('/api/campus words a landmark\'s kind in the request\'s language, each with its own ETag', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  const en = await call(env, '/api/campus?lang=en', { cookie });
+  const zh = await call(env, '/api/campus?lang=zh', { cookie });
+  const deck = (body) => body.destinations.find((d) => d.code === 'THE-DECK');
+  assert.equal(deck(await en.json()).detail, 'Food court');
+  assert.equal(deck(await zh.json()).detail, '食阁');
+  assert.notEqual(en.headers.get('etag'), zh.headers.get('etag'));
+});
+
 test('/api/campus gives each residence its walk in minutes, at the normal pace, never under one', async () => {
   const { env, email } = setup();
   const cookie = await signIn(env, email);
@@ -1693,4 +1704,13 @@ test('an email send that hangs fails after MAIL_TIMEOUT_MS, as a failed send doe
   await assert.rejects(sending, /timed out/);
   // A send that answers in time is not held up by the timer.
   await sendMail({ EMAIL: { send: async () => ({ messageId: 'x' }) } }, { from: 'a@example.test', to: 'b@example.test', subject: 's', text: 't' });
+});
+
+test('a one-off trip on a date that does not exist is a 400, not a server error', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  for (const date of ['2026-13-01', '2026-02-30', '2026-10-45']) {
+    const res = await call(env, '/api/me/once', { method: 'POST', cookie, body: { to: 'COM3', atMin: 600, date } });
+    assert.equal(res.status, 400, date);
+  }
 });

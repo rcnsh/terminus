@@ -87,10 +87,13 @@ export function isHomeKey(key: string): boolean {
 export function leaveOf(b: Boarded): Leave {
   const c = b.change;
   if (c) {
-    // The first bus to catch, the trip's end where the second gets you.
+    // The first bus to catch, the trip's end where the second gets you: where
+    // you get off is the second bus's, never the change stop, even when the
+    // second's isn't known.
     const end = leaveOf(c);
+    const { off: _off, offCode: _offCode, toStop: _toStop, ...first } = leaveOf({ ...b, change: undefined });
     return {
-      ...leaveOf({ ...b, change: undefined }),
+      ...first,
       arrive: c.arrive,
       ...(end.off ? { off: end.off } : {}),
       ...(end.offCode ? { offCode: end.offCode } : {}),
@@ -269,7 +272,7 @@ export function seenOnBus(b: Boarded, lat: number, lon: number, nowMs: number): 
 export interface TripRecord {
   kind: Exclude<SignalKind, 'location' | 'reset' | 'away' | 'back'>;
   at: number;
-  /** Skipped by "Not on campus today" (phase 8.3); "Back on campus" undoes all of them. */
+  /** Skipped by "Not on campus today"; "Back on campus" undoes all of them. */
   away?: boolean;
   /** The trip's name, for "Undo: going to CS2030". */
   label?: string;

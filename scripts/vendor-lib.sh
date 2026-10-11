@@ -7,6 +7,9 @@ die() { echo "$*" >&2; exit 1; }
 # A version as npm publishes a release: 1.2.3, nothing else. It goes into a
 # package spec, a file name and a folder name, so nothing odd may get through.
 version() {
+  # Digits and dots only first: grep passes a value with a newline in it if
+  # any one line matches.
+  case "$2" in '' | *[!0-9.]*) die "$1: '$2' isn't a version like 1.2.3" ;; esac
   printf '%s\n' "$2" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || die "$1: '$2' isn't a version like 1.2.3"
 }
 

@@ -70,7 +70,7 @@ const TRACK_MS = 600_000;
  *  and ahead, as metres plus metres a second (72 km/h, faster than a bus). */
 const TRACK_BACK_M = 50;
 const TRACK_AHEAD_M = 100;
-const TRACK_AHEAD_MS = 20;
+const TRACK_AHEAD_MPS = 20;
 /** Moving fixes in a row heading against its track before the track gives way. */
 const DOUBT_FIXES = 2;
 /** A tracked bus whose only places on its line are behind it, by up to
@@ -293,7 +293,7 @@ export function follow(
     };
     const reach = found.filter((c) => {
       const g = gone(c.along);
-      return g >= -TRACK_BACK_M && g <= TRACK_AHEAD_M + TRACK_AHEAD_MS * ageS;
+      return g >= -TRACK_BACK_M && g <= TRACK_AHEAD_M + TRACK_AHEAD_MPS * ageS;
     });
     if (!found.length) {
       // Off its line: a GPS jump, held for a moment; longer, it's really off.

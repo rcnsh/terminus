@@ -59,6 +59,9 @@ export interface Prediction {
   plate: string;
   stop: string;
   etaS: number;
+  /** The rows this one stands for: Analytics Engine samples at high volume
+   *  (its `_sample_interval`). 1 when absent. */
+  w?: number;
 }
 
 /** One scored prediction: [errS] is how much later than said the bus came (negative: earlier). */
@@ -74,7 +77,9 @@ export interface Scored {
 export interface EtaDay {
   v: 1;
   date: string;
-  /** Predictions read (after dropping repeats of one cached answer), and how many found their bus. */
+  /** Predictions read (after dropping repeats of one cached answer), and how
+   *  many found their bus, each sampled row counted for the rows it stands
+   *  for. `rows` are the rows read: under sampling, an even sample. */
   predictions: number;
   matched: number;
   services: string[];
@@ -161,7 +166,7 @@ export function passingsOf(day: DayFile): Passing[] {
  * bus (off its line, or a gap in the recording) isn't scored. Repeats of
  * one cached answer (the same plate, stop and 15 s) count once.
  */
-export function scoreEtas(predictions: Prediction[], passings: Passing[]): { scored: Scored[]; predictions: number } {
+export function scoreEtas(predictions: Prediction[], passings: Passing[]): { scored: Scored[]; predictions: number; matched: number } {
   const byKey = new Map<string, number[]>();
   for (const p of passings) {
     const k = `${p.svc}|${p.plate}|${p.stop}`;
@@ -172,19 +177,22 @@ export function scoreEtas(predictions: Prediction[], passings: Passing[]): { sco
   const seen = new Set<string>();
   const scored: Scored[] = [];
   let count = 0;
+  let matched = 0;
   for (const p of predictions) {
     if (!(p.etaS >= 0 && p.etaS <= MAX_ETA_S) || !p.plate) continue;
     const once = `${p.svc}|${p.plate}|${p.stop}|${Math.floor(p.t / 15_000)}`;
     if (seen.has(once)) continue;
     seen.add(once);
-    count++;
+    const w = p.w ?? 1;
+    count += w;
     const said = p.t + p.etaS * 1000;
     const from = p.t - (p.etaS <= 120 ? 60_000 : 0);
     const came = byKey.get(`${p.svc}|${p.plate}|${p.stop}`)?.find((t) => t >= from && t <= said + LATE_LIMIT_MS);
     if (came === undefined) continue;
+    matched += w;
     scored.push({ svc: p.svc, etaS: p.etaS, errS: Math.round((came - said) / 1000), hour: new Date(p.t + SGT_MS).getUTCHours() });
   }
-  return { scored, predictions: count };
+  return { scored, predictions: count, matched };
 }
 
 /** An Analytics Engine timestamp ("2026-10-10 04:05:06", UTC) as epoch ms. */
@@ -201,12 +209,12 @@ async function predictionsFor(env: Env, date: string, nowMs: number, fetchImpl: 
   const dataset = env.AE_DATASET || 'terminus';
   const rows = await aeSql(
     env,
-    `SELECT blob6 AS plate, blob2 AS stop, blob3 AS svc, double1 AS eta, timestamp FROM ${dataset}
+    `SELECT blob6 AS plate, blob2 AS stop, blob3 AS svc, double1 AS eta, _sample_interval AS w, timestamp FROM ${dataset}
       WHERE blob1 = 'arrival' AND blob6 != '' AND timestamp > NOW() - INTERVAL '${days}' DAY`,
     fetchImpl,
   );
   return rows
-    .map((r) => ({ t: aeTime(r.timestamp), plate: String(r.plate), stop: String(r.stop), svc: String(r.svc), etaS: Number(r.eta) }))
+    .map((r) => ({ t: aeTime(r.timestamp), plate: String(r.plate), stop: String(r.stop), svc: String(r.svc), etaS: Number(r.eta), w: Number(r.w) >= 1 ? Number(r.w) : 1 }))
     .filter((p) => p.t >= open && p.t < close)
     .sort((a, b) => a.t - b.t);
 }
@@ -220,14 +228,14 @@ export async function scoreDay(env: Env, date: string, nowMs: number, fetchImpl:
   const stored = await env.DOWNLOADS!.get(dayKey(date));
   if (!stored) return null;
   const day = await gunzipJson<DayFile>(await stored.arrayBuffer());
-  const { scored, predictions } = scoreEtas(await predictionsFor(env, date, nowMs, fetchImpl), passingsOf(day));
+  const { scored, predictions, matched } = scoreEtas(await predictionsFor(env, date, nowMs, fetchImpl), passingsOf(day));
   const services = [...new Set(scored.map((s) => s.svc))].sort();
   const index = new Map(services.map((s, i) => [s, i]));
   return {
     v: 1,
     date,
     predictions,
-    matched: scored.length,
+    matched,
     services,
     rows: scored.slice(0, MAX_ROWS).map((s) => [index.get(s.svc)!, s.etaS, s.errS, s.hour]),
   };
@@ -306,6 +314,8 @@ export async function etaSummary(env: Env, nowMs: number, days = 14): Promise<Re
   const byHour = group((s) => s.hour);
   const bySvc = group((s) => s.svc);
   return {
+    // Under sampling the two counts are estimates (repeats are dropped
+    // before each row is weighted); matched / predictions is what's reliable.
     days: kept.map((d) => ({ date: d.date, predictions: d.predictions, matched: d.matched })),
     overall: statsOf(all.map((s) => s.errS)),
     horizons: HORIZONS.map((h, i) => ({ label: h.label, ...statsOf(all.filter((s) => s.etaS <= h.maxS && s.etaS > (HORIZONS[i - 1]?.maxS ?? -1)).map((s) => s.errS)) })),

@@ -476,7 +476,7 @@ export const ME_ROUTES: MeRoute[] = [
     method: 'POST',
     path: '/api/me/once',
     run: async ({ req, url, env, ctx, nowMs, deps, db, session }) => {
-      // A one-off trip (phase 8.3): "Science library at 14:00 today". Planned
+      // A one-off trip: "Science library at 14:00 today". Planned
       // like a class on its day; "Not going" drops it. Answers with /me/next.
       const body = await readJson(req);
       // Read, changed and saved again if another device saved meanwhile, so
@@ -490,7 +490,11 @@ export const ME_ROUTES: MeRoute[] = [
         if (typeof atMin !== 'number' || !Number.isInteger(atMin) || atMin < 0 || atMin > 1439) return json({ error: 'atMin must be minutes past midnight, Singapore time' }, 400);
         const today = sgtDate(nowMs);
         const date = typeof body?.date === 'string' ? body.date : today;
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < today || date > sgtDate(nowMs + 7 * 86_400_000)) return json({ error: 'date must be today or within the next week (YYYY-MM-DD)' }, 400);
+        // A real day: 2026-10-45 passes the pattern and sorts inside the week.
+        // 2026-13-01 is no date at all, and toISOString() would throw on it.
+        const day = Date.parse(`${date}T00:00:00Z`);
+        const real = /^\d{4}-\d{2}-\d{2}$/.test(date) && Number.isFinite(day) && new Date(day).toISOString().slice(0, 10) === date;
+        if (!real || date < today || date > sgtDate(nowMs + 7 * 86_400_000)) return json({ error: 'date must be today or within the next week (YYYY-MM-DD)' }, 400);
         if (date === today && atMin <= sgt(nowMs).minutes) return json({ error: 'that time has passed today' }, 400);
         const label = typeof body?.label === 'string' && body.label.trim() ? body.label.trim().slice(0, PROFILE_LIMITS.label) : dest.label;
         const once = profile.once.filter((o) => o.date >= today && !(o.date === date && o.arriveByMin === atMin && o.to === dest.to));
@@ -548,7 +552,9 @@ export const ME_ROUTES: MeRoute[] = [
       }));
       if (changed instanceof Response) return changed;
       const { profile } = changed;
-      return json({ profile: { ...profile, limits: profileLimits() }, unresolved: r.unresolved, missing: r.missing, online: r.online, term }, 200, { etag: versionTag(changed.version) });
+      // Over the limit, the latest classes of the week are left out: say how many.
+      const dropped = Math.max(0, r.trips.length - PROFILE_LIMITS.trips);
+      return json({ profile: { ...profile, limits: profileLimits() }, unresolved: r.unresolved, missing: r.missing, online: r.online, term, ...(dropped ? { dropped } : {}) }, 200, { etag: versionTag(changed.version) });
     },
   },
   {
@@ -813,7 +819,8 @@ export const ME_ROUTES: MeRoute[] = [
       }
       const profile = await getProfile(db, session.user.id, deps.graph);
       if (!knownTrip(profile, trip, nowMs)) return json({ error: 'no such trip today' }, 400);
-      const label = [...profile.trips, ...profile.manual].find((t) => classKey(t) === trip)?.label ?? null;
+      // A trip home has no name of its own: its label stays null.
+      const label = [...profile.trips, ...profile.manual, ...classesOn(profile, nowMs)].find((t) => classKey(t) === trip)?.label ?? null;
       await setPref(db, session.user.id, trip, pref as PrefKind, choice, label, nowMs);
       return json({ ok: true, choices: await listPrefs(db, session.user.id) });
     },

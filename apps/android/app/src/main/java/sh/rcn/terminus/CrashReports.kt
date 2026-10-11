@@ -8,7 +8,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.io.File
-import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.atomic.AtomicBoolean
@@ -62,14 +61,6 @@ internal object CrashReports {
         sendPending(app)
     }
 
-    /** An error the app caught but didn't expect: kept, and sent in the background. */
-    fun report(ctx: Context, e: Throwable) {
-        val app = ctx.applicationContext
-        if (!enabled(app)) return
-        runCatching { save(app, e, fatal = false) }
-        sendPending(app)
-    }
-
     /** What's waiting, oldest first, sent one by one in the background; each sent (or refused) is deleted. */
     fun sendPending(ctx: Context) {
         val app = ctx.applicationContext
@@ -89,8 +80,10 @@ internal object CrashReports {
                     }
                     val status = try {
                         post(body)
-                    } catch (_: IOException) {
-                        // Offline, or no answer: kept for the next start.
+                    } catch (_: Exception) {
+                        // Offline, or no answer (or anything else that went
+                        // wrong sending): kept for the next start. Nothing
+                        // here may crash the app it reports on.
                         break
                     }
                     if (done(status)) f.delete() else break
@@ -104,8 +97,11 @@ internal object CrashReports {
     /** Sent, or refused for good (a bad body, too many reports): gone. A 5xx is kept for the next start. */
     fun done(status: Int): Boolean = status in 200..499
 
-    private fun post(body: String): Int {
-        val conn = URL(Servers.base + PATH).openConnection() as HttpURLConnection
+    /** The chosen address, then the site's other one if it couldn't be reached at all, as for every request ([Servers.tries]). */
+    private fun post(body: String): Int = Servers.through("POST") { post(it, body) }
+
+    private fun post(base: String, body: String): Int {
+        val conn = URL(base + PATH).openConnection() as HttpURLConnection
         try {
             conn.requestMethod = "POST"
             conn.connectTimeout = 8_000

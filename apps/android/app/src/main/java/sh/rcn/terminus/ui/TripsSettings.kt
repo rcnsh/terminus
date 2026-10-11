@@ -97,6 +97,8 @@ private fun HomeGroup(profile: ProfileDoc, campus: Campus, account: AccountViewM
                 if (r == null) {
                     offCampus = true
                 } else {
+                    // The same residence again saves nothing new, so the stops don't change to reset it.
+                    offCampus = false
                     account.edit {
                         it.setHomeStops(r.stops)
                         it.homeWalkMin = r.minutes
@@ -117,7 +119,7 @@ private fun HomeGroup(profile: ProfileDoc, campus: Campus, account: AccountViewM
                 if (Locator.hasForeground(ctx)) {
                     TextButton(onClick = {
                         locating = L.s(R.string.finding_stop)
-                        scope.launch { locating = pickNearestHome(ctx, campus, stops, account) }
+                        scope.launch { locating = pickNearestHome(ctx, campus, account) }
                     }) { Text(stringResource(R.string.pick_nearest)) }
                 }
                 locating?.let { Hint(it, Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp)) }

@@ -154,15 +154,22 @@ async function soonest(network, kept, event, wait = SLOW_MS) {
 
 /* ---------- the map ---------- */
 
-/** Files that never change at their address (versioned, or glyphs and icons). */
+/**
+ * Files that never change at their address (versioned, or glyphs and icons).
+ * Kept under the address without `retry`: the Map tab asks again with
+ * `?retry=N` after a failed download (app/map.js build), the same file. Any
+ * other query stays: the glyphs' `?v=` is their version.
+ */
 async function cacheFirst(req, name = MAP) {
   const cache = await caches.open(name);
-  const kept = await cache.match(req);
+  const url = new URL(req.url);
+  url.searchParams.delete('retry');
+  const kept = await cache.match(url.href);
   if (kept) return kept;
   const res = await fetch(req);
   if (res.ok) {
-    await cache.put(req, res.clone());
-    await dropOtherVersions(cache, req.url);
+    await cache.put(url.href, res.clone());
+    await dropOtherVersions(cache, url.href);
   }
   return res;
 }
@@ -193,7 +200,8 @@ async function networkThenKept(req, event) {
     if (res.ok) await cache.put(req, res.clone());
     return res;
   })();
-  return soonest(network, () => cache.match(req), event);
+  // Any language's copy: /api/campus varies by it, and one in the other language beats no map.
+  return soonest(network, () => cache.match(req, { ignoreVary: true }), event);
 }
 
 /** The kept map file, read once per worker. */
@@ -348,15 +356,13 @@ function notifyTerm(n) {
   });
 }
 
-async function notifyFromCard(urgent, fetched) {
-  let a = fetched ?? null;
-  if (!a) {
-    try {
-      const res = await fetch(`/api/me/next${HOUR12 ? '?h12=1' : ''}`, { credentials: 'same-origin', signal: AbortSignal.timeout?.(PUSH_CARD_MS) });
-      a = res.ok ? await res.json() : null;
-    } catch {
-      a = null;
-    }
+async function notifyFromCard(urgent) {
+  let a = null;
+  try {
+    const res = await fetch(`/api/me/next${HOUR12 ? '?h12=1' : ''}`, { credentials: 'same-origin', signal: AbortSignal.timeout?.(PUSH_CARD_MS) });
+    a = res.ok ? await res.json() : null;
+  } catch {
+    a = null;
   }
   // A push must always show something (iOS insists), even when the card can't be fetched.
   if (!a?.card) {

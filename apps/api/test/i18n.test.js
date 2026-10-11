@@ -45,8 +45,9 @@ function say(v) {
   return v(...args);
 }
 
-// Kept as they are in Chinese: a number format, a holiday's own name passed through.
-const SAME = new Set(['holiday']);
+// Kept as they are in Chinese: a number format, a holiday's own name or a
+// landmark's kind passed through when there's no translation for it.
+const SAME = new Set(['holiday', 'landmarkKind']);
 
 test('every message is translated, and reads as Chinese', () => {
   const en = msgsFor('en');
@@ -61,6 +62,12 @@ test('every message is translated, and reads as Chinese', () => {
   }
   assert.equal(zh.holiday('Chinese New Year (Observed)'), '农历新年（补假）');
   assert.equal(zh.holiday('Deepavali'), '屠妖节');
+  assert.equal(zh.landmarkKind('Food court'), '食阁');
+});
+
+test('every landmark kind has a Chinese name', async () => {
+  const { allLandmarks } = await import('../src/landmarks.ts');
+  for (const [code, l] of allLandmarks()) assert.match(msgsFor('zh').landmarkKind(l.kind), /[一-鿿]/, code);
 });
 
 test('every public holiday in the calendar has a Chinese name', () => {

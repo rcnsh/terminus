@@ -4,6 +4,7 @@ import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import sh.rcn.terminus.NearbyStop
 import sh.rcn.terminus.LaterBus
@@ -36,6 +37,15 @@ class NearbySwapTest {
         assertEquals("KR-MRT", NearbySwap.offer(stops, null, now, listOf("KR-MRT-OPP", "LT27"))?.code)
         // Swapped, it offers the nearest stop again, even with it on screen.
         assertEquals("KR-MRT-OPP", NearbySwap.offer(stops, swap, now, listOf("KR-MRT", "KR-MRT-OPP"))?.code)
+    }
+
+    @Test fun tappedWhileSwappedItGoesBackRatherThanStoringTheNearestTwice() {
+        // Swapped, the button offers the nearest stop: from and to are the same.
+        assertTrue(NearbySwap.undoes("KR-MRT-OPP", "KR-MRT-OPP", "KR-MRT-OPP", "KR-MRT"))
+        // The same swap tapped twice quickly: undone too.
+        assertTrue(NearbySwap.undoes("KR-MRT-OPP", "KR-MRT", "KR-MRT-OPP", "KR-MRT"))
+        // Not swapped: a swap.
+        assertFalse(NearbySwap.undoes("KR-MRT-OPP", "KR-MRT", null, null))
     }
 
     @Test fun noTwinNoSwap() {

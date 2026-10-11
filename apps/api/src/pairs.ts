@@ -47,9 +47,7 @@ export interface StopPairs {
   places: PairPlace[];
 }
 
-type GraphStop = Stop & { longName?: string };
-
-const isOpp = (s: GraphStop) => /-OPP$/i.test(s.code) || /^opp(osite)?\b/i.test(s.name);
+const isOpp = (s: Stop) => /-OPP$/i.test(s.code) || /^opp(osite)?\b/i.test(s.name);
 
 function isLoop(graph: Graph, svc: string, seq: string[]): boolean {
   return graph.loops?.[svc] ?? (seq.length > 1 && seq[0] === seq[seq.length - 1]);
@@ -74,9 +72,9 @@ function servicesByStop(graph: Graph): Map<string, PairService[]> {
 }
 
 export function stopPairs(graph: Graph): StopPairs {
-  const byCode = new Map(graph.stops.map((s) => [s.code, s as GraphStop]));
+  const byCode = new Map(graph.stops.map((s) => [s.code, s]));
   const services = servicesByStop(graph);
-  const side = (s: GraphStop): PairSide => ({
+  const side = (s: Stop): PairSide => ({
     code: s.code,
     name: s.name,
     longName: s.longName ?? s.name,
@@ -87,7 +85,7 @@ export function stopPairs(graph: Graph): StopPairs {
 
   const seen = new Set<string>();
   const places: PairPlace[] = [];
-  for (const stop of graph.stops as GraphStop[]) {
+  for (const stop of graph.stops) {
     if (seen.has(stop.code)) continue;
     const twin = stop.opposite ? byCode.get(stop.opposite) : undefined;
     // Only a mutual pair is a pair: a one-way pointer is a scrape oddity.

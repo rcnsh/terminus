@@ -31,7 +31,7 @@ export const KV_APP_VERSION = 'config:appVersion';
  *  typo, and sending it would fail every call, so it is ignored. */
 const VERSION_FORMAT = /^univus_android_\d+(?:\.\d+)+_\d+$/;
 
-/** Confirmed. Only used when NEXTBUS_AUTH_BASE carries no path of its own. */
+/** The mint's path: appended to NEXTBUS_AUTH_BASE unless it already ends with it. */
 const DEFAULT_AUTH_PATH = '/get-access-token';
 
 /**
@@ -61,8 +61,8 @@ export interface Session {
  */
 const memos = new WeakMap<object, Session>();
 const versionMemos = new WeakMap<object, { value: string; atMs: number }>();
-/** The mint under way in this isolate, if any (getSession). */
-let inflight: Promise<Session> | null = null;
+/** The mints under way in this isolate, by the version they mint with (getSession). */
+const inflight = new Map<string, Promise<Session>>();
 
 /**
  * The uNivUS version string to send: `config:appVersion` in KV when it holds a
@@ -257,8 +257,12 @@ export async function getSession(
   // A mint that failed a moment ago isn't tried again for failMemoS, here
   // or in any isolate in this data centre: without the memo every stop and
   // service asked for would mint its own while the auth host is down.
-  if (!inflight) {
-    inflight = (async () => {
+  //
+  // Keyed by version: a caller after a switch to a new version doesn't take
+  // a token being minted with the old one.
+  let minting = inflight.get(version);
+  if (!minting) {
+    minting = (async () => {
       if (await flagged(mintFailedKey())) throw new Error('token mint failed a moment ago');
       onMint?.();
       return mint(env, nowMs, version).catch(async (err) => {
@@ -269,10 +273,11 @@ export async function getSession(
         throw err;
       });
     })().finally(() => {
-      inflight = null;
+      inflight.delete(version);
     });
+    inflight.set(version, minting);
   }
-  return inflight;
+  return minting;
 }
 
 const mintFailedKey = () => `${cacheBase()}/mint-failed`;
@@ -380,7 +385,7 @@ export class UpstreamRejected extends Error {
  */
 export function redactDetail(detail: string): string {
   return detail
-    .replace(/("(?:token|access_?token|refresh_?token|id_?token|userid|user_?id|deviceid|device_?id|authorization|password|passwd|secret|api_?key|x-api-key)"\s*:\s*)"(?:\\.|[^"\\])*"/gi, '$1"[redacted]"')
+    .replace(/("(?:token|access_?token|refresh_?token|id_?token|userid|user_?id|deviceid|device_?id|authorization|password|passwd|secret|api_?key|x-api-key)"\s*:\s*)(?:"(?:\\.|[^"\\])*"|-?\d[\d.eE+-]*)/gi, '$1"[redacted]"')
     .replace(/eyJ[\w-]{4,}\.[\w-]{4,}\.[\w-]*/g, '[redacted]')
     .replace(/(Bearer\s+)[\w.~+/=-]+/gi, '$1[redacted]');
 }

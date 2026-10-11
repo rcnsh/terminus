@@ -142,10 +142,6 @@ final class MapModel {
         if case .stop(let code, _?) = sheet { sheet = .stop(code) }
     }
 
-    /// A failed poll keeps the buses drawn and says so, as the web map does:
-    /// "need a connection" when this Mac is offline (`online`). Once the last
-    /// answer is 15 s old (three polls) they're faded, so last places don't
-    /// pass for live. Refused (401, 426): it stops, and says why (`refused`).
     /// How long a polling loop waits before asking again: `base` while the
     /// API answers, doubling with each failure in a row up to a minute, and
     /// never sooner than a 429's or a 503's Retry-After (`quiet`, Quiet.wait).
@@ -155,6 +151,11 @@ final class MapModel {
 
     /// Whether the poll failed (no answer, or one that couldn't be read):
     /// the loop backs off. Not asking, or refused, isn't a failure here.
+    ///
+    /// A failed poll keeps the buses drawn and says so, as the web map does:
+    /// "need a connection" when this Mac is offline (`online`). Once the last
+    /// answer is 15 s old (three polls) they're faded, so last places don't
+    /// pass for live. Refused (401, 426): it stops, and says why (`refused`).
     @discardableResult
     func refreshBuses(app: AppModel) async -> Bool {
         guard let svc = selected, let q = svc.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed), mayAsk() else { return false }

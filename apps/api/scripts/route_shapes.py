@@ -181,6 +181,10 @@ def main():
 
     cache, routes, problems = {}, {}, []
     for svc, seq in graph["routes"].items():
+        missing = [c for c in seq if c not in stops]
+        if missing:
+            problems.append(f"{svc}: stops not in stops.json: {', '.join(missing)}")
+            continue
         cands = [candidates(stops[c]) for c in seq]
         if not all(cands):
             problems.append(f"{svc}: a stop has no road near it")

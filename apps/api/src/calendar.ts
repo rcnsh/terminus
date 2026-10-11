@@ -38,8 +38,8 @@ export function useCalendar(data: CalendarData | null): void {
 /**
  * [a] and [b] together, [b] the newer: every semester either has, with
  * [b]'s where both have one, and every holiday [b] has. [a]'s other holidays
- * stay when they're past (after [nowMs]) or outside the dates [b] covers, so
- * a source that drops an old year never loses it here. A holiday to come
+ * stay when they're past (on or before [nowMs]'s Singapore date) or outside
+ * the dates [b] covers, so a source that drops an old year never loses it here. A holiday to come
  * that [b] covers and no longer lists was taken back upstream, and goes.
  */
 export function mergeCalendars(a: CalendarData, b: CalendarData, nowMs: number = Date.now()): CalendarData {

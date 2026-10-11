@@ -69,7 +69,6 @@ import sh.rcn.terminus.Upcoming
 import sh.rcn.terminus.widget.clock
 import sh.rcn.terminus.ServerClock
 import sh.rcn.terminus.widget.isOld
-import androidx.compose.ui.res.stringResource
 
 @Composable
 internal fun AnswerCard(

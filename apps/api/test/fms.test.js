@@ -7,8 +7,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { installGlobals, makeCtx, makeEnv, makeFetch, makeKV, FROZEN_NOW } from './_stubs.mjs';
-import { breakerOpen, fetchActiveBuses, fetchArrivals, getArrivals, getBuses } from '../src/fms.ts';
-import { UpstreamRejected, appVersion, deviceId } from '../src/auth.ts';
+import { breakerOpen, crowdFromLoad, fetchActiveBuses, fetchArrivals, getArrivals, getBuses } from '../src/fms.ts';
+import { UpstreamRejected, appVersion, deviceId, redactDetail } from '../src/auth.ts';
 import { flagged } from '../src/edgecache.ts';
 
 test('fetchArrivals and fetchActiveBuses retry a rejection once with a fresh token', async () => {
@@ -206,4 +206,16 @@ test('a board cached by an older Worker, without `ends`, still drops the run tha
   assert.equal(read.arrivals[1].ends, undefined);
   const fresh = withEnds(read);
   assert.equal(fresh, read, 'a board that already says so is returned as it is');
+});
+
+test('a refusal echoing our request back keeps no ids or tokens, numbers or strings', () => {
+  const out = redactDetail('{"code":401,"userid":123456,"deviceid":"abc-def","token":"t0k","msg":"Invalid API KEY"}');
+  assert.equal(out, '{"code":401,"userid":"[redacted]","deviceid":"[redacted]","token":"[redacted]","msg":"Invalid API KEY"}');
+});
+
+test('a blank headcount is no count, not an empty bus', () => {
+  assert.equal(crowdFromLoad(60, ''), null);
+  assert.equal(crowdFromLoad(60, '  '), null);
+  assert.equal(crowdFromLoad(60, '0'), 'low');
+  assert.equal(crowdFromLoad(60, 50), 'high');
 });

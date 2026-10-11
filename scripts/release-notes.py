@@ -41,8 +41,10 @@ def escape_text(s: str) -> str:
     def plain(p: str) -> str:
         p = p.replace('\\', '\\\\').replace('[', '\\[').replace(']', '\\]')
         return p.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+    # re.split puts the `code` spans it matched at the odd places; a lone
+    # backtick is plain text, escaped like the rest.
     parts = re.split(r'(`[^`]*`)', s)
-    return ''.join(p if p.startswith('`') else plain(p) for p in parts)
+    return ''.join(p if i % 2 else plain(p) for i, p in enumerate(parts))
 
 
 def sha(path: str) -> str:
@@ -96,8 +98,8 @@ def notes(version: str, tag: str, prev: str, apk: str, mac: str, channel: str = 
             if s.startswith('[ImgBot]') or s == 'optimize images':
                 continue  # image compression, nothing to see
             s = escape_text(s[:1].upper() + s[1:])
-            # The first sentence of each commit subject.
-            changes.append('- ' + re.split(r'(?<=[a-z0-9)`"])\. (?=[A-Z`])', s, maxsplit=1)[0].rstrip('.'))
+            # The first sentence of each commit subject ("e.g." and "i.e." end none).
+            changes.append('- ' + re.split(r'(?<=[a-z0-9)`"])(?<!\be\.g)(?<!\bi\.e)\. (?=[A-Z`])', s, maxsplit=1)[0].rstrip('.'))
         if changes:
             body = '\n'.join(changes)
             if has_highlights:

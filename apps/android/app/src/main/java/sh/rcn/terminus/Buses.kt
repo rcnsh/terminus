@@ -185,7 +185,7 @@ object BusTimes {
             eta = null,
             quality = if (r.quality == "live") "stale" else r.quality,
             laterText = null,
-            later = r.later.map { it.copy(etaS = it.etaS - s, eta = null) }.filter { it.etaS > 0 },
+            later = r.later.map { it.copy(etaS = it.etaS - s, eta = null, quality = if (it.quality == "live") "stale" else it.quality) }.filter { it.etaS > 0 },
         )
     }
 
@@ -205,8 +205,8 @@ object BusTimes {
      */
     fun endingSoon(rows: List<BoardRow>, nowMs: Long, withinMs: Long = 2 * 3_600_000L): List<Pair<String, Long>> =
         rows.mapNotNull { r -> r.endsAtMs?.takeIf { it > nowMs && it - nowMs <= withinMs }?.let { r.svc to it } }
-            .distinctBy { it.first }
             .sortedBy { it.second }
+            .distinctBy { it.first }
 
     /** Minutes past midnight in Singapore, for [hhmm] and [hhmm12]. */
     fun campusMinute(ms: Long): Int = Instant.ofEpochMilli(ms).atZone(ZoneId.of("Asia/Singapore")).let { it.hour * 60 + it.minute }

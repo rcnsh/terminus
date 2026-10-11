@@ -37,6 +37,8 @@ test('a stop\'s address, and anything else is the home', () => {
   assert.deepEqual(B.parse('#buses/stop/YIH'), { kind: 'stop', code: 'YIH' });
   assert.deepEqual(B.parse(`#buses/stop/${encodeURIComponent('A/B')}`), { kind: 'stop', code: 'A/B' });
   assert.deepEqual(B.parse('#buses/line/D1/'), { kind: 'line', svc: 'D1', stop: null });
+  // A stray % (an address edited by hand) is read as it is, not thrown over.
+  assert.deepEqual(B.parse('#buses/stop/50%'), { kind: 'stop', code: '50%' });
   for (const hash of ['#buses', '#buses/', '#buses/stop/', '#buses/stop', '#buses/line/', '#buses/nope/YIH', '', '#map']) assert.deepEqual(B.parse(hash), { kind: 'home' }, hash);
 });
 
@@ -164,6 +166,11 @@ test('an aged timetabled or live time keeps its "~", as the server words a guess
   assert.equal(sched.eta, null);
   assert.equal(Board.etaText(sched.etaS, sched.quality), '~6 min');
   assert.equal(Board.thenText(sched), 'then ~16, ~24 min');
+  // No more of them than the server names.
+  const { THEN_MAX } = await import('../src/resolve.ts');
+  assert.equal(Board.THEN_MAX, THEN_MAX);
+  const many = B.aged({ svc: 'A1', etaS: 400, quality: 'live', later: [600, 900, 1_200, 1_500].map((etaS) => ({ etaS, quality: 'live' })) }, got, got);
+  assert.equal(Board.thenText(many), 'then 10, 15, 20 min');
   const live = B.aged({ svc: 'D1', etaS: 400, eta: '7 min', quality: 'live', later: [] }, got, got + 40_000);
   assert.equal(Board.etaText(live.etaS, live.quality), '~6 min');
   assert.equal(Board.etaText(400, 'live'), '7 min');

@@ -132,8 +132,8 @@ function Actions({ nav, next = t('Continue'), skip, onNext }) {
 
 function Welcome({ nav }) {
   // Untouched, times follow the browser; a pick is the account's, on every device.
-  const [clock, setClock] = useState(null);
-  const shown = clock ?? (browserHour12() ? '12' : '24');
+  const [picked, setPicked] = useState(null);
+  const shown = picked ?? (browserHour12() ? '12' : '24');
   return html`
     <img class="ob-mark" src="/assets/mark.svg" alt="" />
     <${Heading} text=${t('Welcome to terminus')} sub=${t('It tells you when to leave for class, and which bus to catch. Setting up takes about a minute.')} />
@@ -147,13 +147,13 @@ function Welcome({ nav }) {
       ${CLOCKS().map(
         (c) => html`
           <label class="check" key=${c.value}>
-            <input type="radio" name="ob-clock" value=${c.value} checked=${shown === c.value} onChange=${() => setClock(c.value)} />
+            <input type="radio" name="ob-clock" value=${c.value} checked=${shown === c.value} onChange=${() => setPicked(c.value)} />
             ${' '}${t('{0} ({1})', c.label, c.eg)}
           </label>
         `,
       )}
     </fieldset>
-    <${Actions} nav=${nav} next=${t('Get started')} onNext=${clock ? () => saveNow((x) => (x.clock = clock)) : undefined} />
+    <${Actions} nav=${nav} next=${t('Get started')} onNext=${picked ? () => saveNow((x) => (x.clock = picked)) : undefined} />
   `;
 }
 
@@ -283,7 +283,8 @@ function Home({ nav }) {
       nav=${nav}
       onNext=${() =>
         saveNow((x) => {
-          const v = Number(walk);
+          // An emptied box keeps the walk as it was, rather than reading as 0 minutes.
+          const v = walk.trim() === '' ? NaN : Number(walk);
           // A residence brings all its stops; otherwise the one chosen here first.
           if (mode === 'hall' && picked) x.home = { stops: [...picked.stops] };
           else if (stop) x.home = { stops: [stop, ...current.filter((code) => code !== stop)].slice(0, stopsMax) };

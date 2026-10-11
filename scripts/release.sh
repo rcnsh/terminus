@@ -62,7 +62,7 @@ MAC_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$P
 BUILD=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$PLIST")
 [ "$BUILD" = "$ANDROID_BUILD" ] || die "Mac build is $BUILD but Android versionCode is $ANDROID_BUILD; bump both"
 
-grep -q "^TERMINUS_KEYSTORE=" "$HOME/.gradle/gradle.properties" 2>/dev/null || die "Android release key not configured (TERMINUS_KEYSTORE)"
+grep -q "^TERMINUS_KEYSTORE=" "${GRADLE_USER_HOME:-$HOME/.gradle}/gradle.properties" 2>/dev/null || die "Android release key not configured (TERMINUS_KEYSTORE)"
 no_api_base
 # The terminus self-signed certificate (see has_sign_identity).
 export SIGN_IDENTITY=C4EE234DA75ED3CD7699A31394C276801F93C4A9

@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -37,6 +38,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -72,6 +74,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import sh.rcn.terminus.Campus
@@ -309,7 +312,7 @@ internal fun HomePicker(profile: ProfileDoc, campus: Campus, account: AccountVie
         if (Locator.hasForeground(ctx)) {
             TextButton(onClick = {
                 locating = L.s(R.string.finding_stop)
-                scope.launch { locating = pickNearestHome(ctx, campus, stops, account) }
+                scope.launch { locating = pickNearestHome(ctx, campus, account) }
             }) { Text(stringResource(R.string.pick_nearest)) }
         }
         locating?.let { Hint(it) }
@@ -339,13 +342,15 @@ internal fun nearestStop(stops: List<Stop>, lat: Double, lon: Double): Stop? = s
 }
 
 /**
- * "Pick the stop nearest me": the stop nearest the phone made the first of
- * your home stops (the rest kept after it), and what to say about it.
+ * "Pick the stop nearest me": the stop nearest the phone becomes your home
+ * stop, as choosing it from the list does (the first replaced, the rest
+ * kept after it), and what to say about it. The stops are read when it's
+ * found, so an edit made while waiting for the location isn't undone.
  */
-internal suspend fun pickNearestHome(ctx: Context, campus: Campus, stops: List<String>, account: AccountViewModel): String {
+internal suspend fun pickNearestHome(ctx: Context, campus: Campus, account: AccountViewModel): String {
     val loc = Locator.lastKnown(ctx, maxAgeMs = 120_000) ?: Locator.current(ctx)
     val near = loc?.let { l -> nearestStop(campus.stops, l.latitude, l.longitude) } ?: return L.s(R.string.no_location)
-    account.edit { it.setHomeStops(listOf(near.code) + stops.filter { s -> s != near.code }) }
+    account.edit { it.setHomeStops(listOf(near.code) + it.homeStops.drop(1).filter { s -> s != near.code }) }
     return L.s(R.string.picked_stop, near.name)
 }
 
@@ -424,7 +429,10 @@ internal fun StopChip(name: String) {
     )
 }
 
-/** The share link field, its import, and what the import found. Shared by setup and settings. */
+/**
+ * The classes an import couldn't place, each with a stop to pick or Skip.
+ * Shared by setup and settings.
+ */
 @Composable
 internal fun Unplaced(state: AccountState, account: AccountViewModel) {
     if (state.unplaced.isEmpty()) return
@@ -436,7 +444,8 @@ internal fun Unplaced(state: AccountState, account: AccountViewModel) {
         color = MaterialTheme.colorScheme.error,
         modifier = Modifier.padding(top = 8.dp),
     )
-    for (u in state.unplaced) {
+    // Keyed, so the search typed for one class doesn't pass to the next when it's placed or skipped.
+    for (u in state.unplaced) key(u) {
         Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val off = if (u.offCampus) stringResource(R.string.off_campus_paren) else ""
@@ -616,7 +625,7 @@ private fun ClockSwitch(profile: ProfileDoc, account: AccountViewModel) {
     val shown = if (profile.clock != Clock.AUTO) profile.clock else if (hour12(ctx)) Clock.H12 else Clock.H24
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(stringResource(R.string.show_times_as), fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-        Row(Modifier.background(c.surfaceVariant, RoundedCornerShape(12.dp)).padding(3.dp)) {
+        Row(Modifier.background(c.surfaceVariant, RoundedCornerShape(12.dp)).padding(3.dp).selectableGroup()) {
             for ((value, example) in listOf(Clock.H12 to stringResource(R.string.clock_12_eg), Clock.H24 to "18:36")) {
                 val on = shown == value
                 Text(
@@ -644,8 +653,17 @@ private fun ColumnScope.PermissionsStep(state: AccountState, main: MainViewModel
     val ctx = LocalContext.current
     val mainState by main.state.collectAsStateWithLifecycle()
     var hasLocation by remember { mutableStateOf(Locator.hasForeground(ctx)) }
+    // After two refusals Android stops showing the dialog: then the app's settings page, as on Now.
+    var blocked by rememberSaveable { mutableStateOf(false) }
     val askLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         hasLocation = Locator.hasForeground(ctx)
+        val activity = ctx as? android.app.Activity
+        blocked = !hasLocation && activity?.shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION) == false
+    }
+    // Allowed in the phone's settings meanwhile: says so on coming back.
+    LifecycleResumeEffect(Unit) {
+        hasLocation = Locator.hasForeground(ctx)
+        onPauseOrDispose {}
     }
     val askNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted && LeaveAlerts.canNotify(ctx, LeaveAlerts.CHANNEL)) main.setLeaveAlerts(true)
@@ -675,7 +693,10 @@ private fun ColumnScope.PermissionsStep(state: AccountState, main: MainViewModel
             done = hasLocation,
             doneText = stringResource(R.string.allowed),
             ask = stringResource(R.string.allow_location),
-        ) { askLocation.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)) }
+        ) {
+            if (blocked) ctx.openAppSettings()
+            else askLocation.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+        }
     }
 }
 

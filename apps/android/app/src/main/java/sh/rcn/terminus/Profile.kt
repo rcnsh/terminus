@@ -226,7 +226,10 @@ data class Trip(val day: Int, val arriveByMin: Int, val endMin: Int?, val to: St
     }
 }
 
-/** "gym", "gym-2": the same rule as the account page. */
+/**
+ * "gym", "gym-2": the label made a key as the account page makes it. A key
+ * already taken gets the next number (the page adds a random ending instead).
+ */
 fun placeKey(label: String, taken: List<String>): String {
     var key = label.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-').take(24).ifEmpty { "place" }
     var n = 2

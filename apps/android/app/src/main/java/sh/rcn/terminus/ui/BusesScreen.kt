@@ -452,10 +452,6 @@ private fun BackRow(text: String, modifier: Modifier = Modifier, trailing: @Comp
 }
 
 /**
- * One stop's page: what it is ("Nearest stop · 40 m", "Pinned"), its name,
- * the star, this side or across the road, and the board.
- */
-/**
  * A stop's header, in the sky: what it is ("Nearest stop · 40 m",
  * "Pinned"), its name, its code and the star. Across the road, the stop
  * shown is the twin, and the star is for that one.
@@ -699,11 +695,15 @@ private fun BoardRowView(row: BoardRow, color: Long, onClick: (() -> Unit)?, cli
     }
 }
 
-/** A row not running: only these follow the clock (when it's back), so the rest of the board isn't redrawn every second. */
+/**
+ * A row not running: why, and when it's back, from the clock as it ticks.
+ * Once that time has passed it says only why, until the board's next
+ * refresh brings the row's times.
+ */
 @Composable
 private fun StoppedRow(row: BoardRow, color: Long, onClick: (() -> Unit)?, clickLabel: String, compact: Boolean, look: RowLook) {
-    val stopped = Stopped.of(row.running, row.stopped, row.resumesAtMs, ticking())
-    if (stopped != null) StoppedRowView(row, color, stopped, onClick, clickLabel, compact, look) else BoardRowView(row, color, onClick, clickLabel, compact, look)
+    val stopped = Stopped.of(running = false, row.stopped, row.resumesAtMs, ticking()) ?: return
+    StoppedRowView(row, color, stopped, onClick, clickLabel, compact, look)
 }
 
 /**
@@ -809,6 +809,9 @@ private fun crowdWord(crowd: String?): String? = when (crowd) {
     else -> null
 }
 
+/** The number in the server's words for a time ("4" in "~4 min"). */
+private val DIGITS = Regex("\\d+")
+
 /**
  * "4 min" with the number large ([size]), or "Arriving"; nothing without a time (the
  * tag says why). The words are the server's ([eta]: "4 min", "~6 min", "约 6
@@ -817,7 +820,7 @@ private fun crowdWord(crowd: String?): String? = when (crowd) {
 @Composable
 private fun BigTime(etaS: Int?, quality: String, arriving: Boolean, eta: String? = null, size: TextUnit = 34.sp) {
     val c = MaterialTheme.colorScheme
-    val number = eta?.let { Regex("\\d+").find(it) }
+    val number = eta?.let { DIGITS.find(it) }
     when {
         etaS == null -> Text("–", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = c.outline)
         eta != null -> Text(

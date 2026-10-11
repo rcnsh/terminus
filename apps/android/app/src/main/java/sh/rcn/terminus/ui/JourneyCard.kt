@@ -284,7 +284,8 @@ private fun Steps(answer: NextAnswer, journey: Journey, now: Long, top: Top) {
                 Text(journey.toStop, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             }
         }
-        LinePoint(journey.arrive ?: "", Dot.END, null, journey.slack, late = late) {
+        // The slack ("9 min early") is said once, under the headline, as on the web.
+        LinePoint(journey.arrive ?: "", Dot.END, null, null, late = late) {
             Text(if (bus == null || journey.walkEnd != null) journey.place else journey.toStop, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         }
     }

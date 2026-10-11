@@ -161,6 +161,14 @@ class Store(context: Context) {
         get() = prefs.getBoolean(KEY_NEEDS_SETUP, false)
         set(value) = prefs.edit { putBoolean(KEY_NEEDS_SETUP, value) }
 
+    /**
+     * Signed in without an answer from /me: whether the account needs setup
+     * isn't known yet. The next /me (AccountViewModel.refresh) settles it.
+     */
+    var setupUnknown: Boolean
+        get() = prefs.getBoolean(KEY_SETUP_UNKNOWN, false)
+        set(value) = prefs.edit { putBoolean(KEY_SETUP_UNKNOWN, value) }
+
     /** The account's email as last seen, or null for an account without one. */
     var email: String?
         get() = prefs.getString(KEY_EMAIL, null)
@@ -276,12 +284,12 @@ class Store(context: Context) {
     }
 
     /**
-     * Signing out: the account's things go; the phone's language, theme, the
-     * intent key, the server chosen (Servers) and a sign-in set aside for
-     * the other side of the dev stub stay.
+     * Signing out: the account's things go; the phone's language, theme,
+     * card style, the intent key, the server chosen (Servers) and a sign-in
+     * set aside for the other side of the dev stub stay.
      */
     fun clear() = synchronized(Store) {
-        val keep = listOf(KEY_LANG, KEY_THEME, KEY_INTENT, Servers.KEY_SERVER, KEY_TOKEN_SITE, KEY_TOKEN_LOCAL).associateWith { prefs.getString(it, null) }
+        val keep = listOf(KEY_LANG, KEY_THEME, CardStyle.KEY, KEY_INTENT, Servers.KEY_SERVER, KEY_TOKEN_SITE, KEY_TOKEN_LOCAL).associateWith { prefs.getString(it, null) }
         val menu = prefs.getBoolean(Servers.KEY_MENU, false)
         // This phone's choice, not the account's.
         val crashReports = prefs.getBoolean(CrashReports.KEY_ENABLED, true)
@@ -377,6 +385,7 @@ class Store(context: Context) {
         private const val KEY_ADDED = "added-places"
         private const val KEY_LEAVE_NOTIFIED = "leave-notified"
         private const val KEY_NEEDS_SETUP = "needs-setup"
+        private const val KEY_SETUP_UNKNOWN = "setup-unknown"
         private const val KEY_EMAIL = "email"
         private const val KEY_PUSH = "push-token"
         private const val KEY_PUSH_AT = "push-sent-at"

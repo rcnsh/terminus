@@ -81,6 +81,9 @@ const ok = (schema: Record<string, unknown>, example?: Record<string, unknown>) 
   content: { 'application/json': { schema, ...(example ? { example } : {}) } },
 });
 
+/** A 201: something was made. */
+const created = (schema: Record<string, unknown>, example?: Record<string, unknown>) => ({ ...ok(schema, example), description: 'Created' });
+
 const jsonBody = (schema: Record<string, unknown>, example?: Record<string, unknown>) => ({
   required: true,
   content: { 'application/json': { schema, ...(example ? { example } : {}) } },
@@ -441,6 +444,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           description:
             'Returns stop positions (as SVG coordinates and lat/lon) and each route\'s path along the roads, plus a destination search list: every stop, named buildings and NUSMods rooms, each mapped to the stop an import would use. The data only changes when the API is redeployed, and responses are cached for an hour. Send the `ETag` back as `If-None-Match` to get a 304 when nothing has changed.',
           operationId: 'getCampus',
+          parameters: [langParam],
           responses: {
             '200': {
               description: 'Map geometry and destinations.',
@@ -641,7 +645,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             { name: 'Pixel 8', platform: 'android' },
           ),
           responses: {
-            '201': ok({ type: 'object', required: ['token'], properties: { token: { type: 'string' } } }),
+            '201': created({ type: 'object', required: ['token'], properties: { token: { type: 'string' } } }),
             '429': { ...errorResponse('Too many new accounts, from this IP or overall.'), headers: RETRY_AFTER },
           },
         },
@@ -657,7 +661,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           security: [],
           requestBody: jsonBody({ type: 'object', properties: { turnstile: { type: 'string' } } }, {}),
           responses: {
-            '201': ok({ type: 'object', properties: { ok: { type: 'boolean' } } }),
+            '201': created({ type: 'object', properties: { ok: { type: 'boolean' } } }),
             '400': errorResponse('The human check failed.'),
             '403': errorResponse('The request came from another site.'),
             '429': { ...errorResponse('Too many new accounts, from this IP or overall.'), headers: RETRY_AFTER },
@@ -685,7 +689,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             { email: 'you@u.nus.edu', name: 'MacBook Air' },
           ),
           responses: {
-            '201': ok({
+            '201': created({
               type: 'object',
               properties: { request: { type: 'string' }, poll: { type: 'string' }, match: { type: 'integer', example: 47 }, expires: { type: 'string', format: 'date-time' } },
             }),
@@ -1013,7 +1017,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Account'],
           summary: 'Stop push to this device',
           operationId: 'mePushForget',
-          security: [{ bearer: [] }],
+          security: [{ bearer: [] }, { cookie: [] }],
           responses: { '200': ok({ type: 'object', properties: { ok: { type: 'boolean' } } }) },
         },
       },
@@ -1139,7 +1143,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             { kind: 'wrong', reason: 'never-came', note: 'Waited 20 min at COM3', platform: 'web', context: { label: 'D2 · 4 min' } },
           ),
           responses: {
-            '201': ok({ type: 'object', properties: { ok: { type: 'boolean' }, id: { type: 'string' } } }),
+            '201': created({ type: 'object', properties: { ok: { type: 'boolean' }, id: { type: 'string' } } }),
             '400': errorResponse('Missing or invalid field (no reason and an empty note, too; a building or stop not known, or the stop the building has already); the message names it.'),
             '401': errorResponse('No valid session.'),
             '403': errorResponse('An anonymous account: sign in with an email first.'),
@@ -1164,7 +1168,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           security: [{ cookie: [] }],
           requestBody: jsonBody({ type: 'object', required: ['name'], properties: { name: { type: 'string', maxLength: 40 } } }, { name: 'My script' }),
           responses: {
-            '201': ok({
+            '201': created({
               type: 'object',
               properties: {
                 key: { type: 'string', example: 'tk_…' },
@@ -1188,7 +1192,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           description: 'The `ETag` header is the profile’s version (`"0"` before it is first saved). Send it back as `If-Match` on PUT to save only if no other device saved since.',
           operationId: 'getProfile',
           security: [{ bearer: [] }, { cookie: [] }],
-          responses: { '200': ok({ $ref: '#/components/schemas/Profile' }), '401': errorResponse('No valid session.') },
+          responses: { '200': { ...ok({ $ref: '#/components/schemas/Profile' }), headers: { ETag: { description: 'The profile’s version, for `If-Match` on PUT /api/me/profile.', schema: { type: 'string' } } } }, '401': errorResponse('No valid session.') },
         },
         put: {
           tags: ['Account'],
@@ -1202,7 +1206,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           parameters: [{ name: 'If-Match', in: 'header', required: false, schema: { type: 'string', example: '"1767225600000"' }, description: 'The `ETag` of the profile this edit started from.' }],
           requestBody: jsonBody({ $ref: '#/components/schemas/Profile' }),
           responses: {
-            '200': ok({ $ref: '#/components/schemas/Profile' }),
+            '200': { ...ok({ $ref: '#/components/schemas/Profile' }), headers: { ETag: { description: 'The profile’s new version.', schema: { type: 'string' } } } },
             '400': errorResponse('Invalid field; the message names it.'),
             '401': errorResponse('No valid session.'),
             '412': errorResponse('Sent with If-Match, and another device saved the profile since.'),
@@ -1252,6 +1256,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                   missing: { type: 'array', items: { type: 'string' }, example: ['CS9999'], description: 'Modules NUSMods has no timetable for in that semester (a typo, or not offered then).' },
                   online: { type: 'integer', minimum: 0, description: 'Online or TBA lessons, which have no stop and are left out.' },
                   term: { type: 'string', example: 'Sem 1 2026/27', description: 'The semester the classes were read for, in words.' },
+                  dropped: { type: 'integer', minimum: 1, description: 'Only when the timetable had more classes than a profile keeps (`limits.trips`): how many of the week’s latest were left out.' },
                 },
               }),
               headers: { ETag: { description: 'The profile’s new version, for `If-Match` on PUT /api/me/profile.', schema: { type: 'string' } } },
@@ -1786,7 +1791,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           responses: {
             '200': { description: 'The day file, gzipped JSON.', content: { 'application/gzip': {} } },
             '404': errorResponse('No operator token, or no recording for that day.'),
-            '503': errorResponse('The recorder holding the day did not answer within 10 s (wait for `Retry-After`), or timelapse storage is not set up on this server.'),
+            '503': { ...errorResponse('The recorder holding the day did not answer within 10 s (wait for `Retry-After`), or timelapse storage is not set up on this server.'), headers: RETRY_AFTER },
           },
         },
       },
@@ -2324,7 +2329,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           type: 'object',
           required: ['viewBox', 'stops', 'routes', 'destinations', 'residences'],
           properties: {
-            viewBox: { type: 'string', description: 'SVG viewBox the x/y coordinates are projected into.' },
+            viewBox: { type: 'string', deprecated: true, description: 'SVG viewBox the x/y coordinates are projected into. Kept for older clients; draw from `lat`/`lon` instead.' },
             stops: {
               type: 'array',
               items: {
@@ -2334,8 +2339,8 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                   name: { type: 'string' },
                   longName: { type: 'string' },
                   opposite: { type: ['string', 'null'], description: 'The stop across the road, if any.' },
-                  x: { type: 'number' },
-                  y: { type: 'number' },
+                  x: { type: 'number', deprecated: true, description: 'Projected into `viewBox`. Kept for older clients; use `lat`/`lon`.' },
+                  y: { type: 'number', deprecated: true, description: 'As `x`.' },
                   lat: { type: 'number' },
                   lon: { type: 'number' },
                   services: { type: 'array', items: { type: 'string' }, description: 'The services that stop here.' },
@@ -2386,7 +2391,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                   stopCode: { type: 'string', description: 'The stop to route to for this destination.' },
                   kind: { type: 'string', enum: ['stop', 'landmark', 'building', 'room'], description: '`landmark`: a named place such as a food court, served by every stop in `stops`.' },
                   stops: { type: 'array', items: { type: 'string' }, description: 'Landmarks only: every stop that serves it. Send its `code` as `to` and the quicker one is used.' },
-                  detail: { type: 'string', description: 'Landmarks only: what it is, e.g. "Food court".' },
+                  detail: { type: 'string', description: 'Landmarks only: what it is, in the request’s language, e.g. "Food court".' },
                   walkM: { type: 'integer', description: 'Metres on foot from `stopCode`, along campus paths. Absent for a stop.' },
                   aliases: { type: 'array', items: { type: 'string' }, description: 'Other names people search for, lower case.' },
                 },
@@ -2934,7 +2939,7 @@ const ACCOUNT_429 = {
   ...errorResponse('Too many requests from this account (over 120 a minute, across its devices); or, with a token that is no session, too many tries from this IP. Wait for `Retry-After`.'),
   headers: RETRY_AFTER,
 };
-/** /auth/app/merge comes before the account's limit: only a token that is no session counts. */
+/** /api/auth/app/merge comes before the account's limit: only a token that is no session counts. */
 const BAD_TOKEN_429 = { ...errorResponse('A token that is no session, sent too often from this IP. Wait for `Retry-After`.', { error: 'too many attempts, try again in a minute' }), headers: RETRY_AFTER };
 const CROSS_SITE = 'The request came from another site with this browser’s session cookie.';
 
@@ -2996,7 +3001,7 @@ function withUpdateRequired(spec: Record<string, unknown>): Record<string, unkno
       if (!op || typeof op !== 'object' || !op.responses) continue;
       if (method === 'delete' && (path === '/api/me' || path === '/api/me/push')) continue;
       // The overview's default security takes a bearer token; an operation's own must list one.
-      const bearer = op.security === undefined ? !me : op.security.some((s) => s && 'bearer' in s);
+      const bearer = op.security === undefined || op.security.some((s) => s && 'bearer' in s);
       if (bearer) op.responses['426'] ??= UPDATE_REQUIRED_426;
     }
   }

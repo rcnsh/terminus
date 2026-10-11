@@ -31,7 +31,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -60,7 +59,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
@@ -122,7 +120,7 @@ internal enum class SettingsPage(val title: Int) {
     Language(R.string.heading_language),
     Appearance(R.string.heading_appearance),
     Account(R.string.heading_account),
-    // Under the list, as links, rather than in a group.
+    // Feedback is a row of its own in the list; About is a link under it.
     About(R.string.about),
     Feedback(R.string.send_feedback),
 }
@@ -946,7 +944,8 @@ private fun Classes(profile: ProfileDoc, campus: Campus?, account: AccountViewMo
                     val about = listOfNotNull(campus?.let { L.s(R.string.stop_suffix, it.stopName(t.to)) }, if (imported) null else stringResource(R.string.added_by_hand))
                     if (about.isNotEmpty()) Hint(about.joinToString(" · "))
                 }
-                RemoveButton({ account.edit { it.removeClass(imported, i) } })
+                // Only while that place still holds this class: a second tap before the list redraws mustn't take the next one.
+                RemoveButton({ account.edit { if ((if (imported) it.trips else it.manual).getOrNull(i) == t) it.removeClass(imported, i) } })
             }
             if (changing == key) {
                 Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)) {

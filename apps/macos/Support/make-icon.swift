@@ -41,4 +41,8 @@ let out = beta ? "Support/AppIcon-beta.icns" : "Support/AppIcon.icns"
 task.arguments = ["-c", "icns", set.path, "-o", out]
 try task.run()
 task.waitUntilExit()
-print(task.terminationStatus == 0 ? "wrote \(out)" : "iconutil failed")
+guard task.terminationStatus == 0 else {
+    FileHandle.standardError.write(Data("iconutil failed\n".utf8))
+    exit(task.terminationStatus)
+}
+print("wrote \(out)")

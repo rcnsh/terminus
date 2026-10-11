@@ -8,7 +8,7 @@
 // card, today, …); the functions under them fetch and set them, and the
 // components at the bottom draw them.
 //
-// The service worker (/sw.js) answers /me/next and /me/day from its cache
+// The service worker (/sw.js) answers /api/me/next and /api/me/day from its cache
 // when the network is down; those replies carry x-terminus-cached with when
 // they were fetched, so the page can say it's showing old times.
 
@@ -18,6 +18,10 @@ import { Card, InSky, Message, Report, Say, isStale, signal } from '/account/pre
 import { Celestial, Horizon, useNowSky, useSkyPhase } from '/account/sky.js';
 import { Toast, campus, lists, loadCampus, loadProfile, profile, reloadProfile, toast, walkSpeed } from '/account/profile.js';
 import { SearchBox } from '/account/search-box.js';
+// Not used here: loaded with the page so that the Buses and Map tabs, which
+// both import it, don't depend on it arriving later (a failed import can't be
+// retried at the same address; loadTab's retry renews only the tab's file).
+import '/app/board.js';
 import { offlineNext } from '/app/offline.js';
 import { preloadMap } from '/app/map-files.js';
 import { PULL_FRESH_MS, REFRESH_MS, markWaitMs, slowRetryMs, staleText } from '/app/timing.js';
@@ -431,27 +435,27 @@ async function removeFromToday(it, at, before) {
   removed.set((m) => new Map(m).set(it.key, generation + 1));
   focusUndo(it.key);
   const name = it.kind === 'home' ? t('The trip home') : it.label.split(' @ ')[0];
-  showUndo({
-    it,
-    at,
-    before,
-    text: t('{0} removed from today', name),
-    undo: async () => {
-      undo.set(null);
-      removed.set((m) => {
-        const next = new Map(m);
-        next.delete(it.key);
-        return next;
-      });
-      // Back in the list: focus on its × again, else on Today's heading.
-      focusSoon(() => document.querySelector(`.remove-today[data-key="${CSS.escape(it.key)}"]`) ?? document.getElementById('today-title'));
-      try {
-        card.set({ a: await signal({ kind: 'reset', trip: it.key }) });
-      } finally {
-        refresh();
-      }
-    },
-  });
+  const putBack = async () => {
+    undo.set(null);
+    removed.set((m) => {
+      const next = new Map(m);
+      next.delete(it.key);
+      return next;
+    });
+    // Back in the list: focus on its × again, else on Today's heading.
+    focusSoon(() => document.querySelector(`.remove-today[data-key="${CSS.escape(it.key)}"]`) ?? document.getElementById('today-title'));
+    try {
+      card.set({ a: await signal({ kind: 'reset', trip: it.key }) });
+    } catch {
+      // Still off today on the server: off the list again, saying so, with Undo to try again.
+      removed.set((m) => new Map(m).set(it.key, generation + 1));
+      showUndo({ it, at, before, text: t("Couldn't put that back. Check your connection."), undo: putBack });
+      focusUndo(it.key);
+    } finally {
+      refresh();
+    }
+  };
+  showUndo({ it, at, before, text: t('{0} removed from today', name), undo: putBack });
   try {
     card.set({ a: await signal({ kind: 'skipped', trip: it.key }) });
   } catch {
@@ -568,9 +572,11 @@ const importing = new Set();
 /**
  * A tab's code into [mod], unless it's there already or on its way. A failed
  * import is `{ failed: true }` (the tab says it needs a connection), tried
- * again the next time the tab opens or the connection comes back, showing
- * Loading… meanwhile. Browsers keep a module that failed to load as failed
- * for the page, so a retry asks for it at a new address.
+ * again the next time the tab opens or the connection comes back. Browsers
+ * keep a module that failed to load as failed for the page, so a retry asks
+ * for it at a new address. What the tabs both import (board.js) comes with
+ * the page instead (see the imports at the top): a new address for the tab
+ * wouldn't fetch it again.
  */
 async function loadTab(mod, path) {
   if ((mod.get() && !mod.get().failed) || importing.has(path)) return;

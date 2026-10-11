@@ -76,12 +76,12 @@ export interface Profile {
   /** Entered by hand. Survives a re-import. */
   manual: ImportedTrip[];
   places: Place[];
-  /** Saved places with a usual time (phase 8.3): "Gym, Tuesdays 18:00". Each
+  /** Saved places with a usual time: "Gym, Tuesdays 18:00". Each
    *  is a trip on that day like a class, arriving by `atMin`. Kept apart from
    *  `places`, keyed by the place's key, so an older app rewriting the places
    *  can't drop them; one whose place is gone is ignored. */
   usual: UsualTime[];
-  /** One-off trips (phase 8.3): "Science library at 14:00 today". A trip on
+  /** One-off trips: "Science library at 14:00 today". A trip on
    *  its date only, like a class. Past dates are dropped when the profile is
    *  saved. */
   once: OnceTrip[];
@@ -89,7 +89,7 @@ export interface Profile {
   share: string | null;
   /** The semester `trips` were imported for. Null until something is imported. */
   term: Term | null;
-  /** The language terminus speaks (phase 10): 'auto' follows each device. */
+  /** The language terminus speaks: 'auto' follows each device. */
   lang: LangPref;
   /** 12- or 24-hour times; 'auto' follows each device. */
   clock: ClockPref;
@@ -246,6 +246,7 @@ export function parseProfile(
     const v = raw.pinnedStops;
     const codes = Array.isArray(v) && v.every((c) => typeof c === 'string') ? [...new Set((v as string[]).map((c) => c.trim().toUpperCase()))] : null;
     if (!codes || codes.length > PROFILE_LIMITS.pinnedStops || !codes.every(isPinnable)) {
+      // A literal, for ERRORS_ZH: profile.test.js checks it names PROFILE_LIMITS.pinnedStops.
       return { ok: false, error: 'pinnedStops must be up to 8 known stop codes' };
     }
     p.pinnedStops = codes;
@@ -661,11 +662,6 @@ export type OnTime = 'on-time' | 'tight' | 'late';
 /** At least this much spare time counts as comfortably on time. */
 export const ON_TIME_SLACK_S = 180;
 
-/**
- * Compare when you'd reach the class (arrival at the stop plus the walk to
- * the venue) with when it starts. The class is today's: the planner only
- * plans today.
- */
 /** Past this, the stop is not really the venue's stop (off campus, bad data):
  *  a lateness figure would be noise. */
 export const MAX_VENUE_WALK_S = 20 * 60;
@@ -677,8 +673,12 @@ export function classStartMs(trip: ImportedTrip, nowMs: number): number {
   return midnight + trip.arriveByMin * 60_000;
 }
 
-/** `estimated`: the arrival is a guess (a timetable bus, a ride without a
- *  measured time), so its clock gets the same "~" as the card's. */
+/**
+ * Compare when you'd reach the class (arrival at the stop plus the walk to
+ * the venue) with when it starts. The class is today's: the planner only
+ * plans today. `estimated`: the arrival is a guess (a timetable bus, a ride
+ * without a measured time), so its clock gets the same "~" as the card's.
+ */
 export function timingFor(arriveAtIso: string | null | undefined, trip: ImportedTrip, walkToVenueS: number, nowMs: number, h12 = false, estimated = false): Timing | null {
   if (!arriveAtIso || walkToVenueS > MAX_VENUE_WALK_S) return null;
   const classAt = classStartMs(trip, nowMs);

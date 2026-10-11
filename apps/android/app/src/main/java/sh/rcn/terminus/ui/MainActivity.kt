@@ -20,7 +20,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,6 +43,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -141,7 +141,7 @@ class MainActivity : ComponentActivity() {
         // From a long-press shortcut (notifications send no action): tell
         // the launcher, which ranks the shortcuts people use.
         if (intent.action == Intent.ACTION_VIEW) {
-            val id = when (data.host) { "place" -> "place:${data.lastPathSegment}"; "plan" -> "next"; else -> data.host }
+            val id = when (data.host) { "place" -> data.lastPathSegment?.let { "place:$it" }; "plan" -> "next"; else -> data.host }
             id?.let { androidx.core.content.pm.ShortcutManagerCompat.reportShortcutUsed(this, it) }
         }
         when (data.host) {
@@ -243,6 +243,17 @@ private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel,
             screen = Screen.Main
         }
     }
+    // Signed in while /me couldn't be asked: asked again, and if it says the
+    // account was never set up, setup takes over (AccountState.setupDue).
+    // Asked again after each answer that came through, so a connection that
+    // returns while the phone stays on Now settles it too.
+    LaunchedEffect(state.paired, state.fetchedAt) {
+        if (state.paired && store.setupUnknown) account.refresh()
+    }
+    LaunchedEffect(acct.setupDue) {
+        if (acct.setupDue && state.paired && screen == Screen.Main) setup = true
+        if (acct.setupDue) account.setupShown()
+    }
     // Signed in and set up: Now · Buses · Map · Settings along the bottom.
     if (state.paired && !setup && screen == Screen.Main) {
         Tabs(tab, { tab = it }, vm, account, map, buses, acct, onAddEmail = { account.beginSignIn(); screen = Screen.SignIn }, onSignedOut = signedOut)
@@ -251,7 +262,8 @@ private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel,
         WelcomeScreen(
             busy = acct.busy,
             message = acct.message ?: state.pairError,
-            onStart = { account.start { store.needsSetup = true; signedIn() } },
+            // start() has already set needsSetup, off the main thread.
+            onStart = { account.start { signedIn() } },
             onSignIn = { account.beginSignIn(); screen = Screen.SignIn },
             onPair = { screen = Screen.Pair },
             onLang = { pref -> Lang.set(ctx, pref); recreateOn12(ctx) },
@@ -316,9 +328,9 @@ private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel,
 }
 
 /**
- * Now · Buses · Map · Settings. Settings sits inside the safe area; Now
- * scrolls under the status bar (its sky reaches the top), and the map runs
- * under it, with its pills below it. Buses keeps inside the safe area.
+ * Now · Buses · Map · Settings. Now scrolls under the status bar (its sky
+ * reaches the top), and the map runs under it, with its pills below it.
+ * Buses and Settings are edge to edge too, keeping the insets inside.
  */
 @Composable
 private fun Tabs(
@@ -377,8 +389,10 @@ private fun Tabs(
                     Tab.Map -> Box(Modifier.fillMaxSize().padding(bottom = inner.calculateBottomPadding())) {
                         // The account's places, for "Save as place" on a stop.
                         LaunchedEffect(Unit) { if (acct.profile == null) account.refresh() }
-                        // Before the stop sheet asks, so its board has them too.
-                        map.publicBuses = acct.profile?.publicBuses == true
+                        // Before the stop sheet asks, so its board has them too: after
+                        // each composition, rather than written during it.
+                        val publicBuses = acct.profile?.publicBuses == true
+                        SideEffect { map.publicBuses = publicBuses }
                         MapScreen(
                             map,
                             onGoThere = { code, name ->

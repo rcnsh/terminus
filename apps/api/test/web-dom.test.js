@@ -23,6 +23,13 @@ test('a call with no answer gives up after its time, with a sentence to show', a
   assert.ok(Date.now() - started < 2_000);
 });
 
+test('a caller\'s own signal doesn\'t take away the time limit', { timeout: 2_000 }, async () => {
+  globalThis.fetch = (_, init) => new Promise((_, fail) => init.signal.addEventListener('abort', () => fail(init.signal.reason)));
+  const started = Date.now();
+  await assert.rejects(send('/api/me/next', { timeoutMs: 50, signal: new AbortController().signal }), { message: "Couldn't reach terminus. Check your connection." });
+  assert.ok(Date.now() - started < 2_000);
+});
+
 test('a 200 that is not JSON (a captive portal) is a failure, not an empty answer', async () => {
   globalThis.fetch = reply('<html><body>Sign in to the Wi-Fi</body></html>', { headers: { 'content-type': 'text/html' } });
   await assert.rejects(api('/api/me'), { message: "Couldn't reach terminus. Check your connection." });

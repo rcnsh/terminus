@@ -54,6 +54,15 @@ object NearbySwap {
         if (active(stops, swap, now)) return stops.firstOrNull()
         return twin(stops)?.takeIf { it.code !in onScreen }
     }
+
+    /**
+     * Whether a tap offering [to], with [from] the nearest stop, undoes the
+     * swap stored as [storedFrom] → [storedTo]: while swapped the button
+     * offers the nearest stop itself ([offer]), and a quick second tap
+     * repeats the swap just stored.
+     */
+    fun undoes(from: String, to: String, storedFrom: String?, storedTo: String?): Boolean =
+        to == from || (storedFrom == from && storedTo == to)
 }
 
 /** The swap button: shows the twin first, or, tapped again, the nearest stop. */
@@ -62,7 +71,7 @@ class SwapAction : ActionCallback {
         val from = parameters[FROM] ?: return
         val to = parameters[TO] ?: return
         updateAppWidgetState(context, glanceId) {
-            if (it[NearbySwap.FROM] == from && it[NearbySwap.TO] == to) {
+            if (NearbySwap.undoes(from, to, it[NearbySwap.FROM], it[NearbySwap.TO])) {
                 it.remove(NearbySwap.FROM)
                 it.remove(NearbySwap.TO)
                 it.remove(NearbySwap.AT)

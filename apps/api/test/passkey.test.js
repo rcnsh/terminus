@@ -113,6 +113,7 @@ test('a session dies with its expiry, and with the token', async () => {
   assert.equal(await sessionOk(TOKEN, session, now + SESSION_MS), false);
   assert.equal(await sessionOk('rotated', session, now), false);
   assert.equal(await sessionOk(undefined, session, now), false);
+  assert.equal(await sessionOk(TOKEN, `${session}.junk`, now), false, 'nothing after the mac');
   assert.equal(await sessionOk(TOKEN, TOKEN, now), false, 'the token itself is not a session');
   assert.equal(await challengeOk(TOKEN, session.split('.')[2], now), false, 'nor is a session a challenge');
 });

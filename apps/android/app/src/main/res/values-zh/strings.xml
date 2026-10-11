@@ -466,6 +466,8 @@
     <string name="feedback_needs_email_hint">这样我们才能回复你。你的设置会保持不变。</string>
     <string name="download_data">下载我的数据</string>
     <string name="export_saved">你的数据已保存。</string>
+    <string name="no_browser">这部手机上没有能打开网页链接的应用。</string>
+    <string name="export_not_saved">你的数据没能保存到那里。</string>
     <string name="unplaced_one">有 1 节课的地点我们无法确定。选择最近的车站，或跳过：</string>
     <string name="unplaced_n">有 %1$d 节课的地点我们无法确定。选择最近的车站，或跳过：</string>
     <string name="off_campus_paren">（校外）</string>
