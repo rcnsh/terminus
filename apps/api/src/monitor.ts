@@ -573,8 +573,10 @@ export async function remindTerm(env: Env, nowMs: number, batch = ARM_BATCH): Pr
         .bind(after, batch)
         .all<{ user_id: string; json: string }>();
   // Retried users are read again, so one who has imported the new semester
-  // since, or changed language, is skipped or told in the new one.
-  const triesOf = new Map(retry?.users ?? []);
+  // since, or changed language, is skipped or told in the new one. A batch of
+  // them a run, as with armTrips; the rest wait for the next, their tries kept.
+  const waiting = retry?.users ?? [];
+  const triesOf = new Map(waiting.slice(0, batch));
   const ids = [...triesOf.keys()];
   const rows: { user_id: string; json: string; tries: number }[] = [];
   for (let i = 0; i < ids.length; i += PROFILES_AT_ONCE) {
@@ -617,10 +619,12 @@ export async function remindTerm(env: Env, nowMs: number, batch = ARM_BATCH): Pr
   }
   // Users no device took (push itself failing, say) are tried again on the
   // next runs, up to REMIND_TRIES times, so a token that never works stops.
-  const again = failed.filter(([, , tries]) => tries < REMIND_TRIES).slice(0, ARM_BATCH);
+  // Everything this run asked can fail (the retried and the new, a batch
+  // each): all of it is kept, older leftovers past that dropped.
+  const again = failed.filter(([, , tries]) => tries < REMIND_TRIES).map(([userId, , n]): [string, number] => [userId, n]);
+  const users = [...again, ...waiting.slice(batch)].slice(0, 2 * batch);
   if (failed.length) console.error('term reminders not sent', failed.length);
-  if (again.length) {
-    const users = again.map(([userId, , n]): [string, number] => [userId, n]);
+  if (users.length) {
     await env.KV.put(REMIND_RETRY_KEY, JSON.stringify({ term: id, run: nowMs, users }), { expirationTtl: 30 * 86_400 });
   } else if (retry) {
     // Left in place, the old list is set aside by the mark's run stamp anyway.

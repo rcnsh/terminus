@@ -362,6 +362,43 @@ test('a semester reminder that never gets through holds up no one after it, and 
   }
 });
 
+test('a run whose retried and new semester reminders all fail keeps every one of them to try again', async () => {
+  const { call, phone, env, clock } = await setup();
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  const db = env.DB._db;
+  const p = { ...JSON.parse(db.prepare('SELECT json FROM profiles').get().json), trips: [{ day: THU, arriveByMin: 600, to: 'UTOWN', label: 'GEA1000' }], term: { acadYear: '2025/2026', semester: 2 } };
+  db.prepare('UPDATE profiles SET json = ?').run(JSON.stringify(p));
+  // A full batch (ARM_BATCH, 400) and one more, after the first user in id order.
+  for (let i = 0; i < 400; i++) {
+    const id = `zzzz-${String(i).padStart(3, '0')}`;
+    db.prepare("INSERT INTO users (id, email, created, last_seen, via) VALUES (?, ?, 0, 0, 'web')").run(id, `${id}@u.nus.edu`);
+    db.prepare('INSERT INTO profiles (user_id, json, updated) VALUES (?, ?, 0)').run(id, JSON.stringify(p));
+    db.prepare("INSERT INTO sessions (token_hash, user_id, kind, name, created, last_seen, push_token) VALUES (?, ?, 'device', 'Phone', 0, 0, ?)").run(`${id}-hash`, id, `fcm-${id}`);
+  }
+  const start = Date.parse('2026-08-04T10:30:00+08:00');
+  const quiet = console.error;
+  console.error = () => {};
+  // Firebase failing throughout (set after each clock, which puts the fake fetch back).
+  const failing = () => {
+    const real = globalThis.fetch;
+    globalThis.fetch = async (url, init) => (String(url).startsWith('https://fcm.googleapis.com/') ? new Response('unavailable', { status: 503 }) : real(url, init));
+  };
+  try {
+    clock(start);
+    failing();
+    assert.equal(await remindTerm(env, Date.now()), 0);
+    assert.equal(JSON.parse(await env.KV.get('term:retry')).users.length, 400, 'the first batch, kept');
+    // The batch retried and the one user left, all failing again: none dropped.
+    clock(start + 15 * 60_000);
+    failing();
+    assert.equal(await remindTerm(env, Date.now()), 0);
+    assert.equal(JSON.parse(await env.KV.get('term:retry')).users.length, 401);
+  } finally {
+    clock(start);
+    console.error = quiet;
+  }
+});
+
 test('a retried semester reminder is not sent twice when the retry list cannot be saved', async () => {
   const { call, phone, fcm, env, clock } = await setup();
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
