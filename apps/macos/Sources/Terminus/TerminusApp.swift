@@ -31,7 +31,7 @@ struct TerminusApp: App {
         }
         .menuBarExtraStyle(.window)
 
-        // Setup and devices: real windows, opened from the popover.
+        // Setup and Settings: real windows, opened from the popover.
         Window(L("Set up terminus"), id: "setup") { SetupView(app: model).closesWhenSignedOut(model, id: "setup") }
             .windowResizability(.contentSize)
             .defaultPosition(.center)
@@ -93,7 +93,7 @@ private struct MenuBarLabel: View {
         // The name first, then the glance with its "~" said as a word.
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title.map { L("terminus: %@", spokenTimes($0)) } ?? "terminus")
-        // TERMINUS_OPEN=setup, devices or (debug) popover opens that window at launch, for
+        // TERMINUS_OPEN=setup, settings, map or (debug) popover opens that window at launch, for
         // testing when the menu bar item is hidden behind the notch.
         .task {
             guard let id = ProcessInfo.processInfo.environment["TERMINUS_OPEN"] else { return }

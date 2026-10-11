@@ -2,7 +2,7 @@ import Foundation
 
 /// What the map keeps on the Mac so it works offline after the first look:
 /// the stops and routes (`/api/campus`), the map's style in each theme and
-/// language used, and the whole campus map file (about 3 MB). MapLibre
+/// language used, and the whole campus map file (about 4 MB). MapLibre
 /// doesn't cache PMTiles it streams, so the file is downloaded once, checked
 /// weekly for a newer one, and read from disk (`pmtiles://file://…`); until
 /// then the map is plain. Fonts and icons go through MapLibre's own cache.
@@ -167,11 +167,14 @@ enum MapFiles {
         let kept = readMeta(in: dir)
         let file = currentTiles(in: dir)
         if file != nil, let checked = kept?["checked"] as? Double, now - checked < checkS { return false }
-        var req = URLRequest(url: URL(string: "\(Api.base)/map/\(tiles)")!, timeoutInterval: 30)
-        req.setValue(Api.client, forHTTPHeaderField: "x-terminus-client")
         let etag = kept?["etag"] as? String ?? ""
-        if file != nil, !etag.isEmpty { req.setValue(etag, forHTTPHeaderField: "if-none-match") }
-        let (tmp, resp) = try await fetch(req)
+        // The chosen address, then the site's other one if it can't be reached (Servers.reach).
+        let (tmp, resp) = try await Servers.reach(method: "GET") { base in
+            var req = URLRequest(url: URL(string: "\(base)/map/\(tiles)")!, timeoutInterval: 30)
+            req.setValue(Api.client, forHTTPHeaderField: "x-terminus-client")
+            if file != nil, !etag.isEmpty { req.setValue(etag, forHTTPHeaderField: "if-none-match") }
+            return try await fetch(req)
+        }
         // Whatever isn't moved into place below goes: the system leaves it otherwise.
         defer { try? fm.removeItem(at: tmp) }
         let http = resp as? HTTPURLResponse
@@ -214,11 +217,14 @@ enum MapFiles {
     static func get(_ path: String, token: String?) async throws -> Data {
         if token != nil, Outdated.gated("GET", path), Outdated.active { throw ApiError(status: 426, message: "HTTP 426") }
         if Date() < Quiet.until(.app) { throw ApiError(status: 429, message: "HTTP 429") }
-        var req = URLRequest(url: URL(string: Api.base + path)!, timeoutInterval: 10)
-        req.setValue(Api.client, forHTTPHeaderField: "x-terminus-client")
-        req.setValue(Lang.header, forHTTPHeaderField: "accept-language")
-        if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "authorization") }
-        let (data, resp) = try await URLSession.shared.data(for: req)
+        // The chosen address, then the site's other one if it can't be reached (Servers.reach).
+        let (data, resp) = try await Servers.reach(method: "GET") { base in
+            var req = URLRequest(url: URL(string: base + path)!, timeoutInterval: 10)
+            req.setValue(Api.client, forHTTPHeaderField: "x-terminus-client")
+            req.setValue(Lang.header, forHTTPHeaderField: "accept-language")
+            if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "authorization") }
+            return try await URLSession.shared.data(for: req)
+        }
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
         let retryAfter = (resp as? HTTPURLResponse)?.value(forHTTPHeaderField: "retry-after")
         if status == 429 { Quiet.after(retryAfter, scope: .app) }

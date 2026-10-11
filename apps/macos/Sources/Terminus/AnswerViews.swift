@@ -203,6 +203,7 @@ struct AnswerDetail: View {
     struct RideLine: View {
         let ride: NextAnswer.Ride
         var color: String?
+        @Environment(\.colorScheme) private var scheme
 
         var body: some View {
             Ticking(every: 5) { now in
@@ -224,7 +225,8 @@ struct AnswerDetail: View {
                             }
                             Image(systemName: "bus.fill")
                                 .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(inkOn(color ?? "#000000"))
+                                // With no service colour the disc is the brand's (Color.brand), in this appearance.
+                                .foregroundStyle(color.map(inkOn) ?? inkOn(rgb: scheme == .dark ? Color.brandRGB.dark : Color.brandRGB.light))
                                 .frame(width: 16, height: 16)
                                 .background(Circle().fill(tint))
                                 .offset(x: w * done - 4)
@@ -322,6 +324,11 @@ struct NearbyList: View {
     }
 }
 
+extension BoardRow {
+    /// One pill per service; a public bus is its own even under a shuttle's name.
+    var pillID: String { paid == true ? "\(svc) $" : svc }
+}
+
 /// One pill per service: "D2  4 min · 14 min", the next bus solid and the
 /// ones after it faded, as on the web and Android. The times are the
 /// server's words ("~6 min" for a timetable guess).
@@ -334,7 +341,9 @@ struct FlowPills: View {
 
     var body: some View {
         Flow(spacing: 6) {
-            ForEach(rows, id: \.self) { r in
+            // By service, not by the whole row: a new time is the same pill
+            // counting down (.numericText), not a new one replacing it.
+            ForEach(Array(zip(Self.pillIDs(rows), rows)), id: \.0) { _, r in
                 HStack(spacing: 5) {
                     // In the service's colour, as on the buses and the map. A
                     // public bus carries a $ so the fare is never a surprise.
@@ -362,6 +371,18 @@ struct FlowPills: View {
         }
     }
 
+    /// Each row's id: its service, and a repeat numbered (a two-way public
+    /// bus, 151/1 and 151/2, is two rows named 151 at one stop), so ids are
+    /// unique yet stay put from one refresh to the next.
+    nonisolated static func pillIDs(_ rows: [BoardRow]) -> [String] {
+        var seen: [String: Int] = [:]
+        return rows.map { r in
+            let n = seen[r.pillID, default: 0]
+            seen[r.pillID] = n + 1
+            return n == 0 ? r.pillID : "\(r.pillID)#\(n)"
+        }
+    }
+
     /// The server's "4 min"; worded here only for an older server's row.
     nonisolated static func eta(_ r: BoardRow) -> String { r.eta ?? eta(etaS: r.etaS, quality: r.quality) }
 
@@ -386,7 +407,7 @@ struct FlowPills: View {
     }
 }
 
-/// Today, from /me/day: each class with when to leave (or the bus you're
+/// Today, from /api/me/day: each class with when to leave (or the bus you're
 /// on), and the trips home. What's done is dimmed, a skipped class struck through.
 struct TodayList: View {
     let day: DayPlan

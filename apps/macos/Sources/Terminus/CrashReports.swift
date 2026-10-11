@@ -255,13 +255,18 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber, @unchecked Senda
     /// time. Turned off, the waiting reports are deleted instead.
     static func sendPending() async {
         guard enabled else { store.removeAll(); return }
-        guard let url = URL(string: Api.base + "/api/errors") else { return }
         for (file, report) in store.pending() {
-            var req = URLRequest(url: url)
-            req.httpMethod = "POST"
-            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            req.httpBody = try? JSONEncoder().encode(report)
-            let status = (try? await session.data(for: req)).flatMap { ($0.1 as? HTTPURLResponse)?.statusCode }
+            let body = try? JSONEncoder().encode(report)
+            // The chosen address, then the site's other one if it can't be reached (Servers.reach).
+            let sent = try? await Servers.reach(method: "POST") { base in
+                guard let url = URL(string: base + "/api/errors") else { throw URLError(.badURL) }
+                var req = URLRequest(url: url)
+                req.httpMethod = "POST"
+                req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                req.httpBody = body
+                return try await session.data(for: req)
+            }
+            let status = sent.flatMap { ($0.1 as? HTTPURLResponse)?.statusCode }
             if shouldDrop(status: status) { store.remove(file) } else if status == nil { return }
         }
     }

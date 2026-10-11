@@ -66,14 +66,14 @@ struct NextAnswer: Decodable {
         /// 12 characters, for the menu bar.
         let glance: String?
         let line: String?
-        /// Buttons the server decided to show; a click sends one to /me/signal.
+        /// Buttons the server decided to show; a click sends one to /api/me/signal.
         let actions: [CardAction]?
         /// "Last D2 from UTown in 18 min".
         let warning: String?
         let nextChangeAt: String?
         /// False when reminders are off for this class.
         let remind: Bool?
-        /// "Leave one bus earlier for CS2030?", accepted or turned down with /me/choice.
+        /// "Leave one bus earlier for CS2030?", accepted or turned down with /api/me/choice.
         let suggestion: Suggestion?
         /// "NUS's live bus times have been down since 9:14 AM", above the answer.
         let notice: String?
@@ -242,7 +242,7 @@ struct NextAnswer: Decodable {
         arrived = (try? c.decodeIfPresent(Bool.self, forKey: .arrived)) ?? false
         leave = try? c.decodeIfPresent(Leave.self, forKey: .leave)
         card = try? c.decodeIfPresent(Card.self, forKey: .card)
-        walkSpeedMs = (try? c.decodeIfPresent(Double.self, forKey: .walkSpeedMs)).flatMap { $0 }
+        walkSpeedMs = try? c.decodeIfPresent(Double.self, forKey: .walkSpeedMs)
     }
     struct ArrivalLite: Decodable { let svc: String; let crowd: String? }
 
@@ -440,11 +440,11 @@ struct BoardRow: Decodable, Hashable {
     let svc: String
     let etaS: Int?
     let quality: String
-    /// The service's colour ("#8e44c9"), as on the buses: /me/nearby sends it.
+    /// The service's colour ("#8e44c9"), as on the buses: /api/me/nearby sends it.
     var color: String? = nil
     /// A public bus, with a fare (absent for a shuttle).
     var paid: Bool? = nil
-    /// The buses after this one (/me/nearby), soonest first.
+    /// The buses after this one (/api/me/nearby), soonest first.
     var later: [Later]? = nil
     /// "4 min", "now", "~6 min", worded on the server; nil from an older one (or with no time).
     var eta: String? = nil
@@ -577,7 +577,7 @@ struct Campus: Decodable {
         let c = try d.container(keyedBy: CodingKeys.self)
         stops = try c.decode([Stop].self, forKey: .stops).sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
         // The common ones first, so home stops several share (every UTown college is UTOWN's) match the likelier one.
-        residences = ((try? c.decodeIfPresent([Residence].self, forKey: .residences)) ?? []).sorted {
+        residences = (c.lenientList(Residence.self, forKey: .residences) ?? []).sorted {
             ($0.common == true) != ($1.common == true) ? $0.common == true : $0.name.localizedStandardCompare($1.name) == .orderedAscending
         }
     }
@@ -704,7 +704,6 @@ struct DayPlan: Decodable {
             if let line { return line }
             if serverTitle != nil || status == "done" { return nil }
             if status == "skipped" { return L("Not going") }
-            if status == "done" { return nil }
             if let b = onBus {
                 return ([L("On the %@", b.svc), b.off.map { L("off at %@", $0) }, b.arrive.flatMap(parseISODate).map { L("arrive %@", campusTime($0)) }] as [String?]).compactMap { $0 }.joined(separator: " · ")
             }
@@ -737,7 +736,7 @@ struct CardAction: Decodable, Hashable {
     let trip: String
 }
 
-/// Something terminus learned and offers to change; `id` goes back to /me/choice.
+/// Something terminus learned and offers to change; `id` goes back to /api/me/choice.
 struct Suggestion: Decodable, Hashable {
     let id: String
     let text: String
@@ -949,6 +948,30 @@ enum Servers {
         }
     }
 
+    /// [attempt] at each of [tries] in turn, until one is reached: the next
+    /// address only when the last was never reached ([unreached]). Returns
+    /// the address that answered with its result; the last error otherwise.
+    static func first<T>(
+        _ tries: [String], method: String, _ attempt: (String) async throws -> T
+    ) async throws -> (at: String, result: T) {
+        for (i, base) in tries.enumerated() {
+            do { return (base, try await attempt(base)) } catch {
+                if i == tries.count - 1 || !unreached(error, method: method) { throw error }
+            }
+        }
+        throw URLError(.cannotConnectToHost)
+    }
+
+    /// [attempt] at the chosen address, then the site's other one if it
+    /// couldn't be reached at all ([tries], [first]), noting which answered.
+    /// Every request to the server goes this way: the API's, the map's
+    /// polling and files, crash reports.
+    static func reach<T>(method: String, _ attempt: (String) async throws -> T) async throws -> T {
+        let (at, result) = try await first(tries(Api.base), method: method, attempt)
+        answered(at, base: Api.base)
+        return result
+    }
+
     /// The saved choice if it's still one of [all], else the default: a server
     /// dropped from the app, or anything else written into its preferences
     /// (any app running as you can), is never used.
@@ -983,15 +1006,23 @@ enum Servers {
 
     /// Saves [base] and starts terminus again on it. The stub keeps its own
     /// sign-in (TokenStore), so the real account's token never goes to it.
-    @MainActor static func choose(_ base: String) {
+    /// If the new copy doesn't start, this one keeps running on the server
+    /// it has, saved again as the choice, and [failed] runs.
+    @MainActor static func choose(_ base: String, failed: @escaping @MainActor () -> Void = {}) {
         guard choices.contains(base), base != Api.base else { return }
         UserDefaults.standard.set(base, forKey: key)
         let app = Bundle.main.bundleURL
         guard app.pathExtension == "app" else { NSApp.terminate(nil); return }
         let config = NSWorkspace.OpenConfiguration()
         config.createsNewApplicationInstance = true
-        NSWorkspace.shared.openApplication(at: app, configuration: config) { _, _ in
-            DispatchQueue.main.async { NSApp.terminate(nil) }
+        let running = Api.base
+        NSWorkspace.shared.openApplication(at: app, configuration: config) { launched, error in
+            let started = launched != nil && error == nil
+            DispatchQueue.main.async {
+                if started { NSApp.terminate(nil); return }
+                UserDefaults.standard.set(running, forKey: key)
+                failed()
+            }
         }
     }
 }
@@ -1076,7 +1107,7 @@ struct Api {
     }
 
     /// "Is this wrong?": the answer as it came from the server, with a reason
-    /// (an id from `ReportForm.reasons`, as /me/feedback takes them), a note,
+    /// (an id from `ReportForm.reasons`, as /api/me/feedback takes them), a note,
     /// or both. Needs an account with an email.
     func report(reason: String?, note: String, answer: Data?) async throws {
         try await feedback(kind: "wrong", note: note, reason: reason, context: answer.flatMap { try? JSONSerialization.jsonObject(with: $0) })
@@ -1174,7 +1205,7 @@ struct Api {
         try await feedback(kind: "other", note: note)
     }
 
-    /// A note to /me/feedback with this build's version, and for a report the answer it's about.
+    /// A note to /api/me/feedback with this build's version, and for a report the answer it's about.
     private func feedback(kind: String, note: String, reason: String? = nil, context: Any? = nil, extra: [String: String] = [:]) async throws {
         var body: [String: Any] = ["kind": kind, "note": note, "platform": "mac"]
         body.merge(extra) { a, _ in a }
@@ -1277,18 +1308,7 @@ struct Api {
             return req
         }
         // The chosen address, then the site's other one if it couldn't be reached at all (Servers.order).
-        let tries = Servers.tries(Api.base)
-        var answer: (Data, URLResponse)?
-        for (i, base) in tries.enumerated() where answer == nil {
-            do {
-                answer = try await URLSession.shared.data(for: urlRequest(base))
-                Servers.answered(base, base: Api.base)
-            } catch {
-                if i == tries.count - 1 || !Servers.unreached(error, method: method) { throw error }
-            }
-        }
-        guard let answer else { throw URLError(.cannotConnectToHost) }
-        let (data, resp) = answer
+        let (data, resp) = try await Servers.reach(method: method) { try await URLSession.shared.data(for: urlRequest($0)) }
         let http = resp as? HTTPURLResponse
         let status = http?.statusCode ?? 0
         if let http { ServerClock.observe(http) }

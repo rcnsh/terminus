@@ -276,7 +276,7 @@
 "1 class" = "1 节课";
 "%@ classes" = "%@ 节课";
 "No classes yet. Import from NUSMods or add them by hand." = "还没有课。从 NUSMods 导入，或手动添加。";
-"weeks %@–%@" = "第 %@–%@ 周";
+"weeks %@" = "第 %@ 周";
 "Day" = "星期";
 "Starts" = "开始";
 "Ends" = "结束";
