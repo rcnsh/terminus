@@ -245,7 +245,9 @@ private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel,
     }
     // Signed in while /me couldn't be asked: asked again, and if it says the
     // account was never set up, setup takes over (AccountState.setupDue).
-    LaunchedEffect(state.paired) {
+    // Asked again after each answer that came through, so a connection that
+    // returns while the phone stays on Now settles it too.
+    LaunchedEffect(state.paired, state.fetchedAt) {
         if (state.paired && store.setupUnknown) account.refresh()
     }
     LaunchedEffect(acct.setupDue) {
