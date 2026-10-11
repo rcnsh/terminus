@@ -1705,3 +1705,12 @@ test('an email send that hangs fails after MAIL_TIMEOUT_MS, as a failed send doe
   // A send that answers in time is not held up by the timer.
   await sendMail({ EMAIL: { send: async () => ({ messageId: 'x' }) } }, { from: 'a@example.test', to: 'b@example.test', subject: 's', text: 't' });
 });
+
+test('a one-off trip on a date that does not exist is a 400, not a server error', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  for (const date of ['2026-13-01', '2026-02-30', '2026-10-45']) {
+    const res = await call(env, '/api/me/once', { method: 'POST', cookie, body: { to: 'COM3', atMin: 600, date } });
+    assert.equal(res.status, 400, date);
+  }
+});
