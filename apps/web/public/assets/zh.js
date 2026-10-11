@@ -329,7 +329,7 @@ window.TERMINUS_ZH = {
  "terminus checks NUS's shuttle feed every 15 minutes. When the feed is down, the apps show estimated times based on the usual gap between buses and label them as estimates. Outages are on NUS's side.": "terminus 每 15 分钟检查一次 NUS 的校园巴士数据。数据中断时，应用会按巴士通常的间隔显示估计时间，并标注为估计。中断源于 NUS 一方。",
  "terminus is an independent student project, not affiliated with NUS.": "terminus 是一个独立的学生项目，与 NUS 没有关联。",
  "terminus is an independent student project, not affiliated with NUS. Bus times come from NUS's shuttle feed.": "terminus 是一个独立的学生项目，与 NUS 没有关联。巴士时间来自 NUS 的校园巴士数据。",
- "terminus is an independent student project, not affiliated with NUS. Bus times come from NUS's shuttle feed. Walking routes use map data &copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors.": "terminus 是一个独立的学生项目，与 NUS 没有关联。巴士时间来自 NUS 的校园巴士数据。步行路线使用的地图数据 &copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> 贡献者。",
+ "terminus is an independent student project by <a href=\"https://rcn.sh\">rcnsh</a>, not affiliated with NUS. Bus times come from NUS's shuttle feed. Walking routes use map data &copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors.": "terminus 是 <a href=\"https://rcn.sh\">rcnsh</a> 的独立学生项目，与 NUS 没有关联。巴士时间来自 NUS 的校园巴士数据。步行路线使用的地图数据 &copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> 贡献者。",
  "1 trip recorded.": "已记录 1 次行程。",
  "{0} trips recorded.": "已记录 {0} 次行程。",
  "Whether NUS's live bus feed is answering, and recent outages.": "NUS 的实时巴士数据是否正常，以及最近的中断。",
