@@ -138,5 +138,8 @@ test('venueAt: the room itself from the room map, else its building, else nothin
   const building = venueAt('AS1');
   assert.ok(room && building);
   assert.notDeepEqual(room, building, 'a room has its own point, not its building\'s mean');
+  // COM3-01-19 is in the room map with no point of its own: its building's.
+  assert.deepEqual(venueAt('COM3-01-19'), venueAt('COM3'));
+  assert.ok(venueAt('COM3'));
   assert.equal(venueAt('NOT-A-PLACE'), null);
 });

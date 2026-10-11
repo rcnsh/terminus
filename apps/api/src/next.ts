@@ -174,6 +174,32 @@ function acrossTheRoad(walkS: Record<string, number>): Record<string, number> {
   return out;
 }
 
+/**
+ * The walk from the bus to where you're going, in seconds. A room's stops
+ * come from the room, not the stop the trip was saved with: a building's
+ * stops can change (data/src/venue-stops.json) after an import.
+ */
+function endWalks(dest: Dest, speed: number) {
+  const venue = dest.trip?.venue || dest.venue;
+  const room = venue ? venueStops(venue) : null;
+  const venueM = room ? room.walkM[room.to] : 0;
+  // A class or a room searched for has its room's walk; a food court the walk from its nearest stop.
+  const venueWalkS = Math.round((venueM || targetStops(dest.to).walkM) / speed);
+  // Past this the room's stop is not really its stop (bad data): no walk at all.
+  const endWalkS = venueWalkS <= MAX_VENUE_WALK_S ? venueWalkS : 0;
+  // A food court or a room with several stops: the walk from each, for
+  // whichever the bus gets you off at.
+  const lm = venueM ? null : landmark(dest.to);
+  const several = room && room.also.length && endWalkS ? room.walkM : lm && Object.keys(lm.stops).length > 1 ? lm.stops : null;
+  const endWalkByStopS = several ? acrossTheRoad(Object.fromEntries(Object.entries(several).map(([code, m]) => [code, Math.round(m / speed)]))) : undefined;
+  return { room, venueM, venueWalkS, endWalkS, endWalkByStopS };
+}
+
+/** A room several stops serve: the walk from the one the bus gets you off at. */
+function offWalk(room: ReturnType<typeof venueStops>, endWalkByStopS: Record<string, number> | undefined, offCode: string | undefined): number | null {
+  return (room?.also.length && endWalkByStopS?.[offCode ?? '']) || null;
+}
+
 /** How to get to `dest` now: the bus, the leave-by and, for a class, whether you'll make it. */
 export async function tripAnswer(
   env: Env,
@@ -201,19 +227,7 @@ export async function tripAnswer(
     };
   }
   const venue = dest.trip?.venue || dest.venue;
-  // A room's stops come from the room, not the stop the trip was saved with:
-  // a building's stops can change (data/src/venue-stops.json) after an import.
-  const room = venue ? venueStops(venue) : null;
-  const venueM = room ? room.walkM[room.to] : 0;
-  // A class or a room searched for has its room's walk; a food court the walk from its nearest stop.
-  const venueWalkS = Math.round((venueM || targetStops(dest.to).walkM) / speed);
-  // Past this the room's stop is not really its stop (bad data): no walk at all.
-  const endWalkS = venueWalkS <= MAX_VENUE_WALK_S ? venueWalkS : 0;
-  // A food court or a room with several stops: the walk from each, for
-  // whichever the bus gets you off at.
-  const lm = venueM ? null : landmark(dest.to);
-  const several = room && room.also.length && endWalkS ? room.walkM : lm && Object.keys(lm.stops).length > 1 ? lm.stops : null;
-  const endWalkByStopS = several ? acrossTheRoad(Object.fromEntries(Object.entries(several).map(([code, m]) => [code, Math.round(m / speed)]))) : undefined;
+  const { room, venueM, venueWalkS, endWalkS, endWalkByStopS } = endWalks(dest, speed);
   // A place served by several stops arrives at whichever is quicker. Home is
   // every home stop: an A1 to PGP gets you home as well as a D2 to PGP Foyer.
   const target = room && venueM ? { to: room.to, also: room.also } : targetStops(dest.to);
@@ -240,7 +254,7 @@ export async function tripAnswer(
   // For a class, say whether you'll make it: stop arrival plus the walk
   // from the stop to the venue, against the start time. A room several stops
   // serve: from the one the bus gets you to.
-  const offWalkS = (room?.also.length && endWalkByStopS?.[answer.leave?.toCode ?? '']) || null;
+  const offWalkS = offWalk(room, endWalkByStopS, answer.leave?.toCode);
   const timing = dest.trip ? timingFor(answer.arriveAt, dest.trip, offWalkS ?? venueWalkS, nowMs, h12, answer.leave?.estimated === true) : null;
   const endWalkSOff = offWalkS ?? endWalkS;
   const endWalk = endWalkSOff > 0 ? { endWalk: { s: endWalkSOff, inLeave: input.arriveBy != null } } : {};
@@ -333,11 +347,12 @@ export async function nextArrival(env: Env, ctx: ExecutionContext, deps: MeDeps,
 const roughClock = (ms: number, live: boolean, h12: boolean) => (live ? clockAt(ms, h12) : m().approx(clockAt(ms, h12)));
 
 /** For a class, whether you'll make it arriving at `end`, and the words for the detail line. */
-function classTiming(dest: Dest, end: string | null, live: boolean, nowMs: number, h12: boolean, profile: Profile): { timing: MeAnswer['timing']; words: string | null } {
+function classTiming(dest: Dest, end: string | null, live: boolean, nowMs: number, h12: boolean, profile: Profile, offCode: string | undefined): { timing: MeAnswer['timing']; words: string | null } {
   if (!dest.trip || !end) return { timing: null, words: null };
-  const venueM = dest.trip.venue ? (venueToStop(dest.trip.venue)?.m ?? 0) : 0;
-  const walkS = Math.round(venueM / paceSpeed(profile.walkPace));
-  const timing = timingFor(end, dest.trip, walkS, nowMs, h12, !live);
+  // The same walk as before you boarded (tripAnswer), so the spare time
+  // doesn't jump once you're on the bus.
+  const { room, venueWalkS, endWalkByStopS } = endWalks(dest, paceSpeed(profile.walkPace));
+  const timing = timingFor(end, dest.trip, offWalk(room, endWalkByStopS, offCode) ?? venueWalkS, nowMs, h12, !live);
   // Late: "~3 min late"; otherwise only the spare time, as the arrival is already said.
   const words = timing ? (timing.status === 'late' ? timing.text : slackText((Date.parse(timing.classAt) - Date.parse(timing.reachAt!)) / 1000)) : null;
   return { timing, words };
@@ -363,7 +378,7 @@ function ridingAnswer(nowMs: number, dest: Dest, b: Boarded, live: boolean, plac
     parts.push(m().offAtCap(offStop(b) ?? dest.label));
     if (endMs !== null) parts.push(m().arriveAt(roughClock(endMs, live, h12)));
   }
-  const { timing, words } = classTiming(dest, end, endLive, nowMs, h12, profile);
+  const { timing, words } = classTiming(dest, end, endLive, nowMs, h12, profile, (c ?? b).alightCode);
   if (words) parts.push(words);
   return {
     ...base(nowMs, m().onThe(b.svc), parts.join(' · ')),
@@ -388,7 +403,7 @@ function changeAnswer(nowMs: number, dest: Dest, b: Boarded, live: boolean, plac
   const end = c.arrive;
   const parts = [m().changeCap(offStop(b) ?? c.stop)];
   if (end) parts.push(m().arriveAt(roughClock(Date.parse(end), live && !c.estimated, h12)));
-  const { timing, words } = classTiming(dest, end, live, nowMs, h12, profile);
+  const { timing, words } = classTiming(dest, end, live, nowMs, h12, profile, c.alightCode);
   if (words) parts.push(words);
   const stop = indexGraph(GRAPH).byCode.get(c.stopCode ?? '');
   return {

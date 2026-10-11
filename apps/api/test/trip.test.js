@@ -1303,3 +1303,15 @@ test('home is every home stop: from BIZ 2 the A1 to PGP, not a walk because it s
   assert.equal(on.card.phase, 'riding');
   assert.equal(on.card.ride.stops.at(-1).code, 'PGP');
 });
+
+test('the spare time before a class is the same once you are on the bus: the walk from the stop it drops you at', async () => {
+  // AS1-0201 is 277 m from CLB, its usual stop, and 183 m from LT13-OPP.
+  const room = { ...cls(600, 'CLB', 'GEA1000 @ AS1-0201'), venue: 'AS1-0201' };
+  const { phone, next, signal } = await setup({ home: { stops: ['PGP'] }, manual: [room] });
+  const before = await next(phone);
+  const walk = (a) => (Date.parse(a.timing.reachAt) - Date.parse(a.arriveAt)) / 1000;
+  const riding = await (await signal(phone, { kind: 'boarded', trip: FIRST.replace('UTOWN', 'CLB') })).json();
+  assert.equal(riding.card.phase, 'riding');
+  assert.equal(before.leave.toCode, 'LT13-OPP', 'the bus gets you off at the nearer stop');
+  assert.equal(walk(riding), walk(before));
+});
