@@ -3,8 +3,11 @@
 Home-screen widgets and a small app, in Kotlin with Compose and Glance.
 Android 12 or later.
 
-- **Widgets:** a compact one that says when to leave, and one with buttons for
-  your saved places. They refresh themselves through the day.
+- **Widgets:** a compact one that says when to leave, one with buttons for
+  your saved places, and "Buses near you": the nearest stop's buses at any
+  size, with their arrival times and where each stops next. Times are clock
+  times ("11:48"), worked out once per fetch, so the widget only redraws when
+  a bus goes or the times turn old. They refresh themselves through the day.
 - **App:** Now · Buses · Map · Settings along the bottom. Now has the same
   answer, nearby stops and search; Buses has what's coming at a stop and
   where a service's buses are along its line. Optional heads-up notifications before you need

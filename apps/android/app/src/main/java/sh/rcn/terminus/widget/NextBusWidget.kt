@@ -89,18 +89,11 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                 currentState(NearbySwap.FROM)?.let { from ->
                     NearbySwap.Swap(from, currentState(NearbySwap.TO) ?: "", currentState(NearbySwap.AT) ?: 0L)
                 },
+                currentState(NEARBY_PAGE) ?: 0,
             )
             val chosen = modes.get(state) { state }
             Content(snap, chosen, appWidgetId)
         }
-    }
-
-    /** The value made for the last key, made again for a new one. */
-    private class Latest<K, V : Any> {
-        private var key: K? = null
-        private var value: V? = null
-
-        fun get(k: K, make: () -> V): V = value?.takeIf { key == k } ?: make().also { key = k; value = it }
     }
 
     /** What the widget shows from the app, read again on each redraw (and only then, so it's all in here). */
@@ -112,18 +105,19 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         val added = store.addedPlaces
         /** Read only when they're shown. */
         val day by lazy { store.lastDay()?.first }
+        /** The shared board of buses near you ([NearbyShared]), for the big widget's next buses. */
+        val nearbyAt = store.nearbyFetchedAt.takeIf { it > 0L }
+        val nearbyStops by lazy { store.nearbyJson?.let { runCatching { parseNearby(JSONObject(it)) }.getOrNull() } }
         val uses by lazy { store.destinationUses() }
     }
 
-    private data class ModeState(val mode: Mode, val at: Long?, val json: String?, val fetchedAt: Long?, val error: String?, val swap: NearbySwap.Swap? = null) {
+    private data class ModeState(val mode: Mode, val at: Long?, val json: String?, val fetchedAt: Long?, val error: String?, val swap: NearbySwap.Swap? = null, val page: Int = 0) {
         /** Nearby's stops in the API's order (nearest first); null before any, or when they can't be read. */
         val nearbyStops: List<NearbyStop>? by lazy { json?.takeIf { mode == Mode.Nearby }?.let { runCatching { parseNearby(JSONObject(it)) }.getOrNull() } }
 
         /** A place's answer; null before any, or when it can't be read. */
         val answer: NextAnswer? by lazy { json?.takeIf { mode is Mode.To }?.let { runCatching { NextAnswer.parse(JSONObject(it)) }.getOrNull() } }
 
-        /** Nearby's stops as shown: the API's order, or the twin first after a swap. */
-        fun nearby(now: Long): List<NearbyStop>? = nearbyStops?.let { NearbySwap.order(it, swap, now) }
     }
 
     @Composable
@@ -179,11 +173,17 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
             chipAction = { chipAction(ctx, it, appWidgetId) },
             day = { snap.day },
             style = CardStyle.pref(ctx),
+            // The big widget's next buses: the shared board, from the last half hour.
+            nearby = {
+                snap.nearbyAt?.takeIf { now0 - it in 0..WidgetModes.KEEP_MS }?.let { at ->
+                    NearbyView.of(paired, snap.nearbyStops, chosen.swap, at, null, 0, now0)
+                }
+            },
         )
 
         // TalkBack reads the widget as one sentence instead of fragments.
         val spoken = when {
-            mode == Mode.Nearby -> nearbySpoken(chosen)
+            mode == Mode.Nearby -> nearbySpoken(chosen.nearbyStops?.let { NearbySwap.order(it, chosen.swap, now0) }, chosen.fetchedAt, chosen.error)
             frame.offline != null -> OfflineDay.lines(frame.offline) { clock(ctx, it) }.let { Spoken.sentences(L.s(R.string.offline), it.head, it.big, it.how) }
             else -> spokenSummary(ctx, paired, answer, error)
         }
@@ -198,8 +198,8 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         ) {
             when {
                 mode == Mode.Nearby -> {
-                    val now = System.currentTimeMillis()
-                    BoardLayout(scene, w, h, chosen.nearby(now), chosen.nearbyStops, chosen.swap, chosen.fetchedAt, chosen.error, chosen.json)
+                    val view = NearbyView.of(paired, chosen.nearbyStops, chosen.swap, chosen.fetchedAt, chosen.error, chosen.page, System.currentTimeMillis())
+                    NearbyLayout(look, w, h, view, NearbyControls(scene.refresh, { PageAction.of(it) }, chips, mode, scene.chipAction))
                 }
                 shape == WidgetShape.BAR -> BarLayout(scene, w, h)
                 shape == WidgetShape.SQUARE -> SquareLayout(scene, w, h)
@@ -252,14 +252,6 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
             }
     }
 
-    /** Nearby, as a sentence for screen readers. */
-    private fun nearbySpoken(chosen: ModeState): String {
-        val stops = chosen.nearby(System.currentTimeMillis())
-        val first = stops?.firstOrNull() ?: return L.s(R.string.a11y_nearby_none, chosen.error ?: L.s(R.string.a11y_checking))
-        val age = chosen.fetchedAt?.let { (System.currentTimeMillis() - it) / 1000 } ?: 0L
-        val due = departures(first, age, 3).replace(" · ", L.s(R.string.clause_sep)).ifEmpty { L.s(R.string.a11y_no_buses) }
-        return L.s(R.string.a11y_nearby, first.name, Spoken.spell(due))
-    }
 }
 
 /** A widget button: Timetable at once; Nearby and places through a location fix when location is allowed. */
@@ -277,10 +269,18 @@ fun spokenSummary(ctx: Context, paired: Boolean, answer: NextAnswer?, error: Str
     Spoken.summary(paired, answer, error, ServerClock.now()) { clock(ctx, it) }
 
 
+/** The value made for the last key, made again for a new one. */
+internal class Latest<K, V : Any> {
+    private var key: K? = null
+    private var value: V? = null
+
+    fun get(k: K, make: () -> V): V = value?.takeIf { key == k } ?: make().also { key = k; value = it }
+}
+
 class NextBusWidget : BaseWidget(large = false)
 class PlacesWidget : BaseWidget(large = true)
 
-private val VERSION = longPreferencesKey("version")
+internal val VERSION = longPreferencesKey("version")
 
 /**
  * Signing out: each widget forgets the place or Nearby list it was showing
@@ -289,16 +289,19 @@ private val VERSION = longPreferencesKey("version")
  */
 suspend fun forgetWidgets(ctx: Context) {
     val mgr = GlanceAppWidgetManager(ctx)
-    for (widget in listOf(NextBusWidget(), PlacesWidget())) {
+    for (widget in allWidgets()) {
         for (id in mgr.getGlanceIds(widget.javaClass)) updateAppWidgetState(ctx, id) { WidgetModes.forget(it) }
     }
     redrawWidgets(ctx)
 }
 
-/** Redraws every placed widget of both kinds with the latest cached answer. */
+/** Every kind of widget in the picker. */
+private fun allWidgets(): List<GlanceAppWidget> = listOf(NextBusWidget(), PlacesWidget(), NearbyWidget())
+
+/** Redraws every placed widget with the latest cached answer. */
 suspend fun redrawWidgets(ctx: Context) {
     val mgr = GlanceAppWidgetManager(ctx)
-    for (widget in listOf(NextBusWidget(), PlacesWidget())) {
+    for (widget in allWidgets()) {
         for (id in mgr.getGlanceIds(widget.javaClass)) {
             updateAppWidgetState(ctx, id) { it[VERSION] = System.currentTimeMillis() }
             widget.update(ctx, id)

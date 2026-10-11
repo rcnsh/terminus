@@ -48,6 +48,7 @@ import sh.rcn.terminus.Store
 import sh.rcn.terminus.setWhileIdle
 import sh.rcn.terminus.Target
 import sh.rcn.terminus.hour12
+import sh.rcn.terminus.parseNearby
 
 /**
  * What a widget shows. The timetable's plan by default; a row of
@@ -98,7 +99,7 @@ object WidgetModes {
     const val KEEP_MS = 30 * 60_000L
     /** A chosen place's answer is fetched again in the background at most this often. */
     private const val REFETCH_MS = 60_000L
-    /** Nearby's countdowns are guesses past this: dimmed then. */
+    /** Nearby's times may be old past this: dimmed then, and the line above says so. */
     const val NEARBY_OLD_MS = 180_000L
 
     val MODE = stringPreferencesKey("mode")
@@ -110,7 +111,7 @@ object WidgetModes {
 
     /** Back to the timetable, with nothing kept of the answer shown: for signing out. */
     fun forget(prefs: MutablePreferences) {
-        for (k in listOf(MODE, MODE_LABEL, MODE_AT, MODE_JSON, MODE_FETCHED, MODE_ERROR, NearbySwap.FROM, NearbySwap.TO, NearbySwap.AT)) prefs.remove(k)
+        for (k in listOf(MODE, MODE_LABEL, MODE_AT, MODE_JSON, MODE_FETCHED, MODE_ERROR, NearbySwap.FROM, NearbySwap.TO, NearbySwap.AT, NEARBY_PAGE)) prefs.remove(k)
     }
 
     /**
@@ -158,16 +159,24 @@ object WidgetModes {
      * Whether the widget shows the buttons at any of the sizes the home screen
      * has given it (one each way up). True when it hasn't said, as before.
      */
-    private fun rowShownAnySize(ctx: Context, id: GlanceId, large: Boolean): Boolean {
+    private fun rowShownAnySize(ctx: Context, id: GlanceId, large: Boolean): Boolean =
+        anySize(ctx, id, unknown = true) { w, h -> rowShown(w, h, large) }
+
+    /** Whether the widget is big enough for your day ([WidgetShape.DAY]), and its next buses, at any of its sizes. */
+    internal fun bigAnySize(ctx: Context, id: GlanceId): Boolean =
+        anySize(ctx, id, unknown = false) { w, h -> WidgetShape.of(w, h) == WidgetShape.DAY }
+
+    /** Whether [test] holds at any of the sizes the home screen has given the widget; [unknown] when it hasn't said. */
+    private fun anySize(ctx: Context, id: GlanceId, unknown: Boolean, test: (Float, Float) -> Boolean): Boolean {
         val options = AppWidgetManager.getInstance(ctx).getAppWidgetOptions(GlanceAppWidgetManager(ctx).getAppWidgetId(id))
         val sizes = BundleCompat.getParcelableArrayList(options, AppWidgetManager.OPTION_APPWIDGET_SIZES, SizeF::class.java)
-        if (!sizes.isNullOrEmpty()) return sizes.any { rowShown(it.width, it.height, large) }
+        if (!sizes.isNullOrEmpty()) return sizes.any { test(it.width, it.height) }
         val minW = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
         val maxH = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT)
         val maxW = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH)
         val minH = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
-        if (maxW == 0 || maxH == 0) return true
-        return rowShown(minW.toFloat(), maxH.toFloat(), large) || rowShown(maxW.toFloat(), minH.toFloat(), large)
+        if (maxW == 0 || maxH == 0) return unknown
+        return test(minW.toFloat(), maxH.toFloat()) || test(maxW.toFloat(), minH.toFloat())
     }
 
     /** The buttons for a row this wide: Timetable and Nearby, then favourites and added places ([uses]: Store.destinationUses). None if those two don't fit. */
@@ -284,6 +293,13 @@ object WidgetModes {
     private class Chosen(val id: GlanceId, val mode: Mode, val at: Long, val fetchedAt: Long?, val json: String?) {
         /** A place's answer, read only when asked for. */
         val answer: NextAnswer? by lazy { json?.takeIf { mode is Mode.To }?.let { runCatching { NextAnswer.parse(JSONObject(it)) }.getOrNull() } }
+
+        /** Nearby: when the next of its buses shown goes, read only when asked for. */
+        fun busGoes(now: Long): Long? {
+            if (mode != Mode.Nearby || fetchedAt == null) return null
+            val stops = json?.let { runCatching { parseNearby(JSONObject(it)) }.getOrNull() } ?: return null
+            return NearbyBoard.redrawAt(stops.take(2).flatMap { NearbyBoard.buses(it, fetchedAt, now) }, now)
+        }
     }
 
     private suspend fun chosen(ctx: Context, now: Long): List<Chosen> {
@@ -337,19 +353,26 @@ object WidgetModes {
     suspend fun armChosen(ctx: Context) {
         val am = ctx.getSystemService(AlarmManager::class.java) ?: return
         val now = System.currentTimeMillis()
-        val at = if (Store(ctx).paired) chosen(ctx, now).mapNotNull { redrawAt(it.mode, it.at, it.fetchedAt, it.answer, now) }.minOrNull() else null
+        val at = if (Store(ctx).paired) {
+            val chosen = chosen(ctx, now).mapNotNull { redrawAt(it.mode, it.at, it.fetchedAt, it.answer, now, it.busGoes(now)) }
+            // The Nearby widgets and the big widget's next buses share one board.
+            val shared = if (NearbyShared.wanted(ctx)) NearbyShared.redrawAt(ctx, now) else null
+            (chosen + listOfNotNull(shared)).minOrNull()
+        } else null
         if (at == null) am.cancel(alarmIntent(ctx)) else am.setWhileIdle(at + 1_000, alarmIntent(ctx), wake = false)
     }
 
     /**
      * When a widget showing [mode] (chosen at [chosenAt], its answer fetched
      * at [fetchedAt]) next looks different with nothing new, on the phone's
-     * clock like [now]: the choice running out, Nearby's times turning old,
-     * a place's answer moving on ("Leave now", going stale). Null: never.
+     * clock like [now]: the choice running out, Nearby's times turning old
+     * or one of its buses going ([busGoes]), a place's answer moving on
+     * ("Leave now", going stale). Null: never.
      */
-    internal fun redrawAt(mode: Mode, chosenAt: Long, fetchedAt: Long?, answer: NextAnswer?, now: Long): Long? = listOfNotNull(
+    internal fun redrawAt(mode: Mode, chosenAt: Long, fetchedAt: Long?, answer: NextAnswer?, now: Long, busGoes: Long? = null): Long? = listOfNotNull(
         chosenAt + KEEP_MS,
         fetchedAt?.takeIf { mode == Mode.Nearby }?.plus(NEARBY_OLD_MS),
+        busGoes,
         answer?.let { Refresher.redrawAt(it, ServerClock.fromDevice(now)) }?.let(ServerClock::toDevice),
     ).filter { it > now }.minOrNull()
 
@@ -387,6 +410,7 @@ class WidgetModeService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val widgetId = intent?.getIntExtra(EXTRA_WIDGET, -1) ?: -1
+        val shared = intent?.getBooleanExtra(EXTRA_SHARED, false) ?: false
         val mode = Mode.of(intent?.getStringExtra(EXTRA_MODE), intent?.getStringExtra(EXTRA_LABEL))
         val location = Locator.hasForeground(this)
         val started = runCatching {
@@ -396,8 +420,12 @@ class WidgetModeService : Service() {
         }.isSuccess
         scope.launch {
             try {
-                val id = runCatching { GlanceAppWidgetManager(this@WidgetModeService).getGlanceIdBy(widgetId) }.getOrNull()
-                if (id != null) WidgetModes.show(this@WidgetModeService, id, mode, fresh = started && location)
+                if (shared) {
+                    NearbyShared.refresh(this@WidgetModeService, fresh = started && location, tapped = true)
+                } else {
+                    val id = runCatching { GlanceAppWidgetManager(this@WidgetModeService).getGlanceIdBy(widgetId) }.getOrNull()
+                    if (id != null) WidgetModes.show(this@WidgetModeService, id, mode, fresh = started && location)
+                }
             } finally {
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf(startId)
@@ -442,6 +470,8 @@ class WidgetModeService : Service() {
         const val EXTRA_WIDGET = "widget"
         const val EXTRA_MODE = "mode"
         const val EXTRA_LABEL = "label"
+        /** A Nearby widget's ↻: the shared board ([NearbyShared]), not a widget's own mode. */
+        const val EXTRA_SHARED = "shared"
 
         fun intent(ctx: Context, appWidgetId: Int, mode: Mode): Intent =
             Intent(ctx, WidgetModeService::class.java)
@@ -450,5 +480,11 @@ class WidgetModeService : Service() {
                 .putExtra(EXTRA_WIDGET, appWidgetId)
                 .putExtra(EXTRA_MODE, mode.id)
                 .putExtra(EXTRA_LABEL, mode.label)
+
+        fun nearbyIntent(ctx: Context, appWidgetId: Int): Intent =
+            Intent(ctx, WidgetModeService::class.java)
+                .setData("terminus-widget://$appWidgetId/nearby-shared".toUri())
+                .putExtra(EXTRA_WIDGET, appWidgetId)
+                .putExtra(EXTRA_SHARED, true)
     }
 }
