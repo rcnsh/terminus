@@ -60,7 +60,7 @@ VERSION_RE='^[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?$'
 BUILD=$(git rev-list --count HEAD)
 BETA_D1=$(sed -n '/^const BETA = {/,/^};/s/.*d1: "\(.*\)".*/\1/p' apps/api/cloudflare.config.ts)
 [ -n "$BETA_D1" ] || [ $DRY -eq 1 ] || die "the beta's D1 id isn't in apps/api/cloudflare.config.ts yet"
-grep -q "^TERMINUS_KEYSTORE=" "$HOME/.gradle/gradle.properties" 2>/dev/null || die "Android release key not configured (TERMINUS_KEYSTORE)"
+grep -q "^TERMINUS_KEYSTORE=" "${GRADLE_USER_HOME:-$HOME/.gradle}/gradle.properties" 2>/dev/null || die "Android release key not configured (TERMINUS_KEYSTORE)"
 no_api_base
 # The terminus certificate, as for stable: the beta app keeps its own
 # permissions and login item across updates only with the same code identity.

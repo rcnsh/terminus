@@ -80,8 +80,8 @@ jobs:
         working-directory: apps/android
       # What release.sh and release-beta.sh ship: R8 and resource shrinking
       # run only here, so a missing keep rule would otherwise first show in a
-      # released app. With no keystore on the runner, both sign with the
-      # debug key; the beta takes the default version without -PbetaVersion.
+      # released app. With no keystore on the runner, both come out unsigned;
+      # the beta takes the default version without -PbetaVersion.
       - run: ./gradlew :app:assembleStableRelease :app:assembleBetaRelease --console=plain
         working-directory: apps/android
 
