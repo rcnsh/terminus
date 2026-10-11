@@ -192,6 +192,9 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber, @unchecked Senda
 
     /// Called once at launch.
     func start() {
+        // Without this AppKit catches an exception thrown on the main thread,
+        // logs it and carries on half-broken: the handler below never runs.
+        UserDefaults.standard.register(defaults: ["NSApplicationCrashOnExceptions": true])
         MXMetricManager.shared.add(self)
         NSSetUncaughtExceptionHandler { e in
             // The app is going down: write the file and nothing else, no network.
