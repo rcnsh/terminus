@@ -655,15 +655,25 @@ private fun ColumnScope.PermissionsStep(state: AccountState, main: MainViewModel
     var hasLocation by remember { mutableStateOf(Locator.hasForeground(ctx)) }
     // After two refusals Android stops showing the dialog: then the app's settings page, as on Now.
     var blocked by rememberSaveable { mutableStateOf(false) }
+    val activity = ctx as? android.app.Activity
+    val rationale = { activity?.shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION) == true }
+    // Whether Android would have explained itself before this ask, and whether
+    // its dialog came up (it pauses the app): a dialog closed with Back leaves
+    // no explanation either, just as a refusal for good does, but it was shown.
+    var rationaleBefore by remember { mutableStateOf(false) }
+    var asking by remember { mutableStateOf(false) }
+    var dialogShown by remember { mutableStateOf(false) }
     val askLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         hasLocation = Locator.hasForeground(ctx)
-        val activity = ctx as? android.app.Activity
-        blocked = !hasLocation && activity?.shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION) == false
+        asking = false
+        // Blocked: no dialog came up at all, or this was the second refusal.
+        // A first dialog closed without an answer is asked again.
+        blocked = !hasLocation && !rationale() && (!dialogShown || rationaleBefore)
     }
     // Allowed in the phone's settings meanwhile: says so on coming back.
     LifecycleResumeEffect(Unit) {
         hasLocation = Locator.hasForeground(ctx)
-        onPauseOrDispose {}
+        onPauseOrDispose { if (asking) dialogShown = true }
     }
     val askNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted && LeaveAlerts.canNotify(ctx, LeaveAlerts.CHANNEL)) main.setLeaveAlerts(true)
@@ -695,7 +705,12 @@ private fun ColumnScope.PermissionsStep(state: AccountState, main: MainViewModel
             ask = stringResource(R.string.allow_location),
         ) {
             if (blocked) ctx.openAppSettings()
-            else askLocation.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+            else {
+                rationaleBefore = rationale()
+                dialogShown = false
+                asking = true
+                askLocation.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+            }
         }
     }
 }
