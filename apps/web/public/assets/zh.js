@@ -416,6 +416,7 @@ window.TERMINUS_ZH = {
  "Left {0} min ago": "{0} 分钟前已开走",
  "in {0} min": "{0} 分钟后",
  "in {0} min {1} s": "{0} 分 {1} 秒后",
+ "in {0} s": "{0} 秒后",
  "About": "关于",
  "terminus tells you which NUS shuttle bus to catch, from which stop, and when to leave, from your NUSMods timetable.": "terminus 根据你的 NUSMods 课表，告诉你该搭哪一班 NUS 校园巴士、在哪个车站搭，以及什么时候出发。",
  "Get the apps": "下载应用",

@@ -41,10 +41,11 @@ function useEverySecond(from) {
 function Countdown({ at }) {
   const now = useEverySecond(at);
   const left = Math.floor((Date.parse(at) - now) / 1000);
+  // Gone: "Left 1 min ago" from the moment it leaves, never "0 min ago" (as the apps say it).
   const text =
     left > 60 ? t('Leaves in {0} min {1} s', Math.floor(left / 60), left % 60)
     : left > 0 ? t('Leaves in {0} s', left)
-    : t('Left {0} min ago', Math.floor((-left + 59) / 60));
+    : t('Left {0} min ago', Math.max(1, Math.ceil(-left / 60)));
   return html`<div class=${left > 0 ? 'countdown' : 'countdown gone'}>${text}</div>`;
 }
 
@@ -104,7 +105,7 @@ function LeaveBy({ a, late }) {
   const left = a.card.phase === 'waiting' ? 0 : Math.floor((Date.parse(a.leave.at) - now) / 1000);
   return html`
     <h2 class=${`big${late}`}>${leaveHead(a)}</h2>
-    ${left > 0 && html`<div class="countdown">${left >= 120 ? t('in {0} min', Math.round(left / 60)) : t('in {0} min {1} s', Math.floor(left / 60), left % 60)}</div>`}
+    ${left > 0 && html`<div class="countdown">${left >= 120 ? t('in {0} min', Math.round(left / 60)) : left >= 60 ? t('in {0} min {1} s', Math.floor(left / 60), left % 60) : t('in {0} s', left)}</div>`}
   `;
 }
 

@@ -146,7 +146,8 @@ export function busIn(j, now) {
   if (!j.boardAt) return null;
   const left = Math.floor((Date.parse(j.boardAt) - now) / 1000);
   if (left <= 0) return null;
-  return left >= 120 ? t('in {0} min', Math.round(left / 60)) : t('in {0} min {1} s', Math.floor(left / 60), left % 60);
+  if (left >= 120) return t('in {0} min', Math.round(left / 60));
+  return left >= 60 ? t('in {0} min {1} s', Math.floor(left / 60), left % 60) : t('in {0} s', left);
 }
 
 /** The crowd is the headline bus's: a class's leave-by bus can be another. */

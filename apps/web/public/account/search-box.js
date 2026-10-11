@@ -7,7 +7,7 @@
 import { html, useEffect, useId, useLayoutEffect, useRef, useState } from '../assets/ui.js';
 import { t } from './dom.js';
 import { walkSpeed } from './profile.js';
-import { groupOf, metaOf, pickedText, results } from './search.js';
+import { groupKey, groupOf, grouped, metaOf, pickedText, results } from './search.js';
 
 /** The number of results is said this long after the last key typed. */
 const COUNT_AFTER_MS = 500;
@@ -30,7 +30,8 @@ export function SearchBox({ source, suggestions = () => [], pinned, stopName, em
   const wrap = useRef(null);
   const list = useRef(null);
 
-  const items = open ? results(text, { source, suggestions, pinned }) : [];
+  // In the order shown, each kind once (grouped()), so the arrow keys go down the list as drawn.
+  const items = open ? grouped(results(text, { source, suggestions, pinned })) : [];
   const shown = open && (items.length > 0 || text.trim() !== '');
 
   if (ctl) {
@@ -99,7 +100,7 @@ export function SearchBox({ source, suggestions = () => [], pinned, stopName, em
   // Results in groups (stops, buildings, …), each a group in the list with its name.
   const groups = [];
   items.forEach((d, i) => {
-    if (groups.at(-1)?.kind !== d.kind) groups.push({ kind: d.kind, name: groupOf(d), rows: [] });
+    if (groups.at(-1)?.kind !== groupKey(d)) groups.push({ kind: groupKey(d), name: groupOf(d), rows: [] });
     groups.at(-1).rows.push(html`
       <li
         id=${`${listId}-${i}`}

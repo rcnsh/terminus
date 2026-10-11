@@ -4,7 +4,7 @@ import fs from 'node:fs';
 
 // The account page's search ranking, the reference; the Android and Mac apps
 // follow its rules, written out in fixtures/search.json with the cases below.
-import { busesTabIndex, rank, results, score } from '../../web/public/account/search.js';
+import { busesTabIndex, grouped, rank, results, score } from '../../web/public/account/search.js';
 
 const FIXTURE = JSON.parse(fs.readFileSync(new URL('./fixtures/search.json', import.meta.url), 'utf8'));
 const ids = (list) => list.map((d) => `${d.kind}:${d.code}`);
@@ -53,6 +53,26 @@ test('the Buses tab: stops by their long names, found by those, their short name
   assert.deepEqual(rank(stops, 'library').map((d) => d.code), ['CLB']);
   assert.deepEqual(rank(stops, 'yih').map((d) => d.code), ['YIH', 'YIH-OPP']);
   assert.deepEqual(rank(stops, 'yusof').map((d) => d.code), ['YIH', 'YIH-OPP']);
+});
+
+test('the box lists each kind once: groups in the order of their best result, rank order inside', () => {
+  const index = [
+    { code: 'COM3', label: 'COM 3', stopCode: 'COM3', kind: 'stop' },
+    { code: 'COM1', label: 'COM1', stopCode: 'COM3', kind: 'building' },
+    { code: 'OPP-COM', label: 'Opp COM', stopCode: 'OPP-COM', kind: 'stop' },
+    { code: 'COM2', label: 'Computing 2', stopCode: 'COM3', kind: 'building' },
+  ];
+  // Ranked alone, the stops come either side of the buildings.
+  const ranked = rank(index, 'com');
+  assert.deepEqual(ids(ranked), ['stop:COM3', 'building:COM1', 'building:COM2', 'stop:OPP-COM']);
+  assert.deepEqual(ids(grouped(ranked)), ['stop:COM3', 'stop:OPP-COM', 'building:COM1', 'building:COM2']);
+  // A group's place is its best result's; kinds this page doesn't know are one group.
+  const mixed = [{ kind: 'building', code: 'A' }, { kind: 'stop', code: 'B' }, { kind: 'shop', code: 'C' }, { kind: 'building', code: 'D' }, { kind: 'cafe', code: 'E' }, { kind: 'toString', code: 'F' }];
+  assert.deepEqual(ids(grouped(mixed)), ['building:A', 'building:D', 'stop:B', 'shop:C', 'cafe:E', 'toString:F']);
+  // Pinned results lead as their own group.
+  const pinned = [{ code: 'T1', label: 'COM2 (CS2030)', stopCode: 'COM3', kind: 'timetable' }];
+  const got = ids(grouped(results('com', { source: () => index, suggestions: () => [], pinned: () => pinned })));
+  assert.deepEqual(got, ['timetable:T1', 'stop:COM3', 'stop:OPP-COM', 'building:COM1', 'building:COM2']);
 });
 
 test('fixtures/search.json: destinations, ranked as the fixture says', () => {
