@@ -8,7 +8,7 @@
  * most 100 m + 20 m/s since, as src/buses.ts tracks it. A
  * jump outside that is a bus switching to the other side of the road, or
  * being drawn backwards. Prints a Markdown report, and exits 1 when a move
- * is flagged.
+ * is flagged, or when it saw no buses at all (so checked nothing).
  *
  * The load is one person watching the map: one /buses call per service
  * every 5 s, which the Worker caches 5 s per service anyway.
@@ -148,8 +148,11 @@ console.log('|---|---|---|---|---|---|---|');
 for (const line of table) console.log(line);
 const colos = [...new Set(trace.rows.map((r) => r.colo))];
 console.log(`\n${trace.rows.length} readings, ${withSpeed} with \`speed\`; ${trace.failed} requests failed. Answered from ${colos.join(', ')}.`);
-if (!trace.rows.length) console.log('\nNo buses seen: none running, or the feed is down.');
-else if (!bad.length) console.log('\n**No flagged moves:** no bus switched sides or jumped.');
+if (!trace.rows.length) {
+  console.log('\n**No buses seen**, so nothing was checked: none running (try inside their hours), or the feed is down.');
+  // A run that checked nothing hasn't passed.
+  process.exitCode = 1;
+} else if (!bad.length) console.log('\n**No flagged moves:** no bus switched sides or jumped.');
 else {
   console.log(`\n**${bad.length} flagged moves:**\n\n| service | bus | at (UTC) | from | to | moved | over | data centre |\n|---|---|---|---|---|---|---|---|`);
   for (const b of bad) console.log(`| ${b.svc} | ${b.bus} | ${b.at} | ${b.from} m | ${b.to} m | ${b.gone} m | ${b.dt} s | ${b.colos} |`);
