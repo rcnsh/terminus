@@ -49,7 +49,9 @@ cp "$WORK/h/package/dist/htm.module.js" "$NEW/htm.mjs"
 licence "$WORK/p/package/LICENSE" "$NEW/LICENSE-preact"
 licence "$WORK/h/package/LICENSE" "$NEW/LICENSE-htm"
 # Source-map comments point at files not copied.
-sed -i.bak '/^\/\/# sourceMappingURL=/d; s#//\# sourceMappingURL=[^ ]*$##' "$NEW"/*.mjs && rm -f "$NEW"/*.bak
+# Two commands, not `sed && rm`: set -e doesn't stop for a failure before &&.
+sed -i.bak '/^\/\/# sourceMappingURL=/d; s#//\# sourceMappingURL=[^ ]*$##' "$NEW"/*.mjs
+rm -f "$NEW"/*.bak
 if grep -q 'from"preact' "$NEW"/*.mjs; then
   die "a bare import of preact is left in $NEW"
 fi

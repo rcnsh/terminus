@@ -3,7 +3,8 @@
 # encodes its video with, copied from npm into apps/web/public/vendor/ and
 # served from our own domain, like MapLibre (scripts/vendor-map.sh). Its
 # browser build is one self-contained module. MPL-2.0: the licence goes with
-# it, and the file is never edited. Re-run with a new version to update, then
+# it, and the file is never edited beyond dropping its source-map comment.
+# Re-run with a new version to update, then
 # change the path in apps/web/public/admin/timelapse/timelapse.js.
 #
 # The tarball is checked against the npm integrity pinned below before it's
@@ -32,6 +33,8 @@ mkdir -p "$OUT/mediabunny@$MB"
 cp "$WORK/mb/package/dist/bundles/mediabunny.min.mjs" "$OUT/mediabunny@$MB/"
 licence "$WORK/mb/package/LICENSE" "$OUT/mediabunny@$MB/LICENSE"
 # Source-map comments point at files not copied.
-sed -i.bak '/^\/\/# sourceMappingURL=/d' "$OUT/mediabunny@$MB/mediabunny.min.mjs" && rm -f "$OUT/mediabunny@$MB/"*.bak
+# Two commands, not `sed && rm`: set -e doesn't stop for a failure before &&.
+sed -i.bak '/^\/\/# sourceMappingURL=/d' "$OUT/mediabunny@$MB/mediabunny.min.mjs"
+rm -f "$OUT/mediabunny@$MB/"*.bak
 record mediabunny@
 du -sh "$OUT/mediabunny@$MB"

@@ -3,7 +3,8 @@ name: record live buses
 # Run by hand after a deploy: records what /api/buses shows the map for a few
 # minutes, with a throwaway anonymous account, and checks no bus switches to
 # the other side of the road or jumps (apps/api/scripts/record_buses.mjs).
-# The report is the run's summary, and an annotation. Needs no secrets.
+# The report is the run's summary, and an annotation; a flagged move fails
+# the run. Needs no secrets.
 on:
   workflow_dispatch:
     inputs:
@@ -46,6 +47,11 @@ jobs:
               *[!A-Z0-9]*) echo "::error::not a service name (capitals and digits only, as A1 or K): $s"; exit 1 ;;
             esac
           done
-          node apps/api/scripts/record_buses.mjs --site "$SITE" --minutes "$MINUTES" $SERVICES > report.md
+          # The report goes out either way; the script's status decides the run's.
+          status=0
+          node apps/api/scripts/record_buses.mjs --site "$SITE" --minutes "$MINUTES" $SERVICES > report.md || status=$?
           cat report.md >> "$GITHUB_STEP_SUMMARY"
-          python3 -c 'import sys; t = sys.stdin.read().replace("%", "%25").replace("\r", "").replace("\n", "%0A"); print("::notice title=buses::" + t)' < report.md
+          level=notice
+          [ "$status" -eq 0 ] || level=error
+          LEVEL=$level python3 -c 'import os, sys; t = sys.stdin.read().replace("%", "%25").replace("\r", "").replace("\n", "%0A"); print("::" + os.environ["LEVEL"] + " title=buses::" + t)' < report.md
+          exit "$status"
