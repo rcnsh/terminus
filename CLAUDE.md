@@ -40,9 +40,9 @@ Pages opened on the old address go to the same page on terminus.run
 terminus.run (`linkOrigin`). From 9 to 11 October 2026 NUS Wi-Fi reset
 connections to terminus.run, and both were switched off;
 `cloudflare.config.ts` says how to do that again if a network refuses it. The
-privacy contact is still privacy@rcn.sh (a handover moves it). So every
-`terminus.rcn.sh` and `rcn.sh` left in the repo is on purpose: don't
-find-and-replace them.
+privacy contact is privacy@terminus.run, through Email Routing's catch-all,
+so it goes with the domain. Every `terminus.rcn.sh` and `rcn.sh` left in the
+repo is on purpose: don't find-and-replace them.
 
 Every API route is under `/api` (`/api/me/next`, `/api/campus`). The
 pages, `/download/*` and `/map/*` stay at the root, as do the two pages a
