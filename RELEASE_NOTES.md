@@ -1,8 +1,8 @@
-<!-- 3.3.0 -->
-### terminus 3.3
+<!-- 3.4.0 -->
+### terminus 3.4
 
-**Less walking in the sun.** When walking would get you there only a little sooner than the bus, terminus now suggests the bus: each minute on foot counts for more than a minute waiting at a sheltered stop. The times shown don't change. Turn it off with **Prefer the bus** in the Walking settings, on Android, the Mac and the website.
+**Buses near you, on your home screen.** A new Android widget shows the buses at your nearest stop, at any size from a small 2×1 to a full page: one bus, two side by side, or a board of them, each with the time it arrives and where it stops next. When there's room, the next stop's buses come too. Tap ↻ to update it where you are. At night it shows each service's first bus instead of an empty card.
 
-**terminus.run.** The apps now call terminus.run, the project's own address. If they can't reach it, as on NUS Wi-Fi earlier this month, they try terminus.rcn.sh once instead.
+**The big widget** now shows your nearest stop's next two buses under your trip, when there's room.
 
-**Fixes:** the map window, crash reports and the stop boards behave better, and the website shows an error when an action fails rather than doing nothing.
+**Fixes:** setting up after sign-in, location prompts and usual times on Android, and the ride's bus colour on the Mac, behave better.
