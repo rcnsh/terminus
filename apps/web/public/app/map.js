@@ -15,7 +15,7 @@
 
 import { Icon, focusSoon, html, reducedMotion, store, useEffect, useLayoutEffect, useMemo, useRef, useState, useStore } from '/assets/ui.js';
 import { inkOn, quietMs, send, signedOut, t } from '/account/dom.js';
-import { haversineM, loadCampus, profile, reloadProfile, saveNow, withPlace } from '/account/profile.js';
+import { haversineM, loadCampus, profile, reloadProfile, restorePlace, saveNow, toast, withPlace, withoutPlace } from '/account/profile.js';
 import { MAPLIBRE, PMTILES } from '/app/map-files.js';
 import { Row } from '/app/board.js';
 
@@ -1295,12 +1295,25 @@ function StopSheet({ code, box, onGoTo, onSaved, active }) {
   if (!stop) return null;
   const same = p?.places.find((x) => x.to === stop.code);
   // Adds the stop to the places (chips and widget), named as it's called.
+  // Or, when it's one already, takes it off (with its usual times), with Undo as in Settings.
   const save = async () => {
     setSaving(true);
     try {
       if (!profile.get()) await reloadProfile();
-      await saveNow((x) => withPlace(x, stop.code, stop.name));
-      onSaved?.();
+      if (same) {
+        let removed = null;
+        await saveNow((x) => {
+          removed = withoutPlace(x, same.key);
+        });
+        onSaved?.();
+        if (removed) {
+          const undo = () => saveNow((x) => restorePlace(x, removed)).then(() => onSaved?.(), () => toast(t('Not saved. Check your connection.'), { error: true }));
+          toast(t('{0} removed from favourites', same.label), { action: { label: t('Undo'), run: undo } });
+        }
+      } else {
+        await saveNow((x) => withPlace(x, stop.code, stop.name));
+        onSaved?.();
+      }
     } catch (err) {
       // The server's own words when it answered; the browser's ("Failed to fetch") aren't for people.
       setSaveMsg(
@@ -1322,7 +1335,7 @@ function StopSheet({ code, box, onGoTo, onSaved, active }) {
   const footer = html`
     <button type="button" class="btn small accent" onClick=${() => onGoTo({ code: stop.code, name: stop.name, place: same?.key ?? null })}>${t('Go there')}</button>
     <a class="btn small ghost icon" href=${directions(stop)} target="_blank" rel="noopener" aria-label=${t('Walking directions')} title=${t('Walking directions')}><${Icon} paths=${WALKER} /></a>
-    <button type="button" class=${`btn small ghost icon${same ? ' on' : ''}`} disabled=${Boolean(same) || saving} onClick=${save} aria-label=${same ? t('In your favourites') : t('Add to favourites')} title=${same ? t('In your favourites') : t('Add to favourites')}><${Icon} paths=${STAR} /></button>
+    <button type="button" class=${`btn small ghost icon${same ? ' on' : ''}`} disabled=${saving} onClick=${save} aria-pressed=${Boolean(same)} aria-label=${same ? t('Remove from favourites') : t('Add to favourites')} title=${same ? t('Remove from favourites') : t('Add to favourites')}><${Icon} paths=${STAR} /></button>
     ${saveMsg && html`<p class="hint" role="alert">${saveMsg}</p>`}
   `;
   return html`

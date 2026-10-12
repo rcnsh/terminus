@@ -37,6 +37,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -47,6 +48,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
@@ -59,9 +61,12 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.launch
 import sh.rcn.terminus.BuildConfig
+import sh.rcn.terminus.L
 import sh.rcn.terminus.Lang
 import sh.rcn.terminus.R
+import sh.rcn.terminus.RemovedPlace
 import sh.rcn.terminus.Servers
 import sh.rcn.terminus.Store
 import sh.rcn.terminus.Target
@@ -349,6 +354,7 @@ private fun Tabs(
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val snackbars = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     // Settings tapped while already on it: back to its list of all settings.
     val settingsAgain = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
     Scaffold(
@@ -406,6 +412,17 @@ private fun Tabs(
                                 savedAs = { code -> acct.profile?.places?.firstOrNull { it.to == code }?.label },
                                 full = { acct.profile.let { p -> (p?.places?.size ?: 0) >= (p?.limits ?: sh.rcn.terminus.Limits.DEFAULT).places } },
                                 save = { code, name -> account.edit { it.addPlace(name, code) } },
+                                // Taken off with its usual times, so Undo in the bar at the foot, as in Settings.
+                                remove = { code ->
+                                    var removed: RemovedPlace? = null
+                                    account.edit { p -> p.places.firstOrNull { it.to == code }?.let { removed = p.removePlace(it.key) } }
+                                    removed?.let { r ->
+                                        scope.launch {
+                                            val undo = snackbars.showSnackbar(Notice(L.s(R.string.favourite_removed, r.label), actionLabel = L.s(R.string.undo)))
+                                            if (undo == SnackbarResult.ActionPerformed) account.edit { it.restorePlace(r) }
+                                        }
+                                    }
+                                },
                             ),
                             onShowList = { svc, stop ->
                                 buses.home()
