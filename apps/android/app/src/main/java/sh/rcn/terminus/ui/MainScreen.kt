@@ -30,10 +30,11 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.InputChipDefaults
 import androidx.compose.material3.MaterialTheme
@@ -235,10 +236,14 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
                     )
                 }
             }
-            // Go somewhere else: the search opens under the chips.
-            IconButton(onClick = { searching = !searching }) {
-                Icon(painterResource(R.drawable.ic_search), contentDescription = stringResource(R.string.go_somewhere_else))
-            }
+            // Go somewhere else: worded, not a bare magnifier, so it reads as one
+            // more place to go. The search opens under the chips.
+            Spacer(Modifier.width(8.dp))
+            AssistChip(
+                onClick = { searching = !searching },
+                label = { Text(stringResource(R.string.elsewhere)) },
+                leadingIcon = { Icon(painterResource(R.drawable.ic_search), contentDescription = null, Modifier.size(AssistChipDefaults.IconSize)) },
+            )
         }
         if (searching) Search(state, vm) { searching = false }
         } }

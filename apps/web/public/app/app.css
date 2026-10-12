@@ -43,10 +43,10 @@ body.is-offline .app-card .widget.offline-plan { opacity: 1; }
   .app-chips button[aria-pressed="true"], .app-chips .chip-added:has(> button[aria-pressed="true"]) .chip-x { forced-color-adjust: none; background: Highlight; border-color: Highlight; color: HighlightText; }
   .map-pills .dot, .road-bus, .bt-bus { forced-color-adjust: none; }
 }
-/* The search button at the end of the chips, and the search it opens. */
-.app-chips .chip-search { display: grid; place-items: center; padding: 7px 10px; color: var(--muted); }
+/* Elsewhere at the end of the chips, worded so it reads as one more place to go, and the search it opens. */
+.app-chips .chip-search { display: inline-flex; align-items: center; gap: 5px; padding: 7px 14px 7px 10px; }
 .app-chips .chip-search[aria-expanded="true"] { color: var(--ink); border-color: var(--ink); }
-.chip-search svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.chip-search svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .where-box input { width: 100%; }
 /* A place added from the search: its chip, and an X to take it off. */
 .app-chips .chip-added { flex: none; display: inline-flex; align-items: stretch; }
