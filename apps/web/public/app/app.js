@@ -792,7 +792,7 @@ function InstallHint() {
 }
 const installDismissed = store(false);
 
-/** Next, Nearby, each favourite, then places added from the search: the phone app's chips, then the search button. */
+/** Next, Nearby, each favourite, then places added from the search: the phone app's chips, then Elsewhere, which opens the search. */
 function Chips() {
   const to = useStore(target);
   const list = useStore(places);
@@ -816,8 +816,8 @@ function Chips() {
         </span>`,
       )}
       ${to.kind === 'stop' && !extra.some((x) => x.to === to.to) && chip(to.label, to)}
-      <button type="button" class="chip-search" aria-label=${t('Go somewhere else')} aria-expanded=${String(open)} onClick=${() => searching.set(!open)}>
-        <${Icon} paths=${SEARCH} />
+      <button type="button" class="chip-search" aria-expanded=${String(open)} onClick=${() => searching.set(!open)}>
+        <${Icon} paths=${SEARCH} />${t('Elsewhere')}
       </button>
     </div>
   `;
