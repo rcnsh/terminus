@@ -481,11 +481,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private var dayJob: Job? = null
+    /** The language [dayJob] asked in. */
+    private var dayJobLang: String? = null
 
     /** Today's timeline; kept as it was when offline. */
     fun loadDay() {
         val token = store.token ?: return
-        if (dayJob?.isActive == true) return
+        val lang = L.header()
+        // One already on its way is enough, unless it was asked in the language
+        // just switched from: its titles would stay in that one.
+        if (dayJob?.isActive == true) {
+            if (dayJobLang == lang) return
+            dayJob?.cancel()
+        }
+        dayJobLang = lang
         dayJob = viewModelScope.launch(account) {
             // Where the phone was a moment ago (no new fix): the next class from there, as the card has it.
             val loc = Locator.lastKnown(getApplication(), maxAgeMs = 60_000)
@@ -493,7 +502,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val json = Api(token, hour12 = hour12(getApplication())).dayJson(loc?.latitude, loc?.longitude, Locator.accOf(loc))
                 // Kept for when the phone goes offline (OfflineDay); one this version can't read isn't.
                 // Signed out meanwhile: the old account's day, kept nowhere.
-                val day = store.saveDay(json, System.currentTimeMillis(), sentWith = token) ?: return@launch
+                val day = store.saveDay(json, System.currentTimeMillis(), sentWith = token, lang = lang) ?: return@launch
                 _state.update { it.copy(day = day) }
             } catch (e: CancellationException) {
                 throw e
@@ -618,9 +627,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         val before = _state.value.answers[Target.Plan]
                         // And when the kept one is over two minutes old, as on the Mac: the
                         // copy from disk counts as loaded, so Today's leave-by times could
-                        // be hours old beside a fresh card.
+                        // be hours old beside a fresh card. And when it's in the other language.
                         val dayAge = now - store.dayFetchedAt
-                        if (_state.value.day == null || dayAge > DAY_MAX_AGE_MS || before?.destLabel != answer.destLabel || before?.card?.phase != answer.card?.phase) loadDay()
+                        if (_state.value.day == null || dayAge > DAY_MAX_AGE_MS || store.dayLang != L.header() || before?.destLabel != answer.destLabel || before?.card?.phase != answer.card?.phase) loadDay()
                         Refresher.scheduleNext(ctx, answer, now)
                         store.lastError = null
                         redrawWidgets(ctx)

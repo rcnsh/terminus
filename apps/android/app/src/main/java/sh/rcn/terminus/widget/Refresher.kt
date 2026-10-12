@@ -224,7 +224,7 @@ object Refresher {
     /** The day plan kept for offline is another day's, an hour old, or missing. */
     private fun dayDue(store: Store, now: Long): Boolean {
         val at = store.dayFetchedAt
-        return at == 0L || now - at > DAY_MAX_AGE_MS || store.lastDay()?.first?.date != OfflineDay.sgtDate(now)
+        return at == 0L || now - at > DAY_MAX_AGE_MS || store.dayLang != L.header() || store.lastDay()?.first?.date != OfflineDay.sgtDate(now)
     }
 
     /** Whether a job for [extras] would do anything: else it would only redraw every widget again. */
@@ -239,7 +239,8 @@ object Refresher {
         if (dayDue(store, now)) {
             try {
                 // Not kept when [token] has been signed out meanwhile.
-                store.saveDay(api.dayJson(loc?.latitude, loc?.longitude, Locator.accOf(loc)), now, sentWith = token)
+                val lang = L.header()
+                store.saveDay(api.dayJson(loc?.latitude, loc?.longitude, Locator.accOf(loc)), now, sentWith = token, lang = lang)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
