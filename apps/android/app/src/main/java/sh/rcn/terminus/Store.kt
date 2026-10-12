@@ -108,18 +108,24 @@ class Store(context: Context) {
      * (OfflineDay), and the plan read from it; one this version can't read
      * throws [ParseError] and isn't kept. Null, and nothing kept, when
      * [sentWith] is no longer this phone's token, as for [saveAnswer].
+     * [lang] is the language it was asked for in ([L.header]): the server
+     * writes its titles, so one kept from before a language change is fetched
+     * again ([dayLang]).
      */
-    fun saveDay(json: JSONObject, fetchedAtMs: Long, sentWith: String): DayPlan? {
+    fun saveDay(json: JSONObject, fetchedAtMs: Long, sentWith: String, lang: String): DayPlan? {
         val day = DayPlan.parse(json)
         synchronized(Store) {
             if (token != sentWith) return null
-            prefs.edit { putString(KEY_DAY, json.toString()).putLong(KEY_DAY_AT, fetchedAtMs) }
+            prefs.edit { putString(KEY_DAY, json.toString()).putLong(KEY_DAY_AT, fetchedAtMs).putString(KEY_DAY_LANG, lang) }
         }
         return day
     }
 
     /** When the kept day plan was fetched, epoch ms (0: none), without reading it. */
     val dayFetchedAt: Long get() = prefs.getLong(KEY_DAY_AT, 0)
+
+    /** The language the kept day plan is written in, as [L.header] gives it; null when unknown. */
+    val dayLang: String? get() = prefs.getString(KEY_DAY_LANG, null)
 
     fun lastDay(): Pair<DayPlan, Long>? {
         val raw = prefs.getString(KEY_DAY, null) ?: return null
@@ -397,6 +403,7 @@ class Store(context: Context) {
         private const val KEY_INTENT = "intent-key"
         private const val KEY_DAY = "day"
         private const val KEY_DAY_AT = "day-fetched"
+        private const val KEY_DAY_LANG = "day-lang"
         private const val KEY_NEARBY = "nearby"
         private const val KEY_NEARBY_AT = "nearby-fetched"
         private const val KEY_NEARBY_ERROR = "nearby-error"
