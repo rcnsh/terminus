@@ -1102,8 +1102,13 @@ private fun StripRail(color: Color, mark: StripMark?, first: Boolean, last: Bool
     }
 }
 
-/** Saving a stop as a place, from the account's profile (Settings' favourites). */
-internal class PlacesForMap(val savedAs: (code: String) -> String?, val full: () -> Boolean, val save: (code: String, name: String) -> Unit)
+/** Saving a stop as a place, or taking it off again, from the account's profile (Settings' favourites). */
+internal class PlacesForMap(
+    val savedAs: (code: String) -> String?,
+    val full: () -> Boolean,
+    val save: (code: String, name: String) -> Unit,
+    val remove: (code: String) -> Unit,
+)
 
 /** The rows a stop's sheet shows before "Show more", so the map stays in view. */
 private const val PEEK_ROWS = 3
@@ -1134,10 +1139,10 @@ private fun StopSheet(stop: MapStop, ui: MapUi, campus: CampusMap, actions: MapA
             }) { Icon(painterResource(R.drawable.ic_walk), contentDescription = stringResource(R.string.map_walking_directions)) }
             val saved = places.savedAs(stop.code) != null
             val full = !saved && places.full()
-            OutlinedIconButton(onClick = { places.save(stop.code, stop.name) }, enabled = !saved && !full) {
+            OutlinedIconButton(onClick = { if (saved) places.remove(stop.code) else places.save(stop.code, stop.name) }, enabled = saved || !full) {
                 Icon(
                     painterResource(if (saved) R.drawable.ic_star_filled else R.drawable.ic_star),
-                    contentDescription = stringResource(if (saved) R.string.map_saved_as else if (full) R.string.map_places_full else R.string.map_save_place),
+                    contentDescription = stringResource(if (saved) R.string.map_remove_place else if (full) R.string.map_places_full else R.string.map_save_place),
                     tint = if (saved) c.primary else LocalContentColor.current,
                 )
             }

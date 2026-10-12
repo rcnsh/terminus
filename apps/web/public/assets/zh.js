@@ -386,7 +386,7 @@ window.TERMINUS_ZH = {
  "Show fewer": "收起",
  "Go there": "去这里",
  "Add to favourites": "加入收藏",
- "In your favourites": "已收藏",
+ "Remove from favourites": "取消收藏",
  "You can't add more favourites. Remove one in Settings first.": "收藏已满。请先在设置中移除一个。",
  "Walking directions": "步行路线",
  "Live times need a connection.": "实时时间需要联网。",

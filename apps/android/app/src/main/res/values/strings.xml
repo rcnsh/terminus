@@ -31,7 +31,7 @@
     <string name="map_places_full">Favourites are full</string>
     <string name="map_recentre">Back to campus</string>
     <string name="map_save_place">Add to favourites</string>
-    <string name="map_saved_as">In your favourites</string>
+    <string name="map_remove_place">Remove from favourites</string>
     <string name="map_show_more">Show %1$d more</string>
     <string name="map_show_more_stops">Show %1$d more stops</string>
     <string name="map_show_fewer">Show fewer</string>
