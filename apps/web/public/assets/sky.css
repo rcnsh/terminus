@@ -76,6 +76,13 @@
 /* The stars and the moon (sky.js NightSky), at night only, behind the words. */
 .sky-panel .night-sky { position: absolute; z-index: -1; inset: 0; pointer-events: none; display: none; --room: var(--sky-room, 240px); }
 [data-sky="night"] .sky-panel .night-sky { display: block; }
+/* No star behind the logo and wordmark: on a narrow window one lands among the letters.
+   The corner from the left edge to past the wordmark (the .wrap's margin, then the brand) stays clear. */
+.sky-panel:has(> .nav .brand) .night-sky {
+  -webkit-mask: linear-gradient(#000 0 0), linear-gradient(#000 0 0) 0 0 / calc(max(0px, (100vw - 68rem) / 2) + 200px) 66px no-repeat;
+  mask: linear-gradient(#000 0 0), linear-gradient(#000 0 0) 0 0 / calc(max(0px, (100vw - 68rem) / 2) + 200px) 66px no-repeat;
+  -webkit-mask-composite: xor; mask-composite: exclude;
+}
 .sky-panel .night-sky .star { position: absolute; width: 2.4px; height: 2.4px; border-radius: 50%; background: #fff; }
 .sky-panel .night-sky .moon { position: absolute; top: var(--moon-top, 84px); right: 7%; width: var(--moon, 40px); height: var(--moon, 40px); border-radius: 50%; background: #fde9c9;
   -webkit-mask: radial-gradient(44.6% 44.6% at 76% 28%, transparent 97%, #000 100%); mask: radial-gradient(44.6% 44.6% at 76% 28%, transparent 97%, #000 100%); }
