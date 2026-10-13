@@ -1,4 +1,4 @@
-<!-- 3.4.1 -->
-### terminus 3.4.1
+<!-- 3.4.2 -->
+### terminus 3.4.2
 
-**Fixes:** the Now page's search is a chip that says **Elsewhere**, rather than a bare magnifier. The star on a stop takes it off your favourites again. On Android, today's list follows a change of language instead of staying in the old one.
+**Fixes:** on Android, today's list no longer stays in the old language when you switch languages quickly.
