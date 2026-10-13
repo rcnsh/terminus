@@ -411,9 +411,15 @@ export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     scopeCache(env);
     // Every word the server writes is in this request's language (i18n.ts).
-    const res = await withLang(langOfRequest(req), () => route(req, env, ctx));
+    const [res, written] = await withLang(langOfRequest(req), async () => [await route(req, env, ctx), lang()] as const);
+    const path = new URL(req.url).pathname;
     // A redirect or a download body passes through untouched apart from headers.
-    return withSecurityHeaders(res, new URL(req.url).pathname);
+    const out = withSecurityHeaders(res, path);
+    // The language the answer is in, which the account's choice decides over
+    // Accept-Language (useProfileLang): an app that has just switched asks in
+    // the new one before the account has it, and keeps what came back as that.
+    if (path.startsWith('/api/')) out.headers.set('content-language', written === 'zh' ? 'zh-Hans' : 'en');
+    return out;
   },
 };
 

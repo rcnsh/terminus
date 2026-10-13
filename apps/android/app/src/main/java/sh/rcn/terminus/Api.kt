@@ -949,13 +949,16 @@ class Api(private val token: String?, private val fast: Boolean = false, private
     }
 
     /** Today's timeline. */
-    suspend fun day(lat: Double? = null, lon: Double? = null, acc: Double? = null): DayPlan = DayPlan.parse(dayJson(lat, lon, acc))
+    suspend fun day(lat: Double? = null, lon: Double? = null, acc: Double? = null): DayPlan = DayPlan.parse(dayJson(lat, lon, acc).first)
 
     /**
      * /me/day as it came: kept for when the phone is offline ([Store.saveDay]).
      * With a location, the next class is planned from there, as the card is.
+     * With the language it's written in, as [L.header] gives it: the account's
+     * choice wins over the one asked in, and a switch reaches the account a
+     * moment after the app shows it. An older server doesn't say: the one asked in.
      */
-    suspend fun dayJson(lat: Double? = null, lon: Double? = null, acc: Double? = null): JSONObject {
+    suspend fun dayJson(lat: Double? = null, lon: Double? = null, acc: Double? = null): Pair<JSONObject, String> {
         val q = buildList {
             if (lat != null && lon != null) {
                 add("lat=${coord(lat)}")
@@ -964,7 +967,10 @@ class Api(private val token: String?, private val fast: Boolean = false, private
             }
             if (hour12) add("h12=1")
         }
-        return request("GET", "/api/me/day" + if (q.isEmpty()) "" else "?" + q.joinToString("&"))
+        val asked = L.header()
+        var written: String? = null
+        val json = request("GET", "/api/me/day" + if (q.isEmpty()) "" else "?" + q.joinToString("&")) { written = it.getHeaderField("content-language") }
+        return json to (written?.let { if (it.startsWith("zh")) "zh-Hans" else "en" } ?: asked)
     }
 
     /** Whose account a pairing code belongs to (masked), without spending it. */

@@ -923,6 +923,14 @@ Settings. It uses the same routes as the account page, with the session cookie.
   client keeps a copy (web `dom.js` `hour12()`, Android `Clock`, Mac
   `Clock`) so the times it writes itself, and the widgets, match; `auto`
   follows the device.
+- **Which language a reply is in.** The profile's `lang`, when set, wins
+  over the request's `Accept-Language` (`useProfileLang`), and every `/api`
+  reply says what it was written in (`Content-Language`, from `index.ts`).
+  An app that switches language asks again at once, before its debounced
+  profile save reaches the account, so that reply is in the old language.
+  Android keeps today's list with the language it says (`Store.dayLang`),
+  fetches it again while that differs from the app's, and reloads the card
+  and the list once the save has landed (`langSaved`).
 - **Now.** A search button at the end of the chips opens "Go somewhere
   else" (account/search-box.js, ranked by search.js, over `/api/campus`'s
   destinations); a pick shows its card under a chip of its own. "Is this
