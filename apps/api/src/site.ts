@@ -38,7 +38,7 @@ const STAYS = ['/api/', '/download/', '/.well-known/', '/map/', '/robots.txt'];
 
 /**
  * A page opened on an old address goes to the same page on the new one.
- * Only a browser's GET for HTML: apps before 3.2.1 call the old address,
+ * Only a browser's GET for HTML: apps before 3.3.0 call the old address,
  * and newer ones fall back to it, asking for JSON, so they're never sent
  * on. A 301, for search engines, that browsers keep for a day only, so
  * moving back is a change here, not something cached for good.
