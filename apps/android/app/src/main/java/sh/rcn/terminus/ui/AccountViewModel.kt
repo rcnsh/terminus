@@ -63,6 +63,12 @@ data class AccountState(
     val history: Int = 0,
     /** The language just changed: on Android 12 the activity is recreated to show it. */
     val langChanged: Boolean = false,
+    /**
+     * Counts saves that changed the account's language. The server writes the
+     * card and the day in the account's language, not the one asked in, so
+     * what was fetched between the switch and this save is in the old one.
+     */
+    val langSaved: Int = 0,
     /** The timetable is for a semester that has ended (/me needsReimport), and which one. */
     val needsReimport: Boolean = false,
     val term: String? = null,
@@ -260,6 +266,7 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val saved = ProfileDoc(Api(sent).saveProfile(next.json))
                 if (sending === next) sending = null
+                if (saved.lang != confirmed?.lang) _state.update { it.copy(langSaved = it.langSaved + 1) }
                 confirmed = saved
                 if (mine == edits) _state.update { it.copy(profile = saved) }
             } catch (e: CancellationException) {

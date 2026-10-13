@@ -99,7 +99,7 @@ const langParam = {
   name: 'lang',
   in: 'query',
   description:
-    'The language of the words in the answer: `en`, or `zh` for Simplified Chinese. Without it, the `terminus-lang` cookie, else `Accept-Language` (any `zh*` is Chinese). On `/api/me` routes, an account’s own `lang` setting, when not `auto`, wins over all of these. Errors are worded the same way.',
+    'The language of the words in the answer: `en`, or `zh` for Simplified Chinese. Without it, the `terminus-lang` cookie, else `Accept-Language` (any `zh*` is Chinese). On `/api/me` routes, an account’s own `lang` setting, when not `auto`, wins over all of these. Errors are worded the same way. Every `/api` reply says the language it was written in, in `Content-Language` (`en` or `zh-Hans`).',
   schema: { type: 'string', enum: ['en', 'zh'] },
 };
 

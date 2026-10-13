@@ -239,8 +239,8 @@ object Refresher {
         if (dayDue(store, now)) {
             try {
                 // Not kept when [token] has been signed out meanwhile.
-                val lang = L.header()
-                store.saveDay(api.dayJson(loc?.latitude, loc?.longitude, Locator.accOf(loc)), now, sentWith = token, lang = lang)
+                val (json, lang) = api.dayJson(loc?.latitude, loc?.longitude, Locator.accOf(loc))
+                store.saveDay(json, now, sentWith = token, lang = lang)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {

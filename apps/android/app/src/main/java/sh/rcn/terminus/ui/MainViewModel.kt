@@ -484,14 +484,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** The language [dayJob] asked in. */
     private var dayJobLang: String? = null
 
-    /** Today's timeline; kept as it was when offline. */
-    fun loadDay() {
+    /**
+     * Today's timeline; kept as it was when offline. [restart]: one already
+     * on its way was asked for too early (before the account had the new language).
+     */
+    fun loadDay(restart: Boolean = false) {
         val token = store.token ?: return
         val lang = L.header()
         // One already on its way is enough, unless it was asked in the language
         // just switched from: its titles would stay in that one.
         if (dayJob?.isActive == true) {
-            if (dayJobLang == lang) return
+            if (!restart && dayJobLang == lang) return
             dayJob?.cancel()
         }
         dayJobLang = lang
@@ -499,10 +502,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // Where the phone was a moment ago (no new fix): the next class from there, as the card has it.
             val loc = Locator.lastKnown(getApplication(), maxAgeMs = 60_000)
             try {
-                val json = Api(token, hour12 = hour12(getApplication())).dayJson(loc?.latitude, loc?.longitude, Locator.accOf(loc))
+                // In the language the server wrote it in, which can be the old one for
+                // a moment after a switch (Api.dayJson): then the next refresh asks again.
+                val (json, written) = Api(token, hour12 = hour12(getApplication())).dayJson(loc?.latitude, loc?.longitude, Locator.accOf(loc))
                 // Kept for when the phone goes offline (OfflineDay); one this version can't read isn't.
                 // Signed out meanwhile: the old account's day, kept nowhere.
-                val day = store.saveDay(json, System.currentTimeMillis(), sentWith = token, lang = lang) ?: return@launch
+                val day = store.saveDay(json, System.currentTimeMillis(), sentWith = token, lang = written) ?: return@launch
                 _state.update { it.copy(day = day) }
             } catch (e: CancellationException) {
                 throw e

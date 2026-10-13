@@ -38,8 +38,8 @@ async function setup(profile = PROFILE, { trips = true, feed = FEED } = {}) {
   const clock = (ms) => installGlobals(fetchImpl, ms);
   const TRIPS = makeDurableObjects(Trip);
   const env = { ...makeEnv(), DB: makeD1(), EMAIL: makeEmail(), EMAIL_FROM: 'x@example.test', ...(trips ? { TRIPS } : {}) };
-  const call = async (path, { method = 'GET', token, cookie, body } = {}) => {
-    const headers = {};
+  const call = async (path, { method = 'GET', token, cookie, body, headers: extra = {} } = {}) => {
+    const headers = { ...extra };
     if (token) headers.authorization = `Bearer ${token}`;
     if (cookie) headers.cookie = cookie;
     if (body !== undefined) headers['content-type'] = 'application/json';
@@ -238,6 +238,21 @@ test('/api/me/day: each class with where you set off, the leave-by, and the trip
   await signal(phone, { kind: 'skipped', trip: FIRST });
   day = await (await call('/api/me/day', { token: phone })).json();
   assert.equal(day.items.some((i) => i.key === FIRST), false, 'taken off today: not listed');
+});
+
+test('/api/me/day: says the language it is written in, which the account chooses over the device', async () => {
+  // An app that has just switched to English asks in it before its save
+  // reaches the account: the day comes back in Chinese, and says so.
+  const { phone, call } = await setup({ ...PROFILE, lang: 'zh' });
+  const zh = await call('/api/me/day', { token: phone, headers: { 'accept-language': 'en' } });
+  assert.equal(zh.headers.get('content-language'), 'zh-Hans');
+  assert.match((await zh.json()).items.find((i) => i.kind === 'home').title, /回家/);
+
+  const { phone: other, call: ask } = await setup();
+  const en = await ask('/api/me/day', { token: other, headers: { 'accept-language': 'zh-CN' } });
+  assert.equal(en.headers.get('content-language'), 'zh-Hans', 'auto: the device decides');
+  const plain = await ask('/api/me/day', { token: other });
+  assert.equal(plain.headers.get('content-language'), 'en');
 });
 
 test('/api/me/day: the next class planned from where the device is, as the card plans it', async () => {

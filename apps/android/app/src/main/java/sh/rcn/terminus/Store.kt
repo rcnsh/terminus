@@ -108,8 +108,8 @@ class Store(context: Context) {
      * (OfflineDay), and the plan read from it; one this version can't read
      * throws [ParseError] and isn't kept. Null, and nothing kept, when
      * [sentWith] is no longer this phone's token, as for [saveAnswer].
-     * [lang] is the language it was asked for in ([L.header]): the server
-     * writes its titles, so one kept from before a language change is fetched
+     * [lang] is the language the server wrote it in ([Api.dayJson]), in
+     * [L.header]'s form: one in another language than the app's is fetched
      * again ([dayLang]).
      */
     fun saveDay(json: JSONObject, fetchedAtMs: Long, sentWith: String, lang: String): DayPlan? {

@@ -312,6 +312,14 @@ private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel,
             recreateOn12(ctx)
         }
     }
+    // The new language has reached the account: the card and the day asked for
+    // before it did were written in the old one.
+    LaunchedEffect(acct.langSaved) {
+        if (acct.langSaved > 0) {
+            vm.load(restart = true)
+            vm.loadDay(restart = true)
+        }
+    }
     // A timetable shared from NUSMods once set up: import it after a yes.
     acct.sharedLink?.let { link ->
         if (state.paired && !setup) {
