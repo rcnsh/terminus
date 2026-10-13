@@ -819,8 +819,8 @@ the stable site, and that the release and map scripts upload to each site's
 bucket.
 
 Each Worker answers on two addresses: terminus.run, which people see and
-the apps call, and terminus.rcn.sh, the old one, which apps before 3.2.1
-call and which every app falls back to when terminus.run can't be reached
+the apps call, and terminus.rcn.sh, the old one, which apps before 3.3.0
+(betas before 3.2.1-beta.2) call and which every app falls back to when terminus.run can't be reached
 (the beta's likewise). A page a browser opens on the old
 address is sent to the same path on the new one (`movedPage` in
 `src/site.ts`): a GET or HEAD asking for HTML, outside `/download/`,
@@ -1739,7 +1739,7 @@ was never reached (no DNS answer, a refused connection, a TLS handshake cut
 off, as NUS Wi-Fi did to terminus.run in October 2026), so it can't arrive
 twice; a GET also after any other reset. Once the backup has answered, it
 goes first for 10 minutes, so a refused address doesn't slow every request.
-Apps before 3.2.1 call the old address, so it stays on the Worker; if the
+Apps before 3.3.0 call the old address, so it stays on the Worker; if the
 project changes hands, a small proxy on rcn.sh passing every request to
 terminus.run keeps them working until they're gone.
 

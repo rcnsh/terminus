@@ -30,7 +30,7 @@ function site(mode: string | undefined) {
 		return {
 			name: "terminus",
 			domain: "terminus.run",
-			// The old address keeps answering: apps before 3.2.1 call it and
+			// The old address keeps answering: apps before 3.3.0 call it and
 			// check for updates there, and newer ones fall back to it.
 			oldDomain: "terminus.rcn.sh",
 			d1: { name: "terminus", id: "27067356-8691-458f-bc69-fa5ca5bbc374" },

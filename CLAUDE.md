@@ -25,11 +25,12 @@ https://beta.terminus.run. It's an independent student project, not
 affiliated with NUS.
 
 terminus.run is the address people see and the one the apps call (from
-3.2.1; beta.terminus.run for the beta), with the Mac's update feed and the
+3.3.0, or 3.2.1-beta.2 among the betas; beta.terminus.run for the beta), with the Mac's update feed and the
 release scripts: it's the project's own domain, the one that goes with it
 if someone else takes it over. terminus.rcn.sh (and beta.terminus.rcn.sh),
 the owner's, is the backup: a request that can't reach one address at all
-tries the other once (`Servers.order`), and apps before 3.2.1 call it.
+tries the other once (`Servers.order`), and apps before 3.3.0 (betas before
+3.2.1-beta.2) call it.
 Both addresses stay attached to each Worker (`test/deploy.test.js`). The
 apps' developer menu (Settings, About: always in debug and beta builds,
 after seven taps on the version in a stable release) switches between the addresses built in and, in debug builds, the
