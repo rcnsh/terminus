@@ -56,7 +56,6 @@ case "${CHANNEL:-stable}" in
   both) BUCKETS="terminus-downloads terminus-beta-downloads" ;;
   *) echo "CHANNEL is stable, beta or both, not $CHANNEL"; exit 1 ;;
 esac
-# Must match MAP_BOUNDS in apps/api/src/map.ts.
 BBOX=103.755,1.280,103.830,1.332
 # From zoom 12 up: every client's map stops zooming out at 13 (with
 # 512-pixel tiles, one level of tile per level of map), so the world-wide
