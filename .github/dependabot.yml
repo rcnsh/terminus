@@ -1,7 +1,3 @@
-# Keeps the pinned GitHub Actions (by commit SHA), the npm dev dependencies,
-# the Android app's Gradle dependencies and the Mac app's Swift packages
-# current: a PR per ecosystem when there's something new, a week at a time.
-#
 # Every ecosystem has a cooldown: a new release sits a few days first, as a
 # compromised version is usually caught and pulled within that.
 version: 2
@@ -26,7 +22,6 @@ updates:
     groups:
       dev-dependencies:
         patterns: ["*"]
-    # "chore(deps): bump ...".
     commit-message:
       prefix: chore
       include: scope
@@ -42,7 +37,6 @@ updates:
     groups:
       android:
         patterns: ["*"]
-    # "build(deps): bump ...".
     commit-message:
       prefix: build
       include: scope
@@ -57,7 +51,6 @@ updates:
     groups:
       mac:
         patterns: ["*"]
-    # "build(deps): bump ...".
     commit-message:
       prefix: build
       include: scope

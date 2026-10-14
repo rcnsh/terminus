@@ -21,7 +21,6 @@ on:
         options: [both, stable, beta]
         default: both
   schedule:
-    # 04:13 UTC on 1 January and 1 July.
     - cron: "13 4 1 1,7 *"
 
 permissions:

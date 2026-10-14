@@ -4,7 +4,8 @@
 # the site's CSP stays same-site, and the service worker keeps them for
 # offline). htm turns tagged templates into Preact elements without eval, so
 # the CSP needs no 'unsafe-eval'. Re-run with new versions to update, then
-# change the path in apps/web/public/assets/ui.js and sw.js.
+# change the path in apps/web/public/assets/ui.js, sw.js and every page's
+# modulepreload links.
 #
 # The folder has no "@" in its name, unlike the map's: Cloudflare's static
 # assets redirect "@" to "%40", a round trip per module import.

@@ -33,14 +33,11 @@
     background: linear-gradient(var(--s0) 0, var(--s1) 26%, var(--s2) 40%, var(--s3) 47%);
   }
 
-  /* The night: stars and the moon, hidden by day. */
   .night { display: none; }
   @media (prefers-color-scheme: dark) { .night { display: block; } }
   .star { position: absolute; width: 2.4px; height: 2.4px; border-radius: 50%; background: #fff; }
   .moon { position: absolute; top: 40px; left: 800px; width: 40px; height: 40px; border-radius: 50%; box-shadow: -11px 7px 0 0 #fde9c9; }
 
-  /* The ground: the real campus map with D2 picked, laid flat and running
-     back to the horizon. */
   .ground {
     position: absolute; left: 50%; bottom: -40px; width: 2000px; height: 760px; margin-left: -1000px;
     transform-origin: 50% 100%; transform: perspective(900px) rotateX(52deg);
@@ -63,7 +60,6 @@
   h1 em { font-style: normal; color: var(--accent); }
   .lede { margin: 12px 0 0; max-width: 400px; font: 500 1.05rem/1.5 var(--font); color: var(--muted); }
 
-  /* The clients, standing on the map. */
   .thing { position: absolute; }
   .thing .shot { display: block; box-shadow: 0 30px 60px -18px var(--shadow), 0 0 0 1px rgb(255 255 255 / 0.08); }
   .thing::after {

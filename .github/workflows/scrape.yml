@@ -86,7 +86,6 @@ jobs:
         continue-on-error: true
         run: python3 apps/api/scripts/fetch_calendar.py
 
-      # The three steps above fail quietly; say so on the run's page.
       - name: Note what wasn't refreshed
         if: steps.shapes.outcome == 'failure' || steps.lta.outcome == 'failure' || steps.calendar.outcome == 'failure'
         env:

@@ -108,8 +108,7 @@ if [ $DRY -eq 0 ] && [ "$LIVE_VERSION" = "$VERSION" ]; then
 fi
 build_goes_up "bump versionCode and CFBundleVersion"
 
-# This version's apps expect its API, so the Worker is deployed first. A dry
-# run reports and carries on.
+# This version's apps expect its API, so the Worker is deployed first.
 live_check() {
   python3 scripts/release-check.py "$@" && return 0
   [ $DRY -eq 1 ] && { echo "   (a release would stop here)"; return 0; }
@@ -132,7 +131,6 @@ echo "api tests and typecheck pass"
 rm -rf "$OUT"
 mkdir -p "$OUT"
 
-# From here a failure says what's live and how to finish.
 STAGE=build
 stopped() {
   [ "$1" -ne 0 ] || return 0
@@ -147,7 +145,6 @@ stopped() {
 trap 'stopped $?' EXIT
 
 echo "== android"
-# Android Studio's Java, unless JAVA_HOME says otherwise.
 STUDIO_JAVA="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 if [ -z "${JAVA_HOME:-}" ] && [ -d "$STUDIO_JAVA" ]; then export JAVA_HOME="$STUDIO_JAVA"; fi
 # Two runs: ABI splits are off for the bundle (app/build.gradle.kts), and
