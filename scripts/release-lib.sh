@@ -6,7 +6,6 @@
 
 die() { echo "$*" >&2; exit 1; }
 
-# The same on both: under --dry-run a check that can't pass yet only warns.
 warn_or_die() {
   if [ "$DRY" -eq 1 ]; then echo "warning: $* (a real release would stop here)"; else die "$*"; fi
 }
@@ -56,7 +55,6 @@ scrape_commit() {
 ci_state() {
   runs=$(gh run list --workflow ci.yml --commit "$1" --limit 20 --json status,conclusion,event,url) ||
     die "couldn't ask GitHub for CI on $1; check gh and the network"
-  # The newest run of the push to main, else the newest of any.
   state=$(printf '%s' "$runs" | python3 -c '
 import json, sys
 runs = json.load(sys.stdin)
@@ -224,10 +222,9 @@ print(pins[0]["state"].get("version", "") if pins else "")' apps/macos/Package.r
 }
 
 # The appcast signed with the Sparkle key, as Sparkle checks a feed once
-# the app sets SURequireSignedFeed (a later release turns it on, once
-# signed feeds are live). sign_update adds the signature to the file as a
-# closing comment, so nothing may change it after this; upload_all checks
-# it's byte for byte what was signed.
+# the app sets SURequireSignedFeed. sign_update adds the signature to the
+# file as a closing comment, so nothing may change it after this;
+# upload_all checks it's byte for byte what was signed.
 sign_appcast() {  # <appcast.xml>
   sign_update_tool
   "$SIGN_UPDATE" --ed-key-file "$SPARKLE_KEY" "$1" || die "sign_update couldn't sign $1"

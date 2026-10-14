@@ -109,7 +109,6 @@ build_goes_up "commit to main and run again (the build is the commit count)"
 
 # Whether the live beta's API version is at least this commit's
 # (scripts/release-check.py).
-# A dry run reports and carries on.
 live_check() {
   python3 scripts/release-check.py "$@" && return 0
   [ $DRY -eq 1 ] && { echo "   (a release would stop here)"; return 0; }
@@ -133,7 +132,6 @@ if ! pnpm --silent check >"$ROOT/build/test.log" 2>&1; then
 fi
 echo "api tests and typecheck pass"
 
-# From here a failure says what's live and how to finish.
 STAGE=build
 stopped() {
   [ "$1" -ne 0 ] || return 0
@@ -155,7 +153,6 @@ trap 'stopped $?' EXIT
 echo "== android"
 (cd apps/android && JAVA_HOME="${JAVA_HOME:-/Applications/Android Studio.app/Contents/jbr/Contents/Home}" \
   ./gradlew :app:assembleBetaRelease -PbetaVersion="$VERSION" -PbetaCode="$BUILD" --console=plain -q)
-# One APK per CPU type, as scripts/release.sh.
 APKS=apps/android/app/build/outputs/apk/beta/release
 APK="$OUT/terminus-$VERSION.apk"
 cp "$APKS/app-beta-arm64-v8a-release.apk" "$APK"

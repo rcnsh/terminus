@@ -29,14 +29,13 @@ def semver(v):
     """'2.5.0-beta.1' -> a key that sorts a pre-release below its release."""
     core, _, pre = v.partition('-')
     pre_key = tuple((0, int(p), '') if p.isdigit() else (1, 0, p) for p in pre.split('.')) if pre else None
-    # A release (no pre-release part) sorts above any of its pre-releases.
     return (numbers(core), pre_key is None, pre_key or ())
 
 
 def check_api(site, version):
     try:
         live = json.loads(fetch(f'{site}/api/openapi.json'))['info']['version']
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         print(f"couldn't read the API version at {site}: {e}")
         return 2
     if semver(live) >= semver(version):

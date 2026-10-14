@@ -84,7 +84,7 @@ trap 'rm -rf "$STAGE"' EXIT
 cp -R "$APP" "$STAGE/$NAME.app"
 ln -s /Applications "$STAGE/Applications"
 rm -f "$DMG"
-# hdiutil sometimes fails with "Resource busy" on CI runners; a retry does it.
+# hdiutil sometimes fails with "Resource busy"; a retry does it.
 for try in 1 2 3; do
   hdiutil create -quiet -volname "$NAME" -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov "$DMG" && break
   [ "$try" = 3 ] && exit 1

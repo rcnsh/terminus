@@ -2,8 +2,8 @@
 # MapLibre GL JS and the PMTiles reader for the web app's map, copied from
 # npm into apps/web/public/vendor/ and served from our own domain (no CDN:
 # the site's CSP stays same-site, and the service worker keeps them for
-# offline). Re-run with new versions to update, then change the paths in
-# apps/web/public/app/map.js and sw.js.
+# offline). Re-run with new versions to update, then change MAPLIBRE and
+# PMTILES in apps/web/public/app/map-files.js.
 #
 # Each tarball is checked against the npm integrity pinned below before
 # it's unpacked (scripts/vendor-lib.sh), and the files written are recorded

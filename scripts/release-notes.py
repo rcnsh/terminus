@@ -80,7 +80,6 @@ def notes(version: str, tag: str, prev: str, apk: str, mac: str, channel: str = 
         out.append(rest.strip() + '\n')
 
     if not prev:
-        # Everything before the first tag was the pre-beta build-up.
         out.append(
             'The first public beta.\n\n'
             '- An Android home-screen widget and app, and a Mac menu bar app\n'
@@ -96,7 +95,7 @@ def notes(version: str, tag: str, prev: str, apk: str, mac: str, channel: str = 
             if re.fullmatch(r'(terminus|nusbus) \d+\.\d+\.\d+(-[a-z]+(\.\d+)?)?', s, re.I):
                 continue  # the version bump itself
             if s.startswith('[ImgBot]') or s == 'optimize images':
-                continue  # image compression, nothing to see
+                continue
             # The first sentence of each commit subject ("e.g." and "i.e." end
             # none), found before it's capitalised, so a subject starting
             # "e.g." is still one.
@@ -110,7 +109,7 @@ def notes(version: str, tag: str, prev: str, apk: str, mac: str, channel: str = 
                 out.append(f'## What changed\n\n{body}\n')
 
     a, m = os.path.basename(apk), os.path.basename(mac)
-    # From 2.1, one APK per CPU type beside the main (arm64) one.
+    # One APK per CPU type beside the main (arm64) one.
     here = os.path.dirname(apk)
     others = [(kind, os.path.basename(p)) for kind, p in (
         ('older 32-bit phones', apk.replace('.apk', '-armv7.apk')),
