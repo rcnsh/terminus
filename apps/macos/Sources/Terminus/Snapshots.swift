@@ -6,7 +6,7 @@ import SwiftUI
 @MainActor
 enum Snapshots {
     static func render(to dir: String) {
-        // Milliseconds, like the API used to send: keeps the parser honest.
+        // With milliseconds, so the snapshot covers parseISODate's second form.
         let departs = ISO8601DateFormatter().string(from: Date().addingTimeInterval(240)).replacingOccurrences(of: "Z", with: ".000Z")
         let iso = { (s: Double) in ISO8601DateFormatter().string(from: Date().addingTimeInterval(s)) }
         let leaves = iso(1080), boards = iso(1380), arrives = iso(1980), classAt = iso(2160), reach = iso(840)

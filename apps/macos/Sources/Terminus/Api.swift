@@ -205,7 +205,6 @@ struct NextAnswer: Decodable {
             board = try c.decode(String.self, forKey: .board)
             arrive = try c.decode(String.self, forKey: .arrive)
             change = try? c.decodeIfPresent(Change.self, forKey: .change)
-            // Fewer than two stops: there's no ride to draw.
             guard stops.count >= 2 else { throw DecodingError.dataCorruptedError(forKey: .stops, in: c, debugDescription: "a ride needs two stops") }
         }
 
@@ -1284,10 +1283,8 @@ struct Api {
 
     /// The response body of a 2xx; anything else throws with the server's message.
     private func send(_ method: String, _ path: String, query: [URLQueryItem] = [], json: Data? = nil) async throws -> Data {
-        // Too old for the server: nothing with a token goes out until an update.
         let scope = Quiet.scope(path)
         if token != nil, Outdated.gated(method, path), Outdated.active { throw ApiError(status: 426, message: L("Update terminus to keep using it.")) }
-        // Asked to slow down: nothing goes out until Retry-After is up.
         let quietUntil = Quiet.until(scope)
         if Date() < quietUntil { throw ApiError(status: 429, message: L("terminus is busy. Try again in a minute."), retryAfter: quietUntil.timeIntervalSinceNow) }
         func urlRequest(_ base: String) -> URLRequest {
@@ -1307,7 +1304,6 @@ struct Api {
             }
             return req
         }
-        // The chosen address, then the site's other one if it couldn't be reached at all (Servers.order).
         let (data, resp) = try await Servers.reach(method: method) { try await URLSession.shared.data(for: urlRequest($0)) }
         let http = resp as? HTTPURLResponse
         let status = http?.statusCode ?? 0

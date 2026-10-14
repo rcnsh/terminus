@@ -37,7 +37,6 @@ struct TerminusApp: App {
             .defaultPosition(.center)
         Window(L("Settings"), id: "settings") { SettingsWindow(app: model).closesWhenSignedOut(model, id: "settings") }
             .defaultPosition(.center)
-        // The campus map with live buses, like the phone's Map tab.
         Window(L("Map"), id: "map") { MapWindow(app: model).closesWhenSignedOut(model, id: "map") }
             .defaultSize(width: 900, height: 680)
             .defaultPosition(.center)

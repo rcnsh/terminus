@@ -915,7 +915,6 @@ final class AppModel {
         failures: Int, popoverOpen: Bool, resting: Bool, plan: NextAnswer?, now: Date,
         updateRequired: Bool = false, serverWait: TimeInterval? = nil, lowPower: Bool = false
     ) -> TimeInterval {
-        // Too old for the server: every ask would be refused until an update.
         if updateRequired { return Outdated.holdS }
         // Never sooner than the server asked, as long as Quiet honours it.
         let floor = failures > 0 ? serverWait.map(Quiet.cap) ?? 0 : 0
