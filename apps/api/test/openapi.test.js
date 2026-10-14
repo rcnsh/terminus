@@ -28,8 +28,6 @@ const OPS = Object.entries(spec.paths).flatMap(([path, item]) =>
 const opOf = (key) => OPS.find((o) => o.key === key) ?? assert.fail(`no operation ${key} in the spec`);
 const check = (schema, value) => validate(schema, value, { root: spec, strict: true });
 
-/* ---------- 1. examples ---------- */
-
 test('every example in the spec fits its schema', () => {
   const bad = [];
   const walk = (node, at) => {
@@ -52,8 +50,6 @@ test('every example in the spec fits its schema', () => {
   assert.deepEqual(bad, []);
 });
 
-/* ---------- 2. the golden answers ---------- */
-
 const bodySchema = (key, status = '200') => opOf(key).op.responses[status].content['application/json'].schema;
 
 test('every golden answer fits the schema of the route it came from, with nothing the schema leaves out', () => {
@@ -72,8 +68,6 @@ test('every golden answer fits the schema of the route it came from, with nothin
   }
   assert.deepEqual(bad, []);
 });
-
-/* ---------- 3. every operation, called ---------- */
 
 const FEED = {};
 for (const code of ['PGP', 'PGPR', 'COM3', 'UTOWN', 'KR-MRT', 'KR-MRT-OPP', 'CLB', 'LT27', 'YIH', 'AS5']) {
@@ -519,8 +513,6 @@ test('every operation has a case that succeeds', () => {
   assert.deepEqual(OPS.map((o) => o.key).filter((k) => !covered.has(k)), []);
 });
 
-/* ---------- 4. security ---------- */
-
 const SAMPLE = { id: 'x', date: '2026-08-26', fontstack: 'Noto%20Sans%20Regular', range: '0-255', sprite: 'light.json', version: API_VERSION, file: `terminus-${API_VERSION}.apk` };
 
 test('an operation refuses a caller without credentials (401) exactly when its security asks for some', async () => {
@@ -540,8 +532,6 @@ test('an operation refuses a caller without credentials (401) exactly when its s
   }
   assert.deepEqual(wrong, []);
 });
-
-/* ---------- 5. no unused schemas ---------- */
 
 test('every component schema is used', () => {
   const text = JSON.stringify(spec);

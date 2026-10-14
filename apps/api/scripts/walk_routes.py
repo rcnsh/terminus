@@ -289,7 +289,6 @@ def main():
         best = min((tree[i] + off for i, off in snapper.near(pt) if i in tree), default=None)
         return None if best is None else max(best, haversine(pt, stop_pt[code]))
 
-    # Stop to stop.
     pairs = {}
     for a in stop_pt:
         for b in stop_pt:
@@ -339,7 +338,6 @@ def main():
             # trailing digits, so "E9" would fall back to it.
             continue
         else:
-            # New building: the stop nearest by path.
             options = [(routed(s, pt), s) for s in stop_pt]
             options = [(m, s) for m, s in options if m is not None]
             if not options:
@@ -350,8 +348,7 @@ def main():
             continue
         straight = haversine(pt, stop_pt[stop])
         old = venues.get(code, {}).get("m")
-        # The old figure was a straight line from NUS's own building position.
-        # A routed walk more than twice that means NUSMods puts this code
+        # `old` is the last run's figure. A routed walk more than twice that means NUSMods puts this code
         # somewhere else (same code, different building), not a real detour.
         if old is not None and old > 40 and m > 2 * old:
             suspect.append(f"{code} {old}->{round(m)}")
@@ -404,9 +401,9 @@ def main():
     print(f"{room_stops} rooms listed on their own take their building's stops")
 
     if suspect:
-        print(f"kept {len(suspect)} straight-line figures that routed implausibly long: {', '.join(suspect)}")
-    # Buildings the map couldn't route (or that looked wrong) keep their old
-    # straight-line figure. Per stop, the usual detour for walks from anywhere.
+        print(f"kept the last run's figures for {len(suspect)} buildings that routed implausibly long: {', '.join(suspect)}")
+    # Buildings the map couldn't route (or that looked wrong) keep the last
+    # run's figure. Per stop, the usual detour for walks from anywhere.
     all_ratios = [r for rs in ratios.values() for r in rs]
     overall = statistics.median(all_ratios) if all_ratios else 1.0
     clamp = lambda r: round(min(2.0, max(1.0, r)), 3)

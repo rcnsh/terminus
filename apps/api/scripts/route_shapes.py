@@ -77,7 +77,7 @@ def fetch(query: str) -> dict:
             return json.loads(raw)
         except SystemExit:
             raise
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             last = exc
             print(f"  {OVERPASS}: {exc}", file=sys.stderr)
         if attempt < 3:

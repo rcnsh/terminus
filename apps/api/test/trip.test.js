@@ -1,5 +1,5 @@
 /**
- * The trip engine (phase 2): trip signals kept in a Durable Object per user,
+ * The trip engine: trip signals kept in a Durable Object per user,
  * the phase on the card, /me/day, and the planner fixes that go with them.
  * On the frozen clock (Thursday 2026-08-27, 09:00 SGT) and a fake feed.
  */
@@ -389,7 +389,7 @@ test('with every class today skipped, the day is free and "next" is not a skippe
   assert.equal(a.card.actions.at(-1).id, 'reset', 'the last skip can still be undone');
 });
 
-/* Phase 3: the question at departure, and what silence means. */
+/* The question at departure, and what silence means. */
 
 test('nothing is asked about the bus, before or after it leaves, and with no location the card says only that it has left', async () => {
   const { phone, mac, next, signal, clock } = await setup();
@@ -572,7 +572,7 @@ test('once the arrival has passed and no bus is due, the card says only where to
   assert.match(later.detail, /^Off at UTown$/);
 });
 
-/* Phase 3: what terminus learns from the answers (outcomes.ts). */
+/* What terminus learns from the answers (outcomes.ts). */
 
 const DAY = 86_400_000;
 const userOf = (env) => env.DB._db.prepare('SELECT id FROM users WHERE email IS NOT NULL').get().id;
@@ -796,7 +796,7 @@ test('there for the last class: the way home is shown, but not "Time to get goin
   assert.notEqual((await t.next(t.phone)).card.phase, 'idle');
 });
 
-/* Phase 8.3: more than class trips. */
+/* More than class trips. */
 
 test('"Not on campus today" skips every trip left today on every device; "Back on campus" brings them back', async () => {
   const t = await setup();
@@ -932,7 +932,7 @@ test('the card says where to walk to for directions: the stop to catch the bus a
   assert.equal(riding.card.walkTo, null);
 });
 
-/* Seen on a real phone, 1 October: a class in the middle of the day taken off today. */
+/* A class in the middle of the day taken off today. */
 const MIDDAY = {
   home: { stops: ['PGP'] },
   trips: [

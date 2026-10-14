@@ -36,7 +36,6 @@ export function memoryStorage(entries = {}) {
   };
 }
 
-// The page's globals: `window` is the global object, as in a browser.
 Object.defineProperty(globalThis, 'window', { value: globalThis, configurable: true, writable: true });
 Object.defineProperty(globalThis, 'localStorage', { value: memoryStorage(), configurable: true, writable: true });
 globalThis.matchMedia ??= () => ({ matches: false, addEventListener() {}, removeEventListener() {} });

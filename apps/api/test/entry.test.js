@@ -92,9 +92,7 @@ test('/api/health?probe=1 for the operator: a token through the ordinary path, n
   const again = (await (await call(env, '/api/health?probe=1', { 'x-health-token': 'op-secret' })).json()).auth;
   assert.equal(again.cached, true, 'the second goes through the cache');
   assert.ok(!JSON.stringify(again).includes(await env.KV.get('auth:session')), 'the token is never shown');
-  // A wrong token is no operator.
   assert.equal((await (await call(env, '/api/health?probe=1', { 'x-health-token': 'guess' })).json()).auth, undefined);
-  // Not configured: says so rather than trying.
   const bare = { ...makeEnv(), HEALTH_TOKEN: 'op-secret', NEXTBUS_AUTH_BASE: undefined };
   assert.deepEqual((await (await call(bare, '/api/health?probe=1', { 'x-health-token': 'op-secret' })).json()).auth, { ok: false, reason: 'auth not configured' });
 });
@@ -134,6 +132,5 @@ test('opening the web app signed out goes straight to sign-in; signed in, or the
   // The service worker keeping its copy of the app gets the app.
   const kept = await call(env, '/app/', { 'sec-fetch-mode': 'cors', 'sec-fetch-dest': 'empty' });
   assert.equal(await kept.text(), 'page for /app/');
-  // Other pages are left alone.
   assert.equal(await (await call(env, '/account/', navigate)).text(), 'page for /account/');
 });

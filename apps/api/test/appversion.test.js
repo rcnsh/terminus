@@ -121,13 +121,11 @@ test('nothing works: each candidate is tried once, and the pages are read at mos
   assert.match(first.note, /NUS refused univus_android_2\.60\.0_141, univus_android_2\.60\.0_142, univus_android_2\.60\.0_143/);
   assert.equal(hits.proxy, 3);
 
-  // Fifteen minutes later: no page reads, no repeat tries, no NUS calls.
   const again = await autoUpdateVersion(env, now + 15 * 60_000, null, 'COM3');
   assert.equal(again.status, 'failed');
   assert.match(again.note, /nothing new to try/);
   assert.deepEqual([hits.play, hits.combo, hits.proxy], [1, 1, 3]);
 
-  // An hour on, the pages are read again, but the same versions are not retried.
   await autoUpdateVersion(env, now + LOOKUP_EVERY_MS, null, 'COM3');
   assert.deepEqual([hits.play, hits.combo, hits.proxy], [2, 2, 3]);
   assert.equal(await env.KV.get('config:appVersion'), null, 'nothing was switched');

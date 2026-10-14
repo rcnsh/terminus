@@ -181,11 +181,11 @@ const CASES = {
   'arrived': [{ home: { stops: ['PGP'] }, places }, `/api/me/next?to=COM3&${AT_COM3}`],
   // A day with no classes: said plainly, with the next one; no bus headline.
   'free': [{ home: { stops: ['PGP'] }, manual: [{ ...cls(600, 'COM3', 'CS2030 @ COM1'), day: 5 }], places }, `/api/me/next?${CLB}`],
-  // 2.1: a class that started 10 minutes ago is still where you're going.
+  // A class that started 10 minutes ago is still where you're going.
   'class-started': [{ home: { stops: ['PGP'] }, manual: [cls(530, 'UTOWN', 'GEA1000 @ UTown')], places }, '/api/me/next'],
-  // 2.1: an hour after the last class, with no location, you're home.
+  // An hour after the last class, with no location, you're home.
   'home-reached': [{ home: { stops: ['PGP'] }, manual: [cls(390, 'COM3', 'CS2030 @ COM1')], places }, '/api/me/next'],
-  // 2.1: outside your day, on campus and not at home: the way home, not a moon.
+  // Outside your day, on campus and not at home: the way home, not a moon.
   'evening-home': [{ home: { stops: ['PGP'] }, dayStartMin: 600, dayEndMin: 1200, places }, `/api/me/next?${CLB}`],
   'rest': [{ home: { stops: ['PGP'] }, dayStartMin: 600, dayEndMin: 1200, manual: [cls(780, 'COM3', 'CS2030 @ COM1')], places }, '/api/me/next'],
   'home': [{ home: { stops: ['PGPR', 'PGP'] }, manual: [cls(420, 'COM3', 'CS2030 @ COM1')], places }, `/api/me/next?${DORM}`],
@@ -376,7 +376,7 @@ const CASES = {
   }],
 };
 
-// Each case again with the account set to Chinese (phase 10), in zh/: the
+// Each case again with the account set to Chinese, in zh/: the
 // same answers, every word the server writes in Chinese.
 const RUNS = [
   ['', {}, DIR],

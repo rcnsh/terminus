@@ -47,10 +47,6 @@ function htmlFrom(re, base) {
   return fn;
 }
 
-/* ------------------------------------------------------------------ */
-/* The documented limits, as numbers                                   */
-/* ------------------------------------------------------------------ */
-
 test('no limit on the feeds is below what CLAUDE.md and internals.md promise', () => {
   // Raising any of these is fine; lowering one sends more to NUS or LTA.
   assert.ok(TTL.arrivalsMs >= 15_000, `arrivalsMs ${TTL.arrivalsMs}`);
@@ -65,10 +61,6 @@ test('no limit on the feeds is below what CLAUDE.md and internals.md promise', (
   assert.ok(TIMELAPSE.maxPollsPerDay <= 17_280, `maxPollsPerDay ${TIMELAPSE.maxPollsPerDay}`);
   assert.deepEqual(TIMELAPSE.hours, { start: '06:30', end: '00:30' });
 });
-
-/* ------------------------------------------------------------------ */
-/* Freshness windows                                                   */
-/* ------------------------------------------------------------------ */
 
 test('/api/trip asks NUS once per stop per 15 s: not again at 14.9 s, again at 15.1 s', async () => {
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
@@ -116,10 +108,6 @@ test('with the feed down, the last answer is served stale for five minutes, then
   assert.equal(gone.available, false, 'past staleMaxS it is no answer, not a stale one');
 });
 
-/* ------------------------------------------------------------------ */
-/* The breaker                                                         */
-/* ------------------------------------------------------------------ */
-
 test('a tripped breaker keeps every stop off the feed for the whole 60 s, and only that long', async () => {
   const down = makeFetch({ proxyStatus: 503 });
   installGlobals(down);
@@ -152,10 +140,6 @@ test('every 5xx trips the breaker, 500 and 599 as much as 503', async () => {
   }
 });
 
-/* ------------------------------------------------------------------ */
-/* Tokens                                                              */
-/* ------------------------------------------------------------------ */
-
 test("a fresh isolate uses the token another isolate kept in KV: no mint", async () => {
   const kept = { token: 'kept-by-another-isolate-0123456789', userid: 'U1', domain: 'PUBLIC', expMs: FROZEN_NOW + 3_600_000, version: '0.0.0-test' };
   // A new KV binding is a new isolate here: the in-memory memo is per binding.
@@ -167,10 +151,6 @@ test("a fresh isolate uses the token another isolate kept in KV: no mint", async
   assert.equal(fetchImpl.counts.auth, 0, 'no mint');
   assert.equal(fetchImpl.requests[0].body.token, kept.token);
 });
-
-/* ------------------------------------------------------------------ */
-/* NUS answering with a web page                                       */
-/* ------------------------------------------------------------------ */
 
 test('the bus proxy answering 200 with a web page: stale served, one call per stop per failMemoS, no extra mint', async () => {
   const base = makeFetch({ byStop: { PGP: D2_IN_4 } });
@@ -218,10 +198,6 @@ test('the token mint answering 200 with a web page: no other stop mints for fail
   assert.equal(base.counts.auth, 2, 'tried again once failMemoS has passed');
 });
 
-/* ------------------------------------------------------------------ */
-/* LTA DataMall                                                        */
-/* ------------------------------------------------------------------ */
-
 test('DataMall answering with a web page: the stop is not asked again within failMemoS', async () => {
   const base = makeFetch();
   const fetchImpl = htmlFrom(/datamall2/, base);
@@ -237,10 +213,6 @@ test('DataMall answering with a web page: the stop is not asked again within fai
   await ask(FROZEN_NOW + (TTL.failMemoS - 1) * 1000);
   assert.equal(base.counts.public, 1, 'one call per stop per failMemoS');
 });
-
-/* ------------------------------------------------------------------ */
-/* A cache entry it can't read                                         */
-/* ------------------------------------------------------------------ */
 
 test('a cached answer that is not JSON is a miss, not a crash', async () => {
   const cache = installGlobals(null);

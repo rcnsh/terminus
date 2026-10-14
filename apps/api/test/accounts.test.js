@@ -161,7 +161,6 @@ test('another site cannot post a sign-in link or a sign-out', async () => {
     assert.equal((await post('/auth/verify', site, new URLSearchParams({ t }).toString())).status, 403, site);
     assert.equal((await post('/api/auth/logout', site, '')).status, 403, site);
   }
-  // The link is still good from our own page.
   assert.equal((await post('/auth/verify', 'same-origin', new URLSearchParams({ t }).toString())).status, 303);
 });
 
@@ -185,7 +184,6 @@ test('a page on a sibling subdomain cannot change the account with the session c
   const before = email.sent.length;
   assert.equal((await raw('/api/auth/login', sneaky, JSON.stringify({ email: INVITED }))).status, 400);
   assert.equal(email.sent.length, before);
-  // Our own pages, and an app's bearer token from anywhere, still work.
   assert.equal((await raw('/api/me/pair-code', { cookie, 'sec-fetch-site': 'same-origin' })).status, 200);
   assert.equal((await raw('/api/auth/login', { 'content-type': 'application/json; charset=utf-8', 'sec-fetch-site': 'same-origin' }, JSON.stringify({ email: 'other@u.nus.edu' }))).status, 200);
   const { code } = await (await call(env, '/api/me/pair-code', { method: 'POST', cookie })).json();
@@ -216,7 +214,6 @@ test('pairing codes have one ceiling for everyone, on lookups and redeems', asyn
   assert.equal((await call(full, '/api/pair/check', { method: 'POST', body: { code } })).status, 429);
   assert.equal((await call(full, '/api/pair', { method: 'POST', body: { code } })).status, 429);
   assert.deepEqual(keys, ['pair:global', 'pair:global']);
-  // The code wasn't spent by the refused tries.
   assert.equal((await call(env, '/api/pair', { method: 'POST', body: { code } })).status, 200);
 });
 
@@ -270,7 +267,6 @@ test('a code only works for its own address, and dies after five wrong guesses',
     assert.equal((await call(env, '/api/auth/code', { method: 'POST', body: { email: INVITED, code: wrong } })).status, 400);
   }
   assert.equal((await call(env, '/api/auth/code', { method: 'POST', body: { email: INVITED, code } })).status, 400, 'dead after 5 misses');
-  // The link in the same email still works.
   assert.equal((await call(env, '/auth/verify', { method: 'POST', form: { t: email.lastToken() } })).status, 303);
 });
 
@@ -351,14 +347,11 @@ test('pairing: a code from the web session becomes a device token that can be re
   const me = await (await call(env, '/api/me', { token })).json();
   assert.deepEqual(me, { email: INVITED, anonymous: false, kind: 'device', needsReimport: false, reimportReason: null, term: null, onboarding: 'full' });
 
-  // Codes are single use.
   assert.equal((await call(env, '/api/pair', { method: 'POST', body: { code, name: 'x' } })).status, 400);
 
-  // A device added with a code: the owner hears about it.
   assert.equal(email.sent.at(-1).to, INVITED);
   assert.equal(email.sent.at(-1).subject, 'terminus was added to Pixel');
 
-  // A device on an account with an email can add another (the owner is emailed each time).
   assert.equal((await call(env, '/api/me/pair-code', { method: 'POST', token })).status, 200);
 
   const { devices } = await (await call(env, '/api/me/devices', { cookie })).json();
@@ -746,14 +739,11 @@ test('signed in, the map and answers are limited per account, not per IP', async
   delete env[Symbol.for('terminus.testOpen')]; // locked, as in production
   const cookie = await signIn(env, email);
   const never = { limit: async () => ({ success: false }) };
-  // Everyone else on the same campus Wi-Fi has used up the IP's share: still answered.
   assert.equal((await call({ ...env, RL_PUBLIC: never }, '/api/campus', { cookie })).status, 200);
-  // The account's own share used up: 429.
   const keys = [];
   const own = { limit: async ({ key }) => (keys.push(key), { success: !key.startsWith('acct:') }) };
   assert.equal((await call({ ...env, RL_ME: own }, '/api/campus', { cookie })).status, 429);
   assert.ok(keys.some((k) => /^acct:.+/.test(k)), 'keyed by account');
-  // Not signed in: still by IP, then asked for a key.
   assert.equal((await call({ ...env, RL_PUBLIC: never }, '/api/campus')).status, 429);
   assert.equal((await call(env, '/api/campus')).status, 401);
 });
@@ -1101,7 +1091,6 @@ test('the bus answers need a key or an account; downloads, health and docs stay 
   }
   for (const path of ['/api/health', '/docs', '/api/openapi.json']) assert.notEqual((await call(env, path)).status, 401, path);
 
-  // A signed-in browser or a paired device gets through without a key.
   const cookie = await signIn(env, email);
   assert.equal((await call(env, '/api/campus', { cookie })).status, 200);
   assert.equal((await call(env, '/api/stops/pairs', { cookie })).status, 200);
@@ -1136,7 +1125,7 @@ test('/api/campus gives each residence its walk in minutes, at the normal pace, 
   const cookie = await signIn(env, email);
   const { residences } = await (await call(env, '/api/campus', { cookie })).json();
   for (const r of residences) assert.equal(r.walkMin, Math.max(1, Math.round(r.walkM / WALK.speedMs / 60)), r.code);
-  // PGP's own stop is a short walk: the rounding is the clients' old one.
+  // PGP's own stop is a short walk.
   assert.ok(residences.every((r) => Number.isInteger(r.walkMin) && r.walkMin >= 1));
 });
 
@@ -1164,13 +1153,11 @@ test('API keys: made on the account page, shown once, work anywhere, revocable',
   const made = await (await call(env, '/api/me/keys', { method: 'POST', cookie, body: { name: 'My script' } })).json();
   assert.match(made.key, /^tk_/);
   assert.equal(made.hint, made.key.slice(-4));
-  // Only a hash is stored.
   assert.equal(db._db.prepare('SELECT count(*) AS n FROM api_keys WHERE key_hash = ?').get(made.key).n, 0);
 
   assert.equal((await call(env, '/api/arrivals?stop=COM3', { key: made.key })).status, 200);
   assert.equal((await call(env, '/api/arrivals?stop=COM3', { token: made.key })).status, 200, 'as a bearer token too');
   assert.equal((await call(env, '/api/arrivals?stop=COM3', { key: 'tk_nonsense' })).status, 401);
-  // A key is not an account: it can't read /me.
   assert.equal((await call(env, '/api/me', { key: made.key })).status, 401);
 
   const list = await (await call(env, '/api/me/keys', { cookie })).json();
@@ -1216,7 +1203,6 @@ test('/api/buses remembers who was let in for a while; /me and the other answers
   assert.equal((await at(FROZEN_NOW + 15_000, '/api/arrivals?stop=COM3')).status, 401);
   assert.equal((await at(FROZEN_NOW + 15_000, '/api/me')).status, 401);
   assert.equal((await at(FROZEN_NOW + 30_000, '/api/buses?svc=D2')).status, 401, 'then asked again, and refused');
-  // Someone not let in isn't remembered either.
   assert.equal((await at(FROZEN_NOW + 31_000, '/api/buses?svc=D2')).status, 401);
 });
 
@@ -1362,7 +1348,6 @@ test('/api/admin/stats: operator only; counts accounts, devices by platform and 
   env.HEALTH_TOKEN = 'operator-secret';
   const cookie = await signIn(env, email);
   await call(env, '/api/me/profile', { method: 'PUT', cookie, body: { home: { stops: ['PGP'] } } });
-  // Pair a "Mac", by its User-Agent.
   const { code } = await (await call(env, '/api/me/pair-code', { method: 'POST', cookie })).json();
   const pairRes = await worker.fetch(
     new Request(BASE + '/api/pair', { method: 'POST', headers: { 'content-type': 'application/json', 'user-agent': 'Terminus/25 CFNetwork/3860 Darwin/25.0.0' }, body: JSON.stringify({ code, name: 'MacBook' }) }),
@@ -1420,7 +1405,6 @@ test('a browser can use terminus without an email, and an email added later keep
   const after = await (await call(env, '/api/me', { cookie: signedIn })).json();
   assert.equal(after.email, INVITED);
   assert.deepEqual((await (await call(env, '/api/me/profile', { cookie: signedIn })).json()).home, { stops: ['PGP'] });
-  // The browser's old session is gone with its anonymity.
   assert.equal((await call(env, '/api/me', { cookie })).status, 401);
 });
 
@@ -1466,7 +1450,6 @@ test('the pairing QR code opens the pair page in a browser, not an API error', a
   const res = await call(env, '/pair?code=ABC234');
   assert.equal(res.status, 200);
   assert.equal(await res.text(), 'page for /pair');
-  // POST is still the API.
   assert.equal((await call(env, '/api/pair', { method: 'POST', body: { code: 'nope' } })).status, 400);
 });
 
@@ -1481,7 +1464,6 @@ test('a page that isn\'t there is the not-found page for a browser, still a 404'
   assert.equal(browser.status, 404);
   assert.match(browser.headers.get('content-type'), /text\/html/);
   assert.equal(await browser.text(), 'no bus stops here');
-  // A script or a client asking for something missing gets the plain 404.
   const script = await call(env, '/no-such-page.js', { accept: '*/*' });
   assert.equal(script.status, 404);
   assert.equal(await script.text(), 'not found');
@@ -1518,7 +1500,7 @@ test('profile: a save sent with If-Match is refused when another device saved fi
   assert.deepEqual((await (await call(env, '/api/me/profile', { cookie })).json()).home.stops, ['UTOWN']);
   assert.equal((await call(env, '/api/me/profile', { method: 'PUT', cookie, ifMatch: '"0"', body: {} })).status, 412, 'one is saved already');
 
-  // Without If-Match (the apps installed today), the last save wins as before.
+  // Without If-Match, the last save wins.
   assert.equal((await call(env, '/api/me/profile', { method: 'PUT', cookie, body: { home: { stops: ['KR-MRT'] } } })).status, 200);
   assert.deepEqual((await (await call(env, '/api/me/profile', { cookie })).json()).home.stops, ['KR-MRT']);
 });
@@ -1622,7 +1604,6 @@ test('Turnstile down is logged, not only told to the visitor as a failed check',
     assert.equal(await verifyTurnstile(env, 'visitor-token-7', null, async () => new Response('<html>bad gateway</html>', { status: 502 })), false);
     assert.equal(errors.length, 2);
     assert.ok(errors.every((e) => e.startsWith('Turnstile siteverify failed') && !e.includes('visitor-token-7')));
-    // A visitor who fails the check is not an outage.
     assert.equal(await verifyTurnstile(env, 'visitor-token-7', null, async () => Response.json({ success: false, 'error-codes': ['invalid-input-response'] })), false);
     assert.equal(errors.length, 2);
     // Told apart, for a caller that would say "try again" rather than "failed".
@@ -1702,7 +1683,6 @@ test('an email send that hangs fails after MAIL_TIMEOUT_MS, as a failed send doe
   assert.equal(settled, false);
   t.mock.timers.tick(1);
   await assert.rejects(sending, /timed out/);
-  // A send that answers in time is not held up by the timer.
   await sendMail({ EMAIL: { send: async () => ({ messageId: 'x' }) } }, { from: 'a@example.test', to: 'b@example.test', subject: 's', text: 't' });
 });
 

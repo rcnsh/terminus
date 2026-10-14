@@ -1,5 +1,5 @@
 /**
- * The website in Chinese (phase 10): every t('...') in its scripts and every
+ * The website in Chinese: every t('...') in its scripts and every
  * bit of text on its pages has a translation in assets/zh.js, and every
  * translation is still used. The pages are read roughly (text between tags);
  * a fragment counts as covered when it's a key itself or part of a key that

@@ -2,9 +2,7 @@
  * Helpers in me.ts.
  *
  * A saved profile can stop validating whole: a weekly scrape drops a stop
- * someone uses. getProfile then salvages what still holds; it used to fall
- * back to the defaults for the day's hours, usual times and one-off trips,
- * and the next save wrote those defaults back over the user's settings.
+ * someone uses. getProfile then salvages what still holds.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';

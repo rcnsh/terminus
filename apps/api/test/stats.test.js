@@ -31,8 +31,6 @@ async function send(env, path, { method = 'GET', body, headers = {} } = {}) {
   return res;
 }
 
-/* ---------- the switches ---------- */
-
 test('every collector is off until the operator turns it on, and only the operator can', async () => {
   const env = { ...makeEnv(), HEALTH_TOKEN: 'op' };
   for (const name of ['active', 'eta', 'errors']) assert.equal(await collecting(env, name), false, `${name} starts off`);
@@ -46,8 +44,6 @@ test('every collector is off until the operator turns it on, and only the operat
   // KV failing is off: it may hold an "off" nobody can read.
   assert.equal(await collecting({ KV: { get: async () => { throw new Error('down'); } } }, 'errors'), false);
 });
-
-/* ---------- crash reports ---------- */
 
 test('a crash report loses what could say who or where, and keeps what says what broke', () => {
   const text = [
@@ -103,8 +99,6 @@ test('POST /api/errors keeps a scrubbed report only while switched on, with no o
   assert.equal(ae.rows('apperror').length, 2);
 });
 
-/* ---------- active counts ---------- */
-
 async function seedSessions(db, now) {
   const user = (id, email) => db.prepare('INSERT INTO users (id, email, created, last_seen, via) VALUES (?, ?, ?, ?, ?)').bind(id, email, now - 90 * DAY, now, 'app').run();
   const session = (hash, uid, kind, ago, platform, client) =>
@@ -151,8 +145,6 @@ test('the counts are written once a Singapore day, and not at all while switched
   assert.equal(await recordActive(env, now + 15 * 60_000), false, 'the next run that day writes nothing');
   assert.equal(await recordActive(env, now + DAY), true, 'the next day counts again');
 });
-
-/* ---------- arrival times ---------- */
 
 const DATE = '2026-08-26';
 const { open } = windowOf(DATE);

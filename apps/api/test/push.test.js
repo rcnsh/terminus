@@ -1,5 +1,5 @@
 /**
- * Push (phase 3): devices register a Firebase token, the Trip object wakes
+ * Push: devices register a Firebase token, the Trip object wakes
  * when the card is due to change, and nudges the phones when the phase or
  * the question changed. On the frozen clock and a fake feed and Firebase.
  */

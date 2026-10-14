@@ -61,8 +61,7 @@ test('the beta shares no database, store, bucket, limit, dataset, Worker or doma
 
 test('each site answers on its address and its old one, which older apps still call', () => {
   // A deploy detaches any custom domain missing here, so a lost line takes
-  // the old address offline at once, with every app before 3.2.1 and the
-  // newer ones' backup.
+  // that address offline at once, with every app that still calls it.
   assert.deepEqual(STABLE.domains, ['terminus.run', 'terminus.rcn.sh']);
   assert.deepEqual(BETA.domains, ['beta.terminus.run', 'beta.terminus.rcn.sh']);
 });

@@ -45,7 +45,6 @@ test('a live bus is placed on its line, and its next stop is the one ahead', () 
   const section = sectionOf(shape, along, true);
   assert.equal(section.at, k, 'at the stop');
   assert.equal(shape.stops[nextOf(shape, section, true)], shape.stops[k + 1]);
-  // Far from the line: not on the route.
   assert.equal(alongLine(shape, lat + 0.01, lon, heading), null);
 });
 
@@ -283,9 +282,7 @@ test('tracks are shared through the edge cache: every instance draws a bus the s
 
 test('replaying 15 minutes of the real feed: no bus changes side, and none is shown going back', async () => {
   // test/fixtures/bus-trace.jsonl: A1, A2, D1 and D2 on Saturday 3 October
-  // 2026 at 1 pm, every 5 s (the probe workflow with `trace`). Before
-  // tracks, the same readings switched a bus between sides 6 times on one
-  // instance, and 12 times spread over four as in production. Replayed
+  // 2026 at 1 pm, every 5 s (the probe workflow with `trace`). Replayed
   // against the routes as they were then (bus-trace-routes.json), so a
   // weekly scrape that changes a route doesn't fail it.
   const { readFileSync } = await import('node:fs');
