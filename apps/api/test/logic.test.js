@@ -41,10 +41,6 @@ const sa = (code, arrivals, fetchedAt = NOW, stale = false) => [
 /** The feed was unreachable for this stop: no data, as opposed to no bus. */
 const unavailable = (code) => [code, { code, arrivals: [], fetchedAt: NOW, stale: false, available: false }];
 
-/* ------------------------------------------------------------------ */
-/* Direction: the whole point of the project                           */
-/* ------------------------------------------------------------------ */
-
 // The directional pair, 32 m apart -- inside GPS error near dense buildings.
 const KRMRT = { code: 'KRMRT', name: 'Kent Ridge MRT', lat: 1.29473, lon: 103.78448 };
 const OPPKRMRT = { code: 'OPPKRMRT', name: 'Opp Kent Ridge MRT', lat: 1.29497, lon: 103.78432 };
@@ -105,7 +101,6 @@ test('standing on Opp KR MRT heading to Central Library returns the FURTHER stop
 
   assert.equal(options[0].stop.code, 'KR-MRT');
   assert.equal(options[0].svc, 'A1');
-  // ...even though the wrong-side bus is arriving four minutes sooner.
 });
 
 test('when every listed bus leaves too soon, the guess is a bus you can still reach', () => {
@@ -295,10 +290,6 @@ test('a point far from every stop degrades to the nearest rather than nothing', 
   assert.ok(cands[0].distM > 1000);
 });
 
-/* ------------------------------------------------------------------ */
-/* FMS normalisation                                                   */
-/* ------------------------------------------------------------------ */
-
 test('"-" parses to null, not 0 -- and "Arr" parses to 0', () => {
   assert.equal(parseEtaS('-'), null, 'this is the bug that makes you sprint for a bus that does not exist');
   assert.equal(parseEtaS('Arr'), 0);
@@ -364,10 +355,6 @@ test('normalize() flattens the real shuttle shape and keeps "no bus" as informat
   assert.equal(out.find((a) => a.svc === 'A1').crowd, 'high');
   assert.equal(out.find((a) => a.svc === 'D2').plate, 'PA1234A');
 });
-
-/* ------------------------------------------------------------------ */
-/* Formatting and the degrade ladder                                   */
-/* ------------------------------------------------------------------ */
 
 const opt = (over = {}) => ({
   stop: KRMRT,
@@ -591,10 +578,6 @@ test('shortStop abbreviates but never drops the direction word', () => {
   assert.ok(shortStop('Opposite University Town Education Resource Centre').startsWith('Opp '));
 });
 
-/* ------------------------------------------------------------------ */
-/* The cue that saves the bus                                          */
-/* ------------------------------------------------------------------ */
-
 test('being sent across the road says so, in words', () => {
   const input = { lat: KR_OPP.lat, lon: KR_OPP.lon, to: 'UTOWN', originCode: null };
   const near = nearestStop(GRAPH, input.lat, input.lon);
@@ -670,10 +653,6 @@ test('standing at the right stop does not invent a walk', () => {
   assert.match(a.detail, /right here/);
   assert.ok(!/cross the road/.test(a.detail));
 });
-
-/* ------------------------------------------------------------------ */
-/* Walking                                                             */
-/* ------------------------------------------------------------------ */
 
 const busOpt = (over = {}) => ({
   stop: KR,
@@ -757,13 +736,8 @@ test('with no destination there is nothing to walk to', () => {
   assert.equal(walkVerdict(300, undefined), 'lose');
 });
 
-/* ------------------------------------------------------------------ */
-/* Real captured data                                                  */
-/* ------------------------------------------------------------------ */
-
 test('normalize() handles the real feed shape, which is not the one I guessed', () => {
-  // Before this test existed, normalize() returned [] on this input: the list
-  // key is `timings` under an `etas` envelope, not `shuttles`.
+  // The list key is `timings` under an `etas` envelope, not `shuttles`.
   const out = normalize(COM3_FIXTURE);
   assert.equal(out.length, 8, 'four services x arrival + nextArrival');
 
@@ -882,10 +856,6 @@ test('arrivalTime_ts is never used, because half of it points into the past', ()
   assert.ok(past.every((r) => Number(r.arrivalTime) >= 0));
 });
 
-/* ------------------------------------------------------------------ */
-/* The real graph: schema only                                         */
-/* ------------------------------------------------------------------ */
-
 // Behavioural tests above run against a frozen fixture on purpose. These
 // assert only that whatever the scraper last produced is structurally sane,
 // so a route genuinely changing shape fails loudly instead of quietly
@@ -945,10 +915,6 @@ test('indexGraph survives the real graph', () => {
   const r = reach(idx, 'D2', 'KR-MRT', 'UTOWN');
   assert.ok(r && r.hops > 0 && r.hops < idx.routes.get('D2').seq.length);
 });
-
-/* ------------------------------------------------------------------ */
-/* Auth: the confirmed token flow                                      */
-/* ------------------------------------------------------------------ */
 
 // A real captured response, minus the signature. domain PUBLIC, no NUSNET.
 const TOKEN_RESPONSE = {
@@ -1097,15 +1063,10 @@ test('a filled window actually gates the ended rung', () => {
   assert.equal(inService(graph, 'D2', Date.UTC(2026, 7, 27, 19, 0)), false, 'Thu 03:00 SGT');
   assert.equal(inService(graph, 'D2', Date.UTC(2026, 7, 30, 4, 0)), false, 'Sun: does not run');
 
-  // Crossing midnight.
   const late = { ...realGraph, serviceHours: mergeServiceHours({}, { K: { weekday: ['07:00', '01:00'] } }) };
   assert.equal(inService(late, 'K', Date.UTC(2026, 7, 27, 16, 30)), true, 'Thu 00:30 SGT is inside');
   assert.equal(inService(late, 'K', Date.UTC(2026, 7, 27, 18, 0)), false, 'Thu 02:00 SGT is outside');
 });
-
-/* ------------------------------------------------------------------ */
-/* ConnectX FMS: the confirmed query-param scheme                      */
-/* ------------------------------------------------------------------ */
 
 test('every real feed capture reads as a board; rows that changed shape do not', () => {
   // The real ones, the after-midnight ConnectX capture included: every bus

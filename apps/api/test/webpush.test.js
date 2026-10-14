@@ -1,5 +1,5 @@
 /**
- * Web Push (phase 5): the web app subscribes with POST /api/me/push, and a nudge
+ * Web Push: the web app subscribes with POST /api/me/push, and a nudge
  * reaches it signed (VAPID, RFC 8292) and encrypted (aes128gcm, RFC 8291).
  * The browser's side is played here with WebCrypto: the push is decrypted
  * with the subscription's own keys and the JWT checked against the public key.

@@ -127,7 +127,6 @@ test('an anonymous account cannot add devices, but its app can delete it', async
   await seedTrip(env, id);
   assert.equal((await call(env, '/api/me', { method: 'DELETE', token })).status, 200);
   assert.equal(db._db.prepare('SELECT COUNT(*) AS n FROM users').get().n, 0);
-  // Today's trip signals go with the account, not at midnight.
   assert.equal(await hasTrip(env, id), false);
 });
 
@@ -186,7 +185,6 @@ test('app sign-in: a wrong number kills the request', async () => {
   const res = await call(env, '/auth/approve', { method: 'POST', form: { r: lastLink(email), n: String(wrong) } });
   assert.equal(res.status, 400);
   assert.equal((await (await call(env, '/api/auth/app/poll', { method: 'POST', body: s })).json()).status, 'denied');
-  // And the right number afterwards doesn't bring it back.
   assert.equal((await call(env, '/auth/approve', { method: 'POST', form: { r: lastLink(email), n: String(s.match) } })).status, 400);
 });
 
@@ -206,7 +204,6 @@ test('app sign-in: "this wasn\'t me" cancels it and stops app sign-ins to the ad
     assert.match((await again.json()).error, /turned down recently/);
   }
   assert.equal(email.sent.length, sent, 'nothing more is emailed');
-  // Only that address is held.
   assert.equal((await call(env, '/api/auth/app/start', { method: 'POST', body: { email: 'other@u.nus.edu', name: 'Pixel' } })).status, 201);
 });
 
@@ -311,9 +308,7 @@ test('both have a setup: the app chooses, and merge applies it', async () => {
   await seedTrip(env, id);
   const r = await signInApp(env, email, { token: old });
   assert.equal(r.outcome, 'choose');
-  // Still an account until the app chooses, so its trip state stays too.
   assert.equal(await hasTrip(env, id), true);
-  // The account's own setup until the app says otherwise.
   assert.deepEqual((await (await call(env, '/api/me/profile', { token: r.token })).json()).home.stops, ['UTOWN']);
 
   assert.equal((await call(env, '/api/auth/app/merge', { method: 'POST', token: r.token, body: { anon: 'nope', keep: 'device' } })).status, 400);
@@ -362,10 +357,8 @@ test('versions compare by number, a pre-release before its release', () => {
   assert.equal(versionBelow('2.6.0-beta.10', '2.6.0-beta.4'), false);
   assert.equal(versionBelow('2.6.0', '2.6.0-beta.4'), false);
   assert.equal(versionBelow('2.7.0-beta.1', '2.6.0'), false);
-  // Build metadata isn't a pre-release, whatever it holds.
   assert.equal(versionBelow('2.6.0+build-1', '2.6.0'), false);
   assert.equal(versionBelow('2.6.0-beta.3+build-1', '2.6.0'), true);
-  // Unreadable on either side: never refused.
   assert.equal(versionBelow('nightly', '2.6.0'), false);
   assert.equal(versionBelow('1.0.0', 'soon'), false);
 });
@@ -373,7 +366,6 @@ test('versions compare by number, a pre-release before its release', () => {
 test('an app older than config:minClient is told to update; everyone else is served', async () => {
   const { env } = setup();
   const as = (client) => ({ token, headers: client ? { 'x-terminus-client': client } : {} });
-  // No minimum set: an old app is served.
   const token = await anon(env);
   assert.equal((await call(env, '/api/me/profile', as('android/1.0.0'))).status, 200);
 
@@ -387,10 +379,8 @@ test('an app older than config:minClient is told to update; everyone else is ser
   // No header (the web app, API users), or a platform with no minimum.
   assert.equal((await call(strict, '/api/me/profile', as(null))).status, 200);
   assert.equal((await call(strict, '/api/me/profile', as('mac/1.0.0'))).status, 200);
-  // It can still stop its pushes, and sign out.
   assert.equal((await call(strict, '/api/me/push', { ...as('android/2.5.9'), method: 'DELETE' })).status, 200);
   assert.equal((await call(strict, '/api/auth/logout', { ...as('android/2.5.9'), method: 'POST' })).status, 200);
-  // And an anonymous app can still delete its account.
   const other = await anon(env);
   assert.equal((await call(strict, '/api/me', { token: other, headers: { 'x-terminus-client': 'android/2.5.9' }, method: 'DELETE' })).status, 200);
 });
@@ -404,7 +394,6 @@ test('the bus answers refuse an old app too, in Chinese for zh', async () => {
   assert.equal(old.status, 426);
   assert.deepEqual(await old.json(), { error: '请更新 terminus 以继续使用。', update: true });
   assert.equal((await call(strict, '/api/campus', { token, headers: { 'x-terminus-client': 'mac/2.6.0' } })).status, 200);
-  // A bad value in KV is no minimum at all.
   const typo = { ...strict, KV: makeKV() };
   await typo.KV.put('config:minClient', '{android: 2.6');
   assert.equal((await call(typo, '/api/campus', { token, headers: { 'x-terminus-client': 'mac/1.0.0' } })).status, 200);
@@ -434,9 +423,7 @@ test('migration 0006 keeps every row when it rebuilds users (D1 cascades on DROP
   for (const t of ['users', 'sessions', 'profiles', 'api_keys', 'feedback', 'pair_codes']) {
     assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get().n, 1, t);
   }
-  // last_seen comes from the account's most recent session.
   assert.equal(db.prepare('SELECT last_seen FROM users').get().last_seen, 500);
-  // The rebuilt children still cascade from users.
   db.exec("DELETE FROM users WHERE id = 'u1'");
   for (const t of ['sessions', 'profiles', 'api_keys', 'feedback', 'pair_codes']) {
     assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get().n, 0, t);
@@ -454,7 +441,6 @@ test('app sign-in: the code from the email, typed in the app, signs it in straig
   assert.equal(r.status, 'approved');
   assert.equal(r.outcome, 'created');
   assert.equal((await (await call(env, '/api/me', { token: r.token })).json()).email, ME);
-  // Spent: neither the code, a poll nor the link works again.
   assert.equal((await call(env, '/api/auth/app/code', { method: 'POST', body: { ...s, code } })).status, 400);
   assert.deepEqual(await (await call(env, '/api/auth/app/poll', { method: 'POST', body: s })).json(), { status: 'expired' });
   assert.equal((await call(env, `/auth/approve?r=${lastLink(email)}`)).status, 400);
@@ -569,7 +555,6 @@ test('app sign-in: a web sign-in taking the email mid-poll spends nothing; the n
   const second = await (await call(env, '/api/auth/app/poll', { method: 'POST', body: s })).json();
   assert.equal(second.status, 'approved');
   assert.equal(second.outcome, 'signed-in');
-  // The device joined the account the web made; the empty anonymous one went.
   assert.equal(db._db.prepare("SELECT user_id FROM sessions WHERE kind = 'device'").get().user_id, 'web-user');
   assert.equal(db._db.prepare('SELECT COUNT(*) AS n FROM users').get().n, 1);
   assert.deepEqual(await (await call(env, '/api/auth/app/poll', { method: 'POST', body: s })).json(), { status: 'expired' });

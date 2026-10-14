@@ -44,7 +44,7 @@ test('query parsing does not turn a missing lat into the Gulf of Guinea', () => 
 
 test('/api/next with nothing at all prompts setup, not a fabricated destination', async () => {
   // No coordinates, no ?to=. A stranger must not be shown someone
-  // else's hardcoded commute -- the old single-user prior is gone.
+  // else's hardcoded commute.
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4, COM3: D2_IN_4 } });
   const { res } = await call('/api/next', { fetchImpl });
   assert.equal(res.status, 200);
@@ -561,10 +561,6 @@ test('/api/trip with no location needs a starting stop, not someone else\'s defa
   assert.equal((await res.json()).stop.code, 'PGP');
 });
 
-/* ------------------------------------------------------------------ */
-/* Analytics                                                           */
-/* ------------------------------------------------------------------ */
-
 test('an answer logs one decision row plus a row per timed arrival', async () => {
   const ae = makeAnalytics();
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
@@ -606,7 +602,6 @@ test('an answer logs one decision row plus a row per timed arrival', async () =>
 
 test('logging is a no-op without the binding, and never breaks an answer', async () => {
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
-  // makeEnv omits AE by default.
   const { res } = await call('/api/trip?to=UTOWN&from=PGP', { fetchImpl });
   assert.equal(res.status, 200);
   assert.match((await res.json()).label, /^D2 · /);
@@ -639,10 +634,6 @@ test('/api/next with coordinates but no timetable shows nearby buses, no invente
   assert.notEqual(a.quality, undefined);
 });
 
-
-/* ------------------------------------------------------------------ */
-/* Bus proxy transport                                                 */
-/* ------------------------------------------------------------------ */
 
 test('arrivals come from a POST to the bus proxy, authenticated like uNivUS 2.59.2', async () => {
   const fetchImpl = makeFetch({ byStop: { COM3: D2_IN_4 } });
@@ -987,14 +978,13 @@ test('downloads serve whatever latest.json points at', async () => {
   assert.equal((await (await get('/download/latest.json')).json()).version, '1.0.0');
   assert.equal((await get('/download/ios')).status, 404);
 
-  // From 1.3.8 the Mac app is a signed DMG.
   put('releases/1.0.1/terminus-1.0.1.dmg', 'DMG');
   putLater('latest.json', JSON.stringify({
     version: '1.0.1', released: '2026-10-01',
     android: { file: 'releases/1.0.0/terminus-1.0.0.apk', sha256: 'aa', size: 3 },
     mac: { file: 'releases/1.0.1/terminus-1.0.1.dmg', sha256: 'cc', size: 3 },
   }));
-  // One APK per CPU type from 2.1: the arm64 one unless the app asks for its own.
+  // The arm64 APK unless the app asks for its own.
   put('releases/1.0.1/terminus-1.0.1.apk', 'ARM64');
   put('releases/1.0.1/terminus-1.0.1-armv7.apk', 'ARMV7');
   putLater('latest.json', JSON.stringify({

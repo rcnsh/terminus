@@ -108,7 +108,6 @@ export function makeEnv(kv = makeKV(), ae = undefined) {
     NEXTBUS_APP_VERSION: '0.0.0-test',
     NEXTBUS_HTD_API: 'test-htd',
     NEXTBUS_APP_API: 'test-app',
-    // The public-route tests predate API keys; the key tests turn this off.
     [Symbol.for('terminus.testOpen')]: true,
   };
 }
@@ -208,7 +207,6 @@ export function makeFetch({ byStop = {}, buses = {}, fail = false, reject = 0, r
         return Response.json({ code: rejectCode, msg: rejectCode === '10009' ? 'We have a new release of uNivUS' : 'token invalid', data: null });
       }
       if (raw) return Response.json(raw);
-      // active-bus: one service's buses, as the proxy shapes them.
       if (url.endsWith('/active-bus')) {
         const list = buses[body.route_code] ?? [];
         return Response.json({ code: '00000', msg: '', data: { ActiveBusCount: list.length, TimeStamp: '2026-10-02 09:14:02', activebus: list } });
@@ -216,7 +214,6 @@ export function makeFetch({ byStop = {}, buses = {}, fail = false, reject = 0, r
       return Response.json(shuttlePayload(byStop[body.busstopname] ?? []));
     }
 
-    // LTA DataMall: a stop's public buses, by LTA's code (see ltaPayload).
     if (url.startsWith('https://datamall2.mytransport.sg/')) {
       counts.public++;
       requests.push({ url, method: init.method ?? 'GET', headers: new Headers(init.headers), body: null });
@@ -226,7 +223,6 @@ export function makeFetch({ byStop = {}, buses = {}, fail = false, reject = 0, r
       return Response.json(ltaPayload(code, publicStops[code] ?? []));
     }
 
-    // Firebase: an OAuth token, then messages (recorded in `fcm.sent`).
     if (fcm && url === 'https://oauth2.googleapis.com/token') {
       fcm.oauth = (fcm.oauth ?? 0) + 1;
       return Response.json({ access_token: 'ya29.test', expires_in: 3599 });
@@ -348,10 +344,7 @@ export function makeBucket(readFrom) {
  * Thursday 2026-08-27, 09:00 SGT. Inside every service's operating window.
  *
  * The Worker reads Date.now() internally, so without freezing it the smoke
- * tests quietly become time-of-day dependent: once real operating hours were
- * filled into data/service-hours.json, running the suite after 23:00 SGT made
- * every service legitimately 'ended' and three tests failed for a reason that
- * had nothing to do with the code under test.
+ * tests quietly become time-of-day dependent.
  */
 export const FROZEN_NOW = Date.UTC(2026, 7, 27, 1, 0, 0);
 

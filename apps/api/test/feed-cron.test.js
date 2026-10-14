@@ -30,10 +30,6 @@ async function quietly(fn) {
   }
 }
 
-/* ------------------------------------------------------------------ */
-/* One stop of each feed a run                                         */
-/* ------------------------------------------------------------------ */
-
 test('a cron run asks NUS for one stop and LTA for one stop, past the cache, and nothing more', async () => {
   const fetchImpl = makeFetch({ byStop: { [PROBE_STOP]: [] }, publicStops: { [PUBLIC_PROBE[1]]: [] } });
   const cache = installGlobals(fetchImpl);
@@ -50,10 +46,6 @@ test('a cron run asks NUS for one stop and LTA for one stop, past the cache, and
   assert.equal((await readUpstream(env)).up, true);
   assert.equal((await readPublicFeed(env)).up, true);
 });
-
-/* ------------------------------------------------------------------ */
-/* The public feed's record                                            */
-/* ------------------------------------------------------------------ */
 
 test('the public feed: down since the first failed check, kept while it stays down, then back up', async () => {
   const env = ltaEnv();
@@ -85,10 +77,6 @@ test('the public feed is not checked at all without an LTA key', async () => {
   assert.equal(fetchImpl.counts.public, 0);
   assert.equal(await readPublicFeed(env), null);
 });
-
-/* ------------------------------------------------------------------ */
-/* The app-version candidate check                                     */
-/* ------------------------------------------------------------------ */
 
 /**
  * NUS plus the two pages, which both show 2.60.0 (141). `mint` and `proxy`
@@ -201,10 +189,6 @@ test('the automatic update throwing inside the cron is noted, and the rest of th
   })).state;
   assert.match(state.auto, /the automatic update failed: boom/);
 });
-
-/* ------------------------------------------------------------------ */
-/* A broken calendar in KV                                             */
-/* ------------------------------------------------------------------ */
 
 test('a calendar in KV that is not JSON: loaded as nothing, and written over by the next fetch', async () => {
   resetCalendar();

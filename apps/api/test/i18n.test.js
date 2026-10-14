@@ -1,5 +1,5 @@
 /**
- * Chinese (phase 10): the language is picked per request, every message has
+ * Chinese: the language is picked per request, every message has
  * a translation, and every error the API can send is translated. The answers
  * themselves are checked word for word by the zh goldens (golden.test.js).
  */

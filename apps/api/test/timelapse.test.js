@@ -66,10 +66,6 @@ const start = (h, date = DATE) => h.ns.get(h.ns.idFromName(date)).fetch(`https:/
 const status = async (h, date = DATE) => (await h.ns.get(date).fetch(`https://timelapse.internal/status?date=${date}`)).json();
 const gunzip = async (body) => new Response(new Blob([body]).stream().pipeThrough(new DecompressionStream('gzip'))).json();
 
-/* ------------------------------------------------------------------ */
-/* When it records                                                     */
-/* ------------------------------------------------------------------ */
-
 test('the poll interval never goes below its floor', () => {
   assert.equal(MIN_POLL_MS, 15_000);
   assert.equal(pollInterval(30_000, 8), 30_000, 'the default, with eight routes');
@@ -192,10 +188,6 @@ test('the cron starts the day only inside the window with the switch on', async 
   assert.equal(on.ns.instances.size, 1);
   assert.equal(on.busCalls().length, 0, 'starting it asks NUS nothing by itself');
 });
-
-/* ------------------------------------------------------------------ */
-/* What it asks NUS                                                    */
-/* ------------------------------------------------------------------ */
 
 test('each round asks each running service at most once, spread across the interval', async () => {
   assert.ok(RUNNING.length >= 4, `services running at 09:00: ${RUNNING}`);
@@ -557,10 +549,6 @@ test('an outage is not an idle day: rounds where nothing answered do not stop it
   assert.equal((await status(h)).state, 'polling');
 });
 
-/* ------------------------------------------------------------------ */
-/* What it keeps                                                       */
-/* ------------------------------------------------------------------ */
-
 test("a reading keeps each bus's plate, position and metres along its line, as buses.ts placed it", async () => {
   const h = harness({ buses: { D2: [busOn('D2', 400, 'PD111A'), busOn('D2', 1500, 'PD222B')] } });
   await start(h);
@@ -779,10 +767,6 @@ test('the tables are made once, /status counts nothing, and an empty recorder as
   assert.deepEqual(exec("SELECT name FROM sqlite_master WHERE type = 'table'").toArray(), []);
 });
 
-/* ------------------------------------------------------------------ */
-/* The routes                                                          */
-/* ------------------------------------------------------------------ */
-
 test('/api/timelapse/days: operator only, today while recording, closed days from R2 cached for a year', async () => {
   const h = harness({ buses: { D2: [busOn('D2', 400)] } });
   await start(h);
@@ -814,10 +798,6 @@ test('/api/timelapse/days: operator only, today while recording, closed days fro
   const both = await (await call('/api/timelapse/days')).json();
   assert.deepEqual(both.days.map((d) => [d.date, d.closed]), [[DATE, false], ['2026-08-26', true]]);
 });
-
-/* ------------------------------------------------------------------ */
-/* Replaying it                                                        */
-/* ------------------------------------------------------------------ */
 
 /** A day with one D2 bus at these [t, along] readings. */
 function oneBus(readings) {

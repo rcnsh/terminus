@@ -36,7 +36,7 @@ function scored(input, rows, { extra, nowMs = NOW, graph = GRAPH } = {}) {
   return { cands, plan, byStop, options };
 }
 
-// Changing buses on, as it will ship; each test of 'beats' sets that itself.
+// Changing buses on; each test of 'beats' sets that itself.
 TRANSFER.mode = 'noDirect';
 
 const answerOf = ({ cands, options }, nowMs = NOW) =>
