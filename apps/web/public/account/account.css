@@ -340,7 +340,6 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
   background: color-mix(in srgb, var(--warn) 12%, var(--surface)); border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
 }
 
-/* Timetable */
 .classes { padding-bottom: 6px; }
 .day { margin: 14px 0 4px; font: 600 0.75rem/1 var(--font); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 /* A class: its name, then when and its stop; opened, the stop to change and Remove. */
@@ -373,7 +372,6 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 #trip-choices h3, #trip-history h3 { margin: 18px 0 4px; font-size: 1rem; }
 #trip-history .btn { margin-top: 8px; }
 
-/* Devices */
 .pairing { text-align: center; }
 .qr { display: grid; place-items: center; }
 .qr svg { width: 180px; height: 180px; border-radius: 12px; background: #fff; padding: 8px; }
@@ -440,7 +438,7 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 .ob-app:hover { border-color: var(--accent); }
 @media (max-width: 560px) { .ob-apps { grid-template-columns: 1fr; } }
 
-/* The account page arrives after setup, and the "new" card on older accounts. */
+/* The account page fades in when #app appears. */
 /* Backwards, not both: a transform kept after it would hold the widget's bar (.peek) to #app, not the screen. */
 #app:not([hidden]) { animation: ob-appear 0.3s var(--ob-ease) backwards; }
 @keyframes ob-appear { from { opacity: 0; transform: translateY(6px); } }
@@ -524,13 +522,12 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 .report-sent .hint { margin: 6px 0 0; }
 .report-sent .btn:not(.accent) { background: var(--surface-2); color: var(--ink); }
 
-/* Favourites. */
 #place-form .search { flex: 1; }
 #place-form input { width: 100%; }
 .list li.place { flex-direction: column; align-items: stretch; }
 .place-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 
-/* "Not right?": correcting what the phone worked out, quietly (phase 8). */
+/* A button that reads as a link: Today's Undo. */
 .linkish { background: none; border: 0; padding: 10px 4px; color: var(--muted); font: inherit; font-size: 0.875rem; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .linkish:hover { color: var(--ink); }
 /* Who's signed in, at the top of Account: in the web app (no header there),

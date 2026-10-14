@@ -32,8 +32,6 @@ const OLD_MS = 2 * REFRESH_MS;
 /** "Runs until" shows for a service ending within this long. */
 const ENDS_SOON_MS = 2 * 3600_000;
 
-/* ---------- what's on screen ---------- */
-
 /** Where in the tab: its home, a stop's board, or a service's line. From the address. */
 const route = store({ kind: 'home' });
 /** The stop nearest you: { status: 'loading' | 'ready' | 'none', code, distM, fromHome }. */
@@ -62,8 +60,6 @@ const canAsk = store(false);
 
 /** app.js's here(): where the phone is, asking first only when told to. */
 let locate = async () => null;
-
-/* ---------- fetching ---------- */
 
 async function getJSON(path) {
   const res = await send(path, { credentials: 'same-origin', headers: { 'accept-language': window.i18n?.header ?? 'en' } });
@@ -160,8 +156,6 @@ const lineKey = () => {
   return r.kind === 'line' ? `${r.svc}/${r.stop ?? ''}` : null;
 };
 
-/* ---------- the home's pages ---------- */
-
 /** Page 1 is the nearest stop (or finding it), then each pinned stop not already there. */
 export function pagesOf(n, pinned) {
   const list = [n.status === 'ready' ? { kind: 'nearest', code: n.code } : { kind: n.status === 'loading' ? 'loading' : 'find' }];
@@ -246,8 +240,6 @@ export async function togglePin(code) {
   }
 }
 
-/* ---------- moving around the tab ---------- */
-
 export function parse(hash) {
   // A stray % (an address typed or edited by hand) is kept as it is rather than throwing.
   const decode = (part) => {
@@ -314,8 +306,6 @@ function openStop(code) {
 }
 export const lineHash = (svc, stop) => `#buses/line/${encodeURIComponent(svc)}${stop ? `/${encodeURIComponent(stop)}` : ''}`;
 export const stopParent = (code) => (homePages().some((p) => p.code === code) ? '#buses' : `#buses/stop/${encodeURIComponent(code)}`);
-
-/* ---------- drawing ---------- */
 
 const SEARCH = '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/>';
 const STAR = '<path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z"/>';

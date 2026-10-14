@@ -3,7 +3,7 @@
 // its live buses; a stop shows what's coming, the services that call there,
 // and ways to go there. Loaded the first time the tab is opened.
 //
-// MapLibre draws the map itself, so it's driven from here as it always was:
+// MapLibre draws the map itself, so it's driven from here:
 // the map, its layers and the buses' glides are plain functions below. What
 // sits on top of it (the pills, the status line, the sheet for a stop or a
 // bus) is drawn by Preact from the stores they share.
@@ -54,8 +54,6 @@ const NEAR_CAMPUS_M = 3_000;
 const BOUNDS = [[103.755, 1.28], [103.83, 1.332]];
 /** Room round the whole campus, clear of the pills along the top. */
 const CAMPUS_PADDING = { top: 70, bottom: 30, left: 30, right: 30 };
-
-/* ---------- what's on screen ---------- */
 
 /** /campus, once loaded. */
 const campusData = store(null);
@@ -232,8 +230,6 @@ async function allowed() {
   return state === 'granted';
 }
 
-/* ---------- the map ---------- */
-
 /** The map, built once: a build already under way is the same one; a failed one is tried again. */
 function ensureMap(container) {
   building ??= build(container).catch((err) => {
@@ -405,8 +401,6 @@ function resume() {
   followMe();
 }
 
-/* ---------- layers ---------- */
-
 const empty = { type: 'FeatureCollection', features: [] };
 
 function addLayers() {
@@ -434,7 +428,6 @@ function addLayers() {
   const width = ['interpolate', ['linear'], ['zoom'], 13, 1.5, 16, 4, 18, 7];
   map.addLayer({ id: 'route-casing', type: 'line', source: 'routes', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': edgeOf(), 'line-width': ['interpolate', ['linear'], ['zoom'], 13, 3, 16, 7, 18, 11], 'line-opacity': 0.9 } });
   map.addLayer({ id: 'routes', type: 'line', source: 'routes', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': ['get', 'color'], 'line-width': width } });
-  // The chosen service, drawn again on top of the others.
   map.addLayer({ id: 'route-on', type: 'line', source: 'routes', filter: ['==', ['get', 'svc'], ''], layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': ['get', 'color'], 'line-width': ['interpolate', ['linear'], ['zoom'], 13, 3, 16, 6, 18, 9] } });
   // A tapped bus's stretch between two stops, the part of the route it's somewhere on.
   map.addLayer({ id: 'stretch-casing', type: 'line', source: 'stretch', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': paper, 'line-width': ['interpolate', ['linear'], ['zoom'], 13, 7, 16, 13, 18, 18] } });
@@ -573,8 +566,6 @@ function highlight() {
   map.setPaintProperty('stops', 'circle-stroke-opacity', svc ? ['case', on, 1, 0.35] : 1);
   map.setPaintProperty('stop-names', 'text-opacity', svc ? ['case', on, 1, 0.4] : 1);
 }
-
-/* ---------- live buses ---------- */
 
 /** One service at a time: its line and buses, or none. */
 function choose(svc) {
@@ -807,8 +798,6 @@ function drawBuses(buses) {
   });
 }
 
-/* ---------- taps ---------- */
-
 /** How far from a stop or bus a tap still picks it, in pixels: about a
  *  fingertip on a touch screen, less with a mouse. */
 const tapSlop = () => (window.matchMedia('(pointer: coarse)').matches ? 24 : 10);
@@ -851,8 +840,6 @@ function directions(s) {
   const apple = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent);
   return apple ? `https://maps.apple.com/?daddr=${s.lat},${s.lon}&dirflg=w` : `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}&travelmode=walking`;
 }
-
-/* ---------- drawing ---------- */
 
 /** A service here, when there are no times to list it by: tapped, its line on the map. */
 const SvcTag = ({ svc, onClick }) => html`<button type="button" class="svc-tag" style=${svcVars(svc)} aria-label=${t('Show {0} on the map', svc)} onClick=${onClick}>${svc}</button>`;

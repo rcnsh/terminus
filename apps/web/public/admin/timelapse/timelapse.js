@@ -55,8 +55,6 @@ const view = store({
   note: '',
 });
 
-/* ---------- the token ---------- */
-
 function token() {
   try {
     return sessionStorage.getItem(KEY);
@@ -106,14 +104,11 @@ async function loadDays() {
   }
 }
 
-/* ---------- a day ---------- */
-
 async function pick(date) {
   view.set((v) => ({ ...v, date, day: null, loading: true, note: '', scrub: 0 }));
   try {
     const res = await api(`/api/timelapse/days/${date}`);
     if (!res) return;
-    // The day file is gzipped JSON, as it's kept.
     const file = await new Response(res.body.pipeThrough(new DecompressionStream('gzip'))).json();
     const day = decodeDay(file);
     if (date !== view.get().date) return;
@@ -133,8 +128,6 @@ function range() {
   const b = to ? Math.min(day.end, timeOn(day.date, to)) : day.end;
   return b > a ? { a, b } : null;
 }
-
-/* ---------- the map ---------- */
 
 let ml = null;
 let map = null;
@@ -303,8 +296,6 @@ function settled() {
   });
 }
 
-/* ---------- one frame ---------- */
-
 /** Draws the moment [t] onto the composite canvas: the map with its buses, then the overlay. */
 async function frameAt(t) {
   const { day } = view.get();
@@ -361,7 +352,6 @@ function drawOverlay(t, counts) {
     g.fillText(out, x, y);
   }
 
-  // Each service in its colour with its buses out now; none out, faded.
   y += 40 * k;
   const chipH = 58 * k;
   const gap = 12 * k;
@@ -387,7 +377,6 @@ function drawOverlay(t, counts) {
     else y += chipH + gap;
   }
 
-  // The wordmark, bottom right: the mark, then "termi" and a bold "nus".
   const size = 46 * k;
   const by = h - 56 * k;
   g.font = `700 ${size}px "Space Grotesk", sans-serif`;
@@ -406,8 +395,6 @@ function drawOverlay(t, counts) {
   g.fillStyle = c.muted;
   g.fillText('Map data © OpenStreetMap contributors', 56 * k, h - 56 * k);
 }
-
-/* ---------- the preview ---------- */
 
 /** One frame at a time; a newer request while one draws replaces the waiting one. */
 let drawing = null;
@@ -433,8 +420,6 @@ async function preview() {
   }
   view.set((v) => ({ ...v }));
 }
-
-/* ---------- the export ---------- */
 
 async function exportVideo() {
   const r = range();
@@ -471,7 +456,6 @@ async function exportVideo() {
       }
       // The first frame is the start, the last the end.
       await frameAt(r.a + ((r.b - r.a) * i) / Math.max(1, frames - 1));
-      // Waits while the encoder catches up.
       await source.add(i / FPS, 1 / FPS);
       if (i % 5 === 4 || i === frames - 1) {
         const spent = performance.now() - job.started;
@@ -486,8 +470,6 @@ async function exportVideo() {
     update({ running: false, error: err.message ?? String(err) });
   }
 }
-
-/* ---------- drawing the page ---------- */
 
 const mins = (ms) => {
   const s = Math.max(0, Math.round(ms / 1000));

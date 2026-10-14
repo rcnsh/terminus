@@ -1,4 +1,4 @@
-// The installed web app (phase 5): the answer card and today, the way the
+// The installed web app: the answer card and today, the way the
 // phone app shows them, the buses at a stop and along a line (app/buses.js),
 // the campus map (app/map.js) and Settings (the account page's,
 // account/settings.js). A bar along the bottom switches
@@ -34,8 +34,6 @@ const DAY_MS = 120_000;
 const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 // iPadOS says it's a Mac; one with a touch screen is an iPad.
 const iPhone = !/Android/.test(navigator.userAgent) && (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
-
-/* ---------- what's on screen ---------- */
 
 /** What the card is for: the plan, a saved place (its key), a stop picked on the map or in the search, or the buses nearby. */
 const target = store({ kind: 'plan' });
@@ -117,8 +115,6 @@ function removeAdded(x) {
   if (now.kind === 'stop' && now.to === x.to) choose({ kind: 'plan' });
   focusChosen();
 }
-
-/* ---------- fetching ---------- */
 
 /** GET a JSON route; `cached` is when the service worker's copy was fetched, if that's what came back. */
 async function get(path) {
@@ -472,8 +468,6 @@ async function removeFromToday(it, at, before) {
   refresh();
 }
 
-/* ---------- tabs ---------- */
-
 const TABS = ['now', 'buses', 'map', 'settings'];
 /** Each tab's section, set as they're drawn. */
 const views = {};
@@ -624,8 +618,6 @@ function sharedLink() {
   return text.match(/https:\/\/nusmods\.com\/timetable\/\S+/)?.[0] ?? null;
 }
 
-/* ---------- push ---------- */
-
 const pushable = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 const OFF = t("A reminder before it's time to leave, then updates on your bus as your trip goes on.");
 const ON = t('On for this device. Notifications follow your trip, as on your other devices.');
@@ -701,8 +693,6 @@ async function togglePush() {
     push.set({ on: false, text: err.status ? t("Couldn't turn on notifications. {0}", err.message) : t("Couldn't turn on notifications. Try again in a minute."), button: true });
   }
 }
-
-/* ---------- drawing ---------- */
 
 const SEARCH = '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/>';
 const CLOSE = '<path d="M6 6l12 12M18 6 6 18"/>';
