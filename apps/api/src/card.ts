@@ -233,7 +233,7 @@ export interface Card {
   /** Class only, when the leave-by rests on a headway guess. */
   estimate: string | null;
 
-  /* v2: every surface picks what fits. */
+  /* By where the trip is: every surface picks what fits. */
   /** Where the trip is. 'idle' when there is no trip in progress. */
   phase: Phase;
   /** A few words on the phase, above the answer: "On your way". Null when idle. */
@@ -316,15 +316,16 @@ function staleAtOf(a: MeAnswer, kind: CardKind): number | null {
   return marks.length ? Math.min(...marks) : null;
 }
 
-type V2 = 'phase' | 'phaseText' | 'glance' | 'line' | 'actions' | 'warning' | 'nextChangeAt' | 'remind' | 'suggestion' | 'ride' | 'gone' | 'walkTo';
-type V1 = Omit<Card, V2 | 'notice' | 'h12' | 'journey' | 'upcoming' | 'title' | 'heading' | 'remindAt'>;
+// The fields that follow where the trip is, and the card without them.
+type PhaseKeys = 'phase' | 'phaseText' | 'glance' | 'line' | 'actions' | 'warning' | 'nextChangeAt' | 'remind' | 'suggestion' | 'ride' | 'gone' | 'walkTo';
+type BaseCard = Omit<Card, PhaseKeys | 'notice' | 'h12' | 'journey' | 'upcoming' | 'title' | 'heading' | 'remindAt'>;
 
 /**
  * `feedDownSince`: when the monitor confirmed NUS's feed down, or null while
  * it's up. `nowMs`: the request's now; a stale answer's `asOf` is older.
  */
 export function cardFor(a: MeAnswer, h12 = false, trip: TripView = { key: null, phase: 'idle' }, feedDownSince: number | null = null, nowMs = Date.parse(a.asOf)): Card {
-  const card = v1(a, h12);
+  const card = baseCard(a, h12);
   // At the stop, there's nowhere to leave: the headline is the bus to wait for
   // ("D2 at 9:41"). Apps show it as it is, without turning it into "Leave now".
   const l = a.leave ?? null;
@@ -334,7 +335,7 @@ export function cardFor(a: MeAnswer, h12 = false, trip: TripView = { key: null, 
   const notice = feedDownSince !== null && QUALITY[a.quality] ? m().feedDown(clockAt(feedDownSince, h12)) : null;
   return {
     ...card,
-    ...v2(a, card, h12, trip, nowMs),
+    ...phaseFields(a, card, h12, trip, nowMs),
     notice,
     h12,
     journey: journeyOf(a, card, h12, trip.phase, nowMs),
@@ -383,7 +384,7 @@ export function remindAtOf(a: MeAnswer, kind: CardKind, trip: TripView, nowMs = 
 }
 
 /** The journey (see Journey): null on the bus, once there, and with no time to give. */
-export function journeyOf(a: MeAnswer, card: V1, h12: boolean, phase: Phase, nowMs = Date.parse(a.asOf)): Journey | null {
+export function journeyOf(a: MeAnswer, card: BaseCard, h12: boolean, phase: Phase, nowMs = Date.parse(a.asOf)): Journey | null {
   if ((card.kind !== 'class' && card.kind !== 'trip') || !a.dest) return null;
   if (phase === 'riding' || phase === 'arrived') return null;
   const l = a.leave ?? null;
@@ -479,7 +480,7 @@ const busName = (b: JourneyBus) => named({ svc: b.svc, paid: b.paid });
  * The lines the card styles put round the journey (see Journey), from its
  * own facts, for the web's three styles, the app's card and the widgets.
  */
-function worded(a: MeAnswer, card: V1, h12: boolean, phase: Phase, j: Steps): Journey {
+function worded(a: MeAnswer, card: BaseCard, h12: boolean, phase: Phase, j: Steps): Journey {
   const isClass = card.kind === 'class';
   const starts = isClass && a.timing ? m().startsShort(clockAt(Date.parse(a.timing.classAt), h12)) : null;
   const arriveText = j.arrive ? [m().arriveCap(j.arrive), j.slack].filter(Boolean).join(' · ') : null;
@@ -540,7 +541,7 @@ function summaryOf(j: Steps, isClass: boolean): string {
  * leave-by and gets to the room as the leave-by says; anything else is now,
  * for the walk the answer says.
  */
-function footJourney(a: MeAnswer, dest: Dest, foot: NonNullable<MeAnswer['foot']>, card: V1, h12: boolean, phase: Phase, nowMs: number): Journey {
+function footJourney(a: MeAnswer, dest: Dest, foot: NonNullable<MeAnswer['foot']>, card: BaseCard, h12: boolean, phase: Phase, nowMs: number): Journey {
   const l = a.leave ?? null;
   const fromMs = l ? Date.parse(l.at) : nowMs;
   const thereMs = l?.arrive ? Date.parse(l.arrive) : nowMs + foot.s * 1000;
@@ -566,7 +567,7 @@ function footJourney(a: MeAnswer, dest: Dest, foot: NonNullable<MeAnswer['foot']
   });
 }
 
-function v1(a: MeAnswer, h12: boolean): V1 {
+function baseCard(a: MeAnswer, h12: boolean): BaseCard {
   const kind = kindOf(a);
   const at = (iso: string) => clockAt(Date.parse(iso), h12);
   const staleAt = staleAtOf(a, kind);
@@ -576,7 +577,7 @@ function v1(a: MeAnswer, h12: boolean): V1 {
   // "~9:41" when the leave-by is an estimate.
   const est = (iso: string) => approx(l?.estimated, at(iso));
 
-  const card: V1 = {
+  const card: BaseCard = {
     kind,
     staleAt: staleAt == null ? null : iso(staleAt),
     crowd: crowd ? CROWD[crowd]() : null,
@@ -717,13 +718,13 @@ function shortClock(ms: number, h12: boolean): string {
   return h12 ? c.replace(/[ \u00a0]([AaPp])[Mm]$/, (_m, x: string) => x.toLowerCase()) : c;
 }
 
-function v2(
+function phaseFields(
   a: MeAnswer,
-  card: V1,
+  card: BaseCard,
   h12: boolean,
   trip: TripView,
   nowMs: number,
-): Pick<Card, V2> {
+): Pick<Card, PhaseKeys> {
   const at = (t: string) => clockAt(Date.parse(t), h12);
   const short = (t: string) => shortClock(Date.parse(t), h12);
   const l = a.leave ?? null;
