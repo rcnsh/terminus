@@ -264,10 +264,6 @@ export async function recordEta(env: Env, nowMs: number, fetchImpl: typeof fetch
   return null;
 }
 
-/* ------------------------------------------------------------------ */
-/* For the dashboard                                                   */
-/* ------------------------------------------------------------------ */
-
 /** How far ahead a prediction looked, minutes: the dashboard's rows. */
 export const HORIZONS: { label: string; maxS: number }[] = [
   { label: 'under 2 min', maxS: 120 },

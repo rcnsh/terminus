@@ -2,10 +2,10 @@
  * Bus-proxy client (inetapps.nus.edu.sg/univus/api/bus-proxy) and defensive
  * response normalisation.
  *
- * `normalize()` is the ONLY place that touches the raw FMS shape. It is
- * undocumented and has changed before, so this function is deliberately
- * tolerant and everything downstream assumes a clean Arrival[]. When the feed
- * shifts, exactly one function needs editing.
+ * This file is the only code that reads the raw FMS shape. It is
+ * undocumented and has changed before, so the reading here is deliberately
+ * tolerant and everything downstream assumes clean types. When the feed
+ * shifts, only this file needs editing.
  */
 
 import type { Arrival, Crowd, Env, StopArrivals } from './types.ts';
@@ -629,10 +629,6 @@ export async function breakerOpen(): Promise<boolean> {
 
 /** One upstream fetch per stop per isolate, however many requests want it. */
 const inflight = new Map<string, Promise<StopArrivals>>();
-
-/* ------------------------------------------------------------------ */
-/* Live bus positions (active-bus)                                     */
-/* ------------------------------------------------------------------ */
 
 /** One bus as the feed reports it, before it is placed on its route. */
 export interface RawBus {

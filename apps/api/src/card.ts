@@ -2,10 +2,9 @@
  * What every client shows, worded once.
  *
  * The Android app and widget, the notifications, the Mac popover and the
- * account page's preview all render /me/next. Each used to build the class
- * card's lines, the crowd word, the quality note and the "old" rule for
- * itself, and they drifted. Now the server sends them in `card`; clients keep
- * only what has to tick: "Leave now" once `leave.at` passes, countdowns, and
+ * account page's preview all render /me/next. The server sends the class
+ * card's lines, the crowd word, the quality note and the "old" rule in
+ * `card`; clients keep only what has to tick: "Leave now" once `leave.at` passes, countdowns, and
  * dimming once `card.staleAt` passes.
  */
 
@@ -372,8 +371,7 @@ export function headingOf(a: MeAnswer): string | null {
 /**
  * When the leave reminder goes (see Card.remindAt): the same five minutes
  * the trip turns `due` (DUE_MS), so the reminder and the card agree. Only for
- * a class, as the apps have always done: a favourite you tap is already on
- * your mind.
+ * a class: a favourite you tap is already on your mind.
  */
 export function remindAtOf(a: MeAnswer, kind: CardKind, trip: TripView, nowMs = Date.parse(a.asOf)): string | null {
   const l = a.leave ?? null;
@@ -479,8 +477,7 @@ const busName = (b: JourneyBus) => named({ svc: b.svc, paid: b.paid });
 
 /**
  * The lines the card styles put round the journey (see Journey), from its
- * own facts: the web's three styles, the app's card and the widgets all
- * said these for themselves before, each a little differently.
+ * own facts, for the web's three styles, the app's card and the widgets.
  */
 function worded(a: MeAnswer, card: V1, h12: boolean, phase: Phase, j: Steps): Journey {
   const isClass = card.kind === 'class';

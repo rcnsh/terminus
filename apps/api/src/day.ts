@@ -215,8 +215,8 @@ export async function dayPlan(
 }
 
 /**
- * A Today row's second line (see DayItem.line). The apps each used to build
- * it from `leave`, `onBus` and `timing`; now they show this.
+ * A Today row's second line (see DayItem.line), from `leave`, `onBus` and
+ * `timing`.
  */
 export function dayLine(it: DayItem, h12: boolean): string | null {
   if (it.status === 'skipped') return m().notGoing;

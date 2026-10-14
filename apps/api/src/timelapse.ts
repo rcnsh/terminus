@@ -31,10 +31,6 @@ import { buildCampusMap } from './campus.ts';
 import { GRAPH } from './graph.ts';
 import { sgtDate, sgtMidnight as midnightOf } from './calendar.ts';
 
-/* ------------------------------------------------------------------ */
-/* When it records                                                     */
-/* ------------------------------------------------------------------ */
-
 export interface Hours {
   start: string;
   end: string;
@@ -116,10 +112,6 @@ export async function timelapseEnabled(env: Env): Promise<boolean> {
   const v = (kv ?? env.TIMELAPSE_ENABLED ?? '').trim().toLowerCase();
   return v === 'on' || v === 'true' || v === '1';
 }
-
-/* ------------------------------------------------------------------ */
-/* What it keeps                                                       */
-/* ------------------------------------------------------------------ */
 
 /** Coordinates are kept as whole steps of 1/Q degree (about 1.1 m) from ORIGIN. */
 export const Q = 100_000;
@@ -227,16 +219,11 @@ export async function gzip(text: string): Promise<Uint8Array> {
 
 export const dayKey = (date: string) => `timelapse/${date}.json.gz`;
 
-/* ------------------------------------------------------------------ */
-/* The recorder, from the Worker                                        */
-/* ------------------------------------------------------------------ */
-
 /** How long a recorder keeps a closed day that R2 refused, trying again,
  *  and how many days back /timelapse/days looks for one. A week is plenty
  *  to notice. */
 export const HELD_DAYS = 7;
 
-/** The cron runs every 15 minutes. */
 const CRON_MS = 15 * 60_000;
 
 /** How long the Worker waits for a recorder to answer: one that's stuck
@@ -282,10 +269,6 @@ export async function ensureRecorder(env: Env, nowMs: number): Promise<void> {
   if (!(await timelapseEnabled(env))) return;
   await start(date);
 }
-
-/* ------------------------------------------------------------------ */
-/* /timelapse/days                                                     */
-/* ------------------------------------------------------------------ */
 
 const DAY_PATH = /^\/api\/timelapse\/days\/(\d{4}-\d{2}-\d{2})$/;
 

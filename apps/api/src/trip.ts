@@ -392,10 +392,6 @@ export function phaseFor(a: MeAnswer, rec: TripRecord | undefined, nowMs: number
   return 'idle';
 }
 
-/* ------------------------------------------------------------------ */
-/* Talking to the Durable Object                                      */
-/* ------------------------------------------------------------------ */
-
 function stub(env: Env, userId: string): DurableObjectStub | null {
   if (!env.TRIPS) return null;
   // Its users are in Singapore, like the timelapse recorder's.

@@ -74,7 +74,7 @@ const changeLeg = (o: ScoredOption): Leg['change'] =>
 
 /** The fare on a public bus, as the time a free bus may cost instead (PUBLIC.fareWorthS). */
 const fareMs = (leg: { paid?: true }) => (leg.paid ? PUBLIC.fareWorthS * 1000 : 0);
-/** `paid` only on a public bus, so shuttle answers are unchanged; with it the route key a two-way service's number can't name. */
+/** `paid` only on a public bus; with it the route key a two-way service's number can't name. */
 const paidOf = (leg: { svc: string; paid?: true }) => (leg.paid ? { paid: true as const, ...(leg.svc !== svcName(leg.svc) ? { route: leg.svc } : {}) } : {});
 
 /** On to the room from the stop a leg gets you to: a room two stops serve is further from one. */
@@ -84,7 +84,7 @@ const venueWalkOf = (arriveBy: ArriveBy, leg: Leg) => arriveBy.walkByStopS?.[(le
 type Ranked = Leave & { ms: number; worth: number; opens: boolean };
 const unranked = ({ ms: _ms, worth: _worth, opens: _opens, ...leave }: Ranked): Leave => leave;
 
-/** `off` only when there is one, so answers without a crossing are unchanged; `toStop` likewise. */
+/** `off` only when there is one; `toStop` likewise. */
 const offOf = (leg: { off?: { code: string; name: string }; to?: { code: string; name: string } }) => ({
   ...(leg.off ? { off: shortStop(leg.off.name), offCode: leg.off.code } : {}),
   ...(leg.to ? { toStop: shortStop(leg.to.name), toCode: leg.to.code } : {}),

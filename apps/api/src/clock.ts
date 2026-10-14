@@ -3,7 +3,7 @@
  *
  * Campus time (SGT) always: class times and bus times must read in the same
  * zone whatever the phone is set to. `h12` is the client's own preference
- * (`?h12=1`); without it, 24-hour, which is what the API has always sent.
+ * (`?h12=1`); without it, 24-hour.
  */
 
 import { m } from './i18n.ts';

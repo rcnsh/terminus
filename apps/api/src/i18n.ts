@@ -5,8 +5,7 @@
  * else `?lang=`, else the website's `terminus-lang` cookie, else the
  * request's Accept-Language (any zh* is Chinese), else English. It's carried in an AsyncLocalStorage set once at the top of
  * the request, so the formatters call `m()` instead of passing a language
- * through every function. Outside a request (tests, the cron) it's English,
- * and the English output is exactly what it was before this file existed.
+ * through every function. Outside a request (tests, the cron) it's English.
  *
  * `zh` is typed from `en`: a message without a translation fails the
  * typecheck. Place and service names (KR MRT, COM3, D2) stay English in both.

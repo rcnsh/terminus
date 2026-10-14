@@ -107,11 +107,11 @@ root path gets 426 from an app, 308 from anything else (`movedApi` in
    the version search only while NUS is refusing the beta. Each push
    user's Trip object (`src/tripdo.ts`) wakes at most every 30 s to
    recompute the card, asking for its stops through the cache.
-3. **`normalize()` / `normalizeBuses()` in `src/fms.ts` are the only code that
-   touches the raw feed shape.** The feed is undocumented and changes, so
-   they're tolerant and everything downstream assumes clean types. When the
-   feed shifts, edit only there. `normalizePublic()` in `src/lta.ts` is the
-   same for DataMall's shape.
+3. **`src/fms.ts` is the only file that touches the raw feed shape.** The
+   feed is undocumented and changes, so its readers (`normalize()`,
+   `normalizeBuses()` and their helpers) are tolerant and everything
+   downstream assumes clean types. When the feed shifts, edit only there.
+   `src/lta.ts` is the same for DataMall's shape.
 4. **Secrets never go in git or in output.** NUS feed keys and the LTA DataMall
    account key live in `apps/api/.dev.vars` locally and as Worker secrets in
    production. All are gitignored, along with `dev/` (captured traffic), `.private/`, keystores,

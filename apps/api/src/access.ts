@@ -1,6 +1,5 @@
 /**
- * Who may call the bus-answer routes (/next, /trip, /arrivals, /campus,
- * /stops/pairs): the holder of an API key made on the account page, or anyone
+ * Who may call the bus-answer routes (KEYED in index.ts): the holder of an API key made on the account page, or anyone
  * signed in (a browser session or a paired device). Nobody anonymous: the
  * answers are NUS's data, and terminus should not be a free proxy for it.
  */
@@ -27,8 +26,7 @@ function keyFrom(req: Request): { key: string; bearer: boolean } | null {
 }
 
 export async function callerFor(env: Env, req: Request, nowMs: number, ctx?: ExecutionContext): Promise<Caller | null> {
-  // Tests only: the public-route tests predate keys. A symbol, so no
-  // deployed var or secret can ever set it.
+  // Tests only. A symbol, so no deployed var or secret can ever set it.
   if ((env as unknown as Record<symbol, unknown>)[TEST_OPEN] === true) return { kind: 'open' };
   const db = env.DB;
   if (!db) return null;

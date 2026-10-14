@@ -37,8 +37,7 @@ const DEFAULT_AUTH_PATH = '/get-access-token';
 /**
  * The app sends its LAN address here (an emulator reports 10.0.2.15). A Worker
  * has no such thing. Probing showed the field is not what the endpoint
- * validates -- omitting it entirely produces the same "Invalid API KEY" -- but
- * that cannot be confirmed until a valid key exists.
+ * validates: omitting it entirely produces the same "Invalid API KEY".
  */
 const PLACEHOLDER_IP = '127.0.0.1';
 
@@ -111,8 +110,7 @@ export function authConfigured(env: Env): boolean {
 
 /**
  * The real base carries a path PREFIX (`/univus-public/mobile`), so "has a
- * path means use it verbatim" -- which was a reasonable rule when the base was
- * assumed to be a bare origin -- silently posts to the directory instead of
+ * path means use it verbatim" silently posts to the directory instead of
  * the endpoint. Append unless the endpoint is already there.
  */
 export function authUrl(env: Env): string {

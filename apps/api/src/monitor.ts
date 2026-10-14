@@ -394,9 +394,7 @@ export async function housekeeping(db: D1Database, nowMs: number, daily = true, 
       db.prepare('DELETE FROM users INDEXED BY users_anon_idle WHERE email IS NULL AND last_seen < ? RETURNING id').bind(nowMs - ACCOUNT_TTL.anonIdleMs),
       db.prepare("DELETE FROM sessions WHERE kind = 'web' AND expires < ?").bind(nowMs),
       db.prepare("DELETE FROM sessions WHERE kind = 'device' AND last_seen < ?").bind(nowMs - DEVICE_IDLE_MS),
-      // Trip outcomes are kept KEEP_DAYS days.
       db.prepare('DELETE FROM trip_outcomes WHERE at < ?').bind(nowMs - KEEP_DAYS * 86_400_000),
-      // Reports are kept FEEDBACK_KEEP_DAYS.
       db.prepare('DELETE FROM feedback WHERE created < ?').bind(nowMs - FEEDBACK_KEEP_DAYS * 86_400_000),
     );
   }
@@ -460,7 +458,7 @@ export async function armTrips(env: Env, nowMs: number, batch = ARM_BATCH): Prom
   const hour = new Date(nowMs + 8 * 3_600_000).getUTCHours();
   if (hour < ARM_FROM_HOUR) return 0;
   // "2026-10-03" when today is done; "2026-10-03 <user id>" while it's under
-  // way, after that user. (Before batches it was the date alone, which still reads as done.)
+  // way, after that user.
   const mark = (await env.KV.get(ARMED_KEY)) ?? '';
   // Users whose Trip object didn't take the request, asked again each run
   // until it does: "<date> <id> <id> ...".
@@ -721,7 +719,6 @@ export async function runCron(env: Env, nowMs: number): Promise<void> {
     try {
       await refreshCalendar(env, nowMs);
     } finally {
-      // Whether or not the refresh worked, warn if the calendar runs out soon.
       await checkCalendar(env, nowMs);
     }
   });
@@ -740,7 +737,6 @@ export async function runCron(env: Env, nowMs: number): Promise<void> {
     }
   }
   await step('trips', () => armTrips(env, nowMs));
-  // Starts the day's timelapse recorder in the morning (it runs itself after that).
   await step('timelapse', () => ensureRecorder(env, nowMs));
   await step('term', () => remindTerm(env, nowMs));
   // The operator's statistics, each only while switched on (collect.ts):

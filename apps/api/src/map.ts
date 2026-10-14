@@ -31,7 +31,7 @@ const TILES = 'campus.pmtiles';
 const SPRITES = 'v4';
 /**
  * The glyphs' version, in the style's glyphs URL. Bumped when the fonts on
- * R2 change (v2 filled in Chinese), so the edge, the apps and browsers,
+ * R2 change, so the edge, the apps and browsers,
  * which keep a range for 30 days by its URL, ask for the new one.
  */
 const GLYPHS = '2';
