@@ -22,7 +22,7 @@
   --bad-ink: #991b1b;
   --radius: 14px;
   --shadow: 0 1px 2px rgb(28 25 23 / 0.04), 0 8px 24px -12px rgb(28 25 23 / 0.12);
-  /* Chinese (phase 10) falls back to each system's own CJK face. */
+  /* Chinese falls back to each system's own CJK face. */
   --font: "Inter", "Inter Fallback", "Inter Fallback Roboto", system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
   /* Never Inter while Space Grotesk loads: it's wider, so a heading would
      wrap one way, then the other (fonts.css). */
@@ -113,7 +113,6 @@ p { margin: 0; }
 .wrap { max-width: 68rem; margin: 0 auto; padding: 0 16px; }
 .narrow { max-width: 40rem; }
 
-/* Header and footer */
 .nav { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding-top: 18px; padding-bottom: 18px; }
 .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); }
 .brand img { width: 30px; height: 30px; border-radius: 8px; }
@@ -167,7 +166,6 @@ p { margin: 0; }
 .foot a { color: var(--muted); }
 .foot nav a { display: inline-block; padding: 10px 0; }
 
-/* Buttons and inputs */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   font: 600 0.95rem/1 var(--font); padding: 12px 18px; border-radius: 11px;
@@ -201,7 +199,6 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .btn:focus-vi
 ::placeholder { color: var(--muted); opacity: 1; }
 label { display: block; font-size: 0.875rem; color: var(--muted); margin: 12px 0 6px; }
 
-/* Cards */
 .card {
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
   box-shadow: var(--shadow); padding: 20px;

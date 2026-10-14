@@ -105,7 +105,7 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
   const groups = GROUPS.map((g) => g.filter((x) => x !== 'notifications' || Notify));
   const pages = ['account', ...groups.flat(), ...FOOT];
 
-  // The account's language (phase 10): one chosen on another device is used
+  // The account's language: one chosen on another device is used
   // here; one chosen here before the account had one goes to the account.
   useEffect(() => {
     const mine = window.i18n?.followAccount(profile.get().lang ?? 'auto');

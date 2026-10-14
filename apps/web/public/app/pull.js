@@ -271,7 +271,6 @@ export function PullToRefresh({ enabled, refresh }) {
       sign.classList.toggle('on', armed || st.mode === 'board' || (st.page === 'hold' && calm));
       sign.classList.toggle('done', st.page === 'hold' && Boolean(shownAt) && result?.state !== 'failed');
 
-      // The bus.
       let doorOpen = 0;
       let honked = 0;
       const since = now - modeAt;
@@ -340,7 +339,6 @@ export function PullToRefresh({ enabled, refresh }) {
       sign.setAttribute('transform', `translate(${sx} ${base.toFixed(2)})${signed ? '' : ` scale(1 ${(low ? shown : 1).toFixed(3)})`}`);
       sign.style.opacity = signed || low ? 1 : shown.toFixed(3);
       post.setAttribute('y1', low ? 3 : 0);
-      // The bus: standing on the road, or on the hill and tilted with it.
       const g = groundAt(st.x, low);
       const bob = calm ? 0 : st.kneel + 0.25 * Math.sin(st.dist / 5) * clamp(Math.abs(st.smV) / 200);
       bus.setAttribute('transform', `translate(${st.x.toFixed(2)} ${(g.y - 13.2).toFixed(2)}) rotate(${g.tilt.toFixed(2)} 19 13)`);

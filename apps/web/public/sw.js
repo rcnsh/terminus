@@ -1,4 +1,4 @@
-// The web app's service worker (phase 5).
+// The web app's service worker.
 //
 // - The app's own files come from the network, and a copy is kept so the
 //   app still opens without a connection. (Serving the copy first would show
@@ -151,8 +151,6 @@ async function soonest(network, kept, event, wait = SLOW_MS) {
   // Nothing kept: wait for the network after all (or its error).
   return network;
 }
-
-/* ---------- the map ---------- */
 
 /**
  * Files that never change at their address (versioned, or glyphs and icons).
@@ -321,8 +319,6 @@ async function keepShell(cache, path, res) {
   return cache.put(path, res);
 }
 
-// ---------- push (phase 5) ----------
-//
 // A push only says the card changed (the same nudge the Android app gets).
 // The notification is worded here from /me/next, the way the phone app words
 // its own: the question at the departure, the ride or the next way there

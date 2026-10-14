@@ -1,4 +1,4 @@
-// The website in English or Simplified Chinese (phase 10).
+// The website in English or Simplified Chinese.
 //
 // Loaded in <head>, before the page: it picks the language (the choice made
 // on this browser, or the account's, or else the browser's own languages)

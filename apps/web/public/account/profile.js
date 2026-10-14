@@ -62,8 +62,6 @@ export function Toast() {
   `;
 }
 
-/* ---------- loading and saving ---------- */
-
 let saveTimer = null;
 /** Counts edits: a save's reply doesn't replace edits made while it was on its way. */
 let edits = 0;
@@ -140,8 +138,6 @@ export async function loadCampus() {
   if (!campus.get()) campus.set(await api('/api/campus'));
   return campus.get();
 }
-
-/* ---------- reading them ---------- */
 
 /** Every stop, by name, for menus. */
 export const stopsByName = (c = campus.get()) => (c?.stops ?? []).map(({ code, name, lat, lon }) => ({ code, name, lat, lon })).sort((a, b) => a.name.localeCompare(b.name));

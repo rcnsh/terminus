@@ -38,8 +38,6 @@ export const deviceCount = store(null);
 /** A NUSMods link shared to the app, waiting in the import box for the person to import. */
 export const importOffer = store(null);
 
-/* ---------- helpers ---------- */
-
 export const hhmm = (min) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
 /** A time of day in the account's clock style ("9:00 AM" or "09:00"), for showing; hhmm is for time inputs. */
 export const clockMin = (min) => spaced(new Date(Date.UTC(2000, 0, 1, Math.floor(min / 60), min % 60)).toLocaleTimeString(locale(), { ...clockOpts(), timeZone: 'UTC' }));
@@ -111,8 +109,6 @@ function refuse(input, message) {
   input.setCustomValidity(message);
   input.reportValidity();
 }
-
-/* ---------- Your trips ---------- */
 
 /** One setting on a row of a group: its name, then its control. */
 function Field({ id, label, sub, children }) {
@@ -394,8 +390,6 @@ function Choices() {
     </section>`}
   `;
 }
-
-/* ---------- Timetable ---------- */
 
 /**
  * Where a class shown on the page is in the profile now. Every save replaces
@@ -690,8 +684,6 @@ function AddClass() {
   `;
 }
 
-/* ---------- Favourites ---------- */
-
 /**
  * The stops your classes go to, for the top of the favourites picker: one
  * entry per stop, saying which classes use it, leaving out favourites already.
@@ -837,8 +829,6 @@ function Place({ place, arriving }) {
     </li>
   `;
 }
-
-/* ---------- Devices ---------- */
 
 /**
  * The QR code library, from cdnjs, the first time a code is shown. Its
@@ -989,8 +979,6 @@ function Pairing({ count, reload }) {
     </div>
   `;
 }
-
-/* ---------- Language and time, the theme ---------- */
 
 /** The clock choices, shared with setup: one example time each, so the choice shows itself. */
 export const CLOCKS = () => [
@@ -1143,8 +1131,6 @@ function sampleAnswer(now) {
     },
   };
 }
-
-/* ---------- Account ---------- */
 
 /** An email that may wrap: after the @ first, so the name stays whole. */
 const breakAfterAt = (email) => {
@@ -1301,8 +1287,6 @@ function Keys() {
     </section>
   `;
 }
-
-/* ---------- About, Feedback ---------- */
 
 /** About's links, as rows like the Settings list: what each is, and where it goes. */
 const ABOUT_LINKS = () => [
