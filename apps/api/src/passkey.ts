@@ -50,8 +50,6 @@ export const PASSKEY_ALGS = Object.keys(ALGS).map(Number);
 
 const enc = new TextEncoder();
 
-/* ---------- signing with a key made from HEALTH_TOKEN ---------- */
-
 let keyMemo: { token: string; key: Promise<CryptoKey> } | null = null;
 
 function hmacKey(token: string): Promise<CryptoKey> {
@@ -115,8 +113,6 @@ export async function sessionOk(token: string | undefined, given: string | null,
   if (!/^\d{13}$/.test(exp ?? '') || !sigBytes || Number(exp) <= nowMs) return false;
   return macOk(token, 'session', enc.encode(exp), sigBytes);
 }
-
-/* ---------- WebAuthn ---------- */
 
 /**
  * clientDataJSON: the right ceremony, from this origin, not framed by
@@ -187,14 +183,10 @@ export async function signatureOk(pk: Pick<Passkey, 'key' | 'alg'>, authData: Ui
   return crypto.subtle.verify(a.verify, key, sig, signed).catch(() => false);
 }
 
-/* ---------- storage ---------- */
-
 export async function readPasskeys(env: Env): Promise<Passkey[]> {
   const list = await env.KV.get<Passkey[]>(PASSKEYS_KEY, 'json').catch(() => null);
   return Array.isArray(list) ? list : [];
 }
-
-/* ---------- the routes ---------- */
 
 /**
  * /api/admin/passkey/*. `holdsToken`: the request carries HEALTH_TOKEN
@@ -257,8 +249,6 @@ export async function handlePasskey(req: Request, url: URL, env: Env, nowMs: num
 
   return json({ error: 'not found' }, 404);
 }
-
-/* ---------- bytes ---------- */
 
 function decode(s: unknown): Uint8Array | null {
   if (typeof s !== 'string' || !s || !/^[A-Za-z0-9_-]+$/.test(s)) return null;

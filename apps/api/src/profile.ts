@@ -246,7 +246,6 @@ export function parseProfile(
     const v = raw.pinnedStops;
     const codes = Array.isArray(v) && v.every((c) => typeof c === 'string') ? [...new Set((v as string[]).map((c) => c.trim().toUpperCase()))] : null;
     if (!codes || codes.length > PROFILE_LIMITS.pinnedStops || !codes.every(isPinnable)) {
-      // A literal, for ERRORS_ZH: profile.test.js checks it names PROFILE_LIMITS.pinnedStops.
       return { ok: false, error: 'pinnedStops must be up to 8 known stop codes' };
     }
     p.pinnedStops = codes;
@@ -402,10 +401,6 @@ export function needsReimport(profile: Profile, nowMs: number): boolean {
   return reimportReason(profile, nowMs) !== null;
 }
 
-/* ------------------------------------------------------------------ */
-/* Planner                                                            */
-/* ------------------------------------------------------------------ */
-
 export type PlanWhy = Exclude<Why, 'place'>;
 
 export interface Plan {
@@ -524,10 +519,6 @@ export function reachedEarly(profile: Profile, nowMs: number, done: ReadonlySet<
   const nowMin = sgt(nowMs).minutes;
   return classesOn(profile, nowMs).filter((c) => done.has(classKey(c)) && nowMin < c.arriveByMin).at(-1) ?? null;
 }
-
-/* ------------------------------------------------------------------ */
-/* Resting hours                                                      */
-/* ------------------------------------------------------------------ */
 
 /** A class running past dayEnd keeps the day open this long after it ends,
  *  so the trip home still gets an answer. */
@@ -651,10 +642,6 @@ export function upcomingClass(profile: Profile, nowMs: number, h12: boolean, sto
     off: classesOn(profile, nowMs).length ? null : dayOffReason(nowMs),
   };
 }
-
-/* ------------------------------------------------------------------ */
-/* Will I make it?                                                    */
-/* ------------------------------------------------------------------ */
 
 export type OnTime = 'on-time' | 'tight' | 'late';
 

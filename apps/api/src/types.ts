@@ -84,10 +84,6 @@ export interface Env {
   TIMELAPSE_ENABLED?: string;
 }
 
-/* ------------------------------------------------------------------ */
-/* Public API contract                                                 */
-/* ------------------------------------------------------------------ */
-
 /**
  * 'scheduled' means the feed answered and had no vehicle, so a headway is the
  * honest guess. 'unknown' means we never reached the feed at all. Collapsing
@@ -208,10 +204,6 @@ export interface BusChange {
   estimated: boolean;
 }
 
-/* ------------------------------------------------------------------ */
-/* /api/me/next: the personal answer every client renders              */
-/* ------------------------------------------------------------------ */
-
 /** What kind of answer: a trip somewhere, what's near you, resting, or
  *  'free': a day with no classes (or none left to plan), nothing to catch. */
 export type Mode = 'trip' | 'nearby' | 'rest' | 'free';
@@ -331,10 +323,6 @@ export interface ArriveBy {
   oneEarlier?: boolean;
 }
 
-/* ------------------------------------------------------------------ */
-/* Stop graph (data/stops.json)                                        */
-/* ------------------------------------------------------------------ */
-
 export interface Stop {
   code: string;
   name: string;
@@ -411,10 +399,6 @@ export interface GraphIndex {
   routes: Map<string, RouteIndex>;
   servingStop: Map<string, string[]>;
 }
-
-/* ------------------------------------------------------------------ */
-/* Resolution                                                          */
-/* ------------------------------------------------------------------ */
 
 export interface Leg {
   svc: string;

@@ -86,8 +86,8 @@ export function newPairCode(): string {
 }
 
 /**
- * Plain addresses only. The old pattern allowed `,` `<` `>` in the local
- * part, so "x,blocked@example.com" was a different string from the blocked
+ * Plain addresses only: with `,` `<` `>` in the local part,
+ * "x,blocked@example.com" would be a different string from the blocked
  * address but could still be delivered to it.
  */
 export function normalizeEmail(raw: unknown): string | null {
@@ -116,10 +116,6 @@ export function normalizePairCode(raw: unknown): string | null {
   const c = raw.replace(/[\s-]/g, '').toUpperCase();
   return c.length === 6 && [...c].every((ch) => PAIR_ALPHABET.includes(ch)) ? c : null;
 }
-
-/* ------------------------------------------------------------------ */
-/* Sign-in links                                                      */
-/* ------------------------------------------------------------------ */
 
 export type LinkOutcome = 'sent' | 'blocked' | 'cooldown' | 'busy';
 
@@ -619,10 +615,6 @@ async function newAnonymousUser(db: D1Database, via: 'app' | 'web', nowMs: numbe
   return id;
 }
 
-/* ------------------------------------------------------------------ */
-/* Sessions                                                           */
-/* ------------------------------------------------------------------ */
-
 export function tokenFrom(req: Request): string | null {
   const auth = req.headers.get('authorization');
   if (auth?.startsWith('Bearer ')) return auth.slice(7).trim() || null;
@@ -669,8 +661,7 @@ export async function authenticate(
   const client = row.kind === 'device' ? clientFrom(req) : NO_CLIENT;
   // Also straight away when the app has updated, so the dashboard's versions are current.
   if (nowMs - row.last_seen > ACCOUNT_TTL.touchMs || (client.client !== null && client.client !== row.client)) {
-    // Devices paired before sessions had a platform get one here. An explicit
-    // header replaces a User-Agent guess.
+    // An explicit header replaces a User-Agent guess.
     const touch = db.batch([
       db
         .prepare(
@@ -710,10 +701,6 @@ export function sessionCookie(token: string, maxAgeS: number): string {
   // SameSite=Lax blocks cross-site POSTs carrying the cookie.
   return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAgeS}`;
 }
-
-/* ------------------------------------------------------------------ */
-/* Devices                                                            */
-/* ------------------------------------------------------------------ */
 
 export async function createPairCode(db: D1Database, userId: string, nowMs: number): Promise<{ code: string; expires: number }> {
   const code = newPairCode();
@@ -821,10 +808,6 @@ export async function mailDeviceAdded(env: Env, email: string | null, name: stri
   });
 }
 
-/* ------------------------------------------------------------------ */
-/* Profile storage                                                    */
-/* ------------------------------------------------------------------ */
-
 export async function loadProfileJson(db: D1Database, userId: string): Promise<unknown | null> {
   const row = await db.prepare('SELECT json FROM profiles WHERE user_id = ?').bind(userId).first<{ json: string }>();
   return row ? JSON.parse(row.json) : null;
@@ -867,10 +850,6 @@ export async function saveProfileIf(db: D1Database, userId: string, profile: unk
           .first<{ updated: number }>();
   return row?.updated ?? null;
 }
-
-/* ------------------------------------------------------------------ */
-/* Account-wide actions                                               */
-/* ------------------------------------------------------------------ */
 
 /**
  * Signs out every device, and cancels what could still turn into a new one:
@@ -989,13 +968,9 @@ export async function exportAccount(db: D1Database, user: User, today: unknown =
   };
 }
 
-/* ------------------------------------------------------------------ */
-/* Turnstile                                                          */
-/* ------------------------------------------------------------------ */
-
 /**
- * Verifies a Turnstile token. With no secret configured (local dev, tests)
- * it passes, so the check can ship before the widget is set up.
+ * Verifies a Turnstile token. With neither a secret nor a site key configured
+ * (local dev, tests) it passes.
  */
 export async function verifyTurnstile(env: Env, token: unknown, ip: string | null, fetchImpl: typeof fetch = fetch): Promise<boolean> {
   return (await checkTurnstile(env, token, ip, fetchImpl)) === 'ok';

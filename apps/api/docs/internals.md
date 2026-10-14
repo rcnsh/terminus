@@ -2057,10 +2057,11 @@ scripts/          dev-stub.mjs, the scrapers, probes and render-timelapse.mjs
 test/             *.test.js, worker.smoke.js, fixtures/ (captures, golden answers)
 ```
 
-`normalize()` in `fms.ts` is the only function that touches the raw FMS shape.
-It is undocumented and has changed before, so it is tolerant and everything
-downstream assumes a clean `Arrival[]`. When the feed shifts, exactly one
-function needs editing, and `arrivalsProblem()` makes sure the shift is
+`fms.ts` is the only file that touches the raw FMS shape, through
+`normalize()`, `normalizeBuses()` and their helpers. The shape is undocumented
+and has changed before, so they are tolerant and everything downstream
+assumes a clean `Arrival[]`. When the feed shifts, only that file needs
+editing, and `arrivalsProblem()` makes sure the shift is
 noticed (an alert) rather than read as an empty board. The same goes for
 `normalizeBuses()` with `busesProblem()`, and `normalizePublic()` in
 `lta.ts` with `publicProblem()`.

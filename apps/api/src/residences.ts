@@ -103,7 +103,7 @@ export interface HomeWalk {
  * with the walk to each. Those stops were picked by path distance from the
  * building, so a stop that is close as the crow flies but a hill and a
  * link-way away (PGP to KR MRT) never shows up as a short walk. Null
- * outside every residence: then the nearest stops by distance, as before.
+ * outside every residence: then the nearest stops by distance.
  *
  * With `home` and the residence one of its stops serves, the walk to the
  * nearest of those is the user's own (`home.m`), and every other stop of the

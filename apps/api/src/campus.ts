@@ -3,12 +3,6 @@
  * coordinates, with each service's colour) for the map, and a flat search
  * index of places for the destination search, in every client.
  *
- * Deliberately NOT a metro-schematic (idealized 45/90-degree lines): that
- * look needs hand-curated coordinates that go stale the moment the weekly
- * scrape changes a stop, which fights the "static graph, never hand-touched"
- * architecture the rest of this project is built on. This uses the real
- * lat/lon instead, so a scraped change just appears in the right place.
- *
  * Built here, not in the clients, for the same reason /api/me/next words
  * its card: one place computes it, and the web app, Android and the Mac
  * draw it without redoing the work.
@@ -36,10 +30,6 @@ export interface RouteShape {
 
 export const SHAPES = (shapesJson as unknown as { routes: Record<string, RouteShape> }).routes;
 
-/* ------------------------------------------------------------------ */
-/* Projection                                                          */
-/* ------------------------------------------------------------------ */
-
 export interface ProjectedStop {
   code: string;
   name: string;
@@ -53,10 +43,9 @@ export interface ProjectedStop {
   services: string[];
   /** False for a small number of real stops that sit far off the dense
    *  campus cluster (P's excursion to Botanic Gardens MRT is the current
-   *  case) -- scaling the map to fit them too would shrink the other ~30
-   *  stops to illegibility. Off-core stops still carry a real projected x/y
-   *  and are still fully functional (search, tap-for-arrivals); the client
-   *  just lists them separately instead of plotting a misleading position. */
+   *  case). The map fits its bounds to core stops only: fitting these too
+   *  would shrink the other ~30 stops to illegibility. Off-core stops are
+   *  otherwise like any other. */
   core: boolean;
 }
 
@@ -205,15 +194,10 @@ export function shapeFor(svc: string, seq: string[]): RouteShape | null {
   return shape;
 }
 
-/* ------------------------------------------------------------------ */
-/* Friendly building labels                                            */
-/* ------------------------------------------------------------------ */
-
 /**
  * A best-effort starter set, not a verified official directory. Kept
  * deliberately small: shipping a wrong campus building name to a real
  * student is worse than an unlabelled code they can still search directly.
- * Safe to extend -- add an entry and it is picked up everywhere.
  */
 const CURATED_LABELS: Record<string, string> = {
   UTOWN: 'University Town',
@@ -256,10 +240,6 @@ export function friendlyLabel(code: string): string | null {
   }
   return null;
 }
-
-/* ------------------------------------------------------------------ */
-/* Destination search index                                            */
-/* ------------------------------------------------------------------ */
 
 export interface Destination {
   code: string;

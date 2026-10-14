@@ -43,7 +43,7 @@ import { m } from './i18n.ts';
 
 /**
  * 12-hour times: the account's choice when it made one, else the client's
- * own (`?h12=1`). Default 24-hour, as always.
+ * own (`?h12=1`). Default 24-hour.
  */
 export const hour12 = (url: URL, profile?: Pick<Profile, 'clock'>) =>
   profile?.clock === '12' ? true : profile?.clock === '24' ? false : url.searchParams.get('h12') === '1';

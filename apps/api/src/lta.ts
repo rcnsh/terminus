@@ -1,7 +1,7 @@
 /**
  * LTA DataMall client: the public buses at one stop.
  *
- * `normalizePublic()` is the ONLY place that touches DataMall's shape. The
+ * This file is the only code that reads DataMall's shape. The
  * feed is documented (the DataMall API user guide), but a feed is a feed:
  * read tolerantly here, and everything downstream sees a clean Arrival[].
  *

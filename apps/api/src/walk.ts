@@ -6,7 +6,7 @@
  * OpenStreetMap footpaths) carries routed distances between stops and, for
  * each stop, how much longer than the straight line a walk to it usually is.
  * Rooms get routed distances in `data/venues.json` from the same script.
- * Without that data every factor is 1: the old straight-line behaviour.
+ * Without that data every factor is 1: the straight line.
  */
 
 import walksJson from '../data/walks.json' with { type: 'json' };
@@ -19,7 +19,7 @@ const WALKS = walksJson as { detour: Record<string, number>; stopPairs: Record<s
 export type Pace = 'slow' | 'normal' | 'fast';
 export const PACES: readonly Pace[] = ['slow', 'normal', 'fast'];
 
-/** Metres per second. Normal is the long-standing 1.3. */
+/** Metres per second. */
 const SPEED: Record<Pace, number> = { slow: 1.1, normal: WALK.speedMs, fast: 1.5 };
 
 export function paceSpeed(pace: Pace | null | undefined): number {

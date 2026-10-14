@@ -744,8 +744,7 @@ export function boardAt(
       crowd: etas[0]?.crowd ?? null,
       endsAt: ends === null ? null : new Date(ends).toISOString(),
       running: true,
-      // Worded here, so every client says the same: the apps used to each
-      // build these from the numbers, and drifted.
+      // Worded here, so every client says the same.
       eta: etaS === null ? null : etaText(etaS, quality),
       laterText: thenText(later),
       toText: towardsText(towards),

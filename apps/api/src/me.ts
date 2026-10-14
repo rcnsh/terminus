@@ -1,7 +1,6 @@
 /**
  * The personal layer: sign-in, pairing, profile, and the answers that use
- * them (/me/next, /me/nearby). Everything here needs the DB binding; the
- * public routes in index.ts never do.
+ * them (/me/next, /me/nearby). Everything here needs the DB binding.
  */
 
 import { mailFeedback, parseFeedback, saveFeedback } from './feedback.ts';
@@ -289,7 +288,7 @@ async function changeProfile(
 
 /** The version in an If-Match header (`"123"`, or weakened by compression,
  *  `W/"123"`; `"0"` for a profile never saved); undefined when there is none
- *  to go by, and the write is unconditional as before. */
+ *  to go by, and the write is unconditional. */
 export function ifMatchVersion(req: Request): number | null | undefined {
   const m = /^\s*(?:W\/)?"(\d{1,16})"\s*$/.exec(req.headers.get('if-match') ?? '');
   if (!m) return undefined;
@@ -465,7 +464,7 @@ export const ME_ROUTES: MeRoute[] = [
       // One-off trips are done with once their day has passed.
       r.profile.once = r.profile.once.filter((o) => o.date >= sgtDate(nowMs));
       // With If-Match (the ETag of the profile it started from), the save
-      // happens only if no other device saved since; without, as before.
+      // happens only if no other device saved since.
       const from = ifMatchVersion(req);
       const version = from === undefined ? await saveProfileJson(db, session.user.id, r.profile, nowMs) : await saveProfileIf(db, session.user.id, r.profile, nowMs, from);
       if (version === null) return json({ error: PROFILE_CHANGED }, 412);
@@ -651,8 +650,7 @@ export const ME_ROUTES: MeRoute[] = [
       }
       const day = await loadDay(env, session.user.id, nowMs);
       // Older Android apps send a location every 20 seconds or so during a
-      // trip. Nothing is worked out from it any more: it's answered like
-      // /me/next from there, and nothing is kept.
+      // trip. It's answered like /me/next from there, and nothing is kept.
       if (kind === 'location') {
         const prefs = await prefsFor(db, session.user.id, profile, nowMs);
         return json(await nextBody(here, env, ctx, nowMs, deps, profile, day, session.user.id, prefs));
@@ -920,8 +918,6 @@ export async function handleMe(
     if (setsSession || (!bearer && hasSessionCookie(req))) return json({ error: 'that request came from another site' }, 403);
   }
 
-  /* ---------- sign-in ---------- */
-
   // Pages and lookups that cost a D1 read but need no session.
   if ((path === '/auth/verify' || path === '/api/auth/config') && env.RL_PUBLIC) {
     if (!(await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` })).success) return json({ error: 'too many requests, slow down' }, 429, retryAfter());
@@ -1143,8 +1139,6 @@ export async function handleMe(
     ctx.waitUntil(mailDeviceAdded(env, paired.email, name, nowMs).catch(mailFailed));
     return json({ token: paired.token });
   }
-
-  /* ---------- everything below needs a session ---------- */
 
   const session = await authenticate(db, req, nowMs, ctx);
 

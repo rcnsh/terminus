@@ -124,19 +124,14 @@ async function handleTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: numb
 
 /**
  * `?probe=1` attempts a real token mint and reports what came back.
- *
- * Two of this project's values were guesses for a long time and each wrong
- * guess cost a redeploy cycle to diagnose. This makes that one request. It
- * never returns the token, and it goes through the ordinary cached path, so
+ * It never returns the token, and it goes through the ordinary cached path, so
  * hammering it does not hammer upstream.
  */
 async function probeAuth(env: Env, nowMs: number): Promise<Record<string, unknown>> {
   if (!authConfigured(env)) return { ok: false, reason: 'auth not configured' };
 
-  // Goes through the ORDINARY cached path. An earlier version minted a fresh
-  // token on every call, which turned a debugging session into roughly a dozen
-  // mints a minute and started drawing intermittent 400s from upstream. A
-  // debug endpoint that can be turned into a hammer is a bad debug endpoint.
+  // Goes through the ORDINARY cached path: minting a fresh token on every
+  // call draws intermittent 400s from upstream.
   const before = await env.KV.get('auth:session').catch(() => null);
   try {
     const s = await getSession(env, nowMs);
@@ -474,7 +469,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
     }
     const dl = await handleDownload(url.pathname, env, url);
     if (dl) return dl;
-    // A recorded day of buses: operator only, like /admin/stats.
+    // A recorded day of buses: the operator or a TIMELAPSE_TOKEN holder.
     const timelapse = await handleTimelapse(req, url, env, nowMs);
     if (timelapse) return timelapse;
     // Passkeys for the operator's pages: adding one needs HEALTH_TOKEN itself.
@@ -485,8 +480,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
 
     switch (url.pathname) {
       case '/docs':
-        // The landing page at / is a static asset (apps/web). The beta's
-        // docs, like its pages, ask not to be indexed.
+        // The beta's docs, like its pages, ask not to be indexed.
         return new Response(docsPageFor(phaseAt(sgtMinute(nowMs))), {
           headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=300', ...(isBeta(env) ? { 'x-robots-tag': 'noindex' } : {}) },
         });

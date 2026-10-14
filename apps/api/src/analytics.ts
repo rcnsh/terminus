@@ -11,8 +11,7 @@
  * 2. It collects segment travel times. Inter-stop times are not in the feed,
  *    and the router cannot be good without them. `plate` is the join key: the
  *    same vehicle seen at two stops with two ETAs gives you the travel time
- *    between them. That data needs calendar time, so it is collected even
- *    though nothing reads it yet.
+ *    between them.
  *
  * Analytics Engine writes are synchronous, non-blocking and unsampled at this
  * volume. Nothing here may ever throw into a response path -- an answer that
