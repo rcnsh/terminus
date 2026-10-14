@@ -46,7 +46,7 @@ data class NextAnswer(
     val leaveNote: String? = null,
     /** For a class, when it starts, epoch ms. */
     val classAtMs: Long? = null,
-    /** Display-ready text from the server; null only in an answer cached before 1.3.6. */
+    /** Display-ready text from the server; null when there's no card. */
     val card: Card? = null,
     /** The user's walking speed (m/s, from their pace), for walk times the app works out itself. */
     val walkSpeedMs: Double? = null,

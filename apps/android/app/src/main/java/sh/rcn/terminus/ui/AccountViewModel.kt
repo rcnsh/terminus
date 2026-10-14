@@ -355,8 +355,6 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         if (p != null && "onboarding" !in p.seen) edit { it.markSeen("onboarding") }
     }
 
-    /* ---------- signing in ---------- */
-
     private var pollJob: Job? = null
     private var request: SignInRequest? = null
     /** This phone's anonymous token while a sign-in may fold it into another account. */
@@ -468,8 +466,7 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     private fun signedIn(token: String, email: String, onSignedIn: () -> Unit) {
         approvedToken = null
         anonToken = null
-        // The page stays as it is, busy, until the app moves on: cleared
-        // first, it fell back to the email step for a moment.
+        // The page stays as it is, busy, until the app moves on.
         _state.update { it.copy(busy = true, message = null) }
         viewModelScope.launch {
             // Off the main thread: a Keystore round trip and a write to disk.
@@ -491,8 +488,6 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
             onSignedIn()
         }
     }
-
-    /* ---------- trip choices ---------- */
 
     fun loadChoices() {
         val sent = store.token
@@ -521,8 +516,6 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /* ---------- feedback, your data ---------- */
-
     /** Send feedback; [onSent] clears the box once it's gone. */
     fun sendFeedback(note: String, onSent: () -> Unit) {
         attempt({ it.copy(busy = false) }) {
@@ -544,8 +537,6 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
             _state.update { it.copy(message = L.s(if (written != null) R.string.export_saved else R.string.export_not_saved)) }
         }
     }
-
-    /* ---------- devices ---------- */
 
     fun loadDevices() {
         attempt {

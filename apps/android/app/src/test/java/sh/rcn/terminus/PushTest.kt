@@ -13,7 +13,6 @@ class PushTest {
     }
 
     @Test fun anOlderServersWordsAreUsedAsTheyAre() {
-        // Sent in the push itself, before 2.5.0.
         val push = mapOf("kind" to "term", "title" to "Sem 1 starts Mon 10 Aug", "body" to "Import your new timetable.", "zhTitle" to "第 1 学期 8月10日开始", "zhBody" to "导入新课表。")
         assertEquals("Sem 1 starts Mon 10 Aug" to "Import your new timetable.", TermReminder.words(push, zh = false))
         assertEquals("第 1 学期 8月10日开始" to "导入新课表。", TermReminder.words(push, zh = true))

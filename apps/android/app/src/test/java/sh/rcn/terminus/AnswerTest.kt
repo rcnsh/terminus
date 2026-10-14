@@ -166,7 +166,6 @@ class AnswerTest {
     }
 
     @Test fun onlyAnAnswerWithNoCardIsOldWithoutStaleAt() {
-        // Kept from before cards: old until the next refresh replaces it.
         val old = NextAnswer.parse(JSONObject("""{"label":"D2 · 4 min","departsAt":"2026-08-27T01:04:00Z","mode":"trip"}"""))
         assertNull(old.card)
         assertTrue(isOld(old, ms("2026-08-27T01:00:00Z")))
@@ -187,7 +186,6 @@ class AnswerTest {
                 "suggestion":{"id":"earlier:4:600:UTOWN","text":"Leave one bus earlier?","accept":"Leave earlier","dismiss":"No thanks"}}}""",
             ),
         )
-        // A question from an older server is simply not shown: nothing asks any more.
         val card = a.card!!
         assertFalse(card.remind)
         assertEquals("earlier:4:600:UTOWN", card.suggestion!!.id)

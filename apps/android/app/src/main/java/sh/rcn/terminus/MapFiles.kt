@@ -97,7 +97,7 @@ object MapFiles {
         val lang = if (zh) "zh" else "en"
         val dir = dir(ctx)
         val file = File(dir, "style-$theme-$lang.json")
-        // A copy cut short (the app killed mid-write, before writes were whole) is no copy.
+        // A copy cut short (the app killed mid-write) is no copy.
         val kept = runCatching { file.readText() }.getOrNull()?.takeIf(::isJson)
         val text = kept?.takeIf { fresh(file) }
             ?: fetchStyle("/map/style.json?theme=$theme&lang=$lang", file)

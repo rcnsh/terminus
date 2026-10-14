@@ -19,8 +19,8 @@ import javax.net.ssl.SSLHandshakeException
  * The default is the address people see (terminus.run), the one that
  * goes with the project if someone else takes it over. The other,
  * terminus.rcn.sh, is the backup: a request that can't reach one at all
- * goes to the other ([order]), so a network that refuses one of them (NUS
- * Wi-Fi refused terminus.run in October 2026) doesn't stop the app.
+ * goes to the other ([order]), so a network that refuses one of them
+ * doesn't stop the app.
  */
 internal object Servers {
     /** Plain HTTP to this phone or the emulator's host: the dev stub (scripts/dev-stub.mjs). */
