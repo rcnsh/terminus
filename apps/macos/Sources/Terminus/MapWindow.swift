@@ -924,7 +924,6 @@ struct BusCard: View {
     @ViewBuilder private func marker(_ kind: Kind, _ tint: Color) -> some View {
         switch kind {
         case .between, .here:
-            // The bus: its colour in a white ring.
             Circle().fill(tint).frame(width: 10, height: 10)
                 .padding(2.5)
                 .background(Circle().fill(.white))
@@ -1445,12 +1444,10 @@ private struct CampusMapView: NSViewRepresentable {
         private func camera() {
             guard let view else { return }
             let pad = NSEdgeInsets(top: 100, left: 40, bottom: 40, right: 40)
-            // Back to campus, from the button.
             if map.recentre != recentred {
                 recentred = map.recentre
                 view.setVisibleCoordinateBounds(bounds(campus.coreBounds), edgePadding: pad, animated: !still, completionHandler: nil)
             }
-            // The zoom buttons: by the steps asked for since last time, within the map's limits.
             if map.zoomSteps != zoomedSteps {
                 let to = view.zoomLevel + Double(map.zoomSteps - zoomedSteps)
                 zoomedSteps = map.zoomSteps

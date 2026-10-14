@@ -168,7 +168,6 @@ enum MapFiles {
         let file = currentTiles(in: dir)
         if file != nil, let checked = kept?["checked"] as? Double, now - checked < checkS { return false }
         let etag = kept?["etag"] as? String ?? ""
-        // The chosen address, then the site's other one if it can't be reached (Servers.reach).
         let (tmp, resp) = try await Servers.reach(method: "GET") { base in
             var req = URLRequest(url: URL(string: "\(base)/map/\(tiles)")!, timeoutInterval: 30)
             req.setValue(Api.client, forHTTPHeaderField: "x-terminus-client")
@@ -182,7 +181,6 @@ enum MapFiles {
         var fresh = false
         switch http?.statusCode {
         case 304:
-            // Kept from before files were checked: one that isn't a map goes.
             if let file, !looksLikeTiles(file) {
                 dropTiles(in: dir)
                 throw ApiError(status: 0, message: "not a map file")
@@ -217,7 +215,6 @@ enum MapFiles {
     static func get(_ path: String, token: String?) async throws -> Data {
         if token != nil, Outdated.gated("GET", path), Outdated.active { throw ApiError(status: 426, message: "HTTP 426") }
         if Date() < Quiet.until(.app) { throw ApiError(status: 429, message: "HTTP 429") }
-        // The chosen address, then the site's other one if it can't be reached (Servers.reach).
         let (data, resp) = try await Servers.reach(method: "GET") { base in
             var req = URLRequest(url: URL(string: base + path)!, timeoutInterval: 10)
             req.setValue(Api.client, forHTTPHeaderField: "x-terminus-client")

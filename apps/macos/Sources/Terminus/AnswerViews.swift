@@ -19,7 +19,6 @@ struct AnswerDetail: View {
             if let a = answer {
                 if let n = a.card?.notice { Row(icon: "antenna.radiowaves.left.and.right.slash", text: n).foregroundStyle(Color.warn) }
                 if let w = a.card?.warning { Row(icon: "exclamationmark.triangle.fill", text: w).fontWeight(.semibold).foregroundStyle(Color.warn) }
-                // On the bus: how far along, from the stop you got on at to the one you get off at.
                 if let ride = a.card?.ride { RideLine(ride: ride, color: a.card?.journey?.bus?.color) }
                 if a.isFree {
                     // Nothing to catch: no bus to mistake for advice.
@@ -29,7 +28,6 @@ struct AnswerDetail: View {
                     // Nothing timed: an old "by 4:01 PM" would pass for current.
                     EmptyView()
                 } else if a.isClassPlan {
-                    // Each arrival next to the bus it belongs to.
                     // The bus to catch (it names the stop), then when it gets you there.
                     // One colour for "go" (the countdown in the header); red only when it's late.
                     if let c = a.catchHow { Row(icon: a.leave?.svc == nil ? "figure.walk" : "bus.fill", text: c).fontWeight(.semibold).foregroundStyle(a.leaveLate ? Color.bad : Color.primary) }
@@ -41,7 +39,6 @@ struct AnswerDetail: View {
                     // After your day, or at home: what's next.
                     NextClass(answer: a)
                 } else if let j = a.card?.journey {
-                    // The trip as steps, as the phone and the web show them.
                     JourneyRows(journey: j)
                 } else {
                     Row(icon: a.mode == "rest" ? "calendar" : "text.alignleft", text: a.detail)

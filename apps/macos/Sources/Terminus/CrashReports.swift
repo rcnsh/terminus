@@ -257,7 +257,6 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber, @unchecked Senda
         guard enabled else { store.removeAll(); return }
         for (file, report) in store.pending() {
             let body = try? JSONEncoder().encode(report)
-            // The chosen address, then the site's other one if it can't be reached (Servers.reach).
             let sent = try? await Servers.reach(method: "POST") { base in
                 guard let url = URL(string: base + "/api/errors") else { throw URLError(.badURL) }
                 var req = URLRequest(url: url)
