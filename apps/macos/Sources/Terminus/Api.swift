@@ -59,7 +59,7 @@ struct NextAnswer: Decodable {
         let goNow: String?
         let note: String?
         let estimate: String?
-        /// v2: where the trip is (idle, due, heading, waiting, riding, missed, arrived).
+        /// Where the trip is (idle, due, heading, waiting, riding, missed, arrived).
         let phase: String?
         /// "On your way", above the answer. Nil when idle.
         let phaseText: String?
