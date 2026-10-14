@@ -945,8 +945,6 @@ private fun SvcChip(svc: String, color: Long, paid: Boolean = false, big: Boolea
 
 private const val GREY = 0xFF8A939CL
 
-/* ---------- a service's line ---------- */
-
 @Composable
 private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, onShowOnMap: (String) -> Unit, top: Dp) {
     val key = lineKey(route.svc, route.from)

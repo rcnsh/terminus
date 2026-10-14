@@ -415,7 +415,7 @@ private fun paceName(pace: String) = when (pace) {
     else -> R.string.pace_normal
 }
 
-/** One group's settings: the same controls as the single page had, in the same order. */
+/** One page of Settings: that group's controls. */
 @Composable
 private fun SettingsPageContent(
     page: SettingsPage,

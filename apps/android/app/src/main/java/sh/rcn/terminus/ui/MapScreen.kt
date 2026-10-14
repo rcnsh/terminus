@@ -880,7 +880,6 @@ private fun BusSheet(bus: LiveBus, svc: String, color: Color, campus: CampusMap,
         ?: name?.let { n -> campus.nearest(campus.stops.filter { it.name == n && svc in it.services }.map { it.code }, bus.lat, bus.lon)?.let(campus::stop) }
     // A stop opened from here: its sheet, the map on it, and back returns to this bus as it is.
     val open: (MapStop) -> Unit = { actions.showStop(it.code, MapSheet.Bus(bus.id, stops = expanded, all = all)) }
-    // The stop it's at or coming to.
     val stop = if (bus.at != null) stopFor(strip.hereCode, bus.at) else stopFor(strip.nextCode, bus.nextStop)
     MapSheetFrame(
         paneName = stringResource(R.string.a11y_bus, svc),

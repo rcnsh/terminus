@@ -33,9 +33,8 @@ import sh.rcn.terminus.widget.redrawWidgets
  * redraws the widgets and the trip's notification from it. Everything else
  * (the heads-up alarm, the widget refresh) still works without it. The one
  * other kind, `term`, is the reminder to import a new semester's timetable,
- * worded by the server in both languages. Since 2.5.0 the push carries no
- * words, so none pass through Google: the app fetches them (GET /me/notice).
- * Older versions are still sent them.
+ * worded by the server in both languages. The push carries no words, so
+ * none pass through Google: the app fetches them (GET /me/notice).
  */
 object Push {
     /** This build has Firebase, and the phone has Play services. */

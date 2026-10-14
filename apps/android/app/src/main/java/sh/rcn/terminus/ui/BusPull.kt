@@ -357,8 +357,6 @@ private fun Arrow(ink: Color, up: Boolean, calm: Boolean) {
     }
 }
 
-/* ---------- on the horizon ---------- */
-
 /**
  * The pull on Now's horizon, in place of the road's own sign and bus: the
  * sign at [sign] (faded in by the pull when the road has none, [ownSign]),
