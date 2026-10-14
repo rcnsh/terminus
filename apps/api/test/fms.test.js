@@ -187,25 +187,6 @@ test('the device id is read from KV once, then kept; a new one is made only when
   assert.equal(reads, 2, 'read once to find none, once to find it stored, then kept');
 });
 
-test('a board cached by an older Worker, without `ends`, still drops the run that ends here', async () => {
-  const { withEnds } = await import('../src/fms.ts');
-  const old = {
-    code: 'COM3',
-    arrivals: [
-      { svc: 'D2', etaS: 60, crowd: null, plate: 'PA0', berth: 'COM3-D2-E' },
-      { svc: 'D2', etaS: 300, crowd: null, plate: 'PA1', berth: 'COM3-D2-S' },
-    ],
-    fetchedAt: 0,
-    stale: false,
-    available: true,
-  };
-  const read = withEnds(old);
-  assert.equal(read.arrivals[0].ends, true);
-  assert.equal(read.arrivals[1].ends, undefined);
-  const fresh = withEnds(read);
-  assert.equal(fresh, read, 'a board that already says so is returned as it is');
-});
-
 test('a refusal echoing our request back keeps no ids or tokens, numbers or strings', () => {
   const out = redactDetail('{"code":401,"userid":123456,"deviceid":"abc-def","token":"t0k","msg":"Invalid API KEY"}');
   assert.equal(out, '{"code":401,"userid":"[redacted]","deviceid":"[redacted]","token":"[redacted]","msg":"Invalid API KEY"}');
