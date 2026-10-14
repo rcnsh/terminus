@@ -26,7 +26,7 @@ function twoWay(gap = 8) {
 }
 /** A fix [m] metres east of the start and [n] metres north of the eastbound side. */
 const at = ({ east }, m, n, heading = null) => ({ lon: 103.77 + (east * m) / 500, lat: 1.3 + n / M_LAT, heading });
-const track = (along, at, doubt = 0) => ({ along, at, doubt, offSince: null });
+const track = (along, at, doubt = 0) => ({ along, at, seen: at, doubt, offSince: null });
 /** A line's length in metres, as the API measures it. */
 const cumulativeOf = (line) => line.slice(1).reduce((m, p, i) => m + metres(line[i], p), 0);
 

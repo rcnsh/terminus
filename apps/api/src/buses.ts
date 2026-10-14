@@ -102,9 +102,8 @@ export interface Track {
   lon: number;
   /** When the feed last reported the bus, moved or not (ms). The track
    *  lasts TRACK_MS from this: a bus reported standing still for longer is
-   *  still where its track says. Absent on a track from before it was kept:
-   *  `at` stands in. */
-  seen?: number;
+   *  still where its track says. */
+  seen: number;
   /** Moving fixes in a row whose heading said the other way. */
   doubt: number;
   /** Since when it's been off its line while held at `along`; null on it. */
@@ -256,9 +255,6 @@ const onward = (kept: Track | null, fix: Fix, along: number, now: number, doubt 
   held,
 });
 
-/** When a track was last reported, for how long it lasts (TRACK_MS). */
-const seenAt = (t: Track) => t.seen ?? t.at;
-
 const best = <T>(xs: T[], better: (a: T, b: T) => boolean): T | null => xs.reduce<T | null>((b, x) => (b == null || better(x, b) ? x : b), null);
 
 /**
@@ -277,7 +273,7 @@ export function follow(
   const cum = cumulative(shape.line);
   const total = cum[cum.length - 1];
   const found = candidates(shape, fix);
-  const kept = track && now - seenAt(track) < TRACK_MS && now >= track.at ? track : null;
+  const kept = track && now - track.seen < TRACK_MS && now >= track.at ? track : null;
 
   if (kept) {
     // The same reading again (the feed holds a position for 15-20 s): the same answer.
@@ -426,7 +422,7 @@ export async function placeBuses(
   const byCode = new Map(graph.stops.map((s) => [s.code, s]));
   const stops = shape ? shape.stops.map((c) => byCode.get(c) ?? null) : [];
   const next: Record<string, Track> = {};
-  for (const [id, t] of Object.entries(tracks)) if (now - seenAt(t) < TRACK_MS) next[id] = t;
+  for (const [id, t] of Object.entries(tracks)) if (now - t.seen < TRACK_MS) next[id] = t;
   if (!shape) return { buses: [], tracks: next };
   const total = cumulative(shape.line).at(-1) ?? 0;
   const stopOf = (k: number | null) => (k == null ? null : { code: shape.stops[k], name: byCode.get(shape.stops[k])?.name ?? shape.stops[k] });
