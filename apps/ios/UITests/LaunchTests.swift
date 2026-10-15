@@ -1,5 +1,6 @@
 import XCTest
 
+@MainActor
 final class LaunchTests: XCTestCase {
     func testSignedInShowsTheTabs() {
         let app = XCUIApplication.terminus(signedIn: true)

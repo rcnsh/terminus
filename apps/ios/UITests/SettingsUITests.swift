@@ -3,29 +3,30 @@ import XCTest
 /// Settings, every page, against the dev stub's test account: what each
 /// shows (screenshots in light and dark, English and Chinese), and that the
 /// edits made there reach the server.
+@MainActor
 final class SettingsUITests: XCTestCase {
     /// The stub's test account is shared by every test and keeps what each
     /// changes: its profile as it was, put back after each test.
     private var saved: Data?
 
-    override func setUp() {
+    override func setUp() async throws {
         continueAfterFailure = false
         stubPost("/__stub/reset")
         let (t, _) = stubSession()
         var req = URLRequest(url: URL(string: stub + "/api/me/profile")!)
         req.setValue("Bearer \(t)", forHTTPHeaderField: "authorization")
-        saved = fetch(req)
+        saved = stubFetch(req)
         token = t
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         guard let saved, let t = token else { return }
         var put = URLRequest(url: URL(string: stub + "/api/me/profile")!)
         put.httpMethod = "PUT"
         put.setValue("Bearer \(t)", forHTTPHeaderField: "authorization")
         put.setValue("application/json", forHTTPHeaderField: "content-type")
         put.httpBody = saved
-        _ = fetch(put)
+        _ = stubFetch(put)
     }
 
     private static let pages = ["trips", "timetable", "favourites", "notifications", "language", "appearance", "devices", "feedback"]
@@ -322,7 +323,7 @@ final class SettingsUITests: XCTestCase {
         let t = token ?? ""
         var req = URLRequest(url: URL(string: stub + "/api/me/profile")!)
         req.setValue("Bearer \(t)", forHTTPHeaderField: "authorization")
-        return (try? JSONSerialization.jsonObject(with: fetch(req))) as? [String: Any] ?? [:]
+        return (try? JSONSerialization.jsonObject(with: stubFetch(req))) as? [String: Any] ?? [:]
     }
 
     private func places() -> [String] { (profile()["places"] as? [[String: Any]] ?? []).compactMap { $0["label"] as? String } }
@@ -331,14 +332,4 @@ final class SettingsUITests: XCTestCase {
 
     private func anonToken() -> String { stubAnonToken() }
 
-    private func fetch(_ req: URLRequest) -> Data {
-        let done = DispatchSemaphore(value: 0)
-        var out = Data()
-        URLSession.shared.dataTask(with: req) { d, _, _ in
-            out = d ?? Data()
-            done.signal()
-        }.resume()
-        done.wait()
-        return out
-    }
 }

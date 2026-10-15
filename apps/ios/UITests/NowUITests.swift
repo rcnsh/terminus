@@ -3,6 +3,7 @@ import XCTest
 /// Now against the dev stub: the trip, its card styles, Nearby, the search,
 /// a place's tab, Go later, Today's remove and undo, and "Is this wrong?".
 /// Screenshots in light and dark, English and Chinese.
+@MainActor
 final class NowUITests: XCTestCase {
     override func setUp() {
         continueAfterFailure = false

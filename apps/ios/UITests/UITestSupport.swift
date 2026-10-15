@@ -29,6 +29,19 @@ extension XCUIApplication {
     }
 }
 
+/// The stub's answer to `req`, waited for (empty if it didn't answer).
+func stubFetch(_ req: URLRequest) -> Data {
+    final class Box: @unchecked Sendable { var data = Data() }
+    let box = Box()
+    let done = DispatchSemaphore(value: 0)
+    URLSession.shared.dataTask(with: req) { d, _, _ in
+        box.data = d ?? Data()
+        done.signal()
+    }.resume()
+    done.wait()
+    return box.data
+}
+
 /// A fresh device session for the stub's test account.
 func stubSession() -> (String, String) {
     struct R: Decodable {
@@ -37,41 +50,24 @@ func stubSession() -> (String, String) {
     }
     var req = URLRequest(url: URL(string: stub + "/__stub/session")!)
     req.httpMethod = "POST"
-    let done = DispatchSemaphore(value: 0)
-    var out: R?
-    URLSession.shared.dataTask(with: req) { data, _, _ in
-        out = data.flatMap { try? JSONDecoder().decode(R.self, from: $0) }
-        done.signal()
-    }.resume()
-    done.wait()
-    guard let out else { fatalError("the dev stub isn't answering at \(stub)") }
+    guard let out = try? JSONDecoder().decode(R.self, from: stubFetch(req)) else { fatalError("the dev stub isn't answering at \(stub)") }
     return (out.token, out.email)
 }
 
 /// A new account without an email, set up already (a home at PGP), so the
 /// tabs show rather than the onboarding: its token.
 func stubAnonToken() -> String {
-    func fetch(_ req: URLRequest) -> Data {
-        let done = DispatchSemaphore(value: 0)
-        var out = Data()
-        URLSession.shared.dataTask(with: req) { d, _, _ in
-            out = d ?? Data()
-            done.signal()
-        }.resume()
-        done.wait()
-        return out
-    }
     var req = URLRequest(url: URL(string: stub + "/api/auth/anon")!)
     req.httpMethod = "POST"
     req.setValue("application/json", forHTTPHeaderField: "content-type")
     req.httpBody = Data(#"{"name":"iPhone","platform":"ios"}"#.utf8)
-    let t = ((try? JSONSerialization.jsonObject(with: fetch(req))) as? [String: Any])?["token"] as? String ?? ""
+    let t = ((try? JSONSerialization.jsonObject(with: stubFetch(req))) as? [String: Any])?["token"] as? String ?? ""
     var put = URLRequest(url: URL(string: stub + "/api/me/profile")!)
     put.httpMethod = "PUT"
     put.setValue("Bearer \(t)", forHTTPHeaderField: "authorization")
     put.setValue("application/json", forHTTPHeaderField: "content-type")
     put.httpBody = Data(#"{"home":{"stops":["PGP"]},"seen":["onboarding"]}"#.utf8)
-    _ = fetch(put)
+    _ = stubFetch(put)
     return t
 }
 
@@ -79,15 +75,13 @@ func stubAnonToken() -> String {
 func stubPost(_ path: String) {
     var req = URLRequest(url: URL(string: stub + path)!)
     req.httpMethod = "POST"
-    let done = DispatchSemaphore(value: 0)
-    URLSession.shared.dataTask(with: req) { _, _, _ in done.signal() }.resume()
-    done.wait()
+    _ = stubFetch(req)
 }
 
 extension XCTestCase {
     /// A screenshot kept with the test's results, and written to
     /// $TERMINUS_SHOTS/<name>.png when that's set, to look at.
-    func shot(_ name: String, _ app: XCUIApplication) {
+    @MainActor func shot(_ name: String, _ app: XCUIApplication) {
         let s = app.screenshot()
         let a = XCTAttachment(screenshot: s)
         a.name = name

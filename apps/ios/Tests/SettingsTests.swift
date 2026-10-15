@@ -102,7 +102,7 @@ final class SettingsProfileTests: XCTestCase {
         XCTAssertNil(settingsNusmodsLink(in: "no link here"))
     }
 
-    func testFeedbackCountsAsTheServerDoes() {
+    @MainActor func testFeedbackCountsAsTheServerDoes() {
         XCTAssertEqual(SettingsFeedbackPane.length("😀"), 2)
         let long = String(repeating: "😀", count: 600)
         let clipped = SettingsFeedbackPane.clipped(long)

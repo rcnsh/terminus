@@ -8,6 +8,7 @@ import XCTest
 /// Chinese. Each test puts the stub on real hours on a Wednesday at 21:30,
 /// when R1 and R2 have stopped and P has too, so a board has services
 /// running and not.
+@MainActor
 final class BusesUITests: XCTestCase {
     override func setUp() {
         continueAfterFailure = false
@@ -17,8 +18,10 @@ final class BusesUITests: XCTestCase {
         stubPost("/__stub/hours?real=1")
         stubPost("/__stub/at?t=2026-10-07T13:30:00Z")
         stubPost("/__stub/freeze")
-        // Prince George's Park.
-        XCUIDevice.shared.location = XCUILocation(location: CLLocation(latitude: 1.2913, longitude: 103.7805))
+        // Prince George's Park. XCTest calls setUp on the main thread.
+        MainActor.assumeIsolated {
+            XCUIDevice.shared.location = XCUILocation(location: CLLocation(latitude: 1.2913, longitude: 103.7805))
+        }
     }
 
     override func tearDown() {
@@ -325,12 +328,5 @@ func apiJSON(_ method: String, _ path: String, token: String?, body: [String: An
         req.setValue("application/json", forHTTPHeaderField: "content-type")
         req.httpBody = try? JSONSerialization.data(withJSONObject: body)
     }
-    let done = DispatchSemaphore(value: 0)
-    var out: [String: Any]?
-    URLSession.shared.dataTask(with: req) { data, _, _ in
-        out = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
-        done.signal()
-    }.resume()
-    done.wait()
-    return out
+    return (try? JSONSerialization.jsonObject(with: stubFetch(req))) as? [String: Any]
 }

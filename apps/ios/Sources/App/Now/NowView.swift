@@ -274,6 +274,8 @@ struct NowChip: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            // On the button VoiceOver reads, not the chip around it.
+            .accessibilityAddTraits(selected ? .isSelected : [])
             .accessibilityIdentifier(id ?? "chip.\(label)")
             if let remove {
                 Button(action: remove) {
@@ -290,7 +292,6 @@ struct NowChip: View {
         .background(selected ? inks.ink : Color.clear, in: Capsule())
         .overlay(Capsule().strokeBorder(selected ? Color.clear : inks.line.opacity(inks.inSky ? 1.6 : 1), lineWidth: 1))
         .accessibilityElement(children: .contain)
-        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 
