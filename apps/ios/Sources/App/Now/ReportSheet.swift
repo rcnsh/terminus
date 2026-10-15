@@ -216,7 +216,8 @@ struct GoLaterSheet: View {
 }
 
 /// Half an hour from now on campus, to the next five minutes: where "Go later" starts.
-func soonOnCampus(_ now: Date = Date()) -> Date {
+/// By the server's clock, which judges whether the time has passed, not this phone's.
+func soonOnCampus(_ now: Date = ServerClock.now) -> Date {
     var cal = Calendar(identifier: .gregorian)
     cal.timeZone = .campus
     let c = cal.dateComponents([.hour, .minute], from: now)
