@@ -96,13 +96,15 @@ test('up to 8 stops pinned (or as many as the profile allows), then a message an
   mock.timers.enable({ apis: ['setTimeout'] });
   const realFetch = globalThis.fetch;
   const saved = [];
+  const eight = ['COM3', 'YIH', 'UTOWN', 'KR-MRT', 'CLB', 'IT', 'LT13', 'UHC'];
   globalThis.fetch = async (url, init) => {
+    // The save is made on the server's copy, read first.
+    if (init?.method !== 'PUT') return new Response(JSON.stringify({ pinnedStops: eight.slice(0, 7) }), { headers: { etag: '"1"' } });
     saved.push(JSON.parse(init.body));
-    return new Response(init.body, { headers: { 'content-type': 'application/json' } });
+    return new Response(init.body, { headers: { 'content-type': 'application/json', etag: '"2"' } });
   };
   try {
-    const eight = ['COM3', 'YIH', 'UTOWN', 'KR-MRT', 'CLB', 'IT', 'LT13', 'UHC'];
-    P.profile.set({ pinnedStops: eight.slice(0, 7) });
+    await P.loadProfile();
     P.toastText.set(null);
     await B.togglePin('UHC');
     assert.deepEqual(P.profile.get().pinnedStops, eight);
