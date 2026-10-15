@@ -794,10 +794,22 @@ class Api(private val token: String?, private val fast: Boolean = false, private
 
     suspend fun me(): Me = Me.parse(request("GET", "/api/me"))
 
-    /** The whole profile as the server keeps it; edited and sent back whole. */
-    suspend fun profile(): JSONObject = request("GET", "/api/me/profile")
+    /** The whole profile as the server keeps it, with its version; edited and sent back whole ([saveProfile]). */
+    suspend fun profile(): Tagged {
+        var tag: String? = null
+        val json = request("GET", "/api/me/profile") { tag = it.getHeaderField("etag") }
+        return Tagged(json, tag)
+    }
 
-    suspend fun saveProfile(profile: JSONObject): JSONObject = request("PUT", "/api/me/profile", profile)
+    /**
+     * Saves the whole profile. With [ifMatch], the version it was made from, only if no other device saved since: refused with 412
+     * otherwise ([saveChanges]).
+     */
+    suspend fun saveProfile(profile: JSONObject, ifMatch: String?): Tagged {
+        var tag: String? = null
+        val json = request("PUT", "/api/me/profile", profile, ifMatch = ifMatch) { tag = it.getHeaderField("etag") }
+        return Tagged(json, tag)
+    }
 
     /** Imports a NUSMods share link; the server replaces the imported classes only if it all worked. */
     suspend fun import(share: String): ImportResult = parsing {
@@ -1063,6 +1075,7 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         path: String,
         body: JSONObject? = null,
         ifNoneMatch: String? = null,
+        ifMatch: String? = null,
         seen: ((HttpURLConnection) -> Unit)? = null,
     ): JSONObject =
         withContext(Dispatchers.IO) {
@@ -1089,7 +1102,7 @@ class Api(private val token: String?, private val fast: Boolean = false, private
                             // Any reply counts as the server answering (an error status,
                             // a 304 or a body this version can't read too), as on the Mac.
                             return@withTimeout blocking(conn) {
-                                exchange(conn, method, path, body, ifNoneMatch, seen) { Servers.answered(base) }
+                                exchange(conn, method, path, body, ifNoneMatch, ifMatch, seen) { Servers.answered(base) }
                             }
                         } catch (e: IOException) {
                             if (i == tries.lastIndex || !Servers.unreached(e, method)) throw e
@@ -1110,6 +1123,7 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         path: String,
         body: JSONObject?,
         ifNoneMatch: String?,
+        ifMatch: String?,
         seen: ((HttpURLConnection) -> Unit)?,
         reached: () -> Unit,
     ): JSONObject {
@@ -1131,6 +1145,7 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         conn.setRequestProperty("accept-language", L.header())
         token?.let { conn.setRequestProperty("authorization", "Bearer $it") }
         ifNoneMatch?.let { conn.setRequestProperty("if-none-match", it) }
+        ifMatch?.let { conn.setRequestProperty("if-match", it) }
         if (body != null) {
             conn.doOutput = true
             conn.setRequestProperty("content-type", "application/json")
