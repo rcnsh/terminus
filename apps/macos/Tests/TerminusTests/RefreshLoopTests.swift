@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import Terminus
 
 /// How long the Mac's refresh loop waits: `AppModel.nextDelay`.
@@ -8,9 +9,9 @@ private let now = Date(timeIntervalSince1970: 1_790_000_000)
 private func answer(departsIn: TimeInterval? = nil, changesIn: TimeInterval? = nil, mode: String = "trip") throws -> NextAnswer {
     let iso = { (s: TimeInterval) in "\"\(ISO8601DateFormatter().string(from: now.addingTimeInterval(s)))\"" }
     let json = """
-    {"label":"D2 · 4 min","quality":"live","mode":"\(mode)","departsAt":\(departsIn.map(iso) ?? "null"),
-     "card":{"kind":"trip","nextChangeAt":\(changesIn.map(iso) ?? "null")}}
-    """
+        {"label":"D2 · 4 min","quality":"live","mode":"\(mode)","departsAt":\(departsIn.map(iso) ?? "null"),
+         "card":{"kind":"trip","nextChangeAt":\(changesIn.map(iso) ?? "null")}}
+        """
     return try JSONDecoder().decode(NextAnswer.self, from: Data(json.utf8))
 }
 

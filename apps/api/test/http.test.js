@@ -52,7 +52,12 @@ test('security headers: every response; CSP on HTML only; /docs may load unpkg',
   assert.match(page.headers.get('content-security-policy'), /frame-ancestors 'none'/);
   assert.doesNotMatch(page.headers.get('content-security-policy'), /unpkg/);
   // Cloudflare adds the Web Analytics beacon to every page; it must load and report.
-  const csp = Object.fromEntries(page.headers.get('content-security-policy').split('; ').map((d) => [d.split(' ')[0], d]));
+  const csp = Object.fromEntries(
+    page.headers
+      .get('content-security-policy')
+      .split('; ')
+      .map((d) => [d.split(' ')[0], d]),
+  );
   assert.match(csp['script-src'], / https:\/\/static\.cloudflareinsights\.com( |$)/);
   assert.match(csp['connect-src'], / https:\/\/cloudflareinsights\.com( |$)/);
   const docs = withSecurityHeaders(new Response('<p>', { headers: { 'content-type': 'text/html' } }), '/docs');
@@ -64,7 +69,10 @@ test('the CSP: blob: workers only on the timelapse page, whose video encoder sta
   const { readFile } = await import('node:fs/promises');
   const workers = (path) => {
     const page = withSecurityHeaders(new Response('<p>', { headers: { 'content-type': 'text/html' } }), path);
-    return page.headers.get('content-security-policy').split('; ').find((d) => d.startsWith('worker-src '));
+    return page.headers
+      .get('content-security-policy')
+      .split('; ')
+      .find((d) => d.startsWith('worker-src '));
   };
   for (const path of ['/', '/app/', '/account/', '/admin/', '/docs', '/status/']) {
     assert.equal(workers(path), "worker-src 'self'", path);
@@ -73,7 +81,11 @@ test('the CSP: blob: workers only on the timelapse page, whose video encoder sta
   // The rest of the timelapse page's policy is the site's.
   const site = withSecurityHeaders(new Response('<p>', { headers: { 'content-type': 'text/html' } }), '/app/');
   const tl = withSecurityHeaders(new Response('<p>', { headers: { 'content-type': 'text/html' } }), '/admin/timelapse/');
-  const others = (h) => h.get('content-security-policy').split('; ').filter((d) => !d.startsWith('worker-src '));
+  const others = (h) =>
+    h
+      .get('content-security-policy')
+      .split('; ')
+      .filter((d) => !d.startsWith('worker-src '));
   assert.deepEqual(others(tl.headers), others(site.headers));
 
   // Why: MapLibre starts its worker from its own file when that file is on
@@ -113,7 +125,11 @@ test('the CSP allows the CDNs only for the files the site loads from them, not w
   const urls = [...html.matchAll(/(?:src|href)="(https:\/\/unpkg\.com\/[^"]+)"/g)].map((m) => m[1]);
   assert.ok(urls.length >= 2);
   const allowed = sources(docs.headers).filter((x) => x.startsWith('https://unpkg.com/'));
-  for (const u of urls) assert.ok(allowed.some((a) => u.startsWith(a)), u);
+  for (const u of urls)
+    assert.ok(
+      allowed.some((a) => u.startsWith(a)),
+      u,
+    );
 });
 
 test('landmarks: every stop that serves one counts; a stop is itself', () => {
@@ -139,15 +155,17 @@ test('timedFetch: a host that stalls mid-body, hangs or cannot be reached fails 
   try {
     // Headers at once, then a body that never ends: only the abort ends it.
     globalThis.fetch = async (_url, init) =>
-      new Response(new ReadableStream({
-        start(c) {
-          const keep = setTimeout(() => {}, 30_000);
-          init.signal.addEventListener('abort', () => {
-            clearTimeout(keep);
-            c.error(init.signal.reason);
-          });
-        },
-      }));
+      new Response(
+        new ReadableStream({
+          start(c) {
+            const keep = setTimeout(() => {}, 30_000);
+            init.signal.addEventListener('abort', () => {
+              clearTimeout(keep);
+              c.error(init.signal.reason);
+            });
+          },
+        }),
+      );
     await assert.rejects(timedFetch('feed', 'https://x.test/', {}, 50), (err) => {
       assert.ok(err instanceof UpstreamUnreachable);
       assert.equal(err.timedOut, true);
@@ -157,11 +175,18 @@ test('timedFetch: a host that stalls mid-body, hangs or cannot be reached fails 
 
     // workerd's own errors for a refused connection and a failed DNS lookup
     // are plain Errors, not TypeErrors as in Node.
-    for (const make of [() => new Error('Network connection lost.'), () => new Error('internal error; reference = abc'), () => new TypeError('fetch failed')]) {
+    for (const make of [
+      () => new Error('Network connection lost.'),
+      () => new Error('internal error; reference = abc'),
+      () => new TypeError('fetch failed'),
+    ]) {
       globalThis.fetch = async () => {
         throw make();
       };
-      await assert.rejects(timedFetch('feed', 'https://x.test/', {}, 50), (err) => err instanceof UpstreamUnreachable && !err.timedOut && /feed unreachable/.test(err.message));
+      await assert.rejects(
+        timedFetch('feed', 'https://x.test/', {}, 50),
+        (err) => err instanceof UpstreamUnreachable && !err.timedOut && /feed unreachable/.test(err.message),
+      );
     }
 
     // An answer, error statuses included, comes back whole and readable.

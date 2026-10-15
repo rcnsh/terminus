@@ -53,11 +53,28 @@ export function movedPage(req: Request, env: Env): Response | null {
   if (to === undefined || to !== siteOrigin(env)) return null;
   if (!(req.headers.get('accept') ?? '').includes('text/html')) return null;
   if (STAYS.some((p) => url.pathname === p || url.pathname.startsWith(p))) return null;
-  return new Response(null, { status: 301, headers: { location: `${to}${url.pathname}${url.search}`, 'cache-control': 'public, max-age=86400' } });
+  return new Response(null, {
+    status: 301,
+    headers: { location: `${to}${url.pathname}${url.search}`, 'cache-control': 'public, max-age=86400' },
+  });
 }
 
 /** The API's old paths, before it moved under /api (3.0). */
-const OLD_API = new Set(['/me', '/next', '/trip', '/arrivals', '/buses', '/line', '/campus', '/stops/pairs', '/health', '/status.json', '/admin/stats', '/openapi.json', '/pair/check']);
+const OLD_API = new Set([
+  '/me',
+  '/next',
+  '/trip',
+  '/arrivals',
+  '/buses',
+  '/line',
+  '/campus',
+  '/stops/pairs',
+  '/health',
+  '/status.json',
+  '/admin/stats',
+  '/openapi.json',
+  '/pair/check',
+]);
 const OLD_API_UNDER = ['/me/', '/auth/', '/timelapse/'];
 
 /**
@@ -72,9 +89,9 @@ export function movedApi(req: Request, url: URL): Response | null {
   const path = url.pathname;
   const reading = req.method === 'GET' || req.method === 'HEAD';
   const old =
-    OLD_API.has(path)
-    || (path === '/pair' && !reading)
-    || (OLD_API_UNDER.some((p) => path.startsWith(p)) && path !== '/auth/verify' && path !== '/auth/approve');
+    OLD_API.has(path) ||
+    (path === '/pair' && !reading) ||
+    (OLD_API_UNDER.some((p) => path.startsWith(p)) && path !== '/auth/verify' && path !== '/auth/approve');
   if (!old) return null;
   if (req.headers.has('x-terminus-client')) return json(UPDATE_REQUIRED, 426);
   return new Response(null, { status: 308, headers: { location: `/api${path}${url.search}`, 'cache-control': 'no-store', ...CORS } });

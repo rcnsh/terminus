@@ -130,6 +130,7 @@ pnpm install                          # Node 24 as in CI (22.18 or later works),
 pnpm test                             # API tests: Node's runner, no network, no keys
 pnpm check                            # tests + tsc --noEmit (what CI's api job runs)
 pnpm lint                             # oxlint over API, tests, scripts, website JS; warnings fail
+pnpm format                           # oxfmt: JS, TS, JSON (pnpm format:check in CI)
 node apps/api/scripts/dev-stub.mjs    # local Worker on :8787 with a fake feed and fake buses
 ```
 
@@ -139,7 +140,16 @@ node apps/api/scripts/dev-stub.mjs    # local Worker on :8787 with a fake feed a
 - CI's `api` job also runs `pnpm exec cf deploy --dry-run` in `apps/api` to
   catch modules workerd won't load.
 - Website JS: CI runs `node --check` on every file in `apps/web/public`.
-- Android (CI): `./gradlew :app:lintStableDebug :app:testStableDebugUnitTest :app:compileBetaDebugKotlin`,
+- Formatting: Oxfmt (`.oxfmtrc.json`), swift-format (`.swift-format`) and
+  ktfmt (`apps/android/.editorconfig`), all at 140 columns. `pnpm format`
+  covers JS/TS/JSON; `pnpm format:swift` and `pnpm format:kotlin` the apps
+  (`pnpm format:all` for the three). CI checks each one. The reformat
+  commit is in `.git-blame-ignore-revs`. HTML and CSS are left as written:
+  the Worker fills pages by their exact markup, the website translates
+  page text keyed by it, and tests read CSS rule by rule. Templates inside
+  JS (htm's html templates) aren't touched either, and neither is
+  `cloudflare.config.ts`, which release-beta.sh and a test read as text.
+- Android (CI): `./gradlew :app:ktfmtCheck :app:lintStableDebug :app:testStableDebugUnitTest :app:compileBetaDebugKotlin`,
   then `:app:assembleStableRelease :app:assembleBetaRelease` (R8 and
   resource shrinking, unsigned without the keystore) in `apps/android`
   (Java 21).

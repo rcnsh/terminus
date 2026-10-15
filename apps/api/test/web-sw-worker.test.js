@@ -28,7 +28,13 @@ function memoryCache() {
     kept,
     async match(req, opts = {}) {
       const res = kept.get(keyOf(req));
-      if (res && !opts.ignoreVary && /accept-language/i.test(res.headers.get('vary') ?? '') && said(req, 'accept-language') !== asked.get(keyOf(req))) return undefined;
+      if (
+        res &&
+        !opts.ignoreVary &&
+        /accept-language/i.test(res.headers.get('vary') ?? '') &&
+        said(req, 'accept-language') !== asked.get(keyOf(req))
+      )
+        return undefined;
       return res?.clone();
     },
     async put(req, res) {
@@ -122,7 +128,8 @@ function worker({ fetch = () => Promise.reject(new TypeError('offline')), langua
   return { ctx, caches, stores, listeners, dispatch, get: (name) => vm.runInContext(name, ctx) };
 }
 
-const json = (body, init = {}) => new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' }, ...init });
+const json = (body, init = {}) =>
+  new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' }, ...init });
 /** [p], or a failure after a while: a worker that waits for ever fails the test rather than hanging it. */
 function within(p, ms = 2_000) {
   let timer;
@@ -194,7 +201,12 @@ test('each address gets its way of fetching, and the live ones are left alone', 
 test('soonest: the network when it answers in time, else the kept copy, else the network after all', async () => {
   const { ctx } = worker();
   const wait = 20;
-  const event = () => ({ waits: [], waitUntil(p) { this.waits.push(p); } });
+  const event = () => ({
+    waits: [],
+    waitUntil(p) {
+      this.waits.push(p);
+    },
+  });
   const late = (res, ms) => new Promise((ok) => setTimeout(ok, ms, res));
   const copy = async () => new Response('kept');
   const none = async () => undefined;
@@ -245,7 +257,9 @@ test('/api/me/next: kept with when it was fetched, and served after SLOW_MS when
 test('/api/me/next: one copy per place, stop, clock and language, never one for another', async () => {
   let n = 0;
   let online = true;
-  const w = worker({ fetch: (req) => (online ? Promise.resolve(json({ n: ++n, url: req.url })) : Promise.reject(new TypeError('offline'))) });
+  const w = worker({
+    fetch: (req) => (online ? Promise.resolve(json({ n: ++n, url: req.url })) : Promise.reject(new TypeError('offline'))),
+  });
   const en = { headers: { 'accept-language': 'en' } };
   await w.dispatch('/api/me/next?lat=1.3&lon=103.7&acc=10', en).responded;
   await w.dispatch('/api/me/next?to=COM3', en).responded;
@@ -274,7 +288,14 @@ test('/api/me/next: a server error gives the kept copy; a 401 empties the kept r
 });
 
 test('signing in or out empties the kept replies, and a reply on its way then is not kept', async () => {
-  for (const [method, path] of [['POST', '/api/auth/logout'], ['POST', '/api/auth/code'], ['POST', '/auth/verify'], ['POST', '/api/auth/anon/web'], ['DELETE', '/api/me/sessions'], ['DELETE', '/api/me']]) {
+  for (const [method, path] of [
+    ['POST', '/api/auth/logout'],
+    ['POST', '/api/auth/code'],
+    ['POST', '/auth/verify'],
+    ['POST', '/api/auth/anon/web'],
+    ['DELETE', '/api/me/sessions'],
+    ['DELETE', '/api/me'],
+  ]) {
     let hang = null;
     const w = worker({ fetch: (req) => (hang && req.url.includes('/api/me/next') ? hang.promise : Promise.resolve(json({ who: 'a' }))) });
     await w.dispatch('/api/me/next').responded;
@@ -296,18 +317,23 @@ test('signing in or out empties the kept replies, and a reply on its way then is
 
 test("the timelapse's video encoder is never kept, nor answered by the worker", async () => {
   let fetched = 0;
-  const w = worker({ fetch: () => {
+  const w = worker({
+    fetch: () => {
       fetched++;
       return Promise.resolve(new Response('x'));
-    }, });
+    },
+  });
   const { responded } = w.dispatch('/vendor/mediabunny@1.61.3/mediabunny.min.mjs');
   assert.equal(responded, null);
   assert.equal(fetched, 0);
   assert.deepEqual(await w.caches.keys(), []);
 });
 
-test("installing keeps every app file, and Chinese only for a browser that reads it", async () => {
-  for (const [language, withZh] of [['en-SG', false], ['zh-CN', true]]) {
+test('installing keeps every app file, and Chinese only for a browser that reads it', async () => {
+  for (const [language, withZh] of [
+    ['en-SG', false],
+    ['zh-CN', true],
+  ]) {
     const w = worker({ fetch: (req) => Promise.resolve(new Response(new URL(req.url).pathname)), language });
     const waits = [];
     w.listeners.install({ waitUntil: (p) => waits.push(p) });
@@ -318,7 +344,7 @@ test("installing keeps every app file, and Chinese only for a browser that reads
   }
 });
 
-test('the map\'s versioned files: kept per version, and a retry is the same file', async () => {
+test("the map's versioned files: kept per version, and a retry is the same file", async () => {
   const asked = [];
   const w = worker({ fetch: async (req) => (asked.push(new URL(req.url).pathname + new URL(req.url).search), new Response('glyphs')) });
   const glyphs = '/map/fonts/Noto%20Sans%20Regular/0-255.pbf';
@@ -336,7 +362,12 @@ test('the map\'s versioned files: kept per version, and a retry is the same file
 
 test('offline, the campus kept in the other language is used rather than no map', async () => {
   let online = true;
-  const w = worker({ fetch: async () => (online ? json({ stops: [] }, { headers: { 'content-type': 'application/json', vary: 'accept-language' } }) : Promise.reject(new TypeError('offline'))) });
+  const w = worker({
+    fetch: async () =>
+      online
+        ? json({ stops: [] }, { headers: { 'content-type': 'application/json', vary: 'accept-language' } })
+        : Promise.reject(new TypeError('offline')),
+  });
   const first = w.dispatch('/api/campus', { headers: { 'accept-language': 'en' } });
   await within(first.responded);
   await Promise.all(first.waits);

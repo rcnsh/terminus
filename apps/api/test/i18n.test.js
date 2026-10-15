@@ -28,7 +28,10 @@ test('?lang= wins over the header; the profile wins over both', () => {
   assert.equal(langOfRequest(req), 'en');
   assert.equal(langOfRequest(new Request('https://x.test/api/next', { headers: { 'accept-language': 'zh-CN' } })), 'zh');
   // The website's choice, for the pages the Worker serves itself.
-  assert.equal(langOfRequest(new Request('https://x.test/auth/verify', { headers: { 'accept-language': 'en', cookie: 'a=1; terminus-lang=zh' } })), 'zh');
+  assert.equal(
+    langOfRequest(new Request('https://x.test/auth/verify', { headers: { 'accept-language': 'en', cookie: 'a=1; terminus-lang=zh' } })),
+    'zh',
+  );
   withLang('en', () => {
     useProfileLang('auto');
     assert.equal(lang(), 'en', 'auto keeps the device language');
@@ -79,11 +82,7 @@ test('every public holiday in the calendar has a Chinese name', () => {
 
 // Errors worded with a value in them: developer-facing checks of a malformed
 // profile or request, which the apps never send. Kept English.
-const DEV_TEMPLATES = [
-  /^\$\{field\}/,
-  /^home\.stops must/,
-  /^(once|usual|places)(\[|\s)/,
-];
+const DEV_TEMPLATES = [/^\$\{field\}/, /^home\.stops must/, /^(once|usual|places)(\[|\s)/];
 
 test('every error string in the API has a Chinese translation', () => {
   const dir = new URL('../src/', import.meta.url);
@@ -143,8 +142,17 @@ test('Chinese spacing: Latin text keeps its space, two Chinese words touch', () 
 test('json() says the error in the request language', async () => {
   const body = await withLang('zh', () => json({ error: 'sign in first' }, 401)).json();
   assert.equal(body.error, '请先登录');
-  assert.equal(await json({ error: 'sign in first' }, 401).json().then((b) => b.error), 'sign in first');
-  assert.equal(withLang('zh', () => errorText('something new')), 'something new', 'unknown errors stay English');
+  assert.equal(
+    await json({ error: 'sign in first' }, 401)
+      .json()
+      .then((b) => b.error),
+    'sign in first',
+  );
+  assert.equal(
+    withLang('zh', () => errorText('something new')),
+    'something new',
+    'unknown errors stay English',
+  );
 });
 
 test('profile lang: auto, en or zh; auto by default', () => {

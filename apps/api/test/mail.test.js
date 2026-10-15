@@ -41,7 +41,8 @@ test('the device-added email links to the account page', async () => {
 });
 
 test('an operator email keeps commands and responses in a box, as written', async () => {
-  const text = 'The NUS bus feed stopped answering.\n\nTo undo it, from apps/api:\n  pnpm exec cf kv keys delete x\n\nNUS\'s full response:\n{"code":"401"}';
+  const text =
+    'The NUS bus feed stopped answering.\n\nTo undo it, from apps/api:\n  pnpm exec cf kv keys delete x\n\nNUS\'s full response:\n{"code":"401"}';
   const html = await operatorHtml({ origin, beta: false, subject: 'terminus: NUS bus feed is down', text });
   assert.match(html, /<h1[^>]*>NUS bus feed is down<\/h1>/);
   assert.match(html, />To undo it, from apps\/api:<\/p><pre[^>]*>pnpm exec cf kv keys delete x<\/pre>/);
@@ -50,8 +51,20 @@ test('an operator email keeps commands and responses in a box, as written', asyn
 
 test('a stop suggestion shows the building, the stop and the entry to paste, with their words as text', async () => {
   const html = await feedbackHtml({
-    origin, beta: false, id: 'fb_1', what: 'A better stop for a building', from: 'Web', at: Date.parse('2026-10-11T03:05:00Z'),
-    reason: null, note: 'Use <EA>', details: [['Building', 'E4'], ['The stop they use', 'EA (EA)']], entry: '"E4": {"stops":["EA"]}', withAnswer: false,
+    origin,
+    beta: false,
+    id: 'fb_1',
+    what: 'A better stop for a building',
+    from: 'Web',
+    at: Date.parse('2026-10-11T03:05:00Z'),
+    reason: null,
+    note: 'Use <EA>',
+    details: [
+      ['Building', 'E4'],
+      ['The stop they use', 'EA (EA)'],
+    ],
+    entry: '"E4": {"stops":["EA"]}',
+    withAnswer: false,
   });
   assert.match(html, /<h1[^>]*>A better stop for a building<\/h1>/);
   assert.match(html, /Web · 11 Oct 2026, 11:05 Singapore time/);
@@ -63,7 +76,19 @@ test('a stop suggestion shows the building, the stop and the entry to paste, wit
 });
 
 test('a wrong answer shows the reason they picked', async () => {
-  const html = await feedbackHtml({ origin, beta: false, id: 'fb_2', what: 'A wrong answer', from: 'Android 3.1.0', at: 0, reason: 'The bus never came', note: '', details: [], entry: null, withAnswer: true });
+  const html = await feedbackHtml({
+    origin,
+    beta: false,
+    id: 'fb_2',
+    what: 'A wrong answer',
+    from: 'Android 3.1.0',
+    at: 0,
+    reason: 'The bus never came',
+    note: '',
+    details: [],
+    entry: null,
+    withAnswer: true,
+  });
   assert.match(html, /<span[^>]*>The bus never came<\/span>/);
   assert.match(html, /Who sent it and the answer they saw are on the dashboard/);
 });

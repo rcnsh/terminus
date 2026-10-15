@@ -17,8 +17,8 @@ test('pace: normal is the old 1.3 m/s; slow and fast either side', () => {
 
 test('a walk to a stop is never shorter than the straight line', () => {
   const s = stop('COM3');
-  const straight = haversineM(1.2950, 103.7740, s.lat, s.lon);
-  const walked = footM(1.2950, 103.7740, s);
+  const straight = haversineM(1.295, 103.774, s.lat, s.lon);
+  const walked = footM(1.295, 103.774, s);
   assert.ok(walked >= straight);
   assert.equal(walked, straight * (walks.detour.COM3 ?? 1));
 });

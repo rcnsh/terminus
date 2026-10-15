@@ -1,0 +1,6 @@
+root = true
+
+# ktfmt (./gradlew ktfmtFormat) reads this: its kotlinlang style, at the
+# width the rest of the repo formats to.
+[*.{kt,kts}]
+max_line_length = 140

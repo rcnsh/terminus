@@ -31,8 +31,12 @@ test("the page's sky has app.css's colours, on a light page and a dark one", () 
   const darkNight = vars(':root[data-theme="dark"] body.sky');
   for (const phase of PHASES) {
     const light = phase === 'night' ? night : { ...night, ...vars(`body.sky-${phase}`) };
-    const dark = phase === 'night' ? { ...night, ...darkNight } : { ...night, ...darkNight, ...vars(`:root[data-theme="dark"] body.sky-${phase}`) };
-    for (const [theme, want] of [['light', light], ['dark', dark]]) {
+    const dark =
+      phase === 'night' ? { ...night, ...darkNight } : { ...night, ...darkNight, ...vars(`:root[data-theme="dark"] body.sky-${phase}`) };
+    for (const [theme, want] of [
+      ['light', light],
+      ['dark', dark],
+    ]) {
       const got = PAGE_SKIES[theme][phase];
       assert.deepEqual(got.sky, [want.s0, want.s1, want.s2, want.s3], `${theme} ${phase} sky`);
       assert.deepEqual([got.far, got.tree, got.city], [want['h-far'], want['h-tree'], want['h-city']], `${theme} ${phase} horizon`);

@@ -54,7 +54,12 @@ export async function fingerprintOf(platform: string, type: string, message: str
     .map((l) => l.trim())
     .filter(Boolean)
     .slice(0, FINGERPRINT_FRAMES)
-    .map((l) => l.replace(/:\d+(:\d+)?/g, '').replace(/\b0x[0-9a-f]+\b/gi, '').replace(/\+ ?\d+\b/g, ''));
+    .map((l) =>
+      l
+        .replace(/:\d+(:\d+)?/g, '')
+        .replace(/\b0x[0-9a-f]+\b/gi, '')
+        .replace(/\+ ?\d+\b/g, ''),
+    );
   // With no stack, the message with its numbers blanked, so "index 3" and "index 4" are one.
   const basis = [platform, type, ...(frames.length ? frames : [message.replace(/\d+/g, '#')])].join('\n');
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(basis));

@@ -5,17 +5,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.core.content.edit
 
 /**
- * How the card and the widgets draw a trip by bus or on foot (`card.journey`),
- * chosen in Settings › Appearance, for this phone only. Each leads with when
- * to leave:
+ * How the card and the widgets draw a trip by bus or on foot (`card.journey`), chosen in Settings › Appearance, for this phone only. Each
+ * leads with when to leave:
  *
- * - Steps: the trip as a line diagram down the card, as on a bus's route
- *   map: the walk dotted, the ride in the bus's colour, each point with its
- *   time. The default.
- * - Route: a line across, from you to the stop to where you're going, with
- *   the times under each point: the whole trip at a glance.
- * - Ticket: the bus first, as a badge in its colour (what you look for on the
- *   road), then when to leave and when you get there.
+ * - Steps: the trip as a line diagram down the card, as on a bus's route map: the walk dotted, the ride in the bus's colour, each point
+ *   with its time. The default.
+ * - Route: a line across, from you to the stop to where you're going, with the times under each point: the whole trip at a glance.
+ * - Ticket: the bus first, as a badge in its colour (what you look for on the road), then when to leave and when you get there.
  */
 object CardStyle {
     const val ROUTE = "route"
@@ -43,9 +39,10 @@ object CardStyle {
         chosen.value = style
     }
 
-    fun name(style: String) = when (style) {
-        TICKET -> R.string.card_style_ticket
-        STEPS -> R.string.card_style_steps
-        else -> R.string.card_style_route
-    }
+    fun name(style: String) =
+        when (style) {
+            TICKET -> R.string.card_style_ticket
+            STEPS -> R.string.card_style_steps
+            else -> R.string.card_style_route
+        }
 }

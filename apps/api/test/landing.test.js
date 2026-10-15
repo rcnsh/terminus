@@ -16,17 +16,20 @@ const ASSETS = {
   async fetch(req) {
     if (new URL(req.url).pathname !== '/') return new Response('not found', { status: 404 });
     if (req.headers.get('if-none-match')) return new Response(null, { status: 304 });
-    return new Response(INDEX, { headers: { 'content-type': 'text/html; charset=utf-8', etag: '"abc"', 'cache-control': 'public, max-age=0, must-revalidate' } });
+    return new Response(INDEX, {
+      headers: { 'content-type': 'text/html; charset=utf-8', etag: '"abc"', 'cache-control': 'public, max-age=0, must-revalidate' },
+    });
   },
 };
-const downloads = (latest) => makeBucket(async (key) => (key === 'latest.json' && latest ? new TextEncoder().encode(JSON.stringify(latest)) : null));
+const downloads = (latest) =>
+  makeBucket(async (key) => (key === 'latest.json' && latest ? new TextEncoder().encode(JSON.stringify(latest)) : null));
 
 test('landing: index.html still has the markup the Worker fills', () => {
   for (const mark of ['<span id="version"></span>', '<span id="dl-version"></span>', 'id="account-link">Sign in</a>']) {
     assert.ok(INDEX.includes(mark), mark);
   }
   assert.equal(INDEX.split(APK_BUTTON).length - 1, 2, 'the Android button, at the top and the end');
-  assert.match(INDEX, /<li><strong>Android:<\/strong>/, 'the APK\'s install step');
+  assert.match(INDEX, /<li><strong>Android:<\/strong>/, "the APK's install step");
 });
 
 test('landing: with a Google Play page, every Android link goes there', () => {
@@ -36,7 +39,7 @@ test('landing: with a Google Play page, every Android link goes there', () => {
   assert.ok(out.includes('src="/assets/badges/google-play.png"') && out.includes('src="/assets/badges/google-play-zh.png"'));
   assert.ok(!out.includes('/download/android'), 'nothing offers the APK');
   assert.ok(!out.includes('<strong>Android:</strong>'), 'no APK install step');
-  assert.ok(out.includes('<strong>Mac:</strong>'), 'the Mac\'s step stays');
+  assert.ok(out.includes('<strong>Mac:</strong>'), "the Mac's step stays");
   for (const bad of ['https://example.com/', 'https://play.google.com/store/apps/details?id=x"><script>', 'javascript:alert(1)']) {
     assert.equal(fillLanding(INDEX, { version: null, signedIn: false, play: bad }), INDEX, `${bad} is not a Play page`);
   }
@@ -50,20 +53,27 @@ test('landing: the version and Account are in the page as sent', () => {
   assert.equal(fillLanding(INDEX, { version: null, signedIn: false }), INDEX, 'nothing known: the page as written');
   assert.equal(fillLanding(INDEX, { version: '2.4.2"><script>', signedIn: false }), INDEX, 'only a real version goes in');
   assert.ok(fillLanding(INDEX, { version: '2.5.0-beta.3', signedIn: false }).includes('Version 2.5.0-beta.3.'), 'a beta version goes in');
-  for (const v of ['2.4', '2.4.2-Beta', '2.4.2-beta.x', ' 2.4.2']) assert.equal(fillLanding(INDEX, { version: v, signedIn: false }), INDEX, `${v} is not a release version`);
+  for (const v of ['2.4', '2.4.2-Beta', '2.4.2-beta.x', ' 2.4.2'])
+    assert.equal(fillLanding(INDEX, { version: v, signedIn: false }), INDEX, `${v} is not a release version`);
 });
 
-test('landing: signed in by a live session only, never the file\'s own 304, private', async () => {
+test("landing: signed in by a live session only, never the file's own 304, private", async () => {
   const db = makeD1();
   const user = await ensureUser(db, 'you@u.nus.edu', NOW);
   const token = await openSession(db, user.id, 'web', null, NOW);
   const env = { DB: db, DOWNLOADS: downloads({ version: '2.4.2' }) };
-  const get = (cookie) => landingPage(new Request('https://x.test/', { headers: { accept: 'text/html', 'if-none-match': '"abc"', ...(cookie ? { cookie } : {}) } }), ASSETS, env, NOW);
+  const get = (cookie) =>
+    landingPage(
+      new Request('https://x.test/', { headers: { accept: 'text/html', 'if-none-match': '"abc"', ...(cookie ? { cookie } : {}) } }),
+      ASSETS,
+      env,
+      NOW,
+    );
 
   const signedIn = await get(`${SESSION_COOKIE}=${token}`);
   assert.equal(signedIn.status, 200);
   assert.equal(signedIn.headers.get('cache-control'), 'private, no-cache');
-  assert.match(signedIn.headers.get('etag'), /^W\/"[0-9a-f]{24}"$/, 'the page\'s own ETag, not the file\'s');
+  assert.match(signedIn.headers.get('etag'), /^W\/"[0-9a-f]{24}"$/, "the page's own ETag, not the file's");
   const html = await signedIn.text();
   assert.ok(html.includes('id="account-link">Account</a>'));
   assert.ok(html.includes('>Version 2.4.2.</span>'));
@@ -84,7 +94,8 @@ test('landing: a copy that is still what would be sent gets a 304; a change to a
   const token = await openSession(db, user.id, 'web', null, NOW);
   const cookie = `${SESSION_COOKIE}=${token}`;
   const env = { DB: db, DOWNLOADS: downloads({ version: '2.4.2' }) };
-  const get = (headers = {}, e = env, now = NOW) => landingPage(new Request('https://x.test/', { headers: { accept: 'text/html', ...headers } }), ASSETS, e, now);
+  const get = (headers = {}, e = env, now = NOW) =>
+    landingPage(new Request('https://x.test/', { headers: { accept: 'text/html', ...headers } }), ASSETS, e, now);
 
   const first = await get({ cookie });
   const etag = first.headers.get('etag');

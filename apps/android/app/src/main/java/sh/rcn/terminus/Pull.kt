@@ -35,7 +35,14 @@ enum class PullOutcome {
 }
 
 /** The words in the pill, from the first pull to how it went. */
-enum class PullHint { Pull, LetGo, Checking, Updated, UpToDate, Failed }
+enum class PullHint {
+    Pull,
+    LetGo,
+    Checking,
+    Updated,
+    UpToDate,
+    Failed,
+}
 
 object Pull {
     /** How far the sky stretches (dp) before letting go asks again: the bus is at the stop. */
@@ -54,8 +61,8 @@ object Pull {
     const val LEAD = 0.12f
 
     /**
-     * An answer younger than this isn't asked for again: the server keeps
-     * arrivals for 15 s (TTL.arrivalsMs), so asking sooner gets the same.
+     * An answer younger than this isn't asked for again: the server keeps arrivals for 15 s (TTL.arrivalsMs), so asking sooner gets the
+     * same.
      */
     const val FRESH_MS = 15_000L
 
@@ -87,18 +94,18 @@ object Pull {
     fun shouldFetch(lastOkMs: Long?, nowMs: Long): Boolean = lastOkMs == null || nowMs - lastOkMs !in 0 until FRESH_MS
 
     /**
-     * The pill's "next update in 9 s" for an [PullOutcome.UpToDate] pull:
-     * whole seconds until [atMs], when the screen's timed refresh brings new
-     * times, at least 1; null with none due (or one already past).
+     * The pill's "next update in 9 s" for an [PullOutcome.UpToDate] pull: whole seconds until [atMs], when the screen's timed refresh
+     * brings new times, at least 1; null with none due (or one already past).
      */
     fun inS(atMs: Long?, nowMs: Long): Int? = atMs?.takeIf { it > nowMs }?.let { ((it - nowMs + 999) / 1000).toInt().coerceAtLeast(1) }
 
     /** How a pull went: whether it asked, and whether the answer came. */
-    fun outcome(fetched: Boolean, ok: Boolean): PullOutcome = when {
-        !fetched -> PullOutcome.UpToDate
-        ok -> PullOutcome.Updated
-        else -> PullOutcome.Failed
-    }
+    fun outcome(fetched: Boolean, ok: Boolean): PullOutcome =
+        when {
+            !fetched -> PullOutcome.UpToDate
+            ok -> PullOutcome.Updated
+            else -> PullOutcome.Failed
+        }
 
     /** How long a refresh shows at least, from letting go. */
     fun minShowMs(outcome: PullOutcome): Long = if (outcome == PullOutcome.UpToDate) QUICK_MS else MIN_SHOW_MS
@@ -110,8 +117,7 @@ object Pull {
     fun armed(pull: Float): Boolean = pull >= ARM
 
     /** The bus's x for [progress]: from [start], easing into [stop] as the stretch nears [ARM]. */
-    fun busX(progress: Float, start: Float, stop: Float): Float =
-        start + (stop - start) * (1 - (1 - progress.coerceIn(0f, 1f)).pow(1.6f))
+    fun busX(progress: Float, start: Float, stop: Float): Float = start + (stop - start) * (1 - (1 - progress.coerceIn(0f, 1f)).pow(1.6f))
 
     /** The pill's opacity: there once there's room for it, and all the while it waits. */
     fun hintAlpha(pull: Float, held: Boolean): Float = if (held) 1f else ((pull - 22f) / 22f).coerceIn(0f, 1f)
@@ -120,9 +126,8 @@ object Pull {
     fun signGrow(pull: Float, held: Boolean): Float = if (held) 1f else ((pull - 6f) / 34f).coerceIn(0f, 1f)
 
     /**
-     * The pill's centre, from the top of the room that opened: halfway between
-     * what's above it ([above] up from the room's top, come down by its
-     * [lead]) and the words under the room ([room] down).
+     * The pill's centre, from the top of the room that opened: halfway between what's above it ([above] up from the room's top, come down
+     * by its [lead]) and the words under the room ([room] down).
      */
     fun pillCentre(above: Float, room: Float, pull: Float): Float = (lead(pull) - above + room) / 2
 
@@ -145,35 +150,35 @@ object Pull {
 }
 
 /**
- * Where the pull's bus drives, in its horizon's units: [width] across, the
- * sign at [sign], and [home], where the card has its bus (null: none, so
- * one comes in from off the left and waits at the stop).
+ * Where the pull's bus drives, in its horizon's units: [width] across, the sign at [sign], and [home], where the card has its bus (null:
+ * none, so one comes in from off the left and waits at the stop).
  */
 data class PullScene(val width: Float, val sign: Float, val home: Float? = null) {
     /** The bus pulls up just short of the sign. */
-    val stop: Float get() = sign - Pull.SHORT_OF_SIGN
+    val stop: Float
+        get() = sign - Pull.SHORT_OF_SIGN
 
     /** Where the bus starts as the pull begins. */
-    val from: Float get() = home ?: Pull.START
+    val from: Float
+        get() = home ?: Pull.START
 
     /** Where it comes back to once the answer's in. */
-    val rest: Float get() = home ?: stop
+    val rest: Float
+        get() = home ?: stop
 }
 
 /** A puff of exhaust: where it left the bus (x, units) and how old it is (s). */
 data class Puff(val x: Float, var age: Float = 0f)
 
 /**
- * A pull, frame by frame: the stretch, the bus, its door, its horn, its
- * suspension, and the puffs behind it. [drag] and [release] follow the
- * finger, [done] the answer, and [step] moves it all on; what's drawn reads
- * the fields. [scene] can change as the data does (the card's bus moves).
- * [calm]: the phone's "Remove animations", so nothing drives, bounces or
- * puffs, and the sky returns without a spring.
+ * A pull, frame by frame: the stretch, the bus, its door, its horn, its suspension, and the puffs behind it. [drag] and [release] follow
+ * the finger, [done] the answer, and [step] moves it all on; what's drawn reads the fields. [scene] can change as the data does (the card's
+ * bus moves). [calm]: the phone's "Remove animations", so nothing drives, bounces or puffs, and the sky returns without a spring.
  */
 class PullMotion(var scene: PullScene, var calm: Boolean = false) {
     enum class Phase {
-        Idle, Drag,
+        Idle,
+        Drag,
 
         /** Let go short of [Pull.ARM]: back to rest, nothing asked. */
         Cancel,
@@ -189,16 +194,24 @@ class PullMotion(var scene: PullScene, var calm: Boolean = false) {
     }
 
     /** What the bus is doing: with the finger, at the stop, pulling away, going round again, coming back to its place. */
-    enum class Drive { Follow, Boarding, Departing, Looping, Return }
+    enum class Drive {
+        Follow,
+        Boarding,
+        Departing,
+        Looping,
+        Return,
+    }
 
     var phase = Phase.Idle
         private set
+
     var drive = Drive.Follow
         private set
 
     /** How far the sky has stretched (dp). */
     var pull = 0f
         private set
+
     private var pullV = 0f
     private var raw = 0f
     var armed = false
@@ -207,6 +220,7 @@ class PullMotion(var scene: PullScene, var calm: Boolean = false) {
     /** Milliseconds since letting go. */
     var sinceMs = 0f
         private set
+
     private var driveMs = 0f
     private var shownMs = 0f
     private var outcome: PullOutcome? = null
@@ -217,88 +231,110 @@ class PullMotion(var scene: PullScene, var calm: Boolean = false) {
 
     var busX = scene.from
         private set
+
     private var busV = 0f
     private var lastX = busX
     private var smV = 0f
     private var smA = 0f
     var tilt = 0f
         private set
+
     private var tiltV = 0f
     var kneel = 0f
         private set
+
     private var kneelV = 0f
     var wheel = 0f
         private set
+
     private var dist = 0f
     private var t = 0f
 
     var door = 0f
         private set
+
     var honk = 0f
         private set
 
     /** The bus's opacity: faded in where it stands rather than drives (calm, with no bus of the card's). */
     var alpha = 1f
         private set
+
     private val puffing = mutableListOf<Puff>()
 
     /** The puffs behind the bus, for drawing. */
-    val puffs: List<Puff> get() = puffing
+    val puffs: List<Puff>
+        get() = puffing
+
     private var puffEvery = 0f
 
     /** Whether anything still moves (a frame is wanted). */
-    val moving: Boolean get() = phase != Phase.Idle || puffs.isNotEmpty()
+    val moving: Boolean
+        get() = phase != Phase.Idle || puffs.isNotEmpty()
 
     /** The pull's scene is on the horizon instead of the card's own sign and bus. */
-    val open: Boolean get() = phase != Phase.Idle
+    val open: Boolean
+        get() = phase != Phase.Idle
 
     /** Waiting at the hold: asking, or saying how it went. */
-    val held: Boolean get() = phase == Phase.Busy || phase == Phase.Shown
+    val held: Boolean
+        get() = phase == Phase.Busy || phase == Phase.Shown
 
     /** The words in the pill; null at rest. */
     val hint: PullHint?
-        get() = when (phase) {
-            Phase.Idle -> null
-            Phase.Drag, Phase.Cancel -> if (armed) PullHint.LetGo else PullHint.Pull
-            Phase.Busy -> PullHint.Checking
-            Phase.Shown, Phase.Closing -> when (result) {
-                PullOutcome.Updated -> PullHint.Updated
-                PullOutcome.UpToDate -> PullHint.UpToDate
-                PullOutcome.Failed -> PullHint.Failed
-                null -> PullHint.Pull
+        get() =
+            when (phase) {
+                Phase.Idle -> null
+                Phase.Drag,
+                Phase.Cancel -> if (armed) PullHint.LetGo else PullHint.Pull
+                Phase.Busy -> PullHint.Checking
+                Phase.Shown,
+                Phase.Closing ->
+                    when (result) {
+                        PullOutcome.Updated -> PullHint.Updated
+                        PullOutcome.UpToDate -> PullHint.UpToDate
+                        PullOutcome.Failed -> PullHint.Failed
+                        null -> PullHint.Pull
+                    }
             }
-        }
 
-    val hintAlpha: Float get() = Pull.hintAlpha(pull, held)
+    val hintAlpha: Float
+        get() = Pull.hintAlpha(pull, held)
 
     /** How much of a sign the horizon doesn't have shows. */
-    val signGrow: Float get() = Pull.signGrow(pull, held)
+    val signGrow: Float
+        get() = Pull.signGrow(pull, held)
 
     /** The header and chips' way down (dp). */
-    val lead: Float get() = Pull.lead(pull)
+    val lead: Float
+        get() = Pull.lead(pull)
 
     /** The sign lit in the accent: armed, and while it asks. */
-    val lit: Boolean get() = armed || phase == Phase.Busy
+    val lit: Boolean
+        get() = armed || phase == Phase.Busy
 
     /** The sign green: the answer's in (or there was nothing new to ask for), until the sky's shut. */
-    val good: Boolean get() = (phase == Phase.Shown || (phase == Phase.Closing && pull > 0f)) && result != null && result != PullOutcome.Failed
+    val good: Boolean
+        get() = (phase == Phase.Shown || (phase == Phase.Closing && pull > 0f)) && result != null && result != PullOutcome.Failed
 
     /** The bus dipping and rocking as it goes (units); none when calm. */
     val bob: Float
         get() = if (calm) 0f else kneel + 0.25f * sin(dist / 5f) * (abs(smV) / 200f).coerceIn(0f, 1f)
 
     /** The time, in seconds, for the sign's halo. */
-    val clock: Float get() = t
+    val clock: Float
+        get() = t
 
     /** Can a finger take the sky now: at rest, or on its way back. */
-    val canGrab: Boolean get() = phase == Phase.Idle || phase == Phase.Cancel
+    val canGrab: Boolean
+        get() = phase == Phase.Idle || phase == Phase.Cancel
 
     /** The content has scrolled since the finger went down, so this touch can't start a pull. */
     private var scrolled = false
 
     /**
-     * A finger went down. A pull only starts from a touch that began with
-     * the content at its top: scrolling up into the top and on doesn't pull.
+     * A finger went down. A pull only starts from a touch that began with the content at its top: scrolling up into the top and on doesn't
+     * pull.
      */
     fun touch() {
         scrolled = false
@@ -310,9 +346,8 @@ class PullMotion(var scene: PullScene, var calm: Boolean = false) {
     }
 
     /**
-     * The finger moved [dy] dp (down positive) with the content at its top;
-     * true when this crossed into armed, for a tick. Taken back up, the sky
-     * goes first, then the content scrolls.
+     * The finger moved [dy] dp (down positive) with the content at its top; true when this crossed into armed, for a tick. Taken back up,
+     * the sky goes first, then the content scrolls.
      */
     fun drag(dy: Float): Boolean {
         if (phase != Phase.Drag && (!canGrab || scrolled)) return false
@@ -390,7 +425,9 @@ class PullMotion(var scene: PullScene, var calm: Boolean = false) {
                 pull += (target - pull) * (1 - exp(-dt * 14f))
                 pullV = 0f
             } else {
-                val (x, v) = if (phase == Phase.Closing) Pull.spring(pull, pullV, target, 240f, 31f, dt) else Pull.spring(pull, pullV, target, 190f, 26f, dt)
+                val (x, v) =
+                    if (phase == Phase.Closing) Pull.spring(pull, pullV, target, 240f, 31f, dt)
+                    else Pull.spring(pull, pullV, target, 190f, 26f, dt)
                 pull = x
                 pullV = v
             }
@@ -405,7 +442,10 @@ class PullMotion(var scene: PullScene, var calm: Boolean = false) {
         door = 0f
         honk = 0f
         if (calm) stepCalm() else stepDriving(dt)
-        puffing.removeAll { p -> p.age += dt; p.age >= 0.6f }
+        puffing.removeAll { p ->
+            p.age += dt
+            p.age >= 0.6f
+        }
     }
 
     /** The bus is where the horizon has its own (or, with none of the card's, faded with the sign): the scene can go. */
@@ -432,12 +472,13 @@ class PullMotion(var scene: PullScene, var calm: Boolean = false) {
         busX = home ?: scene.stop
         tilt = 0f
         kneel = 0f
-        alpha = when {
-            home != null -> 1f
-            phase == Phase.Idle -> 0f
-            held -> 1f
-            else -> ((pull - 10f) / (Pull.ARM - 10f)).coerceIn(0f, 1f)
-        }
+        alpha =
+            when {
+                home != null -> 1f
+                phase == Phase.Idle -> 0f
+                held -> 1f
+                else -> ((pull - 10f) / (Pull.ARM - 10f)).coerceIn(0f, 1f)
+            }
         door = if (phase == Phase.Busy && home == null) 1f else 0f
     }
 
@@ -455,9 +496,15 @@ class PullMotion(var scene: PullScene, var calm: Boolean = false) {
         val a = (v - smV) / step
         smV += (v - smV) * 0.35f
         smA += (a - smA) * 0.2f
-        Pull.spring(tilt, tiltV, (-smA * 0.004f).coerceIn(-4.5f, 4.5f), 160f, 9f, dt).let { (x, nv) -> tilt = x; tiltV = nv }
+        Pull.spring(tilt, tiltV, (-smA * 0.004f).coerceIn(-4.5f, 4.5f), 160f, 9f, dt).let { (x, nv) ->
+            tilt = x
+            tiltV = nv
+        }
         val kneeling = armed || drive == Drive.Boarding
-        Pull.spring(kneel, kneelV, if (kneeling) 0.55f else 0f, 140f, 10f, dt).let { (x, nv) -> kneel = x; kneelV = nv }
+        Pull.spring(kneel, kneelV, if (kneeling) 0.55f else 0f, 140f, 10f, dt).let { (x, nv) ->
+            kneel = x
+            kneelV = nv
+        }
         dist += abs(v * dt)
         wheel += v * dt / 2.2f
         // Exhaust as it pulls away.

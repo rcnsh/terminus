@@ -28,9 +28,27 @@ const CLASS_AT = NOW + 40 * min;
 const choose = (x) => choosePlan({ located: true, classAtMs: CLASS_AT, nowMs: NOW, ...x });
 
 test('a leave-by becomes a plan; a walk is none', () => {
-  const l = { at: iso(NOW), estimated: true, svc: 'D2', stop: 'PGP', board: iso(NOW + 2 * min), arrive: iso(NOW + 12 * min), note: 'packed', stopCode: 'PGP' };
+  const l = {
+    at: iso(NOW),
+    estimated: true,
+    svc: 'D2',
+    stop: 'PGP',
+    board: iso(NOW + 2 * min),
+    arrive: iso(NOW + 12 * min),
+    note: 'packed',
+    stopCode: 'PGP',
+  };
   assert.deepEqual(planOfLeave(l, true, 'UTOWN'), {
-    svc: 'D2', stop: 'PGP', board: l.board, leave: l.at, located: true, arrive: l.arrive, note: 'packed', estimated: true, stopCode: 'PGP', alightCode: 'UTOWN',
+    svc: 'D2',
+    stop: 'PGP',
+    board: l.board,
+    leave: l.at,
+    located: true,
+    arrive: l.arrive,
+    note: 'packed',
+    estimated: true,
+    stopCode: 'PGP',
+    alightCode: 'UTOWN',
   });
   assert.equal(planOfLeave({ ...l, svc: null, board: null }, true, 'UTOWN'), null);
   assert.equal(planOfLeave(null, true, 'UTOWN'), null);

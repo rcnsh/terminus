@@ -1,6 +1,7 @@
 import Foundation
 import Security
 import Testing
+
 @testable import Terminus
 
 /// The device token, in a temporary folder and under a keychain name of its
@@ -59,7 +60,10 @@ import Testing
     /// Kept in the keychain by 1.3.8 to 2.0.0-beta.4: moved to the file once, and the keychain item goes.
     @Test func aKeychainTokenMovesToTheFileOnce() throws {
         defer { cleanUp() }
-        let item: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: TokenStore.service, kSecAttrAccount as String: "device-token"]
+        let item: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: TokenStore.service,
+            kSecAttrAccount as String: "device-token",
+        ]
         var add = item
         add[kSecValueData as String] = Data("kept-in-keychain".utf8)
         #expect(SecItemAdd(add as CFDictionary, nil) == errSecSuccess)

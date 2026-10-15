@@ -58,9 +58,12 @@ function edgeM(lat: number, lon: number, ring: Array<[number, number]>): number 
   const mLon = 111_320 * Math.cos((lat * Math.PI) / 180);
   let best = Infinity;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const ax = (ring[j][1] - lon) * mLon, ay = (ring[j][0] - lat) * mLat;
-    const bx = (ring[i][1] - lon) * mLon, by = (ring[i][0] - lat) * mLat;
-    const dx = bx - ax, dy = by - ay;
+    const ax = (ring[j][1] - lon) * mLon,
+      ay = (ring[j][0] - lat) * mLat;
+    const bx = (ring[i][1] - lon) * mLon,
+      by = (ring[i][0] - lat) * mLat;
+    const dx = bx - ax,
+      dy = by - ay;
     const t = Math.max(0, Math.min(1, -(ax * dx + ay * dy) / (dx * dx + dy * dy || 1)));
     best = Math.min(best, Math.hypot(ax + t * dx, ay + t * dy));
   }
@@ -115,7 +118,11 @@ export function residenceStops(lat: number, lon: number, byCode: Map<string, Sto
   // The building's edge isn't where you start: the lift, the stairs and the
   // far block are what the "walk to your stop" setting is for, and a phone
   // indoors can't tell which floor or wing you're in.
-  const homeM = home ? Object.entries(r[1].stops).filter(([code]) => home.stops.includes(code)).map(([, m]) => m) : [];
+  const homeM = home
+    ? Object.entries(r[1].stops)
+        .filter(([code]) => home.stops.includes(code))
+        .map(([, m]) => m)
+    : [];
   const extraM = home && homeM.length ? home.m - Math.min(...homeM) : 0;
   const out: NearStop[] = [];
   for (const [code, metres] of Object.entries(r[1].stops)) {
@@ -141,6 +148,13 @@ export function residenceStops(lat: number, lon: number, byCode: Map<string, Sto
  */
 export function residenceList() {
   return allResidences()
-    .map(([code, r]) => ({ code, name: r.name, stops: Object.keys(r.stops), walkM: Object.values(r.stops)[0], walkMin: residenceWalkMin(Object.values(r.stops)[0]), common: r.common === true }))
+    .map(([code, r]) => ({
+      code,
+      name: r.name,
+      stops: Object.keys(r.stops),
+      walkM: Object.values(r.stops)[0],
+      walkMin: residenceWalkMin(Object.values(r.stops)[0]),
+      common: r.common === true,
+    }))
     .sort((a, b) => Number(b.common) - Number(a.common) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 }

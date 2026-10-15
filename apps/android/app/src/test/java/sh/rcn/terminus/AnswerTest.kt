@@ -1,5 +1,7 @@
 package sh.rcn.terminus
 
+import java.io.File
+import java.time.Instant
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -11,15 +13,15 @@ import org.junit.Test
 import sh.rcn.terminus.ui.withoutLocalUndo
 import sh.rcn.terminus.widget.Refresher
 import sh.rcn.terminus.widget.isOld
-import java.io.File
-import java.time.Instant
 
 /**
- * Parses the API's golden answers (apps/api/test/fixtures/answers, checked by
- * the API's own tests), so a change in the response shape fails here too.
+ * Parses the API's golden answers (apps/api/test/fixtures/answers, checked by the API's own tests), so a change in the response shape fails
+ * here too.
  */
 class AnswerTest {
-    init { TestStrings.install() }
+    init {
+        TestStrings.install()
+    }
 
     private fun goldenJson(name: String): JSONObject {
         val dir = listOf("../../api/test/fixtures/answers", "../api/test/fixtures/answers").map(::File).first { it.isDirectory }
@@ -31,22 +33,25 @@ class AnswerTest {
     private fun ms(iso: String) = Instant.parse(iso).toEpochMilli()
 
     /**
-     * Every golden there is, English and Chinese, by the endpoint it answers:
-     * /me/nearby has `stops`, /me/day `items`, the rest are /me/next. A
-     * new fixture is read without being listed here.
+     * Every golden there is, English and Chinese, by the endpoint it answers: /me/nearby has `stops`, /me/day `items`, the rest are
+     * /me/next. A new fixture is read without being listed here.
      */
     private fun everyGolden(): List<Pair<String, JSONObject>> {
         val dir = listOf("../../api/test/fixtures/answers", "../api/test/fixtures/answers").map(::File).first { it.isDirectory }
         return listOf(dir, File(dir, "zh")).flatMap { d ->
-            d.listFiles { f -> f.extension == "json" }.orEmpty().sortedBy { it.name }.map { f ->
-                (if (d == dir) f.nameWithoutExtension else "zh/${f.nameWithoutExtension}") to JSONObject(f.readText())
-            }
+            d.listFiles { f -> f.extension == "json" }
+                .orEmpty()
+                .sortedBy { it.name }
+                .map { f ->
+                    (if (d == dir) f.nameWithoutExtension else "zh/${f.nameWithoutExtension}") to JSONObject(f.readText())
+                }
         }
     }
 
     private fun hasCjk(s: String) = s.any { Character.UnicodeScript.of(it.code) == Character.UnicodeScript.HAN }
 
-    @Test fun everyGoldenAnswerParses() {
+    @Test
+    fun everyGoldenAnswerParses() {
         val all = everyGolden()
         assertTrue("found the goldens", all.size >= 40)
         for ((name, json) in all) {
@@ -61,14 +66,20 @@ class AnswerTest {
                     // The card's parts are read leniently, so a part that no longer
                     // parses would just vanish: each one sent must come through.
                     val sent = json.getJSONObject("card")
-                    for ((key, got) in listOf(
-                        "journey" to card.journey, "ride" to card.ride, "upcoming" to card.upcoming,
-                        "suggestion" to card.suggestion, "walkTo" to card.walkTo,
-                    )) {
+                    for ((key, got) in
+                        listOf(
+                            "journey" to card.journey,
+                            "ride" to card.ride,
+                            "upcoming" to card.upcoming,
+                            "suggestion" to card.suggestion,
+                            "walkTo" to card.walkTo,
+                        )) {
                         if (sent.has(key) && !sent.isNull(key)) assertNotNull("$name: card.$key", got)
                     }
                     // So does a change of bus, read leniently inside them.
-                    sent.optJSONObject("journey")?.optJSONObject("change")?.let { assertNotNull("$name: journey.change", card.journey?.change) }
+                    sent.optJSONObject("journey")?.optJSONObject("change")?.let {
+                        assertNotNull("$name: journey.change", card.journey?.change)
+                    }
                     sent.optJSONObject("ride")?.optJSONObject("change")?.let { assertNotNull("$name: ride.change", card.ride?.change) }
                     assertEquals("$name: card.actions", sent.optJSONArray("actions")?.length() ?: 0, card.actions.size)
                     // The headline is the server's Chinese; some are only a bus and a time, so the line under it counts too.
@@ -78,7 +89,8 @@ class AnswerTest {
         }
     }
 
-    @Test fun aReplyOfTheWrongShapeIsAParseErrorNotOffline() {
+    @Test
+    fun aReplyOfTheWrongShapeIsAParseErrorNotOffline() {
         // Read as offline before: "Couldn't reach terminus" for a server that answered.
         assertThrows(ParseError::class.java) { parseNearby(JSONObject("""{"stops":[{"board":[]}]}""")) }
         assertThrows(ParseError::class.java) { Campus.parse(JSONObject("{}")) }
@@ -86,14 +98,19 @@ class AnswerTest {
         assertThrows(ParseError::class.java) { ImportResult.parse(JSONObject("{}")) }
     }
 
-    @Test fun anythingButALiveTimeIsApproximate() {
+    @Test
+    fun anythingButALiveTimeIsApproximate() {
         val a = golden("place").copy(card = null)
         val fmt = { _: Long -> "09:42" }
         assertEquals("${a.label.substringBefore(" · ")} · 09:42", a.copy(quality = "live").clockLabel(fmt))
-        for (q in listOf("scheduled", "stale", "something-new")) assertEquals("${a.label.substringBefore(" · ")} · ~09:42", a.copy(quality = q).clockLabel(fmt))
+        for (q in listOf("scheduled", "stale", "something-new")) assertEquals(
+            "${a.label.substringBefore(" · ")} · ~09:42",
+            a.copy(quality = q).clockLabel(fmt),
+        )
     }
 
-    @Test fun classCardLinesComeFromTheServer() {
+    @Test
+    fun classCardLinesComeFromTheServer() {
         val a = golden("class-bus")
         assertTrue(a.isClassPlan)
         assertEquals("Catch the ~09:42 R2 at PGP", a.catchHow)
@@ -106,25 +123,29 @@ class AnswerTest {
         assertEquals("Leave now", a.leaveHeadline(at))
     }
 
-    @Test fun crowdIsShownOnceWhenTheDetailSaysIt() {
+    @Test
+    fun crowdIsShownOnceWhenTheDetailSaysIt() {
         // "… · crowding: high · or D2 in 14 min": not said again under it.
         val a = golden("place")
         assertTrue(a.detail.contains("crowding: high"))
         assertEquals(null, a.crowdText)
     }
 
-    @Test fun lateClassIsLate() {
+    @Test
+    fun lateClassIsLate() {
         val a = golden("class-late")
         assertTrue(a.leaveLate)
         assertEquals("Arrive 09:15 · ~10 min late", a.catchArrive)
     }
 
-    @Test fun otherKindsAreNotClassCards() {
+    @Test
+    fun otherKindsAreNotClassCards() {
         for (name in listOf("place", "free", "rest", "arrived", "home", "setup")) assertFalse(name, golden(name).isClassPlan)
         assertEquals("Leave by 09:03", golden("place").leaveHeadline(0))
     }
 
-    @Test fun aDayWithoutClassesIsFreeWithNoBus() {
+    @Test
+    fun aDayWithoutClassesIsFreeWithNoBus() {
         val a = golden("free")
         assertTrue(a.isFree)
         assertEquals("No classes today", a.label)
@@ -132,7 +153,8 @@ class AnswerTest {
         assertEquals("No classes", a.card!!.glance)
     }
 
-    @Test fun theNextClassComesWithItsOwnCard() {
+    @Test
+    fun theNextClassComesWithItsOwnCard() {
         val u = golden("rest").card?.upcoming
         assertEquals(Upcoming("Today", "CS2030 at 13:00", "At COM 3", null), u)
         assertEquals("CS2030，10:00 开始", golden("zh/free").card?.upcoming?.title)
@@ -140,7 +162,8 @@ class AnswerTest {
         assertNull(golden("class-bus").card?.upcoming)
     }
 
-    @Test fun cardV2CarriesThePhaseAndOnlyPlans() {
+    @Test
+    fun cardV2CarriesThePhaseAndOnlyPlans() {
         val a = golden("class-late")
         val card = a.card!!
         assertEquals("heading", card.phase)
@@ -151,21 +174,24 @@ class AnswerTest {
         assertNotNull(card.nextChangeAtMs)
     }
 
-    @Test fun aBusGoneWithNothingKnownSaysSoNotLeaveNow() {
+    @Test
+    fun aBusGoneWithNothingKnownSaysSoNotLeaveNow() {
         val card = golden("bus-gone").card!!
         assertTrue(card.gone)
         assertTrue(card.line!!.startsWith("The 09:06 has left"))
         assertFalse(golden("class-late").card!!.gone)
     }
 
-    @Test fun staleFollowsTheServer() {
+    @Test
+    fun staleFollowsTheServer() {
         val a = golden("class-bus")
         val at = a.card!!.staleAtMs!!
         assertFalse(isOld(a, at - 1))
         assertTrue(isOld(a, at))
     }
 
-    @Test fun onlyAnAnswerWithNoCardIsOldWithoutStaleAt() {
+    @Test
+    fun onlyAnAnswerWithNoCardIsOldWithoutStaleAt() {
         val old = NextAnswer.parse(JSONObject("""{"label":"D2 · 4 min","departsAt":"2026-08-27T01:04:00Z","mode":"trip"}"""))
         assertNull(old.card)
         assertTrue(isOld(old, ms("2026-08-27T01:00:00Z")))
@@ -176,16 +202,18 @@ class AnswerTest {
         }
     }
 
-    @Test fun aSuggestionParsesAndAnOldQuestionIsIgnored() {
-        val a = NextAnswer.parse(
-            JSONObject(
-                """{"label":"On the R2","detail":"Off at UTown · arrive ~9:52","mode":"trip","card":{"kind":"trip","phase":"riding",
+    @Test
+    fun aSuggestionParsesAndAnOldQuestionIsIgnored() {
+        val a =
+            NextAnswer.parse(
+                JSONObject(
+                    """{"label":"On the R2","detail":"Off at UTown · arrive ~9:52","mode":"trip","card":{"kind":"trip","phase":"riding",
                 "ask":{"trip":"4:600:UTOWN","question":"On the 9:41 R2?","actions":[{"id":"boarded","label":"On it","trip":"4:600:UTOWN"},
                 {"id":"missed","label":"Missed it","trip":"4:600:UTOWN"},{"id":"skipped","label":"Not going","trip":"4:600:UTOWN"}]},
                 "askMuted":false,"remind":false,
-                "suggestion":{"id":"earlier:4:600:UTOWN","text":"Leave one bus earlier?","accept":"Leave earlier","dismiss":"No thanks"}}}""",
-            ),
-        )
+                "suggestion":{"id":"earlier:4:600:UTOWN","text":"Leave one bus earlier?","accept":"Leave earlier","dismiss":"No thanks"}}}"""
+                )
+            )
         val card = a.card!!
         assertFalse(card.remind)
         assertEquals("earlier:4:600:UTOWN", card.suggestion!!.id)
@@ -195,14 +223,16 @@ class AnswerTest {
         assertTrue(golden.remind)
     }
 
-    @Test fun notJsonIsAParseErrorNotOffline() {
+    @Test
+    fun notJsonIsAParseErrorNotOffline() {
         try {
             NextAnswer.parse(JSONObject("""{"detail":"no label"}"""))
             throw AssertionError("should not parse")
         } catch (_: ParseError) {}
     }
 
-    @Test fun anOfflineRedrawKeepsTheAnswersOwnMoments() {
+    @Test
+    fun anOfflineRedrawKeepsTheAnswersOwnMoments() {
         val a = golden("class-bus")
         val fetched = ms(a.asOf)
         val card = a.card!!
@@ -219,7 +249,8 @@ class AnswerTest {
         assertTrue(Refresher.redrawAt(r, ride.boardMs)!! <= RideStyle.nextRedrawAt(ride, ride.boardMs)!!)
     }
 
-    @Test fun refreshWaitsForTheNextChangeButNotTooSoon() {
+    @Test
+    fun refreshWaitsForTheNextChangeButNotTooSoon() {
         val a = golden("class-bus")
         val fetched = ms(a.asOf)
         // The widget refreshes when the card says it changes.
@@ -231,7 +262,8 @@ class AnswerTest {
         assertEquals(a.refreshAtMs, Refresher.nextRefreshAt(a, fetched, fetched, widget = false))
     }
 
-    @Test fun onlyTheServersMomentsWakeThePhone() {
+    @Test
+    fun onlyTheServersMomentsWakeThePhone() {
         val a = golden("class-bus")
         val fetched = ms(a.asOf)
         val change = a.card!!.nextChangeAtMs!!
@@ -247,7 +279,8 @@ class AnswerTest {
         assertEquals(null to plan, Refresher.refreshAlarms(a, fetched, change + 1, widget = true, notifying = true))
     }
 
-    @Test fun refreshDoesNotChaseTheLeaveTimeOrTheRidesStops() {
+    @Test
+    fun refreshDoesNotChaseTheLeaveTimeOrTheRidesStops() {
         // Past the card's change, the leave-by is next on screen, but the network
         // waits for the plan's own moment: "Leave now" is a redraw.
         val a = golden("class-bus")
@@ -261,7 +294,8 @@ class AnswerTest {
         assertEquals(RideStyle.nextRedrawAt(ride, ride.boardMs), Refresher.redrawAt(r, ride.boardMs))
     }
 
-    @Test fun theFloorLeavesTheNetworkAloneWhileOnTrack() {
+    @Test
+    fun theFloorLeavesTheNetworkAloneWhileOnTrack() {
         val a = golden("rest")
         val now = ms(a.asOf)
         val alarm = a.card!!.nextChangeAtMs!!
@@ -273,7 +307,8 @@ class AnswerTest {
         assertFalse(Refresher.onTrack(null, null, alarm, now))
     }
 
-    @Test fun aBrokenPartOfTheCardIsLeftOutAndTheRestStands() {
+    @Test
+    fun aBrokenPartOfTheCardIsLeftOutAndTheRestStands() {
         val json = goldenJson("class-room")
         val card = json.getJSONObject("card")
         // One action with no label, and one that isn't an object at all.
@@ -282,7 +317,10 @@ class AnswerTest {
         // A walk with no position, a suggestion half there, a ride with a broken stop.
         card.getJSONObject("walkTo").put("lat", "north")
         card.put("suggestion", JSONObject().put("id", "earlier:x"))
-        card.put("ride", JSONObject("""{"svc":"R2","stops":[{"name":"PGP"},7],"board":"2026-08-27T01:42:00Z","arrive":"2026-08-27T01:53:00Z"}"""))
+        card.put(
+            "ride",
+            JSONObject("""{"svc":"R2","stops":[{"name":"PGP"},7],"board":"2026-08-27T01:42:00Z","arrive":"2026-08-27T01:53:00Z"}"""),
+        )
         card.put("upcoming", JSONObject().put("when", "Today"))
         // A journey whose bus can't be read isn't taken for a walk.
         card.getJSONObject("journey").put("bus", JSONObject().put("color", "#34a853"))
@@ -308,7 +346,8 @@ class AnswerTest {
         assertEquals(whole.leaveAtMs, a.leaveAtMs)
     }
 
-    @Test fun nullTextInTheJourneyIsNotTheWordNull() {
+    @Test
+    fun nullTextInTheJourneyIsNotTheWordNull() {
         val json = goldenJson("class-bus")
         val journey = json.getJSONObject("card").getJSONObject("journey")
         journey.put("to", JSONObject.NULL).put("toStop", JSONObject.NULL)
@@ -322,7 +361,8 @@ class AnswerTest {
         assertEquals(Upcoming("", "CS2030 at 13:00", "", null), c.upcoming)
     }
 
-    @Test fun theHeadlineAndHeadingAreTheServers() {
+    @Test
+    fun theHeadlineAndHeadingAreTheServers() {
         val bus = golden("class-bus")
         assertEquals("R2 · 09:06", bus.card!!.title)
         assertEquals("R2 · 09:06", bus.clockLabel { "never" })
@@ -336,10 +376,14 @@ class AnswerTest {
         val none = golden("no-timetable")
         assertEquals("No timetable yet", none.title)
         assertNull(none.card!!.heading)
-        assertFalse("a card without staleAt never dims", isOld(golden("setup").copy(card = golden("setup").card!!.copy(staleAtMs = null)), ms("2030-01-01T00:00:00Z")))
+        assertFalse(
+            "a card without staleAt never dims",
+            isOld(golden("setup").copy(card = golden("setup").card!!.copy(staleAtMs = null)), ms("2030-01-01T00:00:00Z")),
+        )
     }
 
-    @Test fun theReminderIsWhenTheServerSays() {
+    @Test
+    fun theReminderIsWhenTheServerSays() {
         val a = golden("class-bus")
         assertEquals(a.leaveAtMs!! - 5 * 60_000, a.card!!.remindAtMs)
         // Under way, on the bus, or a trip that isn't a class: none.
@@ -348,7 +392,8 @@ class AnswerTest {
         assertNull(golden("place").card!!.remindAtMs)
     }
 
-    @Test fun theJourneyIsWordedByTheServer() {
+    @Test
+    fun theJourneyIsWordedByTheServer() {
         val j = golden("class-bus").card!!.journey!!
         assertEquals("arrive ~09:51 · R2 ~09:42 at PGP", j.text.summary)
         assertEquals("To GEA1000 @ UTown · starts 10:00", j.text.title)
@@ -357,7 +402,8 @@ class AnswerTest {
         assertEquals("Arrive ~09:51 · 9 min early", JourneyText.arrive(j))
     }
 
-    @Test fun onTheBusTheRideComesWithIt() {
+    @Test
+    fun onTheBusTheRideComesWithIt() {
         val a = golden("riding")
         val c = a.card!!
         assertEquals("riding", c.phase)
@@ -371,7 +417,8 @@ class AnswerTest {
         assertEquals("Next: Opp HSSML · 6 stops to go", ride.nextText(ride.boardMs))
     }
 
-    @Test fun aTripThatChangesBusesCarriesTheSecondBus() {
+    @Test
+    fun aTripThatChangesBusesCarriesTheSecondBus() {
         val j = golden("change-class").card!!.journey!!
         assertEquals("K", j.bus!!.svc)
         // An app that draws one bus still reads the change in its words.
@@ -388,7 +435,8 @@ class AnswerTest {
         assertNull(golden("class-bus").card!!.journey!!.change)
     }
 
-    @Test fun onTheFirstBusTheSecondIsSaidNearTheChange() {
+    @Test
+    fun onTheFirstBusTheSecondIsSaidNearTheChange() {
         val ride = golden("change-riding").card!!.ride!!
         assertEquals("R2", ride.svc)
         assertEquals("Kent Vale", ride.stops.last())
@@ -401,7 +449,8 @@ class AnswerTest {
         assertEquals("Getting off at Kent Vale", ride.nextText(ride.arriveMs, withChange = false))
     }
 
-    @Test fun aClassToARoomWalksOnFromItsStop() {
+    @Test
+    fun aClassToARoomWalksOnFromItsStop() {
         val a = golden("class-room")
         assertTrue(a.isClassPlan)
         val j = a.card!!.journey!!
@@ -412,7 +461,8 @@ class AnswerTest {
         assertEquals("PGP", a.card.walkTo!!.name)
     }
 
-    @Test fun versionsCompareNumerically() {
+    @Test
+    fun versionsCompareNumerically() {
         assertTrue(isNewer("1.0.10", "1.0.9"))
         assertFalse(isNewer("1.3.5", "1.3.5"))
         assertFalse(isNewer("1.2", "1.10"))
@@ -426,12 +476,16 @@ class AnswerTest {
     @Test
     fun `the server's errors are shown as sentences`() {
         assertEquals("Not a valid NUSMods share link.", ApiError(400, "not a valid NUSMods share link").message)
-        assertEquals("Nothing imported: no stop. Your timetable was not changed.", sentence("Nothing imported: no stop. Your timetable was not changed."))
+        assertEquals(
+            "Nothing imported: no stop. Your timetable was not changed.",
+            sentence("Nothing imported: no stop. Your timetable was not changed."),
+        )
         // The name is lower case, even first.
         assertEquals("terminus is busy, try again in a minute.", sentence("terminus is busy, try again in a minute"))
     }
 
-    @Test fun theJourneyComesFromTheServer() {
+    @Test
+    fun theJourneyComesFromTheServer() {
         val j = golden("class-bus").card!!.journey!!
         assertEquals("R2", j.bus!!.svc)
         assertEquals(0xFF34A853, j.bus.color)
@@ -445,7 +499,8 @@ class AnswerTest {
         assertNull(j.why)
     }
 
-    @Test fun onFootTheJourneyIsTheWalkAlone() {
+    @Test
+    fun onFootTheJourneyIsTheWalkAlone() {
         // A class: the leave-by, the walk, and the bus it beats.
         val c = golden("class-walk")
         val j = c.card!!.journey!!
@@ -469,7 +524,8 @@ class AnswerTest {
         assertEquals("A1 would be 31 min", JourneyText.backup(h, home))
     }
 
-    @Test fun theJourneyCountsDownToLeaving() {
+    @Test
+    fun theJourneyCountsDownToLeaving() {
         val a = golden("place")
         val j = a.card!!.journey!!
         val at = a.leaveAtMs!!
@@ -488,7 +544,8 @@ class AnswerTest {
         assertEquals("Arrive 09:10", JourneyText.arrive(j))
     }
 
-    @Test fun aRoomJourneyWalksOnFromItsStop() {
+    @Test
+    fun aRoomJourneyWalksOnFromItsStop() {
         val j = golden("room").card!!.journey!!
         assertEquals("IT", j.toStop)
         assertEquals("LT3", j.place)
@@ -502,13 +559,15 @@ class AnswerTest {
         assertEquals(p.arrive, p.arriveStop)
     }
 
-    @Test fun aClassJourneyOffersTheSoonerBusToGoNowOn() {
+    @Test
+    fun aClassJourneyOffersTheSoonerBusToGoNowOn() {
         val a = golden("class-bus")
         assertEquals("Or go now: R2 at 09:06 from PGP", JourneyText.backup(a, a.card!!.journey!!))
         assertEquals("Arrive ~09:51 · 9 min early", JourneyText.arrive(a.card.journey))
     }
 
-    @Test fun aClassJourneySaysWhenTheClassStarts() {
+    @Test
+    fun aClassJourneySaysWhenTheClassStarts() {
         val a = golden("class-bus")
         assertEquals("To GEA1000 @ UTown · starts 10:00", JourneyText.to(a, a.card!!.journey!!) { "10:00" })
         // Anything else is just where you're going.
@@ -517,11 +576,11 @@ class AnswerTest {
     }
 
     /**
-     * A newer server's phase and quality this version doesn't know: the
-     * answer still shows, no trip is followed for it, and its times are
+     * A newer server's phase and quality this version doesn't know: the answer still shows, no trip is followed for it, and its times are
      * never called live.
      */
-    @Test fun anUnknownPhaseAndQualityAreNeitherATripNorLive() {
+    @Test
+    fun anUnknownPhaseAndQualityAreNeitherATripNorLive() {
         val json = goldenJson("class-bus").put("quality", "predicted")
         json.getJSONObject("card").put("phase", "boarding")
         val a = NextAnswer.parse(json)
@@ -539,11 +598,11 @@ class AnswerTest {
     }
 
     /**
-     * The server's undo stays on the card unless this phone's Undo bar is
-     * up for that same trip: a skip from another device, or from the leave
-     * notification, has no other undo.
+     * The server's undo stays on the card unless this phone's Undo bar is up for that same trip: a skip from another device, or from the
+     * leave notification, has no other undo.
      */
-    @Test fun theCardsUndoHidesOnlyForTheTripInTheUndoBar() {
+    @Test
+    fun theCardsUndoHidesOnlyForTheTripInTheUndoBar() {
         val a = golden("skipped-undo")
         val trip = a.card!!.actions.single { it.id == "reset" }.trip
         assertEquals(listOf("reset"), withoutLocalUndo(a, null)!!.card!!.actions.map { it.id })

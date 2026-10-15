@@ -152,7 +152,15 @@ export function planTransfers(graph: Graph, input: ResolveInput, cands: Candidat
   const all: TransferRoute[] = origins.flatMap((o) =>
     transferRoutes(graph, o.stop, targets).map((r) => {
       const crossS = Math.round(r.crossM / speed);
-      const costS = o.walkS + halfWay(graph, r.leg1.svc) + legRideS(r.leg1) + crossS + TRANSFER.changeBufferS + halfWay(graph, r.leg2.svc) + legRideS(r.leg2) + endS(r.leg2);
+      const costS =
+        o.walkS +
+        halfWay(graph, r.leg1.svc) +
+        legRideS(r.leg1) +
+        crossS +
+        TRANSFER.changeBufferS +
+        halfWay(graph, r.leg2.svc) +
+        legRideS(r.leg2) +
+        endS(r.leg2);
       return { origin: o.stop, distM: o.distM, walkS: o.walkS, leg1: r.leg1, at: r.at, board: r.board, crossS, leg2: r.leg2, costS };
     }),
   );

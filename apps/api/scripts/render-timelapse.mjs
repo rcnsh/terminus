@@ -67,7 +67,9 @@ if (!Number.isFinite(seconds) || seconds < 2 || seconds > 600) fail('--seconds m
 // About 6 s a frame at 30 frames a second on a small VPS (see above); twice
 // that before giving up, and never under 12 hours.
 const RENDER_LIMIT_MS = Math.max(12 * 3_600_000, seconds * 30 * 12_000);
-const token = (process.env.TIMELAPSE_TOKEN || (process.env.TIMELAPSE_TOKEN_FILE ? readFileSync(process.env.TIMELAPSE_TOKEN_FILE, 'utf8') : '')).trim();
+const token = (
+  process.env.TIMELAPSE_TOKEN || (process.env.TIMELAPSE_TOKEN_FILE ? readFileSync(process.env.TIMELAPSE_TOKEN_FILE, 'utf8') : '')
+).trim();
 if (!token) fail('no token: set TIMELAPSE_TOKEN or TIMELAPSE_TOKEN_FILE');
 
 // The day must be listed before the page can pick it: closed and in R2, or
@@ -77,7 +79,11 @@ if (!Number.isFinite(waitMin) || waitMin < 0) fail('--wait-min must be a number 
 const until = Date.now() + waitMin * 60_000;
 for (;;) {
   // Bounded: a request that hangs would stall the wait for good.
-  const res = await fetch(`${BASE}/api/timelapse/days`, { headers: { 'x-health-token': token }, redirect: 'error', signal: AbortSignal.timeout(30_000) }).catch((err) => ({ ok: false, status: err.message }));
+  const res = await fetch(`${BASE}/api/timelapse/days`, {
+    headers: { 'x-health-token': token },
+    redirect: 'error',
+    signal: AbortSignal.timeout(30_000),
+  }).catch((err) => ({ ok: false, status: err.message }));
   if (res.ok) {
     const { days } = await res.json();
     const day = days.find((d) => d.date === o.date);
@@ -132,7 +138,11 @@ try {
   await pick(1, o.preset);
   await pick(2, o.theme);
   await page.fill('.controls input[type=number]', String(seconds));
-  for (const [n, v] of [[0, o.from], [1, o.to]]) if (v) await page.fill(`.controls input[type=time] >> nth=${n}`, v);
+  for (const [n, v] of [
+    [0, o.from],
+    [1, o.to],
+  ])
+    if (v) await page.fill(`.controls input[type=time] >> nth=${n}`, v);
   // The time inputs act on change.
   await page.locator('.controls input[type=time] >> nth=1').dispatchEvent('change');
   await page.locator('.controls input[type=time] >> nth=0').dispatchEvent('change');
@@ -144,7 +154,10 @@ try {
   for (;;) {
     const done = await page.waitForSelector('text=Download the video', { timeout: 60_000 }).catch(() => null);
     if (done) break;
-    const failed = await page.locator('.controls .bad').textContent({ timeout: 1_000 }).catch(() => null);
+    const failed = await page
+      .locator('.controls .bad')
+      .textContent({ timeout: 1_000 })
+      .catch(() => null);
     if (failed) throw new Error(failed);
     log((await page.textContent('.progress .meta').catch(() => ''))?.trim() || 'starting');
     if (Date.now() - started > RENDER_LIMIT_MS) throw new Error(`still rendering after ${Math.round(RENDER_LIMIT_MS / 3_600_000)} hours`);

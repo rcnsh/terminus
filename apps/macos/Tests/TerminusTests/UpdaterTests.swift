@@ -1,5 +1,6 @@
 import AppKit
 import Testing
+
 @testable import Terminus
 
 /// A downloaded update waits while any of the app's windows is open (the

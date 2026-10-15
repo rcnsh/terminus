@@ -267,7 +267,8 @@ export async function getSession(
         // A version refused after the switch away from it is this isolate's
         // alone: the others, minting with the new one, needn't wait.
         await markIfOutdated(env, err);
-        if (!(err instanceof UpstreamRejected && err.outdated)) await flag(mintFailedKey(), String((err as Error)?.message ?? err), TTL.failMemoS);
+        if (!(err instanceof UpstreamRejected && err.outdated))
+          await flag(mintFailedKey(), String((err as Error)?.message ?? err), TTL.failMemoS);
         throw err;
       });
     })().finally(() => {
@@ -291,7 +292,8 @@ const remintedKey = () => `${cacheBase()}/reminted`;
  */
 export async function renewSession(env: Env, nowMs: number, rejected: Session, onMint?: () => void): Promise<Session | null> {
   const version = await appVersion(env, nowMs);
-  const usable = (s: Session | null | undefined): s is Session => Boolean(s && s.token !== rejected.token && s.expMs > nowMs && s.version === version);
+  const usable = (s: Session | null | undefined): s is Session =>
+    Boolean(s && s.token !== rejected.token && s.expMs > nowMs && s.version === version);
   const memo = memos.get(env.KV);
   if (usable(memo)) return memo;
   const kept = (await env.KV.get(KV_TOKEN, 'json').catch(() => null)) as Session | null;
@@ -383,7 +385,10 @@ export class UpstreamRejected extends Error {
  */
 export function redactDetail(detail: string): string {
   return detail
-    .replace(/("(?:token|access_?token|refresh_?token|id_?token|userid|user_?id|deviceid|device_?id|authorization|password|passwd|secret|api_?key|x-api-key)"\s*:\s*)(?:"(?:\\.|[^"\\])*"|-?\d[\d.eE+-]*)/gi, '$1"[redacted]"')
+    .replace(
+      /("(?:token|access_?token|refresh_?token|id_?token|userid|user_?id|deviceid|device_?id|authorization|password|passwd|secret|api_?key|x-api-key)"\s*:\s*)(?:"(?:\\.|[^"\\])*"|-?\d[\d.eE+-]*)/gi,
+      '$1"[redacted]"',
+    )
     .replace(/eyJ[\w-]{4,}\.[\w-]{4,}\.[\w-]*/g, '[redacted]')
     .replace(/(Bearer\s+)[\w.~+/=-]+/gi, '$1[redacted]');
 }

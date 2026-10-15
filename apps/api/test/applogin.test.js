@@ -38,13 +38,21 @@ async function call(env, path, { method = 'GET', body, token, form, cookie, head
   if (token) headers.authorization = `Bearer ${token}`;
   if (cookie) headers.cookie = cookie;
   const ctx = makeCtx();
-  const res = await worker.fetch(new Request(BASE + path, { method, headers, ...(payload === undefined ? {} : { body: payload }) }), env, ctx);
+  const res = await worker.fetch(
+    new Request(BASE + path, { method, headers, ...(payload === undefined ? {} : { body: payload }) }),
+    env,
+    ctx,
+  );
   await ctx.settle();
   return res;
 }
 
 async function anon(env, name = 'Pixel 8') {
-  const res = await call(env, '/api/auth/anon', { method: 'POST', body: { name, platform: 'android' }, headers: { 'x-terminus-client': 'android/1.4.0' } });
+  const res = await call(env, '/api/auth/anon', {
+    method: 'POST',
+    body: { name, platform: 'android' },
+    headers: { 'x-terminus-client': 'android/1.4.0' },
+  });
   assert.equal(res.status, 201);
   return (await res.json()).token;
 }
@@ -214,7 +222,7 @@ test('app sign-in: a wrong number does not hold the address', async () => {
   assert.equal(await env.KV.get(`held:${await hashToken(inboxKey(ME))}`), null);
 });
 
-test('app sign-in emails spend a ceiling of their own, apart from the website\'s', async () => {
+test("app sign-in emails spend a ceiling of their own, apart from the website's", async () => {
   const keys = [];
   const { env } = setup();
   env.RL_MAIL = { limit: async ({ key }) => (keys.push(key), { success: true }) };
@@ -311,7 +319,10 @@ test('both have a setup: the app chooses, and merge applies it', async () => {
   assert.equal(await hasTrip(env, id), true);
   assert.deepEqual((await (await call(env, '/api/me/profile', { token: r.token })).json()).home.stops, ['UTOWN']);
 
-  assert.equal((await call(env, '/api/auth/app/merge', { method: 'POST', token: r.token, body: { anon: 'nope', keep: 'device' } })).status, 400);
+  assert.equal(
+    (await call(env, '/api/auth/app/merge', { method: 'POST', token: r.token, body: { anon: 'nope', keep: 'device' } })).status,
+    400,
+  );
   const merged = await call(env, '/api/auth/app/merge', { method: 'POST', token: r.token, body: { anon: old, keep: 'device' } });
   assert.equal(merged.status, 200);
   assert.deepEqual((await merged.json()).profile.home.stops, ['PGP']);
@@ -335,7 +346,13 @@ test('housekeeping deletes anonymous accounts unused for 60 days, never ones wit
   db.exec(`INSERT INTO users (id, email, created, last_seen) VALUES
     ('idle', NULL, 0, ${now - 61 * day}), ('used', NULL, 0, ${now - 59 * day}), ('mail', 'a@b.c', 0, ${now - 61 * day})`);
   await housekeeping(db, now);
-  assert.deepEqual(db._db.prepare('SELECT id FROM users ORDER BY id').all().map((r) => r.id), ['mail', 'used']);
+  assert.deepEqual(
+    db._db
+      .prepare('SELECT id FROM users ORDER BY id')
+      .all()
+      .map((r) => r.id),
+    ['mail', 'used'],
+  );
 });
 
 test('the client header names the platform and version; the User-Agent is only a fallback', () => {
@@ -343,7 +360,10 @@ test('the client header names the platform and version; the User-Agent is only a
   assert.deepEqual(clientFrom(req({ 'x-terminus-client': 'android/1.4.0' })), { platform: 'android', client: 'android/1.4.0' });
   assert.deepEqual(clientFrom(req({ 'x-terminus-client': 'Android-Play/1.5.0' })), { platform: 'android', client: 'android-play/1.5.0' });
   assert.deepEqual(clientFrom(req({ 'x-terminus-client': 'ios/0.1', 'user-agent': 'CFNetwork' })), { platform: 'ios', client: 'ios/0.1' });
-  assert.deepEqual(clientFrom(req({ 'x-terminus-client': 'toaster/1', 'user-agent': 'Dalvik/2.1' })), { platform: 'android', client: null });
+  assert.deepEqual(clientFrom(req({ 'x-terminus-client': 'toaster/1', 'user-agent': 'Dalvik/2.1' })), {
+    platform: 'android',
+    client: null,
+  });
   assert.deepEqual(clientFrom(req({ 'user-agent': 'terminus/1 CFNetwork/1' })), { platform: 'mac', client: null });
 });
 
@@ -382,7 +402,10 @@ test('an app older than config:minClient is told to update; everyone else is ser
   assert.equal((await call(strict, '/api/me/push', { ...as('android/2.5.9'), method: 'DELETE' })).status, 200);
   assert.equal((await call(strict, '/api/auth/logout', { ...as('android/2.5.9'), method: 'POST' })).status, 200);
   const other = await anon(env);
-  assert.equal((await call(strict, '/api/me', { token: other, headers: { 'x-terminus-client': 'android/2.5.9' }, method: 'DELETE' })).status, 200);
+  assert.equal(
+    (await call(strict, '/api/me', { token: other, headers: { 'x-terminus-client': 'android/2.5.9' }, method: 'DELETE' })).status,
+    200,
+  );
 });
 
 test('the bus answers refuse an old app too, in Chinese for zh', async () => {
@@ -408,7 +431,9 @@ test('a setup worth keeping has somewhere to go or somewhere to start', () => {
 
 test('migration 0006 keeps every row when it rebuilds users (D1 cascades on DROP TABLE)', () => {
   const dir = new URL('../migrations/', import.meta.url);
-  const files = readdirSync(dir).filter((n) => n.endsWith('.sql')).sort();
+  const files = readdirSync(dir)
+    .filter((n) => n.endsWith('.sql'))
+    .sort();
   const at = files.indexOf('0006_anonymous.sql');
   const db = new DatabaseSync(':memory:');
   db.exec('PRAGMA foreign_keys = ON');
@@ -450,7 +475,10 @@ test('app sign-in: five wrong codes kill the request; the code needs the poll se
   const { env, email } = setup();
   const s = await (await call(env, '/api/auth/app/start', { method: 'POST', body: { email: ME, name: 'Pixel' } })).json();
   const code = lastCode(email);
-  assert.equal((await (await call(env, '/api/auth/app/code', { method: 'POST', body: { ...s, poll: 'nope', code } })).json()).status, 'expired');
+  assert.equal(
+    (await (await call(env, '/api/auth/app/code', { method: 'POST', body: { ...s, poll: 'nope', code } })).json()).status,
+    'expired',
+  );
   const wrong = code === '222222' ? '333333' : '222222';
   for (let i = 0; i < 4; i++) {
     const r = await call(env, '/api/auth/app/code', { method: 'POST', body: { ...s, code: wrong } });
@@ -461,7 +489,7 @@ test('app sign-in: five wrong codes kill the request; the code needs the poll se
   assert.equal((await (await call(env, '/api/auth/app/poll', { method: 'POST', body: s })).json()).status, 'denied');
 });
 
-test('app sign-in: the code keeps a device\'s setup just like the link', async () => {
+test("app sign-in: the code keeps a device's setup just like the link", async () => {
   const { env, email } = setup();
   const old = await anon(env);
   await call(env, '/api/me/profile', { method: 'PUT', token: old, body: HOME });
@@ -517,7 +545,8 @@ test('app sign-in: a repeat in the cooldown does not spend the global email ceil
   let spent = 0;
   env.RL_MAIL = { limit: async () => (spent++, { success: true }) };
   assert.equal((await call(env, '/api/auth/app/start', { method: 'POST', body: { email: ME, name: 'x' } })).status, 201);
-  for (let i = 0; i < 3; i++) assert.equal((await call(env, '/api/auth/app/start', { method: 'POST', body: { email: ME, name: 'x' } })).status, 429);
+  for (let i = 0; i < 3; i++)
+    assert.equal((await call(env, '/api/auth/app/start', { method: 'POST', body: { email: ME, name: 'x' } })).status, 429);
   assert.equal(spent, 1);
   env.RL_MAIL = { limit: async () => ({ success: false }) };
   const busy = await call(env, '/api/auth/app/start', { method: 'POST', body: { email: 'new@u.nus.edu', name: 'x' } });
@@ -527,7 +556,9 @@ test('app sign-in: a repeat in the cooldown does not spend the global email ceil
 
 test('app sign-in: requests for one address all at once send one email', async () => {
   const { env, email } = setup();
-  const res = await Promise.all(Array.from({ length: 5 }, () => call(env, '/api/auth/app/start', { method: 'POST', body: { email: ME, name: 'x' } })));
+  const res = await Promise.all(
+    Array.from({ length: 5 }, () => call(env, '/api/auth/app/start', { method: 'POST', body: { email: ME, name: 'x' } })),
+  );
   assert.equal(res.filter((r) => r.status === 201).length, 1);
   assert.equal(email.sent.length, 1);
 });

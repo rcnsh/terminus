@@ -30,7 +30,8 @@ class HTMLRewriterStub {
 const ASSETS = {
   async fetch(req) {
     const path = new URL(req.url).pathname;
-    if (path === '/privacy/') return new Response('<a class="wordmark">terminus</a>', { headers: { 'content-type': 'text/html; charset=utf-8' } });
+    if (path === '/privacy/')
+      return new Response('<a class="wordmark">terminus</a>', { headers: { 'content-type': 'text/html; charset=utf-8' } });
     if (path === '/assets/site.css') return new Response('body{}', { headers: { 'content-type': 'text/css' } });
     return new Response('not found', { status: 404 });
   },
@@ -94,7 +95,10 @@ test('/api/health?probe=1 for the operator: a token through the ordinary path, n
   assert.ok(!JSON.stringify(again).includes(await env.KV.get('auth:session')), 'the token is never shown');
   assert.equal((await (await call(env, '/api/health?probe=1', { 'x-health-token': 'guess' })).json()).auth, undefined);
   const bare = { ...makeEnv(), HEALTH_TOKEN: 'op-secret', NEXTBUS_AUTH_BASE: undefined };
-  assert.deepEqual((await (await call(bare, '/api/health?probe=1', { 'x-health-token': 'op-secret' })).json()).auth, { ok: false, reason: 'auth not configured' });
+  assert.deepEqual((await (await call(bare, '/api/health?probe=1', { 'x-health-token': 'op-secret' })).json()).auth, {
+    ok: false,
+    reason: 'auth not configured',
+  });
 });
 
 test('/api/health?versions=1 for the operator: what the version update would find today', async () => {
@@ -115,9 +119,12 @@ test('/api/health?versions=1 for the operator: what the version update would fin
   assert.equal((await (await call(env, '/api/health?versions=1')).json()).versions, undefined, 'not without the token');
 });
 
-test('opening the web app signed out goes straight to sign-in; signed in, or the service worker\'s copy, is the app', async () => {
+test("opening the web app signed out goes straight to sign-in; signed in, or the service worker's copy, is the app", async () => {
   installGlobals(makeFetch());
-  const env = { ...makeEnv(), ASSETS: { fetch: async (req) => new Response(`page for ${new URL(req.url).pathname}`, { headers: { 'content-type': 'text/html' } }) } };
+  const env = {
+    ...makeEnv(),
+    ASSETS: { fetch: async (req) => new Response(`page for ${new URL(req.url).pathname}`, { headers: { 'content-type': 'text/html' } }) },
+  };
   const navigate = { 'sec-fetch-mode': 'navigate', 'sec-fetch-dest': 'document', accept: 'text/html' };
   for (const path of ['/app/', '/app']) {
     const out = await call(env, path, navigate);

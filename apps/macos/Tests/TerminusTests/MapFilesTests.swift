@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import Terminus
 
 /// The map file kept on the Mac: `MapFiles.keepTiles(in:now:fetch:)`.
@@ -24,7 +25,10 @@ private final class Server: @unchecked Sendable {
     let code: Int, body: Data, etag: String?, length: Int?
     var asked: [URLRequest] = []
     init(_ code: Int, _ body: Data = Data(), etag: String? = "\"v2\"", length: Int? = nil) {
-        self.code = code; self.body = body; self.etag = etag; self.length = length ?? body.count
+        self.code = code
+        self.body = body
+        self.etag = etag
+        self.length = length ?? body.count
     }
     func fetch(_ req: URLRequest) throws -> (URL, URLResponse) {
         asked.append(req)
@@ -44,7 +48,8 @@ private func keep(_ dir: URL, _ s: Server, at t: TimeInterval = now) async throw
 /// A map file kept before files had names of their own: `campus.pmtiles`.
 private func kept(_ dir: URL, checked: TimeInterval, etag: String = "\"v1\"") throws {
     try map("old map").write(to: dir.appendingPathComponent("campus.pmtiles"))
-    try JSONSerialization.data(withJSONObject: ["etag": etag, "checked": checked]).write(to: dir.appendingPathComponent("campus.pmtiles.json"))
+    try JSONSerialization.data(withJSONObject: ["etag": etag, "checked": checked]).write(
+        to: dir.appendingPathComponent("campus.pmtiles.json"))
 }
 
 /// The label of the map file in use, or nil with none.

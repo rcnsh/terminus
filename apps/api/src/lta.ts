@@ -42,7 +42,9 @@ export class LtaRefused extends Error {
 
 /** SEA (seats), SDA (standing), LSD (limited standing), as the guide names them. */
 export function parseLoad(v: unknown): Crowd | null {
-  const s = String(v ?? '').trim().toUpperCase();
+  const s = String(v ?? '')
+    .trim()
+    .toUpperCase();
   return s === 'SEA' ? 'low' : s === 'SDA' ? 'medium' : s === 'LSD' ? 'high' : null;
 }
 
@@ -138,7 +140,8 @@ export function normalizePublic(raw: unknown, stopCode: string, graph: Graph, no
       });
     }
   }
-  if (unplaced.size && warnDue(stopCode, nowMs)) console.warn(`DataMall at ${stopCode}: buses matching neither direction left out: ${[...unplaced].slice(0, 4).join(', ')}`);
+  if (unplaced.size && warnDue(stopCode, nowMs))
+    console.warn(`DataMall at ${stopCode}: buses matching neither direction left out: ${[...unplaced].slice(0, 4).join(', ')}`);
   return out;
 }
 
@@ -179,14 +182,21 @@ export function publicProblem(raw: unknown, stopCode: string, graph: Graph, nowM
       if (at === 'unreadable') return `an arrival time it cannot read (${serviceNo})`;
       if (at === 'empty') continue;
       const dest = (row[slot] as Record<string, unknown>).DestinationCode;
-      if ((dest == null || dest === '') && routesHere(graph, stopCode, serviceNo).length > 1) return `a bus with no destination (${serviceNo})`;
+      if ((dest == null || dest === '') && routesHere(graph, stopCode, serviceNo).length > 1)
+        return `a bus with no destination (${serviceNo})`;
     }
   }
   return null;
 }
 
 /** One stop's public buses, straight from DataMall. `code` is the graph's stop; `ltaCode` LTA's for it. */
-export async function fetchPublicArrivals(env: Env, graph: Graph, code: string, ltaCode: string, nowMs: number = Date.now()): Promise<StopArrivals> {
+export async function fetchPublicArrivals(
+  env: Env,
+  graph: Graph,
+  code: string,
+  ltaCode: string,
+  nowMs: number = Date.now(),
+): Promise<StopArrivals> {
   if (!ltaConfigured(env)) throw new Error('DataMall not configured');
   const res = await timedFetch('DataMall', `${LTA_BASE}v3/BusArrival?BusStopCode=${encodeURIComponent(ltaCode)}`, {
     headers: { AccountKey: env.LTA_ACCOUNT_KEY!, accept: 'application/json' },
@@ -207,7 +217,14 @@ export async function fetchPublicArrivals(env: Env, graph: Graph, code: string, 
  * or no answer at all (a timeout, a failed connection) quiets every stop
  * for breakerS: no other stop would fare better.
  */
-export async function getPublicArrivals(env: Env, ctx: ExecutionContext, graph: Graph, code: string, ltaCode: string, nowMs: number = Date.now()): Promise<StopArrivals> {
+export async function getPublicArrivals(
+  env: Env,
+  ctx: ExecutionContext,
+  graph: Graph,
+  code: string,
+  ltaCode: string,
+  nowMs: number = Date.now(),
+): Promise<StopArrivals> {
   return cachedFetch<StopArrivals>({
     ctx,
     nowMs,

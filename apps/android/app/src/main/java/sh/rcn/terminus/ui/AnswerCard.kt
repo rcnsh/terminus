@@ -63,11 +63,11 @@ import sh.rcn.terminus.CardStyle
 import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.R
 import sh.rcn.terminus.Ride
+import sh.rcn.terminus.ServerClock
 import sh.rcn.terminus.Spoken
 import sh.rcn.terminus.Suggestion
 import sh.rcn.terminus.Upcoming
 import sh.rcn.terminus.widget.clock
-import sh.rcn.terminus.ServerClock
 import sh.rcn.terminus.widget.isOld
 
 @Composable
@@ -83,148 +83,176 @@ internal fun AnswerCard(
     // only then: nothing in it ticks. A node of its own, as the card's words
     // count down every second and must not be read out each time.
     Box {
-    Spoken.announcement(answer)?.let { said ->
-        Box(Modifier.size(1.dp).semantics { liveRegion = LiveRegionMode.Polite; contentDescription = said })
-    }
-    // On the page, not in a box: the answer is the screen. A minimum height
-    // keeps what's under it from jumping as answers come and go.
-    Column(
-        Modifier.fillMaxWidth().heightIn(min = 180.dp).padding(top = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        if (answer == null) {
-            SkyHead { Text(if (loading) stringResource(R.string.checking) else stringResource(R.string.no_answer_yet), style = MaterialTheme.typography.titleLarge) }
-            SkyGround()
-            return@Column
-        }
-        if (answer.mode == "rest" || answer.isFree || answer.arrived) {
-            // Nothing to catch: said plainly, with no bus to mistake for advice.
-            // The server's buttons still show, as on the web: "Undo" when the
-            // class just taken off was the day's last, "Back on campus".
-            DayDone(answer, night = answer.mode == "rest", onPlace)
-            Actions(answer, onAction, busy, onSuggestion)
-            return@Column
-        }
-        // What comes before any answer, in the sky with its top.
-        val lead: @Composable ColumnScope.() -> Unit = {
-            // NUS's live times are down: said once, above the answer.
-            answer.card?.notice?.let { ToneText(it, MaterialTheme.colorScheme.tertiary, MaterialTheme.typography.bodySmall) }
-            // Where the trip is, when one is under way: the same on every device.
-            answer.phaseText?.let { Pill(it, smallAccent()) }
-            // On the bus: how far along the ride, and the next stop, as the live notification shows.
-            answer.card?.ride?.let { RideProgress(it) }
-            answer.card?.warning?.let { ToneText(it, MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.SemiBold) }
-        }
-        // Past the card's staleAt: its times may be gone, so they're dimmed
-        // and "Updating times…" stands in until the refresh lands, as on the
-        // web and the Mac. The styled cards fall through to the plain one.
-        val old = stale(answer)
-        // A trip by bus or on foot, drawn in the style chosen in Settings › Appearance.
-        // Read as one sentence of the server's words, not a word at a time
-        // round the line; the buttons under it stay their own.
-        answer.card?.journey?.takeIf { !answer.arrived && !old }?.let { journey ->
-            val said = spokenCard(answer, withLead = true)
-            Column(Modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = said }, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                JourneyCard(answer, journey, CardStyle.pref(LocalContext.current), lead)
-            }
-            Actions(answer, onAction, busy, onSuggestion)
-            return@Column
-        }
-        if (answer.isClassPlan && !old) {
-            val said = spokenCard(answer, withLead = true)
-            Column(Modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = said }, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                SkyHead { lead(); ClassPlan(answer) }
-            }
-            SkyGround()
-            Actions(answer, onAction, busy, onSuggestion)
-            return@Column
-        }
-        // The server's ("Going to KR MRT", "Long gap · Home"); worked out here only for an older server.
-        val head = answer.card?.heading ?: when {
-            answer.mode == "nearby" -> stringResource(R.string.chip_nearby)
-            answer.why == "gap-home" -> stringResource(R.string.long_gap, answer.destLabel.orEmpty())
-            else -> answer.destLabel
-        }
-        SkyHead {
-            lead()
-            head?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.semantics { heading() }) }
-            val ctx = LocalContext.current
-            val muted = MaterialTheme.colorScheme.onSurfaceVariant
-            // The rest as one sentence, under the heading.
-            val said = if (old) null else spokenCard(answer, withLead = false)
-            Column(if (said == null) Modifier else Modifier.clearAndSetSemantics { contentDescription = said }, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                answer.clockLabel { clock(ctx, it) },
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = if (old) muted else MaterialTheme.colorScheme.onSurface,
+        Spoken.announcement(answer)?.let { said ->
+            Box(
+                Modifier.size(1.dp).semantics {
+                    liveRegion = LiveRegionMode.Polite
+                    contentDescription = said
+                }
             )
-            if (old) {
-                Text(stringResource(R.string.updating_times), color = muted)
-            } else {
-                Countdown(answer)
-                Text(answer.detail)
-                LeaveLine(answer)
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
-                answer.timingText?.takeIf { !old }?.let { Pill(it, timingColor(answer.timingStatus)) }
-                answer.crowdText?.let { Pill(it, muted) }
-            }
-            // The alternative is already at the end of `detail`.
-            answer.qualityText?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            }
         }
-        SkyGround()
-        Actions(answer, onAction, busy, onSuggestion)
-    }
+        // On the page, not in a box: the answer is the screen. A minimum height
+        // keeps what's under it from jumping as answers come and go.
+        Column(
+            Modifier.fillMaxWidth().heightIn(min = 180.dp).padding(top = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            if (answer == null) {
+                SkyHead {
+                    Text(
+                        if (loading) stringResource(R.string.checking) else stringResource(R.string.no_answer_yet),
+                        style = MaterialTheme.typography.titleLarge,
+                    )
+                }
+                SkyGround()
+                return@Column
+            }
+            if (answer.mode == "rest" || answer.isFree || answer.arrived) {
+                // Nothing to catch: said plainly, with no bus to mistake for advice.
+                // The server's buttons still show, as on the web: "Undo" when the
+                // class just taken off was the day's last, "Back on campus".
+                DayDone(answer, night = answer.mode == "rest", onPlace)
+                Actions(answer, onAction, busy, onSuggestion)
+                return@Column
+            }
+            // What comes before any answer, in the sky with its top.
+            val lead: @Composable ColumnScope.() -> Unit = {
+                // NUS's live times are down: said once, above the answer.
+                answer.card?.notice?.let { ToneText(it, MaterialTheme.colorScheme.tertiary, MaterialTheme.typography.bodySmall) }
+                // Where the trip is, when one is under way: the same on every device.
+                answer.phaseText?.let { Pill(it, smallAccent()) }
+                // On the bus: how far along the ride, and the next stop, as the live notification shows.
+                answer.card?.ride?.let { RideProgress(it) }
+                answer.card?.warning?.let { ToneText(it, MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.SemiBold) }
+            }
+            // Past the card's staleAt: its times may be gone, so they're dimmed
+            // and "Updating times…" stands in until the refresh lands, as on the
+            // web and the Mac. The styled cards fall through to the plain one.
+            val old = stale(answer)
+            // A trip by bus or on foot, drawn in the style chosen in Settings › Appearance.
+            // Read as one sentence of the server's words, not a word at a time
+            // round the line; the buttons under it stay their own.
+            answer.card
+                ?.journey
+                ?.takeIf { !answer.arrived && !old }
+                ?.let { journey ->
+                    val said = spokenCard(answer, withLead = true)
+                    Column(
+                        Modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = said },
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        JourneyCard(answer, journey, CardStyle.pref(LocalContext.current), lead)
+                    }
+                    Actions(answer, onAction, busy, onSuggestion)
+                    return@Column
+                }
+            if (answer.isClassPlan && !old) {
+                val said = spokenCard(answer, withLead = true)
+                Column(
+                    Modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = said },
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    SkyHead {
+                        lead()
+                        ClassPlan(answer)
+                    }
+                }
+                SkyGround()
+                Actions(answer, onAction, busy, onSuggestion)
+                return@Column
+            }
+            // The server's ("Going to KR MRT", "Long gap · Home"); worked out here only for an older server.
+            val head =
+                answer.card?.heading
+                    ?: when {
+                        answer.mode == "nearby" -> stringResource(R.string.chip_nearby)
+                        answer.why == "gap-home" -> stringResource(R.string.long_gap, answer.destLabel.orEmpty())
+                        else -> answer.destLabel
+                    }
+            SkyHead {
+                lead()
+                head?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.semantics { heading() }) }
+                val ctx = LocalContext.current
+                val muted = MaterialTheme.colorScheme.onSurfaceVariant
+                // The rest as one sentence, under the heading.
+                val said = if (old) null else spokenCard(answer, withLead = false)
+                Column(
+                    if (said == null) Modifier else Modifier.clearAndSetSemantics { contentDescription = said },
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        answer.clockLabel { clock(ctx, it) },
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (old) muted else MaterialTheme.colorScheme.onSurface,
+                    )
+                    if (old) {
+                        Text(stringResource(R.string.updating_times), color = muted)
+                    } else {
+                        Countdown(answer)
+                        Text(answer.detail)
+                        LeaveLine(answer)
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
+                        answer.timingText?.takeIf { !old }?.let { Pill(it, timingColor(answer.timingStatus)) }
+                        answer.crowdText?.let { Pill(it, muted) }
+                    }
+                    // The alternative is already at the end of `detail`.
+                    answer.qualityText?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+            SkyGround()
+            Actions(answer, onAction, busy, onSuggestion)
+        }
     }
 }
 
 /**
- * The card as a screen reader says it: the server's words as sentences
- * ([Spoken.summary]), then how long until it's time to go, to the minute.
- * [withLead]: the notice, phase, warning and where to as well, when they're
- * inside the group rather than read on their own (the plain card's pill and
- * heading).
+ * The card as a screen reader says it: the server's words as sentences ([Spoken.summary]), then how long until it's time to go, to the
+ * minute. [withLead]: the notice, phase, warning and where to as well, when they're inside the group rather than read on their own (the
+ * plain card's pill and heading).
  */
 @Composable
 private fun spokenCard(answer: NextAnswer, withLead: Boolean): String {
     val ctx = LocalContext.current
     // The sentence rounds to the minute: checked every 10 s is plenty.
-    val now by produceState(ServerClock.now(), answer) {
-        while (true) {
-            value = ServerClock.now()
-            delay(10_000)
+    val now by
+        produceState(ServerClock.now(), answer) {
+            while (true) {
+                value = ServerClock.now()
+                delay(10_000)
+            }
         }
-    }
     val lead = if (!withLead) emptyList() else listOfNotNull(answer.card?.notice, answer.card?.warning)
     return listOfNotNull(
-        lead.joinToString("") { "${Spoken.spell(it).trimEnd('.', '。')}. " }.ifEmpty { null },
-        Spoken.summary(true, answer, null, now, withHead = withLead) { clock(ctx, it) },
-        Spoken.countdown(answer, now)?.let { "$it." },
-    ).joinToString(" ")
+            lead.joinToString("") { "${Spoken.spell(it).trimEnd('.', '。')}. " }.ifEmpty { null },
+            Spoken.summary(true, answer, null, now, withHead = withLead) { clock(ctx, it) },
+            Spoken.countdown(answer, now)?.let { "$it." },
+        )
+        .joinToString(" ")
 }
 
 /** Whether [answer] is past its staleAt ([isOld]), checked again when that comes. */
 @Composable
 private fun stale(answer: NextAnswer): Boolean {
-    val old by produceState(isOld(answer, ServerClock.now()), answer) {
-        while (!value) {
-            val at = answer.card?.staleAtMs ?: break
-            // At most a minute at a time, in case the clock's correction moves.
-            delay((at - ServerClock.now()).coerceIn(50, 60_000))
-            value = isOld(answer, ServerClock.now())
+    val old by
+        produceState(isOld(answer, ServerClock.now()), answer) {
+            while (!value) {
+                val at = answer.card?.staleAtMs ?: break
+                // At most a minute at a time, in case the clock's correction moves.
+                delay((at - ServerClock.now()).coerceIn(50, 60_000))
+                value = isOld(answer, ServerClock.now())
+            }
         }
-    }
     return old
 }
 
 /**
- * [answer] without the server's "Undo: going to UTown" for [undoing], the
- * trip whose Undo bar is at the foot of the screen (a swipe off Today, or
- * "Not going" on this phone): Undo once, in the bar. A skip made anywhere
- * else (another device, the leave notification) keeps the card's undo, the
- * only one there is.
+ * [answer] without the server's "Undo: going to UTown" for [undoing], the trip whose Undo bar is at the foot of the screen (a swipe off
+ * Today, or "Not going" on this phone): Undo once, in the bar. A skip made anywhere else (another device, the leave notification) keeps the
+ * card's undo, the only one there is.
  */
 internal fun withoutLocalUndo(answer: NextAnswer?, undoing: String?): NextAnswer? {
     val card = answer?.card ?: return answer
@@ -233,13 +261,17 @@ internal fun withoutLocalUndo(answer: NextAnswer?, undoing: String?): NextAnswer
 }
 
 /**
- * The server's buttons (plans only: "Not going", "Not on campus today",
- * "Back on campus", undo), in its order: the first one filled, the rest outlined. Then
- * anything terminus has to suggest.
+ * The server's buttons (plans only: "Not going", "Not on campus today", "Back on campus", undo), in its order: the first one filled, the
+ * rest outlined. Then anything terminus has to suggest.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun Actions(answer: NextAnswer, onAction: (CardAction) -> Unit, busy: Boolean, onSuggestion: (Suggestion, Boolean) -> Unit = { _, _ -> }) {
+internal fun Actions(
+    answer: NextAnswer,
+    onAction: (CardAction) -> Unit,
+    busy: Boolean,
+    onSuggestion: (Suggestion, Boolean) -> Unit = { _, _ -> },
+) {
     // "Catch the D2 at Museum", and you don't know where Museum is: walking
     // directions there, as the one filled button; the server's go beside it.
     val walkTo = answer.card?.walkTo
@@ -255,16 +287,26 @@ internal fun Actions(answer: NextAnswer, onAction: (CardAction) -> Unit, busy: B
             Button(
                 onClick = { runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, w.mapsUri())) } },
                 modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-            ) { Text(stringResource(R.string.directions_to, w.name), maxLines = 2, overflow = TextOverflow.Ellipsis) }
+            ) {
+                Text(stringResource(R.string.directions_to, w.name), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
             if (skips.isNotEmpty()) SkipMenu(skips, onAction, busy, label = null)
-            else actions.firstOrNull()?.let { a -> OutlinedButton(onClick = { onAction(a) }, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) { Text(a.label, maxLines = 2, overflow = TextOverflow.Ellipsis) } }
+            else
+                actions.firstOrNull()?.let { a ->
+                    OutlinedButton(onClick = { onAction(a) }, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) {
+                        Text(a.label, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                }
         }
     }
     val rest = if (walkTo != null && skips.isEmpty()) actions.drop(1) else actions
     // Without directions, the menu is a button named for the first choice.
     val skipButton = walkTo == null && skips.isNotEmpty()
     if (rest.isNotEmpty() || skipButton) {
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = if (walkTo != null) 6.dp else 10.dp)) {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(top = if (walkTo != null) 6.dp else 10.dp),
+        ) {
             rest.forEachIndexed { i, a ->
                 if (i == 0 && walkTo == null && a.id != "skipped" && a.id != "reset") {
                     Button(onClick = { onAction(a) }, enabled = !busy) { Text(a.label) }
@@ -288,36 +330,48 @@ internal fun Actions(answer: NextAnswer, onAction: (CardAction) -> Unit, busy: B
     }
 }
 
-/**
- * The skips behind one button: ⋯ beside directions, or [label] on its own.
- * Each choice says underneath how much it skips.
- */
+/** The skips behind one button: ⋯ beside directions, or [label] on its own. Each choice says underneath how much it skips. */
 @Composable
 private fun SkipMenu(skips: List<CardAction>, onAction: (CardAction) -> Unit, busy: Boolean, label: String?) {
     var open by remember { mutableStateOf(false) }
     Box {
         if (label == null) {
-            OutlinedButton(onClick = { open = true }, enabled = !busy, modifier = Modifier.size(48.dp), contentPadding = PaddingValues(0.dp)) {
-                Icon(painterResource(R.drawable.ic_more), contentDescription = stringResource(R.string.more_options), modifier = Modifier.size(20.dp))
+            OutlinedButton(
+                onClick = { open = true },
+                enabled = !busy,
+                modifier = Modifier.size(48.dp),
+                contentPadding = PaddingValues(0.dp),
+            ) {
+                Icon(
+                    painterResource(R.drawable.ic_more),
+                    contentDescription = stringResource(R.string.more_options),
+                    modifier = Modifier.size(20.dp),
+                )
             }
         } else {
             OutlinedButton(onClick = { open = true }, enabled = !busy) { Text(label) }
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             skips.forEach { a ->
-                val hint = when (a.id) {
-                    "skipped" -> stringResource(R.string.skips_class)
-                    "away" -> stringResource(R.string.skips_day)
-                    else -> null
-                }
+                val hint =
+                    when (a.id) {
+                        "skipped" -> stringResource(R.string.skips_class)
+                        "away" -> stringResource(R.string.skips_day)
+                        else -> null
+                    }
                 DropdownMenuItem(
                     text = {
                         Column(Modifier.padding(vertical = 4.dp)) {
                             Text(a.label, style = MaterialTheme.typography.bodyLarge)
-                            hint?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                            hint?.let {
+                                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
                     },
-                    onClick = { open = false; onAction(a) },
+                    onClick = {
+                        open = false
+                        onAction(a)
+                    },
                 )
             }
         }
@@ -325,9 +379,8 @@ private fun SkipMenu(skips: List<CardAction>, onAction: (CardAction) -> Unit, bu
 }
 
 /**
- * A class: when to leave is the headline, the bus that goes with it and when
- * it gets you there underneath, and the next bus as the "or go now" option.
- * Every arrival sits next to the bus it belongs to.
+ * A class: when to leave is the headline, the bus that goes with it and when it gets you there underneath, and the next bus as the "or go
+ * now" option. Every arrival sits next to the bus it belongs to.
  */
 @Composable
 internal fun ClassPlan(answer: NextAnswer) {
@@ -335,12 +388,13 @@ internal fun ClassPlan(answer: NextAnswer) {
     val at = answer.leaveAtMs ?: return
     val fmt = { ms: Long -> clock(ctx, ms) }
     // Minute resolution is enough for "in 24 min"; seconds near the end.
-    val now by produceState(ServerClock.now(), at) {
-        while (true) {
-            value = ServerClock.now()
-            delay(if (at - value < 120_000) 1_000 else 15_000)
+    val now by
+        produceState(ServerClock.now(), at) {
+            while (true) {
+                value = ServerClock.now()
+                delay(if (at - value < 120_000) 1_000 else 15_000)
+            }
         }
-    }
     val late = answer.leaveLate
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val starts = answer.classAtMs?.let { stringResource(R.string.starts_at, fmt(it)) }
@@ -371,12 +425,22 @@ internal fun ClassPlan(answer: NextAnswer) {
     // named here, so no separate "board at" or general detail line below.
     // One colour for "go" (the countdown above); red only when it's late.
     val error = MaterialTheme.colorScheme.error
-    answer.catchHow?.let { Text(it, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = if (late) error else MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 4.dp)) }
+    answer.catchHow?.let {
+        Text(
+            it,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = if (late) error else MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
     answer.catchArrive?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = if (late) error else muted) }
     // A busy bus and an estimate are small print, not more headlines.
-    listOfNotNull(answer.leaveNote, answer.card?.estimate).takeIf { it.isNotEmpty() }?.let {
-        Text(it.joinToString(" "), style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 4.dp))
-    }
+    listOfNotNull(answer.leaveNote, answer.card?.estimate)
+        .takeIf { it.isNotEmpty() }
+        ?.let {
+            Text(it.joinToString(" "), style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 4.dp))
+        }
     answer.goNowLine?.let {
         HorizontalDivider(Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
         Text(it, style = MaterialTheme.typography.bodyMedium, color = muted)
@@ -385,11 +449,9 @@ internal fun ClassPlan(answer: NextAnswer) {
 }
 
 /**
- * The day's done, or there's nothing to catch: the label large, what's next
- * on a card of its own, then your favourites to plan a trip to instead. On
- * Now it's all up in the sky ([SkyHead]), the favourites on the ground
- * below the horizon, under the hour's sky. Elsewhere, a panel: the night's
- * after your day, else a plain one.
+ * The day's done, or there's nothing to catch: the label large, what's next on a card of its own, then your favourites to plan a trip to
+ * instead. On Now it's all up in the sky ([SkyHead]), the favourites on the ground below the horizon, under the hour's sky. Elsewhere, a
+ * panel: the night's after your day, else a plain one.
  */
 @Composable
 private fun DayDone(answer: NextAnswer, night: Boolean, onPlace: (String) -> Unit) {
@@ -401,8 +463,22 @@ private fun DayDone(answer: NextAnswer, night: Boolean, onPlace: (String) -> Uni
     val sky = LocalSky.current
     if (sky != null) {
         SkyHead(72.dp) {
-            Text(answer.label, color = MaterialTheme.colorScheme.onSurface, fontSize = 46.sp, lineHeight = 48.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-1).sp)
-            sub?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 4.dp)) }
+            Text(
+                answer.label,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 46.sp,
+                lineHeight = 48.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = (-1).sp,
+            )
+            sub?.let {
+                Text(
+                    it,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
             upcoming?.let { UpcomingCard(it, glass = true) }
         }
         SkyGround()
@@ -412,35 +488,76 @@ private fun DayDone(answer: NextAnswer, night: Boolean, onPlace: (String) -> Uni
         // With no sky to sit in, the night is a panel of its own.
         NightTheme(true) {
             Column(
-                Modifier
-                    .fillMaxWidth()
+                Modifier.fillMaxWidth()
                     .clip(RoundedCornerShape(28.dp))
                     .background(Brush.verticalGradient(NIGHT))
                     .padding(horizontal = 22.dp)
                     .drawBehind { starsAndMoon(108.dp.toPx()) }
-                    .padding(top = 108.dp, bottom = if (!places) 24.dp else 0.dp),
+                    .padding(top = 108.dp, bottom = if (!places) 24.dp else 0.dp)
             ) {
                 val ink = MaterialTheme.colorScheme
-                Text(answer.label, color = ink.onSurface, fontSize = 46.sp, lineHeight = 48.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-1).sp)
-                sub?.let { Text(it, color = ink.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp)) }
+                Text(
+                    answer.label,
+                    color = ink.onSurface,
+                    fontSize = 46.sp,
+                    lineHeight = 48.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = (-1).sp,
+                )
+                sub?.let {
+                    Text(
+                        it,
+                        color = ink.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
                 upcoming?.let { UpcomingCard(it, glass = true) }
-                if (places) Label(stringResource(R.string.going_anyway), Modifier.padding(top = 24.dp, bottom = 10.dp), color = ink.onSurfaceVariant)
+                if (places)
+                    Label(
+                        stringResource(R.string.going_anyway),
+                        Modifier.padding(top = 24.dp, bottom = 10.dp),
+                        color = ink.onSurfaceVariant,
+                    )
             }
         }
     } else {
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(c.surfaceVariant).padding(start = 22.dp, end = 22.dp, top = 28.dp, bottom = 24.dp)) {
-            Text(answer.label, color = c.onSurface, fontSize = 38.sp, lineHeight = 42.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.5).sp)
-            sub?.let { Text(it, color = c.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp)) }
+        Column(
+            Modifier.fillMaxWidth()
+                .clip(RoundedCornerShape(28.dp))
+                .background(c.surfaceVariant)
+                .padding(start = 22.dp, end = 22.dp, top = 28.dp, bottom = 24.dp)
+        ) {
+            Text(
+                answer.label,
+                color = c.onSurface,
+                fontSize = 38.sp,
+                lineHeight = 42.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = (-0.5).sp,
+            )
+            sub?.let {
+                Text(it, color = c.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp))
+            }
         }
         upcoming?.let { UpcomingCard(it, glass = false) }
         if (places) Label(stringResource(R.string.going_anyway), Modifier.padding(top = 22.dp, bottom = 10.dp))
     }
     if (places) {
         for (row in answer.places.chunked(3)) {
-            Row(Modifier.fillMaxWidth().padding(bottom = 8.dp).height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                Modifier.fillMaxWidth().padding(bottom = 8.dp).height(IntrinsicSize.Min),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 for (p in row) {
                     LinkTile({ onPlace(p.key) }, Modifier.weight(1f).fillMaxHeight()) {
-                        Text(p.label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            p.label,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                         Spacer(Modifier.height(18.dp))
                         Text(stringResource(R.string.plan_trip), style = MaterialTheme.typography.bodySmall, color = c.onSurfaceVariant)
                     }
@@ -451,15 +568,16 @@ private fun DayDone(answer: NextAnswer, night: Boolean, onPlace: (String) -> Uni
     } else {
         Text(
             stringResource(if (night) R.string.rest_hint_none else R.string.free_hint_none),
-            style = MaterialTheme.typography.bodySmall, color = c.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp),
+            style = MaterialTheme.typography.bodySmall,
+            color = c.onSurfaceVariant,
+            modifier = Modifier.padding(top = 12.dp),
         )
     }
 }
 
 /**
- * The next class on a card of its own: when in the accent, what, then
- * where. On the sky ([glass]) it's see-through: frosted on a light sky, a
- * faint pane on a dark one.
+ * The next class on a card of its own: when in the accent, what, then where. On the sky ([glass]) it's see-through: frosted on a light sky,
+ * a faint pane on a dark one.
  */
 @Composable
 private fun UpcomingCard(u: Upcoming, glass: Boolean) {
@@ -467,35 +585,43 @@ private fun UpcomingCard(u: Upcoming, glass: Boolean) {
     val shape = RoundedCornerShape(22.dp)
     val light = LocalSky.current?.palette?.lightInk ?: true
     Column(
-        Modifier
-            .padding(top = 18.dp)
+        Modifier.padding(top = 18.dp)
             .fillMaxWidth()
             .clip(shape)
             .background(if (!glass) c.surface else if (light) Color.White.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.5f))
             .border(1.dp, if (!glass) c.outlineVariant else if (light) Color.White.copy(alpha = 0.14f) else Color(0x291C1917), shape)
-            .padding(18.dp),
+            .padding(18.dp)
     ) {
         Label(u.whenText, color = smallAccent())
-        Text(u.title, fontSize = 22.sp, lineHeight = 26.sp, fontWeight = FontWeight.Bold, color = c.onSurface, modifier = Modifier.padding(top = 6.dp))
+        Text(
+            u.title,
+            fontSize = 22.sp,
+            lineHeight = 26.sp,
+            fontWeight = FontWeight.Bold,
+            color = c.onSurface,
+            modifier = Modifier.padding(top = 6.dp),
+        )
         Text(u.where, style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
     }
 }
 
 /** "On time" green: the sky's in the sky, else the one for the scheme's page (night's on a light phone too). */
 @Composable
-internal fun goodColor() = LocalSkyTones.current?.good ?: if (MaterialTheme.colorScheme.background.luminance() < 0.5f) GoodDark else GoodLight
+internal fun goodColor() =
+    LocalSkyTones.current?.good ?: if (MaterialTheme.colorScheme.background.luminance() < 0.5f) GoodDark else GoodLight
 
 /** "Leave by 09:38 · D2 from PGP", turning into "Leave now" when the time comes. */
 @Composable
 internal fun LeaveLine(answer: NextAnswer) {
     val at = answer.leaveAtMs ?: return
     val ctx = LocalContext.current
-    val now by produceState(ServerClock.now(), at) {
-        while (value < at) {
-            delay((at - value).coerceIn(1_000, 30_000))
-            value = ServerClock.now()
+    val now by
+        produceState(ServerClock.now(), at) {
+            while (value < at) {
+                delay((at - value).coerceIn(1_000, 30_000))
+                value = ServerClock.now()
+            }
         }
-    }
     answer.leaveText(now)?.let {
         Text(it, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))
     }
@@ -505,29 +631,36 @@ internal fun LeaveLine(answer: NextAnswer) {
 @Composable
 internal fun Countdown(answer: NextAnswer) {
     val at = answer.departsAtMs ?: return
-    val now by produceState(ServerClock.now(), at) {
-        while (true) {
-            value = ServerClock.now()
-            delay(1_000)
+    val now by
+        produceState(ServerClock.now(), at) {
+            while (true) {
+                value = ServerClock.now()
+                delay(1_000)
+            }
         }
-    }
     val left = (at - now) / 1000
-    val text = when {
-        left > 60 -> stringResource(R.string.leaves_in_min_s, (left / 60).toInt(), (left % 60).toInt())
-        left > 0 -> stringResource(R.string.leaves_in_s, left.toInt())
-        // Gone: a minute ago from the moment it left, never "0 min ago", as on the Mac.
-        else -> stringResource(R.string.left_ago, maxOf(1, ((-left + 59) / 60).toInt()))
-    }
-    Text(text, style = MaterialTheme.typography.titleSmall, color = if (left > 0) smallAccent() else MaterialTheme.colorScheme.onSurfaceVariant)
+    val text =
+        when {
+            left > 60 -> stringResource(R.string.leaves_in_min_s, (left / 60).toInt(), (left % 60).toInt())
+            left > 0 -> stringResource(R.string.leaves_in_s, left.toInt())
+            // Gone: a minute ago from the moment it left, never "0 min ago", as on the Mac.
+            else -> stringResource(R.string.left_ago, maxOf(1, ((-left + 59) / 60).toInt()))
+        }
+    Text(
+        text,
+        style = MaterialTheme.typography.titleSmall,
+        color = if (left > 0) smallAccent() else MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 /** Three states, three colours: "tight" is the one that must not look calm. */
 @Composable
-internal fun timingColor(status: String?) = when (status) {
-    "late" -> MaterialTheme.colorScheme.error
-    "tight" -> MaterialTheme.colorScheme.tertiary
-    else -> goodColor()
-}
+internal fun timingColor(status: String?) =
+    when (status) {
+        "late" -> MaterialTheme.colorScheme.error
+        "tight" -> MaterialTheme.colorScheme.tertiary
+        else -> goodColor()
+    }
 
 /** Words in a colour of their own (a notice, a warning); in the sky, on its chip, so they read over any hour's colours. */
 @Composable
@@ -538,7 +671,9 @@ private fun ToneText(text: String, color: Color, style: TextStyle = LocalTextSty
         style = style,
         fontWeight = fontWeight,
         color = color,
-        modifier = if (chip == null) Modifier else Modifier.background(chip, RoundedCornerShape(10.dp)).padding(horizontal = 10.dp, vertical = 4.dp),
+        modifier =
+            if (chip == null) Modifier
+            else Modifier.background(chip, RoundedCornerShape(10.dp)).padding(horizontal = 10.dp, vertical = 4.dp),
     )
 }
 
@@ -548,31 +683,41 @@ internal fun Pill(text: String, color: Color) {
         text,
         style = MaterialTheme.typography.labelMedium,
         color = color,
-        modifier = Modifier
-            // In the sky, on its chip, so the colour reads over any hour's (SkyTones).
-            .background(LocalSkyTones.current?.chip ?: color.copy(alpha = 0.12f), RoundedCornerShape(50))
-            .padding(horizontal = 10.dp, vertical = 4.dp),
+        modifier =
+            Modifier
+                // In the sky, on its chip, so the colour reads over any hour's (SkyTones).
+                .background(LocalSkyTones.current?.chip ?: color.copy(alpha = 0.12f), RoundedCornerShape(50))
+                .padding(horizontal = 10.dp, vertical = 4.dp),
     )
 }
 
 /**
- * On the bus: a bar from boarding to getting off, and "Next: Opp NUSS · 3
- * stops to go"; on a trip that changes, the second bus under it.
+ * On the bus: a bar from boarding to getting off, and "Next: Opp NUSS · 3 stops to go"; on a trip that changes, the second bus under it.
  */
 @Composable
 private fun RideProgress(ride: Ride) {
-    val now by produceState(ServerClock.now(), ride) {
-        while (value < ride.arriveMs) {
-            delay(5_000)
-            value = ServerClock.now()
+    val now by
+        produceState(ServerClock.now(), ride) {
+            while (value < ride.arriveMs) {
+                delay(5_000)
+                value = ServerClock.now()
+            }
         }
-    }
     LinearProgressIndicator(
         progress = { ride.progress(now) },
         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
     )
-    Text(ride.nextText(now, withChange = false), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 4.dp, bottom = 4.dp))
+    Text(
+        ride.nextText(now, withChange = false),
+        style = MaterialTheme.typography.bodyMedium,
+        modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+    )
     ride.change?.let {
-        Text(it.text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 4.dp))
+        Text(
+            it.text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 4.dp),
+        )
     }
 }

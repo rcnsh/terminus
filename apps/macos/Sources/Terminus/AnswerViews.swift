@@ -18,7 +18,9 @@ struct AnswerDetail: View {
         VStack(alignment: .leading, spacing: 8) {
             if let a = answer {
                 if let n = a.card?.notice { Row(icon: "antenna.radiowaves.left.and.right.slash", text: n).foregroundStyle(Color.warn) }
-                if let w = a.card?.warning { Row(icon: "exclamationmark.triangle.fill", text: w).fontWeight(.semibold).foregroundStyle(Color.warn) }
+                if let w = a.card?.warning {
+                    Row(icon: "exclamationmark.triangle.fill", text: w).fontWeight(.semibold).foregroundStyle(Color.warn)
+                }
                 if let ride = a.card?.ride { RideLine(ride: ride, color: a.card?.journey?.bus?.color) }
                 if a.isFree {
                     // Nothing to catch: no bus to mistake for advice.
@@ -30,8 +32,13 @@ struct AnswerDetail: View {
                 } else if a.isClassPlan {
                     // The bus to catch (it names the stop), then when it gets you there.
                     // One colour for "go" (the countdown in the header); red only when it's late.
-                    if let c = a.catchHow { Row(icon: a.leave?.svc == nil ? "figure.walk" : "bus.fill", text: c).fontWeight(.semibold).foregroundStyle(a.leaveLate ? Color.bad : Color.primary) }
-                    if let arrive = a.catchArrive { Row(icon: "flag.checkered", text: arrive).foregroundStyle(a.leaveLate ? Color.bad : Color.secondary) }
+                    if let c = a.catchHow {
+                        Row(icon: a.leave?.svc == nil ? "figure.walk" : "bus.fill", text: c).fontWeight(.semibold).foregroundStyle(
+                            a.leaveLate ? Color.bad : Color.primary)
+                    }
+                    if let arrive = a.catchArrive {
+                        Row(icon: "flag.checkered", text: arrive).foregroundStyle(a.leaveLate ? Color.bad : Color.secondary)
+                    }
                     if let note = a.card?.note { Row(icon: "person.3.fill", text: note).foregroundStyle(.secondary) }
                     if let e = a.card?.estimate { Row(icon: "info.circle", text: e).foregroundStyle(.secondary) }
                     if let g = a.goNowLine { Row(icon: "bus", text: g).foregroundStyle(.secondary) }
@@ -49,12 +56,16 @@ struct AnswerDetail: View {
                 let timing = a.card?.ride == nil ? a.timing?.text : nil
                 if !old, !a.isClassPlan, !a.isFree, timing != nil || a.crowdText != nil {
                     HStack(spacing: 6) {
-                        if let t = a.timing, let text = timing { Pill(text: text, color: t.status == "late" ? .bad : t.status == "tight" ? .warn : .good) }
+                        if let t = a.timing, let text = timing {
+                            Pill(text: text, color: t.status == "late" ? .bad : t.status == "tight" ? .warn : .good)
+                        }
                         if let c = a.crowdText { Pill(text: c, color: .secondary) }
                     }
                 }
                 // The server's buttons (plans only: Not going, Not on campus today, undo), the first one prominent.
-                if let actions = a.card?.actions?.filter({ !($0.id == "reset" && $0.trip == undoShownFor && undoShownFor != nil) }), !actions.isEmpty {
+                if let actions = a.card?.actions?.filter({ !($0.id == "reset" && $0.trip == undoShownFor && undoShownFor != nil) }),
+                    !actions.isEmpty
+                {
                     Flow(spacing: 6) {
                         ForEach(Array(Self.grouped(actions).enumerated()), id: \.offset) { i, group in
                             if group.count > 1 {
@@ -118,7 +129,9 @@ struct AnswerDetail: View {
         var body: some View {
             Menu {
                 ForEach(skips, id: \.self) { s in
-                    Button { onAction(s) } label: {
+                    Button {
+                        onAction(s)
+                    } label: {
                         Text(s.label)
                         Text(s.id == "skipped" ? L("Skip this class") : L("Skip every trip left today"))
                     }
@@ -164,7 +177,10 @@ struct AnswerDetail: View {
         /// An icon a few points from its words, the way Row sets them.
         private struct Tight: LabelStyle {
             func makeBody(configuration: Configuration) -> some View {
-                HStack(alignment: .firstTextBaseline, spacing: 4) { configuration.icon.font(.system(size: 10)); configuration.title }
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    configuration.icon.font(.system(size: 10))
+                    configuration.title
+                }
             }
         }
     }
@@ -188,7 +204,9 @@ struct AnswerDetail: View {
                 Row(icon: "bus.fill", text: [j.bus?.svc, ride].compactMap { $0 }.joined(separator: " · ")).fontWeight(.semibold)
             }
             if let end = j.walkEndText { Row(icon: "figure.walk", text: end) }
-            if let arrive = j.arriveText { Row(icon: "flag.checkered", text: [arrive, j.arriveWhere].compactMap { $0 }.joined(separator: " · ")) }
+            if let arrive = j.arriveText {
+                Row(icon: "flag.checkered", text: [arrive, j.arriveWhere].compactMap { $0 }.joined(separator: " · "))
+            }
             if let backup = j.backupText { Row(icon: "bus", text: backup).foregroundStyle(.secondary) }
         }
     }
@@ -224,7 +242,9 @@ struct AnswerDetail: View {
                                 .font(.system(size: 10, weight: .bold))
                                 // With no service colour, or one that can't be read, the disc
                                 // is the brand's (Color.brand), in this appearance: ink for that.
-                                .foregroundStyle(inkOn(rgb: color.flatMap(hexRGB) ?? (scheme == .dark ? Color.brandRGB.dark : Color.brandRGB.light)))
+                                .foregroundStyle(
+                                    inkOn(rgb: color.flatMap(hexRGB) ?? (scheme == .dark ? Color.brandRGB.dark : Color.brandRGB.light))
+                                )
                                 .frame(width: 16, height: 16)
                                 .background(Circle().fill(tint))
                                 .offset(x: w * done - 4)
@@ -246,7 +266,8 @@ struct AnswerDetail: View {
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(L("Ride progress"))
-                .accessibilityValue([Self.spoken(ride.stops.map(\.name), passed: passed), ride.change?.text].compactMap { $0 }.joined(separator: " "))
+                .accessibilityValue(
+                    [Self.spoken(ride.stops.map(\.name), passed: passed), ride.change?.text].compactMap { $0 }.joined(separator: " "))
             }
         }
 
@@ -257,7 +278,9 @@ struct AnswerDetail: View {
             guard last > 0 else { return stops.first ?? "" }
             let next = min(passed + 1, last)
             let left = last - min(passed, last - 1)
-            return left <= 1 ? L("Next stop: %@, where you get off.", stops[last]) : L("Next stop: %@. %@ stops to go, getting off at %@.", stops[next], "\(left)", stops[last])
+            return left <= 1
+                ? L("Next stop: %@, where you get off.", stops[last])
+                : L("Next stop: %@. %@ stops to go, getting off at %@.", stops[next], "\(left)", stops[last])
         }
     }
 
@@ -355,7 +378,8 @@ struct FlowPills: View {
                     }
                     let later = Self.later(r)
                     (Text(Self.eta(r)).foregroundColor(.secondary)
-                        + Text(later.isEmpty ? "" : " · " + later.joined(separator: " · ")).foregroundColor(Color.secondary.opacity(contrast == .increased ? 0.85 : 0.55)))
+                        + Text(later.isEmpty ? "" : " · " + later.joined(separator: " · ")).foregroundColor(
+                            Color.secondary.opacity(contrast == .increased ? 0.85 : 0.55)))
                         .font(.system(size: 11, weight: .medium).monospacedDigit())
                         .contentTransition(.numericText())
                 }
@@ -394,7 +418,9 @@ struct FlowPills: View {
     }
 
     nonisolated static func later(_ r: BoardRow) -> [String] {
-        (r.later ?? []).filter { $0.etaS != nil || $0.eta != nil }.prefix(laterShown).map { $0.eta ?? eta(etaS: $0.etaS, quality: $0.quality) }
+        (r.later ?? []).filter { $0.etaS != nil || $0.eta != nil }.prefix(laterShown).map {
+            $0.eta ?? eta(etaS: $0.etaS, quality: $0.quality)
+        }
     }
 
     /// "D2, public bus, fare applies: 4 min, about 14 min", with Chinese punctuation in Chinese.
@@ -451,7 +477,8 @@ private struct RemovedRow: View {
             Text(parseISODate(item.startsAt).map(campusTime) ?? "")
                 .font(.callout.monospacedDigit())
                 .frame(width: 58, alignment: .leading)
-            Text(L("%@ removed from today", item.kind == "home" ? L("The trip home") : item.label.components(separatedBy: " @ ")[0])).font(.callout)
+            Text(L("%@ removed from today", item.kind == "home" ? L("The trip home") : item.label.components(separatedBy: " @ ")[0])).font(
+                .callout)
             Spacer(minLength: 0)
             Button(L("Undo"), action: onUndo).buttonStyle(.plain).foregroundStyle(.tint).fontWeight(.medium)
         }
@@ -491,13 +518,17 @@ private struct TodayRow: View {
             if item.removable == true {
                 // Shown on hover, and when the keyboard reaches it. VoiceOver
                 // has the row's action instead, so it isn't offered twice.
-                Button { onRemove(item) } label: { Image(systemName: "xmark").font(.caption.weight(.semibold)) }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                    .focused($removeFocused)
-                    .opacity(hovering || removeFocused ? 1 : 0)
-                    .help(L("Remove from today"))
-                    .accessibilityHidden(true)
+                Button {
+                    onRemove(item)
+                } label: {
+                    Image(systemName: "xmark").font(.caption.weight(.semibold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .focused($removeFocused)
+                .opacity(hovering || removeFocused ? 1 : 0)
+                .help(L("Remove from today"))
+                .accessibilityHidden(true)
             }
         }
         .opacity(past ? (contrast == .increased ? 0.7 : 0.5) : 1)

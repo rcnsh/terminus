@@ -21,7 +21,8 @@ class PullTest {
     /** Steps [ms] of frames at 60 a second. */
     private fun PullMotion.run(ms: Int) = repeat(ms * 60 / 1000) { step(1 / 60f) }
 
-    @Test fun theSkyStretchesLessTheFurtherItGoes() {
+    @Test
+    fun theSkyStretchesLessTheFurtherItGoes() {
         assertEquals(0f, Pull.rubber(0f), 0.001f)
         // The web's numbers: 170 * (1 - e^(-raw / 200)).
         assertEquals(170f * (1 - kotlin.math.exp(-1f)), Pull.rubber(200f), 0.01f)
@@ -33,7 +34,8 @@ class PullTest {
         for (raw in listOf(0f, 30f, 120f, 400f)) assertEquals(raw, Pull.unrubber(Pull.rubber(raw)), 0.5f)
     }
 
-    @Test fun theHeaderComesDownALittleAndThePillSitsInTheRoom() {
+    @Test
+    fun theHeaderComesDownALittleAndThePillSitsInTheRoom() {
         assertEquals(0f, Pull.lead(0f), 0.001f)
         assertEquals(12f, Pull.lead(100f), 0.001f)
         // Halfway between the chips (14 dp over the room, come down by the lead) and the words at the room's foot.
@@ -48,7 +50,8 @@ class PullTest {
         assertEquals(1f, Pull.hintAlpha(0f, held = true), 0.001f)
     }
 
-    @Test fun anAnswerUnderFifteenSecondsOldIsNotAskedAgain() {
+    @Test
+    fun anAnswerUnderFifteenSecondsOldIsNotAskedAgain() {
         val now = 1_000_000L
         assertTrue(Pull.shouldFetch(null, now))
         assertFalse(Pull.shouldFetch(now - 1_000, now))
@@ -58,7 +61,8 @@ class PullTest {
         assertTrue(Pull.shouldFetch(now + 60_000, now))
     }
 
-    @Test fun thePillSaysWhatHappened() {
+    @Test
+    fun thePillSaysWhatHappened() {
         assertEquals(PullOutcome.UpToDate, Pull.outcome(fetched = false, ok = false))
         assertEquals(PullOutcome.Updated, Pull.outcome(fetched = true, ok = true))
         assertEquals(PullOutcome.Failed, Pull.outcome(fetched = true, ok = false))
@@ -66,7 +70,8 @@ class PullTest {
         assertEquals(700L, Pull.minShowMs(PullOutcome.Updated))
     }
 
-    @Test fun upToDateSaysWhenTheNextTimesCome() {
+    @Test
+    fun upToDateSaysWhenTheNextTimesCome() {
         val now = 1_000_000L
         assertEquals(9, Pull.inS(now + 8_200, now))
         assertEquals(1, Pull.inS(now + 30, now))
@@ -74,7 +79,8 @@ class PullTest {
         assertNull("one already past says nothing", Pull.inS(now - 1, now))
     }
 
-    @Test fun theHorizonsPlacesAreTheOnesItDraws() {
+    @Test
+    fun theHorizonsPlacesAreTheOnesItDraws() {
         // Your stop's sign left of the flag (at 0.76 across), the bus short of it.
         assertTrue(sign < width * 0.76f - 6)
         assertEquals(sign - Pull.SHORT_OF_SIGN, Pull.roadBus(sign, 0f), 0.5f)
@@ -86,7 +92,8 @@ class PullTest {
         assertEquals(hill.stop, hill.rest, 0f)
     }
 
-    @Test fun theCardsBusDrivesToTheStopAsTheSkyStretches() {
+    @Test
+    fun theCardsBusDrivesToTheStopAsTheSkyStretches() {
         assertEquals(road.from, Pull.busX(0f, road.from, road.stop), 0.001f)
         assertEquals(road.stop, Pull.busX(1f, road.from, road.stop), 0.001f)
         assertEquals(road.stop, Pull.busX(2f, road.from, road.stop), 0.001f)
@@ -100,7 +107,8 @@ class PullTest {
         assertEquals(road.home!!, m.busX, 0.5f)
     }
 
-    @Test fun armedItTicksOnceAndLettingGoAsks() {
+    @Test
+    fun armedItTicksOnceAndLettingGoAsks() {
         val m = motion()
         var ticks = 0
         repeat(40) { if (m.drag(8f)) ticks++ }
@@ -124,7 +132,8 @@ class PullTest {
         assertNull(m.result)
     }
 
-    @Test fun onlyATouchThatStartsAtTheTopPulls() {
+    @Test
+    fun onlyATouchThatStartsAtTheTopPulls() {
         val m = motion()
         // Scrolling up into the top and on: the rest of that drag doesn't pull.
         m.touch()
@@ -144,7 +153,8 @@ class PullTest {
         assertEquals(PullMotion.Phase.Idle, m.phase)
     }
 
-    @Test fun theBusBoardsThenDrivesOffAndGoesRoundAgain() {
+    @Test
+    fun theBusBoardsThenDrivesOffAndGoesRoundAgain() {
         val m = motion()
         m.drag(400f)
         m.release()
@@ -159,7 +169,8 @@ class PullTest {
         assertEquals(PullMotion.Drive.Looping, m.drive)
     }
 
-    @Test fun theAnswerIsSaidThenTheCardsBusComesBackAndItCloses() {
+    @Test
+    fun theAnswerIsSaidThenTheCardsBusComesBackAndItCloses() {
         val m = motion()
         m.drag(400f)
         m.release()
@@ -193,7 +204,8 @@ class PullTest {
         assertEquals(road.home!!, m.busX, 0.5f)
     }
 
-    @Test fun theBusComesBackToWhereTheNewAnswerPutsIt() {
+    @Test
+    fun theBusComesBackToWhereTheNewAnswerPutsIt() {
         val m = motion()
         m.drag(400f)
         m.release()
@@ -204,7 +216,8 @@ class PullTest {
         assertEquals(Pull.roadBus(sign, 0.1f), m.busX, 0.5f)
     }
 
-    @Test fun aSlowAnswerIsSaidAsSoonAsItsIn() {
+    @Test
+    fun aSlowAnswerIsSaidAsSoonAsItsIn() {
         val m = motion()
         m.drag(400f)
         m.release()
@@ -217,7 +230,8 @@ class PullTest {
         assertFalse(m.good)
     }
 
-    @Test fun lettingGoShortAsksNothing() {
+    @Test
+    fun lettingGoShortAsksNothing() {
         val m = motion()
         m.drag(40f)
         assertFalse(m.armed)
@@ -231,7 +245,8 @@ class PullTest {
         assertEquals(road.home!!, m.busX, 0.5f)
     }
 
-    @Test fun upwardTheFingerTakesTheSkyBackFirst() {
+    @Test
+    fun upwardTheFingerTakesTheSkyBackFirst() {
         val m = motion()
         m.drag(50f)
         assertEquals(-50f, m.takeBack(-80f), 0.001f)
@@ -240,7 +255,8 @@ class PullTest {
         assertEquals(0f, m.takeBack(-10f), 0.001f)
     }
 
-    @Test fun onTheHillsASignGrowsAndABusDrivesInFromTheLeft() {
+    @Test
+    fun onTheHillsASignGrowsAndABusDrivesInFromTheLeft() {
         val m = motion(hill)
         m.drag(1f)
         m.step(1 / 60f)
@@ -252,7 +268,8 @@ class PullTest {
         assertEquals(hill.stop, m.busX, 0.5f)
     }
 
-    @Test fun withoutAnimationsNothingDrivesAndTheSkyEasesBack() {
+    @Test
+    fun withoutAnimationsNothingDrivesAndTheSkyEasesBack() {
         // Now: the card's bus stays in its place; only the sign lights.
         val m = motion(calm = true)
         m.drag(400f)

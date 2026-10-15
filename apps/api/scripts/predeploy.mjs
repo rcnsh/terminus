@@ -32,14 +32,19 @@ export function problems(git, readFile) {
   const out = [];
   const unmerged = git(['diff', '--name-only', '--diff-filter=U']).split('\n').filter(Boolean);
   if (unmerged.length) out.push(`unmerged files:\n  ${unmerged.join('\n  ')}`);
-  const dirty = git(['status', '--porcelain', '--', ...SHIPPED]).split('\n').filter(Boolean);
+  const dirty = git(['status', '--porcelain', '--', ...SHIPPED])
+    .split('\n')
+    .filter(Boolean);
   if (dirty.length) out.push(`changes not committed in ${SHIPPED.join(' or ')}:\n  ${dirty.join('\n  ')}`);
   // Markdown's setext headings use =======, so a hit is read again to make
   // sure it sits between the other two markers' kinds of line.
-  const hits = git(['grep', '-l', '-I', '-E', '^(<{7}|>{7})( |$)', '--', ...SHIPPED, ':(exclude,glob)**/vendor/**'], true).split('\n').filter(Boolean);
+  const hits = git(['grep', '-l', '-I', '-E', '^(<{7}|>{7})( |$)', '--', ...SHIPPED, ':(exclude,glob)**/vendor/**'], true)
+    .split('\n')
+    .filter(Boolean);
   for (const file of hits) {
     const lines = conflictMarkers(readFile(file));
-    if (lines.some((l) => /: </.test(l)) && lines.some((l) => /: >/.test(l))) out.push(`conflict markers in ${file}:\n  ${lines.slice(0, 6).join('\n  ')}`);
+    if (lines.some((l) => /: </.test(l)) && lines.some((l) => /: >/.test(l)))
+      out.push(`conflict markers in ${file}:\n  ${lines.slice(0, 6).join('\n  ')}`);
   }
   return out;
 }

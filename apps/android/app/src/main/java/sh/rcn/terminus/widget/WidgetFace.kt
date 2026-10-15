@@ -20,11 +20,9 @@ internal data class Pill(val text: String, val good: Boolean)
 internal data class Tile(val label: String, val title: String, val where: String?)
 
 /**
- * What a widget says, whatever its size: a line above, the headline (with
- * [accent], the part in the accent colour: the time to leave), a line under
- * it with a [pill], and what's on the ground and on the horizon's road. Each
- * size shows as much of it as fits. Worked out once from the answer, so every
- * size says the same thing.
+ * What a widget says, whatever its size: a line above, the headline (with [accent], the part in the accent colour: the time to leave), a
+ * line under it with a [pill], and what's on the ground and on the horizon's road. Each size shows as much of it as fits. Worked out once
+ * from the answer, so every size says the same thing.
  */
 internal data class Face(
     val heading: String?,
@@ -43,25 +41,34 @@ internal data class Face(
     val journey: Journey? = null,
 ) {
     /** The accent part, when the headline has one: what a small widget shows big. */
-    val big: String? get() = accent?.takeIf { it.isNotEmpty() && headline.contains(it) }
+    val big: String?
+        get() = accent?.takeIf { it.isNotEmpty() && headline.contains(it) }
 
     /** The headline without [big] ("Leave by"), shown small with it; null when there's no [big]. */
-    val bigLabel: String? get() = big?.let { headline.replace(it, "").trim(' ', ',', '·').ifEmpty { null } }
+    val bigLabel: String?
+        get() = big?.let { headline.replace(it, "").trim(' ', ',', '·').ifEmpty { null } }
 
     /** [big] comes first in the headline (Chinese: "约 09:36 前出发"): its label goes under it, not over. */
-    val bigFirst: Boolean get() = big?.let { headline.trimStart().startsWith(it) } ?: false
+    val bigFirst: Boolean
+        get() = big?.let { headline.trimStart().startsWith(it) } ?: false
 
     companion object {
         /** The road when nothing of yours is on it: a shuttle going by, as on Now. */
         private val IDLE = Road()
 
         /**
-         * The face for [answer] (null before any), on the widget's [mode], with
-         * the last [error] (or [UPDATING]); [offline] is the day plan's next
-         * thing when the answer can't be trusted ([BaseWidget.frame]). [now] is
-         * on the server's clock; [clock] formats a time.
+         * The face for [answer] (null before any), on the widget's [mode], with the last [error] (or [UPDATING]); [offline] is the day
+         * plan's next thing when the answer can't be trusted ([BaseWidget.frame]). [now] is on the server's clock; [clock] formats a time.
          */
-        fun of(paired: Boolean, mode: Mode, answer: NextAnswer?, error: String?, offline: OfflineDay.Pick?, now: Long, clock: (Long) -> String): Face {
+        fun of(
+            paired: Boolean,
+            mode: Mode,
+            answer: NextAnswer?,
+            error: String?,
+            offline: OfflineDay.Pick?,
+            now: Long,
+            clock: (Long) -> String,
+        ): Face {
             if (!paired) return Face(null, "terminus", sub = error ?: L.s(R.string.tap_to_pair))
             // A problem, or a refresh under way, says so under the headline, in place of what's there.
             val problem = error?.let { if (it == UPDATING) L.s(R.string.updating) else it }
@@ -103,25 +110,30 @@ internal data class Face(
                     )
                 }
                 journey != null && !old -> trip(answer, journey, problem, now, clock)
-                answer.isClassPlan -> Face(
-                    // An older server's class, or one whose times are old: when to leave leads.
-                    heading = listOfNotNull(answer.phaseText, answer.destLabel, answer.classAtMs?.let { L.s(R.string.starts_at, clock(it)) }).joinToString(" · "),
-                    headline = answer.leaveHeadline(now).orEmpty(),
-                    late = answer.leaveLate && !old,
-                    dim = old,
-                    sub = problem ?: if (old) L.s(R.string.old_times) else answer.catchLine,
-                    road = IDLE,
-                )
-                else -> Face(
-                    // A clock time stays true until the bus leaves; once it's gone, or
-                    // the data is old, dim it and ask for a tap rather than lie.
-                    heading = listOfNotNull(answer.phaseText, card?.heading ?: localHeading(answer)).joinToString(" · ").ifEmpty { null },
-                    headline = answer.clockLabel(clock),
-                    dim = old,
-                    sub = problem ?: if (old) L.s(R.string.old_times) else answer.detail,
-                    leg = answer.leaveText(now)?.takeIf { !old }?.let { Leg(null, 0, false, it) },
-                    road = IDLE,
-                )
+                answer.isClassPlan ->
+                    Face(
+                        // An older server's class, or one whose times are old: when to leave leads.
+                        heading =
+                            listOfNotNull(answer.phaseText, answer.destLabel, answer.classAtMs?.let { L.s(R.string.starts_at, clock(it)) })
+                                .joinToString(" · "),
+                        headline = answer.leaveHeadline(now).orEmpty(),
+                        late = answer.leaveLate && !old,
+                        dim = old,
+                        sub = problem ?: if (old) L.s(R.string.old_times) else answer.catchLine,
+                        road = IDLE,
+                    )
+                else ->
+                    Face(
+                        // A clock time stays true until the bus leaves; once it's gone, or
+                        // the data is old, dim it and ask for a tap rather than lie.
+                        heading =
+                            listOfNotNull(answer.phaseText, card?.heading ?: localHeading(answer)).joinToString(" · ").ifEmpty { null },
+                        headline = answer.clockLabel(clock),
+                        dim = old,
+                        sub = problem ?: if (old) L.s(R.string.old_times) else answer.detail,
+                        leg = answer.leaveText(now)?.takeIf { !old }?.let { Leg(null, 0, false, it) },
+                        road = IDLE,
+                    )
             }
         }
 
@@ -129,21 +141,30 @@ internal data class Face(
         private fun trip(answer: NextAnswer, journey: Journey, problem: String?, now: Long, clock: (Long) -> String): Face {
             val bus = journey.bus
             val headline = answer.leaveHeadline(now) ?: L.s(R.string.leave_now)
-            val leg = if (bus != null) {
-                // "from PGP 9:42 → UTown 9:52": where to board, and where it gets you.
-                val there = listOfNotNull(journey.toStop.ifEmpty { null }, journey.arriveStop).joinToString(" ")
-                Leg(bus.svc, bus.color, bus.paid, listOfNotNull("${L.s(R.string.journey_from, bus.stop)} ${bus.board}", there.ifEmpty { null }).joinToString(" → "))
-            } else {
-                // On foot: the bus it beats, or for a class the one to go now on.
-                JourneyText.backup(answer, journey)?.let { Leg(journey.backup?.svc, journey.backup?.color ?: 0, journey.backup?.paid ?: false, it) }
-            }
+            val leg =
+                if (bus != null) {
+                    // "from PGP 9:42 → UTown 9:52": where to board, and where it gets you.
+                    val there = listOfNotNull(journey.toStop.ifEmpty { null }, journey.arriveStop).joinToString(" ")
+                    Leg(
+                        bus.svc,
+                        bus.color,
+                        bus.paid,
+                        listOfNotNull("${L.s(R.string.journey_from, bus.stop)} ${bus.board}", there.ifEmpty { null }).joinToString(" → "),
+                    )
+                } else {
+                    // On foot: the bus it beats, or for a class the one to go now on.
+                    JourneyText.backup(answer, journey)?.let {
+                        Leg(journey.backup?.svc, journey.backup?.color ?: 0, journey.backup?.paid ?: false, it)
+                    }
+                }
             return Face(
                 heading = JourneyText.to(answer, journey, clock),
                 headline = headline,
                 accent = journey.leave?.takeIf { headline.contains(it) },
                 late = answer.leaveLate,
                 sub = problem ?: JourneyText.arrive(journey),
-                pill = bus?.let { if (journey.live) Pill(L.s(R.string.journey_live), true) else Pill(L.s(R.string.buses_scheduled), false) },
+                pill =
+                    bus?.let { if (journey.live) Pill(L.s(R.string.journey_live), true) else Pill(L.s(R.string.buses_scheduled), false) },
                 leg = leg,
                 road = roadFor(journey, now),
                 journey = journey,
@@ -156,7 +177,10 @@ internal data class Face(
 }
 
 /** The line above the headline from an older server, without `card.heading`: where to, and a long gap. */
-private fun localHeading(answer: NextAnswer): String? = listOfNotNull(
-    answer.destLabel ?: if (answer.mode == "nearby") L.s(R.string.chip_nearby) else null,
-    if (answer.why == "gap-home") L.s(R.string.long_gap_short) else null,
-).joinToString(" · ").ifEmpty { null }
+private fun localHeading(answer: NextAnswer): String? =
+    listOfNotNull(
+            answer.destLabel ?: if (answer.mode == "nearby") L.s(R.string.chip_nearby) else null,
+            if (answer.why == "gap-home") L.s(R.string.long_gap_short) else null,
+        )
+        .joinToString(" · ")
+        .ifEmpty { null }

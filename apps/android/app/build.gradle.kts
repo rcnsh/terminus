@@ -100,22 +100,23 @@ android {
 // property (say, in ~/.gradle/gradle.properties) can never ship a release
 // that talks to a laptop.
 val apiBase = providers.gradleProperty("apiBase").orNull
+
 androidComponents {
     onVariants(selector().withBuildType("debug")) { variant ->
         if (apiBase != null) {
-            variant.buildConfigFields?.put("API_BASE", com.android.build.api.variant.BuildConfigField("String", "\"$apiBase\"", "-PapiBase"))
+            variant.buildConfigFields?.put(
+                "API_BASE",
+                com.android.build.api.variant.BuildConfigField("String", "\"$apiBase\"", "-PapiBase"),
+            )
         }
     }
 }
 
 /**
- * One channel's site and name. SITE is the address people see, the one
- * the app's text names, and the one requests go to (API_BASE) and links
- * open (LINK_BASE): the project's own domain, which goes with it if someone
- * else takes it over. In a debug build given `-PapiBase` (above), requests
- * go there instead. SERVERS are the site's addresses the developer menu
- * offers too (Servers.kt): SITE, then the old one, the backup a request
- * tries when the chosen address can't be reached at all.
+ * One channel's site and name. SITE is the address people see, the one the app's text names, and the one requests go to (API_BASE) and
+ * links open (LINK_BASE): the project's own domain, which goes with it if someone else takes it over. In a debug build given `-PapiBase`
+ * (above), requests go there instead. SERVERS are the site's addresses the developer menu offers too (Servers.kt): SITE, then the old one,
+ * the backup a request tries when the chosen address can't be reached at all.
  */
 fun com.android.build.api.dsl.ApplicationProductFlavor.site(site: String, packageName: String, name: String, oldHost: String) {
     buildConfigField("String", "SITE", "\"$site\"")
@@ -129,25 +130,31 @@ fun com.android.build.api.dsl.ApplicationProductFlavor.site(site: String, packag
     // Push: this package's Firebase app from google-services.json (not in
     // git; see apps/android/README.md). Without it the fields are empty and
     // the app keeps its own alarms and refresh, as on a phone without Play services.
-    for ((field, value) in firebaseConfig(project.file("google-services.json"), packageName)) buildConfigField("String", field, "\"$value\"")
+    for ((field, value) in firebaseConfig(project.file("google-services.json"), packageName)) buildConfigField(
+        "String",
+        field,
+        "\"$value\"",
+    )
 }
 
 /** FIREBASE_* values for BuildConfig, empty strings when there's no config file or no app for the package in it. */
 fun firebaseConfig(json: File, packageName: String): Map<String, String> {
     val empty = mapOf("FIREBASE_APP_ID" to "", "FIREBASE_API_KEY" to "", "FIREBASE_PROJECT_ID" to "", "FIREBASE_SENDER_ID" to "")
     if (!json.exists()) return empty
-    @Suppress("UNCHECKED_CAST")
-    val root = groovy.json.JsonSlurper().parse(json) as Map<String, Any?>
+    @Suppress("UNCHECKED_CAST") val root = groovy.json.JsonSlurper().parse(json) as Map<String, Any?>
     val project = root["project_info"] as Map<String, Any?>
-    val client = (root["client"] as List<Map<String, Any?>>).firstOrNull {
-        ((it["client_info"] as Map<String, Any?>)["android_client_info"] as Map<String, Any?>)["package_name"] == packageName
-    } ?: return empty
-    val values = mapOf(
-        "FIREBASE_APP_ID" to (client["client_info"] as Map<String, Any?>)["mobilesdk_app_id"],
-        "FIREBASE_API_KEY" to (client["api_key"] as List<Map<String, Any?>>?)?.firstOrNull()?.get("current_key"),
-        "FIREBASE_PROJECT_ID" to project["project_id"],
-        "FIREBASE_SENDER_ID" to project["project_number"],
-    ).mapValues { it.value?.toString().orEmpty() }
+    val client =
+        (root["client"] as List<Map<String, Any?>>).firstOrNull {
+            ((it["client_info"] as Map<String, Any?>)["android_client_info"] as Map<String, Any?>)["package_name"] == packageName
+        } ?: return empty
+    val values =
+        mapOf(
+                "FIREBASE_APP_ID" to (client["client_info"] as Map<String, Any?>)["mobilesdk_app_id"],
+                "FIREBASE_API_KEY" to (client["api_key"] as List<Map<String, Any?>>?)?.firstOrNull()?.get("current_key"),
+                "FIREBASE_PROJECT_ID" to project["project_id"],
+                "FIREBASE_SENDER_ID" to project["project_number"],
+            )
+            .mapValues { it.value?.toString().orEmpty() }
     // A field missing (a malformed file) leaves push off, as with no file,
     // rather than building in the word "null" as if it were a value.
     return if (values.values.any { it.isEmpty() }) empty else values
@@ -193,7 +200,9 @@ dependencies {
     // these, each with a published advisory; as for the plugins' classpath in
     // ../build.gradle.kts, lint runs with the fixed ones.
     constraints {
-        "androidLintTool"("org.bouncycastle:bcprov-jdk18on:1.86") { because("GHSA-9pwp-9qqc-pr26, GHSA-qp49-qgx5-5m26, GHSA-c3fc-8qff-9hwx") }
+        "androidLintTool"("org.bouncycastle:bcprov-jdk18on:1.86") {
+            because("GHSA-9pwp-9qqc-pr26, GHSA-qp49-qgx5-5m26, GHSA-c3fc-8qff-9hwx")
+        }
         "androidLintTool"("org.bouncycastle:bcpkix-jdk18on:1.86") { because("GHSA-wg6q-6289-32hp; matches bcprov") }
         "androidLintTool"("org.bouncycastle:bcutil-jdk18on:1.86") { because("matches bcprov") }
         "androidLintTool"("org.apache.commons:commons-lang3:3.21.0") { because("GHSA-j288-q9x7-2f5v") }
@@ -208,13 +217,47 @@ tasks.register("resolveAll") {
     description = "Resolves every resolvable configuration, to write gradle.lockfile and verification-metadata.xml."
     notCompatibleWithConfigurationCache("reads the project's configurations when it runs")
     doLast {
-        configurations.filter { it.isCanBeResolved }.forEach { configuration ->
-            val failed = configuration.incoming.resolutionResult.allDependencies
-                .filterIsInstance<org.gradle.api.artifacts.result.UnresolvedDependencyResult>()
-            check(failed.isEmpty()) { "${configuration.name}: ${failed.joinToString { "${it.attempted}: ${it.failure.message}" }}" }
-            // The files too, so their checksums are written; lenient because
-            // some configurations hold more than one kind of artefact.
-            configuration.incoming.artifactView { lenient(true) }.files.files
-        }
+        configurations
+            .filter { it.isCanBeResolved }
+            .forEach { configuration ->
+                val failed =
+                    configuration.incoming.resolutionResult.allDependencies.filterIsInstance<
+                        org.gradle.api.artifacts.result.UnresolvedDependencyResult
+                    >()
+                check(failed.isEmpty()) { "${configuration.name}: ${failed.joinToString { "${it.attempted}: ${it.failure.message}" }}" }
+                // The files too, so their checksums are written; lenient because
+                // some configurations hold more than one kind of artefact.
+                configuration.incoming.artifactView { lenient(true) }.files.files
+            }
     }
 }
+
+// Kotlin formatting: ktfmt's kotlinlang style, at the line width in
+// ../.editorconfig. Run from its Maven Central jar rather than through the
+// ktfmt Gradle plugin, which is published only on the Gradle Plugin Portal
+// (settings.gradle.kts doesn't use it). Covers every .kt and .kts file under
+// apps/android.
+val ktfmt = configurations.create("ktfmt")
+
+dependencies {
+    ktfmt(libs.ktfmt)
+}
+
+fun registerKtfmt(name: String, description: String, vararg flags: String) =
+    tasks.register<JavaExec>(name) {
+        group = "formatting"
+        this.description = description
+        classpath = ktfmt
+        mainClass.set("com.facebook.ktfmt.cli.Main")
+        val sources =
+            fileTree(rootDir) {
+                include("**/*.kt", "**/*.kts")
+                exclude("**/build/**", ".gradle/**", ".kotlin/**")
+            }
+        val options = listOf("--kotlinlang-style", "--enable-editorconfig", "--quiet") + flags
+        argumentProviders.add(CommandLineArgumentProvider { options + sources.files.map { it.path }.sorted() })
+    }
+
+registerKtfmt("ktfmtFormat", "Formats the Kotlin sources and build scripts with ktfmt.")
+
+registerKtfmt("ktfmtCheck", "Fails if ktfmtFormat would change a Kotlin file.", "--dry-run", "--set-exit-if-changed")

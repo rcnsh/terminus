@@ -15,7 +15,13 @@ let loading = null;
 function loadParts() {
   // With what those two import that the page hasn't loaded yet, asked for
   // alongside: otherwise each level is found only once the one above arrives.
-  loading ??= Promise.all([import('./settings.js'), import('./onboarding.js'), import('./settings-pages.js'), import('./search-box.js'), import('./search.js')]).then(([s, o]) => {
+  loading ??= Promise.all([
+    import('./settings.js'),
+    import('./onboarding.js'),
+    import('./settings-pages.js'),
+    import('./search-box.js'),
+    import('./search.js'),
+  ]).then(([s, o]) => {
     parts.set({ Settings: s.Settings, Onboarding: o.Onboarding });
   });
   return loading;
@@ -109,7 +115,10 @@ function SignIn({ adding }) {
     setBusy(true);
     try {
       // From the web app: the emailed link brings them back to it too.
-      await api('/api/auth/login', { method: 'POST', body: { email: email.trim(), turnstile: turnstile.token.current, ...(NEXT ? { next: NEXT } : {}) } });
+      await api('/api/auth/login', {
+        method: 'POST',
+        body: { email: email.trim(), turnstile: turnstile.token.current, ...(NEXT ? { next: NEXT } : {}) },
+      });
       setCode('');
       setCodeError('');
       setStep('sent');
@@ -157,9 +166,11 @@ function SignIn({ adding }) {
           ${adding ? html`<img class="signin-mark" src="/assets/mark.svg" alt="" />` : html`<${Livery} />`}
           <h1>${adding ? t('Add an email') : t('Sign in to terminus')}</h1>
           <p class="hint">
-            ${adding
-              ? t("We'll send you a code. Your settings are kept. If this email already has an account, you'll be switched to it.")
-              : t("Enter your email and we'll send you a code. No password, and the same code creates an account if you're new.")}
+            ${
+              adding
+                ? t("We'll send you a code. Your settings are kept. If this email already has an account, you'll be switched to it.")
+                : t("Enter your email and we'll send you a code. No password, and the same code creates an account if you're new.")
+            }
           </p>
           <form onSubmit=${send}>
             <label for="login-email">${t('Email')}</label>
@@ -179,14 +190,17 @@ function SignIn({ adding }) {
             <button type="submit" class="btn accent wide" disabled=${busy}>${busy ? t('Sending…') : sendLabel}</button>
           </form>
           <p class="form-error" id="login-error" role="alert">${error}</p>
-          ${!adding &&
-          html`<div>
+          ${
+            !adding &&
+            html`<div>
             <p class="signin-or"><span>${t('or')}</span></p>
             <button type="button" class="btn ghost wide" disabled=${busy} onClick=${noEmail}>${t('Use terminus without an email')}</button>
             <p class="hint small">${t("Your setup stays in this browser. Add an email any time to use it on your other devices, or to keep it if this browser's data is cleared.")}</p>
-          </div>`}
-          ${adding &&
-          html`<button
+          </div>`
+          }
+          ${
+            adding &&
+            html`<button
             type="button"
             class="btn ghost wide"
             onClick=${() => {
@@ -194,7 +208,8 @@ function SignIn({ adding }) {
               if (NEXT) return location.assign(NEXT);
               set({ adding: false });
             }}
-          >${t('Cancel')}</button>`}
+          >${t('Cancel')}</button>`
+          }
         </div>
 
         <div id="sent-step" hidden=${step !== 'sent'}>
@@ -293,11 +308,13 @@ function Preview({ me }) {
   return html`
     <section class="side-preview">
       <p class="eyebrow">${t('Your widget right now')}</p>
-      ${a
-        ? html`<${Card} a=${a} onAnswer=${setA} onChoice=${load} chips />`
-        : failed
-          ? html`<${Message} text=${t('Preview unavailable right now.')}><button type="button" class="link-btn" onClick=${load}>${t('Try again')}</button><//>`
-          : html`<${Message} text="…" quiet />`}
+      ${
+        a
+          ? html`<${Card} a=${a} onAnswer=${setA} onChoice=${load} chips />`
+          : failed
+            ? html`<${Message} text=${t('Preview unavailable right now.')}><button type="button" class="link-btn" onClick=${load}>${t('Try again')}</button><//>`
+            : html`<${Message} text="…" quiet />`
+      }
       <${Report} answer=${a} anonymous=${me.anonymous === true} email=${me.email ?? null} onAddEmail=${startAdding} />
     </section>
   `;
@@ -338,9 +355,11 @@ function Who() {
   return html`
     <span class="hint hide-sm">${me.email ?? t('No email')}</span>
     <a class="btn small accent open-app" href="/app/">${t('Open the app')}</a>
-    ${me.anonymous === true
-      ? html`<button type="button" class="btn small ghost" id="add-email" onClick=${startAdding}>${t('Add an email')}</button>`
-      : html`<button type="button" class="btn small ghost" id="logout" onClick=${signOut}>${t('Sign out')}</button>`}
+    ${
+      me.anonymous === true
+        ? html`<button type="button" class="btn small ghost" id="add-email" onClick=${startAdding}>${t('Add an email')}</button>`
+        : html`<button type="button" class="btn small ghost" id="logout" onClick=${signOut}>${t('Sign out')}</button>`
+    }
   `;
 }
 

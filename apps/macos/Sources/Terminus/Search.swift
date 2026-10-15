@@ -30,9 +30,13 @@ struct Search: View {
                         .onKeyPress(.upArrow) { move(-1) }
                 }
                 if !query.isEmpty {
-                    Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(L("Clear search"))
+                    Button {
+                        query = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L("Clear search"))
                 }
             }
             .padding(.horizontal, 10)
@@ -53,19 +57,32 @@ struct Search: View {
                             go(d)
                         } label: {
                             HStack(alignment: .firstTextBaseline) {
-                                Image(systemName: d.kind == "stop" ? "bus" : d.kind == "room" ? "door.left.hand.open" : d.kind == "landmark" ? "fork.knife" : "building.2")
-                                    .foregroundStyle(.secondary).frame(width: 16)
-                                    .accessibilityHidden(true)
+                                Image(
+                                    systemName: d.kind == "stop"
+                                        ? "bus"
+                                        : d.kind == "room" ? "door.left.hand.open" : d.kind == "landmark" ? "fork.knife" : "building.2"
+                                )
+                                .foregroundStyle(.secondary).frame(width: 16)
+                                .accessibilityHidden(true)
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(d.label)
-                                    Text(d.kind == "stop" ? L("Bus stop") : d.kind == "landmark" ? "\(d.detail.map { "\($0) · " } ?? "")\(L("%@ stop", (d.stops ?? []).map(stopName).joined(separator: L(" or "))))" : "\(d.label != d.code ? "\(d.code) · " : "")\(L("%@ stop", stopName(d.stopCode)))\(d.walkM.map { L(", %@ min walk", "\(Swift.max(1, Int((Double($0) / walkSpeed / 60).rounded())))") } ?? "")")
-                                        .font(.caption).foregroundStyle(.secondary)
+                                    Text(
+                                        d.kind == "stop"
+                                            ? L("Bus stop")
+                                            : d.kind == "landmark"
+                                                ? "\(d.detail.map { "\($0) · " } ?? "")\(L("%@ stop", (d.stops ?? []).map(stopName).joined(separator: L(" or "))))"
+                                                : "\(d.label != d.code ? "\(d.code) · " : "")\(L("%@ stop", stopName(d.stopCode)))\(d.walkM.map { L(", %@ min walk", "\(Swift.max(1, Int((Double($0) / walkSpeed / 60).rounded())))") } ?? "")"
+                                    )
+                                    .font(.caption).foregroundStyle(.secondary)
                                 }
                                 Spacer()
                             }
                             .padding(.vertical, 5)
                             .padding(.horizontal, 8)
-                            .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(i == highlighted ? AnyShapeStyle(.primary.opacity(0.08)) : AnyShapeStyle(.clear)))
+                            .background(
+                                RoundedRectangle(cornerRadius: 6, style: .continuous).fill(
+                                    i == highlighted ? AnyShapeStyle(.primary.opacity(0.08)) : AnyShapeStyle(.clear))
+                            )
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -112,7 +129,10 @@ struct Flow: Layout {
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let width = proposal.width ?? .infinity
-        var x: CGFloat = 0, y: CGFloat = 0, line: CGFloat = 0, widest: CGFloat = 0
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var line: CGFloat = 0
+        var widest: CGFloat = 0
         for v in subviews {
             let s = v.sizeThatFits(.unspecified)
             if x > 0 && x + s.width > width {
@@ -128,7 +148,9 @@ struct Flow: Layout {
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var x = bounds.minX, y = bounds.minY, line: CGFloat = 0
+        var x = bounds.minX
+        var y = bounds.minY
+        var line: CGFloat = 0
         for v in subviews {
             let s = v.sizeThatFits(.unspecified)
             if x > bounds.minX && x + s.width > bounds.maxX {

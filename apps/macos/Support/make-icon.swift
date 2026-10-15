@@ -14,8 +14,9 @@ try FileManager.default.createDirectory(at: set, withIntermediateDirectories: tr
 // macOS icons sit inside a margin: the artwork is ~80% of the canvas.
 for (points, scale) in [(16, 1), (16, 2), (32, 1), (32, 2), (128, 1), (128, 2), (256, 1), (256, 2), (512, 1), (512, 2)] {
     let px = points * scale
-    let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: px, pixelsHigh: px, bitsPerSample: 8, samplesPerPixel: 4,
-                               hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+    let rep = NSBitmapImageRep(
+        bitmapDataPlanes: nil, pixelsWide: px, pixelsHigh: px, bitsPerSample: 8, samplesPerPixel: 4,
+        hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
     NSGraphicsContext.saveGraphicsState()
     NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
     let inset = CGFloat(px) * 0.1
@@ -25,7 +26,9 @@ for (points, scale) in [(16, 1), (16, 2), (32, 1), (32, 2), (128, 1), (128, 2), 
         let band = NSRect(x: inset, y: inset, width: CGFloat(px) - 2 * inset, height: CGFloat(px) * 0.2)
         NSColor(srgbRed: 0xC2 / 255, green: 0x41 / 255, blue: 0x0C / 255, alpha: 1).setFill()
         NSBezierPath(roundedRect: band, xRadius: band.height * 0.3, yRadius: band.height * 0.3).fill()
-        let type: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: band.height * 0.62, weight: .bold), .foregroundColor: NSColor.white, .kern: band.height * 0.06]
+        let type: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: band.height * 0.62, weight: .bold), .foregroundColor: NSColor.white, .kern: band.height * 0.06,
+        ]
         let text = NSAttributedString(string: "BETA", attributes: type)
         let size = text.size()
         text.draw(at: NSPoint(x: band.midX - size.width / 2, y: band.midY - size.height / 2))

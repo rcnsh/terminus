@@ -8,7 +8,6 @@ import { lists } from './profile.js';
 import { Journey, cardStyle, spokenJourney } from './journey.js';
 import { Celestial, Horizon, NightSky } from './sky.js';
 
-
 /**
  * Old: past the card's staleAt (its bus has gone, the plan has moved on, or
  * it's 15 minutes old), as every client rules. A card with no staleAt
@@ -43,9 +42,11 @@ function Countdown({ at }) {
   const left = Math.floor((Date.parse(at) - now) / 1000);
   // Gone: "Left 1 min ago" from the moment it leaves, never "0 min ago" (as the apps say it).
   const text =
-    left > 60 ? t('Leaves in {0} min {1} s', Math.floor(left / 60), left % 60)
-    : left > 0 ? t('Leaves in {0} s', left)
-    : t('Left {0} min ago', Math.max(1, Math.ceil(-left / 60)));
+    left > 60
+      ? t('Leaves in {0} min {1} s', Math.floor(left / 60), left % 60)
+      : left > 0
+        ? t('Leaves in {0} s', left)
+        : t('Left {0} min ago', Math.max(1, Math.ceil(-left / 60)));
   return html`<div class=${left > 0 ? 'countdown' : 'countdown gone'}>${text}</div>`;
 }
 
@@ -72,7 +73,8 @@ export function Say({ text }) {
  */
 function spoken(a, now) {
   const c = a.card;
-  if (a.mode === 'rest' || a.mode === 'free' || a.arrived) return sentences([a.label, c?.upcoming ? `${c.upcoming.when} ${c.upcoming.title}` : a.detail]);
+  if (a.mode === 'rest' || a.mode === 'free' || a.arrived)
+    return sentences([a.label, c?.upcoming ? `${c.upcoming.when} ${c.upcoming.title}` : a.detail]);
   if (isStale(a)) return null;
   if (c?.journey) return spokenJourney(a, now);
   if (c?.kind === 'class') {
@@ -165,7 +167,12 @@ function Ride({ ride }) {
   const next = ride.stops[passed + 1]?.name;
   const left = Math.max(0, hops - passed);
   const off = ride.stops[hops].name;
-  const text = !next || left === 0 ? t('Getting off at {0}', off) : left === 1 ? t('Next: {0}, where you get off', off) : t('Next: {0} · {1} stops to go', next, left);
+  const text =
+    !next || left === 0
+      ? t('Getting off at {0}', off)
+      : left === 1
+        ? t('Next: {0}, where you get off', off)
+        : t('Next: {0} · {1} stops to go', next, left);
   return html`
     <div class="ride-progress">
       <progress max="100" value=${Math.round(done * 100)} aria-label=${t('Ride progress')}></progress>
@@ -206,8 +213,9 @@ function Busy({ onClick, class: cls, children, ...props }) {
 function Actions({ a, onAnswer, onChoice }) {
   const list = a.card?.actions ?? [];
   return html`
-    ${list.length > 0 &&
-    html`<div class="actions">
+    ${
+      list.length > 0 &&
+      html`<div class="actions">
       ${list.map(
         (x, i) => html`<${Busy}
           key=${x.id}
@@ -215,7 +223,8 @@ function Actions({ a, onAnswer, onChoice }) {
           onClick=${async () => onAnswer(await signal({ kind: x.id, trip: x.trip }))}
         >${x.label}<//>`,
       )}
-    </div>`}
+    </div>`
+    }
     <${Suggestion} a=${a} onChoice=${onChoice} />
   `;
 }
@@ -274,12 +283,15 @@ function DayDone({ a, night, sky, onPlace, children }) {
       ${sky && html`<${Horizon} />`}
       ${!sky && u && html`<${UpcomingCard} u=${u} />`}
       ${places.length > 0 && html`<p class="eyebrow going">${t('Going somewhere anyway?')}</p>`}
-      ${places.length > 0 &&
-      html`<div class="place-tiles">
+      ${
+        places.length > 0 &&
+        html`<div class="place-tiles">
         ${places.map(
-          (x) => html`<button type="button" class="place-tile" key=${x.key} onClick=${() => onPlace(x.key)}><strong>${x.label}</strong><span>${t('Plan a trip')}</span></button>`,
+          (x) =>
+            html`<button type="button" class="place-tile" key=${x.key} onClick=${() => onPlace(x.key)}><strong>${x.label}</strong><span>${t('Plan a trip')}</span></button>`,
         )}
-      </div>`}
+      </div>`
+      }
       ${onPlace && !places.length && html`<p class="hint done-hint">${night ? t('No buses are shown until your day starts. Tap Nearby to check anyway.') : t('Tap Nearby for buses around you.')}</p>`}
       ${children}
     </div>
@@ -290,8 +302,7 @@ function DayDone({ a, night, sky, onPlace, children }) {
  * On Now (`sky`), `top` up in the page's sky with the sun or the stars over
  * it, then the horizon; elsewhere `top` as it is.
  */
-export const InSky = ({ sky, children }) =>
-  sky ? html`<div class="sky-head"><${Celestial} />${children}</div><${Horizon} />` : children;
+export const InSky = ({ sky, children }) => (sky ? html`<div class="sky-head"><${Celestial} />${children}</div><${Horizon} />` : children);
 
 /** The large Android widget's row: Timetable and Nearby, then the usual places, as many as fit. */
 const Chips = ({ a }) => html`
@@ -321,7 +332,8 @@ export function Card({ a, onAnswer, onChoice, onPlace = null, chips = false, sky
   // After your day, or no classes today: said plainly, with no bus to mistake
   // for advice. "Undo" when the class just taken off was the day's last, and
   // "Back on campus".
-  if (a.mode === 'rest' || a.mode === 'free') return html`<${DayDone} a=${a} night=${a.mode === 'rest'} sky=${sky} onPlace=${onPlace}>${actions}${row}<//>`;
+  if (a.mode === 'rest' || a.mode === 'free')
+    return html`<${DayDone} a=${a} night=${a.mode === 'rest'} sky=${sky} onPlace=${onPlace}>${actions}${row}<//>`;
   // There: the same panel, plain, with where else to go.
   if (a.arrived) return html`<${DayDone} a=${a} night=${false} sky=${sky} onPlace=${onPlace}>${actions}${row}<//>`;
   const old = isStale(a);
@@ -334,12 +346,21 @@ export function Card({ a, onAnswer, onChoice, onPlace = null, chips = false, sky
     return html`<div class="widget"><${InSky} sky=${sky}><${Phase} a=${a} /><${ClassPlan} a=${a} /><//>${actions}${row}</div>`;
   }
   // The server's heading ("Next class · CS2030", "Heading home"); none without somewhere to go.
-  const heading = a.card?.heading !== undefined ? a.card.heading : a.dest?.why === 'class' ? t('Next class · {0}', a.dest.label) : a.dest?.why === 'gap-home' ? t('Long gap · {0}', a.dest.label) : a.dest?.label;
+  const heading =
+    a.card?.heading !== undefined
+      ? a.card.heading
+      : a.dest?.why === 'class'
+        ? t('Next class · {0}', a.dest.label)
+        : a.dest?.why === 'gap-home'
+          ? t('Long gap · {0}', a.dest.label)
+          : a.dest?.label;
   const where = a.mode === 'nearby' ? t('Nearby') : (heading ?? t('Next bus'));
   const timed = a.departsAt && a.quality !== 'unknown' && a.quality !== 'ended';
   // A departure as a clock time, the way the widget shows it, so it can't go stale:
   // the server's title ("A1 · ~09:11"), else worded here for an older server.
-  const big = a.card?.title ?? (timed ? `${a.label.split(' · ')[0]} · ${a.quality === 'scheduled' ? t('~{0}', clock(a.departsAt)) : clock(a.departsAt)}` : a.label);
+  const big =
+    a.card?.title ??
+    (timed ? `${a.label.split(' · ')[0]} · ${a.quality === 'scheduled' ? t('~{0}', clock(a.departsAt)) : clock(a.departsAt)}` : a.label);
   // The crowd only when the detail line doesn't already say it ("· crowding: high ·").
   const crowd = a.card?.crowd && !a.detail?.toLowerCase().includes(a.card.crowd.toLowerCase()) ? a.card.crowd : null;
   const notes = [a.card?.quality, crowd].filter(Boolean).join(' · ');

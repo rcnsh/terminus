@@ -42,7 +42,10 @@ export async function throughGate<T>(env: Env, ctx: ExecutionContext, key: strin
   const ask = (path: string, body: unknown) => gate.fetch(`https://gate.internal${path}`, { method: 'POST', body: JSON.stringify(body) });
   let claim: Claim<T>;
   try {
-    claim = await within(GATE_ASK_MS, ask('/claim', { freshMs }).then((r) => (r.ok ? (r.json() as Promise<Claim<T>>) : Promise.reject(new Error(`gate ${r.status}`)))));
+    claim = await within(
+      GATE_ASK_MS,
+      ask('/claim', { freshMs }).then((r) => (r.ok ? (r.json() as Promise<Claim<T>>) : Promise.reject(new Error(`gate ${r.status}`)))),
+    );
   } catch {
     return fetch();
   }
@@ -53,10 +56,20 @@ export async function throughGate<T>(env: Env, ctx: ExecutionContext, key: strin
   const { claimed } = claim;
   try {
     const value = await fetch();
-    ctx.waitUntil(ask('/put', { claimed, value }).then(() => {}, () => {}));
+    ctx.waitUntil(
+      ask('/put', { claimed, value }).then(
+        () => {},
+        () => {},
+      ),
+    );
     return value;
   } catch (err) {
-    ctx.waitUntil(ask('/put', { claimed, value: null }).then(() => {}, () => {}));
+    ctx.waitUntil(
+      ask('/put', { claimed, value: null }).then(
+        () => {},
+        () => {},
+      ),
+    );
     throw err;
   }
 }

@@ -20,6 +20,9 @@ pnpm install
 pnpm test                                 # API tests: no network, no keys
 pnpm check                                # the tests, then tsc --noEmit
 pnpm lint                                 # oxlint: API, website and scripts; warnings fail CI
+pnpm format                               # oxfmt: JS, TS and JSON
+pnpm format:swift                         # swift-format (Xcode's `swift format`)
+pnpm format:kotlin                        # ktfmt, through Gradle (./gradlew ktfmtFormat)
 node apps/api/scripts/dev-stub.mjs        # local API with fake buses
 ```
 
@@ -28,11 +31,17 @@ you can run it first:
 
 ```bash
 pnpm check && (cd apps/api && pnpm exec cf deploy --dry-run)
-pnpm lint
+pnpm lint && pnpm format:check
 for f in $(find apps/web/public -name '*.js'); do node --check "$f" || exit 1; done
-(cd apps/android && ./gradlew :app:lintStableDebug :app:testStableDebugUnitTest :app:compileBetaDebugKotlin)
-(cd apps/macos && swift build && swift test)
+(cd apps/android && ./gradlew :app:ktfmtCheck :app:lintStableDebug :app:testStableDebugUnitTest :app:compileBetaDebugKotlin)
+(cd apps/macos && swift build && swift test) && scripts/format-swift.sh --check
 ```
+
+Formatting is mechanical: Oxfmt (`.oxfmtrc.json`), swift-format
+(`.swift-format`) and ktfmt's kotlinlang style (`apps/android/.editorconfig`),
+all at 140 columns. Run `pnpm format:all` before you push. To skip the
+one-off reformat in `git blame`:
+`git config blame.ignoreRevsFile .git-blame-ignore-revs`.
 
 `cf deploy --dry-run` only bundles; it sends nothing.
 

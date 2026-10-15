@@ -20,7 +20,10 @@ import { LIVERY } from '/account/livery.js';
 export function drawHorizon(el, { low = false, stop = false, bus = null, shuttle = true, drive = false } = {}) {
   const colours = drive ? LIVERY.map(([, color]) => color) : null;
   // Driving shuttles come with a button to pause them.
-  render(html`<${Horizon} on=${null} low=${low} stop=${stop} bus=${bus} shuttle=${shuttle} drive=${colours} />${drive && html`<${DriveToggle} />`}`, el);
+  render(
+    html`<${Horizon} on=${null} low=${low} stop=${stop} bus=${bus} shuttle=${shuttle} drive=${colours} />${drive && html`<${DriveToggle} />`}`,
+    el,
+  );
 }
 
 /** A horizon's settings from its markup (see above). */

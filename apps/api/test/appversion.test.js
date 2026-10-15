@@ -44,15 +44,33 @@ test('versionNames compare by number, not as text', () => {
 test('candidates: likeliest first, only newer than what we send', () => {
   const cur = V('2.59.2', 140);
   const s = (vs) => vs.map((v) => `${v.name}_${v.code}`);
-  assert.deepEqual(s(candidates(cur, { refusal: [], play: '2.60.0', apkcombo: V('2.60.0', 141) })), ['2.60.0_141', '2.60.0_142', '2.60.0_143'],
-    'both pages agree: their code first, then the next codes in case it was wrong');
-  assert.deepEqual(s(candidates(cur, { refusal: [], play: '2.60.0', apkcombo: V('2.59.2', 140) })), ['2.60.0_141', '2.60.0_142', '2.60.0_143'],
-    'APKCombo lagging behind Play: its old code is skipped');
-  assert.deepEqual(s(candidates(cur, { refusal: [], play: null, apkcombo: V('2.60.0', 141) })).slice(0, 1), ['2.60.0_141'], 'Play unreadable');
+  assert.deepEqual(
+    s(candidates(cur, { refusal: [], play: '2.60.0', apkcombo: V('2.60.0', 141) })),
+    ['2.60.0_141', '2.60.0_142', '2.60.0_143'],
+    'both pages agree: their code first, then the next codes in case it was wrong',
+  );
+  assert.deepEqual(
+    s(candidates(cur, { refusal: [], play: '2.60.0', apkcombo: V('2.59.2', 140) })),
+    ['2.60.0_141', '2.60.0_142', '2.60.0_143'],
+    'APKCombo lagging behind Play: its old code is skipped',
+  );
+  assert.deepEqual(
+    s(candidates(cur, { refusal: [], play: null, apkcombo: V('2.60.0', 141) })).slice(0, 1),
+    ['2.60.0_141'],
+    'Play unreadable',
+  );
   assert.deepEqual(candidates(cur, { refusal: [], play: '2.59.2', apkcombo: V('2.59.2', 140) }), [], 'pages not caught up yet: no guesses');
-  assert.deepEqual(s(candidates(cur, { refusal: [], play: '2.59.2', apkcombo: V('2.59.2', 141) })), ['2.59.2_141'], 'a newer code under the same name is still tried');
+  assert.deepEqual(
+    s(candidates(cur, { refusal: [], play: '2.59.2', apkcombo: V('2.59.2', 141) })),
+    ['2.59.2_141'],
+    'a newer code under the same name is still tried',
+  );
   assert.deepEqual(candidates(cur, { refusal: [], play: '2.58.1', apkcombo: null }), [], 'nothing older');
-  assert.deepEqual(s(candidates(cur, { refusal: [V('2.61.0', 150)], play: '2.60.0', apkcombo: null }))[0], '2.61.0_150', 'the refusal wins');
+  assert.deepEqual(
+    s(candidates(cur, { refusal: [V('2.61.0', 150)], play: '2.60.0', apkcombo: null }))[0],
+    '2.61.0_150',
+    'the refusal wins',
+  );
 });
 
 /**
@@ -91,7 +109,13 @@ function world({ accepts, play = '2.60.0', combo = ['2.60.0', 141] } = {}) {
     return new Response('unexpected ' + url, { status: 599 });
   };
   installGlobals(fetchImpl);
-  const env = { ...makeEnv(makeKV()), NEXTBUS_APP_VERSION: OLD, EMAIL: makeEmail(), EMAIL_FROM: 'login@example.test', ALERT_EMAIL: 'ops@example.test' };
+  const env = {
+    ...makeEnv(makeKV()),
+    NEXTBUS_APP_VERSION: OLD,
+    EMAIL: makeEmail(),
+    EMAIL_FROM: 'login@example.test',
+    ALERT_EMAIL: 'ops@example.test',
+  };
   return { env, hits, versionsTried };
 }
 

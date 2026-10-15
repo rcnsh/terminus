@@ -9,6 +9,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -18,16 +19,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import sh.rcn.terminus.widget.Refresher
 import sh.rcn.terminus.widget.forgetWidgets
-import java.util.concurrent.TimeUnit
 
 /**
- * Leaving the account on this phone, the same way whichever way it goes:
- * signed out here, the account deleted, or the server refusing the token
- * (a 401: this phone removed from the account, or an account with no email
- * deleted after going unused). The account's things go from the phone, and
- * so does everything that would keep asking for them: the refresh chain,
- * the leave alerts, the live notification, the widgets' places, the push
- * address.
+ * Leaving the account on this phone, the same way whichever way it goes: signed out here, the account deleted, or the server refusing the
+ * token (a 401: this phone removed from the account, or an account with no email deleted after going unused). The account's things go from
+ * the phone, and so does everything that would keep asking for them: the refresh chain, the leave alerts, the live notification, the
+ * widgets' places, the push address.
  */
 object Session {
     private val ended = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
@@ -36,9 +33,8 @@ object Session {
     val signedOut: SharedFlow<Unit> = ended
 
     /**
-     * The server refused [token] (401), from wherever it was sent: the app,
-     * the widget, a push, an alarm, the live notification. Signs out only
-     * while it is still this phone's token. True when it signed out.
+     * The server refused [token] (401), from wherever it was sent: the app, the widget, a push, an alarm, the live notification. Signs out
+     * only while it is still this phone's token. True when it signed out.
      */
     suspend fun rejected(ctx: Context, token: String?): Boolean {
         if (token == null) return false
@@ -53,10 +49,7 @@ object Session {
         return true
     }
 
-    /**
-     * Signed out here, or the account deleted: local state goes first, so the
-     * screen can change at once, even offline.
-     */
+    /** Signed out here, or the account deleted: local state goes first, so the screen can change at once, even offline. */
     fun clearLocal(ctx: Context) {
         val app = ctx.applicationContext
         Store(app).clear()
@@ -65,29 +58,30 @@ object Session {
     }
 
     /**
-     * Signing out: local state goes now, and the server is told in a job that
-     * waits for a network and tries again, so an offline sign-out still ends
-     * the session there. The token travels in the job, not in the settings.
+     * Signing out: local state goes now, and the server is told in a job that waits for a network and tries again, so an offline sign-out
+     * still ends the session there. The token travels in the job, not in the settings.
      */
     fun signOut(ctx: Context) {
         val token = Store(ctx).token
         clearLocal(ctx)
         if (token == null) return
-        val work = OneTimeWorkRequestBuilder<LogoutWorker>()
-            .setInputData(workDataOf(LogoutWorker.TOKEN to token))
-            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
-            .build()
+        val work =
+            OneTimeWorkRequestBuilder<LogoutWorker>()
+                .setInputData(workDataOf(LogoutWorker.TOKEN to token))
+                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+                .build()
         WorkManager.getInstance(ctx).enqueue(work)
     }
 
     /** What the welcome screen says about [reason] ([Store.takeSignedOut]); null for none. */
-    fun message(reason: String?): String? = when (reason) {
-        Store.SIGNED_OUT_REMOVED -> L.s(R.string.signed_out_removed)
-        Store.SIGNED_OUT_UNUSED -> L.s(R.string.signed_out_unused)
-        Store.SIGNED_OUT_KEY_LOST -> L.s(R.string.signed_out_key_lost)
-        else -> null
-    }
+    fun message(reason: String?): String? =
+        when (reason) {
+            Store.SIGNED_OUT_REMOVED -> L.s(R.string.signed_out_removed)
+            Store.SIGNED_OUT_UNUSED -> L.s(R.string.signed_out_unused)
+            Store.SIGNED_OUT_KEY_LOST -> L.s(R.string.signed_out_key_lost)
+            else -> null
+        }
 
     private fun widgetMessage(store: Store): String =
         L.s(if (store.signedOutReason == Store.SIGNED_OUT_UNUSED) R.string.device_removed_unused else R.string.device_removed)
@@ -111,9 +105,8 @@ class LogoutWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
     }
 
     /**
-     * Ten tries at most, over some hours. A device session has no expiry: one
-     * never ended stays in the account's devices (where it can be removed)
-     * until the server's daily clean-up drops it, 90 days after its last use.
+     * Ten tries at most, over some hours. A device session has no expiry: one never ended stays in the account's devices (where it can be
+     * removed) until the server's daily clean-up drops it, 90 days after its last use.
      */
     private fun again() = if (runAttemptCount < MAX_TRIES) Result.retry() else Result.success()
 

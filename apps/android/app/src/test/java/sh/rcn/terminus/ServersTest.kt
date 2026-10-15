@@ -1,16 +1,16 @@
 package sh.rcn.terminus
 
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Test
 import java.io.IOException
 import java.net.ConnectException
 import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import javax.net.ssl.SSLHandshakeException
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
 
 class ServersTest {
     private val site = listOf("https://terminus.run", "https://terminus.rcn.sh")
@@ -52,7 +52,10 @@ class ServersTest {
         assertNull(Servers.backup("http://localhost:8787", debug))
         assertEquals(listOf("https://terminus.run", "https://terminus.rcn.sh"), Servers.order("https://terminus.run", debug, null))
         // The backup answered a moment ago: it goes first until the detour ends.
-        assertEquals(listOf("https://terminus.rcn.sh", "https://terminus.run"), Servers.order("https://terminus.run", debug, "https://terminus.rcn.sh"))
+        assertEquals(
+            listOf("https://terminus.rcn.sh", "https://terminus.run"),
+            Servers.order("https://terminus.run", debug, "https://terminus.rcn.sh"),
+        )
         assertEquals(listOf("http://localhost:8787"), Servers.order("http://localhost:8787", debug, "https://terminus.rcn.sh"))
     }
 
@@ -77,10 +80,11 @@ class ServersTest {
     fun throughTriesTheBackupOnlyWhenTheFirstWasNeverReached() {
         val answered = mutableListOf<String>()
         val asked = mutableListOf<String>()
-        val got = Servers.through(site, "POST", { answered += it }) { base ->
-            asked += base
-            if (base == site[0]) throw UnknownHostException("terminus.run") else 204
-        }
+        val got =
+            Servers.through(site, "POST", { answered += it }) { base ->
+                asked += base
+                if (base == site[0]) throw UnknownHostException("terminus.run") else 204
+            }
         assertEquals(204, got)
         assertEquals(site, asked)
         assertEquals(listOf(site[1]), answered)
@@ -94,8 +98,7 @@ class ServersTest {
                 throw SocketException("Connection reset")
             }
             error("should have thrown")
-        } catch (_: SocketException) {
-        }
+        } catch (_: SocketException) {}
         assertEquals(listOf(site[0]), asked)
         assertEquals(emptyList<String>(), answered)
     }

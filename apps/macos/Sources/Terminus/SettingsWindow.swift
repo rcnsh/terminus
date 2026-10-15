@@ -97,10 +97,14 @@ struct SettingsWindow: View {
             .navigationTitle((pane ?? .trips).title)
             .toolbar {
                 ToolbarItem(placement: .navigation) {
-                    Button { back() } label: { Image(systemName: "chevron.left") }
-                        .disabled(visited.isEmpty)
-                        .help(L("Back"))
-                        .accessibilityLabel(L("Back"))
+                    Button {
+                        back()
+                    } label: {
+                        Image(systemName: "chevron.left")
+                    }
+                    .disabled(visited.isEmpty)
+                    .help(L("Back"))
+                    .accessibilityLabel(L("Back"))
                 }
             }
         }
@@ -220,17 +224,26 @@ struct SettingsPaneView: View {
     }
 
     @ViewBuilder private var account: some View {
-        Toggle(app.misplaced ? L("Open at login (move to Applications first)") : L("Open at login"), isOn: Binding(get: { app.openAtLogin }, set: { app.setOpenAtLogin($0) }))
-            .disabled(app.misplaced && !app.openAtLogin)
+        Toggle(
+            app.misplaced ? L("Open at login (move to Applications first)") : L("Open at login"),
+            isOn: Binding(get: { app.openAtLogin }, set: { app.setOpenAtLogin($0) })
+        )
+        .disabled(app.misplaced && !app.openAtLogin)
         Button(Updater.shared.running ? L("Check for updates…") : L("Check for updates (move to Applications first)")) {
             Updater.shared.checkNow()
         }
         .disabled(!Updater.shared.running)
         // Sparkle's own preferences; with no updater (outside Applications) there's nothing to set.
-        Toggle(L("Check for updates automatically"), isOn: Binding(get: { Updater.shared.checksAutomatically }, set: { Updater.shared.setChecksAutomatically($0) }))
-            .disabled(!Updater.shared.running)
-        Toggle(L("Install updates automatically"), isOn: Binding(get: { Updater.shared.installsAutomatically }, set: { Updater.shared.setInstallsAutomatically($0) }))
-            .disabled(!Updater.shared.running || !Updater.shared.checksAutomatically)
+        Toggle(
+            L("Check for updates automatically"),
+            isOn: Binding(get: { Updater.shared.checksAutomatically }, set: { Updater.shared.setChecksAutomatically($0) })
+        )
+        .disabled(!Updater.shared.running)
+        Toggle(
+            L("Install updates automatically"),
+            isOn: Binding(get: { Updater.shared.installsAutomatically }, set: { Updater.shared.setInstallsAutomatically($0) })
+        )
+        .disabled(!Updater.shared.running || !Updater.shared.checksAutomatically)
         Hint(L("Updates install when no terminus window is open. Turned off, terminus asks first."))
         Toggle(isOn: $sendCrashReports) {
             VStack(alignment: .leading, spacing: 2) {
@@ -251,7 +264,10 @@ struct SettingsPaneView: View {
             .confirmationDialog(L("Delete this account?"), isPresented: $confirmDelete) {
                 Button(L("Delete"), role: .destructive) { app.deleteAnonymousAccount() }
             } message: {
-                Text(L("Your timetable and settings will be deleted immediately and this Mac will reset. Without an email on the account, they can't be recovered."))
+                Text(
+                    L(
+                        "Your timetable and settings will be deleted immediately and this Mac will reset. Without an email on the account, they can't be recovered."
+                    ))
             }
         } else {
             if let email = setup.me?.email { Text(L("Signed in as %@", email)).fontWeight(.medium) }
@@ -283,12 +299,10 @@ struct SettingsPaneView: View {
     private func openAccountPage() { NSWorkspace.shared.open(URL(string: "\(Api.linkBase)/account/#account")!) }
 }
 
-/**
- Favourites, each with Remove, then the search to add one. Rows come and go
- gently rather than in one frame, as on the phone and the web: a new one (or
- one back with Undo) fades in with a moment's wash of the accent, and a
- removed one fades and the list closes up, with Undo under it for a while.
- */
+/// Favourites, each with Remove, then the search to add one. Rows come and go
+/// gently rather than in one frame, as on the phone and the web: a new one (or
+/// one back with Undo) fades in with a moment's wash of the accent, and a
+/// removed one fades and the list closes up, with Undo under it for a while.
 private struct FavouritesPane: View {
     @Bindable var app: AppModel
     let setup: SetupModel
@@ -446,12 +460,19 @@ struct TripsPane: View {
         if let campus = setup.campus {
             let picking = offCampus || residence == nil
             LabeledContent(L("Residence")) {
-                Picker(L("Residence"), selection: Binding(
-                    get: { picking ? "" : residence!.code },
-                    set: { code in
-                        if let r = campus.residences.first(where: { $0.code == code }) { setup.setResidence(r) } else { offCampus = true }
-                    }
-                )) {
+                Picker(
+                    L("Residence"),
+                    selection: Binding(
+                        get: { picking ? "" : residence!.code },
+                        set: { code in
+                            if let r = campus.residences.first(where: { $0.code == code }) {
+                                setup.setResidence(r)
+                            } else {
+                                offCampus = true
+                            }
+                        }
+                    )
+                ) {
                     Text(L("Off campus")).tag("")
                     ResidenceItems(residences: campus.residences)
                 }
@@ -463,10 +484,13 @@ struct TripsPane: View {
             } else {
                 Divider()
                 LabeledContent(L("Your stop")) {
-                    Picker(L("Your stop"), selection: Binding(
-                        get: { setup.homeStops.first ?? "" },
-                        set: { setup.setFirstHomeStop($0) }
-                    )) {
+                    Picker(
+                        L("Your stop"),
+                        selection: Binding(
+                            get: { setup.homeStops.first ?? "" },
+                            set: { setup.setFirstHomeStop($0) }
+                        )
+                    ) {
                         Text(L("Choose a stop")).tag("")
                         ForEach(campus.stops, id: \.code) { Text($0.name).tag($0.code) }
                     }
@@ -484,7 +508,9 @@ struct TripsPane: View {
             }
             Divider()
             LabeledContent(L("Walk to your stop")) {
-                Stepper(L("%@ min", "\(setup.homeWalkMin)"), value: Binding(get: { setup.homeWalkMin }, set: { setup.setHomeWalk($0) }), in: setup.limits.homeWalkMin)
+                Stepper(
+                    L("%@ min", "\(setup.homeWalkMin)"), value: Binding(get: { setup.homeWalkMin }, set: { setup.setHomeWalk($0) }),
+                    in: setup.limits.homeWalkMin)
             }
         } else {
             ProgressView()
@@ -494,11 +520,16 @@ struct TripsPane: View {
     @ViewBuilder private var day: some View {
         LabeledContent(L("Show buses between")) {
             HStack(spacing: 6) {
-                DatePicker(L("Day starts"), selection: time(get: { setup.dayStartMin }, set: setup.setDayStart), displayedComponents: .hourAndMinute)
-                    .labelsHidden()
+                DatePicker(
+                    L("Day starts"), selection: time(get: { setup.dayStartMin }, set: setup.setDayStart),
+                    displayedComponents: .hourAndMinute
+                )
+                .labelsHidden()
                 Text(L("and")).foregroundStyle(.secondary)
-                DatePicker(L("Day ends"), selection: time(get: { setup.dayEndMin }, set: setup.setDayEnd), displayedComponents: .hourAndMinute)
-                    .labelsHidden()
+                DatePicker(
+                    L("Day ends"), selection: time(get: { setup.dayEndMin }, set: setup.setDayEnd), displayedComponents: .hourAndMinute
+                )
+                .labelsHidden()
             }
         }
         Divider()
@@ -554,7 +585,10 @@ struct TripsPane: View {
         } label: {
             VStack(alignment: .leading, spacing: 2) {
                 Text(L("Public buses"))
-                Hint(L("Count the 95, 151 and other public buses at your stops too. They have a fare, so one is the answer only when it clearly saves time."))
+                Hint(
+                    L(
+                        "Count the 95, 151 and other public buses at your stops too. They have a fare, so one is the answer only when it clearly saves time."
+                    ))
             }
         }
     }

@@ -19,7 +19,11 @@ const SEND = 'https://fcm.googleapis.com/';
 const PUSH = 'https://web.push.apple.com/send/abc123';
 
 async function serviceAccount() {
-  const { privateKey } = await crypto.subtle.generateKey({ name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' }, true, ['sign', 'verify']);
+  const { privateKey } = await crypto.subtle.generateKey(
+    { name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
+    true,
+    ['sign', 'verify'],
+  );
   const der = Buffer.from(await crypto.subtle.exportKey('pkcs8', privateKey)).toString('base64');
   const pem = `-----BEGIN PRIVATE KEY-----\n${der.match(/.{1,64}/g).join('\n')}\n-----END PRIVATE KEY-----\n`;
   return JSON.stringify({ project_id: 'terminus-test', client_email: 'push@terminus-test.iam.gserviceaccount.com', private_key: pem });
@@ -37,10 +41,21 @@ async function vapidKey() {
 }
 
 /** A user whose devices have these push tokens, and a fetch that plays Firebase and the push service. */
-async function setup(tokens, { mint = () => new Response('{}', { status: 500 }), send = () => Response.json({}), push = () => new Response(null, { status: 201 }) } = {}) {
+async function setup(
+  tokens,
+  {
+    mint = () => new Response('{}', { status: 500 }),
+    send = () => Response.json({}),
+    push = () => new Response(null, { status: 201 }),
+  } = {},
+) {
   const db = makeD1();
   db._db.prepare("INSERT INTO users (id, email, created, last_seen) VALUES ('u1', 'a@u.nus.edu', 0, 0)").run();
-  tokens.forEach((t, i) => db._db.prepare("INSERT INTO sessions (token_hash, user_id, kind, created, last_seen, push_token) VALUES (?, 'u1', 'device', 0, 0, ?)").run(`h${i}`, t));
+  tokens.forEach((t, i) =>
+    db._db
+      .prepare("INSERT INTO sessions (token_hash, user_id, kind, created, last_seen, push_token) VALUES (?, 'u1', 'device', 0, 0, ?)")
+      .run(`h${i}`, t),
+  );
   const calls = { mints: 0, sends: [], pushes: 0 };
   globalThis.fetch = async (input, init) => {
     const url = String(typeof input === 'string' ? input : input.url);
@@ -105,7 +120,15 @@ test('a mint that fails on the retry after a 401 also counts as failed, keeping 
 
 test('the database failing is one failure, not a thrown error', async () => {
   const { env, calls } = await setup(['fcm-phone']);
-  env.DB = { prepare: () => ({ bind: () => ({ all: async () => { throw new Error('D1_ERROR: storage down'); } }) }) };
+  env.DB = {
+    prepare: () => ({
+      bind: () => ({
+        all: async () => {
+          throw new Error('D1_ERROR: storage down');
+        },
+      }),
+    }),
+  };
   assert.deepEqual(await quietly(() => remindUser(env, 'u1', NOTICE, NOW)), { sent: 0, failed: 1 });
   assert.equal(calls.sends.length, 0);
 });

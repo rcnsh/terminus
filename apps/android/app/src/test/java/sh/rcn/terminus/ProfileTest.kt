@@ -8,7 +8,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ProfileTest {
-    init { TestStrings.install() }
+    init {
+        TestStrings.install()
+    }
 
     @Test
     fun `a link shared from NUSMods is found in the sentence around it`() {
@@ -42,7 +44,12 @@ class ProfileTest {
 
     @Test
     fun `undoing a removed favourite puts it back where it was, with its usual times`() {
-        val p = ProfileDoc(JSONObject("""{"places":[{"key":"a","label":"A","to":"COM3"},{"key":"b","label":"B","to":"KR-MRT","icon":"x"},{"key":"c","label":"C","to":"PGP"}],"usual":[{"place":"b","day":1,"atMin":600},{"place":"c","day":2,"atMin":540}]}"""))
+        val p =
+            ProfileDoc(
+                JSONObject(
+                    """{"places":[{"key":"a","label":"A","to":"COM3"},{"key":"b","label":"B","to":"KR-MRT","icon":"x"},{"key":"c","label":"C","to":"PGP"}],"usual":[{"place":"b","day":1,"atMin":600},{"place":"c","day":2,"atMin":540}]}"""
+                )
+            )
         val removed = p.removePlace("b")!!
         assertEquals(listOf("a", "c"), p.places.map { it.key })
         assertEquals(listOf("c"), p.usual.map { it.place })
@@ -80,7 +87,12 @@ class ProfileTest {
     @Test
     fun `removing an imported class leaves the others as they were`() {
         // Imported classes carry fields the app doesn't model (weeks); only the one removed goes.
-        val p = ProfileDoc(JSONObject("""{"trips":[{"day":1,"arriveByMin":600,"to":"COM3","label":"CS2030","venue":"","weeks":[1,2]},{"day":3,"arriveByMin":540,"to":"UTOWN","label":"GEA1000","venue":"","weeks":[3]}]}"""))
+        val p =
+            ProfileDoc(
+                JSONObject(
+                    """{"trips":[{"day":1,"arriveByMin":600,"to":"COM3","label":"CS2030","venue":"","weeks":[1,2]},{"day":3,"arriveByMin":540,"to":"UTOWN","label":"GEA1000","venue":"","weeks":[3]}]}"""
+                )
+            )
         p.removeClass(imported = true, 0)
         assertEquals("GEA1000", p.trips.single().label)
         assertEquals(3, p.json.getJSONArray("trips").getJSONObject(0).getJSONArray("weeks").getInt(0))

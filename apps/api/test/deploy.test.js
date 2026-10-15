@@ -41,7 +41,11 @@ test('stable is the default mode, and an unknown mode is refused', () => {
 });
 
 test('the beta shares no database, store, bucket, limit, dataset, Worker or domain with the stable site', () => {
-  assert.deepEqual(Object.keys(BETA.env).filter((k) => !(k in STABLE.env)), ['PUBLIC_ORIGIN', 'AE_DATASET'], 'the beta only adds the vars that say it is the beta');
+  assert.deepEqual(
+    Object.keys(BETA.env).filter((k) => !(k in STABLE.env)),
+    ['PUBLIC_ORIGIN', 'AE_DATASET'],
+    'the beta only adds the vars that say it is the beta',
+  );
   for (const [name, binding] of Object.entries(STABLE.env)) {
     const stable = resources(binding);
     const beta = resources(BETA.env[name]);
@@ -51,7 +55,11 @@ test('the beta shares no database, store, bucket, limit, dataset, Worker or doma
   const shared = [...everything(STABLE)].filter((r) => everything(BETA).has(r));
   assert.deepEqual(shared, [], 'nothing on one site is used by any binding on the other');
   // Rate-limit counters are per namespace: two limits on one would count each other's requests.
-  const rl = [STABLE, BETA].flatMap((w) => Object.values(w.env).filter((b) => b.type === 'rate-limit').map((b) => b.namespace));
+  const rl = [STABLE, BETA].flatMap((w) =>
+    Object.values(w.env)
+      .filter((b) => b.type === 'rate-limit')
+      .map((b) => b.namespace),
+  );
   assert.equal(new Set(rl).size, rl.length, `rate-limit namespaces repeat: ${rl.join(' ')}`);
   // Each Durable Object binding is to this Worker's own class.
   for (const w of [STABLE, BETA]) {
@@ -90,7 +98,10 @@ test('the beta knows it is the beta, and writes its analytics to its own dataset
 // The guard runs first, so a dirty tree or a failed check changes nothing.
 test('each deploy checks the tree, then applies its own D1 migrations, then deploys its own mode', () => {
   assert.equal(pkg.scripts.deploy, `node scripts/predeploy.mjs && cf d1 migrations apply ${STABLE.env.DB.id} && cf deploy`);
-  assert.equal(pkg.scripts['deploy:beta'], `node scripts/predeploy.mjs && cf d1 migrations apply ${BETA.env.DB.id} && cf deploy --mode beta`);
+  assert.equal(
+    pkg.scripts['deploy:beta'],
+    `node scripts/predeploy.mjs && cf d1 migrations apply ${BETA.env.DB.id} && cf deploy --mode beta`,
+  );
 });
 
 /** Bucket names a shell script names: `BUCKET=`/`BUCKETS=` values and `r2 object put "<bucket>/...`. */
@@ -116,14 +127,19 @@ test('the release and map scripts upload to the buckets each site serves downloa
   assert.deepEqual([...bucketsIn(tiles)].sort(), [stable, beta].sort(), 'scripts/map-tiles.sh knows both buckets');
   // Its CHANNEL arms, where it still picks the bucket with a case.
   const arm = (channel) => tiles.split('\n').find((l) => new RegExp(`^\\s*${channel}\\)`).test(l));
-  for (const [channel, want] of [['stable', [stable]], ['beta', [beta]], ['both', [stable, beta]]]) {
+  for (const [channel, want] of [
+    ['stable', [stable]],
+    ['beta', [beta]],
+    ['both', [stable, beta]],
+  ]) {
     const line = arm(channel);
     if (line) assert.deepEqual([...bucketsIn(line)].sort(), want.sort(), `CHANNEL=${channel} in scripts/map-tiles.sh`);
   }
   // And no script names a bucket that is neither.
   const dir = new URL('../../../scripts/', import.meta.url);
   for (const f of readdirSync(dir).filter((f) => f.endsWith('.sh'))) {
-    for (const b of bucketsIn(readFileSync(new URL(f, dir), 'utf8'))) assert.ok(b === stable || b === beta, `scripts/${f} names bucket ${b}`);
+    for (const b of bucketsIn(readFileSync(new URL(f, dir), 'utf8')))
+      assert.ok(b === stable || b === beta, `scripts/${f} names bucket ${b}`);
   }
 });
 
@@ -148,7 +164,10 @@ test('a release takes the scrape commit for the same data files and bot that scr
 });
 
 const MIGRATIONS = new URL('../migrations/', import.meta.url);
-const migrationFiles = () => readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql')).sort();
+const migrationFiles = () =>
+  readdirSync(MIGRATIONS)
+    .filter((f) => f.endsWith('.sql'))
+    .sort();
 
 test('migrations are numbered 0001, 0002, ... with no gap or repeat', () => {
   const files = migrationFiles();
@@ -160,7 +179,12 @@ test('migrations are numbered 0001, 0002, ... with no gap or repeat', () => {
 });
 
 /** The statements of a SQL file, comments removed. */
-const statements = (sql) => sql.replace(/--[^\n]*/g, '').split(';').map((s) => s.replace(/\s+/g, ' ').trim()).filter(Boolean);
+const statements = (sql) =>
+  sql
+    .replace(/--[^\n]*/g, '')
+    .split(';')
+    .map((s) => s.replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
 
 /** What in a migration would break the Worker still running during a deploy (docs/internals.md, "additive"). */
 function notAdditive(sql) {
@@ -183,7 +207,12 @@ test('migrations only add, unless one says it is the contract step', () => {
   assert.ok(notAdditive('ALTER TABLE a ADD COLUMN b TEXT NOT NULL;').length);
   assert.ok(notAdditive('DROP TABLE a;').length);
   assert.ok(notAdditive('DROP VIEW a;').length);
-  assert.deepEqual(notAdditive("ALTER TABLE a ADD COLUMN b TEXT NOT NULL DEFAULT '';\nALTER TABLE a ADD COLUMN c INTEGER;\nCREATE TABLE d (e TEXT NOT NULL);\nDROP INDEX f;"), []);
+  assert.deepEqual(
+    notAdditive(
+      "ALTER TABLE a ADD COLUMN b TEXT NOT NULL DEFAULT '';\nALTER TABLE a ADD COLUMN c INTEGER;\nCREATE TABLE d (e TEXT NOT NULL);\nDROP INDEX f;",
+    ),
+    [],
+  );
   for (const f of migrationFiles()) {
     if (BEFORE_THE_RULE.includes(f)) continue;
     const sql = readFileSync(new URL(f, MIGRATIONS), 'utf8');
@@ -208,10 +237,16 @@ test('an applied migration is never edited', () => {
   const files = migrationFiles();
   for (const [, hash, file] of lock) {
     assert.ok(files.includes(file), `${file} is applied; it can't be renamed or removed`);
-    const now = createHash('sha256').update(readFileSync(new URL(file, MIGRATIONS))).digest('hex');
+    const now = createHash('sha256')
+      .update(readFileSync(new URL(file, MIGRATIONS)))
+      .digest('hex');
     assert.equal(now, hash, `${file} is applied and must not change: write a new migration instead`);
   }
-  for (const f of BEFORE_THE_RULE) assert.ok(lock.some((l) => l[2] === f), `${f} stays locked`);
+  for (const f of BEFORE_THE_RULE)
+    assert.ok(
+      lock.some((l) => l[2] === f),
+      `${f} stays locked`,
+    );
 });
 
 test('the deploy guard spots conflict markers, not markdown headings', () => {
@@ -221,7 +256,11 @@ test('the deploy guard spots conflict markers, not markdown headings', () => {
   const read = (texts) => (f) => texts[f];
   assert.deepEqual(problems(git({}), read({})), []);
   const found = problems(
-    git({ diff: 'apps/api/src/a.ts\n', status: ' M apps/api/src/b.ts\n?? apps/api/src/c.ts\n', grep: 'apps/api/src/d.ts\napps/web/public/e.md\n' }),
+    git({
+      diff: 'apps/api/src/a.ts\n',
+      status: ' M apps/api/src/b.ts\n?? apps/api/src/c.ts\n',
+      grep: 'apps/api/src/d.ts\napps/web/public/e.md\n',
+    }),
     read({ 'apps/api/src/d.ts': '<<<<<<< ours\nx\n=======\ny\n>>>>>>> theirs\n', 'apps/web/public/e.md': '>>>>>>> quoted\n' }),
   );
   assert.equal(found.length, 3, found.join('\n'));

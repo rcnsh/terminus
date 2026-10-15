@@ -1,11 +1,9 @@
 package sh.rcn.terminus
 
 /**
- * The destination search's ranking, as every client ranks it: the web's
- * (apps/web/public/account/search.js) is the reference, and the rules and
- * the cases all three are held to are in apps/api/test/fixtures/search.json
- * (SearchTest). Exact, then starts with, then a word starts with, then
- * contains; then by kind, by label length, and in the index's order.
+ * The destination search's ranking, as every client ranks it: the web's (apps/web/public/account/search.js) is the reference, and the rules
+ * and the cases all three are held to are in apps/api/test/fixtures/search.json (SearchTest). Exact, then starts with, then a word starts
+ * with, then contains; then by kind, by label length, and in the index's order.
  */
 object SearchRank {
     /** At most this many results. */
@@ -50,7 +48,8 @@ object SearchRank {
     /** The best [max] of [items] for [query], most useful first. Rooms only once the query is two characters. */
     fun <T> rank(items: List<T>, query: String, max: Int = MAX, key: (T) -> Key): List<T> {
         val q = trim(query)
-        return items.asSequence()
+        return items
+            .asSequence()
             .map { it to key(it) }
             .filter { (_, k) -> k.kind != "room" || q.length >= 2 }
             .map { (item, k) -> Triple(item, k, score(k, q)) }
@@ -63,9 +62,8 @@ object SearchRank {
     }
 
     /**
-     * [ranked] gathered under one heading a kind, so none repeats: the groups
-     * in the order of each one's best result, rank order kept inside each.
+     * [ranked] gathered under one heading a kind, so none repeats: the groups in the order of each one's best result, rank order kept
+     * inside each.
      */
-    fun <T, K> grouped(ranked: List<T>, kind: (T) -> K): List<T> =
-        ranked.groupBy(kind).values.flatten()
+    fun <T, K> grouped(ranked: List<T>, kind: (T) -> K): List<T> = ranked.groupBy(kind).values.flatten()
 }

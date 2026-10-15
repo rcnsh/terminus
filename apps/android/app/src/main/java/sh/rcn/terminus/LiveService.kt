@@ -30,16 +30,12 @@ import sh.rcn.terminus.widget.isOld
 import sh.rcn.terminus.widget.redrawWidgets
 
 /**
- * The live notification: during a trip, from "time to go" until you're
- * there, a silent ongoing notification with the next bus and a ticking
- * countdown, refreshed every 30 s (2 min with the screen off), and the
- * widgets redrawn with it.
+ * The live notification: during a trip, from "time to go" until you're there, a silent ongoing notification with the next bus and a ticking
+ * countdown, refreshed every 30 s (2 min with the screen off), and the widgets redrawn with it.
  *
- * Between trips it stops itself, and starts again when the next trip is due:
- * from a high-priority push ("due", "missed"), or an exact alarm (its own, a
- * refresh's or a leave check's). Other pushes come at normal priority, which
- * Android doesn't let start it. The API's 15 s per-stop cache means this
- * costs NUS nothing more than having the app open.
+ * Between trips it stops itself, and starts again when the next trip is due: from a high-priority push ("due", "missed"), or an exact alarm
+ * (its own, a refresh's or a leave check's). Other pushes come at normal priority, which Android doesn't let start it. The API's 15 s
+ * per-stop cache means this costs NUS nothing more than having the app open.
  */
 class LiveService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -181,10 +177,9 @@ class LiveService : Service() {
         val TRIP_PHASES = setOf("due", "heading", "waiting", "riding", "missed")
 
         /**
-         * Starts the live notification when it's on and can be seen. False when
-         * it isn't, or Android refused the start (from the background, outside
-         * the moments it allows: a high-priority push, an exact alarm, boot).
-         * [force] (a push) fetches at once, past the answer kept a moment ago.
+         * Starts the live notification when it's on and can be seen. False when it isn't, or Android refused the start (from the
+         * background, outside the moments it allows: a high-priority push, an exact alarm, boot). [force] (a push) fetches at once, past
+         * the answer kept a moment ago.
          */
         fun start(ctx: Context, force: Boolean = false): Boolean {
             val store = Store(ctx)
@@ -199,11 +194,9 @@ class LiveService : Service() {
         }
 
         /**
-         * Exact, so the service may start from the background: an app allowed
-         * SCHEDULE_EXACT_ALARM may when its exact alarm fires. Without it the
-         * start is refused; a high-priority push ("due", "missed") starts it
-         * then, or opening the app. A normal-priority one (heading, waiting,
-         * riding) can't.
+         * Exact, so the service may start from the background: an app allowed SCHEDULE_EXACT_ALARM may when its exact alarm fires. Without
+         * it the start is refused; a high-priority push ("due", "missed") starts it then, or opening the app. A normal-priority one
+         * (heading, waiting, riding) can't.
          */
         private fun wakeAt(ctx: Context, at: Long) {
             ctx.getSystemService(AlarmManager::class.java)?.setWhileIdle(at, startIntent(ctx))
@@ -211,27 +204,23 @@ class LiveService : Service() {
 
         private fun startIntent(ctx: Context): PendingIntent =
             PendingIntent.getBroadcast(
-                ctx, 3, Intent(ctx, LiveReceiver::class.java).setAction(ACTION_START),
+                ctx,
+                3,
+                Intent(ctx, LiveReceiver::class.java).setAction(ACTION_START),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
 
         /**
-         * Between trips, when the service looks again (server clock): the next
-         * class's reminder or the server's `refreshAt` (the plan changes),
-         * never within [MIN_WAKE_MS]. Not the card's `nextChangeAt`, which
-         * moves at every departure and would wake the phone many times an
-         * hour for nothing; a trip without a reminder starts with its push.
+         * Between trips, when the service looks again (server clock): the next class's reminder or the server's `refreshAt` (the plan
+         * changes), never within [MIN_WAKE_MS]. Not the card's `nextChangeAt`, which moves at every departure and would wake the phone many
+         * times an hour for nothing; a trip without a reminder starts with its push.
          */
         internal fun betweenTripsWakeAt(answer: NextAnswer?, now: Long): Long? =
-            listOfNotNull(answer?.card?.remindAtMs, answer?.refreshAtMs)
-                .filter { it > now }
-                .minOrNull()
-                ?.coerceAtLeast(now + MIN_WAKE_MS)
+            listOfNotNull(answer?.card?.remindAtMs, answer?.refreshAtMs).filter { it > now }.minOrNull()?.coerceAtLeast(now + MIN_WAKE_MS)
 
         /**
-         * What the header counts down to: getting off, leaving for a class, or
-         * the bus. At the stop (`waiting`) there's nowhere to leave: the bus the
-         * card's headline names (its journey's), as the in-app card counts.
+         * What the header counts down to: getting off, leaving for a class, or the bus. At the stop (`waiting`) there's nowhere to leave:
+         * the bus the card's headline names (its journey's), as the in-app card counts.
          */
         internal fun countdownAt(answer: NextAnswer): Long? {
             val card = answer.card
@@ -251,23 +240,30 @@ class LiveService : Service() {
                 NotificationChannel(CHANNEL, L.s(R.string.channel_live), NotificationManager.IMPORTANCE_LOW).apply {
                     description = L.s(R.string.channel_live_desc)
                     setShowBadge(false)
-                },
+                }
             )
             val now = ServerClock.now()
-            val open = PendingIntent.getActivity(
-                ctx, 0, MainActivity.intentFor(ctx),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            )
-            val stop = PendingIntent.getService(
-                ctx, 4, Intent(ctx, LiveService::class.java).setAction(ACTION_STOP),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            )
-            val b = Notification.Builder(ctx, CHANNEL)
-                .setSmallIcon(Icon.createWithResource(ctx, R.drawable.ic_bus))
-                .setOngoing(true)
-                .setOnlyAlertOnce(true)
-                .setContentIntent(open)
-                .setCategory(Notification.CATEGORY_STATUS)
+            val open =
+                PendingIntent.getActivity(
+                    ctx,
+                    0,
+                    MainActivity.intentFor(ctx),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
+            val stop =
+                PendingIntent.getService(
+                    ctx,
+                    4,
+                    Intent(ctx, LiveService::class.java).setAction(ACTION_STOP),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
+            val b =
+                Notification.Builder(ctx, CHANNEL)
+                    .setSmallIcon(Icon.createWithResource(ctx, R.drawable.ic_bus))
+                    .setOngoing(true)
+                    .setOnlyAlertOnce(true)
+                    .setContentIntent(open)
+                    .setCategory(Notification.CATEGORY_STATUS)
             b.addAction(Notification.Action.Builder(null, L.s(R.string.turn_off), stop).build())
             if (answer == null) return b.setContentTitle("terminus").setContentText(L.s(R.string.checking)).build()
             // During a trip, a Live Update (Android 16 QPR1, API 36.1): kept at
@@ -277,9 +273,14 @@ class LiveService : Service() {
             val fmt = { ms: Long -> clock(ctx, ms) }
             // Past its staleAt with no fresh answer (offline, or the server
             // failing): the bus may be long gone. No countdown then, and said so.
-            val unconfirmed = if (isOld(answer, now)) Store(ctx).lastAnswer()?.second?.let { L.s(R.string.unconfirmed_checked, fmt(it)) } else null
+            val unconfirmed =
+                if (isOld(answer, now)) Store(ctx).lastAnswer()?.second?.let { L.s(R.string.unconfirmed_checked, fmt(it)) } else null
             // SDK_INT_FULL only exists from API 36: reading it on 12-15 throws, so check SDK_INT first.
-            if (android.os.Build.VERSION.SDK_INT >= 36 && android.os.Build.VERSION.SDK_INT_FULL >= android.os.Build.VERSION_CODES_FULL.BAKLAVA_1 && card?.phase in TRIP_PHASES) {
+            if (
+                android.os.Build.VERSION.SDK_INT >= 36 &&
+                    android.os.Build.VERSION.SDK_INT_FULL >= android.os.Build.VERSION_CODES_FULL.BAKLAVA_1 &&
+                    card?.phase in TRIP_PHASES
+            ) {
                 b.setRequestPromotedOngoing(true)
                 if (unconfirmed == null) card?.glance?.let { b.setShortCriticalText(it) }
             }
@@ -302,11 +303,27 @@ class LiveService : Service() {
                 // Its bus gone with nothing known: the card's line, never "Leave now"
                 // to someone who may be on it; the next bus is for if you missed it.
                 val gone = card?.gone == true && card.line != null
-                val head = if (gone) card?.line else if (unconfirmed != null) card?.leaveBy ?: answer.leaveHeadline(now) else answer.leaveHeadline(now)
+                val head =
+                    if (gone) card?.line
+                    else if (unconfirmed != null) card?.leaveBy ?: answer.leaveHeadline(now) else answer.leaveHeadline(now)
                 b.setContentTitle(head)
                     .setContentText(unconfirmed ?: if (gone) card?.phaseText ?: catch else catch)
-                    .setStyle(Notification.BigTextStyle().bigText(listOfNotNull(unconfirmed, card?.phaseText.takeIf { gone }, catch, answer.leaveNote.takeIf { unconfirmed == null }, answer.goNowLine.takeIf { unconfirmed == null }).joinToString("\n")))
-                    .setSubText(listOfNotNull(answer.destLabel, answer.classAtMs?.let { L.s(R.string.starts_at, fmt(it)) }).joinToString(" · "))
+                    .setStyle(
+                        Notification.BigTextStyle()
+                            .bigText(
+                                listOfNotNull(
+                                        unconfirmed,
+                                        card?.phaseText.takeIf { gone },
+                                        catch,
+                                        answer.leaveNote.takeIf { unconfirmed == null },
+                                        answer.goNowLine.takeIf { unconfirmed == null },
+                                    )
+                                    .joinToString("\n")
+                            )
+                    )
+                    .setSubText(
+                        listOfNotNull(answer.destLabel, answer.classAtMs?.let { L.s(R.string.starts_at, fmt(it)) }).joinToString(" · ")
+                    )
                 // A class card can come without a leave time: no countdown then.
                 return b.countdownTo(countdownAt(answer).takeIf { unconfirmed == null }, now).build()
             }
@@ -323,12 +340,10 @@ class LiveService : Service() {
 }
 
 /**
- * How long the live notification waits at least after [failures] failed
- * refreshes in a row (offline, the server failing): 1, 2, 4, then 8 minutes;
- * nothing extra after a success.
+ * How long the live notification waits at least after [failures] failed refreshes in a row (offline, the server failing): 1, 2, 4, then 8
+ * minutes; nothing extra after a success.
  */
-internal fun liveBackoffMs(failures: Int): Long =
-    if (failures <= 0) 0 else 60_000L shl (failures - 1).coerceAtMost(3)
+internal fun liveBackoffMs(failures: Int): Long = if (failures <= 0) 0 else 60_000L shl (failures - 1).coerceAtMost(3)
 
 class LiveReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {

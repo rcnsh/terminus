@@ -140,8 +140,14 @@ test('every 5xx trips the breaker, 500 and 599 as much as 503', async () => {
   }
 });
 
-test("a fresh isolate uses the token another isolate kept in KV: no mint", async () => {
-  const kept = { token: 'kept-by-another-isolate-0123456789', userid: 'U1', domain: 'PUBLIC', expMs: FROZEN_NOW + 3_600_000, version: '0.0.0-test' };
+test('a fresh isolate uses the token another isolate kept in KV: no mint', async () => {
+  const kept = {
+    token: 'kept-by-another-isolate-0123456789',
+    userid: 'U1',
+    domain: 'PUBLIC',
+    expMs: FROZEN_NOW + 3_600_000,
+    version: '0.0.0-test',
+  };
   // A new KV binding is a new isolate here: the in-memory memo is per binding.
   const env = makeEnv(makeKV({ 'auth:session': kept }));
   const fetchImpl = makeFetch({ byStop: { COM3: D2_IN_4 } });
@@ -187,7 +193,11 @@ test('the token mint answering 200 with a web page: no other stop mints for fail
   const fetchImpl = htmlFrom(/get-access-token/, base);
   installGlobals(fetchImpl);
   const env = makeEnv();
-  for (const [dt, stop] of [[0, 'PGP'], [5_000, 'COM3'], [(TTL.failMemoS - 1) * 1000, 'UTOWN']]) {
+  for (const [dt, stop] of [
+    [0, 'PGP'],
+    [5_000, 'COM3'],
+    [(TTL.failMemoS - 1) * 1000, 'UTOWN'],
+  ]) {
     const res = await at(FROZEN_NOW + dt, `/api/arrivals?stop=${stop}`, { fetchImpl, env });
     assert.equal((await res.json()).available, false, stop);
   }

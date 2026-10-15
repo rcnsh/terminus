@@ -18,9 +18,16 @@ function setup(extra = {}) {
   installGlobals(makeFetch());
   const env = { ...makeEnv(), HEALTH_TOKEN: TOKEN, ...extra };
   const call = async (path, { method = 'GET', body, token, origin = BASE } = {}) => {
-    const headers = { ...(body === undefined ? {} : { 'content-type': 'application/json' }), ...(token ? { 'x-health-token': token } : {}) };
+    const headers = {
+      ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+      ...(token ? { 'x-health-token': token } : {}),
+    };
     const ctx = makeCtx();
-    const res = await worker.fetch(new Request(origin + path, { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }), env, ctx);
+    const res = await worker.fetch(
+      new Request(origin + path, { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }),
+      env,
+      ctx,
+    );
     await ctx.settle();
     return res;
   };
@@ -36,7 +43,10 @@ for (const alg of [-7, -8]) {
     const added = await call('/api/admin/passkey/register', { method: 'POST', token: TOKEN, body: await a.create(await challenge()) });
     assert.equal(added.status, 201, await added.clone().text());
     const kept = JSON.parse(await env.KV.get(PASSKEYS_KEY));
-    assert.deepEqual(kept.map((p) => [p.id, p.rpId, p.alg, p.name]), [[a.id, 'bus.example.test', alg, 'test device']]);
+    assert.deepEqual(
+      kept.map((p) => [p.id, p.rpId, p.alg, p.name]),
+      [[a.id, 'bus.example.test', alg, 'test device']],
+    );
 
     const res = await call('/api/admin/passkey/signin', { method: 'POST', body: await a.get(await challenge()) });
     assert.equal(res.status, 200, await res.clone().text());
@@ -46,7 +56,11 @@ for (const alg of [-7, -8]) {
 
     assert.equal((await call('/api/admin/stats', { token: session })).status, 200, 'the session opens the dashboard');
     assert.equal((await call('/api/admin/stats', { token: session.slice(0, -2) + 'AA' })).status, 404, 'a forged one does not');
-    const again = await call('/api/admin/passkey/register', { method: 'POST', token: session, body: await (await makeAuthenticator()).create(await challenge()) });
+    const again = await call('/api/admin/passkey/register', {
+      method: 'POST',
+      token: session,
+      body: await (await makeAuthenticator()).create(await challenge()),
+    });
     assert.equal(again.status, 404, 'a session cannot add a passkey');
   });
 }
@@ -84,7 +98,10 @@ test('with HEALTH_TOKEN unset, every passkey route is a 404', async () => {
 test('a passkey is refused: unknown, another site, another host, unverified, a stale or forged challenge', async () => {
   const { call, challenge } = setup();
   const a = await makeAuthenticator();
-  assert.equal((await call('/api/admin/passkey/register', { method: 'POST', token: TOKEN, body: await a.create(await challenge()) })).status, 201);
+  assert.equal(
+    (await call('/api/admin/passkey/register', { method: 'POST', token: TOKEN, body: await a.create(await challenge()) })).status,
+    201,
+  );
 
   const signin = (body, origin) => call('/api/admin/passkey/signin', { method: 'POST', body, origin });
   assert.equal((await signin(await (await makeAuthenticator()).get(await challenge()))).status, 403, 'not a kept passkey');
@@ -95,15 +112,27 @@ test('a passkey is refused: unknown, another site, another host, unverified, a s
   assert.equal((await signin(await a.get(await newChallenge(TOKEN, Date.now() - 6 * 60_000)))).status, 403, 'a challenge run out');
 
   const good = await a.get(await challenge());
-  assert.equal((await signin({ ...good, signature: (await a.get(await challenge())).signature })).status, 403, 'a signature over something else');
+  assert.equal(
+    (await signin({ ...good, signature: (await a.get(await challenge())).signature })).status,
+    403,
+    'a signature over something else',
+  );
   assert.equal((await signin({ id: a.id })).status, 400);
   assert.equal((await signin(good)).status, 200);
 
   const b = await makeAuthenticator();
   const made = await b.create(await challenge(), { flags: 0x41 });
-  assert.equal((await call('/api/admin/passkey/register', { method: 'POST', token: TOKEN, body: made })).status, 403, 'made without verifying the user');
+  assert.equal(
+    (await call('/api/admin/passkey/register', { method: 'POST', token: TOKEN, body: made })).status,
+    403,
+    'made without verifying the user',
+  );
   const other = await b.create(await challenge());
-  assert.equal((await call('/api/admin/passkey/register', { method: 'POST', token: TOKEN, body: { ...other, id: a.id } })).status, 403, 'an id the authenticator did not make');
+  assert.equal(
+    (await call('/api/admin/passkey/register', { method: 'POST', token: TOKEN, body: { ...other, id: a.id } })).status,
+    403,
+    'an id the authenticator did not make',
+  );
 });
 
 test('a session dies with its expiry, and with the token', async () => {

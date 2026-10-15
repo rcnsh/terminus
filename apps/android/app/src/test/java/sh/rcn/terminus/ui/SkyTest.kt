@@ -7,24 +7,44 @@ import org.junit.Test
 class SkyTest {
     private fun at(hhmm: String) = hhmm.split(":").let { (h, m) -> phaseAt(h.toInt() * 60 + m.toInt()) }
 
-    @Test fun theSkyFollowsTheDayDawnToNight() {
-        val day = listOf("00:00", "06:29", "06:30", "08:29", "08:30", "12:00", "16:29", "16:30", "18:44", "18:45", "19:39", "19:40", "23:59").map(::at)
+    @Test
+    fun theSkyFollowsTheDayDawnToNight() {
+        val day =
+            listOf("00:00", "06:29", "06:30", "08:29", "08:30", "12:00", "16:29", "16:30", "18:44", "18:45", "19:39", "19:40", "23:59")
+                .map(::at)
         assertEquals(
-            listOf(Phase.NIGHT, Phase.NIGHT, Phase.DAWN, Phase.DAWN, Phase.DAY, Phase.DAY, Phase.DAY, Phase.GOLDEN, Phase.GOLDEN, Phase.DUSK, Phase.DUSK, Phase.NIGHT, Phase.NIGHT),
+            listOf(
+                Phase.NIGHT,
+                Phase.NIGHT,
+                Phase.DAWN,
+                Phase.DAWN,
+                Phase.DAY,
+                Phase.DAY,
+                Phase.DAY,
+                Phase.GOLDEN,
+                Phase.GOLDEN,
+                Phase.DUSK,
+                Phase.DUSK,
+                Phase.NIGHT,
+                Phase.NIGHT,
+            ),
             day,
         )
     }
 
-    @Test fun aDarkPhoneAlwaysHasLightWordsOverTheSky() {
+    @Test
+    fun aDarkPhoneAlwaysHasLightWordsOverTheSky() {
         for (p in Phase.entries) assertEquals(p.name, true, palette(p, dark = true).lightInk)
     }
 
-    @Test fun aLightPhoneHasDarkWordsOnlyByDay() {
+    @Test
+    fun aLightPhoneHasDarkWordsOnlyByDay() {
         val dark = Phase.entries.filter { !palette(it, dark = false).lightInk }
         assertEquals(listOf(Phase.DAWN, Phase.DAY, Phase.GOLDEN), dark)
     }
 
-    @Test fun theSunIsOnlyLowBehindTheHillsNeverOverTheWords() {
+    @Test
+    fun theSunIsOnlyLowBehindTheHillsNeverOverTheWords() {
         // Rising at dawn, low in the golden hour, setting at dusk; none by day or at night, on either theme.
         for (dark in listOf(false, true)) {
             val low = Phase.entries.filter { palette(it, dark).sun != null }
@@ -32,7 +52,8 @@ class SkyTest {
         }
     }
 
-    @Test fun theSkyHasDepthAsNowScrolls() {
+    @Test
+    fun theSkyHasDepthAsNowScrolls() {
         // sky, far, fade: the web's cases (daylight.test.js).
         fun at(s: Float) = parallax(s).let { listOf(it.sky, it.far, it.fade).map { n -> Math.round(n * 100) / 100f } }
         assertEquals(listOf(0f, 0f, 1f), at(0f))

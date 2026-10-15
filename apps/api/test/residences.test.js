@@ -29,8 +29,7 @@ test('home only when one of your home stops serves the residence you are in', ()
   assert.equal(atHome(null, null, ['PGP']), false);
 });
 
-
-test('at home, the walk to your stop is your own, and the hall\'s other stops as much further', () => {
+test("at home, the walk to your stop is your own, and the hall's other stops as much further", () => {
   const { byCode } = indexGraph(GRAPH);
   const pgp = residences.residences.PGP.stops;
   const foot = (out) => Object.fromEntries(out.map((c) => [c.stop.code, Math.round(c.footM)]));

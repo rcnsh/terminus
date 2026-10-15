@@ -19,21 +19,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import sh.rcn.terminus.Target
-import sh.rcn.terminus.SearchRank
-import sh.rcn.terminus.rankDestinations
-import androidx.compose.ui.res.stringResource
-import sh.rcn.terminus.R
 import sh.rcn.terminus.L
+import sh.rcn.terminus.R
+import sh.rcn.terminus.SearchRank
+import sh.rcn.terminus.Target
+import sh.rcn.terminus.rankDestinations
 
 /**
- * "Go somewhere else", opened by the search button at the end of the chips:
- * a field under them, focused, with the results below. Picking one shows its
- * card under a chip of its own and closes the search; so does Back.
+ * "Go somewhere else", opened by the search button at the end of the chips: a field under them, focused, with the results below. Picking
+ * one shows its card under a chip of its own and closes the search; so does Back.
  */
 @Composable
 internal fun Search(state: UiState, vm: MainViewModel, onClose: () -> Unit) {
@@ -50,7 +49,15 @@ internal fun Search(state: UiState, vm: MainViewModel, onClose: () -> Unit) {
 }
 
 @Composable
-private fun SearchField(state: UiState, vm: MainViewModel, query: String, q: String, setQuery: (String) -> Unit, modifier: Modifier, onPicked: () -> Unit) {
+private fun SearchField(
+    state: UiState,
+    vm: MainViewModel,
+    query: String,
+    q: String,
+    setQuery: (String) -> Unit,
+    modifier: Modifier,
+    onPicked: () -> Unit,
+) {
     // Walk times at the user's pace, as the server last said it (1.3 m/s before any answer).
     val walkSpeed = state.answer?.walkSpeedMs ?: 1.3
     OutlinedTextField(
@@ -68,10 +75,20 @@ private fun SearchField(state: UiState, vm: MainViewModel, query: String, q: Str
     // Once per query, not on every recomposition (the screen refreshes every 30 s).
     val matches = remember(state.destinations, q) { SearchRank.grouped(rankDestinations(state.destinations, q)) { it.kind } }
     val stopName = { code: String -> state.destinations.firstOrNull { it.kind == "stop" && it.code == code }?.label ?: code }
-    val groups = mapOf("stop" to stringResource(R.string.group_stops), "landmark" to stringResource(R.string.group_places), "building" to stringResource(R.string.group_buildings), "room" to stringResource(R.string.group_rooms))
+    val groups =
+        mapOf(
+            "stop" to stringResource(R.string.group_stops),
+            "landmark" to stringResource(R.string.group_places),
+            "building" to stringResource(R.string.group_buildings),
+            "room" to stringResource(R.string.group_rooms),
+        )
     Column {
         if (matches.isEmpty() && state.destinations.isNotEmpty()) {
-            Text(stringResource(R.string.search_none), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 12.dp))
+            Text(
+                stringResource(R.string.search_none),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 12.dp),
+            )
         }
         var group: String? = null
         for (d in matches) {
@@ -84,25 +101,28 @@ private fun SearchField(state: UiState, vm: MainViewModel, query: String, q: Str
                     modifier = Modifier.padding(top = 12.dp, bottom = 4.dp).semantics { heading() },
                 )
             }
-            val meta = when (d.kind) {
-                "stop" -> L.s(R.string.bus_stop)
-                // Served by more than one stop: the quicker one is used at the time.
-                "landmark" -> listOfNotNull(d.detail, L.s(R.string.stop_suffix, d.stops.joinToString(L.s(R.string.or_list)) { stopName(it) })).joinToString(" · ")
-                else -> buildString {
-                    if (d.label != d.code) append("${d.code} · ")
-                    append(L.s(R.string.stop_suffix, stopName(d.stopCode)))
-                    d.walkM?.let { append(L.s(R.string.min_walk_comma, maxOf(1, Math.round(it / walkSpeed / 60).toInt()))) }
+            val meta =
+                when (d.kind) {
+                    "stop" -> L.s(R.string.bus_stop)
+                    // Served by more than one stop: the quicker one is used at the time.
+                    "landmark" ->
+                        listOfNotNull(d.detail, L.s(R.string.stop_suffix, d.stops.joinToString(L.s(R.string.or_list)) { stopName(it) }))
+                            .joinToString(" · ")
+                    else ->
+                        buildString {
+                            if (d.label != d.code) append("${d.code} · ")
+                            append(L.s(R.string.stop_suffix, stopName(d.stopCode)))
+                            d.walkM?.let { append(L.s(R.string.min_walk_comma, maxOf(1, Math.round(it / walkSpeed / 60).toInt()))) }
+                        }
                 }
-            }
             Column(
-                Modifier
-                    .fillMaxWidth()
+                Modifier.fillMaxWidth()
                     .clickable(role = Role.Button) {
                         setQuery("")
                         vm.select(Target.Code(d.code, if (d.kind == "stop" || d.kind == "landmark") d.label else d.code))
                         onPicked()
                     }
-                    .padding(vertical = 10.dp),
+                    .padding(vertical = 10.dp)
             ) {
                 Text(d.label)
                 Text(meta, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

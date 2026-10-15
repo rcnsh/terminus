@@ -97,10 +97,16 @@ export function horizonSvg(lights: boolean, W = BAND_W): string {
       return `<path d="M${c - 1.5} ${g + 2}V${g - 7}L${c - 7} ${g - 13}H${c - 4.5}L${c} ${g - 9}L${c + 4.5} ${g - 13}H${c + 7}L${c + 1.5} ${g - 7}V${g + 2}Z"/><ellipse cx="${c}" cy="${r1(g - 18)}" rx="21" ry="5.5"/><ellipse cx="${c - 8}" cy="${r1(g - 21.5)}" rx="11" ry="4.5"/><ellipse cx="${c + 8}" cy="${r1(g - 22)}" rx="12" ry="4.5"/>`;
     };
     const stars = [0, 1, 2, 3, 4]
-      .map((i) => `<circle cx="${r1(flag + 5.2 + 0.85 * Math.sin((i * 2 * Math.PI) / 5))}" cy="${r1(pole - 22 - 0.85 * Math.cos((i * 2 * Math.PI) / 5))}" r=".35"/>`)
+      .map(
+        (i) =>
+          `<circle cx="${r1(flag + 5.2 + 0.85 * Math.sin((i * 2 * Math.PI) / 5))}" cy="${r1(pole - 22 - 0.85 * Math.cos((i * 2 * Math.PI) / 5))}" r=".35"/>`,
+      )
       .join('');
     if (n % 3 === 0)
-      city.push(...[-13, -2, 9].map((x) => `<path d="M${mbs + x} ${top}L${mbs + x + 1} ${r1(top - 26)}H${mbs + x + 5}L${mbs + x + 6} ${top}Z"/>`), `<path d="M${mbs - 15} ${r1(top - 28)}L${mbs + 25} ${r1(top - 29.2)}L${mbs + 23} ${r1(top - 26)}H${mbs - 14}Z"/>`);
+      city.push(
+        ...[-13, -2, 9].map((x) => `<path d="M${mbs + x} ${top}L${mbs + x + 1} ${r1(top - 26)}H${mbs + x + 5}L${mbs + x + 6} ${top}Z"/>`),
+        `<path d="M${mbs - 15} ${r1(top - 28)}L${mbs + 25} ${r1(top - 29.2)}L${mbs + 23} ${r1(top - 26)}H${mbs - 14}Z"/>`,
+      );
     const tall = n % 2 === 0;
     far.push(`<rect x="${b1 - 8}" y="${r1(farY(b1) - 14)}" width="16" height="20"/>`);
     lit.push(`<rect x="${b1 - 3}" y="${r1(farY(b1) - 9)}" width="3" height="3" opacity=".6"/>`);
@@ -111,7 +117,9 @@ export function horizonSvg(lights: boolean, W = BAND_W): string {
     far.push(`<rect x="${b2 - 13}" y="${r1(farY(b2) - 22)}" width="26" height="28"/>`);
     lit.push(`<rect x="${b2 - 5}" y="${r1(farY(b2) - 16)}" width="3" height="3"/>`);
     trees.push(`<path d="M${flag - 0.6} ${pole + 2}V${pole - 24}H${flag + 0.6}V${pole + 2}Z"/>`);
-    flags.push(`<rect x="${flag + 0.6}" y="${pole - 24}" width="12" height="4" fill="#ef3340"/><rect x="${flag + 0.6}" y="${pole - 20}" width="12" height="4" fill="#f2efeb"/><circle cx="${flag + 3.2}" cy="${pole - 22}" r="1.5" fill="#f2efeb"/><circle cx="${flag + 3.8}" cy="${pole - 22}" r="1.3" fill="#ef3340"/><g fill="#f2efeb">${stars}</g>`);
+    flags.push(
+      `<rect x="${flag + 0.6}" y="${pole - 24}" width="12" height="4" fill="#ef3340"/><rect x="${flag + 0.6}" y="${pole - 20}" width="12" height="4" fill="#f2efeb"/><circle cx="${flag + 3.2}" cy="${pole - 22}" r="1.5" fill="#f2efeb"/><circle cx="${flag + 3.8}" cy="${pole - 22}" r="1.3" fill="#ef3340"/><g fill="#f2efeb">${stars}</g>`,
+    );
   }
   return `<svg class="hz" viewBox="0 6 ${W} 52" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
 <g class="city">${city.join('')}</g>
@@ -129,7 +137,8 @@ const vars = (s: PageSky, lightInk: boolean) =>
 export const lightInkAt = (phase: Phase) => LIGHT_INK.has(phase);
 
 /** The sky's colours at `phase` as CSS variables: on a light page, or on a dark one. */
-export const skyVars = (phase: Phase, page: 'light' | 'dark' = 'light') => vars(PAGE_SKIES[page][phase], page === 'dark' || LIGHT_INK.has(phase));
+export const skyVars = (phase: Phase, page: 'light' | 'dark' = 'light') =>
+  vars(PAGE_SKIES[page][phase], page === 'dark' || LIGHT_INK.has(phase));
 
 /** The band's CSS at `phase`: its colours on a light page and on a dark one, and how it's laid out. */
 export function bandCss(phase: Phase): string {

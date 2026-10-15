@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import Terminus
 
 /// Chinese: every string the app writes has a translation with the
@@ -23,7 +24,9 @@ private func sources() throws -> [(String, String)] {
 private func literals(_ pattern: String, in text: String) throws -> [String] {
     let re = try NSRegularExpression(pattern: pattern)
     return re.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { m in
-        Range(m.range(at: 1), in: text).map { String(text[$0]).replacingOccurrences(of: "\\\"", with: "\"").replacingOccurrences(of: "\\\\", with: "\\") }
+        Range(m.range(at: 1), in: text).map {
+            String(text[$0]).replacingOccurrences(of: "\\\"", with: "\"").replacingOccurrences(of: "\\\\", with: "\\")
+        }
     }
 }
 
@@ -43,7 +46,10 @@ private func literals(_ pattern: String, in text: String) throws -> [String] {
     let count = { (s: String) in blanks.numberOfMatches(in: s, range: NSRange(s.startIndex..., in: s)) }
     for (en, zh) in try chinese() {
         #expect(count(en) == count(zh), "\(en)")
-        #expect(zh.unicodeScalars.contains { (0x4E00...0x9FFF).contains($0.value) || (0x3000...0x303F).contains($0.value) || (0xFF00...0xFFEF).contains($0.value) }, "\(en): \(zh)")
+        #expect(
+            zh.unicodeScalars.contains {
+                (0x4E00...0x9FFF).contains($0.value) || (0x3000...0x303F).contains($0.value) || (0xFF00...0xFFEF).contains($0.value)
+            }, "\(en): \(zh)")
     }
 }
 
@@ -52,7 +58,9 @@ private func literals(_ pattern: String, in text: String) throws -> [String] {
     let allowed: Set = ["terminus", "termi", "nus", "you@u.nus.edu", "ABC 123", "https://nusmods.com/timetable/sem-1/share?…"]
     var found: [String] = []
     for (file, text) in try sources() {
-        for s in try literals(#"\b(?:Text|Button|Toggle|Label|Picker|TextField|Window|Stepper|Hint|help|accessibilityLabel)\("((?:\\.|[^"\\])*[A-Za-z]{2,}(?:\\.|[^"\\])*)""#, in: text)
+        for s in try literals(
+            #"\b(?:Text|Button|Toggle|Label|Picker|TextField|Window|Stepper|Hint|help|accessibilityLabel)\("((?:\\.|[^"\\])*[A-Za-z]{2,}(?:\\.|[^"\\])*)""#,
+            in: text)
         where !allowed.contains(s) && !s.hasPrefix("\\(") {
             found.append("\(file): \(s)")
         }

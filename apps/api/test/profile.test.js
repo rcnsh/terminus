@@ -1,7 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { DEFAULT_PROFILE, GAP_RETURN_MIN, MAX_VENUE_WALK_S, PROFILE_LIMITS, isResting, nextClass, parseProfile, planFor, restDetail, restLabel, timingFor, upcomingClass } from '../src/profile.ts';
+import {
+  DEFAULT_PROFILE,
+  GAP_RETURN_MIN,
+  MAX_VENUE_WALK_S,
+  PROFILE_LIMITS,
+  isResting,
+  nextClass,
+  parseProfile,
+  planFor,
+  restDetail,
+  restLabel,
+  timingFor,
+  upcomingClass,
+} from '../src/profile.ts';
 import { withLang } from '../src/i18n.ts';
 
 const STOPS = new Set(['PGP', 'COM3', 'UTOWN', 'KR-MRT', 'LT27']);
@@ -90,7 +103,15 @@ test('parseProfile fills defaults and rejects bad input with a useful message', 
     [{ manual: [{ day: 7, arriveByMin: 600, to: 'COM3', label: 'x' }] }, /manual\[0\]: day/],
     [{ manual: [{ day: 1, arriveByMin: 600, endMin: 500, to: 'COM3', label: 'x' }] }, /endMin/],
     [{ places: [{ key: 'Gym!', label: 'Gym', to: 'PGP' }] }, /key/],
-    [{ places: [{ key: 'a', label: 'A', to: 'PGP' }, { key: 'a', label: 'B', to: 'PGP' }] }, /duplicate/],
+    [
+      {
+        places: [
+          { key: 'a', label: 'A', to: 'PGP' },
+          { key: 'a', label: 'B', to: 'PGP' },
+        ],
+      },
+      /duplicate/,
+    ],
   ];
   for (const [input, re] of cases) {
     const r = parseProfile(input, isStop);
@@ -168,13 +189,24 @@ test("the next class's card: when, what, and where to get off", () => {
   const name = (code) => ({ COM3: 'COM 3', UTOWN: 'UTown' })[code] ?? code;
   // Its room isn't at the stop: both, so you know where to get off.
   const tt = [cls(10, 12, 'COM3', 'CS2030 @ COM1'), { ...cls(9, 10, 'UTOWN', 'GEA1000 @ UTown'), day: 5, venue: 'UT-AUD1' }];
-  assert.deepEqual(upcomingClass(profile(tt), thu(20), false, name), { when: 'Tomorrow · Fri', title: 'GEA1000 at 09:00', where: 'At UT-AUD1 · get off at UTown', off: null });
+  assert.deepEqual(upcomingClass(profile(tt), thu(20), false, name), {
+    when: 'Tomorrow · Fri',
+    title: 'GEA1000 at 09:00',
+    where: 'At UT-AUD1 · get off at UTown',
+    off: null,
+  });
   // Later today, at its stop, in the 12-hour style.
   const today = upcomingClass(profile(tt), thu(5), true, name);
   // (The 12-hour clock has a narrow space before AM.)
-  assert.deepEqual({ ...today, title: today.title.replace(/\s/g, ' ') }, { when: 'Today', title: 'CS2030 at 10:00 AM', where: 'At COM 3', off: null });
+  assert.deepEqual(
+    { ...today, title: today.title.replace(/\s/g, ' ') },
+    { when: 'Today', title: 'CS2030 at 10:00 AM', where: 'At COM 3', off: null },
+  );
   assert.equal(upcomingClass(profile(tt), thu(20), false, name, new Set()).when, 'Tomorrow · Fri');
-  assert.equal(withLang('zh', () => upcomingClass(profile(tt), thu(20), false, name).where), '在 UT-AUD1 · 在 UTown 下车');
+  assert.equal(
+    withLang('zh', () => upcomingClass(profile(tt), thu(20), false, name).where),
+    '在 UT-AUD1 · 在 UTown 下车',
+  );
   // Nothing coming: no card.
   assert.equal(upcomingClass(profile([]), thu(20), false, name), null);
 });
@@ -233,8 +265,11 @@ test('between classes the plan names the room you leave from; from home it does 
   assert.equal(planFor(profile(tt), thu(14, 30)).fromVenue, 'LT27');
 });
 
-test('clock and card text: campus time in the client\'s 12- or 24-hour style', async () => {
+test("clock and card text: campus time in the client's 12- or 24-hour style", async () => {
   const { clockMin, slackText } = await import('../src/clock.ts');
-  assert.deepEqual([clockMin(0), clockMin(0, true), clockMin(754, true), clockMin(1110, true), clockMin(1110)], ['00:00', '12:00\u00a0AM', '12:34\u00a0PM', '6:30\u00a0PM', '18:30']);
+  assert.deepEqual(
+    [clockMin(0), clockMin(0, true), clockMin(754, true), clockMin(1110, true), clockMin(1110)],
+    ['00:00', '12:00\u00a0AM', '12:34\u00a0PM', '6:30\u00a0PM', '18:30'],
+  );
   assert.deepEqual([slackText(260), slackText(20), slackText(-200)], ['4 min early', 'just in time', '~3 min late']);
 });

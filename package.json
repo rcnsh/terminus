@@ -6,9 +6,18 @@
     "test": "pnpm --filter @terminus/api test",
     "lint": "oxlint --deny-warnings --ignore-pattern 'apps/web/public/vendor/**' apps/api/src apps/api/test apps/api/scripts apps/web/public scripts",
     "check": "pnpm --filter @terminus/api check",
-    "deploy": "pnpm --filter @terminus/api run deploy"
+    "deploy": "pnpm --filter @terminus/api run deploy",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "format:swift": "scripts/format-swift.sh",
+    "format:swift:check": "scripts/format-swift.sh --check",
+    "format:kotlin": "cd apps/android && ./gradlew --console=plain -q ktfmtFormat",
+    "format:kotlin:check": "cd apps/android && ./gradlew --console=plain -q ktfmtCheck",
+    "format:all": "pnpm format && pnpm format:swift && pnpm format:kotlin",
+    "format:check:all": "pnpm format:check && pnpm format:swift:check && pnpm format:kotlin:check"
   },
   "devDependencies": {
+    "oxfmt": "0.72.0",
     "oxlint": "1.87.0"
   }
 }

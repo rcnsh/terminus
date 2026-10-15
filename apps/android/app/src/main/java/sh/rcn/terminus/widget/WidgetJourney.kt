@@ -1,6 +1,5 @@
 package sh.rcn.terminus.widget
 
-import sh.rcn.terminus.ServerClock
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
@@ -37,12 +36,12 @@ import sh.rcn.terminus.JourneyText
 import sh.rcn.terminus.L
 import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.R
+import sh.rcn.terminus.ServerClock
 
 /**
- * A trip's steps on the ground of the big widget, under the headline the
- * sky already shows, in the card style chosen in Settings › Appearance:
- * Steps down the side with the ride in its service's colour, the Route
- * across, or the Ticket. How tall each is: [journeyHeight].
+ * A trip's steps on the ground of the big widget, under the headline the sky already shows, in the card style chosen in Settings ›
+ * Appearance: Steps down the side with the ride in its service's colour, the Route across, or the Ticket. How tall each is:
+ * [journeyHeight].
  */
 @Composable
 internal fun WidgetJourney(answer: NextAnswer, journey: Journey, style: String, inks: Inks, page: ColorProvider) {
@@ -54,17 +53,22 @@ internal fun WidgetJourney(answer: NextAnswer, journey: Journey, style: String, 
 }
 
 /** The room [WidgetJourney] takes in [style]: Steps a row a step, the Route its line, the Ticket its badge. */
-internal fun journeyHeight(journey: Journey, style: String): Dp = when (style) {
-    // A change of bus adds the second bus's line under the first.
-    CardStyle.TICKET -> if (journey.change != null) 76.dp else 58.dp
-    CardStyle.ROUTE -> 52.dp
-    // The rows Steps draws: leave (only with a walk first), the bus, and
-    // where you end up; the last is shorter with nothing under its name.
-    else -> STEP * stepRows(journey) - (if (lastUnder(journey) == null) 12.dp else 0.dp)
-}
+internal fun journeyHeight(journey: Journey, style: String): Dp =
+    when (style) {
+        // A change of bus adds the second bus's line under the first.
+        CardStyle.TICKET -> if (journey.change != null) 76.dp else 58.dp
+        CardStyle.ROUTE -> 52.dp
+        // The rows Steps draws: leave (only with a walk first), the bus, and
+        // where you end up; the last is shorter with nothing under its name.
+        else -> STEP * stepRows(journey) - (if (lastUnder(journey) == null) 12.dp else 0.dp)
+    }
 
-/** How many steps [Steps] draws: leave when there's a walk first, the bus when there is one, the second bus of a change, and where you end up. */
-internal fun stepRows(journey: Journey): Int = (if (journey.walk != null) 1 else 0) + (if (journey.bus != null) 1 else 0) + (if (journey.change != null) 1 else 0) + 1
+/**
+ * How many steps [Steps] draws: leave when there's a walk first, the bus when there is one, the second bus of a change, and where you end
+ * up.
+ */
+internal fun stepRows(journey: Journey): Int =
+    (if (journey.walk != null) 1 else 0) + (if (journey.bus != null) 1 else 0) + (if (journey.change != null) 1 else 0) + 1
 
 /** Under the last step: "2 min walk from UTown", or a class's "9 min early". */
 private fun lastUnder(journey: Journey): String? = journey.walkEnd?.let { JourneyText.arriveWhere(journey) } ?: journey.slack
@@ -72,27 +76,45 @@ private fun lastUnder(journey: Journey): String? = journey.walkEnd?.let { Journe
 private fun solid(argb: Long) = ColorProvider(Color(argb))
 
 /** The big line's lines: one, or two when the phone's text is scaled up, so it wraps rather than cuts. */
-@Composable
-internal fun headLines(): Int = if (LocalContext.current.resources.configuration.fontScale > 1.15f) 2 else 1
+@Composable internal fun headLines(): Int = if (LocalContext.current.resources.configuration.fontScale > 1.15f) 2 else 1
 
 /** How much wider a column of times is with the phone's text scaled up. */
-@Composable
-private fun widen(): Float = LocalContext.current.resources.configuration.fontScale.coerceIn(1f, 1.8f)
+@Composable private fun widen(): Float = LocalContext.current.resources.configuration.fontScale.coerceIn(1f, 1.8f)
 
 /** A step's height: its name and the line under it. */
 private val STEP = 38.dp
 
-/** Steps: leave, the bus at its stop, and where you get off, down a line drawn as the trip goes (dotted on foot, the ride in its colour). */
+/**
+ * Steps: leave, the bus at its stop, and where you get off, down a line drawn as the trip goes (dotted on foot, the ride in its colour).
+ */
 @Composable
 private fun Steps(journey: Journey, inks: Inks, page: ColorProvider) {
     val bus = journey.bus
     val now = ServerClock.now()
     Column(GlanceModifier.fillMaxWidth()) {
         journey.walk?.let {
-            Step(journey.leave ?: L.s(R.string.journey_now), Dot.YOU, Rail.WALK, L.s(R.string.journey_leave), JourneyText.walk(journey), null, inks, page)
+            Step(
+                journey.leave ?: L.s(R.string.journey_now),
+                Dot.YOU,
+                Rail.WALK,
+                L.s(R.string.journey_leave),
+                JourneyText.walk(journey),
+                null,
+                inks,
+                page,
+            )
         }
         if (bus != null) {
-            Step(bus.board, Dot.STOP, Rail.Ride(bus.color), bus.stop, journey.change?.firstRideText ?: JourneyText.ride(journey), bus to JourneyText.busIn(journey, now), inks, page)
+            Step(
+                bus.board,
+                Dot.STOP,
+                Rail.Ride(bus.color),
+                bus.stop,
+                journey.change?.firstRideText ?: JourneyText.ride(journey),
+                bus to JourneyText.busIn(journey, now),
+                inks,
+                page,
+            )
         }
         journey.change?.let { c ->
             Step(c.bus.board, Dot.STOP, Rail.Ride(c.bus.color), c.stop, c.changeText, c.bus to null, inks, page)
@@ -102,30 +124,65 @@ private fun Steps(journey: Journey, inks: Inks, page: ColorProvider) {
     }
 }
 
-private enum class Dot { YOU, STOP, THERE }
+private enum class Dot {
+    YOU,
+    STOP,
+    THERE,
+}
 
 private sealed interface Rail {
     data object WALK : Rail
+
     data class Ride(val color: Long) : Rail
 }
 
 @Composable
-private fun Step(time: String, dot: Dot, rail: Rail?, name: String, under: String?, bus: Pair<JourneyBus, String?>?, inks: Inks, page: ColorProvider, last: Boolean = false) {
+private fun Step(
+    time: String,
+    dot: Dot,
+    rail: Rail?,
+    name: String,
+    under: String?,
+    bus: Pair<JourneyBus, String?>?,
+    inks: Inks,
+    page: ColorProvider,
+    last: Boolean = false,
+) {
     Row(GlanceModifier.fillMaxWidth().height(if (last && under == null) STEP - 12.dp else STEP), verticalAlignment = Alignment.Top) {
-        Text(time, style = TextStyle(color = inks.ink, fontSize = 13.sp, fontWeight = FontWeight.Medium), maxLines = 1, modifier = GlanceModifier.width(52.dp * widen()))
+        Text(
+            time,
+            style = TextStyle(color = inks.ink, fontSize = 13.sp, fontWeight = FontWeight.Medium),
+            maxLines = 1,
+            modifier = GlanceModifier.width(52.dp * widen()),
+        )
         Column(GlanceModifier.width(16.dp).padding(top = 3.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             when (dot) {
                 Dot.YOU -> Box(GlanceModifier.size(12.dp).cornerRadius(6.dp).background(inks.accent)) {}
                 // A ring: the stop in ink, where you're going in the accent.
-                else -> Box(GlanceModifier.size(12.dp).cornerRadius(6.dp).background(if (dot == Dot.THERE) inks.accent else inks.ink), contentAlignment = Alignment.Center) {
-                    Box(GlanceModifier.size(6.dp).cornerRadius(3.dp).background(page)) {}
-                }
+                else ->
+                    Box(
+                        GlanceModifier.size(12.dp).cornerRadius(6.dp).background(if (dot == Dot.THERE) inks.accent else inks.ink),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Box(GlanceModifier.size(6.dp).cornerRadius(3.dp).background(page)) {}
+                    }
             }
             when (rail) {
-                Rail.WALK -> Column(GlanceModifier.padding(top = 3.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    repeat(4) { Box(GlanceModifier.size(2.5.dp).cornerRadius(1.dp).background(inks.muted)) {}; Spacer(GlanceModifier.height(2.5.dp)) }
-                }
-                is Rail.Ride -> Box(GlanceModifier.padding(top = 2.dp).width(3.dp).height(STEP - 17.dp).cornerRadius(1.5.dp).background(solid(rail.color))) {}
+                Rail.WALK ->
+                    Column(GlanceModifier.padding(top = 3.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        repeat(4) {
+                            Box(GlanceModifier.size(2.5.dp).cornerRadius(1.dp).background(inks.muted)) {}
+                            Spacer(GlanceModifier.height(2.5.dp))
+                        }
+                    }
+                is Rail.Ride ->
+                    Box(
+                        GlanceModifier.padding(top = 2.dp)
+                            .width(3.dp)
+                            .height(STEP - 17.dp)
+                            .cornerRadius(1.5.dp)
+                            .background(solid(rail.color))
+                    ) {}
                 null -> {}
             }
         }
@@ -136,7 +193,10 @@ private fun Step(time: String, dot: Dot, rail: Rail?, name: String, under: Strin
                 bus?.let { (b, inAt) ->
                     Spacer(GlanceModifier.width(6.dp))
                     Badge(b.svc, b.color, b.paid)
-                    inAt?.let { Spacer(GlanceModifier.width(6.dp)); Small(it, inks.muted, 11.sp) }
+                    inAt?.let {
+                        Spacer(GlanceModifier.width(6.dp))
+                        Small(it, inks.muted, 11.sp)
+                    }
                 }
             }
             under?.let { Small(it, inks.muted, 11.5.sp) }
@@ -153,10 +213,11 @@ private fun Route(journey: Journey, inks: Inks) {
     val four = journey.walkEnd != null && !change && LocalSize.current.width >= 300.dp
     Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
         val w = if (four || change) 46.dp else 56.dp
-        if (!change) journey.walk?.let { walk ->
-            Point(L.s(R.string.journey_you), journey.leave ?: L.s(R.string.journey_now), inks.accent, w, inks)
-            Stretch(walk, null, inks.muted, 2.dp, inks)
-        }
+        if (!change)
+            journey.walk?.let { walk ->
+                Point(L.s(R.string.journey_you), journey.leave ?: L.s(R.string.journey_now), inks.accent, w, inks)
+                Stretch(walk, null, inks.muted, 2.dp, inks)
+            }
         if (bus == null) {
             Point(journey.place, journey.arrive ?: "", inks.ink, w, inks)
             return@Row
@@ -187,7 +248,11 @@ private fun Point(name: String, time: String, dot: ColorProvider, width: Dp, ink
     Column(GlanceModifier.width(width), horizontalAlignment = Alignment.CenterHorizontally) {
         Spacer(GlanceModifier.height(CAPTION))
         Box(GlanceModifier.size(DOT).cornerRadius(DOT / 2).background(dot)) {}
-        Text(name, style = TextStyle(color = inks.ink, fontSize = 11.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center), maxLines = headLines())
+        Text(
+            name,
+            style = TextStyle(color = inks.ink, fontSize = 11.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center),
+            maxLines = headLines(),
+        )
         Text(time, style = TextStyle(color = inks.muted, fontSize = 11.sp, textAlign = TextAlign.Center), maxLines = 1)
     }
 }
@@ -220,17 +285,27 @@ private fun Ticket(answer: NextAnswer, journey: Journey, inks: Inks) {
                 // A public bus's "$" widens it past the square, as in the app.
                 val shape = if (bus.paid) GlanceModifier.height(side).padding(horizontal = 8.dp) else GlanceModifier.size(side)
                 Box(shape.cornerRadius(12.dp).background(solid(bus.color)), contentAlignment = Alignment.Center) {
-                    Text(if (bus.paid) "${bus.svc} $" else bus.svc, style = TextStyle(color = solid(sh.rcn.terminus.Ink.on(bus.color)), fontWeight = FontWeight.Bold, fontSize = 18.sp), maxLines = 1)
+                    Text(
+                        if (bus.paid) "${bus.svc} $" else bus.svc,
+                        style = TextStyle(color = solid(sh.rcn.terminus.Ink.on(bus.color)), fontWeight = FontWeight.Bold, fontSize = 18.sp),
+                        maxLines = 1,
+                    )
                 }
             } else {
                 Box(GlanceModifier.size(side).cornerRadius(12.dp).background(inks.chip), contentAlignment = Alignment.Center) {
-                    Image(ImageProvider(R.drawable.ic_walk), contentDescription = null, colorFilter = ColorFilter.tint(inks.ink), modifier = GlanceModifier.size(side / 2))
+                    Image(
+                        ImageProvider(R.drawable.ic_walk),
+                        contentDescription = null,
+                        colorFilter = ColorFilter.tint(inks.ink),
+                        modifier = GlanceModifier.size(side / 2),
+                    )
                 }
             }
             Spacer(GlanceModifier.width(12.dp))
             Column {
                 Text(
-                    if (bus != null) listOfNotNull(bus.board, L.s(R.string.journey_from, bus.stop)).joinToString(" ") else L.s(R.string.journey_walk, journey.walk.orEmpty()),
+                    if (bus != null) listOfNotNull(bus.board, L.s(R.string.journey_from, bus.stop)).joinToString(" ")
+                    else L.s(R.string.journey_walk, journey.walk.orEmpty()),
                     style = TextStyle(color = inks.ink, fontWeight = FontWeight.Bold, fontSize = 17.sp),
                     maxLines = 1,
                 )
