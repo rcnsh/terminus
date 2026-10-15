@@ -33,7 +33,7 @@ private struct SetupHomePicker: View {
     let campus: Campus
     @State private var offCampus: Bool?
     @State private var all = false
-    private var locator = Locator.shared
+    private let locator = Locator.shared
 
     /// How many of the other residences show before "All 15 halls and colleges".
     private static let few = 4
