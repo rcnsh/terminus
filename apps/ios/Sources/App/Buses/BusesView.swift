@@ -247,6 +247,8 @@ struct BusesHome: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, 24)
+                    // Its own height, not the tallest page's: a short board isn't stretched.
+                    .fixedSize(horizontal: false, vertical: true)
                     .containerRelativeFrame(.horizontal)
                     .id(id)
                 }
@@ -630,49 +632,75 @@ private struct SkyPage: ViewModifier {
     }
 }
 
-/// Where the sky band at the top of a page ends, on screen.
-private struct BandEnd: PreferenceKey {
-    static let defaultValue: CGFloat = .infinity
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = min(value, nextValue()) }
+/// Where a page's sky band is, as it scrolls: whether it has moved from
+/// where it rests, and whether it has gone under the status bar. Only the
+/// two flags change, so scrolling doesn't redraw the page every frame.
+@MainActor @Observable
+final class BandTracker {
+    private(set) var moved = false
+    private(set) var past = false
+    @ObservationIgnored private var rest: CGFloat?
+
+    func saw(top: CGFloat, bottom: CGFloat) {
+        let r = rest ?? top
+        if rest == nil { rest = r }
+        let m = top < r - 1
+        let p = bottom < r + 8
+        if m != moved { moved = m }
+        if p != past { past = p }
+    }
 }
 
 extension View {
     /// Marks the page's sky band, so the status bar knows when it has scrolled away.
-    func busBandEnd() -> some View {
-        background(GeometryReader { g in Color.clear.preference(key: BandEnd.self, value: g.frame(in: .global).maxY) })
-    }
+    func busBandEnd() -> some View { modifier(BandMark()) }
 
     /// The status bar over the sky in the sky's ink, and once the band has
-    /// scrolled away, the page's; with `strip`, a bar under it then, so the
-    /// board doesn't run under the clock (a pushed page has its navigation bar).
+    /// scrolled away, the page's; with `strip`, a bar under it once the page
+    /// moves, so the board doesn't run under the clock (a pushed page has
+    /// its navigation bar).
     func busSkyChrome(strip: Bool) -> some View { modifier(BusSkyChrome(strip: strip)) }
+}
+
+private struct BandMark: ViewModifier {
+    @Environment(BandTracker.self) private var tracker: BandTracker?
+
+    func body(content: Content) -> some View {
+        content.background(
+            GeometryReader { g in
+                let f = g.frame(in: .global)
+                Color.clear
+                    .onAppear { tracker?.saw(top: f.minY, bottom: f.maxY) }
+                    .onChange(of: f.minY) { _, _ in tracker?.saw(top: f.minY, bottom: f.maxY) }
+            })
+    }
 }
 
 private struct BusSkyChrome: ViewModifier {
     let strip: Bool
     @Environment(\.colorScheme) private var scheme
-    @State private var top: CGFloat = 0
-    /// Only whether it's past, so scrolling doesn't redraw the page each frame.
-    @State private var past = false
+    @State private var band = BandTracker()
     private var sky = SkyClock.shared
+
+    /// The status bar's height: what the strip covers.
+    private var inset: CGFloat {
+        (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.keyWindow?.safeAreaInsets.top ?? 0
+    }
 
     func body(content: Content) -> some View {
         let lightSky = SkyPalette.of(sky.phase, dark: scheme == .dark).lightInk
         content
-            .onPreferenceChange(BandEnd.self) { end in
-                let p = end < top + 8
-                if p != past { past = p }
-            }
-            .background(
-                GeometryReader { g in
-                    Color.clear.onAppear { top = g.frame(in: .global).minY }.onChange(of: g.frame(in: .global).minY) { _, y in top = y }
-                }
-            )
+            .environment(band)
             .overlay(alignment: .top) {
-                if strip && past {
-                    Color.clear.frame(height: 0).background(.bar, ignoresSafeAreaEdges: .top)
+                // Under the clock, once the page has moved: a bar, frosted over the sky
+                // in its own light or dark so the clock keeps the sky's ink, then the page's.
+                if strip && band.moved {
+                    Rectangle().fill(.bar)
+                        .environment(\.colorScheme, band.past ? scheme : (lightSky ? .dark : .light))
+                        .frame(height: inset)
+                        .ignoresSafeArea(edges: .top)
                 }
             }
-            .statusBar(light: past ? scheme == .dark : (lightSky || scheme == .dark))
+            .statusBar(light: band.past ? scheme == .dark : (lightSky || scheme == .dark))
     }
 }

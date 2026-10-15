@@ -55,10 +55,7 @@ final class BusesUITests: XCTestCase {
 
     private func waitForBoard(_ app: XCUIApplication, svc: String = "K") {
         let ok = app.buttons["board-row-\(svc)"].firstMatch.waitForExistence(timeout: 15)
-        if !ok {
-            shot("failed-board-\(svc)", app)
-            try? app.debugDescription.write(toFile: "/tmp/buses-tree.txt", atomically: true, encoding: .utf8)
-        }
+        if !ok { shot("failed-board-\(svc)", app) }
         XCTAssertTrue(ok, "no \(svc) row on the board")
     }
 

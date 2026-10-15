@@ -13,16 +13,17 @@ struct BusChip: View {
     let color: String?
     var paid = false
     var big = false
+    @ScaledMetric(relativeTo: .body) private var scale: CGFloat = 1
 
     var body: some View {
         let rgb = color.flatMap(hexRGB) ?? 0x8A847E
         Text(verbatim: paid ? "\(svc) $" : svc)
-            .font(.system(size: big ? 20 : 15, weight: .heavy))
+            .font(.system(size: (big ? 20 : 15) * scale, weight: .heavy))
             .lineLimit(1)
             .fixedSize()
             .foregroundStyle(inkOn(rgb))
             .padding(.horizontal, 8)
-            .frame(minWidth: big ? 64 : 46, minHeight: big ? 44 : 32)
+            .frame(minWidth: (big ? 64 : 46) * scale, minHeight: (big ? 44 : 32) * scale)
             .background(Color(rgb: rgb), in: RoundedRectangle(cornerRadius: big ? 12 : 9, style: .continuous))
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(paid ? L("Public bus %@, fare applies", svc) : L("Bus %@", svc))
@@ -275,21 +276,24 @@ struct BusBigTime: View {
     let etaS: Int?
     let quality: String
     let eta: String?
+    /// The number's size at the default text size; it grows with the reader's.
     var size: CGFloat = 34
+    @ScaledMetric(relativeTo: .largeTitle) private var scale: CGFloat = 1
 
     var body: some View {
+        let size = self.size * scale
         let arriving = (etaS ?? .max) < BusTimes.arrivingS
         let color: Color = arriving ? .brand : (quality == "live" ? .ink : .muted)
         Group {
             if etaS == nil {
-                Text(verbatim: "–").font(.system(size: 28, weight: .bold)).foregroundStyle(Color.faint)
+                Text(verbatim: "–").font(.system(size: 28 * scale, weight: .bold)).foregroundStyle(Color.faint)
             } else if let eta {
-                big(eta).foregroundStyle(color)
+                big(eta, size: size).foregroundStyle(color)
             } else if arriving {
-                Text(L("Arriving")).font(.system(size: 24, weight: .heavy)).foregroundStyle(Color.brand)
+                Text(L("Arriving")).font(.system(size: 24 * scale, weight: .heavy)).foregroundStyle(Color.brand)
             } else {
                 (Text(verbatim: "\(BusTimes.minutes(etaS ?? 0))").font(.system(size: size, weight: .heavy))
-                    + Text(verbatim: " " + L("min")).font(.system(size: 15, weight: .semibold)))
+                    + Text(verbatim: " " + L("min")).font(.system(size: 15 * scale, weight: .semibold)))
                     .foregroundStyle(color)
             }
         }
@@ -298,11 +302,11 @@ struct BusBigTime: View {
         .accessibilityLabel(BusWords.spoken(etaS, quality: quality) ?? "")
     }
 
-    private func big(_ s: String) -> Text {
+    private func big(_ s: String, size: CGFloat) -> Text {
         guard let r = s.range(of: #"\d+"#, options: .regularExpression) else {
-            return Text(verbatim: s).font(.system(size: 24, weight: .heavy))
+            return Text(verbatim: s).font(.system(size: 24 * scale, weight: .heavy))
         }
-        let small = Font.system(size: 15, weight: .semibold)
+        let small = Font.system(size: 15 * scale, weight: .semibold)
         return Text(verbatim: String(s[..<r.lowerBound])).font(small)
             + Text(verbatim: String(s[r])).font(.system(size: size, weight: .heavy))
             + Text(verbatim: String(s[r.upperBound...])).font(small)
