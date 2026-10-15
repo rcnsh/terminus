@@ -19,7 +19,10 @@ test('a sighting already sent from this isolate is not sent to D1 again', async 
   const db = makeD1();
   let batches = 0;
   const batch = db.batch.bind(db);
-  db.batch = async (s) => { batches++; return batch(s); };
+  db.batch = async (s) => {
+    batches++;
+    return batch(s);
+  };
   await recordCrowds(db, at('COM3', [sighting('PD1A', 'high')]), THU);
   await recordCrowds(db, at('COM3', [sighting('PD1A', 'high')]), THU + 30_000);
   assert.equal(batches, 1, 'the second look costs nothing');
@@ -63,13 +66,30 @@ test('day types: teaching weekday, Saturday, Sunday', () => {
 
 test('often packed: leave-by aims one bus earlier and says why; off, it only warns', () => {
   const option = {
-    stop: { code: 'COM3', name: 'COM 3', lat: 0, lon: 0 }, svc: 'D2', distM: 130, walkS: 100, hops: 4,
-    boardS: 300, rideS: 4 * RIDE.secondsPerHop, totalS: 300 + 4 * RIDE.secondsPerHop, quality: 'live',
-    arrival: null, fetchedAt: THU, fromMs: THU, ambiguousBerth: false,
+    stop: { code: 'COM3', name: 'COM 3', lat: 0, lon: 0 },
+    svc: 'D2',
+    distM: 130,
+    walkS: 100,
+    hops: 4,
+    boardS: 300,
+    rideS: 4 * RIDE.secondsPerHop,
+    totalS: 300 + 4 * RIDE.secondsPerHop,
+    quality: 'live',
+    arrival: null,
+    fetchedAt: THU,
+    fromMs: THU,
+    ambiguousBerth: false,
   };
   const base = {
-    options: [option], candidates: [], graph: { stops: [], routes: {}, headwayS: { D2: 600 } },
-    byStop: at('COM3', [5, 12, 25].map((m) => sighting(`P${m}`, null, m * 60))), walkAllS: null, nowMs: THU,
+    options: [option],
+    candidates: [],
+    graph: { stops: [], routes: {}, headwayS: { D2: 600 } },
+    byStop: at(
+      'COM3',
+      [5, 12, 25].map((m) => sighting(`P${m}`, null, m * 60)),
+    ),
+    walkAllS: null,
+    nowMs: THU,
   };
   // Packed only for the 25-minute bus.
   const risk = (svc, stop, ms) => (ms === THU + 25 * MIN ? 0.8 : 0.1);

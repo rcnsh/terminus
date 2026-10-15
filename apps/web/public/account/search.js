@@ -11,7 +11,16 @@ import { t } from './dom.js';
 const KINDS = { timetable: 0, place: 1, class: 2, service: 3, stop: 4, landmark: 5, building: 6, room: 7 };
 /** A kind this page doesn't know yet (a newer server's) still lists, after every known one. */
 const kindRank = (kind) => KINDS[kind] ?? 8;
-const GROUP = { timetable: t('In your timetable'), place: t('Your favourites'), class: t('Your classes'), service: t('Services'), stop: t('Stops'), landmark: t('Food & places'), building: t('Buildings'), room: t('Rooms') };
+const GROUP = {
+  timetable: t('In your timetable'),
+  place: t('Your favourites'),
+  class: t('Your classes'),
+  service: t('Services'),
+  stop: t('Stops'),
+  landmark: t('Food & places'),
+  building: t('Buildings'),
+  room: t('Rooms'),
+};
 const MAX = 8;
 
 /** A code as typed any way: lower case, without spaces, hyphens or underscores ("COM1-0203" is "com10203"). */
@@ -107,9 +116,20 @@ export function busesTabIndex(c) {
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([svc, r]) => {
       const first = longName(r.seq[0]);
-      return { kind: 'service', code: svc, label: svc, detail: r.loop ? t('Loop from {0}', first) : t('{0} to {1}', first, longName(r.seq.at(-1))) };
+      return {
+        kind: 'service',
+        code: svc,
+        label: svc,
+        detail: r.loop ? t('Loop from {0}', first) : t('{0} to {1}', first, longName(r.seq.at(-1))),
+      };
     });
   const aliases = new Map((c.destinations ?? []).filter((d) => d.kind === 'stop').map((d) => [d.code, d.aliases ?? []]));
-  const stops = c.stops.map((s) => ({ kind: 'stop', code: s.code, stopCode: s.code, label: s.longName ?? s.name, aliases: [s.name.toLowerCase(), ...(aliases.get(s.code) ?? [])] }));
+  const stops = c.stops.map((s) => ({
+    kind: 'stop',
+    code: s.code,
+    stopCode: s.code,
+    label: s.longName ?? s.name,
+    aliases: [s.name.toLowerCase(), ...(aliases.get(s.code) ?? [])],
+  }));
   return [...services, ...stops];
 }

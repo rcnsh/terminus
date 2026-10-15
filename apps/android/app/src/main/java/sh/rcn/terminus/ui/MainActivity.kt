@@ -96,9 +96,8 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Light or dark, or the language, changed (in Settings or the phone's):
-     * the activity stays and Compose redraws in it, with no blank screen
-     * between. What recreating it did besides is done here.
+     * Light or dark, or the language, changed (in Settings or the phone's): the activity stays and Compose redraws in it, with no blank
+     * screen between. What recreating it did besides is done here.
      */
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
@@ -146,7 +145,12 @@ class MainActivity : ComponentActivity() {
         // From a long-press shortcut (notifications send no action): tell
         // the launcher, which ranks the shortcuts people use.
         if (intent.action == Intent.ACTION_VIEW) {
-            val id = when (data.host) { "place" -> data.lastPathSegment?.let { "place:$it" }; "plan" -> "next"; else -> data.host }
+            val id =
+                when (data.host) {
+                    "place" -> data.lastPathSegment?.let { "place:$it" }
+                    "plan" -> "next"
+                    else -> data.host
+                }
             id?.let { androidx.core.content.pm.ShortcutManagerCompat.reportShortcutUsed(this, it) }
         }
         when (data.host) {
@@ -156,9 +160,10 @@ class MainActivity : ComponentActivity() {
             // A stop or place looked up, from the widget showing it.
             // Only from this app's own widgets: another app could otherwise add
             // places with names of its choosing (the activity is exported).
-            "to" -> if (intent.getStringExtra(EXTRA_KEY) == Store(this).intentKey) {
-                data.lastPathSegment?.let { vm.select(Target.Code(it, (data.getQueryParameter("label") ?: it).take(MAX_LABEL))) }
-            }
+            "to" ->
+                if (intent.getStringExtra(EXTRA_KEY) == Store(this).intentKey) {
+                    data.lastPathSegment?.let { vm.select(Target.Code(it, (data.getQueryParameter("label") ?: it).take(MAX_LABEL))) }
+                }
         }
     }
 
@@ -169,12 +174,13 @@ class MainActivity : ComponentActivity() {
         /** Distinct URIs, so each shortcut gets its own intent. */
         fun intentFor(ctx: Context, place: String? = null, nearby: Boolean = false, to: String? = null, label: String? = null): Intent =
             Intent(ctx, MainActivity::class.java).apply {
-                data = when {
-                    place != null -> "terminus://place/${Uri.encode(place)}".toUri()
-                    nearby -> "terminus://nearby".toUri()
-                    to != null -> "terminus://to/${Uri.encode(to)}?label=${Uri.encode(label ?: to)}".toUri()
-                    else -> "terminus://plan".toUri()
-                }
+                data =
+                    when {
+                        place != null -> "terminus://place/${Uri.encode(place)}".toUri()
+                        nearby -> "terminus://nearby".toUri()
+                        to != null -> "terminus://to/${Uri.encode(to)}?label=${Uri.encode(label ?: to)}".toUri()
+                        else -> "terminus://plan".toUri()
+                    }
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
                 putExtra(EXTRA_KEY, Store(ctx).intentKey)
             }
@@ -193,30 +199,52 @@ private fun TerminusTheme(content: @Composable () -> Unit) {
 /** The colours, fading from light to dark or back rather than swapping in one frame. */
 @Composable
 private fun fading(to: ColorScheme): ColorScheme {
-    @Composable
-    fun Color.fade() = animateColorAsState(this, tween(350), label = "theme").value
+    @Composable fun Color.fade() = animateColorAsState(this, tween(350), label = "theme").value
     return to.copy(
-        primary = to.primary.fade(), onPrimary = to.onPrimary.fade(),
-        primaryContainer = to.primaryContainer.fade(), onPrimaryContainer = to.onPrimaryContainer.fade(),
-        secondary = to.secondary.fade(), onSecondary = to.onSecondary.fade(),
-        secondaryContainer = to.secondaryContainer.fade(), onSecondaryContainer = to.onSecondaryContainer.fade(),
-        tertiary = to.tertiary.fade(), onTertiary = to.onTertiary.fade(),
-        error = to.error.fade(), onError = to.onError.fade(),
-        background = to.background.fade(), onBackground = to.onBackground.fade(),
-        surface = to.surface.fade(), onSurface = to.onSurface.fade(),
-        surfaceVariant = to.surfaceVariant.fade(), onSurfaceVariant = to.onSurfaceVariant.fade(),
-        surfaceContainerHighest = to.surfaceContainerHighest.fade(), surfaceContainerHigh = to.surfaceContainerHigh.fade(),
-        surfaceContainer = to.surfaceContainer.fade(), surfaceContainerLow = to.surfaceContainerLow.fade(),
-        outline = to.outline.fade(), outlineVariant = to.outlineVariant.fade(),
-        inverseSurface = to.inverseSurface.fade(), inverseOnSurface = to.inverseOnSurface.fade(), inversePrimary = to.inversePrimary.fade(),
+        primary = to.primary.fade(),
+        onPrimary = to.onPrimary.fade(),
+        primaryContainer = to.primaryContainer.fade(),
+        onPrimaryContainer = to.onPrimaryContainer.fade(),
+        secondary = to.secondary.fade(),
+        onSecondary = to.onSecondary.fade(),
+        secondaryContainer = to.secondaryContainer.fade(),
+        onSecondaryContainer = to.onSecondaryContainer.fade(),
+        tertiary = to.tertiary.fade(),
+        onTertiary = to.onTertiary.fade(),
+        error = to.error.fade(),
+        onError = to.onError.fade(),
+        background = to.background.fade(),
+        onBackground = to.onBackground.fade(),
+        surface = to.surface.fade(),
+        onSurface = to.onSurface.fade(),
+        surfaceVariant = to.surfaceVariant.fade(),
+        onSurfaceVariant = to.onSurfaceVariant.fade(),
+        surfaceContainerHighest = to.surfaceContainerHighest.fade(),
+        surfaceContainerHigh = to.surfaceContainerHigh.fade(),
+        surfaceContainer = to.surfaceContainer.fade(),
+        surfaceContainerLow = to.surfaceContainerLow.fade(),
+        outline = to.outline.fade(),
+        outlineVariant = to.outlineVariant.fade(),
+        inverseSurface = to.inverseSurface.fade(),
+        inverseOnSurface = to.inverseOnSurface.fade(),
+        inversePrimary = to.inversePrimary.fade(),
     )
 }
 
 /** Which screen is up, apart from the tabs. */
-private enum class Screen { Main, SignIn, Pair }
+private enum class Screen {
+    Main,
+    SignIn,
+    Pair,
+}
 
 /** The bottom bar's tabs, once set up. */
-private enum class Tab { Now, Buses, Map, Settings }
+private enum class Tab {
+    Now,
+    Buses,
+    Map,
+    Settings,
+}
 
 @Composable
 private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel, buses: BusesViewModel) {
@@ -263,7 +291,20 @@ private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel,
     }
     // Signed in and set up: Now · Buses · Map · Settings along the bottom.
     if (state.paired && !setup && screen == Screen.Main) {
-        Tabs(tab, { tab = it }, vm, account, map, buses, acct, onAddEmail = { account.beginSignIn(); screen = Screen.SignIn }, onSignedOut = signedOut)
+        Tabs(
+            tab,
+            { tab = it },
+            vm,
+            account,
+            map,
+            buses,
+            acct,
+            onAddEmail = {
+                account.beginSignIn()
+                screen = Screen.SignIn
+            },
+            onSignedOut = signedOut,
+        )
     } else if (!state.paired && screen == Screen.Main) {
         // Edge to edge for its livery: it keeps the insets itself.
         WelcomeScreen(
@@ -271,13 +312,22 @@ private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel,
             message = acct.message ?: state.pairError,
             // start() has already set needsSetup, off the main thread.
             onStart = { account.start { signedIn() } },
-            onSignIn = { account.beginSignIn(); screen = Screen.SignIn },
+            onSignIn = {
+                account.beginSignIn()
+                screen = Screen.SignIn
+            },
             onPair = { screen = Screen.Pair },
-            onLang = { pref -> Lang.set(ctx, pref); recreateOn12(ctx) },
+            onLang = { pref ->
+                Lang.set(ctx, pref)
+                recreateOn12(ctx)
+            },
         )
     } else if (screen == Screen.SignIn) {
         // Edge to edge for its band of the sky: it keeps the insets itself.
-        BackHandler { account.cancelSignIn(); screen = Screen.Main }
+        BackHandler {
+            account.cancelSignIn()
+            screen = Screen.Main
+        }
         SignInScreen(
             acct,
             adding = state.paired,
@@ -287,23 +337,25 @@ private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel,
             onChoose = { keepPhone -> account.choose(keepPhone, signedIn) },
             onDifferentEmail = account::differentEmail,
             onEdit = account::clearMessage,
-            onCancel = { account.cancelSignIn(); screen = Screen.Main },
+            onCancel = {
+                account.cancelSignIn()
+                screen = Screen.Main
+            },
         )
-    } else Column(
-        Modifier
-            .fillMaxSize()
-            .safeDrawingPadding()
-            .imePadding()
-            .padding(horizontal = 16.dp),
-    ) {
-        when {
-            !state.paired && screen == Screen.Pair -> {
-                BackHandler { screen = Screen.Main }
-                PairScreen(state, vm::pair, onBack = { screen = Screen.Main })
+    } else
+        Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().padding(horizontal = 16.dp)) {
+            when {
+                !state.paired && screen == Screen.Pair -> {
+                    BackHandler { screen = Screen.Main }
+                    PairScreen(state, vm::pair, onBack = { screen = Screen.Main })
+                }
+                else ->
+                    OnboardingScreen(acct, account, vm) {
+                        setup = false
+                        vm.load(restart = true)
+                    }
             }
-            else -> OnboardingScreen(acct, account, vm) { setup = false; vm.load(restart = true) }
         }
-    }
     // A language chosen here or on another device: Android 13+ redraws in it by itself.
     LaunchedEffect(acct.langChanged) {
         if (acct.langChanged) {
@@ -326,7 +378,16 @@ private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel,
                 onDismissRequest = account::dismissShared,
                 title = { Text(stringResource(R.string.import_timetable_title)) },
                 text = { Text(stringResource(R.string.import_timetable_text)) },
-                confirmButton = { TextButton(onClick = { account.import(link); tab = Tab.Settings }) { Text(stringResource(R.string.import_action)) } },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            account.import(link)
+                            tab = Tab.Settings
+                        }
+                    ) {
+                        Text(stringResource(R.string.import_action))
+                    }
+                },
                 dismissButton = { TextButton(onClick = account::dismissShared) { Text(stringResource(R.string.cancel)) } },
             )
         }
@@ -343,9 +404,8 @@ private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel,
 }
 
 /**
- * Now · Buses · Map · Settings. Now scrolls under the status bar (its sky
- * reaches the top), and the map runs under it, with its pills below it.
- * Buses and Settings are edge to edge too, keeping the insets inside.
+ * Now · Buses · Map · Settings. Now scrolls under the status bar (its sky reaches the top), and the map runs under it, with its pills below
+ * it. Buses and Settings are edge to edge too, keeping the insets inside.
  */
 @Composable
 private fun Tabs(
@@ -368,12 +428,13 @@ private fun Tabs(
         snackbarHost = { SnackbarHost(snackbars) { NoticeBar(it) } },
         bottomBar = {
             NavigationBar {
-                for ((t, label, icon) in listOf(
-                    Triple(Tab.Now, R.string.tab_now, R.drawable.ic_tab_now),
-                    Triple(Tab.Buses, R.string.tab_buses, R.drawable.ic_tab_buses),
-                    Triple(Tab.Map, R.string.tab_map, R.drawable.ic_tab_map),
-                    Triple(Tab.Settings, R.string.settings, R.drawable.ic_tab_settings),
-                )) {
+                for ((t, label, icon) in
+                    listOf(
+                        Triple(Tab.Now, R.string.tab_now, R.drawable.ic_tab_now),
+                        Triple(Tab.Buses, R.string.tab_buses, R.drawable.ic_tab_buses),
+                        Triple(Tab.Map, R.string.tab_map, R.drawable.ic_tab_map),
+                        Triple(Tab.Settings, R.string.settings, R.drawable.ic_tab_settings),
+                    )) {
                     NavigationBarItem(
                         selected = tab == t,
                         onClick = {
@@ -393,7 +454,10 @@ private fun Tabs(
         },
     ) { inner ->
         // Back from Buses, Map or Settings goes to Now, as from any other tab bar.
-        BackHandler(enabled = tab != Tab.Now) { onTab(Tab.Now); vm.load(restart = true) }
+        BackHandler(enabled = tab != Tab.Now) {
+            onTab(Tab.Now)
+            vm.load(restart = true)
+        }
         // Switching tabs fades through (out, then in with a slight zoom), and
         // each tab keeps its saved state while it's away: where Now and
         // Settings were scrolled to, which page of Settings was open, where
@@ -402,79 +466,116 @@ private fun Tabs(
         AnimatedContent(targetState = tab, transitionSpec = { fadeThrough() }, label = "tab") { t ->
             saved.SaveableStateProvider(t.name) {
                 when (t) {
-                    Tab.Map -> Box(Modifier.fillMaxSize().padding(bottom = inner.calculateBottomPadding())) {
-                        // The account's places, for "Save as place" on a stop.
-                        LaunchedEffect(Unit) { if (acct.profile == null) account.refresh() }
-                        // Before the stop sheet asks, so its board has them too: after
-                        // each composition, rather than written during it.
-                        val publicBuses = acct.profile?.publicBuses == true
-                        SideEffect { map.publicBuses = publicBuses }
-                        MapScreen(
-                            map,
-                            onGoThere = { code, name ->
-                                vm.select(Target.Code(code, name))
-                                onTab(Tab.Now)
-                            },
-                            places = PlacesForMap(
-                                savedAs = { code -> acct.profile?.places?.firstOrNull { it.to == code }?.label },
-                                full = { acct.profile.let { p -> (p?.places?.size ?: 0) >= (p?.limits ?: sh.rcn.terminus.Limits.DEFAULT).places } },
-                                save = { code, name -> account.edit { it.addPlace(name, code) } },
-                                // Taken off with its usual times, so Undo in the bar at the foot, as in Settings.
-                                remove = { code ->
-                                    var removed: RemovedPlace? = null
-                                    account.edit { p -> p.places.firstOrNull { it.to == code }?.let { removed = p.removePlace(it.key) } }
-                                    removed?.let { r ->
-                                        scope.launch {
-                                            val undo = snackbars.showSnackbar(Notice(L.s(R.string.favourite_removed, r.label), actionLabel = L.s(R.string.undo)))
-                                            if (undo == SnackbarResult.ActionPerformed) account.edit { it.restorePlace(r) }
-                                        }
-                                    }
+                    Tab.Map ->
+                        Box(Modifier.fillMaxSize().padding(bottom = inner.calculateBottomPadding())) {
+                            // The account's places, for "Save as place" on a stop.
+                            LaunchedEffect(Unit) { if (acct.profile == null) account.refresh() }
+                            // Before the stop sheet asks, so its board has them too: after
+                            // each composition, rather than written during it.
+                            val publicBuses = acct.profile?.publicBuses == true
+                            SideEffect { map.publicBuses = publicBuses }
+                            MapScreen(
+                                map,
+                                onGoThere = { code, name ->
+                                    vm.select(Target.Code(code, name))
+                                    onTab(Tab.Now)
                                 },
-                            ),
-                            onShowList = { svc, stop ->
-                                buses.home()
-                                when {
-                                    stop != null -> buses.open(BusRoute.Stop(stop))
-                                    svc != null -> buses.open(BusRoute.Line(svc, null))
-                                }
-                                onTab(Tab.Buses)
-                            },
-                        )
-                    }
-                    Tab.Buses -> Box(Modifier.fillMaxSize().consumeWindowInsets(inner).imePadding()) {
-                        // The pinned stops are the profile's.
-                        LaunchedEffect(Unit) { if (acct.profile == null) account.refresh() }
-                        BusesScreen(
-                            buses,
-                            insets = inner,
-                            pins = acct.profile?.pinnedStops.orEmpty(),
-                            publicBuses = acct.profile?.publicBuses == true,
-                            pinLimit = (acct.profile?.limits ?: sh.rcn.terminus.Limits.DEFAULT).pinnedStops,
-                            onPin = { code -> account.edit { it.pinnedStops = sh.rcn.terminus.Pins.toggle(it.pinnedStops, code, it.limits.pinnedStops) } },
-                            onShowOnMap = { svc ->
-                                map.show(svc)
-                                onTab(Tab.Map)
-                            },
-                        )
-                    }
-                    // Edge to edge too, the insets inside, so the list's sky can reach the top.
-                    Tab.Settings -> Box(Modifier.fillMaxSize().consumeWindowInsets(inner).imePadding()) {
-                        // Its pages offer Undo in the same bar as Today's.
-                        CompositionLocalProvider(LocalNotices provides snackbars) {
-                            SettingsScreen(
-                                acct, account, vm, inner,
-                                toList = settingsAgain,
-                                onAddEmail = onAddEmail,
-                                onSignedOut = onSignedOut,
-                                onClose = { onTab(Tab.Now); vm.load(restart = true) },
+                                places =
+                                    PlacesForMap(
+                                        savedAs = { code -> acct.profile?.places?.firstOrNull { it.to == code }?.label },
+                                        full = {
+                                            acct.profile.let { p ->
+                                                (p?.places?.size ?: 0) >= (p?.limits ?: sh.rcn.terminus.Limits.DEFAULT).places
+                                            }
+                                        },
+                                        save = { code, name -> account.edit { it.addPlace(name, code) } },
+                                        // Taken off with its usual times, so Undo in the bar at the foot, as in Settings.
+                                        remove = { code ->
+                                            var removed: RemovedPlace? = null
+                                            account.edit { p ->
+                                                p.places.firstOrNull { it.to == code }?.let { removed = p.removePlace(it.key) }
+                                            }
+                                            removed?.let { r ->
+                                                scope.launch {
+                                                    val undo =
+                                                        snackbars.showSnackbar(
+                                                            Notice(
+                                                                L.s(R.string.favourite_removed, r.label),
+                                                                actionLabel = L.s(R.string.undo),
+                                                            )
+                                                        )
+                                                    if (undo == SnackbarResult.ActionPerformed) account.edit { it.restorePlace(r) }
+                                                }
+                                            }
+                                        },
+                                    ),
+                                onShowList = { svc, stop ->
+                                    buses.home()
+                                    when {
+                                        stop != null -> buses.open(BusRoute.Stop(stop))
+                                        svc != null -> buses.open(BusRoute.Line(svc, null))
+                                    }
+                                    onTab(Tab.Buses)
+                                },
                             )
                         }
-                    }
+                    Tab.Buses ->
+                        Box(Modifier.fillMaxSize().consumeWindowInsets(inner).imePadding()) {
+                            // The pinned stops are the profile's.
+                            LaunchedEffect(Unit) { if (acct.profile == null) account.refresh() }
+                            BusesScreen(
+                                buses,
+                                insets = inner,
+                                pins = acct.profile?.pinnedStops.orEmpty(),
+                                publicBuses = acct.profile?.publicBuses == true,
+                                pinLimit = (acct.profile?.limits ?: sh.rcn.terminus.Limits.DEFAULT).pinnedStops,
+                                onPin = { code ->
+                                    account.edit {
+                                        it.pinnedStops = sh.rcn.terminus.Pins.toggle(it.pinnedStops, code, it.limits.pinnedStops)
+                                    }
+                                },
+                                onShowOnMap = { svc ->
+                                    map.show(svc)
+                                    onTab(Tab.Map)
+                                },
+                            )
+                        }
+                    // Edge to edge too, the insets inside, so the list's sky can reach the top.
+                    Tab.Settings ->
+                        Box(Modifier.fillMaxSize().consumeWindowInsets(inner).imePadding()) {
+                            // Its pages offer Undo in the same bar as Today's.
+                            CompositionLocalProvider(LocalNotices provides snackbars) {
+                                SettingsScreen(
+                                    acct,
+                                    account,
+                                    vm,
+                                    inner,
+                                    toList = settingsAgain,
+                                    onAddEmail = onAddEmail,
+                                    onSignedOut = onSignedOut,
+                                    onClose = {
+                                        onTab(Tab.Now)
+                                        vm.load(restart = true)
+                                    },
+                                )
+                            }
+                        }
                     // Edge to edge, the insets inside its scrolling, so the sky can reach the top.
-                    Tab.Now -> Box(Modifier.fillMaxSize().consumeWindowInsets(inner).imePadding()) {
-                        // A stop tapped in Nearby: open on the map, with its sheet.
-                        MainScreen(state, vm, insets = inner, email = acct.email, onAddEmail = onAddEmail, onOpenStop = { code -> map.showStop(code); onTab(Tab.Map) })
-                    }
+                    Tab.Now ->
+                        Box(Modifier.fillMaxSize().consumeWindowInsets(inner).imePadding()) {
+                            // A stop tapped in Nearby: open on the map, with its sheet.
+                            MainScreen(
+                                state,
+                                vm,
+                                insets = inner,
+                                email = acct.email,
+                                onAddEmail = onAddEmail,
+                                onOpenStop = { code ->
+                                    map.showStop(code)
+                                    onTab(Tab.Map)
+                                },
+                            )
+                        }
                 }
             }
         }
@@ -483,7 +584,8 @@ private fun Tabs(
 
 /** Material's fade through, between tabs: the old one fades out quickly, the new one fades in with a slight zoom. */
 private fun fadeThrough(): ContentTransform =
-    (fadeIn(tween(210, delayMillis = 90, easing = LinearOutSlowInEasing)) + scaleIn(tween(210, delayMillis = 90, easing = LinearOutSlowInEasing), initialScale = 0.92f))
+    (fadeIn(tween(210, delayMillis = 90, easing = LinearOutSlowInEasing)) +
+            scaleIn(tween(210, delayMillis = 90, easing = LinearOutSlowInEasing), initialScale = 0.92f))
         .togetherWith(fadeOut(tween(90, easing = FastOutLinearInEasing)))
 
 /** Android 12 has no per-app language: the activity starts again in the chosen one (Lang.wrap). */

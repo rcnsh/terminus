@@ -3,7 +3,18 @@ import assert from 'node:assert/strict';
 import nusmods from './fixtures/calendar/nusmods.json' with { type: 'json' };
 import holidays from './fixtures/calendar/holidays.json' with { type: 'json' };
 import { BUNDLED, calendarThrough, termDay } from '../src/calendar.ts';
-import { CALENDAR_DATA_KEY, CALENDAR_NEXT_KEY, NUSMODS_CALENDAR, SG_HOLIDAYS, calendarSource, fromSources, loadCalendar, refreshCalendar, resetCalendar, valid } from '../src/calendarsync.ts';
+import {
+  CALENDAR_DATA_KEY,
+  CALENDAR_NEXT_KEY,
+  NUSMODS_CALENDAR,
+  SG_HOLIDAYS,
+  calendarSource,
+  fromSources,
+  loadCalendar,
+  refreshCalendar,
+  resetCalendar,
+  valid,
+} from '../src/calendarsync.ts';
 import { checkCalendar, runCron } from '../src/monitor.ts';
 import { makeEnv, makeKV } from './_stubs.mjs';
 
@@ -38,12 +49,25 @@ test('the bundled calendar passes the checks the fetched one must', () => {
 
 test('the sources read as fetch_calendar.py reads them', () => {
   const c = fromSources(nusmods, holidays, NOW);
-  assert.ok(c.semesters.every((s) => Number(s.acadYear.slice(5)) >= 2025), 'from last year on');
-  assert.deepEqual(c.semesters.find((s) => s.acadYear === '2026/2027' && s.semester === 1), { acadYear: '2026/2027', semester: 1, start: '2026-08-10' });
+  assert.ok(
+    c.semesters.every((s) => Number(s.acadYear.slice(5)) >= 2025),
+    'from last year on',
+  );
+  assert.deepEqual(
+    c.semesters.find((s) => s.acadYear === '2026/2027' && s.semester === 1),
+    { acadYear: '2026/2027', semester: 1, start: '2026-08-10' },
+  );
   assert.ok(c.holidays.some((h) => h.date === '2026-08-09' && h.name === 'National Day'));
-  assert.ok(c.holidays.every((h) => !h.name.includes('’')), 'plain apostrophes, as in the bundled file');
+  assert.ok(
+    c.holidays.every((h) => !h.name.includes('’')),
+    'plain apostrophes, as in the bundled file',
+  );
   // Every semester and holiday in the bundled file from last year on is in the fetched one.
-  for (const s of BUNDLED.semesters.filter((x) => Number(x.acadYear.slice(5)) >= 2025)) assert.ok(c.semesters.some((x) => x.acadYear === s.acadYear && x.semester === s.semester && x.start === s.start), `${s.acadYear} ${s.semester}`);
+  for (const s of BUNDLED.semesters.filter((x) => Number(x.acadYear.slice(5)) >= 2025))
+    assert.ok(
+      c.semesters.some((x) => x.acadYear === s.acadYear && x.semester === s.semester && x.start === s.start),
+      `${s.acadYear} ${s.semester}`,
+    );
   assert.throws(() => fromSources({ '2026/2027': { 1: {} } }, holidays, NOW), /no start date/);
   assert.throws(() => fromSources(nusmods, { result: {} }, NOW), /no records/);
 });
@@ -131,7 +155,12 @@ test('the cron refreshes the calendar, and warns only when even the fetched one 
   const july = Date.UTC(2027, 6, 15, 2, 0);
   const sent = [];
   // Calendar warnings only: the fake fetch has no NUS feed, which is an outage alert of its own.
-  const env = { ...makeEnv(makeKV()), EMAIL: { send: async (m) => /calendar/.test(m.subject) && sent.push(m) }, EMAIL_FROM: 'a@b.c', ALERT_EMAIL: 'ops@b.c' };
+  const env = {
+    ...makeEnv(makeKV()),
+    EMAIL: { send: async (m) => /calendar/.test(m.subject) && sent.push(m) },
+    EMAIL_FROM: 'a@b.c',
+    ALERT_EMAIL: 'ops@b.c',
+  };
   globalThis.fetch = sources({ cal: nusmods });
   await runCron(env, july);
   assert.equal(sent.length, 1, 'NUSMods has no 2027/2028 yet: warned');
@@ -172,7 +201,7 @@ test('valid() reads dates strictly, and each semester inside its own academic ye
 test('valid() takes only plain holiday names', () => {
   const good = fromSources(nusmods, holidays, NOW);
   const named = (name) => valid({ ...good, holidays: [...good.holidays, { date: '2027-12-26', name }] });
-  assert.ok(named("Hari Raya Puasa (Observed)"));
+  assert.ok(named('Hari Raya Puasa (Observed)'));
   assert.ok(named('New Year’s Day'));
   assert.ok(named('春节'));
   assert.equal(named('<img src=x onerror=alert(1)>'), false);

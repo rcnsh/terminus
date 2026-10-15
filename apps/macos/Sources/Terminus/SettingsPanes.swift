@@ -58,14 +58,22 @@ struct UnplacedList: View {
         if !setup.unplaced.isEmpty, let campus = setup.campus {
             VStack(alignment: .leading, spacing: 6) {
                 let n = setup.unplaced.count
-                Text(n == 1 ? L("1 class had a venue we couldn't place. Pick the nearest stop, or skip it:") : L("%@ classes had a venue we couldn't place. Pick the nearest stop, or skip it:", "\(n)"))
-                    .foregroundStyle(Color.warn)
-                    .fixedSize(horizontal: false, vertical: true)
+                Text(
+                    n == 1
+                        ? L("1 class had a venue we couldn't place. Pick the nearest stop, or skip it:")
+                        : L("%@ classes had a venue we couldn't place. Pick the nearest stop, or skip it:", "\(n)")
+                )
+                .foregroundStyle(Color.warn)
+                .fixedSize(horizontal: false, vertical: true)
                 ForEach(setup.unplaced, id: \.self) { u in
                     HStack {
-                        Text("\(dayShort(u.day)) \(clockMin(u.arriveByMin)) · \(u.module) @ \(u.venue)\(u.offCampus ? L(" (off campus)") : "")")
+                        Text(
+                            "\(dayShort(u.day)) \(clockMin(u.arriveByMin)) · \(u.module) @ \(u.venue)\(u.offCampus ? L(" (off campus)") : "")"
+                        )
                         Spacer()
-                        StopMenu(campus: campus, label: L("Stop for %@", u.module), selection: "", blank: L("Choose stop")) { setup.place(u, to: $0) }
+                        StopMenu(campus: campus, label: L("Stop for %@", u.module), selection: "", blank: L("Choose stop")) {
+                            setup.place(u, to: $0)
+                        }
                         Button(L("Skip")) { setup.skip(u) }.buttonStyle(.link)
                     }
                 }
@@ -91,8 +99,12 @@ struct TimetablePane: View {
             if setup.me?.needsReimport == true {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(L("Re-import your timetable.")).fontWeight(.semibold)
-                    Text(L("This link is for %@, which has ended. Copy this semester's link from NUSMods and import it below.", setup.me?.term ?? ""))
-                        .fixedSize(horizontal: false, vertical: true)
+                    Text(
+                        L(
+                            "This link is for %@, which has ended. Copy this semester's link from NUSMods and import it below.",
+                            setup.me?.term ?? "")
+                    )
+                    .fixedSize(horizontal: false, vertical: true)
                 }
                 .card(padding: 10)
             }
@@ -167,7 +179,9 @@ struct TimetablePane: View {
                                             .font(.caption).foregroundStyle(.secondary)
                                     }
                                     Spacer()
-                                    StopMenu(campus: campus, label: L("Stop for %@", c.label), selection: c.to) { setup.setClassStop(c, to: $0) }
+                                    StopMenu(campus: campus, label: L("Stop for %@", c.label), selection: c.to) {
+                                        setup.setClassStop(c, to: $0)
+                                    }
                                     Button(L("Remove")) { setup.removeClass(c) }
                                         .buttonStyle(.link)
                                         .accessibilityLabel(L("Remove %@", c.label))
@@ -205,9 +219,13 @@ func weeksLabel(_ weeks: [Int]?) -> String? {
     let w = Array(Set(weeks ?? [])).sorted()
     guard !w.isEmpty, w.count < 13 else { return nil }
     var runs: [String] = []
-    var start = w[0], last = w[0]
+    var start = w[0]
+    var last = w[0]
     for n in w.dropFirst() + [Int.min] {
-        if n == last + 1 { last = n; continue }
+        if n == last + 1 {
+            last = n
+            continue
+        }
         runs.append(start == last ? "\(start)" : "\(start)–\(last)")
         start = n
         last = n
@@ -251,8 +269,10 @@ private struct AddClassForm: View {
                 Spacer()
                 Button(L("Add")) {
                     guard let d = picked else { return }
-                    let a = minutes(start), b = minutes(end)
-                    setup.addManual(day: day, at: a, end: hasEnd && b > a ? b : nil, to: d.goesTo, label: name.trimmingCharacters(in: .whitespaces))
+                    let a = minutes(start)
+                    let b = minutes(end)
+                    setup.addManual(
+                        day: day, at: a, end: hasEnd && b > a ? b : nil, to: d.goesTo, label: name.trimmingCharacters(in: .whitespaces))
                     name = ""
                     query = ""
                     picked = nil
@@ -277,9 +297,12 @@ struct WhereField: View {
         // A favourite goes to a stop or a landmark (Destination.goesTo): the stop
         // first, so a building sharing its code doesn't show in its place.
         let favs = setup.places.compactMap { p in
-            app.destinations.first { $0.kind == "stop" && $0.code == p.to } ?? app.destinations.first { $0.kind == "landmark" && $0.code == p.to }
+            app.destinations.first { $0.kind == "stop" && $0.code == p.to }
+                ?? app.destinations.first { $0.kind == "landmark" && $0.code == p.to }
         }
-        let classStops = Array(Set(setup.classes.map(\.to))).sorted().compactMap { to in app.destinations.first { $0.kind == "stop" && $0.code == to } }
+        let classStops = Array(Set(setup.classes.map(\.to))).sorted().compactMap { to in
+            app.destinations.first { $0.kind == "stop" && $0.code == to }
+        }
         var seen = Set<String>()
         return (favs + classStops).filter { seen.insert($0.code).inserted }.prefix(8).map { $0 }
     }
@@ -386,7 +409,10 @@ struct AboutPane: View {
         VStack(alignment: .leading, spacing: 12) {
             Text(L("terminus tells you which NUS shuttle bus to catch, from which stop, and when to leave, from your NUSMods timetable."))
                 .fixedSize(horizontal: false, vertical: true)
-            Hint(L("terminus is an independent student project, not affiliated with NUS. Bus times come from NUS's shuttle feed. Walking routes and the map use data from OpenStreetMap contributors."))
+            Hint(
+                L(
+                    "terminus is an independent student project, not affiliated with NUS. Bus times come from NUS's shuttle feed. Walking routes and the map use data from OpenStreetMap contributors."
+                ))
             Hint(L("Use terminus in line with the NUS Acceptable Use Policy for IT Resources."))
             // Clicked seven times, it shows the developer menu, as Android's build number does.
             Hint(L("Version %@", version))
@@ -432,7 +458,10 @@ private struct DeveloperSection: View {
             }
             .pickerStyle(.radioGroup)
             .onChange(of: chosen) { _, base in Servers.choose(base) { chosen = Api.base } }
-            Hint(L("Which server this app talks to. Only terminus's own are here. terminus starts again to switch, and the dev stub keeps its own sign-in."))
+            Hint(
+                L(
+                    "Which server this app talks to. Only terminus's own are here. terminus starts again to switch, and the dev stub keeps its own sign-in."
+                ))
         }
     }
 
@@ -501,8 +530,14 @@ struct FeedbackPane: View {
                     footer
                 }
                 .card(padding: 0)
-                if sent { Text(L("Thanks. Your feedback was sent.")).foregroundStyle(.secondary).padding(.horizontal, 4).announced(L("Thanks. Your feedback was sent.")) }
-                if let result { Text(result).foregroundStyle(Color.bad).fixedSize(horizontal: false, vertical: true).padding(.horizontal, 4).announced(result) }
+                if sent {
+                    Text(L("Thanks. Your feedback was sent.")).foregroundStyle(.secondary).padding(.horizontal, 4).announced(
+                        L("Thanks. Your feedback was sent."))
+                }
+                if let result {
+                    Text(result).foregroundStyle(Color.bad).fixedSize(horizontal: false, vertical: true).padding(.horizontal, 4).announced(
+                        result)
+                }
             }
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "exclamationmark.bubble")
@@ -608,9 +643,12 @@ struct AddEmail: View {
                 Text(L("Add an email to use terminus on your other devices too, and to keep your setup if this Mac is lost."))
                     .fixedSize(horizontal: false, vertical: true)
                 HStack {
-                    TextField(L("Email"), text: $email, prompt: Text(verbatim: "you@u.nus.edu")).textFieldStyle(.roundedBorder).frame(maxWidth: 260)
-                    Button(app.signingIn ? L("Sending…") : L("Email me a code")) { app.signIn(email: email.trimmingCharacters(in: .whitespaces)) }
-                        .disabled(!emailOK || app.signingIn)
+                    TextField(L("Email"), text: $email, prompt: Text(verbatim: "you@u.nus.edu")).textFieldStyle(.roundedBorder).frame(
+                        maxWidth: 260)
+                    Button(app.signingIn ? L("Sending…") : L("Email me a code")) {
+                        app.signIn(email: email.trimmingCharacters(in: .whitespaces))
+                    }
+                    .disabled(!emailOK || app.signingIn)
                 }
             }
             if let e = app.signInError { Text(e).foregroundStyle(Color.bad).fixedSize(horizontal: false, vertical: true).announced(e) }

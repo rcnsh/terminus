@@ -1,7 +1,5 @@
 package sh.rcn.terminus
 
-import org.json.JSONArray
-import org.json.JSONObject
 import kotlin.math.PI
 import kotlin.math.asin
 import kotlin.math.atan
@@ -16,20 +14,19 @@ import kotlin.math.sin
 import kotlin.math.sinh
 import kotlin.math.sqrt
 import kotlin.math.tan
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
- * The Map tab's data: stops and routes from `/campus`, live buses from
- * `/buses`, and the GeoJSON the map draws from them. Plain JSON in and out,
- * so it's tested on the JVM (MapDataTest).
+ * The Map tab's data: stops and routes from `/campus`, live buses from `/buses`, and the GeoJSON the map draws from them. Plain JSON in and
+ * out, so it's tested on the JVM (MapDataTest).
  */
 
 /**
- * How far the map pans and zooms out, so the screen stays on the street map:
- * past the map file's edge there's nothing to draw. MapLibre Native limits
- * only the camera's centre, so the centre's box is the map less half the
- * screen on every side, and the map zooms out only until the screen is full
- * of it. Sizes in dp, as the map's zoom counts them (512 a tile). The same
- * as the Mac's PanLimit; the web's map limits the whole screen itself.
+ * How far the map pans and zooms out, so the screen stays on the street map: past the map file's edge there's nothing to draw. MapLibre
+ * Native limits only the camera's centre, so the centre's box is the map less half the screen on every side, and the map zooms out only
+ * until the screen is full of it. Sizes in dp, as the map's zoom counts them (512 a tile). The same as the Mac's PanLimit; the web's map
+ * limits the whole screen itself.
  */
 object PanLimit {
     /** The map file's extent (MAP_BOUNDS in apps/api/src/map.ts): west, south, east, north. */
@@ -53,15 +50,26 @@ object PanLimit {
 
     // Web Mercator, as a fraction of the world: x east, y south.
     private fun x(lon: Double) = (lon + 180) / 360
+
     private fun y(lat: Double) = (1 - ln(tan(PI / 4 + lat * PI / 360)) / PI) / 2
+
     private fun lon(x: Double) = x * 360 - 180
+
     private fun lat(y: Double) = atan(sinh(PI * (1 - 2 * y))) * 180 / PI
 }
 
 /** A stop on the map, with the services that call there. */
 /** [longName]: the full name ("Yusof Ishak House") where [name] is short ("YIH"); null from an older server. */
-data class MapStop(val code: String, val name: String, val lat: Double, val lon: Double, val services: List<String>, val longName: String? = null) {
-    val fullName: String get() = longName ?: name
+data class MapStop(
+    val code: String,
+    val name: String,
+    val lat: Double,
+    val lon: Double,
+    val services: List<String>,
+    val longName: String? = null,
+) {
+    val fullName: String
+        get() = longName ?: name
 }
 
 /** A service: its colour (ARGB), its path along the roads as [lon, lat] pairs, and whether it's a loop. */
@@ -74,15 +82,15 @@ data class MapRoute(val svc: String, val color: Long, val line: List<DoubleArray
 }
 
 /**
- * A route line measured as the API measures it (haversine, metres from its
- * start at each point), so a bus's `along` is a place on it. [closed] is the
- * service's `loop` from /campus, as the API places buses: a loop's line
- * needn't end exactly where it starts (A1's ends are some 40 m apart at KRB).
+ * A route line measured as the API measures it (haversine, metres from its start at each point), so a bus's `along` is a place on it.
+ * [closed] is the service's `loop` from /campus, as the API places buses: a loop's line needn't end exactly where it starts (A1's ends are
+ * some 40 m apart at KRB).
  */
 class RoutePath(private val line: List<DoubleArray>, loop: Boolean = false) {
-    private val cum = DoubleArray(line.size).also { c ->
-        for (i in 1 until line.size) c[i] = c[i - 1] + haversine(line[i - 1][1], line[i - 1][0], line[i][1], line[i][0])
-    }
+    private val cum =
+        DoubleArray(line.size).also { c ->
+            for (i in 1 until line.size) c[i] = c[i - 1] + haversine(line[i - 1][1], line[i - 1][0], line[i][1], line[i][0])
+        }
     val total: Double = cum.lastOrNull() ?: 0.0
 
     /** A loop: a bus can slide on past the start. */
@@ -106,8 +114,7 @@ class RoutePath(private val line: List<DoubleArray>, loop: Boolean = false) {
         return Triple(aLat + (bLat - aLat) * t, aLon + (bLon - aLon) * t, bearing(aLat, aLon, bLat, bLon))
     }
 
-    /** The part of the line from [a] to [b] metres along it, as [lon, lat]
-     *  points; null when that isn't a stretch of this line. */
+    /** The part of the line from [a] to [b] metres along it, as [lon, lat] points; null when that isn't a stretch of this line. */
     fun slice(a: Double, b: Double): List<DoubleArray>? {
         if (line.size < 2 || !(b > a) || a < 0 || b > total + 1) return null
         // Held to the line's ends, never wrapped: on a loop, a stop at (or a
@@ -120,9 +127,8 @@ class RoutePath(private val line: List<DoubleArray>, loop: Boolean = false) {
     fun wrap(m: Double): Double = if (closed) ((m % total) + total) % total else m.coerceIn(0.0, total)
 
     /**
-     * Metres on along the line from bus [f] to bus [b], round a loop past its
-     * start; null when it isn't on ahead: the same place, behind, a long way,
-     * or a line kept from before the route changed.
+     * Metres on along the line from bus [f] to bus [b], round a loop past its start; null when it isn't on ahead: the same place, behind, a
+     * long way, or a line kept from before the route changed.
      */
     fun aheadBy(f: LiveBus, b: LiveBus): Double? {
         val fa = f.along ?: return null
@@ -154,9 +160,8 @@ class RoutePath(private val line: List<DoubleArray>, loop: Boolean = false) {
 }
 
 /**
- * [serviceCodes]: every service in /campus's routes, drawn or not, in code
- * order. [stopAliases]: each stop's nicknames, from /campus's destinations of
- * kind "stop", for the Buses tab's search.
+ * [serviceCodes]: every service in /campus's routes, drawn or not, in code order. [stopAliases]: each stop's nicknames, from /campus's
+ * destinations of kind "stop", for the Buses tab's search.
  */
 data class CampusMap(
     val stops: List<MapStop>,
@@ -165,7 +170,8 @@ data class CampusMap(
     val stopAliases: Map<String, List<String>> = emptyMap(),
 ) {
     /** The services in pill order: A1, A2, D1, … */
-    val services: List<String> get() = routes.keys.sorted()
+    val services: List<String>
+        get() = routes.keys.sorted()
 
     fun stop(code: String) = stops.firstOrNull { it.code == code }
 
@@ -188,17 +194,36 @@ data class CampusMap(
         fun parse(o: JSONObject): Pair<CampusMap, Set<String>> {
             val s = o.getJSONArray("stops")
             val core = mutableSetOf<String>()
-            val stops = (0 until s.length()).map { i ->
-                val x = s.getJSONObject(i)
-                if (x.optBoolean("core", true)) core += x.getString("code")
-                MapStop(x.getString("code"), x.optString("name", x.getString("code")), x.getDouble("lat"), x.getDouble("lon"), x.optJSONArray("services").stringList(), x.optStringOrNull("longName")?.ifEmpty { null })
-            }
+            val stops =
+                (0 until s.length()).map { i ->
+                    val x = s.getJSONObject(i)
+                    if (x.optBoolean("core", true)) core += x.getString("code")
+                    MapStop(
+                        x.getString("code"),
+                        x.optString("name", x.getString("code")),
+                        x.getDouble("lat"),
+                        x.getDouble("lon"),
+                        x.optJSONArray("services").stringList(),
+                        x.optStringOrNull("longName")?.ifEmpty { null },
+                    )
+                }
             val r = o.getJSONObject("routes")
-            val routes = r.keys().asSequence().associateWith { svc ->
-                val x = r.getJSONObject(svc)
-                val line = x.optJSONArray("line") ?: JSONArray()
-                MapRoute(svc, parseColor(x.optString("color")), (0 until line.length()).map { i -> line.getJSONArray(i).let { p -> doubleArrayOf(p.getDouble(0), p.getDouble(1)) } }, x.optBoolean("loop"))
-            }.filterValues { it.line.size >= 2 }
+            val routes =
+                r.keys()
+                    .asSequence()
+                    .associateWith { svc ->
+                        val x = r.getJSONObject(svc)
+                        val line = x.optJSONArray("line") ?: JSONArray()
+                        MapRoute(
+                            svc,
+                            parseColor(x.optString("color")),
+                            (0 until line.length()).map { i ->
+                                line.getJSONArray(i).let { p -> doubleArrayOf(p.getDouble(0), p.getDouble(1)) }
+                            },
+                            x.optBoolean("loop"),
+                        )
+                    }
+                    .filterValues { it.line.size >= 2 }
             return CampusMap(stops, routes, serviceCodes(r), stopAliases(o.optJSONArray("destinations"))) to core
         }
 
@@ -208,7 +233,8 @@ data class CampusMap(
         /** Each stop's nicknames, from /campus's `destinations` of kind "stop". */
         fun stopAliases(destinations: JSONArray?): Map<String, List<String>> {
             if (destinations == null) return emptyMap()
-            return (0 until destinations.length()).mapNotNull { destinations.optJSONObject(it) }
+            return (0 until destinations.length())
+                .mapNotNull { destinations.optJSONObject(it) }
                 .filter { it.optString("kind") == "stop" }
                 .associate { d -> d.optString("code") to d.optJSONArray("aliases").stringList() }
         }
@@ -218,14 +244,14 @@ data class CampusMap(
 /** "#e53935" -> 0xFFE53935; grey for anything else. */
 fun parseColor(hex: String?): Long {
     val h = hex?.removePrefix("#")
-    return if (h != null && h.length == 6 && h.all { it.isDigit() || it.lowercaseChar() in 'a'..'f' }) 0xFF000000L or h.toLong(16) else 0xFF8A939CL
+    return if (h != null && h.length == 6 && h.all { it.isDigit() || it.lowercaseChar() in 'a'..'f' }) 0xFF000000L or h.toLong(16)
+    else 0xFF8A939CL
 }
 
 /**
- * A bus on the map, as `/buses` gives it: an id stable while it runs, and its
- * number plate. It's at a stop ([at], drawn at the stop's dot) or between two
- * (drawn on its line); [ox] and [oy] are how far from that point it's drawn,
- * in dp at full size, turned with the road: beside the dot at a stop.
+ * A bus on the map, as `/buses` gives it: an id stable while it runs, and its number plate. It's at a stop ([at], drawn at the stop's dot)
+ * or between two (drawn on its line); [ox] and [oy] are how far from that point it's drawn, in dp at full size, turned with the road:
+ * beside the dot at a stop.
  */
 data class LiveBus(
     val id: String,
@@ -245,21 +271,23 @@ data class LiveBus(
     val slot: Int = 0,
     /** Between stops, the stretch of its line it's somewhere on; null at a stop or from an older API. */
     val stretch: Stretch? = null,
-    /** The stops still ahead on its line, [nextStop] first, to where the line
-     *  ends; empty past a one-way line's end or from an older API. */
+    /**
+     * The stops still ahead on its line, [nextStop] first, to where the line ends; empty past a one-way line's end or from an older API.
+     */
     val upcoming: List<String> = emptyList(),
     /** Where its line ends (a loop's first stop); null from an older API. */
     val towards: String? = null,
-    /** The codes of [at], [stretch]'s last stop and [upcoming], in step with
-     *  the names: a name can be a stop either side of a road. Null from an older API. */
+    /**
+     * The codes of [at], [stretch]'s last stop and [upcoming], in step with the names: a name can be a stop either side of a road. Null
+     * from an older API.
+     */
     val atCode: String? = null,
     val passedCode: String? = null,
     val upcomingCodes: List<String?> = emptyList(),
     val ox: Double = 0.0,
     val oy: Double = 0.0,
 ) {
-    /** Drawn where it goes: at a stop, beside the dot to its left (the kerb:
-     *  buses drive on the left), the ones behind it further back. */
+    /** Drawn where it goes: at a stop, beside the dot to its left (the kerb: buses drive on the left), the ones behind it further back. */
     fun placed(): LiveBus = if (at != null) copy(ox = -AT_STOP_SIDE_DP, oy = AT_STOP_STEP_DP * slot) else copy(ox = 0.0, oy = 0.0)
 
     companion object {
@@ -270,10 +298,8 @@ data class LiveBus(
 }
 
 /**
- * A tapped bus's stops, as its sheet lists them, from what `/buses` said
- * (the server walks the line, not the app): the stop it [passed] (between
- * stops) or the one it's [here] at, its [next], then [after] it at most
- * [AFTER] more, and how many [more] there are past those.
+ * A tapped bus's stops, as its sheet lists them, from what `/buses` said (the server walks the line, not the app): the stop it [passed]
+ * (between stops) or the one it's [here] at, its [next], then [after] it at most [AFTER] more, and how many [more] there are past those.
  */
 data class BusStrip(
     val passed: String?,
@@ -288,10 +314,12 @@ data class BusStrip(
     val afterCodes: List<String?> = emptyList(),
 ) {
     /** Between stops: the bus is drawn on the line after [passed], not at a stop. */
-    val between: Boolean get() = here == null
+    val between: Boolean
+        get() = here == null
 
     /** Anything ahead of the bus to list. */
-    val any: Boolean get() = next != null
+    val any: Boolean
+        get() = next != null
 
     companion object {
         const val AFTER = 4
@@ -322,9 +350,8 @@ data class BusStrip(
 data class Stretch(val from: Double, val to: Double, val last: String)
 
 /**
- * One service's buses. [available] false: the feed couldn't be reached, which
- * isn't "no buses". [stale]: the feed is down and these are where the buses
- * were last seen, so they may have moved on.
+ * One service's buses. [available] false: the feed couldn't be reached, which isn't "no buses". [stale]: the feed is down and these are
+ * where the buses were last seen, so they may have moved on.
  */
 data class BusList(val svc: String, val available: Boolean, val buses: List<LiveBus>, val stale: Boolean = false) {
     companion object {
@@ -347,23 +374,31 @@ data class BusList(val svc: String, val available: Boolean, val buses: List<Live
                         plate = b.optString("plate").takeIf { !b.isNull("plate") && it.isNotEmpty() },
                         at = b.optJSONObject("at")?.optString("name")?.ifEmpty { null },
                         slot = b.optInt("slot", 0),
-                        stretch = b.optJSONObject("stretch")?.let { st ->
-                            val from = st.number("from")
-                            val to = st.number("to")
-                            val last = st.optJSONObject("last")?.optString("name")?.ifEmpty { null }
-                            if (from != null && to != null && last != null) Stretch(from, to, last) else null
-                        },
-                        upcoming = b.optJSONArray("upcoming")?.let { u ->
-                            (0 until u.length()).mapNotNull { j -> u.optJSONObject(j)?.optString("name")?.ifEmpty { null } }
-                        }.orEmpty(),
+                        stretch =
+                            b.optJSONObject("stretch")?.let { st ->
+                                val from = st.number("from")
+                                val to = st.number("to")
+                                val last = st.optJSONObject("last")?.optString("name")?.ifEmpty { null }
+                                if (from != null && to != null && last != null) Stretch(from, to, last) else null
+                            },
+                        upcoming =
+                            b.optJSONArray("upcoming")
+                                ?.let { u ->
+                                    (0 until u.length()).mapNotNull { j -> u.optJSONObject(j)?.optString("name")?.ifEmpty { null } }
+                                }
+                                .orEmpty(),
                         towards = b.optJSONObject("towards")?.optString("name")?.ifEmpty { null },
                         atCode = b.optJSONObject("at")?.optString("code")?.ifEmpty { null },
                         passedCode = b.optJSONObject("stretch")?.optJSONObject("last")?.optString("code")?.ifEmpty { null },
-                        upcomingCodes = b.optJSONArray("upcoming")?.let { u ->
-                            // In step with [upcoming]: the same entries, those with a name.
-                            (0 until u.length()).mapNotNull { j -> u.optJSONObject(j)?.takeIf { it.optString("name").isNotEmpty() } }
-                                .map { it.optString("code").ifEmpty { null } }
-                        }.orEmpty(),
+                        upcomingCodes =
+                            b.optJSONArray("upcoming")
+                                ?.let { u ->
+                                    // In step with [upcoming]: the same entries, those with a name.
+                                    (0 until u.length())
+                                        .mapNotNull { j -> u.optJSONObject(j)?.takeIf { it.optString("name").isNotEmpty() } }
+                                        .map { it.optString("code").ifEmpty { null } }
+                                }
+                                .orEmpty(),
                     )
                 },
                 stale = o.optBoolean("stale", false),
@@ -374,31 +409,54 @@ data class BusList(val svc: String, val available: Boolean, val buses: List<Live
 
 /** GeoJSON for the map's sources. */
 object MapGeoJson {
-    fun routes(campus: CampusMap): String = collection(
-        campus.routes.values.map { r ->
-            feature(
-                JSONObject().put("type", "LineString").put("coordinates", JSONArray(r.line.map { JSONArray().put(it[0]).put(it[1]) })),
-                JSONObject().put("svc", r.svc).put("color", hex(r.color)),
-            )
-        },
-    )
+    fun routes(campus: CampusMap): String =
+        collection(
+            campus.routes.values.map { r ->
+                feature(
+                    JSONObject().put("type", "LineString").put("coordinates", JSONArray(r.line.map { JSONArray().put(it[0]).put(it[1]) })),
+                    JSONObject().put("svc", r.svc).put("color", hex(r.color)),
+                )
+            }
+        )
 
     /** `services` as " A1 D2 ": spaces round each, so K never matches inside another code. */
-    fun stops(campus: CampusMap): String = collection(
-        campus.stops.map { s -> point(s.lon, s.lat, JSONObject().put("code", s.code).put("name", s.name).put("services", " ${s.services.joinToString(" ")} ")) },
-    )
+    fun stops(campus: CampusMap): String =
+        collection(
+            campus.stops.map { s ->
+                point(
+                    s.lon,
+                    s.lat,
+                    JSONObject().put("code", s.code).put("name", s.name).put("services", " ${s.services.joinToString(" ")} "),
+                )
+            }
+        )
 
-    fun buses(svc: String, color: Long, buses: List<LiveBus>): String = collection(
-        buses.map { b ->
-            point(b.lon, b.lat, JSONObject().put("id", b.id).put("svc", svc).put("color", hex(color)).put("heading", b.heading ?: 0.0).put("offset", JSONArray().put(b.ox).put(b.oy)))
-        },
-    )
+    fun buses(svc: String, color: Long, buses: List<LiveBus>): String =
+        collection(
+            buses.map { b ->
+                point(
+                    b.lon,
+                    b.lat,
+                    JSONObject()
+                        .put("id", b.id)
+                        .put("svc", svc)
+                        .put("color", hex(color))
+                        .put("heading", b.heading ?: 0.0)
+                        .put("offset", JSONArray().put(b.ox).put(b.oy)),
+                )
+            }
+        )
 
     /** A tapped bus's [stretch] of [path], in the service's [color]; empty when there's none. */
     fun stretch(color: Long, path: RoutePath?, stretch: Stretch?): String {
         val line = stretch?.let { path?.slice(it.from, it.to) } ?: return EMPTY
         return collection(
-            listOf(feature(JSONObject().put("type", "LineString").put("coordinates", JSONArray(line.map { JSONArray().put(it[0]).put(it[1]) })), JSONObject().put("color", hex(color)))),
+            listOf(
+                feature(
+                    JSONObject().put("type", "LineString").put("coordinates", JSONArray(line.map { JSONArray().put(it[0]).put(it[1]) })),
+                    JSONObject().put("color", hex(color)),
+                )
+            )
         )
     }
 
@@ -411,23 +469,20 @@ object MapGeoJson {
     private fun point(lon: Double, lat: Double, props: JSONObject) =
         feature(JSONObject().put("type", "Point").put("coordinates", JSONArray().put(lon).put(lat)), props)
 
-    private fun feature(geometry: JSONObject, props: JSONObject) = JSONObject().put("type", "Feature").put("geometry", geometry).put("properties", props)
+    private fun feature(geometry: JSONObject, props: JSONObject) =
+        JSONObject().put("type", "Feature").put("geometry", geometry).put("properties", props)
 
-    private fun collection(features: List<JSONObject>) = JSONObject().put("type", "FeatureCollection").put("features", JSONArray(features)).toString()
+    private fun collection(features: List<JSONObject>) =
+        JSONObject().put("type", "FeatureCollection").put("features", JSONArray(features)).toString()
 }
 
 /**
- * Each bus's slide from where it was drawn to its new place, along its route
- * line, so it follows the road round corners, easing in and out. It takes
- * [msFor] its distance: further, longer.
- * Its old and new places may be beside the line (a stop's dot, and beside
- * it), so it moves from one to the other as it goes. One that can't get there
- * along the line (behind it, a long way on, no line) jumps, and so does every
- * bus with [still] (animations off) or after a while without an answer.
- * Times are any one clock that keeps counting while the phone sleeps
- * (elapsedRealtime, not uptimeMillis), so a map left asleep reads as stale.
- * Call [update] with every answer, the same list or not: that's what tells
- * a quiet map from a stale one.
+ * Each bus's slide from where it was drawn to its new place, along its route line, so it follows the road round corners, easing in and out.
+ * It takes [msFor] its distance: further, longer. Its old and new places may be beside the line (a stop's dot, and beside it), so it moves
+ * from one to the other as it goes. One that can't get there along the line (behind it, a long way on, no line) jumps, and so does every
+ * bus with [still] (animations off) or after a while without an answer. Times are any one clock that keeps counting while the phone sleeps
+ * (elapsedRealtime, not uptimeMillis), so a map left asleep reads as stale. Call [update] with every answer, the same list or not: that's
+ * what tells a quiet map from a stale one.
  */
 class Slides(private val msFor: (Double) -> Long = { slideMs(it) }) {
     private class Slide(val from: LiveBus?, val to: LiveBus, val start: Long, val path: RoutePath?, val d: Double, val ms: Long = 0)
@@ -481,9 +536,10 @@ class Slides(private val msFor: (Double) -> Long = { slideMs(it) }) {
     }
 
     companion object {
-        /** How long a slide of [m] metres takes, as the web map: a steady
-         *  100 m a second, so a longer stretch takes longer, from 1 s for a
-         *  short hop to 4 s, done before the next answer (every 5 s). */
+        /**
+         * How long a slide of [m] metres takes, as the web map: a steady 100 m a second, so a longer stretch takes longer, from 1 s for a
+         * short hop to 4 s, done before the next answer (every 5 s).
+         */
         fun slideMs(m: Double): Long = (m / 100 * 1_000).toLong().coerceIn(1_000L, 4_000L)
 
         /** No answer for longer than this: every bus jumps to where it is now. */

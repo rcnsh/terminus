@@ -48,11 +48,9 @@ import sh.rcn.terminus.R
 import sh.rcn.terminus.widget.clock
 
 /**
- * Today at a glance, from /me/day: each class with its leave-by, and the
- * trips home. What's done is dimmed. Anything still to come has an × to take
- * it off today, whether it's timetabled or one you added (a swipe does the
- * same); it goes at once, and its row says so with Undo for [UNDO_MS], as
- * on the web app.
+ * Today at a glance, from /me/day: each class with its leave-by, and the trips home. What's done is dimmed. Anything still to come has an ×
+ * to take it off today, whether it's timetabled or one you added (a swipe does the same); it goes at once, and its row says so with Undo
+ * for [UNDO_MS], as on the web app.
  */
 @Composable
 internal fun DayTimeline(
@@ -66,9 +64,16 @@ internal fun DayTimeline(
     val ctx = LocalContext.current
     val fmt = { ms: Long -> clock(ctx, ms) }
     // Above the entry that followed it, else where it was.
-    val noteAt = removed?.let { n -> day.items.indexOfFirst { it.key == n.before }.takeIf { n.before != null && it >= 0 } ?: minOf(n.at, day.items.size) }
+    val noteAt = removed?.let { n ->
+        day.items.indexOfFirst { it.key == n.before }.takeIf { n.before != null && it >= 0 } ?: minOf(n.at, day.items.size)
+    }
     Column(Modifier.fillMaxWidth().padding(top = 16.dp)) {
-        Text(stringResource(R.string.today_heading).uppercase(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 6.dp))
+        Text(
+            stringResource(R.string.today_heading).uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 6.dp),
+        )
         for ((i, item) in day.items.withIndex()) {
             if (i == noteAt && removed != null) RemovedRow(removed, fmt, onUndo, onDismiss)
             // Keyed, so a swiped row's state doesn't pass to the one moving up.
@@ -90,14 +95,18 @@ internal fun DayItem.shortName(): String = if (kind == "home") L.s(R.string.trip
 @Composable
 private fun RemoveButton(item: DayItem, onRemove: (DayItem) -> Unit) {
     IconButton(onClick = { onRemove(item) }) {
-        Icon(painterResource(R.drawable.ic_close), contentDescription = stringResource(R.string.remove_from_today, item.shortName()), tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+        Icon(
+            painterResource(R.drawable.ic_close),
+            contentDescription = stringResource(R.string.remove_from_today, item.shortName()),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 
 /**
- * Where an entry was, just taken off: "GEA1000 removed from today · Undo",
- * or why it couldn't be (the entry is back, just below). Said aloud as it
- * appears, and gone after [UNDO_MS].
+ * Where an entry was, just taken off: "GEA1000 removed from today · Undo", or why it couldn't be (the entry is back, just below). Said
+ * aloud as it appears, and gone after [UNDO_MS].
  */
 @Composable
 private fun RemovedRow(note: TodayNote, fmt: (Long) -> String, onUndo: () -> Unit, onDismiss: (String) -> Unit) {
@@ -107,22 +116,32 @@ private fun RemovedRow(note: TodayNote, fmt: (Long) -> String, onUndo: () -> Uni
     }
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     // Laid out as the entry was, so the time stays in its column when the words wrap.
-    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }, verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Row(Modifier.weight(1f).padding(vertical = 5.dp), verticalAlignment = Alignment.Top) {
-            Text(fmt(note.item.startsAtMs), style = MaterialTheme.typography.bodyMedium, color = muted, modifier = Modifier.widthIn(min = 72.dp).padding(end = 8.dp))
+            Text(
+                fmt(note.item.startsAtMs),
+                style = MaterialTheme.typography.bodyMedium,
+                color = muted,
+                modifier = Modifier.widthIn(min = 72.dp).padding(end = 8.dp),
+            )
             Text(
                 if (note.failed) stringResource(R.string.cant_remove) else stringResource(R.string.taken_off_today, note.item.shortName()),
                 color = if (note.failed) MaterialTheme.colorScheme.error else muted,
             )
         }
         // Its word ends where the ×s do, past the button's own padding.
-        if (!note.failed) TextButton(onClick = onUndo, modifier = Modifier.offset(x = 6.dp)) { Text(stringResource(R.string.undo), fontWeight = FontWeight.SemiBold) }
+        if (!note.failed)
+            TextButton(onClick = onUndo, modifier = Modifier.offset(x = 6.dp)) {
+                Text(stringResource(R.string.undo), fontWeight = FontWeight.SemiBold)
+            }
     }
 }
 
 /**
- * Swipe either way to take it off today, a shortcut for the ×. The row
- * lifts onto a card as it moves; behind it a bin, grey until it's far
+ * Swipe either way to take it off today, a shortcut for the ×. The row lifts onto a card as it moves; behind it a bin, grey until it's far
  * enough to let go, then red.
  */
 @Composable
@@ -140,26 +159,35 @@ private fun Swipeable(item: DayItem, onRemove: (DayItem) -> Unit, content: @Comp
     SwipeToDismissBox(
         state = state,
         // A little wider than the page's column, so the card has room round the words, which stay in line with the other rows.
-        modifier = Modifier.layout { m, k ->
-            val out = 8.dp.roundToPx()
-            val p = m.measure(k.copy(minWidth = k.minWidth + 2 * out, maxWidth = k.maxWidth + 2 * out))
-            layout(p.width - 2 * out, p.height) { p.place(-out, 0) }
-        },
+        modifier =
+            Modifier.layout { m, k ->
+                val out = 8.dp.roundToPx()
+                val p = m.measure(k.copy(minWidth = k.minWidth + 2 * out, maxWidth = k.maxWidth + 2 * out))
+                layout(p.width - 2 * out, p.height) { p.place(-out, 0) }
+            },
         backgroundContent = {
             // Only while swiping: otherwise it's hidden under the row, and screen readers would read it.
             if (!moving) return@SwipeToDismissBox
             Box(
                 Modifier.fillMaxSize().background(behind, shape).padding(horizontal = 20.dp),
-                contentAlignment = if (state.dismissDirection == SwipeToDismissBoxValue.StartToEnd) Alignment.CenterStart else Alignment.CenterEnd,
+                contentAlignment =
+                    if (state.dismissDirection == SwipeToDismissBoxValue.StartToEnd) Alignment.CenterStart else Alignment.CenterEnd,
             ) {
-                Icon(painterResource(R.drawable.ic_delete), contentDescription = null, tint = if (armed) c.onErrorContainer else c.onSurfaceVariant, modifier = Modifier.size(22.dp).scale(bin))
+                Icon(
+                    painterResource(R.drawable.ic_delete),
+                    contentDescription = null,
+                    tint = if (armed) c.onErrorContainer else c.onSurfaceVariant,
+                    modifier = Modifier.size(22.dp).scale(bin),
+                )
             }
         },
     ) {
         Box(
             (if (moving) Modifier.shadow(2.dp, shape).background(c.surfaceContainerHigh, shape) else Modifier.background(c.background))
-                .padding(start = 8.dp),
-        ) { content() }
+                .padding(start = 8.dp)
+        ) {
+            content()
+        }
     }
 }
 
@@ -181,25 +209,43 @@ private fun DayRow(item: DayItem, fmt: (Long) -> String, end: (@Composable () ->
             )
             Column(Modifier.weight(1f)) {
                 // The server's words (`title`, `line`); worked out here only for an older server.
-                val title = item.title ?: if (item.kind == "home") stringResource(R.string.home_from, item.fromName ?: stringResource(R.string.your_last_class)) else item.label
+                val title =
+                    item.title
+                        ?: if (item.kind == "home")
+                            stringResource(R.string.home_from, item.fromName ?: stringResource(R.string.your_last_class))
+                        else item.label
                 Text(
                     title,
                     fontWeight = if (current) FontWeight.SemiBold else FontWeight.Normal,
                     color = if (past) muted else MaterialTheme.colorScheme.onSurface,
                     textDecoration = if (item.status == "skipped") TextDecoration.LineThrough else null,
                 )
-                val sub = when {
-                    item.status == "done" -> null
-                    item.line != null -> item.line
-                    item.status == "skipped" -> stringResource(R.string.not_going_today)
-                    else -> item.onBus?.let { b ->
-                        listOfNotNull(L.s(R.string.on_the, b.svc), b.off?.let { L.s(R.string.off_at, it) }, b.arriveMs?.let { L.s(R.string.arrive_at, fmt(it)) }).joinToString(" · ")
-                    } ?: item.leaveAtMs?.let { at ->
-                        val time = if (item.leaveEstimated) L.s(R.string.approx, fmt(at)) else fmt(at)
-                        val by = L.s(R.string.leave_by, time)
-                        listOfNotNull(by, item.svc?.let { L.s(R.string.svc_from, it, item.leaveStop ?: item.fromName.orEmpty()) } ?: L.s(R.string.walk), item.timingText.takeIf { item.timingStatus == "late" }).joinToString(" · ")
+                val sub =
+                    when {
+                        item.status == "done" -> null
+                        item.line != null -> item.line
+                        item.status == "skipped" -> stringResource(R.string.not_going_today)
+                        else ->
+                            item.onBus?.let { b ->
+                                listOfNotNull(
+                                        L.s(R.string.on_the, b.svc),
+                                        b.off?.let { L.s(R.string.off_at, it) },
+                                        b.arriveMs?.let { L.s(R.string.arrive_at, fmt(it)) },
+                                    )
+                                    .joinToString(" · ")
+                            }
+                                ?: item.leaveAtMs?.let { at ->
+                                    val time = if (item.leaveEstimated) L.s(R.string.approx, fmt(at)) else fmt(at)
+                                    val by = L.s(R.string.leave_by, time)
+                                    listOfNotNull(
+                                            by,
+                                            item.svc?.let { L.s(R.string.svc_from, it, item.leaveStop ?: item.fromName.orEmpty()) }
+                                                ?: L.s(R.string.walk),
+                                            item.timingText.takeIf { item.timingStatus == "late" },
+                                        )
+                                        .joinToString(" · ")
+                                }
                     }
-                }
                 sub?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted) }
             }
         }

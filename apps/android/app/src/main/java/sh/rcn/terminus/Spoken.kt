@@ -4,20 +4,24 @@ import sh.rcn.terminus.widget.UPDATING
 import sh.rcn.terminus.widget.isOld
 
 /**
- * What a screen reader says for the answer, on Now and on the widgets, and
- * for a bus's time. The sentences are the server's own words, joined; the
- * app words only what it works out itself (a countdown, rounded to the
- * minute) and spells out what the screen abbreviates ("~" is "about").
+ * What a screen reader says for the answer, on Now and on the widgets, and for a bus's time. The sentences are the server's own words,
+ * joined; the app words only what it works out itself (a countdown, rounded to the minute) and spells out what the screen abbreviates ("~"
+ * is "about").
  */
 object Spoken {
     /**
-     * The answer as sentences: where to, the trip's phase, the bus and its
-     * time, what to do, and how sure the times are. [now] is on the server's
-     * clock; [clock] writes an instant as the account's clock does. Without
-     * [withHead], a plain card leaves out its phase and where to: Now shows
-     * and reads those on their own, just above.
+     * The answer as sentences: where to, the trip's phase, the bus and its time, what to do, and how sure the times are. [now] is on the
+     * server's clock; [clock] writes an instant as the account's clock does. Without [withHead], a plain card leaves out its phase and
+     * where to: Now shows and reads those on their own, just above.
      */
-    fun summary(paired: Boolean, answer: NextAnswer?, error: String?, now: Long, withHead: Boolean = true, clock: (Long) -> String): String {
+    fun summary(
+        paired: Boolean,
+        answer: NextAnswer?,
+        error: String?,
+        now: Long,
+        withHead: Boolean = true,
+        clock: (Long) -> String,
+    ): String {
         if (!paired) return L.s(R.string.a11y_not_paired)
         // The sentence's own stop ends it: an error that has one ("Can't reach terminus.") loses it, not read twice.
         if (answer == null) return L.s(R.string.a11y_loading, (error ?: L.s(R.string.a11y_loading_word)).trimEnd('.', '。'))
@@ -55,9 +59,8 @@ object Spoken {
     }
 
     /**
-     * How long until it's time to go, in words and to the minute ("Leave in
-     * 6 minutes"), for the card that counts down "6 min 32 s"; null once
-     * it's time, or with nothing to count down to.
+     * How long until it's time to go, in words and to the minute ("Leave in 6 minutes"), for the card that counts down "6 min 32 s"; null
+     * once it's time, or with nothing to count down to.
      */
     fun countdown(answer: NextAnswer, now: Long): String? {
         val leave = answer.leaveAtMs?.takeIf { it > now && answer.card?.phase != "waiting" }
@@ -67,20 +70,23 @@ object Spoken {
     }
 
     /**
-     * What's said when the card changes, and only then: the trip's phase,
-     * where to and the bus to catch. Nothing in it ticks, so a screen reader
-     * that announces it on change isn't talking every second.
+     * What's said when the card changes, and only then: the trip's phase, where to and the bus to catch. Nothing in it ticks, so a screen
+     * reader that announces it on change isn't talking every second.
      */
     fun announcement(answer: NextAnswer?): String? {
         if (answer == null) return null
         val bus = answer.card?.journey?.bus
-        val what = when {
-            answer.card?.phase == "riding" -> null
-            bus != null -> L.s(R.string.a11y_bus_from, bus.svc, bus.stop)
-            // "D2 · 09:42": the service, without the time, which moves.
-            else -> answer.title.substringBefore(" · ")
-        }
-        return listOfNotNull(answer.phaseText, answer.card?.heading ?: answer.destLabel, what).distinct().joinToString(L.s(R.string.sentence_sep)).ifEmpty { null }
+        val what =
+            when {
+                answer.card?.phase == "riding" -> null
+                bus != null -> L.s(R.string.a11y_bus_from, bus.svc, bus.stop)
+                // "D2 · 09:42": the service, without the time, which moves.
+                else -> answer.title.substringBefore(" · ")
+            }
+        return listOfNotNull(answer.phaseText, answer.card?.heading ?: answer.destLabel, what)
+            .distinct()
+            .joinToString(L.s(R.string.sentence_sep))
+            .ifEmpty { null }
     }
 
     /** "1 minute", "6 minutes", or "under a minute", for [seconds], rounded. */
@@ -91,10 +97,8 @@ object Spoken {
     }
 
     /**
-     * A bus's time as it's said: "about 6 minutes, timetable" for a timetable
-     * guess (the screen's "~6 min"), "6 minutes, live" for a bus seen. Without
-     * [withQuality] (where a tag beside it says so already), only the
-     * "about". Null without a time.
+     * A bus's time as it's said: "about 6 minutes, timetable" for a timetable guess (the screen's "~6 min"), "6 minutes, live" for a bus
+     * seen. Without [withQuality] (where a tag beside it says so already), only the "about". Null without a time.
      */
     fun eta(etaS: Int?, quality: String, withQuality: Boolean = true): String? {
         val s = etaS ?: return null
@@ -116,6 +120,7 @@ object Spoken {
         val stop = L.s(R.string.sentence_sep)
         val comma = L.s(R.string.clause_sep)
         // A part that's already a sentence ("Couldn't reach terminus.") doesn't get a second stop.
-        return parts.filterNotNull().filter { it.isNotBlank() }.joinToString(stop) { spell(it.replace(" · ", comma).trimEnd('.', '。')) } + stop.trimEnd()
+        return parts.filterNotNull().filter { it.isNotBlank() }.joinToString(stop) { spell(it.replace(" · ", comma).trimEnd('.', '。')) } +
+            stop.trimEnd()
     }
 }

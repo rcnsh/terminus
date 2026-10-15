@@ -6,7 +6,10 @@
 import { html, render } from '/assets/ui.js';
 import { Livery } from '/account/livery.js';
 
-const code = (new URLSearchParams(location.search).get('code') || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 6);
+const code = (new URLSearchParams(location.search).get('code') || '')
+  .replace(/[^A-Za-z0-9]/g, '')
+  .toUpperCase()
+  .slice(0, 6);
 const Code = () =>
   code.length === 6
     ? html`<span class="flaps" role="img" aria-label=${`${code.slice(0, 3)} ${code.slice(3)}`}>${[...code].map((c, i) => html`<span class="flap" key=${i}>${c}</span>`)}</span>`

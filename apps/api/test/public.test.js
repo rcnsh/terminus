@@ -99,7 +99,7 @@ test('candidates at a shared shelter carry the public leg with its ride time fro
   assert.ok(!candidateStops(GRAPH, AT_IT).some((c) => c.legs.some((l) => l.svc === '95')));
 });
 
-test('a ride on past a loop\'s terminal waits there for the next run, a headway', () => {
+test("a ride on past a loop's terminal waits there for the next run, a headway", () => {
   const clb = candidateStops(GRAPH_PUBLIC, AT_CLB).find((c) => c.stop.code === 'CLB');
   // The 95 ends its loop at Kent Ridge Ter, between CLB and Kent Ridge MRT.
   const bus95 = clb.legs.find((l) => l.svc === '95');
@@ -120,20 +120,30 @@ test('a public bus is the headline only when it clearly beats the free bus; othe
   const bus95 = cands[0].legs.find((l) => l.svc === '95');
   const a2Ride = legRideS(a2);
   // The 95 comes in 5 min and rides faster, but saves less than a fare is worth: A2 stays the answer.
-  const close = new Map([['IT', arrivals('IT', [
-    { svc: 'A2', etaS: 300 + legRideS(bus95) - a2Ride + PUBLIC.fareWorthS - 30, crowd: null, plate: 'PA2', berth: null },
-    { svc: '95', etaS: 300, crowd: 'low', plate: null, berth: null },
-  ])]]);
+  const close = new Map([
+    [
+      'IT',
+      arrivals('IT', [
+        { svc: 'A2', etaS: 300 + legRideS(bus95) - a2Ride + PUBLIC.fareWorthS - 30, crowd: null, plate: 'PA2', berth: null },
+        { svc: '95', etaS: 300, crowd: 'low', plate: null, berth: null },
+      ]),
+    ],
+  ]);
   let opts = scoreOptions(GRAPH_PUBLIC, cands, close, FROZEN_NOW);
   assert.equal(opts[0].svc, 'A2');
   assert.equal(opts[1].svc, '95');
   assert.equal(opts[1].paid, true);
   assert.equal(opts[0].paid, undefined);
   // The A2 is a little later still: now the 95 saves more than the fare is worth and wins.
-  const clear = new Map([['IT', arrivals('IT', [
-    { svc: 'A2', etaS: 300 + legRideS(bus95) - a2Ride + PUBLIC.fareWorthS + 30, crowd: null, plate: 'PA2', berth: null },
-    { svc: '95', etaS: 300, crowd: 'low', plate: null, berth: null },
-  ])]]);
+  const clear = new Map([
+    [
+      'IT',
+      arrivals('IT', [
+        { svc: 'A2', etaS: 300 + legRideS(bus95) - a2Ride + PUBLIC.fareWorthS + 30, crowd: null, plate: 'PA2', berth: null },
+        { svc: '95', etaS: 300, crowd: 'low', plate: null, berth: null },
+      ]),
+    ],
+  ]);
   opts = scoreOptions(GRAPH_PUBLIC, cands, clear, FROZEN_NOW);
   assert.equal(opts[0].svc, '95');
   assert.equal(opts[0].quality, 'live');
@@ -154,10 +164,15 @@ test('a weekday-only public service is not running at weekends, so no time is gu
 
 test('a timetabled public bus ranks as an estimate, below any live bus', () => {
   const cands = candidateStops(GRAPH_PUBLIC, AT_CLB).filter((c) => c.stop.code === 'CLB');
-  const byStop = new Map([['CLB', arrivals('CLB', [
-    { svc: 'A1', etaS: 900, crowd: null, plate: 'PA1', berth: null },
-    { svc: '95', etaS: 60, crowd: 'low', plate: null, berth: null, scheduled: true },
-  ])]]);
+  const byStop = new Map([
+    [
+      'CLB',
+      arrivals('CLB', [
+        { svc: 'A1', etaS: 900, crowd: null, plate: 'PA1', berth: null },
+        { svc: '95', etaS: 60, crowd: 'low', plate: null, berth: null, scheduled: true },
+      ]),
+    ],
+  ]);
   const opts = scoreOptions(GRAPH_PUBLIC, cands, byStop, FROZEN_NOW);
   assert.equal(opts[0].svc, 'A1');
   const pub = opts.find((o) => o.svc === '95');
@@ -178,11 +193,18 @@ test('a stop board lists the campus buses before the public ones, sooner or not'
   const running = board.filter((r) => r.running);
   const firstPaid = running.findIndex((r) => r.paid);
   assert.ok(firstPaid > 0, 'a public bus is on the board, below a campus one');
-  assert.ok(running.slice(firstPaid).every((r) => r.paid), running.map((r) => r.svc).join(' '));
+  assert.ok(
+    running.slice(firstPaid).every((r) => r.paid),
+    running.map((r) => r.svc).join(' '),
+  );
   // Not running: the same order, after every bus that is.
   const stopped = board.filter((r) => !r.running);
   const firstStoppedPaid = stopped.findIndex((r) => r.paid);
-  if (firstStoppedPaid >= 0) assert.ok(stopped.slice(firstStoppedPaid).every((r) => r.paid), stopped.map((r) => r.svc).join(' '));
+  if (firstStoppedPaid >= 0)
+    assert.ok(
+      stopped.slice(firstStoppedPaid).every((r) => r.paid),
+      stopped.map((r) => r.svc).join(' '),
+    );
   assert.ok(board.slice(0, running.length).every((r) => r.running));
 });
 
@@ -204,7 +226,12 @@ test('two feeds at one shelter keep their own state: one down does not read as t
   // The public feed was never reached: the 95 is unknown, not a headway guess.
   assert.equal(opts.find((o) => o.svc === '95').quality, 'unknown');
   // Both up, one stale: only the stale one's buses read as stale.
-  const both = mergeFeeds('CLB', FROZEN_NOW, { ...shuttle, stale: true }, arrivals('CLB', [{ svc: '95', etaS: 240, crowd: null, plate: null, berth: null }]));
+  const both = mergeFeeds(
+    'CLB',
+    FROZEN_NOW,
+    { ...shuttle, stale: true },
+    arrivals('CLB', [{ svc: '95', etaS: 240, crowd: null, plate: null, berth: null }]),
+  );
   assert.equal(both.stale, true);
   const o2 = scoreOptions(GRAPH_PUBLIC, cands, new Map([['CLB', both]]), FROZEN_NOW);
   assert.equal(o2.find((o) => o.svc === 'A1').quality, 'stale');
@@ -214,16 +241,28 @@ test('two feeds at one shelter keep their own state: one down does not read as t
 test('collectArrivals asks each stop of the feeds that call there', async () => {
   const fetch = makeFetch({
     byStop: { CLB: [{ name: 'A1', arrivalTime: '5', nextArrivalTime: '15' }] },
-    publicStops: { 16181: [{ ServiceNo: '95', buses: [{ etaS: 240, dest: '16009' }] }], 16009: [{ ServiceNo: '151', buses: [{ etaS: 120, dest: '64009' }] }] },
+    publicStops: {
+      16181: [{ ServiceNo: '95', buses: [{ etaS: 240, dest: '16009' }] }],
+      16009: [{ ServiceNo: '151', buses: [{ etaS: 120, dest: '64009' }] }],
+    },
   });
   installGlobals(fetch, FROZEN_NOW);
   const ctx = makeCtx();
   const byStop = await collectArrivals(key(), ctx, ['CLB', '16009', 'PGP'], FROZEN_NOW, GRAPH_PUBLIC);
   await ctx.settle();
-  assert.deepEqual(byStop.get('CLB').arrivals.map((a) => a.svc).sort(), ['95', 'A1', 'A1']);
+  assert.deepEqual(
+    byStop
+      .get('CLB')
+      .arrivals.map((a) => a.svc)
+      .sort(),
+    ['95', 'A1', 'A1'],
+  );
   assert.ok(byStop.get('CLB').feeds.shuttle.available && byStop.get('CLB').feeds.public.available);
   // A public-only stop: LTA alone; a shuttle-only stop: NUS alone.
-  assert.deepEqual(byStop.get('16009').arrivals.map((a) => a.svc), ['151/2']);
+  assert.deepEqual(
+    byStop.get('16009').arrivals.map((a) => a.svc),
+    ['151/2'],
+  );
   assert.equal(byStop.get('16009').feeds, undefined);
   assert.equal(byStop.get('PGP').feeds, undefined);
   assert.equal(fetch.counts.shuttle, 2, 'CLB and PGP');
@@ -270,7 +309,18 @@ test('/api/next?public=1 names the public bus, says it is one, and marks its leg
 test('/api/arrivals lists public buses at a public stop, and at a shared shelter only when asked', async () => {
   const fetch = makeFetch({
     byStop: { CLB: [{ name: 'A1', arrivalTime: '5', nextArrivalTime: '15' }] },
-    publicStops: { 16181: [{ ServiceNo: '95', buses: [{ etaS: 240, dest: '16009' }] }], 16009: [{ ServiceNo: '151', buses: [{ etaS: 120, dest: '64009' }, { etaS: 900, dest: '64009', monitored: false }] }] },
+    publicStops: {
+      16181: [{ ServiceNo: '95', buses: [{ etaS: 240, dest: '16009' }] }],
+      16009: [
+        {
+          ServiceNo: '151',
+          buses: [
+            { etaS: 120, dest: '64009' },
+            { etaS: 900, dest: '64009', monitored: false },
+          ],
+        },
+      ],
+    },
   });
   installGlobals(fetch, FROZEN_NOW);
   const env = key();
@@ -284,9 +334,21 @@ test('/api/arrivals lists public buses at a public stop, and at a shared shelter
   assert.equal(s1, 200);
   assert.equal(own.stop.name, 'Kent Ridge Ter');
   // Both directions of the 151 start or end here: the one with a bus, and the other as a guess.
-  assert.deepEqual(own.board.filter((r) => r.svc === '151').map((r) => [r.etaS, r.quality, r.paid]), [[120, 'live', true], [null, 'scheduled', true]]);
+  assert.deepEqual(
+    own.board.filter((r) => r.svc === '151').map((r) => [r.etaS, r.quality, r.paid]),
+    [
+      [120, 'live', true],
+      [null, 'scheduled', true],
+    ],
+  );
   const [, shared] = await ask('/api/arrivals?stop=CLB&public=1');
-  assert.deepEqual(shared.board.map((r) => r.svc).filter((s) => s === '95' || s === 'A1').sort(), ['95', 'A1']);
+  assert.deepEqual(
+    shared.board
+      .map((r) => r.svc)
+      .filter((s) => s === '95' || s === 'A1')
+      .sort(),
+    ['95', 'A1'],
+  );
   const [, plain] = await ask('/api/arrivals?stop=CLB');
   assert.ok(!plain.board.some((r) => r.svc === '95'));
   const [s4] = await ask('/api/arrivals?stop=99999');
@@ -296,7 +358,12 @@ test('/api/arrivals lists public buses at a public stop, and at a shared shelter
 test('an account with publicBuses on gets public buses on /me/next and /me/nearby; the default does not', async () => {
   const fetch = makeFetch({
     byStop: { IT: [{ name: 'A2', arrivalTime: '9', nextArrivalTime: '19' }], CLB: [], 'YIH-OPP': [] },
-    publicStops: { 16189: [{ ServiceNo: '95', buses: [{ etaS: 90, dest: '16009' }] }, { ServiceNo: '151', buses: [{ etaS: 200, dest: '64009' }] }] },
+    publicStops: {
+      16189: [
+        { ServiceNo: '95', buses: [{ etaS: 90, dest: '16009' }] },
+        { ServiceNo: '151', buses: [{ etaS: 200, dest: '64009' }] },
+      ],
+    },
   });
   installGlobals(fetch, FROZEN_NOW);
   const env = { ...key(), DB: makeD1(), EMAIL: makeEmail(), EMAIL_FROM: 'x@example.test' };
@@ -306,10 +373,19 @@ test('an account with publicBuses on gets public buses on /me/next and /me/nearb
     await ctx.settle();
     return res;
   };
-  await call('/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'you@u.nus.edu' }) });
-  const verify = await call('/auth/verify', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: `t=${env.EMAIL.lastToken()}` });
+  await call('/api/auth/login', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: 'you@u.nus.edu' }),
+  });
+  const verify = await call('/auth/verify', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: `t=${env.EMAIL.lastToken()}`,
+  });
   const cookie = verify.headers.get('set-cookie').split(';')[0];
-  const put = async (profile) => call('/api/me/profile', { method: 'PUT', headers: { cookie, 'content-type': 'application/json' }, body: JSON.stringify(profile) });
+  const put = async (profile) =>
+    call('/api/me/profile', { method: 'PUT', headers: { cookie, 'content-type': 'application/json' }, body: JSON.stringify(profile) });
   const get = (path) => call(path, { headers: { cookie } }).then((r) => r.json());
   const places = [{ key: 'mrt', label: 'KR MRT', to: 'KR-MRT' }];
 
@@ -370,11 +446,21 @@ test('turning public buses on never crowds a shuttle stop out of the candidates'
 });
 
 test('a kept plan for a public bus keeps its fare mark and its route', () => {
-  const cands = candidateStops(GRAPH_PUBLIC, { lat: 1.293619, lon: 103.771475, to: 'IT', originCode: null }).filter((c) => c.stop.code === '16009');
+  const cands = candidateStops(GRAPH_PUBLIC, { lat: 1.293619, lon: 103.771475, to: 'IT', originCode: null }).filter(
+    (c) => c.stop.code === '16009',
+  );
   assert.ok(cands.length, 'Kent Ridge Terminal public stop is a candidate');
   const byStop = new Map([['16009', arrivals('16009', [{ svc: '151/2', etaS: 240, crowd: null, plate: null, berth: null }])]]);
   const opts = scoreOptions(GRAPH_PUBLIC, cands, byStop, FROZEN_NOW);
-  const leave = leaveBy({ options: opts, candidates: cands, byStop, graph: GRAPH_PUBLIC, arriveBy: null, walkAllS: null, nowMs: FROZEN_NOW - 600_000 });
+  const leave = leaveBy({
+    options: opts,
+    candidates: cands,
+    byStop,
+    graph: GRAPH_PUBLIC,
+    arriveBy: null,
+    walkAllS: null,
+    nowMs: FROZEN_NOW - 600_000,
+  });
   assert.equal(leave.svc, '151');
   assert.equal(leave.paid, true);
   assert.equal(leave.route, '151/2');

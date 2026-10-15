@@ -82,7 +82,8 @@ function parseSuggestion(b: Record<string, unknown>): { ok: true; value: StopSug
   if (!stop) return { ok: false, error: 'choose a stop' };
   const has = venueStops(venue);
   const now = has ? [has.to, ...has.also] : [];
-  if (now[0] === stop.code || (now[0] && now[0] === stop.opposite)) return { ok: false, error: 'that’s already the stop we use for that building' };
+  if (now[0] === stop.code || (now[0] && now[0] === stop.opposite))
+    return { ok: false, error: 'that’s already the stop we use for that building' };
   return { ok: true, value: { venue, stop: stop.code, stopName: stop.name, now } };
 }
 
@@ -99,11 +100,15 @@ export function parseFeedback(body: unknown): { ok: true; value: FeedbackInput }
     const s = parseSuggestion(b);
     if (!s.ok) return s;
     if (!platform) return { ok: false, error: "platform is 'android', 'mac' or 'web'" };
-    return { ok: true, value: { kind: 'other', reason: BETTER_STOP, note, platform, appVersion, context: JSON.stringify(s.value), suggestion: s.value } };
+    return {
+      ok: true,
+      value: { kind: 'other', reason: BETTER_STOP, note, platform, appVersion, context: JSON.stringify(s.value), suggestion: s.value },
+    };
   }
   let reason: Reason | null = null;
   if (b.reason !== undefined && b.reason !== null) {
-    if (kind !== 'wrong' || typeof b.reason !== 'string' || !Object.hasOwn(REASONS, b.reason)) return { ok: false, error: 'reason is not one of the choices' };
+    if (kind !== 'wrong' || typeof b.reason !== 'string' || !Object.hasOwn(REASONS, b.reason))
+      return { ok: false, error: 'reason is not one of the choices' };
     reason = b.reason as Reason;
   }
   if (!note && !reason) return { ok: false, error: 'say what went wrong' };
@@ -127,7 +132,20 @@ export async function saveFeedback(db: D1Database, userId: string, f: FeedbackIn
       `INSERT INTO feedback (id, user_id, created, kind, reason, note, platform, app_version, context)
        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM feedback WHERE user_id = ? AND created > ?) < ? RETURNING id`,
     )
-    .bind(id, userId, nowMs, f.kind, f.reason, f.note, f.platform, f.appVersion, f.context, userId, nowMs - 86_400_000, FEEDBACK_LIMITS.perDay)
+    .bind(
+      id,
+      userId,
+      nowMs,
+      f.kind,
+      f.reason,
+      f.note,
+      f.platform,
+      f.appVersion,
+      f.context,
+      userId,
+      nowMs - 86_400_000,
+      FEEDBACK_LIMITS.perDay,
+    )
     .first<{ id: string }>();
   return saved ? id : null;
 }
@@ -170,16 +188,29 @@ export async function mailFeedback(env: Env, id: string, f: FeedbackInput, nowMs
     ...(s ? suggestionLines(s) : f.reason && f.reason !== BETTER_STOP ? [`What was wrong: ${REASONS[f.reason]}`] : []),
     ...(f.note ? [`They said: ${f.note}`] : []),
     '',
-    ...(s ? [`If it's right, add this to apps/api/data/src/venue-stops.json and run scripts/walk_routes.py:`, '', venueStopsEntry(s, f.note), ''] : []),
+    ...(s
+      ? [
+          `If it's right, add this to apps/api/data/src/venue-stops.json and run scripts/walk_routes.py:`,
+          '',
+          venueStopsEntry(s, f.note),
+          '',
+        ]
+      : []),
     `Report ${id}. Who sent it${f.context ? ' and the answer they saw' : ''}: the dashboard at ${linkOrigin(env)}/admin.`,
   ].join('\n');
-  const subject = s ? `terminus stop suggestion: ${s.venue} from ${s.stop}` : oneLine(`terminus ${f.kind === 'wrong' ? 'wrong answer' : 'feedback'}: ${(f.note || (f.reason && f.reason !== BETTER_STOP ? REASONS[f.reason] : '')).slice(0, 60)}`);
+  const subject = s
+    ? `terminus stop suggestion: ${s.venue} from ${s.stop}`
+    : oneLine(
+        `terminus ${f.kind === 'wrong' ? 'wrong answer' : 'feedback'}: ${(f.note || (f.reason && f.reason !== BETTER_STOP ? REASONS[f.reason] : '')).slice(0, 60)}`,
+      );
   await sendMail(env, {
     from: { email: env.EMAIL_FROM, name: mailName(env) },
     to: env.ALERT_EMAIL,
     subject,
     text,
-    html: await (await mail()).feedbackHtml({
+    html: await (
+      await mail()
+    ).feedbackHtml({
       origin: linkOrigin(env),
       beta: isBeta(env),
       id,
@@ -188,7 +219,13 @@ export async function mailFeedback(env: Env, id: string, f: FeedbackInput, nowMs
       at: nowMs,
       reason: !s && f.reason && f.reason !== BETTER_STOP ? REASONS[f.reason] : null,
       note: f.note,
-      details: s ? [['Building', s.venue], ['The stop they use', `${s.stopName} (${s.stop})`], ['Its stops now', s.now.join(', ') || 'none']] : [],
+      details: s
+        ? [
+            ['Building', s.venue],
+            ['The stop they use', `${s.stopName} (${s.stop})`],
+            ['Its stops now', s.now.join(', ') || 'none'],
+          ]
+        : [],
       entry: s ? venueStopsEntry(s, f.note) : null,
       withAnswer: !!f.context,
     }),

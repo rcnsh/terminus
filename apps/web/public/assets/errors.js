@@ -57,7 +57,15 @@
       headers: { 'content-type': 'application/json' },
       credentials: 'omit',
       keepalive: true,
-      body: JSON.stringify({ platform: 'web', version: 'web', os: browser(), type, message: message.slice(0, 2000), stack: stack.slice(0, 20_000), fatal: false }),
+      body: JSON.stringify({
+        platform: 'web',
+        version: 'web',
+        os: browser(),
+        type,
+        message: message.slice(0, 2000),
+        stack: stack.slice(0, 20_000),
+        fatal: false,
+      }),
     }).catch(() => {});
   }
 

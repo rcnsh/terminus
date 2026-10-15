@@ -3,25 +3,22 @@ package sh.rcn.terminus
 import android.content.Context
 import android.os.Build
 import androidx.core.content.edit
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import org.json.JSONObject
 
 /**
- * Crash reports, sent to our own server (POST /api/errors) with nothing
- * that says who or where: no token, no cookie, no device or install id. Only
- * what broke, the app's version and Android's.
+ * Crash reports, sent to our own server (POST /api/errors) with nothing that says who or where: no token, no cookie, no device or install
+ * id. Only what broke, the app's version and Android's.
  *
- * A crash is written to a file in the app's own storage ([DIR]) and sent the
- * next time the app starts, never from inside the crash: the process is
- * dying, and a request there could hang it. "Send crash reports" in Settings
- * (on unless turned off, kept on this phone) stops both the writing and the
- * sending.
+ * A crash is written to a file in the app's own storage ([DIR]) and sent the next time the app starts, never from inside the crash: the
+ * process is dying, and a request there could hang it. "Send crash reports" in Settings (on unless turned off, kept on this phone) stops
+ * both the writing and the sending.
  */
 internal object CrashReports {
     const val DIR = "crash"
@@ -46,9 +43,8 @@ internal object CrashReports {
     }
 
     /**
-     * At process start ([TerminusApp]): catch what nothing else does, write
-     * it down, then let the phone's own handler crash the app as before.
-     * Then send what earlier crashes left.
+     * At process start ([TerminusApp]): catch what nothing else does, write it down, then let the phone's own handler crash the app as
+     * before. Then send what earlier crashes left.
      */
     fun install(ctx: Context) {
         val app = ctx.applicationContext
@@ -78,14 +74,15 @@ internal object CrashReports {
                         f.delete()
                         continue
                     }
-                    val status = try {
-                        post(body)
-                    } catch (_: Exception) {
-                        // Offline, or no answer (or anything else that went
-                        // wrong sending): kept for the next start. Nothing
-                        // here may crash the app it reports on.
-                        break
-                    }
+                    val status =
+                        try {
+                            post(body)
+                        } catch (_: Exception) {
+                            // Offline, or no answer (or anything else that went
+                            // wrong sending): kept for the next start. Nothing
+                            // here may crash the app it reports on.
+                            break
+                        }
                     if (done(status)) f.delete() else break
                 }
             } finally {
@@ -146,9 +143,8 @@ internal object CrashReports {
             .put("fatal", fatal)
 
     /**
-     * The stack, causes included, in at most [maxLines] lines. Each cause
-     * gets its share of the lines, so the root cause (often the one that
-     * says why) isn't cut off by a long first trace.
+     * The stack, causes included, in at most [maxLines] lines. Each cause gets its share of the lines, so the root cause (often the one
+     * that says why) isn't cut off by a long first trace.
      */
     fun stack(e: Throwable, maxLines: Int = MAX_LINES): String {
         val chain = mutableListOf<Throwable>()

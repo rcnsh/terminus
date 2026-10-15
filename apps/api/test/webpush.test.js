@@ -72,13 +72,21 @@ async function setup() {
     if (cookie) headers.cookie = cookie;
     if (body !== undefined) headers['content-type'] = 'application/json';
     const ctx = makeCtx();
-    const res = await worker.fetch(new Request(BASE + path, { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }), env, ctx);
+    const res = await worker.fetch(
+      new Request(BASE + path, { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }),
+      env,
+      ctx,
+    );
     await ctx.settle();
     return res;
   };
   await call('/api/auth/login', { method: 'POST', body: { email: 'you@u.nus.edu' } });
   const verify = await worker.fetch(
-    new Request(`${BASE}/auth/verify`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: `t=${env.EMAIL.lastToken()}` }),
+    new Request(`${BASE}/auth/verify`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: `t=${env.EMAIL.lastToken()}`,
+    }),
     env,
     makeCtx(),
   );
@@ -122,7 +130,11 @@ test('nothing is pushed to the web app when there is nothing to show', async () 
   await call('/api/me/push', { method: 'POST', cookie, body: { subscription: (await browser()).subscription } });
   // Nothing sent, and nothing failed: there was nothing to send.
   assert.deepEqual(await nudgeUser(env, userId, { phase: 'idle', urgent: false }, Date.now()), { sent: 0, failed: 0 }, 'an idle card');
-  assert.deepEqual(await nudgeUser(env, userId, { phase: 'due', urgent: true, remind: false }, Date.now()), { sent: 0, failed: 0 }, 'reminders off for the trip');
+  assert.deepEqual(
+    await nudgeUser(env, userId, { phase: 'due', urgent: true, remind: false }, Date.now()),
+    { sent: 0, failed: 0 },
+    'reminders off for the trip',
+  );
   assert.equal(pushes.length, 0);
 });
 
@@ -139,15 +151,24 @@ test('a bad subscription is refused, and without a VAPID key web push says it is
   const bad = [{ endpoint: 'http://push.example.test/x', keys: { p256dh: 'AA', auth: 'AA' } }, { endpoint: ENDPOINT }, 'nope'];
   const real = (await browser()).subscription;
   // Only browsers' push services: the Worker POSTs to whatever is kept here.
-  for (const endpoint of ['https://evil.example/x', 'https://web.push.apple.com.evil.example/x', 'https://web.push.apple.com:8443/x', 'https://u:p@web.push.apple.com/x']) {
+  for (const endpoint of [
+    'https://evil.example/x',
+    'https://web.push.apple.com.evil.example/x',
+    'https://web.push.apple.com:8443/x',
+    'https://u:p@web.push.apple.com/x',
+  ]) {
     bad.push({ ...real, endpoint });
   }
   // Not a P-256 point: it would fail at every push.
   bad.push({ ...real, keys: { ...real.keys, p256dh: b64url(new Uint8Array(65)) } });
-  for (const subscription of bad) assert.equal((await call('/api/me/push', { method: 'POST', cookie, body: { subscription } })).status, 400);
+  for (const subscription of bad)
+    assert.equal((await call('/api/me/push', { method: 'POST', cookie, body: { subscription } })).status, 400);
   delete env.VAPID_PRIVATE_KEY;
   assert.equal((await call('/api/me/push/key', { cookie })).status, 503);
-  assert.equal((await call('/api/me/push', { method: 'POST', cookie, body: { subscription: (await browser()).subscription } })).status, 503);
+  assert.equal(
+    (await call('/api/me/push', { method: 'POST', cookie, body: { subscription: (await browser()).subscription } })).status,
+    503,
+  );
 });
 
 test('a kept subscription is skipped, not failed, once the VAPID key is gone', async () => {

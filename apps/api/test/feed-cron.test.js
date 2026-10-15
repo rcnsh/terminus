@@ -13,7 +13,15 @@ import holidays from './fixtures/calendar/holidays.json' with { type: 'json' };
 import { FROZEN_NOW, installGlobals, makeAnalytics, makeEnv, makeFetch, makeKV, shuttlePayload } from './_stubs.mjs';
 import { APKCOMBO_URL, PLAY_URL, autoUpdateVersion } from '../src/appversion.ts';
 import { PROBE_STOP, PUBLIC_PROBE, checkPublicFeed, checkUpstream, readPublicFeed, readUpstream, runCron } from '../src/monitor.ts';
-import { CALENDAR_DATA_KEY, NUSMODS_CALENDAR, SG_HOLIDAYS, calendarSource, loadCalendar, refreshCalendar, resetCalendar } from '../src/calendarsync.ts';
+import {
+  CALENDAR_DATA_KEY,
+  NUSMODS_CALENDAR,
+  SG_HOLIDAYS,
+  calendarSource,
+  loadCalendar,
+  refreshCalendar,
+  resetCalendar,
+} from '../src/calendarsync.ts';
 
 const OLD = 'univus_android_2.59.2_140';
 const NEW = 'univus_android_2.60.0_141';
@@ -40,7 +48,10 @@ test('a cron run asks NUS for one stop and LTA for one stop, past the cache, and
   const env = ltaEnv();
   await quietly(() => runCron(env, FROZEN_NOW));
   assert.equal(fetchImpl.counts.shuttle, 1, 'one NUS stop');
-  assert.deepEqual(fetchImpl.requests.filter((r) => r.url.includes('bus-proxy')).map((r) => r.body.busstopname), [PROBE_STOP]);
+  assert.deepEqual(
+    fetchImpl.requests.filter((r) => r.url.includes('bus-proxy')).map((r) => r.body.busstopname),
+    [PROBE_STOP],
+  );
   assert.equal(fetchImpl.counts.public, 1, 'one LTA stop');
   assert.equal(fetchImpl.counts.auth, 1, 'and the token for the NUS call');
   assert.equal((await readUpstream(env)).up, true);
@@ -107,7 +118,12 @@ function world({ mint = () => undefined, proxy = () => undefined } = {}) {
     }
     if (url.includes('bus-proxy')) {
       hits.proxy++;
-      return proxy(body.version) ?? (body.version === OLD ? Response.json({ code: '10009', msg: 'We have a new release of uNivUS', data: null }) : Response.json(shuttlePayload([])));
+      return (
+        proxy(body.version) ??
+        (body.version === OLD
+          ? Response.json({ code: '10009', msg: 'We have a new release of uNivUS', data: null })
+          : Response.json(shuttlePayload([])))
+      );
     }
     return new Response('unexpected ' + url, { status: 599 });
   };
@@ -141,8 +157,16 @@ test('a candidate the proxy refuses with 10009 is refused, and not tried again',
 
 test('a candidate check that fails for another reason stops, says so, and tries the same version next time', async () => {
   const cases = [
-    ['another code', { proxy: (v) => (v === OLD ? undefined : Response.json({ code: '10000', msg: 'Invalid API KEY', data: null })) }, /code=10000/],
-    ['the proxy answering 503', { proxy: (v) => (v === OLD ? undefined : new Response('busy', { status: 503 })) }, /shuttle-service HTTP 503/],
+    [
+      'another code',
+      { proxy: (v) => (v === OLD ? undefined : Response.json({ code: '10000', msg: 'Invalid API KEY', data: null })) },
+      /code=10000/,
+    ],
+    [
+      'the proxy answering 503',
+      { proxy: (v) => (v === OLD ? undefined : new Response('busy', { status: 503 })) },
+      /shuttle-service HTTP 503/,
+    ],
     ['the mint answering 503', { mint: (v) => (v === OLD ? undefined : new Response('busy', { status: 503 })) }, /auth HTTP 503/],
   ];
   for (const [what, opts, why] of cases) {
@@ -184,9 +208,11 @@ test('the automatic update throwing inside the cron is noted, and the rest of th
   assert.ok(!ae.rows('error').some((r) => r.blobs[1] === 'cron upstream'), 'the upstream step did not fail');
   assert.ok(await readPublicFeed(env), 'the next step ran');
   // And checkUpstream on its own, with a fix that throws.
-  const state = (await checkUpstream(env, FROZEN_NOW + 15 * 60_000, undefined, async () => {
-    throw new Error('boom');
-  })).state;
+  const state = (
+    await checkUpstream(env, FROZEN_NOW + 15 * 60_000, undefined, async () => {
+      throw new Error('boom');
+    })
+  ).state;
   assert.match(state.auto, /the automatic update failed: boom/);
 });
 

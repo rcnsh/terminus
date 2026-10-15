@@ -123,7 +123,12 @@ export function footS(o: ScoredOption, endS = 0): number {
  * whole walk's and the bus's own walks', counts `walkWeight` times
  * (WALK.sunWeight): a wait at the stop beats a walk in the heat.
  */
-export function walkVerdict(walkAllS: number | null, best: ScoredOption | undefined, bestEndS = 0, walkWeight: number = WALK.sunWeight): WalkVerdict {
+export function walkVerdict(
+  walkAllS: number | null,
+  best: ScoredOption | undefined,
+  bestEndS = 0,
+  walkWeight: number = WALK.sunWeight,
+): WalkVerdict {
   if (walkAllS == null || !best) return 'lose';
   const margin = isMeasured(best.quality) ? WALK.beatsBusByS : 0;
   // Both the whole way: `walkAllS` and the bus's `bestEndS` include the walk
@@ -283,15 +288,9 @@ export function buildAnswer(f: FormatInput): Answer {
     const said = walk != null ? walk + (f.walkEndS ?? 0) : null;
     // A short walk with nothing to board is not an outage, it is an answer.
     const trivial = said != null && said <= WALK.mentionWithinS;
-    const label = clampLabel(
-      said == null ? m().noBuses : trivial ? m().walkLabel(mins(said)) : m().noBusWalk(mins(said)),
-    );
+    const label = clampLabel(said == null ? m().noBuses : trivial ? m().walkLabel(mins(said)) : m().noBusWalk(mins(said)));
     const detail =
-      said == null
-        ? m().servicesEnded
-        : trivial
-          ? m().isAWalk(f.destLabel, mins(said))
-          : m().endedWalkTo(mins(said), f.destLabel);
+      said == null ? m().servicesEnded : trivial ? m().isAWalk(f.destLabel, mins(said)) : m().endedWalkTo(mins(said), f.destLabel);
     return {
       label,
       detail,
@@ -338,11 +337,7 @@ export function buildAnswer(f: FormatInput): Answer {
     return {
       ...common,
       label: clampLabel(m().walkLabel(mins(walkThereS ?? f.walkAllS))),
-      detail: [
-        f.destLabel ? m().onFootTo(f.destLabel) : m().fasterOnFoot,
-        busPhrase,
-        m().fromStop(shortStop(best.stop.name)),
-      ].join(' · '),
+      detail: [f.destLabel ? m().onFootTo(f.destLabel) : m().fasterOnFoot, busPhrase, m().fromStop(shortStop(best.stop.name))].join(' · '),
       alt: renderAlt(best),
       departsAt: null,
       arriveAt: iso(f.nowMs + f.walkAllS * 1000),

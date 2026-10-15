@@ -117,12 +117,13 @@ self.addEventListener('fetch', (event) => {
   }
   if (SHELL_FILES.includes(url.pathname) || url.pathname === ZH) {
     event.respondWith(url.pathname.startsWith('/vendor/') ? cacheFirst(req, SHELL) : shellFile(req, url.pathname, event));
-  }
-  else if (url.pathname === TILES) event.respondWith(tiles(req, event));
+  } else if (url.pathname === TILES) event.respondWith(tiles(req, event));
   // The timelapse page's video encoder (admin/timelapse/) is the operator's, not the map's: never kept.
   else if (url.pathname.startsWith('/vendor/mediabunny')) return;
-  else if (url.pathname.startsWith('/vendor/') || url.pathname.startsWith('/map/fonts/') || url.pathname.startsWith('/map/sprites/')) event.respondWith(cacheFirst(req));
-  else if (url.pathname === '/app/map.js' || url.pathname === '/api/campus' || url.pathname === '/map/style.json') event.respondWith(networkThenKept(req, event));
+  else if (url.pathname.startsWith('/vendor/') || url.pathname.startsWith('/map/fonts/') || url.pathname.startsWith('/map/sprites/'))
+    event.respondWith(cacheFirst(req));
+  else if (url.pathname === '/app/map.js' || url.pathname === '/api/campus' || url.pathname === '/map/style.json')
+    event.respondWith(networkThenKept(req, event));
 });
 
 /** On a slow connection, how long to wait for the network before using the
@@ -143,7 +144,13 @@ async function soonest(network, kept, event, wait = SLOW_MS) {
   const slow = new Promise((ok) => {
     timer = setTimeout(ok, wait, 'slow');
   });
-  const first = await Promise.race([network.then((res) => ({ res }), (err) => ({ err })), slow]);
+  const first = await Promise.race([
+    network.then(
+      (res) => ({ res }),
+      (err) => ({ err }),
+    ),
+    slow,
+  ]);
   clearTimeout(timer);
   if (first !== 'slow' && first.res) return first.res;
   const copy = await kept();
@@ -355,7 +362,10 @@ function notifyTerm(n) {
 async function notifyFromCard(urgent) {
   let a = null;
   try {
-    const res = await fetch(`/api/me/next${HOUR12 ? '?h12=1' : ''}`, { credentials: 'same-origin', signal: AbortSignal.timeout?.(PUSH_CARD_MS) });
+    const res = await fetch(`/api/me/next${HOUR12 ? '?h12=1' : ''}`, {
+      credentials: 'same-origin',
+      signal: AbortSignal.timeout?.(PUSH_CARD_MS),
+    });
     a = res.ok ? await res.json() : null;
   } catch {
     a = null;

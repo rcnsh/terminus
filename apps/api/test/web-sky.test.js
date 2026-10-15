@@ -60,7 +60,9 @@ function skies() {
   const out = [];
   for (const phase of PHASES) {
     const light = phase === 'night' ? night : { ...night, ...vars(`body.sky-${phase}`) };
-    const lightInk = LIGHT_SKY.has(phase) ? vars('body.sky-dawn, body.sky-day, body.sky-golden') : vars('body.sky, body.sky-dusk, body.sky-night');
+    const lightInk = LIGHT_SKY.has(phase)
+      ? vars('body.sky-dawn, body.sky-day, body.sky-golden')
+      : vars('body.sky, body.sky-dusk, body.sky-night');
     out.push({ name: `light ${phase}`, sky: light, ink: lightInk });
     // A dark phone: always light ink, on its own deeper skies.
     const dark = phase === 'night' ? night : { ...night, ...vars(`:root[data-theme="dark"] body.sky-${phase}`) };
@@ -134,7 +136,15 @@ test("the website's pages take the hour from the same clock as Now", async () =>
   for (let min = 0; min < 1440; min += 5) {
     const html = { dataset: {} };
     const at = new Date(2026, 9, 7, Math.floor(min / 60), min % 60);
-    const box = { document: { documentElement: html }, setInterval: () => 0, Date: class extends Date { constructor() { super(at); } } };
+    const box = {
+      document: { documentElement: html },
+      setInterval: () => 0,
+      Date: class extends Date {
+        constructor() {
+          super(at);
+        }
+      },
+    };
     vm.runInNewContext(src, box);
     assert.equal(html.dataset.sky, phaseAt(min), `${min} min`);
   }

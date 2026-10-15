@@ -11,10 +11,11 @@ enum Appearance {
 
     /// The saved choice, applied at launch and whenever it changes.
     static func apply() {
-        NSApp.appearance = switch pref {
-        case "light": NSAppearance(named: .aqua)
-        case "dark": NSAppearance(named: .darkAqua)
-        default: nil
-        }
+        NSApp.appearance =
+            switch pref {
+            case "light": NSAppearance(named: .aqua)
+            case "dark": NSAppearance(named: .darkAqua)
+            default: nil
+            }
     }
 }

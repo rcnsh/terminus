@@ -70,12 +70,22 @@ interface Leg {
 
 /** A change of bus as a leg: the scored option's, without its times. */
 const changeLeg = (o: ScoredOption): Leg['change'] =>
-  o.change ? { svc: o.change.svc, at: o.change.at, stop: o.change.stop, crossS: o.change.crossS, rideS: o.change.rideS, ...(o.to ? { to: o.to } : {}) } : undefined;
+  o.change
+    ? {
+        svc: o.change.svc,
+        at: o.change.at,
+        stop: o.change.stop,
+        crossS: o.change.crossS,
+        rideS: o.change.rideS,
+        ...(o.to ? { to: o.to } : {}),
+      }
+    : undefined;
 
 /** The fare on a public bus, as the time a free bus may cost instead (PUBLIC.fareWorthS). */
 const fareMs = (leg: { paid?: true }) => (leg.paid ? PUBLIC.fareWorthS * 1000 : 0);
 /** `paid` only on a public bus; with it the route key a two-way service's number can't name. */
-const paidOf = (leg: { svc: string; paid?: true }) => (leg.paid ? { paid: true as const, ...(leg.svc !== svcName(leg.svc) ? { route: leg.svc } : {}) } : {});
+const paidOf = (leg: { svc: string; paid?: true }) =>
+  leg.paid ? { paid: true as const, ...(leg.svc !== svcName(leg.svc) ? { route: leg.svc } : {}) } : {};
 
 /** On to the room from the stop a leg gets you to: a room two stops serve is further from one. */
 const venueWalkOf = (arriveBy: ArriveBy, leg: Leg) => arriveBy.walkByStopS?.[(leg.change?.to ?? leg.to)?.code ?? ''] ?? arriveBy.venueWalkS;
@@ -99,7 +109,15 @@ export function leaveBy(f: LeaveInput): Leave | null {
     // Past that already: leave now, and get there when a walk started now
     // does, not when one started then would have (as for a bus, below).
     const from = Math.max(at, f.nowMs);
-    return { at: isoSeconds(from), estimated: false, svc: null, stop: null, board: null, arrive: isoSeconds(from + walkS * 1000), note: null };
+    return {
+      at: isoSeconds(from),
+      estimated: false,
+      svc: null,
+      stop: null,
+      board: null,
+      arrive: isoSeconds(from + walkS * 1000),
+      note: null,
+    };
   }
 
   if (!f.arriveBy) {
@@ -108,11 +126,36 @@ export function leaveBy(f: LeaveInput): Leave | null {
     const at = b.fromMs + b.boardS * 1000 - b.walkS * 1000 - BUFFER_MS;
     if (at - f.nowMs < NOW_S * 1000) return null;
     const endWalkS = f.endWalk?.(b) ?? 0;
-    return { at: isoSeconds(at), estimated: b.quality === 'scheduled', ...(b.quality === 'stale' ? { stale: true as const } : {}), svc: svcName(b.svc), stop: shortStop(b.stop.name), stopCode: b.stop.code, board: isoSeconds(b.fromMs + b.boardS * 1000), arrive: isoSeconds(b.fromMs + b.totalS * 1000), note: null, walkS: b.walkS, rideS: b.rideS, ...offOf(b), ...(endWalkS > 0 ? { endWalkS } : {}), ...paidOf(b), ...(b.change ? { change: busChange(b) } : {}) };
+    return {
+      at: isoSeconds(at),
+      estimated: b.quality === 'scheduled',
+      ...(b.quality === 'stale' ? { stale: true as const } : {}),
+      svc: svcName(b.svc),
+      stop: shortStop(b.stop.name),
+      stopCode: b.stop.code,
+      board: isoSeconds(b.fromMs + b.boardS * 1000),
+      arrive: isoSeconds(b.fromMs + b.totalS * 1000),
+      note: null,
+      walkS: b.walkS,
+      rideS: b.rideS,
+      ...offOf(b),
+      ...(endWalkS > 0 ? { endWalkS } : {}),
+      ...paidOf(b),
+      ...(b.change ? { change: busChange(b) } : {}),
+    };
   }
 
   const legs: Leg[] = f.options.length
-    ? f.options.map((o) => ({ svc: o.svc, stop: o.stop, walkS: o.walkS, rideS: o.rideS, off: o.off, to: o.to, ...paidOf(o), ...(o.change ? { change: changeLeg(o) } : {}) }))
+    ? f.options.map((o) => ({
+        svc: o.svc,
+        stop: o.stop,
+        walkS: o.walkS,
+        rideS: o.rideS,
+        off: o.off,
+        to: o.to,
+        ...paidOf(o),
+        ...(o.change ? { change: changeLeg(o) } : {}),
+      }))
     : fallbackLegs(f.candidates, f.graph);
   let onTime: Ranked | null = null;
   let late: (Ranked & { reach: number }) | null = null;
@@ -127,9 +170,28 @@ export function leaveBy(f: LeaveInput): Leave | null {
     // A change of bus likewise, by what the change is worth; and a longer
     // walk, to a stop further off or on from the stop to the room, by more
     // than the minutes it takes, as the options are ranked (scoreOptions).
-    const extraFootMs = ((f.walkWeight ?? WALK.sunWeight) - 1) * (leg.walkS + (leg.change?.crossS ?? 0) + venueWalkOf(f.arriveBy, leg)) * 1000;
+    const extraFootMs =
+      ((f.walkWeight ?? WALK.sunWeight) - 1) * (leg.walkS + (leg.change?.crossS ?? 0) + venueWalkOf(f.arriveBy, leg)) * 1000;
     const worth = r.ms - fareMs(leg) - (leg.change ? TRANSFER.worthS * 1000 : 0) - extraFootMs;
-    const out: Ranked = { at: isoSeconds(r.ms), estimated: r.estimated, ...(r.stale ? { stale: true as const } : {}), svc: svcName(leg.svc), stop: shortStop(leg.stop.name), stopCode: leg.stop.code, board: isoSeconds(r.board), arrive: isoSeconds(r.arrive), note: r.note, walkS: leg.walkS, rideS: leg.rideS, ...offOf(leg), ...paidOf(leg), ...(r.change ? { change: r.change } : {}), ms: r.ms, worth, opens: r.opens === true };
+    const out: Ranked = {
+      at: isoSeconds(r.ms),
+      estimated: r.estimated,
+      ...(r.stale ? { stale: true as const } : {}),
+      svc: svcName(leg.svc),
+      stop: shortStop(leg.stop.name),
+      stopCode: leg.stop.code,
+      board: isoSeconds(r.board),
+      arrive: isoSeconds(r.arrive),
+      note: r.note,
+      walkS: leg.walkS,
+      rideS: leg.rideS,
+      ...offOf(leg),
+      ...paidOf(leg),
+      ...(r.change ? { change: r.change } : {}),
+      ms: r.ms,
+      worth,
+      opens: r.opens === true,
+    };
     // The latest on-time departure wins; if nothing is on time, the soonest.
     if (!r.late && (!onTime || worth > onTime.worth || (worth === onTime.worth && onTime.estimated && !r.estimated))) onTime = out;
     // Late whatever you do: the bus that gets you there first (a fare counted
@@ -165,7 +227,14 @@ interface LegLeave {
 /** How far ahead a bus is looked for: past a day it's no bus. */
 const PROJECT_MS = 86_400_000;
 
-function forLeg(leg: Leg, sa: StopArrivals | undefined, graph: Graph, arriveBy: ArriveBy, nowMs: number, risk?: CrowdRisk): LegLeave | null {
+function forLeg(
+  leg: Leg,
+  sa: StopArrivals | undefined,
+  graph: Graph,
+  arriveBy: ArriveBy,
+  nowMs: number,
+  risk?: CrowdRisk,
+): LegLeave | null {
   const headway = Math.max(60, headwayFor(graph, leg.svc)) * 1000;
   const walk = leg.walkS * 1000 + BUFFER_MS;
   const venueWalkS = venueWalkOf(arriveBy, leg);
@@ -200,7 +269,16 @@ function forLeg(leg: Leg, sa: StopArrivals | undefined, graph: Graph, arriveBy: 
       board = starts;
     }
     const arrive = arriveAfter(board + headway);
-    return { ms: board - walk, board, arrive, estimated: true, stale: false, late: board + headway > latestBoard, note: null, ...(starts !== null ? { opens: true as const } : {}) };
+    return {
+      ms: board - walk,
+      board,
+      arrive,
+      estimated: true,
+      stale: false,
+      late: board + headway > latestBoard,
+      note: null,
+      ...(starts !== null ? { opens: true as const } : {}),
+    };
   }
 
   const earliest = nowMs + walk;
@@ -225,7 +303,15 @@ function forLeg(leg: Leg, sa: StopArrivals | undefined, graph: Graph, arriveBy: 
   }
   // Nothing gets you there on time: the first bus you can catch.
   const first = buses[0];
-  return { ms: first.at - walk, board: first.at, arrive: arriveAfter(first.at), estimated: first.estimated, stale: first.stale, late: true, note: null };
+  return {
+    ms: first.at - walk,
+    board: first.at,
+    arrive: arriveAfter(first.at),
+    estimated: first.estimated,
+    stale: first.stale,
+    late: true,
+    note: null,
+  };
 }
 
 /** A bus at a stop, as a leave-by plans it. With a live time all three are
@@ -249,7 +335,13 @@ interface Bus {
  * a public bus's timetabled one (LTA's Monitored 0) is an estimate, and one
  * from a stale feed an old reading, however exact.
  */
-function liveBuses(svc: string, paid: boolean, sa: StopArrivals | undefined, graph: Graph, nowMs: number): Array<{ at: number; estimated: boolean; stale: boolean }> {
+function liveBuses(
+  svc: string,
+  paid: boolean,
+  sa: StopArrivals | undefined,
+  graph: Graph,
+  nowMs: number,
+): Array<{ at: number; estimated: boolean; stale: boolean }> {
   const feed = feedFor(sa, paid);
   if (!sa || !feed || feed.available === false) return [];
   return beforeOpening(graph, svc, resolveBerths(sa.arrivals.filter((a) => a.svc === svc)).usable, feed.fetchedAt, nowMs)
@@ -287,7 +379,8 @@ function lastBus(graph: Graph, svc: string, live: ReturnType<typeof liveBuses>, 
   const runs = (ms: number) => inService(graph, svc, ms);
   if (live.length) {
     const buses = live.filter((b) => b.at >= fromMs && b.at <= byMs);
-    for (let t = live[live.length - 1].at + headway; t <= byMs && runs(t); t += headway) if (t >= fromMs) buses.push({ at: t, estimated: true, stale: false });
+    for (let t = live[live.length - 1].at + headway; t <= byMs && runs(t); t += headway)
+      if (t >= fromMs) buses.push({ at: t, estimated: true, stale: false });
     const b = buses[buses.length - 1];
     return b ? { atStop: b.at, board: b.at, latest: b.at, estimated: b.estimated, stale: b.stale } : null;
   }
@@ -303,7 +396,14 @@ function lastBus(graph: Graph, svc: string, live: ReturnType<typeof liveBuses>, 
  * second bus can be sooner than the latest that would do). Late whatever
  * you do: the first bus you can catch, and the first after it.
  */
-function forTransfer(leg: Leg, sa1: StopArrivals | undefined, sa2: StopArrivals | undefined, graph: Graph, arriveBy: ArriveBy, nowMs: number): LegLeave | null {
+function forTransfer(
+  leg: Leg,
+  sa1: StopArrivals | undefined,
+  sa2: StopArrivals | undefined,
+  graph: Graph,
+  arriveBy: ArriveBy,
+  nowMs: number,
+): LegLeave | null {
   const t = leg.change!;
   const venueWalkS = venueWalkOf(arriveBy, leg);
   const walk = leg.walkS * 1000 + BUFFER_MS;
@@ -351,7 +451,12 @@ function forTransfer(leg: Leg, sa1: StopArrivals | undefined, sa2: StopArrivals 
 }
 
 /** Whether the bus you'd wait for is often busy, and what to say. */
-function crowdCheck(leg: Leg, atMs: number, arriveBy: ArriveBy, risk?: CrowdRisk): { earlier: boolean; note: string | null; warnOnly: string | null } {
+function crowdCheck(
+  leg: Leg,
+  atMs: number,
+  arriveBy: ArriveBy,
+  risk?: CrowdRisk,
+): { earlier: boolean; note: string | null; warnOnly: string | null } {
   const r = risk?.(leg.svc, leg.stop.code, atMs);
   if (r == null || r < OFTEN_PACKED) return { earlier: false, note: null, warnOnly: null };
   const where = shortStop(leg.stop.name);
@@ -364,5 +469,15 @@ function crowdCheck(leg: Leg, atMs: number, arriveBy: ArriveBy, risk?: CrowdRisk
 
 /** Every service from every candidate stop, running now or not; forLeg keeps each to its hours. */
 function fallbackLegs(cands: Candidate[], graph: Graph): Leg[] {
-  return cands.flatMap((c) => c.legs.map((l) => ({ svc: l.svc, stop: c.stop, walkS: c.walkS, rideS: legRideS(l), off: l.off, to: l.to, ...(isPublic(graph, l.svc) ? { paid: true as const } : {}) })));
+  return cands.flatMap((c) =>
+    c.legs.map((l) => ({
+      svc: l.svc,
+      stop: c.stop,
+      walkS: c.walkS,
+      rideS: legRideS(l),
+      off: l.off,
+      to: l.to,
+      ...(isPublic(graph, l.svc) ? { paid: true as const } : {}),
+    })),
+  );
 }

@@ -32,23 +32,27 @@ import sh.rcn.terminus.R
 import sh.rcn.terminus.ServerClock
 
 /**
- * The widget's layout by its size on the home screen: a bar one row tall,
- * a small square counting to the time to leave, the trip with the sky over
- * it, and, tall enough, your day: the trip's steps and what's left of today.
+ * The widget's layout by its size on the home screen: a bar one row tall, a small square counting to the time to leave, the trip with the
+ * sky over it, and, tall enough, your day: the trip's steps and what's left of today.
  */
 internal enum class WidgetShape {
-    BAR, SQUARE, TRIP, DAY;
+    BAR,
+    SQUARE,
+    TRIP,
+    DAY;
 
     /** Room for the chips that switch what it shows. */
-    val roomy: Boolean get() = this == TRIP || this == DAY
+    val roomy: Boolean
+        get() = this == TRIP || this == DAY
 
     companion object {
-        fun of(widthDp: Float, heightDp: Float): WidgetShape = when {
-            heightDp < 130f -> BAR
-            widthDp < 220f -> SQUARE
-            heightDp >= 290f && widthDp >= 250f -> DAY
-            else -> TRIP
-        }
+        fun of(widthDp: Float, heightDp: Float): WidgetShape =
+            when {
+                heightDp < 130f -> BAR
+                widthDp < 220f -> SQUARE
+                heightDp >= 290f && widthDp >= 250f -> DAY
+                else -> TRIP
+            }
     }
 }
 
@@ -85,9 +89,8 @@ private fun HeadRow(text: String?, s: Scene, inks: Inks, side: Dp = 32.dp) {
 }
 
 /**
- * The trip, two rows or so: the line above, the headline and how it gets
- * you there in the sky, the hills with your stop and your bus, then the leg
- * along the ground and, on the favourites widget, the chips.
+ * The trip, two rows or so: the line above, the headline and how it gets you there in the sky, the hills with your stop and your bus, then
+ * the leg along the ground and, on the favourites widget, the chips.
  */
 @Composable
 internal fun TripLayout(s: Scene, w: Float, h: Float) {
@@ -116,18 +119,23 @@ internal fun TripLayout(s: Scene, w: Float, h: Float) {
                 HeadRow(face.heading, s, sky, side = 28.dp)
                 Headline(face, sky, 26.sp)
                 if (sub) SubLine(face, sky)
-                face.tile?.let { Spacer(GlanceModifier.height(8.dp)); TileBox(it, sky) }
+                face.tile?.let {
+                    Spacer(GlanceModifier.height(8.dp))
+                    TileBox(it, sky)
+                }
             }
-            if (leg) Box(GlanceModifier.fillMaxWidth().height(28.dp), contentAlignment = Alignment.CenterStart) { face.leg?.let { LegRow(it, s.look.ground) } }
+            if (leg)
+                Box(GlanceModifier.fillMaxWidth().height(28.dp), contentAlignment = Alignment.CenterStart) {
+                    face.leg?.let { LegRow(it, s.look.ground) }
+                }
             if (s.chips.isNotEmpty()) ModeChips(s.chips, s.showing, s.look.ground, s.chipAction)
         }
     }
 }
 
 /**
- * The big widget: the chips across the sky's top, the headline, then on the
- * ground the trip's steps in the card style chosen in Settings and what's
- * left of today's timetable.
+ * The big widget: the chips across the sky's top, the headline, then on the ground the trip's steps in the card style chosen in Settings
+ * and what's left of today's timetable.
  */
 @Composable
 internal fun DayLayout(s: Scene, w: Float, h: Float) {
@@ -148,7 +156,8 @@ internal fun DayLayout(s: Scene, w: Float, h: Float) {
     if (nearby != null) left -= NEARBY_PAIR_HEAD_DP + NEARBY_PAIR_DP
     // Today's timetable: what's still to come, a line each, as many as fit under a heading.
     val now = ServerClock.now()
-    val upcoming = s.day()?.takeIf { it.date == null || it.date == OfflineDay.sgtDate(now) }?.items?.filter { it.status in UPCOMING }.orEmpty()
+    val upcoming =
+        s.day()?.takeIf { it.date == null || it.date == OfflineDay.sgtDate(now) }?.items?.filter { it.status in UPCOMING }.orEmpty()
     val rows = ((left - 30f) / 30f).toInt().coerceIn(0, 6)
     val today = upcoming.take(rows)
     // Nothing left of today: the room goes to two more of the stop's buses.
@@ -159,14 +168,18 @@ internal fun DayLayout(s: Scene, w: Float, h: Float) {
             Column(GlanceModifier.fillMaxWidth().height(skyH.dp).padding(top = 10.dp)) {
                 Row(GlanceModifier.fillMaxWidth().height(40.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(GlanceModifier.defaultWeight()) {
-                        if (s.chips.isNotEmpty()) ModeChips(s.chips, s.showing, sky, s.chipAction) else Small("terminus", sky.ink, 15.sp, bold = true)
+                        if (s.chips.isNotEmpty()) ModeChips(s.chips, s.showing, sky, s.chipAction)
+                        else Small("terminus", sky.ink, 15.sp, bold = true)
                     }
                     s.refresh?.let { RefreshButton(it, sky) }
                 }
                 face.heading?.let { Small(it, sky.muted, 12.sp, modifier = GlanceModifier.padding(top = 2.dp)) }
                 Headline(face, sky, 28.sp)
                 if (sub) SubLine(face, sky)
-                face.tile?.let { Spacer(GlanceModifier.height(8.dp)); TileBox(it, sky) }
+                face.tile?.let {
+                    Spacer(GlanceModifier.height(8.dp))
+                    TileBox(it, sky)
+                }
             }
             Spacer(GlanceModifier.height(6.dp))
             when {
@@ -186,11 +199,20 @@ private val UPCOMING = setOf("now", "next", "later")
 private fun Today(items: List<DayItem>, inks: Inks) {
     val ctx = LocalContext.current
     Column(GlanceModifier.fillMaxWidth().padding(top = 8.dp)) {
-        Text(L.s(R.string.today_heading).uppercase(), style = TextStyle(color = inks.muted, fontSize = 11.sp, fontWeight = FontWeight.Medium), maxLines = 1)
+        Text(
+            L.s(R.string.today_heading).uppercase(),
+            style = TextStyle(color = inks.muted, fontSize = 11.sp, fontWeight = FontWeight.Medium),
+            maxLines = 1,
+        )
         items.forEach { item ->
             Box(GlanceModifier.fillMaxWidth().height(1.dp).background(inks.line)) {}
             Row(GlanceModifier.fillMaxWidth().height(29.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(clock(ctx, item.startsAtMs), style = TextStyle(color = inks.ink, fontSize = 13.sp, fontWeight = FontWeight.Bold), maxLines = 1, modifier = GlanceModifier.width(58.dp))
+                Text(
+                    clock(ctx, item.startsAtMs),
+                    style = TextStyle(color = inks.ink, fontSize = 13.sp, fontWeight = FontWeight.Bold),
+                    maxLines = 1,
+                    modifier = GlanceModifier.width(58.dp),
+                )
                 Text(item.title ?: item.label, style = TextStyle(color = inks.ink, fontSize = 13.sp), maxLines = 1)
                 item.line?.let { Text("  $it", style = TextStyle(color = inks.muted, fontSize = 12.sp), maxLines = 1) }
             }
@@ -199,9 +221,8 @@ private fun Today(items: List<DayItem>, inks: Inks) {
 }
 
 /**
- * The small square: the time to leave, big, under what it is ("Leave by")
- * or with it on its line ("09:37 前出发"),
- * the hills under it, and the bus and its stop along the ground.
+ * The small square: the time to leave, big, under what it is ("Leave by") or with it on its line ("09:37 前出发"), the hills under it, and the
+ * bus and its stop along the ground.
  */
 @Composable
 internal fun SquareLayout(s: Scene, w: Float, h: Float) {
@@ -213,13 +234,17 @@ internal fun SquareLayout(s: Scene, w: Float, h: Float) {
     val big = face.big
     val stripDp = (skyH * 0.32f).coerceIn(24f, 44f)
     val bitmap = skyBitmap(ctx, s.look, w, skyH, stripDp / 92f, face.road, moon = Offset(30f, 100f))
-    val color = when {
-        face.dim -> sky.muted
-        face.late -> sky.late
-        else -> sky.ink
-    }
+    val color =
+        when {
+            face.dim -> sky.muted
+            face.late -> sky.late
+            else -> sky.ink
+        }
     // The bus and where to catch it; else the leg's words, or the next class.
-    val foot = face.journey?.bus?.let { Leg(it.svc, it.color, it.paid, "${it.stop} ${it.board}") } ?: face.leg ?: face.tile?.let { Leg(null, 0, false, it.title) }
+    val foot =
+        face.journey?.bus?.let { Leg(it.svc, it.color, it.paid, "${it.stop} ${it.board}") }
+            ?: face.leg
+            ?: face.tile?.let { Leg(null, 0, false, it.title) }
     Box(GlanceModifier.fillMaxSize()) {
         SkyImage(bitmap, skyH.dp)
         Column(GlanceModifier.fillMaxSize().padding(horizontal = 12.dp)) {
@@ -231,12 +256,28 @@ internal fun SquareLayout(s: Scene, w: Float, h: Float) {
                     // A label after the time ("09:37 前出发") stays on its line:
                     // a line under it would sit on the hills.
                     Row(verticalAlignment = Alignment.Bottom) {
-                        Text(big, style = TextStyle(color = color, fontWeight = FontWeight.Bold, fontSize = if (big.length > 6) 30.sp else 38.sp), maxLines = 1)
-                        if (face.bigFirst) face.bigLabel?.let { Small(it, sky.muted, 13.sp, modifier = GlanceModifier.padding(start = 4.dp, bottom = 7.dp)) }
+                        Text(
+                            big,
+                            style = TextStyle(color = color, fontWeight = FontWeight.Bold, fontSize = if (big.length > 6) 30.sp else 38.sp),
+                            maxLines = 1,
+                        )
+                        if (face.bigFirst)
+                            face.bigLabel?.let {
+                                Small(it, sky.muted, 13.sp, modifier = GlanceModifier.padding(start = 4.dp, bottom = 7.dp))
+                            }
                     }
                 } else {
                     // No time in it ("Leave now", "No classes today"): the headline itself, as big as fits.
-                    Text(face.headline, style = TextStyle(color = color, fontWeight = FontWeight.Bold, fontSize = if (face.headline.length <= 12) 28.sp else 20.sp), maxLines = 2)
+                    Text(
+                        face.headline,
+                        style =
+                            TextStyle(
+                                color = color,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = if (face.headline.length <= 12) 28.sp else 20.sp,
+                            ),
+                        maxLines = 2,
+                    )
                 }
                 // Nothing for the ground: the line under the headline goes up here, with room to wrap.
                 if (foot == null) face.sub?.let { Small(it, sky.muted, 12.sp, lines = 2, modifier = GlanceModifier.padding(top = 4.dp)) }

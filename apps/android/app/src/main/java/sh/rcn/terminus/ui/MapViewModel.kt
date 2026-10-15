@@ -29,8 +29,11 @@ import sh.rcn.terminus.Store
 /** What the pill's status line says about the live buses. */
 sealed interface BusStatus {
     data object Finding : BusStatus
+
     data class Running(val count: Int) : BusStatus
+
     data object NoneRunning : BusStatus
+
     data object Unavailable : BusStatus
 }
 
@@ -38,6 +41,7 @@ sealed interface BusStatus {
 sealed interface MapSheet {
     /** [from]: the bus whose stops it was opened from, which back returns to. */
     data class Stop(val code: String, val from: Bus? = null) : MapSheet
+
     /** [stops]: its stops ahead open, and [all] of them, as when it's come back to from one of them. */
     data class Bus(val id: String, val stops: Boolean = false, val all: Boolean = false) : MapSheet
 }
@@ -84,9 +88,8 @@ data class MapUi(
 private const val BUSES_OLD_MS = 15_000L
 
 /**
- * The Map tab. The screen drives the polling (only while it's on screen):
- * [refreshBuses] every 5 s while a pill is on, [refreshBoard] every 15 s
- * while a stop's sheet is open, [locate] now and then.
+ * The Map tab. The screen drives the polling (only while it's on screen): [refreshBuses] every 5 s while a pill is on, [refreshBoard] every
+ * 15 s while a stop's sheet is open, [locate] now and then.
  */
 class MapViewModel(app: Application) : AndroidViewModel(app) {
     private val store = Store(app)
@@ -113,9 +116,8 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
     private fun failed(s: MapUi) = (s.campus == null && campusFailed) || (s.style == null && styleFailed)
 
     /**
-     * The stops, routes and style; again when the theme or language changes,
-     * and whatever didn't come last time. Nothing already on its way is
-     * asked for twice.
+     * The stops, routes and style; again when the theme or language changes, and whatever didn't come last time. Nothing already on its way
+     * is asked for twice.
      */
     fun open(dark: Boolean, zh: Boolean) {
         val ctx = getApplication<Application>()
@@ -141,11 +143,16 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
                         _state.update { it.copy(failed = failed(it)) }
                     } else {
                         // Reading it and making the GeoJSON takes a moment: not on the main thread.
-                        val (campus, core, lines) = withContext(Dispatchers.Default) {
-                            val (campus, core) = CampusMap.parse(json)
-                            Triple(campus, core, MapGeoJson.routes(campus) to MapGeoJson.stops(campus))
+                        val (campus, core, lines) =
+                            withContext(Dispatchers.Default) {
+                                val (campus, core) = CampusMap.parse(json)
+                                Triple(campus, core, MapGeoJson.routes(campus) to MapGeoJson.stops(campus))
+                            }
+                        _state.update { s ->
+                            s.copy(campus = campus, core = core, routesJson = lines.first, stopsJson = lines.second).let {
+                                it.copy(failed = failed(it))
+                            }
                         }
-                        _state.update { s -> s.copy(campus = campus, core = core, routesJson = lines.first, stopsJson = lines.second).let { it.copy(failed = failed(it)) } }
                     }
                 } catch (e: CancellationException) {
                     throw e
@@ -169,7 +176,9 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
                 val shown = styleKey
                 if (after != null && after != before && shown != null) {
                     // Only if the theme and language are still the ones it was built for: a change meanwhile drew its own.
-                    MapFiles.style(ctx, shown.first, shown.second)?.let { style -> if (styleKey == shown) _state.update { it.copy(style = style) } }
+                    MapFiles.style(ctx, shown.first, shown.second)?.let { style ->
+                        if (styleKey == shown) _state.update { it.copy(style = style) }
+                    }
                 }
             }
         }
@@ -183,7 +192,15 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
     /** One pill at a time; the same one again turns it off. */
     fun choose(svc: String?) {
         val next = if (svc == _state.value.selected) null else svc
-        _state.update { it.copy(selected = next, buses = emptyList(), busesStale = false, busStatus = if (next == null) null else BusStatus.Finding, sheet = (it.sheet as? MapSheet.Stop)) }
+        _state.update {
+            it.copy(
+                selected = next,
+                buses = emptyList(),
+                busesStale = false,
+                busStatus = if (next == null) null else BusStatus.Finding,
+                sheet = (it.sheet as? MapSheet.Stop),
+            )
+        }
     }
 
     suspend fun refreshBuses() {
@@ -193,16 +210,23 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
         try {
             val list = api(token).buses(svc)
             if (svc != _state.value.selected) return
-            val status = when {
-                !list.available -> BusStatus.Unavailable
-                list.buses.isEmpty() -> BusStatus.NoneRunning
-                else -> BusStatus.Running(list.buses.size)
-            }
+            val status =
+                when {
+                    !list.available -> BusStatus.Unavailable
+                    list.buses.isEmpty() -> BusStatus.NoneRunning
+                    else -> BusStatus.Running(list.buses.size)
+                }
             busesAt = SystemClock.elapsedRealtime()
             _state.update { s ->
                 // A bus whose card is open and has gone: close the card.
                 val sheet = s.sheet.let { sh -> if (sh is MapSheet.Bus && list.buses.none { it.id == sh.id }) null else sh }
-                s.copy(buses = list.buses, busesStale = list.stale && list.buses.isNotEmpty(), busAnswers = s.busAnswers + 1, busStatus = status, sheet = sheet)
+                s.copy(
+                    buses = list.buses,
+                    busesStale = list.stale && list.buses.isNotEmpty(),
+                    busAnswers = s.busAnswers + 1,
+                    busStatus = status,
+                    sheet = sheet,
+                )
             }
         } catch (e: CancellationException) {
             throw e
@@ -214,19 +238,23 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
             // No answer: the buses stay where they were last seen, faded once
             // that's a few polls ago, as when the feed itself is down.
             val old = SystemClock.elapsedRealtime() - busesAt > BUSES_OLD_MS
-            if (svc == _state.value.selected) _state.update { it.copy(busStatus = BusStatus.Unavailable, busesStale = it.busesStale || (old && it.buses.isNotEmpty())) }
+            if (svc == _state.value.selected)
+                _state.update { it.copy(busStatus = BusStatus.Unavailable, busesStale = it.busesStale || (old && it.buses.isNotEmpty())) }
         }
     }
 
-    fun openStop(code: String) = _state.update { it.copy(sheet = MapSheet.Stop(code), board = null, boardFailed = false, boardError = false) }
+    fun openStop(code: String) = _state.update {
+        it.copy(sheet = MapSheet.Stop(code), board = null, boardFailed = false, boardError = false)
+    }
 
     /**
-     * A stop from Nearby, or from a bus's sheet ([from], which back returns
-     * to): its sheet, and the map moved to it. Unknown codes are ignored.
+     * A stop from Nearby, or from a bus's sheet ([from], which back returns to): its sheet, and the map moved to it. Unknown codes are
+     * ignored.
      */
     fun showStop(code: String, from: MapSheet.Bus? = null) = _state.update {
         if (it.campus != null && it.campus.stop(code) == null) it
-        else it.copy(sheet = MapSheet.Stop(code, from), board = null, boardFailed = false, boardError = false, focus = code, focusBus = null)
+        else
+            it.copy(sheet = MapSheet.Stop(code, from), board = null, boardFailed = false, boardError = false, focus = code, focusBus = null)
     }
 
     fun openBus(id: String) = _state.update { it.copy(sheet = MapSheet.Bus(id)) }
@@ -236,7 +264,8 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
     /** Back: from a stop opened from a bus, to that bus if it's still on the map; else closed. */
     fun back() = _state.update { s ->
         val from = (s.sheet as? MapSheet.Stop)?.from?.takeIf { b -> s.buses.any { it.id == b.id } }
-        if (from != null) s.copy(sheet = from, board = null, focus = null, focusBus = from.id) else s.copy(sheet = null, board = null, focus = null, focusBus = null)
+        if (from != null) s.copy(sheet = from, board = null, focus = null, focusBus = from.id)
+        else s.copy(sheet = null, board = null, focus = null, focusBus = null)
     }
 
     private val _home = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
@@ -245,7 +274,18 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
 
     /** The Map tab tapped while on it: back to how it opened, no pill on and no sheet open. */
     fun home() {
-        _state.update { it.copy(selected = null, buses = emptyList(), busesStale = false, busStatus = null, sheet = null, board = null, focus = null, focusBus = null) }
+        _state.update {
+            it.copy(
+                selected = null,
+                buses = emptyList(),
+                busesStale = false,
+                busStatus = null,
+                sheet = null,
+                board = null,
+                focus = null,
+                focusBus = null,
+            )
+        }
         _home.tryEmit(Unit)
     }
 
@@ -262,7 +302,11 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
             when (e.status) {
                 401 -> Session.rejected(getApplication(), token)
                 // A stop the server doesn't know: no times, which is true.
-                404 -> if (open()) _state.update { it.copy(board = Board(code, "", null, false, emptyList(), null), boardFailed = false, boardError = false) }
+                404 ->
+                    if (open())
+                        _state.update {
+                            it.copy(board = Board(code, "", null, false, emptyList(), null), boardFailed = false, boardError = false)
+                        }
                 // Down or busy: not "no times", which would say no buses are coming.
                 else -> if (open()) _state.update { it.copy(boardError = true, boardFailed = false) }
             }

@@ -1,5 +1,8 @@
 package sh.rcn.terminus.widget
 
+import java.io.File
+import java.time.Instant
+import java.time.ZoneId
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -9,9 +12,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.TestStrings
-import java.io.File
-import java.time.Instant
-import java.time.ZoneId
 
 /** What every widget says, from the server's golden answers (the API's tests pin them), and how it picks a layout. */
 class WidgetFaceTest {
@@ -21,7 +21,9 @@ class WidgetFaceTest {
     private val notAnswers = setOf("day.json", "nearby-list.json", "setup.json")
 
     private fun answers(sub: String = ""): Map<String, NextAnswer> =
-        File(dir, sub).listFiles { f -> f.name.endsWith(".json") && f.name !in notAnswers }!!.sortedBy { it.name }
+        File(dir, sub)
+            .listFiles { f -> f.name.endsWith(".json") && f.name !in notAnswers }!!
+            .sortedBy { it.name }
             .associate { it.name to NextAnswer.parse(JSONObject(it.readText())) }
 
     /** While the answer holds: just before it goes stale, or at the goldens' morning. */
@@ -32,7 +34,8 @@ class WidgetFaceTest {
 
     private fun load(name: String, sub: String = "") = NextAnswer.parse(JSONObject(File(File(dir, sub), name).readText()))
 
-    @Test fun everyAnswerHasAHeadlineAndItsAccentIsInIt() {
+    @Test
+    fun everyAnswerHasAHeadlineAndItsAccentIsInIt() {
         for (lang in listOf("values" to "", "values-zh" to "zh")) {
             TestStrings.install(lang.first)
             for ((name, a) in answers(lang.second)) {
@@ -51,7 +54,8 @@ class WidgetFaceTest {
         TestStrings.install()
     }
 
-    @Test fun theLeaveTimeIsTheBigPart() {
+    @Test
+    fun theLeaveTimeIsTheBigPart() {
         TestStrings.install()
         val f = face(load("class-bus.json"))
         assertEquals("~09:36", f.big)
@@ -63,7 +67,8 @@ class WidgetFaceTest {
         assertTrue(f.leg!!.text.contains("PGP"))
     }
 
-    @Test fun inChineseTheTimeComesFirstAndItsLabelGoesUnder() {
+    @Test
+    fun inChineseTheTimeComesFirstAndItsLabelGoesUnder() {
         TestStrings.install("values-zh")
         val f = face(load("class-bus.json", "zh"))
         assertEquals("约 09:36", f.big)
@@ -72,7 +77,8 @@ class WidgetFaceTest {
         TestStrings.install()
     }
 
-    @Test fun onFootThereIsNoPillAndTheLegIsTheBusItBeats() {
+    @Test
+    fun onFootThereIsNoPillAndTheLegIsTheBusItBeats() {
         TestStrings.install()
         val f = face(load("class-walk.json"))
         assertNull(f.pill)
@@ -80,7 +86,8 @@ class WidgetFaceTest {
         assertNull(f.leg?.svc)
     }
 
-    @Test fun ridingShowsWhereYouGetOffAndTheBusNearingIt() {
+    @Test
+    fun ridingShowsWhereYouGetOffAndTheBusNearingIt() {
         TestStrings.install()
         val a = load("riding.json")
         val f = face(a, now = a.card!!.ride!!.boardMs + 1)
@@ -92,7 +99,8 @@ class WidgetFaceTest {
         assertTrue("just boarded: far from the stop", bus!!.far > 0.9f)
     }
 
-    @Test fun aFreeDayShowsTheNextClassInATile() {
+    @Test
+    fun aFreeDayShowsTheNextClassInATile() {
         TestStrings.install()
         val a = load("free.json")
         val f = face(a)
@@ -103,14 +111,16 @@ class WidgetFaceTest {
         assertNull(f.leg)
     }
 
-    @Test fun aProblemTakesTheLineUnderTheHeadline() {
+    @Test
+    fun aProblemTakesTheLineUnderTheHeadline() {
         TestStrings.install()
         val a = load("class-bus.json")
         assertEquals("No connection", face(a, error = "No connection").sub)
         assertEquals("Updating…", face(a, error = UPDATING).sub)
     }
 
-    @Test fun signedOutAndNothingYet() {
+    @Test
+    fun signedOutAndNothingYet() {
         TestStrings.install()
         assertEquals("terminus", Face.of(false, Mode.Timetable, null, null, null, 0) { "" }.headline)
         val loading = Face.of(true, Mode.Timetable, null, null, null, 0) { "" }
@@ -118,7 +128,8 @@ class WidgetFaceTest {
         assertEquals("Tap to refresh", loading.sub)
     }
 
-    @Test fun shapeFollowsTheSize() {
+    @Test
+    fun shapeFollowsTheSize() {
         // One row is a bar whatever its width; narrow is the square; tall and wide is your day.
         assertEquals(WidgetShape.BAR, WidgetShape.of(340f, 100f))
         assertEquals(WidgetShape.BAR, WidgetShape.of(180f, 110f))
@@ -128,7 +139,8 @@ class WidgetFaceTest {
         assertEquals(WidgetShape.SQUARE, WidgetShape.of(170f, 420f))
     }
 
-    @Test fun theSkyIsRedrawnWhenItsHourChanges() {
+    @Test
+    fun theSkyIsRedrawnWhenItsHourChanges() {
         // Dawn at 6:30, day at 8:30, the golden hour at 4:30 PM, dusk at 6:45 PM, night at 7:40 PM.
         assertEquals(390, minutesToNextPhase(0))
         assertEquals(1, minutesToNextPhase(389))

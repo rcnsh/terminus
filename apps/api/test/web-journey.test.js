@@ -20,9 +20,15 @@ const ANSWERS = new URL('./fixtures/answers/', import.meta.url);
 /** Every shared answer with a journey, in each language: [lang, name, answer]. */
 function answers() {
   const out = [];
-  for (const [lang, dir] of [['en', ANSWERS], ['zh', new URL('zh/', ANSWERS)]]) {
+  for (const [lang, dir] of [
+    ['en', ANSWERS],
+    ['zh', new URL('zh/', ANSWERS)],
+  ]) {
     if (!fs.existsSync(dir)) continue;
-    for (const f of fs.readdirSync(dir).filter((f) => f.endsWith('.json')).sort()) {
+    for (const f of fs
+      .readdirSync(dir)
+      .filter((f) => f.endsWith('.json'))
+      .sort()) {
       const a = JSON.parse(fs.readFileSync(new URL(f, dir), 'utf8'));
       if (a.card?.journey) out.push([lang, f, a]);
     }
@@ -53,7 +59,8 @@ const android = {
     if (at == null || j.leave == null || now >= at) return null;
     return Math.trunc((at - now) / 1000);
   },
-  countdown: (left, min, minS, s) => (left >= 120 ? t(min, Math.trunc((left + 30) / 60)) : left >= 60 ? t(minS, Math.trunc(left / 60), left % 60) : t(s, Math.max(1, left))),
+  countdown: (left, min, minS, s) =>
+    left >= 120 ? t(min, Math.trunc((left + 30) / 60)) : left >= 60 ? t(minS, Math.trunc(left / 60), left % 60) : t(s, Math.max(1, left)),
   leaveIn(a, j, now) {
     if (a.card.phase === 'waiting') return (a.leave?.at ? a.card.leaveBy : null) ?? t('Leave now');
     const left = android.secondsToLeave(a, j, now);
@@ -71,7 +78,11 @@ const android = {
     if (!j.boardAt) return null;
     const left = Math.trunc((Date.parse(j.boardAt) - now) / 1000);
     if (left <= 0) return null;
-    return left >= 120 ? t('in {0} min', Math.trunc((left + 30) / 60)) : left >= 60 ? t('in {0} min {1} s', Math.trunc(left / 60), left % 60) : t('in {0} s', left);
+    return left >= 120
+      ? t('in {0} min', Math.trunc((left + 30) / 60))
+      : left >= 60
+        ? t('in {0} min {1} s', Math.trunc(left / 60), left % 60)
+        : t('in {0} s', left);
   },
 };
 
@@ -179,14 +190,21 @@ test("every line the server sent is shown as it is, even when it's nothing", () 
       if (j[key] === undefined) continue;
       assert.equal(show(a, j), j[key], `${lang}/${name} ${key}`);
     }
-    if (j.byText !== undefined && a.leave?.at) assert.equal(J.by(a, j, Date.parse(a.leave.at) - 60_000), j.byText, `${lang}/${name} byText`);
+    if (j.byText !== undefined && a.leave?.at)
+      assert.equal(J.by(a, j, Date.parse(a.leave.at) - 60_000), j.byText, `${lang}/${name} byText`);
   }
   // Said as nothing, it stays nothing: not worded here from the rest.
-  assert.equal(J.said({ walkText: null, walk: '5 min' }, 'walkText', () => 'worded here'), null);
-  assert.equal(J.said({ walk: '5 min' }, 'walkText', () => 'worded here'), 'worded here');
+  assert.equal(
+    J.said({ walkText: null, walk: '5 min' }, 'walkText', () => 'worded here'),
+    null,
+  );
+  assert.equal(
+    J.said({ walk: '5 min' }, 'walkText', () => 'worded here'),
+    'worded here',
+  );
 });
 
-test("an answer from before the server sent its lines is worded here as the server words them", () => {
+test('an answer from before the server sent its lines is worded here as the server words them', () => {
   // The service worker's kept copy can be from an older server: without
   // the lines, the card words them from the journey's parts, the same way.
   for (const [, name, a] of answers().filter(([l]) => l === 'en')) {
@@ -203,7 +221,7 @@ test("an answer from before the server sent its lines is worded here as the serv
   }
 });
 
-test('the livery (drawn before sign-in, with no /api/campus to ask) has the API\'s colours', async () => {
+test("the livery (drawn before sign-in, with no /api/campus to ask) has the API's colours", async () => {
   const { LIVERY } = await web('account/livery.js');
   const { ROUTE_COLORS } = await import('../src/campus.ts');
   assert.deepEqual(Object.fromEntries(LIVERY), ROUTE_COLORS);

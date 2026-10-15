@@ -52,7 +52,7 @@ test('in the 24-hour clock, and in Chinese, the span is both times as they are',
   assert.equal(S.clockSpan(23 * 60, 60), '下午 11:00–上午 1:00');
 });
 
-test('a class\'s weeks, each run of them, and none when it\'s every week', () => {
+test("a class's weeks, each run of them, and none when it's every week", () => {
   page('en', 'en-SG');
   assert.equal(S.weeksText([1, 2, 3, 4, 5, 6]), 'wk 1–6');
   assert.equal(S.weeksText([1, 3, 5, 7, 9, 11]), 'wk 1, 3, 5, 7, 9, 11');

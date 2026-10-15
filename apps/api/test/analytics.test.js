@@ -32,13 +32,21 @@ async function setup() {
     if (cookie) headers.cookie = cookie;
     if (body !== undefined) headers['content-type'] = 'application/json';
     const ctx = makeCtx();
-    const res = await worker.fetch(new Request(BASE + path, { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }), env, ctx);
+    const res = await worker.fetch(
+      new Request(BASE + path, { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }),
+      env,
+      ctx,
+    );
     await ctx.settle();
     return res;
   };
   await call('/api/auth/login', { method: 'POST', body: { email: 'you@u.nus.edu' } });
   const verify = await worker.fetch(
-    new Request(`${BASE}/auth/verify`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: `t=${env.EMAIL.lastToken()}` }),
+    new Request(`${BASE}/auth/verify`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: `t=${env.EMAIL.lastToken()}`,
+    }),
     env,
     makeCtx(),
   );
@@ -51,7 +59,10 @@ async function setup() {
 test('/api/me/day plans every class without logging each as an answer', async () => {
   const { ae, call, cookie } = await setup();
   const day = await (await call('/api/me/day', { cookie })).json();
-  assert.ok(day.items.some((i) => i.leave?.at), 'the leave-bys were worked out');
+  assert.ok(
+    day.items.some((i) => i.leave?.at),
+    'the leave-bys were worked out',
+  );
   assert.equal(ae.rows('answer').length, 0);
   assert.equal(ae.rows('arrival').length, 0);
 });
@@ -79,7 +90,10 @@ test("the Trip object's card is worked out without logging", async () => {
   await ctx.settle();
   assert.ok(card, 'a card for a day with classes');
   assert.ok(seen.length > 0);
-  assert.ok(seen.every((l) => l === false), 'every answer it asked for was unlogged');
+  assert.ok(
+    seen.every((l) => l === false),
+    'every answer it asked for was unlogged',
+  );
   assert.equal(ae.rows('answer').length, 0);
 });
 

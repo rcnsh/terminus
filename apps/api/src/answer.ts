@@ -10,16 +10,7 @@ import { getArrivals } from './fms.ts';
 import { getPublicArrivals } from './lta.ts';
 import { publicCodeOf, shuttleCalls, svcName } from './public.ts';
 import { buildAnswer, shortStop } from './format.ts';
-import {
-  candidateStops,
-  confidence,
-  haversineM,
-  indexGraph,
-  nearestStop,
-  pickAlt,
-  scoreOptions,
-  wholeWalk,
-} from './resolve.ts';
+import { candidateStops, confidence, haversineM, indexGraph, nearestStop, pickAlt, scoreOptions, wholeWalk } from './resolve.ts';
 import { logAnswer } from './analytics.ts';
 import { leaveBy } from './leave.ts';
 import { loadCrowdRisk, recordCrowds } from './crowd.ts';
@@ -69,7 +60,8 @@ export async function collectArrivals(
 
 /** Two feeds' answers for one shelter as one board, each feed's state kept. */
 export function mergeFeeds(code: string, nowMs: number, shuttle: StopArrivals | null, pub: StopArrivals | null): StopArrivals {
-  const state = (sa: StopArrivals | null): FeedState => (sa ? { fetchedAt: sa.fetchedAt, stale: sa.stale, available: sa.available } : { fetchedAt: nowMs, stale: false, available: false });
+  const state = (sa: StopArrivals | null): FeedState =>
+    sa ? { fetchedAt: sa.fetchedAt, stale: sa.stale, available: sa.available } : { fetchedAt: nowMs, stale: false, available: false };
   const up = [shuttle, pub].filter((sa): sa is StopArrivals => sa !== null && sa.available);
   return {
     code,
@@ -114,11 +106,10 @@ export async function answerFor(
       return twin ? [s, twin] : [s];
     });
   const atDest = destSides.find((d) =>
-    input.lat != null
-      ? haversineM(input.lat, input.lon!, d.lat, d.lon) / WALK.speedMs < 45
-      : input.originCode === d.code,
+    input.lat != null ? haversineM(input.lat, input.lon!, d.lat, d.lon) / WALK.speedMs < 45 : input.originCode === d.code,
   );
-  const atVenue = input.lat != null && input.destAt != null && haversineM(input.lat, input.lon!, input.destAt.lat, input.destAt.lon) <= WALK.atVenueM;
+  const atVenue =
+    input.lat != null && input.destAt != null && haversineM(input.lat, input.lon!, input.destAt.lat, input.destAt.lon) <= WALK.atVenueM;
   if (dest && (atDest || atVenue)) return arrivedAnswer(dest, destLabel, nowMs);
   // No coordinates and no origin stop: nothing to resolve from. Saying
   // "No buses running" here would be a claim about the network.
@@ -130,17 +121,18 @@ export async function answerFor(
   // change stops to ask about is settled before any fetch, so it all goes
   // in one round, at most TRANSFER.maxFetch stops more.
   const transfers = planTransfers(graph, input, cands);
-  const byStop = await collectArrivals(
-    env,
-    ctx,
-    [...cands.map((c) => c.stop.code), ...transfers.fetch],
-    nowMs,
-    graph,
-  );
+  const byStop = await collectArrivals(env, ctx, [...cands.map((c) => c.stop.code), ...transfers.fetch], nowMs, graph);
 
   // Tally who's packed for the full-bus risk, off the response path.
   if (env.DB) ctx.waitUntil(recordCrowds(env.DB, byStop, nowMs));
-  const crowdRisk = input.arriveBy && env.DB ? await loadCrowdRisk(env.DB, cands.map((c) => c.stop.code), nowMs) : undefined;
+  const crowdRisk =
+    input.arriveBy && env.DB
+      ? await loadCrowdRisk(
+          env.DB,
+          cands.map((c) => c.stop.code),
+          nowMs,
+        )
+      : undefined;
 
   // On from where a bus gets you off to the place itself, from that stop: a
   // food court's other stop can be further from it than its first.
@@ -155,7 +147,9 @@ export async function answerFor(
   const alt = pickAlt(options);
   const chosen = options[0]?.stop.code ?? fallbackStop?.code ?? '';
   // As the buses are named: a two-way public route's key carries its direction.
-  const arrivals: Arrival[] = (byStop.get(chosen)?.arrivals ?? []).map((a) => (a.svc === svcName(a.svc) ? a : { ...a, svc: svcName(a.svc) }));
+  const arrivals: Arrival[] = (byStop.get(chosen)?.arrivals ?? []).map((a) =>
+    a.svc === svcName(a.svc) ? a : { ...a, svc: svcName(a.svc) },
+  );
 
   // Without coordinates the walk starts where the trip does, whichever stop the bus would go from.
   const walk = wholeWalk(graph, input, originStop ?? fallbackStop);
@@ -194,13 +188,14 @@ export async function answerFor(
 
   // Synchronous, non-blocking, and swallows its own errors. Deliberately not
   // behind waitUntil: there is nothing to await.
-  if (input.log !== false) logAnswer(env, {
-    answer,
-    best: options[0] ?? null,
-    dest: input.to,
-    hadCoords: input.lat != null,
-    walkAllS,
-  });
+  if (input.log !== false)
+    logAnswer(env, {
+      answer,
+      best: options[0] ?? null,
+      dest: input.to,
+      hadCoords: input.lat != null,
+      walkAllS,
+    });
 
   return answer;
 }
@@ -221,7 +216,9 @@ export function arrivedAnswer(stop: Stop, destLabel: string | null, nowMs: numbe
     // A place's stop is worth naming ("The Deck is at UTown"); a class's label
     // already says where it is ("GEA1000 @ UTown is at UTown" said it twice).
     detail:
-      destLabel && !destLabel.includes(' @ ') && destLabel !== stop.name && destLabel !== shortStop(stop.name, 14) ? m().destIsAt(destLabel, stop.name) : m().youreAt(stop.name),
+      destLabel && !destLabel.includes(' @ ') && destLabel !== stop.name && destLabel !== shortStop(stop.name, 14)
+        ? m().destIsAt(destLabel, stop.name)
+        : m().youreAt(stop.name),
     alt: null,
     stop: { code: stop.code, name: stop.name, confidence: 1 },
     quality: 'live',

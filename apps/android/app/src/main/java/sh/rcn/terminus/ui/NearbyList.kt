@@ -39,11 +39,9 @@ import sh.rcn.terminus.Spoken
 import sh.rcn.terminus.parseColor
 
 /**
- * The stops near you as their signs: the name plate with the walk there,
- * then a row per service, its buses coming up a short road towards the
- * stop, nearer the sooner they're due, the next one solid and the rest
- * faded. The nearest stop is drawn larger. A timetable guess is an outline,
- * never a filled bus, so it doesn't pass for live.
+ * The stops near you as their signs: the name plate with the walk there, then a row per service, its buses coming up a short road towards
+ * the stop, nearer the sooner they're due, the next one solid and the rest faded. The nearest stop is drawn larger. A timetable guess is an
+ * outline, never a filled bus, so it doesn't pass for live.
  */
 @Composable
 internal fun NearbyList(stops: List<NearbyStop>?, loading: Boolean, onOpenStop: (String) -> Unit) {
@@ -60,26 +58,41 @@ internal fun NearbyList(stops: List<NearbyStop>?, loading: Boolean, onOpenStop: 
                 Modifier.clickable(role = Role.Button, onClickLabel = stringResource(R.string.on_the_map, s.name)) { onOpenStop(s.code) },
                 big = big,
                 trailing = {
-                    Text(if (s.walkS < 60) stringResource(R.string.here) else stringResource(R.string.min_walk, (s.walkS + 30) / 60), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(end = 6.dp))
+                    Text(
+                        if (s.walkS < 60) stringResource(R.string.here) else stringResource(R.string.min_walk, (s.walkS + 30) / 60),
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.padding(end = 6.dp),
+                    )
                 },
             ) {
-                if (!s.available) Text(stringResource(R.string.no_live_data), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(14.dp))
+                if (!s.available)
+                    Text(
+                        stringResource(R.string.no_live_data),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(14.dp),
+                    )
                 for ((j, row) in s.board.withIndex()) {
                     if (j > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     val color = row.color?.let(::parseColor) ?: 0xFF8A939C
                     // One line to a screen reader: "Bus D2, about 6 minutes, timetable",
                     // where the screen has the badge, an outlined bus and "~6 min".
-                    val said = listOfNotNull(
-                        stringResource(if (row.paid) R.string.a11y_bus_paid else R.string.a11y_bus, row.svc),
-                        Spoken.eta(row.etaS, row.quality) ?: Spoken.spell(row.eta ?: eta(row.etaS, row.quality)),
-                    ).joinToString(", ")
+                    val said =
+                        listOfNotNull(
+                                stringResource(if (row.paid) R.string.a11y_bus_paid else R.string.a11y_bus, row.svc),
+                                Spoken.eta(row.etaS, row.quality) ?: Spoken.spell(row.eta ?: eta(row.etaS, row.quality)),
+                            )
+                            .joinToString(", ")
                     Row(
-                        Modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = said }.padding(horizontal = 14.dp, vertical = if (big) 10.dp else 7.dp),
+                        Modifier.fillMaxWidth()
+                            .clearAndSetSemantics { contentDescription = said }
+                            .padding(horizontal = 14.dp, vertical = if (big) 10.dp else 7.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         // A fixed column, so every road starts at the same place.
-                        Box(Modifier.width(if (row.paid) 52.dp else 34.dp)) { BusBadge(row.svc, color, if (big) 13.sp else 12.sp, paid = row.paid) }
+                        Box(Modifier.width(if (row.paid) 52.dp else 34.dp)) {
+                            BusBadge(row.svc, color, if (big) 13.sp else 12.sp, paid = row.paid)
+                        }
                         Road(row, Color(color), Modifier.weight(1f).height(18.dp))
                         Text(
                             row.eta ?: eta(row.etaS, row.quality),
@@ -103,9 +116,8 @@ private const val ROAD_S = 15 * 60
 private const val LATER_ALPHA = 0.35f
 
 /**
- * A short road to the stop (the ring at its end), and the buses on it: filled
- * in their colour when the time is live, an outline when it's a timetable
- * guess. The next one is solid and drawn last, on top; the ones after it, faded.
+ * A short road to the stop (the ring at its end), and the buses on it: filled in their colour when the time is live, an outline when it's a
+ * timetable guess. The next one is solid and drawn last, on top; the ones after it, faded.
  */
 @Composable
 private fun Road(row: BoardRow, color: Color, modifier: Modifier) {
@@ -116,7 +128,13 @@ private fun Road(row: BoardRow, color: Color, modifier: Modifier) {
         val y = size.height / 2
         val ring = 5.dp.toPx()
         val end = size.width - ring - 1.dp.toPx()
-        drawLine(road, Offset(0f, y), Offset(end, y), 2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx())))
+        drawLine(
+            road,
+            Offset(0f, y),
+            Offset(end, y),
+            2.dp.toPx(),
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx())),
+        )
         drawCircle(paper, ring, Offset(end, y))
         drawCircle(stop, ring, Offset(end, y), style = Stroke(2.5.dp.toPx()))
         val w = 18.dp.toPx()
@@ -133,10 +151,14 @@ private fun Road(row: BoardRow, color: Color, modifier: Modifier) {
     }
 }
 
-/** The local wording, for an older server and the widget's own countdown: anything but a live time keeps its "~", as the server's `eta` does. */
-internal fun eta(s: Int?, quality: String) = when {
-    s == null -> if (quality == "ended") L.s(R.string.eta_ended) else "–"
-    s < 45 -> L.s(R.string.now)
-    quality != "live" -> L.s(R.string.approx, L.s(R.string.n_min, (s + 30) / 60))
-    else -> L.s(R.string.n_min, (s + 30) / 60)
-}
+/**
+ * The local wording, for an older server and the widget's own countdown: anything but a live time keeps its "~", as the server's `eta`
+ * does.
+ */
+internal fun eta(s: Int?, quality: String) =
+    when {
+        s == null -> if (quality == "ended") L.s(R.string.eta_ended) else "–"
+        s < 45 -> L.s(R.string.now)
+        quality != "live" -> L.s(R.string.approx, L.s(R.string.n_min, (s + 30) / 60))
+        else -> L.s(R.string.n_min, (s + 30) / 60)
+    }

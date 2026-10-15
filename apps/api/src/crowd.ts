@@ -65,7 +65,9 @@ export async function recordCrowds(db: D1Database, byStop: Map<string, StopArriv
         if (sent.has(key) || keys.includes(key)) continue;
         keys.push(key);
         stmts.push(
-          db.prepare('INSERT OR IGNORE INTO crowd_seen (plate, stop, day, slot) VALUES (?, ?, ?, ?)').bind(a.plate, stop, sgtDate(at), slot),
+          db
+            .prepare('INSERT OR IGNORE INTO crowd_seen (plate, stop, day, slot) VALUES (?, ?, ?, ?)')
+            .bind(a.plate, stop, sgtDate(at), slot),
           // Counts only when the line above added a row: a bus already seen
           // here this half hour is not a new sighting.
           db
@@ -96,7 +98,9 @@ export async function loadCrowdRisk(db: D1Database, stops: string[], nowMs: numb
   if (unique.length) {
     try {
       const { results } = await db
-        .prepare(`SELECT svc, stop, slot, n, packed FROM crowd_stats WHERE daytype = ? AND n >= ? AND stop IN (${unique.map(() => '?').join(', ')})`)
+        .prepare(
+          `SELECT svc, stop, slot, n, packed FROM crowd_stats WHERE daytype = ? AND n >= ? AND stop IN (${unique.map(() => '?').join(', ')})`,
+        )
         .bind(dayType(nowMs), MIN_SAMPLES, ...unique)
         .all<{ svc: string; stop: string; slot: number; n: number; packed: number }>();
       for (const r of results) table.set(`${r.svc}|${r.stop}|${r.slot}`, r.packed / r.n);
@@ -109,5 +113,8 @@ export async function loadCrowdRisk(db: D1Database, stops: string[], nowMs: numb
 
 /** Cron: drop sightings older than the dedupe window. */
 export async function pruneCrowdSeen(db: D1Database, nowMs: number): Promise<void> {
-  await db.prepare('DELETE FROM crowd_seen WHERE day < ?').bind(sgtDate(nowMs - KEEP_SEEN_DAYS * 86_400_000)).run();
+  await db
+    .prepare('DELETE FROM crowd_seen WHERE day < ?')
+    .bind(sgtDate(nowMs - KEEP_SEEN_DAYS * 86_400_000))
+    .run();
 }

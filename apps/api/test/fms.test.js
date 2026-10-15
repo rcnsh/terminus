@@ -122,7 +122,7 @@ test('the device id is made only when none is stored, and a failed read makes no
   assert.equal(await deviceId(raced), 'abcdef0123456789');
 });
 
-test("fetchedAt is when the call that answered went out, not when the fetch began", async () => {
+test('fetchedAt is when the call that answered went out, not when the fetch began', async () => {
   for (const [name, call] of [
     ['shuttle-service', (env) => fetchArrivals(env, 'COM3', FROZEN_NOW)],
     ['active-bus', (env) => fetchActiveBuses(env, 'D2', FROZEN_NOW)],

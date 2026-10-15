@@ -11,15 +11,12 @@ import javax.net.ssl.SSLException
 import javax.net.ssl.SSLHandshakeException
 
 /**
- * Which server the app talks to. Only ever one built into the app: the
- * site's own addresses (the first is the default) and, in a debug build, the
- * local dev stub. The developer menu (Settings, About) picks one; nothing
- * can add one, so the menu can't send a token anywhere but our own servers.
+ * Which server the app talks to. Only ever one built into the app: the site's own addresses (the first is the default) and, in a debug
+ * build, the local dev stub. The developer menu (Settings, About) picks one; nothing can add one, so the menu can't send a token anywhere
+ * but our own servers.
  *
- * The default is the address people see (terminus.run), the one that
- * goes with the project if someone else takes it over. The other,
- * terminus.rcn.sh, is the backup: a request that can't reach one at all
- * goes to the other ([order]), so a network that refuses one of them
+ * The default is the address people see (terminus.run), the one that goes with the project if someone else takes it over. The other,
+ * terminus.rcn.sh, is the backup: a request that can't reach one at all goes to the other ([order]), so a network that refuses one of them
  * doesn't stop the app.
  */
 internal object Servers {
@@ -30,8 +27,7 @@ internal object Servers {
     }
 
     /**
-     * The servers to choose from: [default] first, then [others] (the
-     * site's other addresses), then in a [debug] build the stub, through
+     * The servers to choose from: [default] first, then [others] (the site's other addresses), then in a [debug] build the stub, through
      * `adb reverse` or from the emulator.
      */
     fun all(default: String, others: List<String>, debug: Boolean): List<String> =
@@ -41,13 +37,11 @@ internal object Servers {
     fun pick(saved: String?, all: List<String>): String = saved?.takeIf { it in all } ?: all.first()
 
     /** The site's other address, for when [base] can't be reached. None for the stub. */
-    fun backup(base: String, all: List<String>): String? =
-        if (isLocal(base)) null else all.firstOrNull { it != base && !isLocal(it) }
+    fun backup(base: String, all: List<String>): String? = if (isLocal(base)) null else all.firstOrNull { it != base && !isLocal(it) }
 
     /**
-     * Where a request goes, in turn: [base], then its [backup]. While a
-     * [detour] is on (the backup answered a moment ago when [base] didn't),
-     * the backup first, so a refused address doesn't slow every request.
+     * Where a request goes, in turn: [base], then its [backup]. While a [detour] is on (the backup answered a moment ago when [base]
+     * didn't), the backup first, so a refused address doesn't slow every request.
      */
     fun order(base: String, all: List<String>, detour: String?): List<String> {
         val other = backup(base, all) ?: return listOf(base)
@@ -55,23 +49,21 @@ internal object Servers {
     }
 
     /**
-     * Whether [e] means the server was never reached, so the request can go
-     * to the other address without arriving twice: no address for the name,
-     * a connection refused, or a TLS handshake cut off (a firewall resetting
-     * it). Any other reset only for a GET, which is safe to repeat; never a
-     * timeout or an answer from the server ([ApiError]).
+     * Whether [e] means the server was never reached, so the request can go to the other address without arriving twice: no address for the
+     * name, a connection refused, or a TLS handshake cut off (a firewall resetting it). Any other reset only for a GET, which is safe to
+     * repeat; never a timeout or an answer from the server ([ApiError]).
      */
     fun unreached(e: Throwable, method: String): Boolean =
-        e is UnknownHostException || e is ConnectException || e is NoRouteToHostException || e is SSLHandshakeException ||
+        e is UnknownHostException ||
+            e is ConnectException ||
+            e is NoRouteToHostException ||
+            e is SSLHandshakeException ||
             (method == "GET" && (e is SocketException || e is SSLException) && e !is ApiError)
 
     /** How long requests go to the backup first, once it answered when the chosen address didn't. */
     const val DETOUR_MS = 10 * 60_000L
 
-    /**
-     * The developer menu shows in debug and beta builds; in a stable
-     * release, once the version in About is tapped [UNLOCK_TAPS] times.
-     */
+    /** The developer menu shows in debug and beta builds; in a stable release, once the version in About is tapped [UNLOCK_TAPS] times. */
     fun menuAlways(debug: Boolean, flavor: String): Boolean = debug || flavor == "beta"
 
     const val UNLOCK_TAPS = 7
@@ -88,34 +80,32 @@ internal object Servers {
     @Volatile private var current: String? = null
 
     /** Where requests go now. Read before [init] (it never is: TerminusApp runs first), the default. */
-    val base: String get() = current ?: choices.first()
+    val base: String
+        get() = current ?: choices.first()
 
     /** The backup and until when it goes first ([order]), after the chosen address couldn't be reached. */
     @Volatile private var detour: Pair<String, Long>? = null
 
     /** Where a request goes now, in turn ([order]). */
-    fun tries(now: Long = System.currentTimeMillis()): List<String> =
-        order(base, choices, detour?.takeIf { now < it.second }?.first)
+    fun tries(now: Long = System.currentTimeMillis()): List<String> = order(base, choices, detour?.takeIf { now < it.second }?.first)
 
     /**
-     * [at] answered. The chosen address ends a detour; the backup starts one,
-     * which isn't stretched while it lasts, so the chosen address is tried
-     * first again within [DETOUR_MS].
+     * [at] answered. The chosen address ends a detour; the backup starts one, which isn't stretched while it lasts, so the chosen address
+     * is tried first again within [DETOUR_MS].
      */
     fun answered(at: String, now: Long = System.currentTimeMillis()) {
         val d = detour
-        detour = when {
-            at == base -> null
-            d != null && d.first == at && now < d.second -> d
-            else -> at to now + DETOUR_MS
-        }
+        detour =
+            when {
+                at == base -> null
+                d != null && d.first == at && now < d.second -> d
+                else -> at to now + DETOUR_MS
+            }
     }
 
     /**
-     * [call] with each of [tries] in turn, the next only when one couldn't be
-     * reached ([unreached]); the one that answered goes to [answered]. For
-     * what doesn't go through Api's request (crash reports, the map files),
-     * so it falls back to the backup the same way.
+     * [call] with each of [tries] in turn, the next only when one couldn't be reached ([unreached]); the one that answered goes to
+     * [answered]. For what doesn't go through Api's request (crash reports, the map files), so it falls back to the backup the same way.
      */
     fun <T> through(tries: List<String>, method: String, answered: (String) -> Unit, call: (String) -> T): T {
         for ((i, base) in tries.withIndex()) {
@@ -141,11 +131,9 @@ internal object Servers {
     fun unlockMenu(ctx: Context) = terminusPrefs(ctx).edit { putBoolean(KEY_MENU, true) }
 
     /**
-     * Switch to [to]. Between the site's addresses it's the same server and
-     * the same sign-in. To or from the stub, the sign-in is set aside and
-     * the other side's put back ([Store.swapSession]): a real account's
-     * token never goes to the stub, which is plain HTTP. True when the
-     * session changed, so the app has to start again.
+     * Switch to [to]. Between the site's addresses it's the same server and the same sign-in. To or from the stub, the sign-in is set aside
+     * and the other side's put back ([Store.swapSession]): a real account's token never goes to the stub, which is plain HTTP. True when
+     * the session changed, so the app has to start again.
      */
     fun choose(ctx: Context, to: String): Boolean {
         require(to in choices) { "not one of this app's servers" }

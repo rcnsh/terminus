@@ -26,6 +26,7 @@ export function preloadMap() {
     if (as) link.as = as;
     document.head.append(link);
   };
-  for (const href of ['/app/map.js', `${MAPLIBRE}maplibre-gl.mjs`, `${MAPLIBRE}maplibre-gl-shared.mjs`, PMTILES]) add('modulepreload', href);
+  for (const href of ['/app/map.js', `${MAPLIBRE}maplibre-gl.mjs`, `${MAPLIBRE}maplibre-gl-shared.mjs`, PMTILES])
+    add('modulepreload', href);
   add('preload', `${MAPLIBRE}maplibre-gl.css`, 'style');
 }

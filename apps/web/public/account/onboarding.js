@@ -4,7 +4,19 @@
 
 import { html, reducedMotion, useEffect, useMemo, useRef, useState, useStore } from '../assets/ui.js';
 import { api, browserHour12, clock, inkOn, locationError, t } from './dom.js';
-import { campus, limit, profile, ResidenceOptions, residenceWalkMin, residencesByName, saveNow, stopName, stopsNear, toast, TOAST_MS } from './profile.js';
+import {
+  campus,
+  limit,
+  profile,
+  ResidenceOptions,
+  residenceWalkMin,
+  residencesByName,
+  saveNow,
+  stopName,
+  stopsNear,
+  toast,
+  TOAST_MS,
+} from './profile.js';
 import { CLOCKS, StopSelect } from './settings-pages.js';
 
 const PACES = [
@@ -244,35 +256,44 @@ function Home({ nav }) {
   const chosen = mode === 'hall' && picked ? picked.code : mode;
   const first = common[0]?.code ?? tiles[0]?.code ?? 'more';
   const tabStop = (key) => (key === (chosen ?? first) ? 0 : -1);
-  const tile = (r) => html`<${Tile} key=${r.code} on=${mode === 'hall' && picked === r} tab=${tabStop(r.code)} onClick=${() => pick(r)}><strong>${r.name}</strong><//>`;
+  const tile = (r) =>
+    html`<${Tile} key=${r.code} on=${mode === 'hall' && picked === r} tab=${tabStop(r.code)} onClick=${() => pick(r)}><strong>${r.name}</strong><//>`;
   const yours = mode === 'hall' && picked ? picked.stops : stop ? [stop] : [];
   return html`
     <${Heading} text=${t('Where your day starts')} sub=${t('Where you catch the bus in the morning and head back to at night. Only the stops are saved.')} />
     <div role="radiogroup" aria-label=${t('Where you live')} onKeyDown=${arrowKeys}>
-      ${common.length > 0 &&
-      html`<p class="eyebrow ob-label">${t('Most common')}</p>
+      ${
+        common.length > 0 &&
+        html`<p class="eyebrow ob-label">${t('Most common')}</p>
         <div class="ob-tiles ob-common">${common.map(tile)}</div>
-        <p class="eyebrow ob-label">${t('Elsewhere')}</p>`}
+        <p class="eyebrow ob-label">${t('Elsewhere')}</p>`
+      }
       <div class=${common.length ? 'ob-tiles ob-rest' : 'ob-tiles'}>
         ${tiles.map(tile)}
         <${Tile} on=${mode === 'more'} tab=${tabStop('more')} onClick=${() => setMode('more')}><strong>${t('All {0} halls and colleges', residences.length)}</strong><//>
         <${Tile} on=${mode === 'off'} tab=${tabStop('off')} onClick=${() => pick(null)}><strong>${t('Off campus')}</strong><span class="hint">${t('Choose your stop')}</span><//>
       </div>
     </div>
-    ${mode === 'more' &&
-    html`<label for="ob-residence">${t('Where do you live?')}</label>
+    ${
+      mode === 'more' &&
+      html`<label for="ob-residence">${t('Where do you live?')}</label>
       <select id="ob-residence" value=${picked?.code ?? ''} onChange=${(e) => pick(residences.find((x) => x.code === e.currentTarget.value) ?? null)}>
         <option value="">${t('Choose')}</option>
         <${ResidenceOptions} residences=${residences} />
-      </select>`}
-    ${mode === 'off' &&
-    html`<label for="ob-stop">${t('Home stop')}</label>
+      </select>`
+    }
+    ${
+      mode === 'off' &&
+      html`<label for="ob-stop">${t('Home stop')}</label>
       <${StopSelect} id="ob-stop" aria-label=${t('Home stop')} value=${stop} onChange=${setStop} blank=${t('Choose a stop')} />
-      <button type="button" class="link-btn locate" onClick=${locate}>${t('Pick the stop nearest me')}</button>`}
+      <button type="button" class="link-btn locate" onClick=${locate}>${t('Pick the stop nearest me')}</button>`
+    }
     <p class="hint" role="status">${msg}</p>
-    ${yours.length > 0 &&
-    html`<p class="eyebrow ob-label">${t('Your stops')}</p>
-      <div class="ob-signs">${yours.map((code) => html`<${StopSign} code=${code} key=${code} />`)}</div>`}
+    ${
+      yours.length > 0 &&
+      html`<p class="eyebrow ob-label">${t('Your stops')}</p>
+      <div class="ob-signs">${yours.map((code) => html`<${StopSign} code=${code} key=${code} />`)}</div>`
+    }
     <label for="ob-walk">${t('Walk from home to that stop')}</label>
     <div class="row tight">
       <input id="ob-walk" type="number" min=${range.min} max=${range.max} step="1" aria-describedby="ob-walk-unit" value=${walk} onInput=${(e) => setWalk(e.currentTarget.value)} />
@@ -345,12 +366,14 @@ function Travel({ nav }) {
         </span>
         <input type="checkbox" class="switch" checked=${full} onChange=${(e) => setFull(e.currentTarget.checked)} />
       </label>
-      ${full &&
-      html`<div class="ob-busy-eg">
+      ${
+        full &&
+        html`<div class="ob-busy-eg">
         <span class="ob-bus on"><span class="svc-tag" style=${R2_TAG}>R2</span>${clock('2026-01-05T09:38:00+08:00')}</span>
         <span class="hint">${t('instead of')}</span>
         <span class="ob-bus off"><span class="svc-tag" style=${R2_TAG}>R2</span><s>${`${clock('2026-01-05T09:46:00+08:00')} · ${t('busy')}`}</s></span>
-      </div>`}
+      </div>`
+      }
     </div>
     <${Actions}
       nav=${nav}

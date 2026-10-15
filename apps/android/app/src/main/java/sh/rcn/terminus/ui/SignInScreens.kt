@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -58,7 +59,6 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.error
@@ -67,7 +67,6 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.intl.LocaleList
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -75,6 +74,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.intl.LocaleList
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.coerceIn
 import androidx.compose.ui.unit.dp
@@ -86,13 +86,19 @@ import sh.rcn.terminus.R
 import sh.rcn.terminus.codeEdit
 
 /**
- * First launch: start straight away, or sign in to an account you already
- * have. A bus's livery sweeps across the top, a stripe in each service's
- * colour, with the mark where the fleet number would be. It runs edge to
- * edge, so this screen keeps the insets itself instead of the host's padding.
+ * First launch: start straight away, or sign in to an account you already have. A bus's livery sweeps across the top, a stripe in each
+ * service's colour, with the mark where the fleet number would be. It runs edge to edge, so this screen keeps the insets itself instead of
+ * the host's padding.
  */
 @Composable
-internal fun WelcomeScreen(busy: Boolean, message: String?, onStart: () -> Unit, onSignIn: () -> Unit, onPair: () -> Unit, onLang: (String) -> Unit) {
+internal fun WelcomeScreen(
+    busy: Boolean,
+    message: String?,
+    onStart: () -> Unit,
+    onSignIn: () -> Unit,
+    onPair: () -> Unit,
+    onLang: (String) -> Unit,
+) {
     val ctx = LocalContext.current
     val bg = MaterialTheme.colorScheme.background
     BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
@@ -111,7 +117,9 @@ internal fun WelcomeScreen(busy: Boolean, message: String?, onStart: () -> Unit,
                     BrandMark(Modifier.size(92.dp).shadow(16.dp, RoundedCornerShape(24.dp)))
                 }
             }
-            Box(Modifier.padding(top = 16.dp)) { Wordmark(MaterialTheme.typography.displaySmall.copy(fontSize = 46.sp, letterSpacing = (-1).sp)) }
+            Box(Modifier.padding(top = 16.dp)) {
+                Wordmark(MaterialTheme.typography.displaySmall.copy(fontSize = 46.sp, letterSpacing = (-1).sp))
+            }
             Text(
                 stringResource(R.string.tagline),
                 style = MaterialTheme.typography.titleMedium,
@@ -126,7 +134,13 @@ internal fun WelcomeScreen(busy: Boolean, message: String?, onStart: () -> Unit,
             Spacer(Modifier.weight(1f))
             Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 // Said as soon as it shows: it's why nothing happened.
-                message?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(bottom = 12.dp).semantics { liveRegion = LiveRegionMode.Assertive }) }
+                message?.let {
+                    Text(
+                        it,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(bottom = 12.dp).semantics { liveRegion = LiveRegionMode.Assertive },
+                    )
+                }
                 Button(onClick = onStart, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
                     Text(if (busy) stringResource(R.string.starting) else stringResource(R.string.get_started))
                 }
@@ -152,20 +166,24 @@ internal fun WelcomeScreen(busy: Boolean, message: String?, onStart: () -> Unit,
 }
 
 /**
- * The services as NUS paints them, for the livery. The API's ROUTE_COLORS
- * (campus.ts) is the source, and every other screen takes the colours from
- * /campus; this one shows before there's an account to ask with.
+ * The services as NUS paints them, for the livery. The API's ROUTE_COLORS (campus.ts) is the source, and every other screen takes the
+ * colours from /campus; this one shows before there's an account to ask with.
  */
-internal val LIVERY = listOf(
-    "A1" to 0xFFD32F2F, "A2" to 0xFFD9A000, "D1" to 0xFFEC4FA0, "D2" to 0xFF8E44C9,
-    "K" to 0xFF2B9AD6, "R1" to 0xFFF57C1F, "R2" to 0xFF34A853, "P" to 0xFF8A939C,
-)
+internal val LIVERY =
+    listOf(
+        "A1" to 0xFFD32F2F,
+        "A2" to 0xFFD9A000,
+        "D1" to 0xFFEC4FA0,
+        "D2" to 0xFF8E44C9,
+        "K" to 0xFF2B9AD6,
+        "R1" to 0xFFF57C1F,
+        "R2" to 0xFF34A853,
+        "P" to 0xFF8A939C,
+    )
 
 /**
- * The stripes down a bus's side, rising to the right: one per service (P's
- * grey would dull it), then a gap and a thin line in the accent. They're
- * sized by the height they're given, and the rise is capped so a tablet's
- * wide screen gets a flatter band, not a steeper cut.
+ * The stripes down a bus's side, rising to the right: one per service (P's grey would dull it), then a gap and a thin line in the accent.
+ * They're sized by the height they're given, and the rise is capped so a tablet's wide screen gets a flatter band, not a steeper cut.
  */
 @Composable
 private fun Livery(modifier: Modifier) {
@@ -178,28 +196,33 @@ private fun Livery(modifier: Modifier) {
         val right = left - rise
         // A strip between two heights above the lower edge. Each overlaps the
         // next by a pixel, so no hairline of background shows between them.
-        fun strip(from: Float, to: Float, color: Color) = drawPath(
-            Path().apply {
-                moveTo(0f, left - from); lineTo(size.width, right - from)
-                lineTo(size.width, right - to - 1f); lineTo(0f, left - to - 1f); close()
-            },
-            color,
-        )
+        fun strip(from: Float, to: Float, color: Color) =
+            drawPath(
+                Path().apply {
+                    moveTo(0f, left - from)
+                    lineTo(size.width, right - from)
+                    lineTo(size.width, right - to - 1f)
+                    lineTo(0f, left - to - 1f)
+                    close()
+                },
+                color,
+            )
         strip(0f, 6 * unit, accent)
         val stripe = 20 * unit
         var at = 16 * unit
-        LIVERY.filter { it.first != "P" }.asReversed().forEach { (_, color) ->
-            strip(at, at + stripe, Color(color))
-            at += stripe
-        }
+        LIVERY.filter { it.first != "P" }
+            .asReversed()
+            .forEach { (_, color) ->
+                strip(at, at + stripe, Color(color))
+                at += stripe
+            }
     }
 }
 
 /**
- * Sign in by email, approved from the email on any device: type the address,
- * then the code from the email, or choose the number shown here on the page
- * the email links to. As Settings' pages: the title in a band of the sky
- * ([phase]), with a back arrow that cancels, then the plain page.
+ * Sign in by email, approved from the email on any device: type the address, then the code from the email, or choose the number shown here
+ * on the page the email links to. As Settings' pages: the title in a band of the sky ([phase]), with a back arrow that cancels, then the
+ * plain page.
  */
 @Composable
 internal fun SignInScreen(
@@ -214,37 +237,37 @@ internal fun SignInScreen(
     onCancel: () -> Unit,
 ) {
     val s = state.signIn
-    val title = when (s) {
-        is SignIn.Waiting -> R.string.check_email
-        is SignIn.Choose -> R.string.which_setup
-        else -> if (adding) R.string.add_email else R.string.sign_in
-    }
+    val title =
+        when (s) {
+            is SignIn.Waiting -> R.string.check_email
+            is SignIn.Choose -> R.string.which_setup
+            else -> if (adding) R.string.add_email else R.string.sign_in
+        }
     // Edge to edge, so the band reaches the top; the keyboard pushes the page up.
     // The band scrolls away with the page, as Settings' pages do.
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val scroll = rememberScrollState()
     Box(Modifier.fillMaxSize().imePadding()) {
-    Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
-        SkyBand(phase, top) {
-            BackHeader(stringResource(title), onCancel)
-        }
-        Column(
-            Modifier
-                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
-                .padding(horizontal = 16.dp),
-        ) {
-            Groups {
-                when (s) {
-                    // Editing what went wrong takes its message away ([onEdit]).
-                    is SignIn.Waiting -> Waiting(s, state.busy, state.message, onCode, onDifferentEmail, onEdit)
-                    is SignIn.Choose -> Choose(s, state.busy, state.message, onChoose)
-                    else -> EmailStep(adding, state.busy, state.message, onSend, onEdit)
-                }
+        Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
+            SkyBand(phase, top) {
+                BackHeader(stringResource(title), onCancel)
             }
-            Spacer(Modifier.height(32.dp))
+            Column(
+                Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
+                    .padding(horizontal = 16.dp)
+            ) {
+                Groups {
+                    when (s) {
+                        // Editing what went wrong takes its message away ([onEdit]).
+                        is SignIn.Waiting -> Waiting(s, state.busy, state.message, onCode, onDifferentEmail, onEdit)
+                        is SignIn.Choose -> Choose(s, state.busy, state.message, onChoose)
+                        else -> EmailStep(adding, state.busy, state.message, onSend, onEdit)
+                    }
+                }
+                Spacer(Modifier.height(32.dp))
+            }
         }
-    }
-    StatusStrip(phase, top, scroll)
+        StatusStrip(phase, top, scroll)
     }
 }
 
@@ -253,7 +276,14 @@ internal fun SignInScreen(
 private fun Action(text: String, enabled: Boolean, message: String?, onClick: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         InkButton(text, onClick, Modifier.fillMaxWidth().heightIn(min = 48.dp), enabled = enabled)
-        message?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 4.dp).semantics { liveRegion = LiveRegionMode.Assertive }) }
+        message?.let {
+            Text(
+                it,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(horizontal = 4.dp).semantics { liveRegion = LiveRegionMode.Assertive },
+            )
+        }
     }
 }
 
@@ -288,7 +318,14 @@ private fun EmailStep(adding: Boolean, busy: Boolean, message: String?, onSend: 
 }
 
 @Composable
-private fun ColumnScope.Waiting(s: SignIn.Waiting, busy: Boolean, message: String?, onCode: (String) -> Unit, onDifferentEmail: () -> Unit, onEdit: () -> Unit) {
+private fun ColumnScope.Waiting(
+    s: SignIn.Waiting,
+    busy: Boolean,
+    message: String?,
+    onCode: (String) -> Unit,
+    onDifferentEmail: () -> Unit,
+    onEdit: () -> Unit,
+) {
     var field by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue()) }
     val code = field.text
     Group(stringResource(R.string.code_from_email), stringResource(R.string.code_sent_hint, s.email)) {
@@ -311,15 +348,19 @@ private fun ColumnScope.Waiting(s: SignIn.Waiting, busy: Boolean, message: Strin
         FieldRow(stringResource(R.string.other_device_row), sub = stringResource(R.string.signs_in_itself)) {
             val numberLabel = stringResource(R.string.number_to_choose, s.match.toString())
             Box(
-                Modifier
-                    .background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(14.dp))
+                Modifier.background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(14.dp))
                     .heightIn(min = 52.dp)
                     .widthIn(min = 64.dp)
                     .padding(horizontal = 12.dp)
                     .semantics { contentDescription = numberLabel },
                 contentAlignment = Alignment.Center,
             ) {
-                Text(s.match.toString(), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                Text(
+                    s.match.toString(),
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
             }
         }
     }
@@ -327,14 +368,14 @@ private fun ColumnScope.Waiting(s: SignIn.Waiting, busy: Boolean, message: Strin
         onClick = onDifferentEmail,
         colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant),
         modifier = Modifier.align(Alignment.CenterHorizontally),
-    ) { Text(stringResource(R.string.different_email)) }
+    ) {
+        Text(stringResource(R.string.different_email))
+    }
 }
 
 /**
- * The code from the email in six boxes. One text field takes the keys,
- * pastes and deletes, drawn as the boxes: each character typed fills the
- * next box, a pasted code spreads over all six ([codeEdit]), and the box
- * that's next is outlined in the ink.
+ * The code from the email in six boxes. One text field takes the keys, pastes and deletes, drawn as the boxes: each character typed fills
+ * the next box, a pasted code spreads over all six ([codeEdit]), and the box that's next is outlined in the ink.
  */
 @Composable
 private fun CodeBoxes(field: TextFieldValue, onChange: (TextFieldValue) -> Unit, onDone: () -> Unit, modifier: Modifier = Modifier) {
@@ -354,14 +395,20 @@ private fun CodeBoxes(field: TextFieldValue, onChange: (TextFieldValue) -> Unit,
         singleLine = true,
         textStyle = TextStyle(color = Color.Transparent),
         cursorBrush = SolidColor(Color.Transparent),
-        keyboardOptions = KeyboardOptions(
-            capitalization = KeyboardCapitalization.Characters,
-            autoCorrectEnabled = false,
-            keyboardType = KeyboardType.Ascii,
-            imeAction = ImeAction.Done,
-        ),
+        keyboardOptions =
+            KeyboardOptions(
+                capitalization = KeyboardCapitalization.Characters,
+                autoCorrectEnabled = false,
+                keyboardType = KeyboardType.Ascii,
+                imeAction = ImeAction.Done,
+            ),
         keyboardActions = KeyboardActions(onDone = { onDone() }),
-        modifier = modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { focused = it.isFocused }.semantics { contentDescription = label },
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .focusRequester(focus)
+                .onFocusChanged { focused = it.isFocused }
+                .semantics { contentDescription = label },
         decorationBox = { inner ->
             Box {
                 // The field itself, unseen behind the boxes: it's what long-press Paste reaches.
@@ -370,14 +417,17 @@ private fun CodeBoxes(field: TextFieldValue, onChange: (TextFieldValue) -> Unit,
                     for (i in 0 until CODE_LENGTH) {
                         val next = focused && i == minOf(field.text.length, CODE_LENGTH - 1)
                         Box(
-                            Modifier
-                                .weight(1f)
+                            Modifier.weight(1f)
                                 .height(52.dp)
                                 .background(c.background, RoundedCornerShape(12.dp))
                                 .border(if (next) 2.dp else 1.5.dp, if (next) c.onSurface else c.outlineVariant, RoundedCornerShape(12.dp)),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Text(field.text.getOrNull(i)?.toString().orEmpty(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                field.text.getOrNull(i)?.toString().orEmpty(),
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.SemiBold,
+                            )
                         }
                     }
                 }
@@ -399,9 +449,8 @@ private fun Choose(s: SignIn.Choose, busy: Boolean, message: String?, onChoose: 
 }
 
 /**
- * "English · 中文" on the first screen, before there's an account to keep it
- * in. The one in use is the selected one, in the ink; each name is marked
- * as its own language, so a screen reader says it in that voice.
+ * "English · 中文" on the first screen, before there's an account to keep it in. The one in use is the selected one, in the ink; each name is
+ * marked as its own language, so a screen reader says it in that voice.
  */
 @Composable
 private fun LanguageSwitch(onLang: (String) -> Unit) {
@@ -411,7 +460,10 @@ private fun LanguageSwitch(onLang: (String) -> Unit) {
             val on = (lang == Lang.ZH) == zh
             TextButton(
                 onClick = { if (!on) onLang(lang) },
-                colors = ButtonDefaults.textButtonColors(contentColor = if (on) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary),
+                colors =
+                    ButtonDefaults.textButtonColors(
+                        contentColor = if (on) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary
+                    ),
                 modifier = Modifier.semantics { selected = on },
             ) {
                 Text(AnnotatedString(name, SpanStyle(localeList = LocaleList(tag))), fontWeight = if (on) FontWeight.SemiBold else null)

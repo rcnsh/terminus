@@ -12,13 +12,10 @@ import java.util.Locale
 /**
  * Which language terminus speaks: English or Simplified Chinese.
  *
- * "auto" follows the phone. A choice made in Settings (or on the first setup
- * screen) is the app's own language: on Android 13+ the system's per-app
- * language, so the system's Settings → Apps → Language shows it too; on 12,
- * where there's no per-app language, a context wrapped by [wrap] at every
- * entry point (the activity, the widgets, the notifications). It's also the
- * account's `lang`, so the Mac and the web follow it, and the server writes
- * its answers in it; [header] tells the server on every request.
+ * "auto" follows the phone. A choice made in Settings (or on the first setup screen) is the app's own language: on Android 13+ the system's
+ * per-app language, so the system's Settings → Apps → Language shows it too; on 12, where there's no per-app language, a context wrapped by
+ * [wrap] at every entry point (the activity, the widgets, the notifications). It's also the account's `lang`, so the Mac and the web follow
+ * it, and the server writes its answers in it; [header] tells the server on every request.
  */
 object Lang {
     const val AUTO = "auto"
@@ -56,9 +53,8 @@ object Lang {
     }
 
     /**
-     * The account's language, from its profile: applied when it changed since
-     * last time (someone chose it on another device), so it never overrides a
-     * choice made on this phone after it.
+     * The account's language, from its profile: applied when it changed since last time (someone chose it on another device), so it never
+     * overrides a choice made on this phone after it.
      */
     fun followAccount(ctx: Context, accountLang: String?): Boolean {
         val lang = accountLang?.takeIf { it in PREFS } ?: return false
@@ -89,17 +85,15 @@ object Lang {
     }
 
     /** The language the app is showing: zh or en. */
-    fun current(ctx: Context): String =
-        if (wrap(ctx).resources.configuration.locales[0].language == "zh") ZH else EN
+    fun current(ctx: Context): String = if (wrap(ctx).resources.configuration.locales[0].language == "zh") ZH else EN
 
     /** Accept-Language for the API: it writes answers, cards and errors in it. */
     fun header(ctx: Context): String = if (current(ctx) == ZH) "zh-Hans" else "en"
 }
 
 /**
- * Strings for code that has no Context to hand (the answer's helpers, the
- * ride's "Next: ..."). The app's context in its language; unit tests read
- * strings.xml instead (see StringsTest).
+ * Strings for code that has no Context to hand (the answer's helpers, the ride's "Next: ..."). The app's context in its language; unit
+ * tests read strings.xml instead (see StringsTest).
  */
 // The application context only, which lives as long as the process: no leak.
 @android.annotation.SuppressLint("StaticFieldLeak")
@@ -124,12 +118,12 @@ object L {
         lookup = f
     }
 
-    fun s(@StringRes id: Int, vararg args: Any): String =
-        (lookup ?: error("L.init was not called")).invoke(id, args)
+    fun s(@StringRes id: Int, vararg args: Any): String = (lookup ?: error("L.init was not called")).invoke(id, args)
 
     /** Accept-Language for every API request. */
     fun header(): String = app?.let { Lang.header(it) } ?: "en"
 
     /** The language the app is showing. */
-    val zh: Boolean get() = app?.let { Lang.current(it) == Lang.ZH } ?: false
+    val zh: Boolean
+        get() = app?.let { Lang.current(it) == Lang.ZH } ?: false
 }

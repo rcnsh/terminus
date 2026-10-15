@@ -32,7 +32,10 @@ export async function callerFor(env: Env, req: Request, nowMs: number, ctx?: Exe
   if (!db) return null;
   const found = keyFrom(req);
   const row = found
-    ? await db.prepare('SELECT id, user_id, last_used FROM api_keys WHERE key_hash = ?').bind(await hashToken(found.key)).first<{ id: string; user_id: string; last_used: number | null }>()
+    ? await db
+        .prepare('SELECT id, user_id, last_used FROM api_keys WHERE key_hash = ?')
+        .bind(await hashToken(found.key))
+        .first<{ id: string; user_id: string; last_used: number | null }>()
     : null;
   // A bearer starting tk_ that is no key may still be a session: those are
   // random base64url, and about 1 in 262,144 starts that way too.
@@ -40,7 +43,10 @@ export async function callerFor(env: Env, req: Request, nowMs: number, ctx?: Exe
   if (row) {
     if (row.last_used === null || nowMs - row.last_used > TOUCH_MS) {
       const touch = db.prepare('UPDATE api_keys SET last_used = ? WHERE id = ?').bind(nowMs, row.id).run();
-      if (ctx) ctx.waitUntil(touch.catch((err) => console.error('api key last_used not updated:', err instanceof Error ? err.message : String(err))));
+      if (ctx)
+        ctx.waitUntil(
+          touch.catch((err) => console.error('api key last_used not updated:', err instanceof Error ? err.message : String(err))),
+        );
       else await touch;
     }
     return { kind: 'key', keyId: row.id, userId: row.user_id };
@@ -63,8 +69,12 @@ export function d1Unavailable(err: unknown): boolean {
   // timeout from a fetch to NUS doesn't, and isn't about accounts. Faults
   // in the query itself (a bad binding, too many variables) stay a 500, so
   // a bug doesn't read as "try again in a minute".
-  return /\bD1\b|D1_/.test(msg)
-    && !/constraint|no such (?:table|column|function)|syntax error|D1_TYPE_ERROR|D1_COLUMN_NOTFOUND|too many (?:SQL )?variables|too many terms|too ?big|datatype mismatch|out of range/i.test(msg);
+  return (
+    /\bD1\b|D1_/.test(msg) &&
+    !/constraint|no such (?:table|column|function)|syntax error|D1_TYPE_ERROR|D1_COLUMN_NOTFOUND|too many (?:SQL )?variables|too many terms|too ?big|datatype mismatch|out of range/i.test(
+      msg,
+    )
+  );
 }
 
 /**
@@ -72,7 +82,12 @@ export function d1Unavailable(err: unknown): boolean {
  * drops a single query. Null with `down` when it still fails: the caller answers 503 rather
  * than a bare 500, so the apps know to try again.
  */
-export async function callerOrDown(env: Env, req: Request, nowMs: number, ctx?: ExecutionContext): Promise<{ caller: Caller | null; down: boolean }> {
+export async function callerOrDown(
+  env: Env,
+  req: Request,
+  nowMs: number,
+  ctx?: ExecutionContext,
+): Promise<{ caller: Caller | null; down: boolean }> {
   try {
     return { caller: await callerFor(env, req, nowMs, ctx), down: false };
   } catch (first) {
@@ -143,7 +158,9 @@ export async function createKey(db: D1Database, userId: string, name: string, no
   const hint = key.slice(-4);
   // Counted and inserted in one statement: two at once can't both be the fifth.
   const made = await db
-    .prepare('INSERT INTO api_keys (id, user_id, key_hash, name, hint, created) SELECT ?, ?, ?, ?, ?, ? WHERE (SELECT count(*) FROM api_keys WHERE user_id = ?) < ? RETURNING id')
+    .prepare(
+      'INSERT INTO api_keys (id, user_id, key_hash, name, hint, created) SELECT ?, ?, ?, ?, ?, ? WHERE (SELECT count(*) FROM api_keys WHERE user_id = ?) < ? RETURNING id',
+    )
     .bind(id, userId, await hashToken(key), name, hint, nowMs, userId, MAX_KEYS)
     .first<{ id: string }>();
   if (!made) return null;

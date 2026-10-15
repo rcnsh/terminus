@@ -71,7 +71,13 @@ async function signJwt(a: ServiceAccount, nowS: number): Promise<string> {
   const key = await crypto.subtle.importKey('pkcs8', der, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
   const head = b64urlText(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
   const claims = b64urlText(
-    JSON.stringify({ iss: a.client_email, scope: SCOPE, aud: a.token_uri ?? 'https://oauth2.googleapis.com/token', iat: nowS, exp: nowS + 3600 }),
+    JSON.stringify({
+      iss: a.client_email,
+      scope: SCOPE,
+      aud: a.token_uri ?? 'https://oauth2.googleapis.com/token',
+      iat: nowS,
+      exp: nowS + 3600,
+    }),
   );
   const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(`${head}.${claims}`));
   return `${head}.${claims}.${b64url(sig)}`;
@@ -99,7 +105,10 @@ async function accessToken(env: Env, a: ServiceAccount, nowMs: number): Promise<
   const res = await fetch(a.token_uri ?? 'https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: await signJwt(a, Math.floor(nowMs / 1000)) }),
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion: await signJwt(a, Math.floor(nowMs / 1000)),
+    }),
     signal: AbortSignal.timeout(FCM_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`fcm oauth ${res.status}`);
@@ -124,13 +133,19 @@ export async function nudgeUser(env: Env, userId: string, nudge: Nudge, nowMs: n
   // Every web push shows a notification (iOS insists), so nothing to show
   // means nothing sent: an idle card, or reminders off for the trip.
   const quiet = nudge.phase === 'idle' || nudge.remind === false;
-  return deliver(env, userId, {
-    web: quiet ? null : { kind: 'card', phase: nudge.phase, urgent: nudge.urgent },
-    fcm: { kind: 'card', phase: nudge.phase },
-    urgent: nudge.urgent,
-    collapse: 'card',
-    ttlS: 600,
-  }, nowMs, exceptTokenHash);
+  return deliver(
+    env,
+    userId,
+    {
+      web: quiet ? null : { kind: 'card', phase: nudge.phase, urgent: nudge.urgent },
+      fcm: { kind: 'card', phase: nudge.phase },
+      urgent: nudge.urgent,
+      collapse: 'card',
+      ttlS: 600,
+    },
+    nowMs,
+    exceptTokenHash,
+  );
 }
 
 /** A notification worded by the server, in English and Chinese: the app shows the one in its language. */
@@ -151,7 +166,14 @@ export async function remindUser(env: Env, userId: string, notice: Notice, nowMs
   return deliver(
     env,
     userId,
-    { web: { kind: 'term', ...words }, fcm: { kind: 'term', ...words }, fcmBare: { kind: 'term' }, urgent: false, collapse: 'term', ttlS: 2 * 86_400 },
+    {
+      web: { kind: 'term', ...words },
+      fcm: { kind: 'term', ...words },
+      fcmBare: { kind: 'term' },
+      urgent: false,
+      collapse: 'term',
+      ttlS: 2 * 86_400,
+    },
     nowMs,
   );
 }
@@ -189,7 +211,8 @@ async function deliver(env: Env, userId: string, msg: Delivery, nowMs: number, e
   const a = account(env);
   let results: { token_hash: string; push_token: string; client: string | null }[];
   try {
-    ({ results } = await db.prepare('SELECT token_hash, push_token, client FROM sessions WHERE user_id = ? AND push_token IS NOT NULL AND token_hash != ?')
+    ({ results } = await db
+      .prepare('SELECT token_hash, push_token, client FROM sessions WHERE user_id = ? AND push_token IS NOT NULL AND token_hash != ?')
       .bind(userId, exceptTokenHash ?? '')
       .all<{ token_hash: string; push_token: string; client: string | null }>());
   } catch (err) {
@@ -201,7 +224,11 @@ async function deliver(env: Env, userId: string, msg: Delivery, nowMs: number, e
   for (const r of results) {
     // One device's failure (a key that won't import, a service that hangs) mustn't stop the rest.
     try {
-      const res = r.push_token.startsWith(WEB_PREFIX) ? await toBrowser(env, r.push_token, msg, nowMs) : a ? await toAndroid(env, a, fcm, r, msg, nowMs) : 'skip';
+      const res = r.push_token.startsWith(WEB_PREFIX)
+        ? await toBrowser(env, r.push_token, msg, nowMs)
+        : a
+          ? await toAndroid(env, a, fcm, r, msg, nowMs)
+          : 'skip';
       if (res === 'sent') out.sent++;
       else if (res === 'failed') out.failed++;
       else if (res === 'gone') await forget(r.token_hash);
@@ -237,7 +264,14 @@ interface Fcm {
   down: boolean;
 }
 
-async function toAndroid(env: Env, a: ServiceAccount, fcm: Fcm, to: { push_token: string; client: string | null }, msg: Delivery, nowMs: number): Promise<Outcome> {
+async function toAndroid(
+  env: Env,
+  a: ServiceAccount,
+  fcm: Fcm,
+  to: { push_token: string; client: string | null },
+  msg: Delivery,
+  nowMs: number,
+): Promise<Outcome> {
   // Without an access token no device can be sent to: asking again for each would only wait longer.
   if (fcm.down) return 'failed';
   const send = (token: string) =>
@@ -304,7 +338,9 @@ export async function fcmError(res: Response): Promise<{ tokenGone: boolean; cod
 /** How many of a user's devices take push. */
 export async function pushDevices(env: Env, userId: string): Promise<number> {
   if (!pushEnabled(env) || !env.DB) return 0;
-  const r = await env.DB.prepare('SELECT COUNT(*) AS n FROM sessions WHERE user_id = ? AND push_token IS NOT NULL').bind(userId).first<{ n: number }>();
+  const r = await env.DB.prepare('SELECT COUNT(*) AS n FROM sessions WHERE user_id = ? AND push_token IS NOT NULL')
+    .bind(userId)
+    .first<{ n: number }>();
   return r?.n ?? 0;
 }
 

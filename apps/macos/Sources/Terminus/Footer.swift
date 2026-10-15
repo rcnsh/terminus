@@ -1,5 +1,5 @@
-import SwiftUI
 import AppKit
+import SwiftUI
 
 // MARK: - Footer
 
@@ -32,7 +32,9 @@ struct Footer: View {
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
                 .fixedSize()
-                Button { open("map") } label: {
+                Button {
+                    open("map")
+                } label: {
                     Label(L("Map"), systemImage: "map")
                 }
                 .buttonStyle(.plain)

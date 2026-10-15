@@ -24,7 +24,22 @@ import {
   nearestStop,
   walkAllTheWayS,
 } from '../src/resolve.ts';
-import { arrivalsProblem, arrivalsUnread, busesProblem, crowdFromLoad, hasList, normalize, normalizeBuses, parseCrowd, parseEtaS, parseSeconds, pickList, proxyOk, proxyUrl, unwrap } from '../src/fms.ts';
+import {
+  arrivalsProblem,
+  arrivalsUnread,
+  busesProblem,
+  crowdFromLoad,
+  hasList,
+  normalize,
+  normalizeBuses,
+  parseCrowd,
+  parseEtaS,
+  parseSeconds,
+  pickList,
+  proxyOk,
+  proxyUrl,
+  unwrap,
+} from '../src/fms.ts';
 import { buildAnswer, clampLabel, fitsTile, mins, shortStop, walkVerdict } from '../src/format.ts';
 import { LABEL_MAX, PUBLIC, WALK } from '../src/config.ts';
 import { apiKeyHeaders, authUrl, extractSession, jwtExpMs, proxyHeaders } from '../src/auth.ts';
@@ -34,10 +49,7 @@ const GRAPH = graphJson;
 const NOW = Date.UTC(2026, 7, 27, 1, 0, 0); // Thu 09:00 SGT
 
 const arrivalsFor = (map) => new Map(Object.entries(map));
-const sa = (code, arrivals, fetchedAt = NOW, stale = false) => [
-  code,
-  { code, arrivals, fetchedAt, stale, available: true },
-];
+const sa = (code, arrivals, fetchedAt = NOW, stale = false) => [code, { code, arrivals, fetchedAt, stale, available: true }];
 /** The feed was unreachable for this stop: no data, as opposed to no bus. */
 const unavailable = (code) => [code, { code, arrivals: [], fetchedAt: NOW, stale: false, available: false }];
 
@@ -106,7 +118,12 @@ test('standing on Opp KR MRT heading to Central Library returns the FURTHER stop
 test('when every listed bus leaves too soon, the guess is a bus you can still reach', () => {
   // Twenty minutes' walk to the stop; the one bus listed is in two.
   const cands = candidateStops(GRAPH, TO_CLB).map((c) => ({ ...c, walkS: 1200 }));
-  const [best] = scoreOptions(GRAPH, cands, arrivalsFor(Object.fromEntries([sa('KR-MRT', [{ svc: 'A1', etaS: 120, crowd: null, plate: null }])])), NOW);
+  const [best] = scoreOptions(
+    GRAPH,
+    cands,
+    arrivalsFor(Object.fromEntries([sa('KR-MRT', [{ svc: 'A1', etaS: 120, crowd: null, plate: null }])])),
+    NOW,
+  );
   assert.equal(best.svc, 'A1');
   assert.equal(best.quality, 'scheduled');
   assert.ok(best.boardS >= 1200, `boards at ${best.boardS}s, before the walk is done`);
@@ -187,7 +204,14 @@ test('the walk on from the stop counts in the ranking: the bus to the nearer sid
 });
 
 test('a fare narrows the stop margin as it does the ranking: a public bus just ahead is not a sure answer', () => {
-  const opt = (code, totalS, extra = {}) => ({ stop: { code, name: code, lat: 0, lon: 0 }, svc: 'X', walkS: 60, totalS, ambiguousBerth: false, ...extra });
+  const opt = (code, totalS, extra = {}) => ({
+    stop: { code, name: code, lat: 0, lon: 0 },
+    svc: 'X',
+    walkS: 60,
+    totalS,
+    ambiguousBerth: false,
+    ...extra,
+  });
   // The public bus gets there 190 s sooner, which is only 10 s once its fare counts.
   const options = [opt('A', 600, { paid: true }), opt('B', 600 + PUBLIC.fareWorthS + 10)];
   assert.ok(confidence(options, true) < 0.6, `a 10 s margin is a coin flip: ${confidence(options, true)}`);
@@ -200,7 +224,12 @@ test('near PGP Foyer, trips it would reach the long way round board at PGP inste
   const board = (to) => {
     const cands = candidateStops(realGraph, { ...at, to, originCode: null });
     const byStop = Object.fromEntries(
-      cands.map((c) => sa(c.stop.code, c.legs.map((l) => ({ svc: l.svc, etaS: 240, crowd: null, plate: null })))),
+      cands.map((c) =>
+        sa(
+          c.stop.code,
+          c.legs.map((l) => ({ svc: l.svc, etaS: 240, crowd: null, plate: null })),
+        ),
+      ),
     );
     return scoreOptions(realGraph, cands, arrivalsFor(byStop), NOW)[0].stop.code;
   };
@@ -212,7 +241,12 @@ test('either side of the road counts: PGP to UHC takes A1 to Opp UHC in 4 stops'
   const pgp = realGraph.stops.find((x) => x.code === 'PGP');
   const cands = candidateStops(realGraph, { lat: pgp.lat, lon: pgp.lon, to: 'UHC', originCode: null });
   const byStop = Object.fromEntries(
-    cands.map((c) => sa(c.stop.code, c.legs.map((l) => ({ svc: l.svc, etaS: 240, crowd: null, plate: null })))),
+    cands.map((c) =>
+      sa(
+        c.stop.code,
+        c.legs.map((l) => ({ svc: l.svc, etaS: 240, crowd: null, plate: null })),
+      ),
+    ),
   );
   const best = scoreOptions(realGraph, cands, arrivalsFor(byStop), NOW)[0];
   assert.equal(best.stop.code, 'PGP');
@@ -234,7 +268,11 @@ test('reach(): linear routes are strict, loop routes wrap', () => {
 
   const loop = indexGraph(GRAPH);
   assert.deepEqual(reach(loop, 'D2', 'KR-MRT', 'UTOWN'), { hops: 5 });
-  assert.deepEqual(reach(loop, 'D2', 'KR-MRT-OPP', 'UTOWN'), { hops: 11, through: true }, 'wraps the long way, on past the terminal at COM3');
+  assert.deepEqual(
+    reach(loop, 'D2', 'KR-MRT-OPP', 'UTOWN'),
+    { hops: 11, through: true },
+    'wraps the long way, on past the terminal at COM3',
+  );
   assert.deepEqual(reach(loop, 'D2', 'KR-MRT-OPP', 'COM3'), { hops: 3 }, 'to the terminal itself: getting off there');
   assert.deepEqual(reach(loop, 'D2', 'KR-MRT', 'KR-MRT'), { hops: 0 });
   assert.equal(reach(loop, 'A1', 'KR-MRT', 'UTOWN'), null, 'A1 serves KR MRT but not UTown');
@@ -311,11 +349,16 @@ test('a minus or a clock time is not minutes to go', () => {
 });
 
 test('a live bus with no position is skipped, not drawn at 0', () => {
-  const buses = normalizeBuses({ activebus: [
-    { vehplate: 'PA1234A', lat: null, lng: 103.77, direction: 90 },
-    { vehplate: 'PA1234B', lat: 1.29, lng: 103.77, direction: '' },
-  ] });
-  assert.deepEqual(buses.map((b) => b.plate), ['PA1234B']);
+  const buses = normalizeBuses({
+    activebus: [
+      { vehplate: 'PA1234A', lat: null, lng: 103.77, direction: 90 },
+      { vehplate: 'PA1234B', lat: 1.29, lng: 103.77, direction: '' },
+    ],
+  });
+  assert.deepEqual(
+    buses.map((b) => b.plate),
+    ['PA1234B'],
+  );
   assert.equal(buses[0].heading, null, 'a blank direction is no heading, not north');
 });
 
@@ -344,14 +387,29 @@ test('normalize() flattens the real shuttle shape and keeps "no bus" as informat
         shuttles: [
           { name: 'D2', arrivalTime: '4', nextArrivalTime: '14', passengers: 'low', arrivalTime_veh_plate: 'PA1234A' },
           { name: 'D1', arrivalTime: '-', nextArrivalTime: '-', passengers: '' },
-          { name: 'A1', _etas: [{ eta: 2, passengers: 'high', plate: 'PB1' }, { eta: 9, passengers: 'low' }] },
+          {
+            name: 'A1',
+            _etas: [
+              { eta: 2, passengers: 'high', plate: 'PB1' },
+              { eta: 9, passengers: 'low' },
+            ],
+          },
         ],
       },
     },
   });
-  assert.deepEqual(out.filter((a) => a.svc === 'D2').map((a) => a.etaS), [240, 840]);
-  assert.deepEqual(out.filter((a) => a.svc === 'D1').map((a) => a.etaS), [null]);
-  assert.deepEqual(out.filter((a) => a.svc === 'A1').map((a) => a.etaS), [120, 540]);
+  assert.deepEqual(
+    out.filter((a) => a.svc === 'D2').map((a) => a.etaS),
+    [240, 840],
+  );
+  assert.deepEqual(
+    out.filter((a) => a.svc === 'D1').map((a) => a.etaS),
+    [null],
+  );
+  assert.deepEqual(
+    out.filter((a) => a.svc === 'A1').map((a) => a.etaS),
+    [120, 540],
+  );
   assert.equal(out.find((a) => a.svc === 'A1').crowd, 'high');
   assert.equal(out.find((a) => a.svc === 'D2').plate, 'PA1234A');
 });
@@ -501,12 +559,7 @@ test('a measurement always outranks a guess, however good the guess looks', () =
   const options = scoreOptions(
     GRAPH,
     cands,
-    arrivalsFor(
-      Object.fromEntries([
-        sa('KR-MRT', [{ svc: 'D2', etaS: 600, crowd: null, plate: null }]),
-        unavailable('KR-MRT-OPP'),
-      ]),
-    ),
+    arrivalsFor(Object.fromEntries([sa('KR-MRT', [{ svc: 'D2', etaS: 600, crowd: null, plate: null }]), unavailable('KR-MRT-OPP')])),
     NOW,
   );
   assert.equal(options[0].quality, 'live');
@@ -549,7 +602,18 @@ test('a stale answer under a minute old never reads "0 min old"', async () => {
     arrivalsFor(Object.fromEntries([sa('PGP', [{ svc: 'D2', etaS: 240, crowd: null, plate: null }], fetchedAt, true)])),
     NOW,
   );
-  const answer = () => buildAnswer({ options, alt: null, fallbackStop: options[0].stop, nearestStop: null, destLabel: 'COM3', walkAllS: null, confidence: 0.75, arrivals: [], nowMs: NOW });
+  const answer = () =>
+    buildAnswer({
+      options,
+      alt: null,
+      fallbackStop: options[0].stop,
+      nearestStop: null,
+      destLabel: 'COM3',
+      walkAllS: null,
+      confidence: 0.75,
+      arrivals: [],
+      nowMs: NOW,
+    });
   const a = answer();
   assert.equal(a.quality, 'stale');
   assert.match(a.label, /\(<1 min ago\)$/);
@@ -617,7 +681,17 @@ test('being sent across the road says so, in words', () => {
   // named by its stop: naming only the service would read as "another D2 is
   // coming here", which is the opposite of true.
   const other = options.find((o) => o.stop.code === 'KR-MRT-OPP');
-  const b = buildAnswer({ options, alt: other, fallbackStop: options[0].stop, nearestStop: near, destLabel: 'UTown', walkAllS: null, confidence: 0.9, arrivals: [], nowMs: NOW });
+  const b = buildAnswer({
+    options,
+    alt: other,
+    fallbackStop: options[0].stop,
+    nearestStop: near,
+    destLabel: 'UTown',
+    walkAllS: null,
+    confidence: 0.9,
+    arrivals: [],
+    nowMs: NOW,
+  });
   assert.match(b.detail, /or Opp KR MRT/);
   assert.ok(!/or D2/.test(b.detail));
 });
@@ -742,7 +816,10 @@ test('normalize() handles the real feed shape, which is not the one I guessed', 
   assert.equal(out.length, 8, 'four services x arrival + nextArrival');
 
   const d2 = out.filter((a) => a.svc === 'D2');
-  assert.deepEqual(d2.map((a) => a.etaS), [180, 900, 660, 1080]);
+  assert.deepEqual(
+    d2.map((a) => a.etaS),
+    [180, 900, 660, 1080],
+  );
   assert.equal(d2[0].plate, 'PD1022U');
 });
 
@@ -768,10 +845,7 @@ test('"0" is a real arrival time, distinct from "-"', () => {
 
 test('berth codes survive normalisation, because they are the only direction signal', () => {
   const com3 = normalize(COM3_FIXTURE);
-  assert.deepEqual(
-    [...new Set(com3.map((a) => a.berth))].sort(),
-    ['COM3-D1-E', 'COM3-D1-S', 'COM3-D2-E', 'COM3-D2-S'],
-  );
+  assert.deepEqual([...new Set(com3.map((a) => a.berth))].sort(), ['COM3-D1-E', 'COM3-D1-S', 'COM3-D2-E', 'COM3-D2-S']);
   // A stop the route passes once carries a bare code.
   assert.ok(normalize(UHC_FIXTURE).every((a) => a.berth === 'UHC'));
 });
@@ -781,7 +855,10 @@ test('at a terminus, the boardable berth is -S and never -E', () => {
   const d2 = resolveBerths(all.filter((a) => a.svc === 'D2'));
   assert.equal(d2.ambiguousBerth, false, 'the suffix resolves it, so nothing is unconfirmed');
   assert.ok(d2.usable.every((a) => a.berth === 'COM3-D2-S'));
-  assert.deepEqual(d2.usable.map((a) => a.etaS), [180, 900]);
+  assert.deepEqual(
+    d2.usable.map((a) => a.etaS),
+    [180, 900],
+  );
 
   // The captured sample happens to list -S first, so invert it: this is the
   // case the rule exists for. A bus terminating in 2 minutes must lose to a
@@ -792,7 +869,10 @@ test('at a terminus, the boardable berth is -S and never -E', () => {
   ];
   const picked = resolveBerths(inverted);
   assert.equal(picked.ambiguousBerth, false);
-  assert.deepEqual(picked.usable.map((a) => a.plate), ['DEPARTING']);
+  assert.deepEqual(
+    picked.usable.map((a) => a.plate),
+    ['DEPARTING'],
+  );
 });
 
 test('a single-berth stop is left alone', () => {
@@ -835,12 +915,7 @@ test('berths that no suffix can separate are declared, not guessed at', () => {
 
 test('the terminus split does not dent confidence once resolved', () => {
   const cands = candidateStops(GRAPH, { lat: null, lon: null, to: 'UTOWN', originCode: 'COM3' });
-  const options = scoreOptions(
-    GRAPH,
-    cands,
-    arrivalsFor(Object.fromEntries([sa('COM3', normalize(COM3_FIXTURE))])),
-    NOW,
-  );
+  const options = scoreOptions(GRAPH, cands, arrivalsFor(Object.fromEntries([sa('COM3', normalize(COM3_FIXTURE))])), NOW);
   const d2 = options.find((o) => o.svc === 'D2');
   assert.equal(d2.ambiguousBerth, false);
   assert.equal(d2.boardS, 180, 'the departing bus, not the terminating one');
@@ -1080,7 +1155,15 @@ test('every real feed capture reads as a board; rows that changed shape do not',
   assert.match(arrivalsProblem(renamed('arrivalTime', 'arrival_min')), /no row has an arrival time/);
   assert.match(arrivalsProblem({ timings: [{ name: 'Route D2', arrivalTime: '3' }] }), /no service it names is known \(Route D2\)/);
   // One service unknown among known ones (a new route before the weekly scrape) is fine.
-  assert.equal(arrivalsProblem({ timings: [{ name: 'D2', arrivalTime: '3' }, { name: 'Z9', arrivalTime: '5' }] }), null);
+  assert.equal(
+    arrivalsProblem({
+      timings: [
+        { name: 'D2', arrivalTime: '3' },
+        { name: 'Z9', arrivalTime: '5' },
+      ],
+    }),
+    null,
+  );
 });
 
 test('a bus list whose rows lost their plates or positions is a changed feed, not "no buses"', () => {
@@ -1101,13 +1184,47 @@ test('a bus list whose values changed is a changed feed, not "no buses"', () => 
     [{ vehplate: 'PD726D', lat: '1,2949', lng: '103,7735' }],
     [{ vehplate: null, ...at }],
     [{ vehplate: '-', ...at }],
-  ]) assert.match(busesProblem({ activebus: rows }), /no bus has a plate and a position it can read/, JSON.stringify(rows));
+  ])
+    assert.match(busesProblem({ activebus: rows }), /no bus has a plate and a position it can read/, JSON.stringify(rows));
   // One readable bus among them is a board.
-  assert.equal(busesProblem({ activebus: [{ vehplate: 'PD1', lat: null, lng: null }, { vehplate: 'PD2', ...at }] }), null);
+  assert.equal(
+    busesProblem({
+      activebus: [
+        { vehplate: 'PD1', lat: null, lng: null },
+        { vehplate: 'PD2', ...at },
+      ],
+    }),
+    null,
+  );
   // Every bus with no fix yet is real; one among rows it can't read is not.
-  assert.equal(busesProblem({ activebus: [{ vehplate: 'PD1', lat: 0, lng: 0 }, { vehplate: 'PD2', lat: '0', lng: '0' }] }), null);
-  assert.match(busesProblem({ activebus: [{ vehplate: 'PD1', lat: 0, lng: 0 }, { vehplate: 'PD2', lat: at.lng, lng: at.lat }] }), /no bus has a plate and a position it can read/, 'a fix-less bus beside a swapped one');
-  assert.match(busesProblem({ activebus: [{ vehplate: 'PD1', lat: 0, lng: 0 }, { vehplate: 'PD2', lat: '1,2949', lng: '103,7735' }] }), /no bus has a plate and a position it can read/);
+  assert.equal(
+    busesProblem({
+      activebus: [
+        { vehplate: 'PD1', lat: 0, lng: 0 },
+        { vehplate: 'PD2', lat: '0', lng: '0' },
+      ],
+    }),
+    null,
+  );
+  assert.match(
+    busesProblem({
+      activebus: [
+        { vehplate: 'PD1', lat: 0, lng: 0 },
+        { vehplate: 'PD2', lat: at.lng, lng: at.lat },
+      ],
+    }),
+    /no bus has a plate and a position it can read/,
+    'a fix-less bus beside a swapped one',
+  );
+  assert.match(
+    busesProblem({
+      activebus: [
+        { vehplate: 'PD1', lat: 0, lng: 0 },
+        { vehplate: 'PD2', lat: '1,2949', lng: '103,7735' },
+      ],
+    }),
+    /no bus has a plate and a position it can read/,
+  );
 });
 
 test('a list under a name it does not know is only a list of rows, never the hints beside it', () => {
@@ -1115,7 +1232,13 @@ test('a list under a name it does not know is only a list of rows, never the hin
   assert.ok(Array.isArray(result.hints) && result.hints.every((h) => typeof h === 'string'), 'the real reply carries hints');
   const { shuttles, ...rest } = result;
   // Gone, null, or not a list: no board, so the fetch throws, never "no bus".
-  for (const board of [rest, { ...rest, shuttles: null }, { ...rest, shuttles: {} }, { ...rest, shuttles: 'none' }, { ...rest, busServices: [] }]) {
+  for (const board of [
+    rest,
+    { ...rest, shuttles: null },
+    { ...rest, shuttles: {} },
+    { ...rest, shuttles: 'none' },
+    { ...rest, busServices: [] },
+  ]) {
     assert.equal(hasList({ ShuttleServiceResult: board }), false, JSON.stringify(Object.keys(board)));
     assert.deepEqual(normalize({ ShuttleServiceResult: board }), []);
   }
@@ -1140,11 +1263,31 @@ test('a row needs a time it can read: none reading is a changed feed, one is tha
   // One service changed among good ones: that service has no data, the
   // rest of the board stands.
   const oneOff = [
-    { timings: [{ name: 'D2', arrivalTime: '09:04' }, { name: 'D1', arrivalTime: '3' }] },
-    { timings: [{ name: 'D2', arrival_min: '4' }, { name: 'D1', arrivalTime: '3' }] },
+    {
+      timings: [
+        { name: 'D2', arrivalTime: '09:04' },
+        { name: 'D1', arrivalTime: '3' },
+      ],
+    },
+    {
+      timings: [
+        { name: 'D2', arrival_min: '4' },
+        { name: 'D1', arrivalTime: '3' },
+      ],
+    },
     // The first time gone, the next would pass for the soonest bus.
-    { timings: [{ name: 'D2', nextArrivalTime: '9' }, { name: 'D1', arrivalTime: '3' }] },
-    { timings: [{ name: 'D2', arrivalTime: '3', nextArrivalTime: 'N/A Today' }, { name: 'D1', arrivalTime: '3' }] },
+    {
+      timings: [
+        { name: 'D2', nextArrivalTime: '9' },
+        { name: 'D1', arrivalTime: '3' },
+      ],
+    },
+    {
+      timings: [
+        { name: 'D2', arrivalTime: '3', nextArrivalTime: 'N/A Today' },
+        { name: 'D1', arrivalTime: '3' },
+      ],
+    },
   ];
   for (const raw of oneOff) {
     assert.equal(arrivalsProblem(raw), null);
@@ -1155,12 +1298,30 @@ test('a row needs a time it can read: none reading is a changed feed, one is tha
   // A time past a week is a changed unit or an absolute time.
   assert.match(arrivalsProblem({ timings: [{ name: 'D2', arrivalTime: 1_756_336_500 }] }), /a time it cannot read/);
   // The feed's own "no bus" passes, in each shape.
-  assert.equal(arrivalsProblem({ timings: [{ name: 'D2', arrivalTime: '-', nextArrivalTime: '-' }, { name: 'D1', arrivalTime: 'Arr' }] }), null);
-  assert.equal(arrivalsProblem({ shuttles: [{ name: 'D2', _etas: [] }, { name: 'D1', _etas: [{ eta_s: 60 }] }], hints: ['x'] }), null);
+  assert.equal(
+    arrivalsProblem({
+      timings: [
+        { name: 'D2', arrivalTime: '-', nextArrivalTime: '-' },
+        { name: 'D1', arrivalTime: 'Arr' },
+      ],
+    }),
+    null,
+  );
+  assert.equal(
+    arrivalsProblem({
+      shuttles: [
+        { name: 'D2', _etas: [] },
+        { name: 'D1', _etas: [{ eta_s: 60 }] },
+      ],
+      hints: ['x'],
+    }),
+    null,
+  );
 });
 
 test('seconds are a number or digits; blanks and other types are no time, not "arriving now"', () => {
-  for (const v of [' ', '', '-', false, true, [], [5], {}, '0x1F', '1e3', null, undefined, -5, NaN, Infinity]) assert.equal(parseSeconds(v), null, JSON.stringify(v));
+  for (const v of [' ', '', '-', false, true, [], [5], {}, '0x1F', '1e3', null, undefined, -5, NaN, Infinity])
+    assert.equal(parseSeconds(v), null, JSON.stringify(v));
   assert.equal(parseSeconds(0), 0);
   assert.equal(parseSeconds(' 42 '), 42);
   assert.equal(parseSeconds(12.4), 12);
@@ -1178,9 +1339,30 @@ test('a time to go past a week is no time: a changed unit, an epoch, an overflow
 });
 
 test('service names are read as the graph spells them', () => {
-  assert.deepEqual(normalize({ timings: [{ name: 'd2', arrivalTime: '3' }, { name: ' D 1 ', arrivalTime: '4' }] }).map((a) => a.svc), ['D2', 'D1']);
-  assert.deepEqual(normalize({ timings: [{ name: 'Z9', arrivalTime: '3' }] }).map((a) => a.svc), ['Z9'], 'an unknown one as it is');
-  assert.deepEqual(normalize({ timings: [{ name: { id: 'D2' }, arrivalTime: '3' }, { name: true, arrivalTime: '3' }] }), [], 'only a string or a number is a name');
+  assert.deepEqual(
+    normalize({
+      timings: [
+        { name: 'd2', arrivalTime: '3' },
+        { name: ' D 1 ', arrivalTime: '4' },
+      ],
+    }).map((a) => a.svc),
+    ['D2', 'D1'],
+  );
+  assert.deepEqual(
+    normalize({ timings: [{ name: 'Z9', arrivalTime: '3' }] }).map((a) => a.svc),
+    ['Z9'],
+    'an unknown one as it is',
+  );
+  assert.deepEqual(
+    normalize({
+      timings: [
+        { name: { id: 'D2' }, arrivalTime: '3' },
+        { name: true, arrivalTime: '3' },
+      ],
+    }),
+    [],
+    'only a string or a number is a name',
+  );
 });
 
 test('a run ending here is flagged by normalize, the only code that reads the -E suffix', () => {
@@ -1201,7 +1383,10 @@ test('normalize handles the raw ConnectX ShuttleService shape', () => {
   // eta_s (seconds) is used verbatim, not eta (minutes) re-multiplied.
   assert.equal(d2s[0].etaS, 24055);
   assert.notEqual(d2s[0].etaS, 24060, 'the rounded minutes value would be 24060');
-  assert.ok(d2s.every((a) => a.plate && a.plate.startsWith('PD')), 'plates carry through');
+  assert.ok(
+    d2s.every((a) => a.plate && a.plate.startsWith('PD')),
+    'plates carry through',
+  );
 
   // Terminus split survives, and -S is the boardable berth.
   const berths = new Set(out.filter((a) => a.svc === 'D2').map((a) => a.berth));
@@ -1226,7 +1411,8 @@ test('the proxy reports failure at HTTP 200, so only code "00000" counts as succ
 
 test('a place served by two stops: any bus to either one counts, the shorter ride wins', () => {
   // From KR MRT itself (its twin across the road is a candidate of its own).
-  const legs = (input) => new Map((candidateStops(realGraph, input).find((c) => c.stop.code === 'KR-MRT')?.legs ?? []).map((l) => [l.svc, l.hops]));
+  const legs = (input) =>
+    new Map((candidateStops(realGraph, input).find((c) => c.stop.code === 'KR-MRT')?.legs ?? []).map((l) => [l.svc, l.hops]));
   const base = { lat: null, lon: null, originCode: 'KR-MRT' };
   const a = legs({ ...base, to: 'AS5' });
   const b = legs({ ...base, to: 'NUSS-OPP' });
@@ -1251,11 +1437,11 @@ test('inside a residence, only its own stops are offered, walked by the paths (P
   assert.ok(out.includes('KR-MRT'));
 });
 
-test('a window that crosses midnight still runs after it, by yesterday\'s hours', async () => {
+test("a window that crosses midnight still runs after it, by yesterday's hours", async () => {
   const { serviceEndsAt } = await import('../src/resolve.ts');
   const graph = { ...realGraph, serviceHours: { X: { weekday: ['07:00', '01:00'], saturday: ['08:00', '23:00'], sunday: null } } };
   const sgt = (d, h, m) => Date.UTC(2026, 7, d, h - 8, m); // August 2026, SGT
-  assert.equal(inService(graph, 'X', sgt(29, 0, 30)), true, 'Sat 00:30: Friday\'s service');
+  assert.equal(inService(graph, 'X', sgt(29, 0, 30)), true, "Sat 00:30: Friday's service");
   assert.equal(serviceEndsAt(graph, 'X', sgt(29, 0, 30)), sgt(29, 1, 0));
   assert.equal(inService(graph, 'X', sgt(29, 1, 30)), false, 'Sat 01:30: ended, Saturday opens at 8');
   assert.equal(inService(graph, 'X', sgt(28, 23, 30)), true, 'Fri 23:30');

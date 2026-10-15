@@ -44,14 +44,53 @@ import {
   sessionCookie,
   PLATFORMS,
 } from './accounts.ts';
-import { CLOCK_PREFS, DEFAULT_PROFILE, PROFILE_LIMITS, type Profile, profileLimits, classKey, classesOn, parseProfile, planChangesAt, reimportReason } from './profile.ts';
+import {
+  CLOCK_PREFS,
+  DEFAULT_PROFILE,
+  PROFILE_LIMITS,
+  type Profile,
+  profileLimits,
+  classKey,
+  classesOn,
+  parseProfile,
+  planChangesAt,
+  reimportReason,
+} from './profile.ts';
 import { hour12, planned, resolveTo } from './next.ts';
 import { dayPlan } from './day.ts';
 import { unlogged } from './answer.ts';
-import { type Boarded, type DayRecord, PLATE_WINDOW_S, SIGNALS, type TripRecord, type TripUpdate, clearTrip, isHomeKey, laterChange, leaveOf, loadDay, needsWatch, saveSignals, secondBusOf, sgtDate, updateTrip } from './trip.ts';
+import {
+  type Boarded,
+  type DayRecord,
+  PLATE_WINDOW_S,
+  SIGNALS,
+  type TripRecord,
+  type TripUpdate,
+  clearTrip,
+  isHomeKey,
+  laterChange,
+  leaveOf,
+  loadDay,
+  needsWatch,
+  saveSignals,
+  secondBusOf,
+  sgtDate,
+  updateTrip,
+} from './trip.ts';
 import { nudgeUser, pushEnabled, setPushToken } from './push.ts';
 import { WEB_PREFIX, parseSubscription, vapidPublicKey, webPushEnabled } from './webpush.ts';
-import { NO_PREFS, type PrefKind, type TripPrefs, clearHistory, clearOutcome, historySize, listPrefs, recordOutcome, setPref, tripPrefs } from './outcomes.ts';
+import {
+  NO_PREFS,
+  type PrefKind,
+  type TripPrefs,
+  clearHistory,
+  clearOutcome,
+  historySize,
+  listPrefs,
+  recordOutcome,
+  setPref,
+  tripPrefs,
+} from './outcomes.ts';
 import { ImportInputError, parseShareUrl, resolveTrips } from './nusmods.ts';
 import { termName } from './calendar.ts';
 import { boardAsOf, boardAt, displayName, indexGraph } from './resolve.ts';
@@ -108,7 +147,6 @@ ${bandCss(phase)}</style>
 /** A whole profile is a few KB; nothing legitimate comes close to this. */
 const MAX_BODY_BYTES = 64 * 1024;
 
-
 /**
  * Where emailed links point. The request's own origin only for local
  * development; otherwise always this Worker's site (stable or beta, as
@@ -121,7 +159,6 @@ function emailOrigin(url: URL, env: Env): string {
 }
 
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-
 
 const mailFailed = (e: unknown) => console.error('device email failed', e instanceof Error ? e.name : typeof e);
 
@@ -248,7 +285,12 @@ export async function getProfile(db: D1Database, userId: string, graph: Graph, r
   const idx = indexGraph(graph);
   // A stop can vanish from a new scrape. Re-validating on read would reject
   // the whole profile, so drop only what no longer resolves.
-  const r = parseProfile(raw, (c) => idx.byCode.has(c), (c) => idx.byCode.has(c) || landmark(c) !== null, pinnable(graph));
+  const r = parseProfile(
+    raw,
+    (c) => idx.byCode.has(c),
+    (c) => idx.byCode.has(c) || landmark(c) !== null,
+    pinnable(graph),
+  );
   // The language the account chose wins over the device's, for the rest of this request.
   if (r.ok) {
     useProfileLang(r.profile.lang);
@@ -329,13 +371,17 @@ export function salvageProfile(p: Profile, ok: (code: string) => boolean, pinnab
     trips: (p.trips ?? []).filter((t) => ok(t.to)),
     manual: (p.manual ?? []).filter((t) => ok(t.to)),
     places,
-    usual: (Array.isArray(p.usual) ? p.usual : []).filter((u) => placeKeys.has(u.place) && Number.isInteger(u.day) && u.day >= 0 && u.day <= 6 && minute(u.atMin)),
+    usual: (Array.isArray(p.usual) ? p.usual : []).filter(
+      (u) => placeKeys.has(u.place) && Number.isInteger(u.day) && u.day >= 0 && u.day <= 6 && minute(u.atMin),
+    ),
     once: (Array.isArray(p.once) ? p.once : []).filter((o) => typeof o.date === 'string' && minute(o.arriveByMin) && ok(o.to)),
     share: p.share ?? null,
     term: p.term ?? null,
     lang: LANG_PREFS.includes(p.lang) ? p.lang : 'auto',
     clock: CLOCK_PREFS.includes(p.clock) ? p.clock : 'auto',
-    pinnedStops: (Array.isArray(p.pinnedStops) ? p.pinnedStops : []).filter((c) => typeof c === 'string' && pinnable(c)).slice(0, PROFILE_LIMITS.pinnedStops),
+    pinnedStops: (Array.isArray(p.pinnedStops) ? p.pinnedStops : [])
+      .filter((c) => typeof c === 'string' && pinnable(c))
+      .slice(0, PROFILE_LIMITS.pinnedStops),
   };
 }
 
@@ -372,7 +418,14 @@ interface MeRoute {
  * when it's due there (`at`, ISO). Empty when the feed has no plates or no
  * such bus is near, so the ride falls back to the estimate.
  */
-async function plateAt(env: Env, ctx: ExecutionContext, deps: MeDeps, stopCode: string | undefined, svc: string, nowMs: number): Promise<{ plate?: string; at?: string }> {
+async function plateAt(
+  env: Env,
+  ctx: ExecutionContext,
+  deps: MeDeps,
+  stopCode: string | undefined,
+  svc: string,
+  nowMs: number,
+): Promise<{ plate?: string; at?: string }> {
   if (!stopCode) return {};
   try {
     const sa = (await deps.collectArrivals(env, ctx, [stopCode], nowMs)).get(stopCode);
@@ -428,15 +481,19 @@ export const ME_ROUTES: MeRoute[] = [
       const saved = await loadProfileJson(db, session.user.id);
       const profile = await getProfile(db, session.user.id, deps.graph, saved);
       const reason = reimportReason(profile, nowMs);
-      return json({
-        email: session.user.email,
-        anonymous: session.user.email === null,
-        kind: session.kind,
-        needsReimport: reason !== null,
-        reimportReason: reason,
-        term: profile.term ? termName(profile.term) : null,
-        onboarding: onboardingFor(saved !== null, profile.seen),
-      }, 200, renewed && token ? { 'set-cookie': sessionCookie(token, ACCOUNT_TTL.webSessionMs / 1000) } : {});
+      return json(
+        {
+          email: session.user.email,
+          anonymous: session.user.email === null,
+          kind: session.kind,
+          needsReimport: reason !== null,
+          reimportReason: reason,
+          term: profile.term ? termName(profile.term) : null,
+          onboarding: onboardingFor(saved !== null, profile.seen),
+        },
+        200,
+        renewed && token ? { 'set-cookie': sessionCookie(token, ACCOUNT_TTL.webSessionMs / 1000) } : {},
+      );
     },
   },
   {
@@ -459,14 +516,22 @@ export const ME_ROUTES: MeRoute[] = [
       const body = await readJson(req);
       if (!body) return json({ error: 'send the profile as JSON' }, 400);
       const idx = indexGraph(deps.graph);
-      const r = parseProfile(body, (c) => idx.byCode.has(c), (c) => idx.byCode.has(c) || landmark(c) !== null, pinnable(deps.graph));
+      const r = parseProfile(
+        body,
+        (c) => idx.byCode.has(c),
+        (c) => idx.byCode.has(c) || landmark(c) !== null,
+        pinnable(deps.graph),
+      );
       if (!r.ok) return json({ error: r.error }, 400);
       // One-off trips are done with once their day has passed.
       r.profile.once = r.profile.once.filter((o) => o.date >= sgtDate(nowMs));
       // With If-Match (the ETag of the profile it started from), the save
       // happens only if no other device saved since.
       const from = ifMatchVersion(req);
-      const version = from === undefined ? await saveProfileJson(db, session.user.id, r.profile, nowMs) : await saveProfileIf(db, session.user.id, r.profile, nowMs, from);
+      const version =
+        from === undefined
+          ? await saveProfileJson(db, session.user.id, r.profile, nowMs)
+          : await saveProfileIf(db, session.user.id, r.profile, nowMs, from);
       if (version === null) return json({ error: PROFILE_CHANGED }, 412);
       return json({ ...r.profile, limits: profileLimits() }, 200, { etag: versionTag(version) });
     },
@@ -486,14 +551,16 @@ export const ME_ROUTES: MeRoute[] = [
         const dest = saved ? { to: saved.to, label: saved.label } : typeof body?.to === 'string' ? resolveTo(deps.graph, body.to) : null;
         if (!dest) return json({ error: "send place (a favourite's key) or to (a stop, place or room code)" }, 400);
         const atMin = body?.atMin;
-        if (typeof atMin !== 'number' || !Number.isInteger(atMin) || atMin < 0 || atMin > 1439) return json({ error: 'atMin must be minutes past midnight, Singapore time' }, 400);
+        if (typeof atMin !== 'number' || !Number.isInteger(atMin) || atMin < 0 || atMin > 1439)
+          return json({ error: 'atMin must be minutes past midnight, Singapore time' }, 400);
         const today = sgtDate(nowMs);
         const date = typeof body?.date === 'string' ? body.date : today;
         // A real day: 2026-10-45 passes the pattern and sorts inside the week.
         // 2026-13-01 is no date at all, and toISOString() would throw on it.
         const day = Date.parse(`${date}T00:00:00Z`);
         const real = /^\d{4}-\d{2}-\d{2}$/.test(date) && Number.isFinite(day) && new Date(day).toISOString().slice(0, 10) === date;
-        if (!real || date < today || date > sgtDate(nowMs + 7 * 86_400_000)) return json({ error: 'date must be today or within the next week (YYYY-MM-DD)' }, 400);
+        if (!real || date < today || date > sgtDate(nowMs + 7 * 86_400_000))
+          return json({ error: 'date must be today or within the next week (YYYY-MM-DD)' }, 400);
         if (date === today && atMin <= sgt(nowMs).minutes) return json({ error: 'that time has passed today' }, 400);
         const label = typeof body?.label === 'string' && body.label.trim() ? body.label.trim().slice(0, PROFILE_LIMITS.label) : dest.label;
         const once = profile.once.filter((o) => o.date >= today && !(o.date === date && o.arriveByMin === atMin && o.to === dest.to));
@@ -553,7 +620,18 @@ export const ME_ROUTES: MeRoute[] = [
       const { profile } = changed;
       // Over the limit, the latest classes of the week are left out: say how many.
       const dropped = Math.max(0, r.trips.length - PROFILE_LIMITS.trips);
-      return json({ profile: { ...profile, limits: profileLimits() }, unresolved: r.unresolved, missing: r.missing, online: r.online, term, ...(dropped ? { dropped } : {}) }, 200, { etag: versionTag(changed.version) });
+      return json(
+        {
+          profile: { ...profile, limits: profileLimits() },
+          unresolved: r.unresolved,
+          missing: r.missing,
+          online: r.online,
+          term,
+          ...(dropped ? { dropped } : {}),
+        },
+        200,
+        { etag: versionTag(changed.version) },
+      );
     },
   },
   {
@@ -616,7 +694,10 @@ export const ME_ROUTES: MeRoute[] = [
     path: '/api/me/next',
     run: async ({ url, env, ctx, nowMs, deps, db, session }) => {
       const profile = await getProfile(db, session.user.id, deps.graph);
-      const [day, prefs] = await Promise.all([tripDay(env, session.user.id, profile, nowMs), prefsFor(db, session.user.id, profile, nowMs)]);
+      const [day, prefs] = await Promise.all([
+        tripDay(env, session.user.id, profile, nowMs),
+        prefsFor(db, session.user.id, profile, nowMs),
+      ]);
       return json(await nextBody(url, env, ctx, nowMs, deps, profile, day, session.user.id, prefs));
     },
   },
@@ -625,10 +706,15 @@ export const ME_ROUTES: MeRoute[] = [
     path: '/api/me/day',
     run: async ({ url, env, ctx, nowMs, deps, db, session }) => {
       const profile = await getProfile(db, session.user.id, deps.graph);
-      const [day, prefs] = await Promise.all([tripDay(env, session.user.id, profile, nowMs), prefsFor(db, session.user.id, profile, nowMs)]);
+      const [day, prefs] = await Promise.all([
+        tripDay(env, session.user.id, profile, nowMs),
+        prefsFor(db, session.user.id, profile, nowMs),
+      ]);
       const here = coordsFrom(url);
       const plan = () => dayPlan(env, ctx, nowMs, deps, profile, day, hour12(url, profile), prefs.earlier, here);
-      return json(await dayCached(ctx, nowMs, [session.user.id, profile, day, hour12(url, profile), [...prefs.earlier], here, lang()], plan));
+      return json(
+        await dayCached(ctx, nowMs, [session.user.id, profile, day, hour12(url, profile), [...prefs.earlier], here, lang()], plan),
+      );
     },
   },
   {
@@ -664,13 +750,23 @@ export const ME_ROUTES: MeRoute[] = [
             ? classesOn(profile, nowMs)
                 .filter((c) => !day?.trips[classKey(c)])
                 .map((c) => ({ key: classKey(c), rec: { kind: 'skipped', at: nowMs, label: c.label, away: true } }))
-            : Object.entries(day?.trips ?? {}).filter(([, r]) => r.away).map(([key]) => ({ key, rec: null }));
+            : Object.entries(day?.trips ?? {})
+                .filter(([, r]) => r.away)
+                .map(([key]) => ({ key, rec: null }));
         // One call to the Trip object, however many classes.
         const after = items.length ? await saveSignals(env, session.user.id, items, nowMs) : day;
         logSignal(env, kind);
         const prefs = await prefsFor(db, session.user.id, profile, nowMs);
         const out = await nextBody(url, env, ctx, nowMs, deps, profile, after, session.user.id, prefs);
-        ctx.waitUntil(nudgeUser(env, session.user.id, { phase: out.card.phase, urgent: false, remind: out.card.remind !== false }, nowMs, session.tokenHash));
+        ctx.waitUntil(
+          nudgeUser(
+            env,
+            session.user.id,
+            { phase: out.card.phase, urgent: false, remind: out.card.remind !== false },
+            nowMs,
+            session.tokenHash,
+          ),
+        );
         return json(out);
       }
       const now = await planned(here, env, ctx, nowMs, deps, profile, day);
@@ -686,7 +782,16 @@ export const ME_ROUTES: MeRoute[] = [
         ? gone && p
           ? p.change
             ? { ...now.answer.leave, ...leaveOf(p) }
-            : { ...now.answer.leave, svc: p.svc, stop: p.stop, board: p.board, arrive: p.arrive, off: p.off, stopCode: p.stopCode, offCode: p.alightCode }
+            : {
+                ...now.answer.leave,
+                svc: p.svc,
+                stop: p.stop,
+                board: p.board,
+                arrive: p.arrive,
+                off: p.off,
+                stopCode: p.stopCode,
+                offCode: p.alightCode,
+              }
           : now.answer.leave
         : null;
       const label = current ? (now.answer.dest?.label ?? undefined) : classesOn(profile, nowMs).find((c) => classKey(c) === key)?.label;
@@ -758,7 +863,15 @@ export const ME_ROUTES: MeRoute[] = [
       const prefs = await prefsFor(db, session.user.id, profile, nowMs);
       const out = await nextBody(url, env, ctx, nowMs, deps, profile, next, session.user.id, prefs);
       // A tap here changes the other phones' cards now, not at their next refresh.
-      ctx.waitUntil(nudgeUser(env, session.user.id, { phase: out.card.phase, urgent: false, remind: out.card.remind !== false }, nowMs, session.tokenHash));
+      ctx.waitUntil(
+        nudgeUser(
+          env,
+          session.user.id,
+          { phase: out.card.phase, urgent: false, remind: out.card.remind !== false },
+          nowMs,
+          session.tokenHash,
+        ),
+      );
       return json(out);
     },
   },
@@ -778,7 +891,8 @@ export const ME_ROUTES: MeRoute[] = [
         return json({ ok: true });
       }
       const token = typeof body?.token === 'string' ? body.token.trim() : '';
-      if (!token || token.length > 4096 || token.startsWith(WEB_PREFIX)) return json({ error: 'send token (the FCM registration token) or subscription' }, 400);
+      if (!token || token.length > 4096 || token.startsWith(WEB_PREFIX))
+        return json({ error: 'send token (the FCM registration token) or subscription' }, 400);
       await setPushToken(db, session.tokenHash, token);
       return json({ ok: true });
     },
@@ -813,7 +927,10 @@ export const ME_ROUTES: MeRoute[] = [
           ? [body.id.slice(0, body.id.indexOf(':')), body.id.slice(body.id.indexOf(':') + 1)]
           : [body?.pref, body?.trip];
       if (!choice || (pref !== 'earlier' && pref !== 'quiet') || typeof trip !== 'string' || !trip || trip.length > 80) {
-        return json({ error: "send id (from card.suggestion) or trip and pref ('earlier' or 'quiet'), and choice: accept, dismiss or undo" }, 400);
+        return json(
+          { error: "send id (from card.suggestion) or trip and pref ('earlier' or 'quiet'), and choice: accept, dismiss or undo" },
+          400,
+        );
       }
       const profile = await getProfile(db, session.user.id, deps.graph);
       if (!knownTrip(profile, trip, nowMs)) return json({ error: 'no such trip today' }, 400);
@@ -902,7 +1019,17 @@ export async function handleMe(
 ): Promise<Response | null> {
   const path = url.pathname;
   const emailed = path === '/auth/verify' || path === '/auth/approve';
-  if (!(emailed || path.startsWith('/api/auth/') || path === '/api/pair' || path === '/api/pair/check' || path === '/api/me' || path.startsWith('/api/me/'))) return null;
+  if (
+    !(
+      emailed ||
+      path.startsWith('/api/auth/') ||
+      path === '/api/pair' ||
+      path === '/api/pair/check' ||
+      path === '/api/me' ||
+      path.startsWith('/api/me/')
+    )
+  )
+    return null;
   const db = env.DB;
   if (!db) return json({ error: 'accounts are not configured' }, 503);
   // Changes made with the browser's session, or that start one, come from our
@@ -912,15 +1039,28 @@ export async function handleMe(
   // sent with its POSTs, so this also covers every request carrying it.
   // Apps send no such header; a bearer token isn't sent by a browser on its own.
   const fetchSite = req.headers.get('sec-fetch-site');
-  if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS' && fetchSite && fetchSite !== 'same-origin' && fetchSite !== 'none') {
-    const setsSession = path === '/auth/verify' || path === '/auth/approve' || path === '/api/auth/logout' || path === '/api/auth/code' || path === '/api/auth/anon/web';
+  if (
+    req.method !== 'GET' &&
+    req.method !== 'HEAD' &&
+    req.method !== 'OPTIONS' &&
+    fetchSite &&
+    fetchSite !== 'same-origin' &&
+    fetchSite !== 'none'
+  ) {
+    const setsSession =
+      path === '/auth/verify' ||
+      path === '/auth/approve' ||
+      path === '/api/auth/logout' ||
+      path === '/api/auth/code' ||
+      path === '/api/auth/anon/web';
     const bearer = req.headers.get('authorization')?.startsWith('Bearer ') || req.headers.has('x-api-key');
     if (setsSession || (!bearer && hasSessionCookie(req))) return json({ error: 'that request came from another site' }, 403);
   }
 
   // Pages and lookups that cost a D1 read but need no session.
   if ((path === '/auth/verify' || path === '/api/auth/config') && env.RL_PUBLIC) {
-    if (!(await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` })).success) return json({ error: 'too many requests, slow down' }, 429, retryAfter());
+    if (!(await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` })).success)
+      return json({ error: 'too many requests, slow down' }, 429, retryAfter());
   }
 
   if (path === '/api/auth/config' && req.method === 'GET') {
@@ -935,7 +1075,8 @@ export async function handleMe(
     if (!email) return json({ error: 'enter a valid email address' }, 400);
     const human = await checkTurnstile(env, body?.turnstile, req.headers.get('cf-connecting-ip'));
     // Turnstile itself not answering isn't the visitor's fault: say so, and when to try again.
-    if (human === 'unavailable') return json({ error: 'the human check is not answering, try again in a minute' }, 503, { 'retry-after': '60' });
+    if (human === 'unavailable')
+      return json({ error: 'the human check is not answering, try again in a minute' }, 503, { 'retry-after': '60' });
     if (human === 'failed') return json({ error: 'the human check failed, try again' }, 400);
     let outcome;
     try {
@@ -960,7 +1101,10 @@ export async function handleMe(
     const done = await redeemCode(env, db, email, code, nowMs, await browserAnon(db, req, nowMs));
     if (!done) return json({ error: 'that code is wrong or has expired' }, 400);
     if (done.removed) await clearTrip(env, done.removed);
-    return json({ ok: true }, 200, { 'set-cookie': sessionCookie(done.token, ACCOUNT_TTL.webSessionMs / 1000), 'cache-control': 'no-store' });
+    return json({ ok: true }, 200, {
+      'set-cookie': sessionCookie(done.token, ACCOUNT_TTL.webSessionMs / 1000),
+      'cache-control': 'no-store',
+    });
   }
 
   if (path === '/auth/verify') {
@@ -974,9 +1118,14 @@ export async function handleMe(
       // to their account without you noticing. A dead link says so now.
       const email = safe ? await linkEmail(db, safe, nowMs) : null;
       if (!email) return html(page(m().pageLinkExpired, m().linkExpiredHtml), 400);
-      return html(page(m().pageSignIn, `<h1>${m().signInTitle}</h1>
+      return html(
+        page(
+          m().pageSignIn,
+          `<h1>${m().signInTitle}</h1>
 <p class="hint">${m().continueAs(escapeHtml(email))}</p>
-<form method="post" action="/auth/verify"><input type="hidden" name="t" value="${safe}">${url.searchParams.get('next') === 'app' ? '<input type="hidden" name="next" value="app">' : ''}<button type="submit" class="btn accent">${m().signInButton}</button></form>`));
+<form method="post" action="/auth/verify"><input type="hidden" name="t" value="${safe}">${url.searchParams.get('next') === 'app' ? '<input type="hidden" name="next" value="app">' : ''}<button type="submit" class="btn accent">${m().signInButton}</button></form>`,
+        ),
+      );
     }
     if (req.method === 'POST') {
       const form = await readForm(req);
@@ -1018,7 +1167,8 @@ export async function handleMe(
     const body = await readJson(req);
     const human = await checkTurnstile(env, body?.turnstile, req.headers.get('cf-connecting-ip'));
     // Turnstile itself not answering isn't the visitor's fault: say so, and when to try again.
-    if (human === 'unavailable') return json({ error: 'the human check is not answering, try again in a minute' }, 503, { 'retry-after': '60' });
+    if (human === 'unavailable')
+      return json({ error: 'the human check is not answering, try again in a minute' }, 503, { 'retry-after': '60' });
     if (human === 'failed') return json({ error: 'the human check failed, try again' }, 400);
     if (env.RL_ANON && !(await env.RL_ANON.limit({ key: 'anon:global' })).success) {
       return json({ error: 'terminus is busy, try again in a minute' }, 429, retryAfter());
@@ -1038,16 +1188,30 @@ export async function handleMe(
     if (current?.user.email) return json({ error: 'this device is already signed in' }, 409);
     let started;
     try {
-      started = await startAppLogin(env, db, { email, name: deviceName(body), client: clientWith(req, body), anonUserId: current?.user.id ?? null }, emailOrigin(url, env), nowMs);
+      started = await startAppLogin(
+        env,
+        db,
+        { email, name: deviceName(body), client: clientWith(req, body), anonUserId: current?.user.id ?? null },
+        emailOrigin(url, env),
+        nowMs,
+      );
     } catch (err) {
       console.error('sign-in email failed', err instanceof Error ? err.name : typeof err);
       return json({ error: 'could not send the email, try again later' }, 502);
     }
-    if (started === 'cooldown') return json({ error: 'an email was sent to that address a moment ago; wait a minute and try again' }, 429, retryAfter());
+    if (started === 'cooldown')
+      return json({ error: 'an email was sent to that address a moment ago; wait a minute and try again' }, 429, retryAfter());
     if (started === 'busy') return json({ error: 'sign-in is busy, try again in a minute' }, 429, retryAfter());
     // Not a 429: the apps take a 429 as "wait", and hold back pairing too,
     // which is the way in this tells them to use.
-    if (started === 'held') return json({ error: 'a sign-in to that address was turned down recently, so the app cannot ask again for a few hours; pair this device from the website instead' }, 403);
+    if (started === 'held')
+      return json(
+        {
+          error:
+            'a sign-in to that address was turned down recently, so the app cannot ask again for a few hours; pair this device from the website instead',
+        },
+        403,
+      );
     return json({ ...started, expires: new Date(started.expires).toISOString() }, 201);
   }
 
@@ -1057,14 +1221,19 @@ export async function handleMe(
     if (env.RL_PUBLIC && !(await env.RL_PUBLIC.limit({ key: `poll:${clientKey(req)}` })).success) {
       return json({ error: 'too many requests, slow down' }, 429, retryAfter(10));
     }
-    if (path === '/api/auth/app/code' && (await limited(env, req, 'appcode'))) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
+    if (path === '/api/auth/app/code' && (await limited(env, req, 'appcode')))
+      return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
     const body = await readJson(req);
     if (typeof body?.request !== 'string' || typeof body?.poll !== 'string') return json({ error: 'send request and poll' }, 400);
     if (path === '/api/auth/app/code') {
       const code = normalizePairCode(body.code);
       const entered = code ? await enterCode(db, body.request, body.poll, code, nowMs) : 'wrong';
       if (entered === 'wrong') return json({ status: 'pending', error: "that code isn't right; check the email and try again" }, 400);
-      if (entered !== 'approved') return json({ status: entered, error: entered === 'denied' ? 'too many wrong codes; start again' : 'that request expired; start again' }, 400);
+      if (entered !== 'approved')
+        return json(
+          { status: entered, error: entered === 'denied' ? 'too many wrong codes; start again' : 'that request expired; start again' },
+          400,
+        );
     }
     const r = await pollAppLogin(db, body.request, body.poll, clientWith(req, body), nowMs);
     if (r.status !== 'approved') return json({ status: r.status });
@@ -1074,7 +1243,8 @@ export async function handleMe(
 
   if (path === '/auth/approve') {
     if (req.method === 'GET') {
-      if (env.RL_PUBLIC && !(await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` })).success) return json({ error: 'too many requests, slow down' }, 429, retryAfter());
+      if (env.RL_PUBLIC && !(await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` })).success)
+        return json({ error: 'too many requests, slow down' }, 429, retryAfter());
       // Like /auth/verify: GET only shows the page (mail scanners open every
       // link); the POST decides.
       const link = (url.searchParams.get('r') ?? '').replace(/[^A-Za-z0-9_-]/g, '');
@@ -1084,7 +1254,10 @@ export async function handleMe(
       // The question, when it was asked, then a box for the number the
       // device shows, saying what a wrong one does; "This wasn't me"
       // quietly under it. Typed, not picked: see applogin.ts.
-      return html(page(m().pageApprove, `<h1>${m().approveTitle(device)}</h1>
+      return html(
+        page(
+          m().pageApprove,
+          `<h1>${m().approveTitle(device)}</h1>
 <p class="when">${m().approveWhen(escapeHtml(sgtTime(a.created)))}</p>
 <form method="post" action="/auth/approve"><input type="hidden" name="r" value="${link}">
 <label class="eyebrow" for="n">${m().approveNumber(device)}</label>
@@ -1092,7 +1265,9 @@ export async function handleMe(
 <p class="hint after">${m().approveRule}</p>
 <button type="submit" class="btn accent">${m().approveButton}</button></form>
 <form method="post" action="/auth/approve"><input type="hidden" name="r" value="${link}"><button type="submit" name="n" value="none" class="linkbtn">${m().notMe}</button></form>
-<p class="hint center">${m().notMeHint}</p>`));
+<p class="hint center">${m().notMeHint}</p>`,
+        ),
+      );
     }
     if (req.method === 'POST') {
       if (await limited(env, req, 'approve')) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
@@ -1105,10 +1280,7 @@ export async function handleMe(
       if (out.status === 'denied') {
         const notMe = typed === 'none';
         if (notMe && out.email) await holdAppLogins(env, out.email);
-        return html(
-          page(m().pageCancelled, m().cancelledHtml(!notMe)),
-          notMe ? 200 : 400,
-        );
+        return html(page(m().pageCancelled, m().cancelledHtml(!notMe)), notMe ? 200 : 400);
       }
       return html(page(m().pageRequestExpired, m().approveExpiredHtml), 400);
     }
@@ -1151,7 +1323,8 @@ export async function handleMe(
     // After a sign-in where both the device and the account had a setup.
     const body = await readJson(req);
     const keep = body?.keep === 'device' ? 'device' : body?.keep === 'account' ? 'account' : null;
-    if (!keep || typeof body?.anon !== 'string') return json({ error: "send anon (the device's old token) and keep: 'account' or 'device'" }, 400);
+    if (!keep || typeof body?.anon !== 'string')
+      return json({ error: "send anon (the device's old token) and keep: 'account' or 'device'" }, 400);
     const r = await mergeAnonymous(db, session.user.id, body.anon, keep, nowMs);
     if (r === 'not-anonymous') return json({ error: 'that token is not an anonymous account' }, 400);
     await clearTrip(env, r.removed);
@@ -1161,7 +1334,8 @@ export async function handleMe(
   if (!session) {
     // Each bad token costs a D1 read, so guessing is capped per address.
     // No token at all is just "signed out" (the homepage asks), not a guess.
-    if (tokenFrom(req) && (await limited(env, req, 'badtoken'))) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
+    if (tokenFrom(req) && (await limited(env, req, 'badtoken')))
+      return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
     return json({ error: 'sign in first' }, 401);
   }
   // An app too old to keep serving (config:minClient): it shows "update" and
@@ -1199,12 +1373,19 @@ async function dayCached<T>(ctx: ExecutionContext, nowMs: number, inputs: unknow
   const round = (x: unknown) => (typeof x === 'number' ? Math.round(x * 1000) / 1000 : x);
   const seed = JSON.stringify([...inputs, Math.floor(nowMs / 60_000)], (_, v) => round(v));
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(seed));
-  const key = new Request(`https://terminus.internal/day/${[...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')}`);
+  const key = new Request(
+    `https://terminus.internal/day/${[...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')}`,
+  );
   const cache = typeof caches === 'undefined' ? null : caches.default;
   const hit = await cache?.match(key).catch(() => undefined);
   if (hit) return (await hit.json()) as T;
   const fresh = await plan();
-  if (cache) ctx.waitUntil(cache.put(key, new Response(JSON.stringify(fresh), { headers: { 'content-type': 'application/json', 'cache-control': 'max-age=60' } })).catch(() => {}));
+  if (cache)
+    ctx.waitUntil(
+      cache
+        .put(key, new Response(JSON.stringify(fresh), { headers: { 'content-type': 'application/json', 'cache-control': 'max-age=60' } }))
+        .catch(() => {}),
+    );
   return fresh;
 }
 
@@ -1265,10 +1446,12 @@ async function nextWithTrip(
   }
   if (update.items || update.plans || update.watch) {
     // The answer doesn't wait for it; a failure loses the plan or a push, not the card.
-    ctx.waitUntil(updateTrip(env, userId, update, nowMs).then(
-      () => undefined,
-      (err: unknown) => console.error('trip state not saved', err instanceof Error ? err.message : typeof err),
-    ));
+    ctx.waitUntil(
+      updateTrip(env, userId, update, nowMs).then(
+        () => undefined,
+        (err: unknown) => console.error('trip state not saved', err instanceof Error ? err.message : typeof err),
+      ),
+    );
   }
   // The user's walking speed, for walk times the apps show themselves (search).
   // The walk from the stop is in the card's journey; the raw seconds stay here.
@@ -1295,7 +1478,13 @@ export async function tripCardFor(
   const prefs = await prefsFor(env.DB, userId, profile, nowMs);
   const url = new URL('https://terminus.internal/me/next');
   const { body, trip } = await nextWithTrip(url, env, ctx, nowMs, unlogged(deps), profile, day, userId, prefs, { savePlan: savePlanLocal });
-  return { key: trip.key, phase: body.card.phase, gone: body.card.gone, remind: body.card.remind !== false, wakeAt: nextPhaseAt(body, trip, nowMs) };
+  return {
+    key: trip.key,
+    phase: body.card.phase,
+    gone: body.card.gone,
+    remind: body.card.remind !== false,
+    wakeAt: nextPhaseAt(body, trip, nowMs),
+  };
 }
 
 const CHOICES = ['accept', 'dismiss', 'undo'] as const;
@@ -1366,7 +1555,13 @@ async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: numbe
   const twin = twinCode ? ranked.find((c) => c.stop.code === twinCode) : undefined;
   if (twin && !picked.some((c) => c.stop.code === twin.stop.code)) picked.push(twin);
 
-  const byStop = await deps.collectArrivals(env, ctx, picked.map((c) => c.stop.code), nowMs, graph);
+  const byStop = await deps.collectArrivals(
+    env,
+    ctx,
+    picked.map((c) => c.stop.code),
+    nowMs,
+    graph,
+  );
   // `?stopped=1`: the services not running now too, for the Buses tab.
   const stopped = url.searchParams.get('stopped') === '1';
   const stops = picked.map(({ stop, distM, footM: foot }) => {
@@ -1381,5 +1576,13 @@ async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: numbe
     };
   });
   // As old as the oldest times on it, so "Updated N ago" is true.
-  return json({ stops, asOf: new Date(boardAsOf(picked.map((c) => byStop.get(c.stop.code)), nowMs)).toISOString() });
+  return json({
+    stops,
+    asOf: new Date(
+      boardAsOf(
+        picked.map((c) => byStop.get(c.stop.code)),
+        nowMs,
+      ),
+    ).toISOString(),
+  });
 }

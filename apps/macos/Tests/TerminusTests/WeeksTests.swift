@@ -1,4 +1,5 @@
 import Testing
+
 @testable import Terminus
 
 /// A class that runs only some weeks, as Settings lists it under the class.

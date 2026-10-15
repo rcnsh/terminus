@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import Terminus
 
 /// The code boxes, as Android's SignInCodeTest: typing fills them one by one,

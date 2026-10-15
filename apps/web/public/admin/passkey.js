@@ -13,7 +13,12 @@ const bytes = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/'
 export const passkeysWork = () => typeof PublicKeyCredential === 'function' && Boolean(navigator.credentials?.create);
 
 async function post(path, body, headers = {}) {
-  const res = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body), cache: 'no-store' }).catch(() => null);
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...headers },
+    body: JSON.stringify(body),
+    cache: 'no-store',
+  }).catch(() => null);
   if (!res) throw new Error("Couldn't reach terminus.");
   const out = await res.json().catch(() => ({}));
   if (res.status === 404) throw new Error('That token was not accepted.');
@@ -24,7 +29,10 @@ async function post(path, body, headers = {}) {
 
 /** A challenge; with the token, one for adding a passkey, which checks the token first. */
 async function challenge(token) {
-  const res = await fetch(`/api/admin/passkey/challenge${token ? '?register=1' : ''}`, { headers: token ? { 'x-health-token': token } : {}, cache: 'no-store' }).catch(() => null);
+  const res = await fetch(`/api/admin/passkey/challenge${token ? '?register=1' : ''}`, {
+    headers: token ? { 'x-health-token': token } : {},
+    cache: 'no-store',
+  }).catch(() => null);
   if (!res) throw new Error("Couldn't reach terminus.");
   if (res.status === 404) throw new Error(token ? 'That token was not accepted.' : 'Passkeys are not set up on this server.');
   if (!res.ok) throw new Error(`The server answered ${res.status}.`);
@@ -43,12 +51,19 @@ export async function signIn() {
   const c = await challenge();
   let cred;
   try {
-    cred = await navigator.credentials.get({ publicKey: { challenge: bytes(c.challenge), rpId: c.rpId, userVerification: 'required', timeout: 120_000 } });
+    cred = await navigator.credentials.get({
+      publicKey: { challenge: bytes(c.challenge), rpId: c.rpId, userVerification: 'required', timeout: 120_000 },
+    });
   } catch (err) {
     throw said(err);
   }
   const r = cred.response;
-  return post('/api/admin/passkey/signin', { id: cred.id, clientData: b64url(r.clientDataJSON), authData: b64url(r.authenticatorData), signature: b64url(r.signature) });
+  return post('/api/admin/passkey/signin', {
+    id: cred.id,
+    clientData: b64url(r.clientDataJSON),
+    authData: b64url(r.authenticatorData),
+    signature: b64url(r.signature),
+  });
 }
 
 /** Makes a passkey on this device, with the HEALTH_TOKEN; the session, or throws. */
@@ -77,7 +92,14 @@ export async function addPasskey(token, name) {
   if (!key) throw new Error('This browser can’t add a passkey here. Try a current Chrome, Safari or Firefox.');
   return post(
     '/api/admin/passkey/register',
-    { id: cred.id, key: b64url(key), alg: r.getPublicKeyAlgorithm(), clientData: b64url(r.clientDataJSON), authData: b64url(r.getAuthenticatorData()), name },
+    {
+      id: cred.id,
+      key: b64url(key),
+      alg: r.getPublicKeyAlgorithm(),
+      clientData: b64url(r.clientDataJSON),
+      authData: b64url(r.getAuthenticatorData()),
+      name,
+    },
     { 'x-health-token': token },
   );
 }

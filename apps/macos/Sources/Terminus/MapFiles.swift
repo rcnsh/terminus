@@ -49,7 +49,8 @@ enum MapFiles {
     /// style when one fetch of a streamed map file fails, which would blank
     /// the routes too. Nil with no connection and nothing kept.
     static func style(dark: Bool, zh: Bool) async -> URL? {
-        let theme = dark ? "dark" : "light", lang = zh ? "zh" : "en"
+        let theme = dark ? "dark" : "light"
+        let lang = zh ? "zh" : "en"
         let kept = dir.appendingPathComponent("style-\(theme)-\(lang).json")
         // Kept only once it reads as a style: a Wi-Fi sign-in page answers
         // 200 too, and must not replace the copy the map falls back on.
@@ -69,7 +70,9 @@ enum MapFiles {
     }
 
     private static func styleJSON(_ data: Data) -> [String: Any]? {
-        guard let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any], o["version"] != nil, o["layers"] is [Any] else { return nil }
+        guard let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any], o["version"] != nil, o["layers"] is [Any] else {
+            return nil
+        }
         return o
     }
 
@@ -118,7 +121,8 @@ enum MapFiles {
     /// older files are no longer read and go.
     static func styleLoaded(_ style: URL) {
         guard let file = current, let text = try? String(contentsOf: style, encoding: .utf8),
-              text.contains(file.lastPathComponent) else { return }
+            text.contains(file.lastPathComponent)
+        else { return }
         for old in (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
         where old.hasPrefix("campus") && old.hasSuffix(".pmtiles") && old != file.lastPathComponent {
             try? FileManager.default.removeItem(at: dir.appendingPathComponent(old))
@@ -189,7 +193,9 @@ enum MapFiles {
             // A cut-off download, or a page that isn't the map (a Wi-Fi
             // sign-in page answers 200 too), must not replace a good file.
             let size = (try? fm.attributesOfItem(atPath: tmp.path)[.size] as? Int) ?? -1
-            if http?.expectedContentLength ?? -1 > 0, Int64(size) != http?.expectedContentLength { throw ApiError(status: 0, message: "short download") }
+            if http?.expectedContentLength ?? -1 > 0, Int64(size) != http?.expectedContentLength {
+                throw ApiError(status: 0, message: "short download")
+            }
             guard looksLikeTiles(tmp) else { throw ApiError(status: 0, message: "not a map file") }
             name = "campus-\(UUID().uuidString).pmtiles"
             var dest = dir.appendingPathComponent(name)
@@ -203,7 +209,9 @@ enum MapFiles {
             throw ApiError(status: http?.statusCode ?? 0, message: "HTTP \(http?.statusCode ?? 0)")
         }
         let tag = http?.value(forHTTPHeaderField: "etag") ?? etag
-        if let bytes = try? JSONSerialization.data(withJSONObject: ["file": name, "etag": tag, "checked": now]) { try? bytes.write(to: meta(in: dir), options: .atomic) }
+        if let bytes = try? JSONSerialization.data(withJSONObject: ["file": name, "etag": tag, "checked": now]) {
+            try? bytes.write(to: meta(in: dir), options: .atomic)
+        }
         return fresh
     }
 

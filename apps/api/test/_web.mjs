@@ -20,7 +20,8 @@ export const read = (p) => fs.readFileSync(new URL(p.replace(/^\//, ''), PUBLIC)
 
 registerHooks({
   resolve(spec, ctx, next) {
-    if (spec.startsWith('/') && !spec.startsWith('//') && ctx.parentURL?.startsWith(PUBLIC.href)) return next(new URL(spec.slice(1), PUBLIC).href, ctx);
+    if (spec.startsWith('/') && !spec.startsWith('//') && ctx.parentURL?.startsWith(PUBLIC.href))
+      return next(new URL(spec.slice(1), PUBLIC).href, ctx);
     return next(spec, ctx);
   },
 });

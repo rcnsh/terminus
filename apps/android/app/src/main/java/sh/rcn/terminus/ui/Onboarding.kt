@@ -7,6 +7,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,6 +49,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -59,11 +62,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
-import androidx.compose.foundation.focusable
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
@@ -93,13 +93,11 @@ import sh.rcn.terminus.hour12
 private const val STEPS = 4
 
 /**
- * The in-app setup for a new account, one step at a time, the same four
- * things the account page asks: home, timetable, pace, then notifications and
- * location. Each step saves as it goes and can be skipped; so can the lot.
+ * The in-app setup for a new account, one step at a time, the same four things the account page asks: home, timetable, pace, then
+ * notifications and location. Each step saves as it goes and can be skipped; so can the lot.
  *
- * Each step shows what its choice does (your stops' signs, your week, a lap
- * of a track at your pace, the alert you'd get), and its buttons stay at the
- * foot of the screen, under the thumb, while the step scrolls above them.
+ * Each step shows what its choice does (your stops' signs, your week, a lap of a track at your pace, the alert you'd get), and its buttons
+ * stay at the foot of the screen, under the thumb, while the step scrolls above them.
  */
 @Composable
 internal fun OnboardingScreen(state: AccountState, account: AccountViewModel, main: MainViewModel, onDone: () -> Unit) {
@@ -120,7 +118,13 @@ internal fun OnboardingScreen(state: AccountState, account: AccountViewModel, ma
         val profile = state.profile
         if (profile == null) {
             Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                if (state.message == null) CircularProgressIndicator() else Text(state.message, color = MaterialTheme.colorScheme.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive })
+                if (state.message == null) CircularProgressIndicator()
+                else
+                    Text(
+                        state.message,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
+                    )
             }
             if (state.message != null) Button(onClick = account::refresh) { Text(stringResource(R.string.try_again)) }
             return@Column
@@ -137,8 +141,8 @@ internal fun OnboardingScreen(state: AccountState, account: AccountViewModel, ma
 }
 
 /**
- * Where you are in setup, drawn as a route: a stop per step, the line done
- * so far in the accent, the stop you're at ringed, and each stop's name under it.
+ * Where you are in setup, drawn as a route: a stop per step, the line done so far in the accent, the stop you're at ringed, and each stop's
+ * name under it.
  */
 @Composable
 private fun StepLine(step: Int, modifier: Modifier = Modifier) {
@@ -188,24 +192,35 @@ private fun StepLine(step: Int, modifier: Modifier = Modifier) {
 private fun ColumnScope.StepPage(message: String?, buttons: @Composable () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(top = 12.dp)) {
         content()
-        message?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 12.dp).semantics { liveRegion = LiveRegionMode.Assertive }) }
+        message?.let {
+            Text(
+                it,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 12.dp).semantics { liveRegion = LiveRegionMode.Assertive },
+            )
+        }
         Spacer(Modifier.height(20.dp))
     }
     buttons()
 }
 
 /**
- * Back on the left; the step's one big button filling the rest. With nothing
- * to continue with yet, the big button is the skip, and says so.
+ * Back on the left; the step's one big button filling the rest. With nothing to continue with yet, the big button is the skip, and says so.
  */
 @Composable
 private fun StepButtons(next: () -> Unit, back: (() -> Unit)?, nextLabel: String? = null, skip: String? = null, enabled: Boolean = true) {
-    Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(
+        Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         if (back != null) TextButton(onClick = back) { Text(stringResource(R.string.back)) }
         if (skip != null) {
             OutlinedButton(onClick = next, modifier = Modifier.weight(1f).heightIn(min = 52.dp)) { Text(skip) }
         } else {
-            Button(onClick = next, enabled = enabled, modifier = Modifier.weight(1f).heightIn(min = 52.dp)) { Text(nextLabel ?: stringResource(R.string.continue_)) }
+            Button(onClick = next, enabled = enabled, modifier = Modifier.weight(1f).heightIn(min = 52.dp)) {
+                Text(nextLabel ?: stringResource(R.string.continue_))
+            }
         }
     }
 }
@@ -215,7 +230,12 @@ private fun StepButtons(next: () -> Unit, back: (() -> Unit)?, nextLabel: String
 private fun Title(text: String, sub: String) {
     val focus = remember { FocusRequester() }
     LaunchedEffect(text) { runCatching { focus.requestFocus() } }
-    Text(text, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, modifier = Modifier.focusRequester(focus).focusable().semantics { heading() })
+    Text(
+        text,
+        style = MaterialTheme.typography.headlineMedium,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.focusRequester(focus).focusable().semantics { heading() },
+    )
     Spacer(Modifier.height(6.dp))
     Text(sub, color = MaterialTheme.colorScheme.onSurfaceVariant)
     Spacer(Modifier.height(18.dp))
@@ -233,7 +253,6 @@ private fun ColumnScope.HomeStep(profile: ProfileDoc, state: AccountState, accou
     }
 }
 
-
 /** The residence menu's groups: where most students live, then the rest (residences come common first). */
 @Composable
 internal fun residenceHeadings(residences: List<Residence>): Map<Int, String> {
@@ -248,10 +267,8 @@ private const val MORE = "more"
 private const val OFF = "off"
 
 /**
- * Residences as tiles: where most students live on their own at the top,
- * then a few of the others (the chosen one always among those showing) and
- * off campus. Your stops follow as their signs, with the buses that call
- * there, so the choice shows what it does.
+ * Residences as tiles: where most students live on their own at the top, then a few of the others (the chosen one always among those
+ * showing) and off campus. Your stops follow as their signs, with the buses that call there, so the choice shows what it does.
  */
 @Composable
 internal fun HomePicker(profile: ProfileDoc, campus: Campus, account: AccountViewModel) {
@@ -268,19 +285,38 @@ internal fun HomePicker(profile: ProfileDoc, campus: Campus, account: AccountVie
 
     val (common, others) = campus.residences.partition { it.common }
     val few = others.size > FEW_RESIDENCES + 1 && !all
-    val shown = if (!few) others else others.take(FEW_RESIDENCES).let { if (residence != null && !residence.common && residence !in it) it.dropLast(1) + residence else it }
-    val tile: @Composable (Residence, Modifier) -> Unit = { r, mod ->
-        ChoiceTile(residence == r && !offCampus, {
-            offCampus = false
-            account.edit {
-                it.setHomeStops(r.stops)
-                it.homeWalkMin = r.minutes
+    val shown =
+        if (!few) others
+        else
+            others.take(FEW_RESIDENCES).let {
+                if (residence != null && !residence.common && residence !in it) it.dropLast(1) + residence else it
             }
-        }, mod) {
-            Text(r.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    val tile: @Composable (Residence, Modifier) -> Unit = { r, mod ->
+        ChoiceTile(
+            residence == r && !offCampus,
+            {
+                offCampus = false
+                account.edit {
+                    it.setHomeStops(r.stops)
+                    it.homeWalkMin = r.minutes
+                }
+            },
+            mod,
+        ) {
             Text(
-                listOfNotNull(r.stops.firstOrNull()?.let(campus::stopName), stringResource(R.string.min_walk, r.minutes)).joinToString(" · "),
-                style = MaterialTheme.typography.bodySmall, color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                r.name,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                listOfNotNull(r.stops.firstOrNull()?.let(campus::stopName), stringResource(R.string.min_walk, r.minutes))
+                    .joinToString(" · "),
+                style = MaterialTheme.typography.bodySmall,
+                color = muted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -292,12 +328,19 @@ internal fun HomePicker(profile: ProfileDoc, campus: Campus, account: AccountVie
     TwoColumns(shown + listOfNotNull(if (few) MORE else null, OFF)) { cell, mod ->
         when (cell) {
             is Residence -> tile(cell, mod)
-            MORE -> ChoiceTile(false, { all = true }, mod) {
-                Text(stringResource(R.string.all_residences, campus.residences.size), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
-            }
-            else -> ChoiceTile(offCampus || (residence == null && stops.isNotEmpty()), { offCampus = true }, mod) {
-                Text(stringResource(R.string.off_campus), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            }
+            MORE ->
+                ChoiceTile(false, { all = true }, mod) {
+                    Text(
+                        stringResource(R.string.all_residences, campus.residences.size),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            else ->
+                ChoiceTile(offCampus || (residence == null && stops.isNotEmpty()), { offCampus = true }, mod) {
+                    Text(stringResource(R.string.off_campus), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                }
         }
     }
     if (offCampus || (residence == null && stops.isNotEmpty())) {
@@ -310,10 +353,14 @@ internal fun HomePicker(profile: ProfileDoc, campus: Campus, account: AccountVie
             onSelect = { code -> account.edit { it.setHomeStops(listOfNotNull(code) + stops.drop(1).filter { s -> s != code }) } },
         )
         if (Locator.hasForeground(ctx)) {
-            TextButton(onClick = {
-                locating = L.s(R.string.finding_stop)
-                scope.launch { locating = pickNearestHome(ctx, campus, account) }
-            }) { Text(stringResource(R.string.pick_nearest)) }
+            TextButton(
+                onClick = {
+                    locating = L.s(R.string.finding_stop)
+                    scope.launch { locating = pickNearestHome(ctx, campus, account) }
+                }
+            ) {
+                Text(stringResource(R.string.pick_nearest))
+            }
         }
         locating?.let { Hint(it) }
     }
@@ -327,9 +374,21 @@ internal fun HomePicker(profile: ProfileDoc, campus: Campus, account: AccountVie
         }
         Row(Modifier.fillMaxWidth().padding(top = 18.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.home_walk), modifier = Modifier.weight(1f))
-            OutlinedButton(onClick = { account.edit { it.homeWalkMin = profile.homeWalkMin - 1 } }, enabled = profile.homeWalkMin > profile.limits.homeWalkMin.first, modifier = Modifier.semantics { contentDescription = L.s(R.string.walk_one_less) }) { Text("−") }
+            OutlinedButton(
+                onClick = { account.edit { it.homeWalkMin = profile.homeWalkMin - 1 } },
+                enabled = profile.homeWalkMin > profile.limits.homeWalkMin.first,
+                modifier = Modifier.semantics { contentDescription = L.s(R.string.walk_one_less) },
+            ) {
+                Text("−")
+            }
             Text(stringResource(R.string.n_min, profile.homeWalkMin), modifier = Modifier.padding(horizontal = 12.dp))
-            OutlinedButton(onClick = { account.edit { it.homeWalkMin = profile.homeWalkMin + 1 } }, enabled = profile.homeWalkMin < profile.limits.homeWalkMin.last, modifier = Modifier.semantics { contentDescription = L.s(R.string.walk_one_more) }) { Text("+") }
+            OutlinedButton(
+                onClick = { account.edit { it.homeWalkMin = profile.homeWalkMin + 1 } },
+                enabled = profile.homeWalkMin < profile.limits.homeWalkMin.last,
+                modifier = Modifier.semantics { contentDescription = L.s(R.string.walk_one_more) },
+            ) {
+                Text("+")
+            }
         }
         Hint(stringResource(R.string.home_walk_hint), Modifier.padding(top = 4.dp))
     }
@@ -342,10 +401,9 @@ internal fun nearestStop(stops: List<Stop>, lat: Double, lon: Double): Stop? = s
 }
 
 /**
- * "Pick the stop nearest me": the stop nearest the phone becomes your home
- * stop, as choosing it from the list does (the first replaced, the rest
- * kept after it), and what to say about it. The stops are read when it's
- * found, so an edit made while waiting for the location isn't undone.
+ * "Pick the stop nearest me": the stop nearest the phone becomes your home stop, as choosing it from the list does (the first replaced, the
+ * rest kept after it), and what to say about it. The stops are read when it's found, so an edit made while waiting for the location isn't
+ * undone.
  */
 internal suspend fun pickNearestHome(ctx: Context, campus: Campus, account: AccountViewModel): String {
     val loc = Locator.lastKnown(ctx, maxAgeMs = 120_000) ?: Locator.current(ctx)
@@ -367,15 +425,23 @@ private fun ColumnScope.TimetableStep(state: AccountState, account: AccountViewM
     }
     val pending = link.isNotBlank() && link.trim() != state.profile?.share
     val classes = state.profile?.let { it.trips + it.manual }.orEmpty()
-    StepPage(state.message, {
-        StepButtons(
-            next = { if (pending) { waiting = true; account.import(link) } else next() },
-            back = back,
-            // As on the home step: Continue means there's a timetable; with none, it's the skip.
-            skip = if (classes.isEmpty() && !pending) stringResource(R.string.later) else null,
-            enabled = !state.importing && (pending || classes.isNotEmpty()),
-        )
-    }) {
+    StepPage(
+        state.message,
+        {
+            StepButtons(
+                next = {
+                    if (pending) {
+                        waiting = true
+                        account.import(link)
+                    } else next()
+                },
+                back = back,
+                // As on the home step: Continue means there's a timetable; with none, it's the skip.
+                skip = if (classes.isEmpty() && !pending) stringResource(R.string.later) else null,
+                enabled = !state.importing && (pending || classes.isNotEmpty()),
+            )
+        },
+    ) {
         Title(stringResource(R.string.your_timetable), stringResource(R.string.your_timetable_sub))
         TimetableImport(state, account, link) { link = it }
         Week(classes, state.campus)
@@ -383,8 +449,8 @@ private fun ColumnScope.TimetableStep(state: AccountState, account: AccountViewM
 }
 
 /**
- * The week as imported: each day's classes in order, each beside the stop
- * terminus will take you to, so a wrong one is easy to spot before going on.
+ * The week as imported: each day's classes in order, each beside the stop terminus will take you to, so a wrong one is easy to spot before
+ * going on.
  */
 @Composable
 private fun Week(classes: List<Trip>, campus: Campus?) {
@@ -397,15 +463,39 @@ private fun Week(classes: List<Trip>, campus: Campus?) {
         for ((day, list) in days) {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Row(Modifier.padding(vertical = 10.dp)) {
-                Text(dayShort(day), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = muted, modifier = Modifier.width(52.dp).padding(top = 2.dp))
+                Text(
+                    dayShort(day),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = muted,
+                    modifier = Modifier.width(52.dp).padding(top = 2.dp),
+                )
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     for (t in list) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(minuteClock(t.arriveByMin, h12), style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.width(64.dp))
+                            Text(
+                                minuteClock(t.arriveByMin, h12),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = muted,
+                                modifier = Modifier.width(64.dp),
+                            )
                             Column(Modifier.weight(1f).padding(end = 8.dp)) {
-                                Text(t.label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(
+                                    t.label,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
                                 // The room, unless the name already says it ("MA1521 @ LT27").
-                                if (t.venue.isNotEmpty() && t.venue !in t.label) Text(t.venue, style = MaterialTheme.typography.bodySmall, color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                if (t.venue.isNotEmpty() && t.venue !in t.label)
+                                    Text(
+                                        t.venue,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = muted,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
                             }
                             StopChip(campus?.stopName(t.to) ?: t.to)
                         }
@@ -425,14 +515,12 @@ internal fun StopChip(name: String) {
         fontWeight = FontWeight.Bold,
         color = MaterialTheme.colorScheme.surface,
         maxLines = 1,
-        modifier = Modifier.background(MaterialTheme.colorScheme.onSurface, RoundedCornerShape(7.dp)).padding(horizontal = 8.dp, vertical = 3.dp),
+        modifier =
+            Modifier.background(MaterialTheme.colorScheme.onSurface, RoundedCornerShape(7.dp)).padding(horizontal = 8.dp, vertical = 3.dp),
     )
 }
 
-/**
- * The classes an import couldn't place, each with a stop to pick or Skip.
- * Shared by setup and settings.
- */
+/** The classes an import couldn't place, each with a stop to pick or Skip. Shared by setup and settings. */
 @Composable
 internal fun Unplaced(state: AccountState, account: AccountViewModel) {
     if (state.unplaced.isEmpty()) return
@@ -460,41 +548,66 @@ internal fun Unplaced(state: AccountState, account: AccountViewModel) {
 }
 
 /**
- * Import from NUSMods: the link, Import, and what came of it. Shared by setup
- * and Settings; [inSettings], Import is the ink pill beside the link, and the
- * page says how to get one under its group.
+ * Import from NUSMods: the link, Import, and what came of it. Shared by setup and Settings; [inSettings], Import is the ink pill beside the
+ * link, and the page says how to get one under its group.
  */
 @Composable
-internal fun TimetableImport(state: AccountState, account: AccountViewModel, link: String, inSettings: Boolean = false, onLink: (String) -> Unit) {
-    val field = @Composable { modifier: Modifier ->
-        OutlinedTextField(
-            value = link,
-            onValueChange = onLink,
-            label = { Text(stringResource(R.string.nusmods_link)) },
-            placeholder = { Text("https://nusmods.com/timetable/sem-1/share?…") },
-            singleLine = true,
-            modifier = modifier,
-        )
-    }
+internal fun TimetableImport(
+    state: AccountState,
+    account: AccountViewModel,
+    link: String,
+    inSettings: Boolean = false,
+    onLink: (String) -> Unit,
+) {
+    val field =
+        @Composable { modifier: Modifier ->
+            OutlinedTextField(
+                value = link,
+                onValueChange = onLink,
+                label = { Text(stringResource(R.string.nusmods_link)) },
+                placeholder = { Text("https://nusmods.com/timetable/sem-1/share?…") },
+                singleLine = true,
+                modifier = modifier,
+            )
+        }
     val label = if (state.importing) stringResource(R.string.importing) else stringResource(R.string.import_action)
     if (inSettings) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             field(Modifier.weight(1f))
-            InkButton(label, { account.import(link) }, Modifier.padding(start = 8.dp, top = 6.dp), enabled = link.isNotBlank() && !state.importing)
+            InkButton(
+                label,
+                { account.import(link) },
+                Modifier.padding(start = 8.dp, top = 6.dp),
+                enabled = link.isNotBlank() && !state.importing,
+            )
         }
     } else {
         field(Modifier.fillMaxWidth())
         Hint(stringResource(R.string.nusmods_hint), Modifier.padding(top = 4.dp))
-        Button(onClick = { account.import(link) }, enabled = link.isNotBlank() && !state.importing, modifier = Modifier.padding(top = 8.dp)) { Text(label) }
+        Button(
+            onClick = { account.import(link) },
+            enabled = link.isNotBlank() && !state.importing,
+            modifier = Modifier.padding(top = 8.dp),
+        ) {
+            Text(label)
+        }
     }
     val r = state.imported
     if (r != null) {
-        Text(if (r.classes == 1) stringResource(R.string.imported_one, r.term) else stringResource(R.string.imported_n, r.classes, r.term), modifier = Modifier.padding(top = 8.dp))
+        Text(
+            if (r.classes == 1) stringResource(R.string.imported_one, r.term) else stringResource(R.string.imported_n, r.classes, r.term),
+            modifier = Modifier.padding(top = 8.dp),
+        )
         Unplaced(state, account)
-        if (r.missing.isNotEmpty()) Hint(stringResource(R.string.nusmods_missing, r.missing.joinToString(stringResource(R.string.list_sep))))
+        if (r.missing.isNotEmpty())
+            Hint(stringResource(R.string.nusmods_missing, r.missing.joinToString(stringResource(R.string.list_sep))))
     } else {
         val n = state.profile?.trips?.size ?: 0
-        if (n > 0) Hint(if (n == 1) stringResource(R.string.one_imported) else stringResource(R.string.n_imported, n), Modifier.padding(top = 8.dp))
+        if (n > 0)
+            Hint(
+                if (n == 1) stringResource(R.string.one_imported) else stringResource(R.string.n_imported, n),
+                Modifier.padding(top = 8.dp),
+            )
     }
 }
 
@@ -509,27 +622,37 @@ private fun ColumnScope.PaceStep(profile: ProfileDoc, state: AccountState, accou
 }
 
 /** Each pace, and how long a lap of a 400 m track takes at it. */
-private val PACES = listOf(
-    Triple("slow", R.string.pace_slow, 6),
-    Triple("normal", R.string.pace_normal, 5),
-    Triple("fast", R.string.pace_fast, 4),
-)
+private val PACES =
+    listOf(
+        Triple("slow", R.string.pace_slow, 6),
+        Triple("normal", R.string.pace_normal, 5),
+        Triple("fast", R.string.pace_fast, 4),
+    )
 
 /**
- * The pace as a lap of a running track (400 m, something people have walked
- * round), with the chosen pace's time in the middle; then the three paces;
- * then "allow for busy buses", with the trade it makes drawn under it.
+ * The pace as a lap of a running track (400 m, something people have walked round), with the chosen pace's time in the middle; then the
+ * three paces; then "allow for busy buses", with the trade it makes drawn under it.
  */
 @Composable
 private fun PacePicker(profile: ProfileDoc, account: AccountViewModel) {
     val lap = PACES.firstOrNull { it.first == profile.walkPace }?.third ?: 5
     Track(lap)
-    Text(stringResource(R.string.pace_lap), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+    Text(
+        stringResource(R.string.pace_lap),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+    )
     Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         for ((value, title, min) in PACES) {
             ChoiceTile(profile.walkPace == value, { account.edit { it.walkPace = value } }, Modifier.weight(1f)) {
                 Text(stringResource(title), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                Text(stringResource(R.string.pace_lap_min, min), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    stringResource(R.string.pace_lap_min, min),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
@@ -548,7 +671,13 @@ private fun Track(lapMin: Int) {
             val r = size.height / 2
             val lane = 15.dp.toPx()
             drawRoundRect(TRACK, cornerRadius = CornerRadius(r))
-            drawRoundRect(Color.White.copy(alpha = 0.45f), Offset(lane / 2, lane / 2), Size(size.width - lane, size.height - lane), CornerRadius(r - lane / 2), style = Stroke(1.dp.toPx()))
+            drawRoundRect(
+                Color.White.copy(alpha = 0.45f),
+                Offset(lane / 2, lane / 2),
+                Size(size.width - lane, size.height - lane),
+                CornerRadius(r - lane / 2),
+                style = Stroke(1.dp.toPx()),
+            )
             drawRoundRect(infield, Offset(lane, lane), Size(size.width - 2 * lane, size.height - 2 * lane), CornerRadius(r - lane))
             // The finish line, and you on the far bend.
             drawLine(Color.White, Offset(size.width / 2, 0f), Offset(size.width / 2, lane), 3.dp.toPx())
@@ -559,8 +688,19 @@ private fun Track(lapMin: Int) {
             drawCircle(accent, 6.dp.toPx(), you)
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(stringResource(R.string.n_min, lapMin), fontSize = 40.sp, fontWeight = FontWeight.ExtraBold, color = onInfield, letterSpacing = (-1).sp)
-            Text(stringResource(R.string.pace_lap_yours), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = onInfield)
+            Text(
+                stringResource(R.string.n_min, lapMin),
+                fontSize = 40.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = onInfield,
+                letterSpacing = (-1).sp,
+            )
+            Text(
+                stringResource(R.string.pace_lap_yours),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = onInfield,
+            )
         }
     }
 }
@@ -575,13 +715,28 @@ private fun BusyBuses(profile: ProfileDoc, account: AccountViewModel) {
     val h12 = hour12(LocalContext.current)
     val at = { min: Int -> minuteClock(min, h12) }
     val shape = RoundedCornerShape(18.dp)
-    Column(Modifier.padding(top = 14.dp).fillMaxWidth().clip(shape).border(1.dp, c.outlineVariant, shape).padding(horizontal = 14.dp, vertical = 6.dp)) {
-        SwitchRow(stringResource(R.string.packed), stringResource(R.string.packed_hint), profile.fullBusMargin) { on -> account.edit { it.fullBusMargin = on } }
+    Column(
+        Modifier.padding(top = 14.dp)
+            .fillMaxWidth()
+            .clip(shape)
+            .border(1.dp, c.outlineVariant, shape)
+            .padding(horizontal = 14.dp, vertical = 6.dp)
+    ) {
+        SwitchRow(stringResource(R.string.packed), stringResource(R.string.packed_hint), profile.fullBusMargin) { on ->
+            account.edit { it.fullBusMargin = on }
+        }
         if (profile.fullBusMargin) {
-            Row(Modifier.padding(bottom = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                Modifier.padding(bottom = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 Row(
-                    Modifier.background(c.primaryContainer, RoundedCornerShape(10.dp)).border(2.dp, c.primary, RoundedCornerShape(10.dp)).padding(horizontal = 8.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    Modifier.background(c.primaryContainer, RoundedCornerShape(10.dp))
+                        .border(2.dp, c.primary, RoundedCornerShape(10.dp))
+                        .padding(horizontal = 8.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     BusBadge("R2", 0xFF34A853, 12.sp)
                     Text(at(9 * 60 + 38), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
@@ -589,10 +744,17 @@ private fun BusyBuses(profile: ProfileDoc, account: AccountViewModel) {
                 Text(stringResource(R.string.packed_instead), style = MaterialTheme.typography.bodySmall, color = c.onSurfaceVariant)
                 Row(
                     Modifier.background(c.surfaceVariant, RoundedCornerShape(10.dp)).padding(horizontal = 8.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     BusBadge("R2", 0xFF34A853, 12.sp)
-                    Text("${at(9 * 60 + 46)} · ${stringResource(R.string.packed_word)}", style = MaterialTheme.typography.labelLarge, color = c.onSurfaceVariant, textDecoration = TextDecoration.LineThrough, maxLines = 1)
+                    Text(
+                        "${at(9 * 60 + 46)} · ${stringResource(R.string.packed_word)}",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = c.onSurfaceVariant,
+                        textDecoration = TextDecoration.LineThrough,
+                        maxLines = 1,
+                    )
                 }
             }
         }
@@ -615,8 +777,8 @@ internal fun SwitchRow(title: String, hint: String, on: Boolean, onChange: (Bool
 }
 
 /**
- * 12- or 24-hour, as two halves of one switch, each an example time. The
- * phone's own style shows picked until another is (Settings has "follow the phone").
+ * 12- or 24-hour, as two halves of one switch, each an example time. The phone's own style shows picked until another is (Settings has
+ * "follow the phone").
  */
 @Composable
 private fun ClockSwitch(profile: ProfileDoc, account: AccountViewModel) {
@@ -633,11 +795,11 @@ private fun ClockSwitch(profile: ProfileDoc, account: AccountViewModel) {
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = if (on) c.onSurface else c.onSurfaceVariant,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(9.dp))
-                        .background(if (on) c.surface else Color.Transparent)
-                        .selectable(on, role = Role.RadioButton) { account.setClock(value) }
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                    modifier =
+                        Modifier.clip(RoundedCornerShape(9.dp))
+                            .background(if (on) c.surface else Color.Transparent)
+                            .selectable(on, role = Role.RadioButton) { account.setClock(value) }
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
                 )
             }
         }
@@ -645,8 +807,7 @@ private fun ClockSwitch(profile: ProfileDoc, account: AccountViewModel) {
 }
 
 /**
- * Notifications and location, each showing what it gives before asking: the
- * leave-by alert itself, and your dot finding its nearest stop.
+ * Notifications and location, each showing what it gives before asking: the leave-by alert itself, and your dot finding its nearest stop.
  */
 @Composable
 private fun ColumnScope.PermissionsStep(state: AccountState, main: MainViewModel, next: () -> Unit, back: () -> Unit) {
@@ -663,21 +824,23 @@ private fun ColumnScope.PermissionsStep(state: AccountState, main: MainViewModel
     var rationaleBefore by remember { mutableStateOf(false) }
     var asking by remember { mutableStateOf(false) }
     var dialogShown by remember { mutableStateOf(false) }
-    val askLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-        hasLocation = Locator.hasForeground(ctx)
-        asking = false
-        // Blocked: no dialog came up at all, or this was the second refusal.
-        // A first dialog closed without an answer is asked again.
-        blocked = !hasLocation && !rationale() && (!dialogShown || rationaleBefore)
-    }
+    val askLocation =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+            hasLocation = Locator.hasForeground(ctx)
+            asking = false
+            // Blocked: no dialog came up at all, or this was the second refusal.
+            // A first dialog closed without an answer is asked again.
+            blocked = !hasLocation && !rationale() && (!dialogShown || rationaleBefore)
+        }
     // Allowed in the phone's settings meanwhile: says so on coming back.
     LifecycleResumeEffect(Unit) {
         hasLocation = Locator.hasForeground(ctx)
         onPauseOrDispose { if (asking) dialogShown = true }
     }
-    val askNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted && LeaveAlerts.canNotify(ctx, LeaveAlerts.CHANNEL)) main.setLeaveAlerts(true)
-    }
+    val askNotify =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted && LeaveAlerts.canNotify(ctx, LeaveAlerts.CHANNEL)) main.setLeaveAlerts(true)
+        }
     StepPage(state.message, { StepButtons(next = next, back = back, nextLabel = stringResource(R.string.start_using)) }) {
         Title(stringResource(R.string.two_things), stringResource(R.string.two_things_sub))
         PermissionCard(
@@ -716,7 +879,15 @@ private fun ColumnScope.PermissionsStep(state: AccountState, main: MainViewModel
 }
 
 @Composable
-private fun PermissionCard(preview: @Composable () -> Unit, title: String, text: String, done: Boolean, doneText: String, ask: String, onAsk: () -> Unit) {
+private fun PermissionCard(
+    preview: @Composable () -> Unit,
+    title: String,
+    text: String,
+    done: Boolean,
+    doneText: String,
+    ask: String,
+    onAsk: () -> Unit,
+) {
     val c = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(20.dp)
     Column(Modifier.fillMaxWidth().clip(shape).background(c.surface).border(1.dp, c.outlineVariant, shape)) {
@@ -725,7 +896,13 @@ private fun PermissionCard(preview: @Composable () -> Unit, title: String, text:
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text(text, style = MaterialTheme.typography.bodySmall, color = c.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
             if (done) {
-                Text("✓ $doneText", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = goodColor(), modifier = Modifier.padding(top = 10.dp))
+                Text(
+                    "✓ $doneText",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = goodColor(),
+                    modifier = Modifier.padding(top = 10.dp),
+                )
             } else {
                 OutlinedButton(onClick = onAsk, modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) { Text(ask) }
             }
@@ -738,13 +915,31 @@ private fun PermissionCard(preview: @Composable () -> Unit, title: String, text:
 private fun AlertPreview() {
     val c = MaterialTheme.colorScheme
     val h12 = hour12(LocalContext.current)
-    Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 12.dp).fillMaxWidth().background(c.surfaceVariant, RoundedCornerShape(18.dp)).padding(14.dp)) {
+    Column(
+        Modifier.padding(start = 12.dp, end = 12.dp, top = 12.dp)
+            .fillMaxWidth()
+            .background(c.surfaceVariant, RoundedCornerShape(18.dp))
+            .padding(14.dp)
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
             BrandMark(Modifier.size(16.dp))
-            Text("${stringResource(R.string.app_name)} · ${stringResource(R.string.journey_now)}", style = MaterialTheme.typography.labelMedium, color = c.onSurfaceVariant)
+            Text(
+                "${stringResource(R.string.app_name)} · ${stringResource(R.string.journey_now)}",
+                style = MaterialTheme.typography.labelMedium,
+                color = c.onSurfaceVariant,
+            )
         }
-        Text(stringResource(R.string.alert_preview_title), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
-        Text(stringResource(R.string.alert_preview_text, minuteClock(9 * 60 + 42, h12)), style = MaterialTheme.typography.bodySmall, color = c.onSurfaceVariant)
+        Text(
+            stringResource(R.string.alert_preview_title),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(top = 6.dp),
+        )
+        Text(
+            stringResource(R.string.alert_preview_text, minuteClock(9 * 60 + 42, h12)),
+            style = MaterialTheme.typography.bodySmall,
+            color = c.onSurfaceVariant,
+        )
     }
 }
 
@@ -756,9 +951,32 @@ private fun LocationPreview() {
         val w = size.width
         val h = size.height
         val road = c.outlineVariant
-        drawPath(Path().apply { moveTo(-10f, h * 0.62f); cubicTo(w * 0.25f, h * 0.5f, w * 0.45f, h * 0.85f, w * 0.65f, h * 0.65f); cubicTo(w * 0.8f, h * 0.5f, w * 0.9f, h * 0.4f, w + 10, h * 0.45f) }, road, style = Stroke(12.dp.toPx()))
-        drawPath(Path().apply { moveTo(w * 0.33f, -10f); cubicTo(w * 0.36f, h * 0.35f, w * 0.3f, h * 0.7f, w * 0.42f, h + 10) }, road, style = Stroke(10.dp.toPx()))
-        drawPath(Path().apply { moveTo(-10f, h * 0.82f); cubicTo(w * 0.25f, h * 0.7f, w * 0.45f, h * 1.02f, w * 0.65f, h * 0.82f); cubicTo(w * 0.8f, h * 0.68f, w * 0.9f, h * 0.6f, w + 10, h * 0.64f) }, Color(0xFF2B9AD6), style = Stroke(4.dp.toPx(), cap = StrokeCap.Round))
+        drawPath(
+            Path().apply {
+                moveTo(-10f, h * 0.62f)
+                cubicTo(w * 0.25f, h * 0.5f, w * 0.45f, h * 0.85f, w * 0.65f, h * 0.65f)
+                cubicTo(w * 0.8f, h * 0.5f, w * 0.9f, h * 0.4f, w + 10, h * 0.45f)
+            },
+            road,
+            style = Stroke(12.dp.toPx()),
+        )
+        drawPath(
+            Path().apply {
+                moveTo(w * 0.33f, -10f)
+                cubicTo(w * 0.36f, h * 0.35f, w * 0.3f, h * 0.7f, w * 0.42f, h + 10)
+            },
+            road,
+            style = Stroke(10.dp.toPx()),
+        )
+        drawPath(
+            Path().apply {
+                moveTo(-10f, h * 0.82f)
+                cubicTo(w * 0.25f, h * 0.7f, w * 0.45f, h * 1.02f, w * 0.65f, h * 0.82f)
+                cubicTo(w * 0.8f, h * 0.68f, w * 0.9f, h * 0.6f, w + 10, h * 0.64f)
+            },
+            Color(0xFF2B9AD6),
+            style = Stroke(4.dp.toPx(), cap = StrokeCap.Round),
+        )
         val stop = Offset(w * 0.6f, h * 0.84f)
         val you = Offset(w * 0.47f, h * 0.36f)
         drawLine(c.primary, you, stop, 2.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())))

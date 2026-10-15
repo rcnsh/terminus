@@ -39,10 +39,9 @@ internal fun rememberDrawn(): Boolean {
 }
 
 /**
- * A row of a list that comes and goes gently rather than in one frame: it
- * fades and folds away when [shown] turns false, and one [arriving] (added
- * after the list drew) unfolds and keeps a soft wash of the accent for a
- * moment, so the eye sees where it went. Rows there from the start just show.
+ * A row of a list that comes and goes gently rather than in one frame: it fades and folds away when [shown] turns false, and one [arriving]
+ * (added after the list drew) unfolds and keeps a soft wash of the accent for a moment, so the eye sees where it went. Rows there from the
+ * start just show.
  */
 @Composable
 internal fun FoldRow(shown: Boolean, arriving: Boolean, content: @Composable () -> Unit) {
@@ -57,7 +56,8 @@ internal fun FoldRow(shown: Boolean, arriving: Boolean, content: @Composable () 
     val accent = MaterialTheme.colorScheme.primary
     AnimatedVisibility(
         state,
-        enter = expandVertically(tween(260, easing = FastOutSlowInEasing), expandFrom = Alignment.Top) + fadeIn(tween(200, delayMillis = 100)),
+        enter =
+            expandVertically(tween(260, easing = FastOutSlowInEasing), expandFrom = Alignment.Top) + fadeIn(tween(200, delayMillis = 100)),
         exit = fadeOut(tween(150)) + shrinkVertically(tween(FOLD_MS, easing = FastOutSlowInEasing), shrinkTowards = Alignment.Top),
     ) {
         Box(Modifier.drawBehind { if (wash.value > 0f) drawRect(accent.copy(alpha = 0.14f * wash.value)) }) { content() }
@@ -65,12 +65,13 @@ internal fun FoldRow(shown: Boolean, arriving: Boolean, content: @Composable () 
 }
 
 /**
- * [then] once a row has folded away. Carried through even if the page
- * closes meanwhile: the fold is only how it looks, the change still happens.
+ * [then] once a row has folded away. Carried through even if the page closes meanwhile: the fold is only how it looks, the change still
+ * happens.
  */
-internal fun CoroutineScope.afterFold(then: () -> Unit) = launch(start = CoroutineStart.UNDISPATCHED) {
-    withContext(NonCancellable) {
-        delay(FOLD_MS.toLong())
-        then()
+internal fun CoroutineScope.afterFold(then: () -> Unit) =
+    launch(start = CoroutineStart.UNDISPATCHED) {
+        withContext(NonCancellable) {
+            delay(FOLD_MS.toLong())
+            then()
+        }
     }
-}

@@ -15,8 +15,19 @@ export { phaseAt } from './daylight.js';
 
 /** Where the stars sit: across (0–1), down (0–1 of the room above the words), and how bright. */
 const STARS = [
-  [0.06, 0.3, 0.7], [0.17, 0.62, 0.5], [0.29, 0.18, 0.8], [0.38, 0.8, 0.4], [0.47, 0.42, 0.6], [0.55, 0.1, 0.5], [0.63, 0.68, 0.45],
-  [0.72, 0.28, 0.7], [0.84, 0.88, 0.4], [0.92, 0.5, 0.55], [0.11, 0.95, 0.35], [0.33, 1, 0.4], [0.58, 0.98, 0.3],
+  [0.06, 0.3, 0.7],
+  [0.17, 0.62, 0.5],
+  [0.29, 0.18, 0.8],
+  [0.38, 0.8, 0.4],
+  [0.47, 0.42, 0.6],
+  [0.55, 0.1, 0.5],
+  [0.63, 0.68, 0.45],
+  [0.72, 0.28, 0.7],
+  [0.84, 0.88, 0.4],
+  [0.92, 0.5, 0.55],
+  [0.11, 0.95, 0.35],
+  [0.33, 1, 0.4],
+  [0.58, 0.98, 0.3],
 ];
 
 /**
@@ -254,17 +265,20 @@ export function Horizon({ stop = false, bus = null, shuttle = true, drive = null
   const passing = at(0.58) - 19;
   return html`
     <div class=${`${low ? 'horizon low' : 'horizon'}${stopped ? ' paused' : ''}`} ref=${box} aria-hidden="true">
-      ${w > 0 &&
-      html`<svg width=${w} height=${Math.round(h * k)} viewBox=${`0 ${top} ${vw} ${h}`}>
+      ${
+        w > 0 &&
+        html`<svg width=${w} height=${Math.round(h * k)} viewBox=${`0 ${top} ${vw} ${h}`}>
         <g class="depth">
         <circle class="sun dawn" cx=${at(0.3)} cy="42" r="16" />
         <circle class="sun golden" cx=${at(0.36)} cy="36" r="16" />
         <circle class="sun dusk" cx=${at(0.5)} cy="40" r="26" />
-        ${mbs + 25 <= vw &&
-        html`<g class="city">
+        ${
+          mbs + 25 <= vw &&
+          html`<g class="city">
           ${[-13, -2, 9].map((x) => html`<path d=${`M${mbs + x} ${city}L${mbs + x + 1} ${city - 26}H${mbs + x + 5}L${mbs + x + 6} ${city}Z`} />`)}
           <path d=${`M${mbs - 15} ${city - 28}L${mbs + 25} ${city - 29.2}L${mbs + 23} ${city - 26}H${mbs - 14}Z`} />
-        </g>`}
+        </g>`
+        }
         <path class="far" d=${ridge(vw, farY, 64)} />
         <rect class="far" x=${b1 - 8} y=${farY(b1) - 14} width="16" height="20" />
         <rect class="lit dim" x=${b1 - 3} y=${farY(b1) - 9} width="3" height="3" />
@@ -291,35 +305,42 @@ export function Horizon({ stop = false, bus = null, shuttle = true, drive = null
         ${STARS5.map(([x, y]) => html`<circle class="flag-white" cx=${flag + 5.2 + x} cy=${pole - 22 + y} r="0.35" />`)}
         <path class="near" d=${ridge(vw, nearY)} />
         ${!low && html`<line class="road" x1="0" y1="70" x2=${vw} y2="70" />`}
-        ${!low &&
-        stop &&
-        html`<g class="sign">
+        ${
+          !low &&
+          stop &&
+          html`<g class="sign">
           <line x1=${sx} y1="70" x2=${sx} y2="44" />
           <rect x=${sx - 6.5} y="33" width="13" height="13" rx="2.5" />
           <rect class="mark" x=${sx - 3.5} y="35.5" width="7" height="7.5" rx="1.5" />
           <rect x=${sx - 2.5} y="36.5" width="5" height="3" rx="0.5" />
-        </g>`}
-        ${!low &&
-        bus &&
-        html`<g class=${bus.live ? 'coming' : 'coming guess'} transform=${`translate(${bx} 57)`} style=${{ '--svc': bus.color }}>
+        </g>`
+        }
+        ${
+          !low &&
+          bus &&
+          html`<g class=${bus.live ? 'coming' : 'coming guess'} transform=${`translate(${bx} 57)`} style=${{ '--svc': bus.color }}>
             ${busParts('body', 'band')}
-          </g>`}
-        ${!low &&
-        !bus &&
-        shuttle &&
-        (moving
-          ? html`<${Lane} colours=${drive} vw=${vw} y=${53} back=${true} go=${seen && !stopped} />
+          </g>`
+        }
+        ${
+          !low &&
+          !bus &&
+          shuttle &&
+          (moving
+            ? html`<${Lane} colours=${drive} vw=${vw} y=${53} back=${true} go=${seen && !stopped} />
               <${Lane} colours=${drive} vw=${vw} y=${57} go=${seen && !stopped} first=${true} />`
-          : drive?.length
-            ? html`<g class="parked" transform=${`translate(${passing} 57)`} style=${{ '--svc': drive[0] }}>
+            : drive?.length
+              ? html`<g class="parked" transform=${`translate(${passing} 57)`} style=${{ '--svc': drive[0] }}>
                 <path class="beam" d=${BEAM} />
                 ${busParts('body', 'band', 3)}
               </g>`
-            : html`<g class="shuttle" transform=${`translate(${passing} 57)`}>
+              : html`<g class="shuttle" transform=${`translate(${passing} 57)`}>
                 <path class="beam" d=${BEAM} />
                 ${busParts('bus', 'stripe', 3)}
-              </g>`)}
-      </svg>`}
+              </g>`)
+        }
+      </svg>`
+      }
     </div>
   `;
 }
@@ -375,10 +396,13 @@ export function useSkyPhase() {
   useEffect(() => {
     let t;
     const next = () => {
-      t = setTimeout(() => {
-        setM(minute());
-        next();
-      }, 60_000 - (Date.now() % 60_000));
+      t = setTimeout(
+        () => {
+          setM(minute());
+          next();
+        },
+        60_000 - (Date.now() % 60_000),
+      );
     };
     next();
     return () => clearTimeout(t);

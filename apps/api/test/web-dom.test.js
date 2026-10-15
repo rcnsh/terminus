@@ -13,7 +13,10 @@ test.afterEach(() => {
   globalThis.fetch = realFetch;
 });
 
-const reply = (body, init = {}) => () => Promise.resolve(new Response(body, { status: 200, ...init }));
+const reply =
+  (body, init = {}) =>
+  () =>
+    Promise.resolve(new Response(body, { status: 200, ...init }));
 
 test('a call with no answer gives up after its time, with a sentence to show', async () => {
   // Black-holed Wi-Fi: nothing comes back until the call is aborted.
@@ -23,10 +26,12 @@ test('a call with no answer gives up after its time, with a sentence to show', a
   assert.ok(Date.now() - started < 2_000);
 });
 
-test('a caller\'s own signal doesn\'t take away the time limit', { timeout: 2_000 }, async () => {
+test("a caller's own signal doesn't take away the time limit", { timeout: 2_000 }, async () => {
   globalThis.fetch = (_, init) => new Promise((_, fail) => init.signal.addEventListener('abort', () => fail(init.signal.reason)));
   const started = Date.now();
-  await assert.rejects(send('/api/me/next', { timeoutMs: 50, signal: new AbortController().signal }), { message: "Couldn't reach terminus. Check your connection." });
+  await assert.rejects(send('/api/me/next', { timeoutMs: 50, signal: new AbortController().signal }), {
+    message: "Couldn't reach terminus. Check your connection.",
+  });
   assert.ok(Date.now() - started < 2_000);
 });
 
@@ -154,7 +159,10 @@ test('a 429 from the app quiets the app, never a sign-out', async () => {
   const sent = [];
   globalThis.fetch = async (path) => {
     sent.push(path);
-    return new Response('{}', { status: path === '/api/me/next' ? 429 : 200, headers: { 'retry-after': '60', 'content-type': 'application/json' } });
+    return new Response('{}', {
+      status: path === '/api/me/next' ? 429 : 200,
+      headers: { 'retry-after': '60', 'content-type': 'application/json' },
+    });
   };
   await send('/api/me/next');
   await assert.rejects(send('/api/me/day'), { status: 429 });

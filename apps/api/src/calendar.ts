@@ -97,9 +97,7 @@ export interface TermDay {
 }
 
 /** An imported class's NUSMods `weeks`: a list of teaching weeks, or a date range. */
-export type LessonWeeks =
-  | number[]
-  | { start: string; end: string; weekInterval?: number; weeks?: number[] };
+export type LessonWeeks = number[] | { start: string; end: string; weekInterval?: number; weeks?: number[] };
 
 /** SGT calendar date (YYYY-MM-DD) for an instant. */
 export function sgtDate(nowMs: number): string {
@@ -179,12 +177,7 @@ export interface Term {
  * timetable was imported for; without one (an import from before terms were
  * recorded), any teaching week of any semester counts.
  */
-export function importedClassRuns(
-  weeks: LessonWeeks | undefined,
-  term: Term | null,
-  nowMs: number,
-  data: CalendarData = DATA,
-): boolean {
+export function importedClassRuns(weeks: LessonWeeks | undefined, term: Term | null, nowMs: number, data: CalendarData = DATA): boolean {
   const d = termDay(nowMs, data);
   if (d.holiday) return false;
 
@@ -208,8 +201,7 @@ export function importedClassRuns(
   return weeks ? weeks.includes(d.week) : true;
 }
 
-const semesterStart = (t: Term, data: CalendarData) =>
-  data.semesters.find((s) => s.acadYear === t.acadYear && s.semester === t.semester);
+const semesterStart = (t: Term, data: CalendarData) => data.semesters.find((s) => s.acadYear === t.acadYear && s.semester === t.semester);
 
 /**
  * The semester a NUSMods "sem-N" link most likely means: the current one of
@@ -265,5 +257,13 @@ export function termName(t: Term): string {
 export function dayOffReason(nowMs: number, data: CalendarData = DATA): string | null {
   const d = termDay(nowMs, data);
   if (d.holiday) return m().holiday(d.holiday);
-  return d.kind === 'recess' ? m().recessWeek : d.kind === 'reading' ? m().readingWeek : d.kind === 'exam' ? m().exams : d.kind === 'vacation' ? m().vacation : null;
+  return d.kind === 'recess'
+    ? m().recessWeek
+    : d.kind === 'reading'
+      ? m().readingWeek
+      : d.kind === 'exam'
+        ? m().exams
+        : d.kind === 'vacation'
+          ? m().vacation
+          : null;
 }

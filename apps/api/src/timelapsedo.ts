@@ -30,7 +30,18 @@ import { trackedPlacement } from './buses.ts';
 import { inService } from './resolve.ts';
 import { logPoll } from './analytics.ts';
 import { loadCalendar } from './calendarsync.ts';
-import { buildDayFile, dayKey, encodeBus, gzip, HELD_DAYS, lineKeys, mapSnapshot, pollInterval, timelapseEnabled, windowOf } from './timelapse.ts';
+import {
+  buildDayFile,
+  dayKey,
+  encodeBus,
+  gzip,
+  HELD_DAYS,
+  lineKeys,
+  mapSnapshot,
+  pollInterval,
+  timelapseEnabled,
+  windowOf,
+} from './timelapse.ts';
 import type { DayFile, RecorderStatus, Row } from './timelapse.ts';
 
 type State = 'polling' | 'resting' | 'off' | 'done';
@@ -100,7 +111,9 @@ export class TimelapseRecorder {
     const sql = this.storage.sql;
     if (!this.ready) {
       sql.exec('CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)');
-      sql.exec('CREATE TABLE IF NOT EXISTS samples (n INTEGER PRIMARY KEY AUTOINCREMENT, dt INTEGER NOT NULL, svc TEXT NOT NULL, buses TEXT NOT NULL)');
+      sql.exec(
+        'CREATE TABLE IF NOT EXISTS samples (n INTEGER PRIMARY KEY AUTOINCREMENT, dt INTEGER NOT NULL, svc TEXT NOT NULL, buses TEXT NOT NULL)',
+      );
       this.ready = true;
     }
     return sql;
@@ -113,7 +126,10 @@ export class TimelapseRecorder {
    */
   private tables(): SqlStorage | null {
     const sql = this.storage.sql;
-    if (!this.ready) this.ready = sql.exec<{ n: number }>("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name IN ('meta', 'samples')").one().n === 2;
+    if (!this.ready)
+      this.ready =
+        sql.exec<{ n: number }>("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name IN ('meta', 'samples')").one().n ===
+        2;
     return this.ready ? sql : null;
   }
 
@@ -139,7 +155,11 @@ export class TimelapseRecorder {
       return this.state.blockConcurrencyWhile(() => this.start(date));
     }
     if (req.method === 'GET' && url.pathname === '/status') {
-      const status: RecorderStatus = { date: meta?.date ?? null, samples: meta ? (meta.samples ?? this.count()) : 0, state: meta?.state ?? 'idle' };
+      const status: RecorderStatus = {
+        date: meta?.date ?? null,
+        samples: meta ? (meta.samples ?? this.count()) : 0,
+        state: meta?.state ?? 'idle',
+      };
       return Response.json(status);
     }
     if (req.method === 'GET' && url.pathname === '/day') {
@@ -157,7 +177,21 @@ export class TimelapseRecorder {
     if (!meta) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || now >= close) return Response.json({ state: 'closed' });
       const map = mapSnapshot();
-      meta = { date, t0: now, lastT: now, state: 'polling', round: null, idle: 0, seen: false, last: {}, plates: [], pollMs: pollInterval(), asked: {}, lines: lineKeys(map), samples: 0 };
+      meta = {
+        date,
+        t0: now,
+        lastT: now,
+        state: 'polling',
+        round: null,
+        idle: 0,
+        seen: false,
+        last: {},
+        plates: [],
+        pollMs: pollInterval(),
+        asked: {},
+        lines: lineKeys(map),
+        samples: 0,
+      };
       // The lines the day's `along`s are measured on, kept with it.
       this.write('map', map);
       this.write('meta', meta);
@@ -201,7 +235,15 @@ export class TimelapseRecorder {
       // they need to stay under the day's ceiling, from this round on.
       meta.pollMs = Math.max(meta.pollMs, pollInterval());
       // Only the services running now; none running is a round with no bus.
-      round = { list: Object.keys(GRAPH.routes ?? {}).filter((svc) => inService(GRAPH, svc, now)).sort(), start: now, i: 0, buses: 0, answered: 0 };
+      round = {
+        list: Object.keys(GRAPH.routes ?? {})
+          .filter((svc) => inService(GRAPH, svc, now))
+          .sort(),
+        start: now,
+        i: 0,
+        buses: 0,
+        answered: 0,
+      };
       meta.state = 'polling';
       meta.round = round;
     }
@@ -351,7 +393,14 @@ export class TimelapseRecorder {
       .exec<{ dt: number; svc: string; buses: string }>('SELECT dt, svc, buses FROM samples ORDER BY n')
       .toArray()
       .map((r): Row => ({ dt: r.dt, svc: r.svc, buses: JSON.parse(r.buses) as number[] }));
-    return buildDayFile({ date: meta.date, t0: meta.t0, pollMs: meta.pollMs, plates: meta.plates, rows, map: this.read<DayFile>('map') ?? mapSnapshot() });
+    return buildDayFile({
+      date: meta.date,
+      t0: meta.t0,
+      pollMs: meta.pollMs,
+      plates: meta.plates,
+      rows,
+      map: this.read<DayFile>('map') ?? mapSnapshot(),
+    });
   }
 
   /**
@@ -369,7 +418,10 @@ export class TimelapseRecorder {
       if (samples > 0) {
         if (!this.env.DOWNLOADS) throw new Error('no DOWNLOADS bucket');
         const body = await gzip(JSON.stringify(this.dayFile(meta)));
-        await this.env.DOWNLOADS.put(dayKey(meta.date), body, { httpMetadata: { contentType: 'application/gzip' }, customMetadata: { samples: String(samples) } });
+        await this.env.DOWNLOADS.put(dayKey(meta.date), body, {
+          httpMetadata: { contentType: 'application/gzip' },
+          customMetadata: { samples: String(samples) },
+        });
       }
       await this.storage.deleteAlarm();
       await this.storage.deleteAll();

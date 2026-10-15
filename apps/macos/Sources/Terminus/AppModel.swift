@@ -4,8 +4,8 @@ import Foundation
 import IOKit
 import Network
 import Observation
-import os
 import ServiceManagement
+import os
 
 private let log = Logger(subsystem: "sh.rcn.terminus", category: "refresh")
 
@@ -53,9 +53,14 @@ final class AppModel {
 
     /// Places gone to from the search or the map, each with a tab and an ×, as
     /// on the phone and the web: up to 5, newest first, on this Mac only.
-    struct AddedPlace: Codable, Hashable { let code: String; let label: String }
+    struct AddedPlace: Codable, Hashable {
+        let code: String
+        let label: String
+    }
     static let maxAdded = 5
-    var added: [AddedPlace] = (UserDefaults.standard.data(forKey: "addedPlaces")).flatMap { try? JSONDecoder().decode([AddedPlace].self, from: $0) } ?? [] {
+    var added: [AddedPlace] =
+        (UserDefaults.standard.data(forKey: "addedPlaces")).flatMap { try? JSONDecoder().decode([AddedPlace].self, from: $0) } ?? []
+    {
         didSet { UserDefaults.standard.set(try? JSONEncoder().encode(added), forKey: "addedPlaces") }
     }
 
@@ -69,8 +74,15 @@ final class AppModel {
     /// and refreshes it in place, instead of blanking the popover (which made
     /// it collapse and then grow back when the data arrived).
     var answers: [Target: NextAnswer] {
-        get { var a = otherAnswers; a[.plan] = plan; return a }
-        set { plan = newValue[.plan]; otherAnswers = newValue.filter { $0.key != .plan } }
+        get {
+            var a = otherAnswers
+            a[.plan] = plan
+            return a
+        }
+        set {
+            plan = newValue[.plan]
+            otherAnswers = newValue.filter { $0.key != .plan }
+        }
     }
     var shown: NextAnswer? { target == .plan ? plan : otherAnswers[target] }
     var showNearby = false
@@ -124,7 +136,9 @@ final class AppModel {
             if popoverOpen {
                 // Someone is clicking it: whatever said the Mac was asleep or
                 // locked, it isn't now (a missed wake would stop refreshes).
-                asleep = false; screensAsleep = false; locked = false
+                asleep = false
+                screensAsleep = false
+                locked = false
                 refreshLoginItem()
                 kick()
             } else {
@@ -144,7 +158,8 @@ final class AppModel {
     /// Downloads is translocated to a random read-only path.
     var misplaced: Bool {
         let path = Bundle.main.bundlePath
-        return path.contains("/AppTranslocation/") || !(path.hasPrefix("/Applications/") || path.hasPrefix(NSHomeDirectory() + "/Applications/"))
+        return path.contains("/AppTranslocation/")
+            || !(path.hasPrefix("/Applications/") || path.hasPrefix(NSHomeDirectory() + "/Applications/"))
     }
 
     /// Mirrors the system's login-item status. A stored property, so the
@@ -314,7 +329,10 @@ final class AppModel {
         let entry = IORegistryEntryFromPath(kIOMainPortDefault, "IODeviceTree:/product")
         guard entry != 0 else { return nil }
         defer { IOObjectRelease(entry) }
-        guard let data = IORegistryEntryCreateCFProperty(entry, "product-name" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() as? Data else { return nil }
+        guard
+            let data = IORegistryEntryCreateCFProperty(entry, "product-name" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue()
+                as? Data
+        else { return nil }
         return String(decoding: data, as: UTF8.self).trimmingCharacters(in: CharacterSet(charactersIn: "\0").union(.whitespaces))
     }
 
@@ -361,13 +379,19 @@ final class AppModel {
             try? await Task.sleep(for: .seconds(6))
             if !Task.isCancelled { removed = nil }
         }
-        let at = removedAt, date = day?.date
+        let at = removedAt
+        let date = day?.date
         Task {
             // Refused (or offline): back where it was, with why under it, as on the web.
             if let message = await send(CardAction(id: "skipped", label: "", trip: item.key), token: token, showingError: false) {
-                if removed?.key == item.key { removed = nil; removedTask?.cancel() }
+                if removed?.key == item.key {
+                    removed = nil
+                    removedTask?.cancel()
+                }
                 // Only into the day it was taken off: past midnight, Today is another list.
-                if day?.date == date, day?.items.contains(where: { $0.key == item.key }) == false { day?.items.insert(item, at: min(at, day?.items.count ?? 0)) }
+                if day?.date == date, day?.items.contains(where: { $0.key == item.key }) == false {
+                    day?.items.insert(item, at: min(at, day?.items.count ?? 0))
+                }
                 removeFailed = (item.key, message)
                 removeFailedTask?.cancel()
                 removeFailedTask = Task {
@@ -483,7 +507,10 @@ final class AppModel {
     // MARK: places added from the search
 
     func addPlace(code: String, label: String) {
-        if added.contains(where: { $0.code == code }) || places.contains(where: { $0.label.caseInsensitiveCompare(label) == .orderedSame }) { return }
+        if added.contains(where: { $0.code == code }) || places.contains(where: { $0.label.caseInsensitiveCompare(label) == .orderedSame })
+        {
+            return
+        }
         added = Array(([AddedPlace(code: code, label: label)] + added).prefix(Self.maxAdded))
     }
 
@@ -732,7 +759,9 @@ final class AppModel {
     private func checkForUpdate() {
         let d = UserDefaults.standard
         let current = Api.version ?? "0"
-        let check = Self.updateCheck(cached: d.string(forKey: "latestVersion"), checkedAt: d.double(forKey: "updateCheckedAt"), current: current, now: Date().timeIntervalSince1970)
+        let check = Self.updateCheck(
+            cached: d.string(forKey: "latestVersion"), checkedAt: d.double(forKey: "updateCheckedAt"), current: current,
+            now: Date().timeIntervalSince1970)
         update = check.update
         guard check.fetch else { return }
         Task {
@@ -746,7 +775,8 @@ final class AppModel {
     /// What the last check said (`cached`, a version newer than the running
     /// one, else none), and whether to ask again: a day after the last
     /// answer (`checkedAt`, seconds since 1970, as `now` is).
-    nonisolated static func updateCheck(cached: String?, checkedAt: Double, current: String, now: Double) -> (update: String?, fetch: Bool) {
+    nonisolated static func updateCheck(cached: String?, checkedAt: Double, current: String, now: Double) -> (update: String?, fetch: Bool)
+    {
         (cached.flatMap { isNewer($0, than: current) ? $0 : nil }, now - checkedAt > 86_400)
     }
 
@@ -756,7 +786,8 @@ final class AppModel {
     /// isn't allowed, or too rough to pick a stop by (over 200 m, as the server judges).
     func whereAmI() async -> CLLocation? {
         guard let fix = await locator.current(maxAge: 120),
-              let acc = fixUncertaintyM(accuracy: fix.horizontalAccuracy, ageS: -fix.timestamp.timeIntervalSinceNow), acc <= 200 else { return nil }
+            let acc = fixUncertaintyM(accuracy: fix.horizontalAccuracy, ageS: -fix.timestamp.timeIntervalSinceNow), acc <= 200
+        else { return nil }
         return fix
     }
 
@@ -841,9 +872,17 @@ final class AppModel {
     private var langSynced = false
     private func syncLang(_ api: Api) async {
         let gen = session
-        guard !langSynced, let data = try? await api.profile(), gen == session, var p = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return }
+        guard !langSynced, let data = try? await api.profile(), gen == session,
+            var p = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        else { return }
         langSynced = true
-        guard let mine = Lang.followAccount(p["lang"] as? String ?? "auto"), let body = try? JSONSerialization.data(withJSONObject: { p["lang"] = mine; return p }()) else { return }
+        guard let mine = Lang.followAccount(p["lang"] as? String ?? "auto"),
+            let body = try? JSONSerialization.data(
+                withJSONObject: {
+                    p["lang"] = mine
+                    return p
+                }())
+        else { return }
         _ = try? await api.saveProfile(body)
     }
 
@@ -852,7 +891,9 @@ final class AppModel {
         Lang.set(pref)
         Lang.noteAccount(pref)
         Task {
-            if let token = TokenStore.read(), let data = try? await Api(token: token).profile(), var p = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] {
+            if let token = TokenStore.read(), let data = try? await Api(token: token).profile(),
+                var p = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+            {
                 p["lang"] = pref
                 if let body = try? JSONSerialization.data(withJSONObject: p) { _ = try? await Api(token: token).saveProfile(body) }
             }
@@ -1003,7 +1044,8 @@ final class AppModel {
         let acc = fix.flatMap { fixUncertaintyM(accuracy: $0.horizontalAccuracy, ageS: -$0.timestamp.timeIntervalSinceNow) }
         // An invalid fix is no location at all.
         let loc = acc == nil ? nil : fix
-        let lat = loc?.coordinate.latitude, lon = loc?.coordinate.longitude
+        let lat = loc?.coordinate.latitude
+        let lon = loc?.coordinate.longitude
         loading = true
         defer { loading = false }
         do {
@@ -1050,7 +1092,7 @@ final class AppModel {
                 if let d { day = d }
             }
             return .done
-        } catch where gen != session {
+        } catch  where gen != session {
             // Signed out, or in again, while this was in flight: not this account's.
             return .skipped
         } catch let e as ApiError where e.status == 401 && TokenStore.read() != token {
@@ -1065,7 +1107,8 @@ final class AppModel {
             if anonymous && (signInRequest != nil || chooseSetup != nil) { return .failed }
             // Worded before clearLocal forgets which kind of account it was:
             // one without an email goes after 60 days unused.
-            let reason = anonymous
+            let reason =
+                anonymous
                 ? L("This Mac's setup was removed after a long time unused. Start again or sign in.")
                 : L("This Mac was signed out of your account. Sign in again to carry on.")
             TokenStore.write(nil)
@@ -1175,15 +1218,16 @@ final class AppModel {
     }
 }
 
-/**
- * The device name an anonymous Mac reports: the model, as the device list
- * shows it, and never the computer's own name. The device tree's product
- * name when there is one; else the family from hw.model ("MacBookAir7,2"
- * is a MacBook Air); else "Mac". At most 40 characters, as the server keeps.
- */
+/// The device name an anonymous Mac reports: the model, as the device list
+/// shows it, and never the computer's own name. The device tree's product
+/// name when there is one; else the family from hw.model ("MacBookAir7,2"
+/// is a MacBook Air); else "Mac". At most 40 characters, as the server keeps.
 func macModelName(productName: String?, hwModel: String?) -> String {
     if let p = productName?.trimmingCharacters(in: .whitespaces), !p.isEmpty { return String(p.prefix(40)) }
-    let families: [(String, String)] = [("MacBookPro", "MacBook Pro"), ("MacBookAir", "MacBook Air"), ("MacBook", "MacBook"), ("Macmini", "Mac mini"), ("MacPro", "Mac Pro"), ("iMacPro", "iMac Pro"), ("iMac", "iMac")]
+    let families: [(String, String)] = [
+        ("MacBookPro", "MacBook Pro"), ("MacBookAir", "MacBook Air"), ("MacBook", "MacBook"), ("Macmini", "Mac mini"),
+        ("MacPro", "Mac Pro"), ("iMacPro", "iMac Pro"), ("iMac", "iMac"),
+    ]
     let model = hwModel ?? ""
     // iMacPro before iMac: the longest prefix wins.
     return families.sorted { $0.0.count > $1.0.count }.first { model.hasPrefix($0.0) }?.1 ?? "Mac"

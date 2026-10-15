@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import Terminus
 
 /// The API's golden answers, checked by its own tests: a change in the
@@ -105,11 +106,11 @@ func everyGoldenAnswerDecodes(name: String) throws {
 /// An older server's question decodes without trouble and is simply not shown.
 @Test func aSuggestionDecodesAndAnOldQuestionIsIgnored() throws {
     let json = """
-    {"label":"On the R2","detail":"Off at UTown","mode":"trip","card":{"kind":"trip","phase":"riding",
-    "ask":{"trip":"4:600:UTOWN","question":"On the 9:41 R2?","actions":[{"id":"boarded","label":"On it","trip":"4:600:UTOWN"},
-    {"id":"missed","label":"Missed it","trip":"4:600:UTOWN"}]},"remind":false,
-    "suggestion":{"id":"quiet:4:600:UTOWN","text":"Stop reminders?","accept":"Stop reminders","dismiss":"Keep them"}}}
-    """
+        {"label":"On the R2","detail":"Off at UTown","mode":"trip","card":{"kind":"trip","phase":"riding",
+        "ask":{"trip":"4:600:UTOWN","question":"On the 9:41 R2?","actions":[{"id":"boarded","label":"On it","trip":"4:600:UTOWN"},
+        {"id":"missed","label":"Missed it","trip":"4:600:UTOWN"}]},"remind":false,
+        "suggestion":{"id":"quiet:4:600:UTOWN","text":"Stop reminders?","accept":"Stop reminders","dismiss":"Keep them"}}}
+        """
     let a = try JSONDecoder().decode(NextAnswer.self, from: Data(json.utf8))
     #expect(a.card?.remind == false)
     #expect(a.card?.suggestion?.accept == "Stop reminders")
@@ -150,13 +151,13 @@ func everyGoldenAnswerDecodes(name: String) throws {
 
 @Test func todaySaysTheBusYoureOnOrWhenToLeave() throws {
     let json = """
-    {"date":"2026-10-01","items":[
-      {"kind":"class","key":"a","label":"GEA1000 @ UTown","status":"next","fromName":"PGP","toName":"UTown","startsAt":"2026-10-01T02:00:00Z","onBus":{"svc":"D2","off":"UTown","arrive":"2026-10-01T01:50:00Z"}},
-      {"kind":"class","key":"b","label":"CS2030 @ COM1","status":"later","fromName":"UTown","toName":"COM 3","startsAt":"2026-10-01T05:00:00Z","leave":{"at":"2026-10-01T04:40:00Z","estimated":true,"svc":"D2","stop":"UTown"},"timing":{"status":"late","text":"~3 min late"}},
-      {"kind":"class","key":"c","label":"MA1100 @ LT21","status":"skipped","toName":"LT21","startsAt":"2026-10-01T07:00:00Z"},
-      {"kind":"home","key":"h","label":"Home","status":"later","fromName":"COM 3","toName":"PGP","startsAt":"2026-10-01T09:00:00Z"}
-    ],"note":null}
-    """
+        {"date":"2026-10-01","items":[
+          {"kind":"class","key":"a","label":"GEA1000 @ UTown","status":"next","fromName":"PGP","toName":"UTown","startsAt":"2026-10-01T02:00:00Z","onBus":{"svc":"D2","off":"UTown","arrive":"2026-10-01T01:50:00Z"}},
+          {"kind":"class","key":"b","label":"CS2030 @ COM1","status":"later","fromName":"UTown","toName":"COM 3","startsAt":"2026-10-01T05:00:00Z","leave":{"at":"2026-10-01T04:40:00Z","estimated":true,"svc":"D2","stop":"UTown"},"timing":{"status":"late","text":"~3 min late"}},
+          {"kind":"class","key":"c","label":"MA1100 @ LT21","status":"skipped","toName":"LT21","startsAt":"2026-10-01T07:00:00Z"},
+          {"kind":"home","key":"h","label":"Home","status":"later","fromName":"COM 3","toName":"PGP","startsAt":"2026-10-01T09:00:00Z"}
+        ],"note":null}
+        """
     let day = try JSONDecoder().decode(DayPlan.self, from: Data(json.utf8))
     #expect(day.items[0].sub?.hasPrefix("On the D2 · off at UTown · arrive ") == true)
     let later = try #require(day.items[1].sub)
@@ -169,7 +170,9 @@ func everyGoldenAnswerDecodes(name: String) throws {
 
 @Test func theServersErrorsAreShownAsSentences() {
     #expect(sentence("not a valid NUSMods share link") == "Not a valid NUSMods share link.")
-    #expect(sentence("Nothing imported: no stop. Your timetable was not changed.") == "Nothing imported: no stop. Your timetable was not changed.")
+    #expect(
+        sentence("Nothing imported: no stop. Your timetable was not changed.")
+            == "Nothing imported: no stop. Your timetable was not changed.")
 }
 
 /// After your day, on a free day and at home: the next class, worded on the server.
@@ -209,7 +212,9 @@ func theNextClassComesWithTheCard(name: String) throws {
     #expect(FlowPills.eta(etaS: 360, quality: "scheduled") == "~6 min")
     #expect(FlowPills.eta(etaS: 20, quality: "live") == "now")
     #expect(FlowPills.eta(etaS: nil, quality: "ended") == "ended")
-    let row = BoardRow(svc: "D2", etaS: 240, quality: "live", later: [.init(etaS: 900, quality: "scheduled"), .init(etaS: 1500, quality: "live"), .init(etaS: 2100, quality: "live")])
+    let row = BoardRow(
+        svc: "D2", etaS: 240, quality: "live",
+        later: [.init(etaS: 900, quality: "scheduled"), .init(etaS: 1500, quality: "live"), .init(etaS: 2100, quality: "live")])
     // At most two after the next one.
     #expect(FlowPills.later(row) == ["~15 min", "25 min"])
     // Spoken, the "~" is a word: VoiceOver doesn't read it.
@@ -229,7 +234,8 @@ private func goldenEdited(_ name: String, _ edit: (inout [String: Any]) -> Void)
     let dir = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("../api/test/fixtures/answers").standardized
-    var o = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: dir.appendingPathComponent("\(name).json"))) as? [String: Any])
+    var o = try #require(
+        try JSONSerialization.jsonObject(with: Data(contentsOf: dir.appendingPathComponent("\(name).json"))) as? [String: Any])
     edit(&o)
     return try JSONDecoder().decode(NextAnswer.self, from: JSONSerialization.data(withJSONObject: o))
 }
@@ -364,9 +370,15 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
     #expect(ServerClock.skew(server: local.addingTimeInterval(90), local: local) == 90, "this Mac is 90 s slow")
     #expect(ServerClock.skew(server: local.addingTimeInterval(-45), local: local) == -45, "this Mac is 45 s fast")
     let url = URL(string: "https://terminus.run/me/next")!
-    let fresh = try #require(HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Date": "Wed, 07 Oct 2026 01:15:32 GMT", "Cache-Control": "no-store"]))
+    let fresh = try #require(
+        HTTPURLResponse(
+            url: url, statusCode: 200, httpVersion: nil,
+            headerFields: ["Date": "Wed, 07 Oct 2026 01:15:32 GMT", "Cache-Control": "no-store"]))
     #expect(ServerClock.skew(from: fresh, at: local) == 90)
-    let cached = try #require(HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Date": "Wed, 07 Oct 2026 01:15:32 GMT", "Cache-Control": "private, max-age=5"]))
+    let cached = try #require(
+        HTTPURLResponse(
+            url: url, statusCode: 200, httpVersion: nil,
+            headerFields: ["Date": "Wed, 07 Oct 2026 01:15:32 GMT", "Cache-Control": "private, max-age=5"]))
     #expect(ServerClock.skew(from: cached, at: local) == nil, "a cached answer was dated when it was first sent")
     #expect(ServerClock.now(local: local, skew: 90) == local.addingTimeInterval(90))
 }
@@ -397,11 +409,13 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
     #expect(j.backupText == "Or go now: R2 at 09:06 from PGP")
     #expect(j.bus?.svc == "R2")
     // One line the wrong type: only it is left out.
-    let odd = try goldenEdited("class-bus") { o in editCard(&o) { c in
-        var j = c["journey"] as? [String: Any] ?? [:]
-        j["walkText"] = 5
-        c["journey"] = j
-    } }
+    let odd = try goldenEdited("class-bus") { o in
+        editCard(&o) { c in
+            var j = c["journey"] as? [String: Any] ?? [:]
+            j["walkText"] = 5
+            c["journey"] = j
+        }
+    }
     #expect(odd.card?.journey?.walkText == nil)
     #expect(odd.card?.journey?.title == j.title)
 }
@@ -426,16 +440,19 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
     #expect(r.svc == "R2")
     #expect(r.stops.first?.name == "PGP")
     #expect(r.stops.last?.name == "UTown")
-    let board = try #require(parseISODate(r.board)), arrive = try #require(parseISODate(r.arrive))
+    let board = try #require(parseISODate(r.board))
+    let arrive = try #require(parseISODate(r.arrive))
     #expect(r.progress(at: board.addingTimeInterval(-60)) == 0)
     #expect(r.passed(at: board) == 0)
     #expect(r.passed(at: board.addingTimeInterval(arrive.timeIntervalSince(board) / 2)) == 3, "halfway: three of six stops passed")
     #expect(r.passed(at: arrive) == r.stops.count - 1)
-    let short = try goldenEdited("riding") { o in editCard(&o) { c in
-        var ride = c["ride"] as? [String: Any] ?? [:]
-        ride["stops"] = [["code": "PGP", "name": "PGP"]]
-        c["ride"] = ride
-    } }
+    let short = try goldenEdited("riding") { o in
+        editCard(&o) { c in
+            var ride = c["ride"] as? [String: Any] ?? [:]
+            ride["stops"] = [["code": "PGP", "name": "PGP"]]
+            c["ride"] = ride
+        }
+    }
     #expect(short.card != nil && short.card?.ride == nil, "one stop is no ride")
 }
 
@@ -465,7 +482,11 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
 @Test func theSearchFollowsTheSharedCases() throws {
     struct Fixture: Decodable {
         struct Section: Decodable {
-            struct Query: Decodable { let q: String; let expect: [String]; let why: String? }
+            struct Query: Decodable {
+                let q: String
+                let expect: [String]
+                let why: String?
+            }
             let limit: Int
             let index: [Destination]
             let queries: [Query]
@@ -485,7 +506,8 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
 }
 
 @Test func aResidencesWalkIsTheServers() throws {
-    let json = #"{"stops": [], "residences": [{"code": "PGPR", "name": "PGP Residences", "stops": ["PGP"], "walkM": 300, "walkMin": 6}, {"code": "OLD", "name": "Old", "stops": ["COM3"], "walkM": 420}]}"#
+    let json =
+        #"{"stops": [], "residences": [{"code": "PGPR", "name": "PGP Residences", "stops": ["PGP"], "walkM": 300, "walkMin": 6}, {"code": "OLD", "name": "Old", "stops": ["COM3"], "walkM": 420}]}"#
     let c = try JSONDecoder().decode(Campus.self, from: Data(json.utf8))
     let pgp = try #require(c.residences.first { $0.code == "PGPR" })
     #expect(SetupModel.homeWalk(pgp, within: 0...30) == 6, "not 300 m at 1.3 m/s (4 min)")

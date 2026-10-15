@@ -51,7 +51,8 @@ const SCRIPTS = [
 
 // Names and codes that read the same in Chinese: places and module codes too,
 // as on the signs (the landing page's pictures of the app).
-const SAME = /^(terminus|termi|nus|API|Android|Mac|English|中文|Apple|iPhone|PGP|UTown|Kent Ridge MRT|[A-Z]{2,3}\d{4}[A-Z]?|K7QX4M|x-api-key|you@u\.nus\.edu|terminus\.run\/account|------|https:\/\/nusmods\.com\/\S*|[-–·…×↻→\d\s:&;©]+)$/;
+const SAME =
+  /^(terminus|termi|nus|API|Android|Mac|English|中文|Apple|iPhone|PGP|UTown|Kent Ridge MRT|[A-Z]{2,3}\d{4}[A-Z]?|K7QX4M|x-api-key|you@u\.nus\.edu|terminus\.run\/account|------|https:\/\/nusmods\.com\/\S*|[-–·…×↻→\d\s:&;©]+)$/;
 
 test('every t() string in the scripts is translated', () => {
   const dict = zh();
@@ -90,7 +91,9 @@ const pageBody = (page) =>
 /** The keys with markup that are a whole element's HTML on `page` (i18n.js replaces only those). */
 const htmlKeysOn = (dict, page) => {
   const body = norm(pageBody(page));
-  return Object.keys(dict).filter((k) => k.includes('<') && new RegExp(`> ?${norm(k).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} ?</`).test(body));
+  return Object.keys(dict).filter(
+    (k) => k.includes('<') && new RegExp(`> ?${norm(k).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} ?</`).test(body),
+  );
 };
 
 test('every bit of text on the pages is translated', () => {
@@ -140,7 +143,7 @@ function readTemplate(src, i) {
     } else if (c === '$' && src[i + 1] === '{') {
       text += '\uE000';
       i += 2;
-      for (let depth = 1; depth > 0 && i < src.length; ) {
+      for (let depth = 1; depth > 0 && i < src.length;) {
         const skipped = skipQuoted(src, i);
         if (skipped !== i) {
           i = skipped;
@@ -171,7 +174,10 @@ test('templates have no words of their own: every one goes through t()', () => {
     for (const text of templates(read(f))) {
       // \uE000 marks an expression; \uE001, a tag.
       const attrs = [...text.matchAll(/\s(?:placeholder|aria-label|title|alt)="([^"\uE000]+)"/g)].map((m) => m[1]);
-      const words = text.replace(/<[^>]*>/g, '\uE001').split(/[\uE000\uE001]/).map((x) => x.replace(/\s+/g, ' ').trim());
+      const words = text
+        .replace(/<[^>]*>/g, '\uE001')
+        .split(/[\uE000\uE001]/)
+        .map((x) => x.replace(/\s+/g, ' ').trim());
       for (const s of [...words, ...attrs]) {
         if (!s || SAME.test(s) || !/[A-Za-z]{2,}/.test(s)) continue;
         missing.push(`${f}: ${s}`);
@@ -205,7 +211,8 @@ test('every translation is still used', () => {
   walk('');
   const used = new Set();
   for (const f of scripts) {
-    for (const [, q, s] of read(f).matchAll(/(['"])((?:\\.|(?!\1)[^\\\n])*)\1/g)) used.add(q === '"' ? JSON.parse(`"${s}"`) : s.replace(/\\(.)/g, '$1'));
+    for (const [, q, s] of read(f).matchAll(/(['"])((?:\\.|(?!\1)[^\\\n])*)\1/g))
+      used.add(q === '"' ? JSON.parse(`"${s}"`) : s.replace(/\\(.)/g, '$1'));
   }
   // The English privacy pages too: opened with ?original in Chinese, their title and links are translated.
   for (const page of [...PAGES, 'privacy/index.html', 'privacy/policy/index.html']) {
@@ -216,7 +223,8 @@ test('every translation is still used', () => {
     for (const m of src.matchAll(/<title>([^<]+)<\/title>|<meta name="description" content="([^"]+)"/g)) used.add(norm(m[1] ?? m[2]));
     for (const k of htmlKeysOn(dict, page)) used.add(k);
   }
-  for (const m of fs.readFileSync(new URL('../src/landing.ts', import.meta.url), 'utf8').matchAll(/(?:data-t|alt)="([^"]+)"/g)) used.add(m[1]);
+  for (const m of fs.readFileSync(new URL('../src/landing.ts', import.meta.url), 'utf8').matchAll(/(?:data-t|alt)="([^"]+)"/g))
+    used.add(m[1]);
   const stale = Object.keys(dict).filter((k) => !used.has(k));
   assert.deepEqual(stale, []);
 });

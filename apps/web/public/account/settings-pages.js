@@ -2,7 +2,20 @@
 // out and moves between them). Each saves as it changes, through the shared
 // profile (profile.js).
 
-import { Rich, html, noteRow, reducedMotion, refocusAfterRemove, store, useEffect, useLayoutEffect, useMemo, useRef, useState, useStore } from '../assets/ui.js';
+import {
+  Rich,
+  html,
+  noteRow,
+  reducedMotion,
+  refocusAfterRemove,
+  store,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useStore,
+} from '../assets/ui.js';
 import { api, clock, clockOpts, forgetAccountHere, locale, locationError, serverNow, spaced, t } from './dom.js';
 import { Journey, STYLES, cardStyle, setCardStyle, styleHint, styleName } from './journey.js';
 import {
@@ -40,7 +53,8 @@ export const importOffer = store(null);
 
 export const hhmm = (min) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
 /** A time of day in the account's clock style ("9:00 AM" or "09:00"), for showing; hhmm is for time inputs. */
-export const clockMin = (min) => spaced(new Date(Date.UTC(2000, 0, 1, Math.floor(min / 60), min % 60)).toLocaleTimeString(locale(), { ...clockOpts(), timeZone: 'UTC' }));
+export const clockMin = (min) =>
+  spaced(new Date(Date.UTC(2000, 0, 1, Math.floor(min / 60), min % 60)).toLocaleTimeString(locale(), { ...clockOpts(), timeZone: 'UTC' }));
 /** "9:00–11:00 AM": the start's AM or PM left off when the end has the same. */
 export function clockSpan(from, to) {
   const a = clockMin(from);
@@ -250,8 +264,9 @@ export function Trips() {
             <${ResidenceOptions} residences=${residences} />
           </select>
         <//>
-        ${picking
-          ? html`
+        ${
+          picking
+            ? html`
               <${Field} id="home-1" label=${t('Your stop')}>
                 <${StopSelect} id="home-1" value=${now[0]} onChange=${pickStop} blank=${t('Choose a stop')} />
               <//>
@@ -260,7 +275,8 @@ export function Trips() {
                 <span class="hint" role="status">${msg}</span>
               </div>
             `
-          : null}
+            : null
+        }
         <div class="field">
           <span class="field-label">${t('Walk to your stop')}</span>
           <${Stepper}
@@ -335,11 +351,13 @@ function Choices() {
     load();
   }, [version]);
   if (!r) return null;
-  if (r.failed) return html`<p class="hint group-hint" role="status">${t("Couldn't load your classes and trip history. Check your connection.")}</p>`;
+  if (r.failed)
+    return html`<p class="hint group-hint" role="status">${t("Couldn't load your classes and trip history. Check your connection.")}</p>`;
   const name = (c) => c.label ?? t('A class no longer in your timetable');
   return html`
-    ${r.choices.length > 0 &&
-    html`<section id="trip-choices" class="trips-group">
+    ${
+      r.choices.length > 0 &&
+      html`<section id="trip-choices" class="trips-group">
       <h3 class="eyebrow">${t('Your classes')}</h3>
       <ul class="list card settings-list">
         ${r.choices.map(
@@ -361,9 +379,11 @@ function Choices() {
           </li>`,
         )}
       </ul>
-    </section>`}
-    ${r.history > 0 &&
-    html`<section id="trip-history" class="trips-group">
+    </section>`
+    }
+    ${
+      r.history > 0 &&
+      html`<section id="trip-history" class="trips-group">
       <h3 class="eyebrow">${t('Trip history')}</h3>
       <div class="card settings-list">
         <div class="field">
@@ -387,7 +407,8 @@ function Choices() {
         </div>
       </div>
       <p class="hint group-hint">${t('Kept for 35 days and used only to spot classes you often miss or skip.')}</p>
-    </section>`}
+    </section>`
+    }
   `;
 }
 
@@ -428,7 +449,12 @@ export function Timetable({ me }) {
       setTerm(r.term);
       const n = r.profile.trips.length;
       const notes = [n === 1 ? t('Imported 1 class for {0}.', r.term) : t('Imported {0} classes for {1}.', n, r.term)];
-      if (r.missing?.length) notes.push(r.missing.length === 1 ? t('{0} has no classes that semester.', r.missing[0]) : t('{0} have no classes that semester.', r.missing.join(', ')));
+      if (r.missing?.length)
+        notes.push(
+          r.missing.length === 1
+            ? t('{0} has no classes that semester.', r.missing[0])
+            : t('{0} have no classes that semester.', r.missing.join(', ')),
+        );
       if (r.online) notes.push(r.online === 1 ? t('1 online lesson skipped.') : t('{0} online lessons skipped.', r.online));
       setMsg(notes.join(' '));
       setReimport(false);
@@ -443,24 +469,33 @@ export function Timetable({ me }) {
   const seenKeys = new Map();
   // `nth`: which of the classes just like it (same day, time, name and stop) it is, so a row edits its own.
   const nth = (list, c, i) => list.slice(0, i).filter((y) => same(y, c)).length;
-  const all = [...p.trips.map((c, i) => ({ c, list: 'trips', nth: nth(p.trips, c, i) })), ...p.manual.map((c, i) => ({ c, list: 'manual', nth: nth(p.manual, c, i) }))].map((r) => {
+  const all = [
+    ...p.trips.map((c, i) => ({ c, list: 'trips', nth: nth(p.trips, c, i) })),
+    ...p.manual.map((c, i) => ({ c, list: 'manual', nth: nth(p.manual, c, i) })),
+  ].map((r) => {
     const base = `${r.list}-${r.c.day}-${r.c.arriveByMin}-${r.c.label}`;
     const n = seenKeys.get(base) ?? 0;
     seenKeys.set(base, n + 1);
     return { ...r, key: `${base}-${n}` };
   });
   // A favourite at its usual time each week: listed with the classes that day.
-  const usual = (p.usual ?? []).filter((u) => p.places.some((x) => x.key === u.place)).map((u) => ({ u, key: `usual-${u.place}-${u.day}-${u.atMin}` }));
+  const usual = (p.usual ?? [])
+    .filter((u) => p.places.some((x) => x.key === u.place))
+    .map((u) => ({ u, key: `usual-${u.place}-${u.day}-${u.atMin}` }));
 
-  const count = all.length ? `${all.length === 1 ? t('1 class') : t('{0} classes', all.length)}${term && p.trips.length ? ` · ${term}` : ''}` : t('No classes yet');
+  const count = all.length
+    ? `${all.length === 1 ? t('1 class') : t('{0} classes', all.length)}${term && p.trips.length ? ` · ${term}` : ''}`
+    : t('No classes yet');
 
   return html`
     <div class="trips">
-      ${reimport &&
-      html`<div class="banner">
+      ${
+        reimport &&
+        html`<div class="banner">
         <strong>${t('Re-import your timetable.')}</strong>${' '}
         <span>${t("This link is for {0}, which has ended. Copy this semester's link from NUSMods and import it below.", me.term)}</span>
-      </div>`}
+      </div>`
+      }
       <${Group} title=${t('From NUSMods')} hint=${t('In NUSMods: Timetable → Share/Sync → Copy. Re-import each semester.')}>
         <form class="field stack" onSubmit=${runImport}>
           <label for="share">${t('NUSMods share link')}</label>
@@ -473,14 +508,18 @@ export function Timetable({ me }) {
       <//>
       <${Group} title=${count} hint=${all.length || usual.length ? '' : t('No classes yet. Import from NUSMods or add them by hand.')}>
         ${unresolved.length > 0 && html`<div class="group-body"><${Unresolved} list=${unresolved} onDone=${(u) => setUnresolved((l) => l.filter((x) => x !== u))} /></div>`}
-        ${(all.length > 0 || usual.length > 0) &&
-        html`<div class="classes group-body">
+        ${
+          (all.length > 0 || usual.length > 0) &&
+          html`<div class="classes group-body">
           ${DAY_ORDER.map((day) => {
-            const rows = [...all.filter((r) => r.c.day === day), ...usual.filter((r) => r.u.day === day)].sort((a, b) => (a.c?.arriveByMin ?? a.u.atMin) - (b.c?.arriveByMin ?? b.u.atMin));
+            const rows = [...all.filter((r) => r.c.day === day), ...usual.filter((r) => r.u.day === day)].sort(
+              (a, b) => (a.c?.arriveByMin ?? a.u.atMin) - (b.c?.arriveByMin ?? b.u.atMin),
+            );
             if (!rows.length) return null;
             return html`<div class="day" key=${`d${day}`}>${DAYS[day]}</div>${rows.map((r) => (r.u ? html`<${UsualRow} key=${r.key} u=${r.u} />` : html`<${ClassRow} key=${r.key} c=${r.c} list=${r.list} nth=${r.nth} />`))}`;
           })}
-        </div>`}
+        </div>`
+        }
         <${AddClass} />
       <//>
     </div>
@@ -592,7 +631,16 @@ function Unresolved({ list, onDone }) {
               aria-label=${t('Stop for {0}', u.module)}
               onChange=${(v) => {
                 if (!v) return;
-                edit((x) => x.manual.push({ day: u.day, arriveByMin: u.arriveByMin, ...(u.endMin ? { endMin: u.endMin } : {}), to: v, label: `${u.module} @ ${u.venue.split('-')[0]}`, venue: u.venue }));
+                edit((x) =>
+                  x.manual.push({
+                    day: u.day,
+                    arriveByMin: u.arriveByMin,
+                    ...(u.endMin ? { endMin: u.endMin } : {}),
+                    to: v,
+                    label: `${u.module} @ ${u.venue.split('-')[0]}`,
+                    venue: u.venue,
+                  }),
+                );
                 onDone(u);
               }}
             />
@@ -641,7 +689,9 @@ function AddClass() {
     const b = toMin(end);
     // An end before the start was dropped without a word; say so instead.
     if (b != null && b <= a) return refuse(endBox.current, t('The end time must be after the start time'));
-    edit((x) => x.manual.push({ day: Number(day), arriveByMin: a, ...(b && b > a ? { endMin: b } : {}), to, label: label.trim(), venue: '' }));
+    edit((x) =>
+      x.manual.push({ day: Number(day), arriveByMin: a, ...(b && b > a ? { endMin: b } : {}), to, label: label.trim(), venue: '' }),
+    );
     setStart('');
     setEnd('');
     setLabel('');
@@ -651,8 +701,9 @@ function AddClass() {
   };
   return html`
     <button type="button" class="add-row" aria-expanded=${open} onClick=${() => setOpen(!open)}>${t('Add a class or commitment by hand')}</button>
-    ${open &&
-    html`<div class="group-body add-form" ref=${form}>
+    ${
+      open &&
+      html`<div class="group-body add-form" ref=${form}>
       <form class="grid" onSubmit=${submit}>
         <label>${t('Day')}
           <select name="day" required value=${day} onChange=${(e) => setDay(e.currentTarget.value)}>
@@ -680,7 +731,8 @@ function AddClass() {
         </label>
         <button type="submit" class="btn wide">${t('Add')}</button>
       </form>
-    </div>`}
+    </div>`
+    }
   `;
 }
 
@@ -804,7 +856,10 @@ function Place({ place, arriving }) {
         removed = withoutPlace(x, place.key);
       });
       refocus(document.querySelector('#place-form input'));
-      if (removed) toast(t('{0} removed from favourites', place.label), { action: { label: t('Undo'), run: () => edit((x) => restorePlace(x, removed)) } });
+      if (removed)
+        toast(t('{0} removed from favourites', place.label), {
+          action: { label: t('Undo'), run: () => edit((x) => restorePlace(x, removed)) },
+        });
     };
     if (reducedMotion()) return go();
     const el = row.current;
@@ -865,8 +920,9 @@ export function Devices({ me }) {
   if (anonymous) return html`<div class="card"><p class="hint">${t('Add an email to use terminus on your other devices too.')}</p></div>`;
   return html`
     <div class="trips">
-      ${devices?.length > 0 &&
-      html`<${Group} title=${t('Your devices')}>
+      ${
+        devices?.length > 0 &&
+        html`<${Group} title=${t('Your devices')}>
         <ul class="list group-body">
           ${devices.map(
             (d) => html`<li key=${d.id}>
@@ -890,7 +946,8 @@ export function Devices({ me }) {
             </li>`,
           )}
         </ul>
-      <//>`}
+      <//>`
+      }
       <section class="trips-group">
         <button type="button" class="btn wide add-device" onClick=${() => setPairing((n) => (n ?? 0) + 1)}>${t('Add a device')}</button>
         <${Rich} as="p" class="hint group-hint" text=${t('Get the <a href="/download/android">Android app</a> or <a href="/download/mac">Mac app</a> and sign in with this email, or pair it here with a code.')} />
@@ -956,7 +1013,10 @@ function Pairing({ count, reload }) {
         setState({
           code: made.code,
           text: `${made.code.slice(0, 3)} ${made.code.slice(3)}`,
-          hint: t("Scan with your phone's camera, or type the code in the app. Expires in {0}.", `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`),
+          hint: t(
+            "Scan with your phone's camera, or type the code in the app. Expires in {0}.",
+            `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`,
+          ),
         });
         if (left % 4 === 0) paired();
       };
@@ -972,9 +1032,11 @@ function Pairing({ count, reload }) {
   return html`
     <div class="pairing">
       <div class="qr" ref=${qr} role="img" aria-label=${t('QR code to pair a phone')}></div>
-      ${state.code
-        ? html`<p class="flaps" role="img" aria-label=${state.text}>${[...state.code].map((c, i) => html`<span class="flap" key=${i}>${c}</span>`)}</p>`
-        : html`<p class="code">${state.text}</p>`}
+      ${
+        state.code
+          ? html`<p class="flaps" role="img" aria-label=${state.text}>${[...state.code].map((c, i) => html`<span class="flap" key=${i}>${c}</span>`)}</p>`
+          : html`<p class="code">${state.text}</p>`
+      }
       <p class="hint">${state.hint || t("Scan with your phone's camera, or type the code in the app.")}</p>
     </div>
   `;
@@ -1000,7 +1062,11 @@ export function Language() {
             key=${langTry}
             name="lang"
             value=${window.i18n?.pref() ?? 'auto'}
-            options=${[['auto', t('Auto')], ['en', 'English', 'en'], ['zh', '中文', 'zh-Hans']]}
+            options=${[
+              ['auto', t('Auto')],
+              ['en', 'English', 'en'],
+              ['zh', '中文', 'zh-Hans'],
+            ]}
             labelledBy="lang-label"
             full
             onChange=${async (v) => {
@@ -1053,7 +1119,11 @@ export function ThemeSwitch({ labelledBy, full = false }) {
     <${Pills}
       name="theme"
       value=${now}
-      options=${[['auto', t('Auto')], ['light', t('Light')], ['dark', t('Dark')]]}
+      options=${[
+        ['auto', t('Auto')],
+        ['light', t('Light')],
+        ['dark', t('Dark')],
+      ]}
       labelledBy=${labelledBy}
       full=${full}
       onChange=${(v) => {
@@ -1170,20 +1240,24 @@ export function Account({ me, inApp, onAddEmail, onSignOut }) {
   const chev = html`<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>`;
   return html`
     <div class="trips">
-      ${me.anonymous === true &&
-      html`<div class="card add-email">
+      ${
+        me.anonymous === true &&
+        html`<div class="card add-email">
         <h3>${t('Add an email')}</h3>
         <p class="hint">${t("Your setup stays in this browser. Add an email any time to use it on your other devices, or to keep it if this browser's data is cleared.")}</p>
         <button type="button" class="btn accent wide" onClick=${onAddEmail}>${t('Add an email')}</button>
-      </div>`}
-      ${me.anonymous !== true &&
-      html`<div class=${inApp ? '' : 'narrow-only'}><${Group} title=${t('Signed in')}>
+      </div>`
+      }
+      ${
+        me.anonymous !== true &&
+        html`<div class=${inApp ? '' : 'narrow-only'}><${Group} title=${t('Signed in')}>
         <div class="field account-who">
           <span class="avatar" aria-hidden="true">${(me.email ?? '?').slice(0, 1).toUpperCase()}</span>
           <span class="field-email">${me.email ? breakAfterAt(me.email) : t('No email')}</span>
           <button type="button" class="btn small ghost" onClick=${onSignOut}>${t('Sign out')}</button>
         </div>
-      <//></div>`}
+      <//></div>`
+      }
       <${Group} title=${t('Your data')}>
         <a class="settings-row" href="/api/me/export" download><span class="row-text"><span class="row-title">${t('Download my data')}</span></span>${chev}</a>
         <button type="button" class="settings-row" onClick=${everywhere}><span class="row-text"><span class="row-title">${t('Sign out everywhere')}</span></span>${chev}</button>
@@ -1216,8 +1290,9 @@ function Keys() {
     <section class="trips-group">
       <h3 class="eyebrow">${t('API keys')}</h3>
       <div class="card settings-list">
-        ${keys.length > 0 &&
-        html`<ul class="list group-body">
+        ${
+          keys.length > 0 &&
+          html`<ul class="list group-body">
           ${keys.map(
             (k) => html`<li key=${k.id}>
               <span><strong>${k.name}</strong><div class="meta">${`…${k.hint} · ${t('made {0}', shortDate(k.created))} · ${k.lastUsed ? t('used {0}', shortDate(k.lastUsed)) : t('never used')}`}</div></span>
@@ -1242,7 +1317,8 @@ function Keys() {
               >${t('Revoke')}</button>
             </li>`,
           )}
-        </ul>`}
+        </ul>`
+        }
         <form
           class="field row"
           onSubmit=${async (e) => {
@@ -1261,8 +1337,9 @@ function Keys() {
           <input name="name" class="keys-name" maxlength="40" required placeholder=${t("What it's for, e.g. My script")} aria-label=${t('Key name')} value=${name} onInput=${(e) => setName(e.currentTarget.value)} />
           <button type="submit" class="btn small">${t('Create')}</button>
         </form>
-        ${made &&
-        html`<div class="new-key group-body">
+        ${
+          made &&
+          html`<div class="new-key group-body">
           <p class="warn-text">${t("Copy this key now. It won't be shown again.")}</p>
           <div class="row">
             <code>${made}</code>
@@ -1280,7 +1357,8 @@ function Keys() {
             >${t('Copy')}</button>
           </div>
           <p class="hint">${t('Try it:')} <code>${`curl -H "x-api-key: ${made}" "${location.origin}/api/arrivals?stop=COM3"`}</code></p>
-        </div>`}
+        </div>`
+        }
       </div>
       <p class="hint group-hint" role="status">${msg}</p>
       <${Rich} as="p" class="hint group-hint" text=${t('For your own scripts and projects. See the <a href="/docs">API docs</a>; send the key in the <code>x-api-key</code> header.')} />
@@ -1296,7 +1374,11 @@ const ABOUT_LINKS = () => [
   { title: t('API docs'), href: '/docs' },
   { title: t('Source code'), href: 'https://github.com/rcnsh/terminus' },
   { title: t('Map data'), href: 'https://www.openstreetmap.org/copyright', where: 'openstreetmap.org' },
-  { title: t('NUS Acceptable Use Policy'), href: 'https://nus.edu.sg/registrar/docs/info/registration-guides/aup-form.pdf', where: 'nus.edu.sg' },
+  {
+    title: t('NUS Acceptable Use Policy'),
+    href: 'https://nus.edu.sg/registrar/docs/info/registration-guides/aup-form.pdf',
+    where: 'nus.edu.sg',
+  },
 ];
 
 /** Whether this browser sends error reports (/assets/errors.js keeps the choice), as a row of Your data, as in the apps. */

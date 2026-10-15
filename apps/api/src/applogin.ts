@@ -98,13 +98,21 @@ function randomMatch(): number {
  * wasn't theirs. A blocked address gets a request that looks the same and
  * never completes, so the reply doesn't reveal the blocklist.
  */
-export async function startAppLogin(env: Env, db: D1Database, input: StartInput, origin: string, nowMs: number): Promise<Started | 'cooldown' | 'busy' | 'held'> {
+export async function startAppLogin(
+  env: Env,
+  db: D1Database,
+  input: StartInput,
+  origin: string,
+  nowMs: number,
+): Promise<Started | 'cooldown' | 'busy' | 'held'> {
   const { email } = input;
   if (await env.KV.get(await heldKey(email)).catch(() => null)) return 'held';
   const inbox = inboxKey(email);
   const coolKey = `mail:${await hashToken(inbox)}`;
   const recent = await db
-    .prepare('SELECT 1 FROM login_requests WHERE email = ? AND created > ? UNION ALL SELECT 1 FROM magic_links WHERE email = ? AND created > ?')
+    .prepare(
+      'SELECT 1 FROM login_requests WHERE email = ? AND created > ? UNION ALL SELECT 1 FROM magic_links WHERE email = ? AND created > ?',
+    )
     .bind(email, nowMs - LOGIN_TTL.cooldownMs, email, nowMs - LOGIN_TTL.cooldownMs)
     .first();
   if (recent || (await env.KV.get(coolKey).catch(() => null))) return 'cooldown';
@@ -138,7 +146,24 @@ export async function startAppLogin(env: Env, db: D1Database, input: StartInput,
             AND NOT EXISTS (SELECT 1 FROM magic_links WHERE email = ? AND created > ?)
          RETURNING id`,
       )
-      .bind(id, email, await hashToken(poll), await hashToken(link), await hashToken(code), match, input.name, input.client.platform, input.anonUserId, blocked ? 'blocked' : 'pending', nowMs, expires, email, since, email, since),
+      .bind(
+        id,
+        email,
+        await hashToken(poll),
+        await hashToken(link),
+        await hashToken(code),
+        match,
+        input.name,
+        input.client.platform,
+        input.anonUserId,
+        blocked ? 'blocked' : 'pending',
+        nowMs,
+        expires,
+        email,
+        since,
+        email,
+        since,
+      ),
   ]);
   if (!made?.results?.length) return 'cooldown';
   if (!blocked) {
@@ -186,7 +211,13 @@ ${why}`,
  * request is approved (the caller then collects the token as a poll would).
  * Wrong five times, or for another request: it dies.
  */
-export async function enterCode(db: D1Database, id: string, poll: string, code: string, nowMs: number): Promise<'approved' | 'wrong' | 'denied' | 'expired'> {
+export async function enterCode(
+  db: D1Database,
+  id: string,
+  poll: string,
+  code: string,
+  nowMs: number,
+): Promise<'approved' | 'wrong' | 'denied' | 'expired'> {
   const row = await db
     .prepare('SELECT poll_hash, code_hash, code_tries, status, expires FROM login_requests WHERE id = ?')
     .bind(id)
@@ -199,12 +230,17 @@ export async function enterCode(db: D1Database, id: string, poll: string, code: 
   // Spend the try before checking the code, in one statement: guesses sent
   // all at once can't each see the count from before the others.
   const spent = await db
-    .prepare("UPDATE login_requests SET code_tries = code_tries + 1 WHERE id = ? AND code_tries < ? AND status IN ('pending', 'blocked') RETURNING code_tries")
+    .prepare(
+      "UPDATE login_requests SET code_tries = code_tries + 1 WHERE id = ? AND code_tries < ? AND status IN ('pending', 'blocked') RETURNING code_tries",
+    )
     .bind(id, LOGIN_TTL.codeTries)
     .first<{ code_tries: number }>();
   if (!spent) return 'denied';
   if (row.status === 'pending' && (await hashToken(code)) === row.code_hash) {
-    const ok = await db.prepare("UPDATE login_requests SET status = 'approved' WHERE id = ? AND status = 'pending' RETURNING id").bind(id).first();
+    const ok = await db
+      .prepare("UPDATE login_requests SET status = 'approved' WHERE id = ? AND status = 'pending' RETURNING id")
+      .bind(id)
+      .first();
     return ok ? 'approved' : 'expired';
   }
   if (spent.code_tries < LOGIN_TTL.codeTries) return 'wrong';
@@ -236,7 +272,12 @@ export async function approvable(db: D1Database, link: string, nowMs: number): P
  * "this wasn't me" (null), kills the request. Works once. The address
  * comes back with the answer, for holdAppLogins.
  */
-export async function decide(db: D1Database, link: string, typed: number | null, nowMs: number): Promise<{ status: 'approved' | 'denied' | 'expired'; email?: string }> {
+export async function decide(
+  db: D1Database,
+  link: string,
+  typed: number | null,
+  nowMs: number,
+): Promise<{ status: 'approved' | 'denied' | 'expired'; email?: string }> {
   const row = await db
     .prepare(
       `UPDATE login_requests SET status = CASE WHEN match = ? THEN 'approved' ELSE 'denied' END
@@ -337,7 +378,9 @@ export async function pollAppLogin(db: D1Database, id: string, poll: string, cli
       ...work,
       sessionFor(db, tokenHash, req.email, 'device', req.device_name, nowMs, client, live),
       db
-        .prepare("UPDATE login_requests SET status = 'done' WHERE id = ? AND status = 'approved' AND EXISTS (SELECT 1 FROM sessions WHERE token_hash = ?) RETURNING id")
+        .prepare(
+          "UPDATE login_requests SET status = 'done' WHERE id = ? AND status = 'approved' AND EXISTS (SELECT 1 FROM sessions WHERE token_hash = ?) RETURNING id",
+        )
         .bind(id, tokenHash),
     ]);
   } catch (err) {

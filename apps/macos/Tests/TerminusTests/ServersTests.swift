@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import Terminus
 
 /// The developer menu's servers: the same cases as the phone's ServersTest.
@@ -8,7 +9,8 @@ private let site = ["https://terminus.run", "https://terminus.rcn.sh"]
 
 @Test func theSitesOwnAddressIsTheDefaultAndTheStubOnlyInDebug() {
     #expect(Servers.all(default: "https://terminus.run", backup: "https://terminus.rcn.sh", debug: false) == site)
-    #expect(Servers.all(default: "https://terminus.run", backup: "https://terminus.rcn.sh", debug: true) == site + ["http://localhost:8787"])
+    #expect(
+        Servers.all(default: "https://terminus.run", backup: "https://terminus.rcn.sh", debug: true) == site + ["http://localhost:8787"])
 }
 
 @Test func aSavedServerNoLongerBuiltInFallsBackToTheDefault() {
@@ -72,7 +74,10 @@ private let site = ["https://terminus.run", "https://terminus.rcn.sh"]
 /// What every request does with [Servers.tries] (the API's, the map's, crash
 /// reports): the next address only when the last was never reached.
 @Test func aRequestGoesToTheBackupOnlyWhenTheFirstWasNeverReached() async throws {
-    actor Asked { var list: [String] = []; func add(_ s: String) { list.append(s) } }
+    actor Asked {
+        var list: [String] = []
+        func add(_ s: String) { list.append(s) }
+    }
     // Refused by a firewall: the backup answers, and is named as the one that did.
     var asked = Asked()
     let r = try await Servers.first(site, method: "GET") { base in

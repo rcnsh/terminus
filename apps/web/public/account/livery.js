@@ -10,8 +10,14 @@ import { html } from '../assets/ui.js';
  * page's driving shuttles wear them too (sky-page.js).
  */
 export const LIVERY = [
-  ['A1', '#d32f2f'], ['A2', '#d9a000'], ['D1', '#ec4fa0'], ['D2', '#8e44c9'],
-  ['K', '#2b9ad6'], ['R1', '#f57c1f'], ['R2', '#34a853'], ['P', '#8a939c'],
+  ['A1', '#d32f2f'],
+  ['A2', '#d9a000'],
+  ['D1', '#ec4fa0'],
+  ['D2', '#8e44c9'],
+  ['K', '#2b9ad6'],
+  ['R1', '#f57c1f'],
+  ['R2', '#34a853'],
+  ['P', '#8a939c'],
 ];
 
 /**
@@ -27,7 +33,8 @@ export function Livery() {
   const left = 180 - 60 * u + rise / 2;
   const right = left - rise;
   // Each strip overlaps the next by a little, so no hairline of the card shows between them.
-  const strip = (from, to, color, key) => html`<path key=${key} d=${`M0 ${left - from}L400 ${right - from}L400 ${right - to - 0.6}L0 ${left - to - 0.6}Z`} fill=${color} />`;
+  const strip = (from, to, color, key) =>
+    html`<path key=${key} d=${`M0 ${left - from}L400 ${right - from}L400 ${right - to - 0.6}L0 ${left - to - 0.6}Z`} fill=${color} />`;
   const colours = LIVERY.filter(([svc]) => svc !== 'P').reverse();
   return html`
     <div class="livery" aria-hidden="true">

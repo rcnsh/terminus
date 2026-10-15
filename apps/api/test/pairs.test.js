@@ -32,18 +32,31 @@ test('twins are grouped, the non-Opp side first, with a straight-line crossing',
   const { places, version } = stopPairs(TINY);
   assert.equal(version, TINY.generated);
   const x = places.find((p) => p.id === 'X');
-  assert.deepEqual(x.sides.map((s) => s.code), ['X', 'X-OPP']);
+  assert.deepEqual(
+    x.sides.map((s) => s.code),
+    ['X', 'X-OPP'],
+  );
   assert.equal(x.crossingM, 22);
   assert.ok(!places.some((p) => p.id === 'X-OPP'), 'each stop appears once');
   assert.equal(places.flatMap((p) => p.sides).length, TINY.stops.length);
 });
 
-test("each side says which buses call and where they go next; null where one terminates", () => {
+test('each side says which buses call and where they go next; null where one terminates', () => {
   const x = stopPairs(TINY).places.find((p) => p.id === 'X');
-  assert.deepEqual(x.sides[0].services, [{ svc: 'L', next: 'B' }, { svc: 'T', next: 'C' }]);
+  assert.deepEqual(x.sides[0].services, [
+    { svc: 'L', next: 'B' },
+    { svc: 'T', next: 'C' },
+  ]);
   assert.deepEqual(x.sides[1].services, [{ svc: 'L', next: 'A' }]);
   const a = stopPairs(TINY).places.find((p) => p.id === 'A');
-  assert.deepEqual(a.sides[0].services, [{ svc: 'L', next: 'X' }, { svc: 'T', next: 'X' }], 'the loop calls at A once');
+  assert.deepEqual(
+    a.sides[0].services,
+    [
+      { svc: 'L', next: 'X' },
+      { svc: 'T', next: 'X' },
+    ],
+    'the loop calls at A once',
+  );
   const c = stopPairs(TINY).places.find((p) => p.id === 'C');
   assert.deepEqual(c.sides[0].services, [{ svc: 'T', next: null }]);
 });
@@ -73,7 +86,10 @@ test('on the real graph: every stop once, pairs across real roads', () => {
 
 test('hand-listed pairs join the scraped ones and stay mutual', () => {
   const stops = [stop('A', 'A', 1, 1, 'A-OPP'), stop('A-OPP', 'Opp A', 1, 1, 'A'), stop('B', 'B', 1, 1), stop('C', 'C', 1, 1)];
-  const merged = mergeOpposites(stops, [['A', 'B'], ['C', 'NOPE']]);
+  const merged = mergeOpposites(stops, [
+    ['A', 'B'],
+    ['C', 'NOPE'],
+  ]);
   const by = Object.fromEntries(merged.map((s) => [s.code, s.opposite]));
   assert.deepEqual(by, { A: 'B', B: 'A', 'A-OPP': null, C: null }, "A's old twin is let go; an unknown code is ignored");
   assert.equal(stops[0].opposite, 'A-OPP', 'the input is not mutated');
@@ -88,7 +104,9 @@ test('the hand-listed pairs: BIZ 2 and Opp HSSML, AS 5 and Opp NUSS', () => {
   }
   for (const s of GRAPH.stops) if (s.opposite) assert.equal(by.get(s.opposite)?.opposite, s.code, `${s.code} pairs both ways`);
   assert.equal(by.get('SDE3-OPP').opposite ?? null, null, 'SDE3-OPP has no twin');
-  const ids = stopPairs(GRAPH).places.filter((p) => p.sides.length === 2).map((p) => p.sides.map((s) => s.code).join('+'));
+  const ids = stopPairs(GRAPH)
+    .places.filter((p) => p.sides.length === 2)
+    .map((p) => p.sides.map((s) => s.code).join('+'));
   assert.ok(ids.includes('AS5+NUSS-OPP') && ids.includes('BIZ2+HSSML-OPP'), ids.join(' '));
 });
 

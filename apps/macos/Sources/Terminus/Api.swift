@@ -8,8 +8,15 @@ struct Place: Decodable, Hashable {
 
 /// `/api/me/next`. label and detail are display-ready; show them verbatim.
 struct NextAnswer: Decodable {
-    struct Stop: Decodable { let code: String; let name: String }
-    struct Dest: Decodable { let to: String?; let label: String; let why: String }
+    struct Stop: Decodable {
+        let code: String
+        let name: String
+    }
+    struct Dest: Decodable {
+        let to: String?
+        let label: String
+        let why: String
+    }
 
     // Only `label` is required. Anything else missing (a newer or older API)
     // must not turn the whole answer into "Offline".
@@ -39,8 +46,21 @@ struct NextAnswer: Decodable {
     /// The response as it came, sent with an "Is this wrong?" report. Never in the JSON.
     var raw: Data? = nil
 
-    struct Timing: Decodable { let status: String?; let text: String?; let classAt: String?; let reachAt: String? }
-    struct Leave: Decodable { let at: String; let estimated: Bool?; let svc: String?; let stop: String?; let board: String?; let arrive: String?; let note: String? }
+    struct Timing: Decodable {
+        let status: String?
+        let text: String?
+        let classAt: String?
+        let reachAt: String?
+    }
+    struct Leave: Decodable {
+        let at: String
+        let estimated: Bool?
+        let svc: String?
+        let stop: String?
+        let board: String?
+        let arrive: String?
+        let note: String?
+    }
     /// Every field but `kind` is optional and read on its own: one field this
     /// version can't read is left out (nil, or gone from its list), never the
     /// whole card with it.
@@ -96,7 +116,8 @@ struct NextAnswer: Decodable {
         static let kinds: Set = ["class", "trip", "nearby", "rest", "arrived", "setup", "free"]
 
         enum CodingKeys: String, CodingKey {
-            case kind, staleAt, crowd, quality, leaveBy, leaveVia, `catch`, arrive, late, goNow, note, estimate, phase, phaseText, glance, line, actions, warning, nextChangeAt, remind, suggestion, notice, upcoming
+            case kind, staleAt, crowd, quality, leaveBy, leaveVia, `catch`, arrive, late, goNow, note, estimate, phase, phaseText, glance,
+                line, actions, warning, nextChangeAt, remind, suggestion, notice, upcoming
             case title, heading, remindAt, journey, ride, gone
         }
 
@@ -150,7 +171,10 @@ struct NextAnswer: Decodable {
         let summary: String?
         /// The bus to catch, for its service and colour beside the ride.
         let bus: Bus?
-        struct Bus: Decodable { let svc: String; let color: String? }
+        struct Bus: Decodable {
+            let svc: String
+            let color: String?
+        }
         /// A change of bus on the way: `bus` is the first, this the second.
         /// One this version can't read leaves `rideText`, which names the change.
         let change: Change?
@@ -163,7 +187,9 @@ struct NextAnswer: Decodable {
             let rideText: String
         }
 
-        enum CodingKeys: String, CodingKey { case title, byText, walkText, rideText, walkEndText, arriveText, arriveWhere, backupText, summary, bus, change }
+        enum CodingKeys: String, CodingKey {
+            case title, byText, walkText, rideText, walkEndText, arriveText, arriveWhere, backupText, summary, bus, change
+        }
 
         init(from d: Decoder) throws {
             let c = try d.container(keyedBy: CodingKeys.self)
@@ -186,7 +212,10 @@ struct NextAnswer: Decodable {
     /// Where the bus is comes from the clock, the stops taken as evenly spaced
     /// between the two times, as the phone and the web show it.
     struct Ride: Decodable {
-        struct Stop: Decodable, Hashable { let code: String?; let name: String }
+        struct Stop: Decodable, Hashable {
+            let code: String?
+            let name: String
+        }
         let svc: String
         let stops: [Stop]
         let board: String
@@ -194,7 +223,10 @@ struct NextAnswer: Decodable {
         /// The bus you change to where this one drops you ("Then P at 09:42
         /// from Kent Vale"); `stops` are this bus's alone.
         let change: Change?
-        struct Change: Decodable { let svc: String; let text: String }
+        struct Change: Decodable {
+            let svc: String
+            let text: String
+        }
 
         enum CodingKeys: String, CodingKey { case svc, stops, board, arrive, change }
 
@@ -205,7 +237,9 @@ struct NextAnswer: Decodable {
             board = try c.decode(String.self, forKey: .board)
             arrive = try c.decode(String.self, forKey: .arrive)
             change = try? c.decodeIfPresent(Change.self, forKey: .change)
-            guard stops.count >= 2 else { throw DecodingError.dataCorruptedError(forKey: .stops, in: c, debugDescription: "a ride needs two stops") }
+            guard stops.count >= 2 else {
+                throw DecodingError.dataCorruptedError(forKey: .stops, in: c, debugDescription: "a ride needs two stops")
+            }
         }
 
         /// 0 to 1 along the ride at `now` (the server's clock).
@@ -219,9 +253,17 @@ struct NextAnswer: Decodable {
     }
     /// Worded on the server: "Tomorrow · Fri", "CS2030 at 10:00", "At COM1 · get off at COM 3",
     /// and why today has none on a break ("Recess week").
-    struct Upcoming: Decodable { let when: String; let title: String; let `where`: String; let off: String? }
+    struct Upcoming: Decodable {
+        let when: String
+        let title: String
+        let `where`: String
+        let off: String?
+    }
 
-    enum CodingKeys: String, CodingKey { case label, detail, alt, stop, quality, asOf, mode, dest, places, departsAt, refreshAt, timing, arrivals, arrived, leave, card, walkSpeedMs }
+    enum CodingKeys: String, CodingKey {
+        case label, detail, alt, stop, quality, asOf, mode, dest, places, departsAt, refreshAt, timing, arrivals, arrived, leave, card,
+            walkSpeedMs
+    }
 
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
@@ -243,7 +285,10 @@ struct NextAnswer: Decodable {
         card = try? c.decodeIfPresent(Card.self, forKey: .card)
         walkSpeedMs = try? c.decodeIfPresent(Double.self, forKey: .walkSpeedMs)
     }
-    struct ArrivalLite: Decodable { let svc: String; let crowd: String? }
+    struct ArrivalLite: Decodable {
+        let svc: String
+        let crowd: String?
+    }
 
     var departure: Date? { departsAt.flatMap(parseISODate) }
     var planChanges: Date? { refreshAt.flatMap(parseISODate) }
@@ -345,7 +390,8 @@ enum ServerClock {
     /// cached one (anything but `no-store`) carries the time it was first sent.
     static func skew(from resp: HTTPURLResponse, at local: Date) -> TimeInterval? {
         guard (resp.value(forHTTPHeaderField: "cache-control") ?? "").contains("no-store"),
-              let server = resp.value(forHTTPHeaderField: "date").flatMap(parseHTTPDate) else { return nil }
+            let server = resp.value(forHTTPHeaderField: "date").flatMap(parseHTTPDate)
+        else { return nil }
         return skew(server: server, local: local)
     }
 
@@ -424,7 +470,8 @@ func isNewer(_ latest: String, than current: String) -> Bool {
         let p = v.split(separator: "-", maxSplits: 1).map(String.init)
         return (p.first ?? "", p.count > 1 ? p[1] : nil)
     }
-    let (an, ap) = split(latest), (bn, bp) = split(current)
+    let (an, ap) = split(latest)
+    let (bn, bp) = split(current)
     switch an.compare(bn, options: .numeric) {
     case .orderedDescending: return true
     case .orderedAscending: return false
@@ -456,7 +503,10 @@ struct BoardRow: Decodable, Hashable {
 }
 
 struct NearbyStop: Decodable, Identifiable {
-    struct Stop: Decodable { let code: String; let name: String }
+    struct Stop: Decodable {
+        let code: String
+        let name: String
+    }
     let stop: Stop
     let walkS: Int
     let available: Bool
@@ -546,9 +596,11 @@ func rankDestinations(_ all: [Destination], _ query: String, max: Int = 8) -> [D
         .filter { $0.s >= 0 }
         .sorted { a, b in
             if a.s != b.s { return a.s < b.s }
-            let ka = kindRank(a.d.kind), kb = kindRank(b.d.kind)
+            let ka = kindRank(a.d.kind)
+            let kb = kindRank(b.d.kind)
             if ka != kb { return ka < kb }
-            let la = a.d.label.utf16.count, lb = b.d.label.utf16.count
+            let la = a.d.label.utf16.count
+            let lb = b.d.label.utf16.count
             if la != lb { return la < lb }
             return a.i < b.i
         }
@@ -565,10 +617,22 @@ enum Target: Hashable {
 
 /// `/api/campus`: every stop, and the residences with the stops that serve them.
 struct Campus: Decodable {
-    struct Stop: Decodable, Hashable { let code: String; let name: String; let lat: Double?; let lon: Double? }
+    struct Stop: Decodable, Hashable {
+        let code: String
+        let name: String
+        let lat: Double?
+        let lon: Double?
+    }
     /// `common`: where most students live (PGP, UTown Residence), shown first in the pickers.
     /// `walkMin`: minutes on foot to its stop at a normal pace, as the server works it out.
-    struct Residence: Decodable, Hashable { let code: String; let name: String; let stops: [String]; let walkM: Double?; var walkMin: Int?; var common: Bool? }
+    struct Residence: Decodable, Hashable {
+        let code: String
+        let name: String
+        let stops: [String]
+        let walkM: Double?
+        var walkMin: Int?
+        var common: Bool?
+    }
     let stops: [Stop]
     let residences: [Residence]
 
@@ -588,7 +652,8 @@ struct Campus: Decodable {
     func nearest(lat: Double, lon: Double) -> Stop? {
         stops.filter { $0.lat != nil && $0.lon != nil }.min { a, b in
             func d(_ s: Stop) -> Double {
-                let dLat = s.lat! - lat, dLon = (s.lon! - lon) * cos(lat * .pi / 180)
+                let dLat = s.lat! - lat
+                let dLon = (s.lon! - lon) * cos(lat * .pi / 180)
                 return dLat * dLat + dLon * dLon
             }
             return d(a) < d(b)
@@ -618,7 +683,9 @@ struct ImportResult {
         profile = o["profile"] as? [String: Any] ?? [:]
         classes = (profile["trips"] as? [Any])?.count ?? 0
         unplaced = (o["unresolved"] as? [[String: Any]] ?? []).map {
-            Unplaced(module: $0["module"] as? String ?? "", venue: $0["venue"] as? String ?? "", day: $0["day"] as? Int ?? 1, arriveByMin: $0["arriveByMin"] as? Int ?? 0, endMin: $0["endMin"] as? Int, offCampus: $0["offCampus"] as? Bool ?? false)
+            Unplaced(
+                module: $0["module"] as? String ?? "", venue: $0["venue"] as? String ?? "", day: $0["day"] as? Int ?? 1,
+                arriveByMin: $0["arriveByMin"] as? Int ?? 0, endMin: $0["endMin"] as? Int, offCampus: $0["offCampus"] as? Bool ?? false)
         }
         missing = o["missing"] as? [String] ?? []
         term = o["term"] as? String ?? ""
@@ -669,9 +736,21 @@ struct Device: Decodable, Identifiable, Hashable {
 /// `/api/me/day`: today's classes and the trips home, and where each stands.
 struct DayPlan: Decodable {
     struct Item: Decodable, Identifiable {
-        struct Leave: Decodable { let at: String; let estimated: Bool?; let svc: String?; let stop: String? }
-        struct Timing: Decodable { let status: String?; let text: String? }
-        struct OnBus: Decodable { let svc: String; let off: String?; let arrive: String? }
+        struct Leave: Decodable {
+            let at: String
+            let estimated: Bool?
+            let svc: String?
+            let stop: String?
+        }
+        struct Timing: Decodable {
+            let status: String?
+            let text: String?
+        }
+        struct OnBus: Decodable {
+            let svc: String
+            let off: String?
+            let arrive: String?
+        }
         let kind: String
         let key: String
         let label: String
@@ -704,13 +783,23 @@ struct DayPlan: Decodable {
             if serverTitle != nil || status == "done" { return nil }
             if status == "skipped" { return L("Not going") }
             if let b = onBus {
-                return ([L("On the %@", b.svc), b.off.map { L("off at %@", $0) }, b.arrive.flatMap(parseISODate).map { L("arrive %@", campusTime($0)) }] as [String?]).compactMap { $0 }.joined(separator: " · ")
+                return
+                    ([
+                        L("On the %@", b.svc), b.off.map { L("off at %@", $0) },
+                        b.arrive.flatMap(parseISODate).map { L("arrive %@", campusTime($0)) },
+                    ] as [String?]).compactMap { $0 }.joined(separator: " · ")
             }
             guard let l = leave, let at = parseISODate(l.at) else { return nil }
             let how = l.svc.map { L("%@ from %@", $0, l.stop ?? fromName ?? "") } ?? L("walk")
-            return ([L("Leave by %@", l.estimated == true ? L("~%@", campusTime(at)) : campusTime(at)), how, timing?.status == "late" ? timing?.text : nil] as [String?]).compactMap { $0 }.joined(separator: " · ")
+            return
+                ([
+                    L("Leave by %@", l.estimated == true ? L("~%@", campusTime(at)) : campusTime(at)), how,
+                    timing?.status == "late" ? timing?.text : nil,
+                ] as [String?]).compactMap { $0 }.joined(separator: " · ")
         }
-        var title: String { serverTitle ?? (kind == "home" ? (fromName.map { L("Home, from %@", $0) } ?? L("Home after your last class")) : label) }
+        var title: String {
+            serverTitle ?? (kind == "home" ? (fromName.map { L("Home, from %@", $0) } ?? L("Home after your last class")) : label)
+        }
     }
     var items: [Item]
     let note: String?
@@ -838,7 +927,9 @@ enum Outdated {
     }
 
     /// The bus answers the server refuses an outdated app (KEYED in apps/api/src/index.ts).
-    private static let answers: Set<String> = ["/api/next", "/api/trip", "/api/arrivals", "/api/buses", "/api/line", "/api/campus", "/api/stops/pairs"]
+    private static let answers: Set<String> = [
+        "/api/next", "/api/trip", "/api/arrivals", "/api/buses", "/api/line", "/api/campus", "/api/stops/pairs",
+    ]
 }
 
 struct ApiError: LocalizedError {
@@ -941,9 +1032,12 @@ enum Servers {
     /// tried first again within [detourS].
     static func answered(_ at: String, base: String, now: Date = Date()) {
         lock.withLock {
-            if at == base { detour = nil }
-            else if let d = detour, d.base == at, now < d.until {}
-            else { detour = (at, now.addingTimeInterval(detourS)) }
+            if at == base {
+                detour = nil
+            } else if let d = detour, d.base == at, now < d.until {
+            } else {
+                detour = (at, now.addingTimeInterval(detourS))
+            }
         }
     }
 
@@ -992,9 +1086,9 @@ enum Servers {
 
     static var isDebug: Bool {
         #if DEBUG
-        return true
+            return true
         #else
-        return false
+            return false
         #endif
     }
 
@@ -1011,14 +1105,20 @@ enum Servers {
         guard choices.contains(base), base != Api.base else { return }
         UserDefaults.standard.set(base, forKey: key)
         let app = Bundle.main.bundleURL
-        guard app.pathExtension == "app" else { NSApp.terminate(nil); return }
+        guard app.pathExtension == "app" else {
+            NSApp.terminate(nil)
+            return
+        }
         let config = NSWorkspace.OpenConfiguration()
         config.createsNewApplicationInstance = true
         let running = Api.base
         NSWorkspace.shared.openApplication(at: app, configuration: config) { launched, error in
             let started = launched != nil && error == nil
             DispatchQueue.main.async {
-                if started { NSApp.terminate(nil); return }
+                if started {
+                    NSApp.terminate(nil)
+                    return
+                }
                 UserDefaults.standard.set(running, forKey: key)
                 failed()
             }
@@ -1047,10 +1147,10 @@ struct Api {
     static func devOverride(_ name: String) -> String? {
         guard let value = ProcessInfo.processInfo.environment[name], !value.isEmpty else { return nil }
         #if DEBUG
-        return value
+            return value
         #else
-        guard let host = URL(string: value)?.host?.lowercased(), host == "localhost" || host == "127.0.0.1" else { return nil }
-        return value
+            guard let host = URL(string: value)?.host?.lowercased(), host == "localhost" || host == "127.0.0.1" else { return nil }
+            return value
         #endif
     }
 
@@ -1109,7 +1209,8 @@ struct Api {
     /// (an id from `ReportForm.reasons`, as /api/me/feedback takes them), a note,
     /// or both. Needs an account with an email.
     func report(reason: String?, note: String, answer: Data?) async throws {
-        try await feedback(kind: "wrong", note: note, reason: reason, context: answer.flatMap { try? JSONSerialization.jsonObject(with: $0) })
+        try await feedback(
+            kind: "wrong", note: note, reason: reason, context: answer.flatMap { try? JSONSerialization.jsonObject(with: $0) })
     }
 
     // MARK: setup and devices: the account page's routes, from the app
@@ -1180,7 +1281,9 @@ struct Api {
 
     /// After adding an email where both had a setup: keep the account's, or this Mac's.
     func merge(anon: String, keepDevice: Bool) async throws {
-        _ = try await send("POST", "/api/auth/app/merge", json: JSONSerialization.data(withJSONObject: ["anon": anon, "keep": keepDevice ? "device" : "account"]))
+        _ = try await send(
+            "POST", "/api/auth/app/merge",
+            json: JSONSerialization.data(withJSONObject: ["anon": anon, "keep": keepDevice ? "device" : "account"]))
     }
 
     func me() async throws -> Me {
@@ -1193,7 +1296,9 @@ struct Api {
         switch target {
         case .plan: break
         case .place(let key): body["place"] = key
-        case .code(let code, let label): body["to"] = code; body["label"] = label
+        case .code(let code, let label):
+            body["to"] = code
+            body["label"] = label
         }
         return try await answer("POST", "/api/me/once", query: Self.h12, json: try JSONSerialization.data(withJSONObject: body))
     }
@@ -1205,7 +1310,9 @@ struct Api {
     }
 
     /// A note to /api/me/feedback with this build's version, and for a report the answer it's about.
-    private func feedback(kind: String, note: String, reason: String? = nil, context: Any? = nil, extra: [String: String] = [:]) async throws {
+    private func feedback(kind: String, note: String, reason: String? = nil, context: Any? = nil, extra: [String: String] = [:])
+        async throws
+    {
         var body: [String: Any] = ["kind": kind, "note": note, "platform": "mac"]
         body.merge(extra) { a, _ in a }
         if let reason { body["reason"] = reason }
@@ -1225,7 +1332,8 @@ struct Api {
 
     /// A class's "one bus earlier" or "no reminders" undone.
     func undoChoice(trip: String, pref: String) async throws {
-        _ = try await send("POST", "/api/me/choice", json: JSONSerialization.data(withJSONObject: ["choice": "undo", "trip": trip, "pref": pref]))
+        _ = try await send(
+            "POST", "/api/me/choice", json: JSONSerialization.data(withJSONObject: ["choice": "undo", "trip": trip, "pref": pref]))
     }
 
     /// Clear trip history: the outcomes go; the choices made from them stay.
@@ -1284,9 +1392,13 @@ struct Api {
     /// The response body of a 2xx; anything else throws with the server's message.
     private func send(_ method: String, _ path: String, query: [URLQueryItem] = [], json: Data? = nil) async throws -> Data {
         let scope = Quiet.scope(path)
-        if token != nil, Outdated.gated(method, path), Outdated.active { throw ApiError(status: 426, message: L("Update terminus to keep using it.")) }
+        if token != nil, Outdated.gated(method, path), Outdated.active {
+            throw ApiError(status: 426, message: L("Update terminus to keep using it."))
+        }
         let quietUntil = Quiet.until(scope)
-        if Date() < quietUntil { throw ApiError(status: 429, message: L("terminus is busy. Try again in a minute."), retryAfter: quietUntil.timeIntervalSinceNow) }
+        if Date() < quietUntil {
+            throw ApiError(status: 429, message: L("terminus is busy. Try again in a minute."), retryAfter: quietUntil.timeIntervalSinceNow)
+        }
         func urlRequest(_ base: String) -> URLRequest {
             var comps = URLComponents(string: base + path)!
             if !query.isEmpty { comps.queryItems = query }
@@ -1318,7 +1430,8 @@ struct Api {
             // No message of its own (a proxy's or Cloudflare's HTML page): plain words, not a status code.
             throw ApiError(
                 status: status,
-                message: status == 426 ? L("Update terminus to keep using it.") : msg.map(sentence) ?? L("Couldn't reach terminus. Try again in a moment."),
+                message: status == 426
+                    ? L("Update terminus to keep using it.") : msg.map(sentence) ?? L("Couldn't reach terminus. Try again in a moment."),
                 retryAfter: retryAfterS(retryAfter),
                 state: o?["status"] as? String
             )

@@ -160,8 +160,7 @@ export function profileLimits() {
 type Result = { ok: true; profile: Profile } | { ok: false; error: string };
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
-const isInt = (v: unknown, lo: number, hi: number): v is number =>
-  typeof v === 'number' && Number.isInteger(v) && v >= lo && v <= hi;
+const isInt = (v: unknown, lo: number, hi: number): v is number => typeof v === 'number' && Number.isInteger(v) && v >= lo && v <= hi;
 const str = (v: unknown, max: number): v is string => typeof v === 'string' && v.trim().length > 0 && v.length <= max;
 
 /**
@@ -205,7 +204,8 @@ export function parseProfile(
   if (p.dayStartMin >= p.dayEndMin) return { ok: false, error: 'the day must start before it ends' };
 
   if (raw.walkPace !== undefined) {
-    if (typeof raw.walkPace !== 'string' || !PACES.includes(raw.walkPace as Pace)) return { ok: false, error: 'walkPace must be slow, normal or fast' };
+    if (typeof raw.walkPace !== 'string' || !PACES.includes(raw.walkPace as Pace))
+      return { ok: false, error: 'walkPace must be slow, normal or fast' };
     p.walkPace = raw.walkPace as Pace;
   }
 
@@ -233,18 +233,21 @@ export function parseProfile(
   }
 
   if (raw.lang !== undefined) {
-    if (typeof raw.lang !== 'string' || !LANG_PREFS.includes(raw.lang as LangPref)) return { ok: false, error: 'lang must be auto, en or zh' };
+    if (typeof raw.lang !== 'string' || !LANG_PREFS.includes(raw.lang as LangPref))
+      return { ok: false, error: 'lang must be auto, en or zh' };
     p.lang = raw.lang as LangPref;
   }
 
   if (raw.clock !== undefined) {
-    if (typeof raw.clock !== 'string' || !CLOCK_PREFS.includes(raw.clock as ClockPref)) return { ok: false, error: 'clock must be auto, 12 or 24' };
+    if (typeof raw.clock !== 'string' || !CLOCK_PREFS.includes(raw.clock as ClockPref))
+      return { ok: false, error: 'clock must be auto, 12 or 24' };
     p.clock = raw.clock as ClockPref;
   }
 
   if (raw.pinnedStops !== undefined) {
     const v = raw.pinnedStops;
-    const codes = Array.isArray(v) && v.every((c) => typeof c === 'string') ? [...new Set((v as string[]).map((c) => c.trim().toUpperCase()))] : null;
+    const codes =
+      Array.isArray(v) && v.every((c) => typeof c === 'string') ? [...new Set((v as string[]).map((c) => c.trim().toUpperCase()))] : null;
     if (!codes || codes.length > PROFILE_LIMITS.pinnedStops || !codes.every(isPinnable)) {
       return { ok: false, error: 'pinnedStops must be up to 8 known stop codes' };
     }
@@ -252,14 +255,16 @@ export function parseProfile(
   }
 
   if (raw.homeWalkMin !== undefined) {
-    if (!isInt(raw.homeWalkMin, PROFILE_LIMITS.homeWalkMin.min, PROFILE_LIMITS.homeWalkMin.max)) return { ok: false, error: 'homeWalkMin must be 0 to 30 minutes' };
+    if (!isInt(raw.homeWalkMin, PROFILE_LIMITS.homeWalkMin.min, PROFILE_LIMITS.homeWalkMin.max))
+      return { ok: false, error: 'homeWalkMin must be 0 to 30 minutes' };
     p.homeWalkMin = raw.homeWalkMin;
   }
 
   for (const field of ['trips', 'manual'] as const) {
     if (raw[field] === undefined) continue;
     const list = raw[field];
-    if (!Array.isArray(list) || list.length > PROFILE_LIMITS.trips) return { ok: false, error: `${field} must be a list of up to ${PROFILE_LIMITS.trips}` };
+    if (!Array.isArray(list) || list.length > PROFILE_LIMITS.trips)
+      return { ok: false, error: `${field} must be a list of up to ${PROFILE_LIMITS.trips}` };
     const out: ImportedTrip[] = [];
     for (const [i, t] of list.entries()) {
       const bad = (why: string): Result => ({ ok: false, error: `${field}[${i}]: ${why}` });
@@ -288,12 +293,15 @@ export function parseProfile(
 
   if (raw.places !== undefined) {
     const list = raw.places;
-    if (!Array.isArray(list) || list.length > PROFILE_LIMITS.places) return { ok: false, error: `places must be a list of up to ${PROFILE_LIMITS.places}` };
+    if (!Array.isArray(list) || list.length > PROFILE_LIMITS.places)
+      return { ok: false, error: `places must be a list of up to ${PROFILE_LIMITS.places}` };
     const keys = new Set<string>();
     for (const [i, pl] of list.entries()) {
-      if (!isObj(pl) || typeof pl.key !== 'string' || !/^[a-z0-9-]{1,24}$/.test(pl.key)) return { ok: false, error: `places[${i}].key must be 1-24 of a-z, 0-9, -` };
+      if (!isObj(pl) || typeof pl.key !== 'string' || !/^[a-z0-9-]{1,24}$/.test(pl.key))
+        return { ok: false, error: `places[${i}].key must be 1-24 of a-z, 0-9, -` };
       if (keys.has(pl.key)) return { ok: false, error: `places[${i}].key is a duplicate` };
-      if (!str(pl.label, PROFILE_LIMITS.placeLabel)) return { ok: false, error: `places[${i}].label must be 1-${PROFILE_LIMITS.placeLabel} characters` };
+      if (!str(pl.label, PROFILE_LIMITS.placeLabel))
+        return { ok: false, error: `places[${i}].label must be 1-${PROFILE_LIMITS.placeLabel} characters` };
       if (typeof pl.to !== 'string' || !isPlace(pl.to)) return { ok: false, error: `places[${i}].to must be a known stop or place code` };
       keys.add(pl.key);
       p.places.push({ key: pl.key, label: pl.label.trim(), to: pl.to });
@@ -302,7 +310,8 @@ export function parseProfile(
 
   if (raw.usual !== undefined) {
     const list = raw.usual;
-    if (!Array.isArray(list) || list.length > PROFILE_LIMITS.usual) return { ok: false, error: `usual must be a list of up to ${PROFILE_LIMITS.usual}` };
+    if (!Array.isArray(list) || list.length > PROFILE_LIMITS.usual)
+      return { ok: false, error: `usual must be a list of up to ${PROFILE_LIMITS.usual}` };
     for (const [i, u] of list.entries()) {
       const bad = (why: string): Result => ({ ok: false, error: `usual[${i}]: ${why}` });
       if (!isObj(u) || typeof u.place !== 'string' || !/^[a-z0-9-]{1,24}$/.test(u.place)) return bad('place must be a saved place key');
@@ -315,7 +324,8 @@ export function parseProfile(
 
   if (raw.once !== undefined) {
     const list = raw.once;
-    if (!Array.isArray(list) || list.length > PROFILE_LIMITS.once) return { ok: false, error: `once must be a list of up to ${PROFILE_LIMITS.once}` };
+    if (!Array.isArray(list) || list.length > PROFILE_LIMITS.once)
+      return { ok: false, error: `once must be a list of up to ${PROFILE_LIMITS.once}` };
     for (const [i, o] of list.entries()) {
       const bad = (why: string): Result => ({ ok: false, error: `once[${i}]: ${why}` });
       if (!isObj(o) || typeof o.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(o.date)) return bad('date must be YYYY-MM-DD');
@@ -376,9 +386,13 @@ export function classesOn(profile: Profile, atMs: number): ImportedTrip[] {
     const pl = u.day === day ? profile.places.find((p) => p.key === u.place) : undefined;
     return pl ? [{ day, arriveByMin: u.atMin, endMin: stay(u.atMin), to: pl.to, label: pl.label, venue: '' }] : [];
   });
-  const once = (profile.once ?? []).filter((o) => o.date === date).map((o) => ({ day, arriveByMin: o.arriveByMin, endMin: stay(o.arriveByMin), to: o.to, label: o.label, venue: '' }));
+  const once = (profile.once ?? [])
+    .filter((o) => o.date === date)
+    .map((o) => ({ day, arriveByMin: o.arriveByMin, endMin: stay(o.arriveByMin), to: o.to, label: o.label, venue: '' }));
   return [
-    ...profile.trips.filter((x) => x.day === day && importedClassRuns(x.weeks, profile.term, atMs)).map((x) => ({ ...x, nusmods: true as const })),
+    ...profile.trips
+      .filter((x) => x.day === day && importedClassRuns(x.weeks, profile.term, atMs))
+      .map((x) => ({ ...x, nusmods: true as const })),
     ...profile.manual.filter((x) => x.day === day),
     ...usual,
     ...once,
@@ -486,12 +500,23 @@ export function planFor(profile: Profile, nowMs: number, state: DayState = NO_DA
   // Where you're coming from: the last class you went to. One whose bus you
   // missed (and that nothing since says you reached) is not it: without a
   // location you'd be planned from a room you never got to.
-  const prev = [...today].reverse().find((x) => x !== next && !state.missed?.has(classKey(x)) && (x.arriveByMin <= nowMin || state.done.has(classKey(x)))) ?? null;
+  const prev =
+    [...today]
+      .reverse()
+      .find((x) => x !== next && !state.missed?.has(classKey(x)) && (x.arriveByMin <= nowMin || state.done.has(classKey(x)))) ?? null;
 
   if (!next) {
     // After the last class of the day. Its trip home taken off today: staying.
     if (!homeStop || !prev || state.skipped.has(`home:${endOf(prev)}`)) return null;
-    return { to: homeStop, label: m().home, why: 'home', from: prev.to, trip: null, fromVenue: prev.venue || null, lastEndMin: endOf(prev) };
+    return {
+      to: homeStop,
+      label: m().home,
+      why: 'home',
+      from: prev.to,
+      trip: null,
+      fromVenue: prev.venue || null,
+      lastEndMin: endOf(prev),
+    };
   }
   if (!prev) {
     return { to: next.to, label: next.label, why: 'class', from: homeStop, trip: next, fromVenue: null };
@@ -507,7 +532,14 @@ export function planFor(profile: Profile, nowMs: number, state: DayState = NO_DA
   }
   // In a long gap after going home, the origin is home, not the last class.
   const wentHome = goesHome && nowMin >= endOf(prev);
-  return { to: next.to, label: next.label, why: 'class', from: wentHome ? homeStop : prev.to, trip: next, fromVenue: wentHome ? null : prev.venue || null };
+  return {
+    to: next.to,
+    label: next.label,
+    why: 'class',
+    from: wentHome ? homeStop : prev.to,
+    trip: next,
+    fromVenue: wentHome ? null : prev.venue || null,
+  };
 }
 
 /**
@@ -517,7 +549,11 @@ export function planFor(profile: Profile, nowMs: number, state: DayState = NO_DA
  */
 export function reachedEarly(profile: Profile, nowMs: number, done: ReadonlySet<string>): ImportedTrip | null {
   const nowMin = sgt(nowMs).minutes;
-  return classesOn(profile, nowMs).filter((c) => done.has(classKey(c)) && nowMin < c.arriveByMin).at(-1) ?? null;
+  return (
+    classesOn(profile, nowMs)
+      .filter((c) => done.has(classKey(c)) && nowMin < c.arriveByMin)
+      .at(-1) ?? null
+  );
 }
 
 /** A class running past dayEnd keeps the day open this long after it ends,
@@ -556,11 +592,20 @@ export function planChangesAt(profile: Profile, nowMs: number): number {
   const today = classesOn(profile, nowMs);
   const start = Math.max(0, Math.min(profile.dayStartMin, ...today.map((x) => x.arriveByMin - MORNING_LEAD_MIN)));
   const end = Math.max(profile.dayEndMin, ...today.map((x) => endOf(x) + EVENING_GRACE_MIN));
-  const marks = [start, end, ...today.flatMap((x) => [x.arriveByMin, x.arriveByMin + LATE_GRACE_MIN, endOf(x), endOf(x) + HOME_BY_MIN, x.arriveByMin - GAP_RETURN_MIN])];
+  const marks = [
+    start,
+    end,
+    ...today.flatMap((x) => [
+      x.arriveByMin,
+      x.arriveByMin + LATE_GRACE_MIN,
+      endOf(x),
+      endOf(x) + HOME_BY_MIN,
+      x.arriveByMin - GAP_RETURN_MIN,
+    ]),
+  ];
   const next = marks.filter((m) => m > t.minutes && m < 1440).sort((a, b) => a - b)[0];
   return midnight + (next ?? 1440) * 60_000;
 }
-
 
 /**
  * The resting headline. "Done for today" at 05:00 beside "Next: ..., today
@@ -576,10 +621,16 @@ export function restLabel(profile: Profile, nowMs: number, h12 = false): string 
 const LOOKAHEAD_DAYS = 120;
 
 /** The first class after now, and how many days ahead it is. Today's skipped classes don't count. */
-export function nextClass(profile: Profile, nowMs: number, skipped: ReadonlySet<string> = NO_DAY_STATE.skipped): { trip: ImportedTrip; daysAhead: number } | null {
+export function nextClass(
+  profile: Profile,
+  nowMs: number,
+  skipped: ReadonlySet<string> = NO_DAY_STATE.skipped,
+): { trip: ImportedTrip; daysAhead: number } | null {
   const t = sgt(nowMs);
   for (let ahead = 0; ahead <= LOOKAHEAD_DAYS; ahead++) {
-    const found = classesOn(profile, nowMs + ahead * 86_400_000).find((x) => ahead > 0 || (x.arriveByMin > t.minutes && !skipped.has(classKey(x))));
+    const found = classesOn(profile, nowMs + ahead * 86_400_000).find(
+      (x) => ahead > 0 || (x.arriveByMin > t.minutes && !skipped.has(classKey(x))),
+    );
     if (found) return { trip: found, daysAhead: ahead };
   }
   return null;
@@ -600,7 +651,12 @@ export function restDetail(profile: Profile, nowMs: number, h12 = false, skipped
   // Recess, exams, a public holiday: say why today is empty, next class or not
   // (in reading week and the exams, the semester's classes are all behind you).
   const off = classesOn(profile, nowMs).length ? null : dayOffReason(nowMs);
-  if (!n) return profile.trips.length || profile.manual.length ? (off ? `${off} · ${m().noClassesComing}` : m().noClassesComing) : m().nothingOnTimetable;
+  if (!n)
+    return profile.trips.length || profile.manual.length
+      ? off
+        ? `${off} · ${m().noClassesComing}`
+        : m().noClassesComing
+      : m().nothingOnTimetable;
   const when =
     n.daysAhead === 0
       ? m().today
@@ -617,7 +673,13 @@ export function restDetail(profile: Profile, nowMs: number, h12 = false, skipped
  * where, from the timetable alone. Null when nothing is coming, or the
  * timetable has ended. `stopName` names a stop code.
  */
-export function upcomingClass(profile: Profile, nowMs: number, h12: boolean, stopName: (code: string) => string, skipped: ReadonlySet<string> = NO_DAY_STATE.skipped): Upcoming | null {
+export function upcomingClass(
+  profile: Profile,
+  nowMs: number,
+  h12: boolean,
+  stopName: (code: string) => string,
+  skipped: ReadonlySet<string> = NO_DAY_STATE.skipped,
+): Upcoming | null {
   if (reimportReason(profile, nowMs) === 'ended') return null;
   const n = nextClass(profile, nowMs, skipped);
   if (!n) return null;
@@ -645,7 +707,6 @@ export function upcomingClass(profile: Profile, nowMs: number, h12: boolean, sto
 
 export type OnTime = 'on-time' | 'tight' | 'late';
 
-
 /** At least this much spare time counts as comfortably on time. */
 export const ON_TIME_SLACK_S = 180;
 
@@ -666,13 +727,23 @@ export function classStartMs(trip: ImportedTrip, nowMs: number): number {
  * plans today. `estimated`: the arrival is a guess (a timetable bus, a ride
  * without a measured time), so its clock gets the same "~" as the card's.
  */
-export function timingFor(arriveAtIso: string | null | undefined, trip: ImportedTrip, walkToVenueS: number, nowMs: number, h12 = false, estimated = false): Timing | null {
+export function timingFor(
+  arriveAtIso: string | null | undefined,
+  trip: ImportedTrip,
+  walkToVenueS: number,
+  nowMs: number,
+  h12 = false,
+  estimated = false,
+): Timing | null {
   if (!arriveAtIso || walkToVenueS > MAX_VENUE_WALK_S) return null;
   const classAt = classStartMs(trip, nowMs);
   const reachMs = Date.parse(arriveAtIso) + walkToVenueS * 1000;
   const slackS = Math.round((classAt - reachMs) / 1000);
   const status: OnTime = slackS >= ON_TIME_SLACK_S ? 'on-time' : slackS >= 0 ? 'tight' : 'late';
   // Same words as the class card (clock.ts): the colour carries "tight".
-  const text = status === 'late' ? m().lateBy(Math.max(1, Math.round(-slackS / 60))) : m().arrive(estimated ? m().approx(clockAt(reachMs, h12)) : clockAt(reachMs, h12), slackText(slackS));
+  const text =
+    status === 'late'
+      ? m().lateBy(Math.max(1, Math.round(-slackS / 60)))
+      : m().arrive(estimated ? m().approx(clockAt(reachMs, h12)) : clockAt(reachMs, h12), slackText(slackS));
   return { status, text, classAt: isoSeconds(classAt), reachAt: isoSeconds(reachMs) };
 }

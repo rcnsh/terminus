@@ -23,8 +23,15 @@ final class MapModel {
         case stop(String, from: Bus? = nil)
         case bus(Bus)
     }
-    enum BusStatus: Equatable { case finding, running(Int), noneRunning, unavailable, offline, stale }
-    struct Spot: Equatable { let lat: Double; let lon: Double }
+    enum BusStatus: Equatable {
+        case finding
+        case running(Int)
+        case noneRunning, unavailable, offline, stale
+    }
+    struct Spot: Equatable {
+        let lat: Double
+        let lon: Double
+    }
 
     var campus: CampusMap?
     var style: URL?
@@ -191,7 +198,10 @@ final class MapModel {
 
     /// A stop's card; `from`, the bus card it was opened from, which Esc returns to.
     func open(stop code: String, from: Sheet.Bus? = nil) {
-        guard openStop != code else { sheet = .stop(code, from: from); return }
+        guard openStop != code else {
+            sheet = .stop(code, from: from)
+            return
+        }
         sheet = .stop(code, from: from)
         board = nil
         boardFailed = false
@@ -227,7 +237,9 @@ final class MapModel {
     /// it failed, for the loop's back-off (as `refreshBuses`).
     @discardableResult
     func refreshBoard(app: AppModel) async -> Bool {
-        guard let code = openStop, let q = code.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed), mayAsk() else { return false }
+        guard let code = openStop, let q = code.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed), mayAsk() else {
+            return false
+        }
         let token = TokenStore.read()
         var b: StopBoard?
         do {
@@ -277,7 +289,9 @@ struct MapWindow: View {
             } else if let campus = map.campus, let style = map.style {
                 CampusMapView(
                     map: map, campus: campus, style: style, dark: scheme == .dark, still: reduceMotion,
-                    drawn: .init(selected: map.selected, buses: map.buses, answers: map.busAnswers, stale: map.busesStale, sheet: map.sheet, me: map.me, recentre: map.recentre, zoomSteps: map.zoomSteps, focusCount: map.focusCount)
+                    drawn: .init(
+                        selected: map.selected, buses: map.buses, answers: map.busAnswers, stale: map.busesStale, sheet: map.sheet,
+                        me: map.me, recentre: map.recentre, zoomSteps: map.zoomSteps, focusCount: map.focusCount)
                 )
             } else if map.failed {
                 Text(map.refused?.text ?? L("The map needs a connection the first time."))
@@ -315,9 +329,13 @@ struct MapWindow: View {
                         if let bus = map.openBus {
                             let svc = map.selected ?? ""
                             let was = map.openBusSheet
-                            BusCard(bus: bus, svc: svc, hex: campus.color(svc), stop: BusCard.stop(for: bus, svc: svc, in: campus), campus: campus, show: { map.pick(stop: $0, from: $1) }, close: { map.sheet = nil }, open: was?.stops ?? false, all: was?.all ?? false)
-                                // A fresh card for each bus: one bus's stops list open isn't another's.
-                                .id(bus.id)
+                            BusCard(
+                                bus: bus, svc: svc, hex: campus.color(svc), stop: BusCard.stop(for: bus, svc: svc, in: campus),
+                                campus: campus, show: { map.pick(stop: $0, from: $1) }, close: { map.sheet = nil },
+                                open: was?.stops ?? false, all: was?.all ?? false
+                            )
+                            // A fresh card for each bus: one bus's stops list open isn't another's.
+                            .id(bus.id)
                         }
                     }
                 }
@@ -416,7 +434,9 @@ private struct Pills: View {
                     let hex = campus.color(svc)
                     let c = Color(hex: hex) ?? .gray
                     let on = svc == selected
-                    Button { choose(svc) } label: {
+                    Button {
+                        choose(svc)
+                    } label: {
                         HStack(spacing: 5) {
                             Circle().fill(on ? inkOn(hex) : c).frame(width: 8, height: 8)
                             Text(svc).font(.system(size: 12, weight: .semibold))
@@ -466,31 +486,43 @@ private struct MapControls: View {
                 }
                 .control(L("Find a %@ bus", svc))
             }
-            Button { map.zoomSteps += 1 } label: { Image(systemName: "plus") }
-                .keyboardShortcut("+")
-                .control(L("Zoom in"))
-                // ⌘= too: on most keyboards "+" is a shifted "=".
-                .background {
-                    Button("") { map.zoomSteps += 1 }
-                        .keyboardShortcut("=")
-                        .opacity(0)
-                        .focusable(false)
-                        .accessibilityHidden(true)
-                }
-            Button { map.zoomSteps -= 1 } label: { Image(systemName: "minus") }
-                .keyboardShortcut("-")
-                .control(L("Zoom out"))
+            Button {
+                map.zoomSteps += 1
+            } label: {
+                Image(systemName: "plus")
+            }
+            .keyboardShortcut("+")
+            .control(L("Zoom in"))
+            // ⌘= too: on most keyboards "+" is a shifted "=".
+            .background {
+                Button("") { map.zoomSteps += 1 }
+                    .keyboardShortcut("=")
+                    .opacity(0)
+                    .focusable(false)
+                    .accessibilityHidden(true)
+            }
+            Button {
+                map.zoomSteps -= 1
+            } label: {
+                Image(systemName: "minus")
+            }
+            .keyboardShortcut("-")
+            .control(L("Zoom out"))
             // Lost after zooming or dragging: one click back to the whole campus.
-            Button { map.recentre += 1 } label: { Image(systemName: "scope") }
-                .control(L("Back to campus"))
+            Button {
+                map.recentre += 1
+            } label: {
+                Image(systemName: "scope")
+            }
+            .control(L("Back to campus"))
         }
         .buttonStyle(.plain)
     }
 }
 
-private extension View {
+extension View {
     /// A round button over the map, named for VoiceOver and on hover.
-    func control(_ name: String) -> some View {
+    fileprivate func control(_ name: String) -> some View {
         self
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
@@ -686,7 +718,8 @@ struct BusCard: View {
 
     /// The stop a bus is at or coming to.
     static func stop(for bus: LiveBus, svc: String, in campus: CampusMap) -> MapStop? {
-        bus.at != nil ? stop(code: bus.atCode, name: bus.at, for: bus, svc: svc, in: campus)
+        bus.at != nil
+            ? stop(code: bus.atCode, name: bus.at, for: bus, svc: svc, in: campus)
             : stop(code: bus.nextStopCode ?? bus.upcomingCodes.first ?? nil, name: bus.nextStop, for: bus, svc: svc, in: campus)
     }
 
@@ -815,13 +848,19 @@ struct BusCard: View {
 
     /// Their codes, in step with `stops`; nil where the server didn't say.
     private var stopCodes: [String?] {
-        if !bus.upcoming.isEmpty { return bus.upcoming.indices.map { bus.upcomingCodes.indices.contains($0) ? bus.upcomingCodes[$0] : nil } }
+        if !bus.upcoming.isEmpty {
+            return bus.upcoming.indices.map { bus.upcomingCodes.indices.contains($0) ? bus.upcomingCodes[$0] : nil }
+        }
         return bus.nextStop == nil ? [] : [bus.nextStopCode]
     }
 
     enum Kind { case passed, between, here, next, ahead }
     /// A row of the strip: a stop (`code` when the server gave it), or the bus on its way.
-    struct Row { let name: String; let kind: Kind; var code: String? = nil }
+    struct Row {
+        let name: String
+        let kind: Kind
+        var code: String? = nil
+    }
 
     /// Stops past the first few. Just one is shown rather than hidden behind
     /// a button, as on the stop's card.
@@ -859,9 +898,13 @@ struct BusCard: View {
                 let below: Color? = i == rows.count - 1 && more == 0 ? nil : (row.kind == .passed ? grey : tint)
                 // A stop's row opens its card, and its chevron says so; the bus's own row doesn't.
                 if row.kind != .between, let campus, let s = Self.stop(code: row.code, name: row.name, for: bus, svc: svc, in: campus) {
-                    Button { show(s, now) } label: { line(row, tint, above: above, below: below, chevron: true) }
-                        .buttonStyle(.plain)
-                        .accessibilityHint(L("Show this stop"))
+                    Button {
+                        show(s, now)
+                    } label: {
+                        line(row, tint, above: above, below: below, chevron: true)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint(L("Show this stop"))
                 } else {
                     line(row, tint, above: above, below: below, chevron: false)
                 }
@@ -980,7 +1023,9 @@ struct StopCard: View {
                     // A row picks its line, as the pills do, and again unpicks it
                     // (`choose` toggles). It opens no page, so it has no chevron;
                     // the picked line's row is washed in its colour.
-                    Button { map.choose(r.svc) } label: {
+                    Button {
+                        map.choose(r.svc)
+                    } label: {
                         HStack {
                             SvcTag(svc: r.svc, hex: campus.color(r.svc))
                             Spacer()
@@ -1007,7 +1052,9 @@ struct StopCard: View {
                 if map.board != nil || map.boardFailed || map.refused != nil {
                     HStack(spacing: 5) {
                         ForEach(stop.services, id: \.self) { svc in
-                            Button { if map.selected != svc { map.choose(svc) } } label: {
+                            Button {
+                                if map.selected != svc { map.choose(svc) }
+                            } label: {
                                 SvcTag(svc: svc, hex: campus.color(svc))
                             }
                             .buttonStyle(.plain)
@@ -1214,7 +1261,9 @@ private struct CampusMapView: NSViewRepresentable {
             let box = centreBox(view, zoom: view.zoomLevel)
             let c = view.centerCoordinate
             guard offBy(c, box) > 1e-9 else { return }
-            view.setCenter(CLLocationCoordinate2D(latitude: min(max(c.latitude, box[1]), box[3]), longitude: min(max(c.longitude, box[0]), box[2])), animated: true)
+            view.setCenter(
+                CLLocationCoordinate2D(latitude: min(max(c.latitude, box[1]), box[3]), longitude: min(max(c.longitude, box[0]), box[2])),
+                animated: true)
         }
 
         private func centreBox(_ view: MLNMapView, zoom: Double) -> [Double] {
@@ -1258,7 +1307,9 @@ private struct CampusMapView: NSViewRepresentable {
             // over the street map's solid fills, hiding them. With the street
             // map there, its land and water cover everything anyway: the
             // background goes, its colour behind the map instead.
-            if style.source(withIdentifier: "protomaps") != nil, let bg = style.layer(withIdentifier: "background") as? MLNBackgroundStyleLayer {
+            if style.source(withIdentifier: "protomaps") != nil,
+                let bg = style.layer(withIdentifier: "background") as? MLNBackgroundStyleLayer
+            {
                 if let c = bg.backgroundColor.constantValue as? NSColor { view?.layer?.backgroundColor = c.cgColor }
                 style.removeLayer(bg)
             }
@@ -1276,7 +1327,8 @@ private struct CampusMapView: NSViewRepresentable {
             let on = line("route-on", routes, color: byColor, width: zoomed(13, 3, 16, 6, 18, 9))
             on.predicate = NSPredicate(format: "svc == %@", "")
             style.addLayer(on)
-            style.addLayer(line("stretch-casing", stretch, color: NSExpression(forConstantValue: paper), width: zoomed(13, 7, 16, 13, 18, 18)))
+            style.addLayer(
+                line("stretch-casing", stretch, color: NSExpression(forConstantValue: paper), width: zoomed(13, 7, 16, 13, 18, 18)))
             style.addLayer(line("stretch", stretch, color: byColor, width: zoomed(13, 5, 16, 9, 18, 13)))
 
             let dots = MLNCircleStyleLayer(identifier: "stops", source: stops)
@@ -1343,8 +1395,10 @@ private struct CampusMapView: NSViewRepresentable {
             let now = (selected, dark, stretchOn, open?.id, stale)
             if applied == nil || applied! != now {
                 applied = now
-                (style.layer(withIdentifier: "route-casing") as? MLNLineStyleLayer)?.lineOpacity = NSExpression(forConstantValue: selected == nil ? 0.9 : 0.3)
-                (style.layer(withIdentifier: "routes") as? MLNLineStyleLayer)?.lineOpacity = NSExpression(forConstantValue: selected == nil ? 0.9 : 0.18)
+                (style.layer(withIdentifier: "route-casing") as? MLNLineStyleLayer)?.lineOpacity = NSExpression(
+                    forConstantValue: selected == nil ? 0.9 : 0.3)
+                (style.layer(withIdentifier: "routes") as? MLNLineStyleLayer)?.lineOpacity = NSExpression(
+                    forConstantValue: selected == nil ? 0.9 : 0.18)
                 if let on = style.layer(withIdentifier: "route-on") as? MLNLineStyleLayer {
                     on.predicate = NSPredicate(format: "svc == %@", selected ?? "")
                     on.lineOpacity = NSExpression(forConstantValue: stretchOn ? 0.2 : 1)
@@ -1376,7 +1430,11 @@ private struct CampusMapView: NSViewRepresentable {
             // Buses slide to each new place along their line (see Slides).
             // Every answer, even one the same as the last: a bus only jumps
             // after a while without one (Slides.staleS).
-            if slidesFor != selected { slides = Slides(); slidesFor = selected; lastAnswer = map.busAnswers - 1 }
+            if slidesFor != selected {
+                slides = Slides()
+                slidesFor = selected
+                lastAnswer = map.busAnswers - 1
+            }
             if map.busAnswers != lastAnswer {
                 lastAnswer = map.busAnswers
                 slides.update(map.buses, path: path, now: Slides.clock, still: still)
@@ -1390,7 +1448,8 @@ private struct CampusMapView: NSViewRepresentable {
         /// sets them every frame.
         private func drawBuses() {
             guard let src = view?.style?.source(withIdentifier: "buses") as? MLNShapeSource else { return }
-            let svc = map.selected ?? "", color = color
+            let svc = map.selected ?? ""
+            let color = color
             let features = slides.at(Slides.clock).map { b in
                 let f = MLNPointFeature()
                 f.coordinate = CLLocationCoordinate2D(latitude: b.lat, longitude: b.lon)
@@ -1427,12 +1486,15 @@ private struct CampusMapView: NSViewRepresentable {
         func frameCampus() {
             guard !framed, let view, view.bounds.width > 100, view.bounds.height > 100 else { return }
             framed = true
-            view.setVisibleCoordinateBounds(bounds(campus.coreBounds), edgePadding: NSEdgeInsets(top: 90, left: 24, bottom: 24, right: 24), animated: false, completionHandler: nil)
+            view.setVisibleCoordinateBounds(
+                bounds(campus.coreBounds), edgePadding: NSEdgeInsets(top: 90, left: 24, bottom: 24, right: 24), animated: false,
+                completionHandler: nil)
         }
 
         /// [west, south, east, north] as MapLibre's bounds.
         private func bounds(_ b: [Double]) -> MLNCoordinateBounds {
-            MLNCoordinateBounds(sw: CLLocationCoordinate2D(latitude: b[1], longitude: b[0]), ne: CLLocationCoordinate2D(latitude: b[3], longitude: b[2]))
+            MLNCoordinateBounds(
+                sw: CLLocationCoordinate2D(latitude: b[1], longitude: b[0]), ne: CLLocationCoordinate2D(latitude: b[3], longitude: b[2]))
         }
 
         fileprivate func frame() {
@@ -1457,7 +1519,8 @@ private struct CampusMapView: NSViewRepresentable {
             if map.focusCount != focused, let f = map.focus {
                 focused = map.focusCount
                 let d = 0.0015
-                view.setVisibleCoordinateBounds(bounds([f.lon - d, f.lat - d, f.lon + d, f.lat + d]), edgePadding: pad, animated: !still, completionHandler: nil)
+                view.setVisibleCoordinateBounds(
+                    bounds([f.lon - d, f.lat - d, f.lon + d, f.lat + d]), edgePadding: pad, animated: !still, completionHandler: nil)
             }
             // A pill: its whole line in view, when it's chosen.
             if map.selected != framedLine {
@@ -1469,8 +1532,12 @@ private struct CampusMapView: NSViewRepresentable {
             // First view: your nearest stop when you're on campus, otherwise the whole campus.
             if !framedMe, let me = map.me {
                 framedMe = true
-                if map.selected == nil, let near = campus.stops.min(by: { pow($0.lat - me.lat, 2) + pow($0.lon - me.lon, 2) < pow($1.lat - me.lat, 2) + pow($1.lon - me.lon, 2) }),
-                   abs(near.lat - me.lat) < nearCampusDeg, abs(near.lon - me.lon) < nearCampusDeg {
+                if map.selected == nil,
+                    let near = campus.stops.min(by: {
+                        pow($0.lat - me.lat, 2) + pow($0.lon - me.lon, 2) < pow($1.lat - me.lat, 2) + pow($1.lon - me.lon, 2)
+                    }),
+                    abs(near.lat - me.lat) < nearCampusDeg, abs(near.lon - me.lon) < nearCampusDeg
+                {
                     view.zoomLevel = 17
                     view.setCenter(CLLocationCoordinate2D(latitude: near.lat, longitude: near.lon), animated: false)
                 }
@@ -1488,7 +1555,9 @@ private struct CampusMapView: NSViewRepresentable {
                 map.open(bus: id)
                 return
             }
-            let codes = view.visibleFeatures(at: near.insetBy(dx: -4, dy: -4), styleLayerIdentifiers: ["stops", "stop-names"]).compactMap { $0.attribute(forKey: "code") as? String }
+            let codes = view.visibleFeatures(at: near.insetBy(dx: -4, dy: -4), styleLayerIdentifiers: ["stops", "stop-names"]).compactMap {
+                $0.attribute(forKey: "code") as? String
+            }
             let at = view.convert(p, toCoordinateFrom: view)
             if let code = campus.nearest(codes, lat: at.latitude, lon: at.longitude) {
                 map.open(stop: code)
@@ -1563,7 +1632,7 @@ private final class SizedMapView: MLNMapView {
     }
 }
 
-private extension NSColor {
+extension NSColor {
     /// "#rrggbb"; grey for anything else.
-    convenience init(hex: String) { self.init(rgb: hexRGB(hex) ?? 0x8A939C) }
+    fileprivate convenience init(hex: String) { self.init(rgb: hexRGB(hex) ?? 0x8A939C) }
 }

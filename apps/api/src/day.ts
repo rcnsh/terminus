@@ -8,17 +8,7 @@
 
 import type { Env, Leave, PlaceChip, Timing } from './types.ts';
 import type { MeDeps } from './me.ts';
-import {
-  GAP_RETURN_MIN,
-  HOME_BY_MIN,
-  LATE_GRACE_MIN,
-  type Profile,
-  classKey,
-  classesOn,
-  endOf,
-  restDetail,
-  restSide,
-} from './profile.ts';
+import { GAP_RETURN_MIN, HOME_BY_MIN, LATE_GRACE_MIN, type Profile, classKey, classesOn, endOf, restDetail, restSide } from './profile.ts';
 import type { ImportedTrip } from './nusmods.ts';
 import { sgt } from './config.ts';
 import { isoSeconds, named } from './format.ts';
@@ -110,7 +100,12 @@ export async function dayPlan(
     if (state.skipped.has(key)) continue;
     // A long gap: home in between, back an hour before the next class.
     // Unless that trip home was taken off today: then you stay, and go from there.
-    const longGap = prev && homeStop && homeStop !== c.to && c.arriveByMin - endOf(prev) > profile.gapHours * 60 && !state.skipped.has(`gap-home:${prev.to}`);
+    const longGap =
+      prev &&
+      homeStop &&
+      homeStop !== c.to &&
+      c.arriveByMin - endOf(prev) > profile.gapHours * 60 &&
+      !state.skipped.has(`gap-home:${prev.to}`);
     if (prev && longGap) {
       items.push(homeItem(`gap-home:${prev.to}`, prev, c.arriveByMin - GAP_RETURN_MIN));
     }
@@ -144,11 +139,13 @@ export async function dayPlan(
     // on it a few minutes on (next.ts), and so does this, until it gets
     // there. Not seen: the next way there, as below.
     const unsaid = !rec;
-    const assumed = plan?.board && plan.seen && unsaid && nowMs >= Date.parse(plan.board) + ASSUME_MS && plan.arrive && Date.parse(plan.arrive) > nowMs;
+    const assumed =
+      plan?.board && plan.seen && unsaid && nowMs >= Date.parse(plan.board) + ASSUME_MS && plan.arrive && Date.parse(plan.arrive) > nowMs;
     if (boarded) item.onBus = { svc: boarded.svc, off: offStop(boarded), arrive: boarded.arrive };
     else if (assumed) item.onBus = { svc: plan.svc, off: offStop(plan), arrive: plan.arrive };
     // The plan's leave-by until then, even once its bus has left (the card still says it).
-    else if (plan?.board && (Date.parse(plan.board) > nowMs || (unsaid && nowMs < Date.parse(plan.board) + ASSUME_MS))) item.leave = leaveOf(plan);
+    else if (plan?.board && (Date.parse(plan.board) > nowMs || (unsaid && nowMs < Date.parse(plan.board) + ASSUME_MS)))
+      item.leave = leaveOf(plan);
     // Upcoming classes get a leave-by, from where you'll be then: for the
     // next one, where the device is now (as the card plans it, so the two
     // agree before the card's plan is saved); for later ones, the class or
@@ -156,7 +153,18 @@ export async function dayPlan(
     else if ((status === 'next' || status === 'later') && from) {
       const setOff = status === 'next' ? here : { lat: null, lon: null };
       pending.push(
-        tripAnswer(env, ctx, nowMs, quiet, profile, { to: c.to, label: c.label, why: 'class', from, trip: c, fromVenue }, setOff, places, h12, earlier.has(key))
+        tripAnswer(
+          env,
+          ctx,
+          nowMs,
+          quiet,
+          profile,
+          { to: c.to, label: c.label, why: 'class', from, trip: c, fromVenue },
+          setOff,
+          places,
+          h12,
+          earlier.has(key),
+        )
           .then((a) => {
             item.leave = a.leave ?? null;
             item.timing = a.timing ?? null;

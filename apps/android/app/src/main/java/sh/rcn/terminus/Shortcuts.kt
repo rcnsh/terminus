@@ -8,8 +8,7 @@ import androidx.core.graphics.drawable.IconCompat
 import sh.rcn.terminus.ui.MainActivity
 
 /**
- * Long-press on the app icon: Next, each saved place, and Nearby,
- * opening the app on that answer through the same terminus:// links the
+ * Long-press on the app icon: Next, each saved place, and Nearby, opening the app on that answer through the same terminus:// links the
  * widget's chips use. Rebuilt only when the places change.
  */
 object Shortcuts {
@@ -29,7 +28,10 @@ object Shortcuts {
         val shortcuts = wanted.mapIndexed { rank, (id, label, intent) ->
             ShortcutInfoCompat.Builder(ctx, id)
                 .setShortLabel(label)
-                .setLongLabel(if (id == "next") L.s(R.string.shortcut_next_class) else if (id == "nearby") L.s(R.string.shortcut_nearby) else L.s(R.string.shortcut_bus_to, label))
+                .setLongLabel(
+                    if (id == "next") L.s(R.string.shortcut_next_class)
+                    else if (id == "nearby") L.s(R.string.shortcut_nearby) else L.s(R.string.shortcut_bus_to, label)
+                )
                 .setIcon(icon)
                 .setIntent(intent.setAction(Intent.ACTION_VIEW))
                 .setRank(rank)

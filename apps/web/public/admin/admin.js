@@ -42,7 +42,11 @@ async function load() {
   const t = memory ?? token();
   if (!t) return view.set({ locked: true, msg: '', stats: null, note: '' });
   // Given up on after a while: a hung call would leave old stats up with no word of it.
-  const res = await fetch('/api/admin/stats', { headers: { 'x-health-token': t }, cache: 'no-store', signal: AbortSignal.timeout?.(20_000) }).catch(() => null);
+  const res = await fetch('/api/admin/stats', {
+    headers: { 'x-health-token': t },
+    cache: 'no-store',
+    signal: AbortSignal.timeout?.(20_000),
+  }).catch(() => null);
   if (!res) return view.set((v) => ({ ...v, note: "Couldn't reach terminus." }));
   if (res.status === 404) {
     forget();
@@ -137,9 +141,21 @@ function Timelapse({ an }) {
 
 /** What each switch collects, in a line: the operator turns each on here (collect.ts). */
 const COLLECT = [
-  ['active', 'Active accounts', 'How many accounts used terminus each day, by app and version. Counted from the sessions already kept; only the totals are stored.'],
-  ['eta', 'Arrival-time accuracy', 'The feed’s “in 4 min” against when the timelapse recorder saw the bus arrive. No user data. Needs the recorder on.'],
-  ['errors', 'Crash reports', 'Crashes and errors from the apps and the website, with no account, device or address. Each app has a switch to stop sending them.'],
+  [
+    'active',
+    'Active accounts',
+    'How many accounts used terminus each day, by app and version. Counted from the sessions already kept; only the totals are stored.',
+  ],
+  [
+    'eta',
+    'Arrival-time accuracy',
+    'The feed’s “in 4 min” against when the timelapse recorder saw the bus arrive. No user data. Needs the recorder on.',
+  ],
+  [
+    'errors',
+    'Crash reports',
+    'Crashes and errors from the apps and the website, with no account, device or address. Each app has a switch to stop sending them.',
+  ],
 ];
 
 function Collect({ on }) {
@@ -187,7 +203,8 @@ const names = { android: 'Android', mac: 'Mac', ios: 'iPhone', web: 'Website', a
 function Active({ an }) {
   if (!an) return html`<p class="hint">Needs ANALYTICS_TOKEN, as the answers do.</p>`;
   if (an.error || !an.active) return null;
-  if (!an.active.length) return html`<p class="hint">No days counted yet. Turn on Active accounts above; the first count comes after midnight.</p>`;
+  if (!an.active.length)
+    return html`<p class="hint">No days counted yet. Turn on Active accounts above; the first count comes after midnight.</p>`;
   const all = new Map(an.active.filter((r) => r.scope === 'all').map((r) => [r.day, Number(r.d1)]));
   const latest = an.active.reduce((d, r) => (r.day > d ? r.day : d), '');
   const on = (scope) => an.active.filter((r) => r.scope === scope && r.day === latest).sort((a, b) => b.d7 - a.d7);
@@ -220,10 +237,12 @@ const pctOf = (x) => (x == null ? '—' : `${Math.round(x * 100)}%`);
 function Eta({ eta }) {
   if (!eta) return html`<p class="hint">Needs the downloads bucket, where the recorder keeps its days.</p>`;
   if (eta.error) return html`<p class="bad">${eta.error}</p>`;
-  if (!eta.days.length) return html`<p class="hint">No days scored yet. Turn on Arrival-time accuracy above; it needs the timelapse recorder on and ANALYTICS_TOKEN. A day is scored the night after.</p>`;
+  if (!eta.days.length)
+    return html`<p class="hint">No days scored yet. Turn on Arrival-time accuracy above; it needs the timelapse recorder on and ANALYTICS_TOKEN. A day is scored the night after.</p>`;
   const o = eta.overall;
   const head = html`<tr><th></th><th>Scored</th><th>Typical</th><th>Within 1 min</th><th>Over 2 min late</th><th>Over 1 min early</th></tr>`;
-  const row = (label, r) => html`<tr><td>${label}</td><td>${fmt(r.n)}</td><td>${late(r.medianS)}</td><td>${pctOf(r.within1)}</td><td>${pctOf(r.late2)}</td><td>${pctOf(r.early1)}</td></tr>`;
+  const row = (label, r) =>
+    html`<tr><td>${label}</td><td>${fmt(r.n)}</td><td>${late(r.medianS)}</td><td>${pctOf(r.within1)}</td><td>${pctOf(r.late2)}</td><td>${pctOf(r.early1)}</td></tr>`;
   const matched = eta.days.reduce((t, d) => t + d.matched, 0);
   const predictions = eta.days.reduce((t, d) => t + d.predictions, 0);
   return html`
@@ -307,9 +326,13 @@ function Dashboard({ s, note }) {
         <table>
           <thead><tr><th>App</th><th>Paired</th><th>Used this week</th></tr></thead>
           <tbody>
-            ${s.devices?.length
-              ? s.devices.map((d) => html`<tr><td>${names[d.platform] ?? d.platform}</td><td>${fmt(d.total)}</td><td>${fmt(d.active7)}</td></tr>`)
-              : html`<tr><td colspan="3" class="hint">No paired devices yet.</td></tr>`}
+            ${
+              s.devices?.length
+                ? s.devices.map(
+                    (d) => html`<tr><td>${names[d.platform] ?? d.platform}</td><td>${fmt(d.total)}</td><td>${fmt(d.active7)}</td></tr>`,
+                  )
+                : html`<tr><td colspan="3" class="hint">No paired devices yet.</td></tr>`
+            }
           </tbody>
         </table>
         <p class="hint">${s.apiKeys ? `API keys: ${fmt(s.apiKeys.total)}, ${fmt(s.apiKeys.used7d)} used this week. Web sessions this week: ${fmt(a.webSessions7d)}.` : ''}</p>
@@ -327,9 +350,11 @@ function Dashboard({ s, note }) {
       <section class="card">
         <h2>NUS feed</h2>
         <p>
-          ${s.feed
-            ? html`<strong class=${s.feed.up ? 'good' : 'bad'}>${s.feed.up ? 'Up' : 'Down'}</strong>${` since ${when(s.feed.since)}; last checked ${when(s.feed.checkedAt)}.`}`
-            : 'No checks recorded yet.'}
+          ${
+            s.feed
+              ? html`<strong class=${s.feed.up ? 'good' : 'bad'}>${s.feed.up ? 'Up' : 'Down'}</strong>${` since ${when(s.feed.since)}; last checked ${when(s.feed.checkedAt)}.`}`
+              : 'No checks recorded yet.'
+          }
         </p>
         <ul class="list">
           ${(s.incidents ?? []).map((i) => html`<li>${`${when(i.start)} → ${i.end ? when(i.end) : 'ongoing'} · ${i.cause === 'version' ? 'new uNivUS version' : 'feed failed'}`}</li>`)}
@@ -361,9 +386,10 @@ function Dashboard({ s, note }) {
     <section class="card">
       <h2>Reports <span class="hint">${`· ${fmt(fb.last7d)} this week`}</span></h2>
       <ul class="list reports">
-        ${fb.latest.length
-          ? fb.latest.map(
-              (f) => html`
+        ${
+          fb.latest.length
+            ? fb.latest.map(
+                (f) => html`
                 <li>
                   <div class="meta">${`${when(f.created)} · ${f.email ?? (f.replyTo ? `reply to ${f.replyTo} (not checked)` : 'no email')} · ${f.platform}${f.appVersion ? ` ${f.appVersion}` : ''}`}</div>
                   ${f.reason && html`<div class="note"><b>${f.reason}</b></div>`}
@@ -372,8 +398,9 @@ function Dashboard({ s, note }) {
                   ${f.context && html`<details><summary>The answer they saw</summary><pre>${JSON.stringify(f.context, null, 2)}</pre></details>`}
                 </li>
               `,
-            )
-          : html`<li class="hint">No reports yet.</li>`}
+              )
+            : html`<li class="hint">No reports yet.</li>`
+        }
       </ul>
     </section>
   `;
@@ -397,7 +424,8 @@ async function unlockWith(get, setBusy) {
 function Unlock({ msg }) {
   const box = useRef(null);
   const [busy, setBusy] = useState(false);
-  if (!passkeysWork()) return html`<p class="card hint">This browser can’t use passkeys. Open the dashboard in a current Chrome, Safari or Firefox.</p>`;
+  if (!passkeysWork())
+    return html`<p class="card hint">This browser can’t use passkeys. Open the dashboard in a current Chrome, Safari or Firefox.</p>`;
   return html`
     <div class="card unlock">
       <button type="button" class="btn accent" disabled=${busy} onClick=${() => unlockWith(signIn, setBusy)}>Sign in with a passkey</button>

@@ -45,7 +45,9 @@ enum TokenStore {
     }
 
     static var fileURL: URL {
-        (folder ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent(folderName, isDirectory: true))
+        (folder
+            ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent(
+                folderName, isDirectory: true))
             .appendingPathComponent("device-token")
     }
 
@@ -53,7 +55,7 @@ enum TokenStore {
         do {
             let t = try String(contentsOf: fileURL, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
             return t.isEmpty ? .missing : .found(t)
-        } catch where !isMissing(error) {
+        } catch  where !isMissing(error) {
             return .failed
         } catch {}
         // The keychain item belongs to the real API's sign-in: a dev build leaves it alone.
@@ -116,9 +118,11 @@ enum TokenStore {
     /* ---------- moving out of the keychain, once ---------- */
 
     private static var keychainQuery: [String: Any] {
-        [kSecClass as String: kSecClassGenericPassword,
-         kSecAttrService as String: service,
-         kSecAttrAccount as String: account]
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+        ]
     }
 
     private static func migrateKeychain() -> Lookup {

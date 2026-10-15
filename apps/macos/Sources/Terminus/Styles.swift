@@ -1,5 +1,5 @@
-import SwiftUI
 import AppKit
+import SwiftUI
 
 /// "#rrggbb" as a number (0xRRGGBB); nil for anything else.
 func hexRGB(_ hex: String) -> UInt32? {
@@ -37,9 +37,10 @@ extension Color {
 
     /// One colour in light mode and another in dark, following the appearance.
     private static func themed(light: UInt32, dark: UInt32) -> Color {
-        Color(nsColor: NSColor(name: nil) { appearance in
-            NSColor(rgb: appearance.bestMatch(from: [.darkAqua, .vibrantDark]) != nil ? dark : light)
-        })
+        Color(
+            nsColor: NSColor(name: nil) { appearance in
+                NSColor(rgb: appearance.bestMatch(from: [.darkAqua, .vibrantDark]) != nil ? dark : light)
+            })
     }
 }
 
@@ -48,7 +49,8 @@ struct Wordmark: View {
     var size: CGFloat = 17
     var body: some View {
         // The beta says so wherever the name is, like the beta site.
-        (Text("termi") + Text("nus").foregroundColor(.brand) + Text(Api.isBeta ? " BETA" : "").font(.system(size: size * 0.5, weight: .semibold)).foregroundColor(.brand))
+        (Text("termi") + Text("nus").foregroundColor(.brand)
+            + Text(Api.isBeta ? " BETA" : "").font(.system(size: size * 0.5, weight: .semibold)).foregroundColor(.brand))
             .font(.system(size: size, weight: .semibold))
             .accessibilityLabel(Api.isBeta ? "terminus beta" : "terminus")
     }

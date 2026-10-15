@@ -25,21 +25,21 @@ import sh.rcn.terminus.widget.clock
 import sh.rcn.terminus.widget.isOld
 
 /**
- * Offline with the plan's answer gone stale (or none yet): the next thing on
- * the day plan kept for it (OfflineDay), as the widget shows it. Otherwise
- * [content], the usual card.
+ * Offline with the plan's answer gone stale (or none yet): the next thing on the day plan kept for it (OfflineDay), as the widget shows it.
+ * Otherwise [content], the usual card.
  */
 @Composable
 internal fun OfflinePlanOr(offline: Boolean, answer: NextAnswer?, day: DayPlan?, content: @Composable () -> Unit) {
     // Ticks while offline (only then is the kept plan shown), so "Leave by"
     // turns into "Leave now" without a refresh to prompt it.
-    val now by produceState(ServerClock.now(), offline, day) {
-        value = ServerClock.now()
-        while (offline) {
-            delay(15_000)
+    val now by
+        produceState(ServerClock.now(), offline, day) {
             value = ServerClock.now()
+            while (offline) {
+                delay(15_000)
+                value = ServerClock.now()
+            }
         }
-    }
     val pick = if (offline && (answer == null || isOld(answer, now))) OfflineDay.next(day, now) else null
     if (pick == null) {
         content()

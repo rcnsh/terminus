@@ -12,7 +12,8 @@ struct Header: View {
         let offline = !model.showNearby && model.target == .plan ? model.offlinePick(at: model.clock) : nil
         HStack(alignment: .center, spacing: 12) {
             IconTile(
-                system: model.showNearby ? "location.fill" : resting ? "moon.zzz.fill" : a?.arrived == true ? "checkmark.circle.fill" : "bus.fill",
+                system: model.showNearby
+                    ? "location.fill" : resting ? "moon.zzz.fill" : a?.arrived == true ? "checkmark.circle.fill" : "bus.fill",
                 tint: .brand
             )
             // Ticks every second: the countdown and the dimming are
@@ -45,7 +46,10 @@ struct Header: View {
                     .font(.system(size: 12, weight: .semibold))
                     .rotationEffect(.degrees(model.loading && !reduceMotion ? 360 : 0))
                     .opacity(model.loading && reduceMotion ? 0.4 : 1)
-                    .animation(model.loading && !reduceMotion ? .linear(duration: 0.8).repeatForever(autoreverses: false) : .default, value: model.loading)
+                    .animation(
+                        model.loading && !reduceMotion ? .linear(duration: 0.8).repeatForever(autoreverses: false) : .default,
+                        value: model.loading
+                    )
                     .frame(width: 28, height: 28)
                     .background(Circle().fill(.primary.opacity(0.06)))
             }
@@ -75,7 +79,10 @@ struct Header: View {
             return Lines(head: head, big: OfflineDay.lines(p).big, status: (.gray, text, text))
         }
         let old = !model.showNearby && !resting && a?.arrived != true && model.isOld(a, at: now)
-        var out = Lines(head: head, big: model.showNearby ? L("Departures near you") : (a?.isClassPlan == true ? a?.leaveHeadline(now: now) ?? big(a) : big(a)), dimmed: old)
+        var out = Lines(
+            head: head,
+            big: model.showNearby ? L("Departures near you") : (a?.isClassPlan == true ? a?.leaveHeadline(now: now) ?? big(a) : big(a)),
+            dimmed: old)
         // How sure the time is, worded on the server ("Timetable estimate"),
         // beside the countdown: the "~" alone is easy to miss.
         let sure = { (s: String) in [s, model.showNearby ? nil : a?.card?.quality].compactMap { $0 }.joined(separator: " · ") }
@@ -92,7 +99,10 @@ struct Header: View {
         } else if !model.showNearby, !resting, let a, a.hasLiveTime, let at = a.departure {
             // A guess counts down in minutes: its seconds would be false precision.
             let guess = a.card?.quality != nil
-            out.status = (dotColor(a.quality), sure(Self.countdown(to: at, now: now, minutes: guess)), sure(Self.countdown(to: at, now: now, minutes: true)))
+            out.status = (
+                dotColor(a.quality), sure(Self.countdown(to: at, now: now, minutes: guess)),
+                sure(Self.countdown(to: at, now: now, minutes: true))
+            )
         } else if resting {
             out.status = (.brand, restStatus, restStatus)
         } else if let text = status(a) {
@@ -158,12 +168,13 @@ struct Header: View {
         if a.card != nil { return L("Next bus") }
         guard let d = a.dest else { return L("Next bus") }
         if a.isClassPlan, let c = a.classAt { return "\(d.label) · \(L("starts %@", campusTime(c)))" }
-        let why = switch d.why {
-        case "class": L("Next class")
-        case "gap-home": L("Long gap · home")
-        case "home": L("Heading home")
-        default: L("Going to")
-        }
+        let why =
+            switch d.why {
+            case "class": L("Next class")
+            case "gap-home": L("Long gap · home")
+            case "home": L("Heading home")
+            default: L("Going to")
+            }
         return "\(why) · \(d.label)"
     }
 

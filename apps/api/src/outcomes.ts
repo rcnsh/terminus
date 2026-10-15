@@ -56,7 +56,13 @@ export interface TripPrefs {
 export const NO_PREFS: TripPrefs = { earlier: new Set(), quiet: new Set(), suggestion: null };
 
 /** Records (or replaces) today's outcome for a trip. */
-export async function recordOutcome(db: D1Database, userId: string, key: string, outcome: Exclude<Outcome, 'none'>, nowMs: number): Promise<void> {
+export async function recordOutcome(
+  db: D1Database,
+  userId: string,
+  key: string,
+  outcome: Exclude<Outcome, 'none'>,
+  nowMs: number,
+): Promise<void> {
   await db
     .prepare(
       'INSERT INTO trip_outcomes (user_id, trip_key, day, outcome, at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (user_id, trip_key, day) DO UPDATE SET outcome = excluded.outcome, at = excluded.at',
@@ -74,8 +80,18 @@ export async function clearOutcome(db: D1Database, userId: string, key: string, 
 export const MAX_PREFS = 200;
 
 /** Accepts or turns down a suggestion, or undoes an accepted one. */
-export async function setPref(db: D1Database, userId: string, key: string, pref: PrefKind, choice: 'accept' | 'dismiss' | 'undo', label: string | null, nowMs: number): Promise<void> {
-  const stmts = [db.prepare("DELETE FROM trip_prefs WHERE user_id = ? AND trip_key = ? AND pref IN (?, 'no-' || ?)").bind(userId, key, pref, pref)];
+export async function setPref(
+  db: D1Database,
+  userId: string,
+  key: string,
+  pref: PrefKind,
+  choice: 'accept' | 'dismiss' | 'undo',
+  label: string | null,
+  nowMs: number,
+): Promise<void> {
+  const stmts = [
+    db.prepare("DELETE FROM trip_prefs WHERE user_id = ? AND trip_key = ? AND pref IN (?, 'no-' || ?)").bind(userId, key, pref, pref),
+  ];
   if (choice !== 'undo') {
     stmts.push(
       db
@@ -84,10 +100,14 @@ export async function setPref(db: D1Database, userId: string, key: string, pref:
       // Either answer, accepting or turning it down, starts the count again
       // (misses for "leave earlier", skips for "stop reminders"), so the same
       // days can't suggest it twice; a turned-down one also waits DISMISS_DAYS.
-      db.prepare('DELETE FROM trip_outcomes WHERE user_id = ? AND trip_key = ? AND outcome = ?').bind(userId, key, pref === 'earlier' ? 'missed' : 'skipped'),
+      db
+        .prepare('DELETE FROM trip_outcomes WHERE user_id = ? AND trip_key = ? AND outcome = ?')
+        .bind(userId, key, pref === 'earlier' ? 'missed' : 'skipped'),
       // The oldest go first past the cap.
       db
-        .prepare('DELETE FROM trip_prefs WHERE user_id = ? AND rowid IN (SELECT rowid FROM trip_prefs WHERE user_id = ? ORDER BY set_at DESC, rowid DESC LIMIT -1 OFFSET ?)')
+        .prepare(
+          'DELETE FROM trip_prefs WHERE user_id = ? AND rowid IN (SELECT rowid FROM trip_prefs WHERE user_id = ? ORDER BY set_at DESC, rowid DESC LIMIT -1 OFFSET ?)',
+        )
         .bind(userId, userId, MAX_PREFS),
     );
   }
@@ -95,9 +115,14 @@ export async function setPref(db: D1Database, userId: string, key: string, pref:
 }
 
 /** Accepted choices, for the settings screen. */
-export async function listPrefs(db: D1Database, userId: string): Promise<Array<{ trip: string; pref: PrefKind; label: string | null; since: string }>> {
+export async function listPrefs(
+  db: D1Database,
+  userId: string,
+): Promise<Array<{ trip: string; pref: PrefKind; label: string | null; since: string }>> {
   const { results } = await db
-    .prepare("SELECT trip_key AS trip, pref, label, set_at AS setAt FROM trip_prefs WHERE user_id = ? AND pref IN ('earlier', 'quiet') ORDER BY set_at")
+    .prepare(
+      "SELECT trip_key AS trip, pref, label, set_at AS setAt FROM trip_prefs WHERE user_id = ? AND pref IN ('earlier', 'quiet') ORDER BY set_at",
+    )
     .bind(userId)
     .all<{ trip: string; pref: PrefKind; label: string | null; setAt: number }>();
   return results.map((r) => ({ trip: r.trip, pref: r.pref, label: r.label, since: new Date(r.setAt).toISOString() }));
@@ -115,16 +140,24 @@ interface OutcomeRow {
  * names a trip key ("CS2030 Lecture"), or null for a trip that no longer
  * exists (a suggestion about it would make no sense).
  */
-export async function tripPrefs(db: D1Database, userId: string, nowMs: number, labelOf: (key: string) => string | null): Promise<TripPrefs> {
+export async function tripPrefs(
+  db: D1Database,
+  userId: string,
+  nowMs: number,
+  labelOf: (key: string) => string | null,
+): Promise<TripPrefs> {
   const since = nowMs - KEEP_DAYS * DAY_MS;
   const [rows, prefs] = await db.batch([
-    db.prepare('SELECT trip_key, day, outcome, at FROM trip_outcomes WHERE user_id = ? AND at >= ? ORDER BY at DESC LIMIT 200').bind(userId, since),
+    db
+      .prepare('SELECT trip_key, day, outcome, at FROM trip_outcomes WHERE user_id = ? AND at >= ? ORDER BY at DESC LIMIT 200')
+      .bind(userId, since),
     db.prepare('SELECT trip_key, pref, set_at FROM trip_prefs WHERE user_id = ?').bind(userId),
   ]);
   const outcomes = (rows.results ?? []) as OutcomeRow[];
   const chosen = (prefs.results ?? []) as Array<{ trip_key: string; pref: string; set_at: number }>;
 
-  const has = (key: string, pref: string, withinMs = Infinity) => chosen.some((c) => c.trip_key === key && c.pref === pref && nowMs - c.set_at < withinMs);
+  const has = (key: string, pref: string, withinMs = Infinity) =>
+    chosen.some((c) => c.trip_key === key && c.pref === pref && nowMs - c.set_at < withinMs);
   const earlier = new Set(chosen.filter((c) => c.pref === 'earlier').map((c) => c.trip_key));
   const quiet = new Set(chosen.filter((c) => c.pref === 'quiet').map((c) => c.trip_key));
 
@@ -138,7 +171,12 @@ export async function tripPrefs(db: D1Database, userId: string, nowMs: number, l
       if (!label) continue;
       // "Not going" on its last three occurrences (the list is newest first).
       const last = list.slice(0, SKIPS);
-      if (!quiet.has(key) && !has(key, 'no-quiet', DISMISS_DAYS * DAY_MS) && last.length === SKIPS && last.every((o) => o.outcome === 'skipped')) {
+      if (
+        !quiet.has(key) &&
+        !has(key, 'no-quiet', DISMISS_DAYS * DAY_MS) &&
+        last.length === SKIPS &&
+        last.every((o) => o.outcome === 'skipped')
+      ) {
         return { id: `quiet:${key}`, text: m().suggestQuiet(label, SKIPS), accept: m().stopReminders, dismiss: m().keepThem };
       }
       const misses = list.filter((o) => o.outcome === 'missed' && nowMs - o.at < MISS_DAYS * DAY_MS).length;
@@ -173,6 +211,9 @@ export async function exportOutcomes(db: D1Database, userId: string): Promise<{ 
   ]);
   return {
     tripOutcomes: o.results ?? [],
-    tripChoices: ((p.results ?? []) as Array<{ trip: string; pref: string; label: string | null; setAt: number }>).map((r) => ({ ...r, setAt: new Date(r.setAt).toISOString() })),
+    tripChoices: ((p.results ?? []) as Array<{ trip: string; pref: string; label: string | null; setAt: number }>).map((r) => ({
+      ...r,
+      setAt: new Date(r.setAt).toISOString(),
+    })),
   };
 }

@@ -11,7 +11,8 @@ import org.junit.Test
 class QuietTest {
     private var now = 1_000_000L
 
-    @Before fun clock() {
+    @Before
+    fun clock() {
         Quiet.elapsed = { now }
         Quiet.wall = { now }
         Quiet.reset()
@@ -19,12 +20,14 @@ class QuietTest {
         Outdated.reset()
     }
 
-    @After fun done() {
+    @After
+    fun done() {
         Quiet.reset()
         Outdated.reset()
     }
 
-    @Test fun aSignInLimitHoldsBackOnlySignIn() {
+    @Test
+    fun aSignInLimitHoldsBackOnlySignIn() {
         Quiet.after("/api/auth/app/start", "60")
         assertTrue(Quiet.blocked("/api/auth/app/poll"))
         assertTrue(Quiet.blocked("/api/pair/check"))
@@ -33,7 +36,8 @@ class QuietTest {
         assertEquals(0, Quiet.remainingMs())
     }
 
-    @Test fun anAppWideLimitHoldsEverythingUntilRetryAfter() {
+    @Test
+    fun anAppWideLimitHoldsEverythingUntilRetryAfter() {
         Quiet.after("/api/me/next", "30")
         assertTrue(Quiet.blocked("/api/me/next"))
         assertTrue(Quiet.blocked("/api/auth/app/start"))
@@ -42,7 +46,8 @@ class QuietTest {
         assertFalse(Quiet.blocked("/api/me/next"))
     }
 
-    @Test fun waitsAreCappedAndDefaulted() {
+    @Test
+    fun waitsAreCappedAndDefaulted() {
         Quiet.after("/api/me/next", "99999")
         assertEquals(300_000, Quiet.remainingMs())
         Quiet.reset()
@@ -50,7 +55,8 @@ class QuietTest {
         assertEquals(60_000, Quiet.remainingMs())
     }
 
-    @Test fun a503sRetryAfterSlowsThePollingWithoutBlocking() {
+    @Test
+    fun a503sRetryAfterSlowsThePollingWithoutBlocking() {
         Quiet.later("30")
         assertFalse(Quiet.blocked("/api/me/next"))
         assertEquals(30_000, Quiet.waitMs())
@@ -60,7 +66,8 @@ class QuietTest {
         assertEquals(0, Quiet.waitMs())
     }
 
-    @Test fun refusedAsTooOldHoldsHalfAnHourThenTriesOnce() {
+    @Test
+    fun refusedAsTooOldHoldsHalfAnHourThenTriesOnce() {
         assertFalse(Outdated.holding())
         Outdated.refused()
         assertTrue(Outdated.required)
@@ -74,7 +81,8 @@ class QuietTest {
     }
 
     /** As the server: signing in or out and leaving still go to an outdated app. */
-    @Test fun anOutdatedAppCanStillSignOutAndLeave() {
+    @Test
+    fun anOutdatedAppCanStillSignOutAndLeave() {
         assertTrue(Outdated.gated("GET", "/api/me/next"))
         assertTrue(Outdated.gated("GET", "/api/me/next?lat=1.29"))
         assertTrue(Outdated.gated("POST", "/api/me/push"))

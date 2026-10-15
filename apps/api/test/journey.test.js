@@ -98,7 +98,7 @@ test('the journey gets off where the bus stops across the road', async () => {
   assert.equal(j.toStop, 'Opp NUSS');
 });
 
-test('the journey ends at the stop the bus calls at, not the place\'s first stop', async () => {
+test("the journey ends at the stop the bus calls at, not the place's first stop", async () => {
   // The Deck has more than one stop; this R2 calls at Opp NUSS.
   const j = cardFor(await load('landmark')).journey;
   assert.equal(j.off, null);
@@ -141,15 +141,35 @@ test('a planned trip home shows the planned bus, with the headline bus as its ba
 
 test('a kept plan that changes buses never gives the change stop as where you get off', async () => {
   const { leaveOf } = await import('../src/trip.ts');
-  const first = { svc: 'A1', stop: 'PGP', board: '2026-10-07T01:00:00Z', arrive: '2026-10-07T01:06:00Z', stopCode: 'PGP', alightCode: 'KR-MRT' };
+  const first = {
+    svc: 'A1',
+    stop: 'PGP',
+    board: '2026-10-07T01:00:00Z',
+    arrive: '2026-10-07T01:06:00Z',
+    stopCode: 'PGP',
+    alightCode: 'KR-MRT',
+  };
   // The second bus's off stop unknown: no off stop at all, rather than KR MRT.
-  const l = leaveOf({ ...first, change: { svc: 'D2', stop: 'Opp KR MRT', board: '2026-10-07T01:10:00Z', arrive: '2026-10-07T01:20:00Z', stopCode: 'KR-MRT-OPP' } });
+  const l = leaveOf({
+    ...first,
+    change: { svc: 'D2', stop: 'Opp KR MRT', board: '2026-10-07T01:10:00Z', arrive: '2026-10-07T01:20:00Z', stopCode: 'KR-MRT-OPP' },
+  });
   assert.equal(l.arrive, '2026-10-07T01:20:00Z');
   assert.equal(l.toStop, undefined);
   assert.equal(l.offCode, undefined);
   assert.equal(l.change.fromCode, 'KR-MRT');
   // Known: the second bus's.
-  const k = leaveOf({ ...first, change: { svc: 'D2', stop: 'Opp KR MRT', board: '2026-10-07T01:10:00Z', arrive: '2026-10-07T01:20:00Z', stopCode: 'KR-MRT-OPP', alightCode: 'UTOWN' } });
+  const k = leaveOf({
+    ...first,
+    change: {
+      svc: 'D2',
+      stop: 'Opp KR MRT',
+      board: '2026-10-07T01:10:00Z',
+      arrive: '2026-10-07T01:20:00Z',
+      stopCode: 'KR-MRT-OPP',
+      alightCode: 'UTOWN',
+    },
+  });
   assert.equal(k.offCode, 'UTOWN');
   assert.equal(k.toStop, 'UTown');
 });

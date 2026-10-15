@@ -47,7 +47,9 @@ export async function makeAuthenticator({ alg = -7, origin = 'https://bus.exampl
       const cd = clientData('webauthn.get', challenge, o);
       const ad = await authData(flags);
       const signed = cat(ad, await sha256(cd));
-      const sig = new Uint8Array(await crypto.subtle.sign(alg === -7 ? { name: 'ECDSA', hash: 'SHA-256' } : { name: 'Ed25519' }, pair.privateKey, signed));
+      const sig = new Uint8Array(
+        await crypto.subtle.sign(alg === -7 ? { name: 'ECDSA', hash: 'SHA-256' } : { name: 'Ed25519' }, pair.privateKey, signed),
+      );
       return { id, clientData: b64url(cd), authData: b64url(ad), signature: b64url(alg === -7 ? rawToDer(sig) : sig) };
     },
   };

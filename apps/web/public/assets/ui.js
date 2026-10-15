@@ -8,11 +8,35 @@
 // assets/zh.js applies; web-i18n.test.js checks templates for bare English.
 
 import { Fragment, createContext, h, render } from '../vendor/preact-10.29.8/preact.mjs';
-import { useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useReducer, useRef, useState } from '../vendor/preact-10.29.8/hooks.mjs';
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from '../vendor/preact-10.29.8/hooks.mjs';
 import htm from '../vendor/preact-10.29.8/htm.mjs';
 
 export const html = htm.bind(h);
-export { Fragment, createContext, h, render, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useReducer, useRef, useState };
+export {
+  Fragment,
+  createContext,
+  h,
+  render,
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+};
 
 /**
  * A value shared by components, and by code outside them, that redraws the
@@ -104,7 +128,13 @@ export function Fill({ text, parts }) {
 
 /** An inline icon: `paths` is SVG markup we wrote, never data. */
 export const Icon = ({ paths, size, ...props }) =>
-  h('svg', { viewBox: '0 0 24 24', 'aria-hidden': 'true', ...(size ? { width: size, height: size } : {}), ...props, dangerouslySetInnerHTML: { __html: paths } });
+  h('svg', {
+    viewBox: '0 0 24 24',
+    'aria-hidden': 'true',
+    ...(size ? { width: size, height: size } : {}),
+    ...props,
+    dangerouslySetInnerHTML: { __html: paths },
+  });
 
 /** Prefers reduced motion, read when asked. */
 export const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;

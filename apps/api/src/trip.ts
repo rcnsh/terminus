@@ -443,7 +443,12 @@ export async function loadDay(env: Env, userId: string, nowMs: number): Promise<
  * Sends any of today's changes to the Trip object in one request, and
  * answers with the day as it then stands (null without the binding).
  */
-export async function updateTrip(env: Env, userId: string, u: Omit<TripUpdate, 'date' | 'deleteAt'>, nowMs: number): Promise<DayRecord | null> {
+export async function updateTrip(
+  env: Env,
+  userId: string,
+  u: Omit<TripUpdate, 'date' | 'deleteAt'>,
+  nowMs: number,
+): Promise<DayRecord | null> {
   const s = stub(env, userId);
   if (!s) return null;
   const res = await post(s, 'update', { ...u, date: sgtDate(nowMs), deleteAt: endOfDayMs(nowMs) } satisfies TripUpdate);
@@ -452,7 +457,12 @@ export async function updateTrip(env: Env, userId: string, u: Omit<TripUpdate, '
 }
 
 /** Several trips' records in one call to the Trip object (null deletes one). */
-export async function saveSignals(env: Env, userId: string, items: { key: string; rec: TripRecord | null }[], nowMs: number): Promise<DayRecord | null> {
+export async function saveSignals(
+  env: Env,
+  userId: string,
+  items: { key: string; rec: TripRecord | null }[],
+  nowMs: number,
+): Promise<DayRecord | null> {
   return updateTrip(env, userId, { items }, nowMs);
 }
 
