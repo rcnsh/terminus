@@ -101,3 +101,27 @@ jobs:
       # flags: the debug build can pass where it fails.
       - run: swift build -c release --arch arm64 --force-resolved-versions
         working-directory: apps/macos
+
+  ios:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Every phrase the app writes has its Chinese.
+      - run: python3 -I scripts/strings.py --check
+        working-directory: apps/ios
+      # MapLibre's published iOS build, checked against its SHA-256 before it's unpacked.
+      - run: scripts/fetch-maplibre.sh
+        working-directory: apps/ios
+      - run: brew install xcodegen && xcodegen generate
+        working-directory: apps/ios
+      # The unit tests on the newest iPhone simulator the runner has (the UI
+      # tests need the dev stub and a person looking at their screenshots).
+      - name: unit tests
+        working-directory: apps/ios
+        run: |
+          SIM=$(xcrun simctl list devices available -j | python3 -I -c 'import json,sys; d=json.load(sys.stdin)["devices"]; print(next(x["udid"] for k in sorted(d, reverse=True) if "iOS" in k for x in d[k] if x["name"].startswith("iPhone")))')
+          xcodebuild test -project terminus.xcodeproj -scheme Terminus -destination "id=$SIM" -only-testing:TerminusTests CODE_SIGNING_ALLOWED=NO -quiet
+      # The optimised build a release would make, for a device, unsigned.
+      - run: xcodebuild build -project terminus.xcodeproj -scheme Terminus -configuration Release -destination generic/platform=iOS CODE_SIGNING_ALLOWED=NO -quiet
+        working-directory: apps/ios
