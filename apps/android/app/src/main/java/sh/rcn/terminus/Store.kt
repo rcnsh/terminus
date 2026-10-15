@@ -236,6 +236,16 @@ class Store(context: Context) {
             !prefs.contains(KEY_TOKEN) &&
             listOf(KEY_ANSWER, KEY_DAY, KEY_NEARBY, KEY_EMAIL, KEY_ADDED, KEY_DEST_USE, KEY_PUSH, KEY_ANON).any(prefs::contains)
 
+    /**
+     * Signed in, maybe to another account than the last (a guest signing in with an email): the answer, today's plan and the board kept for
+     * the widgets were that one's, and its places named the shortcuts. The widgets fetch this one's rather than show them.
+     */
+    fun forgetAnswers() =
+        synchronized(Store) {
+            prefs.edit(commit = true) { ANSWER_KEYS.forEach { remove(it) } }
+            runCatching { Shortcuts.update(app, emptyList()) }
+        }
+
     /** The class (its start, epoch ms) the last heads-up was for: one per class. */
     var leaveNotifiedFor: Long
         get() = prefs.getLong(KEY_LEAVE_NOTIFIED, 0)
@@ -443,5 +453,20 @@ class Store(context: Context) {
         private const val KEY_ALERTED = "leave-alerted"
         private const val KEY_ANON = "anonymous"
         private const val KEY_SIGNED_OUT = "signed-out"
+
+        /** What [forgetAnswers] drops: the widgets' answer, today's plan and the board near you, with when and how each was fetched. */
+        private val ANSWER_KEYS =
+            listOf(
+                KEY_ANSWER,
+                KEY_FETCHED,
+                KEY_ASKED,
+                KEY_ERROR,
+                KEY_DAY,
+                KEY_DAY_AT,
+                KEY_DAY_LANG,
+                KEY_NEARBY,
+                KEY_NEARBY_AT,
+                KEY_NEARBY_ERROR,
+            )
     }
 }

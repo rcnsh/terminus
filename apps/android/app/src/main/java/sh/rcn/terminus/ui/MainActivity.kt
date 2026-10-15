@@ -492,9 +492,7 @@ private fun Tabs(
                                         // Taken off with its usual times, so Undo in the bar at the foot, as in Settings.
                                         remove = { code ->
                                             var removed: RemovedPlace? = null
-                                            account.edit { p ->
-                                                p.places.firstOrNull { it.to == code }?.let { removed = p.removePlace(it.key) }
-                                            }
+                                            account.edit { removed = it.removePlaceAt(code) }
                                             removed?.let { r ->
                                                 scope.launch {
                                                     val undo =
@@ -530,8 +528,10 @@ private fun Tabs(
                                 publicBuses = acct.profile?.publicBuses == true,
                                 pinLimit = (acct.profile?.limits ?: sh.rcn.terminus.Limits.DEFAULT).pinnedStops,
                                 onPin = { code ->
+                                    // Pin or unpin as the tap meant on the pins shown, also when it's saved on a newer profile.
+                                    val on = code !in account.state.value.profile?.pinnedStops.orEmpty()
                                     account.edit {
-                                        it.pinnedStops = sh.rcn.terminus.Pins.toggle(it.pinnedStops, code, it.limits.pinnedStops)
+                                        it.pinnedStops = sh.rcn.terminus.Pins.set(it.pinnedStops, code, on, it.limits.pinnedStops)
                                     }
                                 },
                                 onShowOnMap = { svc ->

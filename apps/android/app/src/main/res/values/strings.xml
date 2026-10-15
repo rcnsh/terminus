@@ -264,6 +264,7 @@
     <string name="none_yet">None yet</string>
     <string name="not_going_today">Not going</string>
     <string name="not_saved">Not saved: %1$s</string>
+    <string name="class_changed_elsewhere">A class was changed on another device. Check it and try again.</string>
     <string name="not_signed_in">Not signed in</string>
     <string name="not_signed_in_hint">Your settings are stored only on this phone. Add an email to keep them if you lose your phone, and to use terminus on your Mac or the web.</string>
     <string name="nothing_yet">Nothing yet</string>

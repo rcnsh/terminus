@@ -3,10 +3,13 @@ package sh.rcn.terminus.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,12 +27,14 @@ import sh.rcn.terminus.L
 import sh.rcn.terminus.Lang
 import sh.rcn.terminus.Me
 import sh.rcn.terminus.ParseError
+import sh.rcn.terminus.ProfileChange
 import sh.rcn.terminus.ProfileDoc
 import sh.rcn.terminus.R
 import sh.rcn.terminus.Session
 import sh.rcn.terminus.SignInRequest
 import sh.rcn.terminus.Store
 import sh.rcn.terminus.deviceName
+import sh.rcn.terminus.saveChanges
 
 /** Where an email sign-in is. */
 sealed interface SignIn {
@@ -85,6 +90,12 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     private val _state = MutableStateFlow(AccountState(email = store.email))
     val state: StateFlow<AccountState> = _state
 
+    /**
+     * The parent of every request made for the account signed in: all cancelled together on signing out or into another account
+     * ([endAccount]), so a reply for the last one isn't written into the next one's settings, devices or timetable.
+     */
+    private val account = SupervisorJob(viewModelScope.coroutineContext[Job])
+
     init {
         // Signed out by a refused token (here or anywhere else): nothing of the account stays on screen.
         viewModelScope.launch { Session.signedOut.collect { reset() } }
@@ -112,12 +123,12 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * Runs [block]; a failure is said in the message (the server's words for a refusal, else that it can't be reached), with [failed]
-     * putting back what was under way (busy, importing). With [session], a 401 is this phone's token refused, which signs it out; off for
-     * the requests that carry another token, or none.
+     * putting back what was under way (busy, importing). With [session], a request for the account signed in: a 401 is this phone's token
+     * refused, which signs it out, and it ends with the account ([endAccount]). Off for the requests that carry another token, or none.
      */
     private fun attempt(failed: (AccountState) -> AccountState = { it }, session: Boolean = true, block: suspend () -> Unit) {
         val sent = store.token.takeIf { session }
-        viewModelScope.launch {
+        viewModelScope.launch(if (session) account else EmptyCoroutineContext) {
             try {
                 block()
             } catch (e: CancellationException) {
@@ -153,7 +164,7 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     fun refresh() {
         val token = store.token ?: return
         _state.update { it.copy(message = null) }
-        viewModelScope.launch {
+        viewModelScope.launch(account) {
             try {
                 val me = Api(token).me()
                 store.email = me.email
@@ -165,9 +176,12 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
                 if (failure(e, token) == null) return@launch
             }
             try {
-                val p = ProfileDoc(Api(token).profile())
+                val tagged = Api(token).profile()
+                val p = ProfileDoc(tagged.json)
                 // A change still being saved stays on screen.
-                if (saveJob?.isActive != true) {
+                if (!saving) {
+                    confirmed = p
+                    version = tagged.version
                     _state.update { it.copy(profile = p) }
                     syncLang(p)
                     Clock.keep(getApplication(), p.clock)
@@ -199,15 +213,16 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     fun settleSetup() {
         val token = store.token ?: return
         if (!store.setupUnknown || settleJob?.isActive == true) return
-        settleJob = viewModelScope.launch {
-            try {
-                settle(Api(token).me())
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                // Still unknown: the next answer that comes through asks again.
+        settleJob =
+            viewModelScope.launch(account) {
+                try {
+                    settle(Api(token).me())
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    // Still unknown: the next answer that comes through asks again.
+                }
             }
-        }
     }
 
     fun loadCampus() {
@@ -227,75 +242,135 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** A save waiting or on its way; a reply from an older one doesn't undo the edits made since. */
+    /** The 0.4 s wait before a save, so a run of taps goes as one. */
     private var saveJob: Job? = null
-    private var edits = 0
-    /** The profile as the server last had it, to go back to if a save fails. */
+    /**
+     * The save on its way. Another edit doesn't cancel it: whether it saved is only known from its answer, and a change sent must not be
+     * made twice. In [saves], so leaving the app straight after a tap doesn't cancel it either.
+     */
+    private var sending: Job? = null
+    private val saves = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    /** The profile as the server last had it, to go back to if a save fails, and its version (the ETag) for If-Match. */
     private var confirmed: ProfileDoc? = null
-    /** An edit still in its moment before saving. */
-    private var waiting: ProfileDoc? = null
-    /** An edit on its way to the server, not yet answered. */
-    private var sending: ProfileDoc? = null
+    private var version: String? = null
+    /** The changes made since the last save was sent, shown already, to send next. */
+    private val pending = mutableListOf<ProfileChange>()
+    /** Whether a change is waiting or on its way: the profile shown is ahead of the server's. */
+    private val saving: Boolean
+        get() = saveJob != null || sending != null || pending.isNotEmpty()
 
     /**
      * Changes the profile and saves it. Shown straight away and saved a moment later, so a run of taps is one save, as on the web; if the
-     * server refuses, the saved one comes back with the reason.
+     * server refuses, the saved one comes back with the reason. Only [change] is sent, made again on the profile as the server has it, so a
+     * save never puts back what another device changed since this one loaded it.
      */
-    fun edit(change: (ProfileDoc) -> Unit) {
+    fun edit(change: ProfileChange) {
         val current = _state.value.profile ?: return
-        if (saveJob?.isActive != true) confirmed = current
+        if (!saving) confirmed = current
         val next = current.copy().also(change)
+        pending += change
         _state.update { it.copy(profile = next) }
-        val mine = ++edits
         saveJob?.cancel()
-        waiting = next
         saveJob = viewModelScope.launch {
             delay(400)
-            waiting = null
-            sending = next
-            val sent = store.token
-            try {
-                val saved = ProfileDoc(Api(sent).saveProfile(next.json))
-                if (sending === next) sending = null
-                if (saved.lang != confirmed?.lang) _state.update { it.copy(langSaved = it.langSaved + 1) }
-                confirmed = saved
-                if (mine == edits) _state.update { it.copy(profile = saved) }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                if (sending === next) sending = null
-                val message = failure(e, sent) ?: return@launch
-                if (mine == edits) _state.update { it.copy(profile = confirmed ?: current, message = L.s(R.string.not_saved, message)) }
-            }
+            saveJob = null
+            send()
         }
     }
 
     /**
-     * Leaving Settings straight after a tap: the change is still saved, both one still waiting and one on its way (leaving cancels that
-     * request, and saving the same profile again is harmless).
+     * Sends the changes waiting, made on the profile as the server last had it. One save at a time: changes made meanwhile wait for its
+     * answer and go next, on what it saved. None while an import runs: they go on top of its answer.
      */
-    override fun onCleared() {
-        val unsaved = waiting ?: sending ?: return
-        val api = api()
-        CoroutineScope(Dispatchers.IO).launch { runCatching { api.saveProfile(unsaved.json) } }
+    private fun send() {
+        if (sending != null || _state.value.importing || pending.isEmpty()) return
+        val token = store.token ?: return
+        val base = confirmed ?: return
+        // Left (onCleared), and signed into another account before the last save came back: these were the last account's.
+        if (leftWith != null && token != leftWith) return pending.clear()
+        val changes = pending.toList()
+        pending.clear()
+        val from = version
+        sending = saves.launch {
+            try {
+                val api = Api(token)
+                val r = saveChanges(base, from, changes, load = { api.profile() }, save = { json, tag -> api.saveProfile(json, tag) })
+                sending = null
+                version = r.version
+                // The card and the day come in the account's language: what came since the switch is in the old one.
+                if (r.doc.lang != confirmed?.lang) _state.update { it.copy(langSaved = it.langSaved + 1) }
+                confirmed = r.doc
+                // Changes made since this was sent stay on screen, on top of what it saved.
+                val shown = r.doc.copy().also { d -> pending.forEach { it(d) } }
+                _state.update { it.copy(profile = shown, message = if (r.missed) L.s(R.string.class_changed_elsewhere) else it.message) }
+                if (saveJob == null) send()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                sending = null
+                val message = failure(e, token) ?: return@launch
+                // What failed goes back; changes made since stay on screen, and go in a save of their own.
+                val shown = (confirmed ?: base).copy().also { d -> pending.forEach { it(d) } }
+                _state.update { it.copy(profile = shown, message = L.s(R.string.not_saved, message)) }
+                if (saveJob == null) send()
+            }
+        }
     }
+
+    /** The account's token when the app was left: [saves] outlives the view model, but not into another account. */
+    private var leftWith: String? = null
+
+    /** Leaving Settings straight after a tap: the change is still saved, one still waiting after the one on its way. */
+    override fun onCleared() {
+        leftWith = store.token
+        saveJob?.cancel()
+        saveJob = null
+        send()
+    }
+
+    /** An import on its way: in [saves] too, so leaving the app doesn't cancel it, and the edits waiting for its answer are still saved. */
+    private var importJob: Job? = null
 
     fun import(share: String) {
         val link = share.trim()
         if (link.isEmpty() || _state.value.importing) return
+        val token = store.token ?: return
+        // A change still waiting goes first, so it isn't saved over the import.
+        if (saveJob != null) {
+            saveJob?.cancel()
+            saveJob = null
+            send()
+        }
         _state.update { it.copy(importing = true, imported = null, message = null) }
-        attempt({ it.copy(importing = false) }) {
-            val r = api().import(link)
-            _state.update {
-                it.copy(
-                    importing = false,
-                    imported = r,
-                    profile = ProfileDoc(r.profile),
-                    sharedLink = null,
-                    needsReimport = false,
-                    term = r.term,
-                    unplaced = r.unplaced,
-                )
+        importJob = saves.launch {
+            try {
+                // The save on its way lands before the import, not over it. Changes made from here wait for the import's answer, then go
+                // on top of it.
+                while (true) (sending ?: break).join()
+                val r = Api(token).import(link)
+                val saved = ProfileDoc(r.result.profile)
+                confirmed = saved
+                version = r.version
+                val shown = saved.copy().also { d -> pending.forEach { it(d) } }
+                _state.update {
+                    it.copy(
+                        importing = false,
+                        imported = r.result,
+                        profile = shown,
+                        sharedLink = null,
+                        needsReimport = false,
+                        term = r.result.term,
+                        unplaced = r.result.unplaced,
+                    )
+                }
+                if (saveJob == null) send()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(importing = false) }
+                val message = failure(e, token) ?: return@launch
+                if (saveJob == null) send()
+                _state.update { it.copy(message = message) }
             }
         }
     }
@@ -468,8 +543,10 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     private fun signedIn(token: String, email: String, onSignedIn: () -> Unit) {
         approvedToken = null
         anonToken = null
-        // The page stays as it is, busy, until the app moves on.
-        _state.update { it.copy(busy = true, message = null) }
+        // Maybe another account than this phone's (a guest signing in with an email): nothing of that one's stays or lands later. The
+        // page stays as it is, busy, until the app moves on.
+        endAccount()
+        _state.update { AccountState(campus = it.campus, signIn = it.signIn, busy = true) }
         viewModelScope.launch {
             // Off the main thread: a Keystore round trip and a write to disk.
             withContext(Dispatchers.IO) {
@@ -477,6 +554,7 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
                 store.email = email
                 store.anonymous = false
             }
+            Session.signedIn(getApplication())
             // A new account, or one that was never set up, goes through setup:
             // only on /me's word, asked once more after a moment. Unanswered,
             // no setup now (its pickers save the whole profile, which could
@@ -497,7 +575,7 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
 
     fun loadChoices() {
         val sent = store.token
-        viewModelScope.launch {
+        viewModelScope.launch(account) {
             try {
                 val (c, history) = Api(sent).choices()
                 _state.update { it.copy(choices = c, history = history) }
@@ -590,10 +668,21 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     /** After signing out: forget everything about the account. */
     fun reset() {
         pollJob?.cancel()
-        // A Settings edit still waiting or on its way belonged to the account that's gone.
-        saveJob?.cancel()
-        waiting = null
-        sending = null
+        endAccount()
         _state.value = AccountState()
+    }
+
+    /** Everything under way for the account ends: its requests, an import, and a Settings edit still waiting or on its way. */
+    private fun endAccount() {
+        account.cancelChildren()
+        importJob?.cancel()
+        importJob = null
+        saveJob?.cancel()
+        saveJob = null
+        sending?.cancel()
+        sending = null
+        pending.clear()
+        confirmed = null
+        version = null
     }
 }
