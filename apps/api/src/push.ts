@@ -1,7 +1,9 @@
 /**
- * Push: Firebase Cloud Messaging (HTTP v1) to Android devices, and Web
- * Push to the installed web app (webpush.ts), both kept as the
- * session's push_token: an FCM token, or `web:` and a subscription.
+ * Push: Firebase Cloud Messaging (HTTP v1) to Android devices, Web Push to
+ * the installed web app (webpush.ts), and APNs to the iPhone app (apns.ts),
+ * all kept as the session's push_token: an FCM token, `web:` and a
+ * subscription, or `apns:` and a device token. An iPhone's trip Live
+ * Activity has its own token beside it (sessions.live_token).
  *
  * A push is usually only a nudge. It says the card has changed (`kind:
  * 'card'` and the phase), and the app fetches /me/next itself, so the words
@@ -17,9 +19,35 @@
  * The Worker signs its own OAuth token from the service account in
  * FCM_SERVICE_ACCOUNT (RS256 with WebCrypto) and keeps it in KV for 50
  * minutes. A token FCM no longer knows is cleared from its session.
+ *
+ * An iPhone gets what Android does, the way iOS wants it: a notification
+ * with words where the phone should look (the app's notification service
+ * extension may re-word it from /me/next), a silent background push where
+ * Android's would only update its ongoing notification, and, while a Live
+ * Activity runs, that activity's update with the card in it (apns.ts).
+ * An iPhone whose leave alerts are off (sessions.push_alerts, as it said
+ * when it registered) gets the silent push instead of the trip's alerts, as
+ * Android words and shows its own only with them on.
  */
 
-import type { Env } from './types.ts';
+import type { Card } from './card.ts';
+import { type Lang, lang as currentLang, m, withLang } from './i18n.ts';
+import type { Env, MeAnswer } from './types.ts';
+import {
+  type ApnsPush,
+  type ApnsRun,
+  type LiveActivityState,
+  type Loudness,
+  alertPush,
+  apnsEnabled,
+  backgroundPush,
+  livePush,
+  liveActivityState,
+  looksApns,
+  newApnsRun,
+  parseApnsToken,
+  sendApns,
+} from './apns.ts';
 import { WEB_PREFIX, type WebSubscription, b64url, parseSubscription, sendWebPush, warnUnusable, webPushEnabled } from './webpush.ts';
 
 const SCOPE = 'https://www.googleapis.com/auth/firebase.messaging';
@@ -43,6 +71,21 @@ export interface Nudge {
   /** False when reminders are off for this trip: the web app then isn't
    *  pushed, since a web push must show a notification. */
   remind?: boolean;
+  /** The answer and card it's about: an iPhone's notification and Live Activity are worded from them. */
+  answer?: MeAnswer & { card: Card };
+  /** The language `answer` is worded in; by default the current request's. */
+  lang?: Lang;
+  /**
+   * The same answer worded in another language, for an iPhone pushed in
+   * that one (sessions.push_lang). Asked once per language, and only for an
+   * iPhone's; without it, or when it fails, that iPhone gets the phase's
+   * words in its language and no Live Activity update.
+   */
+  answerIn?: (lang: Lang) => Promise<(MeAnswer & { card: Card }) | null>;
+  /** The trip is over (no trip now): an iPhone's Live Activity ends. */
+  tripOver?: boolean;
+  /** The trip's phase changed since the last push: the Live Activity's update is priority 10 (Apple budgets those). */
+  phaseChanged?: boolean;
 }
 
 function account(env: Env): ServiceAccount | null {
@@ -61,7 +104,7 @@ function account(env: Env): ServiceAccount | null {
 export const fcmEnabled = (env: Env) => account(env) !== null;
 
 /** Whether push is set up at all. */
-export const pushEnabled = (env: Env) => fcmEnabled(env) || webPushEnabled(env);
+export const pushEnabled = (env: Env) => fcmEnabled(env) || webPushEnabled(env) || apnsEnabled(env);
 
 const b64urlText = (s: string) => b64url(new TextEncoder().encode(s));
 
@@ -133,12 +176,38 @@ export async function nudgeUser(env: Env, userId: string, nudge: Nudge, nowMs: n
   // Every web push shows a notification (iOS insists), so nothing to show
   // means nothing sent: an idle card, or reminders off for the trip.
   const quiet = nudge.phase === 'idle' || nudge.remind === false;
+  const data = { kind: 'card', phase: nudge.phase };
+  const answer = nudge.answer;
+  const expiresS = Math.floor(nowMs / 1000) + 600;
+  const { worded, prepare } = wordings(answer ?? null, nudge.lang, nudge.answerIn);
+  const ending = Boolean(nudge.tripOver) || nudge.phase === 'arrived';
   return deliver(
     env,
     userId,
     {
       web: quiet ? null : { kind: 'card', phase: nudge.phase, urgent: nudge.urgent },
-      fcm: { kind: 'card', phase: nudge.phase },
+      fcm: data,
+      prepare,
+      // An iPhone: a notification where the web app gets one (loud only when
+      // it's time to look), and a silent push otherwise, while the Live
+      // Activity shows the trip instead, or with its leave alerts off. Its
+      // words in its own language: the card's, else the phase's.
+      ios: (l, hasLive, alerts) => {
+        if (quiet || !alerts || (hasLive && !nudge.urgent)) return backgroundPush(data, expiresS);
+        const a = worded.get(l);
+        const words = a ? cardWords(a.card) : withLang(l, () => phaseWords(nudge.phase));
+        const loudness: Loudness = nudge.urgent && !answer?.card.gone ? 'time-sensitive' : 'passive';
+        return alertPush({ ...words, data, loudness, collapse: 'card', expiresS });
+      },
+      // Its Live Activity, worded the same way. Without the card in its
+      // language it waits for the Trip object's next update, but an end is
+      // sent in any language rather than leave a finished trip showing.
+      live: answer
+        ? (l) => {
+            const a = worded.get(l) ?? (ending ? answer : null);
+            return a ? { state: liveActivityState(a), event: ending ? 'end' : 'update', urgent: Boolean(nudge.phaseChanged) } : null;
+          }
+        : null,
       urgent: nudge.urgent,
       collapse: 'card',
       ttlS: 600,
@@ -146,6 +215,74 @@ export async function nudgeUser(env: Env, userId: string, nudge: Nudge, nowMs: n
     nowMs,
     exceptTokenHash,
   );
+}
+
+/**
+ * An answer in each iPhone's language: the one given (in `lang`, by default
+ * the current request's), and others asked for (`answerIn`) only when an
+ * iPhone in that language is about to be sent to, once each (`prepare`).
+ * One that can't be had is null.
+ */
+function wordings(answer: (MeAnswer & { card: Card }) | null, lang?: Lang, answerIn?: Nudge['answerIn']) {
+  const worded = new Map<Lang, (MeAnswer & { card: Card }) | null>([[lang ?? currentLang(), answer]]);
+  const prepare =
+    answer && answerIn
+      ? async (langs: Lang[]) => {
+          for (const l of langs) {
+            if (worded.has(l)) continue;
+            worded.set(
+              l,
+              await answerIn(l).catch((err: unknown) => {
+                console.error('push: card not worded', err instanceof Error ? err.message : typeof err);
+                return null;
+              }),
+            );
+          }
+        }
+      : undefined;
+  return { worded, prepare };
+}
+
+/** What a Live Activity update is about: the card to word it from, as nudgeUser takes it, or a state already worded. */
+export type LiveUpdate = (Pick<Nudge, 'lang' | 'answerIn'> & { answer: MeAnswer & { card: Card } }) | { state: LiveActivityState };
+
+/**
+ * Updates the Live Activities of a user's iPhones alone, when what the
+ * activity shows changed but the trip's phase didn't (a bus running late).
+ * Nothing else is pushed. From an answer, each iPhone's is worded in its
+ * own language as nudgeUser's are; one with no card in its language waits
+ * for the next update, but an end goes in any. A state already worded (the
+ * last one sent, to end it) goes to every iPhone as it is.
+ */
+export async function updateLive(env: Env, userId: string, update: LiveUpdate, event: 'update' | 'end', nowMs: number): Promise<Delivered> {
+  let live: (l: Lang) => LiveSend | null;
+  let prepare: Delivery['prepare'];
+  if ('state' in update) {
+    const state = update.state;
+    live = () => ({ state, event, urgent: false });
+  } else {
+    const w = wordings(update.answer, update.lang, update.answerIn);
+    prepare = w.prepare;
+    live = (l) => {
+      const a = w.worded.get(l) ?? (event === 'end' ? update.answer : null);
+      return a ? { state: liveActivityState(a), event, urgent: false } : null;
+    };
+  }
+  return deliver(env, userId, { web: null, fcm: {}, prepare, live, onlyLive: true, urgent: false, collapse: 'card', ttlS: 600 }, nowMs);
+}
+
+/** A card's notification: its phase, and the trip in a line. */
+function cardWords(card: Card): { title: string; body: string } {
+  return { title: card.phaseText ?? card.heading ?? card.title, body: card.line };
+}
+
+/** A notification for a phase when there's no card to word it from. */
+function phaseWords(phase: string): { title: string; body: string } {
+  const t = m();
+  const title =
+    { due: t.phaseDue, heading: t.phaseHeading, waiting: t.phaseWaiting, riding: t.phaseRiding, missed: t.phaseMissed }[phase] ??
+    t.pushTitle;
+  return { title, body: t.pushOpen };
 }
 
 /** A notification worded by the server, in English and Chinese: the app shows the one in its language. */
@@ -163,6 +300,7 @@ export interface Notice {
  */
 export async function remindUser(env: Env, userId: string, notice: Notice, nowMs: number): Promise<Delivered> {
   const words = { title: notice.title, body: notice.body, zhTitle: notice.zhTitle, zhBody: notice.zhBody };
+  const expiresS = Math.floor(nowMs / 1000) + 2 * 86_400;
   return deliver(
     env,
     userId,
@@ -170,6 +308,16 @@ export async function remindUser(env: Env, userId: string, notice: Notice, nowMs
       web: { kind: 'term', ...words },
       fcm: { kind: 'term', ...words },
       fcmBare: { kind: 'term' },
+      // In the language the iPhone registered in, the account's choice first.
+      ios: (l) =>
+        alertPush({
+          title: l === 'zh' ? notice.zhTitle : notice.title,
+          body: l === 'zh' ? notice.zhBody : notice.body,
+          data: { kind: 'term', ...words },
+          loudness: 'active',
+          collapse: 'term',
+          expiresS,
+        }),
       urgent: false,
       collapse: 'term',
       ttlS: 2 * 86_400,
@@ -197,6 +345,18 @@ interface Delivery {
   fcm: Record<string, string>;
   /** What an app that fetches the words itself is sent instead (fetchesNotice). */
   fcmBare?: Record<string, string>;
+  /** Before anything is sent, with the languages of the iPhones to be sent to (with APNs on). */
+  prepare?: (langs: Lang[]) => Promise<void>;
+  /**
+   * What an iPhone is sent, in its language, knowing whether a Live Activity
+   * of its runs and whether its leave alerts are on (true when it never
+   * said). Null or absent: nothing.
+   */
+  ios?: (lang: Lang, hasLive: boolean, alerts: boolean) => ApnsPush | null;
+  /** A Live Activity update for the iPhones running one, in the iPhone's language; null: none for it. */
+  live?: ((lang: Lang) => LiveSend | null) | null;
+  /** Only the Live Activities: no device is sent anything else. */
+  onlyLive?: boolean;
   urgent: boolean;
   /** A newer message with the same key replaces one not yet delivered. */
   collapse: string;
@@ -209,29 +369,50 @@ async function deliver(env: Env, userId: string, msg: Delivery, nowMs: number, e
   const db = env.DB;
   if (!pushEnabled(env) || !db) return out;
   const a = account(env);
-  let results: { token_hash: string; push_token: string; client: string | null }[];
+  let results: Row[];
   try {
     ({ results } = await db
-      .prepare('SELECT token_hash, push_token, client FROM sessions WHERE user_id = ? AND push_token IS NOT NULL AND token_hash != ?')
+      .prepare(
+        msg.onlyLive
+          ? 'SELECT token_hash, push_token, client, live_token, push_lang, push_alerts FROM sessions WHERE user_id = ? AND live_token IS NOT NULL AND token_hash != ?'
+          : 'SELECT token_hash, push_token, client, live_token, push_lang, push_alerts FROM sessions WHERE user_id = ? AND (push_token IS NOT NULL OR live_token IS NOT NULL) AND token_hash != ?',
+      )
       .bind(userId, exceptTokenHash ?? '')
-      .all<{ token_hash: string; push_token: string; client: string | null }>());
+      .all<Row>());
   } catch (err) {
     console.error('push failed', err instanceof Error ? err.message : typeof err);
     return { sent: 0, failed: 1 };
   }
-  const forget = (tokenHash: string) => db.prepare('UPDATE sessions SET push_token = NULL WHERE token_hash = ?').bind(tokenHash).run();
+  const forget = (tokenHash: string) =>
+    db.prepare('UPDATE sessions SET push_token = NULL, live_token = NULL, push_alerts = NULL WHERE token_hash = ?').bind(tokenHash).run();
+  const forgetLive = (tokenHash: string) => db.prepare('UPDATE sessions SET live_token = NULL WHERE token_hash = ?').bind(tokenHash).run();
+  const count = async (res: Outcome, gone: () => Promise<unknown>) => {
+    if (res === 'sent') out.sent++;
+    else if (res === 'failed') out.failed++;
+    else if (res === 'gone') await gone();
+  };
   const fcm: Fcm = { bearer: null, down: false };
+  const apns = newApnsRun();
+  const langOf = (r: Row): Lang => (r.push_lang === 'zh' ? 'zh' : 'en');
+  const iphones = apnsEnabled(env) ? results.filter((r) => looksApns(r.push_token ?? '') || r.live_token) : [];
+  if (msg.prepare && iphones.length) await msg.prepare([...new Set(iphones.map(langOf))]);
   for (const r of results) {
     // One device's failure (a key that won't import, a service that hangs) mustn't stop the rest.
     try {
-      const res = r.push_token.startsWith(WEB_PREFIX)
-        ? await toBrowser(env, r.push_token, msg, nowMs)
-        : a
-          ? await toAndroid(env, a, fcm, r, msg, nowMs)
-          : 'skip';
-      if (res === 'sent') out.sent++;
-      else if (res === 'failed') out.failed++;
-      else if (res === 'gone') await forget(r.token_hash);
+      const token = r.push_token ?? '';
+      const iphone = looksApns(token);
+      const live = r.live_token ? (msg.live?.(langOf(r)) ?? null) : null;
+      if (!msg.onlyLive && token) {
+        const res = token.startsWith(WEB_PREFIX)
+          ? await toBrowser(env, token, msg, nowMs)
+          : iphone
+            ? await toIphone(env, apns, token, langOf(r), live !== null, r.push_alerts !== 0, msg, nowMs)
+            : a
+              ? await toAndroid(env, a, fcm, { push_token: token, client: r.client }, msg, nowMs)
+              : 'skip';
+        await count(res, () => forget(r.token_hash));
+      }
+      if (live && r.live_token) await count(await toLiveActivity(env, apns, r.live_token, live, nowMs), () => forgetLive(r.token_hash));
     } catch (err) {
       console.error('push failed', err instanceof Error ? err.message : typeof err);
       out.failed++;
@@ -240,7 +421,24 @@ async function deliver(env: Env, userId: string, msg: Delivery, nowMs: number, e
   return out;
 }
 
+interface Row {
+  token_hash: string;
+  push_token: string | null;
+  client: string | null;
+  live_token: string | null;
+  push_lang: string | null;
+  /** An iPhone's leave alerts: 0 off, 1 on, null not said (a build from before it was sent). */
+  push_alerts: number | null;
+}
+
 type Outcome = 'sent' | 'failed' | 'gone' | 'skip';
+
+/** One Live Activity's update or end. */
+interface LiveSend {
+  state: LiveActivityState;
+  event: 'update' | 'end';
+  urgent: boolean;
+}
 
 async function toBrowser(env: Env, pushToken: string, msg: Delivery, nowMs: number): Promise<Outcome> {
   // Without a usable VAPID key no browser can be sent to: nobody reached, not a failure to retry.
@@ -256,6 +454,30 @@ async function toBrowser(env: Env, pushToken: string, msg: Delivery, nowMs: numb
     console.error('web push', String(err));
     return 'failed' as const;
   });
+}
+
+async function toIphone(
+  env: Env,
+  run: ApnsRun,
+  pushToken: string,
+  l: Lang,
+  hasLive: boolean,
+  alerts: boolean,
+  msg: Delivery,
+  nowMs: number,
+): Promise<Outcome> {
+  const push = msg.ios?.(l, hasLive, alerts);
+  if (!push) return 'skip';
+  // Stored only once checked (POST /me/push): one that doesn't read is gone.
+  const token = parseApnsToken(pushToken);
+  if (!token || token.live) return 'gone';
+  return sendApns(env, run, token, push, nowMs);
+}
+
+async function toLiveActivity(env: Env, run: ApnsRun, liveToken: string, live: LiveSend, nowMs: number): Promise<Outcome> {
+  const token = parseApnsToken(liveToken);
+  if (!token?.live) return 'gone';
+  return sendApns(env, run, token, livePush(live.state, live.event, Math.floor(nowMs / 1000), live.urgent), nowMs);
 }
 
 /** One delivery's FCM access token, shared by its devices; `down` once it couldn't be had. */
@@ -335,19 +557,91 @@ export async function fcmError(res: Response): Promise<{ tokenGone: boolean; cod
   return { tokenGone: res.status === 404 || code === 'UNREGISTERED' || (res.status === 400 && badToken), code };
 }
 
-/** How many of a user's devices take push. */
-export async function pushDevices(env: Env, userId: string): Promise<number> {
-  if (!pushEnabled(env) || !env.DB) return 0;
-  const r = await env.DB.prepare('SELECT COUNT(*) AS n FROM sessions WHERE user_id = ? AND push_token IS NOT NULL')
-    .bind(userId)
-    .first<{ n: number }>();
-  return r?.n ?? 0;
+/** Who a user's pushes can reach. */
+export interface Audience {
+  /** Devices that take push: an iPhone only with APNs on. */
+  devices: number;
+  /** Of them, the iPhones' Live Activities running (0 with APNs off). */
+  lives: number;
+  /** The language the latest iPhone is pushed in; null with none, or APNs off. */
+  iphoneLang: Lang | null;
 }
 
-/** Registers (or with null, forgets) this device's push token: an FCM token or a web subscription. A token lives on one session only. */
-export async function setPushToken(db: D1Database, tokenHash: string, pushToken: string | null): Promise<void> {
+/**
+ * Who a user's pushes can reach, in one read. An iPhone counts only with
+ * APNs on: its token is kept when it's off, but a Trip object waking every
+ * 30 s for a phone nothing can be sent to would wake all day for nothing.
+ */
+export async function pushAudience(env: Env, userId: string): Promise<Audience> {
+  const none: Audience = { devices: 0, lives: 0, iphoneLang: null };
+  if (!pushEnabled(env) || !env.DB) return none;
+  const r = await env.DB.prepare(
+    `SELECT COUNT(*) AS n,
+       SUM(push_token IS NOT NULL AND push_token NOT LIKE 'apns:%') AS others,
+       SUM(live_token IS NOT NULL) AS lives,
+       (SELECT push_lang FROM sessions WHERE user_id = ? AND push_token LIKE 'apns:%' ORDER BY last_seen DESC LIMIT 1) AS lang,
+       SUM(push_token LIKE 'apns:%') AS iphones
+     FROM sessions WHERE user_id = ? AND (push_token IS NOT NULL OR live_token IS NOT NULL)`,
+  )
+    .bind(userId, userId)
+    .first<{ n: number; others: number | null; lives: number | null; lang: string | null; iphones: number | null }>();
+  if (!r) return none;
+  if (!apnsEnabled(env)) return { devices: r.others ?? 0, lives: 0, iphoneLang: null };
+  return { devices: r.n, lives: r.lives ?? 0, iphoneLang: r.iphones ? (r.lang === 'zh' ? 'zh' : 'en') : null };
+}
+
+/** How many of a user's devices take push (pushAudience). */
+export async function pushDevices(env: Env, userId: string): Promise<number> {
+  return (await pushAudience(env, userId)).devices;
+}
+
+/**
+ * Registers (or with null, forgets) this device's push token: an FCM token,
+ * a web subscription or an iPhone's `apns:` token, with the language an
+ * iPhone's notifications are worded in and whether its leave alerts are on
+ * (null: not said, so alerts as before). A token lives on one session only.
+ * Forgetting it forgets the Live Activity's token too.
+ */
+export async function setPushToken(
+  db: D1Database,
+  tokenHash: string,
+  pushToken: string | null,
+  lang: Lang | null = null,
+  alerts: boolean | null = null,
+): Promise<void> {
   const stmts = [];
-  if (pushToken) stmts.push(db.prepare('UPDATE sessions SET push_token = NULL WHERE push_token = ?').bind(pushToken));
-  stmts.push(db.prepare('UPDATE sessions SET push_token = ? WHERE token_hash = ?').bind(pushToken, tokenHash));
+  if (pushToken)
+    stmts.push(
+      db.prepare('UPDATE sessions SET push_token = NULL, push_lang = NULL, push_alerts = NULL WHERE push_token = ?').bind(pushToken),
+    );
+  stmts.push(
+    pushToken
+      ? db
+          .prepare('UPDATE sessions SET push_token = ?, push_lang = ?, push_alerts = ? WHERE token_hash = ?')
+          .bind(pushToken, lang, alerts === null ? null : alerts ? 1 : 0, tokenHash)
+      : db
+          .prepare('UPDATE sessions SET push_token = NULL, push_lang = NULL, push_alerts = NULL, live_token = NULL WHERE token_hash = ?')
+          .bind(tokenHash),
+  );
   await db.batch(stmts);
+}
+
+/** Registers this iPhone's Live Activity token (`apnsla:`), the latest replacing the last. One session only. */
+export async function setLiveToken(db: D1Database, tokenHash: string, liveToken: string): Promise<void> {
+  await db.batch([
+    db.prepare('UPDATE sessions SET live_token = NULL WHERE live_token = ?').bind(liveToken),
+    db.prepare('UPDATE sessions SET live_token = ? WHERE token_hash = ?').bind(liveToken, tokenHash),
+  ]);
+}
+
+/** The language a user's iPhone notifications are worded in when the account follows each device: the latest iPhone's. */
+export async function iphoneLang(env: Env, userId: string): Promise<Lang> {
+  if (!env.DB) return 'en';
+  const r = await env.DB.prepare(
+    "SELECT push_lang FROM sessions WHERE user_id = ? AND push_token LIKE 'apns:%' ORDER BY last_seen DESC LIMIT 1",
+  )
+    .bind(userId)
+    .first<{ push_lang: string | null }>()
+    .catch(() => null);
+  return r?.push_lang === 'zh' ? 'zh' : 'en';
 }

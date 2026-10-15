@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  What scripts/sideload.sh signs the app and its extensions with: the app
+  group alone. A free Apple ID (a Personal Team) can't sign push or Time
+  Sensitive notifications, so a sideloaded build goes without them.
+-->
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>$(APP_GROUP)</string>
+	</array>
+</dict>
+</plist>

@@ -119,7 +119,7 @@
     <string name="arrive_at">%1$s 到达</string>
     <string name="back">返回</string>
     <string name="building">建筑</string>
-    <string name="bus_stop">巴士站</string>
+    <string name="bus_stop">车站</string>
     <string name="cancel">取消</string>
     <string name="cant_add">无法添加。请检查网络连接。</string>
     <string name="cant_put_back">无法恢复。请检查网络连接。</string>
@@ -208,7 +208,7 @@
     <string name="in_min_s">%1$d 分 %2$d 秒后</string>
     <string name="in_s">%1$d 秒后</string>
     <string name="in_your_timetable">在你的课表里</string>
-    <string name="is_this_wrong">这不对？</string>
+    <string name="is_this_wrong">答案不对？</string>
     <string name="language">语言</string>
     <string name="time_format">时间格式</string>
     <string name="show_times_as">时间显示为</string>
@@ -479,7 +479,7 @@
     <string name="feedback_placeholder">想法、问题，什么都可以：想去的地方、让你困惑的地方……</string>
     <string name="feedback_from">发件人</string>
     <string name="feedback_wrong_title">答案不对？</string>
-    <string name="feedback_wrong_hint">请按它下面的“这不对？”，这样我们能看到你看到的内容。</string>
+    <string name="feedback_wrong_hint">请按它下面的“答案不对？”，这样我们能看到你看到的内容。</string>
     <string name="feedback_thanks">谢谢，你的反馈已发送。</string>
     <string name="report_needs_email">添加邮箱后才能反馈错误的结果，方便我们回复你。</string>
     <string name="feedback_needs_email">添加邮箱后才能发送反馈</string>

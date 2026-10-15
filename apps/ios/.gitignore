@@ -1,0 +1,7 @@
+terminus.xcodeproj/
+build/
+DerivedData/
+Support/Info.plist
+Support/*-Info.plist
+Support/*.entitlements
+Vendor/

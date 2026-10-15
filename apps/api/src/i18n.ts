@@ -195,6 +195,9 @@ const en = {
   phaseWaiting: 'At the stop',
   phaseRiding: 'On the bus',
   phaseMissed: "Missed it. Here's the next way there.",
+  /** An iPhone notification's words when there's no card to word it from (push.ts). */
+  pushTitle: 'Your trip',
+  pushOpen: 'Open terminus for the latest on your trip.',
   phaseGone: "If you missed it, here's the next way there.",
   svcFrom: ((svc: string, stop: string) => `${svc} from ${stop}`) as Fn<[string, string]>,
   walk: 'walk',
@@ -537,6 +540,8 @@ const zh: Msgs = {
   phaseWaiting: '在车站',
   phaseRiding: '在车上',
   phaseMissed: '错过了。这是下一种到达方式。',
+  pushTitle: '你的行程',
+  pushOpen: '打开 terminus 查看行程的最新情况。',
   phaseGone: '如果错过了，这是下一种到达方式。',
   svcFrom: (svc, stop) => zs`在${stop}搭${svc}`,
   walk: '步行',
@@ -755,6 +760,8 @@ export const ERRORS_ZH: Record<string, string> = {
   'web push is not set up on this server': '这台服务器没有设置网页推送',
   'send subscription: an https endpoint with keys.p256dh and keys.auth': '请发送 subscription：带 keys.p256dh 和 keys.auth 的 https 端点',
   'send token (the FCM registration token) or subscription': '请发送 token（FCM 注册令牌）或 subscription',
+  'send token as apns:<hex device token> or apnsla:<hex Live Activity token>, with :sandbox from a development build':
+    '请以 apns:<十六进制设备令牌> 或 apnsla:<十六进制实时活动令牌> 发送 token，开发版本再加上 :sandbox',
   "send id (from card.suggestion) or trip and pref ('earlier' or 'quiet'), and choice: accept, dismiss or undo":
     "请发送 id（来自 card.suggestion）或 trip 和 pref（'earlier' 或 'quiet'），以及 choice：accept、dismiss 或 undo",
   "that's a lot of reports for one day; thanks, try again tomorrow": '今天的反馈已经很多了，谢谢！请明天再试',
@@ -786,7 +793,7 @@ export const ERRORS_ZH: Record<string, string> = {
   'that request expired; start again': '这个请求已失效，请重新开始',
   'turn on location, or add a home stop in Settings': '打开定位，或在设置里添加家附近的车站',
   'profile must be an object': '资料必须是一个对象',
-  "platform is 'android', 'mac' or 'web'": "platform 必须是 'android'、'mac' 或 'web'",
+  "platform is 'android', 'mac', 'ios' or 'web'": "platform 必须是 'android'、'mac'、'ios' 或 'web'",
   "that code isn't right; check the email and try again": '验证码不对，请检查邮件后再试',
   'context is the answer object': 'context 必须是答案对象',
   'context is too large': 'context 太大了',
