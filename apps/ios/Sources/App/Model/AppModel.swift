@@ -450,6 +450,18 @@ final class AppModel {
         }
     }
 
+    /// The server words the answer, the day and the stops' boards: asked for
+    /// again in the new language, and the widgets redrawn in it.
+    func languageChanged() {
+        TripSync.restyled()
+        BusesModel.shared.languageChanged()
+        guard paired else { return }
+        Task {
+            await load(restart: true)
+            await loadDay()
+        }
+    }
+
     func loadDestinations() {
         guard destinations.isEmpty, let token else { return }
         Task {

@@ -29,6 +29,12 @@ import WidgetKit
         countWidgets()
     }
 
+    /// A new language: the widgets redraw in it, whatever the next answer says.
+    static func restyled() {
+        shown = nil
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
     static func signedIn() {
         shown = nil
         Push.signedIn()

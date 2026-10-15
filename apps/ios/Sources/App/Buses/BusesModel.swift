@@ -59,6 +59,12 @@ final class BusesModel {
     private var token: String? { AppModel.shared.token }
 
     /// A new account (or none) starts the tab afresh.
+    /// A new language: each board is asked for again as it next shows, in it.
+    /// What's there stays until then, rather than the page going blank.
+    func languageChanged() {
+        answeredAt = [:]
+    }
+
     func sync() {
         let s = AppModel.shared.session
         guard s != session else { return }

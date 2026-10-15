@@ -9,7 +9,11 @@ final class Prefs {
 
     /// auto, en or zh (Lang.pref), here so a change redraws the app.
     var lang: String = Lang.pref {
-        didSet { Lang.pref = lang }
+        didSet {
+            guard lang != oldValue else { return }
+            Lang.pref = lang
+            AppModel.shared.languageChanged()
+        }
     }
 
     /// auto, light or dark.
