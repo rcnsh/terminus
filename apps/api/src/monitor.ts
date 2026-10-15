@@ -109,6 +109,8 @@ export const answering = (u: UpstreamState): boolean => u.up || (u.oks ?? 0) > 0
 export const answeringSince = (u: UpstreamState): number => (!u.up && answering(u) && u.okSince ? u.okSince : u.since);
 /** How long an operator email may take to send. */
 export const MAIL_TIMEOUT_MS = 15_000;
+/** How long the heartbeat ping may take. */
+export const HEARTBEAT_TIMEOUT_MS = 10_000;
 /** Warn this long before calendar.json runs out. */
 export const CALENDAR_WARN_DAYS = 45;
 
@@ -758,4 +760,19 @@ export async function runCron(env: Env, nowMs: number): Promise<void> {
   // against where the recorder saw the buses.
   await step('usage', () => recordActive(env, nowMs));
   await step('eta', () => recordEta(env, nowMs));
+  // Last, so a run that hangs or dies partway sends none.
+  await step('heartbeat', () => pingHeartbeat(env));
+}
+
+/**
+ * The cron's dead man's switch: tells an outside monitor (healthchecks.io)
+ * the run finished. Everything above alerts from inside this cron, so a
+ * cron that stops running, or a deploy that breaks it, says nothing; the
+ * monitor notices the missing pings instead. Steps that failed still ping:
+ * those are on the dashboard. HEARTBEAT_URL is set on the stable site only.
+ */
+export async function pingHeartbeat(env: Env): Promise<void> {
+  if (!env.HEARTBEAT_URL) return;
+  const res = await fetch(env.HEARTBEAT_URL, { signal: AbortSignal.timeout(HEARTBEAT_TIMEOUT_MS) });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }
