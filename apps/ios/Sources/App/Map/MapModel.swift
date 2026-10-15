@@ -235,6 +235,15 @@ final class MapModel {
 
     func open(bus id: String) { sheet = .bus(Sheet.Bus(id: id)) }
 
+    /// Where the open sheet's stop or bus is on the map, to keep it in sight.
+    var sheetSpot: Spot? {
+        switch sheet {
+        case .stop(let code, _): campus?.stop(code).map { Spot(lat: $0.lat, lon: $0.lon) }
+        case .bus(let b): buses.first { $0.id == b.id }.map { Spot(lat: $0.lat, lon: $0.lon) }
+        case nil: nil
+        }
+    }
+
     /// A stop from another tab (Nearby on Now) or from a bus's sheet (`from`,
     /// which back returns to): its sheet, and the map moved onto it. Unknown codes are ignored.
     func showStop(_ code: String, from: Sheet.Bus? = nil) {

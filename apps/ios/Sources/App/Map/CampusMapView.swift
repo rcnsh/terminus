@@ -485,12 +485,17 @@ struct CampusMapView: UIViewRepresentable {
 
         /// The sheet grew (its rows came) or the pills moved: a place just
         /// moved onto stays in the middle of what they leave uncovered.
+        /// Otherwise a sheet that opened or grew over its own stop or bus
+        /// moves the map just enough to show it again.
         func coverChanged() {
-            guard let f = following, Date() < f.until else {
-                following = nil
-                return
-            }
-            centre(on: f.spot)
+            if let f = following, Date() < f.until { return centre(on: f.spot) }
+            following = nil
+            guard let view, let spot = map.sheetSpot else { return }
+            let p = view.convert(CLLocationCoordinate2D(latitude: spot.lat, longitude: spot.lon), toPointTo: view)
+            let top = cover.top + 24
+            let bottom = view.bounds.height - cover.bottom - 24
+            guard bottom > top, p.y < top || p.y > bottom || p.x < 0 || p.x > view.bounds.width else { return }
+            centre(on: spot)
         }
 
         /// Close in on `spot` (zoom 17, or nearer if already), in the middle
