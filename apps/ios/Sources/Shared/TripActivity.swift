@@ -1,0 +1,104 @@
+import Foundation
+
+#if canImport(ActivityKit)
+    import ActivityKit
+#endif
+
+/// The Live Activity for a trip under way (Android's live notification): on
+/// the Lock Screen and in the Dynamic Island from "time to go" until you're
+/// there. The app starts, updates and ends it from each answer (LiveTrip);
+/// the server updates and ends it by push (apnsla: tokens), with the same
+/// state built the same way from the card.
+struct TripAttributes: Sendable {
+    /// The trip it's about: the card's trip key, else when the class starts.
+    /// A different trip ends this one and starts its own.
+    var trip: String
+
+    /// What it shows, the server's words but for the countdown, which ticks
+    /// on the phone. The keys and types are the server's push payload's
+    /// (`content-state`): every key present, null when it doesn't apply, and
+    /// times in whole seconds since 1970.
+    struct ContentState: Codable, Hashable, Sendable {
+        /// idle, due, heading, waiting, riding, missed or arrived.
+        var phase: String
+        /// "On your way", "On the bus".
+        var phaseText: String?
+        /// card.title: "D2 · 09:42", "On the R2".
+        var headline: String
+        /// card.line: "Leave by 09:38 · D2 from PGP", "On the R2 · off at UTown ~09:52".
+        var line: String
+        /// 12 characters at most ("Leave 09:38", "Off 09:52"): the Dynamic Island.
+        var glance: String
+        /// Where to, short: "GEA1000".
+        var to: String?
+        /// The bus, as painted.
+        var svc: String?
+        var color: String?
+        /// Where you board, and where you get off.
+        var stop: String?
+        var off: String?
+        /// When to leave; when the bus leaves `stop` (on the bus, when it left); when you get off.
+        var leaveAt: Int?
+        var departAt: Int?
+        var arriveAt: Int?
+        /// A timetable guess, not a bus seen: times shown with "~".
+        var estimated: Bool
+        /// The planned bus has left and nothing says whether you're on it: never "Leave now".
+        var gone: Bool
+        /// The trip misses the class.
+        var late: Bool
+        var staleAt: Int?
+    }
+}
+
+#if canImport(ActivityKit)
+    extension TripAttributes: ActivityAttributes {}
+#endif
+
+extension TripAttributes.ContentState {
+    private static func date(_ s: Int?) -> Date? { s.map { Date(timeIntervalSince1970: TimeInterval($0)) } }
+    private static func secs(_ d: Date?) -> Int? { d.map { Int($0.timeIntervalSince1970.rounded()) } }
+
+    var leaveDate: Date? { Self.date(leaveAt) }
+    var departDate: Date? { Self.date(departAt) }
+    var arriveDate: Date? { Self.date(arriveAt) }
+    var staleDate: Date? { Self.date(staleAt) }
+
+    /// What the countdown counts to at `now` (the phone's clock): getting off
+    /// on the bus, leaving before it's time to go, else the bus. Nil when
+    /// there's nothing ahead.
+    func countdown(now: Date) -> (to: Date, kind: String)? {
+        if phase == "riding" { return arriveDate.flatMap { $0 > now ? ($0, "off") : nil } }
+        if !gone, ["idle", "due"].contains(phase), let at = leaveDate, at > now { return (at, "leave") }
+        if let at = departDate, at > now, phase != "missed" { return (at, "bus") }
+        return nil
+    }
+
+    /// The state for `answer`, or nil when there's no trip under way. One
+    /// function, the same mapping the server makes from the card.
+    static func of(_ a: NextAnswer) -> Self? {
+        guard let card = a.card, TripPrefs.tripPhases.contains(card.phase), a.mode != "rest" else { return nil }
+        let ride = card.phase == "riding" ? card.ride : nil
+        let j = card.journey
+        let bus = j?.bus
+        return Self(
+            phase: card.phase,
+            phaseText: card.phaseText,
+            headline: card.title ?? a.label,
+            line: card.line ?? a.label,
+            glance: card.glance ?? "",
+            to: j?.place ?? a.dest?.label,
+            svc: ride?.svc ?? bus?.svc,
+            color: bus.flatMap { ride == nil || $0.svc == ride?.svc ? $0.color : nil },
+            stop: bus?.stop,
+            off: ride?.stops.last?.name ?? j.flatMap { $0.toStop.isEmpty ? nil : $0.toStop },
+            leaveAt: secs(a.leaveAt),
+            departAt: secs(ride?.boardAt ?? j?.boardDate),
+            arriveAt: secs(ride?.arriveAt),
+            estimated: a.leave?.estimated ?? (j.map { !$0.live } ?? false),
+            gone: card.gone,
+            late: card.late,
+            staleAt: secs(a.staleAt)
+        )
+    }
+}
