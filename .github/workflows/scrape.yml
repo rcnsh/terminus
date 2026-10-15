@@ -7,13 +7,14 @@ on:
     - cron: "0 3 * * 1"
   workflow_dispatch:
 
-# Three jobs, so no job holds both third-party code and something worth
+# Separate jobs, so no job holds both third-party code and something worth
 # stealing. Anything running in a job can read every secret mapped into it,
 # whichever step gets them, so:
-#   scrape  has the feed and DataMall secrets, runs only this repo's Python
-#           (standard library only), and can't push;
-#   test    runs the npm dev dependencies, with no secrets and no push;
-#   commit  can push, and runs no npm code at all.
+#   scrape     has the feed and DataMall secrets, runs only this repo's Python
+#              (standard library only), and can't push;
+#   test       runs the npm dev dependencies, with no secrets and no push;
+#   commit     can push, and runs no npm code at all;
+#   heartbeat  has only the healthchecks.io ping URL, and runs only curl.
 # The data travels between them as an artifact, checked against the hashes
 # the scrape job took, so what's pushed is exactly what was scraped and tested.
 permissions:
@@ -265,3 +266,33 @@ jobs:
             exit 1
           fi
           echo "pushed $sha"
+
+  # Tells healthchecks.io how the run went, so a scrape that fails, or stops
+  # running at all, is noticed: the check expects a ping every Monday. A job
+  # of its own, for the same reason as the others: it holds the HC_SCRAPE_URL
+  # secret and nothing else, checks nothing out and runs only curl. It runs
+  # whatever happened above (always()), so it pings exactly once: success
+  # when scrape and test passed and commit passed or was skipped because the
+  # data didn't change; /fail for anything else (a failure, a cancellation).
+  # A commit that finds main moved passes with a warning, so it pings success.
+  # Without the secret (a fork, say) it skips the ping, and a healthchecks.io
+  # outage never fails the run.
+  heartbeat:
+    needs: [scrape, test, commit]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Ping healthchecks.io
+        continue-on-error: true
+        env:
+          HC_URL: ${{ secrets.HC_SCRAPE_URL }}
+          OK: ${{ needs.scrape.result == 'success' && needs.test.result == 'success' && (needs.commit.result == 'success' || needs.commit.result == 'skipped') }}
+        run: |
+          if [ -z "$HC_URL" ]; then
+            echo "::notice title=heartbeat::the HC_SCRAPE_URL secret isn't set, so nothing was pinged"
+            exit 0
+          fi
+          if [ "$OK" = true ]; then url="$HC_URL"; else url="$HC_URL/fail"; fi
+          curl -fsS -m 10 --retry 5 -o /dev/null "$url" || echo "::warning title=heartbeat::couldn't reach healthchecks.io"

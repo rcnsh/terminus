@@ -361,7 +361,9 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
   tests and `check_scraped.py` with no secrets; `commit`, the only job that
   can push, runs no npm code and fast-forwards main to a data-only commit
   on top of the tested one (if main moved, it pushes nothing: run it
-  again). `check_scraped.py` compares with HEAD and fails on a stop moved
+  again). A last job, `heartbeat`, holds only the `HC_SCRAPE_URL` secret
+  and runs only curl, pinging healthchecks.io with the run's outcome.
+  `check_scraped.py` compares with HEAD and fails on a stop moved
   over 100 m, a changed stop order, any item lost from a list under 20,
   odd names, or a moved semester; such a change is committed by hand. A failed
   shapes, public-buses or calendar refresh keeps the committed file and

@@ -1275,7 +1275,11 @@ on the scraped files, with no secrets; `commit` is the only job that can
 push, runs no npm code, and fast-forwards `main` to a commit of just the
 data files on top of the commit that was scraped and tested. If `main`
 moved during the run, nothing is pushed and the run says to run it again. A
-deploy then puts the data live.
+deploy then puts the data live. A fourth job, `heartbeat`, holds only the
+`HC_SCRAPE_URL` repository secret (a healthchecks.io ping URL) and runs only
+curl: it pings on success, a commit skipped because nothing changed
+included, and `/fail` on anything else, so a scrape that fails or stops
+running is noticed. Without the secret it skips the ping.
 
 The scrapers that send keys (`scrape_stops.py`, `scrape_lta.py`) refuse
 every redirect, since urllib re-sends every header to wherever one points;
