@@ -67,7 +67,7 @@ struct PrimaryButtonStyle: ButtonStyle {
         configuration.label
             .font(.body.weight(.semibold))
             .multilineTextAlignment(.center)
-            .foregroundStyle(enabled ? Color.white : Color.faint)
+            .foregroundStyle(enabled ? Color.onBrand : Color.faint)
             .frame(maxWidth: .infinity, minHeight: 52)
             .padding(.horizontal, 16)
             .background(enabled ? Color.brand : Color.surface2, in: Capsule())
@@ -102,7 +102,7 @@ struct ChipButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.subheadline.weight(.semibold))
-            .foregroundStyle(filled ? Color.white : (enabled ? Color.ink : Color.faint))
+            .foregroundStyle(filled ? Color.onBrand : (enabled ? Color.ink : Color.faint))
             .padding(.horizontal, 16)
             .frame(minHeight: 40)
             .background(filled ? (enabled ? Color.brand : Color.faint) : Color.surface, in: Capsule())
@@ -110,6 +110,11 @@ struct ChipButtonStyle: ButtonStyle {
             .opacity(configuration.isPressed ? 0.75 : 1)
             .contentShape(Capsule())
     }
+}
+
+extension Color {
+    /// Words on the accent: white on the light theme's deep orange, the dark ink on the dark theme's light one, as on Android.
+    static let onBrand = themed(0xFFFFFF, 0x1C1917)
 }
 
 extension ButtonStyle where Self == PrimaryButtonStyle {
