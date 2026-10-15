@@ -162,7 +162,7 @@ final class SettingsModel {
     private var version: String?
     /// The changes made since the last save was sent, shown already, to send next.
     private var pending: [(inout ProfileDoc) -> Void] = []
-    /// Moves on with each import and sign-out: a save's answer from before one is dropped.
+    /// Moves on with each sign-out: a save's answer from before one is dropped.
     private var epoch = 0
     /// Whether a change is waiting or on its way: the profile shown is ahead of the server's.
     private var saving: Bool { saveTask != nil || sending != nil || !pending.isEmpty }
@@ -185,9 +185,9 @@ final class SettingsModel {
 
     /// Sends the changes waiting, made on the profile as the server last had
     /// it. One save at a time: changes made meanwhile wait for its answer and
-    /// go next, on what it saved.
+    /// go next, on what it saved. None while an import runs: they go on top of its answer.
     private func send() {
-        guard sending == nil, !pending.isEmpty, let token = app.token, let base = confirmed else { return }
+        guard sending == nil, !importing, !pending.isEmpty, let token = app.token, let base = confirmed else { return }
         let changes = pending
         pending = []
         var doc = base
@@ -294,28 +294,39 @@ final class SettingsModel {
     func importTimetable(_ link: String) {
         let share = link.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !share.isEmpty, !importing, let token = app.token else { return }
+        // A change still waiting goes first, so it isn't saved over the import.
+        if saveTask != nil {
+            saveTask?.cancel()
+            saveTask = nil
+            send()
+        }
         importing = true
         imported = nil
         Task {
-            defer { importing = false }
+            // Changes made from here wait for the import's answer, then go on top of it.
+            while let s = sending { await s.value }
             do {
                 let r = try await Api(token: token).importTimetable(share)
-                saveTask?.cancel()
-                saveTask = nil
-                sending = nil
-                epoch += 1
+                importing = false
                 imported = r
                 unplaced = r.unplaced
-                profile = ProfileDoc(r.profile)
-                pending = []
-                // The import saved a new version; the next edit fetches it on a clash.
+                let saved = ProfileDoc(r.profile)
+                confirmed = saved
+                var shown = saved
+                for change in pending { change(&shown) }
+                profile = shown
+                // The import saved a new version; the next save fetches it on a clash.
+                if saveTask == nil { send() }
                 sharedLink = nil
                 if let m = me {
                     me = Me(email: m.email, anonymous: m.anonymous, onboarding: m.onboarding, needsReimport: false, term: r.term)
                 }
                 announce(r.summary)
             } catch {
-                if !rejected(error, token) { say(failureMessage(error)) }
+                importing = false
+                if rejected(error, token) { return }
+                if saveTask == nil { send() }
+                say(failureMessage(error))
             }
         }
     }
