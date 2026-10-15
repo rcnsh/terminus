@@ -19,6 +19,7 @@ Clients are thin:
 | Website + web app | `apps/web/public` | Preact + htm (vendored), CSS, **no build step**, served by the Worker |
 | Android app + widgets | `apps/android` | Kotlin, Jetpack Compose, Glance, maplibre-compose |
 | Mac menu bar app | `apps/macos` | SwiftUI, Sparkle updates, MapLibre Native (map window) |
+| iPhone app + widgets | `apps/ios` | SwiftUI (iOS 17+), WidgetKit, ActivityKit, MapLibre Native; XcodeGen. Not released yet |
 
 Live at https://terminus.run (API docs at `/docs`); beta at
 https://beta.terminus.run. It's an independent student project, not
@@ -114,7 +115,8 @@ root path gets 426 from an app, 308 from anything else (`movedApi` in
    `src/lta.ts` is the same for DataMall's shape.
 4. **Secrets never go in git or in output.** NUS feed keys and the LTA DataMall
    account key live in `apps/api/.dev.vars` locally and as Worker secrets in
-   production. All are gitignored, along with `dev/` (captured traffic), `.private/`, keystores,
+   production, as do the push keys (FCM, Web Push, and APNs's `APNS_KEY`,
+   off until it's set). All are gitignored, along with `dev/` (captured traffic), `.private/`, keystores,
    `*.p12`/`*.pem`/`*.key` and `apps/android/app/google-services.json`.
    Never print secret values, and never use NUSNET credentials: the feed uses
    a public guest token.
@@ -165,6 +167,14 @@ node apps/api/scripts/dev-stub.mjs    # local Worker on :8787 with a fake feed a
   a warm Gradle cache: CI's cold runners fetch files it leaves out.
 - Mac (CI, macOS runner): `swift build && swift test`, then
   `swift build -c release --arch arm64` in `apps/macos`.
+- iPhone (CI, macOS runner), in `apps/ios`: `python3 -I scripts/strings.py
+  --check`, `scripts/fetch-maplibre.sh`, `xcodegen generate`, the unit tests
+  (`-only-testing:TerminusTests`) on an iPhone simulator, then an unsigned
+  Release build for `generic/platform=iOS`. The generated project, plists
+  and entitlements aren't in git: `project.yml` is the source. The UI tests
+  (`TerminusUITests`) run against the dev stub with
+  `TEST_RUNNER_TERMINUS_STUB=http://127.0.0.1:8787` and save screenshots to
+  `TEST_RUNNER_TERMINUS_SHOTS`; look at them.
 - In a Linux cloud container without the Android SDK or Xcode, you can't
   build those apps. Check pure-Kotlin logic another way if you can (for
   example `MapData.kt` with its JUnit test, using a standalone `kotlinc`
@@ -340,6 +350,17 @@ apps/macos/
   Support/            Info.plist (version, SUPublicEDKey), zh-Hans strings, app icons
   Tests/              swift test, on the API's answer fixtures
   build.sh            Builds terminus.app (CHANNEL=beta for the beta)
+apps/ios/
+  project.yml         XcodeGen: the app, widgets, notification service, tests; version, bundle ids, app group
+  Sources/Shared/     Shared by the app and its extensions: Api.swift, Answer.swift (types), Account.swift,
+                      JourneyText.swift, Spoken.swift (VoiceOver's sentences), OfflineDay.swift, SkyDraw.swift
+  Sources/App/        Now/, Buses/, Map/, Settings/, Onboarding/, Model/ (AppModel), UI/ (Sky, theme),
+                      System/ (Push.swift: APNs and Live Activities, TripSync.swift, Links.swift: terminus://)
+  Sources/Widgets/    WidgetKit widgets and the Live Activity
+  Sources/NotificationService/  Rewords a push before it's shown
+  Support/            zh-Hans strings (a table per part), assets
+  Tests/, UITests/    Unit tests on the API's fixtures; XCUITests against the dev stub
+  scripts/            strings.py (fills and checks the Chinese), fetch-maplibre.sh, run.sh
 scripts/              release.sh, release-beta.sh (+ release-lib.sh, their shared checks;
                       verify-sparkle.swift), github-release.sh, package-mac.sh,
                       appcast.py, release-notes.py, map-tiles.sh (+ map-tiles.lock),
@@ -470,6 +491,11 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
   Lint fails on a missing translation.
 - **Mac:** `L("English %@", value)`, with the Chinese in
   `Support/zh-Hans.lproj/Localizable.strings`.
+- **iPhone:** `L("English %@", value)` too, with the Chinese in
+  `apps/ios/Support/zh-Hans.lproj/` (a table per part: `Now.strings`,
+  `Settings.strings`, ...; anything else in `Localizable.strings`).
+  `scripts/strings.py` fills in what Android or the Mac already says, and
+  `--check` (in CI) fails on anything missing.
 - Place and service names (KR MRT, COM3, D2) stay English in both.
 - One glossary for all of it, at the top of `src/i18n.ts` (class 课, stop
   车站, favourite 收藏, packed 很挤, email address 邮箱, …), with a space
@@ -520,14 +546,14 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
   - `wrangler` is only installed in `apps/api`, so run wrangler/R2 commands
     from there.
   - Server-side changes, the website included, are live for everyone once
-    deployed. Android and Mac changes need an app release.
+    deployed. Android, Mac and iPhone changes need an app release.
 - **Releasing.**
   - **Which version.** Whenever a release, a beta or a version bump comes
     up, work the version out this way and say why, rather than guessing or
     taking the next number. Compare against the last stable tag,
     `T=$(git describe --tags --abbrev=0 --exclude='*-beta*')`. App code
-    means `apps/android/app/src/main`, `apps/macos/Sources` and
-    `apps/macos/Support`.
+    means `apps/android/app/src/main`, `apps/macos/Sources`,
+    `apps/macos/Support`, `apps/ios/Sources` and `apps/ios/Support`.
     1. **No release:** nothing in app code changed
        (`git diff --quiet $T HEAD -- <app code>`). Server and website
        changes only need `pnpm run deploy`; docs, tests, CI and scripts
@@ -557,9 +583,12 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
     picked it and the commits that decided it.
   - Bump Android `versionName`/`versionCode` (`apps/android/app/build.gradle.kts`),
     the Mac `CFBundleShortVersionString`/`CFBundleVersion`
-    (`apps/macos/Support/Info.plist`) and `API_VERSION` (`apps/api/src/openapi.ts`,
+    (`apps/macos/Support/Info.plist`), the iPhone's `MARKETING_VERSION`/
+    `CURRENT_PROJECT_VERSION` (`apps/ios/project.yml`) and `API_VERSION` (`apps/api/src/openapi.ts`,
     the version on the API docs) together. A test fails if the versions
-    differ, or if `versionCode` and `CFBundleVersion` do.
+    differ, or if `versionCode`, `CFBundleVersion` and
+    `CURRENT_PROJECT_VERSION` do. The release scripts don't build the
+    iPhone app yet.
   - Push `main`, wait for CI to pass, deploy the Worker (`pnpm run deploy`),
     then run `scripts/release.sh --dry-run` and `scripts/release.sh` on the
     owner's Mac. It refuses a commit that isn't `origin/main` or whose CI
