@@ -278,8 +278,12 @@ struct DayLayout: View {
             ? (s.entry.day.flatMap { $0.date == nil || $0.date == OfflineDay.sgtDate(now) ? $0 : nil }?.items.filter {
                 ["now", "next", "later"].contains($0.status)
             }.prefix(rows)).map(Array.init) ?? [] : []
+        // A widget's size is fixed: what the steps and today leave over goes
+        // to the sky, rather than blank ground under them.
+        let todayH: CGFloat = today.isEmpty ? 0 : 8 + 17 + 28 * CGFloat(today.count)
+        let tallSky = max(skyH, h - 6 - bodyH - todayH - 14)
         return ZStack(alignment: .topLeading) {
-            SkyBackdrop(look: s.look, height: skyH, scale: 48 / 92, road: f.road, moon: CGPoint(x: 34, y: 66))
+            SkyBackdrop(look: s.look, height: tallSky, scale: 48 / 92, road: f.road, moon: CGPoint(x: 34, y: 66))
             VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 6) {
@@ -298,7 +302,7 @@ struct DayLayout: View {
                     if let tile = f.tile { TileView(tile: tile, inks: sky).padding(.top, 8) }
                 }
                 .padding(.top, 8)
-                .frame(height: skyH, alignment: .topLeading)
+                .frame(height: tallSky, alignment: .topLeading)
                 Spacer().frame(height: 6)
                 if let journey, let a = s.answer {
                     JourneyView(answer: a, journey: journey, style: s.style, inks: ground, page: s.look.page, now: now)
