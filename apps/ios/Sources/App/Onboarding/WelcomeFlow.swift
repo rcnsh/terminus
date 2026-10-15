@@ -38,52 +38,58 @@ struct WelcomeFlow: View {
 /// First launch: start straight away, or sign in to an account you already
 /// have. A bus's livery sweeps across the top, a stripe in each service's
 /// colour, with the mark where the fleet number would be; the buttons sit at
-/// the foot, under the thumb, and the page scrolls when large text needs more.
+/// the foot, under the thumb. It fits the screen; it scrolls only when
+/// large text can't fit.
 struct WelcomeView: View {
     let model: WelcomeModel
     let open: (WelcomeFlow.Page) -> Void
     @Environment(AppModel.self) private var app
 
     var body: some View {
-        GeometryReader { geo in
-            ScrollView {
-                VStack(spacing: 0) {
-                    LanguageSwitch()
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                        .padding(.horizontal, 12)
-                    // The livery grows with the screen, so a tall phone isn't left with a gap.
-                    ZStack(alignment: .bottom) {
-                        WelcomeLivery()
-                        TerminusMark()
-                            .frame(width: 92, height: 92)
-                            .shadow(color: .black.opacity(0.25), radius: 12, y: 6)
-                            .padding(6)
-                            .background(Color.page, in: RoundedRectangle(cornerRadius: 30, style: .continuous))
-                    }
-                    .frame(height: min(360, max(220, geo.size.height * 0.36)))
-                    Wordmark(size: 46)
-                        .tracking(-1)
-                        .padding(.top, 16)
-                    Text(L("When to leave for class, and which bus to catch."))
-                        .font(.title3)
-                        .foregroundStyle(Color.muted)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 40)
-                        .padding(.top, 8)
-                    HStack(spacing: 6) {
-                        ForEach(WelcomeLivery.services, id: \.svc) { BusBadge(svc: $0.svc, color: $0.color, size: 13) }
-                    }
-                    .padding(.top, 14)
-                    .accessibilityHidden(true)
-                    Spacer(minLength: 32)
-                    actions
-                }
-                .frame(minHeight: geo.size.height)
-            }
-            .scrollBounceBehavior(.basedOnSize)
+        // Fitted to the screen, the livery taking what's left, so there's
+        // nothing to drag on any phone; it scrolls only when large text
+        // can't fit, rather than cutting the buttons off.
+        ViewThatFits(in: .vertical) {
+            page(livery: 130...360)
+            ScrollView { page(livery: 160...160) }
         }
         .background(Color.page.ignoresSafeArea())
         .statusBar(light: nil)
+    }
+
+    private func page(livery: ClosedRange<CGFloat>) -> some View {
+        VStack(spacing: 0) {
+            LanguageSwitch()
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .padding(.horizontal, 12)
+            // The livery grows with the screen, so a tall phone isn't left with a gap.
+            ZStack(alignment: .bottom) {
+                WelcomeLivery()
+                TerminusMark()
+                    .frame(width: 92, height: 92)
+                    .shadow(color: .black.opacity(0.25), radius: 12, y: 6)
+                    .padding(6)
+                    .background(Color.page, in: RoundedRectangle(cornerRadius: 30, style: .continuous))
+            }
+            .frame(minHeight: livery.lowerBound, maxHeight: livery.upperBound)
+            Wordmark(size: 46)
+                .tracking(-1)
+                .padding(.top, 16)
+            Text(L("When to leave for class, and which bus to catch."))
+                .font(.title3)
+                .foregroundStyle(Color.muted)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 40)
+                .padding(.top, 8)
+            HStack(spacing: 6) {
+                ForEach(WelcomeLivery.services, id: \.svc) { BusBadge(svc: $0.svc, color: $0.color, size: 13) }
+            }
+            .padding(.top, 14)
+            .accessibilityHidden(true)
+            Spacer(minLength: 24)
+            actions
+        }
     }
 
     private var busy: Bool { model.starting || model.pairing }
