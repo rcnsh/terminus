@@ -48,7 +48,7 @@ import Testing
 
 private func response(date: String) -> HTTPURLResponse {
     HTTPURLResponse(
-        url: URL(string: "https://terminus.rcn.sh/api/me/next")!, statusCode: 200, httpVersion: nil,
+        url: URL(string: "https://terminus.run/api/me/next")!, statusCode: 200, httpVersion: nil,
         headerFields: ["date": date, "cache-control": "no-store"])!
 }
 

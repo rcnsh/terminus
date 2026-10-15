@@ -74,13 +74,18 @@ enum Shared {
 
 /// This phone's sign-in, in the keychain: readable after the first unlock,
 /// so the widgets and a push in the night can use it, and never backed up
-/// to another phone. Each server keeps its own, so the real account's token
-/// never goes to the dev stub.
+/// to another phone. The site's two addresses are one server with one
+/// token; the dev stub keeps its own, so the real account's token never goes
+/// to it over plain HTTP.
 enum TokenStore {
-    private static var account: String { Api.base }
+    private static var account: String { account(for: Api.base) }
     private static let service = "sh.rcn.terminus.token"
 
-    private static func query(_ extra: [CFString: Any] = [:]) -> [CFString: Any] {
+    /// The keychain account a server's token is kept under: "site" for either
+    /// of the site's addresses, the stub's own address for the stub.
+    static func account(for base: String) -> String { Servers.isLocal(base) ? base : "site" }
+
+    private static func query(_ extra: [CFString: Any] = [:], account: String = Self.account) -> [CFString: Any] {
         var q: [CFString: Any] = [
             kSecClass: kSecClassGenericPassword,
             kSecAttrService: service,
@@ -119,8 +124,26 @@ enum TokenStore {
     }
 
     static func read() -> String? {
+        if let token = read(account: account) { return token }
+        // Builds before 3.2.0 kept the site's token under the address it was
+        // saved on: moved over once, so nobody is signed out.
+        guard account == "site" else { return nil }
+        for old in legacy {
+            guard let token = read(account: old) else { continue }
+            save(token)
+            SecItemDelete(query(account: old) as CFDictionary)
+            return token
+        }
+        return nil
+    }
+
+    /// Where builds before 3.2.0 kept the site's token: the address it was saved on.
+    private static var legacy: [String] { [Servers.backupBase, Servers.defaultBase] }
+
+    private static func read(account: String) -> String? {
         var out: CFTypeRef?
-        let status = SecItemCopyMatching(query([kSecReturnData: true, kSecMatchLimit: kSecMatchLimitOne]) as CFDictionary, &out)
+        let status = SecItemCopyMatching(
+            query([kSecReturnData: true, kSecMatchLimit: kSecMatchLimitOne], account: account) as CFDictionary, &out)
         guard status == errSecSuccess, let data = out as? Data else { return nil }
         return String(data: data, encoding: .utf8)
     }
@@ -136,5 +159,7 @@ enum TokenStore {
 
     static func clear() {
         SecItemDelete(query() as CFDictionary)
+        // And any token still under an old address, so it can't come back on the next read.
+        if account == "site" { for old in legacy { SecItemDelete(query(account: old) as CFDictionary) } }
     }
 }

@@ -23,8 +23,10 @@ settings:
     CODE_SIGN_STYLE: Automatic
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     LOCALIZATION_PREFERS_STRING_CATALOGS: NO
-    # The stable app's addresses; the Beta configuration has its own (Servers in Api.swift).
-    TERMINUS_API: https://terminus.rcn.sh
+    # The stable app's addresses: requests go to the one people see, the old
+    # one the backup. The Beta configuration has its own (Servers in Api.swift).
+    TERMINUS_API: https://terminus.run
+    TERMINUS_BACKUP: https://terminus.rcn.sh
     TERMINUS_SITE: https://terminus.run
     TERMINUS_SUFFIX: ""
     TERMINUS_NAME: terminus
@@ -34,7 +36,8 @@ settings:
     LINK_SHOWN: terminus.run
   configs:
     Beta:
-      TERMINUS_API: https://beta.terminus.rcn.sh
+      TERMINUS_API: https://beta.terminus.run
+      TERMINUS_BACKUP: https://beta.terminus.rcn.sh
       TERMINUS_SITE: https://beta.terminus.run
       TERMINUS_SUFFIX: .beta
       TERMINUS_NAME: terminus beta
@@ -85,6 +88,7 @@ targets:
         CFBundleLocalizations: [en, zh-Hans]
         CFBundleAllowMixedLocalizations: true
         TerminusAPI: $(TERMINUS_API)
+        TerminusBackup: $(TERMINUS_BACKUP)
         TerminusSite: $(TERMINUS_SITE)
         TerminusGroup: $(APP_GROUP)
         ITSAppUsesNonExemptEncryption: false
@@ -144,6 +148,7 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleLocalizations: [en, zh-Hans]
         TerminusAPI: $(TERMINUS_API)
+        TerminusBackup: $(TERMINUS_BACKUP)
         TerminusSite: $(TERMINUS_SITE)
         TerminusGroup: $(APP_GROUP)
         NSExtension:
@@ -177,6 +182,7 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleLocalizations: [en, zh-Hans]
         TerminusAPI: $(TERMINUS_API)
+        TerminusBackup: $(TERMINUS_BACKUP)
         TerminusSite: $(TERMINUS_SITE)
         TerminusGroup: $(APP_GROUP)
         NSExtension:

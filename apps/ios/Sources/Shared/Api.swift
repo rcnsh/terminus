@@ -5,21 +5,77 @@ import Foundation
 /// (Settings, About) picks one; nothing can add one, so it can't send the
 /// token anywhere but our own servers.
 ///
-/// The default is terminus.rcn.sh, not the address people see
-/// (terminus.run): it's the one kept for good, so a phone that's never
-/// updated keeps working whichever address the site moves to.
+/// The default is the address people see (terminus.run), the one that goes
+/// with the project if someone else takes it over. The other,
+/// terminus.rcn.sh, is the backup: a request that can't reach one at all
+/// goes to the other ([order]), so a network that refuses one of them (NUS
+/// Wi-Fi refused terminus.run in October 2026) doesn't stop the app.
 enum Servers {
     /// The default: TerminusAPI in the build's Info.plist (the Beta configuration's own).
-    static let defaultBase = Bundle.main.object(forInfoDictionaryKey: "TerminusAPI") as? String ?? "https://terminus.rcn.sh"
+    static let defaultBase = Bundle.main.object(forInfoDictionaryKey: "TerminusAPI") as? String ?? "https://terminus.run"
+    /// The site's old address, the backup: TerminusBackup in the build's Info.plist.
+    static let backupBase = Bundle.main.object(forInfoDictionaryKey: "TerminusBackup") as? String ?? "https://terminus.rcn.sh"
     static let stub = "http://localhost:8787"
     private static let key = "server"
     private static let menuKey = "developerMenu"
 
-    /// [defaultBase] first, then the address people see, then in a debug build the stub.
-    static func all(default base: String, site: String, debug: Bool) -> [String] {
+    /// [defaultBase] first, then the backup, then in a debug build the stub.
+    static func all(default base: String, backup: String, debug: Bool) -> [String] {
         var out: [String] = []
-        for s in [base, site] + (debug ? [stub] : []) where !out.contains(s) { out.append(s) }
+        for s in [base, backup] + (debug ? [stub] : []) where !out.contains(s) { out.append(s) }
         return out
+    }
+
+    /// The site's other address, for when [base] can't be reached. None for the stub.
+    static func backup(of base: String, in all: [String]) -> String? {
+        isLocal(base) ? nil : all.first { $0 != base && !isLocal($0) }
+    }
+
+    /// Where a request goes, in turn: [base], then its backup. While a
+    /// [detour] is on (the backup answered a moment ago when [base] didn't),
+    /// the backup first, so a refused address doesn't slow every request.
+    static func order(_ base: String, in all: [String], detour: String?) -> [String] {
+        guard let other = backup(of: base, in: all) else { return [base] }
+        return detour == other ? [other, base] : [base, other]
+    }
+
+    /// Whether [error] means the server was never reached, so the request can
+    /// go to the other address without arriving twice: no address for the
+    /// name, a connection refused, or a TLS handshake cut off (a firewall
+    /// resetting it). A connection lost otherwise only for a GET, which is
+    /// safe to repeat; never a timeout or no network at all.
+    static func unreached(_ error: Error, method: String) -> Bool {
+        guard let e = error as? URLError else { return false }
+        switch e.code {
+        case .cannotFindHost, .dnsLookupFailed, .cannotConnectToHost, .secureConnectionFailed: return true
+        case .networkConnectionLost: return method == "GET"
+        default: return false
+        }
+    }
+
+    /// How long requests go to the backup first, once it answered when the chosen address didn't.
+    static let detourS: TimeInterval = 600
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var detour: (base: String, until: Date)?
+
+    /// Where a request to [base] goes now, in turn ([order]).
+    static func tries(_ base: String, now: Date = Date()) -> [String] {
+        let d = lock.withLock { detour }
+        return order(base, in: choices, detour: d.flatMap { now < $0.until ? $0.base : nil })
+    }
+
+    /// [at] answered a request meant for [base]. [base] ends a detour; the
+    /// backup starts one, which isn't stretched while it lasts, so [base] is
+    /// tried first again within [detourS].
+    static func answered(_ at: String, base: String, now: Date = Date()) {
+        lock.withLock {
+            if at == base {
+                detour = nil
+            } else if let d = detour, d.base == at, now < d.until {
+            } else {
+                detour = (at, now.addingTimeInterval(detourS))
+            }
+        }
     }
 
     /// The saved choice if it's still one of [all], else the default.
@@ -47,7 +103,7 @@ enum Servers {
         #endif
     }
 
-    static var choices: [String] { all(default: defaultBase, site: Api.site, debug: isDebug) }
+    static var choices: [String] { all(default: defaultBase, backup: backupBase, debug: isDebug) }
     static var current: String { pick(Shared.defaults.string(forKey: key), from: choices) }
     static var menuShown: Bool { menuAlways(debug: isDebug, beta: Api.isBeta) || Shared.defaults.bool(forKey: menuKey) }
     static func unlockMenu() { Shared.defaults.set(true, forKey: menuKey) }
@@ -64,9 +120,9 @@ struct Api: Sendable {
     /// The site this app belongs to, as people see it (TerminusSite in the build's Info.plist).
     static let site = Bundle.main.object(forInfoDictionaryKey: "TerminusSite") as? String ?? stableSite
     static var siteHost: String { site.replacingOccurrences(of: "https://", with: "") }
-    /// Where links open (the account page, privacy, pairing): the address kept
-    /// for good, as the other apps do, because NUS Wi-Fi refuses terminus.run for now.
-    static let linkBase = Servers.defaultBase
+    /// Where links open (the account page, privacy, pairing): the site people
+    /// see, as the requests' default is.
+    static let linkBase = site
     static var isBeta: Bool { site != stableSite }
     /// Where requests go: the server chosen, or TERMINUS_API_BASE for the dev stub in a debug build.
     static var base: String { devOverride("TERMINUS_API_BASE") ?? Servers.current }
@@ -419,22 +475,42 @@ struct Api: Sendable {
         if Date() < quietUntil {
             throw ApiError(status: 429, message: L("terminus is busy. Try again in a minute."), retryAfter: quietUntil.timeIntervalSinceNow)
         }
-        var comps = URLComponents(string: Api.base + path)!
-        if !query.isEmpty { comps.queryItems = query }
-        var req = URLRequest(url: comps.url!, timeoutInterval: fast ? 8 : 15)
-        req.httpMethod = method
-        req.setValue("application/json", forHTTPHeaderField: "accept")
-        req.setValue(Api.client, forHTTPHeaderField: "x-terminus-client")
-        req.setValue(Lang.header, forHTTPHeaderField: "accept-language")
-        if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "authorization") }
-        if let ifNoneMatch { req.setValue(ifNoneMatch, forHTTPHeaderField: "if-none-match") }
-        if let ifMatch { req.setValue(ifMatch, forHTTPHeaderField: "if-match") }
-        if let json {
-            req.setValue("application/json", forHTTPHeaderField: "content-type")
-            req.httpBody = json
+        func urlRequest(_ base: String, timeout: TimeInterval) -> URLRequest {
+            var comps = URLComponents(string: base + path)!
+            if !query.isEmpty { comps.queryItems = query }
+            var req = URLRequest(url: comps.url!, timeoutInterval: timeout)
+            req.httpMethod = method
+            req.setValue("application/json", forHTTPHeaderField: "accept")
+            req.setValue(Api.client, forHTTPHeaderField: "x-terminus-client")
+            req.setValue(Lang.header, forHTTPHeaderField: "accept-language")
+            if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "authorization") }
+            if let ifNoneMatch { req.setValue(ifNoneMatch, forHTTPHeaderField: "if-none-match") }
+            if let ifMatch { req.setValue(ifMatch, forHTTPHeaderField: "if-match") }
+            if let json {
+                req.setValue("application/json", forHTTPHeaderField: "content-type")
+                req.httpBody = json
+            }
+            return req
         }
-        let sent = Date()
-        let (data, resp) = try await Self.session.data(for: req)
+        // The chosen address, then the site's other one if it couldn't be
+        // reached at all (Servers.order), inside the same deadline: widgets
+        // and the notification service have no time for a second full wait.
+        let base = Api.base
+        let tries = Servers.tries(base)
+        let deadline = Date().addingTimeInterval(fast ? 8 : 15)
+        var answer: (Data, URLResponse)?
+        var sent = Date()
+        for (i, at) in tries.enumerated() where answer == nil {
+            sent = Date()
+            do {
+                answer = try await Self.session.data(for: urlRequest(at, timeout: max(1, deadline.timeIntervalSince(sent))))
+                Servers.answered(at, base: base)
+            } catch {
+                if i == tries.count - 1 || !Servers.unreached(error, method: method) || Date() >= deadline { throw error }
+            }
+        }
+        guard let answer else { throw URLError(.cannotConnectToHost) }
+        let (data, resp) = answer
         let http = resp as? HTTPURLResponse
         let status = http?.statusCode ?? 0
         if let http {
