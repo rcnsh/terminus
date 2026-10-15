@@ -109,6 +109,7 @@ import sh.rcn.terminus.Trip
 import sh.rcn.terminus.WEEKDAYS
 import sh.rcn.terminus.dayShort
 import sh.rcn.terminus.hour12
+import sh.rcn.terminus.id
 
 /** Settings' pages, in the order the list shows them. */
 internal enum class SettingsPage(val title: Int) {
@@ -1327,8 +1328,8 @@ private fun Favourites(profile: ProfileDoc, campus: Campus?, account: AccountVie
                     note = null
                     val add = { account.edit { it.addPlace(if (d.kind == "building" || d.kind == "room") d.code else d.label, to) } }
                     // One of your timetable's stops folds out of that list first; a searched one has gone with the search.
-                    if (timetable.none { it.code == d.code }) return@WherePicker add()
-                    picked = d.code
+                    if (timetable.none { it.id == d.id }) return@WherePicker add()
+                    picked = d.id
                     scope.afterFold {
                         add()
                         picked = null

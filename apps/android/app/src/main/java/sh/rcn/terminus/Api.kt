@@ -745,6 +745,26 @@ data class Destination(
 fun rankDestinations(all: List<Destination>, query: String, max: Int = SearchRank.MAX): List<Destination> =
     SearchRank.rank(all, query, max) { SearchRank.Key(it.kind, it.code, it.label, it.aliases) }
 
+/** A result's identity in a list: a stop and a building can share a code (COM3), and the kind tells them apart. */
+val Destination.id: String
+    get() = "$kind:$code"
+
+/**
+ * Whether this is the place a timetable row ([row], whose code is where its classes go) stands for: that stop or landmark itself, not a
+ * building or room sharing its code.
+ */
+fun Destination.isPlaceOf(row: Destination): Boolean = (kind == "stop" || kind == "landmark") && code == row.code
+
+/**
+ * The where picker's results for [query]: [pinned] (the timetable's stops) first, then the rest of the search, less the places a pinned row
+ * already stands for.
+ */
+fun whereResults(destinations: List<Destination>, pinned: List<Destination>, query: String): Pair<List<Destination>, List<Destination>> {
+    if (query.isBlank()) return pinned to emptyList()
+    val top = rankDestinations(pinned, query, max = 6)
+    return top to rankDestinations(destinations, query, max = 6).filter { d -> top.none { d.isPlaceOf(it) } }
+}
+
 /** What the user asked for: the planned trip, a saved place, or any stop/venue. */
 sealed interface Target {
     data object Plan : Target

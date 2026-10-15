@@ -38,7 +38,8 @@ import sh.rcn.terminus.R
 import sh.rcn.terminus.hhmm
 import sh.rcn.terminus.hhmm12
 import sh.rcn.terminus.hour12
-import sh.rcn.terminus.rankDestinations
+import sh.rcn.terminus.id
+import sh.rcn.terminus.whereResults
 
 /** One choice from a list, as a dropdown field. `null` is the blank option. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -108,9 +109,7 @@ internal fun WherePicker(
     )
     if (picked != null) return
     // [pinned] comes first in its own group, before anything is typed too.
-    val top = if (query.isBlank()) pinned else rankDestinations(pinned, query, max = 6)
-    val rest =
-        if (query.isBlank()) emptyList() else rankDestinations(destinations, query, max = 6).filter { d -> top.none { it.code == d.code } }
+    val (top, rest) = whereResults(destinations, pinned, query)
     if (top.isEmpty() && rest.isEmpty() && query.isBlank()) return
     Column {
         if (top.isEmpty() && rest.isEmpty() && destinations.isNotEmpty()) {
@@ -130,9 +129,9 @@ internal fun WherePicker(
         }
         for ((i, d) in (top + rest).withIndex()) {
             if (i == top.size && top.isNotEmpty()) HorizontalDivider(thickness = 2.dp)
-            // [leaving], just picked, folds away before it goes from the list.
-            key(d.code) {
-                FoldRow(shown = d.code != leaving, arriving = false) {
+            // [leaving] (a result's [id]), just picked, folds away before it goes from the list.
+            key(d.id) {
+                FoldRow(shown = d.id != leaving, arriving = false) {
                     Column {
                         Column(
                             Modifier.fillMaxWidth()
