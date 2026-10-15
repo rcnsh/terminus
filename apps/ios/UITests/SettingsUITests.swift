@@ -10,6 +10,7 @@ final class SettingsUITests: XCTestCase {
 
     override func setUp() {
         continueAfterFailure = false
+        stubPost("/__stub/reset")
         let (t, _) = stubSession()
         var req = URLRequest(url: URL(string: stub + "/api/me/profile")!)
         req.setValue("Bearer \(t)", forHTTPHeaderField: "authorization")

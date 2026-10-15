@@ -8,6 +8,7 @@ import XCTest
 final class OnboardingUITests: XCTestCase {
     nonisolated override func setUp() {
         continueAfterFailure = false
+        stubPost("/__stub/reset")
     }
 
     // MARK: welcome

@@ -7,6 +7,7 @@ import XCTest
 final class MapUITests: XCTestCase {
     nonisolated override func setUp() {
         continueAfterFailure = false
+        stubPost("/__stub/reset")
     }
 
     /// The app on the Map tab, the street map drawn.

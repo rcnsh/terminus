@@ -188,7 +188,6 @@ final class SettingsModel {
         Shared.defaults.set(pref, forKey: Self.langNoted)
         edit { $0.lang = pref }
         Prefs.shared.lang = pref
-        stayHere()
     }
 
     /// 12- or 24-hour times on every device; the card and widgets redraw in it.
@@ -209,24 +208,20 @@ final class SettingsModel {
         if Prefs.shared.clock != p.clock { Prefs.shared.clock = p.clock }
         let noted = Shared.defaults.string(forKey: Self.langNoted)
         let local = Prefs.shared.lang
+        #if DEBUG
+            // A test's TERMINUS_LANG is what it's testing: it goes to the account, not the other way.
+            if DevLaunch.langPinned, p.lang != local {
+                Shared.defaults.set(local, forKey: Self.langNoted)
+                edit { $0.lang = local }
+                return
+            }
+        #endif
         if p.lang == "auto", local != "auto", noted == nil {
             Shared.defaults.set(local, forKey: Self.langNoted)
             edit { $0.lang = local }
         } else if p.lang != noted {
             Shared.defaults.set(p.lang, forKey: Self.langNoted)
-            if p.lang != local {
-                Prefs.shared.lang = p.lang
-                stayHere()
-            }
-        }
-    }
-
-    /// A new language redraws the whole app, which starts again on its first
-    /// tab: back to Settings, on the page that was open (`path` is kept here).
-    private func stayHere() {
-        Task {
-            try? await Task.sleep(for: .milliseconds(50))
-            NotificationCenter.default.post(name: .openTab, object: MainTabs.Tab.settings)
+            if p.lang != local { Prefs.shared.lang = p.lang }
         }
     }
 

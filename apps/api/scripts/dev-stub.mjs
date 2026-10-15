@@ -33,6 +33,11 @@
  * STUB_NOW=<ISO time> starts the clock there, and POST /__stub/at?t=<ISO time>
  * moves it there (it runs on from it): STUB_NOW=2026-10-07T13:30:00Z is a
  * Wednesday 21:30 in Singapore, when R1 and R2 have stopped.
+ * The test account's class, GEA1000 at UTown, is CLASS_IN_MIN (50) minutes
+ * after the clock starts; POST /__stub/class?in=N moves it to N minutes from
+ * the stub's now, on its day, so a long test run always has a trip ahead.
+ * POST /__stub/hours?real=1 (or 0) switches the real hours on or off, and
+ * POST /__stub/reset puts the clock and the hours back as they started.
  *
  * The timelapse recorder runs too, on the fake buses, as it would in its
  * window (the cron that starts it is a timer here). POST
@@ -74,7 +79,6 @@ if (Number.isNaN(skipMs)) throw new Error('STUB_NOW must be an ISO time, such as
 const stubNow = () => (frozenAt ?? realNow()) + skipMs;
 // STUB_HOURS=real: services keep their real hours, and the fake feed has
 // nothing for one outside them. Set once the Worker's graph is loaded.
-const REAL_HOURS = process.env.STUB_HOURS === 'real';
 let running = (_svc) => true;
 
 const graph = (await import('../data/stops.json', { with: { type: 'json' } })).default;
@@ -209,27 +213,31 @@ const edgeCache = installGlobals(feed);
 Date.now = stubNow; // installGlobals freezes the clock for tests; the dev server wants real time.
 
 const { default: worker, GRAPH } = await import('../src/index.ts');
-if (REAL_HOURS) {
-  const { inService } = await import('../src/resolve.ts');
-  running = (svc) => inService(GRAPH, svc, stubNow());
-} else {
-  GRAPH.serviceHours = {}; // every service "running", whatever the hour
-}
+const { inService } = await import('../src/resolve.ts');
+const serviceHours = GRAPH.serviceHours;
+// The real hours, or every service "running" whatever the hour (POST /__stub/hours?real=1|0).
+const realHours = (on) => {
+  GRAPH.serviceHours = on ? serviceHours : {};
+  running = on ? (svc) => inService(GRAPH, svc, stubNow()) : (_svc) => true;
+};
+realHours(process.env.STUB_HOURS === 'real');
 
 const db = makeD1();
 const email = makeEmail();
-// The test class, CLASS_IN_MIN (50) minutes from the stub's clock (STUB_NOW
-// included), in Singapore time: late at night, on the next day.
-const classAt = new Date(stubNow() + 8 * 3_600_000 + Number(process.env.CLASS_IN_MIN ?? 50) * 60_000);
-const today = classAt.getUTCDay();
-const inAnHour = classAt.getUTCHours() * 60 + classAt.getUTCMinutes();
+// The test class, `inMin` minutes from the stub's clock (STUB_NOW included),
+// in Singapore time: late at night, on the next day.
+const classIn = (inMin) => {
+  const at = new Date(stubNow() + 8 * 3_600_000 + inMin * 60_000);
+  const min = at.getUTCHours() * 60 + at.getUTCMinutes();
+  return { day: at.getUTCDay(), arriveByMin: min, endMin: Math.min(1439, min + 60), to: 'UTOWN', label: 'GEA1000 @ UTown', venue: '' };
+};
 const profile = {
   home: { stops: ['PGP'] },
   gapHours: 2,
   dayStartMin: 0,
   dayEndMin: 1439,
   trips: [],
-  manual: [{ day: today, arriveByMin: inAnHour, endMin: Math.min(1439, inAnHour + 60), to: 'UTOWN', label: 'GEA1000 @ UTown', venue: '' }],
+  manual: [classIn(Number(process.env.CLASS_IN_MIN ?? 50))],
   places: [
     { key: 'mrt', label: 'KR MRT', to: 'KR-MRT' },
     { key: 'utown', label: 'UTown', to: 'UTOWN' },
@@ -394,6 +402,30 @@ async function serve(req, res) {
     const polls = await fastForward(minutes);
     res.writeHead(200, { 'content-type': 'text/plain' });
     return res.end(`recorded ${minutes} min (${polls} polls); now ${new Date(stubNow()).toISOString()}\n`);
+  }
+  if (req.method === 'POST' && req.url.startsWith('/__stub/hours')) {
+    realHours(new URL(req.url, 'http://x').searchParams.get('real') === '1');
+    edgeCache._store.clear();
+    res.writeHead(200, { 'content-type': 'text/plain' });
+    return res.end('ok\n');
+  }
+  // Back to how it started, for UI tests that each set their own world:
+  // the real clock, running, and the hours STUB_HOURS gave.
+  if (req.method === 'POST' && req.url === '/__stub/reset') {
+    skipMs = process.env.STUB_NOW ? Date.parse(process.env.STUB_NOW) - realNow() : 0;
+    frozenAt = null;
+    realHours(process.env.STUB_HOURS === 'real');
+    edgeCache._store.clear();
+    res.writeHead(200, { 'content-type': 'text/plain' });
+    return res.end(`now ${new Date(stubNow()).toISOString()}\n`);
+  }
+  if (req.method === 'POST' && req.url.startsWith('/__stub/class')) {
+    const inMin = Number(new URL(req.url, 'http://x').searchParams.get('in') ?? 50);
+    const row = db._db.prepare('SELECT json FROM profiles WHERE user_id = ?').get('test-user');
+    const saved = { ...(row ? JSON.parse(row.json) : profile), manual: [classIn(inMin)] };
+    db._db.prepare('UPDATE profiles SET json = ? WHERE user_id = ?').run(JSON.stringify(saved), 'test-user');
+    res.writeHead(200, { 'content-type': 'text/plain' });
+    return res.end(`class at ${saved.manual[0].arriveByMin} min past midnight\n`);
   }
   if (req.method === 'POST' && req.url.startsWith('/__stub/skip')) {
     const min = Number(new URL(req.url, 'http://x').searchParams.get('min') ?? 0);

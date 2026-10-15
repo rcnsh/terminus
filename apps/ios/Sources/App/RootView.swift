@@ -29,7 +29,6 @@ struct RootView: View {
 struct MainTabs: View {
     @Environment(AppModel.self) private var app
     @Environment(\.colorScheme) private var scheme
-    @State private var tab = Tab.now
     private var sky = SkyClock.shared
 
     enum Tab: Hashable { case now, buses, map, settings }
@@ -37,10 +36,10 @@ struct MainTabs: View {
     var body: some View {
         // The Map tab tapped while on it goes back to how it opened, as on Android.
         let selection = Binding(
-            get: { tab },
+            get: { app.tab },
             set: { t in
-                if t == tab, t == .map { MapModel.shared.home() }
-                tab = t
+                if t == app.tab, t == .map { MapModel.shared.home() }
+                app.tab = t
             })
         TabView(selection: selection) {
             NowView()
@@ -57,11 +56,11 @@ struct MainTabs: View {
                 .tag(Tab.settings)
         }
         .onReceive(NotificationCenter.default.publisher(for: .openTab)) { n in
-            if let t = n.object as? Tab { tab = t }
+            if let t = n.object as? Tab { app.tab = t }
         }
         // Now, Buses and Settings start in the hour's sky: light icons over a
         // dark one. The map is the theme's.
-        .statusBar(light: tab == .map ? nil : SkyPalette.of(sky.phase, dark: scheme == .dark).lightInk)
+        .statusBar(light: app.tab == .map ? nil : SkyPalette.of(sky.phase, dark: scheme == .dark).lightInk)
     }
 }
 

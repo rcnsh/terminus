@@ -18,6 +18,8 @@ extension XCUIApplication {
         app.launchEnvironment["TERMINUS_LANG"] = lang
         if let theme { app.launchEnvironment["TERMINUS_THEME"] = theme }
         if signedIn {
+            // The class 50 minutes off, however long the run has gone on.
+            stubPost("/__stub/class?in=50")
             let (token, email) = stubSession()
             app.launchEnvironment["TERMINUS_TOKEN"] = token
             app.launchEnvironment["TERMINUS_EMAIL"] = email
@@ -46,7 +48,7 @@ func stubSession() -> (String, String) {
     return (out.token, out.email)
 }
 
-/// POSTs to one of the stub's own routes (/__stub/at?t=..., /__stub/freeze).
+/// POSTs to one of the stub's own routes (/__stub/at?t=..., /__stub/freeze, /__stub/class?in=N).
 func stubPost(_ path: String) {
     var req = URLRequest(url: URL(string: stub + path)!)
     req.httpMethod = "POST"

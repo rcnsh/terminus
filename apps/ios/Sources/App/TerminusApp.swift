@@ -47,6 +47,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     /// TERMINUS_THEME=light|dark the appearance, TERMINUS_CARD_STYLE=steps|route|ticket
     /// the card's style (and TERMINUS_SKY=night|dawn|day|golden|dusk the sky's hour, in SkyClock).
     enum DevLaunch {
+        /// TERMINUS_LANG was given: the account takes this phone's language, rather than the other way round.
+        nonisolated(unsafe) static var langPinned = false
+
         static func apply() {
             let env = ProcessInfo.processInfo.environment
             if env["TERMINUS_RESET"] == "1" {
@@ -63,7 +66,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
                 Shared.defaults.set(env["TERMINUS_EMAIL"] == nil, forKey: "anonymous")
                 Shared.defaults.set(false, forKey: "needsSetup")
             }
-            if let l = env["TERMINUS_LANG"] { Lang.pref = l }
+            if let l = env["TERMINUS_LANG"] {
+                Lang.pref = l
+                langPinned = true
+            }
             if let t = env["TERMINUS_THEME"] { Shared.defaults.set(t, forKey: "theme") }
             if let s = env["TERMINUS_CARD_STYLE"] { Shared.defaults.set(s, forKey: "cardStyle") }
         }

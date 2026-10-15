@@ -79,6 +79,9 @@ final class AppModel {
     /// A stop to show on the Buses tab, picked elsewhere (Now's Nearby, a
     /// widget): Buses shows it and sets this back to nil.
     var openStop: String?
+    /// The tab on screen. Kept here, not in the view, so a new language
+    /// (which redraws everything) leaves you where you were.
+    var tab: MainTabs.Tab = .now
     /// A service's line to show on the Buses tab (the map's "Show as list"
     /// with no stop open): Buses shows it and sets this back to nil.
     var openLine: String?
@@ -157,6 +160,7 @@ final class AppModel {
         nearby = nil
         day = nil
         removed = nil
+        tab = .now
         places = []
         setAdded([])
         destinations = []

@@ -6,6 +6,13 @@ import XCTest
 final class NowUITests: XCTestCase {
     override func setUp() {
         continueAfterFailure = false
+        // A Wednesday at 09:30, with every service running; each launch puts the class 50 minutes on.
+        stubPost("/__stub/reset")
+        stubPost("/__stub/at?t=2026-10-07T01:30:00Z")
+    }
+
+    override func tearDown() {
+        stubPost("/__stub/reset")
     }
 
     private func launch(lang: String = "en", theme: String = "light", sky: String? = nil, style: String? = nil) -> XCUIApplication {
@@ -14,7 +21,9 @@ final class NowUITests: XCTestCase {
         if let style { extra["TERMINUS_CARD_STYLE"] = style }
         let app = XCUIApplication.terminus(signedIn: true, lang: lang, theme: theme, extra: extra)
         app.launch()
-        XCTAssertTrue(app.descendants(matching: .any)["now.card"].waitForExistence(timeout: 15), "no card")
+        let came = app.descendants(matching: .any)["now.card"].waitForExistence(timeout: 15)
+        if !came { shot("failed-no-card-\(name)", app) }
+        XCTAssertTrue(came, "no card")
         return app
     }
 
@@ -86,8 +95,9 @@ final class NowUITests: XCTestCase {
         XCTAssertTrue(app.buttons["chip.next"].waitForExistence(timeout: 10))
         shot("now-after-go-later", app)
         // A favourite's chip shows its own card.
-        app.swipeDown()
-        app.buttons["chip.KR MRT"].tap()
+        let chip = app.buttons["chip.KR MRT"]
+        for _ in 0..<6 where !chip.isHittable { app.swipeDown() }
+        chip.tap()
         XCTAssertTrue(app.descendants(matching: .any)["now.card"].waitForExistence(timeout: 15))
         shot("now-favourite", app)
     }
