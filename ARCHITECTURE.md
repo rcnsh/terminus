@@ -116,9 +116,10 @@ every client's tests at once.
   worker caches exact files and the API tests import the same modules.
 - **Quality is explicit.** Every time is `live`, `scheduled`, `stale` or
   similar. A guess is never shown as live.
-- **Two addresses.** `terminus.run` is the public name; `terminus.rcn.sh`
-  stays because installed apps call it and NUS Wi-Fi blocks the new domain
-  for now (`movingOff` in the config).
+- **Two addresses.** `terminus.run` is the project's own domain and the one
+  the apps call from 3.3.0. `terminus.rcn.sh` is the backup: a client that
+  can't reach one tries the other once, and apps before 3.3.0 still call it.
+  Both stay attached to each Worker (`test/deploy.test.js`).
 - **Stable and beta are separate.** Their own D1, KV, R2, rate limits and
   dataset; `test/deploy.test.js` checks they share nothing.
 - **English and Simplified Chinese everywhere,** enforced by tests and

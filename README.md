@@ -187,7 +187,7 @@ Secrets go in `apps/api/.dev.vars` locally (template:
 | `HEALTH_TOKEN` | yes | Operator token (`x-health-token`): dashboard, `/api/health?probe=1` |
 | `TURNSTILE_SECRET` | yes | Turnstile on web sign-in. Unset: the check is skipped |
 | `FCM_SERVICE_ACCOUNT` | yes | Firebase service account JSON, for Android push |
-| `VAPID_PRIVATE_KEY` | yes | Web Push key, a P-256 JWK (`scripts/vapid-key.mjs`) |
+| `VAPID_PRIVATE_KEY` | yes | Web Push key, a P-256 JWK (`apps/api/scripts/vapid-key.mjs`) |
 | `LTA_ACCOUNT_KEY` | no | LTA DataMall key, for public buses. Unset: shuttles only |
 | `ANALYTICS_TOKEN` | no | Lets the dashboard query Analytics Engine |
 | `TIMELAPSE_TOKEN` | no | Opens `/api/timelapse/*` for the machine that renders videos |
