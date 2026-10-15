@@ -103,6 +103,11 @@ struct NowView: View {
             guard onScreen && scenePhase == .active else { return }
             await app.poll()
         }
+        // Said when the card changes (a new bus, the trip's next phase), and
+        // only then: nothing in it ticks.
+        .onChange(of: app.showNearby ? nil : Spoken.announcement(app.answer)) { old, said in
+            if old != nil { announce(said) }
+        }
         .onAppear { onScreen = true }
         .onDisappear { onScreen = false }
         .sheet(isPresented: $reporting) { ReportSheet() }
