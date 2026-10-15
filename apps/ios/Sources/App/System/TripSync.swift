@@ -36,6 +36,12 @@ import WidgetKit
     }
 
     static func signedIn() {
+        // Maybe another account than the last (a sign-in from a guest): what the
+        // widgets kept was that one's, so they fetch this one's rather than show it.
+        Shared.lastAnswer = nil
+        Shared.lastDay = nil
+        Shared.lastNearby = nil
+        WidgetStore.forget()
         shown = nil
         Push.signedIn()
         WidgetCenter.shared.reloadAllTimelines()
