@@ -171,10 +171,10 @@ node apps/api/scripts/dev-stub.mjs    # local Worker on :8787 with a fake feed a
   --check`, `scripts/fetch-maplibre.sh`, `xcodegen generate`, the unit tests
   (`-only-testing:TerminusTests`) on an iPhone simulator, then an unsigned
   Release build for `generic/platform=iOS`. The generated project, plists
-  and entitlements aren't in git: `project.yml` is the source. The UI tests
-  (`TerminusUITests`) run against the dev stub with
-  `TEST_RUNNER_TERMINUS_STUB=http://127.0.0.1:8787` and save screenshots to
-  `TEST_RUNNER_TERMINUS_SHOTS`; look at them.
+  and entitlements aren't in git: `project.yml` is the source. CI doesn't
+  run the UI tests: on a Mac, `apps/ios/scripts/ui-tests.sh [simulator]
+  [suite]` starts a stub of its own, runs them against it and leaves
+  screenshots in `apps/ios/build/shots`. Look at them.
 - In a Linux cloud container without the Android SDK or Xcode, you can't
   build those apps. Check pure-Kotlin logic another way if you can (for
   example `MapData.kt` with its JUnit test, using a standalone `kotlinc`
@@ -195,7 +195,10 @@ node apps/api/scripts/dev-stub.mjs    # local Worker on :8787 with a fake feed a
 - every service running at any hour, unless `STUB_HOURS=real` (real hours,
   and no buses or times outside them). `STUB_NOW=2026-10-07T13:30:00Z`
   starts the clock there (a Wednesday 21:30 in Singapore: R1 and R2 have
-  stopped); `POST /__stub/at?t=<ISO>` moves it later.
+  stopped); `POST /__stub/at?t=<ISO>` moves it. `POST /__stub/hours?real=1`
+  switches the real hours on at runtime, `POST /__stub/class?in=N` puts the
+  test class N minutes ahead, and `POST /__stub/reset` puts the clock and
+  hours back: the iPhone's UI tests set what each suite needs with these.
 
 It listens on loopback only; `STUB_HOST=0.0.0.0` opens it to the network
 (a phone on the same Wi-Fi), and `PORT` moves it from 8787.
