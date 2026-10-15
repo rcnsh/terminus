@@ -95,6 +95,8 @@ targets:
       properties:
         com.apple.security.application-groups: [$(APP_GROUP)]
         aps-environment: development
+        # A leave reminder and a due or missed trip's push get through a Focus.
+        com.apple.developer.usernotifications.time-sensitive: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: sh.rcn.terminus$(TERMINUS_SUFFIX)
