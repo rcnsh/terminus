@@ -1,0 +1,62 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face { font-family: "SG"; src: url(../../apps/web/public/assets/fonts/space-grotesk-latin.woff2) format("woff2"); font-weight: 300 700; }
+@font-face { font-family: "In"; src: url(../../apps/web/public/assets/fonts/inter-latin.woff2) format("woff2"); font-weight: 100 900; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1190px; height: 1684px; }
+body { background: #0b0a09; color: #f2efeb; font-family: "In", "PingFang SC", sans-serif; position: relative; overflow: hidden; }
+.housing { position: absolute; top: 90px; left: 70px; right: 70px; background: #151311; border-radius: 28px; padding: 34px 40px 40px;
+  box-shadow: inset 0 0 0 3px #26221f, 0 40px 80px -30px #000; }
+.housing .head { display: flex; justify-content: space-between; font-family: "SG"; font-weight: 600; font-size: 22px; color: #8a847e; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 22px; }
+.screen { background: #050403; border-radius: 12px; padding: 26px 30px; position: relative; overflow: hidden; }
+/* dot-matrix: the lit text, then a grid of dark gaps over it */
+.screen::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(circle, transparent 1.6px, #050403 2.2px) 0 0 / 5px 5px; }
+.led { font-family: Menlo, monospace; font-weight: 700; color: #ffb02e; text-shadow: 0 0 14px rgb(255 160 30 / .8); white-space: nowrap; }
+.row { display: grid; grid-template-columns: 180px 1fr 220px; font-size: 50px; line-height: 1.5; }
+.row .t { text-align: right; }
+.row.dim { color: #b8781f; text-shadow: 0 0 10px rgb(255 160 30 / .4); }
+.row.go { color: #ffd166; }
+.ticker { font-size: 30px; margin-top: 10px; color: #ff7a1a; }
+
+h1 { position: absolute; top: 690px; left: 84px; right: 84px; font-family: "SG"; font-weight: 700; font-size: 150px; line-height: .9; letter-spacing: -6px; }
+h1 em { font-style: normal; color: #fb923c; }
+.sub { position: absolute; top: 1150px; left: 88px; width: 640px; font-size: 32px; line-height: 1.4; color: #a39d97; }
+.sub b { color: #f2efeb; font-weight: 600; }
+.zh { position: absolute; top: 1340px; left: 88px; font-size: 36px; font-weight: 600; color: #6f6964; letter-spacing: 2px; }
+
+.foot { position: absolute; left: 84px; right: 84px; bottom: 84px; display: flex; align-items: flex-end; justify-content: space-between; border-top: 2px solid #2c2926; padding-top: 40px; }
+.brand { display: flex; align-items: center; gap: 16px; font-family: "SG"; font-weight: 700; font-size: 40px; }
+.brand svg { width: 58px; height: 58px; }
+.fine { font-size: 16px; color: #6f6964; margin-top: 18px; }
+.get { display: flex; align-items: center; gap: 28px; text-align: right; }
+.get img { width: 150px; height: 150px; }
+.url { font-family: "SG"; font-weight: 700; font-size: 48px; letter-spacing: -1px; color: #fb923c; }
+.small { font-size: 19px; color: #a39d97; margin-top: 6px; }
+</style></head><body>
+<div class="housing">
+  <div class="head"><span>Your next class · COM3</span><span>09:33</span></div>
+  <div class="screen">
+    <div class="row led go"><span>D2</span><span>LEAVE NOW</span><span class="t">4 min</span></div>
+    <div class="row led dim"><span>A1</span><span>via Kent Ridge</span><span class="t">9 min</span></div>
+    <div class="row led dim"><span>WALK</span><span>campus paths</span><span class="t">17 min</span></div>
+    <div class="ticker led">&gt; D2 from PGP at 09:41. 6 min early for class.</div>
+  </div>
+</div>
+
+<h1>Your own<br>departure <em>board.</em></h1>
+<p class="sub">terminus reads your <b>NUSMods timetable</b> and the <b>live shuttle feed</b>, then tells you which bus, which stop and when to leave. Or that walking is faster.</p>
+<div class="zh">你的专属发车时刻表。</div>
+
+<div class="foot">
+  <div>
+    <div class="brand"><svg viewBox="0 0 64 64"><rect width="64" height="64" fill="#fafaf9" rx="15"/><rect width="36" height="9" x="14" y="14" fill="#fb923c" rx="4.5"/><rect width="9" height="36" x="27.5" y="14" fill="#fb923c" rx="4.5"/><circle cx="44" cy="37" r="4.5" fill="#1c1917"/></svg>terminus</div>
+    <div class="fine">An independent student project, not affiliated with NUS.</div>
+  </div>
+  <div class="get">
+    <div><div class="url">terminus.run</div><div class="small">Free · Android, Mac and the web</div></div>
+    <img src="qr-white.svg" alt="">
+  </div>
+</div>
+</body></html>

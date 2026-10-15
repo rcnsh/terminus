@@ -1,0 +1,81 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face { font-family: "SG"; src: url(../../apps/web/public/assets/fonts/space-grotesk-latin.woff2) format("woff2"); font-weight: 300 700; }
+@font-face { font-family: "In"; src: url(../../apps/web/public/assets/fonts/inter-latin.woff2) format("woff2"); font-weight: 100 900; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1190px; height: 1684px; }
+body { background: #1f6fa3; color: #1c1917; font-family: "In", "PingFang SC", sans-serif; position: relative; overflow: hidden; }
+body::before { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(135deg, rgb(255 255 255 / .04) 0 40px, transparent 40px 80px); }
+h1 { position: absolute; top: 90px; left: 80px; right: 80px; font-family: "SG"; font-weight: 700; font-size: 128px; line-height: .92; letter-spacing: -5px; color: #fff; }
+h1 em { font-style: normal; color: #ffd166; }
+.zh { position: absolute; top: 360px; left: 84px; font-size: 34px; font-weight: 600; color: rgb(255 255 255 / .6); letter-spacing: 2px; }
+
+.ticket { position: absolute; top: 470px; left: 110px; width: 970px; height: 860px; transform: rotate(-3deg); filter: drop-shadow(0 40px 50px rgb(0 0 0 / .35)); }
+.paper { position: absolute; inset: 0; background: #fbf6ea; border-radius: 26px;
+  /* the notches either side of the perforation */
+  -webkit-mask: radial-gradient(circle at 0 600px, transparent 34px, #000 35px) left / 51% 100% no-repeat,
+                radial-gradient(circle at 100% 600px, transparent 34px, #000 35px) right / 51% 100% no-repeat; }
+.paper::after { content: ""; position: absolute; inset: 0; border-radius: 26px; background: repeating-linear-gradient(0deg, rgb(120 90 40 / .03) 0 2px, transparent 2px 5px); }
+.band { position: absolute; top: 0; left: 0; right: 0; height: 120px; background: #1c1917; border-radius: 26px 26px 0 0; color: #fbf6ea; display: flex; align-items: center; justify-content: space-between; padding: 0 50px; font-family: "SG"; }
+.band b { font-size: 40px; font-weight: 700; display: flex; align-items: center; gap: 16px; }
+.band b svg { width: 52px; height: 52px; }
+.band span { font-size: 22px; letter-spacing: 4px; font-weight: 600; color: #fb923c; }
+.stripes { position: absolute; top: 120px; left: 0; right: 0; height: 14px; display: flex; }
+.stripes i { flex: 1; }
+.leg { position: absolute; top: 190px; left: 50px; right: 50px; display: grid; grid-template-columns: 1fr 120px 1fr; align-items: end; }
+.lab { font-family: "SG"; font-size: 20px; letter-spacing: 3px; font-weight: 600; color: #8a847e; text-transform: uppercase; }
+.place { font-family: "SG"; font-weight: 700; font-size: 104px; letter-spacing: -4px; line-height: 1; }
+.leg .to { text-align: right; }
+.arrow { text-align: center; font-size: 60px; color: #c2410c; padding-bottom: 18px; font-family: "SG"; }
+.fields { position: absolute; top: 380px; left: 50px; right: 50px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border-top: 3px solid #1c1917; border-bottom: 3px solid #1c1917; }
+.fields div { padding: 18px 0 20px; }
+.fields div + div { border-left: 2px dashed #c9c0ae; padding-left: 24px; }
+.val { font-family: "SG"; font-weight: 700; font-size: 44px; margin-top: 6px; }
+.svc { display: inline-block; font-size: 38px; line-height: 52px; background: #8e44c9; color: #fff; border-radius: 10px; padding: 0 16px; }
+.note { position: absolute; top: 550px; left: 50px; font-size: 20px; color: #6b6560; }
+.perf { position: absolute; top: 600px; left: 40px; right: 40px; border-top: 4px dotted #c9c0ae; }
+.stub { position: absolute; top: 630px; left: 50px; right: 50px; display: flex; align-items: center; gap: 36px; }
+.stub img { width: 190px; height: 190px; }
+.stub .url { font-family: "SG"; font-weight: 700; font-size: 58px; letter-spacing: -2px; }
+.stub .small { font-size: 21px; color: #6b6560; line-height: 1.45; margin-top: 6px; }
+.stamp { position: absolute; right: 60px; top: 650px; width: 200px; height: 200px; border: 6px solid #c2410c; border-radius: 50%; color: #c2410c; display: flex; align-items: center; justify-content: center; text-align: center; font-family: "SG"; font-weight: 700; font-size: 30px; line-height: 1.05; transform: rotate(14deg); opacity: .8; letter-spacing: 1px; }
+.stamp::before { content: ""; position: absolute; inset: 10px; border: 2px solid #c2410c; border-radius: 50%; }
+.foot { position: absolute; bottom: 80px; left: 84px; right: 84px; color: rgb(255 255 255 / .85); font-size: 28px; line-height: 1.45; }
+.foot b { color: #fff; }
+.fine { position: absolute; bottom: 40px; left: 84px; font-size: 15px; color: rgb(255 255 255 / .5); }
+</style></head><body>
+<h1>Your ticket to<br>being <em>on time.</em></h1>
+<div class="zh">准时上课的车票。</div>
+
+<div class="ticket">
+  <div class="paper">
+    <div class="band">
+      <b><svg viewBox="0 0 64 64"><rect width="64" height="64" fill="#fbf6ea" rx="15"/><rect width="36" height="9" x="14" y="14" fill="#fb923c" rx="4.5"/><rect width="9" height="36" x="27.5" y="14" fill="#fb923c" rx="4.5"/><circle cx="44" cy="37" r="4.5" fill="#1c1917"/></svg>terminus</b>
+      <span>ADMIT ONE · CAMPUS SHUTTLE</span>
+    </div>
+    <div class="stripes"><i style="background:#d32f2f"></i><i style="background:#d9a000"></i><i style="background:#ec4fa0"></i><i style="background:#8e44c9"></i><i style="background:#2b9ad6"></i><i style="background:#f57c1f"></i><i style="background:#34a853"></i></div>
+    <div class="leg">
+      <div><div class="lab">From</div><div class="place">PGP</div></div>
+      <div class="arrow">→</div>
+      <div class="to"><div class="lab">To</div><div class="place">UTown</div></div>
+    </div>
+    <div class="fields">
+      <div><div class="lab">Leave</div><div class="val">09:37</div></div>
+      <div><div class="lab">Board</div><div class="val"><span class="svc">D2</span></div></div>
+      <div><div class="lab">Departs</div><div class="val">09:41</div></div>
+      <div><div class="lab">Class</div><div class="val">10:00</div></div>
+    </div>
+    
+    <div class="perf"></div>
+    <div class="stub">
+      <img src="qr.svg" alt="">
+      <div><div class="url">terminus.run</div><div class="small">Fare: free. Running: not required.<br>Android, Mac and the web</div></div>
+    </div>
+    <div class="stamp">ON<br>TIME</div>
+  </div>
+</div>
+
+<p class="foot"><b>Which bus, which stop, and when to leave</b> for every class on your timetable, from the live shuttle feed. Or a heads-up when walking is faster.</p>
+<div class="fine">An independent student project, not affiliated with NUS.</div>
+</body></html>
