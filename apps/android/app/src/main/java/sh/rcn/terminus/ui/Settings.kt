@@ -1119,6 +1119,8 @@ private fun Classes(profile: ProfileDoc, campus: Campus?, account: AccountViewMo
         for ((imported, i, t) in all) {
             // Tapped, a class opens to change its stop, as on the web.
             val key = "${if (imported) "t" else "m"}$i"
+            // The class as this list shows it, every field: a change made again on a newer profile finds it, or no class at all.
+            val seen = profile.classAt(imported, i)
             val expanded = changing == key
             val state = stringResource(if (expanded) R.string.a11y_expanded else R.string.a11y_collapsed)
             Row(
@@ -1139,16 +1141,14 @@ private fun Classes(profile: ProfileDoc, campus: Campus?, account: AccountViewMo
                         )
                     if (about.isNotEmpty()) Hint(about.joinToString(" · "))
                 }
-                // Only while that place still holds this class: a second tap before the list redraws mustn't take the next one.
-                RemoveButton({
-                    account.edit { if ((if (imported) it.trips else it.manual).getOrNull(i) == t) it.removeClass(imported, i) }
-                })
+                // This class, found where it is now: a second tap before the list redraws mustn't take the next one.
+                RemoveButton({ if (seen != null) account.edit { it.removeClass(imported, i, seen) } })
             }
             if (changing == key) {
                 Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)) {
                     WherePicker(stringResource(R.string.change_stop, t.label), destinations, null) { d ->
-                        if (d != null) {
-                            account.edit { it.setClassStop(imported, i, if (d.kind == "landmark") d.code else d.stopCode) }
+                        if (d != null && seen != null) {
+                            account.edit { it.setClassStop(imported, i, seen, if (d.kind == "landmark") d.code else d.stopCode) }
                             changing = null
                         }
                     }
@@ -1277,7 +1277,7 @@ private fun Favourites(profile: ProfileDoc, campus: Campus?, account: AccountVie
                                 leaving = leaving + p.key
                                 scope.afterFold {
                                     var removed: RemovedPlace? = null
-                                    account.edit { removed = it.removePlace(p.key) }
+                                    account.edit { removed = it.removePlaceAt(p.to) }
                                     leaving = leaving - p.key
                                     // Undo in the bar at the foot, as for a class swiped off Today.
                                     val r = removed ?: return@afterFold
