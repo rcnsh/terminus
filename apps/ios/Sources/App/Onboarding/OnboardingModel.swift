@@ -46,7 +46,7 @@ final class OnboardingModel {
         do {
             let loaded = try await Api(token: token).profile()
             guard AppModel.shared.session == session else { return }
-            if saveTask == nil { profile = loaded }
+            if !saving { profile = loaded }
             if link.isEmpty { link = share ?? "" }
             syncLang()
         } catch let e as ApiError where e.status == 401 {
@@ -72,8 +72,9 @@ final class OnboardingModel {
 
     /// A language picked on the welcome screen, before the account had one, goes to the account.
     private func syncLang() {
-        guard (profile?["lang"] as? String ?? "auto") == "auto", Lang.pref != "auto" else { return }
-        edit { $0["lang"] = Lang.pref }
+        let pref = Lang.pref
+        guard (profile?["lang"] as? String ?? "auto") == "auto", pref != "auto" else { return }
+        edit { $0["lang"] = pref }
     }
 
     // MARK: moving through
@@ -93,17 +94,16 @@ final class OnboardingModel {
     /// Setup finished or skipped: never shown again, on any device. What's
     /// waiting to be saved goes first, then Now asks for the plan.
     func finish() {
-        if let profile {
-            var seen = profile["seen"] as? [String] ?? []
-            if !seen.contains("onboarding") {
-                seen.append("onboarding")
-                edit { $0["seen"] = seen }
+        if !(profile?["seen"] as? [String] ?? []).contains("onboarding") {
+            edit {
+                var seen = $0["seen"] as? [String] ?? []
+                if !seen.contains("onboarding") { seen.append("onboarding") }
+                $0["seen"] = seen
             }
         }
-        let pending = saveTask
         AppModel.shared.needsSetup = false
         Task {
-            await pending?.value
+            await flush()
             await AppModel.shared.load(restart: true)
         }
     }
@@ -134,8 +134,9 @@ final class OnboardingModel {
 
     func setResidence(_ r: Campus.Residence) {
         let walk = min(walkRange.upperBound, max(walkRange.lowerBound, r.minutes))
+        let stops = r.stops
         edit {
-            $0["home"] = ["stops": r.stops]
+            $0["home"] = ["stops": stops]
             $0["homeWalkMin"] = walk
         }
     }
@@ -144,7 +145,8 @@ final class OnboardingModel {
     func setHomeStops(_ stops: [String]) {
         var unique: [String] = []
         for s in stops where !unique.contains(s) { unique.append(s) }
-        edit { $0["home"] = unique.isEmpty ? NSNull() : ["stops": Array(unique.prefix(3))] }
+        let home = Array(unique.prefix(3))
+        edit { $0["home"] = home.isEmpty ? NSNull() : ["stops": home] }
     }
 
     /// The home stop picker: `code` first, the other stops after it.
@@ -153,7 +155,8 @@ final class OnboardingModel {
     }
 
     func setHomeWalk(_ min: Int) {
-        edit { $0["homeWalkMin"] = Swift.min(walkRange.upperBound, Swift.max(walkRange.lowerBound, min)) }
+        let walk = Swift.min(walkRange.upperBound, Swift.max(walkRange.lowerBound, min))
+        edit { $0["homeWalkMin"] = walk }
     }
 
     func setPace(_ pace: String) { edit { $0["walkPace"] = pace } }
@@ -191,48 +194,83 @@ final class OnboardingModel {
 
     // MARK: saving
 
-    /// A save waiting or on its way; a reply from an older one doesn't undo the edits made since.
+    /// The 0.4 s wait before a save, so a run of taps goes as one.
     private var saveTask: Task<Void, Never>?
-    private var edits = 0
+    /// The save on its way. Never cancelled: whether it saved is only known from its answer.
+    private var sending: Task<Void, Never>?
+    /// The changes made since the last save was sent, shown already, to send next.
+    private var pending: [@Sendable (inout [String: Any]) -> Void] = []
     /// The profile as the server last had it, to go back to if a save fails.
     private var confirmed: [String: Any]?
+    /// Whether a change is waiting or on its way: the profile shown is ahead of the server's.
+    private var saving: Bool { saveTask != nil || sending != nil || !pending.isEmpty }
 
     /// Shown at once, saved a moment later (a run of taps is one save, as on
     /// the web), put back with the reason if the server refuses.
-    func edit(_ change: (inout [String: Any]) -> Void) {
+    func edit(_ change: @escaping @Sendable (inout [String: Any]) -> Void) {
         // While an import runs, its answer replaces the profile: an edit now
         // would save the old timetable over it.
-        guard let current = profile, !importing else { return }
-        if saveTask == nil { confirmed = current }
+        guard let current = profile, !importing, AppModel.shared.token != nil else { return }
+        if !saving { confirmed = current }
         var next = current
         change(&next)
         profile = next
-        guard let token = AppModel.shared.token else { return }
-        edits += 1
-        let mine = edits
+        pending.append(change)
         saveTask?.cancel()
-        // JSON values only, read by nothing else while it's sent.
-        nonisolated(unsafe) let body = next
         saveTask = Task {
             try? await Task.sleep(for: .milliseconds(400))
-            if Task.isCancelled { return }
-            do {
-                let saved = try await Api(token: token).saveProfile(body)
-                confirmed = saved
-                if mine == edits {
-                    profile = saved
-                    message = nil
-                }
-            } catch let e as ApiError where e.status == 401 {
-                AppModel.shared.rejected(token, reason: L("This phone was signed out of your account. Sign in again with your email."))
-            } catch {
-                if mine == edits {
-                    profile = confirmed ?? current
-                    message = L("Not saved: %@", failureMessage(error))
-                }
-            }
-            if mine == edits { saveTask = nil }
+            guard !Task.isCancelled else { return }
+            saveTask = nil
+            send()
         }
+    }
+
+    /// Sends the changes waiting, made again on the profile as the server has
+    /// it now (If-Match), so what another device saved since setup loaded
+    /// stays. One save at a time: changes made meanwhile go next.
+    private func send() {
+        guard sending == nil, !pending.isEmpty, let token = AppModel.shared.token else { return }
+        let changes = pending
+        pending = []
+        let session = AppModel.shared.session
+        sending = Task {
+            do {
+                let saved = try await Api(token: token).changeProfile { p in
+                    for change in changes { change(&p) }
+                }
+                guard AppModel.shared.session == session else { return }
+                sending = nil
+                confirmed = saved
+                // Changes made since this was sent stay on screen, on top of what it saved.
+                var shown = saved
+                for change in pending { change(&shown) }
+                profile = shown
+                message = nil
+                if saveTask == nil { send() }
+            } catch {
+                guard AppModel.shared.session == session else { return }
+                sending = nil
+                saveTask?.cancel()
+                saveTask = nil
+                pending = []
+                if let e = error as? ApiError, e.status == 401 {
+                    AppModel.shared.rejected(token, reason: L("This phone was signed out of your account. Sign in again with your email."))
+                    return
+                }
+                if let confirmed { profile = confirmed }
+                message = L("Not saved: %@", failureMessage(error))
+            }
+        }
+    }
+
+    /// Sends what's waiting now, and returns once every save has its answer.
+    private func flush() async {
+        if saveTask != nil {
+            saveTask?.cancel()
+            saveTask = nil
+            send()
+        }
+        while let s = sending { await s.value }
     }
 
     // MARK: the timetable
@@ -277,7 +315,7 @@ final class OnboardingModel {
         defer { importing = false }
         // A setting's save still waiting would land after the import and put
         // the old timetable back: it goes first.
-        await saveTask?.value
+        await flush()
         let session = AppModel.shared.session
         do {
             let r = try await api.importTimetable(share)
