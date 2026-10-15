@@ -1221,9 +1221,38 @@ struct Api {
         try await send("GET", "/api/me/profile")
     }
 
-    /// Saves the whole profile; answers with it as saved.
-    func saveProfile(_ profile: Data) async throws -> Data {
-        try await send("PUT", "/api/me/profile", json: profile)
+    /// Reads the profile, makes `change` to it and saves it, only if nothing
+    /// else saved it in between (If-Match with the ETag it was read with);
+    /// if something did (412), reads it again and makes the change again. So
+    /// a change made here never undoes one made on another device since.
+    /// Answers with the profile as saved.
+    func changeProfile(_ change: @Sendable (inout [String: Any]) -> Void) async throws -> [String: Any] {
+        try await Self.changeProfile(
+            read: { try await sendTagged("GET", "/api/me/profile") },
+            save: { body, tag in try await send("PUT", "/api/me/profile", json: body, ifMatch: tag) },
+            change: change)
+    }
+
+    /// `changeProfile` apart from the network, so it can be tested: `read`
+    /// answers with the profile and its ETag, `save` sends a body with the
+    /// ETag it was made from. At most three tries; then the 412 stands.
+    static func changeProfile(
+        read: () async throws -> (Data, String?), save: (Data, String?) async throws -> Data,
+        change: (inout [String: Any]) -> Void
+    ) async throws -> [String: Any] {
+        var attempt = 0
+        while true {
+            attempt += 1
+            let (data, tag) = try await read()
+            var p = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+            change(&p)
+            do {
+                let saved = try await save(JSONSerialization.data(withJSONObject: p), tag)
+                return try JSONSerialization.jsonObject(with: saved) as? [String: Any] ?? [:]
+            } catch let e as ApiError where e.status == 412 && attempt < 3 {
+                continue
+            }
+        }
     }
 
     /// Imports a NUSMods share link; the server replaces the imported classes only if it all worked.
@@ -1390,7 +1419,16 @@ struct Api {
     }
 
     /// The response body of a 2xx; anything else throws with the server's message.
-    private func send(_ method: String, _ path: String, query: [URLQueryItem] = [], json: Data? = nil) async throws -> Data {
+    private func send(_ method: String, _ path: String, query: [URLQueryItem] = [], json: Data? = nil, ifMatch: String? = nil)
+        async throws -> Data
+    {
+        try await sendTagged(method, path, query: query, json: json, ifMatch: ifMatch).0
+    }
+
+    /// `send`, with the response's ETag: the profile's version, for a later If-Match.
+    private func sendTagged(_ method: String, _ path: String, query: [URLQueryItem] = [], json: Data? = nil, ifMatch: String? = nil)
+        async throws -> (Data, String?)
+    {
         let scope = Quiet.scope(path)
         if token != nil, Outdated.gated(method, path), Outdated.active {
             throw ApiError(status: 426, message: L("Update terminus to keep using it."))
@@ -1410,6 +1448,7 @@ struct Api {
             // The server writes answers, cards and errors in the app's language.
             req.setValue(Lang.header, forHTTPHeaderField: "accept-language")
             if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "authorization") }
+            if let ifMatch { req.setValue(ifMatch, forHTTPHeaderField: "if-match") }
             if let json {
                 req.setValue("application/json", forHTTPHeaderField: "content-type")
                 req.httpBody = json
@@ -1436,6 +1475,6 @@ struct Api {
                 state: o?["status"] as? String
             )
         }
-        return data
+        return (data, http?.value(forHTTPHeaderField: "etag"))
     }
 }
