@@ -30,9 +30,15 @@ final class SetupModel {
     private(set) var choices: Choices?
 
     private var api: Api { Api(token: TokenStore.read()) }
-    /// Which sign-in this Mac is on (AppModel's `session`): a save made for
-    /// one ends, or is waited for, only while it's still the one signed in.
+    /// Which sign-in this Mac is on (AppModel's `session`): a reply for an
+    /// earlier one (a guest's, before signing in with an email) is dropped.
     private let session: @MainActor () -> Int
+    /// The sign-in what's shown belongs to; nil until it has loaded.
+    private var owner: Int?
+    /// What's shown belongs to an account signed out of since.
+    var stale: Bool { owner != nil && owner != session() }
+    /// Still the sign-in a request was made for.
+    private func current(_ s: Int) -> Bool { s == session() }
 
     /// After each save: the popover's favourites (its tabs) follow.
     var onSaved: @MainActor () -> Void = {}
@@ -43,8 +49,12 @@ final class SetupModel {
 
     #if DEBUG
         /// Filled in, for snapshot renders.
-        init(profile: [String: Any], campus: Campus, devices: [Device]? = nil, pairCode: String? = nil) {
-            session = { 0 }
+        init(
+            profile: [String: Any], campus: Campus, devices: [Device]? = nil, pairCode: String? = nil,
+            session: @escaping @MainActor () -> Int = { 0 }
+        ) {
+            self.session = session
+            owner = session()
             self.profile = profile
             self.campus = campus
             self.devices = devices
@@ -52,7 +62,33 @@ final class SetupModel {
         }
     #endif
 
+    /// Everything of the account's goes: another one is signed in, or none.
+    /// A save still waiting is dropped; one on its way can't be called back,
+    /// and its answer is ignored (it was for the account it was made for).
+    func reset() {
+        owner = nil
+        saveTask?.cancel()
+        saveTask = nil
+        sends += 1
+        sending = nil
+        pending = []
+        confirmed = nil
+        profile = nil
+        message = nil
+        imported = nil
+        unplaced = []
+        devices = nil
+        pairCode = nil
+        added = nil
+        me = nil
+        choices = nil
+    }
+
+    /// The account's setup, for whoever is signed in now: another account's
+    /// (one signed out of, or a guest's before signing in) goes first.
     func load() async {
+        let s = session()
+        if owner != s { reset() }
         message = nil
         do {
             async let p = api.profile()
@@ -60,13 +96,19 @@ final class SetupModel {
             async let m = try? api.me()
             async let ch = try? api.choices()
             let loaded = try object(await p)
+            let cam = try await c
+            let who = await m
+            let chosen = await ch
+            guard current(s) else { return }
+            owner = s
             // A change still being saved stays on screen.
             if !saving { profile = loaded }
             Clock.pref = clock
-            campus = try await c
-            me = await m
-            choices = await ch
+            campus = cam
+            me = who
+            choices = chosen
         } catch {
+            guard current(s) else { return }
             message = failureMessage(error)
         }
     }
@@ -251,6 +293,8 @@ final class SetupModel {
     private var saveTask: Task<Void, Never>?
     /// The save on its way. Never cancelled: whether it saved is only known from its answer.
     private var sending: Task<Void, Never>?
+    /// Counts the saves sent, so one that answers after a reset() doesn't end a newer one.
+    private var sends = 0
     /// The changes made since the last save was sent, shown already, to send next.
     private var pending: [@Sendable (inout [String: Any]) -> Void] = []
     /// The profile as the server last had it, to go back to if a save fails.
@@ -265,7 +309,8 @@ final class SetupModel {
     func edit(_ change: @escaping @Sendable (inout [String: Any]) -> Void) {
         // While an import runs, its answer replaces the profile: an edit now
         // would save the old timetable over it.
-        guard let current = profile, !importing else { return }
+        // Only on the account it was loaded for.
+        guard let current = profile, !importing, owner == session() else { return }
         if !saving { confirmed = current }
         var next = current
         change(&next)
@@ -285,18 +330,24 @@ final class SetupModel {
     /// made meanwhile go next.
     private func send() {
         guard sending == nil, !pending.isEmpty else { return }
+        // Signed out or into another account since: these changes were for that one.
+        guard let mine = owner, current(mine) else {
+            pending = []
+            return
+        }
         let changes = pending
         pending = []
         let api = api
-        let mine = session()
+        sends += 1
+        let id = sends
         sending = Task {
             do {
                 let saved = try await api.changeProfile { p in
                     for change in changes { change(&p) }
                 }
                 // Done, whoever is signed in now: flush() waits for this.
-                sending = nil
-                guard session() == mine else { return }
+                if sends == id { sending = nil }
+                guard current(mine) else { return }
                 confirmed = saved
                 // Changes made since this was sent stay on screen, on top of what it saved.
                 var shown = saved
@@ -306,8 +357,8 @@ final class SetupModel {
                 onSaved()
                 if saveTask == nil { send() }
             } catch {
-                sending = nil
-                guard session() == mine else { return }
+                if sends == id { sending = nil }
+                guard current(mine) else { return }
                 saveTask?.cancel()
                 saveTask = nil
                 pending = []
@@ -326,7 +377,7 @@ final class SetupModel {
             send()
         }
         let mine = session()
-        while let s = sending, session() == mine { await s.value }
+        while let s = sending, current(mine) { await s.value }
     }
 
     // MARK: the timetable, class by class
@@ -414,22 +465,33 @@ final class SetupModel {
 
     // MARK: trip choices and history
 
-    func loadChoices() async { choices = try? await api.choices() }
+    func loadChoices() async {
+        let s = session()
+        let c = try? await api.choices()
+        guard current(s) else { return }
+        choices = c
+    }
 
     func undoChoice(_ c: TripChoice) async {
+        let s = session()
         do {
             try await api.undoChoice(trip: c.trip, pref: c.pref)
+            guard current(s) else { return }
             await loadChoices()
         } catch {
+            guard current(s) else { return }
             message = failureMessage(error)
         }
     }
 
     func clearHistory() async {
+        let s = session()
         do {
             try await api.clearHistory()
+            guard current(s) else { return }
             await loadChoices()
         } catch {
+            guard current(s) else { return }
             message = failureMessage(error)
         }
     }
@@ -448,8 +510,11 @@ final class SetupModel {
 
     /// Download my data: the export, saved where the person picks.
     func export() async {
+        let s = session()
         do {
             let data = try await api.export()
+            // Signed out meanwhile: not this Mac's to save now.
+            guard current(s) else { return }
             let panel = NSSavePanel()
             panel.nameFieldStringValue = "terminus-export.json"
             panel.allowedContentTypes = [.json]
@@ -474,13 +539,20 @@ final class SetupModel {
         // A setting's save still waiting would land after the import and put
         // the old timetable back: it goes first.
         await flush()
+        // Only into the account whose setup is shown.
+        let s = session()
+        guard owner == s else { return }
         do {
             let r = ImportResult(try object(await api.importTimetable(share)))
+            guard current(s) else { return }
             imported = r
             profile = r.profile
             unplaced = r.unplaced
-            me = try? await api.me()
+            let who = try? await api.me()
+            guard current(s) else { return }
+            me = who
         } catch {
+            guard current(s) else { return }
             message = failureMessage(error)
         }
     }
@@ -501,9 +573,13 @@ final class SetupModel {
     // MARK: devices
 
     func loadDevices() async {
+        let s = session()
         do {
-            devices = try await api.devices()
+            let d = try await api.devices()
+            guard current(s) else { return }
+            devices = d
         } catch {
+            guard current(s) else { return }
             message = failureMessage(error)
         }
     }
@@ -511,10 +587,13 @@ final class SetupModel {
     func remove(_ d: Device) async {
         busy = true
         defer { busy = false }
+        let s = session()
         do {
             try await api.removeDevice(d.id)
+            guard current(s) else { return }
             devices?.removeAll { $0.id == d.id }
         } catch {
+            guard current(s) else { return }
             message = failureMessage(error, otherwise: L("Couldn't remove it. Try again in a moment."))
         }
     }
@@ -522,17 +601,23 @@ final class SetupModel {
     func newPairCode() async {
         busy = true
         defer { busy = false }
+        let s = session()
         do {
-            pairCode = try await api.pairCode()
+            let code = try await api.pairCode()
+            guard current(s) else { return }
+            pairCode = code
             pairCodeAt = Date()
             message = nil
-        } catch let e as ApiError {
-            // 403: an account without an email can't add devices.
-            message =
-                e.status == 403
-                ? L("Add an email to your account first. Devices can only be added to an account with an email.") : e.message
         } catch {
-            message = L("Couldn't reach terminus. Check your connection and try again.")
+            guard current(s) else { return }
+            if let e = error as? ApiError {
+                // 403: an account without an email can't add devices.
+                message =
+                    e.status == 403
+                    ? L("Add an email to your account first. Devices can only be added to an account with an email.") : e.message
+            } else {
+                message = L("Couldn't reach terminus. Check your connection and try again.")
+            }
         }
     }
 
@@ -546,6 +631,7 @@ final class SetupModel {
     func waitForNewDevice() async {
         let known = Set((devices ?? []).map(\.id))
         let code = pairCode
+        let s = session()
         let until = pairCodeAt.addingTimeInterval(Self.pairCodeS)
         while !Task.isCancelled, pairCode == code {
             guard Date() < until else {
@@ -556,6 +642,8 @@ final class SetupModel {
             }
             try? await Task.sleep(for: .seconds(3))
             guard !Task.isCancelled, pairCode == code, let now = try? await api.devices() else { continue }
+            // Signed out or into another account meanwhile: the code was the other one's.
+            guard current(s) else { return }
             if let added = now.first(where: { !known.contains($0.id) }) {
                 // A tick over the code for a moment, then back to the list.
                 self.added = added.name ?? L("Device")
@@ -650,7 +738,10 @@ struct SetupView: View {
         }
         .padding(20)
         .frame(width: 460, height: 540)
-        .task { if setup.profile == nil { await setup.load() } }
+        // Again for another account: signing in from a guest, or after
+        // signing out, keeps this window's state (a closed Window isn't discarded).
+        .task(id: app.session) { if setup.profile == nil || setup.stale { await setup.load() } }
+        .onChange(of: app.session) { step = 0 }
     }
 
     private func finish() {
