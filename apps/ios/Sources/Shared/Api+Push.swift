@@ -11,15 +11,33 @@ import Foundation
 ///   update and end it (`content-state` as TripAttributes.ContentState).
 ///   Sent again whenever a new one starts.
 ///
-/// Each ends in `:sandbox` from a development (Debug) build: Apple's sandbox gateway.
+/// Each ends in `:sandbox` when the build's provisioning profile says
+/// `aps-environment: development`: Apple's sandbox gateway. Xcode signs a
+/// Release build run from it that way too; an App Store or TestFlight build
+/// has no profile inside and is production.
 extension Api {
-    /// Whether this build's push tokens are for Apple's sandbox gateway: a debug build.
-    static var apnsSandbox: Bool {
-        #if DEBUG
+    /// Whether this build's push tokens are for Apple's sandbox gateway.
+    static let apnsSandbox: Bool = {
+        #if targetEnvironment(simulator)
             return true
         #else
-            return false
+            guard let url = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"),
+                let data = try? Data(contentsOf: url)
+            else { return false }
+            return apsEnvironment(profile: data) == "development"
         #endif
+    }()
+
+    /// The `aps-environment` a provisioning profile grants, read from the
+    /// plist inside its signature; nil without one.
+    static func apsEnvironment(profile: Data) -> String? {
+        guard let text = String(data: profile, encoding: .isoLatin1),
+            let start = text.range(of: "<?xml"), let end = text.range(of: "</plist>", range: start.lowerBound..<text.endIndex),
+            let plist = try? PropertyListSerialization.propertyList(from: Data(text[start.lowerBound..<end.upperBound].utf8), format: nil)
+                as? [String: Any],
+            let ent = plist["Entitlements"] as? [String: Any]
+        else { return nil }
+        return ent["aps-environment"] as? String
     }
 
     /// `prefix:` and the token in hex, with `:sandbox` for a development build.

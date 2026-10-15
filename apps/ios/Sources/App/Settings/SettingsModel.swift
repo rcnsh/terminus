@@ -77,11 +77,12 @@ final class SettingsModel {
             if rejected(error, token) { return }
         }
         do {
-            let data = try await api.profileData()
+            let (data, tag) = try await api.profileData()
             guard token == app.token, let p = ProfileDoc(data: data) else { return }
             // A change still being saved stays on screen.
             if saveTask == nil {
                 profile = p
+                version = tag
                 followAccount(p)
             }
         } catch {
@@ -130,6 +131,8 @@ final class SettingsModel {
         saveTask = nil
         path = []
         profile = nil
+        version = nil
+        pending = []
         me = nil
         devices = nil
         choices = []
@@ -148,24 +151,46 @@ final class SettingsModel {
     private var edits = 0
     /// The profile as the server last had it, to go back to if a save fails.
     private var confirmed: ProfileDoc?
+    /// Its version (the ETag): a save is refused (412) if the profile was saved
+    /// elsewhere since, a pin on Buses, a favourite from the map, another device.
+    private var version: String?
+    /// The changes made since `confirmed`, to make again on the newer profile then.
+    private var pending: [(inout ProfileDoc) -> Void] = []
 
     /// Changes the profile: shown now, saved 0.4 s later with any taps since.
-    func edit(_ change: (inout ProfileDoc) -> Void) {
+    func edit(_ change: @escaping (inout ProfileDoc) -> Void) {
         guard var next = profile, let token = app.token else { return }
-        if saveTask == nil { confirmed = profile }
+        if saveTask == nil {
+            confirmed = profile
+            pending = []
+        }
         change(&next)
+        pending.append(change)
         profile = next
         edits += 1
         let mine = edits
         saveTask?.cancel()
         let body = next.data
+        let from = version
         saveTask = Task {
             try? await Task.sleep(for: .milliseconds(400))
             guard !Task.isCancelled else { return }
             do {
-                let data = try await Api(token: token).saveProfileData(body)
+                let api = Api(token: token)
+                var (data, tag): (Data, String?)
+                do {
+                    (data, tag) = try await api.saveProfileData(body, ifMatch: from)
+                } catch let e as ApiError where e.status == 412 {
+                    // Saved elsewhere meanwhile: these changes, made again on that.
+                    let (fresh, freshTag) = try await api.profileData()
+                    guard mine == edits, var latest = ProfileDoc(data: fresh) else { return }
+                    for change in pending { change(&latest) }
+                    (data, tag) = try await api.saveProfileData(latest.data, ifMatch: freshTag)
+                }
                 guard mine == edits else { return }
                 saveTask = nil
+                pending = []
+                version = tag
                 if let saved = ProfileDoc(data: data) {
                     confirmed = saved
                     profile = saved
@@ -173,6 +198,7 @@ final class SettingsModel {
             } catch {
                 guard mine == edits else { return }
                 saveTask = nil
+                pending = []
                 if rejected(error, token) { return }
                 if let confirmed { profile = confirmed }
                 say(L("Not saved: %@", failureMessage(error)))
@@ -241,6 +267,8 @@ final class SettingsModel {
                 imported = r
                 unplaced = r.unplaced
                 profile = ProfileDoc(r.profile)
+                pending = []
+                // The import saved a new version; the next edit fetches it on a clash.
                 sharedLink = nil
                 if let m = me {
                     me = Me(email: m.email, anonymous: m.anonymous, onboarding: m.onboarding, needsReimport: false, term: r.term)

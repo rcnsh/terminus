@@ -18,7 +18,6 @@
 "Back tomorrow at %@" = "明天 %@ 恢复";
 "Bus %@" = "%@ 巴士";
 "Bus %@ from %@" = "在 %2$@ 搭 %1$@ 巴士";
-"Bus %@, with a fare" = "%@ 巴士，需付车费";
 "Buses" = "巴士";
 "by %@" = "%@ 前出发";
 "Couldn't add it. Try again." = "无法添加，请再试一次。";
@@ -71,6 +70,7 @@
 "then %@ min" = "之后 %@ 分钟";
 "These times are old" = "这些时间已过时";
 "This phone was signed out of your account. Sign in again with your email." = "这部手机已从你的账户退出登录。请用你的邮箱重新登录。";
+"This phone's setup was removed after a long time unused. Start again or sign in." = "这部手机的设置因长时间未使用已被删除。请重新开始或登录。";
 "Times may be out of date · tap ↻ to refresh" = "时间可能已过时 · 点按 ↻ 刷新";
 "Timetable" = "课表";
 "To %@" = "去 %@";

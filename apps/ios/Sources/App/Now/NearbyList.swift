@@ -39,6 +39,8 @@ struct NearbyList: View {
 }
 
 private struct StopSign: View {
+    /// Follows the text size the phone is set to, as the rest of the card does.
+    @ScaledMetric(relativeTo: .title) private var scale: CGFloat = 1
     let stop: NearbyStop
     let big: Bool
 
@@ -46,8 +48,8 @@ private struct StopSign: View {
         VStack(spacing: 0) {
             // The plate, as on the pole: a shade off the card, the bus mark in the accent.
             HStack(spacing: 8) {
-                Image(systemName: "bus.fill").font(.system(size: big ? 15 : 13)).foregroundStyle(Color.brand)
-                Text(stop.stop.name).font(.system(size: big ? 17 : 15, weight: .bold)).lineLimit(1)
+                Image(systemName: "bus.fill").font(.system(size: (big ? 15 : 13) * scale)).foregroundStyle(Color.brand)
+                Text(stop.stop.name).font(.system(size: (big ? 17 : 15) * scale, weight: .bold)).lineLimit(1)
                 Spacer(minLength: 4)
                 Text(stop.walkS < 60 ? L("here") : L("%@ min walk", "\((stop.walkS + 30) / 60)"))
                     .font(.subheadline.weight(.medium))
@@ -69,7 +71,7 @@ private struct StopSign: View {
                         .frame(width: row.paid ? 52 : 34, alignment: .leading)
                     BusRoad(row: row).frame(height: 18)
                     Text(row.etaText ?? "–")
-                        .font(.system(size: big ? 18 : 15, weight: .heavy))
+                        .font(.system(size: (big ? 18 : 15) * scale, weight: .heavy))
                         .monospacedDigit()
                         .lineLimit(1)
                         .frame(minWidth: 56, alignment: .trailing)

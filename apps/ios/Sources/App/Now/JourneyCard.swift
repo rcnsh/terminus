@@ -66,6 +66,8 @@ struct JourneyTop: View {
 /// accent, so it reads first. "Leave now" is all accent; too late to be on
 /// time, all red.
 private struct LeaveHead: View {
+    /// Follows the text size the phone is set to, as the rest of the card does.
+    @ScaledMetric(relativeTo: .title) private var scale: CGFloat = 1
     let answer: NextAnswer
     let journey: Journey
     let now: Date
@@ -84,7 +86,7 @@ private struct LeaveHead: View {
             }
         }
         return Text(s)
-            .font(.system(size: 34, weight: .heavy))
+            .font(.system(size: 34 * scale, weight: .heavy))
             .tracking(-0.5)
             .monospacedDigit()
             .padding(.vertical, 2)
@@ -95,6 +97,8 @@ private struct LeaveHead: View {
 /// Ticket: the bus first, as you'd look for it on the road, then when to
 /// leave and when you get there. On foot, the walk in its place.
 private struct TicketTop: View {
+    /// Follows the text size the phone is set to, as the rest of the card does.
+    @ScaledMetric(relativeTo: .title) private var scale: CGFloat = 1
     let answer: NextAnswer
     let journey: Journey
     let now: Date
@@ -107,7 +111,7 @@ private struct TicketTop: View {
             if let bus = j.bus {
                 let rgb = bus.color.flatMap(hexRGB) ?? 0x8A847E
                 Text(bus.paid ? "\(bus.svc) $" : bus.svc)
-                    .font(.system(size: 26, weight: .heavy))
+                    .font(.system(size: 26 * scale, weight: .heavy))
                     .lineLimit(1)
                     .foregroundStyle(inkOn(rgb))
                     .padding(.horizontal, 6)

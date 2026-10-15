@@ -11,7 +11,8 @@ Sources/Widgets -> Widgets.strings, anything else -> Localizable.strings).
                                 English, the same Chinese), sorted, and lists
                                 what's still missing, to translate by hand
                                 (the glossary is at the top of apps/api/src/i18n.ts)
-    scripts/strings.py --check  fails if any phrase has no Chinese (CI)
+    scripts/strings.py --check  fails if any phrase has no Chinese, or two
+                                tables give one phrase different Chinese (CI)
 """
 import html
 import os
@@ -22,8 +23,9 @@ IOS = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 APPS = os.path.dirname(IOS)
 ZH = os.path.join(IOS, 'Support', 'zh-Hans.lproj')
 
-# L("...") and its first argument, a plain string literal (escapes allowed).
-CALL = re.compile(r'\bL\(\s*"((?:[^"\\]|\\.)*)"')
+# L("...") and its first argument, a plain string literal (escapes allowed);
+# LocalizedStringResource("...") too, the widgets' intent titles.
+CALL = re.compile(r'\b(?:L|LocalizedStringResource)\(\s*"((?:[^"\\]|\\.)*)"')
 
 
 def table_for(path):
@@ -107,6 +109,14 @@ def main():
     for t in tables.values():
         have.update(t)
     missing = sorted(p for p in phrases if p not in have)
+    # One English phrase, one Chinese, whichever table it's in.
+    clashes = sorted(p for p in have if len({t[p] for t in tables.values() if p in t}) > 1)
+    if clashes:
+        print('Different Chinese for the same phrase in different tables:')
+        for p in clashes:
+            print(f'  {p!r}: ' + ', '.join(f'{n}: {t[p]!r}' for n, t in sorted(tables.items()) if p in t))
+        if check:
+            sys.exit(1)
     if check:
         if missing:
             print('No Chinese for these phrases (scripts/strings.py fills what it can):')

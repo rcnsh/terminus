@@ -416,15 +416,13 @@ final class MapModel {
     /// The profile with a place going to `code` added, saved, and as the
     /// server then keeps it (JSON, to hand back to the main actor).
     nonisolated private static func addPlace(token: String, code: String, name: String) async throws -> Data {
-        let api = Api(token: token)
-        var p = try await api.profile()
-        var list = p["places"] as? [[String: Any]] ?? []
-        if !list.contains(where: { $0["to"] as? String == code }) {
+        let p = try await Api(token: token).changeProfile { p in
+            var list = p["places"] as? [[String: Any]] ?? []
+            guard !list.contains(where: { $0["to"] as? String == code }) else { return }
             let labelMax = ((p["limits"] as? [String: Any])?["placeLabel"] as? Int).flatMap { $0 > 0 ? $0 : nil } ?? 24
             let label = String(name.trimmingCharacters(in: .whitespaces).prefix(labelMax))
             list.append(["key": placeKey(label, taken: list.compactMap { $0["key"] as? String }), "label": label, "to": code])
             p["places"] = list
-            p = try await api.saveProfile(p)
         }
         return try JSONSerialization.data(withJSONObject: p)
     }

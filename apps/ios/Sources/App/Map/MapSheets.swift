@@ -419,6 +419,9 @@ private struct IconCircle: View {
 /// it goes, live or scheduled and how full, and the minutes. Tapped, it shows
 /// its line on the map; the line picked there has its row washed in its colour.
 private struct StopRow: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
+    /// Follows the text size the phone is set to, as the rest of the card does.
+    @ScaledMetric(relativeTo: .title) private var scale: CGFloat = 1
     let row: BoardRow
     let hex: String
     let picked: Bool
@@ -475,7 +478,7 @@ private struct StopRow: View {
             SvcChip(svc: row.svc, hex: hex, paid: row.paid, faded: true)
             VStack(alignment: .leading, spacing: 2) {
                 if let to = row.toText ?? (row.towards.isEmpty ? nil : L("to %@", row.towards.joined(separator: L(", ")))) {
-                    Text(verbatim: to).font(.subheadline).foregroundStyle(Color.muted).lineLimit(1)
+                    Text(verbatim: to).font(.subheadline).foregroundStyle(Color.muted).lineLimit(typeSize.isAccessibilitySize ? nil : 1)
                 }
                 Text(why).font(.body.weight(.semibold)).foregroundStyle(Color.muted)
                 if let back { Text(back).font(.subheadline).foregroundStyle(Color.muted) }
@@ -541,15 +544,15 @@ private struct StopRow: View {
         let arriving = (row.etaS ?? .max) < BusTimes.arrivingS
         let color: Color = arriving ? .brand : row.quality == "live" ? .ink : .muted
         if row.etaS == nil {
-            Text(verbatim: "–").font(.system(size: 24, weight: .bold)).foregroundStyle(Color.faint)
+            Text(verbatim: "–").font(.system(size: 24 * scale, weight: .bold)).foregroundStyle(Color.faint)
         } else if let eta = row.etaText {
             Group {
                 if let r = eta.range(of: #"\d+"#, options: .regularExpression) {
-                    Text(verbatim: String(eta[..<r.lowerBound])).font(.system(size: 14, weight: .semibold))
-                        + Text(verbatim: String(eta[r])).font(.system(size: 26, weight: .heavy))
-                        + Text(verbatim: String(eta[r.upperBound...])).font(.system(size: 14, weight: .semibold))
+                    Text(verbatim: String(eta[..<r.lowerBound])).font(.system(size: 14 * scale, weight: .semibold))
+                        + Text(verbatim: String(eta[r])).font(.system(size: 26 * scale, weight: .heavy))
+                        + Text(verbatim: String(eta[r.upperBound...])).font(.system(size: 14 * scale, weight: .semibold))
                 } else {
-                    Text(verbatim: eta).font(.system(size: 20, weight: .heavy))
+                    Text(verbatim: eta).font(.system(size: 20 * scale, weight: .heavy))
                 }
             }
             .foregroundStyle(color)

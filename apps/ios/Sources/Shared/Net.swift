@@ -28,15 +28,19 @@ enum ServerClock {
 
     /// The skew a response says, if it came from the server just now: a
     /// cached one (anything but `no-store`) carries the time it was first sent.
-    static func skew(from resp: HTTPURLResponse, at local: Date) -> TimeInterval? {
+    /// The server stamped it somewhere between `sent` and `received` on this
+    /// phone, so it's compared with the middle; and `Date` drops the
+    /// fraction of its second, so on average the stamp is half a second early.
+    static func skew(from resp: HTTPURLResponse, sent: Date, received: Date) -> TimeInterval? {
         guard (resp.value(forHTTPHeaderField: "cache-control") ?? "").contains("no-store"),
             let server = resp.value(forHTTPHeaderField: "date").flatMap(parseHTTPDate)
         else { return nil }
-        return skew(server: server, local: local)
+        let middle = sent.addingTimeInterval(received.timeIntervalSince(sent) / 2)
+        return skew(server: server.addingTimeInterval(0.5), local: middle)
     }
 
-    static func observe(_ resp: HTTPURLResponse, at local: Date = Date()) {
-        guard let s = skew(from: resp, at: local) else { return }
+    static func observe(_ resp: HTTPURLResponse, sent: Date, received: Date = Date()) {
+        guard let s = skew(from: resp, sent: sent, received: received) else { return }
         offset.withLock { $0 = s }
     }
 

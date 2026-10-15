@@ -96,7 +96,7 @@ struct BusBadge: View {
             .padding(.horizontal, size * 0.42)
             .padding(.vertical, size * 0.12)
             .background(Color(rgb: rgb), in: RoundedRectangle(cornerRadius: size * 0.42, style: .continuous))
-            .accessibilityLabel(paid ? L("Bus %@, with a fare", svc) : L("Bus %@", svc))
+            .accessibilityLabel(paid ? L("Public bus %@, fare applies", svc) : L("Bus %@", svc))
     }
 }
 

@@ -87,7 +87,12 @@ enum WidgetStore {
     /// The phone's last fix, rounded to about 11 m, as the app had it: a
     /// widget or a push has none of its own. Kept two hours at most.
     static var location: (lat: Double, lon: Double, acc: Double?)? {
-        guard let at = d.object(forKey: "widget.loc.at") as? Date, -at.timeIntervalSinceNow < 2 * 3600 else { return nil }
+        guard let at = d.object(forKey: "widget.loc.at") as? Date else { return nil }
+        // Past its two hours it's gone from the phone too, not just unused.
+        guard -at.timeIntervalSinceNow < 2 * 3600 else {
+            forgetLocation()
+            return nil
+        }
         let acc = d.object(forKey: "widget.loc.acc") as? Double
         return (d.double(forKey: "widget.loc.lat"), d.double(forKey: "widget.loc.lon"), acc)
     }
@@ -217,6 +222,10 @@ enum WidgetStore {
         for id in slots { try? FileManager.default.removeItem(at: file(id)) }
         answerAt = nil
         error = nil
+        forgetLocation()
+    }
+
+    static func forgetLocation() {
         for k in ["widget.loc.lat", "widget.loc.lon", "widget.loc.acc", "widget.loc.at"] { d.removeObject(forKey: k) }
     }
 

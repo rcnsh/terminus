@@ -161,8 +161,9 @@ struct BusBoardRowView: View {
             BusChip(svc: row.svc, color: color, paid: row.paid).opacity(0.35)
             VStack(alignment: .leading, spacing: 2) {
                 if !row.towards.isEmpty {
+                    // Whole at the largest text sizes, where one line holds a stop's name at most.
                     Text(verbatim: row.toText ?? L("to %@", row.towards.joined(separator: L(", "))))
-                        .font(.subheadline).foregroundStyle(Color.muted).lineLimit(1)
+                        .font(.subheadline).foregroundStyle(Color.muted).lineLimit(typeSize.isAccessibilitySize ? nil : 1)
                 }
                 Text(why).font(.body.weight(.semibold)).foregroundStyle(Color.muted)
                 if let back { Text(back).font(.subheadline).foregroundStyle(Color.muted) }

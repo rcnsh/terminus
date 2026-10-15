@@ -11,7 +11,7 @@ final class Locator: NSObject, CLLocationManagerDelegate {
 
     private let manager = CLLocationManager()
     private(set) var status: CLAuthorizationStatus
-    private var waiting: [CheckedContinuation<CLLocation?, Never>] = []
+    private var waiting: [UUID: CheckedContinuation<CLLocation?, Never>] = [:]
 
     override init() {
         status = manager.authorizationStatus
@@ -31,16 +31,27 @@ final class Locator: NSObject, CLLocationManagerDelegate {
     /// A recent fix, or a new one within a few seconds; nil without permission or a fix.
     func fix(maxAge: TimeInterval = 60) async -> CLLocation? {
         guard allowed else { return nil }
-        if let last = manager.location, -last.timestamp.timeIntervalSinceNow < maxAge { return last }
+        if let last = manager.location, Self.fresh(last.timestamp, maxAge: maxAge) { return last }
+        let id = UUID()
         return await withCheckedContinuation { c in
-            waiting.append(c)
+            waiting[id] = c
             if waiting.count == 1 { manager.requestLocation() }
-            // A fix that never comes (indoors, the simulator with none set) mustn't hold the answer up.
+            // A fix that never comes (indoors, the simulator with none set)
+            // mustn't hold the answer up. This ask's own wait only, and only
+            // a fix still within maxAge: an hours-old one from home would
+            // plan from the wrong stop, where none lets the server use your
+            // last class or home.
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(6))
-                self.finish(self.manager.location)
+                guard let c = self.waiting.removeValue(forKey: id) else { return }
+                c.resume(returning: self.manager.location.flatMap { Self.fresh($0.timestamp, maxAge: maxAge) ? $0 : nil })
             }
         }
+    }
+
+    /// Whether a fix taken `at` is recent enough.
+    nonisolated static func fresh(_ at: Date, maxAge: TimeInterval, now: Date = Date()) -> Bool {
+        now.timeIntervalSince(at) < maxAge
     }
 
     /// The last fix this phone had, however old, for a quick answer.
@@ -48,8 +59,8 @@ final class Locator: NSObject, CLLocationManagerDelegate {
 
     private func finish(_ loc: CLLocation?) {
         let w = waiting
-        waiting = []
-        for c in w { c.resume(returning: loc) }
+        waiting = [:]
+        for c in w.values { c.resume(returning: loc) }
     }
 
     nonisolated func locationManagerDidChangeAuthorization(_ m: CLLocationManager) {

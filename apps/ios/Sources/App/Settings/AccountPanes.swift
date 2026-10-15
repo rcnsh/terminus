@@ -258,7 +258,7 @@ struct SettingsAccountPane: View {
                 SettingLink(title: L("Delete this account"), color: .bad, id: "settings.delete") { confirmDelete = true }
             } else {
                 SettingLink(title: L("Delete this account"), away: true, color: .bad, id: "settings.delete") {
-                    openInSafari("\(Api.linkBase)/account")
+                    openInSafari("\(Api.linkBase)/account/#account")
                 }
             }
         }

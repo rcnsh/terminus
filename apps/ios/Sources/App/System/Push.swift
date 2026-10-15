@@ -6,9 +6,10 @@ import UserNotifications
 /// phone doesn't have to keep asking. A push is a nudge (`kind: card`, with
 /// its phase): the app fetches /me/next itself and the widgets, the Live
 /// Activity and the reminders follow. An alert (a trip that's due, a missed
-/// bus) is worded on the phone by the notification service from the same
-/// answer, so no words pass through Apple. The other kind, `term`, is the
-/// new semester's reminder, whose words the app fetches (GET /me/notice).
+/// bus) comes with the server's words, through Apple, and the notification
+/// service re-words it on the phone from a fresh answer when it can. The
+/// Live Activity's pushes carry its state (the bus, the stop, the times).
+/// The other kind, `term`, is the new semester's reminder.
 /// Everything still works without push, from the app and the background refresh.
 @MainActor enum Push {
     private static var d: UserDefaults { Shared.defaults }
@@ -24,6 +25,8 @@ import UserNotifications
             if env["TERMINUS_LIVE"] == "1" { TripPrefs.liveActivity = true }
         #endif
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
+        // Before any push: an alert carrying the trip category needs its "Not going" button.
+        Reminders.registerCategories()
         Background.register()
         // A token for silent pushes needs no permission: asked for whenever signed in.
         if TokenStore.read() != nil { application.registerForRemoteNotifications() }
@@ -107,7 +110,7 @@ import UserNotifications
         if let auth = TokenStore.read(), d.string(forKey: "push.sent") != nil {
             Task { try? await Api(token: auth).unregisterPush() }
         }
-        for k in ["push.sent", "push.for", "push.sentAt", "push.live"] { d.removeObject(forKey: k) }
+        for k in ["push.sent", "push.for", "push.sentAt", "push.live", "live.tokenFor"] { d.removeObject(forKey: k) }
     }
 
     // MARK: permission

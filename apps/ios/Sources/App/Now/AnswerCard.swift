@@ -187,6 +187,8 @@ func timingColor(_ status: String?, _ inks: Inks) -> Color {
 /// and when to leave. Past its staleAt the times are dimmed and "Updating
 /// times…" stands in until the refresh lands.
 struct PlainCard: View {
+    /// Follows the text size the phone is set to, as the rest of the card does.
+    @ScaledMetric(relativeTo: .title) private var scale: CGFloat = 1
     let answer: NextAnswer
     let old: Bool
     let now: Date
@@ -202,7 +204,7 @@ struct PlainCard: View {
         if let head { Text(head).foregroundStyle(inks.muted).accessibilityAddTraits(.isHeader) }
         VStack(alignment: .leading, spacing: 4) {
             Text(a.title)
-                .font(.system(size: 30, weight: .bold))
+                .font(.system(size: 30 * scale, weight: .bold))
                 .foregroundStyle(old ? inks.muted : inks.ink)
             if old {
                 Text(L("Updating times…")).foregroundStyle(inks.muted)
@@ -251,6 +253,8 @@ struct Countdown: View {
 /// when it gets you there underneath, and the next bus as the "or go now"
 /// option. Every arrival sits next to the bus it belongs to.
 struct ClassPlan: View {
+    /// Follows the text size the phone is set to, as the rest of the card does.
+    @ScaledMetric(relativeTo: .title) private var scale: CGFloat = 1
     let answer: NextAnswer
     let now: Date
     @Environment(\.inks) private var inks
@@ -262,7 +266,7 @@ struct ClassPlan: View {
             Text([a.dest?.label, a.classAt.map { L("starts %@", campusTime($0)) }].compactMap { $0 }.joined(separator: " · "))
                 .foregroundStyle(inks.muted)
             Text(a.leaveHeadline(now: now) ?? "")
-                .font(.system(size: 30, weight: .bold))
+                .font(.system(size: 30 * scale, weight: .bold))
                 .foregroundStyle(late ? inks.late : inks.ink)
             // Counting down to leaving; at the stop the headline is the bus and its time.
             let left = a.phase == "waiting" ? 0 : Int(at.timeIntervalSince(now))
@@ -309,6 +313,8 @@ struct OfflinePlan: View {
 
 /// The day's done, or there's nothing to catch: the label large, and what's next on a card of its own.
 struct DayDoneHead: View {
+    /// Follows the text size the phone is set to, as the rest of the card does.
+    @ScaledMetric(relativeTo: .title) private var scale: CGFloat = 1
     let answer: NextAnswer
     @Environment(\.inks) private var inks
 
@@ -316,7 +322,7 @@ struct DayDoneHead: View {
         let upcoming = answer.card?.upcoming
         let sub = upcoming?.off ?? (upcoming == nil && !answer.detail.isEmpty ? answer.detail : nil)
         Text(answer.label)
-            .font(.system(size: 44, weight: .heavy))
+            .font(.system(size: 44 * scale, weight: .heavy))
             .tracking(-1)
             .lineSpacing(-4)
             .fixedSize(horizontal: false, vertical: true)
@@ -329,13 +335,15 @@ struct DayDoneHead: View {
 
 /// The next class on a card of its own: when in the accent, what, then where. Glass over the sky.
 struct UpcomingCard: View {
+    /// Follows the text size the phone is set to, as the rest of the card does.
+    @ScaledMetric(relativeTo: .title) private var scale: CGFloat = 1
     let upcoming: Upcoming
     @Environment(\.inks) private var inks
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             SectionLabel(upcoming.when, color: inks.smallAccent)
-            Text(upcoming.title).font(.system(size: 22, weight: .bold)).padding(.top, 6)
+            Text(upcoming.title).font(.system(size: 22 * scale, weight: .bold)).padding(.top, 6)
             if !upcoming.where.isEmpty { Text(upcoming.where).font(.subheadline).foregroundStyle(inks.muted).padding(.top, 4) }
         }
         .padding(18)

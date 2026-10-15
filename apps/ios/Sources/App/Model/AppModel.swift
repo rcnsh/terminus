@@ -108,6 +108,25 @@ final class AppModel {
             places = a.places
         }
         if paired, let data = Shared.lastDay, let d = try? JSONDecoder().decode(DayPlan.self, from: data) { day = d }
+        // Woken by a push or a background refresh before the phone's first
+        // unlock, the keychain can't be read yet: that isn't signed out. Look
+        // again once it can, so opening this same process shows the account.
+        if !paired {
+            NotificationCenter.default.addObserver(
+                forName: UIApplication.protectedDataDidBecomeAvailableNotification, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.keychainOpened() }
+            }
+        }
+    }
+
+    private func keychainOpened() {
+        guard !paired, TokenStore.read() != nil else { return }
+        session += 1
+        paired = true
+        anonymous = Shared.defaults.bool(forKey: "anonymous")
+        email = Shared.defaults.string(forKey: "email")
+        needsSetup = Shared.defaults.bool(forKey: "needsSetup")
     }
 
     // MARK: signing in and out
@@ -141,10 +160,14 @@ final class AppModel {
     }
 
     /// The server refused the token (401) while it was still this phone's.
+    /// An account without an email only goes when the server clears it out
+    /// after a long time unused, so it's told that rather than to sign in
+    /// with an email it never had (as Android does).
     func rejected(_ token: String, reason: String) {
         guard TokenStore.read() == token else { return }
+        let wasAnonymous = anonymous
         clearLocal()
-        signedOutReason = reason
+        signedOutReason = wasAnonymous ? L("This phone's setup was removed after a long time unused. Start again or sign in.") : reason
     }
 
     /// Everything the account left on this phone.
@@ -170,6 +193,8 @@ final class AppModel {
         Shared.lastAnswer = nil
         Shared.lastDay = nil
         Shared.lastNearby = nil
+        // Settings outlives the tabs: the next account mustn't see, or save over, this one's.
+        SettingsModel.shared.reset()
     }
 
     /// Who this phone is, from the server: the email, and whether setup is done.

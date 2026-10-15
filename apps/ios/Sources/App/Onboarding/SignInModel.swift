@@ -173,6 +173,9 @@ final class SignInModel {
         poll(signedIn: signedIn, now: true)
     }
 
+    /// Whether a poll refused with `status` should stop: any 4xx but 429, which only asks for a wait.
+    nonisolated static func givesUp(_ status: Int) -> Bool { (400..<500).contains(status) && status != 429 }
+
     private func restart(_ why: String?) {
         pollTask?.cancel()
         request = nil
@@ -191,8 +194,17 @@ final class SignInModel {
                 if !first { try? await Task.sleep(for: .seconds(Self.pollS)) }
                 first = false
                 if Task.isCancelled { return }
-                // Offline for a moment, or told to wait: keep waiting.
-                guard let p = try? await Api(token: nil).signInPoll(r) else { continue }
+                let p: SignInPoll
+                do {
+                    p = try await Api(token: nil).signInPoll(r)
+                } catch let e as ApiError where Self.givesUp(e.status) {
+                    // Refused outright (this version too old, a request the server can't read): asking again won't help.
+                    restart(e.message)
+                    return
+                } catch {
+                    // Offline for a moment, or told to wait: keep waiting.
+                    continue
+                }
                 if Task.isCancelled { return }
                 switch p.status {
                 case "pending":

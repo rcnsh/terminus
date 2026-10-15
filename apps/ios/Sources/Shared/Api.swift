@@ -81,9 +81,8 @@ struct Api: Sendable {
             if Shared.defaults.string(forKey: shared) != value { Shared.defaults.set(value, forKey: shared) }
             return value
         #else
-            guard let value = ProcessInfo.processInfo.environment[name], !value.isEmpty else { return nil }
-            guard let host = URL(string: value)?.host?.lowercased(), host == "localhost" || host == "127.0.0.1" else { return nil }
-            return value
+            // A release build only talks to its own servers.
+            return nil
         #endif
     }
 
@@ -277,6 +276,37 @@ struct Api: Sendable {
         return try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
     }
 
+    /// Reads the profile, makes `change` to it and saves it, only if nothing
+    /// else saved it in between (If-Match with the ETag it was read with);
+    /// if something did (412), reads it again and makes the change again. So
+    /// a pin added on Buses never undoes a favourite added on the map, or
+    /// another device's change. Answers with the profile as saved.
+    func changeProfile(_ change: @Sendable (inout [String: Any]) -> Void) async throws -> [String: Any] {
+        var attempt = 0
+        while true {
+            attempt += 1
+            let (data, tag) = try await tagged("GET", "/api/me/profile")
+            var p = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+            change(&p)
+            do {
+                let saved = try await send("PUT", "/api/me/profile", json: JSONSerialization.data(withJSONObject: p), ifMatch: tag)
+                return try JSONSerialization.jsonObject(with: saved) as? [String: Any] ?? [:]
+            } catch let e as ApiError where e.status == 412 && attempt < 3 {
+                continue
+            }
+        }
+    }
+
+    /// A request's body and its ETag, the profile's version for a later If-Match.
+    func tagged(_ method: String, _ path: String, json: Data? = nil, ifMatch: String? = nil) async throws -> (Data, String?) {
+        let tag = Mutex<String?>(nil)
+        let data = try await send(method, path, json: json, ifMatch: ifMatch) { http in
+            let t = http.value(forHTTPHeaderField: "etag")
+            tag.withLock { $0 = t }
+        }
+        return (data, tag.withLock { $0 })
+    }
+
     /// Imports a NUSMods share link; the server replaces the imported classes only if it all worked.
     func importTimetable(_ share: String) async throws -> ImportResult {
         let data = try await send("POST", "/api/me/import", json: JSONSerialization.data(withJSONObject: ["share": share]))
@@ -378,7 +408,7 @@ struct Api: Sendable {
 
     /// The response body of a 2xx; anything else throws with the server's message.
     func send(
-        _ method: String, _ path: String, query: [URLQueryItem] = [], json: Data? = nil, ifNoneMatch: String? = nil,
+        _ method: String, _ path: String, query: [URLQueryItem] = [], json: Data? = nil, ifNoneMatch: String? = nil, ifMatch: String? = nil,
         seen: ((HTTPURLResponse) -> Void)? = nil
     ) async throws -> Data {
         let scope = Quiet.scope(path)
@@ -398,15 +428,17 @@ struct Api: Sendable {
         req.setValue(Lang.header, forHTTPHeaderField: "accept-language")
         if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "authorization") }
         if let ifNoneMatch { req.setValue(ifNoneMatch, forHTTPHeaderField: "if-none-match") }
+        if let ifMatch { req.setValue(ifMatch, forHTTPHeaderField: "if-match") }
         if let json {
             req.setValue("application/json", forHTTPHeaderField: "content-type")
             req.httpBody = json
         }
+        let sent = Date()
         let (data, resp) = try await Self.session.data(for: req)
         let http = resp as? HTTPURLResponse
         let status = http?.statusCode ?? 0
         if let http {
-            ServerClock.observe(http)
+            ServerClock.observe(http, sent: sent)
             seen?(http)
         }
         let retryAfter = http?.value(forHTTPHeaderField: "retry-after")

@@ -11,7 +11,7 @@
 "%@ stop" = "%@ 站";
 "%@ trips recorded" = "已记录 %@ 次行程";
 "%@ walk" = "步行 %@";
-", " = "，";
+", " = "、";
 "1 class" = "1 节课";
 "1 class had a venue we couldn't place. Pick the nearest stop, or skip it:" = "有 1 节课的地点我们无法确定。选择最近的车站，或跳过：";
 "1 class imported." = "已导入 1 节课。";
@@ -150,7 +150,7 @@
 "Picked %@. Change it if you use a different stop." = "已选择 %@。如果你用别的车站，可以修改。";
 "Place" = "地点";
 "Preparing your data…" = "正在准备你的数据…";
-"Press \"Is this wrong?\" under it, so we see what you saw." = "请按它下面的“这不对？”，这样我们能看到你看到的内容。";
+"Press \"Is this wrong?\" under it, so we see what you saw." = "请按它下面的“答案不对？”，这样我们能看到你看到的内容。";
 "Privacy" = "隐私";
 "Public buses" = "公共巴士";
 "QR code for pairing code %@" = "配对代码 %@ 的二维码";

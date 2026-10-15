@@ -22,6 +22,11 @@ struct RootView: View {
         // A new language redraws everything in it.
         .id(prefs.lang)
         .onOpenURL { Links.open($0) }
+        // A pairing link from the account page's QR code (/pair?code=…), through Associated Domains.
+        .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+            guard let url = activity.webpageURL, let code = SignInCode.pairCode(scanned: url.absoluteString) else { return }
+            WelcomeModel.shared.checkPairLink(code)
+        }
     }
 }
 

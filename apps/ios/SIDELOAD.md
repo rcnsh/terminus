@@ -12,7 +12,10 @@ push notifications, so:
 - Leave reminders still come (the app sets them itself), but one won't
   move if your bus changes while the app is closed.
 - Reminders can't break through a Focus, as Time Sensitive ones would.
-- Pairing links (`/pair`) don't open the app. Type the pairing code instead.
+- Pairing links (`/pair`) don't open the app. Type the pairing code, or
+  scan its QR code from the app.
+- A Live Activity doesn't end by itself right after you arrive; it goes
+  when you next open terminus, or within an hour.
 
 Now, Buses, the map, the widgets and Settings work as usual.
 
@@ -35,6 +38,10 @@ You need a Mac with [Xcode](https://apps.apple.com/app/xcode/id497799835),
    git clone https://github.com/rcnsh/terminus.git
    cd terminus/apps/ios
    ```
+
+   Until the iPhone app is released, it lives on the `ios` branch, not
+   `main`. If `apps/ios` isn't there, ask for that branch, or for an
+   `.ipa` (below).
 
 3. Plug in the iPhone, unlock it and tap **Trust**.
 4. Run:
@@ -67,8 +74,8 @@ renew it for you in the background.
 3. Open the `.ipa` in it and sign in with your Apple ID when it asks.
 4. Do step 5 above, if the iPhone asks.
 
-If the widgets stay empty after installing this way, open terminus once,
-then remove and re-add the widget.
+The widgets work this way too: open terminus once after installing, and
+they show what it last saw.
 
 ## Limits of a free Apple ID
 

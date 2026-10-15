@@ -72,7 +72,11 @@ xcrun devicectl list devices --json-output "$devicectl_json" >/dev/null 2>&1 || 
 set -- $(python3 -I - "$devicectl_json" "${DEVICE:-}" <<'EOF'
 import json, sys
 want = sys.argv[2]
-for d in json.load(open(sys.argv[1]))["result"]["devices"]:
+try:
+    devices = json.load(open(sys.argv[1]))["result"]["devices"]
+except (OSError, ValueError, KeyError, TypeError):
+    devices = []  # devicectl said nothing usable: no iPhone, as far as this knows
+for d in devices:
     p = d.get("properties", {})
     hw = p.get("hardware", {})
     if hw.get("reality") != "physical" or hw.get("platform") != "iOS": continue

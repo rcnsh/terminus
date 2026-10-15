@@ -144,12 +144,13 @@ final class BusesModel {
         Task {
             do {
                 // The profile as it is now, so nothing else changed elsewhere is lost.
-                let api = Api(token: token)
-                var p = try await api.profile()
-                let saved = (p["pinnedStops"] as? [String]) ?? []
-                let limit = ((p["limits"] as? [String: Any])?["pinnedStops"] as? Int) ?? pinLimit
-                p["pinnedStops"] = BusPins.toggle(saved, code, max: limit)
-                apply(try await api.saveProfile(p))
+                let fallback = pinLimit
+                apply(
+                    try await Api(token: token).changeProfile { p in
+                        let saved = (p["pinnedStops"] as? [String]) ?? []
+                        let limit = ((p["limits"] as? [String: Any])?["pinnedStops"] as? Int) ?? fallback
+                        p["pinnedStops"] = BusPins.toggle(saved, code, max: limit)
+                    })
             } catch {
                 if refused(error, token) { return }
                 pins = before
