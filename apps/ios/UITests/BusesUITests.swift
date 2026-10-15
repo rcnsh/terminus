@@ -5,13 +5,17 @@ import XCTest
 /// board, across the road, a pinned stop's page, the search, a service's
 /// line, a service not running, the public buses, and the states without a
 /// stop or a connection; with screenshots in light and dark, English and
-/// Chinese. The stub runs with real hours on a Wednesday at 21:30
-/// (STUB_HOURS=real STUB_NOW=2026-10-07T13:30:00Z), when R1 and R2 have
-/// stopped and P has too, so a board has services running and not.
+/// Chinese. Each test puts the stub on real hours on a Wednesday at 21:30,
+/// when R1 and R2 have stopped and P has too, so a board has services
+/// running and not.
 final class BusesUITests: XCTestCase {
     override func setUp() {
         continueAfterFailure = false
         resetProfile()
+        // The stub's own world, whatever the other suites left: real hours, a Wednesday at 21:30, held still.
+        stubPost("/__stub/reset")
+        stubPost("/__stub/hours?real=1")
+        stubPost("/__stub/at?t=2026-10-07T13:30:00Z")
         stubPost("/__stub/freeze")
         // Prince George's Park.
         XCUIDevice.shared.location = XCUILocation(location: CLLocation(latitude: 1.2913, longitude: 103.7805))
@@ -19,7 +23,7 @@ final class BusesUITests: XCTestCase {
 
     override func tearDown() {
         resetProfile()
-        stubPost("/__stub/thaw")
+        stubPost("/__stub/reset")
     }
 
     // MARK: helpers
@@ -149,17 +153,21 @@ final class BusesUITests: XCTestCase {
         app.swipeUp()
         shot("buses-line-scrolled-en-light", app)
         // A stop on the line opens its board, Back comes back to the line.
-        let stop = app.buttons["line-stop-KR-MRT"]
+        let stop = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'line-stop-' AND label BEGINSWITH 'TCOMS'")).firstMatch
         XCTAssertTrue(stop.waitForExistence(timeout: 5))
         stop.tap()
-        XCTAssertTrue(app.staticTexts["Kent Ridge MRT"].waitForExistence(timeout: 10))
-        waitForBoard(app, svc: "A1")
+        let name = app.staticTexts["stop-name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 10))
+        XCTAssertEqual(name.label, "TCOMS")
+        waitForBoard(app, svc: "A2")
         shot("buses-line-stop-en-light", app)
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(app.buttons["line-show-on-map"].waitForExistence(timeout: 5))
         app.buttons["line-show-on-map"].tap()
         XCTAssertTrue(app.tabBars.buttons["Map"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.tabBars.buttons["Map"].isSelected)
+        sleep(2)
+        shot("buses-show-on-map-en-light", app)
     }
 
     func testServiceNotRunning() {

@@ -1,11 +1,5 @@
 import SwiftUI
 
-extension Notification.Name {
-    /// "Show on map" on a service's line: `object` is the service ("D2"), for
-    /// the Map tab to show that line; sent with `.openTab` to the map.
-    static let showServiceOnMap = Notification.Name("terminus.showServiceOnMap")
-}
-
 /// A service's line, top to bottom in its colour: each stop, the buses at a
 /// stop or between two, and the stop it was opened from with its time.
 struct BusLinePage: View {
@@ -48,8 +42,8 @@ struct BusLinePage: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
+                    MapModel.shared.show(svc)
                     NotificationCenter.default.post(name: .openTab, object: MainTabs.Tab.map)
-                    NotificationCenter.default.post(name: .showServiceOnMap, object: svc)
                 } label: {
                     Label(L("Show on map"), systemImage: "map").labelStyle(.titleAndIcon)
                 }
