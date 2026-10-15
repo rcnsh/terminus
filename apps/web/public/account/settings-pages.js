@@ -21,6 +21,7 @@ import { Journey, STYLES, cardStyle, setCardStyle, styleHint, styleName } from '
 import {
   campus,
   edit,
+  importTimetable,
   lists,
   profile,
   ResidenceOptions,
@@ -453,8 +454,7 @@ export function Timetable({ me }) {
     e.preventDefault();
     setMsg(t('Importing…'));
     try {
-      const r = await api('/api/me/import', { method: 'POST', body: { share } });
-      profile.set(r.profile);
+      const r = await importTimetable(share);
       setTerm(r.term);
       const n = r.profile.trips.length;
       const notes = [n === 1 ? t('Imported 1 class for {0}.', r.term) : t('Imported {0} classes for {1}.', n, r.term)];
