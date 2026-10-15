@@ -297,6 +297,9 @@ a one-off trip added on one phone isn't lost to a save from another.
 (`GET /api/me/profile` sends it, `"0"` before the first save). A client that
 sends it back as `If-Match` is refused with 412 if another device saved
 since; without it, as the apps installed today send, the last save wins.
+The website sends it: each change made in Settings or setup is kept apart
+until it's saved, one save at a time, and on a 412 the page reads the
+profile again and makes only its own changes on that (three tries).
 
 The calendar keeps itself up to date without a deploy
 ([src/calendarsync.ts](../src/calendarsync.ts)). `data/calendar.json` is

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 
 // The account page's search ranking, the reference; the Android and Mac apps
 // follow its rules, written out in fixtures/search.json with the cases below.
-import { busesTabIndex, grouped, rank, results, score } from '../../web/public/account/search.js';
+import { busesTabIndex, grouped, rank, results, samePlace, score } from '../../web/public/account/search.js';
 
 const FIXTURE = JSON.parse(fs.readFileSync(new URL('./fixtures/search.json', import.meta.url), 'utf8'));
 const ids = (list) => list.map((d) => `${d.kind}:${d.code}`);
@@ -99,6 +99,24 @@ test('the box lists each kind once: groups in the order of their best result, ra
   const pinned = [{ code: 'T1', label: 'COM2 (CS2030)', stopCode: 'COM3', kind: 'timetable' }];
   const got = ids(grouped(results('com', { source: () => index, suggestions: () => [], pinned: () => pinned })));
   assert.deepEqual(got, ['timetable:T1', 'stop:COM3', 'stop:OPP-COM', 'building:COM1', 'building:COM2']);
+});
+
+test('a pinned timetable row hides only the stop or food court it is, not a building with the same code', () => {
+  const index = [
+    { code: 'COM3', label: 'COM3', stopCode: 'COM3', kind: 'stop' },
+    { code: 'COM3', label: 'COM3', stopCode: 'COM3', kind: 'building' },
+    { code: 'TECHNO', label: 'Techno Edge', stops: ['COM3'], kind: 'landmark' },
+  ];
+  const row = { code: 'COM3', label: 'COM3', stopCode: 'COM3', kind: 'timetable', detail: 'CS2030' };
+  const got = ids(results('com3', { source: () => index, suggestions: () => [], pinned: () => [row] }));
+  assert.deepEqual(got, ['timetable:COM3', 'building:COM3']);
+  // A food court a class goes to is that row too.
+  const food = { code: 'TECHNO', label: 'Techno Edge', stopCode: 'TECHNO', kind: 'timetable' };
+  assert.deepEqual(ids(results('techno', { source: () => index, suggestions: () => [], pinned: () => [food] })), ['timetable:TECHNO']);
+  // Otherwise the same result is kind and code together.
+  assert.ok(samePlace({ kind: 'stop', code: 'COM3' }, { kind: 'stop', code: 'COM3' }));
+  assert.ok(!samePlace({ kind: 'stop', code: 'COM3' }, { kind: 'building', code: 'COM3' }));
+  assert.ok(!samePlace({ kind: 'timetable', code: 'COM3' }, { kind: 'room', code: 'COM3' }));
 });
 
 test('fixtures/search.json: destinations, ranked as the fixture says', () => {

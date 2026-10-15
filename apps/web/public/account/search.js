@@ -88,12 +88,20 @@ export function grouped(list) {
   return [...groups.values()].flat();
 }
 
+/**
+ * Whether `d` is the place pinned result `pin` already stands for: the same
+ * result (kind and code), or the stop or food court a timetable row's classes
+ * go to. A code alone isn't one place: the stop COM3 and the building COM3 are two.
+ */
+export const samePlace = (pin, d) =>
+  pin.code === d.code && (pin.kind === d.kind || (pin.kind === 'timetable' && (d.kind === 'stop' || d.kind === 'landmark')));
+
 /** The results for `query`, ranked: `pinned` first whenever they match. The box shows them grouped(). */
 export function results(query, { source, suggestions, pinned = () => [] }) {
   const q = query.trim();
   if (!q) return suggestions();
   const top = rank(pinned(), q);
-  return [...top, ...rank(source(), q).filter((d) => !top.some((x) => x.code === d.code))].slice(0, MAX);
+  return [...top, ...rank(source(), q).filter((d) => !top.some((x) => samePlace(x, d)))].slice(0, MAX);
 }
 
 /** What a picked result puts in the box: a room or a code by its code, anything else by its name. */
