@@ -262,7 +262,7 @@ final class SignInModel {
         approvedToken = nil
         anonToken = nil
         let me = try? await Api(token: token).me()
-        AppModel.shared.signedIn(token: token, anonymous: false, email: me?.email ?? email, needsSetup: me?.onboarding != nil)
+        AppModel.shared.signedIn(token: token, anonymous: false, email: me?.email ?? email, needsSetup: me.map { $0.onboarding != nil })
         busy = false
         signedIn()
     }
@@ -310,7 +310,7 @@ final class WelcomeModel {
                 let token = try await Api(token: nil).pair(code: code, name: deviceName())
                 // Pairing codes come from accounts with an email; one never set up goes through setup.
                 let me = try? await Api(token: token).me()
-                AppModel.shared.signedIn(token: token, anonymous: false, email: me?.email, needsSetup: me?.onboarding != nil)
+                AppModel.shared.signedIn(token: token, anonymous: false, email: me?.email, needsSetup: me.map { $0.onboarding != nil })
             } catch {
                 pairError = failureMessage(error)
             }

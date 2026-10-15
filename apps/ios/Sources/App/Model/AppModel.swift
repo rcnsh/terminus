@@ -22,6 +22,11 @@ final class AppModel {
     var email: String? { didSet { Shared.defaults.set(email, forKey: "email") } }
     /// The account hasn't finished its setup: onboarding shows.
     var needsSetup: Bool { didSet { Shared.defaults.set(needsSetup, forKey: "needsSetup") } }
+    /// Signed in while /me couldn't be asked, so whether setup is done isn't
+    /// known: asked again after each answer that comes through, and if the
+    /// account was never set up, setup takes over (as on Android).
+    private var setupUnknown: Bool { didSet { Shared.defaults.set(setupUnknown, forKey: "setupUnknown") } }
+    private var askingMe = false
     /// Why this phone was signed out, said once on the welcome screen.
     var signedOutReason: String?
     /// Changes with every sign-in and sign-out: a request from before one is dropped.
@@ -41,7 +46,9 @@ final class AppModel {
     private(set) var nearby: [NearbyStop]?
     private(set) var loading = false
     private(set) var error: String?
-    private(set) var fetchedAt: Date?
+    private(set) var fetchedAt: Date? {
+        didSet { if setupUnknown, fetchedAt != nil { Task { await refreshMe() } } }
+    }
     private(set) var places: [Place] = []
     /// Places added from "Go somewhere else", a tab each until removed.
     private(set) var added: [Added] = Added.load()
@@ -101,6 +108,7 @@ final class AppModel {
         anonymous = Shared.defaults.bool(forKey: "anonymous")
         email = Shared.defaults.string(forKey: "email")
         needsSetup = Shared.defaults.bool(forKey: "needsSetup")
+        setupUnknown = Shared.defaults.bool(forKey: "setupUnknown")
         // The last plan this phone was shown, while it still holds: drawn at
         // once on opening the app, then refreshed.
         if paired, let data = Shared.lastAnswer, let a = try? NextAnswer.decode(data), !a.isOld(at: ServerClock.now) {
@@ -127,18 +135,21 @@ final class AppModel {
         anonymous = Shared.defaults.bool(forKey: "anonymous")
         email = Shared.defaults.string(forKey: "email")
         needsSetup = Shared.defaults.bool(forKey: "needsSetup")
+        setupUnknown = Shared.defaults.bool(forKey: "setupUnknown")
     }
 
     // MARK: signing in and out
 
-    /// A token was just stored (a new account, a sign-in, a pairing): start showing answers.
-    func signedIn(token: String, anonymous: Bool, email: String? = nil, needsSetup: Bool = false) {
+    /// A token was just stored (a new account, a sign-in, a pairing): start
+    /// showing answers. [needsSetup] nil: /me couldn't be asked, so it's found out later.
+    func signedIn(token: String, anonymous: Bool, email: String? = nil, needsSetup: Bool? = false) {
         TokenStore.save(token)
         session += 1
         paired = true
         self.anonymous = anonymous
         self.email = email
-        self.needsSetup = needsSetup
+        self.needsSetup = needsSetup ?? false
+        setupUnknown = needsSetup == nil
         signedOutReason = nil
         answers = [:]
         day = nil
@@ -179,6 +190,7 @@ final class AppModel {
         anonymous = false
         email = nil
         needsSetup = false
+        setupUnknown = false
         answers = [:]
         nearby = nil
         day = nil
@@ -199,7 +211,9 @@ final class AppModel {
 
     /// Who this phone is, from the server: the email, and whether setup is done.
     func refreshMe() async {
-        guard let token else { return }
+        guard let token, !askingMe else { return }
+        askingMe = true
+        defer { askingMe = false }
         let gen = session
         do {
             let me = try await Api(token: token).me()
@@ -207,6 +221,7 @@ final class AppModel {
             email = me.email
             anonymous = me.anonymous == true || me.email == nil
             needsSetup = me.onboarding != nil
+            setupUnknown = false
         } catch let e as ApiError where e.status == 401 {
             rejected(token, reason: L("This phone was signed out of your account. Sign in again with your email."))
         } catch {}

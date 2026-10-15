@@ -179,14 +179,15 @@ struct SettingsPairCodeSheet: View {
     }
 }
 
-/// `text` as a QR code, one pixel a module (scaled up without smoothing), with a quiet zone.
+/// `text` as a QR code, one pixel a module (scaled up without smoothing), with
+/// the standard quiet zone of four modules: Core Image's own one, and three more.
 func pairingQR(_ text: String) -> UIImage? {
     let f = CIFilter.qrCodeGenerator()
     f.message = Data(text.utf8)
     f.correctionLevel = "M"
     guard let out = f.outputImage else { return nil }
-    let padded = out.transformed(by: CGAffineTransform(translationX: 2, y: 2))
-        .composited(over: CIImage(color: .white).cropped(to: out.extent.insetBy(dx: -2, dy: -2).offsetBy(dx: 2, dy: 2)))
+    let padded = out.transformed(by: CGAffineTransform(translationX: 3, y: 3))
+        .composited(over: CIImage(color: .white).cropped(to: out.extent.insetBy(dx: -3, dy: -3).offsetBy(dx: 3, dy: 3)))
     let ctx = CIContext()
     guard
         let cg = ctx.createCGImage(

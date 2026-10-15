@@ -22,6 +22,7 @@ final class SettingsProfileTests: XCTestCase {
         XCTAssertEqual(p.homeWalkMin, 5)
         XCTAssertEqual(p.walkPace, "normal")
         XCTAssertTrue(p.fullBusMargin)
+        XCTAssertTrue(p.preferBus)
         XCTAssertFalse(p.publicBuses)
         XCTAssertEqual(p.gapHours, 2)
         XCTAssertEqual(p.limits.places, 2)

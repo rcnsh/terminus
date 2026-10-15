@@ -76,7 +76,7 @@ struct SettingsTimetablePane: View {
                         .accessibilityIdentifier("settings.nusmodsLink")
                     Button(model.importing ? L("Importing…") : L("Import")) { model.importTimetable(link) }
                         .buttonStyle(SettingsInkButtonStyle())
-                        .disabled(link.trimmingCharacters(in: .whitespaces).isEmpty || model.importing)
+                        .disabled(link.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.importing)
                         .accessibilityIdentifier("settings.import")
                 }
                 if let r = model.imported {

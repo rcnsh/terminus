@@ -78,6 +78,30 @@ enum Servers {
         }
     }
 
+    /// [attempt] at each of [tries] in turn, until one is reached: the next
+    /// address only when the last was never reached ([unreached]). Returns
+    /// the address that answered with its result; the last error otherwise.
+    static func first<T>(
+        _ tries: [String], method: String, _ attempt: (String) async throws -> T
+    ) async throws -> (at: String, result: T) {
+        for (i, base) in tries.enumerated() {
+            do { return (base, try await attempt(base)) } catch {
+                if i == tries.count - 1 || !unreached(error, method: method) { throw error }
+            }
+        }
+        throw URLError(.cannotConnectToHost)
+    }
+
+    /// [attempt] at the chosen address, then the site's other one if it
+    /// couldn't be reached at all ([tries], [first]), noting which answered.
+    /// Every request to the server goes this way: the API's, the map's files.
+    static func reach<T>(method: String, _ attempt: (String) async throws -> T) async throws -> T {
+        let base = Api.base
+        let (at, result) = try await first(tries(base), method: method, attempt)
+        answered(at, base: base)
+        return result
+    }
+
     /// The saved choice if it's still one of [all], else the default.
     static func pick(_ saved: String?, from all: [String]) -> String {
         if let saved, all.contains(saved) { return saved }
@@ -495,22 +519,13 @@ struct Api: Sendable {
         // The chosen address, then the site's other one if it couldn't be
         // reached at all (Servers.order), inside the same deadline: widgets
         // and the notification service have no time for a second full wait.
-        let base = Api.base
-        let tries = Servers.tries(base)
         let deadline = Date().addingTimeInterval(fast ? 8 : 15)
-        var answer: (Data, URLResponse)?
         var sent = Date()
-        for (i, at) in tries.enumerated() where answer == nil {
+        let (data, resp) = try await Servers.reach(method: method) { base in
             sent = Date()
-            do {
-                answer = try await Self.session.data(for: urlRequest(at, timeout: max(1, deadline.timeIntervalSince(sent))))
-                Servers.answered(at, base: base)
-            } catch {
-                if i == tries.count - 1 || !Servers.unreached(error, method: method) || Date() >= deadline { throw error }
-            }
+            guard sent < deadline else { throw URLError(.timedOut) }
+            return try await Self.session.data(for: urlRequest(base, timeout: max(1, deadline.timeIntervalSince(sent))))
         }
-        guard let answer else { throw URLError(.cannotConnectToHost) }
-        let (data, resp) = answer
         let http = resp as? HTTPURLResponse
         let status = http?.statusCode ?? 0
         if let http {

@@ -218,11 +218,14 @@ enum MapFiles {
         let kept = readMeta(in: dir)
         let file = currentTiles(in: dir)
         if file != nil, let checked = kept?["checked"] as? Double, now - checked < checkS, now >= checked { return false }
-        var req = URLRequest(url: URL(string: "\(Api.base)/map/\(tiles)")!, timeoutInterval: 30)
-        req.setValue(Api.client, forHTTPHeaderField: "x-terminus-client")
         let etag = kept?["etag"] as? String ?? ""
-        if file != nil, !etag.isEmpty { req.setValue(etag, forHTTPHeaderField: "if-none-match") }
-        let (tmp, resp) = try await fetch(req)
+        // The chosen address, then the site's other one if it can't be reached (Servers.reach).
+        let (tmp, resp) = try await Servers.reach(method: "GET") { base in
+            var req = URLRequest(url: URL(string: "\(base)/map/\(tiles)")!, timeoutInterval: 30)
+            req.setValue(Api.client, forHTTPHeaderField: "x-terminus-client")
+            if file != nil, !etag.isEmpty { req.setValue(etag, forHTTPHeaderField: "if-none-match") }
+            return try await fetch(req)
+        }
         // Whatever isn't moved into place below goes: the system leaves it otherwise.
         defer { try? fm.removeItem(at: tmp) }
         let http = resp as? HTTPURLResponse
@@ -258,9 +261,12 @@ enum MapFiles {
 
     /// The style, with the app's headers; the body of a 200.
     private static func get(_ path: String) async throws -> Data {
-        var req = URLRequest(url: URL(string: Api.base + path)!, timeoutInterval: 10)
-        req.setValue(Api.client, forHTTPHeaderField: "x-terminus-client")
-        let (data, resp) = try await URLSession.shared.data(for: req)
+        // The chosen address, then the site's other one if it can't be reached (Servers.reach).
+        let (data, resp) = try await Servers.reach(method: "GET") { base in
+            var req = URLRequest(url: URL(string: base + path)!, timeoutInterval: 10)
+            req.setValue(Api.client, forHTTPHeaderField: "x-terminus-client")
+            return try await URLSession.shared.data(for: req)
+        }
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
         guard status == 200 else { throw ApiError(status: status, message: "HTTP \(status)") }
         return data

@@ -72,6 +72,12 @@ struct ProfileDoc: @unchecked Sendable {
         set { json["walkPace"] = newValue }
     }
 
+    /// A minute on foot counts for more than one at the stop when choosing; on unless turned off.
+    var preferBus: Bool {
+        get { json["preferBus"] as? Bool ?? true }
+        set { json["preferBus"] = newValue }
+    }
+
     var fullBusMargin: Bool {
         get { json["fullBusMargin"] as? Bool ?? true }
         set { json["fullBusMargin"] = newValue }

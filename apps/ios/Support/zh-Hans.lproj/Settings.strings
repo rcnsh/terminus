@@ -42,6 +42,8 @@
 "Aim one bus earlier when yours is often full." = "你要搭的巴士经常满员时，提早一班。";
 "All off" = "全部关闭";
 "Allow for busy buses" = "考虑巴士很挤的情况";
+"Prefer the bus" = "优先搭巴士";
+"Wait a few minutes more for a bus rather than walk." = "宁可多等几分钟巴士，也不想步行。";
 "Already a favourite: %@" = "已在收藏中：%@";
 "Also used on your Mac, on the web and in emails. Place and bus names stay in English, as on the signs." = "也用于你的 Mac、网页和邮件。地点和巴士名称保持英文，与站牌一致。";
 "and" = "到";

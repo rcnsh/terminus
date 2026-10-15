@@ -77,7 +77,7 @@ private struct SetupTimetableImport: View {
                 Task { await model.importTimetable() }
             }
             .buttonStyle(ChipButtonStyle(filled: true))
-            .disabled(model.link.trimmingCharacters(in: .whitespaces).isEmpty || model.importing)
+            .disabled(model.link.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.importing)
             .padding(.top, 2)
             .accessibilityIdentifier("classes.import")
 
