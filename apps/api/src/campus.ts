@@ -161,7 +161,18 @@ export function buildCampusMap(graph: Graph): CampusMap {
   // client or a script reading /api/campus doesn't break.
   const projected: ProjectedStop[] = stops.map((s) => {
     const { x, y } = project(s);
-    return { code: s.code, name: s.name, longName: s.longName ?? s.name, opposite: s.opposite ?? null, x, y, lat: s.lat, lon: s.lon, services: servicesAt.get(s.code) ?? [], core: isCore(s.code) };
+    return {
+      code: s.code,
+      name: s.name,
+      longName: s.longName ?? s.name,
+      opposite: s.opposite ?? null,
+      x,
+      y,
+      lat: s.lat,
+      lon: s.lon,
+      services: servicesAt.get(s.code) ?? [],
+      core: isCore(s.code),
+    };
   });
 
   const routes: Record<string, ProjectedRoute> = {};
@@ -176,10 +187,12 @@ export function buildCampusMap(graph: Graph): CampusMap {
       seq: closes ? seq.slice(0, -1) : seq.slice(),
       loop,
       color: routeColor(svc),
-      line: shape?.line ?? seq.flatMap((c) => {
-        const st = byCode.get(c);
-        return st ? [[st.lon, st.lat] as [number, number]] : [];
-      }),
+      line:
+        shape?.line ??
+        seq.flatMap((c) => {
+          const st = byCode.get(c);
+          return st ? [[st.lon, st.lat] as [number, number]] : [];
+        }),
       shaped: Boolean(shape),
     };
   }

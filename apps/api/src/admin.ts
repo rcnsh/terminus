@@ -57,7 +57,6 @@ export function timingSafeEqual(given: string, secret: string): boolean {
   return diff === 0;
 }
 
-
 export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetch = fetch): Promise<Record<string, unknown>> {
   const db = env.DB;
   const [upstream, incidents, analytics, collect, eta] = await Promise.all([
@@ -69,8 +68,16 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
   ]);
   const out: Record<string, unknown> = {
     now: new Date(nowMs).toISOString(),
-    feed: upstream ? { up: answering(upstream), since: new Date(answeringSince(upstream)).toISOString(), checkedAt: new Date(upstream.checkedAt).toISOString() } : null,
-    incidents: incidents.slice(0, 5).map((i) => ({ start: new Date(i.start).toISOString(), end: i.end ? new Date(i.end).toISOString() : null, cause: i.cause })),
+    feed: upstream
+      ? {
+          up: answering(upstream),
+          since: new Date(answeringSince(upstream)).toISOString(),
+          checkedAt: new Date(upstream.checkedAt).toISOString(),
+        }
+      : null,
+    incidents: incidents
+      .slice(0, 5)
+      .map((i) => ({ start: new Date(i.start).toISOString(), end: i.end ? new Date(i.end).toISOString() : null, cause: i.cause })),
     analytics,
     collect,
     eta,
@@ -147,8 +154,27 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
   const devices = dev.results as Array<{ platform: string; total: number; active7: number }>;
   const clients = cli.results as Array<{ client: string; n: number }>;
   const signups = sign.results as Array<{ day: string; n: number }>;
-  const feedback = fb.results as Array<{ id: string; created: number; kind: string; reason: string | null; note: string; platform: string; appVersion: string | null; context: string | null; replyTo: string | null; email: string | null }>;
-  const [total, new7, new30, anonymous, upgraded, upgraded30, installs30] = [users.total, users.new7, users.new30, users.anonymous, users.upgraded, users.upgraded30, users.installs30].map(n);
+  const feedback = fb.results as Array<{
+    id: string;
+    created: number;
+    kind: string;
+    reason: string | null;
+    note: string;
+    platform: string;
+    appVersion: string | null;
+    context: string | null;
+    replyTo: string | null;
+    email: string | null;
+  }>;
+  const [total, new7, new30, anonymous, upgraded, upgraded30, installs30] = [
+    users.total,
+    users.new7,
+    users.new30,
+    users.anonymous,
+    users.upgraded,
+    users.upgraded30,
+    users.installs30,
+  ].map(n);
   const [withTimetable, withHome] = [profiles.withTimetable, profiles.withHome].map(n);
   const [active1, active7, web7] = [sessions.active1, sessions.active7, sessions.web7].map(n);
   const [keys, keysUsed7] = [apiKeys.total, apiKeys.used7].map(n);
@@ -157,7 +183,17 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
 
   return {
     ...out,
-    accounts: { total, new7d: new7, new30d: new30, withTimetable, withHome, active1d: active1, active7d: active7, webSessions7d: web7, anonymous },
+    accounts: {
+      total,
+      new7d: new7,
+      new30d: new30,
+      withTimetable,
+      withHome,
+      active1d: active1,
+      active7d: active7,
+      webSessions7d: web7,
+      anonymous,
+    },
     apps: { installs30d: installs30, onboarded30d: onboarded30, addedEmail: upgraded, addedEmail30d: upgraded30 },
     devices,
     clients,
@@ -226,14 +262,39 @@ async function analyticsStats(env: Env, fetchImpl: typeof fetch): Promise<Record
  * numbers), and the versions and systems it came from.
  */
 export function groupErrors(rows: Record<string, unknown>[], versions: Record<string, unknown>[]): Record<string, unknown>[] {
-  const out = new Map<string, { fingerprint: string; platform: string; type: string; message: string; stack: string; n: number; fatal: number; last: string; top: number; versions: { version: string; os: string; n: number }[] }>();
+  const out = new Map<
+    string,
+    {
+      fingerprint: string;
+      platform: string;
+      type: string;
+      message: string;
+      stack: string;
+      n: number;
+      fatal: number;
+      last: string;
+      top: number;
+      versions: { version: string; os: string; n: number }[];
+    }
+  >();
   for (const r of rows) {
     const fp = String(r.fingerprint);
     const n = Number(r.n);
     const e = out.get(fp);
     const last = String(r.last);
     if (!e) {
-      out.set(fp, { fingerprint: fp, platform: String(r.platform), type: String(r.type), message: String(r.message), stack: String(r.stack), n, fatal: Number(r.fatal), last, top: n, versions: [] });
+      out.set(fp, {
+        fingerprint: fp,
+        platform: String(r.platform),
+        type: String(r.type),
+        message: String(r.message),
+        stack: String(r.stack),
+        n,
+        fatal: Number(r.fatal),
+        last,
+        top: n,
+        versions: [],
+      });
       continue;
     }
     e.n += n;

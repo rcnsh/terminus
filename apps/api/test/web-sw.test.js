@@ -22,7 +22,9 @@ function shellFiles() {
 /** Static imports (not import()), resolved to site paths: ours, and the vendored modules' minified ones. */
 function importsOf(file) {
   const src = read(file);
-  return [...src.matchAll(/(?:^|[;\s])import\s*(?:[\w$*{}\s,]+?\s*from\s*)?(['"])([^'"]+)\1/gm)].map((m) => (m[2].startsWith('/') ? m[2] : path.posix.join(path.posix.dirname(file), m[2])));
+  return [...src.matchAll(/(?:^|[;\s])import\s*(?:[\w$*{}\s,]+?\s*from\s*)?(['"])([^'"]+)\1/gm)].map((m) =>
+    m[2].startsWith('/') ? m[2] : path.posix.join(path.posix.dirname(file), m[2]),
+  );
 }
 
 /**
@@ -34,8 +36,13 @@ const SHELL_PIN = { shell: 'shell-v21', files: 'bd9ed5e5e6286b59' };
 
 test('the list of files kept for offline changes only with a new SHELL', () => {
   const shell = /const SHELL = '([^']+)'/.exec(read('sw.js'))[1];
-  const files = crypto.createHash('sha256').update([...shellFiles()].sort().join('\n')).digest('hex').slice(0, 16);
-  if (files !== SHELL_PIN.files && shell === SHELL_PIN.shell) assert.fail(`SHELL_FILES changed: bump SHELL in sw.js, then set SHELL_PIN here to the new name and files: '${files}'`);
+  const files = crypto
+    .createHash('sha256')
+    .update([...shellFiles()].sort().join('\n'))
+    .digest('hex')
+    .slice(0, 16);
+  if (files !== SHELL_PIN.files && shell === SHELL_PIN.shell)
+    assert.fail(`SHELL_FILES changed: bump SHELL in sw.js, then set SHELL_PIN here to the new name and files: '${files}'`);
   assert.deepEqual({ shell, files }, SHELL_PIN, `SHELL_PIN is out of date: set it to { shell: '${shell}', files: '${files}' }`);
 });
 
@@ -101,17 +108,26 @@ test('each page asks for every module it starts with at once (modulepreload), an
 
 /** The modules [file] loads later with import(), resolved to site paths. */
 function lazyImportsOf(file) {
-  return [...read(file).matchAll(/\bimport\((['"])([^'"]+)\1\)/g)].map((m) => (m[2].startsWith('/') ? m[2] : path.posix.join(path.posix.dirname(file), m[2])));
+  return [...read(file).matchAll(/\bimport\((['"])([^'"]+)\1\)/g)].map((m) =>
+    m[2].startsWith('/') ? m[2] : path.posix.join(path.posix.dirname(file), m[2]),
+  );
 }
 
 test('Settings asks for all its modules at once, not one level at a time', () => {
   // Each page imports Settings (and the account page, setup) with import(),
   // along with every module those need that the page hasn't loaded yet.
-  for (const [entry, parts] of [['/app/app.js', ['/account/settings.js']], ['/account/app.js', ['/account/settings.js', '/account/onboarding.js']]]) {
+  for (const [entry, parts] of [
+    ['/app/app.js', ['/account/settings.js']],
+    ['/account/app.js', ['/account/settings.js', '/account/onboarding.js']],
+  ]) {
     const loaded = new Set([entry, ...startupModules(entry)]);
     const needed = new Set(parts.flatMap((p) => [p, ...startupModules(p)]).filter((f) => !loaded.has(f)));
     const asked = new Set(lazyImportsOf(entry));
-    assert.deepEqual([...needed].filter((f) => !asked.has(f)), [], entry);
+    assert.deepEqual(
+      [...needed].filter((f) => !asked.has(f)),
+      [],
+      entry,
+    );
   }
 });
 
@@ -136,7 +152,10 @@ test('the Now tab looks for the kept card where sw.js keeps it', () => {
   const kept = /caches\.match\(`\$\{location\.origin\}([^?`]+)\?/.exec(read('app/app.js'))?.[1];
   const data = /const DATA_PATHS = new Set\(\[([^\]]*)\]\)/.exec(read('sw.js'))[1];
   assert.ok(kept, 'keptCard() no longer reads the cache the way this test expects');
-  assert.ok([...data.matchAll(/'([^']+)'/g)].some((m) => m[1] === kept), `app.js looks for ${kept}, which sw.js never keeps`);
+  assert.ok(
+    [...data.matchAll(/'([^']+)'/g)].some((m) => m[1] === kept),
+    `app.js looks for ${kept}, which sw.js never keeps`,
+  );
 });
 
 test('the API key example in Settings calls a route under /api', () => {

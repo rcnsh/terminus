@@ -226,7 +226,13 @@ export function bestLeg(graph: Graph, idx: GraphIndex, svc: string, fromCode: st
     if (!best || cost(cand) < cost(best)) best = cand;
   }
   if (!best) return null;
-  return { svc, hops: best.hops, ...(best.rideS !== undefined ? { rideS: best.rideS } : {}), ...(best.crossS ? { crossS: best.crossS, off: idx.byCode.get(best.code)! } : {}), to: idx.byCode.get(best.code)! };
+  return {
+    svc,
+    hops: best.hops,
+    ...(best.rideS !== undefined ? { rideS: best.rideS } : {}),
+    ...(best.crossS ? { crossS: best.crossS, off: idx.byCode.get(best.code)! } : {}),
+    to: idx.byCode.get(best.code)!,
+  };
 }
 
 /**
@@ -246,7 +252,9 @@ export function candidateStops(graph: Graph, input: ResolveInput, opts: { any?: 
   const targetCodes = new Set(targets.map((t) => t.code));
   // A stop worth a fetch: some bus from it goes there (any stop, with no destination).
   const reaches = (stop: Stop) =>
-    !to || (!targetCodes.has(stop.code) && (opts.any || (idx.servingStop.get(stop.code) ?? []).some((svc) => targets.some((t) => reach(idx, svc, stop.code, t.code)))));
+    !to ||
+    (!targetCodes.has(stop.code) &&
+      (opts.any || (idx.servingStop.get(stop.code) ?? []).some((svc) => targets.some((t) => reach(idx, svc, stop.code, t.code)))));
 
   // `startS`: without coordinates, the walk to where `footM` starts from.
   let base: Array<{ stop: Stop; distM: number; footM: number; startS?: number }>;
@@ -286,7 +294,8 @@ export function candidateStops(graph: Graph, input: ResolveInput, opts: { any?: 
     const startS = (code: string) => input.originWalkByStopS?.[code] ?? input.originWalkS ?? 0;
     const origins = [stop, ...(input.originAlso ?? []).flatMap((code) => idx.byCode.get(code) ?? [])];
     base = [];
-    for (const s of origins) if (!base.some((b) => b.stop.code === s.code)) base.push({ stop: s, distM: 0, footM: 0, startS: startS(s.code) });
+    for (const s of origins)
+      if (!base.some((b) => b.stop.code === s.code)) base.push({ stop: s, distM: 0, footM: 0, startS: startS(s.code) });
     // The far side of the road, a crossing further: the bus you want may
     // only call there, and nothing says which side you'll come out on.
     for (const s of origins) {
@@ -361,11 +370,7 @@ export function mergeServiceHours(
       if (win === null || (Array.isArray(win) && win.length === 2 && win[0] === null && win[1] === null)) {
         merged[day] = null; // an explicit "does not run"
         touched = true;
-      } else if (
-        Array.isArray(win) &&
-        hhmmToMin(win[0]) !== null &&
-        hhmmToMin(win[1]) !== null
-      ) {
+      } else if (Array.isArray(win) && hhmmToMin(win[0]) !== null && hhmmToMin(win[1]) !== null) {
         merged[day] = [String(win[0]), String(win[1])];
         touched = true;
       }
@@ -892,7 +897,9 @@ export function scoreLeg(
 
 /** What an option costs as the options are ranked, in seconds to the place itself (see scoreOptions). */
 function rankCostS(o: ScoredOption, endWalk: (o: ScoredOption) => number, walkWeight: number): number {
-  return o.totalS + endWalk(o) + (walkWeight - 1) * footS(o, endWalk(o)) + (o.paid ? PUBLIC.fareWorthS : 0) + (o.change ? TRANSFER.worthS : 0);
+  return (
+    o.totalS + endWalk(o) + (walkWeight - 1) * footS(o, endWalk(o)) + (o.paid ? PUBLIC.fareWorthS : 0) + (o.change ? TRANSFER.worthS : 0)
+  );
 }
 
 /**
@@ -1034,7 +1041,8 @@ export function pickAlt(options: ScoredOption[]): ScoredOption | null {
   if (!best) return null;
   // After a change of bus, the single bus it beat, when there is one; after
   // a single bus, never a change, which it beat.
-  if (best.change) return options.find((o) => !o.change) ?? options.find((o) => o.svc !== best.svc || o.change?.svc !== best.change?.svc) ?? null;
+  if (best.change)
+    return options.find((o) => !o.change) ?? options.find((o) => o.svc !== best.svc || o.change?.svc !== best.change?.svc) ?? null;
   const single = options.filter((o) => !o.change);
   return (
     single.find((o) => o.svc !== best.svc) ??
@@ -1048,7 +1056,12 @@ export function pickAlt(options: ScoredOption[]): ScoredOption | null {
  * option at a *different* stop. A tight margin means the hop-count guess in
  * RIDE.secondsPerHop is doing the deciding, which it is not good enough for.
  */
-export function confidence(options: ScoredOption[], hasCoords: boolean, endWalk: (o: ScoredOption) => number = () => 0, walkWeight: number = WALK.sunWeight): number {
+export function confidence(
+  options: ScoredOption[],
+  hasCoords: boolean,
+  endWalk: (o: ScoredOption) => number = () => 0,
+  walkWeight: number = WALK.sunWeight,
+): number {
   if (!options.length) return 0;
   const best = options[0];
   // Two passes of the same service through this stop and no way to tell which
@@ -1125,7 +1138,9 @@ export function walkAllTheWayS(
   // From the origin stop, the walk to it (from home) comes first, same as for
   // the bus; from a room several stops serve, out by whichever is shortest.
   const from = [fallbackFrom, ...(input.originAlso ?? []).flatMap((code) => idx.byCode.get(code) ?? [])];
-  return Math.min(...from.map((s) => Math.round(stopFootM(s, dest) / speed) + (input.originWalkByStopS?.[s.code] ?? input.originWalkS ?? 0)));
+  return Math.min(
+    ...from.map((s) => Math.round(stopFootM(s, dest) / speed) + (input.originWalkByStopS?.[s.code] ?? input.originWalkS ?? 0)),
+  );
 }
 
 /**

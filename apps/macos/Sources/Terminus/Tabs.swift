@@ -7,7 +7,12 @@ struct Tabs: View {
     @Namespace private var pill
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private enum Tab: Hashable { case plan, place(String), code(String, String), nearby }
+    private enum Tab: Hashable {
+        case plan
+        case place(String)
+        case code(String, String)
+        case nearby
+    }
 
     /// Next, Nearby, each favourite, then the places added from the search, as
     /// on the phone, its widget and the web.
@@ -15,7 +20,9 @@ struct Tabs: View {
         var out: [(Tab, String, String)] = [(.plan, L("Next"), "clock"), (.nearby, L("Nearby"), "location")]
         out += model.places.map { (.place($0.key), $0.label, "mappin") }
         out += model.added.map { (.code($0.code, $0.label), $0.label, "magnifyingglass") }
-        if case .code(let c, let l) = model.target, !model.added.contains(where: { $0.code == c }) { out.append((.code(c, l), l, "magnifyingglass")) }
+        if case .code(let c, let l) = model.target, !model.added.contains(where: { $0.code == c }) {
+            out.append((.code(c, l), l, "magnifyingglass"))
+        }
         return out
     }
 
@@ -39,9 +46,14 @@ struct Tabs: View {
             ScrollViewReader { proxy in
                 ScrollView(.horizontal, showsIndicators: false) { strip(icons: false, inset: 6) }
                     // A tab cut off at the edge fades out, so the row reads as more to scroll to.
-                    .mask(LinearGradient(stops: [.init(color: .black, location: 0.9), .init(color: .clear, location: 1)], startPoint: .leading, endPoint: .trailing))
+                    .mask(
+                        LinearGradient(
+                            stops: [.init(color: .black, location: 0.9), .init(color: .clear, location: 1)], startPoint: .leading,
+                            endPoint: .trailing)
+                    )
                     .onAppear { proxy.scrollTo(current, anchor: .center) }
-                    .onChange(of: current) { _, tab in withAnimation(reduceMotion ? nil : .default) { proxy.scrollTo(tab, anchor: .center) } }
+                    .onChange(of: current) { _, tab in withAnimation(reduceMotion ? nil : .default) { proxy.scrollTo(tab, anchor: .center) }
+                    }
             }
         }
         .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(.primary.opacity(0.05)))
@@ -77,7 +89,9 @@ struct Tabs: View {
                     .accessibilityValue(L("Tab %@ of %@", "\(i + 1)", "\(all.count)"))
                     .accessibilityAddTraits(on ? .isSelected : [])
                     if let p = added {
-                        Button { model.removeAdded(p) } label: {
+                        Button {
+                            model.removeAdded(p)
+                        } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .font(.system(size: 12))
                                 .foregroundStyle(.secondary)

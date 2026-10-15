@@ -91,7 +91,8 @@ test('on every line a bus never slides backwards, never jumps between stops it d
       const d = aheadBy(path, f, b);
       // How far on it is along the road, round a loop past its start.
       const on = GRAPH.loops[svc] ? (((b.along - f.along) % path.total) + path.total) % path.total : b.along - f.along;
-      if (on > 0 && on <= 1_500) assert.ok(d != null && Math.abs(d - on) < 0.01, `${svc}: ${f.along} m to ${b.along} m slides ${d}, not ${on}`);
+      if (on > 0 && on <= 1_500)
+        assert.ok(d != null && Math.abs(d - on) < 0.01, `${svc}: ${f.along} m to ${b.along} m slides ${d}, not ${on}`);
       else assert.equal(d, null, `${svc}: ${f.along} m to ${b.along} m`);
       if (d == null) continue;
       const ms = slideMs(d);
@@ -124,7 +125,10 @@ test('on a one-way line, a bus back at the start jumps; it does not slide on rou
 });
 
 test('failed polls for the buses back off from 5 s to a minute, never before the server says', () => {
-  assert.deepEqual([0, 1, 2, 3, 4, 9].map((n) => busesWaitMs(n)), [5_000, 10_000, 20_000, 40_000, 60_000, 60_000]);
+  assert.deepEqual(
+    [0, 1, 2, 3, 4, 9].map((n) => busesWaitMs(n)),
+    [5_000, 10_000, 20_000, 40_000, 60_000, 60_000],
+  );
   // A Retry-After still running (dom.js quietMs) holds the next poll back.
   assert.equal(busesWaitMs(0, 30_000), 30_000);
   assert.equal(busesWaitMs(4, 90_000), 90_000);

@@ -103,7 +103,9 @@ final class Updater: NSObject, SPUUpdaterDelegate {
         Api.devOverride("TERMINUS_APPCAST")
     }
 
-    func updater(_ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem, immediateInstallationBlock: @escaping () -> Void) -> Bool {
+    func updater(_ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem, immediateInstallationBlock: @escaping () -> Void)
+        -> Bool
+    {
         log.notice("update \(item.displayVersionString, privacy: .public) downloaded")
         installNow = immediateInstallationBlock
         if closeWatch == nil {

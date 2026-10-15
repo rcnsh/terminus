@@ -54,7 +54,13 @@ let keyMemo: { token: string; key: Promise<CryptoKey> } | null = null;
 
 function hmacKey(token: string): Promise<CryptoKey> {
   if (keyMemo?.token !== token) {
-    const key = crypto.subtle.importKey('raw', enc.encode(`terminus operator passkeys\n${token}`), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
+    const key = crypto.subtle.importKey(
+      'raw',
+      enc.encode(`terminus operator passkeys\n${token}`),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign', 'verify'],
+    );
     // A refused import isn't kept: the next call tries again.
     key.catch(() => {
       if (keyMemo?.key === key) keyMemo = null;
@@ -100,7 +106,10 @@ export async function challengeOk(token: string, challenge: string, nowMs: numbe
 /** A session: `op1.<expiry ms>.<mac>`. */
 export async function newSession(token: string, nowMs: number): Promise<{ session: string; expires: string }> {
   const exp = nowMs + SESSION_MS;
-  return { session: `${SESSION_PREFIX}${exp}.${b64url(await mac(token, 'session', enc.encode(String(exp))))}`, expires: new Date(exp).toISOString() };
+  return {
+    session: `${SESSION_PREFIX}${exp}.${b64url(await mac(token, 'session', enc.encode(String(exp))))}`,
+    expires: new Date(exp).toISOString(),
+  };
 }
 
 export async function sessionOk(token: string | undefined, given: string | null, nowMs: number): Promise<boolean> {
@@ -173,7 +182,12 @@ async function importPasskey(key: string, alg: number): Promise<CryptoKey | null
 }
 
 /** The assertion's signature, over authenticatorData and the hash of clientDataJSON. */
-export async function signatureOk(pk: Pick<Passkey, 'key' | 'alg'>, authData: Uint8Array, clientData: Uint8Array, signature: Uint8Array): Promise<boolean> {
+export async function signatureOk(
+  pk: Pick<Passkey, 'key' | 'alg'>,
+  authData: Uint8Array,
+  clientData: Uint8Array,
+  signature: Uint8Array,
+): Promise<boolean> {
   const key = await importPasskey(pk.key, pk.alg);
   if (!key) return false;
   const a = ALGS[pk.alg];
@@ -222,7 +236,8 @@ export async function handlePasskey(req: Request, url: URL, env: Env, nowMs: num
     if (!clientData || !authData || !id || !key) return json({ error: 'expected id, key, alg, clientData and authData' }, 400);
     const challenge = readClientData(clientData, 'webauthn.create', url.origin);
     const auth = await readAuthData(authData, rpId);
-    if (!challenge || !(await challengeOk(token, challenge, nowMs)) || auth?.credId !== id) return json({ error: 'passkey not accepted' }, 403);
+    if (!challenge || !(await challengeOk(token, challenge, nowMs)) || auth?.credId !== id)
+      return json({ error: 'passkey not accepted' }, 403);
     if (!(await importPasskey(key, alg))) return json({ error: 'unsupported passkey type' }, 400);
     const name = typeof b?.name === 'string' ? b.name.trim().slice(0, 60) : '';
     const list = (await readPasskeys(env)).filter((p) => p.id !== id);
@@ -242,7 +257,11 @@ export async function handlePasskey(req: Request, url: URL, env: Env, nowMs: num
     const pk = (await readPasskeys(env)).find((p) => p.id === id && p.rpId === rpId);
     const challenge = readClientData(clientData, 'webauthn.get', url.origin);
     const ok =
-      pk && challenge && (await challengeOk(token, challenge, nowMs)) && (await readAuthData(authData, rpId)) && (await signatureOk(pk, authData, clientData, signature));
+      pk &&
+      challenge &&
+      (await challengeOk(token, challenge, nowMs)) &&
+      (await readAuthData(authData, rpId)) &&
+      (await signatureOk(pk, authData, clientData, signature));
     if (!ok) return json({ error: 'passkey not accepted' }, 403);
     return json(await newSession(token, nowMs), 200, { 'cache-control': 'no-store' });
   }

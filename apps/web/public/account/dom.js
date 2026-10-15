@@ -4,7 +4,8 @@
 
 /** The page's language (assets/i18n.js): t('Updated {0}', time). */
 // Outside a browser (the API's tests import search.js) it's English.
-export const t = (en, ...args) => (globalThis.window?.i18n ? window.i18n.t(en, ...args) : en.replace(/\{(\d+)\}/g, (_, i) => String(args[i] ?? '')));
+export const t = (en, ...args) =>
+  globalThis.window?.i18n ? window.i18n.t(en, ...args) : en.replace(/\{(\d+)\}/g, (_, i) => String(args[i] ?? ''));
 export const locale = () => globalThis.window?.i18n?.locale;
 
 /**
@@ -155,7 +156,8 @@ export async function api(path, { method = 'GET', body, timeoutMs = method === '
     // Not JSON: a captive portal's sign-in page, or a proxy's error page.
   }
   // No words from the server (a proxy's error page, a gateway's 502): plain words, in the page's language.
-  if (!res.ok) throw Object.assign(new Error(sentence(data?.error) || t("Couldn't reach terminus. Try again in a moment.")), { status: res.status });
+  if (!res.ok)
+    throw Object.assign(new Error(sentence(data?.error) || t("Couldn't reach terminus. Try again in a moment.")), { status: res.status });
   // A 200 that isn't the API's answer must not pass for one.
   if (data === null || typeof data !== 'object') throw unreachable();
   return data;
@@ -191,7 +193,8 @@ export const browserHour12 = () => new Intl.DateTimeFormat(locale() ?? [], { hou
 export const hour12 = () => (clockPref === '12' ? true : clockPref === '24' ? false : browserHour12());
 
 /** A time as the card writes it: "9:41 AM" or "09:41". */
-export const clockOpts = () => (hour12() ? { hour: 'numeric', minute: '2-digit', hour12: true } : { hour: '2-digit', minute: '2-digit', hour12: false });
+export const clockOpts = () =>
+  hour12() ? { hour: 'numeric', minute: '2-digit', hour12: true } : { hour: '2-digit', minute: '2-digit', hour12: false };
 
 /** A formatted time with a space after 上午/下午, as the server writes it ("下午 6:36"). */
 export const spaced = (s) => s.replace(/([上下]午)(\d)/, '$1 $2');
@@ -255,5 +258,5 @@ export function inkOn(hex) {
   // Contrast with white (luminance 1) against contrast with #1c1917: its
   // luminance is about 0.010, so 0.06 with the 0.05 both sides add; 0.061
   // rounds that up a little.
-  return (1.05 / (lum + 0.05)) >= (lum + 0.05) / 0.061 ? '#fff' : '#1c1917';
+  return 1.05 / (lum + 0.05) >= (lum + 0.05) / 0.061 ? '#fff' : '#1c1917';
 }

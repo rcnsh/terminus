@@ -32,7 +32,10 @@ test('a real reply at YIH (16171) becomes arrivals for 151 and 95, each on its r
   assert.equal(rows[0].crowd, 'low');
   // The feed lists the three buses of a service soonest first; so do we.
   const of151 = rows.filter((a) => a.svc === '151/1').map((a) => a.etaS);
-  assert.deepEqual(of151, [...of151].sort((a, b) => a - b));
+  assert.deepEqual(
+    of151,
+    [...of151].sort((a, b) => a - b),
+  );
 });
 
 test('a timetabled bus (Monitored 0) is marked scheduled, never passed off as live', () => {
@@ -74,9 +77,21 @@ test('load bands become crowd levels; anything else is unknown', () => {
 });
 
 test('a bus a minute gone is dropped; one just due reads as now, never 0', () => {
-  const raw = ltaPayload('16181', [{ ServiceNo: '95', buses: [{ etaS: -90, dest: '16009' }, { etaS: -20, dest: '16009' }, { etaS: 300, dest: '16009' }] }]);
+  const raw = ltaPayload('16181', [
+    {
+      ServiceNo: '95',
+      buses: [
+        { etaS: -90, dest: '16009' },
+        { etaS: -20, dest: '16009' },
+        { etaS: 300, dest: '16009' },
+      ],
+    },
+  ]);
   const rows = normalizePublic(raw, 'CLB', GRAPH_PUBLIC, FROZEN_NOW);
-  assert.deepEqual(rows.map((a) => a.etaS), [1, 300]);
+  assert.deepEqual(
+    rows.map((a) => a.etaS),
+    [1, 300],
+  );
 });
 
 test('empty slots and unknown services are skipped; a reply with no Services list is a problem', () => {
@@ -85,7 +100,10 @@ test('empty slots and unknown services are skipped; a reply with no Services lis
     { ServiceNo: '999', buses: [{ etaS: 60, dest: '00000' }] },
   ]);
   const rows = normalizePublic(raw, 'CLB', GRAPH_PUBLIC, FROZEN_NOW);
-  assert.deepEqual(rows.map((a) => [a.svc, a.etaS]), [['95', 120]]);
+  assert.deepEqual(
+    rows.map((a) => [a.svc, a.etaS]),
+    [['95', 120]],
+  );
   const problem = (raw, stop = 'CLB') => publicProblem(raw, stop, GRAPH_PUBLIC, FROZEN_NOW);
   assert.equal(problem(raw), null);
   // Services listed, none with a bus: a real "no bus" at night.
@@ -114,9 +132,16 @@ function withBus(raw, field, to, value) {
 }
 
 test('a bus is live only when Monitored is 1; anything else is the timetable', () => {
-  const read = (value) => normalizePublic(withBus(ltaPayload('16181', [{ ServiceNo: '95', buses: [{ etaS: 300, dest: '16009' }] }]), 'Monitored', null, value), 'CLB', GRAPH_PUBLIC, FROZEN_NOW)[0];
+  const read = (value) =>
+    normalizePublic(
+      withBus(ltaPayload('16181', [{ ServiceNo: '95', buses: [{ etaS: 300, dest: '16009' }] }]), 'Monitored', null, value),
+      'CLB',
+      GRAPH_PUBLIC,
+      FROZEN_NOW,
+    )[0];
   for (const live of [1, '1', ' 1', true]) assert.equal(read(live).scheduled, undefined, JSON.stringify(live));
-  for (const timetable of [0, '0', false, 'false', null, undefined, '', 2, -1, 'N', {}]) assert.equal(read(timetable).scheduled, true, JSON.stringify(timetable));
+  for (const timetable of [0, '0', false, 'false', null, undefined, '', 2, -1, 'N', {}])
+    assert.equal(read(timetable).scheduled, true, JSON.stringify(timetable));
   // Renamed, it's missing: the timetable, never live.
   const renamed = withBus(ltaPayload('16181', [{ ServiceNo: '95', buses: [{ etaS: 300, dest: '16009' }] }]), 'Monitored', 'IsMonitored');
   assert.equal(normalizePublic(renamed, 'CLB', GRAPH_PUBLIC, FROZEN_NOW)[0].scheduled, true);
@@ -128,7 +153,11 @@ test('a time without its zone, or more than a week away, is not a bus, and says 
   // DataMall's own form, and the same moment in another zone, read alike.
   const local = new Date(FROZEN_NOW + 8 * 3_600_000 + 300_000).toISOString().replace(/\.\d+Z$/, '');
   for (const iso of [`${local}+08:00`, new Date(FROZEN_NOW + 300_000).toISOString()]) {
-    assert.deepEqual(normalizePublic(at(iso), 'CLB', GRAPH_PUBLIC, FROZEN_NOW).map((a) => a.etaS), [300], iso);
+    assert.deepEqual(
+      normalizePublic(at(iso), 'CLB', GRAPH_PUBLIC, FROZEN_NOW).map((a) => a.etaS),
+      [300],
+      iso,
+    );
   }
   // No zone: read as UTC on a Worker, it would be 8 h late and still live.
   for (const iso of [local, local.replace('T', ' '), new Date(FROZEN_NOW + 30 * 86_400_000).toISOString(), 'soon']) {
@@ -152,10 +181,11 @@ test('a reply whose fields moved is a problem, not "no bus"', () => {
   assert.match(problem({ Services: [null] }), /a service it cannot read/);
   // At Kent Ridge Terminal both directions of the 151 call: without its
   // destination a bus can't be put on either, and would vanish unnoticed.
-  const both = () => ltaPayload('16009', [
-    { ServiceNo: '95', buses: [{ etaS: 120, dest: '16009' }] },
-    { ServiceNo: '151', buses: [{ etaS: 240, dest: '64009' }] },
-  ]);
+  const both = () =>
+    ltaPayload('16009', [
+      { ServiceNo: '95', buses: [{ etaS: 120, dest: '16009' }] },
+      { ServiceNo: '151', buses: [{ etaS: 240, dest: '64009' }] },
+    ]);
   assert.equal(problem(both(), '16009'), null);
   assert.match(problem(withBus(both(), 'DestinationCode', 'Destination'), '16009'), /a bus with no destination \(151\)/);
   // The loop never needs one, so on its own it's fine without.
@@ -167,7 +197,10 @@ test('fetchPublicArrivals sends the account key, and a 401 is a refusal, not "no
   installGlobals(fetch);
   const sa = await fetchPublicArrivals(env(), GRAPH_PUBLIC, 'CLB', '16181', FROZEN_NOW);
   assert.equal(sa.code, 'CLB');
-  assert.deepEqual(sa.arrivals.map((a) => [a.svc, a.etaS, a.crowd]), [['95', 240, 'low']]);
+  assert.deepEqual(
+    sa.arrivals.map((a) => [a.svc, a.etaS, a.crowd]),
+    [['95', 240, 'low']],
+  );
   const req = fetch.requests.at(-1);
   assert.equal(req.headers.get('AccountKey'), 'test-account-key');
   assert.match(req.url, /v3\/BusArrival\?BusStopCode=16181$/);
@@ -196,7 +229,10 @@ test('getPublicArrivals: one call per stop per 15 s, stale served when the feed 
   const c = await getPublicArrivals(e, ctx, GRAPH_PUBLIC, 'CLB', '16181', FROZEN_NOW + TTL.arrivalsMs + 1_000);
   await ctx.settle();
   assert.equal(c.stale, true);
-  assert.deepEqual(c.arrivals.map((x) => x.svc), ['95']);
+  assert.deepEqual(
+    c.arrivals.map((x) => x.svc),
+    ['95'],
+  );
 
   // A refused key trips the breaker: another stop isn't even asked.
   installGlobals(makeFetch({ publicStatus: 401 }), FROZEN_NOW);

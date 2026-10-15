@@ -74,7 +74,9 @@ internal fun Group(title: String?, hint: String? = null, content: @Composable Co
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             modifier = Modifier.fillMaxWidth(),
-        ) { Column(content = content) }
+        ) {
+            Column(content = content)
+        }
         hint?.let { Hint(it, Modifier.padding(start = 4.dp, end = 4.dp, top = 6.dp)) }
     }
 }
@@ -88,7 +90,10 @@ internal fun Groups(content: @Composable ColumnScope.() -> Unit) {
 /** One setting: its name (and a line under it), then its control. */
 @Composable
 internal fun FieldRow(label: String, modifier: Modifier = Modifier, sub: String? = null, control: @Composable () -> Unit) {
-    Row(modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Column(Modifier.weight(1f)) {
             Text(label, style = MaterialTheme.typography.bodyLarge)
             sub?.let { Hint(it) }
@@ -98,8 +103,7 @@ internal fun FieldRow(label: String, modifier: Modifier = Modifier, sub: String?
     }
 }
 
-@Composable
-internal fun RowDivider() = HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+@Composable internal fun RowDivider() = HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
 /** Two or three choices as pills on one track, across the row. */
 @Composable
@@ -107,14 +111,11 @@ internal fun <T> Pills(options: List<Pair<T, String>>, selected: T, onSelect: (T
     val c = MaterialTheme.colorScheme
     // The chosen pill a step lighter than the track: in the dark, the card's own colour would barely show.
     val chosen = if (c.background.luminance() < 0.5f) c.onSurface.copy(alpha = 0.14f).compositeOver(c.surface) else c.surface
-    Row(
-        modifier.fillMaxWidth().clip(CircleShape).background(c.surfaceContainerHighest).padding(3.dp).selectableGroup(),
-    ) {
+    Row(modifier.fillMaxWidth().clip(CircleShape).background(c.surfaceContainerHighest).padding(3.dp).selectableGroup()) {
         for ((value, text) in options) {
             val on = value == selected
             Box(
-                Modifier
-                    .weight(1f)
+                Modifier.weight(1f)
                     .heightIn(min = 40.dp)
                     .then(if (on) Modifier.shadow(1.dp, CircleShape) else Modifier)
                     .clip(CircleShape)
@@ -145,13 +146,16 @@ internal fun InkButton(text: String, onClick: () -> Unit, modifier: Modifier = M
         onClick = onClick,
         enabled = enabled,
         modifier = modifier,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = c.onSurface,
-            contentColor = c.background,
-            disabledContainerColor = c.onSurface.copy(alpha = 0.3f),
-            disabledContentColor = c.background,
-        ),
-    ) { Text(text) }
+        colors =
+            ButtonDefaults.buttonColors(
+                containerColor = c.onSurface,
+                contentColor = c.background,
+                disabledContainerColor = c.onSurface.copy(alpha = 0.3f),
+                disabledContentColor = c.background,
+            ),
+    ) {
+        Text(text)
+    }
 }
 
 /** The last row of a list: "+ Add …". */
@@ -159,7 +163,10 @@ internal fun InkButton(text: String, onClick: () -> Unit, modifier: Modifier = M
 internal fun AddRow(text: String, onClick: () -> Unit) {
     val c = MaterialTheme.colorScheme
     Row(
-        Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick).heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 12.dp),
+        Modifier.fillMaxWidth()
+            .clickable(role = Role.Button, onClick = onClick)
+            .heightIn(min = 52.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(24.dp).background(c.surfaceContainerHighest, CircleShape), contentAlignment = Alignment.Center) {
@@ -183,21 +190,30 @@ internal fun RemoveButton(onClick: () -> Unit, text: String? = null) {
 internal fun LinkRow(title: String, onClick: () -> Unit, sub: String? = null, away: Boolean = false, color: Color = Color.Unspecified) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     Row(
-        Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick).heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 12.dp),
+        Modifier.fillMaxWidth()
+            .clickable(role = Role.Button, onClick = onClick)
+            .heightIn(min = 52.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.bodyLarge, color = color)
-            sub?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = muted, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+            sub?.let {
+                Text(it, style = MaterialTheme.typography.bodyMedium, color = muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
         }
-        Icon(painterResource(if (away) R.drawable.ic_open else R.drawable.ic_chevron), contentDescription = null, tint = muted, modifier = Modifier.size(20.dp))
+        Icon(
+            painterResource(if (away) R.drawable.ic_open else R.drawable.ic_chevron),
+            contentDescription = null,
+            tint = muted,
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 
 /**
- * One choice from a long list (your residence, your stop): its name, then
- * what's chosen and a chevron, opening the list. `null` is the [blank]
- * option; [headings] go before the option at their index.
+ * One choice from a long list (your residence, your stop): its name, then what's chosen and a chevron, opening the list. `null` is the
+ * [blank] option; [headings] go before the option at their index.
  */
 @Composable
 internal fun <T> ValueRow(
@@ -214,7 +230,10 @@ internal fun <T> ValueRow(
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     Box {
         Row(
-            Modifier.fillMaxWidth().clickable(role = Role.DropdownList) { open = true }.heightIn(min = 52.dp).padding(start = 16.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
+            Modifier.fillMaxWidth()
+                .clickable(role = Role.DropdownList) { open = true }
+                .heightIn(min = 52.dp)
+                .padding(start = 16.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
@@ -222,15 +241,41 @@ internal fun <T> ValueRow(
                 sub?.let { Hint(it) }
             }
             Spacer(Modifier.width(12.dp))
-            Text(shown, style = MaterialTheme.typography.bodyLarge, color = muted, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.End, modifier = Modifier.widthIn(max = 200.dp))
-            Icon(painterResource(R.drawable.ic_chevron), contentDescription = null, tint = muted, modifier = Modifier.padding(start = 4.dp).size(20.dp))
+            Text(
+                shown,
+                style = MaterialTheme.typography.bodyLarge,
+                color = muted,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.End,
+                modifier = Modifier.widthIn(max = 200.dp),
+            )
+            Icon(
+                painterResource(R.drawable.ic_chevron),
+                contentDescription = null,
+                tint = muted,
+                modifier = Modifier.padding(start = 4.dp).size(20.dp),
+            )
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }, modifier = Modifier.heightIn(max = 420.dp)) {
-            if (blank != null) DropdownMenuItem(text = { Text(blank) }, onClick = { onSelect(null); open = false })
+            if (blank != null)
+                DropdownMenuItem(
+                    text = { Text(blank) },
+                    onClick = {
+                        onSelect(null)
+                        open = false
+                    },
+                )
             for ((i, option) in options.withIndex()) {
                 headings[i]?.let { Label(it, Modifier.padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 4.dp)) }
                 val (value, text) = option
-                DropdownMenuItem(text = { Text(text) }, onClick = { onSelect(value); open = false })
+                DropdownMenuItem(
+                    text = { Text(text) },
+                    onClick = {
+                        onSelect(value)
+                        open = false
+                    },
+                )
             }
         }
     }
@@ -246,9 +291,8 @@ internal fun Context.openWeb(url: String) {
 }
 
 /**
- * Where this install updates: its Play listing (the Play Store app, else the
- * web page), or the website's APK built for this phone's CPU (the site falls
- * back to arm64).
+ * Where this install updates: its Play listing (the Play Store app, else the web page), or the website's APK built for this phone's CPU
+ * (the site falls back to arm64).
  */
 internal fun Context.openUpdate() {
     if (installedFromPlay(this)) {

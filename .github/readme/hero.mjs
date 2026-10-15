@@ -16,7 +16,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 const { chromium } = await import(process.env.PLAYWRIGHT ? join(process.env.PLAYWRIGHT, 'index.mjs') : 'playwright');
 
 const tmp = mkdtempSync(join(tmpdir(), 'readme-hero-'));
-const browser = await chromium.launch({ args: ['--allow-file-access-from-files'], ...(process.env.CHROME ? { executablePath: process.env.CHROME } : {}) });
+const browser = await chromium.launch({
+  args: ['--allow-file-access-from-files'],
+  ...(process.env.CHROME ? { executablePath: process.env.CHROME } : {}),
+});
 try {
   for (const scheme of ['light', 'dark']) {
     const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 2, colorScheme: scheme });

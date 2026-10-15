@@ -130,9 +130,7 @@ interface AutoState {
   lookedAt: number;
 }
 
-export type AutoResult =
-  | { status: 'switched'; from: string; to: string }
-  | { status: 'failed'; note: string };
+export type AutoResult = { status: 'switched'; from: string; to: string } | { status: 'failed'; note: string };
 
 /**
  * Called with NUS's refusal while it is refusing our version. Finds, tries
@@ -141,7 +139,8 @@ export type AutoResult =
 export async function autoUpdateVersion(env: Env, nowMs: number, detail: string | null, probeStop: string): Promise<AutoResult> {
   const currentString = await appVersion(env, nowMs);
   const current = parseVersion(currentString);
-  if (!current) return { status: 'failed', note: `the current version string (${currentString || 'unset'}) is not univus_android_<name>_<code>` };
+  if (!current)
+    return { status: 'failed', note: `the current version string (${currentString || 'unset'}) is not univus_android_<name>_<code>` };
 
   const state: AutoState = { tried: [], lookedAt: 0, ...(await env.KV.get<AutoState>(KV_AUTO, 'json').catch(() => null)) };
   const f: Findings = { refusal: versionsFromRefusal(detail), play: null, apkcombo: null, errors: [] };
@@ -151,7 +150,10 @@ export async function autoUpdateVersion(env: Env, nowMs: number, detail: string 
     state.lookedAt = nowMs;
   }
 
-  const fresh = candidates(current, f).map(versionString).filter((s) => !state.tried.includes(s)).slice(0, MAX_TRIES);
+  const fresh = candidates(current, f)
+    .map(versionString)
+    .filter((s) => !state.tried.includes(s))
+    .slice(0, MAX_TRIES);
   const refused: string[] = [];
   let note = '';
   for (const s of fresh) {
@@ -177,7 +179,9 @@ export async function autoUpdateVersion(env: Env, nowMs: number, detail: string 
 
   const seen = [
     f.refusal.length ? `the refusal names ${f.refusal.map(versionString).join(', ')}` : '',
-    lookedUp ? `Google Play shows ${f.play ?? 'nothing readable'}, APKCombo ${f.apkcombo ? `${f.apkcombo.name} (${f.apkcombo.code})` : 'nothing readable'}` : 'the pages were read less than an hour ago',
+    lookedUp
+      ? `Google Play shows ${f.play ?? 'nothing readable'}, APKCombo ${f.apkcombo ? `${f.apkcombo.name} (${f.apkcombo.code})` : 'nothing readable'}`
+      : 'the pages were read less than an hour ago',
     ...f.errors,
   ].filter(Boolean);
   const outcome = refused.length ? `NUS refused ${refused.join(', ')}` : fresh.length ? '' : 'nothing new to try';

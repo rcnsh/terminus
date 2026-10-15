@@ -84,14 +84,34 @@ test('date-range lessons run on their own dates and interval', () => {
 });
 
 // The profile helpers use the bundled calendar; AY2026/27 sem 1 starts 10 Aug.
-const lab = (day) => ({ day, arriveByMin: 600, endMin: 720, to: 'COM3', label: 'CS2030 Lab', venue: '', weeks: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13] });
+const lab = (day) => ({
+  day,
+  arriveByMin: 600,
+  endMin: 720,
+  to: 'COM3',
+  label: 'CS2030 Lab',
+  venue: '',
+  weeks: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+});
 const gym = (day) => ({ day, arriveByMin: 1080, endMin: 1140, to: 'UHALL', label: 'Gym', venue: '' });
 
 test('classesOn: imported classes follow the calendar, manual ones run every week', () => {
   const p = { ...structuredClone(DEFAULT_PROFILE), trips: [lab(5)], manual: [gym(5)], term: SEM1 };
-  assert.deepEqual(classesOn(p, at('2026-08-14')).map((c) => c.label), ['Gym'], 'week 1 Friday: lab not yet');
-  assert.deepEqual(classesOn(p, at('2026-08-28')).map((c) => c.label), ['CS2030 Lab', 'Gym'], 'week 3 Friday');
-  assert.deepEqual(classesOn(p, at('2026-09-25')).map((c) => c.label), ['Gym'], 'recess Friday');
+  assert.deepEqual(
+    classesOn(p, at('2026-08-14')).map((c) => c.label),
+    ['Gym'],
+    'week 1 Friday: lab not yet',
+  );
+  assert.deepEqual(
+    classesOn(p, at('2026-08-28')).map((c) => c.label),
+    ['CS2030 Lab', 'Gym'],
+    'week 3 Friday',
+  );
+  assert.deepEqual(
+    classesOn(p, at('2026-09-25')).map((c) => c.label),
+    ['Gym'],
+    'recess Friday',
+  );
 });
 
 test('the rest message skips recess to the first real class', () => {
@@ -145,7 +165,14 @@ test('past the end of the calendar data, a semester the data says has finished s
 
 test('a calendar without the next academic year stops before its first semester would start', () => {
   // Through Special Term II 2026/27 (ends 2 August 2027), but not semester 1 2027/28.
-  const data = { semesters: [...CAL.semesters, { acadYear: '2026/2027', semester: 3, start: '2027-05-10' }, { acadYear: '2026/2027', semester: 4, start: '2027-06-21' }], holidays: [] };
+  const data = {
+    semesters: [
+      ...CAL.semesters,
+      { acadYear: '2026/2027', semester: 3, start: '2027-05-10' },
+      { acadYear: '2026/2027', semester: 4, start: '2027-06-21' },
+    ],
+    holidays: [],
+  };
   assert.equal(calendarThrough(data), '2027-08-08', 'not three weeks of grace into the new year');
   assert.equal(termDay(at('2027-08-04'), data).kind, 'vacation');
   assert.equal(termDay(at('2027-08-09'), data).kind, 'unknown', 'week 1 of the new year: classes run, not hidden as vacation');
@@ -160,7 +187,10 @@ test('the real calendar covers the next 60 days, and warns from 120', (t) => {
   const now = Date.now();
   for (let d = 0; d <= 60; d += 5) assert.notEqual(termDay(now + d * 86_400_000).kind, 'unknown');
   const left = (Date.parse(`${calendarThrough(BUNDLED)}T00:00:00+08:00`) - now) / 86_400_000;
-  if (left < 120) t.diagnostic(`warning: data/calendar.json runs out in ${Math.floor(left)} days (${calendarThrough(BUNDLED)}); has NUSMods published the next academic year?`);
+  if (left < 120)
+    t.diagnostic(
+      `warning: data/calendar.json runs out in ${Math.floor(left)} days (${calendarThrough(BUNDLED)}); has NUSMods published the next academic year?`,
+    );
 });
 
 test('the real calendar lists the semester after today’s', () => {

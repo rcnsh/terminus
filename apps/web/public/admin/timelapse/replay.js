@@ -157,7 +157,8 @@ export function placeAt(track, path, t, holdMs = 0) {
   if (path.loop && path.total > 0 && d < -path.total / 2) d += path.total;
   // Further than it could have driven, or backwards a long way: it didn't
   // drive there, so it doesn't slide there. Out at one, in at the other.
-  if (Math.abs(d) > (MAX_SPEED_MS * dt) / 1000 + SLACK_M) return { along: (k < 0.5 ? a : b).along, alpha: Math.abs(1 - 2 * k), jumping: true };
+  if (Math.abs(d) > (MAX_SPEED_MS * dt) / 1000 + SLACK_M)
+    return { along: (k < 0.5 ? a : b).along, alpha: Math.abs(1 - 2 * k), jumping: true };
   return { along: a.along + d * k, alpha: 1 };
 }
 
@@ -170,7 +171,17 @@ export function busesAt(day, t) {
     const place = placeAt(track, route.path, t, day.pollMs ?? 0);
     if (!place) continue;
     const p = pointAt(route.path, place.along);
-    out.push({ key: track.key, svc: track.svc, plate: track.plate, color: route.color, lat: p.lat, lon: p.lon, heading: p.heading, alpha: place.alpha, jumping: place.jumping === true });
+    out.push({
+      key: track.key,
+      svc: track.svc,
+      plate: track.plate,
+      color: route.color,
+      lat: p.lat,
+      lon: p.lon,
+      heading: p.heading,
+      alpha: place.alpha,
+      jumping: place.jumping === true,
+    });
   }
   return out;
 }

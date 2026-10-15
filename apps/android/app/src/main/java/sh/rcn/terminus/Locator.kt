@@ -6,14 +6,13 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
 import android.os.CancellationSignal
+import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlin.coroutines.resume
 
 /**
- * Location without Play Services. Every path returns null rather than
- * throwing: without a location the API falls back to the timetable, which is
- * a fine answer, so a missing fix must never become an error.
+ * Location without Play Services. Every path returns null rather than throwing: without a location the API falls back to the timetable,
+ * which is a fine answer, so a missing fix must never become an error.
  */
 object Locator {
     /** A last-known fix younger than this is good enough for the widget. */
@@ -23,9 +22,8 @@ object Locator {
     private const val DRIFT_M_PER_S = 1.3
 
     /**
-     * A fix that doesn't say how good it is: taken as rough (past the API's
-     * 200 m, MAX_FIX_ACC_M), so it neither wins over one that does nor is
-     * planned from as if it were precise.
+     * A fix that doesn't say how good it is: taken as rough (past the API's 200 m, MAX_FIX_ACC_M), so it neither wins over one that does
+     * nor is planned from as if it were precise.
      */
     private const val UNKNOWN_ACC_M = 1_000.0
 
@@ -33,10 +31,8 @@ object Locator {
     private val PROVIDERS = listOf(LocationManager.FUSED_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER)
 
     /**
-     * How far out a fix may be, in metres: its accuracy, plus how far you
-     * could have walked since it was taken. Sent to the API as `acc`, which
-     * drops a fix too rough to say where you are (a cell-tower fix, or one
-     * from ten minutes ago) and follows the timetable instead.
+     * How far out a fix may be, in metres: its accuracy, plus how far you could have walked since it was taken. Sent to the API as `acc`,
+     * which drops a fix too rough to say where you are (a cell-tower fix, or one from ten minutes ago) and follows the timetable instead.
      */
     fun uncertaintyM(loc: Location, nowMs: Long = System.currentTimeMillis()): Double {
         val ageS = ((nowMs - loc.time).coerceAtLeast(0)) / 1000.0
@@ -56,8 +52,7 @@ object Locator {
             val now = System.currentTimeMillis()
             // The one that could be least wrong now: a fresh network fix over
             // a precise GPS fix from before the walk here.
-            PROVIDERS
-                .filter { lm.allProviders.contains(it) }
+            PROVIDERS.filter { lm.allProviders.contains(it) }
                 .mapNotNull { lm.getLastKnownLocation(it) }
                 .filter { now - it.time < maxAgeMs }
                 .minByOrNull { uncertaintyM(it, now) }
@@ -70,22 +65,21 @@ object Locator {
     suspend fun current(ctx: Context): Location? {
         if (!hasForeground(ctx)) return null
         val lm = ctx.getSystemService(LocationManager::class.java) ?: return null
-        val provider = PROVIDERS
-            .firstOrNull { lm.allProviders.contains(it) && lm.isProviderEnabled(it) } ?: return lastKnown(ctx)
-        val fresh = withTimeoutOrNull(6_000) {
-            suspendCancellableCoroutine { cont ->
-                val cancel = CancellationSignal()
-                cont.invokeOnCancellation { cancel.cancel() }
-                try {
-                    lm.getCurrentLocation(provider, cancel, ctx.mainExecutor) { cont.resume(it) }
-                } catch (_: SecurityException) {
-                    cont.resume(null)
+        val provider = PROVIDERS.firstOrNull { lm.allProviders.contains(it) && lm.isProviderEnabled(it) } ?: return lastKnown(ctx)
+        val fresh =
+            withTimeoutOrNull(6_000) {
+                suspendCancellableCoroutine { cont ->
+                    val cancel = CancellationSignal()
+                    cont.invokeOnCancellation { cancel.cancel() }
+                    try {
+                        lm.getCurrentLocation(provider, cancel, ctx.mainExecutor) { cont.resume(it) }
+                    } catch (_: SecurityException) {
+                        cont.resume(null)
+                    }
                 }
             }
-        }
         return fresh ?: lastKnown(ctx)
     }
 
-    private fun granted(ctx: Context, perm: String) =
-        ctx.checkSelfPermission(perm) == PackageManager.PERMISSION_GRANTED
+    private fun granted(ctx: Context, perm: String) = ctx.checkSelfPermission(perm) == PackageManager.PERMISSION_GRANTED
 }

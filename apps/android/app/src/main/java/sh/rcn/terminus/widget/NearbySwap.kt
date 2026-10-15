@@ -10,12 +10,10 @@ import androidx.glance.appwidget.state.updateAppWidgetState
 import sh.rcn.terminus.NearbyStop
 
 /**
- * The other side of the road on the Nearby widget. Stops across a road from
- * each other are a few metres apart, within GPS error, so the nearest stop
- * can be the wrong side. A tap on the swap button puts the twin first and the
- * nearest one second; it stays swapped while the nearest stop is the same
- * one, for up to [KEEP_MS]. The widget shows only the first few stops, so
- * the button is there only when the twin isn't one of them.
+ * The other side of the road on the Nearby widget. Stops across a road from each other are a few metres apart, within GPS error, so the
+ * nearest stop can be the wrong side. A tap on the swap button puts the twin first and the nearest one second; it stays swapped while the
+ * nearest stop is the same one, for up to [KEEP_MS]. The widget shows only the first few stops, so the button is there only when the twin
+ * isn't one of them.
  */
 object NearbySwap {
     const val KEEP_MS = 60 * 60_000L
@@ -45,10 +43,8 @@ object NearbySwap {
     }
 
     /**
-     * The stop the swap button offers: the nearest stop's twin, or the nearest
-     * one again while swapped. None when the twin is already among the stops
-     * on screen (`onScreen`), since there's nothing to swap for; a swap made
-     * before then can always be undone.
+     * The stop the swap button offers: the nearest stop's twin, or the nearest one again while swapped. None when the twin is already among
+     * the stops on screen (`onScreen`), since there's nothing to swap for; a swap made before then can always be undone.
      */
     fun offer(stops: List<NearbyStop>, swap: Swap?, now: Long, onScreen: Collection<String>): NearbyStop? {
         if (active(stops, swap, now)) return stops.firstOrNull()
@@ -56,10 +52,8 @@ object NearbySwap {
     }
 
     /**
-     * Whether a tap offering [to], with [from] the nearest stop, undoes the
-     * swap stored as [storedFrom] → [storedTo]: while swapped the button
-     * offers the nearest stop itself ([offer]), and a quick second tap
-     * repeats the swap just stored.
+     * Whether a tap offering [to], with [from] the nearest stop, undoes the swap stored as [storedFrom] → [storedTo]: while swapped the
+     * button offers the nearest stop itself ([offer]), and a quick second tap repeats the swap just stored.
      */
     fun undoes(from: String, to: String, storedFrom: String?, storedTo: String?): Boolean =
         to == from || (storedFrom == from && storedTo == to)

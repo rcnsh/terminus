@@ -78,10 +78,14 @@ struct Pair: View {
             }
             .controlSize(.large)
             .disabled(model.startingAnon)
-            Text(L("Your setup stays on this Mac. Add an email any time in Settings to use it on your other devices, or to keep it if this Mac is lost."))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            Text(
+                L(
+                    "Your setup stays on this Mac. Add an email any time in Settings to use it on your other devices, or to keep it if this Mac is lost."
+                )
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
         }
         .card()
     }
@@ -140,10 +144,14 @@ struct Pair: View {
     private var pairCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             SectionLabel(text: L("Pair this Mac"))
-            Text(L("On your phone: Settings, then Add a device. Or on %@/account: Add a device. Then enter the 6-character code here.", Api.siteHost))
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            Text(
+                L(
+                    "On your phone: Settings, then Add a device. Or on %@/account: Add a device. Then enter the 6-character code here.",
+                    Api.siteHost)
+            )
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
             CodeField(code: $code, label: L("Pairing code"), onEdit: { model.pairError = nil }) { model.pair($0) }
                 .padding(.vertical, 4)
             Button {
@@ -219,13 +227,26 @@ struct CodeField: View {
                 .accessibilityLabel(label)
                 .onChange(of: code) { old, v in
                     let clean = codeEdit(old: old, new: v)
-                    if clean != v { code = clean; return }
+                    if clean != v {
+                        code = clean
+                        return
+                    }
                     onEdit()
-                    if clean.count < Self.length { sent = nil }
+                    if clean.count < Self.length {
+                        sent = nil
+                    }
                     // The sixth character, typed or pasted, sends it.
-                    else if sent != clean { sent = clean; onComplete(clean) }
+                    else if sent != clean {
+                        sent = clean
+                        onComplete(clean)
+                    }
                 }
-                .onSubmit { if code.count == Self.length { sent = code; onComplete(code) } }
+                .onSubmit {
+                    if code.count == Self.length {
+                        sent = code
+                        onComplete(code)
+                    }
+                }
             HStack(spacing: 6) {
                 ForEach(0..<Self.length, id: \.self) { i in
                     box(i)

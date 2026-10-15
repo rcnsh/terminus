@@ -60,10 +60,8 @@ import sh.rcn.terminus.codeEdit
 private val SITE_HOST = BuildConfig.SITE.removePrefix("https://")
 
 /**
- * Pair with a code from a signed-in phone or the account page. The code is
- * the screen: six split-flap tiles that fill as it's typed, like a departure
- * board settling. Where to find the code sits under it, and Pair at the foot,
- * above the keyboard.
+ * Pair with a code from a signed-in phone or the account page. The code is the screen: six split-flap tiles that fill as it's typed, like a
+ * departure board settling. Where to find the code sits under it, and Pair at the foot, above the keyboard.
  */
 @Composable
 internal fun PairScreen(state: UiState, onPair: (String) -> Unit, onBack: () -> Unit) {
@@ -76,8 +74,17 @@ internal fun PairScreen(state: UiState, onPair: (String) -> Unit, onBack: () -> 
             IconButton(onClick = onBack, modifier = Modifier.padding(top = 4.dp).offset(x = (-12).dp)) {
                 Icon(painterResource(R.drawable.ic_back), contentDescription = stringResource(R.string.back))
             }
-            Text(stringResource(R.string.pair_title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
-            Text(stringResource(R.string.pair_sub), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
+            Text(
+                stringResource(R.string.pair_title),
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Text(
+                stringResource(R.string.pair_sub),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp),
+            )
             val label = stringResource(R.string.pairing_code)
             BasicTextField(
                 value = code,
@@ -98,15 +105,29 @@ internal fun PairScreen(state: UiState, onPair: (String) -> Unit, onBack: () -> 
                         // The field itself is there for the keyboard and the cursor; the tiles show what's typed.
                         Box(Modifier.alpha(0f)) { field() }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp, Alignment.CenterHorizontally)) {
-                            for (i in 0 until CODE_LENGTH) Flap(code.getOrNull(i), current = i == code.length, Modifier.weight(1f).widthIn(max = 56.dp))
+                            for (i in 0 until CODE_LENGTH) Flap(
+                                code.getOrNull(i),
+                                current = i == code.length,
+                                Modifier.weight(1f).widthIn(max = 56.dp),
+                            )
                         }
                     }
                 },
             )
             state.pairError?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 12.dp)) }
             Row(Modifier.fillMaxWidth().padding(top = 24.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                WhereCard(R.drawable.ic_shortcut, stringResource(R.string.pair_on_phone), stringResource(R.string.pair_on_phone_how), Modifier.weight(1f))
-                WhereCard(R.drawable.ic_open, stringResource(R.string.pair_on_web), stringResource(R.string.pair_on_web_how, SITE_HOST), Modifier.weight(1f)) {
+                WhereCard(
+                    R.drawable.ic_shortcut,
+                    stringResource(R.string.pair_on_phone),
+                    stringResource(R.string.pair_on_phone_how),
+                    Modifier.weight(1f),
+                )
+                WhereCard(
+                    R.drawable.ic_open,
+                    stringResource(R.string.pair_on_web),
+                    stringResource(R.string.pair_on_web_how, SITE_HOST),
+                    Modifier.weight(1f),
+                ) {
                     ctx.openWeb("${BuildConfig.LINK_BASE}/account")
                 }
             }
@@ -117,7 +138,9 @@ internal fun PairScreen(state: UiState, onPair: (String) -> Unit, onBack: () -> 
             onClick = { onPair(code) },
             enabled = code.length == CODE_LENGTH && !state.pairing,
             modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).height(52.dp),
-        ) { Text(if (state.pairing) stringResource(R.string.pairing) else stringResource(R.string.pair)) }
+        ) {
+            Text(if (state.pairing) stringResource(R.string.pairing) else stringResource(R.string.pair))
+        }
     }
 }
 
@@ -129,14 +152,29 @@ private fun Flap(char: Char?, current: Boolean, modifier: Modifier) {
     Box(
         modifier
             .aspectRatio(0.72f)
-            .background(if (char == null) Brush.verticalGradient(listOf(EMPTY, EMPTY)) else Brush.verticalGradient(0f to FLAP_TOP, 0.49f to FLAP_TOP, 0.49f to SEAM, 0.51f to SEAM, 0.51f to FLAP_BOTTOM), shape)
+            .background(
+                if (char == null) Brush.verticalGradient(listOf(EMPTY, EMPTY))
+                else Brush.verticalGradient(0f to FLAP_TOP, 0.49f to FLAP_TOP, 0.49f to SEAM, 0.51f to SEAM, 0.51f to FLAP_BOTTOM),
+                shape,
+            )
             .border(if (current) 2.dp else 1.dp, edge, shape),
         contentAlignment = Alignment.Center,
     ) {
         if (char != null) {
-            Text(char.toString(), color = Color(0xFFF2EFEB), fontFamily = FontFamily.Monospace, fontWeight = FontWeight.ExtraBold, fontSize = 32.sp)
+            Text(
+                char.toString(),
+                color = Color(0xFFF2EFEB),
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 32.sp,
+            )
         } else if (current) {
-            Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 14.dp).size(width = 18.dp, height = 3.dp).background(MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp)))
+            Box(
+                Modifier.align(Alignment.BottomCenter)
+                    .padding(bottom = 14.dp)
+                    .size(width = 18.dp, height = 3.dp)
+                    .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp))
+            )
         }
     }
 }
@@ -152,6 +190,11 @@ private fun WhereCard(icon: Int, title: String, how: String, modifier: Modifier,
     LinkTile(onClick, modifier) {
         Icon(painterResource(icon), contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
         Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
-        Text(how, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp))
+        Text(
+            how,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp),
+        )
     }
 }

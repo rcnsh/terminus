@@ -12,7 +12,22 @@
 // when the network is down; those replies carry x-terminus-cached with when
 // they were fetched, so the page can say it's showing old times.
 
-import { Fill, Icon, MARK, Rich, announce, focusSoon, html, render, store, useEffect, useMedia, useRef, useState, useStore } from '/assets/ui.js';
+import {
+  Fill,
+  Icon,
+  MARK,
+  Rich,
+  announce,
+  focusSoon,
+  html,
+  render,
+  store,
+  useEffect,
+  useMedia,
+  useRef,
+  useState,
+  useStore,
+} from '/assets/ui.js';
 import { ADDED_PLACES_KEY, api, clock, hour12, inkOn, send, serverNow, signedOut, t } from '/account/dom.js';
 import { Card, InSky, Message, Report, Say, isStale, signal } from '/account/preview.js';
 import { Celestial, Horizon, useNowSky, useSkyPhase } from '/account/sky.js';
@@ -33,7 +48,9 @@ const DAY_MS = 120_000;
 
 const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 // iPadOS says it's a Mac; one with a touch screen is an iPad.
-const iPhone = !/Android/.test(navigator.userAgent) && (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+const iPhone =
+  !/Android/.test(navigator.userAgent) &&
+  (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 
 /** What the card is for: the plan, a saved place (its key), a stop picked on the map or in the search, or the buses nearby. */
 const target = store({ kind: 'plan' });
@@ -193,7 +210,10 @@ function query(params = {}) {
 async function here({ ask = false } = {}) {
   if (!navigator.geolocation) return null;
   if (!ask) {
-    const state = await navigator.permissions?.query({ name: 'geolocation' }).then((p) => p.state).catch(() => null);
+    const state = await navigator.permissions
+      ?.query({ name: 'geolocation' })
+      .then((p) => p.state)
+      .catch(() => null);
     if (state !== 'granted') return null;
   }
   return new Promise((resolve) => {
@@ -250,7 +270,10 @@ async function refreshNow(timed) {
     const params = { ...(to.kind === 'place' ? { place: to.key } : to.kind === 'stop' ? { to: to.to } : {}), ...at };
     // Today gets the location too: its next class is planned from here, as the card is.
     const askDay = !timed || !lastPlan || Date.now() - planAt >= DAY_MS;
-    const [nextR, dayR] = await Promise.allSettled([get(`/api/me/next${query(params)}`), askDay ? get(`/api/me/day${query(at ?? {})}`) : Promise.resolve(lastPlan)]);
+    const [nextR, dayR] = await Promise.allSettled([
+      get(`/api/me/next${query(params)}`),
+      askDay ? get(`/api/me/day${query(at ?? {})}`) : Promise.resolve(lastPlan),
+    ]);
     if (mine !== generation) return;
     if (nextR.status === 'rejected' && nextR.reason?.message === 'signed out') return;
     const next = nextR.status === 'fulfilled' ? nextR.value : null;
@@ -289,7 +312,11 @@ async function refreshNow(timed) {
   } catch (err) {
     if (err.message === 'signed out' || mine !== generation) return;
     // Online but no answer (the server busy, an error): not "offline".
-    banner.set(navigator.onLine ? t("Couldn't update. Trying again soon.") : t("You're offline and nothing has been saved yet. This will update when you're back online."));
+    banner.set(
+      navigator.onLine
+        ? t("Couldn't update. Trying again soon.")
+        : t("You're offline and nothing has been saved yet. This will update when you're back online."),
+    );
   }
 }
 
@@ -425,7 +452,12 @@ function holdUndo(held) {
   if (!held && undo.get()) undoTimer = setTimeout(() => undo.set(null), UNDO_MS);
 }
 /** Focus on the removed row's Undo (or the row, when it can't be undone). */
-const focusUndo = (key) => focusSoon(() => document.querySelector(`.today-item.removed[data-key="${CSS.escape(key)}"] .undo-today`) ?? document.querySelector(`.today-item.removed[data-key="${CSS.escape(key)}"]`));
+const focusUndo = (key) =>
+  focusSoon(
+    () =>
+      document.querySelector(`.today-item.removed[data-key="${CSS.escape(key)}"] .undo-today`) ??
+      document.querySelector(`.today-item.removed[data-key="${CSS.escape(key)}"]`),
+  );
 
 async function removeFromToday(it, at, before) {
   removed.set((m) => new Map(m).set(it.key, generation + 1));
@@ -502,7 +534,14 @@ const askMe = () =>
     },
   ));
 
-const tabInAddress = () => (location.hash === '#map' ? 'map' : location.hash.startsWith('#settings') ? 'settings' : location.hash.startsWith('#buses') ? 'buses' : 'now');
+const tabInAddress = () =>
+  location.hash === '#map'
+    ? 'map'
+    : location.hash.startsWith('#settings')
+      ? 'settings'
+      : location.hash.startsWith('#buses')
+        ? 'buses'
+        : 'now';
 
 /**
  * Material's fade through, as on the phone: the old tab fades out quickly,
@@ -512,10 +551,16 @@ const tabInAddress = () => (location.hash === '#map' ? 'map' : location.hash.sta
 function fadeIn(node) {
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   node.style.transformOrigin = `50% ${window.innerHeight / 2 - node.getBoundingClientRect().top}px`;
-  const frames = reduce ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 0, transform: 'scale(0.92)' }, { opacity: 1, transform: 'none' }];
+  const frames = reduce
+    ? [{ opacity: 0 }, { opacity: 1 }]
+    : [
+        { opacity: 0, transform: 'scale(0.92)' },
+        { opacity: 1, transform: 'none' },
+      ];
   node.animate(frames, { duration: reduce ? 150 : 210, easing: 'cubic-bezier(0, 0, 0.2, 1)' });
 }
-const fadeOut = (node) => node.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 90, easing: 'cubic-bezier(0.4, 0, 1, 1)', fill: 'forwards' });
+const fadeOut = (node) =>
+  node.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 90, easing: 'cubic-bezier(0.4, 0, 1, 1)', fill: 'forwards' });
 
 /**
  * Now, Buses, Map or Settings, from the address (#buses, #buses/line/D1,
@@ -636,7 +681,14 @@ async function subscribe() {
   let sub = await reg.pushManager.getSubscription();
   // A subscription made with another server key can't be pushed to: make a new one.
   const was = sub?.options?.applicationServerKey;
-  if (sub && was && btoa(String.fromCharCode(...new Uint8Array(was))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') !== key) {
+  if (
+    sub &&
+    was &&
+    btoa(String.fromCharCode(...new Uint8Array(was)))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '') !== key
+  ) {
     await sub.unsubscribe();
     sub = null;
   }
@@ -661,7 +713,12 @@ async function unsubscribe() {
 async function setupPush() {
   if (!pushable || (iPhone && !standalone)) return;
   const perm = Notification.permission;
-  if (perm === 'denied') return push.set({ on: false, text: t('Notifications are blocked for this site. Allow them in your browser settings to turn this on.'), button: false });
+  if (perm === 'denied')
+    return push.set({
+      on: false,
+      text: t('Notifications are blocked for this site. Allow them in your browser settings to turn this on.'),
+      button: false,
+    });
   let on = false;
   if (perm === 'granted') {
     try {
@@ -686,11 +743,21 @@ async function togglePush() {
       await subscribe();
       push.set({ on: true, text: ON, button: true });
     } else {
-      push.set({ on: false, text: t('Notifications are blocked. To turn them on, allow notifications for this site in your browser settings.'), button: true });
+      push.set({
+        on: false,
+        text: t('Notifications are blocked. To turn them on, allow notifications for this site in your browser settings.'),
+        button: true,
+      });
     }
   } catch (err) {
     // The server's own words when it answered; the browser's ("Failed to fetch") aren't for people.
-    push.set({ on: false, text: err.status ? t("Couldn't turn on notifications. {0}", err.message) : t("Couldn't turn on notifications. Try again in a minute."), button: true });
+    push.set({
+      on: false,
+      text: err.status
+        ? t("Couldn't turn on notifications. {0}", err.message)
+        : t("Couldn't turn on notifications. Try again in a minute."),
+      button: true,
+    });
   }
 }
 
@@ -709,8 +776,9 @@ function Notify() {
         <div class="card settings-list">
           <div class="field">
             <label for="notify-on">${t('Notify me when to leave')}<span class="field-sub">${s.text}</span></label>
-            ${s.button &&
-            html`<div class="field-control">
+            ${
+              s.button &&
+              html`<div class="field-control">
               <input
                 id="notify-on"
                 class="switch"
@@ -724,7 +792,8 @@ function Notify() {
                   setBusy(false);
                 }}
               />
-            </div>`}
+            </div>`
+            }
           </div>
         </div>
       </section>
@@ -848,7 +917,8 @@ function Where() {
 }
 
 /** A /me/day item's name: the server's `title` ("Home, from UTown"), else worded here (an older kept plan). */
-const itemTitle = (it) => it.title ?? (it.kind === 'home' ? (it.fromName ? t('Home, from {0}', it.fromName) : t('Home after your last class')) : it.label);
+const itemTitle = (it) =>
+  it.title ?? (it.kind === 'home' ? (it.fromName ? t('Home, from {0}', it.fromName) : t('Home after your last class')) : it.label);
 
 /**
  * The offline card: the day plan's next item (offline.js picks it), as the
@@ -885,7 +955,8 @@ function OfflineCard({ item, step }) {
 const mins = (s) => Math.round(s / 60);
 
 /** A bus from the side, for a stop's name plate. */
-const BUS = '<rect x="4.5" y="3" width="15" height="15" rx="3"/><path d="M4.5 11h15M8 21v-3M16 21v-3"/><circle cx="8.5" cy="14.5" r="1" fill="currentColor"/><circle cx="15.5" cy="14.5" r="1" fill="currentColor"/>';
+const BUS =
+  '<rect x="4.5" y="3" width="15" height="15" rx="3"/><path d="M4.5 11h15M8 21v-3M16 21v-3"/><circle cx="8.5" cy="14.5" r="1" fill="currentColor"/><circle cx="15.5" cy="14.5" r="1" fill="currentColor"/>';
 /** How far up the road a bus is drawn: this many seconds away is the far end. */
 const ROAD_S = 15 * 60;
 
@@ -899,7 +970,11 @@ const RoadBus = ({ bus, next }) => html`<span
 ></span>`;
 
 /** The server's "4 min", "now", "~6 min" for a timetable guess, or "–". Worded here only for an older server's answer (or a kept copy). */
-const etaText = (b) => (b.etaS == null ? '–' : (b.eta ?? (b.etaS < 60 ? t('Arriving') : b.quality === 'scheduled' ? t('~{0}', t('{0} min', mins(b.etaS))) : t('{0} min', mins(b.etaS)))));
+const etaText = (b) =>
+  b.etaS == null
+    ? '–'
+    : (b.eta ??
+      (b.etaS < 60 ? t('Arriving') : b.quality === 'scheduled' ? t('~{0}', t('{0} min', mins(b.etaS))) : t('{0} min', mins(b.etaS))));
 
 /**
  * Nearby: the stops around you as their signs, the name plate with the walk
@@ -932,9 +1007,10 @@ function NearbyCard({ stops }) {
               >${s.stop.name}</button>
               <span class="plate-walk">${t('{0} min walk', Math.max(1, mins(s.walkS)))}</span>
             </header>
-            ${s.board.length
-              ? s.board.map(
-                  (b) => html`
+            ${
+              s.board.length
+                ? s.board.map(
+                    (b) => html`
                     <div class="nearby-row" key=${b.svc}>
                       <span class="svc-col"
                         ><span class="svc-tag" style=${b.color ? `--svc:${b.color};--svc-ink:${inkOn(b.color)}` : ''}
@@ -947,8 +1023,9 @@ function NearbyCard({ stops }) {
                       <span class="eta">${etaText(b)}</span>
                     </div>
                   `,
-                )
-              : html`<div class="detail">${s.available ? t('No buses due') : t('No times right now')}</div>`}
+                  )
+                : html`<div class="detail">${s.available ? t('No buses due') : t('No times right now')}</div>`
+            }
           </section>
         `,
       )}
@@ -968,7 +1045,10 @@ function CardArea() {
   const who = useStore(me);
   const bar = useStore(undo);
   // Undo once: in the removed entry's row while it's there, not on the card as well.
-  const a = c.a?.card && bar?.undo ? { ...c.a, card: { ...c.a.card, actions: c.a.card.actions.filter((x) => !(x.id === 'reset' && x.trip === bar.it.key)) } } : c.a;
+  const a =
+    c.a?.card && bar?.undo
+      ? { ...c.a, card: { ...c.a.card, actions: c.a.card.actions.filter((x) => !(x.id === 'reset' && x.trip === bar.it.key)) } }
+      : c.a;
   useNowSky(useSkyPhase());
   const body = a
     ? html`<${Card} a=${a} sky onAnswer=${answered} onChoice=${refresh} onPlace=${(key) => choose({ kind: 'place', key })} />`
@@ -1179,10 +1259,23 @@ function Today() {
           let sub = null;
           if (it.line !== undefined) sub = it.line;
           else if (it.status === 'skipped') sub = t('Not going');
-          else if (it.onBus) sub = [t('On the {0}', it.onBus.svc), it.onBus.off ? t('off at {0}', it.onBus.off) : null, it.onBus.arrive ? t('arrive {0}', clock(it.onBus.arrive)) : null].filter(Boolean).join(' · ');
+          else if (it.onBus)
+            sub = [
+              t('On the {0}', it.onBus.svc),
+              it.onBus.off ? t('off at {0}', it.onBus.off) : null,
+              it.onBus.arrive ? t('arrive {0}', clock(it.onBus.arrive)) : null,
+            ]
+              .filter(Boolean)
+              .join(' · ');
           else if (it.status !== 'done' && it.leave?.at) {
             const how = it.leave.svc ? t('{0} from {1}', it.leave.svc, it.leave.stop ?? it.fromName) : t('walk');
-            sub = [t('Leave by {0}', it.leave.estimated ? t('~{0}', clock(it.leave.at)) : clock(it.leave.at)), how, it.timing?.status === 'late' ? it.timing.text : null].filter(Boolean).join(' · ');
+            sub = [
+              t('Leave by {0}', it.leave.estimated ? t('~{0}', clock(it.leave.at)) : clock(it.leave.at)),
+              how,
+              it.timing?.status === 'late' ? it.timing.text : null,
+            ]
+              .filter(Boolean)
+              .join(' · ');
           }
           return html`
             <li class=${`today-item ${it.status}`} key=${it.key}>
@@ -1254,14 +1347,16 @@ function SettingsSkeleton() {
           <${SkeletonRows} n=${1} />
         </div>
       </div>
-      ${wide &&
-      html`<div class="settings-pages" aria-hidden="true">
+      ${
+        wide &&
+        html`<div class="settings-pages" aria-hidden="true">
         <div class="settings-page">
           <div class="page-head"><h2 class="skel-line title"></h2></div>
           <div class="skel-block" style="height: 132px"></div>
           <div class="skel-block" style="height: 180px"></div>
         </div>
-      </div>`}
+      </div>`
+      }
       <p class="sr-only" role="status">${t('Loading…')}</p>
     </div>
   `;
@@ -1281,8 +1376,18 @@ function SettingsArea() {
 
 const TABBAR = [
   { id: 'now', href: '#now', label: () => t('Now'), icon: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>' },
-  { id: 'buses', href: '#buses', label: () => t('Buses'), icon: '<rect x="5" y="3" width="14" height="14.5" rx="3"/><path d="M5 10.5h14M8 17.5V20M16 17.5V20"/><path d="M8.5 14h.01M15.5 14h.01"/>' },
-  { id: 'map', href: '#map', label: () => t('Map'), icon: '<path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6 9 4Z"/><path d="M9 4v14M15 6v14"/>' },
+  {
+    id: 'buses',
+    href: '#buses',
+    label: () => t('Buses'),
+    icon: '<rect x="5" y="3" width="14" height="14.5" rx="3"/><path d="M5 10.5h14M8 17.5V20M16 17.5V20"/><path d="M8.5 14h.01M15.5 14h.01"/>',
+  },
+  {
+    id: 'map',
+    href: '#map',
+    label: () => t('Map'),
+    icon: '<path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6 9 4Z"/><path d="M9 4v14M15 6v14"/>',
+  },
   {
     id: 'settings',
     href: '#settings',

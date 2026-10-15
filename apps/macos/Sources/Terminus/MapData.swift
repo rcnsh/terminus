@@ -100,12 +100,14 @@ struct RoutePath {
     /// The point `m` metres along, as (lat, lon, the road's bearing there).
     func point(at m: Double) -> (lat: Double, lon: Double, bearing: Double) {
         let at = wrap(m)
-        var lo = 0, hi = cum.count - 1
+        var lo = 0
+        var hi = cum.count - 1
         while hi - lo > 1 {
             let mid = (lo + hi) / 2
             if cum[mid] <= at { lo = mid } else { hi = mid }
         }
-        let a = line[lo], b = line[hi]
+        let a = line[lo]
+        let b = line[hi]
         let seg = cum[hi] - cum[lo]
         let t = seg > 0 ? (at - cum[lo]) / seg : 0
         return (a[1] + (b[1] - a[1]) * t, a[0] + (b[0] - a[0]) * t, Self.bearing(a[1], a[0], b[1], b[0]))
@@ -115,7 +117,10 @@ struct RoutePath {
     /// points; nil when that isn't a stretch of this line.
     func slice(_ a: Double, _ b: Double) -> [[Double]]? {
         guard line.count >= 2, b > a, a >= 0, b <= total + 1 else { return nil }
-        func end(_ m: Double) -> [Double] { let p = point(at: min(m, total)); return [p.lon, p.lat] }
+        func end(_ m: Double) -> [Double] {
+            let p = point(at: min(m, total))
+            return [p.lon, p.lat]
+        }
         return [end(a)] + line.indices.filter { cum[$0] > a && cum[$0] < b }.map { line[$0] } + [end(b)]
     }
 
@@ -185,21 +190,30 @@ struct CampusMap {
     /// The stops and routes from `/api/campus`; nil when it isn't that.
     static func parse(_ data: Data) -> CampusMap? {
         guard let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let s = o["stops"] as? [[String: Any]], let r = o["routes"] as? [String: Any] else { return nil }
+            let s = o["stops"] as? [[String: Any]], let r = o["routes"] as? [String: Any]
+        else { return nil }
         var core = Set<String>()
         let stops: [MapStop] = s.compactMap { x in
-            guard let code = x["code"] as? String, let lat = (x["lat"] as? NSNumber)?.doubleValue, let lon = (x["lon"] as? NSNumber)?.doubleValue else { return nil }
+            guard let code = x["code"] as? String, let lat = (x["lat"] as? NSNumber)?.doubleValue,
+                let lon = (x["lon"] as? NSNumber)?.doubleValue
+            else { return nil }
             if (x["core"] as? Bool) ?? true { core.insert(code) }
-            return MapStop(code: code, name: x["name"] as? String ?? code, lat: lat, lon: lon, services: x["services"] as? [String] ?? [], longName: (x["longName"] as? String).flatMap { $0.isEmpty ? nil : $0 })
+            return MapStop(
+                code: code, name: x["name"] as? String ?? code, lat: lat, lon: lon, services: x["services"] as? [String] ?? [],
+                longName: (x["longName"] as? String).flatMap { $0.isEmpty ? nil : $0 })
         }
         var routes: [String: MapRoute] = [:]
         for (svc, v) in r {
             guard let x = v as? [String: Any] else { continue }
             let line = (x["line"] as? [[Any]] ?? []).compactMap { p -> [Double]? in
-                guard p.count >= 2, let lon = (p[0] as? NSNumber)?.doubleValue, let lat = (p[1] as? NSNumber)?.doubleValue else { return nil }
+                guard p.count >= 2, let lon = (p[0] as? NSNumber)?.doubleValue, let lat = (p[1] as? NSNumber)?.doubleValue else {
+                    return nil
+                }
                 return [lon, lat]
             }
-            if line.count >= 2 { routes[svc] = MapRoute(svc: svc, color: mapColor(x["color"] as? String), line: line, loop: x["loop"] as? Bool ?? false) }
+            if line.count >= 2 {
+                routes[svc] = MapRoute(svc: svc, color: mapColor(x["color"] as? String), line: line, loop: x["loop"] as? Bool ?? false)
+            }
         }
         guard !stops.isEmpty else { return nil }
         return CampusMap(stops: stops, routes: routes, core: core)
@@ -267,7 +281,13 @@ struct LiveBus: Hashable {
     /// buses drive on the left), the ones behind it further back.
     func placed() -> LiveBus {
         var b = self
-        if at != nil { b.ox = -Self.atStopSide; b.oy = Self.atStopStep * Double(slot) } else { b.ox = 0; b.oy = 0 }
+        if at != nil {
+            b.ox = -Self.atStopSide
+            b.oy = Self.atStopStep * Double(slot)
+        } else {
+            b.ox = 0
+            b.oy = 0
+        }
         return b
     }
 }
@@ -318,7 +338,8 @@ struct StopBoard {
         guard let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
         let rows: [BoardRow] = (o["board"] as? [[String: Any]] ?? []).compactMap { r in
             guard let svc = r["svc"] as? String, let eta = r["etaS"] as? Int else { return nil }
-            return BoardRow(svc: svc, etaS: eta, quality: r["quality"] as? String ?? "", eta: (r["eta"] as? String).flatMap { $0.isEmpty ? nil : $0 })
+            return BoardRow(
+                svc: svc, etaS: eta, quality: r["quality"] as? String ?? "", eta: (r["eta"] as? String).flatMap { $0.isEmpty ? nil : $0 })
         }
         return StopBoard(available: o["available"] as? Bool ?? false, rows: rows)
     }
@@ -327,16 +348,18 @@ struct StopBoard {
 /// GeoJSON for the map's sources.
 enum MapGeoJson {
     static func routes(_ campus: CampusMap) -> Data {
-        collection(campus.routes.values.map { r in
-            feature(["type": "LineString", "coordinates": r.line], ["svc": r.svc, "color": r.color])
-        })
+        collection(
+            campus.routes.values.map { r in
+                feature(["type": "LineString", "coordinates": r.line], ["svc": r.svc, "color": r.color])
+            })
     }
 
     /// `services` as " A1 D2 ": spaces round each, so K never matches inside another code.
     static func stops(_ campus: CampusMap) -> Data {
-        collection(campus.stops.map { s in
-            point(s.lon, s.lat, ["code": s.code, "name": s.name, "services": " \(s.services.joined(separator: " ")) "])
-        })
+        collection(
+            campus.stops.map { s in
+                point(s.lon, s.lat, ["code": s.code, "name": s.name, "services": " \(s.services.joined(separator: " ")) "])
+            })
     }
 
     static func buses(svc: String, color: String, _ buses: [LiveBus]) -> Data {

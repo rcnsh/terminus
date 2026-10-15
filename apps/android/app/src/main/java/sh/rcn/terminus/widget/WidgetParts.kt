@@ -38,20 +38,26 @@ import sh.rcn.terminus.R
 /** The sky picture at the top of a widget, [height] tall, stretched across it. */
 @Composable
 internal fun SkyImage(bitmap: Bitmap, height: Dp) {
-    Image(ImageProvider(bitmap), contentDescription = null, contentScale = ContentScale.FillBounds, modifier = GlanceModifier.fillMaxWidth().height(height))
+    Image(
+        ImageProvider(bitmap),
+        contentDescription = null,
+        contentScale = ContentScale.FillBounds,
+        modifier = GlanceModifier.fillMaxWidth().height(height),
+    )
 }
 
 /**
- * The headline, with [Face.accent] (the time to leave) in the accent colour,
- * as on Now. Late: all of it in the late colour; old: all of it muted.
+ * The headline, with [Face.accent] (the time to leave) in the accent colour, as on Now. Late: all of it in the late colour; old: all of it
+ * muted.
  */
 @Composable
 internal fun Headline(face: Face, inks: Inks, size: TextUnit) {
-    val base = when {
-        face.dim -> inks.muted
-        face.late -> inks.late
-        else -> inks.ink
-    }
+    val base =
+        when {
+            face.dim -> inks.muted
+            face.late -> inks.late
+            else -> inks.ink
+        }
     fun style(c: ColorProvider) = TextStyle(color = c, fontWeight = FontWeight.Bold, fontSize = size)
     val accent = face.big?.takeIf { !face.dim && !face.late }
     if (accent == null) {
@@ -73,13 +79,16 @@ private fun solid(argb: Long) = ColorProvider(Color(argb))
 @Composable
 internal fun Badge(svc: String, color: Long, paid: Boolean = false, big: Boolean = false) {
     Box(
-        GlanceModifier
-            .cornerRadius(if (big) 9.dp else 6.dp)
+        GlanceModifier.cornerRadius(if (big) 9.dp else 6.dp)
             .background(solid(color))
             .padding(horizontal = if (big) 8.dp else 6.dp, vertical = if (big) 4.dp else 1.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(if (paid) "$svc $" else svc, style = TextStyle(color = solid(Ink.on(color)), fontWeight = FontWeight.Bold, fontSize = if (big) 16.sp else 12.sp), maxLines = 1)
+        Text(
+            if (paid) "$svc $" else svc,
+            style = TextStyle(color = solid(Ink.on(color)), fontWeight = FontWeight.Bold, fontSize = if (big) 16.sp else 12.sp),
+            maxLines = 1,
+        )
     }
 }
 
@@ -92,12 +101,25 @@ internal fun PillText(text: String, color: ColorProvider, inks: Inks) {
 }
 
 @Composable
-internal fun PillOf(pill: Pill, inks: Inks) = PillText(if (pill.good) "● ${pill.text}" else pill.text, if (pill.good) inks.good else inks.muted, inks)
+internal fun PillOf(pill: Pill, inks: Inks) =
+    PillText(if (pill.good) "● ${pill.text}" else pill.text, if (pill.good) inks.good else inks.muted, inks)
 
 /** A line of small words, in [color]. */
 @Composable
-internal fun Small(text: String, color: ColorProvider, size: TextUnit = 12.sp, lines: Int = 1, modifier: GlanceModifier = GlanceModifier, bold: Boolean = false) {
-    Text(text, style = TextStyle(color = color, fontSize = size, fontWeight = if (bold) FontWeight.Medium else FontWeight.Normal), maxLines = lines, modifier = modifier)
+internal fun Small(
+    text: String,
+    color: ColorProvider,
+    size: TextUnit = 12.sp,
+    lines: Int = 1,
+    modifier: GlanceModifier = GlanceModifier,
+    bold: Boolean = false,
+) {
+    Text(
+        text,
+        style = TextStyle(color = color, fontSize = size, fontWeight = if (bold) FontWeight.Medium else FontWeight.Normal),
+        maxLines = lines,
+        modifier = modifier,
+    )
 }
 
 /** The line under the headline, with how sure its time is beside it. */
@@ -129,22 +151,23 @@ internal fun LegRow(leg: Leg, inks: Inks, size: TextUnit = 13.sp) {
 @Composable
 internal fun RefreshButton(action: Action, inks: Inks, side: Dp = 32.dp) {
     Box(
-        GlanceModifier
-            .size(side + 8.dp)
-            .semantics { contentDescription = L.s(R.string.refresh) }
-            .clickable(action),
+        GlanceModifier.size(side + 8.dp).semantics { contentDescription = L.s(R.string.refresh) }.clickable(action),
         contentAlignment = Alignment.Center,
     ) {
         Box(GlanceModifier.size(side).cornerRadius(side / 2).background(inks.chip), contentAlignment = Alignment.Center) {
-            Image(ImageProvider(R.drawable.ic_refresh), contentDescription = null, colorFilter = ColorFilter.tint(inks.ink), modifier = GlanceModifier.size(side / 2))
+            Image(
+                ImageProvider(R.drawable.ic_refresh),
+                contentDescription = null,
+                colorFilter = ColorFilter.tint(inks.ink),
+                modifier = GlanceModifier.size(side / 2),
+            )
         }
     }
 }
 
 /**
- * Timetable, Nearby, then the places you usually go, as the app's chips:
- * each switches this widget in place, without opening the app. The one
- * showing is filled.
+ * Timetable, Nearby, then the places you usually go, as the app's chips: each switches this widget in place, without opening the app. The
+ * one showing is filled.
  */
 @Composable
 internal fun ModeChips(chips: List<Mode>, showing: Mode, inks: Inks, action: (Mode) -> Action) {
@@ -155,15 +178,25 @@ internal fun ModeChips(chips: List<Mode>, showing: Mode, inks: Inks, action: (Mo
             val on = m.id == showing.id
             Box(GlanceModifier.padding(start = if (i > 0) 6.dp else 0.dp)) {
                 Box(
-                    GlanceModifier
-                        .cornerRadius(18.dp)
+                    GlanceModifier.cornerRadius(18.dp)
                         .background(if (on) inks.chipOn else inks.chip)
                         // 14 dp each side, as WidgetModes.fitting counts; tall enough for a fingertip.
                         .padding(horizontal = 14.dp, vertical = 9.dp)
-                        .semantics { contentDescription = if (on) L.s(R.string.mode_showing, m.label) else L.s(R.string.mode_show, m.label) }
-                        .clickable(action(m)),
+                        .semantics {
+                            contentDescription = if (on) L.s(R.string.mode_showing, m.label) else L.s(R.string.mode_show, m.label)
+                        }
+                        .clickable(action(m))
                 ) {
-                    Text(m.label, style = TextStyle(color = if (on) inks.onChipOn else inks.ink, fontSize = 13.sp, fontWeight = if (on) FontWeight.Medium else FontWeight.Normal), maxLines = 1)
+                    Text(
+                        m.label,
+                        style =
+                            TextStyle(
+                                color = if (on) inks.onChipOn else inks.ink,
+                                fontSize = 13.sp,
+                                fontWeight = if (on) FontWeight.Medium else FontWeight.Normal,
+                            ),
+                        maxLines = 1,
+                    )
                 }
             }
         }
@@ -175,6 +208,10 @@ internal fun ModeChips(chips: List<Mode>, showing: Mode, inks: Inks, action: (Mo
 internal fun TileBox(tile: Tile, inks: Inks) {
     androidx.glance.layout.Column(GlanceModifier.cornerRadius(14.dp).background(inks.chip).padding(horizontal = 12.dp, vertical = 7.dp)) {
         Text(tile.label.uppercase(), style = TextStyle(color = inks.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold), maxLines = 1)
-        Text(listOfNotNull(tile.title, tile.where).joinToString(" · "), style = TextStyle(color = inks.ink, fontSize = 14.sp, fontWeight = FontWeight.Medium), maxLines = 1)
+        Text(
+            listOfNotNull(tile.title, tile.where).joinToString(" · "),
+            style = TextStyle(color = inks.ink, fontSize = 14.sp, fontWeight = FontWeight.Medium),
+            maxLines = 1,
+        )
     }
 }

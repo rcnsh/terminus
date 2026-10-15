@@ -4,10 +4,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * The profile's limits, as the server sends them with it (`limits`, its
- * PROFILE_LIMITS): pinned stops, a class's name, favourites, a favourite's
- * name, and the walk to the home stop in minutes. The server ignores them
- * when they're sent back.
+ * The profile's limits, as the server sends them with it (`limits`, its PROFILE_LIMITS): pinned stops, a class's name, favourites, a
+ * favourite's name, and the walk to the home stop in minutes. The server ignores them when they're sent back.
  */
 data class Limits(
     val pinnedStops: Int = 8,
@@ -37,15 +35,15 @@ data class Limits(
 }
 
 /**
- * The profile as the server keeps it (apps/api/src/profile.ts), edited in
- * place and sent back whole with PUT /me/profile. Kept as JSON so fields this
- * version doesn't know about survive a save.
+ * The profile as the server keeps it (apps/api/src/profile.ts), edited in place and sent back whole with PUT /me/profile. Kept as JSON so
+ * fields this version doesn't know about survive a save.
  */
 class ProfileDoc(val json: JSONObject) {
     fun copy() = ProfileDoc(JSONObject(json.toString()))
 
     /** What the server allows (its `limits`); today's values from an older server. */
-    val limits: Limits get() = Limits.parse(json.optJSONObject("limits"))
+    val limits: Limits
+        get() = Limits.parse(json.optJSONObject("limits"))
 
     val homeStops: List<String>
         get() = json.optJSONObject("home")?.optJSONArray("stops")?.strings().orEmpty()
@@ -58,64 +56,91 @@ class ProfileDoc(val json: JSONObject) {
     /** The stops pinned on the Buses tab, in their order. */
     var pinnedStops: List<String>
         get() = json.optJSONArray("pinnedStops")?.strings().orEmpty()
-        set(v) { json.put("pinnedStops", JSONArray(v.distinct().take(limits.pinnedStops))) }
+        set(v) {
+            json.put("pinnedStops", JSONArray(v.distinct().take(limits.pinnedStops)))
+        }
 
     /** The account's language: auto, en or zh. */
     var lang: String
         get() = json.optString("lang", "auto")
-        set(v) { json.put("lang", v) }
+        set(v) {
+            json.put("lang", v)
+        }
 
     /** The account's times: auto (each device's own), 12 or 24. */
     var clock: String
         get() = json.optString("clock", "auto")
-        set(v) { json.put("clock", v) }
+        set(v) {
+            json.put("clock", v)
+        }
 
     var homeWalkMin: Int
         get() = json.optInt("homeWalkMin", 5)
-        set(v) { json.put("homeWalkMin", v.coerceIn(limits.homeWalkMin)) }
+        set(v) {
+            json.put("homeWalkMin", v.coerceIn(limits.homeWalkMin))
+        }
 
     var walkPace: String
         get() = json.optString("walkPace", "normal")
-        set(v) { json.put("walkPace", v) }
+        set(v) {
+            json.put("walkPace", v)
+        }
 
     var fullBusMargin: Boolean
         get() = json.optBoolean("fullBusMargin", true)
-        set(v) { json.put("fullBusMargin", v) }
+        set(v) {
+            json.put("fullBusMargin", v)
+        }
 
     /** Count the public buses (95, 151, ...) at the campus's stops too. Off until asked for: they have a fare. */
     var publicBuses: Boolean
         get() = json.optBoolean("publicBuses", false)
-        set(v) { json.put("publicBuses", v) }
+        set(v) {
+            json.put("publicBuses", v)
+        }
 
     /** A minute on foot counts for more than one at the stop when choosing; on unless turned off. */
     var preferBus: Boolean
         get() = json.optBoolean("preferBus", true)
-        set(v) { json.put("preferBus", v) }
+        set(v) {
+            json.put("preferBus", v)
+        }
 
     var gapHours: Double
         get() = json.optDouble("gapHours", 2.0)
-        set(v) { json.put("gapHours", v.coerceIn(0.5, 12.0)) }
+        set(v) {
+            json.put("gapHours", v.coerceIn(0.5, 12.0))
+        }
 
     var dayStartMin: Int
         get() = json.optInt("dayStartMin", 6 * 60)
-        set(v) { json.put("dayStartMin", v) }
+        set(v) {
+            json.put("dayStartMin", v)
+        }
 
     var dayEndMin: Int
         get() = json.optInt("dayEndMin", 18 * 60)
-        set(v) { json.put("dayEndMin", v) }
+        set(v) {
+            json.put("dayEndMin", v)
+        }
 
-    val share: String? get() = json.optStringOrNull("share")
+    val share: String?
+        get() = json.optStringOrNull("share")
 
-    val seen: List<String> get() = json.optJSONArray("seen")?.strings().orEmpty()
+    val seen: List<String>
+        get() = json.optJSONArray("seen")?.strings().orEmpty()
 
     fun markSeen(name: String) {
         json.put("seen", JSONArray((seen + name).distinct()))
     }
 
     /** Imported from NUSMods. */
-    val trips: List<Trip> get() = trips("trips")
+    val trips: List<Trip>
+        get() = trips("trips")
+
     /** Entered by hand; they survive a re-import. */
-    val manual: List<Trip> get() = trips("manual")
+    val manual: List<Trip>
+        get() = trips("manual")
 
     fun addManual(t: Trip) {
         val list = json.optJSONArray("manual") ?: JSONArray()
@@ -137,12 +162,16 @@ class ProfileDoc(val json: JSONObject) {
     val places: List<SavedPlace>
         get() {
             val a = json.optJSONArray("places") ?: return emptyList()
-            return (0 until a.length()).map { a.getJSONObject(it).let { p -> SavedPlace(p.getString("key"), p.getString("label"), p.getString("to")) } }
+            return (0 until a.length()).map {
+                a.getJSONObject(it).let { p -> SavedPlace(p.getString("key"), p.getString("label"), p.getString("to")) }
+            }
         }
 
     fun addPlace(label: String, to: String) {
         val list = json.optJSONArray("places") ?: JSONArray()
-        list.put(JSONObject().put("key", placeKey(label, places.map { it.key })).put("label", label.trim().take(limits.placeLabel)).put("to", to))
+        list.put(
+            JSONObject().put("key", placeKey(label, places.map { it.key })).put("label", label.trim().take(limits.placeLabel)).put("to", to)
+        )
         json.put("places", list)
     }
 
@@ -157,12 +186,16 @@ class ProfileDoc(val json: JSONObject) {
         val u = json.optJSONArray("usual")
         val usual = if (u == null) emptyList() else (0 until u.length()).map { u.getJSONObject(it) }
         if (u != null) json.put("usual", JSONArray(usual.filter { it.optString("place") != key }))
-        return RemovedPlace(index, JSONObject(all[index].toString()), usual.filter { it.optString("place") == key }.map { JSONObject(it.toString()) })
+        return RemovedPlace(
+            index,
+            JSONObject(all[index].toString()),
+            usual.filter { it.optString("place") == key }.map { JSONObject(it.toString()) },
+        )
     }
 
     /**
-     * Undo for [removePlace]: back in its old place in the list, with its
-     * usual times. Not when the list is full, or the stop is a favourite again.
+     * Undo for [removePlace]: back in its old place in the list, with its usual times. Not when the list is full, or the stop is a
+     * favourite again.
      */
     fun restorePlace(r: RemovedPlace) {
         val now = places
@@ -181,13 +214,18 @@ class ProfileDoc(val json: JSONObject) {
     val usual: List<UsualTime>
         get() {
             val a = json.optJSONArray("usual") ?: return emptyList()
-            return (0 until a.length()).map { a.getJSONObject(it).let { u -> UsualTime(u.getString("place"), u.getInt("day"), u.getInt("atMin")) } }
+            return (0 until a.length()).map {
+                a.getJSONObject(it).let { u -> UsualTime(u.getString("place"), u.getInt("day"), u.getInt("atMin")) }
+            }
         }
 
     /** Takes a usual time off; the others stay as they came, with any field a newer server added. */
     fun removeUsual(u: UsualTime) {
         val a = json.optJSONArray("usual") ?: return
-        val kept = (0 until a.length()).map { a.getJSONObject(it) }.filter { UsualTime(it.getString("place"), it.getInt("day"), it.getInt("atMin")) != u }
+        val kept =
+            (0 until a.length())
+                .map { a.getJSONObject(it) }
+                .filter { UsualTime(it.getString("place"), it.getInt("day"), it.getInt("atMin")) != u }
         json.put("usual", JSONArray(kept))
     }
 
@@ -197,14 +235,16 @@ class ProfileDoc(val json: JSONObject) {
     }
 
     /** Somewhere to go or somewhere to start: what the server counts as a setup worth keeping. */
-    val hasSetup: Boolean get() = homeStops.isNotEmpty() || trips.isNotEmpty() || manual.isNotEmpty() || places.isNotEmpty()
+    val hasSetup: Boolean
+        get() = homeStops.isNotEmpty() || trips.isNotEmpty() || manual.isNotEmpty() || places.isNotEmpty()
 }
 
 data class SavedPlace(val key: String, val label: String, val to: String)
 
 /** A favourite just removed, kept for Undo: where it was in the list, and its usual times. */
 class RemovedPlace(val index: Int, val place: JSONObject, val usual: List<JSONObject>) {
-    val label: String get() = place.optString("label")
+    val label: String
+        get() = place.optString("label")
 }
 
 /** A saved place at a usual time: day 0 = Sunday, minutes past midnight, Singapore time. */
@@ -212,25 +252,27 @@ data class UsualTime(val place: String, val day: Int, val atMin: Int)
 
 /** A class or commitment. day: 0 = Sunday. Minutes past midnight, Singapore time. */
 data class Trip(val day: Int, val arriveByMin: Int, val endMin: Int?, val to: String, val label: String, val venue: String) {
-    fun toJson(): JSONObject = JSONObject()
-        .put("day", day).put("arriveByMin", arriveByMin).put("to", to).put("label", label).put("venue", venue)
-        .apply { if (endMin != null) put("endMin", endMin) }
+    fun toJson(): JSONObject =
+        JSONObject().put("day", day).put("arriveByMin", arriveByMin).put("to", to).put("label", label).put("venue", venue).apply {
+            if (endMin != null) put("endMin", endMin)
+        }
 
     companion object {
-        fun parse(o: JSONObject) = Trip(
-            day = o.optInt("day"),
-            arriveByMin = o.optInt("arriveByMin"),
-            endMin = if (o.has("endMin")) o.optInt("endMin") else null,
-            to = o.optString("to"),
-            label = o.optString("label"),
-            venue = o.optString("venue"),
-        )
+        fun parse(o: JSONObject) =
+            Trip(
+                day = o.optInt("day"),
+                arriveByMin = o.optInt("arriveByMin"),
+                endMin = if (o.has("endMin")) o.optInt("endMin") else null,
+                to = o.optString("to"),
+                label = o.optString("label"),
+                venue = o.optString("venue"),
+            )
     }
 }
 
 /**
- * "gym", "gym-2": the label made a key as the account page makes it. A key
- * already taken gets the next number (the page adds a random ending instead).
+ * "gym", "gym-2": the label made a key as the account page makes it. A key already taken gets the next number (the page adds a random
+ * ending instead).
  */
 fun placeKey(label: String, taken: List<String>): String {
     var key = label.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-').take(24).ifEmpty { "place" }
@@ -240,11 +282,30 @@ fun placeKey(label: String, taken: List<String>): String {
     return key
 }
 
-private val DAY_NAMES = listOf(1 to R.string.monday, 2 to R.string.tuesday, 3 to R.string.wednesday, 4 to R.string.thursday, 5 to R.string.friday, 6 to R.string.saturday, 0 to R.string.sunday)
-private val DAY_SHORT = mapOf(1 to R.string.monday_short, 2 to R.string.tuesday_short, 3 to R.string.wednesday_short, 4 to R.string.thursday_short, 5 to R.string.friday_short, 6 to R.string.saturday_short, 0 to R.string.sunday_short)
+private val DAY_NAMES =
+    listOf(
+        1 to R.string.monday,
+        2 to R.string.tuesday,
+        3 to R.string.wednesday,
+        4 to R.string.thursday,
+        5 to R.string.friday,
+        6 to R.string.saturday,
+        0 to R.string.sunday,
+    )
+private val DAY_SHORT =
+    mapOf(
+        1 to R.string.monday_short,
+        2 to R.string.tuesday_short,
+        3 to R.string.wednesday_short,
+        4 to R.string.thursday_short,
+        5 to R.string.friday_short,
+        6 to R.string.saturday_short,
+        0 to R.string.sunday_short,
+    )
 
 /** Monday first, as a week reads; values are the server's 0 = Sunday. */
-val WEEKDAYS: List<Pair<Int, String>> get() = DAY_NAMES.map { (d, id) -> d to L.s(id) }
+val WEEKDAYS: List<Pair<Int, String>>
+    get() = DAY_NAMES.map { (d, id) -> d to L.s(id) }
 
 fun dayName(day: Int) = DAY_NAMES.firstOrNull { it.first == day }?.second?.let { L.s(it) } ?: "?"
 
@@ -252,8 +313,7 @@ fun dayName(day: Int) = DAY_NAMES.firstOrNull { it.first == day }?.second?.let {
 fun dayShort(day: Int) = DAY_SHORT[day]?.let { L.s(it) } ?: "?"
 
 /**
- * Where a picker for "later today" starts: half an hour from now on campus
- * (Singapore time), on a five-minute mark, and never past 23:55.
+ * Where a picker for "later today" starts: half an hour from now on campus (Singapore time), on a five-minute mark, and never past 23:55.
  */
 fun soonOnCampus(nowMs: Long = System.currentTimeMillis()): Int {
     val now = java.time.Instant.ofEpochMilli(nowMs).atZone(java.time.ZoneId.of("Asia/Singapore"))
@@ -275,8 +335,9 @@ fun hhmm12(min: Int): String {
 private fun JSONArray.strings(): List<String> = (0 until length()).map { getString(it) }
 
 /**
- * A NUSMods share link in text shared from another app ("…timetable/sem-1/share?CS2030=…").
- * NUSMods shares a sentence with the link in it, so this finds the link.
+ * A NUSMods share link in text shared from another app ("…timetable/sem-1/share?CS2030=…"). NUSMods shares a sentence with the link in it,
+ * so this finds the link.
  */
-fun nusmodsLink(text: String?): String? =
-    text?.let { Regex("""https?://(?:www\.)?nusmods\.com/timetable/\S+""").find(it)?.value?.trimEnd('.', ',', ')') }
+fun nusmodsLink(text: String?): String? = text?.let {
+    Regex("""https?://(?:www\.)?nusmods\.com/timetable/\S+""").find(it)?.value?.trimEnd('.', ',', ')')
+}

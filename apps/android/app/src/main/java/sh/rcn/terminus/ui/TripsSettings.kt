@@ -37,10 +37,8 @@ import sh.rcn.terminus.ProfileDoc
 import sh.rcn.terminus.R
 
 /**
- * Settings › Your trips: where you live, your day's hours and how you walk,
- * as three short groups of one-line rows, each group with one line of
- * explanation under it. The same groups as the web and the Mac. Setup
- * (Onboarding.kt) asks the same things with more words.
+ * Settings › Your trips: where you live, your day's hours and how you walk, as three short groups of one-line rows, each group with one
+ * line of explanation under it. The same groups as the web and the Mac. Setup (Onboarding.kt) asks the same things with more words.
  */
 @Composable
 internal fun TripsSettings(profile: ProfileDoc, state: AccountState, account: AccountViewModel) {
@@ -69,8 +67,14 @@ private fun StepButton(sign: String, says: String, enabled: Boolean, onClick: ()
         onClick = onClick,
         enabled = enabled,
         modifier = Modifier.size(36.dp).semantics { contentDescription = says },
-        colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest, contentColor = MaterialTheme.colorScheme.onSurface),
-    ) { Text(sign, style = MaterialTheme.typography.titleMedium) }
+        colors =
+            IconButtonDefaults.filledTonalIconButtonColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+            ),
+    ) {
+        Text(sign, style = MaterialTheme.typography.titleMedium)
+    }
 }
 
 @Composable
@@ -89,7 +93,13 @@ private fun HomeGroup(profile: ProfileDoc, campus: Campus, account: AccountViewM
             label = stringResource(R.string.residence),
             options = campus.residences.map { it.code to it.name },
             selected = if (picking) null else residence.code,
-            sub = if (picking) null else stringResource(R.string.your_stops, residence.stops.joinToString(stringResource(R.string.list_sep)) { campus.stopName(it) }),
+            sub =
+                if (picking) null
+                else
+                    stringResource(
+                        R.string.your_stops,
+                        residence.stops.joinToString(stringResource(R.string.list_sep)) { campus.stopName(it) },
+                    ),
             blank = stringResource(R.string.off_campus_short),
             headings = residenceHeadings(campus.residences),
             onSelect = { code ->
@@ -117,10 +127,14 @@ private fun HomeGroup(profile: ProfileDoc, campus: Campus, account: AccountViewM
             )
             Column(Modifier.padding(horizontal = 4.dp)) {
                 if (Locator.hasForeground(ctx)) {
-                    TextButton(onClick = {
-                        locating = L.s(R.string.finding_stop)
-                        scope.launch { locating = pickNearestHome(ctx, campus, account) }
-                    }) { Text(stringResource(R.string.pick_nearest)) }
+                    TextButton(
+                        onClick = {
+                            locating = L.s(R.string.finding_stop)
+                            scope.launch { locating = pickNearestHome(ctx, campus, account) }
+                        }
+                    ) {
+                        Text(stringResource(R.string.pick_nearest))
+                    }
                 }
                 locating?.let { Hint(it, Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp)) }
             }
@@ -129,8 +143,10 @@ private fun HomeGroup(profile: ProfileDoc, campus: Campus, account: AccountViewM
         FieldRow(stringResource(R.string.walk_to_stop)) {
             Stepper(
                 stringResource(R.string.n_min, profile.homeWalkMin),
-                L.s(R.string.walk_one_less), L.s(R.string.walk_one_more),
-                profile.homeWalkMin > profile.limits.homeWalkMin.first, profile.homeWalkMin < profile.limits.homeWalkMin.last,
+                L.s(R.string.walk_one_less),
+                L.s(R.string.walk_one_more),
+                profile.homeWalkMin > profile.limits.homeWalkMin.first,
+                profile.homeWalkMin < profile.limits.homeWalkMin.last,
                 { account.edit { it.homeWalkMin = it.homeWalkMin - 1 } },
                 { account.edit { it.homeWalkMin = it.homeWalkMin + 1 } },
             )
@@ -143,19 +159,36 @@ private fun DayGroup(profile: ProfileDoc, account: AccountViewModel) {
     Group(stringResource(R.string.heading_your_day), stringResource(R.string.day_hint_short)) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
             Text(stringResource(R.string.show_buses_between), style = MaterialTheme.typography.bodyLarge)
-            Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                TimeButton("", profile.dayStartMin, { m -> if (m < profile.dayEndMin) account.edit { it.dayStartMin = m } }, Modifier.weight(1f))
+            Row(
+                Modifier.padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TimeButton(
+                    "",
+                    profile.dayStartMin,
+                    { m -> if (m < profile.dayEndMin) account.edit { it.dayStartMin = m } },
+                    Modifier.weight(1f),
+                )
                 Text(stringResource(R.string.and))
-                TimeButton("", profile.dayEndMin, { m -> if (m > profile.dayStartMin) account.edit { it.dayEndMin = m } }, Modifier.weight(1f))
+                TimeButton(
+                    "",
+                    profile.dayEndMin,
+                    { m -> if (m > profile.dayStartMin) account.edit { it.dayEndMin = m } },
+                    Modifier.weight(1f),
+                )
             }
         }
         RowDivider()
         FieldRow(stringResource(R.string.gap_home)) {
             val h = profile.gapHours
             Stepper(
-                if (h == 1.0) stringResource(R.string.one_hour) else stringResource(R.string.n_hours, if (h % 1.0 == 0.0) h.toInt().toString() else h.toString()),
-                L.s(R.string.gap_shorter), L.s(R.string.gap_longer),
-                h > 0.5, h < 12,
+                if (h == 1.0) stringResource(R.string.one_hour)
+                else stringResource(R.string.n_hours, if (h % 1.0 == 0.0) h.toInt().toString() else h.toString()),
+                L.s(R.string.gap_shorter),
+                L.s(R.string.gap_longer),
+                h > 0.5,
+                h < 12,
                 { account.edit { it.gapHours = it.gapHours - 0.5 } },
                 { account.edit { it.gapHours = it.gapHours + 0.5 } },
             )
@@ -163,11 +196,12 @@ private fun DayGroup(profile: ProfileDoc, account: AccountViewModel) {
     }
 }
 
-private val PACES = listOf(
-    Triple("slow", R.string.pace_slow, R.string.pace_slow_hint),
-    Triple("normal", R.string.pace_normal, R.string.pace_normal_hint),
-    Triple("fast", R.string.pace_fast, R.string.pace_fast_hint),
-)
+private val PACES =
+    listOf(
+        Triple("slow", R.string.pace_slow, R.string.pace_slow_hint),
+        Triple("normal", R.string.pace_normal, R.string.pace_normal_hint),
+        Triple("fast", R.string.pace_fast, R.string.pace_fast_hint),
+    )
 
 @Composable
 private fun WalkingGroup(profile: ProfileDoc, account: AccountViewModel) {
@@ -176,25 +210,36 @@ private fun WalkingGroup(profile: ProfileDoc, account: AccountViewModel) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
             Text(stringResource(R.string.walking_pace), style = MaterialTheme.typography.bodyLarge)
             Hint(stringResource(pace.third))
-            Pills(PACES.map { (value, title, _) -> value to stringResource(title) }, pace.first, { value -> account.edit { it.walkPace = value } }, Modifier.padding(top = 10.dp))
+            Pills(
+                PACES.map { (value, title, _) -> value to stringResource(title) },
+                pace.first,
+                { value -> account.edit { it.walkPace = value } },
+                Modifier.padding(top = 10.dp),
+            )
         }
         RowDivider()
         FieldRow(
             stringResource(R.string.prefer_bus),
             Modifier.toggleable(value = profile.preferBus, role = Role.Switch) { on -> account.edit { it.preferBus = on } },
             sub = stringResource(R.string.prefer_bus_hint),
-        ) { Switch(checked = profile.preferBus, onCheckedChange = null) }
+        ) {
+            Switch(checked = profile.preferBus, onCheckedChange = null)
+        }
         RowDivider()
         FieldRow(
             stringResource(R.string.packed),
             Modifier.toggleable(value = profile.fullBusMargin, role = Role.Switch) { on -> account.edit { it.fullBusMargin = on } },
             sub = stringResource(R.string.busy_hint_short),
-        ) { Switch(checked = profile.fullBusMargin, onCheckedChange = null) }
+        ) {
+            Switch(checked = profile.fullBusMargin, onCheckedChange = null)
+        }
         RowDivider()
         FieldRow(
             stringResource(R.string.public_buses),
             Modifier.toggleable(value = profile.publicBuses, role = Role.Switch) { on -> account.edit { it.publicBuses = on } },
             sub = stringResource(R.string.public_buses_hint),
-        ) { Switch(checked = profile.publicBuses, onCheckedChange = null) }
+        ) {
+            Switch(checked = profile.publicBuses, onCheckedChange = null)
+        }
     }
 }

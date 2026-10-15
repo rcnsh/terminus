@@ -8,11 +8,12 @@ import org.junit.Test
 class CrashReportsTest {
     private fun deep(depth: Int): Nothing = if (depth == 0) throw IllegalStateException("bottom") else deep(depth - 1)
 
-    private fun thrown(depth: Int): Throwable = try {
-        deep(depth)
-    } catch (e: Throwable) {
-        e
-    }
+    private fun thrown(depth: Int): Throwable =
+        try {
+            deep(depth)
+        } catch (e: Throwable) {
+            e
+        }
 
     @Test
     fun theBodyIsWhatTheServerTakesAndNothingAboutWho() {
@@ -29,7 +30,10 @@ class CrashReportsTest {
 
     @Test
     fun aLongMessageIsCutAndNoMessageIsEmpty() {
-        assertEquals(CrashReports.MAX_MESSAGE, CrashReports.body(RuntimeException("x".repeat(5_000)), "1", "15", true).getString("message").length)
+        assertEquals(
+            CrashReports.MAX_MESSAGE,
+            CrashReports.body(RuntimeException("x".repeat(5_000)), "1", "15", true).getString("message").length,
+        )
         assertEquals("", CrashReports.body(RuntimeException(), "1", "15", true).getString("message"))
     }
 
@@ -55,7 +59,16 @@ class CrashReportsTest {
 
     @Test
     fun theOldestReportsGoBeyondFive() {
-        val names = listOf("1700000000005-1.json", "1700000000001-9.json", "1700000000003-2.json", "1700000000002-4.json", "1700000000006-1.json", "1700000000004-0.json", "1700000000000-3.json")
+        val names =
+            listOf(
+                "1700000000005-1.json",
+                "1700000000001-9.json",
+                "1700000000003-2.json",
+                "1700000000002-4.json",
+                "1700000000006-1.json",
+                "1700000000004-0.json",
+                "1700000000000-3.json",
+            )
         assertEquals(listOf("1700000000000-3.json", "1700000000001-9.json"), CrashReports.overCap(names))
         assertEquals(emptyList<String>(), CrashReports.overCap(names.take(5)))
     }

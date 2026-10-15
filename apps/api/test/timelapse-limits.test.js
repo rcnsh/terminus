@@ -19,7 +19,9 @@ import { GRAPH } from '../src/graph.ts';
 
 const sgt = (date, hhmm) => Date.parse(`${date}T${hhmm}:00+08:00`);
 const DATE = serviceDate(FROZEN_NOW); // Thursday 2026-08-27, 09:00 SGT
-const RUNNING = Object.keys(GRAPH.routes).filter((svc) => inService(GRAPH, svc, FROZEN_NOW)).sort();
+const RUNNING = Object.keys(GRAPH.routes)
+  .filter((svc) => inService(GRAPH, svc, FROZEN_NOW))
+  .sort();
 
 function busOn(svc, m, plate = `PX${svc}1`) {
   const p = pointAlong(shapeFor(svc, GRAPH.routes[svc]), m);
@@ -61,7 +63,8 @@ async function runUntil(h, until, before = async () => {}) {
   Date.now = () => until;
 }
 
-const start = (h, date = DATE) => h.ns.get(h.ns.idFromName(date)).fetch(`https://timelapse.internal/start?date=${date}`, { method: 'POST' });
+const start = (h, date = DATE) =>
+  h.ns.get(h.ns.idFromName(date)).fetch(`https://timelapse.internal/start?date=${date}`, { method: 'POST' });
 const busAsks = (h) => h.feed.log.filter((r) => r.url.endsWith('/active-bus'));
 
 test('backoffOf: 1, then 2, 4 and 8 rounds, and never longer', () => {
@@ -76,7 +79,10 @@ test('a feed down all morning is asked 60, 120, 240, then every 240 s', async ()
   const asks = busAsks(h);
   // The first service fails and opens the breaker, so the rest of each
   // round is skipped without asking: one request a round.
-  assert.ok(asks.every((r) => r.body.route_code === RUNNING[0]), asks.map((r) => r.body.route_code).join());
+  assert.ok(
+    asks.every((r) => r.body.route_code === RUNNING[0]),
+    asks.map((r) => r.body.route_code).join(),
+  );
   const gaps = asks.slice(1).map((r, i) => (r.at - asks[i].at) / 1000);
   assert.deepEqual(gaps, [60, 120, 240, 240]);
 });
@@ -97,7 +103,9 @@ test('a service that closes partway through a round is not asked, and is counted
   // A round that begins at 22:59:50 on a Thursday: most services close at
   // 23:00, so the later ones close before their turn.
   const from = sgt(DATE, '22:59') + 50_000;
-  const list = Object.keys(GRAPH.routes).filter((svc) => inService(GRAPH, svc, from)).sort();
+  const list = Object.keys(GRAPH.routes)
+    .filter((svc) => inService(GRAPH, svc, from))
+    .sort();
   const h = harness();
   Date.now = () => from;
   await start(h);
@@ -126,12 +134,17 @@ test('a whole recorded day asks NUS for live buses only: never arrivals, never L
   Date.now = () => open - 60_000;
   await start(h);
   await runUntil(h, close + 1);
-  const kinds = new Set(h.feed.log.map((r) => (r.url.endsWith('/active-bus') ? 'active-bus' : r.url.includes('get-access-token') ? 'mint' : r.url)));
+  const kinds = new Set(
+    h.feed.log.map((r) => (r.url.endsWith('/active-bus') ? 'active-bus' : r.url.includes('get-access-token') ? 'mint' : r.url)),
+  );
   assert.deepEqual([...kinds].sort(), ['active-bus', 'mint'], 'only live buses, and the token for them');
   assert.equal(fetchImpl.counts.public, 0);
   const asks = busAsks(h);
   assert.ok(asks.length > 1000, `recorded a day: ${asks.length} polls`);
   assert.ok(asks.length <= TIMELAPSE.maxPollsPerDay, `${asks.length} polls`);
-  assert.ok(asks.every((r) => r.at >= open && r.at < close && inService(GRAPH, r.body.route_code, r.at)), 'inside the window and the service hours');
+  assert.ok(
+    asks.every((r) => r.at >= open && r.at < close && inService(GRAPH, r.body.route_code, r.at)),
+    'inside the window and the service hours',
+  );
   assert.equal(h.env.DOWNLOADS._written.size, 1, 'and the day went to R2');
 });

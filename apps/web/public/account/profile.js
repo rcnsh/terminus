@@ -47,15 +47,17 @@ export function Toast() {
   return html`
     <div class=${`toast${now ? ' show' : ''}${last.error ? ' error' : ''}${last.action ? ' has-action' : ''}`}>
       <p role="status">${now ? now.text : ''}</p>
-      ${now?.action &&
-      html`<button
+      ${
+        now?.action &&
+        html`<button
         type="button"
         class="toast-action"
         onClick=${() => {
           toastText.set(null);
           now.action.run();
         }}
-      >${now.action.label}</button>`}
+      >${now.action.label}</button>`
+      }
       ${now?.error && html`<button type="button" class="toast-close" aria-label=${t('Close')} onClick=${() => toastText.set(null)}>×</button>`}
       ${!now && html`<p aria-hidden="true">${last.text}</p>`}
     </div>
@@ -140,7 +142,8 @@ export async function loadCampus() {
 }
 
 /** Every stop, by name, for menus. */
-export const stopsByName = (c = campus.get()) => (c?.stops ?? []).map(({ code, name, lat, lon }) => ({ code, name, lat, lon })).sort((a, b) => a.name.localeCompare(b.name));
+export const stopsByName = (c = campus.get()) =>
+  (c?.stops ?? []).map(({ code, name, lat, lon }) => ({ code, name, lat, lon })).sort((a, b) => a.name.localeCompare(b.name));
 
 /**
  * Residences on campus: the common ones (PGP, UTown Residence) first, then by
@@ -206,7 +209,12 @@ export function withPlace(p, to, label) {
   const same = p.places.find((x) => x.to === to);
   if (same) return same;
   label = label.slice(0, 24);
-  let key = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'place';
+  let key =
+    label
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 24) || 'place';
   while (p.places.some((x) => x.key === key)) key = `${key.slice(0, 21)}-${Math.floor(Math.random() * 90 + 10)}`;
   p.places.push({ key, label, to });
   return null;

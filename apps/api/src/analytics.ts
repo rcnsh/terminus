@@ -243,7 +243,11 @@ export interface AppErrorRow {
 export function logAppError(env: Env, r: AppErrorRow): void {
   if (!analyticsEnabled(env)) return;
   try {
-    env.AE!.writeDataPoint({ blobs: ['apperror', r.platform, r.version, r.fingerprint, r.type, r.message, r.stack, r.os], doubles: [1, r.fatal ? 1 : 0], indexes: ['apperror'] });
+    env.AE!.writeDataPoint({
+      blobs: ['apperror', r.platform, r.version, r.fingerprint, r.type, r.message, r.stack, r.os],
+      doubles: [1, r.fatal ? 1 : 0],
+      indexes: ['apperror'],
+    });
   } catch {
     // Same rule as above.
   }

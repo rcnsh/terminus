@@ -14,7 +14,19 @@ import { FROZEN_NOW, installGlobals, makeAnalytics, makeBucket, makeDurableObjec
 import worker from '../src/index.ts';
 import { TimelapseRecorder } from '../src/timelapsedo.ts';
 import { MIN_POLL_MS, TIMELAPSE } from '../src/config.ts';
-import { buildDayFile, encodeBus, ensureRecorder, inWindow, mapSnapshot, nextOpen, pollInterval, serviceDate, timelapseEnabled, windowLength, windowOf } from '../src/timelapse.ts';
+import {
+  buildDayFile,
+  encodeBus,
+  ensureRecorder,
+  inWindow,
+  mapSnapshot,
+  nextOpen,
+  pollInterval,
+  serviceDate,
+  timelapseEnabled,
+  windowLength,
+  windowOf,
+} from '../src/timelapse.ts';
 import { getBuses } from '../src/fms.ts';
 import { pointAlong } from '../src/buses.ts';
 import { shapeFor } from '../src/campus.ts';
@@ -22,12 +34,24 @@ import { inService } from '../src/resolve.ts';
 import { GRAPH } from '../src/graph.ts';
 import { BUNDLED } from '../src/calendar.ts';
 import { CALENDAR_DATA_KEY, resetCalendar } from '../src/calendarsync.ts';
-import { busesAt, countBySvc, decodeDay, FADE_MS, GAP_MS, haversineM, placeAt, pointAt, timeOn } from '../../web/public/admin/timelapse/replay.js';
+import {
+  busesAt,
+  countBySvc,
+  decodeDay,
+  FADE_MS,
+  GAP_MS,
+  haversineM,
+  placeAt,
+  pointAt,
+  timeOn,
+} from '../../web/public/admin/timelapse/replay.js';
 
 /** Singapore wall time on a date, as epoch ms. */
 const sgt = (date, hhmm) => Date.parse(`${date}T${hhmm}:00+08:00`);
 const DATE = serviceDate(FROZEN_NOW); // Thursday 2026-08-27, 09:00 SGT
-const RUNNING = Object.keys(GRAPH.routes).filter((svc) => inService(GRAPH, svc, FROZEN_NOW)).sort();
+const RUNNING = Object.keys(GRAPH.routes)
+  .filter((svc) => inService(GRAPH, svc, FROZEN_NOW))
+  .sort();
 const BREAKER = 'https://terminus.internal/breaker';
 
 /** A bus as the feed reports it, [m] metres along [svc]'s line, driving its way. */
@@ -62,7 +86,8 @@ async function runUntil(h, until, before = async () => {}) {
   Date.now = () => until;
 }
 
-const start = (h, date = DATE) => h.ns.get(h.ns.idFromName(date)).fetch(`https://timelapse.internal/start?date=${date}`, { method: 'POST' });
+const start = (h, date = DATE) =>
+  h.ns.get(h.ns.idFromName(date)).fetch(`https://timelapse.internal/start?date=${date}`, { method: 'POST' });
 const status = async (h, date = DATE) => (await h.ns.get(date).fetch(`https://timelapse.internal/status?date=${date}`)).json();
 const gunzip = async (body) => new Response(new Blob([body]).stream().pipeThrough(new DecompressionStream('gzip'))).json();
 
@@ -200,7 +225,10 @@ test('each round asks each running service at most once, spread across the inter
   assert.deepEqual([...asked].sort(), RUNNING, 'every running service, each once in one round');
   // Spread out: one service per slot, never a burst.
   const slot = 30_000 / RUNNING.length;
-  assert.deepEqual(times, RUNNING.map((_, i) => FROZEN_NOW + i * slot));
+  assert.deepEqual(
+    times,
+    RUNNING.map((_, i) => FROZEN_NOW + i * slot),
+  );
   // Not one more until the round is over.
   await runUntil(h, FROZEN_NOW + 60_000 - 1);
   const twice = h.busCalls().map((r) => r.body.route_code);
@@ -210,14 +238,20 @@ test('each round asks each running service at most once, spread across the inter
 });
 
 test('a public holiday known only from KV runs holiday hours: services not running are not asked', async () => {
-  const holiday = { ...BUNDLED, generated: '2099-01-01', holidays: [...BUNDLED.holidays, { date: DATE, name: 'A holiday announced late' }] };
+  const holiday = {
+    ...BUNDLED,
+    generated: '2099-01-01',
+    holidays: [...BUNDLED.holidays, { date: DATE, name: 'A holiday announced late' }],
+  };
   resetCalendar();
   try {
     const h = harness({ buses: { D2: [busOn('D2', 400)] }, kv: makeKV({ [CALENDAR_DATA_KEY]: holiday }) });
     await start(h);
     await runUntil(h, FROZEN_NOW + 30_000 - 1);
     const asked = [...new Set(h.busCalls().map((r) => r.body.route_code))].sort();
-    const onHoliday = Object.keys(GRAPH.routes).filter((svc) => inService(GRAPH, svc, FROZEN_NOW)).sort();
+    const onHoliday = Object.keys(GRAPH.routes)
+      .filter((svc) => inService(GRAPH, svc, FROZEN_NOW))
+      .sort();
     assert.ok(onHoliday.length < RUNNING.length, `holiday services: ${onHoliday}`);
     assert.deepEqual(asked, onHoliday);
   } finally {
@@ -237,11 +271,15 @@ test('an alarm that runs late moves the rest later: no burst, no service asked a
   h.ns.alarms.set(DATE, late);
   await runUntil(h, FROZEN_NOW + 120_000, record);
   const gaps = at.slice(1).map((t, i) => t - at[i]);
-  assert.ok(gaps.every((g) => g >= slot - 1), `never closer than a slot: ${gaps}`);
+  assert.ok(
+    gaps.every((g) => g >= slot - 1),
+    `never closer than a slot: ${gaps}`,
+  );
   const calls = h.busCalls().map((r) => r.body.route_code);
   for (const svc of RUNNING) {
     const times = calls.map((s, i) => (s === svc ? at[i] : null)).filter((t) => t !== null);
-    for (let i = 1; i < times.length; i++) assert.ok(times[i] - times[i - 1] >= MIN_POLL_MS, `${svc} asked again after ${times[i] - times[i - 1]} ms`);
+    for (let i = 1; i < times.length; i++)
+      assert.ok(times[i] - times[i - 1] >= MIN_POLL_MS, `${svc} asked again after ${times[i] - times[i - 1]} ms`);
   }
 });
 
@@ -260,7 +298,10 @@ test('with the cache warm (the map just asked), a round costs NUS nothing', asyn
   assert.equal(byRecorder, 0, 'every poll was a cache hit');
   const rows = h.ae.rows('timelapse');
   assert.equal(rows.length, RUNNING.length);
-  assert.ok(rows.every((r) => r.blobs[1] === 'hit'), rows.map((r) => r.blobs[1]).join());
+  assert.ok(
+    rows.every((r) => r.blobs[1] === 'hit'),
+    rows.map((r) => r.blobs[1]).join(),
+  );
   assert.equal((await status(h)).samples, RUNNING.length, 'and still recorded');
 });
 
@@ -286,7 +327,10 @@ test('a failed poll records nothing, but a request that reached NUS still counts
   await h.ns.fireDue(FROZEN_NOW);
   // It asked, and the request failed: an `error`, counted with the requests,
   // as is the token it minted first (the recorder's first poll, cold).
-  assert.deepEqual(h.ae.rows('timelapse').map((r) => r.blobs[1]), ['retry', 'error']);
+  assert.deepEqual(
+    h.ae.rows('timelapse').map((r) => r.blobs[1]),
+    ['retry', 'error'],
+  );
   assert.equal((await status(h)).samples, 0);
   // The same service again within failMemoS isn't asked: `failed`, no request.
   const inst = h.ns.instances.get(DATE);
@@ -296,7 +340,10 @@ test('a failed poll records nothing, but a request that reached NUS still counts
   await h.ns.get(DATE).fetch(`https://timelapse.internal/status?date=${DATE}`);
   h.ns.alarms.set(DATE, FROZEN_NOW + 1_000);
   await h.ns.fireDue(FROZEN_NOW + 1_000);
-  assert.deepEqual(h.ae.rows('timelapse').map((r) => r.blobs[1]), ['retry', 'error', 'failed']);
+  assert.deepEqual(
+    h.ae.rows('timelapse').map((r) => r.blobs[1]),
+    ['retry', 'error', 'failed'],
+  );
 });
 
 test('a poll that throws after asking is a failed poll: the round goes on, and that service is not asked again sooner', async () => {
@@ -374,7 +421,10 @@ test('a retry inside a poll is counted as the request to NUS it is', async () =>
   await h.ns.fireDue(FROZEN_NOW);
   // A token (none yet), a refused call, a fresh token, and the call again:
   // four requests.
-  assert.deepEqual(h.ae.rows('timelapse').map((r) => r.blobs[1]), ['retry', 'retry', 'retry', 'upstream']);
+  assert.deepEqual(
+    h.ae.rows('timelapse').map((r) => r.blobs[1]),
+    ['retry', 'retry', 'retry', 'upstream'],
+  );
 });
 
 test('no service is asked twice within pollMs, even when the next round has fewer services', async () => {
@@ -406,7 +456,8 @@ test('a partial outage is not an idle day: one service failing while the rest ha
   const real = globalThis.fetch;
   globalThis.fetch = async (input, init = {}) => {
     // A reply it can't read, so only D2 fails (no answer at all would open the breaker).
-    if (String(input).endsWith('/active-bus') && JSON.parse(init.body ?? '{}').route_code === 'D2') return Response.json({ code: '00000', msg: '', data: { somethingNew: 1 } });
+    if (String(input).endsWith('/active-bus') && JSON.parse(init.body ?? '{}').route_code === 'D2')
+      return Response.json({ code: '00000', msg: '', data: { somethingNew: 1 } });
     return real(input, init);
   };
   await runUntil(h, FROZEN_NOW + 12 * 30_000);
@@ -485,7 +536,10 @@ test('no buses for a few minutes while services are in their hours is a gap: it 
   await runUntil(h, FROZEN_NOW + (TIMELAPSE.idleRounds + 1) * 30_000);
   assert.equal((await status(h)).state, 'resting', 'not done: D2 is still inside its hours');
   const wake = h.ns.alarms.get(DATE);
-  assert.ok(wake > FROZEN_NOW + TIMELAPSE.idleRounds * 30_000 && wake <= FROZEN_NOW + (TIMELAPSE.idleRounds + 1) * 30_000 + TIMELAPSE.idleSleepMs, 'asleep for idleSleepMs');
+  assert.ok(
+    wake > FROZEN_NOW + TIMELAPSE.idleRounds * 30_000 && wake <= FROZEN_NOW + (TIMELAPSE.idleRounds + 1) * 30_000 + TIMELAPSE.idleSleepMs,
+    'asleep for idleSleepMs',
+  );
   const asked = h.busCalls().length;
   await runUntil(h, wake - 1);
   assert.equal(h.busCalls().length, asked, 'nothing asked while it rests');
@@ -508,7 +562,8 @@ test('only empty rounds in a row stop it: one that could not confirm starts the 
   const real = globalThis.fetch;
   globalThis.fetch = async (input, init = {}) => {
     // A reply it can't read, so only D2 fails (no answer at all would open the breaker).
-    if (String(input).endsWith('/active-bus') && JSON.parse(init.body ?? '{}').route_code === 'D2') return Response.json({ code: '00000', msg: '', data: { somethingNew: 1 } });
+    if (String(input).endsWith('/active-bus') && JSON.parse(init.body ?? '{}').route_code === 'D2')
+      return Response.json({ code: '00000', msg: '', data: { somethingNew: 1 } });
     return real(input, init);
   };
   try {
@@ -544,7 +599,10 @@ test("a reading keeps each bus's plate, position and metres along its line, as b
   const tracks = Object.fromEntries(day.tracks.map((t) => [t.plate, t.pts[0]]));
   assert.ok(Math.abs(tracks.PD111A.along - 400) < 25, `along ${tracks.PD111A.along}`);
   assert.ok(Math.abs(tracks.PD222B.along - 1500) < 25, `along ${tracks.PD222B.along}`);
-  assert.ok(haversineM(tracks.PD111A.lat, tracks.PD111A.lon, busOn('D2', 400).lat, busOn('D2', 400).lng) < 1.6, 'quantised to about a metre');
+  assert.ok(
+    haversineM(tracks.PD111A.lat, tracks.PD111A.lon, busOn('D2', 400).lat, busOn('D2', 400).lng) < 1.6,
+    'quantised to about a metre',
+  );
 });
 
 test('a reading and the times that date it are saved together, or neither is', async () => {
@@ -593,7 +651,10 @@ test('encoding round trip: quantised positions, delta times (even out of order),
   assert.equal(day.end, t0 + 31_000);
   assert.equal(day.readings, 3);
   // PB2 was off its line: kept in the file, not drawn.
-  assert.deepEqual(day.tracks.map((t) => t.key), ['D2 PA1']);
+  assert.deepEqual(
+    day.tracks.map((t) => t.key),
+    ['D2 PA1'],
+  );
   const [p] = day.tracks[0].pts;
   assert.equal(p.t, t0 + 1_000);
   assert.equal(p.along, 812);
@@ -672,7 +733,7 @@ test('a close that fails anywhere keeps the day and tries again, for a week; the
   assert.deepEqual(await status(g), { date: null, samples: 0, state: 'idle' }, 'storage deleted');
 });
 
-test('a past day whose alarm is gone is woken by the next morning\'s cron and written', async () => {
+test("a past day whose alarm is gone is woken by the next morning's cron and written", async () => {
   const h = harness({ buses: { D2: [busOn('D2', 400)] } });
   await start(h);
   await runUntil(h, FROZEN_NOW + 30_000 - 1);
@@ -695,7 +756,7 @@ test('a past day whose alarm is gone is woken by the next morning\'s cron and wr
   assert.equal(h.ns.instances.size, before);
 });
 
-test('a day still retrying a week after its close is cleaned up by the next morning\'s cron', async () => {
+test("a day still retrying a week after its close is cleaned up by the next morning's cron", async () => {
   const h = harness({ buses: { D2: [busOn('D2', 400)] } });
   await start(h);
   await runUntil(h, FROZEN_NOW + 30_000 - 1);
@@ -779,7 +840,13 @@ test('/api/timelapse/days: operator only, today while recording, closed days fro
   assert.equal((await call('/api/timelapse/days/2026-08-25')).status, 404);
   assert.equal((await call('/api/timelapse/days/nonsense')).status, 404);
   const both = await (await call('/api/timelapse/days')).json();
-  assert.deepEqual(both.days.map((d) => [d.date, d.closed]), [[DATE, false], ['2026-08-26', true]]);
+  assert.deepEqual(
+    both.days.map((d) => [d.date, d.closed]),
+    [
+      [DATE, false],
+      ['2026-08-26', true],
+    ],
+  );
 });
 
 /** A day with one D2 bus at these [t, along] readings. */
@@ -806,7 +873,10 @@ test('between readings a bus moves along the road, not in a straight line', () =
     a += 10;
   }
   assert.ok(a + 300 < path.total, 'D2 bends somewhere');
-  const day = oneBus([[0, a], [30_000, a + 300]]);
+  const day = oneBus([
+    [0, a],
+    [30_000, a + 300],
+  ]);
   const [mid] = busesAt(day, FROZEN_NOW + 15_000);
   const onRoad = pointAt(path, a + 150);
   assert.ok(haversineM(mid.lat, mid.lon, onRoad.lat, onRoad.lon) < 0.5, 'halfway along the road');
@@ -820,15 +890,25 @@ test('between readings a bus moves along the road, not in a straight line', () =
 test('round a loop, a bus passing the start carries on forward', () => {
   const path = oneBus([]).routes.D2.path;
   assert.ok(path.loop);
-  const day = oneBus([[0, Math.floor(path.total) - 100], [30_000, 100]]);
+  const day = oneBus([
+    [0, Math.floor(path.total) - 100],
+    [30_000, 100],
+  ]);
   const { along } = placeAt(day.tracks[0], path, FROZEN_NOW + 15_000);
   const atStart = pointAt(path, along);
   const start = pointAt(path, 0);
-  assert.ok(haversineM(atStart.lat, atStart.lon, start.lat, start.lon) < 5, `at the start of the loop, not back round it: ${along} of ${path.total}`);
+  assert.ok(
+    haversineM(atStart.lat, atStart.lon, start.lat, start.lon) < 5,
+    `at the start of the loop, not back round it: ${along} of ${path.total}`,
+  );
 });
 
 test('across a gap of more than two minutes a bus fades out and in, not across', () => {
-  const day = oneBus([[0, 500], [30_000, 700], [30_000 + 5 * 60_000, 2_000]]);
+  const day = oneBus([
+    [0, 500],
+    [30_000, 700],
+    [30_000 + 5 * 60_000, 2_000],
+  ]);
   const track = day.tracks[0];
   const path = day.routes.D2.path;
   const t1 = FROZEN_NOW + 30_000;
@@ -850,14 +930,20 @@ test('across a gap of more than two minutes a bus fades out and in, not across',
   assert.deepEqual(placeAt(track, path, t2 + 29_000, 30_000), { along: 2_000, alpha: 1 });
   assert.ok(Math.abs(placeAt(track, path, t2 + 30_000 + FADE_MS / 2, 30_000).alpha - 0.5) < 1e-9);
   assert.equal(placeAt(track, path, t2 + 30_000 + FADE_MS + 1, 30_000), null);
-  assert.equal(busesAt(day, t2 + 29_000).length, 1, 'busesAt holds for the day file\'s poll interval');
+  assert.equal(busesAt(day, t2 + 29_000).length, 1, "busesAt holds for the day file's poll interval");
   // A short gap (a missed poll) is driven across.
-  const short = oneBus([[0, 500], [60_000, 900]]);
+  const short = oneBus([
+    [0, 500],
+    [60_000, 900],
+  ]);
   assert.deepEqual(placeAt(short.tracks[0], path, FROZEN_NOW + 30_000), { along: 700, alpha: 1 });
 });
 
 test('a reading further on than a bus can drive is a jump: out at one place, in at the other', () => {
-  const day = oneBus([[0, 100], [30_000, 3_000]]);
+  const day = oneBus([
+    [0, 100],
+    [30_000, 3_000],
+  ]);
   const track = day.tracks[0];
   const path = day.routes.D2.path;
   const early = placeAt(track, path, FROZEN_NOW + 7_500);
@@ -867,9 +953,13 @@ test('a reading further on than a bus can drive is a jump: out at one place, in 
   assert.equal(late.along, 3_000);
   assert.ok(Math.abs(late.alpha - 0.5) < 1e-9);
   // Still out the whole way through: the count doesn't blink to none.
-  for (const t of [7_500, 14_000, 15_000, 16_000, 22_500]) assert.deepEqual(countBySvc(busesAt(day, FROZEN_NOW + t)), { D2: 1 }, `at +${t} ms`);
+  for (const t of [7_500, 14_000, 15_000, 16_000, 22_500])
+    assert.deepEqual(countBySvc(busesAt(day, FROZEN_NOW + t)), { D2: 1 }, `at +${t} ms`);
   // A gap is a real absence: none out in the middle of it.
-  const gap = oneBus([[0, 500], [5 * 60_000, 700]]);
+  const gap = oneBus([
+    [0, 500],
+    [5 * 60_000, 700],
+  ]);
   assert.deepEqual(countBySvc(busesAt(gap, FROZEN_NOW + 2.5 * 60_000)), {});
 });
 
@@ -879,7 +969,7 @@ test("start and end times on the day's timeline: after midnight is the next morn
   assert.equal(timeOn('2026-10-07', '06:30'), sgt('2026-10-07', '06:30'));
 });
 
-test("an earlier day stays in the list while its write to R2 is being retried", async () => {
+test('an earlier day stays in the list while its write to R2 is being retried', async () => {
   const h = harness({ buses: { D2: [busOn('D2', 400)] } });
   await start(h);
   await runUntil(h, FROZEN_NOW + 30_000 - 1);
@@ -887,9 +977,16 @@ test("an earlier day stays in the list while its write to R2 is being retried", 
   const next = sgt('2026-08-30', '09:00');
   Date.now = () => next;
   const ctx = { waitUntil() {}, passThroughOnException() {} };
-  const res = await worker.fetch(new Request('https://bus.example.test/api/timelapse/days', { headers: { 'x-health-token': 'op' } }), h.env, ctx);
+  const res = await worker.fetch(
+    new Request('https://bus.example.test/api/timelapse/days', { headers: { 'x-health-token': 'op' } }),
+    h.env,
+    ctx,
+  );
   const { days } = await res.json();
-  assert.deepEqual(days.map((d) => [d.date, d.closed, d.samples]), [[DATE, false, RUNNING.length]]);
+  assert.deepEqual(
+    days.map((d) => [d.date, d.closed, d.samples]),
+    [[DATE, false, RUNNING.length]],
+  );
 });
 
 test('a recorder that never answers holds up neither the cron nor the routes for long', async (t) => {
@@ -899,7 +996,10 @@ test('a recorder that never answers holds up neither the cron nor the routes for
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const settled = async (p) => {
     let result = null;
-    p.then((value) => (result = { value }), (error) => (result = { error }));
+    p.then(
+      (value) => (result = { value }),
+      (error) => (result = { error }),
+    );
     // Let it reach the recorder, then let ten seconds pass.
     for (let i = 0; i < 50 && !result; i++) {
       await new Promise(setImmediate);
@@ -934,5 +1034,9 @@ test('TIMELAPSE_TOKEN opens the timelapse routes and nothing else', async () => 
   // Unset, it opens nothing.
   const none = { ...h.env, TIMELAPSE_TOKEN: undefined };
   const ctx = { waitUntil() {}, passThroughOnException() {} };
-  assert.equal((await worker.fetch(new Request('https://bus.example.test/api/timelapse/days', { headers: { 'x-health-token': '' } }), none, ctx)).status, 404);
+  assert.equal(
+    (await worker.fetch(new Request('https://bus.example.test/api/timelapse/days', { headers: { 'x-health-token': '' } }), none, ctx))
+      .status,
+    404,
+  );
 });

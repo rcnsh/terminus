@@ -157,7 +157,22 @@ export function makeAnalytics() {
  * so the forced-refresh retry can be exercised. Every proxy request is kept in
  * `requests` so tests can assert on headers and body.
  */
-export function makeFetch({ byStop = {}, buses = {}, fail = false, reject = 0, rejectCode = '10009', hang = false, raw = null, mintReject = null, mintStatus = 200, proxyStatus = 200, fcm = null, publicStops = {}, publicStatus = 200, publicFail = false } = {}) {
+export function makeFetch({
+  byStop = {},
+  buses = {},
+  fail = false,
+  reject = 0,
+  rejectCode = '10009',
+  hang = false,
+  raw = null,
+  mintReject = null,
+  mintStatus = 200,
+  proxyStatus = 200,
+  fcm = null,
+  publicStops = {},
+  publicStatus = 200,
+  publicFail = false,
+} = {}) {
   const counts = { auth: 0, shuttle: 0, public: 0 };
   const requests = [];
   const mints = [];
@@ -204,12 +219,20 @@ export function makeFetch({ byStop = {}, buses = {}, fail = false, reject = 0, r
       if (proxyStatus !== 200) return Response.json({ code: '?', msg: 'busy' }, { status: proxyStatus });
       if (reject > 0) {
         reject--;
-        return Response.json({ code: rejectCode, msg: rejectCode === '10009' ? 'We have a new release of uNivUS' : 'token invalid', data: null });
+        return Response.json({
+          code: rejectCode,
+          msg: rejectCode === '10009' ? 'We have a new release of uNivUS' : 'token invalid',
+          data: null,
+        });
       }
       if (raw) return Response.json(raw);
       if (url.endsWith('/active-bus')) {
         const list = buses[body.route_code] ?? [];
-        return Response.json({ code: '00000', msg: '', data: { ActiveBusCount: list.length, TimeStamp: '2026-10-02 09:14:02', activebus: list } });
+        return Response.json({
+          code: '00000',
+          msg: '',
+          data: { ActiveBusCount: list.length, TimeStamp: '2026-10-02 09:14:02', activebus: list },
+        });
       }
       return Response.json(shuttlePayload(byStop[body.busstopname] ?? []));
     }
@@ -267,11 +290,28 @@ export function ltaPayload(code, services) {
           Feature: 'WAB',
           Type: 'SD',
         }
-      : { OriginCode: '', DestinationCode: '', EstimatedArrival: '', Monitored: 0, Latitude: '0.0', Longitude: '0.0', VisitNumber: '', Load: '', Feature: '', Type: '' };
+      : {
+          OriginCode: '',
+          DestinationCode: '',
+          EstimatedArrival: '',
+          Monitored: 0,
+          Latitude: '0.0',
+          Longitude: '0.0',
+          VisitNumber: '',
+          Load: '',
+          Feature: '',
+          Type: '',
+        };
   return {
     'odata.metadata': 'https://datamall2.mytransport.sg/ltaodataservice/v3/BusArrival',
     BusStopCode: code,
-    Services: services.map((s) => ({ ServiceNo: s.ServiceNo, Operator: s.Operator ?? 'SBST', NextBus: slot(s.buses[0]), NextBus2: slot(s.buses[1]), NextBus3: slot(s.buses[2]) })),
+    Services: services.map((s) => ({
+      ServiceNo: s.ServiceNo,
+      Operator: s.Operator ?? 'SBST',
+      NextBus: slot(s.buses[0]),
+      NextBus2: slot(s.buses[1]),
+      NextBus3: slot(s.buses[2]),
+    })),
   };
 }
 
@@ -294,7 +334,12 @@ export function makeBucket(readFrom) {
     gets: 0,
     _written: written,
     async put(key, body) {
-      const data = body instanceof Uint8Array ? body : typeof body === 'string' ? new TextEncoder().encode(body) : new Uint8Array(await new Response(body).arrayBuffer());
+      const data =
+        body instanceof Uint8Array
+          ? body
+          : typeof body === 'string'
+            ? new TextEncoder().encode(body)
+            : new Uint8Array(await new Response(body).arrayBuffer());
       written.set(key, data);
       return { key, size: data.length };
     },
@@ -315,7 +360,12 @@ export function makeBucket(readFrom) {
       const base = { size: data.length, etag, httpEtag: `"${etag}"` };
       const cond = opts.onlyIf;
       const ifMatch = cond instanceof Headers ? cond.get('if-match') : null;
-      if (cond instanceof Headers ? cond.get('if-none-match') === base.httpEtag || (ifMatch != null && ifMatch !== base.httpEtag) : cond?.etagMatches != null && cond.etagMatches !== etag) return base;
+      if (
+        cond instanceof Headers
+          ? cond.get('if-none-match') === base.httpEtag || (ifMatch != null && ifMatch !== base.httpEtag)
+          : cond?.etagMatches != null && cond.etagMatches !== etag
+      )
+        return base;
       let offset = 0;
       let length = data.length;
       let ranged = false;
@@ -334,7 +384,14 @@ export function makeBucket(readFrom) {
       if (offset >= data.length) throw new Error('range not satisfiable');
       const body = data.slice(offset, offset + length);
       bucket.gets++;
-      return { ...base, body, arrayBuffer: async () => body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength), text: async () => new TextDecoder().decode(body), json: async () => JSON.parse(new TextDecoder().decode(body)), ...(ranged ? { range: { offset, length: body.length } } : {}) };
+      return {
+        ...base,
+        body,
+        arrayBuffer: async () => body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
+        text: async () => new TextDecoder().decode(body),
+        json: async () => JSON.parse(new TextDecoder().decode(body)),
+        ...(ranged ? { range: { offset, length: body.length } } : {}),
+      };
     },
   };
   return bucket;
@@ -436,7 +493,13 @@ export function makeDurableObjects(Class, env = {}) {
         queue = run.catch(() => {});
         return run;
       };
-      instances.set(name, new Class({ storage: storageFor(name), waitUntil: (p) => pending.push(p), blockConcurrencyWhile }, typeof env === 'function' ? env() : env));
+      instances.set(
+        name,
+        new Class(
+          { storage: storageFor(name), waitUntil: (p) => pending.push(p), blockConcurrencyWhile },
+          typeof env === 'function' ? env() : env,
+        ),
+      );
     }
     return instances.get(name);
   };

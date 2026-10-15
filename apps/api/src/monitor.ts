@@ -286,8 +286,9 @@ export async function checkUpstream(
     }
     // Should this write fail, the email goes once more next run: better than none.
     if (!state.pending) {
-      await env.KV.put(ALERTED_KEY, `${state.since} ${pending}`, { expirationTtl: 30 * 86_400 })
-        .catch((e) => console.error('alert not marked sent', (e as Error)?.name ?? 'error'));
+      await env.KV.put(ALERTED_KEY, `${state.since} ${pending}`, { expirationTtl: 30 * 86_400 }).catch((e) =>
+        console.error('alert not marked sent', (e as Error)?.name ?? 'error'),
+      );
     }
   }
   // Every run, not only on a change, so an incident whose write failed is
@@ -341,9 +342,10 @@ async function mailOperator(env: Env, subject: string, text: string): Promise<bo
 async function alert(env: Env, s: UpstreamState, kind: 'up' | 'down'): Promise<void> {
   const when = new Date(s.since).toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
   const subject = kind === 'up' ? 'terminus: NUS bus feed recovered' : 'terminus: NUS bus feed is down';
-  const text = kind === 'up'
-    ? `The NUS bus feed is answering again as of ${when}. Live times are back.`
-    : `The NUS bus feed stopped answering at ${when}.\n\nError: ${s.reason}\n\n${s.auto ? `Tried automatically: ${s.auto}.\n\n` : ''}${adviceFor(s.reason, kvNamespaceId(env))}\n\nUntil then every answer says "live times unavailable".${s.detail ? `\n\nNUS's full response:\n${s.detail}` : ''}`;
+  const text =
+    kind === 'up'
+      ? `The NUS bus feed is answering again as of ${when}. Live times are back.`
+      : `The NUS bus feed stopped answering at ${when}.\n\nError: ${s.reason}\n\n${s.auto ? `Tried automatically: ${s.auto}.\n\n` : ''}${adviceFor(s.reason, kvNamespaceId(env))}\n\nUntil then every answer says "live times unavailable".${s.detail ? `\n\nNUS's full response:\n${s.detail}` : ''}`;
   await tellOperator(env, subject, text);
 }
 
@@ -391,7 +393,9 @@ export async function housekeeping(db: D1Database, nowMs: number, daily = true, 
     anonAt = stmts.length;
     stmts.push(
       // The planner prefers the UNIQUE email index, which reads every anonymous account.
-      db.prepare('DELETE FROM users INDEXED BY users_anon_idle WHERE email IS NULL AND last_seen < ? RETURNING id').bind(nowMs - ACCOUNT_TTL.anonIdleMs),
+      db
+        .prepare('DELETE FROM users INDEXED BY users_anon_idle WHERE email IS NULL AND last_seen < ? RETURNING id')
+        .bind(nowMs - ACCOUNT_TTL.anonIdleMs),
       db.prepare("DELETE FROM sessions WHERE kind = 'web' AND expires < ?").bind(nowMs),
       db.prepare("DELETE FROM sessions WHERE kind = 'device' AND last_seen < ?").bind(nowMs - DEVICE_IDLE_MS),
       db.prepare('DELETE FROM trip_outcomes WHERE at < ?').bind(nowMs - KEEP_DAYS * 86_400_000),
@@ -467,11 +471,12 @@ export async function armTrips(env: Env, nowMs: number, batch = ARM_BATCH): Prom
   const retry = left.slice(0, batch);
   if (mark === today && !retry.length) return 0;
   const after = mark.startsWith(`${today} `) ? mark.slice(today.length + 1) : '';
-  const { results } = mark === today
-    ? { results: [] as { user_id: string }[] }
-    : await env.DB.prepare('SELECT DISTINCT user_id FROM sessions WHERE push_token IS NOT NULL AND user_id > ? ORDER BY user_id LIMIT ?')
-        .bind(after, batch)
-        .all<{ user_id: string }>();
+  const { results } =
+    mark === today
+      ? { results: [] as { user_id: string }[] }
+      : await env.DB.prepare('SELECT DISTINCT user_id FROM sessions WHERE push_token IS NOT NULL AND user_id > ? ORDER BY user_id LIMIT ?')
+          .bind(after, batch)
+          .all<{ user_id: string }>();
   const users = [...retry, ...results.map((r) => r.user_id)];
   const failed: string[] = [];
   for (let i = 0; i < users.length; i += ARM_AT_ONCE) {
@@ -513,7 +518,10 @@ const REMIND_FROM_HOUR = 10;
 /** The new semester's reminder, in both languages: the app shows its own. */
 export function termNotice(term: { acadYear: string; semester: number }, start: string): Notice {
   const d = new Date(`${start}T00:00:00Z`);
-  const words = () => ({ title: m().termSoonTitle(termName(term), m().shortDate(d.getUTCDay(), d.getUTCDate(), d.getUTCMonth())), body: m().termSoonBody });
+  const words = () => ({
+    title: m().termSoonTitle(termName(term), m().shortDate(d.getUTCDay(), d.getUTCDate(), d.getUTCMonth())),
+    body: m().termSoonBody,
+  });
   const en = withLang('en', words);
   const zh = withLang('zh', words);
   return { title: en.title, body: en.body, zhTitle: zh.title, zhBody: zh.body };
@@ -525,7 +533,10 @@ export function termNotice(term: { acadYear: string; semester: number }, start: 
  * within the week, no timetable, or the new one already imported. The cron
  * pushes it; GET /api/me/notice gives it to an app that was pushed only its kind.
  */
-export function termNoticeFor(p: { trips?: unknown; term?: { acadYear: string; semester: number } | null; lang?: unknown } | null, nowMs: number): Notice | null {
+export function termNoticeFor(
+  p: { trips?: unknown; term?: { acadYear: string; semester: number } | null; lang?: unknown } | null,
+  nowMs: number,
+): Notice | null {
   const soon = semesterSoon(nowMs);
   if (!soon || !p || !Array.isArray(p.trips) || !p.trips.length || termFrom(p.term, soon.start)) return null;
   const both = termNotice(soon.term, soon.start);
@@ -563,13 +574,14 @@ export async function remindTerm(env: Env, nowMs: number, batch = ARM_BATCH): Pr
   if (retry?.term !== id || !Array.isArray(retry.users) || String(retry.run) !== markRun) retry = null;
   if (mark === id && !retry) return 0;
   const after = mark.startsWith(`${id} `) ? mark.slice(id.length + 1) : '';
-  const { results } = mark === id
-    ? { results: [] as { user_id: string; json: string }[] }
-    : await env.DB.prepare(
-        'SELECT DISTINCT s.user_id AS user_id, p.json AS json FROM sessions s JOIN profiles p ON p.user_id = s.user_id WHERE s.push_token IS NOT NULL AND s.user_id > ? ORDER BY s.user_id LIMIT ?',
-      )
-        .bind(after, batch)
-        .all<{ user_id: string; json: string }>();
+  const { results } =
+    mark === id
+      ? { results: [] as { user_id: string; json: string }[] }
+      : await env.DB.prepare(
+          'SELECT DISTINCT s.user_id AS user_id, p.json AS json FROM sessions s JOIN profiles p ON p.user_id = s.user_id WHERE s.push_token IS NOT NULL AND s.user_id > ? ORDER BY s.user_id LIMIT ?',
+        )
+          .bind(after, batch)
+          .all<{ user_id: string; json: string }>();
   // Retried users are read again, so one who has imported the new semester
   // since, or changed language, is skipped or told in the new one. A batch of
   // them a run, as with armTrips; the rest wait for the next, their tries kept.
@@ -607,7 +619,9 @@ export async function remindTerm(env: Env, nowMs: number, batch = ARM_BATCH): Pr
   const failed: Due[] = [];
   for (let i = 0; i < due.length; i += ARM_AT_ONCE) {
     const some = due.slice(i, i + ARM_AT_ONCE);
-    const n = await Promise.all(some.map(([userId, notice]) => remindUser(env, userId, notice, nowMs).catch(() => ({ sent: 0, failed: 1 }))));
+    const n = await Promise.all(
+      some.map(([userId, notice]) => remindUser(env, userId, notice, nowMs).catch(() => ({ sent: 0, failed: 1 }))),
+    );
     // Only a send that failed is worth trying again; a user with no device
     // it could go to (no usable key, every token gone) would fail every time.
     some.forEach(([userId, notice, tries], j) => {

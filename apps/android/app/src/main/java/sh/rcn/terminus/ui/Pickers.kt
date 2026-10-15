@@ -63,18 +63,28 @@ internal fun <T> Choice(
             modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
         )
         ExposedDropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            if (blank != null) DropdownMenuItem(text = { Text(blank) }, onClick = { onSelect(null); open = false })
+            if (blank != null)
+                DropdownMenuItem(
+                    text = { Text(blank) },
+                    onClick = {
+                        onSelect(null)
+                        open = false
+                    },
+                )
             for ((value, text) in options) {
-                DropdownMenuItem(text = { Text(text) }, onClick = { onSelect(value); open = false })
+                DropdownMenuItem(
+                    text = { Text(text) },
+                    onClick = {
+                        onSelect(value)
+                        open = false
+                    },
+                )
             }
         }
     }
 }
 
-/**
- * "Stop, building or room": the same search as the main screen's. Calls
- * [onPick] with the result; the caller stores its `stopCode`.
- */
+/** "Stop, building or room": the same search as the main screen's. Calls [onPick] with the result; the caller stores its `stopCode`. */
 @Composable
 internal fun WherePicker(
     label: String,
@@ -99,11 +109,16 @@ internal fun WherePicker(
     if (picked != null) return
     // [pinned] comes first in its own group, before anything is typed too.
     val top = if (query.isBlank()) pinned else rankDestinations(pinned, query, max = 6)
-    val rest = if (query.isBlank()) emptyList() else rankDestinations(destinations, query, max = 6).filter { d -> top.none { it.code == d.code } }
+    val rest =
+        if (query.isBlank()) emptyList() else rankDestinations(destinations, query, max = 6).filter { d -> top.none { it.code == d.code } }
     if (top.isEmpty() && rest.isEmpty() && query.isBlank()) return
     Column {
         if (top.isEmpty() && rest.isEmpty() && destinations.isNotEmpty()) {
-            Text(stringResource(R.string.search_none), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
+            Text(
+                stringResource(R.string.search_none),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 8.dp),
+            )
         }
         if (top.isNotEmpty()) {
             Text(
@@ -120,10 +135,12 @@ internal fun WherePicker(
                 FoldRow(shown = d.code != leaving, arriving = false) {
                     Column {
                         Column(
-                            Modifier.fillMaxWidth().clickable(role = Role.Button) {
-                                query = ""
-                                onPick(d)
-                            }.padding(vertical = 8.dp),
+                            Modifier.fillMaxWidth()
+                                .clickable(role = Role.Button) {
+                                    query = ""
+                                    onPick(d)
+                                }
+                                .padding(vertical = 8.dp)
                         ) {
                             Text(d.label)
                             Text(
@@ -147,12 +164,18 @@ internal fun WherePicker(
 }
 
 /**
- * A time of day as a button that opens a time picker in the app's theme.
- * With no time set yet, the picker starts at [initial] (minutes past midnight).
+ * A time of day as a button that opens a time picker in the app's theme. With no time set yet, the picker starts at [initial] (minutes past
+ * midnight).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun TimeButton(label: String, minutes: Int?, onPick: (Int) -> Unit, modifier: Modifier = Modifier, initial: () -> Int = { 9 * 60 }) {
+internal fun TimeButton(
+    label: String,
+    minutes: Int?,
+    onPick: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    initial: () -> Int = { 9 * 60 },
+) {
     val h12 = hour12(LocalContext.current)
     var open by rememberSaveable { mutableStateOf(false) }
     OutlinedButton(onClick = { open = true }, modifier = modifier) {
@@ -165,20 +188,25 @@ internal fun TimeButton(label: String, minutes: Int?, onPick: (Int) -> Unit, mod
         AlertDialog(
             onDismissRequest = { open = false },
             confirmButton = {
-                TextButton(onClick = {
-                    open = false
-                    onPick(state.hour * 60 + state.minute)
-                }) { Text(stringResource(R.string.ok)) }
+                TextButton(
+                    onClick = {
+                        open = false
+                        onPick(state.hour * 60 + state.minute)
+                    }
+                ) {
+                    Text(stringResource(R.string.ok))
+                }
             },
             dismissButton = { TextButton(onClick = { open = false }) { Text(stringResource(R.string.cancel)) } },
             // AM/PM in the same tint as the selected hour (the default is the theme's unset tertiary, a pink).
             text = {
                 TimePicker(
                     state,
-                    colors = TimePickerDefaults.colors(
-                        periodSelectorSelectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                        periodSelectorSelectedContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    ),
+                    colors =
+                        TimePickerDefaults.colors(
+                            periodSelectorSelectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            periodSelectorSelectedContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        ),
                 )
             },
         )

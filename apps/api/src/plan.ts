@@ -38,7 +38,11 @@ export function planOfLeave(l: Leave | null | undefined, located: boolean, aligh
   const change = secondBusOf(l, alightCode);
   if (change) {
     // The first bus to the change; the second (and the trip's end) after it.
-    const first = planOfLeave({ ...l, change: undefined, arrive: l.change!.reach, off: undefined, offCode: l.change!.fromCode }, located, l.change!.fromCode)!;
+    const first = planOfLeave(
+      { ...l, change: undefined, arrive: l.change!.reach, off: undefined, offCode: l.change!.fromCode },
+      located,
+      l.change!.fromCode,
+    )!;
     return { ...first, change };
   }
   return {
@@ -98,11 +102,18 @@ export function choosePlan({ stored, made, located, classAtMs, nowMs }: PlanInpu
   if (!located && stored?.located && ahead) return { bus: sameBus(stored, made) ? made : stored, save: false };
 
   const told =
-    located && stored?.located && ahead && stored.leave && tripEnd(stored) && classAtMs !== null &&
-    nowMs >= at(stored.leave) - WAIT_EARLY_MS && at(tripEnd(stored) ?? undefined) <= classAtMs;
+    located &&
+    stored?.located &&
+    ahead &&
+    stored.leave &&
+    tripEnd(stored) &&
+    classAtMs !== null &&
+    nowMs >= at(stored.leave) - WAIT_EARLY_MS &&
+    at(tripEnd(stored) ?? undefined) <= classAtMs;
   // The same bus with newer times is still that bus: shown as the answer has it.
   if (told && !sameBus(stored, made)) return { bus: stored, save: false };
 
-  const save = made !== null && (!sameBus(stored, made) || (stored?.estimated === true && !made.estimated)) && (located || !stored?.located);
+  const save =
+    made !== null && (!sameBus(stored, made) || (stored?.estimated === true && !made.estimated)) && (located || !stored?.located);
   return { bus: made, save };
 }

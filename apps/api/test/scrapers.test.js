@@ -64,7 +64,11 @@ print(json.dumps({"lta": lta, "stops": stops, "hits": hits}))
   assert.match(out.lta, /HTTP 302 \(redirect refused\)/);
   assert.match(out.stops, /POST \/start -> HTTP 302 \(redirect refused\)/);
   assert.doesNotMatch(out.stops, /127\.0\.0\.1/, 'no address in the message');
-  assert.deepEqual(out.hits.map((h) => h.path), ['/start', '/start'], 'the redirect is never followed');
+  assert.deepEqual(
+    out.hits.map((h) => h.path),
+    ['/start', '/start'],
+    'the redirect is never followed',
+  );
 });
 
 test('the other scrapers refuse a redirect to plain http', { skip: !python }, () => {
@@ -170,7 +174,10 @@ test('check_scraped.py fails a stop moved more than 100 m, but not 50 m', { skip
 test('check_scraped.py fails a route that runs another way; a new route passes', { skip: !python }, () => {
   assert.match(checked('g["routes"][r] = g["routes"][r][::-1]').join('\n'), /^route \S+ changed: /m);
   assert.match(checked('g["routes"][r] = g["routes"][r][:-1]').join('\n'), /^route \S+ changed/m);
-  assert.match(checked('p["routes"][pr] = p["routes"][pr][1:]; p["along"][pr] = p["along"][pr][1:]').join('\n'), /^public route \S+ changed/m);
+  assert.match(
+    checked('p["routes"][pr] = p["routes"][pr][1:]; p["along"][pr] = p["along"][pr][1:]').join('\n'),
+    /^public route \S+ changed/m,
+  );
   assert.deepEqual(checked('g["routes"]["NEW"] = g["routes"][r][:2]'), []);
 });
 
@@ -193,17 +200,32 @@ test('check_scraped.py holds the calendar to calendarsync.ts valid()', { skip: !
   assert.match(checked('cal["holidays"][0]["date"] = "2026-02-30"').join('\n'), /holiday .* is malformed/);
   assert.match(checked('cal["holidays"] = cal["holidays"][:4]').join('\n'), /only 4 holidays/);
   assert.match(checked('cal["semesters"][-1]["start"] = "2027-06-22"').join('\n'), /is malformed/, 'a Tuesday');
-  assert.match(checked('cal["semesters"].append({"acadYear": "2027/2028", "semester": 1, "start": "2026-08-10"})').join('\n'), /is malformed/, 'outside its year');
-  assert.match(checked('cal["semesters"].append({"acadYear": "2027/2029", "semester": 1, "start": "2027-08-09"})').join('\n'), /is malformed/);
+  assert.match(
+    checked('cal["semesters"].append({"acadYear": "2027/2028", "semester": 1, "start": "2026-08-10"})').join('\n'),
+    /is malformed/,
+    'outside its year',
+  );
+  assert.match(
+    checked('cal["semesters"].append({"acadYear": "2027/2029", "semester": 1, "start": "2027-08-09"})').join('\n'),
+    /is malformed/,
+  );
   assert.deepEqual(checked('cal["semesters"].append({"acadYear": "2027/2028", "semester": 1, "start": "2027-08-09"})'), []);
 });
 
 test('check_scraped.py fails a semester moved, or many holidays to come gone', { skip: !python }, () => {
-  assert.match(checked('cal["semesters"][1]["start"] = "2027-01-18"').join('\n'), /semester 2026\/2027 2 moved from 2027-01-11 to 2027-01-18/);
-  // Past ones roll off; one to come may go.
-  assert.deepEqual(checked('cal["holidays"] = [h for h in cal["holidays"] if h["date"] not in ("2026-08-09", "2026-08-10", "2026-11-09")]'), []);
   assert.match(
-    checked('cal["holidays"] = [h for h in cal["holidays"] if h["date"] not in ("2026-11-08", "2026-11-09", "2026-12-25", "2027-01-01")]').join('\n'),
+    checked('cal["semesters"][1]["start"] = "2027-01-18"').join('\n'),
+    /semester 2026\/2027 2 moved from 2027-01-11 to 2027-01-18/,
+  );
+  // Past ones roll off; one to come may go.
+  assert.deepEqual(
+    checked('cal["holidays"] = [h for h in cal["holidays"] if h["date"] not in ("2026-08-09", "2026-08-10", "2026-11-09")]'),
+    [],
+  );
+  assert.match(
+    checked(
+      'cal["holidays"] = [h for h in cal["holidays"] if h["date"] not in ("2026-11-08", "2026-11-09", "2026-12-25", "2027-01-01")]',
+    ).join('\n'),
     /4 holidays to come are gone/,
   );
 });

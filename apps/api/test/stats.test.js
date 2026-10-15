@@ -23,7 +23,11 @@ const DAY = 86_400_000;
 async function send(env, path, { method = 'GET', body, headers = {} } = {}) {
   const ctx = makeCtx();
   const res = await worker.fetch(
-    new Request(BASE + path, { method, headers: { ...(body === undefined ? {} : { 'content-type': 'application/json' }), ...headers }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }),
+    new Request(BASE + path, {
+      method,
+      headers: { ...(body === undefined ? {} : { 'content-type': 'application/json' }), ...headers },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    }),
     env,
     ctx,
   );
@@ -34,15 +38,39 @@ async function send(env, path, { method = 'GET', body, headers = {} } = {}) {
 test('every collector is off until the operator turns it on, and only the operator can', async () => {
   const env = { ...makeEnv(), HEALTH_TOKEN: 'op' };
   for (const name of ['active', 'eta', 'errors']) assert.equal(await collecting(env, name), false, `${name} starts off`);
-  assert.equal((await send(env, '/api/admin/collect', { method: 'POST', body: { name: 'errors', on: true } })).status, 404, 'no token, no switch');
+  assert.equal(
+    (await send(env, '/api/admin/collect', { method: 'POST', body: { name: 'errors', on: true } })).status,
+    404,
+    'no token, no switch',
+  );
   assert.equal(await collecting(env, 'errors'), false);
-  const res = await send(env, '/api/admin/collect', { method: 'POST', body: { name: 'errors', on: true }, headers: { 'x-health-token': 'op' } });
+  const res = await send(env, '/api/admin/collect', {
+    method: 'POST',
+    body: { name: 'errors', on: true },
+    headers: { 'x-health-token': 'op' },
+  });
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), { active: false, eta: false, errors: true });
   assert.equal(await collecting(env, 'errors'), true);
-  assert.equal((await send(env, '/api/admin/collect', { method: 'POST', body: { name: 'errors', on: 'yes' }, headers: { 'x-health-token': 'op' } })).status, 400);
+  assert.equal(
+    (await send(env, '/api/admin/collect', { method: 'POST', body: { name: 'errors', on: 'yes' }, headers: { 'x-health-token': 'op' } }))
+      .status,
+    400,
+  );
   // KV failing is off: it may hold an "off" nobody can read.
-  assert.equal(await collecting({ KV: { get: async () => { throw new Error('down'); } } }, 'errors'), false);
+  assert.equal(
+    await collecting(
+      {
+        KV: {
+          get: async () => {
+            throw new Error('down');
+          },
+        },
+      },
+      'errors',
+    ),
+    false,
+  );
 });
 
 test('a crash report loses what could say who or where, and keeps what says what broke', () => {
@@ -68,13 +96,25 @@ test('the same crash gets the same fingerprint, whatever its line numbers', asyn
   const c = await fingerprintOf('android', 'java.lang.IllegalStateException', 'x', 'at a.X.c(X.kt:10)');
   assert.equal(a, b);
   assert.notEqual(a, c);
-  assert.equal(await fingerprintOf('web', 'TypeError', 'index 3', ''), await fingerprintOf('web', 'TypeError', 'index 4', ''), 'no stack: the message without its numbers');
+  assert.equal(
+    await fingerprintOf('web', 'TypeError', 'index 3', ''),
+    await fingerprintOf('web', 'TypeError', 'index 4', ''),
+    'no stack: the message without its numbers',
+  );
 });
 
 test('POST /api/errors keeps a scrubbed report only while switched on, with no one on it', async () => {
   const ae = makeAnalytics();
   const env = { ...makeEnv(makeKV(), ae), HEALTH_TOKEN: 'op' };
-  const report = { platform: 'android', version: '3.1.0', os: 'Android 15', type: 'java.lang.IllegalStateException', message: 'at 1.29661,103.77628', stack: 'at a.B.c(B.kt:10)', fatal: true };
+  const report = {
+    platform: 'android',
+    version: '3.1.0',
+    os: 'Android 15',
+    type: 'java.lang.IllegalStateException',
+    message: 'at 1.29661,103.77628',
+    stack: 'at a.B.c(B.kt:10)',
+    fatal: true,
+  };
   // A cookie or a token sent along changes nothing: no account is looked up.
   const headers = { cookie: 'terminus_session=abc', authorization: 'Bearer xyz' };
   assert.equal((await send(env, '/api/errors', { method: 'POST', body: report, headers })).status, 204);
@@ -93,16 +133,30 @@ test('POST /api/errors keeps a scrubbed report only while switched on, with no o
   await send(env, '/api/errors', { method: 'POST', body: { platform: 'web', version: 'anything', os: 'Chrome 140', type: 'TypeError' } });
   assert.equal(ae.rows('apperror')[1].blobs[2], API_VERSION, "the website's version is the Worker's");
 
-  for (const bad of [{ ...report, platform: 'pager' }, { ...report, version: 'not a version!' }, { ...report, type: '' }, { ...report, os: '<script>' }]) {
+  for (const bad of [
+    { ...report, platform: 'pager' },
+    { ...report, version: 'not a version!' },
+    { ...report, type: '' },
+    { ...report, os: '<script>' },
+  ]) {
     assert.equal((await send(env, '/api/errors', { method: 'POST', body: bad })).status, 400, JSON.stringify(bad));
   }
   assert.equal(ae.rows('apperror').length, 2);
 });
 
 async function seedSessions(db, now) {
-  const user = (id, email) => db.prepare('INSERT INTO users (id, email, created, last_seen, via) VALUES (?, ?, ?, ?, ?)').bind(id, email, now - 90 * DAY, now, 'app').run();
+  const user = (id, email) =>
+    db
+      .prepare('INSERT INTO users (id, email, created, last_seen, via) VALUES (?, ?, ?, ?, ?)')
+      .bind(id, email, now - 90 * DAY, now, 'app')
+      .run();
   const session = (hash, uid, kind, ago, platform, client) =>
-    db.prepare('INSERT INTO sessions (token_hash, user_id, kind, name, created, last_seen, expires, platform, client) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(hash, uid, kind, null, now - 90 * DAY, now - ago, null, platform, client).run();
+    db
+      .prepare(
+        'INSERT INTO sessions (token_hash, user_id, kind, name, created, last_seen, expires, platform, client) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      )
+      .bind(hash, uid, kind, null, now - 90 * DAY, now - ago, null, platform, client)
+      .run();
   await user('u1', 'a@u.nus.edu');
   await user('u2', null);
   await user('u3', null);
@@ -126,7 +180,10 @@ test('the active counts: accounts in all and by app, devices by version, nothing
   assert.deepEqual(of('app', 'mac'), { scope: 'app', name: 'mac', d1: 0, d7: 1, d30: 1 });
   assert.deepEqual(of('version', 'android/3.0.0'), { scope: 'version', name: 'android/3.0.0', d1: 0, d7: 0, d30: 1 });
   assert.equal(of('app', 'api'), undefined, 'no keys used, no row');
-  assert.ok(rows.every((r) => Object.keys(r).join() === 'scope,name,d1,d7,d30'), 'totals only');
+  assert.ok(
+    rows.every((r) => Object.keys(r).join() === 'scope,name,d1,d7,d30'),
+    'totals only',
+  );
 });
 
 test('the counts are written once a Singapore day, and not at all while switched off', async () => {
@@ -140,7 +197,10 @@ test('the counts are written once a Singapore day, and not at all while switched
   assert.equal(await recordActive(env, now), true);
   const rows = ae.rows('active');
   assert.ok(rows.length >= 6);
-  assert.ok(rows.every((r) => r.blobs[3] === '2026-10-11'), 'named after the day that just ended');
+  assert.ok(
+    rows.every((r) => r.blobs[3] === '2026-10-11'),
+    'named after the day that just ended',
+  );
   assert.deepEqual(rows.find((r) => r.blobs[1] === 'all').doubles, [1, 2, 3]);
   assert.equal(await recordActive(env, now + 15 * 60_000), false, 'the next run that day writes nothing');
   assert.equal(await recordActive(env, now + DAY), true, 'the next day counts again');
@@ -190,7 +250,15 @@ test('a bus reaches each stop on its line as it passes it, round a loop too, and
   assert.equal(k.find((p) => p.stop === second).t, open + Math.round(((SHAPES.K.at[1] - 25) / 8) * 1000));
 
   // Readings too far apart, or a jump no bus could make, say nothing.
-  assert.deepEqual(passingsOf(dayWith([{ plate: 'PA3C', svc: 'K', from: 0, speed: 8, readings: 2, start: 0 }, { plate: 'PA3C', svc: 'K', from: 2000, speed: 0, readings: 1, start: 600_000 }])).filter((p) => p.plate === 'PA3C' && p.t > open + 30_000), []);
+  assert.deepEqual(
+    passingsOf(
+      dayWith([
+        { plate: 'PA3C', svc: 'K', from: 0, speed: 8, readings: 2, start: 0 },
+        { plate: 'PA3C', svc: 'K', from: 2000, speed: 0, readings: 1, start: 600_000 },
+      ]),
+    ).filter((p) => p.plate === 'PA3C' && p.t > open + 30_000),
+    [],
+  );
   assert.deepEqual(passingsOf(dayWith([{ plate: 'PA4D', svc: 'K', from: 0, speed: 100, readings: 5 }])), [], 'too fast: a bad fix');
 });
 
@@ -209,7 +277,10 @@ test('each prediction is scored against its own plate at its own stop, and a cac
     passingsOf(day),
   );
   assert.equal(predictions, 3, 'the repeat of a cached answer counts once');
-  assert.deepEqual(scored.map((s) => s.errS), [90, -45]);
+  assert.deepEqual(
+    scored.map((s) => s.errS),
+    [90, -45],
+  );
   assert.equal(scored[0].hour, 6, 'Singapore hour: the window opens at 06:30');
   assert.deepEqual(statsOf([90, -45, 10, 200]), { n: 4, medianS: 50, within1: 0.5, late2: 0.25, early1: 0 });
 });
@@ -239,7 +310,9 @@ test('the cron scores a closed day once, from the recording and Analytics Engine
   const queries = [];
   const fetchImpl = async (url, init) => {
     queries.push(init.body);
-    return new Response(JSON.stringify({ data: [{ plate: 'PA2B', stop, svc: 'K', eta: Math.round((came - asked) / 1000) + 30, timestamp: ae(asked) }] }));
+    return new Response(
+      JSON.stringify({ data: [{ plate: 'PA2B', stop, svc: 'K', eta: Math.round((came - asked) / 1000) + 30, timestamp: ae(asked) }] }),
+    );
   };
   const bucket = makeBucket(async () => null);
   await bucket.put(dayKey(DATE), await gzip(JSON.stringify(day)));
@@ -258,5 +331,8 @@ test('the cron scores a closed day once, from the recording and Analytics Engine
   const summary = await etaSummary(env, now);
   assert.equal(summary.overall.n, 1);
   assert.equal(summary.overall.medianS, -30);
-  assert.deepEqual(summary.services.map((s) => s.svc), ['K']);
+  assert.deepEqual(
+    summary.services.map((s) => s.svc),
+    ['K'],
+  );
 });

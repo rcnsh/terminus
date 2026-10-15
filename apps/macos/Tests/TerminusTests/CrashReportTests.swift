@@ -1,11 +1,13 @@
 import Foundation
 import Testing
+
 @testable import Terminus
 
 /// Crash reports: what goes to POST /api/errors, cut to size, and nothing else.
 
 @Test func aReportCarriesOnlyTheFieldsTheServerTakes() throws {
-    let r = CrashReport.make(version: "3.1.0", os: "macOS 26", type: "NSRangeException", message: "index 3 beyond bounds", stack: "a\nb", fatal: true)
+    let r = CrashReport.make(
+        version: "3.1.0", os: "macOS 26", type: "NSRangeException", message: "index 3 beyond bounds", stack: "a\nb", fatal: true)
     let json = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(r)) as? [String: Any])
     #expect(Set(json.keys) == ["platform", "version", "os", "type", "message", "stack", "fatal"])
     #expect(json["platform"] as? String == "mac")
@@ -39,12 +41,12 @@ import Testing
 
 @Test func aCallStackTreeIsOneFrameALineTheCrashedThreadFirst() {
     let json = """
-    {"callStackPerThread":true,"callStacks":[
-      {"threadAttributed":false,"callStackRootFrames":[{"binaryName":"libsystem_kernel.dylib","offsetIntoBinaryTextSegment":16,"address":4096}]},
-      {"threadAttributed":true,"callStackRootFrames":[{"binaryName":"Terminus","offsetIntoBinaryTextSegment":6699,"address":4340000000,
-        "subFrames":[{"binaryName":"AppKit","offsetIntoBinaryTextSegment":255,"address":8192}]}]}
-    ]}
-    """
+        {"callStackPerThread":true,"callStacks":[
+          {"threadAttributed":false,"callStackRootFrames":[{"binaryName":"libsystem_kernel.dylib","offsetIntoBinaryTextSegment":16,"address":4096}]},
+          {"threadAttributed":true,"callStackRootFrames":[{"binaryName":"Terminus","offsetIntoBinaryTextSegment":6699,"address":4340000000,
+            "subFrames":[{"binaryName":"AppKit","offsetIntoBinaryTextSegment":255,"address":8192}]}]}
+        ]}
+        """
     let text = CrashReport.frames(fromCallStackJSON: Data(json.utf8))
     #expect(text == "Terminus +0x1a2b (0x102af2500)\nAppKit +0xff (0x2000)\n--\nlibsystem_kernel.dylib +0x10 (0x1000)")
     #expect(CrashReport.frames(fromCallStackJSON: Data("not json".utf8)) == "not json")

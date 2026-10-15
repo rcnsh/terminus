@@ -1,31 +1,29 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  acadYear,
-  parseShareUrl,
-  resolveTrips,
-  venueAt,
-  venueToStop,
-} from '../src/nusmods.ts';
+import { acadYear, parseShareUrl, resolveTrips, venueAt, venueToStop } from '../src/nusmods.ts';
 
-const SHARE =
-  'https://nusmods.com/timetable/sem-1/share?EC1101E=TUT:W11,LEC:2&MA1100=LEC:1&hidden=PC1101';
+const SHARE = 'https://nusmods.com/timetable/sem-1/share?EC1101E=TUT:W11,LEC:2&MA1100=LEC:1&hidden=PC1101';
 
 test('parseShareUrl expands short lesson codes and skips view state', () => {
   const s = parseShareUrl(SHARE);
   assert.equal(s.semester, 1);
   // hidden= is not a module.
-  assert.deepEqual(
-    s.selections.map((x) => `${x.module}/${x.lessonType}/${x.classNo}`).sort(),
-    ['EC1101E/Lecture/2', 'EC1101E/Tutorial/W11', 'MA1100/Lecture/1'],
-  );
+  assert.deepEqual(s.selections.map((x) => `${x.module}/${x.lessonType}/${x.classNo}`).sort(), [
+    'EC1101E/Lecture/2',
+    'EC1101E/Tutorial/W11',
+    'MA1100/Lecture/1',
+  ]);
 });
 
 test('parseShareUrl reads special terms, and only takes NUSMods links', () => {
   assert.equal(parseShareUrl('https://nusmods.com/timetable/sem-2/share?CS1010=LEC:1').semester, 2);
   assert.equal(parseShareUrl('https://nusmods.com/timetable/st-i/share?CS1010=LEC:1').semester, 3);
   assert.equal(parseShareUrl('https://nusmods.com/timetable/st-ii/share?CS1010=LEC:1').semester, 4);
-  for (const bad of ['javascript://nusmods.com/timetable/sem-1/share?CS1010=LEC:1', 'https://evil.example/timetable/sem-1/share?CS1010=LEC:1', 'http://nusmods.com/timetable/sem-1/share?CS1010=LEC:1']) {
+  for (const bad of [
+    'javascript://nusmods.com/timetable/sem-1/share?CS1010=LEC:1',
+    'https://evil.example/timetable/sem-1/share?CS1010=LEC:1',
+    'http://nusmods.com/timetable/sem-1/share?CS1010=LEC:1',
+  ]) {
     assert.throws(() => parseShareUrl(bad), bad);
   }
 });
@@ -69,7 +67,10 @@ const MODULES = {
   },
   MA1100: {
     semesterData: [
-      { semester: 1, timetable: [{ lessonType: 'Lecture', classNo: '1', day: 'Monday', startTime: '0800', endTime: '1000', venue: 'UTOWN' }] },
+      {
+        semester: 1,
+        timetable: [{ lessonType: 'Lecture', classNo: '1', day: 'Monday', startTime: '0800', endTime: '1000', venue: 'UTOWN' }],
+      },
     ],
   },
 };
@@ -98,13 +99,24 @@ test('a stale share link (class no longer offered) is skipped, not fatal', async
 
 test('online and TBA lessons are counted, not sent to "pick a stop"; off-campus rooms are flagged', async () => {
   const mods = {
-    GEA1000: { semesterData: [{ semester: 1, timetable: [
-      { lessonType: 'Tutorial', classNo: '1', day: 'Monday', startTime: '1000', endTime: '1200', venue: 'E-Learn_C' },
-      { lessonType: 'Tutorial', classNo: '1', day: 'Tuesday', startTime: '1000', endTime: '1200', venue: '' },
-      { lessonType: 'Tutorial', classNo: '1', day: 'Friday', startTime: '1000', endTime: '1200', venue: 'DUKENUS' },
-    ] }] },
+    GEA1000: {
+      semesterData: [
+        {
+          semester: 1,
+          timetable: [
+            { lessonType: 'Tutorial', classNo: '1', day: 'Monday', startTime: '1000', endTime: '1200', venue: 'E-Learn_C' },
+            { lessonType: 'Tutorial', classNo: '1', day: 'Tuesday', startTime: '1000', endTime: '1200', venue: '' },
+            { lessonType: 'Tutorial', classNo: '1', day: 'Friday', startTime: '1000', endTime: '1200', venue: 'DUKENUS' },
+          ],
+        },
+      ],
+    },
   };
-  const r = await resolveTrips(parseShareUrl('https://nusmods.com/timetable/sem-1/share?GEA1000=TUT:1'), Date.UTC(2026, 7, 28), stubFetch(mods));
+  const r = await resolveTrips(
+    parseShareUrl('https://nusmods.com/timetable/sem-1/share?GEA1000=TUT:1'),
+    Date.UTC(2026, 7, 28),
+    stubFetch(mods),
+  );
   assert.equal(r.online, 2);
   assert.equal(r.trips.length, 0);
   assert.equal(r.unresolved.length, 1);
@@ -124,7 +136,9 @@ test('a sem-1 link in July reads next academic year, and falls back when NUSMods
 });
 
 test('a network failure is reported per module, never thrown', async () => {
-  const f = async () => { throw new TypeError('network down'); };
+  const f = async () => {
+    throw new TypeError('network down');
+  };
   const r = await resolveTrips(parseShareUrl(SHARE), Date.UTC(2026, 7, 28), f);
   assert.deepEqual(r.failed.sort(), ['EC1101E', 'MA1100']);
 });
@@ -137,7 +151,7 @@ test('venueAt: the room itself from the room map, else its building, else nothin
   const room = venueAt('AS1-0201');
   const building = venueAt('AS1');
   assert.ok(room && building);
-  assert.notDeepEqual(room, building, 'a room has its own point, not its building\'s mean');
+  assert.notDeepEqual(room, building, "a room has its own point, not its building's mean");
   // COM3-01-19 is in the room map with no point of its own: its building's.
   assert.deepEqual(venueAt('COM3-01-19'), venueAt('COM3'));
   assert.ok(venueAt('COM3'));

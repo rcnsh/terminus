@@ -85,7 +85,8 @@ export function isDate(s: unknown): s is string {
  */
 const NAME = /^[\p{L}\p{M}\p{N} '’&().,/+-]+$/u;
 const DOMAIN = /www\.|[a-z0-9]\.[a-z]{2,}/i;
-export const plainName = (s: unknown): s is string => typeof s === 'string' && s.trim().length > 0 && s.length < 80 && NAME.test(s) && !DOMAIN.test(s);
+export const plainName = (s: unknown): s is string =>
+  typeof s === 'string' && s.trim().length > 0 && s.length < 80 && NAME.test(s) && !DOMAIN.test(s);
 
 /**
  * Whether a calendar holds what the app relies on: real dates, terms 1-4
@@ -111,7 +112,8 @@ export function movedSemesters(old: CalendarData, fetched: CalendarData): string
   const out: string[] = [];
   for (const s of fetched.semesters) {
     const before = was.get(`${s.acadYear} ${s.semester}`);
-    if (before && Math.abs(Date.parse(`${s.start}T00:00:00Z`) - Date.parse(`${before}T00:00:00Z`)) > MAX_SHIFT_DAYS * 86_400_000) out.push(`${s.acadYear} ${s.semester}: ${before} to ${s.start}`);
+    if (before && Math.abs(Date.parse(`${s.start}T00:00:00Z`) - Date.parse(`${before}T00:00:00Z`)) > MAX_SHIFT_DAYS * 86_400_000)
+      out.push(`${s.acadYear} ${s.semester}: ${before} to ${s.start}`);
   }
   return out;
 }
@@ -138,9 +140,14 @@ export function fromSources(nusmods: unknown, holidays: unknown, nowMs: number):
     if (Number(acadYear.split('/')[1]) < since || !sems || typeof sems !== 'object') continue;
     for (const [sem, cfg] of Object.entries(sems as Record<string, { start?: unknown }>)) {
       const start = cfg?.start;
-      if (!Array.isArray(start) || start.length !== 3 || !start.every(Number.isInteger)) throw new Error(`NUSMods calendar: ${acadYear} ${sem} has no start date`);
+      if (!Array.isArray(start) || start.length !== 3 || !start.every(Number.isInteger))
+        throw new Error(`NUSMods calendar: ${acadYear} ${sem} has no start date`);
       const [y, mo, d] = start as number[];
-      semesters.push({ acadYear, semester: Number(sem), start: `${String(y).padStart(4, '0')}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}` });
+      semesters.push({
+        acadYear,
+        semester: Number(sem),
+        start: `${String(y).padStart(4, '0')}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`,
+      });
     }
   }
   const records = (holidays as { result?: { records?: unknown } } | null)?.result?.records;
@@ -148,7 +155,12 @@ export function fromSources(nusmods: unknown, holidays: unknown, nowMs: number):
   const days = records
     .map((r) => r as { date?: unknown; holiday?: unknown })
     .filter((r) => typeof r.date === 'string' && Number(r.date.slice(0, 4)) >= since)
-    .map((r) => ({ date: String(r.date), name: String(r.holiday ?? '').replace(/’/g, "'").trim() }));
+    .map((r) => ({
+      date: String(r.date),
+      name: String(r.holiday ?? '')
+        .replace(/’/g, "'")
+        .trim(),
+    }));
   semesters.sort((a, b) => a.start.localeCompare(b.start) || a.semester - b.semester);
   days.sort((a, b) => a.date.localeCompare(b.date));
   return { generated: new Date(nowMs).toISOString().replace(/\.\d+Z$/, 'Z'), semesters, holidays: days };
@@ -190,10 +202,14 @@ export async function refreshCalendar(env: Pick<Env, 'KV'>, nowMs: number): Prom
     const moved = movedSemesters(current, fetched);
     if (moved.length) throw new Error(`fetched calendar moves semesters (${moved.join('; ')}); kept the old one`);
     const gone = takenBack(current, fetched, nowMs);
-    if (gone.length > MAX_TAKEN_BACK) throw new Error(`fetched calendar drops ${gone.length} holidays to come (${gone.join(', ')}); kept the old one`);
+    if (gone.length > MAX_TAKEN_BACK)
+      throw new Error(`fetched calendar drops ${gone.length} holidays to come (${gone.join(', ')}); kept the old one`);
     const next = mergeCalendars(before ?? { semesters: [], holidays: [] }, fetched, nowMs);
     await env.KV.put(CALENDAR_NEXT_KEY, String(nowMs + EVERY_MS));
-    const same = before && JSON.stringify(before.semesters) === JSON.stringify(next.semesters) && JSON.stringify(before.holidays) === JSON.stringify(next.holidays);
+    const same =
+      before &&
+      JSON.stringify(before.semesters) === JSON.stringify(next.semesters) &&
+      JSON.stringify(before.holidays) === JSON.stringify(next.holidays);
     if (same) return 'unchanged';
     await env.KV.put(CALENDAR_DATA_KEY, JSON.stringify(next));
     useCalendar(withBundled(next, nowMs));

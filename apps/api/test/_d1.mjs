@@ -12,7 +12,9 @@ const MIGRATIONS = new URL('../migrations/', import.meta.url);
 export function makeD1() {
   const db = new DatabaseSync(':memory:');
   db.exec('PRAGMA foreign_keys = ON');
-  for (const f of readdirSync(MIGRATIONS).filter((n) => n.endsWith('.sql')).sort()) {
+  for (const f of readdirSync(MIGRATIONS)
+    .filter((n) => n.endsWith('.sql'))
+    .sort()) {
     db.exec(readFileSync(new URL(f, MIGRATIONS), 'utf8'));
   }
 
@@ -25,7 +27,13 @@ export function makeD1() {
       return col ? plain[col] : plain;
     },
     async all() {
-      return { results: db.prepare(sql).all(...params).map((r) => ({ ...r })), success: true };
+      return {
+        results: db
+          .prepare(sql)
+          .all(...params)
+          .map((r) => ({ ...r })),
+        success: true,
+      };
     },
     async run() {
       // Like D1: a statement that returns rows gives them back, in batch() too.

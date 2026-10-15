@@ -200,7 +200,11 @@ async function prepare() {
     ml.addProtocol('pmtiles', new Protocol({ metadata: true }).tile);
   }
   // The fonts the overlay is drawn in, before the first frame uses them.
-  await Promise.all([document.fonts.load('700 100px "Space Grotesk"'), document.fonts.load('500 40px Inter'), mark.decode().catch(() => {})]);
+  await Promise.all([
+    document.fonts.load('700 100px "Space Grotesk"'),
+    document.fonts.load('500 40px Inter'),
+    mark.decode().catch(() => {}),
+  ]);
   const f = framing(day, w, h);
   if (!map) {
     map = new ml.Map({
@@ -239,8 +243,14 @@ function framing(day, w, h) {
   const core = day.stops.filter((s) => s.core);
   const lons = core.map((s) => s.lon);
   const lats = core.map((s) => s.lat);
-  const bounds = [[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]];
-  const padding = h > w ? { top: h * 0.24, bottom: h * 0.08, left: w * 0.06, right: w * 0.06 } : { top: h * 0.08, bottom: h * 0.08, left: w * 0.3, right: w * 0.05 };
+  const bounds = [
+    [Math.min(...lons), Math.min(...lats)],
+    [Math.max(...lons), Math.max(...lats)],
+  ];
+  const padding =
+    h > w
+      ? { top: h * 0.24, bottom: h * 0.08, left: w * 0.06, right: w * 0.06 }
+      : { top: h * 0.08, bottom: h * 0.08, left: w * 0.3, right: w * 0.05 };
   return { bounds, padding };
 }
 
@@ -256,16 +266,47 @@ function addLayers() {
   for (const id of ['buses', 'stops', 'routes']) if (map.getSource(id)) map.removeSource(id);
   map.addSource('routes', {
     type: 'geojson',
-    data: { type: 'FeatureCollection', features: Object.entries(day.routes).map(([svc, r]) => ({ type: 'Feature', properties: { svc, color: r.color }, geometry: { type: 'LineString', coordinates: r.line } })) },
+    data: {
+      type: 'FeatureCollection',
+      features: Object.entries(day.routes).map(([svc, r]) => ({
+        type: 'Feature',
+        properties: { svc, color: r.color },
+        geometry: { type: 'LineString', coordinates: r.line },
+      })),
+    },
   });
   map.addSource('stops', {
     type: 'geojson',
-    data: { type: 'FeatureCollection', features: day.stops.map((s) => ({ type: 'Feature', properties: { code: s.code }, geometry: { type: 'Point', coordinates: [s.lon, s.lat] } })) },
+    data: {
+      type: 'FeatureCollection',
+      features: day.stops.map((s) => ({
+        type: 'Feature',
+        properties: { code: s.code },
+        geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
+      })),
+    },
   });
   map.addSource('buses', { type: 'geojson', data: empty });
-  map.addLayer({ id: 'route-casing', type: 'line', source: 'routes', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': c.casing, 'line-width': 9 * k, 'line-opacity': 0.8 } });
-  map.addLayer({ id: 'routes', type: 'line', source: 'routes', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': ['get', 'color'], 'line-width': 4.5 * k, 'line-opacity': 0.55 } });
-  map.addLayer({ id: 'stops', type: 'circle', source: 'stops', paint: { 'circle-radius': 3.5 * k, 'circle-color': c.paper, 'circle-stroke-color': c.ink, 'circle-stroke-width': 1.5 * k } });
+  map.addLayer({
+    id: 'route-casing',
+    type: 'line',
+    source: 'routes',
+    layout: { 'line-join': 'round', 'line-cap': 'round' },
+    paint: { 'line-color': c.casing, 'line-width': 9 * k, 'line-opacity': 0.8 },
+  });
+  map.addLayer({
+    id: 'routes',
+    type: 'line',
+    source: 'routes',
+    layout: { 'line-join': 'round', 'line-cap': 'round' },
+    paint: { 'line-color': ['get', 'color'], 'line-width': 4.5 * k, 'line-opacity': 0.55 },
+  });
+  map.addLayer({
+    id: 'stops',
+    type: 'circle',
+    source: 'stops',
+    paint: { 'circle-radius': 3.5 * k, 'circle-color': c.paper, 'circle-stroke-color': c.ink, 'circle-stroke-width': 1.5 * k },
+  });
   map.addLayer({
     id: 'buses',
     type: 'circle',
@@ -305,7 +346,11 @@ async function frameAt(t) {
   const done = settled();
   map.getSource('buses').setData({
     type: 'FeatureCollection',
-    features: buses.map((b) => ({ type: 'Feature', properties: { color: b.color, alpha: b.alpha }, geometry: { type: 'Point', coordinates: [b.lon, b.lat] } })),
+    features: buses.map((b) => ({
+      type: 'Feature',
+      properties: { color: b.color, alpha: b.alpha },
+      geometry: { type: 'Point', coordinates: [b.lon, b.lat] },
+    })),
   });
   await done;
   drawOverlay(t, countBySvc(buses));
@@ -339,7 +384,13 @@ function drawOverlay(t, counts) {
   g.font = `700 ${170 * k}px "Space Grotesk", sans-serif`;
   g.fillText(clockAt(t), x - 6 * k, y);
   y += 64 * k;
-  const date = new Date(t).toLocaleDateString('en-SG', { timeZone: 'Asia/Singapore', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const date = new Date(t).toLocaleDateString('en-SG', {
+    timeZone: 'Asia/Singapore',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
   const out = `${total} ${total === 1 ? 'bus' : 'buses'} out`;
   g.font = `500 ${40 * k}px Inter, sans-serif`;
@@ -429,7 +480,18 @@ async function exportVideo() {
   const frames = Math.max(1, Math.round(seconds * FPS));
   const prev = view.get().job;
   if (prev?.url) URL.revokeObjectURL(prev.url);
-  const job = { running: true, cancelled: false, done: 0, total: frames, started: performance.now(), eta: null, url: null, error: null, codec: null, size: 0 };
+  const job = {
+    running: true,
+    cancelled: false,
+    done: 0,
+    total: frames,
+    started: performance.now(),
+    eta: null,
+    url: null,
+    error: null,
+    codec: null,
+    size: 0,
+  };
   view.set((v) => ({ ...v, job, note: '' }));
   const update = (patch) => view.set((v) => ({ ...v, job: Object.assign(job, patch) }));
 
@@ -439,13 +501,18 @@ async function exportVideo() {
     await setting;
     // The preview's frame out of the way; if it failed, that was the preview's problem, not this video's.
     await drawing?.catch(() => {});
-    const { BufferTarget, CanvasSource, Mp4OutputFormat, Output, QUALITY_HIGH, WebMOutputFormat, canEncodeVideo } = await import(MEDIABUNNY);
+    const { BufferTarget, CanvasSource, Mp4OutputFormat, Output, QUALITY_HIGH, WebMOutputFormat, canEncodeVideo } = await import(
+      MEDIABUNNY
+    );
     const opts = { width: w, height: h, frameRate: FPS, quality: QUALITY_HIGH };
     // H.264 in MP4 where the browser can; VP9 in WebM where it can't.
     const avc = await canEncodeVideo('avc', opts);
     if (!avc && !(await canEncodeVideo('vp9', opts))) throw new Error('This browser can encode neither H.264 nor VP9 video.');
     update({ codec: avc ? 'H.264 MP4' : 'VP9 WebM' });
-    output = new Output({ format: avc ? new Mp4OutputFormat({ fastStart: 'in-memory' }) : new WebMOutputFormat(), target: new BufferTarget() });
+    output = new Output({
+      format: avc ? new Mp4OutputFormat({ fastStart: 'in-memory' }) : new WebMOutputFormat(),
+      target: new BufferTarget(),
+    });
     const source = new CanvasSource(composite, { codec: avc ? 'avc' : 'vp9', quality: QUALITY_HIGH });
     output.addVideoTrack(source, { frameRate: FPS });
     await output.start();
@@ -519,8 +586,14 @@ function Unlock() {
 
 function Recording({ r }) {
   if (!r) return null;
-  const words = { polling: 'recording', resting: 'waiting for the first bus', off: 'switched off', done: 'finished for the day', idle: 'not started' };
-  return html`<p class="hint">${`Today (${r.date}): ${r.enabled ? words[r.state] ?? r.state : 'switched off'}${r.samples ? `, ${r.samples} readings so far` : ''}.`}</p>`;
+  const words = {
+    polling: 'recording',
+    resting: 'waiting for the first bus',
+    off: 'switched off',
+    done: 'finished for the day',
+    idle: 'not started',
+  };
+  return html`<p class="hint">${`Today (${r.date}): ${r.enabled ? (words[r.state] ?? r.state) : 'switched off'}${r.samples ? `, ${r.samples} readings so far` : ''}.`}</p>`;
 }
 
 function Progress({ job }) {
@@ -606,12 +679,14 @@ function Studio() {
       <div class="preview">
         ${v.loading ? html`<p class="hint">Loading the day…</p>` : null}
         <div ref=${canvas}></div>
-        ${v.day && r
-          ? html`
+        ${
+          v.day && r
+            ? html`
               <input type="range" min="0" max="1000" value=${Math.round(v.scrub * 1000)} disabled=${busy} aria-label="Moment of the day" onInput=${(e) => set({ scrub: Number(e.currentTarget.value) / 1000 })} />
               <div class="scrub"><span>${clockAt(r.a)}</span><span>${clockAt(r.a + (r.b - r.a) * v.scrub)}</span><span>${clockAt(r.b)}</span></div>
             `
-          : null}
+            : null
+        }
       </div>
     </div>
   `;

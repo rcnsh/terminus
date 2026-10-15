@@ -13,7 +13,19 @@
 // icons (/map/*), routes and stops (/campus), buses (/buses), arrivals
 // (/arrivals). The service worker keeps all but the live ones for offline.
 
-import { Icon, focusSoon, html, reducedMotion, store, useEffect, useLayoutEffect, useMemo, useRef, useState, useStore } from '/assets/ui.js';
+import {
+  Icon,
+  focusSoon,
+  html,
+  reducedMotion,
+  store,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useStore,
+} from '/assets/ui.js';
 import { inkOn, quietMs, send, signedOut, t } from '/account/dom.js';
 import { haversineM, loadCampus, profile, reloadProfile, restorePlace, saveNow, toast, withPlace, withoutPlace } from '/account/profile.js';
 import { MAPLIBRE, PMTILES } from '/app/map-files.js';
@@ -51,7 +63,10 @@ const AT_STOP_STEP_PX = 26;
 /** Further than this from campus, the map opens on campus, not on you. */
 const NEAR_CAMPUS_M = 3_000;
 /** The map file's extent (MAP_BOUNDS in apps/api/src/map.ts). */
-const BOUNDS = [[103.755, 1.28], [103.83, 1.332]];
+const BOUNDS = [
+  [103.755, 1.28],
+  [103.83, 1.332],
+];
 /** Room round the whole campus, clear of the pills along the top. */
 const CAMPUS_PADDING = { top: 70, bottom: 30, left: 30, right: 30 };
 
@@ -226,7 +241,10 @@ async function getJSON(path, timeoutMs) {
 /** Where the phone is, only when location is already allowed. Never asks. */
 async function allowed() {
   if (!navigator.geolocation) return false;
-  const state = await navigator.permissions?.query({ name: 'geolocation' }).then((p) => p.state).catch(() => null);
+  const state = await navigator.permissions
+    ?.query({ name: 'geolocation' })
+    .then((p) => p.state)
+    .catch(() => null);
   return state === 'granted';
 }
 
@@ -300,7 +318,8 @@ async function build(container) {
         b.title = t('Back to campus');
         b.setAttribute('aria-label', t('Back to campus'));
         // A constant, never data.
-        b.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/></svg>';
+        b.innerHTML =
+          '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/></svg>';
         b.onclick = toCampus;
         this.box.append(b);
         return this.box;
@@ -353,7 +372,10 @@ export function home() {
 function boundsOf(points) {
   const lons = points.map((p) => p[0]);
   const lats = points.map((p) => p[1]);
-  return [[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]];
+  return [
+    [Math.min(...lons), Math.min(...lats)],
+    [Math.max(...lons), Math.max(...lats)],
+  ];
 }
 
 /** On your nearest stop when location is allowed and you're on campus. */
@@ -380,7 +402,10 @@ async function followMe() {
   // Asked again while allowed() was on its way: that call's watch is the one.
   if (watchId !== null) return;
   watchId = navigator.geolocation.watchPosition(
-    (p) => map.getSource('me')?.setData({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [p.coords.longitude, p.coords.latitude] } }),
+    (p) =>
+      map
+        .getSource('me')
+        ?.setData({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [p.coords.longitude, p.coords.latitude] } }),
     () => {},
     { maximumAge: 15_000, enableHighAccuracy: true },
   );
@@ -411,14 +436,22 @@ function addLayers() {
     type: 'geojson',
     data: {
       type: 'FeatureCollection',
-      features: Object.entries(campus.routes).map(([svc, r]) => ({ type: 'Feature', properties: { svc, color: r.color }, geometry: { type: 'LineString', coordinates: r.line } })),
+      features: Object.entries(campus.routes).map(([svc, r]) => ({
+        type: 'Feature',
+        properties: { svc, color: r.color },
+        geometry: { type: 'LineString', coordinates: r.line },
+      })),
     },
   });
   map.addSource('stops', {
     type: 'geojson',
     data: {
       type: 'FeatureCollection',
-      features: campus.stops.map((s) => ({ type: 'Feature', properties: { code: s.code, name: s.name, services: ` ${s.services.join(' ')} ` }, geometry: { type: 'Point', coordinates: [s.lon, s.lat] } })),
+      features: campus.stops.map((s) => ({
+        type: 'Feature',
+        properties: { code: s.code, name: s.name, services: ` ${s.services.join(' ')} ` },
+        geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
+      })),
     },
   });
   map.addSource('buses', { type: 'geojson', data: empty });
@@ -426,12 +459,43 @@ function addLayers() {
   map.addSource('stretch', { type: 'geojson', data: empty });
 
   const width = ['interpolate', ['linear'], ['zoom'], 13, 1.5, 16, 4, 18, 7];
-  map.addLayer({ id: 'route-casing', type: 'line', source: 'routes', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': edgeOf(), 'line-width': ['interpolate', ['linear'], ['zoom'], 13, 3, 16, 7, 18, 11], 'line-opacity': 0.9 } });
-  map.addLayer({ id: 'routes', type: 'line', source: 'routes', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': ['get', 'color'], 'line-width': width } });
-  map.addLayer({ id: 'route-on', type: 'line', source: 'routes', filter: ['==', ['get', 'svc'], ''], layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': ['get', 'color'], 'line-width': ['interpolate', ['linear'], ['zoom'], 13, 3, 16, 6, 18, 9] } });
+  map.addLayer({
+    id: 'route-casing',
+    type: 'line',
+    source: 'routes',
+    layout: { 'line-join': 'round', 'line-cap': 'round' },
+    paint: { 'line-color': edgeOf(), 'line-width': ['interpolate', ['linear'], ['zoom'], 13, 3, 16, 7, 18, 11], 'line-opacity': 0.9 },
+  });
+  map.addLayer({
+    id: 'routes',
+    type: 'line',
+    source: 'routes',
+    layout: { 'line-join': 'round', 'line-cap': 'round' },
+    paint: { 'line-color': ['get', 'color'], 'line-width': width },
+  });
+  map.addLayer({
+    id: 'route-on',
+    type: 'line',
+    source: 'routes',
+    filter: ['==', ['get', 'svc'], ''],
+    layout: { 'line-join': 'round', 'line-cap': 'round' },
+    paint: { 'line-color': ['get', 'color'], 'line-width': ['interpolate', ['linear'], ['zoom'], 13, 3, 16, 6, 18, 9] },
+  });
   // A tapped bus's stretch between two stops, the part of the route it's somewhere on.
-  map.addLayer({ id: 'stretch-casing', type: 'line', source: 'stretch', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': paper, 'line-width': ['interpolate', ['linear'], ['zoom'], 13, 7, 16, 13, 18, 18] } });
-  map.addLayer({ id: 'stretch', type: 'line', source: 'stretch', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': ['get', 'color'], 'line-width': ['interpolate', ['linear'], ['zoom'], 13, 5, 16, 9, 18, 13] } });
+  map.addLayer({
+    id: 'stretch-casing',
+    type: 'line',
+    source: 'stretch',
+    layout: { 'line-join': 'round', 'line-cap': 'round' },
+    paint: { 'line-color': paper, 'line-width': ['interpolate', ['linear'], ['zoom'], 13, 7, 16, 13, 18, 18] },
+  });
+  map.addLayer({
+    id: 'stretch',
+    type: 'line',
+    source: 'stretch',
+    layout: { 'line-join': 'round', 'line-cap': 'round' },
+    paint: { 'line-color': ['get', 'color'], 'line-width': ['interpolate', ['linear'], ['zoom'], 13, 5, 16, 9, 18, 13] },
+  });
   map.addLayer({
     id: 'stops',
     type: 'circle',
@@ -460,8 +524,18 @@ function addLayers() {
     },
     paint: { 'text-color': ink, 'text-halo-color': paper, 'text-halo-width': 1.5 },
   });
-  map.addLayer({ id: 'me-halo', type: 'circle', source: 'me', paint: { 'circle-radius': 14, 'circle-color': '#2b7bf3', 'circle-opacity': 0.18 } });
-  map.addLayer({ id: 'me', type: 'circle', source: 'me', paint: { 'circle-radius': 6.5, 'circle-color': '#2b7bf3', 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2.5 } });
+  map.addLayer({
+    id: 'me-halo',
+    type: 'circle',
+    source: 'me',
+    paint: { 'circle-radius': 14, 'circle-color': '#2b7bf3', 'circle-opacity': 0.18 },
+  });
+  map.addLayer({
+    id: 'me',
+    type: 'circle',
+    source: 'me',
+    paint: { 'circle-radius': 6.5, 'circle-color': '#2b7bf3', 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2.5 },
+  });
   if (!map.hasImage('heading')) map.addImage('heading', arrow('#ffffff'), { pixelRatio: 2 });
   paintBus();
   // Icons, not circles, so a bus at a stop can sit beside the dot: a
@@ -580,7 +654,11 @@ function choose(svc) {
   if (map) paintBus();
   status.set(null);
   if (!svc) return;
-  map.fitBounds(boundsOf(campusData.get().routes[svc].line), { padding: { top: 80, bottom: 40, left: 40, right: 40 }, maxZoom: 16.5, duration: 600 });
+  map.fitBounds(boundsOf(campusData.get().routes[svc].line), {
+    padding: { top: 80, bottom: 40, left: 40, right: 40 },
+    maxZoom: 16.5,
+    duration: 600,
+  });
   status.set(t('Finding {0} buses…', svc));
   pollBuses();
 }
@@ -772,7 +850,9 @@ function markOpen(b) {
   const route = campusData.get()?.routes[b?.svc];
   const path = b?.stretch && pathOf(route?.line, route?.loop);
   const line = path ? sliceOf(path, b.stretch.from, b.stretch.to) : null;
-  map.getSource('stretch').setData(line ? { type: 'Feature', properties: { color: b.color }, geometry: { type: 'LineString', coordinates: line } } : empty);
+  map
+    .getSource('stretch')
+    .setData(line ? { type: 'Feature', properties: { color: b.color }, geometry: { type: 'LineString', coordinates: line } } : empty);
   map.setPaintProperty('route-on', 'line-opacity', line ? 0.2 : 1);
 }
 
@@ -806,7 +886,10 @@ const tapSlop = () => (window.matchMedia('(pointer: coarse)').matches ? 24 : 10)
  *  under the finger. */
 function onClick(e) {
   const r = tapSlop();
-  const around = (n) => [[e.point.x - n, e.point.y - n], [e.point.x + n, e.point.y + n]];
+  const around = (n) => [
+    [e.point.x - n, e.point.y - n],
+    [e.point.x + n, e.point.y + n],
+  ];
   let best = null;
   for (const f of map.queryRenderedFeatures(around(r), { layers: ['buses', 'stops'] })) {
     const p = f.layer.id === 'buses' ? drawnAt(f) : map.project(f.geometry.coordinates);
@@ -838,11 +921,14 @@ function drawnAt(f) {
 /** Walking directions in the phone's maps app: Apple Maps on Apple devices, Google Maps elsewhere. */
 function directions(s) {
   const apple = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent);
-  return apple ? `https://maps.apple.com/?daddr=${s.lat},${s.lon}&dirflg=w` : `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}&travelmode=walking`;
+  return apple
+    ? `https://maps.apple.com/?daddr=${s.lat},${s.lon}&dirflg=w`
+    : `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}&travelmode=walking`;
 }
 
 /** A service here, when there are no times to list it by: tapped, its line on the map. */
-const SvcTag = ({ svc, onClick }) => html`<button type="button" class="svc-tag" style=${svcVars(svc)} aria-label=${t('Show {0} on the map', svc)} onClick=${onClick}>${svc}</button>`;
+const SvcTag = ({ svc, onClick }) =>
+  html`<button type="button" class="svc-tag" style=${svcVars(svc)} aria-label=${t('Show {0} on the map', svc)} onClick=${onClick}>${svc}</button>`;
 
 function Pills() {
   const campus = useStore(campusData);
@@ -1091,11 +1177,19 @@ function StopStrip({ b, all, onStop }) {
   const rows = [];
   if (b.at) rows.push({ key: `at-${b.at.code}`, code: b.at.code, name: b.at.name, kind: 'here', said: t('here') });
   else if (b.stretch) {
-    rows.push({ key: `last-${b.stretch.last.code}`, code: b.stretch.last.code, name: b.stretch.last.name, kind: 'passed', said: t('passed') });
+    rows.push({
+      key: `last-${b.stretch.last.code}`,
+      code: b.stretch.last.code,
+      name: b.stretch.last.name,
+      kind: 'passed',
+      said: t('passed'),
+    });
     rows.push({ key: 'bus', name: t('On its way'), kind: 'bus' });
   }
   const shownAhead = all || hiddenAhead(b) <= 1 ? ahead : ahead.slice(0, AHEAD_SHOWN + 1);
-  shownAhead.forEach((s, i) => rows.push({ key: `${i}-${s.code}`, code: s.code, name: s.name, kind: i === 0 ? 'next' : 'stop', said: i === 0 ? t('next') : null }));
+  shownAhead.forEach((s, i) =>
+    rows.push({ key: `${i}-${s.code}`, code: s.code, name: s.name, kind: i === 0 ? 'next' : 'stop', said: i === 0 ? t('next') : null }),
+  );
   const fades = shownAhead.length < ahead.length;
   // The rail's colour above and below each row's dot: grey up to the bus, the route's colour after it.
   const grey = 'var(--line-strong)';
@@ -1109,13 +1203,15 @@ function StopStrip({ b, all, onStop }) {
         const name = html`<span class="name">${r.name}${r.said && html`<span class="sr-only">, ${r.said}</span>`}</span>`;
         return html`
           <li key=${r.key} class=${`bus-stop ${r.kind}`} style=${`--top:${top};--bottom:${bottom}`}>
-            ${r.kind === 'bus'
-              ? html`<div class="bus-row">${rail}${name}</div>`
-              : html`
+            ${
+              r.kind === 'bus'
+                ? html`<div class="bus-row">${rail}${name}</div>`
+                : html`
                   <button type="button" class="bus-row" onClick=${() => onStop(r.code, r.name)}>
                     ${rail}${name}<span class="sr-only">. ${t('Show this stop')}</span><${Icon} paths=${CHEVRON_END} class="go" />
                   </button>
-                `}
+                `
+            }
           </li>
         `;
       })}
@@ -1176,13 +1272,14 @@ function BusSheet({ id, box, stops = false, all: allAtFirst = false }) {
       <${CrowdMeter} crowd=${b.crowd} />
     </div>
   `;
-  const footer = stop && html`<button type="button" class="btn small ghost" onClick=${() => go(stop.code)}>${t('Show {0}', stop.name)}</button>`;
+  const footer =
+    stop && html`<button type="button" class="btn small ghost" onClick=${() => go(stop.code)}>${t('Show {0}', stop.name)}</button>`;
   return html`
     <${Frame} id=${`bus-${id}`} title=${title} sub=${sub} lead=${tile} facts=${facts} onHandle=${(up) => {
-        const next = up ?? !open;
-        if (next !== open) setOpen(next);
-        return next !== open;
-      }} footer=${footer} box=${box}>
+      const next = up ?? !open;
+      if (next !== open) setOpen(next);
+      return next !== open;
+    }} footer=${footer} box=${box}>
       <${SectionBand} text=${t('Stops ahead')} open=${open} onToggle=${() => setOpen(!open)} controls="bus-strip" />
       ${open && html`<${StopStrip} b=${b} all=${all} onStop=${onStop} />`}
       ${open && more > 1 && html`<button type="button" class="sheet-more" aria-expanded=${String(all)} aria-controls="bus-strip" onClick=${() => setAll(!all)}>${all ? t('Show fewer') : t('Show {0} more stops', more)}</button>`}
@@ -1209,9 +1306,11 @@ export function stopOfBus(campus, b, name = (b.at ?? b.nextStop)?.name) {
 
 /** The rows a stop's sheet shows before "Show more", so the map stays in view. */
 const PEEK_ROWS = 3;
-const WALKER = '<circle cx="13" cy="4" r="2" fill="currentColor"/><path d="M12 8l-2 6-3 7M10 14l3 3v4M7 12l2-4h3l2 3 3 1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
+const WALKER =
+  '<circle cx="13" cy="4" r="2" fill="currentColor"/><path d="M12 8l-2 6-3 7M10 14l3 3v4M7 12l2-4h3l2 3 3 1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
 const PIN = '<path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.3"/>';
-const STAR = '<path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>';
+const STAR =
+  '<path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>';
 
 /**
  * A stop: its board as the Buses tab has it (refreshed while open), the first
@@ -1294,7 +1393,11 @@ function StopSheet({ code, box, onGoTo, onSaved, active }) {
         });
         onSaved?.();
         if (removed) {
-          const undo = () => saveNow((x) => restorePlace(x, removed)).then(() => onSaved?.(), () => toast(t('Not saved. Check your connection.'), { error: true }));
+          const undo = () =>
+            saveNow((x) => restorePlace(x, removed)).then(
+              () => onSaved?.(),
+              () => toast(t('Not saved. Check your connection.'), { error: true }),
+            );
           toast(t('{0} removed from favourites', same.label), { action: { label: t('Undo'), run: undo } });
         }
       } else {
@@ -1328,20 +1431,24 @@ function StopSheet({ code, box, onGoTo, onSaved, active }) {
   return html`
     <${Frame} id=${`stop-${code}`} title=${stop.name} sub=${sub} lead=${tile} footer=${footer} box=${box}>
       <${SectionBand} text=${t('Buses here')} />
-      ${(!board || board.text) &&
-      html`
+      ${
+        (!board || board.text) &&
+        html`
         <div class="sheet-note">
           <div class="hint">${board?.text ?? t('Checking…')}</div>
           ${board?.text && html`<div class="svc-tags">${stop.services.map((svc) => html`<${SvcTag} svc=${svc} key=${svc} onClick=${() => choose(svc)} />`)}</div>`}
         </div>
-      `}
-      ${rows.length > 0 &&
-      html`
+      `
+      }
+      ${
+        rows.length > 0 &&
+        html`
         <div class="sheet-board" id="sheet-board">
           ${(all || more <= 1 ? rows : rows.slice(0, PEEK_ROWS)).map((r) => html`<${Row} key=${r.svc} r=${r} picked=${r.svc === picked} onPick=${(svc) => choose(svc === selected.get() ? null : svc)} />`)}
         </div>
         ${more > 1 && html`<button type="button" class="sheet-more" aria-expanded=${String(all)} aria-controls="sheet-board" onClick=${() => setAll(!all)}>${all ? t('Show fewer') : t('Show {0} more', more)}</button>`}
-      `}
+      `
+      }
     <//>
   `;
 }
@@ -1385,10 +1492,18 @@ export function MapTab({ visible: on, focus, onFocused, onGoTo, onSaved }) {
     const code = centreOn;
     const bus = code?.bus;
     // A bus: where it's drawn (or sliding to), else where it last came from the API.
-    const at = bus ? open?.bus === bus && (glides.get(bus)?.to ?? shown.get().get(bus)) : open?.stop === code && campusData.get()?.stops.find((s) => s.code === code);
+    const at = bus
+      ? open?.bus === bus && (glides.get(bus)?.to ?? shown.get().get(bus))
+      : open?.stop === code && campusData.get()?.stops.find((s) => s.code === code);
     if (!at || at.lat == null || !map) return;
     centreOn = null;
-    const go = () => map.easeTo({ center: [at.lon, at.lat], zoom: Math.max(map.getZoom(), 17), padding: { top: 70, bottom: (sheetBox.current?.offsetHeight ?? 0) + 20 }, duration: 600 });
+    const go = () =>
+      map.easeTo({
+        center: [at.lon, at.lat],
+        zoom: Math.max(map.getZoom(), 17),
+        padding: { top: 70, bottom: (sheetBox.current?.offsetHeight ?? 0) + 20 },
+        duration: 600,
+      });
     // Not loaded: the map is still being built (from Nearby), or a source is
     // taking new data (a bus's sheet closing clears its ring), after which
     // 'load' never comes again; 'idle' comes in either case.

@@ -95,7 +95,9 @@ const en = {
   approx: ((s: string) => `~${s}`) as Fn<[string]>,
   noTimes: 'no times',
   /** An old reading's age: "(3 min ago)"; under a minute, "(<1 min ago)", never "(0 min ago)". */
-  staleLabel: ((svc: string, eta: string, ageMin: number) => `${svc} · ${eta} (${ageMin < 1 ? '<1' : ageMin} min ago)`) as Fn<[string, string, number]>,
+  staleLabel: ((svc: string, eta: string, ageMin: number) => `${svc} · ${eta} (${ageMin < 1 ? '<1' : ageMin} min ago)`) as Fn<
+    [string, string, number]
+  >,
 
   // The answer's detail line (format.ts)
   crossRoad: 'cross the road',
@@ -176,14 +178,18 @@ const en = {
   leaveBy: ((t: string) => `Leave by ${t}`) as Fn<[string]>,
   leaveNow: 'Leave now',
   /** After the leave-by: "catch the 9:41 D2 at COM3, off at KR MRT". */
-  leaveVia: ((t: string | null, svc: string, stop: string, off: string | null) => `catch the ${t ? `${t} ` : ''}${svc} at ${stop}${off ? `, off at ${off}` : ''}`) as Fn<[string | null, string, string, string | null]>,
+  leaveVia: ((t: string | null, svc: string, stop: string, off: string | null) =>
+    `catch the ${t ? `${t} ` : ''}${svc} at ${stop}${off ? `, off at ${off}` : ''}`) as Fn<[string | null, string, string, string | null]>,
   /** The class card: "Catch the 9:41 D2 at COM3". */
-  catchBus: ((t: string | null, svc: string, stop: string, off: string | null) => `Catch the ${t ? `${t} ` : ''}${svc} at ${stop}${off ? `, off at ${off}` : ''}`) as Fn<[string | null, string, string, string | null]>,
+  catchBus: ((t: string | null, svc: string, stop: string, off: string | null) =>
+    `Catch the ${t ? `${t} ` : ''}${svc} at ${stop}${off ? `, off at ${off}` : ''}`) as Fn<[string | null, string, string, string | null]>,
   walkThere: 'Walk there',
   arrive: ((t: string, slack: string) => `Arrive ${t} · ${slack}`) as Fn<[string, string]>,
   arriveLower: ((t: string, slack: string) => `arrive ${t} · ${slack}`) as Fn<[string, string]>,
   catchLine: ((c: string, t: string, slack: string) => `${c} · arrive ${t}, ${slack}`) as Fn<[string, string, string]>,
-  goNow: ((svc: string, t: string, reach: string | null) => `Or go now: ${svc} at ${t}${reach ? ` · arrive ${reach}` : ''}`) as Fn<[string, string, string | null]>,
+  goNow: ((svc: string, t: string, reach: string | null) => `Or go now: ${svc} at ${t}${reach ? ` · arrive ${reach}` : ''}`) as Fn<
+    [string, string, string | null]
+  >,
   phaseDue: 'Time to get going',
   phaseHeading: 'On your way',
   phaseWaiting: 'At the stop',
@@ -194,13 +200,17 @@ const en = {
   walk: 'walk',
   leaveGlance: ((t: string) => `Leave ${t}`) as Fn<[string]>,
   /** "D2 9:41 at COM3". */
-  svcAtStop: ((svc: string, t: string | null, stop: string) => `${svc} ${t ? `${t} ` : ''}at ${stop}`) as Fn<[string, string | null, string]>,
+  svcAtStop: ((svc: string, t: string | null, stop: string) => `${svc} ${t ? `${t} ` : ''}at ${stop}`) as Fn<
+    [string, string | null, string]
+  >,
   walkThereNow: 'Walk there now',
   walkNow: 'Walk now',
   missedThe: ((t: string) => `Missed the ${t}`) as Fn<[string]>,
   missedIt: 'Missed it',
   busLeft: ((t: string) => `The ${t} has left`) as Fn<[string]>,
-  missedLine: ((missed: string, next: string, late: string | null) => `${missed} · next ${next}${late ? `, ${late}` : ''}`) as Fn<[string, string, string | null]>,
+  missedLine: ((missed: string, next: string, late: string | null) => `${missed} · next ${next}${late ? `, ${late}` : ''}`) as Fn<
+    [string, string, string | null]
+  >,
   onThe: ((svc: string) => `On the ${svc}`) as Fn<[string]>,
   offAtTime: ((stop: string, t: string) => `off at ${stop} ${t}`) as Fn<[string, string]>,
   yourStop: 'your stop',
@@ -254,8 +264,12 @@ const en = {
   tomorrow: 'tomorrow',
   dayNames: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as readonly string[],
   /** "Mon 28 Sep". */
-  shortDate: ((dow: number, date: number, month: number) => `${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dow]} ${date} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][month]}`) as Fn<[number, number, number]>,
-  nextClass: ((off: string | null, label: string, when: string, t: string) => `${off ? `${off} · ` : ''}Next: ${label}, ${when} ${t}`) as Fn<[string | null, string, string, string]>,
+  shortDate: ((dow: number, date: number, month: number) =>
+    `${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dow]} ${date} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][month]}`) as Fn<
+    [number, number, number]
+  >,
+  nextClass: ((off: string | null, label: string, when: string, t: string) =>
+    `${off ? `${off} · ` : ''}Next: ${label}, ${when} ${t}`) as Fn<[string | null, string, string, string]>,
   // The next class, on its own card under Done for today (card.upcoming).
   upcomingToday: 'Today',
   upcomingTomorrow: ((dow: number) => `Tomorrow · ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dow]}`) as Fn<[number]>,
@@ -293,10 +307,13 @@ const en = {
   setUpHint: 'Send lat/lon for nearby buses, or ?to= a stop or venue',
 
   // What terminus has learned (outcomes.ts, leave.ts)
-  suggestQuiet: ((label: string, n: number) => `You've skipped ${label} ${n} weeks running. Stop reminders for it?`) as Fn<[string, number]>,
+  suggestQuiet: ((label: string, n: number) => `You've skipped ${label} ${n} weeks running. Stop reminders for it?`) as Fn<
+    [string, number]
+  >,
   stopReminders: 'Stop reminders',
   keepThem: 'Keep them',
-  suggestEarlier: ((label: string, n: number) => `You've missed the bus to ${label} ${n} times this month. Leave one bus earlier for it?`) as Fn<[string, number]>,
+  suggestEarlier: ((label: string, n: number) =>
+    `You've missed the bus to ${label} ${n} times this month. Leave one bus earlier for it?`) as Fn<[string, number]>,
   leaveEarlier: 'Leave earlier',
   noThanks: 'No thanks',
   oneEarlierNote: 'One bus earlier, as you chose for this class',
@@ -306,7 +323,9 @@ const en = {
 
   // Timetable import errors (me.ts, nusmods.ts)
   nusmodsNoAnswer: ((mods: string) => `NUSMods didn't respond for ${mods}. Nothing was changed. Try again in a minute.`) as Fn<[string]>,
-  modsNoClasses: ((mods: string, many: boolean, term: string) => `${mods} ${many ? 'have' : 'has'} no classes in ${term}`) as Fn<[string, boolean, string]>,
+  modsNoClasses: ((mods: string, many: boolean, term: string) => `${mods} ${many ? 'have' : 'has'} no classes in ${term}`) as Fn<
+    [string, boolean, string]
+  >,
   linkNoClasses: ((term: string) => `no classes in that link run in ${term}`) as Fn<[string]>,
   nothingImported: ((why: string) => `Nothing imported: ${why}. Your timetable was not changed.`) as Fn<[string]>,
   tooManyModules: ((n: number, max: number) => `that link has ${n} modules; the limit is ${max}`) as Fn<[number, number]>,
@@ -325,28 +344,45 @@ const en = {
   codeTypeWeb: 'Type it on the terminus page where you asked to sign in. It works once and expires in 15 minutes. Never give it to anyone.',
   codeOrLinkText: 'Or sign in with this link instead:',
   codeLinkButton: 'Sign in with this link',
-  codeWhyWeb: ((site: string) => `You're getting this because someone entered this address at ${site}, the NUS shuttle bus times app. If that wasn't you, you can ignore this email. Nothing happens without the code.`) as Fn<[string]>,
-  codeTypeApp: ((device: string) => `Type it in terminus on ${device}. It works once and expires in 15 minutes. Never give it to anyone.`) as Fn<[string]>,
-  codeOtherDeviceText: ((device: string) => `Reading this on another device? Open this link instead and type the number ${device} is showing:`) as Fn<[string]>,
-  codeOtherDevice: ((device: string) => `Reading this on another device? Open this link instead and type the number ${device} is showing.`) as Fn<[string]>,
+  codeWhyWeb: ((site: string) =>
+    `You're getting this because someone entered this address at ${site}, the NUS shuttle bus times app. If that wasn't you, you can ignore this email. Nothing happens without the code.`) as Fn<
+    [string]
+  >,
+  codeTypeApp: ((device: string) =>
+    `Type it in terminus on ${device}. It works once and expires in 15 minutes. Never give it to anyone.`) as Fn<[string]>,
+  codeOtherDeviceText: ((device: string) =>
+    `Reading this on another device? Open this link instead and type the number ${device} is showing:`) as Fn<[string]>,
+  codeOtherDevice: ((device: string) =>
+    `Reading this on another device? Open this link instead and type the number ${device} is showing.`) as Fn<[string]>,
   codeOtherDeviceButton: 'Open the link',
-  codeWhyApp: ((site: string, device: string) => `You're getting this because someone entered this address in the terminus app (${site}, NUS shuttle bus times) on ${device}. If that wasn't you, you can ignore this email. Nothing happens without the code.`) as Fn<[string, string]>,
+  codeWhyApp: ((site: string, device: string) =>
+    `You're getting this because someone entered this address in the terminus app (${site}, NUS shuttle bus times) on ${device}. If that wasn't you, you can ignore this email. Nothing happens without the code.`) as Fn<
+    [string, string]
+  >,
   aDevice: 'a device',
   singaporeTime: ((when: string) => `${when} Singapore time`) as Fn<[string]>,
   deviceAddedSubject: ((device: string) => `terminus was added to ${device}`) as Fn<[string]>,
   deviceAddedButton: 'Check your devices',
   mailFooter: 'terminus, NUS shuttle bus times. An independent student project, not affiliated with NUS.',
-  deviceAddedText: ((device: string, when: string, site: string) => `terminus was added to ${device} on your account, ${when}.\n\nIf that wasn't you, remove it on the account page (${site}/account) or from any of your devices, and sign out everywhere.`) as Fn<[string, string, string]>,
+  deviceAddedText: ((device: string, when: string, site: string) =>
+    `terminus was added to ${device} on your account, ${when}.\n\nIf that wasn't you, remove it on the account page (${site}/account) or from any of your devices, and sign out everywhere.`) as Fn<
+    [string, string, string]
+  >,
 
   // Pages the Worker serves itself (me.ts)
   pageLinkExpired: 'Link expired',
-  linkExpiredHtml: '<h1>That link has expired</h1><p class="hint">Sign-in links work once, for 15 minutes.</p><a class="btn accent" href="/account">Get a new link</a>',
+  linkExpiredHtml:
+    '<h1>That link has expired</h1><p class="hint">Sign-in links work once, for 15 minutes.</p><a class="btn accent" href="/account">Get a new link</a>',
   pageSignIn: 'Sign in',
   signInTitle: 'Sign in to terminus',
-  continueAs: ((who: string) => `Continue as <strong>${who}</strong> on this device. If that isn't your address, or someone sent you this link, close this page. Continuing would sign you in to their account, and anything you add would be theirs.`) as Fn<[string]>,
+  continueAs: ((who: string) =>
+    `Continue as <strong>${who}</strong> on this device. If that isn't your address, or someone sent you this link, close this page. Continuing would sign you in to their account, and anything you add would be theirs.`) as Fn<
+    [string]
+  >,
   signInButton: 'Sign in',
   pageRequestExpired: 'Request expired',
-  approveExpiredHtml: '<h1>This request has expired</h1><p class="hint">Sign-in requests work once, for 15 minutes. Start again on your device.</p>',
+  approveExpiredHtml:
+    '<h1>This request has expired</h1><p class="hint">Sign-in requests work once, for 15 minutes. Start again on your device.</p>',
   pageApprove: 'Approve sign-in',
   approveTitle: ((device: string) => `Sign in to terminus on ${device}?`) as Fn<[string]>,
   approveWhen: ((when: string) => `Requested ${when}.`) as Fn<[string]>,
@@ -356,9 +392,13 @@ const en = {
   notMe: "This wasn't me",
   notMeHint: 'Cancels the request, and stops apps asking to sign in to your address for a few hours. Nothing on your account changes.',
   pageApproved: 'Approved',
-  approvedHtml: '<h1>Approved</h1><p class="hint">Return to your device. It will be signed in within a few seconds. You can close this page.</p>',
+  approvedHtml:
+    '<h1>Approved</h1><p class="hint">Return to your device. It will be signed in within a few seconds. You can close this page.</p>',
   pageCancelled: 'Cancelled',
-  cancelledHtml: ((picked: boolean) => `<h1>Cancelled</h1><p class="hint">${picked ? "That number didn't match the one on your device, so the request was cancelled. If you were trying to sign in, start again on your device." : 'The request was cancelled, and nothing was signed in. For the next few hours, no app can ask to sign in to your address.'}</p>`) as Fn<[boolean]>,
+  cancelledHtml: ((picked: boolean) =>
+    `<h1>Cancelled</h1><p class="hint">${picked ? "That number didn't match the one on your device, so the request was cancelled. If you were trying to sign in, start again on your device." : 'The request was cancelled, and nothing was signed in. For the next few hours, no app can ask to sign in to your address.'}</p>`) as Fn<
+    [boolean]
+  >,
 };
 
 export type Msgs = typeof en;
@@ -621,24 +661,29 @@ const zh: Msgs = {
   codeTypeWeb: '请在你要求登录的 terminus 页面输入它。验证码只能用一次，15 分钟后失效。不要告诉任何人。',
   codeOrLinkText: '也可以用这个链接登录：',
   codeLinkButton: '用这个链接登录',
-  codeWhyWeb: (site) => `你收到这封邮件，是因为有人在 ${site}（NUS 校园巴士时间应用）输入了这个地址。如果不是你，可以忽略这封邮件。没有验证码不会发生任何事。`,
+  codeWhyWeb: (site) =>
+    `你收到这封邮件，是因为有人在 ${site}（NUS 校园巴士时间应用）输入了这个地址。如果不是你，可以忽略这封邮件。没有验证码不会发生任何事。`,
   codeTypeApp: (device) => zs`请在${device}上的 terminus 输入它。验证码只能用一次，15 分钟后失效。不要告诉任何人。`,
   codeOtherDeviceText: (device) => zs`在另一台设备上看这封邮件？打开这个链接，然后输入${device}上显示的数字：`,
   codeOtherDevice: (device) => zs`在另一台设备上看这封邮件？请打开这个链接，然后输入${device}上显示的数字。`,
   codeOtherDeviceButton: '打开链接',
-  codeWhyApp: (site, device) => zs`你收到这封邮件，是因为有人在${device}上的 terminus 应用（${site}，NUS 校园巴士时间）输入了这个地址。如果不是你，可以忽略这封邮件。没有验证码不会发生任何事。`,
+  codeWhyApp: (site, device) =>
+    zs`你收到这封邮件，是因为有人在${device}上的 terminus 应用（${site}，NUS 校园巴士时间）输入了这个地址。如果不是你，可以忽略这封邮件。没有验证码不会发生任何事。`,
   aDevice: '一台设备',
   singaporeTime: (when) => `新加坡时间 ${when}`,
   deviceAddedSubject: (device) => zs`terminus 已添加到${device}`,
   deviceAddedButton: '查看你的设备',
   mailFooter: 'terminus，NUS 校园巴士时间。独立的学生项目，与 NUS 无关。',
-  deviceAddedText: (device, when, site) => zs`${when}，你的账户在${device}上添加了 terminus。\n\n如果不是你，请在账户页面（${site}/account）或你的任一设备上移除它，并在所有设备上退出登录。`,
+  deviceAddedText: (device, when, site) =>
+    zs`${when}，你的账户在${device}上添加了 terminus。\n\n如果不是你，请在账户页面（${site}/account）或你的任一设备上移除它，并在所有设备上退出登录。`,
 
   pageLinkExpired: '链接已失效',
-  linkExpiredHtml: '<h1>这个链接已失效</h1><p class="hint">登录链接只能用一次，有效 15 分钟。</p><a class="btn accent" href="/account">获取新链接</a>',
+  linkExpiredHtml:
+    '<h1>这个链接已失效</h1><p class="hint">登录链接只能用一次，有效 15 分钟。</p><a class="btn accent" href="/account">获取新链接</a>',
   pageSignIn: '登录',
   signInTitle: '登录 terminus',
-  continueAs: (who) => `在这台设备上以 <strong>${who}</strong> 继续。如果这不是你的地址，或者这个链接是别人发给你的，请关闭此页面。继续会让你登录到对方的账户，你添加的任何内容都会归对方所有。`,
+  continueAs: (who) =>
+    `在这台设备上以 <strong>${who}</strong> 继续。如果这不是你的地址，或者这个链接是别人发给你的，请关闭此页面。继续会让你登录到对方的账户，你添加的任何内容都会归对方所有。`,
   signInButton: '登录',
   pageRequestExpired: '请求已失效',
   approveExpiredHtml: '<h1>这个请求已失效</h1><p class="hint">登录请求只能用一次，有效 15 分钟。请在你的设备上重新开始。</p>',
@@ -653,7 +698,8 @@ const zh: Msgs = {
   pageApproved: '已批准',
   approvedHtml: '<h1>已批准</h1><p class="hint">请回到你的设备，几秒内就会登录。你可以关闭此页面。</p>',
   pageCancelled: '已取消',
-  cancelledHtml: (picked) => `<h1>已取消</h1><p class="hint">${picked ? '这个数字与设备上显示的不一致，因此请求已取消。如果你是在登录，请在你的设备上重新开始。' : '请求已取消，没有登录任何设备。接下来几小时内，任何应用都不能请求用你的邮箱登录。'}</p>`,
+  cancelledHtml: (picked) =>
+    `<h1>已取消</h1><p class="hint">${picked ? '这个数字与设备上显示的不一致，因此请求已取消。如果你是在登录，请在你的设备上重新开始。' : '请求已取消，没有登录任何设备。接下来几小时内，任何应用都不能请求用你的邮箱登录。'}</p>`,
 };
 
 const MSGS: Record<Lang, Msgs> = { en, zh };
@@ -709,7 +755,8 @@ export const ERRORS_ZH: Record<string, string> = {
   'web push is not set up on this server': '这台服务器没有设置网页推送',
   'send subscription: an https endpoint with keys.p256dh and keys.auth': '请发送 subscription：带 keys.p256dh 和 keys.auth 的 https 端点',
   'send token (the FCM registration token) or subscription': '请发送 token（FCM 注册令牌）或 subscription',
-  "send id (from card.suggestion) or trip and pref ('earlier' or 'quiet'), and choice: accept, dismiss or undo": "请发送 id（来自 card.suggestion）或 trip 和 pref（'earlier' 或 'quiet'），以及 choice：accept、dismiss 或 undo",
+  "send id (from card.suggestion) or trip and pref ('earlier' or 'quiet'), and choice: accept, dismiss or undo":
+    "请发送 id（来自 card.suggestion）或 trip 和 pref（'earlier' 或 'quiet'），以及 choice：accept、dismiss 或 undo",
   "that's a lot of reports for one day; thanks, try again tomorrow": '今天的反馈已经很多了，谢谢！请明天再试',
   'accounts are not configured': '账户功能未配置',
   'too many attempts, try again in a minute': '尝试次数太多，请一分钟后再试',
@@ -717,7 +764,8 @@ export const ERRORS_ZH: Record<string, string> = {
   'the human check failed, try again': '人机验证没有通过，请再试一次',
   'the human check is not answering, try again in a minute': '人机验证暂时没有响应，请一分钟后再试',
   'sign-in is busy, try again in a minute': '登录繁忙，请一分钟后再试',
-  'a sign-in to that address was turned down recently, so the app cannot ask again for a few hours; pair this device from the website instead': '最近有人拒绝了用这个邮箱登录的请求，所以应用几小时内不能再请求；请改为在网站上配对这台设备',
+  'a sign-in to that address was turned down recently, so the app cannot ask again for a few hours; pair this device from the website instead':
+    '最近有人拒绝了用这个邮箱登录的请求，所以应用几小时内不能再请求；请改为在网站上配对这台设备',
   'pairing is busy, try again in a minute': '配对繁忙，请一分钟后再试',
   'could not send the email, try again later': '邮件发送失败，请稍后再试',
   'enter the 6-character code from the email': '请输入邮件里的 6 位验证码',
@@ -739,39 +787,39 @@ export const ERRORS_ZH: Record<string, string> = {
   'turn on location, or add a home stop in Settings': '打开定位，或在设置里添加家附近的车站',
   'profile must be an object': '资料必须是一个对象',
   "platform is 'android', 'mac' or 'web'": "platform 必须是 'android'、'mac' 或 'web'",
-  "that code isn't right; check the email and try again": "验证码不对，请检查邮件后再试",
-  "context is the answer object": "context 必须是答案对象",
-  "context is too large": "context 太大了",
-  "downloads are not configured": "下载未配置",
-  "fullBusMargin must be true or false": "fullBusMargin 必须是 true 或 false",
-  "publicBuses must be true or false": "publicBuses 必须是 true 或 false",
-  "preferBus must be true or false": "preferBus 必须是 true 或 false",
-  "pinnedStops must be up to 8 known stop codes": "pinnedStops 最多只能有 8 个已知的车站代码",
-  "gapHours must be between 0.5 and 12": "gapHours 必须在 0.5 到 12 之间",
-  "home must be {stops: [...]}": "home 必须是 {stops: [...]}",
-  "homeWalkMin must be 0 to 30 minutes": "homeWalkMin 必须是 0 到 30 分钟",
-  "lang must be auto, en or zh": "lang 必须是 auto、en 或 zh",
-  "clock must be auto, 12 or 24": "clock 必须是 auto、12 或 24",
-  "no release yet": "还没有发布版本",
-  "release file missing": "找不到发布文件",
-  "say what went wrong": "请说说哪里出了问题",
-  "reason is not one of the choices": "reason 不是可选的原因之一",
+  "that code isn't right; check the email and try again": '验证码不对，请检查邮件后再试',
+  'context is the answer object': 'context 必须是答案对象',
+  'context is too large': 'context 太大了',
+  'downloads are not configured': '下载未配置',
+  'fullBusMargin must be true or false': 'fullBusMargin 必须是 true 或 false',
+  'publicBuses must be true or false': 'publicBuses 必须是 true 或 false',
+  'preferBus must be true or false': 'preferBus 必须是 true 或 false',
+  'pinnedStops must be up to 8 known stop codes': 'pinnedStops 最多只能有 8 个已知的车站代码',
+  'gapHours must be between 0.5 and 12': 'gapHours 必须在 0.5 到 12 之间',
+  'home must be {stops: [...]}': 'home 必须是 {stops: [...]}',
+  'homeWalkMin must be 0 to 30 minutes': 'homeWalkMin 必须是 0 到 30 分钟',
+  'lang must be auto, en or zh': 'lang 必须是 auto、en 或 zh',
+  'clock must be auto, 12 or 24': 'clock 必须是 auto、12 或 24',
+  'no release yet': '还没有发布版本',
+  'release file missing': '找不到发布文件',
+  'say what went wrong': '请说说哪里出了问题',
+  'reason is not one of the choices': 'reason 不是可选的原因之一',
   "kind is 'wrong', 'other' or 'stop'": "kind 必须是 'wrong'、'other' 或 'stop'",
-  "we don’t know that building; use the code on your timetable, like LT21": "我们不认识这栋楼，请填写课表上的代码，例如 LT21",
-  "choose a stop": "请选择一个车站",
-  "that’s already the stop we use for that building": "这栋楼用的已经是这个车站",
-  "seen must be a short list of names": "seen 必须是一个简短的名称列表",
-  "share must be a NUSMods link": "share 必须是 NUSMods 链接",
-  "term must be {acadYear: \"2026/2027\", semester: 1-4}": "term 必须是 {acadYear: \"2026/2027\", semester: 1-4}",
-  "the day must start before it ends": "一天的开始时间必须早于结束时间",
-  "no timelapse for that day": "那天没有延时回放",
-  "timelapse storage is not configured": "延时回放存储未配置",
+  'we don’t know that building; use the code on your timetable, like LT21': '我们不认识这栋楼，请填写课表上的代码，例如 LT21',
+  'choose a stop': '请选择一个车站',
+  'that’s already the stop we use for that building': '这栋楼用的已经是这个车站',
+  'seen must be a short list of names': 'seen 必须是一个简短的名称列表',
+  'share must be a NUSMods link': 'share 必须是 NUSMods 链接',
+  'term must be {acadYear: "2026/2027", semester: 1-4}': 'term 必须是 {acadYear: "2026/2027", semester: 1-4}',
+  'the day must start before it ends': '一天的开始时间必须早于结束时间',
+  'no timelapse for that day': '那天没有延时回放',
+  'timelapse storage is not configured': '延时回放存储未配置',
   'expected id, key, alg, clientData and authData': '需要 id、key、alg、clientData 和 authData',
   'expected id, clientData, authData and signature': '需要 id、clientData、authData 和 signature',
   'passkey not accepted': '通行密钥未被接受',
   'unsupported passkey type': '不支持这种通行密钥',
   'too many passkeys; remove one first': '通行密钥太多，请先删除一个',
-  "walkPace must be slow, normal or fast": "walkPace 必须是 slow、normal 或 fast",
+  'walkPace must be slow, normal or fast': 'walkPace 必须是 slow、normal 或 fast',
   'your settings were changed on another device; try again': '你的设置刚在另一台设备上改过，请再试一次',
   "terminus can't reach your account right now; try again in a minute": 'terminus 现在无法读取你的账户，请一分钟后再试',
 };

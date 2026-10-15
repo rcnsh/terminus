@@ -4,10 +4,8 @@ import sh.rcn.terminus.NearbyStop
 import sh.rcn.terminus.parseColor
 
 /**
- * A service's next bus at a stop, as a Nearby widget shows it: worked out
- * once from a fetched board, its times on the phone's clock. Shown as clock
- * times ("9:42"), which stay true between redraws where a countdown would
- * stand still.
+ * A service's next bus at a stop, as a Nearby widget shows it: worked out once from a fetched board, its times on the phone's clock. Shown
+ * as clock times ("9:42"), which stay true between redraws where a countdown would stand still.
  */
 internal data class StopBus(
     val svc: String,
@@ -36,61 +34,64 @@ internal object NearbyBoard {
     private const val GREY = 0xFF8A939CL
 
     /**
-     * The services at [stop] with a time, soonest first, from a board
-     * fetched at [fetchedAt] (the phone's clock, as [now]). A bus gone by
-     * [now] gives way to the service's next one; a service with none left
-     * isn't shown. With none running at all, each service's first bus when
-     * it starts again ([StopBus.first]), from a board asked for with
-     * `stopped=1`; [skewMs] puts the server's times on the phone's clock.
+     * The services at [stop] with a time, soonest first, from a board fetched at [fetchedAt] (the phone's clock, as [now]). A bus gone by
+     * [now] gives way to the service's next one; a service with none left isn't shown. With none running at all, each service's first bus
+     * when it starts again ([StopBus.first]), from a board asked for with `stopped=1`; [skewMs] puts the server's times on the phone's
+     * clock.
      */
     fun buses(stop: NearbyStop, fetchedAt: Long, now: Long, skewMs: Long = 0L): List<StopBus> =
         running(stop, fetchedAt, now).ifEmpty { firsts(stop, now, skewMs) }
 
-    private fun firsts(stop: NearbyStop, now: Long, skewMs: Long): List<StopBus> = stop.board.mapNotNull { r ->
-        val at = (r.resumesAtMs ?: return@mapNotNull null) - skewMs
-        if (r.running || at <= now) return@mapNotNull null
-        StopBus(
-            svc = r.svc,
-            color = r.color?.let(::parseColor) ?: GREY,
-            paid = r.paid,
-            atMs = at,
-            live = false,
-            crowd = null,
-            next = r.towards.firstOrNull(),
-            end = r.towards.drop(1).lastOrNull(),
-            endsHere = r.endsHere,
-            later = emptyList(),
-            first = true,
-        )
-    }.sortedBy { it.atMs }
+    private fun firsts(stop: NearbyStop, now: Long, skewMs: Long): List<StopBus> =
+        stop.board
+            .mapNotNull { r ->
+                val at = (r.resumesAtMs ?: return@mapNotNull null) - skewMs
+                if (r.running || at <= now) return@mapNotNull null
+                StopBus(
+                    svc = r.svc,
+                    color = r.color?.let(::parseColor) ?: GREY,
+                    paid = r.paid,
+                    atMs = at,
+                    live = false,
+                    crowd = null,
+                    next = r.towards.firstOrNull(),
+                    end = r.towards.drop(1).lastOrNull(),
+                    endsHere = r.endsHere,
+                    later = emptyList(),
+                    first = true,
+                )
+            }
+            .sortedBy { it.atMs }
 
-    private fun running(stop: NearbyStop, fetchedAt: Long, now: Long): List<StopBus> = stop.board.mapNotNull { r ->
-        val first = r.etaS ?: return@mapNotNull null
-        val times = (listOf(Due(first, r.quality == "live", r.crowd)) + r.later.map { Due(it.etaS, it.quality == "live", null) })
-            .map { it to fetchedAt + it.s * 1000L }
-            .filter { (_, at) -> at > now - GONE_MS }
-        val (due, at) = times.firstOrNull() ?: return@mapNotNull null
-        StopBus(
-            svc = r.svc,
-            color = r.color?.let(::parseColor) ?: GREY,
-            paid = r.paid,
-            atMs = at,
-            live = due.live,
-            crowd = due.crowd,
-            next = r.towards.firstOrNull(),
-            end = r.towards.drop(1).lastOrNull(),
-            endsHere = r.endsHere,
-            later = times.drop(1).map { it.second },
-        )
-    }.sortedBy { it.atMs }
+    private fun running(stop: NearbyStop, fetchedAt: Long, now: Long): List<StopBus> =
+        stop.board
+            .mapNotNull { r ->
+                val first = r.etaS ?: return@mapNotNull null
+                val times =
+                    (listOf(Due(first, r.quality == "live", r.crowd)) + r.later.map { Due(it.etaS, it.quality == "live", null) })
+                        .map { it to fetchedAt + it.s * 1000L }
+                        .filter { (_, at) -> at > now - GONE_MS }
+                val (due, at) = times.firstOrNull() ?: return@mapNotNull null
+                StopBus(
+                    svc = r.svc,
+                    color = r.color?.let(::parseColor) ?: GREY,
+                    paid = r.paid,
+                    atMs = at,
+                    live = due.live,
+                    crowd = due.crowd,
+                    next = r.towards.firstOrNull(),
+                    end = r.towards.drop(1).lastOrNull(),
+                    endsHere = r.endsHere,
+                    later = times.drop(1).map { it.second },
+                )
+            }
+            .sortedBy { it.atMs }
 
     private data class Due(val s: Int, val live: Boolean, val crowd: String?)
 
     /**
-     * Where [bus] ends, when the widget should say so: another bus in
-     * [shown] has the same next stop but ends somewhere else, so the next
-     * stop alone wouldn't tell them apart (A1, D2 and K all stop next at
-     * LT27 from Kent Ridge MRT).
+     * Where [bus] ends, when the widget should say so: another bus in [shown] has the same next stop but ends somewhere else, so the next
+     * stop alone wouldn't tell them apart (A1, D2 and K all stop next at LT27 from Kent Ridge MRT).
      */
     fun endIfNeeded(bus: StopBus, shown: List<StopBus>): String? {
         val end = bus.end ?: return null
@@ -112,11 +113,9 @@ internal object NearbyBoard {
 }
 
 /**
- * How a Nearby widget lays itself out by its size: one bus (2×1), two side
- * by side in a bar (4×1), rows with the time at the end (narrow ones, 3×2),
- * or tiles under the sky, two or three across, more rows as it gets taller.
- * One row of tiles pages through the rest ([pager]) when there's room for
- * the arrows; more rows list the rest along the bottom ([footer]).
+ * How a Nearby widget lays itself out by its size: one bus (2×1), two side by side in a bar (4×1), rows with the time at the end (narrow
+ * ones, 3×2), or tiles under the sky, two or three across, more rows as it gets taller. One row of tiles pages through the rest ([pager])
+ * when there's room for the arrows; more rows list the rest along the bottom ([footer]).
  */
 internal data class NearbyFit(
     val kind: Kind,
@@ -126,16 +125,23 @@ internal data class NearbyFit(
     /** Room under the rows for the services that don't fit. */
     val footer: Boolean = false,
 ) {
-    enum class Kind { MINI, BAR, ROWS, TILES }
+    enum class Kind {
+        MINI,
+        BAR,
+        ROWS,
+        TILES,
+    }
 
-    val shown: Int get() = cols * rows
+    val shown: Int
+        get() = cols * rows
 
     companion object {
         /**
-         * A tile at its smallest: the time, two lines for the next stop, the
-         * pills; three across, the later buses have a line of their own too.
+         * A tile at its smallest: the time, two lines for the next stop, the pills; three across, the later buses have a line of their own
+         * too.
          */
         fun tileDp(cols: Int): Float = if (cols >= 3) 112f else 98f
+
         const val ROW_DP = 36f
         /** Tall enough to tap the pager's arrows. */
         const val PAGER_DP = 20f

@@ -51,19 +51,22 @@ test('without the gate each data centre asks NUS itself (what the gate is for)',
   assert.equal(f.counts.shuttle, 3);
 });
 
-test('a service\'s buses and a stop\'s public buses are gated too', async () => {
+test("a service's buses and a stop's public buses are gated too", async () => {
   const env = { ...gated(), LTA_ACCOUNT_KEY: 'test' };
   const f = makeFetch({ buses: { D1: [D1_BUS] }, publicStops: { 16189: [] } });
   for (let dc = 0; dc < 3; dc++) await elsewhere(env, f, FROZEN_NOW, (ctx) => getBuses(env, ctx, 'D1', FROZEN_NOW));
   assert.equal(f.counts.shuttle, 1);
   const stop = Object.values(GRAPH_PUBLIC.stops).find((s) => s.publicCode);
   if (stop) {
-    for (let dc = 0; dc < 3; dc++) await elsewhere(env, f, FROZEN_NOW, (ctx) => getPublicArrivals(env, ctx, GRAPH_PUBLIC, stop.code, stop.publicCode, FROZEN_NOW).catch(() => null));
+    for (let dc = 0; dc < 3; dc++)
+      await elsewhere(env, f, FROZEN_NOW, (ctx) =>
+        getPublicArrivals(env, ctx, GRAPH_PUBLIC, stop.code, stop.publicCode, FROZEN_NOW).catch(() => null),
+      );
     assert.ok(f.counts.public <= 1, `public calls: ${f.counts.public}`);
   }
 });
 
-test('a caller arriving while another\'s call runs waits for its answer', async () => {
+test("a caller arriving while another's call runs waits for its answer", async () => {
   const env = gated();
   installGlobals(null, FROZEN_NOW);
   let release;
@@ -85,10 +88,18 @@ test('a failed call holds its window: nobody else asks the feed until it ends', 
   const env = gated();
   installGlobals(null, FROZEN_NOW);
   const ctx = makeCtx();
-  await assert.rejects(throughGate(env, ctx, 'k', 15_000, async () => { throw new Error('down'); }), /down/);
+  await assert.rejects(
+    throughGate(env, ctx, 'k', 15_000, async () => {
+      throw new Error('down');
+    }),
+    /down/,
+  );
   await ctx.settle();
   let asked = 0;
-  await assert.rejects(throughGate(env, makeCtx(), 'k', 15_000, async () => (asked++, 'x')), GateBusy);
+  await assert.rejects(
+    throughGate(env, makeCtx(), 'k', 15_000, async () => (asked++, 'x')),
+    GateBusy,
+  );
   assert.equal(asked, 0);
   Date.now = () => FROZEN_NOW + 15_000;
   assert.equal(await throughGate(env, makeCtx(), 'k', 15_000, async () => (asked++, 'x')), 'x');
@@ -112,8 +123,15 @@ test('an answer from a call that outlived its window does not replace a newer on
   assert.equal(await throughGate(env, makeCtx(), 'k', 15_000, async () => 'never'), 'new');
 });
 
-test('an unreachable gate is skipped: the call goes ahead on the data centre\'s own limits', async () => {
-  const broken = { idFromName: (n) => n, get: () => ({ fetch: async () => { throw new Error('gate down'); } }) };
+test("an unreachable gate is skipped: the call goes ahead on the data centre's own limits", async () => {
+  const broken = {
+    idFromName: (n) => n,
+    get: () => ({
+      fetch: async () => {
+        throw new Error('gate down');
+      },
+    }),
+  };
   const env = { ...makeEnv(), FEED_GATE: broken };
   installGlobals(null, FROZEN_NOW);
   assert.equal(await throughGate(env, makeCtx(), 'k', 15_000, async () => 'ok'), 'ok');

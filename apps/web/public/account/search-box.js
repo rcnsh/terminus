@@ -20,7 +20,18 @@ const COUNT_AFTER_MS = 500;
  * `onText(text)` each change typed (no result picked any more). `ctl`, a
  * ref, gets { clear(), focus(), input }. Other props go to the text box.
  */
-export function SearchBox({ source, suggestions = () => [], pinned, stopName, empty = t('No stop, building or room by that name'), onPick, onText, onKeyDown, ctl, ...inputProps }) {
+export function SearchBox({
+  source,
+  suggestions = () => [],
+  pinned,
+  stopName,
+  empty = t('No stop, building or room by that name'),
+  onPick,
+  onText,
+  onKeyDown,
+  ctl,
+  ...inputProps
+}) {
   const listId = `search-${useId()}`;
   const [text, setText] = useState('');
   const [open, setOpen] = useState(false);
@@ -121,7 +132,8 @@ export function SearchBox({ source, suggestions = () => [], pinned, stopName, em
   });
   // How many there are, said once typing settles on it (the list itself isn't
   // read out): half a second after the last key, not at every letter.
-  const count = !shown || !text.trim() ? '' : items.length === 0 ? empty : items.length === 1 ? t('1 result') : t('{0} results', items.length);
+  const count =
+    !shown || !text.trim() ? '' : items.length === 0 ? empty : items.length === 1 ? t('1 result') : t('{0} results', items.length);
   const [said, setSaid] = useState('');
   useEffect(() => {
     if (!count) {
@@ -150,14 +162,16 @@ export function SearchBox({ source, suggestions = () => [], pinned, stopName, em
         onKeyDown=${keys}
       />
       <ul id=${listId} ref=${list} class=${flip ? 'search-list flip' : 'search-list'} role="listbox" hidden=${!shown}>
-        ${groups.length
-          ? groups.map(
-              (g) => html`<li role="group" aria-label=${g.name} key=${`g-${g.kind}`}>
+        ${
+          groups.length
+            ? groups.map(
+                (g) => html`<li role="group" aria-label=${g.name} key=${`g-${g.kind}`}>
                 <div class="search-group" aria-hidden="true">${g.name}</div>
                 <ul class="search-sub" role="none">${g.rows}</ul>
               </li>`,
-            )
-          : html`<li class="search-empty" role="none">${empty}</li>`}
+              )
+            : html`<li class="search-empty" role="none">${empty}</li>`
+        }
       </ul>
       <p class="sr-only" role="status">${said}</p>
     </div>

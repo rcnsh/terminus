@@ -18,7 +18,15 @@ const { t } = await web('account/dom.js');
 
 /** /campus as the Worker sends it (index.ts handleCampus), through JSON. */
 const map = buildCampusMap(GRAPH);
-const CAMPUS = JSON.parse(JSON.stringify({ viewBox: map.viewBox, stops: map.stops, routes: map.routes, destinations: buildDestinations(GRAPH), residences: residenceList() }));
+const CAMPUS = JSON.parse(
+  JSON.stringify({
+    viewBox: map.viewBox,
+    stops: map.stops,
+    routes: map.routes,
+    destinations: buildDestinations(GRAPH),
+    residences: residenceList(),
+  }),
+);
 P.campus.set(CAMPUS);
 useLang('en');
 
@@ -59,7 +67,10 @@ test('stops nearest first, every stop once, at the distances the API works out',
     assert.equal(new Set(near.map((x) => x.s.code)).size, CAMPUS.stops.length);
     assert.equal(near[0].d, 0, from.code);
     // Another stop on the very same spot may come first; this one is at 0 m.
-    assert.ok(near.some((x) => x.s.code === from.code && x.d === 0), from.code);
+    assert.ok(
+      near.some((x) => x.s.code === from.code && x.d === 0),
+      from.code,
+    );
     for (let i = 1; i < near.length; i++) assert.ok(near[i].d >= near[i - 1].d);
     for (const { s, d } of near) assert.ok(Math.abs(d - haversineM(from.lat, from.lon, s.lat, s.lon)) < 1e-6);
   }
@@ -69,7 +80,7 @@ test('stops nearest first, every stop once, at the distances the API works out',
   assert.equal(P.stopsNear(kr.lat + 0.0001, kr.lon)[0].s.code, 'KR-MRT');
 });
 
-test("a residence is found from its home stops, in any order, and only from exactly them", () => {
+test('a residence is found from its home stops, in any order, and only from exactly them', () => {
   assert.ok(CAMPUS.residences.length > 5);
   for (const r of CAMPUS.residences) {
     const found = P.residenceFor([...r.stops].reverse());
@@ -119,12 +130,13 @@ test('a favourite is called what was picked, keyed from its name, one per place'
   assert.equal(new Set(p.places.map((x) => x.key)).size, p.places.length);
 });
 
-test('a reload while a save is on its way keeps the change, not the server\'s copy from before it', async () => {
+test("a reload while a save is on its way keeps the change, not the server's copy from before it", async () => {
   const realFetch = globalThis.fetch;
   let answerSave;
   globalThis.fetch = async (url, init) => {
     // The save waits; a reload meanwhile gets the profile from before it.
-    if (init?.method === 'PUT') return new Promise((ok) => (answerSave = () => ok(new Response(init.body, { headers: { 'content-type': 'application/json' } }))));
+    if (init?.method === 'PUT')
+      return new Promise((ok) => (answerSave = () => ok(new Response(init.body, { headers: { 'content-type': 'application/json' } }))));
     return new Response(JSON.stringify({ walkPace: 'normal' }), { headers: { 'content-type': 'application/json' } });
   };
   mock.timers.enable({ apis: ['setTimeout'] });
@@ -155,7 +167,8 @@ test('an edit made while a saveNow is on its way is kept, with the saved change 
   globalThis.fetch = async (url, init) => {
     bodies.push(JSON.parse(init.body));
     // The first save waits; its reply is the profile as it went.
-    if (!answerSave) return new Promise((ok) => (answerSave = () => ok(new Response(init.body, { headers: { 'content-type': 'application/json' } }))));
+    if (!answerSave)
+      return new Promise((ok) => (answerSave = () => ok(new Response(init.body, { headers: { 'content-type': 'application/json' } }))));
     return new Response(init.body, { headers: { 'content-type': 'application/json' } });
   };
   mock.timers.enable({ apis: ['setTimeout'] });

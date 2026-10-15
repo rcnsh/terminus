@@ -40,10 +40,7 @@ const SCRAPED = graphJson as unknown as Graph;
 export const GRAPH = {
   ...SCRAPED,
   stops: mergeOpposites(SCRAPED.stops, oppositesJson.pairs),
-  serviceHours: mergeServiceHours(
-    SCRAPED.serviceHours,
-    serviceHoursJson as Record<string, unknown>,
-  ),
+  serviceHours: mergeServiceHours(SCRAPED.serviceHours, serviceHoursJson as Record<string, unknown>),
 } as Graph;
 
 /**
@@ -69,7 +66,10 @@ export function nearbyTwin(stop: Stop): string | null {
  * the road ("Across the road"), false for a stop that's only near (PGP and
  * PGP Foyer), which goes by its own name.
  */
-export function twinOf(stop: Stop, byCode: Map<string, Stop>): { opposite: string | null; oppositeAcross: boolean; oppositeName: string | null } {
+export function twinOf(
+  stop: Stop,
+  byCode: Map<string, Stop>,
+): { opposite: string | null; oppositeAcross: boolean; oppositeName: string | null } {
   const code = nearbyTwin(stop);
   const twin = code ? byCode.get(code) : undefined;
   return { opposite: code, oppositeAcross: !!stop.opposite, oppositeName: code ? (twin?.longName ?? twin?.name ?? code) : null };

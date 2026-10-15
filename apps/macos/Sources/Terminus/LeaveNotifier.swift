@@ -88,7 +88,7 @@ final class LeaveNotifier: NSObject, UNUserNotificationCenterDelegate {
             center.removeDeliveredNotifications(withIdentifiers: [Self.askID])
         case .clear:
             clearLeave()
-        case let .schedule(clearFirst, trip, soon, leaveAt):
+        case .schedule(let clearFirst, let trip, let soon, let leaveAt):
             if clearFirst { clearLeave() }
             if let soon {
                 defaults.set(trip, forKey: "soonTrip")
@@ -127,7 +127,9 @@ final class LeaveNotifier: NSObject, UNUserNotificationCenterDelegate {
         if phase == "heading" { return .heading }
         // At the stop, on the bus, missed, there, or not going: the reminders are over.
         if phase != "idle" && phase != "due" { return .over }
-        guard card?.remind != false, let trip = tripKey(plan), let soonAt = card?.remindAt.flatMap(parseISODate), let leaveAt = plan.leaveAt, leaveAt > now else {
+        guard card?.remind != false, let trip = tripKey(plan), let soonAt = card?.remindAt.flatMap(parseISODate),
+            let leaveAt = plan.leaveAt, leaveAt > now
+        else {
             return .clear
         }
         // A different trip (the last one skipped or over): its reminders go.
@@ -188,7 +190,8 @@ final class LeaveNotifier: NSObject, UNUserNotificationCenterDelegate {
                 // A newer answer or a clear got there first.
                 guard enabled, gen == generation else { return }
                 guard let at = r.content.userInfo["at"] as? Double,
-                      let content = r.content.mutableCopy() as? UNMutableNotificationContent else { continue }
+                    let content = r.content.mutableCopy() as? UNMutableNotificationContent
+                else { continue }
                 // Its trigger counts from when it's added: the time left, not the whole wait again.
                 let wait = at - ServerClock.now.timeIntervalSince1970
                 guard wait > 1 else { continue }
@@ -217,7 +220,9 @@ final class LeaveNotifier: NSObject, UNUserNotificationCenterDelegate {
     // MARK: UNUserNotificationCenterDelegate
 
     /// Shown even while the popover is open.
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async
+        -> UNNotificationPresentationOptions
+    {
         [.banner, .sound, .list]
     }
 }

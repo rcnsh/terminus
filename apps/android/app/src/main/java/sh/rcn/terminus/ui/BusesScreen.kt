@@ -50,12 +50,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.ui.unit.Dp
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -63,12 +62,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -85,6 +84,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -104,28 +104,26 @@ import sh.rcn.terminus.LineBus
 import sh.rcn.terminus.LineItem
 import sh.rcn.terminus.Locator
 import sh.rcn.terminus.Pins
-import sh.rcn.terminus.Stopped
-import sh.rcn.terminus.Quiet
 import sh.rcn.terminus.Pull
 import sh.rcn.terminus.PullScene
+import sh.rcn.terminus.Quiet
 import sh.rcn.terminus.R
 import sh.rcn.terminus.SearchRank
 import sh.rcn.terminus.ServerClock
 import sh.rcn.terminus.Spoken
+import sh.rcn.terminus.Stopped
+import sh.rcn.terminus.busesTabIndex
 import sh.rcn.terminus.hhmm
 import sh.rcn.terminus.hhmm12
 import sh.rcn.terminus.hour12
 import sh.rcn.terminus.parseColor
 import sh.rcn.terminus.searchBuses
-import sh.rcn.terminus.busesTabIndex
 
 /**
- * The Buses tab: a search, then pages to swipe between, the nearest stop
- * and each pinned one, each with its board. A row opens its service's
- * line; a stop on the line, or found in the search, opens its board.
+ * The Buses tab: a search, then pages to swipe between, the nearest stop and each pinned one, each with its board. A row opens its
+ * service's line; a stop on the line, or found in the search, opens its board.
  *
- * Only the times the API gives are shown: the next bus and its `later`
- * buses. A timetabled time says so; no time is guessed.
+ * Only the times the API gives are shown: the next bus and its `later` buses. A timetabled time says so; no time is guessed.
  */
 @Composable
 internal fun BusesScreen(
@@ -155,9 +153,8 @@ internal fun BusesScreen(
 }
 
 /**
- * Runs [refresh] now and every 15 s (longer while the server asked for a
- * wait) while this is on screen and the app is in front, telling [next] when
- * it runs again (for a pull's "next update in 9 s").
+ * Runs [refresh] now and every 15 s (longer while the server asked for a wait) while this is on screen and the app is in front, telling
+ * [next] when it runs again (for a pull's "next update in 9 s").
  */
 @Composable
 private fun Refreshing(vararg keys: Any?, next: (Long) -> Unit, refresh: suspend () -> Unit) {
@@ -179,12 +176,13 @@ private fun Refreshing(vararg keys: Any?, next: (Long) -> Unit, refresh: suspend
 /** The clock, a tick a second, for "Updated 5 s ago". */
 @Composable
 private fun ticking(): Long {
-    val now by produceState(ServerClock.now()) {
-        while (true) {
-            delay(1_000)
-            value = ServerClock.now()
+    val now by
+        produceState(ServerClock.now()) {
+            while (true) {
+                delay(1_000)
+                value = ServerClock.now()
+            }
         }
-    }
     return now
 }
 
@@ -198,14 +196,16 @@ private fun Home(state: BusesUi, vm: BusesViewModel, pins: List<String>, onPin: 
     val heads = rememberPagerState { pages.size }
     val boards = rememberPagerState { pages.size }
     LaunchedEffect(heads, boards) {
-        snapshotFlow { Triple(heads.isScrollInProgress, heads.currentPage, heads.currentPageOffsetFraction) }.collect { (moving, page, off) ->
-            if (moving && !boards.isScrollInProgress) boards.scrollToPage(page, off)
-        }
+        snapshotFlow { Triple(heads.isScrollInProgress, heads.currentPage, heads.currentPageOffsetFraction) }
+            .collect { (moving, page, off) ->
+                if (moving && !boards.isScrollInProgress) boards.scrollToPage(page, off)
+            }
     }
     LaunchedEffect(heads, boards) {
-        snapshotFlow { Triple(boards.isScrollInProgress, boards.currentPage, boards.currentPageOffsetFraction) }.collect { (moving, page, off) ->
-            if (moving && !heads.isScrollInProgress) heads.scrollToPage(page, off)
-        }
+        snapshotFlow { Triple(boards.isScrollInProgress, boards.currentPage, boards.currentPageOffsetFraction) }
+            .collect { (moving, page, off) ->
+                if (moving && !heads.isScrollInProgress) heads.scrollToPage(page, off)
+            }
     }
     val scope = rememberCoroutineScope()
     val phase = skyPhase()
@@ -215,53 +215,71 @@ private fun Home(state: BusesUi, vm: BusesViewModel, pins: List<String>, onPin: 
     // The band, then the board or the search's results, scroll as one, so the
     // sky goes up with the page rather than staying over it.
     val scroll = rememberScrollState()
-    BusPull(boardLivery(state, inView), ::hillScene, enabled = query.isBlank(), onRefresh = { vm.pullPage(inView) }, nextUpdateAt = { vm.pageNextAt(inView) }) { pull ->
-    Box(Modifier.fillMaxSize()) {
-    Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
-        // The dots' line has room for the moon on the right.
-        // Searching, just the field over the hills, so the results start right under it.
-        SkyBand(phase, top, moonLow = true, moonLine = query.isBlank() && pages.size <= 1, padded = false, moon = query.isBlank()) {
-            Column {
-                SearchBox(query, { query = it }, Modifier.pullLead(pull).padding(horizontal = 16.dp, vertical = 8.dp))
-                if (query.isBlank()) {
-                    PullRoom(above = 8.dp, below = 8.dp)
-                    // Every header composed, so the band is as tall as the longest name and doesn't jump.
-                    HorizontalPager(heads, Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top, beyondViewportPageCount = pages.size, key = { pages.getOrNull(it) ?: "nearest" }) { i ->
-                        Box(Modifier.padding(horizontal = 16.dp)) { PageHeader(state, i, pages.getOrNull(i), pins, vm, onPin) }
+    BusPull(
+        boardLivery(state, inView),
+        ::hillScene,
+        enabled = query.isBlank(),
+        onRefresh = { vm.pullPage(inView) },
+        nextUpdateAt = { vm.pageNextAt(inView) },
+    ) { pull ->
+        Box(Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
+                // The dots' line has room for the moon on the right.
+                // Searching, just the field over the hills, so the results start right under it.
+                SkyBand(phase, top, moonLow = true, moonLine = query.isBlank() && pages.size <= 1, padded = false, moon = query.isBlank()) {
+                    Column {
+                        SearchBox(query, { query = it }, Modifier.pullLead(pull).padding(horizontal = 16.dp, vertical = 8.dp))
+                        if (query.isBlank()) {
+                            PullRoom(above = 8.dp, below = 8.dp)
+                            // Every header composed, so the band is as tall as the longest name and doesn't jump.
+                            HorizontalPager(
+                                heads,
+                                Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.Top,
+                                beyondViewportPageCount = pages.size,
+                                key = { pages.getOrNull(it) ?: "nearest" },
+                            ) { i ->
+                                Box(Modifier.padding(horizontal = 16.dp)) { PageHeader(state, i, pages.getOrNull(i), pins, vm, onPin) }
+                            }
+                            if (pages.size > 1) Dots(pages.size, boards.currentPage, nearestFirst = true)
+                        }
                     }
-                    if (pages.size > 1) Dots(pages.size, boards.currentPage, nearestFirst = true)
+                }
+                if (query.isNotBlank()) {
+                    SearchResults(state, query) { hit ->
+                        query = ""
+                        vm.open(
+                            when (hit) {
+                                is BusHit.Service -> BusRoute.Line(hit.svc, null)
+                                is BusHit.Stop -> BusRoute.Stop(hit.code)
+                            }
+                        )
+                    }
+                    return@Column
+                }
+                val shown = pages.getOrNull(boards.settledPage)
+                // The page in view only: swiping past one doesn't ask for it. The
+                // nearest stop's twin comes with it, so across the road costs nothing more.
+                val first = boards.settledPage == 0
+                Refreshing(if (first) null else shown, first, state.across, next = { vm.nextTimedAt = it }) {
+                    vm.refreshPage(if (first) null else shown)
+                }
+                HorizontalPager(
+                    boards,
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top,
+                    key = { pages.getOrNull(it) ?: "nearest" },
+                ) { i ->
+                    val code = pages.getOrNull(i)
+                    val next = pages.getOrNull(i + 1)?.let { stopName(state, it) }
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
+                        if (i == 0 && code == null) NoNearest(state, vm) else if (code != null) StopBody(state, vm, code)
+                        if (next != null) SwipeFor(next) { scope.launch { boards.animateScrollToPage(i + 1) } }
+                    }
                 }
             }
+            StatusStrip(phase, top, scroll)
         }
-        if (query.isNotBlank()) {
-            SearchResults(state, query) { hit ->
-                query = ""
-                vm.open(
-                    when (hit) {
-                        is BusHit.Service -> BusRoute.Line(hit.svc, null)
-                        is BusHit.Stop -> BusRoute.Stop(hit.code)
-                    },
-                )
-            }
-            return@Column
-        }
-        val shown = pages.getOrNull(boards.settledPage)
-        // The page in view only: swiping past one doesn't ask for it. The
-        // nearest stop's twin comes with it, so across the road costs nothing more.
-        val first = boards.settledPage == 0
-        Refreshing(if (first) null else shown, first, state.across, next = { vm.nextTimedAt = it }) { vm.refreshPage(if (first) null else shown) }
-        HorizontalPager(boards, Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top, key = { pages.getOrNull(it) ?: "nearest" }) { i ->
-            val code = pages.getOrNull(i)
-            val next = pages.getOrNull(i + 1)?.let { stopName(state, it) }
-            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
-                if (i == 0 && code == null) NoNearest(state, vm)
-                else if (code != null) StopBody(state, vm, code)
-                if (next != null) SwipeFor(next) { scope.launch { boards.animateScrollToPage(i + 1) } }
-            }
-        }
-    }
-    StatusStrip(phase, top, scroll)
-    }
     }
 }
 
@@ -269,8 +287,8 @@ private fun Home(state: BusesUi, vm: BusesViewModel, pins: List<String>, onPin: 
 private fun hillScene(width: Float) = PullScene(width, Pull.hillSign(width))
 
 /**
- * The pull's bus for the page of stop [code] (null: the nearest stop): the
- * first service on the board it shows, in its colour; null before there's one.
+ * The pull's bus for the page of stop [code] (null: the nearest stop): the first service on the board it shows, in its colour; null before
+ * there's one.
  */
 private fun boardLivery(state: BusesUi, code: String?): Long? {
     val own = code ?: state.nearest?.code ?: return null
@@ -285,7 +303,11 @@ private fun boardLivery(state: BusesUi, code: String?): Long? {
 private fun PageHeader(state: BusesUi, i: Int, code: String?, pins: List<String>, vm: BusesViewModel, onPin: (String) -> Unit) {
     if (code == null) {
         Column(Modifier.padding(top = 8.dp)) {
-            Text(stringResource(R.string.buses_nearest), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                stringResource(R.string.buses_nearest),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             Text(
                 stringResource(if (state.nearestState == Nearest.Loading) R.string.checking else R.string.buses_find_title),
                 style = MaterialTheme.typography.headlineMedium,
@@ -296,10 +318,11 @@ private fun PageHeader(state: BusesUi, i: Int, code: String?, pins: List<String>
         return
     }
     val board = state.boards[code]
-    val label = if (i == 0) {
-        if (!state.located) stringResource(R.string.buses_near_home)
-        else board?.distM?.let { stringResource(R.string.buses_nearest_m, it) } ?: stringResource(R.string.buses_nearest)
-    } else stringResource(R.string.buses_pinned)
+    val label =
+        if (i == 0) {
+            if (!state.located) stringResource(R.string.buses_near_home)
+            else board?.distM?.let { stringResource(R.string.buses_nearest_m, it) } ?: stringResource(R.string.buses_nearest)
+        } else stringResource(R.string.buses_pinned)
     val plain = if (i == 0) stringResource(if (state.located) R.string.buses_nearest else R.string.buses_near_home) else label
     StopHeader(state, vm, code, label, plain, nearest = i == 0 && state.located, pins = pins, onPin = onPin)
 }
@@ -316,19 +339,31 @@ private fun SearchBox(query: String, onQuery: (String) -> Unit, modifier: Modifi
         // A label, not only a placeholder: it keeps the field's name once something's typed.
         label = { Text(stringResource(R.string.buses_search)) },
         leadingIcon = { Icon(painterResource(R.drawable.ic_search), contentDescription = null, modifier = Modifier.size(20.dp)) },
-        trailingIcon = if (query.isEmpty()) null else {
-            { IconButton(onClick = { onQuery(""); focus.clearFocus() }) { Icon(painterResource(R.drawable.ic_close), contentDescription = stringResource(R.string.close)) } }
-        },
+        trailingIcon =
+            if (query.isEmpty()) null
+            else {
+                {
+                    IconButton(
+                        onClick = {
+                            onQuery("")
+                            focus.clearFocus()
+                        }
+                    ) {
+                        Icon(painterResource(R.drawable.ic_close), contentDescription = stringResource(R.string.close))
+                    }
+                }
+            },
         singleLine = true,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         shape = RoundedCornerShape(16.dp),
-        colors = TextFieldDefaults.colors(
-            focusedIndicatorColor = Color.Transparent,
-            unfocusedIndicatorColor = Color.Transparent,
-            // The sky's glass, so the hour shows through it.
-            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-        ),
+        colors =
+            TextFieldDefaults.colors(
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+                // The sky's glass, so the hour shows through it.
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+            ),
         modifier = modifier.fillMaxWidth(),
     )
 }
@@ -342,14 +377,21 @@ private fun SearchResults(state: BusesUi, query: String, onPick: (BusHit) -> Uni
     // In the tab's own scroll, under the field.
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
         if (hits.isEmpty() && campus != null) {
-            Text(stringResource(R.string.buses_search_none), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 12.dp))
+            Text(
+                stringResource(R.string.buses_search_none),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 12.dp),
+            )
         }
         var group: Boolean? = null
         for (hit in hits) {
             val isService = hit is BusHit.Service
             if (group != isService) {
                 group = isService
-                Label(stringResource(if (isService) R.string.buses_group_services else R.string.group_stops), Modifier.padding(top = 12.dp, bottom = 4.dp))
+                Label(
+                    stringResource(if (isService) R.string.buses_group_services else R.string.group_stops),
+                    Modifier.padding(top = 12.dp, bottom = 4.dp),
+                )
             }
             Row(
                 Modifier.fillMaxWidth().clickable(role = Role.Button) { onPick(hit) }.padding(vertical = 10.dp),
@@ -362,13 +404,22 @@ private fun SearchResults(state: BusesUi, query: String, onPick: (BusHit) -> Uni
                         val n = campus?.stops?.count { hit.svc in it.services } ?: 0
                         if (n > 0) Text(stringResource(R.string.buses_n_stops, n), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    is BusHit.Stop -> Column(Modifier.weight(1f)) {
-                        Text(hit.name, fontWeight = FontWeight.SemiBold)
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 3.dp)) {
-                            Text(hit.code, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            for (svc in hit.services) BusBadge(svc, colors[svc] ?: GREY, 11.sp, pad = 5.dp, even = true)
+                    is BusHit.Stop ->
+                        Column(Modifier.weight(1f)) {
+                            Text(hit.name, fontWeight = FontWeight.SemiBold)
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(top = 3.dp),
+                            ) {
+                                Text(
+                                    hit.code,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                for (svc in hit.services) BusBadge(svc, colors[svc] ?: GREY, 11.sp, pad = 5.dp, even = true)
+                            }
                         }
-                    }
                 }
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -382,10 +433,11 @@ private fun NoNearest(state: BusesUi, vm: BusesViewModel) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var hasLocation by remember { mutableStateOf(Locator.hasForeground(ctx)) }
-    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-        hasLocation = Locator.hasForeground(ctx)
-        scope.launch { vm.refreshNearest(force = true) }
-    }
+    val ask =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+            hasLocation = Locator.hasForeground(ctx)
+            scope.launch { vm.refreshNearest(force = true) }
+        }
     Column(Modifier.padding(top = 16.dp)) {
         when (state.nearestState) {
             Nearest.Loading -> {}
@@ -393,18 +445,23 @@ private fun NoNearest(state: BusesUi, vm: BusesViewModel) {
                 Text(stringResource(R.string.cant_reach), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 TextButton(onClick = { scope.launch { vm.refreshNearest(force = true) } }) { Text(stringResource(R.string.try_again)) }
             }
-            else -> LinkTile(null, Modifier.fillMaxWidth()) {
-                Text(
-                    stringResource(if (hasLocation) R.string.buses_find_text_search else R.string.buses_find_text),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-                if (!hasLocation) {
-                    TextButton(onClick = { ask.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)) }) {
-                        Text(stringResource(R.string.allow_location))
+            else ->
+                LinkTile(null, Modifier.fillMaxWidth()) {
+                    Text(
+                        stringResource(if (hasLocation) R.string.buses_find_text_search else R.string.buses_find_text),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                    if (!hasLocation) {
+                        TextButton(
+                            onClick = {
+                                ask.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+                            }
+                        ) {
+                            Text(stringResource(R.string.allow_location))
+                        }
                     }
                 }
-            }
         }
     }
 }
@@ -416,44 +473,61 @@ private fun StopRoute(state: BusesUi, vm: BusesViewModel, code: String, pins: Li
     val phase = skyPhase()
     val scroll = rememberScrollState()
     BusPull(boardLivery(state, code), ::hillScene, onRefresh = { vm.pullPage(code) }, nextUpdateAt = { vm.pageNextAt(code) }) { pull ->
-    Box(Modifier.fillMaxSize()) {
-    Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
-        // Back, and the stop, in the sky, as on the tab's own pages; it scrolls away with the board.
-        SkyBand(phase, top, moonLow = true) {
-            Column {
-                BackRow(stringResource(R.string.back), Modifier.pullLead(pull)) { vm.back() }
-                PullRoom(below = 8.dp)
-                val label = if (code in pins) stringResource(R.string.buses_pinned) else null
-                StopHeader(state, vm, code, label, label, nearest = false, pins = pins, onPin = onPin)
+        Box(Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
+                // Back, and the stop, in the sky, as on the tab's own pages; it scrolls away with the board.
+                SkyBand(phase, top, moonLow = true) {
+                    Column {
+                        BackRow(stringResource(R.string.back), Modifier.pullLead(pull)) { vm.back() }
+                        PullRoom(below = 8.dp)
+                        val label = if (code in pins) stringResource(R.string.buses_pinned) else null
+                        StopHeader(state, vm, code, label, label, nearest = false, pins = pins, onPin = onPin)
+                    }
+                }
+                Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
+                    StopBody(state, vm, code)
+                }
             }
+            StatusStrip(phase, top, scroll)
         }
-        Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
-            StopBody(state, vm, code)
-        }
-    }
-    StatusStrip(phase, top, scroll)
-    }
     }
 }
 
 @Composable
 private fun BackRow(text: String, modifier: Modifier = Modifier, trailing: @Composable () -> Unit = {}, onBack: () -> Unit) {
-    Row(modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+    Row(
+        modifier.fillMaxWidth().heightIn(min = 48.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
         Row(
-            Modifier.weight(1f, fill = false).clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button, onClick = onBack).padding(vertical = 8.dp, horizontal = 4.dp),
+            Modifier.weight(1f, fill = false)
+                .clip(RoundedCornerShape(12.dp))
+                .clickable(role = Role.Button, onClick = onBack)
+                .padding(vertical = 8.dp, horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Icon(painterResource(R.drawable.ic_back), contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-            Text(text, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Icon(
+                painterResource(R.drawable.ic_back),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp),
+            )
+            Text(
+                text,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
         trailing()
     }
 }
 
 /**
- * A stop's header, in the sky: what it is ("Nearest stop · 40 m",
- * "Pinned"), its name, its code and the star. Across the road, the stop
+ * A stop's header, in the sky: what it is ("Nearest stop · 40 m", "Pinned"), its name, its code and the star. Across the road, the stop
  * shown is the twin, and the star is for that one.
  */
 @Composable
@@ -478,8 +552,18 @@ private fun StopHeader(
         Column(Modifier.weight(1f)) {
             if (label != null) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (nearest) Icon(painterResource(R.drawable.ic_near), contentDescription = null, tint = smallAccent(), modifier = Modifier.size(14.dp))
-                    Text(if (across) plainLabel.orEmpty() else label, style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant)
+                    if (nearest)
+                        Icon(
+                            painterResource(R.drawable.ic_near),
+                            contentDescription = null,
+                            tint = smallAccent(),
+                            modifier = Modifier.size(14.dp),
+                        )
+                    Text(
+                        if (across) plainLabel.orEmpty() else label,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = c.onSurfaceVariant,
+                    )
                 }
             }
             Text(
@@ -496,7 +580,8 @@ private fun StopHeader(
         val ctx = LocalContext.current
         IconButton(
             onClick = {
-                if (!starOn && pins.size >= vm.pinLimit) android.widget.Toast.makeText(ctx, L.s(R.string.buses_pins_full, vm.pinLimit), android.widget.Toast.LENGTH_SHORT).show()
+                if (!starOn && pins.size >= vm.pinLimit)
+                    android.widget.Toast.makeText(ctx, L.s(R.string.buses_pins_full, vm.pinLimit), android.widget.Toast.LENGTH_SHORT).show()
                 else onPin(shownCode)
             },
             // A pane of the sky's glass, as the search is.
@@ -528,7 +613,9 @@ private fun StopBody(state: BusesUi, vm: BusesViewModel, code: String) {
             else listOf(own.name, own.oppositeName ?: stopName(state, opposite)),
             if (across) 1 else 0,
             Modifier.padding(top = 12.dp),
-        ) { vm.setAcross(code, it == 1) }
+        ) {
+            vm.setAcross(code, it == 1)
+        }
     }
     Spacer(Modifier.height(12.dp))
     BoardCard(board, failed = shownCode in state.failed, colors = state.campus?.routes?.mapValues { it.value.color }.orEmpty()) { row ->
@@ -542,14 +629,25 @@ private fun StopBody(state: BusesUi, vm: BusesViewModel, code: String) {
 private fun Dots(count: Int, current: Int, nearestFirst: Boolean) {
     val c = MaterialTheme.colorScheme
     val said = stringResource(R.string.a11y_page, current + 1, count)
-    Row(Modifier.fillMaxWidth().padding(top = 10.dp).clearAndSetSemantics { contentDescription = said }, horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        Modifier.fillMaxWidth().padding(top = 10.dp).clearAndSetSemantics { contentDescription = said },
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         for (i in 0 until count) {
             if (i == 0 && nearestFirst) {
-                Icon(painterResource(R.drawable.ic_near), contentDescription = null, tint = if (current == 0) c.onSurface else c.outline, modifier = Modifier.padding(horizontal = 3.dp).size(10.dp))
+                Icon(
+                    painterResource(R.drawable.ic_near),
+                    contentDescription = null,
+                    tint = if (current == 0) c.onSurface else c.outline,
+                    modifier = Modifier.padding(horizontal = 3.dp).size(10.dp),
+                )
             } else {
                 Box(
-                    Modifier.padding(horizontal = 3.dp).height(6.dp).width(if (i == current) 18.dp else 6.dp)
-                        .background(if (i == current) c.onSurface else c.outlineVariant, CircleShape),
+                    Modifier.padding(horizontal = 3.dp)
+                        .height(6.dp)
+                        .width(if (i == current) 18.dp else 6.dp)
+                        .background(if (i == current) c.onSurface else c.outlineVariant, CircleShape)
                 )
             }
         }
@@ -560,18 +658,36 @@ private fun Dots(count: Int, current: Int, nearestFirst: Boolean) {
 @Composable
 private fun Segmented(options: List<String>, selected: Int, modifier: Modifier = Modifier, onSelect: (Int) -> Unit) {
     val c = MaterialTheme.colorScheme
-    Row(modifier.fillMaxWidth().height(IntrinsicSize.Min).clip(RoundedCornerShape(14.dp)).background(c.secondaryContainer).padding(4.dp).selectableGroup()) {
+    Row(
+        modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min)
+            .clip(RoundedCornerShape(14.dp))
+            .background(c.secondaryContainer)
+            .padding(4.dp)
+            .selectableGroup()
+    ) {
         for ((i, text) in options.withIndex()) {
             val on = i == selected
             Box(
-                Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(10.dp))
+                Modifier.weight(1f)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(10.dp))
                     .background(if (on) c.surface else Color.Transparent)
                     .selectable(selected = on, role = Role.Tab) { onSelect(i) }
                     .padding(vertical = 9.dp, horizontal = 8.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 // A long stop name takes two lines, centred; both halves keep one height.
-                Text(text, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium, color = if (on) c.onSurface else c.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, lineHeight = 18.sp)
+                Text(
+                    text,
+                    fontWeight = if (on) FontWeight.Bold else FontWeight.Medium,
+                    color = if (on) c.onSurface else c.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 18.sp,
+                )
             }
         }
     }
@@ -586,18 +702,25 @@ private fun BoardCard(got: Board?, failed: Boolean, colors: Map<String, Long>, o
     val shape = RoundedCornerShape(18.dp)
     Column(Modifier.fillMaxWidth().clip(shape).background(c.surface).border(1.dp, c.outlineVariant, shape)) {
         when {
-            board == null -> Text(
-                stringResource(if (failed) R.string.cant_reach else R.string.checking),
-                color = c.onSurfaceVariant,
-                modifier = Modifier.padding(16.dp),
-            )
-            board.rows.isEmpty() -> Text(
-                stringResource(if (board.available) R.string.buses_none_here else R.string.buses_feed_down),
-                color = c.onSurfaceVariant,
-                modifier = Modifier.padding(16.dp),
-            )
+            board == null ->
+                Text(
+                    stringResource(if (failed) R.string.cant_reach else R.string.checking),
+                    color = c.onSurfaceVariant,
+                    modifier = Modifier.padding(16.dp),
+                )
+            board.rows.isEmpty() ->
+                Text(
+                    stringResource(if (board.available) R.string.buses_none_here else R.string.buses_feed_down),
+                    color = c.onSurfaceVariant,
+                    modifier = Modifier.padding(16.dp),
+                )
             else -> {
-                if (!board.available) Text(stringResource(R.string.buses_feed_down), color = c.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
+                if (!board.available)
+                    Text(
+                        stringResource(R.string.buses_feed_down),
+                        color = c.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    )
                 BoardRows(runningFirst(board.rows), colors, dividerFirst = !board.available, onRow = onRow)
             }
         }
@@ -608,14 +731,11 @@ private fun BoardCard(got: Board?, failed: Boolean, colors: Map<String, Long>, o
 internal fun runningFirst(rows: List<BoardRow>): List<BoardRow> = rows.filter { it.running } + rows.filter { !it.running }
 
 /**
- * A board's rows with lines between them: the Buses tab's card, and smaller
- * ([compact]) the map's stop sheet, so a stop reads the same in both. A row
- * tapped is [onRow], said as [clickLabel] (its line, by default).
+ * A board's rows with lines between them: the Buses tab's card, and smaller ([compact]) the map's stop sheet, so a stop reads the same in
+ * both. A row tapped is [onRow], said as [clickLabel] (its line, by default).
  *
- * The two do different things when tapped, so they look different too: on
- * the Buses tab a row opens its line's page and has a chevron saying so;
- * on the map ([picked] set) a row picks its line, and the line picked
- * there ([picked]'s value) has its row washed in its colour.
+ * The two do different things when tapped, so they look different too: on the Buses tab a row opens its line's page and has a chevron
+ * saying so; on the map ([picked] set) a row picks its line, and the line picked there ([picked]'s value) has its row washed in its colour.
  */
 @Composable
 internal fun BoardRows(
@@ -653,7 +773,13 @@ private fun Modifier.rowGround(look: RowLook, color: Long, base: Color): Modifie
 /** The "opens a page" mark, at a row's end. */
 @Composable
 private fun RowScope.RowChevron(look: RowLook) {
-    if (look.chevron) Icon(painterResource(R.drawable.ic_chevron), contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp).align(Alignment.CenterVertically))
+    if (look.chevron)
+        Icon(
+            painterResource(R.drawable.ic_chevron),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp).align(Alignment.CenterVertically),
+        )
 }
 
 @Composable
@@ -666,16 +792,29 @@ private fun BoardRowView(row: BoardRow, color: Long, onClick: (() -> Unit)?, cli
             // tinted row is the line picked there; the big minutes say it's soon.
             .rowGround(look, color, if (arriving && look.picked == null) c.primaryContainer else Color.Transparent)
             .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClickLabel = clickLabel, onClick = onClick) else Modifier)
-            .padding(start = if (compact) 16.dp else 14.dp, end = if (look.chevron) 8.dp else if (compact) 16.dp else 14.dp, top = if (compact) 10.dp else 14.dp, bottom = if (compact) 10.dp else 14.dp),
+            .padding(
+                start = if (compact) 16.dp else 14.dp,
+                end = if (look.chevron) 8.dp else if (compact) 16.dp else 14.dp,
+                top = if (compact) 10.dp else 14.dp,
+                bottom = if (compact) 10.dp else 14.dp,
+            ),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         SvcChip(row.svc, color, paid = row.paid, small = compact)
         Column(Modifier.weight(1f)) {
             // Where it goes, as the server words it ("to Central Library, Kent Vale", "Ends here").
-            if (row.toText != null) Text(towards(row.toText, row.towards.firstOrNull(), row.towards.isEmpty()), style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            else if (row.towards.isNotEmpty()) Text(towards(row.towards), style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (row.toText != null)
+                Text(
+                    towards(row.toText, row.towards.firstOrNull(), row.towards.isEmpty()),
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            else if (row.towards.isNotEmpty())
+                Text(towards(row.towards), style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
             // The end of its line: said, so no direction doesn't read as missing.
-            else if (row.endsHere) Text(stringResource(R.string.buses_ends_here), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+            else if (row.endsHere)
+                Text(stringResource(R.string.buses_ends_here), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
             @OptIn(ExperimentalLayoutApi::class)
             FlowRow(
                 Modifier.padding(top = if (row.toText == null && row.towards.isEmpty() && !row.endsHere) 2.dp else 6.dp),
@@ -689,16 +828,23 @@ private fun BoardRowView(row: BoardRow, color: Long, onClick: (() -> Unit)?, cli
         }
         Column(horizontalAlignment = Alignment.End, modifier = Modifier.widthIn(min = 72.dp)) {
             BigTime(row.etaS, row.quality, arriving, row.eta, size = if (compact) 26.sp else 34.sp)
-            thenText(row)?.let { Text(it, style = if (compact) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant, textAlign = TextAlign.End, modifier = Modifier.padding(top = 4.dp)) }
+            thenText(row)?.let {
+                Text(
+                    it,
+                    style = if (compact) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium,
+                    color = c.onSurfaceVariant,
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
         }
         RowChevron(look)
     }
 }
 
 /**
- * A row not running: why, and when it's back, from the clock as it ticks.
- * Once that time has passed it says only why, until the board's next
- * refresh brings the row's times.
+ * A row not running: why, and when it's back, from the clock as it ticks. Once that time has passed it says only why, until the board's
+ * next refresh brings the row's times.
  */
 @Composable
 private fun StoppedRow(row: BoardRow, color: Long, onClick: (() -> Unit)?, clickLabel: String, compact: Boolean, look: RowLook) {
@@ -707,11 +853,19 @@ private fun StoppedRow(row: BoardRow, color: Long, onClick: (() -> Unit)?, click
 }
 
 /**
- * A service that calls here but isn't running: greyed, its chip faded, and
- * where the minutes go, why and when it's back. No time, no Live, no crowd.
+ * A service that calls here but isn't running: greyed, its chip faded, and where the minutes go, why and when it's back. No time, no Live,
+ * no crowd.
  */
 @Composable
-private fun StoppedRowView(row: BoardRow, color: Long, stopped: Stopped, onClick: (() -> Unit)?, clickLabel: String, compact: Boolean, look: RowLook) {
+private fun StoppedRowView(
+    row: BoardRow,
+    color: Long,
+    stopped: Stopped,
+    onClick: (() -> Unit)?,
+    clickLabel: String,
+    compact: Boolean,
+    look: RowLook,
+) {
     val c = MaterialTheme.colorScheme
     val ctx = LocalContext.current
     val (why, back) = stopped.lines(remember { hour12(ctx) })
@@ -719,14 +873,25 @@ private fun StoppedRowView(row: BoardRow, color: Long, stopped: Stopped, onClick
         Modifier.fillMaxWidth()
             .rowGround(look, color, Color.Transparent)
             .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClickLabel = clickLabel, onClick = onClick) else Modifier)
-            .padding(start = if (compact) 16.dp else 14.dp, end = if (look.chevron) 8.dp else if (compact) 16.dp else 14.dp, top = if (compact) 8.dp else 12.dp, bottom = if (compact) 8.dp else 12.dp),
+            .padding(
+                start = if (compact) 16.dp else 14.dp,
+                end = if (look.chevron) 8.dp else if (compact) 16.dp else 14.dp,
+                top = if (compact) 8.dp else 12.dp,
+                bottom = if (compact) 8.dp else 12.dp,
+            ),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.alpha(0.35f)) { SvcChip(row.svc, color, paid = row.paid, small = compact) }
         Column(Modifier.weight(1f)) {
             if (row.towards.isNotEmpty()) {
-                Text(row.toText ?: stringResource(R.string.buses_towards, row.towards.joinToString(stringResource(R.string.list_sep))), style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    row.toText ?: stringResource(R.string.buses_towards, row.towards.joinToString(stringResource(R.string.list_sep))),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = c.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
             Text(why, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = c.onSurfaceVariant)
             back?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant) }
@@ -760,19 +925,26 @@ private fun towards(names: List<String>): AnnotatedString {
 private fun QualityTag(row: BoardRow) {
     val c = MaterialTheme.colorScheme
     when {
-        row.etaS == null -> Text(
-            stringResource(if (row.quality == "unknown") R.string.buses_no_live_times else R.string.buses_no_time_yet),
-            style = MaterialTheme.typography.labelLarge,
-            color = c.onSurfaceVariant,
-        )
-        row.quality == "live" -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            val good = goodColor()
-            Canvas(Modifier.size(10.dp)) {
-                drawCircle(good.copy(alpha = 0.25f))
-                drawCircle(good, radius = size.minDimension / 3.2f)
+        row.etaS == null ->
+            Text(
+                stringResource(if (row.quality == "unknown") R.string.buses_no_live_times else R.string.buses_no_time_yet),
+                style = MaterialTheme.typography.labelLarge,
+                color = c.onSurfaceVariant,
+            )
+        row.quality == "live" ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                val good = goodColor()
+                Canvas(Modifier.size(10.dp)) {
+                    drawCircle(good.copy(alpha = 0.25f))
+                    drawCircle(good, radius = size.minDimension / 3.2f)
+                }
+                Text(
+                    stringResource(R.string.buses_live),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = good,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
-            Text(stringResource(R.string.buses_live), style = MaterialTheme.typography.labelLarge, color = good, fontWeight = FontWeight.SemiBold)
-        }
         row.quality == "stale" -> Tag(stringResource(R.string.buses_last_known), c.onSurfaceVariant)
         else -> Tag(stringResource(R.string.buses_scheduled), c.tertiary)
     }
@@ -797,25 +969,27 @@ private fun CrowdPill(text: String, packed: Boolean) {
         text,
         style = MaterialTheme.typography.labelLarge,
         color = color,
-        modifier = Modifier.background(if (packed) color.copy(alpha = 0.12f) else c.secondaryContainer, RoundedCornerShape(50)).padding(horizontal = 9.dp, vertical = 2.dp),
+        modifier =
+            Modifier.background(if (packed) color.copy(alpha = 0.12f) else c.secondaryContainer, RoundedCornerShape(50))
+                .padding(horizontal = 9.dp, vertical = 2.dp),
     )
 }
 
 @Composable
-private fun crowdWord(crowd: String?): String? = when (crowd) {
-    "low" -> stringResource(R.string.buses_seats)
-    "medium" -> stringResource(R.string.buses_busy)
-    "high" -> stringResource(R.string.buses_packed)
-    else -> null
-}
+private fun crowdWord(crowd: String?): String? =
+    when (crowd) {
+        "low" -> stringResource(R.string.buses_seats)
+        "medium" -> stringResource(R.string.buses_busy)
+        "high" -> stringResource(R.string.buses_packed)
+        else -> null
+    }
 
 /** The number in the server's words for a time ("4" in "~4 min"). */
 private val DIGITS = Regex("\\d+")
 
 /**
- * "4 min" with the number large ([size]), or "Arriving"; nothing without a time (the
- * tag says why). The words are the server's ([eta]: "4 min", "~6 min", "约 6
- * 分钟", "now"), with its number drawn large; worked out here for an older server.
+ * "4 min" with the number large ([size]), or "Arriving"; nothing without a time (the tag says why). The words are the server's ([eta]: "4
+ * min", "~6 min", "约 6 分钟", "now"), with its number drawn large; worked out here for an older server.
  */
 @Composable
 private fun BigTime(etaS: Int?, quality: String, arriving: Boolean, eta: String? = null, size: TextUnit = 34.sp) {
@@ -823,21 +997,26 @@ private fun BigTime(etaS: Int?, quality: String, arriving: Boolean, eta: String?
     val number = eta?.let { DIGITS.find(it) }
     when {
         etaS == null -> Text("–", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = c.outline)
-        eta != null -> Text(
-            buildAnnotatedString {
-                if (number == null) {
-                    withStyle(SpanStyle(fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)) { append(eta) }
-                } else {
-                    withStyle(SpanStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold)) { append(eta.substring(0, number.range.first)) }
-                    withStyle(SpanStyle(fontSize = size, fontWeight = FontWeight.ExtraBold)) { append(number.value) }
-                    withStyle(SpanStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold)) { append(eta.substring(number.range.last + 1)) }
-                }
-            },
-            color = if (arriving) c.primary else if (quality == "live") c.onSurface else c.onSurfaceVariant,
-            maxLines = 1,
-            // "about 6 minutes", not "tilde 6 min": the tag beside it says live or timetable.
-            modifier = Modifier.semantics { contentDescription = Spoken.eta(etaS, quality, withQuality = false) ?: eta },
-        )
+        eta != null ->
+            Text(
+                buildAnnotatedString {
+                    if (number == null) {
+                        withStyle(SpanStyle(fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)) { append(eta) }
+                    } else {
+                        withStyle(SpanStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold)) {
+                            append(eta.substring(0, number.range.first))
+                        }
+                        withStyle(SpanStyle(fontSize = size, fontWeight = FontWeight.ExtraBold)) { append(number.value) }
+                        withStyle(SpanStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold)) {
+                            append(eta.substring(number.range.last + 1))
+                        }
+                    }
+                },
+                color = if (arriving) c.primary else if (quality == "live") c.onSurface else c.onSurfaceVariant,
+                maxLines = 1,
+                // "about 6 minutes", not "tilde 6 min": the tag beside it says live or timetable.
+                modifier = Modifier.semantics { contentDescription = Spoken.eta(etaS, quality, withQuality = false) ?: eta },
+            )
         arriving -> Text(stringResource(R.string.map_arriving), fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = c.primary)
         else -> {
             val unit = stringResource(R.string.buses_min)
@@ -849,7 +1028,10 @@ private fun BigTime(etaS: Int?, quality: String, arriving: Boolean, eta: String?
                 // A timetabled time isn't drawn as boldly as a bus seen.
                 color = if (quality == "live") c.onSurface else c.onSurfaceVariant,
                 maxLines = 1,
-                modifier = Modifier.semantics { contentDescription = Spoken.eta(etaS, quality, withQuality = false) ?: L.s(R.string.n_min, BusTimes.minutes(etaS)) },
+                modifier =
+                    Modifier.semantics {
+                        contentDescription = Spoken.eta(etaS, quality, withQuality = false) ?: L.s(R.string.n_min, BusTimes.minutes(etaS))
+                    },
             )
         }
     }
@@ -857,7 +1039,9 @@ private fun BigTime(etaS: Int?, quality: String, arriving: Boolean, eta: String?
 
 /** "then 12, ~20, 25 min", as the server words it; worked out here, from the later buses it gave, for an older server. */
 private fun thenText(row: BoardRow): String? {
-    row.laterText?.let { return it }
+    row.laterText?.let {
+        return it
+    }
     val later = BusTimes.later(row)
     if (later.isEmpty()) return null
     val list = later.joinToString(L.s(R.string.list_sep))
@@ -886,9 +1070,17 @@ private fun Foot(board: Board) {
                 )
             }
         }
-        board.asOfMs?.let { Text(updated(it, now), style = MaterialTheme.typography.bodyMedium, color = muted, modifier = Modifier.padding(start = 8.dp)) }
+        board.asOfMs?.let {
+            Text(updated(it, now), style = MaterialTheme.typography.bodyMedium, color = muted, modifier = Modifier.padding(start = 8.dp))
+        }
     }
-    if (board.rows.any { !it.paid }) Text(stringResource(R.string.buses_tap_hint), style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 10.dp, start = 4.dp))
+    if (board.rows.any { !it.paid })
+        Text(
+            stringResource(R.string.buses_tap_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = muted,
+            modifier = Modifier.padding(top = 10.dp, start = 4.dp),
+        )
 }
 
 /** "Updated just now" for the first few seconds, as the web app says, never "0 s ago". */
@@ -909,7 +1101,12 @@ private fun SwipeFor(name: String, onClick: () -> Unit) {
     val c = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(16.dp)
     Row(
-        Modifier.fillMaxWidth().padding(top = 16.dp).clip(shape).border(1.dp, c.outlineVariant, shape).clickable(role = Role.Button, onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp),
+        Modifier.fillMaxWidth()
+            .padding(top = 16.dp)
+            .clip(shape)
+            .border(1.dp, c.outlineVariant, shape)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val full = stringResource(R.string.buses_swipe_for, name)
@@ -930,16 +1127,27 @@ private fun SwipeFor(name: String, onClick: () -> Unit) {
 @Composable
 private fun SvcChip(svc: String, color: Long, paid: Boolean = false, big: Boolean = false, small: Boolean = false) {
     val said = stringResource(if (paid) R.string.a11y_bus_paid else R.string.a11y_bus, svc)
-    val (w, h, r) = when {
-        big -> Triple(64.dp, 44.dp, 12.dp)
-        small -> Triple(40.dp, 26.dp, 7.dp)
-        else -> Triple(46.dp, 32.dp, 9.dp)
-    }
+    val (w, h, r) =
+        when {
+            big -> Triple(64.dp, 44.dp, 12.dp)
+            small -> Triple(40.dp, 26.dp, 7.dp)
+            else -> Triple(46.dp, 32.dp, 9.dp)
+        }
     Box(
-        Modifier.semantics(mergeDescendants = true) { contentDescription = said }.widthIn(min = w).heightIn(min = h).background(Color(color), RoundedCornerShape(r)).padding(horizontal = 8.dp),
+        Modifier.semantics(mergeDescendants = true) { contentDescription = said }
+            .widthIn(min = w)
+            .heightIn(min = h)
+            .background(Color(color), RoundedCornerShape(r))
+            .padding(horizontal = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(badgeText(svc, paid), color = inkOn(Color(color)), fontWeight = FontWeight.ExtraBold, fontSize = if (big) 20.sp else if (small) 13.sp else 15.sp, maxLines = 1)
+        Text(
+            badgeText(svc, paid),
+            color = inkOn(Color(color)),
+            fontWeight = FontWeight.ExtraBold,
+            fontSize = if (big) 20.sp else if (small) 13.sp else 15.sp,
+            maxLines = 1,
+        )
     }
 }
 
@@ -974,68 +1182,128 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
     }
     val phase = skyPhase()
     // Pulled down, the line asks again, its bus in the service's colour.
-    BusPull(color, ::hillScene, onRefresh = { vm.pullLine(route.svc, route.from) }, nextUpdateAt = { vm.lineNextAt(route.svc, route.from) }) { pull ->
-    Box(Modifier.fillMaxSize()) {
-    Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
-    // Back, the service and how many buses it has out, in the sky, scrolling away with the line.
-    Box(Modifier.onSizeChanged { band = it.height }) { SkyBand(phase, top, moonLow = true) { Column {
-        BackRow(
-            route.from?.let { stopName(state, it) } ?: stringResource(R.string.back),
-            Modifier.pullLead(pull),
-            trailing = {
-                TextButton(onClick = { onShowOnMap(route.svc) }) {
-                    Icon(painterResource(R.drawable.ic_tab_map), contentDescription = null, modifier = Modifier.size(18.dp))
-                    Text(stringResource(R.string.buses_show_on_map), modifier = Modifier.padding(start = 6.dp))
+    BusPull(
+        color,
+        ::hillScene,
+        onRefresh = { vm.pullLine(route.svc, route.from) },
+        nextUpdateAt = { vm.lineNextAt(route.svc, route.from) },
+    ) { pull ->
+        Box(Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
+                // Back, the service and how many buses it has out, in the sky, scrolling away with the line.
+                Box(Modifier.onSizeChanged { band = it.height }) {
+                    SkyBand(phase, top, moonLow = true) {
+                        Column {
+                            BackRow(
+                                route.from?.let { stopName(state, it) } ?: stringResource(R.string.back),
+                                Modifier.pullLead(pull),
+                                trailing = {
+                                    TextButton(onClick = { onShowOnMap(route.svc) }) {
+                                        Icon(
+                                            painterResource(R.drawable.ic_tab_map),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp),
+                                        )
+                                        Text(stringResource(R.string.buses_show_on_map), modifier = Modifier.padding(start = 6.dp))
+                                    }
+                                },
+                            ) {
+                                vm.back()
+                            }
+                            PullRoom(below = 8.dp)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                modifier = Modifier.padding(top = 8.dp),
+                            ) {
+                                SvcChip(route.svc, color, big = true)
+                                Column {
+                                    if (line != null) {
+                                        val n = line.buses.size
+                                        Text(
+                                            when {
+                                                !line.available -> stringResource(R.string.map_buses_unavailable)
+                                                n == 0 -> stringResource(R.string.buses_none_running)
+                                                n == 1 -> stringResource(R.string.buses_one_running)
+                                                else -> stringResource(R.string.buses_n_running, n)
+                                            },
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                        )
+                                        line.endsAtMs?.let {
+                                            Text(
+                                                stringResource(R.string.buses_runs_until, clock(it, h12)),
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
-            },
-        ) { vm.back() }
-        PullRoom(below = 8.dp)
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.padding(top = 8.dp)) {
-            SvcChip(route.svc, color, big = true)
-            Column {
-                if (line != null) {
-                    val n = line.buses.size
-                    Text(
-                        when {
-                            !line.available -> stringResource(R.string.map_buses_unavailable)
-                            n == 0 -> stringResource(R.string.buses_none_running)
-                            n == 1 -> stringResource(R.string.buses_one_running)
-                            else -> stringResource(R.string.buses_n_running, n)
-                        },
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    line.endsAtMs?.let { Text(stringResource(R.string.buses_runs_until, clock(it, h12)), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
+                    // Not running: why and when it's back, over the stops (it has no buses to show).
+                    line
+                        ?.let { Stopped.of(it.running, it.stopped, it.resumesAtMs, now) }
+                        ?.let { st ->
+                            val (why, back) = st.lines(h12)
+                            Column(
+                                Modifier.fillMaxWidth()
+                                    .padding(top = 14.dp)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(c.secondaryContainer)
+                                    .padding(horizontal = 14.dp, vertical = 12.dp)
+                            ) {
+                                Text(why, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                back?.let { Text(it, color = c.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp)) }
+                            }
+                        }
+                    HorizontalDivider(Modifier.padding(top = 16.dp), color = c.outlineVariant)
+                    when {
+                        line == null && key in state.lineFailed ->
+                            Text(
+                                stringResource(R.string.buses_unknown_line),
+                                color = c.onSurfaceVariant,
+                                modifier = Modifier.padding(vertical = 16.dp),
+                            )
+                        line == null ->
+                            Text(
+                                stringResource(R.string.checking),
+                                color = c.onSurfaceVariant,
+                                modifier = Modifier.padding(vertical = 16.dp),
+                            )
+                        else -> {
+                            Row(
+                                Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Label(stringResource(R.string.buses_n_stops, line.stops.size), Modifier.weight(1f))
+                                line.asOfMs?.let {
+                                    Text(updated(it, now), style = MaterialTheme.typography.bodySmall, color = c.onSurfaceVariant)
+                                }
+                            }
+                            LineList(
+                                line,
+                                Color(color),
+                                colors = state.campus?.routes?.mapValues { it.value.color }.orEmpty(),
+                                onHere = { hereY = it },
+                            ) { code ->
+                                vm.open(BusRoute.Stop(code))
+                            }
+                            if (line.here != null && line.running)
+                                Text(
+                                    stringResource(R.string.buses_times_here_only),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = c.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 12.dp),
+                                )
+                        }
+                    }
                 }
             }
+            StatusStrip(phase, top, scroll)
         }
-    } } }
-    Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
-        // Not running: why and when it's back, over the stops (it has no buses to show).
-        line?.let { Stopped.of(it.running, it.stopped, it.resumesAtMs, now) }?.let { st ->
-            val (why, back) = st.lines(h12)
-            Column(Modifier.fillMaxWidth().padding(top = 14.dp).clip(RoundedCornerShape(14.dp)).background(c.secondaryContainer).padding(horizontal = 14.dp, vertical = 12.dp)) {
-                Text(why, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                back?.let { Text(it, color = c.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp)) }
-            }
-        }
-        HorizontalDivider(Modifier.padding(top = 16.dp), color = c.outlineVariant)
-        when {
-            line == null && key in state.lineFailed -> Text(stringResource(R.string.buses_unknown_line), color = c.onSurfaceVariant, modifier = Modifier.padding(vertical = 16.dp))
-            line == null -> Text(stringResource(R.string.checking), color = c.onSurfaceVariant, modifier = Modifier.padding(vertical = 16.dp))
-            else -> {
-                Row(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Label(stringResource(R.string.buses_n_stops, line.stops.size), Modifier.weight(1f))
-                    line.asOfMs?.let { Text(updated(it, now), style = MaterialTheme.typography.bodySmall, color = c.onSurfaceVariant) }
-                }
-                LineList(line, Color(color), colors = state.campus?.routes?.mapValues { it.value.color }.orEmpty(), onHere = { hereY = it }) { code -> vm.open(BusRoute.Stop(code)) }
-                if (line.here != null && line.running) Text(stringResource(R.string.buses_times_here_only), style = MaterialTheme.typography.bodySmall, color = c.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp))
-            }
-        }
-    }
-    }
-    StatusStrip(phase, top, scroll)
-    }
     }
 }
 
@@ -1051,11 +1319,12 @@ private fun LineList(line: Line, color: Color, colors: Map<String, Long>, onHere
             is LineItem.Stop -> {
                 val here = item.here
                 Row(
-                    Modifier.fillMaxWidth().height(IntrinsicSize.Min)
+                    Modifier.fillMaxWidth()
+                        .height(IntrinsicSize.Min)
                         .clip(RoundedCornerShape(14.dp))
                         .background(if (here) c.primaryContainer else Color.Transparent)
                         .then(if (here) Modifier.onGloballyPositioned { onHere(it.positionInParent().y.toInt()) } else Modifier)
-                        .clickable(role = Role.Button, onClickLabel = stringResource(R.string.a11y_open_stop)) { onStop(item.stop.code) },
+                        .clickable(role = Role.Button, onClickLabel = stringResource(R.string.a11y_open_stop)) { onStop(item.stop.code) }
                 ) {
                     Rail(color, first, last, bus = item.buses.isNotEmpty(), here = here)
                     Column(Modifier.weight(1f).padding(vertical = 10.dp).padding(end = 10.dp)) {
@@ -1064,7 +1333,11 @@ private fun LineList(line: Line, color: Color, colors: Map<String, Long>, onHere
                                 Text(item.stop.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                                 if (item.stop.services.isNotEmpty()) {
                                     @OptIn(ExperimentalLayoutApi::class)
-                                    FlowRow(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    FlowRow(
+                                        Modifier.padding(top = 4.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                                    ) {
                                         for (svc in item.stop.services) BusBadge(svc, colors[svc] ?: GREY, 10.sp, pad = 4.dp, even = true)
                                     }
                                 }
@@ -1076,12 +1349,13 @@ private fun LineList(line: Line, color: Color, colors: Map<String, Long>, onHere
                     }
                 }
             }
-            is LineItem.Between -> Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-                Rail(color, first = false, last = last, bus = true, here = false)
-                Box(Modifier.weight(1f).padding(vertical = 8.dp), contentAlignment = Alignment.CenterStart) {
-                    BusesOnLine(item.buses, stringResource(R.string.buses_on_the_way))
+            is LineItem.Between ->
+                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                    Rail(color, first = false, last = last, bus = true, here = false)
+                    Box(Modifier.weight(1f).padding(vertical = 8.dp), contentAlignment = Alignment.CenterStart) {
+                        BusesOnLine(item.buses, stringResource(R.string.buses_on_the_way))
+                    }
                 }
-            }
         }
     }
 }
@@ -1112,7 +1386,10 @@ private fun Plate(text: String) {
         style = MaterialTheme.typography.labelLarge,
         fontWeight = FontWeight.Bold,
         letterSpacing = 0.5.sp,
-        modifier = Modifier.background(c.surface, RoundedCornerShape(6.dp)).border(1.dp, c.outlineVariant, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 1.dp),
+        modifier =
+            Modifier.background(c.surface, RoundedCornerShape(6.dp))
+                .border(1.dp, c.outlineVariant, RoundedCornerShape(6.dp))
+                .padding(horizontal = 6.dp, vertical = 1.dp),
     )
 }
 
@@ -1146,7 +1423,10 @@ private fun Rail(color: Color, first: Boolean, last: Boolean, bus: Boolean, here
             }
         }
         if (bus) {
-            Box(Modifier.size(28.dp).background(color, RoundedCornerShape(8.dp)).border(2.dp, paper, RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier.size(28.dp).background(color, RoundedCornerShape(8.dp)).border(2.dp, paper, RoundedCornerShape(8.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
                 Icon(painterResource(R.drawable.ic_bus), contentDescription = null, tint = inkOn(color), modifier = Modifier.size(16.dp))
             }
         }

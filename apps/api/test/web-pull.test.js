@@ -81,7 +81,9 @@ test('Buses fetches again on a pull only when its times are old enough to change
   const realFetch = globalThis.fetch;
   let calls = 0;
   const nearby = () =>
-    new Response(JSON.stringify({ stops: [{ stop: { code: 'YIH', name: 'YIH' }, board: [], available: true, distM: 40 }] }), { headers: { 'content-type': 'application/json' } });
+    new Response(JSON.stringify({ stops: [{ stop: { code: 'YIH', name: 'YIH' }, board: [], available: true, distM: 40 }] }), {
+      headers: { 'content-type': 'application/json' },
+    });
   globalThis.fetch = async () => (calls++, nearby());
   try {
     B.nearest.set({ status: 'ready', code: 'YIH', distM: 40 });

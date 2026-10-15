@@ -6,7 +6,16 @@ import realGraph from '../data/stops.json' with { type: 'json' };
 import venuesJson from '../data/venues.json' with { type: 'json' };
 
 import { buildCampusMap, buildDestinations, friendlyLabel, ROUTE_COLORS, shapeFor } from '../src/campus.ts';
-import { beforeOpening, boardAsOf, boardAt, FIRST_BUS_LEAD_S, indexGraph, serviceResumesAt, stoppedReason, towardsFrom } from '../src/resolve.ts';
+import {
+  beforeOpening,
+  boardAsOf,
+  boardAt,
+  FIRST_BUS_LEAD_S,
+  indexGraph,
+  serviceResumesAt,
+  stoppedReason,
+  towardsFrom,
+} from '../src/resolve.ts';
 import { GRAPH as REAL, GRAPH_PUBLIC } from '../src/graph.ts';
 import { haversineM } from '../src/geo.ts';
 
@@ -54,7 +63,10 @@ test('buildCampusMap keeps real relative geography: two stops far apart in lat/l
 
 test('buildCampusMap drops the closing repeat of a loop route so the polyline has no zero-length segment', () => {
   const map = buildCampusMap(realGraph);
-  assert.ok(Object.values(map.routes).some((r) => r.loop), 'no loop to check');
+  assert.ok(
+    Object.values(map.routes).some((r) => r.loop),
+    'no loop to check',
+  );
   for (const [svc, seq] of Object.entries(realGraph.routes)) {
     if (map.routes[svc].loop) {
       assert.notEqual(seq[0], map.routes[svc].seq.at(-1), `${svc}: loop-closing repeat was not dropped`);
@@ -90,7 +102,6 @@ test('buildDestinations covers every stop and resolves every known venue to a re
 
   const stopEntries = dest.filter((d) => d.kind === 'stop');
   assert.equal(stopEntries.length, realGraph.stops.length);
-
 
   for (const d of dest) {
     assert.ok(byCode.has(d.stopCode), `${d.code} resolves to unknown stop ${d.stopCode}`);
@@ -257,7 +268,11 @@ test('towards: a loop runs on from its last stop to its first; the end of a line
   assert.deepEqual(towardsFrom(idx, 'K', 'NOPE'), []);
   assert.deepEqual(towardsFrom(idx, 'Z9', 'YIH'), []);
   // A route calling at a stop twice goes on from its first call there.
-  const twice = indexGraph({ stops: ['A', 'B', 'C'].map((code) => ({ code, name: code })), routes: { X: ['A', 'B', 'A', 'C'] }, loops: { X: false } });
+  const twice = indexGraph({
+    stops: ['A', 'B', 'C'].map((code) => ({ code, name: code })),
+    routes: { X: ['A', 'B', 'A', 'C'] },
+    loops: { X: false },
+  });
   assert.deepEqual(towardsFrom(twice, 'X', 'A'), ['B', 'C']);
 });
 
@@ -270,7 +285,10 @@ test('boardAt: a public bus has no colour of its own and still says where it goe
   assert.ok(pub.length, `public buses at ${code}`);
   for (const r of pub) {
     assert.equal(r.color, null);
-    assert.ok(r.towards.every((t) => typeof t === 'string' && t.length), JSON.stringify(r.towards));
+    assert.ok(
+      r.towards.every((t) => typeof t === 'string' && t.length),
+      JSON.stringify(r.towards),
+    );
     assert.ok(!r.svc.includes('/'), 'shown by its number, not its route key');
   }
 });
@@ -306,20 +324,45 @@ test('stopped services: ended for today, not yet started, or no service today, a
 test('boardAt with stopped: services outside their hours come last, greyed, unless the feed still has a bus', () => {
   const idx = indexGraph(REAL);
   const nowMs = sgtAt(7, 21, 30); // R1 and R2 have finished
-  const sa = { code: 'PGP', arrivals: [{ svc: 'K', etaS: 120, crowd: 'low', plate: 'PK1', berth: null }], fetchedAt: nowMs, stale: false, available: true };
+  const sa = {
+    code: 'PGP',
+    arrivals: [{ svc: 'K', etaS: 120, crowd: 'low', plate: 'PK1', berth: null }],
+    fetchedAt: nowMs,
+    stale: false,
+    available: true,
+  };
   const plain = boardAt(REAL, idx, 'PGP', sa, nowMs);
-  assert.ok(plain.every((r) => r.running === true && !('stopped' in r) && !('resumesAt' in r)), 'unchanged without it, apart from running');
+  assert.ok(
+    plain.every((r) => r.running === true && !('stopped' in r) && !('resumesAt' in r)),
+    'unchanged without it, apart from running',
+  );
   assert.ok(!plain.some((r) => r.svc === 'R1'));
   const rows = boardAt(REAL, idx, 'PGP', sa, nowMs, { stopped: true });
   assert.deepEqual(rows.slice(0, plain.length), plain, 'the running rows as before, first');
   const off = rows.slice(plain.length);
-  assert.deepEqual(off.map((r) => r.svc), ['R1', 'R2'], 'then the stopped ones, by name');
+  assert.deepEqual(
+    off.map((r) => r.svc),
+    ['R1', 'R2'],
+    'then the stopped ones, by name',
+  );
   const r1 = off[0];
   assert.deepEqual(r1, {
-    svc: 'R1', etaS: null, quality: 'ended', ambiguousBerth: false, later: [], color: '#f57c1f',
-    towards: r1.towards, crowd: null, endsAt: null, running: false, stopped: 'ended', resumesAt: '2026-10-07T23:40:00.000Z',
+    svc: 'R1',
+    etaS: null,
+    quality: 'ended',
+    ambiguousBerth: false,
+    later: [],
+    color: '#f57c1f',
+    towards: r1.towards,
+    crowd: null,
+    endsAt: null,
+    running: false,
+    stopped: 'ended',
+    resumesAt: '2026-10-07T23:40:00.000Z',
     // Not running: no time to give, but still where it goes.
-    eta: null, laterText: null, toText: r1.toText,
+    eta: null,
+    laterText: null,
+    toText: r1.toText,
   });
   // The feed still reporting an R1 at PGP: the feed wins, and it is a running row.
   const late = { ...sa, arrivals: [...sa.arrivals, { svc: 'R1', etaS: 300, crowd: null, plate: 'PR1', berth: null }] };
@@ -329,7 +372,7 @@ test('boardAt with stopped: services outside their hours come last, greyed, unle
   assert.equal('stopped' in r1Live, false);
 });
 
-test('before a service opens, the feed\'s times hours ahead are not shown as live buses', () => {
+test("before a service opens, the feed's times hours ahead are not shown as live buses", () => {
   const idx = indexGraph(REAL);
   // Thursday 8 October, 01:13: A2 and D2 open at 07:15. NUS's feed still
   // lists them, hours ahead and off their hours (an A2 at 09:16): no bus.
@@ -354,8 +397,9 @@ test('before a service opens, the feed\'s times hours ahead are not shown as liv
 
   // 07:05, the first A2 due at 07:20: shown, but as the timetable's time.
   const early = sgtAt(8, 7, 5);
-  const first = boardAt(REAL, idx, 'PGPR', sa(early, [{ svc: 'A2', etaS: 900, crowd: null, plate: 'PA1', berth: null }]), early)
-    .find((r) => r.svc === 'A2');
+  const first = boardAt(REAL, idx, 'PGPR', sa(early, [{ svc: 'A2', etaS: 900, crowd: null, plate: 'PA1', berth: null }]), early).find(
+    (r) => r.svc === 'A2',
+  );
   assert.equal(first.running, true);
   assert.equal(first.quality, 'scheduled');
   assert.equal(first.eta, '~15 min');
@@ -461,12 +505,18 @@ test('code-unit order lists the same buildings and residences as localeCompare d
     return won;
   };
   const units = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
-  assert.deepEqual(winners(units), winners((a, b) => a.localeCompare(b)));
+  assert.deepEqual(
+    winners(units),
+    winners((a, b) => a.localeCompare(b)),
+  );
 
   const { residenceList } = await import('../src/residences.ts');
   const list = residenceList();
   const locale = [...list].sort((a, b) => Number(b.common) - Number(a.common) || a.name.localeCompare(b.name));
-  assert.deepEqual(list.map((r) => r.code), locale.map((r) => r.code));
+  assert.deepEqual(
+    list.map((r) => r.code),
+    locale.map((r) => r.code),
+  );
 });
 
 test('boardAt: a service whose rows the feed garbled has no data; the rest of the stop is live', () => {

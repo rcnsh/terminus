@@ -1,18 +1,16 @@
 package sh.rcn.terminus
 
-import org.json.JSONArray
-import org.json.JSONObject
 import java.time.Instant
 import java.time.ZoneId
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
- * The Buses tab's data: a stop's board (`/arrivals`, or a `/me/nearby`
- * stop), a service's line (`/line`), the pages to swipe between, and the
- * search. Plain JSON in and plain values out, so it's tested on the JVM
- * (BusesTest); the screens only lay it out.
+ * The Buses tab's data: a stop's board (`/arrivals`, or a `/me/nearby` stop), a service's line (`/line`), the pages to swipe between, and
+ * the search. Plain JSON in and plain values out, so it's tested on the JVM (BusesTest); the screens only lay it out.
  *
- * Every time shown is one the API gave: the next bus and its `later` list.
- * Nothing here works out a time from a headway or for another stop.
+ * Every time shown is one the API gave: the next bus and its `later` list. Nothing here works out a time from a headway or for another
+ * stop.
  */
 
 /** A stop's board. [distM] only for the nearest stop, from /me/nearby. */
@@ -55,7 +53,8 @@ data class Board(
         }
 
         /** A stop from /me/nearby, as a board; its answer's time is [asOfMs]. */
-        fun of(s: NearbyStop, asOfMs: Long?) = Board(s.code, s.longName ?: s.name, s.opposite, s.available, s.board, asOfMs, s.distM, s.oppositeAcross, s.oppositeName)
+        fun of(s: NearbyStop, asOfMs: Long?) =
+            Board(s.code, s.longName ?: s.name, s.opposite, s.available, s.board, asOfMs, s.distM, s.oppositeAcross, s.oppositeName)
     }
 }
 
@@ -63,8 +62,8 @@ data class Board(
 data class LineStop(val code: String, val name: String, val services: List<String>)
 
 /**
- * A bus on a line: at stop [at] (an index into the line's stops), or
- * between stop [after] and the one after it, round to the first on a loop.
+ * A bus on a line: at stop [at] (an index into the line's stops), or between stop [after] and the one after it, round to the first on a
+ * loop.
  */
 data class LineBus(val id: String, val plate: String?, val crowd: String?, val at: Int?, val after: Int?)
 
@@ -93,9 +92,8 @@ data class Line(
         if (gotMs == null || here?.row == null) this else copy(here = here.copy(row = BusTimes.aged(here.row, gotMs, nowMs)))
 
     /**
-     * The line as it's drawn, top to bottom: every stop with the buses at
-     * it, and between two stops a row for the buses on the way. A bus whose
-     * place isn't on the list (an index out of range) isn't drawn.
+     * The line as it's drawn, top to bottom: every stop with the buses at it, and between two stops a row for the buses on the way. A bus
+     * whose place isn't on the list (an index out of range) isn't drawn.
      */
     fun items(): List<LineItem> {
         val out = mutableListOf<LineItem>()
@@ -111,29 +109,36 @@ data class Line(
         fun parse(o: JSONObject): Line {
             val s = o.optJSONArray("stops") ?: JSONArray()
             val b = o.optJSONArray("buses") ?: JSONArray()
-            val stops = (0 until s.length()).mapNotNull { i ->
-                val x = s.optJSONObject(i) ?: return@mapNotNull null
-                val code = x.optString("code")
-                LineStop(code, x.optStringOrNull("longName")?.ifEmpty { null } ?: x.optStringOrNull("name")?.ifEmpty { null } ?: code, x.optJSONArray("services").strings())
-            }
-            val here = o.optJSONObject("stop")?.let { h ->
-                LineHere(h.optString("code"), h.optInt("index", -1), h.optJSONObject("row")?.let(::parseBoardRow))
-            }
+            val stops =
+                (0 until s.length()).mapNotNull { i ->
+                    val x = s.optJSONObject(i) ?: return@mapNotNull null
+                    val code = x.optString("code")
+                    LineStop(
+                        code,
+                        x.optStringOrNull("longName")?.ifEmpty { null } ?: x.optStringOrNull("name")?.ifEmpty { null } ?: code,
+                        x.optJSONArray("services").strings(),
+                    )
+                }
+            val here =
+                o.optJSONObject("stop")?.let { h ->
+                    LineHere(h.optString("code"), h.optInt("index", -1), h.optJSONObject("row")?.let(::parseBoardRow))
+                }
             return Line(
                 svc = o.optString("svc"),
                 color = parseColor(o.optStringOrNull("color")),
                 endsAtMs = o.optStringOrNull("endsAt")?.let(::parseInstant),
                 stops = stops,
-                buses = (0 until b.length()).mapNotNull { i ->
-                    val x = b.optJSONObject(i) ?: return@mapNotNull null
-                    LineBus(
-                        id = x.optString("id", "$i"),
-                        plate = x.optStringOrNull("plate")?.ifEmpty { null },
-                        crowd = x.optStringOrNull("crowd")?.takeIf { it == "low" || it == "medium" || it == "high" },
-                        at = x.index("at")?.takeIf { it in stops.indices },
-                        after = x.index("after")?.takeIf { it in stops.indices },
-                    )
-                },
+                buses =
+                    (0 until b.length()).mapNotNull { i ->
+                        val x = b.optJSONObject(i) ?: return@mapNotNull null
+                        LineBus(
+                            id = x.optString("id", "$i"),
+                            plate = x.optStringOrNull("plate")?.ifEmpty { null },
+                            crowd = x.optStringOrNull("crowd")?.takeIf { it == "low" || it == "medium" || it == "high" },
+                            at = x.index("at")?.takeIf { it in stops.indices },
+                            after = x.index("after")?.takeIf { it in stops.indices },
+                        )
+                    },
                 here = here?.takeIf { it.index in stops.indices },
                 available = o.optBoolean("available", true),
                 asOfMs = o.optStringOrNull("asOf")?.let(::parseInstant),
@@ -147,6 +152,7 @@ data class Line(
 
 sealed interface LineItem {
     data class Stop(val index: Int, val stop: LineStop, val buses: List<LineBus>, val here: Boolean) : LineItem
+
     /** Buses between stop [after] and the next. */
     data class Between(val after: Int, val buses: List<LineBus>) : LineItem
 }
@@ -160,19 +166,15 @@ object BusTimes {
     const val REFRESH_MS = 15_000L
 
     /**
-     * Times got longer ago than this have missed a refresh at least: counted
-     * down here from when they came, and no longer shown as live.
+     * Times got longer ago than this have missed a refresh at least: counted down here from when they came, and no longer shown as live.
      */
     const val OLD_MS = 2 * REFRESH_MS
 
     /**
-     * Row [r] from an answer this phone got at [gotMs], as it stands at
-     * [nowMs] (both on the server's clock). The server counts its times down
-     * to when it answered, so they're counted from [gotMs], never from the
-     * feed's `asOf` (that would take the same seconds off twice). Once the
-     * answer is [OLD_MS] old (refreshes failing), its times are counted down,
-     * a bus over a minute past has no time, and a live time says "Last
-     * known": nothing old passes for live. As the web's `aged()`.
+     * Row [r] from an answer this phone got at [gotMs], as it stands at [nowMs] (both on the server's clock). The server counts its times
+     * down to when it answered, so they're counted from [gotMs], never from the feed's `asOf` (that would take the same seconds off twice).
+     * Once the answer is [OLD_MS] old (refreshes failing), its times are counted down, a bus over a minute past has no time, and a live
+     * time says "Last known": nothing old passes for live. As the web's `aged()`.
      */
     fun aged(r: BoardRow, gotMs: Long, nowMs: Long): BoardRow {
         val ms = nowMs - gotMs
@@ -185,7 +187,10 @@ object BusTimes {
             eta = null,
             quality = if (r.quality == "live") "stale" else r.quality,
             laterText = null,
-            later = r.later.map { it.copy(etaS = it.etaS - s, eta = null, quality = if (it.quality == "live") "stale" else it.quality) }.filter { it.etaS > 0 },
+            later =
+                r.later
+                    .map { it.copy(etaS = it.etaS - s, eta = null, quality = if (it.quality == "live") "stale" else it.quality) }
+                    .filter { it.etaS > 0 },
         )
     }
 
@@ -196,15 +201,14 @@ object BusTimes {
     fun later(row: BoardRow, max: Int = 3): List<Int> = row.later.sortedBy { it.etaS }.take(max).map { minutes(it.etaS) }
 
     /** A later bus is from the timetable while the next one isn't: the "then" line says so. */
-    fun laterScheduled(row: BoardRow): Boolean =
-        row.quality != "scheduled" && row.later.take(3).any { it.quality == "scheduled" }
+    fun laterScheduled(row: BoardRow): Boolean = row.quality != "scheduled" && row.later.take(3).any { it.quality == "scheduled" }
 
     /**
-     * The services that stop within [withinMs] (two hours), soonest first,
-     * once each: "Runs until 11:15 pm" only when it's worth knowing.
+     * The services that stop within [withinMs] (two hours), soonest first, once each: "Runs until 11:15 pm" only when it's worth knowing.
      */
     fun endingSoon(rows: List<BoardRow>, nowMs: Long, withinMs: Long = 2 * 3_600_000L): List<Pair<String, Long>> =
-        rows.mapNotNull { r -> r.endsAtMs?.takeIf { it > nowMs && it - nowMs <= withinMs }?.let { r.svc to it } }
+        rows
+            .mapNotNull { r -> r.endsAtMs?.takeIf { it > nowMs && it - nowMs <= withinMs }?.let { r.svc to it } }
             .sortedBy { it.second }
             .distinctBy { it.first }
 
@@ -216,9 +220,8 @@ object BusTimes {
 }
 
 /**
- * What a service that isn't running says instead of a time: why
- * ("Stopped for today") and, when it's known, when it's back ("Back
- * tomorrow at 7:40 am"). Pure, for the tests; [Stopped.lines] words it.
+ * What a service that isn't running says instead of a time: why ("Stopped for today") and, when it's known, when it's back ("Back tomorrow
+ * at 7:40 am"). Pure, for the tests; [Stopped.lines] words it.
  */
 data class Stopped(val why: String, val back: Back?) {
     /** When it starts again: later [today] ("Starts at"), [tomorrow], or on [weekday] (0 = Sunday). */
@@ -226,20 +229,22 @@ data class Stopped(val why: String, val back: Back?) {
 
     /** The two lines, in the app's language; [h12] for 7:40 am rather than 07:40. */
     fun lines(h12: Boolean): Pair<String, String?> {
-        val first = L.s(
-            when (why) {
-                "notYet" -> R.string.buses_not_yet
-                "noService" -> R.string.buses_no_service
-                else -> R.string.buses_stopped_today
-            },
-        )
+        val first =
+            L.s(
+                when (why) {
+                    "notYet" -> R.string.buses_not_yet
+                    "noService" -> R.string.buses_no_service
+                    else -> R.string.buses_stopped_today
+                }
+            )
         val b = back ?: return first to null
         val time = if (h12) hhmm12(b.minute) else hhmm(b.minute)
-        val second = when {
-            b.today -> L.s(R.string.buses_starts_at, time)
-            b.tomorrow -> L.s(R.string.buses_back_tomorrow, time)
-            else -> L.s(R.string.buses_back_on, dayName(b.weekday), time)
-        }
+        val second =
+            when {
+                b.today -> L.s(R.string.buses_starts_at, time)
+                b.tomorrow -> L.s(R.string.buses_back_tomorrow, time)
+                else -> L.s(R.string.buses_back_on, dayName(b.weekday), time)
+            }
         return first to second
     }
 
@@ -249,11 +254,18 @@ data class Stopped(val why: String, val back: Back?) {
         /** A row or line not running, at [nowMs]; null for one that is. The days are Singapore's. */
         fun of(running: Boolean, why: String?, resumesAtMs: Long?, nowMs: Long): Stopped? {
             if (running) return null
-            val back = resumesAtMs?.takeIf { it > nowMs }?.let { at ->
-                val then = Instant.ofEpochMilli(at).atZone(SG)
-                val days = java.time.temporal.ChronoUnit.DAYS.between(Instant.ofEpochMilli(nowMs).atZone(SG).toLocalDate(), then.toLocalDate())
-                Back(then.hour * 60 + then.minute, today = days <= 0L, tomorrow = days == 1L, weekday = then.dayOfWeek.value % 7)
-            }
+            val back =
+                resumesAtMs
+                    ?.takeIf { it > nowMs }
+                    ?.let { at ->
+                        val then = Instant.ofEpochMilli(at).atZone(SG)
+                        val days =
+                            java.time.temporal.ChronoUnit.DAYS.between(
+                                Instant.ofEpochMilli(nowMs).atZone(SG).toLocalDate(),
+                                then.toLocalDate(),
+                            )
+                        Back(then.hour * 60 + then.minute, today = days <= 0L, tomorrow = days == 1L, weekday = then.dayOfWeek.value % 7)
+                    }
             return Stopped(why ?: "ended", back)
         }
     }
@@ -266,8 +278,7 @@ object Pins {
         if (code in pins) pins - code else if (pins.size >= max) pins else pins + code
 
     /**
-     * The pages to swipe between: the nearest stop first (null until it's
-     * known, or when there's none), then each pinned stop, except the
+     * The pages to swipe between: the nearest stop first (null until it's known, or when there's none), then each pinned stop, except the
      * nearest one again.
      */
     fun pages(nearest: String?, pins: List<String>): List<String?> = listOf(nearest) + pins.distinct().filter { it != nearest }
@@ -278,20 +289,21 @@ sealed interface BusHit {
     val key: SearchRank.Key
 
     data class Service(val svc: String) : BusHit {
-        override val key get() = SearchRank.Key("service", svc, svc)
+        override val key
+            get() = SearchRank.Key("service", svc, svc)
     }
 
     /** [name] is the full name; [aliases] its short name, lower case, and the nicknames /campus has for it ("library"). */
     data class Stop(val code: String, val name: String, val services: List<String>, val aliases: List<String> = emptyList()) : BusHit {
-        override val key get() = SearchRank.Key("stop", code, name, aliases)
+        override val key
+            get() = SearchRank.Key("stop", code, name, aliases)
     }
 }
 
 /**
- * What the tab's search looks through, as the web builds it (busesTabIndex):
- * every service by its code, in code order, then every stop by its full
- * name, in /campus order, also found by its short name and its nicknames
- * ([stopAliases], from /campus's destinations of kind "stop").
+ * What the tab's search looks through, as the web builds it (busesTabIndex): every service by its code, in code order, then every stop by
+ * its full name, in /campus order, also found by its short name and its nicknames ([stopAliases], from /campus's destinations of kind
+ * "stop").
  */
 fun busesTabIndex(stops: List<MapStop>, services: List<String>, stopAliases: Map<String, List<String>>): List<BusHit> =
     services.sorted().map { BusHit.Service(it) } +
@@ -301,8 +313,8 @@ fun busesTabIndex(stops: List<MapStop>, services: List<String>, stopAliases: Map
 fun busesTabIndex(campus: CampusMap): List<BusHit> = busesTabIndex(campus.stops, campus.serviceCodes, campus.stopAliases)
 
 /**
- * The tab's search, by the destination search's rules ([SearchRank]). With
- * nothing typed, the suggestions: every service, in order, not limited.
+ * The tab's search, by the destination search's rules ([SearchRank]). With nothing typed, the suggestions: every service, in order, not
+ * limited.
  */
 fun searchBuses(query: String, index: List<BusHit>, max: Int = SearchRank.MAX): List<BusHit> {
     if (query.trim { it.isWhitespace() || it == '\uFEFF' }.isEmpty()) return index.filterIsInstance<BusHit.Service>()

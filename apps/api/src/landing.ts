@@ -78,8 +78,16 @@ export function fillLanding(html: string, opts: { version: string | null; signed
  * ETag, the version, signed in or not, the beta's mark and the Play page), so a browser
  * revalidating gets a 304 only while what it has is what it would get.
  */
-export async function landingEtag(assetEtag: string, version: string | null, signedIn: boolean, beta: boolean, play: string | null = PLAY_URL): Promise<string> {
-  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify([assetEtag, version, signedIn, beta, play]))));
+export async function landingEtag(
+  assetEtag: string,
+  version: string | null,
+  signedIn: boolean,
+  beta: boolean,
+  play: string | null = PLAY_URL,
+): Promise<string> {
+  const digest = new Uint8Array(
+    await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify([assetEtag, version, signedIn, beta, play]))),
+  );
   return `W/"${Array.from(digest.slice(0, 12), (b) => b.toString(16).padStart(2, '0')).join('')}"`;
 }
 

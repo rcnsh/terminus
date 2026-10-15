@@ -9,8 +9,9 @@ import org.junit.Test
 
 /** The Buses tab's data, from replies shaped like the API's (/arrivals, /me/nearby, /line). */
 class BusesTest {
-    private val arrivals = JSONObject(
-        """
+    private val arrivals =
+        JSONObject(
+            """
         {"stop": {"code": "YIH", "name": "Yusof Ishak House", "opposite": "YIH-OPP"},
          "board": [
           {"svc": "K", "etaS": 40, "quality": "live", "ambiguousBerth": false, "later": [{"etaS": 560, "quality": "live"}, {"etaS": 1260, "quality": "scheduled"}],
@@ -21,10 +22,11 @@ class BusesTest {
            "color": null, "towards": ["Kent Ridge Ter"], "crowd": "nope", "endsAt": "not a time"}
          ],
          "asOf": "2026-10-07T02:42:00.000Z", "available": true}
-        """,
-    )
+        """
+        )
 
-    @Test fun anArrivalsBoardParsesEveryNewField() {
+    @Test
+    fun anArrivalsBoardParsesEveryNewField() {
         val b = Board.parse(arrivals)
         assertEquals("YIH", b.code)
         assertEquals("Yusof Ishak House", b.name)
@@ -42,8 +44,14 @@ class BusesTest {
         assertNull("a time it can't read is no time", bus151.endsAtMs)
     }
 
-    @Test fun anOlderServersBoardStillParses() {
-        val b = Board.parse(JSONObject("""{"stop": {"code": "COM3", "name": "COM 3"}, "board": [{"svc": "D2", "etaS": 120, "quality": "live", "later": []}], "available": true}"""))
+    @Test
+    fun anOlderServersBoardStillParses() {
+        val b =
+            Board.parse(
+                JSONObject(
+                    """{"stop": {"code": "COM3", "name": "COM 3"}, "board": [{"svc": "D2", "etaS": 120, "quality": "live", "later": []}], "available": true}"""
+                )
+            )
         assertNull(b.opposite)
         val r = b.rows.single()
         assertEquals(emptyList<String>(), r.towards)
@@ -53,14 +61,16 @@ class BusesTest {
         assertNull(b.asOfMs)
     }
 
-    @Test fun nearbyRowsCarryTheNewFieldsAndTheDistance() {
-        val json = JSONObject(
-            """
+    @Test
+    fun nearbyRowsCarryTheNewFieldsAndTheDistance() {
+        val json =
+            JSONObject(
+                """
             {"stops": [{"stop": {"code": "YIH", "name": "Yusof Ishak House"}, "opposite": "YIH-OPP", "distM": 40, "walkS": 35, "available": true,
               "board": [{"svc": "A1", "etaS": 240, "quality": "live", "later": [{"etaS": 720, "quality": "live"}], "color": "#e53935", "towards": ["Central Library"], "crowd": "high", "endsAt": null}]}],
              "asOf": "2026-10-07T02:42:00.000Z"}
-            """,
-        )
+            """
+            )
         val s = parseNearby(json).single()
         assertEquals(40, s.distM)
         val board = Board.of(s, 5L)
@@ -70,7 +80,8 @@ class BusesTest {
         assertEquals(listOf("Central Library"), board.rows.single().towards)
     }
 
-    @Test fun aFreshBoardIsShownAsItCame() {
+    @Test
+    fun aFreshBoardIsShownAsItCame() {
         val got = 1_000_000L
         val b = Board.parse(arrivals).copy(gotMs = got)
         // Within two refreshes, as the server counted it: not counted again here.
@@ -81,7 +92,8 @@ class BusesTest {
         assertEquals(unknown, unknown.aged(got + 600_000))
     }
 
-    @Test fun anOldBoardIsCountedDownAndNotLive() {
+    @Test
+    fun anOldBoardIsCountedDownAndNotLive() {
         val got = 1_000_000L
         val b = Board.parse(arrivals).copy(gotMs = got).aged(got + 40_000)
         val k = b.rows[0]
@@ -102,7 +114,8 @@ class BusesTest {
         assertEquals("scheduled", b.rows[1].quality)
     }
 
-    @Test fun busesLongPastHaveNoTime() {
+    @Test
+    fun busesLongPastHaveNoTime() {
         val got = 1_000_000L
         val k = Board.parse(arrivals).copy(gotMs = got).aged(got + 101_000).rows[0]
         // 40 s away 101 s ago: over a minute past, so no time; still not live.
@@ -115,10 +128,12 @@ class BusesTest {
         assertEquals(listOf(660), far.later.map { it.etaS })
     }
 
-    @Test fun aLineCountsYourStopsTimeDownToo() {
+    @Test
+    fun aLineCountsYourStopsTimeDownToo() {
         val got = 1_000_000L
         val here = Board.parse(arrivals).rows[0]
-        val line = Line("K", 0, null, listOf(LineStop("YIH", "YIH", emptyList())), emptyList(), LineHere("YIH", 0, here), true, null, gotMs = got)
+        val line =
+            Line("K", 0, null, listOf(LineStop("YIH", "YIH", emptyList())), emptyList(), LineHere("YIH", 0, here), true, null, gotMs = got)
         assertEquals(line, line.aged(got + 30_000))
         val row = line.aged(got + 45_000).here?.row
         assertEquals(0, row?.etaS)
@@ -126,7 +141,8 @@ class BusesTest {
         assertEquals(listOf(515, 1215), row?.later?.map { it.etaS })
     }
 
-    @Test fun timesComeOnlyFromTheApi() {
+    @Test
+    fun timesComeOnlyFromTheApi() {
         val k = Board.parse(arrivals).rows[0]
         assertEquals(listOf(9, 21), BusTimes.later(k))
         assertTrue("a timetabled later bus after a live one says so", BusTimes.laterScheduled(k))
@@ -138,27 +154,31 @@ class BusesTest {
         assertEquals(5, BusTimes.minutes(270))
     }
 
-    @Test fun onlyServicesEndingWithinTwoHoursSayWhen() {
+    @Test
+    fun onlyServicesEndingWithinTwoHoursSayWhen() {
         val now = java.time.Instant.parse("2026-10-07T14:00:00Z").toEpochMilli()
-        val rows = listOf(
-            BoardRow("D1", 60, "live", endsAtMs = now + 80 * 60_000),
-            BoardRow("D1", 600, "live", endsAtMs = now + 75 * 60_000),
-            BoardRow("R1", 60, "live", endsAtMs = now + 30 * 60_000),
-            BoardRow("A1", 60, "live", endsAtMs = now + 3 * 3_600_000),
-            BoardRow("K", 60, "live", endsAtMs = now - 60_000),
-            BoardRow("D2", 60, "live"),
-        )
+        val rows =
+            listOf(
+                BoardRow("D1", 60, "live", endsAtMs = now + 80 * 60_000),
+                BoardRow("D1", 600, "live", endsAtMs = now + 75 * 60_000),
+                BoardRow("R1", 60, "live", endsAtMs = now + 30 * 60_000),
+                BoardRow("A1", 60, "live", endsAtMs = now + 3 * 3_600_000),
+                BoardRow("K", 60, "live", endsAtMs = now - 60_000),
+                BoardRow("D2", 60, "live"),
+            )
         assertEquals(listOf("R1", "D1"), BusTimes.endingSoon(rows, now).map { it.first })
         // A service on two rows says the sooner of its ends.
         assertEquals(now + 75 * 60_000, BusTimes.endingSoon(rows, now).last().second)
     }
 
-    @Test fun campusTimeIsSingapores() {
+    @Test
+    fun campusTimeIsSingapores() {
         assertEquals(23 * 60 + 15, BusTimes.campusMinute(java.time.Instant.parse("2026-10-07T15:15:00Z").toEpochMilli()))
     }
 
-    private val line = JSONObject(
-        """
+    private val line =
+        JSONObject(
+            """
         {"svc": "D1", "color": "#ec4fa0", "endsAt": "2026-10-07T15:15:00.000Z",
          "stops": [
           {"code": "COM3", "name": "COM 3", "services": ["D2"]},
@@ -174,10 +194,11 @@ class BusesTest {
          ],
          "stop": {"code": "YIH-OPP", "index": 2, "row": {"svc": "D1", "etaS": 420, "quality": "live", "later": [{"etaS": 1020, "quality": "live"}], "color": "#ec4fa0", "towards": ["UTown"], "crowd": "low", "endsAt": null}},
          "available": true, "asOf": "2026-10-07T02:42:00.000Z"}
-        """,
-    )
+        """
+        )
 
-    @Test fun aLineParsesWithItsBusesPlaced() {
+    @Test
+    fun aLineParsesWithItsBusesPlaced() {
         val l = Line.parse(line)
         assertEquals("D1", l.svc)
         assertEquals(0xFFEC4FA0L, l.color)
@@ -188,7 +209,8 @@ class BusesTest {
         assertEquals(420, l.here?.row?.etaS)
     }
 
-    @Test fun theLineIsDrawnStopsWithBusesBetween() {
+    @Test
+    fun theLineIsDrawnStopsWithBusesBetween() {
         val items = Line.parse(line).items()
         val shape = items.map {
             when (it) {
@@ -200,15 +222,22 @@ class BusesTest {
         assertEquals(listOf("COM3", "~0", "IT", "YIH-OPP*!", "UTOWN", "~3"), shape)
     }
 
-    @Test fun aLineWithoutTheStopOrBusesStillParses() {
-        val l = Line.parse(JSONObject("""{"svc": "A1", "color": null, "endsAt": null, "stops": [{"code": "PGP", "name": "PGP", "services": []}], "buses": [], "available": false}"""))
+    @Test
+    fun aLineWithoutTheStopOrBusesStillParses() {
+        val l =
+            Line.parse(
+                JSONObject(
+                    """{"svc": "A1", "color": null, "endsAt": null, "stops": [{"code": "PGP", "name": "PGP", "services": []}], "buses": [], "available": false}"""
+                )
+            )
         assertNull(l.here)
         assertFalse(l.available)
         assertEquals(0xFF8A939CL, l.color)
         assertEquals(1, l.items().size)
     }
 
-    @Test fun pinsToggleAndStopAtEight() {
+    @Test
+    fun pinsToggleAndStopAtEight() {
         assertEquals(listOf("A", "B"), Pins.toggle(listOf("A"), "B"))
         assertEquals(listOf("B"), Pins.toggle(listOf("A", "B"), "A"))
         val full = (1..8).map { "S$it" }
@@ -216,12 +245,14 @@ class BusesTest {
         assertEquals(full - "S3", Pins.toggle(full, "S3"))
     }
 
-    @Test fun pagesAreTheNearestThenThePinnedOnes() {
+    @Test
+    fun pagesAreTheNearestThenThePinnedOnes() {
         assertEquals(listOf("YIH", "CLB", "COM3"), Pins.pages("YIH", listOf("CLB", "YIH", "COM3")))
         assertEquals(listOf(null, "CLB"), Pins.pages(null, listOf("CLB", "CLB")))
     }
 
-    @Test fun pinnedStopsLiveInTheProfile() {
+    @Test
+    fun pinnedStopsLiveInTheProfile() {
         val p = ProfileDoc(JSONObject("""{"lang": "auto", "future": 1}"""))
         assertEquals(emptyList<String>(), p.pinnedStops)
         p.pinnedStops = listOf("YIH", "CLB", "YIH")
@@ -229,13 +260,15 @@ class BusesTest {
         assertEquals("fields this version doesn't know survive", 1, p.json.getInt("future"))
     }
 
-    @Test fun theSearchFindsServicesAndStops() {
-        val stops = listOf(
-            MapStop("COM3", "COM 3", 0.0, 0.0, listOf("D1", "D2")),
-            MapStop("KR-MRT", "KR MRT", 0.0, 0.0, listOf("A1", "D2"), longName = "Kent Ridge MRT"),
-            MapStop("KV", "Kent Vale", 0.0, 0.0, listOf("K")),
-            MapStop("YIH", "YIH", 0.0, 0.0, listOf("A1", "D1", "K"), longName = "Yusof Ishak House"),
-        )
+    @Test
+    fun theSearchFindsServicesAndStops() {
+        val stops =
+            listOf(
+                MapStop("COM3", "COM 3", 0.0, 0.0, listOf("D1", "D2")),
+                MapStop("KR-MRT", "KR MRT", 0.0, 0.0, listOf("A1", "D2"), longName = "Kent Ridge MRT"),
+                MapStop("KV", "Kent Vale", 0.0, 0.0, listOf("K")),
+                MapStop("YIH", "YIH", 0.0, 0.0, listOf("A1", "D1", "K"), longName = "Yusof Ishak House"),
+            )
         val index = busesTabIndex(stops, listOf("K", "D2", "A1", "D1", "A2"), mapOf("KR-MRT" to listOf("mrt")))
         fun names(q: String) = searchBuses(q, index).map { if (it is BusHit.Service) it.svc else (it as BusHit.Stop).code }
         assertEquals("the service first, then stops starting with it", listOf("K", "KV", "KR-MRT", "YIH"), names("k"))
@@ -247,12 +280,25 @@ class BusesTest {
         assertEquals("nothing typed: every service", listOf("A1", "A2", "D1", "D2", "K"), names("  "))
     }
 
-    @Test fun theFullNameIsShownWhereTheServerGivesOne() {
-        val b = Board.parse(JSONObject("""{"stop": {"code": "YIH", "name": "YIH", "longName": "Yusof Ishak House", "opposite": null}, "board": []}"""))
+    @Test
+    fun theFullNameIsShownWhereTheServerGivesOne() {
+        val b =
+            Board.parse(
+                JSONObject("""{"stop": {"code": "YIH", "name": "YIH", "longName": "Yusof Ishak House", "opposite": null}, "board": []}""")
+            )
         assertEquals("Yusof Ishak House", b.name)
-        val l = Line.parse(JSONObject("""{"svc": "D1", "stops": [{"code": "CLB", "name": "CLB", "longName": "Central Library", "services": []}], "buses": []}"""))
+        val l =
+            Line.parse(
+                JSONObject(
+                    """{"svc": "D1", "stops": [{"code": "CLB", "name": "CLB", "longName": "Central Library", "services": []}], "buses": []}"""
+                )
+            )
         assertEquals("Central Library", l.stops.single().name)
-        val near = parseNearby(JSONObject("""{"stops": [{"stop": {"code": "YIH", "name": "YIH", "longName": "Yusof Ishak House"}, "board": []}]}""")).single()
+        val near =
+            parseNearby(
+                    JSONObject("""{"stops": [{"stop": {"code": "YIH", "name": "YIH", "longName": "Yusof Ishak House"}, "board": []}]}""")
+                )
+                .single()
         assertEquals("the widget keeps the short name", "YIH", near.name)
         assertEquals("Yusof Ishak House", Board.of(near, null).name)
         val stops = listOf(MapStop("CLB", "CLB", 0.0, 0.0, listOf("A1"), longName = "Central Library"))
@@ -260,20 +306,38 @@ class BusesTest {
         assertEquals("Central Library", hit.name)
     }
 
-    @Test fun anEmptyTowardsIsTheEndOfTheLine() {
-        val b = Board.parse(JSONObject("""{"stop": {"code": "PGPR"}, "board": [{"svc": "K", "etaS": 600, "quality": "live", "towards": []}, {"svc": "A1", "etaS": 60, "quality": "live", "towards": ["LT 27"]}]}"""))
+    @Test
+    fun anEmptyTowardsIsTheEndOfTheLine() {
+        val b =
+            Board.parse(
+                JSONObject(
+                    """{"stop": {"code": "PGPR"}, "board": [{"svc": "K", "etaS": 600, "quality": "live", "towards": []}, {"svc": "A1", "etaS": 60, "quality": "live", "towards": ["LT 27"]}]}"""
+                )
+            )
         assertTrue(b.rows[0].endsHere)
         assertFalse(b.rows[1].endsHere)
         val old = Board.parse(JSONObject("""{"stop": {"code": "PGPR"}, "board": [{"svc": "K", "etaS": 600, "quality": "live"}]}"""))
         assertFalse("an older server says nothing of where it goes", old.rows[0].endsHere)
     }
 
-    @Test fun aTwinOnlyNearByIsNotAcrossTheRoad() {
-        val b = Board.parse(JSONObject("""{"stop": {"code": "PGPR", "opposite": "PGP", "oppositeAcross": false, "oppositeName": "Prince George's Park"}, "board": []}"""))
+    @Test
+    fun aTwinOnlyNearByIsNotAcrossTheRoad() {
+        val b =
+            Board.parse(
+                JSONObject(
+                    """{"stop": {"code": "PGPR", "opposite": "PGP", "oppositeAcross": false, "oppositeName": "Prince George's Park"}, "board": []}"""
+                )
+            )
         assertFalse(b.oppositeAcross)
         assertEquals("Prince George's Park", b.oppositeName)
         assertTrue("an older server: across the road, as before", Board.parse(arrivals).oppositeAcross)
-        val near = parseNearby(JSONObject("""{"stops": [{"stop": {"code": "PGP", "name": "PGP"}, "opposite": "PGPR", "oppositeAcross": false, "oppositeName": "Prince George's Park Foyer", "board": []}]}""")).single()
+        val near =
+            parseNearby(
+                    JSONObject(
+                        """{"stops": [{"stop": {"code": "PGP", "name": "PGP"}, "opposite": "PGPR", "oppositeAcross": false, "oppositeName": "Prince George's Park Foyer", "board": []}]}"""
+                    )
+                )
+                .single()
         val nb = Board.of(near, null)
         assertFalse(nb.oppositeAcross)
         assertEquals("Prince George's Park Foyer", nb.oppositeName)
@@ -281,45 +345,68 @@ class BusesTest {
 
     private fun at(iso: String) = java.time.Instant.parse(iso).toEpochMilli()
 
-    @Test fun aStoppedRowParsesAndAnOlderOneRuns() {
-        val b = Board.parse(JSONObject("""{"stop": {"code": "PGP"}, "board": [
+    @Test
+    fun aStoppedRowParsesAndAnOlderOneRuns() {
+        val b =
+            Board.parse(
+                JSONObject(
+                    """{"stop": {"code": "PGP"}, "board": [
           {"svc": "R1", "etaS": null, "quality": "ended", "later": [], "towards": ["Kent Ridge MRT"], "running": false, "stopped": "ended", "resumesAt": "2026-10-07T23:40:00.000Z"},
-          {"svc": "A1", "etaS": 60, "quality": "live", "later": []}]}"""))
+          {"svc": "A1", "etaS": 60, "quality": "live", "later": []}]}"""
+                )
+            )
         val r1 = b.rows[0]
         assertFalse(r1.running)
         assertEquals("ended", r1.stopped)
         assertEquals(at("2026-10-07T23:40:00Z"), r1.resumesAtMs)
         assertTrue("no `running` from an older server: running", b.rows[1].running)
         assertNull(b.rows[1].stopped)
-        val l = Line.parse(JSONObject("""{"svc": "R1", "stops": [], "buses": [], "running": false, "stopped": "noService", "resumesAt": null}"""))
+        val l =
+            Line.parse(
+                JSONObject("""{"svc": "R1", "stops": [], "buses": [], "running": false, "stopped": "noService", "resumesAt": null}""")
+            )
         assertFalse(l.running)
         assertEquals("noService", l.stopped)
         assertTrue(Line.parse(JSONObject("""{"svc": "R1", "stops": [], "buses": []}""")).running)
     }
 
-    @Test fun aStoppedServiceSaysWhenItsBackInSingaporeDays() {
+    @Test
+    fun aStoppedServiceSaysWhenItsBackInSingaporeDays() {
         TestStrings.install()
         // Wednesday 21:30 in Singapore.
         val now = at("2026-10-07T13:30:00Z")
         assertNull(Stopped.of(true, null, null, now))
         // Thursday 07:40 in Singapore: tomorrow, though it's the same UTC day.
-        assertEquals("Stopped for today" to "Back tomorrow at 7:40 AM", Stopped.of(false, "ended", at("2026-10-07T23:40:00Z"), now)!!.lines(true))
-        assertEquals("Stopped for today" to "Back tomorrow at 07:40", Stopped.of(false, "ended", at("2026-10-07T23:40:00Z"), now)!!.lines(false))
+        assertEquals(
+            "Stopped for today" to "Back tomorrow at 7:40 AM",
+            Stopped.of(false, "ended", at("2026-10-07T23:40:00Z"), now)!!.lines(true),
+        )
+        assertEquals(
+            "Stopped for today" to "Back tomorrow at 07:40",
+            Stopped.of(false, "ended", at("2026-10-07T23:40:00Z"), now)!!.lines(false),
+        )
         // Saturday morning, back Monday.
         val sat = at("2026-10-10T02:00:00Z")
-        assertEquals("No service today" to "Back Monday at 7:40 AM", Stopped.of(false, "noService", at("2026-10-11T23:40:00Z"), sat)!!.lines(true))
+        assertEquals(
+            "No service today" to "Back Monday at 7:40 AM",
+            Stopped.of(false, "noService", at("2026-10-11T23:40:00Z"), sat)!!.lines(true),
+        )
         // 06:00 on a weekday: later today, so it starts, never "Back today".
         val early = at("2026-10-07T22:00:00Z")
         assertEquals("Not running yet" to "Starts at 7:04 AM", Stopped.of(false, "notYet", at("2026-10-07T23:04:00Z"), early)!!.lines(true))
         assertEquals("No time found: the first line only", "Stopped for today" to null, Stopped.of(false, "ended", null, now)!!.lines(true))
     }
 
-    @Test fun aStoppedServiceInChinese() {
+    @Test
+    fun aStoppedServiceInChinese() {
         TestStrings.install("values-zh")
         try {
             val now = at("2026-10-07T13:30:00Z")
             assertEquals("今天已停运" to "明天 07:40 恢复", Stopped.of(false, "ended", at("2026-10-07T23:40:00Z"), now)!!.lines(false))
-            assertEquals("今天不运行" to "星期一 07:40 恢复", Stopped.of(false, "noService", at("2026-10-11T23:40:00Z"), at("2026-10-10T02:00:00Z"))!!.lines(false))
+            assertEquals(
+                "今天不运行" to "星期一 07:40 恢复",
+                Stopped.of(false, "noService", at("2026-10-11T23:40:00Z"), at("2026-10-10T02:00:00Z"))!!.lines(false),
+            )
         } finally {
             TestStrings.install()
         }

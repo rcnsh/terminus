@@ -5,10 +5,10 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         #if DEBUG
-        if let dir = ProcessInfo.processInfo.environment["TERMINUS_SNAPSHOT"] {
-            MainActor.assumeIsolated { Snapshots.render(to: dir) }
-            exit(0)
-        }
+            if let dir = ProcessInfo.processInfo.environment["TERMINUS_SNAPSHOT"] {
+                MainActor.assumeIsolated { Snapshots.render(to: dir) }
+                exit(0)
+            }
         #endif
         CrashReporter.shared.start()
         MainActor.assumeIsolated {
@@ -41,10 +41,10 @@ struct TerminusApp: App {
             .defaultSize(width: 900, height: 680)
             .defaultPosition(.center)
         #if DEBUG
-        // The popover's content in a window (TERMINUS_OPEN=popover), for
-        // testing it when the menu bar item is hidden behind the notch.
-        Window("terminus", id: "popover") { Popover(model: model) }
-            .windowResizability(.contentSize)
+            // The popover's content in a window (TERMINUS_OPEN=popover), for
+            // testing it when the menu bar item is hidden behind the notch.
+            Window("terminus", id: "popover") { Popover(model: model) }
+                .windowResizability(.contentSize)
         #endif
     }
 }
@@ -170,7 +170,11 @@ struct Popover: View {
                 // view stays either way, so the content (a search being
                 // typed, Go later) keeps its state as it grows past the screen.
                 ScrollView {
-                    content.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { measured($0) }
+                    content.onGeometryChange(for: CGFloat.self) {
+                        $0.size.height
+                    } action: {
+                        measured($0)
+                    }
                 }
                 .scrollDisabled(!overflows)
                 .scrollIndicators(overflows ? .automatic : .never)
@@ -190,7 +194,16 @@ struct Popover: View {
         .onPreferenceChange(ContentHeight.self) { h in fit(height: h) }
         // A snapshot has no window, and ImageRenderer can't draw an NSView.
         // Updater tells it apart from the windows that hold back an install.
-        .background { if !model.isSnapshot { WindowReader { if window !== $0 { window = $0; Updater.shared.popoverWindow = $0 } } } }
+        .background {
+            if !model.isSnapshot {
+                WindowReader {
+                    if window !== $0 {
+                        window = $0
+                        Updater.shared.popoverWindow = $0
+                    }
+                }
+            }
+        }
         // Opening is a plain fade of the whole popover; nothing moves.
         .opacity(shown ? 1 : 0)
         .frame(maxHeight: .infinity, alignment: .top)

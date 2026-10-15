@@ -244,11 +244,27 @@ test('the apps and the API docs carry the same version and build number', async 
   // The literals in defaultConfig; the beta build's `versionCode = it.toInt()` is no number.
   const versionName = only(gradle, /\bversionName = "([^"]+)"/g, 'versionName in apps/android/app/build.gradle.kts');
   const versionCode = only(gradle, /\bversionCode = (\d+)\b/g, 'versionCode in apps/android/app/build.gradle.kts');
-  const macVersion = only(plist, /<key>CFBundleShortVersionString<\/key>\s*<string>([^<]+)<\/string>/g, 'CFBundleShortVersionString in apps/macos/Support/Info.plist');
-  const macBuild = only(plist, /<key>CFBundleVersion<\/key>\s*<string>([^<]+)<\/string>/g, 'CFBundleVersion in apps/macos/Support/Info.plist');
+  const macVersion = only(
+    plist,
+    /<key>CFBundleShortVersionString<\/key>\s*<string>([^<]+)<\/string>/g,
+    'CFBundleShortVersionString in apps/macos/Support/Info.plist',
+  );
+  const macBuild = only(
+    plist,
+    /<key>CFBundleVersion<\/key>\s*<string>([^<]+)<\/string>/g,
+    'CFBundleVersion in apps/macos/Support/Info.plist',
+  );
   assert.equal(API_VERSION, versionName, 'API_VERSION in src/openapi.ts matches versionName in apps/android/app/build.gradle.kts');
-  assert.equal(API_VERSION, macVersion, 'API_VERSION in src/openapi.ts matches CFBundleShortVersionString in apps/macos/Support/Info.plist');
-  assert.equal(macBuild, versionCode, 'CFBundleVersion in apps/macos/Support/Info.plist matches versionCode in apps/android/app/build.gradle.kts');
+  assert.equal(
+    API_VERSION,
+    macVersion,
+    'API_VERSION in src/openapi.ts matches CFBundleShortVersionString in apps/macos/Support/Info.plist',
+  );
+  assert.equal(
+    macBuild,
+    versionCode,
+    'CFBundleVersion in apps/macos/Support/Info.plist matches versionCode in apps/android/app/build.gradle.kts',
+  );
 });
 
 test('the OpenAPI spec documents exactly the routes that exist', async () => {
@@ -269,11 +285,47 @@ test('the OpenAPI spec documents exactly the routes that exist', async () => {
     .sort();
   const routed = [
     ...ME_ROUTES.map((r) => `${r.method} ${r.path.endsWith('/') ? r.path + '*' : r.path}`),
-    ...['/api/next', '/api/trip', '/api/arrivals', '/api/buses', '/api/line', '/api/campus', '/api/stops/pairs', '/api/health', '/api/status.json', '/api/admin/stats', '/api/admin/passkey/challenge', '/docs', '/api/openapi.json', '/api/timelapse/days', '/api/timelapse/days/*'].map((p) => `GET ${p}`),
+    ...[
+      '/api/next',
+      '/api/trip',
+      '/api/arrivals',
+      '/api/buses',
+      '/api/line',
+      '/api/campus',
+      '/api/stops/pairs',
+      '/api/health',
+      '/api/status.json',
+      '/api/admin/stats',
+      '/api/admin/passkey/challenge',
+      '/docs',
+      '/api/openapi.json',
+      '/api/timelapse/days',
+      '/api/timelapse/days/*',
+    ].map((p) => `GET ${p}`),
     ...['/api/auth/config', '/auth/verify', '/auth/approve'].map((p) => `GET ${p}`),
-    ...['/api/auth/login', '/api/auth/code', '/auth/verify', '/api/auth/anon', '/api/auth/anon/web', '/api/auth/app/start', '/api/auth/app/poll', '/api/auth/app/code', '/api/auth/app/merge', '/auth/approve', '/api/auth/logout', '/api/pair', '/api/pair/check', '/api/admin/passkey/register', '/api/admin/passkey/signin', '/api/admin/collect', '/api/errors'].map((p) => `POST ${p}`),
+    ...[
+      '/api/auth/login',
+      '/api/auth/code',
+      '/auth/verify',
+      '/api/auth/anon',
+      '/api/auth/anon/web',
+      '/api/auth/app/start',
+      '/api/auth/app/poll',
+      '/api/auth/app/code',
+      '/api/auth/app/merge',
+      '/auth/approve',
+      '/api/auth/logout',
+      '/api/pair',
+      '/api/pair/check',
+      '/api/admin/passkey/register',
+      '/api/admin/passkey/signin',
+      '/api/admin/collect',
+      '/api/errors',
+    ].map((p) => `POST ${p}`),
     ...['/map/style.json', '/map/campus.pmtiles', '/map/fonts/*/*.pbf', '/map/sprites/v4/*'].map((p) => `GET ${p}`),
-    ...['/download/latest.json', '/download/android', '/download/mac', '/download/appcast.xml', '/download/releases/*/*'].map((p) => `GET ${p}`),
+    ...['/download/latest.json', '/download/android', '/download/mac', '/download/appcast.xml', '/download/releases/*/*'].map(
+      (p) => `GET ${p}`,
+    ),
   ].sort();
   assert.deepEqual(documented, routed);
 
@@ -284,7 +336,14 @@ test('the OpenAPI spec documents exactly the routes that exist', async () => {
     // Account routes have their own security; `security: []` means open (health).
     // The map and downloads need R2, and are tested on their own; the
     // operator's passkey challenge needs HEALTH_TOKEN (openapi.test.js).
-    if (!item.get || item.get.security?.length || path.includes('{') || path.startsWith('/api/admin/') || !['Answers', 'Stops', 'Service'].includes(item.get.tags[0])) continue;
+    if (
+      !item.get ||
+      item.get.security?.length ||
+      path.includes('{') ||
+      path.startsWith('/api/admin/') ||
+      !['Answers', 'Stops', 'Service'].includes(item.get.tags[0])
+    )
+      continue;
     const q = new URLSearchParams();
     // `from` is only conditionally required (no location), so fill it too.
     for (const p of item.get.parameters ?? []) if (p.required || p.name === 'from') q.set(p.name, String(p.example));
@@ -323,7 +382,7 @@ test('/api/campus serves the static map + destination search data, cached hard',
   assert.equal(fetchImpl.counts.shuttle, 0, 'a static payload never touches the upstream feed');
 });
 
-test('/api/arrivals reports one stop\'s board without needing a destination', async () => {
+test("/api/arrivals reports one stop's board without needing a destination", async () => {
   const fetchImpl = makeFetch({ byStop: { COM3: D2_IN_4 } });
   const { res } = await call('/api/arrivals?stop=com3', { fetchImpl }); // lowercase, like a URL a user might paste
   assert.equal(res.status, 200);
@@ -338,7 +397,14 @@ test('/api/arrivals reports one stop\'s board without needing a destination', as
 test('/api/arrivals names the stop across the road, and each row says where it goes', async () => {
   const fetchImpl = makeFetch({ byStop: { YIH: [{ name: 'K', arrivalTime: '3', nextArrivalTime: '12', passengers: 'high' }] } });
   const body = await (await call('/api/arrivals?stop=YIH', { fetchImpl })).res.json();
-  assert.deepEqual(body.stop, { code: 'YIH', name: 'YIH', longName: 'Yusof Ishak House', opposite: 'YIH-OPP', oppositeAcross: true, oppositeName: 'Opp Yusof Ishak House' });
+  assert.deepEqual(body.stop, {
+    code: 'YIH',
+    name: 'YIH',
+    longName: 'Yusof Ishak House',
+    opposite: 'YIH-OPP',
+    oppositeAcross: true,
+    oppositeName: 'Opp Yusof Ishak House',
+  });
   const k = body.board.find((r) => r.svc === 'K');
   assert.deepEqual(k.towards, ['Central Library', "Prince George's Park Foyer"]);
   assert.equal(k.color, '#2b9ad6');
@@ -365,10 +431,13 @@ test('/api/arrivals?stopped=1 adds the services not running, after the others; w
   const all = await (await call('/api/arrivals?stop=PGP&stopped=1', { fetchImpl, cache })).res.json();
   assert.deepEqual(all.board.slice(0, plain.board.length), plain.board);
   const off = all.board.slice(plain.board.length);
-  assert.deepEqual(off.map((r) => [r.svc, r.running, r.stopped, r.resumesAt]), [
-    ['R1', false, 'ended', '2026-10-07T23:40:00.000Z'],
-    ['R2', false, 'ended', '2026-10-08T00:20:00.000Z'],
-  ]);
+  assert.deepEqual(
+    off.map((r) => [r.svc, r.running, r.stopped, r.resumesAt]),
+    [
+      ['R1', false, 'ended', '2026-10-07T23:40:00.000Z'],
+      ['R2', false, 'ended', '2026-10-08T00:20:00.000Z'],
+    ],
+  );
   assert.equal(fetchImpl.counts.shuttle, 1, 'the same cached read');
 });
 
@@ -381,7 +450,14 @@ test('/api/arrivals on an unknown stop is a 400, not a fabricated empty board', 
 
 // Two D2 buses: one on its route (placed by the test), one parked far from it.
 const D2_BUSES = [
-  { vehplate: 'PD123A', lat: 0, lon: 0, speed: 30, direction: 90, loadInfo: { occupancy: 0.9, crowdLevel: 'high', capacity: 88, ridership: 80 } },
+  {
+    vehplate: 'PD123A',
+    lat: 0,
+    lon: 0,
+    speed: 30,
+    direction: 90,
+    loadInfo: { occupancy: 0.9, crowdLevel: 'high', capacity: 88, ridership: 80 },
+  },
   { vehplate: 'PD999Z', lat: 1.3015, lng: 103.7605, speed: 0, direction: 10, loadInfo: { crowdLevel: 'low' } },
 ];
 
@@ -441,7 +517,18 @@ test('/api/line: a service’s stops in order, its buses on them, and with a sto
   const [bLon, bLat] = shape.line[i + 1];
   const heading = (Math.atan2((bLon - aLon) * Math.cos((aLat * Math.PI) / 180), bLat - aLat) * 180) / Math.PI;
   const fetchImpl = makeFetch({
-    buses: { D1: [{ vehplate: 'PD418C', lat: (aLat + bLat) / 2, lng: (aLon + bLon) / 2, speed: 30, direction: (heading + 360) % 360, loadInfo: { crowdLevel: 'low' } }] },
+    buses: {
+      D1: [
+        {
+          vehplate: 'PD418C',
+          lat: (aLat + bLat) / 2,
+          lng: (aLon + bLon) / 2,
+          speed: 30,
+          direction: (heading + 360) % 360,
+          loadInfo: { crowdLevel: 'low' },
+        },
+      ],
+    },
     byStop: { YIH: [{ name: 'D1', arrivalTime: '6', nextArrivalTime: '18', passengers: 'medium' }] },
   });
   const cache = installGlobals(fetchImpl);
@@ -501,7 +588,9 @@ test('/api/line: a bus still out after hours means the service is running, never
   const [aLon, aLat] = shape.line[i];
   const [bLon, bLat] = shape.line[i + 1];
   const heading = (Math.atan2((bLon - aLon) * Math.cos((aLat * Math.PI) / 180), bLat - aLat) * 180) / Math.PI;
-  const fetchImpl = makeFetch({ buses: { R1: [{ vehplate: 'PD500A', lat: (aLat + bLat) / 2, lng: (aLon + bLon) / 2, speed: 30, direction: (heading + 360) % 360 }] } });
+  const fetchImpl = makeFetch({
+    buses: { R1: [{ vehplate: 'PD500A', lat: (aLat + bLat) / 2, lng: (aLon + bLon) / 2, speed: 30, direction: (heading + 360) % 360 }] },
+  });
   const cache = installGlobals(fetchImpl);
   Date.now = () => Date.UTC(2026, 9, 7, 11, 45); // Wednesday 19:45 in Singapore: R1's hours end at 19:30
   const body = await (await call('/api/line?svc=R1', { fetchImpl, cache })).res.json();
@@ -552,7 +641,7 @@ test('the destination stop is never offered as somewhere to catch a bus', async 
   assert.notEqual(a.stop.code, 'COM3', 'boarding at your destination is not an option');
 });
 
-test('/api/trip with no location needs a starting stop, not someone else\'s default', async () => {
+test("/api/trip with no location needs a starting stop, not someone else's default", async () => {
   const f = makeFetch({ byStop: { PGP: [{ name: 'D2', arrivalTime: '5' }] } });
   const bare = await call('/api/trip?to=UTOWN', { fetchImpl: f });
   assert.equal(bare.res.status, 400);
@@ -592,12 +681,11 @@ test('an answer logs one decision row plus a row per timed arrival', async () =>
     arrivals.every((r) => r.doubles[0] >= 0),
     'a null eta carries no timing information and is not logged',
   );
-  assert.equal(
-    arrivals.length,
-    a.arrivals.filter((x) => x.etaS != null).length,
-    'one row per timed arrival, none for "-"',
+  assert.equal(arrivals.length, a.arrivals.filter((x) => x.etaS != null).length, 'one row per timed arrival, none for "-"');
+  assert.ok(
+    arrivals.some((r) => r.blobs[5].length > 0),
+    'plate is recorded',
   );
-  assert.ok(arrivals.some((r) => r.blobs[5].length > 0), 'plate is recorded');
 });
 
 test('logging is a no-op without the binding, and never breaks an answer', async () => {
@@ -633,7 +721,6 @@ test('/api/next with coordinates but no timetable shows nearby buses, no invente
   assert.ok(!/~\d+ min\b.*(UTown|PGP|COM)/.test(a.detail) || true);
   assert.notEqual(a.quality, undefined);
 });
-
 
 test('arrivals come from a POST to the bus proxy, authenticated like uNivUS 2.59.2', async () => {
   const fetchImpl = makeFetch({ byStop: { COM3: D2_IN_4 } });
@@ -808,7 +895,13 @@ test("a refused token is retried with another isolate's newer one from KV, witho
   const env = makeEnv(kv);
   const { cache } = await call('/api/arrivals?stop=PGP', { fetchImpl: makeFetch({ byStop: { PGP: D2_IN_4 } }), env });
   // Another isolate has since minted: its token is in KV, this one's memo is older.
-  const newer = { token: 'another-isolate-token-0123456789', userid: 'U2', domain: 'PUBLIC', expMs: FROZEN_NOW + 3_600_000, version: '0.0.0-test' };
+  const newer = {
+    token: 'another-isolate-token-0123456789',
+    userid: 'U2',
+    domain: 'PUBLIC',
+    expMs: FROZEN_NOW + 3_600_000,
+    version: '0.0.0-test',
+  };
   await kv.put('auth:session', JSON.stringify(newer));
   const fetchImpl = makeFetch({ byStop: { COM3: D2_IN_4 }, reject: 1, rejectCode: '10008' });
   const { res } = await call('/api/arrivals?stop=COM3', { fetchImpl, env, cache });
@@ -842,7 +935,10 @@ test('a code that is not a stop (a food court) is never sent to either feed', as
   await ctx.settle();
   assert.equal(out.get('THE-DECK').available, false);
   assert.equal(out.get('PGP').available, true);
-  assert.deepEqual(fetchImpl.requests.map((r) => r.body.busstopname), ['PGP']);
+  assert.deepEqual(
+    fetchImpl.requests.map((r) => r.body.busstopname),
+    ['PGP'],
+  );
 });
 
 test("the beta's cache keys are its own: the stable site's breaker doesn't quiet it, nor its answers feed it", async () => {
@@ -890,7 +986,12 @@ test('a hung feed times out; with a stale answer on hand it is served instead', 
   TTL.staleRaceMs = 100;
   const hung = makeFetch({ hang: true });
   const cache = installGlobals(hung);
-  cache.seed(ARRIVALS_KEY('PGP'), { code: 'PGP', arrivals: [{ svc: 'D2', etaS: 240, crowd: null, plate: null }], fetchedAt: Date.now() - 60_000, stale: false });
+  cache.seed(ARRIVALS_KEY('PGP'), {
+    code: 'PGP',
+    arrivals: [{ svc: 'D2', etaS: 240, crowd: null, plate: null }],
+    fetchedAt: Date.now() - 60_000,
+    stale: false,
+  });
   const t0 = performance.now();
   const { res } = await call('/api/arrivals?stop=PGP', { fetchImpl: hung, cache });
   const ms = performance.now() - t0;
@@ -963,11 +1064,15 @@ test('downloads serve whatever latest.json points at', async () => {
   assert.equal((await get('/download/android')).status, 404, 'no release yet');
   put('releases/1.0.0/terminus-1.0.0.apk', 'APK');
   put('releases/1.0.0/terminus-1.0.0-mac.zip', 'ZIP');
-  putLater('latest.json', JSON.stringify({
-    version: '1.0.0', released: '2026-09-29',
-    android: { file: 'releases/1.0.0/terminus-1.0.0.apk', sha256: 'aa', size: 3 },
-    mac: { file: 'releases/1.0.0/terminus-1.0.0-mac.zip', sha256: 'bb', size: 3 },
-  }));
+  putLater(
+    'latest.json',
+    JSON.stringify({
+      version: '1.0.0',
+      released: '2026-09-29',
+      android: { file: 'releases/1.0.0/terminus-1.0.0.apk', sha256: 'aa', size: 3 },
+      mac: { file: 'releases/1.0.0/terminus-1.0.0-mac.zip', sha256: 'bb', size: 3 },
+    }),
+  );
   const apk = await get('/download/android');
   assert.equal(apk.status, 200);
   assert.equal(apk.headers.get('content-type'), 'application/vnd.android.package-archive');
@@ -979,23 +1084,31 @@ test('downloads serve whatever latest.json points at', async () => {
   assert.equal((await get('/download/ios')).status, 404);
 
   put('releases/1.0.1/terminus-1.0.1.dmg', 'DMG');
-  putLater('latest.json', JSON.stringify({
-    version: '1.0.1', released: '2026-10-01',
-    android: { file: 'releases/1.0.0/terminus-1.0.0.apk', sha256: 'aa', size: 3 },
-    mac: { file: 'releases/1.0.1/terminus-1.0.1.dmg', sha256: 'cc', size: 3 },
-  }));
+  putLater(
+    'latest.json',
+    JSON.stringify({
+      version: '1.0.1',
+      released: '2026-10-01',
+      android: { file: 'releases/1.0.0/terminus-1.0.0.apk', sha256: 'aa', size: 3 },
+      mac: { file: 'releases/1.0.1/terminus-1.0.1.dmg', sha256: 'cc', size: 3 },
+    }),
+  );
   // The arm64 APK unless the app asks for its own.
   put('releases/1.0.1/terminus-1.0.1.apk', 'ARM64');
   put('releases/1.0.1/terminus-1.0.1-armv7.apk', 'ARMV7');
-  putLater('latest.json', JSON.stringify({
-    version: '1.0.1', released: '2026-10-01',
-    android: { file: 'releases/1.0.1/terminus-1.0.1.apk', sha256: 'a64', size: 5 },
-    androidAbis: {
-      'arm64-v8a': { file: 'releases/1.0.1/terminus-1.0.1.apk', sha256: 'a64', size: 5 },
-      'armeabi-v7a': { file: 'releases/1.0.1/terminus-1.0.1-armv7.apk', sha256: 'a7', size: 5 },
-    },
-    mac: { file: 'releases/1.0.1/terminus-1.0.1.dmg', sha256: 'cc', size: 3 },
-  }));
+  putLater(
+    'latest.json',
+    JSON.stringify({
+      version: '1.0.1',
+      released: '2026-10-01',
+      android: { file: 'releases/1.0.1/terminus-1.0.1.apk', sha256: 'a64', size: 5 },
+      androidAbis: {
+        'arm64-v8a': { file: 'releases/1.0.1/terminus-1.0.1.apk', sha256: 'a64', size: 5 },
+        'armeabi-v7a': { file: 'releases/1.0.1/terminus-1.0.1-armv7.apk', sha256: 'a7', size: 5 },
+      },
+      mac: { file: 'releases/1.0.1/terminus-1.0.1.dmg', sha256: 'cc', size: 3 },
+    }),
+  );
   assert.equal(await (await get('/download/android')).text(), 'ARM64');
   assert.equal(await (await get('/download/android?abi=armeabi-v7a')).text(), 'ARMV7');
   assert.equal(await (await get('/download/android?abi=x86_64')).text(), 'ARM64', 'a type not built: the arm64 one');
@@ -1036,10 +1149,21 @@ test('/api/status.json: the feed state and outages, public and cached', async ()
   const env = makeEnv(kv);
   let res = (await call('/api/status.json', { fetchImpl: makeFetch({}), env })).res;
   assert.equal(res.status, 200);
-  assert.deepEqual(await res.json(), { feed: 'unknown', since: null, checkedAt: null, checking: false, incidents: [], publicFeed: 'unknown', publicSince: null });
+  assert.deepEqual(await res.json(), {
+    feed: 'unknown',
+    since: null,
+    checkedAt: null,
+    checking: false,
+    incidents: [],
+    publicFeed: 'unknown',
+    publicSince: null,
+  });
 
   const now = Date.now();
-  await kv.put('monitor:upstream', JSON.stringify({ up: false, since: now - 3_600_000, reason: 'auth rejected: code=10009 secret detail', checkedAt: now - 60_000 }));
+  await kv.put(
+    'monitor:upstream',
+    JSON.stringify({ up: false, since: now - 3_600_000, reason: 'auth rejected: code=10009 secret detail', checkedAt: now - 60_000 }),
+  );
   await kv.put('monitor:incidents', JSON.stringify([{ start: now - 3_600_000, end: null, cause: 'version' }]));
   // Each isolate reads the records once a minute, not three KV reads a request.
   const cache = installGlobals(makeFetch({}), now + 59_000);
@@ -1373,8 +1497,15 @@ test('/map/style.json is a quiet light or dark map with every URL on our own dom
   assert.ok(light.glyphs.startsWith(`${BASE}/map/fonts/`));
   assert.equal(light.sprite, `${BASE}/map/sprites/v4/light`);
   assert.match(light.sources.protomaps.attribution, /OpenStreetMap/);
-  assert.equal(light.layers.find((l) => l.id === 'pois'), undefined, 'quiet: no icons for libraries, cafés or its own bus stops');
-  assert.ok(light.layers.some((l) => l.id.startsWith('roads_labels')), 'street names stay');
+  assert.equal(
+    light.layers.find((l) => l.id === 'pois'),
+    undefined,
+    'quiet: no icons for libraries, cafés or its own bus stops',
+  );
+  assert.ok(
+    light.layers.some((l) => l.id.startsWith('roads_labels')),
+    'street names stay',
+  );
 
   const dark = await (await get('/map/style.json?theme=dark&lang=zh')).json();
   assert.equal(dark.sprite, `${BASE}/map/sprites/v4/dark`);
@@ -1388,7 +1519,13 @@ test('files served without the Worker get the same headers from _headers', async
   const { openApiSpec } = await import('../src/openapi.ts');
   // Cloudflare's own matching, for runWorkerFirst and _headers alike: `*`
   // is any run of characters, across `/` too.
-  const glob = (p) => new RegExp(`^${p.split('*').map((s) => s.replace(/[.*+?^${}()|[\]\\/-]/g, '\\$&')).join('.*')}$`);
+  const glob = (p) =>
+    new RegExp(
+      `^${p
+        .split('*')
+        .map((s) => s.replace(/[.*+?^${}()|[\]\\/-]/g, '\\$&'))
+        .join('.*')}$`,
+    );
   const config = await readFile(new URL('../cloudflare.config.ts', import.meta.url), 'utf8');
   const first = JSON.parse(config.match(/runWorkerFirst: (\[[^\]]*\])/)[1]);
   const skip = first.filter((p) => p.startsWith('!')).map((p) => glob(p.slice(1)));
@@ -1411,7 +1548,10 @@ test('files served without the Worker get the same headers from _headers', async
     .filter((f) => f.isFile() && f.name !== '_headers')
     .map((f) => `/${relative(root, join(f.parentPath, f.name))}`);
   const skipped = files.filter(skips);
-  assert.ok(skipped.includes('/app/app.js') && skipped.includes('/account/account.css') && skipped.includes('/sw.js'), 'the pages\' scripts and styles skip the Worker');
+  assert.ok(
+    skipped.includes('/app/app.js') && skipped.includes('/account/account.css') && skipped.includes('/sw.js'),
+    "the pages' scripts and styles skip the Worker",
+  );
   for (const path of skipped) {
     // Nothing that skips it is a page, which would need the CSP.
     assert.ok(!path.endsWith('.html'), `${path} is a page`);
@@ -1424,20 +1564,37 @@ test('files served without the Worker get the same headers from _headers', async
       }
     }
     delete set['cache-control'];
-    const viaWorker = Object.fromEntries(withSecurityHeaders(new Response('', { headers: { 'content-type': 'text/javascript' } }), path).headers);
+    const viaWorker = Object.fromEntries(
+      withSecurityHeaders(new Response('', { headers: { 'content-type': 'text/javascript' } }), path).headers,
+    );
     delete viaWorker['content-type'];
     assert.deepEqual(set, viaWorker, `${path}: the headers the Worker would give`);
   }
   // Pages, and everything the Worker itself answers, still reach it.
-  for (const path of files.filter((f) => f.endsWith('.html'))) assert.ok(!skips(path.replace(/index\.html$/, '')), `${path} reaches the Worker`);
+  for (const path of files.filter((f) => f.endsWith('.html')))
+    assert.ok(!skips(path.replace(/index\.html$/, '')), `${path} reaches the Worker`);
   const routes = Object.keys(openApiSpec(BASE).paths).map((p) => p.replace(/\{[^}]+\}/g, 'x'));
-  for (const path of [...routes, '/', '/map/style.json', '/map/campus.pmtiles', '/map/fonts/Noto%20Sans%20Regular/0-255.pbf', '/map/sprites/v4/light.png', '/map/sprites/v4/light.json', '/download/latest.json', '/robots.txt', '/llms.txt', '/api/status.json']) {
+  for (const path of [
+    ...routes,
+    '/',
+    '/map/style.json',
+    '/map/campus.pmtiles',
+    '/map/fonts/Noto%20Sans%20Regular/0-255.pbf',
+    '/map/sprites/v4/light.png',
+    '/map/sprites/v4/light.json',
+    '/download/latest.json',
+    '/robots.txt',
+    '/llms.txt',
+    '/api/status.json',
+  ]) {
     assert.ok(!skips(path), `${path} reaches the Worker`);
   }
   // Only the versioned /vendor/ folders, and the fonts, are kept without asking.
   const kept = rules.filter((r) => r.set['cache-control']).map((r) => String(r.re));
   assert.deepEqual(kept, [String(glob('/assets/fonts/*')), String(glob('/vendor/*'))]);
-  for (const dir of (await readdir(new URL('../../web/public/vendor/', import.meta.url), { withFileTypes: true })).filter((d) => d.isDirectory())) {
+  for (const dir of (await readdir(new URL('../../web/public/vendor/', import.meta.url), { withFileTypes: true })).filter((d) =>
+    d.isDirectory(),
+  )) {
     assert.match(dir.name, /\d+\.\d+\.\d+$/, `vendor/${dir.name} carries its version`);
   }
 });
@@ -1451,18 +1608,24 @@ test('search engines get robots.txt and a sitemap of real pages; the beta asks n
   // The answers (keyed: no `security` of their own in the spec) are not for
   // search; the docs that describe them are.
   const { openApiSpec } = await import('../src/openapi.ts');
-  const keyed = Object.entries(openApiSpec(BASE).paths).filter(([, item]) => item.get && item.get.security === undefined).map(([p]) => p);
+  const keyed = Object.entries(openApiSpec(BASE).paths)
+    .filter(([, item]) => item.get && item.get.security === undefined)
+    .map(([p]) => p);
   assert.ok(keyed.includes('/api/next') && keyed.includes('/api/stops/pairs'));
   // As search engines read it: the longest rule matching a path decides,
   // and an Allow wins a tie.
   const rules = [...robots.matchAll(/^(Allow|Disallow): (\S+)$/gm)].map((m) => ({ allow: m[1] === 'Allow', path: m[2] }));
   const open = (p) => {
-    const hits = rules.filter((r) => p.startsWith(r.path)).sort((a, b) => b.path.length - a.path.length || Number(b.allow) - Number(a.allow));
+    const hits = rules
+      .filter((r) => p.startsWith(r.path))
+      .sort((a, b) => b.path.length - a.path.length || Number(b.allow) - Number(a.allow));
     return hits.length === 0 || hits[0].allow;
   };
   for (const p of keyed) assert.ok(!open(p), `robots.txt disallows ${p}`);
-  for (const p of ['/api/timelapse/days', '/api/me/next', '/api/auth/login', '/auth/verify', '/pair']) assert.ok(!open(p), `robots.txt disallows ${p}`);
-  for (const p of ['/', '/docs', '/api/openapi.json', '/llms.txt', '/status/', '/api/status.json']) assert.ok(open(p), `${p} stays open to search`);
+  for (const p of ['/api/timelapse/days', '/api/me/next', '/api/auth/login', '/auth/verify', '/pair'])
+    assert.ok(!open(p), `robots.txt disallows ${p}`);
+  for (const p of ['/', '/docs', '/api/openapi.json', '/llms.txt', '/status/', '/api/status.json'])
+    assert.ok(open(p), `${p} stays open to search`);
   const { res } = await call('/sitemap.xml');
   assert.equal(res.status, 200);
   const locs = [...(await res.text()).matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => new URL(m[1]).pathname);
@@ -1522,7 +1685,12 @@ test('/api/line is as old as its stop row: a kept board is not "Updated 0 s ago"
   const fetchedAt = Date.now() - 185_000;
   const dead = makeFetch({ fail: true });
   const cache = installGlobals(dead);
-  cache.seed(ARRIVALS_KEY('YIH'), { code: 'YIH', arrivals: [{ svc: 'D1', etaS: 240, crowd: 'low', plate: 'PA1234A' }], fetchedAt, stale: false });
+  cache.seed(ARRIVALS_KEY('YIH'), {
+    code: 'YIH',
+    arrivals: [{ svc: 'D1', etaS: 240, crowd: 'low', plate: 'PA1234A' }],
+    fetchedAt,
+    stale: false,
+  });
   const { res } = await call('/api/line?svc=D1&stop=YIH', { fetchImpl: dead, cache });
   assert.equal(res.status, 200);
   const line = await res.json();
@@ -1537,7 +1705,21 @@ test('the API before 3.0, at its old paths: an app is told to update, anyone els
     return res;
   };
   const app = { 'x-terminus-client': 'android/2.6.0' };
-  for (const [method, path] of [['GET', '/me/next'], ['GET', '/me'], ['DELETE', '/me/push'], ['POST', '/auth/anon'], ['POST', '/auth/app/start'], ['POST', '/pair'], ['POST', '/pair/check'], ['GET', '/next?stop=PGP'], ['GET', '/campus'], ['GET', '/buses?svc=D2'], ['GET', '/stops/pairs'], ['GET', '/timelapse/days'], ['GET', '/health']]) {
+  for (const [method, path] of [
+    ['GET', '/me/next'],
+    ['GET', '/me'],
+    ['DELETE', '/me/push'],
+    ['POST', '/auth/anon'],
+    ['POST', '/auth/app/start'],
+    ['POST', '/pair'],
+    ['POST', '/pair/check'],
+    ['GET', '/next?stop=PGP'],
+    ['GET', '/campus'],
+    ['GET', '/buses?svc=D2'],
+    ['GET', '/stops/pairs'],
+    ['GET', '/timelapse/days'],
+    ['GET', '/health'],
+  ]) {
     const res = await at(path, { method, headers: app });
     assert.equal(res.status, 426, `${method} ${path} from an old app`);
     assert.deepEqual(await res.json(), { error: 'Update terminus to keep using it.', update: true });
@@ -1576,7 +1758,15 @@ test('a page opened on the old address goes to terminus.run; the apps and the up
     assert.equal(res.headers.get('cache-control'), 'public, max-age=86400');
   }
   // What the apps, the Mac's updater and Android's link check ask for there is answered there.
-  for (const [path, accept] of [['/api/me/next', 'application/json'], ['/api/campus', 'application/json'], ['/download/appcast.xml', html], ['/.well-known/assetlinks.json', html], ['/map/style.json', html], ['/robots.txt', html], ['/download/latest.json', null]]) {
+  for (const [path, accept] of [
+    ['/api/me/next', 'application/json'],
+    ['/api/campus', 'application/json'],
+    ['/download/appcast.xml', html],
+    ['/.well-known/assetlinks.json', html],
+    ['/map/style.json', html],
+    ['/robots.txt', html],
+    ['/download/latest.json', null],
+  ]) {
     assert.notEqual((await at('terminus.rcn.sh', path, accept)).status, 301, path);
   }
   assert.notEqual((await at('terminus.rcn.sh', '/api/auth/code', html, on(), 'POST')).status, 301, 'only GET and HEAD');
