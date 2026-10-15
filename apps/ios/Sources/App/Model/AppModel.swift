@@ -76,6 +76,10 @@ final class AppModel {
         var failed = false
     }
 
+    /// A stop to show on the Buses tab, picked elsewhere (Now's Nearby, a
+    /// widget): Buses shows it and sets this back to nil.
+    var openStop: String?
+
     // MARK: "Is this wrong?"
 
     var reportSending = false
