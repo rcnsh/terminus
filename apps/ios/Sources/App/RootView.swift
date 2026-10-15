@@ -28,7 +28,9 @@ struct RootView: View {
 /// The four tabs, as on Android and the web app.
 struct MainTabs: View {
     @Environment(AppModel.self) private var app
+    @Environment(\.colorScheme) private var scheme
     @State private var tab = Tab.now
+    private var sky = SkyClock.shared
 
     enum Tab: Hashable { case now, buses, map, settings }
 
@@ -50,6 +52,9 @@ struct MainTabs: View {
         .onReceive(NotificationCenter.default.publisher(for: .openTab)) { n in
             if let t = n.object as? Tab { tab = t }
         }
+        // Now, Buses and Settings start in the hour's sky: light icons over a
+        // dark one. The map is the theme's.
+        .statusBar(light: tab == .map ? nil : SkyPalette.of(sky.phase, dark: scheme == .dark).lightInk)
     }
 }
 

@@ -138,6 +138,8 @@ struct Inks {
     var pane: Color = .surface
     var raised: Color = .surface2
     var line: Color = .line
+    /// The page under it: words on something filled in the ink (a chosen chip).
+    var paper: Color = .page
     var inSky = false
 
     static let page = Inks()
@@ -149,12 +151,12 @@ struct Inks {
             return Inks(
                 ink: c(0xF2EFEB), muted: c(0xE7E5E4), accent: c(0xFB923C), smallAccent: c(0xFED7AA), good: c(0x86EFAC), late: c(0xFECACA),
                 warn: c(0xFCD34D), chip: .black.opacity(0.22), pane: .white.opacity(0.08), raised: .white.opacity(0.13),
-                line: .white.opacity(0.18), inSky: true)
+                line: .white.opacity(0.18), paper: c(0x0F0E0D), inSky: true)
         }
         return Inks(
             ink: c(0x1C1917), muted: c(0x36312D), accent: c(0x9A3412), smallAccent: c(0x6C2710), good: c(0x14532D), late: c(0x701818),
             warn: c(0x78350F), chip: .white.opacity(0.65), pane: .white.opacity(0.5), raised: .white.opacity(0.65),
-            line: Color(rgb: 0x1C1917).opacity(0.16), inSky: true)
+            line: Color(rgb: 0x1C1917).opacity(0.16), paper: c(0xFAFAF9), inSky: true)
     }
 }
 
