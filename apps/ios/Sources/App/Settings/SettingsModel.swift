@@ -80,7 +80,7 @@ final class SettingsModel {
             let (data, tag) = try await api.profileData()
             guard token == app.token, let p = ProfileDoc(data: data) else { return }
             // A change still being saved stays on screen.
-            if saveTask == nil {
+            if !saving {
                 profile = p
                 version = tag
                 followAccount(p)
@@ -129,6 +129,9 @@ final class SettingsModel {
     func reset() {
         saveTask?.cancel()
         saveTask = nil
+        // Its answer is dropped; the request itself goes on, as it may have saved.
+        sending = nil
+        epoch += 1
         path = []
         profile = nil
         version = nil
@@ -147,65 +150,91 @@ final class SettingsModel {
 
     // MARK: editing the profile
 
+    /// The 0.4 s wait before a save, so a run of taps goes as one.
     private var saveTask: Task<Void, Never>?
-    private var edits = 0
+    /// The save on its way to the server. Never cancelled: whether it saved
+    /// is only known from its answer, and a change sent must not be made twice.
+    private var sending: Task<Void, Never>?
     /// The profile as the server last had it, to go back to if a save fails.
     private var confirmed: ProfileDoc?
     /// Its version (the ETag): a save is refused (412) if the profile was saved
     /// elsewhere since, a pin on Buses, a favourite from the map, another device.
     private var version: String?
-    /// The changes made since `confirmed`, to make again on the newer profile then.
+    /// The changes made since the last save was sent, shown already, to send next.
     private var pending: [(inout ProfileDoc) -> Void] = []
+    /// Moves on with each import and sign-out: a save's answer from before one is dropped.
+    private var epoch = 0
+    /// Whether a change is waiting or on its way: the profile shown is ahead of the server's.
+    private var saving: Bool { saveTask != nil || sending != nil || !pending.isEmpty }
 
     /// Changes the profile: shown now, saved 0.4 s later with any taps since.
     func edit(_ change: @escaping (inout ProfileDoc) -> Void) {
-        guard var next = profile, let token = app.token else { return }
-        if saveTask == nil {
-            confirmed = profile
-            pending = []
-        }
+        guard var next = profile, app.token != nil else { return }
+        if !saving { confirmed = profile }
         change(&next)
         pending.append(change)
         profile = next
-        edits += 1
-        let mine = edits
         saveTask?.cancel()
-        let body = next.data
-        let from = version
         saveTask = Task {
             try? await Task.sleep(for: .milliseconds(400))
             guard !Task.isCancelled else { return }
+            saveTask = nil
+            send()
+        }
+    }
+
+    /// Sends the changes waiting, made on the profile as the server last had
+    /// it. One save at a time: changes made meanwhile wait for its answer and
+    /// go next, on what it saved.
+    private func send() {
+        guard sending == nil, !pending.isEmpty, let token = app.token, let base = confirmed else { return }
+        let changes = pending
+        pending = []
+        var doc = base
+        for change in changes { change(&doc) }
+        let body = doc.data
+        let from = version
+        let mine = epoch
+        sending = Task {
             do {
                 let api = Api(token: token)
                 var (data, tag): (Data, String?)
                 do {
                     (data, tag) = try await api.saveProfileData(body, ifMatch: from)
                 } catch let e as ApiError where e.status == 412 {
-                    // Saved elsewhere meanwhile: these changes, made again on that.
+                    // Saved elsewhere meanwhile, and so not by this request:
+                    // its changes, made again on that.
                     let (fresh, freshTag) = try await api.profileData()
-                    guard mine == edits, var latest = ProfileDoc(data: fresh) else { return }
-                    for change in pending { change(&latest) }
+                    guard mine == epoch else { return }
+                    guard var latest = ProfileDoc(data: fresh) else { throw URLError(.cannotParseResponse) }
+                    for change in changes { change(&latest) }
+                    // A class changed elsewhere isn't changed here instead of its neighbour.
+                    if latest.missed { say(L("A class was changed on another device. Check it and try again.")) }
                     (data, tag) = try await api.saveProfileData(latest.data, ifMatch: freshTag)
                 }
-                guard mine == edits else { return }
-                saveTask = nil
-                pending = []
+                guard mine == epoch else { return }
+                sending = nil
+                guard let saved = ProfileDoc(data: data) else { return }
                 version = tag
-                if let saved = ProfileDoc(data: data) {
-                    // The server writes the card and the day in the account's language,
-                    // not the one asked in: what came between the switch and now is in the old one.
-                    let langSaved = saved.lang != confirmed?.lang
-                    confirmed = saved
-                    profile = saved
-                    if langSaved {
-                        Task {
-                            await app.load(restart: true)
-                            await app.loadDay()
-                        }
+                // The server writes the card and the day in the account's language,
+                // not the one asked in: what came between the switch and now is in the old one.
+                let langSaved = saved.lang != confirmed?.lang
+                confirmed = saved
+                // Changes made since this was sent stay on screen, on top of what it saved.
+                var shown = saved
+                for change in pending { change(&shown) }
+                profile = shown
+                if langSaved {
+                    Task {
+                        await app.load(restart: true)
+                        await app.loadDay()
                     }
                 }
+                if saveTask == nil { send() }
             } catch {
-                guard mine == edits else { return }
+                guard mine == epoch else { return }
+                sending = nil
+                saveTask?.cancel()
                 saveTask = nil
                 pending = []
                 if rejected(error, token) { return }
@@ -273,6 +302,8 @@ final class SettingsModel {
                 let r = try await Api(token: token).importTimetable(share)
                 saveTask?.cancel()
                 saveTask = nil
+                sending = nil
+                epoch += 1
                 imported = r
                 unplaced = r.unplaced
                 profile = ProfileDoc(r.profile)

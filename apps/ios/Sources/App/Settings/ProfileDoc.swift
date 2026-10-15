@@ -132,20 +132,40 @@ struct ProfileDoc: @unchecked Sendable {
     }
 
     /// Sends one class to another stop, by its place in its own list.
-    mutating func setClassStop(imported: Bool, index: Int, to: String) {
-        let key = imported ? "trips" : "manual"
+    mutating func setClassStop(_ c: ClassEntry, to: String) {
+        let key = c.imported ? "trips" : "manual"
         var l = list(key)
-        guard l.indices.contains(index) else { return }
-        l[index]["to"] = to
+        guard let i = find(c, in: l) else { return }
+        l[i]["to"] = to
         json[key] = l
     }
 
-    mutating func removeClass(imported: Bool, index: Int) {
-        let key = imported ? "trips" : "manual"
+    mutating func removeClass(_ c: ClassEntry) {
+        let key = c.imported ? "trips" : "manual"
         var l = list(key)
-        guard l.indices.contains(index) else { return }
-        l.remove(at: index)
+        guard let i = find(c, in: l) else { return }
+        l.remove(at: i)
         json[key] = l
+    }
+
+    /// A change made to a class that isn't in this profile as it was seen:
+    /// another device removed or changed it. Set by [setClassStop] and
+    /// [removeClass] rather than changing a neighbour; never saved.
+    private(set) var missed = false
+
+    /// Where [c] is in [l]: at its index if that's still it, else wherever it
+    /// moved to (another device removed one before it). The same class is the
+    /// same day, times, name and room; its stop is what changes.
+    private mutating func find(_ c: ClassEntry, in l: [[String: Any]]) -> Int? {
+        func same(_ o: [String: Any]) -> Bool {
+            var t = ProfileTrip(o)
+            t.to = c.trip.to
+            return t == c.trip
+        }
+        if l.indices.contains(c.index), same(l[c.index]) { return c.index }
+        if let i = l.firstIndex(where: same) { return i }
+        missed = true
+        return nil
     }
 
     // MARK: favourites

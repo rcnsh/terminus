@@ -22,7 +22,7 @@ struct SettingsTimetablePane: View {
             .onChange(of: model.sharedLink) { _, l in if let l { link = l } }
             .sheet(item: $changing) { c in
                 SettingsWherePicker(title: L("Stop for %@", c.trip.label), destinations: model.campus?.destinations ?? []) { d in
-                    model.edit { $0.setClassStop(imported: c.imported, index: c.index, to: d.goesTo) }
+                    model.edit { $0.setClassStop(c, to: d.goesTo) }
                 }
             }
             .sheet(item: $placing) { pick in
@@ -144,7 +144,7 @@ struct SettingsTimetablePane: View {
                     .buttonStyle(.plain)
                     .accessibilityHint(L("Change the stop for %@", c.trip.label))
                     QuietRemove(says: L("Remove %@", c.trip.label)) {
-                        withAnimation { model.edit { $0.removeClass(imported: c.imported, index: c.index) } }
+                        withAnimation { model.edit { $0.removeClass(c) } }
                     }
                 }
                 .padding(.leading, 16)

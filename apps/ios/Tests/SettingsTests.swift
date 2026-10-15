@@ -82,10 +82,39 @@ final class SettingsProfileTests: XCTestCase {
         XCTAssertEqual(p.classes.map(\.trip.label), ["Mon early", "Mon late", "Sun"])
         let sunday = p.classes[2]
         XCTAssertTrue(sunday.imported)
-        p.setClassStop(imported: sunday.imported, index: sunday.index, to: "Z")
+        p.setClassStop(sunday, to: "Z")
         XCTAssertEqual(p.trips[0].to, "Z")
-        p.removeClass(imported: false, index: 0)
+        p.removeClass(p.classes[0])
         XCTAssertEqual(p.classes.map(\.trip.label), ["Mon late", "Sun"])
+        XCTAssertFalse(p.missed)
+    }
+
+    /// A change made again on a newer profile (after a 412) finds its class
+    /// where it moved to, and never changes the one now at its old place.
+    func testClassChangesFollowTheClassNotItsPlace() {
+        let seen = doc(
+            #"{"trips":[{"day":1,"arriveByMin":500,"to":"A","label":"First"},{"day":1,"arriveByMin":600,"to":"B","label":"Second"},{"day":1,"arriveByMin":700,"to":"C","label":"Third"}]}"#
+        )
+        let second = seen.classes[1]
+        // Another device removed the first class meanwhile.
+        var newer = doc(
+            #"{"trips":[{"day":1,"arriveByMin":600,"to":"B","label":"Second"},{"day":1,"arriveByMin":700,"to":"C","label":"Third"}]}"#)
+        newer.setClassStop(second, to: "Z")
+        XCTAssertEqual(newer.trips.map(\.to), ["Z", "C"])
+        newer.removeClass(second)
+        XCTAssertEqual(newer.trips.map(\.label), ["Third"])
+        XCTAssertFalse(newer.missed)
+    }
+
+    func testAChangeToAClassThatIsGoneChangesNothing() {
+        let seen = doc(
+            #"{"trips":[{"day":1,"arriveByMin":500,"to":"A","label":"First"},{"day":1,"arriveByMin":600,"to":"B","label":"Second"}]}"#)
+        let first = seen.classes[0]
+        var newer = doc(#"{"trips":[{"day":1,"arriveByMin":600,"to":"B","label":"Second"}]}"#)
+        newer.setClassStop(first, to: "Z")
+        newer.removeClass(first)
+        XCTAssertEqual(newer.trips.map(\.to), ["B"])
+        XCTAssertTrue(newer.missed)
     }
 
     func testAddManualKeepsTheEndOnlyWhenThere() {
