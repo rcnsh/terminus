@@ -80,7 +80,7 @@ struct BusProvider: TimelineProvider {
         guard TokenStore.read() != nil, Date() >= Quiet.until(.app) else { return }
         let kept = WidgetStore.plan()
         let fetched = kept.map { $0.1.addingTimeInterval(ServerClock.skew) }
-        if WidgetTiming.due(kept?.0, fetchedAt: fetched, now: ServerClock.now) { _ = await WidgetStore.refreshPlan() }
+        if WidgetTiming.due(kept?.0, fetchedAt: fetched, now: ServerClock.now) { await refreshPlanOnce() }
         if let slot {
             let s = WidgetStore.slot(slot)
             if s.chosen != .timetable, let at = s.at, -at.timeIntervalSinceNow <= WidgetMode.keep,
@@ -89,6 +89,24 @@ struct BusProvider: TimelineProvider {
                 await WidgetStore.fetch(slot: slot)
             }
         }
+    }
+
+    /// The fetch in flight in this process, if any.
+    private static let fetching = Mutex<Task<Void, Never>?>(nil)
+
+    /// One fetch of the plan shared by every widget asking at once: WidgetKit
+    /// asks for each widget's timeline together, and each would otherwise fetch.
+    static func refreshPlanOnce() async {
+        let task = fetching.withLock { t in
+            if let t { return t }
+            let new = Task {
+                _ = await WidgetStore.refreshPlan()
+                fetching.withLock { $0 = nil }
+            }
+            t = new
+            return new
+        }
+        await task.value
     }
 
     static func timeline(kind: String, family: WidgetFamily) -> Timeline<BusEntry> {
@@ -124,14 +142,15 @@ struct BusProvider: TimelineProvider {
                 e.date = Date(timeIntervalSince1970: t)
                 return e
             }
-        // Asked again at the answer's next moment; WidgetKit may make it later.
+        // Asked again at the answer's next moment, but no sooner than
+        // WidgetTiming.minReload; WidgetKit may make it later.
         var next = now.addingTimeInterval(WidgetTiming.fallback)
         if let plan = first.plan, let at = WidgetStore.answerAt {
             next = WidgetTiming.nextRefreshAt(plan, fetchedAt: at.addingTimeInterval(skew), now: now.addingTimeInterval(skew))
                 .addingTimeInterval(-skew)
         }
         if first.error != nil && first.error != WidgetFace.updating { next = min(next, now.addingTimeInterval(5 * 60)) }
-        return Timeline(entries: entries, policy: .after(max(next, now.addingTimeInterval(WidgetTiming.minLocalGap))))
+        return Timeline(entries: entries, policy: .after(WidgetTiming.reloadAt(next, now: now)))
     }
 
     /// When the sky's hour next changes, by the phone's clock: dawn, day, the golden hour, dusk, night.

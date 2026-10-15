@@ -298,6 +298,17 @@ enum WidgetTiming {
     static let minLocalGap: TimeInterval = 60
     /// With no moment from the server at all.
     static let fallback: TimeInterval = 15 * 60
+    /// WidgetKit is never asked to reload a timeline sooner than this: each
+    /// reload may fetch, and a minute apart on a trip would spend its daily
+    /// budget by morning. The entries in between redraw by themselves, and
+    /// the app, a push and the background refresh reload when the card changes.
+    static let minReload: TimeInterval = 5 * 60
+
+    /// When to ask WidgetKit for the next reload, for a refresh wanted at
+    /// `next`: never sooner than `minReload` after `now` (the same clock).
+    static func reloadAt(_ next: Date, now: Date) -> Date {
+        max(next, now.addingTimeInterval(minReload))
+    }
 
     /// The next of the server's own moments for a refresh: the plan moving on
     /// (`refreshAt`) or the card changing (`nextChangeAt`, else `staleAt`).

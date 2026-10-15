@@ -7,32 +7,37 @@ import WidgetKit
 /// leave reminder and Android's notification do. A card's answer is kept for
 /// the widgets too. Whatever can't be fetched in time keeps the fallback.
 final class NotificationService: UNNotificationServiceExtension, @unchecked Sendable {
-    private var handler: ((UNNotificationContent) -> Void)?
+    /// The content handler, until it's called, and the work wording the
+    /// alert: behind a lock, as the work and the expiry race for it from two
+    /// threads and the handler must be called exactly once.
+    private let state = Mutex<(handler: ((UNNotificationContent) -> Void)?, task: Task<Void, Never>?)>((nil, nil))
     private var fallback: UNNotificationContent?
-    private var task: Task<Void, Never>?
 
     override func didReceive(_ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void)
     {
-        handler = contentHandler
         fallback = request.content
         let kind = request.content.userInfo["kind"] as? String
-        task = Task { [self] in
+        state.withLock { $0.handler = contentHandler }
+        let task = Task { [self] in
             guard let original = fallback else { return }
             let content = await Self.word(kind: kind, original: original)
             finish(content ?? original)
         }
+        state.withLock { $0.task = task }
     }
 
     /// Out of time: the server's fallback words.
     override func serviceExtensionTimeWillExpire() {
-        task?.cancel()
+        state.withLock { $0.task }?.cancel()
         if let fallback { finish(fallback) }
     }
 
     private func finish(_ content: UNNotificationContent) {
-        guard let h = handler else { return }
-        handler = nil
-        h(content)
+        let h = state.withLock { s in
+            defer { s.handler = nil }
+            return s.handler
+        }
+        h?(content)
     }
 
     static func word(kind: String?, original: UNNotificationContent) async -> UNNotificationContent? {
@@ -78,10 +83,17 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
             info["trip"] = skip.trip
             c.userInfo = info
         }
-        // This push says it now: the local reminder for the same moment goes, so there's one.
+        // This push says it now: the local heads-up goes, shown or still to
+        // come, so there's one; and it's marked as gone for this trip, so the
+        // app's next answer doesn't schedule it again (Reminders' soonTrip, soonAt).
         let center = UNUserNotificationCenter.current()
         center.removeDeliveredNotifications(withIdentifiers: [TripReminders.soonID])
-        if after { center.removePendingNotificationRequests(withIdentifiers: [TripReminders.soonID, TripReminders.nowID]) }
+        center.removePendingNotificationRequests(
+            withIdentifiers: after ? [TripReminders.soonID, TripReminders.nowID] : [TripReminders.soonID])
+        if !after, let trip = TripReminders.tripKey(a) {
+            Shared.defaults.set(trip, forKey: "soonTrip")
+            Shared.defaults.set(now, forKey: "soonAt")
+        }
         return c
     }
 }

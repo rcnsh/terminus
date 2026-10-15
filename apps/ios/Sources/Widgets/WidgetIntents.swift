@@ -1,9 +1,13 @@
 import AppIntents
 import WidgetKit
 
+// The intents' titles are looked up by the system in the phone's language,
+// from the extension's Widgets.strings (keyed by the English, as L's are),
+// not through L, which follows the app's own choice.
+
 /// ↻ on a widget: the plan (or the place it shows) asked for again now.
 struct RefreshIntent: AppIntent {
-    static let title: LocalizedStringResource = "Refresh"
+    static let title = LocalizedStringResource("Refresh", table: "Widgets")
     static let isDiscoverable = false
 
     @Parameter(title: "Slot") var slot: String?
@@ -26,7 +30,7 @@ struct RefreshIntent: AppIntent {
 
 /// A button along the widget: Timetable, Nearby or one of your places, shown in place without opening the app.
 struct ModeIntent: AppIntent {
-    static let title: LocalizedStringResource = "Show"
+    static let title = LocalizedStringResource("Show", table: "Widgets")
     static let isDiscoverable = false
 
     @Parameter(title: "Slot") var slot: String
@@ -48,7 +52,7 @@ struct ModeIntent: AppIntent {
 
 /// The swap button on Nearby: the stop across the road first, or the nearest again.
 struct SwapIntent: AppIntent {
-    static let title: LocalizedStringResource = "Other side of the road"
+    static let title = LocalizedStringResource("Other side of the road", table: "Widgets")
     static let isDiscoverable = false
 
     @Parameter(title: "Slot") var slot: String

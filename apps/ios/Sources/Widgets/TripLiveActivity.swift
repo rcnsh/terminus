@@ -16,14 +16,14 @@ struct TripLiveActivity: Widget {
                 .widgetURL(URL(string: "terminus://plan"))
         } dynamicIsland: { context in
             let s = context.state
-            let count = context.isStale ? nil : s.countdown(now: Date())
+            let count = context.isStale ? nil : s.countdown(phoneNow: Date(), skew: ServerClock.skew)
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     TripBadge(state: s, size: 17).padding(.leading, 4).padding(.top, 2)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     if let count {
-                        Text(timerInterval: Date()...count.to, countsDown: true)
+                        Text(timerInterval: count.range, countsDown: true)
                             .font(.system(size: 22, weight: .semibold)).monospacedDigit()
                             .multilineTextAlignment(.trailing)
                             .frame(maxWidth: 90, alignment: .trailing)
@@ -52,7 +52,7 @@ struct TripLiveActivity: Widget {
                 TripBadge(state: s, size: 12)
             } compactTrailing: {
                 if let count {
-                    Text(timerInterval: Date()...count.to, countsDown: true)
+                    Text(timerInterval: count.range, countsDown: true)
                         .monospacedDigit()
                         .frame(maxWidth: 52)
                         .foregroundStyle(islandAccent)
@@ -102,7 +102,7 @@ private struct LockScreenTrip: View {
 
     var body: some View {
         let s = state
-        let count = stale ? nil : s.countdown(now: Date())
+        let count = stale ? nil : s.countdown(phoneNow: Date(), skew: ServerClock.skew)
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Wordmark(size: 13).foregroundStyle(Color.ink)
@@ -120,7 +120,7 @@ private struct LockScreenTrip: View {
                 Spacer(minLength: 4)
                 if let count {
                     VStack(alignment: .trailing, spacing: 0) {
-                        Text(timerInterval: Date()...count.to, countsDown: true)
+                        Text(timerInterval: count.range, countsDown: true)
                             .font(.system(size: 24, weight: .bold)).monospacedDigit()
                             .multilineTextAlignment(.trailing)
                             .foregroundStyle(Color.brand)
@@ -152,7 +152,9 @@ private struct LockScreenTrip: View {
     }
 }
 
-/// On the bus: how far along the ride is, by the clock, ending at the stop you get off at.
+/// On the bus: how far along the ride is, by the clock, ending at the stop
+/// you get off at. `from` and `to` are the server's times, as labelled; the
+/// bar runs on the phone's clock, so it's moved by the skew between them.
 private struct RideBar: View {
     let from: Date
     let to: Date
@@ -161,8 +163,9 @@ private struct RideBar: View {
     let muted: Color
 
     var body: some View {
+        let skew = ServerClock.skew
         VStack(alignment: .leading, spacing: 3) {
-            ProgressView(timerInterval: from...to, countsDown: false) {
+            ProgressView(timerInterval: from.addingTimeInterval(-skew)...to.addingTimeInterval(-skew), countsDown: false) {
                 EmptyView()
             } currentValueLabel: {
                 EmptyView()

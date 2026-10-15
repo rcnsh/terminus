@@ -9,9 +9,26 @@ import UserNotifications
     private static var d: UserDefaults { Shared.defaults }
     private static var center: UNUserNotificationCenter { UNUserNotificationCenter.current() }
 
+    /// Bumped by each update, so one waiting on the permission can tell a later answer came meanwhile.
+    private static var asked = 0
+
     /// Brings the scheduled reminders in line with the latest plan.
     static func update(_ plan: NextAnswer, checked: Date) {
-        guard TripPrefs.leaveAlerts, Push.notificationsAllowed else { return clear() }
+        asked += 1
+        guard TripPrefs.leaveAlerts else { return clear() }
+        guard Push.notificationsAllowed else {
+            // Refused: none. Merely not known yet (a launch in the background
+            // can answer before Push.checkPermission has): asked, then this
+            // again, rather than clearing reminders that are allowed.
+            if Push.notificationsDenied { return clear() }
+            let mine = asked
+            Task {
+                await Push.checkPermission()
+                guard mine == asked, Push.notificationsAllowed else { return }
+                update(plan, checked: checked)
+            }
+            return
+        }
         let now = ServerClock.now
         let step = TripReminders.step(plan, soonTrip: d.string(forKey: "soonTrip"), soonAt: d.object(forKey: "soonAt") as? Date, now: now)
         switch step {
@@ -48,8 +65,14 @@ import UserNotifications
 
     /// The card's "Not going", with the server's own words, as the reminders' one button.
     private static func setCategory(_ plan: NextAnswer) {
-        let label = plan.card?.actions.first { $0.id == "skipped" }?.label ?? L("Not going")
-        let skip = UNNotificationAction(identifier: TripReminders.skipAction, title: label, options: [])
+        registerCategories(skipLabel: plan.card?.actions.first { $0.id == "skipped" }?.label)
+    }
+
+    /// The trip category and its "Not going" button, at launch too: a
+    /// pushed alert carries the category on a phone that has never
+    /// scheduled a reminder, and without it there'd be no button.
+    static func registerCategories(skipLabel: String? = nil) {
+        let skip = UNNotificationAction(identifier: TripReminders.skipAction, title: skipLabel ?? L("Not going"), options: [])
         center.setNotificationCategories([
             UNNotificationCategory(identifier: TripReminders.category, actions: [skip], intentIdentifiers: [])
         ])

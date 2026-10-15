@@ -74,6 +74,26 @@ extension TripAttributes.ContentState {
         return nil
     }
 
+    /// The countdown as the Live Activity draws it, on the phone's clock:
+    /// `now` is the phone's and `skew` turns it into the server's, which the
+    /// times are on. One clock reading for both ends, and never backwards,
+    /// so `Text(timerInterval:)` can't be handed a range whose end is before its start.
+    func countdown(phoneNow now: Date, skew: TimeInterval) -> (range: ClosedRange<Date>, kind: String)? {
+        guard let c = countdown(now: now.addingTimeInterval(skew)) else { return nil }
+        return (now...max(now, c.to.addingTimeInterval(-skew)), c.kind)
+    }
+
+    /// With no arrival time, how long after the bus (or the leave-by) a trip nothing has updated is taken as over.
+    static let unheardS: TimeInterval = 3600
+
+    /// When a trip nothing can update any more (no push) is over, on the
+    /// server's clock: `linger` after getting off, else `unheardS` after the
+    /// bus or the leave-by. Nil when it says neither.
+    func overAt(linger: TimeInterval) -> Date? {
+        if let at = arriveDate { return at.addingTimeInterval(linger) }
+        return (departDate ?? leaveDate).map { $0.addingTimeInterval(Self.unheardS) }
+    }
+
     /// The state for `answer`, or nil when there's no trip under way. One
     /// function, the same mapping the server makes from the card.
     static func of(_ a: NextAnswer) -> Self? {

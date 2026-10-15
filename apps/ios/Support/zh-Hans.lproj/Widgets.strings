@@ -9,9 +9,11 @@
 "No buses due" = "暂时没有巴士";
 "No live data" = "没有实时数据";
 "No stops near you" = "附近没有车站";
+"Other side of the road" = "马路对面";
 "Packed" = "很挤";
 "Refresh" = "刷新";
 "Seats" = "有座位";
+"Show" = "查看";
 "Show %@" = "查看 %@";
 "Show %@ first" = "先显示 %@";
 "Showing %@" = "正在显示 %@";
