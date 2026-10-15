@@ -21,6 +21,7 @@ import { Journey, STYLES, cardStyle, setCardStyle, styleHint, styleName } from '
 import {
   campus,
   edit,
+  importTimetable,
   lists,
   profile,
   ResidenceOptions,
@@ -323,13 +324,22 @@ export function Trips() {
           <${Pills} name="pace" value=${pace.value} options=${PACES().map((x) => [x.value, x.label])} onChange=${(v) => edit((y) => (y.walkPace = v))} labelledBy="pace-label" full />
         </div>
         <${Field} id="prefer-bus" label=${t('Prefer the bus')} sub=${t('Wait a few minutes more for a bus rather than walk.')}>
-          <input id="prefer-bus" class="switch" type="checkbox" role="switch" checked=${p.preferBus !== false} onChange=${(e) => edit((x) => (x.preferBus = e.currentTarget.checked))} />
+          <input id="prefer-bus" class="switch" type="checkbox" role="switch" checked=${p.preferBus !== false} onChange=${(e) => {
+            const on = e.currentTarget.checked;
+            edit((x) => (x.preferBus = on));
+          }} />
         <//>
         <${Field} id="full-bus" label=${t('Allow for busy buses')} sub=${t('Aim one bus earlier when yours is often full.')}>
-          <input id="full-bus" class="switch" type="checkbox" role="switch" checked=${p.fullBusMargin !== false} onChange=${(e) => edit((x) => (x.fullBusMargin = e.currentTarget.checked))} />
+          <input id="full-bus" class="switch" type="checkbox" role="switch" checked=${p.fullBusMargin !== false} onChange=${(e) => {
+            const on = e.currentTarget.checked;
+            edit((x) => (x.fullBusMargin = on));
+          }} />
         <//>
         <${Field} id="public-buses" label=${t('Public buses')} sub=${t('Count the 95, 151 and other public buses at your stops too. They have a fare, so one is the answer only when it clearly saves time.')}>
-          <input id="public-buses" class="switch" type="checkbox" role="switch" checked=${p.publicBuses === true} onChange=${(e) => edit((x) => (x.publicBuses = e.currentTarget.checked))} />
+          <input id="public-buses" class="switch" type="checkbox" role="switch" checked=${p.publicBuses === true} onChange=${(e) => {
+            const on = e.currentTarget.checked;
+            edit((x) => (x.publicBuses = on));
+          }} />
         <//>
       <//>
       <${Choices} />
@@ -444,8 +454,7 @@ export function Timetable({ me }) {
     e.preventDefault();
     setMsg(t('Importing…'));
     try {
-      const r = await api('/api/me/import', { method: 'POST', body: { share } });
-      profile.set(r.profile);
+      const r = await importTimetable(share);
       setTerm(r.term);
       const n = r.profile.trips.length;
       const notes = [n === 1 ? t('Imported 1 class for {0}.', r.term) : t('Imported {0} classes for {1}.', n, r.term)];
@@ -758,8 +767,10 @@ function timetableStops() {
 
 function addFavourite(to, label) {
   let already = null;
+  // The same key each time the change is made (it's made again on the server's copy when saved).
+  const keep = {};
   edit((x) => {
-    already = withPlace(x, to, label);
+    already = withPlace(x, to, label, keep);
   });
   if (already) toast(t('Already a favourite: {0}', already.label));
 }
@@ -853,7 +864,8 @@ function Place({ place, arriving }) {
     const go = () => {
       let removed = null;
       edit((x) => {
-        removed = withoutPlace(x, place.key);
+        // Made again when saved: one already gone there keeps what Undo puts back.
+        removed = withoutPlace(x, place.key) ?? removed;
       });
       refocus(document.querySelector('#place-form input'));
       if (removed)

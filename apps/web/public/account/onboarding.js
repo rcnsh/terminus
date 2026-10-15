@@ -3,9 +3,10 @@
 // (profile.js), so leaving halfway loses nothing.
 
 import { html, reducedMotion, useEffect, useMemo, useRef, useState, useStore } from '../assets/ui.js';
-import { api, browserHour12, clock, inkOn, locationError, t } from './dom.js';
+import { browserHour12, clock, inkOn, locationError, t } from './dom.js';
 import {
   campus,
+  importTimetable,
   limit,
   profile,
   ResidenceOptions,
@@ -177,8 +178,7 @@ function TimetableStep({ nav }) {
   const [msg, setMsg] = useState(trips ? (trips === 1 ? t('1 class already imported.') : t('{0} classes already imported.', trips)) : '');
   const doImport = async () => {
     setMsg(t('Importing…'));
-    const r = await api('/api/me/import', { method: 'POST', body: { share: share.trim() } });
-    profile.set(r.profile);
+    const r = await importTimetable(share.trim());
     setImported(true);
     const n = r.profile.trips.length;
     const text = n === 1 ? t('Imported 1 class for {0}.', r.term) : t('Imported {0} classes for {1}.', n, r.term);

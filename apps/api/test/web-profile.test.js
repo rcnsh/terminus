@@ -165,6 +165,7 @@ test('an edit made while a saveNow is on its way is kept, with the saved change 
   let answerSave;
   const bodies = [];
   globalThis.fetch = async (url, init) => {
+    if (init?.method !== 'PUT') return new Response(JSON.stringify({ walkPace: 'normal', clock: '24' }), { headers: { etag: '"1"' } });
     bodies.push(JSON.parse(init.body));
     // The first save waits; its reply is the profile as it went.
     if (!answerSave)
@@ -173,7 +174,7 @@ test('an edit made while a saveNow is on its way is kept, with the saved change 
   };
   mock.timers.enable({ apis: ['setTimeout'] });
   try {
-    P.profile.set({ walkPace: 'normal', clock: '24' });
+    await P.loadProfile();
     P.toastText.set(null);
     const saving = P.saveNow((p) => (p.clock = '12'));
     for (let i = 0; i < 50 && !answerSave; i++) await new Promise((ok) => setImmediate(ok));
@@ -190,4 +191,243 @@ test('an edit made while a saveNow is on its way is kept, with the saved change 
     mock.timers.reset();
     globalThis.fetch = realFetch;
   }
+});
+
+/**
+ * The API's profile, as apps/api/src/me.ts keeps it: a version in the ETag,
+ * and a PUT with If-Match refused (412) if another device saved since.
+ * `hold()` makes the next PUT wait until `release()`.
+ */
+function fakeServer(doc) {
+  const s = { doc, version: 1, puts: [], held: null };
+  const reply = (body, status = 200) =>
+    new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', etag: `"${s.version}"` } });
+  s.hold = () => {
+    let release;
+    s.held = new Promise((ok) => (release = ok));
+    return () => {
+      s.held = null;
+      release();
+    };
+  };
+  /** Another device saves: the version moves on. */
+  s.elsewhere = (change) => {
+    s.doc = structuredClone(s.doc);
+    change(s.doc);
+    s.version++;
+  };
+  s.fetch = async (url, init = {}) => {
+    const method = init.method ?? 'GET';
+    if (url === '/api/me/profile' && method === 'GET') return reply(s.doc);
+    if (url === '/api/me/profile' && method === 'PUT') {
+      const put = { body: JSON.parse(init.body), ifMatch: init.headers['if-match'] ?? null };
+      s.puts.push(put);
+      if (s.held) await s.held;
+      if (put.ifMatch && put.ifMatch !== `"${s.version}"`)
+        return new Response(JSON.stringify({ error: 'your settings were changed on another device; try again' }), { status: 412 });
+      s.doc = put.body;
+      s.version++;
+      return reply(s.doc);
+    }
+    if (s.route) return s.route(url, init, reply);
+    return new Response('{"error":"not found"}', { status: 404 });
+  };
+  return s;
+}
+
+/** Lets promises and fetches run until `done()`, or gives up. */
+async function until(done) {
+  for (let i = 0; i < 200 && !done(); i++) await new Promise((ok) => setImmediate(ok));
+  assert.ok(done(), 'waited too long');
+}
+
+/** Runs `body` against a fake server holding `doc`, with the 400 ms save wait under the test's control. */
+async function withServer(doc, body) {
+  const realFetch = globalThis.fetch;
+  const server = fakeServer(doc);
+  globalThis.fetch = server.fetch;
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    await P.loadProfile();
+    P.toastText.set(null);
+    await body(server);
+  } finally {
+    mock.timers.reset();
+    globalThis.fetch = realFetch;
+  }
+}
+
+test('a save sends the version it was made on, and keeps what another device saved meanwhile (412, read again, the change made again)', async () => {
+  await withServer({ walkPace: 'normal', clock: '24', places: [] }, async (server) => {
+    P.edit((p) => (p.walkPace = 'fast'));
+    // Another device sets the clock after this page loaded.
+    server.elsewhere((p) => (p.clock = '12'));
+    mock.timers.tick(400);
+    await until(() => server.puts.length === 2 && P.toastText.get()?.text === 'Saved');
+    assert.equal(server.puts[0].ifMatch, '"1"');
+    assert.deepEqual(server.puts[0].body.clock, '24', 'the first try is on the copy this page had');
+    // Refused: read again, and only the change made on that.
+    assert.equal(server.puts[1].ifMatch, '"2"');
+    assert.deepEqual(server.doc, { walkPace: 'fast', clock: '12', places: [] });
+    assert.deepEqual(P.profile.get(), server.doc);
+  });
+});
+
+test('one save at a time: a change made while one is on its way goes next, on the version it saved', async () => {
+  await withServer({ walkPace: 'normal', clock: '24' }, async (server) => {
+    const release = server.hold();
+    P.edit((p) => (p.walkPace = 'fast'));
+    mock.timers.tick(400);
+    await until(() => server.puts.length === 1);
+    P.edit((p) => (p.clock = '12'));
+    mock.timers.tick(400);
+    for (let i = 0; i < 20; i++) await new Promise((ok) => setImmediate(ok));
+    assert.equal(server.puts.length, 1, 'not sent while the first is on its way');
+    assert.deepEqual(P.profile.get(), { walkPace: 'fast', clock: '12' });
+    release();
+    await until(() => server.puts.length === 2 && server.version === 3);
+    assert.equal(server.puts[1].ifMatch, '"2"');
+    assert.deepEqual(server.doc, { walkPace: 'fast', clock: '12' });
+    await until(() => P.toastText.get()?.text === 'Saved' && P.profile.get().clock === '12');
+    assert.deepEqual(P.profile.get(), { walkPace: 'fast', clock: '12' });
+  });
+});
+
+test("setup's saveNow saves only its change on the server's copy, and answers once it has landed", async () => {
+  await withServer({ clock: 'auto', seen: [] }, async (server) => {
+    server.elsewhere((p) => (p.seen = ['tips']));
+    const saved = await P.saveNow((p) => (p.seen = [...new Set([...(p.seen ?? []), 'onboarding'])]));
+    assert.deepEqual(saved, { clock: 'auto', seen: ['tips', 'onboarding'] });
+    assert.deepEqual(server.doc, saved);
+    assert.equal(server.puts.at(-1).ifMatch, '"2"');
+    // Its caller says how it went: no "Saved" of its own.
+    assert.equal(P.toastText.get(), null);
+  });
+});
+
+test("a save refused again and again gives up, and the profile shown is the server's", async () => {
+  await withServer({ clock: '24' }, async (server) => {
+    // Every try finds another device has saved since it read.
+    const realFetch = server.fetch;
+    globalThis.fetch = async (url, init = {}) => {
+      if (init.method === 'PUT') server.elsewhere(() => {});
+      return realFetch(url, init);
+    };
+    await assert.rejects(
+      P.saveNow((p) => (p.clock = '12')),
+      { status: 412 },
+    );
+    assert.equal(server.puts.length, 3);
+    assert.equal(server.doc.clock, '24');
+    assert.equal(P.profile.get().clock, '24', 'not shown as saved');
+  });
+});
+
+test('a save without a version (an older page state) is still sent, and the server takes it as before', async () => {
+  await withServer({ clock: '24' }, async (server) => {
+    const realFetch = server.fetch;
+    // A server that sends no ETag.
+    globalThis.fetch = async (url, init) => {
+      const res = await realFetch(url, init);
+      return new Response(await res.text(), { status: res.status });
+    };
+    await P.loadProfile();
+    await P.saveNow((p) => (p.clock = '12'));
+    assert.equal(server.puts.at(-1).ifMatch, null);
+    assert.equal(server.doc.clock, '12');
+  });
+});
+
+test('a favourite added and taken off before the save is gone once it saves (its key is the same each time the change is made)', async () => {
+  await withServer({ places: [{ key: 'kr-mrt', label: 'KR MRT', to: 'KR-MRT' }] }, async (server) => {
+    // Its name's key is taken, so it gets a number: the same one when made again on the server's copy.
+    const keep = {};
+    P.edit((p) => P.withPlace(p, 'COM3', 'KR MRT', keep));
+    const added = P.profile.get().places[1].key;
+    assert.match(added, /^kr-mrt-\d\d$/);
+    P.edit((p) => P.withoutPlace(p, added));
+    mock.timers.tick(400);
+    await until(() => server.puts.length === 1 && P.toastText.get()?.text === 'Saved');
+    assert.deepEqual(server.doc.places, [{ key: 'kr-mrt', label: 'KR MRT', to: 'KR-MRT' }]);
+  });
+  // Made again on a copy where the key is free: the same key.
+  const keep = {};
+  const a = { places: [{ key: 'x', label: 'X', to: 'A' }] };
+  P.withPlace(a, 'B', 'X', keep);
+  for (let i = 0; i < 20; i++) {
+    const b = { places: [{ key: 'x', label: 'X', to: 'A' }] };
+    P.withPlace(b, 'B', 'X', keep);
+    assert.equal(b.places[1].key, a.places[1].key);
+  }
+});
+
+/** POST /api/me/import as the API answers it: the timetable saved on the profile, a new version. `gate` holds the answer. */
+function importRoute(server, trips, gate = null) {
+  server.route = async (url, init, reply) => {
+    if (url !== '/api/me/import') return new Response('{"error":"not found"}', { status: 404 });
+    server.imports = (server.imports ?? 0) + 1;
+    if (gate) await gate;
+    server.doc = { ...server.doc, trips, share: JSON.parse(init.body).share };
+    server.version++;
+    return reply({ profile: server.doc, term: 'AY2026/27 Sem 1' });
+  };
+}
+
+test('an import saves a change still waiting first, so the change is not lost under it', async () => {
+  await withServer({ walkPace: 'normal', trips: [] }, async (server) => {
+    importRoute(server, [{ day: 1, arriveByMin: 540, label: 'CS2030', to: 'COM3' }]);
+    P.edit((p) => (p.walkPace = 'fast'));
+    // Import pressed within the 400 ms.
+    const r = await P.importTimetable('https://nusmods.com/timetable/sem-1/share?CS2030=LEC:1');
+    assert.equal(r.profile.trips.length, 1);
+    assert.equal(server.puts.length, 1, 'the change went before the import');
+    assert.equal(server.doc.walkPace, 'fast');
+    assert.equal(server.doc.trips.length, 1);
+    assert.deepEqual(P.profile.get(), server.doc);
+    mock.timers.tick(400);
+    for (let i = 0; i < 20; i++) await new Promise((ok) => setImmediate(ok));
+    assert.equal(server.puts.length, 1, 'nothing more to save');
+  });
+});
+
+test("a change made while an import runs stays, on top of the import's answer, and is saved on its version", async () => {
+  await withServer({ walkPace: 'normal', trips: [] }, async (server) => {
+    let answer;
+    importRoute(server, [{ day: 1, arriveByMin: 540, label: 'CS2030', to: 'COM3' }], new Promise((ok) => (answer = ok)));
+    const importing = P.importTimetable('https://nusmods.com/timetable/sem-1/share?CS2030=LEC:1');
+    await until(() => server.imports === 1);
+    P.edit((p) => (p.walkPace = 'fast'));
+    mock.timers.tick(400);
+    for (let i = 0; i < 20; i++) await new Promise((ok) => setImmediate(ok));
+    assert.equal(server.puts.length, 0, 'held until the import answers');
+    answer();
+    await importing;
+    // Shown at once on the imported profile, then saved on the version the import made.
+    assert.equal(P.profile.get().walkPace, 'fast');
+    assert.equal(P.profile.get().trips.length, 1);
+    await until(() => server.puts.length === 1 && P.toastText.get()?.text === 'Saved');
+    assert.equal(server.puts[0].ifMatch, '"2"');
+    assert.deepEqual(server.doc, { walkPace: 'fast', trips: P.profile.get().trips, share: P.profile.get().share });
+    assert.deepEqual(P.profile.get(), server.doc);
+  });
+});
+
+test('a failed import keeps the changes made while it ran, and saves them', async () => {
+  await withServer({ walkPace: 'normal', trips: [] }, async (server) => {
+    let answer;
+    const gate = new Promise((ok) => (answer = ok));
+    server.route = async () => {
+      server.imports = 1;
+      await gate;
+      return new Response(JSON.stringify({ error: 'not a valid NUSMods share link' }), { status: 400 });
+    };
+    const importing = P.importTimetable('nope');
+    await until(() => server.imports === 1);
+    P.edit((p) => (p.walkPace = 'fast'));
+    mock.timers.tick(400);
+    answer();
+    await assert.rejects(importing, { status: 400 });
+    await until(() => server.puts.length === 1 && server.doc.walkPace === 'fast');
+    assert.deepEqual(server.doc.trips, []);
+  });
 });

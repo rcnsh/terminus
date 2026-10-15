@@ -236,7 +236,9 @@ const profile = {
   term: null,
 };
 db.exec(`INSERT INTO users (id, email, created, last_seen, via) VALUES ('test-user', 'you@u.nus.edu', 0, 0, 'web')`);
-db._db.prepare('INSERT INTO profiles VALUES (?, ?, 0)').run('test-user', JSON.stringify(profile));
+// Version 1, as a saved profile has one: 0 is the version of no profile at all
+// (If-Match "0" saves only if there's none), so a page saving with If-Match could never save over it.
+db._db.prepare('INSERT INTO profiles VALUES (?, ?, 1)').run('test-user', JSON.stringify(profile));
 for (const code of ['TEST67', 'TEST78', 'TEST89']) db.exec(`INSERT INTO pair_codes VALUES ('${code}', 'test-user', 9999999999999)`);
 // Crowd history, so the full-bus warning shows: every bus at PGP is usually packed.
 for (const svc of servingStop.get('PGP') ?? []) {
