@@ -14,8 +14,12 @@
  * APNS_TOPIC var missing, APNs is off: tokens are still stored, and sends
  * are skipped (said once per isolate).
  *
- * Apple only takes HTTP/2. A deployed Worker's fetch speaks it to Apple;
- * the local runtime (cf dev) doesn't, so nothing reaches an iPhone from there.
+ * Apple only takes HTTP/2. Cloudflare doesn't document which HTTP version a
+ * Worker's fetch uses; deployed Workers have been seen reaching APNs with it
+ * (Cloudflare's proxy upgrades the request), the local runtime can't (cf dev,
+ * the dev stub). Unverified for terminus until a real push: see
+ * docs/internals.md, APNs. A refused connection throws, which counts as a
+ * failed send and drops no token.
  */
 
 import type { Card } from './card.ts';

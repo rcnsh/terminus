@@ -670,9 +670,24 @@ object at the change and once the second bus has gone.
   (`apns:jwt:<key id>`), shared by every isolate. A 403
   `ExpiredProviderToken` or `InvalidProviderToken` signs a new one and
   sends once more.
-- **Requests.** `POST https://<host>/3/device/<hex>` over HTTP/2 (a
-  deployed Worker's fetch speaks it; the local runtime doesn't, so
-  nothing reaches a phone from `cf dev` or the dev stub), with
+- **HTTP/2: unverified here.** APNs accepts only HTTP/2, and Cloudflare's
+  docs don't say which HTTP version a Worker's `fetch` uses to another
+  host. What there is: a Cloudflare engineer answering workerd issue
+  #4841 said deployed Workers' requests go through Cloudflare's proxy
+  stack, which "(apparently)" upgrades to HTTP/2, so APNs from `fetch`
+  works in production but not under workerd locally (no HTTP/2 there,
+  no plans for it); and Workers libraries for APNs (cloudflare-apns2) use
+  plain `fetch` to Apple. That is observed behaviour, not a documented
+  guarantee, and terminus hasn't sent a real push yet. So: from `cf dev`
+  or the dev stub nothing reaches a phone, and the first real check is a
+  push from the beta Worker to a development build. If Apple ever
+  refuses the connection, each send fails (logged `push failed`; counted
+  failed, so the Trip object tries again at its next wake, and no token
+  is dropped). The way out then is a small relay that speaks HTTP/2 to
+  Apple (for instance on the VPS that renders the timelapse), which the
+  Worker calls with the same request and its own shared secret; nothing
+  in Cloudflare sends APNs for us.
+- **Requests.** `POST https://<host>/3/device/<hex>`, with
   `apns-topic` (the bundle id; `<bundle id>.push-type.liveactivity` for a
   Live Activity), `apns-push-type`, `apns-priority`, `apns-expiration` and,
   for alerts, `apns-collapse-id` (`card` or `term`, as Android's

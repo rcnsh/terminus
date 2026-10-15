@@ -471,3 +471,14 @@ test('setPushToken keeps the language an iPhone registered in, and forgets it wi
   await setPushToken(db, 'h0', null);
   assert.equal(db._db.prepare("SELECT push_lang FROM sessions WHERE token_hash = 'h0'").get().push_lang, null);
 });
+
+test('a connection Apple refuses (no HTTP/2, a reset) counts as failed and drops no token', async () => {
+  const { env, row } = await setup([{ push: `apns:${HEX}`, live: `apnsla:${LIVE_HEX}` }], {
+    apple: () => {
+      throw new TypeError('Network connection lost.');
+    },
+  });
+  const { out } = await quietly(() => remindUser(env, 'u1', NOTICE, NOW));
+  assert.deepEqual(out, { sent: 0, failed: 1 });
+  assert.deepEqual(row(0), { push_token: `apns:${HEX}`, live_token: `apnsla:${LIVE_HEX}` });
+});
