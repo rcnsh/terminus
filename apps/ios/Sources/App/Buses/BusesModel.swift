@@ -264,7 +264,7 @@ final class BusesModel {
     private func pulled(_ key: String, _ fetch: () async -> Void) async -> BusPullOutcome {
         let start = Date()
         if asking.contains(key) {
-            while asking.contains(key) { try? await Task.sleep(for: .milliseconds(100)) }
+            while asking.contains(key), !Task.isCancelled { try? await Task.sleep(for: .milliseconds(100)) }
         } else if BusPull.shouldFetch(lastOK: answeredAt[key], now: start) {
             await fetch()
         } else {

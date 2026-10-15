@@ -133,7 +133,9 @@ private struct RemovedRow: View {
         .frame(minHeight: 48)
         .announced(text)
         .task(id: note.item.key) {
-            try? await Task.sleep(for: .seconds(20))
+            // Only once the time is up: the row is rebuilt as Today reloads,
+            // which cancels this, and that mustn't take Undo away with it.
+            guard (try? await Task.sleep(for: .seconds(20))) != nil else { return }
             app.dismissRemoved(note.item.key)
         }
         .transition(.opacity)
