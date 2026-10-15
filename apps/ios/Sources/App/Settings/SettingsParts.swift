@@ -21,7 +21,7 @@ struct SettingsScaffold<Content: View>: View {
     /// goes behind the status bar, so the time never sits on the words.
     @State private var scrolled = false
     @State private var safeTop: CGFloat = 60
-    private var clock = SkyClock.shared
+    private let clock = SkyClock.shared
 
     init(title: String, back: Bool = true, @ViewBuilder content: () -> Content) {
         self.title = title

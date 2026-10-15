@@ -126,7 +126,7 @@ struct BusesHome: View {
     @FocusState private var focused: Bool
     @State private var page: String? = nearestID
     @State private var pull = SkyPull()
-    private var sky = SkyClock.shared
+    private let sky = SkyClock.shared
 
     private var searching: Bool { focused || !query.trimmingCharacters(in: .whitespaces).isEmpty }
     private var pages: [String?] { BusPins.pages(nearest: model.nearest?.code, pins: model.pins) }
@@ -392,7 +392,7 @@ private struct BusSearchResults: View {
 /// Page one without a nearest stop: no location and no home stop, or no answer.
 private struct NoNearest: View {
     @Environment(BusesModel.self) private var model
-    private var locator = Locator.shared
+    private let locator = Locator.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -620,7 +620,7 @@ extension View {
 private struct SkyPage: ViewModifier {
     let title: String
     @Environment(\.colorScheme) private var scheme
-    private var sky = SkyClock.shared
+    private let sky = SkyClock.shared
 
     func body(content: Content) -> some View {
         let light = SkyPalette.of(sky.phase, dark: scheme == .dark).lightInk
@@ -689,7 +689,7 @@ private struct BusSkyChrome: ViewModifier {
     let strip: Bool
     @Environment(\.colorScheme) private var scheme
     @State private var band = BandTracker()
-    private var sky = SkyClock.shared
+    private let sky = SkyClock.shared
 
     /// The status bar's height: what the strip covers.
     private var inset: CGFloat {

@@ -11,8 +11,8 @@ struct NowView: View {
     @Environment(Prefs.self) private var prefs
     @Environment(\.colorScheme) private var scheme
     @Environment(\.scenePhase) private var scenePhase
-    private var sky = SkyClock.shared
-    private var locator = Locator.shared
+    private let sky = SkyClock.shared
+    private let locator = Locator.shared
     @State private var searching = false
     @State private var scrolled: CGFloat = 0
     @State private var onScreen = false

@@ -34,7 +34,7 @@ struct RootView: View {
 struct MainTabs: View {
     @Environment(AppModel.self) private var app
     @Environment(\.colorScheme) private var scheme
-    private var sky = SkyClock.shared
+    private let sky = SkyClock.shared
 
     enum Tab: Hashable { case now, buses, map, settings }
 

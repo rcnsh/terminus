@@ -5,7 +5,7 @@ import UIKit
 /// leave-by alert itself, and your dot finding its nearest stop. Both optional.
 struct SetupAlertsStep: View {
     let model: OnboardingModel
-    private var locator = Locator.shared
+    private let locator = Locator.shared
     @Environment(\.scenePhase) private var scenePhase
 
     init(model: OnboardingModel) { self.model = model }

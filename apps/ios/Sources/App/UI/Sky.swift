@@ -81,7 +81,7 @@ struct SkyBand<Content: View>: View {
     @ViewBuilder var content: Content
     @Environment(\.colorScheme) private var scheme
     @Environment(\.skyPull) private var pull
-    private var clock = SkyClock.shared
+    private let clock = SkyClock.shared
 
     init(moonLow: Bool = false, moon: Bool = true, @ViewBuilder content: () -> Content) {
         self.moonLow = moonLow
@@ -213,7 +213,7 @@ extension View {
 
 private struct SkyStatusBar: ViewModifier {
     @Environment(\.colorScheme) private var scheme
-    private var clock = SkyClock.shared
+    private let clock = SkyClock.shared
     func body(content: Content) -> some View {
         let light = SkyPalette.of(clock.phase, dark: scheme == .dark).lightInk
         content.statusBar(light: light ? true : (scheme == .dark ? true : false))
