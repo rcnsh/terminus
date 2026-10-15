@@ -39,8 +39,11 @@ for f in $(find apps/web/public -name '*.js'); do node --check "$f" || exit 1; d
 
 Formatting is mechanical: Oxfmt (`.oxfmtrc.json`), swift-format
 (`.swift-format`) and ktfmt's kotlinlang style (`apps/android/.editorconfig`),
-all at 140 columns. Run `pnpm format:all` before you push. To skip the
-one-off reformat in `git blame`:
+all at 140 columns. `pnpm install` sets up a Lefthook pre-commit hook
+(`lefthook.yml`) that formats your staged JS, TS, JSON and Swift and
+re-stages them. It skips Kotlin (Gradle is too slow for a hook), so still
+run `pnpm format:all` before you push: CI fails on unformatted code. To
+skip the one-off reformat in `git blame`:
 `git config blame.ignoreRevsFile .git-blame-ignore-revs`.
 
 `cf deploy --dry-run` only bundles; it sends nothing.
