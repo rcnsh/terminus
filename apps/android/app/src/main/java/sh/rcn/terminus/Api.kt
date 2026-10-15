@@ -811,9 +811,11 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         return Tagged(json, tag)
     }
 
-    /** Imports a NUSMods share link; the server replaces the imported classes only if it all worked. */
-    suspend fun import(share: String): ImportResult = parsing {
-        ImportResult.parse(request("POST", "/api/me/import", JSONObject().put("share", share)))
+    /** Imports a NUSMods share link; the server replaces the imported classes only if it all worked. With the profile's new version. */
+    suspend fun import(share: String): Imported {
+        var tag: String? = null
+        val json = request("POST", "/api/me/import", JSONObject().put("share", share)) { tag = it.getHeaderField("etag") }
+        return Imported(ImportResult.parse(json), tag)
     }
 
     /** Stops and residences, for the home and place pickers. */
@@ -1434,6 +1436,9 @@ data class Campus(
 /** `/api/me/import`: what was found, what couldn't be placed, and for which semester. */
 /** An imported class whose room couldn't be placed: the person picks its stop, or skips it. */
 data class Unplaced(val module: String, val venue: String, val day: Int, val arriveByMin: Int, val endMin: Int?, val offCampus: Boolean)
+
+/** An import's answer, and the version (the ETag) of the profile it saved. */
+class Imported(val result: ImportResult, val version: String?)
 
 data class ImportResult(
     val profile: JSONObject,

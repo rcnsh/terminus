@@ -271,10 +271,10 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * Sends the changes waiting, made on the profile as the server last had it. One save at a time: changes made meanwhile wait for its
-     * answer and go next, on what it saved.
+     * answer and go next, on what it saved. None while an import runs: they go on top of its answer.
      */
     private fun send() {
-        if (sending != null || pending.isEmpty()) return
+        if (sending != null || _state.value.importing || pending.isEmpty()) return
         val token = store.token ?: return
         val base = confirmed ?: return
         // Left (onCleared), and signed into another account before the last save came back: these were the last account's.
@@ -319,22 +319,49 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         send()
     }
 
+    /** An import on its way: in [saves] too, so leaving the app doesn't cancel it, and the edits waiting for its answer are still saved. */
+    private var importJob: Job? = null
+
     fun import(share: String) {
         val link = share.trim()
         if (link.isEmpty() || _state.value.importing) return
+        val token = store.token ?: return
+        // A change still waiting goes first, so it isn't saved over the import.
+        if (saveJob != null) {
+            saveJob?.cancel()
+            saveJob = null
+            send()
+        }
         _state.update { it.copy(importing = true, imported = null, message = null) }
-        attempt({ it.copy(importing = false) }) {
-            val r = api().import(link)
-            _state.update {
-                it.copy(
-                    importing = false,
-                    imported = r,
-                    profile = ProfileDoc(r.profile),
-                    sharedLink = null,
-                    needsReimport = false,
-                    term = r.term,
-                    unplaced = r.unplaced,
-                )
+        importJob = saves.launch {
+            try {
+                // The save on its way lands before the import, not over it. Changes made from here wait for the import's answer, then go
+                // on top of it.
+                while (true) (sending ?: break).join()
+                val r = Api(token).import(link)
+                val saved = ProfileDoc(r.result.profile)
+                confirmed = saved
+                version = r.version
+                val shown = saved.copy().also { d -> pending.forEach { it(d) } }
+                _state.update {
+                    it.copy(
+                        importing = false,
+                        imported = r.result,
+                        profile = shown,
+                        sharedLink = null,
+                        needsReimport = false,
+                        term = r.result.term,
+                        unplaced = r.result.unplaced,
+                    )
+                }
+                if (saveJob == null) send()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(importing = false) }
+                val message = failure(e, token) ?: return@launch
+                if (saveJob == null) send()
+                _state.update { it.copy(message = message) }
             }
         }
     }
