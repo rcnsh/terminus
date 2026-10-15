@@ -84,7 +84,7 @@ struct BusProvider: TimelineProvider {
         if let slot {
             let s = WidgetStore.slot(slot)
             if s.chosen != .timetable, let at = s.at, -at.timeIntervalSinceNow <= WidgetMode.keep,
-                s.fetchedAt.map { -$0.timeIntervalSinceNow >= WidgetMode.refetch } ?? true
+                s.fetchedAt.map({ -$0.timeIntervalSinceNow >= WidgetMode.refetch }) ?? true
             {
                 await WidgetStore.fetch(slot: slot)
             }
