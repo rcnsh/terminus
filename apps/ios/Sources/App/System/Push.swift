@@ -76,12 +76,14 @@ import UserNotifications
     }
 
     /// Sends this phone's tokens when they're new, for a new session, or due
-    /// again (`resend`). Called when the session or a token changes, at start,
-    /// and from each answer.
+    /// again (`resend`), and when the leave alerts are turned on or off: the
+    /// server sends the trip's alerts only while they're on. Called when the
+    /// session, a token or the trip settings change, at start, and from each answer.
     static func sync(force: Bool = false) {
         guard let auth = TokenStore.read(), let apns = d.string(forKey: "push.apns") else { return }
         let tokens = [apns] + [liveToken].compactMap { $0 }
-        let sent = tokens.joined(separator: "|")
+        let alerts = TripPrefs.leaveAlerts
+        let sent = (tokens + [alerts ? "alerts" : "quiet"]).joined(separator: "|")
         let fresh =
             d.string(forKey: "push.sent") == sent && d.string(forKey: "push.for") == tag(auth)
             && (d.object(forKey: "push.sentAt") as? Date).map { -$0.timeIntervalSinceNow < resend } == true
@@ -89,7 +91,7 @@ import UserNotifications
         Task {
             do {
                 // One token a request: the phone's, then the Live Activity's.
-                for t in tokens { try await Api(token: auth).registerPush(apple: t) }
+                for t in tokens { try await Api(token: auth).registerPush(apple: t, alerts: t == apns ? alerts : nil) }
                 // Signed in again meanwhile: the new session hasn't got it.
                 guard TokenStore.read() == auth else { return }
                 d.set(sent, forKey: "push.sent")

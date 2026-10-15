@@ -937,8 +937,11 @@ export const ME_ROUTES: MeRoute[] = [
             { error: 'send token as apns:<hex device token> or apnsla:<hex Live Activity token>, with :sandbox from a development build' },
             400,
           );
+        // With the phone's token, whether its leave alerts are on: off, the
+        // trip's pushes to it are silent. Not said (an older build): alerts as before.
+        const alerts = typeof body?.alerts === 'boolean' ? body.alerts : null;
         if (t.live) await setLiveToken(db, session.tokenHash, formatApnsToken(t));
-        else await setPushToken(db, session.tokenHash, formatApnsToken(t), await pushLang(db, session.user.id));
+        else await setPushToken(db, session.tokenHash, formatApnsToken(t), await pushLang(db, session.user.id), alerts);
         return json({ ok: true });
       }
       if (!token || token.length > 4096 || token.startsWith(WEB_PREFIX))

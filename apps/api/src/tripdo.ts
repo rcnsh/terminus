@@ -255,7 +255,7 @@ export class Trip {
     if (!card) {
       // No classes today (any more): a Live Activity still showing the trip ends.
       if (apns && last?.live) {
-        const out = await updateLive(env, userId, JSON.parse(last.live) as LiveActivityState, 'end', nowMs);
+        const out = await updateLive(env, userId, { state: JSON.parse(last.live) as LiveActivityState }, 'end', nowMs);
         if (out.sent > 0 || out.failed === 0) {
           await this.state.blockConcurrencyWhile(async () => {
             if (!(await this.cleared())) await this.storage.put('pushed', { ...last, live: undefined });
@@ -272,14 +272,15 @@ export class Trip {
     const changed = last
       ? last.key !== now.key || last.phase !== now.phase || Boolean(last.gone) !== Boolean(now.gone)
       : now.phase !== 'idle';
+    // The card worded again for an iPhone in the other language (plans aren't saved twice).
+    const answerIn = (l: Lang) =>
+      withLang(l, () => tripCardFor(env, ctx, DEPS, userId, day, nowMs, async () => {})).then((c) => c?.answer ?? null);
     if (changed) {
       // Wake the phone for what the user should see: time to go, a missed bus.
       // With reminders off too: these are what start the live notification on
       // Android, which may start it from the background only for a
       // high-priority message.
       const urgent = now.phase === 'due' || now.phase === 'missed';
-      const answerIn = (l: Lang) =>
-        withLang(l, () => tripCardFor(env, ctx, DEPS, userId, day, nowMs, async () => {})).then((c) => c?.answer ?? null);
       const out = await nudgeUser(
         env,
         userId,
@@ -307,8 +308,14 @@ export class Trip {
       }
     } else if (apns && last && last.live !== now.live) {
       // The same phase, but what a Live Activity shows moved (a later bus):
-      // only the iPhones running one are told.
-      const out = await updateLive(env, userId, live, card.key === null || live.phase === 'arrived' ? 'end' : 'update', nowMs);
+      // only the iPhones running one are told, each in its own language.
+      const out = await updateLive(
+        env,
+        userId,
+        { answer: card.answer, lang, answerIn },
+        card.key === null || live.phase === 'arrived' ? 'end' : 'update',
+        nowMs,
+      );
       if (out.sent > 0 || out.failed === 0) {
         await this.state.blockConcurrencyWhile(async () => {
           if (!(await this.cleared())) await this.storage.put('pushed', now);

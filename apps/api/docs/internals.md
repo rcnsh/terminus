@@ -644,8 +644,11 @@ object at the change and once the second bus has gone.
   keeps its latest of each; the same token on another session moves there;
   `DELETE /api/me/push` forgets both. Registering also notes the language
   the iPhone's notifications are worded in (`sessions.push_lang`): the
-  account's choice, else the request's. The data export lists all three
-  for each device (`push`, `liveActivityPush`, `pushLanguage`).
+  account's choice, else the request's. With the `apns:` token the app
+  sends `alerts`, whether its leave alerts are on (`sessions.push_alerts`,
+  1 or 0; NULL from a build that doesn't say, which is pushed as before).
+  The data export lists all four for each device (`push`,
+  `liveActivityPush`, `pushLanguage`, `pushAlerts`).
 - **Secrets and vars.** `APNS_KEY` (the .p8 from the Apple developer
   account, PEM, an ES256 key), `APNS_KEY_ID` (its 10-character id) and
   `APNS_TEAM_ID`, as Worker secrets; `APNS_TOPIC`, the bundle id, is a var
@@ -720,8 +723,11 @@ object at the change and once the second bus has gone.
     language sets every iPhone's to it; back to following each device, the
     saving iPhone's is its own, and another's catches up when it next
     registers (each launch).
-  - nothing to show (an idle card, reminders off for the trip) or, with
-    its Live Activity running, a quiet change the activity already shows:
+  - nothing to show (an idle card, reminders off for the trip), an iPhone
+    whose leave alerts are off (`push_alerts` 0: as Android, which shows
+    its own notification only with them on, it gets no alert, due and
+    missed included), or, with its Live Activity running, a quiet change
+    the activity already shows:
     a `background` push, `{aps: {content-available: 1}, kind, phase}`,
     priority 5, which wakes the app to fetch the card.
   - the semester's reminder: an `alert` in the iPhone's language, with
@@ -729,7 +735,9 @@ object at the change and once the second bus has gone.
   - its Live Activity, when it has one: a `liveactivity` push with every
     phase change (priority 10), and when only what it shows moved (a later
     bus, a new arrival time) or another device's tap changed it (priority
-    5; the Trip object's `pushed.live`), in the iPhone's language. `event`
+    5; the Trip object's `pushed.live`), in the iPhone's language: the
+    card worded again for an iPhone in the other language, as for an
+    alert (`updateLive` with the answer and `answerIn`). `event`
     is `update`, or `end` once there, with no trip left, or with no class
     left today (the last state sent, ended; `dismissal-date` ten minutes
     on); `stale-date` is the card's `staleAt`.

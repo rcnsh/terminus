@@ -32,6 +32,7 @@ const NOW = Date.parse('2026-08-27T01:00:00Z');
 const HEX = 'ab'.repeat(32);
 const HEX2 = 'cd'.repeat(32);
 const LIVE_HEX = 'ef'.repeat(80);
+const LIVE_HEX2 = '12'.repeat(80);
 const TOPIC = 'sh.rcn.terminus';
 const NOTICE = { title: 'a', body: 'b', zhTitle: 'a', zhBody: 'b' };
 const answer = (name) => JSON.parse(readFileSync(new URL(`./fixtures/answers/${name}.json`, import.meta.url), 'utf8'));
@@ -67,9 +68,9 @@ async function setup(sessions, { apple = () => new Response(null, { status: 200 
   sessions.forEach((s, i) =>
     db._db
       .prepare(
-        "INSERT INTO sessions (token_hash, user_id, kind, created, last_seen, push_token, live_token, push_lang) VALUES (?, 'u1', 'device', 0, ?, ?, ?, ?)",
+        "INSERT INTO sessions (token_hash, user_id, kind, created, last_seen, push_token, live_token, push_lang, push_alerts) VALUES (?, 'u1', 'device', 0, ?, ?, ?, ?, ?)",
       )
-      .run(`h${i}`, i, s.push ?? null, s.live ?? null, s.lang ?? null),
+      .run(`h${i}`, i, s.push ?? null, s.live ?? null, s.lang ?? null, s.alerts === undefined ? null : s.alerts ? 1 : 0),
   );
   const sent = [];
   globalThis.fetch = async (input, init) => {
@@ -265,6 +266,11 @@ test('POST /api/me/push takes apns: and apnsla: tokens, with APNs off too, and r
       )
       .all()
       .map((r) => ({ ...r }));
+  const alerts = () =>
+    db._db
+      .prepare('SELECT push_alerts FROM sessions WHERE push_token IS NOT NULL')
+      .all()
+      .map((r) => r.push_alerts);
 
   const bad = await call('/api/me/push', {
     method: 'POST',
@@ -291,6 +297,14 @@ test('POST /api/me/push takes apns: and apnsla: tokens, with APNs off too, and r
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: `apns:${HEX2}` } });
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: `apnsla:${HEX}` } });
   assert.deepEqual(rows(), [{ push_token: `apns:${HEX2}`, live_token: `apnsla:${HEX}`, push_lang: 'en' }]);
+  // Whether its leave alerts are on comes with the phone's token; not said (an older build), null.
+  assert.deepEqual(alerts(), [null]);
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: `apns:${HEX2}`, alerts: false } });
+  assert.deepEqual(alerts(), [0]);
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: `apnsla:${HEX}`, alerts: true } });
+  assert.deepEqual(alerts(), [0], "the Live Activity's token doesn't say");
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: `apns:${HEX2}`, alerts: true } });
+  assert.deepEqual(alerts(), [1]);
   // The same token from another session moves there.
   await call('/api/me/push', { method: 'POST', token: other, body: { token: `apnsla:${HEX}` } });
   assert.deepEqual(rows(), [
@@ -390,7 +404,7 @@ test("a nudge reaches an iPhone as Android's would: words when it's time to look
 
   // Only the Live Activity, when what it shows moved and the phase didn't.
   sent.length = 0;
-  assert.deepEqual(await updateLive(env, 'u1', liveActivityState(card), 'update', NOW), { sent: 1, failed: 0 });
+  assert.deepEqual(await updateLive(env, 'u1', { state: liveActivityState(card) }, 'update', NOW), { sent: 1, failed: 0 });
   assert.deepEqual(
     sent.map((s) => s.headers['apns-push-type']),
     ['liveactivity'],
@@ -454,6 +468,58 @@ test('a card worded in one language reaches each iPhone in its own: notification
   assert.equal(to(LIVE_HEX).body.aps.event, 'end');
 });
 
+test('an iPhone with its leave alerts off is pushed the trip silently; one that never said gets alerts as before', async () => {
+  const card = answer('class-bus');
+  const as = (phase) => ({ ...card, card: { ...card.card, phase } });
+  const { env, sent } = await setup([{ push: `apns:${HEX}`, alerts: false }, { push: `apns:${HEX2}` }]);
+  const to = (hex) => sent.find((s) => s.url.endsWith(hex));
+  for (const phase of ['due', 'missed']) {
+    sent.length = 0;
+    await nudgeUser(env, 'u1', { phase, urgent: true, remind: true, answer: as(phase) }, NOW);
+    assert.equal(to(HEX).headers['apns-push-type'], 'background', phase);
+    assert.deepEqual(to(HEX).body, { aps: { 'content-available': 1 }, kind: 'card', phase });
+    assert.equal(to(HEX2).headers['apns-push-type'], 'alert', phase);
+  }
+  // The semester's reminder isn't a leave alert: it still shows, as on Android.
+  sent.length = 0;
+  await remindUser(env, 'u1', NOTICE, NOW);
+  assert.equal(to(HEX).headers['apns-push-type'], 'alert');
+});
+
+test("a Live Activity's later bus reaches each iPhone in its own language", async () => {
+  const en = answer('class-bus');
+  const zh = JSON.parse(readFileSync(new URL('./fixtures/answers/zh/class-bus.json', import.meta.url), 'utf8'));
+  const { env, sent } = await setup([
+    { push: `apns:${HEX}`, live: `apnsla:${LIVE_HEX}`, lang: 'zh' },
+    { push: `apns:${HEX2}`, live: `apnsla:${LIVE_HEX2}`, lang: 'en' },
+  ]);
+  const asked = [];
+  const answerIn = async (l) => {
+    asked.push(l);
+    return l === 'zh' ? zh : null;
+  };
+  // Worded in English (the latest iPhone's), the Chinese one's again in Chinese.
+  assert.deepEqual(await updateLive(env, 'u1', { answer: en, lang: 'en', answerIn }, 'update', NOW), { sent: 2, failed: 0 });
+  assert.deepEqual(asked, ['zh']);
+  const to = (hex) => sent.find((s) => s.url.endsWith(hex));
+  assert.deepEqual(
+    sent.map((s) => s.headers['apns-push-type']),
+    ['liveactivity', 'liveactivity'],
+    'only the Live Activities',
+  );
+  assert.equal(to(LIVE_HEX).body.aps['content-state'].line, zh.card.line);
+  assert.equal(to(LIVE_HEX2).body.aps['content-state'].line, en.card.line);
+  assert.notEqual(zh.card.line, en.card.line);
+  // Not worded in Chinese: that activity waits for the next update rather than show English, but an end goes.
+  sent.length = 0;
+  await updateLive(env, 'u1', { answer: en, lang: 'en', answerIn: async () => null }, 'update', NOW);
+  assert.equal(to(LIVE_HEX), undefined);
+  assert.ok(to(LIVE_HEX2));
+  sent.length = 0;
+  await updateLive(env, 'u1', { answer: en, lang: 'en', answerIn: async () => null }, 'end', NOW);
+  assert.equal(to(LIVE_HEX).body.aps.event, 'end');
+});
+
 test("the semester's reminder reaches an iPhone in its language", async () => {
   const { env, sent } = await setup([{ push: `apns:${HEX}`, lang: 'zh' }, { push: `apns:${HEX2}` }]);
   const notice = { title: 'New semester', body: 'Import it', zhTitle: '新学期', zhBody: '导入' };
@@ -480,7 +546,7 @@ test('a token Apple has dropped is forgotten; a Live Activity that ended loses o
   const { env, row } = await setup([{ push: `apns:${HEX}`, live: `apnsla:${LIVE_HEX}` }], {
     apple: (r) => (r.url.endsWith(LIVE_HEX) ? refuse(410, 'Unregistered') : new Response(null)),
   });
-  await updateLive(env, 'u1', liveActivityState(answer('class-bus')), 'update', NOW);
+  await updateLive(env, 'u1', { state: liveActivityState(answer('class-bus')) }, 'update', NOW);
   assert.deepEqual(row(0), { push_token: `apns:${HEX}`, live_token: null });
   // Any other 400 is our message's fault: nobody's token goes.
   const ours = await setup([{ push: `apns:${HEX}` }], { apple: () => refuse(400, 'BadCollapseId') });

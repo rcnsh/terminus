@@ -6,7 +6,8 @@ import Foundation
 /// - `apns:<hex>`: this phone, for a nudge that the card changed
 ///   (`content-available`: the app fetches /me/next itself) and for alerts
 ///   (`mutable-content`: the notification service words them again from a
-///   fresh /me/next).
+///   fresh /me/next). Sent with `alerts`, the leave alerts switch: off, the
+///   trip comes only as the nudge, never an alert.
 /// - `apnsla:<hex>`: the running Live Activity's own token, so the server can
 ///   update and end it (`content-state` as TripAttributes.ContentState).
 ///   Sent again whenever a new one starts.
@@ -47,7 +48,11 @@ extension Api {
     }
 
     /// One of this phone's push tokens: `apns:` or `apnsla:` (apnsToken).
-    func registerPush(apple token: String) async throws {
-        _ = try await send("POST", "/api/me/push", json: JSONSerialization.data(withJSONObject: ["token": token, "platform": "ios"]))
+    /// With the phone's, whether its leave alerts are on: off, the server
+    /// pushes the trip to it only silently, as Android shows nothing then.
+    func registerPush(apple token: String, alerts: Bool? = nil) async throws {
+        var body: [String: Any] = ["token": token, "platform": "ios"]
+        if let alerts { body["alerts"] = alerts }
+        _ = try await send("POST", "/api/me/push", json: JSONSerialization.data(withJSONObject: body))
     }
 }

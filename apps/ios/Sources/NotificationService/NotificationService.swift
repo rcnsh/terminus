@@ -15,13 +15,13 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
 
     override func didReceive(_ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void)
     {
-        fallback = request.content
         let kind = request.content.userInfo["kind"] as? String
+        fallback = Self.respectingAlerts(request.content, kind: kind)
         state.withLock { $0.handler = contentHandler }
         let task = Task { [self] in
             guard let original = fallback else { return }
             let content = await Self.word(kind: kind, original: original)
-            finish(content ?? original)
+            finish(content.map { Self.respectingAlerts($0, kind: kind) } ?? original)
         }
         state.withLock { $0.task = task }
     }
@@ -38,6 +38,18 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
             return s.handler
         }
         h?(content)
+    }
+
+    /// A trip's alert with the leave alerts off on this phone (the server
+    /// sends one only to a build that didn't say so, or before it heard):
+    /// it can't be taken back here, so it comes quietly, with no sound and
+    /// only in Notification Centre, rather than as a heads-up.
+    static func respectingAlerts(_ content: UNNotificationContent, kind: String?) -> UNNotificationContent {
+        guard kind == "card", !TripPrefs.leaveAlerts else { return content }
+        let c = content.mutableCopy() as! UNMutableNotificationContent
+        c.sound = nil
+        c.interruptionLevel = .passive
+        return c
     }
 
     static func word(kind: String?, original: UNNotificationContent) async -> UNNotificationContent? {

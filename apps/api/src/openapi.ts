@@ -1278,7 +1278,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             "When the trip's phase changes, an app gets a data message `{kind: 'card', phase}` and should fetch `/api/me/next`. " +
             'The web app gets the same as an encrypted payload `{kind, phase, urgent}`, only when there is something to show. ' +
             "An iPhone gets an alert with the card's words (`aps.alert` with `mutable-content: 1`, so its notification service extension may re-word it from /api/me/next, `interruption-level` time-sensitive when it's time to go, passive otherwise) and `kind` and `phase` beside `aps`; " +
-            'when there is nothing to show (reminders off, no trip), or its Live Activity already shows a quiet change, a background push (`content-available: 1`) with the same `kind` and `phase`. ' +
+            'when there is nothing to show (reminders off, no trip), its Live Activity already shows a quiet change, or it registered with `alerts: false`, a background push (`content-available: 1`) with the same `kind` and `phase`. ' +
             'Its Live Activity is sent `liveactivity` pushes, `event` `update` or `end` with the trip as `content-state` (see docs/internals.md, APNs). ' +
             "The week before a semester starts, a device whose account imported an older semester's timetable is sent the reminder to import the new one. " +
             "The Android app from 2.5.0 (by its `x-terminus-client` header) gets only `{kind: 'term'}` and fetches the words from GET /api/me/notice; older Android apps and the web app get `{kind: 'term', title, body, zhTitle, zhBody}`, a notification to show as it is; an iPhone gets an alert in its language with the same fields beside `aps`. " +
@@ -1294,6 +1294,11 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                   maxLength: 4096,
                   description:
                     'An FCM registration token; or from an iPhone `apns:<hex>` (its device token) or `apnsla:<hex>` (its Live Activity token), with `:sandbox` from a development build.',
+                },
+                alerts: {
+                  type: 'boolean',
+                  description:
+                    'With an `apns:` token: whether the leave alerts are on on this iPhone. With `false`, the trip is pushed to it only silently (a background push, no alert); left out, as by an older build, alerts as before.',
                 },
                 subscription: {
                   type: 'object',
@@ -1803,6 +1808,10 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                         type: ['string', 'null'],
                         enum: ['en', 'zh', null],
                         description: 'An iPhone’s: the language its notifications are worded in.',
+                      },
+                      pushAlerts: {
+                        type: ['boolean', 'null'],
+                        description: 'An iPhone’s: whether its leave alerts are on, as it last said (null: not said).',
                       },
                       created: { type: 'string', format: 'date-time' },
                       lastSeen: { type: 'string', format: 'date-time' },
