@@ -1,8 +1,9 @@
 import SwiftUI
 
 /// Settings: everything the account page has, so the website is optional for
-/// daily use. Who you are, then the rest as tiles, each saying what's set,
-/// each opening a page; About under them. As on Android (Settings.kt).
+/// daily use. Who you are, then the rest as rows in groups, each saying
+/// what's set, each opening a page; About under them. As on Android
+/// (Settings.kt) and the website.
 struct SettingsView: View {
     @State private var model = SettingsModel.shared
     @Environment(AppModel.self) private var app
@@ -53,7 +54,7 @@ extension Notification.Name {
     static let settingsSignIn = Notification.Name("terminus.signIn")
 }
 
-/// The list: who you are, the tiles, About.
+/// The list: who you are, the groups of pages, About.
 private struct SettingsList: View {
     let model: SettingsModel
     @Environment(AppModel.self) private var app
@@ -62,32 +63,32 @@ private struct SettingsList: View {
 
     var body: some View {
         SettingsScaffold(title: L("Settings"), back: false) {
-            accountTile
-            let columns =
-                type.isAccessibilitySize
-                ? [GridItem(.flexible())] : [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
-            LazyVGrid(columns: columns, spacing: 10) {
-                ForEach(Self.tiles, id: \.0) { page, icon in
-                    tile(page, icon: icon)
+            // Closer together than a page's groups, as on Android.
+            VStack(spacing: 12) {
+                accountTile
+                ForEach(Array(Self.groups.enumerated()), id: \.offset) { _, group in
+                    SettingsGroup(title: nil) {
+                        ForEach(Array(group.enumerated()), id: \.element.0) { i, row in
+                            if i > 0 { GroupDivider(inset: 0) }
+                            self.row(row.0, icon: row.1)
+                        }
+                    }
                 }
+                Button(L("About")) { model.path.append(.about) }
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(Color.brand)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .accessibilityIdentifier("settings.about")
             }
-            Button(L("About")) { model.path.append(.about) }
-                .font(.body.weight(.medium))
-                .foregroundStyle(Color.brand)
-                .frame(maxWidth: .infinity, minHeight: 44)
-                .accessibilityIdentifier("settings.about")
         }
     }
 
-    private static let tiles: [(SettingsPage, String)] = [
-        (.trips, "mappin.and.ellipse"),
-        (.timetable, "calendar"),
-        (.favourites, "heart"),
-        (.notifications, "bell"),
-        (.language, "globe"),
-        (.appearance, "circle.lefthalf.filled"),
-        (.devices, "laptopcomputer.and.iphone"),
-        (.feedback, "bubble.left"),
+    /// The pages, with their icons, in three groups: what your trips use,
+    /// this device, then feedback, as Android and the website list them.
+    private static let groups: [[(SettingsPage, String)]] = [
+        [(.trips, "mappin.and.ellipse"), (.timetable, "calendar"), (.favourites, "heart"), (.notifications, "bell")],
+        [(.language, "globe"), (.appearance, "circle.lefthalf.filled"), (.devices, "ipad.and.iphone")],
+        [(.feedback, "bubble.left")],
     ]
 
     /// Who you are: your email (or that you're not signed in) and your devices, opening Account.
@@ -119,32 +120,43 @@ private struct SettingsList: View {
         .accessibilityIdentifier("settings.account")
     }
 
-    private func tile(_ page: SettingsPage, icon: String) -> some View {
+    /// A page's row: its icon on a tile of the accent, its name, then what's
+    /// set on the right in a line (under the name at the largest text sizes).
+    private func row(_ page: SettingsPage, icon: String) -> some View {
         let s = summary(page)
+        let said = s.text.map { t in
+            Text(t)
+                .font(.subheadline.weight(s.tone == .plain ? .regular : .semibold))
+                .foregroundStyle(s.tone == .todo ? Color.brand : s.tone == .off ? Color.warn : Color.muted)
+        }
         return Button {
             model.path.append(page)
         } label: {
-            VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 14) {
                 Image(systemName: icon)
-                    .font(.title3)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Color.brand)
-                    .frame(height: 26)
+                    .frame(width: 32, height: 32)
+                    .background(Color.brandSoft, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                     .accessibilityHidden(true)
-                Spacer(minLength: 12)
-                Text(page.title).font(.subheadline.weight(.bold)).foregroundStyle(Color.ink).multilineTextAlignment(.leading)
-                if let said = s.text {
-                    Text(said)
-                        .font(.footnote.weight(s.tone == .plain ? .regular : .semibold))
-                        .foregroundStyle(s.tone == .todo ? Color.brand : s.tone == .off ? Color.warn : Color.muted)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
+                if type.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(page.title).foregroundStyle(Color.ink)
+                        said
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    Text(page.title).foregroundStyle(Color.ink).lineLimit(1).layoutPriority(1)
+                    (said ?? Text(verbatim: ""))
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                 }
+                Image(systemName: "chevron.forward").font(.footnote.weight(.semibold)).foregroundStyle(Color.faint)
             }
-            .frame(maxWidth: .infinity, minHeight: 104, alignment: .topLeading)
-            .padding(14)
-            .background(Color.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Color.line))
-            .contentShape(RoundedRectangle(cornerRadius: 18))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .frame(minHeight: 56)
+            .contentShape(Rectangle())
         }
         .buttonStyle(SettingsTilePressStyle())
         .accessibilityElement(children: .combine)
@@ -192,8 +204,6 @@ private struct SettingsList: View {
         case .devices:
             if app.email == nil { return (L("Add an email to use other devices"), .plain) }
             return (model.devices.map { settingsDeviceCount($0.count) }, .plain)
-        case .feedback:
-            return (L("Tell us what's wrong, or what you'd like"), .plain)
         default:
             return (nil, .plain)
         }
@@ -205,7 +215,7 @@ private struct SettingsList: View {
     }
 }
 
-/// A tile's press: dimmed while held.
+/// A row's press, and the account's: dimmed while held.
 struct SettingsTilePressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.opacity(configuration.isPressed ? 0.7 : 1)

@@ -182,7 +182,6 @@
 "Stop for %@" = "%@ 的车站";
 "Stop, building or room" = "车站、建筑或教室";
 "Tap a class to change its stop." = "点一节课可以更改它的车站。";
-"Tell us what's wrong, or what you'd like" = "告诉我们哪里有问题，或你想要什么";
 "terminus is an independent student project, not affiliated with NUS. Live bus times come from NUS. Walking routes and the map use data from OpenStreetMap contributors." = "terminus 是一个独立的学生项目，与 NUS 没有关联。实时巴士时间来自 NUS。步行路线和地图使用 OpenStreetMap 贡献者的数据。";
 "terminus tells you which NUS shuttle bus to catch, from which stop, and when to leave, from your NUSMods timetable." = "terminus 根据你的 NUSMods 课表，告诉你该搭哪一班 NUS 校园巴士、在哪个车站搭，以及什么时候出发。";
 "Thanks. Your feedback was sent." = "谢谢，你的反馈已发送。";
