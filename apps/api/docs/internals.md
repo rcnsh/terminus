@@ -1835,7 +1835,8 @@ off when unset or unreadable):
 ## Clients
 
 The Android widget and app ([apps/android](../../android)), the Mac menu bar app
-([apps/macos](../../macos)) and the website ([apps/web](../../web)) all use `/api/me/next`.
+([apps/macos](../../macos)), the iPhone app and widgets ([apps/ios](../../ios), not
+released yet) and the website ([apps/web](../../web)) all use `/api/me/next`.
 The Android app, the web app and the Mac (in a window of its own) also have
 the campus map: `/api/campus`, `/api/buses`, `/api/arrivals` and `/map/*`. The Buses
 tab (web and Android) opens a service's whole line with `/api/line`. The apps
