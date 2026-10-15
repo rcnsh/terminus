@@ -360,3 +360,74 @@ test('a favourite added and taken off before the save is gone once it saves (its
     assert.equal(b.places[1].key, a.places[1].key);
   }
 });
+
+/** POST /api/me/import as the API answers it: the timetable saved on the profile, a new version. `gate` holds the answer. */
+function importRoute(server, trips, gate = null) {
+  server.route = async (url, init, reply) => {
+    if (url !== '/api/me/import') return new Response('{"error":"not found"}', { status: 404 });
+    server.imports = (server.imports ?? 0) + 1;
+    if (gate) await gate;
+    server.doc = { ...server.doc, trips, share: JSON.parse(init.body).share };
+    server.version++;
+    return reply({ profile: server.doc, term: 'AY2026/27 Sem 1' });
+  };
+}
+
+test('an import saves a change still waiting first, so the change is not lost under it', async () => {
+  await withServer({ walkPace: 'normal', trips: [] }, async (server) => {
+    importRoute(server, [{ day: 1, arriveByMin: 540, label: 'CS2030', to: 'COM3' }]);
+    P.edit((p) => (p.walkPace = 'fast'));
+    // Import pressed within the 400 ms.
+    const r = await P.importTimetable('https://nusmods.com/timetable/sem-1/share?CS2030=LEC:1');
+    assert.equal(r.profile.trips.length, 1);
+    assert.equal(server.puts.length, 1, 'the change went before the import');
+    assert.equal(server.doc.walkPace, 'fast');
+    assert.equal(server.doc.trips.length, 1);
+    assert.deepEqual(P.profile.get(), server.doc);
+    mock.timers.tick(400);
+    for (let i = 0; i < 20; i++) await new Promise((ok) => setImmediate(ok));
+    assert.equal(server.puts.length, 1, 'nothing more to save');
+  });
+});
+
+test("a change made while an import runs stays, on top of the import's answer, and is saved on its version", async () => {
+  await withServer({ walkPace: 'normal', trips: [] }, async (server) => {
+    let answer;
+    importRoute(server, [{ day: 1, arriveByMin: 540, label: 'CS2030', to: 'COM3' }], new Promise((ok) => (answer = ok)));
+    const importing = P.importTimetable('https://nusmods.com/timetable/sem-1/share?CS2030=LEC:1');
+    await until(() => server.imports === 1);
+    P.edit((p) => (p.walkPace = 'fast'));
+    mock.timers.tick(400);
+    for (let i = 0; i < 20; i++) await new Promise((ok) => setImmediate(ok));
+    assert.equal(server.puts.length, 0, 'held until the import answers');
+    answer();
+    await importing;
+    // Shown at once on the imported profile, then saved on the version the import made.
+    assert.equal(P.profile.get().walkPace, 'fast');
+    assert.equal(P.profile.get().trips.length, 1);
+    await until(() => server.puts.length === 1 && P.toastText.get()?.text === 'Saved');
+    assert.equal(server.puts[0].ifMatch, '"2"');
+    assert.deepEqual(server.doc, { walkPace: 'fast', trips: P.profile.get().trips, share: P.profile.get().share });
+    assert.deepEqual(P.profile.get(), server.doc);
+  });
+});
+
+test('a failed import keeps the changes made while it ran, and saves them', async () => {
+  await withServer({ walkPace: 'normal', trips: [] }, async (server) => {
+    let answer;
+    const gate = new Promise((ok) => (answer = ok));
+    server.route = async () => {
+      server.imports = 1;
+      await gate;
+      return new Response(JSON.stringify({ error: 'not a valid NUSMods share link' }), { status: 400 });
+    };
+    const importing = P.importTimetable('nope');
+    await until(() => server.imports === 1);
+    P.edit((p) => (p.walkPace = 'fast'));
+    mock.timers.tick(400);
+    answer();
+    await assert.rejects(importing, { status: 400 });
+    await until(() => server.puts.length === 1 && server.doc.walkPace === 'fast');
+    assert.deepEqual(server.doc.trips, []);
+  });
+});

@@ -75,6 +75,8 @@ let confirmed = null;
 let pending = [];
 /** The save on its way, { changes, done }: one at a time, so each is made on the one before it. */
 let sending = null;
+/** A timetable import on its way: changes made meanwhile wait for its answer, then go on top of it. */
+let importing = null;
 /** saveNow's changes: its caller says how the save went, so a save carrying one shows no toast. */
 const awaited = new WeakSet();
 /** Counts edits: a reload's answer doesn't replace edits made while it was on its way. */
@@ -98,7 +100,7 @@ export async function loadProfile() {
 }
 
 /** Whether the profile shown is ahead of the server's: a change is waiting or on its way. */
-const busy = () => Boolean(saveTimer || sending || pending.length);
+const busy = () => Boolean(saveTimer || sending || pending.length || importing);
 
 /** The profile afresh (it may have changed on the map or another device), unless a change here is waiting or being saved. */
 export async function reloadProfile() {
@@ -141,7 +143,7 @@ function record(change) {
  * is read again and the changes made on that. Returns the save's promise.
  */
 function sendSave() {
-  if (sending || !pending.length) return sending?.done ?? Promise.resolve(null);
+  if (sending || importing || !pending.length) return sending?.done ?? Promise.resolve(null);
   const changes = pending;
   pending = [];
   const batch = { changes, quiet: changes.some((c) => awaited.has(c)) };
@@ -193,8 +195,38 @@ export async function saveNow(change) {
   for (;;) {
     if (sending?.changes.includes(mine)) return sending.done;
     if (sending) await sending.done.catch(() => {});
+    else if (importing) await importing.catch(() => {});
     else sendSave().catch(() => {});
   }
+}
+
+/**
+ * Imports a NUSMods share link (POST /api/me/import), which saves the
+ * timetable itself. A change still waiting is saved first, so it isn't lost
+ * under the import; changes made while it runs wait for its answer, then
+ * are made on top of it and saved. Answers with what the server replied; throws
+ * if it failed.
+ */
+export async function importTimetable(share) {
+  clearTimeout(saveTimer);
+  saveTimer = null;
+  while (importing) await importing.catch(() => {});
+  sendSave().catch(() => {});
+  while (sending) await sending.done.catch(() => {});
+  const run = (async () => {
+    try {
+      const { data, etag } = await apiTagged('/api/me/import', { method: 'POST', body: { share } });
+      // The import saved a new version: the next save is made on it.
+      confirmed = { doc: data.profile, etag };
+      profile.set(withChanges(data.profile, pending));
+      return data;
+    } finally {
+      importing = null;
+      if (!saveTimer) sendSave().catch(() => {});
+    }
+  })();
+  importing = run;
+  return run;
 }
 
 export async function loadCampus() {
