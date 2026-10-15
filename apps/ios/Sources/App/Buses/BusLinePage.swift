@@ -26,7 +26,7 @@ struct BusLinePage: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        SkyBand(moonLow: true) { heading(line, color) }
+                        SkyBand(moonLow: true) { heading(line, color) }.busBandEnd()
                         content(line, color, now)
                             .padding(.horizontal, 16)
                             .padding(.bottom, 24)

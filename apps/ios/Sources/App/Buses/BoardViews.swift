@@ -78,6 +78,7 @@ struct BusBoardRowView: View {
     let color: String?
     let now: Date
     let onTap: (() -> Void)?
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         let stopped = Stopped.of(running: row.running, why: row.stopped, resumesAt: row.resumesAt, now: now)
@@ -97,7 +98,35 @@ struct BusBoardRowView: View {
 
     private var arriving: Bool { (row.etaS ?? .max) < BusTimes.arrivingS }
 
-    private var runningRow: some View {
+    @ViewBuilder private var runningRow: some View {
+        if typeSize.isAccessibilitySize { stackedRow } else { sideBySideRow }
+    }
+
+    /// At the largest text sizes there's no room beside the words for the
+    /// minutes: they go on the chip's line, the rest under it.
+    private var stackedRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 12) {
+                BusChip(svc: row.svc, color: color, paid: row.paid)
+                Spacer(minLength: 8)
+                BusBigTime(etaS: row.etaS, quality: row.quality, eta: row.eta)
+                chevron
+            }
+            if let to = towards { to.font(.body).foregroundStyle(Color.ink).fixedSize(horizontal: false, vertical: true) }
+            BusFlow(spacing: 8) {
+                BusQualityTag(row: row)
+                if let c = busCrowdWord(row.crowd) { BusCrowdPill(text: c, packed: row.crowd == "high") }
+            }
+            if let t = BusWords.then(row) {
+                Text(verbatim: t).font(.subheadline).foregroundStyle(Color.muted).accessibilityLabel(spokenTimes(t))
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 14)
+        .background(arriving ? Color.brandSoft : Color.clear)
+    }
+
+    private var sideBySideRow: some View {
         HStack(alignment: .top, spacing: 12) {
             BusChip(svc: row.svc, color: color, paid: row.paid)
             VStack(alignment: .leading, spacing: 6) {
@@ -148,7 +177,7 @@ struct BusBoardRowView: View {
     @ViewBuilder private var chevron: some View {
         if onTap != nil {
             Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Color.faint)
-                .frame(maxHeight: .infinity).fixedSize(horizontal: true, vertical: false)
+                .frame(maxHeight: typeSize.isAccessibilitySize ? nil : .infinity).fixedSize(horizontal: true, vertical: false)
                 .accessibilityHidden(true)
         }
     }

@@ -21,7 +21,7 @@ struct BusesView: View {
                 }
         }
         .environment(model)
-        .overlay(alignment: .bottom) { NoteView(text: model.note) }
+        .overlay(alignment: .top) { NoteView(text: model.note) }
         .task(id: app.session) {
             model.sync()
             await model.loadCampus()
@@ -64,7 +64,7 @@ struct BusesView: View {
     #endif
 }
 
-/// A short note over the foot of the tab: how a pull went, the pins full.
+/// A short note at the top, where the pull was: how it went, or the pins full.
 private struct NoteView: View {
     let text: String?
 
@@ -77,8 +77,9 @@ private struct NoteView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
                     .background(Color.ink.opacity(0.92), in: Capsule())
-                    .padding(.bottom, 12)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .shadow(color: .black.opacity(0.18), radius: 8, y: 2)
+                    .padding(.top, 6)
+                    .transition(.move(edge: .top).combined(with: .opacity))
                     .accessibilityIdentifier("buses-note")
                     .announced(text)
             }
@@ -147,6 +148,7 @@ struct BusesHome: View {
                     }
                     .padding(.horizontal, 16)
                 }
+                .busBandEnd()
                 if searching {
                     BusSearchResults(query: query) { hit in
                         query = ""
@@ -165,7 +167,7 @@ struct BusesHome: View {
         .background(Color.page)
         .refreshable { if !searching { await model.pullPage(current) } }
         .toolbar(.hidden, for: .navigationBar)
-        .skyStatusBar()
+        .busSkyChrome(strip: true)
         // The page in view only: swiping past one doesn't ask for it. The
         // nearest stop's twin comes with it, so across the road costs nothing more.
         .busRefreshing(searching ? "searching" : "page:\(current ?? nearestID):\(model.across.sorted())") {
@@ -193,7 +195,7 @@ struct BusesHome: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         // The name swipes as the board does.
-        .gesture(
+        .simultaneousGesture(
             DragGesture(minimumDistance: 24).onEnded { g in
                 guard abs(g.translation.width) > abs(g.translation.height) else { return }
                 let to = g.translation.width < -40 ? index + 1 : g.translation.width > 40 ? index - 1 : index
@@ -454,6 +456,7 @@ private struct SwipeFor: View {
 /// its name, its code and the star. Across the road, the stop shown is the
 /// twin, and the star is for that one.
 struct BusStopHeader: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     let code: String
     let label: String?
     /// The label across the road, where the distance is the other stop's.
@@ -478,7 +481,7 @@ struct BusStopHeader: View {
                 Text(verbatim: model.stopName(shown))
                     .font(.title.weight(.heavy))
                     .foregroundStyle(inks.ink)
-                    .lineLimit(2)
+                    .lineLimit(typeSize.isAccessibilitySize ? 4 : 2)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
                     .accessibilityIdentifier("stop-name")
@@ -538,6 +541,7 @@ struct BusStopBody: View {
 /// Two choices side by side, the chosen one raised: "This side | Across the road".
 /// A long stop name takes two lines, which a system segmented control can't.
 private struct Sides: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     let options: [String]
     let selected: Int
     let onSelect: (Int) -> Void
@@ -553,7 +557,7 @@ private struct Sides: View {
                         .font(.subheadline.weight(on ? .bold : .medium))
                         .foregroundStyle(on ? Color.ink : Color.muted)
                         .multilineTextAlignment(.center)
-                        .lineLimit(2)
+                        .lineLimit(typeSize.isAccessibilitySize ? 4 : 2)
                         .padding(.vertical, 9)
                         .padding(.horizontal, 8)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -585,6 +589,7 @@ struct BusStopPage: View {
                     let label = model.pins.contains(code) ? L("Pinned") : nil
                     BusStopHeader(code: code, label: label, plainLabel: label, nearest: false).padding(.horizontal, 16)
                 }
+                .busBandEnd()
                 BusStopBody(code: code).padding(.horizontal, 16).padding(.bottom, 24)
             }
         }
@@ -608,13 +613,66 @@ private struct SkyPage: ViewModifier {
 
     func body(content: Content) -> some View {
         let light = SkyPalette.of(sky.phase, dark: scheme == .dark).lightInk
-        content
+        let page =
+            content
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             // The name is in the sky, large: not again in the bar.
             .toolbar { ToolbarItem(placement: .principal) { Color.clear.frame(width: 1, height: 1) } }
-            .toolbarColorScheme(light ? .dark : .light, for: .navigationBar)
-            .tint(Inks.sky(light: light).ink)
-            .skyStatusBar()
+            .busSkyChrome(strip: false)
+        if #available(iOS 26, *) {
+            // The bar's buttons are glass of their own, readable over the sky and the page alike.
+            page
+        } else {
+            // Over the sky the bar is clear, and scrolled it's a dark bar: the sky's ink reads on both.
+            page.toolbarColorScheme(light ? .dark : nil, for: .navigationBar).tint(Inks.sky(light: light).ink)
+        }
+    }
+}
+
+/// Where the sky band at the top of a page ends, on screen.
+private struct BandEnd: PreferenceKey {
+    static let defaultValue: CGFloat = .infinity
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = min(value, nextValue()) }
+}
+
+extension View {
+    /// Marks the page's sky band, so the status bar knows when it has scrolled away.
+    func busBandEnd() -> some View {
+        background(GeometryReader { g in Color.clear.preference(key: BandEnd.self, value: g.frame(in: .global).maxY) })
+    }
+
+    /// The status bar over the sky in the sky's ink, and once the band has
+    /// scrolled away, the page's; with `strip`, a bar under it then, so the
+    /// board doesn't run under the clock (a pushed page has its navigation bar).
+    func busSkyChrome(strip: Bool) -> some View { modifier(BusSkyChrome(strip: strip)) }
+}
+
+private struct BusSkyChrome: ViewModifier {
+    let strip: Bool
+    @Environment(\.colorScheme) private var scheme
+    @State private var top: CGFloat = 0
+    /// Only whether it's past, so scrolling doesn't redraw the page each frame.
+    @State private var past = false
+    private var sky = SkyClock.shared
+
+    func body(content: Content) -> some View {
+        let lightSky = SkyPalette.of(sky.phase, dark: scheme == .dark).lightInk
+        content
+            .onPreferenceChange(BandEnd.self) { end in
+                let p = end < top + 8
+                if p != past { past = p }
+            }
+            .background(
+                GeometryReader { g in
+                    Color.clear.onAppear { top = g.frame(in: .global).minY }.onChange(of: g.frame(in: .global).minY) { _, y in top = y }
+                }
+            )
+            .overlay(alignment: .top) {
+                if strip && past {
+                    Color.clear.frame(height: 0).background(.bar, ignoresSafeAreaEdges: .top)
+                }
+            }
+            .statusBar(light: past ? scheme == .dark : (lightSky || scheme == .dark))
     }
 }

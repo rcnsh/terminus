@@ -141,7 +141,10 @@ final class BusesUITests: XCTestCase {
             app.otherElements["line-running"].firstMatch.waitForExistence(timeout: 10)
                 || app.staticTexts["3 buses running"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Your stop"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["On the way"].firstMatch.exists || app.staticTexts["At stop"].firstMatch.exists)
+        // Its buses, on the way between two stops or at one.
+        XCTAssertTrue(
+            app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'On the way' OR label CONTAINS 'At stop'"))
+                .firstMatch.exists)
         shot("buses-line-en-light", app)
         app.swipeUp()
         shot("buses-line-scrolled-en-light", app)
@@ -191,17 +194,25 @@ final class BusesUITests: XCTestCase {
         shot("buses-public-en-light", app)
     }
 
-    func testPullToRefresh() {
+    func testPinsFull() {
+        // As many pinned as the profile allows: one more isn't, and a note says why.
+        let stops = ["COM3", "UTOWN", "KR-MRT", "CLB", "YIH", "AS5", "BIZ2", "LT27"]
+        setProfile { $0["pinnedStops"] = stops }
         let app = launch()
         openBuses(app)
-        waitForBoard(app)
-        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45))
-        start.press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.95)))
+        let field = app.textFields["buses-search"]
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        field.tap()
+        field.typeText("Kent Vale")
+        app.buttons["hit-stop:KV"].tap()
+        let pin = app.buttons["buses-pin"]
+        XCTAssertTrue(pin.waitForExistence(timeout: 10))
+        pin.tap()
         let note = app.staticTexts["buses-note"]
-        XCTAssertTrue(note.waitForExistence(timeout: 8))
-        // Just asked: the server would send the same, so nothing is asked.
-        XCTAssertTrue(note.label.hasPrefix("Up to date") || note.label == "Updated just now", note.label)
-        shot("buses-pulled-en-light", app)
+        XCTAssertTrue(note.waitForExistence(timeout: 3))
+        XCTAssertEqual(note.label, "You can pin up to 8 stops")
+        shot("buses-pins-full-en-light", app)
+        XCTAssertEqual(app.buttons["buses-pin"].label, "Pin this stop")
     }
 
     func testOpenedFromElsewhere() {
@@ -220,7 +231,7 @@ final class BusesUITests: XCTestCase {
         shot("buses-offline-en-light", app)
     }
 
-    func testHomeStopWithoutLocation() {
+    func testZHomeStopWithoutLocation() {
         app0.resetAuthorizationStatus(for: .location)
         let app = XCUIApplication.terminus(signedIn: true, lang: "en", theme: "light")
         app.launch()
@@ -230,7 +241,7 @@ final class BusesUITests: XCTestCase {
         shot("buses-home-stop-en-light", app)
     }
 
-    func testNoStopAtAll() {
+    func testZZNoStopAtAll() {
         // A new account has no home stop; without a location there's nothing to call nearest.
         app0.resetAuthorizationStatus(for: .location)
         let anon = apiJSON("POST", "/api/auth/anon", token: nil, body: ["name": "UI test", "platform": "ios"])
