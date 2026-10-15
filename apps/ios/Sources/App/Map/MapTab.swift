@@ -127,7 +127,7 @@ struct MapTab: View {
                 }
                 // The feed is down: these are where the buses were last seen.
                 if map.busesStale { StatusChip(text: L("Bus positions may be out of date")) }
-                if let notice = map.notice { StatusChip(text: notice) }
+                if let notice = map.notice { StatusChip(text: notice, undo: map.noticeUndo) }
                 if map.downloading {
                     StatusChip(text: L("Downloading the street map (about 4 MB)…"), busy: true)
                 } else if map.downloadFailed {
@@ -266,17 +266,24 @@ private struct Pills: View {
 private struct StatusChip: View {
     let text: String
     var busy = false
+    var undo: (() -> Void)?
 
     var body: some View {
         HStack(spacing: 8) {
             if busy { ProgressView().controlSize(.small) }
             Text(text).font(.footnote).foregroundStyle(Color.muted)
+            if let undo {
+                Button(L("Undo"), action: undo)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Color.brand)
+                    .accessibilityIdentifier("map.undo")
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
         .background(Color.surface, in: Capsule())
         .shadow(color: .black.opacity(0.12), radius: 3, y: 1)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: undo == nil ? .combine : .contain)
     }
 }
 

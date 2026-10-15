@@ -191,16 +191,9 @@ struct NowView: View {
                     if case .code(let c, _) = t { withAnimation { reader.scrollTo(c, anchor: .trailing) } }
                 }
             }
-            Button {
-                withAnimation(.snappy) { searching.toggle() }
-            } label: {
-                Image(systemName: searching ? "xmark" : "magnifyingglass")
-                    .font(.system(size: 19, weight: .semibold))
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .accessibilityLabel(searching ? L("Close") : L("Go somewhere else"))
-            .accessibilityIdentifier("search")
+            // Worded, not a bare magnifier, so it reads as one more place to go,
+            // as on the web and Android. The search opens under the chips.
+            ElsewhereChip(open: searching) { withAnimation(.snappy) { searching.toggle() } }
         }
     }
 
@@ -319,6 +312,32 @@ private struct FadeEnd: View {
 }
 
 /// A notice over the sky, on glass: location off, an update needed.
+/// "Elsewhere", after the chips: opens "Go somewhere else" under them.
+/// Outlined like a chip not chosen, its outline darker while the search is open.
+struct ElsewhereChip: View {
+    let open: Bool
+    let action: () -> Void
+    @Environment(\.inks) private var inks
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: "magnifyingglass").font(.footnote.weight(.semibold))
+                Text(L("Elsewhere")).font(.subheadline.weight(.semibold)).lineLimit(1)
+            }
+            .padding(.leading, 10)
+            .padding(.trailing, 14)
+            .frame(minHeight: 36)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(inks.ink)
+        .overlay(Capsule().strokeBorder(open ? inks.ink : inks.line.opacity(inks.inSky ? 1.6 : 1), lineWidth: 1))
+        .accessibilityAddTraits(open ? .isSelected : [])
+        .accessibilityIdentifier("search")
+    }
+}
+
 struct SkyNotice<Actions: View>: View {
     let text: String
     @ViewBuilder var actions: Actions

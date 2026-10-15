@@ -74,6 +74,8 @@ final class MapModel {
     var locateCount = 0
     /// A word under the pills for a moment: your location couldn't be found, a favourite not saved.
     var notice: String?
+    /// Undo beside [notice], while it shows: a favourite taken off from a stop's sheet.
+    var noticeUndo: (() -> Void)?
 
     /// The account's profile, for "Add to favourites" (its places and their
     /// limit) and whether a stop's sheet lists public buses too.
@@ -362,12 +364,17 @@ final class MapModel {
     }
 
     /// `text` under the pills for a few seconds, and said to VoiceOver.
-    func say(_ text: String) {
+    func say(_ text: String, undo: (() -> Void)? = nil) {
         notice = text
+        noticeUndo = undo
         announce(text)
         Task {
-            try? await Task.sleep(for: .seconds(4))
-            if notice == text { notice = nil }
+            // Longer with Undo, as Settings gives its own.
+            try? await Task.sleep(for: .seconds(undo == nil ? 4 : 6))
+            if notice == text {
+                notice = nil
+                noticeUndo = nil
+            }
         }
     }
 
@@ -411,6 +418,58 @@ final class MapModel {
         } catch {
             say(failureMessage(error, otherwise: L("Not saved. Check your connection.")))
         }
+    }
+
+    /// The star on a stop that's already a favourite: takes it off, with its
+    /// usual times, as Settings does, and offers Undo.
+    func unsave(key: String) async {
+        guard let token = app.token, !saving else { return }
+        saving = true
+        defer { saving = false }
+        do {
+            let (saved, removed) = try await Self.removePlace(token: token, key: key)
+            profile = (try? JSONSerialization.jsonObject(with: saved)) as? [String: Any] ?? profile
+            guard let removed else { return }
+            say(L("%@ removed from favourites", removed.label)) { [weak self] in
+                Task { await self?.restore(removed) }
+            }
+        } catch let e as ApiError where e.status == 401 {
+            app.rejected(token, reason: L("This phone was signed out of your account. Sign in again with your email."))
+        } catch {
+            say(failureMessage(error, otherwise: L("Not saved. Check your connection.")))
+        }
+    }
+
+    /// Undo for [unsave].
+    private func restore(_ removed: RemovedPlace) async {
+        guard let token = app.token else { return }
+        notice = nil
+        noticeUndo = nil
+        saving = true
+        defer { saving = false }
+        do {
+            let p = try await Api(token: token).changeProfile { p in
+                var doc = ProfileDoc(p)
+                doc.restorePlace(removed)
+                p = doc.json
+            }
+            profile = p
+        } catch {
+            say(failureMessage(error, otherwise: L("Not saved. Check your connection.")))
+        }
+    }
+
+    /// The profile with the favourite `key` taken off, saved, as the server then
+    /// keeps it (JSON, to hand back to the main actor), and what puts it back.
+    nonisolated private static func removePlace(token: String, key: String) async throws -> (Data, RemovedPlace?) {
+        let removed = Mutex<RemovedPlace?>(nil)
+        let p = try await Api(token: token).changeProfile { p in
+            var doc = ProfileDoc(p)
+            let r = doc.removePlace(key: key)
+            removed.withLock { $0 = r }
+            p = doc.json
+        }
+        return (try JSONSerialization.data(withJSONObject: p), removed.withLock { $0 })
     }
 
     /// The profile with a place going to `code` added, saved, and as the

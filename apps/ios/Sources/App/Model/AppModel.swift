@@ -56,6 +56,9 @@ final class AppModel {
     /// Today's timeline, under the planned answer.
     private(set) var day: DayPlan?
     private var dayFetched: Date?
+    /// The language `day` is written in (Lang.header's form): for a moment
+    /// after a switch the server still writes the old one, so it's fetched again.
+    private var dayLang: String?
     /// Just taken off Today: its row says so where it was, with Undo (or why it didn't go).
     private(set) var removed: Removed?
     /// A card button's signal on its way.
@@ -310,9 +313,10 @@ final class AppModel {
                     let before = answers[.plan]
                     Shared.lastAnswer = a.raw
                     TripSync.answered(a)
-                    // The timeline moves when the answer's trip does, and when it's over two minutes old.
-                    if day == nil || (dayFetched.map { -$0.timeIntervalSinceNow > 120 } ?? true) || before?.dest?.label != a.dest?.label
-                        || before?.phase != a.phase
+                    // The timeline moves when the answer's trip does, when it's over two
+                    // minutes old, and when it's in the other language.
+                    if day == nil || (dayFetched.map { -$0.timeIntervalSinceNow > 120 } ?? true) || dayLang != Lang.header
+                        || before?.dest?.label != a.dest?.label || before?.phase != a.phase
                     {
                         Task { await loadDay() }
                     }
@@ -366,10 +370,12 @@ final class AppModel {
         let gen = session
         let loc = Locator.shared.last
         do {
-            let (d, data) = try await Api(token: token).day(lat: loc?.coordinate.latitude, lon: loc?.coordinate.longitude, acc: loc?.acc)
+            let (d, data, lang) = try await Api(token: token).day(
+                lat: loc?.coordinate.latitude, lon: loc?.coordinate.longitude, acc: loc?.acc)
             guard gen == session else { return }
             day = d
             dayFetched = Date()
+            dayLang = lang
             Shared.lastDay = data
         } catch {}
     }

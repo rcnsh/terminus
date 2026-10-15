@@ -286,10 +286,18 @@ struct Api: Sendable {
             try await send("POST", "/api/me/once", query: Self.h12, json: try JSONSerialization.data(withJSONObject: body)))
     }
 
-    /// Today: each class with its leave-by, and the trips home. The JSON too, kept for offline.
-    func day(lat: Double? = nil, lon: Double? = nil, acc: Double? = nil) async throws -> (DayPlan, Data) {
-        let data = try await send("GET", "/api/me/day", query: Self.coords(lat, lon, acc) + Self.h12)
-        return (try JSONDecoder().decode(DayPlan.self, from: data), data)
+    /// Today: each class with its leave-by, and the trips home. The JSON too,
+    /// kept for offline, and the language it's written in: the account's
+    /// choice wins over the one asked in, and a switch reaches the account a
+    /// moment after the app shows it. An older server doesn't say: the one asked in.
+    func day(lat: Double? = nil, lon: Double? = nil, acc: Double? = nil) async throws -> (DayPlan, Data, lang: String) {
+        let asked = Lang.header
+        let written = Mutex<String?>(nil)
+        let data = try await send("GET", "/api/me/day", query: Self.coords(lat, lon, acc) + Self.h12) { r in
+            written.withLock { $0 = r.value(forHTTPHeaderField: "content-language") }
+        }
+        let lang = written.withLock { $0 }.map { $0.hasPrefix("zh") ? "zh-Hans" : "en" } ?? asked
+        return (try JSONDecoder().decode(DayPlan.self, from: data), data, lang)
     }
 
     /// /me/nearby's stops, nearest first, and the JSON for the widget. With

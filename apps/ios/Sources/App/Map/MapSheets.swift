@@ -378,16 +378,19 @@ struct StopSheet: View {
             // Apple Maps, the phone's own, as the web app does on Apple devices.
             if let u = URL(string: "https://maps.apple.com/?daddr=\(stop.lat),\(stop.lon)&dirflg=w") { openURL(u) }
         }
-        let saved = map.savedAs(stop.code) != nil
+        // Tapped again, the star takes the favourite off, with Undo.
+        let savedKey = map.savedAs(stop.code)
+        let saved = savedKey != nil
         let full = !saved && map.placesFull
         IconCircle(
             symbol: saved ? "star.fill" : "star",
-            label: saved ? L("In your favourites") : full ? L("Favourites are full") : L("Add to favourites"),
+            label: saved ? L("Remove from favourites") : full ? L("Favourites are full") : L("Add to favourites"),
             tint: saved ? .brand : .ink
         ) {
-            Task { await map.save(code: stop.code, name: stop.name) }
+            if let savedKey { Task { await map.unsave(key: savedKey) } } else { Task { await map.save(code: stop.code, name: stop.name) } }
         }
-        .disabled(saved || full || map.saving || map.profile == nil)
+        .accessibilityAddTraits(saved ? .isSelected : [])
+        .disabled(full || map.saving || map.profile == nil)
         .accessibilityIdentifier("map.sheet.save")
     }
 }

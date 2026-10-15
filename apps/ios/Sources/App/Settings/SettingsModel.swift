@@ -192,8 +192,17 @@ final class SettingsModel {
                 pending = []
                 version = tag
                 if let saved = ProfileDoc(data: data) {
+                    // The server writes the card and the day in the account's language,
+                    // not the one asked in: what came between the switch and now is in the old one.
+                    let langSaved = saved.lang != confirmed?.lang
                     confirmed = saved
                     profile = saved
+                    if langSaved {
+                        Task {
+                            await app.load(restart: true)
+                            await app.loadDay()
+                        }
+                    }
                 }
             } catch {
                 guard mine == edits else { return }

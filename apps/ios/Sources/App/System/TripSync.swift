@@ -127,7 +127,7 @@ import WidgetKit
     private static func keepDay() async {
         guard let token = TokenStore.read() else { return }
         let loc = WidgetStore.location
-        guard let (_, data) = try? await Api(token: token, fast: true).day(lat: loc?.lat, lon: loc?.lon, acc: loc?.acc),
+        guard let (_, data, _) = try? await Api(token: token, fast: true).day(lat: loc?.lat, lon: loc?.lon, acc: loc?.acc),
             TokenStore.read() == token
         else { return }
         Shared.lastDay = data
