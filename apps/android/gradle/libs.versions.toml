@@ -12,6 +12,7 @@ orgJson = "20260814"
 zxing = "3.5.4"
 firebaseBom = "34.19.0"
 maplibreCompose = "0.19.0"
+ktfmt = "0.64"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -38,6 +39,8 @@ maplibre-compose-runtime = { module = "org.maplibre.compose:maplibre-compose-run
 junit = { module = "junit:junit", version.ref = "junit" }
 # Android's org.json is a stub on the JVM; unit tests need the real one.
 org-json = { module = "org.json:json", version.ref = "orgJson" }
+# The Kotlin formatter, run by :app:ktfmtFormat and :app:ktfmtCheck.
+ktfmt = { module = "com.facebook:ktfmt", version.ref = "ktfmt" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

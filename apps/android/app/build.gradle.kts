@@ -218,3 +218,31 @@ tasks.register("resolveAll") {
         }
     }
 }
+
+// Kotlin formatting: ktfmt's kotlinlang style, at the line width in
+// ../.editorconfig. Run from its Maven Central jar rather than through the
+// ktfmt Gradle plugin, which is published only on the Gradle Plugin Portal
+// (settings.gradle.kts doesn't use it). Covers every .kt and .kts file under
+// apps/android.
+val ktfmt = configurations.create("ktfmt")
+
+dependencies {
+    ktfmt(libs.ktfmt)
+}
+
+fun registerKtfmt(name: String, description: String, vararg flags: String) =
+    tasks.register<JavaExec>(name) {
+        group = "formatting"
+        this.description = description
+        classpath = ktfmt
+        mainClass.set("com.facebook.ktfmt.cli.Main")
+        val sources = fileTree(rootDir) {
+            include("**/*.kt", "**/*.kts")
+            exclude("**/build/**", ".gradle/**", ".kotlin/**")
+        }
+        val options = listOf("--kotlinlang-style", "--enable-editorconfig", "--quiet") + flags
+        argumentProviders.add(CommandLineArgumentProvider { options + sources.files.map { it.path }.sorted() })
+    }
+
+registerKtfmt("ktfmtFormat", "Formats the Kotlin sources and build scripts with ktfmt.")
+registerKtfmt("ktfmtCheck", "Fails if ktfmtFormat would change a Kotlin file.", "--dry-run", "--set-exit-if-changed")
