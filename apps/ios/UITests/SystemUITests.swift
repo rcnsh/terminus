@@ -67,14 +67,13 @@ final class SystemUITests: XCTestCase {
     }
 
     /// A tap on the widget opens the app.
-    func testTapOpensTheApp() {
+    func testTapOpensTheApp() throws {
         let app = launchSignedIn()
         clearWidgets()
         addWidget(page: 2)
         doneEditing()
-        let widget = widgets().firstMatch
-        XCTAssertTrue(widget.waitForExistence(timeout: 5))
         sleep(2)
+        let widget = try XCTUnwrap(shownWidget(), "the widget on the home screen")
         widget.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.6)).tap()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10))
         clearAfter()
@@ -238,6 +237,17 @@ final class SystemUITests: XCTestCase {
         springboard.icons.matching(NSPredicate(format: "identifier == 'terminus' AND value == 'Widget'"))
     }
 
+    /// The terminus widget on the screen. SpringBoard also lists one off its
+    /// left edge (x < 0), where a tap does nothing, and lists it first.
+    func shownWidget() -> XCUIElement? {
+        let screen = springboard.frame
+        for _ in 0..<10 {
+            if let w = widgets().allElementsBoundByIndex.first(where: { screen.contains($0.frame) }) { return w }
+            sleep(1)
+        }
+        return nil
+    }
+
     func editHomeScreen() {
         if !springboard.buttons["Edit"].exists {
             springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8)).press(forDuration: 1.5)
@@ -251,18 +261,36 @@ final class SystemUITests: XCTestCase {
         sleep(1)
     }
 
-    /// Takes off every terminus widget from the home screen, so each test starts from none.
+    /// Takes off every terminus widget from the home screen, on every page
+    /// (an earlier run can leave one on another), so each test starts from none.
     func clearWidgets() {
         guard widgets().count > 0 else { return }
         editHomeScreen()
-        while widgets().count > 0 {
-            widgets().firstMatch.buttons["DeleteButton"].tap()
+        let screen = springboard.frame
+        for _ in 0..<40 {
+            guard let widget = widgets().allElementsBoundByIndex.first else { break }
+            // On another page: turned to, a page at a time.
+            if widget.frame.maxX <= screen.minX || widget.frame.minX >= screen.maxX {
+                turnPage(back: widget.frame.maxX <= screen.minX)
+                continue
+            }
+            widget.buttons["DeleteButton"].tap()
             let remove = springboard.buttons["Remove"]
             XCTAssertTrue(remove.waitForExistence(timeout: 5))
             remove.tap()
             sleep(1)
         }
+        XCTAssertEqual(widgets().count, 0, "every terminus widget taken off")
         doneEditing()
+    }
+
+    /// The home screen's next page, or the one before: a swipe low on the
+    /// screen, under the icons, so it moves no icon.
+    func turnPage(back: Bool) {
+        let from = springboard.coordinate(withNormalizedOffset: CGVector(dx: back ? 0.1 : 0.9, dy: 0.76))
+        let to = springboard.coordinate(withNormalizedOffset: CGVector(dx: back ? 0.9 : 0.1, dy: 0.76))
+        from.press(forDuration: 0.05, thenDragTo: to)
+        sleep(1)
     }
 
     func clearAfter() {
