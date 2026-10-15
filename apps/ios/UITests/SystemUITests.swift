@@ -14,6 +14,7 @@ final class SystemUITests: XCTestCase {
 
     override func setUp() {
         continueAfterFailure = false
+        stubPost("/__stub/reset")
     }
 
     /// Signed in, the app has fetched the card once, so the widgets have it.
