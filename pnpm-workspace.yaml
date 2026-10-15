@@ -2,6 +2,8 @@ packages:
   - apps/api
 allowBuilds:
   esbuild: true
+  # Its postinstall only runs `lefthook install`; the root `prepare` script does that.
+  lefthook: false
   workerd: true
 
 # Don't install a dependency version published less than three days ago
