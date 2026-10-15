@@ -79,10 +79,10 @@ private struct DayRow<End: View>: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.vertical, 6)
+            .accessibilityElement(children: .combine)
             end
         }
         .frame(minHeight: 48)
-        .accessibilityElement(children: .combine)
     }
 
     /// The server's line; worded here only for an older server.

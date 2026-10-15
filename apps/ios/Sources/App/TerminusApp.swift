@@ -44,7 +44,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     /// For the UI tests and screenshots, in debug builds only: TERMINUS_RESET=1
     /// starts signed out with nothing kept, TERMINUS_TOKEN (and TERMINUS_EMAIL)
     /// signed in with that token, TERMINUS_LANG=en|zh|auto sets the language,
-    /// TERMINUS_THEME=light|dark the appearance.
+    /// TERMINUS_THEME=light|dark the appearance, TERMINUS_CARD_STYLE=steps|route|ticket
+    /// the card's style (and TERMINUS_SKY=night|dawn|day|golden|dusk the sky's hour, in SkyClock).
     enum DevLaunch {
         static func apply() {
             let env = ProcessInfo.processInfo.environment
@@ -64,6 +65,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             }
             if let l = env["TERMINUS_LANG"] { Lang.pref = l }
             if let t = env["TERMINUS_THEME"] { Shared.defaults.set(t, forKey: "theme") }
+            if let s = env["TERMINUS_CARD_STYLE"] { Shared.defaults.set(s, forKey: "cardStyle") }
         }
     }
 #endif

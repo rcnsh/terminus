@@ -152,10 +152,8 @@ struct NowView: View {
             ScrollViewReader { reader in
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        NowChip(label: L("Next"), selected: !app.showNearby && app.target == .plan) { app.select(.plan) }
-                            .accessibilityIdentifier("chip.next")
-                        NowChip(label: L("Nearby"), selected: app.showNearby) { app.selectNearby() }
-                            .accessibilityIdentifier("chip.nearby")
+                        NowChip(label: L("Next"), selected: !app.showNearby && app.target == .plan, id: "chip.next") { app.select(.plan) }
+                        NowChip(label: L("Nearby"), selected: app.showNearby, id: "chip.nearby") { app.selectNearby() }
                         ForEach(app.places, id: \.key) { place in
                             NowChip(label: place.label, selected: !app.showNearby && app.target == .place(key: place.key)) {
                                 app.select(.place(key: place.key))
@@ -254,6 +252,7 @@ private struct NowWordmark: View {
 struct NowChip: View {
     let label: String
     let selected: Bool
+    var id: String?
     var remove: (() -> Void)?
     let action: () -> Void
     @Environment(\.inks) private var inks
@@ -270,6 +269,7 @@ struct NowChip: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier(id ?? "chip.\(label)")
             if let remove {
                 Button(action: remove) {
                     Image(systemName: "xmark")

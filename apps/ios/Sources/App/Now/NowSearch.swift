@@ -53,7 +53,8 @@ struct NowSearch: View {
             Text(L("No stop, building or room by that name")).foregroundStyle(inks.muted).padding(.vertical, 12)
         }
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(matches.enumerated()), id: \.element.code) { i, d in
+            // A stop and a building can share a code (COM3): keyed by both.
+            ForEach(Array(matches.enumerated()), id: \.element.kindCode) { i, d in
                 if i == 0 || matches[i - 1].kind != d.kind {
                     SectionLabel(group(d.kind), color: inks.muted).padding(.top, 14).padding(.bottom, 4)
                 }
@@ -69,7 +70,7 @@ struct NowSearch: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityIdentifier("result.\(d.code)")
+                .accessibilityIdentifier("result.\(d.kindCode)")
                 Rectangle().fill(inks.line).frame(height: 1)
             }
         }
@@ -109,4 +110,8 @@ struct NowSearch: View {
             return s
         }
     }
+}
+
+extension Destination {
+    var kindCode: String { "\(kind):\(code)" }
 }

@@ -1,0 +1,132 @@
+import XCTest
+
+/// Now against the dev stub: the trip, its card styles, Nearby, the search,
+/// a place's tab, Go later, Today's remove and undo, and "Is this wrong?".
+/// Screenshots in light and dark, English and Chinese.
+final class NowUITests: XCTestCase {
+    override func setUp() {
+        continueAfterFailure = false
+    }
+
+    private func launch(lang: String = "en", theme: String = "light", sky: String? = nil, style: String? = nil) -> XCUIApplication {
+        var extra: [String: String] = [:]
+        if let sky { extra["TERMINUS_SKY"] = sky }
+        if let style { extra["TERMINUS_CARD_STYLE"] = style }
+        let app = XCUIApplication.terminus(signedIn: true, lang: lang, theme: theme, extra: extra)
+        app.launch()
+        XCTAssertTrue(app.descendants(matching: .any)["now.card"].waitForExistence(timeout: 15), "no card")
+        return app
+    }
+
+    /// Scrolls until `e` is on screen, clear of the tab bar.
+    private func reveal(_ e: XCUIElement, in app: XCUIApplication) {
+        XCTAssertTrue(e.waitForExistence(timeout: 15), "\(e) never came")
+        let bar = app.tabBars.firstMatch.frame
+        for _ in 0..<8 where !(e.isHittable && e.frame.maxY < bar.minY) {
+            app.swipeUp(velocity: .slow)
+        }
+    }
+
+    func testTheTripInEveryStyleAndSky() {
+        for (style, sky, theme) in [
+            ("steps", "night", "light"), ("route", "day", "light"), ("ticket", "golden", "dark"), ("steps", "dawn", "dark"),
+            ("route", "dusk", "light"),
+        ] {
+            let app = launch(theme: theme, sky: sky, style: style)
+            shot("now-\(style)-\(sky)-\(theme)", app)
+            app.swipeUp()
+            shot("now-\(style)-\(sky)-\(theme)-down", app)
+            app.terminate()
+        }
+    }
+
+    func testChinese() {
+        let app = launch(lang: "zh", theme: "light", sky: "day")
+        shot("now-zh", app)
+        app.swipeUp()
+        shot("now-zh-down", app)
+        app.buttons["chip.nearby"].tap()
+        XCTAssertTrue(
+            app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'nearby.'")).firstMatch.waitForExistence(
+                timeout: 15))
+        shot("now-zh-nearby", app)
+    }
+
+    func testNearbyOpensAStopInBuses() {
+        let app = launch(sky: "night")
+        app.buttons["chip.nearby"].tap()
+        let stop = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'nearby.'")).firstMatch
+        XCTAssertTrue(stop.waitForExistence(timeout: 15))
+        shot("now-nearby", app)
+        app.swipeUp()
+        shot("now-nearby-down", app)
+        app.swipeDown()
+        stop.tap()
+        XCTAssertTrue(app.tabBars.buttons["Buses"].isSelected)
+    }
+
+    func testSearchAPlaceAndGoLater() {
+        let app = launch(sky: "day")
+        app.buttons["search"].tap()
+        let field = app.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.typeText("com3")
+        let result = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'result.'")).firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: 10))
+        shot("now-search", app)
+        result.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["now.card"].waitForExistence(timeout: 15))
+        shot("now-place", app)
+        let later = app.buttons["goLater"]
+        reveal(later, in: app)
+        later.tap()
+        shot("now-go-later", app)
+        app.buttons["goLater.ok"].tap()
+        // Back on Next, with the trip planned.
+        XCTAssertTrue(app.buttons["chip.next"].waitForExistence(timeout: 10))
+        shot("now-after-go-later", app)
+        // A favourite's chip shows its own card.
+        app.swipeDown()
+        app.buttons["chip.KR MRT"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["now.card"].waitForExistence(timeout: 15))
+        shot("now-favourite", app)
+    }
+
+    func testRemoveFromTodayAndUndo() {
+        let app = launch(sky: "day")
+        let remove = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'remove.'")).firstMatch
+        reveal(remove, in: app)
+        shot("now-today", app)
+        remove.tap()
+        let undo = app.buttons["undo"]
+        XCTAssertTrue(undo.waitForExistence(timeout: 5))
+        shot("now-removed", app)
+        undo.tap()
+        XCTAssertTrue(remove.waitForExistence(timeout: 10))
+        shot("now-undone", app)
+    }
+
+    func testReportAWrongAnswer() {
+        let app = launch(sky: "day")
+        reveal(app.buttons["report"], in: app)
+        app.buttons["report"].tap()
+        let reason = app.buttons["reason.never-came"]
+        XCTAssertTrue(reason.waitForExistence(timeout: 5))
+        shot("now-report", app)
+        reason.tap()
+        app.buttons["report.send"].tap()
+        XCTAssertTrue(app.buttons["report.done"].waitForExistence(timeout: 10))
+        shot("now-report-sent", app)
+        app.buttons["report.done"].tap()
+    }
+
+    func testLargeText() {
+        let app = XCUIApplication.terminus(signedIn: true, extra: ["TERMINUS_SKY": "day"])
+        app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityL"]
+        app.launch()
+        XCTAssertTrue(app.descendants(matching: .any)["now.card"].waitForExistence(timeout: 15))
+        shot("now-large-text", app)
+        app.swipeUp()
+        shot("now-large-text-down", app)
+    }
+}

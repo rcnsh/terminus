@@ -43,6 +43,7 @@ final class SkyClock {
         }
         RunLoop.main.add(t, forMode: .common)
         timer = t
+        tick()
     }
 
     func tick() {
