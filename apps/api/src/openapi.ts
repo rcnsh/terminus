@@ -702,7 +702,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           summary: 'Health',
           security: [],
           description:
-            'Returns stop graph details, how long the academic calendar lasts, what the 15-minute check last saw of the NUS feed (`upstream`), and which settings are configured (whether each is set, never its value): `pushAndroid` and `pushWeb` say whether push to the Android app (Firebase) and to the web app (Web Push) is set up with a usable key. For the operator only (the operator token in the `x-health-token` header), `probe=1` also checks that the upstream auth token works, and `versions=1` reads which uNivUS version the app stores list; without the token both are ignored. Answers 503, with the same body, when the NUS feed is confirmed down, the monitor has stopped running, or the calendar data has run out.',
+            'Returns stop graph details, how long the academic calendar lasts, what the 15-minute check last saw of the NUS feed (`upstream`), and which settings are configured (whether each is set, never its value): `pushAndroid`, `pushWeb` and `pushIos` say whether push to the Android app (Firebase), to the web app (Web Push) and to the iPhone app (APNs) is set up. For the operator only (the operator token in the `x-health-token` header), `probe=1` also checks that the upstream auth token works, and `versions=1` reads which uNivUS version the app stores list; without the token both are ignored. Answers 503, with the same body, when the NUS feed is confirmed down, the monitor has stopped running, or the calendar data has run out.',
           operationId: 'getHealth',
           parameters: [
             {
@@ -747,6 +747,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                       alerts: true,
                       pushAndroid: true,
                       pushWeb: true,
+                      pushIos: true,
                     },
                     upstream: { up: true, since: '2026-09-27T22:00:00.000Z', checkedAt: '2026-09-28T01:00:00.000Z', cronStale: false },
                   },
@@ -1272,10 +1273,15 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           summary: 'Register this device for push',
           description:
             'An app sends its Firebase Cloud Messaging token; the web app its Web Push subscription (`PushSubscription.toJSON()`, subscribed with the key from GET /api/me/push/key). ' +
+            "The iPhone app sends `apns:` and its APNs device token in hex (`apns:<hex>`), and while a trip's Live Activity runs, that activity's push token as `apnsla:<hex>`; a development build adds `:sandbox` to either (`apns:<hex>:sandbox`), so it is sent through Apple's sandbox. " +
+            'A device keeps its latest of each; DELETE forgets both. These are taken even while APNs is not set up on the server: the iPhone is pushed once it is. ' +
             "When the trip's phase changes, an app gets a data message `{kind: 'card', phase}` and should fetch `/api/me/next`. " +
             'The web app gets the same as an encrypted payload `{kind, phase, urgent}`, only when there is something to show. ' +
+            "An iPhone gets an alert with the card's words (`aps.alert` with `mutable-content: 1`, so its notification service extension may re-word it from /api/me/next, `interruption-level` time-sensitive when it's time to go, passive otherwise) and `kind` and `phase` beside `aps`; " +
+            'when there is nothing to show (reminders off, no trip), or its Live Activity already shows a quiet change, a background push (`content-available: 1`) with the same `kind` and `phase`. ' +
+            'Its Live Activity is sent `liveactivity` pushes, `event` `update` or `end` with the trip as `content-state` (see docs/internals.md, APNs). ' +
             "The week before a semester starts, a device whose account imported an older semester's timetable is sent the reminder to import the new one. " +
-            "The Android app from 2.5.0 (by its `x-terminus-client` header) gets only `{kind: 'term'}` and fetches the words from GET /api/me/notice; older Android apps and the web app get `{kind: 'term', title, body, zhTitle, zhBody}`, a notification to show as it is. " +
+            "The Android app from 2.5.0 (by its `x-terminus-client` header) gets only `{kind: 'term'}` and fetches the words from GET /api/me/notice; older Android apps and the web app get `{kind: 'term', title, body, zhTitle, zhBody}`, a notification to show as it is; an iPhone gets an alert in its language with the same fields beside `aps`. " +
             'A push address lives on one session; one the push service no longer knows is dropped.',
           operationId: 'mePushRegister',
           security: [{ bearer: [] }, { cookie: [] }],
@@ -1283,7 +1289,12 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             {
               type: 'object',
               properties: {
-                token: { type: 'string', maxLength: 4096 },
+                token: {
+                  type: 'string',
+                  maxLength: 4096,
+                  description:
+                    'An FCM registration token; or from an iPhone `apns:<hex>` (its device token) or `apnsla:<hex>` (its Live Activity token), with `:sandbox` from a development build.',
+                },
                 subscription: {
                   type: 'object',
                   required: ['endpoint', 'keys'],
@@ -1298,7 +1309,9 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           ),
           responses: {
             '200': ok({ type: 'object', properties: { ok: { type: 'boolean' } } }),
-            '400': errorResponse('No token, or a subscription that is not an https endpoint with keys.'),
+            '400': errorResponse(
+              'No token, a malformed `apns:` or `apnsla:` token, or a subscription that is not an https endpoint with keys.',
+            ),
             '503': errorResponse('A subscription, but web push is not set up on this server.'),
           },
         },
@@ -4017,6 +4030,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                 alerts: { type: 'boolean', description: 'Feed alerts are emailed to the operator.' },
                 pushAndroid: { type: 'boolean' },
                 pushWeb: { type: 'boolean' },
+                pushIos: { type: 'boolean', description: 'APNs, to the iPhone app: its key, key id, team id and topic are all set.' },
               },
               additionalProperties: { type: 'boolean' },
             },

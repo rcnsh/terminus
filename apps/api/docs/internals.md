@@ -111,7 +111,8 @@ alerts and feedback go), `HEALTH_TOKEN` (the operator's `x-health-token`),
 pass counts only for the `signin` action on the Worker's own
 `TURNSTILE_HOSTNAMES`),
 `FCM_SERVICE_ACCOUNT` (push to Android) and `VAPID_PRIVATE_KEY` (Web Push).
-Not declared, so a site deploys without them: `LTA_ACCOUNT_KEY` (public
+Not declared, so a site deploys without them: `APNS_KEY`, `APNS_KEY_ID` and
+`APNS_TEAM_ID` (push to the iPhone app; see "APNs"), `LTA_ACCOUNT_KEY` (public
 buses), `ANALYTICS_TOKEN` (the dashboard's Analytics Engine charts, with
 `CF_ACCOUNT_ID`, which is in the config) and `TIMELAPSE_TOKEN` (opens
 `/api/timelapse/*` only). Everything in [src/types.ts](../src/types.ts)'s `Env`
@@ -148,7 +149,7 @@ anything else (a script with an API key, a page open since before) gets a
 | `GET /map/fonts/…`, `/map/sprites/…` | The map's label glyphs and icons, from R2. |
 | `GET /download/android`, `/download/mac` | The current app downloads from R2, as `latest.json` there names them. `?abi=` picks an Android APK by CPU type; `/download/appcast.xml` is the Mac app's Sparkle feed, `/download/latest.json` the version list, `/download/releases/<version>/<file>` a versioned file. `latest.json` and the appcast are read from R2 on every request, so a release is live the moment it's uploaded. |
 | `GET /api/stops/pairs` | Each stop with its twin across the road, and where the buses on each side go next. Cached hard. |
-| `GET /api/health` | Graph age, how long the calendar lasts, the feed as the cron last saw it (`upstream`) and which config is present, never values (`config.pushAndroid` and `config.pushWeb`: push set up with a usable key). 503, with the same body, when the feed is confirmed down, the cron has stopped or the calendar has run out. With the operator's `x-health-token`, `?probe=1` mints a real token and says what came back, and `?versions=1` says what the version updater would find today in the app stores (see "The version string is a kill switch"); without it both are ignored. |
+| `GET /api/health` | Graph age, how long the calendar lasts, the feed as the cron last saw it (`upstream`) and which config is present, never values (`config.pushAndroid`, `config.pushWeb` and `config.pushIos`: push set up with a usable key, or for APNs all four settings). 503, with the same body, when the feed is confirmed down, the cron has stopped or the calendar has run out. With the operator's `x-health-token`, `?probe=1` mints a real token and says what came back, and `?versions=1` says what the version updater would find today in the app stores (see "The version string is a kill switch"); without it both are ignored. |
 | `GET /api/status.json` | Whether NUS's feed is up, as the 15-minute check saw it, and the last 20 outages, read from KV at most once a minute per isolate. Two failed checks in a row confirm an outage and two good ones end it, so a feed that answers every other time sends no emails by turns; the outage ends at the first of the two. `feed` (like `/api/health` and the card's notice) follows the last check, though: one good check and it says `up` again, rather than "down" for 15 minutes with the feed back. The [status page](../../web/public/status) shows it. |
 | `GET /api/admin/stats` | The operator dashboard's data (accounts, devices by app, sign-ups, reports, feed; answers and errors per day, and the timelapse recorder's polls by what they cost NUS, the daily active counts and the week's crash reports, from Analytics Engine when `ANALYTICS_TOKEN` and `CF_ACCOUNT_ID` are set; `collect`, the switches below; `eta`, arrival times scored). Needs `x-health-token` (`HEALTH_TOKEN` or a passkey session); anything else gets a 404. |
 | `POST /api/admin/collect` | `{name, on}`: turns one of the operator's statistics on or off (`active`, `eta`, `errors`; see Analytics). Operator only, like `/api/admin/stats`. |
@@ -582,7 +583,7 @@ object at the change and once the second bus has gone.
   are `trip_prefs`; a turned-down suggestion waits 30 days.
 - **Push** ([src/push.ts](../src/push.ts), [src/tripdo.ts](../src/tripdo.ts)).
   When push is set up (`pushEnabled`: `FCM_SERVICE_ACCOUNT` or
-  `VAPID_PRIVATE_KEY` usable), a card served on a class day asks the
+  `VAPID_PRIVATE_KEY` usable, or APNs's settings all there), a card served on a class day asks the
   Trip object to wake at `nextPhaseAt` (due, leave-by, departure, +3 min,
   class start, ride end; not at `staleAt`). At each wake it works out the card
   again, nudges the user's devices (`sessions.push_token`) if the phase
@@ -619,7 +620,112 @@ object at the change and once the second bus has gone.
     when the object fails.
   - A push secret that's set but won't parse turns that push off; it's
     logged once per isolate, and `/api/health` says which push is usable
-    (`config.pushAndroid`, `config.pushWeb`).
+    (`config.pushAndroid`, `config.pushWeb`, `config.pushIos`).
+
+### APNs: push to the iPhone app
+
+[src/apns.ts](../src/apns.ts), sent by push.ts beside FCM and Web Push.
+
+- **Tokens.** The app sends `POST /api/me/push` with `{token}`:
+  - `apns:<hex>`: the device token from
+    `didRegisterForRemoteNotificationsWithDeviceToken`, as lower- or
+    upper-case hex (stored lower case), in `sessions.push_token` like any
+    other device's;
+  - `apnsla:<hex>`: the trip Live Activity's push token
+    (`Activity.pushTokenUpdates`), in `sessions.live_token` (migration 0015);
+  - either with `:sandbox` on the end from a development build (Xcode,
+    `aps-environment` development), which goes to
+    `api.sandbox.push.apple.com` instead of `api.push.apple.com`. A token
+    from one host is refused by the other (`BadDeviceToken`), and dropped.
+
+  Hex of 32 to 255 bytes; anything else starting `apns` is a 400. A session
+  keeps its latest of each; the same token on another session moves there;
+  `DELETE /api/me/push` forgets both. Registering also notes the language
+  the iPhone's notifications are worded in (`sessions.push_lang`): the
+  account's choice, else the request's.
+- **Secrets and vars.** `APNS_KEY` (the .p8 from the Apple developer
+  account, PEM, an ES256 key), `APNS_KEY_ID` (its 10-character id) and
+  `APNS_TEAM_ID`, as Worker secrets; `APNS_TOPIC`, the bundle id, is a var
+  in cloudflare.config.ts: `sh.rcn.terminus` on the stable Worker,
+  `sh.rcn.terminus.beta` on the beta. One key serves both Workers and both
+  hosts. Set them from `apps/api`, the key from its file, never echoed:
+
+  ```bash
+  pnpm exec cf workers secrets update APNS_KEY --worker terminus --type secret_text --text "$(cat AuthKey_XXXXXXXXXX.p8)"
+  pnpm exec cf workers secrets update APNS_KEY_ID --worker terminus --type secret_text --text XXXXXXXXXX
+  pnpm exec cf workers secrets update APNS_TEAM_ID --worker terminus --type secret_text --text YYYYYYYYYY
+  ```
+
+  and again with `--worker terminus-beta` for the beta. Locally they go in
+  `.dev.vars`. They aren't declared in the config, so a Worker deploys
+  without them; with any of the four missing APNs is off: tokens are still
+  taken and stored, sends are skipped (logged once per isolate), and
+  `/api/health` says `config.pushIos: false`.
+- **The provider token** is a JWT, `{alg: ES256, kid}` and `{iss: team,
+  iat}`, signed with WebCrypto (the .p8 imported as pkcs8). Apple wants it
+  reused, not minted per push, and refuses one over an hour old, so it's
+  kept for 50 minutes (`JWT_REUSE_S`) in the isolate and in KV
+  (`apns:jwt:<key id>`), shared by every isolate. A 403
+  `ExpiredProviderToken` or `InvalidProviderToken` signs a new one and
+  sends once more.
+- **Requests.** `POST https://<host>/3/device/<hex>` over HTTP/2 (a
+  deployed Worker's fetch speaks it; the local runtime doesn't, so
+  nothing reaches a phone from `cf dev` or the dev stub), with
+  `apns-topic` (the bundle id; `<bundle id>.push-type.liveactivity` for a
+  Live Activity), `apns-push-type`, `apns-priority`, `apns-expiration` and,
+  for alerts, `apns-collapse-id` (`card` or `term`, as Android's
+  collapse key), 5 s per call.
+- **What an iPhone is sent**, where Android gets its data message:
+  - time to look (due, missed, a tap on another device): an `alert` with
+    the card's words (title `card.phaseText`, else its heading or title;
+    body `card.line`), `mutable-content: 1` so the notification service
+    extension can re-word it from `/api/me/next`, `thread-id`, and `kind`
+    and `phase` beside `aps` as Android's data has them. Due and missed are
+    `time-sensitive` with a sound, priority 10; anything else is `passive`,
+    priority 5. Worded in the account's language, else the latest
+    iPhone's (`push_lang`); with no card to word it from, the phase's
+    words (`pushTitle`, `pushOpen` in i18n.ts).
+  - nothing to show (an idle card, reminders off for the trip) or, with
+    its Live Activity running, a quiet change the activity already shows:
+    a `background` push, `{aps: {content-available: 1}, kind, phase}`,
+    priority 5, which wakes the app to fetch the card.
+  - the semester's reminder: an `alert` in the iPhone's language, with
+    `kind: 'term'` and the four words beside `aps`.
+  - its Live Activity, when it has one: a `liveactivity` push with every
+    phase change (priority 10), and when only what it shows moved (a later
+    bus, a new arrival time; priority 5, the Trip object's `pushed.live`).
+    `event` is `update`, or `end` once there or with no trip left
+    (`dismissal-date` ten minutes on); `stale-date` is the card's `staleAt`.
+- **The Live Activity's `content-state`** (`liveActivityState`, the
+  `LiveActivityState` type), from `/api/me/next`'s answer and card. Every
+  key is always present, null when it doesn't apply; times are whole
+  epoch seconds (`Int`, read with `Date(timeIntervalSince1970:)`):
+
+  | Key | Type | What |
+  | --- | --- | --- |
+  | `phase` | string | `idle`, `due`, `heading`, `waiting`, `riding`, `missed`, `arrived` (card.phase) |
+  | `phaseText` | string or null | "On your way" (card.phaseText) |
+  | `headline` | string | "D2 · 09:42" (card.title) |
+  | `line` | string | The trip in one line (card.line) |
+  | `glance` | string | 12 characters at most, for the Dynamic Island (card.glance) |
+  | `to` | string or null | Where to, short: "GEA1000" |
+  | `svc` | string or null | The bus to catch, or the one you're on |
+  | `color` | string or null | Its colour, `#rrggbb` |
+  | `stop` | string or null | Where to board it |
+  | `off` | string or null | Where to get off |
+  | `leaveAt` | int or null | When to set off; null on the bus or there |
+  | `departAt` | int or null | When the bus leaves `stop` (on the bus: when it left) |
+  | `arriveAt` | int or null | When you get there; with `departAt`, the ride's progress |
+  | `estimated` | bool | A timetable guess: show "~" |
+  | `gone` | bool | The planned bus has left and nothing says you're on it: never "Leave now" |
+  | `late` | bool | A class you'll be late for |
+  | `staleAt` | int or null | Out of date from then (also the push's `stale-date`) |
+- **Errors.** 410 (`Unregistered`), or 400 `BadDeviceToken` or
+  `DeviceTokenNotForTopic`, drops the token: a device token takes its
+  Live Activity's with it, a Live Activity's goes alone. Any other 400 is
+  our message's fault: logged with Apple's reason, the token kept. A 429
+  or 5xx stops the delivery's other iPhones and pauses APNs in the
+  isolate for a minute, doubling each time to 15 minutes.
 
 The planner ([src/profile.ts](../src/profile.ts), `planFor`):
 

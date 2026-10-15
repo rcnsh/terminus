@@ -43,6 +43,8 @@ function site(mode: string | undefined) {
 			// the beta, so the two sites never poll twice.
 			env: {
 				TIMELAPSE_ENABLED: bindings.text("on"),
+				// APNs's topic: the iPhone app's bundle id (src/apns.ts).
+				APNS_TOPIC: bindings.text("sh.rcn.terminus"),
 				...moved(),
 			},
 		};
@@ -62,6 +64,7 @@ function site(mode: string | undefined) {
 			PUBLIC_ORIGIN: bindings.text("https://beta.terminus.run"),
 			AE_DATASET: bindings.text("terminus_beta"),
 			TIMELAPSE_ENABLED: bindings.text("off"),
+			APNS_TOPIC: bindings.text("sh.rcn.terminus.beta"),
 			...moved(),
 		},
 	};
@@ -226,6 +229,9 @@ export default defineConfig(({ mode }) => {
 				FCM_SERVICE_ACCOUNT: bindings.secret(),
 				// Web Push: the VAPID key, a P-256 JWK (scripts/vapid-key.mjs).
 				VAPID_PRIVATE_KEY: bindings.secret(),
+				// APNs (src/apns.ts): APNS_KEY (the .p8, PEM), APNS_KEY_ID and
+				// APNS_TEAM_ID are optional secrets, not declared, so a site deploys
+				// without them; until all three are set, iPhones aren't pushed.
 				...s.env,
 			},
 		},

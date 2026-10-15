@@ -45,6 +45,7 @@ import { residenceList } from './residences.ts';
 import { ACCOUNTS_DOWN, callerOrDown, d1Unavailable, recentCallerFor } from './access.ts';
 import { fcmEnabled } from './push.ts';
 import { webPushEnabled } from './webpush.ts';
+import { apnsEnabled } from './apns.ts';
 import { handleTimelapse } from './timelapse.ts';
 import { scopeCache } from './edgecache.ts';
 
@@ -409,6 +410,7 @@ async function handleHealth(req: Request, url: URL, env: Env, nowMs: number): Pr
         // Set and usable: a secret that won't parse turns that push off.
         pushAndroid: fcmEnabled(env),
         pushWeb: webPushEnabled(env),
+        pushIos: apnsEnabled(env),
       },
       // From the cron probe: whether the NUS feed answered, and since when.
       upstream: u

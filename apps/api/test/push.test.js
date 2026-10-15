@@ -53,7 +53,7 @@ async function serviceAccount() {
 }
 
 /** `wrap` puts a fetch of the test's own in front of the fake feed and Firebase. */
-async function setup({ push = true, wrap = (f) => f } = {}) {
+async function setup({ push = true, wrap = (f) => f, extra = {} } = {}) {
   const fcm = { sent: [], dead: new Set() };
   const fetchImpl = wrap(makeFetch({ byStop: FEED, fcm }));
   installGlobals(fetchImpl);
@@ -67,6 +67,7 @@ async function setup({ push = true, wrap = (f) => f } = {}) {
     EMAIL_FROM: 'x@example.test',
     TRIPS,
     ...(push ? { FCM_SERVICE_ACCOUNT: await serviceAccount() } : {}),
+    ...extra,
   };
   const call = async (path, { method = 'GET', token, cookie, body } = {}) => {
     const headers = {};
@@ -159,6 +160,38 @@ test('the Trip object wakes when the phase changes and nudges the phone, once pe
   assert.ok(wake > Date.now(), 'it keeps waking');
   assert.equal(fcm.sent.length, before);
   assert.equal(fcm.oauth, 1, 'the access token is reused');
+});
+
+test("the Trip object tells an iPhone too: the notification in the account's words, and its Live Activity", async () => {
+  const { privateKey } = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+  const der = Buffer.from(await crypto.subtle.exportKey('pkcs8', privateKey)).toString('base64');
+  const apple = [];
+  const wrap = (f) => async (input, init) => {
+    const url = String(typeof input === 'string' ? input : input.url);
+    if (!url.startsWith('https://api.push.apple.com/')) return f(input, init);
+    apple.push({ url, type: init.headers['apns-push-type'], body: JSON.parse(init.body) });
+    return new Response(null);
+  };
+  const extra = {
+    APNS_KEY: `-----BEGIN PRIVATE KEY-----\n${der}\n-----END PRIVATE KEY-----`,
+    APNS_KEY_ID: 'K',
+    APNS_TEAM_ID: 'T',
+    APNS_TOPIC: 'sh.rcn.terminus',
+  };
+  const { call, cookie, phone, next, wakeUntil } = await setup({ push: false, wrap, extra });
+  await call('/api/me/profile', { method: 'PUT', cookie, body: { ...PROFILE, lang: 'zh' } });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: `apns:${'ab'.repeat(32)}` } });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: `apnsla:${'cd'.repeat(32)}` } });
+  await next(phone);
+  await wakeUntil(() => apple.some((p) => p.body.phase === 'due'));
+  const due = apple.find((p) => p.body.phase === 'due');
+  assert.equal(due.type, 'alert');
+  assert.equal(due.body.aps.alert.title, '该出发了', "in the account's language");
+  assert.equal(due.body.aps['interruption-level'], 'time-sensitive');
+  const live = apple.find((p) => p.type === 'liveactivity');
+  assert.equal(live.url, `https://api.push.apple.com/3/device/${'cd'.repeat(32)}`);
+  assert.equal(live.body.aps['content-state'].phase, 'due');
+  assert.ok('svc' in live.body.aps['content-state']);
 });
 
 test('time to go wakes the phone with reminders off too: Android starts the live notification from it', async () => {

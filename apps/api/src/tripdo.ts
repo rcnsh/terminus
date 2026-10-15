@@ -20,7 +20,9 @@ import type { Env } from './types.ts';
 import { type Boarded, type DayRecord, type TripRecord, type TripUpdate, endOfDayMs, sgtDate } from './trip.ts';
 import type { MeDeps } from './me.ts';
 import { tripCardFor } from './me.ts';
-import { nudgeUser, pushDevices } from './push.ts';
+import { iphoneLang, nudgeUser, pushDevices, updateLive } from './push.ts';
+import { liveActivityState } from './apns.ts';
+import { withLang } from './i18n.ts';
 import { GRAPH } from './graph.ts';
 import { scopeCache } from './edgecache.ts';
 import { answerFor, collectArrivals } from './answer.ts';
@@ -42,6 +44,8 @@ interface Pushed {
   /** The card's `gone`: the phase stays `heading` when the bus leaves, but
    *  the phones' "Leave now" must give way to it. */
   gone?: boolean;
+  /** What iPhones' Live Activities were last sent (apns.ts), as JSON. */
+  live?: string;
 }
 
 /** What a wake found: when to wake next (null: stop). */
@@ -236,12 +240,16 @@ export class Trip {
       plans.push(p);
       return p;
     };
-    const card = await tripCardFor(env, ctx, DEPS, userId, day, nowMs, savePlan);
+    // Worded for the iPhones (their notifications and Live Activities): in
+    // the account's language, or the latest iPhone's when it follows each device.
+    const lang = await iphoneLang(env, userId);
+    const card = await withLang(lang, () => tripCardFor(env, ctx, DEPS, userId, day, nowMs, savePlan));
     await Promise.allSettled(plans);
     if (!card) return stop;
 
     const last = (await this.storage.get<Pushed>('pushed')) ?? null;
-    const now: Pushed = { key: card.key, phase: card.phase, ...(card.gone ? { gone: true } : {}) };
+    const live = liveActivityState(card.answer);
+    const now: Pushed = { key: card.key, phase: card.phase, ...(card.gone ? { gone: true } : {}), live: JSON.stringify(live) };
     // Only what was actually pushed counts: one device having fetched a card
     // says nothing about the others. Nothing to say yet is never the first push.
     const changed = last
@@ -253,12 +261,26 @@ export class Trip {
       // Android, which may start it from the background only for a
       // high-priority message.
       const urgent = now.phase === 'due' || now.phase === 'missed';
-      const out = await nudgeUser(env, userId, { phase: now.phase, urgent, remind: card.remind }, nowMs);
+      const out = await nudgeUser(
+        env,
+        userId,
+        { phase: now.phase, urgent, remind: card.remind, answer: card.answer, tripOver: card.key === null },
+        nowMs,
+      );
       // Pushed once a device has it, or when none could be sent to (a quiet
       // card for a browser): not when every send failed, so a later wake tries again.
       // Saved at once, held like a POST and not after a /clear: an alarm the
       // platform runs again (the object reset before the wake was done) then
       // sees it sent, rather than pushing it again within seconds.
+      if (out.sent > 0 || out.failed === 0) {
+        await this.state.blockConcurrencyWhile(async () => {
+          if (!(await this.cleared())) await this.storage.put('pushed', now);
+        });
+      }
+    } else if (last && last.live !== now.live) {
+      // The same phase, but what a Live Activity shows moved (a later bus):
+      // only the iPhones running one are told.
+      const out = await updateLive(env, userId, live, card.key === null || live.phase === 'arrived' ? 'end' : 'update', nowMs);
       if (out.sent > 0 || out.failed === 0) {
         await this.state.blockConcurrencyWhile(async () => {
           if (!(await this.cleared())) await this.storage.put('pushed', now);

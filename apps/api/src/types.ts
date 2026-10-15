@@ -60,6 +60,13 @@ export interface Env {
   FCM_SERVICE_ACCOUNT?: string;
   /** Web Push's VAPID key, a P-256 private JWK (webpush.ts). */
   VAPID_PRIVATE_KEY?: string;
+  /** APNs, push to the iPhone app (apns.ts): the team's .p8 key (PEM, ES256),
+   *  its key id and the team id. With any unset, iPhones aren't pushed. */
+  APNS_KEY?: string;
+  APNS_KEY_ID?: string;
+  APNS_TEAM_ID?: string;
+  /** The iPhone app's bundle id, APNs's topic: sh.rcn.terminus, or sh.rcn.terminus.beta on the beta. */
+  APNS_TOPIC?: string;
   /** One global ceiling on new anonymous accounts (apps can't run Turnstile). */
   RL_ANON?: RateLimit;
   /** One global ceiling on pairing-code guesses: a code is guessed against every live one at once. */

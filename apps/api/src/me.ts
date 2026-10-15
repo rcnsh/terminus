@@ -77,7 +77,8 @@ import {
   sgtDate,
   updateTrip,
 } from './trip.ts';
-import { nudgeUser, pushEnabled, setPushToken } from './push.ts';
+import { nudgeUser, pushEnabled, setLiveToken, setPushToken } from './push.ts';
+import { formatApnsToken, looksApns, parseApnsToken } from './apns.ts';
 import { WEB_PREFIX, parseSubscription, vapidPublicKey, webPushEnabled } from './webpush.ts';
 import {
   NO_PREFS,
@@ -96,7 +97,7 @@ import { termName } from './calendar.ts';
 import { boardAsOf, boardAt, displayName, indexGraph } from './resolve.ts';
 import { haversineM } from './geo.ts';
 import { isoSeconds } from './format.ts';
-import { cardFor, nextPhaseAt } from './card.ts';
+import { type Card, cardFor, nextPhaseAt } from './card.ts';
 import { feedDownSince, termNoticeFor } from './monitor.ts';
 import { WALK, sgt } from './config.ts';
 import { landmark } from './landmarks.ts';
@@ -106,7 +107,7 @@ import { MAX_KEYS, createKey, listKeys, revokeKey } from './access.ts';
 import { footM, paceSpeed } from './walk.ts';
 import { clientKey, coordsFrom, json } from './http.ts';
 import { linkOrigin } from './site.ts';
-import { LANG_PREFS, lang, m, useProfileLang } from './i18n.ts';
+import { LANG_PREFS, type Lang, lang, m, useProfileLang } from './i18n.ts';
 import { bandCss, bandHtml, phaseAt, sgtMinute } from './pagesky.ts';
 
 export interface MeDeps {
@@ -299,6 +300,12 @@ export async function getProfile(db: D1Database, userId: string, graph: Graph, r
   const p = raw as Profile;
   useProfileLang(LANG_PREFS.includes(p.lang) ? p.lang : 'auto');
   return salvageProfile(p, (c) => idx.byCode.has(c) || landmark(c) !== null, pinnable(graph));
+}
+
+/** The language an iPhone's notifications are worded in: the account's choice, else this request's. */
+async function pushLang(db: D1Database, userId: string): Promise<Lang> {
+  const chosen = ((await loadProfileJson(db, userId).catch(() => null)) as { lang?: unknown } | null)?.lang;
+  return chosen === 'en' || chosen === 'zh' ? chosen : lang();
 }
 
 /** Tries before a read-modify-write of the profile gives up to another device's writes. */
@@ -762,7 +769,7 @@ export const ME_ROUTES: MeRoute[] = [
           nudgeUser(
             env,
             session.user.id,
-            { phase: out.card.phase, urgent: false, remind: out.card.remind !== false },
+            { phase: out.card.phase, urgent: false, remind: out.card.remind !== false, answer: out },
             nowMs,
             session.tokenHash,
           ),
@@ -867,7 +874,7 @@ export const ME_ROUTES: MeRoute[] = [
         nudgeUser(
           env,
           session.user.id,
-          { phase: out.card.phase, urgent: false, remind: out.card.remind !== false },
+          { phase: out.card.phase, urgent: false, remind: out.card.remind !== false, answer: out },
           nowMs,
           session.tokenHash,
         ),
@@ -880,7 +887,8 @@ export const ME_ROUTES: MeRoute[] = [
     path: '/api/me/push',
     run: async ({ req, env, db, session }) => {
       // This device's push address: the Trip object nudges it when the card
-      // changes. An app sends its Firebase token; the web app its Web Push
+      // changes. An app sends its Firebase token, or an iPhone its APNs
+      // token (and its trip Live Activity's); the web app its Web Push
       // subscription (PushSubscription.toJSON()).
       const body = await readJson(req);
       if (body?.subscription !== undefined) {
@@ -891,6 +899,18 @@ export const ME_ROUTES: MeRoute[] = [
         return json({ ok: true });
       }
       const token = typeof body?.token === 'string' ? body.token.trim() : '';
+      if (looksApns(token)) {
+        // Taken with APNs off too: the iPhone is pushed once it's set up.
+        const t = parseApnsToken(token);
+        if (!t)
+          return json(
+            { error: 'send token as apns:<hex device token> or apnsla:<hex Live Activity token>, with :sandbox from a development build' },
+            400,
+          );
+        if (t.live) await setLiveToken(db, session.tokenHash, formatApnsToken(t));
+        else await setPushToken(db, session.tokenHash, formatApnsToken(t), await pushLang(db, session.user.id));
+        return json({ ok: true });
+      }
       if (!token || token.length > 4096 || token.startsWith(WEB_PREFIX))
         return json({ error: 'send token (the FCM registration token) or subscription' }, 400);
       await setPushToken(db, session.tokenHash, token);
@@ -1471,7 +1491,14 @@ export async function tripCardFor(
   day: DayRecord | null,
   nowMs: number,
   savePlanLocal: (key: string, plan: Boarded) => Promise<void>,
-): Promise<{ key: string | null; phase: string; gone: boolean; remind: boolean; wakeAt: number | null } | null> {
+): Promise<{
+  key: string | null;
+  phase: string;
+  gone: boolean;
+  remind: boolean;
+  wakeAt: number | null;
+  answer: MeAnswer & { card: Card };
+} | null> {
   if (!env.DB) return null;
   const profile = await getProfile(env.DB, userId, deps.graph);
   if (!classesOn(profile, nowMs).length) return null;
@@ -1484,6 +1511,7 @@ export async function tripCardFor(
     gone: body.card.gone,
     remind: body.card.remind !== false,
     wakeAt: nextPhaseAt(body, trip, nowMs),
+    answer: body,
   };
 }
 

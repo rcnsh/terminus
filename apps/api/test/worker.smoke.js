@@ -176,6 +176,7 @@ test('/api/health reports what is configured without leaking any of it', async (
   assert.equal(h.config.proxy, true);
   assert.equal(h.config.pushAndroid, false, 'no Firebase account in this env');
   assert.equal(h.config.pushWeb, false);
+  assert.equal(h.config.pushIos, false, 'no APNs key in this env');
   assert.match(h.graph.source, /scrape_stops\.py/, 'the graph comes from our own scraper');
   assert.ok(h.graph.services.includes('D2'));
 
