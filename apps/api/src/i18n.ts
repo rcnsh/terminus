@@ -793,7 +793,7 @@ export const ERRORS_ZH: Record<string, string> = {
   'that request expired; start again': '这个请求已失效，请重新开始',
   'turn on location, or add a home stop in Settings': '打开定位，或在设置里添加家附近的车站',
   'profile must be an object': '资料必须是一个对象',
-  "platform is 'android', 'mac' or 'web'": "platform 必须是 'android'、'mac' 或 'web'",
+  "platform is 'android', 'mac', 'ios' or 'web'": "platform 必须是 'android'、'mac'、'ios' 或 'web'",
   "that code isn't right; check the email and try again": '验证码不对，请检查邮件后再试',
   'context is the answer object': 'context 必须是答案对象',
   'context is too large': 'context 太大了',

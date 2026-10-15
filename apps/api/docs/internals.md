@@ -406,9 +406,11 @@ stay on the account page; so does deleting an account, except an anonymous
 one, which has no page and is deleted from its app.
 
 Apps send `x-terminus-client: <platform>[-<flavour>]/<version>` (for example
-`android/1.4.0`), stored per session for the dashboard. Without it the
-platform is guessed from the User-Agent, which counts any CFNetwork client as
-the Mac.
+`android/1.4.0`, `ios/3.0.0`; the platforms are `android`, `mac` and `ios`),
+stored per session for the dashboard. Without it the platform is guessed
+from the User-Agent, which counts any CFNetwork client as the Mac: the
+iPhone app always sends the header. Feedback and reports (`POST
+/api/me/feedback`) name their own `platform`: those three, or `web`.
 
 **Oldest app still served.** KV `config:minClient` holds the oldest version
 served per platform, as JSON: `{"android":"2.6.0","mac":"2.6.0"}`. A missing

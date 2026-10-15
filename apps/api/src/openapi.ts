@@ -152,7 +152,7 @@ const answerExample = {
   ],
 };
 
-/** The apps' version (Android versionName, the Mac's CFBundleShortVersionString):
+/** The apps' version (Android versionName, the Mac's CFBundleShortVersionString, the iPhone's MARKETING_VERSION):
  *  the API and the apps are released together. A test fails when a version
  *  bump leaves this behind. */
 export const API_VERSION = '3.4.2';
@@ -1473,7 +1473,11 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                 },
                 venue: { type: 'string', description: 'With kind stop: the building, or a room in it (`LT21`, `COM1-0208`).' },
                 stop: { type: 'string', description: 'With kind stop: the code of the stop you use for it (`S17`).' },
-                platform: { type: 'string', enum: ['android', 'mac', 'web'] },
+                platform: {
+                  type: 'string',
+                  enum: ['android', 'mac', 'ios', 'web'],
+                  description: 'The app sending it: the Android app, the Mac app, the iPhone app, or the website.',
+                },
                 appVersion: { type: 'string', maxLength: 20 },
                 context: { type: 'object', description: 'The answer as shown (a /me/next response), up to 16 KB.' },
               },
