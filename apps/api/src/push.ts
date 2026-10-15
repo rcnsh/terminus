@@ -28,7 +28,7 @@
  */
 
 import type { Card } from './card.ts';
-import { type Lang, m, withLang } from './i18n.ts';
+import { type Lang, lang as currentLang, m, withLang } from './i18n.ts';
 import type { Env, MeAnswer } from './types.ts';
 import {
   type ApnsPush,
@@ -70,8 +70,19 @@ export interface Nudge {
   remind?: boolean;
   /** The answer and card it's about: an iPhone's notification and Live Activity are worded from them. */
   answer?: MeAnswer & { card: Card };
+  /** The language `answer` is worded in; by default the current request's. */
+  lang?: Lang;
+  /**
+   * The same answer worded in another language, for an iPhone pushed in
+   * that one (sessions.push_lang). Asked once per language, and only for an
+   * iPhone's; without it, or when it fails, that iPhone gets the phase's
+   * words in its language and no Live Activity update.
+   */
+  answerIn?: (lang: Lang) => Promise<(MeAnswer & { card: Card }) | null>;
   /** The trip is over (no trip now): an iPhone's Live Activity ends. */
   tripOver?: boolean;
+  /** The trip's phase changed since the last push: the Live Activity's update is priority 10 (Apple budgets those). */
+  phaseChanged?: boolean;
 }
 
 function account(env: Env): ServiceAccount | null {
@@ -165,23 +176,51 @@ export async function nudgeUser(env: Env, userId: string, nudge: Nudge, nowMs: n
   const data = { kind: 'card', phase: nudge.phase };
   const answer = nudge.answer;
   const expiresS = Math.floor(nowMs / 1000) + 600;
+  // The answer in each iPhone's language: the one given, and others asked
+  // for only when an iPhone wants them (prepare, below).
+  const worded = new Map<Lang, (MeAnswer & { card: Card }) | null>([[nudge.lang ?? currentLang(), answer ?? null]]);
+  const answerIn = nudge.answerIn;
+  const ending = Boolean(nudge.tripOver) || nudge.phase === 'arrived';
   return deliver(
     env,
     userId,
     {
       web: quiet ? null : { kind: 'card', phase: nudge.phase, urgent: nudge.urgent },
       fcm: data,
+      prepare:
+        answer && answerIn
+          ? async (langs) => {
+              for (const l of langs) {
+                if (worded.has(l)) continue;
+                worded.set(
+                  l,
+                  await answerIn(l).catch((err: unknown) => {
+                    console.error('push: card not worded', err instanceof Error ? err.message : typeof err);
+                    return null;
+                  }),
+                );
+              }
+            }
+          : undefined,
       // An iPhone: a notification where the web app gets one (loud only when
       // it's time to look), and a silent push otherwise, or while the Live
-      // Activity shows the trip instead.
+      // Activity shows the trip instead. Its words in its own language: the
+      // card's, else the phase's.
       ios: (l, hasLive) => {
         if (quiet || (hasLive && !nudge.urgent)) return backgroundPush(data, expiresS);
-        const words = answer ? cardWords(answer.card) : withLang(l, () => phaseWords(nudge.phase));
+        const a = worded.get(l);
+        const words = a ? cardWords(a.card) : withLang(l, () => phaseWords(nudge.phase));
         const loudness: Loudness = nudge.urgent && !answer?.card.gone ? 'time-sensitive' : 'passive';
         return alertPush({ ...words, data, loudness, collapse: 'card', expiresS });
       },
+      // Its Live Activity, worded the same way. Without the card in its
+      // language it waits for the Trip object's next update, but an end is
+      // sent in any language rather than leave a finished trip showing.
       live: answer
-        ? { state: liveActivityState(answer), event: nudge.tripOver || nudge.phase === 'arrived' ? 'end' : 'update', urgent: true }
+        ? (l) => {
+            const a = worded.get(l) ?? (ending ? answer : null);
+            return a ? { state: liveActivityState(a), event: ending ? 'end' : 'update', urgent: Boolean(nudge.phaseChanged) } : null;
+          }
         : null,
       urgent: nudge.urgent,
       collapse: 'card',
@@ -207,7 +246,7 @@ export async function updateLive(
   return deliver(
     env,
     userId,
-    { web: null, fcm: {}, live: { state, event, urgent: false }, onlyLive: true, urgent: false, collapse: 'card', ttlS: 600 },
+    { web: null, fcm: {}, live: () => ({ state, event, urgent: false }), onlyLive: true, urgent: false, collapse: 'card', ttlS: 600 },
     nowMs,
   );
 }
@@ -286,10 +325,12 @@ interface Delivery {
   fcm: Record<string, string>;
   /** What an app that fetches the words itself is sent instead (fetchesNotice). */
   fcmBare?: Record<string, string>;
+  /** Before anything is sent, with the languages of the iPhones to be sent to (with APNs on). */
+  prepare?: (langs: Lang[]) => Promise<void>;
   /** What an iPhone is sent, in its language, knowing whether a Live Activity of its runs. Null or absent: nothing. */
   ios?: (lang: Lang, hasLive: boolean) => ApnsPush | null;
-  /** A Live Activity update for the iPhones running one. */
-  live?: { state: LiveActivityState; event: 'update' | 'end'; urgent: boolean } | null;
+  /** A Live Activity update for the iPhones running one, in the iPhone's language; null: none for it. */
+  live?: ((lang: Lang) => LiveSend | null) | null;
   /** Only the Live Activities: no device is sent anything else. */
   onlyLive?: boolean;
   urgent: boolean;
@@ -328,24 +369,26 @@ async function deliver(env: Env, userId: string, msg: Delivery, nowMs: number, e
   };
   const fcm: Fcm = { bearer: null, down: false };
   const apns = newApnsRun();
+  const langOf = (r: Row): Lang => (r.push_lang === 'zh' ? 'zh' : 'en');
+  const iphones = apnsEnabled(env) ? results.filter((r) => looksApns(r.push_token ?? '') || r.live_token) : [];
+  if (msg.prepare && iphones.length) await msg.prepare([...new Set(iphones.map(langOf))]);
   for (const r of results) {
     // One device's failure (a key that won't import, a service that hangs) mustn't stop the rest.
     try {
       const token = r.push_token ?? '';
       const iphone = looksApns(token);
-      const hasLive = iphone && r.live_token !== null && Boolean(msg.live);
+      const live = r.live_token ? (msg.live?.(langOf(r)) ?? null) : null;
       if (!msg.onlyLive && token) {
         const res = token.startsWith(WEB_PREFIX)
           ? await toBrowser(env, token, msg, nowMs)
           : iphone
-            ? await toIphone(env, apns, token, r.push_lang === 'zh' ? 'zh' : 'en', hasLive, msg, nowMs)
+            ? await toIphone(env, apns, token, langOf(r), live !== null, msg, nowMs)
             : a
               ? await toAndroid(env, a, fcm, { push_token: token, client: r.client }, msg, nowMs)
               : 'skip';
         await count(res, () => forget(r.token_hash));
       }
-      if (msg.live && r.live_token)
-        await count(await toLiveActivity(env, apns, r.live_token, msg.live, nowMs), () => forgetLive(r.token_hash));
+      if (live && r.live_token) await count(await toLiveActivity(env, apns, r.live_token, live, nowMs), () => forgetLive(r.token_hash));
     } catch (err) {
       console.error('push failed', err instanceof Error ? err.message : typeof err);
       out.failed++;
@@ -363,6 +406,13 @@ interface Row {
 }
 
 type Outcome = 'sent' | 'failed' | 'gone' | 'skip';
+
+/** One Live Activity's update or end. */
+interface LiveSend {
+  state: LiveActivityState;
+  event: 'update' | 'end';
+  urgent: boolean;
+}
 
 async function toBrowser(env: Env, pushToken: string, msg: Delivery, nowMs: number): Promise<Outcome> {
   // Without a usable VAPID key no browser can be sent to: nobody reached, not a failure to retry.
@@ -397,13 +447,7 @@ async function toIphone(
   return sendApns(env, run, token, push, nowMs);
 }
 
-async function toLiveActivity(
-  env: Env,
-  run: ApnsRun,
-  liveToken: string,
-  live: NonNullable<Delivery['live']>,
-  nowMs: number,
-): Promise<Outcome> {
+async function toLiveActivity(env: Env, run: ApnsRun, liveToken: string, live: LiveSend, nowMs: number): Promise<Outcome> {
   const token = parseApnsToken(liveToken);
   if (!token?.live) return 'gone';
   return sendApns(env, run, token, livePush(live.state, live.event, Math.floor(nowMs / 1000), live.urgent), nowMs);
@@ -486,15 +530,42 @@ export async function fcmError(res: Response): Promise<{ tokenGone: boolean; cod
   return { tokenGone: res.status === 404 || code === 'UNREGISTERED' || (res.status === 400 && badToken), code };
 }
 
-/** How many of a user's devices take push. */
-export async function pushDevices(env: Env, userId: string): Promise<number> {
-  if (!pushEnabled(env) || !env.DB) return 0;
+/** Who a user's pushes can reach. */
+export interface Audience {
+  /** Devices that take push: an iPhone only with APNs on. */
+  devices: number;
+  /** Of them, the iPhones' Live Activities running (0 with APNs off). */
+  lives: number;
+  /** The language the latest iPhone is pushed in; null with none, or APNs off. */
+  iphoneLang: Lang | null;
+}
+
+/**
+ * Who a user's pushes can reach, in one read. An iPhone counts only with
+ * APNs on: its token is kept when it's off, but a Trip object waking every
+ * 30 s for a phone nothing can be sent to would wake all day for nothing.
+ */
+export async function pushAudience(env: Env, userId: string): Promise<Audience> {
+  const none: Audience = { devices: 0, lives: 0, iphoneLang: null };
+  if (!pushEnabled(env) || !env.DB) return none;
   const r = await env.DB.prepare(
-    'SELECT COUNT(*) AS n FROM sessions WHERE user_id = ? AND (push_token IS NOT NULL OR live_token IS NOT NULL)',
+    `SELECT COUNT(*) AS n,
+       SUM(push_token IS NOT NULL AND push_token NOT LIKE 'apns:%') AS others,
+       SUM(live_token IS NOT NULL) AS lives,
+       (SELECT push_lang FROM sessions WHERE user_id = ? AND push_token LIKE 'apns:%' ORDER BY last_seen DESC LIMIT 1) AS lang,
+       SUM(push_token LIKE 'apns:%') AS iphones
+     FROM sessions WHERE user_id = ? AND (push_token IS NOT NULL OR live_token IS NOT NULL)`,
   )
-    .bind(userId)
-    .first<{ n: number }>();
-  return r?.n ?? 0;
+    .bind(userId, userId)
+    .first<{ n: number; others: number | null; lives: number | null; lang: string | null; iphones: number | null }>();
+  if (!r) return none;
+  if (!apnsEnabled(env)) return { devices: r.others ?? 0, lives: 0, iphoneLang: null };
+  return { devices: r.n, lives: r.lives ?? 0, iphoneLang: r.iphones ? (r.lang === 'zh' ? 'zh' : 'en') : null };
+}
+
+/** How many of a user's devices take push (pushAudience). */
+export async function pushDevices(env: Env, userId: string): Promise<number> {
+  return (await pushAudience(env, userId)).devices;
 }
 
 /**

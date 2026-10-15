@@ -45,6 +45,9 @@ function site(mode: string | undefined) {
 				TIMELAPSE_ENABLED: bindings.text("on"),
 				// APNs's topic: the iPhone app's bundle id (src/apns.ts).
 				APNS_TOPIC: bindings.text("sh.rcn.terminus"),
+				// APPLE_TEAM_ID (not a secret) turns on iOS universal links:
+				// /.well-known/apple-app-site-association (src/site.ts). Unset
+				// until there's an Apple developer account; add it to both sites.
 				...moved(),
 			},
 		};

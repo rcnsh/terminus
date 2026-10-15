@@ -20,9 +20,9 @@ import type { Env } from './types.ts';
 import { type Boarded, type DayRecord, type TripRecord, type TripUpdate, endOfDayMs, sgtDate } from './trip.ts';
 import type { MeDeps } from './me.ts';
 import { tripCardFor } from './me.ts';
-import { iphoneLang, nudgeUser, pushDevices, updateLive } from './push.ts';
-import { liveActivityState } from './apns.ts';
-import { withLang } from './i18n.ts';
+import { nudgeUser, pushAudience, updateLive } from './push.ts';
+import { type LiveActivityState, apnsEnabled, liveActivityState } from './apns.ts';
+import { type Lang, withLang } from './i18n.ts';
 import { GRAPH } from './graph.ts';
 import { scopeCache } from './edgecache.ts';
 import { answerFor, collectArrivals } from './answer.ts';
@@ -222,8 +222,11 @@ export class Trip {
     const env = this.env;
     const userId = await this.storage.get<string>('userId');
     if (!env || !userId) return stop;
-    // Nobody to tell: stop waking until a request asks again.
-    if ((await pushDevices(env, userId)) === 0) return stop;
+    // Nobody to tell: stop waking until a request asks again. (An iPhone
+    // counts only with APNs on.) The same read says whether there's an iPhone
+    // to word things for, and a Live Activity to update.
+    const audience = await pushAudience(env, userId);
+    if (audience.devices === 0) return stop;
     const stored = await this.storedDay();
     const date = sgtDate(nowMs);
     const day = stored && stored.date === date ? stored : null;
@@ -241,13 +244,27 @@ export class Trip {
       return p;
     };
     // Worded for the iPhones (their notifications and Live Activities): in
-    // the account's language, or the latest iPhone's when it follows each device.
-    const lang = await iphoneLang(env, userId);
+    // the account's language, or the latest iPhone's when it follows each
+    // device. Another iPhone in the other language gets the card worded
+    // again for it (answerIn), without saving plans a second time.
+    const lang: Lang = audience.iphoneLang ?? 'en';
     const card = await withLang(lang, () => tripCardFor(env, ctx, DEPS, userId, day, nowMs, savePlan));
     await Promise.allSettled(plans);
-    if (!card) return stop;
-
     const last = (await this.storage.get<Pushed>('pushed')) ?? null;
+    const apns = apnsEnabled(env) && audience.lives > 0;
+    if (!card) {
+      // No classes today (any more): a Live Activity still showing the trip ends.
+      if (apns && last?.live) {
+        const out = await updateLive(env, userId, JSON.parse(last.live) as LiveActivityState, 'end', nowMs);
+        if (out.sent > 0 || out.failed === 0) {
+          await this.state.blockConcurrencyWhile(async () => {
+            if (!(await this.cleared())) await this.storage.put('pushed', { ...last, live: undefined });
+          });
+        }
+      }
+      return stop;
+    }
+
     const live = liveActivityState(card.answer);
     const now: Pushed = { key: card.key, phase: card.phase, ...(card.gone ? { gone: true } : {}), live: JSON.stringify(live) };
     // Only what was actually pushed counts: one device having fetched a card
@@ -261,10 +278,21 @@ export class Trip {
       // Android, which may start it from the background only for a
       // high-priority message.
       const urgent = now.phase === 'due' || now.phase === 'missed';
+      const answerIn = (l: Lang) =>
+        withLang(l, () => tripCardFor(env, ctx, DEPS, userId, day, nowMs, async () => {})).then((c) => c?.answer ?? null);
       const out = await nudgeUser(
         env,
         userId,
-        { phase: now.phase, urgent, remind: card.remind, answer: card.answer, tripOver: card.key === null },
+        {
+          phase: now.phase,
+          urgent,
+          remind: card.remind,
+          answer: card.answer,
+          lang,
+          answerIn,
+          tripOver: card.key === null,
+          phaseChanged: last?.phase !== now.phase,
+        },
         nowMs,
       );
       // Pushed once a device has it, or when none could be sent to (a quiet
@@ -277,7 +305,7 @@ export class Trip {
           if (!(await this.cleared())) await this.storage.put('pushed', now);
         });
       }
-    } else if (last && last.live !== now.live) {
+    } else if (apns && last && last.live !== now.live) {
       // The same phase, but what a Live Activity shows moved (a later bus):
       // only the iPhones running one are told.
       const out = await updateLive(env, userId, live, card.key === null || live.phase === 'arrived' ? 'end' : 'update', nowMs);

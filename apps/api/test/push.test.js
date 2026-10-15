@@ -69,8 +69,8 @@ async function setup({ push = true, wrap = (f) => f, extra = {} } = {}) {
     ...(push ? { FCM_SERVICE_ACCOUNT: await serviceAccount() } : {}),
     ...extra,
   };
-  const call = async (path, { method = 'GET', token, cookie, body } = {}) => {
-    const headers = {};
+  const call = async (path, { method = 'GET', token, cookie, body, lang } = {}) => {
+    const headers = lang ? { 'accept-language': lang } : {};
     if (token) headers.authorization = `Bearer ${token}`;
     if (cookie) headers.cookie = cookie;
     if (body !== undefined) headers['content-type'] = 'application/json';
@@ -192,6 +192,101 @@ test("the Trip object tells an iPhone too: the notification in the account's wor
   assert.equal(live.url, `https://api.push.apple.com/3/device/${'cd'.repeat(32)}`);
   assert.equal(live.body.aps['content-state'].phase, 'due');
   assert.ok('svc' in live.body.aps['content-state']);
+});
+
+/** An Apple that takes every push, and the APNs settings with a real key. */
+async function fakeApple() {
+  const { privateKey } = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+  const der = Buffer.from(await crypto.subtle.exportKey('pkcs8', privateKey)).toString('base64');
+  const apple = [];
+  const wrap = (f) => async (input, init) => {
+    const url = String(typeof input === 'string' ? input : input.url);
+    if (!url.startsWith('https://api.push.apple.com/')) return f(input, init);
+    apple.push({ url, type: init.headers['apns-push-type'], priority: init.headers['apns-priority'], body: JSON.parse(init.body) });
+    return new Response(null);
+  };
+  const extra = {
+    APNS_KEY: `-----BEGIN PRIVATE KEY-----\n${der}\n-----END PRIVATE KEY-----`,
+    APNS_KEY_ID: 'K',
+    APNS_TEAM_ID: 'T',
+    APNS_TOPIC: 'sh.rcn.terminus',
+  };
+  return { apple, wrap, extra };
+}
+const APNS = `apns:${'ab'.repeat(32)}`;
+const LIVE = `apnsla:${'cd'.repeat(32)}`;
+const CHINESE = /[\u4e00-\u9fff]/;
+
+test('with APNs off, an iPhone alone is nobody to tell: the Trip object stops waking', async () => {
+  // Push is on (Android's), so a card asks the object to watch; APNs isn't set up.
+  const { call, phone, next, alarm, TRIPS, clock, fcm } = await setup({ extra: { APNS_TOPIC: 'sh.rcn.terminus' } });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: APNS } });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: LIVE } });
+  await next(phone);
+  const at = alarm();
+  assert.ok(at !== undefined);
+  const day = () => [...TRIPS.instances.values()][0].storage._map;
+  clock(at);
+  await TRIPS.fireAlarms();
+  assert.equal(day().get('wakeAt'), undefined, 'no wake left: only midnight');
+  assert.equal(alarm(), day().get('deleteAt'));
+  assert.equal(fcm.sent.length, 0);
+});
+
+test("a tap on an English device reaches a Chinese iPhone in Chinese; the account's language, once saved, reaches every iPhone", async () => {
+  const { apple, wrap, extra } = await fakeApple();
+  const { call, cookie, phone, tablet, next, wakeUntil, env } = await setup({ push: false, wrap, extra });
+  // The account follows each device; the iPhone is set to Chinese.
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: APNS }, lang: 'zh-CN' });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: LIVE } });
+  const pushLang = () => env.DB._db.prepare('SELECT push_lang FROM sessions WHERE push_token = ?').get(APNS).push_lang;
+  assert.equal(pushLang(), 'zh');
+  await next(phone);
+  await wakeUntil(() => apple.some((p) => p.body.phase === 'due'));
+  const due = apple.find((p) => p.type === 'alert' && p.body.phase === 'due');
+  assert.match(due.body.aps.alert.title, CHINESE, "the Trip object words it in the iPhone's language");
+  assert.equal(apple.find((p) => p.type === 'liveactivity').priority, '10', 'a phase change');
+
+  // "On it", tapped on the tablet in English.
+  apple.length = 0;
+  const out = await (await call('/api/me/signal', { method: 'POST', token: tablet, body: { kind: 'boarded' }, lang: 'en' })).json();
+  assert.doesNotMatch(out.card.line, CHINESE, "the tablet's answer is English");
+  const live = apple.find((p) => p.type === 'liveactivity');
+  assert.ok(live, 'the Live Activity is updated');
+  assert.match(live.body.aps['content-state'].line, CHINESE, "in the iPhone's language");
+  assert.equal(live.priority, '5', 'a tap never spends a priority-10 update');
+  for (const p of apple.filter((x) => x.type === 'alert')) assert.match(p.body.aps.alert.title, CHINESE);
+
+  // "Not on campus today", also in English.
+  apple.length = 0;
+  await call('/api/me/signal', { method: 'POST', token: tablet, body: { kind: 'away' }, lang: 'en' });
+  for (const p of apple.filter((x) => x.type === 'liveactivity')) assert.match(p.body.aps['content-state'].line, CHINESE);
+
+  // The account picks English: every iPhone is pushed in it from now on.
+  await call('/api/me/profile', { method: 'PUT', cookie, body: { ...PROFILE, lang: 'en' } });
+  assert.equal(pushLang(), 'en');
+  // Back to following each device, from the iPhone set to Chinese: its own again.
+  await call('/api/me/profile', { method: 'PUT', token: phone, body: { ...PROFILE, lang: 'auto' }, lang: 'zh' });
+  assert.equal(pushLang(), 'zh');
+});
+
+test('with no class left today, a running Live Activity is ended', async () => {
+  const { apple, wrap, extra } = await fakeApple();
+  const { call, cookie, phone, next, wakeUntil, alarm, clock, TRIPS } = await setup({ push: false, wrap, extra });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: APNS } });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: LIVE } });
+  await next(phone);
+  await wakeUntil(() => apple.some((p) => p.type === 'liveactivity'));
+  // The class is taken off the timetable; the object's next wake finds no card.
+  await call('/api/me/profile', { method: 'PUT', cookie, body: { ...PROFILE, manual: [] } });
+  apple.length = 0;
+  clock(alarm());
+  await TRIPS.fireAlarms();
+  const end = apple.filter((p) => p.type === 'liveactivity');
+  assert.equal(end.length, 1);
+  assert.equal(end[0].body.aps.event, 'end');
+  // Noted as ended, so a later wake doesn't end it again.
+  assert.equal([...TRIPS.instances.values()][0].storage._map.get('pushed').live, undefined);
 });
 
 test('time to go wakes the phone with reminders off too: Android starts the live notification from it', async () => {

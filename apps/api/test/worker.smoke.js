@@ -1792,3 +1792,48 @@ test('a page opened on the old address goes to terminus.run; the apps and the up
   // Off unless MOVE_PAGES is "on" (off if a network refuses terminus.run): the old address serves its pages.
   assert.notEqual((await at('terminus.rcn.sh', '/account/', html, makeEnv())).status, 301);
 });
+
+test('iOS universal links: the association names the app for /pair on every address of the site, only with a team id', async () => {
+  const at = async (host, env, accept = 'application/json') => {
+    const ctx = makeCtx();
+    const res = await worker.fetch(
+      new Request(`https://${host}/.well-known/apple-app-site-association`, { headers: { accept } }),
+      env,
+      ctx,
+    );
+    await ctx.settle();
+    return res;
+  };
+  const html = 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8';
+  // No Apple developer account yet: nothing to claim, so nothing served.
+  assert.equal((await at('terminus.run', makeEnv())).status, 404);
+
+  const stable = { ...makeEnv(), APPLE_TEAM_ID: 'ABCDE12345', MOVE_PAGES: 'on' };
+  for (const host of ['terminus.run', 'terminus.rcn.sh']) {
+    // Apple's fetch takes no redirect: answered on the old address too, even to a browser.
+    const res = await at(host, stable, html);
+    assert.equal(res.status, 200, host);
+    assert.equal(res.headers.get('content-type'), 'application/json');
+    assert.equal(res.headers.get('cache-control'), 'public, max-age=3600');
+    assert.deepEqual(await res.json(), {
+      applinks: {
+        details: [
+          {
+            appIDs: ['ABCDE12345.sh.rcn.terminus'],
+            components: [
+              { '/': '/pair', comment: 'pairing links' },
+              { '/': '/pair/', comment: 'pairing links' },
+            ],
+          },
+        ],
+      },
+    });
+  }
+  // The beta's app has its own bundle id.
+  const beta = { ...stable, PUBLIC_ORIGIN: 'https://beta.terminus.run' };
+  for (const host of ['beta.terminus.run', 'beta.terminus.rcn.sh']) {
+    const res = await at(host, beta, html);
+    assert.equal(res.status, 200, host);
+    assert.deepEqual((await res.json()).applinks.details[0].appIDs, ['ABCDE12345.sh.rcn.terminus.beta']);
+  }
+});

@@ -107,7 +107,7 @@ import { MAX_KEYS, createKey, listKeys, revokeKey } from './access.ts';
 import { footM, paceSpeed } from './walk.ts';
 import { clientKey, coordsFrom, json } from './http.ts';
 import { linkOrigin } from './site.ts';
-import { LANG_PREFS, type Lang, lang, m, useProfileLang } from './i18n.ts';
+import { LANG_PREFS, type Lang, type LangPref, lang, m, useProfileLang, withLang } from './i18n.ts';
 import { bandCss, bandHtml, phaseAt, sgtMinute } from './pagesky.ts';
 
 export interface MeDeps {
@@ -306,6 +306,32 @@ export async function getProfile(db: D1Database, userId: string, graph: Graph, r
 async function pushLang(db: D1Database, userId: string): Promise<Lang> {
   const chosen = ((await loadProfileJson(db, userId).catch(() => null)) as { lang?: unknown } | null)?.lang;
   return chosen === 'en' || chosen === 'zh' ? chosen : lang();
+}
+
+/**
+ * The account's language changed, or may have: the iPhones are pushed in
+ * it from now on, not in the one they registered in. Back to following each
+ * device, only this one's is known (this request's); another iPhone keeps
+ * its language until it registers again, as it does each launch. Writes
+ * nothing when nothing changes.
+ */
+async function refreshPushLang(db: D1Database, userId: string, tokenHash: string, pref: LangPref): Promise<void> {
+  try {
+    if (pref === 'auto') {
+      await db
+        .prepare("UPDATE sessions SET push_lang = ? WHERE token_hash = ? AND push_token LIKE 'apns:%' AND push_lang IS NOT ?")
+        .bind(lang(), tokenHash, lang())
+        .run();
+    } else {
+      await db
+        .prepare("UPDATE sessions SET push_lang = ? WHERE user_id = ? AND push_token LIKE 'apns:%' AND push_lang IS NOT ?")
+        .bind(pref, userId, pref)
+        .run();
+    }
+  } catch (err) {
+    // The profile is saved; the push language catches up when the iPhone next registers.
+    console.error('push language not saved', err instanceof Error ? err.message : typeof err);
+  }
 }
 
 /** Tries before a read-modify-write of the profile gives up to another device's writes. */
@@ -540,6 +566,7 @@ export const ME_ROUTES: MeRoute[] = [
           ? await saveProfileJson(db, session.user.id, r.profile, nowMs)
           : await saveProfileIf(db, session.user.id, r.profile, nowMs, from);
       if (version === null) return json({ error: PROFILE_CHANGED }, 412);
+      await refreshPushLang(db, session.user.id, session.tokenHash, r.profile.lang);
       return json({ ...r.profile, limits: profileLimits() }, 200, { etag: versionTag(version) });
     },
   },
@@ -765,11 +792,12 @@ export const ME_ROUTES: MeRoute[] = [
         logSignal(env, kind);
         const prefs = await prefsFor(db, session.user.id, profile, nowMs);
         const out = await nextBody(url, env, ctx, nowMs, deps, profile, after, session.user.id, prefs);
+        const answerIn = rewordFor(url, env, ctx, nowMs, deps, profile, after, session.user.id, prefs);
         ctx.waitUntil(
           nudgeUser(
             env,
             session.user.id,
-            { phase: out.card.phase, urgent: false, remind: out.card.remind !== false, answer: out },
+            { phase: out.card.phase, urgent: false, remind: out.card.remind !== false, answer: out, answerIn },
             nowMs,
             session.tokenHash,
           ),
@@ -869,12 +897,14 @@ export const ME_ROUTES: MeRoute[] = [
       else if (outcome && !/^(gap-)?home:/.test(key)) await recordOutcome(db, session.user.id, key, outcome, nowMs);
       const prefs = await prefsFor(db, session.user.id, profile, nowMs);
       const out = await nextBody(url, env, ctx, nowMs, deps, profile, next, session.user.id, prefs);
-      // A tap here changes the other phones' cards now, not at their next refresh.
+      // A tap here changes the other phones' cards now, not at their next
+      // refresh; an iPhone pushed in the other language gets the card in its own.
+      const answerIn = rewordFor(url, env, ctx, nowMs, deps, profile, next, session.user.id, prefs);
       ctx.waitUntil(
         nudgeUser(
           env,
           session.user.id,
-          { phase: out.card.phase, urgent: false, remind: out.card.remind !== false, answer: out },
+          { phase: out.card.phase, urgent: false, remind: out.card.remind !== false, answer: out, answerIn },
           nowMs,
           session.tokenHash,
         ),
@@ -1477,6 +1507,29 @@ async function nextWithTrip(
   // The walk from the stop is in the card's journey; the raw seconds stay here.
   const { endWalk: _endWalk, upcoming: _upcoming, ...shown } = full;
   return { body: { ...shown, walkSpeedMs: paceSpeed(profile.walkPace), card }, trip };
+}
+
+/**
+ * A tap's answer worded in another language, for an iPhone pushed in that
+ * one (push.ts asks only then): worked out as the request did, from the
+ * same moment, so its arrivals come from the edge cache, and saving
+ * nothing (no plan, no watch, not logged), as the request already has.
+ */
+function rewordFor(
+  url: URL,
+  env: Env,
+  ctx: ExecutionContext,
+  nowMs: number,
+  deps: MeDeps,
+  profile: Profile,
+  day: DayRecord | null,
+  userId: string,
+  prefs: TripPrefs,
+) {
+  return (l: Lang) =>
+    withLang(l, () => nextWithTrip(url, env, ctx, nowMs, unlogged(deps), profile, day, userId, prefs, { savePlan: async () => {} })).then(
+      (r) => r.body,
+    );
 }
 
 /**

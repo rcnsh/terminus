@@ -644,21 +644,27 @@ object at the change and once the second bus has gone.
   keeps its latest of each; the same token on another session moves there;
   `DELETE /api/me/push` forgets both. Registering also notes the language
   the iPhone's notifications are worded in (`sessions.push_lang`): the
-  account's choice, else the request's.
+  account's choice, else the request's. The data export lists all three
+  for each device (`push`, `liveActivityPush`, `pushLanguage`).
 - **Secrets and vars.** `APNS_KEY` (the .p8 from the Apple developer
   account, PEM, an ES256 key), `APNS_KEY_ID` (its 10-character id) and
   `APNS_TEAM_ID`, as Worker secrets; `APNS_TOPIC`, the bundle id, is a var
   in cloudflare.config.ts: `sh.rcn.terminus` on the stable Worker,
   `sh.rcn.terminus.beta` on the beta. One key serves both Workers and both
-  hosts. Set them from `apps/api`, the key from its file, never echoed:
+  hosts. Set them from `apps/api`, the key from its file on standard input,
+  never echoed nor in a command's arguments (which other processes can
+  read). `cf workers secrets update` takes a value only as `--text`, so the
+  key goes in with Wrangler's `secret put`, which reads a piped value from
+  stdin:
 
   ```bash
-  pnpm exec cf workers secrets update APNS_KEY --worker terminus --type secret_text --text "$(cat AuthKey_XXXXXXXXXX.p8)"
+  pnpm exec wrangler secret put APNS_KEY --name terminus < AuthKey_XXXXXXXXXX.p8
   pnpm exec cf workers secrets update APNS_KEY_ID --worker terminus --type secret_text --text XXXXXXXXXX
   pnpm exec cf workers secrets update APNS_TEAM_ID --worker terminus --type secret_text --text YYYYYYYYYY
   ```
 
-  and again with `--worker terminus-beta` for the beta. Locally they go in
+  and again with `--name terminus-beta` and `--worker terminus-beta` for
+  the beta. Locally they go in
   `.dev.vars`. They aren't declared in the config, so a Worker deploys
   without them; with any of the four missing APNs is off: tokens are still
   taken and stored, sends are skipped (logged once per isolate), and
@@ -668,8 +674,14 @@ object at the change and once the second bus has gone.
   reused, not minted per push, and refuses one over an hour old, so it's
   kept for 50 minutes (`JWT_REUSE_S`) in the isolate and in KV
   (`apns:jwt:<key id>`), shared by every isolate. A 403
-  `ExpiredProviderToken` or `InvalidProviderToken` signs a new one and
-  sends once more.
+  `ExpiredProviderToken` or `InvalidProviderToken` takes a newer one
+  another isolate signed, else signs a new one, and sends once more; but
+  Apple refuses a token renewed within 20 minutes of the last
+  (`TooManyProviderTokenUpdates`), so one signed less than
+  `RESIGN_GAP_S` (20 minutes) ago, by any isolate (the KV entry keeps its
+  `iat`), isn't signed again. Then, or when the new one is refused too
+  (a wrong key, key id or team), APNs pauses as after a 5xx (see
+  Errors), rather than every send signing and writing KV again.
 - **HTTP/2: unverified here.** APNs accepts only HTTP/2, and Cloudflare's
   docs don't say which HTTP version a Worker's `fetch` uses to another
   host. What there is: a Cloudflare engineer answering workerd issue
@@ -681,10 +693,10 @@ object at the change and once the second bus has gone.
   guarantee, and terminus hasn't sent a real push yet. So: from `cf dev`
   or the dev stub nothing reaches a phone, and the first real check is a
   push from the beta Worker to a development build. If Apple ever
-  refuses the connection, each send fails (logged `push failed`; counted
-  failed, so the Trip object tries again at its next wake, and no token
-  is dropped). The way out then is a small relay that speaks HTTP/2 to
-  Apple (for instance on the VPS that renders the timelapse), which the
+  refuses the connection, the send fails (logged `apns send failed`;
+  counted failed, no token dropped) and APNs pauses as after a 5xx, so
+  the rest of the delivery doesn't each wait out the 5 s again. The way
+  out then is a small relay that speaks HTTP/2 to Apple (for instance on the VPS that renders the timelapse), which the
   Worker calls with the same request and its own shared secret; nothing
   in Cloudflare sends APNs for us.
 - **Requests.** `POST https://<host>/3/device/<hex>`, with
@@ -699,9 +711,15 @@ object at the change and once the second bus has gone.
     extension can re-word it from `/api/me/next`, `thread-id`, and `kind`
     and `phase` beside `aps` as Android's data has them. Due and missed are
     `time-sensitive` with a sound, priority 10; anything else is `passive`,
-    priority 5. Worded in the account's language, else the latest
-    iPhone's (`push_lang`); with no card to word it from, the phase's
-    words (`pushTitle`, `pushOpen` in i18n.ts).
+    priority 5. Worded in each iPhone's language (`push_lang`): the card
+    the push is about is worded again for an iPhone in the other language
+    (`answerIn`: the Trip object's card, or a tap's answer from the same
+    moment, its arrivals from the edge cache, nothing saved); with no card
+    to word it from, the phase's words (`pushTitle`, `pushOpen` in
+    i18n.ts). `push_lang` follows the account: saving the profile with a
+    language sets every iPhone's to it; back to following each device, the
+    saving iPhone's is its own, and another's catches up when it next
+    registers (each launch).
   - nothing to show (an idle card, reminders off for the trip) or, with
     its Live Activity running, a quiet change the activity already shows:
     a `background` push, `{aps: {content-available: 1}, kind, phase}`,
@@ -710,9 +728,16 @@ object at the change and once the second bus has gone.
     `kind: 'term'` and the four words beside `aps`.
   - its Live Activity, when it has one: a `liveactivity` push with every
     phase change (priority 10), and when only what it shows moved (a later
-    bus, a new arrival time; priority 5, the Trip object's `pushed.live`).
-    `event` is `update`, or `end` once there or with no trip left
-    (`dismissal-date` ten minutes on); `stale-date` is the card's `staleAt`.
+    bus, a new arrival time) or another device's tap changed it (priority
+    5; the Trip object's `pushed.live`), in the iPhone's language. `event`
+    is `update`, or `end` once there, with no trip left, or with no class
+    left today (the last state sent, ended; `dismissal-date` ten minutes
+    on); `stale-date` is the card's `staleAt`.
+  - With APNs off, an iPhone isn't counted as a device that takes push
+    (`pushAudience`), so a Trip object with nothing else to tell stops
+    waking; with APNs on, the read that counts devices also gives the
+    latest iPhone's language and whether a Live Activity runs, so a user
+    without an iPhone costs no further read.
 - **The Live Activity's `content-state`** (`liveActivityState`, the
   `LiveActivityState` type), from `/api/me/next`'s answer and card. Every
   key is always present, null when it doesn't apply; times are whole
@@ -741,8 +766,11 @@ object at the change and once the second bus has gone.
   `DeviceTokenNotForTopic`, drops the token: a device token takes its
   Live Activity's with it, a Live Activity's goes alone. Any other 400 is
   our message's fault: logged with Apple's reason, the token kept. A 429
-  or 5xx stops the delivery's other iPhones and pauses APNs in the
-  isolate for a minute, doubling each time to 15 minutes.
+  or 5xx, no answer at all (the 5 s timeout, a refused or reset
+  connection) or a provider token Apple keeps refusing stops the
+  delivery's other iPhones and pauses APNs in the isolate for a minute,
+  doubling each time to 15 minutes; the Trip object's wakes in that time
+  send nothing to Apple, and try again after it.
 
 The planner ([src/profile.ts](../src/profile.ts), `planFor`):
 
@@ -952,6 +980,18 @@ apps included, is answered where it is. The 301 carries `max-age=86400`, so
 search engines move the old address's pages over but a browser asks again
 after a day, and moving back is an edit to `MOVED`, not something browsers
 keep for good.
+
+`/.well-known/` holds what each platform checks before a link opens the
+app, so both addresses serve it. Android's is a static file,
+`assetlinks.json`, with the stable and beta apps' signing keys. The
+iPhone's, `apple-app-site-association`, is the Worker's
+(`appSiteAssociation` in `src/site.ts`): `application/json`, cached an
+hour, naming `<APPLE_TEAM_ID>.sh.rcn.terminus` (`.beta` on the beta) for
+`/pair` and `/pair/`, so a pairing link (`/pair?code=…`) opens the app,
+which claims `applinks:` on both of its site's addresses. Apple's CDN
+fetches it from each one and follows no redirect. `APPLE_TEAM_ID` is a
+var, not a secret, and stays unset until there's an Apple developer
+account; until then the path is a 404.
 
 The redirect runs only with `MOVE_PAGES` set to `on`, as both Workers
 have it in `cloudflare.config.ts`. Links handed to people (sign-in and
@@ -1854,10 +1894,11 @@ people see, and open links there: the project's own domain, which goes with
 it if someone else takes it over. Android has it as `API_BASE`, `LINK_BASE`
 and `SITE` in BuildConfig; the Mac as `Api.base`, `Api.linkBase` and
 `Api.site`, with `TerminusAPI` and `TerminusSite` in the beta's
-Info.plist. The Mac's Sparkle feed is there too.
+Info.plist; the iPhone the same, from `TERMINUS_API` and `TERMINUS_SITE`
+in `project.yml`. The Mac's Sparkle feed is there too.
 
 The old address is the backup (`SERVERS` on Android, `TerminusBackup` on
-the Mac). A request that can't reach the chosen address at all goes once to
+the Mac and the iPhone). A request that can't reach the chosen address at all goes once to
 the other, inside the same deadline (`Servers.order`): only when the server
 was never reached (no DNS answer, a refused connection, a TLS handshake cut
 off, as NUS Wi-Fi did to terminus.run in October 2026), so it can't arrive
@@ -1878,7 +1919,9 @@ Mac's preferences) is ignored on every read, and the default used. The
 stub keeps its own sign-in, so a real token never goes to it over plain
 HTTP: Android sets the session aside (`Store.swapSession`, `token-site` and
 `token-local`) and restarts the app; the Mac keeps a token per folder
-(`terminus`, `terminus-beta`, `terminus-dev`) and relaunches. The site's two
+(`terminus`, `terminus-beta`, `terminus-dev`) and relaunches; the iPhone
+keeps the site's token and the stub's under their own keychain accounts
+(`TokenStore`). The site's two
 addresses are one server with one token, so switching between them keeps
 you signed in.
 

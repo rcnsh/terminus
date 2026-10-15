@@ -1744,7 +1744,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Account'],
           summary: 'Download your data',
           description:
-            'Everything kept for the account, as a JSON file: the account and its dates, the profile, devices (with their app, version and push address), API keys (names only), feedback, trip outcomes and choices, sign-in requests still waiting, and today’s trip.',
+            'Everything kept for the account, as a JSON file: the account and its dates, the profile, devices (with their app, version, push address, an iPhone’s Live Activity push address and the language its notifications are worded in), API keys (names only), feedback, trip outcomes and choices, sign-in requests still waiting, and today’s trip.',
           operationId: 'meExport',
           security: [{ bearer: [] }, { cookie: [] }],
           responses: {
@@ -1792,7 +1792,17 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                       app: { type: ['string', 'null'], description: 'The app and its version, as it last said.' },
                       push: {
                         type: ['object', 'null'],
-                        properties: { service: { type: 'string', enum: ['firebase', 'web'] }, address: {} },
+                        properties: { service: { type: 'string', enum: ['firebase', 'web', 'apple'] }, address: {} },
+                      },
+                      liveActivityPush: {
+                        type: ['object', 'null'],
+                        description: 'An iPhone’s: the push address of its trip Live Activity, while one runs.',
+                        properties: { service: { type: 'string', enum: ['apple'] }, address: { type: 'string' } },
+                      },
+                      pushLanguage: {
+                        type: ['string', 'null'],
+                        enum: ['en', 'zh', null],
+                        description: 'An iPhone’s: the language its notifications are worded in.',
                       },
                       created: { type: 'string', format: 'date-time' },
                       lastSeen: { type: 'string', format: 'date-time' },

@@ -67,6 +67,8 @@ export interface Env {
   APNS_TEAM_ID?: string;
   /** The iPhone app's bundle id, APNs's topic: sh.rcn.terminus, or sh.rcn.terminus.beta on the beta. */
   APNS_TOPIC?: string;
+  /** The Apple developer team id, for iOS universal links (site.ts appSiteAssociation). Unset: none served. */
+  APPLE_TEAM_ID?: string;
   /** One global ceiling on new anonymous accounts (apps can't run Turnstile). */
   RL_ANON?: RateLimit;
   /** One global ceiling on pairing-code guesses: a code is guessed against every live one at once. */

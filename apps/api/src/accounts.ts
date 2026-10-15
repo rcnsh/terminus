@@ -948,8 +948,10 @@ export async function deleteAccount(db: D1Database, user: User): Promise<void> {
 }
 
 /** A device's push address as the export shows it: whose service, and the address itself. */
-function pushOf(token: string | null): { service: 'firebase' | 'web'; address: unknown } | null {
+function pushOf(token: string | null): { service: 'firebase' | 'web' | 'apple'; address: unknown } | null {
   if (!token) return null;
+  // An iPhone's (and its Live Activity's) token, as the app sent it: apns.ts.
+  if (/^apns(la)?:/.test(token)) return { service: 'apple', address: token };
   if (!token.startsWith('web:')) return { service: 'firebase', address: token };
   try {
     return { service: 'web', address: JSON.parse(token.slice(4)) };
@@ -974,7 +976,7 @@ export async function exportAccount(db: D1Database, user: User, today: unknown =
   const profile = await loadProfileJson(db, user.id);
   const { results: sessions } = await db
     .prepare(
-      'SELECT kind, name, platform, client, push_token AS push, created, last_seen AS lastSeen, expires FROM sessions WHERE user_id = ? ORDER BY created',
+      'SELECT kind, name, platform, client, push_token AS push, live_token AS live, push_lang AS pushLang, created, last_seen AS lastSeen, expires FROM sessions WHERE user_id = ? ORDER BY created',
     )
     .bind(user.id)
     .all<{
@@ -983,6 +985,8 @@ export async function exportAccount(db: D1Database, user: User, today: unknown =
       platform: string | null;
       client: string | null;
       push: string | null;
+      live: string | null;
+      pushLang: string | null;
       created: number;
       lastSeen: number;
       expires: number | null;
@@ -1029,6 +1033,9 @@ export async function exportAccount(db: D1Database, user: User, today: unknown =
       platform: r.platform,
       app: r.client,
       push: pushOf(r.push),
+      // An iPhone's: its trip Live Activity's push address, and the language its notifications are worded in.
+      liveActivityPush: pushOf(r.live),
+      pushLanguage: r.pushLang,
       created: new Date(r.created).toISOString(),
       lastSeen: new Date(r.lastSeen).toISOString(),
       expires: iso(r.expires),

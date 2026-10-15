@@ -10,16 +10,17 @@
  * Every request carries a provider token: a JWT signed with the team's .p8
  * key (ES256, WebCrypto), which Apple wants reused rather than minted per
  * push and refused after an hour. It's kept in the isolate and in KV and
- * used for JWT_REUSE_S. With APNS_KEY, APNS_KEY_ID, APNS_TEAM_ID or the
- * APNS_TOPIC var missing, APNs is off: tokens are still stored, and sends
- * are skipped (said once per isolate).
+ * used for JWT_REUSE_S; one Apple refuses is signed again at most every
+ * RESIGN_GAP_S, as Apple refuses renewing more often. With APNS_KEY,
+ * APNS_KEY_ID, APNS_TEAM_ID or the APNS_TOPIC var missing, APNs is off:
+ * tokens are still stored, and sends are skipped (said once per isolate).
  *
  * Apple only takes HTTP/2. Cloudflare doesn't document which HTTP version a
  * Worker's fetch uses; deployed Workers have been seen reaching APNs with it
  * (Cloudflare's proxy upgrades the request), the local runtime can't (cf dev,
  * the dev stub). Unverified for terminus until a real push: see
- * docs/internals.md, APNs. A refused connection throws, which counts as a
- * failed send and drops no token.
+ * docs/internals.md, APNs. A refused connection counts as a failed send,
+ * drops no token, and pauses APNs like a 5xx.
  */
 
 import type { Card } from './card.ts';
@@ -87,6 +88,13 @@ function warnOff(): void {
 
 /** Apple refuses a provider token after an hour, and one renewed more than every 20 minutes. */
 export const JWT_REUSE_S = 50 * 60;
+/**
+ * A token Apple refused (a 403 saying it's expired or invalid) is signed
+ * again only once this long has passed since the last was signed, by any
+ * isolate: sooner, Apple answers TooManyProviderTokenUpdates, and a key
+ * that's simply wrong would have every send sign and write KV again.
+ */
+export const RESIGN_GAP_S = 20 * 60;
 const JWT_KV = (keyId: string) => `apns:jwt:${keyId}`;
 
 const keys = new Map<string, Promise<CryptoKey>>();
@@ -124,16 +132,26 @@ export async function signProviderJwt(pem: string, keyId: string, teamId: string
 /** The token kept in the isolate too, so a push batch doesn't read KV for each device. */
 const jwtMemo = new WeakMap<object, { kid: string; jwt: string; iat: number }>();
 
-async function providerJwt(env: Env, c: ApnsConfig, nowMs: number): Promise<string> {
+/** A provider token and when it was signed (epoch seconds). */
+interface Jwt {
+  jwt: string;
+  iat: number;
+}
+
+async function providerJwt(env: Env, c: ApnsConfig, nowMs: number): Promise<Jwt> {
   const nowS = Math.floor(nowMs / 1000);
   const fresh = (t: { iat: number } | null | undefined) => t && nowS - t.iat < JWT_REUSE_S && t.iat <= nowS + 60;
   const kept = jwtMemo.get(env.KV);
-  if (kept?.kid === c.keyId && fresh(kept)) return kept.jwt;
+  if (kept?.kid === c.keyId && fresh(kept)) return kept;
   const stored = await storedJwt(env, c.keyId);
   if (stored && fresh(stored)) {
     jwtMemo.set(env.KV, { kid: c.keyId, ...stored });
-    return stored.jwt;
+    return stored;
   }
+  return signJwt(env, c, nowS);
+}
+
+async function signJwt(env: Env, c: ApnsConfig, nowS: number): Promise<Jwt> {
   let jwt: string;
   try {
     jwt = await signProviderJwt(c.key, c.keyId, c.teamId, nowS);
@@ -143,7 +161,7 @@ async function providerJwt(env: Env, c: ApnsConfig, nowMs: number): Promise<stri
   }
   jwtMemo.set(env.KV, { kid: c.keyId, jwt, iat: nowS });
   await env.KV.put(JWT_KV(c.keyId), JSON.stringify({ jwt, iat: nowS }), { expirationTtl: JWT_REUSE_S }).catch(() => {});
-  return jwt;
+  return { jwt, iat: nowS };
 }
 
 /** The token another isolate signed, from KV; null when there's none or it's unreadable. */
@@ -156,9 +174,23 @@ async function storedJwt(env: Env, keyId: string): Promise<{ jwt: string; iat: n
   }
 }
 
-async function forgetJwt(env: Env, c: ApnsConfig): Promise<void> {
-  jwtMemo.delete(env.KV);
-  await env.KV.delete(JWT_KV(c.keyId)).catch(() => {});
+/**
+ * A token to replace `refused`, which Apple wouldn't take: one another
+ * isolate has signed since, or a new one, though not within RESIGN_GAP_S of
+ * the last signing (the refused one's, or a newer one's). Null when it's too
+ * soon. The token signed stays in KV, so every isolate knows when that was.
+ */
+async function renewJwt(env: Env, c: ApnsConfig, refused: Jwt, nowMs: number): Promise<Jwt | null> {
+  const nowS = Math.floor(nowMs / 1000);
+  const kept = jwtMemo.get(env.KV);
+  const stored = await storedJwt(env, c.keyId);
+  const newer = [kept?.kid === c.keyId ? kept : null, stored].find(
+    (t) => t && t.jwt !== refused.jwt && t.iat > refused.iat && nowS - t.iat < JWT_REUSE_S,
+  );
+  if (newer) return { jwt: newer.jwt, iat: newer.iat };
+  const lastSigned = Math.max(refused.iat, kept?.kid === c.keyId ? kept.iat : 0, stored?.iat ?? 0);
+  if (nowS - lastSigned < RESIGN_GAP_S) return null;
+  return signJwt(env, c, nowS);
 }
 
 /* ---------------------------------------------------------------- */
@@ -369,13 +401,23 @@ export async function apnsError(res: Response): Promise<{ tokenGone: boolean; st
   };
 }
 
-/** One delivery's provider token, shared by its devices; `down` once it couldn't be had. */
+/** One delivery's provider token, shared by its devices; `down` once Apple can't be asked (no token, or a pause). */
 export interface ApnsRun {
-  jwt: string | null;
+  jwt: Jwt | null;
   down: boolean;
 }
 
 export const newApnsRun = (): ApnsRun => ({ jwt: null, down: false });
+
+/**
+ * Apple isn't asked again in this isolate for a while, doubling each time
+ * up to the cap, and not by the rest of this delivery either.
+ */
+function pause(env: Env, run: ApnsRun, nowMs: number): void {
+  const n = (paused.get(env.KV)?.n ?? 0) + 1;
+  paused.set(env.KV, { until: nowMs + Math.min(BACKOFF_MS * 2 ** (n - 1), BACKOFF_MAX_MS), n });
+  run.down = true;
+}
 
 /** Sends one push to one token. Never says why with the token in it. */
 export async function sendApns(env: Env, run: ApnsRun, token: ApnsToken, push: ApnsPush, nowMs: number): Promise<ApnsOutcome> {
@@ -384,11 +426,12 @@ export async function sendApns(env: Env, run: ApnsRun, token: ApnsToken, push: A
     warnOff();
     return 'skip';
   }
-  const pause = paused.get(env.KV);
-  if (run.down || (pause && nowMs < pause.until)) return 'failed';
-  const send = (jwt: string) => {
-    const { url, init } = apnsRequest(c.topic, token, push, jwt);
-    return fetch(url, { ...init, signal: AbortSignal.timeout(APNS_TIMEOUT_MS) });
+  const pausedNow = paused.get(env.KV);
+  if (run.down || (pausedNow && nowMs < pausedNow.until)) return 'failed';
+  const send = async (jwt: Jwt) => {
+    const { url, init } = apnsRequest(c.topic, token, push, jwt.jwt);
+    const res = await fetch(url, { ...init, signal: AbortSignal.timeout(APNS_TIMEOUT_MS) });
+    return { res, why: res.ok ? null : await apnsError(res) };
   };
   try {
     run.jwt ??= await providerJwt(env, c, nowMs);
@@ -396,31 +439,40 @@ export async function sendApns(env: Env, run: ApnsRun, token: ApnsToken, push: A
     run.down = true;
     throw err;
   }
-  let res = await send(run.jwt);
-  let why = res.ok ? null : await apnsError(res);
-  if (why?.staleJwt) {
-    // Apple no longer takes the provider token: a new one, and once more.
-    await forgetJwt(env, c);
-    run.jwt = null;
-    try {
-      run.jwt = await providerJwt(env, c, nowMs);
-    } catch (err) {
-      run.down = true;
-      throw err;
+  let res: Response;
+  let why: Awaited<ReturnType<typeof apnsError>> | null;
+  try {
+    ({ res, why } = await send(run.jwt));
+    if (why?.staleJwt) {
+      // Apple no longer takes the provider token: a newer one, and once more,
+      // unless one was signed too lately to sign again.
+      const renewed = await renewJwt(env, c, run.jwt, nowMs);
+      if (renewed) {
+        run.jwt = renewed;
+        ({ res, why } = await send(run.jwt));
+      }
+      if (!renewed || why?.staleJwt) {
+        // A key Apple won't take (or not yet a new token): asking with each
+        // device, at each wake, would only be refused again.
+        pause(env, run, nowMs);
+        console.error('apns send', res.status, why?.reason ?? '');
+        return 'failed';
+      }
     }
-    res = await send(run.jwt);
-    why = res.ok ? null : await apnsError(res);
+  } catch (err) {
+    // No answer: the 5 s timeout, a refused connection (no HTTP/2), a reset.
+    // Like a 5xx, the rest of the delivery and the next wakes skip Apple
+    // until the pause ends, rather than each waiting out the timeout again.
+    pause(env, run, nowMs);
+    console.error('apns send failed', err instanceof Error ? err.name : typeof err);
+    return 'failed';
   }
   if (!why) {
     paused.delete(env.KV);
     return 'sent';
   }
   if (why.tokenGone) return 'gone';
-  if (why.backOff) {
-    const n = (pause?.n ?? 0) + 1;
-    paused.set(env.KV, { until: nowMs + Math.min(BACKOFF_MS * 2 ** (n - 1), BACKOFF_MAX_MS), n });
-    run.down = true;
-  }
+  if (why.backOff) pause(env, run, nowMs);
   console.error('apns send', res.status, why.reason);
   return 'failed';
 }

@@ -697,6 +697,23 @@ test('export: each device with its app, version and push address, as the policy 
     },
   );
   assert.equal(body.sessions.find((s) => s.kind === 'web').push, null);
+  assert.equal(phone.liveActivityPush, null);
+  assert.equal(phone.pushLanguage, null);
+});
+
+test("export: an iPhone's push address, its Live Activity's and the language it's pushed in", async () => {
+  const { env, email, db } = setup();
+  const cookie = await signIn(env, email);
+  const { code } = await (await call(env, '/api/me/pair-code', { method: 'POST', cookie })).json();
+  await call(env, '/api/pair', { method: 'POST', body: { code, name: 'iPhone' } });
+  const [push, live] = [`apns:${'ab'.repeat(32)}`, `apnsla:${'cd'.repeat(40)}`];
+  db.exec(`UPDATE sessions SET platform = 'ios', push_token = '${push}', live_token = '${live}', push_lang = 'zh' WHERE kind = 'device'`);
+  const body = await (await call(env, '/api/me/export', { cookie })).json();
+  const phone = body.sessions.find((s) => s.kind === 'device');
+  assert.deepEqual(
+    { push: phone.push, liveActivityPush: phone.liveActivityPush, pushLanguage: phone.pushLanguage },
+    { push: { service: 'apple', address: push }, liveActivityPush: { service: 'apple', address: live }, pushLanguage: 'zh' },
+  );
 });
 
 test('sign out everywhere ends every session', async () => {

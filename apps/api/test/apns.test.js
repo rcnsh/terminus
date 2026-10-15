@@ -35,6 +35,7 @@ const LIVE_HEX = 'ef'.repeat(80);
 const TOPIC = 'sh.rcn.terminus';
 const NOTICE = { title: 'a', body: 'b', zhTitle: 'a', zhBody: 'b' };
 const answer = (name) => JSON.parse(readFileSync(new URL(`./fixtures/answers/${name}.json`, import.meta.url), 'utf8'));
+const LIVE_PRIORITY = (sent) => sent.filter((s) => s.headers['apns-push-type'] === 'liveactivity').map((s) => s.headers['apns-priority']);
 
 async function p8() {
   const { privateKey, publicKey } = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
@@ -340,7 +341,10 @@ test("a nudge reaches an iPhone as Android's would: words when it's time to look
   assert.equal(first.headers['apns-priority'], '10');
   assert.equal(first.headers['apns-collapse-id'], 'card');
   assert.equal(first.headers['apns-expiration'], String(NOW / 1000 + 600));
-  assert.deepEqual(first.body.aps.alert, { title: 'Time to get going', body: card.card.line });
+  // The card is in English and this iPhone is pushed in Chinese: with no
+  // way to word it again (answerIn), the phase's words in Chinese.
+  assert.deepEqual(first.body.aps.alert, { title: '该出发了', body: '打开 terminus 查看行程的最新情况。' });
+  assert.deepEqual(second.body.aps.alert, { title: 'Time to get going', body: card.card.line }, "the card's words in its own language");
   assert.equal(first.body.aps['mutable-content'], 1);
   assert.equal(first.body.aps['interruption-level'], 'time-sensitive');
   assert.deepEqual([first.body.kind, first.body.phase], ['card', 'due'], "the same data as Android's");
@@ -351,6 +355,7 @@ test("a nudge reaches an iPhone as Android's would: words when it's time to look
   assert.equal(live.headers['apns-topic'], `${TOPIC}.push-type.liveactivity`);
   assert.equal(live.body.aps.event, 'update');
   assert.equal(live.body.aps['content-state'].phase, 'due');
+  assert.equal(live.headers['apns-priority'], '5', 'not a phase change the Trip object saw: Apple budgets priority 10');
   // One provider token for the whole delivery.
   assert.equal(new Set(sent.map((s) => s.headers.authorization)).size, 1);
 
@@ -390,6 +395,63 @@ test("a nudge reaches an iPhone as Android's would: words when it's time to look
     sent.map((s) => s.headers['apns-push-type']),
     ['liveactivity'],
   );
+});
+
+test('a card worded in one language reaches each iPhone in its own: notification and Live Activity', async () => {
+  const en = answer('class-bus');
+  const zh = JSON.parse(readFileSync(new URL('./fixtures/answers/zh/class-bus.json', import.meta.url), 'utf8'));
+  const as = (a) => ({ ...a, card: { ...a.card, phase: 'heading' } });
+  const { env, sent } = await setup([
+    { push: `apns:${HEX}`, live: `apnsla:${LIVE_HEX}`, lang: 'zh' },
+    { push: `apns:${HEX2}`, lang: 'en' },
+  ]);
+  const asked = [];
+  const answerIn = async (l) => {
+    asked.push(l);
+    return l === 'zh' ? as(zh) : null;
+  };
+  // A tap on an English device: the answer is English, the Chinese iPhone's is worded again.
+  await nudgeUser(env, 'u1', { phase: 'heading', urgent: true, remind: true, answer: as(en), lang: 'en', answerIn }, NOW);
+  assert.deepEqual(asked, ['zh'], 'asked once, for the language nobody had');
+  const to = (hex) => sent.find((s) => s.url.endsWith(hex));
+  assert.deepEqual(to(HEX).body.aps.alert, { title: zh.card.heading, body: zh.card.line });
+  assert.equal(to(LIVE_HEX).body.aps['content-state'].line, zh.card.line);
+  assert.equal(to(LIVE_HEX).body.aps['content-state'].headline, zh.card.title);
+  assert.deepEqual(to(HEX2).body.aps.alert, { title: en.card.heading, body: en.card.line });
+  // A tap is no phase change the Trip object saw: priority 5. A phase change is 10.
+  assert.deepEqual(LIVE_PRIORITY(sent), ['5']);
+  sent.length = 0;
+  await nudgeUser(
+    env,
+    'u1',
+    { phase: 'heading', urgent: false, remind: true, answer: as(en), lang: 'en', answerIn, phaseChanged: true },
+    NOW,
+  );
+  assert.deepEqual(LIVE_PRIORITY(sent), ['10']);
+
+  // Worded again in nothing (it failed): the phase's words in Chinese, and
+  // the Live Activity waits for the Trip object rather than show English.
+  sent.length = 0;
+  const { said } = await quietly(() =>
+    nudgeUser(
+      env,
+      'u1',
+      { phase: 'due', urgent: true, remind: true, answer: as(en), lang: 'en', answerIn: async () => Promise.reject(new Error('feed')) },
+      NOW,
+    ),
+  );
+  assert.ok(said.some((x) => x.includes('not worded')));
+  assert.equal(to(HEX).body.aps.alert.title, '该出发了');
+  assert.equal(to(LIVE_HEX), undefined);
+  // An end still goes, in any language: a finished trip mustn't stay on the Lock Screen.
+  sent.length = 0;
+  await nudgeUser(
+    env,
+    'u1',
+    { phase: 'arrived', urgent: false, answer: { ...en, card: { ...en.card, phase: 'arrived' } }, lang: 'en' },
+    NOW,
+  );
+  assert.equal(to(LIVE_HEX).body.aps.event, 'end');
 });
 
 test("the semester's reminder reaches an iPhone in its language", async () => {
@@ -441,27 +503,60 @@ test('the provider token is reused for 50 minutes, through KV, and signed again 
   await send(NOW + JWT_REUSE_S * 1000 + 1000);
   assert.notEqual(sent[2].headers.authorization, a, "renewed before Apple's hour is up");
 
-  // Apple refuses the one in KV: signed again, and the push sent once more.
+  // Apple refuses the one in KV, signed 25 minutes ago: signed again, and the push sent once more.
   const stale = await setup([{ push: `apns:${HEX}` }], {
     apple: (_r, n) => (n === 1 ? Response.json({ reason: 'ExpiredProviderToken' }, { status: 403 }) : new Response(null)),
   });
-  await stale.env.KV.put('apns:jwt:KEY1234567', JSON.stringify({ jwt: 'old.jwt.token', iat: NOW / 1000 }));
+  await stale.env.KV.put('apns:jwt:KEY1234567', JSON.stringify({ jwt: 'old.jwt.token', iat: NOW / 1000 - 25 * 60 }));
   assert.equal(await sendApns(stale.env, newApnsRun(), parseApnsToken(`apns:${HEX}`), backgroundPush({}, 0), NOW + 1000), 'sent');
   assert.equal(stale.sent[0].headers.authorization, 'bearer old.jwt.token');
   assert.ok(await verifies(stale.publicKey, stale.sent[1].headers.authorization.slice('bearer '.length)));
+  assert.equal(
+    JSON.parse(await stale.env.KV.get('apns:jwt:KEY1234567')).iat,
+    (NOW + 1000) / 1000,
+    'the new one in KV, with when it was signed',
+  );
 });
 
-test('a 429 or 5xx from Apple backs off: the rest of the delivery, and the next minute, ask nothing', async () => {
-  const { env, sent } = await setup([{ push: `apns:${HEX}` }, { push: `apns:${HEX2}` }], {
-    apple: () => Response.json({ reason: 'TooManyRequests' }, { status: 429 }),
-  });
-  const { out } = await quietly(() => remindUser(env, 'u1', NOTICE, NOW));
-  assert.deepEqual(out, { sent: 0, failed: 2 });
-  assert.equal(sent.length, 1, 'the second device is not tried');
+test('a refused provider token is signed again at most every 20 minutes; a key Apple keeps refusing pauses APNs', async () => {
+  const refused = () => Response.json({ reason: 'InvalidProviderToken' }, { status: 403 });
+  const { env, sent } = await setup([{ push: `apns:${HEX}` }, { push: `apns:${HEX2}` }], { apple: refused });
+  // The first send signs a token; Apple refuses it, and it's too new to sign again.
+  const first = await quietly(() => remindUser(env, 'u1', NOTICE, NOW));
+  assert.deepEqual(first.out, { sent: 0, failed: 2 });
+  assert.equal(sent.length, 1, 'no new token, no second try, and the other iPhone not asked');
+  const jwt = sent[0].headers.authorization;
+  // Paused: the next wakes ask nothing.
   await quietly(() => remindUser(env, 'u1', NOTICE, NOW + 30_000));
-  assert.equal(sent.length, 1, 'nor a delivery a moment later');
+  assert.equal(sent.length, 1);
+  // After the pause, still within 20 minutes of signing: the same token, refused, paused longer.
   await quietly(() => remindUser(env, 'u1', NOTICE, NOW + 61_000));
-  assert.equal(sent.length, 2, 'asked again once the pause is over');
+  assert.equal(sent.length, 2);
+  assert.equal(sent[1].headers.authorization, jwt, 'not signed again within 20 minutes');
+  await quietly(() => remindUser(env, 'u1', NOTICE, NOW + 61_000 + 100_000));
+  assert.equal(sent.length, 2, 'the pause doubled');
+  // 20 minutes on: signed again once, and refused again, so paused again.
+  const t = NOW + 21 * 60_000;
+  await quietly(() => remindUser(env, 'u1', NOTICE, t));
+  assert.equal(sent.length, 4, 'the old token, then one new one');
+  assert.notEqual(sent[3].headers.authorization, jwt);
+  assert.equal(JSON.parse(await env.KV.get('apns:jwt:KEY1234567')).iat, t / 1000);
+  await quietly(() => remindUser(env, 'u1', NOTICE, t + 1000));
+  assert.equal(sent.length, 4, 'paused, not signing again for each device');
+
+  // A newer token another isolate signed (in KV) is taken, without signing.
+  const other = await setup([{ push: `apns:${HEX}` }], {
+    apple: (r) => (r.headers.authorization === 'bearer newer.jwt' ? new Response(null) : refused()),
+  });
+  const newer = { jwt: 'newer.jwt', iat: NOW / 1000 - 30 };
+  await other.env.KV.put('apns:jwt:KEY1234567', JSON.stringify(newer));
+  const run = { jwt: { jwt: 'old.jwt', iat: NOW / 1000 - 60 }, down: false };
+  assert.equal(await sendApns(other.env, run, parseApnsToken(`apns:${HEX}`), backgroundPush({}, 0), NOW), 'sent');
+  assert.deepEqual(
+    other.sent.map((x) => x.headers.authorization),
+    ['bearer old.jwt', 'bearer newer.jwt'],
+  );
+  assert.deepEqual(JSON.parse(await other.env.KV.get('apns:jwt:KEY1234567')), newer, 'nothing signed');
 });
 
 test('setPushToken keeps the language an iPhone registered in, and forgets it with the token', async () => {
@@ -472,13 +567,22 @@ test('setPushToken keeps the language an iPhone registered in, and forgets it wi
   assert.equal(db._db.prepare("SELECT push_lang FROM sessions WHERE token_hash = 'h0'").get().push_lang, null);
 });
 
-test('a connection Apple refuses (no HTTP/2, a reset) counts as failed and drops no token', async () => {
-  const { env, row } = await setup([{ push: `apns:${HEX}`, live: `apnsla:${LIVE_HEX}` }], {
+test('a connection Apple refuses (no HTTP/2, a reset, a timeout) counts as failed, drops no token, and pauses like a 5xx', async () => {
+  const { env, row, sent } = await setup([{ push: `apns:${HEX}`, live: `apnsla:${LIVE_HEX}` }, { push: `apns:${HEX2}` }], {
     apple: () => {
       throw new TypeError('Network connection lost.');
     },
   });
-  const { out } = await quietly(() => remindUser(env, 'u1', NOTICE, NOW));
-  assert.deepEqual(out, { sent: 0, failed: 1 });
+  const { out, said } = await quietly(() => remindUser(env, 'u1', NOTICE, NOW));
+  assert.deepEqual(out, { sent: 0, failed: 2 });
+  assert.equal(sent.length, 1, 'the other iPhone does not wait out the timeout again');
+  assert.ok(
+    said.every((x) => !x.includes(HEX)),
+    'never the token',
+  );
   assert.deepEqual(row(0), { push_token: `apns:${HEX}`, live_token: `apnsla:${LIVE_HEX}` });
+  await quietly(() => remindUser(env, 'u1', NOTICE, NOW + 30_000));
+  assert.equal(sent.length, 1, 'nor the next wake');
+  await quietly(() => remindUser(env, 'u1', NOTICE, NOW + 61_000));
+  assert.equal(sent.length, 2, 'asked again once the pause is over');
 });
