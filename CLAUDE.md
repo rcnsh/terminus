@@ -143,7 +143,11 @@ node apps/api/scripts/dev-stub.mjs    # local Worker on :8787 with a fake feed a
 - Formatting: Oxfmt (`.oxfmtrc.json`), swift-format (`.swift-format`) and
   ktfmt (`apps/android/.editorconfig`), all at 140 columns. `pnpm format`
   covers JS/TS/JSON; `pnpm format:swift` and `pnpm format:kotlin` the apps
-  (`pnpm format:all` for the three). CI checks each one. The reformat
+  (`pnpm format:all` for the three). CI checks each one and fails on
+  unformatted code. A Lefthook pre-commit hook (`lefthook.yml`, installed
+  by `pnpm install`) formats staged JS/TS/JSON and Swift and re-stages
+  them; run `pnpm format` before committing anyway, and
+  `pnpm format:kotlin` for Kotlin, which the hook skips. The reformat
   commit is in `.git-blame-ignore-revs`. HTML and CSS are left as written:
   the Worker fills pages by their exact markup, the website translates
   page text keyed by it, and tests read CSS rule by rule. Templates inside
