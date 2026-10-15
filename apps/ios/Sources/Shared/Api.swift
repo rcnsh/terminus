@@ -72,10 +72,16 @@ struct Api: Sendable {
     static var base: String { devOverride("TERMINUS_API_BASE") ?? Servers.current }
 
     static func devOverride(_ name: String) -> String? {
-        guard let value = ProcessInfo.processInfo.environment[name], !value.isEmpty else { return nil }
         #if DEBUG
+            // The widgets and the notification service aren't launched with the
+            // app's environment: the app hands its value on through the app group.
+            let shared = "dev." + name
+            if Bundle.main.bundlePath.hasSuffix(".appex") { return Shared.defaults.string(forKey: shared) }
+            let value = ProcessInfo.processInfo.environment[name].flatMap { $0.isEmpty ? nil : $0 }
+            if Shared.defaults.string(forKey: shared) != value { Shared.defaults.set(value, forKey: shared) }
             return value
         #else
+            guard let value = ProcessInfo.processInfo.environment[name], !value.isEmpty else { return nil }
             guard let host = URL(string: value)?.host?.lowercased(), host == "localhost" || host == "127.0.0.1" else { return nil }
             return value
         #endif

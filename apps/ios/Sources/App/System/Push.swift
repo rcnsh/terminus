@@ -17,7 +17,10 @@ import UserNotifications
         #if DEBUG
             // For the UI tests and screenshots: the trip settings on from the start.
             let env = ProcessInfo.processInfo.environment
-            if env["TERMINUS_ALERTS"] == "1" { TripPrefs.leaveAlerts = true }
+            if env["TERMINUS_ALERTS"] == "1" {
+                TripPrefs.leaveAlerts = true
+                Task { _ = await askPermission() }
+            }
             if env["TERMINUS_LIVE"] == "1" { TripPrefs.liveActivity = true }
         #endif
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
