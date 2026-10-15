@@ -42,8 +42,6 @@
 "Aim one bus earlier when yours is often full." = "你要搭的巴士经常满员时，提早一班。";
 "All off" = "全部关闭";
 "Allow for busy buses" = "考虑巴士很挤的情况";
-"Prefer the bus" = "优先搭巴士";
-"Wait a few minutes more for a bus rather than walk." = "宁可多等几分钟巴士，也不想步行。";
 "Already a favourite: %@" = "已在收藏中：%@";
 "Also used on your Mac, on the web and in emails. Place and bus names stay in English, as on the signs." = "也用于你的 Mac、网页和邮件。地点和巴士名称保持英文，与站牌一致。";
 "and" = "到";
@@ -151,6 +149,7 @@
 "Pick the stop nearest me" = "选择离我最近的车站";
 "Picked %@. Change it if you use a different stop." = "已选择 %@。如果你用别的车站，可以修改。";
 "Place" = "地点";
+"Prefer the bus" = "优先搭巴士";
 "Preparing your data…" = "正在准备你的数据…";
 "Press \"Is this wrong?\" under it, so we see what you saw." = "请按它下面的“答案不对？”，这样我们能看到你看到的内容。";
 "Privacy" = "隐私";
@@ -165,6 +164,7 @@
 "Room %@" = "教室 %@";
 "Route" = "路线";
 "Send" = "发送";
+"Send crash reports" = "发送崩溃报告";
 "Send feedback" = "发送反馈";
 "Send the pairing code" = "发送配对代码";
 "Sending…" = "正在发送…";
@@ -212,10 +212,12 @@
 "Use terminus in line with the NUS Acceptable Use Policy for IT Resources." = "使用 terminus 时，请遵守 NUS 的 IT 资源可接受使用政策。";
 "used %@" = "%@使用过";
 "Version %@" = "版本 %@";
+"Wait a few minutes more for a bus rather than walk." = "宁可多等几分钟巴士，也不想步行。";
 "Walk to your stop" = "步行到车站";
 "Walking" = "步行";
 "Walking pace" = "步速";
 "Walks follow the paths on campus." = "步行时间按校园里的小路计算。";
+"When terminus crashes, send what broke and the app version. Never who you are or where." = "terminus 崩溃时，发送出错的内容和应用版本，不会包含你是谁或你在哪里。";
 "Where" = "地点";
 "Where you live" = "你的住处";
 "Which server this app talks to. Only terminus's own are here. Switching to or from the dev stub keeps each one's sign-in apart." = "这个应用连接的服务器。这里只有 terminus 自己的。切换到开发用的模拟服务器或从它切回时，两边的登录各自保留。";

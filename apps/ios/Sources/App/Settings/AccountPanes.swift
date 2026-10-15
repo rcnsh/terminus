@@ -206,6 +206,7 @@ struct SettingsAccountPane: View {
     @State private var confirmDelete = false
     @State private var exporting = false
     @State private var export: SettingsExportDocument?
+    @AppStorage(CrashReporter.key) private var sendCrashReports = true
 
     var body: some View {
         if let email = app.email {
@@ -252,6 +253,12 @@ struct SettingsAccountPane: View {
                     openInSafari("\(Api.linkBase)/account")
                 }
             }
+        }
+        SettingsGroup {
+            SettingSwitch(
+                label: L("Send crash reports"),
+                sub: L("When terminus crashes, send what broke and the app version. Never who you are or where."), isOn: $sendCrashReports,
+                id: "settings.crashReports")
         }
         // An account with an email is deleted from the account page, signed in on the web (the server insists).
         SettingsGroup {

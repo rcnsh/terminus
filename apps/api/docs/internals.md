@@ -1827,8 +1827,8 @@ off when unset or unreadable):
   no call to NUS.
 - `errors` ([`src/apperrors.ts`](../src/apperrors.ts)): `POST /api/errors`.
   The Android app saves an uncaught crash to a file and sends it on the next
-  start; the Mac app sends MetricKit's crash diagnostics and saved
-  Objective-C exceptions on the next launch; the website's
+  start; the Mac and iPhone apps send MetricKit's crash diagnostics and
+  saved Objective-C exceptions on the next launch; the website's
   `/assets/errors.js` reports uncaught errors and rejections from its own
   scripts, five a page at most. None sends a token, cookie or device id,
   and each has a switch (Settings, Account; the website's account page) to
