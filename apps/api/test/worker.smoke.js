@@ -236,6 +236,7 @@ test('the apps and the API docs carry the same version and build number', async 
   const { readFileSync } = await import('node:fs');
   const gradle = readFileSync(new URL('../../android/app/build.gradle.kts', import.meta.url), 'utf8');
   const plist = readFileSync(new URL('../../macos/Support/Info.plist', import.meta.url), 'utf8');
+  const xcodegen = readFileSync(new URL('../../ios/project.yml', import.meta.url), 'utf8');
   // Exactly one match each, so a second definition can't hide behind the first.
   const only = (text, re, what) => {
     const all = [...text.matchAll(re)];
@@ -265,6 +266,15 @@ test('the apps and the API docs carry the same version and build number', async 
     macBuild,
     versionCode,
     'CFBundleVersion in apps/macos/Support/Info.plist matches versionCode in apps/android/app/build.gradle.kts',
+  );
+  // The iPhone app's, set once in project.yml's settings (its Info.plists read them).
+  const iosVersion = only(xcodegen, /^\s*MARKETING_VERSION: "?([^"\s]+)"?\s*$/gm, 'MARKETING_VERSION in apps/ios/project.yml');
+  const iosBuild = only(xcodegen, /^\s*CURRENT_PROJECT_VERSION: "?([^"\s]+)"?\s*$/gm, 'CURRENT_PROJECT_VERSION in apps/ios/project.yml');
+  assert.equal(API_VERSION, iosVersion, 'API_VERSION in src/openapi.ts matches MARKETING_VERSION in apps/ios/project.yml');
+  assert.equal(
+    iosBuild,
+    versionCode,
+    'CURRENT_PROJECT_VERSION in apps/ios/project.yml matches versionCode in apps/android/app/build.gradle.kts',
   );
 });
 
