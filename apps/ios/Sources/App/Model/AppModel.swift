@@ -148,6 +148,9 @@ final class AppModel {
     func signedIn(token: String, anonymous: Bool, email: String? = nil, needsSetup: Bool? = false) {
         TokenStore.save(token)
         session += 1
+        // Maybe another account than the one the map last read (a sign-in from a guest).
+        MapModel.shared.reset()
+        Task { await MapModel.shared.loadProfile() }
         paired = true
         self.anonymous = anonymous
         self.email = email
@@ -210,6 +213,7 @@ final class AppModel {
         Shared.lastNearby = nil
         // Settings outlives the tabs: the next account mustn't see, or save over, this one's.
         SettingsModel.shared.reset()
+        MapModel.shared.reset()
     }
 
     /// Who this phone is, from the server: the email, and whether setup is done.

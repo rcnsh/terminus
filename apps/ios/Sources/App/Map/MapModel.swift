@@ -380,10 +380,27 @@ final class MapModel {
 
     // MARK: favourites
 
-    /// The profile, for "Add to favourites" and public buses.
+    /// The profile, for "Add to favourites" and public buses. A reply from
+    /// before a sign-in or sign-out is dropped: it's another account's.
     func loadProfile() async {
-        guard let token = app.token, let p = try? await Api(token: token).profile() else { return }
+        guard let token = app.token else { return }
+        let session = app.session
+        guard let p = try? await Api(token: token).profile(), app.session == session else { return }
         profile = p
+    }
+
+    /// Signed out: the map outlives the tabs, and the next account mustn't see
+    /// this one's favourites or its choice of public buses.
+    func reset() {
+        profile = nil
+        notice = nil
+        noticeUndo = nil
+    }
+
+    /// The profile as a save answered it, unless the account changed meanwhile.
+    private func saved(_ data: Data, session: Int) {
+        guard app.session == session else { return }
+        profile = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? profile
     }
 
     /// The profile's "public buses": a stop's sheet has them too, as its Buses tab board does.
@@ -391,9 +408,9 @@ final class MapModel {
 
     private var places: [[String: Any]] { profile?["places"] as? [[String: Any]] ?? [] }
 
-    /// The favourite going to this stop, if one does.
+    /// The key of the favourite going to this stop, if one does: what `unsave(key:)` takes.
     func savedAs(_ code: String) -> String? {
-        places.first { $0["to"] as? String == code }?["label"] as? String
+        places.first { $0["to"] as? String == code }?["key"] as? String
     }
 
     /// No room for another favourite (the server's limit; 12 from an older server).
@@ -407,11 +424,11 @@ final class MapModel {
     /// doesn't know survive.
     func save(code: String, name: String) async {
         guard let token = app.token, !saving else { return }
+        let session = app.session
         saving = true
         defer { saving = false }
         do {
-            let saved = try await Self.addPlace(token: token, code: code, name: name)
-            profile = (try? JSONSerialization.jsonObject(with: saved)) as? [String: Any] ?? profile
+            saved(try await Self.addPlace(token: token, code: code, name: name), session: session)
             announce(L("In your favourites"))
         } catch let e as ApiError where e.status == 401 {
             app.rejected(token, reason: L("This phone was signed out of your account. Sign in again with your email."))
@@ -424,12 +441,13 @@ final class MapModel {
     /// usual times, as Settings does, and offers Undo.
     func unsave(key: String) async {
         guard let token = app.token, !saving else { return }
+        let session = app.session
         saving = true
         defer { saving = false }
         do {
-            let (saved, removed) = try await Self.removePlace(token: token, key: key)
-            profile = (try? JSONSerialization.jsonObject(with: saved)) as? [String: Any] ?? profile
-            guard let removed else { return }
+            let (data, removed) = try await Self.removePlace(token: token, key: key)
+            saved(data, session: session)
+            guard let removed, app.session == session else { return }
             say(L("%@ removed from favourites", removed.label)) { [weak self] in
                 Task { await self?.restore(removed) }
             }
@@ -443,6 +461,7 @@ final class MapModel {
     /// Undo for [unsave].
     private func restore(_ removed: RemovedPlace) async {
         guard let token = app.token else { return }
+        let session = app.session
         notice = nil
         noticeUndo = nil
         saving = true
@@ -453,6 +472,7 @@ final class MapModel {
                 doc.restorePlace(removed)
                 p = doc.json
             }
+            guard app.session == session else { return }
             profile = p
         } catch {
             say(failureMessage(error, otherwise: L("Not saved. Check your connection.")))
