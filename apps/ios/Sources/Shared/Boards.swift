@@ -107,10 +107,14 @@ struct NearbyStop: Decodable, Identifiable, Sendable {
     let available: Bool
     let board: [BoardRow]
     let opposite: String?
+    /// Whether `opposite` is across the road (else only near), and its name:
+    /// sent beside `stop`, or inside it by an older server.
+    let oppositeAcross: Bool
+    let oppositeName: String?
     let distM: Int?
     var id: String { stop.code }
 
-    enum CodingKeys: String, CodingKey { case stop, walkS, available, board, opposite, distM }
+    enum CodingKeys: String, CodingKey { case stop, walkS, available, board, opposite, oppositeAcross, oppositeName, distM }
 
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
@@ -119,6 +123,8 @@ struct NearbyStop: Decodable, Identifiable, Sendable {
         available = c.bool(.available) ?? true
         board = c.lenientList(BoardRow.self, forKey: .board) ?? []
         opposite = c.string(.opposite).flatMap { $0.isEmpty ? nil : $0 }
+        oppositeAcross = c.bool(.oppositeAcross) ?? stop.oppositeAcross ?? true
+        oppositeName = c.string(.oppositeName) ?? stop.oppositeName
         distM = c.lenientInt(forKey: .distM)
     }
 }

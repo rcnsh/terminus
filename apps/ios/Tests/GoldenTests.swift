@@ -18,6 +18,16 @@ func goldenNames() -> [String] {
     return (names("") + names("zh")).sorted()
 }
 
+/// The stop across the road (or only near), sent beside `stop`.
+@Test func aNearbyStopKnowsItsOpposite() throws {
+    struct R: Decodable { let stops: [NearbyStop] }
+    let data = try Data(contentsOf: answers.appendingPathComponent("nearby-list.json"))
+    let foyer = try #require(try JSONDecoder().decode(R.self, from: data).stops.first { $0.stop.code == "PGPR" })
+    #expect(foyer.opposite == "PGP")
+    #expect(foyer.oppositeAcross == false)
+    #expect(foyer.oppositeName == "Prince George's Park")
+}
+
 @Test func theGoldensAreFound() {
     #expect(goldenNames().count >= 40)
 }
