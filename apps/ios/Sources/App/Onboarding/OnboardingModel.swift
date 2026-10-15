@@ -238,8 +238,9 @@ final class OnboardingModel {
                 let saved = try await Api(token: token).changeProfile { p in
                     for change in changes { change(&p) }
                 }
-                guard AppModel.shared.session == session else { return }
+                // Done, whoever is signed in now: flush() waits for this.
                 sending = nil
+                guard AppModel.shared.session == session else { return }
                 confirmed = saved
                 // Changes made since this was sent stay on screen, on top of what it saved.
                 var shown = saved
@@ -248,8 +249,8 @@ final class OnboardingModel {
                 message = nil
                 if saveTask == nil { send() }
             } catch {
-                guard AppModel.shared.session == session else { return }
                 sending = nil
+                guard AppModel.shared.session == session else { return }
                 saveTask?.cancel()
                 saveTask = nil
                 pending = []
@@ -263,14 +264,16 @@ final class OnboardingModel {
         }
     }
 
-    /// Sends what's waiting now, and returns once every save has its answer.
+    /// Sends what's waiting now, and returns once every save has its answer
+    /// (or the account has changed, and they're no longer this setup's).
     private func flush() async {
         if saveTask != nil {
             saveTask?.cancel()
             saveTask = nil
             send()
         }
-        while let s = sending { await s.value }
+        let session = AppModel.shared.session
+        while let s = sending, AppModel.shared.session == session { await s.value }
     }
 
     // MARK: the timetable
