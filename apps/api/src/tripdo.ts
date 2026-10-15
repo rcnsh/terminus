@@ -180,7 +180,7 @@ export class Trip {
         woke = await this.wake(nowMs);
         if (fails) await this.storage.delete('wakeFails');
       } catch (err) {
-        // D1 or the feed failing mustn't end the day's pushes: try again soon, though not too often.
+        // D1, the feed or a Live Activity's end failing mustn't end the day's pushes: try again soon, though not too often.
         console.error('trip wake failed', err instanceof Error ? err.message : typeof err);
         await this.storage.put('wakeFails', fails + 1);
         woke = { next: nowMs + Math.min(MIN_WAKE_GAP_MS * 2 ** fails, MAX_RETRY_GAP_MS), retry: true };
@@ -260,6 +260,10 @@ export class Trip {
           await this.state.blockConcurrencyWhile(async () => {
             if (!(await this.cleared())) await this.storage.put('pushed', { ...last, live: undefined });
           });
+        } else {
+          // Not ended (APNs paused or out of reach): the Lock Screen would keep
+          // the finished trip, so the wake is tried again, as a failed one is.
+          throw new Error('live activity end not sent');
         }
       }
       return stop;
@@ -275,6 +279,8 @@ export class Trip {
     // The card worded again for an iPhone in the other language (plans aren't saved twice).
     const answerIn = (l: Lang) =>
       withLang(l, () => tripCardFor(env, ctx, DEPS, userId, day, nowMs, async () => {})).then((c) => c?.answer ?? null);
+    // A push due that reached no device: tried again at the next wake.
+    let unsent = false;
     if (changed) {
       // Wake the phone for what the user should see: time to go, a missed bus.
       // With reminders off too: these are what start the live notification on
@@ -305,7 +311,7 @@ export class Trip {
         await this.state.blockConcurrencyWhile(async () => {
           if (!(await this.cleared())) await this.storage.put('pushed', now);
         });
-      }
+      } else unsent = true;
     } else if (apns && last && last.live !== now.live) {
       // The same phase, but what a Live Activity shows moved (a later bus):
       // only the iPhones running one are told, each in its own language.
@@ -320,8 +326,11 @@ export class Trip {
         await this.state.blockConcurrencyWhile(async () => {
           if (!(await this.cleared())) await this.storage.put('pushed', now);
         });
-      }
+      } else unsent = true;
     }
+    // The trip is over but its end didn't go: with no next change to wake
+    // for, the wake is tried again, as a failed one is.
+    if (unsent && !card.key) throw new Error('trip end not sent');
     // Keep waking while there's a trip and someone to tell.
     // A leave-by that keeps sliding (a late bus) mustn't wake it every few seconds.
     const next = card.wakeAt === null ? null : Math.max(card.wakeAt, nowMs + MIN_WAKE_GAP_MS);

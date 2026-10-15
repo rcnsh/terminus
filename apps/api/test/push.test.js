@@ -289,6 +289,39 @@ test('with no class left today, a running Live Activity is ended', async () => {
   assert.equal([...TRIPS.instances.values()][0].storage._map.get('pushed').live, undefined);
 });
 
+test('a Live Activity whose end could not be sent is ended at a later wake', async () => {
+  const { apple, wrap: record, extra } = await fakeApple();
+  let down = false;
+  const wrap = (f) => {
+    const g = record(f);
+    return async (input, init) =>
+      down && String(typeof input === 'string' ? input : input.url).startsWith('https://api.push.apple.com/')
+        ? new Response(JSON.stringify({ reason: 'ServiceUnavailable' }), { status: 503 })
+        : g(input, init);
+  };
+  const { call, cookie, phone, next, wakeUntil, alarm, clock, TRIPS } = await setup({ push: false, wrap, extra });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: APNS } });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: LIVE } });
+  await next(phone);
+  await wakeUntil(() => apple.some((p) => p.type === 'liveactivity'));
+  await call('/api/me/profile', { method: 'PUT', cookie, body: { ...PROFILE, manual: [] } });
+  apple.length = 0;
+  // Apple is down for the end: the trip stays on the Lock Screen, so the object wakes again.
+  down = true;
+  const at = alarm();
+  clock(at);
+  await errorsOf(() => TRIPS.fireAlarms());
+  const storage = () => [...TRIPS.instances.values()][0].storage._map;
+  assert.ok(storage().get('pushed').live, 'not noted as ended');
+  assert.ok(alarm() < storage().get('deleteAt'), 'a wake before midnight');
+  // Back up, and the pause over: the end goes.
+  down = false;
+  clock(at + 15 * 60_000);
+  await wakeUntil(() => apple.some((p) => p.type === 'liveactivity'), 10);
+  assert.equal(apple.find((p) => p.type === 'liveactivity').body.aps.event, 'end');
+  assert.equal(storage().get('pushed').live, undefined);
+});
+
 test('time to go wakes the phone with reminders off too: Android starts the live notification from it', async () => {
   const { call, phone, next, fcm, wakeUntil } = await setup();
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
