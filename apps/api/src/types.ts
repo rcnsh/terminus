@@ -50,6 +50,9 @@ export interface Env {
   /** Optional. An API token with Account Analytics Read, so the dashboard can
    *  query Analytics Engine. Without it the dashboard skips those charts. */
   ANALYTICS_TOKEN?: string;
+  /** Pinged at the end of every cron run (monitor.ts pingHeartbeat), so an
+   *  outside monitor notices when the cron stops. Unset: no ping (the beta). */
+  HEARTBEAT_URL?: string;
   /** The account that owns the Analytics Engine dataset. */
   CF_ACCOUNT_ID?: string;
   /** One global ceiling on sign-in emails. */

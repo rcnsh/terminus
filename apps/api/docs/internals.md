@@ -114,7 +114,9 @@ pass counts only for the `signin` action on the Worker's own
 Not declared, so a site deploys without them: `LTA_ACCOUNT_KEY` (public
 buses), `ANALYTICS_TOKEN` (the dashboard's Analytics Engine charts, with
 `CF_ACCOUNT_ID`, which is in the config) and `TIMELAPSE_TOKEN` (opens
-`/api/timelapse/*` only). Everything in [src/types.ts](../src/types.ts)'s `Env`
+`/api/timelapse/*` only) and `HEARTBEAT_URL` (a healthchecks.io ping URL
+the cron calls after every run, so a cron that stops is noticed; stable
+site only, so the beta never pings for it). Everything in [src/types.ts](../src/types.ts)'s `Env`
 but KV is optional at run time: `/api/health` says what's missing.
 
 ## Endpoints
