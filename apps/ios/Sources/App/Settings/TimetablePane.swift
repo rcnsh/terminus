@@ -59,25 +59,21 @@ struct SettingsTimetablePane: View {
             hint: L("In NUSMods: Timetable, then Share/Sync. Copy the link and paste it here. Re-import each semester.")
         ) {
             VStack(alignment: .leading, spacing: 10) {
-                TextField(L("NUSMods share link"), text: $link, prompt: Text(verbatim: "https://nusmods.com/timetable/sem-1/share?…"))
-                    .textContentType(.URL)
-                    .keyboardType(.URL)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .submitLabel(.go)
-                    .onSubmit { model.importTimetable(link) }
-                    .padding(.horizontal, 12)
-                    .frame(minHeight: 44)
-                    .background(Color.surface2, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .accessibilityLabel(L("NUSMods share link"))
-                    .accessibilityIdentifier("settings.nusmodsLink")
-                HStack {
-                    PasteButton(payloadType: String.self) { items in
-                        if let s = items.first { link = settingsNusmodsLink(in: s) ?? s }
-                    }
-                    .buttonBorderShape(.capsule)
-                    .labelStyle(.titleAndIcon)
-                    Spacer()
+                HStack(spacing: 8) {
+                    TextField(L("NUSMods share link"), text: $link, prompt: Text(verbatim: "https://nusmods.com/timetable/sem-1/share?…"))
+                        .textContentType(.URL)
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .submitLabel(.go)
+                        .onSubmit { model.importTimetable(link) }
+                        // NUSMods shares a sentence with the link in it: just the link is kept.
+                        .onChange(of: link) { _, v in if let l = settingsNusmodsLink(in: v), l != v { link = l } }
+                        .padding(.horizontal, 12)
+                        .frame(minHeight: 44)
+                        .background(Color.surface2, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .accessibilityLabel(L("NUSMods share link"))
+                        .accessibilityIdentifier("settings.nusmodsLink")
                     Button(model.importing ? L("Importing…") : L("Import")) { model.importTimetable(link) }
                         .buttonStyle(SettingsInkButtonStyle())
                         .disabled(link.trimmingCharacters(in: .whitespaces).isEmpty || model.importing)

@@ -137,14 +137,15 @@ func settingsNearestStop(_ stops: [Campus.Stop], to c: CLLocationCoordinate2D) -
 /// What a menu row has chosen, and the up-down chevrons that say it opens a menu.
 struct SettingsMenuValue: View {
     let text: String
+    @Environment(\.dynamicTypeSize) private var type
 
     var body: some View {
         HStack(spacing: 4) {
-            Text(text).multilineTextAlignment(.trailing).lineLimit(2)
+            Text(text).multilineTextAlignment(type.isAccessibilitySize ? .leading : .trailing).lineLimit(3)
             Image(systemName: "chevron.up.chevron.down").font(.caption.weight(.semibold))
         }
         .foregroundStyle(Color.brand)
-        .frame(maxWidth: 210, alignment: .trailing)
+        .frame(maxWidth: type.isAccessibilitySize ? .infinity : 210, alignment: type.isAccessibilitySize ? .leading : .trailing)
     }
 }
 
@@ -161,7 +162,8 @@ struct SettingsStepper: View {
     var body: some View {
         HStack(spacing: 4) {
             step("minus", less, canLess, onLess)
-            Text(text).monospacedDigit().frame(minWidth: 64).multilineTextAlignment(.center).accessibilityHidden(true)
+            Text(text).monospacedDigit().lineLimit(1).fixedSize().frame(minWidth: 64).multilineTextAlignment(.center).accessibilityHidden(
+                true)
             step("plus", more, canMore, onMore)
         }
         .accessibilityElement(children: .ignore)

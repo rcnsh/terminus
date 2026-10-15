@@ -88,6 +88,31 @@ final class SettingsUITests: XCTestCase {
     func testEveryPageChineseLight() { walk(lang: "zh", theme: "light") }
     func testEveryPageChineseDark() { walk(lang: "zh", theme: "dark") }
 
+    /// The largest text: one tile to a row, and every page still readable.
+    func testLargeText() throws {
+        let app = XCUIApplication.terminus(signedIn: true)
+        app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityL"]
+        app.launch()
+        let tab = app.tabBars.buttons.element(boundBy: 3)
+        XCTAssertTrue(tab.waitForExistence(timeout: 15))
+        tab.tap()
+        XCTAssertTrue(app.buttons["settings.account"].waitForExistence(timeout: 10))
+        sleep(1)
+        shot("settings-large-list", app)
+        for page in ["trips", "devices", "appearance"] {
+            let t = app.buttons["settings.tile.\(page)"]
+            while !t.isHittable { app.swipeUp() }
+            t.tap()
+            XCTAssertTrue(app.buttons["settings.back"].waitForExistence(timeout: 5))
+            sleep(1)
+            shot("settings-large-\(page)", app)
+            app.swipeUp()
+            shot("settings-large-\(page)-more", app)
+            app.buttons["settings.back"].firstMatch.tap()
+            XCTAssertTrue(app.buttons["settings.account"].waitForExistence(timeout: 5))
+        }
+    }
+
     /// A switch, a stepper and a menu on Your trips are saved to the account.
     func testTripsSaves() throws {
         let app = open()

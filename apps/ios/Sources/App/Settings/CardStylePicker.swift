@@ -80,10 +80,13 @@ struct SettingsCardSample: View {
         return (campusTime(leave), campusTime(board), campusTime(board.addingTimeInterval(8 * 60)))
     }
 
+    @Environment(\.dynamicTypeSize) private var type
+
     var body: some View {
+        // At the largest text the route's points are too narrow for their words: drawn as steps, as Now does.
         switch style {
         case "ticket": ticket
-        case "route": route
+        case "route" where !type.isAccessibilitySize: route
         default: steps
         }
     }
@@ -140,7 +143,8 @@ struct SettingsCardSample: View {
 
     private func point(_ time: String, dot: Dot, line: Stretch?, @ViewBuilder title: () -> some View, below: () -> String?) -> some View {
         HStack(alignment: .top, spacing: 8) {
-            Text(time).font(.footnote.weight(.semibold).monospacedDigit()).frame(width: 64, alignment: .leading).padding(.top, 1)
+            Text(time).font(.footnote.weight(.semibold).monospacedDigit()).lineLimit(1).fixedSize().frame(minWidth: 64, alignment: .leading)
+                .padding(.top, 1)
             VStack(spacing: 0) {
                 ZStack {
                     switch dot {

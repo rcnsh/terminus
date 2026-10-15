@@ -16,12 +16,32 @@ struct SettingsScaffold<Content: View>: View {
     var back = true
     @ViewBuilder var content: Content
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.dynamicTypeSize) private var type
+    @Environment(\.colorScheme) private var scheme
+    /// The band has scrolled up under the status bar: a strip of the page
+    /// goes behind the status bar, so the time never sits on the words.
+    @State private var scrolled = false
+    @State private var safeTop: CGFloat = 60
+    private var clock = SkyClock.shared
+
+    init(title: String, back: Bool = true, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.back = back
+        self.content = content()
+    }
 
     var body: some View {
+        let skyLight = SkyPalette.of(clock.phase, dark: scheme == .dark).lightInk
         ScrollView {
             VStack(spacing: 0) {
                 SkyBand(moonLow: back) { header }
+                    .background {
+                        GeometryReader { g in
+                            let under = g.frame(in: .global).maxY < safeTop + 12
+                            Color.clear
+                                .onAppear { scrolled = under }
+                                .onChange(of: under) { _, u in withAnimation(.easeOut(duration: 0.15)) { scrolled = u } }
+                        }
+                    }
                 VStack(alignment: .leading, spacing: 22) { content }
                     .padding(.horizontal, 16)
                     .padding(.top, 14)
@@ -29,8 +49,21 @@ struct SettingsScaffold<Content: View>: View {
             }
         }
         .background(Color.page)
+        .overlay(alignment: .top) {
+            GeometryReader { g in
+                VStack(spacing: 0) {
+                    Color.page.frame(height: g.safeAreaInsets.top)
+                    Color.line.frame(height: 1)
+                }
+                .ignoresSafeArea(edges: .top)
+                .opacity(scrolled ? 1 : 0)
+                .allowsHitTesting(false)
+                .onAppear { safeTop = g.safeAreaInsets.top }
+            }
+            .frame(height: 0)
+        }
         .scrollDismissesKeyboard(.interactively)
-        .skyStatusBar()
+        .statusBar(light: scrolled ? scheme == .dark : skyLight)
         .toolbar(.hidden, for: .navigationBar)
         .background(SwipeBack())
     }
@@ -102,9 +135,13 @@ struct SettingRow<Control: View>: View {
     let label: String
     var sub: String?
     @ViewBuilder var control: Control
+    @Environment(\.dynamicTypeSize) private var type
 
     var body: some View {
-        HStack(spacing: 12) {
+        // At the largest text sizes the control goes under its name, where it has the width.
+        let layout =
+            type.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 10)) : AnyLayout(HStackLayout(spacing: 12))
+        layout {
             VStack(alignment: .leading, spacing: 2) {
                 Text(label).foregroundStyle(Color.ink)
                 if let sub { SettingsHint(sub) }
@@ -299,7 +336,7 @@ struct AccountInitial: View {
     var body: some View {
         Text(email.prefix(1).uppercased())
             .font(.system(size: size * 0.42, weight: .heavy))
-            .foregroundStyle(.white)
+            .foregroundStyle(Color.onBrand)
             .frame(width: size, height: size)
             .background(Color.brand, in: Circle())
             .accessibilityHidden(true)
@@ -313,7 +350,7 @@ struct SettingsMark: View {
     var body: some View {
         Image(systemName: "bus.fill")
             .font(.system(size: size * 0.44, weight: .semibold))
-            .foregroundStyle(.white)
+            .foregroundStyle(Color.onBrand)
             .frame(width: size, height: size)
             .background(Color.brand, in: RoundedRectangle(cornerRadius: size * 0.28, style: .continuous))
             .accessibilityHidden(true)
