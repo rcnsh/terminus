@@ -1,0 +1,2 @@
+# Third-party libraries, copied in as-is: keep them out of the language stats.
+apps/web/public/vendor/** linguist-vendored
