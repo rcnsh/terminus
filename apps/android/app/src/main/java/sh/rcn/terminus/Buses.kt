@@ -274,8 +274,18 @@ data class Stopped(val why: String, val back: Back?) {
 /** The account's pinned stops, as the profile keeps them. */
 object Pins {
     /** Pinned: unpinned. Otherwise pinned at the end, unless there are [max] already (the profile's limit). */
-    fun toggle(pins: List<String>, code: String, max: Int = Limits.DEFAULT.pinnedStops): List<String> =
-        if (code in pins) pins - code else if (pins.size >= max) pins else pins + code
+    fun toggle(pins: List<String>, code: String, max: Int = Limits.DEFAULT.pinnedStops): List<String> = set(pins, code, code !in pins, max)
+
+    /**
+     * [code] pinned ([on]) or not, whatever [pins] says now: a pin made again on a profile another device saved meanwhile (which may have
+     * pinned it too) stays a pin rather than toggling back off.
+     */
+    fun set(pins: List<String>, code: String, on: Boolean, max: Int = Limits.DEFAULT.pinnedStops): List<String> =
+        when {
+            !on -> pins - code
+            code in pins || pins.size >= max -> pins
+            else -> pins + code
+        }
 
     /**
      * The pages to swipe between: the nearest stop first (null until it's known, or when there's none), then each pinned stop, except the

@@ -745,6 +745,26 @@ data class Destination(
 fun rankDestinations(all: List<Destination>, query: String, max: Int = SearchRank.MAX): List<Destination> =
     SearchRank.rank(all, query, max) { SearchRank.Key(it.kind, it.code, it.label, it.aliases) }
 
+/** A result's identity in a list: a stop and a building can share a code (COM3), and the kind tells them apart. */
+val Destination.id: String
+    get() = "$kind:$code"
+
+/**
+ * Whether this is the place a timetable row ([row], whose code is where its classes go) stands for: that stop or landmark itself, not a
+ * building or room sharing its code.
+ */
+fun Destination.isPlaceOf(row: Destination): Boolean = (kind == "stop" || kind == "landmark") && code == row.code
+
+/**
+ * The where picker's results for [query]: [pinned] (the timetable's stops) first, then the rest of the search, less the places a pinned row
+ * already stands for.
+ */
+fun whereResults(destinations: List<Destination>, pinned: List<Destination>, query: String): Pair<List<Destination>, List<Destination>> {
+    if (query.isBlank()) return pinned to emptyList()
+    val top = rankDestinations(pinned, query, max = 6)
+    return top to rankDestinations(destinations, query, max = 6).filter { d -> top.none { d.isPlaceOf(it) } }
+}
+
 /** What the user asked for: the planned trip, a saved place, or any stop/venue. */
 sealed interface Target {
     data object Plan : Target
@@ -794,14 +814,28 @@ class Api(private val token: String?, private val fast: Boolean = false, private
 
     suspend fun me(): Me = Me.parse(request("GET", "/api/me"))
 
-    /** The whole profile as the server keeps it; edited and sent back whole. */
-    suspend fun profile(): JSONObject = request("GET", "/api/me/profile")
+    /** The whole profile as the server keeps it, with its version; edited and sent back whole ([saveProfile]). */
+    suspend fun profile(): Tagged {
+        var tag: String? = null
+        val json = request("GET", "/api/me/profile") { tag = it.getHeaderField("etag") }
+        return Tagged(json, tag)
+    }
 
-    suspend fun saveProfile(profile: JSONObject): JSONObject = request("PUT", "/api/me/profile", profile)
+    /**
+     * Saves the whole profile. With [ifMatch], the version it was made from, only if no other device saved since: refused with 412
+     * otherwise ([saveChanges]).
+     */
+    suspend fun saveProfile(profile: JSONObject, ifMatch: String?): Tagged {
+        var tag: String? = null
+        val json = request("PUT", "/api/me/profile", profile, ifMatch = ifMatch) { tag = it.getHeaderField("etag") }
+        return Tagged(json, tag)
+    }
 
-    /** Imports a NUSMods share link; the server replaces the imported classes only if it all worked. */
-    suspend fun import(share: String): ImportResult = parsing {
-        ImportResult.parse(request("POST", "/api/me/import", JSONObject().put("share", share)))
+    /** Imports a NUSMods share link; the server replaces the imported classes only if it all worked. With the profile's new version. */
+    suspend fun import(share: String): Imported {
+        var tag: String? = null
+        val json = request("POST", "/api/me/import", JSONObject().put("share", share)) { tag = it.getHeaderField("etag") }
+        return Imported(ImportResult.parse(json), tag)
     }
 
     /** Stops and residences, for the home and place pickers. */
@@ -1063,6 +1097,7 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         path: String,
         body: JSONObject? = null,
         ifNoneMatch: String? = null,
+        ifMatch: String? = null,
         seen: ((HttpURLConnection) -> Unit)? = null,
     ): JSONObject =
         withContext(Dispatchers.IO) {
@@ -1089,7 +1124,7 @@ class Api(private val token: String?, private val fast: Boolean = false, private
                             // Any reply counts as the server answering (an error status,
                             // a 304 or a body this version can't read too), as on the Mac.
                             return@withTimeout blocking(conn) {
-                                exchange(conn, method, path, body, ifNoneMatch, seen) { Servers.answered(base) }
+                                exchange(conn, method, path, body, ifNoneMatch, ifMatch, seen) { Servers.answered(base) }
                             }
                         } catch (e: IOException) {
                             if (i == tries.lastIndex || !Servers.unreached(e, method)) throw e
@@ -1110,6 +1145,7 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         path: String,
         body: JSONObject?,
         ifNoneMatch: String?,
+        ifMatch: String?,
         seen: ((HttpURLConnection) -> Unit)?,
         reached: () -> Unit,
     ): JSONObject {
@@ -1131,6 +1167,7 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         conn.setRequestProperty("accept-language", L.header())
         token?.let { conn.setRequestProperty("authorization", "Bearer $it") }
         ifNoneMatch?.let { conn.setRequestProperty("if-none-match", it) }
+        ifMatch?.let { conn.setRequestProperty("if-match", it) }
         if (body != null) {
             conn.doOutput = true
             conn.setRequestProperty("content-type", "application/json")
@@ -1419,6 +1456,9 @@ data class Campus(
 /** `/api/me/import`: what was found, what couldn't be placed, and for which semester. */
 /** An imported class whose room couldn't be placed: the person picks its stop, or skips it. */
 data class Unplaced(val module: String, val venue: String, val day: Int, val arriveByMin: Int, val endMin: Int?, val offCampus: Boolean)
+
+/** An import's answer, and the version (the ETag) of the profile it saved. */
+class Imported(val result: ImportResult, val version: String?)
 
 data class ImportResult(
     val profile: JSONObject,
