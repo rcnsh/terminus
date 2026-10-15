@@ -406,11 +406,23 @@ final class SetupModel {
         }
     }
 
+    /// Where the class is in `list`: a change is made again on the profile as
+    /// the server has it, where another device may have moved or removed it,
+    /// so by what it is, not only where it was. Nil once it's gone.
+    nonisolated static func find(_ c: Class, in list: [[String: Any]]) -> Int? {
+        func same(_ o: [String: Any]) -> Bool {
+            o["day"] as? Int == c.day && o["arriveByMin"] as? Int == c.arriveByMin && o["to"] as? String == c.to
+                && (o["label"] as? String ?? "") == c.label
+        }
+        if list.indices.contains(c.index), same(list[c.index]) { return c.index }
+        return list.firstIndex(where: same)
+    }
+
     func setClassStop(_ c: Class, to: String) {
         edit {
             var list = $0[c.list] as? [[String: Any]] ?? []
-            guard list.indices.contains(c.index) else { return }
-            list[c.index]["to"] = to
+            guard let i = Self.find(c, in: list) else { return }
+            list[i]["to"] = to
             $0[c.list] = list
         }
     }
@@ -418,8 +430,8 @@ final class SetupModel {
     func removeClass(_ c: Class) {
         edit {
             var list = $0[c.list] as? [[String: Any]] ?? []
-            guard list.indices.contains(c.index) else { return }
-            list.remove(at: c.index)
+            guard let i = Self.find(c, in: list) else { return }
+            list.remove(at: i)
             $0[c.list] = list
         }
     }
@@ -536,12 +548,13 @@ final class SetupModel {
         imported = nil
         message = nil
         defer { importing = false }
+        // Only into the account whose setup is shown, and still signed in once the saves are done.
+        let s = session()
+        guard owner == s else { return }
         // A setting's save still waiting would land after the import and put
         // the old timetable back: it goes first.
         await flush()
-        // Only into the account whose setup is shown.
-        let s = session()
-        guard owner == s else { return }
+        guard current(s) else { return }
         do {
             let r = ImportResult(try object(await api.importTimetable(share)))
             guard current(s) else { return }
@@ -648,9 +661,12 @@ final class SetupModel {
                 // A tick over the code for a moment, then back to the list.
                 self.added = added.name ?? L("Device")
                 try? await Task.sleep(for: .seconds(1.2))
+                // Signed out meanwhile: reset() has cleared it all.
+                guard current(s) else { return }
+                self.added = nil
+                guard pairCode == code else { return }
                 devices = now
                 pairCode = nil
-                self.added = nil
                 return
             }
         }
