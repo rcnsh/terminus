@@ -3,8 +3,9 @@ import XCTest
 /// The Map tab against the dev stub: the street map, a service's pill and
 /// its live buses, a stop's sheet and a bus's, light and dark, English and
 /// Chinese. Screenshots go to $TERMINUS_SHOTS to look at.
+@MainActor
 final class MapUITests: XCTestCase {
-    override func setUp() {
+    nonisolated override func setUp() {
         continueAfterFailure = false
     }
 
@@ -111,7 +112,8 @@ final class MapUITests: XCTestCase {
         shot("map-bus-light-en", app)
         // Its stops ahead, opened.
         app.buttons["map.sheet.band"].tap()
-        XCTAssertTrue(app.staticTexts["On its way"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["map.sheet.showStop"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["map.sheet.band"].value as? String, "Expanded")
         sleep(1)
         shot("map-bus-stops-light-en", app)
         // A stop of its, opened from here; back returns to the bus.
@@ -121,7 +123,10 @@ final class MapUITests: XCTestCase {
         sleep(2)
         shot("map-bus-stop-light-en", app)
         app.buttons["map.sheet.back"].tap()
-        XCTAssertTrue(app.staticTexts["On its way"].waitForExistence(timeout: 5), "back on the bus, its stops still open")
+        // Back on the bus (the stub's buses move, so it may be at a stop by now), its stops still open.
+        let plateAgain = app.staticTexts["map.sheet.plate"]
+        XCTAssertTrue(plateAgain.waitForExistence(timeout: 5), "back on the bus")
+        XCTAssertEqual(app.buttons["map.sheet.band"].value as? String, "Expanded", "its stops still open")
     }
 
     func testABusesSheetDark() {
