@@ -71,3 +71,13 @@ private final class Server {
     #expect(server.ifMatches.count == 3)
     #expect(server.profile["walkPace"] as? String == "normal")
 }
+
+@Test func aClassIsFoundByWhatItIsWhereAnotherDeviceMovedIt() {
+    let c = SetupModel.Class(list: "manual", index: 1, day: 2, arriveByMin: 600, endMin: nil, to: "COM3", label: "CS2030", weeks: nil)
+    let gym = ["day": 3, "arriveByMin": 480, "to": "UTOWN", "label": "Gym"] as [String: Any]
+    let cs = ["day": 2, "arriveByMin": 600, "to": "COM3", "label": "CS2030"] as [String: Any]
+    #expect(SetupModel.find(c, in: [gym, cs]) == 1)
+    // The class before it was removed on the phone: it's now first, not the one at its old place.
+    #expect(SetupModel.find(c, in: [cs]) == 0)
+    #expect(SetupModel.find(c, in: [gym, gym]) == nil)
+}
