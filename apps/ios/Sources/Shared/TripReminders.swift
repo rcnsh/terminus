@@ -29,7 +29,7 @@ enum TripReminders {
     }
 
     /// `soonTrip` and `soonAt` are the trip the heads-up was last scheduled
-    /// for, and when. `now` is on the server's clock.
+    /// for (its `soonKey`), and when. `now` is on the server's clock.
     static func step(_ plan: NextAnswer, soonTrip: String?, soonAt lastSoonAt: Date?, now: Date) -> Step {
         let card = plan.card
         let phase = card?.phase ?? "idle"
@@ -40,16 +40,27 @@ enum TripReminders {
         guard card?.remind != false, let trip = tripKey(plan), let soonAt = card?.remindAt.flatMap(parseISODate),
             let leaveAt = plan.leaveAt, leaveAt > now
         else { return .clear }
-        let clearFirst = soonTrip != nil && soonTrip != trip
+        let key = soonKey(plan, now: now)
+        let clearFirst = soonTrip != nil && soonTrip != key
         // The heads-up goes once per trip: once it has gone, a leave-by that
         // moves later doesn't bring it back.
-        let soonDone = soonTrip == trip && (lastSoonAt.map { $0 <= now } ?? false)
+        let soonDone = soonTrip == key && (lastSoonAt.map { $0 <= now } ?? false)
         return .schedule(clearFirst: clearFirst, trip: trip, soon: soonDone ? nil : soonAt, leaveAt: leaveAt)
     }
 
     /// The trip a notification is about: the key the card's buttons carry, else when the class starts.
     static func tripKey(_ plan: NextAnswer) -> String? {
         plan.card?.actions.first?.trip ?? plan.timing?.classAt
+    }
+
+    /// The trip the heads-up is for, as it's kept: `tripKey` and the day it
+    /// leaves (campus time), since a weekly class has the same key every week.
+    static func soonKey(_ plan: NextAnswer, now: Date) -> String? {
+        guard let trip = tripKey(plan) else { return nil }
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = .campus
+        let day = cal.dateComponents([.year, .month, .day], from: plan.leaveAt ?? now)
+        return "\(trip)@\(day.year ?? 0)-\(day.month ?? 0)-\(day.day ?? 0)"
     }
 
     /// The heads-up's words: the leave-by, the bus to catch, and where to.

@@ -79,8 +79,17 @@ private func answer(_ name: String) throws -> (NextAnswer, Date) {
     let step = TripReminders.step(a, soonTrip: nil, soonAt: nil, now: now)
     #expect(step == .schedule(clearFirst: false, trip: "4:600:UTOWN", soon: remindAt, leaveAt: leaveAt))
     // Once the heads-up has gone for this trip, it doesn't come back.
-    let again = TripReminders.step(a, soonTrip: "4:600:UTOWN", soonAt: now.addingTimeInterval(-60), now: now)
+    let key = try #require(TripReminders.soonKey(a, now: now))
+    let again = TripReminders.step(a, soonTrip: key, soonAt: now.addingTimeInterval(-60), now: now)
     #expect(again == .schedule(clearFirst: false, trip: "4:600:UTOWN", soon: nil, leaveAt: leaveAt))
+    // The same class a week before was another trip: its heads-up doesn't stop this week's.
+    var cal = Calendar(identifier: .gregorian)
+    cal.timeZone = .campus
+    let week = cal.dateComponents([.year, .month, .day], from: leaveAt.addingTimeInterval(-7 * 86_400))
+    let lastWeek = "4:600:UTOWN@\(week.year!)-\(week.month!)-\(week.day!)"
+    #expect(key != lastWeek && key.hasPrefix("4:600:UTOWN@"))
+    let nextWeek = TripReminders.step(a, soonTrip: lastWeek, soonAt: now.addingTimeInterval(-7 * 86_400), now: now)
+    #expect(nextWeek == .schedule(clearFirst: true, trip: "4:600:UTOWN", soon: remindAt, leaveAt: leaveAt))
     // Another trip's are cleared first.
     let other = TripReminders.step(a, soonTrip: "4:500:COM3", soonAt: nil, now: now)
     #expect(other == .schedule(clearFirst: true, trip: "4:600:UTOWN", soon: remindAt, leaveAt: leaveAt))

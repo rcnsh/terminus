@@ -102,7 +102,7 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
         center.removeDeliveredNotifications(withIdentifiers: [TripReminders.soonID])
         center.removePendingNotificationRequests(
             withIdentifiers: after ? [TripReminders.soonID, TripReminders.nowID] : [TripReminders.soonID])
-        if !after, let trip = TripReminders.tripKey(a) {
+        if !after, let trip = TripReminders.soonKey(a, now: now) {
             Shared.defaults.set(trip, forKey: "soonTrip")
             Shared.defaults.set(now, forKey: "soonAt")
         }

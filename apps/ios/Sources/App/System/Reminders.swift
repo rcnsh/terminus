@@ -41,7 +41,7 @@ import UserNotifications
             if clearFirst { clear() }
             setCategory(plan)
             if let soon {
-                d.set(trip, forKey: "soonTrip")
+                d.set(TripReminders.soonKey(plan, now: now), forKey: "soonTrip")
                 d.set(max(soon, now), forKey: "soonAt")
                 schedule(TripReminders.soonID, at: soon, now: now, plan: plan, trip: trip, leaveNow: false, checked: checked)
             }
