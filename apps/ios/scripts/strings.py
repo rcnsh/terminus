@@ -26,6 +26,9 @@ ZH = os.path.join(IOS, 'Support', 'zh-Hans.lproj')
 # L("...") and its first argument, a plain string literal (escapes allowed);
 # LocalizedStringResource("...") too, the widgets' intent titles.
 CALL = re.compile(r'\b(?:L|LocalizedStringResource)\(\s*"((?:[^"\\]|\\.)*)"')
+# L(...) whose phrase isn't a literal (a variable, a ternary): the check
+# can't see it, so its Chinese could be missing unseen. Not allowed.
+DYNAMIC = re.compile(r'\bL\(\s*(?!")(?!_ en: String)')
 
 
 def table_for(path):
@@ -42,6 +45,18 @@ def table_for(path):
 
 def unescape(s):
     return s.encode('utf-8').decode('unicode_escape').encode('latin-1').decode('utf-8')
+
+
+def dynamic():
+    out = []
+    for root, _, files in os.walk(os.path.join(IOS, 'Sources')):
+        for f in files:
+            if f.endswith('.swift'):
+                p = os.path.join(root, f)
+                for n, line in enumerate(open(p, encoding='utf-8'), 1):
+                    if not line.lstrip().startswith('//') and DYNAMIC.search(line):
+                        out.append(f'{os.path.relpath(p, IOS)}:{n}')
+    return out
 
 
 def used():
@@ -100,6 +115,13 @@ def mac():
 
 def main():
     check = '--check' in sys.argv
+    hidden = dynamic()
+    if hidden:
+        print('L() with a phrase that is not a string literal, which this check cannot read (write each phrase out):')
+        for at in hidden:
+            print(f'  {at}')
+        if check:
+            sys.exit(1)
     phrases = used()
     tables = {}
     for f in os.listdir(ZH) if os.path.isdir(ZH) else []:

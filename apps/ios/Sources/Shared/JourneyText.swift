@@ -12,13 +12,23 @@ enum JourneyText {
     static func leaveIn(_ a: NextAnswer, _ j: Journey, now: Date) -> String {
         if a.phase == "waiting" { return a.leaveHeadline(now: now) ?? L("Leave now") }
         guard let left = secondsToLeave(a, j, now: now) else { return L("Leave now") }
-        return countdown(left, min: "Leave in %@ min", minS: "Leave in %@ min %@ s", s: "Leave in %@ s")
+        switch countdown(left) {
+        case .min(let m): return L("Leave in %@ min", m)
+        case .minS(let m, let s): return L("Leave in %@ min %@ s", m, s)
+        case .s(let s): return L("Leave in %@ s", s)
+        }
     }
 
     /// The time inside [leaveIn]'s headline ("6 min" of "Leave in 6 min"),
     /// for the card to colour; nil when there's none ("Leave now").
     static func leaveTime(_ a: NextAnswer, _ j: Journey, now: Date) -> String? {
-        secondsToLeave(a, j, now: now).map { countdown($0, min: "%@ min", minS: "%@ min %@ s", s: "%@ s") }
+        secondsToLeave(a, j, now: now).map {
+            switch countdown($0) {
+            case .min(let m): L("%@ min", m)
+            case .minS(let m, let s): L("%@ min %@ s", m, s)
+            case .s(let s): L("%@ s", s)
+            }
+        }
     }
 
     /// Whole seconds until it's time to leave; nil at the stop, with no leave time, or once it's passed.
@@ -27,10 +37,15 @@ enum JourneyText {
         return Int(at.timeIntervalSince(now))
     }
 
-    private static func countdown(_ left: Int, min: String, minS: String, s: String) -> String {
-        if left >= 120 { return L(min, "\((left + 30) / 60)") }
-        if left >= 60 { return L(minS, "\(left / 60)", "\(left % 60)") }
-        return L(s, "\(max(1, left))")
+    /// The countdown's numbers: whole minutes until the last two, then
+    /// minutes and seconds, then seconds. Each caller words them with literal
+    /// phrases, so scripts/strings.py finds their Chinese.
+    private enum Countdown { case min(String), minS(String, String), s(String) }
+
+    private static func countdown(_ left: Int) -> Countdown {
+        if left >= 120 { return .min("\((left + 30) / 60)") }
+        if left >= 60 { return .minS("\(left / 60)", "\(left % 60)") }
+        return .s("\(max(1, left))")
     }
 
     /// "To GEA1000 @ UTown · starts 10:00".
@@ -59,7 +74,8 @@ enum JourneyText {
         if let t = j.backupText { return t }
         if j.bus == nil { return j.why }
         guard let b = j.backup else { return nil }
-        return L(a.isClassPlan ? "Or go now: %@ at %@ from %@" : "Or %@ at %@ from %@", b.paid ? "\(b.svc) ($)" : b.svc, b.board, b.stop)
+        let svc = b.paid ? "\(b.svc) ($)" : b.svc
+        return a.isClassPlan ? L("Or go now: %@ at %@ from %@", svc, b.board, b.stop) : L("Or %@ at %@ from %@", svc, b.board, b.stop)
     }
 
     /// "5 min walk".

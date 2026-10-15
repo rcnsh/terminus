@@ -1,7 +1,9 @@
 "%@ from %@" = "在 %2$@ 搭 %1$@";
 "%@ min" = "%@ 分钟";
+"%@ min %@ s" = "%1$@ 分 %2$@ 秒";
 "%@ minutes" = "%@ 分钟";
 "%@ ride" = "乘车 %@";
+"%@ s" = "%@ 秒";
 "%@ walk" = "步行 %@";
 "%@ walk from %@" = "从 %2$@ 步行 %1$@";
 "%@, leaves %@" = "%1$@，%2$@ 发车";
@@ -37,6 +39,9 @@
 "Last checked %@. Times may have changed." = "上次检查：%@。时间可能已有变化。";
 "Leave by %@" = "%@ 前出发";
 "Leave in %@" = "%@后出发";
+"Leave in %@ min" = "%@ 分钟后出发";
+"Leave in %@ min %@ s" = "%1$@ 分 %2$@ 秒后出发";
+"Leave in %@ s" = "%@ 秒后出发";
 "Leave now" = "现在出发";
 "Leaves in %@" = "%@后开";
 "Let go to refresh" = "松开刷新";
@@ -58,6 +63,8 @@
 "On the %@" = "在 %@ 上";
 "On the %@, to %@" = "在 %@ 上，去 %@";
 "Open terminus to sign in" = "打开 terminus 登录";
+"Or %@ at %@ from %@" = "或在 %3$@ 搭 %2$@ 的 %1$@";
+"Or go now: %@ at %@ from %@" = "或现在走：在 %3$@ 搭 %2$@ 的 %1$@";
 "Pull to refresh" = "下拉刷新";
 "Scheduled" = "按时刻表";
 "Settings" = "设置";
