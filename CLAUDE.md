@@ -341,6 +341,7 @@ scripts/              release.sh, release-beta.sh (+ release-lib.sh, their share
                       appcast.py, release-notes.py, map-tiles.sh (+ map-tiles.lock),
                       vendor-map.sh, vendor-maplibre-mac.sh, vendor-preact.sh,
                       vendor-mediabunny.sh
+marketing/poster/     The A3 campus poster: poster.html (source), poster.pdf (print), poster.png
 .github/workflows/    ci.yml, scrape.yml (weekly data),
                       map-tiles.yml, probe-buses.yml (manual feed probe),
                       record-buses.yml (manual: no bus switches sides after a deploy)
