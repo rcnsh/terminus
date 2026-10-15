@@ -100,7 +100,8 @@ private struct SetupHomePicker: View {
                 Text([r.stops.first.map(campus.stopName), L("%@ min walk", "\(r.minutes)")].compactMap { $0 }.joined(separator: " · "))
                     .font(.footnote)
                     .foregroundStyle(Color.muted)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         case .more:
             SetupChoiceTile(selected: false, id: "home.more") {
