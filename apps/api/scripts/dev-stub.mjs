@@ -24,6 +24,9 @@
  *   - a fake NUSMods (every module has a lab, an online tutorial and an
  *     off-campus lecture; XX9999 is not offered; DOWN1000 fails)
  *
+ * POST /__stub/session signs a device in as the test account and answers
+ * with its token, for the iPhone app's UI tests (TERMINUS_TOKEN).
+ *
  * POST /__stub/freeze and /__stub/thaw stop and restart the clock, for
  * light and dark screenshots of the same moment. POST /__stub/skip?min=N
  * moves it ahead, to walk through a trip.
@@ -53,7 +56,7 @@ import { Trip } from '../src/tripdo.ts';
 import { TimelapseRecorder } from '../src/timelapsedo.ts';
 import { FeedGate } from '../src/feedgate.ts';
 import { ensureRecorder, inWindow, nextOpen } from '../src/timelapse.ts';
-import { SESSION_COOKIE as DEV_COOKIE } from '../src/accounts.ts';
+import { SESSION_COOKIE as DEV_COOKIE, openSession } from '../src/accounts.ts';
 import { API_VERSION } from '../src/openapi.ts';
 import { makeD1, makeEmail } from '../test/_d1.mjs';
 
@@ -378,6 +381,13 @@ async function serve(req, res) {
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify(rows.map((r) => ({ name: r.name, token: `${r.push_token.slice(0, 8)}…` }))));
     return;
+  }
+  if (req.method === 'POST' && req.url === '/__stub/session') {
+    // A device signed in as the test account, without a sign-in email: for an
+    // app's UI tests, which can't read the code this prints.
+    const token = await openSession(db, 'test-user', 'device', 'Stub device', stubNow(), { platform: null, client: null });
+    res.writeHead(200, { 'content-type': 'application/json' });
+    return res.end(JSON.stringify({ token, email: 'you@u.nus.edu' }));
   }
   if (req.method === 'POST' && req.url.startsWith('/__stub/timelapse')) {
     const minutes = Number(new URL(req.url, 'http://x').searchParams.get('minutes') ?? 60);
