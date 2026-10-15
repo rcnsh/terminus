@@ -363,7 +363,8 @@ apps/ios/
   Sources/NotificationService/  Rewords a push before it's shown
   Support/            zh-Hans strings (a table per part), assets
   Tests/, UITests/    Unit tests on the API's fixtures; XCUITests against the dev stub
-  scripts/            strings.py (fills and checks the Chinese), fetch-maplibre.sh, run.sh
+  scripts/            strings.py (fills and checks the Chinese), fetch-maplibre.sh, run.sh,
+                      sideload.sh (a free Apple ID's build, on a plugged-in iPhone or as an .ipa; SIDELOAD.md)
 scripts/              release.sh, release-beta.sh (+ release-lib.sh, their shared checks;
                       verify-sparkle.swift), github-release.sh, package-mac.sh,
                       appcast.py, release-notes.py, map-tiles.sh (+ map-tiles.lock),

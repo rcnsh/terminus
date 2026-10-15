@@ -36,10 +36,18 @@ settings:
       TERMINUS_SUFFIX: .beta
       TERMINUS_NAME: terminus beta
       APP_GROUP: group.sh.rcn.terminus.beta
+    # Sideloaded with a free Apple ID (scripts/sideload.sh): the stable
+    # servers, under the signer's own bundle IDs and app group, which the
+    # script sets from their team. The script signs every target with
+    # Support/Sideload/Group.entitlements: the group, without push.
+    Sideload:
+      TERMINUS_SUFFIX: .sideload
+      APP_GROUP: group.sh.rcn.terminus.sideload
 configs:
   Debug: debug
   Release: release
   Beta: release
+  Sideload: release
 targets:
   Terminus:
     type: application
