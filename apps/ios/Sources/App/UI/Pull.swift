@@ -170,9 +170,21 @@ struct PullScene: Equatable {
 }
 
 /// A puff of exhaust: where it left the bus (x, units) and how old it is (s).
-struct Puff {
+struct Puff: Equatable {
     var x: CGFloat
     var age: CGFloat = 0
+}
+
+/// One frame of a pull as it's drawn, as values: a view drawing it redraws
+/// when any of them change, which it wouldn't for the same PullMotion.
+struct PullFrame: Equatable {
+    var open = false, lit = false, good = false, calm = false
+    /// The bus is driving rather than following the finger: its headlight on after dark.
+    var driving = false
+    var signGrow: CGFloat = 0, clock: CGFloat = 0
+    var busX: CGFloat = 0, alpha: CGFloat = 1, bob: CGFloat = 0, tilt: CGFloat = 0, wheel: CGFloat = 0
+    var door: CGFloat = 0, honk: CGFloat = 0
+    var puffs: [Puff] = []
 }
 
 /// A pull, frame by frame: the stretch, the bus, its door, its horn, its
@@ -244,6 +256,13 @@ final class PullMotion {
         self.calm = calm
         busX = scene.from
         lastX = scene.from
+    }
+
+    /// This frame, to draw.
+    var frame: PullFrame {
+        PullFrame(
+            open: open, lit: lit, good: good, calm: calm, driving: drive != .follow, signGrow: signGrow, clock: clock, busX: busX,
+            alpha: alpha, bob: bob, tilt: tilt, wheel: wheel, door: door, honk: honk, puffs: puffs)
     }
 
     /// Whether anything still moves (a frame is wanted).

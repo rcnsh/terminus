@@ -96,7 +96,7 @@ struct SkyBand<Content: View>: View {
     var body: some View {
         let phase = clock.phase
         let p = SkyPalette.of(phase, dark: scheme == .dark)
-        let m = pull?.read()
+        let m = pull?.picture()
         let pulling = m?.open ?? false
         let paint = pull?.paint
         VStack(alignment: .leading, spacing: 0) {

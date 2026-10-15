@@ -48,6 +48,9 @@ final class SkyPull {
         return motion
     }
 
+    /// This frame of it, to draw: a value, so the drawing follows it.
+    func picture() -> PullFrame { read().frame }
+
     /// The motion changed: drawn again, and moved on each frame while it moves.
     func kick() {
         motion.scene = scene(width)
@@ -361,7 +364,7 @@ enum PullDraw {
     /// top and `d` its points a unit; a timetable guess's bus stays an
     /// outline (not `live`). `lights`: after dark, its headlight on as it drives.
     static func road(
-        _ g: inout GraphicsContext, _ m: PullMotion, paint: (Color, Color), p: SkyPalette, top: CGFloat, d: CGFloat, sign: CGFloat,
+        _ g: inout GraphicsContext, _ m: PullFrame, paint: (Color, Color), p: SkyPalette, top: CGFloat, d: CGFloat, sign: CGFloat,
         ownSign: Bool, live: Bool, lights: Bool
     ) {
         stopSign(&g, m, p: p, foot: CGPoint(x: sign * d, y: top + 70 * d), u: d, post: 26, grow: ownSign ? 1 : m.signGrow, rise: false)
@@ -372,7 +375,7 @@ enum PullDraw {
     /// points a unit, `width` units across: a sign growing out of the near
     /// hill, and the bus along the hilltop to it, tilting with the slope.
     static func hill(
-        _ g: inout GraphicsContext, _ m: PullMotion, paint: (Color, Color), p: SkyPalette, top: CGFloat, d: CGFloat, width: CGFloat,
+        _ g: inout GraphicsContext, _ m: PullFrame, paint: (Color, Color), p: SkyPalette, top: CGFloat, d: CGFloat, width: CGFloat,
         lights: Bool
     ) {
         let ground = { (x: CGFloat) in nearY(x) + 0.6 }
@@ -386,7 +389,7 @@ enum PullDraw {
     /// would ask and while it asks, green once the answer's in. `grow` (0–1)
     /// fades it in, or with `rise` grows it up out of the ground.
     private static func stopSign(
-        _ g: inout GraphicsContext, _ m: PullMotion, p: SkyPalette, foot o: CGPoint, u: CGFloat, post: CGFloat, grow: CGFloat, rise: Bool
+        _ g: inout GraphicsContext, _ m: PullFrame, p: SkyPalette, foot o: CGPoint, u: CGFloat, post: CGFloat, grow: CGFloat, rise: Bool
     ) {
         guard grow > 0 else { return }
         var c = g
@@ -427,7 +430,7 @@ enum PullDraw {
     /// it opens, and a honk. Without a `band` it's an outline, as a timetable
     /// guess is on the horizon.
     private static func bus(
-        _ g: inout GraphicsContext, _ m: PullMotion, paint livery: (Color, Color), p: SkyPalette, top: CGFloat, d: CGFloat,
+        _ g: inout GraphicsContext, _ m: PullFrame, paint livery: (Color, Color), p: SkyPalette, top: CGFloat, d: CGFloat,
         ground: (CGFloat) -> CGFloat, slope: Bool, band: Bool, lights: Bool
     ) {
         for f in m.puffs {
@@ -454,7 +457,7 @@ enum PullDraw {
             var body = c
             body.translateBy(x: 0, y: m.bob * d)
             turn(&body, .degrees(m.tilt), about: at(7.5, 12))
-            if lights && m.drive != .follow {
+            if lights && m.driving {
                 var beam = Path()
                 beam.move(to: at(38, 9))
                 beam.addLine(to: at(60, 6))

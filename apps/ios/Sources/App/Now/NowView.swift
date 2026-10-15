@@ -372,7 +372,7 @@ private struct Horizon: View {
 
     var body: some View {
         // Pulled down, the pull's sign and bus are on the road instead of the card's.
-        let m = pull?.read()
+        let m = pull?.picture()
         let pulling = m?.open ?? false
         let paint = pull?.paint
         Canvas { g, size in
