@@ -30,15 +30,21 @@ final class SetupModel {
     private(set) var choices: Choices?
 
     private var api: Api { Api(token: TokenStore.read()) }
+    /// Which sign-in this Mac is on (AppModel's `session`): a save made for
+    /// one ends, or is waited for, only while it's still the one signed in.
+    private let session: @MainActor () -> Int
 
     /// After each save: the popover's favourites (its tabs) follow.
     var onSaved: @MainActor () -> Void = {}
 
-    init() {}
+    init(session: @escaping @MainActor () -> Int = { AppModel.shared.session }) {
+        self.session = session
+    }
 
     #if DEBUG
         /// Filled in, for snapshot renders.
         init(profile: [String: Any], campus: Campus, devices: [Device]? = nil, pairCode: String? = nil) {
+            session = { 0 }
             self.profile = profile
             self.campus = campus
             self.devices = devices
@@ -55,7 +61,7 @@ final class SetupModel {
             async let ch = try? api.choices()
             let loaded = try object(await p)
             // A change still being saved stays on screen.
-            if saveTask == nil { profile = loaded }
+            if !saving { profile = loaded }
             Clock.pref = clock
             campus = try await c
             me = await m
@@ -110,8 +116,8 @@ final class SetupModel {
     func setHomeStops(_ stops: [String]) {
         var unique: [String] = []
         for s in stops where !unique.contains(s) { unique.append(s) }
-        let most = limits.homeStops
-        edit { $0["home"] = unique.isEmpty ? NSNull() : ["stops": Array(unique.prefix(most))] }
+        let home = Array(unique.prefix(limits.homeStops))
+        edit { $0["home"] = home.isEmpty ? NSNull() : ["stops": home] }
     }
 
     /// The home stop picker: `code` first, the other stops after it. "Choose
@@ -132,8 +138,9 @@ final class SetupModel {
 
     func setResidence(_ r: Campus.Residence) {
         let walk = Self.homeWalk(r, within: limits.homeWalkMin)
+        let stops = r.stops
         edit {
-            $0["home"] = ["stops": r.stops]
+            $0["home"] = ["stops": stops]
             $0["homeWalkMin"] = walk
         }
     }
@@ -171,9 +178,10 @@ final class SetupModel {
             in: CharacterSet(charactersIn: "-"))
         var key = String(slug.prefix(24)).isEmpty ? "place" : String(slug.prefix(24))
         while places.contains(where: { $0.key == key }) { key = "\(key.prefix(21))-\(Int.random(in: 10...99))" }
+        let place = ["key": key, "label": label, "to": to]
         edit {
             var list = $0["places"] as? [[String: Any]] ?? []
-            list.append(["key": key, "label": label, "to": to])
+            list.append(place)
             $0["places"] = list
         }
         return nil
@@ -205,17 +213,22 @@ final class SetupModel {
         let now = places
         guard now.count < maxPlaces, !now.contains(where: { $0.to == r.place["to"] as? String || $0.key == r.place["key"] as? String })
         else { return }
+        // JSON values only, read by nothing else while they're saved.
+        nonisolated(unsafe) let place = r.place
+        nonisolated(unsafe) let usual = r.usual
+        let index = r.index
         edit {
             var list = $0["places"] as? [[String: Any]] ?? []
-            list.insert(r.place, at: min(r.index, list.count))
+            list.insert(place, at: min(index, list.count))
             $0["places"] = list
-            if !r.usual.isEmpty { $0["usual"] = ($0["usual"] as? [[String: Any]] ?? []) + r.usual }
+            if !usual.isEmpty { $0["usual"] = ($0["usual"] as? [[String: Any]] ?? []) + usual }
         }
     }
 
     func setHomeWalk(_ min: Int) {
         let range = limits.homeWalkMin
-        edit { $0["homeWalkMin"] = Swift.min(range.upperBound, Swift.max(range.lowerBound, min)) }
+        let walk = Swift.min(range.upperBound, Swift.max(range.lowerBound, min))
+        edit { $0["homeWalkMin"] = walk }
     }
     func setPace(_ pace: String) { edit { $0["walkPace"] = pace } }
     func setFullBusMargin(_ on: Bool) { edit { $0["fullBusMargin"] = on } }
@@ -224,50 +237,96 @@ final class SetupModel {
     /// The start stays before the end; a change that would cross them is refused.
     func setDayStart(_ min: Int) { if min < dayEndMin { edit { $0["dayStartMin"] = min } } }
     func setDayEnd(_ min: Int) { if min > dayStartMin { edit { $0["dayEndMin"] = min } } }
-    func setGapHours(_ h: Double) { edit { $0["gapHours"] = Swift.min(12, Swift.max(0.5, h)) } }
+    func setGapHours(_ h: Double) {
+        let hours = Swift.min(12, Swift.max(0.5, h))
+        edit { $0["gapHours"] = hours }
+    }
     /// Times on every device; the menu bar follows at once, the card once saved.
     func setClock(_ pref: String) {
         Clock.pref = pref
         edit { $0["clock"] = pref }
     }
 
-    /// A save waiting or on its way; a reply from an older one doesn't undo the edits made since.
+    /// The 0.4 s wait before a save, so a run of clicks goes as one.
     private var saveTask: Task<Void, Never>?
-    private var edits = 0
+    /// The save on its way. Never cancelled: whether it saved is only known from its answer.
+    private var sending: Task<Void, Never>?
+    /// The changes made since the last save was sent, shown already, to send next.
+    private var pending: [@Sendable (inout [String: Any]) -> Void] = []
     /// The profile as the server last had it, to go back to if a save fails.
     private var confirmed: [String: Any]?
+    /// Whether a change is waiting or on its way: the profile shown is ahead of the server's.
+    private var saving: Bool { saveTask != nil || sending != nil || !pending.isEmpty }
 
     /// Changes shown at once, saved a moment later (a run of clicks is one
-    /// save, as on the web), put back if the save fails.
-    func edit(_ change: (inout [String: Any]) -> Void) {
+    /// save, as on the web), put back if the save fails. Only the change is
+    /// saved, made on the profile as the server has it then: what another
+    /// device saved since this one loaded stays.
+    func edit(_ change: @escaping @Sendable (inout [String: Any]) -> Void) {
         // While an import runs, its answer replaces the profile: an edit now
         // would save the old timetable over it.
         guard let current = profile, !importing else { return }
-        if saveTask == nil { confirmed = current }
+        if !saving { confirmed = current }
         var next = current
         change(&next)
         profile = next
-        guard let body = try? JSONSerialization.data(withJSONObject: next) else { return }
-        edits += 1
-        let mine = edits
+        pending.append(change)
         saveTask?.cancel()
         saveTask = Task {
             try? await Task.sleep(for: .milliseconds(400))
-            if Task.isCancelled { return }
+            guard !Task.isCancelled else { return }
+            saveTask = nil
+            send()
+        }
+    }
+
+    /// Sends the changes waiting, made again on the profile as the server has
+    /// it now (If-Match, read again on a 412). One save at a time: changes
+    /// made meanwhile go next.
+    private func send() {
+        guard sending == nil, !pending.isEmpty else { return }
+        let changes = pending
+        pending = []
+        let api = api
+        let mine = session()
+        sending = Task {
             do {
-                let saved = try object(await api.saveProfile(body))
+                let saved = try await api.changeProfile { p in
+                    for change in changes { change(&p) }
+                }
+                // Done, whoever is signed in now: flush() waits for this.
+                sending = nil
+                guard session() == mine else { return }
                 confirmed = saved
-                onSaved()
-                guard mine == edits else { return }
-                profile = saved
+                // Changes made since this was sent stay on screen, on top of what it saved.
+                var shown = saved
+                for change in pending { change(&shown) }
+                profile = shown
                 message = nil
+                onSaved()
+                if saveTask == nil { send() }
             } catch {
-                guard mine == edits else { return }
-                profile = confirmed ?? current
+                sending = nil
+                guard session() == mine else { return }
+                saveTask?.cancel()
+                saveTask = nil
+                pending = []
+                if let confirmed { profile = confirmed }
                 message = (error as? ApiError).map { L("Not saved: %@", $0.message) } ?? L("Not saved: couldn't reach terminus")
             }
-            saveTask = nil
         }
+    }
+
+    /// Sends what's waiting now, and returns once every save has its answer
+    /// (or another account is signed in, and they're no longer this one's).
+    func flush() async {
+        if saveTask != nil {
+            saveTask?.cancel()
+            saveTask = nil
+            send()
+        }
+        let mine = session()
+        while let s = sending, session() == mine { await s.value }
     }
 
     // MARK: the timetable, class by class
@@ -414,7 +473,7 @@ final class SetupModel {
         defer { importing = false }
         // A setting's save still waiting would land after the import and put
         // the old timetable back: it goes first.
-        await saveTask?.value
+        await flush()
         do {
             let r = ImportResult(try object(await api.importTimetable(share)))
             imported = r
@@ -426,13 +485,17 @@ final class SetupModel {
         }
     }
 
-    /// Setup done (or skipped): the account page and the apps stop offering it.
-    func finish() {
-        guard let profile else { return }
-        var seen = profile["seen"] as? [String] ?? []
-        guard !seen.contains("onboarding") else { return }
-        seen.append("onboarding")
-        edit { $0["seen"] = seen }
+    /// Setup done (or skipped): the account page and the apps stop offering
+    /// it. Returns once it, and anything else waiting, is saved.
+    func finish() async {
+        if !(profile?["seen"] as? [String] ?? []).contains("onboarding") {
+            edit {
+                var seen = $0["seen"] as? [String] ?? []
+                if !seen.contains("onboarding") { seen.append("onboarding") }
+                $0["seen"] = seen
+            }
+        }
+        await flush()
     }
 
     // MARK: devices
@@ -591,9 +654,12 @@ struct SetupView: View {
     }
 
     private func finish() {
-        setup.finish()
         app.needsSetup = false
-        Task { await app.refresh() }
+        // What's waiting to be saved goes first, then the popover asks for the plan.
+        Task {
+            await setup.finish()
+            await app.refresh()
+        }
         dismissWindow(id: "setup")
     }
 }

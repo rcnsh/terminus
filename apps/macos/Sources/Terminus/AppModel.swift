@@ -24,7 +24,7 @@ final class AppModel {
     var signedOutReason: String?
     /// Bumped whenever the token changes (signed in, signed out): a reply to
     /// a request made with the old one is dropped, not shown for this account.
-    private var session = 0
+    private(set) var session = 0
     /// The server answered 426: this version is too old for it. Polling stops
     /// (Outdated) and the popover offers the update.
     var updateRequired = false
@@ -873,17 +873,12 @@ final class AppModel {
     private func syncLang(_ api: Api) async {
         let gen = session
         guard !langSynced, let data = try? await api.profile(), gen == session,
-            var p = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+            let p = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
         else { return }
         langSynced = true
-        guard let mine = Lang.followAccount(p["lang"] as? String ?? "auto"),
-            let body = try? JSONSerialization.data(
-                withJSONObject: {
-                    p["lang"] = mine
-                    return p
-                }())
-        else { return }
-        _ = try? await api.saveProfile(body)
+        guard let mine = Lang.followAccount(p["lang"] as? String ?? "auto") else { return }
+        // Only the language, on the profile as it is by then.
+        _ = try? await api.changeProfile { $0["lang"] = mine }
     }
 
     /// Settings → Language: this Mac and the account, then terminus starts again in it.
@@ -891,12 +886,7 @@ final class AppModel {
         Lang.set(pref)
         Lang.noteAccount(pref)
         Task {
-            if let token = TokenStore.read(), let data = try? await Api(token: token).profile(),
-                var p = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-            {
-                p["lang"] = pref
-                if let body = try? JSONSerialization.data(withJSONObject: p) { _ = try? await Api(token: token).saveProfile(body) }
-            }
+            if let token = TokenStore.read() { _ = try? await Api(token: token).changeProfile { $0["lang"] = pref } }
             Lang.relaunch()
         }
     }
