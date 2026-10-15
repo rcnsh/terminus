@@ -55,15 +55,16 @@ internal fun WidgetJourney(answer: NextAnswer, journey: Journey, style: String, 
 
 /** The room [WidgetJourney] takes in [style]: Steps a row a step, the Route its line, the Ticket its badge. */
 internal fun journeyHeight(journey: Journey, style: String): Dp = when (style) {
-    CardStyle.TICKET -> 58.dp
+    // A change of bus adds the second bus's line under the first.
+    CardStyle.TICKET -> if (journey.change != null) 76.dp else 58.dp
     CardStyle.ROUTE -> 52.dp
     // The rows Steps draws: leave (only with a walk first), the bus, and
     // where you end up; the last is shorter with nothing under its name.
     else -> STEP * stepRows(journey) - (if (lastUnder(journey) == null) 12.dp else 0.dp)
 }
 
-/** How many steps [Steps] draws: leave when there's a walk first, the bus when there is one, and where you end up. */
-internal fun stepRows(journey: Journey): Int = (if (journey.walk != null) 1 else 0) + (if (journey.bus != null) 1 else 0) + 1
+/** How many steps [Steps] draws: leave when there's a walk first, the bus when there is one, the second bus of a change, and where you end up. */
+internal fun stepRows(journey: Journey): Int = (if (journey.walk != null) 1 else 0) + (if (journey.bus != null) 1 else 0) + (if (journey.change != null) 1 else 0) + 1
 
 /** Under the last step: "2 min walk from UTown", or a class's "9 min early". */
 private fun lastUnder(journey: Journey): String? = journey.walkEnd?.let { JourneyText.arriveWhere(journey) } ?: journey.slack
@@ -91,7 +92,10 @@ private fun Steps(journey: Journey, inks: Inks, page: ColorProvider) {
             Step(journey.leave ?: L.s(R.string.journey_now), Dot.YOU, Rail.WALK, L.s(R.string.journey_leave), JourneyText.walk(journey), null, inks, page)
         }
         if (bus != null) {
-            Step(bus.board, Dot.STOP, Rail.Ride(bus.color), bus.stop, JourneyText.ride(journey), bus to JourneyText.busIn(journey, now), inks, page)
+            Step(bus.board, Dot.STOP, Rail.Ride(bus.color), bus.stop, journey.change?.firstRideText ?: JourneyText.ride(journey), bus to JourneyText.busIn(journey, now), inks, page)
+        }
+        journey.change?.let { c ->
+            Step(c.bus.board, Dot.STOP, Rail.Ride(c.bus.color), c.stop, c.changeText, c.bus to null, inks, page)
         }
         val there = if (bus != null) journey.toStop.ifEmpty { journey.place } else journey.place
         Step(journey.arriveStop ?: journey.arrive.orEmpty(), Dot.THERE, null, there, lastUnder(journey), null, inks, page, last = true)
@@ -144,10 +148,12 @@ private fun Step(time: String, dot: Dot, rail: Rail?, name: String, under: Strin
 @Composable
 private fun Route(journey: Journey, inks: Inks) {
     val bus = journey.bus
-    val four = journey.walkEnd != null && LocalSize.current.width >= 300.dp
+    // A change of bus takes the room of the walk to the stop, and of the walk on at the end.
+    val change = journey.change != null && bus != null
+    val four = journey.walkEnd != null && !change && LocalSize.current.width >= 300.dp
     Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-        val w = if (four) 46.dp else 56.dp
-        journey.walk?.let { walk ->
+        val w = if (four || change) 46.dp else 56.dp
+        if (!change) journey.walk?.let { walk ->
             Point(L.s(R.string.journey_you), journey.leave ?: L.s(R.string.journey_now), inks.accent, w, inks)
             Stretch(walk, null, inks.muted, 2.dp, inks)
         }
@@ -156,7 +162,13 @@ private fun Route(journey: Journey, inks: Inks) {
             return@Row
         }
         Point(bus.stop, bus.board, inks.ink, w, inks)
-        Stretch(journey.ride.orEmpty(), bus, solid(bus.color), 4.dp, inks)
+        val change = journey.change
+        Stretch(change?.firstRide ?: journey.ride.orEmpty(), bus, solid(bus.color), 4.dp, inks)
+        // A change of bus: the stop the second bus goes from, then its ride, as on the app's line.
+        if (change != null) {
+            Point(change.stop, change.bus.board, inks.ink, w, inks)
+            Stretch(change.ride, change.bus, solid(change.bus.color), 4.dp, inks)
+        }
         if (four) {
             Point(journey.toStop, journey.arriveStop ?: "", inks.ink, w, inks)
             Stretch(journey.walkEnd, null, inks.muted, 2.dp, inks)
@@ -201,27 +213,37 @@ private fun RowScope.Stretch(caption: String, bus: JourneyBus?, color: ColorProv
 @Composable
 private fun Ticket(answer: NextAnswer, journey: Journey, inks: Inks) {
     val bus = journey.bus
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        val side = 48.dp
-        if (bus != null) {
-            // A public bus's "$" widens it past the square, as in the app.
-            val shape = if (bus.paid) GlanceModifier.height(side).padding(horizontal = 8.dp) else GlanceModifier.size(side)
-            Box(shape.cornerRadius(12.dp).background(solid(bus.color)), contentAlignment = Alignment.Center) {
-                Text(if (bus.paid) "${bus.svc} $" else bus.svc, style = TextStyle(color = solid(sh.rcn.terminus.Ink.on(bus.color)), fontWeight = FontWeight.Bold, fontSize = 18.sp), maxLines = 1)
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            val side = 48.dp
+            if (bus != null) {
+                // A public bus's "$" widens it past the square, as in the app.
+                val shape = if (bus.paid) GlanceModifier.height(side).padding(horizontal = 8.dp) else GlanceModifier.size(side)
+                Box(shape.cornerRadius(12.dp).background(solid(bus.color)), contentAlignment = Alignment.Center) {
+                    Text(if (bus.paid) "${bus.svc} $" else bus.svc, style = TextStyle(color = solid(sh.rcn.terminus.Ink.on(bus.color)), fontWeight = FontWeight.Bold, fontSize = 18.sp), maxLines = 1)
+                }
+            } else {
+                Box(GlanceModifier.size(side).cornerRadius(12.dp).background(inks.chip), contentAlignment = Alignment.Center) {
+                    Image(ImageProvider(R.drawable.ic_walk), contentDescription = null, colorFilter = ColorFilter.tint(inks.ink), modifier = GlanceModifier.size(side / 2))
+                }
             }
-        } else {
-            Box(GlanceModifier.size(side).cornerRadius(12.dp).background(inks.chip), contentAlignment = Alignment.Center) {
-                Image(ImageProvider(R.drawable.ic_walk), contentDescription = null, colorFilter = ColorFilter.tint(inks.ink), modifier = GlanceModifier.size(side / 2))
+            Spacer(GlanceModifier.width(12.dp))
+            Column {
+                Text(
+                    if (bus != null) listOfNotNull(bus.board, L.s(R.string.journey_from, bus.stop)).joinToString(" ") else L.s(R.string.journey_walk, journey.walk.orEmpty()),
+                    style = TextStyle(color = inks.ink, fontWeight = FontWeight.Bold, fontSize = 17.sp),
+                    maxLines = 1,
+                )
+                JourneyText.arrive(journey)?.let { Small(it, if (answer.leaveLate) inks.late else inks.muted, 12.sp, bold = true) }
             }
         }
-        Spacer(GlanceModifier.width(12.dp))
-        Column {
-            Text(
-                if (bus != null) listOfNotNull(bus.board, L.s(R.string.journey_from, bus.stop)).joinToString(" ") else L.s(R.string.journey_walk, journey.walk.orEmpty()),
-                style = TextStyle(color = inks.ink, fontWeight = FontWeight.Bold, fontSize = 17.sp),
-                maxLines = 1,
-            )
-            JourneyText.arrive(journey)?.let { Small(it, if (answer.leaveLate) inks.late else inks.muted, 12.sp, bold = true) }
+        // A change of bus: the second bus and where to change, so nobody stays on the wrong one.
+        journey.change?.let { c ->
+            Row(GlanceModifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(GlanceModifier.width(48.dp), contentAlignment = Alignment.Center) { Badge(c.bus.svc, c.bus.color, c.bus.paid) }
+                Spacer(GlanceModifier.width(12.dp))
+                Small(listOf(c.changeText, c.bus.board).joinToString(" · "), inks.ink, 12.sp, bold = true)
+            }
         }
     }
 }

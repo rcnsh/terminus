@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -55,6 +56,7 @@ import kotlin.math.roundToInt
 import sh.rcn.terminus.BusTimes
 import sh.rcn.terminus.CardStyle
 import sh.rcn.terminus.Journey
+import sh.rcn.terminus.JourneyBus
 import sh.rcn.terminus.JourneyText
 import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.R
@@ -110,14 +112,20 @@ private fun Route(answer: NextAnswer, journey: Journey, now: Long, top: Top) {
         val muted = MaterialTheme.colorScheme.onSurfaceVariant
         Text(JourneyText.to(answer, journey, clockOf()), color = muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
         LeaveHead(answer, journey, now)
-        val under = listOfNotNull(JourneyText.by(answer, journey, now), JourneyText.arrive(journey)).joinToString(" · ")
+        // With a change of bus the line has no room for the walk to the stop: said here.
+        val under = listOfNotNull(JourneyText.by(answer, journey, now), journey.change?.let { JourneyText.walk(journey) }, JourneyText.arrive(journey)).joinToString(" · ")
         if (under.isNotEmpty()) Text(under, color = if (answer.leaveLate) MaterialTheme.colorScheme.error else muted)
     }
     RouteLine(journey, Modifier.padding(top = 16.dp, bottom = 4.dp))
     Tags(answer, journey)
 }
 
-/** The line itself: a dashed walk, the bus's stretch in its colour, how long each takes under it. On foot, you and the place, the walk between. */
+/**
+ * The line itself: a dashed walk, the bus's stretch in its colour, how long
+ * each takes under it. On foot, you and the place, the walk between. With a
+ * change of bus the line starts at the stop, as on the web: a phone has room
+ * for the points of both rides, and the walk to the stop is said above it.
+ */
 @Composable
 internal fun RouteLine(journey: Journey, modifier: Modifier = Modifier) {
     val fg = MaterialTheme.colorScheme.onSurface
@@ -134,17 +142,31 @@ internal fun RouteLine(journey: Journey, modifier: Modifier = Modifier) {
         }
         return
     }
-    val paint = Color(bus.color)
-    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-        journey.walk?.let { walk ->
-            Point(stringResource(R.string.journey_you), journey.leave ?: stringResource(R.string.journey_now), MaterialTheme.colorScheme.primary, narrow = journey.walkEnd != null)
-            Stretch(Modifier.weight(1f), {}, walk, dashed)
-        }
-        Point(bus.stop, bus.board, fg, narrow = journey.walkEnd != null)
-        Stretch(Modifier.weight(1.4f), { BusBadge(bus.svc, bus.color, 12.sp, paid = bus.paid) }, journey.ride.orEmpty()) {
+    val change = journey.change
+    val narrow = journey.walkEnd != null || change != null
+    val ride: @Composable RowScope.(JourneyBus, String) -> Unit = { b, takes ->
+        val paint = Color(b.color)
+        Stretch(Modifier.weight(1.4f), { BusBadge(b.svc, b.color, 12.sp, paid = b.paid) }, takes) {
             drawLine(paint, Offset(0f, size.height / 2), Offset(size.width, size.height / 2), 5.dp.toPx(), StrokeCap.Round)
         }
-        Point(journey.toStop, (if (journey.walkEnd != null) journey.arriveStop else journey.arrive) ?: "", fg, narrow = journey.walkEnd != null)
+    }
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+        if (change == null) journey.walk?.let { walk ->
+            Point(stringResource(R.string.journey_you), journey.leave ?: stringResource(R.string.journey_now), MaterialTheme.colorScheme.primary, narrow = narrow)
+            Stretch(Modifier.weight(1f), {}, walk, dashed)
+        }
+        Point(bus.stop, bus.board, fg, narrow = narrow)
+        ride(bus, change?.firstRide ?: journey.ride.orEmpty())
+        // Where the first bus drops you, across the road to the second's stop when it isn't the same one, and the second ride.
+        if (change != null) {
+            Point(change.from, if (change.walk != null) change.reach else change.bus.board, fg, narrow = true)
+            change.walk?.let { walk ->
+                Stretch(Modifier.weight(1f), {}, walk, dashed)
+                Point(change.stop, change.bus.board, fg, narrow = true)
+            }
+            ride(change.bus, change.ride)
+        }
+        Point(journey.toStop, (if (journey.walkEnd != null) journey.arriveStop else journey.arrive) ?: "", fg, narrow = narrow)
         // On from the stop to the room or building: a fourth point, so the points take only the room their words need.
         journey.walkEnd?.let { walk ->
             Stretch(Modifier.weight(1f), {}, walk, dashed)
@@ -217,6 +239,17 @@ private fun Ticket(answer: NextAnswer, journey: Journey, now: Long, top: Top) {
                 }
             }
         }
+        // A change of bus: the second bus under the first, so nobody stays on the wrong one.
+        journey.change?.let { c ->
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 10.dp)) {
+                Box(Modifier.width(64.dp), contentAlignment = Alignment.Center) { BusBadge(c.bus.svc, c.bus.color, 16.sp, paid = c.bus.paid) }
+                Spacer(Modifier.width(14.dp))
+                Column {
+                    Text(c.changeText, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                    Text(listOf(c.bus.board, stringResource(R.string.journey_from, c.stop)).joinToString(" · "), style = MaterialTheme.typography.bodyMedium, color = muted)
+                }
+            }
+        }
         val tint = if (answer.leaveLate) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
         Row(
             Modifier.padding(top = 14.dp).fillMaxWidth().background(tint.copy(alpha = 0.12f), RoundedCornerShape(14.dp)).padding(horizontal = 14.dp, vertical = 12.dp),
@@ -271,12 +304,20 @@ private fun Steps(answer: NextAnswer, journey: Journey, now: Long, top: Top) {
         // On foot the whole way, the walk runs straight from leaving to the place.
         if (bus != null) LinePoint(
             bus.board, if (walk == null) Dot.START else Dot.STOP, Line.Ride(Color(bus.color)),
-            JourneyText.ride(journey).orEmpty(),
+            journey.change?.firstRideText ?: JourneyText.ride(journey).orEmpty(),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(bus.stop, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 BusBadge(bus.svc, bus.color, 13.sp, paid = bus.paid)
                 JourneyText.busIn(journey, now)?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted, maxLines = 1) }
+            }
+        }
+        journey.change?.let { c ->
+            LinePoint(c.bus.board, Dot.STOP, Line.Ride(Color(c.bus.color)), listOf(c.changeText, c.rideText).filter { it.isNotEmpty() }.joinToString(" · ")) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(c.stop, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    BusBadge(c.bus.svc, c.bus.color, 13.sp, paid = c.bus.paid)
+                }
             }
         }
         journey.walkEnd?.let { w ->
