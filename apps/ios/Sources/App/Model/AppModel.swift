@@ -310,14 +310,14 @@ final class AppModel {
         }
     }
 
-    /// Pulled down: what's on screen asked for again, unless it came back in
-    /// the last few seconds (the server would send the same). True when it's fresh.
-    func pull() async -> Bool {
+    /// Pulled down: what's on screen asked for again, unless it came back
+    /// within `Pull.freshS` (the server would send the same). Says how it went.
+    func pull() async -> PullOutcome {
         let k = showNearby ? "nearby" : key(target)
-        if let at = answeredAt[k], -at.timeIntervalSinceNow < 10 { return true }
         let start = Date()
+        if !Pull.shouldFetch(lastOK: answeredAt[k], now: start) { return .upToDate(nextInS: nil) }
         await load()
-        return (answeredAt[k] ?? .distantPast) >= start
+        return (answeredAt[k] ?? .distantPast) >= start ? .updated : .failed
     }
 
     /// Today's timeline; kept as it was when offline.

@@ -8,6 +8,7 @@ struct BusLinePage: View {
     @Environment(BusesModel.self) private var model
     @Environment(\.inks) private var inks
     @State private var scrolled = false
+    @State private var pull = SkyPull()
 
     private var key: String { BusesModel.lineKey(svc, from) }
 
@@ -20,7 +21,13 @@ struct BusLinePage: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        SkyBand(moonLow: true) { heading(line, color) }.busBandEnd()
+                        SkyBand(moonLow: true) {
+                            VStack(alignment: .leading, spacing: 0) {
+                                PullRoom(below: 8)
+                                heading(line, color)
+                            }
+                        }
+                        .busBandEnd()
                         content(line, color, now)
                             .padding(.horizontal, 16)
                             .padding(.bottom, 24)
@@ -36,7 +43,9 @@ struct BusLinePage: View {
                 }
             }
         }
-        .refreshable { await model.pullLine(svc, from: from) }
+        .skyPull(pull, livery: (model.lines[key]?.color ?? model.color(svc)).flatMap(hexRGB), scene: { .hill($0) }) {
+            await model.pullLine(svc, from: from)
+        }
         .busRefreshing("line:\(key)") { await model.refreshLine(svc, from: from) }
         .skyPage(title: svc)
         .toolbar {

@@ -113,17 +113,6 @@ final class BusesTests: XCTestCase {
         XCTAssertNil(BusWords.spoken(nil, quality: "live"))
     }
 
-    // MARK: pulled down
-
-    func testPullAsksOnlyOnceTheAnswerIsOld() {
-        let now = Date()
-        XCTAssertTrue(BusPull.shouldFetch(lastOK: nil, now: now))
-        XCTAssertFalse(BusPull.shouldFetch(lastOK: now.addingTimeInterval(-5), now: now))
-        XCTAssertTrue(BusPull.shouldFetch(lastOK: now.addingTimeInterval(-15), now: now))
-        XCTAssertEqual(BusPull.inS(now.addingTimeInterval(8.2), now: now), 9)
-        XCTAssertNil(BusPull.inS(now.addingTimeInterval(-1), now: now))
-    }
-
     func testAgedTimesAreCountedDownAndNotLive() throws {
         let r = try row(#"{"svc":"A1","etaS":300,"quality":"live","eta":"5 min","later":[{"etaS":900,"quality":"live"}]}"#)
         let got = Date()

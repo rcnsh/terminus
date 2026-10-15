@@ -80,6 +80,7 @@ struct SkyBand<Content: View>: View {
     var moon = true
     @ViewBuilder var content: Content
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.skyPull) private var pull
     private var clock = SkyClock.shared
 
     init(moonLow: Bool = false, moon: Bool = true, @ViewBuilder content: () -> Content) {
@@ -95,6 +96,9 @@ struct SkyBand<Content: View>: View {
     var body: some View {
         let phase = clock.phase
         let p = SkyPalette.of(phase, dark: scheme == .dark)
+        let m = pull?.read()
+        let pulling = m?.open ?? false
+        let paint = pull?.paint
         VStack(alignment: .leading, spacing: 0) {
             content.skyInk(light: p.lightInk)
             if moonLow { Spacer().frame(height: Self.moonLine) }
@@ -135,6 +139,10 @@ struct SkyBand<Content: View>: View {
                     hills.clip(to: Path(CGRect(x: 0, y: end - Self.low, width: size.width, height: Self.low)))
                     SkyDraw.horizon(
                         &hills, size: size, top: end - 58, page: .page, p: p, phase: phase, road: Road(shuttle: false), withSun: false)
+                    // Pulled down: a sign grows out of the near hill and a bus drives to it.
+                    if pulling, let m, let paint {
+                        PullDraw.hill(&hills, m, paint: paint, p: p, top: end - 58, d: 1, width: size.width, lights: phase.lights)
+                    }
                 }
             }
             // Up under the status bar, and on up past the top for a pull.

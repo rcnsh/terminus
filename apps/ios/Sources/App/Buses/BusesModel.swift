@@ -44,7 +44,7 @@ final class BusesModel {
 
     /// When each board or line was last asked for, so going back and forth doesn't ask again at once.
     private var asked: [String: Date] = [:]
-    /// When each last came back, for a pull sooner than BusPull.freshS to ask nothing.
+    /// When each last came back, for a pull sooner than Pull.freshS to ask nothing.
     private var answeredAt: [String: Date] = [:]
     /// The ones on their way, so a pull waits for one rather than asking twice.
     private var asking: Set<String> = []
@@ -266,35 +266,36 @@ final class BusesModel {
     }
 
     /// `key` asked for again by `fetch`, or the one on its way waited for;
-    /// nothing within BusPull.freshS of its last answer, as the server would send the same.
-    private func pulled(_ key: String, _ fetch: () async -> Void) async -> BusPullOutcome {
+    /// nothing within Pull.freshS of its last answer, as the server would send the same.
+    private func pulled(_ key: String, _ fetch: () async -> Void) async -> PullOutcome {
         let start = Date()
         if asking.contains(key) {
             while asking.contains(key), !Task.isCancelled { try? await Task.sleep(for: .milliseconds(100)) }
-        } else if BusPull.shouldFetch(lastOK: answeredAt[key], now: start) {
+        } else if Pull.shouldFetch(lastOK: answeredAt[key], now: start) {
             await fetch()
         } else {
-            return .upToDate(nextInS: BusPull.inS(nextUpdate(key), now: Date()))
+            return .upToDate(nextInS: Pull.inS(nextUpdate(key), now: Date()))
         }
         return (answeredAt[key] ?? .distantPast) >= start ? .updated : .failed
     }
 
-    func pullPage(_ code: String?) async {
-        let key = pageBoard(code) ?? Self.nearestKey
-        let started = Date()
-        let o = await pulled(key) { await refreshPage(code, force: true) }
-        // Long enough for the spinner to be seen going, never longer.
-        let shown = Date().timeIntervalSince(started)
-        if shown < 0.6 { try? await Task.sleep(for: .seconds(0.6 - shown)) }
-        say(o.words)
+    /// The pull's bus for the page of `code` (nil: the nearest stop): the
+    /// first service on the board it shows, in its colour; nil before there's one.
+    func livery(_ code: String?) -> UInt32? {
+        guard let own = code ?? nearest?.code, let row = boards[pageBoard(own) ?? own].map({ BusWords.runningFirst($0.rows) })?.first else {
+            return nil
+        }
+        return (row.color ?? color(row.svc)).flatMap(hexRGB)
     }
 
-    func pullLine(_ svc: String, from: String?) async {
-        let started = Date()
-        let o = await pulled("line:" + Self.lineKey(svc, from)) { await refreshLine(svc, from: from, force: true) }
-        let shown = Date().timeIntervalSince(started)
-        if shown < 0.6 { try? await Task.sleep(for: .seconds(0.6 - shown)) }
-        say(o.words)
+    /// Pulled down on the page for `code` (nil: the nearest stop): asked again, and how it went.
+    func pullPage(_ code: String?) async -> PullOutcome {
+        await pulled(pageBoard(code) ?? Self.nearestKey) { await refreshPage(code, force: true) }
+    }
+
+    /// Pulled down on a line's page.
+    func pullLine(_ svc: String, from: String?) async -> PullOutcome {
+        await pulled("line:" + Self.lineKey(svc, from)) { await refreshLine(svc, from: from, force: true) }
     }
 
     // MARK: the note

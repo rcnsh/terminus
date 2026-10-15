@@ -125,6 +125,7 @@ struct BusesHome: View {
     @State private var query = ""
     @FocusState private var focused: Bool
     @State private var page: String? = nearestID
+    @State private var pull = SkyPull()
     private var sky = SkyClock.shared
 
     private var searching: Bool { focused || !query.trimmingCharacters(in: .whitespaces).isEmpty }
@@ -141,7 +142,9 @@ struct BusesHome: View {
                     VStack(alignment: .leading, spacing: 0) {
                         BusSearchField(query: $query, focused: $focused)
                             .padding(.top, 8)
+                            .pullLead()
                         if !searching {
+                            PullRoom(above: 8, below: 8)
                             headers.padding(.top, 8)
                             if pages.count > 1 { dots.padding(.top, 10) }
                         }
@@ -165,7 +168,9 @@ struct BusesHome: View {
         }
         .scrollDismissesKeyboard(.immediately)
         .background(Color.page)
-        .refreshable { if !searching { await model.pullPage(current) } }
+        .skyPull(pull, enabled: !searching, livery: model.livery(current), scene: { .hill($0) }) { [current] in
+            await model.pullPage(current)
+        }
         .toolbar(.hidden, for: .navigationBar)
         .busSkyChrome(strip: true)
         // The page in view only: swiping past one doesn't ask for it. The
@@ -583,20 +588,24 @@ private struct Sides: View {
 struct BusStopPage: View {
     let code: String
     @Environment(BusesModel.self) private var model
+    @State private var pull = SkyPull()
 
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
                 SkyBand(moonLow: true) {
                     let label = model.pins.contains(code) ? L("Pinned") : nil
-                    BusStopHeader(code: code, label: label, plainLabel: label, nearest: false).padding(.horizontal, 16)
+                    VStack(alignment: .leading, spacing: 0) {
+                        PullRoom(below: 8)
+                        BusStopHeader(code: code, label: label, plainLabel: label, nearest: false).padding(.horizontal, 16)
+                    }
                 }
                 .busBandEnd()
                 BusStopBody(code: code).padding(.horizontal, 16).padding(.bottom, 24)
             }
         }
         .background(Color.page)
-        .refreshable { await model.pullPage(code) }
+        .skyPull(pull, livery: model.livery(code), scene: { .hill($0) }) { await model.pullPage(code) }
         .busRefreshing("stop:\(code):\(model.across.contains(code))") { await model.refreshPage(code) }
         .skyPage(title: model.stopName(code))
     }

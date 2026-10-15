@@ -167,7 +167,7 @@ let roadScale: CGFloat = 1.25
 /// The strip at the foot of the sky where Now's horizon is drawn.
 let horizonHeight: CGFloat = 92 * roadScale
 
-private let moonColour = Color(rgb: 0xFDE9C9)
+let moonColour = Color(rgb: 0xFDE9C9)
 
 /// Across (0–1), down (0–1.05 of the room above the words), brightness and size. Fixed, so they never twinkle.
 private let stars: [(CGFloat, CGFloat, Double, CGFloat)] = [
@@ -182,7 +182,7 @@ private let stars: [(CGFloat, CGFloat, Double, CGFloat)] = [
 /// 92-unit strip each is, x units across. Fixed waves, so a wider screen
 /// shows more hills rather than stretched ones.
 private func farY(_ x: CGFloat) -> CGFloat { 30 + 6 * sin(x / 47 + 0.6) + 4 * sin(x / 19 + 2.1) }
-private func nearY(_ x: CGFloat) -> CGFloat { 52 + 3 * sin(x / 61 + 1.3) + 1.5 * sin(x / 27) }
+func nearY(_ x: CGFloat) -> CGFloat { 52 + 3 * sin(x / 61 + 1.3) + 1.5 * sin(x / 27) }
 
 private func dip(_ lo: CGFloat, _ hi: CGFloat) -> CGFloat {
     var best = lo
@@ -198,11 +198,11 @@ private func dip(_ lo: CGFloat, _ hi: CGFloat) -> CGFloat {
 func roadSign(_ w: CGFloat) -> CGFloat { min((w * 0.7).rounded(), (w * 0.74).rounded() - 7) }
 /// Your bus, `far` along the road to the sign.
 func roadBusX(_ sign: CGFloat, _ far: CGFloat) -> CGFloat { (sign - 44 - min(1, max(0, far)) * (sign - 56)).rounded() }
-private func shuttleX(_ w: CGFloat) -> CGFloat { (w * 0.58).rounded() - 19 }
+func shuttleX(_ w: CGFloat) -> CGFloat { (w * 0.58).rounded() - 19 }
 
 /// The shuttle going by when nothing's coming: dark, with A1's red along the bottom.
-private let shuttlePaint = Color(rgb: 0x24211E)
-private let shuttleBand = Color(rgb: 0xD32F2F)
+let shuttlePaint = Color(rgb: 0x24211E)
+let shuttleBand = Color(rgb: 0xD32F2F)
 
 enum SkyDraw {
     /// Where the sky ends, from `top` down: the hills, a building or two, rain
@@ -358,9 +358,12 @@ enum SkyDraw {
     /// A single-decker from the side, heading right: 38 by 12 from `origin`,
     /// standing on its wheels at 12. With no `band` it's an outline in
     /// `paint` (a timetable guess, so it never passes for live). Window `dim`
-    /// (0 to 3) has its light off.
-    static func shuttle(_ g: inout GraphicsContext, origin o: CGPoint, d: CGFloat, paint: Color, band: Color?, glass: Color, dim: Int = -1)
-    {
+    /// (0 to 3) has its light off. Without `wheels`, the arches only: the
+    /// caller draws them turning (`shuttleWheel`).
+    static func shuttle(
+        _ g: inout GraphicsContext, origin o: CGPoint, d: CGFloat, paint: Color, band: Color?, glass: Color, dim: Int = -1,
+        wheels: Bool = true
+    ) {
         let solid = band != nil
         func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: o.x + x * d, y: o.y + y * d) }
         func part(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ h: CGFloat, _ color: Color, _ r: CGFloat, _ line: CGFloat) {
@@ -404,7 +407,7 @@ enum SkyDraw {
                 Path(roundedRect: CGRect(origin: pt(0, 7.4), size: CGSize(width: 0.9 * d, height: 1.8 * d)), cornerRadius: 0.4 * d),
                 with: .color(Color(rgb: 0xEF4444)))
         }
-        for wx: CGFloat in [7.5, 26] {
+        for wx in shuttleWheels {
             let c = pt(wx, 12)
             var arch = Path()
             arch.addArc(center: c, radius: 3.2 * d, startAngle: .degrees(180), endAngle: .degrees(360), clockwise: false)
@@ -414,8 +417,23 @@ enum SkyDraw {
             } else {
                 g.stroke(arch, with: .color(paint), lineWidth: 1.2 * d)
             }
-            dot(&g, c, 2.2 * d, Color(rgb: 0x151311))
-            dot(&g, c, 0.8 * d, Color(rgb: 0x8A847D))
+            if wheels { shuttleWheel(&g, centre: c, d: d) }
+        }
+    }
+
+    /// Across a `shuttle`, in its units, where its wheels are.
+    static let shuttleWheels: [CGFloat] = [7.5, 26]
+
+    /// A shuttle's wheel at `c`; turned `turn` radians, a spoke on its hub shows it going round.
+    static func shuttleWheel(_ g: inout GraphicsContext, centre c: CGPoint, d: CGFloat, turn: CGFloat? = nil) {
+        let tyre = Color(rgb: 0x151311)
+        dot(&g, c, 2.2 * d, tyre)
+        dot(&g, c, 0.8 * d, Color(rgb: 0x8A847D))
+        if let turn {
+            var spoke = g
+            spoke.translateBy(x: c.x, y: c.y)
+            spoke.rotate(by: .radians(turn))
+            spoke.fill(Path(CGRect(x: -0.22 * d, y: -0.85 * d, width: 0.44 * d, height: 0.6 * d)), with: .color(tyre))
         }
     }
 

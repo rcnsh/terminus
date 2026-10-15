@@ -166,39 +166,3 @@ enum BusWords {
         }
     }
 }
-
-/// What a pull to refresh came to, said briefly before it goes.
-enum BusPullOutcome: Equatable {
-    /// Asked, and the answer came back.
-    case updated
-    /// Not asked: the answer is under `BusPull.freshS` old, and the server would send the same.
-    case upToDate(nextInS: Int?)
-    /// Asked, and nothing came back.
-    case failed
-
-    var words: String {
-        switch self {
-        case .updated: L("Updated just now")
-        case .upToDate(let s?): L("Up to date, next update in %@ s", "\(s)")
-        case .upToDate(nil): L("Up to date")
-        case .failed: L("Couldn't update")
-        }
-    }
-}
-
-enum BusPull {
-    /// An answer younger than this isn't asked for again: the server keeps arrivals 15 s.
-    static let freshS: TimeInterval = 15
-
-    static func shouldFetch(lastOK: Date?, now: Date) -> Bool {
-        guard let lastOK else { return true }
-        let age = now.timeIntervalSince(lastOK)
-        return age < 0 || age >= freshS
-    }
-
-    /// "next update in 9 s", rounded up, at least 1; nil with none due.
-    static func inS(_ at: Date?, now: Date) -> Int? {
-        guard let at, at > now else { return nil }
-        return max(1, Int(ceil(at.timeIntervalSince(now))))
-    }
-}

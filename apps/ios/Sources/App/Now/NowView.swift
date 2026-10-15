@@ -18,6 +18,7 @@ struct NowView: View {
     @State private var onScreen = false
     @State private var reporting = false
     @State private var goingLater = false
+    @State private var pull = SkyPull()
 
     var body: some View {
         let phase = sky.phase
@@ -37,6 +38,8 @@ struct NowView: View {
                             }
                         }
                         .padding(.horizontal, 16)
+                        // Comes down a little with a pull; the room opens under it.
+                        .pullLead()
                         TimelineView(.periodic(from: .now, by: 1)) { _ in
                             let shows = NowShows.of(app, now: ServerClock.now)
                             VStack(alignment: .leading, spacing: 0) {
@@ -84,7 +87,11 @@ struct NowView: View {
                 }
             }
             .scrollDismissesKeyboard(.interactively)
-            .refreshable { _ = await app.pull() }
+            // Pulled down at the top, what's shown (the card or Nearby) is asked
+            // for again: the sky stretches, and your bus drives to your stop on its horizon.
+            .skyPull(pull, livery: Self.road(app).bus.map(\.color), scene: { [app] w in .road(w / roadScale, Self.road(app)) }) {
+                await app.pull()
+            }
             .background(Color.page)
             // The status bar's own strip: clear at the top, so the sky shows
             // through, then filled with the sky's top as the page goes under it.
@@ -112,6 +119,12 @@ struct NowView: View {
         .onDisappear { onScreen = false }
         .sheet(isPresented: $reporting) { ReportSheet() }
         .sheet(isPresented: $goingLater) { GoLaterSheet() }
+    }
+
+    /// The horizon's road now, with your bus on it only when it stops for you.
+    private static func road(_ app: AppModel) -> Road {
+        let r = NowShows.of(app, now: ServerClock.now).road
+        return r.stop ? r : Road(stop: false, bus: nil, shuttle: r.shuttle)
     }
 
     // MARK: the top
@@ -324,7 +337,8 @@ struct SkyNotice<Actions: View>: View {
 }
 
 /// The room above the card's words: the stars and the moon at night,
-/// lagging as the page scrolls and fading out; nothing by day.
+/// lagging as the page scrolls and fading out; nothing by day. Pulled down,
+/// it grows (`PullRoom`) and the stars spread over it; the moon keeps its size.
 private struct Room: View {
     let height: CGFloat
     let phase: SkyPhase
@@ -332,15 +346,17 @@ private struct Room: View {
     @Environment(\.accessibilityReduceMotion) private var still
 
     var body: some View {
-        Canvas { g, size in
-            guard phase == .night else { return }
-            let depth = Parallax(still ? 0 : scrolled)
-            guard depth.fade > 0 else { return }
-            g.translateBy(x: 0, y: depth.sky)
-            SkyDraw.starsAndMoon(&g, width: size.width, room: height, alpha: depth.fade)
-        }
-        .frame(height: height)
-        .accessibilityHidden(true)
+        PullRoom(base: height)
+            .background {
+                Canvas { g, size in
+                    guard phase == .night else { return }
+                    let depth = Parallax(still ? 0 : scrolled)
+                    guard depth.fade > 0 else { return }
+                    g.translateBy(x: 0, y: depth.sky)
+                    SkyDraw.starsAndMoon(&g, width: size.width, room: size.height, alpha: depth.fade, moonRoom: height)
+                }
+                .accessibilityHidden(true)
+            }
     }
 }
 
@@ -352,12 +368,23 @@ private struct Horizon: View {
     let phase: SkyPhase
     let scrolled: CGFloat
     @Environment(\.accessibilityReduceMotion) private var still
+    @Environment(\.skyPull) private var pull
 
     var body: some View {
+        // Pulled down, the pull's sign and bus are on the road instead of the card's.
+        let m = pull?.read()
+        let pulling = m?.open ?? false
+        let paint = pull?.paint
         Canvas { g, size in
+            let shown = pulling ? Road(stop: false, bus: nil, shuttle: false) : road
             SkyDraw.horizon(
-                &g, size: size, top: 10, page: .page, p: palette, phase: phase, road: road, far: Parallax(still ? 0 : scrolled).far,
+                &g, size: size, top: 10, page: .page, p: palette, phase: phase, road: shown, far: Parallax(still ? 0 : scrolled).far,
                 scale: roadScale)
+            if pulling, let m, let paint {
+                PullDraw.road(
+                    &g, m, paint: paint, p: palette, top: 10, d: roadScale, sign: roadSign(size.width / roadScale), ownSign: road.stop,
+                    live: road.bus?.live != false, lights: phase.lights)
+            }
         }
         .frame(height: 10 + horizonHeight)
         .accessibilityHidden(true)
