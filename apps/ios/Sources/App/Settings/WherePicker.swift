@@ -22,12 +22,12 @@ struct SettingsWherePicker: View {
                 let rest =
                     q.isEmpty
                     ? []
-                    : rankDestinations(destinations, q, max: 12).map(WhereItem.init).filter { d in !top.contains { $0.code == d.code } }
+                    : rankDestinations(destinations, q, max: 12).map(WhereItem.init).filter { d in !top.contains { d.isPlace(of: $0) } }
                 if !top.isEmpty {
-                    Section(L("In your timetable")) { ForEach(top, id: \.code) { row($0) } }
+                    Section(L("In your timetable")) { ForEach(top) { row($0) } }
                 }
                 if !rest.isEmpty {
-                    Section { ForEach(rest, id: \.code) { row($0) } }
+                    Section { ForEach(rest) { row($0) } }
                 }
                 if top.isEmpty && rest.isEmpty {
                     Section {
@@ -80,7 +80,7 @@ struct SettingsWherePicker: View {
 }
 
 /// One answer in the search: a destination, or one of your timetable's stops.
-struct WhereItem: Hashable {
+struct WhereItem: Hashable, Identifiable {
     let code: String
     let label: String
     let kind: String
@@ -99,4 +99,11 @@ struct WhereItem: Hashable {
     init(_ d: Destination) {
         self.init(code: d.code, label: d.label, kind: d.kind, detail: d.detail, goesTo: d.goesTo)
     }
+
+    /// A stop and a building can share a code (COM3): the kind tells them apart.
+    var id: String { "\(kind):\(code)" }
+
+    /// Whether this is the place a timetable row stands for (its `code`, where
+    /// its classes go): that stop or landmark itself, not a building sharing its code.
+    func isPlace(of row: WhereItem) -> Bool { (kind == "stop" || kind == "landmark") && code == row.code }
 }

@@ -156,3 +156,16 @@ final class SettingsProfileTests: XCTestCase {
         XCTAssertEqual(JourneyText.backup(a, j), L("Or %@ at %@ from %@", "A1", j.backup!.board, "PGP"))
     }
 }
+
+/// The where picker's results: a stop and a building may share a code.
+final class WherePickerTests: XCTestCase {
+    func testAStopAndABuildingWithOneCodeAreTwoResults() {
+        let stop = WhereItem(code: "COM3", label: "COM3", kind: "stop", detail: nil, goesTo: "COM3")
+        let building = WhereItem(code: "COM3", label: "COM3", kind: "building", detail: nil, goesTo: "COM3")
+        XCTAssertNotEqual(stop.id, building.id)
+        // A class at the COM3 stop: the stop is that row, the building isn't.
+        let row = WhereItem(code: "COM3", label: "COM3", kind: "timetable", detail: "CS2030", goesTo: "COM3")
+        XCTAssertTrue(stop.isPlace(of: row))
+        XCTAssertFalse(building.isPlace(of: row))
+    }
+}

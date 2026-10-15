@@ -169,7 +169,7 @@ private struct SetupWherePicker: View {
                 if found.isEmpty && !destinations.isEmpty {
                     SetupHint(L("No stop, building or room by that name")).padding(.vertical, 8)
                 }
-                ForEach(found, id: \.code) { d in
+                ForEach(found, id: \.kindCode) { d in
                     Button {
                         query = ""
                         pick(d)
