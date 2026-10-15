@@ -65,192 +65,50 @@ struct SettingsCardStyles: View {
     }
 }
 
-/// The sample trip, in one style: the same shapes Now draws, without the sky.
+/// The sample trip, in one style: the card Now draws, without the sky, so
+/// what's chosen here is what Now shows. As Android's CardStylePicker.
 struct SettingsCardSample: View {
     let style: String
 
-    private static let d2 = "#8E44C9"
-    private var d2Color: Color { Color(hex: Self.d2) ?? .brand }
+    var body: some View {
+        // Now ticks every second near the end; here the minute is enough.
+        TimelineView(.everyMinute) { tick in
+            if let a = Self.answer(tick.date), let j = a.card?.journey {
+                VStack(alignment: .leading, spacing: 4) {
+                    JourneyTop(answer: a, journey: j, style: JourneyStyle.of(style), now: tick.date)
+                    JourneyGround(answer: a, journey: j, style: JourneyStyle.of(style), now: tick.date, road: false)
+                }
+                .foregroundStyle(Color.ink)
+            }
+        }
+    }
 
-    /// Times for the sample, from now, in the account's clock style.
-    private var times: (leave: String, board: String, arrive: String) {
-        let now = Date()
+    /// A D2 from PGP to UTown, leaving in 4 min, with an A1 three minutes
+    /// after it: decoded as the server's answer would be, its words left for
+    /// the app to put, in the account's clock style.
+    static func answer(_ now: Date) -> NextAnswer? {
         let leave = now.addingTimeInterval(4 * 60)
         let board = leave.addingTimeInterval(4 * 60)
-        return (campusTime(leave), campusTime(board), campusTime(board.addingTimeInterval(8 * 60)))
-    }
-
-    @Environment(\.dynamicTypeSize) private var type
-
-    var body: some View {
-        // At the largest text the route's points are too narrow for their words: drawn as steps, as Now does.
-        switch style {
-        case "ticket": ticket
-        case "route" where !type.isAccessibilitySize: route
-        default: steps
-        }
-    }
-
-    private var head: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(L("To %@", "UTown")).font(.subheadline).foregroundStyle(Color.muted)
-            accented(L("Leave in %@"), L("%@ min", "4"))
-                .font(.title3.weight(.bold))
-        }
-    }
-
-    /// `format` with its blank filled by `value` in the accent, the rest in the ink, whichever order the language puts them.
-    private func accented(_ format: String, _ value: String) -> Text {
-        let parts = format.components(separatedBy: "%@")
-        let before = parts.first ?? ""
-        let after = parts.count > 1 ? parts[1] : ""
-        return Text(before).foregroundColor(Color.ink) + Text(value).foregroundColor(Color.brand) + Text(after).foregroundColor(Color.ink)
-    }
-
-    private var steps: some View {
-        let t = times
-        return VStack(alignment: .leading, spacing: 10) {
-            head
-            VStack(alignment: .leading, spacing: 0) {
-                point(t.leave, dot: .start, line: .walk) {
-                    Text(L("Leave")).font(.subheadline.weight(.semibold))
-                } below: {
-                    L("%@ walk", L("%@ min", "4"))
-                }
-                point(t.board, dot: .stop, line: .ride(d2Color)) {
-                    HStack(spacing: 6) {
-                        Text(verbatim: "PGP").font(.subheadline.weight(.semibold))
-                        BusBadge(svc: "D2", color: Self.d2, size: 11)
-                    }
-                } below: {
-                    L("%@ ride", L("%@ min", "8"))
-                }
-                point(t.arrive, dot: .end, line: nil) {
-                    Text(verbatim: "UTown").font(.subheadline.weight(.bold))
-                } below: {
-                    nil
-                }
-            }
-            .foregroundStyle(Color.ink)
-        }
-    }
-
-    private enum Dot { case start, stop, end }
-    private enum Stretch {
-        case walk
-        case ride(Color)
-    }
-
-    private func point(_ time: String, dot: Dot, line: Stretch?, @ViewBuilder title: () -> some View, below: () -> String?) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Text(time).font(.footnote.weight(.semibold).monospacedDigit()).lineLimit(1).fixedSize().frame(minWidth: 64, alignment: .leading)
-                .padding(.top, 1)
-            VStack(spacing: 0) {
-                ZStack {
-                    switch dot {
-                    case .start: Circle().fill(Color.brand).frame(width: 12, height: 12)
-                    case .stop: Circle().strokeBorder(Color.ink, lineWidth: 2.5).frame(width: 12, height: 12)
-                    case .end: Circle().strokeBorder(Color.brand, lineWidth: 4).frame(width: 15, height: 15)
-                    }
-                }
-                .frame(width: 16, height: 16)
-                switch line {
-                case .walk?:
-                    Rectangle().fill(.clear).frame(width: 3).overlay(
-                        StraightLine().stroke(Color.muted, style: StrokeStyle(lineWidth: 2.5, lineCap: .round, dash: [1.5, 5]))
-                    )
-                case .ride(let c)?:
-                    Capsule().fill(c).frame(width: 6).padding(.vertical, 2)
-                case nil:
-                    EmptyView()
-                }
-            }
-            .frame(width: 16)
-            VStack(alignment: .leading, spacing: 4) {
-                title()
-                if let b = below() { Text(b).font(.caption).foregroundStyle(Color.muted) }
-            }
-            .padding(.bottom, line == nil ? 0 : 10)
-        }
-        .fixedSize(horizontal: false, vertical: true)
-    }
-
-    private var route: some View {
-        let t = times
-        return VStack(alignment: .leading, spacing: 12) {
-            head
-            HStack(alignment: .top, spacing: 0) {
-                routePoint(L("You"), t.leave, Color.brand)
-                routeStretch(above: nil, takes: L("%@ min", "4")) {
-                    StraightLine().stroke(Color.muted, style: StrokeStyle(lineWidth: 2.5, lineCap: .round, dash: [1.5, 5]))
-                }
-                routePoint("PGP", t.board, Color.ink)
-                routeStretch(above: AnyView(BusBadge(svc: "D2", color: Self.d2, size: 10)), takes: L("%@ min", "8")) {
-                    StraightLine().stroke(d2Color, style: StrokeStyle(lineWidth: 4.5, lineCap: .round))
-                }
-                routePoint("UTown", t.arrive, Color.ink)
-            }
-            .foregroundStyle(Color.ink)
-        }
-    }
-
-    private func routePoint(_ name: String, _ time: String, _ dot: Color) -> some View {
-        VStack(spacing: 3) {
-            Spacer().frame(height: 18)
-            Circle().fill(dot).frame(width: 12, height: 12).frame(height: 14)
-            Text(name).font(.caption.weight(.semibold)).lineLimit(1)
-            Text(time).font(.caption2).foregroundStyle(Color.muted).lineLimit(1).fixedSize()
-        }
-        .frame(minWidth: 52)
-    }
-
-    private func routeStretch(above: AnyView?, takes: String, @ViewBuilder line: () -> some View) -> some View {
-        VStack(spacing: 3) {
-            Group { if let above { above } else { Color.clear } }.frame(height: 18)
-            line().frame(height: 14)
-            Text(takes).font(.caption2).foregroundStyle(Color.muted).lineLimit(1).fixedSize()
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    private var ticket: some View {
-        let t = times
-        return VStack(alignment: .leading, spacing: 10) {
-            Text(L("To %@", "UTown")).font(.subheadline).foregroundStyle(Color.muted)
-            HStack(spacing: 12) {
-                Text(verbatim: "D2")
-                    .font(.system(size: 22, weight: .heavy))
-                    .foregroundStyle(inkOn(hexRGB(Self.d2)))
-                    .frame(width: 54, height: 54)
-                    .background(d2Color, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(t.board).font(.title3.weight(.bold)).foregroundStyle(Color.ink)
-                    Text("\(L("from %@", "PGP")) · \(L("%@ walk", L("%@ min", "4")))").font(.subheadline).foregroundStyle(Color.ink)
-                }
-            }
-            HStack {
-                Text(L("Leave in %@", L("%@ min", "4"))).font(.headline).foregroundStyle(Color.brand)
-                Spacer()
-                Text(L("Arrive %@", t.arrive)).font(.subheadline.weight(.semibold)).foregroundStyle(Color.ink)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(Color.brand.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        }
-    }
-}
-
-/// A straight line across the middle of its frame, or down it when it's taller than wide.
-private struct StraightLine: Shape {
-    func path(in r: CGRect) -> Path {
-        var p = Path()
-        if r.height > r.width {
-            p.move(to: CGPoint(x: r.midX, y: r.minY + 3))
-            p.addLine(to: CGPoint(x: r.midX, y: r.maxY - 3))
-        } else {
-            p.move(to: CGPoint(x: r.minX + 4, y: r.midY))
-            p.addLine(to: CGPoint(x: r.maxX - 4, y: r.midY))
-        }
-        return p
+        let arrive = board.addingTimeInterval(8 * 60)
+        let backup = board.addingTimeInterval(3 * 60)
+        let iso = ISO8601DateFormatter()
+        let min = { (n: Int) in L("%@ min", "\(n)") }
+        let json: [String: Any] = [
+            "label": "D2", "detail": "", "stop": ["code": "PGP", "name": "PGP"], "quality": "live", "asOf": iso.string(from: now),
+            "mode": "trip", "dest": ["label": "UTown", "why": "place"], "departsAt": iso.string(from: board),
+            "leave": ["at": iso.string(from: leave)],
+            "card": [
+                "kind": "trip", "late": false, "phase": "idle",
+                "journey": [
+                    "leave": campusTime(leave), "walk": min(4),
+                    "bus": ["svc": "D2", "color": "#8E44C9", "stop": "PGP", "board": campusTime(board)],
+                    "boardAt": iso.string(from: board), "ride": min(8), "to": "UTown", "toStop": "UTown",
+                    "arrive": campusTime(arrive), "live": true,
+                    "backup": ["svc": "A1", "color": "#D32F2F", "stop": "PGP", "board": campusTime(backup)],
+                ] as [String: Any],
+            ] as [String: Any],
+        ]
+        guard let data = try? JSONSerialization.data(withJSONObject: json) else { return nil }
+        return try? JSONDecoder().decode(NextAnswer.self, from: data)
     }
 }

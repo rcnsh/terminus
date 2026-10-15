@@ -14,7 +14,7 @@ struct SettingsAboutPane: View {
             HStack(spacing: 12) {
                 SettingsMark()
                 VStack(alignment: .leading, spacing: 2) {
-                    Wordmark(size: 20)
+                    Text(verbatim: Api.isBeta ? "terminus beta" : "terminus").font(.headline.weight(.bold)).foregroundStyle(Color.ink)
                     Text(L("Version %@", Api.version))
                         .font(.footnote)
                         .foregroundStyle(Color.muted)

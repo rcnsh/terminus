@@ -162,13 +162,15 @@ struct JourneyGround: View {
     let journey: Journey
     let style: JourneyStyle
     let now: Date
+    /// The horizon's road in words; only on Now, where the horizon is.
+    var road = true
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         let a = answer
         let j = journey
         VStack(alignment: .leading, spacing: 0) {
-            RoadLine(journey: j, now: now)
+            if road { RoadLine(journey: j, now: now) }
             switch shown(style, typeSize) {
             case .route:
                 RouteLine(journey: j).padding(.top, 16).padding(.bottom, 4)

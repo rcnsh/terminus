@@ -113,4 +113,16 @@ final class SettingsProfileTests: XCTestCase {
     func testPairingQRIsMade() {
         XCTAssertNotNil(pairingQR("https://terminus.rcn.sh/pair?code=ABC123"))
     }
+
+    /// The card styles' sample is the server's answer shape, so Now's card can draw it.
+    @MainActor func testCardStyleSampleIsATripByBus() throws {
+        let now = Date()
+        let a = try XCTUnwrap(SettingsCardSample.answer(now))
+        let j = try XCTUnwrap(a.card?.journey)
+        XCTAssertEqual(j.bus?.svc, "D2")
+        XCTAssertEqual(j.backup?.svc, "A1")
+        XCTAssertTrue(j.live)
+        XCTAssertEqual(JourneyText.leaveTime(a, j, now: now), L("%@ min", "4"))
+        XCTAssertEqual(JourneyText.backup(a, j), L("Or %@ at %@ from %@", "A1", j.backup!.board, "PGP"))
+    }
 }

@@ -343,17 +343,27 @@ struct AccountInitial: View {
     }
 }
 
-/// The app's mark: a bus stop's sign in the accent, where there's no email to show.
+/// The app's mark, as on its icon: About's, and where there's no email to show.
 struct SettingsMark: View {
     var size: CGFloat = 44
 
     var body: some View {
-        Image(systemName: "bus.fill")
-            .font(.system(size: size * 0.44, weight: .semibold))
-            .foregroundStyle(Color.onBrand)
-            .frame(width: size, height: size)
-            .background(Color.brand, in: RoundedRectangle(cornerRadius: size * 0.28, style: .continuous))
-            .accessibilityHidden(true)
+        // mark.svg's 64-unit grid, as the app's icon and Android's BrandMark.
+        Canvas { ctx, box in
+            let u = min(box.width, box.height) / 64
+            let orange = Color(red: 0xFB / 255, green: 0x92 / 255, blue: 0x3C / 255)
+            func rect(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ h: CGFloat, _ r: CGFloat) -> Path {
+                Path(roundedRect: CGRect(x: x * u, y: y * u, width: w * u, height: h * u), cornerRadius: r * u, style: .continuous)
+            }
+            ctx.fill(rect(0, 0, 64, 64, 15), with: .color(Color(red: 0x1C / 255, green: 0x19 / 255, blue: 0x17 / 255)))
+            ctx.fill(rect(14, 14, 36, 9, 4.5), with: .color(orange))
+            ctx.fill(rect(27.5, 14, 9, 36, 4.5), with: .color(orange))
+            ctx.fill(
+                Path(ellipseIn: CGRect(x: 39.5 * u, y: 32.5 * u, width: 9 * u, height: 9 * u)),
+                with: .color(Color(red: 0xFA / 255, green: 0xFA / 255, blue: 0xF9 / 255)))
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
     }
 }
 

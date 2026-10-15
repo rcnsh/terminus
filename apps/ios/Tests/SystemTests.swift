@@ -122,9 +122,8 @@ private func answer(_ name: String) throws -> (NextAnswer, Date) {
     let f = WidgetFace.of(paired: true, mode: .timetable, answer: a, error: nil, offline: nil, now: now)
     #expect(f.headline == a.card?.leaveBy)
     #expect(f.leg?.svc == "R2")
-    let count = try #require(f.count)
-    #expect(count.to == a.leaveAt)
-    #expect(count.text.contains(WidgetCount.blank))
+    // When to leave is in the headline: no countdown under it, as on Android, where "17:44" could be read as a time.
+    #expect(f.sub == a.card?.journey.flatMap { JourneyText.arrive($0) })
 }
 
 @Test func onTheBusTheWidgetSaysWhereToGetOff() throws {
@@ -132,7 +131,6 @@ private func answer(_ name: String) throws -> (NextAnswer, Date) {
     let f = WidgetFace.of(paired: true, mode: .timetable, answer: a, error: nil, offline: nil, now: now)
     let off = try #require(a.card?.ride?.stops.last?.name)
     #expect(f.headline.hasPrefix("Off at \(off)"))
-    #expect(f.count?.to == a.card?.ride?.arriveAt)
 }
 
 @Test func theWidgetsAskAgainAtTheServersMomentNotSooner() throws {

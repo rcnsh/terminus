@@ -55,13 +55,6 @@ struct SkyBackdrop: View {
     }
 }
 
-/// The countdown's words with the time in its blank ticking by itself, to `count.to`.
-func countText(_ count: WidgetCount, now: Date) -> Text {
-    let parts = count.text.components(separatedBy: WidgetCount.blank)
-    let timer = Text(timerInterval: now...max(now, count.to.addingTimeInterval(-ServerClock.skew)), countsDown: true).monospacedDigit()
-    return Text(verbatim: parts.first ?? "") + timer + Text(verbatim: parts.count > 1 ? parts[1] : "")
-}
-
 /// The headline, with `face.big` (the time to leave) in the accent colour, as
 /// on Now. Late: all of it in the late colour; old: all of it muted.
 struct Headline: View {

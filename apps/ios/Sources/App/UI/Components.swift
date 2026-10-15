@@ -97,14 +97,17 @@ struct SecondaryButtonStyle: ButtonStyle {
 /// A smaller filled or outlined capsule, for buttons that sit in a row ("Not going", "Undo").
 struct ChipButtonStyle: ButtonStyle {
     var filled = false
+    /// Across the rest of its row, and taller: the one thing to do (directions, "Go there").
+    var wide = false
     @Environment(\.isEnabled) private var enabled
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.subheadline.weight(.semibold))
+            .multilineTextAlignment(.center)
             .foregroundStyle(filled ? Color.onBrand : (enabled ? Color.ink : Color.faint))
             .padding(.horizontal, 16)
-            .frame(minHeight: 40)
+            .frame(maxWidth: wide ? .infinity : nil, minHeight: wide ? 48 : 40)
             .background(filled ? (enabled ? Color.brand : Color.faint) : Color.surface, in: Capsule())
             .overlay(Capsule().strokeBorder(filled ? Color.clear : Color.line))
             .opacity(configuration.isPressed ? 0.75 : 1)

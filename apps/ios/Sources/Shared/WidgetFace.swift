@@ -137,17 +137,9 @@ struct WidgetTile: Equatable {
     var place: String?
 }
 
-/// A countdown that ticks on the widget by itself: `text` ("Leave in %@",
-/// worded) with the ticking time where `WidgetCount.blank` is.
-struct WidgetCount: Equatable {
-    var to: Date
-    var text: String
-    static let blank = "\u{1}"
-}
-
 /// What a widget says, whatever its size: a line above, the headline (with
 /// `accent`, the time to leave, in the accent colour), a line under it with
-/// a pill, what's on the ground and on the horizon's road, and a countdown.
+/// a pill, and what's on the ground and on the horizon's road.
 /// Each size shows as much as fits. Worked out once from the answer, so every
 /// size says the same thing. As Android's Face.
 struct WidgetFace {
@@ -165,7 +157,6 @@ struct WidgetFace {
     var road = Road()
     var tile: WidgetTile?
     var journey: Journey?
-    var count: WidgetCount?
 
     /// The accent part, when the headline has it: what a small widget shows big.
     var big: String? { accent.flatMap { !$0.isEmpty && headline.contains($0) ? $0 : nil } }
@@ -229,8 +220,7 @@ struct WidgetFace {
                 leg: WidgetLeg(svc: ride.svc, color: color ?? "#24211e", text: ride.nextText(at: now)),
                 road: Road(
                     stop: true, bus: RoadBus(color: color.flatMap(hexRGB) ?? 0x24211E, far: 1 - ride.progress(at: now), live: true),
-                    shuttle: false),
-                count: ride.arriveAt > now ? WidgetCount(to: ride.arriveAt, text: L("Off in %@", WidgetCount.blank)) : nil
+                    shuttle: false)
             )
         }
         if let journey, !old { return trip(answer, journey, problem: problem, now: now) }
@@ -256,12 +246,7 @@ struct WidgetFace {
             headline: answer.title,
             dim: old,
             sub: problem ?? (old ? L("Times may be out of date · tap ↻ to refresh") : answer.detail),
-            leg: old ? nil : answer.leaveText(now: now).map { WidgetLeg(text: $0) },
-            count: old
-                ? nil
-                : answer.departure.flatMap {
-                    $0 > now && answer.quality != "unknown" ? WidgetCount(to: $0, text: L("Leaves in %@", WidgetCount.blank)) : nil
-                }
+            leg: old ? nil : answer.leaveText(now: now).map { WidgetLeg(text: $0) }
         )
     }
 
@@ -282,13 +267,6 @@ struct WidgetFace {
                 WidgetLeg(svc: j.backup?.svc, color: j.backup?.color, paid: j.backup?.paid ?? false, text: $0)
             }
         }
-        // Counting down to leaving, else at the stop to the bus.
-        var count: WidgetCount?
-        if let at = a.leaveAt, at > now, a.phase != "waiting", j.leave != nil {
-            count = WidgetCount(to: at, text: L("Leave in %@", WidgetCount.blank))
-        } else if let board = j.boardDate, board > now {
-            count = WidgetCount(to: board, text: L("Bus in %@", WidgetCount.blank))
-        }
         return WidgetFace(
             heading: JourneyText.to(a, j),
             headline: headline,
@@ -298,8 +276,7 @@ struct WidgetFace {
             pill: bus.map { _ in j.live ? WidgetPill(text: L("Live"), good: true) : WidgetPill(text: L("Scheduled"), good: false) },
             leg: leg,
             road: Road.of(j, now: now),
-            journey: j,
-            count: count
+            journey: j
         )
     }
 

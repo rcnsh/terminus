@@ -132,7 +132,7 @@ private struct HeadRow: View {
     }
 }
 
-/// Under the headline: the countdown, then what it gets you ("Arrive 9:52"), with how sure its time is.
+/// Under the headline: what it gets you ("Arrive 9:52"), with how sure its time is.
 private struct SubLine: View {
     let s: Scene
     let inks: Inks
@@ -141,12 +141,7 @@ private struct SubLine: View {
     var body: some View {
         let f = s.face
         HStack(spacing: 6) {
-            if let count = f.count {
-                let rest = withSub ? f.sub.map { Text(verbatim: " · " + $0).foregroundColor(inks.muted) } : nil
-                (countText(count, now: s.entry.date).foregroundColor(inks.smallAccent).fontWeight(.semibold) + (rest ?? Text(verbatim: "")))
-                    .font(.system(size: 12))
-                    .lineLimit(1)
-            } else if withSub, let sub = f.sub {
+            if withSub, let sub = f.sub {
                 small(sub, inks.muted, 12)
             }
             if let pill = f.pill { PillView(pill: pill, inks: inks).layoutPriority(1) }
@@ -191,10 +186,7 @@ struct SquareLayout: View {
                             color
                         ).lineLimit(2).minimumScaleFactor(0.7)
                     }
-                    if let count = f.count {
-                        countText(count, now: s.entry.date).font(.system(size: 12, weight: .semibold)).foregroundStyle(sky.smallAccent)
-                            .lineLimit(1)
-                    } else if foot == nil, let sub = f.sub {
+                    if foot == nil, let sub = f.sub {
                         small(sub, sky.muted, 12, lines: 2).padding(.top, 2)
                     }
                 }
@@ -224,7 +216,7 @@ struct TripLayout: View {
         // As much as fits, the leg first to go, then the line under the headline.
         let textFull: CGFloat = 6 + 32 + 32
         var leg = f.leg != nil
-        var sub = f.sub != nil || f.pill != nil || f.count != nil
+        var sub = f.sub != nil || f.pill != nil
         let need = { textFull + (sub ? 20 : 0) + tileH + 26 + (leg ? 26 : 0) + chipsH + 6 }
         if need() > h { leg = false }
         if need() > h { sub = false }
@@ -265,7 +257,7 @@ struct DayLayout: View {
         let f = s.face
         let sky = s.look.sky
         let ground = s.look.ground
-        let sub = f.sub != nil || f.pill != nil || f.count != nil
+        let sub = f.sub != nil || f.pill != nil
         let textH: CGFloat = 8 + 36 + (f.heading != nil ? 18 : 0) + 34 + (sub ? 22 : 0) + (f.tile != nil ? 56 : 0)
         let skyH = textH + 40
         let journey = s.answer?.phase == "riding" ? nil : f.journey
@@ -503,9 +495,7 @@ struct RectangularView: View {
             }
             .foregroundStyle(.secondary)
             Text(verbatim: f.headline).font(.system(size: 16, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)
-            if let count = f.count {
-                countText(count, now: s.entry.date).font(.system(size: 13)).lineLimit(1)
-            } else if let line = f.leg?.text ?? f.sub {
+            if let line = f.leg?.text ?? f.sub {
                 Text(verbatim: line).font(.system(size: 13)).lineLimit(1)
             }
         }

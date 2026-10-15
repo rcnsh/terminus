@@ -445,9 +445,9 @@ struct CardActions: View {
                     Button {
                         if let u = w.mapsURL { openURL(u) }
                     } label: {
-                        Label(L("Directions to %@", w.name), systemImage: "figure.walk").lineLimit(2)
+                        Text(L("Directions to %@", w.name)).lineLimit(2)
                     }
-                    .buttonStyle(ChipButtonStyle(filled: true))
+                    .buttonStyle(ChipButtonStyle(filled: true, wide: true))
                     .accessibilityIdentifier("directions")
                     if !skips.isEmpty {
                         SkipMenu(skips: skips, label: nil)
@@ -509,7 +509,8 @@ struct SkipMenu: View {
             if let label {
                 Text(label)
             } else {
-                Image(systemName: "ellipsis").frame(width: 16)
+                // A circle as tall as the directions beside it.
+                Image(systemName: "ellipsis").frame(width: 16, height: 48)
             }
         }
         .buttonStyle(ChipButtonStyle())
