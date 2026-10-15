@@ -16,6 +16,7 @@ import {
   checkUpstream,
   feedDownSince,
   housekeeping,
+  pingHeartbeat,
   readIncidents,
   readUpstream,
   runCron,
@@ -612,4 +613,21 @@ test('the card says when the feed is down, on an answer without a live time', as
     'NUS 的实时巴士时间自 09:14 起无法获取。',
   );
   assert.equal(cardFor(guess, true).notice, null, 'up');
+});
+
+test('the heartbeat pings only when a URL is set, and a failed ping throws for the cron to log', async () => {
+  const realFetch = globalThis.fetch;
+  const calls = [];
+  try {
+    globalThis.fetch = async (url) => (calls.push(String(url)), new Response('OK'));
+    await pingHeartbeat({});
+    assert.deepEqual(calls, [], 'unset (the beta): no ping');
+    await pingHeartbeat({ HEARTBEAT_URL: 'https://hc.example.test/abc' });
+    assert.deepEqual(calls, ['https://hc.example.test/abc']);
+
+    globalThis.fetch = async () => new Response('nope', { status: 404 });
+    await assert.rejects(pingHeartbeat({ HEARTBEAT_URL: 'https://hc.example.test/abc' }), /HTTP 404/);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });
