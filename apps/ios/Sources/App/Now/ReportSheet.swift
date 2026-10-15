@@ -93,6 +93,7 @@ struct ReportSheet: View {
             }
             .buttonStyle(.primary)
             .padding(.top, 20)
+            .accessibilityIdentifier("report.addEmail")
         }
     }
 

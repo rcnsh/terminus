@@ -329,22 +329,7 @@ final class SettingsUITests: XCTestCase {
 
     private func classes() -> [String] { (profile()["manual"] as? [[String: Any]] ?? []).compactMap { $0["label"] as? String } }
 
-    private func anonToken() -> String {
-        var req = URLRequest(url: URL(string: stub + "/api/auth/anon")!)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "content-type")
-        req.httpBody = Data(#"{"name":"iPhone","platform":"ios"}"#.utf8)
-        let o = (try? JSONSerialization.jsonObject(with: fetch(req))) as? [String: Any]
-        let t = o?["token"] as? String ?? ""
-        // Set up already, so the tabs show rather than the onboarding.
-        var put = URLRequest(url: URL(string: stub + "/api/me/profile")!)
-        put.httpMethod = "PUT"
-        put.setValue("Bearer \(t)", forHTTPHeaderField: "authorization")
-        put.setValue("application/json", forHTTPHeaderField: "content-type")
-        put.httpBody = Data(#"{"home":{"stops":["PGP"]},"seen":["onboarding"]}"#.utf8)
-        _ = fetch(put)
-        return t
-    }
+    private func anonToken() -> String { stubAnonToken() }
 
     private func fetch(_ req: URLRequest) -> Data {
         let done = DispatchSemaphore(value: 0)

@@ -48,6 +48,33 @@ func stubSession() -> (String, String) {
     return (out.token, out.email)
 }
 
+/// A new account without an email, set up already (a home at PGP), so the
+/// tabs show rather than the onboarding: its token.
+func stubAnonToken() -> String {
+    func fetch(_ req: URLRequest) -> Data {
+        let done = DispatchSemaphore(value: 0)
+        var out = Data()
+        URLSession.shared.dataTask(with: req) { d, _, _ in
+            out = d ?? Data()
+            done.signal()
+        }.resume()
+        done.wait()
+        return out
+    }
+    var req = URLRequest(url: URL(string: stub + "/api/auth/anon")!)
+    req.httpMethod = "POST"
+    req.setValue("application/json", forHTTPHeaderField: "content-type")
+    req.httpBody = Data(#"{"name":"iPhone","platform":"ios"}"#.utf8)
+    let t = ((try? JSONSerialization.jsonObject(with: fetch(req))) as? [String: Any])?["token"] as? String ?? ""
+    var put = URLRequest(url: URL(string: stub + "/api/me/profile")!)
+    put.httpMethod = "PUT"
+    put.setValue("Bearer \(t)", forHTTPHeaderField: "authorization")
+    put.setValue("application/json", forHTTPHeaderField: "content-type")
+    put.httpBody = Data(#"{"home":{"stops":["PGP"]},"seen":["onboarding"]}"#.utf8)
+    _ = fetch(put)
+    return t
+}
+
 /// POSTs to one of the stub's own routes (/__stub/at?t=..., /__stub/freeze, /__stub/class?in=N).
 func stubPost(_ path: String) {
     var req = URLRequest(url: URL(string: stub + path)!)
