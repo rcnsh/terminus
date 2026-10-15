@@ -58,6 +58,9 @@ final class BusesModel {
 
     private var token: String? { AppModel.shared.token }
 
+    /// Still the account a request was made for: one from before a sign-in or sign-out is dropped.
+    private func current(_ s: Int) -> Bool { s == AppModel.shared.session }
+
     /// A new account (or none) starts the tab afresh.
     /// A new language: each board is asked for again as it next shows, in it.
     /// What's there stays until then, rather than the page going blank.
@@ -119,7 +122,8 @@ final class BusesModel {
     /// shows, so a change in Settings is here when you come back.
     func loadProfile() async {
         guard let token else { return }
-        guard let p = try? await Api(token: token).profile() else { return }
+        let s = AppModel.shared.session
+        guard let p = try? await Api(token: token).profile(), current(s) else { return }
         apply(p)
     }
 
@@ -141,17 +145,20 @@ final class BusesModel {
         }
         let before = pins
         pins = BusPins.toggle(pins, code, max: pinLimit)
+        let s = AppModel.shared.session
         Task {
             do {
                 // The profile as it is now, so nothing else changed elsewhere is lost.
                 let fallback = pinLimit
-                apply(
-                    try await Api(token: token).changeProfile { p in
-                        let saved = (p["pinnedStops"] as? [String]) ?? []
-                        let limit = ((p["limits"] as? [String: Any])?["pinnedStops"] as? Int) ?? fallback
-                        p["pinnedStops"] = BusPins.toggle(saved, code, max: limit)
-                    })
+                let saved = try await Api(token: token).changeProfile { p in
+                    let saved = (p["pinnedStops"] as? [String]) ?? []
+                    let limit = ((p["limits"] as? [String: Any])?["pinnedStops"] as? Int) ?? fallback
+                    p["pinnedStops"] = BusPins.toggle(saved, code, max: limit)
+                }
+                guard current(s) else { return }
+                apply(saved)
             } catch {
+                guard current(s) else { return }
                 if refused(error, token) { return }
                 pins = before
                 say(L("Couldn't save. Try again."))
@@ -166,11 +173,14 @@ final class BusesModel {
         if !force && fresh(Self.nearestKey) { return }
         guard let token else { return }
         asked[Self.nearestKey] = Date()
+        let s = AppModel.shared.session
         await fetching(Self.nearestKey) {
             let loc = await Locator.shared.fix(maxAge: 60)
             do {
                 let stops = try await Api(token: token).nearbyBoards(
                     lat: loc?.coordinate.latitude, lon: loc?.coordinate.longitude, acc: loc?.acc)
+                // Without a location, the nearest is the home stop: another account's, after a sign-in.
+                guard current(s) else { return }
                 answeredAt[Self.nearestKey] = Date()
                 nearest = stops.first
                 nearestState = stops.isEmpty ? .none : .ready
@@ -180,6 +190,7 @@ final class BusesModel {
                     failed.remove(b.code)
                 }
             } catch {
+                guard current(s) else { return }
                 if refused(error, token) { return }
                 if let e = error as? ApiError, e.status == 400 {
                     // No location and no home stop: nothing to call nearest.

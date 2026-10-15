@@ -151,6 +151,8 @@ final class AppModel {
         // Maybe another account than the one the map last read (a sign-in from a guest).
         MapModel.shared.reset()
         Task { await MapModel.shared.loadProfile() }
+        // Settings too: an old account's reply, or an edit still waiting, mustn't be saved into this one.
+        SettingsModel.shared.reset()
         paired = true
         self.anonymous = anonymous
         self.email = email
@@ -489,8 +491,10 @@ final class AppModel {
     /// "Go later today": a one-off trip to the place on screen, planned like a class.
     func goLater(atMin: Int) async -> String? {
         guard let token, target != .plan else { return nil }
+        let gen = session
         do {
             let a = try await Api(token: token).once(target, atMin: atMin)
+            guard gen == session else { return nil }
             applyPlan(a)
             select(.plan)
             await loadDay()

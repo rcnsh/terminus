@@ -107,8 +107,10 @@ final class SettingsModel {
 
     func loadChoices() async {
         guard let token = app.token else { return }
+        let session = app.session
         do {
             let c = try await Api(token: token).choices()
+            guard app.session == session else { return }
             choices = c.choices
             history = c.history ?? 0
         } catch {
@@ -118,8 +120,11 @@ final class SettingsModel {
 
     func loadDevices() async {
         guard let token = app.token else { return }
+        let session = app.session
         do {
-            devices = try await Api(token: token).devices()
+            let d = try await Api(token: token).devices()
+            guard app.session == session else { return }
+            devices = d
         } catch {
             if !rejected(error, token) { say(failureMessage(error)) }
         }
@@ -302,12 +307,15 @@ final class SettingsModel {
         }
         importing = true
         imported = nil
+        let session = app.session
         Task {
             // Changes made from here wait for the import's answer, then go on top of it.
             while let s = sending { await s.value }
             do {
                 let r = try await Api(token: token).importTimetable(share)
                 importing = false
+                // Signed out or into another account meanwhile: not this one's timetable.
+                guard app.session == session else { return }
                 imported = r
                 unplaced = r.unplaced
                 let saved = ProfileDoc(r.profile)
@@ -324,6 +332,7 @@ final class SettingsModel {
                 announce(r.summary)
             } catch {
                 importing = false
+                guard app.session == session else { return }
                 if rejected(error, token) { return }
                 if saveTask == nil { send() }
                 say(failureMessage(error))
@@ -360,9 +369,11 @@ final class SettingsModel {
 
     func undoChoice(_ c: TripChoice) {
         guard let token = app.token else { return }
+        let session = app.session
         Task {
             do {
                 try await Api(token: token).undoChoice(trip: c.trip, pref: c.pref)
+                guard app.session == session else { return }
                 choices.removeAll { $0 == c }
                 await loadChoices()
             } catch {
@@ -373,9 +384,11 @@ final class SettingsModel {
 
     func clearHistory() {
         guard let token = app.token else { return }
+        let session = app.session
         Task {
             do {
                 try await Api(token: token).clearHistory()
+                guard app.session == session else { return }
                 history = 0
                 say(L("Trip history cleared"))
             } catch {
@@ -389,10 +402,13 @@ final class SettingsModel {
     func newPairCode() {
         guard let token = app.token, !busy else { return }
         busy = true
+        let session = app.session
         Task {
             defer { busy = false }
             do {
-                pairCode = try await Api(token: token).pairCode()
+                let code = try await Api(token: token).pairCode()
+                guard app.session == session else { return }
+                pairCode = code
             } catch {
                 if !rejected(error, token) { say(failureMessage(error)) }
             }
@@ -406,9 +422,11 @@ final class SettingsModel {
 
     func removeDevice(_ d: Device) {
         guard let token = app.token else { return }
+        let session = app.session
         Task {
             do {
                 try await Api(token: token).removeDevice(d.id)
+                guard app.session == session else { return }
                 if d.current == true {
                     // This phone's session went with it: signed out here too.
                     signedOut()
@@ -432,10 +450,12 @@ final class SettingsModel {
     func deleteAccount() {
         guard let token = app.token, !busy else { return }
         busy = true
+        let session = app.session
         Task {
             defer { busy = false }
             do {
                 try await Api(token: token).deleteAccount()
+                guard app.session == session else { return }
                 signedOut()
             } catch {
                 if !rejected(error, token) { say(failureMessage(error)) }
@@ -497,6 +517,8 @@ final class SettingsModel {
     /// A 401 for this phone's own token signs it out, and the welcome screen says why. True when it did.
     private func rejected(_ error: Error, _ token: String) -> Bool {
         guard let e = error as? ApiError, e.status == 401 else { return false }
+        // Another account's token by now: this one's settings stay.
+        guard token == app.token else { return true }
         reset()
         app.rejected(token, reason: L("This phone was signed out of your account. Sign in again with your email."))
         return true

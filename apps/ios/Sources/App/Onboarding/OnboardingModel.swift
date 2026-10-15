@@ -42,8 +42,10 @@ final class OnboardingModel {
     func load() async {
         message = nil
         guard let token = AppModel.shared.token else { return }
+        let session = AppModel.shared.session
         do {
             let loaded = try await Api(token: token).profile()
+            guard AppModel.shared.session == session else { return }
             if saveTask == nil { profile = loaded }
             if link.isEmpty { link = share ?? "" }
             syncLang()
@@ -276,8 +278,10 @@ final class OnboardingModel {
         // A setting's save still waiting would land after the import and put
         // the old timetable back: it goes first.
         await saveTask?.value
+        let session = AppModel.shared.session
         do {
             let r = try await api.importTimetable(share)
+            guard AppModel.shared.session == session else { return false }
             imported = r
             profile = r.profile
             unplaced = r.unplaced
