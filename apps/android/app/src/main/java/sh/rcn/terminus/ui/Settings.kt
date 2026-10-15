@@ -39,10 +39,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.SnackbarResult
-import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -126,10 +126,9 @@ internal enum class SettingsPage(val title: Int) {
 }
 
 /**
- * Everything the account page has, so the website is optional for daily
- * use: a list of groups, each with a line saying what's set, opening a page
- * that slides in. Back (and the back gesture, which the page follows) returns
- * to the list, as does tapping the Settings tab again ([toList]).
+ * Everything the account page has, so the website is optional for daily use: a list of groups, each with a line saying what's set, opening
+ * a page that slides in. Back (and the back gesture, which the page follows) returns to the list, as does tapping the Settings tab again
+ * ([toList]).
  */
 @Composable
 internal fun SettingsScreen(
@@ -201,13 +200,10 @@ internal fun SettingsScreen(
 }
 
 /**
- * Settings at a glance: who you are, then the rest as rows in groups, each
- * saying what's set. What isn't set yet (a home stop, classes) says what to
- * do, in the accent; notifications all off shows in amber: it's the setting
- * that changes the most. About is under them.
- * The title is in the same slim band of the sky as each page's, so opening
- * one doesn't change the top; the list is plain under it and scrolls, as a
- * page does. [top] and [bottom]: the status bar's and the tab bar's room.
+ * Settings at a glance: who you are, then the rest as rows in groups, each saying what's set. What isn't set yet (a home stop, classes)
+ * says what to do, in the accent; notifications all off shows in amber: it's the setting that changes the most. About is under them. The
+ * title is in the same slim band of the sky as each page's, so opening one doesn't change the top; the list is plain under it and scrolls,
+ * as a page does. [top] and [bottom]: the status bar's and the tab bar's room.
  */
 @Composable
 private fun SettingsList(state: AccountState, main: MainViewModel, top: Dp, bottom: Dp, onOpen: (SettingsPage) -> Unit) {
@@ -244,7 +240,13 @@ private fun AccountTile(state: AccountState, ui: UiState, onOpen: (SettingsPage)
                 BrandMark(Modifier.size(44.dp))
             }
             Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-                Text(email ?: stringResource(R.string.not_signed_in), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    email ?: stringResource(R.string.not_signed_in),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
                 summary(SettingsPage.Devices, state, ui)?.let {
                     Text(it, style = MaterialTheme.typography.bodySmall, color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
@@ -263,24 +265,22 @@ private fun Initial(email: String, size: Dp, fontSize: TextUnit) {
     }
 }
 
-/**
- * The pages in the list, with their icons: three groups (what your trips use,
- * this device, then feedback), as the website lists them.
- */
-private val GROUPS = listOf(
+/** The pages in the list, with their icons: three groups (what your trips use, this device, then feedback), as the website lists them. */
+private val GROUPS =
     listOf(
-        SettingsPage.Trips to R.drawable.ic_pin,
-        SettingsPage.Timetable to R.drawable.ic_calendar,
-        SettingsPage.Favourites to R.drawable.ic_heart,
-        SettingsPage.Notifications to R.drawable.ic_bell,
-    ),
-    listOf(
-        SettingsPage.Language to R.drawable.ic_globe,
-        SettingsPage.Appearance to R.drawable.ic_contrast,
-        SettingsPage.Devices to R.drawable.ic_devices,
-    ),
-    listOf(SettingsPage.Feedback to R.drawable.ic_chat),
-)
+        listOf(
+            SettingsPage.Trips to R.drawable.ic_pin,
+            SettingsPage.Timetable to R.drawable.ic_calendar,
+            SettingsPage.Favourites to R.drawable.ic_heart,
+            SettingsPage.Notifications to R.drawable.ic_bell,
+        ),
+        listOf(
+            SettingsPage.Language to R.drawable.ic_globe,
+            SettingsPage.Appearance to R.drawable.ic_contrast,
+            SettingsPage.Devices to R.drawable.ic_devices,
+        ),
+        listOf(SettingsPage.Feedback to R.drawable.ic_chat),
+    )
 
 /** Under the horizon: the groups of pages, and About. */
 @Composable
@@ -290,11 +290,12 @@ private fun SettingsGround(state: AccountState, ui: UiState, profile: ProfileDoc
     // What isn't set yet says what to do, in the accent: no home stop, no
     // classes, or a link for a semester that's over.
     val todo = { page: SettingsPage ->
-        profile != null && when (page) {
-            SettingsPage.Trips -> profile.homeStops.isEmpty()
-            SettingsPage.Timetable -> state.needsReimport || profile.trips.size + profile.manual.size == 0
-            else -> false
-        }
+        profile != null &&
+            when (page) {
+                SettingsPage.Trips -> profile.homeStops.isEmpty()
+                SettingsPage.Timetable -> state.needsReimport || profile.trips.size + profile.manual.size == 0
+                else -> false
+            }
     }
     Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         for (group in GROUPS) {
@@ -302,21 +303,29 @@ private fun SettingsGround(state: AccountState, ui: UiState, profile: ProfileDoc
                 group.forEachIndexed { i, (page, icon) ->
                     if (i > 0) RowDivider()
                     Row(
-                        Modifier.fillMaxWidth().clickable(role = Role.Button) { onOpen(page) }.heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 10.dp),
+                        Modifier.fillMaxWidth()
+                            .clickable(role = Role.Button) { onOpen(page) }
+                            .heightIn(min = 56.dp)
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Box(Modifier.size(32.dp).background(c.primaryContainer, RoundedCornerShape(9.dp)), contentAlignment = Alignment.Center) {
+                        Box(
+                            Modifier.size(32.dp).background(c.primaryContainer, RoundedCornerShape(9.dp)),
+                            contentAlignment = Alignment.Center,
+                        ) {
                             Icon(painterResource(icon), contentDescription = null, tint = c.primary, modifier = Modifier.size(18.dp))
                         }
                         Spacer(Modifier.width(14.dp))
                         Text(stringResource(page.title), style = MaterialTheme.typography.bodyLarge, maxLines = 1)
                         Spacer(Modifier.width(12.dp))
                         // Send feedback says what it's for on its page: beside it there's no room.
-                        val said = when (page) {
-                            SettingsPage.Feedback -> null
-                            SettingsPage.Language, SettingsPage.Appearance -> displaySummary(page, state)
-                            else -> summary(page, state, ui)
-                        }
+                        val said =
+                            when (page) {
+                                SettingsPage.Feedback -> null
+                                SettingsPage.Language,
+                                SettingsPage.Appearance -> displaySummary(page, state)
+                                else -> summary(page, state, ui)
+                            }
                         val off = page == SettingsPage.Notifications && !ui.leaveAlerts && !ui.liveUpdates
                         val ask = todo(page)
                         Text(
@@ -330,7 +339,12 @@ private fun SettingsGround(state: AccountState, ui: UiState, profile: ProfileDoc
                             modifier = Modifier.weight(1f),
                         )
                         Spacer(Modifier.width(4.dp))
-                        Icon(painterResource(R.drawable.ic_chevron), contentDescription = null, tint = muted, modifier = Modifier.size(20.dp))
+                        Icon(
+                            painterResource(R.drawable.ic_chevron),
+                            contentDescription = null,
+                            tint = muted,
+                            modifier = Modifier.size(20.dp),
+                        )
                     }
                 }
             }
@@ -348,23 +362,35 @@ private fun SettingsGround(state: AccountState, ui: UiState, profile: ProfileDoc
 private fun summary(page: SettingsPage, state: AccountState, ui: UiState): String? {
     val profile = state.profile
     return when (page) {
-        SettingsPage.Trips -> profile?.let {
-            val home = it.homeStops.firstOrNull()?.let { code -> state.campus?.stopName(code) ?: code }
-            if (home == null) stringResource(R.string.choose_your_stop) else "$home · ${stringResource(R.string.pace_summary, stringResource(paceName(it.walkPace)))}"
-        }
-        SettingsPage.Timetable -> if (state.needsReimport) stringResource(R.string.reimport_needed) else profile?.let {
-            val n = it.trips.size + it.manual.size
-            if (n == 0) stringResource(R.string.import_from_nusmods) else classCount(n)
-        }
-        SettingsPage.Favourites -> profile?.let { p -> p.places.joinToString(stringResource(R.string.list_sep)) { it.label }.ifEmpty { stringResource(R.string.none_yet) } }
-        SettingsPage.Notifications -> listOfNotNull(
-            if (ui.leaveAlerts) stringResource(R.string.short_leave_alerts) else null,
-            if (ui.liveUpdates) stringResource(R.string.short_live) else null,
-        ).joinToString(stringResource(R.string.list_sep)).ifEmpty { stringResource(R.string.all_off) }
-        SettingsPage.Devices -> when {
-            state.email == null -> stringResource(R.string.devices_need_email)
-            else -> state.devices?.let { deviceCount(it.size) }
-        }
+        SettingsPage.Trips ->
+            profile?.let {
+                val home = it.homeStops.firstOrNull()?.let { code -> state.campus?.stopName(code) ?: code }
+                if (home == null) stringResource(R.string.choose_your_stop)
+                else "$home · ${stringResource(R.string.pace_summary, stringResource(paceName(it.walkPace)))}"
+            }
+        SettingsPage.Timetable ->
+            if (state.needsReimport) stringResource(R.string.reimport_needed)
+            else
+                profile?.let {
+                    val n = it.trips.size + it.manual.size
+                    if (n == 0) stringResource(R.string.import_from_nusmods) else classCount(n)
+                }
+        SettingsPage.Favourites ->
+            profile?.let { p ->
+                p.places.joinToString(stringResource(R.string.list_sep)) { it.label }.ifEmpty { stringResource(R.string.none_yet) }
+            }
+        SettingsPage.Notifications ->
+            listOfNotNull(
+                    if (ui.leaveAlerts) stringResource(R.string.short_leave_alerts) else null,
+                    if (ui.liveUpdates) stringResource(R.string.short_live) else null,
+                )
+                .joinToString(stringResource(R.string.list_sep))
+                .ifEmpty { stringResource(R.string.all_off) }
+        SettingsPage.Devices ->
+            when {
+                state.email == null -> stringResource(R.string.devices_need_email)
+                else -> state.devices?.let { deviceCount(it.size) }
+            }
         SettingsPage.Account -> state.email ?: stringResource(R.string.not_signed_in)
         else -> null
     }
@@ -372,11 +398,12 @@ private fun summary(page: SettingsPage, state: AccountState, ui: UiState): Strin
 
 /** "No classes yet", "1 class", "12 classes". */
 @Composable
-private fun classCount(n: Int): String = when (n) {
-    0 -> stringResource(R.string.no_classes_yet)
-    1 -> stringResource(R.string.one_class)
-    else -> stringResource(R.string.n_classes, n)
-}
+private fun classCount(n: Int): String =
+    when (n) {
+        0 -> stringResource(R.string.no_classes_yet)
+        1 -> stringResource(R.string.one_class)
+        else -> stringResource(R.string.n_classes, n)
+    }
 
 @Composable
 private fun deviceCount(n: Int): String = if (n == 1) stringResource(R.string.one_device) else stringResource(R.string.n_devices, n)
@@ -387,33 +414,36 @@ private fun displaySummary(page: SettingsPage, state: AccountState): String {
     val ctx = LocalContext.current
     return if (page == SettingsPage.Language) {
         listOfNotNull(
-            when (Lang.pref(ctx)) {
-                Lang.EN -> "English"
-                Lang.ZH -> "中文"
-                else -> stringResource(R.string.follow_device)
-            },
-            when (state.profile?.clock) {
-                Clock.H12 -> stringResource(R.string.clock_12)
-                Clock.H24 -> stringResource(R.string.clock_24)
-                else -> null
-            },
-        ).joinToString(" · ")
+                when (Lang.pref(ctx)) {
+                    Lang.EN -> "English"
+                    Lang.ZH -> "中文"
+                    else -> stringResource(R.string.follow_device)
+                },
+                when (state.profile?.clock) {
+                    Clock.H12 -> stringResource(R.string.clock_12)
+                    Clock.H24 -> stringResource(R.string.clock_24)
+                    else -> null
+                },
+            )
+            .joinToString(" · ")
     } else {
         "${stringResource(themeName(Theme.pref(ctx)))} · ${stringResource(CardStyle.name(CardStyle.pref(ctx)))}"
     }
 }
 
-private fun themeName(theme: String) = when (theme) {
-    Theme.LIGHT -> R.string.theme_light
-    Theme.DARK -> R.string.theme_dark
-    else -> R.string.follow_device
-}
+private fun themeName(theme: String) =
+    when (theme) {
+        Theme.LIGHT -> R.string.theme_light
+        Theme.DARK -> R.string.theme_dark
+        else -> R.string.follow_device
+    }
 
-private fun paceName(pace: String) = when (pace) {
-    "slow" -> R.string.pace_slow
-    "fast" -> R.string.pace_fast
-    else -> R.string.pace_normal
-}
+private fun paceName(pace: String) =
+    when (pace) {
+        "slow" -> R.string.pace_slow
+        "fast" -> R.string.pace_fast
+        else -> R.string.pace_normal
+    }
 
 /** One page of Settings: that group's controls. */
 @Composable
@@ -436,43 +466,49 @@ private fun SettingsPageContent(
             if (profile == null) return
             TripsSettings(profile, state, account)
         }
-        SettingsPage.Timetable -> Groups {
-            if (profile == null) return@Groups
-            var link by rememberSaveable(state.sharedLink) { mutableStateOf(state.sharedLink ?: profile.share.orEmpty()) }
-            // The semester the link is for has ended: say so above everything else.
-            if (state.needsReimport) {
-                Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(12.dp)) {
-                        Text(stringResource(R.string.reimport_title), style = MaterialTheme.typography.titleSmall)
-                        Text(stringResource(R.string.reimport_text, state.term.orEmpty()), style = MaterialTheme.typography.bodyMedium)
+        SettingsPage.Timetable ->
+            Groups {
+                if (profile == null) return@Groups
+                var link by rememberSaveable(state.sharedLink) { mutableStateOf(state.sharedLink ?: profile.share.orEmpty()) }
+                // The semester the link is for has ended: say so above everything else.
+                if (state.needsReimport) {
+                    Card(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(12.dp)) {
+                            Text(stringResource(R.string.reimport_title), style = MaterialTheme.typography.titleSmall)
+                            Text(stringResource(R.string.reimport_text, state.term.orEmpty()), style = MaterialTheme.typography.bodyMedium)
+                        }
                     }
                 }
+                Group(stringResource(R.string.heading_from_nusmods), stringResource(R.string.nusmods_hint)) {
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        TimetableImport(state, account, link, inSettings = true) { link = it }
+                    }
+                }
+                Classes(profile, state.campus, account)
             }
-            Group(stringResource(R.string.heading_from_nusmods), stringResource(R.string.nusmods_hint)) {
-                Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) { TimetableImport(state, account, link, inSettings = true) { link = it } }
-            }
-            Classes(profile, state.campus, account)
-        }
         SettingsPage.Favourites -> if (profile != null) Groups { Favourites(profile, state.campus, account) }
         SettingsPage.Notifications -> Groups { NotificationSettings(main) }
-        SettingsPage.Devices -> Groups {
-            if (state.email == null) {
-                Hint(stringResource(R.string.not_signed_in_hint))
-                InkButton(stringResource(R.string.add_email), onAddEmail)
-            } else {
-                Devices(state, account, main, onSignedOut)
+        SettingsPage.Devices ->
+            Groups {
+                if (state.email == null) {
+                    Hint(stringResource(R.string.not_signed_in_hint))
+                    InkButton(stringResource(R.string.add_email), onAddEmail)
+                } else {
+                    Devices(state, account, main, onSignedOut)
+                }
             }
-        }
-        SettingsPage.Language -> Groups {
-            LanguagePicker(account)
-            Group(stringResource(R.string.time_format), stringResource(R.string.time_format_hint_auto)) {
-                ClockPills(state.profile, account)
+        SettingsPage.Language ->
+            Groups {
+                LanguagePicker(account)
+                Group(stringResource(R.string.time_format), stringResource(R.string.time_format_hint_auto)) {
+                    ClockPills(state.profile, account)
+                }
             }
-        }
-        SettingsPage.Appearance -> Groups {
-            ThemePicker()
-            CardStylePicker()
-        }
+        SettingsPage.Appearance ->
+            Groups {
+                ThemePicker()
+                CardStylePicker()
+            }
         SettingsPage.Account -> Groups { AccountSection(state, account, main, onAddEmail, onSignedOut) }
         SettingsPage.About -> Groups { AboutPage() }
         SettingsPage.Feedback -> Groups { FeedbackPage(state, account, onAddEmail) }
@@ -488,15 +524,16 @@ private fun AboutPage() {
     val host = BuildConfig.SITE.removePrefix("https://").removePrefix("http://")
     // Each link's name, where it goes (LINK_BASE), and that
     // place as shown under the name (the address people know).
-    val links = listOf(
-        Triple(R.string.get_apps, BuildConfig.LINK_BASE, host),
-        Triple(R.string.status, "${BuildConfig.LINK_BASE}/status", "$host/status"),
-        Triple(R.string.privacy, "${BuildConfig.LINK_BASE}/privacy", "$host/privacy"),
-        Triple(R.string.api_docs, "${BuildConfig.LINK_BASE}/docs", "$host/docs"),
-        Triple(R.string.source_code, "https://github.com/rcnsh/terminus", "github.com/rcnsh/terminus"),
-        Triple(R.string.map_data, "https://www.openstreetmap.org/copyright", "openstreetmap.org"),
-        Triple(R.string.aup, "https://nus.edu.sg/registrar/docs/info/registration-guides/aup-form.pdf", "nus.edu.sg"),
-    )
+    val links =
+        listOf(
+            Triple(R.string.get_apps, BuildConfig.LINK_BASE, host),
+            Triple(R.string.status, "${BuildConfig.LINK_BASE}/status", "$host/status"),
+            Triple(R.string.privacy, "${BuildConfig.LINK_BASE}/privacy", "$host/privacy"),
+            Triple(R.string.api_docs, "${BuildConfig.LINK_BASE}/docs", "$host/docs"),
+            Triple(R.string.source_code, "https://github.com/rcnsh/terminus", "github.com/rcnsh/terminus"),
+            Triple(R.string.map_data, "https://www.openstreetmap.org/copyright", "openstreetmap.org"),
+            Triple(R.string.aup, "https://nus.edu.sg/registrar/docs/info/registration-guides/aup-form.pdf", "nus.edu.sg"),
+        )
     Column(Modifier.padding(horizontal = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             BrandMark(Modifier.size(44.dp))
@@ -531,8 +568,8 @@ private fun AboutPage() {
 }
 
 /**
- * Which server the app talks to, from the ones built in (Servers). Moving to
- * or from the dev stub sets the sign-in aside, so the app starts again.
+ * Which server the app talks to, from the ones built in (Servers). Moving to or from the dev stub sets the sign-in aside, so the app starts
+ * again.
  */
 @Composable
 private fun DeveloperGroup() {
@@ -541,12 +578,13 @@ private fun DeveloperGroup() {
     Group(stringResource(R.string.developer), stringResource(R.string.developer_server_hint)) {
         Servers.choices.forEachIndexed { i, base ->
             if (i > 0) RowDivider()
-            val sub = when {
-                base.contains("10.0.2.2") -> stringResource(R.string.server_stub_emulator)
-                Servers.isLocal(base) -> stringResource(R.string.server_stub_reverse)
-                i == 0 -> stringResource(R.string.server_default)
-                else -> null
-            }
+            val sub =
+                when {
+                    base.contains("10.0.2.2") -> stringResource(R.string.server_stub_emulator)
+                    Servers.isLocal(base) -> stringResource(R.string.server_stub_reverse)
+                    i == 0 -> stringResource(R.string.server_default)
+                    else -> null
+                }
             ServerRow(base.substringAfter("://"), sub, base == chosen) {
                 if (base == chosen) return@ServerRow
                 val restart = Servers.choose(ctx, base)
@@ -560,7 +598,10 @@ private fun DeveloperGroup() {
 @Composable
 private fun ServerRow(host: String, sub: String?, selected: Boolean, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().selectable(selected, role = Role.RadioButton, onClick = onClick).heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 8.dp),
+        Modifier.fillMaxWidth()
+            .selectable(selected, role = Role.RadioButton, onClick = onClick)
+            .heightIn(min = 52.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
@@ -583,11 +624,9 @@ private const val FEEDBACK_MAX = 1000
 private const val FEEDBACK_NEAR = 900
 
 /**
- * A note to the operator about anything, laid out as a message: who it's
- * from, the note, then a counter and Send. Only an account with an email can
- * send one, so there's someone to reply to; without one, the page asks for an
- * email instead. A wrong answer is better sent from under the card, so the
- * card below says so.
+ * A note to the operator about anything, laid out as a message: who it's from, the note, then a counter and Send. Only an account with an
+ * email can send one, so there's someone to reply to; without one, the page asks for an email instead. A wrong answer is better sent from
+ * under the card, so the card below says so.
  */
 @Composable
 private fun FeedbackPage(state: AccountState, account: AccountViewModel, onAddEmail: () -> Unit) {
@@ -606,7 +645,13 @@ private fun FeedbackPage(state: AccountState, account: AccountViewModel, onAddEm
             Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.feedback_from), style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant)
                 Spacer(Modifier.width(12.dp))
-                Text(email, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Text(
+                    email,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
             }
             RowDivider()
             // The note is the card's body: no box of its own, and it scrolls inside past ten lines.
@@ -616,19 +661,28 @@ private fun FeedbackPage(state: AccountState, account: AccountViewModel, onAddEm
                 placeholder = { Text(stringResource(R.string.feedback_placeholder)) },
                 minLines = 6,
                 maxLines = 10,
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    disabledContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    disabledIndicatorColor = Color.Transparent,
-                ),
+                colors =
+                    TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        disabledContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        disabledIndicatorColor = Color.Transparent,
+                    ),
                 modifier = Modifier.fillMaxWidth().semantics { contentDescription = L.s(R.string.feedback_label) },
             )
             RowDivider()
-            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("${note.length} / $FEEDBACK_MAX", style = MaterialTheme.typography.labelMedium, color = count, modifier = Modifier.weight(1f))
+            Row(
+                Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "${note.length} / $FEEDBACK_MAX",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = count,
+                    modifier = Modifier.weight(1f),
+                )
                 InkButton(
                     stringResource(R.string.send),
                     { account.sendFeedback(note) { note = "" } },
@@ -638,9 +692,18 @@ private fun FeedbackPage(state: AccountState, account: AccountViewModel, onAddEm
         }
         Group(null) {
             Row(Modifier.padding(16.dp)) {
-                Icon(painterResource(R.drawable.ic_chat), contentDescription = null, tint = c.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp).size(20.dp))
+                Icon(
+                    painterResource(R.drawable.ic_chat),
+                    contentDescription = null,
+                    tint = c.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp).size(20.dp),
+                )
                 Column(Modifier.padding(start = 12.dp)) {
-                    Text(stringResource(R.string.feedback_wrong_title), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                    Text(
+                        stringResource(R.string.feedback_wrong_title),
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium,
+                    )
                     Hint(stringResource(R.string.feedback_wrong_hint), Modifier.padding(top = 2.dp))
                 }
             }
@@ -649,10 +712,8 @@ private fun FeedbackPage(state: AccountState, account: AccountViewModel, onAddEm
 }
 
 /**
- * Leave alerts and the live notification: on this phone only, in two
- * groups (before class, during a trip), each row with a short line and the
- * details under the group. Exact alarms are asked for
- * when either notification is on.
+ * Leave alerts and the live notification: on this phone only, in two groups (before class, during a trip), each row with a short line and
+ * the details under the group. Exact alarms are asked for when either notification is on.
  */
 @Composable
 private fun NotificationSettings(main: MainViewModel) {
@@ -665,7 +726,8 @@ private fun NotificationSettings(main: MainViewModel) {
     // notifications, or the one's channel): said, with the way there.
     val blocked = {
         val store = Store(ctx)
-        (store.leaveAlerts && !LeaveAlerts.canNotify(ctx, LeaveAlerts.CHANNEL)) || (store.liveUpdates && !LeaveAlerts.canNotify(ctx, LiveService.CHANNEL))
+        (store.leaveAlerts && !LeaveAlerts.canNotify(ctx, LeaveAlerts.CHANNEL)) ||
+            (store.liveUpdates && !LeaveAlerts.canNotify(ctx, LiveService.CHANNEL))
     }
     var off by remember { mutableStateOf(blocked()) }
     LaunchedEffect(Unit) {
@@ -680,20 +742,30 @@ private fun NotificationSettings(main: MainViewModel) {
         NotifyToggle(
             stringResource(R.string.notify_leave),
             stringResource(R.string.notify_leave_short),
-            ui.leaveAlerts, main::setLeaveAlerts, openSettings, inCard = true, channel = LeaveAlerts.CHANNEL,
+            ui.leaveAlerts,
+            main::setLeaveAlerts,
+            openSettings,
+            inCard = true,
+            channel = LeaveAlerts.CHANNEL,
         )
     }
     Group(stringResource(R.string.heading_during_trip), stringResource(R.string.during_trip_hint)) {
         NotifyToggle(
             stringResource(R.string.live_notification),
             stringResource(R.string.live_notification_short),
-            ui.liveUpdates, main::setLiveUpdates, openSettings, inCard = true, channel = LiveService.CHANNEL,
+            ui.liveUpdates,
+            main::setLiveUpdates,
+            openSettings,
+            inCard = true,
+            channel = LiveService.CHANNEL,
         )
     }
     if ((ui.leaveAlerts || ui.liveUpdates) && !exact) {
         Column {
             Hint(stringResource(R.string.exact_off), Modifier.padding(horizontal = 4.dp))
-            TextButton(onClick = { runCatching { ctx.startActivity(LeaveAlerts.exactAlarmSettings(ctx)) } }) { Text(stringResource(R.string.allow_exact)) }
+            TextButton(onClick = { runCatching { ctx.startActivity(LeaveAlerts.exactAlarmSettings(ctx)) } }) {
+                Text(stringResource(R.string.allow_exact))
+            }
         }
     }
 }
@@ -705,7 +777,10 @@ internal fun TripChoices(state: AccountState, account: AccountViewModel) {
     Group(stringResource(R.string.your_classes)) {
         state.choices.forEachIndexed { i, c ->
             if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Column(Modifier.weight(1f)) {
                     Text(c.label ?: stringResource(R.string.class_gone))
                     Hint(if (c.pref == "earlier") stringResource(R.string.one_bus_earlier) else stringResource(R.string.no_reminders))
@@ -722,8 +797,15 @@ internal fun TripHistory(state: AccountState, account: AccountViewModel) {
     if (state.history == 0) return
     var confirm by remember { mutableStateOf(false) }
     Group(stringResource(R.string.trip_history), stringResource(R.string.history_kept)) {
-        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(if (state.history == 1) stringResource(R.string.trips_recorded_one) else stringResource(R.string.trips_recorded_n, state.history), modifier = Modifier.weight(1f))
+        Row(
+            Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                if (state.history == 1) stringResource(R.string.trips_recorded_one)
+                else stringResource(R.string.trips_recorded_n, state.history),
+                modifier = Modifier.weight(1f),
+            )
             TextButton(onClick = { confirm = true }) { Text(stringResource(R.string.clear_history)) }
         }
     }
@@ -732,23 +814,38 @@ internal fun TripHistory(state: AccountState, account: AccountViewModel) {
             onDismissRequest = { confirm = false },
             title = { Text(stringResource(R.string.clear_history_title)) },
             text = { Text(stringResource(R.string.clear_history_text)) },
-            confirmButton = { TextButton(onClick = { confirm = false; account.clearHistory() }) { Text(stringResource(R.string.clear)) } },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirm = false
+                        account.clearHistory()
+                    }
+                ) {
+                    Text(stringResource(R.string.clear))
+                }
+            },
             dismissButton = { TextButton(onClick = { confirm = false }) { Text(stringResource(R.string.cancel)) } },
         )
     }
 }
 
 /**
- * Who you're signed in as, with Sign out; your data; the account page for
- * API keys and signing out everywhere (the web's alone); then Delete account
- * on its own at the foot, the only red on any page.
+ * Who you're signed in as, with Sign out; your data; the account page for API keys and signing out everywhere (the web's alone); then
+ * Delete account on its own at the foot, the only red on any page.
  */
 @Composable
-private fun AccountSection(state: AccountState, account: AccountViewModel, main: MainViewModel, onAddEmail: () -> Unit, onSignedOut: () -> Unit) {
+private fun AccountSection(
+    state: AccountState,
+    account: AccountViewModel,
+    main: MainViewModel,
+    onAddEmail: () -> Unit,
+    onSignedOut: () -> Unit,
+) {
     val ctx = LocalContext.current
     val c = MaterialTheme.colorScheme
     var confirm by remember { mutableStateOf<String?>(null) }
-    val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri -> uri?.let(account::exportTo) }
+    val export =
+        rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri -> uri?.let(account::exportTo) }
     val email = state.email
     if (email == null) {
         Group(stringResource(R.string.not_signed_in), stringResource(R.string.not_signed_in_hint)) {
@@ -759,7 +856,13 @@ private fun AccountSection(state: AccountState, account: AccountViewModel, main:
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Initial(email, 40.dp, 17.sp)
                 Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-                    Text(email, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        email,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                     state.devices?.let { Hint(deviceCount(it.size)) }
                 }
                 OutlinedButton(onClick = { confirm = "signout" }) { Text(stringResource(R.string.sign_out)) }
@@ -770,40 +873,80 @@ private fun AccountSection(state: AccountState, account: AccountViewModel, main:
         LinkRow(stringResource(R.string.download_data), { export.launch("terminus-export.json") })
         if (email != null) {
             RowDivider()
-            LinkRow(stringResource(R.string.account_page), { ctx.openWeb("${BuildConfig.LINK_BASE}/account") }, sub = stringResource(R.string.account_page_sub), away = true)
+            LinkRow(
+                stringResource(R.string.account_page),
+                { ctx.openWeb("${BuildConfig.LINK_BASE}/account") },
+                sub = stringResource(R.string.account_page_sub),
+                away = true,
+            )
         }
         RowDivider()
         // Kept on this phone, not in the account: it's about this app's crashes.
         var crashReports by remember { mutableStateOf(CrashReports.enabled(ctx)) }
         FieldRow(
             stringResource(R.string.crash_reports),
-            Modifier.toggleable(value = crashReports, role = Role.Switch) { on -> CrashReports.setEnabled(ctx, on); crashReports = on },
+            Modifier.toggleable(value = crashReports, role = Role.Switch) { on ->
+                CrashReports.setEnabled(ctx, on)
+                crashReports = on
+            },
             sub = stringResource(R.string.crash_reports_hint),
-        ) { Switch(checked = crashReports, onCheckedChange = null) }
+        ) {
+            Switch(checked = crashReports, onCheckedChange = null)
+        }
     }
     // An account with an email is deleted from the account page, signed in on the web (the server insists).
     Group(null) {
         if (email == null) {
             LinkRow(stringResource(R.string.delete_account), { confirm = "delete" }, color = c.error)
         } else {
-            LinkRow(stringResource(R.string.delete_account), { ctx.openWeb("${BuildConfig.LINK_BASE}/account") }, away = true, color = c.error)
+            LinkRow(
+                stringResource(R.string.delete_account),
+                { ctx.openWeb("${BuildConfig.LINK_BASE}/account") },
+                away = true,
+                color = c.error,
+            )
         }
     }
     when (confirm) {
-        "delete" -> AlertDialog(
-            onDismissRequest = { confirm = null },
-            title = { Text(stringResource(R.string.delete_account_title)) },
-            text = { Text(stringResource(R.string.delete_account_text)) },
-            confirmButton = { TextButton(onClick = { confirm = null; account.deleteAccount { main.signedOut(); onSignedOut() } }) { Text(stringResource(R.string.delete)) } },
-            dismissButton = { TextButton(onClick = { confirm = null }) { Text(stringResource(R.string.cancel)) } },
-        )
-        "signout" -> AlertDialog(
-            onDismissRequest = { confirm = null },
-            title = { Text(stringResource(R.string.sign_out_title)) },
-            text = { Text(stringResource(R.string.sign_out_text, email.orEmpty())) },
-            confirmButton = { TextButton(onClick = { confirm = null; main.unpair(); account.reset(); onSignedOut() }) { Text(stringResource(R.string.sign_out)) } },
-            dismissButton = { TextButton(onClick = { confirm = null }) { Text(stringResource(R.string.cancel)) } },
-        )
+        "delete" ->
+            AlertDialog(
+                onDismissRequest = { confirm = null },
+                title = { Text(stringResource(R.string.delete_account_title)) },
+                text = { Text(stringResource(R.string.delete_account_text)) },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            confirm = null
+                            account.deleteAccount {
+                                main.signedOut()
+                                onSignedOut()
+                            }
+                        }
+                    ) {
+                        Text(stringResource(R.string.delete))
+                    }
+                },
+                dismissButton = { TextButton(onClick = { confirm = null }) { Text(stringResource(R.string.cancel)) } },
+            )
+        "signout" ->
+            AlertDialog(
+                onDismissRequest = { confirm = null },
+                title = { Text(stringResource(R.string.sign_out_title)) },
+                text = { Text(stringResource(R.string.sign_out_text, email.orEmpty())) },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            confirm = null
+                            main.unpair()
+                            account.reset()
+                            onSignedOut()
+                        }
+                    ) {
+                        Text(stringResource(R.string.sign_out))
+                    }
+                },
+                dismissButton = { TextButton(onClick = { confirm = null }) { Text(stringResource(R.string.cancel)) } },
+            )
     }
 }
 
@@ -818,14 +961,31 @@ private fun Devices(state: AccountState, account: AccountViewModel, main: MainVi
         Group(stringResource(R.string.heading_your_devices)) {
             devices.forEachIndexed { i, d ->
                 if (i > 0) RowDivider()
-                Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Column(Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(d.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                            Text(
+                                d.name,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false),
+                            )
                             if (d.current) Tag(stringResource(R.string.this_phone_tag))
                         }
                         val now = System.currentTimeMillis()
-                        val used = if (now - d.lastSeenMs < 60_000) stringResource(R.string.just_now) else android.text.format.DateUtils.getRelativeTimeSpanString(d.lastSeenMs, now, android.text.format.DateUtils.MINUTE_IN_MILLIS)
+                        val used =
+                            if (now - d.lastSeenMs < 60_000) stringResource(R.string.just_now)
+                            else
+                                android.text.format.DateUtils.getRelativeTimeSpanString(
+                                    d.lastSeenMs,
+                                    now,
+                                    android.text.format.DateUtils.MINUTE_IN_MILLIS,
+                                )
                         Hint(listOfNotNull(platformName(d.platform), stringResource(R.string.used_when, used)).joinToString(" · "))
                     }
                     RemoveButton({ removing = d })
@@ -843,7 +1003,19 @@ private fun Devices(state: AccountState, account: AccountViewModel, main: MainVi
             onDismissRequest = { removing = null },
             title = { Text(stringResource(R.string.remove_device_title, d.name)) },
             text = { Text(if (d.current) stringResource(R.string.remove_this_phone) else stringResource(R.string.remove_other)) },
-            confirmButton = { TextButton(onClick = { removing = null; account.removeDevice(d) { main.signedOut(); onSignedOut() } }) { Text(stringResource(R.string.remove)) } },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        removing = null
+                        account.removeDevice(d) {
+                            main.signedOut()
+                            onSignedOut()
+                        }
+                    }
+                ) {
+                    Text(stringResource(R.string.remove))
+                }
+            },
             dismissButton = { TextButton(onClick = { removing = null }) { Text(stringResource(R.string.cancel)) } },
         )
     }
@@ -858,16 +1030,20 @@ private fun Tag(text: String) {
         style = MaterialTheme.typography.labelSmall,
         fontWeight = FontWeight.SemiBold,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = 8.dp).background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp),
+        modifier =
+            Modifier.padding(start = 8.dp)
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(6.dp))
+                .padding(horizontal = 6.dp, vertical = 2.dp),
     )
 }
 
-private fun platformName(p: String?) = when (p) {
-    "android" -> "Android"
-    "mac" -> "Mac"
-    "ios" -> "iPhone"
-    else -> null
-}
+private fun platformName(p: String?) =
+    when (p) {
+        "android" -> "Android"
+        "mac" -> "Mac"
+        "ios" -> "iPhone"
+        else -> null
+    }
 
 /** The code to type on a Mac, and a QR code another phone's camera opens. */
 @Composable
@@ -887,16 +1063,27 @@ private fun PairCodeDialog(code: String, onClose: () -> Unit) {
                     modifier = Modifier.padding(vertical = 12.dp),
                 )
                 Text(stringResource(R.string.or_scan))
-                Image(BitmapPainter(qr.asImageBitmap()), contentDescription = stringResource(R.string.qr_desc, code), modifier = Modifier.size(200.dp).padding(8.dp))
+                Image(
+                    BitmapPainter(qr.asImageBitmap()),
+                    contentDescription = stringResource(R.string.qr_desc, code),
+                    modifier = Modifier.size(200.dp).padding(8.dp),
+                )
                 Hint(stringResource(R.string.works_once))
             }
         },
         confirmButton = { TextButton(onClick = onClose) { Text(stringResource(R.string.done)) } },
         dismissButton = {
-            TextButton(onClick = {
-                val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, L.s(R.string.pair_share_text, code, link))
-                ctx.startActivity(Intent.createChooser(send, L.s(R.string.send_pair_code)))
-            }) { Text(stringResource(R.string.send)) }
+            TextButton(
+                onClick = {
+                    val send =
+                        Intent(Intent.ACTION_SEND)
+                            .setType("text/plain")
+                            .putExtra(Intent.EXTRA_TEXT, L.s(R.string.pair_share_text, code, link))
+                    ctx.startActivity(Intent.createChooser(send, L.s(R.string.send_pair_code)))
+                }
+            ) {
+                Text(stringResource(R.string.send))
+            }
         },
     )
 }
@@ -905,14 +1092,14 @@ private fun PairCodeDialog(code: String, onClose: () -> Unit) {
 private fun qrBitmap(text: String, size: Int): Bitmap {
     val m = QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, size, size, mapOf(EncodeHintType.MARGIN to 2))
     val bmp = createBitmap(m.width, m.height)
-    for (x in 0 until m.width) for (y in 0 until m.height) bmp[x, y] = if (m[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE
+    for (x in 0 until m.width) for (y in 0 until m.height) bmp[x, y] =
+        if (m[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE
     return bmp
 }
 
 /**
- * Every class, imported or added by hand, by day and time, each with Remove,
- * in one card ending in "+ Add a class or commitment by hand"; then any
- * favourites at their usual time each week.
+ * Every class, imported or added by hand, by day and time, each with Remove, in one card ending in "+ Add a class or commitment by hand";
+ * then any favourites at their usual time each week.
  */
 @Composable
 private fun Classes(profile: ProfileDoc, campus: Campus?, account: AccountViewModel) {
@@ -924,8 +1111,10 @@ private fun Classes(profile: ProfileDoc, campus: Campus?, account: AccountViewMo
     val order = WEEKDAYS.map { it.first }
     var changing by rememberSaveable { mutableStateOf<String?>(null) }
     var open by rememberSaveable { mutableStateOf(false) }
-    val all = (profile.trips.mapIndexed { i, t -> Triple(true, i, t) } + profile.manual.mapIndexed { i, t -> Triple(false, i, t) })
-        .sortedWith(compareBy({ order.indexOf(it.third.day) }, { it.third.arriveByMin }))
+    val all =
+        (profile.trips.mapIndexed { i, t -> Triple(true, i, t) } + profile.manual.mapIndexed { i, t -> Triple(false, i, t) }).sortedWith(
+            compareBy({ order.indexOf(it.third.day) }, { it.third.arriveByMin })
+        )
     Group(classCount(all.size)) {
         for ((imported, i, t) in all) {
             // Tapped, a class opens to change its stop, as on the web.
@@ -934,18 +1123,26 @@ private fun Classes(profile: ProfileDoc, campus: Campus?, account: AccountViewMo
             val state = stringResource(if (expanded) R.string.a11y_expanded else R.string.a11y_collapsed)
             Row(
                 Modifier.fillMaxWidth()
-                    .clickable(role = Role.Button, onClickLabel = stringResource(R.string.a11y_change_stop, t.label)) { changing = if (expanded) null else key }
+                    .clickable(role = Role.Button, onClickLabel = stringResource(R.string.a11y_change_stop, t.label)) {
+                        changing = if (expanded) null else key
+                    }
                     .semantics { stateDescription = state }
                     .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
                     Text("${dayShort(t.day)} ${time(t.arriveByMin)} · ${t.label}", style = MaterialTheme.typography.bodyLarge)
-                    val about = listOfNotNull(campus?.let { L.s(R.string.stop_suffix, it.stopName(t.to)) }, if (imported) null else stringResource(R.string.added_by_hand))
+                    val about =
+                        listOfNotNull(
+                            campus?.let { L.s(R.string.stop_suffix, it.stopName(t.to)) },
+                            if (imported) null else stringResource(R.string.added_by_hand),
+                        )
                     if (about.isNotEmpty()) Hint(about.joinToString(" · "))
                 }
                 // Only while that place still holds this class: a second tap before the list redraws mustn't take the next one.
-                RemoveButton({ account.edit { if ((if (imported) it.trips else it.manual).getOrNull(i) == t) it.removeClass(imported, i) } })
+                RemoveButton({
+                    account.edit { if ((if (imported) it.trips else it.manual).getOrNull(i) == t) it.removeClass(imported, i) }
+                })
             }
             if (changing == key) {
                 Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)) {
@@ -969,13 +1166,18 @@ private fun Classes(profile: ProfileDoc, campus: Campus?, account: AccountViewMo
         }
     }
     // A favourite at its usual time each week: removable here with the classes.
-    val usual = profile.usual.mapNotNull { u -> profile.places.firstOrNull { it.key == u.place }?.let { u to it } }
-        .sortedWith(compareBy({ order.indexOf(it.first.day) }, { it.first.atMin }))
+    val usual =
+        profile.usual
+            .mapNotNull { u -> profile.places.firstOrNull { it.key == u.place }?.let { u to it } }
+            .sortedWith(compareBy({ order.indexOf(it.first.day) }, { it.first.atMin }))
     if (usual.isNotEmpty()) {
         Group(stringResource(R.string.every_week)) {
             usual.forEachIndexed { n, (u, place) ->
                 if (n > 0) RowDivider()
-                Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Column(Modifier.weight(1f)) {
                         Text("${dayShort(u.day)} ${time(u.atMin)} · ${place.label}", style = MaterialTheme.typography.bodyLarge)
                         if (campus != null) Hint(stringResource(R.string.stop_suffix, campus.stopName(place.to)))
@@ -1008,7 +1210,13 @@ private fun AddClass(destinations: List<Destination>, account: AccountViewModel,
             TimeButton(stringResource(R.string.starts), start, { start = it }, Modifier.weight(1f))
             TimeButton(stringResource(R.string.ends), end, { end = it }, Modifier.weight(1f))
         }
-        OutlinedTextField(label, { if (it.length <= maxLabel) label = it }, label = { Text(stringResource(R.string.name_eg_gym)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(
+            label,
+            { if (it.length <= maxLabel) label = it },
+            label = { Text(stringResource(R.string.name_eg_gym)) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
         WherePicker(stringResource(R.string.where), destinations, where) { where = it }
         Row(verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onDone) { Text(stringResource(R.string.cancel)) }
@@ -1019,7 +1227,11 @@ private fun AddClass(destinations: List<Destination>, account: AccountViewModel,
                     val s = start
                     val w = where
                     if (s != null && w != null) {
-                        account.edit { it.addManual(Trip(day, s, end?.takeIf { e -> e > s }, if (w.kind == "landmark") w.code else w.stopCode, label.trim(), "")) }
+                        account.edit {
+                            it.addManual(
+                                Trip(day, s, end?.takeIf { e -> e > s }, if (w.kind == "landmark") w.code else w.stopCode, label.trim(), "")
+                            )
+                        }
                         onDone()
                     }
                 },
@@ -1034,7 +1246,9 @@ private fun AddClass(destinations: List<Destination>, account: AccountViewModel,
 private fun Favourites(profile: ProfileDoc, campus: Campus?, account: AccountViewModel) {
     // A stop's name, or a food court's (favourites and classes can go to one).
     val stopName = { code: String ->
-        campus?.stops?.firstOrNull { it.code == code }?.name ?: campus?.destinations?.firstOrNull { it.code == code && it.kind == "landmark" }?.label ?: code
+        campus?.stops?.firstOrNull { it.code == code }?.name
+            ?: campus?.destinations?.firstOrNull { it.code == code && it.kind == "landmark" }?.label
+            ?: code
     }
     var note by remember { mutableStateOf<String?>(null) }
     // Rows fold away before they go and unfold as they come (FoldRow), so
@@ -1049,7 +1263,10 @@ private fun Favourites(profile: ProfileDoc, campus: Campus?, account: AccountVie
             key(p.key) {
                 FoldRow(shown = p.key !in leaving, arriving = drawn) {
                     Column {
-                        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
                             Column(Modifier.weight(1f)) {
                                 Text(p.label, style = MaterialTheme.typography.bodyLarge)
                                 // Where it goes, when the name doesn't already say (a building's stop, or a name from before favourites).
@@ -1065,7 +1282,10 @@ private fun Favourites(profile: ProfileDoc, campus: Campus?, account: AccountVie
                                     // Undo in the bar at the foot, as for a class swiped off Today.
                                     val r = removed ?: return@afterFold
                                     scope.launch {
-                                        val undo = notices?.showSnackbar(Notice(L.s(R.string.favourite_removed, r.label), actionLabel = L.s(R.string.undo)))
+                                        val undo =
+                                            notices?.showSnackbar(
+                                                Notice(L.s(R.string.favourite_removed, r.label), actionLabel = L.s(R.string.undo))
+                                            )
                                         if (undo == SnackbarResult.ActionPerformed) account.edit { it.restorePlace(r) }
                                     }
                                 }
@@ -1079,12 +1299,23 @@ private fun Favourites(profile: ProfileDoc, campus: Campus?, account: AccountVie
         if (profile.places.size < profile.limits.places) {
             // The stops your classes go to come first, each saying which classes use it.
             val favourite = profile.places.map { it.to }.toSet()
-            val timetable = (profile.trips + profile.manual).groupBy { it.to }
-                .filterKeys { it !in favourite }
-                .map { (to, classes) -> Destination(to, stopName(to), to, "timetable", detail = classes.map { it.label.substringBefore(" @ ") }.distinct().joinToString(L.s(R.string.list_sep))) }
-                .sortedBy { it.label }
+            val timetable =
+                (profile.trips + profile.manual)
+                    .groupBy { it.to }
+                    .filterKeys { it !in favourite }
+                    .map { (to, classes) ->
+                        Destination(
+                            to,
+                            stopName(to),
+                            to,
+                            "timetable",
+                            detail = classes.map { it.label.substringBefore(" @ ") }.distinct().joinToString(L.s(R.string.list_sep)),
+                        )
+                    }
+                    .sortedBy { it.label }
             Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                WherePicker(stringResource(R.string.add_favourite), campus?.destinations.orEmpty(), null, timetable, leaving = picked) { d ->
+                WherePicker(stringResource(R.string.add_favourite), campus?.destinations.orEmpty(), null, timetable, leaving = picked) { d
+                    ->
                     if (d == null || picked != null) return@WherePicker
                     // No name to type: it's called what was picked, short, as it reads on a button.
                     val to = if (d.kind == "landmark") d.code else d.stopCode
@@ -1117,9 +1348,16 @@ private fun ThemePicker() {
     var pref by remember { mutableStateOf(Theme.pref(ctx)) }
     Group(stringResource(R.string.theme), stringResource(R.string.theme_hint)) {
         Pills(
-            listOf(Theme.AUTO to stringResource(R.string.auto), Theme.LIGHT to stringResource(R.string.theme_light), Theme.DARK to stringResource(R.string.theme_dark)),
+            listOf(
+                Theme.AUTO to stringResource(R.string.auto),
+                Theme.LIGHT to stringResource(R.string.theme_light),
+                Theme.DARK to stringResource(R.string.theme_dark),
+            ),
             pref,
-            { Theme.set(ctx, it); pref = it },
+            {
+                Theme.set(ctx, it)
+                pref = it
+            },
             Modifier.padding(16.dp),
         )
     }
@@ -1129,7 +1367,11 @@ private fun ThemePicker() {
 @Composable
 private fun ClockPills(profile: ProfileDoc?, account: AccountViewModel) {
     Pills(
-        listOf(Clock.AUTO to stringResource(R.string.auto), Clock.H12 to stringResource(R.string.clock_12), Clock.H24 to stringResource(R.string.clock_24)),
+        listOf(
+            Clock.AUTO to stringResource(R.string.auto),
+            Clock.H12 to stringResource(R.string.clock_12),
+            Clock.H24 to stringResource(R.string.clock_24),
+        ),
         profile?.clock ?: Clock.AUTO,
         account::setClock,
         Modifier.padding(16.dp),

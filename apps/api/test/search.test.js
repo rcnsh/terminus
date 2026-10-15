@@ -38,8 +38,18 @@ test('score ladder: exact, starts with, word, contains', () => {
 });
 
 test('the Buses tab: a service before a stop that matches as well', () => {
-  const withServices = [...D, { code: 'AS5', label: 'AS 5', stopCode: 'AS5', kind: 'stop' }, { code: 'A1', label: 'A1', kind: 'service', detail: 'Loop from KRB' }, { code: 'A2', label: 'A2', kind: 'service', detail: 'Loop from KRB' }];
-  assert.deepEqual(rank(withServices, 'a').map((d) => d.code).slice(0, 3), ['A1', 'A2', 'AS5']);
+  const withServices = [
+    ...D,
+    { code: 'AS5', label: 'AS 5', stopCode: 'AS5', kind: 'stop' },
+    { code: 'A1', label: 'A1', kind: 'service', detail: 'Loop from KRB' },
+    { code: 'A2', label: 'A2', kind: 'service', detail: 'Loop from KRB' },
+  ];
+  assert.deepEqual(
+    rank(withServices, 'a')
+      .map((d) => d.code)
+      .slice(0, 3),
+    ['A1', 'A2', 'AS5'],
+  );
   assert.equal(rank(withServices, 'a2')[0].code, 'A2');
 });
 
@@ -50,9 +60,18 @@ test('the Buses tab: stops by their long names, found by those, their short name
     { code: 'YIH', label: 'Yusof Ishak House', stopCode: 'YIH', kind: 'stop', aliases: ['yih'] },
     { code: 'YIH-OPP', label: 'Opp Yusof Ishak House', stopCode: 'YIH-OPP', kind: 'stop', aliases: ['opp yih'] },
   ];
-  assert.deepEqual(rank(stops, 'library').map((d) => d.code), ['CLB']);
-  assert.deepEqual(rank(stops, 'yih').map((d) => d.code), ['YIH', 'YIH-OPP']);
-  assert.deepEqual(rank(stops, 'yusof').map((d) => d.code), ['YIH', 'YIH-OPP']);
+  assert.deepEqual(
+    rank(stops, 'library').map((d) => d.code),
+    ['CLB'],
+  );
+  assert.deepEqual(
+    rank(stops, 'yih').map((d) => d.code),
+    ['YIH', 'YIH-OPP'],
+  );
+  assert.deepEqual(
+    rank(stops, 'yusof').map((d) => d.code),
+    ['YIH', 'YIH-OPP'],
+  );
 });
 
 test('the box lists each kind once: groups in the order of their best result, rank order inside', () => {
@@ -67,7 +86,14 @@ test('the box lists each kind once: groups in the order of their best result, ra
   assert.deepEqual(ids(ranked), ['stop:COM3', 'building:COM1', 'building:COM2', 'stop:OPP-COM']);
   assert.deepEqual(ids(grouped(ranked)), ['stop:COM3', 'stop:OPP-COM', 'building:COM1', 'building:COM2']);
   // A group's place is its best result's; kinds this page doesn't know are one group.
-  const mixed = [{ kind: 'building', code: 'A' }, { kind: 'stop', code: 'B' }, { kind: 'shop', code: 'C' }, { kind: 'building', code: 'D' }, { kind: 'cafe', code: 'E' }, { kind: 'toString', code: 'F' }];
+  const mixed = [
+    { kind: 'building', code: 'A' },
+    { kind: 'stop', code: 'B' },
+    { kind: 'shop', code: 'C' },
+    { kind: 'building', code: 'D' },
+    { kind: 'cafe', code: 'E' },
+    { kind: 'toString', code: 'F' },
+  ];
   assert.deepEqual(ids(grouped(mixed)), ['building:A', 'building:D', 'stop:B', 'shop:C', 'cafe:E', 'toString:F']);
   // Pinned results lead as their own group.
   const pinned = [{ code: 'T1', label: 'COM2 (CS2030)', stopCode: 'COM3', kind: 'timetable' }];
@@ -115,7 +141,10 @@ test('the fixture covers what the other apps need to get right', () => {
   const { index, queries } = FIXTURE.destinations;
   const kinds = new Set(index.map((d) => d.kind));
   for (const k of ['stop', 'landmark', 'building', 'room']) assert.ok(kinds.has(k), k);
-  assert.ok([...kinds].some((k) => !['timetable', 'place', 'class', 'service', 'stop', 'landmark', 'building', 'room'].includes(k)), 'an unknown kind');
+  assert.ok(
+    [...kinds].some((k) => !['timetable', 'place', 'class', 'service', 'stop', 'landmark', 'building', 'room'].includes(k)),
+    'an unknown kind',
+  );
   assert.ok(index.some((d) => d.code.includes('_')) && index.some((d) => d.code.includes('-')) && index.some((d) => / {2}/.test(d.label)));
   // Every query has its reason, so a port that differs can tell which rule.
   for (const q of [...queries, ...FIXTURE.busesTab.queries]) assert.ok(q.why, `"${q.q}" says why`);

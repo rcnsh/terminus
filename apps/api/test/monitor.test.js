@@ -4,7 +4,22 @@ import assert from 'node:assert/strict';
 import { makeKV } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import { readFileSync } from 'node:fs';
-import { DEVICE_IDLE_MS, INCIDENTS_KEPT, KV_NAMESPACE_IDS, MAIL_TIMEOUT_MS, adviceFor, answering, answeringSince, checkCalendar, checkUpstream, feedDownSince, housekeeping, readIncidents, readUpstream, runCron } from '../src/monitor.ts';
+import {
+  DEVICE_IDLE_MS,
+  INCIDENTS_KEPT,
+  KV_NAMESPACE_IDS,
+  MAIL_TIMEOUT_MS,
+  adviceFor,
+  answering,
+  answeringSince,
+  checkCalendar,
+  checkUpstream,
+  feedDownSince,
+  housekeeping,
+  readIncidents,
+  readUpstream,
+  runCron,
+} from '../src/monitor.ts';
 import { UpstreamRejected } from '../src/auth.ts';
 import { cardFor } from '../src/card.ts';
 import { withLang } from '../src/i18n.ts';
@@ -131,7 +146,13 @@ test('an incident whose close was not saved is closed on the next run', async ()
   assert.deepEqual(await readIncidents(e), [{ start: 3000, end: 4000, cause: 'feed' }], 'closed when it came back');
   await checkUpstream(e, 7000, fail('network'));
   await checkUpstream(e, 8000, fail('network'));
-  assert.deepEqual((await readIncidents(e)).map((i) => [i.start, i.end]), [[8000, null], [3000, 4000]]);
+  assert.deepEqual(
+    (await readIncidents(e)).map((i) => [i.start, i.end]),
+    [
+      [8000, null],
+      [3000, 4000],
+    ],
+  );
 });
 
 test('an incident whose opening was not saved is opened on the next run, once', async () => {
@@ -254,7 +275,9 @@ test('an alert that fails to send is retried on the next run', async () => {
   const e = env();
   await checkUpstream(e, 1000, ok);
   const send = e.EMAIL.send;
-  e.EMAIL.send = async () => { throw new Error('email service down'); };
+  e.EMAIL.send = async () => {
+    throw new Error('email service down');
+  };
   await checkUpstream(e, 2000, fail('network'));
   await checkUpstream(e, 3000, fail('network'));
   assert.equal((await readUpstream(e)).pending, 'down');
@@ -296,9 +319,19 @@ test('each alert goes once, with KV taking one write a second to a key', async (
     console.error = quiet;
     // The beta logs its alerts in place of the email; nothing else is an error.
     const alerts = errors.filter((l) => l.startsWith('beta: '));
-    assert.deepEqual(errors.filter((l) => !alerts.includes(l)), [], beta ? 'beta' : 'stable');
-    assert.deepEqual(alerts.map((l) => l.match(/down|recovered/)[0]), beta ? ['down', 'recovered'] : []);
-    assert.deepEqual(e.EMAIL.sent.map((m) => m.subject.match(/down|recovered/)[0]), beta ? [] : ['down', 'recovered']);
+    assert.deepEqual(
+      errors.filter((l) => !alerts.includes(l)),
+      [],
+      beta ? 'beta' : 'stable',
+    );
+    assert.deepEqual(
+      alerts.map((l) => l.match(/down|recovered/)[0]),
+      beta ? ['down', 'recovered'] : [],
+    );
+    assert.deepEqual(
+      e.EMAIL.sent.map((m) => m.subject.match(/down|recovered/)[0]),
+      beta ? [] : ['down', 'recovered'],
+    );
     assert.equal((await readUpstream(e)).pending, null);
   }
 });
@@ -308,8 +341,13 @@ test('cron: a KV failure in one step does not stop the others', async () => {
   const db = makeD1();
   let cleaned = false;
   const batch = db.batch.bind(db);
-  db.batch = async (s) => { cleaned = true; return batch(s); };
-  e.KV.put = async () => { throw new Error('KV write quota'); };
+  db.batch = async (s) => {
+    cleaned = true;
+    return batch(s);
+  };
+  e.KV.put = async () => {
+    throw new Error('KV write quota');
+  };
   const orig = console.error;
   console.error = () => {};
   await runCron({ ...e, DB: db }, 1000);
@@ -320,7 +358,9 @@ test('cron: a KV failure in one step does not stop the others', async () => {
 test('cron: a failed step is counted with the errors on the dashboard', async () => {
   const rows = [];
   const e = { ...env(), AE: { writeDataPoint: (p) => rows.push(p) } };
-  e.KV.put = async () => { throw new Error('KV write quota'); };
+  e.KV.put = async () => {
+    throw new Error('KV write quota');
+  };
   const orig = console.error;
   console.error = () => {};
   await runCron(e, 1000);
@@ -379,7 +419,9 @@ test('housekeeping removes expired links, codes, sessions and idle devices only'
   const db = makeD1();
   const now = 10 * DEVICE_IDLE_MS;
   db.exec(`INSERT INTO users (id, email, created, last_seen) VALUES ('u', 'a@b.c', 0, 0)`);
-  db.exec(`INSERT INTO magic_links (token_hash, email, created, expires) VALUES ('old', 'a@b.c', 0, ${now - 1}), ('new', 'a@b.c', 0, ${now + 1})`);
+  db.exec(
+    `INSERT INTO magic_links (token_hash, email, created, expires) VALUES ('old', 'a@b.c', 0, ${now - 1}), ('new', 'a@b.c', 0, ${now + 1})`,
+  );
   db.exec(`INSERT INTO pair_codes VALUES ('AAAAAA', 'u', ${now - 1}), ('BBBBBB', 'u', ${now + 1})`);
   db.exec(`INSERT INTO sessions (token_hash, user_id, kind, name, created, last_seen, expires) VALUES
     ('w-old', 'u', 'web', NULL, 0, 0, ${now - 1}),
@@ -387,7 +429,11 @@ test('housekeeping removes expired links, codes, sessions and idle devices only'
     ('d-idle', 'u', 'device', 'x', 0, ${now - DEVICE_IDLE_MS - 1}, NULL),
     ('d-used', 'u', 'device', 'y', 0, ${now - 1000}, NULL)`);
   await housekeeping(db, now);
-  const left = (t, c) => db._db.prepare(`SELECT ${c} AS k FROM ${t} ORDER BY 1`).all().map((r) => r.k);
+  const left = (t, c) =>
+    db._db
+      .prepare(`SELECT ${c} AS k FROM ${t} ORDER BY 1`)
+      .all()
+      .map((r) => r.k);
   assert.deepEqual(left('magic_links', 'token_hash'), ['new']);
   assert.deepEqual(left('pair_codes', 'code'), ['BBBBBB']);
   assert.deepEqual(left('sessions', 'token_hash'), ['d-used', 'w-new']);
@@ -398,7 +444,10 @@ test('cron: the large tables are swept once a Singapore day, the short-lived cod
   const db = makeD1();
   const swept = [];
   const batch = db.batch.bind(db);
-  db.batch = async (s) => { swept.push(s.length); return batch(s); };
+  db.batch = async (s) => {
+    swept.push(s.length);
+    return batch(s);
+  };
   const orig = console.error;
   console.error = () => {};
   const day = Date.UTC(2026, 9, 7, 2); // 10:00 in Singapore
@@ -406,7 +455,10 @@ test('cron: the large tables are swept once a Singapore day, the short-lived cod
   await runCron({ ...e, DB: db }, day + 15 * 60_000);
   await runCron({ ...e, DB: db }, day + 86_400_000);
   console.error = orig;
-  assert.deepEqual(swept.filter((n) => n >= 3), [8, 3, 8]);
+  assert.deepEqual(
+    swept.filter((n) => n >= 3),
+    [8, 3, 8],
+  );
 });
 
 test('cron: a failed daily sweep is tried again on the next run', async () => {
@@ -417,7 +469,10 @@ test('cron: a failed daily sweep is tried again on the next run', async () => {
   let fail = true;
   db.batch = async (s) => {
     sizes.push(s.length);
-    if (fail && s.length === 8) { fail = false; throw new Error('D1 busy'); }
+    if (fail && s.length === 8) {
+      fail = false;
+      throw new Error('D1 busy');
+    }
     return batch(s);
   };
   const orig = console.error;
@@ -427,13 +482,24 @@ test('cron: a failed daily sweep is tried again on the next run', async () => {
   await runCron({ ...e, DB: db }, day + 15 * 60_000);
   await runCron({ ...e, DB: db }, day + 30 * 60_000);
   console.error = orig;
-  assert.deepEqual(sizes.filter((n) => n >= 3), [8, 8, 3]);
+  assert.deepEqual(
+    sizes.filter((n) => n >= 3),
+    [8, 8, 3],
+  );
 });
 
 test('the hot and housekeeping lookups use an index, not a table scan', () => {
   const db = makeD1();
-  const plan = (sql) => db._db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all().map((r) => r.detail).join('; ');
-  assert.match(plan("SELECT svc, stop, slot, n, packed FROM crowd_stats WHERE daytype = 'term' AND n >= 3 AND stop IN ('COM3', 'UTOWN')"), /USING INDEX crowd_stats_lookup/);
+  const plan = (sql) =>
+    db._db
+      .prepare(`EXPLAIN QUERY PLAN ${sql}`)
+      .all()
+      .map((r) => r.detail)
+      .join('; ');
+  assert.match(
+    plan("SELECT svc, stop, slot, n, packed FROM crowd_stats WHERE daytype = 'term' AND n >= 3 AND stop IN ('COM3', 'UTOWN')"),
+    /USING INDEX crowd_stats_lookup/,
+  );
   assert.match(plan("UPDATE sessions SET push_token = NULL WHERE push_token = 'x'"), /USING INDEX sessions_push/);
   assert.match(plan('DELETE FROM users INDEXED BY users_anon_idle WHERE email IS NULL AND last_seen < 5'), /USING INDEX users_anon_idle/);
 });
@@ -443,14 +509,21 @@ test('housekeeping: reports are kept a year', async () => {
   const db = makeD1();
   const now = Date.UTC(2026, 9, 1);
   db.exec(`INSERT INTO users (id, email, created, last_seen) VALUES ('u', 'a@b.c', 0, ${now})`);
-  const report = (id, created) => db.exec(`INSERT INTO feedback (id, user_id, created, kind, note, platform) VALUES ('${id}', 'u', ${created}, 'other', 'x', 'web')`);
+  const report = (id, created) =>
+    db.exec(`INSERT INTO feedback (id, user_id, created, kind, note, platform) VALUES ('${id}', 'u', ${created}, 'other', 'x', 'web')`);
   report('old', now - FEEDBACK_KEEP_DAYS * 86_400_000 - 1);
   report('new', now - (FEEDBACK_KEEP_DAYS - 1) * 86_400_000);
   await housekeeping(db, now);
-  assert.deepEqual(db._db.prepare('SELECT id FROM feedback').all().map((r) => r.id), ['new']);
+  assert.deepEqual(
+    db._db
+      .prepare('SELECT id FROM feedback')
+      .all()
+      .map((r) => r.id),
+    ['new'],
+  );
 });
 
-test('a refused version: the alert gives the one-line KV fix and NUS\'s whole response', async () => {
+test("a refused version: the alert gives the one-line KV fix and NUS's whole response", async () => {
   const e = env();
   const body = '{"code":"10009","msg":"We have a new release of uNivUS","data":{"store":"https://example.test/new"}}';
   const refused = async () => {
@@ -470,7 +543,12 @@ test('a refused version: the alert gives the one-line KV fix and NUS\'s whole re
 test('a refusal that echoes our request back has its credentials blanked before the logs and the email', async () => {
   const e = env();
   const jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJndWVzdCJ9.c2lnbmF0dXJl';
-  const body = JSON.stringify({ code: '10009', msg: 'refused', request: { token: jwt, userid: 'guest-123', deviceid: 'dev-abc', domain: 'nus' }, note: `Bearer ${jwt}` });
+  const body = JSON.stringify({
+    code: '10009',
+    msg: 'refused',
+    request: { token: jwt, userid: 'guest-123', deviceid: 'dev-abc', domain: 'nus' },
+    note: `Bearer ${jwt}`,
+  });
   const refused = async () => {
     throw new UpstreamRejected('10009', 'auth rejected: code=10009 msg=refused', body);
   };
@@ -529,6 +607,9 @@ test('the card says when the feed is down, on an answer without a live time', as
   assert.equal(cardFor(answer, true, undefined, down).notice, null, 'a live answer: the feed is back');
   const guess = { ...answer, quality: 'scheduled' };
   assert.equal(cardFor(guess, true, undefined, down).notice, "NUS's live bus times have been down since 9:14\u00a0AM.");
-  assert.equal(withLang('zh', () => cardFor(guess, false, undefined, down).notice), 'NUS 的实时巴士时间自 09:14 起无法获取。');
+  assert.equal(
+    withLang('zh', () => cardFor(guess, false, undefined, down).notice),
+    'NUS 的实时巴士时间自 09:14 起无法获取。',
+  );
   assert.equal(cardFor(guess, true).notice, null, 'up');
 });

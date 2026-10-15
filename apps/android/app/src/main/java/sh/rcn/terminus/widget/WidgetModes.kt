@@ -45,20 +45,17 @@ import sh.rcn.terminus.Place
 import sh.rcn.terminus.R
 import sh.rcn.terminus.ServerClock
 import sh.rcn.terminus.Store
-import sh.rcn.terminus.setWhileIdle
 import sh.rcn.terminus.Target
 import sh.rcn.terminus.hour12
 import sh.rcn.terminus.parseNearby
+import sh.rcn.terminus.setWhileIdle
 
 /**
- * What a widget shows. The timetable's plan by default; a row of
- * buttons switches it, in place, to the buses near you or the quickest way
- * from where you are to one of the places you usually go. Each widget keeps
- * its own choice.
+ * What a widget shows. The timetable's plan by default; a row of buttons switches it, in place, to the buses near you or the quickest way
+ * from where you are to one of the places you usually go. Each widget keeps its own choice.
  *
- * The choice gives way to the timetable by itself: after [KEEP_MS], when a
- * trip becomes due after it was made, and whenever the widget is too small
- * for the buttons (so a widget can't be stuck on a place with no way back).
+ * The choice gives way to the timetable by itself: after [KEEP_MS], when a trip becomes due after it was made, and whenever the widget is
+ * too small for the buttons (so a widget can't be stuck on a place with no way back).
  */
 sealed interface Mode {
     val id: String
@@ -66,29 +63,38 @@ sealed interface Mode {
 
     data object Timetable : Mode {
         override val id = "plan"
-        override val label get() = L.s(R.string.timetable)
+        override val label
+            get() = L.s(R.string.timetable)
     }
 
     data object Nearby : Mode {
         override val id = "nearby"
-        override val label get() = L.s(R.string.chip_nearby)
+        override val label
+            get() = L.s(R.string.chip_nearby)
     }
 
     /** A saved place (`place:<key>`) or a stop looked up (`stop:<code>`). */
     data class To(val dest: Destinations.Dest) : Mode {
-        override val id get() = dest.id
-        override val label get() = dest.label
+        override val id
+            get() = dest.id
+
+        override val label
+            get() = dest.label
+
         val target: Target
-            get() = if (dest.id.startsWith("place:")) Target.SavedPlace(dest.id.removePrefix("place:")) else Target.Code(dest.id.removePrefix("stop:"), dest.label)
+            get() =
+                if (dest.id.startsWith("place:")) Target.SavedPlace(dest.id.removePrefix("place:"))
+                else Target.Code(dest.id.removePrefix("stop:"), dest.label)
     }
 
     companion object {
-        fun of(id: String?, label: String?): Mode = when {
-            id == null || id == Timetable.id -> Timetable
-            id == Nearby.id -> Nearby
-            (id.startsWith("place:") || id.startsWith("stop:")) && label != null -> To(Destinations.Dest(id, label))
-            else -> Timetable
-        }
+        fun of(id: String?, label: String?): Mode =
+            when {
+                id == null || id == Timetable.id -> Timetable
+                id == Nearby.id -> Nearby
+                (id.startsWith("place:") || id.startsWith("stop:")) && label != null -> To(Destinations.Dest(id, label))
+                else -> Timetable
+            }
     }
 }
 
@@ -111,14 +117,25 @@ object WidgetModes {
 
     /** Back to the timetable, with nothing kept of the answer shown: for signing out. */
     fun forget(prefs: MutablePreferences) {
-        for (k in listOf(MODE, MODE_LABEL, MODE_AT, MODE_JSON, MODE_FETCHED, MODE_ERROR, NearbySwap.FROM, NearbySwap.TO, NearbySwap.AT, NEARBY_PAGE)) prefs.remove(k)
+        for (k in
+            listOf(
+                MODE,
+                MODE_LABEL,
+                MODE_AT,
+                MODE_JSON,
+                MODE_FETCHED,
+                MODE_ERROR,
+                NearbySwap.FROM,
+                NearbySwap.TO,
+                NearbySwap.AT,
+                NEARBY_PAGE,
+            )) prefs.remove(k)
     }
 
     /**
-     * The mode to show now: the chosen one, unless it has run out or a trip
-     * has become due since it was chosen (the timetable matters then).
-     * [chosenAt] and [now] are on the phone's clock ([MODE_AT] is); the
-     * plan's times are the server's, put on the phone's by [toDevice].
+     * The mode to show now: the chosen one, unless it has run out or a trip has become due since it was chosen (the timetable matters
+     * then). [chosenAt] and [now] are on the phone's clock ([MODE_AT] is); the plan's times are the server's, put on the phone's by
+     * [toDevice].
      */
     fun effective(chosen: Mode, chosenAt: Long?, plan: NextAnswer?, rowShown: Boolean, now: Long, toDevice: (Long) -> Long = { it }): Mode {
         if (chosen == Mode.Timetable || !rowShown || chosenAt == null) return Mode.Timetable
@@ -130,9 +147,8 @@ object WidgetModes {
     }
 
     /**
-     * How many buttons fit a row this wide: the text at about 7.2 dp a
-     * character, 28 dp of padding each and 6 dp between. Glance can't measure
-     * text, and a button cut in half is worse than one fewer.
+     * How many buttons fit a row this wide: the text at about 7.2 dp a character, 28 dp of padding each and 6 dp between. Glance can't
+     * measure text, and a button cut in half is worse than one fewer.
      */
     fun fitting(labels: List<String>, widthDp: Float): Int {
         var used = 0f
@@ -156,8 +172,8 @@ object WidgetModes {
     }
 
     /**
-     * Whether the widget shows the buttons at any of the sizes the home screen
-     * has given it (one each way up). True when it hasn't said, as before.
+     * Whether the widget shows the buttons at any of the sizes the home screen has given it (one each way up). True when it hasn't said, as
+     * before.
      */
     private fun rowShownAnySize(ctx: Context, id: GlanceId, large: Boolean): Boolean =
         anySize(ctx, id, unknown = true) { w, h -> rowShown(w, h, large) }
@@ -179,16 +195,24 @@ object WidgetModes {
         return test(minW.toFloat(), maxH.toFloat()) || test(maxW.toFloat(), minH.toFloat())
     }
 
-    /** The buttons for a row this wide: Timetable and Nearby, then favourites and added places ([uses]: Store.destinationUses). None if those two don't fit. */
-    fun chips(uses: Map<String, Destinations.Use>, places: List<Place>, added: List<Destinations.Dest>, widthDp: Float, now: Long = System.currentTimeMillis()): List<Mode> {
+    /**
+     * The buttons for a row this wide: Timetable and Nearby, then favourites and added places ([uses]: Store.destinationUses). None if
+     * those two don't fit.
+     */
+    fun chips(
+        uses: Map<String, Destinations.Use>,
+        places: List<Place>,
+        added: List<Destinations.Dest>,
+        widthDp: Float,
+        now: Long = System.currentTimeMillis(),
+    ): List<Mode> {
         val ranked = Destinations.rank(places, added, uses, now).map { Mode.To(it) }
         return pick(listOf(Mode.Timetable, Mode.Nearby) + ranked, ranked.firstOrNull { it.dest.id == added.firstOrNull()?.id }, widthDp)
     }
 
     /**
-     * As many of `all` as fit, in order; but the place added last from "Go
-     * somewhere else" always gets the last button, in place of favourites
-     * that would have pushed it off. None if Timetable and Nearby don't fit.
+     * As many of `all` as fit, in order; but the place added last from "Go somewhere else" always gets the last button, in place of
+     * favourites that would have pushed it off. None if Timetable and Nearby don't fit.
      */
     fun pick(all: List<Mode>, newest: Mode?, widthDp: Float): List<Mode> {
         val fits = { modes: List<Mode> -> fitting(modes.map { it.label }, widthDp) == modes.size }
@@ -201,8 +225,8 @@ object WidgetModes {
     }
 
     /**
-     * Switches one widget to `mode` and fetches what it shows. `fresh`: take a
-     * new location fix (only inside [WidgetModeService], which a tap started).
+     * Switches one widget to `mode` and fetches what it shows. `fresh`: take a new location fix (only inside [WidgetModeService], which a
+     * tap started).
      */
     suspend fun show(ctx: Context, id: GlanceId, mode: Mode, fresh: Boolean) {
         val now = System.currentTimeMillis()
@@ -237,8 +261,8 @@ object WidgetModes {
     }
 
     /**
-     * What [mode] shows, asked for once, with the token it was asked with;
-     * null when there's nothing to record (signed out, or the token refused).
+     * What [mode] shows, asked for once, with the token it was asked with; null when there's nothing to record (signed out, or the token
+     * refused).
      */
     private suspend fun request(ctx: Context, mode: Mode, fresh: Boolean): Pair<String, Result<JSONObject>>? {
         val store = Store(ctx)
@@ -262,25 +286,26 @@ object WidgetModes {
     }
 
     /**
-     * [result] on the widget, unless [sentWith] has been signed out since it
-     * was asked for: a sign-out clears the token before it forgets the
-     * widgets' places, and both go through the widget's state in turn, so
-     * the old account's answer can't land after it.
+     * [result] on the widget, unless [sentWith] has been signed out since it was asked for: a sign-out clears the token before it forgets
+     * the widgets' places, and both go through the widget's state in turn, so the old account's answer can't land after it.
      */
     private suspend fun record(ctx: Context, id: GlanceId, mode: Mode, sentWith: String, result: Result<JSONObject>) {
         updateAppWidgetState(ctx, id) {
             if (Store(ctx).token != sentWith) return@updateAppWidgetState
-            result.onSuccess { json ->
-                it[MODE_JSON] = json.toString()
-                it[MODE_FETCHED] = System.currentTimeMillis()
-                it.remove(MODE_ERROR)
-            }.onFailure { e ->
-                it[MODE_ERROR] = when {
-                    e is ApiError && e.status == 400 && mode == Mode.Nearby -> L.s(R.string.turn_on_location)
-                    e is ApiError -> e.message ?: L.s(R.string.couldnt_load)
-                    else -> L.s(R.string.offline)
+            result
+                .onSuccess { json ->
+                    it[MODE_JSON] = json.toString()
+                    it[MODE_FETCHED] = System.currentTimeMillis()
+                    it.remove(MODE_ERROR)
                 }
-            }
+                .onFailure { e ->
+                    it[MODE_ERROR] =
+                        when {
+                            e is ApiError && e.status == 400 && mode == Mode.Nearby -> L.s(R.string.turn_on_location)
+                            e is ApiError -> e.message ?: L.s(R.string.couldnt_load)
+                            else -> L.s(R.string.offline)
+                        }
+                }
         }
     }
 
@@ -292,13 +317,18 @@ object WidgetModes {
     /** A widget showing a place or Nearby, while the choice still stands. */
     private class Chosen(val id: GlanceId, val mode: Mode, val at: Long, val fetchedAt: Long?, val json: String?) {
         /** A place's answer, read only when asked for. */
-        val answer: NextAnswer? by lazy { json?.takeIf { mode is Mode.To }?.let { runCatching { NextAnswer.parse(JSONObject(it)) }.getOrNull() } }
+        val answer: NextAnswer? by lazy {
+            json?.takeIf { mode is Mode.To }?.let { runCatching { NextAnswer.parse(JSONObject(it)) }.getOrNull() }
+        }
 
         /** Nearby: when the next of its buses shown goes, read only when asked for. */
         fun busGoes(now: Long): Long? {
             if (mode != Mode.Nearby || fetchedAt == null) return null
             val stops = json?.let { runCatching { parseNearby(JSONObject(it)) }.getOrNull() } ?: return null
-            return NearbyBoard.redrawAt(stops.take(2).flatMap { NearbyBoard.buses(it, fetchedAt, now, sh.rcn.terminus.ServerClock.skewMs) }, now)
+            return NearbyBoard.redrawAt(
+                stops.take(2).flatMap { NearbyBoard.buses(it, fetchedAt, now, sh.rcn.terminus.ServerClock.skewMs) },
+                now,
+            )
         }
     }
 
@@ -332,11 +362,9 @@ object WidgetModes {
     }
 
     /**
-     * Keeps each widget showing a place or Nearby current, from the background
-     * refresh: at most once a minute, with the last known location, and only
-     * while the choice still stands. Widgets showing the same are asked for
-     * once between them. With [staleOnly] (the widgets' own alarm), only
-     * places whose answer has gone stale.
+     * Keeps each widget showing a place or Nearby current, from the background refresh: at most once a minute, with the last known
+     * location, and only while the choice still stands. Widgets showing the same are asked for once between them. With [staleOnly] (the
+     * widgets' own alarm), only places whose answer has gone stale.
      */
     suspend fun refreshChosen(ctx: Context, staleOnly: Boolean = false) {
         val now = System.currentTimeMillis()
@@ -347,38 +375,40 @@ object WidgetModes {
     }
 
     /**
-     * Arms the redraw of the widgets showing a place or Nearby, at the
-     * soonest of their moments ([redrawAt]); none when no widget has one.
+     * Arms the redraw of the widgets showing a place or Nearby, at the soonest of their moments ([redrawAt]); none when no widget has one.
      */
     suspend fun armChosen(ctx: Context) {
         val am = ctx.getSystemService(AlarmManager::class.java) ?: return
         val now = System.currentTimeMillis()
-        val at = if (Store(ctx).paired) {
-            val chosen = chosen(ctx, now).mapNotNull { redrawAt(it.mode, it.at, it.fetchedAt, it.answer, now, it.busGoes(now)) }
-            // The Nearby widgets and the big widget's next buses share one board.
-            val shared = if (NearbyShared.wanted(ctx)) NearbyShared.redrawAt(ctx, now) else null
-            (chosen + listOfNotNull(shared)).minOrNull()
-        } else null
+        val at =
+            if (Store(ctx).paired) {
+                val chosen = chosen(ctx, now).mapNotNull { redrawAt(it.mode, it.at, it.fetchedAt, it.answer, now, it.busGoes(now)) }
+                // The Nearby widgets and the big widget's next buses share one board.
+                val shared = if (NearbyShared.wanted(ctx)) NearbyShared.redrawAt(ctx, now) else null
+                (chosen + listOfNotNull(shared)).minOrNull()
+            } else null
         if (at == null) am.cancel(alarmIntent(ctx)) else am.setWhileIdle(at + 1_000, alarmIntent(ctx), wake = false)
     }
 
     /**
-     * When a widget showing [mode] (chosen at [chosenAt], its answer fetched
-     * at [fetchedAt]) next looks different with nothing new, on the phone's
-     * clock like [now]: the choice running out, Nearby's times turning old
-     * or one of its buses going ([busGoes]), a place's answer moving on
-     * ("Leave now", going stale). Null: never.
+     * When a widget showing [mode] (chosen at [chosenAt], its answer fetched at [fetchedAt]) next looks different with nothing new, on the
+     * phone's clock like [now]: the choice running out, Nearby's times turning old or one of its buses going ([busGoes]), a place's answer
+     * moving on ("Leave now", going stale). Null: never.
      */
-    internal fun redrawAt(mode: Mode, chosenAt: Long, fetchedAt: Long?, answer: NextAnswer?, now: Long, busGoes: Long? = null): Long? = listOfNotNull(
-        chosenAt + KEEP_MS,
-        fetchedAt?.takeIf { mode == Mode.Nearby }?.plus(NEARBY_OLD_MS),
-        busGoes,
-        answer?.let { Refresher.redrawAt(it, ServerClock.fromDevice(now)) }?.let(ServerClock::toDevice),
-    ).filter { it > now }.minOrNull()
+    internal fun redrawAt(mode: Mode, chosenAt: Long, fetchedAt: Long?, answer: NextAnswer?, now: Long, busGoes: Long? = null): Long? =
+        listOfNotNull(
+                chosenAt + KEEP_MS,
+                fetchedAt?.takeIf { mode == Mode.Nearby }?.plus(NEARBY_OLD_MS),
+                busGoes,
+                answer?.let { Refresher.redrawAt(it, ServerClock.fromDevice(now)) }?.let(ServerClock::toDevice),
+            )
+            .filter { it > now }
+            .minOrNull()
 
     internal fun alarmIntent(ctx: Context): PendingIntent =
         PendingIntent.getBroadcast(
-            ctx, 2,
+            ctx,
+            2,
             Intent(ctx, RefreshReceiver::class.java).setAction(Refresher.ACTION_REDRAW_CHOSEN),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
@@ -398,10 +428,8 @@ class ModeAction : ActionCallback {
 }
 
 /**
- * A widget button that needs where you are (Nearby, a place): a moment in the
- * foreground with the location type, which Android allows when a widget tap
- * starts it, to take a fresh fix and fetch. Usually done before Android would
- * even show its notification.
+ * A widget button that needs where you are (Nearby, a place): a moment in the foreground with the location type, which Android allows when
+ * a widget tap starts it, to take a fresh fix and fetch. Usually done before Android would even show its notification.
  */
 class WidgetModeService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -414,10 +442,13 @@ class WidgetModeService : Service() {
         val mode = Mode.of(intent?.getStringExtra(EXTRA_MODE), intent?.getStringExtra(EXTRA_LABEL))
         val location = Locator.hasForeground(this)
         val started = runCatching {
-            val type = if (location) ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
-            else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) ServiceInfo.FOREGROUND_SERVICE_TYPE_SHORT_SERVICE else 0
+            val type =
+                if (location) ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+                else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) ServiceInfo.FOREGROUND_SERVICE_TYPE_SHORT_SERVICE
+                else 0
             if (type == 0) startForeground(NOTIFICATION_ID, notification()) else startForeground(NOTIFICATION_ID, notification(), type)
-        }.isSuccess
+        }
+            .isSuccess
         scope.launch {
             try {
                 if (shared) {
@@ -455,7 +486,7 @@ class WidgetModeService : Service() {
             NotificationChannel(CHANNEL, L.s(R.string.channel_widget), NotificationManager.IMPORTANCE_MIN).apply {
                 description = L.s(R.string.channel_widget_desc)
                 setShowBadge(false)
-            },
+            }
         )
         return Notification.Builder(this, CHANNEL)
             .setSmallIcon(Icon.createWithResource(this, R.drawable.ic_bus))

@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import Terminus
 
 /// How the app takes the server's refusals and replies it only partly
@@ -84,12 +85,12 @@ import Testing
 @Test func nearbyStopsKeepWhatTheyCanRead() throws {
     struct R: Decodable { let stops: [NearbyStop] }
     let json = """
-    {"stops": [
-      {"stop": {"code": "COM3", "name": "COM 3"}, "walkS": 95.6, "available": true,
-       "board": [{"svc": "D2", "etaS": 120, "quality": "live"}, {"svc": 7}]},
-      {"stop": {"code": "UTOWN", "name": "University Town"}}
-    ]}
-    """
+        {"stops": [
+          {"stop": {"code": "COM3", "name": "COM 3"}, "walkS": 95.6, "available": true,
+           "board": [{"svc": "D2", "etaS": 120, "quality": "live"}, {"svc": 7}]},
+          {"stop": {"code": "UTOWN", "name": "University Town"}}
+        ]}
+        """
     let r = try JSONDecoder().decode(R.self, from: Data(json.utf8))
     #expect(r.stops.count == 2)
     #expect(r.stops[0].walkS == 96)
@@ -99,7 +100,8 @@ import Testing
 }
 
 @Test func aDestinationWithAFractionalWalkStays() throws {
-    let json = #"{"code": "FINEFOOD", "label": "Fine Food", "stopCode": "UTOWN", "kind": "landmark", "walkM": 120.4, "aliases": ["food", 3]}"#
+    let json =
+        #"{"code": "FINEFOOD", "label": "Fine Food", "stopCode": "UTOWN", "kind": "landmark", "walkM": 120.4, "aliases": ["food", 3]}"#
     let d = try JSONDecoder().decode(Destination.self, from: Data(json.utf8))
     #expect(d.walkM == 120)
     #expect(d.aliases == ["food"])
@@ -108,11 +110,11 @@ import Testing
 
 @Test func todayKeepsTheEntriesItCanRead() throws {
     let json = """
-    {"date": "2026-10-08", "items": [
-      {"kind": "class", "key": "CS2030", "label": "CS2030", "status": "next", "startsAt": "2026-10-08T02:00:00Z"},
-      {"kind": "class", "key": "broken"}
-    ]}
-    """
+        {"date": "2026-10-08", "items": [
+          {"kind": "class", "key": "CS2030", "label": "CS2030", "status": "next", "startsAt": "2026-10-08T02:00:00Z"},
+          {"kind": "class", "key": "broken"}
+        ]}
+        """
     let day = try JSONDecoder().decode(DayPlan.self, from: Data(json.utf8))
     #expect(day.items.map(\.key) == ["CS2030"])
     #expect(day.date == "2026-10-08")

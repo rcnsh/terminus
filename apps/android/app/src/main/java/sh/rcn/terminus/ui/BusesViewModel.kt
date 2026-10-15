@@ -32,12 +32,18 @@ import sh.rcn.terminus.widget.redrawWidgets
 /** A page opened over the tab's home: a stop's board, or a service's line. */
 sealed interface BusRoute {
     data class Stop(val code: String) : BusRoute
+
     /** [from]: the stop it was opened from, highlighted on the line with its time. */
     data class Line(val svc: String, val from: String?) : BusRoute
 }
 
 /** Where the nearest stop's page is. */
-enum class Nearest { Loading, Ready, None, Failed }
+enum class Nearest {
+    Loading,
+    Ready,
+    None,
+    Failed,
+}
 
 data class BusesUi(
     /** The stops and services, for the search and names before a board loads. */
@@ -47,8 +53,8 @@ data class BusesUi(
     /** The nearest stop is from a location; false: from the home stop. */
     val located: Boolean = false,
     /**
-     * Boards by stop code: pinned stops, opened ones, the twins across the road.
-     * A failed refresh keeps the last one; the screen shows it [Board.aged].
+     * Boards by stop code: pinned stops, opened ones, the twins across the road. A failed refresh keeps the last one; the screen shows it
+     * [Board.aged].
      */
     val boards: Map<String, Board> = emptyMap(),
     /** Stops whose board couldn't be fetched (offline), until one is. */
@@ -65,9 +71,8 @@ data class BusesUi(
 fun lineKey(svc: String, from: String?) = "$svc|${from.orEmpty()}"
 
 /**
- * The Buses tab. The screen drives the refreshing, only while the tab is on
- * screen and the app in front: the page in view every 15 s, the API's own
- * cache, so asking sooner would show nothing new.
+ * The Buses tab. The screen drives the refreshing, only while the tab is on screen and the app in front: the page in view every 15 s, the
+ * API's own cache, so asking sooner would show nothing new.
  */
 class BusesViewModel(app: Application) : AndroidViewModel(app) {
     private val store = Store(app)
@@ -80,9 +85,8 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
     private fun api(token: String) = Api(token)
 
     /**
-     * A 401: this phone's token refused, so it's signed out
-     * ([Session.rejected]), and the screen follows. Nothing is asked again
-     * with it: every request here first needs a token. True when [e] was that.
+     * A 401: this phone's token refused, so it's signed out ([Session.rejected]), and the screen follows. Nothing is asked again with it:
+     * every request here first needs a token. True when [e] was that.
      */
     private suspend fun refused(e: Exception, token: String): Boolean {
         if (e !is ApiError || e.status != 401) return false
@@ -94,8 +98,8 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
     var pinLimit = sh.rcn.terminus.Limits.DEFAULT.pinnedStops
 
     /**
-     * The profile's "public buses": boards then have them too, as the web's
-     * do. A change asks again at the next refresh rather than waiting out the gap.
+     * The profile's "public buses": boards then have them too, as the web's do. A change asks again at the next refresh rather than waiting
+     * out the gap.
      */
     var publicBuses = false
         set(v) {
@@ -105,7 +109,9 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun fresh(key: String): Boolean = System.currentTimeMillis() - (asked[key] ?: 0) < MIN_GAP_MS
 
-    private fun mark(key: String) { asked[key] = System.currentTimeMillis() }
+    private fun mark(key: String) {
+        asked[key] = System.currentTimeMillis()
+    }
 
     /** When each board or line last came back, for a pull sooner than [Pull.FRESH_MS] to ask nothing. */
     private val answeredAt = mutableMapOf<String, Long>()
@@ -123,11 +129,12 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun answered(key: String) { answeredAt[key] = System.currentTimeMillis() }
+    private fun answered(key: String) {
+        answeredAt[key] = System.currentTimeMillis()
+    }
 
     /**
-     * Pulled down: [key] asked for again by [fetch] (the screen's own
-     * refresh), or the one already on its way waited for; nothing within
+     * Pulled down: [key] asked for again by [fetch] (the screen's own refresh), or the one already on its way waited for; nothing within
      * [Pull.FRESH_MS] of its last answer, as the server would send the same.
      */
     private suspend fun pulled(key: String, fetch: suspend () -> Unit): PullOutcome {
@@ -144,8 +151,7 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
     var nextTimedAt: Long? = null
 
     /**
-     * When the timed refresh brings new times for [key]: at its next run,
-     * or the one after when that's too soon after [key] was last asked
+     * When the timed refresh brings new times for [key]: at its next run, or the one after when that's too soon after [key] was last asked
      * ([MIN_GAP_MS]) and it will skip it. Null with none due.
      */
     private fun nextUpdateAt(key: String): Long? {
@@ -163,7 +169,8 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun pullPage(code: String?): PullOutcome = pulled(pageBoard(code) ?: NEAREST) { refreshPage(code, force = true) }
 
     /** A service's line pulled down. */
-    suspend fun pullLine(svc: String, from: String?): PullOutcome = pulled("line:${lineKey(svc, from)}") { refreshLine(svc, from, force = true) }
+    suspend fun pullLine(svc: String, from: String?): PullOutcome =
+        pulled("line:${lineKey(svc, from)}") { refreshLine(svc, from, force = true) }
 
     private var campusJob: kotlinx.coroutines.Job? = null
 
@@ -199,7 +206,11 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
         try {
             val json = api(token).nearbyJson(loc?.latitude, loc?.longitude, Locator.accOf(loc), stopped = true)
             // The Nearby widgets draw this board too: kept for them, and they're redrawn.
-            if (runCatching { store.saveNearby(json, System.currentTimeMillis(), sentWith = token) }.getOrNull() != null && NearbyShared.wanted(ctx)) redrawWidgets(ctx)
+            if (
+                runCatching { store.saveNearby(json, System.currentTimeMillis(), sentWith = token) }.getOrNull() != null &&
+                    NearbyShared.wanted(ctx)
+            )
+                redrawWidgets(ctx)
             val asOf = json.optString("asOf").takeIf { it.isNotEmpty() }?.let(::parseInstant)
             val got = ServerClock.now()
             val stops = parseNearby(json).map { Board.of(it, asOf).copy(gotMs = got) }
@@ -253,9 +264,8 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * The page for [code] (null: the nearest stop): its own board, or its
-     * twin's when it's switched across the road. The nearest stop's twin
-     * comes with /me/nearby, so that page asks only for that.
+     * The page for [code] (null: the nearest stop): its own board, or its twin's when it's switched across the road. The nearest stop's
+     * twin comes with /me/nearby, so that page asks only for that.
      */
     suspend fun refreshPage(code: String?, force: Boolean = false) {
         val board = pageBoard(code)

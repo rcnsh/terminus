@@ -129,9 +129,23 @@ test('a map file replaced since its pieces were cached is served new, never mixe
 test('the stable site and the beta share one edge cache but never serve each other its map files', async () => {
   const stableFont = bytesOf(5);
   const betaFont = bytesOf(6);
-  const { get: stable } = setup(new Map([['map/fonts/Noto Sans Regular/0-255.pbf', stableFont], ['map/campus.pmtiles', bytesOf(8)]]));
+  const { get: stable } = setup(
+    new Map([
+      ['map/fonts/Noto Sans Regular/0-255.pbf', stableFont],
+      ['map/campus.pmtiles', bytesOf(8)],
+    ]),
+  );
   // Same cache (installed by setup above), the beta's own bucket.
-  const betaEnv = { ...makeEnv(), PUBLIC_ORIGIN: 'https://beta.terminus.run', DOWNLOADS: makeBucket(async (key) => new Map([['map/fonts/Noto Sans Regular/0-255.pbf', betaFont], ['map/campus.pmtiles', bytesOf(9)]]).get(key)) };
+  const betaEnv = {
+    ...makeEnv(),
+    PUBLIC_ORIGIN: 'https://beta.terminus.run',
+    DOWNLOADS: makeBucket(async (key) =>
+      new Map([
+        ['map/fonts/Noto Sans Regular/0-255.pbf', betaFont],
+        ['map/campus.pmtiles', bytesOf(9)],
+      ]).get(key),
+    ),
+  };
   const beta = async (path, headers = {}) => {
     const ctx = makeCtx();
     const res = await worker.fetch(new Request(BASE + path, { headers }), betaEnv, ctx);

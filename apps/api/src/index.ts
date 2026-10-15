@@ -11,7 +11,6 @@
  * (tripdo.ts) also read on a schedule, a call or a card at a time.
  */
 
-
 import type { Env, ResolveInput } from './types.ts';
 import { sgt } from './config.ts';
 import { venueAt, venueToStop } from './nusmods.ts';
@@ -108,7 +107,15 @@ async function handleNext(url: URL, env: Env, ctx: ExecutionContext, nowMs: numb
   // With coordinates but no destination, `to` stays null and the resolver
   // simply reports the next buses at the nearest stop. `?public=1` counts
   // the public buses too, as an account's `publicBuses` does for /me/next.
-  const input: ResolveInput = { lat, lon, to, toAlso: dest?.also, originCode, destAt: dest?.at ?? null, ...(url.searchParams.get('public') === '1' ? { publicBuses: true } : {}) };
+  const input: ResolveInput = {
+    lat,
+    lon,
+    to,
+    toAlso: dest?.also,
+    originCode,
+    destAt: dest?.at ?? null,
+    ...(url.searchParams.get('public') === '1' ? { publicBuses: true } : {}),
+  };
   return json(await answerFor(env, ctx, input, dest?.label ?? null, nowMs));
 }
 
@@ -119,7 +126,15 @@ async function handleTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: numb
   if (lat === null && !dest.from) {
     return json({ error: 'pass lat and lon, or ?from= a stop code' }, 400);
   }
-  return json(await answerFor(env, ctx, { lat, lon, to: dest.to, toAlso: dest.also, originCode: lat === null ? dest.from : null, destAt: dest.at }, dest.label, nowMs));
+  return json(
+    await answerFor(
+      env,
+      ctx,
+      { lat, lon, to: dest.to, toAlso: dest.also, originCode: lat === null ? dest.from : null, destAt: dest.at },
+      dest.label,
+      nowMs,
+    ),
+  );
 }
 
 /**
@@ -159,16 +174,33 @@ async function handleCampus(req: Request): Promise<Response> {
   if (!made) {
     made = (async () => {
       const map = buildCampusMap(GRAPH);
-      const body = JSON.stringify({ viewBox: map.viewBox, stops: map.stops, routes: map.routes, destinations: buildDestinations(GRAPH), residences: residenceList() });
+      const body = JSON.stringify({
+        viewBox: map.viewBox,
+        stops: map.stops,
+        routes: map.routes,
+        destinations: buildDestinations(GRAPH),
+        residences: residenceList(),
+      });
       const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(body)));
-      return { body, etag: `"${Array.from(digest.slice(0, 12)).map((b) => b.toString(16).padStart(2, '0')).join('')}"` };
+      return {
+        body,
+        etag: `"${Array.from(digest.slice(0, 12))
+          .map((b) => b.toString(16).padStart(2, '0'))
+          .join('')}"`,
+      };
     })();
     // A failure isn't kept: the next request builds it again.
     made.catch(() => campusBodies.delete(l));
     campusBodies.set(l, made);
   }
   const { body, etag } = await made;
-  const headers = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'private, max-age=3600', vary: 'accept-language', etag, ...CORS };
+  const headers = {
+    'content-type': 'application/json; charset=utf-8',
+    'cache-control': 'private, max-age=3600',
+    vary: 'accept-language',
+    etag,
+    ...CORS,
+  };
   if (matchesEtag(req, etag)) return new Response(null, { status: 304, headers });
   return new Response(body, { headers });
 }
@@ -215,14 +247,18 @@ async function handleBuses(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
   const svc = url.searchParams.get('svc')?.trim().toUpperCase() || '';
   if (!GRAPH.routes?.[svc]) return json({ error: 'unknown service', svc }, 400);
   const live = await getBuses(env, ctx, svc, nowMs).catch(() => null);
-  return json({
-    svc,
-    color: ROUTE_COLORS[svc] ?? null,
-    buses: live ? await trackedBuses(GRAPH, svc, live, ctx) : [],
-    asOf: new Date(live?.stale ? live.fetchedAt : nowMs).toISOString(),
-    available: Boolean(live),
-    stale: Boolean(live?.stale),
-  }, 200, { 'cache-control': 'private, max-age=5' });
+  return json(
+    {
+      svc,
+      color: ROUTE_COLORS[svc] ?? null,
+      buses: live ? await trackedBuses(GRAPH, svc, live, ctx) : [],
+      asOf: new Date(live?.stale ? live.fetchedAt : nowMs).toISOString(),
+      available: Boolean(live),
+      stale: Boolean(live?.stale),
+    },
+    200,
+    { 'cache-control': 'private, max-age=5' },
+  );
 }
 
 /**
@@ -253,22 +289,28 @@ async function handleLine(url: URL, env: Env, ctx: ExecutionContext, nowMs: numb
   // "Stopped" over a moving bus.
   const stopped = placed.length ? null : stoppedReason(GRAPH, svc, nowMs);
   const resumes = stopped ? serviceResumesAt(GRAPH, svc, nowMs) : null;
-  return json({
-    svc,
-    color: ROUTE_COLORS[svc] ?? null,
-    endsAt: ends === null ? null : new Date(ends).toISOString(),
-    // By its hours unless a bus is out; `stopped` and `resumesAt` are null while it runs.
-    running: stopped === null,
-    stopped,
-    resumesAt: resumes === null ? null : new Date(resumes).toISOString(),
-    stops: lineStops(idx, svc),
-    buses: busesOnLine(route.seq, route.loop, placed),
-    ...(code ? { stop: { code, index, row: boardAt(GRAPH, idx, code, sa, nowMs, { stopped: true }).find((r) => r.svc === svc) ?? null } } : {}),
-    available: Boolean(live),
-    // As old as the oldest thing on the page: the buses, and your stop's row,
-    // which can come from a kept or stale board.
-    asOf: new Date(Math.min(live?.stale ? live.fetchedAt : nowMs, code ? boardAsOf([sa], nowMs) : nowMs)).toISOString(),
-  }, 200, { 'cache-control': 'private, max-age=5' });
+  return json(
+    {
+      svc,
+      color: ROUTE_COLORS[svc] ?? null,
+      endsAt: ends === null ? null : new Date(ends).toISOString(),
+      // By its hours unless a bus is out; `stopped` and `resumesAt` are null while it runs.
+      running: stopped === null,
+      stopped,
+      resumesAt: resumes === null ? null : new Date(resumes).toISOString(),
+      stops: lineStops(idx, svc),
+      buses: busesOnLine(route.seq, route.loop, placed),
+      ...(code
+        ? { stop: { code, index, row: boardAt(GRAPH, idx, code, sa, nowMs, { stopped: true }).find((r) => r.svc === svc) ?? null } }
+        : {}),
+      available: Boolean(live),
+      // As old as the oldest thing on the page: the buses, and your stop's row,
+      // which can come from a kept or stale board.
+      asOf: new Date(Math.min(live?.stale ? live.fetchedAt : nowMs, code ? boardAsOf([sa], nowMs) : nowMs)).toISOString(),
+    },
+    200,
+    { 'cache-control': 'private, max-age=5' },
+  );
 }
 
 /**
@@ -280,9 +322,9 @@ async function handleLine(url: URL, env: Env, ctx: ExecutionContext, nowMs: numb
  * cookie is still sent on by the app itself (signedOut()).
  */
 export function signInFirst(req: Request, url: URL): boolean {
-  return (url.pathname === '/app/' || url.pathname === '/app')
-    && req.headers.get('sec-fetch-dest') === 'document'
-    && !hasSessionCookie(req);
+  return (
+    (url.pathname === '/app/' || url.pathname === '/app') && req.headers.get('sec-fetch-dest') === 'document' && !hasSessionCookie(req)
+  );
 }
 
 /**
@@ -369,7 +411,9 @@ async function handleHealth(req: Request, url: URL, env: Env, nowMs: number): Pr
         pushWeb: webPushEnabled(env),
       },
       // From the cron probe: whether the NUS feed answered, and since when.
-      upstream: u ? { up: answering(u), since: new Date(answeringSince(u)).toISOString(), checkedAt: new Date(u.checkedAt).toISOString(), cronStale } : null,
+      upstream: u
+        ? { up: answering(u), since: new Date(answeringSince(u)).toISOString(), checkedAt: new Date(u.checkedAt).toISOString(), cronStale }
+        : null,
       auth: probe ? await probeAuth(env, nowMs) : undefined,
       versions: versions ? await versionLookup(env, nowMs) : undefined,
     },
@@ -435,7 +479,17 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
     // NUS; this protects the Worker from being a free proxy, and D1/R2 from
     // being a free bill.
     const keyed = KEYED.includes(url.pathname);
-    if (env.RL_PUBLIC && (url.pathname === '/api/health' || url.pathname === '/api/status.json' || url.pathname === '/api/admin/stats' || url.pathname === '/api/admin/collect' || url.pathname === '/api/errors' || url.pathname.startsWith('/api/admin/passkey/') || url.pathname.startsWith('/download/') || url.pathname.startsWith('/api/timelapse/'))) {
+    if (
+      env.RL_PUBLIC &&
+      (url.pathname === '/api/health' ||
+        url.pathname === '/api/status.json' ||
+        url.pathname === '/api/admin/stats' ||
+        url.pathname === '/api/admin/collect' ||
+        url.pathname === '/api/errors' ||
+        url.pathname.startsWith('/api/admin/passkey/') ||
+        url.pathname.startsWith('/download/') ||
+        url.pathname.startsWith('/api/timelapse/'))
+    ) {
       const { success } = await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` });
       if (!success) return json({ error: 'too many requests, slow down' }, 429, { 'retry-after': '60' });
     }
@@ -447,17 +501,24 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
       // /buses, which the map asks every 5 s: who it is, remembered a little
       // while (recentCallerFor says what that costs). D1 failing there is
       // the 503 the catch below gives.
-      const { caller, down } = url.pathname === '/api/buses' ? { caller: await recentCallerFor(env, req, nowMs, ctx), down: false } : await callerOrDown(env, req, nowMs, ctx);
+      const { caller, down } =
+        url.pathname === '/api/buses'
+          ? { caller: await recentCallerFor(env, req, nowMs, ctx), down: false }
+          : await callerOrDown(env, req, nowMs, ctx);
       if (down) {
         logError(env, url.pathname);
         return json({ error: ACCOUNTS_DOWN }, 503, { 'retry-after': '30' });
       }
       const bucket =
-        caller?.kind === 'key' ? { rl: env.RL_PUBLIC, key: `key:${caller.keyId}` }
-        : caller?.kind === 'account' ? { rl: env.RL_ME, key: `acct:${caller.userId}` }
-        : { rl: env.RL_PUBLIC, key: `pub:${clientKey(req)}` };
+        caller?.kind === 'key'
+          ? { rl: env.RL_PUBLIC, key: `key:${caller.keyId}` }
+          : caller?.kind === 'account'
+            ? { rl: env.RL_ME, key: `acct:${caller.userId}` }
+            : { rl: env.RL_PUBLIC, key: `pub:${clientKey(req)}` };
       if (bucket.rl && !(await bucket.rl.limit({ key: bucket.key })).success) {
-        return json({ error: caller?.kind === 'key' ? 'too many requests for this key, slow down' : 'too many requests, slow down' }, 429, { 'retry-after': '60' });
+        return json({ error: caller?.kind === 'key' ? 'too many requests for this key, slow down' : 'too many requests, slow down' }, 429, {
+          'retry-after': '60',
+        });
       }
       if (!caller) {
         return json({ error: m().needsKey(linkOrigin(env)) }, 401, {
@@ -482,15 +543,25 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
       case '/docs':
         // The beta's docs, like its pages, ask not to be indexed.
         return new Response(docsPageFor(phaseAt(sgtMinute(nowMs))), {
-          headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=300', ...(isBeta(env) ? { 'x-robots-tag': 'noindex' } : {}) },
+          headers: {
+            'content-type': 'text/html; charset=utf-8',
+            'cache-control': 'public, max-age=300',
+            ...(isBeta(env) ? { 'x-robots-tag': 'noindex' } : {}),
+          },
         });
       case '/robots.txt':
-        return new Response(robotsTxt(env), { headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
+        return new Response(robotsTxt(env), {
+          headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'public, max-age=3600' },
+        });
       case '/llms.txt':
-        return new Response(llmsTxt(url.origin), { headers: { 'content-type': 'text/markdown; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
+        return new Response(llmsTxt(url.origin), {
+          headers: { 'content-type': 'text/markdown; charset=utf-8', 'cache-control': 'public, max-age=3600' },
+        });
       case '/sitemap.xml':
         if (isBeta(env)) return json({ error: 'not found' }, 404);
-        return new Response(SITEMAP, { headers: { 'content-type': 'application/xml; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
+        return new Response(SITEMAP, {
+          headers: { 'content-type': 'application/xml; charset=utf-8', 'cache-control': 'public, max-age=3600' },
+        });
       case '/api/openapi.json':
         // servers[] is this request's origin, so the docs' "Send API Request"
         // hits whichever deployment is serving them.
@@ -532,7 +603,8 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
         // Everything else is the website; the landing page with its version and account link.
         if (env.ASSETS && (req.method === 'GET' || req.method === 'HEAD')) {
           if (url.pathname === '/') return markBeta(await landingPage(req, env.ASSETS, env, nowMs, ctx), env);
-          if (signInFirst(req, url)) return new Response(null, { status: 302, headers: { location: '/account/?next=/app/', 'cache-control': 'no-store' } });
+          if (signInFirst(req, url))
+            return new Response(null, { status: 302, headers: { location: '/account/?next=/app/', 'cache-control': 'no-store' } });
           return markBeta(await sitePage(req, env.ASSETS), env);
         }
         return json({ error: 'not found' }, 404);

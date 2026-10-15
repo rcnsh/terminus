@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import Terminus
 
 /// The header's countdowns, which tick on the Mac between refreshes.

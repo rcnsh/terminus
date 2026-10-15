@@ -76,7 +76,8 @@ let running = (_svc) => true;
 
 const graph = (await import('../data/stops.json', { with: { type: 'json' } })).default;
 const servingStop = new Map();
-for (const [svc, seq] of Object.entries(graph.routes)) for (const code of new Set(seq)) servingStop.set(code, [...(servingStop.get(code) ?? []), svc]);
+for (const [svc, seq] of Object.entries(graph.routes))
+  for (const code of new Set(seq)) servingStop.set(code, [...(servingStop.get(code) ?? []), svc]);
 
 const crowds = ['low', 'medium', 'high'];
 // The public buses (data/public.json): which call at each LTA stop code, and
@@ -85,7 +86,9 @@ const pub = (await import('../data/public.json', { with: { type: 'json' } })).de
 const ltaToGraph = new Map([...Object.entries(pub.merged), ...pub.stops.map((s) => [s.code, s.code])]);
 const publicAt = (ltaCode) => {
   const code = ltaToGraph.get(ltaCode);
-  return Object.entries(pub.routes).filter(([, seq]) => seq.includes(code)).map(([key]) => pub.public[key]);
+  return Object.entries(pub.routes)
+    .filter(([, seq]) => seq.includes(code))
+    .map(([key]) => pub.public[key]);
 };
 const shapes = (await import('../data/shapes.json', { with: { type: 'json' } })).default.routes;
 
@@ -133,20 +136,37 @@ async function feed(input, init = {}) {
     const nowMin = stubNow() / 60_000;
     const Services = publicAt(ltaCode).map((p, i) => {
       const offset = (p.svc.charCodeAt(0) * 3 + i * 4) % 10;
-      const eta = Math.max(1, Math.round(((offset - nowMin) % 10 + 10) % 10) + 1);
-      const bus = (n, monitored) => ({ OriginCode: p.origin, DestinationCode: p.dest, EstimatedArrival: new Date(stubNow() + (eta + n * 10) * 60_000).toISOString(), Monitored: monitored ? 1 : 0, Latitude: monitored ? '1.2966' : '0.0', Longitude: monitored ? '103.7724' : '0.0', VisitNumber: '1', Load: ['SEA', 'SDA', 'LSD'][(eta + n) % 3], Feature: 'WAB', Type: 'DD' });
+      const eta = Math.max(1, Math.round((((offset - nowMin) % 10) + 10) % 10) + 1);
+      const bus = (n, monitored) => ({
+        OriginCode: p.origin,
+        DestinationCode: p.dest,
+        EstimatedArrival: new Date(stubNow() + (eta + n * 10) * 60_000).toISOString(),
+        Monitored: monitored ? 1 : 0,
+        Latitude: monitored ? '1.2966' : '0.0',
+        Longitude: monitored ? '103.7724' : '0.0',
+        VisitNumber: '1',
+        Load: ['SEA', 'SDA', 'LSD'][(eta + n) % 3],
+        Feature: 'WAB',
+        Type: 'DD',
+      });
       return { ServiceNo: p.svc, Operator: p.operator, NextBus: bus(0, true), NextBus2: bus(1, true), NextBus3: bus(2, false) };
     });
-    return Response.json({ 'odata.metadata': 'https://datamall2.mytransport.sg/ltaodataservice/v3/BusArrival', BusStopCode: ltaCode, Services });
+    return Response.json({
+      'odata.metadata': 'https://datamall2.mytransport.sg/ltaodataservice/v3/BusArrival',
+      BusStopCode: ltaCode,
+      Services,
+    });
   }
   if (url.includes('bus-proxy')) {
     const stop = JSON.parse(init.body ?? '{}').busstopname;
     const nowMin = stubNow() / 60_000;
-    const shuttles = (servingStop.get(stop) ?? []).filter((svc) => running(svc)).map((svc, i) => {
-      const offset = (svc.charCodeAt(0) * 7 + i * 5) % 12;
-      const eta = Math.max(1, Math.round(((offset - nowMin) % 12 + 12) % 12) + 1);
-      return { name: svc, arrivalTime: String(eta), nextArrivalTime: String(eta + 12), passengers: crowds[(eta + i) % 3] };
-    });
+    const shuttles = (servingStop.get(stop) ?? [])
+      .filter((svc) => running(svc))
+      .map((svc, i) => {
+        const offset = (svc.charCodeAt(0) * 7 + i * 5) % 12;
+        const eta = Math.max(1, Math.round((((offset - nowMin) % 12) + 12) % 12) + 1);
+        return { name: svc, arrivalTime: String(eta), nextArrivalTime: String(eta + 12), passengers: crowds[(eta + i) % 3] };
+      });
     return Response.json(shuttlePayload(shuttles));
   }
   // Fake NUSMods: any module has a Monday lab, a Tuesday online tutorial and
@@ -156,15 +176,29 @@ async function feed(input, init = {}) {
   if (mod) {
     if (mod[1] === 'XX9999') return new Response('not found', { status: 404 });
     if (mod[1] === 'DOWN1000') return new Response('bad gateway', { status: 502 });
-    const lesson = (lessonType, day, startTime, venue) => ({ lessonType, classNo: '1', day, startTime, endTime: String(Number(startTime) + 200).padStart(4, '0'), venue, weeks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13] });
-    const timetable = [lesson('Laboratory', 'Monday', '1000', 'COM3-0120'), lesson('Tutorial', 'Tuesday', '1400', 'E-Learn_C'), lesson('Lecture', 'Wednesday', '0900', 'DUKENUS')];
+    const lesson = (lessonType, day, startTime, venue) => ({
+      lessonType,
+      classNo: '1',
+      day,
+      startTime,
+      endTime: String(Number(startTime) + 200).padStart(4, '0'),
+      venue,
+      weeks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+    });
+    const timetable = [
+      lesson('Laboratory', 'Monday', '1000', 'COM3-0120'),
+      lesson('Tutorial', 'Tuesday', '1400', 'E-Learn_C'),
+      lesson('Lecture', 'Wednesday', '0900', 'DUKENUS'),
+    ];
     return Response.json({ semesterData: [1, 2, 3, 4].map((semester) => ({ semester, timetable })) });
   }
   // Firebase for real, with each send logged (status only; no tokens or keys).
   const res = await realFetch(input, init);
   // Chrome's Web Push endpoints are on fcm.googleapis.com too, with an encrypted (binary) body.
-  if (url.startsWith('https://fcm.googleapis.com/') && typeof init?.body === 'string') console.log(`push: FCM ${res.status}`, JSON.parse(init.body).message?.data ?? '');
-  else if (init?.headers && new Headers(init.headers).get('content-encoding') === 'aes128gcm') console.log(`push: web ${res.status} ${new URL(url).host}`);
+  if (url.startsWith('https://fcm.googleapis.com/') && typeof init?.body === 'string')
+    console.log(`push: FCM ${res.status}`, JSON.parse(init.body).message?.data ?? '');
+  else if (init?.headers && new Headers(init.headers).get('content-encoding') === 'aes128gcm')
+    console.log(`push: web ${res.status} ${new URL(url).host}`);
   return res;
 }
 
@@ -213,7 +247,14 @@ for (const svc of servingStop.get('PGP') ?? []) {
 
 // The website, standing in for the Workers ASSETS binding.
 const WEB = new URL('../../web/public/', import.meta.url).pathname;
-const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.mjs': 'text/javascript', '.svg': 'image/svg+xml', '.json': 'application/json' };
+const TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css',
+  '.js': 'text/javascript',
+  '.mjs': 'text/javascript',
+  '.svg': 'image/svg+xml',
+  '.json': 'application/json',
+};
 const ASSETS = {
   async fetch(req) {
     let p;
@@ -263,7 +304,23 @@ const FEED_GATE = makeDurableObjects(FeedGate);
 // Web Push: a fresh VAPID key each run (browsers subscribed to an old one just subscribe again).
 const vapid = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
 const VAPID = JSON.stringify(await crypto.subtle.exportKey('jwk', vapid.privateKey));
-env = { ...makeEnv(), LTA_ACCOUNT_KEY: 'dev', [Symbol.for('terminus.testOpen')]: false, DB: db, EMAIL: email, EMAIL_FROM: 'login@example.test', ASSETS, DOWNLOADS, HEALTH_TOKEN: 'dev', TRIPS, TIMELAPSE, FEED_GATE, TIMELAPSE_ENABLED: 'on', VAPID_PRIVATE_KEY: VAPID, ...(FCM ? { FCM_SERVICE_ACCOUNT: FCM } : {}) };
+env = {
+  ...makeEnv(),
+  LTA_ACCOUNT_KEY: 'dev',
+  [Symbol.for('terminus.testOpen')]: false,
+  DB: db,
+  EMAIL: email,
+  EMAIL_FROM: 'login@example.test',
+  ASSETS,
+  DOWNLOADS,
+  HEALTH_TOKEN: 'dev',
+  TRIPS,
+  TIMELAPSE,
+  FEED_GATE,
+  TIMELAPSE_ENABLED: 'on',
+  VAPID_PRIVATE_KEY: VAPID,
+  ...(FCM ? { FCM_SERVICE_ACCOUNT: FCM } : {}),
+};
 console.log(FCM ? 'push: on (Firebase project from .private/)' : 'push: off (no .private/fcm-service-account.json)');
 setInterval(() => {
   const due = [...TRIPS.alarms.values()].filter((at) => at <= stubNow()).length;
@@ -297,11 +354,13 @@ async function fastForward(minutes) {
 }
 
 async function serve(req, res) {
-  const body = ['GET', 'HEAD'].includes(req.method) ? undefined : await new Promise((r) => {
-    const chunks = [];
-    req.on('data', (c) => chunks.push(c));
-    req.on('end', () => r(Buffer.concat(chunks)));
-  });
+  const body = ['GET', 'HEAD'].includes(req.method)
+    ? undefined
+    : await new Promise((r) => {
+        const chunks = [];
+        req.on('data', (c) => chunks.push(c));
+        req.on('end', () => r(Buffer.concat(chunks)));
+      });
   if (req.method === 'GET' && req.url === '/__stub/trips') {
     // Each Trip object's alarm and what it holds, for checking push.
     const out = [...TRIPS.instances.entries()].map(([id, o]) => ({
@@ -373,7 +432,12 @@ async function serve(req, res) {
   if (email.sent.length) {
     // An app's sign-in mails an approval link instead of a verify link.
     const approve = /\/auth\/approve\?r=[A-Za-z0-9_-]+/.exec(email.sent.at(-1)?.text ?? '')?.[0];
-    console.log('sign-in code:', email.lastCode(), ' link:', approve ? `http://localhost:${PORT}${approve}` : email.lastToken() && `http://localhost:${PORT}/auth/verify?t=${email.lastToken()}`);
+    console.log(
+      'sign-in code:',
+      email.lastCode(),
+      ' link:',
+      approve ? `http://localhost:${PORT}${approve}` : email.lastToken() && `http://localhost:${PORT}/auth/verify?t=${email.lastToken()}`,
+    );
     email.sent.length = 0;
   }
 }
@@ -393,7 +457,11 @@ const listen = (server, port, ready) => {
   }
 };
 const where = process.env.STUB_HOST ? ` (listening on ${process.env.STUB_HOST}, open to the network)` : '';
-listen(() => http.createServer(serve), PORT, () => console.log(`dev API with fake buses on http://localhost:${PORT}${where} (pairing codes TEST67, TEST78, TEST89)`));
+listen(
+  () => http.createServer(serve),
+  PORT,
+  () => console.log(`dev API with fake buses on http://localhost:${PORT}${where} (pairing codes TEST67, TEST78, TEST89)`),
+);
 // STUB_TLS=<dir with localhost.key and localhost.pem>: the same stub over
 // HTTPS on PORT + 1, for browsers that need a real secure origin (Web Push on
 // iOS). Trust the certificate's CA in the device first; a phone also needs
@@ -401,5 +469,9 @@ listen(() => http.createServer(serve), PORT, () => console.log(`dev API with fak
 if (process.env.STUB_TLS) {
   const tls = process.env.STUB_TLS;
   const [key, cert] = await Promise.all([readFile(path.join(tls, 'localhost.key')), readFile(path.join(tls, 'localhost.pem'))]);
-  listen(() => https.createServer({ key, cert }, serve), PORT + 1, () => console.log(`and over HTTPS on https://localhost:${PORT + 1}`));
+  listen(
+    () => https.createServer({ key, cert }, serve),
+    PORT + 1,
+    () => console.log(`and over HTTPS on https://localhost:${PORT + 1}`),
+  );
 }

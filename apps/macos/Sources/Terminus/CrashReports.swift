@@ -101,7 +101,8 @@ struct CrashReport: Codable, Equatable, Sendable {
     /// is sent as it came, cut to size.
     static func frames(fromCallStackJSON data: Data) -> String {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let stacks = root["callStacks"] as? [[String: Any]] else {
+            let stacks = root["callStacks"] as? [[String: Any]]
+        else {
             return String(decoding: data, as: UTF8.self)
         }
         let ordered = stacks.filter { $0["threadAttributed"] as? Bool == true } + stacks.filter { $0["threadAttributed"] as? Bool != true }
@@ -134,8 +135,10 @@ struct CrashReportStore: Sendable {
 
     /// ~/Library/Application Support/<bundle id>/CrashReports.
     static var standard: CrashReportStore {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
-        return CrashReportStore(dir: base.appendingPathComponent(Bundle.main.bundleIdentifier ?? "terminus").appendingPathComponent("CrashReports"))
+        let base =
+            FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
+        return CrashReportStore(
+            dir: base.appendingPathComponent(Bundle.main.bundleIdentifier ?? "terminus").appendingPathComponent("CrashReports"))
     }
 
     func add(_ report: CrashReport) {
@@ -199,11 +202,12 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber, @unchecked Senda
         NSSetUncaughtExceptionHandler { e in
             // The app is going down: write the file and nothing else, no network.
             guard CrashReporter.enabled else { return }
-            CrashReporter.store.add(.make(
-                version: CrashReporter.version, os: CrashReporter.os,
-                type: e.name.rawValue, message: e.reason ?? "",
-                stack: e.callStackSymbols.joined(separator: "\n"), fatal: true
-            ))
+            CrashReporter.store.add(
+                .make(
+                    version: CrashReporter.version, os: CrashReporter.os,
+                    type: e.name.rawValue, message: e.reason ?? "",
+                    stack: e.callStackSymbols.joined(separator: "\n"), fatal: true
+                ))
         }
         Task.detached(priority: .utility) { await Self.sendPending() }
     }
@@ -254,7 +258,10 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber, @unchecked Senda
     /// Sends what's waiting to the server the app uses (Servers), one at a
     /// time. Turned off, the waiting reports are deleted instead.
     static func sendPending() async {
-        guard enabled else { store.removeAll(); return }
+        guard enabled else {
+            store.removeAll()
+            return
+        }
         for (file, report) in store.pending() {
             let body = try? JSONEncoder().encode(report)
             let sent = try? await Servers.reach(method: "POST") { base in

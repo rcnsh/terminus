@@ -13,17 +13,38 @@ import sh.rcn.terminus.NearbyStop
 class NearbyBoardTest {
     private val fetched = 1_000_000L
 
-    private val utown = NearbyStop(
-        "UTOWN", "UTown", 120, true,
-        listOf(
-            BoardRow("D2", 370, "live", color = "#8e44c9", towards = listOf("University Health Centre", "COM 3"), crowd = "medium", later = listOf(LaterBus(960, "live"))),
-            BoardRow("D1", 190, "live", color = "#ec4fa0", towards = listOf("Yusof Ishak House", "COM 3"), crowd = "low", later = listOf(LaterBus(660, "scheduled"), LaterBus(1140, "live"))),
-            BoardRow("R1", 540, "scheduled", towards = listOf("Yusof Ishak House", "Prince George's Park")),
-            BoardRow("E", null, "ended"),
-        ),
-    )
+    private val utown =
+        NearbyStop(
+            "UTOWN",
+            "UTown",
+            120,
+            true,
+            listOf(
+                BoardRow(
+                    "D2",
+                    370,
+                    "live",
+                    color = "#8e44c9",
+                    towards = listOf("University Health Centre", "COM 3"),
+                    crowd = "medium",
+                    later = listOf(LaterBus(960, "live")),
+                ),
+                BoardRow(
+                    "D1",
+                    190,
+                    "live",
+                    color = "#ec4fa0",
+                    towards = listOf("Yusof Ishak House", "COM 3"),
+                    crowd = "low",
+                    later = listOf(LaterBus(660, "scheduled"), LaterBus(1140, "live")),
+                ),
+                BoardRow("R1", 540, "scheduled", towards = listOf("Yusof Ishak House", "Prince George's Park")),
+                BoardRow("E", null, "ended"),
+            ),
+        )
 
-    @Test fun soonestFirstWithTheirClockTimes() {
+    @Test
+    fun soonestFirstWithTheirClockTimes() {
         val buses = NearbyBoard.buses(utown, fetched, fetched)
         assertEquals(listOf("D1", "D2", "R1"), buses.map { it.svc })
         assertEquals(fetched + 190_000, buses[0].atMs)
@@ -33,11 +54,13 @@ class NearbyBoardTest {
         assertEquals(0xFFEC4FA0L, buses[0].color)
     }
 
-    @Test fun aServiceWithNoTimeIsntShown() {
+    @Test
+    fun aServiceWithNoTimeIsntShown() {
         assertFalse(NearbyBoard.buses(utown, fetched, fetched).any { it.svc == "E" })
     }
 
-    @Test fun aBusStaysAMinuteAfterItsDueThenTheNextTakesItsPlace() {
+    @Test
+    fun aBusStaysAMinuteAfterItsDueThenTheNextTakesItsPlace() {
         val due = fetched + 190_000
         assertEquals(due, NearbyBoard.buses(utown, fetched, due + 59_000).first { it.svc == "D1" }.atMs)
         val d1 = NearbyBoard.buses(utown, fetched, due + 61_000).first { it.svc == "D1" }
@@ -48,13 +71,15 @@ class NearbyBoardTest {
         assertNull(d1.crowd)
     }
 
-    @Test fun aServiceWithEveryBusGoneIsDropped() {
+    @Test
+    fun aServiceWithEveryBusGoneIsDropped() {
         val buses = NearbyBoard.buses(utown, fetched, fetched + 600_000)
         assertFalse(buses.any { it.svc == "R1" })
         assertEquals(listOf("D1", "D2"), buses.map { it.svc })
     }
 
-    @Test fun theEndIsNamedOnlyWhenTwoBusesShownStopNextAtTheSamePlace() {
+    @Test
+    fun theEndIsNamedOnlyWhenTwoBusesShownStopNextAtTheSamePlace() {
         val buses = NearbyBoard.buses(utown, fetched, fetched)
         val d1 = buses.first { it.svc == "D1" }
         val r1 = buses.first { it.svc == "R1" }
@@ -67,13 +92,15 @@ class NearbyBoardTest {
         assertNull(NearbyBoard.endIfNeeded(d1, listOf(d1, d2)))
     }
 
-    @Test fun theSameNextStopAndEndNeedsNoEnd() {
+    @Test
+    fun theSameNextStopAndEndNeedsNoEnd() {
         val a = StopBus("A1", 0, false, 0, true, null, "LT27", "Kent Ridge Bus Terminal", false, emptyList())
         val k = a.copy(svc = "K")
         assertNull(NearbyBoard.endIfNeeded(a, listOf(a, k)))
     }
 
-    @Test fun redrawnWhenTheFirstOfItsBusesGoes() {
+    @Test
+    fun redrawnWhenTheFirstOfItsBusesGoes() {
         val buses = NearbyBoard.buses(utown, fetched, fetched)
         assertEquals(fetched + 190_000 + NearbyBoard.GONE_MS, NearbyBoard.redrawAt(buses, fetched))
         // Past that moment, the next one.
@@ -81,16 +108,29 @@ class NearbyBoardTest {
         assertNull(NearbyBoard.redrawAt(emptyList(), fetched))
     }
 
-    private val night = NearbyStop(
-        "PGPF", "PGP Foyer", 240, true,
-        listOf(
-            BoardRow("A2", null, "", towards = listOf("TCOMS", "Kent Ridge Bus Terminal"), running = false, stopped = "notYet", resumesAtMs = fetched + 20_000_000),
-            BoardRow("K", null, "", endsHere = true, running = false, stopped = "notYet", resumesAtMs = fetched + 19_000_000),
-            BoardRow("E", null, "", running = false, stopped = "noService"),
-        ),
-    )
+    private val night =
+        NearbyStop(
+            "PGPF",
+            "PGP Foyer",
+            240,
+            true,
+            listOf(
+                BoardRow(
+                    "A2",
+                    null,
+                    "",
+                    towards = listOf("TCOMS", "Kent Ridge Bus Terminal"),
+                    running = false,
+                    stopped = "notYet",
+                    resumesAtMs = fetched + 20_000_000,
+                ),
+                BoardRow("K", null, "", endsHere = true, running = false, stopped = "notYet", resumesAtMs = fetched + 19_000_000),
+                BoardRow("E", null, "", running = false, stopped = "noService"),
+            ),
+        )
 
-    @Test fun withNothingRunningEachServicesFirstBusSoonestFirst() {
+    @Test
+    fun withNothingRunningEachServicesFirstBusSoonestFirst() {
         val buses = NearbyBoard.buses(night, fetched, fetched, skewMs = 2_000)
         assertEquals(listOf("K", "A2"), buses.map { it.svc })
         assertTrue(buses.all { it.first && !it.live })
@@ -99,16 +139,19 @@ class NearbyBoardTest {
         assertEquals("TCOMS", buses[1].next)
     }
 
-    @Test fun aRunningBusHidesTheFirstBuses() {
+    @Test
+    fun aRunningBusHidesTheFirstBuses() {
         val mixed = night.copy(board = night.board + BoardRow("D2", 300, "live", towards = listOf("TCOMS", "COM 3")))
         assertEquals(listOf("D2"), NearbyBoard.buses(mixed, fetched, fetched).map { it.svc })
     }
 
-    @Test fun aFirstBusPastIsntShown() {
+    @Test
+    fun aFirstBusPastIsntShown() {
         assertEquals(listOf("A2"), NearbyBoard.buses(night, fetched, fetched + 19_500_000).map { it.svc })
     }
 
-    @Test fun pagesCountRound() {
+    @Test
+    fun pagesCountRound() {
         val buses = NearbyBoard.buses(utown, fetched, fetched)
         assertEquals(listOf("D1", "D2"), NearbyBoard.page(buses, 2, 0).buses.map { it.svc })
         val second = NearbyBoard.page(buses, 2, 1)
@@ -124,39 +167,47 @@ class NearbyBoardTest {
 class NearbyFitTest {
     private val sky = 72f
 
-    @Test fun oneRowTall() {
+    @Test
+    fun oneRowTall() {
         assertEquals(NearbyFit.Kind.MINI, NearbyFit.of(186f, 100f, sky).kind)
         assertEquals(NearbyFit(NearbyFit.Kind.BAR, cols = 2), NearbyFit.of(387f, 100f, sky))
     }
 
-    @Test fun narrowIsRows() {
+    @Test
+    fun narrowIsRows() {
         assertEquals(NearbyFit(NearbyFit.Kind.ROWS, rows = 3), NearbyFit.of(186f, 212f, sky))
         assertEquals(NearbyFit(NearbyFit.Kind.ROWS, rows = 3), NearbyFit.of(286f, 212f, sky))
     }
 
-    @Test fun fourByTwoIsThreeTilesAndThePager() {
+    @Test
+    fun fourByTwoIsThreeTilesAndThePager() {
         assertEquals(NearbyFit(NearbyFit.Kind.TILES, cols = 3, rows = 1, pager = true), NearbyFit.of(387f, 212f, sky))
     }
 
-    @Test fun narrowerIsTwoAcross() {
+    @Test
+    fun narrowerIsTwoAcross() {
         assertEquals(NearbyFit(NearbyFit.Kind.TILES, cols = 2, rows = 1, pager = true), NearbyFit.of(320f, 196f, sky))
     }
 
-    @Test fun shorterHasNoRoomForThePager() {
+    @Test
+    fun shorterHasNoRoomForThePager() {
         assertFalse(NearbyFit.of(320f, 184f, sky).pager)
     }
 
-    @Test fun fourByThreeIsTwoRowsWithTheRestUnderThem() {
+    @Test
+    fun fourByThreeIsTwoRowsWithTheRestUnderThem() {
         val fit = NearbyFit.of(387f, 324f, sky)
         assertEquals(NearbyFit(NearbyFit.Kind.TILES, cols = 3, rows = 2, footer = true), fit)
         assertEquals(6, fit.shown)
     }
 
-    @Test fun tallerTakesAnotherRow() {
+    @Test
+    fun tallerTakesAnotherRow() {
         assertEquals(NearbyFit(NearbyFit.Kind.TILES, cols = 3, rows = 3, footer = true), NearbyFit.of(387f, 436f, sky))
     }
 
-    @Test fun tooShortForATileIsRows() {
+    @Test
+    fun tooShortForATileIsRows() {
         assertEquals(NearbyFit.Kind.ROWS, NearbyFit.of(320f, 150f, sky).kind)
     }
 }

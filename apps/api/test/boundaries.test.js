@@ -112,7 +112,7 @@ test('a lesson given as a date range runs on its last date, and not the day afte
   assert.equal(importedClassRuns({ ...weeks, start: '2026-08-28', end: '2026-09-10' }, null, thu('2026-08-27')), false);
 });
 
-test("a place visited at 23:30 is there until midnight, not past it", () => {
+test('a place visited at 23:30 is there until midnight, not past it', () => {
   const profile = {
     ...structuredClone(DEFAULT_PROFILE),
     places: [{ key: 'gym', label: 'Gym', to: 'UTOWN' }],
@@ -120,7 +120,13 @@ test("a place visited at 23:30 is there until midnight, not past it", () => {
     once: [{ date: '2026-08-27', arriveByMin: 23 * 60 + 45, to: 'COM3', label: 'Late lab' }],
   };
   const trips = classesOn(profile, Date.parse('2026-08-27T01:00:00Z'));
-  assert.deepEqual(trips.map((t) => [t.label, t.endMin]), [['Gym', 1440], ['Late lab', 1440]]);
+  assert.deepEqual(
+    trips.map((t) => [t.label, t.endMin]),
+    [
+      ['Gym', 1440],
+      ['Late lab', 1440],
+    ],
+  );
   const early = classesOn({ ...profile, usual: [{ place: 'gym', day: 4, atMin: 600 }], once: [] }, Date.parse('2026-08-27T01:00:00Z'));
   assert.equal(early[0].endMin, 660, 'an hour there otherwise');
 });

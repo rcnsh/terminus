@@ -24,17 +24,13 @@ import sh.rcn.terminus.widget.Refresher
 import sh.rcn.terminus.widget.redrawWidgets
 
 /**
- * Push: the server says when the card changes, so the phone doesn't
- * have to keep asking.
+ * Push: the server says when the card changes, so the phone doesn't have to keep asking.
  *
- * Firebase Cloud Messaging, only on a phone with Google Play services and a
- * build that has the Firebase config (BuildConfig.FIREBASE_*). A push is a
- * nudge (`{kind: 'card', phase}`); the app fetches /me/next itself and
- * redraws the widgets and the trip's notification from it. Everything else
- * (the heads-up alarm, the widget refresh) still works without it. The one
- * other kind, `term`, is the reminder to import a new semester's timetable,
- * worded by the server in both languages. The push carries no words, so
- * none pass through Google: the app fetches them (GET /me/notice).
+ * Firebase Cloud Messaging, only on a phone with Google Play services and a build that has the Firebase config (BuildConfig.FIREBASE_*). A
+ * push is a nudge (`{kind: 'card', phase}`); the app fetches /me/next itself and redraws the widgets and the trip's notification from it.
+ * Everything else (the heads-up alarm, the widget refresh) still works without it. The one other kind, `term`, is the reminder to import a
+ * new semester's timetable, worded by the server in both languages. The push carries no words, so none pass through Google: the app fetches
+ * them (GET /me/notice).
  */
 object Push {
     /** This build has Firebase, and the phone has Play services. */
@@ -60,9 +56,8 @@ object Push {
     }
 
     /**
-     * The same token is sent again after this long: the server drops one
-     * that Firebase stopped delivering to, and nothing tells the phone. At
-     * most twice a day, one small request.
+     * The same token is sent again after this long: the server drops one that Firebase stopped delivering to, and nothing tells the phone.
+     * At most twice a day, one small request.
      */
     private const val RESEND_MS = 12 * 60 * 60_000L
 
@@ -70,17 +65,14 @@ object Push {
     private const val TRUST_MS = 24 * 60 * 60_000L
 
     /**
-     * Pushes are asked for while something they move on can be seen: the
-     * leave alert, the live notification, or the new semester's reminder,
-     * which only comes by push.
+     * Pushes are asked for while something they move on can be seen: the leave alert, the live notification, or the new semester's
+     * reminder, which only comes by push.
      */
-    fun wanted(ctx: Context): Boolean =
-        Store(ctx).paired && (follows(ctx) || LeaveAlerts.canNotify(ctx, TermReminder.CHANNEL))
+    fun wanted(ctx: Context): Boolean = Store(ctx).paired && (follows(ctx) || LeaveAlerts.canNotify(ctx, TermReminder.CHANNEL))
 
     /**
-     * What push's timing reads from [Store]: the token sent, when the server
-     * took it, when a push last arrived, and the [tag]s of the session it was
-     * sent with ([sentFor]) and of the session now ([session]).
+     * What push's timing reads from [Store]: the token sent, when the server took it, when a push last arrived, and the [tag]s of the
+     * session it was sent with ([sentFor]) and of the session now ([session]).
      */
     data class State(
         val token: String?,
@@ -90,48 +82,41 @@ object Push {
         val session: String? = null,
     ) {
         companion object {
-            fun of(store: Store) = State(store.pushToken, store.pushSentAt, store.pushHeardAt, store.pushFor, store.token?.let { Push.tag(it) })
+            fun of(store: Store) =
+                State(store.pushToken, store.pushSentAt, store.pushHeardAt, store.pushFor, store.token?.let { Push.tag(it) })
         }
     }
 
     /**
-     * A card push only moves the leave alert and the live notification on
-     * (the widgets keep their own alarms): with neither on and seen, it's
-     * left alone rather than fetched for.
+     * A card push only moves the leave alert and the live notification on (the widgets keep their own alarms): with neither on and seen,
+     * it's left alone rather than fetched for.
      */
     fun follows(ctx: Context): Boolean {
         val store = Store(ctx)
-        return (store.leaveAlerts && LeaveAlerts.canNotify(ctx, LeaveAlerts.CHANNEL)) || (store.liveUpdates && LeaveAlerts.canNotify(ctx, LiveService.CHANNEL))
+        return (store.leaveAlerts && LeaveAlerts.canNotify(ctx, LeaveAlerts.CHANNEL)) ||
+            (store.liveUpdates && LeaveAlerts.canNotify(ctx, LiveService.CHANNEL))
     }
 
     /** Which session a token was sent with, without keeping the session token in plain prefs. */
     internal fun tag(session: String): String =
-        java.security.MessageDigest.getInstance("SHA-256").digest(session.toByteArray())
-            .take(8).joinToString("") { "%02x".format(it) }
+        java.security.MessageDigest.getInstance("SHA-256").digest(session.toByteArray()).take(8).joinToString("") { "%02x".format(it) }
 
-    /**
-     * No token sent for this session yet (a new sign-in or pairing, whatever
-     * was sent before it), or not for [RESEND_MS].
-     */
+    /** No token sent for this session yet (a new sign-in or pairing, whatever was sent before it), or not for [RESEND_MS]. */
     fun due(store: Store, now: Long = System.currentTimeMillis()): Boolean = store.token != null && due(State.of(store), now)
 
-    fun due(state: State, now: Long): Boolean =
-        state.token == null || state.sentFor != state.session || now - state.sentAt >= RESEND_MS
+    fun due(state: State, now: Long): Boolean = state.token == null || state.sentFor != state.session || now - state.sentAt >= RESEND_MS
 
     /** [sync] would change something: a token to send, or one to take back. */
     fun stale(ctx: Context): Boolean = if (wanted(ctx)) due(Store(ctx)) else Store(ctx).pushToken != null
 
     /**
-     * Sends this phone's token when [wanted] and new or [due], or takes it
-     * back from the server when no longer wanted. Call when the session
-     * changes, when the alerts or notifications are turned on or off, at
-     * start, and from refreshes.
+     * Sends this phone's token when [wanted] and new or [due], or takes it back from the server when no longer wanted. Call when the
+     * session changes, when the alerts or notifications are turned on or off, at start, and from refreshes.
      */
     fun sync(ctx: Context) {
         val app = ctx.applicationContext
         if (!Store(app).paired || !init(app)) return
-        if (wanted(app)) FirebaseMessaging.getInstance().token.addOnSuccessListener { send(app, it) }
-        else drop(app)
+        if (wanted(app)) FirebaseMessaging.getInstance().token.addOnSuccessListener { send(app, it) } else drop(app)
     }
 
     fun send(ctx: Context, token: String) {
@@ -139,13 +124,14 @@ object Push {
         val auth = store.token ?: return
         if (!wanted(ctx) || (token == store.pushToken && !due(store))) return
         CoroutineScope(Dispatchers.IO).launch {
-            runCatching { Api(auth).registerPush(token) }.onSuccess {
-                // Signed in again meanwhile: the new session hasn't got it.
-                if (store.token != auth) return@onSuccess
-                store.pushToken = token
-                store.pushFor = tag(auth)
-                store.pushSentAt = System.currentTimeMillis()
-            }
+            runCatching { Api(auth).registerPush(token) }
+                .onSuccess {
+                    // Signed in again meanwhile: the new session hasn't got it.
+                    if (store.token != auth) return@onSuccess
+                    store.pushToken = token
+                    store.pushFor = tag(auth)
+                    store.pushSentAt = System.currentTimeMillis()
+                }
         }
     }
 
@@ -155,17 +141,16 @@ object Push {
         if (store.pushToken == null) return
         val auth = store.token ?: return
         CoroutineScope(Dispatchers.IO).launch {
-            runCatching { Api(auth).unregisterPush() }.onSuccess {
-                if (store.token == auth) store.pushToken = null
-            }
+            runCatching { Api(auth).unregisterPush() }
+                .onSuccess {
+                    if (store.token == auth) store.pushToken = null
+                }
         }
     }
 
     /**
-     * This phone hears about changes by push: a token this session sent and
-     * the server took, and a push that arrived, both within [TRUST_MS].
-     * Otherwise the alarms keep the trip in step too (LeaveAlerts.followUp),
-     * in case the server has dropped the token.
+     * This phone hears about changes by push: a token this session sent and the server took, and a push that arrived, both within
+     * [TRUST_MS]. Otherwise the alarms keep the trip in step too (LeaveAlerts.followUp), in case the server has dropped the token.
      */
     fun active(ctx: Context): Boolean {
         val store = Store(ctx)
@@ -174,9 +159,7 @@ object Push {
 
     /** [active], apart from whether this phone can have push at all. */
     fun active(state: State, now: Long): Boolean =
-        state.token != null && state.sentFor == state.session &&
-            now - state.sentAt < TRUST_MS && now - state.heardAt < TRUST_MS
-
+        state.token != null && state.sentFor == state.session && now - state.sentAt < TRUST_MS && now - state.heardAt < TRUST_MS
 }
 
 /** Firebase is ready before anything else runs, including a push that starts the process. */
@@ -201,9 +184,8 @@ class TerminusApp : Application() {
     private var nightMode = 0
 
     /**
-     * The phone's theme changed while the app is running: the widgets' sky
-     * is a picture drawn for one theme, so they're drawn again now rather
-     * than at their next redraw.
+     * The phone's theme changed while the app is running: the widgets' sky is a picture drawn for one theme, so they're drawn again now
+     * rather than at their next redraw.
      */
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
@@ -257,8 +239,7 @@ object TermReminder {
     }
 
     /**
-     * The title and body in the app's language, from the push (an older
-     * server) or /me/notice; null with no title to show, rather than a
+     * The title and body in the app's language, from the push (an older server) or /me/notice; null with no title to show, rather than a
      * blank notification.
      */
     fun words(data: Map<String, String>, zh: Boolean): Pair<String, String>? {
@@ -273,21 +254,25 @@ object TermReminder {
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL, L.s(R.string.channel_term), NotificationManager.IMPORTANCE_DEFAULT).apply {
                 description = L.s(R.string.channel_term_desc)
-            },
+            }
         )
-        val open = PendingIntent.getActivity(
-            ctx, NOTIFICATION_ID, MainActivity.intentFor(ctx),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-        val n = Notification.Builder(ctx, CHANNEL)
-            .setSmallIcon(Icon.createWithResource(ctx, R.drawable.ic_bus))
-            .setContentTitle(title)
-            .setContentText(body)
-            .setStyle(Notification.BigTextStyle().bigText(body))
-            .setContentIntent(open)
-            .setAutoCancel(true)
-            .setCategory(Notification.CATEGORY_REMINDER)
-            .build()
+        val open =
+            PendingIntent.getActivity(
+                ctx,
+                NOTIFICATION_ID,
+                MainActivity.intentFor(ctx),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        val n =
+            Notification.Builder(ctx, CHANNEL)
+                .setSmallIcon(Icon.createWithResource(ctx, R.drawable.ic_bus))
+                .setContentTitle(title)
+                .setContentText(body)
+                .setStyle(Notification.BigTextStyle().bigText(body))
+                .setContentIntent(open)
+                .setAutoCancel(true)
+                .setCategory(Notification.CATEGORY_REMINDER)
+                .build()
         nm.notify(NOTIFICATION_ID, n)
     }
 }

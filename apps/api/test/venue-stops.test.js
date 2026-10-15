@@ -62,7 +62,15 @@ test("leaving a room two stops serve: both are starting points, each with the ro
   assert.deepEqual(origin.also, ['CLB']);
   assert.deepEqual(origin.walkByStopS, { COM3: Math.round(walks.COM3 / SPEED), CLB: Math.round(walks.CLB / SPEED) });
 
-  const input = { lat: null, lon: null, to: 'UTOWN', originCode: origin.code, originAlso: origin.also, originWalkByStopS: origin.walkByStopS, originWalkS: origin.walkS };
+  const input = {
+    lat: null,
+    lon: null,
+    to: 'UTOWN',
+    originCode: origin.code,
+    originAlso: origin.also,
+    originWalkByStopS: origin.walkByStopS,
+    originWalkS: origin.walkS,
+  };
   const cands = candidateStops(GRAPH, input);
   const walkAt = Object.fromEntries(cands.map((c) => [c.stop.code, c.walkS]));
   assert.equal(walkAt.CLB, origin.walkByStopS.CLB, 'CLB is walked to from the room, not from COM3');

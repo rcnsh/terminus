@@ -3,10 +3,8 @@ package sh.rcn.terminus
 import kotlin.math.pow
 
 /**
- * The ink for words and marks on a service's colour: white or near-black,
- * whichever reads better on it (WCAG contrast). White on the yellow A2 or
- * the blue K was under 3.5:1. Plain ARGB, so the app, the widgets and the
- * tests share it.
+ * The ink for words and marks on a service's colour: white or near-black, whichever reads better on it (WCAG contrast). White on the yellow
+ * A2 or the blue K was under 3.5:1. Plain ARGB, so the app, the widgets and the tests share it.
  */
 object Ink {
     const val WHITE = 0xFFFFFFFFL

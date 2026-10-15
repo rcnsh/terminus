@@ -21,7 +21,11 @@ enum Lang {
 
     /// Sets the app's language; it shows from the next launch ([relaunch]).
     static func set(_ pref: String) {
-        if pref == "auto" { UserDefaults.standard.removeObject(forKey: key) } else { UserDefaults.standard.set([pref == "zh" ? "zh-Hans" : "en"], forKey: key) }
+        if pref == "auto" {
+            UserDefaults.standard.removeObject(forKey: key)
+        } else {
+            UserDefaults.standard.set([pref == "zh" ? "zh-Hans" : "en"], forKey: key)
+        }
     }
 
     /// Whether the app is showing Chinese.

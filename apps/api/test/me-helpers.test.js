@@ -17,9 +17,18 @@ test('a vanished stop drops only what used it, not the hours or usual times', ()
       home: { stops: ['GONE-STOP', 'PGP'] },
       dayStartMin: 420,
       dayEndMin: 1200,
-      places: [{ key: 'gym', label: 'Gym', to: 'UTOWN' }, { key: 'old', label: 'Old', to: 'GONE-STOP' }],
-      usual: [{ place: 'gym', day: 2, atMin: 1080 }, { place: 'old', day: 3, atMin: 600 }],
-      once: [{ date: '2026-10-05', arriveByMin: 600, to: 'COM3', label: 'Talk' }, { date: '2026-10-05', arriveByMin: 700, to: 'GONE-STOP', label: 'X' }],
+      places: [
+        { key: 'gym', label: 'Gym', to: 'UTOWN' },
+        { key: 'old', label: 'Old', to: 'GONE-STOP' },
+      ],
+      usual: [
+        { place: 'gym', day: 2, atMin: 1080 },
+        { place: 'old', day: 3, atMin: 600 },
+      ],
+      once: [
+        { date: '2026-10-05', arriveByMin: 600, to: 'COM3', label: 'Talk' },
+        { date: '2026-10-05', arriveByMin: 700, to: 'GONE-STOP', label: 'X' },
+      ],
       trips: [],
       manual: [],
       lang: 'zh',
@@ -29,14 +38,24 @@ test('a vanished stop drops only what used it, not the hours or usual times', ()
   assert.equal(p.dayStartMin, 420);
   assert.equal(p.dayEndMin, 1200);
   assert.deepEqual(p.home, { stops: ['PGP'] });
-  assert.deepEqual(p.places.map((x) => x.key), ['gym']);
+  assert.deepEqual(
+    p.places.map((x) => x.key),
+    ['gym'],
+  );
   assert.deepEqual(p.usual, [{ place: 'gym', day: 2, atMin: 1080 }], 'the usual time of a dropped place goes with it');
-  assert.deepEqual(p.once.map((o) => o.label), ['Talk']);
+  assert.deepEqual(
+    p.once.map((o) => o.label),
+    ['Talk'],
+  );
   assert.equal(p.lang, 'zh');
 });
 
 test('a pinned stop gone from the stops is dropped; the other pins stay, in order', () => {
-  const p = salvageProfile({ pinnedStops: ['UTOWN', 'GONE-STOP', '16009', 'PGP'], dayStartMin: 1300, dayEndMin: 400 }, ok, (c) => ok(c) || c === '16009');
+  const p = salvageProfile(
+    { pinnedStops: ['UTOWN', 'GONE-STOP', '16009', 'PGP'], dayStartMin: 1300, dayEndMin: 400 },
+    ok,
+    (c) => ok(c) || c === '16009',
+  );
   assert.deepEqual(p.pinnedStops, ['UTOWN', '16009', 'PGP']);
   assert.deepEqual(salvageProfile({}, ok).pinnedStops, []);
 });

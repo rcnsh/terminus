@@ -72,11 +72,21 @@ test('the vendor check catches a file changed by one byte, added or removed', ()
   };
   assert.deepEqual(mismatches(files, sums, changed), [`${target}: changed since it was vendored`]);
   assert.deepEqual(mismatches([...files, 'evil/x.mjs'].sort(), sums, hashOnDisk), ['evil/x.mjs: not in SHA256SUMS']);
-  assert.deepEqual(mismatches(files.filter((f) => f !== target), sums, hashOnDisk), [`${target}: in SHA256SUMS but missing`]);
+  assert.deepEqual(
+    mismatches(
+      files.filter((f) => f !== target),
+      sums,
+      hashOnDisk,
+    ),
+    [`${target}: in SHA256SUMS but missing`],
+  );
 });
 
 test('every vendored library carries its licence', () => {
-  const dirs = fs.readdirSync(VENDOR, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
+  const dirs = fs
+    .readdirSync(VENDOR, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name);
   assert.ok(dirs.length >= 4);
   for (const d of dirs) {
     const licences = fs.readdirSync(new URL(`${d}/`, VENDOR)).filter((f) => /^LICEN[CS]E/.test(f));

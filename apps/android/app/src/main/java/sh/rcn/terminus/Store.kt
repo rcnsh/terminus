@@ -6,83 +6,80 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import androidx.core.content.edit
-import org.json.JSONObject
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+import org.json.JSONObject
 
 /**
- * The app's own settings and state on this phone: Store's, and Lang's,
- * Theme's, CardStyle's and CrashReports' keys beside them, which a sign-out keeps
- * ([Store.clear]).
+ * The app's own settings and state on this phone: Store's, and Lang's, Theme's, CardStyle's and CrashReports' keys beside them, which a
+ * sign-out keeps ([Store.clear]).
  */
 internal fun terminusPrefs(ctx: Context): SharedPreferences = ctx.applicationContext.getSharedPreferences("terminus", Context.MODE_PRIVATE)
 
-/**
- * The device token, encrypted with a key that never leaves the Android
- * Keystore, plus the last answer the widget shows.
- */
+/** The device token, encrypted with a key that never leaves the Android Keystore, plus the last answer the widget shows. */
 class Store(context: Context) {
     private val app = context.applicationContext
     private val prefs = terminusPrefs(context)
 
     /**
-     * Decrypted once per process: the widget reads `paired` on every draw, and
-     * a Keystore round trip each time is slow. Written with commit(), so a
-     * process killed right after pairing cannot lose the token the server
-     * already issued.
+     * Decrypted once per process: the widget reads `paired` on every draw, and a Keystore round trip each time is slow. Written with
+     * commit(), so a process killed right after pairing cannot lose the token the server already issued.
      */
     var token: String?
-        get() = synchronized(Store) {
-            if (!loaded) {
-                cached = prefs.getString(KEY_TOKEN, null)?.let { stored ->
-                    try {
-                        decrypt(stored)
-                    } catch (e: Exception) {
-                        // Anything else (the Keystore busy) may pass: not
-                        // loaded, so the next read tries again.
-                        if (!lost(e)) return@synchronized null
-                        // The Keystore key is gone or changed (a restore, a
-                        // reset of the phone's secure storage): the token can
-                        // never be read again. Signed out, then, and said once
-                        // (Session), rather than trying it on every draw.
-                        prefs.edit(commit = true) { remove(KEY_TOKEN); putString(KEY_SIGNED_OUT, SIGNED_OUT_KEY_LOST) }
-                        null
-                    }
+        get() =
+            synchronized(Store) {
+                if (!loaded) {
+                    cached =
+                        prefs.getString(KEY_TOKEN, null)?.let { stored ->
+                            try {
+                                decrypt(stored)
+                            } catch (e: Exception) {
+                                // Anything else (the Keystore busy) may pass: not
+                                // loaded, so the next read tries again.
+                                if (!lost(e)) return@synchronized null
+                                // The Keystore key is gone or changed (a restore, a
+                                // reset of the phone's secure storage): the token can
+                                // never be read again. Signed out, then, and said once
+                                // (Session), rather than trying it on every draw.
+                                prefs.edit(commit = true) {
+                                    remove(KEY_TOKEN)
+                                    putString(KEY_SIGNED_OUT, SIGNED_OUT_KEY_LOST)
+                                }
+                                null
+                            }
+                        }
+                    loaded = true
                 }
+                cached
+            }
+        set(value) =
+            synchronized(Store) {
+                // commit, not apply: a process killed right after pairing must not lose it.
+                prefs.edit(commit = true) {
+                    if (value == null) remove(KEY_TOKEN) else putString(KEY_TOKEN, encrypt(value))
+                    // A new session has no push address on the server yet.
+                    if (value != cached) remove(KEY_PUSH)
+                }
+                cached = value
                 loaded = true
             }
-            cached
-        }
-        set(value) = synchronized(Store) {
-            // commit, not apply: a process killed right after pairing must not lose it.
-            prefs.edit(commit = true) {
-                if (value == null) remove(KEY_TOKEN) else putString(KEY_TOKEN, encrypt(value))
-                // A new session has no push address on the server yet.
-                if (value != cached) remove(KEY_PUSH)
-            }
-            cached = value
-            loaded = true
-        }
 
-    val paired: Boolean get() = token != null
+    val paired: Boolean
+        get() = token != null
 
     /**
-     * The widget's last answer, as the raw JSON plus when it was fetched, and
-     * the answer read from it. Read first: an answer this version can't read
-     * throws [ParseError] and leaves the good one kept before it, and the
-     * back-off, as they were.
+     * The widget's last answer, as the raw JSON plus when it was fetched, and the answer read from it. Read first: an answer this version
+     * can't read throws [ParseError] and leaves the good one kept before it, and the back-off, as they were.
      *
-     * [askedAtMs]: when its request went out. One asked for before the
-     * answer already kept (a slow widget refresh overtaken by the app's)
+     * [askedAtMs]: when its request went out. One asked for before the answer already kept (a slow widget refresh overtaken by the app's)
      * isn't kept, and the newer one is returned in its place.
      *
-     * [sentWith]: the token the request went with. Null, and nothing kept,
-     * when it's no longer this phone's (signed out, or into another account,
-     * while the request was out): a sign-out clears [KEY_ASKED] too, so
-     * only this keeps the old account's answer and places off the phone.
+     * [sentWith]: the token the request went with. Null, and nothing kept, when it's no longer this phone's (signed out, or into another
+     * account, while the request was out): a sign-out clears [KEY_ASKED] too, so only this keeps the old account's answer and places off
+     * the phone.
      */
     fun saveAnswer(json: JSONObject, fetchedAtMs: Long, sentWith: String, askedAtMs: Long = fetchedAtMs): NextAnswer? {
         val answer = NextAnswer.parse(json)
@@ -90,11 +87,20 @@ class Store(context: Context) {
             if (token != sentWith) return null
             // One "asked" later than now is from before the phone's clock went back: not newer.
             val kept = prefs.getLong(KEY_ASKED, 0)
-            if (askedAtMs < kept && kept <= System.currentTimeMillis()) lastAnswer()?.let { return it.first }
+            if (askedAtMs < kept && kept <= System.currentTimeMillis())
+                lastAnswer()?.let {
+                    return it.first
+                }
             // A fresh answer from anywhere (the app, the live notification, a
             // skip) ends a run of failed refreshes, so the back-off starts over,
             // and the widget no longer says Offline over it.
-            prefs.edit { putString(KEY_ANSWER, json.toString()).putLong(KEY_FETCHED, fetchedAtMs).putLong(KEY_ASKED, askedAtMs).putInt(KEY_REFRESH_FAILS, 0).remove(KEY_ERROR) }
+            prefs.edit {
+                putString(KEY_ANSWER, json.toString())
+                    .putLong(KEY_FETCHED, fetchedAtMs)
+                    .putLong(KEY_ASKED, askedAtMs)
+                    .putInt(KEY_REFRESH_FAILS, 0)
+                    .remove(KEY_ERROR)
+            }
             // The app shortcuts follow the saved places (a no-op when they
             // haven't changed). Inside the lock: a sign-out's [clear] empties
             // them, and must not be undone by an answer kept just before it.
@@ -104,13 +110,10 @@ class Store(context: Context) {
     }
 
     /**
-     * Today's plan (/me/day) as last fetched, for when the phone is offline
-     * (OfflineDay), and the plan read from it; one this version can't read
-     * throws [ParseError] and isn't kept. Null, and nothing kept, when
-     * [sentWith] is no longer this phone's token, as for [saveAnswer].
-     * [lang] is the language the server wrote it in ([Api.dayJson]), in
-     * [L.header]'s form: one in another language than the app's is fetched
-     * again ([dayLang]).
+     * Today's plan (/me/day) as last fetched, for when the phone is offline (OfflineDay), and the plan read from it; one this version can't
+     * read throws [ParseError] and isn't kept. Null, and nothing kept, when [sentWith] is no longer this phone's token, as for
+     * [saveAnswer]. [lang] is the language the server wrote it in ([Api.dayJson]), in [L.header]'s form: one in another language than the
+     * app's is fetched again ([dayLang]).
      */
     fun saveDay(json: JSONObject, fetchedAtMs: Long, sentWith: String, lang: String): DayPlan? {
         val day = DayPlan.parse(json)
@@ -122,10 +125,12 @@ class Store(context: Context) {
     }
 
     /** When the kept day plan was fetched, epoch ms (0: none), without reading it. */
-    val dayFetchedAt: Long get() = prefs.getLong(KEY_DAY_AT, 0)
+    val dayFetchedAt: Long
+        get() = prefs.getLong(KEY_DAY_AT, 0)
 
     /** The language the kept day plan is written in, as [L.header] gives it; null when unknown. */
-    val dayLang: String? get() = prefs.getString(KEY_DAY_LANG, null)
+    val dayLang: String?
+        get() = prefs.getString(KEY_DAY_LANG, null)
 
     fun lastDay(): Pair<DayPlan, Long>? {
         val raw = prefs.getString(KEY_DAY, null) ?: return null
@@ -134,11 +139,9 @@ class Store(context: Context) {
     }
 
     /**
-     * The buses near you (/api/nearby) as last fetched, for the Nearby widget
-     * and the big widget's next buses: one board for every widget, whoever
-     * fetched it (a widget's ↻, the background refresh, the Buses tab).
-     * One this version can't read throws [ParseError] and isn't kept; nothing
-     * is kept when [sentWith] is no longer this phone's token.
+     * The buses near you (/api/nearby) as last fetched, for the Nearby widget and the big widget's next buses: one board for every widget,
+     * whoever fetched it (a widget's ↻, the background refresh, the Buses tab). One this version can't read throws [ParseError] and isn't
+     * kept; nothing is kept when [sentWith] is no longer this phone's token.
      */
     fun saveNearby(json: JSONObject, fetchedAtMs: Long, sentWith: String): List<NearbyStop>? {
         val stops = parseNearby(json)
@@ -150,8 +153,11 @@ class Store(context: Context) {
     }
 
     /** The kept board as JSON, and when it was fetched (the phone's clock); null when there's none. */
-    val nearbyJson: String? get() = prefs.getString(KEY_NEARBY, null)
-    val nearbyFetchedAt: Long get() = prefs.getLong(KEY_NEARBY_AT, 0)
+    val nearbyJson: String?
+        get() = prefs.getString(KEY_NEARBY, null)
+
+    val nearbyFetchedAt: Long
+        get() = prefs.getLong(KEY_NEARBY_AT, 0)
 
     /** Why the last fetch of the board failed ([sh.rcn.terminus.widget.UPDATING] while one is under way); null when it didn't. */
     var nearbyError: String?
@@ -193,8 +199,8 @@ class Store(context: Context) {
         set(value) = prefs.edit { putBoolean(KEY_NEEDS_SETUP, value) }
 
     /**
-     * Signed in without an answer from /me: whether the account needs setup
-     * isn't known yet. The next /me (AccountViewModel.refresh) settles it.
+     * Signed in without an answer from /me: whether the account needs setup isn't known yet. The next /me (AccountViewModel.refresh)
+     * settles it.
      */
     var setupUnknown: Boolean
         get() = prefs.getBoolean(KEY_SETUP_UNKNOWN, false)
@@ -205,32 +211,30 @@ class Store(context: Context) {
         get() = prefs.getString(KEY_EMAIL, null)
         set(value) = prefs.edit { putString(KEY_EMAIL, value) }
 
-    /**
-     * An account with no email, made on this phone ("Get started"). Before
-     * this was kept, an account without an email seen here.
-     */
+    /** An account with no email, made on this phone ("Get started"). Before this was kept, an account without an email seen here. */
     var anonymous: Boolean
         get() = if (prefs.contains(KEY_ANON)) prefs.getBoolean(KEY_ANON, false) else email == null
         set(value) = prefs.edit { putBoolean(KEY_ANON, value) }
 
     /**
-     * Why this phone was last signed out without being asked to ([SIGNED_OUT_REMOVED],
-     * [SIGNED_OUT_UNUSED], [SIGNED_OUT_KEY_LOST]), for the welcome screen to
-     * say once; read with [takeSignedOut].
+     * Why this phone was last signed out without being asked to ([SIGNED_OUT_REMOVED], [SIGNED_OUT_UNUSED], [SIGNED_OUT_KEY_LOST]), for the
+     * welcome screen to say once; read with [takeSignedOut].
      */
-    val signedOutReason: String? get() = prefs.getString(KEY_SIGNED_OUT, null)
+    val signedOutReason: String?
+        get() = prefs.getString(KEY_SIGNED_OUT, null)
 
-    fun takeSignedOut(): String? = synchronized(Store) {
-        // Reading the token first: a lost key is found out there.
-        token
-        prefs.getString(KEY_SIGNED_OUT, null)?.also { prefs.edit { remove(KEY_SIGNED_OUT) } }
-    }
+    fun takeSignedOut(): String? =
+        synchronized(Store) {
+            // Reading the token first: a lost key is found out there.
+            token
+            prefs.getString(KEY_SIGNED_OUT, null)?.also { prefs.edit { remove(KEY_SIGNED_OUT) } }
+        }
 
-    /**
-     * Anything of an account kept with no token to go with it: a sign-out
-     * that stopped halfway, or a token whose key was lost.
-     */
-    fun hasLeftovers(): Boolean = !paired && !prefs.contains(KEY_TOKEN) && listOf(KEY_ANSWER, KEY_DAY, KEY_NEARBY, KEY_EMAIL, KEY_ADDED, KEY_DEST_USE, KEY_PUSH, KEY_ANON).any(prefs::contains)
+    /** Anything of an account kept with no token to go with it: a sign-out that stopped halfway, or a token whose key was lost. */
+    fun hasLeftovers(): Boolean =
+        !paired &&
+            !prefs.contains(KEY_TOKEN) &&
+            listOf(KEY_ANSWER, KEY_DAY, KEY_NEARBY, KEY_EMAIL, KEY_ADDED, KEY_DEST_USE, KEY_PUSH, KEY_ANON).any(prefs::contains)
 
     /** The class (its start, epoch ms) the last heads-up was for: one per class. */
     var leaveNotifiedFor: Long
@@ -248,8 +252,7 @@ class Store(context: Context) {
         set(value) = prefs.edit { putString(KEY_PUSH, value) }
 
     /**
-     * Which session [pushToken] was sent with ([Push.tag] of the token): a
-     * new session (signed in, paired, signed in again) has none on the
+     * Which session [pushToken] was sent with ([Push.tag] of the token): a new session (signed in, paired, signed in again) has none on the
      * server yet, whatever this phone sent before.
      */
     var pushFor: String?
@@ -284,91 +287,96 @@ class Store(context: Context) {
         get() = Destinations.parseAdded(prefs.getString(KEY_ADDED, null))
         set(value) = prefs.edit { putString(KEY_ADDED, Destinations.serialiseAdded(value)) }
 
-    fun noteDestination(dest: Destinations.Dest, now: Long = System.currentTimeMillis()) = synchronized(Store) {
-        prefs.edit { putString(KEY_DEST_USE, Destinations.serialise(Destinations.note(destinationUses(), dest, now))) }
-    }
+    fun noteDestination(dest: Destinations.Dest, now: Long = System.currentTimeMillis()) =
+        synchronized(Store) {
+            prefs.edit { putString(KEY_DEST_USE, Destinations.serialise(Destinations.note(destinationUses(), dest, now))) }
+        }
 
     /**
-     * A random value only this install knows, put on the app's own intents
-     * (widgets, shortcuts) so MainActivity can tell them from another app's:
-     * it's exported, so any app can start it.
+     * A random value only this install knows, put on the app's own intents (widgets, shortcuts) so MainActivity can tell them from another
+     * app's: it's exported, so any app can start it.
      */
     val intentKey: String
-        get() = synchronized(Store) {
-            prefs.getString(KEY_INTENT, null) ?: java.util.UUID.randomUUID().toString().also { prefs.edit(commit = true) { putString(KEY_INTENT, it) } }
-        }
+        get() =
+            synchronized(Store) {
+                prefs.getString(KEY_INTENT, null)
+                    ?: java.util.UUID.randomUUID().toString().also { prefs.edit(commit = true) { putString(KEY_INTENT, it) } }
+            }
 
     /**
-     * The server refused [rejected] (401): the account's things go, as on
-     * signing out, but only while it is still this phone's token: one stored
-     * since (signed in again meanwhile) stays. Why is kept for the welcome
-     * screen ([takeSignedOut]): an account with no email the server deleted
-     * after it went unused, or this phone removed from an account. True
-     * when it signed out.
+     * The server refused [rejected] (401): the account's things go, as on signing out, but only while it is still this phone's token: one
+     * stored since (signed in again meanwhile) stays. Why is kept for the welcome screen ([takeSignedOut]): an account with no email the
+     * server deleted after it went unused, or this phone removed from an account. True when it signed out.
      */
-    fun signOutIf(rejected: String): Boolean = synchronized(Store) {
-        if (token != rejected) return@synchronized false
-        val why = if (anonymous) SIGNED_OUT_UNUSED else SIGNED_OUT_REMOVED
-        clear()
-        prefs.edit(commit = true) { putString(KEY_SIGNED_OUT, why) }
-        true
-    }
-
-    /**
-     * Signing out: the account's things go; the phone's language, theme,
-     * card style, the intent key, the server chosen (Servers) and a sign-in
-     * set aside for the other side of the dev stub stay.
-     */
-    fun clear() = synchronized(Store) {
-        val keep = listOf(KEY_LANG, KEY_THEME, CardStyle.KEY, KEY_INTENT, Servers.KEY_SERVER, KEY_TOKEN_SITE, KEY_TOKEN_LOCAL).associateWith { prefs.getString(it, null) }
-        val menu = prefs.getBoolean(Servers.KEY_MENU, false)
-        // This phone's choice, not the account's.
-        val crashReports = prefs.getBoolean(CrashReports.KEY_ENABLED, true)
-        prefs.edit(commit = true) {
+    fun signOutIf(rejected: String): Boolean =
+        synchronized(Store) {
+            if (token != rejected) return@synchronized false
+            val why = if (anonymous) SIGNED_OUT_UNUSED else SIGNED_OUT_REMOVED
             clear()
-            for ((k, v) in keep) if (v != null) putString(k, v)
-            if (menu) putBoolean(Servers.KEY_MENU, true)
-            if (!crashReports) putBoolean(CrashReports.KEY_ENABLED, false)
+            prefs.edit(commit = true) { putString(KEY_SIGNED_OUT, why) }
+            true
         }
-        cached = null
-        loaded = true
-        // The shortcuts named the old account's places.
-        runCatching { Shortcuts.update(app, emptyList()) }
-    }
 
     /**
-     * Crossing between the site and the dev stub (Servers.choose): this
-     * side's token is set aside, still encrypted, the account's things go as
-     * on signing out, and the other side's token, if one was set aside,
-     * comes back. So the stub never gets the real account's token.
+     * Signing out: the account's things go; the phone's language, theme, card style, the intent key, the server chosen (Servers) and a
+     * sign-in set aside for the other side of the dev stub stay.
      */
-    fun swapSession(toLocal: Boolean) = synchronized(Store) {
-        val (away, back) = if (toLocal) KEY_TOKEN_SITE to KEY_TOKEN_LOCAL else KEY_TOKEN_LOCAL to KEY_TOKEN_SITE
-        val mine = prefs.getString(KEY_TOKEN, null)
-        val theirs = prefs.getString(back, null)
-        clear()
-        prefs.edit(commit = true) {
-            if (mine != null) putString(away, mine) else remove(away)
-            remove(back)
-            if (theirs != null) putString(KEY_TOKEN, theirs)
+    fun clear() =
+        synchronized(Store) {
+            val keep =
+                listOf(KEY_LANG, KEY_THEME, CardStyle.KEY, KEY_INTENT, Servers.KEY_SERVER, KEY_TOKEN_SITE, KEY_TOKEN_LOCAL).associateWith {
+                    prefs.getString(it, null)
+                }
+            val menu = prefs.getBoolean(Servers.KEY_MENU, false)
+            // This phone's choice, not the account's.
+            val crashReports = prefs.getBoolean(CrashReports.KEY_ENABLED, true)
+            prefs.edit(commit = true) {
+                clear()
+                for ((k, v) in keep) if (v != null) putString(k, v)
+                if (menu) putBoolean(Servers.KEY_MENU, true)
+                if (!crashReports) putBoolean(CrashReports.KEY_ENABLED, false)
+            }
+            cached = null
+            loaded = true
+            // The shortcuts named the old account's places.
+            runCatching { Shortcuts.update(app, emptyList()) }
         }
-        // Read again, through the Keystore, on next use.
-        cached = null
-        loaded = false
-    }
 
-    private fun key(): SecretKey = synchronized(Store) {
-        val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-        (ks.getEntry(ALIAS, null) as? KeyStore.SecretKeyEntry)?.let { return@synchronized it.secretKey }
-        val gen = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
-        gen.init(
-            KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
-                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                .build(),
-        )
-        gen.generateKey()
-    }
+    /**
+     * Crossing between the site and the dev stub (Servers.choose): this side's token is set aside, still encrypted, the account's things go
+     * as on signing out, and the other side's token, if one was set aside, comes back. So the stub never gets the real account's token.
+     */
+    fun swapSession(toLocal: Boolean) =
+        synchronized(Store) {
+            val (away, back) = if (toLocal) KEY_TOKEN_SITE to KEY_TOKEN_LOCAL else KEY_TOKEN_LOCAL to KEY_TOKEN_SITE
+            val mine = prefs.getString(KEY_TOKEN, null)
+            val theirs = prefs.getString(back, null)
+            clear()
+            prefs.edit(commit = true) {
+                if (mine != null) putString(away, mine) else remove(away)
+                remove(back)
+                if (theirs != null) putString(KEY_TOKEN, theirs)
+            }
+            // Read again, through the Keystore, on next use.
+            cached = null
+            loaded = false
+        }
+
+    private fun key(): SecretKey =
+        synchronized(Store) {
+            val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+            (ks.getEntry(ALIAS, null) as? KeyStore.SecretKeyEntry)?.let {
+                return@synchronized it.secretKey
+            }
+            val gen = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
+            gen.init(
+                KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+                    .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                    .build()
+            )
+            gen.generateKey()
+        }
 
     private fun encrypt(plain: String): String {
         val c = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, key()) }
@@ -377,8 +385,11 @@ class Store(context: Context) {
     }
 
     /** A token that can never be decrypted: the key replaced or invalidated, or the stored value damaged. */
-    private fun lost(e: Exception) = e is javax.crypto.BadPaddingException || e is android.security.keystore.KeyPermanentlyInvalidatedException ||
-        e is java.security.UnrecoverableKeyException || e is IllegalArgumentException
+    private fun lost(e: Exception) =
+        e is javax.crypto.BadPaddingException ||
+            e is android.security.keystore.KeyPermanentlyInvalidatedException ||
+            e is java.security.UnrecoverableKeyException ||
+            e is IllegalArgumentException
 
     private fun decrypt(stored: String): String {
         val bytes = Base64.decode(stored, Base64.NO_WRAP)

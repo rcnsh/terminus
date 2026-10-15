@@ -1,6 +1,5 @@
 package sh.rcn.terminus.widget
 
-import sh.rcn.terminus.ServerClock
 import android.content.Context
 import android.text.format.DateFormat
 import androidx.compose.runtime.Composable
@@ -32,6 +31,11 @@ import androidx.glance.layout.fillMaxSize
 import androidx.glance.semantics.contentDescription
 import androidx.glance.semantics.semantics
 import androidx.glance.state.PreferencesGlanceStateDefinition
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.TimeZone
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import sh.rcn.terminus.CardStyle
 import sh.rcn.terminus.DayPlan
@@ -41,6 +45,7 @@ import sh.rcn.terminus.NearbyStop
 import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.OfflineDay
 import sh.rcn.terminus.R
+import sh.rcn.terminus.ServerClock
 import sh.rcn.terminus.Spoken
 import sh.rcn.terminus.Store
 import sh.rcn.terminus.Target
@@ -48,17 +53,11 @@ import sh.rcn.terminus.hour12
 import sh.rcn.terminus.parseNearby
 import sh.rcn.terminus.ui.MainActivity
 import sh.rcn.terminus.ui.eta
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.TimeZone
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.withContext
 
 /**
- * Two widgets in the picker, drawn as Now is: the hour's sky over the top
- * with the campus's hills, your stop and your bus on the horizon. "Next bus"
- * is the trip; "Next bus + favourites" adds chips for Nearby and the places
- * you go. Each lays itself out by its size ([WidgetShape]).
+ * Two widgets in the picker, drawn as Now is: the hour's sky over the top with the campus's hills, your stop and your bus on the horizon.
+ * "Next bus" is the trip; "Next bus + favourites" adds chips for Nearby and the places you go. Each lays itself out by its size
+ * ([WidgetShape]).
  */
 abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
 
@@ -80,17 +79,18 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
             val version = currentState(VERSION) ?: 0L
             val snap = snaps.get(version) { Snap(store) }
             // This widget's own choice: the timetable, Nearby or a place.
-            val state = ModeState(
-                Mode.of(currentState(WidgetModes.MODE), currentState(WidgetModes.MODE_LABEL)),
-                currentState(WidgetModes.MODE_AT),
-                currentState(WidgetModes.MODE_JSON),
-                currentState(WidgetModes.MODE_FETCHED),
-                currentState(WidgetModes.MODE_ERROR),
-                currentState(NearbySwap.FROM)?.let { from ->
-                    NearbySwap.Swap(from, currentState(NearbySwap.TO) ?: "", currentState(NearbySwap.AT) ?: 0L)
-                },
-                currentState(NEARBY_PAGE) ?: 0,
-            )
+            val state =
+                ModeState(
+                    Mode.of(currentState(WidgetModes.MODE), currentState(WidgetModes.MODE_LABEL)),
+                    currentState(WidgetModes.MODE_AT),
+                    currentState(WidgetModes.MODE_JSON),
+                    currentState(WidgetModes.MODE_FETCHED),
+                    currentState(WidgetModes.MODE_ERROR),
+                    currentState(NearbySwap.FROM)?.let { from ->
+                        NearbySwap.Swap(from, currentState(NearbySwap.TO) ?: "", currentState(NearbySwap.AT) ?: 0L)
+                    },
+                    currentState(NEARBY_PAGE) ?: 0,
+                )
             val chosen = modes.get(state) { state }
             Content(snap, chosen, appWidgetId)
         }
@@ -111,13 +111,24 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         val uses by lazy { store.destinationUses() }
     }
 
-    private data class ModeState(val mode: Mode, val at: Long?, val json: String?, val fetchedAt: Long?, val error: String?, val swap: NearbySwap.Swap? = null, val page: Int = 0) {
+    private data class ModeState(
+        val mode: Mode,
+        val at: Long?,
+        val json: String?,
+        val fetchedAt: Long?,
+        val error: String?,
+        val swap: NearbySwap.Swap? = null,
+        val page: Int = 0,
+    ) {
         /** Nearby's stops in the API's order (nearest first); null before any, or when they can't be read. */
-        val nearbyStops: List<NearbyStop>? by lazy { json?.takeIf { mode == Mode.Nearby }?.let { runCatching { parseNearby(JSONObject(it)) }.getOrNull() } }
+        val nearbyStops: List<NearbyStop>? by lazy {
+            json?.takeIf { mode == Mode.Nearby }?.let { runCatching { parseNearby(JSONObject(it)) }.getOrNull() }
+        }
 
         /** A place's answer; null before any, or when it can't be read. */
-        val answer: NextAnswer? by lazy { json?.takeIf { mode is Mode.To }?.let { runCatching { NextAnswer.parse(JSONObject(it)) }.getOrNull() } }
-
+        val answer: NextAnswer? by lazy {
+            json?.takeIf { mode is Mode.To }?.let { runCatching { NextAnswer.parse(JSONObject(it)) }.getOrNull() }
+        }
     }
 
     @Composable
@@ -143,62 +154,80 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         val mode = WidgetModes.effective(chosen.mode, chosen.at, plan, chips.isNotEmpty(), now0, ServerClock::toDevice)
         val onTimetable = mode == Mode.Timetable
         // What's shown: the plan, or this widget's own answer for a place.
-        val answer = when (mode) {
-            Mode.Timetable -> plan
-            is Mode.To -> chosen.answer
-            Mode.Nearby -> null
-        }
+        val answer =
+            when (mode) {
+                Mode.Timetable -> plan
+                is Mode.To -> chosen.answer
+                Mode.Nearby -> null
+            }
         val error = if (onTimetable) snap.error else chosen.error
         // The day plan read once with the rest of this redraw (snap), only used offline.
         val frame = frame(paired, mode, answer, error, snap.live, ServerClock.now()) { snap.day }
         // ↻ refreshes what it shows (a place with a new location fix); a tap
         // anywhere else on the widget opens the app on the same view.
         val refresh = if (onTimetable) actionRunCallback<RefreshAction>() else chipAction(ctx, mode, appWidgetId)
-        val tap = actionStartActivity(
-            when (val t = frame.tap) {
-                Tap.Plan -> MainActivity.intentFor(ctx)
-                Tap.Nearby -> MainActivity.intentFor(ctx, nearby = true)
-                is Tap.Place -> MainActivity.intentFor(ctx, place = t.key)
-                is Tap.Stop -> MainActivity.intentFor(ctx, to = t.code, label = t.label)
-            },
-        )
-        val face = Face.of(paired, mode, answer, error, frame.offline, ServerClock.now()) { clock(ctx, it) }
-        val scene = Scene(
-            look = look,
-            face = face,
-            answer = answer,
-            refresh = refresh.takeIf { frame.refreshButton },
-            chips = chips,
-            showing = mode,
-            chipAction = { chipAction(ctx, it, appWidgetId) },
-            day = { snap.day },
-            style = CardStyle.pref(ctx),
-            // The big widget's next buses: the shared board, from the last half hour.
-            nearby = {
-                snap.nearbyAt?.takeIf { now0 - it in 0..WidgetModes.KEEP_MS }?.let { at ->
-                    NearbyView.of(paired, snap.nearbyStops, chosen.swap, at, null, 0, now0)
+        val tap =
+            actionStartActivity(
+                when (val t = frame.tap) {
+                    Tap.Plan -> MainActivity.intentFor(ctx)
+                    Tap.Nearby -> MainActivity.intentFor(ctx, nearby = true)
+                    is Tap.Place -> MainActivity.intentFor(ctx, place = t.key)
+                    is Tap.Stop -> MainActivity.intentFor(ctx, to = t.code, label = t.label)
                 }
-            },
-        )
+            )
+        val face = Face.of(paired, mode, answer, error, frame.offline, ServerClock.now()) { clock(ctx, it) }
+        val scene =
+            Scene(
+                look = look,
+                face = face,
+                answer = answer,
+                refresh = refresh.takeIf { frame.refreshButton },
+                chips = chips,
+                showing = mode,
+                chipAction = { chipAction(ctx, it, appWidgetId) },
+                day = { snap.day },
+                style = CardStyle.pref(ctx),
+                // The big widget's next buses: the shared board, from the last half hour.
+                nearby = {
+                    snap.nearbyAt
+                        ?.takeIf { now0 - it in 0..WidgetModes.KEEP_MS }
+                        ?.let { at ->
+                            NearbyView.of(paired, snap.nearbyStops, chosen.swap, at, null, 0, now0)
+                        }
+                },
+            )
 
         // TalkBack reads the widget as one sentence instead of fragments.
-        val spoken = when {
-            mode == Mode.Nearby -> nearbySpoken(ctx, chosen.nearbyStops?.let { NearbySwap.order(it, chosen.swap, now0) }, chosen.fetchedAt, chosen.error)
-            frame.offline != null -> OfflineDay.lines(frame.offline) { clock(ctx, it) }.let { Spoken.sentences(L.s(R.string.offline), it.head, it.big, it.how) }
-            else -> spokenSummary(ctx, paired, answer, error)
-        }
+        val spoken =
+            when {
+                mode == Mode.Nearby ->
+                    nearbySpoken(ctx, chosen.nearbyStops?.let { NearbySwap.order(it, chosen.swap, now0) }, chosen.fetchedAt, chosen.error)
+                frame.offline != null ->
+                    OfflineDay.lines(frame.offline) { clock(ctx, it) }
+                        .let { Spoken.sentences(L.s(R.string.offline), it.head, it.big, it.how) }
+                else -> spokenSummary(ctx, paired, answer, error)
+            }
         Box(
-            modifier = GlanceModifier
-                .fillMaxSize()
-                .appWidgetBackground()
-                .background(look.pageColor)
-                .cornerRadius(android.R.dimen.system_app_widget_background_radius)
-                .semantics { contentDescription = spoken }
-                .clickable(tap),
+            modifier =
+                GlanceModifier.fillMaxSize()
+                    .appWidgetBackground()
+                    .background(look.pageColor)
+                    .cornerRadius(android.R.dimen.system_app_widget_background_radius)
+                    .semantics { contentDescription = spoken }
+                    .clickable(tap)
         ) {
             when {
                 mode == Mode.Nearby -> {
-                    val view = NearbyView.of(paired, chosen.nearbyStops, chosen.swap, chosen.fetchedAt, chosen.error, chosen.page, System.currentTimeMillis())
+                    val view =
+                        NearbyView.of(
+                            paired,
+                            chosen.nearbyStops,
+                            chosen.swap,
+                            chosen.fetchedAt,
+                            chosen.error,
+                            chosen.page,
+                            System.currentTimeMillis(),
+                        )
                     NearbyLayout(look, w, h, view, NearbyControls(scene.refresh, { PageAction.of(it) }, chips, mode, scene.chipAction))
                 }
                 shape == WidgetShape.BAR -> BarLayout(scene, w, h)
@@ -212,46 +241,57 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
     /** Where a tap on the widget opens the app: the view it shows. */
     sealed interface Tap {
         data object Plan : Tap
+
         data object Nearby : Tap
+
         data class Place(val key: String) : Tap
+
         data class Stop(val code: String, val label: String) : Tap
     }
 
     /**
-     * The widget's frame, whatever its body: [offline] (the day plan's next
-     * thing, shown instead of the answer), whether there's a refresh
+     * The widget's frame, whatever its body: [offline] (the day plan's next thing, shown instead of the answer), whether there's a refresh
      * button, and where a tap goes.
      */
     data class Frame(val offline: OfflineDay.Pick?, val refreshButton: Boolean, val tap: Tap)
 
     companion object {
         /**
-         * [Frame] for the [mode] shown, with its [answer] and last [error];
-         * [day] is read only when it's needed. [now] is on the server's clock.
+         * [Frame] for the [mode] shown, with its [answer] and last [error]; [day] is read only when it's needed. [now] is on the server's
+         * clock.
          */
         fun frame(paired: Boolean, mode: Mode, answer: NextAnswer?, error: String?, live: Boolean, now: Long, day: () -> DayPlan?): Frame {
             val onTimetable = mode == Mode.Timetable
             // Offline (the last refresh failed) with the plan gone stale, or none
             // kept: the next thing on the day plan kept for it.
-            val offline = if (onTimetable && paired && error != null && error != UPDATING && (answer == null || isOld(answer, now))) OfflineDay.next(day(), now) else null
+            val offline =
+                if (onTimetable && paired && error != null && error != UPDATING && (answer == null || isOld(answer, now)))
+                    OfflineDay.next(day(), now)
+                else null
             // The live notification keeps the plan current, so no refresh button then.
             val refreshButton = paired && (!live || !onTimetable)
-            val tap = when (mode) {
-                Mode.Timetable -> Tap.Plan
-                Mode.Nearby -> Tap.Nearby
-                is Mode.To -> (mode.target as? Target.SavedPlace)?.let { Tap.Place(it.key) } ?: Tap.Stop(mode.dest.id.removePrefix("stop:"), mode.label)
-            }
+            val tap =
+                when (mode) {
+                    Mode.Timetable -> Tap.Plan
+                    Mode.Nearby -> Tap.Nearby
+                    is Mode.To ->
+                        (mode.target as? Target.SavedPlace)?.let { Tap.Place(it.key) }
+                            ?: Tap.Stop(mode.dest.id.removePrefix("stop:"), mode.label)
+                }
             return Frame(offline, refreshButton, tap)
         }
 
         /** "D2 3 min · A1 7 min": the server's words while fresh, then counted down by `ageS`. */
         fun departures(s: NearbyStop, ageS: Long, n: Int, skip: Int = 0): String =
-            s.board.filter { it.etaS != null }.drop(skip).take(n).joinToString(" · ") { r ->
-                val left = (r.etaS!! - ageS).toInt()
-                "${r.svc} ${r.eta?.takeIf { ageS < SERVER_ETA_S } ?: eta(left.coerceAtLeast(0), r.quality)}"
-            }
+            s.board
+                .filter { it.etaS != null }
+                .drop(skip)
+                .take(n)
+                .joinToString(" · ") { r ->
+                    val left = (r.etaS!! - ageS).toInt()
+                    "${r.svc} ${r.eta?.takeIf { ageS < SERVER_ETA_S } ?: eta(left.coerceAtLeast(0), r.quality)}"
+                }
     }
-
 }
 
 /** A widget button: Timetable at once; Nearby and places through a location fix when location is allowed. */
@@ -259,33 +299,35 @@ internal fun chipAction(ctx: Context, mode: Mode, appWidgetId: Int): Action =
     if (mode != Mode.Timetable && Locator.hasForeground(ctx)) {
         actionStartService(WidgetModeService.intent(ctx, appWidgetId, mode), isForegroundService = true)
     } else {
-        actionRunCallback<ModeAction>(
-            actionParametersOf(ModeAction.MODE_ID to mode.id, ModeAction.MODE_LABEL_PARAM to mode.label),
-        )
+        actionRunCallback<ModeAction>(actionParametersOf(ModeAction.MODE_ID to mode.id, ModeAction.MODE_LABEL_PARAM to mode.label))
     }
 
 /** What the widget says, as sentences for screen readers ([Spoken.summary]). */
 fun spokenSummary(ctx: Context, paired: Boolean, answer: NextAnswer?, error: String?): String =
     Spoken.summary(paired, answer, error, ServerClock.now()) { clock(ctx, it) }
 
-
 /** The value made for the last key, made again for a new one. */
 internal class Latest<K, V : Any> {
     private var key: K? = null
     private var value: V? = null
 
-    fun get(k: K, make: () -> V): V = value?.takeIf { key == k } ?: make().also { key = k; value = it }
+    fun get(k: K, make: () -> V): V =
+        value?.takeIf { key == k }
+            ?: make().also {
+                key = k
+                value = it
+            }
 }
 
 class NextBusWidget : BaseWidget(large = false)
+
 class PlacesWidget : BaseWidget(large = true)
 
 internal val VERSION = longPreferencesKey("version")
 
 /**
- * Signing out: each widget forgets the place or Nearby list it was showing
- * (WidgetModes) and the stops it was swapping between (NearbySwap), which
- * were the old account's, and is drawn again.
+ * Signing out: each widget forgets the place or Nearby list it was showing (WidgetModes) and the stops it was swapping between
+ * (NearbySwap), which were the old account's, and is drawn again.
  */
 suspend fun forgetWidgets(ctx: Context) {
     val mgr = GlanceAppWidgetManager(ctx)
@@ -333,7 +375,6 @@ class RefreshAction : ActionCallback {
 /** Stored as the error while an update is under way; shown as R.string.updating. */
 const val UPDATING = "Updating…"
 
-
 open class BusWidgetReceiver(widget: GlanceAppWidget) : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = widget
 
@@ -352,13 +393,12 @@ open class BusWidgetReceiver(widget: GlanceAppWidget) : GlanceAppWidgetReceiver(
 }
 
 class NextBusWidgetReceiver : BusWidgetReceiver(NextBusWidget())
+
 class PlacesWidgetReceiver : BusWidgetReceiver(PlacesWidget())
 
-
 /**
- * Campus time, in the phone's 12/24-hour style. Class times and "Arrive
- * 09:52" come from the server in Singapore time; a phone set to another
- * zone must not print the bus in a different one beside them.
+ * Campus time, in the phone's 12/24-hour style. Class times and "Arrive 09:52" come from the server in Singapore time; a phone set to
+ * another zone must not print the bus in a different one beside them.
  */
 fun clock(ctx: Context, ms: Long): String {
     // In the account's 12- or 24-hour style, as the server writes the card.

@@ -6,15 +6,12 @@ import android.graphics.drawable.Icon
 import android.os.Build
 
 /**
- * On the bus: the notification follows the ride. "On the D2 · off at
- * UTown 9:52", the next stop and how many are left, and a countdown to getting
- * off that the system ticks by itself.
+ * On the bus: the notification follows the ride. "On the D2 · off at UTown 9:52", the next stop and how many are left, and a countdown to
+ * getting off that the system ticks by itself.
  *
- * From Android 16 it's a progress bar too (Notification.ProgressStyle): one
- * segment per stop ridden, a point at each stop, and the bus's icon where the
- * clock puts it. The position is an estimate (stops evenly spaced between
- * boarding and the arrival, which is live when the server knows the bus's
- * plate), so it's redrawn at each stop by whoever posts the notification.
+ * From Android 16 it's a progress bar too (Notification.ProgressStyle): one segment per stop ridden, a point at each stop, and the bus's
+ * icon where the clock puts it. The position is an estimate (stops evenly spaced between boarding and the arrival, which is live when the
+ * server knows the bus's plate), so it's redrawn at each stop by whoever posts the notification.
  */
 object RideStyle {
     /** When the bus should reach its next stop, to redraw then; null once it's there. */
@@ -49,9 +46,8 @@ object RideStyle {
 }
 
 /**
- * A countdown to [at] in the notification's header, which the system ticks
- * by itself; no time at all when there's nothing ahead to count down to.
- * [at] and [now] are on the server's clock; the header counts on the phone's.
+ * A countdown to [at] in the notification's header, which the system ticks by itself; no time at all when there's nothing ahead to count
+ * down to. [at] and [now] are on the server's clock; the header counts on the phone's.
  */
 internal fun Notification.Builder.countdownTo(at: Long?, now: Long): Notification.Builder =
     if (at != null && at > now) setWhen(ServerClock.toDevice(at)).setShowWhen(true).setUsesChronometer(true).setChronometerCountDown(true)

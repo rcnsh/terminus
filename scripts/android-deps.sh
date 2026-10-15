@@ -64,7 +64,7 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 cp "$android/gradle/verification-metadata.xml" "$tmp/before.xml"
 
-ci=':app:lintStableDebug :app:testStableDebugUnitTest :app:compileBetaDebugKotlin :app:assembleStableRelease :app:assembleBetaRelease'
+ci=':app:ktfmtCheck :app:lintStableDebug :app:testStableDebugUnitTest :app:compileBetaDebugKotlin :app:assembleStableRelease :app:assembleBetaRelease'
 
 # Each run gets a Gradle home of its own and reruns every task, so nothing
 # downloaded or built before stands in for a download.

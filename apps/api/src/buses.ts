@@ -169,7 +169,7 @@ function bearing(aLat: number, aLon: number, bLat: number, bLon: number): number
   const r = Math.PI / 180;
   const y = Math.sin((bLon - aLon) * r) * Math.cos(bLat * r);
   const x = Math.cos(aLat * r) * Math.sin(bLat * r) - Math.sin(aLat * r) * Math.cos(bLat * r) * Math.cos((bLon - aLon) * r);
-  return ((Math.atan2(y, x) / r) % 360 + 360) % 360;
+  return (((Math.atan2(y, x) / r) % 360) + 360) % 360;
 }
 
 const angleBetween = (a: number, b: number) => {
@@ -200,7 +200,12 @@ export function pointAlong(shape: RouteShape, m: number): Place {
   const [bLon, bLat] = line[Math.min(i + 1, line.length - 1)];
   const seg = cum[Math.min(i + 1, line.length - 1)] - cum[i];
   const t = seg > 0 ? (x - cum[i]) / seg : 0;
-  return { along: x, lat: aLat + (bLat - aLat) * t, lon: aLon + (bLon - aLon) * t, bearing: seg >= 1 ? bearing(aLat, aLon, bLat, bLon) : null };
+  return {
+    along: x,
+    lat: aLat + (bLat - aLat) * t,
+    lon: aLon + (bLon - aLon) * t,
+    bearing: seg >= 1 ? bearing(aLat, aLon, bLat, bLon) : null,
+  };
 }
 
 interface Candidate extends Place {
@@ -223,12 +228,18 @@ function candidates(shape: RouteShape, fix: Fix, withinM = ON_ROUTE_M): Candidat
     const [bLon, bLat] = line[i + 1];
     const seg = cum[i + 1] - cum[i];
     // Local flat projection is plenty at this scale.
-    const ax = aLon * cosLat, ay = aLat, bx = bLon * cosLat, by = bLat;
-    const px = fix.lon * cosLat, py = fix.lat;
-    const dx = bx - ax, dy = by - ay;
+    const ax = aLon * cosLat,
+      ay = aLat,
+      bx = bLon * cosLat,
+      by = bLat;
+    const px = fix.lon * cosLat,
+      py = fix.lat;
+    const dx = bx - ax,
+      dy = by - ay;
     const len2 = dx * dx + dy * dy;
     const t = len2 > 0 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2)) : 0;
-    const lat = aLat + (bLat - aLat) * t, lon = aLon + (bLon - aLon) * t;
+    const lat = aLat + (bLat - aLat) * t,
+      lon = aLon + (bLon - aLon) * t;
     const d = haversineM(fix.lat, fix.lon, lat, lon);
     if (d > withinM) continue;
     const road = seg >= 1 ? bearing(aLat, aLon, bLat, bLon) : null;
@@ -255,7 +266,8 @@ const onward = (kept: Track | null, fix: Fix, along: number, now: number, doubt 
   held,
 });
 
-const best = <T>(xs: T[], better: (a: T, b: T) => boolean): T | null => xs.reduce<T | null>((b, x) => (b == null || better(x, b) ? x : b), null);
+const best = <T>(xs: T[], better: (a: T, b: T) => boolean): T | null =>
+  xs.reduce<T | null>((b, x) => (b == null || better(x, b) ? x : b), null);
 
 /**
  * Where a bus with track [track] is, from [fix] at time [now], and its
@@ -277,7 +289,8 @@ export function follow(
 
   if (kept) {
     // The same reading again (the feed holds a position for 15-20 s): the same answer.
-    if (fix.lat === kept.lat && fix.lon === kept.lon && kept.offSince == null) return { place: pointAlong(shape, kept.along), track: { ...kept, seen: now }, kept: true };
+    if (fix.lat === kept.lat && fix.lon === kept.lon && kept.offSince == null)
+      return { place: pointAlong(shape, kept.along), track: { ...kept, seen: now }, kept: true };
     const ageS = (now - kept.at) / 1000;
     // Metres driven from the track to `along`. Round a loop, up to
     // HOLD_BACK_M behind is behind, not a lap ahead: after a long wait, the
@@ -294,7 +307,11 @@ export function follow(
     if (!found.length) {
       // Off its line: a GPS jump, held for a moment; longer, it's really off.
       if (kept.offSince == null || now - kept.offSince < HOLD_OFF_MS) {
-        return { place: pointAlong(shape, kept.along), track: { ...kept, offSince: kept.offSince ?? now, held: true, seen: now }, kept: true };
+        return {
+          place: pointAlong(shape, kept.along),
+          track: { ...kept, offSince: kept.offSince ?? now, held: true, seen: now },
+          kept: true,
+        };
       }
       return { place: null, track: null, kept: false };
     }
@@ -314,7 +331,13 @@ export function follow(
       }
       pieces.push(best(run, (a, b) => (a.fits !== b.fits ? a.fits : a.d < b.d))!);
       const c = best(pieces, (a, b) => (a.fits !== b.fits ? a.fits : Math.abs(gone(a.along)) < Math.abs(gone(b.along))))!;
-      const against = fix.heading != null && !c.fits ? best(found.filter((x) => x.fits), (a, b) => a.d < b.d) : null;
+      const against =
+        fix.heading != null && !c.fits
+          ? best(
+              found.filter((x) => x.fits),
+              (a, b) => a.d < b.d,
+            )
+          : null;
       const doubt = against ? kept.doubt + 1 : 0;
       if (!against || doubt < DOUBT_FIXES) {
         // Never back: a little behind is GPS error, and it stays put.
@@ -328,7 +351,10 @@ export function follow(
     // Only behind it, not far: it doesn't drive backwards, so it waits there.
     const back = (along: number) => (loop && total > 0 ? (((kept.along - along) % total) + total) % total : kept.along - along);
     const atLoopEnd = loop && total > 0 && total - kept.along <= HOLD_BACK_M;
-    if (now - kept.at < (atLoopEnd ? TRACK_MS : HOLD_BACK_MS) && found.every((c) => back(c.along) > TRACK_BACK_M && back(c.along) <= HOLD_BACK_M)) {
+    if (
+      now - kept.at < (atLoopEnd ? TRACK_MS : HOLD_BACK_MS) &&
+      found.every((c) => back(c.along) > TRACK_BACK_M && back(c.along) <= HOLD_BACK_M)
+    ) {
       return { place: pointAlong(shape, kept.along), track: { ...kept, held: true, seen: now }, kept: true };
     }
     // Nowhere it could have driven to: start again from this fix.
@@ -425,7 +451,8 @@ export async function placeBuses(
   for (const [id, t] of Object.entries(tracks)) if (now - t.seen < TRACK_MS) next[id] = t;
   if (!shape) return { buses: [], tracks: next };
   const total = cumulative(shape.line).at(-1) ?? 0;
-  const stopOf = (k: number | null) => (k == null ? null : { code: shape.stops[k], name: byCode.get(shape.stops[k])?.name ?? shape.stops[k] });
+  const stopOf = (k: number | null) =>
+    k == null ? null : { code: shape.stops[k], name: byCode.get(shape.stops[k])?.name ?? shape.stops[k] };
   /** From stop [k] to the line's end; a loop's end is its first stop again, listed last. */
   const upcomingOf = (k: number | null) => (k == null ? [] : shape.stops.slice(k).map((_, i) => stopOf(k + i)!));
 
@@ -460,7 +487,10 @@ export async function placeBuses(
   const buses: LiveBus[] = [];
   for (const group of groups.values()) {
     const { at: k, from, to } = group[0].section;
-    const sorted = k != null ? [...group].sort((x, y) => past(y.along, k) - past(x.along, k) || x.id.localeCompare(y.id)) : [...group].sort((x, y) => order(x) - order(y) || x.id.localeCompare(y.id));
+    const sorted =
+      k != null
+        ? [...group].sort((x, y) => past(y.along, k) - past(x.along, k) || x.id.localeCompare(y.id))
+        : [...group].sort((x, y) => order(x) - order(y) || x.id.localeCompare(y.id));
     sorted.forEach((f, i) => {
       const even = k != null ? shape.at[k] : shape.at[from] + ((i + 1) / (sorted.length + 1)) * (shape.at[to!] - shape.at[from]);
       // Never back along the same stretch (a bus that comes into the feed
@@ -544,7 +574,12 @@ export async function trackedPlacement(
   const body: Placed = { fetchedAt: live.fetchedAt, ...placed };
   ctx.waitUntil(
     cache
-      .put(key, new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json', 'cache-control': `max-age=${TRACK_MS / 1000}` } }))
+      .put(
+        key,
+        new Response(JSON.stringify(body), {
+          headers: { 'content-type': 'application/json', 'cache-control': `max-age=${TRACK_MS / 1000}` },
+        }),
+      )
       .catch(() => {}),
   );
   return body;
@@ -588,7 +623,11 @@ export interface LineBus {
  * list twice, it's the visit followed by the bus's next stop. Null when the
  * stop isn't in the list (the route changed since the shapes were made).
  */
-export function indexOnLine(seq: string[], loop: boolean, bus: Pick<LiveBus, 'at' | 'stretch' | 'nextStop'>): { at: number | null; after: number | null } | null {
+export function indexOnLine(
+  seq: string[],
+  loop: boolean,
+  bus: Pick<LiveBus, 'at' | 'stretch' | 'nextStop'>,
+): { at: number | null; after: number | null } | null {
   const after = (i: number): string | null => (i + 1 < seq.length ? seq[i + 1] : loop ? seq[0] : null);
   const find = (code: string): number | null => {
     const hits = seq.flatMap((c, i) => (c === code ? [i] : []));

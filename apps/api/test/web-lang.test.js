@@ -6,7 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { loadI18n, zh } from './_web.mjs';
 
-test("t() fills {0} and {1}, a missing value with nothing", () => {
+test('t() fills {0} and {1}, a missing value with nothing', () => {
   const { t } = loadI18n({ stored: 'en' }).i18n;
   assert.equal(t('Leave in {0} min {1} s', 1, 5), 'Leave in 1 min 5 s');
   assert.equal(t('{0} and {0} again', 'D1'), 'D1 and D1 again');

@@ -23,7 +23,11 @@ function setup(bindings) {
   const call = async (path, { method = 'GET', body } = {}) => {
     const headers = body === undefined ? {} : { 'content-type': 'application/json' };
     const ctx = makeCtx();
-    const res = await worker.fetch(new Request(BASE + path, { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }), env, ctx);
+    const res = await worker.fetch(
+      new Request(BASE + path, { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }),
+      env,
+      ctx,
+    );
     await ctx.settle();
     return res;
   };
@@ -37,7 +41,14 @@ async function assert429(res, retryAfter) {
 }
 
 test('RL_PUBLIC caps /health, /status.json, /admin/*, downloads and timelapse days per IP', async () => {
-  for (const path of ['/api/health', '/api/status.json', '/api/admin/stats', '/api/admin/passkey/challenge', '/download/terminus.apk', '/api/timelapse/days']) {
+  for (const path of [
+    '/api/health',
+    '/api/status.json',
+    '/api/admin/stats',
+    '/api/admin/passkey/challenge',
+    '/download/terminus.apk',
+    '/api/timelapse/days',
+  ]) {
     const rl = refusing();
     const { call } = setup({ RL_PUBLIC: rl });
     await assert429(await call(path), '60');
@@ -46,7 +57,10 @@ test('RL_PUBLIC caps /health, /status.json, /admin/*, downloads and timelapse da
 });
 
 test('RL_PUBLIC caps the sign-in link page and /auth/config', async () => {
-  for (const [path, method] of [['/auth/verify?t=abc', 'GET'], ['/api/auth/config', 'GET']]) {
+  for (const [path, method] of [
+    ['/auth/verify?t=abc', 'GET'],
+    ['/api/auth/config', 'GET'],
+  ]) {
     const { call } = setup({ RL_PUBLIC: refusing() });
     await assert429(await call(path, { method }), '60');
   }

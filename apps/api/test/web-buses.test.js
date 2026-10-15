@@ -15,9 +15,19 @@ const B = await web('app/buses.js');
 const P = await web('account/profile.js');
 
 const map = buildCampusMap(GRAPH);
-P.campus.set(JSON.parse(JSON.stringify({ viewBox: map.viewBox, stops: map.stops, routes: map.routes, destinations: buildDestinations(GRAPH), residences: residenceList() })));
+P.campus.set(
+  JSON.parse(
+    JSON.stringify({
+      viewBox: map.viewBox,
+      stops: map.stops,
+      routes: map.routes,
+      destinations: buildDestinations(GRAPH),
+      residences: residenceList(),
+    }),
+  ),
+);
 
-test('a line\'s address reads back as the line, whatever its names hold', () => {
+test("a line's address reads back as the line, whatever its names hold", () => {
   for (const [svc, stop] of [
     ['D1', 'YIH'],
     ['A1', null],
@@ -33,13 +43,14 @@ test('a line\'s address reads back as the line, whatever its names hold', () => 
   assert.equal(B.lineHash('D1', null), '#buses/line/D1');
 });
 
-test('a stop\'s address, and anything else is the home', () => {
+test("a stop's address, and anything else is the home", () => {
   assert.deepEqual(B.parse('#buses/stop/YIH'), { kind: 'stop', code: 'YIH' });
   assert.deepEqual(B.parse(`#buses/stop/${encodeURIComponent('A/B')}`), { kind: 'stop', code: 'A/B' });
   assert.deepEqual(B.parse('#buses/line/D1/'), { kind: 'line', svc: 'D1', stop: null });
   // A stray % (an address edited by hand) is read as it is, not thrown over.
   assert.deepEqual(B.parse('#buses/stop/50%'), { kind: 'stop', code: '50%' });
-  for (const hash of ['#buses', '#buses/', '#buses/stop/', '#buses/stop', '#buses/line/', '#buses/nope/YIH', '', '#map']) assert.deepEqual(B.parse(hash), { kind: 'home' }, hash);
+  for (const hash of ['#buses', '#buses/', '#buses/stop/', '#buses/stop', '#buses/line/', '#buses/nope/YIH', '', '#map'])
+    assert.deepEqual(B.parse(hash), { kind: 'home' }, hash);
 });
 
 test('the home: the nearest stop (or finding it), then each pinned stop not already there', () => {
@@ -108,7 +119,10 @@ test('up to 8 stops pinned (or as many as the profile allows), then a message an
 
     // Unpinning is always allowed.
     await B.togglePin('YIH');
-    assert.deepEqual(P.profile.get().pinnedStops, eight.filter((c) => c !== 'YIH'));
+    assert.deepEqual(
+      P.profile.get().pinnedStops,
+      eight.filter((c) => c !== 'YIH'),
+    );
 
     // The profile's own limit, when it sends one.
     P.profile.set({ pinnedStops: ['COM3', 'YIH', 'UTOWN'], limits: { pinnedStops: 3 } });
@@ -128,7 +142,9 @@ test('a board kept by the server (asOf minutes old) is counted down from when it
   // The server has already counted its times down to its own now.
   const row = { svc: 'D1', etaS: 300, eta: '5 min', quality: 'live', later: [{ etaS: 900 }] };
   globalThis.fetch = async () =>
-    new Response(JSON.stringify({ asOf, stop: { code: 'YIH', name: 'YIH' }, available: true, board: [row] }), { headers: { 'content-type': 'application/json' } });
+    new Response(JSON.stringify({ asOf, stop: { code: 'YIH', name: 'YIH' }, available: true, board: [row] }), {
+      headers: { 'content-type': 'application/json' },
+    });
   try {
     B.boards.set(new Map());
     await B.loadBoard('YIH');
@@ -162,14 +178,32 @@ test('a failed refresh under times already shown says they could not be updated,
 test('an aged timetabled or live time keeps its "~", as the server words a guess', async () => {
   const Board = await web('app/board.js');
   const got = 1_000_000;
-  const sched = B.aged({ svc: 'A1', etaS: 400, eta: '~7 min', quality: 'scheduled', later: [{ etaS: 1_000, quality: 'scheduled' }, { etaS: 1_500, quality: 'live' }], laterText: 'then ~17, 25 min' }, got, got + 40_000);
+  const sched = B.aged(
+    {
+      svc: 'A1',
+      etaS: 400,
+      eta: '~7 min',
+      quality: 'scheduled',
+      later: [
+        { etaS: 1_000, quality: 'scheduled' },
+        { etaS: 1_500, quality: 'live' },
+      ],
+      laterText: 'then ~17, 25 min',
+    },
+    got,
+    got + 40_000,
+  );
   assert.equal(sched.eta, null);
   assert.equal(Board.etaText(sched.etaS, sched.quality), '~6 min');
   assert.equal(Board.thenText(sched), 'then ~16, ~24 min');
   // No more of them than the server names.
   const { THEN_MAX } = await import('../src/resolve.ts');
   assert.equal(Board.THEN_MAX, THEN_MAX);
-  const many = B.aged({ svc: 'A1', etaS: 400, quality: 'live', later: [600, 900, 1_200, 1_500].map((etaS) => ({ etaS, quality: 'live' })) }, got, got);
+  const many = B.aged(
+    { svc: 'A1', etaS: 400, quality: 'live', later: [600, 900, 1_200, 1_500].map((etaS) => ({ etaS, quality: 'live' })) },
+    got,
+    got,
+  );
   assert.equal(Board.thenText(many), 'then 10, 15, 20 min');
   const live = B.aged({ svc: 'D1', etaS: 400, eta: '7 min', quality: 'live', later: [] }, got, got + 40_000);
   assert.equal(Board.etaText(live.etaS, live.quality), '~6 min');

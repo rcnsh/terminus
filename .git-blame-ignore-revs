@@ -1,0 +1,6 @@
+# Commits git blame skips, with
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+# (GitHub reads this file on its own).
+
+# chore: reformat with oxfmt, swift-format and ktfmt
+631fc0e6fbba3a438d0ae82aba54464466b8dde6

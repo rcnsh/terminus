@@ -36,7 +36,8 @@ test('every example in the spec fits its schema', () => {
     // A parameter or a media type: its example(s) against its schema.
     if (node.schema && node.example !== undefined) bad.push(...check(node.schema, node.example).map((e) => `${at}.example ${e}`));
     if (node.schema && node.examples && !Array.isArray(node.examples)) {
-      for (const [name, ex] of Object.entries(node.examples)) bad.push(...check(node.schema, ex.value).map((e) => `${at}.examples.${name} ${e}`));
+      for (const [name, ex] of Object.entries(node.examples))
+        bad.push(...check(node.schema, ex.value).map((e) => `${at}.examples.${name} ${e}`));
     }
     // A schema with an example of its own.
     if (!node.schema && node.example !== undefined && (node.type || node.$ref || node.oneOf || node.allOf)) {
@@ -55,15 +56,26 @@ const bodySchema = (key, status = '200') => opOf(key).op.responses[status].conte
 test('every golden answer fits the schema of the route it came from, with nothing the schema leaves out', () => {
   const dir = new URL('./fixtures/answers/', import.meta.url);
   const files = [
-    ...fs.readdirSync(dir).filter((f) => f.endsWith('.json')).map((f) => new URL(f, dir)),
-    ...fs.readdirSync(new URL('zh/', dir)).filter((f) => f.endsWith('.json')).map((f) => new URL(`zh/${f}`, dir)),
+    ...fs
+      .readdirSync(dir)
+      .filter((f) => f.endsWith('.json'))
+      .map((f) => new URL(f, dir)),
+    ...fs
+      .readdirSync(new URL('zh/', dir))
+      .filter((f) => f.endsWith('.json'))
+      .map((f) => new URL(`zh/${f}`, dir)),
   ];
   assert.ok(files.length >= 40, 'the fixtures are found');
   const bad = [];
   for (const file of files) {
     const body = JSON.parse(fs.readFileSync(file, 'utf8'));
     // Which route a fixture is from, by its shape: /me/day has items, /me/nearby a list of stops, the rest are /me/next.
-    const route = Array.isArray(body.items) && body.date ? 'GET /api/me/day' : Array.isArray(body.stops) && !('label' in body) ? 'GET /api/me/nearby' : 'GET /api/me/next';
+    const route =
+      Array.isArray(body.items) && body.date
+        ? 'GET /api/me/day'
+        : Array.isArray(body.stops) && !('label' in body)
+          ? 'GET /api/me/nearby'
+          : 'GET /api/me/next';
     bad.push(...check(bodySchema(route), body).map((e) => `${file.pathname.split('/answers/')[1]} (${route}) ${e}`));
   }
   assert.deepEqual(bad, []);
@@ -80,7 +92,14 @@ for (const code of ['PGP', 'PGPR', 'COM3', 'UTOWN', 'KR-MRT', 'KR-MRT-OPP', 'CLB
 
 /** NUSMods' module files, by code: 'fail' answers 500; a code not here, 404. */
 const NUSMODS = {
-  MA1100: { semesterData: [{ semester: 1, timetable: [{ lessonType: 'Lecture', classNo: '1', day: 'Monday', startTime: '0800', endTime: '1000', venue: 'UTOWN' }] }] },
+  MA1100: {
+    semesterData: [
+      {
+        semester: 1,
+        timetable: [{ lessonType: 'Lecture', classNo: '1', day: 'Monday', startTime: '0800', endTime: '1000', venue: 'UTOWN' }],
+      },
+    ],
+  },
   BZ1000: 'fail',
 };
 
@@ -110,7 +129,12 @@ const downloads = (files = FILES) => makeBucket(async (key) => (key in files ? e
 
 const LIMITERS = ['RL_AUTH', 'RL_PUBLIC', 'RL_ME', 'RL_MAP', 'RL_ANON', 'RL_PAIR', 'RL_MAIL'];
 function limiter() {
-  return { block: false, async limit() { return { success: !this.block }; } };
+  return {
+    block: false,
+    async limit() {
+      return { success: !this.block };
+    },
+  };
 }
 
 const THU = 4; // FROZEN_NOW is Thursday 2026-08-27, 09:00 SGT
@@ -140,7 +164,11 @@ async function send(w, path, { method = 'GET', body, form, auth, headers = {} } 
     payload = new URLSearchParams(form).toString();
   }
   const ctx = makeCtx();
-  const res = await worker.fetch(new Request(BASE + path, { method, headers: h, ...(payload === undefined ? {} : { body: payload }) }), w.env, ctx);
+  const res = await worker.fetch(
+    new Request(BASE + path, { method, headers: h, ...(payload === undefined ? {} : { body: payload }) }),
+    w.env,
+    ctx,
+  );
   await ctx.settle();
   return res;
 }
@@ -277,7 +305,18 @@ const CASES = [
   ['GET /api/status.json', 429, { block: ['RL_PUBLIC'] }],
   ['GET /api/health', 200, {}],
   ['GET /api/health', 200, { auth: 'operator', path: '/api/health?probe=1&versions=1', why: 'the operator’s probe and versions' }],
-  ['GET /api/health', 503, { before: (w) => w.env.KV.put('monitor:upstream', JSON.stringify({ up: false, since: FROZEN_NOW - 3_600_000, checkedAt: FROZEN_NOW - 60_000, reason: 'feed' })), why: 'the feed is down' }],
+  [
+    'GET /api/health',
+    503,
+    {
+      before: (w) =>
+        w.env.KV.put(
+          'monitor:upstream',
+          JSON.stringify({ up: false, since: FROZEN_NOW - 3_600_000, checkedAt: FROZEN_NOW - 60_000, reason: 'feed' }),
+        ),
+      why: 'the feed is down',
+    },
+  ],
   ['GET /api/health', 429, { block: ['RL_PUBLIC'] }],
   ['GET /docs', 200, {}],
   ['GET /api/openapi.json', 200, {}],
@@ -285,7 +324,20 @@ const CASES = [
   ['POST /api/admin/collect', 200, { auth: 'operator', body: { name: 'errors', on: true } }],
   ['POST /api/admin/collect', 400, { auth: 'operator', body: { name: 'everything', on: true } }],
   ['POST /api/admin/collect', 404, { body: { name: 'errors', on: true } }],
-  ['POST /api/errors', 204, { body: { platform: 'web', version: '3.1.0', os: 'Chrome 140', type: 'TypeError', message: 'x is undefined', stack: 'at f (https://terminus.run/app/app.js:1:2)' } }],
+  [
+    'POST /api/errors',
+    204,
+    {
+      body: {
+        platform: 'web',
+        version: '3.1.0',
+        os: 'Chrome 140',
+        type: 'TypeError',
+        message: 'x is undefined',
+        stack: 'at f (https://terminus.run/app/app.js:1:2)',
+      },
+    },
+  ],
   ['POST /api/errors', 400, { body: { platform: 'pager', version: '1', type: 'x' } }],
   ['POST /api/errors', 429, { block: ['RL_PUBLIC'], body: { platform: 'web', version: '3.1.0', type: 'TypeError' } }],
   ['GET /api/admin/stats', 404, {}],
@@ -299,11 +351,36 @@ const CASES = [
   ['POST /api/admin/passkey/register', 400, { auth: 'operator', body: { id: 'x' } }],
   ['POST /api/admin/passkey/register', 403, { auth: 'operator', before: passkey, body: (w) => ({ ...w.made, id: 'AAAA' }) }],
   ['POST /api/admin/passkey/register', 404, { before: passkey, body: (w) => w.made }],
-  ['POST /api/admin/passkey/register', 409, { auth: 'operator', before: async (w) => { await passkey(w); await w.env.KV.put('operator:passkeys', JSON.stringify(Array.from({ length: 20 }, (_, i) => ({ id: `k${i}`, rpId: 'x', alg: -7, key: 'x', name: '', created: '' })))); }, body: (w) => w.made }],
+  [
+    'POST /api/admin/passkey/register',
+    409,
+    {
+      auth: 'operator',
+      before: async (w) => {
+        await passkey(w);
+        await w.env.KV.put(
+          'operator:passkeys',
+          JSON.stringify(Array.from({ length: 20 }, (_, i) => ({ id: `k${i}`, rpId: 'x', alg: -7, key: 'x', name: '', created: '' }))),
+        );
+      },
+      body: (w) => w.made,
+    },
+  ],
   ['POST /api/admin/passkey/register', 429, { auth: 'operator', block: ['RL_PUBLIC'], body: {} }],
   ['POST /api/admin/passkey/signin', 200, { before: signedIn, body: (w) => w.assertion }],
   ['POST /api/admin/passkey/signin', 400, { body: {} }],
-  ['POST /api/admin/passkey/signin', 403, { before: async (w) => { await passkey(w); w.assertion = await w.authenticator.get(await challengeOf(w)); }, body: (w) => w.assertion, why: 'a passkey never kept' }],
+  [
+    'POST /api/admin/passkey/signin',
+    403,
+    {
+      before: async (w) => {
+        await passkey(w);
+        w.assertion = await w.authenticator.get(await challengeOf(w));
+      },
+      body: (w) => w.assertion,
+      why: 'a passkey never kept',
+    },
+  ],
   ['POST /api/admin/passkey/signin', 404, { before: (w) => delete w.env.HEALTH_TOKEN, body: {} }],
   ['POST /api/admin/passkey/signin', 429, { block: ['RL_PUBLIC'], body: {} }],
   ['GET /api/timelapse/days', 200, { auth: 'operator' }],
@@ -317,19 +394,53 @@ const CASES = [
   ['GET /api/auth/config', 429, { block: ['RL_PUBLIC'] }],
   ['POST /api/auth/login', 200, { body: { email: 'new@u.nus.edu' } }],
   ['POST /api/auth/login', 400, { body: { email: 'not an email' } }],
-  ['POST /api/auth/login', 400, { before: turnstile('fail'), body: { email: 'new@u.nus.edu', turnstile: 'bad' }, why: 'the human check failed' }],
+  [
+    'POST /api/auth/login',
+    400,
+    { before: turnstile('fail'), body: { email: 'new@u.nus.edu', turnstile: 'bad' }, why: 'the human check failed' },
+  ],
   ['POST /api/auth/login', 429, { block: ['RL_AUTH'], body: { email: 'new@u.nus.edu' } }],
   ['POST /api/auth/login', 429, { block: ['RL_MAIL'], body: { email: 'new@u.nus.edu' }, why: 'too many emails for everyone' }],
   ['POST /api/auth/login', 502, { before: mailFails, body: { email: 'new@u.nus.edu' } }],
   ['POST /api/auth/login', 503, { before: turnstile('down'), body: { email: 'new@u.nus.edu', turnstile: 'x' } }],
-  ['POST /api/auth/code', 200, { before: async (w) => { await w.call('/api/auth/login', { method: 'POST', body: { email: 'new@u.nus.edu' } }); w.code = w.email.lastCode(); }, body: (w) => ({ email: 'new@u.nus.edu', code: w.code }) }],
+  [
+    'POST /api/auth/code',
+    200,
+    {
+      before: async (w) => {
+        await w.call('/api/auth/login', { method: 'POST', body: { email: 'new@u.nus.edu' } });
+        w.code = w.email.lastCode();
+      },
+      body: (w) => ({ email: 'new@u.nus.edu', code: w.code }),
+    },
+  ],
   ['POST /api/auth/code', 400, { body: { email: 'new@u.nus.edu', code: 'ABCDEF' } }],
   ['POST /api/auth/code', 403, { headers: cross, body: { email: 'new@u.nus.edu', code: 'ABCDEF' } }],
   ['POST /api/auth/code', 429, { block: ['RL_AUTH'], body: { email: 'new@u.nus.edu', code: 'ABCDEF' } }],
-  ['GET /auth/verify', 200, { before: async (w) => { await w.call('/api/auth/login', { method: 'POST', body: { email: 'new@u.nus.edu' } }); w.t = w.email.lastToken(); }, path: (w) => `/auth/verify?t=${w.t}` }],
+  [
+    'GET /auth/verify',
+    200,
+    {
+      before: async (w) => {
+        await w.call('/api/auth/login', { method: 'POST', body: { email: 'new@u.nus.edu' } });
+        w.t = w.email.lastToken();
+      },
+      path: (w) => `/auth/verify?t=${w.t}`,
+    },
+  ],
   ['GET /auth/verify', 400, { path: '/auth/verify?t=nope' }],
   ['GET /auth/verify', 429, { block: ['RL_PUBLIC'], path: '/auth/verify?t=nope' }],
-  ['POST /auth/verify', 303, { before: async (w) => { await w.call('/api/auth/login', { method: 'POST', body: { email: 'new@u.nus.edu' } }); w.t = w.email.lastToken(); }, form: (w) => ({ t: w.t }) }],
+  [
+    'POST /auth/verify',
+    303,
+    {
+      before: async (w) => {
+        await w.call('/api/auth/login', { method: 'POST', body: { email: 'new@u.nus.edu' } });
+        w.t = w.email.lastToken();
+      },
+      form: (w) => ({ t: w.t }),
+    },
+  ],
   ['POST /auth/verify', 400, { form: { t: 'nope' } }],
   ['POST /auth/verify', 403, { headers: cross, form: { t: 'nope' } }],
   ['POST /api/auth/anon', 201, { body: { name: 'Pixel 8', platform: 'android' } }],
@@ -343,7 +454,18 @@ const CASES = [
   ['POST /api/auth/app/start', 201, { body: { email: 'app@u.nus.edu', name: 'MacBook Air' } }],
   ['POST /api/auth/app/start', 201, { auth: 'anon', body: { email: 'app@u.nus.edu' }, why: 'keeping the app’s setup' }],
   ['POST /api/auth/app/start', 400, { body: { email: 'nope' } }],
-  ['POST /api/auth/app/start', 403, { before: async (w) => { await startApp(w, 'held@u.nus.edu'); await w.call('/auth/approve', { method: 'POST', form: { r: w.approveLink, n: 'none' } }); }, body: { email: 'held@u.nus.edu' }, why: 'turned down with “This wasn’t me”' }],
+  [
+    'POST /api/auth/app/start',
+    403,
+    {
+      before: async (w) => {
+        await startApp(w, 'held@u.nus.edu');
+        await w.call('/auth/approve', { method: 'POST', form: { r: w.approveLink, n: 'none' } });
+      },
+      body: { email: 'held@u.nus.edu' },
+      why: 'turned down with “This wasn’t me”',
+    },
+  ],
   ['POST /api/auth/app/start', 409, { auth: 'device', body: { email: 'app@u.nus.edu' } }],
   ['POST /api/auth/app/start', 429, { block: ['RL_AUTH'], body: { email: 'app@u.nus.edu' } }],
   ['POST /api/auth/app/start', 429, { before: (w) => startApp(w), body: { email: 'app@u.nus.edu' }, why: 'an email a moment ago' }],
@@ -351,8 +473,16 @@ const CASES = [
   ['POST /api/auth/app/poll', 200, { before: (w) => startApp(w), body: (w) => ({ request: w.started.request, poll: w.started.poll }) }],
   ['POST /api/auth/app/poll', 400, { body: {} }],
   ['POST /api/auth/app/poll', 429, { block: ['RL_PUBLIC'], body: {} }],
-  ['POST /api/auth/app/code', 200, { before: (w) => startApp(w), body: (w) => ({ request: w.started.request, poll: w.started.poll, code: w.appCode }) }],
-  ['POST /api/auth/app/code', 400, { before: (w) => startApp(w), body: (w) => ({ request: w.started.request, poll: w.started.poll, code: 'ZZZZZZ' }) }],
+  [
+    'POST /api/auth/app/code',
+    200,
+    { before: (w) => startApp(w), body: (w) => ({ request: w.started.request, poll: w.started.poll, code: w.appCode }) },
+  ],
+  [
+    'POST /api/auth/app/code',
+    400,
+    { before: (w) => startApp(w), body: (w) => ({ request: w.started.request, poll: w.started.poll, code: 'ZZZZZZ' }) },
+  ],
   ['POST /api/auth/app/code', 429, { block: ['RL_AUTH'], body: {} }],
   ['POST /api/auth/app/merge', 200, { auth: 'device', body: (w) => ({ anon: w.anon, keep: 'account' }) }],
   ['POST /api/auth/app/merge', 400, { auth: 'device', body: { anon: 'nope', keep: 'account' } }],
@@ -362,17 +492,39 @@ const CASES = [
   ['GET /auth/approve', 429, { block: ['RL_PUBLIC'], path: '/auth/approve?r=nope' }],
   ['POST /auth/approve', 200, { before: (w) => startApp(w), form: (w) => ({ r: w.approveLink, n: String(w.started.match) }) }],
   ['POST /auth/approve', 200, { before: (w) => startApp(w), form: (w) => ({ r: w.approveLink, n: 'none' }), why: '“This wasn’t me”' }],
-  ['POST /auth/approve', 400, { before: (w) => startApp(w), form: (w) => ({ r: w.approveLink, n: String(w.started.match === 1 ? 2 : 1) }), why: 'the wrong number' }],
+  [
+    'POST /auth/approve',
+    400,
+    { before: (w) => startApp(w), form: (w) => ({ r: w.approveLink, n: String(w.started.match === 1 ? 2 : 1) }), why: 'the wrong number' },
+  ],
   ['POST /auth/approve', 403, { headers: cross, form: { r: 'nope', n: '1' } }],
   ['POST /auth/approve', 429, { block: ['RL_AUTH'], form: { r: 'nope', n: '1' } }],
   ['POST /api/auth/logout', 200, { auth: 'cookie' }],
   ['POST /api/auth/logout', 200, { why: 'signed out already' }],
   ['POST /api/auth/logout', 403, { auth: 'cookie', headers: cross }],
-  ['POST /api/pair', 200, { before: async (w) => { w.code = (await (await w.call('/api/me/pair-code', { method: 'POST', auth: 'cookie' })).json()).code; }, body: (w) => ({ code: w.code, name: 'Tablet' }) }],
+  [
+    'POST /api/pair',
+    200,
+    {
+      before: async (w) => {
+        w.code = (await (await w.call('/api/me/pair-code', { method: 'POST', auth: 'cookie' })).json()).code;
+      },
+      body: (w) => ({ code: w.code, name: 'Tablet' }),
+    },
+  ],
   ['POST /api/pair', 400, { body: { code: 'ZZZZZZ' } }],
   ['POST /api/pair', 429, { block: ['RL_AUTH'], body: { code: 'ZZZZZZ' } }],
   ['POST /api/pair', 429, { block: ['RL_PAIR'], body: { code: 'ZZZZZZ' } }],
-  ['POST /api/pair/check', 200, { before: async (w) => { w.code = (await (await w.call('/api/me/pair-code', { method: 'POST', auth: 'cookie' })).json()).code; }, body: (w) => ({ code: w.code }) }],
+  [
+    'POST /api/pair/check',
+    200,
+    {
+      before: async (w) => {
+        w.code = (await (await w.call('/api/me/pair-code', { method: 'POST', auth: 'cookie' })).json()).code;
+      },
+      body: (w) => ({ code: w.code }),
+    },
+  ],
   ['POST /api/pair/check', 400, { body: { code: 'ZZZZZZ' } }],
   ['POST /api/pair/check', 429, { block: ['RL_PAIR'], body: { code: 'ZZZZZZ' } }],
 
@@ -402,7 +554,15 @@ const CASES = [
   ['POST /api/me/signal', 503, { auth: 'cookie', before: (w) => delete w.env.TRIPS, body: { kind: 'reset' } }],
   ['POST /api/me/push', 200, { auth: 'device', body: { token: 'fcm-token' } }],
   ['POST /api/me/push', 400, { auth: 'device', body: {} }],
-  ['POST /api/me/push', 503, { auth: 'cookie', before: (w) => delete w.env.VAPID_PRIVATE_KEY, body: { subscription: { endpoint: 'https://push.example.test/x', keys: { p256dh: 'a', auth: 'b' } } } }],
+  [
+    'POST /api/me/push',
+    503,
+    {
+      auth: 'cookie',
+      before: (w) => delete w.env.VAPID_PRIVATE_KEY,
+      body: { subscription: { endpoint: 'https://push.example.test/x', keys: { p256dh: 'a', auth: 'b' } } },
+    },
+  ],
   ['DELETE /api/me/push', 200, { auth: 'device' }],
   ['DELETE /api/me/push', 401, {}],
   ['GET /api/me/push/key', 200, { auth: 'cookie' }],
@@ -412,15 +572,43 @@ const CASES = [
   ['GET /api/me/notice', 200, { auth: 'cookie' }],
   ['GET /api/me/choices', 200, { auth: 'cookie' }],
   ['DELETE /api/me/history', 200, { auth: 'cookie' }],
-  ['POST /api/me/feedback', 201, { auth: 'cookie', body: { kind: 'wrong', note: 'The D2 never came', platform: 'web', appVersion: '2.4.2', context: { label: 'D2 · 4 min' } } }],
+  [
+    'POST /api/me/feedback',
+    201,
+    {
+      auth: 'cookie',
+      body: { kind: 'wrong', note: 'The D2 never came', platform: 'web', appVersion: '2.4.2', context: { label: 'D2 · 4 min' } },
+    },
+  ],
   ['POST /api/me/feedback', 400, { auth: 'cookie', body: { note: '', platform: 'web' } }],
   ['POST /api/me/feedback', 403, { auth: 'anon', body: { note: 'hi', platform: 'android' } }],
-  ['POST /api/me/feedback', 429, { auth: 'cookie', before: async (w) => { for (let i = 0; i < 10; i++) await w.call('/api/me/feedback', { method: 'POST', auth: 'cookie', body: { note: `n${i}`, platform: 'web' } }); }, body: { note: 'again', platform: 'web' } }],
+  [
+    'POST /api/me/feedback',
+    429,
+    {
+      auth: 'cookie',
+      before: async (w) => {
+        for (let i = 0; i < 10; i++)
+          await w.call('/api/me/feedback', { method: 'POST', auth: 'cookie', body: { note: `n${i}`, platform: 'web' } });
+      },
+      body: { note: 'again', platform: 'web' },
+    },
+  ],
   ['GET /api/me/keys', 200, { auth: 'cookie' }],
   ['POST /api/me/keys', 201, { auth: 'cookie', body: { name: 'Another' } }],
   ['POST /api/me/keys', 400, { auth: 'cookie', body: {} }],
   ['POST /api/me/keys', 403, { auth: 'device', body: { name: 'From a phone' } }],
-  ['POST /api/me/keys', 409, { auth: 'cookie', before: async (w) => { for (let i = 0; i < 4; i++) await w.call('/api/me/keys', { method: 'POST', auth: 'cookie', body: { name: `k${i}` } }); }, body: { name: 'Sixth' } }],
+  [
+    'POST /api/me/keys',
+    409,
+    {
+      auth: 'cookie',
+      before: async (w) => {
+        for (let i = 0; i < 4; i++) await w.call('/api/me/keys', { method: 'POST', auth: 'cookie', body: { name: `k${i}` } });
+      },
+      body: { name: 'Sixth' },
+    },
+  ],
   ['DELETE /api/me/keys/{id}', 200, { auth: 'cookie', path: (w) => `/api/me/keys/${w.keyId}` }],
   ['DELETE /api/me/keys/{id}', 403, { auth: 'device', path: (w) => `/api/me/keys/${w.keyId}` }],
   ['DELETE /api/me/keys/{id}', 404, { auth: 'cookie', path: '/api/me/keys/nope' }],
@@ -432,16 +620,46 @@ const CASES = [
   ['POST /api/me/once', 400, { auth: 'cookie', body: { to: 'CLB', atMin: 60 }, why: 'a time already past' }],
   ['POST /api/me/import', 200, { auth: 'cookie', body: { share: 'https://nusmods.com/timetable/sem-1/share?MA1100=LEC:1' } }],
   ['POST /api/me/import', 400, { auth: 'cookie', body: { share: 'https://example.test/' } }],
-  ['POST /api/me/import', 422, { auth: 'cookie', body: { share: 'https://nusmods.com/timetable/sem-1/share?CS9999=LEC:1' }, why: 'NUSMods has no such module' }],
-  ['POST /api/me/import', 429, { auth: 'cookie', block: ['RL_AUTH'], body: { share: 'https://nusmods.com/timetable/sem-1/share?MA1100=LEC:1' } }],
-  ['POST /api/me/import', 502, { auth: 'cookie', body: { share: 'https://nusmods.com/timetable/sem-1/share?BZ1000=LEC:1' }, why: 'NUSMods did not answer' }],
-  ['GET /api/me/export', 200, { auth: 'cookie', before: (w) => w.call('/api/me/feedback', { method: 'POST', auth: 'cookie', body: { note: 'kept', platform: 'web', context: { label: 'x' } } }) }],
+  [
+    'POST /api/me/import',
+    422,
+    { auth: 'cookie', body: { share: 'https://nusmods.com/timetable/sem-1/share?CS9999=LEC:1' }, why: 'NUSMods has no such module' },
+  ],
+  [
+    'POST /api/me/import',
+    429,
+    { auth: 'cookie', block: ['RL_AUTH'], body: { share: 'https://nusmods.com/timetable/sem-1/share?MA1100=LEC:1' } },
+  ],
+  [
+    'POST /api/me/import',
+    502,
+    { auth: 'cookie', body: { share: 'https://nusmods.com/timetable/sem-1/share?BZ1000=LEC:1' }, why: 'NUSMods did not answer' },
+  ],
+  [
+    'GET /api/me/export',
+    200,
+    {
+      auth: 'cookie',
+      before: (w) =>
+        w.call('/api/me/feedback', { method: 'POST', auth: 'cookie', body: { note: 'kept', platform: 'web', context: { label: 'x' } } }),
+    },
+  ],
   ['DELETE /api/me/sessions', 200, { auth: 'cookie' }],
   ['DELETE /api/me/sessions', 403, { auth: 'device' }],
   ['POST /api/me/pair-code', 200, { auth: 'cookie' }],
   ['POST /api/me/pair-code', 403, { auth: 'anon' }],
   ['GET /api/me/devices', 200, { auth: 'device' }],
-  ['DELETE /api/me/devices/{id}', 200, { auth: 'cookie', before: async (w) => { w.deviceId = (await (await w.call('/api/me/devices', { auth: 'cookie' })).json()).devices[0].id; }, path: (w) => `/api/me/devices/${w.deviceId}` }],
+  [
+    'DELETE /api/me/devices/{id}',
+    200,
+    {
+      auth: 'cookie',
+      before: async (w) => {
+        w.deviceId = (await (await w.call('/api/me/devices', { auth: 'cookie' })).json()).devices[0].id;
+      },
+      path: (w) => `/api/me/devices/${w.deviceId}`,
+    },
+  ],
   ['DELETE /api/me/devices/{id}', 403, { auth: 'anon', path: '/api/me/devices/nope' }],
   ['DELETE /api/me/devices/{id}', 404, { auth: 'cookie', path: '/api/me/devices/nope' }],
 
@@ -450,30 +668,74 @@ const CASES = [
   ['GET /map/campus.pmtiles', 200, {}],
   ['GET /map/campus.pmtiles', 206, { headers: { range: 'bytes=0-9' } }],
   ['GET /map/campus.pmtiles', 304, { before: etagOf('/map/campus.pmtiles'), headers: (w) => ({ 'if-none-match': w.etag }) }],
-  ['GET /map/campus.pmtiles', 404, { before: (w) => { w.env.DOWNLOADS = downloads({}); } }],
+  [
+    'GET /map/campus.pmtiles',
+    404,
+    {
+      before: (w) => {
+        w.env.DOWNLOADS = downloads({});
+      },
+    },
+  ],
   ['GET /map/campus.pmtiles', 416, { headers: { range: 'bytes=1000-' } }],
   ['GET /map/campus.pmtiles', 429, { block: ['RL_MAP'] }],
   ['GET /map/campus.pmtiles', 503, { before: r2Fails }],
   ['GET /map/fonts/{fontstack}/{range}.pbf', 200, { path: '/map/fonts/Noto%20Sans%20Regular/0-255.pbf' }],
-  ['GET /map/fonts/{fontstack}/{range}.pbf', 304, { before: etagOf('/map/fonts/Noto%20Sans%20Regular/0-255.pbf'), headers: (w) => ({ 'if-none-match': w.etag }), path: '/map/fonts/Noto%20Sans%20Regular/0-255.pbf' }],
+  [
+    'GET /map/fonts/{fontstack}/{range}.pbf',
+    304,
+    {
+      before: etagOf('/map/fonts/Noto%20Sans%20Regular/0-255.pbf'),
+      headers: (w) => ({ 'if-none-match': w.etag }),
+      path: '/map/fonts/Noto%20Sans%20Regular/0-255.pbf',
+    },
+  ],
   ['GET /map/fonts/{fontstack}/{range}.pbf', 404, { path: '/map/fonts/Noto%20Sans%20Regular/1-2.pbf' }],
   ['GET /map/fonts/{fontstack}/{range}.pbf', 429, { block: ['RL_MAP'], path: '/map/fonts/Noto%20Sans%20Regular/0-255.pbf' }],
   ['GET /map/fonts/{fontstack}/{range}.pbf', 503, { before: r2Fails, path: '/map/fonts/Noto%20Sans%20Regular/0-255.pbf' }],
   ['GET /map/sprites/v4/{sprite}', 200, { path: '/map/sprites/v4/light.json' }],
-  ['GET /map/sprites/v4/{sprite}', 304, { before: etagOf('/map/sprites/v4/light.json'), headers: (w) => ({ 'if-none-match': w.etag }), path: '/map/sprites/v4/light.json' }],
+  [
+    'GET /map/sprites/v4/{sprite}',
+    304,
+    { before: etagOf('/map/sprites/v4/light.json'), headers: (w) => ({ 'if-none-match': w.etag }), path: '/map/sprites/v4/light.json' },
+  ],
   ['GET /map/sprites/v4/{sprite}', 404, { path: '/map/sprites/v4/dark.png' }],
   ['GET /map/sprites/v4/{sprite}', 429, { block: ['RL_MAP'], path: '/map/sprites/v4/light.json' }],
 
   // Downloads.
   ['GET /download/latest.json', 200, {}],
-  ['GET /download/latest.json', 404, { before: (w) => { w.env.DOWNLOADS = downloads({}); } }],
+  [
+    'GET /download/latest.json',
+    404,
+    {
+      before: (w) => {
+        w.env.DOWNLOADS = downloads({});
+      },
+    },
+  ],
   ['GET /download/latest.json', 429, { block: ['RL_PUBLIC'] }],
   ['GET /download/latest.json', 503, { before: (w) => delete w.env.DOWNLOADS }],
   ['GET /download/android', 200, {}],
-  ['GET /download/android', 404, { before: (w) => { w.env.DOWNLOADS = downloads({}); } }],
+  [
+    'GET /download/android',
+    404,
+    {
+      before: (w) => {
+        w.env.DOWNLOADS = downloads({});
+      },
+    },
+  ],
   ['GET /download/mac', 200, {}],
   ['GET /download/appcast.xml', 200, {}],
-  ['GET /download/appcast.xml', 404, { before: (w) => { w.env.DOWNLOADS = downloads({}); } }],
+  [
+    'GET /download/appcast.xml',
+    404,
+    {
+      before: (w) => {
+        w.env.DOWNLOADS = downloads({});
+      },
+    },
+  ],
   ['GET /download/releases/{version}/{file}', 200, { path: `/download/releases/${API_VERSION}/terminus-${API_VERSION}.apk` }],
   ['GET /download/releases/{version}/{file}', 404, { path: '/download/releases/1.0.0/terminus-1.0.0.apk' }],
 ];
@@ -484,13 +746,20 @@ const at = (w, v) => (typeof v === 'function' ? v(w) : v);
 async function conforms(op, res) {
   const status = String(res.status);
   const doc = op.op.responses[status];
-  assert.ok(doc, `${op.key} answered ${status}, which the spec does not list (it lists ${Object.keys(op.op.responses).join(', ')}): ${await res.clone().text()}`);
-  for (const name of Object.keys(doc.headers ?? {})) assert.ok(res.headers.has(name), `${op.key} ${status}: no ${name} header, which the spec promises`);
+  assert.ok(
+    doc,
+    `${op.key} answered ${status}, which the spec does not list (it lists ${Object.keys(op.op.responses).join(', ')}): ${await res.clone().text()}`,
+  );
+  for (const name of Object.keys(doc.headers ?? {}))
+    assert.ok(res.headers.has(name), `${op.key} ${status}: no ${name} header, which the spec promises`);
   if (!doc.content) return;
   const type = (res.headers.get('content-type') ?? '').split(';')[0];
   const text = await res.text();
   if (!text) return;
-  assert.ok(Object.keys(doc.content).includes(type), `${op.key} ${status}: sent ${type}, the spec says ${Object.keys(doc.content).join(' or ')}`);
+  assert.ok(
+    Object.keys(doc.content).includes(type),
+    `${op.key} ${status}: sent ${type}, the spec says ${Object.keys(doc.content).join(' or ')}`,
+  );
   const schema = doc.content[type]?.schema;
   if (type !== 'application/json' || !schema) return;
   assert.deepEqual(check(schema, JSON.parse(text)), [], `${op.key} ${status}: the body does not fit its schema`);
@@ -502,7 +771,13 @@ for (const [key, status, opts] of CASES) {
     const w = await world();
     await opts.before?.(w);
     for (const name of opts.block ?? []) w.limit[name].block = true;
-    const res = await send(w, at(w, opts.path) ?? op.path, { method: op.method, auth: opts.auth, body: at(w, opts.body), form: at(w, opts.form), headers: at(w, opts.headers) });
+    const res = await send(w, at(w, opts.path) ?? op.path, {
+      method: op.method,
+      auth: opts.auth,
+      body: at(w, opts.body),
+      form: at(w, opts.form),
+      headers: at(w, opts.headers),
+    });
     assert.equal(res.status, status, `the case itself: ${await res.clone().text()}`);
     await conforms(op, res);
   });
@@ -510,10 +785,21 @@ for (const [key, status, opts] of CASES) {
 
 test('every operation has a case that succeeds', () => {
   const covered = new Set(CASES.filter(([, s]) => s < 400).map(([k]) => k));
-  assert.deepEqual(OPS.map((o) => o.key).filter((k) => !covered.has(k)), []);
+  assert.deepEqual(
+    OPS.map((o) => o.key).filter((k) => !covered.has(k)),
+    [],
+  );
 });
 
-const SAMPLE = { id: 'x', date: '2026-08-26', fontstack: 'Noto%20Sans%20Regular', range: '0-255', sprite: 'light.json', version: API_VERSION, file: `terminus-${API_VERSION}.apk` };
+const SAMPLE = {
+  id: 'x',
+  date: '2026-08-26',
+  fontstack: 'Noto%20Sans%20Regular',
+  range: '0-255',
+  sprite: 'light.json',
+  version: API_VERSION,
+  file: `terminus-${API_VERSION}.apk`,
+};
 
 test('an operation refuses a caller without credentials (401) exactly when its security asks for some', async () => {
   const w = await world();

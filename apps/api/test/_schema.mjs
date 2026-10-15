@@ -23,7 +23,10 @@ export function validate(schema, value, { root = schema, strict = false } = {}) 
 
 function deref(s, root) {
   while (s?.$ref) {
-    const at = s.$ref.replace(/^#\//, '').split('/').reduce((o, k) => o?.[k], root);
+    const at = s.$ref
+      .replace(/^#\//, '')
+      .split('/')
+      .reduce((o, k) => o?.[k], root);
     if (!at) throw new Error(`dangling $ref ${s.$ref}`);
     s = at;
   }
@@ -45,14 +48,18 @@ function check(s, v, path, errs, opts, inAllOf) {
       for (const k of Object.keys(v)) if (!known.has(k)) errs.push(`${path}.${k}: not in the schema`);
     }
   }
-  for (const [kw, need] of [['oneOf', (n) => n === 1], ['anyOf', (n) => n >= 1]]) {
+  for (const [kw, need] of [
+    ['oneOf', (n) => n === 1],
+    ['anyOf', (n) => n >= 1],
+  ]) {
     if (!s[kw]) continue;
     const tries = s[kw].map((b) => {
       const e = [];
       check(b, v, path, e, opts, false);
       return e;
     });
-    if (!need(tries.filter((e) => !e.length).length)) errs.push(`${path}: matches ${tries.filter((e) => !e.length).length} of ${kw} (${tries.flat().slice(0, 3).join('; ')})`);
+    if (!need(tries.filter((e) => !e.length).length))
+      errs.push(`${path}: matches ${tries.filter((e) => !e.length).length} of ${kw} (${tries.flat().slice(0, 3).join('; ')})`);
   }
   if (s.type !== undefined && ![s.type].flat().some((t) => fits(t, v))) {
     errs.push(`${path}: ${typeOf(v)}, not ${[s.type].flat().join('|')}`);
@@ -80,7 +87,8 @@ function check(s, v, path, errs, opts, inAllOf) {
       if (props[k]) check(props[k], x, `${path}.${k}`, errs, opts, false);
       else if (s.additionalProperties === false) errs.push(`${path}.${k}: not allowed`);
       else if (typeof s.additionalProperties === 'object') check(s.additionalProperties, x, `${path}.${k}`, errs, opts, false);
-      else if (opts.strict && !inAllOf && !s.allOf && s.properties && s.additionalProperties === undefined) errs.push(`${path}.${k}: not in the schema`);
+      else if (opts.strict && !inAllOf && !s.allOf && s.properties && s.additionalProperties === undefined)
+        errs.push(`${path}.${k}: not in the schema`);
     }
   }
 }

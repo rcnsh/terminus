@@ -77,6 +77,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import kotlin.math.PI
+import kotlin.math.atan2
+import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import sh.rcn.terminus.Pull
@@ -85,9 +88,6 @@ import sh.rcn.terminus.PullMotion
 import sh.rcn.terminus.PullOutcome
 import sh.rcn.terminus.PullScene
 import sh.rcn.terminus.R
-import kotlin.math.PI
-import kotlin.math.atan2
-import kotlin.math.roundToInt
 
 /*
  * Pull to refresh, drawn: "the sky stretches". Pulled down at the top of its
@@ -107,9 +107,8 @@ private val LIT = Color(0xFFFB923C)
 private val GOOD = Color(0xFF22C55E)
 
 /**
- * A pull in progress, for what's drawn and laid out with it: the room, the
- * pill, the header's lead, and the horizon. Reading [read] while drawing or
- * laying out follows it frame by frame without composing.
+ * A pull in progress, for what's drawn and laid out with it: the room, the pill, the header's lead, and the horizon. Reading [read] while
+ * drawing or laying out follows it frame by frame without composing.
  */
 @Stable
 internal class PullView(val motion: PullMotion) {
@@ -136,14 +135,10 @@ internal class PullView(val motion: PullMotion) {
 internal val LocalPull = staticCompositionLocalOf<PullView?> { null }
 
 /**
- * [content] with pull to refresh: [onRefresh] asks again (or not, inside
- * [Pull.FRESH_MS]) and says how it went; when it didn't ask, [nextUpdateAt]
- * (null: unknown) is when the screen's timed refresh brings new times, for
- * the pill to say. The bus is in [livery] (null: the
- * horizon's shuttle), going round again while it asks. [scene] gives the
- * horizon's places for the screen's width in dp. [content] lays out the
- * room ([PullRoom]) and draws the horizon with the [PullView] it's given
- * (also in [LocalPull]). Off when not [enabled].
+ * [content] with pull to refresh: [onRefresh] asks again (or not, inside [Pull.FRESH_MS]) and says how it went; when it didn't ask,
+ * [nextUpdateAt] (null: unknown) is when the screen's timed refresh brings new times, for the pill to say. The bus is in [livery] (null:
+ * the horizon's shuttle), going round again while it asks. [scene] gives the horizon's places for the screen's width in dp. [content] lays
+ * out the room ([PullRoom]) and draws the horizon with the [PullView] it's given (also in [LocalPull]). Off when not [enabled].
  */
 @Composable
 internal fun BusPull(
@@ -190,54 +185,55 @@ internal fun BusPull(
             }
             running = false
         }
-        val connection = remember(motion) {
-            object : NestedScrollConnection {
-                override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                    // Back up: the sky closes first, then the content scrolls.
-                    if (source != NestedScrollSource.UserInput || available.y >= 0f) return Offset.Zero
-                    val used = motion.takeBack(available.y / density)
-                    if (used == 0f) return Offset.Zero
-                    kick()
-                    return Offset(0f, used * density)
-                }
-
-                override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                    // Down, with the content at its top since the finger went down: the sky stretches with the finger.
-                    if (source == NestedScrollSource.UserInput && consumed.y != 0f) motion.contentScrolled()
-                    if (!on || source != NestedScrollSource.UserInput || available.y <= 0f) return Offset.Zero
-                    if (!motion.canGrab && motion.phase != PullMotion.Phase.Drag) return Offset.Zero
-                    if (motion.phase == PullMotion.Phase.Idle) motion.scene = sceneOf(width)
-                    if (motion.drag(available.y / density)) tick(view)
-                    kick()
-                    return Offset(0f, available.y)
-                }
-
-                override suspend fun onPreFling(available: Velocity): Velocity {
-                    if (motion.phase != PullMotion.Phase.Drag) return Velocity.Zero
-                    if (motion.release()) {
-                        scope.launch {
-                            val outcome = try {
-                                ask()
-                            } catch (e: CancellationException) {
-                                throw e
-                            } catch (_: Exception) {
-                                PullOutcome.Failed
-                            }
-                            pv.nextInS = if (outcome == PullOutcome.UpToDate) Pull.inS(nextAt(), System.currentTimeMillis()) else null
-                            motion.done(outcome)
-                            kick()
-                        }
+        val connection =
+            remember(motion) {
+                object : NestedScrollConnection {
+                    override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                        // Back up: the sky closes first, then the content scrolls.
+                        if (source != NestedScrollSource.UserInput || available.y >= 0f) return Offset.Zero
+                        val used = motion.takeBack(available.y / density)
+                        if (used == 0f) return Offset.Zero
+                        kick()
+                        return Offset(0f, used * density)
                     }
-                    kick()
-                    // The pull took this drag: the content doesn't fling with it.
-                    return available
+
+                    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                        // Down, with the content at its top since the finger went down: the sky stretches with the finger.
+                        if (source == NestedScrollSource.UserInput && consumed.y != 0f) motion.contentScrolled()
+                        if (!on || source != NestedScrollSource.UserInput || available.y <= 0f) return Offset.Zero
+                        if (!motion.canGrab && motion.phase != PullMotion.Phase.Drag) return Offset.Zero
+                        if (motion.phase == PullMotion.Phase.Idle) motion.scene = sceneOf(width)
+                        if (motion.drag(available.y / density)) tick(view)
+                        kick()
+                        return Offset(0f, available.y)
+                    }
+
+                    override suspend fun onPreFling(available: Velocity): Velocity {
+                        if (motion.phase != PullMotion.Phase.Drag) return Velocity.Zero
+                        if (motion.release()) {
+                            scope.launch {
+                                val outcome =
+                                    try {
+                                        ask()
+                                    } catch (e: CancellationException) {
+                                        throw e
+                                    } catch (_: Exception) {
+                                        PullOutcome.Failed
+                                    }
+                                pv.nextInS = if (outcome == PullOutcome.UpToDate) Pull.inS(nextAt(), System.currentTimeMillis()) else null
+                                motion.done(outcome)
+                                kick()
+                            }
+                        }
+                        kick()
+                        // The pull took this drag: the content doesn't fling with it.
+                        return available
+                    }
                 }
             }
-        }
         CompositionLocalProvider(LocalPull provides pv) {
             Box(
-                Modifier
-                    .fillMaxSize()
+                Modifier.fillMaxSize()
                     // Each touch starts afresh: seen before the content takes it, and left for it.
                     .pointerInput(motion) {
                         awaitEachGesture {
@@ -245,15 +241,19 @@ internal fun BusPull(
                             motion.touch()
                         }
                     }
-                    .nestedScroll(connection),
-            ) { content(pv) }
+                    .nestedScroll(connection)
+            ) {
+                content(pv)
+            }
         }
     }
 }
 
 /** A light tick as the bus reaches the stop: the gesture's own where the phone has it. */
 private fun tick(view: View) {
-    view.performHapticFeedback(if (Build.VERSION.SDK_INT >= 34) HapticFeedbackConstants.GESTURE_THRESHOLD_ACTIVATE else HapticFeedbackConstants.CLOCK_TICK)
+    view.performHapticFeedback(
+        if (Build.VERSION.SDK_INT >= 34) HapticFeedbackConstants.GESTURE_THRESHOLD_ACTIVATE else HapticFeedbackConstants.CLOCK_TICK
+    )
 }
 
 /** The phone's "Remove animations" is on (checked again on coming back to the app). */
@@ -272,10 +272,8 @@ internal fun Modifier.pullLead(pv: PullView?): Modifier =
     if (pv == null) this else graphicsLayer { translationY = pv.read().lead * density }
 
 /**
- * The room in the sky above the words: [base] at rest, and taller by the
- * pull, with the pill in the middle of what opened, between what's [above]
- * it (its gap over the room) and the words [below]. Outside a pull, just
- * [base]. In the sky's ink ([SkyInk]).
+ * The room in the sky above the words: [base] at rest, and taller by the pull, with the pill in the middle of what opened, between what's
+ * [above] it (its gap over the room) and the words [below]. Outside a pull, just [base]. In the sky's ink ([SkyInk]).
  */
 @Composable
 internal fun PullRoom(base: Dp = 0.dp, above: Dp = 0.dp, below: Dp = 0.dp) {
@@ -285,7 +283,9 @@ internal fun PullRoom(base: Dp = 0.dp, above: Dp = 0.dp, below: Dp = 0.dp) {
         return
     }
     val hint = pv.hint
-    Layout(content = { if (hint != null) Pill(hint, pv.motion.calm, pv.nextInS) }, modifier = Modifier.fillMaxWidth()) { measurables, constraints ->
+    Layout(content = { if (hint != null) Pill(hint, pv.motion.calm, pv.nextInS) }, modifier = Modifier.fillMaxWidth()) {
+        measurables,
+        constraints ->
         val m = pv.read()
         val pills = measurables.map { it.measure(Constraints()) }
         val room = (base.toPx() + m.pull * density).roundToInt()
@@ -304,9 +304,8 @@ internal fun PullRoom(base: Dp = 0.dp, above: Dp = 0.dp, below: Dp = 0.dp) {
 }
 
 /**
- * The pill: "Pull to refresh" with an arrow down, "Let go to refresh" with
- * it up, "Checking…" turning, then how it went with a dot: green, or amber
- * for "Couldn't update". Only what changes on its own is read out.
+ * The pill: "Pull to refresh" with an arrow down, "Let go to refresh" with it up, "Checking…" turning, then how it went with a dot: green,
+ * or amber for "Couldn't update". Only what changes on its own is read out.
  */
 @Composable
 private fun Pill(hint: PullHint, calm: Boolean, nextInS: Int?) {
@@ -314,16 +313,19 @@ private fun Pill(hint: PullHint, calm: Boolean, nextInS: Int?) {
     val tones = LocalSkyTones.current
     val chip = tones?.chip ?: MaterialTheme.colorScheme.surfaceVariant
     val good = tones?.good ?: GOOD
-    val words = if (hint == PullHint.UpToDate && nextInS != null) stringResource(R.string.pull_up_to_date_next_s, nextInS) else stringResource(
-        when (hint) {
-            PullHint.Pull -> R.string.pull_to_refresh
-            PullHint.LetGo -> R.string.pull_let_go
-            PullHint.Checking -> R.string.checking
-            PullHint.Updated -> R.string.pull_updated
-            PullHint.UpToDate -> R.string.pull_up_to_date
-            PullHint.Failed -> R.string.pull_failed
-        },
-    )
+    val words =
+        if (hint == PullHint.UpToDate && nextInS != null) stringResource(R.string.pull_up_to_date_next_s, nextInS)
+        else
+            stringResource(
+                when (hint) {
+                    PullHint.Pull -> R.string.pull_to_refresh
+                    PullHint.LetGo -> R.string.pull_let_go
+                    PullHint.Checking -> R.string.checking
+                    PullHint.Updated -> R.string.pull_updated
+                    PullHint.UpToDate -> R.string.pull_up_to_date
+                    PullHint.Failed -> R.string.pull_failed
+                }
+            )
     val said = hint != PullHint.Pull && hint != PullHint.LetGo
     Row(
         Modifier.background(chip, CircleShape).padding(start = 10.dp, end = 13.dp, top = 5.dp, bottom = 5.dp),
@@ -331,9 +333,11 @@ private fun Pill(hint: PullHint, calm: Boolean, nextInS: Int?) {
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         when (hint) {
-            PullHint.Pull, PullHint.LetGo -> Arrow(ink, up = hint == PullHint.LetGo, calm = calm)
+            PullHint.Pull,
+            PullHint.LetGo -> Arrow(ink, up = hint == PullHint.LetGo, calm = calm)
             PullHint.Checking -> if (!calm) CircularProgressIndicator(Modifier.size(12.dp), color = ink, strokeWidth = 2.dp)
-            PullHint.Updated, PullHint.UpToDate -> Box(Modifier.size(7.dp).background(good, CircleShape))
+            PullHint.Updated,
+            PullHint.UpToDate -> Box(Modifier.size(7.dp).background(good, CircleShape))
             PullHint.Failed -> Box(Modifier.size(7.dp).background(MaterialTheme.colorScheme.tertiary, CircleShape))
         }
         Text(
@@ -353,18 +357,35 @@ private fun Arrow(ink: Color, up: Boolean, calm: Boolean) {
     Canvas(Modifier.size(14.dp).graphicsLayer { rotationZ = turn }) {
         val u = size.minDimension / 24f
         val stroke = Stroke(2.4f * u, cap = StrokeCap.Round, join = StrokeJoin.Round)
-        drawPath(Path().apply { moveTo(12 * u, 5 * u); lineTo(12 * u, 19 * u); moveTo(6 * u, 13 * u); lineTo(12 * u, 19 * u); lineTo(18 * u, 13 * u) }, ink, style = stroke)
+        drawPath(
+            Path().apply {
+                moveTo(12 * u, 5 * u)
+                lineTo(12 * u, 19 * u)
+                moveTo(6 * u, 13 * u)
+                lineTo(12 * u, 19 * u)
+                lineTo(18 * u, 13 * u)
+            },
+            ink,
+            style = stroke,
+        )
     }
 }
 
 /**
- * The pull on Now's horizon, in place of the road's own sign and bus: the
- * sign at [sign] (faded in by the pull when the road has none, [ownSign]),
- * the puffs, and the bus on the road. [top] is the horizon's top and [d]
- * its px a unit; a timetable guess's bus stays an outline (not [live]).
- * [lights]: after dark, its headlight on as it drives.
+ * The pull on Now's horizon, in place of the road's own sign and bus: the sign at [sign] (faded in by the pull when the road has none,
+ * [ownSign]), the puffs, and the bus on the road. [top] is the horizon's top and [d] its px a unit; a timetable guess's bus stays an
+ * outline (not [live]). [lights]: after dark, its headlight on as it drives.
  */
-internal fun DrawScope.pullRoad(v: PullView, p: Palette, top: Float, d: Float, sign: Float, ownSign: Boolean, live: Boolean, lights: Boolean) {
+internal fun DrawScope.pullRoad(
+    v: PullView,
+    p: Palette,
+    top: Float,
+    d: Float,
+    sign: Float,
+    ownSign: Boolean,
+    live: Boolean,
+    lights: Boolean,
+) {
     val m = v.read()
     val road = { _: Float -> 70f }
     pullSign(m, p, Offset(sign * d, top + 70 * d), d, post = 26f, grow = if (ownSign) 1f else m.signGrow, rise = false)
@@ -372,9 +393,8 @@ internal fun DrawScope.pullRoad(v: PullView, p: Palette, top: Float, d: Float, s
 }
 
 /**
- * The pull on the low horizon (Buses), from its strip's [top], [d] px a
- * unit, [width] units across: a sign growing out of the near hill, and the
- * bus along the hilltop to it, tilting with the slope.
+ * The pull on the low horizon (Buses), from its strip's [top], [d] px a unit, [width] units across: a sign growing out of the near hill,
+ * and the bus along the hilltop to it, tilting with the slope.
  */
 internal fun DrawScope.pullHill(v: PullView, p: Palette, top: Float, d: Float, width: Float, lights: Boolean) {
     val m = v.read()
@@ -385,22 +405,22 @@ internal fun DrawScope.pullHill(v: PullView, p: Palette, top: Float, d: Float, w
 }
 
 /**
- * The stop's sign, its foot at [o], [u] px a unit, its post [post] tall:
- * lit in the accent with a ring going out from it while letting go would
- * ask and while it asks, green once the answer's in. [grow] (0–1) fades it
- * in, or with [rise] grows it up out of the ground.
+ * The stop's sign, its foot at [o], [u] px a unit, its post [post] tall: lit in the accent with a ring going out from it while letting go
+ * would ask and while it asks, green once the answer's in. [grow] (0–1) fades it in, or with [rise] grows it up out of the ground.
  */
 private fun DrawScope.pullSign(m: PullMotion, p: Palette, o: Offset, u: Float, post: Float, grow: Float, rise: Boolean) {
     if (grow <= 0f) return
     val alpha = if (rise) 1f else grow
     fun at(x: Float, y: Float) = Offset(o.x + x * u, o.y + y * u)
-    fun box(x: Float, y: Float, w: Float, h: Float, color: Color, r: Float) = drawRoundRect(color, at(x, y), Size(w * u, h * u), CornerRadius(r * u), alpha = alpha)
+    fun box(x: Float, y: Float, w: Float, h: Float, color: Color, r: Float) =
+        drawRoundRect(color, at(x, y), Size(w * u, h * u), CornerRadius(r * u), alpha = alpha)
     val plate = -(post + 11)
-    val face = when {
-        m.good -> GOOD
-        m.lit -> LIT
-        else -> p.post
-    }
+    val face =
+        when {
+            m.good -> GOOD
+            m.lit -> LIT
+            else -> p.post
+        }
     val mark = if (face == p.post) p.postInk else Color(0xFF1C1917)
     scale(1f, if (rise) grow else 1f, pivot = o) {
         if (m.lit && !m.calm) {
@@ -415,16 +435,29 @@ private fun DrawScope.pullSign(m: PullMotion, p: Palette, o: Offset, u: Float, p
 }
 
 /**
- * The bus at the motion's place on [ground] (units down the strip at x),
- * its puffs behind it: the body bobbing and pitching on its suspension
- * over wheels that turn, along the [slope] of the hill, the door lit as it
- * opens, and a honk. Without a [band] it's an outline, as a timetable
- * guess is on the horizon.
+ * The bus at the motion's place on [ground] (units down the strip at x), its puffs behind it: the body bobbing and pitching on its
+ * suspension over wheels that turn, along the [slope] of the hill, the door lit as it opens, and a honk. Without a [band] it's an outline,
+ * as a timetable guess is on the horizon.
  */
-private fun DrawScope.pullBus(v: PullView, m: PullMotion, p: Palette, top: Float, d: Float, ground: (Float) -> Float, slope: Boolean, band: Boolean, lights: Boolean) {
+private fun DrawScope.pullBus(
+    v: PullView,
+    m: PullMotion,
+    p: Palette,
+    top: Float,
+    d: Float,
+    ground: (Float) -> Float,
+    slope: Boolean,
+    band: Boolean,
+    lights: Boolean,
+) {
     for (f in m.puffs) {
         val k = f.age / 0.6f
-        drawCircle(Color.White, (1.4f + k * 3.6f) * d, Offset((f.x - k * 10) * d, top + (ground(f.x) - 4.2f - k * 5) * d), alpha = 0.55f * (1 - k))
+        drawCircle(
+            Color.White,
+            (1.4f + k * 3.6f) * d,
+            Offset((f.x - k * 10) * d, top + (ground(f.x) - 4.2f - k * 5) * d),
+            alpha = 0.55f * (1 - k),
+        )
     }
     if (m.alpha <= 0f) return
     val x = m.busX
@@ -438,22 +471,38 @@ private fun DrawScope.pullBus(v: PullView, m: PullMotion, p: Palette, top: Float
         translate(top = m.bob * d) {
             rotate(m.tilt, pivot = at(7.5f, 12f)) {
                 if (lights && m.drive != PullMotion.Drive.Follow) {
-                    drawPath(Path().apply { at(38f, 9f).let { moveTo(it.x, it.y) }; at(60f, 6f).let { lineTo(it.x, it.y) }; at(60f, 13f).let { lineTo(it.x, it.y) }; close() }, MOON, alpha = 0.14f)
+                    drawPath(
+                        Path().apply {
+                            at(38f, 9f).let { moveTo(it.x, it.y) }
+                            at(60f, 6f).let { lineTo(it.x, it.y) }
+                            at(60f, 13f).let { lineTo(it.x, it.y) }
+                            close()
+                        },
+                        MOON,
+                        alpha = 0.14f,
+                    )
                 }
                 shuttle(o, d, Color(v.livery), if (band) v.band() else null, p.window, dim = 3, wheels = false)
-                if (m.door > 0f) drawRoundRect(Color(0xFFFBBF24), at(32f, 2.5f), Size(2.8f * d, 8.2f * d), CornerRadius(0.6f * d), alpha = m.door)
+                if (m.door > 0f)
+                    drawRoundRect(Color(0xFFFBBF24), at(32f, 2.5f), Size(2.8f * d, 8.2f * d), CornerRadius(0.6f * d), alpha = m.door)
             }
         }
         for (wx in SHUTTLE_WHEELS) shuttleWheel(at(wx, 12f), d, m.wheel)
         if (m.honk > 0f) {
             val shift = m.honk * 0.8f
-            val arcs = Path().apply {
-                at(40.2f + shift, 3.2f).let { moveTo(it.x, it.y) }
-                at(41.7f + shift, 5.6f).let { c -> at(40.2f + shift, 8f).let { quadraticTo(c.x, c.y, it.x, it.y) } }
-                at(42.4f + shift, 1.6f).let { moveTo(it.x, it.y) }
-                at(45.2f + shift, 5.6f).let { c -> at(42.4f + shift, 9.6f).let { quadraticTo(c.x, c.y, it.x, it.y) } }
-            }
-            drawPath(arcs, if (p.lightInk) Color(0xFFF5F3F0) else Color(0xFF1C1917), alpha = m.honk.coerceIn(0f, 1f), style = Stroke(0.75f * d, cap = StrokeCap.Round))
+            val arcs =
+                Path().apply {
+                    at(40.2f + shift, 3.2f).let { moveTo(it.x, it.y) }
+                    at(41.7f + shift, 5.6f).let { c -> at(40.2f + shift, 8f).let { quadraticTo(c.x, c.y, it.x, it.y) } }
+                    at(42.4f + shift, 1.6f).let { moveTo(it.x, it.y) }
+                    at(45.2f + shift, 5.6f).let { c -> at(42.4f + shift, 9.6f).let { quadraticTo(c.x, c.y, it.x, it.y) } }
+                }
+            drawPath(
+                arcs,
+                if (p.lightInk) Color(0xFFF5F3F0) else Color(0xFF1C1917),
+                alpha = m.honk.coerceIn(0f, 1f),
+                style = Stroke(0.75f * d, cap = StrokeCap.Round),
+            )
         }
     }
     if (faded) drawIntoCanvas { it.restore() }

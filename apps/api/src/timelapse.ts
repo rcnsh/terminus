@@ -129,7 +129,12 @@ export interface SampleBus {
 /** A bus as four whole numbers: its plate's index, latitude and longitude
  *  in steps from ORIGIN, and metres along its line (-1 off it). */
 export function encodeBus(b: SampleBus, plateIndex: number): [number, number, number, number] {
-  return [plateIndex, Math.round((b.lat - ORIGIN.lat) * Q), Math.round((b.lon - ORIGIN.lon) * Q), b.along == null ? -1 : Math.round(b.along)];
+  return [
+    plateIndex,
+    Math.round((b.lat - ORIGIN.lat) * Q),
+    Math.round((b.lon - ORIGIN.lon) * Q),
+    b.along == null ? -1 : Math.round(b.along),
+  ];
 }
 
 /**
@@ -279,7 +284,6 @@ export interface RecorderStatus {
   state: string;
 }
 
-
 /**
  * GET /api/timelapse/days and /api/timelapse/days/:date, for the operator or a
  * holder of TIMELAPSE_TOKEN only (anything else is a 404, as /admin/stats).
@@ -305,7 +309,8 @@ export async function handleTimelapse(req: Request, url: URL, env: Env, nowMs: n
     } while (cursor);
     const today = serviceDate(nowMs);
     const status = await recorderStatus(env, today);
-    if (status && status.samples > 0 && !days.some((d) => d.date === today)) days.push({ date: today, closed: false, bytes: null, samples: status.samples });
+    if (status && status.samples > 0 && !days.some((d) => d.date === today))
+      days.push({ date: today, closed: false, bytes: null, samples: status.samples });
     // Earlier days whose recorders are still trying to write them to R2.
     const held = await Promise.all(
       Array.from({ length: HELD_DAYS }, (_, i) => serviceDate(nowMs - (i + 1) * DAY_MS))
@@ -314,7 +319,10 @@ export async function handleTimelapse(req: Request, url: URL, env: Env, nowMs: n
     );
     for (const { date, status: s } of held) if (s && s.samples > 0) days.push({ date, closed: false, bytes: null, samples: s.samples });
     days.sort((a, b) => b.date.localeCompare(a.date));
-    return json({ days, recording: { date: today, enabled: await timelapseEnabled(env), state: status?.state ?? 'idle', samples: status?.samples ?? 0 } });
+    return json({
+      days,
+      recording: { date: today, enabled: await timelapseEnabled(env), state: status?.state ?? 'idle', samples: status?.samples ?? 0 },
+    });
   }
 
   const date = DAY_PATH.exec(url.pathname)?.[1];

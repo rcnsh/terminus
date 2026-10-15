@@ -14,7 +14,16 @@ import { UpstreamUnreachable, timedFetch } from './http.ts';
 import { cacheBase, cachedFetch, flagged } from './edgecache.ts';
 import { GateBusy, throughGate } from './feedgate.ts';
 import { noteTrip } from './feedwatch.ts';
-import { UpstreamHttpError, UpstreamRejected, getSession, markIfOutdated, mintWith, proxyEnvelope, proxyHeaders, renewSession } from './auth.ts';
+import {
+  UpstreamHttpError,
+  UpstreamRejected,
+  getSession,
+  markIfOutdated,
+  mintWith,
+  proxyEnvelope,
+  proxyHeaders,
+  renewSession,
+} from './auth.ts';
 import type { Session } from './auth.ts';
 import graphJson from '../data/stops.json' with { type: 'json' };
 
@@ -256,9 +265,7 @@ export function normalize(raw: unknown): Arrival[] {
     out.push({
       svc,
       etaS: parseEtaS(field(item, ...ROW_TIME)),
-      crowd:
-        crowdFromLoad(item.arrivalTime_capacity, item.arrivalTime_ridership) ??
-        parseCrowd(field(item, 'passengers', 'crowd', 'load')),
+      crowd: crowdFromLoad(item.arrivalTime_capacity, item.arrivalTime_ridership) ?? parseCrowd(field(item, 'passengers', 'crowd', 'load')),
       plate: plateOf(field(item, 'arrivalTime_veh_plate', 'vehiclePlate', 'plate')),
       berth,
       ...ends,
@@ -356,11 +363,16 @@ function rowsRead(raw: unknown): { svc: string; read: boolean; garbled: boolean 
  * the rest of the board stands, so one odd value doesn't take a whole stop
  * (or, at the probe's stop, every card) down.
  */
-export function arrivalsProblem(raw: unknown, arrivals: Arrival[] = normalize(raw), known: ReadonlySet<string> = KNOWN_SERVICES): string | null {
+export function arrivalsProblem(
+  raw: unknown,
+  arrivals: Arrival[] = normalize(raw),
+  known: ReadonlySet<string> = KNOWN_SERVICES,
+): string | null {
   const rows = objects(pickList(raw, ARRIVAL_LIST_KEYS));
   if (!rows.length) return null;
   if (!arrivals.length) return 'no row names a service';
-  if (!arrivals.some((a) => known.has(a.svc))) return `no service it names is known (${[...new Set(arrivals.map((a) => a.svc))].slice(0, 4).join(', ')})`;
+  if (!arrivals.some((a) => known.has(a.svc)))
+    return `no service it names is known (${[...new Set(arrivals.map((a) => a.svc))].slice(0, 4).join(', ')})`;
   // Not checked: how far away the times are, up to MAX_ETA_S. After midnight
   // every real arrival is the next morning's, hours away (fixtures/connectx-*.json).
   const times = rowsRead(raw);
@@ -378,7 +390,13 @@ export function arrivalsProblem(raw: unknown, arrivals: Arrival[] = normalize(ra
  * first time is gone counts too: its next bus would pass for the soonest.
  */
 export function arrivalsUnread(raw: unknown): string[] {
-  return [...new Set(rowsRead(raw).filter((t) => t.garbled || !t.read).map((t) => t.svc))];
+  return [
+    ...new Set(
+      rowsRead(raw)
+        .filter((t) => t.garbled || !t.read)
+        .map((t) => t.svc),
+    ),
+  ];
 }
 
 /** A bus the feed lists with no fix yet: 0, 0. A real bus without a place.
@@ -426,12 +444,7 @@ export function proxyOk(body: unknown): body is ProxyBody {
   return typeof body === 'object' && body !== null && (body as ProxyBody).code === '00000';
 }
 
-async function proxyCall(
-  env: Env,
-  session: Session,
-  endpoint: string,
-  params: Record<string, string>,
-): Promise<unknown> {
+async function proxyCall(env: Env, session: Session, endpoint: string, params: Record<string, string>): Promise<unknown> {
   const res = await timedFetch(endpoint, proxyUrl(env, endpoint), {
     method: 'POST',
     headers: proxyHeaders(env, session.token),
@@ -477,7 +490,13 @@ async function retryable(env: Env, nowMs: number, session: Session, body: unknow
  * that is up to 15 s after nowMs, and reading them from nowMs would put
  * every bus that much early. Not the reply's time, which would put them late.
  */
-async function acceptedCall(env: Env, endpoint: string, params: Record<string, string>, nowMs: number, onCall?: () => void): Promise<{ body: ProxyBody; sentAtMs: number }> {
+async function acceptedCall(
+  env: Env,
+  endpoint: string,
+  params: Record<string, string>,
+  nowMs: number,
+  onCall?: () => void,
+): Promise<{ body: ProxyBody; sentAtMs: number }> {
   if (!fmsConfigured(env)) throw new Error('bus proxy not configured');
   const startMs = Date.now();
   const sinceNow = () => nowMs + Math.max(0, Date.now() - startMs);
@@ -493,7 +512,11 @@ async function acceptedCall(env: Env, endpoint: string, params: Record<string, s
   }
   if (!proxyOk(body)) {
     const b = body as ProxyBody | null;
-    const err = new UpstreamRejected(String(b?.code ?? '?'), `${endpoint} rejected: code=${b?.code ?? '?'} msg=${String(b?.msg ?? '').slice(0, 120)}`, JSON.stringify(body));
+    const err = new UpstreamRejected(
+      String(b?.code ?? '?'),
+      `${endpoint} rejected: code=${b?.code ?? '?'} msg=${String(b?.msg ?? '').slice(0, 120)}`,
+      JSON.stringify(body),
+    );
     err.version = (renewed ?? session).version;
     await markIfOutdated(env, err);
     throw err;
@@ -506,11 +529,7 @@ async function acceptedCall(env: Env, endpoint: string, params: Record<string, s
  * the stop is reported unavailable and the answer degrades to an honest
  * `unknown` rather than passing an empty result off as "the feed says no bus".
  */
-export async function fetchArrivals(
-  env: Env,
-  code: string,
-  nowMs: number = Date.now(),
-): Promise<StopArrivals> {
+export async function fetchArrivals(env: Env, code: string, nowMs: number = Date.now()): Promise<StopArrivals> {
   const { body, sentAtMs } = await acceptedCall(env, 'shuttle-service', { busstopname: code }, nowMs);
   // "00000" with no list anywhere is not "no bus": the payload changed shape,
   // and reading it as an empty board would print confident headway guesses.
@@ -562,12 +581,7 @@ export function hasList(data: unknown, keys: string[] = ARRIVAL_LIST_KEYS): bool
  * and /trip. A refused version or key (NO_REMINT_CODES) trips the feed's
  * breaker, which stops every stop for breakerS: a fresh token can't fix it.
  */
-export async function getArrivals(
-  env: Env,
-  ctx: ExecutionContext,
-  code: string,
-  nowMs: number = Date.now(),
-): Promise<StopArrivals> {
+export async function getArrivals(env: Env, ctx: ExecutionContext, code: string, nowMs: number = Date.now()): Promise<StopArrivals> {
   return cachedFetch<StopArrivals>({
     ctx,
     nowMs,
@@ -652,7 +666,8 @@ export function normalizeBuses(data: unknown): RawBus[] {
     const num = (v: unknown) => (v == null || v === '' ? NaN : Number(v));
     const lat = num(field(item, 'lat', 'latitude'));
     const lon = num(field(item, 'lng', 'lon', 'longitude'));
-    if (!plate || !Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180 || (lat === 0 && lon === 0)) continue;
+    if (!plate || !Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180 || (lat === 0 && lon === 0))
+      continue;
     const dir = num(field(item, 'direction', 'heading', 'bearing'));
     const speed = Number(field(item, 'speed'));
     const load = (item.loadInfo ?? {}) as Record<string, unknown>;
@@ -691,7 +706,13 @@ export async function fetchActiveBuses(env: Env, svc: string, nowMs: number = Da
  * hit, not a fetch or a mint another request started): the call, any token
  * it mints, and a retry. So the timelapse recorder can count its real load.
  */
-export async function getBuses(env: Env, ctx: ExecutionContext, svc: string, nowMs: number = Date.now(), onUpstream?: () => void): Promise<ActiveBuses> {
+export async function getBuses(
+  env: Env,
+  ctx: ExecutionContext,
+  svc: string,
+  nowMs: number = Date.now(),
+  onUpstream?: () => void,
+): Promise<ActiveBuses> {
   // No stale race: the map polls every few seconds and would rather wait
   // for the fresh positions than see a stale jump.
   return cachedFetch<ActiveBuses>({

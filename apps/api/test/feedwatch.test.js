@@ -6,7 +6,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { FROZEN_NOW, installGlobals, makeCtx, makeEnv, makeFetch, makeKV } from './_stubs.mjs';
-import { CHECK_EVERY_MS, KV_NAMESPACE_IDS, checkPublicFeed, checkUpstream, readPublicFeed, readUpstream, runCron, sawTrip } from '../src/monitor.ts';
+import {
+  CHECK_EVERY_MS,
+  KV_NAMESPACE_IDS,
+  checkPublicFeed,
+  checkUpstream,
+  readPublicFeed,
+  readUpstream,
+  runCron,
+  sawTrip,
+} from '../src/monitor.ts';
 import { lastTrip, noteTrip, resetNotes } from '../src/feedwatch.ts';
 import { scopeCache } from '../src/edgecache.ts';
 import { getArrivals } from '../src/fms.ts';
@@ -125,7 +134,10 @@ test('the beta goes down on trips in two runs in a row, and back up after two wi
   });
   assert.equal((await readUpstream(env)).up, true, 'back after two runs without a trip');
   assert.equal(env.EMAIL.sent.length, 0, 'the beta emails no one');
-  assert.ok(logged.some((l) => /beta: terminus: NUS bus feed is down/.test(l)), logged.join('\n'));
+  assert.ok(
+    logged.some((l) => /beta: terminus: NUS bus feed is down/.test(l)),
+    logged.join('\n'),
+  );
   assert.ok(logged.some((l) => /beta: terminus: NUS bus feed recovered/.test(l)));
   assert.equal(ae.filter((p) => p.blobs[1] === 'cron feed down').length, 2, 'each run while down counts on the dashboard');
 });

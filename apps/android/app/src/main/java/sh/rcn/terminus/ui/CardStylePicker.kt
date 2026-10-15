@@ -34,8 +34,8 @@ import sh.rcn.terminus.widget.clock
 import sh.rcn.terminus.widget.redrawWidgets
 
 /**
- * The card styles, each drawn with a made-up trip so the choice is made by
- * looking, not by reading. The pick holds for the card and the widgets.
+ * The card styles, each drawn with a made-up trip so the choice is made by looking, not by reading. The pick holds for the card and the
+ * widgets.
  */
 @Composable
 internal fun CardStylePicker() {
@@ -50,22 +50,36 @@ internal fun CardStylePicker() {
                 val on = style == chosen
                 if (i > 0) RowDivider()
                 Column(
-                    Modifier.fillMaxWidth().selectable(on, role = Role.RadioButton) {
-                        CardStyle.set(ctx, style)
-                        scope.launch { redrawWidgets(ctx) }
-                    }.padding(start = 4.dp, end = 16.dp, top = 4.dp, bottom = 16.dp),
+                    Modifier.fillMaxWidth()
+                        .selectable(on, role = Role.RadioButton) {
+                            CardStyle.set(ctx, style)
+                            scope.launch { redrawWidgets(ctx) }
+                        }
+                        .padding(start = 4.dp, end = 16.dp, top = 4.dp, bottom = 16.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         RadioButton(selected = on, onClick = null, modifier = Modifier.padding(12.dp))
                         Column {
-                            Text(stringResource(CardStyle.name(style)), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                            Text(stringResource(hint(style)), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                stringResource(CardStyle.name(style)),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                stringResource(hint(style)),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                     }
                     OutlinedCard(
                         Modifier.fillMaxWidth().padding(start = 12.dp, top = 4.dp),
                         colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.background),
-                        border = BorderStroke(if (on) 2.dp else 1.dp, if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
+                        border =
+                            BorderStroke(
+                                if (on) 2.dp else 1.dp,
+                                if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                            ),
                     ) {
                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             JourneyCard(sample, sample.card!!.journey!!, style)
@@ -77,11 +91,12 @@ internal fun CardStylePicker() {
     }
 }
 
-private fun hint(style: String) = when (style) {
-    CardStyle.TICKET -> R.string.card_style_ticket_hint
-    CardStyle.STEPS -> R.string.card_style_steps_hint
-    else -> R.string.card_style_route_hint
-}
+private fun hint(style: String) =
+    when (style) {
+        CardStyle.TICKET -> R.string.card_style_ticket_hint
+        CardStyle.STEPS -> R.string.card_style_steps_hint
+        else -> R.string.card_style_route_hint
+    }
 
 /** A D2 from PGP to UTown, leaving in a few minutes, in the phone's clock style. */
 @Composable
@@ -95,17 +110,54 @@ private fun sampleAnswer(): NextAnswer {
         val board = leave + 4 * 60_000
         val arrive = board + 8 * 60_000
         val at = { ms: Long -> clock(ctx, ms) }
-        val journey = Journey(
-            leave = at(leave), walk = min, bus = JourneyBus("D2", 0xFF8E44C9, "PGP", at(board)), boardAtMs = board, ride = ride, off = null,
-            to = "UTown", toStop = "UTown", arrive = at(arrive), slack = null, live = true, backup = JourneyBus("A1", 0xFFD32F2F, "PGP", at(board + 3 * 60_000)),
-        )
-        val card = Card(
-            kind = "trip", staleAtMs = null, crowd = null, quality = null, leaveBy = null, leaveVia = null, catch = null, arrive = null,
-            catchLine = null, late = false, goNow = null, note = null, estimate = null, journey = journey,
-        )
+        val journey =
+            Journey(
+                leave = at(leave),
+                walk = min,
+                bus = JourneyBus("D2", 0xFF8E44C9, "PGP", at(board)),
+                boardAtMs = board,
+                ride = ride,
+                off = null,
+                to = "UTown",
+                toStop = "UTown",
+                arrive = at(arrive),
+                slack = null,
+                live = true,
+                backup = JourneyBus("A1", 0xFFD32F2F, "PGP", at(board + 3 * 60_000)),
+            )
+        val card =
+            Card(
+                kind = "trip",
+                staleAtMs = null,
+                crowd = null,
+                quality = null,
+                leaveBy = null,
+                leaveVia = null,
+                catch = null,
+                arrive = null,
+                catchLine = null,
+                late = false,
+                goNow = null,
+                note = null,
+                estimate = null,
+                journey = journey,
+            )
         NextAnswer(
-            label = "D2", detail = "", alt = null, stopName = "PGP", quality = "live", asOf = "", mode = "trip", destLabel = "UTown", why = "place",
-            places = emptyList(), departsAtMs = board, timingStatus = null, timingText = null, leaveAtMs = leave, card = card,
+            label = "D2",
+            detail = "",
+            alt = null,
+            stopName = "PGP",
+            quality = "live",
+            asOf = "",
+            mode = "trip",
+            destLabel = "UTown",
+            why = "place",
+            places = emptyList(),
+            departsAtMs = board,
+            timingStatus = null,
+            timingText = null,
+            leaveAtMs = leave,
+            card = card,
         )
     }
 }

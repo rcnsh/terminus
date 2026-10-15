@@ -18,8 +18,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarData
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarVisuals
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
@@ -52,16 +52,14 @@ internal class Notice(
     override val duration: SnackbarDuration = if (actionLabel == null) SnackbarDuration.Short else SnackbarDuration.Long,
     val error: Boolean = false,
 ) : SnackbarVisuals {
-    override val withDismissAction: Boolean get() = false
+    override val withDismissAction: Boolean
+        get() = false
 }
 
 /**
- * The bar a SnackbarHost shows, drawn as the app's own pieces are (a card
- * with a hairline round it, Transit.kt) rather than Material's inverted
- * slab: a stop's dot in the accent, the message, the action as a soft orange
- * pill, and a line along the foot running down to when it goes. It still
- * comes and goes as a snackbar does, waits longer for accessibility
- * services, and can be swiped away either way.
+ * The bar a SnackbarHost shows, drawn as the app's own pieces are (a card with a hairline round it, Transit.kt) rather than Material's
+ * inverted slab: a stop's dot in the accent, the message, the action as a soft orange pill, and a line along the foot running down to when
+ * it goes. It still comes and goes as a snackbar does, waits longer for accessibility services, and can be swiped away either way.
  */
 @Composable
 internal fun NoticeBar(data: SnackbarData) {
@@ -71,14 +69,17 @@ internal fun NoticeBar(data: SnackbarData) {
     val action = visuals.actionLabel
     // As long as the host will wait (SnackbarHost's own sums), so the line ends when the bar goes.
     val a11y = LocalAccessibilityManager.current
-    val millis = remember(data) {
-        val base = when (visuals.duration) {
-            SnackbarDuration.Short -> 4_000L
-            SnackbarDuration.Long -> 10_000L
-            SnackbarDuration.Indefinite -> Long.MAX_VALUE
+    val millis =
+        remember(data) {
+            val base =
+                when (visuals.duration) {
+                    SnackbarDuration.Short -> 4_000L
+                    SnackbarDuration.Long -> 10_000L
+                    SnackbarDuration.Indefinite -> Long.MAX_VALUE
+                }
+            a11y?.calculateRecommendedTimeoutMillis(base, containsIcons = true, containsText = true, containsControls = action != null)
+                ?: base
         }
-        a11y?.calculateRecommendedTimeoutMillis(base, containsIcons = true, containsText = true, containsControls = action != null) ?: base
-    }
     val left = remember(data) { Animatable(1f) }
     LaunchedEffect(data) {
         if (millis < Long.MAX_VALUE) left.animateTo(0f, tween(millis.toInt(), easing = LinearEasing))
@@ -94,8 +95,7 @@ internal fun NoticeBar(data: SnackbarData) {
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp).widthIn(max = 560.dp),
     ) {
         Row(
-            Modifier
-                .fillMaxWidth()
+            Modifier.fillMaxWidth()
                 .shadow(10.dp, shape, ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.25f))
                 .clip(shape)
                 .background(c.surface)
@@ -124,12 +124,12 @@ internal fun NoticeBar(data: SnackbarData) {
                     color = c.primary,
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .background(c.primaryContainer)
-                        .clickable(role = Role.Button, onClick = data::performAction)
-                        .heightIn(min = 40.dp)
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    modifier =
+                        Modifier.clip(RoundedCornerShape(50))
+                            .background(c.primaryContainer)
+                            .clickable(role = Role.Button, onClick = data::performAction)
+                            .heightIn(min = 40.dp)
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
                 )
             }
         }

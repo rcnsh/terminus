@@ -134,7 +134,9 @@ export function passingsOf(day: DayFile): Passing[] {
     const { shape, loop } = lines.get(svc)!;
     const total = shape.at.at(-1) ?? 0;
     // On a loop the last stop is the first again; a one-way route's first is skipped.
-    const stops = loop ? shape.stops.slice(0, -1).map((code, k) => ({ code, mark: shape.at[k] })) : shape.stops.slice(1).map((code, k) => ({ code, mark: shape.at[k + 1] }));
+    const stops = loop
+      ? shape.stops.slice(0, -1).map((code, k) => ({ code, mark: shape.at[k] }))
+      : shape.stops.slice(1).map((code, k) => ({ code, mark: shape.at[k + 1] }));
     for (let i = 1; i < fixes.length; i++) {
       const [t1, a1] = fixes[i - 1];
       const [t2, a2] = fixes[i];
@@ -214,7 +216,14 @@ async function predictionsFor(env: Env, date: string, nowMs: number, fetchImpl: 
     fetchImpl,
   );
   return rows
-    .map((r) => ({ t: aeTime(r.timestamp), plate: String(r.plate), stop: String(r.stop), svc: String(r.svc), etaS: Number(r.eta), w: Number(r.w) >= 1 ? Number(r.w) : 1 }))
+    .map((r) => ({
+      t: aeTime(r.timestamp),
+      plate: String(r.plate),
+      stop: String(r.stop),
+      svc: String(r.svc),
+      etaS: Number(r.eta),
+      w: Number(r.w) >= 1 ? Number(r.w) : 1,
+    }))
     .filter((p) => p.t >= open && p.t < close)
     .sort((a, b) => a.t - b.t);
 }
@@ -296,7 +305,9 @@ export function statsOf(errs: number[]): EtaStats {
 export async function etaSummary(env: Env, nowMs: number, days = 14): Promise<Record<string, unknown> | null> {
   if (!env.DOWNLOADS) return null;
   const dates = Array.from({ length: days }, (_, i) => new Date(nowMs + SGT_MS - (i + 1) * DAY).toISOString().slice(0, 10));
-  const kept = (await Promise.all(dates.map(async (d) => (await env.DOWNLOADS!.get(etaKey(d)))?.json<EtaDay>().catch(() => null) ?? null))).filter((d): d is EtaDay => d?.v === 1);
+  const kept = (
+    await Promise.all(dates.map(async (d) => (await env.DOWNLOADS!.get(etaKey(d)))?.json<EtaDay>().catch(() => null) ?? null))
+  ).filter((d): d is EtaDay => d?.v === 1);
   const all: Scored[] = kept.flatMap((d) => d.rows.map(([s, etaS, errS, hour]) => ({ svc: d.services[s], etaS, errS, hour })));
   const group = <K extends string | number>(key: (s: Scored) => K) => {
     const m = new Map<K, number[]>();
@@ -314,7 +325,10 @@ export async function etaSummary(env: Env, nowMs: number, days = 14): Promise<Re
     // before each row is weighted); matched / predictions is what's reliable.
     days: kept.map((d) => ({ date: d.date, predictions: d.predictions, matched: d.matched })),
     overall: statsOf(all.map((s) => s.errS)),
-    horizons: HORIZONS.map((h, i) => ({ label: h.label, ...statsOf(all.filter((s) => s.etaS <= h.maxS && s.etaS > (HORIZONS[i - 1]?.maxS ?? -1)).map((s) => s.errS)) })),
+    horizons: HORIZONS.map((h, i) => ({
+      label: h.label,
+      ...statsOf(all.filter((s) => s.etaS <= h.maxS && s.etaS > (HORIZONS[i - 1]?.maxS ?? -1)).map((s) => s.errS)),
+    })),
     services: [...bySvc.keys()].sort().map((svc) => ({ svc, ...statsOf(bySvc.get(svc)!) })),
     hours: [...byHour.keys()].sort((a, b) => a - b).map((hour) => ({ hour, ...statsOf(byHour.get(hour)!) })),
   };

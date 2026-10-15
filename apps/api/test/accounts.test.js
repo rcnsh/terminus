@@ -42,7 +42,11 @@ async function call(env, path, { method = 'GET', body, token, form, cookie, key,
   if (token) headers.authorization = `Bearer ${token}`;
   if (cookie) headers.cookie = cookie;
   const ctx = makeCtx();
-  const res = await worker.fetch(new Request(BASE + path, { method, headers, ...(payload === undefined ? {} : { body: payload }) }), env, ctx);
+  const res = await worker.fetch(
+    new Request(BASE + path, { method, headers, ...(payload === undefined ? {} : { body: payload }) }),
+    env,
+    ctx,
+  );
   await ctx.settle();
   return res;
 }
@@ -63,7 +67,10 @@ test('sign-up is open; a blocked address gets the same reply and no email', asyn
   assert.equal(a.status, 200);
   assert.deepEqual(await a.json(), await b.json(), 'the reply must not reveal the blocklist');
   assert.equal(c.status, 200);
-  assert.deepEqual(email.sent.map((m) => m.to), [INVITED, 'anyone@gmail.com']);
+  assert.deepEqual(
+    email.sent.map((m) => m.to),
+    [INVITED, 'anyone@gmail.com'],
+  );
 });
 
 test('Turnstile: enforced once a secret is set', async () => {
@@ -81,8 +88,16 @@ test('Turnstile: enforced once a secret is set', async () => {
   assert.equal(cfg.turnstileSiteKey, 'site');
   assert.equal((await call(e, '/api/auth/login', { method: 'POST', body: { email: INVITED } })).status, 400, 'no token');
   assert.equal((await call(e, '/api/auth/login', { method: 'POST', body: { email: INVITED, turnstile: 'bad' } })).status, 400);
-  assert.equal((await call(e, '/api/auth/login', { method: 'POST', body: { email: INVITED, turnstile: 'beta' } })).status, 400, "the beta's pass");
-  assert.equal((await call(e, '/api/auth/login', { method: 'POST', body: { email: INVITED, turnstile: 'other' } })).status, 400, 'another action');
+  assert.equal(
+    (await call(e, '/api/auth/login', { method: 'POST', body: { email: INVITED, turnstile: 'beta' } })).status,
+    400,
+    "the beta's pass",
+  );
+  assert.equal(
+    (await call(e, '/api/auth/login', { method: 'POST', body: { email: INVITED, turnstile: 'other' } })).status,
+    400,
+    'another action',
+  );
   assert.equal((await call(e, '/api/auth/login', { method: 'POST', body: { email: INVITED, turnstile: 'good' } })).status, 200);
   assert.equal(email.sent.length, 1);
   assert.ok(verify.every((u) => u.includes('challenges.cloudflare.com')));
@@ -90,7 +105,9 @@ test('Turnstile: enforced once a secret is set', async () => {
 
 test('Turnstile not answering: sign-in says try again later (503), not that the check failed', async () => {
   const { env, email } = setup();
-  globalThis.fetch = async () => { throw new TypeError('fetch failed'); };
+  globalThis.fetch = async () => {
+    throw new TypeError('fetch failed');
+  };
   const e = { ...env, TURNSTILE_SECRET: 's', TURNSTILE_SITE_KEY: 'site', TURNSTILE_HOSTNAMES: 'terminus.run' };
   for (const path of ['/api/auth/login', '/api/auth/anon/web']) {
     const res = await call(e, path, { method: 'POST', body: { email: INVITED, turnstile: 'good' } });
@@ -124,7 +141,9 @@ test('wrong emailed codes sent all at once still only get five tries', async () 
   await call(env, '/api/auth/login', { method: 'POST', body: { email: INVITED } });
   const code = email.lastCode();
   const wrong = code === '222222' ? '333333' : '222222';
-  await Promise.all(Array.from({ length: 20 }, () => call(env, '/api/auth/code', { method: 'POST', body: { email: INVITED, code: wrong } })));
+  await Promise.all(
+    Array.from({ length: 20 }, () => call(env, '/api/auth/code', { method: 'POST', body: { email: INVITED, code: wrong } })),
+  );
   assert.equal((await call(env, '/api/auth/code', { method: 'POST', body: { email: INVITED, code } })).status, 400);
 });
 
@@ -185,7 +204,16 @@ test('a page on a sibling subdomain cannot change the account with the session c
   assert.equal((await raw('/api/auth/login', sneaky, JSON.stringify({ email: INVITED }))).status, 400);
   assert.equal(email.sent.length, before);
   assert.equal((await raw('/api/me/pair-code', { cookie, 'sec-fetch-site': 'same-origin' })).status, 200);
-  assert.equal((await raw('/api/auth/login', { 'content-type': 'application/json; charset=utf-8', 'sec-fetch-site': 'same-origin' }, JSON.stringify({ email: 'other@u.nus.edu' }))).status, 200);
+  assert.equal(
+    (
+      await raw(
+        '/api/auth/login',
+        { 'content-type': 'application/json; charset=utf-8', 'sec-fetch-site': 'same-origin' },
+        JSON.stringify({ email: 'other@u.nus.edu' }),
+      )
+    ).status,
+    200,
+  );
   const { code } = await (await call(env, '/api/me/pair-code', { method: 'POST', cookie })).json();
   const { token } = await (await call(env, '/api/pair', { method: 'POST', body: { code } })).json();
   assert.equal((await raw('/api/me/pair-code', { authorization: `Bearer ${token}`, cookie, 'sec-fetch-site': 'cross-site' })).status, 200);
@@ -345,7 +373,15 @@ test('pairing: a code from the web session becomes a device token that can be re
   const { token } = await paired.json();
 
   const me = await (await call(env, '/api/me', { token })).json();
-  assert.deepEqual(me, { email: INVITED, anonymous: false, kind: 'device', needsReimport: false, reimportReason: null, term: null, onboarding: 'full' });
+  assert.deepEqual(me, {
+    email: INVITED,
+    anonymous: false,
+    kind: 'device',
+    needsReimport: false,
+    reimportReason: null,
+    term: null,
+    onboarding: 'full',
+  });
 
   assert.equal((await call(env, '/api/pair', { method: 'POST', body: { code, name: 'x' } })).status, 400);
 
@@ -426,7 +462,11 @@ test('profile: defaults, validated writes, and unknown stops rejected', async ()
   assert.equal(empty.gapHours, 2);
   assert.deepEqual(empty.places, []);
 
-  const bad = await call(env, '/api/me/profile', { method: 'PUT', cookie, body: { places: [{ key: 'gym', label: 'Gym', to: 'NOWHERE' }] } });
+  const bad = await call(env, '/api/me/profile', {
+    method: 'PUT',
+    cookie,
+    body: { places: [{ key: 'gym', label: 'Gym', to: 'NOWHERE' }] },
+  });
   assert.equal(bad.status, 400);
   assert.match((await bad.json()).error, /known stop/);
 
@@ -445,7 +485,11 @@ test('profile: defaults, validated writes, and unknown stops rejected', async ()
   const pinned = await call(env, '/api/me/profile', { method: 'PUT', cookie, body: { ...saved, pinnedStops: ['YIH', '16009', 'yih'] } });
   assert.equal(pinned.status, 200);
   assert.deepEqual((await pinned.json()).pinnedStops, ['YIH', '16009']);
-  assert.deepEqual((await (await call(env, '/api/me/profile', { cookie })).json()).pinnedStops, ['YIH', '16009'], 'kept, and read back whole');
+  assert.deepEqual(
+    (await (await call(env, '/api/me/profile', { cookie })).json()).pinnedStops,
+    ['YIH', '16009'],
+    'kept, and read back whole',
+  );
   const badPin = await call(env, '/api/me/profile', { method: 'PUT', cookie, body: { pinnedStops: ['NOWHERE'] } });
   assert.equal(badPin.status, 400);
   assert.equal((await badPin.json()).error, 'pinnedStops must be up to 8 known stop codes');
@@ -510,7 +554,10 @@ test('/api/me/nearby lists boards for stops near the given point', async () => {
   // Its twin is always there, for the widget to swap to.
   assert.equal(body.stops[0].opposite, 'PGPR');
   assert.ok(body.stops.some((s) => s.stop.code === 'PGPR'));
-  assert.ok(body.stops.every((s) => s.board.every((r) => r.running === true)), 'only running services, without stopped=1');
+  assert.ok(
+    body.stops.every((s) => s.board.every((r) => r.running === true)),
+    'only running services, without stopped=1',
+  );
 });
 
 test('/api/me/nearby?stopped=1 lists the services not running too', async () => {
@@ -600,7 +647,18 @@ test('delete account removes every row for the user', async () => {
 
   const res = await call(env, '/api/me', { method: 'DELETE', cookie });
   assert.equal(res.status, 200);
-  for (const t of ['users', 'sessions', 'profiles', 'pair_codes', 'magic_links', 'api_keys', 'feedback', 'trip_outcomes', 'trip_prefs', 'login_requests']) {
+  for (const t of [
+    'users',
+    'sessions',
+    'profiles',
+    'pair_codes',
+    'magic_links',
+    'api_keys',
+    'feedback',
+    'trip_outcomes',
+    'trip_prefs',
+    'login_requests',
+  ]) {
     assert.equal(db._db.prepare(`SELECT count(*) AS n FROM ${t}`).get().n, 0, t);
   }
   assert.equal(await env.KV.get(codeKey), null, 'the waiting sign-in code');
@@ -629,12 +687,15 @@ test('export: each device with its app, version and push address, as the policy 
   db.exec(`UPDATE sessions SET platform = 'android', client = 'android/2.4.2', push_token = 'fcm-token' WHERE kind = 'device'`);
   const body = await (await call(env, '/api/me/export', { cookie })).json();
   const phone = body.sessions.find((s) => s.kind === 'device');
-  assert.deepEqual({ name: phone.name, platform: phone.platform, app: phone.app, push: phone.push }, {
-    name: 'Pixel 8',
-    platform: 'android',
-    app: 'android/2.4.2',
-    push: { service: 'firebase', address: 'fcm-token' },
-  });
+  assert.deepEqual(
+    { name: phone.name, platform: phone.platform, app: phone.app, push: phone.push },
+    {
+      name: 'Pixel 8',
+      platform: 'android',
+      app: 'android/2.4.2',
+      push: { service: 'firebase', address: 'fcm-token' },
+    },
+  );
   assert.equal(body.sessions.find((s) => s.kind === 'web').push, null);
 });
 
@@ -743,7 +804,10 @@ test('signed in, the map and answers are limited per account, not per IP', async
   const keys = [];
   const own = { limit: async ({ key }) => (keys.push(key), { success: !key.startsWith('acct:') }) };
   assert.equal((await call({ ...env, RL_ME: own }, '/api/campus', { cookie })).status, 429);
-  assert.ok(keys.some((k) => /^acct:.+/.test(k)), 'keyed by account');
+  assert.ok(
+    keys.some((k) => /^acct:.+/.test(k)),
+    'keyed by account',
+  );
   assert.equal((await call({ ...env, RL_PUBLIC: never }, '/api/campus')).status, 429);
   assert.equal((await call(env, '/api/campus')).status, 401);
 });
@@ -760,34 +824,66 @@ function withNusmods(modules, { down = [] } = {}) {
   };
 }
 
-const LAB = { semesterData: [{ semester: 1, timetable: [{ lessonType: 'Laboratory', classNo: 'B1', day: 'Monday', startTime: '1000', endTime: '1200', venue: 'COM3-0120', weeks: [3, 4, 5] }] }] };
+const LAB = {
+  semesterData: [
+    {
+      semester: 1,
+      timetable: [
+        {
+          lessonType: 'Laboratory',
+          classNo: 'B1',
+          day: 'Monday',
+          startTime: '1000',
+          endTime: '1200',
+          venue: 'COM3-0120',
+          weeks: [3, 4, 5],
+        },
+      ],
+    },
+  ],
+};
 
 test('import: limited per account, since each one fetches from NUSMods', async () => {
   const { env, email } = setup();
   const cookie = await signIn(env, email);
   withNusmods({ CS2030: LAB });
   const keys = [];
-  const res = await call({ ...env, RL_AUTH: { limit: async ({ key }) => (keys.push(key), { success: !key.startsWith('import:') }) } }, '/api/me/import', {
-    method: 'POST',
-    cookie,
-    body: { share: 'https://nusmods.com/timetable/sem-1/share?CS2030=LAB:B1' },
-  });
+  const res = await call(
+    { ...env, RL_AUTH: { limit: async ({ key }) => (keys.push(key), { success: !key.startsWith('import:') }) } },
+    '/api/me/import',
+    {
+      method: 'POST',
+      cookie,
+      body: { share: 'https://nusmods.com/timetable/sem-1/share?CS2030=LAB:B1' },
+    },
+  );
   assert.equal(res.status, 429);
-  assert.ok(keys.some((k) => /^import:.+/.test(k)), 'keyed by account');
+  assert.ok(
+    keys.some((k) => /^import:.+/.test(k)),
+    'keyed by account',
+  );
 });
 
 test('import: a NUSMods failure changes nothing and names the module', async () => {
   const { env, email } = setup();
   const cookie = await signIn(env, email);
   withNusmods({ CS2030: LAB });
-  const ok = await call(env, '/api/me/import', { method: 'POST', cookie, body: { share: 'https://nusmods.com/timetable/sem-1/share?CS2030=LAB:B1' } });
+  const ok = await call(env, '/api/me/import', {
+    method: 'POST',
+    cookie,
+    body: { share: 'https://nusmods.com/timetable/sem-1/share?CS2030=LAB:B1' },
+  });
   assert.equal(ok.status, 200);
   const first = await ok.json();
   assert.equal(first.profile.trips.length, 1);
   assert.equal(first.term, 'Sem 1 2026/27');
 
   withNusmods({ CS2030: LAB }, { down: ['MA1521'] });
-  const bad = await call(env, '/api/me/import', { method: 'POST', cookie, body: { share: 'https://nusmods.com/timetable/sem-1/share?CS2030=LAB:B1&MA1521=LEC:1' } });
+  const bad = await call(env, '/api/me/import', {
+    method: 'POST',
+    cookie,
+    body: { share: 'https://nusmods.com/timetable/sem-1/share?CS2030=LAB:B1&MA1521=LEC:1' },
+  });
   assert.equal(bad.status, 502);
   assert.match((await bad.json()).error, /MA1521/);
   const after = await (await call(env, '/api/me/profile', { cookie })).json();
@@ -799,7 +895,11 @@ test('import: nothing found is refused, not saved as an empty timetable', async 
   const cookie = await signIn(env, email);
   await call(env, '/api/me/profile', { method: 'PUT', cookie, body: { manual: [{ day: 1, arriveByMin: 600, to: 'COM3', label: 'Gym' }] } });
   withNusmods({});
-  const r = await call(env, '/api/me/import', { method: 'POST', cookie, body: { share: 'https://nusmods.com/timetable/sem-1/share?CS9999=LEC:1' } });
+  const r = await call(env, '/api/me/import', {
+    method: 'POST',
+    cookie,
+    body: { share: 'https://nusmods.com/timetable/sem-1/share?CS9999=LEC:1' },
+  });
   assert.equal(r.status, 422);
   assert.match((await r.json()).error, /CS9999/);
 });
@@ -808,10 +908,18 @@ test('import: bad module codes and oversized links are rejected up front', async
   const { env, email } = setup();
   const cookie = await signIn(env, email);
   withNusmods({});
-  const odd = await call(env, '/api/me/import', { method: 'POST', cookie, body: { share: 'https://nusmods.com/timetable/sem-1/share?..%2Fx=LEC:1' } });
+  const odd = await call(env, '/api/me/import', {
+    method: 'POST',
+    cookie,
+    body: { share: 'https://nusmods.com/timetable/sem-1/share?..%2Fx=LEC:1' },
+  });
   assert.equal(odd.status, 400);
   const many = Array.from({ length: 16 }, (_, i) => `CS${1000 + i}=LEC:1`).join('&');
-  const big = await call(env, '/api/me/import', { method: 'POST', cookie, body: { share: `https://nusmods.com/timetable/sem-1/share?${many}` } });
+  const big = await call(env, '/api/me/import', {
+    method: 'POST',
+    cookie,
+    body: { share: `https://nusmods.com/timetable/sem-1/share?${many}` },
+  });
   assert.equal(big.status, 400);
   assert.match((await big.json()).error, /limit is 15/);
 });
@@ -820,12 +928,22 @@ test('import: a link that is not a NUSMods share link, or has no modules, is a 4
   const { env, email } = setup();
   const cookie = await signIn(env, email);
   withNusmods({});
-  for (const share of ['', 'not a link', 'https://example.com/timetable/sem-1/share?CS2030=LAB:B1', 'http://nusmods.com/timetable/sem-1/share?CS2030=LAB:B1', `https://nusmods.com/?${'x'.repeat(2000)}`]) {
+  for (const share of [
+    '',
+    'not a link',
+    'https://example.com/timetable/sem-1/share?CS2030=LAB:B1',
+    'http://nusmods.com/timetable/sem-1/share?CS2030=LAB:B1',
+    `https://nusmods.com/?${'x'.repeat(2000)}`,
+  ]) {
     const r = await call(env, '/api/me/import', { method: 'POST', cookie, body: { share } });
     assert.equal(r.status, 400, share.slice(0, 60));
     assert.equal((await r.json()).error, 'not a valid NUSMods share link');
   }
-  const none = await call(env, '/api/me/import', { method: 'POST', cookie, body: { share: 'https://nusmods.com/timetable/sem-1/share?hidden=CS2030' } });
+  const none = await call(env, '/api/me/import', {
+    method: 'POST',
+    cookie,
+    body: { share: 'https://nusmods.com/timetable/sem-1/share?hidden=CS2030' },
+  });
   assert.equal(none.status, 400);
   assert.equal((await none.json()).error, 'no modules found in that link');
   assert.equal((await call(env, '/api/me/import', { method: 'POST', cookie, body: {} })).status, 400);
@@ -834,7 +952,11 @@ test('import: a link that is not a NUSMods share link, or has no modules, is a 4
 test('/api/me/next: a class but no home stop and no location asks for a home stop', async () => {
   const { env, email } = setup();
   const cookie = await signIn(env, email);
-  await call(env, '/api/me/profile', { method: 'PUT', cookie, body: { manual: [{ day: 4, arriveByMin: 600, to: 'COM3', label: 'CS2030' }] } });
+  await call(env, '/api/me/profile', {
+    method: 'PUT',
+    cookie,
+    body: { manual: [{ day: 4, arriveByMin: 600, to: 'COM3', label: 'CS2030' }] },
+  });
   const body = await (await call(env, '/api/me/next', { cookie })).json();
   assert.equal(body.label, 'Add a home stop');
   assert.notEqual(body.quality, 'ended', 'never "Services ended" at 9 am');
@@ -847,7 +969,11 @@ test('email: odd characters are refused; +tags and gmail dots share one cooldown
   await call(env, '/api/auth/login', { method: 'POST', body: { email: 'spammer+1@example.com' } });
   await call(env, '/api/auth/login', { method: 'POST', body: { email: 'Jo.Tan@gmail.com' } });
   await call(env, '/api/auth/login', { method: 'POST', body: { email: 'jotan+x@gmail.com' } });
-  assert.deepEqual(email.sent.map((m) => m.to), ['jo.tan@gmail.com'], 'blocked via +tag; second gmail spelling cooled down');
+  assert.deepEqual(
+    email.sent.map((m) => m.to),
+    ['jo.tan@gmail.com'],
+    'blocked via +tag; second gmail spelling cooled down',
+  );
 });
 
 test('a failed send does not hold the cooldown, and the log has no address', async () => {
@@ -856,14 +982,20 @@ test('a failed send does not hold the cooldown, and the log has no address', asy
   const orig = console.error;
   console.error = (...a) => errors.push(a.join(' '));
   const send = env.EMAIL.send;
-  env.EMAIL.send = async () => { throw new Error(`could not deliver to ${INVITED}`); };
+  env.EMAIL.send = async () => {
+    throw new Error(`could not deliver to ${INVITED}`);
+  };
   const failed = await call(env, '/api/auth/login', { method: 'POST', body: { email: INVITED } });
   env.EMAIL.send = send;
   console.error = orig;
   assert.equal(failed.status, 502);
   assert.ok(!errors.join('\n').includes(INVITED));
   await call(env, '/api/auth/login', { method: 'POST', body: { email: INVITED } });
-  assert.deepEqual(email.sent.map((m) => m.to), [INVITED], 'the retry goes out straight away');
+  assert.deepEqual(
+    email.sent.map((m) => m.to),
+    [INVITED],
+    'the retry goes out straight away',
+  );
 });
 
 test('an unexpected error is logged and answered with a bare 500', async () => {
@@ -872,7 +1004,9 @@ test('an unexpected error is logged and answered with a bare 500', async () => {
   const orig = console.error;
   console.error = (...a) => errors.push(a.join(' '));
   // A fault (here a missing column), not D1 being away for a moment.
-  env.DB.prepare = () => { throw new Error('D1_ERROR: no such column: secret_internals'); };
+  env.DB.prepare = () => {
+    throw new Error('D1_ERROR: no such column: secret_internals');
+  };
   const r = await call(env, '/api/me?lat=1.29&lon=103.77', { cookie: '__Host-tm_s=whatever' });
   console.error = orig;
   assert.equal(r.status, 500);
@@ -910,7 +1044,11 @@ test('pair/check names the account (masked) without spending the code', async ()
 test('/api/me/next carries refreshAt: the next class start while one is ahead', async () => {
   const { env, email } = setup();
   const cookie = await signIn(env, email);
-  await call(env, '/api/me/profile', { method: 'PUT', cookie, body: { home: { stops: ['PGP'] }, manual: [{ day: 4, arriveByMin: 600, endMin: 720, to: 'COM3', label: 'CS2030' }] } });
+  await call(env, '/api/me/profile', {
+    method: 'PUT',
+    cookie,
+    body: { home: { stops: ['PGP'] }, manual: [{ day: 4, arriveByMin: 600, endMin: 720, to: 'COM3', label: 'CS2030' }] },
+  });
   const body = await (await call(env, '/api/me/next', { cookie })).json();
   // Frozen clock: Thursday 09:00 SGT. The return-at mark for this class is 09:00 itself, so 10:00 is next.
   assert.equal(body.refreshAt, '2026-08-27T02:00:00Z');
@@ -944,7 +1082,11 @@ test('/api/me/next: a class carries a leave-by time, moved by the walk from home
   const { env, email } = setup();
   const cookie = await signIn(env, email);
   const put = (homeWalkMin) =>
-    call(env, '/api/me/profile', { method: 'PUT', cookie, body: { home: { stops: ['PGP'] }, homeWalkMin, manual: [{ day: 4, arriveByMin: 660, endMin: 720, to: 'COM3', label: 'CS2030' }] } });
+    call(env, '/api/me/profile', {
+      method: 'PUT',
+      cookie,
+      body: { home: { stops: ['PGP'] }, homeWalkMin, manual: [{ day: 4, arriveByMin: 660, endMin: 720, to: 'COM3', label: 'CS2030' }] },
+    });
   await put(0);
   const a = await (await call(env, '/api/me/next', { cookie })).json();
   assert.equal(a.dest.why, 'class');
@@ -1025,7 +1167,11 @@ test('/api/me: a new account gets the full setup, then never again', async () =>
 test('a food court works as a saved place and a destination', async () => {
   const { env, email } = setup();
   const cookie = await signIn(env, email);
-  const put = await call(env, '/api/me/profile', { method: 'PUT', cookie, body: { home: { stops: ['PGP'] }, places: [{ key: 'deck', label: 'Deck', to: 'THE-DECK' }] } });
+  const put = await call(env, '/api/me/profile', {
+    method: 'PUT',
+    cookie,
+    body: { home: { stops: ['PGP'] }, places: [{ key: 'deck', label: 'Deck', to: 'THE-DECK' }] },
+  });
   assert.equal(put.status, 200);
   const home = await call(env, '/api/me/profile', { method: 'PUT', cookie, body: { home: { stops: ['THE-DECK'] } } });
   assert.equal(home.status, 400, 'home is stops only');
@@ -1041,7 +1187,9 @@ test('/api/me/next in your residence: "You\'re home" after the last class, leave
   const { env, email } = setup();
   const cookie = await signIn(env, email);
   const ring = residencesJson.residences.PGP.areas[0];
-  const [lat, lon] = [ring.reduce((s, p) => s + p[0], 0) / ring.length, ring.reduce((s, p) => s + p[1], 0) / ring.length].map((v) => v.toFixed(4));
+  const [lat, lon] = [ring.reduce((s, p) => s + p[0], 0) / ring.length, ring.reduce((s, p) => s + p[1], 0) / ring.length].map((v) =>
+    v.toFixed(4),
+  );
   const put = (manual) => call(env, '/api/me/profile', { method: 'PUT', cookie, body: { home: { stops: ['PGP'] }, manual } });
 
   // Frozen clock: Thursday 09:00. The only class ended at 08:50.
@@ -1063,12 +1211,13 @@ test('/api/me/next in your residence: "You\'re home" after the last class, leave
   assert.ok(gap.leave, 'says when to leave home for it');
 });
 
-
 test('/api/me/next from inside your residence counts your own walk to your stop', async () => {
   const { env, email } = setup();
   const cookie = await signIn(env, email);
   const ring = residencesJson.residences.PGP.areas[0];
-  const [lat, lon] = [ring.reduce((s, p) => s + p[0], 0) / ring.length, ring.reduce((s, p) => s + p[1], 0) / ring.length].map((v) => v.toFixed(4));
+  const [lat, lon] = [ring.reduce((s, p) => s + p[0], 0) / ring.length, ring.reduce((s, p) => s + p[1], 0) / ring.length].map((v) =>
+    v.toFixed(4),
+  );
   const { PGPR, PGP } = residencesJson.residences.PGP.stops;
   // To PGP Foyer, the nearer: your own walk. To PGP, as much further as the paths say.
   const walkTo = async (homeWalkMin) => {
@@ -1076,15 +1225,20 @@ test('/api/me/next from inside your residence counts your own walk to your stop'
     const { leave } = await (await call(env, `/api/me/next?to=UTOWN&lat=${lat}&lon=${lon}`, { cookie })).json();
     return leave.walkS - (leave.stopCode === 'PGP' ? Math.round((PGP - PGPR) / 1.3) : 0);
   };
-  assert.equal(await walkTo(6), 360, 'six minutes, as set, not the hall\'s outline');
+  assert.equal(await walkTo(6), 360, "six minutes, as set, not the hall's outline");
   assert.equal(await walkTo(9), 540);
 });
-
 
 test('the bus answers need a key or an account; downloads, health and docs stay open', async () => {
   const { env, email } = setup();
   delete env[Symbol.for('terminus.testOpen')]; // locked, as in production
-  for (const path of ['/api/next?lat=1.2966&lon=103.7764', '/api/trip?to=UTOWN&from=PGP', '/api/arrivals?stop=COM3', '/api/campus', '/api/stops/pairs']) {
+  for (const path of [
+    '/api/next?lat=1.2966&lon=103.7764',
+    '/api/trip?to=UTOWN&from=PGP',
+    '/api/arrivals?stop=COM3',
+    '/api/campus',
+    '/api/stops/pairs',
+  ]) {
     const res = await call(env, path);
     assert.equal(res.status, 401, path);
     assert.match((await res.json()).error, /API key/);
@@ -1102,14 +1256,20 @@ test('/api/campus lists PGP and UTown Residence first, marked common, then the r
   const cookie = await signIn(env, email);
   const { residences } = await (await call(env, '/api/campus', { cookie })).json();
   const common = residences.filter((r) => r.common);
-  assert.deepEqual(common.map((r) => r.code), ['PGP', 'UTR']);
+  assert.deepEqual(
+    common.map((r) => r.code),
+    ['PGP', 'UTR'],
+  );
   assert.deepEqual(residences.slice(0, 2), common, 'the common ones lead');
   const rest = residences.slice(2).map((r) => r.name);
-  assert.deepEqual(rest, [...rest].sort((a, b) => a.localeCompare(b)));
+  assert.deepEqual(
+    rest,
+    [...rest].sort((a, b) => a.localeCompare(b)),
+  );
   assert.ok(residences.slice(2).every((r) => r.common === false));
 });
 
-test('/api/campus words a landmark\'s kind in the request\'s language, each with its own ETag', async () => {
+test("/api/campus words a landmark's kind in the request's language, each with its own ETag", async () => {
   const { env, email } = setup();
   const cookie = await signIn(env, email);
   const en = await call(env, '/api/campus?lang=en', { cookie });
@@ -1132,18 +1292,46 @@ test('/api/campus gives each residence its walk in minutes, at the normal pace, 
 test('the profile comes with its limits, wherever it is sent, and they are the ones enforced', async () => {
   const { env, email } = setup();
   const cookie = await signIn(env, email);
-  const want = { pinnedStops: 8, label: 60, places: 12, placeLabel: 24, homeStops: 3, homeWalkMin: { min: 0, max: 30 }, trips: 100, usual: 30, once: 10 };
+  const want = {
+    pinnedStops: 8,
+    label: 60,
+    places: 12,
+    placeLabel: 24,
+    homeStops: 3,
+    homeWalkMin: { min: 0, max: 30 },
+    trips: 100,
+    usual: 30,
+    once: 10,
+  };
   const got = await (await call(env, '/api/me/profile', { cookie })).json();
   assert.deepEqual(got.limits, want);
   // Sent back whole, as the apps do, the limits are ignored, not an error.
   const put = await call(env, '/api/me/profile', { method: 'PUT', cookie, body: { ...got, homeWalkMin: want.homeWalkMin.max } });
   assert.equal(put.status, 200);
   assert.deepEqual((await put.json()).limits, want);
-  assert.equal((await call(env, '/api/me/profile', { method: 'PUT', cookie, body: { homeWalkMin: want.homeWalkMin.max + 1 } })).status, 400);
+  assert.equal(
+    (await call(env, '/api/me/profile', { method: 'PUT', cookie, body: { homeWalkMin: want.homeWalkMin.max + 1 } })).status,
+    400,
+  );
   const stops = GRAPH.stops.map((x) => x.code);
-  assert.equal((await call(env, '/api/me/profile', { method: 'PUT', cookie, body: { pinnedStops: stops.slice(0, want.pinnedStops) } })).status, 200);
-  assert.equal((await call(env, '/api/me/profile', { method: 'PUT', cookie, body: { pinnedStops: stops.slice(0, want.pinnedStops + 1) } })).status, 400);
-  assert.equal((await call(env, '/api/me/profile', { method: 'PUT', cookie, body: { places: [{ key: 'x', label: 'x'.repeat(want.placeLabel + 1), to: 'COM3' }] } })).status, 400);
+  assert.equal(
+    (await call(env, '/api/me/profile', { method: 'PUT', cookie, body: { pinnedStops: stops.slice(0, want.pinnedStops) } })).status,
+    200,
+  );
+  assert.equal(
+    (await call(env, '/api/me/profile', { method: 'PUT', cookie, body: { pinnedStops: stops.slice(0, want.pinnedStops + 1) } })).status,
+    400,
+  );
+  assert.equal(
+    (
+      await call(env, '/api/me/profile', {
+        method: 'PUT',
+        cookie,
+        body: { places: [{ key: 'x', label: 'x'.repeat(want.placeLabel + 1), to: 'COM3' }] },
+      })
+    ).status,
+    400,
+  );
 });
 
 test('API keys: made on the account page, shown once, work anywhere, revocable', async () => {
@@ -1161,7 +1349,10 @@ test('API keys: made on the account page, shown once, work anywhere, revocable',
   assert.equal((await call(env, '/api/me', { key: made.key })).status, 401);
 
   const list = await (await call(env, '/api/me/keys', { cookie })).json();
-  assert.deepEqual(list.keys.map((k) => k.name), ['My script']);
+  assert.deepEqual(
+    list.keys.map((k) => k.name),
+    ['My script'],
+  );
   assert.equal('key' in list.keys[0], false, 'never shown again');
   assert.ok(list.keys[0].lastUsed, 'last use is recorded');
   const exported = await (await call(env, '/api/me/export', { cookie })).json();
@@ -1188,7 +1379,11 @@ test('/api/buses remembers who was let in for a while; /me and the other answers
   const { token } = await (await call(env, '/api/auth/anon', { method: 'POST', body: { name: 'Pixel' } })).json();
   const prepare = env.DB.prepare.bind(env.DB);
   let lookups = 0;
-  env.DB = { ...env.DB, prepare: (sql) => (sql.includes('FROM sessions s JOIN users') && lookups++, prepare(sql)), batch: env.DB.batch.bind(env.DB) };
+  env.DB = {
+    ...env.DB,
+    prepare: (sql) => (sql.includes('FROM sessions s JOIN users') && lookups++, prepare(sql)),
+    batch: env.DB.batch.bind(env.DB),
+  };
   const at = (ms, path) => {
     installGlobals(makeFetch(), ms);
     return call(env, path, { token });
@@ -1210,7 +1405,8 @@ test('API keys: a name is required, five at most, and a phone cannot make them',
   const { env, email } = setup();
   const cookie = await signIn(env, email);
   assert.equal((await call(env, '/api/me/keys', { method: 'POST', cookie, body: {} })).status, 400);
-  for (let i = 0; i < 5; i++) assert.equal((await call(env, '/api/me/keys', { method: 'POST', cookie, body: { name: `k${i}` } })).status, 201);
+  for (let i = 0; i < 5; i++)
+    assert.equal((await call(env, '/api/me/keys', { method: 'POST', cookie, body: { name: `k${i}` } })).status, 201);
   assert.equal((await call(env, '/api/me/keys', { method: 'POST', cookie, body: { name: 'one too many' } })).status, 409);
   const { code } = await (await call(env, '/api/me/pair-code', { method: 'POST', cookie })).json();
   const { token } = await (await call(env, '/api/pair', { method: 'POST', body: { code, name: 'Phone' } })).json();
@@ -1220,7 +1416,12 @@ test('API keys: a name is required, five at most, and a phone cannot make them',
 test('/api/me without any token is a plain 401 and does not count as a guess', async () => {
   const { env } = setup();
   let calls = 0;
-  env.RL_AUTH = { limit: async () => { calls++; return { success: false }; } };
+  env.RL_AUTH = {
+    limit: async () => {
+      calls++;
+      return { success: false };
+    },
+  };
   assert.equal((await call(env, '/api/me')).status, 401);
   assert.equal(calls, 0);
   assert.equal((await call(env, '/api/me', { token: 'nonsense' })).status, 429, 'a presented bad token still counts');
@@ -1234,8 +1435,12 @@ test('feedback: a wrong answer is kept with the account, its note emailed withou
   const { token } = await (await call(env, '/api/pair', { method: 'POST', body: { code } })).json();
   assert.equal((await call(env, '/api/me/feedback', { method: 'POST', body: { platform: 'mac' } })).status, 401);
 
-  const answer = { label: 'D2 · 4 min', stop: { code: 'PGP', name: 'Prince George\'s Park' }, quality: 'live' };
-  const res = await call(env, '/api/me/feedback', { method: 'POST', token, body: { note: 'It never came', platform: 'mac', appVersion: '1.3.9', context: answer } });
+  const answer = { label: 'D2 · 4 min', stop: { code: 'PGP', name: "Prince George's Park" }, quality: 'live' };
+  const res = await call(env, '/api/me/feedback', {
+    method: 'POST',
+    token,
+    body: { note: 'It never came', platform: 'mac', appVersion: '1.3.9', context: answer },
+  });
   assert.equal(res.status, 201, 'from a paired device too');
   const sent = email.sent.at(-1);
   assert.equal(sent.to, 'ops@example.test');
@@ -1245,9 +1450,15 @@ test('feedback: a wrong answer is kept with the account, its note emailed withou
   assert.doesNotMatch(`${sent.subject}\n${sent.text}`, new RegExp(`${INVITED}|PGP|Prince George|D2`));
 
   const row = db._db.prepare('SELECT kind, note, platform, app_version, context FROM feedback').get();
-  assert.deepEqual({ ...row }, { kind: 'wrong', note: 'It never came', platform: 'mac', app_version: '1.3.9', context: JSON.stringify(answer) });
+  assert.deepEqual(
+    { ...row },
+    { kind: 'wrong', note: 'It never came', platform: 'mac', app_version: '1.3.9', context: JSON.stringify(answer) },
+  );
   const exported = await (await call(env, '/api/me/export', { cookie })).json();
-  assert.deepEqual(exported.feedback.map((f) => [f.note, f.answer.label]), [['It never came', 'D2 · 4 min']]);
+  assert.deepEqual(
+    exported.feedback.map((f) => [f.note, f.answer.label]),
+    [['It never came', 'D2 · 4 min']],
+  );
 
   await call(env, '/api/me', { method: 'DELETE', cookie });
   assert.equal(db._db.prepare('SELECT count(*) AS n FROM feedback').get().n, 0);
@@ -1267,15 +1478,26 @@ test('feedback: a reason picked from the sheet is enough on its own, said in wor
   assert.equal((await post({ reason: 'times-off', note: 'Seven minutes late', platform: 'web' })).status, 201, 'a reason and a note');
   assert.match(email.sent.at(-1).text, /What was wrong: The times were off\n+They said: Seven minutes late/);
   assert.deepEqual(
-    db._db.prepare('SELECT reason, note FROM feedback ORDER BY created, rowid').all().map((r) => [r.reason, r.note]),
-    [['never-came', ''], ['times-off', 'Seven minutes late']],
+    db._db
+      .prepare('SELECT reason, note FROM feedback ORDER BY created, rowid')
+      .all()
+      .map((r) => [r.reason, r.note]),
+    [
+      ['never-came', ''],
+      ['times-off', 'Seven minutes late'],
+    ],
   );
   assert.equal((await post({ reason: 'bored', platform: 'web' })).status, 400, 'only the listed reasons');
   assert.equal((await post({ reason: 7, note: 'x', platform: 'web' })).status, 400);
   assert.equal((await post({ kind: 'other', reason: 'never-came', note: 'x', platform: 'web' })).status, 400, 'feedback has no reason');
   const exported = await (await call(env, '/api/me/export', { cookie })).json();
-  assert.deepEqual(exported.feedback.map((f) => f.reason), ['never-came', 'times-off']);
-  const stats = await (await worker.fetch(new Request(BASE + '/api/admin/stats', { headers: { 'x-health-token': 'operator-secret' } }), env, makeCtx())).json();
+  assert.deepEqual(
+    exported.feedback.map((f) => f.reason),
+    ['never-came', 'times-off'],
+  );
+  const stats = await (
+    await worker.fetch(new Request(BASE + '/api/admin/stats', { headers: { 'x-health-token': 'operator-secret' } }), env, makeCtx())
+  ).json();
   assert.deepEqual(stats.feedback.latest.map((f) => f.reason).sort(), ['The bus never came', 'The times were off']);
 });
 
@@ -1286,15 +1508,24 @@ test('feedback: a stop suggestion names a building and its stop, and the email c
   const cookie = await signIn(env, email);
   const post = (body) => call(env, '/api/me/feedback', { method: 'POST', cookie, body });
   // A room stands for its building, and why can be left out.
-  assert.equal((await post({ kind: 'stop', venue: 'com1-0208', stop: 'CLB', note: 'The bridge goes straight there', platform: 'web' })).status, 201);
+  assert.equal(
+    (await post({ kind: 'stop', venue: 'com1-0208', stop: 'CLB', note: 'The bridge goes straight there', platform: 'web' })).status,
+    201,
+  );
   const sent = email.sent.at(-1);
   assert.equal(sent.subject, 'terminus stop suggestion: COM1 from CLB');
   assert.match(sent.text, /Building: COM1\nThe stop they use: .+ \(CLB\)\nIts stops now: COM3, CLB/);
   assert.ok(sent.text.includes('"COM1": {"stops":["CLB"],"why":"The bridge goes straight there"}'), sent.text);
   assert.equal((await post({ kind: 'stop', venue: 'LT21', stop: 'UHALL', platform: 'android' })).status, 201, 'no note needed');
   assert.deepEqual(
-    db._db.prepare('SELECT kind, reason, note, context FROM feedback ORDER BY created, rowid').all().map((r) => [r.kind, r.reason, r.note, JSON.parse(r.context).venue]),
-    [['other', 'better-stop', 'The bridge goes straight there', 'COM1'], ['other', 'better-stop', '', 'LT21']],
+    db._db
+      .prepare('SELECT kind, reason, note, context FROM feedback ORDER BY created, rowid')
+      .all()
+      .map((r) => [r.kind, r.reason, r.note, JSON.parse(r.context).venue]),
+    [
+      ['other', 'better-stop', 'The bridge goes straight there', 'COM1'],
+      ['other', 'better-stop', '', 'LT21'],
+    ],
   );
   const refused = async (body, why) => {
     const res = await post({ kind: 'stop', platform: 'web', ...body });
@@ -1305,7 +1536,9 @@ test('feedback: a stop suggestion names a building and its stop, and the email c
   assert.equal(await refused({ venue: 'LT21', stop: 'NOPE' }, 'a stop on the map'), 'choose a stop');
   assert.match(await refused({ venue: 'LT21', stop: 'S17' }, 'its stop already'), /already/);
   assert.match(await refused({ venue: 'LT21', stop: 'LT27' }, 'the stop across the road from it'), /already/);
-  const stats = await (await worker.fetch(new Request(BASE + '/api/admin/stats', { headers: { 'x-health-token': 'operator-secret' } }), env, makeCtx())).json();
+  const stats = await (
+    await worker.fetch(new Request(BASE + '/api/admin/stats', { headers: { 'x-health-token': 'operator-secret' } }), env, makeCtx())
+  ).json();
   assert.deepEqual(stats.feedback.latest.map((f) => [f.reason, f.answer]).sort(), [
     ['A better stop for a building', `COM1: use ${GRAPH.stops.find((x) => x.code === 'CLB').name}`],
     ['A better stop for a building', `LT21: use ${GRAPH.stops.find((x) => x.code === 'UHALL').name}`],
@@ -1316,10 +1549,18 @@ test('feedback: an account without an email is asked to sign in, and nothing is 
   const { env, email, db } = setup();
   env.ALERT_EMAIL = 'ops@example.test';
   const { token } = await (await call(env, '/api/auth/anon', { method: 'POST', body: {} })).json();
-  const res = await call(env, '/api/me/feedback', { method: 'POST', token, body: { kind: 'other', note: 'Add Kent Vale', platform: 'android' } });
+  const res = await call(env, '/api/me/feedback', {
+    method: 'POST',
+    token,
+    body: { kind: 'other', note: 'Add Kent Vale', platform: 'android' },
+  });
   assert.equal(res.status, 403);
   assert.equal((await res.json()).error, 'sign in to send feedback');
-  const wrong = await call(env, '/api/me/feedback', { method: 'POST', token, body: { note: 'It never came', platform: 'android', context: { label: 'D2 · 4 min' } } });
+  const wrong = await call(env, '/api/me/feedback', {
+    method: 'POST',
+    token,
+    body: { note: 'It never came', platform: 'android', context: { label: 'D2 · 4 min' } },
+  });
   assert.equal(wrong.status, 403, 'a wrong answer too');
   assert.equal(db._db.prepare('SELECT count(*) AS n FROM feedback').get().n, 0);
   assert.equal(email.sent.filter((m) => m.to === 'ops@example.test').length, 0);
@@ -1350,17 +1591,29 @@ test('/api/admin/stats: operator only; counts accounts, devices by platform and 
   await call(env, '/api/me/profile', { method: 'PUT', cookie, body: { home: { stops: ['PGP'] } } });
   const { code } = await (await call(env, '/api/me/pair-code', { method: 'POST', cookie })).json();
   const pairRes = await worker.fetch(
-    new Request(BASE + '/api/pair', { method: 'POST', headers: { 'content-type': 'application/json', 'user-agent': 'Terminus/25 CFNetwork/3860 Darwin/25.0.0' }, body: JSON.stringify({ code, name: 'MacBook' }) }),
+    new Request(BASE + '/api/pair', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'user-agent': 'Terminus/25 CFNetwork/3860 Darwin/25.0.0' },
+      body: JSON.stringify({ code, name: 'MacBook' }),
+    }),
     env,
     makeCtx(),
   );
   const { token } = await pairRes.json();
-  await call(env, '/api/me/feedback', { method: 'POST', token, body: { note: 'wrong stop', platform: 'mac', context: { label: 'A1 · 2 min' } } });
+  await call(env, '/api/me/feedback', {
+    method: 'POST',
+    token,
+    body: { note: 'wrong stop', platform: 'mac', context: { label: 'A1 · 2 min' } },
+  });
 
   assert.equal((await call(env, '/api/admin/stats')).status, 404, 'no token: looks like nothing is there');
   const wrong = await worker.fetch(new Request(BASE + '/api/admin/stats', { headers: { 'x-health-token': 'nope' } }), env, makeCtx());
   assert.equal(wrong.status, 404);
-  const res = await worker.fetch(new Request(BASE + '/api/admin/stats', { headers: { 'x-health-token': 'operator-secret' } }), env, makeCtx());
+  const res = await worker.fetch(
+    new Request(BASE + '/api/admin/stats', { headers: { 'x-health-token': 'operator-secret' } }),
+    env,
+    makeCtx(),
+  );
   assert.equal(res.status, 200);
   assert.equal(res.headers.get('cache-control'), 'no-store');
   const s = await res.json();
@@ -1382,7 +1635,13 @@ test('a device paired before platforms were recorded gets one on its next reques
   const { token } = await (await call(env, '/api/pair', { method: 'POST', body: { code, name: 'Pixel' } })).json();
   assert.equal(db._db.prepare("SELECT platform FROM sessions WHERE kind = 'device'").get().platform, null);
   db._db.prepare("UPDATE sessions SET last_seen = ? WHERE kind = 'device'").run(Date.now() - 86_400_000);
-  await worker.fetch(new Request(BASE + '/api/me/profile', { headers: { authorization: `Bearer ${token}`, 'user-agent': 'Dalvik/2.1.0 (Linux; U; Android 16; Pixel 8)' } }), env, makeCtx());
+  await worker.fetch(
+    new Request(BASE + '/api/me/profile', {
+      headers: { authorization: `Bearer ${token}`, 'user-agent': 'Dalvik/2.1.0 (Linux; U; Android 16; Pixel 8)' },
+    }),
+    env,
+    makeCtx(),
+  );
   assert.equal(db._db.prepare("SELECT platform FROM sessions WHERE kind = 'device'").get().platform, 'android');
 });
 
@@ -1394,7 +1653,11 @@ test('a browser can use terminus without an email, and an email added later keep
   const me = await (await call(env, '/api/me', { cookie })).json();
   assert.equal(me.anonymous, true);
   assert.equal(me.email, null);
-  const put = await call(env, '/api/me/profile', { method: 'PUT', cookie, body: { home: { stops: ['PGP'] }, places: [], trips: [], manual: [] } });
+  const put = await call(env, '/api/me/profile', {
+    method: 'PUT',
+    cookie,
+    body: { home: { stops: ['PGP'] }, places: [], trips: [], manual: [] },
+  });
   assert.equal(put.status, 200);
 
   // The emailed code, typed in the same browser: the email goes to this account.
@@ -1411,7 +1674,11 @@ test('a browser can use terminus without an email, and an email added later keep
 test('an email that has an account already wins over a browser without one', async () => {
   const { env, email } = setup();
   const owner = await signIn(env, email);
-  await call(env, '/api/me/profile', { method: 'PUT', cookie: owner, body: { home: { stops: ['KR-MRT'] }, places: [], trips: [], manual: [] } });
+  await call(env, '/api/me/profile', {
+    method: 'PUT',
+    cookie: owner,
+    body: { home: { stops: ['KR-MRT'] }, places: [], trips: [], manual: [] },
+  });
   const cookie = (await call(env, '/api/auth/anon/web', { method: 'POST', body: {} })).headers.get('set-cookie').split(';')[0];
   await call(env, '/api/me/profile', { method: 'PUT', cookie, body: { home: { stops: ['PGP'] }, places: [], trips: [], manual: [] } });
   // A minute later, as far as the one-email-a-minute rule goes.
@@ -1428,7 +1695,9 @@ test('limits hold when requests arrive all at once: API keys and feedback', asyn
   const cookie = await signIn(env, email);
   await Promise.all(Array.from({ length: 12 }, (_, i) => call(env, '/api/me/keys', { method: 'POST', cookie, body: { name: `k${i}` } })));
   assert.equal(db._db.prepare('SELECT count(*) AS n FROM api_keys').get().n, 5);
-  await Promise.all(Array.from({ length: 25 }, () => call(env, '/api/me/feedback', { method: 'POST', cookie, body: { note: 'x', platform: 'web' } })));
+  await Promise.all(
+    Array.from({ length: 25 }, () => call(env, '/api/me/feedback', { method: 'POST', cookie, body: { note: 'x', platform: 'web' } })),
+  );
   assert.equal(db._db.prepare('SELECT count(*) AS n FROM feedback').get().n, 10);
 });
 
@@ -1446,20 +1715,24 @@ test('feedback emails to the operator stop at fifty a day; the reports are still
 
 test('the pairing QR code opens the pair page in a browser, not an API error', async () => {
   const { env } = setup();
-  env.ASSETS = { fetch: async (req) => new Response(`page for ${new URL(req.url).pathname}`, { headers: { 'content-type': 'text/html' } }) };
+  env.ASSETS = {
+    fetch: async (req) => new Response(`page for ${new URL(req.url).pathname}`, { headers: { 'content-type': 'text/html' } }),
+  };
   const res = await call(env, '/pair?code=ABC234');
   assert.equal(res.status, 200);
   assert.equal(await res.text(), 'page for /pair');
   assert.equal((await call(env, '/api/pair', { method: 'POST', body: { code: 'nope' } })).status, 400);
 });
 
-test('a page that isn\'t there is the not-found page for a browser, still a 404', async () => {
+test("a page that isn't there is the not-found page for a browser, still a 404", async () => {
   const { env } = setup();
   const pages = { '/not-found/': 'no bus stops here' };
-  env.ASSETS = { fetch: async (req) => {
-    const page = pages[new URL(req.url).pathname];
-    return page ? new Response(page, { headers: { 'content-type': 'text/html' } }) : new Response('not found', { status: 404 });
-  } };
+  env.ASSETS = {
+    fetch: async (req) => {
+      const page = pages[new URL(req.url).pathname];
+      return page ? new Response(page, { headers: { 'content-type': 'text/html' } }) : new Response('not found', { status: 404 });
+    },
+  };
   const browser = await call(env, '/no-such-page', { accept: 'text/html,application/xhtml+xml' });
   assert.equal(browser.status, 404);
   assert.match(browser.headers.get('content-type'), /text\/html/);
@@ -1498,7 +1771,11 @@ test('profile: a save sent with If-Match is refused when another device saved fi
   assert.equal(stale.status, 412);
   assert.equal((await stale.json()).error, 'your settings were changed on another device; try again');
   assert.deepEqual((await (await call(env, '/api/me/profile', { cookie })).json()).home.stops, ['UTOWN']);
-  assert.equal((await call(env, '/api/me/profile', { method: 'PUT', cookie, ifMatch: '"0"', body: {} })).status, 412, 'one is saved already');
+  assert.equal(
+    (await call(env, '/api/me/profile', { method: 'PUT', cookie, ifMatch: '"0"', body: {} })).status,
+    412,
+    'one is saved already',
+  );
 
   // Without If-Match, the last save wins.
   assert.equal((await call(env, '/api/me/profile', { method: 'PUT', cookie, body: { home: { stops: ['KR-MRT'] } } })).status, 200);
@@ -1600,16 +1877,39 @@ test('Turnstile down is logged, not only told to the visitor as a failed check',
   const log = console.error;
   console.error = (...a) => errors.push(a.join(' '));
   try {
-    assert.equal(await verifyTurnstile(env, 'visitor-token-7', null, async () => { throw new Error('timed out'); }), false);
-    assert.equal(await verifyTurnstile(env, 'visitor-token-7', null, async () => new Response('<html>bad gateway</html>', { status: 502 })), false);
+    assert.equal(
+      await verifyTurnstile(env, 'visitor-token-7', null, async () => {
+        throw new Error('timed out');
+      }),
+      false,
+    );
+    assert.equal(
+      await verifyTurnstile(env, 'visitor-token-7', null, async () => new Response('<html>bad gateway</html>', { status: 502 })),
+      false,
+    );
     assert.equal(errors.length, 2);
     assert.ok(errors.every((e) => e.startsWith('Turnstile siteverify failed') && !e.includes('visitor-token-7')));
-    assert.equal(await verifyTurnstile(env, 'visitor-token-7', null, async () => Response.json({ success: false, 'error-codes': ['invalid-input-response'] })), false);
+    assert.equal(
+      await verifyTurnstile(env, 'visitor-token-7', null, async () =>
+        Response.json({ success: false, 'error-codes': ['invalid-input-response'] }),
+      ),
+      false,
+    );
     assert.equal(errors.length, 2);
     // Told apart, for a caller that would say "try again" rather than "failed".
-    assert.equal(await checkTurnstile(env, 'visitor-token-7', null, async () => { throw new Error('timed out'); }), 'unavailable');
+    assert.equal(
+      await checkTurnstile(env, 'visitor-token-7', null, async () => {
+        throw new Error('timed out');
+      }),
+      'unavailable',
+    );
     assert.equal(await checkTurnstile(env, 'visitor-token-7', null, async () => Response.json({ success: false })), 'failed');
-    assert.equal(await checkTurnstile(env, 'visitor-token-7', null, async () => Response.json({ success: true, action: 'signin', hostname: 'terminus.run' })), 'ok');
+    assert.equal(
+      await checkTurnstile(env, 'visitor-token-7', null, async () =>
+        Response.json({ success: true, action: 'signin', hostname: 'terminus.run' }),
+      ),
+      'ok',
+    );
     // A pass for another action, or from another site, isn't one.
     assert.equal(await checkTurnstile(env, 'visitor-token-7', null, async () => Response.json({ success: true })), 'failed');
   } finally {
@@ -1634,7 +1934,10 @@ test('a last_seen update that fails is logged, and the request still answers', a
     db.batch = batch;
     console.error = log;
   }
-  assert.ok(errors.some((e) => e.startsWith('last_seen not updated')), errors.join('\n'));
+  assert.ok(
+    errors.some((e) => e.startsWith('last_seen not updated')),
+    errors.join('\n'),
+  );
 });
 
 test('a code whose sign-in fails part way can be typed again', async () => {
@@ -1657,11 +1960,16 @@ test('a code whose sign-in fails part way can be typed again', async () => {
 });
 
 test('only an unreachable D1 counts as an outage; a fault in the query stays a 500', () => {
-  for (const msg of ['D1_ERROR: Network connection lost.', 'D1 DB is overloaded. Requests queued for too long.', 'D1 DB is overloaded. Too many requests queued.', 'D1_ERROR: internal error']) {
+  for (const msg of [
+    'D1_ERROR: Network connection lost.',
+    'D1 DB is overloaded. Requests queued for too long.',
+    'D1 DB is overloaded. Too many requests queued.',
+    'D1_ERROR: internal error',
+  ]) {
     assert.equal(d1Unavailable(new Error(msg)), true, msg);
   }
   for (const msg of [
-    'D1_TYPE_ERROR: Type \'undefined\' not supported for value \'undefined\'',
+    "D1_TYPE_ERROR: Type 'undefined' not supported for value 'undefined'",
     'D1_ERROR: too many SQL variables: SQLITE_ERROR',
     'D1_ERROR: string or blob too big: SQLITE_TOOBIG',
     'D1_ERROR: UNIQUE constraint failed: users.email',
@@ -1683,7 +1991,10 @@ test('an email send that hangs fails after MAIL_TIMEOUT_MS, as a failed send doe
   assert.equal(settled, false);
   t.mock.timers.tick(1);
   await assert.rejects(sending, /timed out/);
-  await sendMail({ EMAIL: { send: async () => ({ messageId: 'x' }) } }, { from: 'a@example.test', to: 'b@example.test', subject: 's', text: 't' });
+  await sendMail(
+    { EMAIL: { send: async () => ({ messageId: 'x' }) } },
+    { from: 'a@example.test', to: 'b@example.test', subject: 's', text: 't' },
+  );
 });
 
 test('a one-off trip on a date that does not exist is a 400, not a server error', async () => {

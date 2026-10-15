@@ -10,7 +10,8 @@ import { duration, month } from '/status/outages.js';
 
 const TZ = { timeZone: 'Asia/Singapore' };
 const LOCALE = window.i18n?.lang === 'zh' ? 'zh-CN' : 'en-SG';
-const dateTime = (iso) => new Date(iso).toLocaleString(LOCALE, { ...TZ, day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+const dateTime = (iso) =>
+  new Date(iso).toLocaleString(LOCALE, { ...TZ, day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
 const time = (iso) => new Date(iso).toLocaleTimeString(LOCALE, { ...TZ, hour: 'numeric', minute: '2-digit' });
 
 /** The shuttle on the road: A1's red. */
@@ -29,9 +30,21 @@ const CAUSE = {
 function now(s) {
   let state = { kind: 'off', headline: t('No checks yet'), detail: '', checked: '', chip: '', bus: null };
   if (s.feed === 'up') {
-    state = { kind: 'up', headline: t('Live bus times are working'), detail: s.since ? t('Up since {0}.', dateTime(s.since)) : '', chip: t('Live'), bus: { color: RED, far: 0.4, live: true } };
+    state = {
+      kind: 'up',
+      headline: t('Live bus times are working'),
+      detail: s.since ? t('Up since {0}.', dateTime(s.since)) : '',
+      chip: t('Live'),
+      bus: { color: RED, far: 0.4, live: true },
+    };
   } else if (s.feed === 'down') {
-    state = { kind: 'down', headline: t("NUS's live feed is down"), detail: t("Since {0}. The apps show estimated times until it's restored.", dateTime(s.since)), chip: t('Estimates only'), bus: { color: RED, far: 0.7, live: false } };
+    state = {
+      kind: 'down',
+      headline: t("NUS's live feed is down"),
+      detail: t("Since {0}. The apps show estimated times until it's restored.", dateTime(s.since)),
+      chip: t('Estimates only'),
+      bus: { color: RED, far: 0.7, live: false },
+    };
   }
   if (s.checkedAt && s.checking) state.checked = t('Last checked {0}.', time(s.checkedAt));
   else if (s.checkedAt) {
@@ -42,7 +55,11 @@ function now(s) {
 }
 
 function Head({ s, failed }) {
-  const head = failed ? { kind: 'off', headline: t("Couldn't load the status"), detail: t('Try again in a minute.'), chip: '' } : s ? now(s) : { kind: 'off', headline: t('Checking…'), detail: '', chip: '' };
+  const head = failed
+    ? { kind: 'off', headline: t("Couldn't load the status"), detail: t('Try again in a minute.'), chip: '' }
+    : s
+      ? now(s)
+      : { kind: 'off', headline: t('Checking…'), detail: '', chip: '' };
   return html`
     <div aria-live="polite">
       <p class="eyebrow">${t('Status')}</p>
@@ -57,17 +74,20 @@ function Head({ s, failed }) {
 function History({ s, failed }) {
   const m = s && month(s.incidents, Date.now());
   return html`
-    ${m &&
-    html`<div class="facts">
+    ${
+      m &&
+      html`<div class="facts">
       <div><strong>${m.live}%</strong><small>${t('live in the last 30 days')}</small></div>
       <div><strong>${m.count}</strong><small>${m.count === 1 ? t('outage in the last 30 days') : t('outages in the last 30 days')}</small></div>
       <div><strong>${t('{0} min', 15)}</strong><small>${t('between checks')}</small></div>
-    </div>`}
+    </div>`
+    }
     <h2>${t('Recent outages')}</h2>
     ${!s && html`<p class="hint">${failed ? '' : t('Loading…')}</p>`}
     ${s && !s.incidents.length && html`<p class="hint">${t('None recorded.')}</p>`}
-    ${s?.incidents.length > 0 &&
-    html`<ol class="outages">
+    ${
+      s?.incidents.length > 0 &&
+      html`<ol class="outages">
       ${s.incidents.map(
         (i) => html`
           <li key=${i.start} class=${i.end ? '' : 'ongoing-now'}>
@@ -76,7 +96,8 @@ function History({ s, failed }) {
           </li>
         `,
       )}
-    </ol>`}
+    </ol>`
+    }
   `;
 }
 

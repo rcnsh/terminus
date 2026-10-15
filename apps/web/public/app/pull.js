@@ -149,7 +149,18 @@ export function PullToRefresh({ enabled, refresh }) {
   useEffect(() => {
     const el = root.current;
     const $ = (sel) => el.querySelector(sel);
-    const [scene, bus, body, door, honk, sign, post, puffs, hint, words] = ['.pull-scene', '.p-bus', '.p-body', '.p-door', '.p-honk', '.p-sign', '.p-post', '.p-puffs', '.pull-hint', '.pull-hint span'].map($);
+    const [scene, bus, body, door, honk, sign, post, puffs, hint, words] = [
+      '.pull-scene',
+      '.p-bus',
+      '.p-body',
+      '.p-door',
+      '.p-honk',
+      '.p-sign',
+      '.p-post',
+      '.p-puffs',
+      '.pull-hint',
+      '.pull-hint span',
+    ].map($);
     const wheels = [...el.querySelectorAll('.p-wheel')];
     const page = document.body;
 
@@ -158,7 +169,23 @@ export function PullToRefresh({ enabled, refresh }) {
     // its way back with the sky shut). `mode`: what the bus is doing: follow
     // (the pull), board, go (pulling away), loop (round again), back
     // (coming home).
-    const st = { page: 'idle', mode: 'follow', pull: 0, v: 0, x: 0, lastX: 0, busV: 0, smV: 0, smA: 0, tilt: 0, tiltV: 0, kneel: 0, kneelV: 0, wheel: 0, dist: 0 };
+    const st = {
+      page: 'idle',
+      mode: 'follow',
+      pull: 0,
+      v: 0,
+      x: 0,
+      lastX: 0,
+      busV: 0,
+      smV: 0,
+      smA: 0,
+      tilt: 0,
+      tiltV: 0,
+      kneel: 0,
+      kneelV: 0,
+      wheel: 0,
+      dist: 0,
+    };
     // The horizon on screen, and what's on it: its width in its own numbers, low or not, its own sign, where the bus came from.
     let hz = null;
     let calm = reducedMotion();
@@ -345,7 +372,8 @@ export function PullToRefresh({ enabled, refresh }) {
       // Without a bus of the horizon's own, it sinks away with the sign as the sky closes.
       bus.style.opacity = !drive ? 0 : !own && calm ? shown.toFixed(3) : !own && st.page === 'closing' ? clamp((p - 6) / 34).toFixed(3) : 1;
       body.setAttribute('transform', `translate(0 ${bob.toFixed(3)}) rotate(${(calm ? 0 : st.tilt).toFixed(3)} 7.5 12)`);
-      for (const [i, wh] of wheels.entries()) wh.setAttribute('transform', `translate(${WHEELS[i]} 12) rotate(${((st.wheel * 180) / Math.PI) % 360})`);
+      for (const [i, wh] of wheels.entries())
+        wh.setAttribute('transform', `translate(${WHEELS[i]} 12) rotate(${((st.wheel * 180) / Math.PI) % 360})`);
       puffs.replaceChildren(
         ...smoke.map((f) => {
           const q = f.age / 0.6;

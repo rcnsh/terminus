@@ -11,7 +11,8 @@ export const colorOf = (svc) => campus.get()?.routes[svc]?.color ?? '#8a939c';
 export const svcVars = (color) => `--svc:${color};--svc-ink:${inkOn(color)}`;
 
 const SEAT = '<path d="M6 20v-5.5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2V20M8 12.5V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v6.5"/>';
-const PEOPLE = '<circle cx="8.5" cy="7.5" r="2.8"/><circle cx="16" cy="7.5" r="2.8"/><path d="M3.5 20v-1.5a4 4 0 0 1 4-4h2a4 4 0 0 1 4 4V20M14 14.5h3a4 4 0 0 1 4 4V20"/>';
+const PEOPLE =
+  '<circle cx="8.5" cy="7.5" r="2.8"/><circle cx="16" cy="7.5" r="2.8"/><path d="M3.5 20v-1.5a4 4 0 0 1 4-4h2a4 4 0 0 1 4 4V20M14 14.5h3a4 4 0 0 1 4 4V20"/>';
 
 const mins = (s) => Math.max(1, Math.round(s / 60));
 
@@ -56,7 +57,16 @@ export const THEN_MAX = 3;
 
 /** "then 12, ~20 min": the later buses the feed gave, a timetabled one marked, as the server words it. */
 export const thenText = (r) =>
-  r.laterText ?? (r.later?.length ? t('then {0} min', r.later.slice(0, THEN_MAX).map((x) => (approx(x.quality) ? t('~{0}', mins(x.etaS)) : mins(x.etaS))).join(t(', '))) : '');
+  r.laterText ??
+  (r.later?.length
+    ? t(
+        'then {0} min',
+        r.later
+          .slice(0, THEN_MAX)
+          .map((x) => (approx(x.quality) ? t('~{0}', mins(x.etaS)) : mins(x.etaS)))
+          .join(t(', ')),
+      )
+    : '');
 
 /** "to Central Library, Kent Vale" (the server's `toText`), the next stop in bold. */
 export function Towards({ r }) {

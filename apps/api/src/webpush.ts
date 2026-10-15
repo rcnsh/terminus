@@ -84,7 +84,13 @@ export const vapidPublicKey = (env: Env) => vapid(env)?.publicKey ?? null;
  * Worker POSTs to a subscription's endpoint, signed with our VAPID key, so an
  * open list would let any account aim those POSTs at any site.
  */
-const PUSH_HOSTS = [/^fcm\.googleapis\.com$/, /^android\.googleapis\.com$/, /^updates\.push\.services\.mozilla\.com$/, /^([a-z0-9-]+\.)*push\.apple\.com$/, /^([a-z0-9-]+\.)*notify\.windows\.com$/];
+const PUSH_HOSTS = [
+  /^fcm\.googleapis\.com$/,
+  /^android\.googleapis\.com$/,
+  /^updates\.push\.services\.mozilla\.com$/,
+  /^([a-z0-9-]+\.)*push\.apple\.com$/,
+  /^([a-z0-9-]+\.)*notify\.windows\.com$/,
+];
 
 /** A subscription from the browser, checked before it's kept. */
 export function parseSubscription(v: unknown): WebSubscription | null {
@@ -114,8 +120,16 @@ export function parseSubscription(v: unknown): WebSubscription | null {
 /** The VAPID JWT for one push service (its origin), valid 12 hours. */
 async function vapidAuth(v: Vapid, endpoint: string, nowMs: number): Promise<string> {
   const header = b64url(enc.encode(JSON.stringify({ typ: 'JWT', alg: 'ES256' })));
-  const claims = b64url(enc.encode(JSON.stringify({ aud: new URL(endpoint).origin, exp: Math.floor(nowMs / 1000) + 12 * 3600, sub: SUBJECT })));
-  const key = await crypto.subtle.importKey('jwk', { ...v.jwk, key_ops: ['sign'], ext: true }, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+  const claims = b64url(
+    enc.encode(JSON.stringify({ aud: new URL(endpoint).origin, exp: Math.floor(nowMs / 1000) + 12 * 3600, sub: SUBJECT })),
+  );
+  const key = await crypto.subtle.importKey(
+    'jwk',
+    { ...v.jwk, key_ops: ['sign'], ext: true },
+    { name: 'ECDSA', namedCurve: 'P-256' },
+    false,
+    ['sign'],
+  );
   // WebCrypto signs ECDSA as r || s, which is exactly ES256's form.
   const sig = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key, enc.encode(`${header}.${claims}`));
   return `vapid t=${header}.${claims}.${b64url(sig)}, k=${v.publicKey}`;

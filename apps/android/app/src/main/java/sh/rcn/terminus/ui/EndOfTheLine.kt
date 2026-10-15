@@ -25,19 +25,18 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.launch
-import sh.rcn.terminus.R
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import kotlinx.coroutines.launch
+import sh.rcn.terminus.R
 
 /** Taps that count as one go at the egg. */
 private const val TAPS = 5
 private const val TAP_WINDOW_MS = 1_500L
 
 /**
- * Now's wordmark. Five quick taps and a bus drives across the header to the
- * end of the line: terminus is where the bus stops. Taps aren't a semantics
- * action, so TalkBack still reads it as the title.
+ * Now's wordmark. Five quick taps and a bus drives across the header to the end of the line: terminus is where the bus stops. Taps aren't a
+ * semantics action, so TalkBack still reads it as the title.
  */
 @Composable
 fun RowScope.HeaderWordmark() {
@@ -67,18 +66,20 @@ fun RowScope.HeaderWordmark() {
                         }
                     }
                 }
-            },
-        ) { Wordmark(MaterialTheme.typography.titleLarge) }
+            }
+        ) {
+            Wordmark(MaterialTheme.typography.titleLarge)
+        }
         if (drive.isRunning) {
             // In from the right edge, out past the left, bouncing a little on the road.
             Icon(
                 painterResource(R.drawable.ic_bus),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .size(bus)
-                    .offset { IntOffset(((widthPx + busPx) * (1 - drive.value) - busPx).roundToInt(), 0) }
-                    .graphicsLayer { translationY = sin(drive.value * 60f) * bob },
+                modifier =
+                    Modifier.size(bus)
+                        .offset { IntOffset(((widthPx + busPx) * (1 - drive.value) - busPx).roundToInt(), 0) }
+                        .graphicsLayer { translationY = sin(drive.value * 60f) * bob },
             )
         }
     }

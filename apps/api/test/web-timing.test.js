@@ -13,7 +13,11 @@ test('the banner says why the card is old: offline, a failed update, or a slow c
   for (const lang of ['en', 'zh']) {
     useLang(lang);
     assert.equal(staleText('9:41', { online: false }), t("You're offline. Showing the update from {0}.", '9:41'));
-    assert.equal(staleText('9:41', { online: false, failed: true }), t("You're offline. Showing the update from {0}.", '9:41'), 'offline wins');
+    assert.equal(
+      staleText('9:41', { online: false, failed: true }),
+      t("You're offline. Showing the update from {0}.", '9:41'),
+      'offline wins',
+    );
     assert.equal(staleText('9:41', { online: true, failed: true }), t("Couldn't update. Showing the update from {0}.", '9:41'));
     assert.equal(staleText('9:41', { online: true }), t('Slow connection. Showing the update from {0}.', '9:41'));
   }

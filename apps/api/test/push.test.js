@@ -35,7 +35,10 @@ const FEED = new Proxy(
       }),
   },
 );
-const PROFILE = { home: { stops: ['PGP'] }, manual: [{ day: THU, arriveByMin: 600, endMin: 660, to: 'UTOWN', label: 'GEA1000 @ UTown', venue: '' }] };
+const PROFILE = {
+  home: { stops: ['PGP'] },
+  manual: [{ day: THU, arriveByMin: 600, endMin: 660, to: 'UTOWN', label: 'GEA1000 @ UTown', venue: '' }],
+};
 
 /** A throwaway service account with a real RSA key, so the JWT really gets signed. */
 async function serviceAccount() {
@@ -57,20 +60,35 @@ async function setup({ push = true, wrap = (f) => f } = {}) {
   const clock = (ms) => installGlobals(fetchImpl, ms);
   let env;
   const TRIPS = makeDurableObjects(Trip, () => env);
-  env = { ...makeEnv(), DB: makeD1(), EMAIL: makeEmail(), EMAIL_FROM: 'x@example.test', TRIPS, ...(push ? { FCM_SERVICE_ACCOUNT: await serviceAccount() } : {}) };
+  env = {
+    ...makeEnv(),
+    DB: makeD1(),
+    EMAIL: makeEmail(),
+    EMAIL_FROM: 'x@example.test',
+    TRIPS,
+    ...(push ? { FCM_SERVICE_ACCOUNT: await serviceAccount() } : {}),
+  };
   const call = async (path, { method = 'GET', token, cookie, body } = {}) => {
     const headers = {};
     if (token) headers.authorization = `Bearer ${token}`;
     if (cookie) headers.cookie = cookie;
     if (body !== undefined) headers['content-type'] = 'application/json';
     const ctx = makeCtx();
-    const res = await worker.fetch(new Request(BASE + path, { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }), env, ctx);
+    const res = await worker.fetch(
+      new Request(BASE + path, { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }),
+      env,
+      ctx,
+    );
     await ctx.settle();
     return res;
   };
   await call('/api/auth/login', { method: 'POST', body: { email: 'you@u.nus.edu' } });
   const verify = await worker.fetch(
-    new Request(`${BASE}/auth/verify`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: `t=${env.EMAIL.lastToken()}` }),
+    new Request(`${BASE}/auth/verify`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: `t=${env.EMAIL.lastToken()}`,
+    }),
     env,
     makeCtx(),
   );
@@ -84,7 +102,11 @@ async function setup({ push = true, wrap = (f) => f } = {}) {
   const mac = await pair('MacBook');
   const tablet = await pair('Galaxy Tab');
   const next = async (token) => (await call('/api/me/next', { token })).json();
-  const pushTokens = () => env.DB._db.prepare('SELECT name, push_token FROM sessions WHERE push_token IS NOT NULL ORDER BY name').all().map((r) => ({ ...r }));
+  const pushTokens = () =>
+    env.DB._db
+      .prepare('SELECT name, push_token FROM sessions WHERE push_token IS NOT NULL ORDER BY name')
+      .all()
+      .map((r) => ({ ...r }));
   const alarm = () => [...TRIPS.alarms.values()][0];
   /** Lets the Trip object wake at each alarm until `done`; how many wakes it took. */
   const wakeUntil = async (done, max = 5) => {
@@ -142,7 +164,11 @@ test('the Trip object wakes when the phase changes and nudges the phone, once pe
 test('time to go wakes the phone with reminders off too: Android starts the live notification from it', async () => {
   const { call, phone, next, fcm, wakeUntil } = await setup();
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
-  assert.equal((await call('/api/me/choice', { method: 'POST', token: phone, body: { trip: `${THU}:600:UTOWN`, pref: 'quiet', choice: 'accept' } })).status, 200);
+  assert.equal(
+    (await call('/api/me/choice', { method: 'POST', token: phone, body: { trip: `${THU}:600:UTOWN`, pref: 'quiet', choice: 'accept' } }))
+      .status,
+    200,
+  );
   assert.equal((await next(phone)).card.remind, false);
   await wakeUntil(() => fcm.sent.some((m) => m.data.phase === 'due'));
   assert.equal(fcm.sent.find((m) => m.data.phase === 'due').android.priority, 'HIGH');
@@ -157,15 +183,24 @@ test('nothing is pushed to ask about the bus, and nothing says you are on it unl
   const plan = Object.values([...TRIPS.instances.values()][0].storage._map.get('day').plans)[0];
   clock(Date.parse(plan.board) + 30_000);
   await TRIPS.fireAlarms();
-  assert.ok(fcm.sent.every((m) => !('ask' in m.data)), 'never a question');
+  assert.ok(
+    fcm.sent.every((m) => !('ask' in m.data)),
+    'never a question',
+  );
   // No answer, and the object has no location: not taken to be on it. The
   // phase stays "heading", but the card is now "has left": pushed, quietly,
   // so the phones drop their "Leave now".
   const sentBefore = fcm.sent.length;
   clock(Date.parse(plan.board) + 4 * 60_000);
   await TRIPS.fireAlarms();
-  assert.ok(fcm.sent.every((m) => m.data.phase !== 'riding'), 'never on the bus without a location seeing it');
-  assert.deepEqual(fcm.sent.slice(sentBefore).map((m) => [m.data.phase, m.android.priority]), [['heading', 'NORMAL']]);
+  assert.ok(
+    fcm.sent.every((m) => m.data.phase !== 'riding'),
+    'never on the bus without a location seeing it',
+  );
+  assert.deepEqual(
+    fcm.sent.slice(sentBefore).map((m) => [m.data.phase, m.android.priority]),
+    [['heading', 'NORMAL']],
+  );
   await TRIPS.fireAlarms();
   assert.equal(fcm.sent.length, sentBefore + 1, 'once');
   // An older app's tap still reaches the user's other phones (quietly); this one doesn't need telling.
@@ -173,7 +208,10 @@ test('nothing is pushed to ask about the bus, and nothing says you are on it unl
   const before = fcm.sent.length;
   await call('/api/me/signal', { method: 'POST', token: phone, body: { kind: 'boarded' } });
   const told = fcm.sent.slice(before);
-  assert.deepEqual(told.map((m) => [m.token, m.data.phase, m.android.priority]), [['fcm-tablet', 'riding', 'NORMAL']]);
+  assert.deepEqual(
+    told.map((m) => [m.token, m.data.phase, m.android.priority]),
+    [['fcm-tablet', 'riding', 'NORMAL']],
+  );
 });
 
 test('the morning cron starts the day for push users, so the push comes without any app asking', async () => {
@@ -229,7 +267,11 @@ test('the week before a semester, push users with an older timetable are reminde
   const { call, phone, fcm, env, clock } = await setup();
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
   const setProfile = (extra) => {
-    const p = { ...JSON.parse(env.DB._db.prepare('SELECT json FROM profiles').get().json), trips: [{ day: THU, arriveByMin: 600, to: 'UTOWN', label: 'GEA1000' }], ...extra };
+    const p = {
+      ...JSON.parse(env.DB._db.prepare('SELECT json FROM profiles').get().json),
+      trips: [{ day: THU, arriveByMin: 600, to: 'UTOWN', label: 'GEA1000' }],
+      ...extra,
+    };
     env.DB._db.prepare('UPDATE profiles SET json = ?').run(JSON.stringify(p));
   };
   setProfile({ term: { acadYear: '2025/2026', semester: 2 } });
@@ -271,14 +313,20 @@ test('the week before a semester, push users with an older timetable are reminde
 test('a semester reminder for someone with no device left to reach is not tried again', async () => {
   const { call, phone, env, clock } = await setup();
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
-  const p = { ...JSON.parse(env.DB._db.prepare('SELECT json FROM profiles').get().json), trips: [{ day: THU, arriveByMin: 600, to: 'UTOWN', label: 'GEA1000' }], term: { acadYear: '2025/2026', semester: 2 } };
+  const p = {
+    ...JSON.parse(env.DB._db.prepare('SELECT json FROM profiles').get().json),
+    trips: [{ day: THU, arriveByMin: 600, to: 'UTOWN', label: 'GEA1000' }],
+    term: { acadYear: '2025/2026', semester: 2 },
+  };
   env.DB._db.prepare('UPDATE profiles SET json = ?').run(JSON.stringify(p));
   clock(Date.parse('2026-08-04T10:30:00+08:00'));
   // The app was uninstalled: Firebase says the token is gone, so it's dropped
   // and there is nobody left to send to, which no retry would change.
   const real = globalThis.fetch;
   globalThis.fetch = async (url, init) =>
-    String(url).startsWith('https://fcm.googleapis.com/') ? Response.json({ error: { status: 'NOT_FOUND', details: [{ errorCode: 'UNREGISTERED' }] } }, { status: 404 }) : real(url, init);
+    String(url).startsWith('https://fcm.googleapis.com/')
+      ? Response.json({ error: { status: 'NOT_FOUND', details: [{ errorCode: 'UNREGISTERED' }] } }, { status: 404 })
+      : real(url, init);
   try {
     assert.equal(await remindTerm(env, Date.now()), 0);
   } finally {
@@ -290,7 +338,11 @@ test('a semester reminder for someone with no device left to reach is not tried 
 test('a semester reminder that reaches nobody is tried again; one whose mark cannot be saved is not sent', async () => {
   const { call, phone, fcm, env, clock } = await setup();
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
-  const p = { ...JSON.parse(env.DB._db.prepare('SELECT json FROM profiles').get().json), trips: [{ day: THU, arriveByMin: 600, to: 'UTOWN', label: 'GEA1000' }], term: { acadYear: '2025/2026', semester: 2 } };
+  const p = {
+    ...JSON.parse(env.DB._db.prepare('SELECT json FROM profiles').get().json),
+    trips: [{ day: THU, arriveByMin: 600, to: 'UTOWN', label: 'GEA1000' }],
+    term: { acadYear: '2025/2026', semester: 2 },
+  };
   env.DB._db.prepare('UPDATE profiles SET json = ?').run(JSON.stringify(p));
   clock(Date.parse('2026-08-04T10:30:00+08:00'));
   const quiet = console.error;
@@ -307,7 +359,8 @@ test('a semester reminder that reaches nobody is tried again; one whose mark can
   assert.equal(fcm.sent.length, before);
   // Firebase failing: nothing reached, so the user is kept to try again.
   const real = globalThis.fetch;
-  globalThis.fetch = async (url, init) => (String(url).startsWith('https://fcm.googleapis.com/') ? new Response('unavailable', { status: 503 }) : real(url, init));
+  globalThis.fetch = async (url, init) =>
+    String(url).startsWith('https://fcm.googleapis.com/') ? new Response('unavailable', { status: 503 }) : real(url, init);
   assert.equal(await remindTerm(env, Date.now()), 0);
   globalThis.fetch = real;
   console.error = quiet;
@@ -322,18 +375,26 @@ test('a semester reminder that never gets through holds up no one after it, and 
   const { call, phone, fcm, env, clock } = await setup();
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-broken' } });
   const db = env.DB._db;
-  const p = { ...JSON.parse(db.prepare('SELECT json FROM profiles').get().json), trips: [{ day: THU, arriveByMin: 600, to: 'UTOWN', label: 'GEA1000' }], term: { acadYear: '2025/2026', semester: 2 } };
+  const p = {
+    ...JSON.parse(db.prepare('SELECT json FROM profiles').get().json),
+    trips: [{ day: THU, arriveByMin: 600, to: 'UTOWN', label: 'GEA1000' }],
+    term: { acadYear: '2025/2026', semester: 2 },
+  };
   db.prepare('UPDATE profiles SET json = ?').run(JSON.stringify(p));
   // A second user, after the first in id order, whose phone works.
   const later = 'zzzz-later';
   db.prepare("INSERT INTO users (id, email, created, last_seen, via) VALUES (?, 'later@u.nus.edu', 0, 0, 'web')").run(later);
   db.prepare('INSERT INTO profiles (user_id, json, updated) VALUES (?, ?, 0)').run(later, JSON.stringify(p));
-  db.prepare("INSERT INTO sessions (token_hash, user_id, kind, name, created, last_seen, push_token) VALUES ('later-hash', ?, 'device', 'Later', 0, 0, 'fcm-later')").run(later);
+  db.prepare(
+    "INSERT INTO sessions (token_hash, user_id, kind, name, created, last_seen, push_token) VALUES ('later-hash', ?, 'device', 'Later', 0, 0, 'fcm-later')",
+  ).run(later);
   clock(Date.parse('2026-08-04T10:30:00+08:00'));
   // Firebase fails for the first user's token every time, without saying it's gone.
   const real = globalThis.fetch;
   globalThis.fetch = async (url, init) =>
-    String(url).startsWith('https://fcm.googleapis.com/') && String(init?.body).includes('fcm-broken') ? new Response('internal', { status: 500 }) : real(url, init);
+    String(url).startsWith('https://fcm.googleapis.com/') && String(init?.body).includes('fcm-broken')
+      ? new Response('internal', { status: 500 })
+      : real(url, init);
   // KV as Cloudflare runs it: one write a second to a key, so one per run here.
   const put = env.KV.put.bind(env.KV);
   let written = new Set();
@@ -348,7 +409,10 @@ test('a semester reminder that never gets through holds up no one after it, and 
   try {
     assert.equal(await run(), 0, 'the first user, not reached');
     assert.equal(await run(), 1, 'the next batch goes all the same');
-    assert.deepEqual(fcm.sent.map((m) => m.token), ['fcm-later']);
+    assert.deepEqual(
+      fcm.sent.map((m) => m.token),
+      ['fcm-later'],
+    );
     let runs = 2;
     while ((await env.KV.get('term:retry')) !== null && runs < 20) {
       await run();
@@ -366,14 +430,20 @@ test('a run whose retried and new semester reminders all fail keeps every one of
   const { call, phone, env, clock } = await setup();
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
   const db = env.DB._db;
-  const p = { ...JSON.parse(db.prepare('SELECT json FROM profiles').get().json), trips: [{ day: THU, arriveByMin: 600, to: 'UTOWN', label: 'GEA1000' }], term: { acadYear: '2025/2026', semester: 2 } };
+  const p = {
+    ...JSON.parse(db.prepare('SELECT json FROM profiles').get().json),
+    trips: [{ day: THU, arriveByMin: 600, to: 'UTOWN', label: 'GEA1000' }],
+    term: { acadYear: '2025/2026', semester: 2 },
+  };
   db.prepare('UPDATE profiles SET json = ?').run(JSON.stringify(p));
   // A full batch (ARM_BATCH, 400) and one more, after the first user in id order.
   for (let i = 0; i < 400; i++) {
     const id = `zzzz-${String(i).padStart(3, '0')}`;
     db.prepare("INSERT INTO users (id, email, created, last_seen, via) VALUES (?, ?, 0, 0, 'web')").run(id, `${id}@u.nus.edu`);
     db.prepare('INSERT INTO profiles (user_id, json, updated) VALUES (?, ?, 0)').run(id, JSON.stringify(p));
-    db.prepare("INSERT INTO sessions (token_hash, user_id, kind, name, created, last_seen, push_token) VALUES (?, ?, 'device', 'Phone', 0, 0, ?)").run(`${id}-hash`, id, `fcm-${id}`);
+    db.prepare(
+      "INSERT INTO sessions (token_hash, user_id, kind, name, created, last_seen, push_token) VALUES (?, ?, 'device', 'Phone', 0, 0, ?)",
+    ).run(`${id}-hash`, id, `fcm-${id}`);
   }
   const start = Date.parse('2026-08-04T10:30:00+08:00');
   const quiet = console.error;
@@ -381,7 +451,8 @@ test('a run whose retried and new semester reminders all fail keeps every one of
   // Firebase failing throughout (set after each clock, which puts the fake fetch back).
   const failing = () => {
     const real = globalThis.fetch;
-    globalThis.fetch = async (url, init) => (String(url).startsWith('https://fcm.googleapis.com/') ? new Response('unavailable', { status: 503 }) : real(url, init));
+    globalThis.fetch = async (url, init) =>
+      String(url).startsWith('https://fcm.googleapis.com/') ? new Response('unavailable', { status: 503 }) : real(url, init);
   };
   try {
     clock(start);
@@ -402,7 +473,11 @@ test('a run whose retried and new semester reminders all fail keeps every one of
 test('a retried semester reminder is not sent twice when the retry list cannot be saved', async () => {
   const { call, phone, fcm, env, clock } = await setup();
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
-  const p = { ...JSON.parse(env.DB._db.prepare('SELECT json FROM profiles').get().json), trips: [{ day: THU, arriveByMin: 600, to: 'UTOWN', label: 'GEA1000' }], term: { acadYear: '2025/2026', semester: 2 } };
+  const p = {
+    ...JSON.parse(env.DB._db.prepare('SELECT json FROM profiles').get().json),
+    trips: [{ day: THU, arriveByMin: 600, to: 'UTOWN', label: 'GEA1000' }],
+    term: { acadYear: '2025/2026', semester: 2 },
+  };
   env.DB._db.prepare('UPDATE profiles SET json = ?').run(JSON.stringify(p));
   const start = Date.parse('2026-08-04T10:30:00+08:00');
   clock(start);
@@ -412,7 +487,8 @@ test('a retried semester reminder is not sent twice when the retry list cannot b
   const del = env.KV.delete;
   try {
     // Firebase failing: the user goes on the retry list.
-    globalThis.fetch = async (url, init) => (String(url).startsWith('https://fcm.googleapis.com/') ? new Response('unavailable', { status: 503 }) : real(url, init));
+    globalThis.fetch = async (url, init) =>
+      String(url).startsWith('https://fcm.googleapis.com/') ? new Response('unavailable', { status: 503 }) : real(url, init);
     assert.equal(await remindTerm(env, Date.now()), 0);
     globalThis.fetch = real;
     // The retry reaches them, but the list can't be cleared.
@@ -435,14 +511,19 @@ test('a retried semester reminder is not sent twice when the retry list cannot b
 test('a retried semester reminder reads the profile again: imported since, nothing; a new language, in that one', async () => {
   const { call, phone, fcm, env, clock } = await setup();
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
-  const p = { ...JSON.parse(env.DB._db.prepare('SELECT json FROM profiles').get().json), trips: [{ day: THU, arriveByMin: 600, to: 'UTOWN', label: 'GEA1000' }], term: { acadYear: '2025/2026', semester: 2 } };
+  const p = {
+    ...JSON.parse(env.DB._db.prepare('SELECT json FROM profiles').get().json),
+    trips: [{ day: THU, arriveByMin: 600, to: 'UTOWN', label: 'GEA1000' }],
+    term: { acadYear: '2025/2026', semester: 2 },
+  };
   const setProfile = (extra) => env.DB._db.prepare('UPDATE profiles SET json = ?').run(JSON.stringify({ ...p, ...extra }));
   setProfile({});
   const start = Date.parse('2026-08-04T10:30:00+08:00');
   const quiet = console.error;
   console.error = () => {};
   const real = globalThis.fetch;
-  const failing = async (url, init) => (String(url).startsWith('https://fcm.googleapis.com/') ? new Response('unavailable', { status: 503 }) : real(url, init));
+  const failing = async (url, init) =>
+    String(url).startsWith('https://fcm.googleapis.com/') ? new Response('unavailable', { status: 503 }) : real(url, init);
   try {
     clock(start);
     globalThis.fetch = failing;
@@ -478,7 +559,8 @@ test('a retried semester reminder reads the profile again: imported since, nothi
 test('which apps fetch the reminder words themselves: Android from 2.5.0', async () => {
   const { fetchesNotice } = await import('../src/push.ts');
   for (const c of ['android/2.5.0', 'android/2.5.0-beta.1', 'android/2.10.0', 'android/3.0.0']) assert.equal(fetchesNotice(c), true, c);
-  for (const c of ['android/2.4.2', 'android/2.4.10', 'android/1.9.9', 'mac/3.0.0', 'web', null, '']) assert.equal(fetchesNotice(c), false, String(c));
+  for (const c of ['android/2.4.2', 'android/2.4.10', 'android/1.9.9', 'mac/3.0.0', 'web', null, ''])
+    assert.equal(fetchesNotice(c), false, String(c));
 });
 
 test('an access token that went stale is replaced, and the push still goes', async () => {
@@ -562,7 +644,9 @@ const fcmRefusal = (field) =>
         message: field ? 'Request contains an invalid argument.' : 'The registration token is not a valid FCM registration token',
         details: [
           { '@type': 'type.googleapis.com/google.firebase.fcm.v1.FcmError', errorCode: 'INVALID_ARGUMENT' },
-          ...(field ? [{ '@type': 'type.googleapis.com/google.rpc.BadRequest', fieldViolations: [{ field, description: 'Invalid value' }] }] : []),
+          ...(field
+            ? [{ '@type': 'type.googleapis.com/google.rpc.BadRequest', fieldViolations: [{ field, description: 'Invalid value' }] }]
+            : []),
         ],
       },
     },
@@ -599,8 +683,14 @@ test('a message FCM refuses keeps the token; a token FCM says is bad is dropped'
     }
   });
   assert.deepEqual(pushTokens(), [{ name: 'Pixel', push_token: 'fcm-phone' }]);
-  assert.ok(logged.some((l) => l.includes('fcm send 400 INVALID_ARGUMENT')), 'logged with its status and code');
-  assert.ok(logged.every((l) => !l.includes('fcm-phone')), 'never the token');
+  assert.ok(
+    logged.some((l) => l.includes('fcm send 400 INVALID_ARGUMENT')),
+    'logged with its status and code',
+  );
+  assert.ok(
+    logged.every((l) => !l.includes('fcm-phone')),
+    'never the token',
+  );
   // The token itself named as the bad value: that one goes.
   refuse = 'message.token';
   clock(alarm());
@@ -632,7 +722,10 @@ test("one device's failure doesn't keep the push from the user's other devices",
   await call('/api/me/push', { method: 'POST', token: tablet, body: { token: 'fcm-tablet' } });
   await next(phone);
   await errorsOf(() => wakeUntil(() => fcm.sent.length > 0));
-  assert.deepEqual(fcm.sent.map((m) => [m.token, m.data.phase]), [['fcm-tablet', 'due']]);
+  assert.deepEqual(
+    fcm.sent.map((m) => [m.token, m.data.phase]),
+    [['fcm-tablet', 'due']],
+  );
 });
 
 test('every call to Firebase has a time limit', async () => {
@@ -653,7 +746,8 @@ test('every call to Firebase has a time limit', async () => {
 
 test('a push no device got is tried again at the next wake', async () => {
   let down = true;
-  const wrap = (f) => async (url, init) => (down && String(url).startsWith(FCM_SEND) ? new Response('unavailable', { status: 503 }) : f(url, init));
+  const wrap = (f) => async (url, init) =>
+    down && String(url).startsWith(FCM_SEND) ? new Response('unavailable', { status: 503 }) : f(url, init);
   const { call, phone, next, fcm, TRIPS, clock, alarm } = await setup({ wrap });
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
   await next(phone);
@@ -797,7 +891,7 @@ test('a /clear or a sooner /watch while the object wakes is not undone by it', a
   g.open();
   await run;
   assert.deepEqual([...stored(TRIPS).keys()].sort(), ['deleteAt', 'gone'], 'nothing but the mark');
-  assert.equal(alarm(), stored(TRIPS).get('deleteAt'), 'and only the mark\'s alarm, at midnight');
+  assert.equal(alarm(), stored(TRIPS).get('deleteAt'), "and only the mark's alarm, at midnight");
 });
 
 test('deleting the account clears its Trip object, its wake alarm too', async () => {
@@ -849,7 +943,10 @@ test('refreshing while the leave-by moves by seconds asks the Trip object to wat
   }
   assert.ok(marks.size > 1, 'the leave-by moved between refreshes');
   const watches = sent.filter((u) => u.watch).map((u) => u.watch.at);
-  assert.ok(watches.length >= 1 && watches.length < 12, `a watch only when it brings the wake sooner, not one per refresh (${watches.length})`);
+  assert.ok(
+    watches.length >= 1 && watches.length < 12,
+    `a watch only when it brings the wake sooner, not one per refresh (${watches.length})`,
+  );
   for (let i = 1; i < watches.length; i++) assert.ok(watches[i] < watches[i - 1], 'each watch is sooner than the one pending');
   // The wake booked is no later than the latest card's own "due".
   assert.ok(Math.min(...watches) <= Date.parse(last.leave.at) - DUE_MS, 'the push is not late');

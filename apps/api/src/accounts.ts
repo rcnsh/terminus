@@ -138,7 +138,14 @@ export async function takeGlobalMail(env: Env, scope: 'web' | 'app' = 'web'): Pr
  * blocklist are refused. The caller shows the same message for every
  * outcome, so the endpoint doesn't reveal who has an account or is blocked.
  */
-export async function requestLink(env: Env, db: D1Database, email: string, origin: string, nowMs: number, toApp = false): Promise<LinkOutcome> {
+export async function requestLink(
+  env: Env,
+  db: D1Database,
+  email: string,
+  origin: string,
+  nowMs: number,
+  toApp = false,
+): Promise<LinkOutcome> {
   const inbox = inboxKey(email);
   const blocked = await db.prepare('SELECT 1 FROM blocklist WHERE email IN (?, ?)').bind(email, inbox).first();
   // It spends from the ceiling as a sent email would, so a busy minute
@@ -164,7 +171,9 @@ export async function requestLink(env: Env, db: D1Database, email: string, origi
   const [, made] = await db.batch([
     db.prepare('DELETE FROM magic_links WHERE expires < ?').bind(nowMs),
     db
-      .prepare('INSERT INTO magic_links (token_hash, email, created, expires) SELECT ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM magic_links WHERE email = ? AND created > ?) RETURNING token_hash')
+      .prepare(
+        'INSERT INTO magic_links (token_hash, email, created, expires) SELECT ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM magic_links WHERE email = ? AND created > ?) RETURNING token_hash',
+      )
       .bind(tokenHash, email, nowMs, nowMs + ACCOUNT_TTL.linkMs, email, nowMs - ACCOUNT_TTL.linkCooldownMs),
   ]);
   if (!made?.results?.length) return 'cooldown';
@@ -287,7 +296,9 @@ async function spendLink(db: D1Database, hash: string, nowMs: number, anonId: st
   const out = await db.batch([
     ...claim.statements,
     sessionFor(db, tokenHash, row.email, 'web', null, nowMs, NO_CLIENT, live),
-    db.prepare('DELETE FROM magic_links WHERE token_hash = ? AND EXISTS (SELECT 1 FROM sessions WHERE token_hash = ?) RETURNING email').bind(hash, tokenHash),
+    db
+      .prepare('DELETE FROM magic_links WHERE token_hash = ? AND EXISTS (SELECT 1 FROM sessions WHERE token_hash = ?) RETURNING email')
+      .bind(hash, tokenHash),
   ]);
   if (!out.at(-1)?.results?.length) return null;
   return { token, ...(claim.removed ? { removed: claim.removed } : {}) };
@@ -312,7 +323,16 @@ export function whileLive(db: D1Database, sql: string, params: unknown[], live: 
 }
 
 /** A new session for the account with this email, made only while `live` holds. Returns its user_id. */
-export function sessionFor(db: D1Database, tokenHash: string, email: string, kind: 'web' | 'device', name: string | null, nowMs: number, client: Client, live: Live): D1PreparedStatement {
+export function sessionFor(
+  db: D1Database,
+  tokenHash: string,
+  email: string,
+  kind: 'web' | 'device',
+  name: string | null,
+  nowMs: number,
+  client: Client,
+  live: Live,
+): D1PreparedStatement {
   return whileLive(
     db,
     `INSERT INTO sessions (token_hash, user_id, kind, name, created, last_seen, expires, platform, client)
@@ -338,7 +358,12 @@ export function userFor(db: D1Database, email: string, nowMs: number, via: 'web'
 export function addEmailTo(db: D1Database, anonId: string, email: string, nowMs: number, live: Live): D1PreparedStatement[] {
   return [
     whileLive(db, 'UPDATE users SET email = ?, email_added = ? WHERE id = ? AND email IS NULL AND {live}', [email, nowMs, anonId], live),
-    whileLive(db, 'DELETE FROM sessions WHERE user_id = ? AND EXISTS (SELECT 1 FROM users WHERE id = ? AND email = ?) AND {live}', [anonId, anonId, email], live),
+    whileLive(
+      db,
+      'DELETE FROM sessions WHERE user_id = ? AND EXISTS (SELECT 1 FROM users WHERE id = ? AND email = ?) AND {live}',
+      [anonId, anonId, email],
+      live,
+    ),
   ];
 }
 
@@ -360,7 +385,13 @@ export function profileFor(db: D1Database, userId: string, profile: unknown, now
  * setup to keep; a browser's is a minute to redo.) Reads now; the changes
  * come back as statements for the caller's batch, guarded by `live`.
  */
-export async function claimEmail(db: D1Database, email: string, anonId: string | null, nowMs: number, live: Live): Promise<{ statements: D1PreparedStatement[]; removed?: string }> {
+export async function claimEmail(
+  db: D1Database,
+  email: string,
+  anonId: string | null,
+  nowMs: number,
+  live: Live,
+): Promise<{ statements: D1PreparedStatement[]; removed?: string }> {
   const existing = await db.prepare('SELECT id, email FROM users WHERE email = ?').bind(email).first<User>();
   const anon = anonId ? await db.prepare('SELECT id FROM users WHERE id = ? AND email IS NULL').bind(anonId).first<{ id: string }>() : null;
   if (!anon) return { statements: existing ? [] : [userFor(db, email, nowMs, 'web', live)] };
@@ -437,14 +468,23 @@ async function signInCodeKey(email: string): Promise<string> {
  * session itself comes from spending the link's D1 row, which is atomic, so
  * a code and its link together still sign in exactly once.
  */
-export async function redeemCode(env: Env, db: D1Database, email: string, code: string, nowMs: number, anonId: string | null = null): Promise<Redeemed | null> {
+export async function redeemCode(
+  env: Env,
+  db: D1Database,
+  email: string,
+  code: string,
+  nowMs: number,
+  anonId: string | null = null,
+): Promise<Redeemed | null> {
   const key = await signInCodeKey(email);
   const pending = await env.KV.get<PendingCode>(key, 'json').catch(() => null);
   if (!pending || pending.e < nowMs) return null;
   // Spend a try on the link's row before checking, in one statement: KV's
   // read-then-write let guesses sent all at once past the limit.
   const spent = await db
-    .prepare('UPDATE magic_links SET code_tries = code_tries + 1 WHERE token_hash = ? AND code_tries < ? AND expires >= ? RETURNING code_tries')
+    .prepare(
+      'UPDATE magic_links SET code_tries = code_tries + 1 WHERE token_hash = ? AND code_tries < ? AND expires >= ? RETURNING code_tries',
+    )
     .bind(pending.t, ACCOUNT_TTL.codeTries, nowMs)
     .first<{ code_tries: number }>();
   if (!spent) {
@@ -483,7 +523,17 @@ export async function openSession(
     .prepare(
       'INSERT INTO sessions (token_hash, user_id, kind, name, created, last_seen, expires, platform, client) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
     )
-    .bind(await hashToken(token), userId, kind, name || null, nowMs, nowMs, kind === 'web' ? nowMs + ACCOUNT_TTL.webSessionMs : null, client.platform, client.client)
+    .bind(
+      await hashToken(token),
+      userId,
+      kind,
+      name || null,
+      nowMs,
+      nowMs,
+      kind === 'web' ? nowMs + ACCOUNT_TTL.webSessionMs : null,
+      client.platform,
+      client.client,
+    )
     .run();
   return token;
 }
@@ -635,12 +685,7 @@ export function hasSessionCookie(req: Request): boolean {
   return cookieToken(req) !== null;
 }
 
-export async function authenticate(
-  db: D1Database,
-  req: Request,
-  nowMs: number,
-  ctx?: ExecutionContext,
-): Promise<SessionInfo | null> {
+export async function authenticate(db: D1Database, req: Request, nowMs: number, ctx?: ExecutionContext): Promise<SessionInfo | null> {
   const token = tokenFrom(req);
   if (!token) return null;
   const hash = await hashToken(token);
@@ -651,7 +696,15 @@ export async function authenticate(
         WHERE s.token_hash = ?`,
     )
     .bind(hash)
-    .first<{ kind: 'web' | 'device'; created: number; last_seen: number; expires: number | null; client: string | null; id: string; email: string | null }>();
+    .first<{
+      kind: 'web' | 'device';
+      created: number;
+      last_seen: number;
+      expires: number | null;
+      client: string | null;
+      id: string;
+      email: string | null;
+    }>();
   if (!row) return null;
   if (row.expires !== null && row.expires < nowMs) return null;
   if (row.kind === 'web' && row.email !== null && nowMs - row.created > ACCOUNT_TTL.webSessionMaxMs) return null;
@@ -815,7 +868,10 @@ export async function loadProfileJson(db: D1Database, userId: string): Promise<u
 
 /** The saved profile and its version: `updated`, which a conditional write compares. */
 export async function loadProfileRow(db: D1Database, userId: string): Promise<{ json: unknown; updated: number } | null> {
-  const row = await db.prepare('SELECT json, updated FROM profiles WHERE user_id = ?').bind(userId).first<{ json: string; updated: number }>();
+  const row = await db
+    .prepare('SELECT json, updated FROM profiles WHERE user_id = ?')
+    .bind(userId)
+    .first<{ json: string; updated: number }>();
   return row ? { json: JSON.parse(row.json), updated: row.updated } : null;
 }
 
@@ -836,7 +892,13 @@ export async function saveProfileJson(db: D1Database, userId: string, profile: u
  * Saves the profile only if it is still at version `from` (null: none saved
  * yet). Returns the new version, or null when another write got there first.
  */
-export async function saveProfileIf(db: D1Database, userId: string, profile: unknown, nowMs: number, from: number | null): Promise<number | null> {
+export async function saveProfileIf(
+  db: D1Database,
+  userId: string,
+  profile: unknown,
+  nowMs: number,
+  from: number | null,
+): Promise<number | null> {
   const json = JSON.stringify(profile);
   const row =
     from === null
@@ -911,11 +973,24 @@ export async function exportAccount(db: D1Database, user: User, today: unknown =
     .first<{ created: number; lastSeen: number; via: string; emailAdded: number | null; askFrom: number | null }>();
   const profile = await loadProfileJson(db, user.id);
   const { results: sessions } = await db
-    .prepare('SELECT kind, name, platform, client, push_token AS push, created, last_seen AS lastSeen, expires FROM sessions WHERE user_id = ? ORDER BY created')
+    .prepare(
+      'SELECT kind, name, platform, client, push_token AS push, created, last_seen AS lastSeen, expires FROM sessions WHERE user_id = ? ORDER BY created',
+    )
     .bind(user.id)
-    .all<{ kind: string; name: string | null; platform: string | null; client: string | null; push: string | null; created: number; lastSeen: number; expires: number | null }>();
+    .all<{
+      kind: string;
+      name: string | null;
+      platform: string | null;
+      client: string | null;
+      push: string | null;
+      created: number;
+      lastSeen: number;
+      expires: number | null;
+    }>();
   const { results: requests } = await db
-    .prepare('SELECT device_name AS device, platform, status, created, expires FROM login_requests WHERE email = ? OR anon_user_id = ? ORDER BY created')
+    .prepare(
+      'SELECT device_name AS device, platform, status, created, expires FROM login_requests WHERE email = ? OR anon_user_id = ? ORDER BY created',
+    )
     .bind(user.email, user.id)
     .all<{ device: string; platform: string | null; status: string; created: number; expires: number }>();
   const { results: apiKeys } = await db
@@ -923,9 +998,20 @@ export async function exportAccount(db: D1Database, user: User, today: unknown =
     .bind(user.id)
     .all<{ name: string; hint: string; created: number; lastUsed: number | null }>();
   const { results: feedback } = await db
-    .prepare('SELECT created, kind, reason, note, platform, app_version AS appVersion, context, reply_to AS replyTo FROM feedback WHERE user_id = ? ORDER BY created')
+    .prepare(
+      'SELECT created, kind, reason, note, platform, app_version AS appVersion, context, reply_to AS replyTo FROM feedback WHERE user_id = ? ORDER BY created',
+    )
     .bind(user.id)
-    .all<{ created: number; kind: string; reason: string | null; note: string; platform: string; appVersion: string | null; context: string | null; replyTo: string | null }>();
+    .all<{
+      created: number;
+      kind: string;
+      reason: string | null;
+      note: string;
+      platform: string;
+      appVersion: string | null;
+      context: string | null;
+      replyTo: string | null;
+    }>();
   const trips = await exportOutcomes(db, user.id);
   return {
     email: user.email,
@@ -947,7 +1033,13 @@ export async function exportAccount(db: D1Database, user: User, today: unknown =
       lastSeen: new Date(r.lastSeen).toISOString(),
       expires: iso(r.expires),
     })),
-    signInRequests: requests.map((r) => ({ device: r.device, platform: r.platform, status: r.status, created: iso(r.created), expires: iso(r.expires) })),
+    signInRequests: requests.map((r) => ({
+      device: r.device,
+      platform: r.platform,
+      status: r.status,
+      created: iso(r.created),
+      expires: iso(r.expires),
+    })),
     // Names and dates only: a key itself is never kept.
     apiKeys: apiKeys.map((k) => ({
       name: k.name,
@@ -987,7 +1079,12 @@ export const TURNSTILE_ACTION = 'signin';
  * Worker's own hostnames (TURNSTILE_HOSTNAMES): the widget is shared by the
  * stable site and the beta, so a token from one mustn't open the other.
  */
-export async function checkTurnstile(env: Env, token: unknown, ip: string | null, fetchImpl: typeof fetch = fetch): Promise<'ok' | 'failed' | 'unavailable'> {
+export async function checkTurnstile(
+  env: Env,
+  token: unknown,
+  ip: string | null,
+  fetchImpl: typeof fetch = fetch,
+): Promise<'ok' | 'failed' | 'unavailable'> {
   if (!env.TURNSTILE_SECRET) {
     // No Turnstile at all (tests, local dev) is allowed. A site key without
     // its secret is a broken rotation, and must not quietly open sign-in.
@@ -1005,7 +1102,11 @@ export async function checkTurnstile(env: Env, token: unknown, ip: string | null
   body.set('response', token);
   if (ip) body.set('remoteip', ip);
   try {
-    const res = await fetchImpl('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body, signal: AbortSignal.timeout(5000) });
+    const res = await fetchImpl('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      body,
+      signal: AbortSignal.timeout(5000),
+    });
     const out = (await res.json()) as { success?: boolean; action?: string; hostname?: string; 'error-codes'?: string[] };
     if (out.success === true) return out.action === TURNSTILE_ACTION && hostnames.has(out.hostname ?? '') ? 'ok' : 'failed';
     // A failed check is the visitor's; Turnstile's own fault, or a wrong
@@ -1025,5 +1126,10 @@ export async function checkTurnstile(env: Env, token: unknown, ip: string | null
 
 /** TURNSTILE_HOSTNAMES, comma-separated: where this Worker's sign-in form is served. */
 function turnstileHostnames(env: Env): Set<string> {
-  return new Set((env.TURNSTILE_HOSTNAMES ?? '').split(',').map((h) => h.trim().toLowerCase()).filter(Boolean));
+  return new Set(
+    (env.TURNSTILE_HOSTNAMES ?? '')
+      .split(',')
+      .map((h) => h.trim().toLowerCase())
+      .filter(Boolean),
+  );
 }

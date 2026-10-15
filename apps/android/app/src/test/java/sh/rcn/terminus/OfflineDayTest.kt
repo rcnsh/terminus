@@ -1,19 +1,20 @@
 package sh.rcn.terminus
 
+import java.io.File
+import java.time.Instant
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
-import java.io.File
-import java.time.Instant
 
 /**
- * The offline fallback, against the cases the web and Mac apps are checked
- * against too (apps/api/test/fixtures/offline-day.json), on the API's own
- * /me/day golden.
+ * The offline fallback, against the cases the web and Mac apps are checked against too (apps/api/test/fixtures/offline-day.json), on the
+ * API's own /me/day golden.
  */
 class OfflineDayTest {
-    init { TestStrings.install() }
+    init {
+        TestStrings.install()
+    }
 
     private val dir = listOf("../../api/test/fixtures", "../api/test/fixtures").map(::File).first { it.isDirectory }
     private val spec = JSONObject(File(dir, "offline-day.json").readText())
@@ -21,7 +22,8 @@ class OfflineDayTest {
 
     private fun ms(iso: String) = Instant.parse(iso).toEpochMilli()
 
-    @Test fun theDayPlanGivesTheNextThingAtEachMoment() {
+    @Test
+    fun theDayPlanGivesTheNextThingAtEachMoment() {
         assertEquals("2026-08-27", day.date)
         val cases = spec.getJSONArray("cases")
         for (i in 0 until cases.length()) {
@@ -33,24 +35,29 @@ class OfflineDayTest {
                 continue
             }
             assertEquals(at, c.getString("key"), got?.item?.key)
-            val step = when (c.getString("step")) {
-                "leaveBy" -> OfflineDay.Step.LeaveBy
-                "leaveNow" -> OfflineDay.Step.LeaveNow
-                else -> OfflineDay.Step.Home
-            }
+            val step =
+                when (c.getString("step")) {
+                    "leaveBy" -> OfflineDay.Step.LeaveBy
+                    "leaveNow" -> OfflineDay.Step.LeaveNow
+                    else -> OfflineDay.Step.Home
+                }
             assertEquals(at, step, got?.step)
         }
     }
 
-    @Test fun theWidgetIsRedrawnWhenTheLineMovesOn() {
+    @Test
+    fun theWidgetIsRedrawnWhenTheLineMovesOn() {
         // 09:00: the first class's leave-by (09:36:40) is the next change.
         assertEquals(ms("2026-08-27T01:36:40Z"), OfflineDay.nextChangeAt(day, ms("2026-08-27T01:00:00Z")))
         // After the last trip home has ended: nothing more.
         assertNull(OfflineDay.nextChangeAt(day, ms("2026-08-27T08:10:00Z")))
     }
 
-    @Test fun linesAreWordedLikeTheTodayList() {
-        val hhmm = { at: Long -> java.time.format.DateTimeFormatter.ofPattern("HH:mm").format(Instant.ofEpochMilli(at).atOffset(java.time.ZoneOffset.ofHours(8))) }
+    @Test
+    fun linesAreWordedLikeTheTodayList() {
+        val hhmm = { at: Long ->
+            java.time.format.DateTimeFormatter.ofPattern("HH:mm").format(Instant.ofEpochMilli(at).atOffset(java.time.ZoneOffset.ofHours(8)))
+        }
         val first = OfflineDay.lines(OfflineDay.next(day, ms("2026-08-27T01:00:00Z"))!!, hhmm)
         assertEquals("GEA1000 @ UTown · starts 10:00", first.head)
         assertEquals("Leave by ~09:36", first.big)

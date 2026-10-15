@@ -1,4 +1,5 @@
 import Testing
+
 @testable import Terminus
 
 /// An anonymous Mac reports its model, never the name its owner gave it.

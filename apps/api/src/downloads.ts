@@ -49,7 +49,9 @@ const APPCAST = 'appcast.xml';
  *  tag: 2.0.0-beta, 2.0.0-beta.2. */
 export const RELEASE_VERSION = String.raw`\d+\.\d+\.\d+(?:-[a-z]+(?:\.\d+)?)?`;
 /** A versioned release file, as /download/releases/<version>/<file>. */
-const RELEASE_FILE = new RegExp(String.raw`^\/download\/(releases\/${RELEASE_VERSION}\/terminus-${RELEASE_VERSION}(?:-armv7|-x86_64)?\.(?:apk|dmg|zip))$`);
+const RELEASE_FILE = new RegExp(
+  String.raw`^\/download\/(releases\/${RELEASE_VERSION}\/terminus-${RELEASE_VERSION}(?:-armv7|-x86_64)?\.(?:apk|dmg|zip))$`,
+);
 
 const TYPES: Record<string, string> = {
   apk: 'application/vnd.android.package-archive',

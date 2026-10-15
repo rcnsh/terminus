@@ -10,12 +10,12 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -54,22 +54,30 @@ import sh.rcn.terminus.R
  */
 
 /**
- * A stop's name plate, as on the pole: a shade off the card with a hairline
- * under it, the bus mark in the accent, the name, and anything to say about
- * it at the end (the walk there, a button), quieter. Not inverted: in the
- * dark a near-white plate glared off every stop.
+ * A stop's name plate, as on the pole: a shade off the card with a hairline under it, the bus mark in the accent, the name, and anything to
+ * say about it at the end (the walk there, a button), quieter. Not inverted: in the dark a near-white plate glared off every stop.
  */
 @Composable
 internal fun StopPlate(name: String, modifier: Modifier = Modifier, big: Boolean = false, trailing: @Composable RowScope.() -> Unit = {}) {
     val c = MaterialTheme.colorScheme
     Row(
-        modifier.fillMaxWidth().background(c.secondaryContainer).drawBehind {
-            drawLine(c.outlineVariant, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx())
-        }.padding(start = 14.dp, end = 8.dp).heightIn(min = if (big) 46.dp else 38.dp),
+        modifier
+            .fillMaxWidth()
+            .background(c.secondaryContainer)
+            .drawBehind {
+                drawLine(c.outlineVariant, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx())
+            }
+            .padding(start = 14.dp, end = 8.dp)
+            .heightIn(min = if (big) 46.dp else 38.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Icon(painterResource(R.drawable.ic_bus), contentDescription = null, tint = c.primary, modifier = Modifier.size(if (big) 18.dp else 16.dp))
+        Icon(
+            painterResource(R.drawable.ic_bus),
+            contentDescription = null,
+            tint = c.primary,
+            modifier = Modifier.size(if (big) 18.dp else 16.dp),
+        )
         Text(
             name,
             color = c.onSurface,
@@ -85,9 +93,17 @@ internal fun StopPlate(name: String, modifier: Modifier = Modifier, big: Boolean
 
 /** A stop's sign: the plate, then what's under it. Rounded, with a hairline round the lot. */
 @Composable
-internal fun StopSign(name: String, modifier: Modifier = Modifier, big: Boolean = false, trailing: @Composable RowScope.() -> Unit = {}, content: @Composable ColumnScope.() -> Unit) {
+internal fun StopSign(
+    name: String,
+    modifier: Modifier = Modifier,
+    big: Boolean = false,
+    trailing: @Composable RowScope.() -> Unit = {},
+    content: @Composable ColumnScope.() -> Unit,
+) {
     val shape = RoundedCornerShape(if (big) 18.dp else 14.dp)
-    Column(modifier.clip(shape).background(MaterialTheme.colorScheme.surface).border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)) {
+    Column(
+        modifier.clip(shape).background(MaterialTheme.colorScheme.surface).border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)
+    ) {
         StopPlate(name, big = big, trailing = trailing)
         content()
     }
@@ -103,11 +119,16 @@ internal fun ServiceBadges(services: List<String>, colors: Map<String, Long>, mo
 }
 
 /**
- * One choice of several, as a tile: outlined, or filled with the accent's
- * soft colour and edged in it when chosen, with a tick in the corner.
+ * One choice of several, as a tile: outlined, or filled with the accent's soft colour and edged in it when chosen, with a tick in the
+ * corner.
  */
 @Composable
-internal fun ChoiceTile(selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+internal fun ChoiceTile(
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     val c = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(16.dp)
     Box(
@@ -117,7 +138,7 @@ internal fun ChoiceTile(selected: Boolean, onClick: () -> Unit, modifier: Modifi
             .background(if (selected) c.primaryContainer else Color.Transparent)
             .border(if (selected) 2.dp else 1.dp, if (selected) c.primary else c.outlineVariant, shape)
             .selectable(selected, role = Role.RadioButton, onClick = onClick)
-            .padding(horizontal = 13.dp, vertical = 11.dp),
+            .padding(horizontal = 13.dp, vertical = 11.dp)
     ) {
         Column(Modifier.padding(end = if (selected) 22.dp else 0.dp), content = content)
         if (selected) {
@@ -160,5 +181,16 @@ internal fun <T> TwoColumns(items: List<T>, modifier: Modifier = Modifier, gap: 
 /** A small heading over a group, in capitals: "YOUR STOPS". Said as written ("Your stops"), not spelt out as capitals. */
 @Composable
 internal fun Label(text: String, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.onSurfaceVariant) {
-    Text(text.uppercase(), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp, color = color, modifier = modifier.semantics { heading(); contentDescription = text })
+    Text(
+        text.uppercase(),
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.Bold,
+        letterSpacing = 0.8.sp,
+        color = color,
+        modifier =
+            modifier.semantics {
+                heading()
+                contentDescription = text
+            },
+    )
 }

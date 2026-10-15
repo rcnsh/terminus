@@ -11,7 +11,20 @@
 // Only the times the API gives are shown: `later` is every later bus the
 // feed reported, and a line shows no times at stops other than yours.
 
-import { Fill, Icon, MARK, focusSoon, html, reducedMotion, store, useEffect, useLayoutEffect, useMemo, useRef, useStore } from '/assets/ui.js';
+import {
+  Fill,
+  Icon,
+  MARK,
+  focusSoon,
+  html,
+  reducedMotion,
+  store,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useStore,
+} from '/assets/ui.js';
 import { clock, send, serverNow, signedOut, t } from '/account/dom.js';
 import { campus, edit, limit, loadCampus, profile, reloadProfile, toast } from '/account/profile.js';
 import { SearchBox } from '/account/search-box.js';
@@ -105,7 +118,14 @@ export async function loadBoard(code) {
     // stopped=1: the services not running now are listed too, greyed.
     const data = await getJSON(`/api/arrivals?stop=${encodeURIComponent(code)}${pub}&stopped=1`);
     if (newer()) return;
-    keep(code, { stop: { ...data.stop, opposite: data.stop.opposite ?? stopOf(code)?.opposite ?? null }, board: data.board, available: data.available !== false, at: Date.now(), got: serverNow(), asOf: asOfMs(data) });
+    keep(code, {
+      stop: { ...data.stop, opposite: data.stop.opposite ?? stopOf(code)?.opposite ?? null },
+      board: data.board,
+      available: data.available !== false,
+      at: Date.now(),
+      got: serverNow(),
+      asOf: asOfMs(data),
+    });
   } catch (err) {
     if (err.message === 'signed out' || newer()) return;
     const was = boards.get().get(code);
@@ -119,7 +139,10 @@ export async function loadBoard(code) {
  * unless `ask`; without it, /me/nearby starts from your home.
  */
 async function findNearest({ ask = false } = {}) {
-  const state = await navigator.permissions?.query({ name: 'geolocation' }).then((p) => p.state).catch(() => null);
+  const state = await navigator.permissions
+    ?.query({ name: 'geolocation' })
+    .then((p) => p.state)
+    .catch(() => null);
   canAsk.set(Boolean(navigator.geolocation) && state !== 'denied');
   const at = await locate({ ask });
   if (ask && !at) toast(t('Location is off for this site. Search for a stop instead.'), { error: true });
@@ -130,7 +153,15 @@ async function findNearest({ ask = false } = {}) {
     if (!first) return nearest.set({ status: 'none' });
     const asOf = asOfMs(data);
     const got = serverNow();
-    for (const s of data.stops) keep(s.stop.code, { stop: { ...s.stop, opposite: s.opposite ?? null, oppositeAcross: s.oppositeAcross, oppositeName: s.oppositeName }, board: s.board, available: s.available, at: Date.now(), got, asOf });
+    for (const s of data.stops)
+      keep(s.stop.code, {
+        stop: { ...s.stop, opposite: s.opposite ?? null, oppositeAcross: s.oppositeAcross, oppositeName: s.oppositeName },
+        board: s.board,
+        available: s.available,
+        at: Date.now(),
+        got,
+        asOf,
+      });
     nearest.set({ status: 'ready', code: first.stop.code, distM: first.distM, fromHome: !at });
   } catch (err) {
     if (err.message === 'signed out') return;
@@ -206,7 +237,8 @@ export async function pullRefresh() {
     return code ? boards.get().get(shownCode(code)) : null;
   };
   const was = shown();
-  if (was?.at && !was.error && Date.now() - was.at < PULL_FRESH_MS) return { state: 'fresh', inS: nextTimedAt ? Math.max(1, Math.ceil((nextTimedAt - Date.now()) / 1000)) : null };
+  if (was?.at && !was.error && Date.now() - was.at < PULL_FRESH_MS)
+    return { state: 'fresh', inS: nextTimedAt ? Math.max(1, Math.ceil((nextTimedAt - Date.now()) / 1000)) : null };
   const asked = Date.now();
   // The nearest stop's page, or the page still finding it: found again, its board with it.
   if (page && page.kind !== 'pinned') {
@@ -336,7 +368,9 @@ export function aged(r, got, now) {
     etaS: left > -60 ? Math.max(0, left) : null,
     quality: r.quality === 'live' ? 'stale' : r.quality,
     laterText: null,
-    later: r.later?.map((x) => ({ ...x, etaS: x.etaS - s, ...(x.quality === 'live' ? { quality: 'stale' } : {}) })).filter((x) => x.etaS > 0),
+    later: r.later
+      ?.map((x) => ({ ...x, etaS: x.etaS - s, ...(x.quality === 'live' ? { quality: 'stale' } : {}) }))
+      .filter((x) => x.etaS > 0),
   };
 }
 
@@ -361,9 +395,11 @@ function Board({ code }) {
   if (!b?.board) return html`<p class="hint bt-empty">${b?.error ?? t('Checking…')}</p>`;
   const ending = b.board.filter((r) => r.endsAt && Date.parse(r.endsAt) > now && Date.parse(r.endsAt) - now <= ENDS_SOON_MS);
   return html`
-    ${b.board.length
-      ? html`<div class="card bt-board">${b.board.map((r) => html`<${Row} key=${r.svc} r=${aged(r, b.got, now)} now=${now} chevron onPick=${(svc) => go(lineHash(svc, code))} />`)}</div>`
-      : html`<p class="hint bt-empty">${b.available ? t('No buses due') : t('No times right now')}</p>`}
+    ${
+      b.board.length
+        ? html`<div class="card bt-board">${b.board.map((r) => html`<${Row} key=${r.svc} r=${aged(r, b.got, now)} now=${now} chevron onPick=${(svc) => go(lineHash(svc, code))} />`)}</div>`
+        : html`<p class="hint bt-empty">${b.available ? t('No buses due') : t('No times right now')}</p>`
+    }
     <div class="bt-foot">
       <div class="bt-ends">${ending.map((r) => html`<div key=${r.svc}><${Chip} svc=${r.svc} color=${r.color} cls="small" /> ${t('Runs until {0}', clock(r.endsAt))}</div>`)}</div>
       <div class="bt-status"><${Status} asOf=${b.asOf} error=${b.error} /></div>
@@ -378,15 +414,18 @@ function Board({ code }) {
  * What's in it takes the sky's ink (app.css, .sky-head). Each page has its
  * own, so it swipes with the page.
  */
-const Sky = ({ children }) => html`<div class="bt-sky"><div class="sky-head"><${Celestial} band />${children}</div><${Horizon} on=${null} low /></div>`;
+const Sky = ({ children }) =>
+  html`<div class="bt-sky"><div class="sky-head"><${Celestial} band />${children}</div><${Horizon} on=${null} low /></div>`;
 
 /** The dots under a page's name: where it is in the row. The nearest stop's is an arrow. */
 function Dots({ index, count, nearestFirst, onDot }) {
   if (count < 2) return null;
   return html`
     <div class="bt-dots">
-      ${Array.from({ length: count }, (_, j) =>
-        html`<button type="button" key=${j} class=${j === index ? 'on' : ''} aria-label=${t('Page {0} of {1}', j + 1, count)} aria-current=${j === index ? 'true' : undefined} onClick=${() => onDot(j)}>
+      ${Array.from(
+        { length: count },
+        (_, j) =>
+          html`<button type="button" key=${j} class=${j === index ? 'on' : ''} aria-label=${t('Page {0} of {1}', j + 1, count)} aria-current=${j === index ? 'true' : undefined} onClick=${() => onDot(j)}>
           ${j === 0 && nearestFirst && j !== index ? html`<${Icon} paths=${ARROW} />` : html`<i></i>`}
         </button>`,
       )}
@@ -437,11 +476,13 @@ function StopView({ code, kicker, dots, peek, above = null }) {
     </div>
     ${dots}
     <//>
-    ${opposite &&
-    html`<div class="segmented full bt-sides" role="radiogroup" aria-label=${twinAcross ? t('Side of the road') : t('Which stop')}>
+    ${
+      opposite &&
+      html`<div class="segmented full bt-sides" role="radiogroup" aria-label=${twinAcross ? t('Side of the road') : t('Which stop')}>
       <label><input type="radio" name=${`side-${code}`} checked=${shown === code} onChange=${() => setSide(false)} /><span>${twinAcross ? t('This side') : (longName(own) ?? stopName(code))}</span></label>
       <label><input type="radio" name=${`side-${code}`} checked=${shown !== code} onChange=${() => setSide(true)} /><span>${twinAcross ? t('Across the road') : twinName}</span></label>
-    </div>`}
+    </div>`
+    }
     <${Board} code=${shown} />
     ${peek}
   `;
@@ -509,7 +550,8 @@ function Home() {
         const dots = html`<${Dots} index=${j} count=${pages.length} nearestFirst=${pages[0].kind === 'nearest'} onDot=${turnTo} />`;
         const nextPage = pages[j + 1];
         const peek = nextPage?.code && html`<${Peek} code=${nextPage.code} onClick=${() => turnTo(j + 1)} />`;
-        if (pg.kind === 'loading') return html`<section class="bt-page" key="loading"><${Sky}><p class="hint bt-empty">${t('Checking…')}</p>${dots}<//>${peek}</section>`;
+        if (pg.kind === 'loading')
+          return html`<section class="bt-page" key="loading"><${Sky}><p class="hint bt-empty">${t('Checking…')}</p>${dots}<//>${peek}</section>`;
         if (pg.kind === 'find') return html`<section class="bt-page" key="find"><${Sky}><${FindPage} dots=${dots} /><//>${peek}</section>`;
         let kicker;
         if (pg.kind === 'pinned') kicker = html`<${Icon} paths=${STAR} class="bt-kicker-icon star" />${t('Pinned')}`;
@@ -594,7 +636,8 @@ const Plate = ({ b }) => html`${b.plate && html`<span class="bt-plate">${b.plate
 /** Your stop's time on the line, from its board row: nothing worked out here. */
 function YourTime({ r }) {
   if (!r) return null;
-  if (r.running === false) return html`<span class="bt-yours"><span class="bt-big none">${stoppedWords(r.stopped, r.resumesAt, tick.get())[0]}</span></span>`;
+  if (r.running === false)
+    return html`<span class="bt-yours"><span class="bt-big none">${stoppedWords(r.stopped, r.resumesAt, tick.get())[0]}</span></span>`;
   return html`
     <span class="bt-yours">
       <${Big} r=${r} />
@@ -642,14 +685,19 @@ function LinePage({ svc, stop }) {
   // Not running: its stops, no buses, and why.
   const stopped = data.running === false;
   const buses = data.available && !stopped ? data.buses : [];
-  const running = buses.length === 0 ? t('No buses running') : buses.length === 1 ? t('1 bus running') : t('{0} buses running', buses.length);
+  const running =
+    buses.length === 0 ? t('No buses running') : buses.length === 1 ? t('1 bus running') : t('{0} buses running', buses.length);
   const ends = data.endsAt && Date.parse(data.endsAt) > now ? t('Runs until {0}', clock(data.endsAt)) : null;
   const yours = data.stop?.index ?? -1;
   return html`
     ${head}
-    ${stopped
-      ? html`<p class="bt-stopped-note">${stoppedWords(data.stopped, data.resumesAt, now).filter(Boolean).map((w, i) => html`<span key=${i}>${w}</span>`)}</p>`
-      : html`<p class="bt-summary">${[data.available ? running : null, ends].filter(Boolean).join(' · ')}</p>`}
+    ${
+      stopped
+        ? html`<p class="bt-stopped-note">${stoppedWords(data.stopped, data.resumesAt, now)
+            .filter(Boolean)
+            .map((w, i) => html`<span key=${i}>${w}</span>`)}</p>`
+        : html`<p class="bt-summary">${[data.available ? running : null, ends].filter(Boolean).join(' · ')}</p>`
+    }
     ${!data.available && !stopped && html`<p class="bt-note">${t('Bus positions are unavailable right now.')}</p>`}
     <div class="bt-line-label"><span class="eyebrow">${t('{0} stops', n)}</span><span class="bt-status"><${Status} asOf=${mine.asOf} error=${mine.error} /></span></div>
     <ol class="bt-route" style=${svcVars(color)}>

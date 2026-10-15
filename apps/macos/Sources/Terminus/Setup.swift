@@ -1,8 +1,8 @@
 import AppKit
 import CoreImage.CIFilterBuiltins
-import UniformTypeIdentifiers
 import Observation
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// The account's setup, edited from the Mac: the same four steps as
 /// the phone's onboarding, and the devices on the account. Everything goes
@@ -37,13 +37,13 @@ final class SetupModel {
     init() {}
 
     #if DEBUG
-    /// Filled in, for snapshot renders.
-    init(profile: [String: Any], campus: Campus, devices: [Device]? = nil, pairCode: String? = nil) {
-        self.profile = profile
-        self.campus = campus
-        self.devices = devices
-        self.pairCode = pairCode
-    }
+        /// Filled in, for snapshot renders.
+        init(profile: [String: Any], campus: Campus, devices: [Device]? = nil, pairCode: String? = nil) {
+            self.profile = profile
+            self.campus = campus
+            self.devices = devices
+            self.pairCode = pairCode
+        }
     #endif
 
     func load() async {
@@ -99,7 +99,9 @@ final class SetupModel {
             if let n = o["homeStops"] as? Int, n > 0 { homeStops = n }
             if let n = o["places"] as? Int, n > 0 { places = n }
             if let n = o["placeLabel"] as? Int, n > 0 { placeLabel = n }
-            if let w = o["homeWalkMin"] as? [String: Any], let lo = w["min"] as? Int, let hi = w["max"] as? Int, lo <= hi { homeWalkMin = lo...hi }
+            if let w = o["homeWalkMin"] as? [String: Any], let lo = w["min"] as? Int, let hi = w["max"] as? Int, lo <= hi {
+                homeWalkMin = lo...hi
+            }
         }
     }
 
@@ -165,7 +167,8 @@ final class SetupModel {
         let to = d.goesTo
         if let same = places.first(where: { $0.to == to }) { return same.label }
         let label = String((d.kind == "building" || d.kind == "room" ? d.code : d.label).prefix(limits.placeLabel))
-        let slug = label.lowercased().replacingOccurrences(of: "[^a-z0-9]+", with: "-", options: .regularExpression).trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+        let slug = label.lowercased().replacingOccurrences(of: "[^a-z0-9]+", with: "-", options: .regularExpression).trimmingCharacters(
+            in: CharacterSet(charactersIn: "-"))
         var key = String(slug.prefix(24)).isEmpty ? "place" : String(slug.prefix(24))
         while places.contains(where: { $0.key == key }) { key = "\(key.prefix(21))-\(Int.random(in: 10...99))" }
         edit {
@@ -200,7 +203,8 @@ final class SetupModel {
     /// Undo for removePlace: back where it was. Not when the list is full, or that stop is a favourite again.
     func restorePlace(_ r: RemovedPlace) {
         let now = places
-        guard now.count < maxPlaces, !now.contains(where: { $0.to == r.place["to"] as? String || $0.key == r.place["key"] as? String }) else { return }
+        guard now.count < maxPlaces, !now.contains(where: { $0.to == r.place["to"] as? String || $0.key == r.place["key"] as? String })
+        else { return }
         edit {
             var list = $0["places"] as? [[String: Any]] ?? []
             list.insert(r.place, at: min(r.index, list.count))
@@ -285,7 +289,9 @@ final class SetupModel {
         ["trips", "manual"].flatMap { list in
             (profile?[list] as? [[String: Any]] ?? []).enumerated().compactMap { i, c -> Class? in
                 guard let day = c["day"] as? Int, let at = c["arriveByMin"] as? Int, let to = c["to"] as? String else { return nil }
-                return Class(list: list, index: i, day: day, arriveByMin: at, endMin: c["endMin"] as? Int, to: to, label: c["label"] as? String ?? "", weeks: c["weeks"] as? [Int])
+                return Class(
+                    list: list, index: i, day: day, arriveByMin: at, endMin: c["endMin"] as? Int, to: to,
+                    label: c["label"] as? String ?? "", weeks: c["weeks"] as? [Int])
             }
         }
     }
@@ -322,18 +328,26 @@ final class SetupModel {
     /// A favourite at its usual time each week (from before favourites lost them), with its place.
     var usual: [(place: String, day: Int, atMin: Int, label: String, to: String)] {
         (profile?["usual"] as? [[String: Any]] ?? []).compactMap { u in
-            guard let key = u["place"] as? String, let day = u["day"] as? Int, let at = u["atMin"] as? Int, let p = places.first(where: { $0.key == key }) else { return nil }
+            guard let key = u["place"] as? String, let day = u["day"] as? Int, let at = u["atMin"] as? Int,
+                let p = places.first(where: { $0.key == key })
+            else { return nil }
             return (key, day, at, p.label, p.to)
         }
     }
 
     func removeUsual(place: String, day: Int, atMin: Int) {
-        edit { $0["usual"] = ($0["usual"] as? [[String: Any]] ?? []).filter { !($0["place"] as? String == place && $0["day"] as? Int == day && $0["atMin"] as? Int == atMin) } }
+        edit {
+            $0["usual"] = ($0["usual"] as? [[String: Any]] ?? []).filter {
+                !($0["place"] as? String == place && $0["day"] as? Int == day && $0["atMin"] as? Int == atMin)
+            }
+        }
     }
 
     /// An unplaced class given a stop: added by hand there, as the account page does.
     func place(_ u: Unplaced, to: String) {
-        addManual(day: u.day, at: u.arriveByMin, end: u.endMin, to: to, label: "\(u.module) @ \(u.venue.split(separator: "-").first.map(String.init) ?? u.venue)", venue: u.venue)
+        addManual(
+            day: u.day, at: u.arriveByMin, end: u.endMin, to: to,
+            label: "\(u.module) @ \(u.venue.split(separator: "-").first.map(String.init) ?? u.venue)", venue: u.venue)
         skip(u)
     }
 
@@ -451,7 +465,9 @@ final class SetupModel {
             message = nil
         } catch let e as ApiError {
             // 403: an account without an email can't add devices.
-            message = e.status == 403 ? L("Add an email to your account first. Devices can only be added to an account with an email.") : e.message
+            message =
+                e.status == 403
+                ? L("Add an email to your account first. Devices can only be added to an account with an email.") : e.message
         } catch {
             message = L("Couldn't reach terminus. Check your connection and try again.")
         }
@@ -496,7 +512,9 @@ final class SetupModel {
     }
 
     private func object(_ data: Data) throws -> [String: Any] {
-        guard let o = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw ApiError(status: 0, message: L("terminus sent something this version can't read.")) }
+        guard let o = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw ApiError(status: 0, message: L("terminus sent something this version can't read."))
+        }
         return o
     }
 }
@@ -623,29 +641,40 @@ struct HomeStep: View {
     private var residence: Campus.Residence? { setup.residence }
 
     var body: some View {
-        StepTitle(title: L("Where do you live?"), sub: L("Where you catch the bus in the morning and head back to at night. Only the stops are saved."))
+        StepTitle(
+            title: L("Where do you live?"),
+            sub: L("Where you catch the bus in the morning and head back to at night. Only the stops are saved."))
         if let campus = setup.campus {
-            Picker(L("Residence"), selection: Binding(
-                get: { offCampus || residence == nil ? "" : residence!.code },
-                set: { code in
-                    if let r = campus.residences.first(where: { $0.code == code }) {
-                        offCampus = false
-                        setup.setResidence(r)
-                    } else {
-                        offCampus = true
+            Picker(
+                L("Residence"),
+                selection: Binding(
+                    get: { offCampus || residence == nil ? "" : residence!.code },
+                    set: { code in
+                        if let r = campus.residences.first(where: { $0.code == code }) {
+                            offCampus = false
+                            setup.setResidence(r)
+                        } else {
+                            offCampus = true
+                        }
                     }
-                }
-            )) {
+                )
+            ) {
                 Text(L("Off campus, or I'll pick a stop")).tag("")
                 ResidenceItems(residences: campus.residences)
             }
             if let r = residence, !offCampus {
-                Hint(L("Stops for %@: %@. terminus won't direct you home when you're already there.", r.name, r.stops.map(campus.stopName).joined(separator: ", ")))
+                Hint(
+                    L(
+                        "Stops for %@: %@. terminus won't direct you home when you're already there.", r.name,
+                        r.stops.map(campus.stopName).joined(separator: ", ")))
             } else {
-                Picker(L("Home stop"), selection: Binding(
-                    get: { setup.homeStops.first ?? "" },
-                    set: { setup.setFirstHomeStop($0) }
-                )) {
+                Picker(
+                    L("Home stop"),
+                    selection: Binding(
+                        get: { setup.homeStops.first ?? "" },
+                        set: { setup.setFirstHomeStop($0) }
+                    )
+                ) {
                     Text(L("Choose a stop")).tag("")
                     ForEach(campus.stops, id: \.code) { Text($0.name).tag($0.code) }
                 }
@@ -656,8 +685,11 @@ struct HomeStep: View {
                 .buttonStyle(.link)
                 if let locating { Hint(locating) }
             }
-            Stepper(L("Walk from home to your stop: %@ min", "\(setup.homeWalkMin)"), value: Binding(get: { setup.homeWalkMin }, set: { setup.setHomeWalk($0) }), in: setup.limits.homeWalkMin)
-                .padding(.top, 6)
+            Stepper(
+                L("Walk from home to your stop: %@ min", "\(setup.homeWalkMin)"),
+                value: Binding(get: { setup.homeWalkMin }, set: { setup.setHomeWalk($0) }), in: setup.limits.homeWalkMin
+            )
+            .padding(.top, 6)
             Hint(L("Included in your departure time when your location isn't available."))
         } else {
             ProgressView()
@@ -710,7 +742,9 @@ struct PaceStep: View {
         StepTitle(title: L("How you get around"), sub: L("Walks follow the paths on campus. Your pace sets how long they take."))
         ForEach(paces, id: \.0) { value, title, hint in
             let on = setup.walkPace == value
-            Button { setup.setPace(value) } label: {
+            Button {
+                setup.setPace(value)
+            } label: {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.headline)
                     Hint(hint)
@@ -718,7 +752,9 @@ struct PaceStep: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(10)
                 .background(RoundedRectangle(cornerRadius: 10).fill(on ? Color.brand.opacity(0.12) : Color.primary.opacity(0.04)))
-                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(on ? Color.brand : Color.primary.opacity(0.1), lineWidth: on ? 2 : 1))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10).strokeBorder(on ? Color.brand : Color.primary.opacity(0.1), lineWidth: on ? 2 : 1)
+                )
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -732,7 +768,10 @@ struct PaceStep: View {
         }
         .padding(.top, 6)
         // Untouched, this Mac's own style is the one shown picked.
-        Picker(L("Show times as"), selection: Binding(get: { setup.clock != "auto" ? setup.clock : (usesHour12 ? "12" : "24") }, set: { setup.setClock($0) })) {
+        Picker(
+            L("Show times as"),
+            selection: Binding(get: { setup.clock != "auto" ? setup.clock : (usesHour12 ? "12" : "24") }, set: { setup.setClock($0) })
+        ) {
             Text(L("12-hour (%@)", L("6:36 PM"))).tag("12")
             Text(L("24-hour (%@)", "18:36")).tag("24")
         }
@@ -752,8 +791,12 @@ private struct PermissionsStep: View {
             .fixedSize(horizontal: false, vertical: true)
         if app.leaveAlerts { Hint(L("On.")) } else { Button(L("Turn on leave alerts")) { app.setLeaveAlerts(true) } }
         Text(L("Location")).font(.headline).accessibilityAddTraits(.isHeader).padding(.top, 10)
-        Text(L("So directions start from your nearest stop. Your location is used only for that request, rounded to about 11 m, and never stored."))
-            .fixedSize(horizontal: false, vertical: true)
+        Text(
+            L(
+                "So directions start from your nearest stop. Your location is used only for that request, rounded to about 11 m, and never stored."
+            )
+        )
+        .fixedSize(horizontal: false, vertical: true)
         if app.needsLocation {
             Button(L("Allow location")) { app.askLocation() }
         } else if app.locationDenied {
@@ -801,7 +844,16 @@ struct DevicesView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(d.name ?? L("Device")) + Text(d.current == true ? "  " + L("This Mac") : "").foregroundColor(.secondary)
-                            Hint([platform(d.platform), d.lastSeen.map { L("last used %@", Date(timeIntervalSince1970: $0 / 1000).formatted(.relative(presentation: .named).locale(Lang.locale))) }].compactMap { $0 }.joined(separator: " · "))
+                            Hint(
+                                [
+                                    platform(d.platform),
+                                    d.lastSeen.map {
+                                        L(
+                                            "last used %@",
+                                            Date(timeIntervalSince1970: $0 / 1000).formatted(
+                                                .relative(presentation: .named).locale(Lang.locale)))
+                                    },
+                                ].compactMap { $0 }.joined(separator: " · "))
                         }
                         Spacer()
                         if d.current != true {
@@ -859,9 +911,11 @@ private struct PairCodeCard: View {
     var body: some View {
         VStack(spacing: 8) {
             Text(L("On the other device, open terminus and enter:"))
-            Text("\(code.prefix(3)) \(code.dropFirst(3))").font(.system(size: 30, weight: .bold, design: .monospaced)).textSelection(.enabled)
-                // A character at a time: read as a word, "K7Q" is mumbled.
-                .accessibilityLabel(L("Pairing code") + L(", ") + code.map(String.init).joined(separator: " "))
+            Text("\(code.prefix(3)) \(code.dropFirst(3))").font(.system(size: 30, weight: .bold, design: .monospaced)).textSelection(
+                .enabled
+            )
+            // A character at a time: read as a word, "K7Q" is mumbled.
+            .accessibilityLabel(L("Pairing code") + L(", ") + code.map(String.init).joined(separator: " "))
             Text(L("Or scan this with a phone's camera:")).font(.callout)
             if let qr = qrImage("\(Api.linkBase)/pair?code=\(code)") {
                 Image(nsImage: qr).interpolation(.none).resizable().frame(width: 160, height: 160)
@@ -880,10 +934,12 @@ private struct PairCodeCard: View {
         let f = CIFilter.qrCodeGenerator()
         f.message = Data(text.utf8)
         f.correctionLevel = "M"
-        let scale: CGFloat = 8, margin = 3 * scale
+        let scale: CGFloat = 8
+        let margin = 3 * scale
         guard let out = f.outputImage?.transformed(by: CGAffineTransform(scaleX: scale, y: scale)) else { return nil }
         let framed = out.transformed(by: CGAffineTransform(translationX: margin, y: margin))
-            .composited(over: CIImage(color: .white).cropped(to: out.extent.insetBy(dx: -margin, dy: -margin).offsetBy(dx: margin, dy: margin)))
+            .composited(
+                over: CIImage(color: .white).cropped(to: out.extent.insetBy(dx: -margin, dy: -margin).offsetBy(dx: margin, dy: margin)))
         guard let cg = CIContext().createCGImage(framed, from: framed.extent) else { return nil }
         return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
     }

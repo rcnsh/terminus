@@ -1,21 +1,23 @@
 import Foundation
 import Testing
+
 @testable import Terminus
 
 /// The map window's data, from replies shaped like the API's (see its /campus
 /// and /buses tests). The same cases as the phone's MapDataTest.
 
-private let campusJson = Data("""
-{"stops": [
-  {"code": "COM3", "name": "COM 3", "lat": 1.2948, "lon": 103.7745, "services": ["D1", "D2"], "core": true},
-  {"code": "BG-MRT", "name": "Botanic Gdns MRT", "lat": 1.3224, "lon": 103.8153, "services": ["P"], "core": false}
- ],
- "routes": {
-  "D2": {"seq": ["COM3"], "loop": true, "color": "#8e44c9", "line": [[103.7745, 1.2948], [103.7750, 1.2950], [103.7760, 1.2955]], "shaped": true},
-  "A1": {"seq": ["COM3"], "loop": true, "color": "#e53935", "line": [[103.77, 1.29], [103.78, 1.30]], "shaped": true},
-  "X": {"seq": [], "loop": false, "color": "nope", "line": [], "shaped": false}
- }}
-""".utf8)
+private let campusJson = Data(
+    """
+    {"stops": [
+      {"code": "COM3", "name": "COM 3", "lat": 1.2948, "lon": 103.7745, "services": ["D1", "D2"], "core": true},
+      {"code": "BG-MRT", "name": "Botanic Gdns MRT", "lat": 1.3224, "lon": 103.8153, "services": ["P"], "core": false}
+     ],
+     "routes": {
+      "D2": {"seq": ["COM3"], "loop": true, "color": "#8e44c9", "line": [[103.7745, 1.2948], [103.7750, 1.2950], [103.7760, 1.2955]], "shaped": true},
+      "A1": {"seq": ["COM3"], "loop": true, "color": "#e53935", "line": [[103.77, 1.29], [103.78, 1.30]], "shaped": true},
+      "X": {"seq": [], "loop": false, "color": "nope", "line": [], "shaped": false}
+     }}
+    """.utf8)
 
 private func json(_ data: Data) throws -> [String: Any] {
     try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
@@ -62,13 +64,16 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
 }
 
 @Test func busesParseWithoutPlates() throws {
-    let list = try #require(BusList.parse(Data("""
-    {"svc": "D2", "color": "#8e44c9", "available": true, "stale": false, "asOf": "2026-10-02T01:00:00Z",
-     "buses": [
-       {"id": "3f9a1c0b7e21", "lat": 1.295, "lon": 103.775, "heading": 92, "moving": true, "crowd": "high", "nextStop": {"code": "COM3", "name": "COM 3"}},
-       {"id": "aa", "lat": 1.3, "lon": 103.76, "heading": null, "moving": false, "crowd": null, "nextStop": null}
-     ]}
-    """.utf8)))
+    let list = try #require(
+        BusList.parse(
+            Data(
+                """
+                {"svc": "D2", "color": "#8e44c9", "available": true, "stale": false, "asOf": "2026-10-02T01:00:00Z",
+                 "buses": [
+                   {"id": "3f9a1c0b7e21", "lat": 1.295, "lon": 103.775, "heading": 92, "moving": true, "crowd": "high", "nextStop": {"code": "COM3", "name": "COM 3"}},
+                   {"id": "aa", "lat": 1.3, "lon": 103.76, "heading": null, "moving": false, "crowd": null, "nextStop": null}
+                 ]}
+                """.utf8)))
     #expect(list.available)
     #expect(list.buses[0].nextStop == "COM 3")
     #expect(list.buses[0].crowd == "high")
@@ -79,7 +84,11 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
 }
 
 @Test func boardDropsRowsWithNoTime() throws {
-    let b = try #require(StopBoard.parse(Data(#"{"available": true, "board": [{"svc": "D2", "etaS": 240, "quality": "live"}, {"svc": "D1", "etaS": null, "quality": "none"}]}"#.utf8)))
+    let b = try #require(
+        StopBoard.parse(
+            Data(
+                #"{"available": true, "board": [{"svc": "D2", "etaS": 240, "quality": "live"}, {"svc": "D1", "etaS": null, "quality": "none"}]}"#
+                    .utf8)))
     #expect(b.rows.map(\.svc) == ["D2"])
 }
 
@@ -162,11 +171,14 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
     // Like A1 at KRB: out east about 1.1 km, then back west on the other
     // side of the road, ending some 40 m from where it started. The loop
     // comes from /campus, not from where the line ends.
-    let campus = try #require(CampusMap.parse(Data("""
-    {"stops": [{"code": "KRB", "name": "KRB", "lat": 1.0, "lon": 103.0}], "routes": {
-      "A1": {"seq": ["KRB"], "loop": true, "line": [[103.0, 1.0], [103.01, 1.0], [103.01, 1.0004], [103.0, 1.0004]]},
-      "K": {"seq": ["PGP"], "loop": false, "line": [[103.0, 1.0], [103.01, 1.0], [103.01, 1.0004], [103.0, 1.0004]]}}}
-    """.utf8)))
+    let campus = try #require(
+        CampusMap.parse(
+            Data(
+                """
+                {"stops": [{"code": "KRB", "name": "KRB", "lat": 1.0, "lon": 103.0}], "routes": {
+                  "A1": {"seq": ["KRB"], "loop": true, "line": [[103.0, 1.0], [103.01, 1.0], [103.01, 1.0004], [103.0, 1.0004]]},
+                  "K": {"seq": ["PGP"], "loop": false, "line": [[103.0, 1.0], [103.01, 1.0], [103.01, 1.0004], [103.0, 1.0004]]}}}
+                """.utf8)))
     let loop = try #require(campus.routes["A1"]?.path)
     let a = loop.point(at: 0)
     let z = loop.point(at: loop.total - 1e-9)
@@ -198,11 +210,14 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
 }
 
 @Test func busesSayWhichStopTheyAreAt() throws {
-    let list = try #require(BusList.parse(Data("""
-    {"svc": "D2", "available": true, "buses": [
-      {"id": "a", "plate": "PD726D", "lat": 1.0, "lon": 103.0, "along": 812.5, "heading": 90, "moving": true, "crowd": null, "at": {"code": "COM3", "name": "COM 3"}, "slot": 1, "stretch": null, "nextStop": {"code": "BIZ2", "name": "BIZ 2"}, "upcoming": [{"code": "BIZ2", "name": "BIZ 2"}, {"code": "", "name": ""}, {"code": "PGP", "name": "Prince George's Park"}], "towards": {"code": "PGP", "name": "Prince George's Park"}},
-      {"id": "b", "lat": 1.0, "lon": 103.0, "along": 900, "heading": 90, "moving": true, "crowd": null, "at": null, "slot": 0, "stretch": {"from": 812.5, "to": 1100, "last": {"code": "COM3", "name": "COM 3"}}, "nextStop": null}]}
-    """.utf8)))
+    let list = try #require(
+        BusList.parse(
+            Data(
+                """
+                {"svc": "D2", "available": true, "buses": [
+                  {"id": "a", "plate": "PD726D", "lat": 1.0, "lon": 103.0, "along": 812.5, "heading": 90, "moving": true, "crowd": null, "at": {"code": "COM3", "name": "COM 3"}, "slot": 1, "stretch": null, "nextStop": {"code": "BIZ2", "name": "BIZ 2"}, "upcoming": [{"code": "BIZ2", "name": "BIZ 2"}, {"code": "", "name": ""}, {"code": "PGP", "name": "Prince George's Park"}], "towards": {"code": "PGP", "name": "Prince George's Park"}},
+                  {"id": "b", "lat": 1.0, "lon": 103.0, "along": 900, "heading": 90, "moving": true, "crowd": null, "at": null, "slot": 0, "stretch": {"from": 812.5, "to": 1100, "last": {"code": "COM3", "name": "COM 3"}}, "nextStop": null}]}
+                """.utf8)))
     #expect(list.buses[0].at == "COM 3")
     #expect(list.buses[0].slot == 1)
     #expect(list.buses[0].plate == "PD726D")
@@ -219,7 +234,11 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
     #expect(list.buses[1].upcomingCodes == [])
     #expect(list.buses[1].upcoming == [], "an older API: no stops ahead")
     #expect(list.buses[1].towards == nil)
-    let end = try #require(BusList.parse(Data(#"{"svc": "A1", "available": true, "buses": [{"id": "c", "lat": 1.0, "lon": 103.0, "upcoming": [], "towards": {"code": "KR-MRT", "name": "KR MRT"}}]}"#.utf8)))
+    let end = try #require(
+        BusList.parse(
+            Data(
+                #"{"svc": "A1", "available": true, "buses": [{"id": "c", "lat": 1.0, "lon": 103.0, "upcoming": [], "towards": {"code": "KR-MRT", "name": "KR MRT"}}]}"#
+                    .utf8)))
     #expect(end.buses[0].upcoming == [], "past a one-way line's end")
     #expect(end.buses[0].towards == "KR MRT")
 }
@@ -244,27 +263,35 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
 }
 
 @Test func busesSayHowFarAlongTheirLineTheyAre() throws {
-    let list = try #require(BusList.parse(Data("""
-    {"svc": "D2", "available": true, "buses": [
-      {"id": "a", "lat": 1.0, "lon": 103.0, "along": 812.5, "heading": 90, "moving": true, "crowd": null, "nextStop": null},
-      {"id": "b", "lat": 1.0, "lon": 103.0, "along": null, "heading": null, "moving": false, "crowd": null, "nextStop": null}]}
-    """.utf8)))
+    let list = try #require(
+        BusList.parse(
+            Data(
+                """
+                {"svc": "D2", "available": true, "buses": [
+                  {"id": "a", "lat": 1.0, "lon": 103.0, "along": 812.5, "heading": 90, "moving": true, "crowd": null, "nextStop": null},
+                  {"id": "b", "lat": 1.0, "lon": 103.0, "along": null, "heading": null, "moving": false, "crowd": null, "nextStop": null}]}
+                """.utf8)))
     #expect(list.buses[0].along == 812.5)
     #expect(list.buses[1].along == nil)
 }
 
 @Test func theStyleReadsTheMapFileFromDisk() throws {
-    let style = try json(Data(#"{"version": 8, "sources": {"protomaps": {"type": "vector", "url": "pmtiles://https://terminus.run/map/campus.pmtiles"}}, "layers": []}"#.utf8))
+    let style = try json(
+        Data(
+            #"{"version": 8, "sources": {"protomaps": {"type": "vector", "url": "pmtiles://https://terminus.run/map/campus.pmtiles"}}, "layers": []}"#
+                .utf8))
     let local = MapFiles.localTiles(style, path: "/Users/me/Library/Application Support/sh.rcn.terminus/map/campus.pmtiles")
     let src = (local["sources"] as? [String: Any])?["protomaps"] as? [String: Any]
     #expect(src?["url"] as? String == "pmtiles://file:///Users/me/Library/Application%20Support/sh.rcn.terminus/map/campus.pmtiles")
 }
 
 @Test func withoutTheMapFileOnlyTheBackgroundStays() throws {
-    let style = try json(Data("""
-    {"version": 8, "glyphs": "g", "sources": {"protomaps": {"type": "vector", "url": "pmtiles://https://x/map/campus.pmtiles"}},
-     "layers": [{"id": "background", "type": "background"}, {"id": "roads", "type": "line", "source": "protomaps"}]}
-    """.utf8))
+    let style = try json(
+        Data(
+            """
+            {"version": 8, "glyphs": "g", "sources": {"protomaps": {"type": "vector", "url": "pmtiles://https://x/map/campus.pmtiles"}},
+             "layers": [{"id": "background", "type": "background"}, {"id": "roads", "type": "line", "source": "protomaps"}]}
+            """.utf8))
     let plain = MapFiles.withoutBaseMap(style)
     #expect((plain["sources"] as? [String: Any])?.isEmpty == true)
     #expect((plain["layers"] as? [Any])?.count == 1)
@@ -272,10 +299,12 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
 }
 
 @Test func lastKnownBusesAreMarkedStale() throws {
-    let list = try #require(BusList.parse(Data(#"{"svc": "D2", "available": true, "stale": true, "buses": [{"id": "a", "lat": 1.3, "lon": 103.77}]}"#.utf8)))
+    let list = try #require(
+        BusList.parse(Data(#"{"svc": "D2", "available": true, "stale": true, "buses": [{"id": "a", "lat": 1.3, "lon": 103.77}]}"#.utf8)))
     #expect(list.stale)
     #expect(list.buses.count == 1)
-    #expect(BusList.parse(Data(#"{"svc": "D2", "available": true, "buses": []}"#.utf8))?.stale == false, "an older server's answer is fresh")
+    #expect(
+        BusList.parse(Data(#"{"svc": "D2", "available": true, "buses": []}"#.utf8))?.stale == false, "an older server's answer is fresh")
 }
 
 @Test func busesAreDrawnInTheFeedsOrder() {
@@ -306,7 +335,11 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
 }
 
 @Test func aStopsBoardSaysTheServersTimes() throws {
-    let b = try #require(StopBoard.parse(Data(#"{"available": true, "board": [{"svc": "D2", "etaS": 240, "quality": "live", "eta": "4 min"}, {"svc": "A1", "etaS": 300, "quality": "live"}]}"#.utf8)))
+    let b = try #require(
+        StopBoard.parse(
+            Data(
+                #"{"available": true, "board": [{"svc": "D2", "etaS": 240, "quality": "live", "eta": "4 min"}, {"svc": "A1", "etaS": 300, "quality": "live"}]}"#
+                    .utf8)))
     #expect(b.rows[0].eta == "4 min")
     #expect(b.rows[1].eta == nil, "an older server's row is worded here")
 }

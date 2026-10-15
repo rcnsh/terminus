@@ -25,8 +25,9 @@ func drawMark(at origin: CGPoint, unit u: CGFloat, height canvasH: CGFloat) {
 }
 
 func render(_ w: Int, _ h: Int, to path: String, draw: () -> Void) {
-    let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: w, pixelsHigh: h, bitsPerSample: 8, samplesPerPixel: 4,
-                               hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+    let rep = NSBitmapImageRep(
+        bitmapDataPlanes: nil, pixelsWide: w, pixelsHigh: h, bitsPerSample: 8, samplesPerPixel: 4,
+        hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
     rep.size = NSSize(width: w, height: h)
     NSGraphicsContext.saveGraphicsState()
     NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
@@ -70,26 +71,34 @@ func feature(_ promise: String, _ note: String, to path: String) {
         NSRect(x: 0, y: 0, width: 1024, height: 500).fill()
         drawMark(at: CGPoint(x: 96, y: 140), unit: 3.1, height: 500)
 
-        let word = NSMutableAttributedString(string: "terminus", attributes: [
-            .font: NSFont.systemFont(ofSize: 104, weight: .bold), .foregroundColor: paper, .kern: -2,
-        ])
+        let word = NSMutableAttributedString(
+            string: "terminus",
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 104, weight: .bold), .foregroundColor: paper, .kern: -2,
+            ])
         word.addAttribute(.foregroundColor, value: orange, range: NSRange(location: 5, length: 3))
         word.draw(at: NSPoint(x: 360, y: 500 - 104 - 124))
 
         let para = NSMutableParagraphStyle()
         para.lineSpacing = 6
-        let line = NSAttributedString(string: promise, attributes: [
-            .font: NSFont.systemFont(ofSize: 38, weight: .medium), .foregroundColor: muted, .paragraphStyle: para,
-        ])
+        let line = NSAttributedString(
+            string: promise,
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 38, weight: .medium), .foregroundColor: muted, .paragraphStyle: para,
+            ])
         line.draw(in: NSRect(x: 364, y: 500 - 248 - 110, width: 640, height: 110))
 
-        let small = NSAttributedString(string: note, attributes: [
-            .font: NSFont.systemFont(ofSize: 22, weight: .regular), .foregroundColor: muted.withAlphaComponent(0.6),
-        ])
+        let small = NSAttributedString(
+            string: note,
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 22, weight: .regular), .foregroundColor: muted.withAlphaComponent(0.6),
+            ])
         small.draw(at: NSPoint(x: 366, y: 500 - 372 - 30))
     }
 }
-feature("When to leave for class,\nand which NUS shuttle to catch.", "Unofficial · not affiliated with NUS",
-        to: "\(out)/feature-graphic.png")
-feature("什么时候出发上课，\n该搭哪班 NUS 校园巴士。", "非官方应用 · 与 NUS 无关联",
-        to: "\(out)/feature-graphic-zh.png")
+feature(
+    "When to leave for class,\nand which NUS shuttle to catch.", "Unofficial · not affiliated with NUS",
+    to: "\(out)/feature-graphic.png")
+feature(
+    "什么时候出发上课，\n该搭哪班 NUS 校园巴士。", "非官方应用 · 与 NUS 无关联",
+    to: "\(out)/feature-graphic-zh.png")

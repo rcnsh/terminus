@@ -4,10 +4,7 @@ import java.io.File
 import java.util.Locale
 import javax.xml.parsers.DocumentBuilderFactory
 
-/**
- * strings.xml for unit tests, which have no Context: [L] reads from here.
- * `install("values-zh")` for the Chinese.
- */
+/** strings.xml for unit tests, which have no Context: [L] reads from here. `install("values-zh")` for the Chinese. */
 object TestStrings {
     fun read(dir: String): Map<String, String> {
         val doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(File("src/main/res/$dir/strings.xml"))

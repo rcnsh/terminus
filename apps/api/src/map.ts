@@ -89,14 +89,22 @@ export async function handleMap(req: Request, url: URL, env: Env, ctx?: Executio
     const id = `${url.origin} ${theme} ${lang}`;
     let style = styles.get(id);
     if (!style) styles.set(id, (style = JSON.stringify(mapStyle(url.origin, theme, lang))));
-    return new Response(style, { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=3600', ...CORS } });
+    return new Response(style, {
+      headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=3600', ...CORS },
+    });
   }
 
   if (!env.DOWNLOADS) return json({ error: 'not found' }, 404);
   // Asked at most once per request, and only when R2 is about to be read:
   // never for what the edge cache already has.
   let allowed: Promise<boolean> | null = null;
-  const mayRead = () => (allowed ??= env.RL_MAP ? env.RL_MAP.limit({ key: `map:${clientKey(req)}` }).then((r) => r.success, () => true) : Promise.resolve(true));
+  const mayRead = () =>
+    (allowed ??= env.RL_MAP
+      ? env.RL_MAP.limit({ key: `map:${clientKey(req)}` }).then(
+          (r) => r.success,
+          () => true,
+        )
+      : Promise.resolve(true));
 
   if (path === `/map/${TILES}`) return edgePart(req, env.DOWNLOADS, PREFIX + TILES, 'application/vnd.pmtiles', 86400, mayRead, ctx);
 
@@ -118,7 +126,11 @@ export async function handleMap(req: Request, url: URL, env: Env, ctx?: Executio
   }
 
   const sprite = SPRITE.exec(path);
-  if (sprite) return file(`${PREFIX}sprites/${SPRITES}/${sprite[1]}${sprite[2] ?? ''}.${sprite[3]}`, sprite[3] === 'png' ? 'image/png' : 'application/json');
+  if (sprite)
+    return file(
+      `${PREFIX}sprites/${SPRITES}/${sprite[1]}${sprite[2] ?? ''}.${sprite[3]}`,
+      sprite[3] === 'png' ? 'image/png' : 'application/json',
+    );
   return json({ error: 'not found' }, 404);
 }
 
@@ -200,7 +212,9 @@ async function headOf(
   }
   const head = { etag: obj.etag, httpEtag: obj.httpEtag, size: obj.size, atMs: nowMs };
   heads.set(key, head);
-  const put = cache.put(headId(key), Response.json(head, { headers: { 'cache-control': `public, max-age=${HEAD_KEPT_S}` } })).catch(() => {});
+  const put = cache
+    .put(headId(key), Response.json(head, { headers: { 'cache-control': `public, max-age=${HEAD_KEPT_S}` } }))
+    .catch(() => {});
   if (ctx) ctx.waitUntil(put);
   else await put;
   return head;
@@ -211,7 +225,13 @@ async function cachedHead(cache: Cache, key: string): Promise<Head | undefined> 
   try {
     const hit = await cache.match(headId(key));
     const head = hit ? ((await hit.json()) as Head) : undefined;
-    return head && typeof head.etag === 'string' && typeof head.httpEtag === 'string' && Number.isFinite(head.size) && Number.isFinite(head.atMs) ? head : undefined;
+    return head &&
+      typeof head.etag === 'string' &&
+      typeof head.httpEtag === 'string' &&
+      Number.isFinite(head.size) &&
+      Number.isFinite(head.atMs)
+      ? head
+      : undefined;
   } catch {
     return undefined;
   }
@@ -224,7 +244,8 @@ async function forgetHead(cache: Cache, key: string): Promise<void> {
 }
 
 /** Conditions beyond If-None-Match, which R2 decides. */
-const otherConditions = (req: Request) => ['if-match', 'if-modified-since', 'if-unmodified-since', 'if-range'].some((h) => req.headers.has(h));
+const otherConditions = (req: Request) =>
+  ['if-match', 'if-modified-since', 'if-unmodified-since', 'if-range'].some((h) => req.headers.has(h));
 
 /**
  * The byte range a Range header asks for, within a file this size: null for
@@ -278,7 +299,8 @@ async function edgePart(
   if (otherConditions(req)) return fromR2();
 
   const range = rangeOf(req.headers.get('range'), head.size);
-  if (range === 'unsatisfiable') return new Response(null, { status: 416, headers: { 'content-range': `bytes */${head.size}`, ...PART_CORS } });
+  if (range === 'unsatisfiable')
+    return new Response(null, { status: 416, headers: { 'content-range': `bytes */${head.size}`, ...PART_CORS } });
   if (range === 'other') return fromR2();
   const { offset, length } = range ?? { offset: 0, length: head.size };
   if (length > MAX_CACHED_BYTES) return fromR2();
@@ -305,7 +327,9 @@ async function edgePart(
     // Read whole once, for the cache and this answer: a miss is once per
     // piece per data centre.
     const bytes = await obj.arrayBuffer();
-    const put = cache.put(id, new Response(bytes.slice(0), { headers: { 'content-type': type, 'cache-control': `public, max-age=${maxAgeS}` } })).catch(() => {});
+    const put = cache
+      .put(id, new Response(bytes.slice(0), { headers: { 'content-type': type, 'cache-control': `public, max-age=${maxAgeS}` } }))
+      .catch(() => {});
     if (ctx) ctx.waitUntil(put);
     else await put;
     body = bytes;
@@ -367,7 +391,12 @@ async function edgeFile(
     return new Response(null, { status: 304, headers });
   }
   const bytes = await obj.arrayBuffer();
-  const kept = { 'content-type': type, 'cache-control': `public, max-age=${maxAgeS}`, etag: obj.httpEtag, 'content-length': String(bytes.byteLength) };
+  const kept = {
+    'content-type': type,
+    'cache-control': `public, max-age=${maxAgeS}`,
+    etag: obj.httpEtag,
+    'content-length': String(bytes.byteLength),
+  };
   const put = cache.put(id, new Response(bytes.slice(0), { headers: kept })).catch(() => {});
   if (ctx) ctx.waitUntil(put);
   else await put;
@@ -380,7 +409,10 @@ async function edgeFile(
 
 /** If-None-Match names this ETag. Cloudflare weakens an ETag when it compresses the body, so W/ counts too. */
 export const matchesEtag = (req: Request, etag: string) =>
-  req.headers.get('if-none-match')?.split(',').some((t) => t.trim().replace(/^W\//, '') === etag) ?? false;
+  req.headers
+    .get('if-none-match')
+    ?.split(',')
+    .some((t) => t.trim().replace(/^W\//, '') === etag) ?? false;
 
 /** Open to any page, as every answer for the map's files is, the errors too. */
 const PART_CORS = { 'access-control-allow-origin': '*', 'access-control-expose-headers': 'etag, content-range, content-length' };
@@ -419,7 +451,10 @@ async function servePart(req: Request, bucket: R2Bucket, key: string, type: stri
     if (ranged && /range|satisf/i.test(String((e as Error)?.message ?? e))) {
       // The file's size, as the edge path's 416 says it, when R2 will tell.
       const size = (await bucket.head(key).catch(() => null))?.size;
-      return new Response(null, { status: 416, headers: { ...(size != null ? { 'content-range': `bytes */${size}` } : {}), ...PART_CORS } });
+      return new Response(null, {
+        status: 416,
+        headers: { ...(size != null ? { 'content-range': `bytes */${size}` } : {}), ...PART_CORS },
+      });
     }
     return unavailable();
   }
