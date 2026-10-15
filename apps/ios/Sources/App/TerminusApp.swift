@@ -5,6 +5,12 @@ import UIKit
 struct TerminusApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
+    init() {
+        #if DEBUG
+            DevLaunch.apply()
+        #endif
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()
@@ -33,3 +39,23 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         await Push.received(userInfo)
     }
 }
+
+#if DEBUG
+    /// For the UI tests and screenshots, in debug builds only: TERMINUS_RESET=1
+    /// starts signed out with nothing kept, TERMINUS_LANG=en|zh|auto sets the
+    /// language, TERMINUS_THEME=light|dark the appearance.
+    enum DevLaunch {
+        static func apply() {
+            let env = ProcessInfo.processInfo.environment
+            if env["TERMINUS_RESET"] == "1" {
+                TokenStore.clear()
+                for k in Shared.defaults.dictionaryRepresentation().keys { Shared.defaults.removeObject(forKey: k) }
+                Shared.lastAnswer = nil
+                Shared.lastDay = nil
+                Shared.lastNearby = nil
+            }
+            if let l = env["TERMINUS_LANG"] { Lang.pref = l }
+            if let t = env["TERMINUS_THEME"] { Shared.defaults.set(t, forKey: "theme") }
+        }
+    }
+#endif

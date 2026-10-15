@@ -177,18 +177,31 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         # The API's golden answers and search cases, read where they are.
         FIXTURES: $(SRCROOT)/../api/test/fixtures
+  TerminusUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: UITests
+    dependencies:
+      - target: Terminus
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: sh.rcn.terminus.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Terminus
 schemes:
   Terminus:
     build:
       targets:
         Terminus: all
         TerminusTests: [test]
+        TerminusUITests: [test]
     run:
       config: Debug
     test:
       config: Debug
       gatherCoverageData: false
-      targets: [TerminusTests]
+      targets: [TerminusTests, TerminusUITests]
       environmentVariables:
         FIXTURES: $(SRCROOT)/../api/test/fixtures
     archive:

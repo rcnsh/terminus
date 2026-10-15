@@ -2,8 +2,8 @@ import Foundation
 
 /// The app in English or Simplified Chinese, switched in Settings without a
 /// restart: `L` looks each phrase up in the chosen language's table
-/// (Support/zh-Hans.lproj/Localizable.strings, keyed by the English it
-/// replaces). "auto" follows the phone. The widgets and the notification
+/// (Support/zh-Hans.lproj/*.strings, keyed by the English they
+/// replace). "auto" follows the phone. The widgets and the notification
 /// service read the same choice from the app group. The server writes
 /// answers, cards and errors in this language too ([header]).
 enum Lang {
@@ -39,8 +39,12 @@ enum Lang {
 
     static func table() -> [String: String] {
         if let t = cache.withLock({ $0 }) { return t }
-        let url = Bundle.main.url(forResource: "Localizable", withExtension: "strings", subdirectory: nil, localization: "zh-Hans")
-        let t = url.flatMap { NSDictionary(contentsOf: $0) as? [String: String] } ?? [:]
+        // Every table in zh-Hans.lproj: Localizable, and one per part of the app (Buses.strings, Map.strings, ...).
+        var t: [String: String] = [:]
+        for url in Bundle.main.urls(forResourcesWithExtension: "strings", subdirectory: nil, localization: "zh-Hans") ?? []
+        where url.lastPathComponent != "InfoPlist.strings" {
+            t.merge((NSDictionary(contentsOf: url) as? [String: String]) ?? [:]) { a, _ in a }
+        }
         cache.withLock { $0 = t }
         return t
     }
