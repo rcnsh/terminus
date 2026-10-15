@@ -33,13 +33,19 @@ struct BusesView: View {
         }
         // A stop picked elsewhere (Now's nearby stops): its board, over the tab's home.
         .onChange(of: app.openStop) { openPicked() }
+        .onChange(of: app.openLine) { openPicked() }
     }
 
     private func openPicked() {
-        guard let code = app.openStop else { return }
-        app.openStop = nil
-        model.sync()
-        model.path = [.stop(code)]
+        if let code = app.openStop {
+            app.openStop = nil
+            model.sync()
+            model.path = [.stop(code)]
+        } else if let svc = app.openLine {
+            app.openLine = nil
+            model.sync()
+            model.path = [.line(svc: svc, from: nil)]
+        }
     }
 
     #if DEBUG

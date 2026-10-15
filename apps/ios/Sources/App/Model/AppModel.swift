@@ -79,6 +79,12 @@ final class AppModel {
     /// A stop to show on the Buses tab, picked elsewhere (Now's Nearby, a
     /// widget): Buses shows it and sets this back to nil.
     var openStop: String?
+    /// A service's line to show on the Buses tab (the map's "Show as list"
+    /// with no stop open): Buses shows it and sets this back to nil.
+    var openLine: String?
+    /// "Add your email" asked for elsewhere (Now's "Is this wrong?"):
+    /// Settings opens the sign-in as it shows, then sets this back.
+    var wantsSignIn = false
 
     // MARK: "Is this wrong?"
 

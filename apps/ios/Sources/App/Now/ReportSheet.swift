@@ -87,8 +87,9 @@ struct ReportSheet: View {
                 .padding(.top, 10)
             Button(L("Add your email")) {
                 dismiss()
+                // A flag rather than a notification: Settings may not have been built yet.
+                app.wantsSignIn = true
                 NotificationCenter.default.post(name: .openTab, object: MainTabs.Tab.settings)
-                NotificationCenter.default.post(name: .signIn, object: nil)
             }
             .buttonStyle(.primary)
             .padding(.top, 20)
@@ -164,11 +165,6 @@ struct ReportSheet: View {
         }
         return s
     }
-}
-
-extension Notification.Name {
-    /// Asks Settings to sign this phone in with an email (an anonymous account adding one).
-    static let signIn = Notification.Name("terminus.signIn")
 }
 
 /// "Go later today at…": a one-off trip to the place on screen, planned like a class.

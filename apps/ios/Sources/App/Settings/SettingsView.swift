@@ -26,6 +26,8 @@ struct SettingsView: View {
         .onChange(of: app.session) { _, _ in model.reset() }
         // "Add your email", here or from Now's "Is this wrong?": the email sign-in, which keeps this phone's setup.
         .onReceive(NotificationCenter.default.publisher(for: .settingsSignIn)) { _ in signingIn = true }
+        .onAppear(perform: signInIfAsked)
+        .onChange(of: app.wantsSignIn) { signInIfAsked() }
         .sheet(isPresented: $signingIn, onDismiss: { Task { await model.refresh() } }) { SignInSheet() }
         // A NUSMods link shared into the app: straight to Timetable, to import it.
         .onReceive(NotificationCenter.default.publisher(for: .settingsImportTimetable)) { n in
@@ -33,6 +35,14 @@ struct SettingsView: View {
             model.sharedLink = link
             model.path = [.timetable]
         }
+    }
+}
+
+extension SettingsView {
+    private func signInIfAsked() {
+        guard app.wantsSignIn else { return }
+        app.wantsSignIn = false
+        signingIn = true
     }
 }
 

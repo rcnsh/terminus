@@ -35,7 +35,14 @@ struct MainTabs: View {
     enum Tab: Hashable { case now, buses, map, settings }
 
     var body: some View {
-        TabView(selection: $tab) {
+        // The Map tab tapped while on it goes back to how it opened, as on Android.
+        let selection = Binding(
+            get: { tab },
+            set: { t in
+                if t == tab, t == .map { MapModel.shared.home() }
+                tab = t
+            })
+        TabView(selection: selection) {
             NowView()
                 .tabItem { Label(L("Now"), systemImage: "clock") }
                 .tag(Tab.now)

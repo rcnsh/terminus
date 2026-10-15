@@ -191,16 +191,9 @@ struct MapTab: View {
 
     /// The map as a list, for VoiceOver: the Buses tab, on the open stop or the chosen service's line.
     private func showList() {
+        if let stop = map.openStop { AppModel.shared.openStop = stop } else if let svc = map.selected { AppModel.shared.openLine = svc }
         NotificationCenter.default.post(name: .openTab, object: MainTabs.Tab.buses)
-        NotificationCenter.default.post(
-            name: .showInBuses, object: nil, userInfo: ["stop": map.openStop as Any, "svc": map.selected as Any])
     }
-}
-
-extension Notification.Name {
-    /// The Map tab's "Show as list": the Buses tab on `userInfo["stop"]`, else
-    /// on `userInfo["svc"]`'s line (either may be missing).
-    static let showInBuses = Notification.Name("terminus.showInBuses")
 }
 
 extension MapModel.BusStatus {
