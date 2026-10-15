@@ -554,6 +554,7 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
                 store.email = email
                 store.anonymous = false
             }
+            Session.signedIn(getApplication())
             // A new account, or one that was never set up, goes through setup:
             // only on /me's word, asked once more after a moment. Unanswered,
             // no setup now (its pickers save the whole profile, which could
