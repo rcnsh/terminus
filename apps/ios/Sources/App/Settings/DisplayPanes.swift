@@ -22,14 +22,14 @@ struct SettingsNotificationsPane: View {
         SettingsGroup(title: L("Before class"), hint: L("Then updates on your ride or the next way there.")) {
             SettingSwitch(
                 label: L("Notify me when to leave for class"), sub: L("A reminder 5 minutes before you need to leave"),
-                isOn: Binding(get: { leave }, set: setLeave), id: "settings.leaveAlerts")
+                isOn: Binding(get: { leave }, set: { setLeave($0) }), id: "settings.leaveAlerts")
         }
         SettingsGroup(
             title: L("During a trip"), hint: L("Your bus and a countdown on the Lock Screen and in the Dynamic Island, until you arrive.")
         ) {
             SettingSwitch(
                 label: L("Live Activity during trips"), sub: L("The next bus and a countdown, until you arrive"),
-                isOn: Binding(get: { live }, set: setLive), id: "settings.liveActivity")
+                isOn: Binding(get: { live }, set: { setLive($0) }), id: "settings.liveActivity")
         }
         .onAppear(perform: check)
         .onChange(of: phase) { _, p in if p == .active { check() } }
@@ -78,14 +78,14 @@ struct SettingsLanguagePane: View {
         ) {
             SettingSegments(
                 label: L("Language"), options: [("auto", L("Auto")), ("en", "English"), ("zh", "中文")],
-                selection: Binding(get: { prefs.lang }, set: model.setLang), id: "settings.lang")
+                selection: Binding(get: { prefs.lang }, set: { model.setLang($0) }), id: "settings.lang")
         }
         SettingsGroup(
             title: L("Time format"), hint: L("For every time terminus shows, here, on your Mac and on the web. Auto follows this phone.")
         ) {
             SettingSegments(
                 label: L("Time format"), options: [("auto", L("Auto")), ("12", L("12-hour")), ("24", L("24-hour"))],
-                selection: Binding(get: { prefs.clock }, set: model.setClock), id: "settings.clock")
+                selection: Binding(get: { prefs.clock }, set: { model.setClock($0) }), id: "settings.clock")
         }
     }
 }
