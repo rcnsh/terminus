@@ -1389,7 +1389,7 @@ function StopSheet({ code, box, onGoTo, onSaved, active }) {
       if (same) {
         let removed = null;
         await saveNow((x) => {
-          removed = withoutPlace(x, same.key);
+          removed = withoutPlace(x, same.key) ?? removed;
         });
         onSaved?.();
         if (removed) {
@@ -1401,7 +1401,8 @@ function StopSheet({ code, box, onGoTo, onSaved, active }) {
           toast(t('{0} removed from favourites', same.label), { action: { label: t('Undo'), run: undo } });
         }
       } else {
-        await saveNow((x) => withPlace(x, stop.code, stop.name));
+        const keep = {};
+        await saveNow((x) => withPlace(x, stop.code, stop.name, keep));
         onSaved?.();
       }
     } catch (err) {
