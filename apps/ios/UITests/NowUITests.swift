@@ -120,6 +120,17 @@ final class NowUITests: XCTestCase {
         app.buttons["report.done"].tap()
     }
 
+    /// VoiceOver reads the card as sentences of the server's words, not a word at a time.
+    func testTheCardIsReadAsSentences() {
+        let app = launch(sky: "day")
+        let card = app.descendants(matching: .any)["now.card"]
+        let said = card.label
+        print("card says: \(said)")
+        XCTAssertTrue(said.contains(". "), said)
+        XCTAssertFalse(said.contains("~"), said)
+        XCTAssertFalse(said.contains(" · "), said)
+    }
+
     func testLargeText() {
         let app = XCUIApplication.terminus(signedIn: true, extra: ["TERMINUS_SKY": "day"])
         app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityL"]
