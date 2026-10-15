@@ -267,6 +267,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** A token was just stored (a new account, or a sign-in): start showing answers. */
     fun signedIn() {
+        // Maybe into another account than this phone's (a guest signing in with an email): a request still out for that one isn't shown.
+        endAccount()
         _state.update { it.copy(paired = true, pairError = null, answers = emptyMap(), rawAnswers = emptyMap()) }
         Refresher.schedule(getApplication())
         // A new session: this phone's push address goes to it.
@@ -312,7 +314,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * Every request still out for the account, cancelled. One past its save already is kept from the phone by [Store.saveAnswer]'s token
      * check.
      */
-    private fun endAccount() = account.cancelChildren()
+    private fun endAccount() {
+        account.cancelChildren()
+        // A request cancelled says nothing: what it had under way would otherwise stay so, its buttons off.
+        _state.update { it.copy(loading = false, signalling = false, reportSending = false) }
+    }
 
     /**
      * A 401 for [token]: signed out ([Session.rejected]), and the screen follows through [Session.signedOut]. True when [e] was that; false

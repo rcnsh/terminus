@@ -3,11 +3,13 @@ package sh.rcn.terminus.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -88,6 +90,12 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     private val _state = MutableStateFlow(AccountState(email = store.email))
     val state: StateFlow<AccountState> = _state
 
+    /**
+     * The parent of every request made for the account signed in: all cancelled together on signing out or into another account
+     * ([endAccount]), so a reply for the last one isn't written into the next one's settings, devices or timetable.
+     */
+    private val account = SupervisorJob(viewModelScope.coroutineContext[Job])
+
     init {
         // Signed out by a refused token (here or anywhere else): nothing of the account stays on screen.
         viewModelScope.launch { Session.signedOut.collect { reset() } }
@@ -115,12 +123,12 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * Runs [block]; a failure is said in the message (the server's words for a refusal, else that it can't be reached), with [failed]
-     * putting back what was under way (busy, importing). With [session], a 401 is this phone's token refused, which signs it out; off for
-     * the requests that carry another token, or none.
+     * putting back what was under way (busy, importing). With [session], a request for the account signed in: a 401 is this phone's token
+     * refused, which signs it out, and it ends with the account ([endAccount]). Off for the requests that carry another token, or none.
      */
     private fun attempt(failed: (AccountState) -> AccountState = { it }, session: Boolean = true, block: suspend () -> Unit) {
         val sent = store.token.takeIf { session }
-        viewModelScope.launch {
+        viewModelScope.launch(if (session) account else EmptyCoroutineContext) {
             try {
                 block()
             } catch (e: CancellationException) {
@@ -156,7 +164,7 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     fun refresh() {
         val token = store.token ?: return
         _state.update { it.copy(message = null) }
-        viewModelScope.launch {
+        viewModelScope.launch(account) {
             try {
                 val me = Api(token).me()
                 store.email = me.email
@@ -205,15 +213,16 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     fun settleSetup() {
         val token = store.token ?: return
         if (!store.setupUnknown || settleJob?.isActive == true) return
-        settleJob = viewModelScope.launch {
-            try {
-                settle(Api(token).me())
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                // Still unknown: the next answer that comes through asks again.
+        settleJob =
+            viewModelScope.launch(account) {
+                try {
+                    settle(Api(token).me())
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    // Still unknown: the next answer that comes through asks again.
+                }
             }
-        }
     }
 
     fun loadCampus() {
@@ -534,8 +543,10 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     private fun signedIn(token: String, email: String, onSignedIn: () -> Unit) {
         approvedToken = null
         anonToken = null
-        // The page stays as it is, busy, until the app moves on.
-        _state.update { it.copy(busy = true, message = null) }
+        // Maybe another account than this phone's (a guest signing in with an email): nothing of that one's stays or lands later. The
+        // page stays as it is, busy, until the app moves on.
+        endAccount()
+        _state.update { AccountState(campus = it.campus, signIn = it.signIn, busy = true) }
         viewModelScope.launch {
             // Off the main thread: a Keystore round trip and a write to disk.
             withContext(Dispatchers.IO) {
@@ -563,7 +574,7 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
 
     fun loadChoices() {
         val sent = store.token
-        viewModelScope.launch {
+        viewModelScope.launch(account) {
             try {
                 val (c, history) = Api(sent).choices()
                 _state.update { it.copy(choices = c, history = history) }
@@ -656,7 +667,15 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     /** After signing out: forget everything about the account. */
     fun reset() {
         pollJob?.cancel()
-        // A Settings edit still waiting or on its way belonged to the account that's gone.
+        endAccount()
+        _state.value = AccountState()
+    }
+
+    /** Everything under way for the account ends: its requests, an import, and a Settings edit still waiting or on its way. */
+    private fun endAccount() {
+        account.cancelChildren()
+        importJob?.cancel()
+        importJob = null
         saveJob?.cancel()
         saveJob = null
         sending?.cancel()
@@ -664,6 +683,5 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         pending.clear()
         confirmed = null
         version = null
-        _state.value = AccountState()
     }
 }
