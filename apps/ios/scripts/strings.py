@@ -27,8 +27,9 @@ ZH = os.path.join(IOS, 'Support', 'zh-Hans.lproj')
 # LocalizedStringResource("...") too, the widgets' intent titles.
 CALL = re.compile(r'\b(?:L|LocalizedStringResource)\(\s*"((?:[^"\\]|\\.)*)"')
 # L(...) whose phrase isn't a literal (a variable, a ternary): the check
-# can't see it, so its Chinese could be missing unseen. Not allowed.
-DYNAMIC = re.compile(r'\bL\(\s*(?!")(?!_ en: String)')
+# can't see it, so its Chinese could be missing unseen. Not allowed. Read
+# over whole files: swift-format puts a long phrase on the line after `L(`.
+DYNAMIC = re.compile(r'\bL\((?!\s*")(?!\s*_ en: String)')
 
 
 def table_for(path):
@@ -53,8 +54,11 @@ def dynamic():
         for f in files:
             if f.endswith('.swift'):
                 p = os.path.join(root, f)
-                for n, line in enumerate(open(p, encoding='utf-8'), 1):
-                    if not line.lstrip().startswith('//') and DYNAMIC.search(line):
+                text = open(p, encoding='utf-8').read()
+                lines = text.split('\n')
+                for m in DYNAMIC.finditer(text):
+                    n = text.count('\n', 0, m.start()) + 1
+                    if not lines[n - 1].lstrip().startswith('//'):
                         out.append(f'{os.path.relpath(p, IOS)}:{n}')
     return out
 
