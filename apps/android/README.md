@@ -26,6 +26,7 @@ Android 12 or later.
 ./gradlew :app:installBetaDebug                                     # against beta.terminus.run
 ./gradlew :app:installStableDebug -PapiBase=http://localhost:8787   # against the dev stub (debug builds only)
 adb reverse tcp:8787 tcp:8787                                       # so the phone can reach it
+./gradlew :app:ktfmtFormat                                          # format the Kotlin (ktfmt; ktfmtCheck in CI)
 ./gradlew :app:lintStableDebug :app:testStableDebugUnitTest :app:compileBetaDebugKotlin   # what CI runs, with the
 ./gradlew :app:assembleStableRelease :app:assembleBetaRelease       # release builds (R8)
 ```
