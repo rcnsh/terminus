@@ -18,9 +18,10 @@ struct JourneyView: View {
     /// The room each style takes.
     static func height(_ j: Journey, style: String) -> CGFloat {
         switch style {
-        case "ticket": 56
+        // A change of bus adds the second bus's line under the first, and its step.
+        case "ticket": j.change != nil ? 74 : 56
         case "route": 52
-        default: step * CGFloat(j.bus != nil ? 3 : 2) - (lastUnder(j) == nil ? 12 : 0)
+        default: step * CGFloat((j.bus != nil ? 3 : 2) + (j.change != nil ? 1 : 0)) - (lastUnder(j) == nil ? 12 : 0)
         }
     }
 
@@ -47,7 +48,14 @@ struct JourneyView: View {
                 stepRow(time: j.leave ?? L("Now"), dot: .you, rail: .walk, name: L("Leave"), under: JourneyText.walk(j), bus: nil)
             }
             if let bus = j.bus {
-                stepRow(time: bus.board, dot: .stop, rail: .ride(bus.color), name: bus.stop, under: JourneyText.ride(j), bus: bus)
+                stepRow(
+                    time: bus.board, dot: .stop, rail: .ride(bus.color), name: bus.stop,
+                    under: j.change?.firstRideText ?? JourneyText.ride(j), bus: bus)
+            }
+            if let c = j.change {
+                stepRow(
+                    time: c.bus.board, dot: .stop, rail: .ride(c.bus.color), name: c.stop, under: c.changeText, bus: c.bus, countdown: false
+                )
             }
             stepRow(time: j.arriveStop ?? j.arrive ?? "", dot: .there, rail: nil, name: there, under: Self.lastUnder(j), bus: nil)
         }
@@ -58,7 +66,9 @@ struct JourneyView: View {
         case ride(String?)
     }
 
-    private func stepRow(time: String, dot: Dot, rail: Rail?, name: String, under: String?, bus: Journey.Bus?) -> some View {
+    private func stepRow(time: String, dot: Dot, rail: Rail?, name: String, under: String?, bus: Journey.Bus?, countdown: Bool = true)
+        -> some View
+    {
         HStack(alignment: .top, spacing: 6) {
             Text(verbatim: time).font(.system(size: 13, weight: .medium)).foregroundStyle(inks.ink).lineLimit(1).frame(
                 width: 64, alignment: .leading)
@@ -84,7 +94,7 @@ struct JourneyView: View {
                     Text(verbatim: name).font(.system(size: 13, weight: .bold)).foregroundStyle(inks.ink).lineLimit(1)
                     if let bus {
                         BusBadge(svc: bus.svc, color: bus.color, size: 11, paid: bus.paid)
-                        if let inAt = JourneyText.busIn(journey, now: now) { small(inAt, inks.muted, 11) }
+                        if countdown, let inAt = JourneyText.busIn(journey, now: now) { small(inAt, inks.muted, 11) }
                     }
                 }
                 if let under { small(under, inks.muted, 11.5) }
@@ -98,14 +108,21 @@ struct JourneyView: View {
 
     private var route: some View {
         let j = journey
+        // A change of bus takes the room of the walk to the stop.
+        let change = j.bus == nil ? nil : j.change
         return HStack(alignment: .top, spacing: 0) {
-            if let walk = j.walk {
+            if change == nil, let walk = j.walk {
                 point(L("You"), j.leave ?? L("Now"), inks.accent)
                 stretch(walk, bus: nil, color: inks.muted, thick: 2)
             }
             if let bus = j.bus {
                 point(bus.stop, bus.board, inks.ink)
-                stretch(j.ride ?? "", bus: bus, color: serviceColor(bus.color), thick: 4)
+                stretch(change?.firstRide ?? j.ride ?? "", bus: bus, color: serviceColor(bus.color), thick: 4)
+                // The stop the second bus goes from, then its ride, as on the app's line.
+                if let c = change {
+                    point(c.stop, c.bus.board, inks.ink)
+                    stretch(c.ride ?? "", bus: c.bus, color: serviceColor(c.bus.color), thick: 4)
+                }
                 point(j.walkEnd != nil ? j.place : j.toStop, j.arrive ?? "", inks.ink)
             } else {
                 point(j.place, j.arrive ?? "", inks.ink)
@@ -138,6 +155,20 @@ struct JourneyView: View {
     // MARK: Ticket
 
     private var ticket: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ticketBus
+            // A change of bus: the second bus and where to change, so nobody stays on the wrong one.
+            if let c = journey.change {
+                HStack(spacing: 12) {
+                    BusBadge(svc: c.bus.svc, color: c.bus.color, size: 11, paid: c.bus.paid).frame(width: 48)
+                    small([c.changeText, c.bus.board].joined(separator: " · "), inks.ink, 12, bold: true)
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+    }
+
+    private var ticketBus: some View {
         let j = journey
         return HStack(spacing: 12) {
             if let bus = j.bus {

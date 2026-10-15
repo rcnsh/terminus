@@ -46,7 +46,10 @@ struct JourneyTop: View {
         switch shown(style, typeSize) {
         case .route:
             LeaveHead(answer: a, journey: j, now: now)
-            let under = [JourneyText.by(a, j, now: now), JourneyText.arrive(j)].compactMap { $0 }.joined(separator: " · ")
+            // With a change of bus the line has no room for the walk to the stop: said here.
+            let under = [JourneyText.by(a, j, now: now), j.change == nil ? nil : JourneyText.walk(j), JourneyText.arrive(j)].compactMap {
+                $0
+            }.joined(separator: " · ")
             if !under.isEmpty { Text(under).foregroundStyle(a.leaveLate ? inks.late : inks.muted) }
         case .steps:
             LeaveHead(answer: a, journey: j, now: now)
@@ -138,6 +141,17 @@ private struct TicketTop: View {
             }
         }
         .padding(.top, 10)
+        // A change of bus: the second bus under the first, so nobody stays on the wrong one.
+        if let c = j.change {
+            HStack(spacing: 14) {
+                BusBadge(svc: c.bus.svc, color: c.bus.color, size: 16, paid: c.bus.paid).frame(width: 64)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(c.changeText).font(.body.weight(.semibold))
+                    Text([c.bus.board, L("from %@", c.stop)].joined(separator: " · ")).font(.subheadline).foregroundStyle(inks.muted)
+                }
+            }
+            .padding(.top, 10)
+        }
         let tint = a.leaveLate ? inks.late : inks.accent
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
@@ -265,13 +279,25 @@ private struct RouteLine: View {
         let j = journey
         HStack(alignment: .top, spacing: 0) {
             if let bus = j.bus {
-                let narrow = j.walkEnd != nil
-                if let walk = j.walk {
+                let change = j.change
+                let narrow = j.walkEnd != nil || change != nil
+                // With a change of bus the line starts at the stop, as on the
+                // web: room for both rides, the walk to the stop said above.
+                if change == nil, let walk = j.walk {
                     Point(name: L("You"), time: j.leave ?? L("now"), dot: .brand, narrow: narrow)
                     Stretch(takes: walk, line: .walk)
                 }
                 Point(name: bus.stop, time: bus.board, dot: .ink, narrow: narrow)
-                Stretch(takes: j.ride ?? "", line: .ride(serviceColor(bus.color)), badge: bus).layoutPriority(1)
+                Stretch(takes: change?.firstRide ?? j.ride ?? "", line: .ride(serviceColor(bus.color)), badge: bus).layoutPriority(1)
+                // Where the first bus drops you, across the road to the second's stop when it isn't the same one, and the second ride.
+                if let c = change {
+                    Point(name: c.from, time: (c.walk != nil ? c.reach : nil) ?? c.bus.board, dot: .ink, narrow: true)
+                    if let walk = c.walk {
+                        Stretch(takes: walk, line: .walk)
+                        Point(name: c.stop, time: c.bus.board, dot: .ink, narrow: true)
+                    }
+                    Stretch(takes: c.ride ?? "", line: .ride(serviceColor(c.bus.color)), badge: c.bus).layoutPriority(1)
+                }
                 Point(name: j.toStop, time: (narrow ? j.arriveStop : j.arrive) ?? "", dot: .ink, narrow: narrow)
                 if let walk = j.walkEnd {
                     Stretch(takes: walk, line: .walk)
@@ -359,7 +385,8 @@ private struct StepsLine: View {
             }
             if let bus = j.bus {
                 LinePoint(
-                    time: bus.board, dot: j.walk == nil ? .start : .stop, line: .ride(serviceColor(bus.color)), below: JourneyText.ride(j)
+                    time: bus.board, dot: j.walk == nil ? .start : .stop, line: .ride(serviceColor(bus.color)),
+                    below: j.change?.firstRideText ?? JourneyText.ride(j)
                 ) {
                     HStack(spacing: 8) {
                         Text(bus.stop).font(.headline).lineLimit(2)
@@ -367,6 +394,17 @@ private struct StepsLine: View {
                         if let busIn = JourneyText.busIn(j, now: now) {
                             Text(busIn).font(.caption).foregroundStyle(Color.muted).lineLimit(1).monospacedDigit()
                         }
+                    }
+                }
+            }
+            if let c = j.change {
+                LinePoint(
+                    time: c.bus.board, dot: .stop, line: .ride(serviceColor(c.bus.color)),
+                    below: [c.changeText, c.rideText].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+                ) {
+                    HStack(spacing: 8) {
+                        Text(c.stop).font(.headline).lineLimit(2)
+                        BusBadge(svc: c.bus.svc, color: c.bus.color, size: 13, paid: c.bus.paid)
                     }
                 }
             }
