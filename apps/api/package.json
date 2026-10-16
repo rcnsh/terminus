@@ -16,9 +16,9 @@
     "check": "pnpm test && pnpm typecheck"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "5.20261009.1",
+    "@cloudflare/workers-types": "5.20261011.1",
     "@types/react": "19.3.0",
-    "cf": "1.0.0-beta.13",
+    "cf": "1.0.0-beta.14",
     "typescript": "7.0.2",
     "wrangler": "4.149.0"
   },
