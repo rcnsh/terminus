@@ -1,6 +1,7 @@
 package sh.rcn.terminus.widget
 
 import android.content.Context
+import android.os.SystemClock
 import android.util.TypedValue
 import android.view.View
 import android.widget.RemoteViews
@@ -385,15 +386,20 @@ private fun SideRow(b: StopBus, inks: Inks, old: Boolean) {
         // A column for the badges, so the times line up whatever the service's name.
         Box(GlanceModifier.width(BADGE_DP.dp)) { Badge(b.svc, b.color, b.paid) }
         TimeText(b, inks, old, 15.sp)
-        b.later.firstOrNull()?.let {
-            Text("  " + shortClock(ctx, it), style = TextStyle(color = inks.muted, fontSize = 11.sp), maxLines = 1)
-        }
+        if (counts(b, old)) {
+            // The bus after makes way for how long until this one.
+            Spacer(GlanceModifier.defaultWeight())
+            Countdown(b, inks, 11f)
+        } else
+            b.later.firstOrNull()?.let {
+                Text("  " + shortClock(ctx, it), style = TextStyle(color = inks.muted, fontSize = 11.sp), maxLines = 1)
+            }
     }
 }
 
 /**
- * New to NUS: a bus, its time and whether that's Live or the timetable's; under them, the places it passes (where it stops next when it
- * passes none), and Packed when it is.
+ * New to NUS: a bus, its time and how long until it; under them, the places it passes (where it stops next when it passes none), then Live
+ * or Scheduled, or Packed (only a live bus says how full it is).
  */
 @Composable
 private fun SideRowExplained(b: StopBus, shown: List<StopBus>, inks: Inks, old: Boolean) {
@@ -401,18 +407,55 @@ private fun SideRowExplained(b: StopBus, shown: List<StopBus>, inks: Inks, old: 
         Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Box(GlanceModifier.width(BADGE_DP.dp)) { Badge(b.svc, b.color, b.paid) }
             TimeText(b, inks, old, 13.sp)
-            Spacer(GlanceModifier.width(6.dp))
-            when {
-                b.first -> Small(firstLabel(b), inks.muted, 10.sp)
-                b.live -> Small("● " + L.s(R.string.journey_live), inks.good, 10.sp)
-                else -> Small(L.s(R.string.buses_scheduled), inks.muted, 10.sp)
+            if (counts(b, old)) {
+                Spacer(GlanceModifier.width(6.dp))
+                Countdown(b, inks, 10f)
             }
         }
         Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Box(GlanceModifier.defaultWeight()) {
                 Small(b.via.joinToString(" · ").ifEmpty { nextLine(b, shown) }, inks.ink, 10.sp, bold = true)
             }
-            if (b.crowd == "high") Small(" " + L.s(R.string.buses_packed), inks.late, 10.sp, bold = true)
+            when {
+                b.first -> Small(" " + firstLabel(b), inks.muted, 10.sp)
+                b.crowd == "high" -> Small(" " + L.s(R.string.buses_packed), inks.late, 10.sp, bold = true)
+                b.live -> Small(" ● " + L.s(R.string.journey_live), inks.good, 10.sp)
+                else -> Small(" " + L.s(R.string.buses_scheduled), inks.muted, 10.sp)
+            }
+        }
+    }
+}
+
+/**
+ * Whether [b] counts down: not while the times may be old (a ticking count would claim more than an old guess knows), not for a first bus
+ * tomorrow, and not an hour or more away, where the count would turn to hours.
+ */
+private fun counts(b: StopBus, old: Boolean): Boolean = !old && !b.first && b.atMs - System.currentTimeMillis() < 60 * 60_000L
+
+/**
+ * How long until [b]: "in 04:32", which Android counts down by itself ([R.layout.widget_countdown]), "in ~08:12" for a timetable's time;
+ * "now" from [NearbyBoard.NOW_MS] before it's due, when the widget redraws ([NearbyBoard.redrawAt]), so the count never goes below zero.
+ */
+@Composable
+private fun Countdown(b: StopBus, inks: Inks, sizeSp: Float) {
+    val ctx = LocalContext.current
+    val left = b.atMs - System.currentTimeMillis()
+    Box(GlanceModifier.cornerRadius(8.dp).background(inks.chip).padding(horizontal = 6.dp, vertical = 1.dp)) {
+        if (left <= NearbyBoard.NOW_MS) {
+            Text(
+                L.s(R.string.now),
+                style = TextStyle(color = inks.good, fontSize = sizeSp.sp, fontWeight = FontWeight.Bold),
+                maxLines = 1,
+            )
+        } else {
+            val rv = RemoteViews(ctx.packageName, R.layout.widget_countdown)
+            // The count goes where "%s" is: the string is formatted once here, leaving that for the Chronometer.
+            val words = L.s(if (b.live) R.string.nearby_in else R.string.nearby_in_approx, "%s")
+            rv.setChronometer(R.id.countdown, SystemClock.elapsedRealtime() + left, words, true)
+            rv.setChronometerCountDown(R.id.countdown, true)
+            rv.setTextColor(R.id.countdown, inks.ink.getColor(ctx).toArgb())
+            rv.setTextViewTextSize(R.id.countdown, TypedValue.COMPLEX_UNIT_SP, sizeSp)
+            AndroidRemoteViews(rv)
         }
     }
 }

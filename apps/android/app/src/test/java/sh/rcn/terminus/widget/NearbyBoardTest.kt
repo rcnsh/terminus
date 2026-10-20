@@ -100,11 +100,13 @@ class NearbyBoardTest {
     }
 
     @Test
-    fun redrawnWhenTheFirstOfItsBusesGoes() {
+    fun redrawnWhenACountdownTurnsToNowAndWhenItsBusGoes() {
         val buses = NearbyBoard.buses(utown, fetched, fetched)
-        assertEquals(fetched + 190_000 + NearbyBoard.GONE_MS, NearbyBoard.redrawAt(buses, fetched))
-        // Past that moment, the next one.
-        assertEquals(fetched + 370_000 + NearbyBoard.GONE_MS, NearbyBoard.redrawAt(buses, fetched + 250_000))
+        // D1 at 190 s: "now" half a minute before, then gone a minute after.
+        assertEquals(fetched + 190_000 - NearbyBoard.NOW_MS, NearbyBoard.redrawAt(buses, fetched))
+        assertEquals(fetched + 190_000 + NearbyBoard.GONE_MS, NearbyBoard.redrawAt(buses, fetched + 190_000))
+        // Past that, D2 at 370 s turning to "now".
+        assertEquals(fetched + 370_000 - NearbyBoard.NOW_MS, NearbyBoard.redrawAt(buses, fetched + 250_000))
         assertNull(NearbyBoard.redrawAt(emptyList(), fetched))
     }
 

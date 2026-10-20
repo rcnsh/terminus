@@ -50,6 +50,9 @@
     <string name="nearby_next">下一站 %1$s</string>
     <string name="nearby_next_to">下一站 %1$s，开往 %2$s</string>
     <string name="nearby_then_label">之后</string>
+    <!-- How long until a bus on a Nearby widget, counted down by Android ("in 04:32"); %1$s is the count. -->
+    <string name="nearby_in">%1$s 后</string>
+    <string name="nearby_in_approx">约 %1$s 后</string>
     <string name="nearby_then">之后 %1$s</string>
     <string name="nearby_times_sep">、</string>
     <string name="nearby_old">时间可能已过时 · %1$s</string>

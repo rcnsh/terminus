@@ -102,9 +102,15 @@ internal object NearbyBoard {
         return end.takeIf { shown.any { it !== bus && it.next == bus.next && it.end != end } }
     }
 
-    /** When the widget next looks different with nothing new: a shown bus going ([GONE_MS] after it's due). */
+    /** A countdown says "now" this long before its bus is due: the redraw then has half a minute before the count could pass zero. */
+    const val NOW_MS = 30_000L
+
+    /**
+     * When the widget next looks different with nothing new: a shown bus's countdown turning to "now" ([NOW_MS] before it's due), or the
+     * bus going ([GONE_MS] after).
+     */
     fun redrawAt(buses: List<StopBus>, now: Long): Long? =
-        buses.flatMap { listOf(it.atMs) + it.later }.map { it + GONE_MS }.filter { it > now }.minOrNull()
+        buses.flatMap { listOf(it.atMs) + it.later }.flatMap { listOf(it - NOW_MS, it + GONE_MS) }.filter { it > now }.minOrNull()
 
     /** Page [page] of [buses], [per] to a page, counting round; with which page it is and how many there are. */
     fun page(buses: List<StopBus>, per: Int, page: Int): Paged {
