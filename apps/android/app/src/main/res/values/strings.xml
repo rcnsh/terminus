@@ -503,8 +503,6 @@
     <string name="card_style_hint">How the card and widgets show a trip by bus. Only on this phone.</string>
     <string name="card_style_route">Route</string>
     <string name="card_style_route_hint">The whole trip as a line, with the times under it.</string>
-    <string name="card_style_ticket">Ticket</string>
-    <string name="card_style_ticket_hint">The bus first, in its colour, then when to leave.</string>
     <string name="card_style_steps">Steps</string>
     <string name="card_style_steps_hint">The trip as a line down the card, as on a route map.</string>
     <string name="leave_in_min">Leave in %1$d min</string>
@@ -514,7 +512,6 @@
     <string name="journey_to">To %1$s</string>
     <string name="journey_you">You</string>
     <string name="journey_now">now</string>
-    <string name="journey_walk_to">Walk to %1$s</string>
     <string name="journey_walk">%1$s walk</string>
     <string name="journey_from">from %1$s</string>
     <string name="road_arriving">arriving at %1$s</string>

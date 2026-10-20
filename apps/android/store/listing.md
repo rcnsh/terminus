@@ -30,7 +30,7 @@ Import your NUSMods timetable once. From then on, terminus plans the whole trip:
 
 ONE ANSWER, ON YOUR HOME SCREEN
 • The widget shows when to leave for your next class. Its buttons switch it to the buses near you, or the quickest way to your favourite places, without opening the app.
-• The whole trip at a glance: you, the stop and your class on one line, with the bus in its colour and when you'll get there. Prefer it as a ticket or a list of steps? Choose in Settings › Appearance.
+• The whole trip at a glance: you, the stop and your class on one line, with the bus in its colour and when you'll get there. Prefer it as a list of steps? Choose in Settings › Appearance.
 • A heads-up five minutes before you need to set off.
 • If you're late, it says so and offers the quickest way there.
 • If the bus you'd catch is often busy at that stop and time, it aims for one bus earlier.
@@ -90,7 +90,7 @@ terminus 告诉你什么时候该出发去上 NUS 的下一节课，以及该搭
 
 一个答案，就在主屏幕上
 • 小组件显示下一节课什么时候出发。点它上面的按钮，不用打开应用就能看附近的巴士，或去收藏地点最快的方式。
-• 整段行程一眼看完：你、车站和课室连成一条线，巴士用它的颜色标出，还有几点到达。想看成车票或逐条步骤？在“设置 › 外观”里选。
+• 整段行程一眼看完：你、车站和课室连成一条线，巴士用它的颜色标出，还有几点到达。想看成逐条步骤？在“设置 › 外观”里选。
 • 需要出发前五分钟提醒你。
 • 要迟到时，它会告诉你，并给出最快的走法。
 • 如果你要搭的那班车在那个站、那个时间经常很挤，它会建议早一班。

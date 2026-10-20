@@ -1147,8 +1147,9 @@ export function ThemeSwitch({ labelledBy, full = false }) {
 }
 
 /**
- * Appearance: the theme, then the card styles, each drawn with a made-up
- * trip so the choice is made by looking. Both hold for this browser only.
+ * Appearance: the theme, then the card style, the chosen one drawn under its
+ * pills with a made-up trip so the choice is made by looking. Both hold for
+ * this browser only.
  */
 export function Appearance() {
   const chosen = useStore(cardStyle);
@@ -1167,18 +1168,12 @@ export function Appearance() {
         <div class="field"><${ThemeSwitch} labelledBy="theme-label" full /></div>
       <//>
       <${Group} title=${t('Card style')} id="style-label" hint=${t('How the card shows a trip by bus. Only in this browser.')}>
-        <div class="style-picker" role="radiogroup" aria-labelledby="style-label">
-          ${STYLES.map(
-            (s) => html`
-              <label class=${chosen === s ? 'style-choice on' : 'style-choice'} key=${s}>
-                <span class="style-head">
-                  <input type="radio" name="card-style" value=${s} checked=${chosen === s} onChange=${() => setCardStyle(s)} />
-                  <span><strong>${styleName(s)}</strong><span class="hint">${styleHint(s)}</span></span>
-                </span>
-                <div class="widget" aria-hidden="true"><${Journey} a=${sample} style=${s} /></div>
-              </label>
-            `,
-          )}
+        <div class="field">
+          <${Pills} name="card-style" value=${chosen} options=${STYLES.map((s) => [s, styleName(s)])} onChange=${setCardStyle} labelledBy="style-label" full />
+        </div>
+        <div class="style-preview">
+          <p class="hint">${styleHint(chosen)}</p>
+          <div class="widget" aria-hidden="true"><${Journey} a=${sample} style=${chosen} /></div>
         </div>
       <//>
     </div>
