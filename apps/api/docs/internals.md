@@ -690,8 +690,8 @@ minute (`feedDownSince`).
 
 `journey` is the trip as steps, for the card styles on Android and the
 web (`account/journey.js`): the steps as a line down the card, as on a
-route map (the default), a line across from you to the destination, or a
-ticket, chosen in Settings › Appearance per phone or browser. It says when to leave, the walk to the stop, the
+route map (the default), or a line across from you to the destination,
+chosen in Settings › Appearance per phone or browser. It says when to leave, the walk to the stop, the
 bus with its colour and time, the ride, where you get off and when you get
 there, and a backup bus (the other bus on a trip; for a class, the sooner
 bus to go now on). A class takes the leave-by's bus, any other trip the

@@ -503,8 +503,6 @@
     <string name="card_style_hint">卡片和小组件如何显示搭巴士的行程。仅限这部手机。</string>
     <string name="card_style_route">路线</string>
     <string name="card_style_route_hint">整段行程画成一条线，时间写在下面。</string>
-    <string name="card_style_ticket">车票</string>
-    <string name="card_style_ticket_hint">先显示巴士和它的颜色，再显示何时出发。</string>
     <string name="card_style_steps">步骤</string>
     <string name="card_style_steps_hint">整段行程画成一条竖线，像路线图一样。</string>
     <string name="leave_in_min">%1$d 分钟后出发</string>
@@ -514,7 +512,6 @@
     <string name="journey_to">去 %1$s</string>
     <string name="journey_you">你</string>
     <string name="journey_now">现在</string>
-    <string name="journey_walk_to">步行到 %1$s</string>
     <string name="journey_walk">步行 %1$s</string>
     <string name="journey_from">在 %1$s 上车</string>
     <string name="road_arriving">即将到达 %1$s</string>
