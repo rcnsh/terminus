@@ -12,6 +12,10 @@
       "distM": 192,
       "walkS": 235,
       "available": true,
+      "via": [
+        "COM 3"
+      ],
+      "viaText": "to COM 3",
       "board": [
         {
           "svc": "D2",
@@ -28,6 +32,9 @@
           "color": "#8e44c9",
           "towards": [
             "TCOMS",
+            "COM 3"
+          ],
+          "via": [
             "COM 3"
           ],
           "crowd": "low",
@@ -48,6 +55,7 @@
             "TCOMS",
             "Kent Ridge Bus Terminal"
           ],
+          "via": [],
           "crowd": null,
           "endsAt": "2026-08-27T15:00:00.000Z",
           "running": true,
@@ -63,6 +71,7 @@
           "later": [],
           "color": "#2b9ad6",
           "towards": [],
+          "via": [],
           "crowd": null,
           "endsAt": "2026-08-27T15:04:00.000Z",
           "running": true,
@@ -84,6 +93,12 @@
       "distM": 266,
       "walkS": 300,
       "available": true,
+      "via": [
+        "Kent Ridge MRT",
+        "UTown",
+        "Central Library"
+      ],
+      "viaText": "to Kent Ridge MRT, UTown, Central Library",
       "board": [
         {
           "svc": "D2",
@@ -101,6 +116,11 @@
           "towards": [
             "Kent Ridge MRT",
             "COM 3"
+          ],
+          "via": [
+            "Kent Ridge MRT",
+            "UTown",
+            "Science"
           ],
           "crowd": "low",
           "endsAt": "2026-08-27T15:00:00.000Z",
@@ -124,6 +144,10 @@
           "color": "#34a853",
           "towards": [
             "Opp HSSML",
+            "Kent Vale"
+          ],
+          "via": [
+            "UTown",
             "Kent Vale"
           ],
           "crowd": "medium",
@@ -150,6 +174,10 @@
             "Kent Ridge MRT",
             "Kent Ridge Bus Terminal"
           ],
+          "via": [
+            "Kent Ridge MRT",
+            "Central Library"
+          ],
           "crowd": "high",
           "endsAt": "2026-08-27T15:00:00.000Z",
           "running": true,
@@ -168,6 +196,11 @@
             "Kent Ridge MRT",
             "Prince George's Park Foyer"
           ],
+          "via": [
+            "Kent Ridge MRT",
+            "Central Library",
+            "Engineering"
+          ],
           "crowd": null,
           "endsAt": "2026-08-27T15:04:00.000Z",
           "running": true,
@@ -183,6 +216,7 @@
           "later": [],
           "color": "#f57c1f",
           "towards": [],
+          "via": [],
           "crowd": null,
           "endsAt": "2026-08-27T11:30:00.000Z",
           "running": true,

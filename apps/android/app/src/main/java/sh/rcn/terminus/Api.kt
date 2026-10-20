@@ -655,6 +655,8 @@ data class BoardRow(
     val paid: Boolean = false,
     val later: List<LaterBus> = emptyList(),
     val towards: List<String> = emptyList(),
+    /** The well-known places it passes from here ("UTown", "Kent Ridge MRT"), for someone new to NUS; empty from an older server. */
+    val via: List<String> = emptyList(),
     val crowd: String? = null,
     val endsAtMs: Long? = null,
     /** The route ends at this stop: the server gave `towards` and it's empty. An older server gives none. */
@@ -694,6 +696,7 @@ fun parseBoardRow(r: JSONObject): BoardRow =
         paid = r.optBoolean("paid", false),
         later = parseLater(r),
         towards = r.optJSONArray("towards").stringList().filter { it.isNotBlank() },
+        via = r.optJSONArray("via").stringList().filter { it.isNotBlank() },
         crowd = r.optStringOrNull("crowd")?.takeIf { it in CROWDS },
         endsAtMs = r.optStringOrNull("endsAt")?.let(::parseInstant),
         running = r.optBoolean("running", true),
@@ -724,6 +727,8 @@ data class NearbyStop(
     val oppositeAcross: Boolean = true,
     /** [opposite]'s full name; null from an older server. */
     val oppositeName: String? = null,
+    /** Which way its buses go, by places a newcomer knows: "to UTown, Science, Kent Ridge MRT". Null with none, or from an older server. */
+    val viaText: String? = null,
 )
 
 data class Destination(
@@ -1591,6 +1596,7 @@ fun parseNearby(json: JSONObject): List<NearbyStop> = parsing {
             oppositeAcross = (s.getJSONObject("stop").takeIf { it.has("oppositeAcross") } ?: s).optBoolean("oppositeAcross", true),
             oppositeName = (s.getJSONObject("stop").optStringOrNull("oppositeName") ?: s.optStringOrNull("oppositeName"))?.ifEmpty { null },
             distM = if (s.has("distM") && !s.isNull("distM")) s.optInt("distM") else null,
+            viaText = s.optStringOrNull("viaText")?.ifEmpty { null },
             board = (0 until board.length()).map { j -> parseBoardRow(board.getJSONObject(j)) },
         )
     }

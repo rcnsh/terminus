@@ -45,7 +45,7 @@
     <string name="widget_places_description">下一班巴士，加上收藏和附近发车的按钮</string>
     <string name="widget_description">去下一个目的地的下一班巴士</string>
     <string name="widget_nearby_name">附近的巴士</string>
-    <string name="widget_nearby_description">离你最近的车站的下一班巴士，以及每班的下一站</string>
+    <string name="widget_nearby_description">你的车站和马路对面的下一班巴士</string>
     <string name="widget_now">现在</string>
     <string name="nearby_next">下一站 %1$s</string>
     <string name="nearby_next_to">下一站 %1$s，开往 %2$s</string>
@@ -61,9 +61,7 @@
     <string name="nearby_first_spoken">现在没有巴士。首班车：%1$s</string>
     <string name="nearby_page_next">更多巴士</string>
     <string name="nearby_page_prev">更早的巴士</string>
-    <string name="preview_nearby_now">现在 9:41 · 步行 2 分钟</string>
-    <string name="preview_nearby_next_1">下一站 Yusof Ishak House</string>
-    <string name="preview_nearby_next_2">下一站 University Health Centre</string>
+    <string name="preview_nearby_now">现在 9:41</string>
     <string name="a11y_checking">正在查询</string>
     <string name="a11y_leaves">"，发车 "</string>
     <string name="a11y_loading">terminus。%1$s。</string>
@@ -505,6 +503,11 @@
     <string name="card_style_route_hint">整段行程画成一条线，时间写在下面。</string>
     <string name="card_style_steps">步骤</string>
     <string name="card_style_steps_hint">整段行程画成一条竖线，像路线图一样。</string>
+    <!-- New to NUS (NewToNus), in Settings › Appearance: the Nearby widget explains the buses. -->
+    <string name="nearby_widget">“附近的巴士”小组件</string>
+    <string name="new_to_nus">刚来 NUS</string>
+    <string name="new_to_nus_sub">用你熟悉的地方说明每辆巴士去哪里：地铁站、UTown、PGP。</string>
+    <string name="new_to_nus_hint">仅限这部手机。关闭时，小组件能显示更多巴士。</string>
     <string name="leave_in_min">%1$d 分钟后出发</string>
     <string name="leave_in_min_s">%1$d 分 %2$d 秒后出发</string>
     <string name="leave_in_s">%1$d 秒后出发</string>

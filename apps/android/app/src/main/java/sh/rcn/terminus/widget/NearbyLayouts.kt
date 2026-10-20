@@ -53,6 +53,7 @@ import java.util.Locale
 import java.util.TimeZone
 import sh.rcn.terminus.L
 import sh.rcn.terminus.NearbyStop
+import sh.rcn.terminus.NewToNus
 import sh.rcn.terminus.R
 import sh.rcn.terminus.ServerClock
 import sh.rcn.terminus.Spoken
@@ -83,7 +84,10 @@ internal class NearbyView(
      */
     fun old(now: Long): Boolean = (fetchedAt == null || now - fetchedAt > WidgetModes.NEARBY_OLD_MS) && buses(now).any { !it.first }
 
-    fun buses(now: Long): List<StopBus> = first?.let { NearbyBoard.buses(it, fetchedAt ?: 0L, now, ServerClock.skewMs) }.orEmpty()
+    fun buses(now: Long): List<StopBus> = first?.let { busesAt(it, now) }.orEmpty()
+
+    /** [stop]'s buses, as [buses] gives the first's. */
+    fun busesAt(stop: NearbyStop, now: Long): List<StopBus> = NearbyBoard.buses(stop, fetchedAt ?: 0L, now, ServerClock.skewMs)
 
     companion object {
         /** [stopsInApiOrder] ordered for [swap], as it's shown. */
@@ -124,12 +128,17 @@ private const val CHIPS_SKY_DP = 94f
 internal fun NearbyLayout(look: WidgetLook, w: Float, h: Float, v: NearbyView, c: NearbyControls) {
     val now = System.currentTimeMillis()
     val chipsOnTop = c.chips.isNotEmpty()
-    val skyH = if (chipsOnTop) CHIPS_SKY_DP else SKY_DP
-    val fit = NearbyFit.of(w, h, skyH)
+    val newcomer = NewToNus.on(LocalContext.current)
+    // Both sides of the road where there's a stop beside yours and room for them, under a slimmer sky.
+    val beside = v.stops?.let { NearbyBoard.beside(it) { st -> v.busesAt(st, now) } }
+    val sidesSky = if (chipsOnTop) CHIPS_SKY_DP else NearbyFit.SIDES_SKY_DP
+    val sides = beside?.let { NearbyFit.sides(w, h, sidesSky, newcomer) }
+    val skyH = if (sides != null) sidesSky else if (chipsOnTop) CHIPS_SKY_DP else SKY_DP
+    val fit = sides ?: NearbyFit.of(w, h, skyH)
     when (fit.kind) {
         NearbyFit.Kind.MINI -> NearbyMini(look, v, now)
         NearbyFit.Kind.BAR -> NearbyBar(look, v, now, c)
-        else -> NearbySky(look, w, h, skyH, fit, v, c, now)
+        else -> NearbySky(look, w, h, skyH, fit, v, c, now, beside.takeIf { sides != null }, newcomer)
     }
 }
 
@@ -212,16 +221,29 @@ private fun NearbyBar(look: WidgetLook, v: NearbyView, now: Long, c: NearbyContr
 
 /** The sky with the stop's name and Now, then the buses under it: rows, or tiles. */
 @Composable
-private fun NearbySky(look: WidgetLook, w: Float, h: Float, skyH: Float, fit: NearbyFit, v: NearbyView, c: NearbyControls, now: Long) {
+private fun NearbySky(
+    look: WidgetLook,
+    w: Float,
+    h: Float,
+    skyH: Float,
+    fit: NearbyFit,
+    v: NearbyView,
+    c: NearbyControls,
+    now: Long,
+    beside: NearbyStop?,
+    newcomer: Boolean,
+) {
     val ctx = LocalContext.current
     val sky = look.sky
     val ground = look.ground
     val buses = v.buses(now)
     val old = v.old(now)
-    // The hills low, under the stop's name.
-    val bitmap = skyBitmap(ctx, look, w, skyH, 15f / 92f, Road(stop = true, shuttle = false), moon = Offset(110f, 20f).takeIf { w >= 300f })
-    // The twin across the road a tap away, unless it's the one shown already.
-    val other = v.first?.let { NearbySwap.offer(v.all.orEmpty(), v.swap, now, listOf(it.code)) }
+    val besideBuses = beside?.let { v.busesAt(it, now) }.orEmpty()
+    // The hills low, under the stop's name; no moon in the slim sky over both sides, where Now is.
+    val moon = Offset(110f, 20f).takeIf { w >= 300f && beside == null }
+    val bitmap = skyBitmap(ctx, look, w, skyH, 15f / 92f, Road(stop = true, shuttle = false), moon = moon)
+    // The twin across the road a tap away, unless it's the one shown already: beside it, or first.
+    val other = v.first?.takeIf { beside == null }?.let { NearbySwap.offer(v.all.orEmpty(), v.swap, now, listOf(it.code)) }
     val swap: (@Composable () -> Unit)? = other?.let { o -> { SwapButton(o, v.all!!.first().code, sky) } }
     Box(GlanceModifier.fillMaxSize()) {
         SkyImage(bitmap, skyH.dp)
@@ -240,6 +262,15 @@ private fun NearbySky(look: WidgetLook, w: Float, h: Float, skyH: Float, fit: Ne
                         HeadWords(v, buses, old, sky, walk = false)
                         swap?.invoke()
                     }
+                } else if (beside != null) {
+                    // Slim: the stop's name, Now and ↻ on one line; each side says how far it is.
+                    Row(GlanceModifier.fillMaxWidth().height(30.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(GlanceModifier.defaultWeight()) {
+                            Text(title(v), style = TextStyle(color = sky.ink, fontWeight = FontWeight.Bold, fontSize = 17.sp), maxLines = 1)
+                        }
+                        Box(GlanceModifier.padding(start = 6.dp)) { HeadWords(v, buses + besideBuses, old, sky, walk = false) }
+                        c.refresh?.let { RefreshButton(it, sky, 24.dp) }
+                    }
                 } else {
                     Row(GlanceModifier.fillMaxWidth().height(30.dp), verticalAlignment = Alignment.CenterVertically) {
                         Box(GlanceModifier.defaultWeight()) { HeadWords(v, buses, old, sky, walk = true) }
@@ -250,7 +281,7 @@ private fun NearbySky(look: WidgetLook, w: Float, h: Float, skyH: Float, fit: Ne
                 }
             }
             val area = h - skyH
-            val message = problem(v, buses)
+            val message = problem(v, buses + besideBuses)
             if (message != null) {
                 Box(GlanceModifier.fillMaxWidth().height((area - 8f).dp).padding(horizontal = PAD), contentAlignment = Alignment.Center) {
                     Text(
@@ -260,6 +291,8 @@ private fun NearbySky(look: WidgetLook, w: Float, h: Float, skyH: Float, fit: Ne
                         maxLines = 3,
                     )
                 }
+            } else if (beside != null) {
+                Sides(v, beside, buses, besideBuses, fit.rows, ground, old, newcomer)
             } else if (fit.kind == NearbyFit.Kind.ROWS) {
                 BusRows(buses.take(fit.rows), ground, old, area)
             } else {
@@ -269,11 +302,133 @@ private fun NearbySky(look: WidgetLook, w: Float, h: Float, skyH: Float, fit: Ne
     }
 }
 
+/**
+ * Both sides of the road, a column each: your stop (or this side) and the one [beside] it (across the road, or the next stop), each service
+ * a row with the time it's due, up to [rows]. Which side a bus is on says which way it goes. New to NUS ([newcomer]) heads each side with
+ * the places its buses go and gives each bus the places it passes, Live or Scheduled in words, and Packed; otherwise each row is the badge,
+ * the time and the bus after, for more buses at a glance.
+ */
+@Composable
+private fun Sides(
+    v: NearbyView,
+    beside: NearbyStop,
+    buses: List<StopBus>,
+    besideBuses: List<StopBus>,
+    rows: Int,
+    inks: Inks,
+    old: Boolean,
+    newcomer: Boolean,
+) {
+    val first = v.first ?: return
+    // Under the sky's full name, each side goes by its short one ("PGP Foyer", "PGP").
+    val across = first.opposite == beside.code && first.oppositeAcross
+    Row(GlanceModifier.fillMaxWidth().padding(top = 2.dp)) {
+        Box(GlanceModifier.defaultWeight()) {
+            Side(
+                if (across) L.s(R.string.buses_this_side) else first.name,
+                if (across) first.name else walkWords(first),
+                first,
+                buses.take(rows),
+                inks,
+                old,
+                newcomer,
+            )
+        }
+        VRule(inks, 4.dp)
+        Box(GlanceModifier.defaultWeight()) {
+            Side(
+                if (across) L.s(R.string.buses_across) else beside.name,
+                walkWords(beside),
+                beside,
+                besideBuses.take(rows),
+                inks,
+                old,
+                newcomer,
+            )
+        }
+    }
+}
+
+/** One side: its heading ("Across the road · 1 min walk"), where its buses go with New to NUS, then a row a bus. */
+@Composable
+private fun Side(head: String, sub: String, stop: NearbyStop, shown: List<StopBus>, inks: Inks, old: Boolean, newcomer: Boolean) {
+    Column(GlanceModifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+        Row(GlanceModifier.fillMaxWidth().height(18.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(head, style = TextStyle(color = inks.ink, fontWeight = FontWeight.Bold, fontSize = 11.sp), maxLines = 1)
+            Text(" · $sub", style = TextStyle(color = inks.muted, fontSize = 10.sp), maxLines = 1)
+        }
+        if (newcomer) Small(stop.viaText.orEmpty(), inks.muted, 10.sp, modifier = GlanceModifier.height(14.dp))
+        if (shown.isEmpty()) {
+            Small(
+                if (stop.available) L.s(R.string.no_buses_due) else L.s(R.string.no_live_data),
+                inks.muted,
+                12.sp,
+                modifier = GlanceModifier.padding(top = 6.dp),
+            )
+            return@Column
+        }
+        // In a Column of its own: a Glance Column holds at most 10 children.
+        Column(GlanceModifier.fillMaxWidth()) {
+            shown.forEachIndexed { i, b ->
+                if (i > 0) Box(GlanceModifier.fillMaxWidth().height(1.dp).background(inks.line)) {}
+                if (newcomer) SideRowExplained(b, shown, inks, old) else SideRow(b, inks, old)
+            }
+        }
+    }
+}
+
+/** A bus on its side of the road: its badge, the time it's due, and the one after, muted. */
+@Composable
+private fun SideRow(b: StopBus, inks: Inks, old: Boolean) {
+    val ctx = LocalContext.current
+    Row(GlanceModifier.fillMaxWidth().height(NearbyFit.SIDE_ROW_DP.dp), verticalAlignment = Alignment.CenterVertically) {
+        // A column for the badges, so the times line up whatever the service's name.
+        Box(GlanceModifier.width(BADGE_DP.dp)) { Badge(b.svc, b.color, b.paid) }
+        TimeText(b, inks, old, 15.sp)
+        b.later.firstOrNull()?.let {
+            Text("  " + shortClock(ctx, it), style = TextStyle(color = inks.muted, fontSize = 11.sp), maxLines = 1)
+        }
+    }
+}
+
+/**
+ * New to NUS: a bus, its time and whether that's Live or the timetable's; under them, the places it passes (where it stops next when it
+ * passes none), and Packed when it is.
+ */
+@Composable
+private fun SideRowExplained(b: StopBus, shown: List<StopBus>, inks: Inks, old: Boolean) {
+    Column(GlanceModifier.fillMaxWidth().height(NearbyFit.SIDE_ROW_NEW_DP.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Box(GlanceModifier.width(BADGE_DP.dp)) { Badge(b.svc, b.color, b.paid) }
+            TimeText(b, inks, old, 13.sp)
+            Spacer(GlanceModifier.width(6.dp))
+            when {
+                b.first -> Small(firstLabel(b), inks.muted, 10.sp)
+                b.live -> Small("● " + L.s(R.string.journey_live), inks.good, 10.sp)
+                else -> Small(L.s(R.string.buses_scheduled), inks.muted, 10.sp)
+            }
+        }
+        Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Box(GlanceModifier.defaultWeight()) {
+                Small(b.via.joinToString(" · ").ifEmpty { nextLine(b, shown) }, inks.ink, 10.sp, bold = true)
+            }
+            if (b.crowd == "high") Small(" " + L.s(R.string.buses_packed), inks.late, 10.sp, bold = true)
+        }
+    }
+}
+
+/** Wide enough for a badge and the gap after it ("R1"; a public bus's "95 $" a little over). */
+private const val BADGE_DP = 36f
+
+/** "2 min walk", or "here" under a minute. */
+private fun walkWords(stop: NearbyStop): String =
+    if (stop.walkS < 60) L.s(R.string.here) else L.s(R.string.min_walk, (stop.walkS + 30) / 60)
+
 /** The biggest a tile grows: past this, the room is better spent on the next stop's buses. */
 private const val TILE_MAX_DP = 128f
 private const val STOP_HEAD_DP = 24f
 /** Clear of the widget's rounded corners, so the last row's pills aren't cut. */
-private const val BOTTOM_DP = 6f
+private const val BOTTOM_DP = NearbyFit.BOTTOM_DP
 
 /**
  * The stop's services as tiles, [NearbyFit.cols] across: one row and the pager, or rows and the rest along the bottom. Rows a stop with few

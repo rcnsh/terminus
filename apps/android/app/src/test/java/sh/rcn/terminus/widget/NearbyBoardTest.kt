@@ -161,6 +161,32 @@ class NearbyBoardTest {
         assertEquals(listOf("R1"), NearbyBoard.page(buses, 2, -1).buses.map { it.svc })
         assertEquals(1, NearbyBoard.page(emptyList(), 2, 3).pages)
     }
+
+    private fun stop(code: String, opposite: String? = null, rows: List<BoardRow> = emptyList()) =
+        NearbyStop(code, code, 60, true, rows, opposite = opposite)
+
+    @Test
+    fun besideIsTheTwinAcrossTheRoad() {
+        val bus = listOf(BoardRow("A1", 120, "live"))
+        val stops = listOf(stop("YIH", opposite = "YIH-OPP"), stop("CLB", rows = bus), stop("YIH-OPP"))
+        // The twin, even with no bus, over a nearer stop that has one.
+        assertEquals("YIH-OPP", NearbyBoard.beside(stops) { NearbyBoard.buses(it, fetched, fetched) }?.code)
+    }
+
+    @Test
+    fun withNoTwinBesideIsTheNextStopWithABus() {
+        val bus = listOf(BoardRow("D2", 120, "live"))
+        val stops = listOf(stop("COM3"), stop("TCOMS"), stop("BIZ2", rows = bus))
+        assertEquals("BIZ2", NearbyBoard.beside(stops) { NearbyBoard.buses(it, fetched, fetched) }?.code)
+        assertNull(NearbyBoard.beside(stops.take(2)) { NearbyBoard.buses(it, fetched, fetched) })
+    }
+
+    @Test
+    fun aBusKeepsThePlacesItPasses() {
+        val row = BoardRow("A2", 120, "live", via = listOf("Science", "Kent Ridge MRT", "PGP"))
+        val b = NearbyBoard.buses(stop("YIH-OPP", rows = listOf(row)), fetched, fetched).single()
+        assertEquals(listOf("Science", "Kent Ridge MRT", "PGP"), b.via)
+    }
 }
 
 /** Which layout a Nearby widget takes at the sizes a Pixel home screen gives it, and the mockups'. */
@@ -209,5 +235,23 @@ class NearbyFitTest {
     @Test
     fun tooShortForATileIsRows() {
         assertEquals(NearbyFit.Kind.ROWS, NearbyFit.of(320f, 150f, sky).kind)
+    }
+
+    @Test
+    fun bothSidesAtFourByTwo() {
+        val sky = NearbyFit.SIDES_SKY_DP
+        assertEquals(NearbyFit(NearbyFit.Kind.SIDES, cols = 2, rows = 4), NearbyFit.sides(387f, 212f, sky, newcomer = false))
+        // New to NUS: a line more for each bus and each side, so a bus fewer.
+        assertEquals(NearbyFit(NearbyFit.Kind.SIDES, cols = 2, rows = 3), NearbyFit.sides(387f, 212f, sky, newcomer = true))
+    }
+
+    @Test
+    fun bothSidesNeedTheWidthAndTwoRows() {
+        val sky = NearbyFit.SIDES_SKY_DP
+        assertNull(NearbyFit.sides(286f, 212f, sky, newcomer = false))
+        assertNull(NearbyFit.sides(387f, 100f, sky, newcomer = false))
+        assertNull(NearbyFit.sides(387f, 130f, sky, newcomer = true))
+        // Taller: up to five rows a side, no more than a Glance Column holds.
+        assertEquals(5, NearbyFit.sides(387f, 436f, sky, newcomer = false)!!.rows)
     }
 }
