@@ -154,7 +154,7 @@ node apps/api/scripts/dev-stub.mjs    # local Worker on :8787 with a fake feed a
   JS (htm's html templates) aren't touched either, and neither is
   `cloudflare.config.ts`, which release-beta.sh and a test read as text.
 - Android (CI): `./gradlew :app:ktfmtCheck :app:lintStableDebug :app:testStableDebugUnitTest :app:compileBetaDebugKotlin`,
-  then `:app:assembleStableRelease :app:assembleBetaRelease` (R8 and
+  and beside it, a job each, `:app:assembleStableRelease` and `:app:assembleBetaRelease` (R8 and
   resource shrinking, unsigned without the keystore) in `apps/android`
   (Java 21).
 - Android dependencies are locked and hash-checked. On a Dependabot Gradle
