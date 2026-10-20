@@ -154,6 +154,8 @@ const en = {
   towardsOne: ((stop: string) => `to ${stop}`) as Fn<[string]>,
   towardsTwo: ((next: string, end: string) => `to ${next}, ${end}`) as Fn<[string, string]>,
   endsHere: 'Ends here',
+  /** Where a stop's buses go, by places a newcomer knows (via.ts): "to UTown, Kent Ridge MRT". */
+  viaTo: ((places: string) => `to ${places}`) as Fn<[string]>,
 
   // Clock and lateness (clock.ts)
   /** "6:36 PM", with a no-break space so a line never ends between the two. */
@@ -506,6 +508,7 @@ const zh: Msgs = {
   towardsOne: (stop) => zs`开往${stop}`,
   towardsTwo: (next, end) => zs`经${next}，开往${end}`,
   endsHere: '本站为终点站',
+  viaTo: (places) => zs`往${places}方向`,
 
   clock12: (hm, pm) => `${pm ? '下午' : '上午'}\u00a0${hm}`,
   earlyBy: (n) => `早到 ${n} 分钟`,

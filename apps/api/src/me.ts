@@ -94,6 +94,7 @@ import {
 import { ImportInputError, parseShareUrl, resolveTrips } from './nusmods.ts';
 import { termName } from './calendar.ts';
 import { boardAsOf, boardAt, displayName, indexGraph } from './resolve.ts';
+import { stopVia, viaText } from './via.ts';
 import { haversineM } from './geo.ts';
 import { isoSeconds } from './format.ts';
 import { cardFor, nextPhaseAt } from './card.ts';
@@ -1566,13 +1567,18 @@ async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: numbe
   const stopped = url.searchParams.get('stopped') === '1';
   const stops = picked.map(({ stop, distM, footM: foot }) => {
     const sa = byStop.get(stop.code)!;
+    const board = boardAt(graph, idx, stop.code, sa, nowMs, { stopped });
+    // Which way this side of the road's buses go, for a heading over its board.
+    const via = stopVia(board);
     return {
       stop: { code: stop.code, name: stop.name, longName: displayName(stop, stop.code) },
       ...twinOf(stop, idx.byCode),
       distM: Math.round(distM),
       walkS: Math.round(foot / paceSpeed(profile.walkPace)),
       available: sa.available !== false,
-      board: boardAt(graph, idx, stop.code, sa, nowMs, { stopped }),
+      via,
+      viaText: viaText(via),
+      board,
     };
   });
   // As old as the oldest times on it, so "Updated N ago" is true.

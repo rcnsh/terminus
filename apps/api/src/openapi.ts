@@ -361,6 +361,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                         ],
                         color: '#2b9ad6',
                         towards: ['Central Library', 'Prince George’s Park Foyer'],
+                        via: ['Central Library', 'Engineering', 'Kent Vale'],
                         crowd: 'low',
                         endsAt: '2026-09-28T15:04:00.000Z',
                         running: true,
@@ -376,6 +377,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                         later: [],
                         color: '#ec4fa0',
                         towards: ['Central Library', 'COM 3'],
+                        via: ['Central Library', 'Arts', 'BIZ'],
                         crowd: 'high',
                         endsAt: '2026-09-28T15:00:00.000Z',
                         running: true,
@@ -510,6 +512,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                         later: [],
                         color: '#ec4fa0',
                         towards: ['Central Library', 'COM 3'],
+                        via: ['Central Library', 'Arts', 'BIZ'],
                         crowd: 'low',
                         endsAt: '2026-10-07T15:00:00.000Z',
                         running: true,
@@ -1118,6 +1121,18 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                       distM: { type: 'integer' },
                       walkS: { type: 'integer' },
                       available: { type: 'boolean' },
+                      via: {
+                        type: 'array',
+                        items: { type: 'string' },
+                        example: ['UTown', 'Science', 'Kent Ridge MRT'],
+                        description:
+                          'Which way this stop’s buses go, by places someone new to NUS knows: the ones most of its buses (`board[].via`) pass first, the most shared first, up to three. Empty when they pass none.',
+                      },
+                      viaText: {
+                        type: ['string', 'null'],
+                        example: 'to UTown, Science, Kent Ridge MRT',
+                        description: '`via` in words (Chinese "往 UTown、理学院 方向"). Null when `via` is empty.',
+                      },
                       board: { type: 'array', items: { $ref: '#/components/schemas/BoardRow' } },
                     },
                   },
@@ -2830,6 +2845,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             'later',
             'color',
             'towards',
+            'via',
             'crowd',
             'endsAt',
             'running',
@@ -2892,6 +2908,13 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               description:
                 'Where the service goes from this stop, by full name: the next stop, then the stop the route ends at (for a loop, the stop it started from). One name when they are the same, none at the end of the line. Place names stay English in every language.',
               example: ['Central Library', 'Prince George’s Park Foyer'],
+            },
+            via: {
+              type: 'array',
+              items: { type: 'string' },
+              description:
+                'The well-known places the service passes from this stop, in order, up to three (the MRT stations, UTown, PGP, Kent Vale, Central Library, COM 3, BIZ, and the faculties: Arts, Science, Engineering), for someone who does not know the routes yet. Each once, never the place this stop is. A faculty is in the request’s language; a place keeps its English name. Empty when it passes none: show `toText` then.',
+              example: ['Central Library', 'Arts', 'BIZ'],
             },
             crowd: {
               type: ['string', 'null'],

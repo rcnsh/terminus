@@ -36,6 +36,7 @@ import { isPublic, publicRideS, rideMetres, svcName } from './public.ts';
 import { footM, stopFootM } from './walk.ts';
 import { footS, mins } from './format.ts';
 import { listOf, m } from './i18n.ts';
+import { viaFrom } from './via.ts';
 import { type HomeWalk, residenceStops } from './residences.ts';
 
 export { haversineM };
@@ -564,6 +565,10 @@ export interface BoardRow {
   /** Where it goes from here: the next stop's name, then the stop the route
    *  ends at. One name when they're the same; none at the end of the line. */
   towards: string[];
+  /** The well-known places it passes from here, in order, up to three
+   *  ("UTown", "Kent Ridge MRT"; via.ts), for someone who doesn't know the
+   *  routes yet. Empty when it passes none. */
+  via: string[];
   /** How full the first bus is, from the feed; null when it doesn't say. */
   crowd: Crowd | null;
   /** When the service stops running today (ISO); null when its hours are unknown. */
@@ -711,6 +716,7 @@ export function boardAt(
         later: [],
         color: ROUTE_COLORS[svcName(svc)] ?? null,
         towards: towardsFrom(idx, svc, stopCode),
+        via: viaFrom(idx, svc, stopCode),
         crowd: null,
         endsAt: null,
         running: false,
@@ -746,6 +752,7 @@ export function boardAt(
       later,
       color: ROUTE_COLORS[svcName(svc)] ?? null,
       towards,
+      via: viaFrom(idx, svc, stopCode),
       crowd: etas[0]?.crowd ?? null,
       endsAt: ends === null ? null : new Date(ends).toISOString(),
       running: true,

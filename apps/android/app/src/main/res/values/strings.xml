@@ -45,7 +45,7 @@
     <string name="widget_places_description">The next bus, plus buttons for your favourites and nearby departures</string>
     <string name="widget_description">The next bus to wherever you\'re going next</string>
     <string name="widget_nearby_name">Buses near you</string>
-    <string name="widget_nearby_description">The next buses at the stop nearest you, and where each stops next</string>
+    <string name="widget_nearby_description">The next buses at your stop and across the road</string>
     <string name="widget_now">Now</string>
     <string name="nearby_next">Next %1$s</string>
     <string name="nearby_next_to">Next %1$s, to %2$s</string>
@@ -61,9 +61,7 @@
     <string name="nearby_first_spoken">No buses now. First buses: %1$s</string>
     <string name="nearby_page_next">More buses</string>
     <string name="nearby_page_prev">Sooner buses</string>
-    <string name="preview_nearby_now">Now 9:41 · 2 min walk</string>
-    <string name="preview_nearby_next_1">Next Yusof Ishak House</string>
-    <string name="preview_nearby_next_2">Next University Health Centre</string>
+    <string name="preview_nearby_now">Now 9:41</string>
     <string name="a11y_checking">Checking</string>
     <string name="a11y_leaves">", leaves "</string>
     <string name="a11y_loading">terminus. %1$s.</string>
@@ -505,6 +503,11 @@
     <string name="card_style_route_hint">The whole trip as a line, with the times under it.</string>
     <string name="card_style_steps">Steps</string>
     <string name="card_style_steps_hint">The trip as a line down the card, as on a route map.</string>
+    <!-- New to NUS (NewToNus), in Settings › Appearance: the Nearby widget explains the buses. -->
+    <string name="nearby_widget">Buses near you widget</string>
+    <string name="new_to_nus">New to NUS</string>
+    <string name="new_to_nus_sub">Says where each bus goes, by places you\'ll know: the MRT, UTown, PGP.</string>
+    <string name="new_to_nus_hint">Only on this phone. Off, the widget fits in more buses.</string>
     <string name="leave_in_min">Leave in %1$d min</string>
     <string name="leave_in_min_s">Leave in %1$d min %2$d s</string>
     <string name="leave_in_s">Leave in %1$d s</string>

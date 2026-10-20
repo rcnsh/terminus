@@ -219,6 +219,13 @@ after it the feed knows (`later`), and
   at. On a loop the stop after the last is the first, and the end is where
   it started (D1 at BIZ2 is just "COM 3"). One name when the two are the
   same; none at the end of a line that doesn't loop (K at PGP Foyer);
+- `via`: the well-known places it passes from here, in order, up to three
+  (`src/via.ts`, hand-kept: the MRT stations, UTown, PGP, Kent Vale,
+  Central Library, COM 3, BIZ, and Arts, Science and Engineering for
+  their faculties' stops), each once and never the place you're at. For
+  someone who doesn't know the routes yet: `towards` tells a regular which
+  way a bus goes, `via` whether it goes past the MRT. The Android widget's
+  "New to NUS" setting shows it; empty when it passes none;
 - `crowd`: how full the bus in `etaS` is, from the feed, null without one;
 - `endsAt`: when the service stops running today (`serviceEndsAt`), null
   when its hours are unknown or it isn't running;
@@ -446,7 +453,11 @@ pnpm exec cf kv keys put config:minClient --namespace-id <KV id in cloudflare.co
   its service's colour (`color`, as on the buses and the map). Each row
   (as on `/stops/{code}`) has the next bus in `etaS` and the ones after it
   the feed knows in `later`, each with its own quality; Nearby draws them
-  all on the road, the next one solid and the rest faded.
+  all on the road, the next one solid and the rest faded. Each stop has
+  `via` too: the places most of its buses pass first (each row's first
+  two, the most shared first, up to three), and `viaText` ("to UTown,
+  Science, Kent Ridge MRT"), the heading the widget puts over each side
+  of the road.
 - The profile's `pinnedStops` are the stops pinned to the Buses tab, in the
   user's order: up to 8, each a shuttle stop or a public stop of its own
   (LTA's code), repeats dropped. A pinned stop gone from a new scrape is

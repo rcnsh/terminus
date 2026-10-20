@@ -25,6 +25,8 @@ internal data class StopBus(
     val later: List<Long>,
     /** The service's first bus when it starts again: none of the stop's services is running now. A timetable's time. */
     val first: Boolean = false,
+    /** The well-known places it passes from here (the server's `via`), for New to NUS; empty with none, or from an older server. */
+    val via: List<String> = emptyList(),
 )
 
 internal object NearbyBoard {
@@ -56,6 +58,7 @@ internal object NearbyBoard {
                     crowd = null,
                     next = r.towards.firstOrNull(),
                     end = r.towards.drop(1).lastOrNull(),
+                    via = r.via,
                     endsHere = r.endsHere,
                     later = emptyList(),
                     first = true,
@@ -81,6 +84,7 @@ internal object NearbyBoard {
                     crowd = due.crowd,
                     next = r.towards.firstOrNull(),
                     end = r.towards.drop(1).lastOrNull(),
+                    via = r.via,
                     endsHere = r.endsHere,
                     later = times.drop(1).map { it.second },
                 )
@@ -110,6 +114,15 @@ internal object NearbyBoard {
     }
 
     data class Paged(val buses: List<StopBus>, val page: Int, val pages: Int)
+
+    /**
+     * The stop beside the first of [stops] (as shown) on a widget showing both sides of the road: its twin where the board has it, else the
+     * next stop with a bus ([buses] gives each stop's). Null with neither: the widget shows the one stop.
+     */
+    fun beside(stops: List<NearbyStop>, buses: (NearbyStop) -> List<StopBus>): NearbyStop? {
+        val first = stops.firstOrNull() ?: return null
+        return stops.drop(1).firstOrNull { it.code == first.opposite } ?: stops.drop(1).firstOrNull { buses(it).isNotEmpty() }
+    }
 }
 
 /**
@@ -130,6 +143,8 @@ internal data class NearbyFit(
         BAR,
         ROWS,
         TILES,
+        /** Two stops side by side, a column each: your side of the road and across it ([sides]). */
+        SIDES,
     }
 
     val shown: Int
@@ -148,6 +163,29 @@ internal data class NearbyFit(
         const val FOOTER_DP = 22f
         /** A Glance Column holds at most 10 children: rows and the rules between them. */
         private const val MAX_ROWS = 5
+
+        /** Both sides of the road: a row a bus, and the heading over each side; New to NUS adds a line to each. */
+        const val SIDE_ROW_DP = 30f
+        const val SIDE_ROW_NEW_DP = 34f
+        const val SIDE_HEAD_DP = 20f
+        const val SIDE_HEAD_NEW_DP = 34f
+        /** The slim sky over both sides: the stop's name, Now and ↻ on one line. */
+        const val SIDES_SKY_DP = 42f
+
+        /**
+         * Both sides of the road, a column each ([Kind.SIDES]), where the widget is wide and tall enough for a few rows in each: as many
+         * rows as fit, up to [MAX_ROWS]. Null where it isn't: [of]'s layouts then.
+         */
+        fun sides(widthDp: Float, heightDp: Float, skyDp: Float, newcomer: Boolean): NearbyFit? {
+            if (widthDp < 300f || heightDp < 130f) return null
+            val head = if (newcomer) SIDE_HEAD_NEW_DP else SIDE_HEAD_DP
+            val row = if (newcomer) SIDE_ROW_NEW_DP else SIDE_ROW_DP
+            val rows = ((heightDp - skyDp + 1f - head - BOTTOM_DP) / (row + 1f)).toInt()
+            return if (rows < 2) null else NearbyFit(Kind.SIDES, cols = 2, rows = rows.coerceAtMost(MAX_ROWS))
+        }
+
+        /** Clear of the widget's rounded corners. */
+        const val BOTTOM_DP = 6f
 
         /** [skyDp]: the sky over the buses, taller with the chips on it. */
         fun of(widthDp: Float, heightDp: Float, skyDp: Float): NearbyFit {
