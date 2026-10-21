@@ -15,6 +15,7 @@ import { isoSeconds } from './format.ts';
 import { clockAt, clockMin, slackText } from './clock.ts';
 import { PACES, type Pace } from './walk.ts';
 import { type LessonWeeks, type Term, dayOffReason, importedClassRuns, sgtDate, termEnded, termName } from './calendar.ts';
+import { isDate } from './calendarsync.ts';
 import { LANG_PREFS, type LangPref, m } from './i18n.ts';
 
 export interface Place {
@@ -328,7 +329,8 @@ export function parseProfile(
       return { ok: false, error: `once must be a list of up to ${PROFILE_LIMITS.once}` };
     for (const [i, o] of list.entries()) {
       const bad = (why: string): Result => ({ ok: false, error: `once[${i}]: ${why}` });
-      if (!isObj(o) || typeof o.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(o.date)) return bad('date must be YYYY-MM-DD');
+      // A real day: 2026-13-45 is never today, so a save would never drop it.
+      if (!isObj(o) || !isDate(o.date)) return bad('date must be YYYY-MM-DD');
       if (!isInt(o.arriveByMin, 0, 1439)) return bad('arriveByMin must be minutes past midnight');
       if (typeof o.to !== 'string' || !isPlace(o.to)) return bad('to must be a known stop or place code');
       if (!str(o.label, PROFILE_LIMITS.label)) return bad(`label must be 1-${PROFILE_LIMITS.label} characters`);
@@ -358,8 +360,8 @@ function parseWeeks(v: unknown): LessonWeeks | undefined | false {
   if (v === undefined) return undefined;
   if (Array.isArray(v)) return v.length <= 20 && v.every((w) => isInt(w, 1, 20)) ? (v as number[]) : false;
   if (!isObj(v)) return false;
-  const date = /^\d{4}-\d{2}-\d{2}$/;
-  if (typeof v.start !== 'string' || typeof v.end !== 'string' || !date.test(v.start) || !date.test(v.end)) return false;
+  // Real days, in order: a lesson on days that don't exist would silently never run.
+  if (!isDate(v.start) || !isDate(v.end) || v.start > v.end) return false;
   const out: LessonWeeks = { start: v.start, end: v.end };
   if (v.weekInterval !== undefined) {
     if (!isInt(v.weekInterval, 1, 10)) return false;
