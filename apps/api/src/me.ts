@@ -1318,6 +1318,9 @@ export async function handleMe(
 
   if (path === '/api/auth/logout' && req.method === 'POST') {
     if (session) await endSession(db, session.tokenHash);
+    // A token that isn't one cost a D1 read, as under /me: capped per address the same way.
+    else if (tokenFrom(req) && (await limited(env, req, 'badtoken')))
+      return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
     return json({ ok: true }, 200, { 'set-cookie': sessionCookie('', 0) });
   }
 
