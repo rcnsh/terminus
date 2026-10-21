@@ -286,7 +286,10 @@ async function networkFirst(req, event) {
   for (const k of ['place', 'to', 'h12']) if (url.searchParams.get(k)) keyed.set(k, url.searchParams.get(k));
   const lang = (req.headers.get('accept-language') ?? '').split(',')[0].trim().slice(0, 16);
   if (lang) keyed.set('lang', lang);
-  const key = `${url.origin}${url.pathname}${keyed.size ? `?${keyed}` : ''}`;
+  // `keyed.size` is undefined on Safari before 17 (iOS 16.4 to 16.7, the
+  // first with web push), which would keep every card under the bare path.
+  const query = String(keyed);
+  const key = `${url.origin}${url.pathname}${query ? `?${query}` : ''}`;
   const network = (async () => {
     const res = await fetch(req);
     // A server error is as good as no network: the kept reply beats an error.
