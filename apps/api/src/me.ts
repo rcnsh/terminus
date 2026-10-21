@@ -1307,7 +1307,8 @@ export async function handleMe(
     // It goes into the email to the account's owner: cleaned as at /auth/app/start.
     const name = deviceName(body);
     if (!code) return json({ error: 'enter the 6-character code from the account page' }, 400);
-    const paired = await redeemPairCode(db, code, name, nowMs, clientFrom(req));
+    // The platform an app names in its body when it has no header, as /auth/anon takes it.
+    const paired = await redeemPairCode(db, code, name, nowMs, clientWith(req, body));
     if (!paired) return json({ error: 'that code is wrong or has expired' }, 400);
     ctx.waitUntil(mailDeviceAdded(env, paired.email, name, nowMs).catch(mailFailed));
     return json({ token: paired.token });
