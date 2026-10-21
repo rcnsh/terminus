@@ -550,6 +550,32 @@ test('a web sign-in inside the cooldown of an app sign-in to the address sends n
   assert.equal(email.sent.length, 1, 'one email a minute per address, whichever sign-in asks');
 });
 
+test('merging a device setup into the account is all or nothing', async () => {
+  const { mergeAnonymous } = await import('../src/applogin.ts');
+  const { ensureUser, loadProfileJson, saveProfileJson } = await import('../src/accounts.ts');
+  const { env, db } = setup();
+  const now = Date.now();
+  const user = await ensureUser(db, ME, now);
+  await saveProfileJson(db, user.id, { home: { stops: ['COM3'] } }, now);
+  const old = await anon(env);
+  await call(env, '/api/me/profile', { method: 'PUT', token: old, body: HOME });
+  const id = anonId(db);
+  // D1 drops the batch: the account's setup stays as it was, and the device's account too.
+  const failing = {
+    ...db,
+    batch: async () => {
+      throw new Error('D1_ERROR: Network connection lost.');
+    },
+  };
+  await assert.rejects(mergeAnonymous(failing, user.id, old, 'device', now));
+  assert.deepEqual((await loadProfileJson(db, user.id)).home.stops, ['COM3']);
+  assert.equal(anonId(db), id);
+  // Then it goes through whole.
+  assert.deepEqual(await mergeAnonymous(db, user.id, old, 'device', now), { removed: id });
+  assert.deepEqual((await loadProfileJson(db, user.id)).home.stops, ['PGP']);
+  assert.equal(anonId(db), undefined);
+});
+
 test('app sign-in: a repeat in the cooldown does not spend the global email ceiling', async () => {
   // Otherwise three addresses repeating one email address could use up
   // everyone's sign-in emails without a single email being sent.

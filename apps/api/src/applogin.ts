@@ -45,7 +45,7 @@ import {
   newToken,
   profileFor,
   removeAnonymous,
-  saveProfileJson,
+  profileUpsert,
   mail,
   sendMail,
   sessionFor,
@@ -414,10 +414,9 @@ export async function mergeAnonymous(
     .bind(await hashToken(anonToken))
     .first<{ id: string }>();
   if (!anon || anon.id === userId) return 'not-anonymous';
-  if (keep === 'device') {
-    const mine = await loadProfileJson(db, anon.id);
-    if (mine) await saveProfileJson(db, userId, mine, nowMs);
-  }
-  await removeAnonymous(db, anon.id, userId);
+  // The setup and the removal in one batch: half a merge would leave the
+  // account with the device's setup and the device still signed in.
+  const mine = keep === 'device' ? await loadProfileJson(db, anon.id) : null;
+  await removeAnonymous(db, anon.id, userId, mine ? [profileUpsert(db, userId, mine, nowMs)] : []);
   return { removed: anon.id };
 }
