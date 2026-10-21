@@ -106,3 +106,19 @@ test('a failure arriving late does not take a newer answer off the preview', asy
   assert.equal(box.querySelector('.big')?.textContent, 'Latest');
   assert.equal(box.textContent.includes('Preview unavailable'), false);
 });
+
+test('Your classes shows the newest list asked for, not the last to arrive', async (t) => {
+  const box = draw(t, html`<${Choices} />`);
+  await settle();
+  assert.equal(calls.choices.length, 1, 'asked once on opening');
+  // An Undo elsewhere bumps the lists while the first is still on its way.
+  lists.set((n) => n + 1);
+  await settle();
+  assert.equal(calls.choices.length, 2, 'asked again after the change');
+  calls.choices[1].answer(choices('After the undo'));
+  await settle();
+  assert.equal(box.querySelector('#trip-choices li span span')?.textContent, 'After the undo');
+  calls.choices[0].answer(choices('Before the undo'));
+  await settle();
+  assert.equal(box.querySelector('#trip-choices li span span')?.textContent, 'After the undo', 'the older list does not take its place');
+});
