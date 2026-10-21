@@ -56,6 +56,21 @@ test('RL_PUBLIC caps /health, /status.json, /admin/*, downloads and timelapse da
   }
 });
 
+test('RL_AUTH caps guessed tokens on /auth/logout too: each costs a D1 read, as on /me', async () => {
+  const rl = refusing();
+  const { env } = setup({ RL_AUTH: rl });
+  const res = await worker.fetch(
+    new Request(`${BASE}/api/auth/logout`, { method: 'POST', headers: { authorization: 'Bearer nope' } }),
+    env,
+    makeCtx(),
+  );
+  await assert429(res, '60');
+  assert.deepEqual(rl.keys, ['badtoken:unknown']);
+  // No token at all is just "signed out", not a guess.
+  const bare = await worker.fetch(new Request(`${BASE}/api/auth/logout`, { method: 'POST' }), env, makeCtx());
+  assert.equal(bare.status, 200);
+});
+
 test('RL_PUBLIC caps the sign-in link page and /auth/config', async () => {
   for (const [path, method] of [
     ['/auth/verify?t=abc', 'GET'],
