@@ -8,7 +8,7 @@
  * dimming once `card.staleAt` passes.
  */
 
-import type { BusLeg, Crowd, Dest, Leave, MeAnswer, Quality } from './types.ts';
+import type { Arrival, BusLeg, Crowd, Dest, Leave, MeAnswer, Quality } from './types.ts';
 import { clockAt, slackText } from './clock.ts';
 import {
   ASSUME_MS,
@@ -629,12 +629,27 @@ function footJourney(
   });
 }
 
+/**
+ * The board row the headline bus is: of its service's rows, the one whose
+ * time is the departure (`departsAt`), not the first listed, which may be a
+ * bus the walk can't catch. The first of them with no departure to go by.
+ */
+function headlineRow(a: MeAnswer, svc: string): Arrival | undefined {
+  const rows = a.arrivals.filter((x) => x.svc === svc);
+  const departs = a.departsAt ? Date.parse(a.departsAt) : NaN;
+  if (Number.isNaN(departs)) return rows[0];
+  // etaS counts from the feed's fetch, which asOf is or follows within a cache window.
+  const asOf = Date.parse(a.asOf);
+  const off = (x: Arrival) => (x.etaS === null ? Infinity : Math.abs(asOf + x.etaS * 1000 - departs));
+  return rows.reduce<Arrival | undefined>((best, x) => (best === undefined || off(x) < off(best) ? x : best), undefined);
+}
+
 function baseCard(a: MeAnswer, h12: boolean): BaseCard {
   const kind = kindOf(a);
   const at = (iso: string) => clockAt(Date.parse(iso), h12);
   const staleAt = staleAtOf(a, kind);
   const svc = a.label.split(' · ')[0];
-  const crowd = a.arrivals.find((x) => x.svc === svc)?.crowd ?? null;
+  const crowd = headlineRow(a, svc)?.crowd ?? null;
   const l = a.leave ?? null;
   // "~9:41" when the leave-by is an estimate.
   const est = (iso: string) => approx(l?.estimated, at(iso));
