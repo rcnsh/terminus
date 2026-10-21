@@ -100,6 +100,13 @@ class LeaveAlertsTest {
     }
 
     @Test
+    fun aDismissedHeadsUpStopsTheFollowUpChecks() {
+        // Dismissed: nothing will be posted for this trip again, so no alarm checks for it.
+        val a = plan(leaveAt = now + 4 * 60_000, nextChangeAt = now + 5 * 60_000)
+        assertEquals(Step.Follow(false, null), LeaveAlerts.decide(a, State(true, classAt), showing = false, pushActive = false, now = now))
+    }
+
+    @Test
     fun nothingOnceTheClassHasStarted() {
         assertEquals(Step.StopChecking, run(plan(leaveAt = now - 10 * 60_000), fresh, classAt).first)
         assertEquals(Step.StopChecking, run(plan(leaveAt = now - 10 * 60_000), fresh, classAt + 1).first)

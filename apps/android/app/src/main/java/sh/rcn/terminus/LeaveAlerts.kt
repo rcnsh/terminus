@@ -189,8 +189,10 @@ object LeaveAlerts {
         if (!state.alertsOn || trip == null || (classAt != null && now >= classAt) || (remindAt == null && !following))
             return Step.StopChecking
         // One heads-up per trip. A new plan (the next class) has a new key.
-        // After it, the same notification follows the trip, but only while it's showing.
-        if (noted) return Step.Follow(post = showing, checkAt = followUpAt(answer, pushActive, now))
+        // After it, the same notification follows the trip, but only while
+        // it's showing: dismissed, nothing is posted for it again, so no check
+        // wakes the phone for it either.
+        if (noted) return Step.Follow(post = showing, checkAt = if (showing) followUpAt(answer, pushActive, now) else null)
         if (remindAt == null) return Step.Keep
         if (remindAt > now + CHECK_AHEAD_MS) return Step.CheckAt(remindAt - CHECK_AHEAD_MS)
         // Fresh times in hand, but not yet: the heads-up goes at remindAt, so
