@@ -193,6 +193,10 @@ export async function sendWebPush(
     signal: AbortSignal.timeout(5_000),
   });
   if (res.status === 404 || res.status === 410) return 'gone';
+  // Anything else keeps the subscription. A 401 or 403 refuses our VAPID
+  // signature (RFC 8292): a key the browser didn't subscribe with, or a
+  // token the service's clock reads as expired. The browser's side is still
+  // good, and the web app renews it with the current key when next opened.
   if (!res.ok) {
     console.error('web push', res.status);
     return 'failed';
