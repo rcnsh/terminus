@@ -163,6 +163,9 @@ type Result = { ok: true; profile: Profile } | { ok: false; error: string };
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isInt = (v: unknown, lo: number, hi: number): v is number => typeof v === 'number' && Number.isInteger(v) && v >= lo && v <= hi;
 const str = (v: unknown, max: number): v is string => typeof v === 'string' && v.trim().length > 0 && v.length <= max;
+/** A name on one line: it goes into card lines and notification titles. Control characters count as spaces. */
+// oxlint-disable-next-line no-control-regex
+const oneLine = (v: string): string => v.replace(/[\s\x00-\x1f\x7f]+/g, ' ').trim();
 
 /**
  * Validates a whole profile. Missing fields take their defaults, so a client
@@ -275,7 +278,7 @@ export function parseProfile(
       if (t.endMin !== undefined && !isInt(t.endMin, t.arriveByMin + 1, 1440)) return bad('endMin must be after arriveByMin');
       if (typeof t.to !== 'string' || !isPlace(t.to)) return bad('to must be a known stop or place code');
       if (!str(t.label, PROFILE_LIMITS.label)) return bad(`label must be 1-${PROFILE_LIMITS.label} characters`);
-      const venue = typeof t.venue === 'string' ? t.venue.slice(0, 40) : '';
+      const venue = typeof t.venue === 'string' ? oneLine(t.venue.slice(0, 40)) : '';
       const weeks = parseWeeks(t.weeks);
       if (weeks === false) return bad('weeks must be a list of week numbers or a date range');
       out.push({
@@ -284,7 +287,7 @@ export function parseProfile(
         ...(t.endMin !== undefined ? { endMin: t.endMin as number } : {}),
         ...(weeks ? { weeks } : {}),
         to: t.to,
-        label: t.label.trim(),
+        label: oneLine(t.label),
         venue,
       });
     }
@@ -305,7 +308,7 @@ export function parseProfile(
         return { ok: false, error: `places[${i}].label must be 1-${PROFILE_LIMITS.placeLabel} characters` };
       if (typeof pl.to !== 'string' || !isPlace(pl.to)) return { ok: false, error: `places[${i}].to must be a known stop or place code` };
       keys.add(pl.key);
-      p.places.push({ key: pl.key, label: pl.label.trim(), to: pl.to });
+      p.places.push({ key: pl.key, label: oneLine(pl.label), to: pl.to });
     }
   }
 
@@ -334,7 +337,7 @@ export function parseProfile(
       if (!isInt(o.arriveByMin, 0, 1439)) return bad('arriveByMin must be minutes past midnight');
       if (typeof o.to !== 'string' || !isPlace(o.to)) return bad('to must be a known stop or place code');
       if (!str(o.label, PROFILE_LIMITS.label)) return bad(`label must be 1-${PROFILE_LIMITS.label} characters`);
-      p.once.push({ date: o.date, arriveByMin: o.arriveByMin, to: o.to, label: o.label.trim() });
+      p.once.push({ date: o.date, arriveByMin: o.arriveByMin, to: o.to, label: oneLine(o.label) });
     }
     p.once.sort((a, b) => a.date.localeCompare(b.date) || a.arriveByMin - b.arriveByMin);
   }

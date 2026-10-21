@@ -151,6 +151,22 @@ test('a one-off trip or a date-range lesson on a day that does not exist is refu
   );
 });
 
+test('a label with a line break or control characters is saved on one line: it goes into notifications', () => {
+  const r = parseProfile(
+    {
+      manual: [{ day: 1, arriveByMin: 600, to: 'COM3', label: 'CS2030\nLecture\u0000 @ COM1', venue: 'COM1\t01' }],
+      places: [{ key: 'gym', label: 'The\r\nGym', to: 'PGP' }],
+      once: [{ date: '2099-01-01', arriveByMin: 600, to: 'COM3', label: 'Lib\u0007rary' }],
+    },
+    isStop,
+  );
+  assert.ok(r.ok, r.error);
+  assert.equal(r.profile.manual[0].label, 'CS2030 Lecture @ COM1');
+  assert.equal(r.profile.manual[0].venue, 'COM1 01');
+  assert.equal(r.profile.places[0].label, 'The Gym');
+  assert.equal(r.profile.once[0].label, 'Library');
+});
+
 test('the limit errors, written as literals for their translation, name the limits enforced', () => {
   const pin = parseProfile({ pinnedStops: ['NOPE'] }, isStop);
   assert.match(pin.error, new RegExp(`up to ${PROFILE_LIMITS.pinnedStops} `));
