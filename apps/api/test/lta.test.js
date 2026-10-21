@@ -211,6 +211,16 @@ test('fetchPublicArrivals sends the account key, and a 401 is a refusal, not "no
   await assert.rejects(fetchPublicArrivals(makeEnv(), GRAPH_PUBLIC, 'CLB', '16181', FROZEN_NOW), /not configured/);
 });
 
+test('fetchPublicArrivals: a 200 that is not JSON (a maintenance page) names DataMall, not a bare SyntaxError', async () => {
+  installGlobals(async () => new Response('<html><body>Down for maintenance</body></html>', { status: 200 }));
+  await assert.rejects(fetchPublicArrivals(env(), GRAPH_PUBLIC, 'CLB', '16181', FROZEN_NOW), (err) => {
+    assert.match(err.message, /DataMall/);
+    assert.match(err.message, /non-JSON/);
+    assert.ok(!(err instanceof SyntaxError));
+    return true;
+  });
+});
+
 test('getPublicArrivals: one call per stop per 15 s, stale served when the feed fails, a refused key quiets every stop', async () => {
   const fetch = makeFetch({ publicStops: { 16181: [{ ServiceNo: '95', buses: [{ etaS: 240, dest: '16009' }] }] } });
   installGlobals(fetch, FROZEN_NOW);
