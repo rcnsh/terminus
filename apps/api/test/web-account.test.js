@@ -74,3 +74,35 @@ test('signed out, a warm-up of Settings that fails is left for the sign-in to tr
     'nothing is left unhandled',
   );
 });
+
+test('the preview shows the newest answer asked for, not the last to arrive', async (t) => {
+  const box = draw(t, html`<${app.Preview} me=${{ anonymous: false, email: 'a@u.nus.edu' }} />`);
+  await settle();
+  assert.equal(calls.next.length, 1, 'asked once on opening');
+  // A save asks again while the first is still on its way.
+  saves.set((n) => n + 1);
+  await settle();
+  assert.equal(calls.next.length, 2, 'asked again after a save');
+  calls.next[1].answer(answer('After the save'));
+  await settle();
+  assert.equal(box.querySelector('.big')?.textContent, 'After the save');
+  // The first answer lands late, with the card from before the save.
+  calls.next[0].answer(answer('Before the save'));
+  await settle();
+  assert.equal(box.querySelector('.big')?.textContent, 'After the save', 'the older answer does not take its place');
+});
+
+test('a failure arriving late does not take a newer answer off the preview', async (t) => {
+  const was = calls.next.length;
+  const box = draw(t, html`<${app.Preview} me=${{ anonymous: false, email: 'a@u.nus.edu' }} />`);
+  await settle();
+  saves.set((n) => n + 1);
+  await settle();
+  assert.equal(calls.next.length, was + 2);
+  calls.next[was + 1].answer(answer('Latest'));
+  await settle();
+  calls.next[was].answer({ error: 'down' }, 503);
+  await settle();
+  assert.equal(box.querySelector('.big')?.textContent, 'Latest');
+  assert.equal(box.textContent.includes('Preview unavailable'), false);
+});
