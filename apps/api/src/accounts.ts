@@ -415,8 +415,13 @@ export function hasSetup(json: unknown): boolean {
 }
 
 /** Deletes an anonymous account once it's been signed in elsewhere; its reports move with it. */
-export async function removeAnonymous(db: D1Database, anonId: string, intoUserId: string): Promise<void> {
-  await db.batch(anonymousGone(db, anonId, intoUserId, ALWAYS));
+export async function removeAnonymous(
+  db: D1Database,
+  anonId: string,
+  intoUserId: string,
+  first: D1PreparedStatement[] = [],
+): Promise<void> {
+  await db.batch([...first, ...anonymousGone(db, anonId, intoUserId, ALWAYS)]);
 }
 
 const ALWAYS: Live = { sql: '1', params: [] };
@@ -883,13 +888,17 @@ export async function loadProfileRow(db: D1Database, userId: string): Promise<{ 
  *  write's version is later than the one it replaces, even within a
  *  millisecond, so a conditional write can't mistake one for another. */
 export async function saveProfileJson(db: D1Database, userId: string, profile: unknown, nowMs: number): Promise<number> {
-  const row = await db
+  const row = await profileUpsert(db, userId, profile, nowMs).first<{ updated: number }>();
+  return row?.updated ?? nowMs;
+}
+
+/** saveProfileJson's statement, for a batch with other writes. */
+export function profileUpsert(db: D1Database, userId: string, profile: unknown, nowMs: number): D1PreparedStatement {
+  return db
     .prepare(
       'INSERT INTO profiles (user_id, json, updated) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET json = excluded.json, updated = MAX(excluded.updated, profiles.updated + 1) RETURNING updated',
     )
-    .bind(userId, JSON.stringify(profile), nowMs)
-    .first<{ updated: number }>();
-  return row?.updated ?? nowMs;
+    .bind(userId, JSON.stringify(profile), nowMs);
 }
 
 /**
