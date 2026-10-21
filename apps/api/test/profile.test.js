@@ -156,7 +156,7 @@ test('a label with a line break or control characters is saved on one line: it g
     {
       manual: [{ day: 1, arriveByMin: 600, to: 'COM3', label: 'CS2030\nLecture\u0000 @ COM1', venue: 'COM1\t01' }],
       places: [{ key: 'gym', label: 'The\r\nGym', to: 'PGP' }],
-      once: [{ date: '2099-01-01', arriveByMin: 600, to: 'COM3', label: 'Lib\u0007rary' }],
+      once: [{ date: '2099-01-01', arriveByMin: 600, to: 'COM3', label: 'Lib\u0007rary ' }],
     },
     isStop,
   );
@@ -164,7 +164,7 @@ test('a label with a line break or control characters is saved on one line: it g
   assert.equal(r.profile.manual[0].label, 'CS2030 Lecture @ COM1');
   assert.equal(r.profile.manual[0].venue, 'COM1 01');
   assert.equal(r.profile.places[0].label, 'The Gym');
-  assert.equal(r.profile.once[0].label, 'Library');
+  assert.equal(r.profile.once[0].label, 'Lib rary');
 });
 
 test('the limit errors, written as literals for their translation, name the limits enforced', () => {
