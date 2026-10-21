@@ -149,6 +149,43 @@ test('a public bus is the headline only when it clearly beats the free bus; othe
   assert.equal(opts[0].quality, 'live');
 });
 
+test('the same public service from the other stop, the other way, is named by its stop, as a shuttle is', async () => {
+  const { buildAnswer } = await import('../src/format.ts');
+  // 151 both ways reaches the target: one direction from here, the other from across the road.
+  const opt = (code, svc, boardS) => ({
+    stop: { code, name: code === 'KR-MRT' ? 'Kent Ridge MRT' : 'Opp Kent Ridge MRT', lat: 0, lon: 0 },
+    svc,
+    paid: true,
+    distM: 100,
+    walkS: 80,
+    hops: 3,
+    boardS,
+    rideS: 600,
+    totalS: boardS + 600,
+    quality: 'live',
+    arrival: null,
+    fetchedAt: FROZEN_NOW,
+    fromMs: FROZEN_NOW,
+    ambiguousBerth: false,
+  });
+  const best = opt('KR-MRT', '151/1', 300);
+  const alt = opt('KR-MRT-OPP', '151/2', 240);
+  const a = buildAnswer({
+    options: [best, alt],
+    alt,
+    fallbackStop: best.stop,
+    nearestStop: best.stop,
+    destLabel: 'UTown',
+    walkAllS: null,
+    confidence: 0.9,
+    arrivals: [],
+    nowMs: FROZEN_NOW,
+  });
+  // "or 151 in 4 min" would read as another 151 coming here: it's the one across the road.
+  assert.match(a.detail, /or Opp KR MRT/);
+  assert.ok(!/or 151/.test(a.detail), a.detail);
+});
+
 test('a weekday-only public service is not running at weekends, so no time is guessed for it', () => {
   const sunday = Date.parse('2026-10-11T18:00:00+08:00');
   const wednesday = Date.parse('2026-10-07T18:00:00+08:00');
