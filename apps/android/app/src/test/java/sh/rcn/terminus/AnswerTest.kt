@@ -280,6 +280,19 @@ class AnswerTest {
     }
 
     @Test
+    fun theFallbackCountsFromWhenTheAnswerCameNotItsAsOf() {
+        // Past every moment the server named, the next refresh is a quarter of an hour after the answer came. Its asOf is the
+        // server's clock as it wrote the answer, always a little earlier than the arrival scheduleNext passes: the alarm counts from
+        // the arrival, and the server's own moments are instants, the same whenever the answer was fetched.
+        val a = golden("class-bus")
+        val card = a.card!!
+        val fetched = listOfNotNull(a.refreshAtMs, card.nextChangeAtMs, card.staleAtMs).max() + 60_000
+        assertTrue(fetched > ms(a.asOf))
+        assertEquals(fetched + 15 * 60_000L, Refresher.nextRefreshAt(a, fetched, fetched))
+        assertEquals(fetched + 15 * 60_000L, Refresher.nextRefreshAt(a, fetched, fetched, widget = false))
+    }
+
+    @Test
     fun refreshDoesNotChaseTheLeaveTimeOrTheRidesStops() {
         // Past the card's change, the leave-by is next on screen, but the network
         // waits for the plan's own moment: "Leave now" is a redraw.
