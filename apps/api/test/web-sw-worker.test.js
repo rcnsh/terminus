@@ -311,6 +311,29 @@ test("an app file answered with a server error gives the kept copy, as the accou
   assert.equal(bare.status, 503);
 });
 
+test('/api/me/next: the copies stay apart on a browser whose URLSearchParams has no size (Safari before 17)', async () => {
+  // iOS 16.4 to 16.7, the first with web push, has no URLSearchParams.size.
+  class OldParams extends URLSearchParams {
+    get size() {
+      return undefined;
+    }
+  }
+  let n = 0;
+  let online = true;
+  const w = worker({
+    fetch: () => (online ? Promise.resolve(json({ n: ++n })) : Promise.reject(new TypeError('offline'))),
+    globals: { URLSearchParams: OldParams },
+  });
+  const en = { headers: { 'accept-language': 'en' } };
+  await w.dispatch('/api/me/next?lat=1.3&lon=103.7', en).responded;
+  await w.dispatch('/api/me/next?to=COM3', en).responded;
+  online = false;
+  // A stop's card never stands in for the plan's, nor the plan's for a stop's.
+  assert.equal((await (await w.dispatch('/api/me/next?lat=1.2&lon=103.8', en).responded).json()).n, 1);
+  assert.equal((await (await w.dispatch('/api/me/next?to=COM3', en).responded).json()).n, 2);
+  await assert.rejects(w.dispatch('/api/me/next?h12=1', en).responded);
+});
+
 test('signing in or out empties the kept replies, and a reply on its way then is not kept', async () => {
   for (const [method, path] of [
     ['POST', '/api/auth/logout'],
