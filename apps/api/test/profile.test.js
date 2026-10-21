@@ -130,6 +130,27 @@ test('parseProfile fills defaults and rejects bad input with a useful message', 
   }
 });
 
+test('a one-off trip or a date-range lesson on a day that does not exist is refused, not kept for ever', () => {
+  // 2026-13-45 passes the pattern; it is never today, so a save would never drop it.
+  const once = parseProfile({ once: [{ date: '2026-13-45', arriveByMin: 600, to: 'COM3', label: 'x' }] }, isStop);
+  assert.equal(once.ok, false);
+  assert.match(once.error, /once\[0\]: date/);
+  for (const weeks of [
+    { start: '2026-02-30', end: '2026-03-10' },
+    { start: '2026-03-10', end: '2026-03-01' },
+  ]) {
+    const r = parseProfile({ manual: [{ day: 1, arriveByMin: 600, to: 'COM3', label: 'x', weeks }] }, isStop);
+    assert.equal(r.ok, false, JSON.stringify(weeks));
+    assert.match(r.error, /weeks/);
+  }
+  assert.ok(
+    parseProfile(
+      { manual: [{ day: 1, arriveByMin: 600, to: 'COM3', label: 'x', weeks: { start: '2026-03-02', end: '2026-03-02' } }] },
+      isStop,
+    ).ok,
+  );
+});
+
 test('the limit errors, written as literals for their translation, name the limits enforced', () => {
   const pin = parseProfile({ pinnedStops: ['NOPE'] }, isStop);
   assert.match(pin.error, new RegExp(`up to ${PROFILE_LIMITS.pinnedStops} `));
