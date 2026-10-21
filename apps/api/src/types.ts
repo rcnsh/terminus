@@ -85,6 +85,9 @@ export interface Env {
   /** "on" lets the timelapse recorder poll; anything else, or unset, is off.
    *  KV config:timelapse overrides it without a deploy (timelapse.ts). */
   TIMELAPSE_ENABLED?: string;
+  /** "shadow" runs the arrival-time model beside the feed's times, answering
+   *  no one (etashadow.ts); anything else, or unset, is off. */
+  ETA_MODEL?: string;
 }
 
 /**

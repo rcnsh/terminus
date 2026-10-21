@@ -273,6 +273,9 @@ apps/api/
   src/collect.ts      The dashboard's switches for the statistics below, all off until turned on
   src/usage.ts, eta.ts, apperrors.ts  Daily active counts; the feed's arrival times against
                       the timelapse; crash reports (/api/errors), scrubbed, with no one on them
+  src/etamodel.ts, etashadow.ts  An arrival-time model (segment medians, the feed's usual
+                      error, a blend), pure; run in shadow by the cron with ETA_MODEL=shadow,
+                      answering no one (docs/eta-model.md)
   src/feedback.ts     "This was wrong" reports, stored and emailed to the operator
   src/downloads.ts    App downloads from R2 (latest.json, the APKs, the DMG, the appcast)
   src/landing.ts, site.ts, pagesky.ts  The landing page; stable or beta, and the old address's
@@ -295,13 +298,15 @@ apps/api/
                       route_shapes.py, fetch_calendar.py, walk_routes.py,
                       check_scraped.py);
                       probe_buses.py (feed update-rate probe); record_buses.mjs (checks /api/buses on a live site);
+                      record_eta.mjs + eta_backtest.mjs (the arrival-time model's data and backtest);
                       render-timelapse.mjs (renders a recorded day headless, e.g. on a VPS);
                       vapid-key.mjs (makes the Web Push key, once)
   test/               *.test.js + worker.smoke.js; _stubs.mjs, _d1.mjs (D1 on node:sqlite)
   test/fixtures/answers/   Golden answers, shared with the Android and Mac tests
   cloudflare.config.ts     Worker config (stable + beta via --mode beta)
   wrangler.config.ts       Website assets directory
-  docs/internals.md        How everything works, in depth; docs/analytics.md
+  docs/internals.md        How everything works, in depth; docs/analytics.md;
+                           docs/eta-model.md (+ eta-backtest.md, its results)
 apps/web/public/
   index.html          Landing page
   account/            The account page (app.js): sign-in, onboarding.js, settings.js +

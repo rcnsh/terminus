@@ -164,7 +164,9 @@ how far ahead it was, how much later than said the bus came, and the hour.
 It needs the recorder on, the downloads bucket and `ANALYTICS_TOKEN`; it
 calls nobody but Analytics Engine. A bus counts as arrived 25 m before its
 stop's mark on the line, interpolated between readings; the answer is good
-to about 15 s.
+to about 15 s. With `ETA_MODEL=shadow`, the arrival-time model's answers to
+the same predictions are kept beside it (`eta/model/`, `src/etashadow.ts`;
+[eta-model.md](eta-model.md)).
 
 ### Crash reports (`errors`)
 
