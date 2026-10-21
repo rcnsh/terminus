@@ -27,13 +27,14 @@ class LeaveAlertsTest {
         phase: String = "idle",
         nextChangeAt: Long? = null,
         leaveBy: String? = "Leave by 09:38",
+        actions: String = "[]",
     ) =
         NextAnswer.parse(
             JSONObject(
                 """{"label":"R2 · 9:42","detail":"","quality":"live","mode":"trip",
             "leave":{"at":"${iso(leaveAt)}","svc":"R2","stop":"PGP"},
             "timing":{"classAt":"${iso(classAt)}"},
-            "card":{"kind":"class","phase":"$phase","actions":[],"remind":$remind,
+            "card":{"kind":"class","phase":"$phase","actions":$actions,"remind":$remind,
               "leaveBy":${leaveBy?.let { "\"$it\"" } ?: "null"},
               "remindAt":${remindAt?.let { "\"${iso(it)}\"" } ?: "null"},
               "nextChangeAt":${nextChangeAt?.let { "\"${iso(it)}\"" } ?: "null"}}}"""
@@ -67,6 +68,35 @@ class LeaveAlertsTest {
         // Dismissed: not posted again.
         val (third, _) = run(plan(leaveAt = now + 9 * 60_000), after, now + 60_000, showing = false)
         assertEquals(Step.Follow(post = false, checkAt = null), third)
+    }
+
+    /** The same plan with the feed down: no arrival time, so no `timing.classAt`; the trip is named by the card's actions. */
+    private fun feedDownPlan(leaveAt: Long, remindAt: Long? = leaveAt - 5 * 60_000) =
+        NextAnswer.parse(
+            JSONObject(
+                """{"label":"R2 · ~9:42","detail":"","quality":"scheduled","mode":"trip",
+            "leave":{"at":"${iso(leaveAt)}","svc":"R2","stop":"PGP","estimated":true},
+            "card":{"kind":"class","phase":"idle","remind":true,"leaveBy":"Leave by ~09:38",
+              "actions":[{"id":"skipped","label":"Not going","trip":"4:600:UTOWN"}],
+              "remindAt":${remindAt?.let { "\"${iso(it)}\"" } ?: "null"}}}"""
+            )
+        )
+
+    @Test
+    fun withTheFeedDownAMovingReminderIsStillOneHeadsUp() {
+        // No arrival time, so no classAt: the trip is the class all the same.
+        val (first, after) = run(feedDownPlan(leaveAt = now + 4 * 60_000), fresh, now)
+        assertTrue("$first", first is Step.HeadsUp)
+        // Dismissed, then the estimate moves (the feed is back): not posted again.
+        val (second, _) = run(feedDownPlan(leaveAt = now + 7 * 60_000), after, now + 60_000, showing = false)
+        assertEquals(Step.Follow(post = false, checkAt = null), second)
+        // Back with an arrival time (classAt): still the same trip.
+        val actions = """[{"id":"skipped","label":"Not going","trip":"4:600:UTOWN"}]"""
+        val (third, _) = run(plan(leaveAt = now + 7 * 60_000, actions = actions), after, now + 60_000, showing = false)
+        assertEquals(Step.Follow(post = false, checkAt = null), third)
+        // And a heads-up noted by the class's start (an older app) still counts for it.
+        val (fourth, _) = run(plan(leaveAt = now + 7 * 60_000, actions = actions), State(true, classAt), now + 60_000, showing = false)
+        assertEquals(Step.Follow(post = false, checkAt = null), fourth)
     }
 
     @Test
