@@ -403,9 +403,11 @@ async function start() {
       // Signed out, or deleted, elsewhere: what this browser kept of it goes.
       forgetAccountHere();
       set({ view: 'signin' });
-      // Ready by the time they've signed in, without holding up the card.
-      if (document.readyState === 'complete') loadParts();
-      else addEventListener('load', () => loadParts(), { once: true });
+      // Ready by the time they've signed in, without holding up the card. If
+      // they can't be had now, signing in reloads the page, which asks again.
+      const warm = () => loadParts().catch(() => {});
+      if (document.readyState === 'complete') warm();
+      else addEventListener('load', warm, { once: true });
       return;
     }
     throw err;
