@@ -61,7 +61,7 @@ function memoryCache() {
 let scope;
 
 /** A fresh worker: sw.js run in its own scope, with `fetch` answering. */
-function worker({ fetch = () => Promise.reject(new TypeError('offline')), language = 'en-SG' } = {}) {
+function worker({ fetch = () => Promise.reject(new TypeError('offline')), language = 'en-SG', globals = {} } = {}) {
   const listeners = {};
   const stores = new Map();
   const caches = {
@@ -108,6 +108,7 @@ function worker({ fetch = () => Promise.reject(new TypeError('offline')), langua
     AbortSignal,
     setTimeout: (f, ms, ...args) => setTimeout(f, ms / SPEED, ...args),
     clearTimeout,
+    ...globals,
   };
   vm.createContext(ctx);
   vm.runInContext(SOURCE, ctx);
@@ -285,6 +286,29 @@ test('/api/me/next: a server error gives the kept copy; a 401 empties the kept r
   status = 401;
   assert.equal((await w.dispatch('/api/me/next').responded).status, 401);
   assert.equal(await w.caches.has(w.get('DATA')), false);
+});
+
+test("an app file answered with a server error gives the kept copy, as the account's replies do", async () => {
+  let status = 200;
+  const w = worker({
+    fetch: () =>
+      Promise.resolve(
+        status === 200
+          ? new Response('good', { status, headers: { 'content-type': 'text/javascript', etag: '"a"' } })
+          : new Response('Worker threw exception', { status, headers: { 'content-type': 'text/html' } }),
+      ),
+  });
+  const first = w.dispatch('/app/app.js');
+  assert.equal(await (await first.responded).text(), 'good');
+  await within(Promise.all(first.waits));
+  // A deploy window, an outage: the page gets the copy, not the error page.
+  status = 503;
+  const res = await within(w.dispatch('/app/app.js').responded);
+  assert.equal(res.status, 200);
+  assert.equal(await res.text(), 'good');
+  // With nothing kept, the error is all there is.
+  const bare = await within(w.dispatch('/app/offline.js').responded);
+  assert.equal(bare.status, 503);
 });
 
 test('signing in or out empties the kept replies, and a reply on its way then is not kept', async () => {

@@ -310,7 +310,13 @@ async function networkFirst(req, event) {
 
 async function shellFile(req, path, event) {
   const cache = await caches.open(SHELL);
-  const network = fetch(req).then((res) => {
+  const network = fetch(req).then(async (res) => {
+    // A server error (a deploy window, an outage) is as good as no network:
+    // the kept copy beats an error page, as it does for the account's replies.
+    if (res.status >= 500) {
+      const kept = await cache.match(path);
+      if (kept) return kept;
+    }
     // Kept after the page has it, not before.
     if (res.ok) event.waitUntil(keepShell(cache, path, res.clone()));
     return res;
