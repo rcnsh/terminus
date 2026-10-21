@@ -152,9 +152,13 @@ export async function requestLink(
   // answers the same for it and doesn't reveal the blocklist.
   if (blocked) return (await takeGlobalMail(env)) ? 'blocked' : 'busy';
 
+  // An app sign-in (login_requests) to the address counts too: one email a minute, whichever asked.
+  const since = nowMs - ACCOUNT_TTL.linkCooldownMs;
   const recent = await db
-    .prepare('SELECT 1 FROM magic_links WHERE email = ? AND created > ?')
-    .bind(email, nowMs - ACCOUNT_TTL.linkCooldownMs)
+    .prepare(
+      'SELECT 1 FROM magic_links WHERE email = ? AND created > ? UNION ALL SELECT 1 FROM login_requests WHERE email = ? AND created > ?',
+    )
+    .bind(email, since, email, since)
     .first();
   if (recent) return 'cooldown';
   // Per inbox too, so +tags and dots cannot mail one person over and over.
@@ -172,9 +176,9 @@ export async function requestLink(
     db.prepare('DELETE FROM magic_links WHERE expires < ?').bind(nowMs),
     db
       .prepare(
-        'INSERT INTO magic_links (token_hash, email, created, expires) SELECT ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM magic_links WHERE email = ? AND created > ?) RETURNING token_hash',
+        'INSERT INTO magic_links (token_hash, email, created, expires) SELECT ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM magic_links WHERE email = ? AND created > ?) AND NOT EXISTS (SELECT 1 FROM login_requests WHERE email = ? AND created > ?) RETURNING token_hash',
       )
-      .bind(tokenHash, email, nowMs, nowMs + ACCOUNT_TTL.linkMs, email, nowMs - ACCOUNT_TTL.linkCooldownMs),
+      .bind(tokenHash, email, nowMs, nowMs + ACCOUNT_TTL.linkMs, email, since, email, since),
   ]);
   if (!made?.results?.length) return 'cooldown';
 

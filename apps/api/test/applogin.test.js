@@ -538,6 +538,18 @@ test('an inbox over its hourly budget does not spend the global email ceiling', 
   assert.equal(spent, 0);
 });
 
+test('a web sign-in inside the cooldown of an app sign-in to the address sends no second email', async () => {
+  const { env, email } = setup();
+  // KV is eventually consistent: another data centre may not see the inbox's
+  // cooldown key yet, so the D1 check must hold for both kinds of sign-in.
+  const get = env.KV.get.bind(env.KV);
+  env.KV.get = async (k, type) => (String(k).startsWith('mail:') ? null : get(k, type));
+  assert.equal((await call(env, '/api/auth/app/start', { method: 'POST', body: { email: ME, name: 'x' } })).status, 201);
+  assert.equal(email.sent.length, 1);
+  await call(env, '/api/auth/login', { method: 'POST', body: { email: ME } });
+  assert.equal(email.sent.length, 1, 'one email a minute per address, whichever sign-in asks');
+});
+
 test('app sign-in: a repeat in the cooldown does not spend the global email ceiling', async () => {
   // Otherwise three addresses repeating one email address could use up
   // everyone's sign-in emails without a single email being sent.
