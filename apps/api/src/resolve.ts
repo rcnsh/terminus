@@ -447,6 +447,26 @@ export function serviceEndsAt(graph: Graph, svc: string, nowMs: number): number 
   return midnight + ((w.close >= w.open ? 0 : 1440) + w.close) * 60_000;
 }
 
+/**
+ * When `svc` last stopped running at or before `ms` (SGT), epoch ms: the
+ * close of the most recent window ending by then, today's or yesterday's.
+ * Null when the hours are unknown, or neither day has a window closing by `ms`.
+ */
+export function serviceClosedAt(graph: Graph, svc: string, ms: number): number | null {
+  const hours = graph.serviceHours?.[svc];
+  if (!hours) return null;
+  const { minutes } = sgt(ms);
+  const midnight = ms - (minutes * 60_000 + (ms % 60_000));
+  for (let d = 0; d <= 1; d++) {
+    const day = midnight - d * 86_400_000;
+    const w = parseWindow(windowOn(hours, day));
+    if (!w) continue;
+    const close = day + ((w.close >= w.open ? 0 : 1440) + w.close) * 60_000;
+    if (close <= ms) return close;
+  }
+  return null;
+}
+
 /** Why a service isn't running now: it has finished for today, it starts
  *  later today, or it doesn't run today at all. */
 export type StoppedReason = 'ended' | 'notYet' | 'noService';
