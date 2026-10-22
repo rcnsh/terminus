@@ -7,7 +7,7 @@
  * /llms.txt, a short guide to the site and the API (llmstxt.org).
  */
 
-import { isBeta, STABLE_ORIGIN } from './site.ts';
+import { isBeta, STABLE_ORIGIN } from './origin.ts';
 import type { Env } from './types.ts';
 
 /** The pages in the sitemap, on the stable site. */

@@ -8,7 +8,8 @@
  */
 
 import type { Env } from './types.ts';
-import { isBeta, linkOrigin, mailName } from './site.ts';
+import { mailName } from './site.ts';
+import { isBeta, linkOrigin } from './origin.ts';
 import {
   type Client,
   type Live,

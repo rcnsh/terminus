@@ -2382,8 +2382,8 @@ src/appversion.ts Finding the new uNivUS version when NUS refuses the old one
 src/downloads.ts  /download/*: app files and the Mac appcast from R2
 src/admin.ts      /api/admin/stats; src/feedback.ts "Is this wrong?" reports
 src/i18n.ts       Every server string in English and Chinese
-src/site.ts       Which Worker this is: stable or beta; the old address's redirects
-                  (movedPage, movedApi) and emailed links' origin (linkOrigin)
+src/origin.ts     Which Worker this is: stable or beta (isBeta); emailed links' origin (linkOrigin)
+src/site.ts       The old address's redirects (movedPage, movedApi); the beta's marks
 data/             Bundled JSON: stops.json, shapes.json, public.json,
                   calendar.json, walks.json, venues, rooms, landmarks, residences
 migrations/       D1 schema

@@ -9,7 +9,8 @@
 import { exportOutcomes } from './outcomes.ts';
 import type { Env } from './types.ts';
 import { DEVICE_IDLE_MS } from './monitor.ts';
-import { isBeta, linkOrigin, mailName } from './site.ts';
+import { mailName } from './site.ts';
+import { isBeta, linkOrigin } from './origin.ts';
 import { m } from './i18n.ts';
 import { TTL } from './config.ts';
 

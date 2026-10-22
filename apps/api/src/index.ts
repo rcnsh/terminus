@@ -43,7 +43,8 @@ import { handleTimelapse } from './timelapse.ts';
 import { scopeCache } from './edgecache.ts';
 
 import { GRAPH, GRAPH_PUBLIC, oppositeOf } from './graph.ts';
-import { appSiteAssociation, isBeta, linkOrigin, markBeta, movedApi, movedPage } from './site.ts';
+import { appSiteAssociation, markBeta, movedApi, movedPage } from './site.ts';
+import { isBeta, linkOrigin } from './origin.ts';
 import { noteLegacy } from './legacy.ts';
 import { answerFor, arrivedAnswer, collectArrivals, needsSetupAnswer } from './answer.ts';
 import { lang, langOfRequest, m, withLang } from './i18n.ts';

@@ -83,7 +83,7 @@ test('sign-in email comes from an address the email binding may send from', () =
 });
 
 test('the beta knows it is the beta, and writes its analytics to its own dataset', () => {
-  // site.ts isBeta reads PUBLIC_ORIGIN; admin.ts queries AE_DATASET.
+  // origin.ts isBeta reads PUBLIC_ORIGIN; admin.ts queries AE_DATASET.
   assert.equal(STABLE.env.PUBLIC_ORIGIN, undefined);
   assert.equal(BETA.env.PUBLIC_ORIGIN.value, `https://${BETA.domains[0]}`);
   assert.equal(STABLE.env.AE.name, 'terminus', 'admin.ts falls back to "terminus" without AE_DATASET');

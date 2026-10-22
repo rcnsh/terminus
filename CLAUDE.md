@@ -311,8 +311,9 @@ apps/api/
                       answering no one (docs/eta-model.md)
   src/feedback.ts     "This was wrong" reports, stored and emailed to the operator
   src/downloads.ts    App downloads from R2 (latest.json, the APKs, the DMG, the appcast)
-  src/landing.ts, site.ts, pagesky.ts  The landing page; stable or beta, and the old address's
-                      redirect (movedPage); the small pages' sky
+  src/origin.ts       Which Worker this is, stable or beta (isBeta); emailed links' origin
+  src/landing.ts, site.ts, pagesky.ts  The landing page; the old address's redirect
+                      (movedPage); the small pages' sky
   src/types.ts        Env (the bindings) and the shared types
   src/openapi.ts      OpenAPI 3.1 spec + docs page (a test fails if routes drift from it)
   src/http.ts         JSON helpers, CORS, security headers (CSP lives here)
