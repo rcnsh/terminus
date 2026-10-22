@@ -9,7 +9,7 @@ import fs from 'node:fs';
 
 import { offlineNext } from '../../web/public/app/offline.js';
 
-const FIXTURES = new URL('./fixtures/', import.meta.url);
+const FIXTURES = new URL('../../../fixtures/', import.meta.url);
 const spec = JSON.parse(fs.readFileSync(new URL('offline-day.json', FIXTURES), 'utf8'));
 const day = JSON.parse(fs.readFileSync(new URL(spec.day, FIXTURES), 'utf8'));
 

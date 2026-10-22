@@ -176,7 +176,7 @@ jobs:
           python-version: "3.12"
 
       # A bad graph is worse than a stale one, so the suite gates the commit.
-      # The golden answers (test/fixtures/answers) are worked out on the real
+      # The golden answers (fixtures/answers) are worked out on the real
       # graph, so a changed stop or route can change them with nothing wrong.
       - name: Test against the new graph
         run: |

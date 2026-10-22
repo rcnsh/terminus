@@ -91,7 +91,7 @@ string needs both; each platform's tests fail on one without its Chinese:
 
 - **API:** `apps/api/src/i18n.ts`, read with `m()`. Errors stay English in
   the code (`json({ error: '...' })`) and get an entry in `ERRORS_ZH`. Answers
-  are checked word for word by the Chinese goldens in `test/fixtures/answers/zh`.
+  are checked word for word by the Chinese goldens in `fixtures/answers/zh`.
 - **Android:** `res/values/strings.xml` and `res/values-zh/strings.xml`;
   `L.s(R.string.x)` outside Compose. Lint fails on a missing translation.
 - **Website:** `t('English {0}', value)` in scripts; page text needs nothing

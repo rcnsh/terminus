@@ -1212,7 +1212,7 @@ Settings. It uses the same routes as the account page, with the session cookie.
   (`app/offline.js`, `OfflineDay.kt`, `OfflineDay.swift`): skip what was done
   or taken off when the plan was fetched, a class 15 minutes after it starts,
   and a trip home at its end (or an hour after it starts); only a plan for
-  today counts. All three are tested against `test/fixtures/offline-day.json`
+  today counts. All three are tested against `fixtures/offline-day.json`
   on the `/api/me/day` golden. The Android widget's background refresh fetches
   `/api/me/day` hourly to keep the plan current, and arms a redraw alarm (no
   network needed) for the moment the offline line next changes.

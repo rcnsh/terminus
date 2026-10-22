@@ -16,7 +16,7 @@ const { setClockPref, t } = await web('account/dom.js');
 // The fixtures' times are in the 24-hour clock.
 setClockPref('24');
 
-const ANSWERS = new URL('./fixtures/answers/', import.meta.url);
+const ANSWERS = new URL('../../../fixtures/answers/', import.meta.url);
 /** Every shared answer with a journey, in each language: [lang, name, answer]. */
 function answers() {
   const out = [];
@@ -117,7 +117,7 @@ test('the countdowns read as the Android app reads them, on every shared answer,
 });
 
 test('"Leave in 4 min", then minutes and seconds, then seconds, then "Leave now" once the leave time passes', async () => {
-  const { default: a } = await import('./fixtures/answers/class-bus.json', { with: { type: 'json' } });
+  const { default: a } = await import('../../../fixtures/answers/class-bus.json', { with: { type: 'json' } });
   const j = a.card.journey;
   const at = Date.parse(a.leave.at);
   const cases = [
@@ -143,7 +143,7 @@ test('"Leave in 4 min", then minutes and seconds, then seconds, then "Leave now"
 });
 
 test('the same in Chinese, the time inside the sentence', async () => {
-  const { default: a } = await import('./fixtures/answers/zh/class-bus.json', { with: { type: 'json' } });
+  const { default: a } = await import('../../../fixtures/answers/zh/class-bus.json', { with: { type: 'json' } });
   const j = a.card.journey;
   const at = Date.parse(a.leave.at);
   useLang('zh');
@@ -155,7 +155,7 @@ test('the same in Chinese, the time inside the sentence', async () => {
 });
 
 test('at the stop the headline is the bus to wait for, as the server words it, with no countdown', async () => {
-  const { default: base } = await import('./fixtures/answers/class-bus.json', { with: { type: 'json' } });
+  const { default: base } = await import('../../../fixtures/answers/class-bus.json', { with: { type: 'json' } });
   const a = structuredClone(base);
   a.card.phase = 'waiting';
   a.card.leaveBy = 'R2 at 09:42';
@@ -169,7 +169,7 @@ test('at the stop the headline is the bus to wait for, as the server words it, w
 });
 
 test('the bus\'s "in 4 min": minutes and seconds under two minutes, gone once it leaves, none on foot', async () => {
-  const { default: a } = await import('./fixtures/answers/class-bus.json', { with: { type: 'json' } });
+  const { default: a } = await import('../../../fixtures/answers/class-bus.json', { with: { type: 'json' } });
   const j = a.card.journey;
   const board = Date.parse(j.boardAt);
   useLang('en');

@@ -105,7 +105,7 @@ the web app also get a push when a trip's phase changes.
 | Android | `apps/android` | Kotlin, Compose, Glance widgets, maplibre-compose. Stable and beta flavours. `Api.kt` is the client |
 | Mac | `apps/macos` | SwiftUI menu bar app, MapLibre Native for the map window, Sparkle updates. `Api.swift` is the client |
 
-The API's golden answers in `apps/api/test/fixtures/answers` are parsed by
+The API's golden answers in `fixtures/answers` are parsed by
 the Android and Mac unit tests too, so a change to the answer's shape fails
 every client's tests at once.
 

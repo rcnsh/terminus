@@ -129,12 +129,12 @@
             }
         }
 
-        /// The API's golden answers (apps/api/test/fixtures/answers), at the
+        /// The API's golden answers (fixtures/answers), at the
         /// moment they were answered: the journey's steps and the ride's line.
         static func renderGoldens(to dir: String) {
             let answers = URL(fileURLWithPath: #filePath)
                 .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-                .appendingPathComponent("../api/test/fixtures/answers").standardized
+                .appendingPathComponent("../../fixtures/answers").standardized
             // Three of the ride's six stops behind it: the bus halfway along.
             let cases: [(String, String, String)] = [
                 ("golden-scheduled", "scheduled.json", "2026-08-27T01:00:00Z"),

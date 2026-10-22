@@ -78,7 +78,7 @@ A release build without the `TERMINUS_*` key properties comes out unsigned,
 never signed with the debug key.
 
 The unit tests read the same answer fixtures as the API's tests
-(`apps/api/test/fixtures/answers`).
+(`fixtures/answers`).
 
 Push (Firebase Cloud Messaging) needs the Firebase app's config at
 `app/google-services.json`, downloaded from the terminus Firebase project.

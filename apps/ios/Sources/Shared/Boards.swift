@@ -372,7 +372,7 @@ struct Destination: Decodable, Hashable, Sendable {
 }
 
 /// The destination search, with the rules and cases every client is held to
-/// (apps/api/test/fixtures/search.json; the web's account/search.js is the
+/// (fixtures/search.json; the web's account/search.js is the
 /// reference): exact, then starts with, then a word starts with, then
 /// contains; then by kind, then the shorter label, then the list's own order.
 /// Rooms only once two characters say which.

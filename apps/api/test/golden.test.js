@@ -6,7 +6,7 @@
  *   UPDATE_GOLDEN=1 pnpm test          every case
  *   UPDATE_GOLDEN=stale pnpm test      only the cases named (comma-separated)
  *
- * and shows up as a diff in test/fixtures/answers/. A fixture that's missing
+ * and shows up as a diff in fixtures/answers/. A fixture that's missing
  * fails rather than being written, and so does one no case makes: a case
  * that quietly records whatever it got would pin a wrong answer as the spec.
  * The Android and Mac unit tests parse these same files, so a change in
@@ -23,7 +23,7 @@ import { Trip } from '../src/tripdo.ts';
 import { ASSUME_MS, CHANGE_GRACE_MS, RIDE_GRACE_MS } from '../src/trip.ts';
 import { onRideQuery, rideLength } from './_ride.mjs';
 
-const DIR = new URL('./fixtures/answers/', import.meta.url);
+const DIR = new URL('../../../fixtures/answers/', import.meta.url);
 const ZH_DIR = new URL('./zh/', DIR);
 const BASE = 'https://bus.example.test';
 

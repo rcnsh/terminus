@@ -6,7 +6,7 @@ import fs from 'node:fs';
 // follow its rules, written out in fixtures/search.json with the cases below.
 import { busesTabIndex, grouped, rank, results, samePlace, score } from '../../web/public/account/search.js';
 
-const FIXTURE = JSON.parse(fs.readFileSync(new URL('./fixtures/search.json', import.meta.url), 'utf8'));
+const FIXTURE = JSON.parse(fs.readFileSync(new URL('../../../fixtures/search.json', import.meta.url), 'utf8'));
 const ids = (list) => list.map((d) => `${d.kind}:${d.code}`);
 
 const D = [

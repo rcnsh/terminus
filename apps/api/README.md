@@ -46,7 +46,7 @@ folder is set in [`wrangler.config.ts`](wrangler.config.ts).
 | | |
 | --- | --- |
 | `src/` | The Worker. `index.ts` routes, `me.ts` has the account routes, `resolve.ts` picks the stop and bus |
-| `test/` | Node's test runner. `golden.test.js` pins whole answers to `test/fixtures/answers` |
+| `test/` | Node's test runner. `golden.test.js` pins whole answers to `fixtures/answers` |
 | `data/` | Stops, routes, venues and walking paths, bundled into the Worker |
 | `migrations/` | D1 schema |
 | `scripts/` | Dev stub, and scrapers that rebuild `data/` (`route_shapes.py` makes `data/shapes.json`, the routes along the roads) |

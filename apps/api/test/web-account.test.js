@@ -36,7 +36,7 @@ globalThis.fetch = async (input) => {
   throw new Error(`unexpected fetch ${path}`);
 };
 
-const GOLDEN = JSON.parse(fs.readFileSync(new URL('./fixtures/answers/class-bus.json', import.meta.url), 'utf8'));
+const GOLDEN = JSON.parse(fs.readFileSync(new URL('../../../fixtures/answers/class-bus.json', import.meta.url), 'utf8'));
 /** The class-bus answer with the card's title `title`, to tell two answers apart on the page. */
 const answer = (title) => ({ ...GOLDEN, card: { ...GOLDEN.card, title } });
 const choices = (label) => ({ choices: [{ trip: 1, pref: 'earlier', label }], history: 0 });

@@ -337,7 +337,7 @@ apps/api/
                       render-timelapse.mjs (renders a recorded day headless, e.g. on a VPS);
                       vapid-key.mjs (makes the Web Push key, once)
   test/               *.test.js + worker.smoke.js; _stubs.mjs, _d1.mjs (D1 on node:sqlite)
-  test/fixtures/answers/   Golden answers, shared with the Android and Mac tests
+  fixtures/answers/   Golden answers, shared with the Android and Mac tests
   cloudflare.config.ts     Worker config (stable + beta via --mode beta)
   wrangler.config.ts       Website assets directory
   docs/internals.md        How everything works, in depth; docs/analytics.md;
@@ -523,7 +523,7 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
 
 - **API:** use `m()` from `src/i18n.ts`. Errors stay English in the code
   (`json({ error: '...' })`) and get an entry in `ERRORS_ZH`. The Chinese
-  goldens in `test/fixtures/answers/zh` are checked word for word.
+  goldens in `fixtures/answers/zh` are checked word for word.
 - **Website:** use `t('English {0}', value)`, in templates too
   (`${t('Go there')}`, never bare words). The Chinese, keyed by the English,
   goes in `apps/web/public/assets/zh.js`; `web-i18n.test.js` checks it, and
@@ -552,7 +552,7 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
   TS must be erasable: no enums, namespaces or parameter properties, and
   type-only imports use `import type` (`verbatimModuleSyntax`).
 - **Golden answers.** `golden.test.js` pins whole answers to
-  `test/fixtures/answers/`. After an intended change, run
+  `fixtures/answers/`. After an intended change, run
   `UPDATE_GOLDEN=1 pnpm test` and review the fixture diff. The Android and
   Mac unit tests read the same fixtures, so a changed answer shape must
   still parse there.

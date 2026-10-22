@@ -2,7 +2,7 @@
 // (search-box.js), a short, ranked, grouped list under a text box. Plain
 // functions, so the API's tests import them. This is the reference: the
 // Android and Mac apps follow the same rules, written out with the cases
-// they're held to in apps/api/test/fixtures/search.json.
+// they're held to in fixtures/search.json.
 
 import { t } from './dom.js';
 

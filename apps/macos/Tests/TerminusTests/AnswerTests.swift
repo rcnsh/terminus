@@ -8,7 +8,7 @@ import Testing
 private func golden(_ name: String) throws -> NextAnswer {
     let dir = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        .appendingPathComponent("../api/test/fixtures/answers").standardized
+        .appendingPathComponent("../../fixtures/answers").standardized
     let data = try Data(contentsOf: dir.appendingPathComponent("\(name).json"))
     return try JSONDecoder().decode(NextAnswer.self, from: data)
 }
@@ -18,7 +18,7 @@ private func golden(_ name: String) throws -> NextAnswer {
 func goldenNames() -> [String] {
     let dir = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        .appendingPathComponent("../api/test/fixtures/answers").standardized
+        .appendingPathComponent("../../fixtures/answers").standardized
     let names = { (sub: String) in
         ((try? FileManager.default.contentsOfDirectory(atPath: dir.appendingPathComponent(sub).path)) ?? [])
             .filter { $0.hasSuffix(".json") }
@@ -39,7 +39,7 @@ func goldenNames() -> [String] {
 func everyGoldenAnswerDecodes(name: String) throws {
     let dir = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        .appendingPathComponent("../api/test/fixtures/answers").standardized
+        .appendingPathComponent("../../fixtures/answers").standardized
     let data = try Data(contentsOf: dir.appendingPathComponent("\(name).json"))
     let json = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
     if json["stops"] != nil {
@@ -188,7 +188,7 @@ func theNextClassComesWithTheCard(name: String) throws {
     struct R: Decodable { let stops: [NearbyStop] }
     let dir = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        .appendingPathComponent("../api/test/fixtures/answers").standardized
+        .appendingPathComponent("../../fixtures/answers").standardized
     let r = try JSONDecoder().decode(R.self, from: Data(contentsOf: dir.appendingPathComponent("nearby-list.json")))
     let d2 = try #require(r.stops.first?.board.first { $0.svc == "D2" })
     #expect(d2.later?.first?.etaS == 840)
@@ -233,7 +233,7 @@ func theNextClassComesWithTheCard(name: String) throws {
 private func goldenEdited(_ name: String, _ edit: (inout [String: Any]) -> Void) throws -> NextAnswer {
     let dir = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        .appendingPathComponent("../api/test/fixtures/answers").standardized
+        .appendingPathComponent("../../fixtures/answers").standardized
     var o = try #require(
         try JSONSerialization.jsonObject(with: Data(contentsOf: dir.appendingPathComponent("\(name).json"))) as? [String: Any])
     edit(&o)
@@ -470,14 +470,14 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
 @Test func todaysLinesComeFromTheServer() throws {
     let dir = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        .appendingPathComponent("../api/test/fixtures/answers").standardized
+        .appendingPathComponent("../../fixtures/answers").standardized
     let day = try JSONDecoder().decode(DayPlan.self, from: Data(contentsOf: dir.appendingPathComponent("day.json")))
     #expect(day.items[0].sub == "Leave by ~09:36 · R2 from PGP")
     #expect(day.items[1].title == "Home, from UTown")
     #expect(day.items[1].sub == nil)
 }
 
-/// The search every client is held to (apps/api/test/fixtures/search.json).
+/// The search every client is held to (fixtures/search.json).
 /// The Mac has no Buses tab, so only its "destinations" section.
 @Test func theSearchFollowsTheSharedCases() throws {
     struct Fixture: Decodable {
@@ -495,7 +495,7 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
     }
     let dir = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        .appendingPathComponent("../api/test/fixtures").standardized
+        .appendingPathComponent("../../fixtures").standardized
     let f = try JSONDecoder().decode(Fixture.self, from: Data(contentsOf: dir.appendingPathComponent("search.json"))).destinations
     #expect(!f.queries.isEmpty)
     for c in f.queries {

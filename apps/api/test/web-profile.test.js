@@ -10,7 +10,7 @@ import { buildCampusMap, buildDestinations } from '../src/campus.ts';
 import { GRAPH } from '../src/graph.ts';
 import { haversineM } from '../src/geo.ts';
 import { residenceList, residenceWalkMin as serverWalkMin } from '../src/residences.ts';
-import classBus from './fixtures/answers/class-bus.json' with { type: 'json' };
+import classBus from '../../../fixtures/answers/class-bus.json' with { type: 'json' };
 
 const { isStale, leaveHead, leaveText } = await web('account/preview.js');
 const P = await web('account/profile.js');
