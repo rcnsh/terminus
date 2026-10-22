@@ -17,10 +17,9 @@ const BETA = {
 };
 
 // Pages opened on the old address go to terminus.run (MOVE_PAGES, site.ts
-// movedPage), and emailed links use the site's own address. From 9 to 11
-// October 2026 NUS Wi-Fi reset connections to terminus.run, so the old
-// address was handed out instead: if a network refuses it again, add
-// LINK_ORIGIN set to the old address and drop MOVE_PAGES.
+// movedPage), and emailed links use the site's own address. If a network
+// refuses terminus.run, add LINK_ORIGIN set to the old address and drop
+// MOVE_PAGES.
 const moved = () => ({
 	MOVE_PAGES: bindings.text("on"),
 });
