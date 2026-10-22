@@ -6,8 +6,9 @@
 //
 //   pnpm loc            a table (coloured on a terminal; NO_COLOR turns it off)
 //   pnpm loc --json     the same numbers as JSON
+//   pnpm loc --readme   rewrites the README's table, between its <!-- loc --> marks
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, extname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -84,7 +85,7 @@ const tally = () => {
   };
 };
 
-const colour = process.stdout.isTTY && !process.env.NO_COLOR;
+const colour = process.stdout.isTTY && !process.env.NO_COLOR && !process.argv.includes('--readme');
 const paint = (code) => (s) => (colour ? `\x1b[${code}m${s}\x1b[0m` : s);
 const bold = paint('1');
 const dim = paint('2');
@@ -161,8 +162,48 @@ const print = ({ lines, files, parts, languages }) => {
   console.log(out.join('\n'));
 };
 
+const FOLDERS = {
+  API: 'apps/api',
+  Website: 'apps/web',
+  Android: 'apps/android',
+  Mac: 'apps/macos',
+  iPhone: 'apps/ios',
+  'Scripts and CI': 'scripts',
+};
+
+const kilo = (n) => (n ? `${(n / 1000).toFixed(1)}k` : '–');
+
+// The README's tables: rounded to hundreds, so they read at a glance and
+// don't go stale with every commit.
+export const readme = ({ lines, files, parts, languages }) => {
+  const W = 20;
+  const maxPart = Math.max(...parts.map((p) => p.lines));
+  const name = (p) => (FOLDERS[p.name] ? `[${p.name}](${FOLDERS[p.name]})` : p.name);
+  return [
+    `About ${kilo(lines)} lines of code in ${num(files)} files, not counting blank lines, vendored code, test fixtures`,
+    'or the bundled data. Each bar is solid for code and light for tests. `pnpm loc --readme` refreshes these tables.',
+    '',
+    '| Part | Code | Tests | |',
+    '| --- | ---: | ---: | --- |',
+    ...parts.map((p) => `| ${name(p)} | ${kilo(p.code)} | ${kilo(p.tests)} | \`${bar(p.lines, maxPart, W, p.code)}\` |`),
+    '',
+    '| Language | Lines | Share | |',
+    '| --- | ---: | ---: | --- |',
+    ...languages.map((l) => `| ${l.name} | ${kilo(l.lines)} | ${pct(l.lines, lines)} | \`${bar(l.lines, languages[0].lines, W)}\` |`),
+  ].join('\n');
+};
+
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const result = tally();
   if (process.argv.includes('--json')) console.log(JSON.stringify(result, null, 2));
-  else print(result);
+  else if (process.argv.includes('--readme')) {
+    const file = join(root, 'README.md');
+    const text = readFileSync(file, 'utf8');
+    const marks = /(<!-- loc -->)[\s\S]*?(<!-- \/loc -->)/;
+    if (!marks.test(text)) throw new Error('README.md has no <!-- loc --> … <!-- /loc --> section');
+    writeFileSync(
+      file,
+      text.replace(marks, (_, open, close) => `${open}\n${readme(result)}\n${close}`),
+    );
+  } else print(result);
 }
