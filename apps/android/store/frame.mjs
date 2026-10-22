@@ -2,8 +2,8 @@
 // (captures/en, captures/zh, unchanged) inside a phone, under a headline.
 // The five are one picture cut in five, as Play shows them side by side: the
 // app's sky going from dawn to night along it, its hills, city and road
-// running through, a shuttle crossing from one to the next, and a route line
-// with a stop for each. Writes screenshots/ and screenshots/zh/, 1080×1920
+// running through, and shuttles, the setting sun and Marina Bay Sands
+// crossing from one to the next. Writes screenshots/ and screenshots/zh/, 1080×1920
 // like the captures (Play's phone limit is a 2:1 ratio).
 //
 // The home screen's capture is rebuilt around its own pixels: the widgets and
@@ -29,20 +29,17 @@ const H = 1920;
 
 // The words, in the listing's order. The headline is two lines, split at
 // "|", so every phone sits at the same height; its part in braces is in the
-// accent colour; the Chinese follows the app's glossary (src/i18n.ts). `icon`
-// is the stop's on the route line.
+// accent colour; the Chinese follows the app's glossary (src/i18n.ts).
 const SLIDES = [
   {
     file: '1-leave-by',
     sky: 'dawn',
-    icon: 'clock',
     en: { head: 'Know when to|{leave for class}', sub: 'A countdown to setting off, and the bus to catch.' },
     zh: { head: '{什么时候出发}，|一看就知道', sub: '出发倒计时，还有该搭的那班巴士。' },
   },
   {
     file: '2-widget',
     sky: 'day',
-    icon: 'widget',
     home: true,
     en: { head: 'Your buses,|{on the home screen}', sub: 'The next bus, and the buses near you, at a glance.' },
     zh: { head: '你的巴士，|就在{主屏幕上}', sub: '不用打开应用，就能看到下一班巴士和附近的巴士。' },
@@ -50,21 +47,18 @@ const SLIDES = [
   {
     file: '3-map',
     sky: 'golden',
-    icon: 'map',
     en: { head: 'Every bus,|{live on the map}', sub: 'Pick a service to see its line, its stops and its buses.' },
     zh: { head: '每辆巴士，|{地图上实时看}', sub: '选一条线路，看它的路线、车站和巴士。' },
   },
   {
     file: '4-buses',
     sky: 'dusk',
-    icon: 'stop',
     en: { head: 'What’s coming|{at your stop}', sub: 'Every service’s next buses, live, and how full.' },
     zh: { head: '{你的车站}，|下一班什么时候到', sub: '每条线路的下一班巴士，实时到站，还有多挤。' },
   },
   {
     file: '5-on-the-bus',
     sky: 'night',
-    icon: 'bus',
     en: { head: 'With you|{all the way}', sub: 'On the bus: the next stop, and when you’ll get there.' },
     zh: { head: '上车以后，|{一路}都在身边', sub: '在车上：下一站是哪里，什么时候到。' },
   },
@@ -118,11 +112,10 @@ const SKIES = {
   },
 };
 
-// Where the phone sits, and the route line above it.
-const SCREEN_W = 700;
+// Where the phones sit.
+const SCREEN_W = 720;
 const SCREEN_H = Math.round((SCREEN_W * H) / W);
-const PHONE_TOP = 512;
-const LINE_Y = 446;
+const PHONE_TOP = 470;
 
 // The home screen's capture (both languages lay it out alike): the two widgets
 // and the four app icons, in its own pixels.
@@ -179,28 +172,28 @@ function panoramaScript() {
     g.fillStyle = 'rgba(255,255,255,' + a.toFixed(2) + ')';
     g.beginPath(); g.arc(x, y, rnd() < 0.15 ? 2.8 : 1.7, 0, 7); g.fill();
   }
-  // The sun rising over the first join, setting over the third; the moon over the last slide.
+  // The sun rising beside the first phone, setting behind Marina Bay Sands across the fourth join; the moon over the last.
   const disc = (x, y, r, fill, glow) => {
     const gl = g.createRadialGradient(x, y, r * 0.6, x, y, r * 2.6);
     gl.addColorStop(0, glow); gl.addColorStop(1, 'rgba(255,255,255,0)');
     g.fillStyle = gl; g.beginPath(); g.arc(x, y, r * 2.6, 0, 7); g.fill();
     g.fillStyle = fill; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
   };
-  disc(W, 1300, 58, '#fff1d6', 'rgba(255,241,214,0.45)');
-  disc(3 * W, 1420, 84, '#ffb37a', 'rgba(255,179,122,0.42)');
+  disc(78, 1250, 58, '#fff1d6', 'rgba(255,241,214,0.45)');
+  disc(4 * W - 30, 1440, 84, '#ffb37a', 'rgba(255,179,122,0.42)');
   disc(4 * W + 980, 1210, 40, '#fde9c9', 'rgba(253,233,201,0.25)');
   // The far hills, one ridge the whole way, in each hour's colour.
   const farY = (x) => 1478 + 26 * Math.sin(x / 233) + 14 * Math.sin(x / 91 + 1.3) + 10 * Math.sin(x / 611 + 0.4);
   const nearY = (x) => 1652 + 16 * Math.sin(x / 377 + 2) + 9 * Math.sin(x / 143);
   const band = (key) => { const gr = g.createLinearGradient(0, 0, PW, 0); for (let x = 0; x <= PW; x += 90) gr.addColorStop(x / PW, col(x, key)); return gr; };
-  // The city on the far hills: Marina Bay Sands beside the golden slide's phone, towers here and there.
+  // The city on the far hills: Marina Bay Sands across the fourth join, towers here and there.
   g.fillStyle = band('city');
   const sands = (cx) => {
     const cy = farY(cx) + 6;
     for (const dx of [-52, -8, 36]) { g.beginPath(); g.moveTo(cx + dx, cy); g.lineTo(cx + dx + 4, cy - 110); g.lineTo(cx + dx + 20, cy - 110); g.lineTo(cx + dx + 24, cy); g.fill(); }
     g.beginPath(); g.moveTo(cx - 62, cy - 118); g.lineTo(cx + 104, cy - 124); g.lineTo(cx + 96, cy - 110); g.lineTo(cx - 58, cy - 110); g.fill();
   };
-  sands(2 * W + 1000);
+  sands(4 * W - 60);
   for (const [x, w, h] of [[70, 46, 70], [1150, 60, 96], [1230, 34, 58], [3120, 50, 80], [4300, 70, 110], [4380, 36, 64], [5330, 54, 84]]) g.fillRect(x, farY(x) - h + 8, w, h);
   g.fillStyle = band('far');
   g.beginPath(); g.moveTo(0, H); for (let x = 0; x <= PW; x += 6) g.lineTo(x, farY(x)); g.lineTo(PW, H); g.fill();
@@ -236,32 +229,9 @@ function panoramaScript() {
     for (const cx of [x + 62, x + w - 64]) { g.fillStyle = '#151311'; g.beginPath(); g.arc(cx, y + h, 20, 0, 7); g.fill(); g.fillStyle = '#8a847d'; g.beginPath(); g.arc(cx, y + h, 8, 0, 7); g.fill(); }
     g.restore();
   };
-  bus(W - 123, false);
+  bus(2 * W - 123, false);
   bus(4 * W - 123, true);
 })();`;
-}
-
-/** The route line through all five, a stop on each slide (its icon) and a small one at each join. */
-function routeLine() {
-  const ICONS = {
-    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
-    widget:
-      '<rect x="3.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="3.5" y="13.5" width="17" height="7" rx="1.6"/>',
-    map: '<path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/>',
-    stop: '<rect x="6" y="3" width="12" height="9" rx="2"/><path d="M12 12v9M9 21h6M9 7.5h6"/>',
-    bus: '<rect x="4" y="4" width="16" height="13" rx="3"/><path d="M4 11h16M8 17v2.5M16 17v2.5"/><circle cx="8" cy="14" r="0.6"/><circle cx="16" cy="14" r="0.6"/>',
-  };
-  const stops = SLIDES.map((s, i) => {
-    const cx = i * W + W / 2;
-    return `<circle cx="${cx}" cy="${LINE_Y}" r="44" fill="#fffdfa" stroke="#f97316" stroke-width="9"/>
-      <g transform="translate(${cx - 26} ${LINE_Y - 26}) scale(2.17)" fill="none" stroke="#1c1917" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${ICONS[s.icon]}</g>`;
-  }).join('');
-  const joins = SLIDES.slice(1)
-    .map((_, i) => `<circle cx="${(i + 1) * W}" cy="${LINE_Y}" r="13" fill="#fffdfa" stroke="#f97316" stroke-width="6"/>`)
-    .join('');
-  return `<svg class="route" width="${W * SLIDES.length}" height="${H}" viewBox="0 0 ${W * SLIDES.length} ${H}">
-    <line x1="0" y1="${LINE_Y}" x2="${W * SLIDES.length}" y2="${LINE_Y}" stroke="#f97316" stroke-width="12" stroke-linecap="round"/>
-    ${joins}${stops}</svg>`;
 }
 
 /** The home screen, rebuilt: the capture's widgets and icons on the app's dusk, its status bar redrawn. */
@@ -315,7 +285,7 @@ function head(text) {
     .replace('|', '<br>');
 }
 
-function page(index, lang, shot) {
+function page(index, lang) {
   const slide = SLIDES[index];
   const k = SKIES[slide.sky];
   const words = slide[lang];
@@ -325,18 +295,25 @@ function page(index, lang, shot) {
   const zh = lang === 'zh';
   const face = zh ? `'PingFang SC', 'Hiragino Sans GB', sans-serif` : `'Space Grotesk', sans-serif`;
   const body = zh ? `'PingFang SC', 'Hiragino Sans GB', sans-serif` : `'Inter', sans-serif`;
-  const screen = slide.home ? homeScreen(shot) : `<img src="${pathToFileURL(shot)}">`;
+  // Every slide's phone, in the middle of its own fifth of the strip.
+  const phones = SLIDES.map((s, i) => {
+    const shot = join(here, 'captures', lang, `${s.file}.png`);
+    const screen = s.home ? homeScreen(shot) : `<img src="${pathToFileURL(shot)}">`;
+    const left = i * W + W / 2 - SCREEN_W / 2 - 16;
+    return `<div class="phone" style="left:${left}px"><div class="screen">${screen}</div></div>`;
+  }).join('');
   return `<!doctype html><html><head><meta charset="utf-8"><style>
     @font-face { font-family: 'Space Grotesk'; font-weight: 300 700; src: url('${pathToFileURL(join(fonts, 'space-grotesk-latin.woff2'))}') format('woff2'); }
     @font-face { font-family: 'Inter'; font-weight: 100 900; src: url('${pathToFileURL(join(fonts, 'inter-latin.woff2'))}') format('woff2'); }
     html, body { margin: 0; width: ${W}px; height: ${H}px; overflow: hidden; position: relative; }
-    #pano, .route { position: absolute; top: 0; left: -${index * W}px; }
+    .world { position: absolute; top: 0; left: -${index * W}px; width: ${W * SLIDES.length}px; height: ${H}px; }
+    #pano { position: absolute; top: 0; left: 0; }
     .words { position: absolute; top: 96px; left: 56px; right: 56px; text-align: center; color: ${ink}; }
     h1 { font-family: ${face}; font-weight: 700; font-size: ${zh ? 84 : 88}px; line-height: 1.08; letter-spacing: ${zh ? '0.01em' : '-0.025em'}; margin: 0; }
     h1 em { font-style: normal; color: ${accent}; }
     p { font-family: ${body}; font-weight: 500; font-size: ${zh ? 36 : 37}px; line-height: 1.35; color: ${muted}; margin: 24px auto 0; max-width: 940px; text-wrap: pretty; }
     /* A phone a little like the Pixel the captures are from: a thin dark bezel, round corners, the camera's punch hole, the keys on the right. */
-    .phone { position: absolute; left: 50%; top: ${PHONE_TOP}px; transform: translateX(-50%); width: ${SCREEN_W}px; padding: 16px; border-radius: 80px;
+    .phone { position: absolute; top: ${PHONE_TOP}px; width: ${SCREEN_W}px; padding: 16px; border-radius: 80px;
       background: linear-gradient(145deg, #3a3a3e, #121214 45%, #26262a); box-shadow: 0 0 0 2px rgba(255,255,255,0.10) inset, 0 50px 90px rgba(10,12,30,0.35), 0 12px 30px rgba(10,12,30,0.22); }
     .phone::before, .phone::after { content: ''; position: absolute; right: -5px; width: 6px; border-radius: 0 4px 4px 0; background: linear-gradient(90deg, #1a1a1c, #3c3c40); }
     .phone::before { top: 240px; height: 88px; }
@@ -349,10 +326,8 @@ function page(index, lang, shot) {
     .home .sys { display: flex; gap: 14px; align-items: center; }
     .home .pill { position: absolute; left: 50%; bottom: 28px; width: 284px; height: 10px; margin-left: -142px; border-radius: 5px; background: rgba(255,255,255,0.9); }
   </style></head><body>
-    <canvas id="pano" width="${W * SLIDES.length}" height="${H}"></canvas>
-    ${routeLine()}
+    <div class="world"><canvas id="pano" width="${W * SLIDES.length}" height="${H}"></canvas>${phones}</div>
     <div class="words"><h1>${head(words.head)}</h1><p>${words.sub}</p></div>
-    <div class="phone"><div class="screen">${screen}</div></div>
     <script>${panoramaScript()}</script>
   </body></html>`;
 }
@@ -381,11 +356,10 @@ try {
   SLIDES.forEach((slide, index) => {
     if (only && slide.file !== only) return;
     for (const lang of ['en', 'zh']) {
-      const shot = join(here, 'captures', lang, `${slide.file}.png`);
       const outDir = join(here, 'screenshots', lang === 'en' ? '' : 'zh');
       mkdirSync(outDir, { recursive: true });
       const html = join(tmp, `${lang}-${slide.file}.html`);
-      writeFileSync(html, page(index, lang, shot));
+      writeFileSync(html, page(index, lang));
       const out = join(outDir, `${slide.file}.png`);
       execFileSync(
         bin,
