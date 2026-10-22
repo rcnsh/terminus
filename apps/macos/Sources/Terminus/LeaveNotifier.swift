@@ -10,8 +10,7 @@ private let log = Logger(subsystem: "sh.rcn.terminus", category: "notify")
 /// get one (no `remindAt`, no reminder) and words them, like every other client. Nothing asks what happened afterwards: the trip
 /// follows the plan and the phone's location.
 ///
-/// Local notifications don't need APNs or a paid Apple team, so they work for
-/// the self-signed build. They're scheduled ahead from each refresh, so they
+/// Local notifications don't need APNs or a push key. They're scheduled ahead from each refresh, so they
 /// fire on time even while the refresh loop waits; a later refresh moves them
 /// when the leave-by moves. When the refreshes stop (offline, asleep, locked)
 /// they still go, but say when their times were last checked.

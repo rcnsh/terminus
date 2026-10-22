@@ -5,10 +5,9 @@ import Security
 /// The device token, in a file only this user can read:
 /// ~/Library/Application Support/terminus/device-token (0600, folder 0700).
 ///
-/// Not the keychain: terminus is signed with a self-signed certificate, with
-/// no Apple Team ID, so macOS knows each version only by its code hash and
-/// would ask for the keychain password after every update. A file has the same
-/// protection as an SSH key. The token only reads your bus answers, and
+/// Not the keychain: a keychain item is tied to the app's code signature, and
+/// macOS asks for the password again whenever that changes. A file has the
+/// same protection as an SSH key. The token only reads your bus answers, and
 /// Settings on the web can revoke it.
 ///
 /// Versions 1.3.8 to 2.0.0-beta.4 kept it in the keychain. It's moved to the
