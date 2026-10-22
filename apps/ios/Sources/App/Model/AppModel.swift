@@ -95,9 +95,6 @@ final class AppModel {
     /// A service's line to show on the Buses tab (the map's "Show as list"
     /// with no stop open): Buses shows it and sets this back to nil.
     var openLine: String?
-    /// "Add your email" asked for elsewhere (Now's "Is this wrong?"):
-    /// Settings opens the sign-in as it shows, then sets this back.
-    var wantsSignIn = false
 
     // MARK: "Is this wrong?"
 

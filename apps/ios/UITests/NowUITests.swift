@@ -135,7 +135,7 @@ final class NowUITests: XCTestCase {
     }
 
     /// Without an email the server takes no reports: "Add your email" opens
-    /// Settings' email sign-in, though Settings hasn't been opened yet.
+    /// the email sign-in over Now, which stays where it was.
     func testReportWithoutAnEmailAsksForOne() {
         let app = XCUIApplication.terminus(signedIn: false, extra: ["TERMINUS_TOKEN": stubAnonToken(), "TERMINUS_SKY": "day"])
         app.launch()
@@ -147,8 +147,9 @@ final class NowUITests: XCTestCase {
         shot("now-report-no-email", app)
         add.tap()
         XCTAssertTrue(app.textFields["signIn.email"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.tabBars.buttons["Settings"].isSelected)
         shot("now-report-sign-in", app)
+        app.buttons["Cancel"].firstMatch.tap()
+        XCTAssertTrue(app.tabBars.buttons["Now"].isSelected)
     }
 
     /// VoiceOver reads the card as sentences of the server's words, not a word at a time.

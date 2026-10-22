@@ -17,6 +17,9 @@ struct NowView: View {
     @State private var scrolled: CGFloat = 0
     @State private var onScreen = false
     @State private var reporting = false
+    /// "Add your email" from the report: the sign-in, over Now, as the report closes.
+    @State private var addEmail = false
+    @State private var signingIn = false
     @State private var goingLater = false
     @State private var pull = SkyPull()
 
@@ -117,7 +120,13 @@ struct NowView: View {
         }
         .onAppear { onScreen = true }
         .onDisappear { onScreen = false }
-        .sheet(isPresented: $reporting) { ReportSheet() }
+        .sheet(
+            isPresented: $reporting,
+            onDismiss: {
+                if addEmail { (addEmail, signingIn) = (false, true) }
+            }
+        ) { ReportSheet(addEmail: $addEmail) }
+        .sheet(isPresented: $signingIn) { SignInSheet() }
         .sheet(isPresented: $goingLater) { GoLaterSheet() }
     }
 

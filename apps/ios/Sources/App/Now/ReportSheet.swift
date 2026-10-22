@@ -7,6 +7,8 @@ import SwiftUI
 struct ReportSheet: View {
     @Environment(AppModel.self) private var app
     @Environment(\.dismiss) private var dismiss
+    /// Set by "Add your email": Now opens the sign-in once this sheet has gone.
+    @Binding var addEmail: Bool
     @State private var reason: String?
     @State private var note = ""
     /// The answer as it was when the sheet opened: what the report is about, whatever refreshes meanwhile.
@@ -86,10 +88,8 @@ struct ReportSheet: View {
                 .foregroundStyle(Color.muted)
                 .padding(.top, 10)
             Button(L("Add your email")) {
+                addEmail = true
                 dismiss()
-                // A flag rather than a notification: Settings may not have been built yet.
-                app.wantsSignIn = true
-                NotificationCenter.default.post(name: .openTab, object: MainTabs.Tab.settings)
             }
             .buttonStyle(.primary)
             .padding(.top, 20)
