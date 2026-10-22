@@ -16,6 +16,7 @@ import { clockAt } from './clock.ts';
 import { indexGraph } from './resolve.ts';
 import { tripAnswer } from './next.ts';
 import { unlogged } from './answer.ts';
+import { GRAPH } from './graph.ts';
 import { ASSUME_MS, type DayRecord, dayState, leaveOf, offStop, sgtDate } from './trip.ts';
 import { m } from './i18n.ts';
 
@@ -75,7 +76,7 @@ export async function dayPlan(
   earlier: Set<string> = new Set(),
   here: { lat: number | null; lon: number | null } = { lat: null, lon: null },
 ): Promise<DayPlan> {
-  const idx = indexGraph(deps.graph);
+  const idx = indexGraph(GRAPH);
   const name = (code: string | null) => (code ? (idx.byCode.get(code)?.name ?? code) : null);
   const t = sgt(nowMs);
   const midnight = nowMs - (t.minutes * 60_000 + (nowMs % 60_000));

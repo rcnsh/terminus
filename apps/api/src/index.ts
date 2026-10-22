@@ -434,7 +434,7 @@ async function versionLookup(env: Env, nowMs: number): Promise<Record<string, un
   };
 }
 
-const ME_DEPS: MeDeps = { graph: GRAPH, publicGraph: GRAPH_PUBLIC, answerFor, collectArrivals };
+const ME_DEPS: MeDeps = { answerFor, collectArrivals };
 
 /** Routes that need an API key or a signed-in account. */
 const KEYED = ['/api/next', '/api/trip', '/api/arrivals', '/api/buses', '/api/line', '/api/campus', '/api/stops/pairs'];
