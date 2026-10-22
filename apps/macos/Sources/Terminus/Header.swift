@@ -112,7 +112,7 @@ struct Header: View {
     }
 
     /// "D2 · 09:42", "A1 · ~09:11", or the label when there's no time: the
-    /// card's title. An older server's answer, without one, is worded here.
+    /// card's title; worked out here for an older server.
     private func big(_ a: NextAnswer?) -> String {
         guard let a else { return L("Checking…") }
         if let title = a.card?.title { return title }
@@ -164,7 +164,7 @@ struct Header: View {
         if let p = a.card?.phaseText, let d = a.dest { return "\(p) · \(d.label)" }
         if let h = a.card?.heading { return h }
         if a.mode == "nearby" { return L("Nearby") }
-        // A card with no heading has nowhere to go; the rest is for an older server's answer.
+        // A card with no heading has nowhere to go; the rest is worked out here for an older server.
         if a.card != nil { return L("Next bus") }
         guard let d = a.dest else { return L("Next bus") }
         if a.isClassPlan, let c = a.classAt { return "\(d.label) · \(L("starts %@", campusTime(c)))" }

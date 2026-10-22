@@ -31,8 +31,8 @@ func goldenNames() -> [String] {
     #expect(goldenNames().count >= 40)
 }
 
-/// By the endpoint each answers: /me/nearby has `stops`, /me/day `items`,
-/// the rest are /me/next with a card. The card's parts are read leniently,
+/// By the endpoint each answers: /api/me/nearby has `stops`, /api/me/day `items`,
+/// the rest are /api/me/next with a card. The card's parts are read leniently,
 /// so one that no longer decodes would just vanish: each one sent must
 /// come through.
 @Test(arguments: goldenNames())
@@ -103,7 +103,7 @@ func everyGoldenAnswerDecodes(name: String) throws {
     #expect((a.card?.glance?.count ?? 99) <= 12)
 }
 
-/// An older server's question decodes without trouble and is simply not shown.
+/// A question (`ask`) from an older server decodes without trouble and is not shown.
 @Test func aSuggestionDecodesAndAnOldQuestionIsIgnored() throws {
     let json = """
         {"label":"On the R2","detail":"Off at UTown","mode":"trip","card":{"kind":"trip","phase":"riding",
@@ -197,7 +197,7 @@ func theNextClassComesWithTheCard(name: String) throws {
     #expect(FlowPills.spoken(d2) == "D2: 4 min, 14 min")
 }
 
-/// An older server's row, worded on the Mac: the map's stop card uses
+/// A row's time, worked out here for an older server: the map's stop card uses
 /// this too, so 4 min 30 s is "5 min" in both, not "4 min" on the map.
 @Test func aRowsTimeRoundsToTheNearestMinute() {
     #expect(FlowPills.eta(BoardRow(svc: "D2", etaS: 270, quality: "live")) == "5 min")

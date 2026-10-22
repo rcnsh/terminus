@@ -65,7 +65,7 @@ private func key(_ trip: String = "4:600:UTOWN", leaveIn: TimeInterval) -> Strin
     let step = LeaveNotifier.step(try plan(leaveIn: 600), soonTrip: lastWeek, soonAt: now.timeIntervalSince1970 - week, now: now)
     #expect(
         step == .schedule(clearFirst: true, trip: "4:600:UTOWN", soon: now.addingTimeInterval(300), leaveAt: now.addingTimeInterval(600)))
-    // Kept the old way, by the trip alone (before this fix): not taken for today's.
+    // A key kept by the trip alone, as an older version kept it: not taken for today's.
     let before = LeaveNotifier.step(try plan(leaveIn: 600), soonTrip: "4:600:UTOWN", soonAt: now.timeIntervalSince1970 - week, now: now)
     #expect(
         before == .schedule(clearFirst: true, trip: "4:600:UTOWN", soon: now.addingTimeInterval(300), leaveAt: now.addingTimeInterval(600)))

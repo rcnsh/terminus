@@ -7,7 +7,7 @@ import Security
 ///
 /// Not the keychain: terminus is signed with a self-signed certificate, with
 /// no Apple Team ID, so macOS knows each version only by its code hash and
-/// asked for the keychain password after every update. A file has the same
+/// would ask for the keychain password after every update. A file has the same
 /// protection as an SSH key. The token only reads your bus answers, and
 /// Settings on the web can revoke it.
 ///

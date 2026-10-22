@@ -93,7 +93,6 @@ enum MapFiles {
         return FileManager.default.fileExists(atPath: file.path) ? file : nil
     }
 
-    /// Whether the map file is on this Mac.
     static var hasTiles: Bool { current != nil }
 
     /// Whether `head` (the file's first bytes) starts a PMTiles version 3

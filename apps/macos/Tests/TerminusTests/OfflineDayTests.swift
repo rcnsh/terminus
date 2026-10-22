@@ -5,7 +5,7 @@ import Testing
 
 /// The offline fallback, against the cases the web and Android apps are
 /// checked against too (apps/api/test/fixtures/offline-day.json), on the
-/// API's own /me/day golden.
+/// API's own /api/me/day golden.
 private let fixtures = URL(fileURLWithPath: #filePath)
     .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     .appendingPathComponent("../api/test/fixtures").standardized

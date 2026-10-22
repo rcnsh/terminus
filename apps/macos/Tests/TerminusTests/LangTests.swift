@@ -69,7 +69,7 @@ private func literals(_ pattern: String, in text: String) throws -> [String] {
 }
 
 /// The API's Chinese answers (apps/api/test/fixtures/answers/zh, every
-/// /me/next one) are in Chinese. Some headlines are only a bus and a time,
+/// /api/me/next one) are in Chinese. Some headlines are only a bus and a time,
 /// so the line under it counts too.
 @Test(arguments: goldenNames().filter { $0.hasPrefix("zh/") })
 func chineseAnswersAreInChinese(name: String) throws {

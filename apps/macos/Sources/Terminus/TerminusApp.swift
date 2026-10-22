@@ -165,8 +165,8 @@ struct Popover: View {
                 // No taller than the screen: a long Today scrolls inside the
                 // popover, with the footer kept in view, instead of running
                 // off the bottom. It scrolls only then: scrolling content
-                // that fits made switching tabs shake the popover, its scroll
-                // bar flickering, as the window's height changed. The scroll
+                // that fits would shake the popover on a tab switch, its scroll
+                // bar flickering, as the window's height changes. The scroll
                 // view stays either way, so the content (a search being
                 // typed, Go later) keeps its state as it grows past the screen.
                 ScrollView {
