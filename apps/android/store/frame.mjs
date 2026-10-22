@@ -186,7 +186,7 @@ function panoramaScript() {
   const farY = (x) => 1478 + 26 * Math.sin(x / 233) + 14 * Math.sin(x / 91 + 1.3) + 10 * Math.sin(x / 611 + 0.4);
   const nearY = (x) => 1652 + 16 * Math.sin(x / 377 + 2) + 9 * Math.sin(x / 143);
   const band = (key) => { const gr = g.createLinearGradient(0, 0, PW, 0); for (let x = 0; x <= PW; x += 90) gr.addColorStop(x / PW, col(x, key)); return gr; };
-  // The city on the far hills: Marina Bay Sands across the fourth join, towers here and there.
+  // The city on the far hills: Marina Bay Sands across the fourth join, clear of the towers here and there.
   g.fillStyle = band('city');
   const sands = (cx) => {
     const cy = farY(cx) + 6;
@@ -194,7 +194,7 @@ function panoramaScript() {
     g.beginPath(); g.moveTo(cx - 62, cy - 118); g.lineTo(cx + 104, cy - 124); g.lineTo(cx + 96, cy - 110); g.lineTo(cx - 58, cy - 110); g.fill();
   };
   sands(4 * W - 60);
-  for (const [x, w, h] of [[70, 46, 70], [1150, 60, 96], [1230, 34, 58], [3120, 50, 80], [4300, 70, 110], [4380, 36, 64], [5330, 54, 84]]) g.fillRect(x, farY(x) - h + 8, w, h);
+  for (const [x, w, h] of [[70, 46, 70], [1150, 60, 96], [1230, 34, 58], [3120, 50, 80], [4440, 70, 110], [4520, 36, 64], [5330, 54, 84]]) g.fillRect(x, farY(x) - h + 8, w, h);
   g.fillStyle = band('far');
   g.beginPath(); g.moveTo(0, H); for (let x = 0; x <= PW; x += 6) g.lineTo(x, farY(x)); g.lineTo(PW, H); g.fill();
   // Rain trees beside the phones.

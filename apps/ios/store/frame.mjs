@@ -154,8 +154,8 @@ const HOME = {
  * shuttles carry on across the joins. The sky and the stars are drawn at this
  * page's size; the landscape is the Play set's drawing, scaled.
  */
-function panoramaScript({ dw = W, dh = H, scale = S, landY = LAND_Y, clear = true, span = null } = {}) {
-  const phases = SLIDES.map((s) => SKIES[s.sky]);
+function panoramaScript({ dw = W, dh = H, scale = S, landY = LAND_Y, clear = true, span = null, land = null } = {}) {
+  const phases = SLIDES.map((s) => (land ? { ...SKIES[s.sky], ...land } : SKIES[s.sky]));
   return `(() => {
   const P = ${JSON.stringify(phases)};
   const DW = ${dw}, DH = ${dh}, S = ${scale}, LAND_Y = ${landY}, CLEAR = ${clear}, SPAN = ${JSON.stringify(span)};
@@ -215,7 +215,7 @@ function panoramaScript({ dw = W, dh = H, scale = S, landY = LAND_Y, clear = tru
   const farY = (x) => 1478 + 26 * Math.sin(x / 233) + 14 * Math.sin(x / 91 + 1.3) + 10 * Math.sin(x / 611 + 0.4);
   const nearY = (x) => 1652 + 16 * Math.sin(x / 377 + 2) + 9 * Math.sin(x / 143);
   const band = (key) => { const gr = g.createLinearGradient(0, 0, PW, 0); for (let x = 0; x <= PW; x += 90) gr.addColorStop(x / PW, col(x, key)); return gr; };
-  // The city on the far hills: Marina Bay Sands across the fourth join, towers here and there.
+  // The city on the far hills: Marina Bay Sands across the fourth join, clear of the towers here and there.
   g.fillStyle = band('city');
   const sands = (cx) => {
     const cy = farY(cx) + 6;
@@ -223,7 +223,7 @@ function panoramaScript({ dw = W, dh = H, scale = S, landY = LAND_Y, clear = tru
     g.beginPath(); g.moveTo(cx - 62, cy - 118); g.lineTo(cx + 104, cy - 124); g.lineTo(cx + 96, cy - 110); g.lineTo(cx - 58, cy - 110); g.fill();
   };
   sands(4 * W - 60);
-  for (const [x, w, h] of [[70, 46, 70], [1150, 60, 96], [1230, 34, 58], [3120, 50, 80], [4300, 70, 110], [4380, 36, 64], [5330, 54, 84]]) g.fillRect(x, farY(x) - h + 8, w, h);
+  for (const [x, w, h] of [[70, 46, 70], [1150, 60, 96], [1230, 34, 58], [3120, 50, 80], [4440, 70, 110], [4520, 36, 64], [5330, 54, 84]]) g.fillRect(x, farY(x) - h + 8, w, h);
   g.fillStyle = band('far');
   g.beginPath(); g.moveTo(0, H); for (let x = 0; x <= PW; x += 6) g.lineTo(x, farY(x)); g.lineTo(PW, H); g.fill();
   // Rain trees beside the phones.
@@ -384,7 +384,8 @@ function headerPage() {
   const scale = dw / 1080;
   const left = HEADER.from * 1080;
   const span = [left, left + HEADER.w / scale, 2, SLIDES.length - 1];
-  const opts = { dw, dh: HEADER.h, scale, landY: HEADER.h - 1920 * scale, clear: false, span };
+  const { far, tree, city, ground, road } = SKIES.dusk;
+  const opts = { dw, dh: HEADER.h, scale, landY: HEADER.h - 1920 * scale, clear: false, span, land: { far, tree, city, ground, road } };
   return `<!doctype html><html><head><meta charset="utf-8"><style>
     html, body { margin: 0; width: ${HEADER.w}px; height: ${HEADER.h}px; overflow: hidden; position: relative; }
     #pano { position: absolute; top: 0; left: -${Math.round(HEADER.from * dw)}px; }
