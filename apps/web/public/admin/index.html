@@ -16,17 +16,13 @@
 <link rel="stylesheet" href="/admin/admin.css">
 </head>
 <body>
-<header class="wrap nav">
+<!-- Shown until signed in; the dashboard has its own sidebar (admin.js). -->
+<header class="wrap nav gate-nav">
   <a class="brand" href="/"><img src="/assets/mark.svg" alt=""><span class="wordmark">termi<b>nus</b></span></a>
-  <!-- Refresh and Lock, once unlocked (admin.js). -->
-  <nav class="nav-links" id="admin-nav"></nav>
 </header>
 
-<main class="wrap">
-  <h1>Dashboard</h1>
-  <!-- The token form, or the stats: drawn by admin.js. -->
-  <div id="admin"></div>
-</main>
+<!-- The passkey form, or the dashboard: drawn by admin.js. -->
+<main id="admin"></main>
 <script type="module" src="/admin/admin.js"></script>
 </body>
 </html>
