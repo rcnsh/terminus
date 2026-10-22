@@ -64,6 +64,7 @@
 "Before class" = "上课前";
 "Building" = "建筑";
 "Bus stop" = "车站";
+"Buses near you widget" = "“附近的巴士”小组件";
 "Cancel" = "取消";
 "Card style" = "卡片样式";
 "Change the stop for %@" = "更改 %@ 的车站";
@@ -136,6 +137,7 @@
 "Most common" = "最常见";
 "Name, e.g. Gym" = "名称，例如“健身房”";
 "Never" = "从未";
+"New to NUS" = "刚来 NUS";
 "Next background refresh" = "下次后台刷新";
 "No answer" = "没有回应";
 "No classes yet" = "还没有课";
@@ -162,6 +164,7 @@
 "One minute less" = "少一分钟";
 "One minute more" = "多一分钟";
 "Only on this phone." = "仅限这部手机。";
+"Only on this phone. With New to NUS off, the widget fits in more buses." = "仅在这部手机上。关闭“刚来 NUS”时，小组件能显示更多巴士。";
 "Only your stops are saved." = "只保存车站。";
 "Open settings" = "打开设置";
 "Opens in Safari" = "在 Safari 中打开";
@@ -190,6 +193,7 @@
 "Right" = "准确";
 "Room %@" = "教室 %@";
 "Route" = "路线";
+"Says where each bus goes, by places you'll know: the MRT, UTown, PGP." = "用你熟悉的地方说明每辆巴士去哪里：地铁站、UTown、PGP。";
 "Send" = "发送";
 "Send crash reports" = "发送崩溃报告";
 "Send feedback" = "发送反馈";

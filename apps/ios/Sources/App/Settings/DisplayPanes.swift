@@ -90,7 +90,8 @@ struct SettingsLanguagePane: View {
     }
 }
 
-/// Settings › Appearance: the theme, and how the card draws a trip, both on this phone only.
+/// Settings › Appearance: the theme, how the card draws a trip, and how the
+/// Buses near you widget explains the buses, all on this phone only.
 struct SettingsAppearancePane: View {
     @Environment(Prefs.self) private var prefs
 
@@ -101,5 +102,11 @@ struct SettingsAppearancePane: View {
                 selection: Binding(get: { prefs.theme }, set: { prefs.theme = $0 }), id: "settings.theme")
         }
         SettingsCardStyles()
+        SettingsGroup(title: L("Buses near you widget"), hint: L("Only on this phone. With New to NUS off, the widget fits in more buses."))
+        {
+            SettingSwitch(
+                label: L("New to NUS"), sub: L("Says where each bus goes, by places you'll know: the MRT, UTown, PGP."),
+                isOn: Binding(get: { prefs.newToNus }, set: { prefs.newToNus = $0 }), id: "settings.newToNus")
+        }
     }
 }

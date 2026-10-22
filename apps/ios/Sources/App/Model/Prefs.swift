@@ -1,7 +1,8 @@
 import SwiftUI
+import WidgetKit
 
 /// The choices kept on this phone that redraw the app: its language, its
-/// appearance and the card's style. The account keeps its own copy of the
+/// appearance, the card's style and New to NUS. The account keeps its own copy of the
 /// language and the clock; Settings saves both.
 @MainActor @Observable
 final class Prefs {
@@ -24,6 +25,15 @@ final class Prefs {
     /// steps or route: how Now draws a trip (Settings › Appearance).
     var cardStyle: String = Shared.defaults.string(forKey: "cardStyle") ?? "steps" {
         didSet { Shared.defaults.set(cardStyle, forKey: "cardStyle") }
+    }
+
+    /// New to NUS (Settings › Appearance): the Buses near you widget explains the buses, redrawn at once.
+    var newToNus: Bool = NewToNus.on {
+        didSet {
+            guard newToNus != oldValue else { return }
+            NewToNus.on = newToNus
+            WidgetCenter.shared.reloadTimelines(ofKind: "nearby")
+        }
     }
 
     /// auto, 12 or 24 (Clock.pref).
