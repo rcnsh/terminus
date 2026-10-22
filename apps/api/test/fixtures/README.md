@@ -21,6 +21,13 @@
   campus shelters (YIH, 16171; UHC, 18329), captured 2026-10-06 17:28 SGT.
   The second has buses the feed marks `Monitored: 0` (timetabled, with no
   position), which `normalizePublic()` reads as `scheduled`.
+- `search.json`: the destination search's ranking rules and cases, which
+  the website's `search.js` (`search.test.js`) and the Android and Mac
+  tests are all held to.
+- `calendar/`: NUSMods' and data.gov.sg's real replies on 3 October 2026,
+  cut to the fields the code reads, for the calendar refresh's tests.
+- `migrations.sha256`: the hash of every migration already applied, so
+  `deploy.test.js` fails when one is edited.
 
 ## The stop captures
 

@@ -12,7 +12,7 @@ everything in `public/`.
 | [`/pair`](public/pair) | Where a pairing QR code lands: opens the app, or shows the code |
 | [`/privacy`](public/privacy) | Privacy summary; the full policy is at [`/privacy/policy`](public/privacy/policy). Each has a Chinese copy in `zh/` |
 | [`/status`](public/status) | Whether NUS's live feed is answering, and recent outages |
-| [`/admin`](public/admin) | Operator dashboard: usage, reports and errors. Asks for the `HEALTH_TOKEN` (`dev` with the stub) |
+| [`/admin`](public/admin) | Operator dashboard: usage, reports and errors. Opens with a passkey; adding one asks for the `HEALTH_TOKEN` (`dev` with the stub) |
 | [`/admin/timelapse`](public/admin/timelapse) | Replays a recorded day's buses on the map and exports it as a video |
 | [`not-found/`](public/not-found) | The page a browser gets for an address the site doesn't have (still a 404) |
 

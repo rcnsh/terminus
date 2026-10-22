@@ -5,9 +5,11 @@ Android 12 or later.
 
 - **Widgets:** a compact one that says when to leave, one with buttons for
   your favourites, and "Buses near you": the nearest stop's buses at any
-  size, with their arrival times and where each stops next. Times are clock
-  times ("11:48"), worked out once per fetch, so the widget only redraws when
-  a bus goes or the times turn old. They refresh themselves through the day.
+  size (from 4×2 up, beside the stop across the road), with their arrival
+  times and where each stops next. Times are clock times ("11:48"), worked
+  out once per fetch, with a countdown the phone ticks for a bus in the next
+  hour, so the widget only redraws when a bus is due or the times turn old.
+  They refresh themselves through the day.
 - **App:** Now · Buses · Map · Settings along the bottom. Now has the same
   answer, nearby stops and search; Buses has what's coming at a stop and
   where a service's buses are along its line. Optional heads-up notifications before you need
@@ -27,7 +29,7 @@ Android 12 or later.
 ./gradlew :app:installStableDebug -PapiBase=http://localhost:8787   # against the dev stub (debug builds only)
 adb reverse tcp:8787 tcp:8787                                       # so the phone can reach it
 ./gradlew :app:ktfmtFormat                                          # format the Kotlin (ktfmt; ktfmtCheck in CI)
-./gradlew :app:lintStableDebug :app:testStableDebugUnitTest :app:compileBetaDebugKotlin   # what CI runs, with the
+./gradlew :app:ktfmtCheck :app:lintStableDebug :app:testStableDebugUnitTest :app:compileBetaDebugKotlin   # what CI runs, with the
 ./gradlew :app:assembleStableRelease :app:assembleBetaRelease       # release builds (R8)
 ```
 

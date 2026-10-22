@@ -24,7 +24,7 @@
  * starts lying.
  *
  *   blob1   kind        'answer' | 'arrival' | 'error' | 'timelapse' | 'signal'
- *                       | 'active' | 'apperror'
+ *                       | 'active' | 'apperror' | 'tripwake'
  *   blob2   stop        boarding stop code; for 'error', the route (no query),
  *                       or 'cron <step>' for a cron step that failed;
  *                       for 'timelapse', the poll's outcome (see logPoll);
@@ -52,8 +52,8 @@
  *   double10 walkAllS        whole-way walk, -1 when unknown
  *   double11 changeWaitS     answer rows: seconds waiting for the bus after a change, -1 on one bus
  *
- *   index1  stop code (the sampling key); 'error', 'timelapse', 'signal', 'active'
- *           and 'apperror' rows use their kind
+ *   index1  stop code (the sampling key); 'error', 'timelapse', 'signal', 'active',
+ *           'apperror' and 'tripwake' rows use their kind
  *
  * Two kinds give the columns their own meaning:
  *

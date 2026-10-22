@@ -1,8 +1,8 @@
 # terminus for Mac
 
 A menu bar app in SwiftUI. It shows when to leave in the menu bar; click it for
-the bus, your favourites, nearby stops and search. macOS 14 or later on Apple
-silicon.
+the bus, your favourites, nearby stops and search, and open the campus map in
+a window. macOS 14 or later on Apple silicon.
 
 ## Run it
 
@@ -46,7 +46,7 @@ hash, so the token is kept in a file only you can read instead
 Installed copies update themselves with [Sparkle](https://sparkle-project.org)
 (`Sources/Terminus/Updater.swift`): every 6 hours they check
 `/download/appcast.xml`, download a new version in the background and install
-it once the popover, Settings and Setup are all closed (or at quit). An update installs only if its DMG is signed
+it once the popover and every window (Settings, Setup, the map) are closed (or at quit). An update installs only if its DMG is signed
 with the update key (`SUPublicEDKey` in `Support/Info.plist`) and the app with
 the terminus certificate. `TERMINUS_APPCAST=<url>` points a build at a test feed. A release build only takes
 this and `TERMINUS_API_BASE` when they point at this Mac (localhost or 127.0.0.1).

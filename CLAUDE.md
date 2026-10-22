@@ -105,7 +105,7 @@ root path gets 426 from an app, 308 from anything else (`movedApi` in
    reads Google Play and APKCombo at most hourly and tries at most three new
    version strings on that stop per run, never one twice
    (`src/appversion.ts`). The beta's cron makes no health check: it reads
-   the breaker trips its own traffic noted (`src/feedwatch.ts`), and runs
+   the breakers its own traffic opened (`src/feedwatch.ts`), and runs
    the version search only while NUS is refusing the beta. Each push
    user's Trip object (`src/tripdo.ts`) wakes at most every 30 s to
    recompute the card, asking for its stops through the cache.
@@ -243,11 +243,13 @@ apps/api/
   src/answer.ts       The answer engine: stops near you, arrivals, the best option, worded
   src/card.ts         What every client shows, worded once (the card's lines)
   src/plan.ts, leave.ts  Which bus a trip is about; when to set off
-  src/profile.ts      The saved setup (validated) and the planner; day.ts is /api/me/day
+  src/profile.ts      The profile (validated) and the planner; day.ts is /api/me/day
   src/nusmods.ts      NUSMods timetable import
   src/walk.ts         Walking times along campus paths (walks.json)
   src/crowd.ts        Full buses, tallied as the Worker answers
   src/resolve.ts      Stop + bus choice: haversine, directional pairing, scoring
+  src/transfer.ts     A trip that changes buses once (TRANSFER in config)
+  src/calendar.ts     The academic calendar: which weeks and days a class runs
   src/format.ts       Labels/details and the degrade ladder (live → scheduled)
   src/fms.ts          NUS feed client + normalisation (see rule 3)
   src/lta.ts          LTA DataMall client: the public buses at a stop (see below)
@@ -264,14 +266,17 @@ apps/api/
   src/map.ts          /map/*: PMTiles street map, style, fonts, sprites from R2
   src/accounts.ts     Sign-in codes/links, sessions, anonymous accounts, pairing (D1)
   src/applogin.ts     App sign-in approved from the email (RFC 8628-like)
+  src/mail.ts         Every email's HTML, built with react-email (the plain text is beside it)
+  src/pairs.ts        /api/stops/pairs: every stop with its opposite stop
   src/trip.ts, tripdo.ts  Per-user Durable Object with today's trip signals
   src/outcomes.ts     How each trip went (taps, Not going) and what it suggests
   src/monitor.ts      15-minute cron: feed health, incidents, housekeeping
-  src/feedwatch.ts    The beta's feed health, from breaker trips its traffic noted
+  src/feedwatch.ts    The beta's feed health, from the breakers its own traffic opened
   src/calendarsync.ts The academic calendar, refreshed into KV by the cron
   src/push.ts, webpush.ts  Push: FCM to Android, Web Push to the installed web app
   src/access.ts       Who may call the keyed routes (an API key or a session)
   src/admin.ts        /api/admin/stats for the dashboard; analytics.ts logs to Analytics Engine
+  src/passkey.ts      Passkeys for the operator's pages (adding one needs HEALTH_TOKEN)
   src/collect.ts      The dashboard's switches for the statistics below, all off until turned on
   src/usage.ts, eta.ts, apperrors.ts  Daily active counts; the feed's arrival times against
                       the timelapse; crash reports (/api/errors), scrubbed, with no one on them
@@ -299,7 +304,8 @@ apps/api/
   scripts/            dev-stub.mjs; predeploy.mjs (first step of a deploy); scrapers (scrape_stops.py, scrape_lta.py,
                       route_shapes.py, fetch_calendar.py, walk_routes.py,
                       check_scraped.py);
-                      probe_buses.py (feed update-rate probe); record_buses.mjs (checks /api/buses on a live site);
+                      probe_buses.py (feed update-rate probe); probe_arrivals.py (how often
+                      arrival times change, run by hand); record_buses.mjs (checks /api/buses on a live site);
                       record_eta.mjs + eta_backtest.mjs (the arrival-time model's data and backtest);
                       render-timelapse.mjs (renders a recorded day headless, e.g. on a VPS);
                       vapid-key.mjs (makes the Web Push key, once)
@@ -319,7 +325,8 @@ apps/web/public/
                       and horizon), daylight.js (its colours by the hour), livery.js
                       (the services' stripes)
   app/                Installed web app: app.js (Now, tabs), buses.js (Buses tab), map.js
-                      (Map tab), map-files.js, offline.js
+                      (Map tab), board.js (a stop's board, shared by both), map-files.js,
+                      offline.js, pull.js (pull to refresh), timing.js (when Now refetches)
   admin/, status/, pair/, privacy/ (the summary; privacy/policy/ the full policy;
                       each with zh/), not-found/ (the Worker's 404 page)
   admin/timelapse/    Replays a recorded day on the map and exports a video
@@ -348,14 +355,17 @@ apps/macos/
   Tests/              swift test, on the API's answer fixtures
   build.sh            Builds terminus.app (CHANNEL=beta for the beta)
 scripts/              release.sh, release-beta.sh (+ release-lib.sh, their shared checks;
-                      verify-sparkle.swift), github-release.sh, package-mac.sh,
+                      verify-sparkle.swift, release-check.py), github-release.sh, package-mac.sh,
                       appcast.py, release-notes.py, map-tiles.sh (+ map-tiles.lock),
                       vendor-map.sh, vendor-maplibre-mac.sh, vendor-preact.sh,
-                      vendor-mediabunny.sh
+                      vendor-mediabunny.sh (+ vendor-lib.sh); android-deps.sh
+                      (+ android_deps.py); format-swift.sh
 marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (source), .pdf (print), .png
 .github/workflows/    ci.yml, scrape.yml (weekly data),
                       map-tiles.yml, probe-buses.yml (manual feed probe),
-                      record-buses.yml (manual: no bus switches sides after a deploy)
+                      probe-arrivals.yml (manual: how often arrival times change),
+                      record-buses.yml (manual: no bus switches sides after a deploy),
+                      android-deps.yml (lockfiles and hashes for Dependabot's Gradle PRs)
 ```
 
 ## How the core works (short version)
@@ -379,7 +389,7 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
   the cron also fetches it weekly into KV (`src/calendarsync.ts`), so it
   doesn't run out when nobody deploys.
 - **Answering.** `resolve.ts` picks candidate stops near the user, pairs each
-  stop with its twin across the road, checks the bus goes downstream to the
+  stop with its opposite stop across the road, checks the bus goes downstream to the
   destination, and scores the options by arrival time. Rides are
   `RIDE.secondsPerHop` a stop, no faster than `RIDE.longHopMs` over a long
   stretch (`RIDE` in config). Walking is
@@ -402,7 +412,7 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
   On failure it serves a stale answer if one exists (up to `staleMaxS`), and
   a failed stop isn't asked again for `failMemoS`. A version or key
   rejection, a 429 or 5xx, or no answer at all (a timeout, a failed
-  connection) trips a breaker. The uNivUS version string must track the
+  connection) opens a breaker. The uNivUS version string must track the
   Play Store; KV `config:appVersion` overrides the secret.
 - **Accounts.** D1. Sign-in is by emailed code or link. Apps get a device
   token: anonymous on first launch, then sign-in approved from the email, or
