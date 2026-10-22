@@ -131,35 +131,38 @@ struct SetupPage<Content: View, Buttons: View>: View {
     @AccessibilityFocusState private var titleFocused: Bool
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                Text(title)
-                    .font(.largeTitle.bold())
-                    .foregroundStyle(Color.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityAddTraits(.isHeader)
-                    .accessibilityFocused($titleFocused)
-                Text(sub)
-                    .font(.body)
-                    .foregroundStyle(Color.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 6)
-                    .padding(.bottom, 20)
-                content
-                if let message {
-                    Text(message)
-                        .font(.subheadline)
-                        .foregroundStyle(Color.bad)
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(title)
+                        .font(.largeTitle.bold())
+                        .foregroundStyle(Color.ink)
                         .fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, 14)
-                        .announced(message)
-                        .accessibilityIdentifier("setup.message")
+                        .accessibilityAddTraits(.isHeader)
+                        .accessibilityFocused($titleFocused)
+                    Text(sub)
+                        .font(.body)
+                        .foregroundStyle(Color.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 6)
+                        .padding(.bottom, 20)
+                    content
+                    if let message {
+                        Text(message)
+                            .font(.subheadline)
+                            .foregroundStyle(Color.bad)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, 14)
+                            .announced(message)
+                            .accessibilityIdentifier("setup.message")
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 20)
+                .padding(.top, 14)
+                .padding(.bottom, 24)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 20)
-            .padding(.top, 14)
-            .padding(.bottom, 24)
+            .environment(\.setupScroll, proxy)
         }
         .scrollDismissesKeyboard(.interactively)
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -280,5 +283,15 @@ struct SetupTwoColumns<Item: Hashable, Cell: View>: View {
                 }
             }
         }
+    }
+}
+
+private struct SetupScrollKey: EnvironmentKey { static var defaultValue: ScrollViewProxy? { nil } }
+
+extension EnvironmentValues {
+    /// The setup step's scroll view, for a search to bring its results into view above the keyboard.
+    var setupScroll: ScrollViewProxy? {
+        get { self[SetupScrollKey.self] }
+        set { self[SetupScrollKey.self] = newValue }
     }
 }

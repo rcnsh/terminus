@@ -135,7 +135,8 @@ private struct SetupUnplaced: View {
                                 .font(.subheadline.weight(.semibold))
                                 .accessibilityIdentifier("classes.skip.\(u.module).\(u.day)")
                         }
-                        SetupWherePicker(destinations: model.campus?.destinations ?? []) { d in
+                        SetupWherePicker(id: "where.\(u.module).\(u.day).\(u.arriveByMin)", destinations: model.campus?.destinations ?? [])
+                        { d in
                             withAnimation { model.place(u, to: d.goesTo) }
                         }
                     }
@@ -149,9 +150,11 @@ private struct SetupUnplaced: View {
 
 /// "Stop, building or room": the same search as Now's, the pick handed on.
 private struct SetupWherePicker: View {
+    let id: String
     let destinations: [Destination]
     let pick: (Destination) -> Void
     @State private var query = ""
+    @Environment(\.setupScroll) private var scroll
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -164,6 +167,11 @@ private struct SetupWherePicker: View {
             }
             .padding(10)
             .background(Color.surface2, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .id(id)
+            // The field to the top as the results come, or they'd be under the buttons and the keyboard.
+            .onChange(of: query.isEmpty) { _, empty in
+                if !empty { withAnimation { scroll?.scrollTo(id, anchor: .top) } }
+            }
             let found = rankDestinations(destinations, query, max: 6)
             if !query.trimmingCharacters(in: .whitespaces).isEmpty {
                 if found.isEmpty && !destinations.isEmpty {
