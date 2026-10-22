@@ -1197,6 +1197,20 @@ home stops serve, the walk to the nearest of them is your own `homeWalkMin`
 its other stops are as much further as the paths say. The same walk counts on
 the card, in walking the whole way, and on the Nearby tab.
 
+**In a building, the walk is by the paths from it too.** Within
+`WALK.atVenueM` of a building's point on the room map, and nearer it than to
+any stop, you're in it (`buildingStops` in [`walk.ts`](../src/walk.ts)): the
+stops are its `out` in `venues.json`, every stop within `WALK.maxRadiusM` with
+the routed walk from the building (`scripts/walk_routes.py`), and the far
+side of each one's road. The straight line with a stop's usual detour
+undersells a walk across a hill or a road with no crossing: from MD6, PGP is
+508 m that way and 771 m by the paths. A building `venue-stops.json` covers
+walks out only by its listed stops, since the paths can be wrong as well:
+from LT21, PGP is 400 m away in a straight line but nobody walks it, so the
+walk home goes by S17 and the bus from S17 wins. The same stops count for the
+bus, in walking the whole way, and on the Nearby tab. Outside every building
+and residence it's the straight line with the stop's detour, as before.
+
 **A room can have more than one stop.** A building between two stops is
 served by both (`stops` in `venues.json`, from `scripts/walk_routes.py`): its
 own stop, and one more when the walk to it is at most `VENUE_EXTRA_M` (100 m)
