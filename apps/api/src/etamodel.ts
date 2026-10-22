@@ -10,7 +10,10 @@
  *   Singapore hour where there are enough, are the SegmentTable.
  * - **Position.** A bus's last stop and when it passed it (busStates): the
  *   time still to go is the rest of its current segment, then each segment
- *   to the stop asked about (historicalEtaS).
+ *   to the stop asked about (historicalEtaS). Gated, only for a bus on its
+ *   way: not through a route's first stop, where buses wait for their
+ *   departure time, nor for a bus held far past its segment's usual time.
+ *   Each segment can take the times the buses just ahead drove it (recentS).
  * - **The feed.** Its own time, plus its usual error at that horizon for
  *   that service (bias), and the two blended by a weight per horizon
  *   (predictS). Without a position, or with no history for the stretch,
@@ -38,6 +41,8 @@ const MAX_SEGMENT_S = 20 * 60;
 const MAX_GAP_MS = 120_000;
 /** A bus's last stop is its position for this long after; older, it's lost. */
 const STATE_MAX_AGE_MS = 20 * 60_000;
+/** Overdue on its segment by this much (heldAfterS), a bus is taken as held; the gate refuses it. */
+const HELD = { factor: 2, overS: 120 };
 /** A bus still this far from its next stop when overdue: it is held, not there. */
 const OVERDUE_LEFT_S = 10;
 /**
@@ -136,11 +141,13 @@ export interface Segment {
   to: string;
   t: number;
   s: number;
+  /** When it could first be known: the passing at [to] seen, or [lagMs] after it. */
+  known: number;
 }
 
 /** Each bus's consecutive passings at adjacent stops of its route, as segments. */
-export function segmentsOf(passings: Passing[], routes: Record<string, Route>): Segment[] {
-  const byBus = new Map<string, Passing[]>();
+export function segmentsOf(passings: (Passing & { seen?: number })[], routes: Record<string, Route>, lagMs = 0): Segment[] {
+  const byBus = new Map<string, (Passing & { seen?: number })[]>();
   for (const p of passings) {
     const k = `${p.svc}|${p.plate}`;
     const list = byBus.get(k);
@@ -156,7 +163,7 @@ export function segmentsOf(passings: Passing[], routes: Record<string, Route>): 
       const route = routes[a.svc];
       const s = (b.t - a.t) / 1000;
       if (!route || s <= 0 || s > MAX_SEGMENT_S || !adjacent(route, a.stop, b.stop)) continue;
-      out.push({ svc: a.svc, from: a.stop, to: b.stop, t: a.t, s: Math.round(s) });
+      out.push({ svc: a.svc, from: a.stop, to: b.stop, t: a.t, s: Math.round(s), known: b.seen ?? b.t + lagMs });
     }
   }
   return out;
@@ -243,6 +250,73 @@ export function segmentS(table: SegmentTable, svc: string, from: string, to: str
   return (slot[0] * slot[1] + SLOT_PRIOR * all[1]) / (slot[0] + SLOT_PRIOR);
 }
 
+/**
+ * The bus ahead: segment times the service's buses have just driven count
+ * for those still to drive them. [windowMs]: how far back a segment still
+ * counts, by when it was known; [minN]: fewer than this, and history's
+ * median stands alone; [prior]: segments history's median is worth against
+ * the recent ones' (0: the recent median replaces it).
+ */
+export interface Recent {
+  windowMs: number;
+  minN: number;
+  prior: number;
+}
+
+export const RECENT: Recent = { windowMs: 30 * 60_000, minN: 2, prior: 0 };
+
+/** Segment times by `svc|from|to`, in the order they could be known: for recentS. */
+export type RecentIndex = Map<string, { known: number; s: number }[]>;
+
+export function recentIndex(segments: Segment[]): RecentIndex {
+  const out: RecentIndex = new Map();
+  for (const g of segments) {
+    const k = `${g.svc}|${g.from}|${g.to}`;
+    const list = out.get(k);
+    if (list) list.push({ known: g.known, s: g.s });
+    else out.set(k, [{ known: g.known, s: g.s }]);
+  }
+  for (const list of out.values()) list.sort((a, b) => a.known - b.known);
+  return out;
+}
+
+/** The segments from [from] to [to] known in the [windowMs] before [at], and never after: [count, median s], or null with none. */
+export function recentS(index: RecentIndex, svc: string, from: string, to: string, at: number, windowMs: number): [number, number] | null {
+  const list = index.get(`${svc}|${from}|${to}`);
+  if (!list) return null;
+  const xs: number[] = [];
+  for (let i = list.length - 1; i >= 0 && list[i].known > at - windowMs; i--) if (list[i].known <= at) xs.push(list[i].s);
+  return xs.length ? [xs.length, median(xs)] : null;
+}
+
+/**
+ * A bus this far into a segment usually taking [s] is held (or lost), not
+ * on its way: the gate's limit, twice the usual time and at least 2 minutes
+ * over (A1s have sat at PGP for 15 minutes).
+ */
+export function heldAfterS(s: number): number {
+  return Math.max(HELD.factor * s, s + HELD.overS);
+}
+
+/** How the walk to a stop is summed: see historicalEtaS. */
+export interface HistoryOptions {
+  /** Not through a route's first stop, where buses wait for their departure time. */
+  gate?: boolean;
+  /** Segments just driven, with these settings, beside history's medians. */
+  recent?: { index: RecentIndex; at: number } & Recent;
+}
+
+/** The time from [from] to [to] at [t]: history's median, with the buses just ahead's (HistoryOptions.recent) where there are enough. */
+function segmentWith(table: SegmentTable, svc: string, from: string, to: string, t: number, opts: HistoryOptions): number | null {
+  const hist = segmentS(table, svc, from, to, t);
+  const r = opts.recent;
+  if (!r) return hist;
+  const seen = recentS(r.index, svc, from, to, r.at, r.windowMs);
+  if (!seen || seen[0] < r.minN) return hist;
+  if (hist === null || r.prior <= 0) return seen[1];
+  return (seen[0] * seen[1] + r.prior * hist) / (seen[0] + r.prior);
+}
+
 /** Where a bus is: the last stop it reached, and when. */
 export interface BusState {
   plate: string;
@@ -299,7 +373,11 @@ export function busStates(passings: (Passing & { seen?: number })[], svc: string
  * shorter, once it's overdue), then each segment on to the target. A bus
  * that passed the target no more than [justPassedS] ago is there now;
  * otherwise it has the whole way round to go. Null when the target isn't
- * ahead on the route or a segment has no history.
+ * ahead on the route or a segment has no history; with [opts].gate, also
+ * when the way there leaves the route's first stop, the bus's own included:
+ * buses wait there for NUS's departure time (D1 has waited over 12 minutes
+ * at COM3), which the feed may know and travel times can't; and when the
+ * bus is so overdue on its current segment that it's held (heldAfterS).
  */
 export function historicalEtaS(
   table: SegmentTable,
@@ -309,6 +387,7 @@ export function historicalEtaS(
   target: string,
   at: number,
   justPassedS = 0,
+  opts: HistoryOptions = {},
 ): number | null {
   const elapsed = Math.max(0, (at - bus.t) / 1000);
   if (bus.stop === target && elapsed <= justPassedS) return 0;
@@ -320,9 +399,10 @@ export function historicalEtaS(
   let clock = bus.t;
   for (let step = 0; step < route.seq.length; step++) {
     const j = after(route, i);
-    if (j === null) return null;
-    const s = segmentS(table, svc, route.seq[i], route.seq[j], clock);
+    if (j === null || (opts.gate && i === 0)) return null;
+    const s = segmentWith(table, svc, route.seq[i], route.seq[j], clock, opts);
     if (s === null) return null;
+    if (first === null && opts.gate && elapsed > heldAfterS(s)) return null;
     first ??= s;
     total += s;
     clock += s * 1000;
@@ -361,16 +441,29 @@ export function biasS(model: Pick<EtaModel, 'bias'>, svc: string, feedS: number)
   return (own[0] * own[1] + BIAS_PRIOR * any[1]) / (own[0] + BIAS_PRIOR);
 }
 
-/** Every way of answering one question, s from now; null where it can't be. */
+/**
+ * Every way of answering one question, s from now; null where it can't be.
+ * [history] is history alone; [gated], history through the layover gate,
+ * and [recent], that with the buses just ahead (HistoryOptions), each the
+ * feed's time where they can't answer, as they would be served; [blend],
+ * the corrected feed with [recent]'s history.
+ */
 export interface Answers {
   feed: number | null;
   corrected: number | null;
   history: number | null;
+  gated: number | null;
+  recent: number | null;
   blend: number | null;
 }
 
 /** The model's answer from the feed's time and history's, either possibly missing. */
-export function predictS(model: EtaModel, svc: string, feedS: number | null, histS: number | null): Answers {
+export function predictS(
+  model: EtaModel,
+  svc: string,
+  feedS: number | null,
+  histS: number | null,
+): Pick<Answers, 'feed' | 'corrected' | 'history' | 'blend'> {
   const corrected = feedS === null ? null : Math.max(0, Math.round(feedS + biasS(model, svc, feedS)));
   let blend: number | null;
   if (corrected === null) blend = histS;
@@ -395,20 +488,30 @@ export interface Query {
 /**
  * History's answer to [q]: for a plate, that bus's; otherwise the soonest
  * of the service's buses. A bus that reached the stop within earlyS(q) is
- * there now; one before that has gone, and has a lap to come round.
+ * there now; one before that has gone, and has a lap to come round. With
+ * [opts].gate, the soonest is still picked as if ungated, so a bus waiting
+ * at the first stop isn't skipped for the one after it: when the soonest
+ * has to leave the first stop, it's null.
  */
-export function historyFor(table: SegmentTable, route: Route, states: BusState[], q: Query): number | null {
+export function historyFor(table: SegmentTable, route: Route, states: BusState[], q: Query, opts: HistoryOptions = {}): number | null {
   const early = earlyS(q);
+  const eta = (bus: BusState) => historicalEtaS(table, route, q.svc, bus, q.stop, q.t, early, opts);
   if (q.plate) {
     const bus = states.find((b) => b.plate === q.plate);
-    return bus ? historicalEtaS(table, route, q.svc, bus, q.stop, q.t, early) : null;
+    return bus ? eta(bus) : null;
   }
-  let best: number | null = null;
+  const ungated = { ...opts, gate: false };
+  let best: BusState | null = null;
+  let bestS = Infinity;
   for (const bus of states) {
-    const s = historicalEtaS(table, route, q.svc, bus, q.stop, q.t, early);
-    if (s !== null && (best === null || s < best)) best = s;
+    const s = historicalEtaS(table, route, q.svc, bus, q.stop, q.t, early, ungated);
+    if (s !== null && s < bestS) {
+      best = bus;
+      bestS = s;
+    }
   }
-  return best;
+  if (!best) return null;
+  return opts.gate ? eta(best) : bestS;
 }
 
 /**
@@ -450,26 +553,40 @@ export interface Case {
   feedS: number;
   actualS: number;
   answers: Answers;
+  /** History's own answers, null where it couldn't: alone, gated, and gated with the buses just ahead (the blend's). */
+  hist: { alone: number | null; gated: number | null; recent: number | null };
 }
 
-/** Each query with a feed time, an actual arrival and history's view, answered by [model]. */
-export function casesOf(model: EtaModel, routes: Record<string, Route>, rec: Recorded): Case[] {
+/**
+ * Each query with a feed time, an actual arrival and history's view,
+ * answered by [model]. The buses just ahead come from [rec]'s own
+ * segments, each only once it could be known, with [recent]'s settings.
+ */
+export function casesOf(model: EtaModel, routes: Record<string, Route>, rec: Recorded, recent: Recent = RECENT): Case[] {
   const index = passingIndex(rec.passings);
   const states = stateIndex(rec.passings, rec.lagMs);
+  const driven = recentIndex(segmentsOf(rec.passings, routes, rec.lagMs));
   const out: Case[] = [];
   for (const q of rec.queries) {
     const route = routes[q.svc];
     if (!route || q.etaS === null) continue;
     const came = actualFor(q, index);
     if (came === null) continue;
-    const hist = historyFor(model.table, route, statesAt(states, q.svc, q.t), q);
+    const buses = statesAt(states, q.svc, q.t);
+    const hist = {
+      alone: historyFor(model.table, route, buses, q),
+      gated: historyFor(model.table, route, buses, q, { gate: true }),
+      recent: historyFor(model.table, route, buses, q, { gate: true, recent: { ...recent, index: driven, at: q.t } }),
+    };
+    const blended = predictS(model, q.svc, q.etaS, hist.recent);
     out.push({
       svc: q.svc,
       stop: q.stop,
       t: q.t,
       feedS: q.etaS,
       actualS: (came - q.t) / 1000,
-      answers: predictS(model, q.svc, q.etaS, hist),
+      answers: { ...blended, history: hist.alone, gated: hist.gated ?? q.etaS, recent: hist.recent ?? q.etaS },
+      hist,
     });
   }
   return out;
@@ -479,7 +596,8 @@ const WEIGHT_STEPS = 10;
 
 /**
  * For each horizon, the blend's summed absolute error at each weight on
- * history from 0 to 1 in tenths, over the cases history could answer, and
+ * history from 0 to 1 in tenths, over the cases the blend's history (gated,
+ * with the buses just ahead) could answer, and
  * how many there were. Sums add up across days, so a day's grid can be kept
  * and the weights fitted from many.
  */
@@ -492,13 +610,14 @@ export function weightGrid(model: Pick<EtaModel, 'bias'>, cases: Case[]): Weight
   const sums = HORIZONS.map(() => Array.from({ length: WEIGHT_STEPS + 1 }, () => 0));
   const n = HORIZONS.map(() => 0);
   for (const c of cases) {
-    if (c.answers.history === null) continue;
+    const hist = c.hist.recent;
+    if (hist === null) continue;
     const h = horizonOf(c.feedS);
     const corrected = Math.max(0, c.feedS + biasS(model, c.svc, c.feedS));
     n[h]++;
     for (let k = 0; k <= WEIGHT_STEPS; k++) {
       const w = k / WEIGHT_STEPS;
-      sums[h][k] += Math.abs(c.actualS - (w * c.answers.history + (1 - w) * corrected));
+      sums[h][k] += Math.abs(c.actualS - (w * hist + (1 - w) * corrected));
     }
   }
   return { sums: sums.map((row) => row.map((x) => Math.round(x))), n };
@@ -571,7 +690,7 @@ export function errorStats(errs: number[]): ErrorStats {
   };
 }
 
-export const METHODS = ['feed', 'corrected', 'history', 'blend'] as const;
+export const METHODS = ['feed', 'corrected', 'history', 'gated', 'recent', 'blend'] as const;
 export type Method = (typeof METHODS)[number];
 
 /**

@@ -63,10 +63,23 @@ beyond the language.
    only once it could have been (a poll after): the rest of its current
    segment, at least 10 s once it's overdue, then each segment to the stop
    (`historicalEtaS`). Without a plate, the soonest of the service's buses.
-4. **The feed corrected.** The feed's time plus its median error for that
+4. **The gate.** History answers only for a bus on its way. It refuses
+   (and the feed's time stands) when the way to the stop leaves a route's
+   first stop, the bus's own included, since buses wait there for NUS's
+   departure time (A1 and A2 at KRB, D1 and D2 at COM3), which travel times
+   can't predict; and when the bus is over twice its current segment's usual
+   time into it, and at least 2 minutes over (`heldAfterS`), since it's held
+   or lost. Without a plate, the soonest bus is still picked as if ungated,
+   so one waiting at the first stop isn't swapped for the one after it.
+5. **The buses just ahead.** Each segment's time is the median of the
+   service's own buses that drove it in the last 30 minutes, when there are
+   at least 2, instead of history's (`Recent`, `recentS`). A segment counts
+   only once it could be known (the reading that showed its end), so no
+   answer sees anything from after it was asked.
+6. **The feed corrected.** The feed's time plus its median error for that
    service at that horizon in the training data (`biasS`).
-5. **The blend.** Per horizon (under 2 min, 2 to 5, 5 to 10, 10 to 30), a
-   weight on history against the corrected feed, picked in tenths to
+7. **The blend.** Per horizon (under 2 min, 2 to 5, 5 to 10, 10 to 30), a
+   weight on history (gated, with the buses just ahead) against the corrected feed, picked in tenths to
    minimise absolute error (`weightGrid`, `weightsFrom`; ties go to the
    feed). Without history it's the corrected feed; without the feed,
    history.
@@ -76,8 +89,13 @@ Nothing in the answer path calls it. Users see the feed's times as before.
 ## The backtest (`scripts/eta_backtest.mjs`)
 
 Fits the model on the earlier data and scores the feed, the corrected
-feed, history and the blend on later data it never saw, all on the same
-questions (those history could answer, with the share given). It reports
+feed, history, history+gate, history+gate+recent and the blend on later
+data it never saw, all on the same questions (those ungated history could
+answer, with the share given). The gated methods fall back to the feed's
+time where the gate refuses, as they would be served; a second table
+compares them with the feed on just the questions the gate lets through.
+`--recent-min`, `--recent-n` and `--recent-prior` change the buses just
+ahead's settings. It reports
 MAE, the median and 90th-percentile absolute error and the mean signed
 error, overall and by horizon. Errors are the actual arrival minus the
 time given: positive is the bus coming later.

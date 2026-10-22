@@ -17,6 +17,7 @@ import {
   casesOf,
   errorStats,
   fitModel,
+  heldAfterS,
   historicalEtaS,
   historyFor,
   horizonOf,
@@ -24,6 +25,8 @@ import {
   passingsFromReadings,
   predictS,
   quantile,
+  recentIndex,
+  recentS,
   ringOf,
   scoreCases,
   segmentS,
@@ -137,6 +140,20 @@ test('replaying the real feed every 20 s finds the same arrivals as every 5 s, t
     driving.every((g) => g.s >= 5 && g.s <= 8 * 60),
     'stop to stop in seconds to minutes',
   );
+  // The gate: history won't sum a D1 at COM3 through its layover, but will one on its way.
+  const table = buildTable(segments);
+  const atCom3 = fine.find((p) => p.svc === 'D1' && p.stop === 'COM3');
+  assert.ok(atCom3, 'a D1 reaches COM3 in the trace');
+  const bus = { plate: atCom3.plate, stop: 'COM3', t: atCom3.t };
+  const ungated = historicalEtaS(table, routes.D1, 'D1', bus, routes.D1.seq[1], atCom3.t);
+  assert.ok(ungated > 5 * 60, `${ungated} s: the layover summed as if driven`);
+  assert.equal(historicalEtaS(table, routes.D1, 'D1', bus, routes.D1.seq[1], atCom3.t, 0, { gate: true }), null);
+  const moving = driving.find((g) => g.svc === 'D1');
+  const ahead = routes.D1.seq[(routes.D1.seq.indexOf(moving.to) + 1) % routes.D1.seq.length];
+  const on = { plate: 'X', stop: moving.to, t: moving.t + moving.s * 1000 };
+  const driven = historicalEtaS(table, routes.D1, 'D1', on, ahead, on.t);
+  assert.ok(driven !== null && ahead !== routes.D1.seq[0], `a D1 at ${moving.to} heading for ${ahead}`);
+  assert.equal(historicalEtaS(table, routes.D1, 'D1', on, ahead, on.t, 0, { gate: true }), driven, 'gated or not, the same');
 });
 
 /** A passing: [plate] reached [stop] at T0 + [s] seconds. */
@@ -187,6 +204,69 @@ test("history's time: the rest of the bus's segment, then each one on to the sto
   const line = buildTable([{ svc: 'O', from: 'P', to: 'Q', t: T0, s: 60 }]);
   assert.equal(historicalEtaS(line, LINE, 'O', { plate: 'PB1', stop: 'Q', t: T0 }, 'P', T0), null, 'behind it on a one-way route');
   assert.equal(historicalEtaS(line, LINE, 'O', { plate: 'PB1', stop: 'P', t: T0 }, 'R', T0), null, 'Q to R never driven');
+});
+
+test("the gate: history only for a bus on its way, not through a loop's first stop or held", () => {
+  const gate = { gate: true };
+  const bus = { plate: 'PA1', stop: 'B', t: T0 };
+  assert.equal(historicalEtaS(TABLE, LOOP, 'L', bus, 'D', T0, 0, gate), 140, 'B to D: no first stop on the way');
+  assert.equal(historicalEtaS(TABLE, LOOP, 'L', { ...bus, stop: 'A' }, 'C', T0, 0, gate), null, 'at A, the first stop: waiting there');
+  assert.equal(historicalEtaS(TABLE, LOOP, 'L', { ...bus, stop: 'D' }, 'B', T0, 0, gate), null, 'D to B goes through A');
+  assert.equal(historicalEtaS(TABLE, LOOP, 'L', { ...bus, stop: 'D' }, 'A', T0, 0, gate), 100, 'D to A ends there: arriving is driving');
+  // B to C takes 90 s: held past max(2 × 90, 90 + 120) = 210 s.
+  assert.equal(heldAfterS(90), 210);
+  assert.equal(historicalEtaS(TABLE, LOOP, 'L', bus, 'C', T0 + 200 * S, 0, gate), 10, 'overdue, not yet held');
+  assert.equal(historicalEtaS(TABLE, LOOP, 'L', bus, 'C', T0 + 211 * S, 0, gate), null, 'held');
+  assert.equal(historicalEtaS(TABLE, LOOP, 'L', bus, 'C', T0 + 211 * S), 10, 'without the gate, still 10 s away');
+});
+
+test("with the gate, the next bus of any plate is still the soonest: one waiting at the first stop isn't skipped", () => {
+  const states = [
+    { plate: 'PA1', stop: 'A', t: T0 },
+    { plate: 'PA2', stop: 'D', t: T0 },
+  ];
+  const q = { t: T0, svc: 'L', stop: 'C', etaS: 120 };
+  assert.equal(historyFor(TABLE, LOOP, states, q), 150, 'PA1, from A');
+  assert.equal(historyFor(TABLE, LOOP, states, q, { gate: true }), null, 'PA1 must leave A: the feed, not PA2 a lap later');
+  const held = [{ plate: 'PA3', stop: 'B', t: T0 - 300 * S }, ...states];
+  assert.equal(historyFor(TABLE, LOOP, held, q), 10, 'PA3, overdue between B and C');
+  assert.equal(historyFor(TABLE, LOOP, held, q, { gate: true }), null, 'PA3 is held: the feed');
+  assert.equal(historyFor(TABLE, LOOP, [{ plate: 'PA4', stop: 'B', t: T0 }], q, { gate: true }), 90);
+});
+
+test('the buses just ahead: segments driven in the last half hour, only once known, replace the median', () => {
+  const segs = [
+    { svc: 'L', from: 'B', to: 'C', t: T0 - 50 * 60 * S, s: 300, known: T0 - 45 * 60 * S },
+    { svc: 'L', from: 'B', to: 'C', t: T0 - 10 * 60 * S, s: 120, known: T0 - 8 * 60 * S },
+    { svc: 'L', from: 'B', to: 'C', t: T0 - 6 * 60 * S, s: 140, known: T0 - 4 * 60 * S },
+    // Driven before T0 but not known until after it.
+    { svc: 'L', from: 'B', to: 'C', t: T0 - 2 * 60 * S, s: 900, known: T0 + 10 * S },
+  ];
+  const index = recentIndex(segs);
+  const window = 30 * 60_000;
+  assert.deepEqual(recentS(index, 'L', 'B', 'C', T0, window), [2, 130], 'not the one 45 minutes ago, nor the one not yet known');
+  assert.deepEqual(recentS(index, 'L', 'B', 'C', T0 + 10 * S, window), [3, 140]);
+  assert.equal(recentS(index, 'L', 'C', 'D', T0, window), null);
+  const bus = { plate: 'PA1', stop: 'B', t: T0 };
+  const recent = (o) => ({ gate: true, recent: { index, at: T0, windowMs: window, minN: 2, prior: 0, ...o } });
+  assert.equal(historicalEtaS(TABLE, LOOP, 'L', bus, 'D', T0, 0, recent()), 180, 'B to C 130 s, as just driven, then C to D 50 s');
+  assert.equal(historicalEtaS(TABLE, LOOP, 'L', bus, 'D', T0, 0, recent({ minN: 3 })), 140, 'too few: the median');
+  // (2 × 130 + 2 × 90) / 4 = 110
+  assert.equal(historicalEtaS(TABLE, LOOP, 'L', bus, 'D', T0, 0, recent({ prior: 2 })), 160, 'shrunk towards the median');
+});
+
+test("the model's cases never use a segment driven after the question", () => {
+  const rec = morning({ minutes: 40 });
+  // A bus that crawls B to C long after every question: it mustn't change any earlier answer.
+  const crawl = [at('B', 3000, 'PZ'), at('C', 3600, 'PZ')];
+  const model = fitModel({ L: LOOP }, [morning({ minutes: 60 })]);
+  const before = casesOf(model, { L: LOOP }, rec).filter((c) => c.t < T0 + 3000 * S);
+  const after = casesOf(model, { L: LOOP }, { ...rec, passings: [...rec.passings, ...crawl] }).filter((c) => c.t < T0 + 3000 * S);
+  assert.deepEqual(
+    after.map((c) => c.hist),
+    before.map((c) => c.hist),
+  );
+  assert.ok(before.some((c) => c.hist.recent !== null));
 });
 
 test('a bus is where it was last seen to be, and only from when that could be known', () => {
