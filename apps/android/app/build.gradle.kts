@@ -22,12 +22,12 @@ android {
     productFlavors {
         create("stable") {
             dimension = "channel"
-            site("https://terminus.run", "sh.rcn.terminus", "terminus", "terminus.rcn.sh")
+            site("https://terminus.run", "sh.rcn.terminus", "terminus")
         }
         create("beta") {
             dimension = "channel"
             applicationIdSuffix = ".beta"
-            site("https://beta.terminus.run", "sh.rcn.terminus.beta", "terminus beta", "beta.terminus.rcn.sh")
+            site("https://beta.terminus.run", "sh.rcn.terminus.beta", "terminus beta")
             // Its own version line, from scripts/release-beta.sh: the next
             // stable version's pre-release (2.0.1-beta.3), numbered by commit.
             providers.gradleProperty("betaVersion").orNull?.let { versionName = it }
@@ -115,17 +115,16 @@ androidComponents {
 /**
  * One channel's site and name. SITE is the address people see, the one the app's text names, and the one requests go to (API_BASE) and
  * links open (LINK_BASE): the project's own domain, which goes with it if someone else takes it over. In a debug build given `-PapiBase`
- * (above), requests go there instead. SERVERS are the site's addresses the developer menu offers too (Servers.kt): SITE, then the old one,
- * the backup a request tries when the chosen address can't be reached at all.
+ * (above), requests go there instead. SERVERS are the site's addresses the developer menu offers too (Servers.kt): only SITE, since the old
+ * address (terminus.rcn.sh) is the owner's and doesn't go with the project. A second one would be the backup a request tries when the
+ * chosen address can't be reached at all.
  */
-fun com.android.build.api.dsl.ApplicationProductFlavor.site(site: String, packageName: String, name: String, oldHost: String) {
+fun com.android.build.api.dsl.ApplicationProductFlavor.site(site: String, packageName: String, name: String) {
     buildConfigField("String", "SITE", "\"$site\"")
     buildConfigField("String", "API_BASE", "\"$site\"")
     buildConfigField("String", "LINK_BASE", "\"$site\"")
-    buildConfigField("String", "SERVERS", "\"$site https://$oldHost\"")
+    buildConfigField("String", "SERVERS", "\"$site\"")
     manifestPlaceholders["siteHost"] = site.removePrefix("https://")
-    // The old address, the backup, whose pairing links (from older apps) open it too.
-    manifestPlaceholders["oldSiteHost"] = oldHost
     resValue("string", "app_name", name)
     // Push: this package's Firebase app from google-services.json (not in
     // git; see apps/android/README.md). Without it the fields are empty and

@@ -37,8 +37,8 @@ enum TokenStore {
 
     /// The beta, and the dev stub (the developer menu, or TERMINUS_API_BASE),
     /// keep their own token, so neither signs this Mac out of the real one,
-    /// and the real one is never sent to the stub. The site's two addresses
-    /// are one server, with one token.
+    /// and the real one is never sent to the stub. The site's addresses are
+    /// one server, with one token.
     private static var folderName: String {
         let site = Servers.choices.filter { !Servers.isLocal($0) }
         return !site.contains(Api.base) ? "terminus-dev" : Api.isBeta ? "terminus-beta" : "terminus"

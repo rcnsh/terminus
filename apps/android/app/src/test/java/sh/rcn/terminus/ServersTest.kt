@@ -60,6 +60,15 @@ class ServersTest {
     }
 
     @Test
+    fun theSiteAloneHasNoBackup() {
+        // As built: the site's own address and nothing else, so a request is never sent to an address that doesn't go with the project.
+        assertEquals(BuildConfig.SITE, BuildConfig.SERVERS)
+        val built = Servers.all(BuildConfig.SITE, listOf(BuildConfig.SERVERS), debug = true)
+        assertNull(Servers.backup(BuildConfig.SITE, built))
+        assertEquals(listOf(BuildConfig.SITE), Servers.order(BuildConfig.SITE, built, null))
+    }
+
+    @Test
     fun onlyAServerNeverReachedIsTriedAgainElsewhere() {
         // A firewall's reset during the TLS handshake, no DNS, refused: the request never arrived.
         for (method in listOf("GET", "POST")) {

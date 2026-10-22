@@ -7,7 +7,7 @@ a window. macOS 14 or later on Apple silicon.
 ## Run it
 
 ```bash
-swift run                                            # against terminus.run (terminus.rcn.sh as backup)
+swift run                                            # against terminus.run
 TERMINUS_API_BASE=http://localhost:8787 swift run    # against the dev stub
 swift test                                           # tests on the API's answer fixtures
 ./build.sh                                           # build/terminus.app
