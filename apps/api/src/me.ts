@@ -104,7 +104,7 @@ import { landmark } from './landmarks.ts';
 import { GRAPH_PUBLIC, nearbyTwin, twinOf } from './graph.ts';
 import { residenceStops } from './residences.ts';
 import { MAX_KEYS, createKey, listKeys, revokeKey } from './access.ts';
-import { footM, paceSpeed } from './walk.ts';
+import { buildingStops, footM, paceSpeed } from './walk.ts';
 import { clientKey, coordsFrom, json } from './http.ts';
 import { linkOrigin } from './site.ts';
 import { LANG_PREFS, lang, m, useProfileLang } from './i18n.ts';
@@ -1549,10 +1549,11 @@ async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: numbe
     .map((stop) => ({ stop, distM: haversineM(lat!, lon!, stop.lat, stop.lon), footM: footM(lat!, lon!, stop) }))
     .sort((a, b) => a.distM - b.distM);
   const near = ranked.filter((c) => c.distM <= WALK.maxRadiusM).slice(0, WALK.maxCandidates);
-  // In a residence: its own stops, walked by the paths, like /me/next,
-  // and at home your own walk to your stop.
+  // In a residence or a building: its own stops, walked by the paths, like
+  // /me/next, and at home your own walk to your stop.
   const homeWalk = profile.home ? { stops: profile.home.stops, m: profile.homeWalkMin * 60 * paceSpeed(profile.walkPace) } : null;
-  const picked = residenceStops(lat, lon, idx.byCode, homeWalk)?.slice(0, WALK.maxCandidates) ?? (near.length ? near : ranked.slice(0, 1));
+  const inside = residenceStops(lat, lon, idx.byCode, homeWalk) ?? buildingStops(lat, lon, idx.byCode);
+  const picked = inside?.slice(0, WALK.maxCandidates) ?? (near.length ? near : ranked.slice(0, 1));
   // The nearest stop's twin (across the road, or PGP and PGP Foyer), always:
   // a location a few metres out puts you at the wrong one, and the widget
   // offers the other.

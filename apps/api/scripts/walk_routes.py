@@ -83,6 +83,9 @@ OPPOSITES = json.loads((ROOT / "data/opposites.json").read_text())["pairs"]
 # stops across the road), so leaving a class never fans out into many fetches.
 VENUE_EXTRA_M = 100
 MAX_VENUE_STOPS = 2
+# The stops a building's `out` lists: every one this close in a straight
+# line, as the planner looks that far for stops (WALK.maxRadiusM).
+OUT_RADIUS_M = 450
 
 WALKABLE = "footway|path|pedestrian|steps|corridor|living_street|residential|service|unclassified|tertiary|secondary|primary|cycleway|track|crossing"
 # Stairs take longer than their length suggests.
@@ -324,6 +327,15 @@ def main():
                 out[s] = round(w)
         return out
 
+    def walks_out(code, pt, serving):
+        """The stops you walk to from inside a building, with the routed walk
+        to each: the hand-kept ones when it has them (the paths say a stop is
+        near that nobody can reach), else every stop in reach."""
+        if code in VENUE_STOPS:
+            return dict(serving)
+        near = sorted((w, s) for s in stop_pt if haversine(pt, stop_pt[s]) <= OUT_RADIUS_M and (w := routed(s, pt)) is not None)
+        return {s: round(w) for w, s in near}
+
     # Buildings: routed walk to their stop; a detour ratio sample per stop.
     coords = buildings(rooms)
     ratios = {}
@@ -372,6 +384,11 @@ def main():
         else:
             # Read back from the last run: a building down to one stop drops the list.
             venues[code].pop("stops", None)
+        # Standing in the building, the walk to a stop by the paths, not the
+        # straight line: a hill or a road with no crossing can be between.
+        out = walks_out(code, pt, serving)
+        if out:
+            venues[code]["out"] = out
 
     # Rooms uNivUS lists on their own (COM1-0208): served by their building's
     # stops, walked from the room where NUSMods places it. A room uNivUS puts
