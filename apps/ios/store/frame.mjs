@@ -18,6 +18,7 @@
 //
 //   node apps/ios/store/frame.mjs            # all of them
 //   node apps/ios/store/frame.mjs 3-map      # one, both languages
+//   node apps/ios/store/frame.mjs header     # the product page's header
 //
 // Draws with Chromium, headless: CHROME if set, else Playwright's download
 // (~/Library/Caches/ms-playwright), else Google Chrome. The Chinese uses the
@@ -153,11 +154,11 @@ const HOME = {
  * shuttles carry on across the joins. The sky and the stars are drawn at this
  * page's size; the landscape is the Play set's drawing, scaled.
  */
-function panoramaScript() {
+function panoramaScript({ dw = W, dh = H, scale = S, landY = LAND_Y, clear = true, even = false } = {}) {
   const phases = SLIDES.map((s) => SKIES[s.sky]);
   return `(() => {
   const P = ${JSON.stringify(phases)};
-  const DW = ${W}, DH = ${H}, S = ${S}, LAND_Y = ${LAND_Y};
+  const DW = ${dw}, DH = ${dh}, S = ${scale}, LAND_Y = ${landY}, CLEAR = ${clear}, EVEN = ${even};
   const W = 1080, H = 1920, N = P.length, PW = W * N;
   const c = document.getElementById('pano');
   const g = c.getContext('2d');
@@ -168,7 +169,7 @@ function panoramaScript() {
   const at = (x) => {
     const f = Math.min(N - 1, Math.max(0, x / W - 0.5));
     const i = Math.min(N - 2, Math.floor(f)), t = f - i;
-    const e = t < 0.25 ? 0 : t > 0.75 ? 1 : (t - 0.25) / 0.5;
+    const e = EVEN ? t : t < 0.25 ? 0 : t > 0.75 ? 1 : (t - 0.25) / 0.5;
     return [i, e * e * (3 - 2 * e)];
   };
   const col = (x, key, k) => { const [i, t] = at(x); const a = k === undefined ? P[i][key] : P[i][key][k], b = k === undefined ? P[i + 1][key] : P[i + 1][key][k]; return mix(a, b, t); };
@@ -186,8 +187,8 @@ function panoramaScript() {
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   for (let n = 0; n < 640; n++) {
     const x = rnd() * DW * N, y = rnd() * (1380 * S + LAND_Y), local = x % DW;
-    const words = y > 80 && y < 540 && local > 60 && local < DW - 60;
-    const phone = y > ${PHONE_TOP - 40} && local > ${(W - SCREEN_W) / 2 - BEZEL - 40} && local < ${(W + SCREEN_W) / 2 + BEZEL + 40};
+    const words = CLEAR && y > 80 && y < 540 && local > 60 && local < DW - 60;
+    const phone = CLEAR && y > ${PHONE_TOP - 40} && local > ${(W - SCREEN_W) / 2 - BEZEL - 40} && local < ${(W + SCREEN_W) / 2 + BEZEL + 40};
     const a = dark(x / S) * (0.35 + rnd() * 0.6);
     if (words || phone || a < 0.05) continue;
     g.fillStyle = 'rgba(255,255,255,' + a.toFixed(2) + ')';
@@ -364,6 +365,27 @@ function page(index, lang) {
   </body></html>`;
 }
 
+// The product page's header (App Store Connect's 3840×1646): the same strip
+// without the phones or words, since the App Store crops it to each screen
+// and sets the app's name beside it. The whole day would leave the land a
+// thin line at this shape, so it shows golden hour to night, larger, from
+// just past the morning's shuttle, the hours blending evenly across it, as
+// no phone covers the joins.
+const HEADER = { w: 3840, h: 1646, from: 2.15 };
+
+function headerPage() {
+  const dw = HEADER.w / (SLIDES.length - HEADER.from);
+  const scale = dw / 1080;
+  const opts = { dw, dh: HEADER.h, scale, landY: HEADER.h - 1920 * scale, clear: false, even: true };
+  return `<!doctype html><html><head><meta charset="utf-8"><style>
+    html, body { margin: 0; width: ${HEADER.w}px; height: ${HEADER.h}px; overflow: hidden; position: relative; }
+    #pano { position: absolute; top: 0; left: -${Math.round(HEADER.from * dw)}px; }
+  </style></head><body>
+    <canvas id="pano" width="${Math.ceil(dw * SLIDES.length)}" height="${HEADER.h}"></canvas>
+    <script>${panoramaScript(opts)}</script>
+  </body></html>`;
+}
+
 function chrome() {
   if (process.env.CHROME) return process.env.CHROME;
   const cache = join(homedir(), 'Library/Caches/ms-playwright');
@@ -384,7 +406,30 @@ function chrome() {
 const only = process.argv[2];
 const bin = chrome();
 const tmp = mkdtempSync(join(tmpdir(), 'terminus-frames-'));
+function shoot(html, out, w, h) {
+  execFileSync(
+    bin,
+    [
+      '--headless',
+      '--disable-gpu',
+      '--hide-scrollbars',
+      '--force-device-scale-factor=1',
+      '--allow-file-access-from-files',
+      '--virtual-time-budget=3000',
+      `--window-size=${w},${h}`,
+      `--screenshot=${out}`,
+      pathToFileURL(html).href,
+    ],
+    { stdio: 'ignore' },
+  );
+  console.log(`wrote ${out}`);
+}
 try {
+  if (!only || only === 'header') {
+    const html = join(tmp, 'header.html');
+    writeFileSync(html, headerPage());
+    shoot(html, join(here, 'header.png'), HEADER.w, HEADER.h);
+  }
   SLIDES.forEach((slide, index) => {
     if (only && slide.file !== only) return;
     for (const lang of ['en', 'zh']) {
@@ -392,23 +437,7 @@ try {
       mkdirSync(outDir, { recursive: true });
       const html = join(tmp, `${lang}-${slide.file}.html`);
       writeFileSync(html, page(index, lang));
-      const out = join(outDir, `${slide.file}.png`);
-      execFileSync(
-        bin,
-        [
-          '--headless',
-          '--disable-gpu',
-          '--hide-scrollbars',
-          '--force-device-scale-factor=1',
-          '--allow-file-access-from-files',
-          '--virtual-time-budget=3000',
-          `--window-size=${W},${H}`,
-          `--screenshot=${out}`,
-          pathToFileURL(html).href,
-        ],
-        { stdio: 'ignore' },
-      );
-      console.log(`wrote ${out}`);
+      shoot(html, join(outDir, `${slide.file}.png`), W, H);
     }
   });
 } finally {
