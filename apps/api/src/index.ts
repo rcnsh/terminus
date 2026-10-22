@@ -38,11 +38,12 @@ import { residenceList } from './residences.ts';
 import { ACCOUNTS_DOWN, callerOrDown, d1Unavailable, recentCallerFor } from './access.ts';
 import { fcmEnabled } from './push.ts';
 import { webPushEnabled } from './webpush.ts';
+import { apnsEnabled } from './apns.ts';
 import { handleTimelapse } from './timelapse.ts';
 import { scopeCache } from './edgecache.ts';
 
 import { GRAPH, GRAPH_PUBLIC, oppositeOf } from './graph.ts';
-import { isBeta, linkOrigin, markBeta, movedApi, movedPage } from './site.ts';
+import { appSiteAssociation, isBeta, linkOrigin, markBeta, movedApi, movedPage } from './site.ts';
 import { noteLegacy } from './legacy.ts';
 import { answerFor, arrivedAnswer, collectArrivals, needsSetupAnswer } from './answer.ts';
 import { lang, langOfRequest, m, withLang } from './i18n.ts';
@@ -403,6 +404,7 @@ async function handleHealth(req: Request, url: URL, env: Env, nowMs: number): Pr
         // Set and usable: a secret that won't parse turns that push off.
         pushAndroid: fcmEnabled(env),
         pushWeb: webPushEnabled(env),
+        pushIos: apnsEnabled(env),
       },
       // From the cron probe: whether the NUS feed answered, and since when.
       upstream: u
@@ -550,6 +552,15 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
         return new Response(robotsTxt(env), {
           headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'public, max-age=3600' },
         });
+      case '/.well-known/apple-app-site-association': {
+        // On every address of the site, never redirected (STAYS in site.ts):
+        // Apple fetches it from each domain the app claims.
+        const aasa = appSiteAssociation(env);
+        if (!aasa) return json({ error: 'not found' }, 404);
+        return new Response(JSON.stringify(aasa), {
+          headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=3600' },
+        });
+      }
       case '/llms.txt':
         return new Response(llmsTxt(url.origin), {
           headers: { 'content-type': 'text/markdown; charset=utf-8', 'cache-control': 'public, max-age=3600' },

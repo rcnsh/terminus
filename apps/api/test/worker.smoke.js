@@ -163,6 +163,7 @@ test('/api/health reports what is configured without leaking any of it', async (
   assert.equal(h.config.proxy, true);
   assert.equal(h.config.pushAndroid, false, 'no Firebase account in this env');
   assert.equal(h.config.pushWeb, false);
+  assert.equal(h.config.pushIos, false, 'no APNs key in this env');
   assert.match(h.graph.source, /scrape_stops\.py/, 'the graph comes from our own scraper');
   assert.ok(h.graph.services.includes('D2'));
 
@@ -222,6 +223,7 @@ test('the apps and the API docs carry the same version and build number', async 
   const { readFileSync } = await import('node:fs');
   const gradle = readFileSync(new URL('../../android/app/build.gradle.kts', import.meta.url), 'utf8');
   const plist = readFileSync(new URL('../../macos/Support/Info.plist', import.meta.url), 'utf8');
+  const xcodegen = readFileSync(new URL('../../ios/project.yml', import.meta.url), 'utf8');
   // Exactly one match each, so a second definition can't hide behind the first.
   const only = (text, re, what) => {
     const all = [...text.matchAll(re)];
@@ -251,6 +253,15 @@ test('the apps and the API docs carry the same version and build number', async 
     macBuild,
     versionCode,
     'CFBundleVersion in apps/macos/Support/Info.plist matches versionCode in apps/android/app/build.gradle.kts',
+  );
+  // The iPhone app's, set once in project.yml's settings (its Info.plists read them).
+  const iosVersion = only(xcodegen, /^\s*MARKETING_VERSION: "?([^"\s]+)"?\s*$/gm, 'MARKETING_VERSION in apps/ios/project.yml');
+  const iosBuild = only(xcodegen, /^\s*CURRENT_PROJECT_VERSION: "?([^"\s]+)"?\s*$/gm, 'CURRENT_PROJECT_VERSION in apps/ios/project.yml');
+  assert.equal(API_VERSION, iosVersion, 'API_VERSION in src/openapi.ts matches MARKETING_VERSION in apps/ios/project.yml');
+  assert.equal(
+    iosBuild,
+    versionCode,
+    'CURRENT_PROJECT_VERSION in apps/ios/project.yml matches versionCode in apps/android/app/build.gradle.kts',
   );
 });
 
@@ -1768,4 +1779,49 @@ test('a page opened on the old address goes to terminus.run; the apps and the up
   assert.notEqual((await at('beta.terminus.rcn.sh', '/', html)).status, 301);
   // Off unless MOVE_PAGES is "on" (off if a network refuses terminus.run): the old address serves its pages.
   assert.notEqual((await at('terminus.rcn.sh', '/account/', html, makeEnv())).status, 301);
+});
+
+test('iOS universal links: the association names the app for /pair on every address of the site, only with a team id', async () => {
+  const at = async (host, env, accept = 'application/json') => {
+    const ctx = makeCtx();
+    const res = await worker.fetch(
+      new Request(`https://${host}/.well-known/apple-app-site-association`, { headers: { accept } }),
+      env,
+      ctx,
+    );
+    await ctx.settle();
+    return res;
+  };
+  const html = 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8';
+  // No Apple developer account yet: nothing to claim, so nothing served.
+  assert.equal((await at('terminus.run', makeEnv())).status, 404);
+
+  const stable = { ...makeEnv(), APPLE_TEAM_ID: 'ABCDE12345', MOVE_PAGES: 'on' };
+  for (const host of ['terminus.run', 'terminus.rcn.sh']) {
+    // Apple's fetch takes no redirect: answered on the old address too, even to a browser.
+    const res = await at(host, stable, html);
+    assert.equal(res.status, 200, host);
+    assert.equal(res.headers.get('content-type'), 'application/json');
+    assert.equal(res.headers.get('cache-control'), 'public, max-age=3600');
+    assert.deepEqual(await res.json(), {
+      applinks: {
+        details: [
+          {
+            appIDs: ['ABCDE12345.sh.rcn.terminus'],
+            components: [
+              { '/': '/pair', comment: 'pairing links' },
+              { '/': '/pair/', comment: 'pairing links' },
+            ],
+          },
+        ],
+      },
+    });
+  }
+  // The beta's app has its own bundle id.
+  const beta = { ...stable, PUBLIC_ORIGIN: 'https://beta.terminus.run' };
+  for (const host of ['beta.terminus.run', 'beta.terminus.rcn.sh']) {
+    const res = await at(host, beta, html);
+    assert.equal(res.status, 200, host);
+    assert.deepEqual((await res.json()).applinks.details[0].appIDs, ['ABCDE12345.sh.rcn.terminus.beta']);
+  }
 });

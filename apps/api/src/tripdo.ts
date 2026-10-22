@@ -12,7 +12,8 @@
  * - **Push:** when the Worker has worked out a card, the object wakes at
  *   its next phase change (`nextPhaseAt`, not the card's `nextChangeAt`,
  *   which also counts going stale), works out the card again, and nudges
- *   the user's phones (push.ts) if the trip or its phase changed. It keeps
+ *   the user's phones (push.ts) if the trip or its phase changed, starting
+ *   an iPhone's Live Activity when it's due or missed. It keeps
  *   waking at each new one while there's a trip and a device that takes
  *   push, and stops otherwise.
  */
@@ -22,7 +23,9 @@ import type { Env } from './types.ts';
 import { type Plan, type DayRecord, type TripUpdate, endOfDayMs, sgtDate } from './trip.ts';
 import type { MeDeps } from './me.ts';
 import { tripCardFor } from './me.ts';
-import { nudgeUser, pushDevices } from './push.ts';
+import { nudgeUser, pushAudience, updateLive } from './push.ts';
+import { type LiveActivityState, apnsEnabled, liveActivityState } from './apns.ts';
+import { type Lang, withLang } from './i18n.ts';
 import { logTripWake } from './analytics.ts';
 import { scopeCache } from './edgecache.ts';
 import { answerFor, collectArrivals } from './answer.ts';
@@ -42,6 +45,14 @@ interface Pushed {
   /** The card's `gone`: the phase stays `heading` when the bus leaves, but
    *  the phones' "Leave now" must give way to it. */
   gone?: boolean;
+  /** What iPhones' Live Activities were last sent (apns.ts), as JSON. */
+  live?: string;
+  /**
+   * The trip an iPhone's Live Activity was last started by push for, or
+   * seen running for. Started once per trip only: again, it would bring back
+   * one the user ended.
+   */
+  started?: string;
 }
 
 /** This object's last wake today, for the freshness log (analytics.ts logTripWake). */
@@ -182,7 +193,7 @@ export class Trip {
         woke = await this.wake(nowMs, wakeAt);
         if (fails) await this.storage.delete('wakeFails');
       } catch (err) {
-        // D1 or the feed failing mustn't end the day's pushes: try again soon, though not too often.
+        // D1, the feed or a Live Activity's end failing mustn't end the day's pushes: try again soon, though not too often.
         console.error('trip wake failed', err instanceof Error ? err.message : typeof err);
         await this.storage.put('wakeFails', fails + 1);
         woke = { next: nowMs + Math.min(MIN_WAKE_GAP_MS * 2 ** fails, MAX_RETRY_GAP_MS), retry: true };
@@ -225,8 +236,11 @@ export class Trip {
     const env = this.env;
     const userId = await this.storage.get<string>('userId');
     if (!env || !userId) return stop;
-    // Nobody to tell: stop waking until a request asks again.
-    if ((await pushDevices(env, userId)) === 0) return stop;
+    // Nobody to tell: stop waking until a request asks again. (An iPhone
+    // counts only with APNs on.) The same read says whether there's an iPhone
+    // to word things for, and a Live Activity to update.
+    const audience = await pushAudience(env, userId);
+    if (audience.devices === 0) return stop;
     const stored = await this.storedDay();
     const date = sgtDate(nowMs);
     const day = stored && stored.date === date ? stored : null;
@@ -251,24 +265,78 @@ export class Trip {
       return byStop;
     };
     const deps: MeDeps = { collectArrivals: collect, answerFor: (e, c, i, l, n) => answerFor(e, c, i, l, n, collect) };
-    const card = await tripCardFor(env, ctx, deps, userId, day, nowMs, savePlan);
+    // Worded for the iPhones (their notifications and Live Activities): in
+    // the account's language, or the latest iPhone's when it follows each
+    // device. Another iPhone in the other language gets the card worded
+    // again for it (answerIn), without saving plans a second time.
+    const lang: Lang = audience.iphoneLang ?? 'en';
+    const card = await withLang(lang, () => tripCardFor(env, ctx, deps, userId, day, nowMs, savePlan));
     await Promise.allSettled(plans);
-    if (!card) return stop;
-
     const last = (await this.storage.get<Pushed>('pushed')) ?? null;
-    const now: Pushed = { key: card.key, phase: card.phase, ...(card.gone ? { gone: true } : {}) };
+    const apns = apnsEnabled(env) && audience.lives > 0;
+    if (!card) {
+      // No classes today (any more): a Live Activity still showing the trip ends.
+      if (apns && last?.live) {
+        const out = await updateLive(env, userId, { state: JSON.parse(last.live) as LiveActivityState }, 'end', nowMs);
+        if (out.sent > 0 || out.failed === 0) {
+          await this.state.blockConcurrencyWhile(async () => {
+            if (!(await this.cleared())) await this.storage.put('pushed', { ...last, live: undefined });
+          });
+        } else {
+          // Not ended (APNs paused or out of reach): the Lock Screen would keep
+          // the finished trip, so the wake is tried again, as a failed one is.
+          throw new Error('live activity end not sent');
+        }
+      }
+      return stop;
+    }
+
+    const live = liveActivityState(card.answer);
+    const started = audience.lives > 0 && card.key ? card.key : last?.started;
+    const now: Pushed = {
+      key: card.key,
+      phase: card.phase,
+      ...(card.gone ? { gone: true } : {}),
+      live: JSON.stringify(live),
+      ...(started ? { started } : {}),
+    };
     // Only what was actually pushed counts: one device having fetched a card
     // says nothing about the others. Nothing to say yet is never the first push.
     const changed = last
       ? last.key !== now.key || last.phase !== now.phase || Boolean(last.gone) !== Boolean(now.gone)
       : now.phase !== 'idle';
+    // The card worded again for an iPhone in the other language (plans aren't saved twice).
+    const answerIn = (l: Lang) =>
+      withLang(l, () => tripCardFor(env, ctx, { answerFor, collectArrivals }, userId, day, nowMs, async () => {})).then(
+        (c) => c?.answer ?? null,
+      );
+    // A push due that reached no device: tried again at the next wake.
+    let unsent = false;
     if (changed) {
       // Wake the phone for what the user should see: time to go, a missed bus.
       // With reminders off too: these are what start the live notification on
       // Android, which may start it from the background only for a
       // high-priority message.
       const urgent = now.phase === 'due' || now.phase === 'missed';
-      const out = await nudgeUser(env, userId, { phase: now.phase, urgent, remind: card.remind }, nowMs);
+      // The same moments start an iPhone's Live Activity where none runs (push.ts).
+      const startLive = urgent && apnsEnabled(env) && card.key !== null && now.started !== card.key;
+      const out = await nudgeUser(
+        env,
+        userId,
+        {
+          phase: now.phase,
+          urgent,
+          remind: card.remind,
+          answer: card.answer,
+          lang,
+          answerIn,
+          tripOver: card.key === null,
+          phaseChanged: last?.phase !== now.phase,
+          startLive,
+        },
+        nowMs,
+      );
+      if (startLive && card.key) now.started = card.key;
       // Pushed once a device has it, or when none could be sent to (a quiet
       // card for a browser): not when every send failed, so a later wake tries again.
       // Saved at once, held like a POST and not after a /clear: an alarm the
@@ -278,8 +346,26 @@ export class Trip {
         await this.state.blockConcurrencyWhile(async () => {
           if (!(await this.cleared())) await this.storage.put('pushed', now);
         });
-      }
+      } else unsent = true;
+    } else if (apns && last && last.live !== now.live) {
+      // The same phase, but what a Live Activity shows moved (a later bus):
+      // only the iPhones running one are told, each in its own language.
+      const out = await updateLive(
+        env,
+        userId,
+        { answer: card.answer, lang, answerIn },
+        card.key === null || live.phase === 'arrived' ? 'end' : 'update',
+        nowMs,
+      );
+      if (out.sent > 0 || out.failed === 0) {
+        await this.state.blockConcurrencyWhile(async () => {
+          if (!(await this.cleared())) await this.storage.put('pushed', now);
+        });
+      } else unsent = true;
     }
+    // The trip is over but its end didn't go: with no next change to wake
+    // for, the wake is tried again, as a failed one is.
+    if (unsent && !card.key) throw new Error('trip end not sent');
     const prev = (await this.storage.get<LastWake>('lastWake')) ?? null;
     const before = prev && sgtDate(prev.at) === date ? prev : null;
     logTripWake(env, {

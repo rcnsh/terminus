@@ -1,0 +1,247 @@
+# The iPhone app, generated into terminus.xcodeproj by XcodeGen
+# (`xcodegen` in apps/ios; the project itself isn't kept in git).
+#
+# Three targets share Sources/Shared (the API client, the answer's types,
+# the token, the language): the app, its widgets and Live Activity, and the
+# notification service that words a push from the card. They share the
+# token and the latest answer through the app group.
+name: terminus
+options:
+  bundleIdPrefix: sh.rcn
+  deploymentTarget:
+    iOS: "17.0"
+  developmentLanguage: en
+  createIntermediateGroups: true
+  groupSortPosition: top
+settings:
+  base:
+    MARKETING_VERSION: "3.6.0"
+    CURRENT_PROJECT_VERSION: "66"
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    LOCALIZATION_PREFERS_STRING_CATALOGS: NO
+    # The stable app's address, where requests go: the one people see. The
+    # Beta configuration has its own (Servers in Api.swift).
+    TERMINUS_API: https://terminus.run
+    TERMINUS_SITE: https://terminus.run
+    TERMINUS_SUFFIX: ""
+    TERMINUS_NAME: terminus
+    APP_GROUP: group.sh.rcn.terminus
+    # The host whose /pair links open the app (Associated Domains).
+    LINK_SHOWN: terminus.run
+  configs:
+    Beta:
+      TERMINUS_API: https://beta.terminus.run
+      TERMINUS_SITE: https://beta.terminus.run
+      TERMINUS_SUFFIX: .beta
+      TERMINUS_NAME: terminus beta
+      APP_GROUP: group.sh.rcn.terminus.beta
+      LINK_SHOWN: beta.terminus.run
+    # Sideloaded with a free Apple ID (scripts/sideload.sh): the stable
+    # servers, under the signer's own bundle IDs and app group, which the
+    # script sets from their team. The script signs every target with
+    # Support/Sideload/Group.entitlements: the group, without push.
+    Sideload:
+      TERMINUS_SUFFIX: .sideload
+      APP_GROUP: group.sh.rcn.terminus.sideload
+configs:
+  Debug: debug
+  Release: release
+  Beta: release
+  Sideload: release
+targets:
+  Terminus:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources/App
+      - path: Sources/Shared
+      # The Live Activity's Turn off runs in the app (a LiveActivityIntent),
+      # where TERMINUS_APP lets it reach the rest of the app.
+      - path: Sources/Widgets/LiveIntents.swift
+      - path: Support/Assets.xcassets
+      # What the app collects and why it reads its settings and file dates (App Store).
+      - path: Support/PrivacyInfo.xcprivacy
+        buildPhase: resources
+      # The parent folder, so XcodeGen makes each table a localised variant group.
+      - path: Support
+        includes: ["*.lproj/**"]
+    dependencies:
+      - target: TerminusWidgets
+      - target: TerminusNotifications
+      # The campus map: MapLibre's published iOS build, the release the Mac's
+      # is built from (scripts/fetch-maplibre.sh puts it in Vendor/).
+      - framework: Vendor/MapLibre.xcframework
+        embed: true
+    info:
+      path: Support/Info.plist
+      properties:
+        CFBundleDisplayName: $(TERMINUS_NAME)
+        CFBundleName: $(TERMINUS_NAME)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDevelopmentRegion: en
+        CFBundleLocalizations: [en, zh-Hans]
+        CFBundleAllowMixedLocalizations: true
+        TerminusAPI: $(TERMINUS_API)
+        TerminusSite: $(TERMINUS_SITE)
+        TerminusGroup: $(APP_GROUP)
+        ITSAppUsesNonExemptEncryption: false
+        LSRequiresIPhoneOS: true
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        UIBackgroundModes: [remote-notification, fetch]
+        BGTaskSchedulerPermittedIdentifiers: [sh.rcn.terminus.refresh]
+        NSSupportsLiveActivities: true
+        NSSupportsLiveActivitiesFrequentUpdates: true
+        # The Chinese is in zh-Hans.lproj/InfoPlist.strings.
+        NSLocationWhenInUseUsageDescription: So directions start from your nearest stop. It's rounded to about 11 m and never saved on the server; the phone keeps the last one for 2 hours at most, for the widgets.
+        NSCameraUsageDescription: To scan a pairing code from another device.
+        CFBundleURLTypes:
+          - CFBundleURLName: sh.rcn.terminus
+            CFBundleURLSchemes: [terminus]
+        # Google Maps, offered for directions when it's installed.
+        LSApplicationQueriesSchemes: [comgooglemaps]
+    entitlements:
+      path: Support/Terminus.entitlements
+      properties:
+        com.apple.security.application-groups: [$(APP_GROUP)]
+        aps-environment: development
+        # A leave reminder and a due or missed trip's push get through a Focus.
+        com.apple.developer.usernotifications.time-sensitive: true
+        # The site's /pair links open the app (the server's apple-app-site-association).
+        com.apple.developer.associated-domains: [applinks:$(LINK_SHOWN)]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: sh.rcn.terminus$(TERMINUS_SUFFIX)
+        PRODUCT_NAME: Terminus
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) TERMINUS_APP
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        TARGETED_DEVICE_FAMILY: "1"
+        SUPPORTS_MACCATALYST: NO
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+  TerminusWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Sources/Widgets
+      - path: Support/PrivacyInfo.xcprivacy
+        buildPhase: resources
+      - path: Sources/Shared
+      # The parent folder, so XcodeGen makes each table a localised variant group.
+      - path: Support
+        includes: ["*.lproj/**"]
+    info:
+      path: Support/Widgets-Info.plist
+      properties:
+        CFBundleDisplayName: $(TERMINUS_NAME)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleLocalizations: [en, zh-Hans]
+        TerminusAPI: $(TERMINUS_API)
+        TerminusSite: $(TERMINUS_SITE)
+        TerminusGroup: $(APP_GROUP)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: Support/Widgets.entitlements
+      properties:
+        com.apple.security.application-groups: [$(APP_GROUP)]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: sh.rcn.terminus$(TERMINUS_SUFFIX).widgets
+        PRODUCT_NAME: TerminusWidgets
+        TARGETED_DEVICE_FAMILY: "1"
+        APPLICATION_EXTENSION_API_ONLY: YES
+  TerminusNotifications:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Sources/NotificationService
+      - path: Support/PrivacyInfo.xcprivacy
+        buildPhase: resources
+      - path: Sources/Shared
+      # The parent folder, so XcodeGen makes each table a localised variant group.
+      - path: Support
+        includes: ["*.lproj/**"]
+    info:
+      path: Support/Notifications-Info.plist
+      properties:
+        CFBundleDisplayName: $(TERMINUS_NAME)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleLocalizations: [en, zh-Hans]
+        TerminusAPI: $(TERMINUS_API)
+        TerminusSite: $(TERMINUS_SITE)
+        TerminusGroup: $(APP_GROUP)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
+    entitlements:
+      path: Support/Notifications.entitlements
+      properties:
+        com.apple.security.application-groups: [$(APP_GROUP)]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: sh.rcn.terminus$(TERMINUS_SUFFIX).notifications
+        PRODUCT_NAME: TerminusNotifications
+        TARGETED_DEVICE_FAMILY: "1"
+        APPLICATION_EXTENSION_API_ONLY: YES
+  TerminusTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: Terminus
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: sh.rcn.terminus.tests
+        GENERATE_INFOPLIST_FILE: YES
+        # The API's golden answers and search cases, read where they are.
+        FIXTURES: $(SRCROOT)/../api/test/fixtures
+  TerminusUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: UITests
+    dependencies:
+      - target: Terminus
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: sh.rcn.terminus.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Terminus
+schemes:
+  Terminus:
+    build:
+      targets:
+        Terminus: all
+        TerminusTests: [test]
+        TerminusUITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: false
+      targets: [TerminusTests, TerminusUITests]
+      environmentVariables:
+        FIXTURES: $(SRCROOT)/../api/test/fixtures
+    archive:
+      config: Release
+  Terminus Beta:
+    build:
+      targets:
+        Terminus: all
+    run:
+      config: Beta
+    archive:
+      config: Beta

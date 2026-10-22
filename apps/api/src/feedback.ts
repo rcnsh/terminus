@@ -25,10 +25,10 @@ export const FEEDBACK_LIMITS = {
 /** Reports older than this are deleted by the cron. */
 export const FEEDBACK_KEEP_DAYS = 365;
 
-const PLATFORMS = ['android', 'mac', 'web'] as const;
+const PLATFORMS = ['android', 'mac', 'ios', 'web'] as const;
 type Platform = (typeof PLATFORMS)[number];
 /** As the operator's email names them. */
-const PLATFORM_NAMES: Record<Platform, string> = { android: 'Android', mac: 'Mac', web: 'Web' };
+const PLATFORM_NAMES: Record<Platform, string> = { android: 'Android', mac: 'Mac', ios: 'iPhone', web: 'Web' };
 
 /** What was wrong with an answer, as the apps' chips offer it; the email and the dashboard say it in words. */
 export const REASONS = {
@@ -91,7 +91,7 @@ export function parseFeedback(body: unknown): { ok: true; value: FeedbackInput }
     // The building and the stop say it all; why is welcome but not needed.
     const s = parseSuggestion(b);
     if (!s.ok) return s;
-    if (!platform) return { ok: false, error: "platform is 'android', 'mac' or 'web'" };
+    if (!platform) return { ok: false, error: "platform is 'android', 'mac', 'ios' or 'web'" };
     return {
       ok: true,
       value: { kind: 'other', reason: BETTER_STOP, note, platform, appVersion, context: JSON.stringify(s.value), suggestion: s.value },
@@ -104,7 +104,7 @@ export function parseFeedback(body: unknown): { ok: true; value: FeedbackInput }
     reason = b.reason as Reason;
   }
   if (!note && !reason) return { ok: false, error: 'say what went wrong' };
-  if (!platform) return { ok: false, error: "platform is 'android', 'mac' or 'web'" };
+  if (!platform) return { ok: false, error: "platform is 'android', 'mac', 'ios' or 'web'" };
   let context: string | null = null;
   if (b.context !== undefined && b.context !== null) {
     if (typeof b.context !== 'object') return { ok: false, error: 'context is the answer object' };
