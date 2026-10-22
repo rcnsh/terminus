@@ -57,7 +57,7 @@ struct Scene {
     var mode: WidgetMode = .timetable
     var answer: NextAnswer?
     var face: WidgetFace
-    /// The card style chosen in Settings: steps, route or ticket.
+    /// The card style chosen in Settings: steps or route.
     let style: String
 
     init(entry: BusEntry, kind: String, family: WidgetFamily, dark: Bool) {

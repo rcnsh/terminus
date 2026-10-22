@@ -8,18 +8,16 @@ import SwiftUI
 /// - steps: the trip as a line diagram down the card, as on a bus's route
 ///   map: the walk dotted, the ride in the bus's colour. The default.
 /// - route: a line across, from you to the stop to where you're going.
-/// - ticket: the bus first, as a badge in its colour, then when to leave
-///   and when you get there.
 enum JourneyStyle: String, CaseIterable {
-    case steps, route, ticket
+    case steps, route
 
+    /// A style since removed (the ticket) reads as steps.
     static func of(_ pref: String) -> JourneyStyle { JourneyStyle(rawValue: pref) ?? .steps }
 
     var name: String {
         switch self {
         case .steps: L("Steps")
         case .route: L("Route")
-        case .ticket: L("Ticket")
         }
     }
 }
@@ -59,8 +57,6 @@ struct JourneyTop: View {
                 if j.live { SkyPill(text: L("Live"), color: inks.good) }
                 if !a.isClassPlan, let crowd = a.card?.crowd { SkyPill(text: crowd, color: inks.muted) }
             }
-        case .ticket:
-            TicketTop(answer: a, journey: j, now: now)
         }
     }
 }
@@ -97,83 +93,6 @@ private struct LeaveHead: View {
     }
 }
 
-/// Ticket: the bus first, as you'd look for it on the road, then when to
-/// leave and when you get there. On foot, the walk in its place.
-private struct TicketTop: View {
-    /// Follows the text size the phone is set to, as the rest of the card does.
-    @ScaledMetric(relativeTo: .title) private var scale: CGFloat = 1
-    let answer: NextAnswer
-    let journey: Journey
-    let now: Date
-    @Environment(\.inks) private var inks
-
-    var body: some View {
-        let a = answer
-        let j = journey
-        HStack(spacing: 14) {
-            if let bus = j.bus {
-                let rgb = bus.color.flatMap(hexRGB) ?? 0x8A847E
-                Text(bus.paid ? "\(bus.svc) $" : bus.svc)
-                    .font(.system(size: 26 * scale, weight: .heavy))
-                    .lineLimit(1)
-                    .foregroundStyle(inkOn(rgb))
-                    .padding(.horizontal, 6)
-                    .frame(minWidth: 64, minHeight: 64)
-                    .background(Color(rgb: rgb), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(alignment: .lastTextBaseline, spacing: 4) {
-                        Text(bus.board).font(.title2.weight(.bold))
-                        if let busIn = JourneyText.busIn(j, now: now) {
-                            Text(busIn).font(.subheadline.weight(.semibold)).foregroundStyle(inks.muted).monospacedDigit()
-                        }
-                    }
-                    Text(([L("from %@", bus.stop)] + [JourneyText.walk(j)].compactMap { $0 }).joined(separator: " · "))
-                }
-            } else {
-                Image(systemName: "figure.walk")
-                    .font(.system(size: 30, weight: .semibold))
-                    .frame(width: 64, height: 64)
-                    .background(inks.raised, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(JourneyText.walk(j) ?? "").font(.title2.weight(.bold))
-                    Text(j.why ?? L("Walk to %@", j.place))
-                }
-            }
-        }
-        .padding(.top, 10)
-        // A change of bus: the second bus under the first, so nobody stays on the wrong one.
-        if let c = j.change {
-            HStack(spacing: 14) {
-                BusBadge(svc: c.bus.svc, color: c.bus.color, size: 16, paid: c.bus.paid).frame(width: 64)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(c.changeText).font(.body.weight(.semibold))
-                    Text([c.bus.board, L("from %@", c.stop)].joined(separator: " · ")).font(.subheadline).foregroundStyle(inks.muted)
-                }
-            }
-            .padding(.top, 10)
-        }
-        let tint = a.leaveLate ? inks.late : inks.accent
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(JourneyText.leaveIn(a, j, now: now)).font(.title3.weight(.bold)).foregroundStyle(tint).monospacedDigit()
-                if let by = JourneyText.by(a, j, now: now) { Text(by).font(.footnote).foregroundStyle(inks.muted) }
-            }
-            Spacer(minLength: 8)
-            if let arrive = j.arrive {
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(L("Arrive %@", arrive)).font(.subheadline.weight(.semibold))
-                    Text(JourneyText.arriveWhere(j)).font(.footnote).foregroundStyle(a.leaveLate ? inks.late : inks.muted)
-                }
-                .multilineTextAlignment(.trailing)
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .padding(.top, 14)
-    }
-}
-
 /// The rest of the trip, on the ground under the horizon.
 struct JourneyGround: View {
     let answer: NextAnswer
@@ -193,8 +112,6 @@ struct JourneyGround: View {
             case .route:
                 RouteLine(journey: j).padding(.top, 16).padding(.bottom, 4)
                 Tags(answer: a, journey: j)
-            case .ticket:
-                if j.bus != nil { Tags(answer: a, journey: j) }
             case .steps:
                 StepsLine(answer: a, journey: j, now: now).padding(.top, 18)
                 if let backup = JourneyText.backup(a, j) {

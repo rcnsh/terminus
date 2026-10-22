@@ -66,7 +66,6 @@
 "Tap Nearby for buses around you." = "点按“附近”查看你周围的巴士。";
 "Thanks, it's sent" = "谢谢，已发送";
 "The trip home" = "回家的行程";
-"Ticket" = "车票";
 "Time" = "时间";
 "Times were off" = "时间不准";
 "Today" = "今天";
@@ -75,7 +74,6 @@
 "Updated %@" = "%@ 更新";
 "Updating times…" = "正在更新时间…";
 "Walk is longer" = "步行更久";
-"Walk to %@" = "步行到 %@";
 "We'll look at this answer, and reply to %@ if we need to know more." = "我们会查看这个答案，需要了解更多时会回复到 %@。";
 "We'll reply to %@. This answer is sent with your report." = "我们会回复到 %@。这个答案会随反馈一起发送。";
 "What happened? A time or a stop helps." = "发生了什么？写上时间或车站会更有帮助。";

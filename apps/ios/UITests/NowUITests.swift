@@ -39,7 +39,7 @@ final class NowUITests: XCTestCase {
 
     func testTheTripInEveryStyleAndSky() {
         for (style, sky, theme) in [
-            ("steps", "night", "light"), ("route", "day", "light"), ("ticket", "golden", "dark"), ("steps", "dawn", "dark"),
+            ("steps", "night", "light"), ("route", "day", "light"), ("route", "golden", "dark"), ("steps", "dawn", "dark"),
             ("route", "dusk", "light"),
         ] {
             let app = launch(theme: theme, sky: sky, style: style)

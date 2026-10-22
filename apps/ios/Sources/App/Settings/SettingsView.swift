@@ -240,7 +240,6 @@ func settingsThemeName(_ theme: String) -> String {
 
 func settingsCardStyleName(_ style: String) -> String {
     switch style {
-    case "ticket": L("Ticket")
     case "route": L("Route")
     default: L("Steps")
     }

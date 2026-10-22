@@ -190,7 +190,6 @@
 "Thanks. Your feedback was sent." = "谢谢，你的反馈已发送。";
 "That's the most favourites you can have. Remove one to add another." = "收藏已达上限。移除一个才能再添加。";
 "The app and widget will stop showing your timetable. Your account and settings are kept; sign in again with %@." = "应用和小组件将不再显示你的课表。你的账户和设置会保留，可用 %@ 重新登录。";
-"The bus first, in its colour, then when to leave." = "先显示巴士和它的颜色，再显示何时出发。";
 "The next bus and a countdown, until you arrive" = "下一班巴士和倒计时，直到你到达";
 "The trip as a line down the card, as on a route map." = "整段行程画成一条竖线，像路线图一样。";
 "The whole trip as a line, with the times under it." = "整段行程画成一条线，时间写在下面。";
@@ -201,7 +200,6 @@
 "This link is for %@, which has ended. Copy this semester's link from NUSMods and import it below." = "此链接属于已结束的 %@。请从 NUSMods 复制本学期的链接并在下方导入。";
 "This phone" = "这部手机";
 "This phone will be signed out." = "这部手机会退出登录。";
-"Ticket" = "车票";
 "Time format" = "时间格式";
 "Timetable" = "课表";
 "To %@" = "去 %@";

@@ -257,16 +257,17 @@ final class SettingsUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Language and time"].waitForExistence(timeout: 5))
     }
 
-    /// The card styles, picked.
+    /// The card styles, picked from segments, the chosen one drawn under them.
     func testCardStyle() throws {
         let app = open()
         tile(app, "appearance").tap()
-        let ticket = app.buttons["settings.cardStyle.ticket"]
-        XCTAssertTrue(ticket.waitForExistence(timeout: 5))
-        while !ticket.isHittable { app.swipeUp() }
-        ticket.tap()
-        XCTAssertTrue(ticket.isSelected)
-        shot("settings-appearance-ticket", app)
+        let route = app.segmentedControls["settings.cardStyle"].buttons["Route"]
+        XCTAssertTrue(route.waitForExistence(timeout: 5))
+        while !route.isHittable { app.swipeUp() }
+        route.tap()
+        XCTAssertTrue(route.isSelected)
+        XCTAssertTrue(app.staticTexts["The whole trip as a line, with the times under it."].exists)
+        shot("settings-appearance-route", app)
     }
 
     /// The developer settings: seven taps on the version (shown already in a debug build).

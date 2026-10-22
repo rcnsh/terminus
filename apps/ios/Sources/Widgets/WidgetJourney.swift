@@ -2,8 +2,8 @@ import SwiftUI
 
 /// A trip's steps on the ground of the large widget, under the headline the
 /// sky already shows, in the card style chosen in Settings › Appearance:
-/// Steps down the side with the ride in its service's colour, the Route
-/// across, or the Ticket. As Android's WidgetJourney.
+/// Steps down the side with the ride in its service's colour, or the Route
+/// across. As Android's WidgetJourney.
 struct JourneyView: View {
     let answer: NextAnswer
     let journey: Journey
@@ -18,8 +18,6 @@ struct JourneyView: View {
     /// The room each style takes.
     static func height(_ j: Journey, style: String) -> CGFloat {
         switch style {
-        // A change of bus adds the second bus's line under the first, and its step.
-        case "ticket": j.change != nil ? 74 : 56
         case "route": 52
         default: step * CGFloat((j.bus != nil ? 3 : 2) + (j.change != nil ? 1 : 0)) - (lastUnder(j) == nil ? 12 : 0)
         }
@@ -30,7 +28,6 @@ struct JourneyView: View {
 
     var body: some View {
         switch style {
-        case "ticket": ticket
         case "route": route
         default: steps
         }
@@ -152,39 +149,4 @@ struct JourneyView: View {
         .frame(maxWidth: .infinity)
     }
 
-    // MARK: Ticket
-
-    private var ticket: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            ticketBus
-            // A change of bus: the second bus and where to change, so nobody stays on the wrong one.
-            if let c = journey.change {
-                HStack(spacing: 12) {
-                    BusBadge(svc: c.bus.svc, color: c.bus.color, size: 11, paid: c.bus.paid).frame(width: 48)
-                    small([c.changeText, c.bus.board].joined(separator: " · "), inks.ink, 12, bold: true)
-                    Spacer(minLength: 0)
-                }
-            }
-        }
-    }
-
-    private var ticketBus: some View {
-        let j = journey
-        return HStack(spacing: 12) {
-            if let bus = j.bus {
-                let rgb = bus.color.flatMap(hexRGB) ?? 0x8A847E
-                Text(verbatim: bus.svc).font(.system(size: 18, weight: .heavy)).foregroundStyle(inkOn(rgb))
-                    .frame(width: 48, height: 48).background(Color(rgb: rgb), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            } else {
-                Image(systemName: "figure.walk").font(.system(size: 22)).foregroundStyle(inks.ink)
-                    .frame(width: 48, height: 48).background(inks.raised, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(verbatim: j.bus.map { "\($0.board) " + L("from %@", $0.stop) } ?? L("Walk %@", j.walk ?? ""))
-                    .font(.system(size: 17, weight: .bold)).foregroundStyle(inks.ink).lineLimit(1)
-                if let arrive = JourneyText.arrive(j) { small(arrive, answer.leaveLate ? inks.late : inks.muted, 12, bold: true) }
-            }
-            Spacer(minLength: 0)
-        }
-    }
 }

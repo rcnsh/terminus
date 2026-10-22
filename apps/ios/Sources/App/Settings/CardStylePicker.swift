@@ -1,64 +1,43 @@
 import SwiftUI
 import WidgetKit
 
-/// The card styles, each drawn with a made-up trip (a D2 from PGP to UTown,
-/// leaving in a few minutes) so the choice is made by looking, not by
-/// reading. The pick holds for the card on Now and the widgets.
+/// The card style: Steps or Route as segments, like the theme's, and the
+/// chosen one drawn under them with a made-up trip (a D2 from PGP to UTown,
+/// leaving in a few minutes), so the choice is made by looking without a
+/// card for each. The pick holds for the card on Now and the widgets.
 struct SettingsCardStyles: View {
     @Environment(Prefs.self) private var prefs
 
-    private static let styles = ["steps", "route", "ticket"]
+    private static let styles = ["steps", "route"]
 
     var body: some View {
         SettingsGroup(title: L("Card style"), hint: L("How the card and widgets show a trip by bus. Only on this phone.")) {
-            ForEach(Array(Self.styles.enumerated()), id: \.element) { i, style in
-                if i > 0 { GroupDivider() }
-                option(style)
-            }
+            let chosen = JourneyStyle.of(prefs.cardStyle).rawValue
+            SettingSegments(
+                label: L("Card style"), options: Self.styles.map { ($0, settingsCardStyleName($0)) },
+                selection: Binding(
+                    get: { chosen },
+                    set: {
+                        prefs.cardStyle = $0
+                        WidgetCenter.shared.reloadAllTimelines()
+                    }), id: "settings.cardStyle"
+            )
+            .padding(.bottom, -6)
+            SettingsHint(hint(chosen))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+            SettingsCardSample(style: chosen)
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.page, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.line, lineWidth: 1))
+                .padding(16)
+                .accessibilityHidden(true)
         }
-    }
-
-    private func option(_ style: String) -> some View {
-        let on = prefs.cardStyle == style
-        return Button {
-            prefs.cardStyle = style
-            WidgetCenter.shared.reloadAllTimelines()
-        } label: {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 12) {
-                    Image(systemName: on ? "checkmark.circle.fill" : "circle")
-                        .font(.title3)
-                        .foregroundStyle(on ? Color.brand : Color.faint)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(settingsCardStyleName(style)).font(.subheadline.weight(.semibold)).foregroundStyle(Color.ink)
-                        SettingsHint(hint(style))
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                SettingsCardSample(style: style)
-                    .padding(14)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.page, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(
-                            on ? Color.brand : Color.line, lineWidth: on ? 2 : 1)
-                    )
-                    .padding(.leading, 36)
-                    .accessibilityHidden(true)
-            }
-            .padding(16)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(settingsCardStyleName(style)). \(hint(style))")
-        .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
-        .accessibilityIdentifier("settings.cardStyle.\(style)")
     }
 
     private func hint(_ style: String) -> String {
         switch style {
-        case "ticket": L("The bus first, in its colour, then when to leave.")
         case "route": L("The whole trip as a line, with the times under it.")
         default: L("The trip as a line down the card, as on a route map.")
         }

@@ -21,7 +21,7 @@ final class Prefs {
         didSet { Shared.defaults.set(theme, forKey: "theme") }
     }
 
-    /// route, ticket or steps: how Now draws a trip (Settings › Appearance).
+    /// steps or route: how Now draws a trip (Settings › Appearance).
     var cardStyle: String = Shared.defaults.string(forKey: "cardStyle") ?? "steps" {
         didSet { Shared.defaults.set(cardStyle, forKey: "cardStyle") }
     }

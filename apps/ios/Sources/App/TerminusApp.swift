@@ -46,7 +46,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     /// starts signed out with nothing kept, TERMINUS_TOKEN (and TERMINUS_EMAIL)
     /// signed in with that token, TERMINUS_LANG=en|zh|auto sets the language,
     /// TERMINUS_API_BASE the server (the stub at http://localhost:8787 is kept as the
-    /// developer menu's choice), TERMINUS_THEME=light|dark the appearance, TERMINUS_CARD_STYLE=steps|route|ticket
+    /// developer menu's choice), TERMINUS_THEME=light|dark the appearance, TERMINUS_CARD_STYLE=steps|route
     /// the card's style (and TERMINUS_SKY=night|dawn|day|golden|dusk the sky's hour, in SkyClock).
     enum DevLaunch {
         /// TERMINUS_LANG was given: the account takes this phone's language, rather than the other way round.
