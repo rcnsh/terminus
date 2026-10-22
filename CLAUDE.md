@@ -38,9 +38,8 @@ dev stub, never a typed one (`Servers.kt`, `Servers` in `Api.swift`).
 
 Pages opened on the old address go to the same page on terminus.run
 (`movedPage` in `src/site.ts`, on with `MOVE_PAGES`), and emailed links use
-terminus.run (`linkOrigin`). From 9 to 11 October 2026 NUS Wi-Fi reset
-connections to terminus.run, and both were switched off;
-`cloudflare.config.ts` says how to do that again if a network refuses it. The
+terminus.run (`linkOrigin`). If a network refuses terminus.run,
+`cloudflare.config.ts` says how to switch both off. The
 privacy contact is privacy@terminus.run, through Email Routing's catch-all,
 so it goes with the domain. Every `terminus.rcn.sh` and `rcn.sh` left in the
 repo is on purpose: don't find-and-replace them.

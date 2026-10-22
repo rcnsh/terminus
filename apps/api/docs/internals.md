@@ -849,10 +849,9 @@ keep for good.
 The redirect runs only with `MOVE_PAGES` set to `on`, as both Workers
 have it in `cloudflare.config.ts`. Links handed to people (sign-in and
 new-device emails, the "create a key" error) come from `linkOrigin`:
-`LINK_ORIGIN` if set, else the site's own. From 9 to 11 October 2026 NUS
-Wi-Fi reset connections to terminus.run, so the redirect was off and
-`LINK_ORIGIN` was the old address; that is the way back if a network
-refuses it again.
+`LINK_ORIGIN` if set, else the site's own. If a network refuses
+terminus.run, turn the redirect off and set `LINK_ORIGIN` to the old
+address.
 
 Email goes out through Cloudflare Email Sending from `EMAIL_FROM`. That
 needs the Workers Paid plan and the sender's domain onboarded under Email
@@ -1770,7 +1769,7 @@ The old address is the backup (`SERVERS` on Android, `TerminusBackup` on
 the Mac). A request that can't reach the chosen address at all goes once to
 the other, inside the same deadline (`Servers.order`): only when the server
 was never reached (no DNS answer, a refused connection, a TLS handshake cut
-off, as NUS Wi-Fi did to terminus.run in October 2026), so it can't arrive
+off), so it can't arrive
 twice; a GET also after any other reset. Once the backup has answered, it
 goes first for 10 minutes, so a refused address doesn't slow every request.
 Apps before 3.3.0 call the old address, so it stays on the Worker; if the

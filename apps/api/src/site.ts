@@ -18,8 +18,8 @@ export const isBeta = (env: Env): boolean => siteOrigin(env) !== STABLE_ORIGIN;
 /**
  * Where links handed to people point: sign-in links, the new-device email,
  * an error's "create a key at". LINK_ORIGIN when set, for if a network
- * refuses terminus.run (NUS Wi-Fi reset connections to it in October 2026),
- * so a link tapped there still opens; else the site's own.
+ * refuses terminus.run, so a link tapped there still opens; else the site's
+ * own.
  */
 export const linkOrigin = (env: Env): string => env.LINK_ORIGIN || siteOrigin(env);
 
