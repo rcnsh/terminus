@@ -1,5 +1,55 @@
 # Arrival-time backtest: results
 
+## Round 2: the gate and the buses just ahead (the same morning)
+
+**Still nothing beats the feed overall, but history got much better.** On
+the same split of the same morning as below (one weekday, 557 test
+questions), the gate cut history's MAE by a fifth and its p90 by a third.
+The buses just ahead added a little more. The blend now roughly ties the
+feed: 60.7 s against 59.8 s.
+
+| method | MAE | p90 | MAE vs feed | what it adds |
+|---|---|---|---|---|
+| feed | **59.8 s** | 127.8 s | | |
+| corrected | 60.3 s | 131.9 s | +1% | |
+| history | 84.0 s | 239.9 s | +40% | round 1's |
+| history+gate | 67.0 s | 164.1 s | +12% | −17.0 s against history |
+| history+gate+recent | 66.4 s | 163.1 s | +11% | −0.6 s against history+gate |
+| blend | 60.7 s | 137.1 s | +2% | |
+
+- **What the gate is.** History answers only for a bus on its way. Where the
+  way to the stop leaves a route's first stop (KRB for A1 and A2, COM3 for
+  D1 and D2), or the bus is held far past its segment's usual time, the
+  feed's time is used. It handed 24% of the questions back to the feed. On
+  the morning's segments, leaving a first stop took a median of 730–760 s
+  at COM3, with a p90 of 960–1,100 s. That's waiting for the departure
+  time, not driving. The held test caught A1s sitting at PGP for 14–19
+  minutes, which history had counted as "overdue, 10 s away".
+- **On the questions the gate lets through** (426), history is still worse
+  than the feed: MAE 48.5 s (47.3 s with the buses just ahead) against
+  38.9 s. History reads early: its mean signed error is +24 s, against the
+  feed's +11 s.
+- **By horizon.** Under 2 minutes, every history method still beats the
+  feed (MAE 50–51 s against 54.4 s). History alone, ungated, was best there
+  (45.4 s): close to a stop, an overdue bus usually is about to arrive. From
+  2 to 10 minutes, the gate removes most of history's damage (2–5 min:
+  81 → 63 s; 5–10 min: 144 → 89 s), but the feed still wins. At 10 to
+  30 minutes (21 questions), the fitted weight on history was 1, so the
+  blend was as bad as history. That's what too little training data does
+  to the weights.
+- **How sensitive.** The held limit (1.2× to 3× the usual time) moves
+  history+gate between 65.7 and 67 s. The buses just ahead's settings
+  (20–45 min back, 1–3 segments, replacing or shrunk) move
+  history+gate+recent between 64.6 and 66.4 s. Every setting helps a
+  little. The defaults (twice the usual time and 2 minutes over; 30 min,
+  at least 2, replacing) were fixed before looking. These are tested on
+  90 minutes of one morning, so none of the settings were tuned on it.
+
+**What's next:** the same comparison trained on this morning and tested on
+the afternoon (being recorded today), then on whole days once later ones
+are in (the VM records every day to 12 November). Regime shift, round 1's
+first suspect, is untouched by either change. Only more days can test it.
+
 ## First real data: one weekday morning
 
 **Nothing beat the feed overall.** On one weekday morning, the feed's own

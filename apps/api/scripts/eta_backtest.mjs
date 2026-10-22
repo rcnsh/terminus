@@ -27,6 +27,11 @@
  *
  *   node scripts/eta_backtest.mjs [--recording f.jsonl]... [--day d.json.gz --predictions p.jsonl]...
  *                                 [--split 0.6] [--out results.md] [--model-out model.json]
+ *                                 [--recent-min 30] [--recent-n 2] [--recent-prior 0]
+ *
+ * The --recent-* settings are the buses just ahead's (etamodel.ts Recent):
+ * how many minutes back a segment counts, how many are needed, and how
+ * many segments history's median is worth beside them (0: replaced).
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -35,7 +40,7 @@ import { GRAPH } from '../src/graph.ts';
 import { HORIZONS, aeTime, passingsOf } from '../src/eta.ts';
 import { windowOf } from '../src/timelapse.ts';
 import { SGT_MS } from '../src/config.ts';
-import { METHODS, casesOf, fitModel, passingsFromReadings, ringOf, scoreCases, segmentsOf } from '../src/etamodel.ts';
+import { METHODS, RECENT, casesOf, errorStats, fitModel, passingsFromReadings, ringOf, scoreCases, segmentsOf } from '../src/etamodel.ts';
 
 const args = process.argv.slice(2);
 const usage = (why) => {
@@ -59,10 +64,17 @@ const predictionFiles = all('predictions');
 const SPLIT = Number(one('split', '0.6'));
 const OUT = one('out', null);
 const MODEL_OUT = one('model-out', null);
+const recent = {
+  windowMs: Number(one('recent-min', `${RECENT.windowMs / 60_000}`)) * 60_000,
+  minN: Number(one('recent-n', `${RECENT.minN}`)),
+  prior: Number(one('recent-prior', `${RECENT.prior}`)),
+};
 if (args.length) usage(`unknown arguments: ${args.join(' ')}`);
 if (!recordings.length && !days.length) usage('give at least one --recording, or --day with --predictions');
 if (days.length !== predictionFiles.length) usage('each --day needs its --predictions, in the same order');
 if (!(SPLIT > 0 && SPLIT < 1)) usage('--split is between 0 and 1');
+if (!(recent.windowMs > 0 && recent.minN >= 1 && recent.prior >= 0))
+  usage('--recent-min over 0, --recent-n 1 or more, --recent-prior 0 or more');
 
 /** After the time a question was given, how long its bus may take to come: the data must run that long. */
 const TAIL_MS = 10 * 60_000;
@@ -186,12 +198,14 @@ if (dates.length >= 2) {
 }
 
 const model = fitModel(routes, train);
-const cases = test.flatMap((u) => casesOf(model, routes, u));
+const cases = test.flatMap((u) => casesOf(model, routes, u, recent));
 const result = scoreCases(cases);
-const trainCases = train.flatMap((u) => casesOf(model, routes, u)).length;
+const trainCases = train.flatMap((u) => casesOf(model, routes, u, recent)).length;
 const segments = train.flatMap((u) => segmentsOf(u.passings, routes));
 const pairs = Object.values(model.table.all);
 
+const LABELS = { gated: 'history+gate', recent: 'history+gate+recent' };
+for (const m of METHODS) LABELS[m] ??= m;
 const fmt = (x) => (x == null ? '–' : `${x}`);
 const vs = (a, b) => (a == null || b == null || !b ? '–' : `${a <= b ? '−' : '+'}${Math.abs(Math.round(((a - b) / b) * 100))}%`);
 const lines = [];
@@ -222,7 +236,13 @@ p();
 p(
   "Methods: **feed**, the feed's time as served; **corrected**, plus the feed's median error at that horizon for that service in training;",
 );
-p("**history**, the bus's last stop and the segment medians on from it; **blend**, history and corrected, weighted per horizon.");
+p("**history**, the bus's last stop and the segment medians on from it; **history+gate**, history only where the bus needn't");
+p("leave a route's first stop (where buses wait for their departure time), the feed's time otherwise; **history+gate+recent**,");
+p(
+  `that with each segment's median from the service's buses just ahead (the last ${recent.windowMs / 60_000} min, ` +
+    `at least ${recent.minN}, ${recent.prior ? `history's median worth ${recent.prior}` : 'replacing history'}) where there are enough;`,
+);
+p('**blend**, history+gate+recent and corrected, weighted per horizon (corrected where the gate refuses).');
 p();
 p('## Errors in seconds (actual minus predicted: positive is the bus coming later)');
 p();
@@ -232,13 +252,51 @@ const table = (stats) => {
   for (const m of METHODS) {
     const s = stats[m];
     p(
-      `| ${m} | ${s.n} | ${fmt(s.mae)} | ${fmt(s.p50)} | ${fmt(s.p90)} | ${fmt(s.bias)} | ${m === 'feed' ? '' : vs(s.mae, stats.feed.mae)} |`,
+      `| ${LABELS[m]} | ${s.n} | ${fmt(s.mae)} | ${fmt(s.p50)} | ${fmt(s.p90)} | ${fmt(s.bias)} | ${m === 'feed' ? '' : vs(s.mae, stats.feed.mae)} |`,
     );
   }
 };
 p('### Overall');
 p();
 table(result.overall);
+const scored = cases.filter((c) => c.hist.alone !== null);
+const gated = scored.filter((c) => c.hist.gated === null);
+const fresh = scored.filter((c) => c.hist.gated !== null && c.hist.recent !== c.hist.gated);
+p();
+p(
+  `The gate gave ${gated.length} of these ${scored.length} questions back to the feed ` +
+    `(${scored.length ? Math.round((gated.length / scored.length) * 100) : 0}%); the buses just ahead changed history's answer on ${fresh.length}.`,
+);
+p();
+p('### Where the gate lets history answer');
+p();
+p("Only the questions history+gate answers itself: the feed's time against history's, with and without the buses just ahead.");
+p();
+const open = scored.filter((c) => c.hist.gated !== null);
+const row = (name, errs) => {
+  const s = errorStats(errs);
+  return `| ${name} | ${s.n} | ${fmt(s.mae)} | ${fmt(s.p50)} | ${fmt(s.p90)} | ${fmt(s.bias)} |`;
+};
+p('| method | n | MAE | p50 abs | p90 abs | mean signed |');
+p('|---|---|---|---|---|---|');
+p(
+  row(
+    'feed',
+    open.map((c) => c.actualS - c.feedS),
+  ),
+);
+p(
+  row(
+    'history+gate',
+    open.map((c) => c.actualS - c.hist.gated),
+  ),
+);
+p(
+  row(
+    'history+gate+recent',
+    open.map((c) => c.actualS - c.hist.recent),
+  ),
+);
 for (const h of result.horizons) {
   p();
   p(`### Feed said ${h.label}`);
