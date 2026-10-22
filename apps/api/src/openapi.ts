@@ -2154,6 +2154,11 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                   description:
                     'How close the feed’s arrival times came to when the buses did come, over the last 14 scored days: overall, by how far ahead, by service and by hour. null without storage.',
                 },
+                model: {
+                  type: ['object', 'null'],
+                  description:
+                    'The arrival-time model run in shadow (it answers no one): whether it runs (`on`), and each of the last 28 days it answered, every method’s error overall and by how far ahead, with the share of questions history could answer. null without storage.',
+                },
               },
             }),
             '404': errorResponse('No operator token, or the wrong one.'),

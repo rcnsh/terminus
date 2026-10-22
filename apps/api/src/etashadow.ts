@@ -190,3 +190,25 @@ export async function shadowEta(env: Env, nowMs: number, fetchImpl: typeof fetch
   }
   return null;
 }
+
+/**
+ * The dashboard's view of the model in shadow: whether it runs, and the
+ * last [days] days it answered, oldest first, without their weight grids
+ * (only the next day's model needs those). Null without the bucket.
+ */
+export async function shadowSummary(
+  env: Pick<Env, 'DOWNLOADS' | 'ETA_MODEL'>,
+  nowMs: number,
+  days = HISTORY_DAYS,
+): Promise<{ on: boolean; historyDays: number; days: Omit<ShadowDay, 'grid'>[] } | null> {
+  if (!env.DOWNLOADS) return null;
+  // The latest service day too: once its window closes, it's scored that night.
+  const latest = serviceDate(nowMs);
+  const dates = Array.from({ length: days }, (_, i) => before(latest, days - 1 - i));
+  const kept = await Promise.all(dates.map((d) => readJson<ShadowDay>(env.DOWNLOADS!, shadowKey(d))));
+  return {
+    on: etaModelOn(env),
+    historyDays: HISTORY_DAYS,
+    days: kept.filter((d): d is ShadowDay => d?.v === 1).map(({ grid: _grid, ...d }) => d),
+  };
+}

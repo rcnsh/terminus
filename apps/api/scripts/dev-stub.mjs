@@ -331,7 +331,7 @@ env = {
   TIMELAPSE_ENABLED: 'on',
   VAPID_PRIVATE_KEY: VAPID,
   ...(FCM ? { FCM_SERVICE_ACCOUNT: FCM } : {}),
-  ...(DEMO_ADMIN ? { ANALYTICS_TOKEN: 'dev', CF_ACCOUNT_ID: 'dev' } : {}),
+  ...(DEMO_ADMIN ? { ANALYTICS_TOKEN: 'dev', CF_ACCOUNT_ID: 'dev', ETA_MODEL: 'shadow' } : {}),
 };
 if (DEMO_ADMIN) await seedAdmin({ db, kv: env.KV, downloads: DOWNLOADS, nowMs: stubNow() });
 console.log(FCM ? 'push: on (Firebase project from .private/)' : 'push: off (no .private/fcm-service-account.json)');

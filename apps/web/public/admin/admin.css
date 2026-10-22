@@ -197,6 +197,7 @@ table.data th button:focus-visible { outline: 2px solid var(--accent); }
 table.data th .arrow { opacity: 0.35; font-size: 0.75rem; }
 table.data th[aria-sort="ascending"] .arrow, table.data th[aria-sort="descending"] .arrow { opacity: 1; color: var(--ink); }
 table.data td { padding: 8px 8px; vertical-align: middle; }
+table.data td:first-child { white-space: nowrap; }
 table.data .num { text-align: right; }
 table.data tbody tr { transition: background 0.12s ease; }
 table.data tbody tr:hover { background: var(--surface-2); }
@@ -321,6 +322,21 @@ td:not(.num) .with-meter { justify-content: flex-start; }
 
 .empty { padding: 28px 20px; border: 1px dashed var(--line-strong); border-radius: var(--radius); color: var(--muted); text-align: center; font-size: 0.9rem; }
 .empty code { font-size: 0.85em; }
+.page > .empty { margin-bottom: 16px; }
+
+/* Arrival model */
+.model-status { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(22rem, 100%), 1fr)); gap: 16px 32px; align-items: start; }
+.model-status .status { margin: 0; }
+.model-status .status span { max-width: 34rem; }
+.warmup .hint { margin-top: 6px; font-size: 0.8rem; }
+.weights { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.weights li { display: grid; grid-template-columns: 7rem 1fr 2.5rem; gap: 12px; align-items: center; font-size: 0.88rem; }
+.weights b { text-align: right; font-variant-numeric: tabular-nums; }
+table.data th .th { display: block; padding: 8px; color: var(--muted); font-weight: 500; }
+table.data td.best { font-weight: 700; color: var(--good-ink); }
+.tag.good { background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--good-ink); }
+.tag.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn-ink); }
+.tag.wait { color: var(--muted); }
 
 /* Collection */
 .switches { list-style: none; margin: 0 0 12px; padding: 0; }

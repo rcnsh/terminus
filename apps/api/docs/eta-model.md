@@ -189,7 +189,8 @@ week in, and judge after about four weeks.
 
 ## Before it answers anyone
 
-- Read the shadow days (`eta/model/*.json`): the blend should beat the
+- Read the shadow days (`eta/model/*.json`, or the dashboard's Arrival
+  model section, which reads them): the blend should beat the
   feed's MAE and p90 at every horizon, on most days, not just on average.
 - Then it can answer behind a switch, for the `live` times only: a
   `scheduled` time stays a guess, labelled so.
