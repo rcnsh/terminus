@@ -24,7 +24,6 @@ import type { MeDeps } from './me.ts';
 import { tripCardFor } from './me.ts';
 import { nudgeUser, pushDevices } from './push.ts';
 import { logTripWake } from './analytics.ts';
-import { GRAPH } from './graph.ts';
 import { scopeCache } from './edgecache.ts';
 import { answerFor, collectArrivals } from './answer.ts';
 
@@ -253,7 +252,7 @@ export class Trip {
       for (const sa of byStop.values()) if (sa.available) read.push(sa.fetchedAt);
       return byStop;
     };
-    const deps: MeDeps = { graph: GRAPH, collectArrivals: collect, answerFor: (e, c, i, l, n) => answerFor(e, c, i, l, n, collect) };
+    const deps: MeDeps = { collectArrivals: collect, answerFor: (e, c, i, l, n) => answerFor(e, c, i, l, n, collect) };
     const card = await tripCardFor(env, ctx, deps, userId, day, nowMs, savePlan);
     await Promise.allSettled(plans);
     if (!card) return stop;

@@ -18,6 +18,7 @@ import {
   isResting,
   nextClass,
   nextTripFor,
+  planChangesAt,
   reachedEarly,
   restDetail,
   restLabel,
@@ -34,9 +35,9 @@ import { isoSeconds, mins, shortStop } from './format.ts';
 import { landmark, targetStops } from './landmarks.ts';
 import { atHome } from './residences.ts';
 import { paceSpeed } from './walk.ts';
-import { coordsFrom } from './http.ts';
-import type { TripView } from './card.ts';
-import { NO_PREFS, type TripPrefs } from './outcomes.ts';
+import { type Coords, coordsFrom } from './http.ts';
+import { type TripView, cardFor, nextPhaseAt } from './card.ts';
+import type { TripPrefs } from './outcomes.ts';
 import {
   ASSUME_MS,
   AT_STOP_M,
@@ -45,8 +46,11 @@ import {
   type DayRecord,
   type Phase,
   RIDE_GRACE_MS,
+  type TripUpdate,
   dayState,
+  isHomeKey,
   leaveOf,
+  needsWatch,
   offStop,
   phaseFor,
   rideStage,
@@ -57,13 +61,46 @@ import {
 } from './trip.ts';
 import { SAME_BUS_MS, choosePlan, planOfLeave } from './plan.ts';
 import { m } from './i18n.ts';
+import { feedDownSince } from './monitor.ts';
+import { pushEnabled } from './push.ts';
 
 /**
  * 12-hour times: the account's choice when it made one, else the client's
  * own (`?h12=1`). Default 24-hour.
  */
-export const hour12 = (url: URL, profile?: Pick<Profile, 'clock'>) =>
-  profile?.clock === '12' ? true : profile?.clock === '24' ? false : url.searchParams.get('h12') === '1';
+export const hour12 = (clientH12: boolean, profile?: Pick<Profile, 'clock'>) =>
+  profile?.clock === '12' ? true : profile?.clock === '24' ? false : clientH12;
+
+/**
+ * What a request asks the planner: where it is, and a favourite (`place`)
+ * or a stop or room (`to`) to go to instead of the day's own trip.
+ */
+export interface Ask {
+  at: Coords;
+  place: string | null;
+  to: string | null;
+  /** The client shows 12-hour times, for an account that hasn't chosen. */
+  h12: boolean;
+}
+
+/** The ask in a request's query: `lat`, `lon`, `acc`, `place`, `to`, `h12`. */
+export const askOf = (url: URL): Ask => ({
+  at: coordsFrom(url),
+  place: url.searchParams.get('place'),
+  to: url.searchParams.get('to'),
+  h12: url.searchParams.get('h12') === '1',
+});
+
+/** The day's own trip, from nowhere in particular: what the Trip object plans when it wakes. */
+export const DAY_ASK: Ask = { at: { lat: null, lon: null }, place: null, to: null, h12: false };
+
+/** Who the planner plans for. `day` is today's trip signals, or null when there are none. */
+export interface Rider {
+  userId: string;
+  profile: Profile;
+  day: DayRecord | null;
+  prefs: TripPrefs;
+}
 
 /** In the evening, a location this close to a stop is on campus. */
 export const ON_CAMPUS_M = 500;
@@ -577,25 +614,14 @@ function thereAnswer(
   };
 }
 
-/**
- * The planned (or asked-for) answer and the trip it's about. `day` is
- * today's trip signals, or null when there are none.
- */
-export async function planned(
-  url: URL,
-  env: Env,
-  ctx: ExecutionContext,
-  nowMs: number,
-  deps: MeDeps,
-  profile: Profile,
-  day: DayRecord | null,
-  prefs: TripPrefs = NO_PREFS,
-): Promise<Planned> {
-  const p = await plannedTrip(url, env, ctx, nowMs, deps, profile, day, prefs);
+/** The planned (or asked-for) answer and the trip it's about. */
+export async function planned(env: Env, ctx: ExecutionContext, deps: MeDeps, rider: Rider, ask: Ask, nowMs: number): Promise<Planned> {
+  const { profile, day, prefs } = rider;
+  const p = await plannedTrip(env, ctx, deps, rider, ask, nowMs);
   // What the user chose for their trips, and what terminus has to suggest.
   const trip: TripView = {
     ...p.trip,
-    ...reachedOf(url, nowMs, profile, day, p),
+    ...reachedOf(ask, nowMs, profile, day, p),
     remind: !(p.trip.key && prefs.quiet.has(p.trip.key)),
     // Never in the middle of a trip.
     suggestion: p.trip.phase === 'idle' || p.trip.phase === 'arrived' ? prefs.suggestion : null,
@@ -603,34 +629,69 @@ export async function planned(
   return { answer: p.answer, trip };
 }
 
-async function plannedTrip(
-  url: URL,
-  env: Env,
-  ctx: ExecutionContext,
-  nowMs: number,
-  deps: MeDeps,
-  profile: Profile,
-  day: DayRecord | null,
-  prefs: TripPrefs,
-): Promise<Planned> {
-  const at = coordsFrom(url);
+/** What a request changes in the Trip object: a route sends it all, the Trip object keeps only the plans. */
+export type NextUpdate = Omit<TripUpdate, 'date' | 'deleteAt'>;
+
+/**
+ * /me/next's body (the answer, when it changes by itself, and the card), the
+ * trip it's about, and what it changes in the Trip object. Nothing is saved
+ * here: the caller sends `update`, or inside the Trip object keeps only its plans.
+ */
+export async function nextFor(env: Env, ctx: ExecutionContext, deps: MeDeps, rider: Rider, ask: Ask, nowMs: number) {
+  const { userId, profile, day } = rider;
+  const { answer, trip } = await planned(env, ctx, deps, rider, ask, nowMs);
+  const update: NextUpdate = {};
+  // At the destination, or home (this request's location): that trip is over, for every device.
+  if (trip.reached) {
+    const label = isHomeKey(trip.reached) ? 'Home' : (answer.dest?.label ?? undefined);
+    const onBus = day?.trips[trip.reached]?.kind === 'boarded' ? day.trips[trip.reached].boarded : undefined;
+    update.items = [{ key: trip.reached, rec: { kind: 'arrived', at: nowMs, label, ...(onBus ? { boarded: onBus } : {}) } }];
+  }
+  // Remember which bus the trip is for, so every device says it and detection
+  // watches it: from when it's due, or before then when it was planned from
+  // where the phone is (the widget and the Mac would otherwise each plan
+  // from where the timetable puts you). Written only when the plan changes,
+  // or once its bus is seen ridden.
+  const plan = trip.seenOn ?? (trip.planChanged ? trip.plan : null);
+  if (plan && trip.key && (trip.phase !== 'idle' || plan.located)) update.plans = { [trip.key]: plan };
+  // When the plan itself moves on (class starts, day ends). Only the planned
+  // answer has one; a place or a stop never changes by itself.
+  const isPlan = !ask.place && !ask.to;
+  const full: MeAnswer = isPlan ? { ...answer, refreshAt: isoSeconds(planChangesAt(profile, nowMs)) } : answer;
+  // The display-ready card, in the client's 12- or 24-hour style.
+  const card = cardFor(full, hour12(ask.h12, profile), trip, await feedDownSince(env, nowMs), nowMs);
+  // Push: have the Trip object wake when this card next changes, to tell the
+  // phones, unless it already wakes about then or sooner.
+  const wakeAt = nextPhaseAt(full, trip, nowMs);
+  if (wakeAt !== null && pushEnabled(env) && needsWatch(day, wakeAt, nowMs) && classesOn(profile, nowMs).length) {
+    update.watch = { userId, at: wakeAt };
+  }
+  // The user's walking speed, for walk times the apps show themselves (search).
+  // The walk from the stop is in the card's journey; the raw seconds stay here.
+  const { endWalk: _endWalk, upcoming: _upcoming, ...shown } = full;
+  return { body: { ...shown, walkSpeedMs: paceSpeed(profile.walkPace), card }, trip, update, wakeAt };
+}
+
+async function plannedTrip(env: Env, ctx: ExecutionContext, deps: MeDeps, rider: Rider, ask: Ask, nowMs: number): Promise<Planned> {
+  const { profile, day, prefs } = rider;
+  const at = ask.at;
   const { lat, lon } = at;
-  const h12 = hour12(url, profile);
+  const h12 = hour12(ask.h12, profile);
   const homeStop = profile.home?.stops[0] ?? null;
   const places: PlaceChip[] = profile.places.map(({ key, label }) => ({ key, label }));
   const undo = undoOf(day, nowMs);
   const idle = (answer: MeAnswer): Planned => ({ answer, trip: { key: null, phase: 'idle', undo } });
 
   // A place or stop you asked for: an ad-hoc trip, not tracked.
-  const placeKey = url.searchParams.get('place');
-  const toRaw = url.searchParams.get('to');
+  const placeKey = ask.place;
+  const toRaw = ask.to;
   if (placeKey || toRaw) {
     let dest: Dest | null = null;
     if (placeKey) {
       const pl = profile.places.find((p) => p.key === placeKey);
       if (pl) dest = { to: pl.to, label: pl.label, why: 'place', from: homeStop };
     } else {
-      const r = resolveTo(deps.graph, toRaw!);
+      const r = resolveTo(GRAPH, toRaw!);
       if (r) dest = { ...r, why: 'place', from: homeStop };
     }
     if (dest) return idle(await tripAnswer(env, ctx, nowMs, deps, profile, dest, at, places, h12));
@@ -642,18 +703,18 @@ async function plannedTrip(
   const homeHere = atHome(lat, lon, profile.home?.stops ?? []);
   if (isResting(profile, nowMs)) {
     // Evenings: on campus and not at home, the way home rather than a moon.
-    if (homeStop && lat !== null && lon !== null && !homeHere && onCampus(deps.graph, lat, lon)) {
+    if (homeStop && lat !== null && lon !== null && !homeHere && onCampus(GRAPH, lat, lon)) {
       const dest: Dest = { to: homeStop, label: m().home, why: 'home', from: null };
       const answer = await tripAnswer(env, ctx, nowMs, deps, profile, dest, at, places, h12);
-      return withPhase({ ...answer, warning: lastBusWarning(deps.graph, answer, nowMs) }, 'home:evening');
+      return withPhase({ ...answer, warning: lastBusWarning(GRAPH, answer, nowMs) }, 'home:evening');
     }
-    return idle(restAnswer(deps.graph, profile, nowMs, places, h12));
+    return idle(restAnswer(GRAPH, profile, nowMs, places, h12));
   }
 
   const state = dayState(day);
   const plan = nextTripFor(profile, nowMs, state);
   if (!plan) {
-    const free = freeAnswer(deps.graph, profile, nowMs, places, h12, state.skipped, state.away);
+    const free = freeAnswer(GRAPH, profile, nowMs, places, h12, state.skipped, state.away);
     return { answer: free, trip: { key: null, phase: 'idle', undo, ...(state.away ? { away: true } : {}) } };
   }
 
@@ -678,7 +739,7 @@ async function plannedTrip(
       // The next class still on today: not one taken off.
       const next = nextClass(profile, nowMs, state.skipped);
       if (plan.why !== 'gap-home' || next?.daysAhead !== 0)
-        return idle(youreHome(deps.graph, profile, nowMs, homeStop, places, h12, state.skipped));
+        return idle(youreHome(GRAPH, profile, nowMs, homeStop, places, h12, state.skipped));
       // Between classes: when to leave home for the next one.
       dest = { to: next.trip.to, label: next.trip.label, why: 'class', from: homeStop, trip: next.trip, fromVenue: null };
       key = classKey(next.trip);
@@ -689,7 +750,7 @@ async function plannedTrip(
       sgt(nowMs).minutes >= plan.lastEndMin + HOME_BY_MIN
     ) {
       // No location, and long enough since the last class to be home by now.
-      return idle(youreHome(deps.graph, profile, nowMs, homeStop, places, h12, state.skipped));
+      return idle(youreHome(GRAPH, profile, nowMs, homeStop, places, h12, state.skipped));
     }
   }
 
@@ -727,7 +788,7 @@ async function plannedTrip(
   const answer: MeAnswer = kept ? { ...fresh, leave: { ...leaveOf(bus), stale: true } } : fresh;
 
   const home = dest.why === 'home' || dest.why === 'gap-home';
-  const out = withPhase(home ? { ...answer, warning: lastBusWarning(deps.graph, answer, nowMs) } : answer, key);
+  const out = withPhase(home ? { ...answer, warning: lastBusWarning(GRAPH, answer, nowMs) } : answer, key);
   // Still in the day's last class: the way home is the answer, but that trip
   // hasn't started ("Time to get going" in the middle of a lecture), and
   // nothing about its bus is assumed until the class ends.
@@ -769,7 +830,7 @@ async function plannedTrip(
     // Not known: the next way there, which is what you need if you missed
     // it, and says only that the bus has gone if you didn't. Under way
     // either way: never "Time to get going" to someone who may be on board.
-    const next = withPhase(home ? { ...fresh, warning: lastBusWarning(deps.graph, fresh, nowMs) } : fresh, key);
+    const next = withPhase(home ? { ...fresh, warning: lastBusWarning(GRAPH, fresh, nowMs) } : fresh, key);
     const phase = next.trip.phase === 'idle' || next.trip.phase === 'due' ? 'heading' : next.trip.phase;
     return { answer: next.answer, trip: { ...next.trip, phase, plan: bus, gone: true } };
   }
@@ -838,15 +899,15 @@ async function plannedTrip(
  * a device without a location (the widget, the background refresh, the Mac)
  * stops assuming you're still on the way, and plans what comes next too.
  */
-function reachedOf(url: URL, nowMs: number, profile: Profile, day: DayRecord | null, p: Planned): { reached?: string } {
-  const { lat, lon } = coordsFrom(url);
+function reachedOf(ask: Ask, nowMs: number, profile: Profile, day: DayRecord | null, p: Planned): { reached?: string } {
+  const { lat, lon } = ask.at;
   if (lat === null || lon === null) return {};
   const key = p.trip.key;
   if (key && p.trip.phase === 'arrived' && p.answer.arrived) {
     const r = day?.trips[key];
     return r && r.kind !== 'boarded' ? {} : { reached: key };
   }
-  if (url.searchParams.get('place') || url.searchParams.get('to') || isResting(profile, nowMs)) return {};
+  if (ask.place || ask.to || isResting(profile, nowMs)) return {};
   if (!atHome(lat, lon, profile.home?.stops ?? [])) return {};
   const plan = nextTripFor(profile, nowMs, dayState(day));
   if (!plan || (plan.why !== 'home' && plan.why !== 'gap-home')) return {};

@@ -247,6 +247,14 @@ _Avoid_: booking, choice, boarded
 The trip the planner picks for right now from the day: the next class, a long gap, or home.
 _Avoid_: plan, next, destination choice
 
+**Rider**:
+Whom the planner plans for: their profile, today's trip signals and what their trips suggest (`Rider` in next.ts).
+_Avoid_: user, session, context
+
+**Ask**:
+What a request wants of the planner: where it is, a favourite or stop instead of the day's trip, and its clock (`Ask` in next.ts).
+_Avoid_: query, request, params
+
 **Phase**:
 Where a trip stands: due, heading, waiting, riding, missed or arrived; idle before any of them.
 _Avoid_: state, stage, status

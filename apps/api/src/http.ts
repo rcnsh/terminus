@@ -67,12 +67,17 @@ export const roundCoord = (x: number): number => Math.round(x * 10_000) / 10_000
  * rounded (roundCoord): a fix too rough to say where you are counts as none
  * (MAX_FIX_ACC_M).
  */
-export function coordsFrom(url: URL): { lat: number; lon: number } | { lat: null; lon: null } {
-  const lat = numParam(url, 'lat');
-  const lon = numParam(url, 'lon');
+export function coordsFrom(url: URL): Coords {
+  return coords(numParam(url, 'lat'), numParam(url, 'lon'), numParam(url, 'acc'));
+}
+
+/** A location, or none. */
+export type Coords = { lat: number; lon: number } | { lat: null; lon: null };
+
+/** A location from its numbers, by coordsFrom's rules: out of range or too rough is none. */
+export function coords(lat: number | null, lon: number | null, acc: number | null = null): Coords {
   if (lat === null || lon === null) return { lat: null, lon: null };
   if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return { lat: null, lon: null };
-  const acc = numParam(url, 'acc');
   if (acc !== null && acc > MAX_FIX_ACC_M) return { lat: null, lon: null };
   return { lat: roundCoord(lat), lon: roundCoord(lon) };
 }
