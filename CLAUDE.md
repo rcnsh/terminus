@@ -622,9 +622,13 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
 
 ## Code style
 
-- Match the surrounding code. Comments explain **why**, in plain English, at
-  the density of the file around them. Doc comments describe behaviour, not
-  history.
+- Match the surrounding code. Comments explain **why**, in plain English, in
+  the present tense, at the density of the file around them. No history
+  ("used to", "since 3.2", dates): that's what git log is for. Don't
+  restate the name or the next line. Don't repeat internals.md at length;
+  point to it. The exception is evidence about the outside feeds (NUS,
+  LTA, NUSMods): what was observed and when stays, because nothing else
+  records it.
 - **User-facing copy** is short, plain and concrete, in British spelling
   (colour, metres), with no jargon. It names what the user sees ("the map",
   "your stop"), not internals.
