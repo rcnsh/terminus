@@ -1,5 +1,6 @@
 // The shuttles' livery: the stripes down a bus's side, as on sign-in, the
-// Android app's welcome and the pair page. Its own module so a page without
+// Android app's welcome and the pair page (and the Worker's own pages, drawn
+// by me.ts liveryHtml). Its own module so a page without
 // the account's code (pair/) can draw it too; styled in site.css.
 import { html } from '../assets/ui.js';
 

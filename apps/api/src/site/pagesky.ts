@@ -1,7 +1,6 @@
 /**
- * The band of sky at the top of the Worker's own small pages (me.ts page():
- * approving a sign-in, a used link, and so on): the hour's sky, with the
- * campus's hills along its foot, as Settings' pages have it in the apps.
+ * The hour's sky, with the campus's hills along its foot, as Settings' pages
+ * have it in the apps: the /docs page's bar (openapi/docs.ts).
  * The page is plain HTML with no script, so the hour is the server's, in
  * Singapore. The colours and hours are the web app's (app.css, daylight.js);
  * pagesky.test.js keeps them the same.
@@ -139,18 +138,3 @@ export const lightInkAt = (phase: Phase) => LIGHT_INK.has(phase);
 /** The sky's colours at `phase` as CSS variables: on a light page, or on a dark one. */
 export const skyVars = (phase: Phase, page: 'light' | 'dark' = 'light') =>
   vars(PAGE_SKIES[page][phase], page === 'dark' || LIGHT_INK.has(phase));
-
-/** The band's CSS at `phase`: its colours on a light page and on a dark one, and how it's laid out. */
-export function bandCss(phase: Phase): string {
-  return `.band{${vars(PAGE_SKIES.light[phase], LIGHT_INK.has(phase))}}
-@media (prefers-color-scheme:dark){.band{${vars(PAGE_SKIES.dark[phase], true)}}}
-.band{margin:-32px -28px 20px;padding:18px 24px 0;background:linear-gradient(var(--s0),var(--s1) 50%,var(--s2) 86%,var(--s3))}
-.band .brand{color:var(--band-ink)}
-.band .hz{display:block;width:calc(100% + 48px);height:52px;margin:6px -24px 0}
-.hz .far{fill:var(--h-far)}.hz .tree{fill:var(--h-tree)}.hz .city{fill:var(--h-city)}.hz .lit{fill:#fde9c9}.hz .near{fill:var(--surface)}`;
-}
-
-/** The band itself: the mark and the name in the sky, over the hills. */
-export function bandHtml(phase: Phase): string {
-  return `<div class="band"><span class="brand"><img src="/assets/mark.svg" alt=""><span class="wordmark">terminus</span></span>${horizonSvg(phase === 'dusk' || phase === 'night')}</div>`;
-}
