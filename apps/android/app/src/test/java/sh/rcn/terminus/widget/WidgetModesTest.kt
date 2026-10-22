@@ -35,7 +35,6 @@ class WidgetModesTest {
             steps++
         }
         assertTrue(at - t <= WidgetModes.LAST_STEP_MS)
-        assertTrue(WidgetModes.LAST_STEP_MS < NearbyBoard.NOW_MS)
         assertTrue(steps in 1..12)
     }
 

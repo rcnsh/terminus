@@ -102,15 +102,27 @@ internal object NearbyBoard {
         return end.takeIf { shown.any { it !== bus && it.next == bus.next && it.end != end } }
     }
 
-    /** A countdown says "now" this long before its bus is due: the redraw then has half a minute before the count could pass zero. */
-    const val NOW_MS = 30_000L
+    /** A bus says how many minutes until it under this; further off, its clock time says enough, and the widget redraws less. */
+    const val MINUTES_MS = 15 * 60_000L
 
     /**
-     * When the widget next looks different with nothing new: a shown bus's countdown turning to "now" ([NOW_MS] before it's due), or the
-     * bus going ([GONE_MS] after).
+     * Whole minutes until a bus due at [atMs], rounded down so it's never later than said ("6 min" from 6:59 to 6:00 away), 0 in its last
+     * minute ("now"); null from [MINUTES_MS] away.
      */
-    fun redrawAt(buses: List<StopBus>, now: Long): Long? =
-        buses.flatMap { listOf(it.atMs) + it.later }.flatMap { listOf(it - NOW_MS, it + GONE_MS) }.filter { it > now }.minOrNull()
+    fun minutesLeft(atMs: Long, now: Long): Int? = (atMs - now).takeIf { it < MINUTES_MS }?.let { maxOf(0L, it / 60_000L).toInt() }
+
+    /**
+     * When the widget next looks different with nothing new: a shown bus going ([GONE_MS] after it's due), and before [minutesUntil] each
+     * minute off a shown bus's count ([minutesLeft]). Null [minutesUntil]: no counts shown, as without exact alarms, which could leave one
+     * a minute or more behind. A bus after a shown one counts once it's shown, from the redraw as the one before it goes.
+     */
+    fun redrawAt(buses: List<StopBus>, now: Long, minutesUntil: Long? = null): Long? {
+        val gone = buses.flatMap { listOf(it.atMs) + it.later }.map { it + GONE_MS }
+        val ticks = minutesUntil?.let { until ->
+            buses.filter { !it.first }.flatMap { b -> (1..MINUTES_MS / 60_000L).map { b.atMs - it * 60_000L } }.filter { it < until }
+        }
+        return (gone + ticks.orEmpty()).filter { it > now }.minOrNull()
+    }
 
     /** Page [page] of [buses], [per] to a page, counting round; with which page it is and how many there are. */
     fun page(buses: List<StopBus>, per: Int, page: Int): Paged {
