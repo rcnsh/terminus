@@ -110,6 +110,15 @@ jobs:
       # must come with a changed hash, in the same reviewed diff.
       - run: shasum -a 256 -c MapLibre.xcframework.zip.sha256
         working-directory: apps/macos/Vendor
+      # And it links only macOS's own libraries: one from Homebrew loads on
+      # the Mac that built it and nowhere else (scripts/vendor-maplibre-mac.sh).
+      - run: |
+          dir=$(mktemp -d)
+          ditto -x -k MapLibre.xcframework.zip "$dir"
+          bin=$(find "$dir" -path '*/Versions/A/MapLibre' -type f)
+          otool -L "$bin"
+          ! otool -L "$bin" | grep -v ':$' | awk '{ print $1 }' | grep -vE '^(/System/|/usr/lib/|@rpath/)'
+        working-directory: apps/macos/Vendor
       # The Swift is formatted (swift-format, by .swift-format).
       - run: scripts/format-swift.sh --check
       # Exactly the versions in Package.resolved: a package that moved its
