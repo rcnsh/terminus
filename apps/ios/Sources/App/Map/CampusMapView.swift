@@ -436,7 +436,14 @@ struct CampusMapView: UIViewRepresentable {
         func frameCampus() {
             guard !framed, let view, view.bounds.width > 100, view.bounds.height > 100 else { return }
             framed = true
-            if map.focusCount != focused { return camera() }
+            // A stop opened from another tab: the first view is on it, put
+            // there at once. A glide begun before the style has loaded is
+            // cut short by it, and the map stays at the style's own view.
+            if map.focusCount != focused, let f = map.focus {
+                focused = map.focusCount
+                following = (f, Date().addingTimeInterval(followCoverS))
+                return centre(on: f, animated: false)
+            }
             view.setVisibleCoordinateBounds(bounds(campus.coreBounds), edgePadding: padding(24), animated: false, completionHandler: nil)
             if let at = Locator.shared.last?.coordinate,
                 let near = campus.stops.min(by: {
@@ -500,7 +507,7 @@ struct CampusMapView: UIViewRepresentable {
 
         /// Close in on `spot` (zoom 17, or nearer if already), in the middle
         /// of what the pills and the sheet leave uncovered.
-        private func centre(on spot: MapModel.Spot) {
+        private func centre(on spot: MapModel.Spot, animated: Bool = true) {
             guard let view else { return }
             let zoom = max(view.zoomLevel, 17)
             // How far above the map's middle the uncovered part's middle is, in
@@ -508,7 +515,7 @@ struct CampusMapView: UIViewRepresentable {
             // points round at zoom 0, its north-south scale cos(lat) of that).
             let up = Double(cover.bottom - cover.top) / 2
             let lat = spot.lat - up * 360 / (512 * pow(2, zoom)) * cos(spot.lat * .pi / 180)
-            view.setCenter(CLLocationCoordinate2D(latitude: lat, longitude: spot.lon), zoomLevel: zoom, animated: !still)
+            view.setCenter(CLLocationCoordinate2D(latitude: lat, longitude: spot.lon), zoomLevel: zoom, animated: animated && !still)
         }
 
         // MARK: taps
