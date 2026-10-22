@@ -154,22 +154,27 @@ const HOME = {
  * shuttles carry on across the joins. The sky and the stars are drawn at this
  * page's size; the landscape is the Play set's drawing, scaled.
  */
-function panoramaScript({ dw = W, dh = H, scale = S, landY = LAND_Y, clear = true, even = false } = {}) {
+function panoramaScript({ dw = W, dh = H, scale = S, landY = LAND_Y, clear = true, span = null } = {}) {
   const phases = SLIDES.map((s) => SKIES[s.sky]);
   return `(() => {
   const P = ${JSON.stringify(phases)};
-  const DW = ${dw}, DH = ${dh}, S = ${scale}, LAND_Y = ${landY}, CLEAR = ${clear}, EVEN = ${even};
+  const DW = ${dw}, DH = ${dh}, S = ${scale}, LAND_Y = ${landY}, CLEAR = ${clear}, SPAN = ${JSON.stringify(span)};
   const W = 1080, H = 1920, N = P.length, PW = W * N;
   const c = document.getElementById('pano');
   const g = c.getContext('2d');
   const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
   const mix = (a, b, t) => { const x = hex(a), y = hex(b); return 'rgb(' + x.map((v, i) => Math.round(v + (y[i] - v) * t)).join(',') + ')'; };
   // How far along the day at x (in the drawing's units): whole numbers at the
-  // slides' middles, easing from one to the next across the join.
+  // slides' middles, easing from one to the next across the join. A span
+  // ([x0, x1, from, to]) instead spreads the hours from..to evenly over x0..x1,
+  // without the easing, so no part of it changes faster than the rest.
   const at = (x) => {
-    const f = Math.min(N - 1, Math.max(0, x / W - 0.5));
+    const f = SPAN
+      ? Math.min(SPAN[3], Math.max(SPAN[2], SPAN[2] + ((x - SPAN[0]) / (SPAN[1] - SPAN[0])) * (SPAN[3] - SPAN[2])))
+      : Math.min(N - 1, Math.max(0, x / W - 0.5));
     const i = Math.min(N - 2, Math.floor(f)), t = f - i;
-    const e = EVEN ? t : t < 0.25 ? 0 : t > 0.75 ? 1 : (t - 0.25) / 0.5;
+    if (SPAN) return [i, t];
+    const e = t < 0.25 ? 0 : t > 0.75 ? 1 : (t - 0.25) / 0.5;
     return [i, e * e * (3 - 2 * e)];
   };
   const col = (x, key, k) => { const [i, t] = at(x); const a = k === undefined ? P[i][key] : P[i][key][k], b = k === undefined ? P[i + 1][key] : P[i + 1][key][k]; return mix(a, b, t); };
@@ -368,15 +373,18 @@ function page(index, lang) {
 // The product page's header (App Store Connect's 3840×1646): the same strip
 // without the phones or words, since the App Store crops it to each screen
 // and sets the app's name beside it. The whole day would leave the land a
-// thin line at this shape, so it shows golden hour to night, larger, from
-// just past the morning's shuttle, the hours blending evenly across it, as
-// no phone covers the joins.
+// thin line at this shape, so it shows the strip from just past the
+// morning's shuttle, larger, with golden hour at its left edge, dusk in the
+// middle and night at its right edge: with no phone to cover a join, each
+// hour turns into the next over half the picture.
 const HEADER = { w: 3840, h: 1646, from: 2.15 };
 
 function headerPage() {
   const dw = HEADER.w / (SLIDES.length - HEADER.from);
   const scale = dw / 1080;
-  const opts = { dw, dh: HEADER.h, scale, landY: HEADER.h - 1920 * scale, clear: false, even: true };
+  const left = HEADER.from * 1080;
+  const span = [left, left + HEADER.w / scale, 2, SLIDES.length - 1];
+  const opts = { dw, dh: HEADER.h, scale, landY: HEADER.h - 1920 * scale, clear: false, span };
   return `<!doctype html><html><head><meta charset="utf-8"><style>
     html, body { margin: 0; width: ${HEADER.w}px; height: ${HEADER.h}px; overflow: hidden; position: relative; }
     #pano { position: absolute; top: 0; left: -${Math.round(HEADER.from * dw)}px; }
