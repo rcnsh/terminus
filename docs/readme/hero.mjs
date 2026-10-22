@@ -2,7 +2,7 @@
 // (banner-light.webp, banner-dark.webp). Run shots.mjs first when the app's
 // screenshots change; this only composes them.
 //
-//   node .github/readme/hero.mjs
+//   node docs/readme/hero.mjs
 //
 // Needs Playwright (PLAYWRIGHT=/path/to/node_modules/playwright if it isn't
 // resolvable from here), a Chromium (CHROME, or Playwright's own) and cwebp.

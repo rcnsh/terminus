@@ -1,7 +1,7 @@
 <a href="https://terminus.run">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset=".github/readme/banner-dark.webp">
-    <img alt="terminus: never run for a bus again. Your NUS timetable in, one answer out: which shuttle, from which stop, and when to leave. Every client stands on the live campus map, with the D2 line and its buses running back to the horizon under the sky: the Android widget on your home screen (leave by 9:39 AM, walk to PGP, R2 to UTown), the Mac menu bar app (leave by 9:41, catch the 9:45 D2 at PGP) and the web app on a phone (leave in 19 minutes, live)." src=".github/readme/banner-light.webp" width="100%">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/readme/banner-dark.webp">
+    <img alt="terminus: never run for a bus again. Your NUS timetable in, one answer out: which shuttle, from which stop, and when to leave. Every client stands on the live campus map, with the D2 line and its buses running back to the horizon under the sky: the Android widget on your home screen (leave by 9:39 AM, walk to PGP, R2 to UTown), the Mac menu bar app (leave by 9:41, catch the 9:45 D2 at PGP) and the web app on a phone (leave in 19 minutes, live)." src="docs/readme/banner-light.webp" width="100%">
   </picture>
 </a>
 
@@ -30,15 +30,15 @@ How it was built, and why it runs on one Cloudflare Worker:
 The same answer on your home screen, in your menu bar and on the web, in light or dark.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/readme/clients-dark.webp">
-  <img alt="Four cards. On the web: Now in the web app, under the daytime sky, says leave in 19 minutes for GEA1000 at UTown, walking 5 minutes to PGP and riding the R2 for 10; the app in any browser, with your trip drawn as a line, added to your home screen like an app, with notifications when it's time to leave. On your home screen: the Android widget says leave by 9:39 AM, with the trip as a line from you to PGP to UTown and buttons for favourites; it keeps itself up to date, with a live notification when it's time to go. In your menu bar: the Mac app says leave by 9:41 for CS2030 at 10:00, catch the 9:45 D2 at PGP; click for the whole trip, your favourites, or anywhere else on campus. Every stop's buses: the Buses tab for Prince George's Park Foyer, each service live with how full it usually is; search any stop or service, on Android and the web." src=".github/readme/clients-light.webp" width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/readme/clients-dark.webp">
+  <img alt="Four cards. On the web: Now in the web app, under the daytime sky, says leave in 19 minutes for GEA1000 at UTown, walking 5 minutes to PGP and riding the R2 for 10; the app in any browser, with your trip drawn as a line, added to your home screen like an app, with notifications when it's time to leave. On your home screen: the Android widget says leave by 9:39 AM, with the trip as a line from you to PGP to UTown and buttons for favourites; it keeps itself up to date, with a live notification when it's time to go. In your menu bar: the Mac app says leave by 9:41 for CS2030 at 10:00, catch the 9:45 D2 at PGP; click for the whole trip, your favourites, or anywhere else on campus. Every stop's buses: the Buses tab for Prince George's Park Foyer, each service live with how full it usually is; search any stop or service, on Android and the web." src="docs/readme/clients-light.webp" width="100%">
 </picture>
 
 ## What it knows
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/readme/knows-dark.webp">
-  <img alt="Three cards. Follows your timetable: import from NUSMods once a semester; the week before the next one starts, it reminds you. It knows teaching weeks, recess, exams and public holidays, and sends you home in long gaps. Leave at the right time: the latest bus that still gets you there, walks along campus paths at your pace, and a bus earlier when yours is usually busy. The right side of the road: the stop going your way, even when the one across the road is closer. Inside your hall, only the stops you can walk to. Or check any stop with one tap." src=".github/readme/knows-light.webp" width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/readme/knows-dark.webp">
+  <img alt="Three cards. Follows your timetable: import from NUSMods once a semester; the week before the next one starts, it reminds you. It knows teaching weeks, recess, exams and public holidays, and sends you home in long gaps. Leave at the right time: the latest bus that still gets you there, walks along campus paths at your pace, and a bus earlier when yours is usually busy. The right side of the road: the stop going your way, even when the one across the road is closer. Inside your hall, only the stops you can walk to. Or check any stop with one tap." src="docs/readme/knows-light.webp" width="100%">
 </picture>
 
 ### And a map of campus
@@ -74,8 +74,8 @@ It updates through the day and goes quiet in the evening. The app has four tabs:
 ## How it fits together
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/readme/diagram-dark.webp">
-  <img alt="How it fits together. Live, when someone asks (cached): the NUS shuttle feed (arrivals 15 s a stop, live buses 5 s a service), LTA DataMall (public buses, for accounts that turn them on) and NUSMods (your timetable). Refreshed weekly: the NUS calendar and public holidays, OpenStreetMap walking paths and route lines, and the Protomaps street map. All feed one Cloudflare Worker (apps/api), which does all the thinking and keeps D1, the edge cache, Durable Objects, KV and R2, a cron and email. It sends one card from /api/me/next, and push, to the Android app and widgets, the Mac menu bar app, and the website and web app." src=".github/readme/diagram-light.webp" width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/readme/diagram-dark.webp">
+  <img alt="How it fits together. Live, when someone asks (cached): the NUS shuttle feed (arrivals 15 s a stop, live buses 5 s a service), LTA DataMall (public buses, for accounts that turn them on) and NUSMods (your timetable). Refreshed weekly: the NUS calendar and public holidays, OpenStreetMap walking paths and route lines, and the Protomaps street map. All feed one Cloudflare Worker (apps/api), which does all the thinking and keeps D1, the edge cache, Durable Objects, KV and R2, a cron and email. It sends one card from /api/me/next, and push, to the Android app and widgets, the Mac menu bar app, and the website and web app." src="docs/readme/diagram-light.webp" width="100%">
 </picture>
 
 The Worker does all the thinking, and caches the NUS feed for 15 seconds per stop. Every client shows the same ready-made card
@@ -245,8 +245,8 @@ map goes to R2 with the **map tiles** workflow or `scripts/map-tiles.sh`.
 See [CONTRIBUTING.md](CONTRIBUTING.md) to send a change.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/readme/loc-dark.webp">
-  <img alt="The code, counted by pnpm loc: the API, the website, the Android, Mac and iPhone apps, and the scripts and CI, drawn as stops along a shuttle line as long as each part's share of the lines, with each part's count beneath; and the share of each language." src=".github/readme/loc-light.webp" width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/readme/loc-dark.webp">
+  <img alt="The code, counted by pnpm loc: the API, the website, the Android, Mac and iPhone apps, and the scripts and CI, drawn as stops along a shuttle line as long as each part's share of the lines, with each part's count beneath; and the share of each language." src="docs/readme/loc-light.webp" width="100%">
 </picture>
 
 <br>

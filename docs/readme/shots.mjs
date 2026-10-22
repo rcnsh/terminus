@@ -1,9 +1,9 @@
 // The README's pictures, light and dark, from the real site run by the dev
 // stub: the web app's Now and Buses tabs, and the map with D2 picked. The
 // banner and the clients picture are composed from them afterwards:
-// node .github/readme/hero.mjs, then sh .github/readme/features.sh
+// node docs/readme/hero.mjs, then sh docs/readme/features.sh
 //
-//   node .github/readme/shots.mjs
+//   node docs/readme/shots.mjs
 //
 // Needs Playwright (PLAYWRIGHT=/path/to/node_modules/playwright if it isn't
 // resolvable from here), a Chromium (CHROME, or Playwright's own) and cwebp.
@@ -69,8 +69,8 @@ try {
   const phone = { width: 390, height: 844 };
 
   for (const scheme of ['light', 'dark']) {
-    await shoot(scheme, { name: 'now', to: '.github/readme', viewport: phone, path: '/app/' });
-    await shoot(scheme, { name: 'buses', to: '.github/readme', viewport: phone, path: '/app/', act: tab('Buses') });
+    await shoot(scheme, { name: 'now', to: 'docs/readme', viewport: phone, path: '/app/' });
+    await shoot(scheme, { name: 'buses', to: 'docs/readme', viewport: phone, path: '/app/', act: tab('Buses') });
     await shoot(scheme, {
       name: 'map',
       to: 'apps/web/public/assets/shots',
