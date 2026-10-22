@@ -106,7 +106,7 @@
 .sky-panel .horizon .road { stroke: var(--h-road); stroke-width: 1.5; stroke-dasharray: 6 6; }
 .sky-panel .horizon .sun { display: none; fill: var(--sun); }
 [data-sky="dawn"] .sky-panel .horizon .sun.dawn, [data-sky="golden"] .sky-panel .horizon .sun.golden, [data-sky="dusk"] .sky-panel .horizon .sun.dusk { display: inline; }
-.sky-panel .horizon.low .sun { display: none !important; }
+.sky-panel .horizon.low .sun { display: none; }
 .sky-panel .horizon :is(.lit, .beam) { display: none; fill: #fde9c9; }
 [data-sky="dusk"] .sky-panel .horizon :is(.lit, .beam), [data-sky="night"] .sky-panel .horizon :is(.lit, .beam) { display: inline; }
 .sky-panel .horizon .beam { opacity: 0.12; }
@@ -157,3 +157,31 @@
   .sky-panel { --surface: var(--k-bg); --surface-2: var(--k-bg); }
   .sky-panel * { --k-chip: var(--k-bg); }
 }
+
+/* The beta's pages (data-site="beta", from markBeta in src/site.ts) are under
+   a blueprint at every hour instead: the plans for the next terminus, so it's
+   never taken for the real one. Only the page's own sky: the phone drawn on
+   the landing page keeps the app's, as the beta app does. The hills are
+   drawn in outline and the night is left out; the shuttles keep their colours. */
+:root[data-site="beta"] .sky-panel:not(.sky-panel .sky-panel) {
+  --s0: #1a355a; --bp-foot: #24497a; --bp-line: rgb(255 255 255 / 0.07); --bp-major: rgb(255 255 255 / 0.14);
+  --k-bg: #1a355a; --k-surface: rgb(255 255 255 / 0.08); --k-surface-2: rgb(255 255 255 / 0.13); --k-ink: #f5f3f0; --k-muted: #dbe5f1; --k-faint: #c3d2e4;
+  --k-line: rgb(255 255 255 / 0.18); --k-line-strong: rgb(255 255 255 / 0.34); --k-accent: #fdba74; --k-accent-soft: rgb(253 186 116 / 0.18); --k-scheme: dark;
+  --k-good: #86efac; --k-warn: #fcd34d; --k-bad: #fecaca; --k-chip: rgb(0 0 0 / 0.22); --k-accent-small: #fed7aa;
+  --h-road: #d6cfc7; --h-post: #f5f3f0; --h-post-ink: #1a355a; --h-tree: rgb(255 255 255 / 0.6);
+  background:
+    linear-gradient(var(--bp-major) 1px, transparent 1px) 0 0 / 80px 80px,
+    linear-gradient(90deg, var(--bp-major) 1px, transparent 1px) 0 0 / 80px 80px,
+    linear-gradient(var(--bp-line) 1px, transparent 1px) 0 0 / 16px 16px,
+    linear-gradient(90deg, var(--bp-line) 1px, transparent 1px) 0 0 / 16px 16px,
+    linear-gradient(var(--s0), var(--bp-foot));
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"])[data-site="beta"] .sky-panel:not(.sky-panel .sky-panel) { --s0: #11243f; --bp-foot: #1a355a; --k-bg: #11243f; --h-road: #2c2926; }
+}
+:root[data-theme="dark"][data-site="beta"] .sky-panel:not(.sky-panel .sky-panel) { --s0: #11243f; --bp-foot: #1a355a; --k-bg: #11243f; --h-road: #2c2926; }
+:root[data-site="beta"] .sky-panel :is(.far, .tree, .city):not(.sky-panel .sky-panel *) {
+  fill: none; stroke: rgb(255 255 255 / 0.6); stroke-width: 1; vector-effect: non-scaling-stroke;
+}
+:root[data-site="beta"] .sky-panel :is(.night-sky, .horizon .sun, .horizon .lit, .horizon .beam):not(.sky-panel .sky-panel *) { display: none; }
+:root[data-site="beta"] .sky-panel .beta-tag { background: var(--k-accent); color: var(--h-post-ink); }

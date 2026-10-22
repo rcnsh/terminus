@@ -56,7 +56,11 @@ test('the beta asks for its HTML pages not to be indexed, and marks them; the st
   assert.equal(page.headers.get('x-robots-tag'), 'noindex');
   assert.match(page.headers.get('content-type'), /^text\/html/);
   assert.equal(await page.text(), '<a class="wordmark">terminus</a>');
-  assert.deepEqual(HTMLRewriterStub.selectors, ['.wordmark'], 'the beta tag goes beside the wordmark');
+  assert.deepEqual(
+    HTMLRewriterStub.selectors,
+    ['html', '.wordmark'],
+    'the page is marked as the beta, and the tag goes beside the wordmark',
+  );
   // Not HTML: nothing to mark, nothing to say.
   const css = await call(beta, '/assets/site.css');
   assert.equal(css.headers.get('x-robots-tag'), null);
