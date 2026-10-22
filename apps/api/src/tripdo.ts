@@ -21,14 +21,13 @@ import { type Boarded, type DayRecord, type TripRecord, type TripUpdate, endOfDa
 import type { MeDeps } from './me.ts';
 import { tripCardFor } from './me.ts';
 import { nudgeUser, pushDevices } from './push.ts';
+import { logTripWake } from './analytics.ts';
 import { GRAPH } from './graph.ts';
 import { scopeCache } from './edgecache.ts';
 import { answerFor, collectArrivals } from './answer.ts';
 
 /** Trip records one day keeps at most (see /signal). */
 export const MAX_DAY_TRIPS = 64;
-
-const DEPS: MeDeps = { graph: GRAPH, answerFor, collectArrivals };
 
 /** Never wake again sooner than this after a wake. */
 const MIN_WAKE_GAP_MS = 30_000;
@@ -44,11 +43,19 @@ interface Pushed {
   gone?: boolean;
 }
 
+/** This object's last wake today, for the freshness log (analytics.ts logTripWake). */
+interface LastWake {
+  at: number;
+  leaveAt: number | null;
+}
+
 /** What a wake found: when to wake next (null: stop). */
 interface Woke {
   next: number | null;
   /** The wake failed: `next` is when to try again, not the card's next change. */
   retry?: boolean;
+  /** A card was worked out: kept as the last wake. */
+  seen?: LastWake;
 }
 
 export class Trip {
@@ -173,7 +180,7 @@ export class Trip {
       await this.storage.delete('wakeAt');
       const fails = (await this.storage.get<number>('wakeFails')) ?? 0;
       try {
-        woke = await this.wake(nowMs);
+        woke = await this.wake(nowMs, wakeAt);
         if (fails) await this.storage.delete('wakeFails');
       } catch (err) {
         // D1 or the feed failing mustn't end the day's pushes: try again soon, though not too often.
@@ -194,6 +201,7 @@ export class Trip {
         if (next === undefined) await this.storage.delete('wakeAt');
         else await this.storage.put('wakeAt', next);
         await this.storage.delete('waking');
+        if (woke.seen) await this.storage.put('lastWake', woke.seen);
         // The card's next change, as /watch records it (a retry is no change of the card's).
         if (woke.next !== null && !woke.retry && next !== undefined) {
           const d = today(await this.storedDay(), sgtDate(nowMs));
@@ -213,7 +221,7 @@ export class Trip {
   }
 
   /** Works out the card again and pushes it if it changed; when to wake next. */
-  private async wake(nowMs: number): Promise<Woke> {
+  private async wake(nowMs: number, askedAt: number): Promise<Woke> {
     const stop: Woke = { next: null };
     const env = this.env;
     const userId = await this.storage.get<string>('userId');
@@ -236,7 +244,15 @@ export class Trip {
       plans.push(p);
       return p;
     };
-    const card = await tripCardFor(env, ctx, DEPS, userId, day, nowMs, savePlan);
+    // The arrivals it reads, so the log can say how old they were.
+    const read: number[] = [];
+    const collect: MeDeps['collectArrivals'] = async (...args) => {
+      const byStop = await collectArrivals(...args);
+      for (const sa of byStop.values()) if (sa.available) read.push(sa.fetchedAt);
+      return byStop;
+    };
+    const deps: MeDeps = { graph: GRAPH, collectArrivals: collect, answerFor: (e, c, i, l, n) => answerFor(e, c, i, l, n, collect) };
+    const card = await tripCardFor(env, ctx, deps, userId, day, nowMs, savePlan);
     await Promise.allSettled(plans);
     if (!card) return stop;
 
@@ -265,10 +281,23 @@ export class Trip {
         });
       }
     }
+    const prev = (await this.storage.get<LastWake>('lastWake')) ?? null;
+    const before = prev && sgtDate(prev.at) === date ? prev : null;
+    logTripWake(env, {
+      changed,
+      phase: now.phase,
+      quality: card.quality,
+      first: !before,
+      gapS: before ? Math.round((nowMs - before.at) / 1000) : 0,
+      feedAgeS: read.length ? Math.max(0, Math.round((nowMs - Math.min(...read)) / 1000)) : -1,
+      leaveShiftS: before?.leaveAt != null && card.leaveAt !== null ? Math.round((card.leaveAt - before.leaveAt) / 1000) : 0,
+      lateS: Math.max(0, Math.round((nowMs - askedAt) / 1000)),
+    });
+    const seen = { at: nowMs, leaveAt: card.leaveAt };
     // Keep waking while there's a trip and someone to tell.
     // A leave-by that keeps sliding (a late bus) mustn't wake it every few seconds.
     const next = card.wakeAt === null ? null : Math.max(card.wakeAt, nowMs + MIN_WAKE_GAP_MS);
-    return { next: card.key ? next : null };
+    return { next: card.key ? next : null, seen };
   }
 
   /**

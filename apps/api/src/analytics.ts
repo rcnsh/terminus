@@ -208,6 +208,41 @@ export function logPoll(env: Env, outcome: PollOutcome, svc: string, buses: numb
   }
 }
 
+/**
+ * One Trip object wake (tripdo.ts), to see how stale pushed cards get and
+ * why: the wake schedule or the cache. No user, trip or stop in it.
+ *
+ * - `changed`: the card was pushed (its trip, phase or gone moved);
+ * - `gapS`: seconds since this object's last wake today (0 for the first);
+ * - `feedAgeS`: how old the oldest arrivals reading it used was (-1: none);
+ * - `leaveShiftS`: how far the leave-by moved since the last wake (0 when
+ *   either had none), which a sooner wake would have caught sooner;
+ * - `lateS`: how long after its asked-for time the alarm ran.
+ */
+export interface WakeRow {
+  changed: boolean;
+  phase: string;
+  quality: string;
+  first: boolean;
+  gapS: number;
+  feedAgeS: number;
+  leaveShiftS: number;
+  lateS: number;
+}
+
+export function logTripWake(env: Env, r: WakeRow): void {
+  if (!analyticsEnabled(env)) return;
+  try {
+    env.AE!.writeDataPoint({
+      blobs: ['tripwake', r.changed ? 'pushed' : 'same', r.phase, r.quality, r.first ? 'first' : 'again'],
+      doubles: [r.gapS, r.feedAgeS, r.leaveShiftS, r.lateS],
+      indexes: ['tripwake'],
+    });
+  } catch {
+    // Same rule as above: a lost count never stops a wake.
+  }
+}
+
 /** One row of the daily active counts (usage.ts). */
 export interface ActiveRow {
   scope: 'all' | 'app' | 'version';
