@@ -507,7 +507,10 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
     refuses unmerged files, conflict markers or uncommitted changes in
     `apps/api` and `apps/web/public` and runs `pnpm check`; then it applies
     the stable D1's pending migrations and runs `cf deploy`. It needs
-    `CLOUDFLARE_API_TOKEN`.
+    Cloudflare credentials: `CLOUDFLARE_API_TOKEN`, or a browser login
+    with `pnpm exec cf auth login`, which `cf` keeps on the machine.
+    `pnpm exec cf auth whoami` says which is in use; a missing token in
+    the shell doesn't mean a deploy can't run.
   - The beta is `pnpm run deploy:beta`, with its own D1, KV and R2; it
     applies the beta D1's migrations the same way.
   - By hand, a migration is applied **before** deploying:
