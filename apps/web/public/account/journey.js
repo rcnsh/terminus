@@ -206,7 +206,7 @@ function onTheRoad(j, now) {
 
 /**
  * The horizon's road in words, on the ground under it at the page's size:
- * your bus and when it reaches your stop ("about" for a timetable guess),
+ * your bus and when it reaches your stop ("about" for an estimate),
  * the stop's name in bold.
  */
 function RoadLine({ j, now }) {

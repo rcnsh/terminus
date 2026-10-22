@@ -144,7 +144,7 @@ test('the Trip object wakes when the phase changes and nudges the phone, once pe
   assert.equal(alarm(), Date.parse(first.leave.at) - 5 * 60_000);
 
   // The phone already shows "idle": that is never pushed. (The 9:00 leave-by
-  // was a timetable estimate; live times firm it up, so it may take a wake or two.)
+  // was an estimate; live times firm it up, so it may take a wake or two.)
   const woke = await wakeUntil(() => fcm.sent.length > 0);
   assert.ok(woke <= 3);
   assert.equal(fcm.sent.length, 1);

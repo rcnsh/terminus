@@ -52,9 +52,9 @@ const iPhone =
   !/Android/.test(navigator.userAgent) &&
   (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 
-/** What the card is for: the plan, a saved place (its key), a stop picked on the map or in the search, or the buses nearby. */
+/** What the card is for: the plan, a favourite (its key), a stop picked on the map or in the search, or the buses nearby. */
 const target = store({ kind: 'plan' });
-/** The saved places, for their chips: from the last answer, and from the profile as Settings or the map change it. */
+/** The favourites, for their chips: from the last answer, and from the profile as Settings or the map change it. */
 const places = store([]);
 profile.subscribe((p) => p && places.set(p.places.map(({ key, label }) => ({ key, label }))));
 /**
@@ -385,7 +385,7 @@ function goSomewhere(d) {
 
 /** Go there, from a stop on the map: Now, with the card for that stop. */
 function goToStop({ code, name, place }) {
-  // A saved place already has its chip: that one, not a second.
+  // A favourite already has its chip: that one, not a second.
   if (!place) addPlace(code, name);
   target.set(place ? { kind: 'place', key: place } : { kind: 'stop', to: code, label: name });
   drawSeen();
@@ -969,7 +969,7 @@ const RoadBus = ({ bus, next }) => html`<span
   style=${{ '--far': Math.min(1, Math.max(0, bus.etaS / ROAD_S)) }}
 ></span>`;
 
-/** The server's "4 min", "now", "~6 min" for a timetable guess, or "–". Worded here only for an older server's answer (or a kept copy). */
+/** The server's "4 min", "now", "~6 min" for an estimate, or "–". Worded here only for an older server's answer (or a kept copy). */
 const etaText = (b) =>
   b.etaS == null
     ? '–'
@@ -980,7 +980,7 @@ const etaText = (b) =>
  * Nearby: the stops around you as their signs, the name plate with the walk
  * there, then a row per service, its buses coming up a short road towards
  * the stop, nearer the sooner they're due, the next one solid and the rest
- * faded. The nearest stop is drawn larger. A timetable guess is an outline,
+ * faded. The nearest stop is drawn larger. An estimate is an outline,
  * never a filled bus, so it doesn't pass for live. The name opens the stop
  * on the map.
  */

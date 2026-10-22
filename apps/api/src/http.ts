@@ -100,7 +100,7 @@ export function clientKey(req: Request): string {
  * A host that gave no answer at all: it timed out, or the connection
  * failed. Unlike an HTTP status, nothing upstream said why, and a host that
  * hangs costs more than one that says 503, so the feeds' breakers count it
- * as the host being down (fms.ts tripsBreaker).
+ * as the host being down (fms.ts opensBreaker).
  */
 export class UpstreamUnreachable extends Error {
   readonly timedOut: boolean;

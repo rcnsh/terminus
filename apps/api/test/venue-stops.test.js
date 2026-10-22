@@ -26,7 +26,7 @@ test('a building listed by hand is served by the stops students use, the first a
   assert.equal(venueToStop('LT21-0001')?.stop, 'S17');
 });
 
-test("a building's stops start with its own, never list a stop with its twin, and stay few", () => {
+test("a building's stops start with its own, never list a stop with its opposite stop, and stay few", () => {
   for (const [code, v] of Object.entries(venuesJson.venues)) {
     if (!v.stops) continue;
     const codes = Object.keys(v.stops);

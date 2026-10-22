@@ -135,14 +135,14 @@ class ProfileDoc(val json: JSONObject) {
     }
 
     /** Imported from NUSMods. */
-    val trips: List<Trip>
+    val trips: List<TimetableClass>
         get() = trips("trips")
 
     /** Entered by hand; they survive a re-import. */
-    val manual: List<Trip>
+    val manual: List<TimetableClass>
         get() = trips("manual")
 
-    fun addManual(t: Trip) {
+    fun addManual(t: TimetableClass) {
         val list = json.optJSONArray("manual") ?: JSONArray()
         list.put(t.toJson())
         json.put("manual", list)
@@ -247,7 +247,7 @@ class ProfileDoc(val json: JSONObject) {
         json.put("usual", u)
     }
 
-    /** Saved places at a usual time: each a trip that day, like a class. */
+    /** Favourites at a usual time: each a trip that day, like a class. */
     val usual: List<UsualTime>
         get() {
             val a = json.optJSONArray("usual") ?: return emptyList()
@@ -266,9 +266,9 @@ class ProfileDoc(val json: JSONObject) {
         json.put("usual", JSONArray(kept))
     }
 
-    private fun trips(field: String): List<Trip> {
+    private fun trips(field: String): List<TimetableClass> {
         val a = json.optJSONArray(field) ?: return emptyList()
-        return (0 until a.length()).map { Trip.parse(a.getJSONObject(it)) }
+        return (0 until a.length()).map { TimetableClass.parse(a.getJSONObject(it)) }
     }
 
     /** Somewhere to go or somewhere to start: what the server counts as a setup worth keeping. */
@@ -348,11 +348,11 @@ class RemovedPlace(val index: Int, val place: JSONObject, val usual: List<JSONOb
         get() = place.optString("label")
 }
 
-/** A saved place at a usual time: day 0 = Sunday, minutes past midnight, Singapore time. */
+/** A favourite at a usual time: day 0 = Sunday, minutes past midnight, Singapore time. */
 data class UsualTime(val place: String, val day: Int, val atMin: Int)
 
 /** A class or commitment. day: 0 = Sunday. Minutes past midnight, Singapore time. */
-data class Trip(val day: Int, val arriveByMin: Int, val endMin: Int?, val to: String, val label: String, val venue: String) {
+data class TimetableClass(val day: Int, val arriveByMin: Int, val endMin: Int?, val to: String, val label: String, val venue: String) {
     fun toJson(): JSONObject =
         JSONObject().put("day", day).put("arriveByMin", arriveByMin).put("to", to).put("label", label).put("venue", venue).apply {
             if (endMin != null) put("endMin", endMin)
@@ -360,7 +360,7 @@ data class Trip(val day: Int, val arriveByMin: Int, val endMin: Int?, val to: St
 
     companion object {
         fun parse(o: JSONObject) =
-            Trip(
+            TimetableClass(
                 day = o.optInt("day"),
                 arriveByMin = o.optInt("arriveByMin"),
                 endMin = if (o.has("endMin")) o.optInt("endMin") else null,

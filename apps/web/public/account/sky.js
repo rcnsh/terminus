@@ -211,7 +211,7 @@ function Lane({ colours, vw, y, back = false, go, first = false }) {
  * `live`) coming up to it, or a shuttle going by (`shuttle`). It's a
  * picture with no words: drawn this small, they were too hard to read, so
  * the card says them under it (journey.js RoadLine).
- * A timetable guess is an outline, never a filled bus, so it doesn't pass
+ * An estimate is an outline, never a filled bus, so it doesn't pass
  * for live. The sun is only ever low behind the hills: rising at dawn, low in
  * the golden hour, setting at dusk (app.css shows the hour's). `on`: 'now',
  * for Now's sky to reach down to it, or null for one in a sky of its own.

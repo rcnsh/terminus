@@ -88,7 +88,7 @@ test('a change is never at the start or the end, never onto the same service, an
         assert.notEqual(r.leg1.svc, r.leg2.svc);
         assert.notEqual(r.board.code, from.code);
         assert.ok(!targets.some((t) => t.code === r.board.code || t.code === r.at.code));
-        // Across the road only when it changes to the twin.
+        // Across the road only when it changes to the opposite stop.
         assert.equal(r.crossM > 0, r.board.code !== r.at.code);
       }
     }

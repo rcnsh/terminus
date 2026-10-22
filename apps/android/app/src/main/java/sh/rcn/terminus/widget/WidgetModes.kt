@@ -73,7 +73,7 @@ sealed interface Mode {
             get() = L.s(R.string.chip_nearby)
     }
 
-    /** A saved place (`place:<key>`) or a stop looked up (`stop:<code>`). */
+    /** A favourite (`place:<key>`) or a stop looked up (`stop:<code>`). */
     data class To(val dest: Destinations.Dest) : Mode {
         override val id
             get() = dest.id

@@ -82,7 +82,7 @@
     "kind": "trip",
     "staleAt": "2026-08-27T01:04:30Z",
     "crowd": "Crowding: low",
-    "quality": "Timetable estimate",
+    "quality": "Estimated time",
     "leaveBy": "Leave by ~09:03",
     "leaveVia": "catch the ~09:04 151 ($) at IT",
     "catch": null,

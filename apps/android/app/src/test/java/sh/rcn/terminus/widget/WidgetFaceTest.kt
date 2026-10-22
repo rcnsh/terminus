@@ -61,7 +61,7 @@ class WidgetFaceTest {
         assertEquals("~09:36", f.big)
         assertEquals("Leave by", f.bigLabel)
         assertFalse(f.bigFirst)
-        // The golden's time is a timetable guess: Scheduled, never Live.
+        // The golden's time is an estimate: Estimate, never Live.
         assertEquals(false, f.pill?.good)
         assertEquals("R2", f.leg?.svc)
         assertTrue(f.leg!!.text.contains("PGP"))

@@ -289,7 +289,7 @@ export async function decide(
 }
 
 /** How a finished sign-in left the accounts. */
-export type Outcome =
+export type SignInOutcome =
   /** A new account with this email. */
   | 'created'
   /** The device's anonymous account now has the email; nothing moved. */
@@ -307,7 +307,7 @@ export type PollResult =
       status: 'approved';
       token: string;
       email: string;
-      outcome: Outcome;
+      outcome: SignInOutcome;
       userId: string;
       device: string;
       /** The anonymous account this sign-in deleted, if any. */
@@ -347,7 +347,7 @@ export async function pollAppLogin(db: D1Database, id: string, poll: string, cli
   // two racing polls only one is handed a token.
   const live: Live = { sql: "EXISTS (SELECT 1 FROM login_requests WHERE id = ? AND status = 'approved')", params: [id] };
   const work: D1PreparedStatement[] = [];
-  let outcome: Outcome;
+  let outcome: SignInOutcome;
   if (!existing && anon) {
     // The device's old anonymous token is replaced by the one returned here.
     work.push(...addEmailTo(db, anon.id, req.email, nowMs, live));
