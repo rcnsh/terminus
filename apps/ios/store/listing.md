@@ -176,4 +176,19 @@ terminus is an independent student project, not affiliated with the National Uni
 
 ## Screenshots
 
-iPhone only (`TARGETED_DEVICE_FAMILY` is 1), so one set at 6.9" (1320×2868) covers every size.
+iPhone only (`TARGETED_DEVICE_FAMILY` is 1), so one set at 6.9" (1320×2868) covers every size. Upload in this order. English in `screenshots/`, Chinese in `screenshots/zh/` (for the zh-Hans localisation).
+
+They're the Play set's five, with its words and its look: each capture from `captures/en` or `captures/zh` in an iPhone under a two-line headline, and the five one picture cut in five (the app's sky from dawn to night, its hills, city and road running through, a shuttle crossing two of the joins). The home screen's capture is rebuilt around its own pixels (the two widgets and the app's icon as captured) on a wallpaper of the app's dusk, without the test runner's icon, the search pill and the dock; its status bar is redrawn with the capture's time. The words are in `frame.mjs` (`SLIDES`). After retaking a capture, or changing the words, run `node apps/ios/store/frame.mjs` (or `node apps/ios/store/frame.mjs 3-map` for one) on a Mac.
+
+1. `1-leave-by.png` "Know when to leave for class": when to leave for the next class, counting down under the morning sky, and the trip below: the walk, then the R2 in its colour.
+2. `2-widget.png` "Your buses, on the home screen": Next bus + favourites over Buses near you (both medium), with both sides of the road.
+3. `3-map.png` "Every bus, live on the map": the campus map with A1 picked: its line, its three buses and its stops on the street map.
+4. `4-buses.png` "What's coming at your stop": the Buses tab at the nearest stop, every service's next two buses, live, with how full they are.
+5. `5-on-the-bus.png` "With you all the way": on the R2, with how far along the ride you are, the next stop and the arrival.
+
+How the captures are taken: `apps/ios/store/capture.sh` (on a Mac, with the iPhone 17 Pro Max simulator booted) starts a dev stub of its own on port 8791 and runs `StoreShotsUITests`, one test a scene, in both languages, setting the status bar's time for each. The stub's clock is held at 09:26 on a Thursday with GEA1000 at UTown at 10:00, and the phone a short walk north of PGP (1.2927, 103.7803), signed in as the stub's test account, light, with the sky's hour set (`TERMINUS_SKY`). On the bus is stepped through the R2's departure: at PGP until it leaves, then along its route past Opp HSSML and Opp NUSS, so the app takes it the user is on it.
+
+- **The widgets** draw their sky and "Now" from the phone's own clock, which a simulator can't move, so their scene runs at the real time with the class 34 minutes off: an evening's sky, coherent with its own times. It runs last, since it moves the stub's clock. The time it showed is kept in `captures/*/2-widget.time` for the redrawn status bar.
+- **On the bus**: the card's "Updated" line under Today also reads the phone's clock; `frame.mjs` covers it in the page's colour (`hide`).
+- **The map** needs the street map, fonts and icons in `dev/map/` (see the Play listing).
+- The simulator has no Dynamic Island in its screenshots: `frame.mjs` draws it.
