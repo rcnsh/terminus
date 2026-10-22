@@ -19,6 +19,7 @@ struct RootView: View {
         .environment(prefs)
         .tint(.brand)
         .preferredColorScheme(prefs.colorScheme)
+        .onChange(of: app.paired && !app.needsSetup, initial: true) { _, tabs in StatusBar.inTabs = tabs }
         // A new language redraws everything in it.
         .id(prefs.lang)
         .onOpenURL { Links.open($0) }

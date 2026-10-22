@@ -38,7 +38,6 @@ struct OnboardingFlow: View {
         }
         .animation(.snappy(duration: 0.32), value: model.step)
         .background(Color.page.ignoresSafeArea())
-        .statusBar(light: nil)
         .task { if model.profile == nil { await model.load() } }
     }
 

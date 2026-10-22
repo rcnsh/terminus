@@ -70,7 +70,6 @@ struct PairView: View {
         }
         .background(Color.page.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
-        .statusBar(light: nil)
         .onAppear {
             model.pairError = nil
             focused = true

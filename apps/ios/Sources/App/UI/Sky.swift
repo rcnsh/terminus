@@ -160,12 +160,20 @@ struct SkyBand<Content: View>: View {
 enum StatusBar {
     /// Light icons, or nil for the theme's own.
     static var light: Bool? {
-        didSet {
-            guard light != oldValue else { return }
-            install()
-            for scene in UIApplication.shared.connectedScenes {
-                (scene as? UIWindowScene)?.windows.forEach { $0.rootViewController?.setNeedsStatusBarAppearanceUpdate() }
-            }
+        didSet { if light != oldValue { refresh() } }
+    }
+
+    /// Whether the tabs show. Outside them (welcome, setup) the theme's icons,
+    /// whatever a tab's page asked for as it went: signing out, a tab's last
+    /// change can come after the welcome screen has appeared.
+    static var inTabs = true {
+        didSet { if inTabs != oldValue { refresh() } }
+    }
+
+    private static func refresh() {
+        install()
+        for scene in UIApplication.shared.connectedScenes {
+            (scene as? UIWindowScene)?.windows.forEach { $0.rootViewController?.setNeedsStatusBarAppearanceUpdate() }
         }
     }
 
@@ -187,7 +195,7 @@ enum StatusBar {
                 let fallback = unsafeBitCast(method_getImplementation(original), to: Getter.self)
                 let block: @convention(block) (AnyObject) -> UIStatusBarStyle = { me in
                     MainActor.assumeIsolated {
-                        switch StatusBar.light {
+                        switch StatusBar.inTabs ? StatusBar.light : nil {
                         case true?: .lightContent
                         case false?: .darkContent
                         case nil: fallback(me, sel)
