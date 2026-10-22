@@ -26,7 +26,7 @@ import {
 } from './profile.ts';
 import { type TimetableClass, venueAt, venueStops, venueToStop } from './nusmods.ts';
 import { feedFor, indexGraph, serviceEndsAt } from './resolve.ts';
-import { GRAPH } from './graph.ts';
+import { GRAPH, GRAPH_PUBLIC } from './graph.ts';
 import { haversineM } from './geo.ts';
 import { clockAt, clockMin, slackText } from './clock.ts';
 import { sgt } from './config.ts';
@@ -367,9 +367,11 @@ function undoOf(day: DayRecord | null, nowMs: number): TripView['undo'] {
  * 151 never costs NUS a call that can't list it.
  */
 function rideStopArrivals(env: Env, ctx: ExecutionContext, deps: MeDeps, b: Plan, nowMs: number): Promise<StopArrivals | undefined> {
-  const graph = b.paid ? (deps.publicGraph ?? deps.graph) : deps.graph;
-  return deps.collectArrivals(env, ctx, [b.alightCode!], nowMs, graph).then((byStop) => byStop.get(b.alightCode!));
+  return deps.collectArrivals(env, ctx, [b.alightCode!], nowMs, graphOf(b)).then((byStop) => byStop.get(b.alightCode!));
 }
+
+/** The graph a bus is in: a public bus's has LTA's stops and asks LTA, whoever planned it. */
+const graphOf = (b: Pick<Plan, 'paid'>): Graph => (b.paid ? GRAPH_PUBLIC : GRAPH);
 
 /**
  * The feed the bus you're on is reported by, when it answered fresh. At a
@@ -515,13 +517,20 @@ function changeAnswer(nowMs: number, dest: Dest, b: Plan, live: boolean, places:
  * now, and the trip's end moved with it. The plan's times when the feed has
  * no such bus, which are not live.
  */
-async function secondBus(env: Env, ctx: ExecutionContext, deps: MeDeps, b: Plan, nowMs: number): Promise<{ change: Plan; live: boolean }> {
+export async function secondBus(
+  env: Env,
+  ctx: ExecutionContext,
+  deps: MeDeps,
+  b: Plan,
+  nowMs: number,
+): Promise<{ change: Plan; live: boolean }> {
   const c = b.change!;
   if (!c.board || !c.stopCode) return { change: c, live: false };
-  const sa = (await deps.collectArrivals(env, ctx, [c.stopCode], nowMs, deps.graph)).get(c.stopCode);
+  const sa = (await deps.collectArrivals(env, ctx, [c.stopCode], nowMs, graphOf(c))).get(c.stopCode);
   const feed = rideFeed(sa, c);
   const planned = Date.parse(c.board);
-  const times = feed && sa ? sa.arrivals.filter((x) => x.svc === c.svc && x.etaS !== null).map((x) => feed.fetchedAt + x.etaS! * 1000) : [];
+  const times =
+    feed && sa ? sa.arrivals.filter((x) => x.svc === rideSvc(c) && x.etaS !== null).map((x) => feed.fetchedAt + x.etaS! * 1000) : [];
   // A guessed time stands for whichever bus comes first within a headway of it.
   const latest = secondLeavesMs(c)!;
   const same = c.estimated
