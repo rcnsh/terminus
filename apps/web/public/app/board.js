@@ -52,7 +52,7 @@ export function Big({ r }) {
   return html`<span class="bt-big">${parts.map((x) => (/^\d+$/.test(x) ? x : html`<small>${x}</small>`))}</span>`;
 }
 
-/** How many later buses "then …" names, as the server's (THEN_MAX in the API's src/resolve.ts). */
+/** How many later buses "then …" names, as the server's (THEN_MAX in the API's src/answer/resolve.ts). */
 export const THEN_MAX = 3;
 
 /** "then 12, ~20 min": the later buses the feed gave, a timetabled one marked, as the server words it. */

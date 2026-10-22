@@ -2,8 +2,8 @@ import test, { beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { makeD1 } from './_d1.mjs';
-import { MIN_SAMPLES, dayType, forgetSent, loadCrowdRisk, pruneCrowdSeen, recordCrowds } from '../src/crowd.ts';
-import { leaveBy } from '../src/leave.ts';
+import { MIN_SAMPLES, dayType, forgetSent, loadCrowdRisk, pruneCrowdSeen, recordCrowds } from '../src/answer/crowd.ts';
+import { leaveBy } from '../src/answer/leave.ts';
 import { RIDE, WALK } from '../src/config.ts';
 
 // Thursday 27 Aug 2026, 09:00 SGT: a teaching day.

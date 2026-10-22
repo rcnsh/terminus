@@ -1,5 +1,5 @@
 // A recorded day of shuttles, read back for the timelapse: the day file the
-// recorder writes (DayFile in apps/api/src/timelapse.ts) turned into one
+// recorder writes (DayFile in apps/api/src/map/timelapse.ts) turned into one
 // track per bus, and where each bus is at any moment of the day.
 //
 // Shared: the timelapse page draws with it, and the API's tests check it

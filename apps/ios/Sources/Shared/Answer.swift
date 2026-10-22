@@ -154,7 +154,7 @@ struct NextAnswer: Decodable, Sendable {
     func isOld(at now: Date) -> Bool { staleAt.map { now >= $0 } ?? false }
 }
 
-/// `card` in /me/next (apps/api/src/card.ts). Lines are shown verbatim.
+/// `card` in /me/next (apps/api's card.ts). Lines are shown verbatim.
 struct Card: Decodable, Sendable {
     /// class, trip, nearby, rest, arrived, setup or free; "trip" for one this version doesn't know.
     let kind: String

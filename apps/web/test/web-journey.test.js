@@ -223,6 +223,6 @@ test('an answer from before the server sent its lines is worded here as the serv
 
 test("the livery (drawn before sign-in, with no /api/campus to ask) has the API's colours", async () => {
   const { LIVERY } = await web('account/livery.js');
-  const { ROUTE_COLORS } = await import('../../api/src/campus.ts');
+  const { ROUTE_COLORS } = await import('../../api/src/map/campus.ts');
   assert.deepEqual(Object.fromEntries(LIVERY), ROUTE_COLORS);
 });

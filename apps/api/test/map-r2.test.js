@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 
 import { FROZEN_NOW, installGlobals, makeBucket, makeCtx, makeEnv, makeFetch } from './_stubs.mjs';
 import worker from '../src/index.ts';
-import { glyphRange } from '../src/map.ts';
+import { glyphRange } from '../src/map/map.ts';
 
 const BASE = 'https://bus.example.test';
 const SIZE = 2000;

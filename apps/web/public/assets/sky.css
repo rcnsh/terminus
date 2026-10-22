@@ -158,7 +158,7 @@
   .sky-panel * { --k-chip: var(--k-bg); }
 }
 
-/* The beta's pages (data-site="beta", from markBeta in src/site.ts) are under
+/* The beta's pages (data-site="beta", from markBeta in src/site/site.ts) are under
    a blueprint at every hour instead: the plans for the next terminus, so it's
    never taken for the real one. Only the page's own sky: the phone drawn on
    the landing page keeps the app's, as the beta app does. The hills are

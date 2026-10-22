@@ -9,13 +9,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { FROZEN_NOW, installGlobals, makeAnalytics, makeBucket, makeDurableObjects, makeEnv, makeFetch, makeKV } from './_stubs.mjs';
-import { TimelapseRecorder, backoffOf } from '../src/timelapsedo.ts';
+import { TimelapseRecorder, backoffOf } from '../src/map/timelapsedo.ts';
 import { TIMELAPSE } from '../src/config.ts';
-import { pollInterval, serviceDate, windowOf } from '../src/timelapse.ts';
-import { pointAlong } from '../src/buses.ts';
-import { shapeFor } from '../src/campus.ts';
-import { inService } from '../src/resolve.ts';
-import { GRAPH } from '../src/graph.ts';
+import { pollInterval, serviceDate, windowOf } from '../src/map/timelapse.ts';
+import { pointAlong } from '../src/map/buses.ts';
+import { shapeFor } from '../src/map/campus.ts';
+import { inService } from '../src/answer/resolve.ts';
+import { GRAPH } from '../src/answer/graph.ts';
 
 const sgt = (date, hhmm) => Date.parse(`${date}T${hhmm}:00+08:00`);
 const DATE = serviceDate(FROZEN_NOW); // Thursday 2026-08-27, 09:00 SGT

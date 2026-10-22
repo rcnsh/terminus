@@ -223,7 +223,7 @@ test('every translation is still used', () => {
     for (const m of src.matchAll(/<title>([^<]+)<\/title>|<meta name="description" content="([^"]+)"/g)) used.add(norm(m[1] ?? m[2]));
     for (const k of htmlKeysOn(dict, page)) used.add(k);
   }
-  for (const m of fs.readFileSync(new URL('../../api/src/landing.ts', import.meta.url), 'utf8').matchAll(/(?:data-t|alt)="([^"]+)"/g))
+  for (const m of fs.readFileSync(new URL('../../api/src/site/landing.ts', import.meta.url), 'utf8').matchAll(/(?:data-t|alt)="([^"]+)"/g))
     used.add(m[1]);
   const stale = Object.keys(dict).filter((k) => !used.has(k));
   assert.deepEqual(stale, []);

@@ -7,15 +7,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { GRAPH, GRAPH_PUBLIC } from '../src/graph.ts';
-import { SHAPES } from '../src/campus.ts';
-import { alongLine, sectionOf } from '../src/buses.ts';
-import { walkVerdict } from '../src/format.ts';
+import { GRAPH, GRAPH_PUBLIC } from '../src/answer/graph.ts';
+import { SHAPES } from '../src/map/campus.ts';
+import { alongLine, sectionOf } from '../src/map/buses.ts';
+import { walkVerdict } from '../src/answer/format.ts';
 import { WALK } from '../src/config.ts';
-import { indexGraph, reach } from '../src/resolve.ts';
-import { importedClassRuns } from '../src/calendar.ts';
-import { DEFAULT_PROFILE, classesOn } from '../src/profile.ts';
-import { rideMetres } from '../src/public.ts';
+import { indexGraph, reach } from '../src/answer/resolve.ts';
+import { importedClassRuns } from '../src/timetable/calendar.ts';
+import { DEFAULT_PROFILE, classesOn } from '../src/timetable/profile.ts';
+import { rideMetres } from '../src/answer/public.ts';
 
 const D2 = SHAPES.D2;
 const M_LAT = 111_320;

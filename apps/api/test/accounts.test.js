@@ -5,10 +5,18 @@ import assert from 'node:assert/strict';
 import { FROZEN_NOW, installGlobals, makeCtx, makeEnv, makeFetch } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
-import { MAIL_TIMEOUT_MS, checkTurnstile, hashToken, newPairCode, normalizePairCode, sendMail, verifyTurnstile } from '../src/accounts.ts';
-import { d1Unavailable } from '../src/access.ts';
+import {
+  MAIL_TIMEOUT_MS,
+  checkTurnstile,
+  hashToken,
+  newPairCode,
+  normalizePairCode,
+  sendMail,
+  verifyTurnstile,
+} from '../src/accounts/accounts.ts';
+import { d1Unavailable } from '../src/accounts/access.ts';
 import { WALK } from '../src/config.ts';
-import { GRAPH } from '../src/graph.ts';
+import { GRAPH } from '../src/answer/graph.ts';
 import venuesJson from '../data/venues.json' with { type: 'json' };
 import residencesJson from '../data/residences.json' with { type: 'json' };
 
@@ -826,8 +834,8 @@ test('every limit that refuses says when to try again', async () => {
 test('no 429 in the API goes out without a retry-after', () => {
   const dir = new URL('../src/', import.meta.url);
   const bare = [];
-  for (const f of fs.readdirSync(dir)) {
-    if (!f.endsWith('.ts') || f === 'openapi.ts') continue;
+  for (const f of fs.readdirSync(dir, { recursive: true })) {
+    if (!f.endsWith('.ts') || f === 'openapi.ts' || f.startsWith('openapi/')) continue;
     for (const [n, line] of fs.readFileSync(new URL(f, dir), 'utf8').split('\n').entries()) {
       if (/,\s*429\s*\)/.test(line)) bare.push(`${f}:${n + 1}`);
     }
@@ -1770,7 +1778,7 @@ test('limits hold when requests arrive all at once: API keys and feedback', asyn
 });
 
 test('feedback emails to the operator stop at fifty a day; the reports are still kept', async () => {
-  const { mailFeedback, OPERATOR_MAILS_PER_DAY } = await import('../src/feedback.ts');
+  const { mailFeedback, OPERATOR_MAILS_PER_DAY } = await import('../src/ops/feedback.ts');
   const { env, email } = setup();
   env.ALERT_EMAIL = 'ops@example.test';
   const f = { kind: 'other', note: 'x', platform: 'web', appVersion: null, context: null };

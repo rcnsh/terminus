@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 
 import { FROZEN_NOW, makeEnv } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
-import { linkEmail, redeemLink, requestLink } from '../src/accounts.ts';
+import { linkEmail, redeemLink, requestLink } from '../src/accounts/accounts.ts';
 
 const ORIGIN = 'https://bus.example.test';
 const ADDR = 'friend@u.nus.edu';

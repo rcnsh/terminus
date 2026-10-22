@@ -20,9 +20,9 @@ import {
   readIncidents,
   readUpstream,
   runCron,
-} from '../src/monitor.ts';
-import { UpstreamRejected } from '../src/auth.ts';
-import { cardFor } from '../src/card.ts';
+} from '../src/ops/monitor.ts';
+import { UpstreamRejected } from '../src/feeds/auth.ts';
+import { cardFor } from '../src/answer/card.ts';
 import { withLang } from '../src/i18n.ts';
 
 function env() {
@@ -506,7 +506,7 @@ test('the hot and housekeeping lookups use an index, not a table scan', () => {
 });
 
 test('housekeeping: reports are kept a year', async () => {
-  const { FEEDBACK_KEEP_DAYS } = await import('../src/feedback.ts');
+  const { FEEDBACK_KEEP_DAYS } = await import('../src/ops/feedback.ts');
   const db = makeD1();
   const now = Date.UTC(2026, 9, 1);
   db.exec(`INSERT INTO users (id, email, created, last_seen) VALUES ('u', 'a@b.c', 0, ${now})`);

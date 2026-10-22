@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { makeKV } from './_stubs.mjs';
-import { adminStats, isOperator, timingSafeEqual } from '../src/admin.ts';
+import { adminStats, isOperator, timingSafeEqual } from '../src/ops/admin.ts';
 
 test('the dashboard asks Analytics Engine with the token, and says so when it fails', async () => {
   const asked = [];

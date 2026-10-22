@@ -113,15 +113,15 @@ test('stop codes are unique: in stops.json, in public.json, and between them', (
   assert.deepEqual(dupes([...stops.stops, ...pub.stops].map((s) => s.code)), [], 'a public stop with a shuttle stop’s code');
 });
 
-import { ROUTE_COLORS, shapeFor } from '../src/campus.ts';
-import { GRAPH } from '../src/graph.ts';
-import { pointAlong } from '../src/buses.ts';
+import { ROUTE_COLORS, shapeFor } from '../src/map/campus.ts';
+import { GRAPH } from '../src/answer/graph.ts';
+import { pointAlong } from '../src/map/buses.ts';
 import { haversineM } from '../src/geo.ts';
 import opposites from '../data/opposites.json' with { type: 'json' };
 
 test('every shuttle service has its own colour', () => {
   for (const svc of Object.keys(stops.routes))
-    assert.match(ROUTE_COLORS[svc] ?? '', /^#[0-9a-f]{6}$/, `no colour for ${svc} in ROUTE_COLORS (src/campus.ts)`);
+    assert.match(ROUTE_COLORS[svc] ?? '', /^#[0-9a-f]{6}$/, `no colour for ${svc} in ROUTE_COLORS (src/map/campus.ts)`);
   assert.equal(new Set(Object.values(ROUTE_COLORS)).size, Object.keys(ROUTE_COLORS).length, 'two services share a colour');
 });
 

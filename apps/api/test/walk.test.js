@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { footM, paceSpeed, stopFootM } from '../src/walk.ts';
-import { haversineM } from '../src/resolve.ts';
-import { DEFAULT_PROFILE, parseProfile } from '../src/profile.ts';
+import { footM, paceSpeed, stopFootM } from '../src/answer/walk.ts';
+import { haversineM } from '../src/answer/resolve.ts';
+import { DEFAULT_PROFILE, parseProfile } from '../src/timetable/profile.ts';
 import walks from '../data/walks.json' with { type: 'json' };
 import graph from '../data/stops.json' with { type: 'json' };
 

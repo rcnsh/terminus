@@ -21,10 +21,10 @@ import {
   saveSignals,
   seenOnBus,
   sgtDate,
-} from '../src/trip.ts';
-import { Trip } from '../src/tripdo.ts';
-import { GRAPH } from '../src/graph.ts';
-import { indexGraph, rideStops, serviceEndsAt } from '../src/resolve.ts';
+} from '../src/answer/trip.ts';
+import { Trip } from '../src/push/tripdo.ts';
+import { GRAPH } from '../src/answer/graph.ts';
+import { indexGraph, rideStops, serviceEndsAt } from '../src/answer/resolve.ts';
 import { clockAt } from '../src/clock.ts';
 import { onRide, onRideQuery, rideLength } from './_ride.mjs';
 
@@ -871,8 +871,8 @@ test("a deleted account's trip state goes at once, and a request still under way
 });
 
 test("the cron's deletion of an idle anonymous account takes its trip state too", async () => {
-  const { housekeeping } = await import('../src/monitor.ts');
-  const { ACCOUNT_TTL } = await import('../src/accounts.ts');
+  const { housekeeping } = await import('../src/ops/monitor.ts');
+  const { ACCOUNT_TTL } = await import('../src/accounts/accounts.ts');
   const { env, TRIPS } = await setup();
   const post = (id, path, body) =>
     TRIPS.get(TRIPS.idFromName(id)).fetch(`https://trip/${path}`, {
@@ -1343,7 +1343,7 @@ test('/api/me/day follows the plan once its bus has left: the same leave-by, the
 });
 
 test('choices are capped per account, the oldest dropped first', async () => {
-  const { MAX_PREFS } = await import('../src/outcomes.ts');
+  const { MAX_PREFS } = await import('../src/accounts/outcomes.ts');
   const { env, call, phone } = await setup();
   for (let i = 0; i < MAX_PREFS + 5; i++) {
     env.DB._db
@@ -1378,7 +1378,7 @@ test('a trip key that is no class of yours and no trip home is refused', async (
 });
 
 test('a day keeps at most so many trip records', async () => {
-  const { MAX_DAY_TRIPS } = await import('../src/tripdo.ts');
+  const { MAX_DAY_TRIPS } = await import('../src/push/tripdo.ts');
   const { phone, signal, TRIPS } = await setup();
   await signal(phone, { kind: 'skipped', trip: FIRST });
   const inst = [...TRIPS.instances.values()][0];

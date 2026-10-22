@@ -2,10 +2,10 @@
  * Where a phone on a shuttle would be: a point on the real road line
  * (shapes.json), part way along a ride. For the tests of seenOnBus.
  */
-import { GRAPH } from '../src/graph.ts';
-import { shapeFor } from '../src/campus.ts';
-import { pointAlong } from '../src/buses.ts';
-import { indexGraph, rideSpan } from '../src/resolve.ts';
+import { GRAPH } from '../src/answer/graph.ts';
+import { shapeFor } from '../src/map/campus.ts';
+import { pointAlong } from '../src/map/buses.ts';
+import { indexGraph, rideSpan } from '../src/answer/resolve.ts';
 
 function ride(svc, from, to) {
   const shape = shapeFor(svc, GRAPH.routes[svc]);

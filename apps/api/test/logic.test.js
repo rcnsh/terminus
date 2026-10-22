@@ -23,7 +23,7 @@ import {
   scoreOptions,
   nearestStop,
   walkAllTheWayS,
-} from '../src/resolve.ts';
+} from '../src/answer/resolve.ts';
 import {
   arrivalsProblem,
   arrivalsUnread,
@@ -39,11 +39,11 @@ import {
   proxyOk,
   proxyUrl,
   unwrap,
-} from '../src/fms.ts';
-import { buildAnswer, clampLabel, fitsTile, mins, shortStop, walkVerdict } from '../src/format.ts';
+} from '../src/feeds/fms.ts';
+import { buildAnswer, clampLabel, fitsTile, mins, shortStop, walkVerdict } from '../src/answer/format.ts';
 import { LABEL_MAX, PUBLIC, WALK } from '../src/config.ts';
-import { apiKeyHeaders, authUrl, extractSession, jwtExpMs, proxyHeaders } from '../src/auth.ts';
-import { GRAPH as BUNDLED_GRAPH } from '../src/graph.ts';
+import { apiKeyHeaders, authUrl, extractSession, jwtExpMs, proxyHeaders } from '../src/feeds/auth.ts';
+import { GRAPH as BUNDLED_GRAPH } from '../src/answer/graph.ts';
 
 const GRAPH = graphJson;
 const NOW = Date.UTC(2026, 7, 27, 1, 0, 0); // Thu 09:00 SGT
@@ -705,7 +705,7 @@ test('the same service from the other stop is an alternative only when it gets y
 });
 
 test('standing across the road from the destination, the answer names the stop you are at', async () => {
-  const { answerFor } = await import('../src/answer.ts');
+  const { answerFor } = await import('../src/answer/answer.ts');
   const { installGlobals, makeCtx, makeEnv, makeFetch } = await import('./_stubs.mjs');
   installGlobals(makeFetch());
   const a = await answerFor(makeEnv(), makeCtx(), { lat: KR_OPP.lat, lon: KR_OPP.lon, to: 'KR-MRT', originCode: null }, null, NOW);
@@ -1434,7 +1434,7 @@ test('a place served by two stops: any bus to either one counts, the shorter rid
 });
 
 test('inside a residence, only its own stops are offered, walked by the paths (PGP, not KR MRT over the hill)', async () => {
-  const { candidateStops, walkAllTheWayS } = await import('../src/resolve.ts');
+  const { candidateStops, walkAllTheWayS } = await import('../src/answer/resolve.ts');
   const { default: g } = await import('../data/stops.json', { with: { type: 'json' } });
   const dorm = { lat: 1.291519, lon: 103.782764, originCode: null };
   const codes = candidateStops(g, { ...dorm, to: 'UTOWN' }).map((c) => c.stop.code);
@@ -1448,7 +1448,7 @@ test('inside a residence, only its own stops are offered, walked by the paths (P
 });
 
 test("a window that crosses midnight still runs after it, by yesterday's hours", async () => {
-  const { serviceEndsAt } = await import('../src/resolve.ts');
+  const { serviceEndsAt } = await import('../src/answer/resolve.ts');
   const graph = { ...realGraph, serviceHours: { X: { weekday: ['07:00', '01:00'], saturday: ['08:00', '23:00'], sunday: null } } };
   const sgt = (d, h, m) => Date.UTC(2026, 7, d, h - 8, m); // August 2026, SGT
   assert.equal(inService(graph, 'X', sgt(29, 0, 30)), true, "Sat 00:30: Friday's service");

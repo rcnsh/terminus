@@ -13,9 +13,9 @@ import {
   versionFromApkCombo,
   versionFromPlay,
   versionsFromRefusal,
-} from '../src/appversion.ts';
-import { appVersion, getSession } from '../src/auth.ts';
-import { checkUpstream, readUpstream } from '../src/monitor.ts';
+} from '../src/feeds/appversion.ts';
+import { appVersion, getSession } from '../src/feeds/auth.ts';
+import { checkUpstream, readUpstream } from '../src/ops/monitor.ts';
 
 // The shapes of the real pages, not copies of them: on Play the app's version
 // sits before its SDK levels, and a review's version comes earlier.

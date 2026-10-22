@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import nusmods from './fixtures/calendar/nusmods.json' with { type: 'json' };
 import holidays from './fixtures/calendar/holidays.json' with { type: 'json' };
-import { BUNDLED, calendarThrough, termDay } from '../src/calendar.ts';
+import { BUNDLED, calendarThrough, termDay } from '../src/timetable/calendar.ts';
 import {
   CALENDAR_DATA_KEY,
   CALENDAR_NEXT_KEY,
@@ -14,8 +14,8 @@ import {
   refreshCalendar,
   resetCalendar,
   valid,
-} from '../src/calendarsync.ts';
-import { checkCalendar, runCron } from '../src/monitor.ts';
+} from '../src/timetable/calendarsync.ts';
+import { checkCalendar, runCron } from '../src/ops/monitor.ts';
 import { makeEnv, makeKV } from './_stubs.mjs';
 
 // test/fixtures/calendar: the two sources' real replies on 3 October 2026,

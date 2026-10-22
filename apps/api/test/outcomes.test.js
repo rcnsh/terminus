@@ -7,8 +7,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { makeD1 } from './_d1.mjs';
-import { tripPrefs } from '../src/outcomes.ts';
-import { sgtDate } from '../src/trip.ts';
+import { tripPrefs } from '../src/accounts/outcomes.ts';
+import { sgtDate } from '../src/answer/trip.ts';
 
 const NOW = Date.parse('2026-08-27T01:00:00Z'); // Thursday 09:00 in Singapore
 const DAY = 86_400_000;

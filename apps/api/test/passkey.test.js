@@ -1,5 +1,5 @@
 /**
- * Passkeys for the operator's pages (src/passkey.ts): adding one needs
+ * Passkeys for the operator's pages (src/accounts/passkey.ts): adding one needs
  * HEALTH_TOKEN itself; signing in with one gives a session that opens the
  * dashboard and the timelapse days as the token does, and nothing more.
  */
@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { installGlobals, makeCtx, makeEnv, makeFetch } from './_stubs.mjs';
 import { makeAuthenticator } from './_passkey.mjs';
 import worker from '../src/index.ts';
-import { challengeOk, derToRaw, newChallenge, newSession, PASSKEYS_KEY, SESSION_MS, sessionOk } from '../src/passkey.ts';
+import { challengeOk, derToRaw, newChallenge, newSession, PASSKEYS_KEY, SESSION_MS, sessionOk } from '../src/accounts/passkey.ts';
 
 const BASE = 'https://bus.example.test';
 const TOKEN = 'operator-secret';

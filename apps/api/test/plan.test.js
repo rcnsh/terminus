@@ -5,9 +5,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { SAME_BUS_MS, choosePlan, planOfLeave, sameBus } from '../src/plan.ts';
-import { WAIT_EARLY_MS } from '../src/trip.ts';
-import { reachedEarly } from '../src/profile.ts';
+import { SAME_BUS_MS, choosePlan, planOfLeave, sameBus } from '../src/answer/plan.ts';
+import { WAIT_EARLY_MS } from '../src/answer/trip.ts';
+import { reachedEarly } from '../src/timetable/profile.ts';
 import { FROZEN_NOW, installGlobals, makeFetch } from './_stubs.mjs';
 
 const NOW = Date.parse('2026-08-27T01:00:00Z'); // 09:00 SGT

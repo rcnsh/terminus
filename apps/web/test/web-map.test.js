@@ -1,16 +1,16 @@
 /**
  * The web map's buses sliding along their line (apps/web/public/app/map.js:
  * pathOf, aheadBy, pointAt, positionAt, slideMs), on the real route lines
- * and the API's own placing (src/buses.ts), so the two measure a line the
+ * and the API's own placing (src/map/buses.ts), so the two measure a line the
  * same way and agree on which lines are loops.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
 
-import { buildCampusMap, shapeFor } from '../../api/src/campus.ts';
-import { placeBuses, pointAlong } from '../../api/src/buses.ts';
-import { GRAPH } from '../../api/src/graph.ts';
+import { buildCampusMap, shapeFor } from '../../api/src/map/campus.ts';
+import { placeBuses, pointAlong } from '../../api/src/map/buses.ts';
+import { GRAPH } from '../../api/src/answer/graph.ts';
 import { haversineM } from '../../api/src/geo.ts';
 
 // map.js imports by site path (/assets/ui.js), as the browser does; here

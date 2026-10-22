@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 import { ERRORS_ZH, errorText, langFromHeader, langOfRequest, msgsFor, useProfileLang, withLang, lang } from '../src/i18n.ts';
-import { parseProfile } from '../src/profile.ts';
+import { parseProfile } from '../src/timetable/profile.ts';
 import { json } from '../src/http.ts';
 
 test('Accept-Language: the first supported language by preference', () => {
@@ -69,7 +69,7 @@ test('every message is translated, and reads as Chinese', () => {
 });
 
 test('every landmark kind has a Chinese name', async () => {
-  const { allLandmarks } = await import('../src/landmarks.ts');
+  const { allLandmarks } = await import('../src/answer/landmarks.ts');
   for (const [code, l] of allLandmarks()) assert.match(msgsFor('zh').landmarkKind(l.kind), /[一-鿿]/, code);
 });
 
@@ -87,8 +87,8 @@ const DEV_TEMPLATES = [/^\$\{field\}/, /^home\.stops must/, /^(once|usual|places
 test('every error string in the API has a Chinese translation', () => {
   const dir = new URL('../src/', import.meta.url);
   const missing = [];
-  for (const f of fs.readdirSync(dir)) {
-    if (!f.endsWith('.ts') || f === 'openapi.ts' || f === 'i18n.ts') continue;
+  for (const f of fs.readdirSync(dir, { recursive: true })) {
+    if (!f.endsWith('.ts') || f === 'openapi.ts' || f.startsWith('openapi/') || f === 'i18n.ts') continue;
     const src = fs.readFileSync(new URL(f, dir), 'utf8');
     for (const [, q, text] of src.matchAll(/error: (['"`])((?:\\.|(?!\1).)*)\1/g)) {
       if (q === '`') {

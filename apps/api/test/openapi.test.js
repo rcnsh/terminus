@@ -16,7 +16,7 @@ import { makeD1, makeEmail } from './_d1.mjs';
 import { validate } from './_schema.mjs';
 import { makeAuthenticator } from './_passkey.mjs';
 import worker from '../src/index.ts';
-import { Trip } from '../src/tripdo.ts';
+import { Trip } from '../src/push/tripdo.ts';
 import { API_VERSION, openApiSpec } from '../src/openapi.ts';
 
 const BASE = 'https://bus.example.test';

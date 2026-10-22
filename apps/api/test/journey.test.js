@@ -2,8 +2,8 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cardFor } from '../src/card.ts';
-import { ROUTE_COLORS } from '../src/campus.ts';
+import { cardFor } from '../src/answer/card.ts';
+import { ROUTE_COLORS } from '../src/map/campus.ts';
 
 const load = async (name) => {
   const { default: fixture } = await import(`../../../fixtures/answers/${name}.json`, { with: { type: 'json' } });
@@ -106,8 +106,8 @@ test("the journey ends at the stop the bus calls at, not the place's first stop"
 });
 
 test('a trip kept as a plan keeps its journey on every device', async () => {
-  const { planOfLeave } = await import('../src/plan.ts');
-  const { leaveOf } = await import('../src/trip.ts');
+  const { planOfLeave } = await import('../src/answer/plan.ts');
+  const { leaveOf } = await import('../src/answer/trip.ts');
   const answer = await load('class-bus');
   const fresh = cardFor(answer).journey;
   // Another device reads the plan the first one kept (next.ts), not its own leave-by.
@@ -120,8 +120,8 @@ test('a trip kept as a plan keeps its journey on every device', async () => {
 });
 
 test('a plan kept before it carried walk and ride times still has a journey', async () => {
-  const { planOfLeave } = await import('../src/plan.ts');
-  const { leaveOf } = await import('../src/trip.ts');
+  const { planOfLeave } = await import('../src/answer/plan.ts');
+  const { leaveOf } = await import('../src/answer/trip.ts');
   const answer = await load('class-bus');
   const { walkS: _w, rideS: _r, ...old } = planOfLeave(answer.leave, false, 'UTOWN');
   const j = cardFor({ ...answer, leave: leaveOf(old) }).journey;
@@ -140,7 +140,7 @@ test('a planned trip home shows the planned bus, with the headline bus as its ba
 });
 
 test('a kept plan that changes buses never gives the change stop as where you get off', async () => {
-  const { leaveOf } = await import('../src/trip.ts');
+  const { leaveOf } = await import('../src/answer/trip.ts');
   const first = {
     svc: 'A1',
     stop: 'PGP',

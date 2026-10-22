@@ -7,10 +7,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { cardFor, headingOf, remindAtOf, titleOf } from '../src/card.ts';
-import { dayLine } from '../src/day.ts';
-import { etaText, thenText, towardsText } from '../src/resolve.ts';
-import { DUE_MS } from '../src/trip.ts';
+import { cardFor, headingOf, remindAtOf, titleOf } from '../src/answer/card.ts';
+import { dayLine } from '../src/timetable/day.ts';
+import { etaText, thenText, towardsText } from '../src/answer/resolve.ts';
+import { DUE_MS } from '../src/answer/trip.ts';
 import { withLang } from '../src/i18n.ts';
 
 const load = async (name) => {

@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { stopPairs } from '../src/pairs.ts';
-import { GRAPH, mergeOpposites } from '../src/graph.ts';
-import { candidateStops, legRideS } from '../src/resolve.ts';
+import { stopPairs } from '../src/map/pairs.ts';
+import { GRAPH, mergeOpposites } from '../src/answer/graph.ts';
+import { candidateStops, legRideS } from '../src/answer/resolve.ts';
 import { RIDE } from '../src/config.ts';
 import oppositesJson from '../data/opposites.json' with { type: 'json' };
 
@@ -124,7 +124,7 @@ test('a bus that stops on the far side counts, with the walk back across in its 
 });
 
 test('the class card names the stop to get off at, only when there is one', async () => {
-  const { cardFor } = await import('../src/card.ts');
+  const { cardFor } = await import('../src/answer/card.ts');
   const { default: fixture } = await import('../../../fixtures/answers/class-from-dorm.json', { with: { type: 'json' } });
   const { card: _card, refreshAt: _r, ...answer } = fixture;
   const plain = cardFor(answer);

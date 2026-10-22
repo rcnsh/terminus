@@ -19,8 +19,8 @@ import fs from 'node:fs';
 import { FROZEN_NOW, installGlobals, makeCtx, makeDurableObjects, makeEnv, makeFetch, makeKV } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
-import { Trip } from '../src/tripdo.ts';
-import { ASSUME_MS, CHANGE_GRACE_MS, RIDE_GRACE_MS } from '../src/trip.ts';
+import { Trip } from '../src/push/tripdo.ts';
+import { ASSUME_MS, CHANGE_GRACE_MS, RIDE_GRACE_MS } from '../src/answer/trip.ts';
 import { onRideQuery, rideLength } from './_ride.mjs';
 
 const DIR = new URL('../../../fixtures/answers/', import.meta.url);

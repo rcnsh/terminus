@@ -38,17 +38,17 @@ function site(mode: string | undefined) {
 			dataset: "terminus",
 			// Rate limit counters are per namespace; the beta has its own.
 			rl: { auth: "1001", public: "1002", me: "1003", mail: "1004", anon: "1005", map: "1006", pair: "1007" },
-			// The timelapse recorder polls NUS (src/timelapse.ts): on here, off on
+			// The timelapse recorder polls NUS (src/map/timelapse.ts): on here, off on
 			// the beta, so the two sites never poll twice.
 			env: {
 				TIMELAPSE_ENABLED: bindings.text("on"),
-				// The arrival-time model scores each day in shadow (src/etashadow.ts),
+				// The arrival-time model scores each day in shadow (src/ops/etashadow.ts),
 				// answering no one; it needs the eta collector on too. Off on the beta.
 				ETA_MODEL: bindings.text("shadow"),
-				// APNs's topic: the iPhone app's bundle id (src/apns.ts).
+				// APNs's topic: the iPhone app's bundle id (src/push/apns.ts).
 				APNS_TOPIC: bindings.text("sh.rcn.terminus"),
 				// APPLE_TEAM_ID (not a secret) turns on iOS universal links:
-				// /.well-known/apple-app-site-association (src/site.ts). Unset
+				// /.well-known/apple-app-site-association (src/site/site.ts). Unset
 				// until there's an Apple developer account; add it to both sites.
 				...moved(),
 			},
@@ -114,8 +114,8 @@ export default defineConfig(({ mode }) => {
 				s.oldDomain,
 			],
 			// The trip engine: one Durable Object per user with today's trip signals,
-			// the timelapse recorder, one per Singapore day (src/timelapsedo.ts),
-			// and the feed gate, one per stop or service (src/feedgate.ts).
+			// the timelapse recorder, one per Singapore day (src/map/timelapsedo.ts),
+			// and the feed gate, one per stop or service (src/feeds/feedgate.ts).
 			exports: {
 				Trip: exports.durableObject({ storage: "sqlite" }),
 				TimelapseRecorder: exports.durableObject({ storage: "sqlite" }),
@@ -235,7 +235,7 @@ export default defineConfig(({ mode }) => {
 				FCM_SERVICE_ACCOUNT: bindings.secret(),
 				// Web Push: the VAPID key, a P-256 JWK (scripts/deploy/vapid-key.mjs).
 				VAPID_PRIVATE_KEY: bindings.secret(),
-				// APNs (src/apns.ts): APNS_KEY (the .p8, PEM), APNS_KEY_ID and
+				// APNs (src/push/apns.ts): APNS_KEY (the .p8, PEM), APNS_KEY_ID and
 				// APNS_TEAM_ID are optional secrets, not declared, so a site deploys
 				// without them; until all three are set, iPhones aren't pushed.
 				...s.env,

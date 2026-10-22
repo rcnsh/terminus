@@ -60,11 +60,11 @@ import https from 'node:https';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { installGlobals, makeBucket, makeDurableObjects, makeEnv, makeCtx, shuttlePayload } from '../../test/_stubs.mjs';
-import { Trip } from '../../src/tripdo.ts';
-import { TimelapseRecorder } from '../../src/timelapsedo.ts';
-import { FeedGate } from '../../src/feedgate.ts';
-import { ensureRecorder, inWindow, nextOpen } from '../../src/timelapse.ts';
-import { SESSION_COOKIE as DEV_COOKIE, openSession } from '../../src/accounts.ts';
+import { Trip } from '../../src/push/tripdo.ts';
+import { TimelapseRecorder } from '../../src/map/timelapsedo.ts';
+import { FeedGate } from '../../src/feeds/feedgate.ts';
+import { ensureRecorder, inWindow, nextOpen } from '../../src/map/timelapse.ts';
+import { SESSION_COOKIE as DEV_COOKIE, openSession } from '../../src/accounts/accounts.ts';
 import { API_VERSION } from '../../src/openapi.ts';
 import { makeD1, makeEmail } from '../../test/_d1.mjs';
 import { fakeAeRows, seedAdmin } from './stub-admin.mjs';
@@ -221,7 +221,7 @@ const edgeCache = installGlobals(feed);
 Date.now = stubNow; // installGlobals freezes the clock for tests; the dev server wants real time.
 
 const { default: worker, GRAPH } = await import('../../src/index.ts');
-const { inService } = await import('../../src/resolve.ts');
+const { inService } = await import('../../src/answer/resolve.ts');
 const serviceHours = GRAPH.serviceHours;
 // The real hours, or every service "running" whatever the hour (POST /__stub/hours?real=1|0).
 const realHours = (on) => {

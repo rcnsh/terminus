@@ -8,7 +8,7 @@ needs before it answers anyone. The backtest's numbers are in
 ## How terminus gets bus data now
 
 - **The feed.** NUS's uNivUS bus proxy (`NEXTBUS_PROXY_BASE`), with a
-  public guest token (`src/auth.ts`). `src/fms.ts` is the only reader of its
+  public guest token (`src/feeds/auth.ts`). `src/feeds/fms.ts` is the only reader of its
   shape: `normalize()` turns a stop's `ShuttleService` reply into arrivals
   (`etaS`, the plate, crowding, the berth: `-S` runs starting at a terminus,
   `-E` ending there), and `normalizeBuses()` turns `ActiveBus` into raw
@@ -17,11 +17,11 @@ needs before it answers anyone. The backtest's numbers are in
 - **On request, not on a schedule.** Arrivals are read per stop when someone
   asks, through a 15 s edge cache (`TTL.arrivalsMs`) and the feed gate (one
   upstream call per key per window, every data centre); live buses per
-  service through a 5 s cache. `src/buses.ts` places each bus on its route
+  service through a 5 s cache. `src/map/buses.ts` places each bus on its route
   line with a track (`follow`), and `/api/buses` draws it at a stop or
   halfway between two (`sectionOf`), so the public `along` is quantised.
-- **The one poller** is the timelapse recorder (`src/timelapse.ts`,
-  `src/timelapsedo.ts`): every service's buses every 30 s, 06:30 to 00:30,
+- **The one poller** is the timelapse recorder (`src/map/timelapse.ts`,
+  `src/map/timelapsedo.ts`): every service's buses every 30 s, 06:30 to 00:30,
   through `getBuses()`, bounded by CLAUDE.md rule 2. It keeps each bus's
   own track position (metres along its line, not the drawn spot).
 
@@ -33,7 +33,7 @@ All of it is in production, none of it in the repo:
 | --- | --- | --- | --- |
 | Where every bus was, every 30 s | R2 `timelapse/YYYY-MM-DD.json.gz` (downloads bucket) | `DayFile`: per sample, each bus's plate, position and metres along its line | Since the recorder was turned on (stable site) |
 | What the feed predicted | Analytics Engine, `blob1 = 'arrival'` | per answer, up to 8 arrivals at the chosen stop: plate, stop, service, `etaS` (`analytics.ts`, "the segment-time seed"); sampled at high volume (`_sample_interval`) | AE keeps about 3 months |
-| How wrong the feed was | R2 `eta/YYYY-MM-DD.json` | `EtaDay` rows `[service, etaS, errS, hour]` (`src/eta.ts`) | Only while the operator collects `eta` |
+| How wrong the feed was | R2 `eta/YYYY-MM-DD.json` | `EtaDay` rows `[service, etaS, errS, hour]` (`src/ops/eta.ts`) | Only while the operator collects `eta` |
 
 There is nothing in D1 or KV, and the repo's only real trace is
 `test/fixtures/bus-trace.jsonl`: 15 minutes of four services.
@@ -43,7 +43,7 @@ Worker ("Don't add another poller"). Positions are the recorder's;
 predictions are what users were already shown. This work reads those two,
 and adds no call to NUS.
 
-## The model (`src/etamodel.ts`)
+## The model (`src/ops/etamodel.ts`)
 
 It starts simple, and it runs in a Worker: medians and sums, no runtime
 beyond the language.
@@ -147,7 +147,7 @@ node apps/api/scripts/probes/record_eta.mjs --until 11:00          # Singapore t
 node apps/api/scripts/probes/eta_backtest.mjs --recording dev/eta/2026-10-22.jsonl --out /tmp/backtest.md
 ```
 
-## In shadow (`src/etashadow.ts`)
+## In shadow (`src/ops/etashadow.ts`)
 
 With the `ETA_MODEL` var set to `shadow` (unset: off) and the operator
 collecting `eta`, the cron runs the backtest on production every day, after

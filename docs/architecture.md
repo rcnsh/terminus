@@ -31,19 +31,19 @@ A request goes through `src/index.ts` (the router), which hands off to:
 
 | Path | What |
 | --- | --- |
-| `src/me.ts`, `src/accounts.ts`, `src/applogin.ts` | Accounts: emailed codes and links, device tokens, pairing |
-| `src/access.ts` | Who may call the keyed routes (API key or session) |
-| `src/next.ts` | `/api/me/next`: today's plan and the trip's phase |
-| `src/profile.ts`, `src/day.ts` | The profile, the planner (`nextTripFor`), and today's timeline |
-| `src/answer.ts`, `src/resolve.ts`, `src/transfer.ts` | Stops near you, the stop on the right side of the road, scoring, one change of bus |
-| `src/walk.ts` | Walking times along campus paths |
-| `src/card.ts`, `src/format.ts`, `src/i18n.ts` | Everything a client shows, worded once |
-| `src/fms.ts` | The NUS feed client; the only code that reads the raw format |
-| `src/lta.ts`, `src/public.ts` | Public buses from LTA DataMall, for accounts that turn them on |
-| `src/buses.ts`, `src/campus.ts`, `src/map.ts` | The campus map: live buses on their line, stops and routes, the street map from R2 |
-| `src/trip.ts`, `src/tripdo.ts`, `src/plan.ts` | The trip engine, one Durable Object per user per day |
-| `src/push.ts`, `src/webpush.ts` | FCM to Android, Web Push to the web app |
-| `src/monitor.ts`, `src/calendarsync.ts` | The 15-minute cron: feed health, calendar refresh, housekeeping |
+| `src/accounts/me.ts`, `src/accounts/accounts.ts`, `src/accounts/applogin.ts` | Accounts: emailed codes and links, device tokens, pairing |
+| `src/accounts/access.ts` | Who may call the keyed routes (API key or session) |
+| `src/answer/next.ts` | `/api/me/next`: today's plan and the trip's phase |
+| `src/timetable/profile.ts`, `src/timetable/day.ts` | The profile, the planner (`nextTripFor`), and today's timeline |
+| `src/answer/answer.ts`, `src/answer/resolve.ts`, `src/answer/transfer.ts` | Stops near you, the stop on the right side of the road, scoring, one change of bus |
+| `src/answer/walk.ts` | Walking times along campus paths |
+| `src/answer/card.ts`, `src/answer/format.ts`, `src/i18n.ts` | Everything a client shows, worded once |
+| `src/feeds/fms.ts` | The NUS feed client; the only code that reads the raw format |
+| `src/feeds/lta.ts`, `src/answer/public.ts` | Public buses from LTA DataMall, for accounts that turn them on |
+| `src/map/buses.ts`, `src/map/campus.ts`, `src/map/map.ts` | The campus map: live buses on their line, stops and routes, the street map from R2 |
+| `src/answer/trip.ts`, `src/push/tripdo.ts`, `src/answer/plan.ts` | The trip engine, one Durable Object per user per day |
+| `src/push/push.ts`, `src/push/webpush.ts` | FCM to Android, Web Push to the web app |
+| `src/ops/monitor.ts`, `src/timetable/calendarsync.ts` | The 15-minute cron: feed health, calendar refresh, housekeeping |
 | `src/openapi.ts`, `src/openapi/` | The OpenAPI spec behind [`/docs`](https://terminus.run/docs); a test fails if it and the routes drift |
 | `src/config.ts` | Cache TTLs and tuning constants |
 | `src/types.ts` | `Env`: every binding and secret |
@@ -51,11 +51,11 @@ A request goes through `src/index.ts` (the router), which hands off to:
 ## Data sources
 
 - **NUS shuttle feed.** No public API: the Worker uses the uNivUS app's
-  guest-token flow (no NUSNET credentials), through `src/auth.ts` and
-  `src/fms.ts`. `src/appversion.ts` follows the app version string the feed
+  guest-token flow (no NUSNET credentials), through `src/feeds/auth.ts` and
+  `src/feeds/fms.ts`. `src/feeds/appversion.ts` follows the app version string the feed
   demands, and KV `config:appVersion` can override it without a deploy.
 - **LTA DataMall.** Public bus arrivals, only with `LTA_ACCOUNT_KEY`.
-- **NUSMods.** The timetable, imported from a share link (`src/nusmods.ts`).
+- **NUSMods.** The timetable, imported from a share link (`src/timetable/nusmods.ts`).
 - **Bundled data** in `apps/api/data`: stops and route order
   (`stops.json`), route lines (`shapes.json`, from OpenStreetMap), public
   buses, walking paths, venues and residences, and the academic calendar.
@@ -64,20 +64,20 @@ A request goes through `src/index.ts` (the router), which hands off to:
   `nus-days.json`, and `src/venue-stops.json` (the stops students use for a
   building, where the map's nearest is wrong).
 - **Calendar.** Bundled, and also fetched weekly by the cron into KV
-  (`src/calendarsync.ts`), so it doesn't run out between deploys.
+  (`src/timetable/calendarsync.ts`), so it doesn't run out between deploys.
 
 ## Caching and load on NUS
 
 - Arrivals are cached 15 s per stop and live buses 5 s per service, in the
-  edge cache (`src/edgecache.ts`, `TTL` in `src/config.ts`), so every request
+  edge cache (`src/feeds/edgecache.ts`, `TTL` in `src/config.ts`), so every request
   in a data centre shares one upstream call.
-- `src/feedgate.ts` (the `FeedGate` Durable Object) holds each key to one
+- `src/feeds/feedgate.ts` (the `FeedGate` Durable Object) holds each key to one
   upstream call per window across all data centres.
 - On a failure the last answer is served, marked stale, for up to 5 minutes;
   a rejected version or key, a 429 or 5xx, or no answer at all (a timeout,
   a failed connection) trips a breaker.
 - The only scheduled poller is the timelapse recorder
-  (`src/timelapsedo.ts`, one Durable Object per Singapore day), every 30 s
+  (`src/map/timelapsedo.ts`, one Durable Object per Singapore day), every 30 s
   inside service hours, through the same cache. It's on for the stable site
   only (`TIMELAPSE_ENABLED`).
 

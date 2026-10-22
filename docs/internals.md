@@ -46,7 +46,7 @@ hour, like the Worker's small pages.
 
 The landing page is sent with the current release's version (from
 `latest.json`, read from R2 on every request, so a release shows at once) and, for someone with a live
-session, Account in place of Sign in, both written in by `src/landing.ts`
+session, Account in place of Sign in, both written in by `src/site/landing.ts`
 so nothing changes once the page is up. It's `private, no-cache`, with a
 weak ETag of its own made from the file's ETag, the version, signed in or
 not and the beta (`landingEtag`), so a browser gets a 304 only while its
@@ -134,7 +134,7 @@ and `/auth/approve`, so a link already sent keeps working), the downloads
 (the Mac's Sparkle feed is built into every copy) and the map's files.
 
 The old root paths (before 3.0) aren't served. `movedApi` in
-[src/site.ts](../apps/api/src/site.ts) answers them: a request with
+[src/site/site.ts](../apps/api/src/site.ts) answers them: a request with
 `x-terminus-client` is an app from before 3.0, so it gets the 426
 `config:minClient` gives (the app shows "update" rather than an error);
 anything else (a script with an API key, a page open since before) gets a
@@ -168,7 +168,7 @@ anything else (a script with an API key, a page open since before) gets a
 | `GET /api/timelapse/days` | The days the timelapse recorder has kept (closed ones from R2; today's while it records, and any of the past week's still held by a recorder that hasn't written it to R2 yet) and what it's doing today. Needs `x-health-token`: the operator's, or `TIMELAPSE_TOKEN`, which opens `/api/timelapse/*` and nothing else. |
 | `GET /api/timelapse/days/<date>` | One recorded day as gzipped JSON (see "The timelapse recorder"). A closed day never changes and is cached for a year; today's is built from what the recorder holds so far, `no-store` (503 if its recorder doesn't answer within 10 s). Needs `x-health-token` (operator or timelapse token). |
 | `GET /account` | The account page ([apps/web](../apps/web)), served as static assets. |
-| `POST /api/auth/login`, `/api/auth/code`, `/api/pair`, `/api/me/*` | Accounts. See below. `POST /api/me/feedback` is "Is this wrong?": the answer the user saw and what was wrong (a `reason` from the sheet's chips, `REASONS` in `src/feedback.ts`, a note, or both), kept with the account for a year (`FEEDBACK_KEEP_DAYS`, the cron) and its note emailed to `ALERT_EMAIL`, without the address or the answer (they'd outlive the account in an inbox; the dashboard has both). It needs a reason or a note (feedback, `kind: other`, always a note), and an account with an email: an anonymous one gets 403. |
+| `POST /api/auth/login`, `/api/auth/code`, `/api/pair`, `/api/me/*` | Accounts. See below. `POST /api/me/feedback` is "Is this wrong?": the answer the user saw and what was wrong (a `reason` from the sheet's chips, `REASONS` in `src/ops/feedback.ts`, a note, or both), kept with the account for a year (`FEEDBACK_KEEP_DAYS`, the cron) and its note emailed to `ALERT_EMAIL`, without the address or the answer (they'd outlive the account in an inbox; the dashboard has both). It needs a reason or a note (feedback, `kind: other`, always a note), and an account with an email: an anonymous one gets 403. |
 
 `/api/next`, `/api/trip`, `/api/arrivals`, `/api/buses`, `/api/line`, `/api/campus` and `/api/stops/pairs` need an API key
 (made on the account page, sent as `x-api-key`, or as a bearer token) or a signed-in
@@ -178,7 +178,7 @@ limited by who's asking: a signed-in account by account (`RL_ME`, `acct:`),
 an API key by key (`RL_PUBLIC`, `key:`), and a request with neither by IP.
 On campus Wi-Fi hundreds of students share one IP, and the map alone asks
 for buses every 5 s. For `/api/buses` only, each isolate remembers who it let
-in for 30 s (`recentCallerFor` in `src/access.ts`), so a poll doesn't
+in for 30 s (`recentCallerFor` in `src/accounts/access.ts`), so a poll doesn't
 look the session up in D1 again: a session signed out or a key revoked can
 still see the buses that long, and nothing else. `/api/health`, `/api/status.json`, `/api/admin/stats`,
 `/api/timelapse/*` and `/download/*` stay limited by IP. `/map/*` is limited by IP only where it
@@ -217,7 +217,7 @@ What the bill depends on, and the guards against it:
 ### Board rows
 
 `/api/arrivals`, `/api/me/nearby` and `/api/line` (`stop.row`) share one row per service
-(`boardAt` in `src/resolve.ts`): the next bus (`etaS`, `quality`), the ones
+(`boardAt` in `src/answer/resolve.ts`): the next bus (`etaS`, `quality`), the ones
 after it the feed knows (`later`), and
 
 - `color`: the service's colour from `ROUTE_COLORS`, null for a public bus;
@@ -227,7 +227,7 @@ after it the feed knows (`later`), and
   it started (D1 at BIZ2 is just "COM 3"). One name when the two are the
   same; none at the end of a line that doesn't loop (K at PGP Foyer);
 - `via`: the well-known places it passes from here, in order, up to three
-  (`src/via.ts`, hand-kept: the MRT stations, UTown, PGP, Kent Vale,
+  (`src/answer/via.ts`, hand-kept: the MRT stations, UTown, PGP, Kent Vale,
   Central Library, COM 3, BIZ, and Arts, Science and Engineering for
   their faculties' stops), each once and never the place you're at. For
   someone who doesn't know the routes yet: `towards` tells a regular which
@@ -296,7 +296,7 @@ themselves, and drifted):
 Per-user trips come from the account (`/api/me/next`): a NUSMods timetable
 imported with `POST /api/me/import` (a profile keeps 100 classes a week; past that the
 week's latest are left out and the answer's `dropped` says how many), plus classes entered by hand. Imported classes only
-count in the weeks they run ([src/calendar.ts](../apps/api/src/calendar.ts), built from
+count in the weeks they run ([src/timetable/calendar.ts](../apps/api/src/calendar.ts), built from
 NUSMods' semester dates and MOM's public holidays by
 `scripts/data/fetch_calendar.py`). NUS's own days off, such as Well-Being Days,
 aren't in either source: they're kept by hand in `data/nus-days.json` (add
@@ -319,7 +319,7 @@ until it's saved, one save at a time, and on a 412 the page reads the
 profile again and makes only its own changes on that (three tries).
 
 The calendar keeps itself up to date without a deploy
-([src/calendarsync.ts](../apps/api/src/calendarsync.ts)). `data/calendar.json` is
+([src/timetable/calendarsync.ts](../apps/api/src/calendarsync.ts)). `data/calendar.json` is
 bundled at deploy time, and the scrape workflow refreshes it weekly, but a
 bundled file only changes when someone deploys. So the cron also fetches the
 same two sources once a week. The copy must pass checks:
@@ -378,7 +378,7 @@ get one of three ways:
   older than `FEEDBACK_KEEP_DAYS` (365), runs once a
   Singapore day (KV `housekeeping:day`), since each reads a whole table;
   expired sign-in links and codes go every run.
-- **Sign-in approved from the email** ([src/applogin.ts](../apps/api/src/applogin.ts),
+- **Sign-in approved from the email** ([src/accounts/applogin.ts](../apps/api/src/applogin.ts),
   modelled on RFC 8628). `POST /api/auth/app/start {email, name}` returns
   `{request, poll, match, expires}` and emails a 6-character code (in the subject
   too: filters hold back link-only mail) and a link. Typed into the app,
@@ -396,7 +396,7 @@ get one of three ways:
   That page, like the Worker's other small pages (`page()` in me.ts), has
   a band of the hour's sky across its card, as Settings' pages do in the
   apps: no script, so the hour is the server's, in Singapore
-  ([src/pagesky.ts](../apps/api/src/pagesky.ts); pagesky.test.js keeps its hours
+  ([src/site/pagesky.ts](../apps/api/src/pagesky.ts); pagesky.test.js keeps its hours
   and colours the web app's). The Android app takes the code in six boxes,
   one field underneath: a paste spreads over them, keeping only the code
   from around it (`codeEdit`, SignInCode.kt).
@@ -457,7 +457,7 @@ pnpm exec cf kv keys put config:minClient --namespace-id <KV id in cloudflare.co
 ```
 
 - `GET /api/me/next` is the widget's one call. It picks the destination from the
-  timetable (see `nextTripFor` in [src/profile.ts](../apps/api/src/profile.ts)) or from
+  timetable (see `nextTripFor` in [src/timetable/profile.ts](../apps/api/src/profile.ts)) or from
   `?place=`/`?to=`, and returns the usual answer plus `dest` and `places`.
   A `place` or `to` that names nothing it knows is ignored: the answer is
   the timetable's.
@@ -499,8 +499,8 @@ phase comes from the answer and the day's signals: `POST /api/me/signal` with
 names. Clients show `card.actions` as buttons and never decide them.
 
 The signals live in a Durable Object per user (`Trip` in
-[src/tripdo.ts](../apps/api/src/tripdo.ts), reached through
-[src/trip.ts](../apps/api/src/trip.ts), bound as `TRIPS`, keyed by user id, created
+[src/push/tripdo.ts](../apps/api/src/tripdo.ts), reached through
+[src/answer/trip.ts](../apps/api/src/trip.ts), bound as `TRIPS`, keyed by user id, created
 in Asia with `locationHint: 'apac'`). It's
 only touched on a day with classes and keeps only that day: its signals
 (`DayRecord.trips`), the bus each trip's plan is for (`plans`), the wake
@@ -539,7 +539,7 @@ object at the change and once the second bus has gone.
 
 ### One plan, and push
 
-- **One plan, everywhere** ([src/plan.ts](../apps/api/src/plan.ts)). The Worker saves the bus a trip is for in the
+- **One plan, everywhere** ([src/answer/plan.ts](../apps/api/src/plan.ts)). The Worker saves the bus a trip is for in the
   day's record (`DayRecord.plans`): from the moment the trip is due, or
   earlier when it was planned from the phone's location (`Plan.located`).
   Every device then says that bus (the card, the notifications, Today in
@@ -604,7 +604,7 @@ object at the change and once the second bus has gone.
   service due at your stop is the guess, marked `~`, or with nothing due
   only where to get off; ten minutes after the arrival (`RIDE_GRACE_MS`)
   you're taken to be there.
-- **Outcomes** ([src/outcomes.ts](../apps/api/src/outcomes.ts), `trip_outcomes`, 35
+- **Outcomes** ([src/accounts/outcomes.ts](../apps/api/src/outcomes.ts), `trip_outcomes`, 35
   days): what was said (boarded, missed, arrived, from older apps' taps or
   the phone reaching the destination) and "Not going",
   with the day it happened (`at` is that day's start, never the moment:
@@ -612,7 +612,7 @@ object at the change and once the second bus has gone.
   three misses of one class in 30 days suggest a bus earlier (`ArriveBy.oneEarlier`);
   three skips in a row offer to stop reminders (`card.remind: false`). Choices
   are `trip_prefs`; a turned-down suggestion waits 30 days.
-- **Push** ([src/push.ts](../apps/api/src/push.ts), [src/tripdo.ts](../apps/api/src/tripdo.ts)).
+- **Push** ([src/push/push.ts](../apps/api/src/push.ts), [src/push/tripdo.ts](../apps/api/src/tripdo.ts)).
   When push is set up (`pushEnabled`: `FCM_SERVICE_ACCOUNT` or
   `VAPID_PRIVATE_KEY` usable, or APNs's settings all there), a card served on a class day asks the
   Trip object to wake at `nextPhaseAt` (due, leave-by, departure, +3 min,
@@ -655,7 +655,7 @@ object at the change and once the second bus has gone.
 
 ### APNs: push to the iPhone app
 
-[src/apns.ts](../apps/api/src/apns.ts), sent by push.ts beside FCM and Web Push.
+[src/push/apns.ts](../apps/api/src/apns.ts), sent by push.ts beside FCM and Web Push.
 
 - **Tokens.** The app sends `POST /api/me/push` with `{token}`:
   - `apns:<hex>`: the device token from
@@ -841,7 +841,7 @@ object at the change and once the second bus has gone.
   doubling each time to 15 minutes; the Trip object's wakes in that time
   send nothing to Apple, and try again after it.
 
-The planner ([src/profile.ts](../apps/api/src/profile.ts), `nextTripFor`):
+The planner ([src/timetable/profile.ts](../apps/api/src/profile.ts), `nextTripFor`):
 
 - A class stays the target until 15 minutes after it starts (you may still
   be on the bus), unless you've reached it. A skipped class is left out.
@@ -866,7 +866,7 @@ arrival) instead of a leave-by that has passed. Each row comes worded:
 `title` (the class, or "Home, from UTown") and `line`, its second line
 ("Leave by ~09:38 · D2 from PGP", with "~5 min late" when it will be; "On
 the D2 · off at UTown · arrive 09:52"; "Not going"), null once it's done or
-with nothing to say yet (`dayLine` in `src/day.ts`). Apps send it the same
+with nothing to say yet (`dayLine` in `src/timetable/day.ts`). Apps send it the same
 `lat`/`lon` as `/api/me/next`, and the next class is planned from there, so Today
 and the card agree even on the first load, when both are asked at once and
 the card's plan isn't saved yet. (Without it, Today planned from the home
@@ -928,7 +928,7 @@ leg's `arrive`) stay at the stop. A class's leave-by already aims at the
 room (`leave.arrive` is there): the answer's `endWalk` (kept off the
 response) says which, so the walk is never added twice. Apps count down to `leave.at` and `journey.boardAt` themselves.
 
-The journey's lines come worded too (`worded` in `src/card.ts`), so the three
+The journey's lines come worded too (`worded` in `src/answer/card.ts`), so the three
 web styles, the app's card and the widgets say the same: `title` ("To
 GEA1000 @ UTown · starts 10:00"), `place` ("GEA1000"), `byText` ("by
 ~09:36", null at the stop), `walkText` ("5 min walk"), `rideText` ("10 min
@@ -964,7 +964,7 @@ route moves it from the answer into the card (`profile.ts` `upcomingClass`).
   wrong guesses are counted on the link's row (`magic_links.code_tries`,
   migration 0009), five at most.
 - Every email (sign-in, a device added, feedback, the operator's alerts) is
-  plain text with an HTML version from `src/mail.ts`, built with react-email
+  plain text with an HTML version from `src/site/mail.ts`, built with react-email
   (written with htm, as the sources have no JSX build step). The plain text
   is written where each is sent and stays the one the tests read. `mail.ts`
   is loaded with `import()` (`mail` in accounts.ts): React and its renderer
@@ -1045,7 +1045,7 @@ the apps call, and terminus.rcn.sh, the old one, which apps before 3.3.0
 (betas before 3.2.1-beta.2) call and which apps before 3.6.0 fall back to when terminus.run can't be reached
 (the beta's likewise). A page a browser opens on the old
 address is sent to the same path on the new one (`movedPage` in
-`src/site.ts`): a GET or HEAD asking for HTML, outside `/download/`,
+`src/site/site.ts`): a GET or HEAD asking for HTML, outside `/download/`,
 `/.well-known/`, `/map/` and `/robots.txt`. Anything asking for JSON, the
 apps included, is answered where it is. The 301 carries `max-age=86400`, so
 search engines move the old address's pages over but a browser asks again
@@ -1056,7 +1056,7 @@ keep for good.
 app, so both addresses serve it. Android's is a static file,
 `assetlinks.json`, with the stable and beta apps' signing keys. The
 iPhone's, `apple-app-site-association`, is the Worker's
-(`appSiteAssociation` in `src/site.ts`): `application/json`, cached an
+(`appSiteAssociation` in `src/site/site.ts`): `application/json`, cached an
 hour, naming `<APPLE_TEAM_ID>.sh.rcn.terminus` (`.beta` on the beta) for
 `/pair` and `/pair/`, so a pairing link (`/pair?code=…`) opens the app,
 which claims `applinks:` on both of its site's addresses. Apple's CDN
@@ -1466,7 +1466,7 @@ anything else (CLAUDE.md, rule 2).
 The cache is one Cloudflare data centre's, shared by its isolates, so on
 its own "one call per stop per 15 s" would hold per data centre: traffic
 spread across many (a botnet) would multiply it. So a miss asks the **feed
-gate** first ([src/feedgate.ts](../apps/api/src/feedgate.ts), `FEED_GATE`): one
+gate** first ([src/feeds/feedgate.ts](../apps/api/src/feedgate.ts), `FEED_GATE`): one
 Durable Object per key (`arrivals/<stop>`, `buses/<service>`,
 `public/<LTA stop>`), in Asia. The first to ask in a window may call the
 feed and hands its answer back; anyone else in that window, from any data
@@ -1568,7 +1568,7 @@ other. A client downloads only the ranges its labels use.
 
 A range is kept for 30 days by its URL, at the edge, in the apps' map
 caches and in the web app's service worker, so changed fonts need a new
-URL: the style's glyphs URL ends `?v=` and `GLYPHS` in `src/map.ts`, bumped
+URL: the style's glyphs URL ends `?v=` and `GLYPHS` in `src/map/map.ts`, bumped
 when the fonts on R2 change (v2 brought the Chinese), and the edge keeps the
 versioned range apart from the old.
 
@@ -1797,7 +1797,7 @@ pnpm exec cf kv keys put config:appVersion --namespace-id <KV id in cloudflare.c
 the fallback while the key is unset; a malformed value is ignored. Tokens
 remember the version they were minted with, so the next call mints a new one.
 Usually nobody has to: on a 10009 the cron check runs
-[`src/appversion.ts`](../apps/api/src/appversion.ts), which reads the new version from
+[`src/feeds/appversion.ts`](../apps/api/src/appversion.ts), which reads the new version from
 NUS's refusal if it names one, or from the uNivUS pages on Google Play
 (versionName) and APKCombo (versionName and versionCode). It tries the
 likeliest strings with NUS (a token and one bus call each, three at most),
@@ -1816,7 +1816,7 @@ find today, without calling NUS: `GET /api/health?versions=1` with the
 ## Operator passkeys
 
 The dashboard (`/admin/`) and the timelapse page open with a passkey
-(`src/passkey.ts`, `apps/web/public/admin/passkey.js`). Adding one needs
+(`src/accounts/passkey.ts`, `apps/web/public/admin/passkey.js`). Adding one needs
 `HEALTH_TOKEN`, typed once on that device; signing in with it answers an
 operator session, `op1.<expiry ms>.<HMAC>`, which the pages send in
 `x-health-token` where the token went and which `isOperator()` accepts for
@@ -1911,7 +1911,7 @@ too would double that scheduled load for a site few people use. Instead,
 whenever a request on the beta opens a feed's breaker, the failure (with
 NUS's code, response and the version string it refused) is noted in the
 beta's KV (`monitor:seen`, `monitor:seen-public`; at most once a minute per
-isolate; [`src/feedwatch.ts`](../apps/api/src/feedwatch.ts)). The beta's cron reads a
+isolate; [`src/feeds/feedwatch.ts`](../apps/api/src/feedwatch.ts)). The beta's cron reads a
 note from the last 15 minutes as a failed check (`sawTrip`) and runs the same
 state machine on it, so its status page, the card's "down since" notice and
 `/api/health` follow its own traffic, and a note from a version since switched
@@ -1925,15 +1925,15 @@ step with `cloudflare.config.ts` by a test), and each run while its feed is
 down is counted on its dashboard as the error `cron feed down`.
 
 **The operator's switches.** Five statistics are collected only once
-turned on, on the dashboard (`src/collect.ts`, KV `config:collect:<name>`,
+turned on, on the dashboard (`src/ops/collect.ts`, KV `config:collect:<name>`,
 off when unset or unreadable):
 
-- `active` ([`src/usage.ts`](../apps/api/src/usage.ts)): the first cron run after
+- `active` ([`src/ops/usage.ts`](../apps/api/src/usage.ts)): the first cron run after
   Singapore midnight counts accounts with a session used in the last 1, 7
   and 30 days, in all, by app and devices by version, and writes only the
   totals (KV `usage:day` marks the day done). D1 alone only knows "now";
   these rows give the dashboard its month.
-- `eta` ([`src/eta.ts`](../apps/api/src/eta.ts)): the cron scores the newest closed
+- `eta` ([`src/ops/eta.ts`](../apps/api/src/eta.ts)): the cron scores the newest closed
   recording day not yet scored, one a run, by joining its `arrival` rows
   (read back through Analytics Engine's SQL API) with the timelapse file:
   `passingsOf` reads when each plate passed 25 m before each stop along its
@@ -1945,14 +1945,14 @@ off when unset or unreadable):
   route line this deploy doesn't have is skipped for that service. It makes
   no call to NUS.
   With the `ETA_MODEL` var `shadow` as well, the next step
-  ([`src/etashadow.ts`](../apps/api/src/etashadow.ts)) answers the same day's
-  predictions with the arrival-time model ([`src/etamodel.ts`](../apps/api/src/etamodel.ts):
+  ([`src/ops/etashadow.ts`](../apps/api/src/etashadow.ts)) answers the same day's
+  predictions with the arrival-time model ([`src/ops/etamodel.ts`](../apps/api/src/etamodel.ts):
   segment medians from earlier days, the feed's usual error, a blend), built
   only from the 28 days before, and keeps the errors as
   `eta/model/YYYY-MM-DD.json` and the day's segment times as
   `eta/segments/YYYY-MM-DD.json`. Nobody is shown its times;
   [eta-model.md](eta-model.md) has the design and what it needs first.
-- `errors` ([`src/apperrors.ts`](../apps/api/src/apperrors.ts)): `POST /api/errors`.
+- `errors` ([`src/ops/apperrors.ts`](../apps/api/src/apperrors.ts)): `POST /api/errors`.
   The Android app saves an uncaught crash to a file and sends it on the next
   start; the Mac and iPhone apps send MetricKit's crash diagnostics and
   saved Objective-C exceptions on the next launch; the website's
@@ -1962,13 +1962,13 @@ off when unset or unreadable):
   stop. The server scrubs the message and stack (`scrub()`), fingerprints
   the top five frames without line numbers, and for the website fills in
   its own `API_VERSION`.
-- `legacy` ([`src/legacy.ts`](../apps/api/src/legacy.ts)): after each request, the
+- `legacy` ([`src/ops/legacy.ts`](../apps/api/src/legacy.ts)): after each request, the
   Worker checks whether it used the old address, an API path from before
   3.0, or was an app refused with 426 (`config:minClient`), and if so, in
   `waitUntil`, writes one row each: what, the app and version (or
   `browser`, `other`), and the route with no query and ids as `:id`. Most
   requests use none, so most never read the switch.
-- `settings` ([`src/settings.ts`](../apps/api/src/settings.ts)): with the active
+- `settings` ([`src/ops/settings.ts`](../apps/api/src/settings.ts)): with the active
   counts, once a Singapore day (KV `settings:day`), the profiles of the
   accounts used in 30 days are counted per setting and value
   (`settingsOf`: a missing setting is its default, a list is `some` or
@@ -2081,7 +2081,7 @@ terminus.run still signed in.
 
 ### Live buses on the map
 
-`/api/buses` shows each bus at a stop or between two (`src/buses.ts`). The feed
+`/api/buses` shows each bus at a stop or between two (`src/map/buses.ts`). The feed
 gives a position, a speed and a heading every 15–20 s per bus (the reply's
 own time stamp changes that often, for every bus at once, however often
 it's asked): too far apart, and too noisy, to draw a bus where it really
@@ -2177,8 +2177,8 @@ going ("Towards Kent Ridge MRT"), with the stops ahead from `upcoming`.
 ### The timelapse recorder
 
 A day of every shuttle, for a timelapse video
-([`src/timelapse.ts`](../apps/api/src/timelapse.ts),
-[`src/timelapsedo.ts`](../apps/api/src/timelapsedo.ts)). It is the **only poller of
+([`src/map/timelapse.ts`](../apps/api/src/timelapse.ts),
+[`src/map/timelapsedo.ts`](../apps/api/src/timelapsedo.ts)). It is the **only poller of
 the NUS feed** and the one exception to "don't add load on NUS"
 (CLAUDE.md, rule 2). Answers fetch because someone asked; the only other
 scheduled reads are the stable cron's health check (one stop from NUS and one from
@@ -2314,84 +2314,93 @@ worker never keeps it.
 ## Layout
 
 ```
-src/index.ts      Router
-src/resolve.ts    Haversine, directional pairing, downstream reachability, scoring
-src/transfer.ts   Changing buses: which change stops to fetch, the two-bus trip
-src/via.ts        The places a bus passes, by names a new student knows (hand-kept)
-src/format.ts     label/detail strings, the degrade ladder
-src/fms.ts        ShuttleService client + defensive response normalisation
-src/lta.ts        LTA DataMall client: the public buses at a stop
-src/public.ts     Public buses in the graph (GRAPH_PUBLIC), route keys, ride metres
-src/edgecache.ts  Fetch through the edge cache, stale on failure, breaker: both feeds
-src/feedgate.ts   One feed call per key per window across every data centre (FeedGate)
-src/auth.ts       Public token, lazy refresh, KV + in-memory memo
-src/config.ts     Cache TTLs and tuning constants
-src/calendar.ts   NUS teaching weeks and public holidays
-src/calendarsync.ts  The calendar fetched weekly by the cron into KV, between deploys
-src/nusmods.ts    NUSMods share URL -> classes; a room's stops (venueStops)
-src/campus.ts     /api/campus: stops, route lines and colours, destination search
-src/buses.ts      /api/buses: live buses placed on their route, next stop; /api/line's stops and buses
-src/timelapse.ts  The timelapse recorder's rules, day file and /api/timelapse/days
-src/timelapsedo.ts  The recorder's Durable Object: one per Singapore day
-src/map.ts        /map/*: the street map file, its style, fonts and icons
-src/pairs.ts      /api/stops/pairs
-src/analytics.ts  Analytics Engine logging: decisions and arrivals, errors
-                  (logError, logCronError), timelapse polls (logPoll), Trip wakes
-                  (logTripWake)
-src/collect.ts    The dashboard's switches for five statistics, off until turned on
-src/usage.ts      Daily active counts; src/eta.ts the feed's arrival times scored
-                  against the timelapse; src/apperrors.ts crash reports (/api/errors)
-src/legacy.ts     Requests on the old address and paths, by app version and route;
-                  src/settings.ts how many accounts have each setting, daily
-src/etamodel.ts   The arrival-time model (pure); src/etashadow.ts runs it in shadow
-                  beside eta.ts when ETA_MODEL is shadow (docs/eta-model.md)
-src/openapi.ts    OpenAPI 3.1 spec: the overview and the common errors;
-                  src/openapi/ its paths, schemas, shared parts and the
-                  Elements docs page
-src/http.ts       JSON responses, query parsing, CORS, security headers and
-                  the CSP, timedFetch (upstream calls under a timeout)
-src/types.ts      Env (bindings and secrets) and the API's shared types
-src/landing.ts    The landing page, with the version and Account written in
-src/pagesky.ts    The band of sky on the Worker's small pages and /docs
-src/async-hooks.d.ts  Types for node:async_hooks, the one Node API used
-src/seo.ts        robots.txt, the sitemap and /llms.txt (a guide for AI agents); the beta asks not to be crawled
-src/accounts.ts   Sign-in codes and links, sessions, anonymous accounts, pairing codes (D1)
-src/applogin.ts   App sign-in approved from the email
-src/passkey.ts    Passkeys and sessions for the operator's pages
-src/mail.ts       Every email's HTML (react-email), beside its plain text
-src/access.ts     API keys, and who may call the keyed routes
-src/profile.ts    Profile validation and the where-next planner
-src/me.ts         /api/auth, /api/pair and /api/me routes
-src/next.ts       /api/me/next's answer: the plan, free days, riding, the trip's phase
-src/day.ts        /api/me/day, today's timeline
-src/trip.ts       Trip phases, and the per-user Durable Object with today's signals
-src/tripdo.ts     The Trip object's wakes and push
-src/answer.ts     The answer engine: stops near you, their arrivals, the best bus
-src/card.ts       The card every client shows, worded once
-src/leave.ts      When to set off; src/clock.ts clock times and lateness
-src/plan.ts       Which bus a trip is about: one plan for every device
-src/outcomes.ts   What happened to each planned trip, and what it suggests
-src/crowd.ts      Full buses: a packed bus can pass a stop
-src/walk.ts       Walking along campus paths (data/walks.json), and out of a building
-                  by its paths (buildingStops)
-src/graph.ts      The stop graph, with hand-kept fixes
-src/geo.ts        Distance (a leaf module)
-src/residences.ts, src/landmarks.ts  Halls and named places served by several stops
-src/push.ts       FCM to Android; src/webpush.ts Web Push to the web app
-src/monitor.ts    The cron: feed health, incidents, housekeeping, arming trips,
-                  the new-semester reminder
-src/feedwatch.ts  The beta's feed checks, from the breakers its own traffic opened
-src/appversion.ts Finding the new uNivUS version when NUS refuses the old one
-src/downloads.ts  /download/*: app files and the Mac appcast from R2
-src/admin.ts      /api/admin/stats; src/feedback.ts "Is this wrong?" reports
-src/i18n.ts       Every server string in English and Chinese
-src/origin.ts     Which Worker this is: stable or beta (isBeta); emailed links' origin (linkOrigin)
-src/site.ts       The old address's redirects (movedPage, movedApi); the beta's marks
-data/             Bundled JSON: stops.json, shapes.json, public.json,
-                  calendar.json, walks.json, venues, rooms, landmarks, residences
-migrations/       D1 schema
-scripts/          dev-stub.mjs, the scrapers, probes and render-timelapse.mjs
-test/             *.test.js, worker.smoke.js, fixtures/ (captures, golden answers)
+src/index.ts               Router
+src/config.ts              Cache TTLs and tuning constants
+src/openapi.ts             OpenAPI 3.1 spec: the overview and the common errors;
+                           src/openapi/ its paths, schemas, shared parts and the
+                           Elements docs page
+src/http.ts                JSON responses, query parsing, CORS, security headers and
+                           the CSP, timedFetch (upstream calls under a timeout)
+src/types.ts               Env (bindings and secrets) and the API's shared types
+src/async-hooks.d.ts       Types for node:async_hooks, the one Node API used
+src/geo.ts                 Distance (a leaf module)
+src/i18n.ts                Every server string in English and Chinese
+src/origin.ts              Which Worker this is: stable or beta (isBeta); emailed links' origin (linkOrigin)
+
+src/feeds/fms.ts           ShuttleService client + defensive response normalisation
+src/feeds/lta.ts           LTA DataMall client: the public buses at a stop
+src/feeds/edgecache.ts     Fetch through the edge cache, stale on failure, breaker: both feeds
+src/feeds/feedgate.ts      One feed call per key per window across every data centre (FeedGate)
+src/feeds/auth.ts          Public token, lazy refresh, KV + in-memory memo
+src/feeds/feedwatch.ts     The beta's feed checks, from the breakers its own traffic opened
+src/feeds/appversion.ts    Finding the new uNivUS version when NUS refuses the old one
+
+src/answer/resolve.ts      Haversine, directional pairing, downstream reachability, scoring
+src/answer/transfer.ts     Changing buses: which change stops to fetch, the two-bus trip
+src/answer/via.ts          The places a bus passes, by names a new student knows (hand-kept)
+src/answer/format.ts       label/detail strings, the degrade ladder
+src/answer/public.ts       Public buses in the graph (GRAPH_PUBLIC), route keys, ride metres
+src/answer/next.ts         /api/me/next's answer: the plan, free days, riding, the trip's phase
+src/answer/trip.ts         Trip phases, and the per-user Durable Object with today's signals
+src/answer/answer.ts       The answer engine: stops near you, their arrivals, the best bus
+src/answer/card.ts         The card every client shows, worded once
+src/answer/leave.ts        When to set off; src/clock.ts clock times and lateness
+src/answer/plan.ts         Which bus a trip is about: one plan for every device
+src/answer/crowd.ts        Full buses: a packed bus can pass a stop
+src/answer/walk.ts         Walking along campus paths (data/walks.json), and out of a building
+                           by its paths (buildingStops)
+src/answer/graph.ts        The stop graph, with hand-kept fixes
+src/answer/residences.ts, landmarks.ts  Halls and named places served by several stops
+
+src/timetable/calendar.ts  NUS teaching weeks and public holidays
+src/timetable/calendarsync.ts  The calendar fetched weekly by the cron into KV, between deploys
+src/timetable/nusmods.ts   NUSMods share URL -> classes; a room's stops (venueStops)
+src/timetable/profile.ts   Profile validation and the where-next planner
+src/timetable/day.ts       /api/me/day, today's timeline
+
+src/accounts/accounts.ts   Sign-in codes and links, sessions, anonymous accounts, pairing codes (D1)
+src/accounts/applogin.ts   App sign-in approved from the email
+src/accounts/passkey.ts    Passkeys and sessions for the operator's pages
+src/accounts/access.ts     API keys, and who may call the keyed routes
+src/accounts/me.ts         /api/auth, /api/pair and /api/me routes
+src/accounts/outcomes.ts   What happened to each planned trip, and what it suggests
+
+src/push/tripdo.ts         The Trip object's wakes and push
+src/push/push.ts           FCM to Android; src/push/webpush.ts Web Push to the web app
+
+src/map/campus.ts          /api/campus: stops, route lines and colours, destination search
+src/map/buses.ts           /api/buses: live buses placed on their route, next stop; /api/line's stops and buses
+src/map/timelapse.ts       The timelapse recorder's rules, day file and /api/timelapse/days
+src/map/timelapsedo.ts     The recorder's Durable Object: one per Singapore day
+src/map/map.ts             /map/*: the street map file, its style, fonts and icons
+src/map/pairs.ts           /api/stops/pairs
+
+src/ops/analytics.ts       Analytics Engine logging: decisions and arrivals, errors
+                           (logError, logCronError), timelapse polls (logPoll), Trip wakes
+                           (logTripWake)
+src/ops/collect.ts         The dashboard's switches for five statistics, off until turned on
+src/ops/usage.ts           Daily active counts; src/ops/eta.ts the feed's arrival times scored
+                           against the timelapse; src/ops/apperrors.ts crash reports (/api/errors)
+src/ops/legacy.ts          Requests on the old address and paths, by app version and route;
+                           src/ops/settings.ts how many accounts have each setting, daily
+src/ops/etamodel.ts        The arrival-time model (pure); src/ops/etashadow.ts runs it in shadow
+                           beside eta.ts when ETA_MODEL is shadow (docs/eta-model.md)
+src/ops/monitor.ts         The cron: feed health, incidents, housekeeping, arming trips,
+                           the new-semester reminder
+src/ops/admin.ts           /api/admin/stats; src/ops/feedback.ts "Is this wrong?" reports
+
+src/site/landing.ts        The landing page, with the version and Account written in
+src/site/pagesky.ts        The band of sky on the Worker's small pages and /docs
+src/site/seo.ts            robots.txt, the sitemap and /llms.txt (a guide for AI agents); the beta asks not to be crawled
+src/site/mail.ts           Every email's HTML (react-email), beside its plain text
+src/site/downloads.ts      /download/*: app files and the Mac appcast from R2
+src/site/site.ts           The old address's redirects (movedPage, movedApi); the beta's marks
+
+data/                      Bundled JSON: stops.json, shapes.json, public.json,
+                           calendar.json, walks.json, venues, rooms, landmarks, residences
+migrations/                D1 schema
+scripts/                   dev-stub.mjs, the scrapers, probes and render-timelapse.mjs
+test/                      *.test.js, worker.smoke.js, fixtures/ (captures, golden answers)
 ```
 
 `fms.ts` is the only file that touches the raw FMS shape, through

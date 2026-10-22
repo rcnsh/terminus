@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 import { phaseAt as webPhaseAt, PHASES } from '../../web/public/account/daylight.js';
-import { PAGE_SKIES, bandCss, bandHtml, phaseAt, sgtMinute } from '../src/pagesky.ts';
+import { PAGE_SKIES, bandCss, bandHtml, phaseAt, sgtMinute } from '../src/site/pagesky.ts';
 
 const css = fs.readFileSync(new URL('../../web/public/app/app.css', import.meta.url), 'utf8');
 

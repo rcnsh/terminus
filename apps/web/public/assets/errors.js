@@ -1,5 +1,5 @@
 // Error reports from the web app and the account page (POST /api/errors,
-// apps/api/src/apperrors.ts): what broke, never who for. No cookie goes
+// apps/api/src/ops/apperrors.ts): what broke, never who for. No cookie goes
 // with it, nor anything kept in this browser; the server scrubs the message
 // and stack and fills in the website's version. A classic script, loaded
 // before the modules, so an error while they load is caught too.

@@ -1,4 +1,4 @@
-// Passkeys for the operator's pages (/api/admin/passkey/*, src/passkey.ts).
+// Passkeys for the operator's pages (/api/admin/passkey/*, src/accounts/passkey.ts).
 // Signing in gives a session, sent in x-health-token as the token is, that
 // lasts 12 hours; adding a passkey needs the HEALTH_TOKEN secret, once per
 // device. English only, as the pages are.

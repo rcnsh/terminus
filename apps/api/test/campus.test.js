@@ -5,7 +5,7 @@ import graphJson from './fixtures/graph.json' with { type: 'json' };
 import realGraph from '../data/stops.json' with { type: 'json' };
 import venuesJson from '../data/venues.json' with { type: 'json' };
 
-import { buildCampusMap, buildDestinations, friendlyLabel, ROUTE_COLORS, shapeFor } from '../src/campus.ts';
+import { buildCampusMap, buildDestinations, friendlyLabel, ROUTE_COLORS, shapeFor } from '../src/map/campus.ts';
 import {
   beforeOpening,
   boardAsOf,
@@ -15,8 +15,8 @@ import {
   serviceResumesAt,
   stoppedReason,
   towardsFrom,
-} from '../src/resolve.ts';
-import { GRAPH as REAL, GRAPH_PUBLIC } from '../src/graph.ts';
+} from '../src/answer/resolve.ts';
+import { GRAPH as REAL, GRAPH_PUBLIC } from '../src/answer/graph.ts';
 import { haversineM } from '../src/geo.ts';
 
 const GRAPH = graphJson;
@@ -511,7 +511,7 @@ test('code-unit order lists the same buildings and residences as localeCompare d
     winners((a, b) => a.localeCompare(b)),
   );
 
-  const { residenceList } = await import('../src/residences.ts');
+  const { residenceList } = await import('../src/answer/residences.ts');
   const list = residenceList();
   const locale = [...list].sort((a, b) => Number(b.common) - Number(a.common) || a.name.localeCompare(b.name));
   assert.deepEqual(

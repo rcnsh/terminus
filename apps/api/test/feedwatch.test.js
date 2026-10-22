@@ -1,6 +1,6 @@
 /**
  * The beta's cron asks neither NUS nor LTA (CLAUDE.md, rule 2): it reads the
- * breaker trips its own traffic noted (src/feedwatch.ts) as its check.
+ * breaker trips its own traffic noted (src/feeds/feedwatch.ts) as its check.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -15,13 +15,13 @@ import {
   readUpstream,
   runCron,
   sawTrip,
-} from '../src/monitor.ts';
-import { lastBreakerOpen, noteBreakerOpen, resetNotes } from '../src/feedwatch.ts';
-import { scopeCache } from '../src/edgecache.ts';
-import { getArrivals } from '../src/fms.ts';
-import { getPublicArrivals } from '../src/lta.ts';
-import { GRAPH_PUBLIC } from '../src/graph.ts';
-import { UpstreamRejected } from '../src/auth.ts';
+} from '../src/ops/monitor.ts';
+import { lastBreakerOpen, noteBreakerOpen, resetNotes } from '../src/feeds/feedwatch.ts';
+import { scopeCache } from '../src/feeds/edgecache.ts';
+import { getArrivals } from '../src/feeds/fms.ts';
+import { getPublicArrivals } from '../src/feeds/lta.ts';
+import { GRAPH_PUBLIC } from '../src/answer/graph.ts';
+import { UpstreamRejected } from '../src/feeds/auth.ts';
 import { makeEmail } from './_d1.mjs';
 
 const BETA_ORIGIN = 'https://beta.terminus.run';

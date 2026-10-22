@@ -1,5 +1,5 @@
 /**
- * The LTA DataMall client (src/lta.ts): reading the feed, telling a two-way
+ * The LTA DataMall client (src/feeds/lta.ts): reading the feed, telling a two-way
  * service's directions apart, and the same quiet-under-failure caching as
  * the shuttle feed. The fixtures are real replies captured 2026-10-06.
  */
@@ -8,8 +8,16 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 import { installGlobals, ltaPayload, makeCtx, makeEnv, makeFetch, FROZEN_NOW } from './_stubs.mjs';
-import { LtaRefused, fetchPublicArrivals, getPublicArrivals, normalizePublic, parseLoad, publicProblem, routeFor } from '../src/lta.ts';
-import { GRAPH_PUBLIC } from '../src/graph.ts';
+import {
+  LtaRefused,
+  fetchPublicArrivals,
+  getPublicArrivals,
+  normalizePublic,
+  parseLoad,
+  publicProblem,
+  routeFor,
+} from '../src/feeds/lta.ts';
+import { GRAPH_PUBLIC } from '../src/answer/graph.ts';
 import { TTL } from '../src/config.ts';
 import pub from '../data/public.json' with { type: 'json' };
 

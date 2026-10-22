@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Backtests src/etamodel.ts against the feed's own arrival times: fits the
+ * Backtests src/ops/etamodel.ts against the feed's own arrival times: fits the
  * model on the earlier data, then, on the later data it never saw, scores
  * each method against when the bus really came. Prints Markdown (MAE,
  * median and 90th-percentile absolute error, mean signed error, by how far
@@ -36,9 +36,9 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
-import { GRAPH } from '../../src/graph.ts';
-import { HORIZONS, aeTime, passingsOf } from '../../src/eta.ts';
-import { windowOf } from '../../src/timelapse.ts';
+import { GRAPH } from '../../src/answer/graph.ts';
+import { HORIZONS, aeTime, passingsOf } from '../../src/ops/eta.ts';
+import { windowOf } from '../../src/map/timelapse.ts';
 import { SGT_MS } from '../../src/config.ts';
 import {
   METHODS,
@@ -50,7 +50,7 @@ import {
   ringOf,
   scoreCases,
   segmentsOf,
-} from '../../src/etamodel.ts';
+} from '../../src/ops/etamodel.ts';
 
 const args = process.argv.slice(2);
 const usage = (why) => {

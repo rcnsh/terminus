@@ -4,8 +4,8 @@ import { readFile } from 'node:fs/promises';
 
 import { makeBucket } from './_stubs.mjs';
 import { makeD1 } from './_d1.mjs';
-import { APK_BUTTON, fillLanding, landingEtag, landingPage } from '../src/landing.ts';
-import { ensureUser, openSession, SESSION_COOKIE } from '../src/accounts.ts';
+import { APK_BUTTON, fillLanding, landingEtag, landingPage } from '../src/site/landing.ts';
+import { ensureUser, openSession, SESSION_COOKIE } from '../src/accounts/accounts.ts';
 
 const INDEX = await readFile(new URL('../../web/public/index.html', import.meta.url), 'utf8');
 const NOW = 1_790_000_000_000;

@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { BUNDLED, calendarThrough, importedClassRuns, sgtDate, termDay, termsForImport } from '../src/calendar.ts';
-import { DEFAULT_PROFILE, classesOn, needsReimport, nextClass, reimportReason, restDetail } from '../src/profile.ts';
+import { BUNDLED, calendarThrough, importedClassRuns, sgtDate, termDay, termsForImport } from '../src/timetable/calendar.ts';
+import { DEFAULT_PROFILE, classesOn, needsReimport, nextClass, reimportReason, restDetail } from '../src/timetable/profile.ts';
 
 // Fixed calendar, so these tests don't move when data/calendar.json refreshes.
 const CAL = {

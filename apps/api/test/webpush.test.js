@@ -10,8 +10,8 @@ import assert from 'node:assert/strict';
 import { installGlobals, makeCtx, makeEnv, makeFetch } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
-import { nudgeUser } from '../src/push.ts';
-import { b64url, fromB64url } from '../src/webpush.ts';
+import { nudgeUser } from '../src/push/push.ts';
+import { b64url, fromB64url } from '../src/push/webpush.ts';
 
 const BASE = 'https://bus.example.test';
 const ENDPOINT = 'https://web.push.apple.com/send/abc123';

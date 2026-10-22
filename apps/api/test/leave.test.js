@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { leaveBy } from '../src/leave.ts';
-import { DEFAULT_PROFILE, parseProfile } from '../src/profile.ts';
+import { leaveBy } from '../src/answer/leave.ts';
+import { DEFAULT_PROFILE, parseProfile } from '../src/timetable/profile.ts';
 import { WALK, RIDE } from '../src/config.ts';
-import { footS } from '../src/format.ts';
-import { venueStops } from '../src/nusmods.ts';
+import { footS } from '../src/answer/format.ts';
+import { venueStops } from '../src/timetable/nusmods.ts';
 
 const NOW = Date.UTC(2026, 8, 29, 1, 0); // 09:00 SGT
 const MIN = 60_000;

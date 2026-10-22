@@ -1,6 +1,6 @@
 // The answer card: /api/me/next drawn the way the widget shows it, on the account
 // page ("Your widget right now") and on the web app's Now. Every line comes
-// from the server's card (apps/api/src/card.ts); this only lays them out.
+// from the server's card (apps/api/src/answer/card.ts); this only lays them out.
 
 import { Fill, MARK, announce, focusSoon, html, useEffect, useRef, useState, useStore } from '../assets/ui.js';
 import { api, clock, hour12, sentences, serverNow, t } from './dom.js';

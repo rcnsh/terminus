@@ -926,7 +926,7 @@ enum Outdated {
         return p == "/api/me" || p.hasPrefix("/api/me/") || answers.contains(p)
     }
 
-    /// The bus answers the server refuses an outdated app (KEYED in apps/api/src/index.ts).
+    /// The bus answers the server refuses an outdated app (KEYED in apps/api's index.ts).
     private static let answers: Set<String> = [
         "/api/next", "/api/trip", "/api/arrivals", "/api/buses", "/api/line", "/api/campus", "/api/stops/pairs",
     ]

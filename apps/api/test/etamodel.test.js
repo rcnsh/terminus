@@ -7,7 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { placeBuses } from '../src/buses.ts';
+import { placeBuses } from '../src/map/buses.ts';
 import {
   actualFor,
   biasS,
@@ -32,7 +32,7 @@ import {
   segmentS,
   segmentsOf,
   slotOf,
-} from '../src/etamodel.ts';
+} from '../src/ops/etamodel.ts';
 
 // Wednesday 21 October 2026, 08:00 Singapore time.
 const T0 = Date.UTC(2026, 9, 21, 0, 0);

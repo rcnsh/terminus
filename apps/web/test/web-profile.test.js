@@ -6,10 +6,10 @@
 import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { useLang, web } from './_web.mjs';
-import { buildCampusMap, buildDestinations } from '../../api/src/campus.ts';
-import { GRAPH } from '../../api/src/graph.ts';
+import { buildCampusMap, buildDestinations } from '../../api/src/map/campus.ts';
+import { GRAPH } from '../../api/src/answer/graph.ts';
 import { haversineM } from '../../api/src/geo.ts';
-import { residenceList, residenceWalkMin as serverWalkMin } from '../../api/src/residences.ts';
+import { residenceList, residenceWalkMin as serverWalkMin } from '../../api/src/answer/residences.ts';
 import classBus from '../../../fixtures/answers/class-bus.json' with { type: 'json' };
 
 const { isStale, leaveHead, leaveText } = await web('account/preview.js');
@@ -194,7 +194,7 @@ test('an edit made while a saveNow is on its way is kept, with the saved change 
 });
 
 /**
- * The API's profile, as apps/api/src/me.ts keeps it: a version in the ETag,
+ * The API's profile, as apps/api/src/accounts/me.ts keeps it: a version in the ETag,
  * and a PUT with If-Match refused (412) if another device saved since.
  * `hold()` makes the next PUT wait until `release()`.
  */
