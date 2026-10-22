@@ -15,7 +15,9 @@
 #
 # Signs with the keys on this Mac, as scripts/release/release-beta.sh does: the
 # Android release key in ~/.gradle/gradle.properties (TERMINUS_*), the
-# terminus certificate in the login keychain (~/.terminus/mac-signing.p12)
+# terminus Developer ID certificate in the login keychain
+# (~/.terminus/developer-id.p12), the notary credentials stored as
+# terminus-notary (xcrun notarytool store-credentials)
 # and the Sparkle key in ~/.terminus/sparkle-ed25519.key. Without them an
 # update would refuse to install over the real app, so each is checked
 # against what the apps trust before anything is uploaded.
@@ -64,9 +66,12 @@ BUILD=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$PLIST")
 
 grep -q "^TERMINUS_KEYSTORE=" "${GRADLE_USER_HOME:-$HOME/.gradle}/gradle.properties" 2>/dev/null || die "Android release key not configured (TERMINUS_KEYSTORE)"
 no_api_base
-# The terminus self-signed certificate (see has_sign_identity).
-export SIGN_IDENTITY=C4EE234DA75ED3CD7699A31394C276801F93C4A9
+# The terminus Developer ID certificate, and Apple's notary service (see
+# has_sign_identity and has_notary_profile).
+export SIGN_IDENTITY=B0692598973AE875C270263F0403FE4495EEF562
 has_sign_identity
+export NOTARY_PROFILE=terminus-notary
+has_notary_profile
 SPARKLE_KEY="$HOME/.terminus/sparkle-ed25519.key"
 [ -f "$SPARKLE_KEY" ] || die "no Sparkle key at $SPARKLE_KEY"
 

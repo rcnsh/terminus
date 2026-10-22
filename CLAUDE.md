@@ -664,9 +664,11 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
     hasn't passed, a live API older than this version (deploy first), a
     build number not above the live one, an APK not signed with the key in
     `assetlinks.json`, a Sparkle signature that doesn't verify with
-    `SUPublicEDKey`, an ad-hoc signed Mac app, or an `apiBase` Gradle
-    property. Then it tests; builds the signed split APKs and the signed Mac
-    DMG with its Sparkle appcast; uploads the APKs and the DMG to R2; tags
+    `SUPublicEDKey`, an ad-hoc signed Mac app, a Mac binary linking a
+    library outside macOS (Homebrew's, say), notary credentials that don't
+    work, or an `apiBase` Gradle property. Then it tests; builds the signed
+    split APKs and the Mac DMG, signed with Developer ID and notarised by
+    Apple (app and DMG, tickets stapled), with its Sparkle appcast; uploads the APKs and the DMG to R2; tags
     and pushes `v<version>` (the appcast links to the tag's page); uploads
     the appcast and `latest.json`; and publishes the GitHub release. Nothing
     waits for an approval. A dry run builds into `build/dry-run/`; a release
@@ -713,8 +715,10 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
       Push needs the stable Worker's `APNS_*` secrets (set; the key is
       `~/.terminus/AuthKey_9NH85A3927.p8`).
 - **Signing keys.** The Android keystore (`~/.gradle/gradle.properties`
-  `TERMINUS_*`), the Mac certificate (in the login keychain, from
-  `~/.terminus/mac-signing.p12`), the Sparkle key
+  `TERMINUS_*`), the Mac's Developer ID Application certificate (in the
+  login keychain, from `~/.terminus/developer-id.p12`), the notary
+  credentials (the keychain's `terminus-notary` profile, an app-specific
+  password), the Sparkle key
   (`~/.terminus/sparkle-ed25519.key`) and the APNs key
   (`~/.terminus/AuthKey_*.p8`) live off-repo, only on the owner's Mac.
   The iPhone's distribution certificate is Apple's cloud-managed one, used

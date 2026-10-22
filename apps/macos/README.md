@@ -34,28 +34,25 @@ PNGs and quits, for checking layout without clicking around.
 
 Releases are built, signed and packaged as a DMG on the owner's Mac by
 [`scripts/release/release.sh`](../../scripts/release/release.sh) (via
-[`scripts/release/package-mac.sh`](../../scripts/release/package-mac.sh)) with the terminus
-self-signed certificate, so every version has the same code identity and macOS
-keeps its location permission and login item across updates. It isn't
-notarised, which needs a paid Apple Developer account, so macOS asks once on
-first open. Without an Apple Team ID the keychain would still ask for the
-device token after every update, since it knows each version only by its code
-hash, so the token is kept in a file only you can read instead
+[`scripts/release/package-mac.sh`](../../scripts/release/package-mac.sh)), signed with the
+terminus Developer ID certificate and notarised by Apple, so macOS opens a
+download without asking, and every version has the same code identity (the
+team's): macOS keeps its location permission and login item across updates.
+The device token is kept in a file only you can read
 (`~/Library/Application Support/terminus/device-token`; see `TokenStore`).
 
 Installed copies update themselves with [Sparkle](https://sparkle-project.org)
 (`Sources/Terminus/Updater.swift`): every 6 hours they check
 `/download/appcast.xml`, download a new version in the background and install
 it once the popover and every window (Settings, Setup, the map) are closed (or at quit). An update installs only if its DMG is signed
-with the update key (`SUPublicEDKey` in `Support/Info.plist`) and the app with
-the terminus certificate. `TERMINUS_APPCAST=<url>` points a build at a test feed. A release build only takes
+with the update key (`SUPublicEDKey` in `Support/Info.plist`) and the app is
+code signed. `TERMINUS_APPCAST=<url>` points a build at a test feed. A release build only takes
 this and `TERMINUS_API_BASE` when they point at this Mac (localhost or 127.0.0.1).
 
-Everything is signed with the hardened runtime. The self-signed certificate
-has no Team ID, so library validation would refuse even our own re-signed
-frameworks: the app alone gets `com.apple.security.cs.disable-library-validation`
-(`Support/Terminus.entitlements`), plus the location entitlement the runtime
-needs. `SUVerifyUpdateBeforeExtraction` makes Sparkle check the DMG's
+Everything is signed with the hardened runtime, library validation on: the
+frameworks are re-signed with the app's Developer ID. The app alone gets the
+location entitlement the runtime needs (`Support/Terminus.entitlements`). No
+binary may link a library outside macOS; `package-mac.sh` and CI check. `SUVerifyUpdateBeforeExtraction` makes Sparkle check the DMG's
 signature before opening it. Releases also sign the appcast, so a later
 version can set `SURequireSignedFeed`.
 

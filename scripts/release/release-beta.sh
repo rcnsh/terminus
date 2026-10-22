@@ -64,8 +64,10 @@ grep -q "^TERMINUS_KEYSTORE=" "${GRADLE_USER_HOME:-$HOME/.gradle}/gradle.propert
 no_api_base
 # The terminus certificate, as for stable: the beta app keeps its own
 # permissions and login item across updates only with the same code identity.
-export SIGN_IDENTITY=C4EE234DA75ED3CD7699A31394C276801F93C4A9
+export SIGN_IDENTITY=B0692598973AE875C270263F0403FE4495EEF562
 has_sign_identity
+export NOTARY_PROFILE=terminus-notary
+has_notary_profile
 SPARKLE_KEY="$HOME/.terminus/sparkle-ed25519.key"
 [ -f "$SPARKLE_KEY" ] || die "no Sparkle key at $SPARKLE_KEY"
 BETA=0
