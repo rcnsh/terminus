@@ -2,6 +2,9 @@
 
 Guidance for AI agents working in this repo. Read it before you change
 anything; the deeper "why" is in [apps/api/docs/internals.md](apps/api/docs/internals.md).
+The words for the domain (stop, service, trip, plan, estimate, …) are in
+[GLOSSARY.md](GLOSSARY.md): name new code and copy with them. Decisions that
+look odd but are deliberate are in [docs/adr/](docs/adr/).
 
 ## What terminus is
 
