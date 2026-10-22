@@ -102,11 +102,13 @@ export const mailName = (env: Env): string => (isBeta(env) ? 'terminus beta' : '
 
 /**
  * On the beta, every page says "beta" next to the wordmark (styled in
- * site.css) and asks not to be indexed, so nobody lands on it by search.
+ * site.css), is drawn under a blueprint instead of the hour's sky
+ * (data-site, sky.css), and asks not to be indexed, so nobody lands on it by search.
  */
 export function markBeta(res: Response, env: Env): Response {
   if (!isBeta(env) || !(res.headers.get('content-type') ?? '').startsWith('text/html')) return res;
   const marked = new HTMLRewriter()
+    .on('html', { element: (e) => void e.setAttribute('data-site', 'beta') })
     .on('.wordmark', { element: (e) => void e.after('<span class="beta-tag">beta</span>', { html: true }) })
     .transform(res);
   const out = new Response(marked.body, marked);
