@@ -1,6 +1,7 @@
 // The README's pictures, light and dark, from the real site run by the dev
 // stub: the web app's Now and Buses tabs, and the map with D2 picked. The
-// banner is composed from them afterwards: node .github/readme/hero.mjs
+// banner and the clients picture are composed from them afterwards:
+// node .github/readme/hero.mjs, then sh .github/readme/features.sh
 //
 //   node .github/readme/shots.mjs
 //

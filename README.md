@@ -29,63 +29,17 @@ How it was built, and why it runs on one Cloudflare Worker:
 
 The same answer on your home screen, in your menu bar and on the web, in light or dark.
 
-<table>
-  <tr>
-    <td width="56%" valign="top">
-      <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="apps/web/public/assets/shots/widget-dark.webp">
-        <img alt="The Android home-screen widget: leave by 9:39 AM for GEA1000, with the trip drawn as a line from you to PGP to UTown, and buttons for favourites." src="apps/web/public/assets/shots/widget-light.webp" width="100%">
-      </picture>
-      <h3>On your home screen</h3>
-      A widget that keeps itself up to date, with your favourites one tap away, and a live notification when it's time to go.
-    </td>
-    <td width="44%" valign="top">
-      <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="apps/web/public/assets/shots/mac-dark.webp">
-        <img alt="The Mac menu bar app: leave by 9:41 for CS2030 at 10:00, catch the 9:45 D2 at PGP." src="apps/web/public/assets/shots/mac-light.webp" width="100%">
-      </picture>
-      <h3>In your menu bar</h3>
-      When to leave, in the menu bar. Click for the whole trip, your favourites, or anywhere else on campus.
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <picture>
-        <source media="(prefers-color-scheme: dark)" srcset=".github/readme/now-dark.webp">
-        <img alt="Now in the web app, under the daytime sky: leave in 19 minutes, by 12:37, for GEA1000 at UTown. The R2 comes along the road to the stop; the trip below walks 5 minutes to PGP, rides the R2 for 10 minutes and arrives at UTown at 12:52." src=".github/readme/now-light.webp" width="100%">
-      </picture>
-      <h3>On the web</h3>
-      The app in any browser, under a sky that follows the hour, with your trip drawn as a line. Add it to your home screen like an app, with notifications when it's time to leave.
-    </td>
-    <td width="50%" valign="top">
-      <picture>
-        <source media="(prefers-color-scheme: dark)" srcset=".github/readme/buses-dark.webp">
-        <img alt="The Buses tab for Prince George's Park Foyer: K in 5 minutes, A2 in 9 and D2 in 11, each live, with how full it usually is." src=".github/readme/buses-light.webp" width="100%">
-      </picture>
-      <h3>Every stop's buses</h3>
-      The Buses tab: search any stop or service for what's coming, live, and how full it usually is. On Android and the web.
-    </td>
-  </tr>
-</table>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/readme/clients-dark.webp">
+  <img alt="Four cards. On the web: Now in the web app, under the daytime sky, says leave in 19 minutes for GEA1000 at UTown, walking 5 minutes to PGP and riding the R2 for 10; the app in any browser, with your trip drawn as a line, added to your home screen like an app, with notifications when it's time to leave. On your home screen: the Android widget says leave by 9:39 AM, with the trip as a line from you to PGP to UTown and buttons for favourites; it keeps itself up to date, with a live notification when it's time to go. In your menu bar: the Mac app says leave by 9:41 for CS2030 at 10:00, catch the 9:45 D2 at PGP; click for the whole trip, your favourites, or anywhere else on campus. Every stop's buses: the Buses tab for Prince George's Park Foyer, each service live with how full it usually is; search any stop or service, on Android and the web." src=".github/readme/clients-light.webp" width="100%">
+</picture>
 
 ## What it knows
 
-<table>
-  <tr>
-    <td width="33%" valign="top">
-      <h3>Follows your timetable</h3>
-      Import from NUSMods once a semester; the week before the next one starts, it reminds you. It knows teaching weeks, recess, exams and public holidays, and sends you home in long gaps.
-    </td>
-    <td width="33%" valign="top">
-      <h3>Leave at the right time</h3>
-      The latest bus that still gets you there, walks along campus paths at your pace, and a bus earlier when yours is usually busy.
-    </td>
-    <td width="33%" valign="top">
-      <h3>The right side of the road</h3>
-      The stop going your way, even when the one across the road is closer. Inside your hall, only the stops you can walk to. Or check any stop with one tap.
-    </td>
-  </tr>
-</table>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/readme/knows-dark.webp">
+  <img alt="Three cards. Follows your timetable: import from NUSMods once a semester; the week before the next one starts, it reminds you. It knows teaching weeks, recess, exams and public holidays, and sends you home in long gaps. Leave at the right time: the latest bus that still gets you there, walks along campus paths at your pace, and a bus earlier when yours is usually busy. The right side of the road: the stop going your way, even when the one across the road is closer. Inside your hall, only the stops you can walk to. Or check any stop with one tap." src=".github/readme/knows-light.webp" width="100%">
+</picture>
 
 ### And a map of campus
 
