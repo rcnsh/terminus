@@ -120,11 +120,14 @@ enum WidgetStore {
 
         var chosen: WidgetMode { WidgetMode.of(id: mode, label: label) }
 
+        /// Nearby's stops: the board every widget showing it shares (NearbyShared), not one of its own.
         var nearby: [NearbyStop]? {
-            guard chosen == .nearby, let json else { return nil }
-            struct R: Decodable { let stops: [NearbyStop] }
-            return (try? JSONDecoder().decode(R.self, from: json))?.stops
+            guard chosen == .nearby else { return nil }
+            return NearbyShared.stops()
         }
+
+        /// When what it shows came: the shared board's time for Nearby.
+        var shownAt: Date? { chosen == .nearby ? NearbyShared.fetchedAt : fetchedAt }
 
         var answer: NextAnswer? {
             guard case .to = chosen, let json else { return nil }
@@ -143,8 +146,10 @@ enum WidgetStore {
         try? JSONEncoder().encode(s).write(to: file(id), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
     }
 
-    /// Every widget's slot, for a refresh of the ones showing a place or Nearby.
+    /// Every widget's slot, for a refresh of the ones showing a place or Nearby;
+    /// the Buses near you widgets keep only which side of the road they show first.
     static let slots = ["next.large", "places.medium", "places.large"]
+    static let nearbySlots = ["nearby.small", "nearby.medium", "nearby.large", "nearby.rect"]
 
     /// Shows `mode` on a widget and fetches it. A different place's old answer goes: it's someone else's.
     static func choose(_ mode: WidgetMode, slot id: String) async {
@@ -174,15 +179,20 @@ enum WidgetStore {
         var s = slot(id)
         let mode = s.chosen
         guard mode != .timetable, let token = TokenStore.read() else { return }
+        if mode == .nearby {
+            // The shared board, which the Buses near you widgets draw too.
+            let problem = await NearbyShared.refresh(tapped: false)
+            guard TokenStore.read() == token else { return }
+            s = slot(id)
+            guard s.mode == mode.id else { return }
+            s.error = problem
+            save(s, id)
+            return
+        }
         let api = Api(token: token, fast: true)
         let loc = location
         do {
-            let data: Data
-            if mode == .nearby {
-                data = try await api.nearby(lat: loc?.lat, lon: loc?.lon, acc: loc?.acc).1
-            } else {
-                data = try await api.next(mode.target!, lat: loc?.lat, lon: loc?.lon, acc: loc?.acc).raw ?? Data()
-            }
+            let data = try await api.next(mode.target!, lat: loc?.lat, lon: loc?.lon, acc: loc?.acc).raw ?? Data()
             guard TokenStore.read() == token else { return }
             s = slot(id)
             guard s.mode == mode.id else { return }
@@ -191,7 +201,7 @@ enum WidgetStore {
             s.error = nil
         } catch let e as ApiError {
             s = slot(id)
-            s.error = e.status == 400 && mode == .nearby ? L("Turn on location, or set a home") : e.message
+            s.error = e.message
         } catch {
             s = slot(id)
             s.error = L("Offline")
@@ -205,7 +215,7 @@ enum WidgetStore {
         for id in slots {
             let s = slot(id)
             guard s.chosen != .timetable, let at = s.at, now.timeIntervalSince(at) <= WidgetMode.keep else { continue }
-            if let f = s.fetchedAt, now.timeIntervalSince(f) < WidgetMode.refetch { continue }
+            if let f = s.shownAt, now.timeIntervalSince(f) < WidgetMode.refetch { continue }
             await fetch(slot: id)
         }
     }
@@ -219,7 +229,8 @@ enum WidgetStore {
 
     /// Signing out: every widget forgets its place or Nearby list, which were the old account's.
     static func forget() {
-        for id in slots { try? FileManager.default.removeItem(at: file(id)) }
+        for id in slots + nearbySlots { try? FileManager.default.removeItem(at: file(id)) }
+        NearbyShared.forget()
         answerAt = nil
         error = nil
         forgetLocation()

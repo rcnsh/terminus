@@ -16,7 +16,12 @@ struct RefreshIntent: AppIntent {
     init(slot: String?) { self.slot = slot }
 
     func perform() async throws -> some IntentResult {
-        if let slot, WidgetStore.slot(slot).chosen != .timetable {
+        if let slot, WidgetStore.nearbySlots.contains(slot) {
+            // Buses near you: the shared board, "Updating…" while it's on its way.
+            NearbyShared.error = WidgetFace.updating
+            WidgetCenter.shared.reloadAllTimelines()
+            await NearbyShared.refresh(tapped: true)
+        } else if let slot, WidgetStore.slot(slot).chosen != .timetable {
             await WidgetStore.fetch(slot: slot)
         } else {
             // Shows the tap landed while the answer is on its way.

@@ -49,7 +49,7 @@ enum Shared {
         set { write(newValue, to: "next.json") }
     }
 
-    /// Nearby's stops as they came, for the widget's Nearby mode.
+    /// The board of buses near you as it came, which the widgets share: read through NearbyShared.
     static var lastNearby: Data? {
         get { try? Data(contentsOf: folder.appendingPathComponent("nearby.json")) }
         set { write(newValue, to: "nearby.json") }

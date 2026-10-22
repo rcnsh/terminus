@@ -212,7 +212,7 @@ final class AppModel {
         answeredAt = [:]
         Shared.lastAnswer = nil
         Shared.lastDay = nil
-        Shared.lastNearby = nil
+        NearbyShared.forget()
         // Settings outlives the tabs: the next account mustn't see, or save over, this one's.
         SettingsModel.shared.reset()
         MapModel.shared.reset()
@@ -307,9 +307,11 @@ final class AppModel {
         let t = target
         do {
             if nearbyView {
-                let (stops, data) = try await api.nearby(lat: loc?.coordinate.latitude, lon: loc?.coordinate.longitude, acc: loc?.acc)
+                // With the services not running now too, as the widgets that share it want (NearbyShared).
+                let (stops, data) = try await api.nearby(
+                    lat: loc?.coordinate.latitude, lon: loc?.coordinate.longitude, acc: loc?.acc, stopped: true)
                 guard gen == session, !Task.isCancelled else { return }
-                Shared.lastNearby = data
+                TripSync.nearbyFetched(data, token: token)
                 nearby = stops
                 answeredAt["nearby"] = Date()
             } else {

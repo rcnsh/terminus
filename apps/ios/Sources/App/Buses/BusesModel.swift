@@ -177,10 +177,12 @@ final class BusesModel {
         await fetching(Self.nearestKey) {
             let loc = await Locator.shared.fix(maxAge: 60)
             do {
-                let stops = try await Api(token: token).nearbyBoards(
+                let (stops, data) = try await Api(token: token).nearbyBoards(
                     lat: loc?.coordinate.latitude, lon: loc?.coordinate.longitude, acc: loc?.acc)
                 // Without a location, the nearest is the home stop: another account's, after a sign-in.
                 guard current(s) else { return }
+                // The widgets showing buses near you draw this board too.
+                TripSync.nearbyFetched(data, token: token)
                 answeredAt[Self.nearestKey] = Date()
                 nearest = stops.first
                 nearestState = stops.isEmpty ? .none : .ready
