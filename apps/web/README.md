@@ -55,3 +55,14 @@ drives three fake buses round each route. For the map's labels, put the fonts
 and icons in `dev/map/` (`scripts/map-tiles.sh --dry-run`, then copy
 `build/map` there); without a map file the streets stay blank, but routes and
 stops draw.
+
+## Test it
+
+```bash
+pnpm --filter @terminus/web test   # or pnpm test from the root, for the API's too
+```
+
+The tests in `test/` load the site's modules under Node (`_web.mjs` maps
+`/assets/...` to `public/`) and render pages in happy-dom (`_dom.mjs`). Some
+read the API's real campus data from `apps/api/src`, and the answers every
+client is held to from the root's `fixtures/`.

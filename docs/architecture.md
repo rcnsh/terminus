@@ -44,7 +44,7 @@ A request goes through `src/index.ts` (the router), which hands off to:
 | `src/trip.ts`, `src/tripdo.ts`, `src/plan.ts` | The trip engine, one Durable Object per user per day |
 | `src/push.ts`, `src/webpush.ts` | FCM to Android, Web Push to the web app |
 | `src/monitor.ts`, `src/calendarsync.ts` | The 15-minute cron: feed health, calendar refresh, housekeeping |
-| `src/openapi.ts` | The OpenAPI spec behind [`/docs`](https://terminus.run/docs); a test fails if it and the routes drift |
+| `src/openapi.ts`, `src/openapi/` | The OpenAPI spec behind [`/docs`](https://terminus.run/docs); a test fails if it and the routes drift |
 | `src/config.ts` | Cache TTLs and tuning constants |
 | `src/types.ts` | `Env`: every binding and secret |
 

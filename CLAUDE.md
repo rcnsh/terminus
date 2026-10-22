@@ -134,17 +134,17 @@ root path gets 426 from an app, 308 from anything else (`movedApi` in
 
 ```bash
 pnpm install                          # Node 24 as in CI (22.18 or later works), pnpm from packageManager
-pnpm test                             # API tests: Node's runner, no network, no keys
+pnpm test                             # API and website tests: Node's runner, no network, no keys
 pnpm check                            # tests + tsc --noEmit (what CI's api job runs)
 pnpm lint                             # oxlint over API, tests, scripts, website JS; warnings fail
 pnpm format                           # oxfmt: JS, TS, JSON (pnpm format:check in CI)
 pnpm loc                              # lines of code by part and language (--json too)
-node apps/api/scripts/dev/dev-stub.mjs    # local Worker on :8787 with a fake feed and fake buses
+node apps/api/scripts/dev/dev-stub.mjs # local Worker on :8787 with a fake feed and fake buses
 ```
 
 - Run `pnpm lint` **and** `pnpm check` after your **last** edit, not before
   it. A stray `'` inside a single-quoted TS string (`doesn't`) has broken the
-  build before. In `src/openapi.ts` and similar, write `does not` or use `’`.
+  build before. In `src/openapi/` and similar, write `does not` or use `’`.
 - CI's `api` job also runs `pnpm exec cf deploy --dry-run` in `apps/api` to
   catch modules workerd won't load.
 - Website JS: CI runs `node --check` on every file in `apps/web/public`.
@@ -315,7 +315,8 @@ apps/api/
   src/landing.ts, site.ts, pagesky.ts  The landing page; the old address's redirect
                       (movedPage); the small pages' sky
   src/types.ts        Env (the bindings) and the shared types
-  src/openapi.ts      OpenAPI 3.1 spec + docs page (a test fails if routes drift from it)
+  src/openapi.ts      OpenAPI 3.1 spec (a test fails if routes drift from it); its paths,
+                      schemas, shared parts and the /docs page are in src/openapi/
   src/http.ts         JSON helpers, CORS, security headers (CSP lives here)
   src/seo.ts          robots.txt, the sitemap, /llms.txt for AI agents (the beta asks not to be crawled)
   src/i18n.ts         Server strings, m(), ERRORS_ZH
@@ -328,20 +329,20 @@ apps/api/
                       src/venue-stops.json (the stops students use for a building,
                       where the map's nearest is wrong; then run walk_routes.py)
   migrations/         D1 schema, numbered NNNN_name.sql
-  scripts/            dev-stub.mjs; predeploy.mjs (first step of a deploy); scrapers (scrape_stops.py, scrape_lta.py,
-                      route_shapes.py, fetch_calendar.py, walk_routes.py,
-                      check_scraped.py);
-                      probe_buses.py (feed update-rate probe); probe_arrivals.py (how often
+  scripts/dev/        dev-stub.mjs, stub-admin.mjs (its dashboard numbers);
+                      render-timelapse.mjs (renders a recorded day headless, e.g. on a VPS)
+  scripts/deploy/     predeploy.mjs (first step of a deploy); vapid-key.mjs (makes the Web Push key, once)
+  scripts/data/       The weekly scrapers (scrape_stops.py, scrape_lta.py, route_shapes.py,
+                      fetch_calendar.py), walk_routes.py, check_scraped.py
+  scripts/probes/     probe_buses.py (feed update-rate probe); probe_arrivals.py (how often
                       arrival times change, run by hand); record_buses.mjs (checks /api/buses on a live site);
-                      record_eta.mjs + eta_backtest.mjs (the arrival-time model's data and backtest);
-                      render-timelapse.mjs (renders a recorded day headless, e.g. on a VPS);
-                      vapid-key.mjs (makes the Web Push key, once)
-  test/               *.test.js + worker.smoke.js; _stubs.mjs, _d1.mjs (D1 on node:sqlite)
-  fixtures/answers/   Golden answers, shared with the Android and Mac tests
+                      record_eta.mjs + eta_backtest.mjs (the arrival-time model's data and backtest)
+  test/               *.test.js + worker.smoke.js; _stubs.mjs, _d1.mjs (D1 on node:sqlite);
+                      fixtures/ (feed captures, the migrations' hashes)
   cloudflare.config.ts     Worker config (stable + beta via --mode beta)
   wrangler.config.ts       Website assets directory
-  docs/internals.md        How everything works, in depth; docs/analytics.md;
-                           docs/eta-model.md (+ eta-backtest.md, its results)
+apps/web/
+  test/               The website's tests (web-*, search, offline, daylight, vendor), happy-dom
 apps/web/public/
   index.html          Landing page
   account/            The account page (app.js): sign-in, onboarding.js, settings.js +
@@ -396,12 +397,18 @@ apps/ios/
   store/              App Store listing (listing.md, English and Chinese), the screenshots and
                       header, capture.sh + frame.mjs, which take and draw them (StoreShotsUITests),
                       and ExportOptions.plist for the upload
-scripts/              release.sh, release-beta.sh (+ release-lib.sh, their shared checks;
+scripts/              map-tiles.sh (+ map-tiles.lock), android-deps.sh (+ android_deps.py),
+                      format-swift.sh, loc.mjs (pnpm loc)
+scripts/release/      release.sh, release-beta.sh (+ release-lib.sh, their shared checks;
                       verify-sparkle.swift, release-check.py), github-release.sh, package-mac.sh,
-                      appcast.py, release-notes.py, map-tiles.sh (+ map-tiles.lock),
-                      vendor-map.sh, vendor-maplibre-mac.sh, vendor-preact.sh,
-                      vendor-mediabunny.sh (+ vendor-lib.sh); android-deps.sh
-                      (+ android_deps.py); format-swift.sh; loc.mjs (pnpm loc)
+                      appcast.py, release-notes.py
+scripts/vendor/       vendor-map.sh, vendor-maplibre-mac.sh, vendor-preact.sh,
+                      vendor-mediabunny.sh (+ vendor-lib.sh)
+fixtures/             What every client is held to: answers/ (golden answers, zh/ the Chinese),
+                      offline-day.json, search.json; read by the API's, website's and apps' tests
+docs/                 internals.md (how everything works, in depth), architecture.md,
+                      analytics.md, eta-model.md (+ eta-backtest.md, its results), adr/;
+                      readme/ (the README's pictures and the scripts that render them)
 marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (source), .pdf (print), .png
 .github/workflows/    ci.yml, scrape.yml (weekly data),
                       map-tiles.yml, probe-buses.yml (manual feed probe),
@@ -547,8 +554,9 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
 
 ## Tests
 
-- **Running them.** API tests are plain `node --test` over `test/*.test.js`,
-  importing the TypeScript sources directly. Node strips the types, so the
+- **Running them.** `pnpm test` runs both packages' tests: the API's
+  (`apps/api/test`) and the website's (`apps/web/test`), each plain
+  `node --test` over `test/*.test.js`, importing the TypeScript sources directly. Node strips the types, so the
   TS must be erasable: no enums, namespaces or parameter properties, and
   type-only imports use `import type` (`verbatimModuleSyntax`).
 - **Golden answers.** `golden.test.js` pins whole answers to
@@ -560,8 +568,8 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
 - **Writing tests.** Add tests for API changes. Prefer tests on real data,
   such as the real `shapes.json` lines, over synthetic ones. Check a new
   test fails without your fix.
-- **The spec.** Changing an endpoint's shape means updating `src/openapi.ts`
-  (schema, example, description) and `docs/internals.md`.
+- **The spec.** Changing an endpoint's shape means updating the spec
+  (`src/openapi/paths.ts` and `components.ts`: schema, example, description) and `docs/internals.md`.
 
 ## Deploying and releasing
 

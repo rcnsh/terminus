@@ -23,7 +23,8 @@ places to fix every bug.
 This document is about the API. The clients (Android, Mac, the website) are
 the other folders in `apps/`; the Worker serves the website too, so `GET /` is
 the landing page and `GET /docs` the API documentation. The OpenAPI spec lives
-in [src/openapi.ts](../apps/api/src/openapi.ts). worker.smoke.js fails if a route and
+in [src/openapi.ts](../apps/api/src/openapi.ts) (the paths and schemas in
+[src/openapi/](../apps/api/src/openapi)). worker.smoke.js fails if a route and
 the spec drift apart; [test/openapi.test.js](../apps/api/test/openapi.test.js) calls
 every operation, its success and its error cases, and fails when a status
 isn't listed in its `responses`, a body doesn't fit its schema or carries a
@@ -2344,7 +2345,9 @@ src/legacy.ts     Requests on the old address and paths, by app version and rout
                   src/settings.ts how many accounts have each setting, daily
 src/etamodel.ts   The arrival-time model (pure); src/etashadow.ts runs it in shadow
                   beside eta.ts when ETA_MODEL is shadow (docs/eta-model.md)
-src/openapi.ts    OpenAPI 3.1 spec and the Elements docs page
+src/openapi.ts    OpenAPI 3.1 spec: the overview and the common errors;
+                  src/openapi/ its paths, schemas, shared parts and the
+                  Elements docs page
 src/http.ts       JSON responses, query parsing, CORS, security headers and
                   the CSP, timedFetch (upstream calls under a timeout)
 src/types.ts      Env (bindings and secrets) and the API's shared types

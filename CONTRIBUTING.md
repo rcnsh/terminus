@@ -17,7 +17,7 @@ Android SDK, or Swift 6 on a Mac.
 
 ```bash
 pnpm install
-pnpm test                                 # API tests: no network, no keys
+pnpm test                                 # API and website tests: no network, no keys
 pnpm check                                # the tests, then tsc --noEmit
 pnpm lint                                 # oxlint: API, website and scripts; warnings fail CI
 pnpm format                               # oxfmt: JS, TS and JSON
@@ -49,11 +49,12 @@ skip the one-off reformat in `git blame`:
 
 `cf deploy --dry-run` only bundles; it sends nothing.
 
-- **Golden answers.** `apps/api/test/golden.test.js` pins whole answers. After
-  an intended change, `UPDATE_GOLDEN=1 pnpm test` and review the fixture
-  diff. The Android and Mac tests read the same fixtures.
+- **Golden answers.** `apps/api/test/golden.test.js` pins whole answers to
+  `fixtures/answers`. After an intended change, `UPDATE_GOLDEN=1 pnpm test`
+  and review the fixture diff. The website's, Android, Mac and iPhone tests
+  read the same fixtures.
 - **Endpoints.** A changed route or response shape updates
-  `apps/api/src/openapi.ts` and `docs/internals.md`.
+  the spec (`apps/api/src/openapi/`) and `docs/internals.md`.
 - **Migrations** in `apps/api/migrations` are additive only (no renames,
   drops or `NOT NULL` without a default), and an applied one is never edited.
   `test/deploy.test.js` checks this.
