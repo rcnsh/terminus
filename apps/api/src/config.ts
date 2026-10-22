@@ -7,7 +7,9 @@ import type { Quality } from './types.ts';
 
 export const TTL = {
   /** Edge cache freshness for a stop's arrivals. Every client inside this
-   *  window sees the same answer and upstream sees one call. */
+   *  window sees the same answer and upstream sees one call. NUS works the
+   *  times out only every 35-40 s (scripts/probe_arrivals.py), so a shorter
+   *  window would add calls and no fresher times. */
   arrivalsMs: 15_000,
   /** The same for one service's live bus positions on the map. The feed
    *  moves a bus every 15-20 s (scripts/probe_buses.py); polling at 5 s sees

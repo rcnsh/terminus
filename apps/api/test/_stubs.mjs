@@ -118,7 +118,8 @@ export function shuttlePayload(shuttles) {
   return {
     code: '00000',
     msg: '',
-    data: { TimeStamp: new Date().toISOString(), name: 'STUB', shuttles, hints: [] },
+    // Made as the call is: no lag, unless a test says otherwise.
+    data: { TimeStamp: new Date(Date.now()).toISOString(), name: 'STUB', shuttles, hints: [] },
     ts: '20260928204939',
   };
 }

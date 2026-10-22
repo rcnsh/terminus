@@ -1475,6 +1475,23 @@ Also: `arrivalTime_ts` looks like an absolute arrival time and would be better
 than relative minutes across a cache TTL, but real rows carry timestamps
 minutes in the past alongside a positive `arrivalTime`. It is not used.
 
+The times count from the reply's own `TimeStamp`, not from when we asked.
+NUS works a stop's arrivals out every 35 to 40 s, all its services at
+once, and serves that same reply until the next: `eta_s` doesn't count
+down in between. `scripts/probe_arrivals.py` measured it (22 Oct 2026, a
+weekday morning, COM3, UTown, KR MRT and PGP polled every 5 s for 10
+min): a reply was a median of 20 s old when it came, up to 55 s, and
+counted from its TimeStamp a bus's arrival moved a median of 3 s from one
+update to the next, against 32 s counted from our call. So
+`fetchArrivals` takes the reply's age (`stampLagS`) off every time, never
+below 0, and the times count from the call (`fetchedAt`) as everything
+downstream reads them. `fetchedAt` itself stays the call's time: the
+cache's freshness is decided from it, and an older one would send every
+request to NUS. A TimeStamp that's missing, unreadable, ahead of us or
+more than `MAX_STAMP_LAG_S` (90 s) behind is taken as no age. The same
+probe is why the 15 s cache (`TTL.arrivalsMs`) stays: it already beats
+NUS's own cycle, so a shorter one would add calls and no fresher times.
+
 `normalize()` and `normalizeBuses()` treat anything they can't read as
 missing, never as zero: an `arrivalTime` that is negative or looks like a
 clock time ("-3", "12:30") is no time; `eta_s` is a number or a string of
