@@ -181,6 +181,9 @@ node apps/api/scripts/dev-stub.mjs    # local Worker on :8787 with a fake feed a
   run the UI tests: on a Mac, `apps/ios/scripts/ui-tests.sh [simulator]
   [suite]` starts a stub of its own, runs them against it and leaves
   screenshots in `apps/ios/build/shots`. Look at them.
+- The mac and ios jobs are skipped when a run with exactly the same inputs
+  has already passed (`swift-changes` in `ci.yml` hashes them). A file
+  either job reads from outside its own app needs adding to that hash.
 - In a Linux cloud container without the Android SDK or Xcode, you can't
   build those apps. Check pure-Kotlin logic another way if you can (for
   example `MapData.kt` with its JUnit test, using a standalone `kotlinc`
