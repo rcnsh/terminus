@@ -32,6 +32,7 @@ import { ensureRecorder } from './timelapse.ts';
 import { logCronError } from './analytics.ts';
 import { recordActive } from './usage.ts';
 import { recordEta } from './eta.ts';
+import { shadowEta } from './etashadow.ts';
 import { type Feed, lastBreakerOpen, breakerError } from './feedwatch.ts';
 
 export interface UpstreamState {
@@ -757,9 +758,11 @@ export async function runCron(env: Env, nowMs: number): Promise<void> {
   await step('term', () => remindTerm(env, nowMs));
   // The operator's statistics, each only while switched on (collect.ts):
   // the day's active counts once a day, and a closed day's arrival times
-  // against where the recorder saw the buses.
+  // against where the recorder saw the buses; then, with ETA_MODEL=shadow,
+  // the arrival-time model's own times for that day, shown to no one.
   await step('usage', () => recordActive(env, nowMs));
   await step('eta', () => recordEta(env, nowMs));
+  await step('etaModel', () => shadowEta(env, nowMs));
   // Last, so a run that hangs or dies partway sends none.
   await step('heartbeat', () => pingHeartbeat(env));
 }

@@ -116,7 +116,10 @@ buses), `ANALYTICS_TOKEN` (the dashboard's Analytics Engine charts, with
 `CF_ACCOUNT_ID`, which is in the config) and `TIMELAPSE_TOKEN` (opens
 `/api/timelapse/*` only) and `HEARTBEAT_URL` (a healthchecks.io ping URL
 the cron calls after every run, so a cron that stops is noticed; stable
-site only, so the beta never pings for it). Everything in [src/types.ts](../src/types.ts)'s `Env`
+site only, so the beta never pings for it). One plain var, not a secret,
+is unset everywhere: `ETA_MODEL` (`shadow` runs the arrival-time model
+beside the feed's times, answering no one; see "The operator's switches").
+Everything in [src/types.ts](../src/types.ts)'s `Env`
 but KV is optional at run time: `/api/health` says what's missing.
 
 ## Endpoints
@@ -1712,6 +1715,14 @@ off when unset or unreadable):
   bucket, read for the last 14 days by the dashboard. A day recorded on a
   route line this deploy doesn't have is skipped for that service. It makes
   no call to NUS.
+  With the `ETA_MODEL` var `shadow` as well, the next step
+  ([`src/etashadow.ts`](../src/etashadow.ts)) answers the same day's
+  predictions with the arrival-time model ([`src/etamodel.ts`](../src/etamodel.ts):
+  segment medians from earlier days, the feed's usual error, a blend), built
+  only from the 28 days before, and keeps the errors as
+  `eta/model/YYYY-MM-DD.json` and the day's segment times as
+  `eta/segments/YYYY-MM-DD.json`. Nobody is shown its times;
+  [eta-model.md](eta-model.md) has the design and what it needs first.
 - `errors` ([`src/apperrors.ts`](../src/apperrors.ts)): `POST /api/errors`.
   The Android app saves an uncaught crash to a file and sends it on the next
   start; the Mac app sends MetricKit's crash diagnostics and saved
