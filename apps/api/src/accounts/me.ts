@@ -148,7 +148,7 @@ const page = (title: string, intro: string, form = '') => `<!doctype html>
 <style>.signin-intro .btn{margin-top:20px}form.signin-alt .link-btn{padding:0}
 .number{display:block;min-height:72px;text-align:center;font:700 2.2rem/1 var(--display);letter-spacing:.3em;font-variant-numeric:tabular-nums}
 .sent-icon.done{background:color-mix(in srgb,var(--good) 14%,transparent);color:var(--good)}.sent-icon.cancelled{background:color-mix(in srgb,var(--ink) 8%,transparent);color:var(--ink)}
-@media (min-width:900px){.signin-step.solo{display:block;max-width:34rem;text-align:center}.solo .sent-icon{margin:0 auto 16px}}</style>
+@media (min-width:900px){.signin-step.solo{display:block;max-width:44rem;text-align:center}.solo .sent-icon{margin:0 auto 16px}}</style>
 </head><body><header class="wrap nav"><a class="brand" href="/"><img src="/assets/mark.svg" alt=""><span class="wordmark">termi<b>nus</b></span></a></header>
 <main class="wrap"><section class="signin">${liveryHtml()}<div class="signin-step${form ? '' : ' solo'}"><div class="signin-intro">${intro}</div>${form ? `<div class="signin-form">${form}</div>` : ''}</div></section></main></body></html>`;
 
