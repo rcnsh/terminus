@@ -13,8 +13,6 @@ struct TripLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: TripAttributes.self) { context in
             LockScreenTrip(state: context.state, stale: context.isStale)
-                .activityBackgroundTint(Color.surface)
-                .activitySystemActionForegroundColor(Color.ink)
                 .widgetURL(URL(string: "terminus://plan"))
         } dynamicIsland: { context in
             let s = context.state
@@ -105,8 +103,18 @@ private struct TripBadge: View {
 private struct LockScreenTrip: View {
     let state: TripAttributes.ContentState
     let stale: Bool
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
+        banner
+            // Fixed colours for the appearance it's drawn in: iOS resolves a
+            // light-or-dark tint as light even on a dark Lock Screen, where
+            // the text is dark mode's, light on light.
+            .activityBackgroundTint(Color(rgb: scheme == .dark ? 0x1A1816 : 0xFFFFFF))
+            .activitySystemActionForegroundColor(Color(rgb: scheme == .dark ? 0xF2EFEB : 0x1C1917))
+    }
+
+    @ViewBuilder private var banner: some View {
         let s = state
         let count = stale ? nil : s.countdown(phoneNow: Date(), skew: ServerClock.skew)
         let turnOff = s.phase != "arrived"
