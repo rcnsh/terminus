@@ -138,7 +138,7 @@ enum TokenStore {
     }
 
     /// Where builds before 3.2.0 kept the site's token: the address it was saved on.
-    private static var legacy: [String] { [Servers.backupBase, Servers.defaultBase] }
+    private static var legacy: [String] { [Servers.backupBase, Servers.defaultBase].compactMap { $0 } }
 
     private static func read(account: String) -> String? {
         var out: CFTypeRef?

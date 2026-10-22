@@ -39,10 +39,10 @@ enum SignInCode {
     }
 
     /// The sites a pairing QR code may point at: the account page's
-    /// `https://terminus.run/pair?code=…`, the beta's, either's old address,
-    /// and in a debug build the stub.
+    /// `https://terminus.run/pair?code=…`, the beta's, and in a debug build
+    /// the stub.
     static var pairHosts: Set<String> {
-        var hosts: Set<String> = ["terminus.run", "terminus.rcn.sh", "beta.terminus.run", "beta.terminus.rcn.sh"]
+        var hosts: Set<String> = ["terminus.run", "beta.terminus.run"]
         for s in Servers.choices + [Api.site] { if let h = URL(string: s)?.host?.lowercased() { hosts.insert(h) } }
         return hosts
     }

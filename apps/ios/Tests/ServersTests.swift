@@ -5,18 +5,20 @@ import Testing
 
 /// The developer menu's servers: the same cases as Android's ServersTest and the Mac's.
 
-private let site = ["https://terminus.run", "https://terminus.rcn.sh"]
+/// Two addresses of one site, as a build with a backup would have (neither build has one).
+private let site = ["https://terminus.run", "https://backup.terminus.run"]
 
 @Test func theSitesOwnAddressIsTheDefaultAndTheStubOnlyInDebug() {
-    #expect(Servers.all(default: "https://terminus.run", backup: "https://terminus.rcn.sh", debug: false) == site)
+    #expect(Servers.all(default: "https://terminus.run", backup: "https://backup.terminus.run", debug: false) == site)
     #expect(
-        Servers.all(default: "https://terminus.run", backup: "https://terminus.rcn.sh", debug: true) == site + ["http://localhost:8787"])
+        Servers.all(default: "https://terminus.run", backup: "https://backup.terminus.run", debug: true) == site + ["http://localhost:8787"]
+    )
 }
 
 @Test func aSavedServerNoLongerBuiltInFallsBackToTheDefault() {
-    #expect(Servers.pick("https://terminus.rcn.sh", from: site) == "https://terminus.rcn.sh")
+    #expect(Servers.pick("https://backup.terminus.run", from: site) == "https://backup.terminus.run")
     #expect(Servers.pick(nil, from: site) == "https://terminus.run")
-    // Dropped from a later version, or written by another app (defaults write).
+    // Dropped from a later version (the old address), or written by another app (defaults write).
     #expect(Servers.pick("https://terminus.rcn.sh", from: ["https://terminus.run"]) == "https://terminus.run")
     #expect(Servers.pick("https://evil.example", from: site) == "https://terminus.run")
     #expect(Servers.pick("http://localhost:8787", from: site) == "https://terminus.run")
@@ -24,13 +26,13 @@ private let site = ["https://terminus.run", "https://terminus.rcn.sh"]
 
 @Test func eachSiteAddressIsTheOthersBackupAndTheStubHasNone() {
     let debug = site + ["http://localhost:8787"]
-    #expect(Servers.backup(of: "https://terminus.run", in: debug) == "https://terminus.rcn.sh")
-    #expect(Servers.backup(of: "https://terminus.rcn.sh", in: debug) == "https://terminus.run")
+    #expect(Servers.backup(of: "https://terminus.run", in: debug) == "https://backup.terminus.run")
+    #expect(Servers.backup(of: "https://backup.terminus.run", in: debug) == "https://terminus.run")
     #expect(Servers.backup(of: "http://localhost:8787", in: debug) == nil)
     #expect(Servers.order("https://terminus.run", in: debug, detour: nil) == site)
     // The backup answered a moment ago: it goes first until the detour ends.
-    #expect(Servers.order("https://terminus.run", in: debug, detour: "https://terminus.rcn.sh") == site.reversed())
-    #expect(Servers.order("http://localhost:8787", in: debug, detour: "https://terminus.rcn.sh") == ["http://localhost:8787"])
+    #expect(Servers.order("https://terminus.run", in: debug, detour: "https://backup.terminus.run") == site.reversed())
+    #expect(Servers.order("http://localhost:8787", in: debug, detour: "https://backup.terminus.run") == ["http://localhost:8787"])
 }
 
 @Test func onlyAServerNeverReachedIsTriedAgainElsewhere() {
@@ -53,7 +55,7 @@ private let site = ["https://terminus.run", "https://terminus.rcn.sh"]
     #expect(Servers.isLocal("http://localhost:8787"))
     #expect(Servers.isLocal("http://127.0.0.1:8787"))
     #expect(!Servers.isLocal("https://localhost:8787"))
-    #expect(!Servers.isLocal("https://terminus.rcn.sh"))
+    #expect(!Servers.isLocal("https://backup.terminus.run"))
     #expect(!Servers.isLocal("http://localhost.evil.example"))
 }
 
@@ -63,15 +65,18 @@ private let site = ["https://terminus.run", "https://terminus.rcn.sh"]
     #expect(!Servers.menuAlways(debug: false, beta: false))
 }
 
-@Test func theStableSiteDefaultsToItsOwnAddressWithTheOldOneAsBackup() {
-    // The tests run in the Debug app, built with the stable site's addresses.
+@Test func theStableSiteDefaultsToItsOwnAddressWithNoBackup() {
+    // The tests run in the Debug app, built with the stable site's address.
     #expect(Servers.defaultBase == "https://terminus.run")
-    #expect(Servers.backupBase == "https://terminus.rcn.sh")
+    #expect(Servers.backupBase == nil)
+    #expect(Servers.all(default: Servers.defaultBase, backup: nil, debug: false) == ["https://terminus.run"])
+    #expect(Servers.order("https://terminus.run", in: ["https://terminus.run"], detour: nil) == ["https://terminus.run"])
     #expect(Api.site == "https://terminus.run")
     #expect(Api.linkBase == "https://terminus.run")
 }
 
-@Test func theSitesTwoAddressesShareOneTokenAndTheStubKeepsItsOwn() {
+@Test func theSitesAddressesShareOneTokenAndTheStubKeepsItsOwn() {
+    // A saved choice of the old address, dropped, falls back to terminus.run still signed in.
     #expect(TokenStore.account(for: "https://terminus.run") == TokenStore.account(for: "https://terminus.rcn.sh"))
     #expect(TokenStore.account(for: "https://beta.terminus.run") == TokenStore.account(for: "https://beta.terminus.rcn.sh"))
     #expect(TokenStore.account(for: "http://localhost:8787") != TokenStore.account(for: "https://terminus.run"))

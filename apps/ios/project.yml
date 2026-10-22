@@ -23,26 +23,22 @@ settings:
     CODE_SIGN_STYLE: Automatic
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     LOCALIZATION_PREFERS_STRING_CATALOGS: NO
-    # The stable app's addresses: requests go to the one people see, the old
-    # one the backup. The Beta configuration has its own (Servers in Api.swift).
+    # The stable app's address, where requests go: the one people see. The
+    # Beta configuration has its own (Servers in Api.swift).
     TERMINUS_API: https://terminus.run
-    TERMINUS_BACKUP: https://terminus.rcn.sh
     TERMINUS_SITE: https://terminus.run
     TERMINUS_SUFFIX: ""
     TERMINUS_NAME: terminus
     APP_GROUP: group.sh.rcn.terminus
-    # The hosts whose /pair links open the app (Associated Domains).
-    LINK_KEPT: terminus.rcn.sh
+    # The host whose /pair links open the app (Associated Domains).
     LINK_SHOWN: terminus.run
   configs:
     Beta:
       TERMINUS_API: https://beta.terminus.run
-      TERMINUS_BACKUP: https://beta.terminus.rcn.sh
       TERMINUS_SITE: https://beta.terminus.run
       TERMINUS_SUFFIX: .beta
       TERMINUS_NAME: terminus beta
       APP_GROUP: group.sh.rcn.terminus.beta
-      LINK_KEPT: beta.terminus.rcn.sh
       LINK_SHOWN: beta.terminus.run
     # Sideloaded with a free Apple ID (scripts/sideload.sh): the stable
     # servers, under the signer's own bundle IDs and app group, which the
@@ -88,7 +84,6 @@ targets:
         CFBundleLocalizations: [en, zh-Hans]
         CFBundleAllowMixedLocalizations: true
         TerminusAPI: $(TERMINUS_API)
-        TerminusBackup: $(TERMINUS_BACKUP)
         TerminusSite: $(TERMINUS_SITE)
         TerminusGroup: $(APP_GROUP)
         ITSAppUsesNonExemptEncryption: false
@@ -119,7 +114,7 @@ targets:
         # A leave reminder and a due or missed trip's push get through a Focus.
         com.apple.developer.usernotifications.time-sensitive: true
         # The site's /pair links open the app (the server's apple-app-site-association).
-        com.apple.developer.associated-domains: [applinks:$(LINK_KEPT), applinks:$(LINK_SHOWN)]
+        com.apple.developer.associated-domains: [applinks:$(LINK_SHOWN)]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: sh.rcn.terminus$(TERMINUS_SUFFIX)
@@ -148,7 +143,6 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleLocalizations: [en, zh-Hans]
         TerminusAPI: $(TERMINUS_API)
-        TerminusBackup: $(TERMINUS_BACKUP)
         TerminusSite: $(TERMINUS_SITE)
         TerminusGroup: $(APP_GROUP)
         NSExtension:
@@ -182,7 +176,6 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleLocalizations: [en, zh-Hans]
         TerminusAPI: $(TERMINUS_API)
-        TerminusBackup: $(TERMINUS_BACKUP)
         TerminusSite: $(TERMINUS_SITE)
         TerminusGroup: $(APP_GROUP)
         NSExtension:
