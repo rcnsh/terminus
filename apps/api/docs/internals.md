@@ -2104,6 +2104,8 @@ src/analytics.ts  Analytics Engine logging: decisions and arrivals, errors
 src/collect.ts    The dashboard's switches for three statistics, off until turned on
 src/usage.ts      Daily active counts; src/eta.ts the feed's arrival times scored
                   against the timelapse; src/apperrors.ts crash reports (/api/errors)
+src/etamodel.ts   The arrival-time model (pure); src/etashadow.ts runs it in shadow
+                  beside eta.ts when ETA_MODEL is shadow (docs/eta-model.md)
 src/openapi.ts    OpenAPI 3.1 spec and the Elements docs page
 src/http.ts       JSON responses, query parsing, CORS, security headers and
                   the CSP, timedFetch (upstream calls under a timeout)
