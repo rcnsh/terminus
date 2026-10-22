@@ -12,6 +12,8 @@ struct WelcomeFlow: View {
         NavigationStack(path: $path) {
             WelcomeView(model: model, open: { path.append($0) })
                 .toolbar(.hidden, for: .navigationBar)
+                // The theme's icons on the light page, not the night sky's of the tabs signed out of.
+                .statusBar(light: nil)
                 .navigationDestination(for: Page.self) { page in
                     switch page {
                     case .signIn: SignInView(model: SignInModel()) {}
