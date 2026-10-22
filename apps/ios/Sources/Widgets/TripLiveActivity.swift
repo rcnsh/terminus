@@ -6,7 +6,9 @@ import WidgetKit
 /// bus, the card's line, and a countdown that ticks by itself (to leaving,
 /// to the bus, or to getting off). On the bus, how far along the ride is.
 /// Past the card's staleAt with nothing newer, it says the times may have
-/// changed rather than counting down to a bus that may be gone.
+/// changed rather than counting down to a bus that may be gone. Turn off, by
+/// where it says terminus, ends it and turns it off, as on Android's live
+/// notification.
 struct TripLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: TripAttributes.self) { context in
@@ -42,8 +44,12 @@ struct TripLiveActivity: Widget {
                         if s.phase == "riding", let from = s.departDate, let to = s.arriveDate, to > from {
                             RideBar(from: from, to: to, off: s.off, color: serviceColor(s.color), muted: .secondary)
                         }
-                        Text(verbatim: context.isStale ? L("Times may have changed. Open terminus to check.") : s.line)
-                            .font(.footnote).foregroundStyle(.secondary).lineLimit(2)
+                        HStack(alignment: .center, spacing: 8) {
+                            Text(verbatim: context.isStale ? L("Times may have changed. Open terminus to check.") : s.line)
+                                .font(.footnote).foregroundStyle(.secondary).lineLimit(2)
+                            Spacer(minLength: 0)
+                            if s.phase != "arrived" { TurnOffButton(ink: .white, chip: Color.white.opacity(0.16)) }
+                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 4)
@@ -103,13 +109,19 @@ private struct LockScreenTrip: View {
     var body: some View {
         let s = state
         let count = stale ? nil : s.countdown(phoneNow: Date(), skew: ServerClock.skew)
+        let turnOff = s.phase != "arrived"
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Wordmark(size: 13).foregroundStyle(Color.ink)
-                if let h = heading(s) {
-                    Text(verbatim: h).font(.system(size: 13, weight: .medium)).foregroundStyle(Color.muted).lineLimit(1)
+            HStack(alignment: .center, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Wordmark(size: 13).foregroundStyle(Color.ink)
+                    if let h = heading(s) {
+                        Text(verbatim: h).font(.system(size: 13, weight: .medium)).foregroundStyle(Color.muted).lineLimit(1)
+                    }
                 }
                 Spacer(minLength: 0)
+                // Its room, kept here; the button itself is laid over it, outside the
+                // banner read as one by VoiceOver, so it can be pressed on its own.
+                if turnOff { TurnOffButton(ink: Color.ink, chip: Color.surface2).hidden() }
             }
             HStack(alignment: .center, spacing: 10) {
                 TripBadge(state: s, size: 18)
@@ -140,6 +152,9 @@ private struct LockScreenTrip: View {
         }
         .padding(16)
         .accessibilityElement(children: .combine)
+        .overlay(alignment: .topTrailing) {
+            if turnOff { TurnOffButton(ink: Color.ink, chip: Color.surface2).padding(16) }
+        }
     }
 
     /// What the countdown is to, under it.
@@ -149,6 +164,28 @@ private struct LockScreenTrip: View {
         case "off": L("to your stop")
         default: L("to the bus")
         }
+    }
+}
+
+/// Turn off (TurnOffLiveIntent): a small chip, as the widgets' buttons are,
+/// so it reads as something to press rather than part of the trip.
+private struct TurnOffButton: View {
+    let ink: Color
+    let chip: Color
+
+    var body: some View {
+        Button(intent: TurnOffLiveIntent()) {
+            Text(verbatim: L("Turn off"))
+                .font(.system(size: 12, weight: .semibold))
+                .lineLimit(1)
+                .fixedSize()
+                .foregroundStyle(ink)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(chip, in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("live.turnOff")
     }
 }
 

@@ -7,7 +7,9 @@ import UIKit
 /// riding or missed), updated with each answer, and ended when you're there
 /// or the trip is over. Only while it's turned on in Settings and allowed in
 /// the phone's. iOS lets the app start one only while it's open; updates, and the end, can come
-/// from the background too. Its countdown ticks by itself.
+/// from the background too. From iOS 17.2 the server starts one by push
+/// (the push-to-start token, `apnsstart:`) when the trip is due or missed
+/// with the app closed, as Android's starts from a push. Its countdown ticks by itself.
 @MainActor enum LiveTrip {
     /// How long a finished trip stays on the Lock Screen, saying you're there.
     nonisolated static let lingerS: TimeInterval = 5 * 60
@@ -183,11 +185,20 @@ import UIKit
     }
 
     /// At launch: each activity's push token as it comes, whoever started
-    /// it; and the ones no push can end, ended if their trip is over.
+    /// it (the app, or the server by push); the token that lets the server
+    /// start one; and the ones no push can end, ended if their trip is over.
     static func observeTokens() {
         for activity in Activity<TripAttributes>.activities { observe(activity) }
         Task {
             for await activity in Activity<TripAttributes>.activityUpdates { observe(activity) }
+        }
+        if #available(iOS 17.2, *) {
+            Task {
+                for await token in Activity<TripAttributes>.pushToStartTokenUpdates {
+                    Push.startToken = Api.apnsToken(token, prefix: "apnsstart")
+                    Push.sync(force: true)
+                }
+            }
         }
         Task { await serially { await endFinished() } }
     }

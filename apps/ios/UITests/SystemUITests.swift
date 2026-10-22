@@ -80,7 +80,8 @@ final class SystemUITests: XCTestCase {
     }
 
     /// With the leave alerts and the Live Activity on, and the trip under
-    /// way (the stub told "left"): the Live Activity in Notification Centre.
+    /// way (the stub told "left"): the Live Activity in Notification Centre,
+    /// and its Turn off.
     func testLiveActivity() throws {
         let (token, email) = stubSession()
         let extra = ["TERMINUS_ALERTS": "1", "TERMINUS_LIVE": "1", "TERMINUS_TOKEN": token, "TERMINUS_EMAIL": email]
@@ -112,6 +113,12 @@ final class SystemUITests: XCTestCase {
         let activity = springboard.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'terminus,'")).firstMatch
         XCTAssertTrue(activity.waitForExistence(timeout: 5), "the Live Activity shows")
         shot("live-activity-\(tag)", springboard)
+        // Turn off, as on Android's live notification: the activity goes (and the setting with it).
+        let turnOff = springboard.buttons[lang == "zh" ? "关闭" : "Turn off"]
+        XCTAssertTrue(turnOff.waitForExistence(timeout: 5), "the Live Activity has Turn off")
+        turnOff.tap()
+        XCTAssertTrue(activity.waitForNonExistence(timeout: 10), "Turn off ends it")
+        shot("live-activity-off-\(tag)", springboard)
         XCUIDevice.shared.press(.home)
     }
 

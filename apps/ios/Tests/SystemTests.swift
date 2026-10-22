@@ -191,9 +191,22 @@ private func answer(_ name: String) throws -> (NextAnswer, Date) {
 @Test func pushTokensAreHexWithTheirKind() {
     let t = Api.apnsToken(Data([0x0a, 0xff, 0x00]))
     let la = Api.apnsToken(Data([0x01]), prefix: "apnsla")
+    let start = Api.apnsToken(Data([0x02]), prefix: "apnsstart")
     let tail = Api.apnsSandbox ? ":sandbox" : ""
     #expect(t == "apns:0aff00" + tail)
     #expect(la == "apnsla:01" + tail)
+    #expect(start == "apnsstart:02" + tail)
+}
+
+/// Turn off on the Live Activity turns the setting off, as Android's does, and leaves the leave alerts as they were.
+@MainActor @Test func turnOffOnTheLiveActivityTurnsItOff() async throws {
+    let (live, alerts) = (TripPrefs.liveActivity, TripPrefs.leaveAlerts)
+    defer { (TripPrefs.liveActivity, TripPrefs.leaveAlerts) = (live, alerts) }
+    TripPrefs.liveActivity = true
+    TripPrefs.leaveAlerts = true
+    _ = try await TurnOffLiveIntent().perform()
+    #expect(!TripPrefs.liveActivity)
+    #expect(TripPrefs.leaveAlerts)
 }
 
 @Test func aSavedPlacesLinkOpensItsTab() {

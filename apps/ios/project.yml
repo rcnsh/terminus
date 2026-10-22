@@ -59,6 +59,9 @@ targets:
     sources:
       - path: Sources/App
       - path: Sources/Shared
+      # The Live Activity's Turn off runs in the app (a LiveActivityIntent),
+      # where TERMINUS_APP lets it reach the rest of the app.
+      - path: Sources/Widgets/LiveIntents.swift
       - path: Support/Assets.xcassets
       # What the app collects and why it reads its settings and file dates (App Store).
       - path: Support/PrivacyInfo.xcprivacy
@@ -119,6 +122,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: sh.rcn.terminus$(TERMINUS_SUFFIX)
         PRODUCT_NAME: Terminus
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) TERMINUS_APP
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         TARGETED_DEVICE_FAMILY: "1"

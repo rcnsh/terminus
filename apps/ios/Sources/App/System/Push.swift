@@ -70,35 +70,50 @@ import UserNotifications
         set { d.set(newValue, forKey: "push.live") }
     }
 
+    /// The token that starts a Live Activity by push (`apnsstart:`, iOS 17.2
+    /// and later). The phone's, not the session's: kept when signed out, and
+    /// sent only while the Live Activity is on.
+    static var startToken: String? {
+        get { d.string(forKey: "push.start") }
+        set { d.set(newValue, forKey: "push.start") }
+    }
+
     /// Which session the tokens were sent with, without keeping the session token in plain defaults.
     static func tag(_ session: String) -> String {
         SHA256.hash(data: Data(session.utf8)).prefix(8).map { String(format: "%02x", $0) }.joined()
     }
 
     /// Sends this phone's tokens when they're new, for a new session, or due
-    /// again (`resend`), and when the leave alerts are turned on or off: the
-    /// server sends the trip's alerts only while they're on. Called when the
-    /// session, a token or the trip settings change, at start, and from each answer.
+    /// again (`resend`), and when the trip settings are turned on or off: the
+    /// server sends the trip's alerts only while the leave alerts are on, and
+    /// starts a Live Activity only while that is. Called when the session, a
+    /// token or the trip settings change, at start, and from each answer.
     static func sync(force: Bool = false) {
+        Task { await send(force: force) }
+    }
+
+    /// `sync`, waited for: the Live Activity's Turn off is done once the server knows.
+    static func send(force: Bool = false) async {
         guard let auth = TokenStore.read(), let apns = d.string(forKey: "push.apns") else { return }
-        let tokens = [apns] + [liveToken].compactMap { $0 }
+        let live = TripPrefs.liveActivity
+        let tokens = [apns] + [liveToken, live ? startToken : nil].compactMap { $0 }
         let alerts = TripPrefs.leaveAlerts
-        let sent = (tokens + [alerts ? "alerts" : "quiet"]).joined(separator: "|")
+        let sent = (tokens + [alerts ? "alerts" : "quiet", live ? "live" : "still"]).joined(separator: "|")
         let fresh =
             d.string(forKey: "push.sent") == sent && d.string(forKey: "push.for") == tag(auth)
             && (d.object(forKey: "push.sentAt") as? Date).map { -$0.timeIntervalSinceNow < resend } == true
         if fresh && !force { return }
-        Task {
-            do {
-                // One token a request: the phone's, then the Live Activity's.
-                for t in tokens { try await Api(token: auth).registerPush(apple: t, alerts: t == apns ? alerts : nil) }
-                // Signed in again meanwhile: the new session hasn't got it.
-                guard TokenStore.read() == auth else { return }
-                d.set(sent, forKey: "push.sent")
-                d.set(tag(auth), forKey: "push.for")
-                d.set(Date(), forKey: "push.sentAt")
-            } catch {}
-        }
+        do {
+            // One token a request: the phone's (with both settings), then the Live Activity's.
+            for t in tokens {
+                try await Api(token: auth).registerPush(apple: t, alerts: t == apns ? alerts : nil, live: t == apns ? live : nil)
+            }
+            // Signed in again meanwhile: the new session hasn't got it.
+            guard TokenStore.read() == auth else { return }
+            d.set(sent, forKey: "push.sent")
+            d.set(tag(auth), forKey: "push.for")
+            d.set(Date(), forKey: "push.sentAt")
+        } catch {}
     }
 
     /// Signed in: asks for a token, which comes to `registered`.
