@@ -431,7 +431,7 @@ export async function checkCalendar(env: Env, nowMs: number, through = calendarT
   const sent = await mailOperator(
     env,
     'terminus: academic calendar data runs out soon',
-    `The academic calendar covers dates up to ${through} (${daysLeft} days from now). After that, imported classes are shown every week, including recess and exams.\n\nThe Worker fetches the calendar itself every week, from NUSMods and data.gov.sg, so either NUSMods doesn't list the next academic year yet, or the fetch is failing (look for "cron calendar" in the Worker's logs).\n\nWhen NUSMods has the year, nothing else is needed. To bundle it as well:\n  python3 apps/api/scripts/fetch_calendar.py && pnpm run deploy`,
+    `The academic calendar covers dates up to ${through} (${daysLeft} days from now). After that, imported classes are shown every week, including recess and exams.\n\nThe Worker fetches the calendar itself every week, from NUSMods and data.gov.sg, so either NUSMods doesn't list the next academic year yet, or the fetch is failing (look for "cron calendar" in the Worker's logs).\n\nWhen NUSMods has the year, nothing else is needed. To bundle it as well:\n  python3 apps/api/scripts/data/fetch_calendar.py && pnpm run deploy`,
   );
   if (!sent) return false;
   await env.KV.put(CALENDAR_KEY, String(nowMs));

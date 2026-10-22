@@ -1,5 +1,5 @@
 // Where the map's libraries live: MapLibre and the PMTiles reader, vendored
-// with their version in the folder's name (scripts/vendor-map.sh). The one
+// with their version in the folder's name (scripts/vendor/vendor-map.sh). The one
 // place that names them, for the Map tab (map.js), the timelapse page, and
 // the hint below that fetches them early.
 

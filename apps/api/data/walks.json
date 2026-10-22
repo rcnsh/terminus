@@ -35,7 +35,7 @@
   "YIH-OPP": 1.247
  },
  "generated": "2026-09-29",
- "source": "OpenStreetMap footpaths (Map data (c) OpenStreetMap contributors, ODbL) via Overpass; scripts/walk_routes.py",
+ "source": "OpenStreetMap footpaths (Map data (c) OpenStreetMap contributors, ODbL) via Overpass; scripts/data/walk_routes.py",
  "stopPairs": {
   "AS5>BIZ2": 513,
   "AS5>CLB": 509,

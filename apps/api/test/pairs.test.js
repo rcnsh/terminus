@@ -125,7 +125,7 @@ test('a bus that stops on the far side counts, with the walk back across in its 
 
 test('the class card names the stop to get off at, only when there is one', async () => {
   const { cardFor } = await import('../src/card.ts');
-  const { default: fixture } = await import('./fixtures/answers/class-from-dorm.json', { with: { type: 'json' } });
+  const { default: fixture } = await import('../../../fixtures/answers/class-from-dorm.json', { with: { type: 'json' } });
   const { card: _card, refreshAt: _r, ...answer } = fixture;
   const plain = cardFor(answer);
   assert.equal(plain.catch, 'Catch the ~09:42 R2 at PGP');

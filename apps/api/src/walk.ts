@@ -2,7 +2,7 @@
  * Walking, as close to the real paths as the data allows.
  *
  * Straight lines undersell campus walks: roads to cross, stairs, the long way
- * round a building. `data/walks.json` (scripts/walk_routes.py, from
+ * round a building. `data/walks.json` (scripts/data/walk_routes.py, from
  * OpenStreetMap footpaths) carries routed distances between stops and, for
  * each stop, how much longer than the straight line a walk to it usually is.
  * Rooms get routed distances in `data/venues.json` from the same script, and

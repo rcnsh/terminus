@@ -16,7 +16,7 @@ class LiveServiceTest {
     }
 
     private fun golden(name: String): NextAnswer {
-        val dir = listOf("../../api/test/fixtures/answers", "../api/test/fixtures/answers").map(::File).first { it.isDirectory }
+        val dir = listOf("../../../fixtures/answers", "../../fixtures/answers").map(::File).first { it.isDirectory }
         return NextAnswer.parse(JSONObject(File(dir, "$name.json").readText()))
     }
 
@@ -47,7 +47,7 @@ class LiveServiceTest {
         val json =
             JSONObject(
                 File(
-                        listOf("../../api/test/fixtures/answers", "../api/test/fixtures/answers").map(::File).first { it.isDirectory },
+                        listOf("../../../fixtures/answers", "../../fixtures/answers").map(::File).first { it.isDirectory },
                         "class-bus.json",
                     )
                     .readText()

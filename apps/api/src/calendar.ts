@@ -4,7 +4,7 @@
  * not outside their own semester, and only in the teaching weeks NUSMods
  * lists for them (many tutorials and labs start in week 2 or 3).
  *
- * data/calendar.json is built by scripts/fetch_calendar.py from NUSMods'
+ * data/calendar.json is built by scripts/data/fetch_calendar.py from NUSMods'
  * semester start dates and MOM's public holidays. data/nus-days.json, kept
  * by hand, adds NUS's own days off (Well-Being Days), which count as holidays.
  */

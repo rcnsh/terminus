@@ -604,7 +604,7 @@ test('the card says when the feed is down, on an answer without a live time', as
   assert.equal(await feedDownSince(e, down + 30_000), null, 'read again at most once a minute');
   assert.equal(await feedDownSince(e, down + 60_000), down);
 
-  const answer = JSON.parse(readFileSync(new URL('./fixtures/answers/class-bus.json', import.meta.url), 'utf8'));
+  const answer = JSON.parse(readFileSync(new URL('../../../fixtures/answers/class-bus.json', import.meta.url), 'utf8'));
   assert.equal(cardFor(answer, true, undefined, down).notice, null, 'a live answer: the feed is back');
   const guess = { ...answer, quality: 'scheduled' };
   assert.equal(cardFor(guess, true, undefined, down).notice, "NUS's live bus times have been down since 9:14\u00a0AM.");

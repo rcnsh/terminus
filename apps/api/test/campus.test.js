@@ -454,7 +454,7 @@ test('every route is drawn along the roads, through its own stops', () => {
   const byCode = new Map(realGraph.stops.map((s) => [s.code, s]));
   for (const [svc, seq] of Object.entries(realGraph.routes)) {
     const r = map.routes[svc];
-    assert.equal(r.shaped, true, `${svc} has no road shape for its current stops: run scripts/route_shapes.py`);
+    assert.equal(r.shaped, true, `${svc} has no road shape for its current stops: run scripts/data/route_shapes.py`);
     assert.ok(r.line.length > seq.length, `${svc} line is too coarse`);
     // Each stop is near the line (it joined the road there).
     for (const code of seq) {

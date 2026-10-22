@@ -2,7 +2,7 @@
  * The academic calendar, kept up to date by the Worker itself, so it doesn't
  * run out when nobody redeploys.
  *
- * data/calendar.json is bundled at deploy time (scripts/fetch_calendar.py,
+ * data/calendar.json is bundled at deploy time (scripts/data/fetch_calendar.py,
  * refreshed weekly by the scrape workflow). Bundled data only changes with a
  * deploy, so the cron also fetches the same two public sources once a week
  * (refreshCalendar): NUSMods' semester start dates and MOM's public holidays

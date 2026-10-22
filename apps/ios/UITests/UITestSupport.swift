@@ -1,6 +1,6 @@
 import XCTest
 
-/// The dev stub the tests run against (node apps/api/scripts/dev-stub.mjs):
+/// The dev stub the tests run against (node apps/api/scripts/dev/dev-stub.mjs):
 /// TERMINUS_STUB in the test runner's environment (TEST_RUNNER_TERMINUS_STUB
 /// on xcodebuild's command line), else http://localhost:8787.
 let stub = ProcessInfo.processInfo.environment["TERMINUS_STUB"] ?? "http://localhost:8787"

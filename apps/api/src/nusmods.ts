@@ -24,7 +24,7 @@ import { m } from './i18n.ts';
 /**
  * Stop, routed walk and, from the NUSMods room map, where the building is
  * (its rooms' mean point). `stops`, when more than one serves it: each with
- * its routed walk, `stop` first (scripts/walk_routes.py, data/src/venue-stops.json).
+ * its routed walk, `stop` first (scripts/data/walk_routes.py, data/src/venue-stops.json).
  */
 type VenueEntry = { stop: string; m: number; lat?: number; lon?: number; stops?: Record<string, number> };
 const VENUES = venuesJson as { venues: Record<string, VenueEntry> };

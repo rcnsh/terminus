@@ -15,7 +15,7 @@ import sh.rcn.terminus.TestStrings
 
 /** What every widget says, from the server's golden answers (the API's tests pin them), and how it picks a layout. */
 class WidgetFaceTest {
-    private val dir = listOf("../../api/test/fixtures/answers", "../api/test/fixtures/answers").map(::File).first { it.isDirectory }
+    private val dir = listOf("../../../fixtures/answers", "../../fixtures/answers").map(::File).first { it.isDirectory }
 
     /** Not /api/me/next answers. */
     private val notAnswers = setOf("day.json", "nearby-list.json", "setup.json")

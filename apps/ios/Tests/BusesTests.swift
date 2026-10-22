@@ -26,9 +26,9 @@ final class BusesTests: XCTestCase {
 
     // MARK: the search
 
-    /// The shared cases every client is held to (apps/api/test/fixtures/search.json, busesTab).
+    /// The shared cases every client is held to (fixtures/search.json, busesTab).
     func testSearchMatchesTheSharedCases() throws {
-        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../api/test/fixtures/search.json")
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../../fixtures/search.json")
         let all = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [String: Any]
         let tab = all["busesTab"] as! [String: Any]
         let campusJSON = try JSONSerialization.data(withJSONObject: tab["campus"]!)

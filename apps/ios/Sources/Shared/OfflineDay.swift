@@ -3,7 +3,7 @@ import Foundation
 /// What Now and the widgets show offline once the last answer has gone
 /// stale: the next thing on the day plan kept from /me/day. Android, the web
 /// and the Mac follow the same rule, checked against the same cases
-/// (apps/api/test/fixtures/offline-day.json).
+/// (fixtures/offline-day.json).
 enum OfflineDay {
     /// A class still counts this long after it starts: late, but still the one to go to.
     static let classGrace: TimeInterval = 15 * 60

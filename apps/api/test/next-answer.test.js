@@ -269,7 +269,7 @@ test('a stale answer is counted from now: its bus is no further away than it is'
 });
 
 test("a stale answer's card counts from the request: its next change is never in the past", async () => {
-  const { default: fixture } = await import('./fixtures/answers/class-bus.json', { with: { type: 'json' } });
+  const { default: fixture } = await import('../../../fixtures/answers/class-bus.json', { with: { type: 'json' } });
   const { card: _card, refreshAt: _r, ...answer } = fixture;
   const now = Date.parse(answer.asOf);
   // Read four minutes ago; leave in two. Its "time to go" moment was a minute or more ago.
@@ -285,7 +285,7 @@ test("a stale answer's card counts from the request: its next change is never in
 
 test('a leave-by sliding just ahead of now asks for a refetch no sooner than 30 s', async () => {
   const { nextPhaseAt, LEAVE_GAP_MS } = await import('../src/card.ts');
-  const { default: fixture } = await import('./fixtures/answers/class-bus.json', { with: { type: 'json' } });
+  const { default: fixture } = await import('../../../fixtures/answers/class-bus.json', { with: { type: 'json' } });
   const { card: _card, refreshAt: _r, ...answer } = fixture;
   const now = Date.parse(answer.asOf);
   const trip = { key: 'k', phase: 'due' };

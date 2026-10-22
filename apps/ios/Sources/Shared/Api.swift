@@ -109,7 +109,7 @@ enum Servers {
         return all[0]
     }
 
-    /// Plain HTTP to this Mac: the dev stub (apps/api/scripts/dev-stub.mjs), from the simulator.
+    /// Plain HTTP to this Mac: the dev stub (apps/api/scripts/dev/dev-stub.mjs), from the simulator.
     static func isLocal(_ base: String) -> Bool {
         guard let u = URL(string: base), u.scheme == "http", let host = u.host?.lowercased() else { return false }
         return host == "localhost" || host == "127.0.0.1"

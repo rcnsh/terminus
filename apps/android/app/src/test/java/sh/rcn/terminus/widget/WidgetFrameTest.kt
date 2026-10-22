@@ -19,7 +19,7 @@ class WidgetFrameTest {
         TestStrings.install()
     }
 
-    private val dir = listOf("../../api/test/fixtures/answers", "../api/test/fixtures/answers").map(::File).first { it.isDirectory }
+    private val dir = listOf("../../../fixtures/answers", "../../fixtures/answers").map(::File).first { it.isDirectory }
     private val day = DayPlan.parse(JSONObject(File(dir, "day.json").readText()))
     private val plan = NextAnswer.parse(JSONObject(File(dir, "class-bus.json").readText()))
     private val staleAt = plan.card!!.staleAtMs!!

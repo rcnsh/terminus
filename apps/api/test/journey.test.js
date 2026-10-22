@@ -6,7 +6,7 @@ import { cardFor } from '../src/card.ts';
 import { ROUTE_COLORS } from '../src/campus.ts';
 
 const load = async (name) => {
-  const { default: fixture } = await import(`./fixtures/answers/${name}.json`, { with: { type: 'json' } });
+  const { default: fixture } = await import(`../../../fixtures/answers/${name}.json`, { with: { type: 'json' } });
   const { card: _card, refreshAt: _r, ...answer } = fixture;
   return answer;
 };

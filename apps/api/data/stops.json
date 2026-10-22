@@ -1,6 +1,6 @@
 {
   "generated": "2026-09-28T13:26:23.237956+00:00",
-  "source": "uNivUS bus proxy via scripts/scrape_stops.py",
+  "source": "uNivUS bus proxy via scripts/data/scrape_stops.py",
   "stops": [
     {
       "code": "AS5",

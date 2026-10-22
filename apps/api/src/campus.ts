@@ -18,7 +18,7 @@ import type { Graph, Stop } from './types.ts';
 const VENUES = venuesJson as { venues: Record<string, { stop: string; m: number }> };
 const ROOMS = roomsJson as { rooms: Record<string, { name: string; stop: string; m: number }> };
 
-/** A service's path along the roads (scripts/route_shapes.py). */
+/** A service's path along the roads (scripts/data/route_shapes.py). */
 export interface RouteShape {
   /** The stop sequence it was routed for. */
   stops: string[];

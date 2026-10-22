@@ -21,7 +21,7 @@ import javax.net.ssl.SSLHandshakeException
  * go with the project.
  */
 internal object Servers {
-    /** Plain HTTP to this phone or the emulator's host: the dev stub (scripts/dev-stub.mjs). */
+    /** Plain HTTP to this phone or the emulator's host: the dev stub (scripts/dev/dev-stub.mjs). */
     fun isLocal(base: String): Boolean {
         val host = base.substringAfter("://").substringBefore('/').substringBefore(':')
         return base.startsWith("http://") && (host == "localhost" || host == "10.0.2.2")

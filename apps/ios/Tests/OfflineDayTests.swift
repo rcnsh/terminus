@@ -4,11 +4,11 @@ import Testing
 @testable import Terminus
 
 /// The offline fallback, against the cases the web, Android and the Mac are
-/// checked against too (apps/api/test/fixtures/offline-day.json), on the
+/// checked against too (fixtures/offline-day.json), on the
 /// API's own /me/day golden.
 let fixtures = URL(fileURLWithPath: #filePath)
     .deletingLastPathComponent().deletingLastPathComponent()
-    .appendingPathComponent("../api/test/fixtures").standardized
+    .appendingPathComponent("../../fixtures").standardized
 
 private struct Spec: Decodable {
     struct Case: Decodable {

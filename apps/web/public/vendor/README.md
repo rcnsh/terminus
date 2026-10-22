@@ -1,11 +1,11 @@
-Third-party code, copied from npm by `scripts/vendor-preact.sh`,
-`scripts/vendor-map.sh` and `scripts/vendor-mediabunny.sh`; never edited
+Third-party code, copied from npm by `scripts/vendor/vendor-preact.sh`,
+`scripts/vendor/vendor-map.sh` and `scripts/vendor/vendor-mediabunny.sh`; never edited
 by hand.
 
 Each script pins its versions with their npm integrity (sha512) and
 checks the tarball against it before unpacking. `SHA256SUMS` lists the
 SHA-256 of every file here but this README; the scripts rewrite their
-entries, and `apps/api/test/vendor.test.js` fails when a file doesn't
+entries, and `apps/web/test/vendor.test.js` fails when a file doesn't
 match it, is missing, or isn't listed.
 
 - `preact-10.29.8/`: Preact and its hooks (MIT, LICENSE-preact) and htm

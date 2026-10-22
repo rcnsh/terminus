@@ -1,6 +1,6 @@
 #!/bin/sh
 # MapLibre Native for the iPhone's map: the published iOS build of the same
-# release the Mac's is built from (scripts/vendor-maplibre-mac.sh), unpacked
+# release the Mac's is built from (scripts/vendor/vendor-maplibre-mac.sh), unpacked
 # into Vendor/ (not kept in git). The zip is checked against the SHA-256
 # MapLibre publishes for SwiftPM before anything is unpacked.
 #   apps/ios/scripts/fetch-maplibre.sh

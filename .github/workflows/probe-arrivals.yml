@@ -49,7 +49,7 @@ jobs:
           STOPS: ${{ inputs.stops }}
           EVERY: ${{ inputs.every }}
           TRACE: ${{ inputs.trace }}
-        working-directory: apps/api/scripts
+        working-directory: apps/api/scripts/probes
         # STOPS unquoted on purpose: one argument per stop. Each must be a
         # plain stop code, so the input can't pass an option (or a glob);
         # after `--` too, and probe_arrivals.py checks again.

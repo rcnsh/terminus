@@ -17,8 +17,8 @@ test('a building listed by hand is served by the stops students use, the first a
     for (const s of o.stops) assert.ok(byCode.has(s), `${code}: ${s} is a stop`);
     assert.ok(o.why, `${code} says why`);
     const v = venuesJson.venues[code];
-    assert.ok(v, `${code} is in venues.json: run scripts/walk_routes.py`);
-    assert.equal(v.stop, o.stops[0], `${code}: venues.json is stale, run scripts/walk_routes.py`);
+    assert.ok(v, `${code} is in venues.json: run scripts/data/walk_routes.py`);
+    assert.equal(v.stop, o.stops[0], `${code}: venues.json is stale, run scripts/data/walk_routes.py`);
     assert.deepEqual(Object.keys(v.stops ?? { [v.stop]: v.m }), o.stops, `${code}: venues.json is stale`);
   }
   // LT21: University Hall is nearer on the map, but the path goes to S17 and LT27.

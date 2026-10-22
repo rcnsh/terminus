@@ -1,5 +1,6 @@
 packages:
   - apps/api
+  - apps/web
 allowBuilds:
   esbuild: true
   # Its postinstall only runs `lefthook install`; the root `prepare` script does that.

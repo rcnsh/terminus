@@ -58,7 +58,7 @@ jobs:
           NEXTBUS_APP_API: ${{ secrets.NEXTBUS_APP_API }}
           NEXTBUS_PROXY_BASE: ${{ secrets.NEXTBUS_PROXY_BASE }}
           NEXTBUS_PROXY_API_KEY: ${{ secrets.NEXTBUS_PROXY_API_KEY }}
-        run: python3 apps/api/scripts/scrape_stops.py
+        run: python3 apps/api/scripts/data/scrape_stops.py
 
       # Each service's path along OpenStreetMap roads, for the map. Overpass is
       # often busy: on failure the committed shapes stay, and the API draws a
@@ -66,7 +66,7 @@ jobs:
       - name: Route shapes
         id: shapes
         continue-on-error: true
-        run: python3 apps/api/scripts/route_shapes.py
+        run: python3 apps/api/scripts/data/route_shapes.py
 
       # The public buses at the campus's stops, from LTA DataMall (free account
       # key, the LTA_ACCOUNT_KEY secret). Without the key, or with DataMall
@@ -76,7 +76,7 @@ jobs:
         continue-on-error: true
         env:
           LTA_ACCOUNT_KEY: ${{ secrets.LTA_ACCOUNT_KEY }}
-        run: python3 apps/api/scripts/scrape_lta.py
+        run: python3 apps/api/scripts/data/scrape_lta.py
 
       # Semester dates (NUSMods) and public holidays (MOM). No credentials.
       # On failure the committed calendar stays: the Worker's cron also
@@ -85,7 +85,7 @@ jobs:
       - name: Refresh calendar
         id: calendar
         continue-on-error: true
-        run: python3 apps/api/scripts/fetch_calendar.py
+        run: python3 apps/api/scripts/data/fetch_calendar.py
 
       - name: Note what wasn't refreshed
         if: steps.shapes.outcome == 'failure' || steps.lta.outcome == 'failure' || steps.calendar.outcome == 'failure'
@@ -176,7 +176,7 @@ jobs:
           python-version: "3.12"
 
       # A bad graph is worse than a stale one, so the suite gates the commit.
-      # The golden answers (test/fixtures/answers) are worked out on the real
+      # The golden answers (fixtures/answers) are worked out on the real
       # graph, so a changed stop or route can change them with nothing wrong.
       - name: Test against the new graph
         run: |
@@ -190,7 +190,7 @@ jobs:
       # file) is caught here: this pushes to main with no review. It
       # compares with HEAD, the commit the data was scraped on.
       - name: Sanity-check against what's committed
-        run: python3 apps/api/scripts/check_scraped.py
+        run: python3 apps/api/scripts/data/check_scraped.py
 
   commit:
     needs: [scrape, test]

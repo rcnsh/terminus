@@ -223,7 +223,7 @@ export default defineConfig(({ mode }) => {
 				ALERT_EMAIL: bindings.secret(),
 				HEALTH_TOKEN: bindings.secret(),
 				// TIMELAPSE_TOKEN, which opens /api/timelapse/* only for the VPS that renders
-				// the videos (scripts/render-timelapse.mjs), is an optional secret like
+				// the videos (scripts/dev/render-timelapse.mjs), is an optional secret like
 				// ANALYTICS_TOKEN: not declared, so a site without one (the beta) deploys.
 				NEXTBUS_APP_API: bindings.secret(),
 				NEXTBUS_APP_VERSION: bindings.secret(),
@@ -233,7 +233,7 @@ export default defineConfig(({ mode }) => {
 				NEXTBUS_PROXY_BASE: bindings.secret(),
 				TURNSTILE_SECRET: bindings.secret(),
 				FCM_SERVICE_ACCOUNT: bindings.secret(),
-				// Web Push: the VAPID key, a P-256 JWK (scripts/vapid-key.mjs).
+				// Web Push: the VAPID key, a P-256 JWK (scripts/deploy/vapid-key.mjs).
 				VAPID_PRIVATE_KEY: bindings.secret(),
 				// APNs (src/apns.ts): APNS_KEY (the .p8, PEM), APNS_KEY_ID and
 				// APNS_TEAM_ID are optional secrets, not declared, so a site deploys

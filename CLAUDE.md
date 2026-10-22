@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 Guidance for AI agents working in this repo. Read it before you change
-anything; the deeper "why" is in [apps/api/docs/internals.md](apps/api/docs/internals.md).
+anything; the deeper "why" is in [docs/internals.md](docs/internals.md).
 The words for the domain (stop, service, trip, plan, estimate, …) are in
 [GLOSSARY.md](GLOSSARY.md): name new code and copy with them. Decisions that
 look odd but are deliberate are in [docs/adr/](docs/adr/).
@@ -134,17 +134,17 @@ root path gets 426 from an app, 308 from anything else (`movedApi` in
 
 ```bash
 pnpm install                          # Node 24 as in CI (22.18 or later works), pnpm from packageManager
-pnpm test                             # API tests: Node's runner, no network, no keys
+pnpm test                             # API and website tests: Node's runner, no network, no keys
 pnpm check                            # tests + tsc --noEmit (what CI's api job runs)
 pnpm lint                             # oxlint over API, tests, scripts, website JS; warnings fail
 pnpm format                           # oxfmt: JS, TS, JSON (pnpm format:check in CI)
 pnpm loc                              # lines of code by part and language (--json too)
-node apps/api/scripts/dev-stub.mjs    # local Worker on :8787 with a fake feed and fake buses
+node apps/api/scripts/dev/dev-stub.mjs # local Worker on :8787 with a fake feed and fake buses
 ```
 
 - Run `pnpm lint` **and** `pnpm check` after your **last** edit, not before
   it. A stray `'` inside a single-quoted TS string (`doesn't`) has broken the
-  build before. In `src/openapi.ts` and similar, write `does not` or use `’`.
+  build before. In `src/openapi/` and similar, write `does not` or use `’`.
 - CI's `api` job also runs `pnpm exec cf deploy --dry-run` in `apps/api` to
   catch modules workerd won't load.
 - Website JS: CI runs `node --check` on every file in `apps/web/public`.
@@ -192,7 +192,7 @@ node apps/api/scripts/dev-stub.mjs    # local Worker on :8787 with a fake feed a
 
 ### The dev stub
 
-`apps/api/scripts/dev-stub.mjs` runs the real Worker under Node with:
+`apps/api/scripts/dev/dev-stub.mjs` runs the real Worker under Node with:
 - a fake NUS feed. Arrivals are made up; three buses per service drive round
   each route line, moving every 18 s like the real feed.
 - an in-memory D1;
@@ -203,7 +203,7 @@ node apps/api/scripts/dev-stub.mjs    # local Worker on :8787 with a fake feed a
   `/admin/timelapse/` (token `dev`).
 - made-up numbers for the dashboard (`/admin/`, token `dev`): accounts,
   answers, crash reports, reports and arrival-time scores
-  (`scripts/stub-admin.mjs`). `STUB_ADMIN=empty` shows it as a new install
+  (`scripts/dev/stub-admin.mjs`). `STUB_ADMIN=empty` shows it as a new install
   would.
 - every service running at any hour, unless `STUB_HOURS=real` (real hours,
   and no buses or times outside them). `STUB_NOW=2026-10-07T13:30:00Z`
@@ -315,7 +315,8 @@ apps/api/
   src/landing.ts, site.ts, pagesky.ts  The landing page; the old address's redirect
                       (movedPage); the small pages' sky
   src/types.ts        Env (the bindings) and the shared types
-  src/openapi.ts      OpenAPI 3.1 spec + docs page (a test fails if routes drift from it)
+  src/openapi.ts      OpenAPI 3.1 spec (a test fails if routes drift from it); its paths,
+                      schemas, shared parts and the /docs page are in src/openapi/
   src/http.ts         JSON helpers, CORS, security headers (CSP lives here)
   src/seo.ts          robots.txt, the sitemap, /llms.txt for AI agents (the beta asks not to be crawled)
   src/i18n.ts         Server strings, m(), ERRORS_ZH
@@ -328,20 +329,20 @@ apps/api/
                       src/venue-stops.json (the stops students use for a building,
                       where the map's nearest is wrong; then run walk_routes.py)
   migrations/         D1 schema, numbered NNNN_name.sql
-  scripts/            dev-stub.mjs; predeploy.mjs (first step of a deploy); scrapers (scrape_stops.py, scrape_lta.py,
-                      route_shapes.py, fetch_calendar.py, walk_routes.py,
-                      check_scraped.py);
-                      probe_buses.py (feed update-rate probe); probe_arrivals.py (how often
+  scripts/dev/        dev-stub.mjs, stub-admin.mjs (its dashboard numbers);
+                      render-timelapse.mjs (renders a recorded day headless, e.g. on a VPS)
+  scripts/deploy/     predeploy.mjs (first step of a deploy); vapid-key.mjs (makes the Web Push key, once)
+  scripts/data/       The weekly scrapers (scrape_stops.py, scrape_lta.py, route_shapes.py,
+                      fetch_calendar.py), walk_routes.py, check_scraped.py
+  scripts/probes/     probe_buses.py (feed update-rate probe); probe_arrivals.py (how often
                       arrival times change, run by hand); record_buses.mjs (checks /api/buses on a live site);
-                      record_eta.mjs + eta_backtest.mjs (the arrival-time model's data and backtest);
-                      render-timelapse.mjs (renders a recorded day headless, e.g. on a VPS);
-                      vapid-key.mjs (makes the Web Push key, once)
-  test/               *.test.js + worker.smoke.js; _stubs.mjs, _d1.mjs (D1 on node:sqlite)
-  test/fixtures/answers/   Golden answers, shared with the Android and Mac tests
+                      record_eta.mjs + eta_backtest.mjs (the arrival-time model's data and backtest)
+  test/               *.test.js + worker.smoke.js; _stubs.mjs, _d1.mjs (D1 on node:sqlite);
+                      fixtures/ (feed captures, the migrations' hashes)
   cloudflare.config.ts     Worker config (stable + beta via --mode beta)
   wrangler.config.ts       Website assets directory
-  docs/internals.md        How everything works, in depth; docs/analytics.md;
-                           docs/eta-model.md (+ eta-backtest.md, its results)
+apps/web/
+  test/               The website's tests (web-*, search, offline, daylight, vendor), happy-dom
 apps/web/public/
   index.html          Landing page
   account/            The account page (app.js): sign-in, onboarding.js, settings.js +
@@ -362,8 +363,8 @@ apps/web/public/
                       i18n.js, zh.js (Chinese), theme.js, landing.js, docs.js (/docs),
                       tabbar.css (the app's bar), fonts.css + fonts/ (self-hosted), shots/;
                       sky.css + sky-phase.js + sky-page.js: the app's sky on the site's pages
-  vendor/             Preact + htm (scripts/vendor-preact.sh), MapLibre GL + PMTiles
-                      (scripts/vendor-map.sh), Mediabunny (scripts/vendor-mediabunny.sh):
+  vendor/             Preact + htm (scripts/vendor/vendor-preact.sh), MapLibre GL + PMTiles
+                      (scripts/vendor/vendor-map.sh), Mediabunny (scripts/vendor/vendor-mediabunny.sh):
                       never hand-edited, not linted
   sw.js               Service worker: offline app shell and map
 apps/android/app/src/main/java/sh/rcn/terminus/
@@ -377,7 +378,7 @@ apps/android/app/src/main/java/sh/rcn/terminus/
 apps/macos/
   Sources/Terminus/   Api.swift (with Servers, the server it calls), AppModel.swift (state/refresh/pairing), views, Updater.swift,
                       MapWindow.swift + MapData.swift + MapFiles.swift (the map window)
-  Vendor/             MapLibre.xcframework.zip, from scripts/vendor-maplibre-mac.sh
+  Vendor/             MapLibre.xcframework.zip, from scripts/vendor/vendor-maplibre-mac.sh
   Support/            Info.plist (version, SUPublicEDKey), zh-Hans strings, app icons
   Tests/              swift test, on the API's answer fixtures
   build.sh            Builds terminus.app (CHANNEL=beta for the beta)
@@ -396,12 +397,18 @@ apps/ios/
   store/              App Store listing (listing.md, English and Chinese), the screenshots and
                       header, capture.sh + frame.mjs, which take and draw them (StoreShotsUITests),
                       and ExportOptions.plist for the upload
-scripts/              release.sh, release-beta.sh (+ release-lib.sh, their shared checks;
+scripts/              map-tiles.sh (+ map-tiles.lock), android-deps.sh (+ android_deps.py),
+                      format-swift.sh, loc.mjs (pnpm loc)
+scripts/release/      release.sh, release-beta.sh (+ release-lib.sh, their shared checks;
                       verify-sparkle.swift, release-check.py), github-release.sh, package-mac.sh,
-                      appcast.py, release-notes.py, map-tiles.sh (+ map-tiles.lock),
-                      vendor-map.sh, vendor-maplibre-mac.sh, vendor-preact.sh,
-                      vendor-mediabunny.sh (+ vendor-lib.sh); android-deps.sh
-                      (+ android_deps.py); format-swift.sh; loc.mjs (pnpm loc)
+                      appcast.py, release-notes.py
+scripts/vendor/       vendor-map.sh, vendor-maplibre-mac.sh, vendor-preact.sh,
+                      vendor-mediabunny.sh (+ vendor-lib.sh)
+fixtures/             What every client is held to: answers/ (golden answers, zh/ the Chinese),
+                      offline-day.json, search.json; read by the API's, website's and apps' tests
+docs/                 internals.md (how everything works, in depth), architecture.md,
+                      analytics.md, eta-model.md (+ eta-backtest.md, its results), adr/;
+                      readme/ (the README's pictures and the scripts that render them)
 marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (source), .pdf (print), .png
 .github/workflows/    ci.yml, scrape.yml (weekly data),
                       map-tiles.yml, probe-buses.yml (manual feed probe),
@@ -413,7 +420,7 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
 ## How the core works (short version)
 
 - **Data graph.** `data/stops.json` (stops, route order, operating hours) is
-  scraped weekly by `scrape.yml` → `scripts/scrape_stops.py`, along with
+  scraped weekly by `scrape.yml` → `scripts/data/scrape_stops.py`, along with
   `shapes.json` (route lines from OpenStreetMap via Overpass) and
   `calendar.json`. The workflow is three jobs: `scrape` holds the feed
   secrets and runs only the repo's standard-library Python; `test` runs the
@@ -443,7 +450,7 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
   A room can have several stops (`venueStops()`, `stops` in `venues.json`):
   a trip from or to a class considers each, with the room's own walk to it.
   Where the map's nearest stop is the wrong one, fix it in
-  `data/src/venue-stops.json` and run `scripts/walk_routes.py`.
+  `data/src/venue-stops.json` and run `scripts/data/walk_routes.py`.
   Standing in a building, the walk to a stop is the path from it (`out` in
   `venues.json`, `buildingStops()`), and only by its listed stops when it
   has them, not the straight line.
@@ -491,7 +498,7 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
 - **Public buses (`src/public.ts`, `src/lta.ts`, `data/public.json`).** Off
   by default; an account turns them on (`publicBuses` in the profile). The
   public buses that call at the campus's stops (95, 151, 96 and others, from
-  LTA DataMall via `scripts/scrape_lta.py`, weekly) join a second graph,
+  LTA DataMall via `scripts/data/scrape_lta.py`, weekly) join a second graph,
   `GRAPH_PUBLIC`, used only when asked: a public stop on a shuttle stop's
   shelter is the same stop with a `publicCode`; a stop of its own keeps
   LTA's five-digit code. A two-way service is two routes, `151/1` and
@@ -523,7 +530,7 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
 
 - **API:** use `m()` from `src/i18n.ts`. Errors stay English in the code
   (`json({ error: '...' })`) and get an entry in `ERRORS_ZH`. The Chinese
-  goldens in `test/fixtures/answers/zh` are checked word for word.
+  goldens in `fixtures/answers/zh` are checked word for word.
 - **Website:** use `t('English {0}', value)`, in templates too
   (`${t('Go there')}`, never bare words). The Chinese, keyed by the English,
   goes in `apps/web/public/assets/zh.js`; `web-i18n.test.js` checks it, and
@@ -547,12 +554,13 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
 
 ## Tests
 
-- **Running them.** API tests are plain `node --test` over `test/*.test.js`,
-  importing the TypeScript sources directly. Node strips the types, so the
+- **Running them.** `pnpm test` runs both packages' tests: the API's
+  (`apps/api/test`) and the website's (`apps/web/test`), each plain
+  `node --test` over `test/*.test.js`, importing the TypeScript sources directly. Node strips the types, so the
   TS must be erasable: no enums, namespaces or parameter properties, and
   type-only imports use `import type` (`verbatimModuleSyntax`).
 - **Golden answers.** `golden.test.js` pins whole answers to
-  `test/fixtures/answers/`. After an intended change, run
+  `fixtures/answers/`. After an intended change, run
   `UPDATE_GOLDEN=1 pnpm test` and review the fixture diff. The Android and
   Mac unit tests read the same fixtures, so a changed answer shape must
   still parse there.
@@ -560,14 +568,14 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
 - **Writing tests.** Add tests for API changes. Prefer tests on real data,
   such as the real `shapes.json` lines, over synthetic ones. Check a new
   test fails without your fix.
-- **The spec.** Changing an endpoint's shape means updating `src/openapi.ts`
-  (schema, example, description) and `docs/internals.md`.
+- **The spec.** Changing an endpoint's shape means updating the spec
+  (`src/openapi/paths.ts` and `components.ts`: schema, example, description) and `docs/internals.md`.
 
 ## Deploying and releasing
 
 - **Deploying.** `main` is **not** auto-deployed.
   - Deploy from `apps/api` with `pnpm run deploy` (not `pnpm deploy`, which
-    is a pnpm built-in). It first runs `scripts/predeploy.mjs`, which
+    is a pnpm built-in). It first runs `scripts/deploy/predeploy.mjs`, which
     refuses unmerged files, conflict markers or uncommitted changes in
     `apps/api` and `apps/web/public` and runs `pnpm check`; then it applies
     the stable D1's pending migrations and runs `cf deploy`. It needs
@@ -636,7 +644,7 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
     `CURRENT_PROJECT_VERSION` do. The release scripts don't build the
     iPhone app; it goes to the App Store by hand (below).
   - Push `main`, wait for CI to pass, deploy the Worker (`pnpm run deploy`),
-    then run `scripts/release.sh --dry-run` and `scripts/release.sh` on the
+    then run `scripts/release/release.sh --dry-run` and `scripts/release/release.sh` on the
     owner's Mac. It refuses a commit that isn't `origin/main` or whose CI
     hasn't passed, a live API older than this version (deploy first), a
     build number not above the live one, an APK not signed with the key in
@@ -648,7 +656,7 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
     the appcast and `latest.json`; and publishes the GitHub release. Nothing
     waits for an approval. A dry run builds into `build/dry-run/`; a release
     that stops partway prints what's live and the commands that finish it.
-  - Betas use `scripts/release-beta.sh <x.y.z-beta.n>`, on the same Mac,
+  - Betas use `scripts/release/release-beta.sh <x.y.z-beta.n>`, on the same Mac,
     with the same checks: also from `origin/main` with CI passed. It deploys
     the beta Worker itself and uploads nothing until that deploy has
     finished (a beta keeps `API_VERSION`, so the live API's version can't
@@ -656,7 +664,7 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
   - Both start from the lockfiles: they delete `node_modules` and
     `apps/macos/.build`, then install with `--frozen-lockfile` and
     `--force-resolved-versions`. The Sparkle key only goes to a `sign_update`
-    matching `SIGN_UPDATE_SHA256` in `scripts/release-lib.sh`; a Sparkle bump
+    matching `SIGN_UPDATE_SHA256` in `scripts/release/release-lib.sh`; a Sparkle bump
     means updating `SPARKLE_VERSION` and that hash (check the new zip
     against the checksum in Sparkle's `Package.swift` first). The appcast
     itself is signed too, and nothing may edit it afterwards.

@@ -8,15 +8,15 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * The offline fallback, against the cases the web and Mac apps are checked against too (apps/api/test/fixtures/offline-day.json), on the
- * API's own /api/me/day golden.
+ * The offline fallback, against the cases the web and Mac apps are checked against too (fixtures/offline-day.json), on the API's own
+ * /api/me/day golden.
  */
 class OfflineDayTest {
     init {
         TestStrings.install()
     }
 
-    private val dir = listOf("../../api/test/fixtures", "../api/test/fixtures").map(::File).first { it.isDirectory }
+    private val dir = listOf("../../../fixtures", "../../fixtures").map(::File).first { it.isDirectory }
     private val spec = JSONObject(File(dir, "offline-day.json").readText())
     private val day = DayPlan.parse(JSONObject(File(dir, spec.getString("day")).readText()))
 

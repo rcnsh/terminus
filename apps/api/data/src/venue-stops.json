@@ -1,6 +1,6 @@
 {
   "_help": [
-    "HAND-MAINTAINED. scripts/walk_routes.py reads this file and never writes it.",
+    "HAND-MAINTAINED. scripts/data/walk_routes.py reads this file and never writes it.",
     "",
     "The stops students actually use for a building, where the map gets it",
     "wrong. Without an entry a building is served by its own stop (uNivUS's",

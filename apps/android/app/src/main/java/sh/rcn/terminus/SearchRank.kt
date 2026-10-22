@@ -2,8 +2,8 @@ package sh.rcn.terminus
 
 /**
  * The destination search's ranking, as every client ranks it: the web's (apps/web/public/account/search.js) is the reference, and the rules
- * and the cases all three are held to are in apps/api/test/fixtures/search.json (SearchTest). Exact, then starts with, then a word starts
- * with, then contains; then by kind, by label length, and in the index's order.
+ * and the cases all three are held to are in fixtures/search.json (SearchTest). Exact, then starts with, then a word starts with, then
+ * contains; then by kind, by label length, and in the index's order.
  */
 object SearchRank {
     /** At most this many results. */

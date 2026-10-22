@@ -54,7 +54,7 @@ test('every example in the spec fits its schema', () => {
 const bodySchema = (key, status = '200') => opOf(key).op.responses[status].content['application/json'].schema;
 
 test('every golden answer fits the schema of the route it came from, with nothing the schema leaves out', () => {
-  const dir = new URL('./fixtures/answers/', import.meta.url);
+  const dir = new URL('../../../fixtures/answers/', import.meta.url);
   const files = [
     ...fs
       .readdirSync(dir)

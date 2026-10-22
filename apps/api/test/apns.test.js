@@ -39,7 +39,7 @@ const START_HEX = '34'.repeat(80);
 const START_HEX2 = '56'.repeat(80);
 const TOPIC = 'sh.rcn.terminus';
 const NOTICE = { title: 'a', body: 'b', zhTitle: 'a', zhBody: 'b' };
-const answer = (name) => JSON.parse(readFileSync(new URL(`./fixtures/answers/${name}.json`, import.meta.url), 'utf8'));
+const answer = (name) => JSON.parse(readFileSync(new URL(`../../../fixtures/answers/${name}.json`, import.meta.url), 'utf8'));
 const LIVE_PRIORITY = (sent) => sent.filter((s) => s.headers['apns-push-type'] === 'liveactivity').map((s) => s.headers['apns-priority']);
 
 async function p8() {
@@ -518,7 +518,7 @@ test("a nudge reaches an iPhone as Android's would: words when it's time to look
 
 test('a card worded in one language reaches each iPhone in its own: notification and Live Activity', async () => {
   const en = answer('class-bus');
-  const zh = JSON.parse(readFileSync(new URL('./fixtures/answers/zh/class-bus.json', import.meta.url), 'utf8'));
+  const zh = JSON.parse(readFileSync(new URL('../../../fixtures/answers/zh/class-bus.json', import.meta.url), 'utf8'));
   const as = (a) => ({ ...a, card: { ...a.card, phase: 'heading' } });
   const { env, sent } = await setup([
     { push: `apns:${HEX}`, live: `apnsla:${LIVE_HEX}`, lang: 'zh' },
@@ -593,7 +593,7 @@ test('an iPhone with its leave alerts off is pushed the trip silently; one that 
 
 test("a Live Activity's later bus reaches each iPhone in its own language", async () => {
   const en = answer('class-bus');
-  const zh = JSON.parse(readFileSync(new URL('./fixtures/answers/zh/class-bus.json', import.meta.url), 'utf8'));
+  const zh = JSON.parse(readFileSync(new URL('../../../fixtures/answers/zh/class-bus.json', import.meta.url), 'utf8'));
   const { env, sent } = await setup([
     { push: `apns:${HEX}`, live: `apnsla:${LIVE_HEX}`, lang: 'zh' },
     { push: `apns:${HEX2}`, live: `apnsla:${LIVE_HEX2}`, lang: 'en' },
@@ -627,7 +627,7 @@ test("a Live Activity's later bus reaches each iPhone in its own language", asyn
 
 test('time to go starts the Live Activity on an iPhone that can and has none running, in its language', async () => {
   const en = answer('class-bus');
-  const zh = JSON.parse(readFileSync(new URL('./fixtures/answers/zh/class-bus.json', import.meta.url), 'utf8'));
+  const zh = JSON.parse(readFileSync(new URL('../../../fixtures/answers/zh/class-bus.json', import.meta.url), 'utf8'));
   const due = (a) => ({ ...a, card: { ...a.card, phase: 'due', actions: [{ id: 'skipped', label: 'x', trip: '4:600:UTOWN' }] } });
   const { env, sent } = await setup([
     // Its setting on and none running: started.

@@ -13,7 +13,7 @@ pre-commit:
       exclude:
         - 'apps/web/public/vendor/**'
         - 'apps/api/data/**'
-        - 'apps/api/test/fixtures/**'
+        - 'fixtures/**'
         - 'apps/api/cloudflare.config.ts'
         - '**/*.min.*'
         - '**/build/**'

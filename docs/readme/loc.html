@@ -1,0 +1,92 @@
+<!doctype html>
+<!--
+  The picture at the end of the README: the lines of code by part, drawn as
+  stops along a shuttle line in the services' livery, and by language. The
+  numbers come in the hash from `pnpm loc --json` (#light=… or #dark=…,
+  base64), so the page holds no counts of its own.
+  Re-render:  sh docs/readme/loc.sh
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: 'Inter'; font-weight: 400 700; src: url(../../apps/web/public/assets/fonts/inter-latin.woff2) format('woff2'); }
+  @font-face { font-family: 'Space Grotesk'; font-weight: 500 700; src: url(../../apps/web/public/assets/fonts/space-grotesk-latin.woff2) format('woff2'); }
+
+  /* The site's own tokens (assets/site.css), light and dark. */
+  :root {
+    --bg: #fafaf9; --surface: #ffffff; --ink: #1c1917; --muted: #6b6560; --faint: #a8a29e;
+    --font: 'Inter', system-ui, sans-serif; --display: 'Space Grotesk', 'Inter', sans-serif;
+  }
+  .dark { --bg: #0f0e0d; --surface: #1a1816; --ink: #f2efeb; --muted: #a39d97; --faint: #6b6560; }
+  html, body { margin: 0; }
+  body { width: 1280px; height: 360px; box-sizing: border-box; padding: 44px 56px 0; background: var(--bg); color: var(--ink); font-family: var(--font); overflow: hidden; }
+
+  .kick { font: 600 13px/1 var(--font); letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
+  .head { display: flex; align-items: baseline; gap: 16px; margin-top: 14px; }
+  .big { font: 700 40px/1 var(--display); letter-spacing: -0.02em; }
+  .sub { font: 400 18px/1 var(--font); color: var(--muted); }
+
+  /* The line: one segment per part, as long as its share, with a stop in
+     its middle. A short segment's name goes above the line, out of its
+     neighbours' way. */
+  .route { position: relative; margin: 74px 10px 0; height: 76px; }
+  .seg { position: absolute; top: 0; height: 12px; border-radius: 6px; }
+  .stop { position: absolute; top: -7px; width: 26px; height: 26px; margin-left: -13px; border-radius: 50%; box-sizing: border-box; background: var(--surface); border: 5px solid; }
+  .name { position: absolute; top: 32px; font: 600 18px/1.2 var(--font); white-space: nowrap; text-align: center; }
+  .name.up { top: -60px; }
+  .name small { display: block; font: 400 16px/1.4 var(--font); color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  /* No colour of their own: the line's colours are the parts'. */
+  .langs { display: flex; justify-content: space-between; align-items: baseline; gap: 18px; margin: 30px 10px 0 0; font: 400 16px/1 var(--font); white-space: nowrap; color: var(--muted); }
+  .langs b { color: var(--ink); font-weight: 600; margin-right: 6px; }
+  .langs .kick { font-size: 12px; margin-right: -4px; }
+</style>
+</head>
+<body>
+<div class="kick">The code</div>
+<div class="head"><span class="big" id="total"></span><span class="sub" id="files"></span></div>
+<div class="route" id="route"></div>
+<div class="langs" id="langs"></div>
+<script>
+  const [scheme, data] = location.hash.slice(1).split('=');
+  if (scheme === 'dark') document.documentElement.className = 'dark';
+  const { lines, files, parts, languages } = JSON.parse(atob(data));
+
+  // The services' livery (account/livery.js), one per part.
+  const PARTS = { API: '#f57c1f', Website: '#2b9ad6', Android: '#34a853', Mac: '#8e44c9', iPhone: '#ec4fa0', 'Scripts and CI': '#d9a000' };
+
+  const hundreds = (n) => (Math.round(n / 100) * 100).toLocaleString('en-GB');
+  const kilo = (n) => `${(n / 1000).toFixed(1)}k`;
+  document.getElementById('total').textContent = `${hundreds(lines)} lines of code`;
+  document.getElementById('files').textContent = `in ${files.toLocaleString('en-GB')} files, from the Worker to the iPhone`;
+
+  const shown = parts.filter((p) => PARTS[p.name]);
+  const sum = shown.reduce((s, p) => s + p.lines, 0);
+  let x = 0;
+  const route = document.getElementById('route');
+  for (const p of shown) {
+    const w = (p.lines / sum) * 100;
+    const mid = x + w / 2;
+    const colour = PARTS[p.name];
+    // Names near either end line up with it rather than hang off the edge.
+    const shift = mid < 6 ? '-20%' : mid > 94 ? '-80%' : '-50%';
+    route.insertAdjacentHTML(
+      'beforeend',
+      `<div class="seg" style="left:${x}%;width:${w}%;background:${colour}"></div>` +
+        `<div class="stop" style="left:${mid}%;border-color:${colour}"></div>` +
+        `<div class="name${w < 6 ? ' up' : ''}" style="left:${mid}%;transform:translateX(${shift})">${p.name}<small>${kilo(p.lines)}</small></div>`,
+    );
+    x += w;
+  }
+
+  // Languages under 1% go together, so the row fits on one line.
+  const small = languages.filter((l) => l.lines / lines < 0.01);
+  const langs = languages.filter((l) => !small.includes(l));
+  if (small.length) langs.push({ name: 'Other', lines: small.reduce((s, l) => s + l.lines, 0) });
+  document.getElementById('langs').innerHTML =
+    '<span class="kick">By language</span>' +
+    langs.map((l) => `<span><b>${l.name}</b>${((100 * l.lines) / lines).toFixed(1)}%</span>`).join('');
+</script>
+</body>
+</html>

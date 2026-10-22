@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Debug only: allow plain HTTP to the dev stub (scripts/dev-stub.mjs) on localhost or the emulator's host. -->
+<!-- Debug only: allow plain HTTP to the dev stub (scripts/dev/dev-stub.mjs) on localhost or the emulator's host. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application android:networkSecurityConfig="@xml/network_security_config" />
 </manifest>

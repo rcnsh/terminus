@@ -10,14 +10,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Both searches against the cases every client is held to (apps/api/test/fixtures/search.json): the destination search, and the Buses
- * tab's, with its index built from the fixture's /api/campus.
+ * Both searches against the cases every client is held to (fixtures/search.json): the destination search, and the Buses tab's, with its
+ * index built from the fixture's /api/campus.
  */
 class SearchTest {
     private val spec =
-        JSONObject(
-            File(listOf("../../api/test/fixtures", "../api/test/fixtures").map(::File).first { it.isDirectory }, "search.json").readText()
-        )
+        JSONObject(File(listOf("../../../fixtures", "../../fixtures").map(::File).first { it.isDirectory }, "search.json").readText())
 
     private fun JSONArray?.strings(): List<String> = if (this == null) emptyList() else (0 until length()).map { getString(it) }
 

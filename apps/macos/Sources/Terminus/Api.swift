@@ -562,7 +562,7 @@ struct Destination: Decodable, Hashable {
 }
 
 /// The destination search, with the rules and cases every client is held to
-/// (apps/api/test/fixtures/search.json; the web's account/search.js is the
+/// (fixtures/search.json; the web's account/search.js is the
 /// reference): exact, then starts with, then a word starts with, then
 /// contains; then by kind, then the shorter label, then the list's own order.
 /// Rooms only once two characters say which.
@@ -1074,7 +1074,7 @@ enum Servers {
         return all[0]
     }
 
-    /// Plain HTTP to this Mac: the dev stub (apps/api/scripts/dev-stub.mjs).
+    /// Plain HTTP to this Mac: the dev stub (apps/api/scripts/dev/dev-stub.mjs).
     static func isLocal(_ base: String) -> Bool {
         guard let u = URL(string: base), u.scheme == "http", let host = u.host?.lowercased() else { return false }
         return host == "localhost" || host == "127.0.0.1"
@@ -1139,7 +1139,7 @@ struct Api {
     static let linkBase = site
     static var isBeta: Bool { site != stableSite }
     /// Where requests go: the server chosen (Servers), or TERMINUS_API_BASE=http://localhost:8787
-    /// for the local dev stub (apps/api/scripts/dev-stub.mjs).
+    /// for the local dev stub (apps/api/scripts/dev/dev-stub.mjs).
     static let base = devOverride("TERMINUS_API_BASE") ?? Servers.current
 
     /// An environment override for local development: any URL in a debug
