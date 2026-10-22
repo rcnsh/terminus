@@ -485,10 +485,10 @@ async function retryable(env: Env, nowMs: number, session: Session, body: unknow
  * call makes to NUS, its token mints included (the first, on a cold token,
  * and a re-mint), so the timelapse recorder counts what a poll cost.
  *
- * `sentAtMs` is when the call that answered went out, on nowMs's clock: the
- * feed's times are relative to then. After a mint, a refusal and a re-mint
- * that is up to 15 s after nowMs, and reading them from nowMs would put
- * every bus that much early. Not the reply's time, which would put them late.
+ * `sentAtMs` is when the call that answered went out, on nowMs's clock.
+ * After a mint, a refusal and a re-mint that is up to 15 s after nowMs.
+ * The arrivals' times count from their reply's own TimeStamp, which is
+ * older (fetchArrivals, stampLagS).
  */
 async function acceptedCall(
   env: Env,
@@ -524,6 +524,34 @@ async function acceptedCall(
   return { body, sentAtMs };
 }
 
+/** A reply's TimeStamp further behind the call than this is a clock that's off, not an old reply. */
+export const MAX_STAMP_LAG_S = 90;
+
+/**
+ * How many seconds the reply's own `TimeStamp` is behind `sentAtMs`: 0 when
+ * it has none, can't be read, is ahead (NUS's clock a little fast), or is
+ * more than MAX_STAMP_LAG_S behind.
+ *
+ * NUS works a stop's arrivals out every 35 to 40 s and serves that same
+ * reply, TimeStamp and `eta_s` unchanged, until the next: "in 3 min"
+ * counts from the TimeStamp, not from when we asked. Measured with
+ * scripts/probe_arrivals.py (22 Oct 2026): a reply was a median of 20 s
+ * old when it came, up to 55 s. Read from the call, every bus came that
+ * much later than NUS said.
+ */
+export function stampLagS(data: unknown, sentAtMs: number): number {
+  const root = unwrap(data);
+  const raw = root && typeof root === 'object' ? (root as Record<string, unknown>).TimeStamp : undefined;
+  if (typeof raw !== 'string') return 0;
+  // ISO with a zone (2026-10-22T09:58:41+08:00), or without one, which is Singapore time.
+  const m = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2}(?:\.\d+)?)(Z|[+-]\d{2}:?\d{2})?$/.exec(raw.trim());
+  if (!m) return 0;
+  const at = Date.parse(`${m[1]}T${m[2]}${m[3] ?? '+08:00'}`);
+  if (!Number.isFinite(at)) return 0;
+  const lagS = Math.round((sentAtMs - at) / 1000);
+  return lagS > 0 && lagS <= MAX_STAMP_LAG_S ? lagS : 0;
+}
+
 /**
  * One stop's arrivals via the bus proxy (acceptedCall). A refusal throws, so
  * the stop is reported unavailable and the answer degrades to an honest
@@ -534,7 +562,9 @@ export async function fetchArrivals(env: Env, code: string, nowMs: number = Date
   // "00000" with no list anywhere is not "no bus": the payload changed shape,
   // and reading it as an empty board would print confident headway guesses.
   if (!hasList(body.data, ARRIVAL_LIST_KEYS)) throw new Error('shuttle-service answered in an unknown shape (no arrivals list)');
-  const arrivals = normalize(body.data);
+  // Times as if counted from sentAtMs, as everything downstream reads them.
+  const lagS = stampLagS(body.data, sentAtMs);
+  const arrivals = normalize(body.data).map((a) => (lagS && a.etaS !== null ? { ...a, etaS: Math.max(0, a.etaS - lagS) } : a));
   const problem = arrivalsProblem(body.data, arrivals);
   if (problem) throw new Error(`shuttle-service answered in an unknown shape (${problem})`);
   const unread = arrivalsUnread(body.data);
