@@ -6,10 +6,10 @@
 #                                    for beta.terminus.run, updating from its appcast
 #
 # Signed with SIGN_IDENTITY (and SIGN_KEYCHAIN, optionally, the keychain
-# holding it); without it, with the terminus self-signed certificate if it's in
-# your keychain, else ad-hoc. Releases are signed with that certificate by
-# scripts/release/package-mac.sh, so every version has the same code identity and
-# macOS keeps its permissions across updates.
+# holding it); without it, with the terminus Developer ID certificate if it's
+# in your keychain, else ad-hoc. Releases are signed with that certificate and
+# notarised by scripts/release/package-mac.sh, so every version has the same code
+# identity (the team's) and macOS keeps its permissions across updates.
 set -eu
 cd "$(dirname "$0")"
 # Exactly the versions in Package.resolved: a newer Sparkle never slips in unreviewed.
@@ -57,19 +57,18 @@ mkdir -p "$APP/Contents/Resources"
 cp "$ICON" "$APP/Contents/Resources/AppIcon.icns"
 # Chinese: macOS shows it when the app or the Mac is set to it.
 cp -R Support/zh-Hans.lproj "$APP/Contents/Resources/"
-TERMINUS_CERT=C4EE234DA75ED3CD7699A31394C276801F93C4A9
+# Developer ID Application: Jacob Wiltshire (BUKSCHP3SV), by its SHA-1.
+TERMINUS_CERT=B0692598973AE875C270263F0403FE4495EEF562
 if [ -z "${SIGN_IDENTITY:-}" ] && security find-identity -p codesigning | grep -q "$TERMINUS_CERT"; then
   SIGN_IDENTITY=$TERMINUS_CERT
 fi
 # The hardened runtime: no injected libraries, no unsigned executable
-# memory, no debugger attaching. The app alone gets two exceptions, in
-# Support/Terminus.entitlements: library validation off (the self-signed
-# certificate has no Team ID, so it would refuse even our own frameworks)
-# and location.
+# memory, no debugger attaching, and only frameworks signed by the same team.
+# The app alone gets one exception, location (Support/Terminus.entitlements).
 # A release (PUBLISH=true, from scripts/release/package-mac.sh) is also timestamped
-# by Apple's server, which stamps the self-signed certificate too: the
-# signature then outlives the certificate (it expires in 2036). Local builds
-# skip it so they work offline; an ad-hoc signature can't have one.
+# by Apple's server, which notarisation requires, and which keeps the
+# signature valid after the certificate expires. Local builds skip it so
+# they work offline; an ad-hoc signature can't have one.
 TS=--timestamp=none
 if [ "${PUBLISH:-}" = true ] && [ -n "${SIGN_IDENTITY:-}" ]; then TS=--timestamp; fi
 sign() { codesign --force --options runtime "$TS" --sign "${SIGN_IDENTITY:--}" ${SIGN_KEYCHAIN:+--keychain "$SIGN_KEYCHAIN"} "$@"; }
@@ -79,7 +78,15 @@ sign "$FW/Autoupdate"
 sign "$FW/Updater.app"
 sign "$APP/Contents/Frameworks/Sparkle.framework"
 sign "$APP/Contents/Frameworks/MapLibre.framework"
-sign --identifier "$ID" --entitlements Support/Terminus.entitlements "$APP"
+ENT=Support/Terminus.entitlements
+if [ -z "${SIGN_IDENTITY:-}" ]; then
+  # Ad-hoc signatures carry no Team ID, so library validation would refuse
+  # our own frameworks: a local build gets the exception, a release never.
+  ENT=$(mktemp -t terminus-ent).plist
+  cp Support/Terminus.entitlements "$ENT"
+  /usr/libexec/PlistBuddy -c "Add :com.apple.security.cs.disable-library-validation bool true" "$ENT"
+fi
+sign --identifier "$ID" --entitlements "$ENT" "$APP"
 echo "built $APP"
 if [ "${1:-}" = install ]; then
   # Both channels' executables are named Terminus: quit only this one.

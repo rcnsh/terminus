@@ -174,8 +174,16 @@ has_sign_identity() {
   ids=$(security find-identity -p codesigning) || die "couldn't list the keychain's signing identities"
   case "$ids" in
     *"$SIGN_IDENTITY"*) ;;
-    *) die "the terminus certificate isn't in the keychain: import ~/.terminus/mac-signing.p12" ;;
+    *) die "the terminus Developer ID certificate isn't in the keychain: import ~/.terminus/developer-id.p12" ;;
   esac
+}
+
+# Apple's notary service, before anything is built: credentials that have
+# expired (the app-specific password was revoked, say) would stop the
+# release after the Android build. They're in the keychain, never in a file.
+has_notary_profile() {
+  xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 ||
+    die "the notary credentials $NOTARY_PROFILE don't work: xcrun notarytool store-credentials $NOTARY_PROFILE --apple-id <email> --team-id BUKSCHP3SV"
 }
 
 # The dependencies, from the lockfiles only. node_modules and

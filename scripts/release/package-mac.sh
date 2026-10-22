@@ -3,18 +3,21 @@
 # a disk image holding terminus.app and an Applications shortcut to drag it onto.
 #
 #   SIGN_IDENTITY=<certificate SHA-1> SIGN_KEYCHAIN=<keychain> scripts/release/package-mac.sh
+#   PUBLISH=true NOTARY_PROFILE=terminus-notary ... scripts/release/package-mac.sh
 #
 # With CHANNEL=beta (and BETA_VERSION, BETA_BUILD; scripts/release/release-beta.sh
 # sets them) it packages "terminus beta.app" as
 # build/release/beta/<version>/terminus-<version>.dmg instead. RELEASES
 # moves build/release elsewhere (a dry run's build/dry-run).
 #
-# scripts/release/release.sh and scripts/release/release-beta.sh run this with the terminus
-# self-signed certificate,
-# from the login keychain. That certificate is not trusted by macOS
-# and the app is not notarised, so Gatekeeper still asks on first open; what
-# the signature buys is the same code identity on every version, so macOS
-# keeps the app's location permission and login item across updates.
+# scripts/release/release.sh and scripts/release/release-beta.sh run this with PUBLISH=true
+# and the terminus Developer ID certificate from the login keychain. The app
+# and then the disk image are notarised by Apple (notarytool, with the
+# credentials stored in the keychain as NOTARY_PROFILE) and the tickets
+# stapled to them, so macOS opens a download without asking. Every version
+# carries the same code identity, the team's, so macOS keeps the app's
+# location permission and login item across updates. The stapling changes
+# the disk image, so the Sparkle signature is made after this, never before.
 # Without SIGN_IDENTITY it signs ad-hoc, for trying the packaging locally.
 set -eu
 cd "$(dirname "$0")/../.."
@@ -41,6 +44,11 @@ if [ "${PUBLISH:-}" = true ] && [ -z "${SIGN_IDENTITY:-}" ]; then
   echo "SIGN_IDENTITY is not set; refusing to package a release to publish" >&2
   exit 1
 fi
+if [ "${PUBLISH:-}" = true ] && [ -z "${NOTARY_PROFILE:-}" ]; then
+  echo "NOTARY_PROFILE is not set; refusing to package a release that isn't notarised" >&2
+  exit 1
+fi
+TEAM=BUKSCHP3SV
 
 echo "== mac $VERSION ($CHANNEL)"
 (cd apps/macos && ./build.sh >/dev/null)
@@ -73,22 +81,43 @@ if [ "${PUBLISH:-}" = true ] && codesign -dv "$APP" 2>&1 | grep -q '^Signature=a
 fi
 DR=$(codesign -d -r- "$APP" 2>&1 | grep designated)
 echo "$DR"
-# Signed with a certificate, the app must name it: macOS ties the app's
-# permissions and login item to this requirement, and a release with another
-# would lose them on every Mac. The leaf's SHA-1 comes from the identity
-# itself (a hash already, or looked up by name), not a copy kept here.
+# Signed with a certificate, the app must be ours: macOS ties the app's
+# permissions and login item to this requirement (the bundle id, a
+# Developer ID from Apple, and the team), and a release with another would
+# lose them on every Mac. It names the team rather than the certificate, so
+# a renewed certificate keeps it.
 if [ -n "${SIGN_IDENTITY:-}" ]; then
-  if echo "$SIGN_IDENTITY" | grep -Eq '^[0-9A-Fa-f]{40}$'; then
-    LEAF=$SIGN_IDENTITY
-  else
-    LEAF=$(security find-identity -p codesigning ${SIGN_KEYCHAIN:+"$SIGN_KEYCHAIN"} | grep -F "\"$SIGN_IDENTITY\"" | awk 'NR==1 { print $2 }')
-  fi
-  LEAF=$(echo "$LEAF" | tr 'A-F' 'a-f')
-  [ -n "$LEAF" ] || { echo "can't find the certificate for $SIGN_IDENTITY" >&2; exit 1; }
-  echo "$DR" | grep -Fq "identifier \"$ID\"" && echo "$DR" | grep -Fq "certificate leaf = H\"$LEAF\"" || {
-    echo "the app's designated requirement isn't $ID signed by certificate $LEAF; refusing to package it" >&2
+  for want in "identifier \"$ID\"" "anchor apple generic" "certificate leaf[subject.OU] = $TEAM"; do
+    echo "$DR" | grep -Fq "$want" || {
+      echo "the app's designated requirement lacks '$want'; refusing to package it" >&2
+      exit 1
+    }
+  done
+fi
+
+# Apple's notary service checks the upload and issues a ticket; stapling it
+# lets macOS check a download offline. notarytool exits 0 even when it
+# rejects an upload, so the status is read from its answer.
+notarise() {
+  out=$(xcrun notarytool submit "$1" --keychain-profile "$NOTARY_PROFILE" --wait --output-format json) || {
+    echo "notarytool couldn't submit $1" >&2
     exit 1
   }
+  status=$(printf '%s' "$out" | python3 -c 'import json, sys; print(json.load(sys.stdin).get("status", ""))')
+  if [ "$status" != Accepted ]; then
+    id=$(printf '%s' "$out" | python3 -c 'import json, sys; print(json.load(sys.stdin).get("id", ""))')
+    echo "Apple's notary service didn't accept $1 ($status); its log: xcrun notarytool log $id --keychain-profile $NOTARY_PROFILE" >&2
+    exit 1
+  fi
+}
+if [ "${PUBLISH:-}" = true ]; then
+  echo "notarising $APP"
+  ZIP=$(mktemp -d)/app.zip
+  ditto -c -k --keepParent "$APP" "$ZIP"
+  notarise "$ZIP"
+  rm -f "$ZIP"
+  xcrun stapler staple -q "$APP"
+  spctl --assess --type execute "$APP" || { echo "Gatekeeper refuses $APP after notarising" >&2; exit 1; }
 fi
 
 STAGE=$(mktemp -d)
@@ -102,7 +131,16 @@ for try in 1 2 3; do
   [ "$try" = 3 ] && exit 1
   sleep 5
 done
-codesign --force --sign "${SIGN_IDENTITY:--}" ${SIGN_KEYCHAIN:+--keychain "$SIGN_KEYCHAIN"} "$DMG"
+TS=--timestamp=none
+[ "${PUBLISH:-}" = true ] && TS=--timestamp
+codesign --force "$TS" --sign "${SIGN_IDENTITY:--}" ${SIGN_KEYCHAIN:+--keychain "$SIGN_KEYCHAIN"} "$DMG"
 codesign --verify "$DMG"
 hdiutil verify -quiet "$DMG"
+if [ "${PUBLISH:-}" = true ]; then
+  echo "notarising $DMG"
+  notarise "$DMG"
+  xcrun stapler staple -q "$DMG"
+  spctl --assess --type open --context context:primary-signature "$DMG" ||
+    { echo "Gatekeeper refuses $DMG after notarising" >&2; exit 1; }
+fi
 echo "built $DMG ($(stat -f%z "$DMG") bytes)"
