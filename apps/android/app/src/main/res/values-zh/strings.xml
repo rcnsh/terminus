@@ -109,6 +109,12 @@
     <string name="add_favourite">添加收藏</string>
     <string name="added_by_hand">手动添加</string>
     <string name="allow_exact">允许闹钟和提醒</string>
+    <string name="allow">允许</string>
+    <string name="on_time_title">准时，精确到分钟</string>
+    <string name="on_time_text">允许“闹钟和提醒”，出发提醒就能准时送达，“附近的巴士”小组件也会显示每班巴士还有几分钟。</string>
+    <string name="widget_minutes">每班巴士还有几分钟</string>
+    <string name="widget_minutes_on">已允许。15 分钟内到站的巴士会显示还有几分钟。</string>
+    <string name="widget_minutes_off">需要开启“闹钟和提醒”，小组件才能每分钟更新。在此之前只显示时刻。</string>
     <string name="allow_location">允许定位</string>
     <string name="allowed">已允许。</string>
     <string name="already_favourite">已经收藏了：%1$s</string>
@@ -166,7 +172,7 @@
     <string name="email_me_code">给我发验证码</string>
     <string name="ends">结束</string>
     <string name="eta_ended">已停运</string>
-    <string name="exact_off">terminus 的“闹钟和提醒”已关闭。提醒可能会晚几分钟，实时通知也可能要等你打开应用才会开始。</string>
+    <string name="exact_off">terminus 的“闹钟和提醒”已关闭。提醒可能会晚几分钟，实时通知也可能要等你打开应用才会开始，“附近的巴士”小组件只显示时刻，不显示还有几分钟。</string>
     <string name="favourites_hint">在应用、小组件和 Mac 菜单栏中一键可达。每周都去的地方，可以加到课表里。</string>
     <string name="finding_stop">正在找最近的车站…</string>
     <string name="follow_device">跟随手机设置</string>
@@ -411,8 +417,8 @@
     <string name="turn_off">关闭</string>
     <string name="turn_on_alerts">开启出发提醒</string>
     <string name="turn_on_location">请打开定位，或设置家</string>
-    <string name="two_things">最后两项</string>
-    <string name="two_things_sub">都是可选的，之后可以在“设置”里修改。</string>
+    <string name="last_things">最后几项</string>
+    <string name="last_things_sub">都是可选的，之后可以在“设置”里修改。</string>
     <string name="undo">撤销</string>
     <string name="unexpected_answer">terminus 返回了意外的响应</string>
     <string name="update">更新</string>
@@ -508,7 +514,7 @@
     <string name="nearby_widget">“附近的巴士”小组件</string>
     <string name="new_to_nus">刚来 NUS</string>
     <string name="new_to_nus_sub">用你熟悉的地方说明每辆巴士去哪里：地铁站、UTown、PGP。</string>
-    <string name="new_to_nus_hint">仅限这部手机。关闭时，小组件能显示更多巴士。</string>
+    <string name="new_to_nus_hint">仅在这部手机上。关闭“刚来 NUS”时，小组件能显示更多巴士。</string>
     <string name="leave_in_min">%1$d 分钟后出发</string>
     <string name="leave_in_min_s">%1$d 分 %2$d 秒后出发</string>
     <string name="leave_in_s">%1$d 秒后出发</string>
