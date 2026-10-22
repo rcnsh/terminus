@@ -708,6 +708,35 @@ test('export: each device with its app, version and push address, as the policy 
     },
   );
   assert.equal(body.sessions.find((s) => s.kind === 'web').push, null);
+  assert.equal(phone.liveActivityPush, null);
+  assert.equal(phone.pushLanguage, null);
+});
+
+test("export: an iPhone's push address, its Live Activity's (and the one that starts it) and the language it's pushed in", async () => {
+  const { env, email, db } = setup();
+  const cookie = await signIn(env, email);
+  const { code } = await (await call(env, '/api/me/pair-code', { method: 'POST', cookie })).json();
+  await call(env, '/api/pair', { method: 'POST', body: { code, name: 'iPhone' } });
+  const [push, live, start] = [`apns:${'ab'.repeat(32)}`, `apnsla:${'cd'.repeat(40)}`, `apnsstart:${'ef'.repeat(40)}`];
+  db.exec(
+    `UPDATE sessions SET platform = 'ios', push_token = '${push}', live_token = '${live}', start_token = '${start}', push_lang = 'zh' WHERE kind = 'device'`,
+  );
+  const body = await (await call(env, '/api/me/export', { cookie })).json();
+  const phone = body.sessions.find((s) => s.kind === 'device');
+  assert.deepEqual(
+    {
+      push: phone.push,
+      liveActivityPush: phone.liveActivityPush,
+      liveActivityStartPush: phone.liveActivityStartPush,
+      pushLanguage: phone.pushLanguage,
+    },
+    {
+      push: { service: 'apple', address: push },
+      liveActivityPush: { service: 'apple', address: live },
+      liveActivityStartPush: { service: 'apple', address: start },
+      pushLanguage: 'zh',
+    },
+  );
 });
 
 test('sign out everywhere ends every session', async () => {
@@ -1512,6 +1541,34 @@ test('feedback: a reason picked from the sheet is enough on its own, said in wor
   assert.deepEqual(stats.feedback.latest.map((f) => f.reason).sort(), ['The bus never came', 'The times were off']);
 });
 
+test('feedback: the iPhone app sends both kinds as platform ios; an unknown platform is refused', async () => {
+  const { env, email, db } = setup();
+  env.ALERT_EMAIL = 'ops@example.test';
+  const cookie = await signIn(env, email);
+  const post = (body) => call(env, '/api/me/feedback', { method: 'POST', cookie, body });
+  assert.equal(
+    (await post({ reason: 'never-came', platform: 'ios', appVersion: '3.0.0', context: { label: 'D2 · 4 min' } })).status,
+    201,
+    'Is this wrong?',
+  );
+  assert.equal(
+    (await post({ kind: 'other', note: 'Love the Live Activity', platform: 'ios', appVersion: '3.0.0' })).status,
+    201,
+    'Send feedback',
+  );
+  assert.match(email.sent.at(-1).text, / on ios 3\.0\.0, /);
+  assert.deepEqual(
+    db._db
+      .prepare('SELECT DISTINCT platform FROM feedback')
+      .all()
+      .map((r) => r.platform),
+    ['ios'],
+  );
+  const bad = await post({ note: 'x', platform: 'windows' });
+  assert.equal(bad.status, 400);
+  assert.equal((await bad.json()).error, "platform is 'android', 'mac', 'ios' or 'web'");
+});
+
 test('feedback: a stop suggestion names a building and its stop, and the email carries the entry for venue-stops.json', async () => {
   const { env, email, db } = setup();
   env.ALERT_EMAIL = 'ops@example.test';
@@ -1585,7 +1642,7 @@ test('feedback: validated, and capped at ten a day per account', async () => {
   assert.equal((await post({ platform: 'web', context: { label: 'D2 · 4 min' } })).status, 400, 'the answer alone is not enough');
   assert.equal((await post({ note: '   ', platform: 'web', context: { label: 'D2 · 4 min' } })).status, 400, 'nor is a blank note');
   assert.equal((await post({ kind: 'other', platform: 'web' })).status, 400, "'other' needs a note");
-  assert.equal((await post({ note: 'x', platform: 'ios' })).status, 400);
+  assert.equal((await post({ note: 'x', platform: 'watch' })).status, 400, 'only the apps and the website');
   assert.equal((await post({ note: 'x'.repeat(1001), platform: 'web' })).status, 400);
   assert.equal((await post({ note: 'x', platform: 'web', context: 'D2' })).status, 400, 'context is an object');
   assert.equal((await post({ note: 'x', platform: 'web', context: { pad: 'x'.repeat(17_000) } })).status, 400);

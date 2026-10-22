@@ -108,6 +108,32 @@ export function oldApiPath(req: Request, url: URL): boolean {
 /** One of the site's old addresses (terminus.rcn.sh, the beta's). */
 export const oldAddress = (hostname: string): boolean => hostname in MOVED;
 
+/**
+ * iOS universal links: the file an iPhone fetches (through Apple's CDN) to
+ * open this site's pairing links (/pair?code=…) in the app, which claims
+ * both addresses of its own site. The app is the team's bundle id, the
+ * beta's for the beta. Null without APPLE_TEAM_ID, until there's an Apple
+ * developer account: then the path is a 404, as before.
+ */
+export function appSiteAssociation(env: Env): Record<string, unknown> | null {
+  const team = env.APPLE_TEAM_ID?.trim();
+  if (!team) return null;
+  const appID = `${team}.sh.rcn.terminus${isBeta(env) ? '.beta' : ''}`;
+  return {
+    applinks: {
+      details: [
+        {
+          appIDs: [appID],
+          components: [
+            { '/': '/pair', comment: 'pairing links' },
+            { '/': '/pair/', comment: 'pairing links' },
+          ],
+        },
+      ],
+    },
+  };
+}
+
 /** The sender's name on every email, so a beta email is never mistaken for the real one. */
 export const mailName = (env: Env): string => (isBeta(env) ? 'terminus beta' : 'terminus');
 

@@ -5,7 +5,7 @@
 
 import { mailFeedback, parseFeedback, saveFeedback } from './feedback.ts';
 import { approvable, decide, enterCode, holdAppLogins, mergeAnonymous, pollAppLogin, startAppLogin } from './applogin.ts';
-import type { Answer, Env, Graph, ResolveInput, StopArrivals } from './types.ts';
+import type { Answer, Env, Graph, MeAnswer, ResolveInput, StopArrivals } from './types.ts';
 import {
   ACCOUNT_TTL,
   type SessionInfo,
@@ -73,7 +73,8 @@ import {
   sgtDate,
   updateTrip,
 } from './trip.ts';
-import { nudgeUser, setPushToken } from './push.ts';
+import { nudgeUser, setLiveToken, setPushToken, setStartToken } from './push.ts';
+import { formatApnsToken, looksApns, parseApnsToken } from './apns.ts';
 import { WEB_PREFIX, parseSubscription, vapidPublicKey, webPushEnabled } from './webpush.ts';
 import {
   NO_PREFS,
@@ -93,6 +94,7 @@ import { boardAsOf, boardAt, displayName, indexGraph } from './resolve.ts';
 import { stopVia, viaText } from './via.ts';
 import { haversineM } from './geo.ts';
 import { isoSeconds } from './format.ts';
+import type { Card } from './card.ts';
 import { termNoticeFor } from './monitor.ts';
 import { WALK, sgt } from './config.ts';
 import { landmark } from './landmarks.ts';
@@ -102,7 +104,7 @@ import { MAX_KEYS, createKey, listKeys, revokeKey } from './access.ts';
 import { buildingStops, footM, paceSpeed } from './walk.ts';
 import { clientKey, coords, coordsFrom, json } from './http.ts';
 import { linkOrigin } from './site.ts';
-import { LANG_PREFS, lang, m, useProfileLang } from './i18n.ts';
+import { LANG_PREFS, type Lang, type LangPref, lang, m, useProfileLang, withLang } from './i18n.ts';
 import { bandCss, bandHtml, phaseAt, sgtMinute } from './pagesky.ts';
 
 export interface MeDeps {
@@ -292,6 +294,38 @@ export async function getProfile(db: D1Database, userId: string, graph: Graph, r
   const p = raw as Profile;
   useProfileLang(LANG_PREFS.includes(p.lang) ? p.lang : 'auto');
   return salvageProfile(p, (c) => idx.byCode.has(c) || landmark(c) !== null, pinnable(graph));
+}
+
+/** The language an iPhone's notifications are worded in: the account's choice, else this request's. */
+async function pushLang(db: D1Database, userId: string): Promise<Lang> {
+  const chosen = ((await loadProfileJson(db, userId).catch(() => null)) as { lang?: unknown } | null)?.lang;
+  return chosen === 'en' || chosen === 'zh' ? chosen : lang();
+}
+
+/**
+ * The account's language changed, or may have: the iPhones are pushed in
+ * it from now on, not in the one they registered in. Back to following each
+ * device, only this one's is known (this request's); another iPhone keeps
+ * its language until it registers again, as it does each launch. Writes
+ * nothing when nothing changes.
+ */
+async function refreshPushLang(db: D1Database, userId: string, tokenHash: string, pref: LangPref): Promise<void> {
+  try {
+    if (pref === 'auto') {
+      await db
+        .prepare("UPDATE sessions SET push_lang = ? WHERE token_hash = ? AND push_token LIKE 'apns:%' AND push_lang IS NOT ?")
+        .bind(lang(), tokenHash, lang())
+        .run();
+    } else {
+      await db
+        .prepare("UPDATE sessions SET push_lang = ? WHERE user_id = ? AND push_token LIKE 'apns:%' AND push_lang IS NOT ?")
+        .bind(pref, userId, pref)
+        .run();
+    }
+  } catch (err) {
+    // The profile is saved; the push language catches up when the iPhone next registers.
+    console.error('push language not saved', err instanceof Error ? err.message : typeof err);
+  }
 }
 
 /** Tries before a read-modify-write of the profile gives up to another device's writes. */
@@ -526,6 +560,7 @@ export const ME_ROUTES: MeRoute[] = [
           ? await saveProfileJson(db, session.user.id, r.profile, nowMs)
           : await saveProfileIf(db, session.user.id, r.profile, nowMs, from);
       if (version === null) return json({ error: PROFILE_CHANGED }, 412);
+      await refreshPushLang(db, session.user.id, session.tokenHash, r.profile.lang);
       return json({ ...r.profile, limits: profileLimits() }, 200, { etag: versionTag(version) });
     },
   },
@@ -738,12 +773,14 @@ export const ME_ROUTES: MeRoute[] = [
         // One call to the Trip object, however many classes.
         const after = items.length ? await saveSignals(env, session.user.id, items, nowMs) : day;
         logSignal(env, kind);
-        const out = await nextBody(env, ctx, deps, await loadRider(env, session.user.id, nowMs, { profile, day: after }), asked, nowMs);
+        const rider = await loadRider(env, session.user.id, nowMs, { profile, day: after });
+        const out = await nextBody(env, ctx, deps, rider, asked, nowMs);
+        const answerIn = rewordFor(env, ctx, deps, rider, asked, nowMs);
         ctx.waitUntil(
           nudgeUser(
             env,
             session.user.id,
-            { phase: out.card.phase, urgent: false, remind: out.card.remind !== false },
+            { phase: out.card.phase, urgent: false, remind: out.card.remind !== false, answer: out, answerIn },
             nowMs,
             session.tokenHash,
           ),
@@ -841,13 +878,16 @@ export const ME_ROUTES: MeRoute[] = [
       if (rec === null) await clearOutcome(db, session.user.id, key, nowMs);
       // A trip home isn't a class: nothing to learn from skipping it.
       else if (outcome && !/^(gap-)?home:/.test(key)) await recordOutcome(db, session.user.id, key, outcome, nowMs);
-      const out = await nextBody(env, ctx, deps, await loadRider(env, session.user.id, nowMs, { profile, day: next }), asked, nowMs);
-      // A tap here changes the other phones' cards now, not at their next refresh.
+      const rider = await loadRider(env, session.user.id, nowMs, { profile, day: next });
+      const out = await nextBody(env, ctx, deps, rider, asked, nowMs);
+      // A tap here changes the other phones' cards now, not at their next
+      // refresh; an iPhone pushed in the other language gets the card in its own.
+      const answerIn = rewordFor(env, ctx, deps, rider, asked, nowMs);
       ctx.waitUntil(
         nudgeUser(
           env,
           session.user.id,
-          { phase: out.card.phase, urgent: false, remind: out.card.remind !== false },
+          { phase: out.card.phase, urgent: false, remind: out.card.remind !== false, answer: out, answerIn },
           nowMs,
           session.tokenHash,
         ),
@@ -860,7 +900,8 @@ export const ME_ROUTES: MeRoute[] = [
     path: '/api/me/push',
     run: async ({ req, env, db, session }) => {
       // This device's push address: the Trip object nudges it when the card
-      // changes. An app sends its Firebase token; the web app its Web Push
+      // changes. An app sends its Firebase token, or an iPhone its APNs
+      // token (and its trip Live Activity's, and the one that starts it); the web app its Web Push
       // subscription (PushSubscription.toJSON()).
       const body = await readJson(req);
       if (body?.subscription !== undefined) {
@@ -871,6 +912,28 @@ export const ME_ROUTES: MeRoute[] = [
         return json({ ok: true });
       }
       const token = typeof body?.token === 'string' ? body.token.trim() : '';
+      if (looksApns(token)) {
+        // Taken with APNs off too: the iPhone is pushed once it's set up.
+        const t = parseApnsToken(token);
+        if (!t)
+          return json(
+            {
+              error:
+                'send token as apns:<hex device token>, apnsla:<hex Live Activity token> or apnsstart:<hex Live Activity start token>, with :sandbox from a development build',
+            },
+            400,
+          );
+        // With the phone's token, whether its leave alerts are on: off, the
+        // trip's pushes to it are silent. Not said (an older build): alerts as
+        // before. And whether its Live Activity setting is on: off, it forgets
+        // the token that starts one, so none is started by push.
+        const alerts = typeof body?.alerts === 'boolean' ? body.alerts : null;
+        const live = typeof body?.live === 'boolean' ? body.live : null;
+        if (t.kind === 'live') await setLiveToken(db, session.tokenHash, formatApnsToken(t));
+        else if (t.kind === 'start') await setStartToken(db, session.tokenHash, formatApnsToken(t));
+        else await setPushToken(db, session.tokenHash, formatApnsToken(t), await pushLang(db, session.user.id), alerts, live);
+        return json({ ok: true });
+      }
       if (!token || token.length > 4096 || token.startsWith(WEB_PREFIX))
         return json({ error: 'send token (the FCM registration token) or subscription' }, 400);
       await setPushToken(db, session.tokenHash, token);
@@ -1413,6 +1476,16 @@ async function nextBody(env: Env, ctx: ExecutionContext, deps: MeDeps, rider: Ri
 }
 
 /**
+ * A tap's answer worded in another language, for an iPhone pushed in that
+ * one (push.ts asks only then): worked out as the request did, from the
+ * same moment, so its arrivals come from the edge cache, and saving
+ * nothing (no plan, no watch, not logged), as the request already has.
+ */
+function rewordFor(env: Env, ctx: ExecutionContext, deps: MeDeps, rider: Rider, ask: Ask, nowMs: number) {
+  return (l: Lang) => withLang(l, () => nextFor(env, ctx, unlogged(deps), rider, ask, nowMs)).then((r) => r.body);
+}
+
+/**
  * The card as a request would get it, for the Trip object when it wakes:
  * which trip, its phase, whether there's a question, when it next changes.
  * Of what the card changes, only the plan is kept (in the Trip object, by
@@ -1435,6 +1508,7 @@ export async function tripCardFor(
   /** The leave-by and how sure the answer is, for the wake's freshness log (tripdo.ts). */
   leaveAt: number | null;
   quality: string;
+  answer: MeAnswer & { card: Card };
 } | null> {
   if (!env.DB) return null;
   const profile = await getProfile(env.DB, userId, GRAPH);
@@ -1450,6 +1524,7 @@ export async function tripCardFor(
     wakeAt,
     leaveAt: body.leave?.at ? Date.parse(body.leave.at) : null,
     quality: body.quality,
+    answer: body,
   };
 }
 
