@@ -1151,6 +1151,7 @@ test('/api/status.json: the feed state and outages, public and cached', async ()
   assert.deepEqual(await res.json(), {
     feed: 'unknown',
     since: null,
+    cause: null,
     checkedAt: null,
     checking: false,
     incidents: [],
@@ -1178,6 +1179,7 @@ test('/api/status.json: the feed state and outages, public and cached', async ()
   assert.equal(res.headers.get('cache-control'), 'public, max-age=60');
   const s = await res.json();
   assert.equal(s.feed, 'down');
+  assert.equal(s.cause, 'version');
   assert.equal(s.checking, true);
   assert.equal(s.since, new Date(now - 3_600_000).toISOString());
   assert.deepEqual(s.incidents, [{ start: new Date(now - 3_600_000).toISOString(), end: null, cause: 'version' }]);

@@ -482,14 +482,24 @@ export function paths(): Record<string, unknown> {
         summary: 'Feed status',
         security: [],
         description:
-          "Whether NUS's live feed is answering, as the 15-minute check last saw it, and the last 20 confirmed outages. What the status page at /status shows.",
+          "Whether NUS's live feed is answering, as the 15-minute check last saw it, and the last 20 confirmed outages. An outage is confirmed only between 07:00 and 23:30 Singapore time, except when NUS refuses the uNivUS version. What the status page at /status shows.",
         operationId: 'getStatus',
         responses: {
           '200': ok({
             type: 'object',
             properties: {
-              feed: { type: 'string', enum: ['up', 'down', 'unknown'] },
+              feed: {
+                type: 'string',
+                enum: ['up', 'down', 'maintenance', 'unknown'],
+                description:
+                  "'maintenance': not answering between 23:30 and 07:00 Singapore time, when no shuttle runs. Not an outage, so it has no incident.",
+              },
               since: { type: ['string', 'null'], format: 'date-time' },
+              cause: {
+                type: ['string', 'null'],
+                enum: ['version', 'feed', null],
+                description: "Why the feed is down, null otherwise. 'version': NUS wants a newer uNivUS version string, at any hour.",
+              },
               checkedAt: { type: ['string', 'null'], format: 'date-time' },
               checking: { type: 'boolean', description: 'False when the checks have stopped running.' },
               publicFeed: {

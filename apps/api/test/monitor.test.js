@@ -15,6 +15,7 @@ import {
   checkCalendar,
   checkUpstream,
   feedDownSince,
+  feedStatus,
   housekeeping,
   pingHeartbeat,
   readIncidents,
@@ -137,6 +138,36 @@ test('outside 07:00 to 23:30 Singapore time a failing feed is no outage', async 
   await checkUpstream(d, at(15, 45), fail('network'));
   assert.equal((await readUpstream(d)).up, false);
   assert.deepEqual(await readIncidents(d), [{ start: at(15, 15), end: null, cause: 'feed' }]);
+});
+
+test('the status page calls night-time failures maintenance, and a refused version down at any hour', async () => {
+  const at = (h, m = 0) => Date.UTC(2026, 9, 22, h, m);
+  const e = env();
+  await checkUpstream(e, at(15, 0), ok);
+  assert.equal(feedStatus(await readUpstream(e)).feed, 'up');
+  await checkUpstream(e, at(15, 45), fail('network'));
+  assert.equal(feedStatus(await readUpstream(e)).feed, 'up', 'one failed check is a blip');
+  await checkUpstream(e, at(16, 0), fail('network'));
+  assert.deepEqual(feedStatus(await readUpstream(e)), { feed: 'maintenance', since: at(15, 45), cause: null });
+  await checkUpstream(e, at(22, 0), ok);
+  assert.equal(feedStatus(await readUpstream(e)).feed, 'up');
+
+  // 02:00 SGT: NUS refuses our version and no new one is found.
+  const v = env();
+  const refused = fail('auth rejected: code=10009 msg=We have a new release of uNivUS');
+  const noFix = async () => ({ status: 'failed', note: 'nothing found' });
+  await checkUpstream(v, at(18, 0), ok);
+  await checkUpstream(v, at(18, 0) + 1000, refused, noFix);
+  await checkUpstream(v, at(18, 15), refused, noFix);
+  assert.deepEqual(feedStatus(await readUpstream(v)), { feed: 'down', since: at(18, 15), cause: 'version' });
+  assert.deepEqual(await readIncidents(v), [{ start: at(18, 15), end: null, cause: 'version' }]);
+  assert.equal(v.EMAIL.sent.length, 1, 'emailed at night: it needs fixing before the buses run');
+
+  // In the day, anything else is an outage of the feed.
+  const f = env();
+  await checkUpstream(f, 1000, fail('network'));
+  await checkUpstream(f, 2000, fail('network'));
+  assert.deepEqual(feedStatus(await readUpstream(f)), { feed: 'down', since: 2000, cause: 'feed' });
 });
 
 test('a KV read that fails changes nothing: no state, no email, no incident', async () => {

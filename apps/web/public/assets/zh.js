@@ -177,6 +177,13 @@ window.TERMINUS_ZH = {
   'Monday': '星期一',
   'NUS released a new version of uNivUS and stopped accepting the old one': 'NUS 发布了新版 uNivUS，旧版已停止使用',
   "NUS's live feed is down": 'NUS 的实时数据中断了',
+  "Since {0}. NUS's live feed isn't answering, outside the hours shuttles run (7am to 11:30pm). Not counted as an outage.":
+    '自 {0} 起。现在不在校车运行时间（早上 7 点到晚上 11:30）内，NUS 的实时数据没有回应。不算作中断。',
+  'Since {0}. NUS released a new version of uNivUS and stopped accepting the old one. The apps show estimated times until terminus switches to the new one.':
+    '自 {0} 起。NUS 发布了新版 uNivUS，旧版已停止使用。在 terminus 换用新版之前，应用会显示估计时间。',
+  'Night-time maintenance': '夜间维护',
+  'Maintenance': '维护中',
+  'uNivUS version update': 'uNivUS 版本更新',
   "NUS's live bus times weren't available": 'NUS 的实时巴士时间暂时不可用',
   'NUSMods share link': 'NUSMods 分享链接',
   'Name': '名称',
