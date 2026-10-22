@@ -133,7 +133,8 @@ function liveryHtml(): string {
 /**
  * Minimal pages served by the Worker itself, laid out as the account page's
  * sign-in is (account.css): the livery under the header, then the words, and
- * from 900px the form beside them. A page with nothing to fill in has no form.
+ * from 900px the form beside them. A page with nothing to fill in has no
+ * form, and there its words are one centred column instead.
  */
 const page = (title: string, intro: string, form = '') => `<!doctype html>
 <html lang="${lang() === 'zh' ? 'zh-Hans' : 'en'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -146,7 +147,7 @@ const page = (title: string, intro: string, form = '') => `<!doctype html>
 <link rel="stylesheet" href="/account/account.css">
 <style>.signin-intro .btn{margin-top:20px}form.signin-alt .link-btn{padding:0}
 .number{display:block;min-height:72px;text-align:center;font:700 2.2rem/1 var(--display);letter-spacing:.3em;font-variant-numeric:tabular-nums}
-@media (min-width:900px){.signin-step.solo{display:block}.solo .hint{max-width:36rem}}</style>
+@media (min-width:900px){.signin-step.solo{display:block;max-width:34rem;text-align:center}}</style>
 </head><body><header class="wrap nav"><a class="brand" href="/"><img src="/assets/mark.svg" alt=""><span class="wordmark">termi<b>nus</b></span></a></header>
 <main class="wrap"><section class="signin">${liveryHtml()}<div class="signin-step${form ? '' : ' solo'}"><div class="signin-intro">${intro}</div>${form ? `<div class="signin-form">${form}</div>` : ''}</div></section></main></body></html>`;
 
