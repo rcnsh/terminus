@@ -297,7 +297,7 @@ imported with `POST /api/me/import` (a profile keeps 100 classes a week; past th
 week's latest are left out and the answer's `dropped` says how many), plus classes entered by hand. Imported classes only
 count in the weeks they run ([src/calendar.ts](../src/calendar.ts), built from
 NUSMods' semester dates and MOM's public holidays by
-`scripts/fetch_calendar.py`). NUS's own days off, such as Well-Being Days,
+`scripts/data/fetch_calendar.py`). NUS's own days off, such as Well-Being Days,
 aren't in either source: they're kept by hand in `data/nus-days.json` (add
 one when NUS announces it, then deploy) and count as public holidays, so
 classes don't run and the shuttles keep Sunday/PH hours. Neither the scrape
@@ -999,7 +999,7 @@ route moves it from the answer into the card (`profile.ts` `upcomingClass`).
   does, so a GET that spent the token would break NUS addresses.
 
 Setup and deploys: `pnpm run deploy` (and `deploy:beta`) first runs
-`scripts/predeploy.mjs`, which refuses a tree with unmerged files, conflict
+`scripts/deploy/predeploy.mjs`, which refuses a tree with unmerged files, conflict
 markers or changes not committed in `apps/api` or `apps/web/public` (a deploy
 ships the files on disk, not the commit), then runs `pnpm check`. Only then
 does it apply the database's pending migrations, and deploy. The code reads columns from
@@ -1220,7 +1220,7 @@ Settings. It uses the same routes as the account page, with the session cookie.
   subscription on the session as `web:` plus its JSON, next to where an
   Android session keeps its FCM token. So the Trip object's nudges reach both,
   through `push.ts` and `webpush.ts`. Each push is VAPID-signed with
-  `VAPID_PRIVATE_KEY` (a P-256 JWK; `scripts/vapid-key.mjs` makes one) and
+  `VAPID_PRIVATE_KEY` (a P-256 JWK; `scripts/deploy/vapid-key.mjs` makes one) and
   its payload encrypted with aes128gcm, using WebCrypto only. Only
   subscriptions on browsers' push services are kept (FCM, Mozilla, Apple,
   Windows): the Worker POSTs to the endpoint, so any other host is refused.
@@ -1420,7 +1420,7 @@ the card, in walking the whole way, and on the Nearby tab.
 `WALK.atVenueM` of a building's point on the room map, and nearer it than to
 any stop, you're in it (`buildingStops` in [`walk.ts`](../src/walk.ts)): the
 stops are its `out` in `venues.json`, every stop within `WALK.maxRadiusM` with
-the routed walk from the building (`scripts/walk_routes.py`), and the far
+the routed walk from the building (`scripts/data/walk_routes.py`), and the far
 side of each one's road. The straight line with a stop's usual detour
 undersells a walk across a hill or a road with no crossing: from MD6, PGP is
 508 m that way and 771 m by the paths. A building `venue-stops.json` covers
@@ -1431,7 +1431,7 @@ bus, in walking the whole way, and on the Nearby tab. Outside every building
 and residence it's the straight line with the stop's detour, as before.
 
 **A room can have more than one stop.** A building between two stops is
-served by both (`stops` in `venues.json`, from `scripts/walk_routes.py`): its
+served by both (`stops` in `venues.json`, from `scripts/data/walk_routes.py`): its
 own stop, and one more when the walk to it is at most `VENUE_EXTRA_M` (100 m)
 longer than to the nearest, never a stop and its opposite stop (the
 resolver adds that itself). Where the map's nearest stop is the wrong one,
@@ -1443,7 +1443,7 @@ building's stop for imports and search. A room uNivUS lists on its own
 (`COM1-0208`) takes its building's stops, walked from the room where NUSMods
 places it; one uNivUS puts at a stop its building doesn't use keeps that
 stop alone. To fix a building: add it to `venue-stops.json` with a `why`, run
-`python3 scripts/walk_routes.py`, and commit both (`venue-stops.test.js`
+`python3 scripts/data/walk_routes.py`, and commit both (`venue-stops.test.js`
 fails while `venues.json` is stale). A trip reads its room's stops from `venueStops()` each time, not from the stop
 its timetable was saved with. Leaving a class without a location starts from
 every one of them (`originAlso`), each with the room's own walk to it
@@ -1541,7 +1541,7 @@ list under 20, a name with odd characters or a web address, a moved
 semester or more than 3 future holidays gone all fail, and such a change is
 committed by hand.
 
-**Route lines follow the roads.** `scripts/route_shapes.py` routes each
+**Route lines follow the roads.** `scripts/data/route_shapes.py` routes each
 service stop to stop along OpenStreetMap's drivable roads (one-way streets
 respected, each stop joined on the side the bus drives) into
 `data/shapes.json`; the weekly scrape runs it after the stop graph and
@@ -1589,7 +1589,7 @@ when a newer build exists.
 [`lta.ts`](../src/lta.ts), `data/public.json`). Singapore's public buses stop
 at the shuttles' shelters along Kent Ridge Crescent and Lower Kent Ridge
 Road, and a 95 or 151 is often the first bus to a stop the shuttle also
-serves. `scripts/scrape_lta.py` takes LTA DataMall's stops, routes and
+serves. `scripts/data/scrape_lta.py` takes LTA DataMall's stops, routes and
 services, keeps the stops within 200 m of a shuttle stop (the campus, not
 Pasir Panjang Road or the AYE) and trims each public service to its stops
 there; the weekly scrape runs it, with the `LTA_ACCOUNT_KEY` secret, and
@@ -1702,7 +1702,7 @@ minutes in the past alongside a positive `arrivalTime`. It is not used.
 The times count from the reply's own `TimeStamp`, not from when we asked.
 NUS works a stop's arrivals out every 35 to 40 s, all its services at
 once, and serves that same reply until the next: `eta_s` doesn't count
-down in between. `scripts/probe_arrivals.py` measured it (22 Oct 2026, a
+down in between. `scripts/probes/probe_arrivals.py` measured it (22 Oct 2026, a
 weekday morning, COM3, UTown, KR MRT and PGP polled every 5 s for 10
 min): a reply was a median of 20 s old when it came, up to 55 s, and
 counted from its TimeStamp a bus's arrival moved a median of 3 s from one
@@ -2024,7 +2024,7 @@ built from source (`scripts/vendor-maplibre-mac.sh`; no macOS build is
 published), and its Metal renderer draws the style's background layer over
 the street map's fills, so the Mac drops that layer when the street map is
 there.
-For local work, `node scripts/dev-stub.mjs` runs this Worker with a fake bus
+For local work, `node scripts/dev/dev-stub.mjs` runs this Worker with a fake bus
 feed and a seeded test account.
 
 The apps call terminus.run (the beta's: beta.terminus.run), the address
@@ -2285,7 +2285,7 @@ creates no storage. `/download/*`
 serves only release files, so the days are reachable only through
 `/api/timelapse/days`, with the operator token or `TIMELAPSE_TOKEN`. The second
 opens these routes and nothing else, so the machine that renders the videos
-unattended (`scripts/render-timelapse.mjs`, on a VPS) never holds the
+unattended (`scripts/dev/render-timelapse.mjs`, on a VPS) never holds the
 dashboard's key.
 
 **Replaying it.** The operator's page,
@@ -2423,8 +2423,8 @@ stop), each push user's Trip object (through the same caches), and the
 timelapse recorder, each service's bus positions at most once per 30
 seconds inside fixed hours, behind a kill switch. Public buses come from
 LTA DataMall, one call per stop per 15 seconds, plus one stop per health
-check. By hand only, the two probe workflows (`scripts/probe_buses.py`,
-`scripts/probe_arrivals.py`) measure the feed: a few services or stops
+check. By hand only, the two probe workflows (`scripts/probes/probe_buses.py`,
+`scripts/probes/probe_arrivals.py`) measure the feed: a few services or stops
 every 5 seconds at most, for 15 minutes at most, with their own guest
 token. Use it in line with the
 [NUS Acceptable Use Policy for IT Resources](https://nus.edu.sg/registrar/docs/info/registration-guides/aup-form.pdf).

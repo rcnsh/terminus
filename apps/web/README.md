@@ -46,7 +46,7 @@ fails if a module the app loads at startup isn't on its list.
 ## Run it
 
 ```bash
-node apps/api/scripts/dev-stub.mjs   # from the repo root, then open http://localhost:8787
+node apps/api/scripts/dev/dev-stub.mjs   # from the repo root, then open http://localhost:8787
 ```
 
 The stub serves these files straight from disk, so a reload shows your change.

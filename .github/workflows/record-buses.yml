@@ -2,7 +2,7 @@ name: record live buses
 
 # Run by hand after a deploy: records what /api/buses shows the map for a few
 # minutes, with a throwaway anonymous account, and checks no bus switches to
-# the other side of the road or jumps (apps/api/scripts/record_buses.mjs).
+# the other side of the road or jumps (apps/api/scripts/probes/record_buses.mjs).
 # The report is the run's summary, and an annotation; a flagged move fails
 # the run. Needs no secrets.
 on:
@@ -49,7 +49,7 @@ jobs:
           done
           # The report goes out either way; the script's status decides the run's.
           status=0
-          node apps/api/scripts/record_buses.mjs --site "$SITE" --minutes "$MINUTES" $SERVICES > report.md || status=$?
+          node apps/api/scripts/probes/record_buses.mjs --site "$SITE" --minutes "$MINUTES" $SERVICES > report.md || status=$?
           cat report.md >> "$GITHUB_STEP_SUMMARY"
           level=notice
           [ "$status" -eq 0 ] || level=error

@@ -2,9 +2,9 @@
 """
 Walking distances along real paths, for data/walks.json and data/venues.json.
 
-    python3 scripts/walk_routes.py            # uses cached downloads in dev/
-    python3 scripts/walk_routes.py --fetch    # downloads them again
-    python3 scripts/walk_routes.py --check    # writes nothing; fails if data/ is stale
+    python3 scripts/data/walk_routes.py            # uses cached downloads in dev/
+    python3 scripts/data/walk_routes.py --fetch    # downloads them again
+    python3 scripts/data/walk_routes.py --check    # writes nothing; fails if data/ is stale
 
 Run it after stops.json changes (a stop added or renamed): walks, rooms,
 landmarks and residences all refer to stop codes.
@@ -49,7 +49,7 @@ import urllib.request
 from datetime import date
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 REPO = ROOT.parent.parent
 CACHE = REPO / "dev"
 OSM_FILE = CACHE / "osm-nus-paths.json"
@@ -428,7 +428,7 @@ def main():
 
     emit("walks.json", json.dumps({
         "generated": date.today().isoformat(),
-        "source": "OpenStreetMap footpaths (Map data (c) OpenStreetMap contributors, ODbL) via Overpass; scripts/walk_routes.py",
+        "source": "OpenStreetMap footpaths (Map data (c) OpenStreetMap contributors, ODbL) via Overpass; scripts/data/walk_routes.py",
         "detour": detour,
         "stopPairs": pairs,
     }, indent=1, sort_keys=True) + "\n")
@@ -482,7 +482,7 @@ def main():
         marks[code] = {"name": lm["name"], "kind": lm["kind"], "aliases": lm["aliases"], "stops": walks}
     emit("landmarks.json", json.dumps({
         "generated": date.today().isoformat(),
-        "source": "positions from OpenStreetMap (ODbL); walks routed on its paths; scripts/walk_routes.py",
+        "source": "positions from OpenStreetMap (ODbL); walks routed on its paths; scripts/data/walk_routes.py",
         "landmarks": marks,
     }, indent=1) + "\n")
     print("landmarks:", {c: m["stops"] for c, m in marks.items()})
@@ -509,14 +509,14 @@ def main():
             res[code] = {"name": r["name"], **({"common": True} if r.get("common") else {}), "stops": serving, "areas": areas}
         emit("residences.json", json.dumps({
             "generated": date.today().isoformat(),
-            "source": "outlines from OpenStreetMap (ODbL); serving stops by path distance; scripts/walk_routes.py",
+            "source": "outlines from OpenStreetMap (ODbL); serving stops by path distance; scripts/data/walk_routes.py",
             "residences": res,
         }, separators=(",", ":")) + "\n")
         print("residences:", {c: r["stops"] for c, r in res.items()})
 
     venues_doc["venues"] = dict(sorted(venues.items()))
     venues_doc["generated"] = date.today().isoformat()
-    venues_doc["source"] = "uNivUS building->stop assignments; walks routed on OpenStreetMap paths (scripts/walk_routes.py); new buildings from the NUSMods room map"
+    venues_doc["source"] = "uNivUS building->stop assignments; walks routed on OpenStreetMap paths (scripts/data/walk_routes.py); new buildings from the NUSMods room map"
     # One line: it is data, not something to read.
     emit("venues.json", json.dumps(venues_doc, separators=(",", ":"), ensure_ascii=False))
     print(f"{len(pairs)} stop pairs, {updated} buildings re-routed, {added} added, median detour {overall:.2f}")

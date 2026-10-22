@@ -46,7 +46,7 @@ jobs:
           SERVICES: ${{ inputs.services }}
           EVERY: ${{ inputs.every }}
           TRACE: ${{ inputs.trace }}
-        working-directory: apps/api/scripts
+        working-directory: apps/api/scripts/probes
         # SERVICES unquoted on purpose: one argument per service. Each must
         # be a plain service name, so the input can't pass an option (or a
         # glob); after `--` too, and probe_buses.py checks again.

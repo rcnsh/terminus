@@ -1,5 +1,5 @@
 /**
- * Public buses in the stop graph (data/public.json, from scripts/scrape_lta.py).
+ * Public buses in the stop graph (data/public.json, from scripts/data/scrape_lta.py).
  *
  * They are services like any other once in the graph: the resolver pairs
  * stops, checks the route goes where you're going and scores by time the

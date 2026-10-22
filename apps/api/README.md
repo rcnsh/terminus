@@ -24,7 +24,7 @@ serves the website in [`apps/web`](../web).
 pnpm install
 pnpm test                          # no network, no keys
 pnpm typecheck
-node scripts/dev-stub.mjs          # the Worker with fake buses on :8787
+node scripts/dev/dev-stub.mjs          # the Worker with fake buses on :8787
 pnpm dev                           # cf dev against the live feed (needs .dev.vars)
 ```
 

@@ -22,7 +22,7 @@ const origin = 'http://localhost:8787';
 const email = 'you@u.nus.edu';
 
 // The stub prints the sign-in code on its stdout.
-const stub = spawn(process.execPath, ['scripts/dev-stub.mjs'], { cwd: join(root, 'apps/api'), stdio: ['ignore', 'pipe', 'inherit'] });
+const stub = spawn(process.execPath, ['scripts/dev/dev-stub.mjs'], { cwd: join(root, 'apps/api'), stdio: ['ignore', 'pipe', 'inherit'] });
 let out = '';
 stub.stdout.on('data', (d) => {
   out += d;

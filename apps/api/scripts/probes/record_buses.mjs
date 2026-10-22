@@ -13,7 +13,7 @@
  * The load is one person watching the map: one /api/buses call per service
  * every 5 s, which the Worker caches 5 s per service anyway.
  *
- *   node scripts/record_buses.mjs [--site https://terminus.run] [--minutes 10] [--out trace.json] [A1 A2 D1 D2]
+ *   node scripts/probes/record_buses.mjs [--site https://terminus.run] [--minutes 10] [--out trace.json] [A1 A2 D1 D2]
  */
 
 import { writeFileSync } from 'node:fs';

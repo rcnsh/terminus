@@ -3,7 +3,7 @@
 Each bus service's path along real roads, for data/shapes.json (the lines on
 the map, and where a live bus is along its route).
 
-    python3 apps/api/scripts/route_shapes.py
+    python3 apps/api/scripts/data/route_shapes.py
 
 Downloads the drivable roads around Kent Ridge from OpenStreetMap's Overpass
 API and routes each service stop to stop along them, the way it runs in
@@ -33,7 +33,7 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 OUT = ROOT / "data" / "shapes.json"
 # The Overpass project's own instance only: what it answers is committed to
 # main unreviewed, so no third-party mirror gets a say in it.
@@ -239,7 +239,7 @@ def main():
         raise SystemExit(1)
     shapes = {
         "generated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "source": "OpenStreetMap roads (c) OpenStreetMap contributors, ODbL, via scripts/route_shapes.py",
+        "source": "OpenStreetMap roads (c) OpenStreetMap contributors, ODbL, via scripts/data/route_shapes.py",
         "routes": routes,
     }
     # Only write when something other than the timestamp changed, so the

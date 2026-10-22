@@ -1,7 +1,7 @@
 /**
  * Local API with fake live buses, for building and screenshotting the apps.
  *
- *   node scripts/dev-stub.mjs            # http://localhost:8787
+ *   node scripts/dev/dev-stub.mjs            # http://localhost:8787
  *
  * It answers this machine only (127.0.0.1 and ::1): its admin token is
  * "dev", it prints sign-in codes, and it may hold real keys from .dev.vars.
@@ -59,14 +59,14 @@ import http from 'node:http';
 import https from 'node:https';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { installGlobals, makeBucket, makeDurableObjects, makeEnv, makeCtx, shuttlePayload } from '../test/_stubs.mjs';
-import { Trip } from '../src/tripdo.ts';
-import { TimelapseRecorder } from '../src/timelapsedo.ts';
-import { FeedGate } from '../src/feedgate.ts';
-import { ensureRecorder, inWindow, nextOpen } from '../src/timelapse.ts';
-import { SESSION_COOKIE as DEV_COOKIE, openSession } from '../src/accounts.ts';
-import { API_VERSION } from '../src/openapi.ts';
-import { makeD1, makeEmail } from '../test/_d1.mjs';
+import { installGlobals, makeBucket, makeDurableObjects, makeEnv, makeCtx, shuttlePayload } from '../../test/_stubs.mjs';
+import { Trip } from '../../src/tripdo.ts';
+import { TimelapseRecorder } from '../../src/timelapsedo.ts';
+import { FeedGate } from '../../src/feedgate.ts';
+import { ensureRecorder, inWindow, nextOpen } from '../../src/timelapse.ts';
+import { SESSION_COOKIE as DEV_COOKIE, openSession } from '../../src/accounts.ts';
+import { API_VERSION } from '../../src/openapi.ts';
+import { makeD1, makeEmail } from '../../test/_d1.mjs';
 import { fakeAeRows, seedAdmin } from './stub-admin.mjs';
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -87,7 +87,7 @@ const stubNow = () => (frozenAt ?? realNow()) + skipMs;
 const DEMO_ADMIN = process.env.STUB_ADMIN !== 'empty';
 let running = (_svc) => true;
 
-const graph = (await import('../data/stops.json', { with: { type: 'json' } })).default;
+const graph = (await import('../../data/stops.json', { with: { type: 'json' } })).default;
 const servingStop = new Map();
 for (const [svc, seq] of Object.entries(graph.routes))
   for (const code of new Set(seq)) servingStop.set(code, [...(servingStop.get(code) ?? []), svc]);
@@ -95,7 +95,7 @@ for (const [svc, seq] of Object.entries(graph.routes))
 const crowds = ['low', 'medium', 'high'];
 // The public buses (data/public.json): which call at each LTA stop code, and
 // which way a two-way service is going there, for the fake DataMall below.
-const pub = (await import('../data/public.json', { with: { type: 'json' } })).default;
+const pub = (await import('../../data/public.json', { with: { type: 'json' } })).default;
 const ltaToGraph = new Map([...Object.entries(pub.merged), ...pub.stops.map((s) => [s.code, s.code])]);
 const publicAt = (ltaCode) => {
   const code = ltaToGraph.get(ltaCode);
@@ -103,7 +103,7 @@ const publicAt = (ltaCode) => {
     .filter(([, seq]) => seq.includes(code))
     .map(([key]) => pub.public[key]);
 };
-const shapes = (await import('../data/shapes.json', { with: { type: 'json' } })).default.routes;
+const shapes = (await import('../../data/shapes.json', { with: { type: 'json' } })).default.routes;
 
 /** Three buses per service, a third of the route apart, at 20 km/h along its
  *  line. Like the real feed, a bus's position only moves every 18 s. */
@@ -220,8 +220,8 @@ async function feed(input, init = {}) {
 const edgeCache = installGlobals(feed);
 Date.now = stubNow; // installGlobals freezes the clock for tests; the dev server wants real time.
 
-const { default: worker, GRAPH } = await import('../src/index.ts');
-const { inService } = await import('../src/resolve.ts');
+const { default: worker, GRAPH } = await import('../../src/index.ts');
+const { inService } = await import('../../src/resolve.ts');
 const serviceHours = GRAPH.serviceHours;
 // The real hours, or every service "running" whatever the hour (POST /__stub/hours?real=1|0).
 const realHours = (on) => {
@@ -267,7 +267,7 @@ for (const svc of servingStop.get('PGP') ?? []) {
 }
 
 // The website, standing in for the Workers ASSETS binding.
-const WEB = new URL('../../web/public/', import.meta.url).pathname;
+const WEB = new URL('../../../web/public/', import.meta.url).pathname;
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css',
@@ -302,7 +302,7 @@ const ASSETS = {
 // The map's files (fonts, icons, the map file if there is one) from dev/map/,
 // standing in for R2, byte ranges and all. latest.json names this version,
 // for the landing page; there are no app files behind it.
-const MAP_DIR = new URL('../../../dev/map/', import.meta.url).pathname;
+const MAP_DIR = new URL('../../../../dev/map/', import.meta.url).pathname;
 const DOWNLOADS = makeBucket(async (key) => {
   if (key === 'latest.json') return new TextEncoder().encode(JSON.stringify({ version: API_VERSION }));
   if (!key.startsWith('map/')) return null;
@@ -315,7 +315,7 @@ const DOWNLOADS = makeBucket(async (key) => {
 // The /admin dashboard opens with the token "dev" here.
 // Push: the real Firebase project, when its service account is in
 // .private/ (gitignored). Pushes then reach a real device or emulator.
-const FCM = await readFile(new URL('../../../.private/fcm-service-account.json', import.meta.url), 'utf8').catch(() => undefined);
+const FCM = await readFile(new URL('../../../../.private/fcm-service-account.json', import.meta.url), 'utf8').catch(() => undefined);
 let env;
 // The trip engine's Durable Object, in-process; its alarms fire on time below.
 const TRIPS = makeDurableObjects(Trip, () => env);

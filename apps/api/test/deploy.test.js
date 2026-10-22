@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
 
 import defineSite from '../cloudflare.config.ts';
-import { conflictMarkers, problems } from '../scripts/predeploy.mjs';
+import { conflictMarkers, problems } from '../scripts/deploy/predeploy.mjs';
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 
@@ -97,10 +97,10 @@ test('the beta knows it is the beta, and writes its analytics to its own dataset
 // feedback.reply_to), so a deploy to a database without them answers 500.
 // The guard runs first, so a dirty tree or a failed check changes nothing.
 test('each deploy checks the tree, then applies its own D1 migrations, then deploys its own mode', () => {
-  assert.equal(pkg.scripts.deploy, `node scripts/predeploy.mjs && cf d1 migrations apply ${STABLE.env.DB.id} && cf deploy`);
+  assert.equal(pkg.scripts.deploy, `node scripts/deploy/predeploy.mjs && cf d1 migrations apply ${STABLE.env.DB.id} && cf deploy`);
   assert.equal(
     pkg.scripts['deploy:beta'],
-    `node scripts/predeploy.mjs && cf d1 migrations apply ${BETA.env.DB.id} && cf deploy --mode beta`,
+    `node scripts/deploy/predeploy.mjs && cf d1 migrations apply ${BETA.env.DB.id} && cf deploy --mode beta`,
   );
 });
 

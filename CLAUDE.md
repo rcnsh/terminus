@@ -139,7 +139,7 @@ pnpm check                            # tests + tsc --noEmit (what CI's api job 
 pnpm lint                             # oxlint over API, tests, scripts, website JS; warnings fail
 pnpm format                           # oxfmt: JS, TS, JSON (pnpm format:check in CI)
 pnpm loc                              # lines of code by part and language (--json too)
-node apps/api/scripts/dev-stub.mjs    # local Worker on :8787 with a fake feed and fake buses
+node apps/api/scripts/dev/dev-stub.mjs    # local Worker on :8787 with a fake feed and fake buses
 ```
 
 - Run `pnpm lint` **and** `pnpm check` after your **last** edit, not before
@@ -192,7 +192,7 @@ node apps/api/scripts/dev-stub.mjs    # local Worker on :8787 with a fake feed a
 
 ### The dev stub
 
-`apps/api/scripts/dev-stub.mjs` runs the real Worker under Node with:
+`apps/api/scripts/dev/dev-stub.mjs` runs the real Worker under Node with:
 - a fake NUS feed. Arrivals are made up; three buses per service drive round
   each route line, moving every 18 s like the real feed.
 - an in-memory D1;
@@ -203,7 +203,7 @@ node apps/api/scripts/dev-stub.mjs    # local Worker on :8787 with a fake feed a
   `/admin/timelapse/` (token `dev`).
 - made-up numbers for the dashboard (`/admin/`, token `dev`): accounts,
   answers, crash reports, reports and arrival-time scores
-  (`scripts/stub-admin.mjs`). `STUB_ADMIN=empty` shows it as a new install
+  (`scripts/dev/stub-admin.mjs`). `STUB_ADMIN=empty` shows it as a new install
   would.
 - every service running at any hour, unless `STUB_HOURS=real` (real hours,
   and no buses or times outside them). `STUB_NOW=2026-10-07T13:30:00Z`
@@ -413,7 +413,7 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
 ## How the core works (short version)
 
 - **Data graph.** `data/stops.json` (stops, route order, operating hours) is
-  scraped weekly by `scrape.yml` → `scripts/scrape_stops.py`, along with
+  scraped weekly by `scrape.yml` → `scripts/data/scrape_stops.py`, along with
   `shapes.json` (route lines from OpenStreetMap via Overpass) and
   `calendar.json`. The workflow is three jobs: `scrape` holds the feed
   secrets and runs only the repo's standard-library Python; `test` runs the
@@ -443,7 +443,7 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
   A room can have several stops (`venueStops()`, `stops` in `venues.json`):
   a trip from or to a class considers each, with the room's own walk to it.
   Where the map's nearest stop is the wrong one, fix it in
-  `data/src/venue-stops.json` and run `scripts/walk_routes.py`.
+  `data/src/venue-stops.json` and run `scripts/data/walk_routes.py`.
   Standing in a building, the walk to a stop is the path from it (`out` in
   `venues.json`, `buildingStops()`), and only by its listed stops when it
   has them, not the straight line.
@@ -491,7 +491,7 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
 - **Public buses (`src/public.ts`, `src/lta.ts`, `data/public.json`).** Off
   by default; an account turns them on (`publicBuses` in the profile). The
   public buses that call at the campus's stops (95, 151, 96 and others, from
-  LTA DataMall via `scripts/scrape_lta.py`, weekly) join a second graph,
+  LTA DataMall via `scripts/data/scrape_lta.py`, weekly) join a second graph,
   `GRAPH_PUBLIC`, used only when asked: a public stop on a shuttle stop's
   shelter is the same stop with a `publicCode`; a stop of its own keeps
   LTA's five-digit code. A two-way service is two routes, `151/1` and
@@ -567,7 +567,7 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
 
 - **Deploying.** `main` is **not** auto-deployed.
   - Deploy from `apps/api` with `pnpm run deploy` (not `pnpm deploy`, which
-    is a pnpm built-in). It first runs `scripts/predeploy.mjs`, which
+    is a pnpm built-in). It first runs `scripts/deploy/predeploy.mjs`, which
     refuses unmerged files, conflict markers or uncommitted changes in
     `apps/api` and `apps/web/public` and runs `pnpm check`; then it applies
     the stable D1's pending migrations and runs `cf deploy`. It needs

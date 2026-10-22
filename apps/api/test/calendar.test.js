@@ -201,7 +201,7 @@ test('the real calendar lists the semester after today’s', () => {
   assert.ok(started.length > 0, `nothing in data/calendar.json has started by ${today}`);
   const next = BUNDLED.semesters.find((s) => s.start > today);
   const now = started.at(-1);
-  assert.ok(next, `data/calendar.json ends with ${now.acadYear} semester ${now.semester}: refresh it (scripts/fetch_calendar.py)`);
+  assert.ok(next, `data/calendar.json ends with ${now.acadYear} semester ${now.semester}: refresh it (scripts/data/fetch_calendar.py)`);
 });
 
 test('the real calendar: semesters in order, none listed twice, each 1 to 4', () => {

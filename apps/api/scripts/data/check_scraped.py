@@ -12,7 +12,7 @@ Some of these are real changes now and then (NUS reorders a route a few
 times a year). The check still fails on them: a human looks, and commits the
 data by hand.
 
-    python3 apps/api/scripts/check_scraped.py
+    python3 apps/api/scripts/data/check_scraped.py
 
 Exits 1 with the reasons when something looks off, so nothing is pushed.
 """
@@ -26,7 +26,7 @@ import sys
 import unicodedata
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[4]
 DATA = "apps/api/data"
 # NUS Kent Ridge, Bukit Timah and the stops between: generous on every side.
 LAT = (1.25, 1.35)

@@ -62,7 +62,7 @@ erred less (MAE 45.4 s against 54.4 s) and the blend 10% less. Beyond
 How it was recorded and tested:
 
 - **When:** Thursday 22 October 2026, 07:20–11:00 SGT (A1, A2, D1, D2 and K).
-- **How:** `scripts/record_eta.mjs` on a VM, reading terminus.run's public
+- **How:** `scripts/probes/record_eta.mjs` on a VM, reading terminus.run's public
   API: `/api/buses` per service every 20 s, one `/api/arrivals` board every
   15 s. That's 10,503 bus readings and 879 board reads, with no failed
   requests.

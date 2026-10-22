@@ -16,7 +16,7 @@ kind ends the run: it never retries, backs off or tries again faster.
 Same config as scrape_stops.py (environment, falling back to .dev.vars).
 Never prints a credential, a device id or a plate.
 
-    python3 scripts/probe_arrivals.py [--minutes 10] [--every 5] [--trace FILE] [COM3 UTOWN KR-MRT PGP]
+    python3 scripts/probes/probe_arrivals.py [--minutes 10] [--every 5] [--trace FILE] [COM3 UTOWN KR-MRT PGP]
 
 --trace also writes every reading, one JSON object a line (seconds since the
 start, stop, service, berth, the times as the feed gave them, the reply's
@@ -35,6 +35,8 @@ import sys
 import time
 from datetime import datetime, timedelta, timezone
 
+# The feed client is the weekly scrape's (scripts/data/scrape_stops.py).
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data"))
 from scrape_stops import REQUIRED, ROOT, get_session, load_dev_vars, pick_list, proxy
 
 

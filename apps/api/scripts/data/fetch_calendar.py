@@ -9,7 +9,7 @@ Sources, both public and credential-free:
     https://data.gov.sg/datasets/d_8ef23381f9417e4d4254ee8b4dcdb176/view
 
 Usage:
-    python3 scripts/fetch_calendar.py [--out data/calendar.json]
+    python3 scripts/data/fetch_calendar.py [--out data/calendar.json]
 
 Only rewrites the file when the dates actually change.
 
@@ -25,7 +25,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 NUSMODS = (
     "https://raw.githubusercontent.com/nusmodifications/nusmods/master/"
     "packages/nusmods-academic-calendar/academic-calendar.json"

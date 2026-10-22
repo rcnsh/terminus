@@ -101,13 +101,13 @@ Node 22.18 or later and pnpm (the version is pinned in `package.json`).
 pnpm install
 pnpm check                            # API tests and typecheck: no network, no keys
 pnpm lint                             # oxlint; warnings fail
-node apps/api/scripts/dev-stub.mjs    # the Worker and website with fake buses on :8787
+node apps/api/scripts/dev/dev-stub.mjs    # the Worker and website with fake buses on :8787
 ```
 
 Open http://localhost:8787 and sign in as `you@u.nus.edu` with the code the
 stub prints. The stub needs no keys. Its options (`PORT`, `STUB_HOST`,
 `STUB_NOW`, `STUB_HOURS`, `STUB_TLS`, `CLASS_IN_MIN`) are described at the
-top of [`apps/api/scripts/dev-stub.mjs`](apps/api/scripts/dev-stub.mjs).
+top of [`apps/api/scripts/dev/dev-stub.mjs`](apps/api/scripts/dev/dev-stub.mjs).
 
 Against the live NUS feed, with `cf dev`:
 
@@ -142,7 +142,7 @@ Secrets go in `apps/api/.dev.vars` locally (template:
 | `HEALTH_TOKEN` | yes | Operator token (`x-health-token`): dashboard, `/api/health?probe=1` |
 | `TURNSTILE_SECRET` | yes | Turnstile on web sign-in. Unset: the check is skipped |
 | `FCM_SERVICE_ACCOUNT` | yes | Firebase service account JSON, for Android push |
-| `VAPID_PRIVATE_KEY` | yes | Web Push key, a P-256 JWK (`apps/api/scripts/vapid-key.mjs`) |
+| `VAPID_PRIVATE_KEY` | yes | Web Push key, a P-256 JWK (`apps/api/scripts/deploy/vapid-key.mjs`) |
 | `LTA_ACCOUNT_KEY` | no | LTA DataMall key, for public buses. Unset: shuttles only |
 | `ANALYTICS_TOKEN` | no | Lets the dashboard query Analytics Engine |
 | `TIMELAPSE_TOKEN` | no | Opens `/api/timelapse/*` for the machine that renders videos |
@@ -195,7 +195,7 @@ pnpm run deploy:beta    # beta: beta.terminus.run
 ```
 
 Use `pnpm run deploy`, not `pnpm deploy`, which is a pnpm built-in. Each runs
-[`scripts/predeploy.mjs`](apps/api/scripts/predeploy.mjs) (refuses
+[`scripts/deploy/predeploy.mjs`](apps/api/scripts/deploy/predeploy.mjs) (refuses
 uncommitted changes in `apps/api` or `apps/web/public`, then runs
 `pnpm check`), applies pending D1 migrations with `cf d1 migrations apply`,
 then runs `cf deploy` (`--mode beta` for the beta). Migrations must be

@@ -17,7 +17,7 @@ rm -rf build/store-shots
 scripts/fetch-maplibre.sh
 xcodegen generate -q
 
-PORT=$PORT node ../api/scripts/dev-stub.mjs > build/store-stub.log 2>&1 &
+PORT=$PORT node ../api/scripts/dev/dev-stub.mjs > build/store-stub.log 2>&1 &
 STUB=$!
 trap 'kill $STUB 2>/dev/null; xcrun simctl status_bar "$SIM" clear' EXIT INT TERM
 for _ in 1 2 3 4 5 6 7 8 9 10; do

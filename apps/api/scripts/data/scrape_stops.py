@@ -14,7 +14,7 @@ to get right; everything else in this file is bookkeeping.
 Reads config from the environment, falling back to .dev.vars. Never prints or
 commits any credential value.
 
-    python3 scripts/scrape_stops.py [--out data/stops.json] [--dry-run]
+    python3 scripts/data/scrape_stops.py [--out data/stops.json] [--dry-run]
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 REQUIRED = [
     "NEXTBUS_AUTH_BASE",
@@ -349,7 +349,7 @@ def scrape(session: dict, route_codes: list) -> dict:
 
     return {
         "generated": datetime.now(timezone.utc).isoformat(),
-        "source": "uNivUS bus proxy via scripts/scrape_stops.py",
+        "source": "uNivUS bus proxy via scripts/data/scrape_stops.py",
         "stops": sorted(stops, key=lambda s: s["code"]),
         "routes": routes,
         "berths": berths,

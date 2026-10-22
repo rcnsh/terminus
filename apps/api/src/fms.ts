@@ -534,7 +534,7 @@ export const MAX_STAMP_LAG_S = 90;
  * NUS works a stop's arrivals out every 35 to 40 s and serves that same
  * reply, TimeStamp and `eta_s` unchanged, until the next: "in 3 min"
  * counts from the TimeStamp, not from when we asked. Measured with
- * scripts/probe_arrivals.py (22 Oct 2026): a reply was a median of 20 s
+ * scripts/probes/probe_arrivals.py (22 Oct 2026): a reply was a median of 20 s
  * old when it came, up to 55 s. Read from the call, every bus came that
  * much later than NUS said.
  */

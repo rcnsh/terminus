@@ -23,7 +23,7 @@ pnpm lint                                 # oxlint: API, website and scripts; wa
 pnpm format                               # oxfmt: JS, TS and JSON
 pnpm format:swift                         # swift-format (Xcode's `swift format`)
 pnpm format:kotlin                        # ktfmt, through Gradle (./gradlew ktfmtFormat)
-node apps/api/scripts/dev-stub.mjs        # local API with fake buses
+node apps/api/scripts/dev/dev-stub.mjs        # local API with fake buses
 ```
 
 What CI runs ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)), so

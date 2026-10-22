@@ -50,7 +50,7 @@ export function problems(git, readFile) {
 }
 
 function main() {
-  const api = join(dirname(fileURLToPath(import.meta.url)), '..');
+  const api = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
   const root = execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd: api, encoding: 'utf8' }).trim();
   // `git grep` exits 1 when nothing matches: that's the good case.
   const git = (args, noneOk = false) => {
@@ -68,7 +68,7 @@ function main() {
   }
   console.log('predeploy: tree clean, running pnpm check');
   try {
-    execFileSync('pnpm', ['check'], { cwd: api, stdio: 'inherit' });
+    execFileSync('pnpm', ['check'], { cwd: root, stdio: 'inherit' });
   } catch {
     console.error('Not deploying: pnpm check failed.');
     process.exit(1);

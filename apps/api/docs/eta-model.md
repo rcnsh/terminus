@@ -86,7 +86,7 @@ beyond the language.
 
 Nothing in the answer path calls it. Users see the feed's times as before.
 
-## The backtest (`scripts/eta_backtest.mjs`)
+## The backtest (`scripts/probes/eta_backtest.mjs`)
 
 Fits the model on the earlier data and scores the feed, the corrected
 feed, history, history+gate, history+gate+recent and the blend on later
@@ -122,7 +122,7 @@ curl -s "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/analytics_
   -H "Authorization: Bearer $ANALYTICS_TOKEN" \
   --data "SELECT blob6 AS plate, blob2 AS stop, blob3 AS svc, double1 AS eta, timestamp FROM terminus
           WHERE blob1 = 'arrival' AND blob6 != '' AND timestamp > NOW() - INTERVAL '3' DAY" > /tmp/ae.json
-node scripts/eta_backtest.mjs --day /tmp/day-2026-10-20.json.gz --predictions /tmp/ae.json \
+node scripts/probes/eta_backtest.mjs --day /tmp/day-2026-10-20.json.gz --predictions /tmp/ae.json \
   --day /tmp/day-2026-10-21.json.gz --predictions /tmp/ae.json --out /tmp/backtest.md
 ```
 
@@ -131,7 +131,7 @@ each cached answer once, so one predictions file can serve every day. With
 two days or more, the last is the test. Analytics Engine samples at high
 volume; the backtest scores the rows it has, each once.
 
-### From the public API (`scripts/record_eta.mjs`)
+### From the public API (`scripts/probes/record_eta.mjs`)
 
 For a developer's machine, when there's no recorder day to hand: it signs
 in as a throwaway anonymous account (deleted at the end) and reads
@@ -143,8 +143,8 @@ positions are the map's drawn spot, so an arrival is known to about half
 the poll, and the boards carry no plate.
 
 ```bash
-node apps/api/scripts/record_eta.mjs --until 11:00          # Singapore time
-node apps/api/scripts/eta_backtest.mjs --recording dev/eta/2026-10-22.jsonl --out /tmp/backtest.md
+node apps/api/scripts/probes/record_eta.mjs --until 11:00          # Singapore time
+node apps/api/scripts/probes/eta_backtest.mjs --recording dev/eta/2026-10-22.jsonl --out /tmp/backtest.md
 ```
 
 ## In shadow (`src/etashadow.ts`)

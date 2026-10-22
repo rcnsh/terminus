@@ -10,7 +10,7 @@ Same guest token and bus proxy as scrape_stops.py, and the same config
 (environment, falling back to .dev.vars). Never prints a credential, and
 buses are shown as #1, #2..., not plates.
 
-    python3 scripts/probe_buses.py [--minutes 3] [--every 5] [--trace FILE] [A1 A2 D2 ...]
+    python3 scripts/probes/probe_buses.py [--minutes 3] [--every 5] [--trace FILE] [A1 A2 D2 ...]
 
 --trace also writes every reading, one JSON object a line (seconds since the
 start, service, bus number, lat, lng, speed, direction), for replaying through
@@ -27,6 +27,8 @@ import statistics
 import sys
 import time
 
+# The feed client is the weekly scrape's (scripts/data/scrape_stops.py).
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data"))
 from scrape_stops import REQUIRED, get_session, load_dev_vars, pick_list, proxy
 
 

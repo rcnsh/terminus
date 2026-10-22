@@ -735,7 +735,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                     sgt: '09:14 day1',
                     graph: {
                       generated: '2026-09-28T13:27:41Z',
-                      source: 'uNivUS bus proxy via scripts/scrape_stops.py',
+                      source: 'uNivUS bus proxy via scripts/data/scrape_stops.py',
                       stops: 33,
                       services: ['A1', 'A2', 'D1', 'D2', 'K', 'P', 'R1', 'R2'],
                     },

@@ -283,7 +283,7 @@ export function feedbackHtml(r: Report): Promise<string> {
     </tbody></table>`
         : null
     }
-    ${r.entry ? html`<${Text} style=${s.p}>If it's right, add this to apps/api/data/src/venue-stops.json and run scripts/walk_routes.py:<//>` : null}
+    ${r.entry ? html`<${Text} style=${s.p}>If it's right, add this to apps/api/data/src/venue-stops.json and run scripts/data/walk_routes.py:<//>` : null}
     ${r.entry ? html`<pre style=${s.pre}>${r.entry}</pre>` : null}
     ${cta(`${r.origin}/admin`, 'Open the dashboard')}
     <${Text} style=${s.small}>${`Report ${r.id}. ${r.withAnswer ? 'Who sent it and the answer they saw are' : 'Who sent it is'} on the dashboard, not in this email.`}<//>

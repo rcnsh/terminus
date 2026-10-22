@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Records, from a live site's own API, what the arrival-time backtest
- * (scripts/eta_backtest.mjs) needs when there's no recorder day to hand:
+ * (scripts/probes/eta_backtest.mjs) needs when there's no recorder day to hand:
  * where each bus is (/api/buses, per service) and what the boards say
  * (/api/arrivals, per stop), timestamped, appended as JSON lines to a local
  * file. It's for a developer's machine, never the Worker: the Worker
@@ -22,7 +22,7 @@
  * draws it (at a stop, or between two), not its raw position, so arrivals
  * read from this are good to about half the polling interval.
  *
- *   node scripts/record_eta.mjs [--site https://terminus.run] [--until 11:00] [--every 20] [--board-every 15]
+ *   node scripts/probes/record_eta.mjs [--site https://terminus.run] [--until 11:00] [--every 20] [--board-every 15]
  *                               [--out ../../dev/eta/<date>.jsonl] [A1 A2 D1 D2 K]
  *
  * --until is a Singapore clock time today (or tomorrow, if already past).
@@ -56,7 +56,7 @@ const UNTIL = opt('until', '11:00');
 const m = /^(\d\d):(\d\d)$/.exec(UNTIL);
 if (!m) usage('--until is HH:MM, Singapore time');
 const here = dirname(fileURLToPath(import.meta.url));
-const OUT = resolve(opt('out', resolve(here, `../../../dev/eta/${sgtDate(Date.now())}.jsonl`)));
+const OUT = resolve(opt('out', resolve(here, `../../../../dev/eta/${sgtDate(Date.now())}.jsonl`)));
 const SERVICES = args.length ? args : ['A1', 'A2', 'D1', 'D2', 'K'];
 
 /** --until as epoch ms: today's in Singapore, or tomorrow's once that's past. */

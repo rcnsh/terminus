@@ -14,7 +14,7 @@ Runs weekly in CI like scrape_stops.py; the result is bundled into the Worker.
 Reads LTA_ACCOUNT_KEY from the environment, falling back to .dev.vars. Never
 prints or commits the key.
 
-    python3 scripts/scrape_lta.py [--out data/public.json] [--dry-run]
+    python3 scripts/data/scrape_lta.py [--out data/public.json] [--dry-run]
 
 Contains information from LTA DataMall, under the Singapore Open Data Licence.
 """
@@ -31,7 +31,7 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 BASE = "https://datamall2.mytransport.sg/ltaodataservice/"
 
 # A public stop this close to a shuttle stop is the same shelter: the shuttle
@@ -228,7 +228,7 @@ def build(shuttle: dict, stops: list, routes: list, services: list) -> dict:
 
     return {
         "generated": datetime.now(timezone.utc).isoformat(),
-        "source": "LTA DataMall (BusStops, BusRoutes, BusServices) via scripts/scrape_lta.py; Singapore Open Data Licence",
+        "source": "LTA DataMall (BusStops, BusRoutes, BusServices) via scripts/data/scrape_lta.py; Singapore Open Data Licence",
         "radiusM": RADIUS_M,
         "stops": out_stops,
         "merged": {c: merged[c] for c in sorted(merged)},
