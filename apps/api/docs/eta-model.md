@@ -164,6 +164,14 @@ first, up to three days back), one a run:
 It writes only those two files to the downloads bucket and calls no one
 but Analytics Engine. Each day is scored by a model that never saw it.
 
+`ETA_MODEL` is set in `cloudflare.config.ts`: `shadow` on the stable site,
+`off` on the beta. The `eta` collector is the dashboard's switch (`POST
+/api/admin/collect`). Because each day is scored only by the days before
+it, the first days have no segment times to build from: history can answer
+almost nothing, and every method but the feed and the corrected feed looks
+empty. Coverage grows as segment days build up. Read the days from about a
+week in, and judge after about four weeks.
+
 ## How much data a verdict needs
 
 - **Segment times.** About 105 stop pairs over the 8 services. A bus laps
