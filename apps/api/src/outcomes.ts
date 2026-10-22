@@ -4,10 +4,10 @@
  *
  * One row per trip per day in `trip_outcomes`: what detection saw from the
  * phone's location (boarded, missed, arrived) or "Not going" (skipped). terminus
- * never asks what happened. Rows from before that may say `none` (a question
- * nobody answered); nothing reads them any more. Kept 35 days. `at` is the
- * start of that day, not the moment: the suggestions only count days, and a
- * time of day would say when you got off a bus. From it:
+ * never asks what happened; `none` is allowed by the schema but never written,
+ * and nothing acts on it. Kept 35 days. `at` is the start of that day, not the
+ * moment: the suggestions only count days, and a time of day would say when
+ * you got off a bus. From it:
  *
  * - **Three misses of the same trip in 30 days** suggest leaving one bus
  *   earlier for it. Only a suggestion; nothing changes until it's accepted.
@@ -34,7 +34,7 @@ export const DISMISS_DAYS = 30;
 
 const DAY_MS = 86_400_000;
 
-/** A suggestion for the card: accept or turn down with /me/choice. */
+/** A suggestion for the card: accept or turn down with /api/me/choice. */
 export interface Suggestion {
   /** `earlier:<trip>` or `quiet:<trip>`. */
   id: string;

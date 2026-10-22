@@ -49,6 +49,16 @@ object Session {
         return true
     }
 
+    /**
+     * A token was just stored for a sign-in: what the phone kept for the widgets, and the place each widget was showing, were the last
+     * account's (maybe a guest's on this phone), so they go before the widgets refresh.
+     */
+    suspend fun signedIn(ctx: Context) {
+        val app = ctx.applicationContext
+        withContext(Dispatchers.IO) { Store(app).forgetAnswers() }
+        runCatching { forgetWidgets(app) }
+    }
+
     /** Signed out here, or the account deleted: local state goes first, so the screen can change at once, even offline. */
     fun clearLocal(ctx: Context) {
         val app = ctx.applicationContext

@@ -65,9 +65,13 @@ function anonId(db) {
 /** Gives a user some trip state today, as a "Not going" would. */
 async function seedTrip(env, userId) {
   const now = Date.now();
-  const res = await env.TRIPS.get(userId).fetch('https://trip/signal', {
+  const res = await env.TRIPS.get(userId).fetch('https://trip/update', {
     method: 'POST',
-    body: JSON.stringify({ date: sgtDate(now), key: '4:600:UTOWN', rec: { kind: 'skipped', at: now }, deleteAt: endOfDayMs(now) }),
+    body: JSON.stringify({
+      date: sgtDate(now),
+      items: [{ key: '4:600:UTOWN', rec: { kind: 'skipped', at: now } }],
+      deleteAt: endOfDayMs(now),
+    }),
   });
   assert.equal(res.status, 200);
 }
@@ -536,6 +540,44 @@ test('an inbox over its hourly budget does not spend the global email ceiling', 
   assert.equal(await requestLink(env, env.DB, ME, 'https://terminus.run', now), 'cooldown');
   assert.equal((await call(env, '/api/auth/app/start', { method: 'POST', body: { email: ME, name: 'x' } })).status, 429);
   assert.equal(spent, 0);
+});
+
+test('a web sign-in inside the cooldown of an app sign-in to the address sends no second email', async () => {
+  const { env, email } = setup();
+  // KV is eventually consistent: another data centre may not see the inbox's
+  // cooldown key yet, so the D1 check must hold for both kinds of sign-in.
+  const get = env.KV.get.bind(env.KV);
+  env.KV.get = async (k, type) => (String(k).startsWith('mail:') ? null : get(k, type));
+  assert.equal((await call(env, '/api/auth/app/start', { method: 'POST', body: { email: ME, name: 'x' } })).status, 201);
+  assert.equal(email.sent.length, 1);
+  await call(env, '/api/auth/login', { method: 'POST', body: { email: ME } });
+  assert.equal(email.sent.length, 1, 'one email a minute per address, whichever sign-in asks');
+});
+
+test('merging a device setup into the account is all or nothing', async () => {
+  const { mergeAnonymous } = await import('../src/applogin.ts');
+  const { ensureUser, loadProfileJson, saveProfileJson } = await import('../src/accounts.ts');
+  const { env, db } = setup();
+  const now = Date.now();
+  const user = await ensureUser(db, ME, now);
+  await saveProfileJson(db, user.id, { home: { stops: ['COM3'] } }, now);
+  const old = await anon(env);
+  await call(env, '/api/me/profile', { method: 'PUT', token: old, body: HOME });
+  const id = anonId(db);
+  // D1 drops the batch: the account's setup stays as it was, and the device's account too.
+  const failing = {
+    ...db,
+    batch: async () => {
+      throw new Error('D1_ERROR: Network connection lost.');
+    },
+  };
+  await assert.rejects(mergeAnonymous(failing, user.id, old, 'device', now));
+  assert.deepEqual((await loadProfileJson(db, user.id)).home.stops, ['COM3']);
+  assert.equal(anonId(db), id);
+  // Then it goes through whole.
+  assert.deepEqual(await mergeAnonymous(db, user.id, old, 'device', now), { removed: id });
+  assert.deepEqual((await loadProfileJson(db, user.id)).home.stops, ['PGP']);
+  assert.equal(anonId(db), undefined);
 });
 
 test('app sign-in: a repeat in the cooldown does not spend the global email ceiling', async () => {

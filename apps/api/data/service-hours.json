@@ -21,14 +21,14 @@
     "nothing except that it never reports 'ended'."
   ],
   "_routes": {
-    "A1": "KRT > PGP > KR MRT > CLB > KRT",
-    "A2": "KRT > CLB > KR MRT > PGP > KRT",
-    "D1": "COM3 > CLB > UTown > COM3",
-    "D2": "PGP > UTown > CLB > PGP",
-    "K": "PGP > KR MRT > LT27 > PGP",
+    "A1": "KRT > BIZ2 > PGP > KR MRT > UHall > CLB > KRT",
+    "A2": "KRT > IT > UHC > Opp KR MRT > PGP Foyer > Ventus > KRT",
+    "D1": "COM3 > IT > UTown > CLB > BIZ2 > COM3",
+    "D2": "COM3 > PGP > KR MRT > UTown > Opp KR MRT > PGP Foyer > COM3",
+    "K": "PGP > KR MRT > CLB > Kent Vale > UHC > PGP Foyer (one way)",
     "P": "KV > CG > OTH > BG MRT > KR MRT > Opp UHC > UTown > KV",
-    "R1": "UTown > BIZ2 > KR MRT > UTown",
-    "R2": "UTown > KR MRT > BIZ2 > UTown"
+    "R1": "KV > UTown > CLB > BIZ2 > PGP (one way)",
+    "R2": "PGP > Ventus > IT > UTown > KV (one way)"
   },
   "A1": {
     "weekday": [

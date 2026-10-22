@@ -477,7 +477,7 @@ internal fun Refused(text: String, openSettings: () -> Unit, inCard: Boolean) {
     }
 }
 
-/** The reasons offered as chips, as /me/feedback takes them (REASONS in the API's feedback.ts). */
+/** The reasons offered as chips, as /api/me/feedback takes them (REASONS in the API's feedback.ts). */
 private val REPORT_REASONS =
     listOf(
         "never-came" to R.string.report_never_came,

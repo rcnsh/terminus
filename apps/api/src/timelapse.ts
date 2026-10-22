@@ -1,26 +1,15 @@
 /**
- * A day of NUS shuttles, recorded for a timelapse (the operator's page at
- * /admin/timelapse/ replays it and exports a video).
+ * A day of NUS shuttles, recorded for a timelapse (/admin/timelapse/ replays
+ * it). The one scheduled poller of the NUS feed (CLAUDE.md rule 2), bounded:
  *
- * This is the one place terminus polls the NUS feed on a schedule rather
- * than because someone asked (CLAUDE.md rule 2 has the exception). It is
- * bounded on every side:
+ * - rate: each service once per TIMELAPSE.pollMs, never below MIN_POLL_MS,
+ *   spread across that time (pollInterval());
+ * - path: getBuses(), so the edge cache, failMemoS and the breaker apply;
+ * - hours: TIMELAPSE.hours, and each service's own operating hours;
+ * - kill switch: timelapseEnabled();
+ * - at most TIMELAPSE.maxPollsPerDay polls a day.
  *
- * - one Durable Object per Singapore day (timelapsedo.ts), driven by its own
- *   alarm, asks for each service's buses once per TIMELAPSE.pollMs (never
- *   below MIN_POLL_MS, and never more than TIMELAPSE.maxPollsPerDay polls a
- *   day: pollInterval()), the services spread across that time, never in a
- *   burst;
- * - only inside TIMELAPSE.hours, and only for services inside their own
- *   operating hours;
- * - through getBuses(), the map's own path: the 5 s edge cache, failMemoS
- *   and the breaker all apply, so a poll the map already paid for costs NUS
- *   nothing, and an open breaker skips the poll altogether;
- * - only while the kill switch is on (timelapseEnabled()).
- *
- * The day is kept in the object's SQLite storage as it's recorded, then
- * written to R2 as one gzipped JSON file (DayFile) when the window closes,
- * and the object is emptied.
+ * See internals.md, *The timelapse recorder*.
  */
 
 import type { Env } from './types.ts';
@@ -82,7 +71,6 @@ export function serviceDate(ms: number, hours: Hours = TIMELAPSE.hours): string 
   return sgtDate(ms - minutesOf(hours.start) * 60_000);
 }
 
-/** Whether [ms] is inside a recording window. */
 export function inWindow(ms: number, hours: Hours = TIMELAPSE.hours): boolean {
   const w = windowOf(serviceDate(ms, hours), hours);
   return ms >= w.open && ms < w.close;
@@ -161,7 +149,7 @@ export interface DayFile {
   samples: number[][];
 }
 
-/** The routes and stops a day is drawn with: the map's, as /campus has them now. */
+/** The routes and stops a day is drawn with: the map's, as /api/campus has them now. */
 export function mapSnapshot(): Pick<DayFile, 'routes' | 'stops'> {
   const campus = buildCampusMap(GRAPH);
   return {
@@ -225,7 +213,7 @@ export async function gzip(text: string): Promise<Uint8Array> {
 export const dayKey = (date: string) => `timelapse/${date}.json.gz`;
 
 /** How long a recorder keeps a closed day that R2 refused, trying again,
- *  and how many days back /timelapse/days looks for one. A week is plenty
+ *  and how many days back /api/timelapse/days looks for one. A week is plenty
  *  to notice. */
 export const HELD_DAYS = 7;
 
@@ -286,7 +274,7 @@ export interface RecorderStatus {
 
 /**
  * GET /api/timelapse/days and /api/timelapse/days/:date, for the operator or a
- * holder of TIMELAPSE_TOKEN only (anything else is a 404, as /admin/stats).
+ * holder of TIMELAPSE_TOKEN only (anything else is a 404, as /api/admin/stats).
  * A closed day is its file from R2, unchanged from then on, so it's cached
  * for a year; today's is built from what the recorder holds so far, and not
  * cached.

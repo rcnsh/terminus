@@ -1,7 +1,9 @@
 /**
  * The operator's extra statistics (collect.ts): the switches, the daily
  * active counts (usage.ts), arrival times against where the recorder saw the
- * buses (eta.ts), and crash reports (apperrors.ts). On the real route lines.
+ * buses (eta.ts), crash reports (apperrors.ts), what still uses the old
+ * address and paths (legacy.ts) and the settings' counts (settings.ts). On
+ * the real route lines.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -15,6 +17,9 @@ import { etaKey, etaSummary, passingsOf, recordEta, scoreEtas, statsOf } from '.
 import { countActive, recordActive } from '../src/usage.ts';
 import { fingerprintOf, scrub } from '../src/apperrors.ts';
 import { collecting } from '../src/collect.ts';
+import { adminStats, undismissed } from '../src/admin.ts';
+import { legacyUses, routeOf, senderOf } from '../src/legacy.ts';
+import { countSettings, readSettings, recordSettings, settingsOf } from '../src/settings.ts';
 import { API_VERSION } from '../src/openapi.ts';
 
 const BASE = 'https://bus.example.test';
@@ -37,7 +42,8 @@ async function send(env, path, { method = 'GET', body, headers = {} } = {}) {
 
 test('every collector is off until the operator turns it on, and only the operator can', async () => {
   const env = { ...makeEnv(), HEALTH_TOKEN: 'op' };
-  for (const name of ['active', 'eta', 'errors']) assert.equal(await collecting(env, name), false, `${name} starts off`);
+  for (const name of ['active', 'eta', 'errors', 'legacy', 'settings'])
+    assert.equal(await collecting(env, name), false, `${name} starts off`);
   assert.equal(
     (await send(env, '/api/admin/collect', { method: 'POST', body: { name: 'errors', on: true } })).status,
     404,
@@ -50,7 +56,7 @@ test('every collector is off until the operator turns it on, and only the operat
     headers: { 'x-health-token': 'op' },
   });
   assert.equal(res.status, 200);
-  assert.deepEqual(await res.json(), { active: false, eta: false, errors: true });
+  assert.deepEqual(await res.json(), { active: false, eta: false, errors: true, legacy: false, settings: false });
   assert.equal(await collecting(env, 'errors'), true);
   assert.equal(
     (await send(env, '/api/admin/collect', { method: 'POST', body: { name: 'errors', on: 'yes' }, headers: { 'x-health-token': 'op' } }))
@@ -144,6 +150,36 @@ test('POST /api/errors keeps a scrubbed report only while switched on, with no o
   assert.equal(ae.rows('apperror').length, 2);
 });
 
+test('a dismissed crash is hidden until a report comes in after it was dismissed', async () => {
+  const env = { ...makeEnv(), HEALTH_TOKEN: 'op' };
+  const dismiss = (fingerprint, headers = { 'x-health-token': 'op' }) =>
+    send(env, '/api/admin/crashes/dismiss', { method: 'POST', body: { fingerprint }, headers });
+  assert.equal((await dismiss('18b32d7aae56', {})).status, 404, 'operator only');
+  assert.equal((await dismiss('not one')).status, 400);
+  const before = Date.now();
+  assert.equal((await dismiss('18b32d7aae56')).status, 204);
+  const dismissed = JSON.parse(await env.KV.get('config:crashes:dismissed'));
+  assert.ok(dismissed['18b32d7aae56'] >= before);
+
+  // Analytics Engine's max(timestamp): UTC, to the second.
+  const ae = (ms) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
+  const crashes = [
+    { fingerprint: '18b32d7aae56', last: ae(before - 60_000) },
+    { fingerprint: 'aaaaaaaaaaaa', last: ae(before - 60_000) },
+  ];
+  assert.deepEqual(
+    undismissed(crashes, dismissed).map((e) => e.fingerprint),
+    ['aaaaaaaaaaaa'],
+  );
+  const again = [{ fingerprint: '18b32d7aae56', last: ae(before + 60_000) }];
+  assert.deepEqual(undismissed(again, dismissed), again, 'reported again since: back');
+
+  // A dismissal from over a week ago goes when the next is written.
+  await env.KV.put('config:crashes:dismissed', JSON.stringify({ '000000000000': before - 9 * DAY }));
+  await dismiss('18b32d7aae56');
+  assert.deepEqual(Object.keys(JSON.parse(await env.KV.get('config:crashes:dismissed'))), ['18b32d7aae56']);
+});
+
 async function seedSessions(db, now) {
   const user = (id, email) =>
     db
@@ -186,6 +222,17 @@ test('the active counts: accounts in all and by app, devices by version, nothing
   );
 });
 
+test('the dashboard lists every paired device’s version by when it was last used, the last 7, 30 and 90 days', async () => {
+  const now = Date.UTC(2026, 9, 11, 16, 5);
+  const env = { ...makeEnv(), DB: makeD1() };
+  await seedSessions(env.DB, now);
+  const { clients } = await adminStats(env, now);
+  const of = (c) => clients.find((x) => x.client === c);
+  assert.deepEqual(of('android/3.1.0'), { client: 'android/3.1.0', n: 1, d30: 1, d90: 1 });
+  assert.deepEqual(of('android/3.0.0'), { client: 'android/3.0.0', n: 0, d30: 1, d90: 1 }, 'not seen this week, still counted');
+  assert.equal(clients.length, 3, 'devices only, not the website');
+});
+
 test('the counts are written once a Singapore day, and not at all while switched off', async () => {
   const now = Date.UTC(2026, 9, 11, 16, 5); // 00:05 on the 12th in Singapore
   const ae = makeAnalytics();
@@ -204,6 +251,131 @@ test('the counts are written once a Singapore day, and not at all while switched
   assert.deepEqual(rows.find((r) => r.blobs[1] === 'all').doubles, [1, 2, 3]);
   assert.equal(await recordActive(env, now + 15 * 60_000), false, 'the next run that day writes nothing');
   assert.equal(await recordActive(env, now + DAY), true, 'the next day counts again');
+});
+
+test('a request on the old address or an old path is counted by app and route, with nothing about who', () => {
+  const req = (url, headers = {}, method = 'GET') => new Request(url, { method, headers });
+  const app = { 'x-terminus-client': 'android/3.2.0' };
+  const old = req('https://terminus.rcn.sh/api/me/next?lat=1.29661&lon=103.77628', app);
+  assert.deepEqual(legacyUses(old, new URL(old.url), 200), ['address']);
+  assert.deepEqual(legacyUses(req('https://terminus.rcn.sh/me', app), new URL('https://terminus.rcn.sh/me'), 426), ['address', 'path']);
+  assert.deepEqual(legacyUses(req('https://terminus.run/api/me', app), new URL('https://terminus.run/api/me'), 426), ['outdated']);
+  assert.deepEqual(
+    legacyUses(req('https://terminus.run/api/me', app), new URL('https://terminus.run/api/me'), 200),
+    [],
+    'most requests are nothing',
+  );
+  assert.equal(senderOf(old), 'android/3.2.0');
+  assert.equal(senderOf(req('https://terminus.rcn.sh/', { accept: 'text/html' })), 'browser');
+  assert.equal(
+    senderOf(req('https://terminus.rcn.sh/api/health', { 'x-terminus-client': 'evil<script>' })),
+    'other',
+    'only a well-formed version',
+  );
+  // No query, and no part with a digit in it: no stop, id or tile can single anyone out.
+  assert.equal(routeOf('/api/me/next'), '/api/me/next');
+  assert.equal(routeOf('/api/me/trips/9f8e7d6c'), '/api/me/trips');
+  assert.equal(routeOf('/api/stops/UTOWN/arrivals'), '/api/stops/UTOWN');
+  assert.equal(routeOf('/map/tiles/15/25821/16249.mvt'), '/map/tiles/:id');
+  assert.equal(routeOf('/api/arrivals/CGH'), '/api/arrivals/CGH');
+  assert.equal(routeOf('/api/pair/k7qx4m'), '/api/pair/:id');
+  assert.equal(routeOf('/'), '/');
+});
+
+test('the old address and paths are counted only while switched on', async () => {
+  const ae = makeAnalytics();
+  const env = { ...makeEnv(makeKV(), ae) };
+  const call = async (url, headers) => {
+    const ctx = makeCtx();
+    const res = await worker.fetch(new Request(url, { headers }), env, ctx);
+    await ctx.settle();
+    return res;
+  };
+  const app = { 'x-terminus-client': 'mac/3.2.0' };
+  await call('https://terminus.rcn.sh/api/health', app);
+  assert.equal(ae.rows('legacy').length, 0, 'off');
+  await env.KV.put('config:collect:legacy', 'on');
+  await call('https://terminus.rcn.sh/api/health?x=1', app);
+  assert.equal((await call('https://bus.example.test/next', app)).status, 426);
+  await call('https://bus.example.test/api/health', app);
+  assert.deepEqual(
+    ae.rows('legacy').map((r) => r.blobs),
+    [
+      ['legacy', 'address', 'mac/3.2.0', '/api/health'],
+      ['legacy', 'path', 'mac/3.2.0', '/next'],
+    ],
+    'one row for each, and none for a request on the new address',
+  );
+});
+
+test('the settings: each value counted over the accounts, an older profile at the defaults', () => {
+  assert.deepEqual(Object.fromEntries(settingsOf({})), {
+    publicBuses: 'off',
+    fullBusMargin: 'on',
+    preferBus: 'on',
+    walkPace: 'normal',
+    lang: 'auto',
+    clock: 'auto',
+    gapHours: '2',
+    home: 'none',
+    timetable: 'none',
+    manualClasses: 'none',
+    favourites: 'none',
+    usualTimes: 'none',
+    pinnedStops: 'none',
+  });
+  const rows = countSettings([
+    { publicBuses: true, walkPace: 'fast', trips: [{}], places: [{ key: 'gym' }] },
+    { publicBuses: false, walkPace: 'fast' },
+    { walkPace: '<b>', lang: 'zh' },
+  ]);
+  const of = (setting, value) => rows.find((r) => r.setting === setting && r.value === value)?.n ?? 0;
+  assert.equal(of('publicBuses', 'on'), 1);
+  assert.equal(of('publicBuses', 'off'), 2);
+  assert.equal(of('walkPace', 'fast'), 2);
+  assert.equal(of('walkPace', 'normal'), 1, 'a value that isn\u2019t one is the default');
+  assert.equal(of('timetable', 'some'), 1);
+  assert.equal(of('lang', 'zh'), 1);
+  assert.ok(
+    rows.every((r) => r.of === 3 && Object.keys(r).join() === 'setting,value,n,of'),
+    'totals only',
+  );
+  // A place's name, a stop or a class never becomes a value.
+  assert.ok(rows.every((r) => !JSON.stringify(r).includes('gym')));
+});
+
+test('the settings are read from the accounts used this month, written once a Singapore day while switched on', async () => {
+  const now = Date.UTC(2026, 9, 11, 16, 5);
+  const ae = makeAnalytics();
+  const env = { ...makeEnv(makeKV(), ae), DB: makeD1() };
+  const db = env.DB;
+  const user = (id, seen) =>
+    db
+      .prepare('INSERT INTO users (id, email, created, last_seen, via) VALUES (?, NULL, ?, ?, ?)')
+      .bind(id, now - 90 * DAY, now - seen, 'app')
+      .run();
+  const profile = (id, json) =>
+    db.prepare('INSERT INTO profiles (user_id, json, updated) VALUES (?, ?, ?)').bind(id, JSON.stringify(json), now).run();
+  await user('u1', DAY);
+  await user('u2', 40 * DAY);
+  await profile('u1', { publicBuses: true });
+  await profile('u2', { publicBuses: true });
+  await db
+    .prepare(
+      'INSERT INTO sessions (token_hash, user_id, kind, name, created, last_seen, expires, platform, client, push_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    )
+    .bind('s1', 'u1', 'device', null, now - 9 * DAY, now - DAY, null, 'android', 'android/3.6.0', 'fcm')
+    .run();
+  const rows = await readSettings(db, now);
+  const find = (setting, value) => rows.find((r) => r.setting === setting && r.value === value);
+  assert.deepEqual(find('publicBuses', 'on'), { setting: 'publicBuses', value: 'on', n: 1, of: 1 }, 'only the account used this month');
+  assert.deepEqual(find('notifications', 'android'), { setting: 'notifications', value: 'android', n: 1, of: 1 });
+  assert.equal(await recordSettings(env, now), false, 'off');
+  await env.KV.put('config:collect:settings', 'on');
+  assert.equal(await recordSettings(env, now), true);
+  assert.ok(ae.rows('settings').every((r) => r.blobs[3] === '2026-10-11'));
+  assert.deepEqual(ae.rows('settings').find((r) => r.blobs[1] === 'publicBuses').doubles, [1, 1]);
+  assert.equal(await recordSettings(env, now + 15 * 60_000), false, 'once a day');
 });
 
 const DATE = '2026-08-26';

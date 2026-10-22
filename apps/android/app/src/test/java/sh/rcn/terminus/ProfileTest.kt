@@ -77,10 +77,10 @@ class ProfileTest {
         assertFalse(p.hasSetup)
         p.setHomeStops(emptyList())
         assertTrue(p.json.isNull("home"))
-        p.addManual(Trip(1, 9 * 60, 10 * 60, "COM3", "Gym", ""))
+        p.addManual(TimetableClass(1, 9 * 60, 10 * 60, "COM3", "Gym", ""))
         assertTrue(p.hasSetup)
         assertEquals(600, p.manual.single().endMin)
-        p.removeClass(imported = false, 0)
+        p.removeClass(imported = false, 0, p.classAt(imported = false, 0)!!)
         assertFalse(p.hasSetup)
     }
 
@@ -93,7 +93,7 @@ class ProfileTest {
                     """{"trips":[{"day":1,"arriveByMin":600,"to":"COM3","label":"CS2030","venue":"","weeks":[1,2]},{"day":3,"arriveByMin":540,"to":"UTOWN","label":"GEA1000","venue":"","weeks":[3]}]}"""
                 )
             )
-        p.removeClass(imported = true, 0)
+        p.removeClass(imported = true, 0, p.classAt(imported = true, 0)!!)
         assertEquals("GEA1000", p.trips.single().label)
         assertEquals(3, p.json.getJSONArray("trips").getJSONObject(0).getJSONArray("weeks").getInt(0))
     }

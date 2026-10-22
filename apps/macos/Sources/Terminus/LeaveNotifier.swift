@@ -91,7 +91,7 @@ final class LeaveNotifier: NSObject, UNUserNotificationCenterDelegate {
         case .schedule(let clearFirst, let trip, let soon, let leaveAt):
             if clearFirst { clearLeave() }
             if let soon {
-                defaults.set(trip, forKey: "soonTrip")
+                defaults.set(Self.soonKey(plan, now: now) ?? trip, forKey: "soonTrip")
                 defaults.set(max(soon, now).timeIntervalSince1970, forKey: "soonAt")
                 schedule(Self.soonID, at: soon, now: now, title: card?.leaveBy ?? card?.title ?? plan.label, plan: plan)
             }
@@ -116,7 +116,7 @@ final class LeaveNotifier: NSObject, UNUserNotificationCenterDelegate {
 
     /// The choice `update` makes, apart from macOS so it can be tested.
     /// `soonTrip` and `soonAt` (seconds since 1970) are the trip the
-    /// heads-up was last scheduled for, and when.
+    /// heads-up was last scheduled for (its `soonKey`), and when.
     nonisolated static func step(_ plan: NextAnswer, soonTrip: String?, soonAt lastSoonAt: Double, now: Date) -> Step {
         let card = plan.card
         let phase = card?.phase ?? "idle"
@@ -132,17 +132,28 @@ final class LeaveNotifier: NSObject, UNUserNotificationCenterDelegate {
         else {
             return .clear
         }
+        let key = soonKey(plan, now: now)
         // A different trip (the last one skipped or over): its reminders go.
-        let clearFirst = soonTrip != nil && soonTrip != trip
+        let clearFirst = soonTrip != nil && soonTrip != key
         // The heads-up goes once per trip: once it has gone, a leave-by that
         // moves later doesn't bring it back.
-        let soonDone = soonTrip == trip && lastSoonAt <= now.timeIntervalSince1970
+        let soonDone = soonTrip == key && lastSoonAt <= now.timeIntervalSince1970
         return .schedule(clearFirst: clearFirst, trip: trip, soon: soonDone ? nil : soonAt, leaveAt: leaveAt)
     }
 
     /// The trip a notification is about: the key the card's buttons carry.
     private nonisolated static func tripKey(_ plan: NextAnswer) -> String? {
         plan.card?.actions?.first?.trip
+    }
+
+    /// The trip the heads-up is for, as it's kept: `tripKey` and the day it
+    /// leaves (campus time), since a weekly class has the same key every week.
+    nonisolated static func soonKey(_ plan: NextAnswer, now: Date) -> String? {
+        guard let trip = tripKey(plan) else { return nil }
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = .campus
+        let day = cal.dateComponents([.year, .month, .day], from: plan.leaveAt ?? now)
+        return "\(trip)@\(day.year ?? 0)-\(day.month ?? 0)-\(day.day ?? 0)"
     }
 
     /// Removes the leave reminders, delivered or not (after "left", or when the trip moves on).

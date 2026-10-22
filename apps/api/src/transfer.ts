@@ -5,7 +5,7 @@
  *
  * Which changes are worth asking the feed about is decided here from the
  * route data alone, before any fetch: the change stops are ranked by a
- * timetable guess of the whole trip (half a headway's wait for each bus),
+ * estimate of the whole trip (half a headway's wait for each bus),
  * and at most TRANSFER.maxFetch of them, beyond the stops near you, have
  * their arrivals fetched. scoreOptions() then times each route on the live
  * arrivals at both stops.
@@ -30,12 +30,12 @@ export interface TransferRoute {
   /** The first bus, to `at`. */
   leg1: Leg;
   at: Stop;
-  /** Where the second bus goes from: `at`, or its twin across the road. */
+  /** Where the second bus goes from: `at`, or its opposite stop. */
   board: Stop;
   crossS: number;
   /** The second bus, to the destination. */
   leg2: Leg;
-  /** The timetable guess of the trip from setting off (the walk included)
+  /** The estimate of the trip from setting off (the walk included)
    *  to the place itself: how routes are ranked before any fetch. */
   costS: number;
 }
@@ -49,7 +49,7 @@ interface Route {
   leg2: Leg;
 }
 
-/** Whole-trip guesses from a stop past this are no use to anyone. */
+/** Memo entries (origin and targets) kept per graph before the memo is cleared. */
 const MEMO_MAX = 500;
 const memo = new WeakMap<Graph, Map<string, Route[]>>();
 
@@ -83,8 +83,8 @@ export function transferRoutes(graph: Graph, origin: Stop, targets: Target[]): R
       const leg1 = bestLeg(graph, idx, svc1, origin.code, [{ code, crossS: 0 }]);
       const at = idx.byCode.get(code);
       if (!leg1 || !at) continue;
-      const twin = at.opposite ? idx.byCode.get(at.opposite) : undefined;
-      for (const board of twin ? [at, twin] : [at]) {
+      const opp = at.opposite ? idx.byCode.get(at.opposite) : undefined;
+      for (const board of opp ? [at, opp] : [at]) {
         // Back where you started, or already there.
         if (board.code === origin.code || board.code === origin.opposite || targetCodes.has(board.code)) continue;
         const crossM = board === at ? 0 : stopFootM(at, board);
@@ -126,7 +126,7 @@ const ROUTES_MAX = 8;
 /**
  * Which trips with a change to time, before anything is fetched. Only with
  * a destination; where a single bus goes there, only in 'beats' mode and
- * only a change that beats it by TRANSFER.worthS on the timetable guess.
+ * only a change that beats it by TRANSFER.worthS on the estimate.
  * The routes come cheapest first, with at most TRANSFER.maxFetch stops
  * fetched for them beyond those the answer fetches anyway.
  */

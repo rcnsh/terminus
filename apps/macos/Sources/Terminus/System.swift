@@ -7,7 +7,7 @@ import Security
 ///
 /// Not the keychain: terminus is signed with a self-signed certificate, with
 /// no Apple Team ID, so macOS knows each version only by its code hash and
-/// asked for the keychain password after every update. A file has the same
+/// would ask for the keychain password after every update. A file has the same
 /// protection as an SSH key. The token only reads your bus answers, and
 /// Settings on the web can revoke it.
 ///
@@ -37,8 +37,8 @@ enum TokenStore {
 
     /// The beta, and the dev stub (the developer menu, or TERMINUS_API_BASE),
     /// keep their own token, so neither signs this Mac out of the real one,
-    /// and the real one is never sent to the stub. The site's two addresses
-    /// are one server, with one token.
+    /// and the real one is never sent to the stub. The site's addresses are
+    /// one server, with one token.
     private static var folderName: String {
         let site = Servers.choices.filter { !Servers.isLocal($0) }
         return !site.contains(Api.base) ? "terminus-dev" : Api.isBeta ? "terminus-beta" : "terminus"

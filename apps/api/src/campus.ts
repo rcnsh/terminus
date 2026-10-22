@@ -69,7 +69,7 @@ export interface CampusMap {
 /**
  * Each service's colour, as NUS paints it on the buses and stop signs (as
  * students know them; D1 and P chosen to stay distinct). Every client takes
- * these from /campus rather than keeping its own copy, and writes on each in
+ * these from /api/campus rather than keeping its own copy, and writes on each in
  * white or near-black, whichever contrasts more: every one reaches 4.5:1
  * with one of them (campus.test.js).
  */
@@ -156,9 +156,9 @@ export function buildCampusMap(graph: Graph): CampusMap {
   }
   const byCode = new Map(stops.map((s) => [s.code, s]));
 
-  // x/y and the viewBox are no longer drawn by any client (they all map from
-  // lat/lon); they stay in the response, deprecated in the spec, so an older
-  // client or a script reading /api/campus doesn't break.
+  // No client draws x/y or the viewBox (they all map from lat/lon); they stay
+  // in the response, deprecated in the spec, so an older client or a script
+  // reading /api/campus doesn't break.
   const projected: ProjectedStop[] = stops.map((s) => {
     const { x, y } = project(s);
     return {

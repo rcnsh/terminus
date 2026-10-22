@@ -75,7 +75,7 @@ data class UiState(
     val reportSending: Boolean = false,
     val reportResult: String? = null,
     val reportSent: Boolean = false,
-    /** Today's timeline (/me/day), for under the planned answer. */
+    /** Today's timeline (/api/me/day), for under the planned answer. */
     val day: DayPlan? = null,
     /** Just taken off Today: its row says so where it was, with Undo (or why it didn't go). */
     val removed: TodayNote? = null,
@@ -86,6 +86,18 @@ data class UiState(
 ) {
     val answer: NextAnswer?
         get() = answers[target]
+
+    /** Signed in, maybe to another account than the last: nothing it was shown stays on screen. */
+    fun withoutAccount() =
+        copy(
+            answers = emptyMap(),
+            rawAnswers = emptyMap(),
+            nearby = null,
+            places = emptyList(),
+            day = null,
+            removed = null,
+            fetchedAt = null,
+        )
 }
 
 /**
@@ -170,7 +182,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     // Pairing codes come from accounts with an email.
                     store.anonymous = false
                 }
-                _state.update { it.copy(paired = true, pairing = false) }
+                Session.signedIn(getApplication())
+                _state.update { it.copy(paired = true, pairing = false).withoutAccount() }
                 Refresher.schedule(getApplication())
                 // A new session: this phone's push address goes to it.
                 Push.sync(getApplication())
@@ -267,7 +280,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** A token was just stored (a new account, or a sign-in): start showing answers. */
     fun signedIn() {
-        _state.update { it.copy(paired = true, pairError = null, answers = emptyMap(), rawAnswers = emptyMap()) }
+        // Maybe into another account than this phone's (a guest signing in with an email): a request still out for that one isn't shown.
+        endAccount()
+        _state.update { it.copy(paired = true, pairError = null).withoutAccount() }
         Refresher.schedule(getApplication())
         // A new session: this phone's push address goes to it.
         Push.sync(getApplication())
@@ -312,7 +327,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * Every request still out for the account, cancelled. One past its save already is kept from the phone by [Store.saveAnswer]'s token
      * check.
      */
-    private fun endAccount() = account.cancelChildren()
+    private fun endAccount() {
+        account.cancelChildren()
+        // A request cancelled says nothing: what it had under way would otherwise stay so, its buttons off.
+        _state.update { it.copy(loading = false, signalling = false, reportSending = false) }
+    }
 
     /**
      * A 401 for [token]: signed out ([Session.rejected]), and the screen follows through [Session.signedOut]. True when [e] was that; false
@@ -480,8 +499,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun dismissRemoved(key: String) = _state.update { if (it.removed?.item?.key == key) it.copy(removed = null) else it }
 
     /**
-     * A new plan from /me/signal, asked for with [token]: shown, cached for the widget, and the alarms moved. False, and none of it, when
-     * the phone signed out (or into another account) while it was asked for.
+     * A new plan from /api/me/signal, asked for with [token]: shown, cached for the widget, and the alarms moved. False, and none of it,
+     * when the phone signed out (or into another account) while it was asked for.
      */
     private fun applyPlan(ctx: Application, json: org.json.JSONObject, token: String): Boolean {
         val now = System.currentTimeMillis()
@@ -748,8 +767,8 @@ internal fun installedFromPlay(ctx: android.content.Context): Boolean = runCatch
 /**
  * The answer on Now is fetched again this often while it's on screen: the API caches 15 s, so sooner shows nothing new. Not sooner at the
  * server's own moments (the card's `nextChangeAt`, the plan's `refreshAt`) either: a leave time that keeps sliding (a late bus) moves them
- * a few seconds on with every answer, which brought the polling down to every 5 s. The countdown ticks on the phone in between; the Mac and
- * the server's trip engine wait 30 s too.
+ * a few seconds on with every answer, so following them would poll every 5 s. The countdown ticks on the phone in between; the Mac and the
+ * server's trip engine wait 30 s too.
  */
 internal const val POLL_MS = 30_000L
 

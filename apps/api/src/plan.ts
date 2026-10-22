@@ -1,39 +1,23 @@
 /**
- * Which bus a trip is about: one plan for every device.
+ * Which bus a trip is about: one plan for every device. Frozen from its
+ * leave-by, kept for a device without a location, held once you were told
+ * it unless it would make you late (answers a minute apart can prefer another:
+ * the feed lists a later one, a crowd guess changes), else the fresh answer's
+ * bus. See internals.md, *One plan, and push*.
  *
- * Each request works out a fresh answer, and with it a bus (`made`). The day's
- * record keeps the bus the trip is for (`DayRecord.plans`). This decides which
- * of the two the trip is about now, and whether the record should change:
- *
- * - **Frozen** from the plan's leave-by (or its departure, if earlier): that
- *   bus until it has left, whatever the answer says now. Past the leave time
- *   the answer moves on to later buses, and from a moving bus to other stops.
- * - **Kept** for a device without a location (the widget, the background
- *   refresh, the Mac, the web) when the plan was made from the phone's
- *   location: it would otherwise plan from where the timetable puts you.
- *   The same bus in this answer is shown with this answer's times.
- * - **Told:** from when you'd be at the stop for it (and so from the
- *   heads-up), the bus you were told stays the plan while it still gets you
- *   there in time. Answers a minute apart can prefer another (the feed lists
- *   a later one, a crowd guess changes); only one that would make you late
- *   gives way.
- * - Otherwise the fresh answer's bus, saved when it's another bus, or the
- *   same one now on live times.
- *
- * Live times move a little from one answer to the next, so the same service
- * from the same stop within a few minutes is the same bus (`sameBus`).
- * Saved again each time, its leave-by would stay just ahead of the clock (at
- * the stop it's seconds before the bus) and the plan would never freeze.
+ * The same service from the same stop within SAME_BUS_MS is the same bus
+ * (`sameBus`): saved again each time, its leave-by would stay just ahead of
+ * the clock and the plan would never freeze.
  */
 
 import type { Leave } from './types.ts';
-import { type Boarded, WAIT_EARLY_MS, secondBusOf, tripEnd } from './trip.ts';
+import { type Plan, WAIT_EARLY_MS, secondBusOf, tripEnd } from './trip.ts';
 
 /** Live times move this much from one answer to the next, and it's still the same bus. */
 export const SAME_BUS_MS = 3 * 60_000;
 
 /** The bus a leave-by is for, as a plan; null when it's a walk. */
-export function planOfLeave(l: Leave | null | undefined, located: boolean, alightCode: string): Boarded | null {
+export function planOfLeave(l: Leave | null | undefined, located: boolean, alightCode: string): Plan | null {
   if (!l?.svc || !l.board) return null;
   const change = secondBusOf(l, alightCode);
   if (change) {
@@ -65,7 +49,7 @@ export function planOfLeave(l: Leave | null | undefined, located: boolean, aligh
 }
 
 /** The same service from the same stop, its time moved a little by the feed. */
-export function sameBus(a: Boarded | null | undefined, b: Boarded | null | undefined): boolean {
+export function sameBus(a: Plan | null | undefined, b: Plan | null | undefined): boolean {
   if (!a?.board || !b?.board || a.svc !== b.svc || (a.stopCode ?? a.stop) !== (b.stopCode ?? b.stop)) return false;
   // A trip that changes buses is the same only with the same change.
   if (a.change?.svc !== b.change?.svc || a.change?.stopCode !== b.change?.stopCode) return false;
@@ -74,9 +58,9 @@ export function sameBus(a: Boarded | null | undefined, b: Boarded | null | undef
 
 export interface PlanInput {
   /** The plan in the day's record, if any. */
-  stored: Boarded | undefined;
+  stored: Plan | undefined;
   /** The bus this request's answer says. */
-  made: Boarded | null;
+  made: Plan | null;
   /** This request has a location. */
   located: boolean;
   /** When the class starts, for a class; null for a trip home. */
@@ -86,8 +70,8 @@ export interface PlanInput {
 
 export interface PlanChoice {
   /** The bus the trip is about: what every device shows and detection watches. */
-  bus: Boarded | null;
-  /** The answer's own bus, to be saved as the plan. */
+  bus: Plan | null;
+  /** Save the answer's own bus (`made`) as the plan. */
   save: boolean;
 }
 

@@ -24,9 +24,9 @@ export interface Env {
   ASSETS?: Fetcher;
   /** Accounts (migrations/). Optional so the public API runs without it. */
   DB?: D1Database;
-  /** Cloudflare Email Sending, for sign-in links. */
+  /** Cloudflare Email Sending: sign-in codes and links, new-device emails, reports and outage alerts. */
   EMAIL?: SendEmail;
-  /** Sender for sign-in links; must be on a domain onboarded to Email Sending. */
+  /** The sender of every email; must be on a domain onboarded to Email Sending. */
   EMAIL_FROM?: string;
   /** Workers rate limiting, keyed per IP, on sign-in and pairing. */
   RL_AUTH?: RateLimit;
@@ -50,6 +50,9 @@ export interface Env {
   /** Optional. An API token with Account Analytics Read, so the dashboard can
    *  query Analytics Engine. Without it the dashboard skips those charts. */
   ANALYTICS_TOKEN?: string;
+  /** Pinged at the end of every cron run (monitor.ts pingHeartbeat), so an
+   *  outside monitor notices when the cron stops. Unset: no ping (the beta). */
+  HEARTBEAT_URL?: string;
   /** The account that owns the Analytics Engine dataset. */
   CF_ACCOUNT_ID?: string;
   /** One global ceiling on sign-in emails. */
@@ -91,6 +94,9 @@ export interface Env {
   /** "on" lets the timelapse recorder poll; anything else, or unset, is off.
    *  KV config:timelapse overrides it without a deploy (timelapse.ts). */
   TIMELAPSE_ENABLED?: string;
+  /** "shadow" runs the arrival-time model beside the feed's times, answering
+   *  no one (etashadow.ts); anything else, or unset, is off. */
+  ETA_MODEL?: string;
 }
 
 /**
@@ -176,7 +182,7 @@ export interface BusLeg {
   /** When it leaves the stop, and when you reach the destination stop, ISO. Null with no time. */
   board: string | null;
   arrive: string | null;
-  /** Not a live time: a headway or timetable guess, or an old reading from a stale feed. */
+  /** Not a live time: a guess from the headway, a public bus's timetabled time, or an old reading from a stale feed. */
   estimated: boolean;
   /** Where to get off, when the bus only stops across the road from the destination. */
   off?: string;
@@ -216,7 +222,6 @@ export interface BusChange {
 /** What kind of answer: a trip somewhere, what's near you, resting, or
  *  'free': a day with no classes (or none left to plan), nothing to catch. */
 export type Mode = 'trip' | 'nearby' | 'rest' | 'free';
-/** Why you're going there. */
 export type Why = 'class' | 'home' | 'gap-home' | 'place';
 
 export interface Dest {
@@ -225,7 +230,7 @@ export interface Dest {
   why: Why;
 }
 
-/** A saved place, as a one-tap chip. */
+/** A favourite, as a one-tap chip. */
 export interface PlaceChip {
   key: string;
   label: string;
@@ -339,7 +344,7 @@ export interface Stop {
   longName?: string;
   lat: number;
   lon: number;
-  /** Code of the directional twin ("Opp X" <-> "X"), if any. */
+  /** Code of the opposite stop ("Opp X" <-> "X"), if any. */
   opposite?: string | null;
   /**
    * Public buses call at this shelter too, under LTA's five-digit code
@@ -417,11 +422,11 @@ export interface Leg {
    *  along the route on a public bus (see shuttleRideS, publicRideS). */
   rideS?: number;
   /** Seconds to walk across from where the bus stops to the destination's
-   *  side of the road, when it only calls at the twin. Absent when it's 0. */
+   *  side of the road, when it only calls at the opposite stop. Absent when it's 0. */
   crossS?: number;
-  /** Where to get off, when that's the twin rather than the destination. */
+  /** Where to get off, when that's the opposite stop rather than the destination. */
   off?: Stop;
-  /** Where you get off: the destination stop this bus calls at, or its twin. */
+  /** Where you get off: the destination stop this bus calls at, or its opposite stop. */
   to?: Stop;
 }
 
@@ -489,7 +494,7 @@ export interface ScoredOption {
   ambiguousBerth: boolean;
   /** Where to get off, when the bus only stops across the road from the destination. */
   off?: Stop;
-  /** Where you get off: the destination stop this bus calls at, or its twin. */
+  /** Where you get off: the destination stop this bus calls at, or its opposite stop. */
   to?: Stop;
   /** A public bus, with a fare (public.ts). */
   paid?: true;
@@ -505,7 +510,7 @@ export interface ScoredOption {
 export interface ScoredChange {
   /** Where the first bus drops you. */
   at: Stop;
-  /** Where the second bus goes from: `at`, or its twin across the road. */
+  /** Where the second bus goes from: `at`, or its opposite stop. */
   stop: Stop;
   /** Seconds to cross to `stop`; 0 at `at` itself. */
   crossS: number;

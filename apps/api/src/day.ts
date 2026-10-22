@@ -1,5 +1,5 @@
 /**
- * GET /api/me/day: today's timeline, worked out with the planner /me/next uses.
+ * GET /api/me/day: today's timeline, worked out with the planner /api/me/next uses.
  * Each class with where you set off from and its leave-by, the trips home in
  * long gaps and after the last class, and where each stands now. Clients
  * cache it, so they have the day's shape offline or between refreshes; the
@@ -9,13 +9,14 @@
 import type { Env, Leave, PlaceChip, Timing } from './types.ts';
 import type { MeDeps } from './me.ts';
 import { GAP_RETURN_MIN, HOME_BY_MIN, LATE_GRACE_MIN, type Profile, classKey, classesOn, endOf, restDetail, restSide } from './profile.ts';
-import type { ImportedTrip } from './nusmods.ts';
+import type { TimetableClass } from './nusmods.ts';
 import { sgt } from './config.ts';
 import { isoSeconds, named } from './format.ts';
 import { clockAt } from './clock.ts';
 import { indexGraph } from './resolve.ts';
 import { tripAnswer } from './next.ts';
 import { unlogged } from './answer.ts';
+import { GRAPH } from './graph.ts';
 import { ASSUME_MS, type DayRecord, dayState, leaveOf, offStop, sgtDate } from './trip.ts';
 import { m } from './i18n.ts';
 
@@ -23,7 +24,7 @@ export type DayStatus = 'done' | 'now' | 'next' | 'later' | 'skipped';
 
 export interface DayItem {
   kind: 'class' | 'home';
-  /** The trip's key, for /me/signal ("Not going", "Undo"). */
+  /** The trip's key, for /api/me/signal ("Not going", "Undo"). */
   key: string;
   label: string;
   status: DayStatus;
@@ -75,7 +76,7 @@ export async function dayPlan(
   earlier: Set<string> = new Set(),
   here: { lat: number | null; lon: number | null } = { lat: null, lon: null },
 ): Promise<DayPlan> {
-  const idx = indexGraph(deps.graph);
+  const idx = indexGraph(GRAPH);
   const name = (code: string | null) => (code ? (idx.byCode.get(code)?.name ?? code) : null);
   const t = sgt(nowMs);
   const midnight = nowMs - (t.minutes * 60_000 + (nowMs % 60_000));
@@ -89,7 +90,7 @@ export async function dayPlan(
   const quiet = unlogged(deps);
 
   const items: DayItem[] = [];
-  let prev: ImportedTrip | null = null;
+  let prev: TimetableClass | null = null;
   const pending: Array<Promise<void>> = [];
   let nextTaken = false;
 
@@ -177,7 +178,7 @@ export async function dayPlan(
     }
     items.push(item);
     // A class whose bus was missed (and that nothing since says you reached)
-    // is not where you go on from (see planFor).
+    // is not where you go on from (see nextTripFor).
     if (!state.missed.has(key)) prev = c;
   }
   if (prev && homeStop && !state.skipped.has(`home:${endOf(prev)}`)) items.push(homeItem(`home:${endOf(prev)}`, prev, null));
@@ -185,7 +186,7 @@ export async function dayPlan(
   // Worded once every leave-by is in.
   for (const it of items) it.line = dayLine(it, h12);
 
-  // The day's hours, stretched for early and late classes (as /me/next rests).
+  // The day's hours, stretched for early and late classes (as /api/me/next rests).
   const r = restSide(profile, nowMs);
   const startMin = r?.startMin ?? Math.max(0, Math.min(profile.dayStartMin, ...classes.map((x) => x.arriveByMin - 90)));
   const endMin = Math.max(profile.dayEndMin, ...classes.map((x) => endOf(x) + 45));
@@ -198,7 +199,7 @@ export async function dayPlan(
     note: classes.length ? null : restDetail(profile, nowMs, h12),
   };
 
-  function homeItem(key: string, after: ImportedTrip, until: number | null): DayItem {
+  function homeItem(key: string, after: TimetableClass, until: number | null): DayItem {
     const leaveMin = endOf(after);
     const done = state.done.has(key) || t.minutes >= (until ?? leaveMin + HOME_BY_MIN);
     const now = !done && t.minutes >= leaveMin;

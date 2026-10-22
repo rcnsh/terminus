@@ -192,6 +192,7 @@ Secrets go in `apps/api/.dev.vars` locally (template:
 | `LTA_ACCOUNT_KEY` | no | LTA DataMall key, for public buses. Unset: shuttles only |
 | `ANALYTICS_TOKEN` | no | Lets the dashboard query Analytics Engine |
 | `TIMELAPSE_TOKEN` | no | Opens `/api/timelapse/*` for the machine that renders videos |
+| `HEARTBEAT_URL` | no | Pinged after every cron run (healthchecks.io), so a stopped cron is noticed. Unset: no ping |
 | `NEXTBUS_DEVICE_ID` | no | 16 hex characters. Unset: one is made and kept in KV |
 | `NEXTBUS_REQUESTED_BY`, `NEXTBUS_SECURED_REQUEST` | no | Sent if set; not required upstream |
 
@@ -225,7 +226,9 @@ Bindings:
 | `ASSETS` | The website, `apps/web/public` |
 
 Runtime switches in KV, changed without a deploy: `config:appVersion`,
-`config:minClient` (oldest app version served) and `config:timelapse`.
+`config:minClient` (oldest app version served), `config:timelapse`, and
+`config:collect:*` (the dashboard's switches for the statistics collected,
+all off until turned on).
 
 ## Deployment
 

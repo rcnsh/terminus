@@ -34,7 +34,7 @@ A request goes through `src/index.ts` (the router), which hands off to:
 | `src/me.ts`, `src/accounts.ts`, `src/applogin.ts` | Accounts: emailed codes and links, device tokens, pairing |
 | `src/access.ts` | Who may call the keyed routes (API key or session) |
 | `src/next.ts` | `/api/me/next`: today's plan and the trip's phase |
-| `src/profile.ts`, `src/day.ts` | The saved setup, the planner (`planFor`), and today's timeline |
+| `src/profile.ts`, `src/day.ts` | The profile, the planner (`nextTripFor`), and today's timeline |
 | `src/answer.ts`, `src/resolve.ts`, `src/transfer.ts` | Stops near you, the stop on the right side of the road, scoring, one change of bus |
 | `src/walk.ts` | Walking times along campus paths |
 | `src/card.ts`, `src/format.ts`, `src/i18n.ts` | Everything a client shows, worded once |
@@ -61,7 +61,8 @@ A request goes through `src/index.ts` (the router), which hands off to:
   buses, walking paths, venues and residences, and the academic calendar.
   The `scrape` workflow refreshes it weekly; a data change ships with a
   deploy. Hand-kept files: `service-hours.json`, `opposites.json`,
-  `nus-days.json`.
+  `nus-days.json`, and `src/venue-stops.json` (the stops students use for a
+  building, where the map's nearest is wrong).
 - **Calendar.** Bundled, and also fetched weekly by the cron into KV
   (`src/calendarsync.ts`), so it doesn't run out between deploys.
 
@@ -73,7 +74,8 @@ A request goes through `src/index.ts` (the router), which hands off to:
 - `src/feedgate.ts` (the `FeedGate` Durable Object) holds each key to one
   upstream call per window across all data centres.
 - On a failure the last answer is served, marked stale, for up to 5 minutes;
-  a 429, 5xx, rejected key or timeout trips a breaker.
+  a rejected version or key, a 429 or 5xx, or no answer at all (a timeout,
+  a failed connection) trips a breaker.
 - The only scheduled poller is the timelapse recorder
   (`src/timelapsedo.ts`, one Durable Object per Singapore day), every 30 s
   inside service hours, through the same cache. It's on for the stable site
@@ -85,7 +87,7 @@ A request goes through `src/index.ts` (the router), which hands off to:
 | --- | --- |
 | D1 (`DB`) | Users, sessions (devices included), profiles, API keys, trip outcomes, crowding, feedback. Schema in `migrations/`, additive only |
 | KV | Guest token and device id, calendar copy, feed state, runtime switches (`config:*`), sign-in codes |
-| R2 (`DOWNLOADS`) | App builds, `latest.json`, the Sparkle appcast, the PMTiles street map, fonts and icons, timelapse days |
+| R2 (`DOWNLOADS`) | App builds, `latest.json`, the Sparkle appcast, the PMTiles street map, fonts and icons, timelapse days, and each day's arrival-time scores (`eta/`) |
 | Durable Objects | `Trip` (per user, today only, deleted at midnight), `TimelapseRecorder`, `FeedGate` |
 | Analytics Engine (`AE`) | Usage and error counts for the operator dashboard; see [analytics.md](apps/api/docs/analytics.md) |
 

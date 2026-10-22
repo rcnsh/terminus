@@ -97,7 +97,7 @@ data class NextAnswer(
     val crowdText: String?
         get() = card?.crowd?.takeUnless { detail.contains(it, ignoreCase = true) }
 
-    /** "Timetable estimate", "Live times are a few minutes old", "No live data". */
+    /** "Estimated time", "Live times are a few minutes old", "No live data". */
     val qualityText: String?
         get() = card?.quality
 
@@ -111,7 +111,7 @@ data class NextAnswer(
     val title: String
         get() = card?.title ?: label
 
-    /** [title], or for an older server without it, "D2 · 09:42" from the label and departure time; anything but a live time gets a "~". */
+    /** [title]; "D2 · 09:42" from the label and departure time (a "~" on anything but a live time), worked out here for an older server. */
     fun clockLabel(format: (Long) -> String): String {
         card?.title?.let {
             return it
@@ -158,7 +158,7 @@ data class NextAnswer(
     }
 }
 
-/** `card` in /me/next (apps/api/src/card.ts). Lines are shown verbatim. */
+/** `card` in /api/me/next (apps/api/src/card.ts). Lines are shown verbatim. */
 data class Card(
     val kind: String,
     /** Dim from this instant, epoch ms. */
@@ -174,7 +174,7 @@ data class Card(
     val goNow: String?,
     val note: String?,
     val estimate: String?,
-    /** v2: where the trip is: idle, due, heading, waiting, riding, missed, arrived. */
+    /** Where the trip is: idle, due, heading, waiting, riding, missed, arrived. */
     val phase: String = "idle",
     /** "On your way", above the answer. Null when idle. */
     val phaseText: String? = null,
@@ -182,7 +182,7 @@ data class Card(
     val glance: String? = null,
     /** One line: a collapsed notification, a compact widget. */
     val line: String? = null,
-    /** Buttons the server decided to show; tapping one sends it to /me/signal. */
+    /** Buttons the server decided to show; tapping one sends it to /api/me/signal. */
     val actions: List<CardAction> = emptyList(),
     /** "Last D2 from UTown in 18 min". */
     val warning: String? = null,
@@ -190,7 +190,7 @@ data class Card(
     val nextChangeAtMs: Long? = null,
     /** False when the user turned reminders off for this class: no leave notification. */
     val remind: Boolean = true,
-    /** "Leave one bus earlier for CS2030?", accepted or turned down with /me/choice. */
+    /** "Leave one bus earlier for CS2030?", accepted or turned down with /api/me/choice. */
     val suggestion: Suggestion? = null,
     /** On the bus: the stops from boarding to getting off, for a progress bar. */
     val ride: Ride? = null,
@@ -538,7 +538,7 @@ data class WalkTo(val name: String, val lat: Double, val lon: Double) {
     fun mapsUri(): android.net.Uri = "https://www.google.com/maps/dir/?api=1&destination=$lat,$lon&travelmode=walking".toUri()
 }
 
-/** Something terminus learned and offers to change; `id` goes back to /me/choice. */
+/** Something terminus learned and offers to change; `id` goes back to /api/me/choice. */
 data class Suggestion(val id: String, val text: String, val accept: String, val dismiss: String) {
     companion object {
         fun parse(o: JSONObject): Suggestion? =
@@ -645,7 +645,7 @@ data class DayPlan(val items: List<DayItem>, val note: String?, val date: String
  * A service at a stop and its next bus. `color` (#rrggbb), the service's colour. `paid`: a public bus, with a fare. `later`: the buses
  * after the next one the feed knows, soonest first: every later time there is, so nothing else is guessed. `towards`: the next stop's name,
  * then where the route ends (one entry when they're the same). `crowd`: the next bus's (low, medium, high). `endsAtMs`: when the service
- * stops for the day. An older server leaves the newer fields out: empty, or null.
+ * stops for the day. The newer fields are null or empty from an older server.
  */
 data class BoardRow(
     val svc: String,
@@ -655,9 +655,11 @@ data class BoardRow(
     val paid: Boolean = false,
     val later: List<LaterBus> = emptyList(),
     val towards: List<String> = emptyList(),
+    /** The well-known places it passes from here ("UTown", "Kent Ridge MRT"), for someone new to NUS; empty from an older server. */
+    val via: List<String> = emptyList(),
     val crowd: String? = null,
     val endsAtMs: Long? = null,
-    /** The route ends at this stop: the server gave `towards` and it's empty. An older server gives none. */
+    /** The route ends at this stop: the server gave `towards` and it's empty; false from an older server. */
     val endsHere: Boolean = false,
     /** False: a service that calls here but isn't running now (asked for with `stopped=1`). */
     val running: Boolean = true,
@@ -684,7 +686,7 @@ private fun parseLater(r: JSONObject): List<LaterBus> {
     }
 }
 
-/** One board row, wherever a board appears (/arrivals, /me/nearby, /line). */
+/** One board row, wherever a board appears (/api/arrivals, /api/me/nearby, /api/line). */
 fun parseBoardRow(r: JSONObject): BoardRow =
     BoardRow(
         svc = r.getString("svc"),
@@ -694,6 +696,7 @@ fun parseBoardRow(r: JSONObject): BoardRow =
         paid = r.optBoolean("paid", false),
         later = parseLater(r),
         towards = r.optJSONArray("towards").stringList().filter { it.isNotBlank() },
+        via = r.optJSONArray("via").stringList().filter { it.isNotBlank() },
         crowd = r.optStringOrNull("crowd")?.takeIf { it in CROWDS },
         endsAtMs = r.optStringOrNull("endsAt")?.let(::parseInstant),
         running = r.optBoolean("running", true),
@@ -724,6 +727,8 @@ data class NearbyStop(
     val oppositeAcross: Boolean = true,
     /** [opposite]'s full name; null from an older server. */
     val oppositeName: String? = null,
+    /** Which way its buses go, by places a newcomer knows: "to UTown, Science, Kent Ridge MRT". Null with none, or from an older server. */
+    val viaText: String? = null,
 )
 
 data class Destination(
@@ -745,7 +750,27 @@ data class Destination(
 fun rankDestinations(all: List<Destination>, query: String, max: Int = SearchRank.MAX): List<Destination> =
     SearchRank.rank(all, query, max) { SearchRank.Key(it.kind, it.code, it.label, it.aliases) }
 
-/** What the user asked for: the planned trip, a saved place, or any stop/venue. */
+/** A result's identity in a list: a stop and a building can share a code (COM3), and the kind tells them apart. */
+val Destination.id: String
+    get() = "$kind:$code"
+
+/**
+ * Whether this is the place a timetable row ([row], whose code is where its classes go) stands for: that stop or landmark itself, not a
+ * building or room sharing its code.
+ */
+fun Destination.isPlaceOf(row: Destination): Boolean = (kind == "stop" || kind == "landmark") && code == row.code
+
+/**
+ * The where picker's results for [query]: [pinned] (the timetable's stops) first, then the rest of the search, less the places a pinned row
+ * already stands for.
+ */
+fun whereResults(destinations: List<Destination>, pinned: List<Destination>, query: String): Pair<List<Destination>, List<Destination>> {
+    if (query.isBlank()) return pinned to emptyList()
+    val top = rankDestinations(pinned, query, max = 6)
+    return top to rankDestinations(destinations, query, max = 6).filter { d -> top.none { d.isPlaceOf(it) } }
+}
+
+/** What the user asked for: the planned trip, a favourite, or any stop/venue. */
 sealed interface Target {
     data object Plan : Target
 
@@ -794,14 +819,28 @@ class Api(private val token: String?, private val fast: Boolean = false, private
 
     suspend fun me(): Me = Me.parse(request("GET", "/api/me"))
 
-    /** The whole profile as the server keeps it; edited and sent back whole. */
-    suspend fun profile(): JSONObject = request("GET", "/api/me/profile")
+    /** The whole profile as the server keeps it, with its version; edited and sent back whole ([saveProfile]). */
+    suspend fun profile(): Tagged {
+        var tag: String? = null
+        val json = request("GET", "/api/me/profile") { tag = it.getHeaderField("etag") }
+        return Tagged(json, tag)
+    }
 
-    suspend fun saveProfile(profile: JSONObject): JSONObject = request("PUT", "/api/me/profile", profile)
+    /**
+     * Saves the whole profile. With [ifMatch], the version it was made from, only if no other device saved since: refused with 412
+     * otherwise ([saveChanges]).
+     */
+    suspend fun saveProfile(profile: JSONObject, ifMatch: String?): Tagged {
+        var tag: String? = null
+        val json = request("PUT", "/api/me/profile", profile, ifMatch = ifMatch) { tag = it.getHeaderField("etag") }
+        return Tagged(json, tag)
+    }
 
-    /** Imports a NUSMods share link; the server replaces the imported classes only if it all worked. */
-    suspend fun import(share: String): ImportResult = parsing {
-        ImportResult.parse(request("POST", "/api/me/import", JSONObject().put("share", share)))
+    /** Imports a NUSMods share link; the server replaces the imported classes only if it all worked. With the profile's new version. */
+    suspend fun import(share: String): Imported {
+        var tag: String? = null
+        val json = request("POST", "/api/me/import", JSONObject().put("share", share)) { tag = it.getHeaderField("etag") }
+        return Imported(ImportResult.parse(json), tag)
     }
 
     /** Stops and residences, for the home and place pickers. */
@@ -826,8 +865,8 @@ class Api(private val token: String?, private val fast: Boolean = false, private
     suspend fun buses(svc: String): BusList = parsing { BusList.parse(request("GET", "/api/buses?svc=${enc(svc)}")) }
 
     /**
-     * What's coming at one stop, for the Buses tab and the map's stop sheet: every row, the stop's name and its twin, and the services not
-     * running now (`stopped=1`), greyed. With [public], the public buses there too (the profile's `publicBuses`).
+     * What's coming at one stop, for the Buses tab and the map's stop sheet: every row, the stop's name and its opposite stop, and the
+     * services not running now (`stopped=1`), greyed. With [public], the public buses there too (the profile's `publicBuses`).
      */
     suspend fun board(stop: String, public: Boolean = false): Board = parsing {
         Board.parse(request("GET", "/api/arrivals?stop=${enc(stop)}&stopped=1" + if (public) "&public=1" else ""))
@@ -934,14 +973,14 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         }
     }
 
-    /** Something that happened on the trip ("boarded", "missed", ...). Answers with the new /me/next. */
+    /** Something that happened on the trip ("boarded", "missed", ...). Answers with the new /api/me/next. */
     suspend fun signal(kind: String, trip: String?): JSONObject {
         val body = JSONObject().put("kind", kind)
         trip?.let { body.put("trip", it) }
         return request("POST", "/api/me/signal" + if (hour12) "?h12=1" else "", body)
     }
 
-    /** A one-off trip later today: planned like a class. Answers with the new /me/next. */
+    /** A one-off trip later today: planned like a class. Answers with the new /api/me/next. */
     suspend fun once(target: Target, atMin: Int): JSONObject {
         val body = JSONObject().put("atMin", atMin)
         when (target) {
@@ -999,13 +1038,10 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         }
     }
 
-    /** Today's timeline. */
-    suspend fun day(lat: Double? = null, lon: Double? = null, acc: Double? = null): DayPlan = DayPlan.parse(dayJson(lat, lon, acc).first)
-
     /**
-     * /me/day as it came: kept for when the phone is offline ([Store.saveDay]). With a location, the next class is planned from there, as
-     * the card is. With the language it's written in, as [L.header] gives it: the account's choice wins over the one asked in, and a switch
-     * reaches the account a moment after the app shows it. An older server doesn't say: the one asked in.
+     * /api/me/day as it came: kept for when the phone is offline ([Store.saveDay]). With a location, the next class is planned from there,
+     * as the card is. With the language it's written in, as [L.header] gives it: the account's choice wins over the one asked in, and a
+     * switch reaches the account a moment after the app shows it. Null from an older server: the one asked in.
      */
     suspend fun dayJson(lat: Double? = null, lon: Double? = null, acc: Double? = null): Pair<JSONObject, String> {
         val q = buildList {
@@ -1063,6 +1099,7 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         path: String,
         body: JSONObject? = null,
         ifNoneMatch: String? = null,
+        ifMatch: String? = null,
         seen: ((HttpURLConnection) -> Unit)? = null,
     ): JSONObject =
         withContext(Dispatchers.IO) {
@@ -1085,16 +1122,32 @@ class Api(private val token: String?, private val fast: Boolean = false, private
                     val tries = Servers.tries()
                     for ((i, base) in tries.withIndex()) {
                         val conn = URL(base + path).openConnection() as HttpURLConnection
+                        val started = System.nanoTime()
+                        var status: Int? = null
+                        var failure: Throwable? = null
                         try {
                             // Any reply counts as the server answering (an error status,
                             // a 304 or a body this version can't read too), as on the Mac.
                             return@withTimeout blocking(conn) {
-                                exchange(conn, method, path, body, ifNoneMatch, seen) { Servers.answered(base) }
+                                exchange(conn, method, path, body, ifNoneMatch, ifMatch, seen) {
+                                    status = it
+                                    Servers.answered(base)
+                                }
                             }
                         } catch (e: IOException) {
+                            failure = e
                             if (i == tries.lastIndex || !Servers.unreached(e, method)) throw e
                         } finally {
                             conn.disconnect()
+                            // For the developer menu: an error status is an answer, not a failure.
+                            RequestLog.record(
+                                method,
+                                path,
+                                base,
+                                status,
+                                (System.nanoTime() - started) / 1_000_000,
+                                failure.takeIf { status == null },
+                            )
                         }
                     }
                     error("no server to try")
@@ -1110,13 +1163,14 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         path: String,
         body: JSONObject?,
         ifNoneMatch: String?,
+        ifMatch: String?,
         seen: ((HttpURLConnection) -> Unit)?,
-        reached: () -> Unit,
+        reached: (Int) -> Unit,
     ): JSONObject {
         conn.requestMethod = method
         // Fast: 2 s to connect plus 7 s to read stays under the broadcast's
         // budget. The Worker gives each NUS call up to 5 s, and a cold
-        // /me/next mints a guest token first, which usually fits in 7 s. A
+        // /api/me/next mints a guest token first, which usually fits in 7 s. A
         // connection is up in well under a second, or not at all within 2.
         // The read timeout counts each wait for bytes, but the answer is one
         // small JSON body sent at once, so it is in effect the wait for the
@@ -1131,13 +1185,14 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         conn.setRequestProperty("accept-language", L.header())
         token?.let { conn.setRequestProperty("authorization", "Bearer $it") }
         ifNoneMatch?.let { conn.setRequestProperty("if-none-match", it) }
+        ifMatch?.let { conn.setRequestProperty("if-match", it) }
         if (body != null) {
             conn.doOutput = true
             conn.setRequestProperty("content-type", "application/json")
             conn.outputStream.use { it.write(body.toString().toByteArray()) }
         }
         val status = conn.responseCode
-        reached()
+        reached(status)
         // How far the phone's clock is out, from a reply fresh from the server.
         val cached =
             (conn.getHeaderField("age")?.trim()?.toLongOrNull() ?: 0) > 0 ||
@@ -1355,12 +1410,12 @@ data class Residence(
     val common: Boolean = false,
     val walkMin: Int? = null,
 ) {
-    /** Minutes on foot to its stop, as the server works them out; at a steady 1.3 m/s from an older server. */
+    /** Minutes on foot to its stop, as the server works them out; from the metres at 1.3 m/s, worked out here for an older server. */
     val minutes: Int
         get() = walkMin ?: maxOf(1, Math.round(walkM / 1.3 / 60).toInt())
 }
 
-/** `colors`: each service's colour as NUS paints it, from /campus's routes. */
+/** `colors`: each service's colour as NUS paints it, from /api/campus's routes. */
 data class Campus(
     val stops: List<Stop>,
     val residences: List<Residence>,
@@ -1419,6 +1474,9 @@ data class Campus(
 /** `/api/me/import`: what was found, what couldn't be placed, and for which semester. */
 /** An imported class whose room couldn't be placed: the person picks its stop, or skips it. */
 data class Unplaced(val module: String, val venue: String, val day: Int, val arriveByMin: Int, val endMin: Int?, val offCampus: Boolean)
+
+/** An import's answer, and the version (the ETag) of the profile it saved. */
+class Imported(val result: ImportResult, val version: String?)
 
 data class ImportResult(
     val profile: JSONObject,
@@ -1534,7 +1592,7 @@ fun isNewer(latest: String, current: String): Boolean {
 
 fun JSONObject.optStringOrNull(key: String): String? = if (!has(key) || isNull(key)) null else optString(key)
 
-/** /me/nearby's stops, nearest first. */
+/** /api/me/nearby's stops, nearest first. */
 fun parseNearby(json: JSONObject): List<NearbyStop> = parsing {
     val stops = json.getJSONArray("stops")
     (0 until stops.length()).map { i ->
@@ -1547,10 +1605,11 @@ fun parseNearby(json: JSONObject): List<NearbyStop> = parsing {
             available = s.optBoolean("available", true),
             opposite = s.optStringOrNull("opposite")?.ifEmpty { null },
             longName = s.getJSONObject("stop").optStringOrNull("longName")?.ifEmpty { null },
-            // On the stop object, or beside it as `opposite` is; an older server has neither: across, as before.
+            // On the stop object, or beside it as `opposite` is; across when null from an older server.
             oppositeAcross = (s.getJSONObject("stop").takeIf { it.has("oppositeAcross") } ?: s).optBoolean("oppositeAcross", true),
             oppositeName = (s.getJSONObject("stop").optStringOrNull("oppositeName") ?: s.optStringOrNull("oppositeName"))?.ifEmpty { null },
             distM = if (s.has("distM") && !s.isNull("distM")) s.optInt("distM") else null,
+            viaText = s.optStringOrNull("viaText")?.ifEmpty { null },
             board = (0 until board.length()).map { j -> parseBoardRow(board.getJSONObject(j)) },
         )
     }

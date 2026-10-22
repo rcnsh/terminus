@@ -354,6 +354,7 @@ test('boardAt with stopped: services outside their hours come last, greyed, unle
     later: [],
     color: '#f57c1f',
     towards: r1.towards,
+    via: r1.via,
     crowd: null,
     endsAt: null,
     running: false,

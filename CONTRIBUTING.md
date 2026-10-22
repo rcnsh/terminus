@@ -34,7 +34,8 @@ pnpm check && (cd apps/api && pnpm exec cf deploy --dry-run)
 pnpm lint && pnpm format:check
 for f in $(find apps/web/public -name '*.js'); do node --check "$f" || exit 1; done
 (cd apps/android && ./gradlew :app:ktfmtCheck :app:lintStableDebug :app:testStableDebugUnitTest :app:compileBetaDebugKotlin)
-(cd apps/macos && swift build && swift test) && scripts/format-swift.sh --check
+(cd apps/android && ./gradlew :app:assembleStableRelease :app:assembleBetaRelease)
+scripts/format-swift.sh --check && (cd apps/macos && swift build && swift test && swift build -c release --arch arm64)
 ```
 
 Formatting is mechanical: Oxfmt (`.oxfmtrc.json`), swift-format
@@ -78,7 +79,8 @@ Work on a branch (from a fork if you don't have write access) and open a
 pull request against `main`. Commit under your own name. Commit messages
 follow [Conventional Commits](https://www.conventionalcommits.org), for
 example `fix(map): stops easier to tap on a phone`; CLAUDE.md lists the
-types and scopes. If an agent such as Claude Code writes your commits, it
+types and scopes. PRs are squash-merged, so the PR title becomes the
+commit on `main`: give it the same form. If an agent such as Claude Code writes your commits, it
 follows [CLAUDE.md](CLAUDE.md), which tells it to use your git identity and
 never anyone else's.
 

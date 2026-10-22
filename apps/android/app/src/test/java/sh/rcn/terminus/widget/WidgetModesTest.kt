@@ -21,6 +21,24 @@ class WidgetModesTest {
     private val utown = Mode.To(Destinations.Dest("place:utown", "UTown"))
 
     @Test
+    fun anInexactRedrawStepsCloserSoItIsNeverLaterThanACountdownsSlack() {
+        val at = now + 10 * 60_000L
+        assertEquals(at, WidgetModes.stepTo(at, now, exact = true))
+        // Inexact: steps of a third, each run no later than two thirds of the way, until the last is within LAST_STEP_MS.
+        var t = now
+        var steps = 0
+        while (true) {
+            val step = WidgetModes.stepTo(at, t, exact = false)
+            if (step == at) break
+            assertTrue(step - t + (step - t) <= at - t)
+            t = step + (step - t)
+            steps++
+        }
+        assertTrue(at - t <= WidgetModes.LAST_STEP_MS)
+        assertTrue(steps in 1..12)
+    }
+
+    @Test
     fun asManyButtonsAsFitAndNoneIfTimetableAndNearbyDont() {
         val labels = listOf("Timetable", "Nearby", "KR MRT", "The Deck", "UTown")
         assertEquals(5, WidgetModes.fitting(labels, 420f))

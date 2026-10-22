@@ -61,7 +61,7 @@ function memoryCache() {
 let scope;
 
 /** A fresh worker: sw.js run in its own scope, with `fetch` answering. */
-function worker({ fetch = () => Promise.reject(new TypeError('offline')), language = 'en-SG' } = {}) {
+function worker({ fetch = () => Promise.reject(new TypeError('offline')), language = 'en-SG', globals = {} } = {}) {
   const listeners = {};
   const stores = new Map();
   const caches = {
@@ -108,6 +108,7 @@ function worker({ fetch = () => Promise.reject(new TypeError('offline')), langua
     AbortSignal,
     setTimeout: (f, ms, ...args) => setTimeout(f, ms / SPEED, ...args),
     clearTimeout,
+    ...globals,
   };
   vm.createContext(ctx);
   vm.runInContext(SOURCE, ctx);
@@ -191,7 +192,7 @@ test('each address gets its way of fetching, and the live ones are left alone', 
     ['https://elsewhere.example/app/app.js', null],
   ];
   for (const [path, expected] of cases) assert.deepEqual(way(path), expected, path);
-  // Only GETs are kept; a POST to /me/next goes straight through.
+  // Only GETs are kept; a POST to /api/me/next goes straight through.
   assert.equal(way('/api/me/next', { method: 'POST', body: '{}' }), null);
   // Signing in or out goes through the worker, which empties the kept replies.
   assert.deepEqual(way('/api/auth/logout', { method: 'POST' }), ['fetch']);
@@ -285,6 +286,52 @@ test('/api/me/next: a server error gives the kept copy; a 401 empties the kept r
   status = 401;
   assert.equal((await w.dispatch('/api/me/next').responded).status, 401);
   assert.equal(await w.caches.has(w.get('DATA')), false);
+});
+
+test("an app file answered with a server error gives the kept copy, as the account's replies do", async () => {
+  let status = 200;
+  const w = worker({
+    fetch: () =>
+      Promise.resolve(
+        status === 200
+          ? new Response('good', { status, headers: { 'content-type': 'text/javascript', etag: '"a"' } })
+          : new Response('Worker threw exception', { status, headers: { 'content-type': 'text/html' } }),
+      ),
+  });
+  const first = w.dispatch('/app/app.js');
+  assert.equal(await (await first.responded).text(), 'good');
+  await within(Promise.all(first.waits));
+  // A deploy window, an outage: the page gets the copy, not the error page.
+  status = 503;
+  const res = await within(w.dispatch('/app/app.js').responded);
+  assert.equal(res.status, 200);
+  assert.equal(await res.text(), 'good');
+  // With nothing kept, the error is all there is.
+  const bare = await within(w.dispatch('/app/offline.js').responded);
+  assert.equal(bare.status, 503);
+});
+
+test('/api/me/next: the copies stay apart on a browser whose URLSearchParams has no size (Safari before 17)', async () => {
+  // iOS 16.4 to 16.7, the first with web push, has no URLSearchParams.size.
+  class OldParams extends URLSearchParams {
+    get size() {
+      return undefined;
+    }
+  }
+  let n = 0;
+  let online = true;
+  const w = worker({
+    fetch: () => (online ? Promise.resolve(json({ n: ++n })) : Promise.reject(new TypeError('offline'))),
+    globals: { URLSearchParams: OldParams },
+  });
+  const en = { headers: { 'accept-language': 'en' } };
+  await w.dispatch('/api/me/next?lat=1.3&lon=103.7', en).responded;
+  await w.dispatch('/api/me/next?to=COM3', en).responded;
+  online = false;
+  // A stop's card never stands in for the plan's, nor the plan's for a stop's.
+  assert.equal((await (await w.dispatch('/api/me/next?lat=1.2&lon=103.8', en).responded).json()).n, 1);
+  assert.equal((await (await w.dispatch('/api/me/next?to=COM3', en).responded).json()).n, 2);
+  await assert.rejects(w.dispatch('/api/me/next?h12=1', en).responded);
 });
 
 test('signing in or out empties the kept replies, and a reply on its way then is not kept', async () => {

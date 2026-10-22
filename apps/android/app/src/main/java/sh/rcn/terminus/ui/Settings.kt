@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -38,7 +37,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Switch
@@ -99,16 +97,20 @@ import sh.rcn.terminus.L
 import sh.rcn.terminus.Lang
 import sh.rcn.terminus.LeaveAlerts
 import sh.rcn.terminus.LiveService
+import sh.rcn.terminus.NewToNus
 import sh.rcn.terminus.ProfileDoc
 import sh.rcn.terminus.R
 import sh.rcn.terminus.RemovedPlace
 import sh.rcn.terminus.Servers
 import sh.rcn.terminus.Store
 import sh.rcn.terminus.Theme
-import sh.rcn.terminus.Trip
+import sh.rcn.terminus.TimetableClass
 import sh.rcn.terminus.WEEKDAYS
 import sh.rcn.terminus.dayShort
 import sh.rcn.terminus.hour12
+import sh.rcn.terminus.id
+import sh.rcn.terminus.widget.NearbyShared
+import sh.rcn.terminus.widget.redrawWidgets
 
 /** Settings' pages, in the order the list shows them. */
 internal enum class SettingsPage(val title: Int) {
@@ -427,7 +429,12 @@ private fun displaySummary(page: SettingsPage, state: AccountState): String {
             )
             .joinToString(" · ")
     } else {
-        "${stringResource(themeName(Theme.pref(ctx)))} · ${stringResource(CardStyle.name(CardStyle.pref(ctx)))}"
+        listOfNotNull(
+                stringResource(themeName(Theme.pref(ctx))),
+                stringResource(CardStyle.name(CardStyle.pref(ctx))),
+                stringResource(R.string.new_to_nus).takeIf { NewToNus.on(ctx) },
+            )
+            .joinToString(" · ")
     }
 }
 
@@ -508,6 +515,7 @@ private fun SettingsPageContent(
             Groups {
                 ThemePicker()
                 CardStylePicker()
+                NearbyWidgetSettings()
             }
         SettingsPage.Account -> Groups { AccountSection(state, account, main, onAddEmail, onSignedOut) }
         SettingsPage.About -> Groups { AboutPage() }
@@ -564,59 +572,7 @@ private fun AboutPage() {
             LinkRow(stringResource(title), { ctx.openWeb(url) }, sub = where, away = true)
         }
     }
-    if (developer) DeveloperGroup()
-}
-
-/**
- * Which server the app talks to, from the ones built in (Servers). Moving to or from the dev stub sets the sign-in aside, so the app starts
- * again.
- */
-@Composable
-private fun DeveloperGroup() {
-    val ctx = LocalContext.current
-    var chosen by remember { mutableStateOf(Servers.base) }
-    Group(stringResource(R.string.developer), stringResource(R.string.developer_server_hint)) {
-        Servers.choices.forEachIndexed { i, base ->
-            if (i > 0) RowDivider()
-            val sub =
-                when {
-                    base.contains("10.0.2.2") -> stringResource(R.string.server_stub_emulator)
-                    Servers.isLocal(base) -> stringResource(R.string.server_stub_reverse)
-                    i == 0 -> stringResource(R.string.server_default)
-                    else -> null
-                }
-            ServerRow(base.substringAfter("://"), sub, base == chosen) {
-                if (base == chosen) return@ServerRow
-                val restart = Servers.choose(ctx, base)
-                chosen = base
-                if (restart) ctx.restartApp()
-            }
-        }
-    }
-}
-
-@Composable
-private fun ServerRow(host: String, sub: String?, selected: Boolean, onClick: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth()
-            .selectable(selected, role = Role.RadioButton, onClick = onClick)
-            .heightIn(min = 52.dp)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(host, style = MaterialTheme.typography.bodyLarge)
-            sub?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        }
-        RadioButton(selected = selected, onClick = null)
-    }
-}
-
-/** A new session (the dev stub's, or the site's again): start from the top, as after signing in. */
-private fun android.content.Context.restartApp() {
-    val launch = packageManager.getLaunchIntentForPackage(packageName) ?: return
-    startActivity(android.content.Intent.makeRestartActivityTask(launch.component))
-    Runtime.getRuntime().exit(0)
+    if (developer) DeveloperGroups()
 }
 
 /** The longest note the server takes; the counter turns amber from [FEEDBACK_NEAR]. */
@@ -713,7 +669,8 @@ private fun FeedbackPage(state: AccountState, account: AccountViewModel, onAddEm
 
 /**
  * Leave alerts and the live notification: on this phone only, in two groups (before class, during a trip), each row with a short line and
- * the details under the group. Exact alarms are asked for when either notification is on.
+ * the details under the group. Exact alarms are asked for when either notification is on, or a widget shows buses near you (its minutes
+ * need them too).
  */
 @Composable
 private fun NotificationSettings(main: MainViewModel) {
@@ -730,10 +687,12 @@ private fun NotificationSettings(main: MainViewModel) {
             (store.liveUpdates && !LeaveAlerts.canNotify(ctx, LiveService.CHANNEL))
     }
     var off by remember { mutableStateOf(blocked()) }
+    var nearbyWidget by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             exact = LeaveAlerts.canBeExact(ctx)
             off = blocked()
+            nearbyWidget = NearbyShared.wanted(ctx)
         }
     }
     val openSettings = { ctx.openAppSettings() }
@@ -760,7 +719,7 @@ private fun NotificationSettings(main: MainViewModel) {
             channel = LiveService.CHANNEL,
         )
     }
-    if ((ui.leaveAlerts || ui.liveUpdates) && !exact) {
+    if ((ui.leaveAlerts || ui.liveUpdates || nearbyWidget) && !exact) {
         Column {
             Hint(stringResource(R.string.exact_off), Modifier.padding(horizontal = 4.dp))
             TextButton(onClick = { runCatching { ctx.startActivity(LeaveAlerts.exactAlarmSettings(ctx)) } }) {
@@ -1119,6 +1078,8 @@ private fun Classes(profile: ProfileDoc, campus: Campus?, account: AccountViewMo
         for ((imported, i, t) in all) {
             // Tapped, a class opens to change its stop, as on the web.
             val key = "${if (imported) "t" else "m"}$i"
+            // The class as this list shows it, every field: a change made again on a newer profile finds it, or no class at all.
+            val seen = profile.classAt(imported, i)
             val expanded = changing == key
             val state = stringResource(if (expanded) R.string.a11y_expanded else R.string.a11y_collapsed)
             Row(
@@ -1139,16 +1100,14 @@ private fun Classes(profile: ProfileDoc, campus: Campus?, account: AccountViewMo
                         )
                     if (about.isNotEmpty()) Hint(about.joinToString(" · "))
                 }
-                // Only while that place still holds this class: a second tap before the list redraws mustn't take the next one.
-                RemoveButton({
-                    account.edit { if ((if (imported) it.trips else it.manual).getOrNull(i) == t) it.removeClass(imported, i) }
-                })
+                // This class, found where it is now: a second tap before the list redraws mustn't take the next one.
+                RemoveButton({ if (seen != null) account.edit { it.removeClass(imported, i, seen) } })
             }
             if (changing == key) {
                 Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)) {
                     WherePicker(stringResource(R.string.change_stop, t.label), destinations, null) { d ->
-                        if (d != null) {
-                            account.edit { it.setClassStop(imported, i, if (d.kind == "landmark") d.code else d.stopCode) }
+                        if (d != null && seen != null) {
+                            account.edit { it.setClassStop(imported, i, seen, if (d.kind == "landmark") d.code else d.stopCode) }
                             changing = null
                         }
                     }
@@ -1229,7 +1188,14 @@ private fun AddClass(destinations: List<Destination>, account: AccountViewModel,
                     if (s != null && w != null) {
                         account.edit {
                             it.addManual(
-                                Trip(day, s, end?.takeIf { e -> e > s }, if (w.kind == "landmark") w.code else w.stopCode, label.trim(), "")
+                                TimetableClass(
+                                    day,
+                                    s,
+                                    end?.takeIf { e -> e > s },
+                                    if (w.kind == "landmark") w.code else w.stopCode,
+                                    label.trim(),
+                                    "",
+                                )
                             )
                         }
                         onDone()
@@ -1277,7 +1243,7 @@ private fun Favourites(profile: ProfileDoc, campus: Campus?, account: AccountVie
                                 leaving = leaving + p.key
                                 scope.afterFold {
                                     var removed: RemovedPlace? = null
-                                    account.edit { removed = it.removePlace(p.key) }
+                                    account.edit { removed = it.removePlaceAt(p.to) }
                                     leaving = leaving - p.key
                                     // Undo in the bar at the foot, as for a class swiped off Today.
                                     val r = removed ?: return@afterFold
@@ -1327,8 +1293,8 @@ private fun Favourites(profile: ProfileDoc, campus: Campus?, account: AccountVie
                     note = null
                     val add = { account.edit { it.addPlace(if (d.kind == "building" || d.kind == "room") d.code else d.label, to) } }
                     // One of your timetable's stops folds out of that list first; a searched one has gone with the search.
-                    if (timetable.none { it.code == d.code }) return@WherePicker add()
-                    picked = d.code
+                    if (timetable.none { it.id == d.id }) return@WherePicker add()
+                    picked = d.id
                     scope.afterFold {
                         add()
                         picked = null
@@ -1338,6 +1304,47 @@ private fun Favourites(profile: ProfileDoc, campus: Campus?, account: AccountVie
         }
     }
     LaunchedEffect(Unit) { account.loadCampus() }
+}
+
+/**
+ * The Nearby widget, on this phone only: New to NUS, where it explains the buses ([NewToNus]); and its minutes until each bus, which need
+ * "Alarms & reminders", allowed on a system page (the row goes there, either way).
+ */
+@Composable
+private fun NearbyWidgetSettings() {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val on = NewToNus.on(ctx)
+    // Checked again on coming back from the system page; the widget follows by itself (Refresher hears the change).
+    var exact by remember { mutableStateOf(LeaveAlerts.canBeExact(ctx)) }
+    LifecycleResumeEffect(Unit) {
+        exact = LeaveAlerts.canBeExact(ctx)
+        onPauseOrDispose {}
+    }
+    Group(stringResource(R.string.nearby_widget), stringResource(R.string.new_to_nus_hint)) {
+        FieldRow(
+            stringResource(R.string.widget_minutes),
+            Modifier.clickable { runCatching { ctx.startActivity(LeaveAlerts.exactAlarmSettings(ctx)) } },
+            sub = stringResource(if (exact) R.string.widget_minutes_on else R.string.widget_minutes_off),
+        ) {
+            // Allowed, the line under it says so; there's nothing to do here.
+            if (!exact)
+                OutlinedButton(onClick = { runCatching { ctx.startActivity(LeaveAlerts.exactAlarmSettings(ctx)) } }) {
+                    Text(stringResource(R.string.allow))
+                }
+        }
+        RowDivider()
+        FieldRow(
+            stringResource(R.string.new_to_nus),
+            Modifier.toggleable(value = on, role = Role.Switch) {
+                NewToNus.set(ctx, it)
+                scope.launch { redrawWidgets(ctx) }
+            },
+            sub = stringResource(R.string.new_to_nus_sub),
+        ) {
+            Switch(checked = on, onCheckedChange = null)
+        }
+    }
 }
 
 /** Auto, light or dark, on this phone only. */

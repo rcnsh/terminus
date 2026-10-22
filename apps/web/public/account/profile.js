@@ -4,15 +4,15 @@
 // Settings at once, and a change made in Settings is the one the map sees.
 
 import { html, store, useStore } from '../assets/ui.js';
-import { api, setClockPref, t } from './dom.js';
+import { api, apiTagged, setClockPref, t } from './dom.js';
 
 /** The profile as the server last returned it, with edits not yet saved. Null until loaded. */
 export const profile = store(null);
 // Times everywhere follow the account's 12- or 24-hour choice.
 profile.subscribe((p) => p && setClockPref(p.clock));
-/** /campus: stops, routes, destinations (the search list) and residences. Null until loaded. */
+/** /api/campus: stops, routes, destinations (the search list) and residences. Null until loaded. */
 export const campus = store(null);
-/** The user's walking speed (m/s, from their pace), as /me/next last said, for walk times worked out here. */
+/** The user's walking speed (m/s, from their pace), as /api/me/next last said, for walk times worked out here. */
 export const walkSpeed = store(1.3);
 /** Bumped after each save: what depends on the profile (the account page's preview) redraws. */
 export const saves = store(0);
@@ -64,76 +64,169 @@ export function Toast() {
   `;
 }
 
+/** How many times a save is made again on a fresh copy when another device saved first (412). */
+const SAVE_TRIES = 3;
+
+/** The 400 ms wait before a save, so a run of changes (typing, a few taps) is one save. */
 let saveTimer = null;
-/** Counts edits: a save's reply doesn't replace edits made while it was on its way. */
+/** The profile as the server last answered with it, and its version (`etag`, for If-Match). */
+let confirmed = null;
+/** The changes made since the last save was sent: shown already, sent next. */
+let pending = [];
+/** The save on its way, { changes, done }: one at a time, so each is made on the one before it. */
+let sending = null;
+/** A timetable import on its way: changes made meanwhile wait for its answer, then go on top of it. */
+let importing = null;
+/** saveNow's changes: its caller says how the save went, so a save carrying one shows no toast. */
+const awaited = new WeakSet();
+/** Counts edits: a reload's answer doesn't replace edits made while it was on its way. */
 let edits = 0;
-/** Saves on their way: until they're back, the server's copy may not have them yet. */
-let saving = 0;
+
+const loaded = ({ data, etag }) => {
+  confirmed = { doc: data, etag };
+  return data;
+};
+
+/** `doc` with `changes` made to it, on a copy. */
+function withChanges(doc, changes) {
+  const next = structuredClone(doc);
+  for (const change of changes) change(next);
+  return next;
+}
 
 export async function loadProfile() {
-  profile.set(await api('/api/me/profile'));
+  profile.set(loaded(await apiTagged('/api/me/profile')));
   return profile.get();
 }
 
+/** Whether the profile shown is ahead of the server's: a change is waiting or on its way. */
+const busy = () => Boolean(saveTimer || sending || pending.length || importing);
+
 /** The profile afresh (it may have changed on the map or another device), unless a change here is waiting or being saved. */
 export async function reloadProfile() {
-  if (saveTimer || saving) return;
+  if (busy()) return;
   const mine = edits;
-  const p = await api('/api/me/profile');
-  if (!saveTimer && !saving && mine === edits) profile.set(p);
+  const r = await apiTagged('/api/me/profile');
+  if (!busy() && mine === edits) profile.set(loaded(r));
 }
 
 /**
  * Changes the profile: `change` gets a copy to edit. Saved a moment later,
- * so a run of changes (typing, a few taps) is one save.
+ * so a run of changes (typing, a few taps) is one save. Only the change is
+ * saved, made again on the profile as the server has it, so what another
+ * device saved meanwhile stays: `change` may run more than once.
  */
 export function edit(change) {
-  const next = structuredClone(profile.get());
-  change(next);
-  profile.set(next);
-  edits++;
+  record(change);
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(async () => {
+  saveTimer = setTimeout(() => {
     saveTimer = null;
-    const mine = edits;
-    saving++;
-    try {
-      const saved = await api('/api/me/profile', { method: 'PUT', body: profile.get() });
-      if (mine === edits) profile.set(saved);
-      toast(t('Saved'));
-      saves.set((n) => n + 1);
-    } catch (err) {
-      toast(err.status ? t('Not saved. {0}', err.message) : t('Not saved. Check your connection.'), { error: true });
-    } finally {
-      saving--;
-    }
+    sendSave().catch(() => {
+      // Said in a toast; nothing waits on it.
+    });
   }, 400);
 }
 
-/** Saves straight away, for steps that must land before moving on; throws if it can't. */
+/** Shows `change` at once and queues it for the next save. */
+function record(change) {
+  const next = structuredClone(profile.get());
+  change(next);
+  profile.set(next);
+  pending.push(change);
+  edits++;
+}
+
+/**
+ * Sends the changes waiting, if no save is on its way (they go when it's
+ * back). Each is made on the profile as the server last had it, sent with
+ * its version (If-Match); if another device saved since (412), the profile
+ * is read again and the changes made on that. Returns the save's promise.
+ */
+function sendSave() {
+  if (sending || importing || !pending.length) return sending?.done ?? Promise.resolve(null);
+  const changes = pending;
+  pending = [];
+  const batch = { changes, quiet: changes.some((c) => awaited.has(c)) };
+  batch.done = (async () => {
+    try {
+      let saved = null;
+      for (let tries = 1; !saved; tries++) {
+        // Nothing read yet (a page that set the profile itself): read it now.
+        if (!confirmed) loaded(await apiTagged('/api/me/profile'));
+        const base = confirmed;
+        try {
+          saved = loaded(
+            await apiTagged('/api/me/profile', { method: 'PUT', body: withChanges(base.doc, changes), ifMatch: base.etag ?? undefined }),
+          );
+        } catch (err) {
+          if (err.status !== 412 || tries >= SAVE_TRIES) throw err;
+          confirmed = null;
+        }
+      }
+      // Changes made since this was sent stay on screen, on top of what it saved.
+      profile.set(withChanges(saved, pending));
+      if (!batch.quiet) toast(t('Saved'));
+      saves.set((n) => n + 1);
+      return saved;
+    } catch (err) {
+      // Not saved: the profile as the server has it, with the changes made since (they're sent next).
+      if (confirmed) profile.set(withChanges(confirmed.doc, pending));
+      if (!batch.quiet) toast(err.status ? t('Not saved. {0}', err.message) : t('Not saved. Check your connection.'), { error: true });
+      throw err;
+    } finally {
+      sending = null;
+      if (!saveTimer) sendSave().catch(() => {});
+    }
+  })();
+  sending = batch;
+  return batch.done;
+}
+
+/**
+ * Saves straight away, for steps that must land before moving on; throws if
+ * it can't. Changes still waiting go with it; a save on its way goes first.
+ */
 export async function saveNow(change) {
   clearTimeout(saveTimer);
   saveTimer = null;
-  const next = structuredClone(profile.get());
-  change?.(next);
-  const mine = ++edits;
-  saving++;
-  let saved;
-  try {
-    saved = await api('/api/me/profile', { method: 'PUT', body: next });
-  } finally {
-    saving--;
+  const mine = change ?? (() => {});
+  awaited.add(mine);
+  record(mine);
+  for (;;) {
+    if (sending?.changes.includes(mine)) return sending.done;
+    if (sending) await sending.done.catch(() => {});
+    else if (importing) await importing.catch(() => {});
+    else sendSave().catch(() => {});
   }
-  // An edit made while this was on its way is newer: it stays, with this
-  // change on it too, so its own save a moment later carries both.
-  if (mine === edits) profile.set(saved);
-  else if (change) {
-    const both = structuredClone(profile.get());
-    change(both);
-    profile.set(both);
-  }
-  saves.set((n) => n + 1);
-  return saved;
+}
+
+/**
+ * Imports a NUSMods share link (POST /api/me/import), which saves the
+ * timetable itself. A change still waiting is saved first, so it isn't lost
+ * under the import; changes made while it runs wait for its answer, then
+ * are made on top of it and saved. Answers with what the server replied; throws
+ * if it failed.
+ */
+export async function importTimetable(share) {
+  clearTimeout(saveTimer);
+  saveTimer = null;
+  while (importing) await importing.catch(() => {});
+  sendSave().catch(() => {});
+  while (sending) await sending.done.catch(() => {});
+  const run = (async () => {
+    try {
+      const { data, etag } = await apiTagged('/api/me/import', { method: 'POST', body: { share } });
+      // The import saved a new version: the next save is made on it.
+      confirmed = { doc: data.profile, etag };
+      profile.set(withChanges(data.profile, pending));
+      return data;
+    } finally {
+      importing = null;
+      if (!saveTimer) sendSave().catch(() => {});
+    }
+  })();
+  importing = run;
+  return run;
 }
 
 export async function loadCampus() {
@@ -190,22 +283,24 @@ export function residenceFor(homeStops) {
   return residencesByName().find((r) => [...r.stops].sort().join() === key) ?? null;
 }
 
-/** A residence's walk to its stops, in minutes at a normal pace: /campus says (`walkMin`); worked out only from an older answer without it. */
+/** A residence's walk to its stops, in minutes at a normal pace (/api/campus `walkMin`); worked out here for an older server. */
 export const residenceWalkMin = (r) => r.walkMin ?? Math.max(1, Math.round(r.walkM / 1.3 / 60));
 
 /**
  * One of the account's limits (the profile's `limits`: pinnedStops, label,
  * homeWalkMin, …), so the page holds to what the server will take; `fallback`
- * until the profile has loaded, or from a server that doesn't send them.
+ * until the profile has loaded, and worked out here for an older server.
  */
 export const limit = (key, fallback) => profile.get()?.limits?.[key] ?? fallback;
 
 /**
  * Adds a favourite, called what was picked, short, as it reads on a button
  * ("KR MRT", "The Deck", "COM1" for School of Computing). One per stop.
- * Returns the one already there instead, if there is one.
+ * Returns the one already there instead, if there is one. `keep` holds the
+ * key given, so the same change made again (on the server's copy, when it's
+ * saved) gives the same key while it's free.
  */
-export function withPlace(p, to, label) {
+export function withPlace(p, to, label, keep = {}) {
   const same = p.places.find((x) => x.to === to);
   if (same) return same;
   label = label.slice(0, 24);
@@ -215,7 +310,9 @@ export function withPlace(p, to, label) {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '')
       .slice(0, 24) || 'place';
+  if (keep.key && !p.places.some((x) => x.key === keep.key)) key = keep.key;
   while (p.places.some((x) => x.key === key)) key = `${key.slice(0, 21)}-${Math.floor(Math.random() * 90 + 10)}`;
+  keep.key = key;
   p.places.push({ key, label, to });
   return null;
 }

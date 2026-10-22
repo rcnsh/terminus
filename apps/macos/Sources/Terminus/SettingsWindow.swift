@@ -124,6 +124,17 @@ struct SettingsWindow: View {
             await setup.loadDevices()
             loaded = true
         }
+        // Signed in from a guest (Settings' Add an email) or out: this window
+        // stays, with what it showed, so the account's setup goes and the new
+        // one's comes. A reply for the old one is dropped (SetupModel.load).
+        .onChange(of: app.session) {
+            setup.reset()
+            guard app.paired else { return }
+            Task {
+                await setup.load()
+                await setup.loadDevices()
+            }
+        }
         // Come back to while open: the account again, so a device added or a
         // change made on another one shows here.
         .background { WindowReader { if window !== $0 { window = $0 } } }
@@ -213,7 +224,7 @@ struct SettingsPaneView: View {
             case .account:
                 account
             case .about:
-                AboutPane()
+                AboutPane(app: app)
             case .feedback:
                 FeedbackPane(app: app, setup: setup)
             }
@@ -568,13 +579,13 @@ struct TripsPane: View {
         }
         Divider()
         LabeledContent {
-            Toggle(L("Allow for busy buses"), isOn: Binding(get: { setup.fullBusMargin }, set: { setup.setFullBusMargin($0) }))
+            Toggle(L("Allow for packed buses"), isOn: Binding(get: { setup.fullBusMargin }, set: { setup.setFullBusMargin($0) }))
                 .toggleStyle(.switch)
                 .labelsHidden()
         } label: {
             VStack(alignment: .leading, spacing: 2) {
-                Text(L("Allow for busy buses"))
-                Hint(L("Aim one bus earlier when yours is often full."))
+                Text(L("Allow for packed buses"))
+                Hint(L("Aim one bus earlier when yours is often packed."))
             }
         }
         Divider()

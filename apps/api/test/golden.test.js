@@ -1,5 +1,5 @@
 /**
- * Golden answers: the exact JSON /me/next and /me/nearby return for a set of
+ * Golden answers: the exact JSON /api/me/next and /api/me/nearby return for a set of
  * fixed situations, each on its own frozen clock and fake feed. Refactors must
  * reproduce them byte for byte; a deliberate change is re-recorded with
  *
@@ -43,7 +43,7 @@ const MIN = 60_000;
 /** A Singapore wall-clock time as epoch ms: sgtAt('2026-08-27', '09:00'). */
 const sgtAt = (date, hhmm) => Date.parse(`${date}T${hhmm}:00+08:00`);
 
-// Every service at every stop: D2 in 4 and 14 min, A1 in 9, R2 in 6.
+// Four services at each of these stops: D2 in 4 and 14 min, A1 in 9, R2 in 6, D1 in 7.
 const FEED = {};
 for (const code of ['PGP', 'PGPR', 'COM3', 'UTOWN', 'KR-MRT', 'KR-MRT-OPP', 'CLB', 'LT27', 'AS5']) {
   FEED[code] = [
@@ -282,7 +282,7 @@ const CASES = {
       },
     },
   ],
-  // The feed answers with no buses at all: every time is a timetable estimate, marked "~".
+  // The feed answers with no buses at all: every time is an estimate, marked "~".
   'scheduled': [{ home: { stops: ['PGP'] }, places }, '/api/me/next?place=mrt', { feed: {} }],
   'nearby-list': [{ home: { stops: ['PGP'] } }, `/api/me/nearby?${DORM}`],
   // The day the apps keep for when they're offline (see offline-day.json):

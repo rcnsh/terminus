@@ -6,7 +6,7 @@
 //     <div data-horizon></div>           the hills, the road and a shuttle
 // data-horizon takes data-low (just the hills), data-stop (your stop's
 // sign), data-bus="#34a853 0.4 live" (a bus coming up to it: its colour, how
-// far, and live or a timetable guess), data-shuttle="no" (an empty road) and
+// far, and live or an estimate), data-shuttle="no" (an empty road) and
 // data-drive (shuttles drive across, over and over, each a service at random).
 // A page's script can draw one itself with drawHorizon().
 import { html, render } from './ui.js';

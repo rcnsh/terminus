@@ -19,7 +19,7 @@ const quality = {
   enum: ['live', 'scheduled', 'unknown', 'stale', 'ended'],
   description:
     'How reliable the answer is, best to worst. `live`: an ETA from the feed for a tracked bus. ' +
-    '`scheduled`: the feed responded but listed no bus, so the time is an estimate from the usual gap between buses. ' +
+    '`scheduled`: the feed responded but listed no bus, so the time is an estimate from the usual gap between buses; for a public bus, a time from LTA’s timetable rather than a bus on the road. ' +
     '`unknown`: the feed could not be reached, so no time is given. ' +
     '`stale`: the last cached live answer, returned because the feed is down; `asOf` is when it was originally fetched. ' +
     '`ended`: the service is outside its operating hours.',
@@ -155,7 +155,7 @@ const answerExample = {
 /** The apps' version (Android versionName, the Mac's CFBundleShortVersionString, the iPhone's MARKETING_VERSION):
  *  the API and the apps are released together. A test fails when a version
  *  bump leaves this behind. */
-export const API_VERSION = '3.4.2';
+export const API_VERSION = '3.6.0';
 
 export function openApiSpec(origin: string): Record<string, unknown> {
   return withCommonErrors({
@@ -361,6 +361,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                         ],
                         color: '#2b9ad6',
                         towards: ['Central Library', 'Prince George’s Park Foyer'],
+                        via: ['Central Library', 'Engineering', 'Kent Vale'],
                         crowd: 'low',
                         endsAt: '2026-09-28T15:04:00.000Z',
                         running: true,
@@ -376,6 +377,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                         later: [],
                         color: '#ec4fa0',
                         towards: ['Central Library', 'COM 3'],
+                        via: ['Central Library', 'Arts', 'BIZ'],
                         crowd: 'high',
                         endsAt: '2026-09-28T15:00:00.000Z',
                         running: true,
@@ -510,6 +512,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                         later: [],
                         color: '#ec4fa0',
                         towards: ['Central Library', 'COM 3'],
+                        via: ['Central Library', 'Arts', 'BIZ'],
                         crowd: 'low',
                         endsAt: '2026-10-07T15:00:00.000Z',
                         running: true,
@@ -594,9 +597,9 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Stops'],
           summary: 'Stops by side of the road',
           description:
-            'Every stop grouped with its twin across the road, with the buses that call at each side and the stop each one goes to next. ' +
+            'Every stop grouped with its opposite stop, with the buses that call at each side and the stop each one goes to next. ' +
             'NUS stops come in pairs a few metres apart, one for each direction of travel, so this is how to tell which side goes where. ' +
-            'A stop with no twin is a place with one side.\n\n' +
+            'A stop with no opposite stop is a place with one side.\n\n' +
             '`crossingM` is the straight-line distance between the two stops, not a walking distance. ' +
             '`next` is null where the bus terminates. For whole routes in order, see `/api/campus`.\n\n' +
             'The data only changes when the stop graph is re-scraped; `version` says when that was, and stop codes can change between versions. ' +
@@ -768,7 +771,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           summary: 'Email a sign-in code and link',
           description:
             'Emails a 6-character sign-in code and a sign-in link to the address. The reply is the same whether or not the address is blocked or has an account. ' +
-            'One email per address per minute. Either the code (`/api/auth/code`) or the link signs in, once, within 15 minutes.',
+            'One email per address per minute, an app sign-in’s included. Either the code (`/api/auth/code`) or the link signs in, once, within 15 minutes.',
           operationId: 'login',
           security: [],
           requestBody: jsonBody(
@@ -853,7 +856,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           description:
             'Emails a code to type into the app, and a link to approve it from another device by typing the number the app shows (returned here). ' +
             'Send the anonymous token (if the app has one) as `Authorization: Bearer` to keep its setup. Then poll `/api/auth/app/poll`. ' +
-            'One email per address per minute; a request lasts 15 minutes. After “This wasn’t me” on the approval page, the address takes no app sign-ins for 6 hours (403).',
+            'One email per address per minute, a website sign-in’s included; a request lasts 15 minutes. After “This wasn’t me” on the approval page, the address takes no app sign-ins for 6 hours (403).',
           operationId: 'appStart',
           // The anonymous token is optional.
           security: [{}, { bearer: [] }],
@@ -1020,9 +1023,17 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             {
               type: 'object',
               required: ['code'],
-              properties: { code: { type: 'string' }, name: { type: 'string', maxLength: 40, description: 'Shown in the device list.' } },
+              properties: {
+                code: { type: 'string' },
+                name: { type: 'string', maxLength: 40, description: 'Shown in the device list.' },
+                platform: {
+                  type: 'string',
+                  enum: ['android', 'mac', 'ios'],
+                  description: 'The app’s platform, used when the request has no `x-terminus-client` header.',
+                },
+              },
             },
-            { code: 'K7QX4M', name: 'Pixel 8' },
+            { code: 'K7QX4M', name: 'Pixel 8', platform: 'android' },
           ),
           responses: {
             '200': ok({ type: 'object', required: ['token'], properties: { token: { type: 'string' } } }),
@@ -1095,8 +1106,8 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Account'],
           summary: 'Departures near you',
           description:
-            "Upcoming buses at up to three stops within walking range, nearest first, plus the nearest stop's twin " +
-            "(across the road, or a stop easily mistaken for it) when it isn't one of them. `opposite` is each stop's twin, if it has one. Each departure has its service's `color`. Without coordinates, uses your home.",
+            "Upcoming buses at up to three stops within walking range, nearest first, plus the nearest stop's opposite stop " +
+            "(across the road, or a stop easily mistaken for it) when it isn't one of them. `opposite` is each stop's opposite or partner stop, if it has one. Each departure has its service's `color`. Without coordinates, uses your home.",
           operationId: 'meNearby',
           security: [{ bearer: [] }, { cookie: [] }],
           parameters: [...coordParams, stoppedParam, langParam],
@@ -1119,6 +1130,18 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                       distM: { type: 'integer' },
                       walkS: { type: 'integer' },
                       available: { type: 'boolean' },
+                      via: {
+                        type: 'array',
+                        items: { type: 'string' },
+                        example: ['UTown', 'Science', 'Kent Ridge MRT'],
+                        description:
+                          'Which way this stop’s buses go, by places someone new to NUS knows: the ones most of its buses (`board[].via`) pass first, the most shared first, up to three. Empty when they pass none.',
+                      },
+                      viaText: {
+                        type: ['string', 'null'],
+                        example: 'to UTown, Science, Kent Ridge MRT',
+                        description: '`via` in words (Chinese "往 UTown、理学院 方向"). Null when `via` is empty.',
+                      },
                       board: { type: 'array', items: { $ref: '#/components/schemas/BoardRow' } },
                     },
                   },
@@ -1633,7 +1656,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           ),
           responses: {
             '200': ok({ $ref: '#/components/schemas/MeAnswer' }),
-            '400': errorResponse('Unknown place, a time already past, or too many.'),
+            '400': errorResponse('Unknown place, a time already past, a date that is not today or in the next week, or too many.'),
             '409': errorResponse('Other devices kept saving the profile meanwhile; try again.'),
           },
         },
@@ -2076,6 +2099,12 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           responses: {
             '200': ok({ type: 'object', properties: { ok: { type: 'boolean' } } }),
             '403': errorResponse('The form was posted from another site.'),
+            '429': {
+              ...errorResponse('A token that is no session, sent too often from this IP. Wait for `Retry-After`.', {
+                error: 'too many attempts, try again in a minute',
+              }),
+              headers: RETRY_AFTER,
+            },
           },
         },
       },
@@ -2146,7 +2175,17 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                 },
                 clients: {
                   type: 'array',
-                  items: { type: 'object', properties: { client: { type: ['string', 'null'] }, n: { type: 'integer' } } },
+                  description:
+                    'App versions, from the version each device last sent: devices used in the last 7 days (`n`), 30 and 90. A device unused for 90 days is signed out.',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      client: { type: ['string', 'null'] },
+                      n: { type: 'integer' },
+                      d30: { type: 'integer' },
+                      d90: { type: 'integer' },
+                    },
+                  },
                 },
                 signups: { type: 'array', items: { type: 'object', properties: { day: { type: 'string' }, n: { type: 'integer' } } } },
                 apiKeys: { type: 'object', additionalProperties: { type: 'integer' } },
@@ -2154,12 +2193,23 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                 collect: {
                   type: 'object',
                   description: 'Which of the extra statistics are being collected: set with POST /api/admin/collect.',
-                  properties: { active: { type: 'boolean' }, eta: { type: 'boolean' }, errors: { type: 'boolean' } },
+                  properties: {
+                    active: { type: 'boolean' },
+                    eta: { type: 'boolean' },
+                    errors: { type: 'boolean' },
+                    legacy: { type: 'boolean' },
+                    settings: { type: 'boolean' },
+                  },
                 },
                 eta: {
                   type: ['object', 'null'],
                   description:
                     'How close the feed’s arrival times came to when the buses did come, over the last 14 scored days: overall, by how far ahead, by service and by hour. null without storage.',
+                },
+                model: {
+                  type: ['object', 'null'],
+                  description:
+                    'The arrival-time model run in shadow (it answers no one): whether it runs (`on`), and each of the last 28 days it answered, every method’s error overall and by how far ahead, with the share of questions history could answer. null without storage.',
                 },
               },
             }),
@@ -2172,20 +2222,46 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Service'],
           summary: 'Turn one of the operator’s statistics on or off',
           description:
-            'The switches for what terminus collects beyond its answers: `active` (how many accounts used it each day, by app and version, counted from the sessions already kept), `eta` (the feed’s arrival times against when the timelapse recorder saw each bus arrive) and `errors` (crash and error reports from the apps and the website, POST /api/errors). Each is off until turned on. Answers every switch. Answers 404 without the operator token.',
+            'The switches for what terminus collects beyond its answers: `active` (how many accounts used it each day, by app and version, counted from the sessions already kept), `eta` (the feed’s arrival times against when the timelapse recorder saw each bus arrive), `errors` (crash and error reports from the apps and the website, POST /api/errors), `legacy` (requests that still use the old address, the API’s old paths or too old an app, by app version and route) and `settings` (how many active accounts have each setting, once a day). Each is off until turned on. Answers every switch. Answers 404 without the operator token.',
           operationId: 'adminCollect',
           security: [{ operator: [] }],
           requestBody: jsonBody({
             type: 'object',
             required: ['name', 'on'],
-            properties: { name: { type: 'string', enum: ['active', 'eta', 'errors'] }, on: { type: 'boolean' } },
+            properties: { name: { type: 'string', enum: ['active', 'eta', 'errors', 'legacy', 'settings'] }, on: { type: 'boolean' } },
           }),
           responses: {
             '200': ok({
               type: 'object',
-              properties: { active: { type: 'boolean' }, eta: { type: 'boolean' }, errors: { type: 'boolean' } },
+              properties: {
+                active: { type: 'boolean' },
+                eta: { type: 'boolean' },
+                errors: { type: 'boolean' },
+                legacy: { type: 'boolean' },
+                settings: { type: 'boolean' },
+              },
             }),
             '400': errorResponse('No such switch, or `on` is not true or false.'),
+            '404': errorResponse('No operator token, or the wrong one.'),
+          },
+        },
+      },
+      '/api/admin/crashes/dismiss': {
+        post: {
+          tags: ['Service'],
+          summary: 'Hide a crash from the operator’s dashboard',
+          description:
+            'Analytics Engine cannot delete a report, so this hides one crash, by its fingerprint, from `appErrors` in GET /api/admin/stats until a report of it comes in after now. Answers 404 without the operator token.',
+          operationId: 'adminDismissCrash',
+          security: [{ operator: [] }],
+          requestBody: jsonBody({
+            type: 'object',
+            required: ['fingerprint'],
+            properties: { fingerprint: { type: 'string', pattern: '^[0-9a-f]{1,32}$', example: '18b32d7aae56' } },
+          }),
+          responses: {
+            '204': { description: 'Hidden.' },
+            '400': errorResponse('No fingerprint, or not one.'),
             '404': errorResponse('No operator token, or the wrong one.'),
           },
         },
@@ -2866,6 +2942,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             'later',
             'color',
             'towards',
+            'via',
             'crowd',
             'endsAt',
             'running',
@@ -2928,6 +3005,13 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               description:
                 'Where the service goes from this stop, by full name: the next stop, then the stop the route ends at (for a loop, the stop it started from). One name when they are the same, none at the end of the line. Place names stay English in every language.',
               example: ['Central Library', 'Prince George’s Park Foyer'],
+            },
+            via: {
+              type: 'array',
+              items: { type: 'string' },
+              description:
+                'The well-known places the service passes from this stop, in order, up to three (the MRT stations, UTown, PGP, Kent Vale, Central Library, COM 3, BIZ, and the faculties: Arts, Science, Engineering), for someone who does not know the routes yet. Each once, never the place this stop is. A faculty is in the request’s language; a place keeps its English name. Empty when it passes none: show `toText` then.',
+              example: ['Central Library', 'Arts', 'BIZ'],
             },
             crowd: {
               type: ['string', 'null'],
@@ -3336,7 +3420,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             },
           },
         },
-        Trip: {
+        Class: {
           type: 'object',
           required: ['day', 'arriveByMin', 'to', 'label'],
           properties: {
@@ -3344,11 +3428,16 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             arriveByMin: { type: 'integer', minimum: 0, maximum: 1439, description: 'Class start, minutes past midnight SGT.' },
             endMin: { type: 'integer', maximum: 1440, description: 'Class end, minutes past midnight SGT. After `arriveByMin`.' },
             to: { type: 'string', description: 'Destination: a stop code, or a place code (a `landmark` in `/api/campus`).' },
-            label: { type: 'string', minLength: 1, maxLength: 60 },
+            label: {
+              type: 'string',
+              minLength: 1,
+              maxLength: 60,
+              description: 'Saved on one line: line breaks and control characters become spaces.',
+            },
             venue: { type: 'string', maxLength: 40, description: 'The NUSMods room, such as `COM1-0212`. Longer is cut to 40 characters.' },
             weeks: {
               description:
-                'From NUSMods: the teaching weeks the class runs in, or the dates it runs between (every `weekInterval` weeks, or only the `weeks` of the range counted from `start`). ' +
+                'From NUSMods: the teaching weeks the class runs in, or the dates it runs between (real dates, `start` not after `end`; every `weekInterval` weeks, or only the `weeks` of the range counted from `start`). ' +
                 'Absent: every teaching week of the semester in `term`. A class in `manual`, entered by hand, runs every week whatever this says.',
               oneOf: [
                 { type: 'array', maxItems: 20, items: { type: 'integer', minimum: 1, maximum: 20 } },
@@ -3469,8 +3558,8 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               description:
                 'Clock times in answers and cards, 12-hour ("6:36 PM") or 24-hour ("18:36"). `auto` follows each request (`?h12=1` for 12-hour); `12` or `24` here overrides it, so every device shows the same.',
             },
-            trips: { type: 'array', items: { $ref: '#/components/schemas/Trip' }, description: 'From the NUSMods import.' },
-            manual: { type: 'array', items: { $ref: '#/components/schemas/Trip' }, description: 'Entered by hand. Kept on re-import.' },
+            trips: { type: 'array', items: { $ref: '#/components/schemas/Class' }, description: 'From the NUSMods import.' },
+            manual: { type: 'array', items: { $ref: '#/components/schemas/Class' }, description: 'Entered by hand. Kept on re-import.' },
             places: {
               type: 'array',
               maxItems: 12,
@@ -3481,7 +3570,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                 required: ['key', 'label', 'to'],
                 properties: {
                   key: { type: 'string', pattern: '^[a-z0-9-]{1,24}$' },
-                  label: { type: 'string', maxLength: 24 },
+                  label: { type: 'string', maxLength: 24, description: 'Saved on one line, as a class’s `label`.' },
                   to: { type: 'string' },
                 },
               },
@@ -3589,7 +3678,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                       type: 'string',
                       example: 'D2 · 09:42',
                       description:
-                        'The headline. With a bus to count down to, its service and departure as a clock time ("D2 · 09:42", "~09:42" for a timetable estimate, Chinese "约 09:42"), which stays true until the bus leaves; otherwise `label` as it is ("Walk · 8 min", "No classes today").',
+                        'The headline. With a bus to count down to, its service and departure as a clock time ("D2 · 09:42", "~09:42" for an estimate, Chinese "约 09:42"), which stays true until the bus leaves; otherwise `label` as it is ("Walk · 8 min", "No classes today").',
                     },
                     heading: {
                       type: ['string', 'null'],
@@ -3618,9 +3707,9 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                     },
                     quality: {
                       type: ['string', 'null'],
-                      example: 'Timetable estimate',
+                      example: 'Estimated time',
                       description:
-                        'What is less than live about the times: "Timetable estimate", "Live times are a few minutes old", "No live data". Null when they are live.',
+                        'What is less than live about the times: "Estimated time", "Live times are a few minutes old", "No live data". Null when they are live.',
                     },
                     leaveBy: {
                       type: ['string', 'null'],
@@ -3760,7 +3849,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                     journey: {
                       type: ['object', 'null'],
                       description:
-                        'The trip as steps, for apps that draw it (a line from you to the destination, a ticket, a list of steps): walk to the stop, take the bus, get there, and walk on when the destination is a room or building away from the stop. ' +
+                        'The trip as steps, for apps that draw it (a line from you to the destination, or a list of steps): walk to the stop, take the bus, get there, and walk on when the destination is a room or building away from the stop. ' +
                         'On foot the whole way it is the walk alone: `bus`, `boardAt` and `ride` are null, `walk` is the whole walk and `why` says why not a bus. ' +
                         'Null on the bus, once there, and with no time to give. Count down to `leave.at` and `boardAt` yourself; show the strings as they are.',
                       required: [
@@ -3827,7 +3916,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                           description: 'When the bus gets to `toStop` ("4:06 PM"). The same as `arrive` when `walkEnd` is null.',
                         },
                         slack: { type: ['string', 'null'], description: 'A class only: "3 min early", "2 min late".' },
-                        live: { type: 'boolean', description: 'The bus’s time is live, not a timetable estimate.' },
+                        live: { type: 'boolean', description: 'The bus’s time is live, not an estimate.' },
                         backup: {
                           oneOf: [{ $ref: '#/components/schemas/JourneyBus' }, { type: 'null' }],
                           description: 'Another bus: the next one for a trip, or for a class the sooner bus to go now on.',

@@ -52,9 +52,9 @@ const iPhone =
   !/Android/.test(navigator.userAgent) &&
   (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 
-/** What the card is for: the plan, a saved place (its key), a stop picked on the map or in the search, or the buses nearby. */
+/** What the card is for: the plan, a favourite (its key), a stop picked on the map or in the search, or the buses nearby. */
 const target = store({ kind: 'plan' });
-/** The saved places, for their chips: from the last answer, and from the profile as Settings or the map change it. */
+/** The favourites, for their chips: from the last answer, and from the profile as Settings or the map change it. */
 const places = store([]);
 profile.subscribe((p) => p && places.set(p.places.map(({ key, label }) => ({ key, label }))));
 /**
@@ -66,7 +66,7 @@ const card = store({ text: t('Checking…'), loading: true });
 const updated = store('');
 /** The banner above the chips when the card isn't live (offline, or no answer), else null. */
 const banner = store(null);
-/** Today, from /me/day. */
+/** Today, from /api/me/day. */
 const day = store(null);
 /** Taken off today here, by key, with the refresh that started after it: hidden until one comes back. */
 const removed = store(new Map());
@@ -78,7 +78,7 @@ const removed = store(new Map());
 const undo = store(null);
 /** The search under the chips is open. */
 const searching = store(false);
-/** /me, once fetched: who's signed in. */
+/** /api/me, once fetched: who's signed in. */
 const me = store(null);
 /** Now, Buses, Map or Settings; null until the first draw. */
 const tab = store(null);
@@ -385,7 +385,7 @@ function goSomewhere(d) {
 
 /** Go there, from a stop on the map: Now, with the card for that stop. */
 function goToStop({ code, name, place }) {
-  // A saved place already has its chip: that one, not a second.
+  // A favourite already has its chip: that one, not a second.
   if (!place) addPlace(code, name);
   target.set(place ? { kind: 'place', key: place } : { kind: 'stop', to: code, label: name });
   drawSeen();
@@ -916,7 +916,7 @@ function Where() {
   `;
 }
 
-/** A /me/day item's name: the server's `title` ("Home, from UTown"), else worded here (an older kept plan). */
+/** A /api/me/day item's name: the server's `title` ("Home, from UTown"); worked out here for an older server. */
 const itemTitle = (it) =>
   it.title ?? (it.kind === 'home' ? (it.fromName ? t('Home, from {0}', it.fromName) : t('Home after your last class')) : it.label);
 
@@ -969,7 +969,7 @@ const RoadBus = ({ bus, next }) => html`<span
   style=${{ '--far': Math.min(1, Math.max(0, bus.etaS / ROAD_S)) }}
 ></span>`;
 
-/** The server's "4 min", "now", "~6 min" for a timetable guess, or "–". Worded here only for an older server's answer (or a kept copy). */
+/** The server's "4 min", "now", "~6 min" for an estimate, or "–"; worked out here for an older server. */
 const etaText = (b) =>
   b.etaS == null
     ? '–'
@@ -980,7 +980,7 @@ const etaText = (b) =>
  * Nearby: the stops around you as their signs, the name plate with the walk
  * there, then a row per service, its buses coming up a short road towards
  * the stop, nearer the sooner they're due, the next one solid and the rest
- * faded. The nearest stop is drawn larger. A timetable guess is an outline,
+ * faded. The nearest stop is drawn larger. An estimate is an outline,
  * never a filled bus, so it doesn't pass for live. The name opens the stop
  * on the map.
  */
@@ -1216,7 +1216,7 @@ function GoLater() {
   `;
 }
 
-/** Today, from /me/day: each class with when to leave and how, and the trips home. */
+/** Today, from /api/me/day: each class with when to leave and how, and the trips home. */
 function Today() {
   const plan = useStore(day);
   const gone = useStore(removed);
@@ -1255,7 +1255,7 @@ function Today() {
             `;
           }
           const title = itemTitle(it);
-          // The server's line ("Leave by ~09:36 · R2 from PGP", "Not going"; none once done), else worded here.
+          // The server's line ("Leave by ~09:36 · R2 from PGP", "Not going"; none once done); worked out here for an older server.
           let sub = null;
           if (it.line !== undefined) sub = it.line;
           else if (it.status === 'skipped') sub = t('Not going');
@@ -1461,13 +1461,13 @@ async function start() {
   const opening = tabInAddress();
   markTab(opening);
   render(html`<${App} />`, document.getElementById('root'));
-  // Settings' code and the account alongside the card, not after /me.
+  // Settings' code and the account alongside the card, not after /api/me.
   if (opening === 'settings') openSettings();
   // The plan from last time at once, if it still holds (a look in the cache),
-  // then the new one asked for alongside /me rather than after it.
+  // then the new one asked for alongside /api/me rather than after it.
   await drawSeen();
   const first = refresh();
-  // /me renews the session, so the installed app stays signed in. It keeps
+  // /api/me renews the session, so the installed app stays signed in. It keeps
   // the same token, so the card's requests sent with it are still good.
   // Offline it comes from the cache like everything else, or not at all.
   try {

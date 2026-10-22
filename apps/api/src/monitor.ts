@@ -31,8 +31,10 @@ import { isBeta, linkOrigin } from './site.ts';
 import { ensureRecorder } from './timelapse.ts';
 import { logCronError } from './analytics.ts';
 import { recordActive } from './usage.ts';
+import { recordSettings } from './settings.ts';
 import { recordEta } from './eta.ts';
-import { type Feed, lastTrip, tripError } from './feedwatch.ts';
+import { shadowEta } from './etashadow.ts';
+import { type Feed, lastBreakerOpen, breakerError } from './feedwatch.ts';
 
 export interface UpstreamState {
   /** Confirmed state: it takes FAILS_TO_ALERT failed checks in a row to go down. */
@@ -98,7 +100,7 @@ export const OKS_TO_RECOVER = 2;
 
 /**
  * Whether the feed is answering, as users are told it (the card's notice,
- * /status.json, /health): confirmed up, or its last check good. Waiting for
+ * /api/status.json, /api/health): confirmed up, or its last check good. Waiting for
  * the second good check is for the email and the incident record; the
  * notice would otherwise say "down" for 15 minutes with the feed back.
  */
@@ -107,8 +109,8 @@ export const answering = (u: UpstreamState): boolean => u.up || (u.oks ?? 0) > 0
 /** Since when it's been as [answering] says: back since its first good
  *  check while that's still to be confirmed, else the confirmed state's. */
 export const answeringSince = (u: UpstreamState): number => (!u.up && answering(u) && u.okSince ? u.okSince : u.since);
-/** How long an operator email may take to send. */
 export const MAIL_TIMEOUT_MS = 15_000;
+export const HEARTBEAT_TIMEOUT_MS = 10_000;
 /** Warn this long before calendar.json runs out. */
 export const CALENDAR_WARN_DAYS = 45;
 
@@ -172,7 +174,7 @@ export async function feedDownSince(env: Env, nowMs: number): Promise<number | n
   return since;
 }
 
-/** What /status.json and /health read: the cron's records, which change at most every 15 minutes. */
+/** What /api/status.json and /api/health read: the cron's records, which change at most every 15 minutes. */
 export interface StatusRecords {
   upstream: UpstreamState | null;
   incidents: Incident[];
@@ -183,7 +185,7 @@ const statusMemo = new WeakMap<object, { at: number; records: StatusRecords }>()
 
 /**
  * The cron's records, read from KV at most once a minute per isolate (as
- * feedDownSince is): /status.json is public and polled, and three KV reads a
+ * feedDownSince is): /api/status.json is public and polled, and three KV reads a
  * request cost more than a minute's lag behind a 15-minute check.
  */
 export async function statusRecords(env: Env, nowMs: number): Promise<StatusRecords> {
@@ -312,7 +314,7 @@ export function adviceFor(reason: string | null, kv: string = KV_NAMESPACE_IDS.s
   }
   if (/10008/.test(reason)) return 'The device id no longer matches the access token. Clear auth:session in KV and let it re-mint.';
   if (/10000|Invalid API KEY/i.test(reason)) return 'The app API keys were rejected; they may have been rotated in a new uNivUS build.';
-  return 'Check `pnpm exec wrangler tail` and /health?probe=1.';
+  return 'Check `pnpm exec wrangler tail` (from apps/api) and /api/health?probe=1.';
 }
 
 /**
@@ -663,7 +665,7 @@ export async function readPublicFeed(env: Env): Promise<PublicFeedState | null> 
 
 /**
  * Probe LTA DataMall directly (past the cache) and record whether it
- * answered, for /status.json and /health. Nothing is done without the key.
+ * answered, for /api/status.json and /api/health. Nothing is done without the key.
  */
 export async function checkPublicFeed(
   env: Env,
@@ -693,10 +695,10 @@ export async function checkPublicFeed(
  */
 export function sawTrip(env: Env, feed: Feed, nowMs: number): () => Promise<void> {
   return async () => {
-    const seen = await lastTrip(env, feed);
+    const seen = await lastBreakerOpen(env, feed);
     if (!seen || seen.at > nowMs || nowMs - seen.at >= CHECK_EVERY_MS) return;
     if (feed === 'nus' && seen.version !== undefined && seen.version !== (await appVersion(env, nowMs))) return;
-    throw tripError(seen);
+    throw breakerError(seen);
   };
 }
 
@@ -754,8 +756,27 @@ export async function runCron(env: Env, nowMs: number): Promise<void> {
   await step('timelapse', () => ensureRecorder(env, nowMs));
   await step('term', () => remindTerm(env, nowMs));
   // The operator's statistics, each only while switched on (collect.ts):
-  // the day's active counts once a day, and a closed day's arrival times
-  // against where the recorder saw the buses.
+  // the day's active counts and settings once a day, and a closed day's
+  // arrival times against where the recorder saw the buses; then, with
+  // ETA_MODEL=shadow, the arrival-time model's own times for that day,
+  // shown to no one.
   await step('usage', () => recordActive(env, nowMs));
+  await step('settings', () => recordSettings(env, nowMs));
   await step('eta', () => recordEta(env, nowMs));
+  await step('etaModel', () => shadowEta(env, nowMs));
+  // Last, so a run that hangs or dies partway sends none.
+  await step('heartbeat', () => pingHeartbeat(env));
+}
+
+/**
+ * The cron's dead man's switch: tells an outside monitor (healthchecks.io)
+ * the run finished. Everything above alerts from inside this cron, so a
+ * cron that stops running, or a deploy that breaks it, says nothing; the
+ * monitor notices the missing pings instead. Steps that failed still ping:
+ * those are on the dashboard. HEARTBEAT_URL is set on the stable site only.
+ */
+export async function pingHeartbeat(env: Env): Promise<void> {
+  if (!env.HEARTBEAT_URL) return;
+  const res = await fetch(env.HEARTBEAT_URL, { signal: AbortSignal.timeout(HEARTBEAT_TIMEOUT_MS) });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }

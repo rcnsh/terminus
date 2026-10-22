@@ -259,7 +259,7 @@ private fun Home(state: BusesUi, vm: BusesViewModel, pins: List<String>, onPin: 
                 }
                 val shown = pages.getOrNull(boards.settledPage)
                 // The page in view only: swiping past one doesn't ask for it. The
-                // nearest stop's twin comes with it, so across the road costs nothing more.
+                // nearest stop's opposite stop comes with it, so across the road costs nothing more.
                 val first = boards.settledPage == 0
                 Refreshing(if (first) null else shown, first, state.across, next = { vm.nextTimedAt = it }) {
                     vm.refreshPage(if (first) null else shown)
@@ -528,7 +528,7 @@ private fun BackRow(text: String, modifier: Modifier = Modifier, trailing: @Comp
 
 /**
  * A stop's header, in the sky: what it is ("Nearest stop · 40 m", "Pinned"), its name, its code and the star. Across the road, the stop
- * shown is the twin, and the star is for that one.
+ * shown is the opposite stop, and the star is for that one.
  */
 @Composable
 private fun StopHeader(
@@ -751,7 +751,7 @@ internal fun BoardRows(
     for ((i, row) in rows.withIndex()) {
         if (i > 0 || dividerFirst) HorizontalDivider(color = c.outlineVariant)
         val color = row.color?.let(::parseColor) ?: colors[row.svc] ?: GREY
-        // A public bus has no line page: /line is the shuttles'.
+        // A public bus has no line page: /api/line is the shuttles'.
         val open = if (row.paid) null else ({ onRow(row) })
         val label = clickLabel(row.svc)
         val look = RowLook(chevron = picked == null && open != null, picked = picked?.let { it.svc == row.svc })
@@ -908,7 +908,7 @@ private fun towards(text: String, next: String?, endsHere: Boolean): AnnotatedSt
     else if (at >= 0) addStyle(SpanStyle(fontWeight = FontWeight.Bold), at, at + next!!.length)
 }
 
-/** "to **Central Library**, Kent Vale", worked out here for an older server without `toText`. */
+/** "to **Central Library**, Kent Vale"; worked out here for an older server. */
 @Composable
 private fun towards(names: List<String>): AnnotatedString {
     val joined = names.joinToString(stringResource(R.string.list_sep))
@@ -1037,7 +1037,7 @@ private fun BigTime(etaS: Int?, quality: String, arriving: Boolean, eta: String?
     }
 }
 
-/** "then 12, ~20, 25 min", as the server words it; worked out here, from the later buses it gave, for an older server. */
+/** "then 12, ~20, 25 min", as the server words it, from the later buses it gave; worked out here for an older server. */
 private fun thenText(row: BoardRow): String? {
     row.laterText?.let {
         return it

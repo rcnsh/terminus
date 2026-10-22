@@ -259,13 +259,13 @@ struct LiveBus: Hashable {
     /// Between stops, the stretch of its line it's somewhere on.
     var stretch: Stretch? = nil
     /// The stops still ahead, the next first, to where its line ends, as the
-    /// server walks them; empty past a one-way line's end (or from an older API).
+    /// server walks them; empty past a one-way line's end, or from an older server.
     var upcoming: [String] = []
-    /// Where its line ends; nil from an older API.
+    /// Where its line ends; nil from an older server.
     var towards: String? = nil
     /// The codes of `at`, `nextStop`, the stretch's `last` and `upcoming`
     /// (in step with it): one name can be a stop either side of a road. Nil
-    /// where the server didn't say (an older API).
+    /// where the server didn't say, or from an older server.
     var atCode: String? = nil
     var nextStopCode: String? = nil
     var passedCode: String? = nil
@@ -397,7 +397,7 @@ enum MapGeoJson {
 
 /// Each bus's slide from where it was drawn to its new place, along its route
 /// line, so it follows the road round corners, easing in and out. It takes
-/// `duration(for:)` its distance: further, longer.
+/// `duration` (`slideS` by default) its distance: further, longer.
 /// Its old and new places may be beside the line (a stop's dot, and beside
 /// it), so it moves from one to the other as it goes. One that can't get there
 /// along the line (behind it, a long way on, no line) jumps, and so does every

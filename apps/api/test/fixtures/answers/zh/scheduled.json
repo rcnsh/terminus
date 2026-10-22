@@ -70,7 +70,7 @@
     "kind": "trip",
     "staleAt": "2026-08-27T01:11:50Z",
     "crowd": null,
-    "quality": "按时刻表估计",
+    "quality": "估计时间",
     "leaveBy": "约 09:06 前出发",
     "leaveVia": "在 PGP 搭约 09:11 的 A1",
     "catch": null,

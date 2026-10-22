@@ -292,7 +292,7 @@ struct NextAnswer: Decodable {
 
     var departure: Date? { departsAt.flatMap(parseISODate) }
     var planChanges: Date? { refreshAt.flatMap(parseISODate) }
-    /// The service, for an older server's answer without a card (the menu bar's fallback).
+    /// The service, for the menu bar without a card; worked out here for an older server.
     var service: String { label.components(separatedBy: " · ").first ?? label }
     var leaveAt: Date? { leave.flatMap { parseISODate($0.at) } }
     /// What the header counts down to: the leave-by, or at the stop (phase
@@ -492,7 +492,7 @@ struct BoardRow: Decodable, Hashable {
     var paid: Bool? = nil
     /// The buses after this one (/api/me/nearby), soonest first.
     var later: [Later]? = nil
-    /// "4 min", "now", "~6 min", worded on the server; nil from an older one (or with no time).
+    /// "4 min", "now", "~6 min", worded on the server; nil with no time, or from an older server.
     var eta: String? = nil
 
     struct Later: Decodable, Hashable {
@@ -608,7 +608,7 @@ func rankDestinations(_ all: [Destination], _ query: String, max: Int = 8) -> [D
         .map(\.d)
 }
 
-/// What the popover shows: the planned trip, a saved place, or any stop/venue.
+/// What the popover shows: the planned trip, a favourite, or any stop/venue.
 enum Target: Hashable {
     case plan
     case place(key: String)
@@ -777,7 +777,7 @@ struct DayPlan: Decodable {
         }
 
         /// "Leave by 09:38 · D2 from PGP", "On the D2 · off at UTown · arrive 09:52", or nil:
-        /// the server's `line`, worded here only for an older server's plan.
+        /// the server's `line`; worked out here for an older server.
         var sub: String? {
             if let line { return line }
             if serverTitle != nil || status == "done" { return nil }
@@ -964,28 +964,29 @@ func sentence(_ text: String) -> String {
 }
 
 /// Which server the app talks to. Only ever one built in: the site's own
-/// two addresses, and in a debug build the local dev stub. The developer menu
+/// addresses, and in a debug build the local dev stub. The developer menu
 /// (Settings, About) picks one; nothing can add one, so it can't send the
 /// token anywhere but our own servers.
 ///
 /// The default is the address people see (terminus.run), the one that goes
-/// with the project if someone else takes it over. The other,
-/// terminus.rcn.sh, is the backup: a request that can't reach one at all
-/// goes to the other ([order]), so a network that refuses one of them (NUS
-/// Wi-Fi refused terminus.run in October 2026) doesn't stop the app.
+/// with the project if someone else takes it over, and for now the only
+/// one. With a backup built in (TerminusBackup), a request that can't reach
+/// one at all goes to the other ([order]), so a network that refuses one of
+/// them doesn't stop the app. The old address, terminus.rcn.sh, isn't one:
+/// it's the owner's, so it doesn't go with the project.
 enum Servers {
     /// The default: TerminusAPI in the beta build's Info.plist (build.sh), else the stable site's.
     static let defaultBase = Bundle.main.object(forInfoDictionaryKey: "TerminusAPI") as? String ?? "https://terminus.run"
-    /// The site's old address, the backup: TerminusBackup in the beta build's Info.plist, else the stable site's.
-    static let backupBase = Bundle.main.object(forInfoDictionaryKey: "TerminusBackup") as? String ?? "https://terminus.rcn.sh"
+    /// A second address of the site's, the backup: TerminusBackup in Info.plist. Neither build has one.
+    static let backupBase = Bundle.main.object(forInfoDictionaryKey: "TerminusBackup") as? String
     static let stub = "http://localhost:8787"
     private static let key = "server"
     private static let menuKey = "developerMenu"
 
-    /// [defaultBase] first, then the backup, then in a debug build the stub.
-    static func all(default base: String, backup: String, debug: Bool) -> [String] {
+    /// [defaultBase] first, then the backup if there is one, then in a debug build the stub.
+    static func all(default base: String, backup: String?, debug: Bool) -> [String] {
         var out: [String] = []
-        for s in [base, backup] + (debug ? [stub] : []) where !out.contains(s) { out.append(s) }
+        for s in [base] + (backup.map { [$0] } ?? []) + (debug ? [stub] : []) where !out.contains(s) { out.append(s) }
         return out
     }
 
@@ -1221,9 +1222,38 @@ struct Api {
         try await send("GET", "/api/me/profile")
     }
 
-    /// Saves the whole profile; answers with it as saved.
-    func saveProfile(_ profile: Data) async throws -> Data {
-        try await send("PUT", "/api/me/profile", json: profile)
+    /// Reads the profile, makes `change` to it and saves it, only if nothing
+    /// else saved it in between (If-Match with the ETag it was read with);
+    /// if something did (412), reads it again and makes the change again. So
+    /// a change made here never undoes one made on another device since.
+    /// Answers with the profile as saved.
+    func changeProfile(_ change: @Sendable (inout [String: Any]) -> Void) async throws -> [String: Any] {
+        try await Self.changeProfile(
+            read: { try await sendTagged("GET", "/api/me/profile") },
+            save: { body, tag in try await send("PUT", "/api/me/profile", json: body, ifMatch: tag) },
+            change: change)
+    }
+
+    /// `changeProfile` apart from the network, so it can be tested: `read`
+    /// answers with the profile and its ETag, `save` sends a body with the
+    /// ETag it was made from. At most three tries; then the 412 stands.
+    static func changeProfile(
+        read: () async throws -> (Data, String?), save: (Data, String?) async throws -> Data,
+        change: (inout [String: Any]) -> Void
+    ) async throws -> [String: Any] {
+        var attempt = 0
+        while true {
+            attempt += 1
+            let (data, tag) = try await read()
+            var p = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+            change(&p)
+            do {
+                let saved = try await save(JSONSerialization.data(withJSONObject: p), tag)
+                return try JSONSerialization.jsonObject(with: saved) as? [String: Any] ?? [:]
+            } catch let e as ApiError where e.status == 412 && attempt < 3 {
+                continue
+            }
+        }
     }
 
     /// Imports a NUSMods share link; the server replaces the imported classes only if it all worked.
@@ -1390,7 +1420,16 @@ struct Api {
     }
 
     /// The response body of a 2xx; anything else throws with the server's message.
-    private func send(_ method: String, _ path: String, query: [URLQueryItem] = [], json: Data? = nil) async throws -> Data {
+    private func send(_ method: String, _ path: String, query: [URLQueryItem] = [], json: Data? = nil, ifMatch: String? = nil)
+        async throws -> Data
+    {
+        try await sendTagged(method, path, query: query, json: json, ifMatch: ifMatch).0
+    }
+
+    /// `send`, with the response's ETag: the profile's version, for a later If-Match.
+    private func sendTagged(_ method: String, _ path: String, query: [URLQueryItem] = [], json: Data? = nil, ifMatch: String? = nil)
+        async throws -> (Data, String?)
+    {
         let scope = Quiet.scope(path)
         if token != nil, Outdated.gated(method, path), Outdated.active {
             throw ApiError(status: 426, message: L("Update terminus to keep using it."))
@@ -1410,15 +1449,30 @@ struct Api {
             // The server writes answers, cards and errors in the app's language.
             req.setValue(Lang.header, forHTTPHeaderField: "accept-language")
             if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "authorization") }
+            if let ifMatch { req.setValue(ifMatch, forHTTPHeaderField: "if-match") }
             if let json {
                 req.setValue("application/json", forHTTPHeaderField: "content-type")
                 req.httpBody = json
             }
             return req
         }
-        let (data, resp) = try await Servers.reach(method: method) { try await URLSession.shared.data(for: urlRequest($0)) }
+        let started = Date()
+        func logged(_ status: Int?, _ error: Error?) {
+            // For the developer menu: an error status is an answer, not a failure.
+            RequestLog.record(
+                method, path, base: Api.base, status: status, tookMs: Int(Date().timeIntervalSince(started) * 1000), failure: error)
+        }
+        let data: Data
+        let resp: URLResponse
+        do {
+            (data, resp) = try await Servers.reach(method: method) { try await URLSession.shared.data(for: urlRequest($0)) }
+        } catch {
+            logged(nil, error)
+            throw error
+        }
         let http = resp as? HTTPURLResponse
         let status = http?.statusCode ?? 0
+        logged(http?.statusCode, nil)
         if let http { ServerClock.observe(http) }
         let retryAfter = http?.value(forHTTPHeaderField: "retry-after")
         if status == 429 { Quiet.after(retryAfter, scope: scope) }
@@ -1436,6 +1490,6 @@ struct Api {
                 state: o?["status"] as? String
             )
         }
-        return data
+        return (data, http?.value(forHTTPHeaderField: "etag"))
     }
 }

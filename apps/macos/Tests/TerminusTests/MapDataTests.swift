@@ -3,8 +3,8 @@ import Testing
 
 @testable import Terminus
 
-/// The map window's data, from replies shaped like the API's (see its /campus
-/// and /buses tests). The same cases as the phone's MapDataTest.
+/// The map window's data, from replies shaped like the API's (see its /api/campus
+/// and /api/buses tests). The same cases as the phone's MapDataTest.
 
 private let campusJson = Data(
     """
@@ -170,7 +170,7 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
 @Test func aLoopWhoseEndsDoNotMeetStillSlidesOnPastItsStart() throws {
     // Like A1 at KRB: out east about 1.1 km, then back west on the other
     // side of the road, ending some 40 m from where it started. The loop
-    // comes from /campus, not from where the line ends.
+    // comes from /api/campus, not from where the line ends.
     let campus = try #require(
         CampusMap.parse(
             Data(

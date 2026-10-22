@@ -5,10 +5,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.glance.ColorFilter
 import androidx.glance.GlanceModifier
-import androidx.glance.Image
-import androidx.glance.ImageProvider
 import androidx.glance.LocalContext
 import androidx.glance.LocalSize
 import androidx.glance.appwidget.cornerRadius
@@ -34,29 +31,24 @@ import sh.rcn.terminus.Journey
 import sh.rcn.terminus.JourneyBus
 import sh.rcn.terminus.JourneyText
 import sh.rcn.terminus.L
-import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.R
 import sh.rcn.terminus.ServerClock
 
 /**
  * A trip's steps on the ground of the big widget, under the headline the sky already shows, in the card style chosen in Settings ›
- * Appearance: Steps down the side with the ride in its service's colour, the Route across, or the Ticket. How tall each is:
- * [journeyHeight].
+ * Appearance: Steps down the side with the ride in its service's colour, or the Route across. How tall each is: [journeyHeight].
  */
 @Composable
-internal fun WidgetJourney(answer: NextAnswer, journey: Journey, style: String, inks: Inks, page: ColorProvider) {
+internal fun WidgetJourney(journey: Journey, style: String, inks: Inks, page: ColorProvider) {
     when (style) {
-        CardStyle.TICKET -> Ticket(answer, journey, inks)
         CardStyle.ROUTE -> Route(journey, inks)
         else -> Steps(journey, inks, page)
     }
 }
 
-/** The room [WidgetJourney] takes in [style]: Steps a row a step, the Route its line, the Ticket its badge. */
+/** The room [WidgetJourney] takes in [style]: Steps a row a step, the Route its line. */
 internal fun journeyHeight(journey: Journey, style: String): Dp =
     when (style) {
-        // A change of bus adds the second bus's line under the first.
-        CardStyle.TICKET -> if (journey.change != null) 76.dp else 58.dp
         CardStyle.ROUTE -> 52.dp
         // The rows Steps draws: leave (only with a walk first), the bus, and
         // where you end up; the last is shorter with nothing under its name.
@@ -270,55 +262,6 @@ private fun RowScope.Stretch(caption: String, bus: JourneyBus?, color: ColorProv
         }
         Box(GlanceModifier.fillMaxWidth().height(DOT), contentAlignment = Alignment.Center) {
             Box(GlanceModifier.fillMaxWidth().height(thick).cornerRadius(thick / 2).background(color)) {}
-        }
-    }
-}
-
-/** Ticket: the bus as a big badge in its colour, its time and stop, then when you get there. On foot, someone walking and the walk. */
-@Composable
-private fun Ticket(answer: NextAnswer, journey: Journey, inks: Inks) {
-    val bus = journey.bus
-    Column {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            val side = 48.dp
-            if (bus != null) {
-                // A public bus's "$" widens it past the square, as in the app.
-                val shape = if (bus.paid) GlanceModifier.height(side).padding(horizontal = 8.dp) else GlanceModifier.size(side)
-                Box(shape.cornerRadius(12.dp).background(solid(bus.color)), contentAlignment = Alignment.Center) {
-                    Text(
-                        if (bus.paid) "${bus.svc} $" else bus.svc,
-                        style = TextStyle(color = solid(sh.rcn.terminus.Ink.on(bus.color)), fontWeight = FontWeight.Bold, fontSize = 18.sp),
-                        maxLines = 1,
-                    )
-                }
-            } else {
-                Box(GlanceModifier.size(side).cornerRadius(12.dp).background(inks.chip), contentAlignment = Alignment.Center) {
-                    Image(
-                        ImageProvider(R.drawable.ic_walk),
-                        contentDescription = null,
-                        colorFilter = ColorFilter.tint(inks.ink),
-                        modifier = GlanceModifier.size(side / 2),
-                    )
-                }
-            }
-            Spacer(GlanceModifier.width(12.dp))
-            Column {
-                Text(
-                    if (bus != null) listOfNotNull(bus.board, L.s(R.string.journey_from, bus.stop)).joinToString(" ")
-                    else L.s(R.string.journey_walk, journey.walk.orEmpty()),
-                    style = TextStyle(color = inks.ink, fontWeight = FontWeight.Bold, fontSize = 17.sp),
-                    maxLines = 1,
-                )
-                JourneyText.arrive(journey)?.let { Small(it, if (answer.leaveLate) inks.late else inks.muted, 12.sp, bold = true) }
-            }
-        }
-        // A change of bus: the second bus and where to change, so nobody stays on the wrong one.
-        journey.change?.let { c ->
-            Row(GlanceModifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(GlanceModifier.width(48.dp), contentAlignment = Alignment.Center) { Badge(c.bus.svc, c.bus.color, c.bus.paid) }
-                Spacer(GlanceModifier.width(12.dp))
-                Small(listOf(c.changeText, c.bus.board).joinToString(" · "), inks.ink, 12.sp, bold = true)
-            }
         }
     }
 }

@@ -16,7 +16,7 @@
  *     the real hours (data/service-hours.json) instead, and no buses or
  *     times for a service outside them (the Buses tab's stopped rows)
  *   - an in-memory database with a test account (you@u.nus.edu),
- *     three saved places, a class later today, and pairing codes TEST67, TEST78, TEST89
+ *     three favourites, a class later today, and pairing codes TEST67, TEST78, TEST89
  *   - crowd history saying every bus at PGP is usually packed (the full-bus warning)
  *   - live buses: three per service, driving round its route line
  *   - the map's files from dev/map/ when it's there (fonts and icons:
@@ -26,6 +26,9 @@
  *
  * POST /__stub/session signs a device in as the test account and answers
  * with its token, for the iPhone app's UI tests (TERMINUS_TOKEN).
+ * The dashboard (/admin/, token "dev") shows made-up accounts, answers,
+ * crash reports and arrival-time scores (stub-admin.mjs); STUB_ADMIN=empty
+ * shows it as a new install would.
  *
  * POST /__stub/freeze and /__stub/thaw stop and restart the clock, for
  * light and dark screenshots of the same moment. POST /__stub/skip?min=N
@@ -64,6 +67,7 @@ import { ensureRecorder, inWindow, nextOpen } from '../src/timelapse.ts';
 import { SESSION_COOKIE as DEV_COOKIE, openSession } from '../src/accounts.ts';
 import { API_VERSION } from '../src/openapi.ts';
 import { makeD1, makeEmail } from '../test/_d1.mjs';
+import { fakeAeRows, seedAdmin } from './stub-admin.mjs';
 
 const PORT = Number(process.env.PORT ?? 8787);
 // Anything the stub doesn't fake (Firebase, for push) goes out for real.
@@ -79,6 +83,8 @@ if (Number.isNaN(skipMs)) throw new Error('STUB_NOW must be an ISO time, such as
 const stubNow = () => (frozenAt ?? realNow()) + skipMs;
 // STUB_HOURS=real: services keep their real hours, and the fake feed has
 // nothing for one outside them. Set once the Worker's graph is loaded.
+// The dashboard's made-up numbers (stub-admin.mjs); STUB_ADMIN=empty for none.
+const DEMO_ADMIN = process.env.STUB_ADMIN !== 'empty';
 let running = (_svc) => true;
 
 const graph = (await import('../data/stops.json', { with: { type: 'json' } })).default;
@@ -176,6 +182,8 @@ async function feed(input, init = {}) {
       });
     return Response.json(shuttlePayload(shuttles));
   }
+  // Analytics Engine's SQL API, for the dashboard: made-up rows for its queries, none for any other.
+  if (url.includes('/analytics_engine/sql')) return Response.json({ data: fakeAeRows(String(init.body ?? ''), stubNow()) ?? [] });
   // Fake NUSMods: any module has a Monday lab, a Tuesday online tutorial and
   // a Wednesday off-campus lecture; XX9999 is not offered, DOWN1000 answers
   // 502 as NUSMods being down.
@@ -247,7 +255,9 @@ const profile = {
   term: null,
 };
 db.exec(`INSERT INTO users (id, email, created, last_seen, via) VALUES ('test-user', 'you@u.nus.edu', 0, 0, 'web')`);
-db._db.prepare('INSERT INTO profiles VALUES (?, ?, 0)').run('test-user', JSON.stringify(profile));
+// Version 1, as a saved profile has one: 0 is the version of no profile at all
+// (If-Match "0" saves only if there's none), so a page saving with If-Match could never save over it.
+db._db.prepare('INSERT INTO profiles VALUES (?, ?, 1)').run('test-user', JSON.stringify(profile));
 for (const code of ['TEST67', 'TEST78', 'TEST89']) db.exec(`INSERT INTO pair_codes VALUES ('${code}', 'test-user', 9999999999999)`);
 // Crowd history, so the full-bus warning shows: every bus at PGP is usually packed.
 for (const svc of servingStop.get('PGP') ?? []) {
@@ -331,7 +341,9 @@ env = {
   TIMELAPSE_ENABLED: 'on',
   VAPID_PRIVATE_KEY: VAPID,
   ...(FCM ? { FCM_SERVICE_ACCOUNT: FCM } : {}),
+  ...(DEMO_ADMIN ? { ANALYTICS_TOKEN: 'dev', CF_ACCOUNT_ID: 'dev', ETA_MODEL: 'shadow' } : {}),
 };
+if (DEMO_ADMIN) await seedAdmin({ db, kv: env.KV, downloads: DOWNLOADS, nowMs: stubNow() });
 console.log(FCM ? 'push: on (Firebase project from .private/)' : 'push: off (no .private/fcm-service-account.json)');
 setInterval(() => {
   const due = [...TRIPS.alarms.values()].filter((at) => at <= stubNow()).length;

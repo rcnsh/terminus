@@ -1,6 +1,6 @@
 /**
- * Who may call the bus-answer routes (KEYED in index.ts): the holder of an API key made on the account page, or anyone
- * signed in (a browser session or a paired device). Nobody anonymous: the
+ * Who may call the bus-answer routes (KEYED in index.ts): the holder of an API key made on the account page, or any
+ * session (a browser's, or an app's device token, an anonymous account's included). Nobody without one: the
  * answers are NUS's data, and terminus should not be a free proxy for it.
  */
 
@@ -105,13 +105,13 @@ export async function callerOrDown(
 }
 
 /**
- * Who was let in lately, by a hash of what they sent, for /buses only: the
+ * Who was let in lately, by a hash of what they sent, for /api/buses only: the
  * map asks every 5 s, and each ask would otherwise hash the token and look
  * it up in D1 again. The trade-off: a session signed out, or a key revoked,
  * still sees the buses on the map for up to CALLER_MEMO_MS in this isolate
  * (and keeps its own rate-limit bucket that long). Only callers let in are
  * kept, so someone just signed in is never turned away. Never used for
- * /me/* or anything else that hands out an account's data.
+ * /api/me/* or anything else that hands out an account's data.
  */
 export const CALLER_MEMO_MS = 30_000;
 const CALLERS_KEPT = 2_000;

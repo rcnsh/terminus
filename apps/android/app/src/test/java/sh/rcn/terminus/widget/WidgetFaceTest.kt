@@ -17,7 +17,7 @@ import sh.rcn.terminus.TestStrings
 class WidgetFaceTest {
     private val dir = listOf("../../api/test/fixtures/answers", "../api/test/fixtures/answers").map(::File).first { it.isDirectory }
 
-    /** Not /me/next answers. */
+    /** Not /api/me/next answers. */
     private val notAnswers = setOf("day.json", "nearby-list.json", "setup.json")
 
     private fun answers(sub: String = ""): Map<String, NextAnswer> =
@@ -61,7 +61,7 @@ class WidgetFaceTest {
         assertEquals("~09:36", f.big)
         assertEquals("Leave by", f.bigLabel)
         assertFalse(f.bigFirst)
-        // The golden's time is a timetable guess: Scheduled, never Live.
+        // The golden's time is an estimate: Estimate, never Live.
         assertEquals(false, f.pill?.good)
         assertEquals("R2", f.leg?.svc)
         assertTrue(f.leg!!.text.contains("PGP"))

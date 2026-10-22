@@ -2,6 +2,9 @@
 
 Guidance for AI agents working in this repo. Read it before you change
 anything; the deeper "why" is in [apps/api/docs/internals.md](apps/api/docs/internals.md).
+The words for the domain (stop, service, trip, plan, estimate, …) are in
+[GLOSSARY.md](GLOSSARY.md): name new code and copy with them. Decisions that
+look odd but are deliberate are in [docs/adr/](docs/adr/).
 
 ## What terminus is
 
@@ -29,19 +32,21 @@ terminus.run is the address people see and the one the apps call (from
 3.3.0, or 3.2.1-beta.2 among the betas; beta.terminus.run for the beta), with the Mac's update feed and the
 release scripts: it's the project's own domain, the one that goes with it
 if someone else takes it over. terminus.rcn.sh (and beta.terminus.rcn.sh),
-the owner's, is the backup: a request that can't reach one address at all
-tries the other once (`Servers.order`), and apps before 3.3.0 (betas before
-3.2.1-beta.2) call it.
-Both addresses stay attached to each Worker (`test/deploy.test.js`). The
+the owner's, is the old address: apps before 3.3.0 (betas before
+3.2.1-beta.2) call it, and apps before 3.6.0 fall back to it once when
+they can't reach terminus.run at all (`Servers.order`). From 3.6.0 the
+apps have only terminus.run built in.
+Both addresses stay attached to each Worker (`test/deploy.test.js`) until
+no app that uses the old one is left. The
 apps' developer menu (Settings, About: always in debug and beta builds,
-after seven taps on the version in a stable release) switches between the addresses built in and, in debug builds, the
-dev stub, never a typed one (`Servers.kt`, `Servers` in `Api.swift`).
+after seven taps on the version in a stable release) shows diagnostics and
+the recent requests, for a bug report, and in debug builds switches to the
+dev stub, never a typed server (`Servers.kt`, `Servers` in `Api.swift`).
 
 Pages opened on the old address go to the same page on terminus.run
 (`movedPage` in `src/site.ts`, on with `MOVE_PAGES`), and emailed links use
-terminus.run (`linkOrigin`). From 9 to 11 October 2026 NUS Wi-Fi reset
-connections to terminus.run, and both were switched off;
-`cloudflare.config.ts` says how to do that again if a network refuses it. The
+terminus.run (`linkOrigin`). If a network refuses terminus.run,
+`cloudflare.config.ts` says how to switch both off. The
 privacy contact is privacy@terminus.run, through Email Routing's catch-all,
 so it goes with the domain. Every `terminus.rcn.sh` and `rcn.sh` left in the
 repo is on purpose: don't find-and-replace them.
@@ -104,7 +109,7 @@ root path gets 426 from an app, 308 from anything else (`movedApi` in
    reads Google Play and APKCombo at most hourly and tries at most three new
    version strings on that stop per run, never one twice
    (`src/appversion.ts`). The beta's cron makes no health check: it reads
-   the breaker trips its own traffic noted (`src/feedwatch.ts`), and runs
+   the breakers its own traffic opened (`src/feedwatch.ts`), and runs
    the version search only while NUS is refusing the beta. Each push
    user's Trip object (`src/tripdo.ts`) wakes at most every 30 s to
    recompute the card, asking for its stops through the cache.
@@ -156,7 +161,7 @@ node apps/api/scripts/dev-stub.mjs    # local Worker on :8787 with a fake feed a
   JS (htm's html templates) aren't touched either, and neither is
   `cloudflare.config.ts`, which release-beta.sh and a test read as text.
 - Android (CI): `./gradlew :app:ktfmtCheck :app:lintStableDebug :app:testStableDebugUnitTest :app:compileBetaDebugKotlin`,
-  then `:app:assembleStableRelease :app:assembleBetaRelease` (R8 and
+  and beside it, a job each, `:app:assembleStableRelease` and `:app:assembleBetaRelease` (R8 and
   resource shrinking, unsigned without the keystore) in `apps/android`
   (Java 21).
 - Android dependencies are locked and hash-checked. On a Dependabot Gradle
@@ -192,6 +197,10 @@ node apps/api/scripts/dev-stub.mjs    # local Worker on :8787 with a fake feed a
 - the timelapse recorder on the fake buses. `POST /__stub/timelapse?minutes=N`
   records N minutes at once, moving the clock ahead. Then open
   `/admin/timelapse/` (token `dev`).
+- made-up numbers for the dashboard (`/admin/`, token `dev`): accounts,
+  answers, crash reports, reports and arrival-time scores
+  (`scripts/stub-admin.mjs`). `STUB_ADMIN=empty` shows it as a new install
+  would.
 - every service running at any hour, unless `STUB_HOURS=real` (real hours,
   and no buses or times outside them). `STUB_NOW=2026-10-07T13:30:00Z`
   starts the clock there (a Wednesday 21:30 in Singapore: R1 and R2 have
@@ -254,11 +263,13 @@ apps/api/
   src/answer.ts       The answer engine: stops near you, arrivals, the best option, worded
   src/card.ts         What every client shows, worded once (the card's lines)
   src/plan.ts, leave.ts  Which bus a trip is about; when to set off
-  src/profile.ts      The saved setup (validated) and the planner; day.ts is /api/me/day
+  src/profile.ts      The profile (validated) and the planner; day.ts is /api/me/day
   src/nusmods.ts      NUSMods timetable import
   src/walk.ts         Walking times along campus paths (walks.json)
   src/crowd.ts        Full buses, tallied as the Worker answers
   src/resolve.ts      Stop + bus choice: haversine, directional pairing, scoring
+  src/transfer.ts     A trip that changes buses once (TRANSFER in config)
+  src/calendar.ts     The academic calendar: which weeks and days a class runs
   src/format.ts       Labels/details and the degrade ladder (live → scheduled)
   src/fms.ts          NUS feed client + normalisation (see rule 3)
   src/lta.ts          LTA DataMall client: the public buses at a stop (see below)
@@ -275,17 +286,25 @@ apps/api/
   src/map.ts          /map/*: PMTiles street map, style, fonts, sprites from R2
   src/accounts.ts     Sign-in codes/links, sessions, anonymous accounts, pairing (D1)
   src/applogin.ts     App sign-in approved from the email (RFC 8628-like)
+  src/mail.ts         Every email's HTML, built with react-email (the plain text is beside it)
+  src/pairs.ts        /api/stops/pairs: every stop with its opposite stop
   src/trip.ts, tripdo.ts  Per-user Durable Object with today's trip signals
   src/outcomes.ts     How each trip went (taps, Not going) and what it suggests
   src/monitor.ts      15-minute cron: feed health, incidents, housekeeping
-  src/feedwatch.ts    The beta's feed health, from breaker trips its traffic noted
+  src/feedwatch.ts    The beta's feed health, from the breakers its own traffic opened
   src/calendarsync.ts The academic calendar, refreshed into KV by the cron
   src/push.ts, webpush.ts  Push: FCM to Android, Web Push to the installed web app
   src/access.ts       Who may call the keyed routes (an API key or a session)
   src/admin.ts        /api/admin/stats for the dashboard; analytics.ts logs to Analytics Engine
+  src/passkey.ts      Passkeys for the operator's pages (adding one needs HEALTH_TOKEN)
   src/collect.ts      The dashboard's switches for the statistics below, all off until turned on
   src/usage.ts, eta.ts, apperrors.ts  Daily active counts; the feed's arrival times against
                       the timelapse; crash reports (/api/errors), scrubbed, with no one on them
+  src/legacy.ts, settings.ts  What still uses the old address and paths, by app version and
+                      route; how many accounts have each setting, daily totals
+  src/etamodel.ts, etashadow.ts  An arrival-time model (segment medians, the feed's usual
+                      error, a blend), pure; run in shadow by the cron with ETA_MODEL=shadow,
+                      answering no one (docs/eta-model.md)
   src/feedback.ts     "This was wrong" reports, stored and emailed to the operator
   src/downloads.ts    App downloads from R2 (latest.json, the APKs, the DMG, the appcast)
   src/landing.ts, site.ts, pagesky.ts  The landing page; stable or beta, and the old address's
@@ -307,14 +326,17 @@ apps/api/
   scripts/            dev-stub.mjs; predeploy.mjs (first step of a deploy); scrapers (scrape_stops.py, scrape_lta.py,
                       route_shapes.py, fetch_calendar.py, walk_routes.py,
                       check_scraped.py);
-                      probe_buses.py (feed update-rate probe); record_buses.mjs (checks /api/buses on a live site);
+                      probe_buses.py (feed update-rate probe); probe_arrivals.py (how often
+                      arrival times change, run by hand); record_buses.mjs (checks /api/buses on a live site);
+                      record_eta.mjs + eta_backtest.mjs (the arrival-time model's data and backtest);
                       render-timelapse.mjs (renders a recorded day headless, e.g. on a VPS);
                       vapid-key.mjs (makes the Web Push key, once)
   test/               *.test.js + worker.smoke.js; _stubs.mjs, _d1.mjs (D1 on node:sqlite)
   test/fixtures/answers/   Golden answers, shared with the Android and Mac tests
   cloudflare.config.ts     Worker config (stable + beta via --mode beta)
   wrangler.config.ts       Website assets directory
-  docs/internals.md        How everything works, in depth; docs/analytics.md
+  docs/internals.md        How everything works, in depth; docs/analytics.md;
+                           docs/eta-model.md (+ eta-backtest.md, its results)
 apps/web/public/
   index.html          Landing page
   account/            The account page (app.js): sign-in, onboarding.js, settings.js +
@@ -325,7 +347,8 @@ apps/web/public/
                       and horizon), daylight.js (its colours by the hour), livery.js
                       (the services' stripes)
   app/                Installed web app: app.js (Now, tabs), buses.js (Buses tab), map.js
-                      (Map tab), map-files.js, offline.js
+                      (Map tab), board.js (a stop's board, shared by both), map-files.js,
+                      offline.js, pull.js (pull to refresh), timing.js (when Now refetches)
   admin/, status/, pair/, privacy/ (the summary; privacy/policy/ the full policy;
                       each with zh/), not-found/ (the Worker's 404 page)
   admin/timelapse/    Replays a recorded day on the map and exports a video
@@ -366,14 +389,17 @@ apps/ios/
   scripts/            strings.py (fills and checks the Chinese), fetch-maplibre.sh, run.sh,
                       sideload.sh (a free Apple ID's build, on a plugged-in iPhone or as an .ipa; SIDELOAD.md)
 scripts/              release.sh, release-beta.sh (+ release-lib.sh, their shared checks;
-                      verify-sparkle.swift), github-release.sh, package-mac.sh,
+                      verify-sparkle.swift, release-check.py), github-release.sh, package-mac.sh,
                       appcast.py, release-notes.py, map-tiles.sh (+ map-tiles.lock),
                       vendor-map.sh, vendor-maplibre-mac.sh, vendor-preact.sh,
-                      vendor-mediabunny.sh
+                      vendor-mediabunny.sh (+ vendor-lib.sh); android-deps.sh
+                      (+ android_deps.py); format-swift.sh
 marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (source), .pdf (print), .png
 .github/workflows/    ci.yml, scrape.yml (weekly data),
                       map-tiles.yml, probe-buses.yml (manual feed probe),
-                      record-buses.yml (manual: no bus switches sides after a deploy)
+                      probe-arrivals.yml (manual: how often arrival times change),
+                      record-buses.yml (manual: no bus switches sides after a deploy),
+                      android-deps.yml (lockfiles and hashes for Dependabot's Gradle PRs)
 ```
 
 ## How the core works (short version)
@@ -386,7 +412,9 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
   tests and `check_scraped.py` with no secrets; `commit`, the only job that
   can push, runs no npm code and fast-forwards main to a data-only commit
   on top of the tested one (if main moved, it pushes nothing: run it
-  again). `check_scraped.py` compares with HEAD and fails on a stop moved
+  again). A last job, `heartbeat`, holds only the `HC_SCRAPE_URL` secret
+  and runs only curl, pinging healthchecks.io with the run's outcome.
+  `check_scraped.py` compares with HEAD and fails on a stop moved
   over 100 m, a changed stop order, any item lost from a list under 20,
   odd names, or a moved semester; such a change is committed by hand. A failed
   shapes, public-buses or calendar refresh keeps the committed file and
@@ -395,7 +423,7 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
   the cron also fetches it weekly into KV (`src/calendarsync.ts`), so it
   doesn't run out when nobody deploys.
 - **Answering.** `resolve.ts` picks candidate stops near the user, pairs each
-  stop with its twin across the road, checks the bus goes downstream to the
+  stop with its opposite stop across the road, checks the bus goes downstream to the
   destination, and scores the options by arrival time. Rides are
   `RIDE.secondsPerHop` a stop, no faster than `RIDE.longHopMs` over a long
   stretch (`RIDE` in config). Walking is
@@ -408,6 +436,9 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
   a trip from or to a class considers each, with the room's own walk to it.
   Where the map's nearest stop is the wrong one, fix it in
   `data/src/venue-stops.json` and run `scripts/walk_routes.py`.
+  Standing in a building, the walk to a stop is the path from it (`out` in
+  `venues.json`, `buildingStops()`), and only by its listed stops when it
+  has them, not the straight line.
 - **Quality ladder.** Each answer says how sure it is: `live`, `scheduled` (a
   headway guess inside operating hours, labelled as such), and so on. Never
   label a guess as live.
@@ -415,7 +446,7 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
   On failure it serves a stale answer if one exists (up to `staleMaxS`), and
   a failed stop isn't asked again for `failMemoS`. A version or key
   rejection, a 429 or 5xx, or no answer at all (a timeout, a failed
-  connection) trips a breaker. The uNivUS version string must track the
+  connection) opens a breaker. The uNivUS version string must track the
   Play Store; KV `config:appVersion` overrides the secret.
 - **Accounts.** D1. Sign-in is by emailed code or link. Apps get a device
   token: anonymous on first launch, then sign-in approved from the email, or
@@ -532,7 +563,10 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
     refuses unmerged files, conflict markers or uncommitted changes in
     `apps/api` and `apps/web/public` and runs `pnpm check`; then it applies
     the stable D1's pending migrations and runs `cf deploy`. It needs
-    `CLOUDFLARE_API_TOKEN`.
+    Cloudflare credentials: `CLOUDFLARE_API_TOKEN`, or a browser login
+    with `pnpm exec cf auth login`, which `cf` keeps on the machine.
+    `pnpm exec cf auth whoami` says which is in use; a missing token in
+    the shell doesn't mean a deploy can't run.
   - The beta is `pnpm run deploy:beta`, with its own D1, KV and R2; it
     applies the beta D1's migrations the same way.
   - By hand, a migration is applied **before** deploying:
@@ -626,9 +660,13 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
 
 ## Code style
 
-- Match the surrounding code. Comments explain **why**, in plain English, at
-  the density of the file around them. Doc comments describe behaviour, not
-  history.
+- Match the surrounding code. Comments explain **why**, in plain English, in
+  the present tense, at the density of the file around them. No history
+  ("used to", "since 3.2", dates): that's what git log is for. Don't
+  restate the name or the next line. Don't repeat internals.md at length;
+  point to it. The exception is evidence about the outside feeds (NUS,
+  LTA, NUSMods): what was observed and when stays, because nothing else
+  records it.
 - **User-facing copy** is short, plain and concrete, in British spelling
   (colour, metres), with no jargon. It names what the user sees ("the map",
   "your stop"), not internals.
@@ -697,7 +735,16 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
     wrangler is installed`.
   - A version bump is `chore(release): terminus <version>`.
   - The body is wrapped at about 72 characters and says what changed and
-    why. Merge commits keep Git's own message.
+    why.
+- **Merging.** Pull requests are squash-merged (GitHub's default here;
+  merge commits are off). The PR title becomes the commit on `main`, with
+  ` (#n)` added, so the title follows the commit rules above and stays
+  under 94 characters. Commits on the branch can be rough, and merging
+  `main` into it is fine; both are squashed away. Use rebase-and-merge
+  only for a PR whose commits each build and stand alone. GitHub deletes
+  the branch on merge; locally, `git branch -D <branch>` (a squashed
+  branch never looks merged to Git, so `-d` refuses) and
+  `git fetch --prune`.
 - **After pushing,** watch CI on the commit and fix anything red straight
   away.
 - **History.** Never rewrite pushed history unless asked. It was rewritten

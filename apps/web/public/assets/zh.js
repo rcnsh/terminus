@@ -1,4 +1,4 @@
-// Simplified Chinese for the website (phase 10), keyed by the English it
+// Simplified Chinese for the website, keyed by the English it
 // replaces: text as it appears on the page, or a whole element's HTML where
 // a sentence has a link or a name inside it. i18n.js puts it in place.
 // Place and bus names stay English, as on the signs.
@@ -31,7 +31,7 @@ window.TERMINUS_ZH = {
   'Send crash reports': '发送崩溃报告',
   'Tap {0} at the bottom of Safari.': '点按 Safari 底部的{0}。',
   'Added {0} · used {1}': '{0} 添加 · {1} 使用过',
-  'Allow for busy buses': '考虑巴士很挤的情况',
+  'Allow for packed buses': '考虑巴士很挤的情况',
   'Prefer the bus': '优先搭巴士',
   'Wait a few minutes more for a bus rather than walk.': '宁可多等几分钟巴士，也不想步行。',
   'Allow location for this site to see the buses near you.': '允许这个网站使用定位，查看你附近的巴士。',
@@ -57,6 +57,7 @@ window.TERMINUS_ZH = {
   'Cancel': '取消',
   'Check your inbox': '查看你的收件箱',
   'Checking…': '正在查询…',
+  'No email? {0}': '没有邮箱？{0}',
   'No email after a minute? Check spam, or {0}.': '一分钟后还没收到邮件？看看垃圾邮件，或{0}。',
   'send another': '再发一封',
   'Status checks have paused. Last check: {0}.': '状态检查已暂停。上次检查：{0}。',
@@ -313,7 +314,7 @@ window.TERMINUS_ZH = {
   'Up since {0}.': '自 {0} 起正常。',
   'Updated {0}': '{0} 更新',
   'Use a different email': '换一个邮箱',
-  'Use terminus without an email': '不用邮箱，直接使用 terminus',
+  'Use terminus in this browser only': '只在这个浏览器里使用 terminus',
   'Used when the app does not have your location.': '应用没有你的位置时使用。',
   'Version {0}.': '版本 {0}。',
   'Walk from home to that stop': '从家步行到那个车站',
@@ -326,8 +327,8 @@ window.TERMINUS_ZH = {
   'Welcome': '欢迎',
   'Welcome to terminus': '欢迎使用 terminus',
   "What it's for, e.g. My script": '用途，例如：我的脚本',
-  'When the bus you would wait for is often full at that stop and time, aim one bus earlier.':
-    '如果你要等的巴士在那个车站和时间经常满员，就提早一班。',
+  'When the bus you would wait for is often packed at that stop and time, aim one bus earlier.':
+    '如果你要等的巴士在那个车站和时间经常很挤，就提早一班。',
   'When to leave, in the menu bar. Click for the whole trip, your favourites, or anywhere else on campus.':
     '在菜单栏里看什么时候出发。点一下，查看完整行程、你的收藏，或去校园里的任何地方。',
   'Where': '地点',
@@ -359,7 +360,6 @@ window.TERMINUS_ZH = {
   'minutes': '分钟',
   'never used': '从未使用',
   'off at {0}': '在 {0} 下车',
-  'or': '或',
   'reaches {0} in about {1} min': '约 {1} 分钟后到达 {0}',
   'reaches {0} in {1} min': '{1} 分钟后到达 {0}',
   'starts {0}': '{0} 开始',
@@ -413,7 +413,6 @@ window.TERMINUS_ZH = {
   'At {0}': '在 {0}',
   'Moving': '行驶中',
   'Stopped': '已停下',
-  'Seats free': '有座位',
   'Stops ahead': '前方车站',
   'Buses here': '本站巴士',
   'Show {0}': '查看 {0}',
@@ -496,7 +495,7 @@ window.TERMINUS_ZH = {
   '400 m in about 6 min. A relaxed pace, or if you often carry a bag.': '400 米约 6 分钟。步伐从容，或经常背着包。',
   '400 m in about 5 min. An average pace.': '400 米约 5 分钟。一般步速。',
   '400 m in about 4 min. A brisk pace.': '400 米约 4 分钟。步伐轻快。',
-  'Aim one bus earlier when yours is often full.': '你要搭的巴士经常满员时，提早一班。',
+  'Aim one bus earlier when yours is often packed.': '你要搭的巴士经常很挤时，提早一班。',
   'Getting off at {0}': '在 {0} 下车',
   'Next: {0}, where you get off': '下一站：{0}，在这里下车',
   'Next: {0} · {1} stops to go': '下一站：{0} · 还有 {1} 站',
@@ -519,10 +518,8 @@ window.TERMINUS_ZH = {
   'Card style': '卡片样式',
   'How the card shows a trip by bus. Only in this browser.': '卡片如何显示搭巴士的行程。仅限这个浏览器。',
   'Route': '路线',
-  'Ticket': '车票',
   'Steps': '步骤',
   'The whole trip as a line, with the times under it.': '整段行程画成一条线，时间写在下面。',
-  'The bus first, in its colour, then when to leave.': '先显示车和它的颜色，再显示何时出发。',
   'Leave in {0} min': '{0} 分钟后出发',
   'Leave in {0} min {1} s': '{0} 分 {1} 秒后出发',
   'Leave in {0} s': '{0} 秒后出发',
@@ -656,7 +653,7 @@ window.TERMINUS_ZH = {
   'Swipe for {0}': '滑动查看 {0}',
   'to {0}': '开往 {0}',
   'to {0}, {1}': '经 {0}，开往 {1}',
-  'Scheduled': '按时刻表',
+  'Estimate': '估计',
   'Last known': '最后已知',
   'Seats': '有座位',
   'Busy': '有点挤',

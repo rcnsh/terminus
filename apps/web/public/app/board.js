@@ -19,7 +19,7 @@ const mins = (s) => Math.max(1, Math.round(s / 60));
 /** Whether a time is a guess, a timetable's or counted down from an old reading: marked "~", as the server marks it. */
 const approx = (quality) => quality === 'scheduled' || quality === 'stale';
 
-/** "~6 min", "7 min": a time worded here, from a row aged on this page (buses.js aged) or an older server, as the server words it. */
+/** "~6 min", "7 min", as the server words it, for a row aged on this page (buses.js aged); worked out here for an older server. */
 export const etaText = (etaS, quality) => (approx(quality) ? t('~{0}', t('{0} min', mins(etaS))) : t('{0} min', mins(etaS)));
 
 /** How full the first bus is, as the feed says; nothing when it doesn't. */
@@ -30,19 +30,19 @@ export function Crowd({ crowd }) {
   return html`<span class=${`bt-crowd ${crowd}`}><${Icon} paths=${crowd === 'low' ? SEAT : PEOPLE} />${word}</span>`;
 }
 
-/** Live, Scheduled, or a live time that has stopped updating. Nothing without a time. */
+/** Live, Estimate, or a live time that has stopped updating. Nothing without a time. */
 export function Quality({ r }) {
   if (r.etaS == null) return null;
   if (r.quality === 'live') return html`<span class="bt-live"><span class="dot"></span>${t('Live')}</span>`;
-  if (r.quality === 'scheduled') return html`<span class="bt-sched">${t('Scheduled')}</span>`;
+  if (r.quality === 'scheduled') return html`<span class="bt-sched">${t('Estimate')}</span>`;
   if (r.quality === 'stale') return html`<span class="bt-stale">${t('Last known')}</span>`;
   return null;
 }
 
 /**
  * The big time, in the server's words (`eta`: "7 min", "~7 min", "now"),
- * its numbers large and the rest small; or why there's none. An answer
- * without `eta` (an older server) is worded here as it was.
+ * its numbers large and the rest small; or why there's none. Worked out
+ * here for an older server.
  */
 export function Big({ r }) {
   if (r.etaS == null) return html`<span class="bt-big none">${r.quality === 'unknown' ? t('No live times') : t('No time yet')}</span>`;
@@ -76,7 +76,7 @@ export function Towards({ r }) {
     if (at < 0) return r.toText;
     return html`${r.toText.slice(0, at)}<b>${to[0]}</b>${r.toText.slice(at + to[0].length)}`;
   }
-  // From an older server: worded here. The end of its line: nowhere further to say.
+  // Worked out here for an older server; the end of its line has nowhere further to say.
   if (!to?.length) return t('Ends here');
   const text = to.length > 1 ? t('to {0}, {1}', MARK, to[1]) : t('to {0}', MARK);
   return html`<${Fill} text=${text} parts=${[html`<b>${to[0]}</b>`]} />`;

@@ -148,7 +148,7 @@ struct AnswerDetail: View {
 
     /// The next class on a block of its own (`card.upcoming`): when in the
     /// accent, what, then where, as the web and Android show it. Why today has
-    /// none on a break goes above it. An older server's one line otherwise.
+    /// none on a break goes above it. One line, worked out here for an older server.
     private struct NextClass: View {
         let answer: NextAnswer
 
@@ -352,7 +352,7 @@ extension BoardRow {
 
 /// One pill per service: "D2  4 min · 14 min", the next bus solid and the
 /// ones after it faded, as on the web and Android. The times are the
-/// server's words ("~6 min" for a timetable guess).
+/// server's words ("~6 min" for an estimate).
 /// Wraps onto more lines instead of squeezing when a stop has many services.
 struct FlowPills: View {
     let rows: [BoardRow]
@@ -405,11 +405,11 @@ struct FlowPills: View {
         }
     }
 
-    /// The server's "4 min"; worded here only for an older server's row.
+    /// The server's "4 min"; worked out here for an older server.
     nonisolated static func eta(_ r: BoardRow) -> String { r.eta ?? eta(etaS: r.etaS, quality: r.quality) }
 
-    /// An older server's row: "4 min", "~6 min" for a timetable guess, "now",
-    /// or "ended", as the server words it ("4m" would be read as metres).
+    /// "4 min", "~6 min" for an estimate, "now", or "ended", as the server words it
+    /// ("4m" would be read as metres); worked out here for an older server.
     nonisolated static func eta(etaS: Int?, quality: String) -> String {
         guard let s = etaS else { return quality == "ended" ? L("ended") : "–" }
         if s < 45 { return L("now") }

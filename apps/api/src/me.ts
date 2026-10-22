@@ -1,6 +1,6 @@
 /**
  * The personal layer: sign-in, pairing, profile, and the answers that use
- * them (/me/next, /me/nearby). Everything here needs the DB binding.
+ * them (/api/me/next, /api/me/nearby). Everything here needs the DB binding.
  */
 
 import { mailFeedback, parseFeedback, saveFeedback } from './feedback.ts';
@@ -53,31 +53,27 @@ import {
   classKey,
   classesOn,
   parseProfile,
-  planChangesAt,
   reimportReason,
 } from './profile.ts';
-import { hour12, planned, resolveTo } from './next.ts';
+import { type Ask, DAY_ASK, type Rider, askOf, hour12, nextFor, planned, resolveTo } from './next.ts';
 import { dayPlan } from './day.ts';
 import { unlogged } from './answer.ts';
 import {
-  type Boarded,
+  type Plan,
   type DayRecord,
   PLATE_WINDOW_S,
   SIGNALS,
   type TripRecord,
-  type TripUpdate,
   clearTrip,
-  isHomeKey,
   laterChange,
   leaveOf,
   loadDay,
-  needsWatch,
   saveSignals,
   secondBusOf,
   sgtDate,
   updateTrip,
 } from './trip.ts';
-import { nudgeUser, pushEnabled, setLiveToken, setPushToken } from './push.ts';
+import { nudgeUser, setLiveToken, setPushToken } from './push.ts';
 import { formatApnsToken, looksApns, parseApnsToken } from './apns.ts';
 import { WEB_PREFIX, parseSubscription, vapidPublicKey, webPushEnabled } from './webpush.ts';
 import {
@@ -95,25 +91,23 @@ import {
 import { ImportInputError, parseShareUrl, resolveTrips } from './nusmods.ts';
 import { termName } from './calendar.ts';
 import { boardAsOf, boardAt, displayName, indexGraph } from './resolve.ts';
+import { stopVia, viaText } from './via.ts';
 import { haversineM } from './geo.ts';
 import { isoSeconds } from './format.ts';
-import { type Card, cardFor, nextPhaseAt } from './card.ts';
-import { feedDownSince, termNoticeFor } from './monitor.ts';
+import type { Card } from './card.ts';
+import { termNoticeFor } from './monitor.ts';
 import { WALK, sgt } from './config.ts';
 import { landmark } from './landmarks.ts';
-import { GRAPH_PUBLIC, nearbyTwin, twinOf } from './graph.ts';
+import { GRAPH, GRAPH_PUBLIC, oppositeOrPartner, oppositeOf } from './graph.ts';
 import { residenceStops } from './residences.ts';
 import { MAX_KEYS, createKey, listKeys, revokeKey } from './access.ts';
-import { footM, paceSpeed } from './walk.ts';
-import { clientKey, coordsFrom, json } from './http.ts';
+import { buildingStops, footM, paceSpeed } from './walk.ts';
+import { clientKey, coords, coordsFrom, json } from './http.ts';
 import { linkOrigin } from './site.ts';
 import { LANG_PREFS, type Lang, type LangPref, lang, m, useProfileLang, withLang } from './i18n.ts';
 import { bandCss, bandHtml, phaseAt, sgtMinute } from './pagesky.ts';
 
 export interface MeDeps {
-  graph: Graph;
-  /** The graph with the public buses in it, for accounts that turned them on. Absent: `graph`. */
-  publicGraph?: Graph;
   answerFor: (env: Env, ctx: ExecutionContext, input: ResolveInput, label: string | null, nowMs: number) => Promise<Answer>;
   collectArrivals: (env: Env, ctx: ExecutionContext, codes: string[], nowMs: number, graph?: Graph) => Promise<Map<string, StopArrivals>>;
 }
@@ -427,7 +421,7 @@ interface MeContext {
   deps: MeDeps;
   db: D1Database;
   session: SessionInfo;
-  /** What follows a prefix path ("/me/keys/<id>"). */
+  /** What follows a prefix path ("/api/me/keys/<id>"). */
   rest: string;
 }
 
@@ -507,12 +501,12 @@ export const ME_ROUTES: MeRoute[] = [
   {
     method: 'GET',
     path: '/api/me',
-    run: async ({ req, nowMs, deps, db, session }) => {
-      // Every page load asks /me first: a web session in use keeps going.
+    run: async ({ req, nowMs, db, session }) => {
+      // Every page load asks /api/me first: a web session in use keeps going.
       const token = session.kind === 'web' ? tokenFrom(req) : null;
       const renewed = token !== null && (await renewWebSession(db, session.tokenHash, nowMs));
       const saved = await loadProfileJson(db, session.user.id);
-      const profile = await getProfile(db, session.user.id, deps.graph, saved);
+      const profile = await getProfile(db, session.user.id, GRAPH, saved);
       const reason = reimportReason(profile, nowMs);
       return json(
         {
@@ -532,28 +526,28 @@ export const ME_ROUTES: MeRoute[] = [
   {
     method: 'GET',
     path: '/api/me/profile',
-    run: async ({ deps, db, session }) => {
+    run: async ({ db, session }) => {
       // The limits ride along, so clients needn't hard-code them; a client
       // that sends the whole profile back sends them too, and they're ignored.
       // The version goes in the ETag, not the body, for the same reason: a
       // client that sends it back as If-Match has asked for the check.
       const row = await loadProfileRow(db, session.user.id);
-      const profile = await getProfile(db, session.user.id, deps.graph, row?.json ?? null);
+      const profile = await getProfile(db, session.user.id, GRAPH, row?.json ?? null);
       return json({ ...profile, limits: profileLimits() }, 200, { etag: versionTag(row?.updated) });
     },
   },
   {
     method: 'PUT',
     path: '/api/me/profile',
-    run: async ({ req, nowMs, deps, db, session }) => {
+    run: async ({ req, nowMs, db, session }) => {
       const body = await readJson(req);
       if (!body) return json({ error: 'send the profile as JSON' }, 400);
-      const idx = indexGraph(deps.graph);
+      const idx = indexGraph(GRAPH);
       const r = parseProfile(
         body,
         (c) => idx.byCode.has(c),
         (c) => idx.byCode.has(c) || landmark(c) !== null,
-        pinnable(deps.graph),
+        pinnable(GRAPH),
       );
       if (!r.ok) return json({ error: r.error }, 400);
       // One-off trips are done with once their day has passed.
@@ -575,14 +569,14 @@ export const ME_ROUTES: MeRoute[] = [
     path: '/api/me/once',
     run: async ({ req, url, env, ctx, nowMs, deps, db, session }) => {
       // A one-off trip: "Science library at 14:00 today". Planned
-      // like a class on its day; "Not going" drops it. Answers with /me/next.
+      // like a class on its day; "Not going" drops it. Answers with /api/me/next.
       const body = await readJson(req);
       // Read, changed and saved again if another device saved meanwhile, so
       // neither write is lost.
-      const changed = await changeProfile(db, session.user.id, deps.graph, nowMs, (profile) => {
+      const changed = await changeProfile(db, session.user.id, GRAPH, nowMs, (profile) => {
         // A favourite by its key, or a stop, food court or room by its code.
         const saved = typeof body?.place === 'string' ? profile.places.find((p) => p.key === body.place) : undefined;
-        const dest = saved ? { to: saved.to, label: saved.label } : typeof body?.to === 'string' ? resolveTo(deps.graph, body.to) : null;
+        const dest = saved ? { to: saved.to, label: saved.label } : typeof body?.to === 'string' ? resolveTo(GRAPH, body.to) : null;
         if (!dest) return json({ error: "send place (a favourite's key) or to (a stop, place or room code)" }, 400);
         const atMin = body?.atMin;
         if (typeof atMin !== 'number' || !Number.isInteger(atMin) || atMin < 0 || atMin > 1439)
@@ -604,15 +598,14 @@ export const ME_ROUTES: MeRoute[] = [
         return { ...profile, once };
       });
       if (changed instanceof Response) return changed;
-      const next = changed.profile;
-      const [day, prefs] = await Promise.all([tripDay(env, session.user.id, next, nowMs), prefsFor(db, session.user.id, next, nowMs)]);
-      return json(await nextBody(url, env, ctx, nowMs, deps, next, day, session.user.id, prefs));
+      const rider = await loadRider(env, session.user.id, nowMs, { profile: changed.profile });
+      return json(await nextBody(env, ctx, deps, rider, askOf(url), nowMs));
     },
   },
   {
     method: 'POST',
     path: '/api/me/import',
-    run: async ({ env, req, nowMs, deps, db, session }) => {
+    run: async ({ env, req, nowMs, db, session }) => {
       // Each import can fetch 15 modules from NUSMods: a few a minute per account, not 120.
       if (env.RL_AUTH && !(await env.RL_AUTH.limit({ key: `import:${session.user.id}` })).success) {
         return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
@@ -644,7 +637,7 @@ export const ME_ROUTES: MeRoute[] = [
       }
       // The timetable replaces the old one; the rest of the profile is read
       // again if another device saved it meanwhile, so that write isn't lost.
-      const changed = await changeProfile(db, session.user.id, deps.graph, nowMs, (profile) => ({
+      const changed = await changeProfile(db, session.user.id, GRAPH, nowMs, (profile) => ({
         ...profile,
         trips: r.trips.slice(0, PROFILE_LIMITS.trips),
         share,
@@ -726,29 +719,23 @@ export const ME_ROUTES: MeRoute[] = [
   {
     method: 'GET',
     path: '/api/me/next',
-    run: async ({ url, env, ctx, nowMs, deps, db, session }) => {
-      const profile = await getProfile(db, session.user.id, deps.graph);
-      const [day, prefs] = await Promise.all([
-        tripDay(env, session.user.id, profile, nowMs),
-        prefsFor(db, session.user.id, profile, nowMs),
-      ]);
-      return json(await nextBody(url, env, ctx, nowMs, deps, profile, day, session.user.id, prefs));
+    run: async ({ url, env, ctx, nowMs, deps, session }) => {
+      return json(await nextBody(env, ctx, deps, await loadRider(env, session.user.id, nowMs), askOf(url), nowMs));
     },
   },
   {
     method: 'GET',
     path: '/api/me/day',
     run: async ({ url, env, ctx, nowMs, deps, db, session }) => {
-      const profile = await getProfile(db, session.user.id, deps.graph);
+      const profile = await getProfile(db, session.user.id, GRAPH);
       const [day, prefs] = await Promise.all([
         tripDay(env, session.user.id, profile, nowMs),
         prefsFor(db, session.user.id, profile, nowMs),
       ]);
-      const here = coordsFrom(url);
-      const plan = () => dayPlan(env, ctx, nowMs, deps, profile, day, hour12(url, profile), prefs.earlier, here);
-      return json(
-        await dayCached(ctx, nowMs, [session.user.id, profile, day, hour12(url, profile), [...prefs.earlier], here, lang()], plan),
-      );
+      const { at: here, h12: clientH12 } = askOf(url);
+      const h12 = hour12(clientH12, profile);
+      const plan = () => dayPlan(env, ctx, nowMs, deps, profile, day, h12, prefs.earlier, here);
+      return json(await dayCached(ctx, nowMs, [session.user.id, profile, day, h12, [...prefs.earlier], here, lang()], plan));
     },
   },
   {
@@ -756,24 +743,20 @@ export const ME_ROUTES: MeRoute[] = [
     path: '/api/me/signal',
     run: async ({ req, url, env, ctx, nowMs, deps, db, session }) => {
       // "On the D2", "Missed it", "Not going", "I'm there": what
-      // actually happened, for every device. Answers with the new /me/next.
+      // actually happened, for every device. Answers with the new /api/me/next.
       if (!env.TRIPS) return json({ error: 'trip tracking is not available' }, 503);
       const body = await readJson(req);
       const kind = SIGNALS.find((k) => k === body?.kind);
       if (!kind) return json({ error: m().signalKinds(SIGNALS.join(', ')) }, 400);
-      const profile = await getProfile(db, session.user.id, deps.graph);
+      const profile = await getProfile(db, session.user.id, GRAPH);
       // A location travels in the body; it's used for this answer and not kept.
-      const here = new URL(url);
-      if (typeof body?.lat === 'number' && typeof body?.lon === 'number') {
-        here.searchParams.set('lat', String(body.lat));
-        here.searchParams.set('lon', String(body.lon));
-      }
+      const asked = askOf(url);
+      const here = typeof body?.lat === 'number' && typeof body?.lon === 'number' ? { ...asked, at: coords(body.lat, body.lon) } : asked;
       const day = await loadDay(env, session.user.id, nowMs);
       // Older Android apps send a location every 20 seconds or so during a
-      // trip. It's answered like /me/next from there, and nothing is kept.
+      // trip. It's answered like /api/me/next from there, and nothing is kept.
       if (kind === 'location') {
-        const prefs = await prefsFor(db, session.user.id, profile, nowMs);
-        return json(await nextBody(here, env, ctx, nowMs, deps, profile, day, session.user.id, prefs));
+        return json(await nextBody(env, ctx, deps, await loadRider(env, session.user.id, nowMs, { profile, day }), here, nowMs));
       }
       if (kind === 'away' || kind === 'back') {
         // "Not on campus today" skips every trip left today (not the ones
@@ -790,9 +773,9 @@ export const ME_ROUTES: MeRoute[] = [
         // One call to the Trip object, however many classes.
         const after = items.length ? await saveSignals(env, session.user.id, items, nowMs) : day;
         logSignal(env, kind);
-        const prefs = await prefsFor(db, session.user.id, profile, nowMs);
-        const out = await nextBody(url, env, ctx, nowMs, deps, profile, after, session.user.id, prefs);
-        const answerIn = rewordFor(url, env, ctx, nowMs, deps, profile, after, session.user.id, prefs);
+        const rider = await loadRider(env, session.user.id, nowMs, { profile, day: after });
+        const out = await nextBody(env, ctx, deps, rider, asked, nowMs);
+        const answerIn = rewordFor(env, ctx, deps, rider, asked, nowMs);
         ctx.waitUntil(
           nudgeUser(
             env,
@@ -804,7 +787,7 @@ export const ME_ROUTES: MeRoute[] = [
         );
         return json(out);
       }
-      const now = await planned(here, env, ctx, nowMs, deps, profile, day);
+      const now = await planned(env, ctx, deps, { userId: session.user.id, profile, day, prefs: NO_PREFS }, here, nowMs);
       const key = typeof body?.trip === 'string' && body.trip ? body.trip.slice(0, 80) : now.trip.key;
       if (!key) return json({ error: 'no trip in progress to say that about' }, 409);
       if (key !== now.trip.key && !knownTrip(profile, key, nowMs)) return json({ error: 'no such trip today' }, 400);
@@ -895,11 +878,11 @@ export const ME_ROUTES: MeRoute[] = [
       if (rec === null) await clearOutcome(db, session.user.id, key, nowMs);
       // A trip home isn't a class: nothing to learn from skipping it.
       else if (outcome && !/^(gap-)?home:/.test(key)) await recordOutcome(db, session.user.id, key, outcome, nowMs);
-      const prefs = await prefsFor(db, session.user.id, profile, nowMs);
-      const out = await nextBody(url, env, ctx, nowMs, deps, profile, next, session.user.id, prefs);
+      const rider = await loadRider(env, session.user.id, nowMs, { profile, day: next });
+      const out = await nextBody(env, ctx, deps, rider, asked, nowMs);
       // A tap here changes the other phones' cards now, not at their next
       // refresh; an iPhone pushed in the other language gets the card in its own.
-      const answerIn = rewordFor(url, env, ctx, nowMs, deps, profile, next, session.user.id, prefs);
+      const answerIn = rewordFor(env, ctx, deps, rider, asked, nowMs);
       ctx.waitUntil(
         nudgeUser(
           env,
@@ -970,7 +953,7 @@ export const ME_ROUTES: MeRoute[] = [
   {
     method: 'POST',
     path: '/api/me/choice',
-    run: async ({ req, nowMs, deps, db, session }) => {
+    run: async ({ req, nowMs, db, session }) => {
       // A suggestion accepted or turned down ({id, choice}), or an accepted
       // one undone from settings ({trip, pref, choice: 'undo'}).
       const body = await readJson(req);
@@ -985,7 +968,7 @@ export const ME_ROUTES: MeRoute[] = [
           400,
         );
       }
-      const profile = await getProfile(db, session.user.id, deps.graph);
+      const profile = await getProfile(db, session.user.id, GRAPH);
       if (!knownTrip(profile, trip, nowMs)) return json({ error: 'no such trip today' }, 400);
       // A trip home has no name of its own: its label stays null.
       const label = [...profile.trips, ...profile.manual, ...classesOn(profile, nowMs)].find((t) => classKey(t) === trip)?.label ?? null;
@@ -1044,7 +1027,7 @@ export const ME_ROUTES: MeRoute[] = [
     method: 'GET',
     path: '/api/me/nearby',
     run: async ({ url, env, ctx, nowMs, deps, db, session }) => {
-      const profile = await getProfile(db, session.user.id, deps.graph);
+      const profile = await getProfile(db, session.user.id, GRAPH);
       return nearbyFor(url, env, ctx, nowMs, deps, profile);
     },
   },
@@ -1359,7 +1342,8 @@ export async function handleMe(
     // It goes into the email to the account's owner: cleaned as at /auth/app/start.
     const name = deviceName(body);
     if (!code) return json({ error: 'enter the 6-character code from the account page' }, 400);
-    const paired = await redeemPairCode(db, code, name, nowMs, clientFrom(req));
+    // The platform an app names in its body when it has no header, as /auth/anon takes it.
+    const paired = await redeemPairCode(db, code, name, nowMs, clientWith(req, body));
     if (!paired) return json({ error: 'that code is wrong or has expired' }, 400);
     ctx.waitUntil(mailDeviceAdded(env, paired.email, name, nowMs).catch(mailFailed));
     return json({ token: paired.token });
@@ -1369,6 +1353,9 @@ export async function handleMe(
 
   if (path === '/api/auth/logout' && req.method === 'POST') {
     if (session) await endSession(db, session.tokenHash);
+    // A token that isn't one cost a D1 read, as under /api/me: capped per address the same way.
+    else if (tokenFrom(req) && (await limited(env, req, 'badtoken')))
+      return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
     return json({ ok: true }, 200, { 'set-cookie': sessionCookie('', 0) });
   }
 
@@ -1381,7 +1368,7 @@ export async function handleMe(
     const r = await mergeAnonymous(db, session.user.id, body.anon, keep, nowMs);
     if (r === 'not-anonymous') return json({ error: 'that token is not an anonymous account' }, 400);
     await clearTrip(env, r.removed);
-    return json({ ok: true, profile: { ...(await getProfile(db, session.user.id, deps.graph)), limits: profileLimits() } });
+    return json({ ok: true, profile: { ...(await getProfile(db, session.user.id, GRAPH)), limits: profileLimits() } });
   }
 
   if (!session) {
@@ -1416,7 +1403,7 @@ export async function handleMe(
 }
 
 /**
- * /me/day's plan, kept up to a minute per user: a phone, a Mac and a browser
+ * /api/me/day's plan, kept up to a minute per user: a phone, a Mac and a browser
  * each ask every 30 s or so, and planning the whole day is the expensive
  * part. Kept under everything it's worked out from (the profile, today's
  * record, the clock style, the language, roughly where you are) and the
@@ -1448,68 +1435,37 @@ async function tripDay(env: Env, userId: string, profile: Profile, nowMs: number
   return loadDay(env, userId, nowMs);
 }
 
-/** /me/next's body: the answer, when it changes by itself, and the card. */
-async function nextBody(...args: Parameters<typeof nextWithTrip>) {
-  return (await nextWithTrip(...args)).body;
+/**
+ * Who a request plans for: the saved profile and today's trip signals, unless
+ * the request has just changed them (then those), and their trip choices.
+ */
+export async function loadRider(
+  env: Env,
+  userId: string,
+  nowMs: number,
+  given: { profile?: Profile; day?: DayRecord | null } = {},
+): Promise<Rider> {
+  const profile = given.profile ?? (await getProfile(env.DB!, userId, GRAPH));
+  const [day, prefs] = await Promise.all([
+    given.day !== undefined ? given.day : tripDay(env, userId, profile, nowMs),
+    prefsFor(env.DB!, userId, profile, nowMs),
+  ]);
+  return { userId, profile, day, prefs };
 }
 
-async function nextWithTrip(
-  url: URL,
-  env: Env,
-  ctx: ExecutionContext,
-  nowMs: number,
-  deps: MeDeps,
-  profile: Profile,
-  day: DayRecord | null,
-  userId: string,
-  prefs: TripPrefs = NO_PREFS,
-  /** Inside the Trip object itself: write plans there, and don't ask it to watch. */
-  local?: { savePlan: (key: string, plan: Boarded) => Promise<void> },
-) {
-  const { answer, trip } = await planned(url, env, ctx, nowMs, deps, profile, day, prefs);
-  // What this request changes in the Trip object, sent in one request at the end.
-  const update: Omit<TripUpdate, 'date' | 'deleteAt'> = {};
-  // At the destination, or home (this request's location): that trip is over, for every device.
-  if (trip.reached && !local) {
-    const label = isHomeKey(trip.reached) ? 'Home' : (answer.dest?.label ?? undefined);
-    const onBus = day?.trips[trip.reached]?.kind === 'boarded' ? day.trips[trip.reached].boarded : undefined;
-    update.items = [{ key: trip.reached, rec: { kind: 'arrived', at: nowMs, label, ...(onBus ? { boarded: onBus } : {}) } }];
-  }
-  // Remember which bus the trip is for, so every device says it and detection
-  // watches it: from when it's due, or before then when it was planned from
-  // where the phone is (the widget and the Mac would otherwise each plan
-  // from where the timetable puts you). Written only when the plan changes,
-  // or once its bus is seen ridden.
-  const plan = trip.seenOn ?? (trip.planChanged ? trip.plan : null);
-  if (plan && trip.key && (trip.phase !== 'idle' || plan.located)) {
-    if (local) ctx.waitUntil(local.savePlan(trip.key, plan));
-    else update.plans = { [trip.key]: plan };
-  }
-  // When the plan itself moves on (class starts, day ends). Only the planned
-  // answer has one; a place or a stop never changes by itself.
-  const isPlan = !url.searchParams.get('place') && !url.searchParams.get('to');
-  const full: MeAnswer = isPlan ? { ...answer, refreshAt: isoSeconds(planChangesAt(profile, nowMs)) } : answer;
-  // The display-ready card, in the client's 12- or 24-hour style.
-  const card = cardFor(full, hour12(url, profile), trip, await feedDownSince(env, nowMs), nowMs);
-  // Push: have the Trip object wake when this card next changes, to tell the
-  // phones, unless it already wakes about then or sooner.
-  const at = nextPhaseAt(full, trip, nowMs);
-  if (!local && at !== null && pushEnabled(env) && needsWatch(day, at, nowMs) && classesOn(profile, nowMs).length) {
-    update.watch = { userId, at };
-  }
+/** /api/me/next's body, with what it changes sent to the Trip object. */
+async function nextBody(env: Env, ctx: ExecutionContext, deps: MeDeps, rider: Rider, ask: Ask, nowMs: number) {
+  const { body, update } = await nextFor(env, ctx, deps, rider, ask, nowMs);
   if (update.items || update.plans || update.watch) {
     // The answer doesn't wait for it; a failure loses the plan or a push, not the card.
     ctx.waitUntil(
-      updateTrip(env, userId, update, nowMs).then(
+      updateTrip(env, rider.userId, update, nowMs).then(
         () => undefined,
         (err: unknown) => console.error('trip state not saved', err instanceof Error ? err.message : typeof err),
       ),
     );
   }
-  // The user's walking speed, for walk times the apps show themselves (search).
-  // The walk from the stop is in the card's journey; the raw seconds stay here.
-  const { endWalk: _endWalk, upcoming: _upcoming, ...shown } = full;
-  return { body: { ...shown, walkSpeedMs: paceSpeed(profile.walkPace), card }, trip };
+  return body;
 }
 
 /**
@@ -1518,26 +1474,15 @@ async function nextWithTrip(
  * same moment, so its arrivals come from the edge cache, and saving
  * nothing (no plan, no watch, not logged), as the request already has.
  */
-function rewordFor(
-  url: URL,
-  env: Env,
-  ctx: ExecutionContext,
-  nowMs: number,
-  deps: MeDeps,
-  profile: Profile,
-  day: DayRecord | null,
-  userId: string,
-  prefs: TripPrefs,
-) {
-  return (l: Lang) =>
-    withLang(l, () => nextWithTrip(url, env, ctx, nowMs, unlogged(deps), profile, day, userId, prefs, { savePlan: async () => {} })).then(
-      (r) => r.body,
-    );
+function rewordFor(env: Env, ctx: ExecutionContext, deps: MeDeps, rider: Rider, ask: Ask, nowMs: number) {
+  return (l: Lang) => withLang(l, () => nextFor(env, ctx, unlogged(deps), rider, ask, nowMs)).then((r) => r.body);
 }
 
 /**
  * The card as a request would get it, for the Trip object when it wakes:
  * which trip, its phase, whether there's a question, when it next changes.
+ * Of what the card changes, only the plan is kept (in the Trip object, by
+ * `savePlan`): a wake neither ends a trip nor asks itself to watch.
  */
 export async function tripCardFor(
   env: Env,
@@ -1546,27 +1491,32 @@ export async function tripCardFor(
   userId: string,
   day: DayRecord | null,
   nowMs: number,
-  savePlanLocal: (key: string, plan: Boarded) => Promise<void>,
+  savePlan: (key: string, plan: Plan) => Promise<void>,
 ): Promise<{
   key: string | null;
   phase: string;
   gone: boolean;
   remind: boolean;
   wakeAt: number | null;
+  /** The leave-by and how sure the answer is, for the wake's freshness log (tripdo.ts). */
+  leaveAt: number | null;
+  quality: string;
   answer: MeAnswer & { card: Card };
 } | null> {
   if (!env.DB) return null;
-  const profile = await getProfile(env.DB, userId, deps.graph);
+  const profile = await getProfile(env.DB, userId, GRAPH);
   if (!classesOn(profile, nowMs).length) return null;
-  const prefs = await prefsFor(env.DB, userId, profile, nowMs);
-  const url = new URL('https://terminus.internal/me/next');
-  const { body, trip } = await nextWithTrip(url, env, ctx, nowMs, unlogged(deps), profile, day, userId, prefs, { savePlan: savePlanLocal });
+  const rider = await loadRider(env, userId, nowMs, { profile, day });
+  const { body, trip, update, wakeAt } = await nextFor(env, ctx, unlogged(deps), rider, DAY_ASK, nowMs);
+  for (const [key, plan] of Object.entries(update.plans ?? {})) ctx.waitUntil(savePlan(key, plan));
   return {
     key: trip.key,
     phase: body.card.phase,
     gone: body.card.gone,
     remind: body.card.remind !== false,
-    wakeAt: nextPhaseAt(body, trip, nowMs),
+    wakeAt,
+    leaveAt: body.leave?.at ? Date.parse(body.leave.at) : null,
+    quality: body.quality,
     answer: body,
   };
 }
@@ -1617,7 +1567,7 @@ async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: numbe
   let { lat, lon } = coordsFrom(url);
   // With public buses on, the graph that has them: the same stops with more
   // services, and the public stops of their own.
-  const graph = profile.publicBuses ? (deps.publicGraph ?? deps.graph) : deps.graph;
+  const graph = profile.publicBuses ? GRAPH_PUBLIC : GRAPH;
   // Without a location, start from the first home stop.
   const homeStop = profile.home ? indexGraph(graph).byCode.get(profile.home.stops[0]) : undefined;
   if (lat === null && homeStop) ({ lat, lon } = homeStop);
@@ -1628,16 +1578,17 @@ async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: numbe
     .map((stop) => ({ stop, distM: haversineM(lat!, lon!, stop.lat, stop.lon), footM: footM(lat!, lon!, stop) }))
     .sort((a, b) => a.distM - b.distM);
   const near = ranked.filter((c) => c.distM <= WALK.maxRadiusM).slice(0, WALK.maxCandidates);
-  // In a residence: its own stops, walked by the paths, like /me/next,
-  // and at home your own walk to your stop.
+  // In a residence or a building: its own stops, walked by the paths, like
+  // /api/me/next, and at home your own walk to your stop.
   const homeWalk = profile.home ? { stops: profile.home.stops, m: profile.homeWalkMin * 60 * paceSpeed(profile.walkPace) } : null;
-  const picked = residenceStops(lat, lon, idx.byCode, homeWalk)?.slice(0, WALK.maxCandidates) ?? (near.length ? near : ranked.slice(0, 1));
-  // The nearest stop's twin (across the road, or PGP and PGP Foyer), always:
+  const inside = residenceStops(lat, lon, idx.byCode, homeWalk) ?? buildingStops(lat, lon, idx.byCode);
+  const picked = inside?.slice(0, WALK.maxCandidates) ?? (near.length ? near : ranked.slice(0, 1));
+  // The nearest stop's opposite or partner stop (PGP and PGP Foyer), always:
   // a location a few metres out puts you at the wrong one, and the widget
   // offers the other.
-  const twinCode = picked[0] ? nearbyTwin(picked[0].stop) : null;
-  const twin = twinCode ? ranked.find((c) => c.stop.code === twinCode) : undefined;
-  if (twin && !picked.some((c) => c.stop.code === twin.stop.code)) picked.push(twin);
+  const otherCode = picked[0] ? oppositeOrPartner(picked[0].stop) : null;
+  const other = otherCode ? ranked.find((c) => c.stop.code === otherCode) : undefined;
+  if (other && !picked.some((c) => c.stop.code === other.stop.code)) picked.push(other);
 
   const byStop = await deps.collectArrivals(
     env,
@@ -1650,13 +1601,18 @@ async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: numbe
   const stopped = url.searchParams.get('stopped') === '1';
   const stops = picked.map(({ stop, distM, footM: foot }) => {
     const sa = byStop.get(stop.code)!;
+    const board = boardAt(graph, idx, stop.code, sa, nowMs, { stopped });
+    // Which way this side of the road's buses go, for a heading over its board.
+    const via = stopVia(board);
     return {
       stop: { code: stop.code, name: stop.name, longName: displayName(stop, stop.code) },
-      ...twinOf(stop, idx.byCode),
+      ...oppositeOf(stop, idx.byCode),
       distM: Math.round(distM),
       walkS: Math.round(foot / paceSpeed(profile.walkPace)),
       available: sa.available !== false,
-      board: boardAt(graph, idx, stop.code, sa, nowMs, { stopped }),
+      via,
+      viaText: viaText(via),
+      board,
     };
   });
   // As old as the oldest times on it, so "Updated N ago" is true.

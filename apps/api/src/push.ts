@@ -1,22 +1,12 @@
 /**
- * Push: Firebase Cloud Messaging (HTTP v1) to Android devices, Web Push to
- * the installed web app (webpush.ts), and APNs to the iPhone app (apns.ts),
- * all kept as the session's push_token: an FCM token, `web:` and a
- * subscription, or `apns:` and a device token. An iPhone's trip Live
- * Activity has its own token beside it (sessions.live_token).
- *
- * A push is usually only a nudge. It says the card has changed (`kind:
- * 'card'` and the phase), and the app fetches /me/next itself, so the words
- * are never worked out twice and nothing sensitive travels through Google.
- * It's high priority only when the user should look: the trip is due, or it
- * was missed, whether or not its reminders are on, since Android starts the
- * live notification from these. The new semester's reminder (`kind: 'term'`) is the same to
- * an app that can fetch its words (GET /api/me/notice): only to an older
- * Android app, which shows what it's sent, does it carry the words, in
- * English and Chinese (fetchesNotice). Web pushes are encrypted for the
- * browser, so they always carry them.
- *
- * The Worker signs its own OAuth token from the service account in
+ * Push: FCM (HTTP v1) to Android, Web Push to the installed web app
+ * (webpush.ts) and APNs to the iPhone app (apns.ts), all kept as the
+ * session's push_token: an FCM token, `web:` and a subscription, or `apns:`
+ * and a device token. An iPhone's trip Live Activity has its own token
+ * beside it (sessions.live_token). A push is a nudge and the app fetches
+ * the card itself (an iPhone's notification and Live Activity carry their
+ * words); see internals.md, *One plan, and push*, and *A new semester* under
+ * *The web app*. The Worker signs its own OAuth token from
  * FCM_SERVICE_ACCOUNT (RS256 with WebCrypto) and keeps it in KV for 50
  * minutes. A token FCM no longer knows is cleared from its session.
  *
@@ -100,7 +90,6 @@ function account(env: Env): ServiceAccount | null {
   return null;
 }
 
-/** Whether push to Android (FCM) is set up. */
 export const fcmEnabled = (env: Env) => account(env) !== null;
 
 /** Whether push is set up at all. */
@@ -386,7 +375,7 @@ async function deliver(env: Env, userId: string, msg: Delivery, nowMs: number, e
   const forget = (tokenHash: string) =>
     db.prepare('UPDATE sessions SET push_token = NULL, live_token = NULL, push_alerts = NULL WHERE token_hash = ?').bind(tokenHash).run();
   const forgetLive = (tokenHash: string) => db.prepare('UPDATE sessions SET live_token = NULL WHERE token_hash = ?').bind(tokenHash).run();
-  const count = async (res: Outcome, gone: () => Promise<unknown>) => {
+  const count = async (res: PushResult, gone: () => Promise<unknown>) => {
     if (res === 'sent') out.sent++;
     else if (res === 'failed') out.failed++;
     else if (res === 'gone') await gone();
@@ -431,7 +420,7 @@ interface Row {
   push_alerts: number | null;
 }
 
-type Outcome = 'sent' | 'failed' | 'gone' | 'skip';
+type PushResult = 'sent' | 'failed' | 'gone' | 'skip';
 
 /** One Live Activity's update or end. */
 interface LiveSend {
@@ -440,7 +429,7 @@ interface LiveSend {
   urgent: boolean;
 }
 
-async function toBrowser(env: Env, pushToken: string, msg: Delivery, nowMs: number): Promise<Outcome> {
+async function toBrowser(env: Env, pushToken: string, msg: Delivery, nowMs: number): Promise<PushResult> {
   // Without a usable VAPID key no browser can be sent to: nobody reached, not a failure to retry.
   if (!msg.web || !webPushEnabled(env)) return 'skip';
   let sub: WebSubscription | null = null;
@@ -465,7 +454,7 @@ async function toIphone(
   alerts: boolean,
   msg: Delivery,
   nowMs: number,
-): Promise<Outcome> {
+): Promise<PushResult> {
   const push = msg.ios?.(l, hasLive, alerts);
   if (!push) return 'skip';
   // Stored only once checked (POST /me/push): one that doesn't read is gone.
@@ -474,7 +463,7 @@ async function toIphone(
   return sendApns(env, run, token, push, nowMs);
 }
 
-async function toLiveActivity(env: Env, run: ApnsRun, liveToken: string, live: LiveSend, nowMs: number): Promise<Outcome> {
+async function toLiveActivity(env: Env, run: ApnsRun, liveToken: string, live: LiveSend, nowMs: number): Promise<PushResult> {
   const token = parseApnsToken(liveToken);
   if (!token?.live) return 'gone';
   return sendApns(env, run, token, livePush(live.state, live.event, Math.floor(nowMs / 1000), live.urgent), nowMs);
@@ -493,7 +482,7 @@ async function toAndroid(
   to: { push_token: string; client: string | null },
   msg: Delivery,
   nowMs: number,
-): Promise<Outcome> {
+): Promise<PushResult> {
   // Without an access token no device can be sent to: asking again for each would only wait longer.
   if (fcm.down) return 'failed';
   const send = (token: string) =>

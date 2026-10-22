@@ -164,7 +164,7 @@ export function venueAt(venue: string): { lat: number; lon: number } | null {
   return null;
 }
 
-export interface ImportedTrip {
+export interface TimetableClass {
   day: number; // 0=Sun..6=Sat
   arriveByMin: number; // minutes past midnight SGT, class start
   endMin?: number; // minutes past midnight SGT, class end, when known
@@ -180,7 +180,7 @@ export interface ImportedTrip {
 }
 
 export interface ImportResult {
-  trips: ImportedTrip[];
+  trips: TimetableClass[];
   /** Classes whose venue matched no stop, with enough detail to place them by hand. */
   unresolved: Array<{ module: string; venue: string; day: number; arriveByMin: number; endMin?: number; offCampus?: boolean }>;
   /** The semester the classes were read for. */
@@ -262,7 +262,7 @@ export async function resolveTrips(
     fetched = await fetchTerm(term);
   }
 
-  const trips: ImportedTrip[] = [];
+  const trips: TimetableClass[] = [];
   const unresolved: ImportResult['unresolved'] = [];
   const missing: string[] = [];
   const failed: string[] = [];

@@ -24,7 +24,7 @@
  * starts lying.
  *
  *   blob1   kind        'answer' | 'arrival' | 'error' | 'timelapse' | 'signal'
- *                       | 'active' | 'apperror'
+ *                       | 'active' | 'apperror' | 'tripwake' | 'legacy' | 'settings'
  *   blob2   stop        boarding stop code; for 'error', the route (no query),
  *                       or 'cron <step>' for a cron step that failed;
  *                       for 'timelapse', the poll's outcome (see logPoll);
@@ -52,10 +52,10 @@
  *   double10 walkAllS        whole-way walk, -1 when unknown
  *   double11 changeWaitS     answer rows: seconds waiting for the bus after a change, -1 on one bus
  *
- *   index1  stop code (the sampling key); 'error', 'timelapse', 'signal', 'active'
- *           and 'apperror' rows use their kind
+ *   index1  stop code (the sampling key); 'error', 'timelapse', 'signal', 'active',
+ *           'apperror', 'tripwake', 'legacy' and 'settings' rows use their kind
  *
- * Two kinds give the columns their own meaning:
+ * Five kinds give the columns their own meaning:
  *
  *   'active' (usage.ts logActive), once a Singapore day, counts only:
  *     blob2 scope 'all' | 'app' | 'version';  blob3 the app (web, android,
@@ -69,6 +69,19 @@
  *     blob7 its stack, both scrubbed (apperrors.ts scrub);  blob8 the OS or
  *     browser and its major version;  double1 1;  double2 1 for a crash
  *     that ended the app, 0 for an error it carried on from.
+ *   'tripwake' (logTripWake), one Trip object wake (see WakeRow):
+ *     blob2 'pushed' | 'same';  blob3 the card's phase;  blob4 its quality;
+ *     blob5 'first' | 'again' (today's first wake or not);  double1 gapS;
+ *     double2 feedAgeS;  double3 leaveShiftS;  double4 lateS.
+ *   'legacy' (legacy.ts), one request that used something on its way out:
+ *     blob2 what: 'address' (the old address), 'path' (the API's old path)
+ *     or 'outdated' (an app below config:minClient, answered 426);
+ *     blob3 the app and version ("android/3.2.0"), 'browser' or 'other';
+ *     blob4 the route, ids and query left out ("/api/me/next");  double1 1.
+ *   'settings' (settings.ts), once a Singapore day, counts only:
+ *     blob2 the setting ("publicBuses");  blob3 its value ("on", "fast");
+ *     blob4 the Singapore day counted, YYYY-MM-DD;  double1 accounts with
+ *     that value;  double2 accounts counted (used in the last 30 days).
  *
  * No row holds an account, email, IP address, device or install id, or
  * coordinates. An answer row's
@@ -109,7 +122,7 @@ export function logAnswer(env: Env, input: LogInput): void {
         answer.quality,
         '',
         best?.arrival?.crowd ?? '',
-        '', // was the trip key, never set; the column stays so the others don't shift
+        '', // blob8: always empty, kept so the columns after it don't shift
         best?.arrival?.berth ?? '',
         best?.change?.stop.code ?? '',
         best?.change?.svc ?? '',
@@ -142,7 +155,7 @@ export function logAnswer(env: Env, input: LogInput): void {
           answer.quality,
           a.plate ?? '',
           a.crowd ?? '',
-          '', // was the trip key, never set; the column stays so the others don't shift
+          '', // blob8: always empty, kept so the columns after it don't shift
           a.berth ?? '',
         ],
         doubles: [a.etaS, -1, -1, -1, -1, -1, answer.stop.confidence, 0, input.hadCoords ? 1 : 0, -1],
@@ -208,6 +221,41 @@ export function logPoll(env: Env, outcome: PollOutcome, svc: string, buses: numb
   }
 }
 
+/**
+ * One Trip object wake (tripdo.ts), to see how stale pushed cards get and
+ * why: the wake schedule or the cache. No user, trip or stop in it.
+ *
+ * - `changed`: the card was pushed (its trip, phase or gone moved);
+ * - `gapS`: seconds since this object's last wake today (0 for the first);
+ * - `feedAgeS`: how old the oldest arrivals reading it used was (-1: none);
+ * - `leaveShiftS`: how far the leave-by moved since the last wake (0 when
+ *   either had none), which a sooner wake would have caught sooner;
+ * - `lateS`: how long after its asked-for time the alarm ran.
+ */
+export interface WakeRow {
+  changed: boolean;
+  phase: string;
+  quality: string;
+  first: boolean;
+  gapS: number;
+  feedAgeS: number;
+  leaveShiftS: number;
+  lateS: number;
+}
+
+export function logTripWake(env: Env, r: WakeRow): void {
+  if (!analyticsEnabled(env)) return;
+  try {
+    env.AE!.writeDataPoint({
+      blobs: ['tripwake', r.changed ? 'pushed' : 'same', r.phase, r.quality, r.first ? 'first' : 'again'],
+      doubles: [r.gapS, r.feedAgeS, r.leaveShiftS, r.lateS],
+      indexes: ['tripwake'],
+    });
+  } catch {
+    // Same rule as above: a lost count never stops a wake.
+  }
+}
+
 /** One row of the daily active counts (usage.ts). */
 export interface ActiveRow {
   scope: 'all' | 'app' | 'version';
@@ -222,6 +270,40 @@ export function logActive(env: Env, row: ActiveRow): void {
   if (!analyticsEnabled(env)) return;
   try {
     env.AE!.writeDataPoint({ blobs: ['active', row.scope, row.name, row.day], doubles: [row.d1, row.d7, row.d30], indexes: ['active'] });
+  } catch {
+    // Same rule as above: a lost count never stops the cron.
+  }
+}
+
+/** One request that used something on its way out (legacy.ts). */
+export interface LegacyRow {
+  what: 'address' | 'path' | 'outdated';
+  client: string;
+  route: string;
+}
+
+export function logLegacy(env: Env, r: LegacyRow): void {
+  if (!analyticsEnabled(env)) return;
+  try {
+    env.AE!.writeDataPoint({ blobs: ['legacy', r.what, r.client, r.route], doubles: [1], indexes: ['legacy'] });
+  } catch {
+    // Same rule as above: a lost count never stops a request.
+  }
+}
+
+/** One setting's value and how many accounts have it, on a day (settings.ts). */
+export interface SettingRow {
+  setting: string;
+  value: string;
+  day: string;
+  n: number;
+  of: number;
+}
+
+export function logSetting(env: Env, r: SettingRow): void {
+  if (!analyticsEnabled(env)) return;
+  try {
+    env.AE!.writeDataPoint({ blobs: ['settings', r.setting, r.value, r.day], doubles: [r.n, r.of], indexes: ['settings'] });
   } catch {
     // Same rule as above: a lost count never stops the cron.
   }

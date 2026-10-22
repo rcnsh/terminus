@@ -70,7 +70,7 @@ NUS stops come in pairs on opposite sides of the road, a few metres apart (\`KR-
 - [GET /api/buses?svc=D2](${origin}/docs#/operations/getBuses): one service's live buses for a map, each at a stop or between two
 - [GET /api/line?svc=D1&stop=YIH](${origin}/docs#/operations/getLine): one service's stops in order, its buses on them, and its next bus at one stop
 - [GET /api/campus](${origin}/docs#/operations/getCampus): stops, route lines and colours, and destinations to search
-- [GET /api/stops/pairs](${origin}/docs#/operations/getStopPairs): every stop with its twin across the road, and where each side's buses go next
+- [GET /api/stops/pairs](${origin}/docs#/operations/getStopPairs): every stop with its opposite stop, and where each side's buses go next
 - [GET /api/status.json](${origin}/api/status.json): whether NUS's feed is working, without a key
 
 ## Reference

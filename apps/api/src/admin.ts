@@ -1,5 +1,5 @@
 /**
- * The operator dashboard's data (/admin/stats, shown by apps/web/public/admin).
+ * The operator dashboard's data (/api/admin/stats, shown by apps/web/public/admin).
  * Operator only: the x-health-token header holds HEALTH_TOKEN, or a session
  * from signing in with a passkey (passkey.ts).
  *
@@ -7,7 +7,8 @@
  * also queries Analytics Engine for answers and errors per day, the daily
  * active counts and the apps' error reports; without them those parts are
  * null and the page says how to turn them on. `collect` is the switches for
- * what's collected (collect.ts), `eta` the arrival times scored (eta.ts).
+ * what's collected (collect.ts), `eta` the arrival times scored (eta.ts),
+ * `model` the arrival-time model's days in shadow (etashadow.ts).
  */
 
 import type { Env } from './types.ts';
@@ -16,7 +17,9 @@ import { BETTER_STOP, BETTER_STOP_TEXT, REASONS, summarize } from './feedback.ts
 import { sessionOk } from './passkey.ts';
 import { aeSql } from './analytics.ts';
 import { collectState } from './collect.ts';
+import { json } from './http.ts';
 import { etaSummary } from './eta.ts';
+import { shadowSummary } from './etashadow.ts';
 
 const DAY = 86_400_000;
 
@@ -59,12 +62,13 @@ export function timingSafeEqual(given: string, secret: string): boolean {
 
 export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetch = fetch): Promise<Record<string, unknown>> {
   const db = env.DB;
-  const [upstream, incidents, analytics, collect, eta] = await Promise.all([
+  const [upstream, incidents, analytics, collect, eta, model] = await Promise.all([
     readUpstream(env),
     readIncidents(env),
     analyticsStats(env, fetchImpl),
     collectState(env),
     etaSummary(env, nowMs).catch((err) => ({ error: err instanceof Error ? err.message : String(err) })),
+    shadowSummary(env, nowMs).catch((err) => ({ error: err instanceof Error ? err.message : String(err) })),
   ]);
   const out: Record<string, unknown> = {
     now: new Date(nowMs).toISOString(),
@@ -81,14 +85,14 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
     analytics,
     collect,
     eta,
+    model,
   };
   if (!db) return out;
 
   const d1 = nowMs - DAY;
   const d7 = nowMs - 7 * DAY;
   const d30 = nowMs - 30 * DAY;
-  // One pass over each table, and every query in one round trip: the counts
-  // read whole tables, so asking each its own question read them many times.
+  // One pass over each table, and every query in one round trip: the counts read whole tables.
   // SUM of a comparison counts the rows where it's true (NULL counts none).
   const [u, p, s, k, f, o, dev, cli, sign, fb] = await db.batch([
     db
@@ -131,11 +135,14 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
       .bind(d7),
     db
       .prepare(
-        // App versions in use: the x-terminus-client header of devices seen this week.
-        `SELECT client, COUNT(*) AS n FROM sessions
-          WHERE kind = 'device' AND client IS NOT NULL AND last_seen > ? GROUP BY 1 ORDER BY n DESC LIMIT 20`,
+        // App versions in use: the x-terminus-client header each device last
+        // sent, by when it was last used. A device unused for 90 days is
+        // signed out, so the 90 days are every device still paired: a
+        // version at none there is one nothing can still be running.
+        `SELECT client, SUM(last_seen > ?1) AS n, SUM(last_seen > ?2) AS d30, SUM(last_seen > ?3) AS d90 FROM sessions
+          WHERE kind = 'device' AND client IS NOT NULL AND last_seen > ?3 GROUP BY 1 ORDER BY d90 DESC, n DESC LIMIT 40`,
       )
-      .bind(d7),
+      .bind(d7, d30, nowMs - 90 * DAY),
     db
       .prepare(
         // Per Singapore day, the last 30.
@@ -152,7 +159,7 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
   const n = (v: number | null | undefined) => v ?? 0;
   const [users, profiles, sessions, apiKeys] = [row(u), row(p), row(s), row(k)];
   const devices = dev.results as Array<{ platform: string; total: number; active7: number }>;
-  const clients = cli.results as Array<{ client: string; n: number }>;
+  const clients = cli.results as Array<{ client: string; n: number; d30: number; d90: number }>;
   const signups = sign.results as Array<{ day: string; n: number }>;
   const feedback = fb.results as Array<{
     id: string;
@@ -221,36 +228,56 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
 
 /** Answers, their quality, and errors per day for 14 days, the timelapse
  *  recorder's polls by what each cost NUS (logPoll), the daily active counts
- *  (usage.ts) and the apps' error reports (apperrors.ts), from Analytics
- *  Engine's SQL API. */
+ *  (usage.ts), the apps' error reports (apperrors.ts), what still uses
+ *  something on its way out (legacy.ts) and the settings' counts
+ *  (settings.ts), from Analytics Engine's SQL API. */
 async function analyticsStats(env: Env, fetchImpl: typeof fetch): Promise<Record<string, unknown> | null> {
   if (!env.ANALYTICS_TOKEN || !env.CF_ACCOUNT_ID) return null;
   const sql = (q: string) => aeSql(env, q, fetchImpl);
   const dataset = env.AE_DATASET || 'terminus';
   try {
-    const [daily, quality, errors, timelapse, active, appErrors, appErrorVersions] = await Promise.all([
-      // _sample_interval: each row may stand for several, at high volume.
-      sql(`SELECT toDate(timestamp) AS day, blob1 AS kind, SUM(_sample_interval) AS n FROM ${dataset}
+    const [dismissed, [daily, quality, errors, timelapse, active, appErrors, appErrorVersions, legacy, settings]] = await Promise.all([
+      dismissedCrashes(env),
+      Promise.all([
+        // _sample_interval: each row may stand for several, at high volume.
+        sql(`SELECT toDate(timestamp) AS day, blob1 AS kind, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '14' DAY AND blob1 IN ('answer', 'error')
            GROUP BY day, kind ORDER BY day`),
-      sql(`SELECT blob5 AS quality, SUM(_sample_interval) AS n FROM ${dataset}
+        sql(`SELECT blob5 AS quality, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '7' DAY AND blob1 = 'answer' GROUP BY quality ORDER BY n DESC`),
-      sql(`SELECT blob2 AS route, SUM(_sample_interval) AS n FROM ${dataset}
+        sql(`SELECT blob2 AS route, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '7' DAY AND blob1 = 'error' GROUP BY route ORDER BY n DESC LIMIT 10`),
-      sql(`SELECT toDate(timestamp) AS day, blob2 AS outcome, SUM(_sample_interval) AS n FROM ${dataset}
+        sql(`SELECT toDate(timestamp) AS day, blob2 AS outcome, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '14' DAY AND blob1 = 'timelapse' GROUP BY day, outcome ORDER BY day`),
-      // One row per day and name: max() in case a day was ever counted twice.
-      sql(`SELECT blob4 AS day, blob2 AS scope, blob3 AS name, max(double1) AS d1, max(double2) AS d7, max(double3) AS d30 FROM ${dataset}
+        // One row per day and name: max() in case a day was ever counted twice.
+        sql(`SELECT blob4 AS day, blob2 AS scope, blob3 AS name, max(double1) AS d1, max(double2) AS d7, max(double3) AS d30 FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '31' DAY AND blob1 = 'active' GROUP BY day, scope, name ORDER BY day`),
-      sql(`SELECT blob4 AS fingerprint, blob2 AS platform, blob5 AS type, blob6 AS message, blob7 AS stack,
+        sql(`SELECT blob4 AS fingerprint, blob2 AS platform, blob5 AS type, blob6 AS message, blob7 AS stack,
                   SUM(_sample_interval) AS n, SUM(_sample_interval * double2) AS fatal, max(timestamp) AS last FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '7' DAY AND blob1 = 'apperror'
            GROUP BY fingerprint, platform, type, message, stack ORDER BY n DESC LIMIT 25`),
-      sql(`SELECT blob4 AS fingerprint, blob3 AS version, blob8 AS os, SUM(_sample_interval) AS n FROM ${dataset}
+        sql(`SELECT blob4 AS fingerprint, blob3 AS version, blob8 AS os, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '7' DAY AND blob1 = 'apperror'
            GROUP BY fingerprint, version, os ORDER BY n DESC LIMIT 200`),
+        // What still uses the old address, old paths or too old an app (legacy.ts), and when it last did.
+        sql(`SELECT blob2 AS what, blob3 AS client, blob4 AS route, SUM(_sample_interval) AS n, max(timestamp) AS last FROM ${dataset}
+           WHERE timestamp > NOW() - INTERVAL '30' DAY AND blob1 = 'legacy'
+           GROUP BY what, client, route ORDER BY n DESC LIMIT 100`),
+        // Each setting's counts per day (settings.ts): max() in case a day was ever counted twice.
+        sql(`SELECT blob4 AS day, blob2 AS setting, blob3 AS value, max(double1) AS n, max(double2) AS of FROM ${dataset}
+           WHERE timestamp > NOW() - INTERVAL '31' DAY AND blob1 = 'settings' GROUP BY day, setting, value ORDER BY day`),
+      ]),
     ]);
-    return { daily, quality, errors, timelapse, active, appErrors: groupErrors(appErrors, appErrorVersions) };
+    return {
+      daily,
+      quality,
+      errors,
+      timelapse,
+      active,
+      appErrors: undismissed(groupErrors(appErrors, appErrorVersions), dismissed),
+      legacy,
+      settings,
+    };
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };
   }
@@ -304,4 +331,41 @@ export function groupErrors(rows: Record<string, unknown>[], versions: Record<st
   }
   for (const v of versions) out.get(String(v.fingerprint))?.versions.push({ version: String(v.version), os: String(v.os), n: Number(v.n) });
   return [...out.values()].sort((a, b) => b.n - a.n).map(({ top: _top, ...e }) => e);
+}
+
+const DISMISSED_KEY = 'config:crashes:dismissed';
+/** A dismissal outlives the dashboard's week of reports, then goes. */
+const DISMISSED_KEEP_MS = 8 * 86_400_000;
+
+/** Fingerprints the operator dismissed, each with when: { fingerprint: ms }. */
+export async function dismissedCrashes(env: Env): Promise<Record<string, number>> {
+  try {
+    const v = JSON.parse((await env.KV.get(DISMISSED_KEY)) ?? '{}');
+    return v && typeof v === 'object' ? v : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Analytics Engine's `max(timestamp)`, "2026-10-22 07:43:55" in UTC, as ms. */
+const aeMs = (t: string) => Date.parse(`${t.replace(' ', 'T')}Z`);
+
+/**
+ * The crashes still to look at: a dismissed one is hidden until a report
+ * comes in after it was dismissed, since that means it wasn't fixed.
+ */
+export function undismissed<T extends Record<string, unknown>>(crashes: T[], dismissed: Record<string, number>): T[] {
+  return crashes.filter((e) => !(dismissed[String(e.fingerprint)] >= aeMs(String(e.last))));
+}
+
+/** POST /api/admin/crashes/dismiss {fingerprint}: operator only. Analytics Engine can't delete a row, so the dashboard hides it. */
+export async function handleDismissCrash(req: Request, env: Env, nowMs: number): Promise<Response> {
+  if (!(await isOperator(env, req, nowMs))) return json({ error: 'not found' }, 404);
+  if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405, { allow: 'POST' });
+  const b = (await req.json().catch(() => null)) as { fingerprint?: unknown } | null;
+  const fingerprint = typeof b?.fingerprint === 'string' && /^[0-9a-f]{1,32}$/.test(b.fingerprint) ? b.fingerprint : null;
+  if (!fingerprint) return json({ error: 'fingerprint must be a crash report fingerprint' }, 400);
+  const kept = Object.entries(await dismissedCrashes(env)).filter(([, at]) => nowMs - at < DISMISSED_KEEP_MS);
+  await env.KV.put(DISMISSED_KEY, JSON.stringify(Object.fromEntries([...kept, [fingerprint, nowMs]])));
+  return new Response(null, { status: 204 });
 }

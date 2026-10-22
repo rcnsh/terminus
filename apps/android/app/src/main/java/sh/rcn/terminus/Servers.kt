@@ -15,9 +15,10 @@ import javax.net.ssl.SSLHandshakeException
  * build, the local dev stub. The developer menu (Settings, About) picks one; nothing can add one, so the menu can't send a token anywhere
  * but our own servers.
  *
- * The default is the address people see (terminus.run), the one that goes with the project if someone else takes it over. The other,
- * terminus.rcn.sh, is the backup: a request that can't reach one at all goes to the other ([order]), so a network that refuses one of them
- * doesn't stop the app.
+ * The default is the address people see (terminus.run), the one that goes with the project if someone else takes it over, and for now the
+ * only one. With a second site address built in, it would be the backup: a request that can't reach one at all goes to the other ([order]),
+ * so a network that refuses one of them doesn't stop the app. The old address, terminus.rcn.sh, isn't one: it's the owner's, so it doesn't
+ * go with the project.
  */
 internal object Servers {
     /** Plain HTTP to this phone or the emulator's host: the dev stub (scripts/dev-stub.mjs). */

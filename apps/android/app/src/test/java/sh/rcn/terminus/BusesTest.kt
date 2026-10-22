@@ -7,7 +7,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The Buses tab's data, from replies shaped like the API's (/arrivals, /me/nearby, /line). */
+/** The Buses tab's data, from replies shaped like the API's (/api/arrivals, /api/me/nearby, /api/line). */
 class BusesTest {
     private val arrivals =
         JSONObject(
@@ -243,6 +243,9 @@ class BusesTest {
         val full = (1..8).map { "S$it" }
         assertEquals("a ninth isn't added", full, Pins.toggle(full, "S9"))
         assertEquals(full - "S3", Pins.toggle(full, "S3"))
+        // Made again on a profile where another device pinned it too: still pinned, not toggled off.
+        assertEquals(listOf("A", "B"), Pins.set(listOf("A", "B"), "B", on = true))
+        assertEquals(listOf("A"), Pins.set(listOf("A"), "B", on = false))
     }
 
     @Test
@@ -321,7 +324,7 @@ class BusesTest {
     }
 
     @Test
-    fun aTwinOnlyNearByIsNotAcrossTheRoad() {
+    fun anOppositeOnlyNearByIsNotAcrossTheRoad() {
         val b =
             Board.parse(
                 JSONObject(

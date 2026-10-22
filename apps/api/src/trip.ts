@@ -26,15 +26,19 @@ import { isoSeconds, shortStop } from './format.ts';
 
 export type Phase = 'idle' | 'due' | 'heading' | 'waiting' | 'riding' | 'missed' | 'arrived';
 
-/** What a client can send to /me/signal. */
+/** What a client can send to /api/me/signal. */
 export const SIGNALS = ['boarded', 'missed', 'skipped', 'left', 'arrived', 'location', 'reset', 'away', 'back'] as const;
 export type SignalKind = (typeof SIGNALS)[number];
 
-/** The bus you said you're on, as the answer had it when you said so. */
-export interface Boarded {
+/**
+ * A trip's plan: the bus it is about, the same on every device. Set when the
+ * answer plans one (plan.ts) or when you say you're on a bus, and settled by
+ * its leave-by.
+ */
+export interface Plan {
   svc: string;
   stop: string;
-  /** ISO: when it left, and when it gets you there. */
+  /** ISO: when it leaves the stop (`arrive`, below: when it gets you there). */
   board: string | null;
   /** ISO: the leave-by time that went with it. From then on the trip is
    *  about this bus, whatever later answers suggest (see next.ts). */
@@ -43,7 +47,7 @@ export interface Boarded {
    *  you. A plan without one never replaces a plan with one. */
   located?: boolean;
   arrive: string | null;
-  /** The leave-by's own reason and whether it's a timetable estimate, so a
+  /** The leave-by's own reason and whether it's an estimate, so a
    *  plan shown again (see `leaveOf`) reads as it did when it was made. */
   note?: string;
   estimated?: boolean;
@@ -70,7 +74,7 @@ export interface Boarded {
    * further) and its `arrive` the end of the trip. The fields above are then
    * the first bus alone, `arrive` and `alightCode` at the change.
    */
-  change?: Boarded;
+  change?: Plan;
   /** On a trip's second bus: seconds across the road to its stop from where the first drops you. */
   crossS?: number;
 }
@@ -84,7 +88,7 @@ export function isHomeKey(key: string): boolean {
  * A plan as a leave-by again: what every device shows once one device's plan
  * is the trip's (see next.ts), instead of each working out its own bus.
  */
-export function leaveOf(b: Boarded): Leave {
+export function leaveOf(b: Plan): Leave {
   const c = b.change;
   if (c) {
     // The first bus to catch, the trip's end where the second gets you: where
@@ -135,21 +139,21 @@ export function leaveOf(b: Boarded): Leave {
  * Where you get off the bus you're on: across the road when the plan said so,
  * else the stop it drops you at ("UTown"), never the class ("GEA1000 @ UTown").
  */
-export function offStop(b: Boarded): string | null {
+export function offStop(b: Plan): string | null {
   if (b.off) return b.off;
   const s = b.alightCode ? indexGraph(GRAPH).byCode.get(b.alightCode) : undefined;
   return s ? shortStop(s.name) : null;
 }
 
 /** When the trip ends, the second bus's arrival on a trip that changes buses. */
-export const tripEnd = (b: Boarded): string | null => (b.change ? b.change.arrive : b.arrive);
+export const tripEnd = (b: Plan): string | null => (b.change ? b.change.arrive : b.arrive);
 
 /**
  * The bus a leave-by's change of buses goes on to, as a plan's second bus
- * (Boarded.change): to `alightCode`, the trip's end, unless the leave-by
+ * (Plan.change): to `alightCode`, the trip's end, unless the leave-by
  * names where it gets you off.
  */
-export function secondBusOf(l: Pick<Leave, 'change' | 'arrive' | 'off' | 'offCode' | 'toCode'>, alightCode: string): Boarded | undefined {
+export function secondBusOf(l: Pick<Leave, 'change' | 'arrive' | 'off' | 'offCode' | 'toCode'>, alightCode: string): Plan | undefined {
   const c = l.change;
   if (!c) return undefined;
   return {
@@ -172,7 +176,7 @@ export function secondBusOf(l: Pick<Leave, 'change' | 'arrive' | 'off' | 'offCod
  * planned second bus, that one has gone, so a guess from when you get there,
  * a bus within a headway, and the trip's end moved with it.
  */
-export function laterChange(c: Boarded | undefined, reach: string | null | undefined, shiftMs: number): Boarded | undefined {
+export function laterChange(c: Plan | undefined, reach: string | null | undefined, shiftMs: number): Plan | undefined {
   if (!c?.board || !reach || shiftMs <= 0) return c;
   const there = Date.parse(reach) + shiftMs;
   const by = there - Date.parse(c.board);
@@ -188,7 +192,7 @@ export const CHANGE_GRACE_MS = 30_000;
  * time, or a headway after it when that time is only a guess (there by
  * then, and a bus within a headway).
  */
-export function secondLeavesMs(c: Boarded): number | null {
+export function secondLeavesMs(c: Plan): number | null {
   if (!c.board) return null;
   const at = Date.parse(c.board);
   return c.estimated ? at + Math.max(60, headwayFor(GRAPH, c.svc)) * 1000 : at;
@@ -202,7 +206,7 @@ export function secondLeavesMs(c: Boarded): number | null {
  * The second bus's time should be the feed's where it has one (secondBus in
  * next.ts), so a bus still due there keeps you at the change.
  */
-export function rideStage(b: Boarded, nowMs: number, firstLate = false): 'first' | 'change' | 'second' {
+export function rideStage(b: Plan, nowMs: number, firstLate = false): 'first' | 'change' | 'second' {
   if (!b.change) return 'first';
   if (firstLate || !b.arrive || nowMs < Date.parse(b.arrive)) return 'first';
   const leaves = secondLeavesMs(b.change);
@@ -222,7 +226,7 @@ export interface Ride {
 }
 
 /** The ride on the bus you're on, when its stops are known. */
-export function rideOf(b: Boarded): Ride | null {
+export function rideOf(b: Plan): Ride | null {
   if (!b.stopCode || !b.alightCode || !b.board || !b.arrive) return null;
   const idx = indexGraph(GRAPH);
   const codes = rideStops(idx, b.svc, b.stopCode, b.alightCode);
@@ -244,7 +248,7 @@ export function rideOf(b: Boarded): Ride | null {
  * the same place twice), no place on the line the fix could be may be
  * within that walk. Shuttles only: public buses have no road line here.
  */
-export function seenOnBus(b: Boarded, lat: number, lon: number, nowMs: number): boolean {
+export function seenOnBus(b: Plan, lat: number, lon: number, nowMs: number): boolean {
   if (!b.board || !b.stopCode || !b.alightCode || b.paid) return false;
   const idx = indexGraph(GRAPH);
   const r = idx.routes.get(b.svc);
@@ -276,19 +280,19 @@ export interface TripRecord {
   away?: boolean;
   /** The trip's name, for "Undo: going to CS2030". */
   label?: string;
-  boarded?: Boarded;
+  boarded?: Plan;
   /** The departure you missed, ISO. */
   missed?: string | null;
 }
 
-/** Today's signals, by trip key (classKey, or home:<minutes>). */
+/** Today's signals, by trip key (classKey, or a home key: see isHomeKey). */
 export interface DayRecord {
   date: string;
   trips: Record<string, TripRecord>;
   /** The bus each trip's plan said to catch, kept from when the trip was due
    *  and frozen once it left, so a trip taken to be on that bus ("On the
    *  D2") stays about it after the answer has moved on to the next one. */
-  plans?: Record<string, Boarded>;
+  plans?: Record<string, Plan>;
   /** When the object next wakes to push (epoch ms), or absent when it
    *  won't: the Worker asks again only when that would be sooner
    *  (needsWatch). Push only. */
@@ -314,7 +318,7 @@ export interface TripUpdate {
   deleteAt: number;
   /** Trip records; null deletes one. */
   items?: Array<{ key: string; rec: TripRecord | null }>;
-  plans?: Record<string, Boarded>;
+  plans?: Record<string, Plan>;
   /** Wake at `at` (no later than a wake already pending) to push the card. */
   watch?: { userId: string; at: number };
 }

@@ -14,7 +14,9 @@ serves the website in [`apps/web`](../web).
 - **Cron:** every 15 minutes, checks the NUS feed (and LTA DataMall, when set
   up) is up and emails if it isn't, keeps the academic calendar current, and
   does the housekeeping: old sign-in codes, unused anonymous accounts and the
-  like.
+  like. The beta's cron asks neither feed: it reads the failures its own
+  traffic noted. The stable site's pings a heartbeat URL after each run, so
+  a cron that stops is noticed.
 
 ## Run it
 

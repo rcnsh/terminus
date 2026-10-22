@@ -1,5 +1,5 @@
 /**
- * The /me/next answer at its edges: operating hours, the age of an answer,
+ * The /api/me/next answer at its edges: operating hours, the age of an answer,
  * which stops are tried, the walk the whole way, and what is shown as live.
  * On the real stop graph (data/stops.json), as the answer is made.
  */
@@ -391,9 +391,9 @@ test('riding a public bus reads its arrival from the public graph, by its route'
   const pidx = indexGraph(GRAPH_PUBLIC);
   const alight = [...pidx.routes.get('151/1').pos.keys()][1];
   const asked = [];
+  // As the Trip object builds them: no public graph among the deps.
   const deps = {
     graph: GRAPH,
-    publicGraph: GRAPH_PUBLIC,
     answerFor: async () => {
       throw new Error('not used');
     },
@@ -409,6 +409,34 @@ test('riding a public bus reads its arrival from the public graph, by its route'
 
   // A shuttle ride still asks the shuttle graph.
   await nextArrival({}, {}, deps, { svc: 'D2', stop: 'x', board: null, arrive: null, alightCode: 'COM3' }, nowMs);
+  assert.equal(asked[1], GRAPH);
+});
+
+test('a public second bus is looked for in the public graph, a shuttle one in the shuttle graph', async () => {
+  const { secondBus } = await import('../src/next.ts');
+  const nowMs = Date.parse('2026-08-27T02:00:00Z');
+  const pidx = indexGraph(GRAPH_PUBLIC);
+  const stopCode = [...pidx.routes.get('151/1').pos.keys()][0];
+  const board = new Date(nowMs + 240_000).toISOString();
+  const asked = [];
+  const deps = {
+    graph: GRAPH,
+    answerFor: async () => {
+      throw new Error('not used');
+    },
+    collectArrivals: async (_env, _ctx, codes, at, graph) => {
+      asked.push(graph);
+      const arrivals = [{ svc: '151/1', etaS: 240, crowd: null, plate: null, berth: null }];
+      return new Map(codes.map((code) => [code, { code, arrivals, fetchedAt: at, stale: false, available: true }]));
+    },
+  };
+  const change = { svc: '151', route: '151/1', paid: true, stop: 'x', stopCode, board, arrive: null };
+  const b = { svc: 'D2', stop: 'y', board: null, arrive: null, change };
+  const out = await secondBus({}, {}, deps, b, nowMs);
+  assert.equal(asked[0], GRAPH_PUBLIC, 'asked of the graph that has LTA');
+  assert.equal(out.live, true);
+
+  await secondBus({}, {}, deps, { ...b, change: { svc: 'D2', stop: 'x', stopCode: 'COM3', board, arrive: null } }, nowMs);
   assert.equal(asked[1], GRAPH);
 });
 

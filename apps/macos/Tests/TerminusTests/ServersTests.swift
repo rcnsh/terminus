@@ -63,10 +63,12 @@ private let site = ["https://terminus.run", "https://terminus.rcn.sh"]
     #expect(!Servers.menuAlways(debug: false, beta: false))
 }
 
-@Test func theStableSiteDefaultsToItsOwnAddressWithTheOldOneAsBackup() {
+@Test func theStableSiteDefaultsToItsOwnAddressWithNoBackup() {
     // No TerminusAPI or TerminusBackup in a test bundle: the stable site's.
     #expect(Servers.defaultBase == "https://terminus.run")
-    #expect(Servers.backupBase == "https://terminus.rcn.sh")
+    #expect(Servers.backupBase == nil)
+    #expect(Servers.all(default: Servers.defaultBase, backup: nil, debug: false) == ["https://terminus.run"])
+    #expect(Servers.order("https://terminus.run", in: ["https://terminus.run"], detour: nil) == ["https://terminus.run"])
     #expect(Api.site == "https://terminus.run")
     #expect(Api.linkBase == "https://terminus.run")
 }

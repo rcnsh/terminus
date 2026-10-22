@@ -14,8 +14,8 @@ import javax.crypto.spec.GCMParameterSpec
 import org.json.JSONObject
 
 /**
- * The app's own settings and state on this phone: Store's, and Lang's, Theme's, CardStyle's and CrashReports' keys beside them, which a
- * sign-out keeps ([Store.clear]).
+ * The app's own settings and state on this phone: Store's, and Lang's, Theme's, CardStyle's, NewToNus' and CrashReports' keys beside them,
+ * which a sign-out keeps ([Store.clear]).
  */
 internal fun terminusPrefs(ctx: Context): SharedPreferences = ctx.applicationContext.getSharedPreferences("terminus", Context.MODE_PRIVATE)
 
@@ -101,7 +101,7 @@ class Store(context: Context) {
                     .putInt(KEY_REFRESH_FAILS, 0)
                     .remove(KEY_ERROR)
             }
-            // The app shortcuts follow the saved places (a no-op when they
+            // The app shortcuts follow the favourites (a no-op when they
             // haven't changed). Inside the lock: a sign-out's [clear] empties
             // them, and must not be undone by an answer kept just before it.
             runCatching { Shortcuts.update(app, answer.places) }
@@ -110,8 +110,8 @@ class Store(context: Context) {
     }
 
     /**
-     * Today's plan (/me/day) as last fetched, for when the phone is offline (OfflineDay), and the plan read from it; one this version can't
-     * read throws [ParseError] and isn't kept. Null, and nothing kept, when [sentWith] is no longer this phone's token, as for
+     * Today's plan (/api/me/day) as last fetched, for when the phone is offline (OfflineDay), and the plan read from it; one this version
+     * can't read throws [ParseError] and isn't kept. Null, and nothing kept, when [sentWith] is no longer this phone's token, as for
      * [saveAnswer]. [lang] is the language the server wrote it in ([Api.dayJson]), in [L.header]'s form: one in another language than the
      * app's is fetched again ([dayLang]).
      */
@@ -139,9 +139,9 @@ class Store(context: Context) {
     }
 
     /**
-     * The buses near you (/api/nearby) as last fetched, for the Nearby widget and the big widget's next buses: one board for every widget,
-     * whoever fetched it (a widget's ↻, the background refresh, the Buses tab). One this version can't read throws [ParseError] and isn't
-     * kept; nothing is kept when [sentWith] is no longer this phone's token.
+     * The buses near you (/api/me/nearby) as last fetched, for the Nearby widget and the big widget's next buses: one board for every
+     * widget, whoever fetched it (a widget's ↻, the background refresh, the Buses tab). One this version can't read throws [ParseError] and
+     * isn't kept; nothing is kept when [sentWith] is no longer this phone's token.
      */
     fun saveNearby(json: JSONObject, fetchedAtMs: Long, sentWith: String): List<NearbyStop>? {
         val stops = parseNearby(json)
@@ -199,8 +199,8 @@ class Store(context: Context) {
         set(value) = prefs.edit { putBoolean(KEY_NEEDS_SETUP, value) }
 
     /**
-     * Signed in without an answer from /me: whether the account needs setup isn't known yet. The next /me (AccountViewModel.refresh)
-     * settles it.
+     * Signed in without an answer from /api/me: whether the account needs setup isn't known yet. The next /api/me
+     * (AccountViewModel.refresh) settles it.
      */
     var setupUnknown: Boolean
         get() = prefs.getBoolean(KEY_SETUP_UNKNOWN, false)
@@ -236,7 +236,17 @@ class Store(context: Context) {
             !prefs.contains(KEY_TOKEN) &&
             listOf(KEY_ANSWER, KEY_DAY, KEY_NEARBY, KEY_EMAIL, KEY_ADDED, KEY_DEST_USE, KEY_PUSH, KEY_ANON).any(prefs::contains)
 
-    /** The class (its start, epoch ms) the last heads-up was for: one per class. */
+    /**
+     * Signed in, maybe to another account than the last (a guest signing in with an email): the answer, today's plan and the board kept for
+     * the widgets were that one's, and its places named the shortcuts. The widgets fetch this one's rather than show them.
+     */
+    fun forgetAnswers() =
+        synchronized(Store) {
+            prefs.edit(commit = true) { ANSWER_KEYS.forEach { remove(it) } }
+            runCatching { Shortcuts.update(app, emptyList()) }
+        }
+
+    /** The trip the last heads-up was for (its key hashed, or an older note of a class by its start, epoch ms): one per trip. */
     var leaveNotifiedFor: Long
         get() = prefs.getLong(KEY_LEAVE_NOTIFIED, 0)
         set(value) = prefs.edit { putLong(KEY_LEAVE_NOTIFIED, value) }
@@ -246,7 +256,7 @@ class Store(context: Context) {
         get() = prefs.getString(KEY_ALERTED, null)
         set(value) = prefs.edit { putString(KEY_ALERTED, value) }
 
-    /** The Firebase token last sent to /me/push, so it's only sent when it changes (or now and then, Push). */
+    /** The Firebase token last sent to /api/me/push, so it's only sent when it changes (or now and then, Push). */
     var pushToken: String?
         get() = prefs.getString(KEY_PUSH, null)
         set(value) = prefs.edit { putString(KEY_PUSH, value) }
@@ -318,15 +328,16 @@ class Store(context: Context) {
         }
 
     /**
-     * Signing out: the account's things go; the phone's language, theme, card style, the intent key, the server chosen (Servers) and a
-     * sign-in set aside for the other side of the dev stub stay.
+     * Signing out: the account's things go; the phone's language, theme, card style, New to NUS, the intent key, the server chosen
+     * (Servers) and a sign-in set aside for the other side of the dev stub stay.
      */
     fun clear() =
         synchronized(Store) {
             val keep =
-                listOf(KEY_LANG, KEY_THEME, CardStyle.KEY, KEY_INTENT, Servers.KEY_SERVER, KEY_TOKEN_SITE, KEY_TOKEN_LOCAL).associateWith {
-                    prefs.getString(it, null)
-                }
+                listOf(KEY_LANG, KEY_THEME, CardStyle.KEY, NewToNus.KEY, KEY_INTENT, Servers.KEY_SERVER, KEY_TOKEN_SITE, KEY_TOKEN_LOCAL)
+                    .associateWith {
+                        prefs.getString(it, null)
+                    }
             val menu = prefs.getBoolean(Servers.KEY_MENU, false)
             // This phone's choice, not the account's.
             val crashReports = prefs.getBoolean(CrashReports.KEY_ENABLED, true)
@@ -443,5 +454,20 @@ class Store(context: Context) {
         private const val KEY_ALERTED = "leave-alerted"
         private const val KEY_ANON = "anonymous"
         private const val KEY_SIGNED_OUT = "signed-out"
+
+        /** What [forgetAnswers] drops: the widgets' answer, today's plan and the board near you, with when and how each was fetched. */
+        private val ANSWER_KEYS =
+            listOf(
+                KEY_ANSWER,
+                KEY_FETCHED,
+                KEY_ASKED,
+                KEY_ERROR,
+                KEY_DAY,
+                KEY_DAY_AT,
+                KEY_DAY_LANG,
+                KEY_NEARBY,
+                KEY_NEARBY_AT,
+                KEY_NEARBY_ERROR,
+            )
     }
 }

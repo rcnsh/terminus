@@ -27,10 +27,10 @@ import sh.rcn.terminus.widget.redrawWidgets
  * Push: the server says when the card changes, so the phone doesn't have to keep asking.
  *
  * Firebase Cloud Messaging, only on a phone with Google Play services and a build that has the Firebase config (BuildConfig.FIREBASE_*). A
- * push is a nudge (`{kind: 'card', phase}`); the app fetches /me/next itself and redraws the widgets and the trip's notification from it.
- * Everything else (the heads-up alarm, the widget refresh) still works without it. The one other kind, `term`, is the reminder to import a
- * new semester's timetable, worded by the server in both languages. The push carries no words, so none pass through Google: the app fetches
- * them (GET /me/notice).
+ * push is a nudge (`{kind: 'card', phase}`); the app fetches /api/me/next itself and redraws the widgets and the trip's notification from
+ * it. Everything else (the heads-up alarm, the widget refresh) still works without it. The one other kind, `term`, is the reminder to
+ * import a new semester's timetable, worded by the server in both languages. The push carries no words, so none pass through Google: the
+ * app fetches them (GET /api/me/notice).
  */
 object Push {
     /** This build has Firebase, and the phone has Play services. */
@@ -239,8 +239,8 @@ object TermReminder {
     }
 
     /**
-     * The title and body in the app's language, from the push (an older server) or /me/notice; null with no title to show, rather than a
-     * blank notification.
+     * The title and body in the app's language, from /api/me/notice, or from the push from an older server; null with no title to show,
+     * rather than a blank notification.
      */
     fun words(data: Map<String, String>, zh: Boolean): Pair<String, String>? {
         val title = (if (zh) data["zhTitle"] else data["title"])?.takeIf { it.isNotBlank() } ?: return null

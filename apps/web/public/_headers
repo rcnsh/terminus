@@ -4,11 +4,12 @@
 # no CSP is needed here. The pages in the folders below still go through
 # the Worker, which sets the same headers again (and the CSP).
 #
-# Two rules that match one file add their headers twice, so the rules
-# don't overlap. Cache-Control: left alone, a file is asked about again
-# on every load (max-age=0, must-revalidate), which suits files whose
-# name never changes. /vendor/ folders carry their version, so a browser
-# keeps them for a year without asking; fonts change about never.
+# Two rules that match one file both apply, so a header is set in only
+# one of them: /assets/fonts/* adds only Cache-Control. Cache-Control:
+# left alone, a file is asked about again on every load (max-age=0,
+# must-revalidate), which suits files whose name never changes. /vendor/
+# folders carry their version, so a browser keeps them for a year without
+# asking; fonts change about never.
 /assets/*
   X-Content-Type-Options: nosniff
   Strict-Transport-Security: max-age=31536000; includeSubDomains

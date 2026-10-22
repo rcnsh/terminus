@@ -1,14 +1,7 @@
 /**
- * terminus -- answers one question: when is my bus, and should I run.
- *
- * Fetch-on-demand with a 15-second edge cache; no poll loop for answers.
- * Workers has no long-lived process and Cron Triggers bottom out at
- * one-minute granularity. The one poller of the feed is the timelapse
- * recorder (timelapse.ts): a Durable Object on its own alarm, at most one
- * call per service per 30 s, through the same cache, inside fixed hours,
- * behind a kill switch. It is the exception, not a pattern to copy. The
- * cron's health check (monitor.ts) and each push user's Trip object
- * (tripdo.ts) also read on a schedule, a call or a card at a time.
+ * terminus: answers one question, when is my bus and should I run. Fetch on
+ * demand through a 15-second edge cache, with no poll loop. See internals.md,
+ * *How it works*, and CLAUDE.md rule 2 for the few reads made on a schedule.
  */
 
 import type { Env, ResolveInput } from './types.ts';
@@ -22,7 +15,7 @@ import { boardAsOf, boardAt, displayName, indexGraph, serviceEndsAt, serviceResu
 import { buildCampusMap, buildDestinations, ROUTE_COLORS } from './campus.ts';
 import { busesOnLine, lineStops, trackedBuses } from './buses.ts';
 import { stopPairs } from './pairs.ts';
-import { adminStats, holdsHealthToken, isOperator } from './admin.ts';
+import { adminStats, handleDismissCrash, holdsHealthToken, isOperator } from './admin.ts';
 import { handleCollect } from './collect.ts';
 import { handleAppError } from './apperrors.ts';
 import { handlePasskey } from './passkey.ts';
@@ -49,8 +42,9 @@ import { apnsEnabled } from './apns.ts';
 import { handleTimelapse } from './timelapse.ts';
 import { scopeCache } from './edgecache.ts';
 
-import { GRAPH, GRAPH_PUBLIC, twinOf } from './graph.ts';
+import { GRAPH, GRAPH_PUBLIC, oppositeOf } from './graph.ts';
 import { appSiteAssociation, isBeta, linkOrigin, markBeta, movedApi, movedPage } from './site.ts';
+import { noteLegacy } from './legacy.ts';
 import { answerFor, arrivedAnswer, collectArrivals, needsSetupAnswer } from './answer.ts';
 import { lang, langOfRequest, m, withLang } from './i18n.ts';
 import type { Lang } from './i18n.ts';
@@ -58,8 +52,8 @@ import type { Lang } from './i18n.ts';
 // Pure functions of the static GRAPH, computed once per isolate on first
 // use (not at module scope: every cold start would pay for them, ~1000
 // destinations included, whatever it was started for), served with a long
-// client cache, same spirit as GRAPH itself: /stops/pairs here, /campus in
-// campusBody.
+// client cache, same spirit as GRAPH itself: /api/stops/pairs here, /api/campus in
+// handleCampus.
 let stopPairsMemo: ReturnType<typeof stopPairs> | null = null;
 
 export { GRAPH, answerFor, arrivedAnswer, collectArrivals, coordsFrom, numParam };
@@ -107,7 +101,7 @@ async function handleNext(url: URL, env: Env, ctx: ExecutionContext, nowMs: numb
 
   // With coordinates but no destination, `to` stays null and the resolver
   // simply reports the next buses at the nearest stop. `?public=1` counts
-  // the public buses too, as an account's `publicBuses` does for /me/next.
+  // the public buses too, as an account's `publicBuses` does for /api/me/next.
   const input: ResolveInput = {
     lat,
     lon,
@@ -209,7 +203,7 @@ async function handleCampus(req: Request): Promise<Response> {
 /**
  * GET /api/arrivals?stop=<code> -- what is coming at one stop, for the map's
  * tap-a-stop popover. Goes through the same per-stop 15s edge cache as
- * /next, so a map open does not cost more than checking that one stop would
+ * /api/next, so a map open does not cost more than checking that one stop would
  * on its own -- there is no bulk "every stop at once" fetch anywhere.
  */
 async function handleArrivals(url: URL, env: Env, ctx: ExecutionContext, nowMs: number): Promise<Response> {
@@ -221,16 +215,16 @@ async function handleArrivals(url: URL, env: Env, ctx: ExecutionContext, nowMs: 
   const stop = idx.byCode.get(code);
   if (!stop) return json({ error: 'unknown stop', stop: code }, 400);
 
-  // Same failure handling as /next: a rejected fetch means "we never reached
+  // Same failure handling as /api/next: a rejected fetch means "we never reached
   // the feed", not "no bus is coming" -- those are different answers, and
-  // /next never lets this surface as a 500, so /arrivals must not either.
+  // /api/next never lets this surface as a 500, so /api/arrivals must not either.
   const sa = (await collectArrivals(env, ctx, [code], nowMs, graph)).get(code)!;
   // `?stopped=1`: the services not running now too, for the Buses tab.
   const board = boardAt(graph, idx, code, sa, nowMs, { stopped: url.searchParams.get('stopped') === '1' });
   return json({
-    // Its twin, for "This side | Across the road" (or the twin's name, when
+    // Its opposite stop, for "This side | Across the road" (or the other stop's name, when
     // it's only near rather than across).
-    stop: { code: stop.code, name: stop.name, longName: displayName(stop, stop.code), ...twinOf(stop, idx.byCode) },
+    stop: { code: stop.code, name: stop.name, longName: displayName(stop, stop.code), ...oppositeOf(stop, idx.byCode) },
     board,
     // As old as the times on the board (counted from now in boardAt).
     asOf: new Date(boardAsOf([sa], nowMs)).toISOString(),
@@ -241,7 +235,7 @@ async function handleArrivals(url: URL, env: Env, ctx: ExecutionContext, nowMs: 
 /**
  * GET /api/buses?svc=<service> -- where that service's buses are now, for the
  * map. One upstream call per service per 5 s however many people watch it
- * (getBuses). Like /arrivals, an unreachable feed is `available: false`, not
+ * (getBuses). Like /api/arrivals, an unreachable feed is `available: false`, not
  * an error and not "no buses".
  */
 async function handleBuses(url: URL, env: Env, ctx: ExecutionContext, nowMs: number): Promise<Response> {
@@ -265,8 +259,8 @@ async function handleBuses(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
 /**
  * GET /api/line?svc=<service>[&stop=<code>] -- one service's whole line, for a
  * service's page: its stops in route order, its buses placed on that list,
- * and with `stop`, that service's board row there. Costs what /buses does,
- * plus one /arrivals read with `stop`, both through their caches. No times
+ * and with `stop`, that service's board row there. Costs what /api/buses does,
+ * plus one /api/arrivals read with `stop`, both through their caches. No times
  * are worked out for the other stops: only the feed's own are shown.
  */
 async function handleLine(url: URL, env: Env, ctx: ExecutionContext, nowMs: number): Promise<Response> {
@@ -280,7 +274,7 @@ async function handleLine(url: URL, env: Env, ctx: ExecutionContext, nowMs: numb
 
   const [live, sa] = await Promise.all([
     getBuses(env, ctx, svc, nowMs).catch(() => null),
-    // A rejected fetch is "never reached the feed", as on /arrivals.
+    // A rejected fetch is "never reached the feed", as on /api/arrivals.
     code ? collectArrivals(env, ctx, [code], nowMs, GRAPH).then((m) => m.get(code)) : Promise.resolve(undefined),
   ]);
   const placed = live ? await trackedBuses(GRAPH, svc, live, ctx) : [];
@@ -371,7 +365,7 @@ async function handleStatus(env: Env, nowMs: number): Promise<Response> {
 async function handleHealth(req: Request, url: URL, env: Env, nowMs: number): Promise<Response> {
   const idx = indexGraph(GRAPH);
   const t = sgt(nowMs);
-  // Read fresh, not through /status.json's minute-long memo: the uptime
+  // Read fresh, not through /api/status.json's minute-long memo: the uptime
   // check and the operator want the record as it is.
   const u = await readUpstream(env);
   const cronStale = u ? nowMs - u.checkedAt > CRON_STALE_MS : null;
@@ -436,7 +430,7 @@ async function versionLookup(env: Env, nowMs: number): Promise<Record<string, un
   };
 }
 
-const ME_DEPS: MeDeps = { graph: GRAPH, publicGraph: GRAPH_PUBLIC, answerFor, collectArrivals };
+const ME_DEPS: MeDeps = { answerFor, collectArrivals };
 
 /** Routes that need an API key or a signed-in account. */
 const KEYED = ['/api/next', '/api/trip', '/api/arrivals', '/api/buses', '/api/line', '/api/campus', '/api/stops/pairs'];
@@ -453,6 +447,8 @@ export default {
     scopeCache(env);
     // Every word the server writes is in this request's language (i18n.ts).
     const [res, written] = await withLang(langOfRequest(req), async () => [await route(req, env, ctx), lang()] as const);
+    // What still uses the old address, the old paths or an app too old to serve (legacy.ts).
+    noteLegacy(env, ctx, req, res.status);
     const path = new URL(req.url).pathname;
     // A redirect or a download body passes through untouched apart from headers.
     const out = withSecurityHeaders(res, path);
@@ -487,6 +483,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
         url.pathname === '/api/status.json' ||
         url.pathname === '/api/admin/stats' ||
         url.pathname === '/api/admin/collect' ||
+        url.pathname === '/api/admin/crashes/dismiss' ||
         url.pathname === '/api/errors' ||
         url.pathname.startsWith('/api/admin/passkey/') ||
         url.pathname.startsWith('/download/') ||
@@ -500,7 +497,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
     // and the map alone asks every 5 s. A key has its own ceiling wherever
     // it's used from; a request with neither is limited by IP.
     if (keyed) {
-      // /buses, which the map asks every 5 s: who it is, remembered a little
+      // /api/buses, which the map asks every 5 s: who it is, remembered a little
       // while (recentCallerFor says what that costs). D1 failing there is
       // the 503 the catch below gives.
       const { caller, down } =
@@ -527,7 +524,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
           'www-authenticate': 'Bearer realm="terminus"',
         });
       }
-      // As under /me: an app older than config:minClient is told to update.
+      // As under /api/me: an app older than config:minClient is told to update.
       if (caller.kind === 'account' && (await clientOutdated(env, req, nowMs))) return json(UPDATE_REQUIRED, 426);
     }
     const dl = await handleDownload(url.pathname, env, url);
@@ -596,13 +593,16 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
       case '/api/admin/collect':
         // The dashboard's switches for what's collected (collect.ts).
         return await handleCollect(req, env, nowMs);
+      case '/api/admin/crashes/dismiss':
+        // Hides a crash report from the dashboard (Analytics Engine can't delete one).
+        return await handleDismissCrash(req, env, nowMs);
       case '/api/errors':
         // Crash and error reports from the apps and the website, with no one's name on them.
         return await handleAppError(req, env);
       case '/api/campus':
         return await handleCampus(req);
       case '/api/stops/pairs':
-        // Static like /campus: changes only with a new scrape.
+        // Static like /api/campus: changes only with a new scrape.
         return jsonCached((stopPairsMemo ??= stopPairs(GRAPH)), 3600, 'private');
       case '/api/arrivals':
         return await handleArrivals(url, env, ctx, nowMs);
@@ -625,7 +625,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
     // dashboard. The path only: the query can hold coordinates.
     console.error('unhandled', req.method, url.pathname, err instanceof Error ? (err.stack ?? err.message) : String(err));
     logError(env, url.pathname);
-    // D1 down for a moment (on /me/*, say) is worth trying again; the apps
+    // D1 down for a moment (on /api/me/*, say) is worth trying again; the apps
     // read a 503 that way, and a 500 as a fault.
     if (d1Unavailable(err)) return json({ error: ACCOUNTS_DOWN }, 503, { 'retry-after': '30' });
     return json({ error: 'something went wrong on our side' }, 500);

@@ -18,8 +18,8 @@ export const isBeta = (env: Env): boolean => siteOrigin(env) !== STABLE_ORIGIN;
 /**
  * Where links handed to people point: sign-in links, the new-device email,
  * an error's "create a key at". LINK_ORIGIN when set, for if a network
- * refuses terminus.run (NUS Wi-Fi reset connections to it in October 2026),
- * so a link tapped there still opens; else the site's own.
+ * refuses terminus.run, so a link tapped there still opens; else the site's
+ * own.
  */
 export const linkOrigin = (env: Env): string => env.LINK_ORIGIN || siteOrigin(env);
 
@@ -86,16 +86,27 @@ const OLD_API_UNDER = ['/me/', '/auth/', '/timelapse/'];
  * and the pairing page (GET /pair) never moved, so they aren't this.
  */
 export function movedApi(req: Request, url: URL): Response | null {
+  if (!oldApiPath(req, url)) return null;
+  if (req.headers.has('x-terminus-client')) return json(UPDATE_REQUIRED, 426);
+  return new Response(null, {
+    status: 308,
+    headers: { location: `/api${url.pathname}${url.search}`, 'cache-control': 'no-store', ...CORS },
+  });
+}
+
+/** A call to the API at its path from before 3.0 ([movedApi]). */
+export function oldApiPath(req: Request, url: URL): boolean {
   const path = url.pathname;
   const reading = req.method === 'GET' || req.method === 'HEAD';
-  const old =
+  return (
     OLD_API.has(path) ||
     (path === '/pair' && !reading) ||
-    (OLD_API_UNDER.some((p) => path.startsWith(p)) && path !== '/auth/verify' && path !== '/auth/approve');
-  if (!old) return null;
-  if (req.headers.has('x-terminus-client')) return json(UPDATE_REQUIRED, 426);
-  return new Response(null, { status: 308, headers: { location: `/api${path}${url.search}`, 'cache-control': 'no-store', ...CORS } });
+    (OLD_API_UNDER.some((p) => path.startsWith(p)) && path !== '/auth/verify' && path !== '/auth/approve')
+  );
 }
+
+/** One of the site's old addresses (terminus.rcn.sh, the beta's). */
+export const oldAddress = (hostname: string): boolean => hostname in MOVED;
 
 /**
  * iOS universal links: the file an iPhone fetches (through Apple's CDN) to
@@ -128,11 +139,13 @@ export const mailName = (env: Env): string => (isBeta(env) ? 'terminus beta' : '
 
 /**
  * On the beta, every page says "beta" next to the wordmark (styled in
- * site.css) and asks not to be indexed, so nobody lands on it by search.
+ * site.css), is drawn under a blueprint instead of the hour's sky
+ * (data-site, sky.css), and asks not to be indexed, so nobody lands on it by search.
  */
 export function markBeta(res: Response, env: Env): Response {
   if (!isBeta(env) || !(res.headers.get('content-type') ?? '').startsWith('text/html')) return res;
   const marked = new HTMLRewriter()
+    .on('html', { element: (e) => void e.setAttribute('data-site', 'beta') })
     .on('.wordmark', { element: (e) => void e.after('<span class="beta-tag">beta</span>', { html: true }) })
     .transform(res);
   const out = new Response(marked.body, marked);

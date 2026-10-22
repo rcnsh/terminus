@@ -21,6 +21,7 @@ import { Journey, STYLES, cardStyle, setCardStyle, styleHint, styleName } from '
 import {
   campus,
   edit,
+  importTimetable,
   lists,
   profile,
   ResidenceOptions,
@@ -323,13 +324,22 @@ export function Trips() {
           <${Pills} name="pace" value=${pace.value} options=${PACES().map((x) => [x.value, x.label])} onChange=${(v) => edit((y) => (y.walkPace = v))} labelledBy="pace-label" full />
         </div>
         <${Field} id="prefer-bus" label=${t('Prefer the bus')} sub=${t('Wait a few minutes more for a bus rather than walk.')}>
-          <input id="prefer-bus" class="switch" type="checkbox" role="switch" checked=${p.preferBus !== false} onChange=${(e) => edit((x) => (x.preferBus = e.currentTarget.checked))} />
+          <input id="prefer-bus" class="switch" type="checkbox" role="switch" checked=${p.preferBus !== false} onChange=${(e) => {
+            const on = e.currentTarget.checked;
+            edit((x) => (x.preferBus = on));
+          }} />
         <//>
-        <${Field} id="full-bus" label=${t('Allow for busy buses')} sub=${t('Aim one bus earlier when yours is often full.')}>
-          <input id="full-bus" class="switch" type="checkbox" role="switch" checked=${p.fullBusMargin !== false} onChange=${(e) => edit((x) => (x.fullBusMargin = e.currentTarget.checked))} />
+        <${Field} id="full-bus" label=${t('Allow for packed buses')} sub=${t('Aim one bus earlier when yours is often packed.')}>
+          <input id="full-bus" class="switch" type="checkbox" role="switch" checked=${p.fullBusMargin !== false} onChange=${(e) => {
+            const on = e.currentTarget.checked;
+            edit((x) => (x.fullBusMargin = on));
+          }} />
         <//>
         <${Field} id="public-buses" label=${t('Public buses')} sub=${t('Count the 95, 151 and other public buses at your stops too. They have a fare, so one is the answer only when it clearly saves time.')}>
-          <input id="public-buses" class="switch" type="checkbox" role="switch" checked=${p.publicBuses === true} onChange=${(e) => edit((x) => (x.publicBuses = e.currentTarget.checked))} />
+          <input id="public-buses" class="switch" type="checkbox" role="switch" checked=${p.publicBuses === true} onChange=${(e) => {
+            const on = e.currentTarget.checked;
+            edit((x) => (x.publicBuses = on));
+          }} />
         <//>
       <//>
       <${Choices} />
@@ -340,13 +350,18 @@ export function Trips() {
 const PREF_TEXT = { earlier: t('One bus earlier'), quiet: t('No reminders') };
 
 /** Classes you leave a bus earlier for or get no reminders for, and the trip history. */
-function Choices() {
+export function Choices() {
   const version = useStore(lists);
   const [r, setR] = useState(null);
-  const load = () =>
-    api('/api/me/choices')
-      .then(setR)
-      .catch(() => setR((was) => was ?? { failed: true }));
+  // Only the newest list asked for lands: one asked for before an Undo that
+  // comes back after the Undo's mustn't put the old list over the new.
+  const asked = useRef(0);
+  const load = () => {
+    const n = ++asked.current;
+    return api('/api/me/choices')
+      .then((x) => n === asked.current && setR(x))
+      .catch(() => n === asked.current && setR((was) => was ?? { failed: true }));
+  };
   useEffect(() => {
     load();
   }, [version]);
@@ -444,8 +459,7 @@ export function Timetable({ me }) {
     e.preventDefault();
     setMsg(t('Importing…'));
     try {
-      const r = await api('/api/me/import', { method: 'POST', body: { share } });
-      profile.set(r.profile);
+      const r = await importTimetable(share);
       setTerm(r.term);
       const n = r.profile.trips.length;
       const notes = [n === 1 ? t('Imported 1 class for {0}.', r.term) : t('Imported {0} classes for {1}.', n, r.term)];
@@ -687,7 +701,7 @@ function AddClass() {
     if (!to) return refuse(where.current.input, t('Pick a stop, building or room from the list'));
     const a = toMin(start);
     const b = toMin(end);
-    // An end before the start was dropped without a word; say so instead.
+    // An end at or before the start is refused out loud, not left off the class.
     if (b != null && b <= a) return refuse(endBox.current, t('The end time must be after the start time'));
     edit((x) =>
       x.manual.push({ day: Number(day), arriveByMin: a, ...(b && b > a ? { endMin: b } : {}), to, label: label.trim(), venue: '' }),
@@ -758,8 +772,10 @@ function timetableStops() {
 
 function addFavourite(to, label) {
   let already = null;
+  // The same key each time the change is made (it's made again on the server's copy when saved).
+  const keep = {};
   edit((x) => {
-    already = withPlace(x, to, label);
+    already = withPlace(x, to, label, keep);
   });
   if (already) toast(t('Already a favourite: {0}', already.label));
 }
@@ -853,7 +869,8 @@ function Place({ place, arriving }) {
     const go = () => {
       let removed = null;
       edit((x) => {
-        removed = withoutPlace(x, place.key);
+        // Made again when saved: one already gone there keeps what Undo puts back.
+        removed = withoutPlace(x, place.key) ?? removed;
       });
       refocus(document.querySelector('#place-form input'));
       if (removed)
@@ -1135,8 +1152,9 @@ export function ThemeSwitch({ labelledBy, full = false }) {
 }
 
 /**
- * Appearance: the theme, then the card styles, each drawn with a made-up
- * trip so the choice is made by looking. Both hold for this browser only.
+ * Appearance: the theme, then the card style, the chosen one drawn under its
+ * pills with a made-up trip so the choice is made by looking. Both hold for
+ * this browser only.
  */
 export function Appearance() {
   const chosen = useStore(cardStyle);
@@ -1155,18 +1173,12 @@ export function Appearance() {
         <div class="field"><${ThemeSwitch} labelledBy="theme-label" full /></div>
       <//>
       <${Group} title=${t('Card style')} id="style-label" hint=${t('How the card shows a trip by bus. Only in this browser.')}>
-        <div class="style-picker" role="radiogroup" aria-labelledby="style-label">
-          ${STYLES.map(
-            (s) => html`
-              <label class=${chosen === s ? 'style-choice on' : 'style-choice'} key=${s}>
-                <span class="style-head">
-                  <input type="radio" name="card-style" value=${s} checked=${chosen === s} onChange=${() => setCardStyle(s)} />
-                  <span><strong>${styleName(s)}</strong><span class="hint">${styleHint(s)}</span></span>
-                </span>
-                <div class="widget" aria-hidden="true"><${Journey} a=${sample} style=${s} /></div>
-              </label>
-            `,
-          )}
+        <div class="field">
+          <${Pills} name="card-style" value=${chosen} options=${STYLES.map((s) => [s, styleName(s)])} onChange=${setCardStyle} labelledBy="style-label" full />
+        </div>
+        <div class="style-preview">
+          <p class="hint">${styleHint(chosen)}</p>
+          <div class="widget" aria-hidden="true"><${Journey} a=${sample} style=${chosen} /></div>
         </div>
       <//>
     </div>

@@ -24,7 +24,7 @@ final class AppModel {
     var signedOutReason: String?
     /// Bumped whenever the token changes (signed in, signed out): a reply to
     /// a request made with the old one is dropped, not shown for this account.
-    private var session = 0
+    private(set) var session = 0
     /// The server answered 426: this version is too old for it. Polling stops
     /// (Outdated) and the popover offers the update.
     var updateRequired = false
@@ -71,8 +71,8 @@ final class AppModel {
     private var otherAnswers: [Target: NextAnswer] = [:]
     var target: Target = .plan
     /// The last answer per view. Switching views shows the cached one at once
-    /// and refreshes it in place, instead of blanking the popover (which made
-    /// it collapse and then grow back when the data arrived).
+    /// and refreshes it in place, instead of blanking the popover, which would
+    /// collapse it and grow it back when the data arrives.
     var answers: [Target: NextAnswer] {
         get {
             var a = otherAnswers
@@ -264,10 +264,10 @@ final class AppModel {
 
     /// The menu bar text at `now` (on the server's clock): the card's glance,
     /// worded on the server as the phone's widget shows it, or nil for the
-    /// plain icon. An answer from an older server, without a card, counts
-    /// down from its departure time here. Offline with the plan gone stale
-    /// and no day plan to fall back on, the plain icon: the old glance would
-    /// pass for current.
+    /// plain icon. Without a card, a countdown to its departure, worked out
+    /// here for an older server. Offline with the plan gone stale and no day
+    /// plan to fall back on, the plain icon: the old glance would pass for
+    /// current.
     func menuTitle(at now: Date) -> String? {
         if let p = offlinePick(at: now) { return OfflineDay.menuTitle(p) }
         guard let plan, error == nil || !isOld(plan, at: now) else { return nil }
@@ -873,17 +873,12 @@ final class AppModel {
     private func syncLang(_ api: Api) async {
         let gen = session
         guard !langSynced, let data = try? await api.profile(), gen == session,
-            var p = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+            let p = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
         else { return }
         langSynced = true
-        guard let mine = Lang.followAccount(p["lang"] as? String ?? "auto"),
-            let body = try? JSONSerialization.data(
-                withJSONObject: {
-                    p["lang"] = mine
-                    return p
-                }())
-        else { return }
-        _ = try? await api.saveProfile(body)
+        guard let mine = Lang.followAccount(p["lang"] as? String ?? "auto") else { return }
+        // Only the language, on the profile as it is by then.
+        _ = try? await api.changeProfile { $0["lang"] = mine }
     }
 
     /// Settings → Language: this Mac and the account, then terminus starts again in it.
@@ -891,12 +886,7 @@ final class AppModel {
         Lang.set(pref)
         Lang.noteAccount(pref)
         Task {
-            if let token = TokenStore.read(), let data = try? await Api(token: token).profile(),
-                var p = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-            {
-                p["lang"] = pref
-                if let body = try? JSONSerialization.data(withJSONObject: p) { _ = try? await Api(token: token).saveProfile(body) }
-            }
+            if let token = TokenStore.read() { _ = try? await Api(token: token).changeProfile { $0["lang"] = pref } }
             Lang.relaunch()
         }
     }

@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-// Installs globalThis.caches before the Worker module graph is evaluated.
 import { FROZEN_NOW, installGlobals, makeAnalytics, makeBucket, makeCtx, makeEnv, makeFetch, makeKV } from './_stubs.mjs';
 import worker, { coordsFrom, numParam } from '../src/index.ts';
 import { LABEL_MAX } from '../src/config.ts';
@@ -87,18 +86,6 @@ test('the answer is a valid Answer and its label fits the contract', async () =>
     '"-" survives the whole pipeline as null, never 0',
   );
   assert.equal(a.arrivals.find((x) => x.svc === 'A1').crowd, 'high', 'crowd is plumbed through');
-});
-
-test('repeat calls within the TTL produce exactly one upstream call', async () => {
-  const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
-  const cache = installGlobals(fetchImpl);
-
-  await call('/api/trip?to=UTOWN&from=PGP', { fetchImpl, cache });
-  assert.equal(fetchImpl.counts.shuttle, 1);
-
-  await call('/api/trip?to=UTOWN&from=PGP', { fetchImpl, cache });
-  await call('/api/trip?to=UTOWN&from=PGP', { fetchImpl, cache });
-  assert.equal(fetchImpl.counts.shuttle, 1, 'the 15 s edge cache absorbed the repeats');
 });
 
 test('a cache-busting ?t= does not defeat the cache', async () => {
@@ -331,6 +318,7 @@ test('the OpenAPI spec documents exactly the routes that exist', async () => {
       '/api/admin/passkey/register',
       '/api/admin/passkey/signin',
       '/api/admin/collect',
+      '/api/admin/crashes/dismiss',
       '/api/errors',
     ].map((p) => `POST ${p}`),
     ...['/map/style.json', '/map/campus.pmtiles', '/map/fonts/*/*.pbf', '/map/sprites/v4/*'].map((p) => `GET ${p}`),
@@ -421,7 +409,7 @@ test('/api/arrivals names the stop across the road, and each row says where it g
   assert.equal(k.color, '#2b9ad6');
   assert.equal(k.crowd, 'high');
   assert.ok(k.endsAt === null || Number.isFinite(Date.parse(k.endsAt)));
-  // A stop with no twin says so.
+  // A stop with no opposite stop says so.
   const utown = await (await call('/api/arrivals?stop=UTOWN', { fetchImpl: makeFetch({}) })).res.json();
   assert.equal(utown.stop.opposite, null);
   assert.equal(utown.stop.oppositeName, null);
@@ -502,7 +490,7 @@ test('/api/buses shows each bus on its route at a stop or between two, with its 
   assert.equal(on.plate, 'PD123A', 'each bus comes with its plate');
   assert.equal(fetchImpl.requests[0].body.route_code, 'D2');
 
-  // A second look within 10 s is served from the cache.
+  // A second look, the clock unmoved, is served from the cache.
   await call('/api/buses?svc=D2', { fetchImpl, cache });
   assert.equal(fetchImpl.counts.shuttle, 1);
 });
@@ -558,7 +546,7 @@ test('/api/line: a service’s stops in order, its buses on them, and with a sto
   assert.equal(body.stop.row.etaS, 360);
   assert.deepEqual(body.stop.row.towards, ['Central Library', 'COM 3']);
   assert.equal(body.stop.row.crowd, 'medium');
-  // The bus where /buses puts it.
+  // The bus where /api/buses puts it.
   const [bus] = body.buses;
   assert.equal(bus.plate, 'PD418C');
   assert.equal(bus.crowd, 'low');
@@ -729,7 +717,7 @@ test('/api/next with coordinates but no timetable shows nearby buses, no invente
   assert.ok(a.stop.code.length > 0, 'a real nearby stop');
   assert.ok(a.label.length > 0);
   // No destination was chosen, so the detail must not claim to send you anywhere.
-  assert.ok(!/~\d+ min\b.*(UTown|PGP|COM)/.test(a.detail) || true);
+  assert.ok(!/~\d+ min\b.*(UTown|PGP|COM)/.test(a.detail));
   assert.notEqual(a.quality, undefined);
 });
 

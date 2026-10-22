@@ -81,6 +81,7 @@ import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import sh.rcn.terminus.Pull
 import sh.rcn.terminus.PullHint
@@ -165,25 +166,25 @@ internal fun BusPull(
         val motion = pv.motion
         motion.calm = calm
         pv.livery = own
-        var running by remember { mutableStateOf(false) }
+        val frames = remember { arrayOfNulls<Job>(1) }
         fun kick() {
             pv.frame++
             pv.hint = motion.hint
-            if (motion.moving) running = true
-        }
-        LaunchedEffect(running) {
-            if (!running) return@LaunchedEffect
-            var last = withFrameNanos { it }
-            while (motion.moving) {
-                withFrameNanos { now ->
-                    // The card's bus may have moved with the answer: it comes back to where it is now.
-                    motion.scene = sceneOf(width)
-                    motion.step((now - last) / 1e9f)
-                    last = now
+            // A job rather than an effect keyed on a flag: the loop ending and a touch starting it again inside one frame leave the flag
+            // where it was, so no effect would run and a pull let go would stay at "Checking…" for good.
+            if (!motion.moving || frames[0]?.isActive == true) return
+            frames[0] = scope.launch {
+                var last = withFrameNanos { it }
+                while (motion.moving) {
+                    withFrameNanos { now ->
+                        // The card's bus may have moved with the answer: it comes back to where it is now.
+                        motion.scene = sceneOf(width)
+                        motion.step((now - last) / 1e9f)
+                        last = now
+                    }
+                    kick()
                 }
-                kick()
             }
-            running = false
         }
         val connection =
             remember(motion) {
@@ -373,8 +374,8 @@ private fun Arrow(ink: Color, up: Boolean, calm: Boolean) {
 
 /**
  * The pull on Now's horizon, in place of the road's own sign and bus: the sign at [sign] (faded in by the pull when the road has none,
- * [ownSign]), the puffs, and the bus on the road. [top] is the horizon's top and [d] its px a unit; a timetable guess's bus stays an
- * outline (not [live]). [lights]: after dark, its headlight on as it drives.
+ * [ownSign]), the puffs, and the bus on the road. [top] is the horizon's top and [d] its px a unit; an estimate's bus stays an outline (not
+ * [live]). [lights]: after dark, its headlight on as it drives.
  */
 internal fun DrawScope.pullRoad(
     v: PullView,
@@ -437,7 +438,7 @@ private fun DrawScope.pullSign(m: PullMotion, p: Palette, o: Offset, u: Float, p
 /**
  * The bus at the motion's place on [ground] (units down the strip at x), its puffs behind it: the body bobbing and pitching on its
  * suspension over wheels that turn, along the [slope] of the hill, the door lit as it opens, and a honk. Without a [band] it's an outline,
- * as a timetable guess is on the horizon.
+ * as an estimate is on the horizon.
  */
 private fun DrawScope.pullBus(
     v: PullView,

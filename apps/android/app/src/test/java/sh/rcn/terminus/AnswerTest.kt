@@ -33,8 +33,8 @@ class AnswerTest {
     private fun ms(iso: String) = Instant.parse(iso).toEpochMilli()
 
     /**
-     * Every golden there is, English and Chinese, by the endpoint it answers: /me/nearby has `stops`, /me/day `items`, the rest are
-     * /me/next. A new fixture is read without being listed here.
+     * Every golden there is, English and Chinese, by the endpoint it answers: /api/me/nearby has `stops`, /api/me/day `items`, the rest are
+     * /api/me/next. A new fixture is read without being listed here.
      */
     private fun everyGolden(): List<Pair<String, JSONObject>> {
         val dir = listOf("../../api/test/fixtures/answers", "../api/test/fixtures/answers").map(::File).first { it.isDirectory }
@@ -91,7 +91,6 @@ class AnswerTest {
 
     @Test
     fun aReplyOfTheWrongShapeIsAParseErrorNotOffline() {
-        // Read as offline before: "Couldn't reach terminus" for a server that answered.
         assertThrows(ParseError::class.java) { parseNearby(JSONObject("""{"stops":[{"board":[]}]}""")) }
         assertThrows(ParseError::class.java) { Campus.parse(JSONObject("{}")) }
         assertThrows(ParseError::class.java) { DayPlan.parse(JSONObject("""{"items":[1]}""")) }
@@ -217,7 +216,7 @@ class AnswerTest {
         val card = a.card!!
         assertFalse(card.remind)
         assertEquals("earlier:4:600:UTOWN", card.suggestion!!.id)
-        // Older cards have none of it, and still remind.
+        // A card with no suggestion still reminds.
         val golden = golden("class-bus").card!!
         assertNull(golden.suggestion)
         assertTrue(golden.remind)
@@ -277,6 +276,19 @@ class AnswerTest {
         assertEquals(change to plan, Refresher.refreshAlarms(a, fetched, fetched, widget = true, notifying = true))
         // Past the card's change the plan's moment is the widget's next too: one alarm, waking.
         assertEquals(null to plan, Refresher.refreshAlarms(a, fetched, change + 1, widget = true, notifying = true))
+    }
+
+    @Test
+    fun theFallbackCountsFromWhenTheAnswerCameNotItsAsOf() {
+        // Past every moment the server named, the next refresh is a quarter of an hour after the answer came. Its asOf is the
+        // server's clock as it wrote the answer, always a little earlier than the arrival scheduleNext passes: the alarm counts from
+        // the arrival, and the server's own moments are instants, the same whenever the answer was fetched.
+        val a = golden("class-bus")
+        val card = a.card!!
+        val fetched = listOfNotNull(a.refreshAtMs, card.nextChangeAtMs, card.staleAtMs).max() + 60_000
+        assertTrue(fetched > ms(a.asOf))
+        assertEquals(fetched + 15 * 60_000L, Refresher.nextRefreshAt(a, fetched, fetched))
+        assertEquals(fetched + 15 * 60_000L, Refresher.nextRefreshAt(a, fetched, fetched, widget = false))
     }
 
     @Test
@@ -367,7 +379,7 @@ class AnswerTest {
         assertEquals("R2 · 09:06", bus.card!!.title)
         assertEquals("R2 · 09:06", bus.clockLabel { "never" })
         assertEquals("Next class · GEA1000 @ UTown", bus.card.heading)
-        // A timetable estimate keeps its "~", in the server's words.
+        // An estimate keeps its "~", in the server's words.
         val scheduled = golden("scheduled")
         assertEquals("A1 · ~09:11", scheduled.title)
         assertEquals("Going to KR MRT", scheduled.card!!.heading)
@@ -431,7 +443,7 @@ class AnswerTest {
         assertEquals("14 min ride · off at Kent Vale", c.firstRideText)
         assertEquals("Change at Kent Vale · 5 min wait", c.changeText)
         assertNull(c.walk)
-        // A journey from a server before changes has none.
+        // A journey on one bus has no change.
         assertNull(golden("class-bus").card!!.journey!!.change)
     }
 

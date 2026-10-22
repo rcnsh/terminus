@@ -1,7 +1,7 @@
 /**
  * Which answers are logged to Analytics Engine: the ones someone asked for,
  * not the ones the server works out for itself (the Trip object's wakes,
- * each class's leave-by on /me/day). On the frozen clock and a fake feed.
+ * each class's leave-by on /api/me/day). On the frozen clock and a fake feed.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';

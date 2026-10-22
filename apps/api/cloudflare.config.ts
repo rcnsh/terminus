@@ -17,10 +17,9 @@ const BETA = {
 };
 
 // Pages opened on the old address go to terminus.run (MOVE_PAGES, site.ts
-// movedPage), and emailed links use the site's own address. From 9 to 11
-// October 2026 NUS Wi-Fi reset connections to terminus.run, so the old
-// address was handed out instead: if a network refuses it again, add
-// LINK_ORIGIN set to the old address and drop MOVE_PAGES.
+// movedPage), and emailed links use the site's own address. If a network
+// refuses terminus.run, add LINK_ORIGIN set to the old address and drop
+// MOVE_PAGES.
 const moved = () => ({
 	MOVE_PAGES: bindings.text("on"),
 });
@@ -31,7 +30,7 @@ function site(mode: string | undefined) {
 			name: "terminus",
 			domain: "terminus.run",
 			// The old address keeps answering: apps before 3.3.0 call it and
-			// check for updates there, and newer ones fall back to it.
+			// check for updates there, and ones before 3.6.0 fall back to it.
 			oldDomain: "terminus.rcn.sh",
 			d1: { name: "terminus", id: "27067356-8691-458f-bc69-fa5ca5bbc374" },
 			kv: "1f88f570f6e04f78aa2888ee7aa78e6a",
@@ -43,6 +42,9 @@ function site(mode: string | undefined) {
 			// the beta, so the two sites never poll twice.
 			env: {
 				TIMELAPSE_ENABLED: bindings.text("on"),
+				// The arrival-time model scores each day in shadow (src/etashadow.ts),
+				// answering no one; it needs the eta collector on too. Off on the beta.
+				ETA_MODEL: bindings.text("shadow"),
 				// APNs's topic: the iPhone app's bundle id (src/apns.ts).
 				APNS_TOPIC: bindings.text("sh.rcn.terminus"),
 				// APPLE_TEAM_ID (not a secret) turns on iOS universal links:
@@ -68,6 +70,7 @@ function site(mode: string | undefined) {
 			AE_DATASET: bindings.text("terminus_beta"),
 			TIMELAPSE_ENABLED: bindings.text("off"),
 			APNS_TOPIC: bindings.text("sh.rcn.terminus.beta"),
+			ETA_MODEL: bindings.text("off"),
 			...moved(),
 		},
 	};

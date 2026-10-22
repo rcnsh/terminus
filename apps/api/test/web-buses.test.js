@@ -96,13 +96,15 @@ test('up to 8 stops pinned (or as many as the profile allows), then a message an
   mock.timers.enable({ apis: ['setTimeout'] });
   const realFetch = globalThis.fetch;
   const saved = [];
+  const eight = ['COM3', 'YIH', 'UTOWN', 'KR-MRT', 'CLB', 'IT', 'LT13', 'UHC'];
   globalThis.fetch = async (url, init) => {
+    // The save is made on the server's copy, read first.
+    if (init?.method !== 'PUT') return new Response(JSON.stringify({ pinnedStops: eight.slice(0, 7) }), { headers: { etag: '"1"' } });
     saved.push(JSON.parse(init.body));
-    return new Response(init.body, { headers: { 'content-type': 'application/json' } });
+    return new Response(init.body, { headers: { 'content-type': 'application/json', etag: '"2"' } });
   };
   try {
-    const eight = ['COM3', 'YIH', 'UTOWN', 'KR-MRT', 'CLB', 'IT', 'LT13', 'UHC'];
-    P.profile.set({ pinnedStops: eight.slice(0, 7) });
+    await P.loadProfile();
     P.toastText.set(null);
     await B.togglePin('UHC');
     assert.deepEqual(P.profile.get().pinnedStops, eight);
@@ -166,6 +168,46 @@ test('a board kept by the server (asOf minutes old) is counted down from when it
   } finally {
     globalThis.fetch = realFetch;
     B.boards.set(new Map());
+  }
+});
+
+test("a line's refresh that hung (the phone asleep) cannot put back older times over newer ones", async () => {
+  const realFetch = globalThis.fetch;
+  const reply = (n) =>
+    new Response(JSON.stringify({ svc: 'D1', asOf: new Date().toISOString(), stops: [], buses: [], n }), {
+      headers: { 'content-type': 'application/json' },
+    });
+  let release;
+  const hung = new Promise((ok) => {
+    release = ok;
+  });
+  let calls = 0;
+  globalThis.fetch = () => (++calls === 1 ? hung : Promise.resolve(reply(2)));
+  try {
+    B.line.set(null);
+    B.route.set({ kind: 'line', svc: 'D1', stop: 'YIH' });
+    const first = B.loadLine('D1', 'YIH');
+    // The refresh comes a while later (the phone woke up).
+    await new Promise((ok) => setTimeout(ok, 5));
+    await B.loadLine('D1', 'YIH');
+    assert.equal(B.line.get().data.n, 2);
+    // The older answer lands last: the newer stays.
+    release(reply(1));
+    await first;
+    assert.equal(B.line.get().data.n, 2);
+    // An error landing late doesn't cover fresh times either.
+    globalThis.fetch = () => Promise.resolve(new Response('{}', { status: 503, headers: { 'content-type': 'application/json' } }));
+    const failing = B.loadLine('D1', 'YIH');
+    globalThis.fetch = () => Promise.resolve(reply(3));
+    await new Promise((ok) => setTimeout(ok, 5));
+    await B.loadLine('D1', 'YIH');
+    await failing;
+    assert.equal(B.line.get().data.n, 3);
+    assert.equal(B.line.get().error, undefined);
+  } finally {
+    globalThis.fetch = realFetch;
+    B.line.set(null);
+    B.route.set({ kind: 'home' });
   }
 });
 

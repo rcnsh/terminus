@@ -286,7 +286,10 @@ async function networkFirst(req, event) {
   for (const k of ['place', 'to', 'h12']) if (url.searchParams.get(k)) keyed.set(k, url.searchParams.get(k));
   const lang = (req.headers.get('accept-language') ?? '').split(',')[0].trim().slice(0, 16);
   if (lang) keyed.set('lang', lang);
-  const key = `${url.origin}${url.pathname}${keyed.size ? `?${keyed}` : ''}`;
+  // `keyed.size` is undefined on Safari before 17 (iOS 16.4 to 16.7, the
+  // first with web push), which would keep every card under the bare path.
+  const query = String(keyed);
+  const key = `${url.origin}${url.pathname}${query ? `?${query}` : ''}`;
   const network = (async () => {
     const res = await fetch(req);
     // A server error is as good as no network: the kept reply beats an error.
@@ -310,7 +313,13 @@ async function networkFirst(req, event) {
 
 async function shellFile(req, path, event) {
   const cache = await caches.open(SHELL);
-  const network = fetch(req).then((res) => {
+  const network = fetch(req).then(async (res) => {
+    // A server error (a deploy window, an outage) is as good as no network:
+    // the kept copy beats an error page, as it does for the account's replies.
+    if (res.status >= 500) {
+      const kept = await cache.match(path);
+      if (kept) return kept;
+    }
     // Kept after the page has it, not before.
     if (res.ok) event.waitUntil(keepShell(cache, path, res.clone()));
     return res;
@@ -327,7 +336,7 @@ async function keepShell(cache, path, res) {
 }
 
 // A push only says the card changed (the same nudge the Android app gets).
-// The notification is worded here from /me/next, the way the phone app words
+// The notification is worded here from /api/me/next, the way the phone app words
 // its own: the question at the departure, the ride or the next way there
 // while on the move, otherwise when to leave. One notification, replaced as
 // the trip goes on; it only buzzes when the push says it's worth it.

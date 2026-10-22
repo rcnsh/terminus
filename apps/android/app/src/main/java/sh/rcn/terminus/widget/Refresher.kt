@@ -85,8 +85,8 @@ object Refresher {
     private const val EXTRAS = "terminus-refresh-extras"
 
     /**
-     * One request for the answer at a time in this process: a second waits, then finds the first's answer fresh. Held only for /me/next,
-     * not for the day plan or the chosen widgets that follow it.
+     * One request for the answer at a time in this process: a second waits, then finds the first's answer fresh. Held only for
+     * /api/me/next, not for the day plan or the chosen widgets that follow it.
      */
     private val running = Mutex()
     /**
@@ -292,6 +292,8 @@ object Refresher {
         if (store.paired && !online(ctx)) store.lastError = L.s(R.string.offline)
         armRedraw(ctx, store)
         redrawWidgets(ctx)
+        // Exact alarms just allowed, or all alarms gone after a reboot: the widgets' own moments too (Nearby's minutes need them).
+        WidgetModes.armChosen(ctx)
     }
 
     internal fun online(ctx: Context): Boolean {
@@ -364,8 +366,8 @@ object Refresher {
 
     /**
      * The next of the server's own moments for a refresh, at most every 15 s; null when none is ahead. The card's `nextChangeAt` already
-     * counts its `staleAt`, and its leave-by only from 30 s ahead; `staleAt` stands in for it from a server without it. Moments the widget
-     * can draw by itself ("Leave now", a ride's next stop) are [redrawAt]'s.
+     * counts its `staleAt`, and its leave-by only from 30 s ahead; `staleAt` stands in when it's null from an older server. Moments the
+     * widget can draw by itself ("Leave now", a ride's next stop) are [redrawAt]'s.
      */
     internal fun serverRefreshAt(answer: NextAnswer, now: Long, widget: Boolean = true): Long? {
         val card = answer.card
@@ -576,7 +578,7 @@ class RefreshReceiver : BroadcastReceiver() {
                         // Fetched right here, as the leave check is: the alarm's idle
                         // allowance is seconds long, and a queued job may wait for
                         // hours once Android's quota for prompt jobs runs out. Only
-                        // /me/next here; the rest follows in a job when it's needed.
+                        // /api/me/next here; the rest follows in a job when it's needed.
                         alarm && Refresher.online(context) ->
                             finishAsync(Dispatchers.IO) {
                                 Refresher.refresh(context, fast = true, extras = false)

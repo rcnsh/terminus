@@ -1,13 +1,13 @@
 /**
  * The bus proxy client (src/fms.ts) on its own: one re-mint on a rejection a
  * fresh token could fix, none on one it can't, and a refusal that names the
- * endpoint it came from. worker.smoke.js covers the same through /arrivals.
+ * endpoint it came from. worker.smoke.js covers the same through /api/arrivals.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { installGlobals, makeCtx, makeEnv, makeFetch, makeKV, FROZEN_NOW } from './_stubs.mjs';
-import { breakerOpen, crowdFromLoad, fetchActiveBuses, fetchArrivals, getArrivals, getBuses } from '../src/fms.ts';
+import { breakerOpen, crowdFromLoad, fetchActiveBuses, fetchArrivals, getArrivals, getBuses, stampLagS } from '../src/fms.ts';
 import { UpstreamRejected, appVersion, deviceId, redactDetail } from '../src/auth.ts';
 import { flagged } from '../src/edgecache.ts';
 
@@ -197,4 +197,54 @@ test('a blank headcount is no count, not an empty bus', () => {
   assert.equal(crowdFromLoad(60, '  '), null);
   assert.equal(crowdFromLoad(60, '0'), 'low');
   assert.equal(crowdFromLoad(60, 50), 'high');
+});
+
+// FROZEN_NOW is 09:00:00 in Singapore.
+const stamped = (stamp, shuttles) => ({ code: '00000', msg: '', data: { TimeStamp: stamp, name: 'COM3', shuttles, hints: [] } });
+
+test("arrival times count from the reply's TimeStamp, which NUS keeps for 35 to 40 s", async () => {
+  // As the feed sends them: D2 in 185 s and 11 min, the next in 12 s, all as of 20 s before the call.
+  const shuttles = [
+    {
+      name: 'D2',
+      busstopcode: 'COM3-D2-S',
+      _etas: [
+        { eta: 3, eta_s: 185 },
+        { eta: 11, eta_s: 660 },
+      ],
+      arrivalTime: '3',
+    },
+    { name: 'D1', busstopcode: 'COM3-D1-S', arrivalTime: '0', nextArrivalTime: '9' },
+    { name: 'A1', busstopcode: 'COM3', _etas: [{ eta: 0, eta_s: 12 }], arrivalTime: '0' },
+  ];
+  installGlobals(makeFetch({ raw: stamped('2026-08-27T08:59:40+08:00', shuttles) }));
+  const sa = await fetchArrivals(makeEnv(), 'COM3', FROZEN_NOW);
+  assert.equal(sa.fetchedAt, FROZEN_NOW, 'the cache still dates it from the call');
+  const times = (svc) => sa.arrivals.filter((a) => a.svc === svc).map((a) => a.etaS);
+  assert.deepEqual(times('D2'), [165, 640]);
+  assert.deepEqual(times('D1'), [0, 520], 'whole minutes too; never before now');
+  assert.deepEqual(times('A1'), [0]);
+});
+
+test('a TimeStamp that is missing, unreadable, ahead or far behind leaves the times alone', async () => {
+  for (const stamp of [undefined, '', 'yesterday', 1_756_256_380, '2026-08-27T09:00:05+08:00', '2026-08-27T08:58:00+08:00']) {
+    const reply = stamped(stamp, [{ name: 'D2', busstopcode: 'COM3-D2-S', _etas: [{ eta: 3, eta_s: 185 }] }]);
+    installGlobals(makeFetch({ raw: reply }));
+    const sa = await fetchArrivals(makeEnv(), 'COM3', FROZEN_NOW);
+    assert.deepEqual(
+      sa.arrivals.map((a) => a.etaS),
+      [185],
+      String(stamp),
+    );
+  }
+});
+
+test('stampLagS reads the forms the feed has sent, inside its envelope too', () => {
+  assert.equal(stampLagS({ TimeStamp: '2026-08-27T08:59:40+08:00' }, FROZEN_NOW), 20);
+  assert.equal(stampLagS({ TimeStamp: '2026-08-27 08:59:15' }, FROZEN_NOW), 45, 'no zone: Singapore time');
+  assert.equal(stampLagS({ TimeStamp: '2026-08-27T00:59:30Z' }, FROZEN_NOW), 30);
+  assert.equal(stampLagS({ ShuttleServiceResult: { TimeStamp: '2026-08-27T08:59:50+08:00' } }, FROZEN_NOW), 10);
+  assert.equal(stampLagS({ TimeStamp: '2026-08-27T08:58:30+08:00' }, FROZEN_NOW), 90);
+  assert.equal(stampLagS({ TimeStamp: '2026-08-27T08:58:29+08:00' }, FROZEN_NOW), 0, 'past MAX_STAMP_LAG_S');
+  assert.equal(stampLagS(null, FROZEN_NOW), 0);
 });

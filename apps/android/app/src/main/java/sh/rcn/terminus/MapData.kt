@@ -18,8 +18,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * The Map tab's data: stops and routes from `/campus`, live buses from `/buses`, and the GeoJSON the map draws from them. Plain JSON in and
- * out, so it's tested on the JVM (MapDataTest).
+ * The Map tab's data: stops and routes from `/api/campus`, live buses from `/api/buses`, and the GeoJSON the map draws from them. Plain
+ * JSON in and out, so it's tested on the JVM (MapDataTest).
  */
 
 /**
@@ -83,8 +83,8 @@ data class MapRoute(val svc: String, val color: Long, val line: List<DoubleArray
 
 /**
  * A route line measured as the API measures it (haversine, metres from its start at each point), so a bus's `along` is a place on it.
- * [closed] is the service's `loop` from /campus, as the API places buses: a loop's line needn't end exactly where it starts (A1's ends are
- * some 40 m apart at KRB).
+ * [closed] is the service's `loop` from /api/campus, as the API places buses: a loop's line needn't end exactly where it starts (A1's ends
+ * are some 40 m apart at KRB).
  */
 class RoutePath(private val line: List<DoubleArray>, loop: Boolean = false) {
     private val cum =
@@ -160,8 +160,8 @@ class RoutePath(private val line: List<DoubleArray>, loop: Boolean = false) {
 }
 
 /**
- * [serviceCodes]: every service in /campus's routes, drawn or not, in code order. [stopAliases]: each stop's nicknames, from /campus's
- * destinations of kind "stop", for the Buses tab's search.
+ * [serviceCodes]: every service in /api/campus's routes, drawn or not, in code order. [stopAliases]: each stop's nicknames, from
+ * /api/campus's destinations of kind "stop", for the Buses tab's search.
  */
 data class CampusMap(
     val stops: List<MapStop>,
@@ -190,7 +190,7 @@ data class CampusMap(
     }
 
     companion object {
-        /** The stops and routes from `/campus`; the core stops' codes come back alongside. */
+        /** The stops and routes from `/api/campus`; the core stops' codes come back alongside. */
         fun parse(o: JSONObject): Pair<CampusMap, Set<String>> {
             val s = o.getJSONArray("stops")
             val core = mutableSetOf<String>()
@@ -227,10 +227,10 @@ data class CampusMap(
             return CampusMap(stops, routes, serviceCodes(r), stopAliases(o.optJSONArray("destinations"))) to core
         }
 
-        /** Every service in /campus's `routes`, in plain code order. */
+        /** Every service in /api/campus's `routes`, in plain code order. */
         fun serviceCodes(routes: JSONObject): List<String> = routes.keys().asSequence().toList().sorted()
 
-        /** Each stop's nicknames, from /campus's `destinations` of kind "stop". */
+        /** Each stop's nicknames, from /api/campus's `destinations` of kind "stop". */
         fun stopAliases(destinations: JSONArray?): Map<String, List<String>> {
             if (destinations == null) return emptyMap()
             return (0 until destinations.length())
@@ -249,8 +249,8 @@ fun parseColor(hex: String?): Long {
 }
 
 /**
- * A bus on the map, as `/buses` gives it: an id stable while it runs, and its number plate. It's at a stop ([at], drawn at the stop's dot)
- * or between two (drawn on its line); [ox] and [oy] are how far from that point it's drawn, in dp at full size, turned with the road:
+ * A bus on the map, as `/api/buses` gives it: an id stable while it runs, and its number plate. It's at a stop ([at], drawn at the stop's
+ * dot) or between two (drawn on its line); [ox] and [oy] are how far from that point it's drawn, in dp at full size, turned with the road:
  * beside the dot at a stop.
  */
 data class LiveBus(
@@ -261,25 +261,26 @@ data class LiveBus(
     val moving: Boolean,
     val crowd: String?,
     val nextStop: String?,
-    /** Metres along its route line of where it's drawn; null from an older API, off its line. */
+    /** Metres along its route line of where it's drawn; null off its line, or from an older server. */
     val along: Double? = null,
-    /** Its number plate (PD726D); null from an older API. */
+    /** Its number plate (PD726D); null from an older server. */
     val plate: String? = null,
     /** The stop it's at, or null between stops. */
     val at: String? = null,
     /** At a stop, its place among the buses there: 0 in front, then 1, 2 behind. */
     val slot: Int = 0,
-    /** Between stops, the stretch of its line it's somewhere on; null at a stop or from an older API. */
+    /** Between stops, the stretch of its line it's somewhere on; null at a stop, or from an older server. */
     val stretch: Stretch? = null,
     /**
-     * The stops still ahead on its line, [nextStop] first, to where the line ends; empty past a one-way line's end or from an older API.
+     * The stops still ahead on its line, [nextStop] first, to where the line ends; empty past a one-way line's end, or from an older
+     * server.
      */
     val upcoming: List<String> = emptyList(),
-    /** Where its line ends (a loop's first stop); null from an older API. */
+    /** Where its line ends (a loop's first stop); null from an older server. */
     val towards: String? = null,
     /**
      * The codes of [at], [stretch]'s last stop and [upcoming], in step with the names: a name can be a stop either side of a road. Null
-     * from an older API.
+     * from an older server.
      */
     val atCode: String? = null,
     val passedCode: String? = null,
@@ -298,7 +299,7 @@ data class LiveBus(
 }
 
 /**
- * A tapped bus's stops, as its sheet lists them, from what `/buses` said (the server walks the line, not the app): the stop it [passed]
+ * A tapped bus's stops, as its sheet lists them, from what `/api/buses` said (the server walks the line, not the app): the stop it [passed]
  * (between stops) or the one it's [here] at, its [next], then [after] it at most [AFTER] more, and how many [more] there are past those.
  */
 data class BusStrip(
@@ -326,7 +327,7 @@ data class BusStrip(
 
         /** [all]: every stop to where its line ends, not the first [AFTER] after the next. */
         fun of(bus: LiveBus, all: Boolean = false): BusStrip {
-            // An older API has nextStop but no upcoming.
+            // [nextStop] alone: upcoming is empty from an older server.
             val ahead = bus.upcoming.ifEmpty { listOfNotNull(bus.nextStop) }
             val codes = ahead.indices.map { bus.upcomingCodes.getOrNull(it) }
             val rest = ahead.drop(1)

@@ -1,23 +1,12 @@
 /**
- * How good the feed's arrival times are: when NUS said "R1 in 4 min", when
- * did that bus really come? Measured with no user data at all, from two
- * things terminus already has:
- *
- * - the predictions: every `arrival` row in Analytics Engine (analytics.ts
- *   logAnswer) is a plate, a stop and the seconds the feed gave it, at a time;
- * - what happened: the timelapse recorder's day (timelapse.ts DayFile) has
- *   every bus's metres along its line every 30 s, so the moment a plate
- *   reached a stop can be read off it (passingsOf).
- *
- * Once a day, after the recorder has written the day to R2, the cron joins
- * the two (scoreEtas) and keeps the result as `eta/YYYY-MM-DD.json` in the
- * same bucket. The dashboard reads the last 14 (etaSummary). Nothing calls
- * NUS: the recorder's polls are the only input, and it is bounded as rule 2
- * says. Off unless the operator turns `eta` on (collect.ts).
- *
- * The answer is good to about 15 s either way: a prediction can be up to
- * TTL.arrivalsMs old when the row is written, and a bus's position is read
- * every pollMs and interpolated between.
+ * How good the feed's arrival times are: each `arrival` row in Analytics
+ * Engine (a plate, a stop, the seconds the feed gave) against when the
+ * timelapse recorder saw that plate reach the stop (passingsOf). The cron
+ * scores each closed day into `eta/YYYY-MM-DD.json` (scoreEtas); the
+ * dashboard reads the last 14 (etaSummary). Nothing calls NUS. Off unless
+ * the operator turns `eta` on (collect.ts). Good to about 15 s either way:
+ * a prediction can be up to TTL.arrivalsMs old when logged, and positions
+ * are read every pollMs. See docs/analytics.md, *Arrival-time accuracy (`eta`)*.
  */
 
 import type { Env } from './types.ts';
@@ -204,7 +193,7 @@ export function aeTime(s: unknown): number {
 }
 
 /** The predictions logged inside day [date]'s recording window, from Analytics Engine. */
-async function predictionsFor(env: Env, date: string, nowMs: number, fetchImpl: typeof fetch): Promise<Prediction[]> {
+export async function predictionsFor(env: Env, date: string, nowMs: number, fetchImpl: typeof fetch): Promise<Prediction[]> {
   const { open, close } = windowOf(date);
   // Days back to reach the window's start, with one to spare.
   const days = Math.ceil((nowMs - open) / DAY) + 1;
@@ -228,7 +217,7 @@ async function predictionsFor(env: Env, date: string, nowMs: number, fetchImpl: 
     .sort((a, b) => a.t - b.t);
 }
 
-async function gunzipJson<T>(gz: ArrayBuffer): Promise<T> {
+export async function gunzipJson<T>(gz: ArrayBuffer): Promise<T> {
   return (await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'))).json()) as T;
 }
 

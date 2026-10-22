@@ -23,10 +23,11 @@ export const LIVERY = [
 /**
  * The stripes down a bus's side, rising to the right, as on the Android
  * app's welcome: one per service (P's grey would dull it), then a gap and a
- * thin line in the accent, with the mark sitting on the band. Drawn on a
- * 400 × 180 box stretched to the card, so a wide card gets a flatter band.
+ * thin line in the accent, with the mark sitting on the band (unless `mark`
+ * is false: sign-in's band, under the header's own mark). Drawn on a
+ * 400 × 180 box stretched to its box, so a wide one gets a flatter band.
  */
-export function Livery() {
+export function Livery({ mark = true }) {
   const u = 180 / 300;
   const rise = 100;
   // The band's lower edge, a fifth of the way up in the middle: the mark sits on it.
@@ -42,7 +43,7 @@ export function Livery() {
         <path d=${`M0 ${left - 0}L400 ${right}L400 ${right - 6 * u}L0 ${left - 6 * u}Z`} class="livery-accent" />
         ${colours.map(([svc, color], i) => strip((16 + 20 * i) * u, (36 + 20 * i) * u, color, svc))}
       </svg>
-      <img class="livery-mark" src="/assets/mark.svg" alt="" />
+      ${mark && html`<img class="livery-mark" src="/assets/mark.svg" alt="" />`}
     </div>
   `;
 }

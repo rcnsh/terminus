@@ -92,7 +92,7 @@ export interface FormatInput {
   nearestStop: Stop | null;
   /** Without coordinates, the stop the trip is assumed to start from. */
   origin?: Stop | null;
-  /** Short destination name, e.g. "UTown". Null for a bare /next. */
+  /** Short destination name, e.g. "UTown". Null for a bare /api/next. */
   destLabel: string | null;
   /** Seconds to walk the entire way, when known. */
   walkAllS: number | null;
@@ -220,7 +220,6 @@ function buildDetail(f: FormatInput, best: ScoredOption, verdict: WalkVerdict): 
   // No nearestStop means no coordinates, so we cannot claim you are anywhere.
   else if (f.nearestStop) parts.push(m().rightHere);
 
-  // No single bus goes there: where to change, and to which bus.
   const change = changeWords(best);
   if (change) parts.push(change);
 
@@ -262,7 +261,9 @@ function buildDetail(f: FormatInput, best: ScoredOption, verdict: WalkVerdict): 
     const raw = etaPhrase(f.alt);
     const plain = raw === m().now || raw === m().noTimes;
     const altName = f.alt.change ? `${named(f.alt)} → ${named(f.alt.change)}` : named(f.alt);
-    parts.push(m().orAlt(f.alt.svc === best.svc && !f.alt.change && !best.change ? shortStop(f.alt.stop.name) : altName, raw, plain));
+    // As the buses are named: a two-way public route's directions are one service ("151/1", "151/2").
+    const sameSvc = svcName(f.alt.svc) === svcName(best.svc) && !f.alt.change && !best.change;
+    parts.push(m().orAlt(sameSvc ? shortStop(f.alt.stop.name) : altName, raw, plain));
   }
 
   return parts.join(' · ');

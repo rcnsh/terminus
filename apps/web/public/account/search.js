@@ -88,12 +88,20 @@ export function grouped(list) {
   return [...groups.values()].flat();
 }
 
+/**
+ * Whether `d` is the place pinned result `pin` already stands for: the same
+ * result (kind and code), or the stop or food court a timetable row's classes
+ * go to. A code alone isn't one place: the stop COM3 and the building COM3 are two.
+ */
+export const samePlace = (pin, d) =>
+  pin.code === d.code && (pin.kind === d.kind || (pin.kind === 'timetable' && (d.kind === 'stop' || d.kind === 'landmark')));
+
 /** The results for `query`, ranked: `pinned` first whenever they match. The box shows them grouped(). */
 export function results(query, { source, suggestions, pinned = () => [] }) {
   const q = query.trim();
   if (!q) return suggestions();
   const top = rank(pinned(), q);
-  return [...top, ...rank(source(), q).filter((d) => !top.some((x) => x.code === d.code))].slice(0, MAX);
+  return [...top, ...rank(source(), q).filter((d) => !top.some((x) => samePlace(x, d)))].slice(0, MAX);
 }
 
 /** What a picked result puts in the box: a room or a code by its code, anything else by its name. */
@@ -103,9 +111,9 @@ export const pickedText = (d) => (d.kind === 'room' || d.label === d.code ? d.co
 export const pickedStop = (d) => (d.kind === 'landmark' ? d.code : d.stopCode);
 
 /**
- * The Buses tab's search, from /campus `c`: every service, by its code
+ * The Buses tab's search, from /api/campus `c`: every service, by its code
  * (with where it runs), then every stop by its long name, found by that, its
- * short name, its code and the nicknames /campus has for it ("library").
+ * short name, its code and the nicknames /api/campus has for it ("library").
  */
 export function busesTabIndex(c) {
   if (!c) return [];

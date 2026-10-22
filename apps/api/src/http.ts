@@ -67,12 +67,17 @@ export const roundCoord = (x: number): number => Math.round(x * 10_000) / 10_000
  * rounded (roundCoord): a fix too rough to say where you are counts as none
  * (MAX_FIX_ACC_M).
  */
-export function coordsFrom(url: URL): { lat: number; lon: number } | { lat: null; lon: null } {
-  const lat = numParam(url, 'lat');
-  const lon = numParam(url, 'lon');
+export function coordsFrom(url: URL): Coords {
+  return coords(numParam(url, 'lat'), numParam(url, 'lon'), numParam(url, 'acc'));
+}
+
+/** A location, or none. */
+export type Coords = { lat: number; lon: number } | { lat: null; lon: null };
+
+/** A location from its numbers, by coordsFrom's rules: out of range or too rough is none. */
+export function coords(lat: number | null, lon: number | null, acc: number | null = null): Coords {
   if (lat === null || lon === null) return { lat: null, lon: null };
   if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return { lat: null, lon: null };
-  const acc = numParam(url, 'acc');
   if (acc !== null && acc > MAX_FIX_ACC_M) return { lat: null, lon: null };
   return { lat: roundCoord(lat), lon: roundCoord(lon) };
 }
@@ -100,7 +105,7 @@ export function clientKey(req: Request): string {
  * A host that gave no answer at all: it timed out, or the connection
  * failed. Unlike an HTTP status, nothing upstream said why, and a host that
  * hangs costs more than one that says 503, so the feeds' breakers count it
- * as the host being down (fms.ts tripsBreaker).
+ * as the host being down (fms.ts opensBreaker).
  */
 export class UpstreamUnreachable extends Error {
   readonly timedOut: boolean;
@@ -192,7 +197,6 @@ const widen = (extra: Record<string, string>): string =>
 const CSP_DOCS = widen(DOCS_EXTRA);
 const CSP_TIMELAPSE = widen(TIMELAPSE_EXTRA);
 
-/** The CSP for the page at this path. */
 export function cspFor(path: string): string {
   if (path === '/docs') return CSP_DOCS;
   if (path.startsWith('/admin/timelapse/')) return CSP_TIMELAPSE;

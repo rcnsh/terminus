@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Records what the map is shown: /buses on a live site, every 5 s per
+ * Records what the map is shown: /api/buses on a live site, every 5 s per
  * service, for a few minutes, with a throwaway anonymous account (deleted at
  * the end). Then checks each bus's `along` (metres along its route line):
  * between two readings on its line it may go back at most 60 m (GPS error:
@@ -10,7 +10,7 @@
  * being drawn backwards. Prints a Markdown report, and exits 1 when a move
  * is flagged, or when it saw no buses at all (so checked nothing).
  *
- * The load is one person watching the map: one /buses call per service
+ * The load is one person watching the map: one /api/buses call per service
  * every 5 s, which the Worker caches 5 s per service anyway.
  *
  *   node scripts/record_buses.mjs [--site https://terminus.run] [--minutes 10] [--out trace.json] [A1 A2 D1 D2]
@@ -72,7 +72,7 @@ async function record() {
   let routes = {};
   try {
     const campus = await (await fetch(`${SITE}/api/campus`, { headers, signal: within() })).json();
-    // /campus says which routes are loops: a loop's line can end tens of
+    // /api/campus says which routes are loops: a loop's line can end tens of
     // metres from where it starts (A1, A2), so the ends can't tell.
     routes = Object.fromEntries(
       SERVICES.map((s) => [s, { line: campus.routes?.[s]?.line ?? [], loop: campus.routes?.[s]?.loop === true }]),

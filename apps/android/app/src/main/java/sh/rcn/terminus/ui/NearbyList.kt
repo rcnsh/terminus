@@ -40,7 +40,7 @@ import sh.rcn.terminus.parseColor
 
 /**
  * The stops near you as their signs: the name plate with the walk there, then a row per service, its buses coming up a short road towards
- * the stop, nearer the sooner they're due, the next one solid and the rest faded. The nearest stop is drawn larger. A timetable guess is an
+ * the stop, nearer the sooner they're due, the next one solid and the rest faded. The nearest stop is drawn larger. An estimate is an
  * outline, never a filled bus, so it doesn't pass for live.
  */
 @Composable
@@ -117,7 +117,7 @@ private const val LATER_ALPHA = 0.35f
 
 /**
  * A short road to the stop (the ring at its end), and the buses on it: filled in their colour when the time is live, an outline when it's a
- * timetable guess. The next one is solid and drawn last, on top; the ones after it, faded.
+ * estimate. The next one is solid and drawn last, on top; the ones after it, faded.
  */
 @Composable
 private fun Road(row: BoardRow, color: Color, modifier: Modifier) {
@@ -152,8 +152,8 @@ private fun Road(row: BoardRow, color: Color, modifier: Modifier) {
 }
 
 /**
- * The local wording, for an older server and the widget's own countdown: anything but a live time keeps its "~", as the server's `eta`
- * does.
+ * The local wording, for the widget's own countdown: anything but a live time keeps its "~", as the server's `eta` does; worked out here
+ * for an older server.
  */
 internal fun eta(s: Int?, quality: String) =
     when {

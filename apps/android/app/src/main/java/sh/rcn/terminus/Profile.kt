@@ -35,13 +35,13 @@ data class Limits(
 }
 
 /**
- * The profile as the server keeps it (apps/api/src/profile.ts), edited in place and sent back whole with PUT /me/profile. Kept as JSON so
- * fields this version doesn't know about survive a save.
+ * The profile as the server keeps it (apps/api/src/profile.ts), edited in place and sent back whole with PUT /api/me/profile. Kept as JSON
+ * so fields this version doesn't know about survive a save.
  */
 class ProfileDoc(val json: JSONObject) {
     fun copy() = ProfileDoc(JSONObject(json.toString()))
 
-    /** What the server allows (its `limits`); today's values from an older server. */
+    /** What the server allows (its `limits`); today's values, worked out here for an older server. */
     val limits: Limits
         get() = Limits.parse(json.optJSONObject("limits"))
 
@@ -135,28 +135,54 @@ class ProfileDoc(val json: JSONObject) {
     }
 
     /** Imported from NUSMods. */
-    val trips: List<Trip>
+    val trips: List<TimetableClass>
         get() = trips("trips")
 
     /** Entered by hand; they survive a re-import. */
-    val manual: List<Trip>
+    val manual: List<TimetableClass>
         get() = trips("manual")
 
-    fun addManual(t: Trip) {
+    fun addManual(t: TimetableClass) {
         val list = json.optJSONArray("manual") ?: JSONArray()
         list.put(t.toJson())
         json.put("manual", list)
     }
 
-    /** Sends one class to another stop: imported ([trips]) or by hand ([manual]), by its place in that list. */
-    fun setClassStop(imported: Boolean, index: Int, to: String) {
-        json.optJSONArray(if (imported) "trips" else "manual")?.optJSONObject(index)?.put("to", to)
+    /** One class as the profile keeps it, imported ([trips]) or by hand ([manual]), with every field (an import's weeks too): a copy. */
+    fun classAt(imported: Boolean, index: Int): JSONObject? =
+        json.optJSONArray(if (imported) "trips" else "manual")?.optJSONObject(index)?.let { JSONObject(it.toString()) }
+
+    /** Sends a class ([seen], from [classAt]) to another stop: imported ([trips]) or by hand ([manual]), seen at [index] in that list. */
+    fun setClassStop(imported: Boolean, index: Int, seen: JSONObject, to: String) {
+        val list = json.optJSONArray(if (imported) "trips" else "manual") ?: return run { missed = true }
+        find(list, index, seen)?.let { list.getJSONObject(it).put("to", to) }
     }
 
-    /** Takes one class off: imported ([trips]) or added by hand ([manual]), by its place in that list. */
-    fun removeClass(imported: Boolean, index: Int) {
-        val list = json.optJSONArray(if (imported) "trips" else "manual") ?: return
-        list.remove(index)
+    /** Takes a class ([seen], from [classAt]) off: imported ([trips]) or added by hand ([manual]), seen at [index] in that list. */
+    fun removeClass(imported: Boolean, index: Int, seen: JSONObject) {
+        val list = json.optJSONArray(if (imported) "trips" else "manual") ?: return run { missed = true }
+        find(list, index, seen)?.let { list.remove(it) }
+    }
+
+    /**
+     * A change made to a class that isn't in this profile as it was seen: another device removed or changed it, or a second tap came before
+     * the list redrew. Set by [setClassStop] and [removeClass] rather than changing a neighbour; never saved.
+     */
+    var missed = false
+        private set
+
+    /**
+     * Where [seen] is in [list]: at [index] if that's still it, else wherever it moved to (another device removed one before it). The same
+     * class has every field the same (day, times, name, room, an import's weeks) but its stop, which is what changes.
+     */
+    private fun find(list: JSONArray, index: Int, seen: JSONObject): Int? {
+        fun same(i: Int) = list.optJSONObject(i)?.let { sameJson(it, seen, except = "to") } == true
+        if (same(index)) return index
+        return (0 until list.length()).firstOrNull(::same)
+            ?: run {
+                missed = true
+                null
+            }
     }
 
     val places: List<SavedPlace>
@@ -167,7 +193,9 @@ class ProfileDoc(val json: JSONObject) {
             }
         }
 
+    /** A favourite at [to], unless there's one already (added again on a profile another device saved meanwhile, it isn't doubled). */
     fun addPlace(label: String, to: String) {
+        if (places.any { it.to == to }) return
         val list = json.optJSONArray("places") ?: JSONArray()
         list.put(
             JSONObject().put("key", placeKey(label, places.map { it.key })).put("label", label.trim().take(limits.placeLabel)).put("to", to)
@@ -194,23 +222,32 @@ class ProfileDoc(val json: JSONObject) {
     }
 
     /**
+     * The favourite at [to] taken off, as [removePlace]: found by its stop, which is one favourite's, rather than its key, which a
+     * favourite added again on a newer profile may not have kept.
+     */
+    fun removePlaceAt(to: String): RemovedPlace? = places.firstOrNull { it.to == to }?.let { removePlace(it.key) }
+
+    /**
      * Undo for [removePlace]: back in its old place in the list, with its usual times. Not when the list is full, or the stop is a
      * favourite again.
      */
     fun restorePlace(r: RemovedPlace) {
         val now = places
-        if (now.size >= limits.places || now.any { it.to == r.place.optString("to") || it.key == r.place.optString("key") }) return
+        if (now.size >= limits.places || now.any { it.to == r.place.optString("to") }) return
+        // Its key taken meanwhile (another device's favourite, saved first): a free one, and its usual times follow.
+        val was = r.place.optString("key")
+        val key = if (now.any { it.key == was }) placeKey(r.label, now.map { it.key }) else was
         val a = json.optJSONArray("places") ?: JSONArray()
         val all = (0 until a.length()).map { a.getJSONObject(it) }.toMutableList()
-        all.add(r.index.coerceAtMost(all.size), r.place)
+        all.add(r.index.coerceAtMost(all.size), JSONObject(r.place.toString()).put("key", key))
         json.put("places", JSONArray(all))
         if (r.usual.isEmpty()) return
         val u = json.optJSONArray("usual") ?: JSONArray()
-        r.usual.forEach { u.put(it) }
+        r.usual.forEach { u.put(JSONObject(it.toString()).put("place", key)) }
         json.put("usual", u)
     }
 
-    /** Saved places at a usual time: each a trip that day, like a class. */
+    /** Favourites at a usual time: each a trip that day, like a class. */
     val usual: List<UsualTime>
         get() {
             val a = json.optJSONArray("usual") ?: return emptyList()
@@ -229,14 +266,78 @@ class ProfileDoc(val json: JSONObject) {
         json.put("usual", JSONArray(kept))
     }
 
-    private fun trips(field: String): List<Trip> {
+    private fun trips(field: String): List<TimetableClass> {
         val a = json.optJSONArray(field) ?: return emptyList()
-        return (0 until a.length()).map { Trip.parse(a.getJSONObject(it)) }
+        return (0 until a.length()).map { TimetableClass.parse(a.getJSONObject(it)) }
     }
 
     /** Somewhere to go or somewhere to start: what the server counts as a setup worth keeping. */
     val hasSetup: Boolean
         get() = homeStops.isNotEmpty() || trips.isNotEmpty() || manual.isNotEmpty() || places.isNotEmpty()
+}
+
+/** Whether [a] and [b] are the same JSON, numbers by value, leaving out [except] at the top. */
+internal fun sameJson(a: Any?, b: Any?, except: String? = null): Boolean =
+    when {
+        a is JSONObject && b is JSONObject -> {
+            val keys = a.keys().asSequence().filter { it != except }.toSet()
+            keys == b.keys().asSequence().filter { it != except }.toSet() && keys.all { sameJson(a.opt(it), b.opt(it)) }
+        }
+        a is JSONArray && b is JSONArray -> a.length() == b.length() && (0 until a.length()).all { sameJson(a.opt(it), b.opt(it)) }
+        a is Number && b is Number -> a.toDouble() == b.toDouble()
+        else -> a == b
+    }
+
+/** A profile as the server sent it, and its version (the ETag), for a save that checks no other device saved since. */
+class Tagged(val json: JSONObject, val version: String?)
+
+/** A change to the profile: made on the screen's copy at once, and made again on the server's when it's saved. */
+typealias ProfileChange = (ProfileDoc) -> Unit
+
+/** What a save stored and its version; [missed] when a change made again on a newer profile found its class gone ([ProfileDoc.missed]). */
+class SavedProfile(val doc: ProfileDoc, val version: String?, val missed: Boolean)
+
+/**
+ * Saves [changes], made on [base], the profile as the server had it at [version]. With If-Match, so a save never overwrites what another
+ * device (or a pin on Buses, a favourite from the map) saved since: refused for that (412), or with no version to go by, only [changes] are
+ * made again on the profile as the server has it now ([load]) and saved on that, up to [tries] times.
+ */
+suspend fun saveChanges(
+    base: ProfileDoc,
+    version: String?,
+    changes: List<ProfileChange>,
+    load: suspend () -> Tagged,
+    save: suspend (JSONObject, String?) -> Tagged,
+    tries: Int = 3,
+): SavedProfile {
+    var missed = false
+    fun on(json: JSONObject) = ProfileDoc(json).also { d -> changes.forEach { it(d) } }
+    var doc: ProfileDoc
+    var from: String?
+    if (version != null) {
+        doc = base.copy().also { d -> changes.forEach { it(d) } }
+        missed = doc.missed
+        from = version
+    } else {
+        val fresh = load()
+        doc = on(fresh.json)
+        missed = doc.missed
+        from = fresh.version
+    }
+    var attempt = 1
+    while (true) {
+        try {
+            val saved = save(doc.json, from)
+            return SavedProfile(ProfileDoc(saved.json), saved.version, missed)
+        } catch (e: ApiError) {
+            if (e.status != 412 || attempt >= tries) throw e
+        }
+        attempt++
+        val fresh = load()
+        doc = on(fresh.json)
+        missed = missed || doc.missed
+        from = fresh.version
+    }
 }
 
 data class SavedPlace(val key: String, val label: String, val to: String)
@@ -247,11 +348,11 @@ class RemovedPlace(val index: Int, val place: JSONObject, val usual: List<JSONOb
         get() = place.optString("label")
 }
 
-/** A saved place at a usual time: day 0 = Sunday, minutes past midnight, Singapore time. */
+/** A favourite at a usual time: day 0 = Sunday, minutes past midnight, Singapore time. */
 data class UsualTime(val place: String, val day: Int, val atMin: Int)
 
 /** A class or commitment. day: 0 = Sunday. Minutes past midnight, Singapore time. */
-data class Trip(val day: Int, val arriveByMin: Int, val endMin: Int?, val to: String, val label: String, val venue: String) {
+data class TimetableClass(val day: Int, val arriveByMin: Int, val endMin: Int?, val to: String, val label: String, val venue: String) {
     fun toJson(): JSONObject =
         JSONObject().put("day", day).put("arriveByMin", arriveByMin).put("to", to).put("label", label).put("venue", venue).apply {
             if (endMin != null) put("endMin", endMin)
@@ -259,7 +360,7 @@ data class Trip(val day: Int, val arriveByMin: Int, val endMin: Int?, val to: St
 
     companion object {
         fun parse(o: JSONObject) =
-            Trip(
+            TimetableClass(
                 day = o.optInt("day"),
                 arriveByMin = o.optInt("arriveByMin"),
                 endMin = if (o.has("endMin")) o.optInt("endMin") else null,

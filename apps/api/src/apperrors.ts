@@ -12,7 +12,8 @@
  * Reports go to Analytics Engine (analytics.ts logAppError), which keeps
  * them three months, and the dashboard groups them by fingerprint. Off
  * unless the operator turns `errors` on (collect.ts); while it's off a
- * report is answered the same and dropped.
+ * report is answered the same and dropped. The operator can dismiss a
+ * crash from the dashboard (admin.ts handleDismissCrash).
  */
 
 import type { Env } from './types.ts';

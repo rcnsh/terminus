@@ -34,7 +34,6 @@ export interface CachedOptions<T> {
   /** Where "this key failed a moment ago" lives. */
   failKey: string;
   fetch: () => Promise<T>;
-  /** How long a cached answer is fresh. */
   freshMs: number;
   /** How long a stale answer stays usable as a fallback. */
   staleMaxS: number;
@@ -54,11 +53,11 @@ export interface CachedOptions<T> {
    */
   memoes?: (err: unknown) => boolean;
   /**
-   * The feed's breaker: tripped by a failure that `trips`, it quiets every
-   * key that names it. `onTrip` hears of each trip (the beta notes it for its
+   * The feed's breaker: opened by a failure that `opens` it, it quiets every
+   * key that names it. `onOpen` hears each time it opens (the beta notes it for its
    * cron, feedwatch.ts); its own failure is shrugged off.
    */
-  breaker?: { key: string; trips: (err: unknown) => boolean; maxAgeS: number; onTrip?: (err: unknown) => Promise<void> };
+  breaker?: { key: string; opens: (err: unknown) => boolean; maxAgeS: number; onOpen?: (err: unknown) => Promise<void> };
   /** One in-flight fetch per key per isolate. The caller owns the map, so each feed has its own. */
   inflight: Map<string, Promise<T>>;
 }
@@ -177,10 +176,10 @@ export async function cachedFetch<T extends { fetchedAt: number }>(o: CachedOpti
         async (err) => {
           const reason = String((err as Error)?.message ?? err);
           if (o.memoes?.(err) ?? true) await cache.put(o.failKey, memo(reason, o.failMemoS)).catch(() => {});
-          if (o.breaker?.trips(err)) {
+          if (o.breaker?.opens(err)) {
             await cache.put(o.breaker.key, memo(reason, o.breaker.maxAgeS)).catch(() => {});
             // After the answer, so a failing request waits for no extra write.
-            if (o.breaker.onTrip) o.ctx.waitUntil(o.breaker.onTrip(err).catch(() => {}));
+            if (o.breaker.onOpen) o.ctx.waitUntil(o.breaker.onOpen(err).catch(() => {}));
           }
           throw err;
         },

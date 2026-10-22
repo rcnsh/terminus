@@ -10,8 +10,8 @@
 //
 // Everything comes from our own domain: MapLibre and the PMTiles reader
 // (vendor/, scripts/vendor-map.sh), the map file and its style, fonts and
-// icons (/map/*), routes and stops (/campus), buses (/buses), arrivals
-// (/arrivals). The service worker keeps all but the live ones for offline.
+// icons (/map/*), routes and stops (/api/campus), buses (/api/buses), arrivals
+// (/api/arrivals). The service worker keeps all but the live ones for offline.
 
 import {
   Icon,
@@ -70,7 +70,7 @@ const BOUNDS = [
 /** Room round the whole campus, clear of the pills along the top. */
 const CAMPUS_PADDING = { top: 70, bottom: 30, left: 30, right: 30 };
 
-/** /campus, once loaded. */
+/** /api/campus, once loaded. */
 const campusData = store(null);
 /** The service whose pill is on, or null. */
 const selected = store(null);
@@ -782,7 +782,7 @@ export function positionAt(g, now) {
 
 /* A route line measured as the API measures it (haversine, metres from its
    start at each point), so a bus's `along` is a place on it. Whether it's a
-   loop comes from /campus, as the API places buses: a loop's line needn't end
+   loop comes from /api/campus, as the API places buses: a loop's line needn't end
    exactly where it starts (A1's ends are some 40 m apart at KRB). */
 
 const paths = new WeakMap();
@@ -1151,12 +1151,12 @@ function SectionBand({ text, open = true, onToggle, controls }) {
 
 /** How full a bus is, as three rising bars (as many filled as it's full) and a word. */
 function CrowdMeter({ crowd }) {
-  const word = { low: t('Seats free'), medium: t('Busy'), high: t('Packed') }[crowd];
+  const word = { low: t('Seats'), medium: t('Busy'), high: t('Packed') }[crowd];
   if (!word) return null;
   return html`<span class=${`bus-crowd ${crowd}`}><span class="bars" aria-hidden="true"><i></i><i></i><i></i></span>${word}</span>`;
 }
 
-/** Stops after the next one shown in the bus's list before "+N more". */
+/** Stops after the next one shown in the bus's list before the rest are asked for. */
 const AHEAD_SHOWN = 4;
 const CHEVRON_DOWN = '<path d="m6 9 6 6 6-6" />';
 const CHEVRON_END = '<path d="m9 6 6 6-6 6" />';
@@ -1164,8 +1164,8 @@ const CHEVRON_END = '<path d="m9 6 6 6-6 6" />';
 /**
  * The bus's line from the stop it passed (or the one it's at) on through the
  * stops ahead, as the server lists them (`upcoming`): the client never walks
- * the route itself. An older server without `upcoming` gives its next stop
- * only. The first few after the next, unless `all` (or only one more is
+ * the route itself (null from an older server: its next stop only). The
+ * first few after the next, unless `all` (or only one more is
  * left); with more beyond them, the line fades out under the last. Passed,
  * here and next are drawn on the line (grey, the bus, bold), not written
  * beside it; a screen reader still hears the word. Each stop's row is a
@@ -1260,7 +1260,7 @@ function BusSheet({ id, box, stops = false, all: allAtFirst = false }) {
   const stop = stopOfBus(campus, b);
   // A stop opened from here: its sheet, the map on it, and back returns to this bus as it is.
   const go = (code) => showStop(code, { bus: id, stops: open, all });
-  // A stop on its line by its code; from an older API, by name, the one nearest the bus.
+  // A stop on its line by its code; by name, the one nearest the bus, worked out here for an older server.
   const onStop = (code, name) => {
     const s = (code && campus?.stops.find((x) => x.code === code)) || stopOfBus(campus, b, name);
     if (s) go(s.code);
@@ -1389,7 +1389,7 @@ function StopSheet({ code, box, onGoTo, onSaved, active }) {
       if (same) {
         let removed = null;
         await saveNow((x) => {
-          removed = withoutPlace(x, same.key);
+          removed = withoutPlace(x, same.key) ?? removed;
         });
         onSaved?.();
         if (removed) {
@@ -1401,7 +1401,8 @@ function StopSheet({ code, box, onGoTo, onSaved, active }) {
           toast(t('{0} removed from favourites', same.label), { action: { label: t('Undo'), run: undo } });
         }
       } else {
-        await saveNow((x) => withPlace(x, stop.code, stop.name));
+        const keep = {};
+        await saveNow((x) => withPlace(x, stop.code, stop.name, keep));
         onSaved?.();
       }
     } catch (err) {

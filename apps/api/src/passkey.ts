@@ -1,21 +1,9 @@
 /**
- * Passkeys for the operator's pages (/admin/, /admin/timelapse/).
- *
- * Adding a passkey needs HEALTH_TOKEN itself; signing in with one gives an
- * operator session, a signed token that does what HEALTH_TOKEN does, sent
- * in the same x-health-token header, for SESSION_MS. So the secret is typed
- * once per device rather than every visit, and a session that leaks dies on
- * its own.
- *
- * Nothing here is stored but the passkeys (KV `operator:passkeys`): the
- * challenge and the session are signed with a key made from HEALTH_TOKEN,
- * so a challenge needs no KV read-after-write, and rotating the token ends
- * every session. A passkey is kept for the host it was made on (its rpId):
- * terminus.run, terminus.rcn.sh and the beta each want their own.
- *
- * WebAuthn is checked by hand with WebCrypto: the browser gives the public
- * key as SPKI (getPublicKey()), so there's no CBOR to read, and attestation
- * isn't asked for (the token is what vouches for a new passkey).
+ * Passkeys for the operator's pages (/admin/, /admin/timelapse/). Adding one
+ * needs HEALTH_TOKEN itself; signing in with one gives an operator session in
+ * the same x-health-token header for SESSION_MS, so the secret is typed once
+ * per device and a leaked session dies on its own. See internals.md,
+ * *Operator passkeys*.
  */
 
 import type { Env } from './types.ts';

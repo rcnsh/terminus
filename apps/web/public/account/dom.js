@@ -133,12 +133,28 @@ export async function signedOut() {
  * A same-origin JSON call; throws with the server's error message and status.
  * Reads give up after SEND_TIMEOUT_MS, writes after WRITE_TIMEOUT_MS.
  */
-export async function api(path, { method = 'GET', body, timeoutMs = method === 'GET' ? SEND_TIMEOUT_MS : WRITE_TIMEOUT_MS } = {}) {
+export async function api(path, opts) {
+  return (await apiTagged(path, opts)).data;
+}
+
+/**
+ * api(), with the answer's ETag (`etag`, null without one): the profile's
+ * version, sent back as `ifMatch` so a save happens only if nothing else
+ * saved since (412 otherwise).
+ */
+export async function apiTagged(
+  path,
+  { method = 'GET', body, ifMatch, timeoutMs = method === 'GET' ? SEND_TIMEOUT_MS : WRITE_TIMEOUT_MS } = {},
+) {
   const res = await send(path, {
     method,
     timeoutMs,
     // The API writes answers and errors in the page's language.
-    headers: { 'accept-language': window.i18n?.header ?? 'en', ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
+    headers: {
+      'accept-language': window.i18n?.header ?? 'en',
+      ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+      ...(ifMatch ? { 'if-match': ifMatch } : {}),
+    },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     credentials: 'same-origin',
   });
@@ -160,7 +176,7 @@ export async function api(path, { method = 'GET', body, timeoutMs = method === '
     throw Object.assign(new Error(sentence(data?.error) || t("Couldn't reach terminus. Try again in a moment.")), { status: res.status });
   // A 200 that isn't the API's answer must not pass for one.
   if (data === null || typeof data !== 'object') throw unreachable();
-  return data;
+  return { data, etag: res.headers?.get('etag') ?? null };
 }
 
 // The API's errors are lowercase phrases ("not a valid NUSMods share link"),

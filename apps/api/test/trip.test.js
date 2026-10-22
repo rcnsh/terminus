@@ -1,6 +1,6 @@
 /**
  * The trip engine: trip signals kept in a Durable Object per user,
- * the phase on the card, /me/day, and the planner fixes that go with them.
+ * the phase on the card, /api/me/day, and the planner fixes that go with them.
  * On the frozen clock (Thursday 2026-08-27, 09:00 SGT) and a fake feed.
  */
 import test from 'node:test';
@@ -857,10 +857,10 @@ test("a deleted account's trip state goes at once, and a request still under way
     obj.fetch(`https://trip/${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   const date = sgtDate(FROZEN_NOW);
   const deleteAt = endOfDayMs(FROZEN_NOW);
-  // What a /me/next that read the account just before it went would still send.
-  assert.ok((await post('signal', { date, key: FIRST, rec: { kind: 'skipped', at: FROZEN_NOW }, deleteAt })).ok);
-  assert.ok((await post('plan', { date, key: FIRST, plan: { svc: 'D2', stop: 'PGP', board: null, arrive: null }, deleteAt })).ok);
-  assert.ok((await post('watch', { userId, date, at: FROZEN_NOW + 60_000, deleteAt })).ok);
+  // What a /api/me/next that read the account just before it went would still send.
+  assert.ok((await post('update', { date, items: [{ key: FIRST, rec: { kind: 'skipped', at: FROZEN_NOW } }], deleteAt })).ok);
+  assert.ok((await post('update', { date, plans: { [FIRST]: { svc: 'D2', stop: 'PGP', board: null, arrive: null } }, deleteAt })).ok);
+  assert.ok((await post('update', { date, watch: { userId, at: FROZEN_NOW + 60_000 }, deleteAt })).ok);
   assert.equal(await (await obj.fetch(`https://trip/day?date=${date}`)).json(), null);
   assert.deepEqual([...inst.storage._map.keys()].sort(), ['deleteAt', 'gone'], 'only the mark is kept');
   assert.equal(TRIPS.alarms.get(userId), deleteAt, 'until midnight');
@@ -882,7 +882,11 @@ test("the cron's deletion of an idle anonymous account takes its trip state too"
     });
   env.DB._db.exec(`INSERT INTO users (id, email, created, last_seen) VALUES ('idle', NULL, 0, 0), ('used', NULL, 0, ${FROZEN_NOW})`);
   for (const id of ['idle', 'used'])
-    await post(id, 'watch', { userId: id, date: sgtDate(FROZEN_NOW), at: FROZEN_NOW + 60_000, deleteAt: endOfDayMs(FROZEN_NOW) });
+    await post(id, 'update', {
+      date: sgtDate(FROZEN_NOW),
+      watch: { userId: id, at: FROZEN_NOW + 60_000 },
+      deleteAt: endOfDayMs(FROZEN_NOW),
+    });
   await housekeeping(env.DB, FROZEN_NOW + ACCOUNT_TTL.anonIdleMs - 1000, true, env);
   assert.deepEqual(
     env.DB._db
@@ -896,7 +900,7 @@ test("the cron's deletion of an idle anonymous account takes its trip state too"
 });
 
 const stopAt = (code) => indexGraph(GRAPH).byCode.get(code);
-/** Due, then at the boarding stop just before the bus, as the phone's /me/next sends it. */
+/** Due, then at the boarding stop just before the bus, as the phone's /api/me/next sends it. */
 async function waitingAtStop(t) {
   const first = await t.next(t.phone);
   t.clock(Date.parse(first.leave.at) - 60_000);
@@ -979,7 +983,7 @@ test('"Not on campus today" leaves a trip already answered alone', async () => {
   assert.equal((await tripRec(t, SECOND)).away, true);
 });
 
-test('a saved place with a usual time is a trip on that day, like a class', async () => {
+test('a favourite with a usual time is a trip on that day, like a class', async () => {
   const t = await setup({
     home: { stops: ['PGP'] },
     places: [{ key: 'gym', label: 'Gym', to: 'UHALL' }],
@@ -1035,7 +1039,7 @@ test('usual times and one-offs are checked like the rest of the profile', async 
   );
 });
 
-test('a one-off trip to a saved place, by its key', async () => {
+test('a one-off trip to a favourite, by its key', async () => {
   const t = await setup({ home: { stops: ['PGP'] }, places: [{ key: 'gym', label: 'Gym', to: 'UHALL' }] });
   const a = await (await t.call('/api/me/once', { method: 'POST', token: t.phone, body: { place: 'gym', atMin: 11 * 60 } })).json();
   assert.equal(a.dest.label, 'Gym');
@@ -1293,7 +1297,7 @@ test('at the stop and from the heads-up, the bus you were told stays the plan wh
   assert.equal((await next(mac)).leave.svc, told.leave.svc, 'and on every device');
 });
 
-test('a plan and a watch sent together both stick (the Trip object reads the day after the body)', async () => {
+test('a plan and a watch sent at once both stick (the Trip object reads the day after the body)', async () => {
   installGlobals(makeFetch({}));
   const trips = makeDurableObjects(Trip);
   const s = trips.get('u1');
@@ -1301,10 +1305,10 @@ test('a plan and a watch sent together both stick (the Trip object reads the day
   const deleteAt = endOfDayMs(FROZEN_NOW);
   const post = (path, body) =>
     s.fetch(`https://trip${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-  // As one /me/next does: the plan and the watch, neither waiting for the other.
+  // Two updates at once (two devices asking together), neither waiting for the other.
   await Promise.all([
-    post('/plan', { date, key: 'k', plan: { svc: 'D2', stop: 'PGP', board: new Date(FROZEN_NOW + 600_000).toISOString() }, deleteAt }),
-    post('/watch', { userId: 'u1', date, at: FROZEN_NOW + 60_000, deleteAt }),
+    post('/update', { date, plans: { k: { svc: 'D2', stop: 'PGP', board: new Date(FROZEN_NOW + 600_000).toISOString() } }, deleteAt }),
+    post('/update', { date, watch: { userId: 'u1', at: FROZEN_NOW + 60_000 }, deleteAt }),
   ]);
   const day = await (await s.fetch(`https://trip/day?date=${date}`)).json();
   assert.equal(day.plans?.k?.svc, 'D2', 'the plan survives the watch');

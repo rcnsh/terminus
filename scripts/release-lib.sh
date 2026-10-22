@@ -1,8 +1,8 @@
 # Checks and steps shared by scripts/release.sh and scripts/release-beta.sh,
 # which source this file from the repo root. Each check stops the release
-# and says what to do; they read VERSION, BUILD, OUT, BUCKET and DRY from the
-# script that sources them. Both run under bash with pipefail, so a failure
-# anywhere in a pipeline stops the release too.
+# and says what to do; they read VERSION, BUILD, OUT, BUCKET, DRY, ROOT,
+# SIGN_IDENTITY and SPARKLE_KEY from the script that sources them. Both run
+# under bash with pipefail, so a failure anywhere in a pipeline stops the release too.
 
 die() { echo "$*" >&2; exit 1; }
 

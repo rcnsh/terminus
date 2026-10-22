@@ -1,4 +1,6 @@
-<!-- 3.4.2 -->
-### terminus 3.4.2
+<!-- 3.6.0 -->
+### terminus 3.6.0
 
-**Fixes:** on Android, today's list no longer stays in the old language when you switch languages quickly.
+**New:** the developer menu (Settings › About) shows diagnostics for a bug report: the server, notification and alarm permissions, the last push and refresh, and the app's recent requests. Copy diagnostics puts them on the clipboard; nothing leaves your device unless you paste it.
+
+**Fixes:** the apps call only terminus.run. Public buses as the second bus of a trip, or while you ride one, now show live times.
