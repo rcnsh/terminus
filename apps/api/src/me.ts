@@ -1476,7 +1476,16 @@ export async function tripCardFor(
   day: DayRecord | null,
   nowMs: number,
   savePlanLocal: (key: string, plan: Boarded) => Promise<void>,
-): Promise<{ key: string | null; phase: string; gone: boolean; remind: boolean; wakeAt: number | null } | null> {
+): Promise<{
+  key: string | null;
+  phase: string;
+  gone: boolean;
+  remind: boolean;
+  wakeAt: number | null;
+  /** The leave-by and how sure the answer is, for the wake's freshness log (tripdo.ts). */
+  leaveAt: number | null;
+  quality: string;
+} | null> {
   if (!env.DB) return null;
   const profile = await getProfile(env.DB, userId, deps.graph);
   if (!classesOn(profile, nowMs).length) return null;
@@ -1489,6 +1498,8 @@ export async function tripCardFor(
     gone: body.card.gone,
     remind: body.card.remind !== false,
     wakeAt: nextPhaseAt(body, trip, nowMs),
+    leaveAt: body.leave?.at ? Date.parse(body.leave.at) : null,
+    quality: body.quality,
   };
 }
 

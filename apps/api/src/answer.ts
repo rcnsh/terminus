@@ -83,6 +83,8 @@ export async function answerFor(
   input: ResolveInput,
   destLabel: string | null,
   nowMs: number,
+  /** How to read the stops' arrivals; the Trip object passes one that notes how old they were. */
+  collect: typeof collectArrivals = collectArrivals,
 ): Promise<Answer> {
   // With public buses on, the graph that has them: more services at the same stops.
   const graph = input.publicBuses ? GRAPH_PUBLIC : GRAPH;
@@ -123,7 +125,7 @@ export async function answerFor(
   // change stops to ask about is settled before any fetch, so it all goes
   // in one round, at most TRANSFER.maxFetch stops more.
   const transfers = planTransfers(graph, input, cands);
-  const byStop = await collectArrivals(env, ctx, [...cands.map((c) => c.stop.code), ...transfers.fetch], nowMs, graph);
+  const byStop = await collect(env, ctx, [...cands.map((c) => c.stop.code), ...transfers.fetch], nowMs, graph);
 
   // Tally who's packed for the full-bus risk, off the response path.
   if (env.DB) ctx.waitUntil(recordCrowds(env.DB, byStop, nowMs));
