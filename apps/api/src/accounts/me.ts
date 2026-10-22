@@ -134,7 +134,7 @@ function liveryHtml(): string {
  * Minimal pages served by the Worker itself, laid out as the account page's
  * sign-in is (account.css): the livery under the header, then the words, and
  * from 900px the form beside them. A page with nothing to fill in has no
- * form, and there its words are one centred column instead.
+ * form (notice() below), and there its words are one centred column instead.
  */
 const page = (title: string, intro: string, form = '') => `<!doctype html>
 <html lang="${lang() === 'zh' ? 'zh-Hans' : 'en'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -147,9 +147,25 @@ const page = (title: string, intro: string, form = '') => `<!doctype html>
 <link rel="stylesheet" href="/account/account.css">
 <style>.signin-intro .btn{margin-top:20px}form.signin-alt .link-btn{padding:0}
 .number{display:block;min-height:72px;text-align:center;font:700 2.2rem/1 var(--display);letter-spacing:.3em;font-variant-numeric:tabular-nums}
-@media (min-width:900px){.signin-step.solo{display:block;max-width:34rem;text-align:center}}</style>
+.sent-icon.done{background:color-mix(in srgb,var(--good) 14%,transparent);color:var(--good)}.sent-icon.cancelled{background:color-mix(in srgb,var(--ink) 8%,transparent);color:var(--ink)}
+@media (min-width:900px){.signin-step.solo{display:block;max-width:34rem;text-align:center}.solo .sent-icon{margin:0 auto 16px}}</style>
 </head><body><header class="wrap nav"><a class="brand" href="/"><img src="/assets/mark.svg" alt=""><span class="wordmark">termi<b>nus</b></span></a></header>
 <main class="wrap"><section class="signin">${liveryHtml()}<div class="signin-step${form ? '' : ' solo'}"><div class="signin-intro">${intro}</div>${form ? `<div class="signin-form">${form}</div>` : ''}</div></section></main></body></html>`;
+
+const stroke = (d: string) =>
+  `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+const NOTICE_ICONS = {
+  done: stroke('<path d="m5 12 5 5 9-10"/>'),
+  expired: stroke('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),
+  cancelled: stroke('<path d="M7 7l10 10M17 7 7 17"/>'),
+};
+
+/**
+ * A page that only says how something ended, with its tile over the heading
+ * as sign-in's "Check your inbox" has its envelope: a tick, a clock or a cross.
+ */
+const notice = (title: string, icon: keyof typeof NOTICE_ICONS, inner: string) =>
+  page(title, `<div class="sent-icon ${icon}" aria-hidden="true">${NOTICE_ICONS[icon]}</div>${inner}`);
 
 /** A whole profile is a few KB; nothing legitimate comes close to this. */
 const MAX_BODY_BYTES = 64 * 1024;
@@ -1175,7 +1191,7 @@ export async function handleMe(
       // Name the account, so a link someone else requested can't sign you in
       // to their account without you noticing. A dead link says so now.
       const email = safe ? await linkEmail(db, safe, nowMs) : null;
-      if (!email) return html(page(m().pageLinkExpired, m().linkExpiredHtml), 400);
+      if (!email) return html(notice(m().pageLinkExpired, 'expired', m().linkExpiredHtml), 400);
       return html(
         page(
           m().pageSignIn,
@@ -1192,7 +1208,7 @@ export async function handleMe(
       if (done?.removed) await clearTrip(env, done.removed);
       const token = done?.token;
       if (!token) {
-        return html(page(m().pageLinkExpired, m().linkExpiredHtml), 400);
+        return html(notice(m().pageLinkExpired, 'expired', m().linkExpiredHtml), 400);
       }
       // Only ever one of two places: the account page, or (by way of it, for
       // first-time setup) the web app.
@@ -1307,7 +1323,7 @@ export async function handleMe(
       // link); the POST decides.
       const link = (url.searchParams.get('r') ?? '').replace(/[^A-Za-z0-9_-]/g, '');
       const a = link ? await approvable(db, link, nowMs) : null;
-      if (!a) return html(page(m().pageRequestExpired, m().approveExpiredHtml), 400);
+      if (!a) return html(notice(m().pageRequestExpired, 'expired', m().approveExpiredHtml), 400);
       const device = escapeHtml(a.device || m().aDevice);
       // The question and when it was asked, then a box for the number the
       // device shows, saying what a wrong one does; "This wasn't me" one
@@ -1334,13 +1350,13 @@ export async function handleMe(
       const typed = (form?.get('n') ?? '').trim();
       const n = /^[0-9]{1,3}$/.test(typed) ? Number(typed) : null;
       const out = typeof r === 'string' ? await decide(db, r, n, nowMs) : { status: 'expired' as const };
-      if (out.status === 'approved') return html(page(m().pageApproved, m().approvedHtml));
+      if (out.status === 'approved') return html(notice(m().pageApproved, 'done', m().approvedHtml));
       if (out.status === 'denied') {
         const notMe = typed === 'none';
         if (notMe && out.email) await holdAppLogins(env, out.email);
-        return html(page(m().pageCancelled, m().cancelledHtml(!notMe)), notMe ? 200 : 400);
+        return html(notice(m().pageCancelled, 'cancelled', m().cancelledHtml(!notMe)), notMe ? 200 : 400);
       }
-      return html(page(m().pageRequestExpired, m().approveExpiredHtml), 400);
+      return html(notice(m().pageRequestExpired, 'expired', m().approveExpiredHtml), 400);
     }
   }
 
