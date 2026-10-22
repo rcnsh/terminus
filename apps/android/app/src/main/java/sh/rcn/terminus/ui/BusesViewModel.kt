@@ -53,7 +53,7 @@ data class BusesUi(
     /** The nearest stop is from a location; false: from the home stop. */
     val located: Boolean = false,
     /**
-     * Boards by stop code: pinned stops, opened ones, the twins across the road. A failed refresh keeps the last one; the screen shows it
+     * Boards by stop code: pinned stops, opened ones, the opposite stops. A failed refresh keeps the last one; the screen shows it
      * [Board.aged].
      */
     val boards: Map<String, Board> = emptyMap(),
@@ -192,7 +192,7 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** The nearest stop, by location, else the home stop; its twin across the road comes with it. */
+    /** The nearest stop, by location, else the home stop; its opposite stop comes with it. */
     suspend fun refreshNearest(force: Boolean = false) {
         if (!force && fresh(NEAREST)) return
         val token = store.token ?: return
@@ -264,15 +264,15 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * The page for [code] (null: the nearest stop): its own board, or its twin's when it's switched across the road. The nearest stop's
-     * twin comes with /me/nearby, so that page asks only for that.
+     * The page for [code] (null: the nearest stop): its own board, or its opposite stop's when it's switched across the road. The nearest
+     * stop's opposite stop comes with /me/nearby, so that page asks only for that.
      */
     suspend fun refreshPage(code: String?, force: Boolean = false) {
         val board = pageBoard(code)
         if (board == null) refreshNearest(force) else refreshBoard(board, force)
     }
 
-    /** The board the page for [code] shows: its own, or its twin's across the road; null for the nearest stop's page. */
+    /** The board the page for [code] shows: its own, or its opposite stop's; null for the nearest stop's page. */
     private fun pageBoard(code: String?): String? {
         if (code == null) return null
         val s = _state.value

@@ -183,7 +183,7 @@ internal fun DayLayout(s: Scene, w: Float, h: Float) {
             }
             Spacer(GlanceModifier.height(6.dp))
             when {
-                journey != null -> WidgetJourney(s.answer!!, journey, s.style, ground, s.look.pageColor)
+                journey != null -> WidgetJourney(journey, s.style, ground, s.look.pageColor)
                 face.leg != null -> LegRow(face.leg, ground)
             }
             nearby?.let { NearbyPair(it, ground, wall, nearbyRows) }

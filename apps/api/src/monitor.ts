@@ -32,7 +32,8 @@ import { ensureRecorder } from './timelapse.ts';
 import { logCronError } from './analytics.ts';
 import { recordActive } from './usage.ts';
 import { recordEta } from './eta.ts';
-import { type Feed, lastTrip, tripError } from './feedwatch.ts';
+import { shadowEta } from './etashadow.ts';
+import { type Feed, lastBreakerOpen, breakerError } from './feedwatch.ts';
 
 export interface UpstreamState {
   /** Confirmed state: it takes FAILS_TO_ALERT failed checks in a row to go down. */
@@ -695,10 +696,10 @@ export async function checkPublicFeed(
  */
 export function sawTrip(env: Env, feed: Feed, nowMs: number): () => Promise<void> {
   return async () => {
-    const seen = await lastTrip(env, feed);
+    const seen = await lastBreakerOpen(env, feed);
     if (!seen || seen.at > nowMs || nowMs - seen.at >= CHECK_EVERY_MS) return;
     if (feed === 'nus' && seen.version !== undefined && seen.version !== (await appVersion(env, nowMs))) return;
-    throw tripError(seen);
+    throw breakerError(seen);
   };
 }
 
@@ -757,9 +758,11 @@ export async function runCron(env: Env, nowMs: number): Promise<void> {
   await step('term', () => remindTerm(env, nowMs));
   // The operator's statistics, each only while switched on (collect.ts):
   // the day's active counts once a day, and a closed day's arrival times
-  // against where the recorder saw the buses.
+  // against where the recorder saw the buses; then, with ETA_MODEL=shadow,
+  // the arrival-time model's own times for that day, shown to no one.
   await step('usage', () => recordActive(env, nowMs));
   await step('eta', () => recordEta(env, nowMs));
+  await step('etaModel', () => shadowEta(env, nowMs));
   // Last, so a run that hangs or dies partway sends none.
   await step('heartbeat', () => pingHeartbeat(env));
 }

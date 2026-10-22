@@ -579,13 +579,13 @@ struct TripsPane: View {
         }
         Divider()
         LabeledContent {
-            Toggle(L("Allow for busy buses"), isOn: Binding(get: { setup.fullBusMargin }, set: { setup.setFullBusMargin($0) }))
+            Toggle(L("Allow for packed buses"), isOn: Binding(get: { setup.fullBusMargin }, set: { setup.setFullBusMargin($0) }))
                 .toggleStyle(.switch)
                 .labelsHidden()
         } label: {
             VStack(alignment: .leading, spacing: 2) {
-                Text(L("Allow for busy buses"))
-                Hint(L("Aim one bus earlier when yours is often full."))
+                Text(L("Allow for packed buses"))
+                Hint(L("Aim one bus earlier when yours is often packed."))
             }
         }
         Divider()

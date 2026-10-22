@@ -77,7 +77,7 @@ class ProfileTest {
         assertFalse(p.hasSetup)
         p.setHomeStops(emptyList())
         assertTrue(p.json.isNull("home"))
-        p.addManual(Trip(1, 9 * 60, 10 * 60, "COM3", "Gym", ""))
+        p.addManual(TimetableClass(1, 9 * 60, 10 * 60, "COM3", "Gym", ""))
         assertTrue(p.hasSetup)
         assertEquals(600, p.manual.single().endMin)
         p.removeClass(imported = false, 0, p.classAt(imported = false, 0)!!)

@@ -7,7 +7,6 @@
     <string name="map_bus_towards">开往 %1$s</string>
     <string name="map_bus_moving">行驶中</string>
     <string name="map_bus_stopped">已停下</string>
-    <string name="map_bus_seats_free">有座位</string>
     <string name="map_buses_here">本站巴士</string>
     <string name="map_open_stop">查看这个车站</string>
     <string name="map_show_stop">查看 %1$s</string>
@@ -45,11 +44,14 @@
     <string name="widget_places_description">下一班巴士，加上收藏和附近发车的按钮</string>
     <string name="widget_description">去下一个目的地的下一班巴士</string>
     <string name="widget_nearby_name">附近的巴士</string>
-    <string name="widget_nearby_description">离你最近的车站的下一班巴士，以及每班的下一站</string>
+    <string name="widget_nearby_description">你的车站和马路对面的下一班巴士</string>
     <string name="widget_now">现在</string>
     <string name="nearby_next">下一站 %1$s</string>
     <string name="nearby_next_to">下一站 %1$s，开往 %2$s</string>
     <string name="nearby_then_label">之后</string>
+    <!-- How long until a bus on a Nearby widget, counted down by Android ("in 04:32"); %1$s is the count. -->
+    <string name="nearby_in">%1$s 后</string>
+    <string name="nearby_in_approx">约 %1$s 后</string>
     <string name="nearby_then">之后 %1$s</string>
     <string name="nearby_times_sep">、</string>
     <string name="nearby_old">时间可能已过时 · %1$s</string>
@@ -61,9 +63,7 @@
     <string name="nearby_first_spoken">现在没有巴士。首班车：%1$s</string>
     <string name="nearby_page_next">更多巴士</string>
     <string name="nearby_page_prev">更早的巴士</string>
-    <string name="preview_nearby_now">现在 9:41 · 步行 2 分钟</string>
-    <string name="preview_nearby_next_1">下一站 Yusof Ishak House</string>
-    <string name="preview_nearby_next_2">下一站 University Health Centre</string>
+    <string name="preview_nearby_now">现在 9:41</string>
     <string name="a11y_checking">正在查询</string>
     <string name="a11y_leaves">"，发车 "</string>
     <string name="a11y_loading">terminus。%1$s。</string>
@@ -97,7 +97,7 @@
     <string name="a11y_under_minute">不到 1 分钟</string>
     <string name="a11y_leave_in">%1$s后出发</string>
     <string name="a11y_leaves_in">%1$s后开</string>
-    <string name="a11y_eta_timetable">约 %1$s，按时刻表</string>
+    <string name="a11y_eta_timetable">约 %1$s，估计</string>
     <string name="a11y_eta_about">约 %1$s</string>
     <string name="a11y_eta_live">%1$s，实时</string>
     <string name="account_page">账户页面</string>
@@ -314,7 +314,7 @@
     <string name="prefer_bus_hint">宁可多等几分钟巴士，也不想步行。</string>
     <string name="public_buses">公共巴士</string>
     <string name="public_buses_hint">也算上你车站的 95、151 等公共巴士。它们要收费，所以只有明显省时才会推荐。</string>
-    <string name="packed_hint">如果你要等的巴士在那个车站和时间经常满员，就提早一班。</string>
+    <string name="packed_hint">如果你要等的巴士在那个车站和时间经常很挤，就提早一班。</string>
     <string name="pair">配对</string>
     <string name="pair_instead">改用代码配对</string>
     <string name="pair_phone_text">此链接会将这部手机与 %1$s 配对。仅当这个代码是你在自己的账户页面上创建的才继续。他人的代码会把你的行程和位置发送到他们的账户。</string>
@@ -454,7 +454,7 @@
     <string name="heading_walking">步行</string>
     <string name="walks_follow_paths">步行时间按校园里的小路计算。</string>
     <string name="walking_pace">步速</string>
-    <string name="busy_hint_short">你要搭的巴士经常满员时，提早一班。</string>
+    <string name="busy_hint_short">你要搭的巴士经常很挤时，提早一班。</string>
     <string name="history_kept">保留 35 天，仅用于发现你经常错过或跳过的课。</string>
     <string name="trips_recorded_one">已记录 1 次行程</string>
     <string name="trips_recorded_n">已记录 %1$d 次行程</string>
@@ -503,10 +503,13 @@
     <string name="card_style_hint">卡片和小组件如何显示搭巴士的行程。仅限这部手机。</string>
     <string name="card_style_route">路线</string>
     <string name="card_style_route_hint">整段行程画成一条线，时间写在下面。</string>
-    <string name="card_style_ticket">车票</string>
-    <string name="card_style_ticket_hint">先显示巴士和它的颜色，再显示何时出发。</string>
     <string name="card_style_steps">步骤</string>
     <string name="card_style_steps_hint">整段行程画成一条竖线，像路线图一样。</string>
+    <!-- New to NUS (NewToNus), in Settings › Appearance: the Nearby widget explains the buses. -->
+    <string name="nearby_widget">“附近的巴士”小组件</string>
+    <string name="new_to_nus">刚来 NUS</string>
+    <string name="new_to_nus_sub">用你熟悉的地方说明每辆巴士去哪里：地铁站、UTown、PGP。</string>
+    <string name="new_to_nus_hint">仅限这部手机。关闭时，小组件能显示更多巴士。</string>
     <string name="leave_in_min">%1$d 分钟后出发</string>
     <string name="leave_in_min_s">%1$d 分 %2$d 秒后出发</string>
     <string name="leave_in_s">%1$d 秒后出发</string>
@@ -514,7 +517,6 @@
     <string name="journey_to">去 %1$s</string>
     <string name="journey_you">你</string>
     <string name="journey_now">现在</string>
-    <string name="journey_walk_to">步行到 %1$s</string>
     <string name="journey_walk">步行 %1$s</string>
     <string name="journey_from">在 %1$s 上车</string>
     <string name="road_arriving">即将到达 %1$s</string>
@@ -597,13 +599,13 @@
     <string name="buses_towards">开往 %1$s</string>
     <string name="buses_min">分钟</string>
     <string name="buses_live">实时</string>
-    <string name="buses_scheduled">按时刻表</string>
+    <string name="buses_scheduled">估计</string>
     <string name="buses_last_known">最后已知</string>
     <string name="buses_seats">有座位</string>
     <string name="buses_busy">有点挤</string>
     <string name="buses_packed">很挤</string>
     <string name="buses_then">之后 %1$s 分钟</string>
-    <string name="buses_then_scheduled">之后 %1$s 分钟（按时刻表）</string>
+    <string name="buses_then_scheduled">之后 %1$s 分钟（估计）</string>
     <string name="buses_no_time_yet">暂无时间</string>
     <string name="buses_no_live_times">暂无实时时间</string>
     <string name="buses_none_here">现在没有巴士在这里运行</string>

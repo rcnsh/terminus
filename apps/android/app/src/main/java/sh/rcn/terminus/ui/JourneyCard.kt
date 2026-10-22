@@ -16,13 +16,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -38,7 +36,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -64,10 +61,10 @@ import sh.rcn.terminus.ServerClock
 import sh.rcn.terminus.widget.clock
 
 /**
- * A trip by bus, or on foot the whole way, drawn in the style chosen in Settings › Appearance ([CardStyle]). All three lead with when to
- * leave and end with when you get there; the words and times are the server's (`card.journey`), and only the countdowns tick here. [lead]
- * (where the trip is, a notice) goes first. On Now the top of it is up in the sky ([SkyHead]), and the horizon under it has your bus on its
- * way to your stop; the rest is on the ground.
+ * A trip by bus, or on foot the whole way, drawn in the style chosen in Settings › Appearance ([CardStyle]). Both lead with when to leave
+ * and end with when you get there; the words and times are the server's (`card.journey`), and only the countdowns tick here. [lead] (where
+ * the trip is, a notice) goes first. On Now the top of it is up in the sky ([SkyHead]), and the horizon under it has your bus on its way to
+ * your stop; the rest is on the ground.
  */
 @Composable
 internal fun JourneyCard(answer: NextAnswer, journey: Journey, style: String, lead: @Composable ColumnScope.() -> Unit = {}) {
@@ -92,11 +89,7 @@ internal fun JourneyCard(answer: NextAnswer, journey: Journey, style: String, le
     // At a large text size the route's points are too narrow for their names
     // and times: the trip as steps then, one point to a line, with room to wrap.
     val big = LocalDensity.current.fontScale > LARGE_TEXT
-    when (if (big && style != CardStyle.TICKET) CardStyle.STEPS else style) {
-        CardStyle.TICKET -> Ticket(answer, journey, now, top)
-        CardStyle.STEPS -> Steps(answer, journey, now, top)
-        else -> Route(answer, journey, now, top)
-    }
+    if (big || style == CardStyle.STEPS) Steps(answer, journey, now, top) else Route(answer, journey, now, top)
     // A busy bus and an estimate are small print, not more headlines.
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     listOfNotNull(answer.leaveNote, answer.card?.estimate)
@@ -260,121 +253,6 @@ private const val LARGE_TEXT = 1.3f
 
 private val CAPTION = 22.dp
 private val DOT = 18.dp
-
-/** Ticket: the bus first, as you'd look for it on the road, then when to leave and when you get there. On foot, the walk in its place. */
-@Composable
-private fun Ticket(answer: NextAnswer, journey: Journey, now: Long, top: Top) {
-    val bus = journey.bus
-    top {
-        val muted = MaterialTheme.colorScheme.onSurfaceVariant
-        Text(JourneyText.to(answer, journey, clockOf()), color = muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 10.dp)) {
-            if (bus != null) {
-                Box(
-                    Modifier.sizeIn(minWidth = 64.dp, minHeight = 64.dp)
-                        .background(Color(bus.color), RoundedCornerShape(16.dp))
-                        .padding(horizontal = 6.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        badgeText(bus.svc, bus.paid),
-                        color = inkOn(Color(bus.color)),
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 26.sp,
-                        maxLines = 1,
-                    )
-                }
-            } else {
-                Box(
-                    Modifier.size(64.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        painterResource(R.drawable.ic_walk),
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(34.dp),
-                    )
-                }
-            }
-            Spacer(Modifier.width(14.dp))
-            Column {
-                if (bus != null) {
-                    Row(verticalAlignment = Alignment.Bottom) {
-                        Text(bus.board, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                        JourneyText.busIn(journey, now)?.let {
-                            Text(
-                                " $it",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = muted,
-                                modifier = Modifier.padding(bottom = 2.dp),
-                            )
-                        }
-                    }
-                    Text(
-                        listOfNotNull(stringResource(R.string.journey_from, bus.stop), JourneyText.walk(journey)).joinToString(" · "),
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-                } else {
-                    Text(JourneyText.walk(journey).orEmpty(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                    // Why not the bus, which the others say under the trip.
-                    Text(journey.why ?: stringResource(R.string.journey_walk_to, journey.place), style = MaterialTheme.typography.bodyLarge)
-                }
-            }
-        }
-        // A change of bus: the second bus under the first, so nobody stays on the wrong one.
-        journey.change?.let { c ->
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 10.dp)) {
-                Box(Modifier.width(64.dp), contentAlignment = Alignment.Center) {
-                    BusBadge(c.bus.svc, c.bus.color, 16.sp, paid = c.bus.paid)
-                }
-                Spacer(Modifier.width(14.dp))
-                Column {
-                    Text(c.changeText, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-                    Text(
-                        listOf(c.bus.board, stringResource(R.string.journey_from, c.stop)).joinToString(" · "),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = muted,
-                    )
-                }
-            }
-        }
-        val tint = if (answer.leaveLate) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-        Row(
-            Modifier.padding(top = 14.dp)
-                .fillMaxWidth()
-                .background(tint.copy(alpha = 0.12f), RoundedCornerShape(14.dp))
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    JourneyText.leaveIn(answer, journey, now),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = tint,
-                )
-                JourneyText.by(answer, journey, now)?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted) }
-            }
-            journey.arrive?.let { arrive ->
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        stringResource(R.string.journey_arrive_time, arrive),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    // Late is said in red, as on the line and in the steps.
-                    Text(
-                        JourneyText.arriveWhere(journey),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (answer.leaveLate) MaterialTheme.colorScheme.error else muted,
-                    )
-                }
-            }
-        }
-    }
-    if (bus != null) Tags(answer, journey)
-}
 
 /**
  * Steps: the trip as a line diagram, as on a bus's route map. Each point has its time on the left and a dot on the line; between them the
@@ -577,7 +455,7 @@ internal fun roadFor(journey: Journey, now: Long): Road {
 
 /**
  * The horizon's road in words, on the ground just under it at the page's size: your bus and when it reaches your stop ("about" for a
- * timetable guess), the stop's name in bold. Only on Now, where the horizon is. As the web's (journey.js RoadLine).
+ * estimate), the stop's name in bold. Only on Now, where the horizon is. As the web's (journey.js RoadLine).
  */
 @Composable
 private fun RoadLine(journey: Journey, now: Long) {

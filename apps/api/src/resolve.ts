@@ -33,9 +33,10 @@ import type { TransferRoute } from './transfer.ts';
 import { ROUTE_COLORS } from './campus.ts';
 import { haversineM } from './geo.ts';
 import { isPublic, publicRideS, rideMetres, svcName } from './public.ts';
-import { footM, stopFootM } from './walk.ts';
+import { buildingStops, footM, stopFootM } from './walk.ts';
 import { footS, mins } from './format.ts';
 import { listOf, m } from './i18n.ts';
+import { viaFrom } from './via.ts';
 import { type HomeWalk, residenceStops } from './residences.ts';
 
 export { haversineM };
@@ -180,7 +181,7 @@ function homeWalk(input: ResolveInput): HomeWalk | null {
   return { stops: input.preferStops, m: input.homeWalkS * (input.walkSpeedMs ?? WALK.speedMs) };
 }
 
-/** A stop a trip can end at, and the walk across the road from it when it's the twin. */
+/** A stop a trip can end at, and the walk across the road from it when it's the opposite stop. */
 export interface Target {
   code: string;
   crossS: number;
@@ -199,8 +200,8 @@ export function targetsFor(idx: GraphIndex, input: ResolveInput): Target[] {
   return [input.to, ...(input.toAlso ?? [])].flatMap((code) => {
     const s = idx.byCode.get(code);
     if (!s) return [];
-    const twin = s.opposite ? idx.byCode.get(s.opposite) : undefined;
-    return [{ code, crossS: 0 }, ...(twin ? [{ code: twin.code, crossS: Math.round(stopFootM(twin, s) / speed) }] : [])];
+    const opp = s.opposite ? idx.byCode.get(s.opposite) : undefined;
+    return [{ code, crossS: 0 }, ...(opp ? [{ code: opp.code, crossS: Math.round(stopFootM(opp, s) / speed) }] : [])];
   });
 }
 
@@ -268,19 +269,22 @@ export function candidateStops(graph: Graph, input: ResolveInput, opts: { any?: 
       .sort((a, b) => a.distM - b.distM)
       .map((c) => ({ ...c, footM: footM(input.lat!, input.lon!, c.stop) }));
     const inRange = all.filter((c) => c.distM <= WALK.maxRadiusM);
+    // In a building, its shuttle stops by the paths from it: the straight
+    // line can cross a hill or a road nobody crosses (buildingStops).
+    const inside = buildingStops(input.lat, input.lon, idx.byCode);
     // The nearest few shuttle stops that go there, and the nearest stop only
     // public buses call at as one more: turning public buses on adds
     // options and never crowds a shuttle stop out of the answer. A closer
     // stop no bus to the destination calls at would only take a fetch and
     // push out one that does.
-    const shuttle = inRange.filter((c) => !c.stop.public);
+    const shuttle = (inside ?? inRange).filter((c) => !c.stop.public);
     const near = shuttle.filter((c) => reaches(c.stop)).slice(0, WALK.maxCandidates);
     const publicOnly = inRange.find((c) => c.stop.public && reaches(c.stop));
     if (publicOnly) near.push(publicOnly);
     // A user's usual stops (near home) join the set when in range, so a dense
     // cluster of closer stops cannot push out the one they actually use.
     for (const code of input.preferStops ?? []) {
-      const c = all.find((x) => x.stop.code === code);
+      const c = (inside ?? all).find((x) => x.stop.code === code);
       if (c && c.distM <= WALK.maxRadiusM && !near.includes(c)) near.push(c);
     }
     // Never answer "no stop nearby" -- degrade to the nearest one, however far.
@@ -299,9 +303,9 @@ export function candidateStops(graph: Graph, input: ResolveInput, opts: { any?: 
     // The far side of the road, a crossing further: the bus you want may
     // only call there, and nothing says which side you'll come out on.
     for (const s of origins) {
-      const twin = s.opposite ? idx.byCode.get(s.opposite) : undefined;
-      if (twin && !base.some((b) => b.stop.code === twin.code)) {
-        base.push({ stop: twin, distM: haversineM(s.lat, s.lon, twin.lat, twin.lon), footM: stopFootM(s, twin), startS: startS(s.code) });
+      const opp = s.opposite ? idx.byCode.get(s.opposite) : undefined;
+      if (opp && !base.some((b) => b.stop.code === opp.code)) {
+        base.push({ stop: opp, distM: haversineM(s.lat, s.lon, opp.lat, opp.lon), footM: stopFootM(s, opp), startS: startS(s.code) });
       }
     }
     // From home, every home stop: the walk from home (originWalkS) is to each.
@@ -446,6 +450,26 @@ export function serviceEndsAt(graph: Graph, svc: string, nowMs: number): number 
   return midnight + ((w.close >= w.open ? 0 : 1440) + w.close) * 60_000;
 }
 
+/**
+ * When `svc` last stopped running at or before `ms` (SGT), epoch ms: the
+ * close of the most recent window ending by then, today's or yesterday's.
+ * Null when the hours are unknown, or neither day has a window closing by `ms`.
+ */
+export function serviceClosedAt(graph: Graph, svc: string, ms: number): number | null {
+  const hours = graph.serviceHours?.[svc];
+  if (!hours) return null;
+  const { minutes } = sgt(ms);
+  const midnight = ms - (minutes * 60_000 + (ms % 60_000));
+  for (let d = 0; d <= 1; d++) {
+    const day = midnight - d * 86_400_000;
+    const w = parseWindow(windowOn(hours, day));
+    if (!w) continue;
+    const close = day + ((w.close >= w.open ? 0 : 1440) + w.close) * 60_000;
+    if (close <= ms) return close;
+  }
+  return null;
+}
+
 /** Why a service isn't running now: it has finished for today, it starts
  *  later today, or it doesn't run today at all. */
 export type StoppedReason = 'ended' | 'notYet' | 'noService';
@@ -564,6 +588,10 @@ export interface BoardRow {
   /** Where it goes from here: the next stop's name, then the stop the route
    *  ends at. One name when they're the same; none at the end of the line. */
   towards: string[];
+  /** The well-known places it passes from here, in order, up to three
+   *  ("UTown", "Kent Ridge MRT"; via.ts), for someone who doesn't know the
+   *  routes yet. Empty when it passes none. */
+  via: string[];
   /** How full the first bus is, from the feed; null when it doesn't say. */
   crowd: Crowd | null;
   /** When the service stops running today (ISO); null when its hours are unknown. */
@@ -711,6 +739,7 @@ export function boardAt(
         later: [],
         color: ROUTE_COLORS[svcName(svc)] ?? null,
         towards: towardsFrom(idx, svc, stopCode),
+        via: viaFrom(idx, svc, stopCode),
         crowd: null,
         endsAt: null,
         running: false,
@@ -746,6 +775,7 @@ export function boardAt(
       later,
       color: ROUTE_COLORS[svcName(svc)] ?? null,
       towards,
+      via: viaFrom(idx, svc, stopCode),
       crowd: etas[0]?.crowd ?? null,
       endsAt: ends === null ? null : new Date(ends).toISOString(),
       running: true,
@@ -1115,9 +1145,9 @@ export function walkAllTheWayS(
   const speed = input.walkSpeedMs ?? WALK.speedMs;
   if (input.lat != null && input.lon != null) {
     const { lat, lon } = input;
-    // In a residence, walk out by its own stops: the straight line can cross
-    // a hill the path goes round.
-    const home = residenceStops(lat, lon, idx.byCode, homeWalk(input));
+    // In a residence or a building, walk out by its own stops: the straight
+    // line can cross a hill the path goes round.
+    const home = residenceStops(lat, lon, idx.byCode, homeWalk(input)) ?? buildingStops(lat, lon, idx.byCode);
     if (home) {
       const via = Math.min(...home.map((h) => (h.stop.code === dest.code ? h.footM : h.footM + stopFootM(h.stop, dest))));
       return Math.round(Math.max(via, footM(lat, lon, dest)) / speed);

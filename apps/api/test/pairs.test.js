@@ -28,7 +28,7 @@ const TINY = {
   loops: { L: true, T: false },
 };
 
-test('twins are grouped, the non-Opp side first, with a straight-line crossing', () => {
+test('opposite stops are grouped, the non-Opp side first, with a straight-line crossing', () => {
   const { places, version } = stopPairs(TINY);
   assert.equal(version, TINY.generated);
   const x = places.find((p) => p.id === 'X');
@@ -61,7 +61,7 @@ test('each side says which buses call and where they go next; null where one ter
   assert.deepEqual(c.sides[0].services, [{ svc: 'T', next: null }]);
 });
 
-test('a twin that does not exist, or does not point back, leaves a one-sided place', () => {
+test('an opposite stop that does not exist, or does not point back, leaves a one-sided place', () => {
   const b = stopPairs(TINY).places.find((p) => p.id === 'B');
   assert.equal(b.sides.length, 1);
   assert.equal(b.crossingM, null);
@@ -91,7 +91,7 @@ test('hand-listed pairs join the scraped ones and stay mutual', () => {
     ['C', 'NOPE'],
   ]);
   const by = Object.fromEntries(merged.map((s) => [s.code, s.opposite]));
-  assert.deepEqual(by, { A: 'B', B: 'A', 'A-OPP': null, C: null }, "A's old twin is let go; an unknown code is ignored");
+  assert.deepEqual(by, { A: 'B', B: 'A', 'A-OPP': null, C: null }, "A's old opposite is let go; an unknown code is ignored");
   assert.equal(stops[0].opposite, 'A-OPP', 'the input is not mutated');
 });
 
@@ -103,7 +103,7 @@ test('the hand-listed pairs: BIZ 2 and Opp HSSML, AS 5 and Opp NUSS', () => {
     assert.equal(by.get(b).opposite, a);
   }
   for (const s of GRAPH.stops) if (s.opposite) assert.equal(by.get(s.opposite)?.opposite, s.code, `${s.code} pairs both ways`);
-  assert.equal(by.get('SDE3-OPP').opposite ?? null, null, 'SDE3-OPP has no twin');
+  assert.equal(by.get('SDE3-OPP').opposite ?? null, null, 'SDE3-OPP has no opposite stop');
   const ids = stopPairs(GRAPH)
     .places.filter((p) => p.sides.length === 2)
     .map((p) => p.sides.map((s) => s.code).join('+'));

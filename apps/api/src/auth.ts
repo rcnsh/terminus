@@ -396,7 +396,7 @@ export function redactDetail(detail: string): string {
 /**
  * A NUS host answered with an HTTP error status, not its usual 200 and a
  * code: a gateway or the host itself saying no. 429 and 5xx trip the
- * feed's breaker (fms.ts tripsBreaker).
+ * feed's breaker (fms.ts opensBreaker).
  */
 export class UpstreamHttpError extends Error {
   readonly status: number;

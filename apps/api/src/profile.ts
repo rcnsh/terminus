@@ -5,7 +5,7 @@
  * so the planner can trust what it reads back.
  */
 
-import { type ImportedTrip, venueToStop } from './nusmods.ts';
+import { type TimetableClass, venueToStop } from './nusmods.ts';
 import { sgt } from './config.ts';
 import type { Timing, Why } from './types.ts';
 import type { Upcoming } from './card.ts';
@@ -15,6 +15,7 @@ import { isoSeconds } from './format.ts';
 import { clockAt, clockMin, slackText } from './clock.ts';
 import { PACES, type Pace } from './walk.ts';
 import { type LessonWeeks, type Term, dayOffReason, importedClassRuns, sgtDate, termEnded, termName } from './calendar.ts';
+import { isDate } from './calendarsync.ts';
 import { LANG_PREFS, type LangPref, m } from './i18n.ts';
 
 export interface Place {
@@ -25,7 +26,7 @@ export interface Place {
 }
 
 export interface UsualTime {
-  /** The saved place's key. */
+  /** The favourite's key. */
   place: string;
   day: number; // 0=Sun..6=Sat
   atMin: number; // minutes past midnight SGT, when to be there
@@ -72,11 +73,11 @@ export interface Profile {
   /** One-time screens already shown (the web onboarding, "new: walking pace"). */
   seen: string[];
   /** From the NUSMods import. Replaced wholesale on re-import. */
-  trips: ImportedTrip[];
+  trips: TimetableClass[];
   /** Entered by hand. Survives a re-import. */
-  manual: ImportedTrip[];
+  manual: TimetableClass[];
   places: Place[];
-  /** Saved places with a usual time: "Gym, Tuesdays 18:00". Each
+  /** Favourites with a usual time: "Gym, Tuesdays 18:00". Each
    *  is a trip on that day like a class, arriving by `atMin`. Kept apart from
    *  `places`, keyed by the place's key, so an older app rewriting the places
    *  can't drop them; one whose place is gone is ignored. */
@@ -162,6 +163,9 @@ type Result = { ok: true; profile: Profile } | { ok: false; error: string };
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isInt = (v: unknown, lo: number, hi: number): v is number => typeof v === 'number' && Number.isInteger(v) && v >= lo && v <= hi;
 const str = (v: unknown, max: number): v is string => typeof v === 'string' && v.trim().length > 0 && v.length <= max;
+/** A name on one line: it goes into card lines and notification titles. Control characters count as spaces. */
+// oxlint-disable-next-line no-control-regex
+const oneLine = (v: string): string => v.replace(/[\s\x00-\x1f\x7f]+/g, ' ').trim();
 
 /**
  * Validates a whole profile. Missing fields take their defaults, so a client
@@ -265,7 +269,7 @@ export function parseProfile(
     const list = raw[field];
     if (!Array.isArray(list) || list.length > PROFILE_LIMITS.trips)
       return { ok: false, error: `${field} must be a list of up to ${PROFILE_LIMITS.trips}` };
-    const out: ImportedTrip[] = [];
+    const out: TimetableClass[] = [];
     for (const [i, t] of list.entries()) {
       const bad = (why: string): Result => ({ ok: false, error: `${field}[${i}]: ${why}` });
       if (!isObj(t)) return bad('not an object');
@@ -274,7 +278,7 @@ export function parseProfile(
       if (t.endMin !== undefined && !isInt(t.endMin, t.arriveByMin + 1, 1440)) return bad('endMin must be after arriveByMin');
       if (typeof t.to !== 'string' || !isPlace(t.to)) return bad('to must be a known stop or place code');
       if (!str(t.label, PROFILE_LIMITS.label)) return bad(`label must be 1-${PROFILE_LIMITS.label} characters`);
-      const venue = typeof t.venue === 'string' ? t.venue.slice(0, 40) : '';
+      const venue = typeof t.venue === 'string' ? oneLine(t.venue.slice(0, 40)) : '';
       const weeks = parseWeeks(t.weeks);
       if (weeks === false) return bad('weeks must be a list of week numbers or a date range');
       out.push({
@@ -283,7 +287,7 @@ export function parseProfile(
         ...(t.endMin !== undefined ? { endMin: t.endMin as number } : {}),
         ...(weeks ? { weeks } : {}),
         to: t.to,
-        label: t.label.trim(),
+        label: oneLine(t.label),
         venue,
       });
     }
@@ -304,7 +308,7 @@ export function parseProfile(
         return { ok: false, error: `places[${i}].label must be 1-${PROFILE_LIMITS.placeLabel} characters` };
       if (typeof pl.to !== 'string' || !isPlace(pl.to)) return { ok: false, error: `places[${i}].to must be a known stop or place code` };
       keys.add(pl.key);
-      p.places.push({ key: pl.key, label: pl.label.trim(), to: pl.to });
+      p.places.push({ key: pl.key, label: oneLine(pl.label), to: pl.to });
     }
   }
 
@@ -314,7 +318,8 @@ export function parseProfile(
       return { ok: false, error: `usual must be a list of up to ${PROFILE_LIMITS.usual}` };
     for (const [i, u] of list.entries()) {
       const bad = (why: string): Result => ({ ok: false, error: `usual[${i}]: ${why}` });
-      if (!isObj(u) || typeof u.place !== 'string' || !/^[a-z0-9-]{1,24}$/.test(u.place)) return bad('place must be a saved place key');
+      if (!isObj(u) || typeof u.place !== 'string' || !/^[a-z0-9-]{1,24}$/.test(u.place))
+        return bad('place must be the key of a favourite');
       if (!isInt(u.day, 0, 6)) return bad('day must be 0 (Sun) to 6 (Sat)');
       if (!isInt(u.atMin, 0, 1439)) return bad('atMin must be minutes past midnight');
       p.usual.push({ place: u.place, day: u.day, atMin: u.atMin });
@@ -328,11 +333,12 @@ export function parseProfile(
       return { ok: false, error: `once must be a list of up to ${PROFILE_LIMITS.once}` };
     for (const [i, o] of list.entries()) {
       const bad = (why: string): Result => ({ ok: false, error: `once[${i}]: ${why}` });
-      if (!isObj(o) || typeof o.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(o.date)) return bad('date must be YYYY-MM-DD');
+      // A real day: 2026-13-45 is never today, so a save would never drop it.
+      if (!isObj(o) || !isDate(o.date)) return bad('date must be YYYY-MM-DD');
       if (!isInt(o.arriveByMin, 0, 1439)) return bad('arriveByMin must be minutes past midnight');
       if (typeof o.to !== 'string' || !isPlace(o.to)) return bad('to must be a known stop or place code');
       if (!str(o.label, PROFILE_LIMITS.label)) return bad(`label must be 1-${PROFILE_LIMITS.label} characters`);
-      p.once.push({ date: o.date, arriveByMin: o.arriveByMin, to: o.to, label: o.label.trim() });
+      p.once.push({ date: o.date, arriveByMin: o.arriveByMin, to: o.to, label: oneLine(o.label) });
     }
     p.once.sort((a, b) => a.date.localeCompare(b.date) || a.arriveByMin - b.arriveByMin);
   }
@@ -358,8 +364,8 @@ function parseWeeks(v: unknown): LessonWeeks | undefined | false {
   if (v === undefined) return undefined;
   if (Array.isArray(v)) return v.length <= 20 && v.every((w) => isInt(w, 1, 20)) ? (v as number[]) : false;
   if (!isObj(v)) return false;
-  const date = /^\d{4}-\d{2}-\d{2}$/;
-  if (typeof v.start !== 'string' || typeof v.end !== 'string' || !date.test(v.start) || !date.test(v.end)) return false;
+  // Real days, in order: a lesson on days that don't exist would silently never run.
+  if (!isDate(v.start) || !isDate(v.end) || v.start > v.end) return false;
   const out: LessonWeeks = { start: v.start, end: v.end };
   if (v.weekInterval !== undefined) {
     if (!isInt(v.weekInterval, 1, 10)) return false;
@@ -376,7 +382,7 @@ function parseWeeks(v: unknown): LessonWeeks | undefined | false {
  * The classes actually on for the SGT day containing `atMs`: manual entries
  * every week, imported ones only when the academic calendar says they run.
  */
-export function classesOn(profile: Profile, atMs: number): ImportedTrip[] {
+export function classesOn(profile: Profile, atMs: number): TimetableClass[] {
   const day = sgt(atMs).day;
   const date = sgtDate(atMs);
   // Places at their usual time and one-off trips are trips like classes: an
@@ -415,17 +421,17 @@ export function needsReimport(profile: Profile, nowMs: number): boolean {
   return reimportReason(profile, nowMs) !== null;
 }
 
-export type PlanWhy = Exclude<Why, 'place'>;
+export type NextTripWhy = Exclude<Why, 'place'>;
 
-export interface Plan {
+export interface NextTrip {
   /** Destination stop code. */
   to: string;
   label: string;
-  why: PlanWhy;
+  why: NextTripWhy;
   /** Where you are assumed to be when the client sends no location. */
   from: string | null;
-  /** The class this plan is about, when there is one. */
-  trip: ImportedTrip | null;
+  /** The class this trip is about, when there is one. */
+  trip: TimetableClass | null;
   /** The room you're leaving, when `from` is the last class's stop: the walk
    *  from it to the stop counts. Null when starting from home. */
   fromVenue: string | null;
@@ -441,7 +447,7 @@ export const LATE_GRACE_MIN = 15;
 export const HOME_BY_MIN = 60;
 
 /** Which of today's classes a trip signal is about. Stable for the day. */
-export function classKey(t: ImportedTrip): string {
+export function classKey(t: TimetableClass): string {
   return `${t.day}:${t.arriveByMin}:${t.to}`;
 }
 
@@ -471,7 +477,7 @@ const DEFAULT_CLASS_MIN = 60;
  */
 export const ENDS_EARLY_MIN = 30;
 
-export const endOf = (t: ImportedTrip) => {
+export const endOf = (t: TimetableClass) => {
   const end = t.endMin ?? t.arriveByMin + DEFAULT_CLASS_MIN;
   return t.nusmods ? Math.max(t.arriveByMin + 15, end - ENDS_EARLY_MIN) : end;
 };
@@ -489,7 +495,7 @@ export const endOf = (t: ImportedTrip) => {
  * it's reached. A skipped class is left out; a reached one still counts as
  * where you're coming from, and one whose bus was missed doesn't.
  */
-export function planFor(profile: Profile, nowMs: number, state: DayState = NO_DAY_STATE): Plan | null {
+export function nextTripFor(profile: Profile, nowMs: number, state: DayState = NO_DAY_STATE): NextTrip | null {
   const t = sgt(nowMs);
   const nowMin = t.minutes;
   const today = classesOn(profile, nowMs).filter((x) => !state.skipped.has(classKey(x)));
@@ -525,8 +531,10 @@ export function planFor(profile: Profile, nowMs: number, state: DayState = NO_DA
   const gapMin = next.arriveByMin - endOf(prev);
   const returnAt = next.arriveByMin - GAP_RETURN_MIN;
   // A long gap goes home in between, unless that trip was taken off today.
-  const goesHome = homeStop && gapMin > profile.gapHours * 60 && !state.skipped.has(`gap-home:${prev.to}`);
-  if (goesHome && nowMin < returnAt && homeStop !== next.to) {
+  // Not to a class at the home stop: "Home" is no trip then, and the class
+  // is planned from where you are, as /me/day has it (day.ts).
+  const goesHome = homeStop && homeStop !== next.to && gapMin > profile.gapHours * 60 && !state.skipped.has(`gap-home:${prev.to}`);
+  if (goesHome && nowMin < returnAt) {
     // Still in class: nothing to catch yet, but the answer is the trip home.
     return { to: homeStop, label: m().home, why: 'gap-home', from: prev.to, trip: null, fromVenue: prev.venue || null };
   }
@@ -547,7 +555,7 @@ export function planFor(profile: Profile, nowMs: number, state: DayState = NO_DA
  * you are, rather than the next class or the trip home after it. The latest
  * one, if a few are.
  */
-export function reachedEarly(profile: Profile, nowMs: number, done: ReadonlySet<string>): ImportedTrip | null {
+export function reachedEarly(profile: Profile, nowMs: number, done: ReadonlySet<string>): TimetableClass | null {
   const nowMin = sgt(nowMs).minutes;
   return (
     classesOn(profile, nowMs)
@@ -625,7 +633,7 @@ export function nextClass(
   profile: Profile,
   nowMs: number,
   skipped: ReadonlySet<string> = NO_DAY_STATE.skipped,
-): { trip: ImportedTrip; daysAhead: number } | null {
+): { trip: TimetableClass; daysAhead: number } | null {
   const t = sgt(nowMs);
   for (let ahead = 0; ahead <= LOOKAHEAD_DAYS; ahead++) {
     const found = classesOn(profile, nowMs + ahead * 86_400_000).find(
@@ -715,7 +723,7 @@ export const ON_TIME_SLACK_S = 180;
 export const MAX_VENUE_WALK_S = 20 * 60;
 
 /** When today's (SGT) run of this class starts, epoch ms. */
-export function classStartMs(trip: ImportedTrip, nowMs: number): number {
+export function classStartMs(trip: TimetableClass, nowMs: number): number {
   const day = new Date(nowMs + 8 * 3_600_000);
   const midnight = Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate()) - 8 * 3_600_000;
   return midnight + trip.arriveByMin * 60_000;
@@ -729,7 +737,7 @@ export function classStartMs(trip: ImportedTrip, nowMs: number): number {
  */
 export function timingFor(
   arriveAtIso: string | null | undefined,
-  trip: ImportedTrip,
+  trip: TimetableClass,
   walkToVenueS: number,
   nowMs: number,
   h12 = false,

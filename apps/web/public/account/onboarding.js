@@ -361,8 +361,8 @@ function Travel({ nav }) {
     <div class="ob-busy">
       <label class="ob-busy-row">
         <span>
-          <strong>${t('Allow for busy buses')}</strong>
-          <span class="hint">${t('When the bus you would wait for is often full at that stop and time, aim one bus earlier.')}</span>
+          <strong>${t('Allow for packed buses')}</strong>
+          <span class="hint">${t('When the bus you would wait for is often packed at that stop and time, aim one bus earlier.')}</span>
         </span>
         <input type="checkbox" class="switch" checked=${full} onChange=${(e) => setFull(e.currentTarget.checked)} />
       </label>

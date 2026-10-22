@@ -16,7 +16,7 @@
  *     the real hours (data/service-hours.json) instead, and no buses or
  *     times for a service outside them (the Buses tab's stopped rows)
  *   - an in-memory database with a test account (you@u.nus.edu),
- *     three saved places, a class later today, and pairing codes TEST67, TEST78, TEST89
+ *     three favourites, a class later today, and pairing codes TEST67, TEST78, TEST89
  *   - crowd history saying every bus at PGP is usually packed (the full-bus warning)
  *   - live buses: three per service, driving round its route line
  *   - the map's files from dev/map/ when it's there (fonts and icons:

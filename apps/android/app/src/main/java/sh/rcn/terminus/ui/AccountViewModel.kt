@@ -378,7 +378,9 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     /** An unplaced class given a stop: added by hand at that stop, as the account page does. */
     fun place(u: sh.rcn.terminus.Unplaced, to: String) {
         edit {
-            it.addManual(sh.rcn.terminus.Trip(u.day, u.arriveByMin, u.endMin, to, "${u.module} @ ${u.venue.substringBefore('-')}", u.venue))
+            it.addManual(
+                sh.rcn.terminus.TimetableClass(u.day, u.arriveByMin, u.endMin, to, "${u.module} @ ${u.venue.substringBefore('-')}", u.venue)
+            )
         }
         skip(u)
     }

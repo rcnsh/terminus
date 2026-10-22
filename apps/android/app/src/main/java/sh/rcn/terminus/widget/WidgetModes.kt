@@ -73,7 +73,7 @@ sealed interface Mode {
             get() = L.s(R.string.chip_nearby)
     }
 
-    /** A saved place (`place:<key>`) or a stop looked up (`stop:<code>`). */
+    /** A favourite (`place:<key>`) or a stop looked up (`stop:<code>`). */
     data class To(val dest: Destinations.Dest) : Mode {
         override val id
             get() = dest.id
@@ -387,8 +387,19 @@ object WidgetModes {
                 val shared = if (NearbyShared.wanted(ctx)) NearbyShared.redrawAt(ctx, now) else null
                 (chosen + listOfNotNull(shared)).minOrNull()
             } else null
-        if (at == null) am.cancel(alarmIntent(ctx)) else am.setWhileIdle(at + 1_000, alarmIntent(ctx), wake = false)
+        if (at == null) am.cancel(alarmIntent(ctx))
+        else am.setWhileIdle(stepTo(at + 1_000, now, am.canScheduleExactAlarms()), alarmIntent(ctx), wake = false)
     }
+
+    /** The last inexact step: run this close to its moment, a redraw is late by less than a countdown's slack ([NearbyBoard.NOW_MS]). */
+    const val LAST_STEP_MS = 25_000L
+
+    /**
+     * When to set the redraw alarm for [at]. Exact, at [at]. Inexact, Android may run it as late again as it is away, so a countdown would
+     * run on past zero before turning to "now": it's set for a third of the way there, each step re-arming the next, until [at] is within
+     * [LAST_STEP_MS].
+     */
+    internal fun stepTo(at: Long, now: Long, exact: Boolean): Long = if (exact || at - now <= LAST_STEP_MS) at else now + (at - now) / 3
 
     /**
      * When a widget showing [mode] (chosen at [chosenAt], its answer fetched at [fetchedAt]) next looks different with nothing new, on the

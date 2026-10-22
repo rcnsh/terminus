@@ -14,8 +14,8 @@ import javax.crypto.spec.GCMParameterSpec
 import org.json.JSONObject
 
 /**
- * The app's own settings and state on this phone: Store's, and Lang's, Theme's, CardStyle's and CrashReports' keys beside them, which a
- * sign-out keeps ([Store.clear]).
+ * The app's own settings and state on this phone: Store's, and Lang's, Theme's, CardStyle's, NewToNus' and CrashReports' keys beside them,
+ * which a sign-out keeps ([Store.clear]).
  */
 internal fun terminusPrefs(ctx: Context): SharedPreferences = ctx.applicationContext.getSharedPreferences("terminus", Context.MODE_PRIVATE)
 
@@ -101,7 +101,7 @@ class Store(context: Context) {
                     .putInt(KEY_REFRESH_FAILS, 0)
                     .remove(KEY_ERROR)
             }
-            // The app shortcuts follow the saved places (a no-op when they
+            // The app shortcuts follow the favourites (a no-op when they
             // haven't changed). Inside the lock: a sign-out's [clear] empties
             // them, and must not be undone by an answer kept just before it.
             runCatching { Shortcuts.update(app, answer.places) }
@@ -246,7 +246,7 @@ class Store(context: Context) {
             runCatching { Shortcuts.update(app, emptyList()) }
         }
 
-    /** The class (its start, epoch ms) the last heads-up was for: one per class. */
+    /** The trip the last heads-up was for (its key hashed, or an older note of a class by its start, epoch ms): one per trip. */
     var leaveNotifiedFor: Long
         get() = prefs.getLong(KEY_LEAVE_NOTIFIED, 0)
         set(value) = prefs.edit { putLong(KEY_LEAVE_NOTIFIED, value) }
@@ -328,15 +328,16 @@ class Store(context: Context) {
         }
 
     /**
-     * Signing out: the account's things go; the phone's language, theme, card style, the intent key, the server chosen (Servers) and a
-     * sign-in set aside for the other side of the dev stub stay.
+     * Signing out: the account's things go; the phone's language, theme, card style, New to NUS, the intent key, the server chosen
+     * (Servers) and a sign-in set aside for the other side of the dev stub stay.
      */
     fun clear() =
         synchronized(Store) {
             val keep =
-                listOf(KEY_LANG, KEY_THEME, CardStyle.KEY, KEY_INTENT, Servers.KEY_SERVER, KEY_TOKEN_SITE, KEY_TOKEN_LOCAL).associateWith {
-                    prefs.getString(it, null)
-                }
+                listOf(KEY_LANG, KEY_THEME, CardStyle.KEY, NewToNus.KEY, KEY_INTENT, Servers.KEY_SERVER, KEY_TOKEN_SITE, KEY_TOKEN_LOCAL)
+                    .associateWith {
+                        prefs.getString(it, null)
+                    }
             val menu = prefs.getBoolean(Servers.KEY_MENU, false)
             // This phone's choice, not the account's.
             val crashReports = prefs.getBoolean(CrashReports.KEY_ENABLED, true)

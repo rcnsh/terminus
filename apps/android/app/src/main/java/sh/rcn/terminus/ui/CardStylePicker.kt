@@ -3,25 +3,22 @@ package sh.rcn.terminus.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import sh.rcn.terminus.Card
@@ -34,58 +31,40 @@ import sh.rcn.terminus.widget.clock
 import sh.rcn.terminus.widget.redrawWidgets
 
 /**
- * The card styles, each drawn with a made-up trip so the choice is made by looking, not by reading. The pick holds for the card and the
- * widgets.
+ * The card style: Steps or Route as pills, like the theme's, and the chosen one drawn under them with a made-up trip, so the choice is made
+ * by looking without a card for each. The pick holds for the card and the widgets.
  */
 @Composable
 internal fun CardStylePicker() {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    val chosen = CardStyle.pref(ctx)
+    // Read again when it changes, so the pill and the sample move at once.
+    var chosen by remember { mutableStateOf(CardStyle.pref(ctx)) }
     val sample = sampleAnswer()
-    // One card of choices, each with its trip drawn in a box of its own, edged in the accent when chosen.
     Group(stringResource(R.string.card_style), stringResource(R.string.card_style_hint)) {
-        Column(Modifier.selectableGroup()) {
-            CardStyle.ALL.forEachIndexed { i, style ->
-                val on = style == chosen
-                if (i > 0) RowDivider()
-                Column(
-                    Modifier.fillMaxWidth()
-                        .selectable(on, role = Role.RadioButton) {
-                            CardStyle.set(ctx, style)
-                            scope.launch { redrawWidgets(ctx) }
-                        }
-                        .padding(start = 4.dp, end = 16.dp, top = 4.dp, bottom = 16.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = on, onClick = null, modifier = Modifier.padding(12.dp))
-                        Column {
-                            Text(
-                                stringResource(CardStyle.name(style)),
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            Text(
-                                stringResource(hint(style)),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                    OutlinedCard(
-                        Modifier.fillMaxWidth().padding(start = 12.dp, top = 4.dp),
-                        colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.background),
-                        border =
-                            BorderStroke(
-                                if (on) 2.dp else 1.dp,
-                                if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
-                            ),
-                    ) {
-                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            JourneyCard(sample, sample.card!!.journey!!, style)
-                        }
-                    }
-                }
+        Pills(
+            CardStyle.ALL.map { it to stringResource(CardStyle.name(it)) },
+            chosen,
+            {
+                CardStyle.set(ctx, it)
+                chosen = it
+                scope.launch { redrawWidgets(ctx) }
+            },
+            Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp),
+        )
+        Text(
+            stringResource(hint(chosen)),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp),
+        )
+        OutlinedCard(
+            Modifier.fillMaxWidth().padding(16.dp).clearAndSetSemantics {},
+            colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.background),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        ) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                JourneyCard(sample, sample.card!!.journey!!, chosen)
             }
         }
     }
@@ -93,7 +72,6 @@ internal fun CardStylePicker() {
 
 private fun hint(style: String) =
     when (style) {
-        CardStyle.TICKET -> R.string.card_style_ticket_hint
         CardStyle.STEPS -> R.string.card_style_steps_hint
         else -> R.string.card_style_route_hint
     }

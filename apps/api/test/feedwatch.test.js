@@ -16,7 +16,7 @@ import {
   runCron,
   sawTrip,
 } from '../src/monitor.ts';
-import { lastTrip, noteTrip, resetNotes } from '../src/feedwatch.ts';
+import { lastBreakerOpen, noteBreakerOpen, resetNotes } from '../src/feedwatch.ts';
 import { scopeCache } from '../src/edgecache.ts';
 import { getArrivals } from '../src/fms.ts';
 import { getPublicArrivals } from '../src/lta.ts';
@@ -81,8 +81,8 @@ test('a breaker trip on the beta is noted for its cron; on the stable site it is
     await assert.rejects(getArrivals(env, ctx, 'COM3', FROZEN_NOW));
     await assert.rejects(getPublicArrivals(env, ctx, GRAPH_PUBLIC, 'CLB', '16181', FROZEN_NOW));
     await ctx.settle();
-    const nus = await lastTrip(env, 'nus');
-    const lta = await lastTrip(env, 'lta');
+    const nus = await lastBreakerOpen(env, 'nus');
+    const lta = await lastBreakerOpen(env, 'lta');
     if (beta) {
       assert.equal(nus?.at, FROZEN_NOW);
       assert.match(nus.reason, /503/);
@@ -104,13 +104,13 @@ test('a note is written at most once a minute per isolate', async () => {
     writes++;
     return put(...a);
   };
-  await noteTrip(env, 'nus', new Error('HTTP 503'), 1_000_000);
-  await noteTrip(env, 'nus', new Error('HTTP 503'), 1_030_000);
-  await noteTrip(env, 'lta', new Error('HTTP 503'), 1_030_000);
+  await noteBreakerOpen(env, 'nus', new Error('HTTP 503'), 1_000_000);
+  await noteBreakerOpen(env, 'nus', new Error('HTTP 503'), 1_030_000);
+  await noteBreakerOpen(env, 'lta', new Error('HTTP 503'), 1_030_000);
   assert.equal(writes, 2, 'each feed once');
-  await noteTrip(env, 'nus', new Error('HTTP 502'), 1_060_000);
+  await noteBreakerOpen(env, 'nus', new Error('HTTP 502'), 1_060_000);
   assert.equal(writes, 3);
-  assert.match((await lastTrip(env, 'nus')).reason, /502/);
+  assert.match((await lastBreakerOpen(env, 'nus')).reason, /502/);
 });
 
 test('the beta goes down on trips in two runs in a row, and back up after two without; no email, but logged and counted', async () => {
@@ -121,11 +121,11 @@ test('the beta goes down on trips in two runs in a row, and back up after two wi
   scopeCache(env);
   const t0 = FROZEN_NOW;
   const logged = await quietly(async () => {
-    await noteTrip(env, 'nus', new Error('bus-proxy HTTP 503'), t0 - 60_000);
+    await noteBreakerOpen(env, 'nus', new Error('bus-proxy HTTP 503'), t0 - 60_000);
     await runCron(env, t0);
     assert.equal((await readUpstream(env)).up, true, 'one failed check is a blip');
     resetNotes();
-    await noteTrip(env, 'nus', new Error('bus-proxy HTTP 503'), t0 + CHECK_EVERY_MS - 60_000);
+    await noteBreakerOpen(env, 'nus', new Error('bus-proxy HTTP 503'), t0 + CHECK_EVERY_MS - 60_000);
     await runCron(env, t0 + CHECK_EVERY_MS);
     assert.equal((await readUpstream(env)).up, false);
     // A trip older than a run's gap was the last run's news.
@@ -151,7 +151,7 @@ test('a version refusal the beta saw runs the automatic update, with the fix in 
     err.version = VERSION;
     return err;
   };
-  await noteTrip(env, 'nus', refusal(), FROZEN_NOW - 60_000);
+  await noteBreakerOpen(env, 'nus', refusal(), FROZEN_NOW - 60_000);
   const tried = [];
   const fix = async (detail) => {
     tried.push(detail);
@@ -160,7 +160,7 @@ test('a version refusal the beta saw runs the automatic update, with the fix in 
   const logged = await quietly(async () => {
     await checkUpstream(env, FROZEN_NOW, sawTrip(env, 'nus', FROZEN_NOW), fix);
     resetNotes();
-    await noteTrip(env, 'nus', refusal(), FROZEN_NOW + CHECK_EVERY_MS - 60_000);
+    await noteBreakerOpen(env, 'nus', refusal(), FROZEN_NOW + CHECK_EVERY_MS - 60_000);
     await checkUpstream(env, FROZEN_NOW + CHECK_EVERY_MS, sawTrip(env, 'nus', FROZEN_NOW + CHECK_EVERY_MS), fix);
   });
   assert.deepEqual(tried, ['{"code":"10009"}', '{"code":"10009"}'], 'with NUS’s response, as the stable check does');
@@ -177,11 +177,11 @@ test('a refusal of a version switched away from since is not counted', async () 
   const env = site(true);
   const err = new UpstreamRejected('10009', 'auth rejected: code=10009', '');
   err.version = 'univus_android_3.0.0_300';
-  await noteTrip(env, 'nus', err, FROZEN_NOW - 60_000);
+  await noteBreakerOpen(env, 'nus', err, FROZEN_NOW - 60_000);
   await sawTrip(env, 'nus', FROZEN_NOW)();
   err.version = VERSION;
   resetNotes();
-  await noteTrip(env, 'nus', err, FROZEN_NOW - 60_000);
+  await noteBreakerOpen(env, 'nus', err, FROZEN_NOW - 60_000);
   await assert.rejects(sawTrip(env, 'nus', FROZEN_NOW)(), (e) => e instanceof UpstreamRejected && e.code === '10009');
 });
 
@@ -190,7 +190,7 @@ test('the beta records the public feed from its own trips too', async () => {
   const env = site(true);
   await checkPublicFeed(env, FROZEN_NOW, sawTrip(env, 'lta', FROZEN_NOW));
   assert.equal((await readPublicFeed(env)).up, true);
-  await noteTrip(env, 'lta', new Error('DataMall HTTP 503'), FROZEN_NOW + 1000);
+  await noteBreakerOpen(env, 'lta', new Error('DataMall HTTP 503'), FROZEN_NOW + 1000);
   await quietly(() => checkPublicFeed(env, FROZEN_NOW + 2000, sawTrip(env, 'lta', FROZEN_NOW + 2000)));
   assert.equal((await readPublicFeed(env)).up, false);
   assert.match((await readPublicFeed(env)).reason, /503/);

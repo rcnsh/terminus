@@ -1,16 +1,16 @@
 // A trip by bus, or on foot the whole way, drawn from the server's
 // card.journey (apps/api/src/card.ts) in the card style chosen in Settings ›
-// Appearance: Steps (the default), Route or Ticket, as the Android app draws
+// Appearance: Steps (the default) or Route, as the Android app draws
 // them. Every word and time is the server's (its title, byText, walkText, …);
 // only the countdowns tick here. An answer from before those lines (an older
 // server, or the service worker's kept copy) is worded here as it was.
 
-import { Fill, Icon, MARK, html, store, useEffect, useState } from '../assets/ui.js';
+import { Fill, MARK, html, store, useEffect, useState } from '../assets/ui.js';
 import { clock, inkOn, sentences, serverNow, t } from './dom.js';
 import { Celestial, Horizon } from './sky.js';
 
 const KEY = 'terminus-card-style';
-export const STYLES = ['steps', 'route', 'ticket'];
+export const STYLES = ['steps', 'route'];
 const DEFAULT = 'steps';
 
 const saved = () => {
@@ -35,11 +35,10 @@ export function setCardStyle(style) {
 }
 
 /** Each style's name and what it is, for Settings. */
-export const styleName = (s) => ({ route: t('Route'), ticket: t('Ticket'), steps: t('Steps') })[s];
+export const styleName = (s) => ({ route: t('Route'), steps: t('Steps') })[s];
 export const styleHint = (s) =>
   ({
     route: t('The whole trip as a line, with the times under it.'),
-    ticket: t('The bus first, in its colour, then when to leave.'),
     steps: t('The trip as a line down the card, as on a route map.'),
   })[s];
 
@@ -171,17 +170,12 @@ const LiveTags = ({ live, crowd }) =>
   html`${live && html`<span class="tag live"><span class="dot"></span>${t('Live')}</span>`}${crowd && html`<span class="tag">${crowd}</span>`}`;
 
 /** The service as painted on the bus; a public bus (with a fare) carries a $ so the fare is never a surprise. */
-const Badge = ({ bus, big = false }) =>
-  html`<span class=${big ? 'bus-badge big' : 'bus-badge'} style=${{ background: bus.color, color: inkOn(bus.color) }}>${bus.svc}${bus.paid ? html`<span class="fare" role="img" aria-label=${t('Public bus, fare applies')}>$</span>` : ''}</span>`;
+const Badge = ({ bus }) =>
+  html`<span class="bus-badge" style=${{ background: bus.color, color: inkOn(bus.color) }}>${bus.svc}${bus.paid ? html`<span class="fare" role="img" aria-label=${t('Public bus, fare applies')}>$</span>` : ''}</span>`;
 /** The service in running text: "95 ($)" for a public bus. */
 const named = (bus) => (bus.paid ? `${bus.svc} ($)` : bus.svc);
 /** A change of bus's second bus, as the first is said: "P from Kent Vale 9:42". */
 const secondBus = (c) => `${named(c.bus)} ${t('from {0}', c.stop)} ${c.bus.board}`;
-
-/** Someone walking, for a trip on foot where a bus would have its badge. */
-const WALKER =
-  '<circle cx="13" cy="4" r="2" fill="currentColor"/><path d="M12 8l-2 6-3 7M10 14l3 3v4M7 12l2-4h3l2 3 3 1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
-const WalkBadge = () => html`<span class="bus-badge big walk"><${Icon} paths=${WALKER} size="34" /></span>`;
 
 /** Now, every second near the end (so "Leave in 45 s" is never a stale 45), else every 15. */
 function useNow(a, j) {
@@ -212,7 +206,7 @@ function onTheRoad(j, now) {
 
 /**
  * The horizon's road in words, on the ground under it at the page's size:
- * your bus and when it reaches your stop ("about" for a timetable guess),
+ * your bus and when it reaches your stop ("about" for an estimate),
  * the stop's name in bold.
  */
 function RoadLine({ j, now }) {
@@ -239,7 +233,7 @@ export function Journey({ a, style, sky = false, lead = null }) {
   const j = a.card.journey;
   const now = useNow(a, j);
   const late = a.card.late ? ' late' : '';
-  const body = style === 'ticket' ? Ticket : style === 'steps' ? Steps : Route;
+  const body = style === 'route' ? Route : Steps;
   const small = [a.leave?.note, a.card.estimate].filter(Boolean).join(' ');
   const top = (head) =>
     sky
@@ -358,57 +352,6 @@ const Point = ({ name, time, you = false }) => html`
     <span class="above"></span><span class="dot"></span><span class="name">${name}</span><span class="time">${time}</span>
   </div>
 `;
-
-/** Ticket: the bus first, as you'd look for it on the road, then when to leave and when you get there. On foot, the walk in its place. */
-function Ticket({ a, j, now, late, top }) {
-  const soon = busIn(j, now);
-  return html`
-    ${top(html`
-    <div class="where">${to(a, j)}</div>
-    ${
-      j.bus
-        ? html`<div class="ticket-bus">
-          <${Badge} bus=${j.bus} big />
-          <div>
-            <div class="ticket-time">${j.bus.board}${soon && html` <span>${soon}</span>`}</div>
-            <div>${[t('from {0}', j.bus.stop), walkText(j)].filter(Boolean).join(' · ')}</div>
-          </div>
-        </div>
-        ${
-          j.change &&
-          html`<div class="ticket-bus">
-          <${Badge} bus=${j.change.bus} />
-          <div>
-            <div>${j.change.changeText}</div>
-            <div>${[j.change.bus.board, t('from {0}', j.change.stop)].join(' · ')}</div>
-          </div>
-        </div>`
-        }`
-        : html`<div class="ticket-bus">
-          <${WalkBadge} />
-          <div>
-            <div class="ticket-time">${walkText(j)}</div>
-            <div>${j.why ?? t('Walk to {0}', place(j))}</div>
-          </div>
-        </div>`
-    }
-    <div class=${`ticket-go${late}`}>
-      <div>
-        <h2 class="go">${leaveIn(a, j, now)}</h2>
-        ${by(a, j, now) && html`<div class="by">${by(a, j, now)}</div>`}
-      </div>
-      ${
-        arrive(j) &&
-        html`<div class="arrives">
-        <div>${arrive(j)}</div>
-        <div class=${`by${late}`}>${arriveWhere(j)}</div>
-      </div>`
-      }
-    </div>
-    `)}
-    ${j.bus && html`<${Tags} a=${a} j=${j} />`}
-  `;
-}
 
 /**
  * Steps: the trip as a line diagram, as on a bus's route map. Each point has

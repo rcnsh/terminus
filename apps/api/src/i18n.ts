@@ -15,7 +15,7 @@
  * Nearby 附近, widget 小组件, Settings 设置, sign in 登录, sign out 退出登录,
  * device 设备, pair 配对, sign-in code 验证码, pairing code 配对代码,
  * expired (a code, link or request) 失效, service 线路 (a drawn route line
- * or walking directions 路线), scheduled (a guessed bus time) 按时刻表,
+ * or walking directions 路线), timetabled (a public bus's LTA timetable time) 按时刻表,
  * home stop 家附近的车站, shuttle 校园巴士, public bus 公共巴士, fare 车费,
  * account 账户, trip 行程, location (the setting) 定位 (where you are 位置),
  * a bus that's often packed 很挤, crowding 拥挤程度 (low 低, medium 中,
@@ -154,6 +154,8 @@ const en = {
   towardsOne: ((stop: string) => `to ${stop}`) as Fn<[string]>,
   towardsTwo: ((next: string, end: string) => `to ${next}, ${end}`) as Fn<[string, string]>,
   endsHere: 'Ends here',
+  /** Where a stop's buses go, by places a newcomer knows (via.ts): "to UTown, Kent Ridge MRT". */
+  viaTo: ((places: string) => `to ${places}`) as Fn<[string]>,
 
   // Clock and lateness (clock.ts)
   /** "6:36 PM", with a no-break space so a line never ends between the two. */
@@ -166,7 +168,7 @@ const en = {
   crowdLowCap: 'Crowding: low',
   crowdMediumCap: 'Crowding: medium',
   crowdHighCap: 'Crowding: high',
-  qualityScheduled: 'Timetable estimate',
+  qualityScheduled: 'Estimated time',
   qualityStale: 'Live times are a few minutes old',
   qualityUnknown: 'No live data',
   feedDown: ((since: string) => `NUS's live bus times have been down since ${since}.`) as Fn<[string]>,
@@ -506,6 +508,7 @@ const zh: Msgs = {
   towardsOne: (stop) => zs`开往${stop}`,
   towardsTwo: (next, end) => zs`经${next}，开往${end}`,
   endsHere: '本站为终点站',
+  viaTo: (places) => zs`往${places}方向`,
 
   clock12: (hm, pm) => `${pm ? '下午' : '上午'}\u00a0${hm}`,
   earlyBy: (n) => `早到 ${n} 分钟`,
@@ -515,7 +518,7 @@ const zh: Msgs = {
   crowdLowCap: '拥挤程度：低',
   crowdMediumCap: '拥挤程度：中',
   crowdHighCap: '拥挤程度：高',
-  qualityScheduled: '按时刻表估计',
+  qualityScheduled: '估计时间',
   qualityStale: '实时时间已是几分钟前的',
   qualityUnknown: '没有实时数据',
   feedDown: (since) => zs`NUS 的实时巴士时间自${since}起无法获取。`,

@@ -195,7 +195,7 @@ internal object NearbyShared {
         val store = Store(ctx)
         val at = store.nearbyFetchedAt.takeIf { it > 0L } ?: return null
         val stops = store.nearbyJson?.let { runCatching { parseNearby(JSONObject(it)) }.getOrNull() } ?: return null
-        // The nearest two: a swap shows the twin, which is one of them.
+        // The nearest two: a swap shows the opposite stop, which is one of them.
         val buses = stops.take(2).flatMap { NearbyBoard.buses(it, at, now, sh.rcn.terminus.ServerClock.skewMs) }
         return listOfNotNull(at + WidgetModes.NEARBY_OLD_MS, NearbyBoard.redrawAt(buses, now)).filter { it > now }.minOrNull()
     }

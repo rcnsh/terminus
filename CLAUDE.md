@@ -2,6 +2,9 @@
 
 Guidance for AI agents working in this repo. Read it before you change
 anything; the deeper "why" is in [apps/api/docs/internals.md](apps/api/docs/internals.md).
+The words for the domain (stop, service, trip, plan, estimate, …) are in
+[GLOSSARY.md](GLOSSARY.md): name new code and copy with them. Decisions that
+look odd but are deliberate are in [docs/adr/](docs/adr/).
 
 ## What terminus is
 
@@ -38,9 +41,8 @@ dev stub, never a typed one (`Servers.kt`, `Servers` in `Api.swift`).
 
 Pages opened on the old address go to the same page on terminus.run
 (`movedPage` in `src/site.ts`, on with `MOVE_PAGES`), and emailed links use
-terminus.run (`linkOrigin`). From 9 to 11 October 2026 NUS Wi-Fi reset
-connections to terminus.run, and both were switched off;
-`cloudflare.config.ts` says how to do that again if a network refuses it. The
+terminus.run (`linkOrigin`). If a network refuses terminus.run,
+`cloudflare.config.ts` says how to switch both off. The
 privacy contact is privacy@terminus.run, through Email Routing's catch-all,
 so it goes with the domain. Every `terminus.rcn.sh` and `rcn.sh` left in the
 repo is on purpose: don't find-and-replace them.
@@ -154,7 +156,7 @@ node apps/api/scripts/dev-stub.mjs    # local Worker on :8787 with a fake feed a
   JS (htm's html templates) aren't touched either, and neither is
   `cloudflare.config.ts`, which release-beta.sh and a test read as text.
 - Android (CI): `./gradlew :app:ktfmtCheck :app:lintStableDebug :app:testStableDebugUnitTest :app:compileBetaDebugKotlin`,
-  then `:app:assembleStableRelease :app:assembleBetaRelease` (R8 and
+  and beside it, a job each, `:app:assembleStableRelease` and `:app:assembleBetaRelease` (R8 and
   resource shrinking, unsigned without the keystore) in `apps/android`
   (Java 21).
 - Android dependencies are locked and hash-checked. On a Dependabot Gradle
@@ -273,6 +275,9 @@ apps/api/
   src/collect.ts      The dashboard's switches for the statistics below, all off until turned on
   src/usage.ts, eta.ts, apperrors.ts  Daily active counts; the feed's arrival times against
                       the timelapse; crash reports (/api/errors), scrubbed, with no one on them
+  src/etamodel.ts, etashadow.ts  An arrival-time model (segment medians, the feed's usual
+                      error, a blend), pure; run in shadow by the cron with ETA_MODEL=shadow,
+                      answering no one (docs/eta-model.md)
   src/feedback.ts     "This was wrong" reports, stored and emailed to the operator
   src/downloads.ts    App downloads from R2 (latest.json, the APKs, the DMG, the appcast)
   src/landing.ts, site.ts, pagesky.ts  The landing page; stable or beta, and the old address's
@@ -295,13 +300,15 @@ apps/api/
                       route_shapes.py, fetch_calendar.py, walk_routes.py,
                       check_scraped.py);
                       probe_buses.py (feed update-rate probe); record_buses.mjs (checks /api/buses on a live site);
+                      record_eta.mjs + eta_backtest.mjs (the arrival-time model's data and backtest);
                       render-timelapse.mjs (renders a recorded day headless, e.g. on a VPS);
                       vapid-key.mjs (makes the Web Push key, once)
   test/               *.test.js + worker.smoke.js; _stubs.mjs, _d1.mjs (D1 on node:sqlite)
   test/fixtures/answers/   Golden answers, shared with the Android and Mac tests
   cloudflare.config.ts     Worker config (stable + beta via --mode beta)
   wrangler.config.ts       Website assets directory
-  docs/internals.md        How everything works, in depth; docs/analytics.md
+  docs/internals.md        How everything works, in depth; docs/analytics.md;
+                           docs/eta-model.md (+ eta-backtest.md, its results)
 apps/web/public/
   index.html          Landing page
   account/            The account page (app.js): sign-in, onboarding.js, settings.js +
@@ -385,6 +392,9 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
   a trip from or to a class considers each, with the room's own walk to it.
   Where the map's nearest stop is the wrong one, fix it in
   `data/src/venue-stops.json` and run `scripts/walk_routes.py`.
+  Standing in a building, the walk to a stop is the path from it (`out` in
+  `venues.json`, `buildingStops()`), and only by its listed stops when it
+  has them, not the straight line.
 - **Quality ladder.** Each answer says how sure it is: `live`, `scheduled` (a
   headway guess inside operating hours, labelled as such), and so on. Never
   label a guess as live.
@@ -504,7 +514,10 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
     refuses unmerged files, conflict markers or uncommitted changes in
     `apps/api` and `apps/web/public` and runs `pnpm check`; then it applies
     the stable D1's pending migrations and runs `cf deploy`. It needs
-    `CLOUDFLARE_API_TOKEN`.
+    Cloudflare credentials: `CLOUDFLARE_API_TOKEN`, or a browser login
+    with `pnpm exec cf auth login`, which `cf` keeps on the machine.
+    `pnpm exec cf auth whoami` says which is in use; a missing token in
+    the shell doesn't mean a deploy can't run.
   - The beta is `pnpm run deploy:beta`, with its own D1, KV and R2; it
     applies the beta D1's migrations the same way.
   - By hand, a migration is applied **before** deploying:

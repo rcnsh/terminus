@@ -133,6 +133,25 @@ SELECT blob2 AS signal, SUM(_sample_interval) AS n
 FROM terminus WHERE blob1 = 'signal' GROUP BY signal ORDER BY n DESC
 ```
 
+## How fresh the pushed cards are
+
+Each wake of a Trip object (`src/tripdo.ts`) that works out a card writes a
+`tripwake` row (`logTripWake` in `src/analytics.ts`): `blob2` `pushed` or
+`same`, `blob3` the phase, `blob4` the answer's quality, `blob5` `first`
+(its first wake today) or `again`; `double1` seconds since its last wake,
+`double2` the age of the oldest arrivals reading it used (-1: none),
+`double3` how far the leave-by moved since the last wake, `double4` how late
+the alarm ran. It shows how much of a card's staleness is the wake schedule
+(big gaps with big leave-by moves) and how much is the cache (`double2`). It
+was added to measure that, and goes once the wake schedule is settled.
+
+```sql
+SELECT blob3 AS phase, count() AS wakes, avg(double1) AS gap_s, avg(double2) AS feed_age_s,
+  avg(abs(double3)) AS leave_moved_s, max(abs(double3)) AS max_moved_s
+FROM terminus WHERE blob1 = 'tripwake' AND blob5 = 'again' AND timestamp > NOW() - INTERVAL '1' DAY
+GROUP BY phase
+```
+
 ## The operator's switches
 
 Three more kinds of statistics are collected only once switched on, on the
@@ -164,7 +183,9 @@ how far ahead it was, how much later than said the bus came, and the hour.
 It needs the recorder on, the downloads bucket and `ANALYTICS_TOKEN`; it
 calls nobody but Analytics Engine. A bus counts as arrived 25 m before its
 stop's mark on the line, interpolated between readings; the answer is good
-to about 15 s.
+to about 15 s. With `ETA_MODEL=shadow`, the arrival-time model's answers to
+the same predictions are kept beside it (`eta/model/`, `src/etashadow.ts`;
+[eta-model.md](eta-model.md)).
 
 ### Crash reports (`errors`)
 

@@ -46,7 +46,7 @@ const OLD_MS = 2 * REFRESH_MS;
 const ENDS_SOON_MS = 2 * 3600_000;
 
 /** Where in the tab: its home, a stop's board, or a service's line. From the address. */
-const route = store({ kind: 'home' });
+export const route = store({ kind: 'home' });
 /** The stop nearest you: { status: 'loading' | 'ready' | 'none', code, distM, fromHome }. */
 export const nearest = store({ status: 'loading' });
 /**
@@ -65,7 +65,7 @@ const active = store(0);
 /** A stop to scroll the home to, once it's drawn (a search result that has a page). */
 const wantPage = store(null);
 /** The line on screen: { key, data, at, got, asOf } or { key, error }. */
-const line = store(null);
+export const line = store(null);
 /** Now on the server's clock (dom.js), every few seconds, for "Updated 5 s ago". */
 const tick = store(serverNow());
 /** Location can be asked for (it isn't blocked), for the nearest stop. */
@@ -170,13 +170,17 @@ async function findNearest({ ask = false } = {}) {
   }
 }
 
-async function loadLine(svc, stop) {
+export async function loadLine(svc, stop) {
   const key = `${svc}/${stop ?? ''}`;
+  // As for a board: a call that hung can end after a newer one, and mustn't
+  // put back older buses, or an error over fresh ones.
+  const asked = Date.now();
+  const newer = () => line.get()?.key === key && line.get().at > asked;
   try {
     const data = await getJSON(`/api/line?svc=${encodeURIComponent(svc)}${stop ? `&stop=${encodeURIComponent(stop)}` : ''}`);
-    if (lineKey() === key) line.set({ key, data, at: Date.now(), got: serverNow(), asOf: asOfMs(data) });
+    if (lineKey() === key && !newer()) line.set({ key, data, at: Date.now(), got: serverNow(), asOf: asOfMs(data) });
   } catch (err) {
-    if (err.message === 'signed out' || lineKey() !== key) return;
+    if (err.message === 'signed out' || lineKey() !== key || newer()) return;
     const was = line.get()?.key === key ? line.get() : null;
     const error = err.status === 400 ? t('No line to show for {0}.', svc) : failedWords(Boolean(was?.data));
     line.set({ ...was, key, error });
@@ -435,8 +439,8 @@ function Dots({ index, count, nearestFirst, onDot }) {
 
 /**
  * A stop: what the page is (nearest, pinned), its name with a star to pin
- * it, This side | Across the road when it has a twin (both stops by
- * name when the twin is only nearby), and its board.
+ * it, This side | Across the road when it has an opposite stop (both stops by
+ * name when the opposite stop is only nearby), and its board.
  */
 function StopView({ code, kicker, dots, peek, above = null }) {
   const p = useStore(profile);
@@ -445,7 +449,7 @@ function StopView({ code, kicker, dots, peek, above = null }) {
   useStore(campus);
   const own = all.get(code)?.stop;
   const opposite = own?.opposite ?? stopOf(code)?.opposite ?? null;
-  // Its twin is across the road, or (PGP and its Foyer) just nearby: then both are named.
+  // Its opposite stop is across the road, or (PGP and its Foyer) just nearby: then both are named.
   // Always the page's own stop's words, whichever side is showing. Old answers without it were across.
   const twinAcross = own?.oppositeAcross !== false;
   const twinName = own?.oppositeName ?? stopName(opposite);

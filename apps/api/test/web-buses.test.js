@@ -171,6 +171,46 @@ test('a board kept by the server (asOf minutes old) is counted down from when it
   }
 });
 
+test("a line's refresh that hung (the phone asleep) cannot put back older times over newer ones", async () => {
+  const realFetch = globalThis.fetch;
+  const reply = (n) =>
+    new Response(JSON.stringify({ svc: 'D1', asOf: new Date().toISOString(), stops: [], buses: [], n }), {
+      headers: { 'content-type': 'application/json' },
+    });
+  let release;
+  const hung = new Promise((ok) => {
+    release = ok;
+  });
+  let calls = 0;
+  globalThis.fetch = () => (++calls === 1 ? hung : Promise.resolve(reply(2)));
+  try {
+    B.line.set(null);
+    B.route.set({ kind: 'line', svc: 'D1', stop: 'YIH' });
+    const first = B.loadLine('D1', 'YIH');
+    // The refresh comes a while later (the phone woke up).
+    await new Promise((ok) => setTimeout(ok, 5));
+    await B.loadLine('D1', 'YIH');
+    assert.equal(B.line.get().data.n, 2);
+    // The older answer lands last: the newer stays.
+    release(reply(1));
+    await first;
+    assert.equal(B.line.get().data.n, 2);
+    // An error landing late doesn't cover fresh times either.
+    globalThis.fetch = () => Promise.resolve(new Response('{}', { status: 503, headers: { 'content-type': 'application/json' } }));
+    const failing = B.loadLine('D1', 'YIH');
+    globalThis.fetch = () => Promise.resolve(reply(3));
+    await new Promise((ok) => setTimeout(ok, 5));
+    await B.loadLine('D1', 'YIH');
+    await failing;
+    assert.equal(B.line.get().data.n, 3);
+    assert.equal(B.line.get().error, undefined);
+  } finally {
+    globalThis.fetch = realFetch;
+    B.line.set(null);
+    B.route.set({ kind: 'home' });
+  }
+});
+
 test('a failed refresh under times already shown says they could not be updated, not that there are none', () => {
   assert.equal(B.failedWords(true, true), "Couldn't update. Trying again soon.");
   assert.equal(B.failedWords(false, true), 'No times right now');

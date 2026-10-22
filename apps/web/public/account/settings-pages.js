@@ -329,7 +329,7 @@ export function Trips() {
             edit((x) => (x.preferBus = on));
           }} />
         <//>
-        <${Field} id="full-bus" label=${t('Allow for busy buses')} sub=${t('Aim one bus earlier when yours is often full.')}>
+        <${Field} id="full-bus" label=${t('Allow for packed buses')} sub=${t('Aim one bus earlier when yours is often packed.')}>
           <input id="full-bus" class="switch" type="checkbox" role="switch" checked=${p.fullBusMargin !== false} onChange=${(e) => {
             const on = e.currentTarget.checked;
             edit((x) => (x.fullBusMargin = on));
@@ -350,13 +350,18 @@ export function Trips() {
 const PREF_TEXT = { earlier: t('One bus earlier'), quiet: t('No reminders') };
 
 /** Classes you leave a bus earlier for or get no reminders for, and the trip history. */
-function Choices() {
+export function Choices() {
   const version = useStore(lists);
   const [r, setR] = useState(null);
-  const load = () =>
-    api('/api/me/choices')
-      .then(setR)
-      .catch(() => setR((was) => was ?? { failed: true }));
+  // Only the newest list asked for lands: one asked for before an Undo that
+  // comes back after the Undo's mustn't put the old list over the new.
+  const asked = useRef(0);
+  const load = () => {
+    const n = ++asked.current;
+    return api('/api/me/choices')
+      .then((x) => n === asked.current && setR(x))
+      .catch(() => n === asked.current && setR((was) => was ?? { failed: true }));
+  };
   useEffect(() => {
     load();
   }, [version]);
@@ -1147,8 +1152,9 @@ export function ThemeSwitch({ labelledBy, full = false }) {
 }
 
 /**
- * Appearance: the theme, then the card styles, each drawn with a made-up
- * trip so the choice is made by looking. Both hold for this browser only.
+ * Appearance: the theme, then the card style, the chosen one drawn under its
+ * pills with a made-up trip so the choice is made by looking. Both hold for
+ * this browser only.
  */
 export function Appearance() {
   const chosen = useStore(cardStyle);
@@ -1167,18 +1173,12 @@ export function Appearance() {
         <div class="field"><${ThemeSwitch} labelledBy="theme-label" full /></div>
       <//>
       <${Group} title=${t('Card style')} id="style-label" hint=${t('How the card shows a trip by bus. Only in this browser.')}>
-        <div class="style-picker" role="radiogroup" aria-labelledby="style-label">
-          ${STYLES.map(
-            (s) => html`
-              <label class=${chosen === s ? 'style-choice on' : 'style-choice'} key=${s}>
-                <span class="style-head">
-                  <input type="radio" name="card-style" value=${s} checked=${chosen === s} onChange=${() => setCardStyle(s)} />
-                  <span><strong>${styleName(s)}</strong><span class="hint">${styleHint(s)}</span></span>
-                </span>
-                <div class="widget" aria-hidden="true"><${Journey} a=${sample} style=${s} /></div>
-              </label>
-            `,
-          )}
+        <div class="field">
+          <${Pills} name="card-style" value=${chosen} options=${STYLES.map((s) => [s, styleName(s)])} onChange=${setCardStyle} labelledBy="style-label" full />
+        </div>
+        <div class="style-preview">
+          <p class="hint">${styleHint(chosen)}</p>
+          <div class="widget" aria-hidden="true"><${Journey} a=${sample} style=${chosen} /></div>
         </div>
       <//>
     </div>

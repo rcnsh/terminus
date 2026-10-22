@@ -97,7 +97,7 @@ data class NextAnswer(
     val crowdText: String?
         get() = card?.crowd?.takeUnless { detail.contains(it, ignoreCase = true) }
 
-    /** "Timetable estimate", "Live times are a few minutes old", "No live data". */
+    /** "Estimated time", "Live times are a few minutes old", "No live data". */
     val qualityText: String?
         get() = card?.quality
 
@@ -655,6 +655,8 @@ data class BoardRow(
     val paid: Boolean = false,
     val later: List<LaterBus> = emptyList(),
     val towards: List<String> = emptyList(),
+    /** The well-known places it passes from here ("UTown", "Kent Ridge MRT"), for someone new to NUS; empty from an older server. */
+    val via: List<String> = emptyList(),
     val crowd: String? = null,
     val endsAtMs: Long? = null,
     /** The route ends at this stop: the server gave `towards` and it's empty. An older server gives none. */
@@ -694,6 +696,7 @@ fun parseBoardRow(r: JSONObject): BoardRow =
         paid = r.optBoolean("paid", false),
         later = parseLater(r),
         towards = r.optJSONArray("towards").stringList().filter { it.isNotBlank() },
+        via = r.optJSONArray("via").stringList().filter { it.isNotBlank() },
         crowd = r.optStringOrNull("crowd")?.takeIf { it in CROWDS },
         endsAtMs = r.optStringOrNull("endsAt")?.let(::parseInstant),
         running = r.optBoolean("running", true),
@@ -724,6 +727,8 @@ data class NearbyStop(
     val oppositeAcross: Boolean = true,
     /** [opposite]'s full name; null from an older server. */
     val oppositeName: String? = null,
+    /** Which way its buses go, by places a newcomer knows: "to UTown, Science, Kent Ridge MRT". Null with none, or from an older server. */
+    val viaText: String? = null,
 )
 
 data class Destination(
@@ -765,7 +770,7 @@ fun whereResults(destinations: List<Destination>, pinned: List<Destination>, que
     return top to rankDestinations(destinations, query, max = 6).filter { d -> top.none { d.isPlaceOf(it) } }
 }
 
-/** What the user asked for: the planned trip, a saved place, or any stop/venue. */
+/** What the user asked for: the planned trip, a favourite, or any stop/venue. */
 sealed interface Target {
     data object Plan : Target
 
@@ -860,8 +865,8 @@ class Api(private val token: String?, private val fast: Boolean = false, private
     suspend fun buses(svc: String): BusList = parsing { BusList.parse(request("GET", "/api/buses?svc=${enc(svc)}")) }
 
     /**
-     * What's coming at one stop, for the Buses tab and the map's stop sheet: every row, the stop's name and its twin, and the services not
-     * running now (`stopped=1`), greyed. With [public], the public buses there too (the profile's `publicBuses`).
+     * What's coming at one stop, for the Buses tab and the map's stop sheet: every row, the stop's name and its opposite stop, and the
+     * services not running now (`stopped=1`), greyed. With [public], the public buses there too (the profile's `publicBuses`).
      */
     suspend fun board(stop: String, public: Boolean = false): Board = parsing {
         Board.parse(request("GET", "/api/arrivals?stop=${enc(stop)}&stopped=1" + if (public) "&public=1" else ""))
@@ -1591,6 +1596,7 @@ fun parseNearby(json: JSONObject): List<NearbyStop> = parsing {
             oppositeAcross = (s.getJSONObject("stop").takeIf { it.has("oppositeAcross") } ?: s).optBoolean("oppositeAcross", true),
             oppositeName = (s.getJSONObject("stop").optStringOrNull("oppositeName") ?: s.optStringOrNull("oppositeName"))?.ifEmpty { null },
             distM = if (s.has("distM") && !s.isNull("distM")) s.optInt("distM") else null,
+            viaText = s.optStringOrNull("viaText")?.ifEmpty { null },
             board = (0 until board.length()).map { j -> parseBoardRow(board.getJSONObject(j)) },
         )
     }

@@ -51,7 +51,7 @@ class SpokenTest {
         val a = golden("scheduled")
         val said = Spoken.summary(true, a, null, before(a), clock = clock)
         assertTrue(said, said.contains("A1, leaves about 09:11"))
-        assertTrue(said, said.contains("Timetable estimate"))
+        assertTrue(said, said.contains("Estimated time"))
         assertFalse(said, said.contains("~"))
     }
 
@@ -70,7 +70,7 @@ class SpokenTest {
         val said = Spoken.summary(true, a, null, ride.arriveMs - 60_000, clock = clock)
         assertTrue(said, said.startsWith("On the R2, to "))
         assertTrue(said, said.contains("Off at UTown"))
-        assertTrue(said, said.contains("Timetable estimate"))
+        assertTrue(said, said.contains("Estimated time"))
     }
 
     @Test
@@ -103,7 +103,7 @@ class SpokenTest {
 
     @Test
     fun aBusTimeSaysWhetherItsLive() {
-        assertEquals("about 6 minutes, timetable", Spoken.eta(360, "scheduled"))
+        assertEquals("about 6 minutes, estimated", Spoken.eta(360, "scheduled"))
         assertEquals("about 6 minutes", Spoken.eta(360, "scheduled", withQuality = false))
         assertEquals("6 minutes, live", Spoken.eta(360, "live"))
         assertEquals("1 minute, live", Spoken.eta(60, "live"))
@@ -117,7 +117,7 @@ class SpokenTest {
     fun inChinese() {
         TestStrings.install("values-zh")
         try {
-            assertEquals("约 6 分钟，按时刻表", Spoken.eta(360, "scheduled"))
+            assertEquals("约 6 分钟，估计", Spoken.eta(360, "scheduled"))
             assertEquals("6 分钟后出发", L.s(R.string.a11y_leave_in, Spoken.minutes(360)))
             assertEquals("约 09:11", Spoken.spell("~09:11"))
         } finally {

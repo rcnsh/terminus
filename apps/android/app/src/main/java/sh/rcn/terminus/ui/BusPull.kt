@@ -373,8 +373,8 @@ private fun Arrow(ink: Color, up: Boolean, calm: Boolean) {
 
 /**
  * The pull on Now's horizon, in place of the road's own sign and bus: the sign at [sign] (faded in by the pull when the road has none,
- * [ownSign]), the puffs, and the bus on the road. [top] is the horizon's top and [d] its px a unit; a timetable guess's bus stays an
- * outline (not [live]). [lights]: after dark, its headlight on as it drives.
+ * [ownSign]), the puffs, and the bus on the road. [top] is the horizon's top and [d] its px a unit; an estimate's bus stays an outline (not
+ * [live]). [lights]: after dark, its headlight on as it drives.
  */
 internal fun DrawScope.pullRoad(
     v: PullView,
@@ -437,7 +437,7 @@ private fun DrawScope.pullSign(m: PullMotion, p: Palette, o: Offset, u: Float, p
 /**
  * The bus at the motion's place on [ground] (units down the strip at x), its puffs behind it: the body bobbing and pitching on its
  * suspension over wheels that turn, along the [slope] of the hill, the door lit as it opens, and a honk. Without a [band] it's an outline,
- * as a timetable guess is on the horizon.
+ * as an estimate is on the horizon.
  */
 private fun DrawScope.pullBus(
     v: PullView,

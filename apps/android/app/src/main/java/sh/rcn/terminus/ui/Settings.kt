@@ -99,17 +99,19 @@ import sh.rcn.terminus.L
 import sh.rcn.terminus.Lang
 import sh.rcn.terminus.LeaveAlerts
 import sh.rcn.terminus.LiveService
+import sh.rcn.terminus.NewToNus
 import sh.rcn.terminus.ProfileDoc
 import sh.rcn.terminus.R
 import sh.rcn.terminus.RemovedPlace
 import sh.rcn.terminus.Servers
 import sh.rcn.terminus.Store
 import sh.rcn.terminus.Theme
-import sh.rcn.terminus.Trip
+import sh.rcn.terminus.TimetableClass
 import sh.rcn.terminus.WEEKDAYS
 import sh.rcn.terminus.dayShort
 import sh.rcn.terminus.hour12
 import sh.rcn.terminus.id
+import sh.rcn.terminus.widget.redrawWidgets
 
 /** Settings' pages, in the order the list shows them. */
 internal enum class SettingsPage(val title: Int) {
@@ -428,7 +430,12 @@ private fun displaySummary(page: SettingsPage, state: AccountState): String {
             )
             .joinToString(" · ")
     } else {
-        "${stringResource(themeName(Theme.pref(ctx)))} · ${stringResource(CardStyle.name(CardStyle.pref(ctx)))}"
+        listOfNotNull(
+                stringResource(themeName(Theme.pref(ctx))),
+                stringResource(CardStyle.name(CardStyle.pref(ctx))),
+                stringResource(R.string.new_to_nus).takeIf { NewToNus.on(ctx) },
+            )
+            .joinToString(" · ")
     }
 }
 
@@ -509,6 +516,7 @@ private fun SettingsPageContent(
             Groups {
                 ThemePicker()
                 CardStylePicker()
+                NewToNusSwitch()
             }
         SettingsPage.Account -> Groups { AccountSection(state, account, main, onAddEmail, onSignedOut) }
         SettingsPage.About -> Groups { AboutPage() }
@@ -1230,7 +1238,14 @@ private fun AddClass(destinations: List<Destination>, account: AccountViewModel,
                     if (s != null && w != null) {
                         account.edit {
                             it.addManual(
-                                Trip(day, s, end?.takeIf { e -> e > s }, if (w.kind == "landmark") w.code else w.stopCode, label.trim(), "")
+                                TimetableClass(
+                                    day,
+                                    s,
+                                    end?.takeIf { e -> e > s },
+                                    if (w.kind == "landmark") w.code else w.stopCode,
+                                    label.trim(),
+                                    "",
+                                )
                             )
                         }
                         onDone()
@@ -1339,6 +1354,26 @@ private fun Favourites(profile: ProfileDoc, campus: Campus?, account: AccountVie
         }
     }
     LaunchedEffect(Unit) { account.loadCampus() }
+}
+
+/** New to NUS: the Nearby widget explains the buses ([NewToNus]), on this phone only. */
+@Composable
+private fun NewToNusSwitch() {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val on = NewToNus.on(ctx)
+    Group(stringResource(R.string.nearby_widget), stringResource(R.string.new_to_nus_hint)) {
+        FieldRow(
+            stringResource(R.string.new_to_nus),
+            Modifier.toggleable(value = on, role = Role.Switch) {
+                NewToNus.set(ctx, it)
+                scope.launch { redrawWidgets(ctx) }
+            },
+            sub = stringResource(R.string.new_to_nus_sub),
+        ) {
+            Switch(checked = on, onCheckedChange = null)
+        }
+    }
 }
 
 /** Auto, light or dark, on this phone only. */
