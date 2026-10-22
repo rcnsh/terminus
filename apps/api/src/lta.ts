@@ -21,7 +21,6 @@ import { UpstreamUnreachable, timedFetch } from './http.ts';
 import { cacheBase, cachedFetch } from './edgecache.ts';
 import { GateBusy, throughGate } from './feedgate.ts';
 import { noteBreakerOpen } from './feedwatch.ts';
-import { indexGraph } from './resolve.ts';
 
 export const LTA_BASE = 'https://datamall2.mytransport.sg/ltaodataservice/';
 
@@ -62,8 +61,7 @@ export function routeFor(graph: Graph, stopCode: string, serviceNo: string, dest
 }
 
 function routesHere(graph: Graph, stopCode: string, serviceNo: string) {
-  const idx = indexGraph(graph);
-  return Object.entries(graph.public ?? {}).filter(([key, p]) => p.svc === serviceNo && idx.routes.get(key)?.pos.has(stopCode));
+  return Object.entries(graph.public ?? {}).filter(([key, p]) => p.svc === serviceNo && graph.routes[key]?.includes(stopCode));
 }
 
 const SLOTS = ['NextBus', 'NextBus2', 'NextBus3'];
