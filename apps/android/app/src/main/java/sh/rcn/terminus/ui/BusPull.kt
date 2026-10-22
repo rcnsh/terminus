@@ -81,6 +81,7 @@ import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import sh.rcn.terminus.Pull
 import sh.rcn.terminus.PullHint
@@ -165,25 +166,25 @@ internal fun BusPull(
         val motion = pv.motion
         motion.calm = calm
         pv.livery = own
-        var running by remember { mutableStateOf(false) }
+        val frames = remember { arrayOfNulls<Job>(1) }
         fun kick() {
             pv.frame++
             pv.hint = motion.hint
-            if (motion.moving) running = true
-        }
-        LaunchedEffect(running) {
-            if (!running) return@LaunchedEffect
-            var last = withFrameNanos { it }
-            while (motion.moving) {
-                withFrameNanos { now ->
-                    // The card's bus may have moved with the answer: it comes back to where it is now.
-                    motion.scene = sceneOf(width)
-                    motion.step((now - last) / 1e9f)
-                    last = now
+            // A job rather than an effect keyed on a flag: the loop ending and a touch starting it again inside one frame left the flag
+            // where it was, so no effect ran and a pull let go stayed at "Checking…" for good.
+            if (!motion.moving || frames[0]?.isActive == true) return
+            frames[0] = scope.launch {
+                var last = withFrameNanos { it }
+                while (motion.moving) {
+                    withFrameNanos { now ->
+                        // The card's bus may have moved with the answer: it comes back to where it is now.
+                        motion.scene = sceneOf(width)
+                        motion.step((now - last) / 1e9f)
+                        last = now
+                    }
+                    kick()
                 }
-                kick()
             }
-            running = false
         }
         val connection =
             remember(motion) {
