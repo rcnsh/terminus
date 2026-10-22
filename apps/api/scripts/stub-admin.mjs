@@ -2,7 +2,8 @@
  * Made-up numbers for the dashboard (/admin/), so the dev stub shows every
  * part of it filled in: Analytics Engine's answers to the queries admin.ts
  * makes, a feed state with past incidents in KV, two weeks of scored arrival
- * times in the downloads bucket, and accounts, devices and reports in D1.
+ * times and the arrival-time model's days in shadow in the downloads
+ * bucket, and accounts, devices and reports in D1.
  * Nothing here is real; STUB_ADMIN=empty leaves the dashboard as a fresh
  * install would see it.
  */
@@ -165,9 +166,71 @@ function etaDay(date) {
   };
 }
 
+const METHODS = ['feed', 'corrected', 'history', 'gated', 'recent', 'blend'];
+const HORIZONS = ['under 2 min', '2 to 5 min', '5 to 10 min', '10 to 30 min'];
+
+/**
+ * A day of the arrival-time model in shadow, as etashadow.ts keeps it: the
+ * [i]th day it ran, so history covers more as days build up, and the
+ * blend edges past the feed once it has a week or so to learn from.
+ */
+function shadowDay(date, i) {
+  const learnt = Math.min(1, i / 10);
+  const stats = (h, m) => {
+    const base = [42, 55, 78, 130][h];
+    const by = {
+      feed: 1,
+      corrected: 0.97,
+      history: [0.85, 1.15, 1.45, 1.9][h] - learnt * 0.1,
+      gated: 1.02 - learnt * 0.05,
+      recent: 1 - learnt * 0.08,
+      blend: 0.99 - learnt * 0.1,
+    }[m];
+    const mae = Math.round(base * by * (0.92 + rand(`${date}${h}${m}`) * 0.16) * 10) / 10;
+    const n = Math.round([60, 120, 110, 90][h] * (0.3 + learnt * 0.6));
+    return {
+      n,
+      mae,
+      p50: Math.round(mae * 0.7 * 10) / 10,
+      p90: Math.round(mae * 2.3 * 10) / 10,
+      bias: Math.round((rand(`b${date}${h}${m}`) - 0.3) * mae * 0.6 * 10) / 10,
+    };
+  };
+  const horizons = HORIZONS.map((label, h) => ({ label, stats: Object.fromEntries(METHODS.map((m) => [m, stats(h, m)])) }));
+  const overall = Object.fromEntries(
+    METHODS.map((m) => {
+      const hs = horizons.map((x) => x.stats[m]);
+      const n = hs.reduce((t, x) => t + x.n, 0);
+      const w = (k) => Math.round((hs.reduce((t, x) => t + x.n * x[k], 0) / n) * 10) / 10;
+      return [m, { n, mae: w('mae'), p50: w('p50'), p90: w('p90'), bias: w('bias') }];
+    }),
+  );
+  const predictions = 520 + Math.round(rand(`p${date}`) * 200);
+  const cases = Math.round(predictions * 0.86);
+  return {
+    v: 1,
+    date,
+    built: { days: i, pairs: Math.round(Math.min(105, i * 30)) },
+    predictions,
+    cases,
+    coverage: i ? Math.round(Math.min(0.88, 0.25 + learnt * 0.6) * 1000) / 1000 : 0,
+    weights: HORIZONS.map((_, h) => (i ? Math.round(learnt * [0.6, 0.4, 0.2, 0.1][h] * 10) / 10 : 0)),
+    overall: i ? overall : Object.fromEntries(METHODS.map((m) => [m, { n: 0, mae: null, p50: null, p90: null, bias: null }])),
+    horizons: i
+      ? horizons
+      : horizons.map((x) => ({
+          label: x.label,
+          stats: Object.fromEntries(METHODS.map((m) => [m, { n: 0, mae: null, p50: null, p90: null, bias: null }])),
+        })),
+    grid: { sums: [], n: [] },
+  };
+}
+
 /** Fills the stub's D1, KV and bucket with the dashboard's made-up data. */
 export async function seedAdmin({ db, kv, downloads, nowMs }) {
   for (const date of days(nowMs - DAY, 14)) await downloads.put(`eta/${date}.json`, JSON.stringify(etaDay(date)));
+  for (const [i, date] of days(nowMs - DAY, 12).entries())
+    await downloads.put(`eta/model/${date}.json`, JSON.stringify(shadowDay(date, i)));
   await kv.put(
     'monitor:upstream',
     JSON.stringify({ up: true, since: nowMs - 2.3 * DAY, reason: null, checkedAt: nowMs - 6 * 60_000, failures: 0, oks: 40 }),

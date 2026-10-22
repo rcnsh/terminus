@@ -9,14 +9,16 @@ const num = (n) => Number(n ?? 0).toLocaleString('en-SG');
 const compactFmt = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
 export const compact = (n) => compactFmt.format(n);
 
-/** Round steps from 0 up past [max]: 0, 500, 1000, … */
-export function ticks(max, count = 4, whole = true) {
-  if (!(max > 0)) return [0, 1];
-  const raw = whole ? Math.max(1, max / count) : max / count;
+/** Round steps from [min] (0 unless given) up past [max]: 0, 500, 1000, … */
+export function ticks(max, count = 4, whole = true, min = 0) {
+  if (!(max > min)) return min === 0 ? [0, 1] : [min - 1, min, min + 1];
+  const span = max - min;
+  const raw = whole ? Math.max(1, span / count) : span / count;
   const p = 10 ** Math.floor(Math.log10(raw));
   const step = [1, 2, 2.5, 5, 10].map((m) => m * p).find((s) => s >= raw);
+  const lo = Math.floor(min / step + 1e-9) * step;
   const top = Math.ceil(max / step - 1e-9) * step;
-  return Array.from({ length: Math.round(top / step) + 1 }, (_, i) => +(i * step).toPrecision(12));
+  return Array.from({ length: Math.round((top - lo) / step) + 1 }, (_, i) => +(lo + i * step).toPrecision(12));
 }
 
 /** The element's width, following it as the window changes. */
@@ -77,6 +79,7 @@ export function Chart({
   note,
   pickNote,
   whole = true,
+  fromZero = true,
   legend = series.length > 1,
 }) {
   const box = useRef(null);
@@ -93,13 +96,16 @@ export function Chart({
   const shown = series.map((_, i) => !hidden.has(i));
   const vals = (r) => r.values.map((v, i) => (shown[i] ? (v ?? 0) : 0));
   const tops = rows.map((r) => (stacked ? vals(r).reduce((a, b) => a + b, 0) : Math.max(0, ...vals(r))));
-  const ys = ticks(fixedMax ?? Math.max(0, ...tops), 4, whole);
+  // A line may start above 0 (or go below it) to show the gaps between series.
+  const low = fromZero ? 0 : Math.min(...rows.flatMap((r) => r.values.filter((v, i) => shown[i] && v != null)));
+  const ys = ticks(fixedMax ?? Math.max(0, ...tops), 4, whole, Number.isFinite(low) ? low : 0);
+  const bottom = ys[0];
   const top = ys.at(-1) || 1;
   const M = { l: Math.max(28, 9 * Math.max(...ys.map((t) => yfmt(t).length)) + 4), r: 6, t: 10, b: 24 };
   const iw = Math.max(20, w - M.l - M.r);
   const ih = height - M.t - M.b;
   const base = M.t + ih;
-  const y = (v) => base - (Math.min(v, top) / top) * ih;
+  const y = (v) => base - ((Math.min(Math.max(v, bottom), top) - bottom) / (top - bottom)) * ih;
   const band = iw / Math.max(1, rows.length);
   const cx = (i) => M.l + band * i + band / 2;
   const bw = Math.max(2, Math.min(24, band - 2, band * 0.72));

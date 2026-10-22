@@ -10,7 +10,7 @@ import { makeBucket, makeEnv } from './_stubs.mjs';
 import { SHAPES } from '../src/campus.ts';
 import { buildDayFile, dayKey, encodeBus, gzip, mapSnapshot, windowOf } from '../src/timelapse.ts';
 import { etaKey, passingsOf, recordEta } from '../src/eta.ts';
-import { etaModelOn, modelBefore, segmentsKey, shadowEta, shadowKey } from '../src/etashadow.ts';
+import { etaModelOn, modelBefore, segmentsKey, shadowEta, shadowKey, shadowSummary } from '../src/etashadow.ts';
 
 const DAYS = ['2026-08-25', '2026-08-26'];
 
@@ -98,4 +98,26 @@ test('each day is answered by the model of the days before it, oldest first, onc
   const { model } = await modelBefore(bucket, '2026-08-27');
   assert.equal(model.bias['K|1'][1], 90, 'the feed is 90 s early for K');
   assert.equal(model.weights[1], 0, 'the corrected feed was exact: no weight on history');
+});
+
+test('the dashboard reads the days in shadow, oldest first, without their weight grids', async () => {
+  const { env, bucket, fetchImpl, now } = await setUp({ ETA_MODEL: 'shadow' });
+  assert.equal(await shadowSummary({}, now), null, 'no bucket');
+  assert.deepEqual(await shadowSummary(env, now), { on: true, historyDays: 28, days: [] }, 'nothing run yet');
+  await env.KV.put('config:collect:eta', 'on');
+  await recordEta(env, now, fetchImpl);
+  await recordEta(env, now, fetchImpl);
+  await shadowEta(env, now, fetchImpl);
+  await shadowEta(env, now, fetchImpl);
+  const summary = await shadowSummary(env, now);
+  assert.deepEqual(
+    summary.days.map((d) => d.date),
+    DAYS,
+  );
+  assert.ok(
+    summary.days.every((d) => !('grid' in d)),
+    'grids stay in the bucket',
+  );
+  assert.equal(summary.days[1].coverage, 1);
+  assert.equal((await shadowSummary({ DOWNLOADS: bucket }, now)).on, false, 'ETA_MODEL unset: off, days still shown');
 });

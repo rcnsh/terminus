@@ -95,6 +95,11 @@ export const SECTIONS = [
   ['devices', 'Devices', 'Paired apps, the versions they run, API keys and web sessions.'],
   ['answers', 'Answers', 'Answers given per day, how sure they were, and the errors.'],
   ['arrivals', 'Arrival times', 'How close the feed’s “in 4 min” came to when the bus arrived.'],
+  [
+    'model',
+    'Arrival model',
+    'Our own arrival-time model, run in shadow beside the feed: how it would have done, day by day. It answers no one yet.',
+  ],
   ['feed', 'Feed & recorder', 'The NUS feed’s health, its outages, and what the timelapse recorder asked of it.'],
   ['crashes', 'Crash reports', 'Crashes and errors from the apps and the website this week, by fingerprint.'],
   ['reports', 'Reports', '“This was wrong” reports and stop suggestions, newest first.'],

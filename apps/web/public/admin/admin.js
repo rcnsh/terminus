@@ -5,11 +5,12 @@
 // A sidebar of sections (views.js), each its own address (#/answers), so a
 // section can be linked to and the back button works. The stats refresh
 // every minute while the tab is in front, keeping what's drawn until the
-// new numbers arrive. Keys: 1–9 open a section, r refreshes, / searches.
+// new numbers arrive. Keys: 1–9 and 0 open a section, r refreshes, / searches.
 
 import { html, render, store, useEffect, useMemo, useRef, useState, useStore } from '/assets/ui.js';
 import { addPasskey, passkeysWork, signIn } from '/admin/passkey.js';
 import { ago, when } from '/admin/parts.js';
+import { Model } from '/admin/model.js';
 import { Accounts, Answers, Arrivals, Collection, Crashes, Devices, Feed, Overview, Reports, SECTIONS, derive } from '/admin/views.js';
 
 const KEY = 'terminus-operator-token';
@@ -211,6 +212,7 @@ const PAGES = {
   devices: Devices,
   answers: Answers,
   arrivals: Arrivals,
+  model: Model,
   feed: Feed,
   crashes: Crashes,
   reports: Reports,
@@ -237,7 +239,8 @@ function Dashboard({ v }) {
         if (e.key === 'Escape') document.activeElement.blur();
         return;
       }
-      const n = Number(e.key);
+      // 1 to 9, then 0 for the tenth.
+      const n = e.key === '0' ? 10 : Number(e.key);
       if (n >= 1 && n <= SECTIONS.length) location.hash = `#/${SECTIONS[n - 1][0]}`;
       else if (e.key === 'r') load();
       else if (e.key === '/') {
@@ -262,7 +265,7 @@ function Dashboard({ v }) {
               [id, name],
               i,
             ) => html`<a href=${`#/${id}`} class=${route.id === id ? 'on' : ''} aria-current=${route.id === id ? 'page' : null}>
-              <span>${name}</span>${badge(id, s, d)}<kbd>${i + 1}</kbd>
+              <span>${name}</span>${badge(id, s, d)}<kbd>${(i + 1) % 10}</kbd>
             </a>`,
           )}
           <a href="/admin/timelapse/" class="out"><span>Timelapse</span><span aria-hidden="true">↗</span></a>
@@ -277,7 +280,7 @@ function Dashboard({ v }) {
             <button type="button" class="btn small ghost" onClick=${lock}>Lock</button>
           </div>
           <p class="hint keys">
-            <span><kbd>1</kbd>–<kbd>9</kbd> section</span><span><kbd>r</kbd> refresh</span><span><kbd>/</kbd> search</span>
+            <span><kbd>1</kbd>–<kbd>0</kbd> section</span><span><kbd>r</kbd> refresh</span><span><kbd>/</kbd> search</span>
           </p>
         </div>
       </aside>

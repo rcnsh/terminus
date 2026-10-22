@@ -7,7 +7,8 @@
  * also queries Analytics Engine for answers and errors per day, the daily
  * active counts and the apps' error reports; without them those parts are
  * null and the page says how to turn them on. `collect` is the switches for
- * what's collected (collect.ts), `eta` the arrival times scored (eta.ts).
+ * what's collected (collect.ts), `eta` the arrival times scored (eta.ts),
+ * `model` the arrival-time model's days in shadow (etashadow.ts).
  */
 
 import type { Env } from './types.ts';
@@ -17,6 +18,7 @@ import { sessionOk } from './passkey.ts';
 import { aeSql } from './analytics.ts';
 import { collectState } from './collect.ts';
 import { etaSummary } from './eta.ts';
+import { shadowSummary } from './etashadow.ts';
 
 const DAY = 86_400_000;
 
@@ -59,12 +61,13 @@ export function timingSafeEqual(given: string, secret: string): boolean {
 
 export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetch = fetch): Promise<Record<string, unknown>> {
   const db = env.DB;
-  const [upstream, incidents, analytics, collect, eta] = await Promise.all([
+  const [upstream, incidents, analytics, collect, eta, model] = await Promise.all([
     readUpstream(env),
     readIncidents(env),
     analyticsStats(env, fetchImpl),
     collectState(env),
     etaSummary(env, nowMs).catch((err) => ({ error: err instanceof Error ? err.message : String(err) })),
+    shadowSummary(env, nowMs).catch((err) => ({ error: err instanceof Error ? err.message : String(err) })),
   ]);
   const out: Record<string, unknown> = {
     now: new Date(nowMs).toISOString(),
@@ -81,6 +84,7 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
     analytics,
     collect,
     eta,
+    model,
   };
   if (!db) return out;
 
