@@ -6,47 +6,47 @@
 
 import type { Env, ResolveInput } from './types.ts';
 import { sgt } from './config.ts';
-import { venueAt, venueToStop } from './nusmods.ts';
-import { appVersion, authConfigured, getSession } from './auth.ts';
-import { candidates, lookUp, parseVersion, versionString } from './appversion.ts';
-import { fmsConfigured, getBuses } from './fms.ts';
-import { shortStop } from './format.ts';
-import { boardAsOf, boardAt, displayName, indexGraph, serviceEndsAt, serviceResumesAt, stoppedReason } from './resolve.ts';
-import { buildCampusMap, buildDestinations, ROUTE_COLORS } from './campus.ts';
-import { busesOnLine, lineStops, trackedBuses } from './buses.ts';
-import { stopPairs } from './pairs.ts';
-import { adminStats, handleDismissCrash, holdsHealthToken, isOperator } from './admin.ts';
-import { handleCollect } from './collect.ts';
-import { handleAppError } from './apperrors.ts';
-import { handlePasskey } from './passkey.ts';
-import { analyticsEnabled, logError } from './analytics.ts';
+import { venueAt, venueToStop } from './timetable/nusmods.ts';
+import { appVersion, authConfigured, getSession } from './feeds/auth.ts';
+import { candidates, lookUp, parseVersion, versionString } from './feeds/appversion.ts';
+import { fmsConfigured, getBuses } from './feeds/fms.ts';
+import { shortStop } from './answer/format.ts';
+import { boardAsOf, boardAt, displayName, indexGraph, serviceEndsAt, serviceResumesAt, stoppedReason } from './answer/resolve.ts';
+import { buildCampusMap, buildDestinations, ROUTE_COLORS } from './map/campus.ts';
+import { busesOnLine, lineStops, trackedBuses } from './map/buses.ts';
+import { stopPairs } from './map/pairs.ts';
+import { adminStats, handleDismissCrash, holdsHealthToken, isOperator } from './ops/admin.ts';
+import { handleCollect } from './ops/collect.ts';
+import { handleAppError } from './ops/apperrors.ts';
+import { handlePasskey } from './accounts/passkey.ts';
+import { analyticsEnabled, logError } from './ops/analytics.ts';
 import { docsPageFor, openApiJson } from './openapi.ts';
-import { phaseAt, sgtMinute } from './pagesky.ts';
+import { phaseAt, sgtMinute } from './site/pagesky.ts';
 import { CORS, clientKey, coordsFrom, json, jsonCached, numParam, withSecurityHeaders } from './http.ts';
-import { type MeDeps, handleMe } from './me.ts';
-import { UPDATE_REQUIRED, accountsConfigured, clientOutdated, hasSessionCookie } from './accounts.ts';
-import { answering, answeringSince, readUpstream, runCron, statusRecords } from './monitor.ts';
-import { ltaConfigured } from './lta.ts';
-import { calendarThrough } from './calendar.ts';
-import { llmsTxt, robotsTxt, SITEMAP } from './seo.ts';
-import { calendarSource, loadCalendar } from './calendarsync.ts';
-import { handleDownload } from './downloads.ts';
-import { landingPage } from './landing.ts';
-import { handleMap, matchesEtag } from './map.ts';
-import { landmark, targetStops } from './landmarks.ts';
-import { residenceList } from './residences.ts';
-import { ACCOUNTS_DOWN, callerOrDown, d1Unavailable, recentCallerFor } from './access.ts';
-import { fcmEnabled } from './push.ts';
-import { webPushEnabled } from './webpush.ts';
-import { apnsEnabled } from './apns.ts';
-import { handleTimelapse } from './timelapse.ts';
-import { scopeCache } from './edgecache.ts';
+import { type MeDeps, handleMe } from './accounts/me.ts';
+import { UPDATE_REQUIRED, accountsConfigured, clientOutdated, hasSessionCookie } from './accounts/accounts.ts';
+import { answering, answeringSince, readUpstream, runCron, statusRecords } from './ops/monitor.ts';
+import { ltaConfigured } from './feeds/lta.ts';
+import { calendarThrough } from './timetable/calendar.ts';
+import { llmsTxt, robotsTxt, SITEMAP } from './site/seo.ts';
+import { calendarSource, loadCalendar } from './timetable/calendarsync.ts';
+import { handleDownload } from './site/downloads.ts';
+import { landingPage } from './site/landing.ts';
+import { handleMap, matchesEtag } from './map/map.ts';
+import { landmark, targetStops } from './answer/landmarks.ts';
+import { residenceList } from './answer/residences.ts';
+import { ACCOUNTS_DOWN, callerOrDown, d1Unavailable, recentCallerFor } from './accounts/access.ts';
+import { fcmEnabled } from './push/push.ts';
+import { webPushEnabled } from './push/webpush.ts';
+import { apnsEnabled } from './push/apns.ts';
+import { handleTimelapse } from './map/timelapse.ts';
+import { scopeCache } from './feeds/edgecache.ts';
 
-import { GRAPH, GRAPH_PUBLIC, oppositeOf } from './graph.ts';
-import { appSiteAssociation, markBeta, movedApi, movedPage } from './site.ts';
+import { GRAPH, GRAPH_PUBLIC, oppositeOf } from './answer/graph.ts';
+import { appSiteAssociation, markBeta, movedApi, movedPage } from './site/site.ts';
 import { isBeta, linkOrigin } from './origin.ts';
-import { noteLegacy } from './legacy.ts';
-import { answerFor, arrivedAnswer, collectArrivals, needsSetupAnswer } from './answer.ts';
+import { noteLegacy } from './ops/legacy.ts';
+import { answerFor, arrivedAnswer, collectArrivals, needsSetupAnswer } from './answer/answer.ts';
 import { lang, langOfRequest, m, withLang } from './i18n.ts';
 import type { Lang } from './i18n.ts';
 
@@ -59,10 +59,10 @@ let stopPairsMemo: ReturnType<typeof stopPairs> | null = null;
 
 export { GRAPH, answerFor, arrivedAnswer, collectArrivals, coordsFrom, numParam };
 // The trip engine's Durable Object (one per user), bound as TRIPS.
-export { Trip } from './tripdo.ts';
+export { Trip } from './push/tripdo.ts';
 // The timelapse recorder (one per Singapore day), bound as TIMELAPSE.
-export { TimelapseRecorder } from './timelapsedo.ts';
-export { FeedGate } from './feedgate.ts';
+export { TimelapseRecorder } from './map/timelapsedo.ts';
+export { FeedGate } from './feeds/feedgate.ts';
 
 /** `?to=` as a stop code or a NUSMods venue code; `?from=` as an origin stop. */
 function resolveDestination(url: URL) {

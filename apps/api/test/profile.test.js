@@ -14,7 +14,7 @@ import {
   restLabel,
   timingFor,
   upcomingClass,
-} from '../src/profile.ts';
+} from '../src/timetable/profile.ts';
 import { withLang } from '../src/i18n.ts';
 
 const STOPS = new Set(['PGP', 'COM3', 'UTOWN', 'KR-MRT', 'LT27']);

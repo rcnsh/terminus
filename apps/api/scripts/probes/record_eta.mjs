@@ -6,7 +6,7 @@
  * (/api/arrivals, per stop), timestamped, appended as JSON lines to a local
  * file. It's for a developer's machine, never the Worker: the Worker
  * already has both (the timelapse recorder's days in R2, the feed's
- * predictions in Analytics Engine; see src/eta.ts).
+ * predictions in Analytics Engine; see src/ops/eta.ts).
  *
  * Polite by construction, and read-only:
  * - each service's buses at most once per --every seconds (20 at least),

@@ -6,7 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { GRAPH, GRAPH_PUBLIC } from '../src/graph.ts';
+import { GRAPH, GRAPH_PUBLIC } from '../src/answer/graph.ts';
 import {
   candidateStops,
   indexGraph,
@@ -17,11 +17,11 @@ import {
   shuttleRideS,
   walkAllTheWayS,
   wholeWalk,
-} from '../src/resolve.ts';
-import { leaveBy } from '../src/leave.ts';
-import { walkVerdict } from '../src/format.ts';
-import { mergeFeeds } from '../src/answer.ts';
-import { cardFor } from '../src/card.ts';
+} from '../src/answer/resolve.ts';
+import { leaveBy } from '../src/answer/leave.ts';
+import { walkVerdict } from '../src/answer/format.ts';
+import { mergeFeeds } from '../src/answer/answer.ts';
+import { cardFor } from '../src/answer/card.ts';
 import { haversineM } from '../src/geo.ts';
 import { RIDE, WALK } from '../src/config.ts';
 
@@ -284,7 +284,7 @@ test("a stale answer's card counts from the request: its next change is never in
 });
 
 test('a leave-by sliding just ahead of now asks for a refetch no sooner than 30 s', async () => {
-  const { nextPhaseAt, LEAVE_GAP_MS } = await import('../src/card.ts');
+  const { nextPhaseAt, LEAVE_GAP_MS } = await import('../src/answer/card.ts');
   const { default: fixture } = await import('../../../fixtures/answers/class-bus.json', { with: { type: 'json' } });
   const { card: _card, refreshAt: _r, ...answer } = fixture;
   const now = Date.parse(answer.asOf);
@@ -385,7 +385,7 @@ test('choosing the stops that go there still asks the feed about WALK.maxCandida
 });
 
 test('riding a public bus reads its arrival from the public graph, by its route', async () => {
-  const { nextArrival } = await import('../src/next.ts');
+  const { nextArrival } = await import('../src/answer/next.ts');
   const nowMs = Date.parse('2026-08-27T02:00:00Z');
   // A stop on the 151's first direction in the public graph.
   const pidx = indexGraph(GRAPH_PUBLIC);
@@ -413,7 +413,7 @@ test('riding a public bus reads its arrival from the public graph, by its route'
 });
 
 test('a public second bus is looked for in the public graph, a shuttle one in the shuttle graph', async () => {
-  const { secondBus } = await import('../src/next.ts');
+  const { secondBus } = await import('../src/answer/next.ts');
   const nowMs = Date.parse('2026-08-27T02:00:00Z');
   const pidx = indexGraph(GRAPH_PUBLIC);
   const stopCode = [...pidx.routes.get('151/1').pos.keys()][0];
@@ -441,7 +441,7 @@ test('a public second bus is looked for in the public graph, a shuttle one in th
 });
 
 test('riding counts the bus from its own feed: at a shared shelter, not the older one', async () => {
-  const { liveArrival, nextArrival } = await import('../src/next.ts');
+  const { liveArrival, nextArrival } = await import('../src/answer/next.ts');
   const nowMs = Date.parse('2026-08-27T02:00:00Z');
   const pidx = indexGraph(GRAPH_PUBLIC);
   const alight = [...pidx.routes.get('151/1').pos.keys()][1];

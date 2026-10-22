@@ -42,7 +42,7 @@ REQUIRED = [
     "NEXTBUS_PROXY_API_KEY",
 ]
 
-# Mirrors src/auth.ts.
+# Mirrors src/feeds/auth.ts.
 AUTH_PATH = "/get-access-token"
 # The feed's replies are a few KB; anything near this is not the feed.
 MAX_BYTES = 5_000_000
@@ -118,7 +118,7 @@ def first(d: dict, *keys, default=None):
 
 def app_headers() -> dict:
     # No X-Forwarded-Proto: it makes the NUS load balancer intermittently
-    # answer 400 "Contradictory scheme headers". See src/auth.ts.
+    # answer 400 "Contradictory scheme headers". See src/feeds/auth.ts.
     h = {
         "X-HTD-API": os.environ["NEXTBUS_HTD_API"],
         "X-APP-API": os.environ["NEXTBUS_APP_API"],
@@ -171,7 +171,7 @@ def device_id() -> str:
 
 
 def get_session() -> dict:
-    """Mint the PUBLIC guest JWT, exactly as src/auth.ts does."""
+    """Mint the PUBLIC guest JWT, exactly as src/feeds/auth.ts does."""
     base = os.environ["NEXTBUS_AUTH_BASE"].rstrip("/")
     url = base if base.endswith(AUTH_PATH) else base + AUTH_PATH
     dev = device_id()

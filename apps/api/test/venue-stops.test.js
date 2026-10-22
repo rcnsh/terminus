@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { venueStops, venueToStop } from '../src/nusmods.ts';
-import { originOf } from '../src/next.ts';
-import { candidateStops, indexGraph, walkAllTheWayS } from '../src/resolve.ts';
-import { buildingStops, footM } from '../src/walk.ts';
-import { GRAPH } from '../src/graph.ts';
+import { venueStops, venueToStop } from '../src/timetable/nusmods.ts';
+import { originOf } from '../src/answer/next.ts';
+import { candidateStops, indexGraph, walkAllTheWayS } from '../src/answer/resolve.ts';
+import { buildingStops, footM } from '../src/answer/walk.ts';
+import { GRAPH } from '../src/answer/graph.ts';
 import venuesJson from '../data/venues.json' with { type: 'json' };
 import overrides from '../data/src/venue-stops.json' with { type: 'json' };
 

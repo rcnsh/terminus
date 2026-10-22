@@ -1,13 +1,13 @@
 /**
- * The planner's entry (nextFor in src/next.ts), called as the routes and the
+ * The planner's entry (nextFor in src/answer/next.ts), called as the routes and the
  * Trip object call it: a rider and an ask, no request, no D1, no Trip object.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DAY_ASK, nextFor } from '../src/next.ts';
-import { DEFAULT_PROFILE } from '../src/profile.ts';
-import { NO_PREFS } from '../src/outcomes.ts';
-import { answerFor } from '../src/answer.ts';
+import { DAY_ASK, nextFor } from '../src/answer/next.ts';
+import { DEFAULT_PROFILE } from '../src/timetable/profile.ts';
+import { NO_PREFS } from '../src/accounts/outcomes.ts';
+import { answerFor } from '../src/answer/answer.ts';
 
 const NOW = Date.parse('2026-08-27T02:00:00Z'); // a Thursday, 10:00 in Singapore
 const asked = [];

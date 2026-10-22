@@ -8,9 +8,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { makeD1 } from './_d1.mjs';
-import { checkTurnstile, exportAccount } from '../src/accounts.ts';
-import { logAnswer, logCronError, logError, logPoll } from '../src/analytics.ts';
-import { loadDay } from '../src/trip.ts';
+import { checkTurnstile, exportAccount } from '../src/accounts/accounts.ts';
+import { logAnswer, logCronError, logError, logPoll } from '../src/ops/analytics.ts';
+import { loadDay } from '../src/answer/trip.ts';
 
 const NOW = Date.parse('2026-08-27T01:00:00Z');
 

@@ -158,7 +158,7 @@ data class NextAnswer(
     }
 }
 
-/** `card` in /api/me/next (apps/api/src/card.ts). Lines are shown verbatim. */
+/** `card` in /api/me/next (apps/api's card.ts). Lines are shown verbatim. */
 data class Card(
     val kind: String,
     /** Dim from this instant, epoch ms. */
@@ -1348,7 +1348,7 @@ object Outdated {
         return p == "/api/me" || p.startsWith("/api/me/") || p in ANSWERS
     }
 
-    /** The bus answers the server refuses an outdated app (KEYED in apps/api/src/index.ts). */
+    /** The bus answers the server refuses an outdated app (KEYED in apps/api's index.ts). */
     private val ANSWERS = setOf("/api/next", "/api/trip", "/api/arrivals", "/api/buses", "/api/line", "/api/campus", "/api/stops/pairs")
 
     fun refused() {

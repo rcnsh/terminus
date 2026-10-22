@@ -4,8 +4,8 @@
  * service, for a few minutes, with a throwaway anonymous account (deleted at
  * the end). Then checks each bus's `along` (metres along its route line):
  * between two readings on its line it may go back at most 60 m (GPS error:
- * src/buses.ts's TRACK_BACK_M of 50 m, plus 10 m of slack) and forward at
- * most 100 m + 20 m/s since, as src/buses.ts tracks it. A
+ * src/map/buses.ts's TRACK_BACK_M of 50 m, plus 10 m of slack) and forward at
+ * most 100 m + 20 m/s since, as src/map/buses.ts tracks it. A
  * jump outside that is a bus switching to the other side of the road, or
  * being drawn backwards. Prints a Markdown report, and exits 1 when a move
  * is flagged, or when it saw no buses at all (so checked nothing).
@@ -38,7 +38,7 @@ const SERVICES = args.length ? args : ['A1', 'A2', 'D1', 'D2'];
 const EVERY_MS = 5_000;
 const BACK_M = 60;
 const AHEAD_M = 100;
-/** Metres a second on top of AHEAD_M (src/buses.ts TRACK_AHEAD_MPS). */
+/** Metres a second on top of AHEAD_M (src/map/buses.ts TRACK_AHEAD_MPS). */
 const AHEAD_MPS = 20;
 /** A request the site hasn't answered in this long has failed: a hung one would stall the recording. */
 const TIMEOUT_MS = 15_000;

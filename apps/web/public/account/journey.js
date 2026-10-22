@@ -1,5 +1,5 @@
 // A trip by bus, or on foot the whole way, drawn from the server's
-// card.journey (apps/api/src/card.ts) in the card style chosen in Settings ›
+// card.journey (apps/api/src/answer/card.ts) in the card style chosen in Settings ›
 // Appearance: Steps (the default) or Route, as the Android app draws
 // them. Every word and time is the server's (its title, byText, walkText, …);
 // only the countdowns tick here. Lines missing from an answer (or the service

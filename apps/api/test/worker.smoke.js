@@ -4,9 +4,9 @@ import assert from 'node:assert/strict';
 import { FROZEN_NOW, installGlobals, makeAnalytics, makeBucket, makeCtx, makeEnv, makeFetch, makeKV } from './_stubs.mjs';
 import worker, { coordsFrom, numParam } from '../src/index.ts';
 import { LABEL_MAX } from '../src/config.ts';
-import { ME_ROUTES } from '../src/me.ts';
+import { ME_ROUTES } from '../src/accounts/me.ts';
 import { API_VERSION } from '../src/openapi.ts';
-import { forgetHeads } from '../src/map.ts';
+import { forgetHeads } from '../src/map/map.ts';
 
 const BASE = 'https://bus.example.test';
 const ARRIVALS_KEY = (code) => `https://terminus.internal/arrivals/${code}`;
@@ -928,7 +928,7 @@ test('while another isolate fetches a stale stop, the stale answer is served wit
 test('a code that is not a stop (a food court) is never sent to either feed', async () => {
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
   installGlobals(fetchImpl);
-  const { collectArrivals } = await import('../src/answer.ts');
+  const { collectArrivals } = await import('../src/answer/answer.ts');
   const ctx = makeCtx();
   const out = await collectArrivals(makeEnv(), ctx, ['THE-DECK', 'PGP'], Date.now());
   await ctx.settle();
@@ -941,7 +941,7 @@ test('a code that is not a stop (a food court) is never sent to either feed', as
 });
 
 test("the beta's cache keys are its own: the stable site's breaker doesn't quiet it, nor its answers feed it", async () => {
-  const { scopeCache } = await import('../src/edgecache.ts');
+  const { scopeCache } = await import('../src/feeds/edgecache.ts');
   const beta = { ...makeEnv(), PUBLIC_ORIGIN: 'https://beta.terminus.run' };
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
   const cache = installGlobals(fetchImpl);
@@ -1014,7 +1014,7 @@ test('a feed whose rows changed shape is a failure the monitor sees, not every b
   assert.equal(body.available, false);
   assert.ok(body.board.length > 0 && body.board.every((x) => x.quality === 'unknown'), 'no headway guess passed off as the board');
   // The monitor's probe fails the same way, so the outage is confirmed and emailed.
-  const { checkUpstream, FAILS_TO_ALERT } = await import('../src/monitor.ts');
+  const { checkUpstream, FAILS_TO_ALERT } = await import('../src/ops/monitor.ts');
   installGlobals(makeFetch({ raw }));
   const env = makeEnv();
   let state;
@@ -1027,7 +1027,7 @@ test('concurrent token requests share one mint instead of each minting', async (
   const fetchImpl = makeFetch({});
   installGlobals(fetchImpl);
   const env = makeEnv();
-  const { getSession } = await import('../src/auth.ts');
+  const { getSession } = await import('../src/feeds/auth.ts');
 
   // force: true bypasses memo and KV, so all three would mint without dedupe.
   const sessions = await Promise.all([1, 2, 3].map(() => getSession(env, Date.now(), { force: true })));

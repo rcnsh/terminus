@@ -1,11 +1,11 @@
 /**
- * The emails' HTML (src/mail.ts): what each must say, in both languages,
+ * The emails' HTML (src/site/mail.ts): what each must say, in both languages,
  * with whatever a user typed escaped.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { deviceAddedHtml, feedbackHtml, operatorHtml, signInHtml } from '../src/mail.ts';
+import { deviceAddedHtml, feedbackHtml, operatorHtml, signInHtml } from '../src/site/mail.ts';
 import { msgsFor, withLang } from '../src/i18n.ts';
 
 const origin = 'https://terminus.rcn.sh';

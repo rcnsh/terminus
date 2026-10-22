@@ -1,5 +1,5 @@
 // The dashboard's Arrival model section: the arrival-time model run in
-// shadow (src/etashadow.ts), which answers no one. Each day is answered
+// shadow (src/ops/etashadow.ts), which answers no one. Each day is answered
 // by a model built only from the 28 days before it, every way the model
 // can answer, against when the bus came. docs/eta-model.md says what the
 // numbers must show before it answers anyone: the blend beating the feed's

@@ -9,8 +9,8 @@ import assert from 'node:assert/strict';
 
 import { makeEnv } from './_stubs.mjs';
 import { makeD1 } from './_d1.mjs';
-import { remindUser } from '../src/push.ts';
-import { b64url } from '../src/webpush.ts';
+import { remindUser } from '../src/push/push.ts';
+import { b64url } from '../src/push/webpush.ts';
 
 const NOW = Date.parse('2026-08-27T01:00:00Z');
 const NOTICE = { title: 't', body: 'b', zhTitle: 't', zhBody: 'b' };

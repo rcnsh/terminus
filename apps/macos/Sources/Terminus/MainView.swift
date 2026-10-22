@@ -201,7 +201,7 @@ struct ReportForm: View {
     @FocusState private var focused: Bool
     @Environment(\.openWindow) private var openWindow
 
-    /// The reasons, as /api/me/feedback takes them (REASONS in apps/api/src/feedback.ts)
+    /// The reasons, as /api/me/feedback takes them (REASONS in apps/api's feedback.ts)
     /// and worded as the phone and the web offer them.
     static var reasons: [(id: String, label: String)] {
         [

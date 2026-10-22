@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { acadYear, parseShareUrl, resolveTrips, venueAt, venueToStop } from '../src/nusmods.ts';
+import { acadYear, parseShareUrl, resolveTrips, venueAt, venueToStop } from '../src/timetable/nusmods.ts';
 
 const SHARE = 'https://nusmods.com/timetable/sem-1/share?EC1101E=TUT:W11,LEC:2&MA1100=LEC:1&hidden=PC1101';
 

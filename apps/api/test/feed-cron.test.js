@@ -11,8 +11,8 @@ import nusmods from './fixtures/calendar/nusmods.json' with { type: 'json' };
 import holidays from './fixtures/calendar/holidays.json' with { type: 'json' };
 
 import { FROZEN_NOW, installGlobals, makeAnalytics, makeEnv, makeFetch, makeKV, shuttlePayload } from './_stubs.mjs';
-import { APKCOMBO_URL, PLAY_URL, autoUpdateVersion } from '../src/appversion.ts';
-import { PROBE_STOP, PUBLIC_PROBE, checkPublicFeed, checkUpstream, readPublicFeed, readUpstream, runCron } from '../src/monitor.ts';
+import { APKCOMBO_URL, PLAY_URL, autoUpdateVersion } from '../src/feeds/appversion.ts';
+import { PROBE_STOP, PUBLIC_PROBE, checkPublicFeed, checkUpstream, readPublicFeed, readUpstream, runCron } from '../src/ops/monitor.ts';
 import {
   CALENDAR_DATA_KEY,
   NUSMODS_CALENDAR,
@@ -21,7 +21,7 @@ import {
   loadCalendar,
   refreshCalendar,
   resetCalendar,
-} from '../src/calendarsync.ts';
+} from '../src/timetable/calendarsync.ts';
 
 const OLD = 'univus_android_2.59.2_140';
 const NEW = 'univus_android_2.60.0_141';

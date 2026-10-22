@@ -6,11 +6,11 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { installGlobals, makeCtx, makeDurableObjects, makeEnv, makeFetch, makeKV } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
-import { clientFrom, hashToken, inboxKey, versionBelow } from '../src/accounts.ts';
-import { hasSetup } from '../src/applogin.ts';
-import { housekeeping } from '../src/monitor.ts';
-import { endOfDayMs, sgtDate } from '../src/trip.ts';
-import { Trip } from '../src/tripdo.ts';
+import { clientFrom, hashToken, inboxKey, versionBelow } from '../src/accounts/accounts.ts';
+import { hasSetup } from '../src/accounts/applogin.ts';
+import { housekeeping } from '../src/ops/monitor.ts';
+import { endOfDayMs, sgtDate } from '../src/answer/trip.ts';
+import { Trip } from '../src/push/tripdo.ts';
 
 const BASE = 'https://bus.example.test';
 const ME = 'student@u.nus.edu';
@@ -521,7 +521,7 @@ test('app sign-in: the device name in the email is a name, not a message', async
 });
 
 test('one inbox is sent at most ten sign-in emails an hour', async () => {
-  const { takeMailBudget, MAILS_PER_HOUR } = await import('../src/accounts.ts');
+  const { takeMailBudget, MAILS_PER_HOUR } = await import('../src/accounts/accounts.ts');
   const { env } = setup();
   const hour = Date.UTC(2026, 9, 1, 3, 0, 0);
   for (let i = 0; i < MAILS_PER_HOUR; i++) assert.equal(await takeMailBudget(env, 'a@u.nus.edu', hour + i * 60_000), true);
@@ -531,7 +531,7 @@ test('one inbox is sent at most ten sign-in emails an hour', async () => {
 });
 
 test('an inbox over its hourly budget does not spend the global email ceiling', async () => {
-  const { takeMailBudget, requestLink, inboxKey: inboxOf, MAILS_PER_HOUR } = await import('../src/accounts.ts');
+  const { takeMailBudget, requestLink, inboxKey: inboxOf, MAILS_PER_HOUR } = await import('../src/accounts/accounts.ts');
   const { env } = setup();
   const now = Date.now();
   for (let i = 0; i < MAILS_PER_HOUR; i++) await takeMailBudget(env, inboxOf(ME), now);
@@ -555,8 +555,8 @@ test('a web sign-in inside the cooldown of an app sign-in to the address sends n
 });
 
 test('merging a device setup into the account is all or nothing', async () => {
-  const { mergeAnonymous } = await import('../src/applogin.ts');
-  const { ensureUser, loadProfileJson, saveProfileJson } = await import('../src/accounts.ts');
+  const { mergeAnonymous } = await import('../src/accounts/applogin.ts');
+  const { ensureUser, loadProfileJson, saveProfileJson } = await import('../src/accounts/accounts.ts');
   const { env, db } = setup();
   const now = Date.now();
   const user = await ensureUser(db, ME, now);

@@ -1,8 +1,8 @@
 /** The /docs page: Stoplight Elements reading /api/openapi.json, under a bar of the campus sky. */
 
-import { horizonSvg, lightInkAt, skyVars } from '../pagesky.ts';
+import { horizonSvg, lightInkAt, skyVars } from '../site/pagesky.ts';
 import { ELEMENTS } from '../http.ts';
-import type { Phase } from '../pagesky.ts';
+import type { Phase } from '../site/pagesky.ts';
 
 /** How wide the docs bar's hills are, in pixels: wider than any screen. */
 const HZ_W = 4000;

@@ -62,7 +62,7 @@ const AT_STOP_SIDE_PX = 22;
 const AT_STOP_STEP_PX = 26;
 /** Further than this from campus, the map opens on campus, not on you. */
 const NEAR_CAMPUS_M = 3_000;
-/** The map file's extent (MAP_BOUNDS in apps/api/src/map.ts). */
+/** The map file's extent (MAP_BOUNDS in apps/api/src/map/map.ts). */
 const BOUNDS = [
   [103.755, 1.28],
   [103.83, 1.332],

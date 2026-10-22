@@ -12,7 +12,7 @@ import Foundation
 /// full of it. Sizes in points, as the map's zoom counts them (512 a tile).
 /// The same as Android's and the Mac's PanLimit; the web's map limits the whole screen itself.
 enum PanLimit {
-    /// The map file's extent (MAP_BOUNDS in apps/api/src/map.ts): west, south, east, north.
+    /// The map file's extent (MAP_BOUNDS in apps/api's map.ts): west, south, east, north.
     static let extent = [103.755, 1.28, 103.83, 1.332]
     private static let tile = 512.0
 
@@ -140,7 +140,7 @@ struct RoutePath {
         return d > 0 && d <= Self.slideMaxM ? d : nil
     }
 
-    /// As apps/api/src/geo.ts.
+    /// As apps/api's geo.ts.
     static func haversine(_ aLat: Double, _ aLon: Double, _ bLat: Double, _ bLon: Double) -> Double {
         let r = Double.pi / 180
         let s = pow(sin((bLat - aLat) * r / 2), 2) + cos(aLat * r) * cos(bLat * r) * pow(sin((bLon - aLon) * r / 2), 2)

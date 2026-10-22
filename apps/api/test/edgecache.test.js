@@ -1,12 +1,12 @@
 /**
- * The edge-cache fetch (src/edgecache.ts) on its own: what a failure around
+ * The edge-cache fetch (src/feeds/edgecache.ts) on its own: what a failure around
  * the fetch does to the answer and to the key's memo.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { installGlobals, makeCtx, FROZEN_NOW } from './_stubs.mjs';
-import { cachedFetch } from '../src/edgecache.ts';
+import { cachedFetch } from '../src/feeds/edgecache.ts';
 
 const options = (over = {}) => ({
   ctx: makeCtx(),
