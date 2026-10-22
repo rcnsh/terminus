@@ -42,6 +42,9 @@ function site(mode: string | undefined) {
 			// the beta, so the two sites never poll twice.
 			env: {
 				TIMELAPSE_ENABLED: bindings.text("on"),
+				// The arrival-time model scores each day in shadow (src/etashadow.ts),
+				// answering no one; it needs the eta collector on too. Off on the beta.
+				ETA_MODEL: bindings.text("shadow"),
 				...moved(),
 			},
 		};
@@ -61,6 +64,7 @@ function site(mode: string | undefined) {
 			PUBLIC_ORIGIN: bindings.text("https://beta.terminus.run"),
 			AE_DATASET: bindings.text("terminus_beta"),
 			TIMELAPSE_ENABLED: bindings.text("off"),
+			ETA_MODEL: bindings.text("off"),
 			...moved(),
 		},
 	};
