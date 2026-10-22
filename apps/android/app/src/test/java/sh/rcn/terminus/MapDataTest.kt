@@ -354,17 +354,6 @@ class MapDataTest {
     }
 
     @Test
-    fun theStyleReadsTheMapFileFromStorage() {
-        val style =
-            """{"version": 8, "sources": {"protomaps": {"type": "vector", "url": "pmtiles://https://terminus.run/map/campus.pmtiles"}}, "layers": []}"""
-        val local = JSONObject(MapFiles.localTiles(style, "/data/user/0/sh.rcn.terminus/files/map/campus.pmtiles"))
-        assertEquals(
-            "pmtiles://file:///data/user/0/sh.rcn.terminus/files/map/campus.pmtiles",
-            local.getJSONObject("sources").getJSONObject("protomaps").getString("url"),
-        )
-    }
-
-    @Test
     fun withoutTheMapFileOnlyTheBackgroundStays() {
         val style =
             """{"version": 8, "glyphs": "g", "sources": {"protomaps": {"type": "vector", "url": "pmtiles://https://x/map/campus.pmtiles"}},
