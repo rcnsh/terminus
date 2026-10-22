@@ -59,8 +59,8 @@ esac
 BBOX=103.755,1.280,103.830,1.332
 # From zoom 12 up: every client's map stops zooming out at 13 (with
 # 512-pixel tiles, one level of tile per level of map), so the world-wide
-# levels below were a quarter of the file, downloaded by every phone and Mac
-# for offline use and never drawn. 12 is a level to spare.
+# levels below would be a quarter of the file, downloaded by every phone and
+# Mac for offline use and never drawn. 12 is a level to spare.
 MINZOOM=12
 PMTILES_VERSION=1.31.2
 # Chinese place names: Protomaps' Noto Sans has no Chinese, and the web's
@@ -132,7 +132,7 @@ verify_out() {
 upload() {
   # Wrangler, not `cf r2 objects put`: cf 1.0.0-beta.5 percent-encodes the
   # slashes in the key, which R2 needs literal. It's installed in apps/api,
-  # so run from there, as release.sh does. Eight at a time.
+  # so run from there, as release-lib.sh does. Eight at a time.
   cd apps/api
   export OUT
   for BUCKET in $BUCKETS; do

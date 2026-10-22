@@ -18,7 +18,7 @@
  * - a failed request backs the whole loop off, doubling to 5 minutes.
  *
  * It signs in as a throwaway anonymous account, deleted at the end, as
- * record_buses.mjs does. The site's /buses gives each bus where the map
+ * record_buses.mjs does. The site's /api/buses gives each bus where the map
  * draws it (at a stop, or between two), not its raw position, so arrivals
  * read from this are good to about half the polling interval.
  *

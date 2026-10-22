@@ -4,9 +4,9 @@
 #   scripts/release-beta.sh 2.0.1-beta.1 --dry-run   # tests and builds, nothing uploaded
 #   scripts/release-beta.sh 2.0.1-beta.1             # also deploys and uploads
 #
-# In order: the tests; the beta Worker's D1 migrations and the beta Worker
-# (Worker first, as for stable); "terminus beta" for Android and the Mac; then
-# their downloads, appcast and latest.json, in the beta's own R2 bucket.
+# In order: the tests; "terminus beta" for Android and the Mac; the beta
+# Worker's D1 migrations and the beta Worker (before any upload, as for
+# stable); then their downloads, appcast and latest.json, in the beta's own R2 bucket.
 #
 # A beta version is the next stable version's pre-release (after 2.0.0:
 # 2.0.1-beta.1, 2.0.1-beta.2, ...). The build number is the commit count, so
@@ -23,7 +23,7 @@
 # key in ~/.terminus), each checked against what the apps trust.
 #
 # Last, a beta version gets its tag (pushed) and a GitHub pre-release with
-# both files and the commits since the previous tag. A release's version
+# the APKs, the DMG and the commits since the previous tag. A release's version
 # already has its own, from scripts/release.sh.
 #
 # Each run starts from the lockfiles, as scripts/release.sh does.

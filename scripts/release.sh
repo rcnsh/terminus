@@ -1,7 +1,7 @@
 #!/bin/bash
 # Release a version, from this Mac: the tests, the Android APKs, the signed
-# Mac DMG and its Sparkle appcast, all onto R2 with latest.json, then the tag
-# and the GitHub release with every file.
+# Mac DMG and its Sparkle appcast; the APKs and the DMG onto R2, then the tag,
+# the appcast and latest.json, and the GitHub release with every file.
 #
 #   scripts/release.sh --dry-run   # test, build and sign; upload nothing
 #   scripts/release.sh             # also upload, tag v<version> and publish
