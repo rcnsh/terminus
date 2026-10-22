@@ -138,6 +138,7 @@ pnpm test                             # API tests: Node's runner, no network, no
 pnpm check                            # tests + tsc --noEmit (what CI's api job runs)
 pnpm lint                             # oxlint over API, tests, scripts, website JS; warnings fail
 pnpm format                           # oxfmt: JS, TS, JSON (pnpm format:check in CI)
+pnpm loc                              # lines of code by part and language (--json too)
 node apps/api/scripts/dev-stub.mjs    # local Worker on :8787 with a fake feed and fake buses
 ```
 
@@ -396,7 +397,7 @@ scripts/              release.sh, release-beta.sh (+ release-lib.sh, their share
                       appcast.py, release-notes.py, map-tiles.sh (+ map-tiles.lock),
                       vendor-map.sh, vendor-maplibre-mac.sh, vendor-preact.sh,
                       vendor-mediabunny.sh (+ vendor-lib.sh); android-deps.sh
-                      (+ android_deps.py); format-swift.sh
+                      (+ android_deps.py); format-swift.sh; loc.mjs (pnpm loc)
 marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (source), .pdf (print), .png
 .github/workflows/    ci.yml, scrape.yml (weekly data),
                       map-tiles.yml, probe-buses.yml (manual feed probe),
