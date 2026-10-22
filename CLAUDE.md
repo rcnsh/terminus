@@ -38,8 +38,9 @@ apps have only terminus.run built in.
 Both addresses stay attached to each Worker (`test/deploy.test.js`) until
 no app that uses the old one is left. The
 apps' developer menu (Settings, About: always in debug and beta builds,
-after seven taps on the version in a stable release) switches between the addresses built in and, in debug builds, the
-dev stub, never a typed one (`Servers.kt`, `Servers` in `Api.swift`).
+after seven taps on the version in a stable release) shows diagnostics and
+the recent requests, for a bug report, and in debug builds switches to the
+dev stub, never a typed server (`Servers.kt`, `Servers` in `Api.swift`).
 
 Pages opened on the old address go to the same page on terminus.run
 (`movedPage` in `src/site.ts`, on with `MOVE_PAGES`), and emailed links use

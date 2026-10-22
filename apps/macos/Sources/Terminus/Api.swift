@@ -1456,9 +1456,23 @@ struct Api {
             }
             return req
         }
-        let (data, resp) = try await Servers.reach(method: method) { try await URLSession.shared.data(for: urlRequest($0)) }
+        let started = Date()
+        func logged(_ status: Int?, _ error: Error?) {
+            // For the developer menu: an error status is an answer, not a failure.
+            RequestLog.record(
+                method, path, base: Api.base, status: status, tookMs: Int(Date().timeIntervalSince(started) * 1000), failure: error)
+        }
+        let data: Data
+        let resp: URLResponse
+        do {
+            (data, resp) = try await Servers.reach(method: method) { try await URLSession.shared.data(for: urlRequest($0)) }
+        } catch {
+            logged(nil, error)
+            throw error
+        }
         let http = resp as? HTTPURLResponse
         let status = http?.statusCode ?? 0
+        logged(http?.statusCode, nil)
         if let http { ServerClock.observe(http) }
         let retryAfter = http?.value(forHTTPHeaderField: "retry-after")
         if status == 429 { Quiet.after(retryAfter, scope: scope) }

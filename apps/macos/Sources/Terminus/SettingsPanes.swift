@@ -401,6 +401,7 @@ struct ChoicesSection: View {
 
 /// What terminus is, that it isn't NUS's, where its data comes from, and links.
 struct AboutPane: View {
+    let app: AppModel
     private let version = Api.version ?? "dev"
     @State private var developer = Servers.menuShown
     @State private var clicks = 0
@@ -433,7 +434,11 @@ struct AboutPane: View {
                 link(L("Map data"), "https://www.openstreetmap.org/copyright")
                 link(L("NUS Acceptable Use Policy"), "https://nus.edu.sg/registrar/docs/info/registration-guides/aup-form.pdf")
             }
-            if developer { DeveloperSection() }
+            if developer {
+                if Servers.choices.count > 1 { ServerSection() }
+                DiagnosticsSection(app: app)
+                RequestsSection()
+            }
         }
     }
 
@@ -442,9 +447,10 @@ struct AboutPane: View {
     }
 }
 
-/// Which server terminus talks to, from the ones built in (Servers). It
+/// Which server terminus talks to, from the ones built in (Servers): only
+/// shown with more than one, so in a debug build with the dev stub. It
 /// starts again on the one chosen.
-private struct DeveloperSection: View {
+private struct ServerSection: View {
     @State private var chosen = Api.base
 
     var body: some View {
@@ -470,6 +476,114 @@ private struct DeveloperSection: View {
         if Servers.isLocal(base) { return L("%@ (dev stub on this Mac)", host) }
         return first ? L("%@ (default)", host) : host
     }
+}
+
+/// The state the reminders depend on, each in a row, then Copy diagnostics:
+/// what's needed for a bug report, read again every few seconds while open.
+private struct DiagnosticsSection: View {
+    let app: AppModel
+    @State private var facts: Diagnostics.Facts?
+    @State private var copied = false
+
+    init(app: AppModel) {
+        self.app = app
+        _facts = State(initialValue: Diagnostics.facts(app, notifications: nil, nextReminder: nil))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Divider().padding(.vertical, 4)
+            Text(L("Diagnostics")).font(.headline)
+            if let f = facts {
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 4) {
+                        row(L("Server"), URL(string: f.server)?.host ?? f.server)
+                        row(L("This Mac's clock"), clock(f.skewS))
+                        row(L("Notifications"), f.notifications.map { $0 ? L("Allowed") : L("Not allowed") } ?? L("Not asked yet"))
+                        row(L("Leave alerts"), f.leaveAlerts ? L("On") : L("Off"))
+                        row(L("Next alert"), f.nextReminder.map { $0.formatted(date: .omitted, time: .standard) } ?? L("None"))
+                        row(L("Last answer"), f.answerAt.map { ago($0, now: context.date) } ?? L("Never"))
+                    }
+                }
+            }
+            HStack {
+                Button(L("Copy diagnostics")) { copy() }
+                if copied { Hint(L("Copied")) }
+            }
+            Hint(
+                L(
+                    "What the app is doing, for a bug report, with the recent requests. It stays on this Mac unless you copy it, and leaves out your account and where you are."
+                ))
+        }
+        .task {
+            while !Task.isCancelled {
+                facts = await Diagnostics.facts(app)
+                try? await Task.sleep(for: .seconds(5))
+            }
+        }
+    }
+
+    private func row(_ label: String, _ value: String) -> some View {
+        GridRow {
+            Text(label)
+            Text(value).foregroundStyle(.secondary)
+        }
+    }
+
+    private func clock(_ skew: TimeInterval) -> String {
+        let n = Int(skew.rounded(.towardZero))
+        if n == 0 { return L("Right") }
+        return n > 0 ? L("%@ s behind", String(n)) : L("%@ s ahead", String(-n))
+    }
+
+    private func copy() {
+        Task {
+            let f = await Diagnostics.facts(app)
+            facts = f
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(Diagnostics.report(f, requests: RequestLog.entries, now: Date()), forType: .string)
+            copied = true
+        }
+    }
+}
+
+/// The last requests to our server, newest first: what was asked, and how it went.
+private struct RequestsSection: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Divider().padding(.vertical, 4)
+            Text(L("Recent requests")).font(.headline)
+            TimelineView(.periodic(from: .now, by: 1)) { _ in
+                let entries = RequestLog.entries
+                if entries.isEmpty {
+                    Hint(L("None since terminus started."))
+                } else {
+                    Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 3) {
+                        ForEach(Array(entries.enumerated()), id: \.offset) { _, r in
+                            GridRow {
+                                Text(r.at, format: .dateTime.hour().minute().second()).foregroundStyle(.secondary)
+                                Text(verbatim: "\(r.method) \(r.path)").lineLimit(1).truncationMode(.middle)
+                                Text(verbatim: r.status.map(String.init) ?? L("No answer"))
+                                    .foregroundStyle(r.status == nil || r.status! >= 400 ? Color.red : Color.secondary)
+                                Text(verbatim: "\(r.tookMs) ms").foregroundStyle(.secondary)
+                            }
+                            .font(.caption.monospacedDigit())
+                        }
+                    }
+                }
+            }
+            Hint(L("The last 50 this app made to terminus since it started, newest first. Only the path is kept, never where you are."))
+        }
+    }
+}
+
+/// "3 min ago", in the app's language.
+private func ago(_ at: Date, now: Date) -> String {
+    let s = max(0, Int(now.timeIntervalSince(at)))
+    if s < 60 { return L("%@ s ago", String(s)) }
+    if s < 3600 { return L("%@ min ago", String(s / 60)) }
+    if s < 48 * 3600 { return L("%@ h ago", String(s / 3600)) }
+    return L("%@ d ago", String(s / 86_400))
 }
 
 /// A note to the operator about anything, written like a message: who it's

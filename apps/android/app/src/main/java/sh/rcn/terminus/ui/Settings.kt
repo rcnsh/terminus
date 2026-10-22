@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -38,7 +37,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Switch
@@ -574,59 +572,7 @@ private fun AboutPage() {
             LinkRow(stringResource(title), { ctx.openWeb(url) }, sub = where, away = true)
         }
     }
-    if (developer) DeveloperGroup()
-}
-
-/**
- * Which server the app talks to, from the ones built in (Servers). Moving to or from the dev stub sets the sign-in aside, so the app starts
- * again.
- */
-@Composable
-private fun DeveloperGroup() {
-    val ctx = LocalContext.current
-    var chosen by remember { mutableStateOf(Servers.base) }
-    Group(stringResource(R.string.developer), stringResource(R.string.developer_server_hint)) {
-        Servers.choices.forEachIndexed { i, base ->
-            if (i > 0) RowDivider()
-            val sub =
-                when {
-                    base.contains("10.0.2.2") -> stringResource(R.string.server_stub_emulator)
-                    Servers.isLocal(base) -> stringResource(R.string.server_stub_reverse)
-                    i == 0 -> stringResource(R.string.server_default)
-                    else -> null
-                }
-            ServerRow(base.substringAfter("://"), sub, base == chosen) {
-                if (base == chosen) return@ServerRow
-                val restart = Servers.choose(ctx, base)
-                chosen = base
-                if (restart) ctx.restartApp()
-            }
-        }
-    }
-}
-
-@Composable
-private fun ServerRow(host: String, sub: String?, selected: Boolean, onClick: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth()
-            .selectable(selected, role = Role.RadioButton, onClick = onClick)
-            .heightIn(min = 52.dp)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(host, style = MaterialTheme.typography.bodyLarge)
-            sub?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        }
-        RadioButton(selected = selected, onClick = null)
-    }
-}
-
-/** A new session (the dev stub's, or the site's again): start from the top, as after signing in. */
-private fun android.content.Context.restartApp() {
-    val launch = packageManager.getLaunchIntentForPackage(packageName) ?: return
-    startActivity(android.content.Intent.makeRestartActivityTask(launch.component))
-    Runtime.getRuntime().exit(0)
+    if (developer) DeveloperGroups()
 }
 
 /** The longest note the server takes; the counter turns amber from [FEEDBACK_NEAR]. */
