@@ -262,7 +262,9 @@ function buildDetail(f: FormatInput, best: ScoredOption, verdict: WalkVerdict): 
     const raw = etaPhrase(f.alt);
     const plain = raw === m().now || raw === m().noTimes;
     const altName = f.alt.change ? `${named(f.alt)} → ${named(f.alt.change)}` : named(f.alt);
-    parts.push(m().orAlt(f.alt.svc === best.svc && !f.alt.change && !best.change ? shortStop(f.alt.stop.name) : altName, raw, plain));
+    // As the buses are named: a two-way public route's directions are one service ("151/1", "151/2").
+    const sameSvc = svcName(f.alt.svc) === svcName(best.svc) && !f.alt.change && !best.change;
+    parts.push(m().orAlt(sameSvc ? shortStop(f.alt.stop.name) : altName, raw, plain));
   }
 
   return parts.join(' · ');

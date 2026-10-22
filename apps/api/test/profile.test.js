@@ -58,6 +58,16 @@ test('a gap longer than gapHours sends you home, then back', () => {
   assert.deepEqual([back.to, back.why, back.from], ['UTOWN', 'class', 'PGP']);
 });
 
+test('a class at the home stop after a long gap is planned from the last class, not from home to home', () => {
+  // A UTown resident with a class at UTown after a long gap: "Home" is not
+  // a trip (as /me/day has it), so the class is the trip, from where you are.
+  const tt = [cls(10, 12, 'COM3'), cls(16, 18, 'UTOWN')];
+  for (const at of [thu(12, 30), thu(14), thu(15, 30)]) {
+    const p = planFor(profile(tt, { home: { stops: ['UTOWN'] } }), at);
+    assert.deepEqual([p.to, p.why, p.from, p.fromVenue], ['UTOWN', 'class', 'COM3', null], new Date(at).toISOString());
+  }
+});
+
 test('a gap at or under gapHours does not', () => {
   const p = planFor(profile([cls(10, 12, 'COM3'), cls(14, 15, 'UTOWN')]), thu(12, 5));
   assert.equal(p.why, 'class');
@@ -118,6 +128,43 @@ test('parseProfile fills defaults and rejects bad input with a useful message', 
     assert.equal(r.ok, false, JSON.stringify(input));
     assert.match(r.error, re);
   }
+});
+
+test('a one-off trip or a date-range lesson on a day that does not exist is refused, not kept for ever', () => {
+  // 2026-13-45 passes the pattern; it is never today, so a save would never drop it.
+  const once = parseProfile({ once: [{ date: '2026-13-45', arriveByMin: 600, to: 'COM3', label: 'x' }] }, isStop);
+  assert.equal(once.ok, false);
+  assert.match(once.error, /once\[0\]: date/);
+  for (const weeks of [
+    { start: '2026-02-30', end: '2026-03-10' },
+    { start: '2026-03-10', end: '2026-03-01' },
+  ]) {
+    const r = parseProfile({ manual: [{ day: 1, arriveByMin: 600, to: 'COM3', label: 'x', weeks }] }, isStop);
+    assert.equal(r.ok, false, JSON.stringify(weeks));
+    assert.match(r.error, /weeks/);
+  }
+  assert.ok(
+    parseProfile(
+      { manual: [{ day: 1, arriveByMin: 600, to: 'COM3', label: 'x', weeks: { start: '2026-03-02', end: '2026-03-02' } }] },
+      isStop,
+    ).ok,
+  );
+});
+
+test('a label with a line break or control characters is saved on one line: it goes into notifications', () => {
+  const r = parseProfile(
+    {
+      manual: [{ day: 1, arriveByMin: 600, to: 'COM3', label: 'CS2030\nLecture\u0000 @ COM1', venue: 'COM1\t01' }],
+      places: [{ key: 'gym', label: 'The\r\nGym', to: 'PGP' }],
+      once: [{ date: '2099-01-01', arriveByMin: 600, to: 'COM3', label: 'Lib\u0007rary ' }],
+    },
+    isStop,
+  );
+  assert.ok(r.ok, r.error);
+  assert.equal(r.profile.manual[0].label, 'CS2030 Lecture @ COM1');
+  assert.equal(r.profile.manual[0].venue, 'COM1 01');
+  assert.equal(r.profile.places[0].label, 'The Gym');
+  assert.equal(r.profile.once[0].label, 'Lib rary');
 });
 
 test('the limit errors, written as literals for their translation, name the limits enforced', () => {

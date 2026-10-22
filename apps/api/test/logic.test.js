@@ -704,6 +704,16 @@ test('the same service from the other stop is an alternative only when it gets y
   assert.equal(pickAlt([at('KR-MRT', 600), { ...at('KR-MRT', 2000), svc: 'A1' }]).svc, 'A1');
 });
 
+test('standing across the road from the destination, the answer names the stop you are at', async () => {
+  const { answerFor } = await import('../src/answer.ts');
+  const { installGlobals, makeCtx, makeEnv, makeFetch } = await import('./_stubs.mjs');
+  installGlobals(makeFetch());
+  const a = await answerFor(makeEnv(), makeCtx(), { lat: KR_OPP.lat, lon: KR_OPP.lon, to: 'KR-MRT', originCode: null }, null, NOW);
+  assert.equal(a.arrived, true);
+  assert.equal(a.stop.code, 'KR-MRT-OPP');
+  assert.match(a.detail, /Opp/);
+});
+
 test('standing at the right stop does not invent a walk', () => {
   const input = { lat: KR.lat, lon: KR.lon, to: 'UTOWN', originCode: null };
   const cands = candidateStops(GRAPH, input);

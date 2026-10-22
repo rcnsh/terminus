@@ -132,7 +132,7 @@
   "card": {
     "kind": "class",
     "staleAt": "2026-08-27T01:14:30Z",
-    "crowd": "拥挤程度：低",
+    "crowd": null,
     "quality": null,
     "leaveBy": "约 09:35 前出发",
     "leaveVia": "在 PGP 搭约 09:42 的 R2",

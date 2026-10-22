@@ -105,12 +105,14 @@ export async function answerFor(
       const twin = s.opposite ? idx.byCode.get(s.opposite) : undefined;
       return twin ? [s, twin] : [s];
     });
-  const atDest = destSides.find((d) =>
-    input.lat != null ? haversineM(input.lat, input.lon!, d.lat, d.lon) / WALK.speedMs < 45 : input.originCode === d.code,
-  );
+  // The nearest side, not the first: twins stand within the 45 s of each other.
+  const walkS = (d: Stop) =>
+    input.lat != null ? haversineM(input.lat, input.lon!, d.lat, d.lon) / WALK.speedMs : input.originCode === d.code ? 0 : Infinity;
+  const atDest = destSides.filter((d) => walkS(d) < 45).sort((a, b) => walkS(a) - walkS(b))[0];
   const atVenue =
     input.lat != null && input.destAt != null && haversineM(input.lat, input.lon!, input.destAt.lat, input.destAt.lon) <= WALK.atVenueM;
-  if (dest && (atDest || atVenue)) return arrivedAnswer(dest, destLabel, nowMs);
+  // Named for the side of the road you stand on: across from it, that is the twin.
+  if (dest && (atDest || atVenue)) return arrivedAnswer(atDest ?? dest, destLabel, nowMs);
   // No coordinates and no origin stop: nothing to resolve from. Saying
   // "No buses running" here would be a claim about the network.
   if (!cands.length) {

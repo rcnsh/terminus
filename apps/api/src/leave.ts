@@ -14,7 +14,7 @@
 
 import type { ArriveBy, BusChange, Candidate, Graph, Leave, ScoredOption, StopArrivals } from './types.ts';
 import { PUBLIC, TRANSFER, WALK } from './config.ts';
-import { beforeOpening, feedFor, headwayFor, inService, legRideS, resolveBerths, serviceResumesAt } from './resolve.ts';
+import { beforeOpening, feedFor, headwayFor, inService, legRideS, resolveBerths, serviceClosedAt, serviceResumesAt } from './resolve.ts';
 import { isPublic, svcName } from './public.ts';
 import { ON_TIME_SLACK_S } from './profile.ts';
 import { busChange, isoSeconds, shortStop } from './format.ts';
@@ -253,9 +253,19 @@ function forLeg(
     const back = crowd.earlier || arriveBy.oneEarlier ? 2 : 1;
     const note = crowd.note ?? (arriveBy.oneEarlier ? m().oneEarlierNote : null);
     // The latest that bus can come and still get you there: it must be running then.
-    const by = latestBoard - (back - 1) * headway;
+    let by = latestBoard - (back - 1) * headway;
     let board = latestBoard - headway * back;
-    if (board - walk >= nowMs && runs(by)) {
+    let then = runs(by);
+    if (!then) {
+      // Closed by then, after running today: the last buses before it closes.
+      const closes = serviceClosedAt(graph, leg.svc, by);
+      if (closes !== null && closes > nowMs) {
+        by = closes - (back - 1) * headway;
+        board = closes - headway * back;
+        then = true;
+      }
+    }
+    if (board - walk >= nowMs && then) {
       // Before it starts, the first bus is the one to be there for.
       if (!runs(board)) board = serviceResumesAt(graph, leg.svc, board) ?? board;
       return { ms: board - walk, board, arrive: arriveAfter(by), estimated: true, stale: false, late: false, note };

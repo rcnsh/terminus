@@ -15,6 +15,7 @@ import { isoSeconds } from './format.ts';
 import { clockAt, clockMin, slackText } from './clock.ts';
 import { PACES, type Pace } from './walk.ts';
 import { type LessonWeeks, type Term, dayOffReason, importedClassRuns, sgtDate, termEnded, termName } from './calendar.ts';
+import { isDate } from './calendarsync.ts';
 import { LANG_PREFS, type LangPref, m } from './i18n.ts';
 
 export interface Place {
@@ -162,6 +163,9 @@ type Result = { ok: true; profile: Profile } | { ok: false; error: string };
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isInt = (v: unknown, lo: number, hi: number): v is number => typeof v === 'number' && Number.isInteger(v) && v >= lo && v <= hi;
 const str = (v: unknown, max: number): v is string => typeof v === 'string' && v.trim().length > 0 && v.length <= max;
+/** A name on one line: it goes into card lines and notification titles. Control characters count as spaces. */
+// oxlint-disable-next-line no-control-regex
+const oneLine = (v: string): string => v.replace(/[\s\x00-\x1f\x7f]+/g, ' ').trim();
 
 /**
  * Validates a whole profile. Missing fields take their defaults, so a client
@@ -274,7 +278,7 @@ export function parseProfile(
       if (t.endMin !== undefined && !isInt(t.endMin, t.arriveByMin + 1, 1440)) return bad('endMin must be after arriveByMin');
       if (typeof t.to !== 'string' || !isPlace(t.to)) return bad('to must be a known stop or place code');
       if (!str(t.label, PROFILE_LIMITS.label)) return bad(`label must be 1-${PROFILE_LIMITS.label} characters`);
-      const venue = typeof t.venue === 'string' ? t.venue.slice(0, 40) : '';
+      const venue = typeof t.venue === 'string' ? oneLine(t.venue.slice(0, 40)) : '';
       const weeks = parseWeeks(t.weeks);
       if (weeks === false) return bad('weeks must be a list of week numbers or a date range');
       out.push({
@@ -283,7 +287,7 @@ export function parseProfile(
         ...(t.endMin !== undefined ? { endMin: t.endMin as number } : {}),
         ...(weeks ? { weeks } : {}),
         to: t.to,
-        label: t.label.trim(),
+        label: oneLine(t.label),
         venue,
       });
     }
@@ -304,7 +308,7 @@ export function parseProfile(
         return { ok: false, error: `places[${i}].label must be 1-${PROFILE_LIMITS.placeLabel} characters` };
       if (typeof pl.to !== 'string' || !isPlace(pl.to)) return { ok: false, error: `places[${i}].to must be a known stop or place code` };
       keys.add(pl.key);
-      p.places.push({ key: pl.key, label: pl.label.trim(), to: pl.to });
+      p.places.push({ key: pl.key, label: oneLine(pl.label), to: pl.to });
     }
   }
 
@@ -328,11 +332,12 @@ export function parseProfile(
       return { ok: false, error: `once must be a list of up to ${PROFILE_LIMITS.once}` };
     for (const [i, o] of list.entries()) {
       const bad = (why: string): Result => ({ ok: false, error: `once[${i}]: ${why}` });
-      if (!isObj(o) || typeof o.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(o.date)) return bad('date must be YYYY-MM-DD');
+      // A real day: 2026-13-45 is never today, so a save would never drop it.
+      if (!isObj(o) || !isDate(o.date)) return bad('date must be YYYY-MM-DD');
       if (!isInt(o.arriveByMin, 0, 1439)) return bad('arriveByMin must be minutes past midnight');
       if (typeof o.to !== 'string' || !isPlace(o.to)) return bad('to must be a known stop or place code');
       if (!str(o.label, PROFILE_LIMITS.label)) return bad(`label must be 1-${PROFILE_LIMITS.label} characters`);
-      p.once.push({ date: o.date, arriveByMin: o.arriveByMin, to: o.to, label: o.label.trim() });
+      p.once.push({ date: o.date, arriveByMin: o.arriveByMin, to: o.to, label: oneLine(o.label) });
     }
     p.once.sort((a, b) => a.date.localeCompare(b.date) || a.arriveByMin - b.arriveByMin);
   }
@@ -358,8 +363,8 @@ function parseWeeks(v: unknown): LessonWeeks | undefined | false {
   if (v === undefined) return undefined;
   if (Array.isArray(v)) return v.length <= 20 && v.every((w) => isInt(w, 1, 20)) ? (v as number[]) : false;
   if (!isObj(v)) return false;
-  const date = /^\d{4}-\d{2}-\d{2}$/;
-  if (typeof v.start !== 'string' || typeof v.end !== 'string' || !date.test(v.start) || !date.test(v.end)) return false;
+  // Real days, in order: a lesson on days that don't exist would silently never run.
+  if (!isDate(v.start) || !isDate(v.end) || v.start > v.end) return false;
   const out: LessonWeeks = { start: v.start, end: v.end };
   if (v.weekInterval !== undefined) {
     if (!isInt(v.weekInterval, 1, 10)) return false;
@@ -525,8 +530,10 @@ export function planFor(profile: Profile, nowMs: number, state: DayState = NO_DA
   const gapMin = next.arriveByMin - endOf(prev);
   const returnAt = next.arriveByMin - GAP_RETURN_MIN;
   // A long gap goes home in between, unless that trip was taken off today.
-  const goesHome = homeStop && gapMin > profile.gapHours * 60 && !state.skipped.has(`gap-home:${prev.to}`);
-  if (goesHome && nowMin < returnAt && homeStop !== next.to) {
+  // Not to a class at the home stop: "Home" is no trip then, and the class
+  // is planned from where you are, as /me/day has it (day.ts).
+  const goesHome = homeStop && homeStop !== next.to && gapMin > profile.gapHours * 60 && !state.skipped.has(`gap-home:${prev.to}`);
+  if (goesHome && nowMin < returnAt) {
     // Still in class: nothing to catch yet, but the answer is the trip home.
     return { to: homeStop, label: m().home, why: 'gap-home', from: prev.to, trip: null, fromVenue: prev.venue || null };
   }

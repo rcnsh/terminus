@@ -86,6 +86,16 @@ test('the card title is the departure as a clock time, marked when it is an esti
   assert.equal(titleOf(await load('free'), false), 'No classes today');
 });
 
+test("the card's crowd word is the headline bus's, not the first of its service on the board", async () => {
+  const a = await load('class-bus');
+  // An R2 pulling in now, packed, that the five-minute walk can't catch:
+  // the headline is the R2 in 6 min (departsAt), which is medium.
+  const answer = { ...a, arrivals: [{ svc: 'R2', etaS: 60, crowd: 'high', plate: null, berth: null }, ...a.arrivals] };
+  const card = cardFor(answer, false, { key: null, phase: 'idle' }, null, Date.parse(a.asOf));
+  assert.equal(card.crowd, 'Crowding: medium');
+  assert.equal(cardFor(a, false, { key: null, phase: 'idle' }, null, Date.parse(a.asOf)).crowd, 'Crowding: medium');
+});
+
 test('the heading above the card says why you are going', async () => {
   assert.equal(headingOf(await load('class-bus')), 'Next class · GEA1000 @ UTown');
   assert.equal(headingOf(await load('place')), 'Going to KR MRT');
