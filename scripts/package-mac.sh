@@ -55,6 +55,18 @@ for code in "$APP" "$APP/Contents/Frameworks/Sparkle.framework" "$APP/Contents/F
     exit 1
   fi
 done
+# Every binary links only macOS's own libraries (/System, /usr/lib) and the
+# app's (@rpath, @executable_path, @loader_path): one linked from Homebrew
+# loads on the Mac that built it and nowhere else.
+find "$APP" -type f -perm +111 | while IFS= read -r bin; do
+  file -b "$bin" | grep -q Mach-O || continue
+  foreign=$(otool -L "$bin" | grep -v ':$' | awk '{ print $1 }' | grep -vE '^(/System/|/usr/lib/|@rpath/|@executable_path/|@loader_path/)' || true)
+  if [ -n "$foreign" ]; then
+    echo "$bin links libraries a Mac doesn't have:" >&2
+    echo "$foreign" >&2
+    exit 1
+  fi
+done
 if [ "${PUBLISH:-}" = true ] && codesign -dv "$APP" 2>&1 | grep -q '^Signature=adhoc'; then
   echo "$APP is signed ad-hoc; refusing to package a release to publish" >&2
   exit 1

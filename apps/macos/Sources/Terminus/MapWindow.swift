@@ -1253,17 +1253,27 @@ private struct CampusMapView: NSViewRepresentable {
 
         func mapView(_ mapView: MLNMapView, cameraDidChangeAnimated animated: Bool) { keepOnMap() }
 
+        func mapView(_ mapView: MLNMapView, regionDidChangeAnimated animated: Bool) { bringingBack = false }
+
+        /// A move back onto the street map is under way. MapLibre reports its
+        /// first frame as a camera change at once, before the centre has moved,
+        /// so without this each report would start the move again, inside the
+        /// last, until the stack ran out.
+        private var bringingBack = false
+
         /// Back onto the street map after a zoom out by its edge or a bigger window,
         /// and no further out than the window full of map.
         func keepOnMap() {
-            guard let view, view.bounds.width > 0, view.bounds.height > 0 else { return }
+            guard !bringingBack, let view, view.bounds.width > 0, view.bounds.height > 0 else { return }
             view.minimumZoomLevel = max(13, PanLimit.minZoom(width: view.bounds.width, height: view.bounds.height))
             let box = centreBox(view, zoom: view.zoomLevel)
             let c = view.centerCoordinate
             guard offBy(c, box) > 1e-9 else { return }
-            view.setCenter(
-                CLLocationCoordinate2D(latitude: min(max(c.latitude, box[1]), box[3]), longitude: min(max(c.longitude, box[0]), box[2])),
-                animated: true)
+            let camera = view.camera
+            camera.centerCoordinate = CLLocationCoordinate2D(
+                latitude: min(max(c.latitude, box[1]), box[3]), longitude: min(max(c.longitude, box[0]), box[2]))
+            bringingBack = true
+            view.setCamera(camera, withDuration: 0.3, animationTimingFunction: nil) { [weak self] in self?.bringingBack = false }
         }
 
         private func centreBox(_ view: MLNMapView, zoom: Double) -> [Double] {
