@@ -705,7 +705,7 @@ test('/api/next with coordinates but no timetable shows nearby buses, no invente
   assert.ok(a.stop.code.length > 0, 'a real nearby stop');
   assert.ok(a.label.length > 0);
   // No destination was chosen, so the detail must not claim to send you anywhere.
-  assert.ok(!/~\d+ min\b.*(UTown|PGP|COM)/.test(a.detail) || true);
+  assert.ok(!/~\d+ min\b.*(UTown|PGP|COM)/.test(a.detail));
   assert.notEqual(a.quality, undefined);
 });
 
