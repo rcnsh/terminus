@@ -66,6 +66,64 @@ final class SystemUITests: XCTestCase {
         shot("widget-places-large-\(tag)", springboard)
     }
 
+    /// Buses near you at each size, from the board the app fetched for Now's
+    /// Nearby (shared with the widgets): small and medium, then large; the
+    /// large Next bus widget's next buses under the trip, and the Nearby chip
+    /// on the favourites widget; then with New to NUS, which heads each side
+    /// with where its buses go.
+    func testNearbyWidgets() {
+        let app = launchSignedIn(extra: ["TERMINUS_NEW_TO_NUS": "0"])
+        fetchNearby(app)
+        clearWidgets()
+        addWidget(page: 6)
+        addWidget(page: 7)
+        doneEditing()
+        XCTAssertEqual(widgets().count, 2)
+        sleep(3)
+        shot("widgets-nearby-small-medium-\(tag)", springboard)
+        clearWidgets()
+        addWidget(page: 8)
+        doneEditing()
+        sleep(3)
+        shot("widget-nearby-large-\(tag)", springboard)
+        clearWidgets()
+        addWidget(page: 3)
+        doneEditing()
+        sleep(3)
+        shot("widget-large-next-buses-\(tag)", springboard)
+        clearWidgets()
+        addWidget(page: 4)
+        doneEditing()
+        sleep(2)
+        let chip = springboard.buttons.matching(NSPredicate(format: "label == %@", lang == "zh" ? "查看 附近" : "Show Nearby")).firstMatch
+        if chip.waitForExistence(timeout: 10) {
+            chip.tap()
+            sleep(4)
+            shot("widget-places-nearby-\(tag)", springboard)
+        }
+        // New to NUS, switched on in the app: the widgets redraw.
+        clearWidgets()
+        app.terminate()
+        app.launchEnvironment["TERMINUS_RESET"] = "0"
+        app.launchEnvironment["TERMINUS_NEW_TO_NUS"] = "1"
+        app.launch()
+        fetchNearby(app)
+        addWidget(page: 7)
+        addWidget(page: 8)
+        doneEditing()
+        sleep(3)
+        shot("widgets-nearby-new-\(tag)", springboard)
+        clearAfter()
+    }
+
+    /// Now's Nearby opened, as a widget's tap does: the app fetches the board the widgets share.
+    func fetchNearby(_ app: XCUIApplication) {
+        app.open(URL(string: "terminus://nearby")!)
+        sleep(4)
+        XCUIDevice.shared.press(.home)
+        sleep(1)
+    }
+
     /// A tap on the widget opens the app.
     func testTapOpensTheApp() throws {
         let app = launchSignedIn()
@@ -316,7 +374,8 @@ final class SystemUITests: XCTestCase {
     }
 
     /// The gallery's page'th terminus widget (1: Next bus small, 2 medium,
-    /// 3 large, 4 Next bus + favourites medium, 5 large), added.
+    /// 3 large, 4 Next bus + favourites medium, 5 large, 6 Buses near you
+    /// small, 7 medium, 8 large), added.
     func addWidget(page: Int) {
         openGallery()
         let preview = springboard.buttons.matching(NSPredicate(format: "label BEGINSWITH 'terminus,'")).firstMatch
@@ -330,7 +389,7 @@ final class SystemUITests: XCTestCase {
             usleep(800_000)
         }
         let dots = springboard.pageIndicators.matching(NSPredicate(format: "value BEGINSWITH 'page'")).firstMatch
-        XCTAssertEqual(dots.value as? String, "page \(page) of 5")
+        XCTAssertEqual(dots.value as? String, "page \(page) of 8")
         let add = springboard.buttons.matching(NSPredicate(format: "label ENDSWITH 'Add Widget' AND label != 'Add Widget'")).firstMatch
         XCTAssertTrue(add.waitForExistence(timeout: 5))
         add.tap()

@@ -47,7 +47,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     /// signed in with that token, TERMINUS_LANG=en|zh|auto sets the language,
     /// TERMINUS_API_BASE the server (the stub at http://localhost:8787 is kept as the
     /// developer menu's choice), TERMINUS_THEME=light|dark the appearance, TERMINUS_CARD_STYLE=steps|route
-    /// the card's style (and TERMINUS_SKY=night|dawn|day|golden|dusk the sky's hour, in SkyClock).
+    /// the card's style, TERMINUS_NEW_TO_NUS=1|0 New to NUS (and TERMINUS_SKY=night|dawn|day|golden|dusk
+    /// the sky's hour, in SkyClock).
     enum DevLaunch {
         /// TERMINUS_LANG was given: the account takes this phone's language, rather than the other way round.
         nonisolated(unsafe) static var langPinned = false
@@ -77,6 +78,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             }
             if let t = env["TERMINUS_THEME"] { Shared.defaults.set(t, forKey: "theme") }
             if let s = env["TERMINUS_CARD_STYLE"] { Shared.defaults.set(s, forKey: "cardStyle") }
+            if let n = env["TERMINUS_NEW_TO_NUS"] { NewToNus.on = n == "1" }
         }
     }
 #endif
