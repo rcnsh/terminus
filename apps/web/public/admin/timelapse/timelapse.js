@@ -1,5 +1,5 @@
 // The timelapse: a day of NUS shuttles, as the recorder kept it
-// (/timelapse/days, apps/api/src/timelapse.ts), replayed on the campus map
+// (/api/timelapse/days, apps/api/src/timelapse.ts), replayed on the campus map
 // and exported as a video. English only: it's for the operator.
 //
 // The export never records the screen. Each frame is made on purpose: the

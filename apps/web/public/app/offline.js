@@ -1,5 +1,5 @@
 // What the web app shows when it's offline and its last answer has gone
-// stale: the next thing on the day plan it kept (/me/day). The Android and
+// stale: the next thing on the day plan it kept (/api/me/day). The Android and
 // Mac apps follow the same rule (OfflineDay.kt, OfflineDay.swift), checked
 // against the same cases (apps/api/test/fixtures/offline-day.json).
 

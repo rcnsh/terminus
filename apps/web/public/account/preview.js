@@ -1,4 +1,4 @@
-// The answer card: /me/next drawn the way the widget shows it, on the account
+// The answer card: /api/me/next drawn the way the widget shows it, on the account
 // page ("Your widget right now") and on the web app's Now. Every line comes
 // from the server's card (apps/api/src/card.ts); this only lays them out.
 
@@ -310,7 +310,7 @@ const Chips = ({ a }) => html`
 `;
 
 /**
- * The card for answer `a` (from /me/next or a signal). `onAnswer` gets the
+ * The card for answer `a` (from /api/me/next or a signal). `onAnswer` gets the
  * answer after a button; `onChoice` runs after a suggestion is answered.
  * `chips`: the widget's row of buttons under it (the account page's preview).
  * `onPlace`: a favourite tapped on Done for today (its key), in the web app.
@@ -357,7 +357,7 @@ export function Card({ a, onAnswer, onChoice, onPlace = null, chips = false, sky
   const where = a.mode === 'nearby' ? t('Nearby') : (heading ?? t('Next bus'));
   const timed = a.departsAt && a.quality !== 'unknown' && a.quality !== 'ended';
   // A departure as a clock time, the way the widget shows it, so it can't go stale:
-  // the server's title ("A1 · ~09:11"), else worded here for an older server.
+  // the server's title ("A1 · ~09:11"), else worked out here for an older server.
   const big =
     a.card?.title ??
     (timed ? `${a.label.split(' · ')[0]} · ${a.quality === 'scheduled' ? t('~{0}', clock(a.departsAt)) : clock(a.departsAt)}` : a.label);
@@ -387,7 +387,7 @@ export const Message = ({ text, children, cls = 'widget', quiet = false }) => ht
 `;
 
 /**
- * The reasons offered as chips, as /me/feedback takes them (REASONS in the
+ * The reasons offered as chips, as /api/me/feedback takes them (REASONS in the
  * API's feedback.ts). A pick is enough to send; a note can say more.
  */
 export const REPORT_REASONS = [

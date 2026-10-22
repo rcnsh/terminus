@@ -4,7 +4,7 @@
 // and stack and fills in the website's version. A classic script, loaded
 // before the modules, so an error while they load is caught too.
 //
-// About, "Send crash reports", turns it off in this browser
+// Account › Your data, "Send crash reports", turns it off in this browser
 // (localStorage `terminus.errorReports` = "off").
 
 (() => {

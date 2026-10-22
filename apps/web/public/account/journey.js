@@ -2,8 +2,8 @@
 // card.journey (apps/api/src/card.ts) in the card style chosen in Settings ›
 // Appearance: Steps (the default) or Route, as the Android app draws
 // them. Every word and time is the server's (its title, byText, walkText, …);
-// only the countdowns tick here. An answer from before those lines (an older
-// server, or the service worker's kept copy) is worded here as it was.
+// only the countdowns tick here. Lines missing from an answer (or the service
+// worker's kept copy) are worked out here for an older server.
 
 import { Fill, MARK, html, store, useEffect, useState } from '../assets/ui.js';
 import { clock, inkOn, sentences, serverNow, t } from './dom.js';
@@ -112,7 +112,7 @@ export function spokenJourney(a, now) {
   return sentences([to(a, j), head, bus, j.change?.changeText, j.change && secondBus(j.change), a.card.late ? arrive(j) : null]);
 }
 
-/** The server's line `key` when it sent the journey's lines, else `old()`. */
+/** The server's line `key`, else `old()`: worked out here for an older server. */
 export const said = (j, key, old) => (j[key] !== undefined ? j[key] : old());
 
 /** "by 4:01 PM" under the countdown, until it's time to go. */

@@ -135,8 +135,8 @@ export async function loadBoard(code) {
 
 /**
  * The stop nearest you, with its board and the one across the road (both
- * come with /me/nearby). Uses your location only when it's already allowed,
- * unless `ask`; without it, /me/nearby starts from your home.
+ * come with /api/me/nearby). Uses your location only when it's already allowed,
+ * unless `ask`; without it, /api/me/nearby starts from your home.
  */
 async function findNearest({ ask = false } = {}) {
   const state = await navigator.permissions
@@ -450,7 +450,7 @@ function StopView({ code, kicker, dots, peek, above = null }) {
   const own = all.get(code)?.stop;
   const opposite = own?.opposite ?? stopOf(code)?.opposite ?? null;
   // Its opposite stop is across the road, or (PGP and its Foyer) just nearby: then both are named.
-  // Always the page's own stop's words, whichever side is showing. Old answers without it were across.
+  // Always the page's own stop's words, whichever side is showing; across when null from an older server.
   const twinAcross = own?.oppositeAcross !== false;
   const twinName = own?.oppositeName ?? stopName(opposite);
   const shown = (side.has(code) && opposite) || code;

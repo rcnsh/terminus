@@ -123,8 +123,8 @@ function summaries({ p, me, notifyOn, devices, imported }) {
 }
 
 /**
- * Settings for the signed-in account `me` (from /me), once the profile and
- * /campus are loaded (profile.js). `inApp`: in the web app, which shows the
+ * Settings for the signed-in account `me` (from /api/me), once the profile and
+ * /api/campus are loaded (profile.js). `inApp`: in the web app, which shows the
  * answer on Now, has no header (so Sign out is in Account), and keeps its tab
  * in the address. `Notify` (a component) is the app's "Notify me when to
  * leave", for Notifications, and `notifyOn` whether it's on. `side` goes above

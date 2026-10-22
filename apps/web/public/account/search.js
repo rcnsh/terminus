@@ -111,9 +111,9 @@ export const pickedText = (d) => (d.kind === 'room' || d.label === d.code ? d.co
 export const pickedStop = (d) => (d.kind === 'landmark' ? d.code : d.stopCode);
 
 /**
- * The Buses tab's search, from /campus `c`: every service, by its code
+ * The Buses tab's search, from /api/campus `c`: every service, by its code
  * (with where it runs), then every stop by its long name, found by that, its
- * short name, its code and the nicknames /campus has for it ("library").
+ * short name, its code and the nicknames /api/campus has for it ("library").
  */
 export function busesTabIndex(c) {
   if (!c) return [];

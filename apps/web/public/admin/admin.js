@@ -1,4 +1,4 @@
-// The operator dashboard: /admin/stats, opened with a passkey (passkey.js),
+// The operator dashboard: /api/admin/stats, opened with a passkey (passkey.js),
 // whose session is kept in this tab's sessionStorage only. Adding a passkey
 // takes the HEALTH_TOKEN. English only: it's for the operator.
 //
