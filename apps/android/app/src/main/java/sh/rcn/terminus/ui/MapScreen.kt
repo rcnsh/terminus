@@ -276,10 +276,8 @@ private suspend fun MapState.centreOn(lat: Double, lon: Double, cover: MapCover,
                 // 512 dp round at zoom 0, its north-south scale cos(lat) of that).
                 val up = h / 2 - (topDp + h - sheetDp) / 2
                 val target = Position(longitude = lon, latitude = lat - up * 360 / (512 * 2.0.pow(zoom)) * cos(Math.toRadians(lat)))
-                // With animations off in the phone's settings, it jumps there.
-                if (ValueAnimator.areAnimatorsEnabled())
-                    animateCamera(CameraUpdate(center = target, zoom = zoom), CameraAnimation.Ease.Standard)
-                else setCameraPosition(cameraPosition.copy(center = target, zoom = zoom))
+                // With animations off in the phone's settings, it jumps there (the library reads the setting).
+                animateCamera(CameraUpdate(center = target, zoom = zoom), CameraAnimation.Ease.Standard)
             }
     }
 }
@@ -564,14 +562,12 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
     // Back to campus, from the button.
     LaunchedEffect(recentre) {
         if (recentre == 0) return@LaunchedEffect
-        // With animations off in the phone's settings, it jumps there.
-        if (ValueAnimator.areAnimatorsEnabled())
-            state.animateCameraToBounds(
-                box(campus.coreBounds(ui.core)),
-                CameraFit(fitPadding = CORE_PADDING),
-                animation = CameraAnimation.Ease.Standard,
-            )
-        else state.fitCameraToBounds(box(campus.coreBounds(ui.core)), CameraFit(fitPadding = CORE_PADDING))
+        // With animations off in the phone's settings, it jumps there (the library reads the setting).
+        state.animateCameraToBounds(
+            box(campus.coreBounds(ui.core)),
+            CameraFit(fitPadding = CORE_PADDING),
+            animation = CameraAnimation.Ease.Standard,
+        )
     }
     // A pill: its whole line in view, when it's chosen (not again on coming back to the tab).
     var framedLine by rememberSaveable { mutableStateOf<String?>(null) }
@@ -580,9 +576,7 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
         framedLine = selected
         val r = selected?.let { campus.routes[it] } ?: return@LaunchedEffect
         val padding = DpPadding(left = 40.dp, top = 110.dp, right = 40.dp, bottom = 40.dp)
-        if (ValueAnimator.areAnimatorsEnabled())
-            state.animateCameraToBounds(box(r.bounds()), CameraFit(fitPadding = padding), animation = CameraAnimation.Ease.Standard)
-        else state.fitCameraToBounds(box(r.bounds()), CameraFit(fitPadding = padding))
+        state.animateCameraToBounds(box(r.bounds()), CameraFit(fitPadding = padding), animation = CameraAnimation.Ease.Standard)
     }
 
     // The map is drawn, and its stops and buses are only reached by a finger
