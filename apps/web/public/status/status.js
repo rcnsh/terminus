@@ -1,7 +1,8 @@
 // The status page: /api/status.json, in Singapore time, checked every minute.
 // The feed's state is drawn on the sky's road (sky-page.js): a live shuttle
 // when NUS's feed answers, the same bus in outline when the apps are
-// showing timetable estimates, as the apps draw a guess.
+// showing timetable estimates, as the apps draw a guess, and an empty road
+// overnight, when no shuttle runs.
 
 import { html, render, useEffect, useState } from '/assets/ui.js';
 import { t, timeout } from '/account/dom.js';
@@ -36,6 +37,29 @@ function now(s) {
       detail: s.since ? t('Up since {0}.', dateTime(s.since)) : '',
       chip: t('Live'),
       bus: { color: RED, far: 0.4, live: true },
+    };
+  } else if (s.feed === 'down' && s.cause === 'version') {
+    state = {
+      kind: 'down',
+      headline: t('uNivUS version update'),
+      detail: t(
+        'Since {0}. NUS released a new version of uNivUS and stopped accepting the old one. The apps show estimated times until terminus switches to the new one.',
+        dateTime(s.since),
+      ),
+      chip: t('Estimates only'),
+      bus: { color: RED, far: 0.7, live: false },
+    };
+  } else if (s.feed === 'maintenance') {
+    state = {
+      kind: 'maintenance',
+      headline: t('Night-time maintenance'),
+      detail: t(
+        "Since {0}. NUS's live feed isn't answering, outside the hours shuttles run (7am to 11:30pm). Not counted as an outage.",
+        dateTime(s.since),
+      ),
+      chip: t('Maintenance'),
+      bus: null,
+      empty: true,
     };
   } else if (s.feed === 'down') {
     state = {
@@ -127,8 +151,13 @@ function Status() {
     };
   }, []);
   // The road under the headline: your stop's sign, and the feed's bus coming to it.
-  const bus = !failed && s ? now(s).bus : null;
-  useEffect(() => drawHorizon(document.getElementById('road'), { stop: true, bus, shuttle: !bus }), [bus?.live, Boolean(bus)]);
+  const head = !failed && s ? now(s) : null;
+  const bus = head?.bus ?? null;
+  const empty = Boolean(head?.empty);
+  useEffect(
+    () => drawHorizon(document.getElementById('road'), { stop: true, bus, shuttle: !bus && !empty }),
+    [bus?.live, Boolean(bus), empty],
+  );
   useEffect(() => render(html`<${Head} s=${s} failed=${failed} />`, document.getElementById('state')), [s, failed]);
   return html`<${History} s=${s} failed=${failed} />`;
 }

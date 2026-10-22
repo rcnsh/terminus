@@ -51,6 +51,8 @@ export interface UpstreamState {
   checkedAt: number;
   /** Failed checks in a row. */
   failures?: number;
+  /** The first of those failed checks, epoch ms. */
+  failSince?: number | null;
   /** Good checks in a row: it takes OKS_TO_RECOVER to come back up. */
   oks?: number;
   /** The first of those good checks, epoch ms: when the feed came back. */
@@ -99,9 +101,10 @@ export const FAILS_TO_ALERT = 2;
  *  incident each time. What users see follows the last check (answering). */
 export const OKS_TO_RECOVER = 2;
 /** Singapore time, in minutes from midnight, inside which a failing feed is
- *  an outage. Outside it no bus runs, so failures there confirm nothing;
- *  they still count, so a feed failing at 07:00 after a night of failures
- *  is confirmed down at once. */
+ *  an outage. Outside it no bus runs, so failures there are maintenance and
+ *  confirm nothing, unless NUS refuses our uNivUS version, which needs
+ *  fixing whatever the hour. They still count, so a feed failing at 07:00
+ *  after a night of failures is confirmed down at once. */
 export const OUTAGE_HOURS = { start: 7 * 60, end: 23 * 60 + 30 };
 export const inOutageHours = (nowMs: number): boolean => {
   const { minutes } = sgt(nowMs);
@@ -119,6 +122,19 @@ export const answering = (u: UpstreamState): boolean => u.up || (u.oks ?? 0) > 0
 /** Since when it's been as [answering] says: back since its first good
  *  check while that's still to be confirmed, else the confirmed state's. */
 export const answeringSince = (u: UpstreamState): number => (!u.up && answering(u) && u.okSince ? u.okSince : u.since);
+
+/** Why the feed failed, as the status page names it: never NUS's error text. */
+export const causeOf = (reason: string | null | undefined): Incident['cause'] => (/10009/.test(reason ?? '') ? 'version' : 'feed');
+
+/**
+ * The feed as the status page shows it. 'maintenance': failing outside
+ * OUTAGE_HOURS, as often as it takes to confirm an outage, without one.
+ */
+export function feedStatus(u: UpstreamState): { feed: 'up' | 'down' | 'maintenance'; since: number; cause: Incident['cause'] | null } {
+  if (!answering(u)) return { feed: 'down', since: answeringSince(u), cause: causeOf(u.reason) };
+  if ((u.failures ?? 0) >= FAILS_TO_ALERT) return { feed: 'maintenance', since: u.failSince ?? u.checkedAt, cause: null };
+  return { feed: 'up', since: answeringSince(u), cause: null };
+}
 export const MAIL_TIMEOUT_MS = 15_000;
 export const HEARTBEAT_TIMEOUT_MS = 10_000;
 /** Warn this long before calendar.json runs out. */
@@ -163,8 +179,7 @@ async function recordIncident(env: Env, state: UpstreamState, nowMs: number): Pr
     if (open && open.start === state.since) return;
     // An older one left open (its close was never saved) ended by then.
     if (open) open.end = Math.max(open.start, state.since);
-    const cause = /10009/.test(state.reason ?? '') ? 'version' : 'feed';
-    list.unshift({ start: state.since, end: null, cause });
+    list.unshift({ start: state.since, end: null, cause: causeOf(state.reason) });
   }
   await env.KV.put(INCIDENTS_KEY, JSON.stringify(list.slice(0, INCIDENTS_KEPT)));
 }
@@ -271,11 +286,13 @@ export async function checkUpstream(
   }
 
   const failures = ok ? 0 : (prev?.failures ?? 0) + 1;
+  const failSince = ok ? null : prev?.failures && prev.failSince ? prev.failSince : nowMs;
   const oks = ok ? (prev?.oks ?? 0) + 1 : 0;
   const okSince = ok ? (prev?.oks && prev.okSince ? prev.okSince : nowMs) : null;
   const was = prev?.up ?? true;
   // An outage already confirmed runs on past the hours until the feed answers.
-  const up = was ? failures < FAILS_TO_ALERT || !inOutageHours(nowMs) : oks >= OKS_TO_RECOVER;
+  const counts = causeOf(reason) === 'version' || inOutageHours(nowMs);
+  const up = was ? failures < FAILS_TO_ALERT || !counts : oks >= OKS_TO_RECOVER;
   const changed = !prev || prev.up !== up;
   let pending = prev?.pending ?? null;
   if (pending && delivered === `${prev!.since} ${pending}`) pending = null;
@@ -283,7 +300,7 @@ export async function checkUpstream(
   // Back up, it has been since the first of the good checks that confirmed
   // it, not the last: the outage ends there, on the status page and in the email.
   const since = !changed ? prev!.since : up && okSince ? okSince : nowMs;
-  const state: UpstreamState = { up, since, reason, detail, auto, checkedAt: nowMs, failures, oks, okSince, pending };
+  const state: UpstreamState = { up, since, reason, detail, auto, checkedAt: nowMs, failures, failSince, oks, okSince, pending };
 
   // Saved before the email goes, so a KV write that keeps failing can't send
   // the same email every run; it's sent once the state with it pending is kept.

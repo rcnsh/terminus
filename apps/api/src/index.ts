@@ -25,7 +25,7 @@ import { phaseAt, sgtMinute } from './site/pagesky.ts';
 import { CORS, clientKey, coordsFrom, json, jsonCached, numParam, withSecurityHeaders } from './http.ts';
 import { type MeDeps, handleMe } from './accounts/me.ts';
 import { UPDATE_REQUIRED, accountsConfigured, clientOutdated, hasSessionCookie } from './accounts/accounts.ts';
-import { answering, answeringSince, readUpstream, runCron, statusRecords } from './ops/monitor.ts';
+import { answering, answeringSince, feedStatus, readUpstream, runCron, statusRecords } from './ops/monitor.ts';
 import { ltaConfigured } from './feeds/lta.ts';
 import { calendarThrough } from './timetable/calendar.ts';
 import { llmsTxt, robotsTxt, SITEMAP } from './site/seo.ts';
@@ -346,10 +346,13 @@ const CRON_STALE_MS = 40 * 60_000;
 async function handleStatus(env: Env, nowMs: number): Promise<Response> {
   const { upstream: u, incidents, publicFeed: pub } = await statusRecords(env, nowMs);
   const iso = (ms: number | null) => (ms == null ? null : new Date(ms).toISOString());
+  const f = u ? feedStatus(u) : null;
   return json(
     {
-      feed: u ? (answering(u) ? 'up' : 'down') : 'unknown',
-      since: u ? iso(answeringSince(u)) : null,
+      feed: f?.feed ?? 'unknown',
+      since: f ? iso(f.since) : null,
+      // Why it's down: NUS refusing our uNivUS version, or anything else.
+      cause: f?.cause ?? null,
       checkedAt: u ? iso(u.checkedAt) : null,
       // Checks every 15 minutes; if they've stopped, what's above is old news.
       checking: u ? nowMs - u.checkedAt <= CRON_STALE_MS : false,
