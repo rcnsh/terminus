@@ -27,7 +27,6 @@ export const BUNDLED = calendarJson as CalendarData;
  *  fetched itself (calendarsync.ts) merged over it. */
 let DATA: CalendarData = BUNDLED;
 
-/** The calendar answered from now. */
 export const currentCalendar = (): CalendarData => DATA;
 
 /** Answer from [data] from now on; null goes back to the bundled copy. */
@@ -145,7 +144,6 @@ export function termDay(nowMs: number, data: CalendarData = DATA): TermDay {
   const dayStart = sgtMidnight(today);
   if (today > calendarThrough(data)) return { acadYear: null, semester: null, kind: 'unknown', week: null, holiday };
 
-  // Latest semester that has started.
   const started = data.semesters
     .filter((s) => sgtMidnight(s.start) <= dayStart)
     .sort((a, b) => a.start.localeCompare(b.start))

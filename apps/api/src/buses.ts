@@ -1,50 +1,9 @@
 /**
  * Live buses on the map: which stop each bus of a service is at, or which
  * two stops it's between, how full it is, and the stop it reaches next.
- *
- * The feed gives a position and a heading, not a stop, and only every 15-20
- * seconds, so a bus drawn where its reading puts it is often well off where
- * it really is. Instead each bus is shown at a stop or between two:
- *
- * - within AT_STOP_M of one of its stops, measured along its route line,
- *   it's at that stop, drawn at the stop's dot (clients draw it just beside
- *   the dot, and several there side by side, by `slot`);
- * - otherwise it's halfway between the stop it passed and the next one, or,
- *   with several there, spread evenly between them (thirds for two).
- *
- * The bus is placed on its route's road shape (data/shapes.json) to tell
- * which stop or stretch that is. A route with no shape for its current
- * stops, or a bus away from its line (parked at the depot), isn't shown.
- *
- * Many routes use the same road both ways (most of D1, D2 and K), so the
- * two directions of the line are metres apart, often on the very same
- * points, and GPS can't tell them apart. What can is where the bus has been:
- * a bus drives forward along its route, so its next stop only ever moves on
- * to the stop after. Each bus has a track (its last place along the line),
- * and a new position counts only where the bus could have driven to since:
- * a little back for GPS error, or ahead at most at bus speed. The other
- * side of the road is the far end of the route, so it never counts.
- *
- * - A bus with no track yet is placed by its heading when it's moving, by
- *   the stop it's standing at when it's at one, and otherwise on the nearer
- *   side.
- * - A track that was wrong to begin with gives way when the bus is seen
- *   moving the other way DOUBT_FIXES times in a row; one odd heading doesn't
- *   move it.
- * - A bus is never put back along its line: a position a little behind its
- *   track (GPS error) leaves it where it was, and one up to HOLD_BACK_M
- *   behind (leaving a terminus by the road it came in on) holds it there
- *   for a while.
- * - A tracked bus that strays off its line for a moment (a GPS jump) stays
- *   at its last place; off it for HOLD_OFF_MS or more (the depot, a
- *   detour), its track is dropped and it isn't shown until it's back on
- *   its line.
- *
- * Tracks live in the edge cache with the placed buses (trackedBuses), so
- * every Worker instance in a data centre draws a bus the same way and picks
- * up its track where another left it. Placing is a pure function of the
- * feed's positions, its time and the tracks, so two instances that place
- * the same update agree.
+ * Each bus keeps a track along its line, kept in the edge cache
+ * (trackedBuses), so it holds its side of a road used both ways.
+ * See internals.md, *Live buses on the map*.
  */
 
 import { shapeFor } from './campus.ts';
@@ -123,7 +82,7 @@ export interface LiveBus {
    *  route line between the two stops. */
   lat: number;
   lon: number;
-  /** Metres along the service's route line (`/campus` routes[svc].line) of
+  /** Metres along the service's route line (`/api/campus` routes[svc].line) of
    *  that place (at a stop, the stop's place on the line), so a map can
    *  move the bus along the road to it. */
   along: number;
@@ -585,7 +544,7 @@ export async function trackedPlacement(
   return body;
 }
 
-/** A stop on a service's line (/line): its name and the other services there. */
+/** A stop on a service's line (/api/line): its name and the other services there. */
 export interface LineStop {
   code: string;
   name: string;
@@ -605,7 +564,7 @@ export function lineStops(idx: GraphIndex, svc: string): LineStop[] {
   }));
 }
 
-/** A bus on a service's line (/line), by its place in the list of stops. */
+/** A bus on a service's line (/api/line), by its place in the list of stops. */
 export interface LineBus {
   id: string;
   plate: string;

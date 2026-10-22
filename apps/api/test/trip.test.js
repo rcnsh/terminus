@@ -1,6 +1,6 @@
 /**
  * The trip engine: trip signals kept in a Durable Object per user,
- * the phase on the card, /me/day, and the planner fixes that go with them.
+ * the phase on the card, /api/me/day, and the planner fixes that go with them.
  * On the frozen clock (Thursday 2026-08-27, 09:00 SGT) and a fake feed.
  */
 import test from 'node:test';
@@ -857,7 +857,7 @@ test("a deleted account's trip state goes at once, and a request still under way
     obj.fetch(`https://trip/${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   const date = sgtDate(FROZEN_NOW);
   const deleteAt = endOfDayMs(FROZEN_NOW);
-  // What a /me/next that read the account just before it went would still send.
+  // What a /api/me/next that read the account just before it went would still send.
   assert.ok((await post('signal', { date, key: FIRST, rec: { kind: 'skipped', at: FROZEN_NOW }, deleteAt })).ok);
   assert.ok((await post('plan', { date, key: FIRST, plan: { svc: 'D2', stop: 'PGP', board: null, arrive: null }, deleteAt })).ok);
   assert.ok((await post('watch', { userId, date, at: FROZEN_NOW + 60_000, deleteAt })).ok);
@@ -896,7 +896,7 @@ test("the cron's deletion of an idle anonymous account takes its trip state too"
 });
 
 const stopAt = (code) => indexGraph(GRAPH).byCode.get(code);
-/** Due, then at the boarding stop just before the bus, as the phone's /me/next sends it. */
+/** Due, then at the boarding stop just before the bus, as the phone's /api/me/next sends it. */
 async function waitingAtStop(t) {
   const first = await t.next(t.phone);
   t.clock(Date.parse(first.leave.at) - 60_000);
@@ -1301,7 +1301,7 @@ test('a plan and a watch sent together both stick (the Trip object reads the day
   const deleteAt = endOfDayMs(FROZEN_NOW);
   const post = (path, body) =>
     s.fetch(`https://trip${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-  // As one /me/next does: the plan and the watch, neither waiting for the other.
+  // As one /api/me/next does: the plan and the watch, neither waiting for the other.
   await Promise.all([
     post('/plan', { date, key: 'k', plan: { svc: 'D2', stop: 'PGP', board: new Date(FROZEN_NOW + 600_000).toISOString() }, deleteAt }),
     post('/watch', { userId: 'u1', date, at: FROZEN_NOW + 60_000, deleteAt }),

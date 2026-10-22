@@ -5,7 +5,7 @@
  * scripts/release.sh uploads the APKs and the Mac DMG, each under its
  * version, and then latest.json, which names the
  * current files. /download/android and /download/mac always serve whatever
- * latest.json points at, zip (up to 1.3.7) or DMG.
+ * latest.json points at.
  *
  * Android comes as one APK per CPU type. `android` in latest.json is the
  * arm64 one, which suits nearly every phone (and is all an older app or link
@@ -38,7 +38,7 @@ export interface Latest {
   version: string;
   released: string;
   android: ReleaseFile;
-  /** By Android ABI name (arm64-v8a, armeabi-v7a, x86_64). Absent before 2.1. */
+  /** By Android ABI name (arm64-v8a, armeabi-v7a, x86_64). */
   androidAbis?: Record<string, ReleaseFile>;
   mac: ReleaseFile;
 }

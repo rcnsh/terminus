@@ -532,7 +532,7 @@ export function nextTripFor(profile: Profile, nowMs: number, state: DayState = N
   const returnAt = next.arriveByMin - GAP_RETURN_MIN;
   // A long gap goes home in between, unless that trip was taken off today.
   // Not to a class at the home stop: "Home" is no trip then, and the class
-  // is planned from where you are, as /me/day has it (day.ts).
+  // is planned from where you are, as /api/me/day has it (day.ts).
   const goesHome = homeStop && homeStop !== next.to && gapMin > profile.gapHours * 60 && !state.skipped.has(`gap-home:${prev.to}`);
   if (goesHome && nowMin < returnAt) {
     // Still in class: nothing to catch yet, but the answer is the trip home.

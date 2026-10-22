@@ -36,7 +36,7 @@ const boards = (codes, fetchedAt, rows = {}, extra = {}) =>
     ]),
   );
 
-/** From COM3 without a location, to Cheng Yi Hall (CG): only P goes there, and not from COM3. */
+/** From COM3 without a location, to College Green (CG): only P goes there, and not from COM3. */
 const COM3_CG = { lat: null, lon: null, to: 'CG', originCode: 'COM3' };
 
 /** The trip planned and scored as answerFor does it. */

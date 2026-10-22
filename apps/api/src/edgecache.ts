@@ -34,7 +34,6 @@ export interface CachedOptions<T> {
   /** Where "this key failed a moment ago" lives. */
   failKey: string;
   fetch: () => Promise<T>;
-  /** How long a cached answer is fresh. */
   freshMs: number;
   /** How long a stale answer stays usable as a fallback. */
   staleMaxS: number;

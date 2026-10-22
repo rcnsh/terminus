@@ -1,29 +1,9 @@
 /**
- * A second opinion on "the next D1 in 4 min", from how long the buses have
- * really taken: the feed's time, corrected for how it usually errs, blended
- * with the time the bus's own position says it needs, from history.
- *
- * - **History.** Every time a bus reached a stop (a Passing: eta.ts
- *   passingsOf on a timelapse day, or passingsFromReadings on the map's
- *   placed buses), the time to the next stop on its line is one segment.
- *   Their medians, by service and stop pair, and by weekday or weekend and
- *   Singapore hour where there are enough, are the SegmentTable.
- * - **Position.** A bus's last stop and when it passed it (busStates): the
- *   time still to go is the rest of its current segment, then each segment
- *   to the stop asked about (historicalEtaS). Gated, only for a bus on its
- *   way: not through a route's first stop, where buses wait for their
- *   departure time, nor for a bus held far past its segment's usual time.
- *   Each segment can take the times the buses just ahead drove it (recentS).
- * - **The feed.** Its own time, plus its usual error at that horizon for
- *   that service (bias), and the two blended by a weight per horizon
- *   (predictS). Without a position, or with no history for the stretch,
- *   it's the feed's time corrected; without the feed, history alone.
- *
+ * A second opinion on "the next D1 in 4 min": the feed's time corrected for
+ * how it usually errs, blended with history's time for the bus's position.
  * Pure, with no I/O and nothing bigger than a Map: it runs in the Worker or
- * in a script (scripts/eta_backtest.mjs, which fits the model on some days
- * and scores it on later ones). Nothing in the answer path uses it yet: the
- * feed's own times stay what users see until a backtest on enough days says
- * this is better (docs/eta-model.md).
+ * in scripts/eta_backtest.mjs. Nothing in the answer path uses it.
+ * See docs/eta-model.md, *The model*.
  */
 
 import { HORIZONS, type Passing } from './eta.ts';
@@ -298,7 +278,7 @@ export function heldAfterS(s: number): number {
   return Math.max(HELD.factor * s, s + HELD.overS);
 }
 
-/** How the walk to a stop is summed: see historicalEtaS. */
+/** How the segments to a stop are summed: see historicalEtaS. */
 export interface HistoryOptions {
   /** Not through a route's first stop, where buses wait for their departure time. */
   gate?: boolean;
@@ -641,7 +621,7 @@ export function weightsFrom(grids: WeightGrid[]): number[] {
   });
 }
 
-/** The feed's error at each horizon, per service and for all, from [cases]: [count, median s]. */
+/** The feed's error at each horizon, per service and for all, from [errors]: [count, median s]. */
 export function biasOf(errors: { svc: string; feedS: number; errS: number }[]): Record<string, [number, number]> {
   const groups = new Map<string, number[]>();
   for (const e of errors) {

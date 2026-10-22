@@ -1,5 +1,5 @@
 /**
- * The operator dashboard's data (/admin/stats, shown by apps/web/public/admin).
+ * The operator dashboard's data (/api/admin/stats, shown by apps/web/public/admin).
  * Operator only: the x-health-token header holds HEALTH_TOKEN, or a session
  * from signing in with a passkey (passkey.ts).
  *
@@ -91,8 +91,7 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
   const d1 = nowMs - DAY;
   const d7 = nowMs - 7 * DAY;
   const d30 = nowMs - 30 * DAY;
-  // One pass over each table, and every query in one round trip: the counts
-  // read whole tables, so asking each its own question read them many times.
+  // One pass over each table, and every query in one round trip: the counts read whole tables.
   // SUM of a comparison counts the rows where it's true (NULL counts none).
   const [u, p, s, k, f, o, dev, cli, sign, fb] = await db.batch([
     db

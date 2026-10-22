@@ -1,28 +1,10 @@
 /**
- * Signing in an app, confirmed from the email (modelled on RFC 8628, device
- * authorisation). The app starts a request and the email carries two ways to
- * confirm it: a code to type into the app, and a link, for reading mail on
- * another device, to a page that asks for the number the app shows. The app
- * polls and picks up its token once either is done.
- *
- * Why a code first: university filters (NUS's among them) hold back mail
- * that is only a link, and a code needs no click. Typing it into the app
- * proves the inbox and the device are in the same hands.
- *
- * Why not open the app from the link: the Mac (and an iOS sideload) can't
- * take universal links without a paid Apple team, and people often read mail
- * on a different device from the one they are signing in.
- *
- * Why the number: without it anyone could type your address into their app
- * and you might approve an email you weren't expecting. Typing the number
- * your own screen shows proves you are looking at the device being signed in.
- * Typed, not chosen from a few: someone tapping whatever is offered would
- * let a stranger in one time in three. "This wasn't me" also stops app
- * sign-ins to the address for a while (LOGIN_TTL.heldMs), so a stranger
- * can't keep asking until someone confused gets it right.
- *
- * The app holds `poll`; the email holds different secrets (`code`, `link`),
- * so the app that started a request can never confirm it by itself.
+ * Signing in an app, confirmed from the email (modelled on RFC 8628): a code
+ * to type into the app, or a link to a page that asks for the number the app
+ * shows. The app holds `poll`; the email holds `code` and `link`, so the app
+ * can never confirm its own request. Not a link that opens the app: the Mac
+ * and an iOS sideload can't take universal links without a paid Apple team.
+ * Why a code and a typed number: see internals.md, *Accounts*.
  */
 
 import type { Env } from './types.ts';

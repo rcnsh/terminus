@@ -1,20 +1,9 @@
 /**
  * The `TimelapseRecorder` Durable Object: one per Singapore day (named by
- * its date), recording where every shuttle is while the day's window is
- * open (timelapse.ts has the rules it keeps to).
- *
- * Its alarm is its clock. Each round asks every service that's running for
- * its buses once, spread evenly across TIMELAPSE.pollMs: with eight
- * services and 30 s, one service every 3.75 s, never all at once. A round
- * with no bus anywhere counts towards idleness; after idleRounds of them it
- * stops for the day if it has seen buses and no service is still inside its
- * hours (service is over), or rests for idleSleepMs otherwise: before the
- * first bus of the morning, or a gap in the middle of the day (the feed
- * listing no buses for a few minutes), after which it asks again.
- *
- * When the window closes it writes the day to R2 and deletes everything,
- * its alarm too (deleteAll() keeps it at this compatibility date, so it is
- * deleted first), so a finished day costs nothing.
+ * its date), its alarm its clock. timelapse.ts has the limits it keeps to;
+ * internals.md, *The timelapse recorder*, its rounds, idling and close. At
+ * the close it deletes its alarm first: deleteAll() keeps it at this
+ * compatibility date.
  *
  * States: `polling`; `resting` (idle, asks again after idleSleepMs); `off`
  * (the kill switch, until the cron finds it on again); `done` (idle after
@@ -75,8 +64,7 @@ interface Meta {
    *  that changes a line mid-day would measure `along` on a line the day
    *  doesn't have. */
   lines: Record<string, string>;
-  /** Rows kept so far, for /status without counting them each time. A day
-   *  begun before this was kept counts its rows once. */
+  /** Rows kept so far, for /status without counting them each time; counted once when absent. */
   samples?: number;
 }
 
@@ -120,7 +108,7 @@ export class TimelapseRecorder {
   }
 
   /**
-   * The tables for a read, or null when there are none: /timelapse/days asks
+   * The tables for a read, or null when there are none: /api/timelapse/days asks
    * the past week's recorders, most of them closed and empty, and a read
    * mustn't make tables there for nothing.
    */
@@ -406,7 +394,7 @@ export class TimelapseRecorder {
   /**
    * The window has closed: the day to R2, then nothing left here. Anything
    * failing on the way keeps the day and tries again RETRY_MS later, for
-   * HELD_DAYS after the close (as long as /timelapse/days lists it); past
+   * HELD_DAYS after the close (as long as /api/timelapse/days lists it); past
    * that the day is given up and the storage deleted, so it can't stay for
    * ever.
    */

@@ -1,23 +1,11 @@
 /**
  * The arrival-time model (etamodel.ts) run in shadow, beside eta.ts's
- * scoring of the feed: nobody is shown its times. Once a day, for the
- * newest closed day the eta step has scored, the cron
- *
- * 1. builds the model from the HISTORY_DAYS days before it, from what
- *    earlier runs kept: their segment times (`eta/segments/<date>.json`),
- *    the feed's errors eta.ts scored (`eta/<date>.json`), and the weights'
- *    grids (`eta/model/<date>.json`), so the day is scored by a model that
- *    never saw it;
- * 2. answers each of the day's predictions (the same Analytics Engine rows
- *    and timelapse recording eta.ts reads) every way, against when that
- *    plate did come, and keeps the errors and the day's weight grid as
- *    `eta/model/<date>.json`;
- * 3. keeps the day's own segment times for the days after.
- *
- * Nothing calls NUS, and nothing is written but those two files in the
- * downloads bucket. Off unless the ETA_MODEL var is "shadow" and the
- * operator collects `eta` (collect.ts): the scored feed errors are its
- * input. docs/eta-model.md says what to look for before it answers anyone.
+ * scoring of the feed: nobody is shown its times. Once a run, the cron takes
+ * the oldest closed day of the last CATCH_UP_DAYS that eta.ts has scored and
+ * this hasn't, scores it with a model built from the HISTORY_DAYS before it,
+ * and keeps its segment times and errors in the downloads bucket. Nothing
+ * calls NUS. Off unless ETA_MODEL is "shadow" and the operator collects `eta`.
+ * See docs/eta-model.md, *In shadow*.
  */
 
 import type { Env } from './types.ts';

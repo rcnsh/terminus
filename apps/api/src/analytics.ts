@@ -109,7 +109,7 @@ export function logAnswer(env: Env, input: LogInput): void {
         answer.quality,
         '',
         best?.arrival?.crowd ?? '',
-        '', // was the trip key, never set; the column stays so the others don't shift
+        '', // blob8: always empty, kept so the columns after it don't shift
         best?.arrival?.berth ?? '',
         best?.change?.stop.code ?? '',
         best?.change?.svc ?? '',
@@ -142,7 +142,7 @@ export function logAnswer(env: Env, input: LogInput): void {
           answer.quality,
           a.plate ?? '',
           a.crowd ?? '',
-          '', // was the trip key, never set; the column stays so the others don't shift
+          '', // blob8: always empty, kept so the columns after it don't shift
           a.berth ?? '',
         ],
         doubles: [a.etaS, -1, -1, -1, -1, -1, answer.stop.confidence, 0, input.hadCoords ? 1 : 0, -1],

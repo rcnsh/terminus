@@ -27,7 +27,7 @@ export function onRide(svc, from, to, metres) {
   return { lat: p.lat, lon: p.lon };
 }
 
-/** The same, as a query string for /me/next. */
+/** The same, as a query string for /api/me/next. */
 export const onRideQuery = (svc, from, to, metres) => {
   const p = onRide(svc, from, to, metres);
   return `?lat=${p.lat.toFixed(5)}&lon=${p.lon.toFixed(5)}`;

@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-// Installs globalThis.caches before the Worker module graph is evaluated.
 import { FROZEN_NOW, installGlobals, makeAnalytics, makeBucket, makeCtx, makeEnv, makeFetch, makeKV } from './_stubs.mjs';
 import worker, { coordsFrom, numParam } from '../src/index.ts';
 import { LABEL_MAX } from '../src/config.ts';
@@ -479,7 +478,7 @@ test('/api/buses shows each bus on its route at a stop or between two, with its 
   assert.equal(on.plate, 'PD123A', 'each bus comes with its plate');
   assert.equal(fetchImpl.requests[0].body.route_code, 'D2');
 
-  // A second look within 10 s is served from the cache.
+  // A second look, the clock unmoved, is served from the cache.
   await call('/api/buses?svc=D2', { fetchImpl, cache });
   assert.equal(fetchImpl.counts.shuttle, 1);
 });
@@ -535,7 +534,7 @@ test('/api/line: a service’s stops in order, its buses on them, and with a sto
   assert.equal(body.stop.row.etaS, 360);
   assert.deepEqual(body.stop.row.towards, ['Central Library', 'COM 3']);
   assert.equal(body.stop.row.crowd, 'medium');
-  // The bus where /buses puts it.
+  // The bus where /api/buses puts it.
   const [bus] = body.buses;
   assert.equal(bus.plate, 'PD418C');
   assert.equal(bus.crowd, 'low');

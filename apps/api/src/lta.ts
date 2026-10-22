@@ -61,7 +61,6 @@ export function routeFor(graph: Graph, stopCode: string, serviceNo: string, dest
   return byDest ? byDest[0] : null;
 }
 
-/** The graph's routes of `serviceNo` that call at `stopCode`. */
 function routesHere(graph: Graph, stopCode: string, serviceNo: string) {
   const idx = indexGraph(graph);
   return Object.entries(graph.public ?? {}).filter(([key, p]) => p.svc === serviceNo && idx.routes.get(key)?.pos.has(stopCode));

@@ -17,7 +17,7 @@ export const svcName = (key: string): string => key.split('/')[0];
 /** A public bus service (with a fare), by route key. */
 export const isPublic = (graph: Graph, svc: string): boolean => Boolean(graph.public?.[svc]);
 
-/** Whether public buses call at this stop: a shelter they share with the shuttle, or a stop of their own. */
+/** The LTA code public buses use at this stop (a shelter shared with the shuttle, or a stop of their own); null when none call. */
 export const publicCodeOf = (stop: Stop): string | null => stop.publicCode ?? (stop.public ? stop.code : null);
 
 /** Whether the shuttle calls at this stop (every stop but a public-only one). */

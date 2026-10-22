@@ -192,7 +192,7 @@ test('each address gets its way of fetching, and the live ones are left alone', 
     ['https://elsewhere.example/app/app.js', null],
   ];
   for (const [path, expected] of cases) assert.deepEqual(way(path), expected, path);
-  // Only GETs are kept; a POST to /me/next goes straight through.
+  // Only GETs are kept; a POST to /api/me/next goes straight through.
   assert.equal(way('/api/me/next', { method: 'POST', body: '{}' }), null);
   // Signing in or out goes through the worker, which empties the kept replies.
   assert.deepEqual(way('/api/auth/logout', { method: 'POST' }), ['fetch']);

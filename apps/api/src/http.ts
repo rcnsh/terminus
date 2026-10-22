@@ -197,7 +197,6 @@ const widen = (extra: Record<string, string>): string =>
 const CSP_DOCS = widen(DOCS_EXTRA);
 const CSP_TIMELAPSE = widen(TIMELAPSE_EXTRA);
 
-/** The CSP for the page at this path. */
 export function cspFor(path: string): string {
   if (path === '/docs') return CSP_DOCS;
   if (path.startsWith('/admin/timelapse/')) return CSP_TIMELAPSE;

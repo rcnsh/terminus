@@ -1,7 +1,7 @@
 /**
  * The answer engine: stops near you (or your origin), their arrivals, the
  * best option and a worded Answer. Used by the public routes in index.ts and
- * by /me/next in next.ts (through MeDeps).
+ * by /api/me/next in next.ts (through MeDeps).
  */
 
 import type { Answer, Arrival, Env, FeedState, Graph, ResolveInput, ScoredOption, Stop, StopArrivals } from './types.ts';

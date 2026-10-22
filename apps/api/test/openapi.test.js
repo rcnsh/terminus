@@ -69,7 +69,7 @@ test('every golden answer fits the schema of the route it came from, with nothin
   const bad = [];
   for (const file of files) {
     const body = JSON.parse(fs.readFileSync(file, 'utf8'));
-    // Which route a fixture is from, by its shape: /me/day has items, /me/nearby a list of stops, the rest are /me/next.
+    // Which route a fixture is from, by its shape: /api/me/day has items, /api/me/nearby a list of stops, the rest are /api/me/next.
     const route =
       Array.isArray(body.items) && body.date
         ? 'GET /api/me/day'

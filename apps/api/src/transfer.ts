@@ -49,7 +49,7 @@ interface Route {
   leg2: Leg;
 }
 
-/** Whole-trip guesses from a stop past this are no use to anyone. */
+/** Memo entries (origin and targets) kept per graph before the memo is cleared. */
 const MEMO_MAX = 500;
 const memo = new WeakMap<Graph, Map<string, Route[]>>();
 

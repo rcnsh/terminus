@@ -190,7 +190,6 @@ function field(o: Record<string, unknown>, ...keys: string[]): unknown {
   return null;
 }
 
-/** The services the stop graph knows. */
 const KNOWN_SERVICES: ReadonlySet<string> = new Set(Object.keys((graphJson as { routes: Record<string, unknown> }).routes));
 
 /** Each known service by its name without spaces, in capitals. */
@@ -607,8 +606,8 @@ export function hasList(data: unknown, keys: string[] = ARRIVAL_LIST_KEYS): bool
  * the phone's location, whose coordinates jitter from one call to the next,
  * so a cache keyed on the raw URL would rarely hit. Keying on the resolved
  * stop is what makes "one upstream call per stop per 15 seconds however
- * often the clients refresh" true, and it shares the entry between /next
- * and /trip. A refused version or key (NO_REMINT_CODES) trips the feed's
+ * often the clients refresh" true, and it shares the entry between /api/next
+ * and /api/trip. A refused version or key (NO_REMINT_CODES) trips the feed's
  * breaker, which stops every stop for breakerS: a fresh token can't fix it.
  */
 export async function getArrivals(env: Env, ctx: ExecutionContext, code: string, nowMs: number = Date.now()): Promise<StopArrivals> {

@@ -594,7 +594,7 @@ export interface BoardRow {
   via: string[];
   /** How full the first bus is, from the feed; null when it doesn't say. */
   crowd: Crowd | null;
-  /** When the service stops running today (ISO); null when its hours are unknown. */
+  /** When the service stops running today (ISO); null when its hours are unknown or it's outside them. */
   endsAt: string | null;
   /** False only on a row for a service outside its hours, listed when asked for (`stopped`). */
   running: boolean;

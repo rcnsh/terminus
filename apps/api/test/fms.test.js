@@ -1,7 +1,7 @@
 /**
  * The bus proxy client (src/fms.ts) on its own: one re-mint on a rejection a
  * fresh token could fix, none on one it can't, and a refusal that names the
- * endpoint it came from. worker.smoke.js covers the same through /arrivals.
+ * endpoint it came from. worker.smoke.js covers the same through /api/arrivals.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
