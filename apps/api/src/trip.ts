@@ -26,7 +26,7 @@ import { isoSeconds, shortStop } from './format.ts';
 
 export type Phase = 'idle' | 'due' | 'heading' | 'waiting' | 'riding' | 'missed' | 'arrived';
 
-/** What a client can send to /me/signal. */
+/** What a client can send to /api/me/signal. */
 export const SIGNALS = ['boarded', 'missed', 'skipped', 'left', 'arrived', 'location', 'reset', 'away', 'back'] as const;
 export type SignalKind = (typeof SIGNALS)[number];
 
@@ -38,7 +38,7 @@ export type SignalKind = (typeof SIGNALS)[number];
 export interface Plan {
   svc: string;
   stop: string;
-  /** ISO: when it left, and when it gets you there. */
+  /** ISO: when it leaves the stop (`arrive`, below: when it gets you there). */
   board: string | null;
   /** ISO: the leave-by time that went with it. From then on the trip is
    *  about this bus, whatever later answers suggest (see next.ts). */
@@ -285,7 +285,7 @@ export interface TripRecord {
   missed?: string | null;
 }
 
-/** Today's signals, by trip key (classKey, or home:<minutes>). */
+/** Today's signals, by trip key (classKey, or a home key: see isHomeKey). */
 export interface DayRecord {
   date: string;
   trips: Record<string, TripRecord>;

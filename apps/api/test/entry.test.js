@@ -1,7 +1,7 @@
 /**
  * The Worker's entry points the other tests don't reach: the beta's
  * "noindex" on its pages (HTMLRewriter, which Node lacks, stubbed here as a
- * pass-through), the cron's scheduled() handler, and the operator's /health
+ * pass-through), the cron's scheduled() handler, and the operator's /api/health
  * auth probe and version lookup.
  */
 import test from 'node:test';

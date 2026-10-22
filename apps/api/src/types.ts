@@ -24,9 +24,9 @@ export interface Env {
   ASSETS?: Fetcher;
   /** Accounts (migrations/). Optional so the public API runs without it. */
   DB?: D1Database;
-  /** Cloudflare Email Sending, for sign-in links. */
+  /** Cloudflare Email Sending: sign-in codes and links, new-device emails, reports and outage alerts. */
   EMAIL?: SendEmail;
-  /** Sender for sign-in links; must be on a domain onboarded to Email Sending. */
+  /** The sender of every email; must be on a domain onboarded to Email Sending. */
   EMAIL_FROM?: string;
   /** Workers rate limiting, keyed per IP, on sign-in and pairing. */
   RL_AUTH?: RateLimit;
@@ -213,7 +213,6 @@ export interface BusChange {
 /** What kind of answer: a trip somewhere, what's near you, resting, or
  *  'free': a day with no classes (or none left to plan), nothing to catch. */
 export type Mode = 'trip' | 'nearby' | 'rest' | 'free';
-/** Why you're going there. */
 export type Why = 'class' | 'home' | 'gap-home' | 'place';
 
 export interface Dest {

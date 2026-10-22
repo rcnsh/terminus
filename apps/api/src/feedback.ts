@@ -1,17 +1,9 @@
 /**
- * "This was wrong" reports. The apps and the account page send the answer the
- * user was looking at with what was wrong; it's stored for checking against
- * what the buses actually did, and emailed to the operator so a bad answer
- * is seen the day it happens. Who sent it and the answer stay on the
- * dashboard: an inbox keeps mail after the account is deleted. Only accounts
- * with an email can send one, and every report must say something: an
- * anonymous answer with nothing said can't be acted on or replied to, and
- * anonymous accounts cost nothing to make. A wrong answer says what was
- * wrong with a reason picked from a few (REASONS), a note, or both. A stop suggestion
- * (kind `stop`) names a building and the stop students use for it, for
- * data/src/venue-stops.json; it's kept as feedback with the reason
- * `better-stop`, and the email carries the entry to paste. Reports are kept
- * FEEDBACK_KEEP_DAYS.
+ * "This was wrong" reports and stop suggestions (kind `stop`, kept with the
+ * reason `better-stop`, the email carrying the data/src/venue-stops.json
+ * entry to paste). Stored for checking against what the buses actually did,
+ * and the note emailed to the operator so a bad answer is seen the day it
+ * happens. Who may send one and what it must say: internals.md, *Endpoints*.
  */
 
 import type { Env } from './types.ts';

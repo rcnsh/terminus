@@ -1,20 +1,9 @@
 /**
- * Push: Firebase Cloud Messaging (HTTP v1) to Android devices, and Web
- * Push to the installed web app (webpush.ts), both kept as the
- * session's push_token: an FCM token, or `web:` and a subscription.
- *
- * A push is usually only a nudge. It says the card has changed (`kind:
- * 'card'` and the phase), and the app fetches /me/next itself, so the words
- * are never worked out twice and nothing sensitive travels through Google.
- * It's high priority only when the user should look: the trip is due, or it
- * was missed, whether or not its reminders are on, since Android starts the
- * live notification from these. The new semester's reminder (`kind: 'term'`) is the same to
- * an app that can fetch its words (GET /api/me/notice): only to an older
- * Android app, which shows what it's sent, does it carry the words, in
- * English and Chinese (fetchesNotice). Web pushes are encrypted for the
- * browser, so they always carry them.
- *
- * The Worker signs its own OAuth token from the service account in
+ * Push: FCM (HTTP v1) to Android and Web Push to the installed web app
+ * (webpush.ts), both kept as the session's push_token: an FCM token, or
+ * `web:` and a subscription. A push is a nudge and the app fetches the card
+ * itself; see internals.md, *One plan, and push*, and *A new semester* under
+ * *The web app*. The Worker signs its own OAuth token from
  * FCM_SERVICE_ACCOUNT (RS256 with WebCrypto) and keeps it in KV for 50
  * minutes. A token FCM no longer knows is cleared from its session.
  */
@@ -57,10 +46,8 @@ function account(env: Env): ServiceAccount | null {
   return null;
 }
 
-/** Whether push to Android (FCM) is set up. */
 export const fcmEnabled = (env: Env) => account(env) !== null;
 
-/** Whether push is set up at all. */
 export const pushEnabled = (env: Env) => fcmEnabled(env) || webPushEnabled(env);
 
 const b64urlText = (s: string) => b64url(new TextEncoder().encode(s));
@@ -335,7 +322,6 @@ export async function fcmError(res: Response): Promise<{ tokenGone: boolean; cod
   return { tokenGone: res.status === 404 || code === 'UNREGISTERED' || (res.status === 400 && badToken), code };
 }
 
-/** How many of a user's devices take push. */
 export async function pushDevices(env: Env, userId: string): Promise<number> {
   if (!pushEnabled(env) || !env.DB) return 0;
   const r = await env.DB.prepare('SELECT COUNT(*) AS n FROM sessions WHERE user_id = ? AND push_token IS NOT NULL')

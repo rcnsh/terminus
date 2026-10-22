@@ -1,5 +1,5 @@
 /**
- * GET /api/me/day: today's timeline, worked out with the planner /me/next uses.
+ * GET /api/me/day: today's timeline, worked out with the planner /api/me/next uses.
  * Each class with where you set off from and its leave-by, the trips home in
  * long gaps and after the last class, and where each stands now. Clients
  * cache it, so they have the day's shape offline or between refreshes; the
@@ -24,7 +24,7 @@ export type DayStatus = 'done' | 'now' | 'next' | 'later' | 'skipped';
 
 export interface DayItem {
   kind: 'class' | 'home';
-  /** The trip's key, for /me/signal ("Not going", "Undo"). */
+  /** The trip's key, for /api/me/signal ("Not going", "Undo"). */
   key: string;
   label: string;
   status: DayStatus;
@@ -186,7 +186,7 @@ export async function dayPlan(
   // Worded once every leave-by is in.
   for (const it of items) it.line = dayLine(it, h12);
 
-  // The day's hours, stretched for early and late classes (as /me/next rests).
+  // The day's hours, stretched for early and late classes (as /api/me/next rests).
   const r = restSide(profile, nowMs);
   const startMin = r?.startMin ?? Math.max(0, Math.min(profile.dayStartMin, ...classes.map((x) => x.arriveByMin - 90)));
   const endMin = Math.max(profile.dayEndMin, ...classes.map((x) => endOf(x) + 45));

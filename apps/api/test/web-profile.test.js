@@ -1,6 +1,6 @@
 /**
  * The account page's card and profile helpers (apps/web/public/account/
- * preview.js and profile.js), on the real /campus answer, built from the
+ * preview.js and profile.js), on the real /api/campus answer, built from the
  * Worker's own modules and data.
  */
 import test, { mock } from 'node:test';
@@ -16,7 +16,7 @@ const { isStale, leaveHead, leaveText } = await web('account/preview.js');
 const P = await web('account/profile.js');
 const { t } = await web('account/dom.js');
 
-/** /campus as the Worker sends it (index.ts handleCampus), through JSON. */
+/** /api/campus as the Worker sends it (index.ts handleCampus), through JSON. */
 const map = buildCampusMap(GRAPH);
 const CAMPUS = JSON.parse(
   JSON.stringify({

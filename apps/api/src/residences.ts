@@ -140,7 +140,7 @@ export function residenceStops(lat: number, lon: number, byCode: Map<string, Sto
 }
 
 /**
- * For "Where do you live?" on /campus: names and stops only, the outlines
+ * For "Where do you live?" on /api/campus: names and stops only, the outlines
  * stay here. The common ones come first, so a client matching home stops
  * back to a residence (every UTown college shares UTOWN) lands on the
  * likelier one. Names in code-unit order, not localeCompare (which starts

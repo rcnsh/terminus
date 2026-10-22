@@ -127,7 +127,7 @@ test('every shuttle service has its own colour', () => {
 
 test('a service is a loop exactly when it ends where it starts, and a loop’s line ends near its start', () => {
   // The API places buses with the loop flag, and the maps take it from
-  // /campus: the line's ends needn't meet (A1's are some 40 m apart at KRB),
+  // /api/campus: the line's ends needn't meet (A1's are some 40 m apart at KRB),
   // but further apart than this and a bus going round would jump.
   assert.deepEqual(Object.keys(stops.loops).sort(), Object.keys(stops.routes).sort());
   for (const [svc, seq] of Object.entries(stops.routes)) {

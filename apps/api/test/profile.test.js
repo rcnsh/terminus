@@ -60,7 +60,7 @@ test('a gap longer than gapHours sends you home, then back', () => {
 
 test('a class at the home stop after a long gap is planned from the last class, not from home to home', () => {
   // A UTown resident with a class at UTown after a long gap: "Home" is not
-  // a trip (as /me/day has it), so the class is the trip, from where you are.
+  // a trip (as /api/me/day has it), so the class is the trip, from where you are.
   const tt = [cls(10, 12, 'COM3'), cls(16, 18, 'UTOWN')];
   for (const at of [thu(12, 30), thu(14), thu(15, 30)]) {
     const p = nextTripFor(profile(tt, { home: { stops: ['UTOWN'] } }), at);

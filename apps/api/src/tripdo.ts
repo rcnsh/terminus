@@ -27,7 +27,7 @@ import { logTripWake } from './analytics.ts';
 import { scopeCache } from './edgecache.ts';
 import { answerFor, collectArrivals } from './answer.ts';
 
-/** Trip records one day keeps at most (see /signal). */
+/** Trip records one day keeps at most (see update). */
 export const MAX_DAY_TRIPS = 64;
 
 /** Never wake again sooner than this after a wake. */
@@ -170,7 +170,7 @@ export class Trip {
       return;
     }
     // The wake owed is moved aside, not dropped, until the wake is done: a
-    // /watch meanwhile starts a fresh wakeAt, and an alarm the platform
+    // watch meanwhile starts a fresh wakeAt, and an alarm the platform
     // runs again (this one threw, or the object restarted) still wakes.
     const owed = await this.storage.get<number>('waking');
     const asked = await this.storage.get<number>('wakeAt');
@@ -190,7 +190,7 @@ export class Trip {
         woke = { next: nowMs + Math.min(MIN_WAKE_GAP_MS * 2 ** fails, MAX_RETRY_GAP_MS), retry: true };
       }
     }
-    // Held like a POST, so a /watch or /clear that came in while this woke
+    // Held like a POST, so a watch or /clear that came in while this woke
     // isn't undone: an earlier wake asked for stays, and a cleared object stays empty.
     // A storage write that throws in here resets the object, but a failed write
     // does that anyway (the output gate), and 'waking' makes the rerun wake again.
@@ -203,7 +203,7 @@ export class Trip {
         else await this.storage.put('wakeAt', next);
         await this.storage.delete('waking');
         if (woke.seen) await this.storage.put('lastWake', woke.seen);
-        // The card's next change, as /watch records it (a retry is no change of the card's).
+        // The card's next change, as a watch records it (a retry is no change of the card's).
         if (woke.next !== null && !woke.retry && next !== undefined) {
           const d = today(await this.storedDay(), sgtDate(nowMs));
           await this.storage.put('day', { ...d, watch: next });

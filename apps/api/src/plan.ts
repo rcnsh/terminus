@@ -1,29 +1,13 @@
 /**
- * Which bus a trip is about: one plan for every device.
+ * Which bus a trip is about: one plan for every device. Frozen from its
+ * leave-by, kept for a device without a location, held once you were told
+ * it unless it would make you late (answers a minute apart can prefer another:
+ * the feed lists a later one, a crowd guess changes), else the fresh answer's
+ * bus. See internals.md, *One plan, and push*.
  *
- * Each request works out a fresh answer, and with it a bus (`made`). The day's
- * record keeps the bus the trip is for (`DayRecord.plans`). This decides which
- * of the two the trip is about now, and whether the record should change:
- *
- * - **Frozen** from the plan's leave-by (or its departure, if earlier): that
- *   bus until it has left, whatever the answer says now. Past the leave time
- *   the answer moves on to later buses, and from a moving bus to other stops.
- * - **Kept** for a device without a location (the widget, the background
- *   refresh, the Mac, the web) when the plan was made from the phone's
- *   location: it would otherwise plan from where the timetable puts you.
- *   The same bus in this answer is shown with this answer's times.
- * - **Told:** from when you'd be at the stop for it (and so from the
- *   heads-up), the bus you were told stays the plan while it still gets you
- *   there in time. Answers a minute apart can prefer another (the feed lists
- *   a later one, a crowd guess changes); only one that would make you late
- *   gives way.
- * - Otherwise the fresh answer's bus, saved when it's another bus, or the
- *   same one now on live times.
- *
- * Live times move a little from one answer to the next, so the same service
- * from the same stop within a few minutes is the same bus (`sameBus`).
- * Saved again each time, its leave-by would stay just ahead of the clock (at
- * the stop it's seconds before the bus) and the plan would never freeze.
+ * The same service from the same stop within SAME_BUS_MS is the same bus
+ * (`sameBus`): saved again each time, its leave-by would stay just ahead of
+ * the clock and the plan would never freeze.
  */
 
 import type { Leave } from './types.ts';
@@ -87,7 +71,7 @@ export interface PlanInput {
 export interface PlanChoice {
   /** The bus the trip is about: what every device shows and detection watches. */
   bus: Plan | null;
-  /** The answer's own bus, to be saved as the plan. */
+  /** Save the answer's own bus (`made`) as the plan. */
   save: boolean;
 }
 

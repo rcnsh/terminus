@@ -99,7 +99,7 @@ export const OKS_TO_RECOVER = 2;
 
 /**
  * Whether the feed is answering, as users are told it (the card's notice,
- * /status.json, /health): confirmed up, or its last check good. Waiting for
+ * /api/status.json, /api/health): confirmed up, or its last check good. Waiting for
  * the second good check is for the email and the incident record; the
  * notice would otherwise say "down" for 15 minutes with the feed back.
  */
@@ -108,9 +108,7 @@ export const answering = (u: UpstreamState): boolean => u.up || (u.oks ?? 0) > 0
 /** Since when it's been as [answering] says: back since its first good
  *  check while that's still to be confirmed, else the confirmed state's. */
 export const answeringSince = (u: UpstreamState): number => (!u.up && answering(u) && u.okSince ? u.okSince : u.since);
-/** How long an operator email may take to send. */
 export const MAIL_TIMEOUT_MS = 15_000;
-/** How long the heartbeat ping may take. */
 export const HEARTBEAT_TIMEOUT_MS = 10_000;
 /** Warn this long before calendar.json runs out. */
 export const CALENDAR_WARN_DAYS = 45;
@@ -175,7 +173,7 @@ export async function feedDownSince(env: Env, nowMs: number): Promise<number | n
   return since;
 }
 
-/** What /status.json and /health read: the cron's records, which change at most every 15 minutes. */
+/** What /api/status.json and /api/health read: the cron's records, which change at most every 15 minutes. */
 export interface StatusRecords {
   upstream: UpstreamState | null;
   incidents: Incident[];
@@ -186,7 +184,7 @@ const statusMemo = new WeakMap<object, { at: number; records: StatusRecords }>()
 
 /**
  * The cron's records, read from KV at most once a minute per isolate (as
- * feedDownSince is): /status.json is public and polled, and three KV reads a
+ * feedDownSince is): /api/status.json is public and polled, and three KV reads a
  * request cost more than a minute's lag behind a 15-minute check.
  */
 export async function statusRecords(env: Env, nowMs: number): Promise<StatusRecords> {
@@ -666,7 +664,7 @@ export async function readPublicFeed(env: Env): Promise<PublicFeedState | null> 
 
 /**
  * Probe LTA DataMall directly (past the cache) and record whether it
- * answered, for /status.json and /health. Nothing is done without the key.
+ * answered, for /api/status.json and /api/health. Nothing is done without the key.
  */
 export async function checkPublicFeed(
   env: Env,

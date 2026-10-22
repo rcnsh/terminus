@@ -247,7 +247,7 @@ export async function getSession(
     }
   }
 
-  // One mint per isolate at a time. On a cold cache /trip fetches several
+  // One mint per isolate at a time. On a cold cache /api/trip fetches several
   // stops in parallel; without this each one minted its own token, and a
   // single failed mint degraded that stop to "unknown". A forced caller that
   // joins an in-flight mint still gets a freshly minted token.

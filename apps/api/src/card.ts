@@ -2,7 +2,7 @@
  * What every client shows, worded once.
  *
  * The Android app and widget, the notifications, the Mac popover and the
- * account page's preview all render /me/next. The server sends the class
+ * account page's preview all render /api/me/next. The server sends the class
  * card's lines, the crowd word, the quality note and the "old" rule in
  * `card`; clients keep only what has to tick: "Leave now" once `leave.at` passes, countdowns, and
  * dimming once `card.staleAt` passes.
@@ -38,7 +38,7 @@ import { m } from './i18n.ts';
 export type CardKind = 'class' | 'trip' | 'nearby' | 'rest' | 'arrived' | 'setup' | 'free';
 
 /** A button the server decided to show. Clients render it and send `id`
- *  and `trip` back to /me/signal; they never decide which to show. */
+ *  and `trip` back to /api/me/signal; they never decide which to show. */
 export interface CardAction {
   id: 'boarded' | 'missed' | 'skipped' | 'arrived' | 'reset' | 'away' | 'back';
   label: string;
@@ -266,7 +266,7 @@ export interface Card {
    *  notification. The card itself is unchanged. */
   remind: boolean;
   /** "Leave one bus earlier for CS2030?", with its two buttons: send the id
-   *  to /me/choice. Never during a trip. */
+   *  to /api/me/choice. Never during a trip. */
   suggestion: Suggestion | null;
   /** On the bus: the stops from boarding to getting off and the board and
    *  arrival times (the arrival live when the bus's plate is known), for a

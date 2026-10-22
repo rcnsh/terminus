@@ -1,5 +1,5 @@
 /**
- * /me/next's answer: where you're going now and how, from the timetable (or
+ * /api/me/next's answer: where you're going now and how, from the timetable (or
  * a place you asked for), and which of today's trips it is about, so the
  * card can say what phase it's in (trip.ts).
  */
@@ -633,7 +633,7 @@ export async function planned(env: Env, ctx: ExecutionContext, deps: MeDeps, rid
 export type NextUpdate = Omit<TripUpdate, 'date' | 'deleteAt'>;
 
 /**
- * /me/next's body (the answer, when it changes by itself, and the card), the
+ * /api/me/next's body (the answer, when it changes by itself, and the card), the
  * trip it's about, and what it changes in the Trip object. Nothing is saved
  * here: the caller sends `update`, or inside the Trip object keeps only its plans.
  */
@@ -658,7 +658,7 @@ export async function nextFor(env: Env, ctx: ExecutionContext, deps: MeDeps, rid
   // answer has one; a place or a stop never changes by itself.
   const isPlan = !ask.place && !ask.to;
   const full: MeAnswer = isPlan ? { ...answer, refreshAt: isoSeconds(planChangesAt(profile, nowMs)) } : answer;
-  // The display-ready card, in the client's 12- or 24-hour style.
+  // The display-ready card, in the account's 12- or 24-hour choice, else the client's.
   const card = cardFor(full, hour12(ask.h12, profile), trip, await feedDownSince(env, nowMs), nowMs);
   // Push: have the Trip object wake when this card next changes, to tell the
   // phones, unless it already wakes about then or sooner.

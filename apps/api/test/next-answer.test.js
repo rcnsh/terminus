@@ -1,5 +1,5 @@
 /**
- * The /me/next answer at its edges: operating hours, the age of an answer,
+ * The /api/me/next answer at its edges: operating hours, the age of an answer,
  * which stops are tried, the walk the whole way, and what is shown as live.
  * On the real stop graph (data/stops.json), as the answer is made.
  */

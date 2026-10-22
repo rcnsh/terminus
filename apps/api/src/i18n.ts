@@ -36,12 +36,10 @@ export const LANG_PREFS: readonly LangPref[] = ['auto', 'en', 'zh'];
 
 const store = new AsyncLocalStorage<{ lang: Lang }>();
 
-/** Runs `fn` with this request's language. */
 export function withLang<T>(lang: Lang, fn: () => T): T {
   return store.run({ lang }, fn);
 }
 
-/** The current request's language. */
 export function lang(): Lang {
   return store.getStore()?.lang ?? 'en';
 }
@@ -707,7 +705,6 @@ const zh: Msgs = {
 
 const MSGS: Record<Lang, Msgs> = { en, zh };
 
-/** The current request's messages. */
 export function m(): Msgs {
   return MSGS[lang()];
 }

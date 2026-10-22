@@ -91,7 +91,6 @@ interface Held {
   value: unknown;
 }
 
-/** The gate for one key. */
 export class FeedGate {
   private readonly storage: DurableObjectStorage;
   private held: Held | null = null;

@@ -92,7 +92,7 @@ export interface FormatInput {
   nearestStop: Stop | null;
   /** Without coordinates, the stop the trip is assumed to start from. */
   origin?: Stop | null;
-  /** Short destination name, e.g. "UTown". Null for a bare /next. */
+  /** Short destination name, e.g. "UTown". Null for a bare /api/next. */
   destLabel: string | null;
   /** Seconds to walk the entire way, when known. */
   walkAllS: number | null;
@@ -220,7 +220,6 @@ function buildDetail(f: FormatInput, best: ScoredOption, verdict: WalkVerdict): 
   // No nearestStop means no coordinates, so we cannot claim you are anywhere.
   else if (f.nearestStop) parts.push(m().rightHere);
 
-  // No single bus goes there: where to change, and to which bus.
   const change = changeWords(best);
   if (change) parts.push(change);
 

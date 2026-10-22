@@ -1,6 +1,6 @@
 /**
  * The personal layer: sign-in, pairing, profile, and the answers that use
- * them (/me/next, /me/nearby). Everything here needs the DB binding.
+ * them (/api/me/next, /api/me/nearby). Everything here needs the DB binding.
  */
 
 import { mailFeedback, parseFeedback, saveFeedback } from './feedback.ts';
@@ -387,7 +387,7 @@ interface MeContext {
   deps: MeDeps;
   db: D1Database;
   session: SessionInfo;
-  /** What follows a prefix path ("/me/keys/<id>"). */
+  /** What follows a prefix path ("/api/me/keys/<id>"). */
   rest: string;
 }
 
@@ -468,7 +468,7 @@ export const ME_ROUTES: MeRoute[] = [
     method: 'GET',
     path: '/api/me',
     run: async ({ req, nowMs, db, session }) => {
-      // Every page load asks /me first: a web session in use keeps going.
+      // Every page load asks /api/me first: a web session in use keeps going.
       const token = session.kind === 'web' ? tokenFrom(req) : null;
       const renewed = token !== null && (await renewWebSession(db, session.tokenHash, nowMs));
       const saved = await loadProfileJson(db, session.user.id);
@@ -534,7 +534,7 @@ export const ME_ROUTES: MeRoute[] = [
     path: '/api/me/once',
     run: async ({ req, url, env, ctx, nowMs, deps, db, session }) => {
       // A one-off trip: "Science library at 14:00 today". Planned
-      // like a class on its day; "Not going" drops it. Answers with /me/next.
+      // like a class on its day; "Not going" drops it. Answers with /api/me/next.
       const body = await readJson(req);
       // Read, changed and saved again if another device saved meanwhile, so
       // neither write is lost.
@@ -708,7 +708,7 @@ export const ME_ROUTES: MeRoute[] = [
     path: '/api/me/signal',
     run: async ({ req, url, env, ctx, nowMs, deps, db, session }) => {
       // "On the D2", "Missed it", "Not going", "I'm there": what
-      // actually happened, for every device. Answers with the new /me/next.
+      // actually happened, for every device. Answers with the new /api/me/next.
       if (!env.TRIPS) return json({ error: 'trip tracking is not available' }, 503);
       const body = await readJson(req);
       const kind = SIGNALS.find((k) => k === body?.kind);
@@ -719,7 +719,7 @@ export const ME_ROUTES: MeRoute[] = [
       const here = typeof body?.lat === 'number' && typeof body?.lon === 'number' ? { ...asked, at: coords(body.lat, body.lon) } : asked;
       const day = await loadDay(env, session.user.id, nowMs);
       // Older Android apps send a location every 20 seconds or so during a
-      // trip. It's answered like /me/next from there, and nothing is kept.
+      // trip. It's answered like /api/me/next from there, and nothing is kept.
       if (kind === 'location') {
         return json(await nextBody(env, ctx, deps, await loadRider(env, session.user.id, nowMs, { profile, day }), here, nowMs));
       }
@@ -1297,7 +1297,7 @@ export async function handleMe(
 
   if (path === '/api/auth/logout' && req.method === 'POST') {
     if (session) await endSession(db, session.tokenHash);
-    // A token that isn't one cost a D1 read, as under /me: capped per address the same way.
+    // A token that isn't one cost a D1 read, as under /api/me: capped per address the same way.
     else if (tokenFrom(req) && (await limited(env, req, 'badtoken')))
       return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
     return json({ ok: true }, 200, { 'set-cookie': sessionCookie('', 0) });
@@ -1347,7 +1347,7 @@ export async function handleMe(
 }
 
 /**
- * /me/day's plan, kept up to a minute per user: a phone, a Mac and a browser
+ * /api/me/day's plan, kept up to a minute per user: a phone, a Mac and a browser
  * each ask every 30 s or so, and planning the whole day is the expensive
  * part. Kept under everything it's worked out from (the profile, today's
  * record, the clock style, the language, roughly where you are) and the
@@ -1397,7 +1397,7 @@ export async function loadRider(
   return { userId, profile, day, prefs };
 }
 
-/** /me/next's body, with what it changes sent to the Trip object. */
+/** /api/me/next's body, with what it changes sent to the Trip object. */
 async function nextBody(env: Env, ctx: ExecutionContext, deps: MeDeps, rider: Rider, ask: Ask, nowMs: number) {
   const { body, update } = await nextFor(env, ctx, deps, rider, ask, nowMs);
   if (update.items || update.plans || update.watch) {
@@ -1511,7 +1511,7 @@ async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: numbe
     .sort((a, b) => a.distM - b.distM);
   const near = ranked.filter((c) => c.distM <= WALK.maxRadiusM).slice(0, WALK.maxCandidates);
   // In a residence or a building: its own stops, walked by the paths, like
-  // /me/next, and at home your own walk to your stop.
+  // /api/me/next, and at home your own walk to your stop.
   const homeWalk = profile.home ? { stops: profile.home.stops, m: profile.homeWalkMin * 60 * paceSpeed(profile.walkPace) } : null;
   const inside = residenceStops(lat, lon, idx.byCode, homeWalk) ?? buildingStops(lat, lon, idx.byCode);
   const picked = inside?.slice(0, WALK.maxCandidates) ?? (near.length ? near : ranked.slice(0, 1));

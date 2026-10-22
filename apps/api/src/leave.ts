@@ -192,7 +192,7 @@ export function leaveBy(f: LeaveInput): Leave | null {
       worth,
       opens: r.opens === true,
     };
-    // The latest on-time departure wins; if nothing is on time, the soonest.
+    // The latest on-time departure wins, by worth; at a tie, a live time over an estimate.
     if (!r.late && (!onTime || worth > onTime.worth || (worth === onTime.worth && onTime.estimated && !r.estimated))) onTime = out;
     // Late whatever you do: the bus that gets you there first (a fare counted
     // as for the on-time ones), not the first to leave, which on a loop can
