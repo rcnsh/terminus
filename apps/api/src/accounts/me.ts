@@ -105,7 +105,7 @@ import { buildingStops, footM, paceSpeed } from '../answer/walk.ts';
 import { clientKey, coords, coordsFrom, json } from '../http.ts';
 import { linkOrigin } from '../origin.ts';
 import { LANG_PREFS, type Lang, type LangPref, lang, m, useProfileLang, withLang } from '../i18n.ts';
-import { bandCss, bandHtml, phaseAt, sgtMinute } from '../site/pagesky.ts';
+import { ROUTE_COLORS } from '../map/campus.ts';
 
 export interface MeDeps {
   answerFor: (env: Env, ctx: ExecutionContext, input: ResolveInput, label: string | null, nowMs: number) => Promise<Answer>;
@@ -116,13 +116,26 @@ const html = (body: string, status = 200, extra: Record<string, string> = {}) =>
   new Response(body, { status, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', ...extra } });
 
 /**
- * Minimal pages served by the Worker itself, in the site's style: a card
- * with a band of the hour's sky across its top, the mark in it, as
- * Settings' pages have in the apps (pagesky.ts).
+ * The shuttles' livery across the top of the Worker's pages, as sign-in's
+ * (account/livery.js, drawn there with the same numbers): a stripe per
+ * service, P's grey left out, then a thin line in the accent.
  */
-const page = (title: string, inner: string) => {
-  const phase = phaseAt(sgtMinute(Date.now()));
-  return `<!doctype html>
+function liveryHtml(): string {
+  const u = 180 / 300;
+  const left = 180 - 60 * u + 50;
+  const right = left - 100;
+  const band = (from: number, to: number, fill: string) =>
+    `<path d="M0 ${left - from}L400 ${right - from}L400 ${right - to}L0 ${left - to}Z" fill="${fill}"/>`;
+  const colours = ['R2', 'R1', 'K', 'D2', 'D1', 'A2', 'A1'].map((svc) => ROUTE_COLORS[svc]);
+  return `<div class="livery" aria-hidden="true"><svg viewBox="0 0 400 180" preserveAspectRatio="none">${band(0, 6 * u, 'var(--accent-bright)')}${colours.map((c, i) => band((16 + 20 * i) * u, (36 + 20 * i) * u + 0.6, c)).join('')}</svg></div>`;
+}
+
+/**
+ * Minimal pages served by the Worker itself, laid out as the account page's
+ * sign-in is (account.css): the livery under the header, then the words, and
+ * from 900px the form beside them. A page with nothing to fill in has no form.
+ */
+const page = (title: string, intro: string, form = '') => `<!doctype html>
 <html lang="${lang() === 'zh' ? 'zh-Hans' : 'en'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex"><title>${title} · terminus</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
@@ -130,14 +143,12 @@ const page = (title: string, inner: string) => {
 <link rel="preload" href="/assets/fonts/space-grotesk-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/assets/fonts.css">
 <link rel="stylesheet" href="/assets/site.css">
-<style>.box{max-width:25rem;margin:10vh auto 0;padding:32px 28px;overflow:hidden}.band .brand img{width:28px;height:28px}.box h1{font-size:1.6rem;margin-bottom:8px}.box .btn{width:100%;margin-top:20px}
-.when{color:var(--muted)}.box .eyebrow{display:block;margin:24px 4px 8px;line-height:1.4}.box .hint.after{margin:8px 4px 0;font-size:.85rem}.box .hint.center{margin-top:4px;text-align:center;font-size:.85rem}
-.number{display:block;width:100%;box-sizing:border-box;min-height:64px;padding:0 12px;border:1px solid var(--line);border-radius:16px;background:var(--bg);color:var(--ink);text-align:center;font:700 2rem/1 var(--display);letter-spacing:.3em;font-variant-numeric:tabular-nums}
-.number:focus-visible{outline:none;border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
-.linkbtn{display:block;margin:22px auto 0;background:none;border:0;color:var(--ink);text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--muted);font:500 .95rem var(--font);cursor:pointer}
-${bandCss(phase)}</style>
-</head><body><main class="wrap"><div class="card box">${bandHtml(phase)}${inner}</div></main></body></html>`;
-};
+<link rel="stylesheet" href="/account/account.css">
+<style>.signin-intro .btn{margin-top:20px}form.signin-alt .link-btn{padding:0}
+.number{display:block;min-height:72px;text-align:center;font:700 2.2rem/1 var(--display);letter-spacing:.3em;font-variant-numeric:tabular-nums}
+@media (min-width:900px){.signin-step.solo{display:block}.solo .hint{max-width:36rem}}</style>
+</head><body><header class="wrap nav"><a class="brand" href="/"><img src="/assets/mark.svg" alt=""><span class="wordmark">termi<b>nus</b></span></a></header>
+<main class="wrap"><section class="signin">${liveryHtml()}<div class="signin-step${form ? '' : ' solo'}"><div class="signin-intro">${intro}</div>${form ? `<div class="signin-form">${form}</div>` : ''}</div></section></main></body></html>`;
 
 /** A whole profile is a few KB; nothing legitimate comes close to this. */
 const MAX_BODY_BYTES = 64 * 1024;
@@ -1168,8 +1179,8 @@ export async function handleMe(
         page(
           m().pageSignIn,
           `<h1>${m().signInTitle}</h1>
-<p class="hint">${m().continueAs(escapeHtml(email))}</p>
-<form method="post" action="/auth/verify"><input type="hidden" name="t" value="${safe}">${url.searchParams.get('next') === 'app' ? '<input type="hidden" name="next" value="app">' : ''}<button type="submit" class="btn accent">${m().signInButton}</button></form>`,
+<p class="hint">${m().continueAs(escapeHtml(email))}</p>`,
+          `<form method="post" action="/auth/verify"><input type="hidden" name="t" value="${safe}">${url.searchParams.get('next') === 'app' ? '<input type="hidden" name="next" value="app">' : ''}<button type="submit" class="btn accent wide">${m().signInButton}</button></form>`,
         ),
       );
     }
@@ -1297,21 +1308,21 @@ export async function handleMe(
       const a = link ? await approvable(db, link, nowMs) : null;
       if (!a) return html(page(m().pageRequestExpired, m().approveExpiredHtml), 400);
       const device = escapeHtml(a.device || m().aDevice);
-      // The question, when it was asked, then a box for the number the
-      // device shows, saying what a wrong one does; "This wasn't me"
-      // quietly under it. Typed, not picked: see applogin.ts.
+      // The question and when it was asked, then a box for the number the
+      // device shows, saying what a wrong one does; "This wasn't me" one
+      // line under it. Typed, not picked: see applogin.ts.
       return html(
         page(
           m().pageApprove,
           `<h1>${m().approveTitle(device)}</h1>
-<p class="when">${m().approveWhen(escapeHtml(sgtTime(a.created)))}</p>
-<form method="post" action="/auth/approve"><input type="hidden" name="r" value="${link}">
-<label class="eyebrow" for="n">${m().approveNumber(device)}</label>
+<p class="hint">${m().approveWhen(escapeHtml(sgtTime(a.created)))}</p>`,
+          `<form method="post" action="/auth/approve"><input type="hidden" name="r" value="${link}">
+<label for="n">${m().approveNumber(device)}</label>
 <input class="number" id="n" name="n" inputmode="numeric" pattern="[0-9]{2}" maxlength="2" autocomplete="off" required autofocus>
-<p class="hint after">${m().approveRule}</p>
-<button type="submit" class="btn accent">${m().approveButton}</button></form>
-<form method="post" action="/auth/approve"><input type="hidden" name="r" value="${link}"><button type="submit" name="n" value="none" class="linkbtn">${m().notMe}</button></form>
-<p class="hint center">${m().notMeHint}</p>`,
+<p class="hint small">${m().approveRule}</p>
+<button type="submit" class="btn accent wide">${m().approveButton}</button></form>
+<form class="signin-alt" method="post" action="/auth/approve"><input type="hidden" name="r" value="${link}">${m().notYou} <button type="submit" name="n" value="none" class="link-btn">${m().notMe}</button></form>
+<p class="hint small">${m().notMeHint}</p>`,
         ),
       );
     }

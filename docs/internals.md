@@ -42,7 +42,7 @@ app's own `sky.js` (web-sky.test.js keeps the colours and the hours the
 same). An address the website doesn't have, asked for by a browser, gets
 `/not-found/` with a 404 (`sitePage` in index.ts); anything else gets the
 plain 404. `/docs` takes its bar's band from pagesky.ts, at Singapore's
-hour, like the Worker's small pages.
+hour.
 
 The landing page is sent with the current release's version (from
 `latest.json`, read from R2 on every request, so a release shows at once) and, for someone with a live
@@ -393,11 +393,10 @@ get one of three ways:
   App sign-in emails spend their own key of `RL_MAIL` (`mail:app`): the
   apps can't run Turnstile, and using that ceiling up must leave the
   website's sign-in working.
-  That page, like the Worker's other small pages (`page()` in me.ts), has
-  a band of the hour's sky across its card, as Settings' pages do in the
-  apps: no script, so the hour is the server's, in Singapore
-  ([src/site/pagesky.ts](../apps/api/src/pagesky.ts); pagesky.test.js keeps its hours
-  and colours the web app's). The Android app takes the code in six boxes,
+  That page, like the Worker's other small pages (`page()` in me.ts), is
+  laid out as the account page's sign-in is, with account.css: the
+  livery under the header, the words, and from 900px the form beside
+  them. The Android app takes the code in six boxes,
   one field underneath: a paste spreads over them, keeping only the code
   from around it (`codeEdit`, SignInCode.kt).
   The app polls `POST /api/auth/app/poll {request, poll}` every 3 s and gets
@@ -2390,7 +2389,7 @@ src/ops/monitor.ts         The cron: feed health, incidents, housekeeping, armin
 src/ops/admin.ts           /api/admin/stats; src/ops/feedback.ts "Is this wrong?" reports
 
 src/site/landing.ts        The landing page, with the version and Account written in
-src/site/pagesky.ts        The band of sky on the Worker's small pages and /docs
+src/site/pagesky.ts        The hour's sky on /docs's bar
 src/site/seo.ts            robots.txt, the sitemap and /llms.txt (a guide for AI agents); the beta asks not to be crawled
 src/site/mail.ts           Every email's HTML (react-email), beside its plain text
 src/site/downloads.ts      /download/*: app files and the Mac appcast from R2
