@@ -142,3 +142,20 @@ test('a web push service answering 5xx counts as failed and keeps the subscripti
   assert.equal(calls.pushes, 1);
   assert.equal(pushToken(0), sub, 'still subscribed');
 });
+
+for (const status of [401, 403]) {
+  test(`a web push service answering ${status} counts as failed and keeps the subscription`, async () => {
+    // A 401 or 403 refuses our VAPID signature (RFC 8292, sections 2 and
+    // 4.2): a key that isn't the one the browser subscribed with, or a token
+    // the service's clock reads as expired. The subscription itself is
+    // still good, and the web app renews it with the current key when next
+    // opened; only a 404 or 410 says it's gone (RFC 8030, section 7.3).
+    const sub = `web:${JSON.stringify(await subscription())}`;
+    const { env, calls, pushToken } = await setup([sub], { push: () => new Response('forbidden', { status }) });
+    env.VAPID_PRIVATE_KEY = await vapidKey();
+    delete env.FCM_SERVICE_ACCOUNT;
+    assert.deepEqual(await quietly(() => remindUser(env, 'u1', NOTICE, NOW)), { sent: 0, failed: 1 });
+    assert.equal(calls.pushes, 1);
+    assert.equal(pushToken(0), sub, 'still subscribed');
+  });
+}

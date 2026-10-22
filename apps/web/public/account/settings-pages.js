@@ -350,13 +350,18 @@ export function Trips() {
 const PREF_TEXT = { earlier: t('One bus earlier'), quiet: t('No reminders') };
 
 /** Classes you leave a bus earlier for or get no reminders for, and the trip history. */
-function Choices() {
+export function Choices() {
   const version = useStore(lists);
   const [r, setR] = useState(null);
-  const load = () =>
-    api('/api/me/choices')
-      .then(setR)
-      .catch(() => setR((was) => was ?? { failed: true }));
+  // Only the newest list asked for lands: one asked for before an Undo that
+  // comes back after the Undo's mustn't put the old list over the new.
+  const asked = useRef(0);
+  const load = () => {
+    const n = ++asked.current;
+    return api('/api/me/choices')
+      .then((x) => n === asked.current && setR(x))
+      .catch(() => n === asked.current && setR((was) => was ?? { failed: true }));
+  };
   useEffect(() => {
     load();
   }, [version]);

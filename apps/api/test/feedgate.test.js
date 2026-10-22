@@ -176,3 +176,41 @@ test('a gate with nothing to share yet neither quiets the stop nor trips the bre
   assert.equal(await cache.match(new Request('https://terminus.internal/breaker')), undefined);
   assert.equal(await cache.match(new Request('https://terminus.internal/failed/COM3')), undefined);
 });
+
+test('a waiter answered by /put lets go of its own timer', async () => {
+  // Each waiter arms a timer for GATE_WAIT_MS in case the call never puts.
+  // Once the answer arrives the timer has nothing left to do, and an object
+  // busy in a window would otherwise keep one alive per caller it answered.
+  const ns = makeDurableObjects(FeedGate);
+  const gate = (path, body) =>
+    ns
+      .get('k')
+      .fetch(`https://gate.internal${path}`, { method: 'POST', body: JSON.stringify(body) })
+      .then((r) => r.json());
+  const realSet = globalThis.setTimeout;
+  const realClear = globalThis.clearTimeout;
+  const pending = new Set();
+  globalThis.setTimeout = (fn, ms, ...args) => {
+    const id = realSet(fn, ms, ...args);
+    pending.add(id);
+    return id;
+  };
+  globalThis.clearTimeout = (id) => {
+    pending.delete(id);
+    realClear(id);
+  };
+  try {
+    const first = await gate('/claim', { freshMs: 15_000, askedAt: Date.now() });
+    assert.equal(first.go, true);
+    const waiting = gate('/claim', { freshMs: 15_000, askedAt: Date.now() });
+    await new Promise((r) => realSet(r, 5));
+    assert.equal(pending.size, 1, 'the waiter armed its timer');
+    assert.deepEqual(await gate('/put', { claimed: first.claimed, value: { v: 1 } }), { ok: true });
+    assert.deepEqual(await waiting, { value: { v: 1 } });
+    assert.equal(pending.size, 0, 'and let go of it once answered');
+  } finally {
+    globalThis.setTimeout = realSet;
+    globalThis.clearTimeout = realClear;
+    for (const id of pending) realClear(id);
+  }
+});
