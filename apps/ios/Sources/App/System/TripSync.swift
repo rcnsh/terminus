@@ -60,18 +60,28 @@ import WidgetKit
 
     /// The leave alerts or the Live Activity turned on or off in Settings.
     static func prefsChanged() {
-        Task {
-            await Push.checkPermission()
-            let plan = WidgetStore.plan()?.0
-            if let plan {
-                Reminders.update(plan, checked: WidgetStore.answerAt.map { $0.addingTimeInterval(ServerClock.skew) } ?? ServerClock.now)
-            } else {
-                Reminders.clear()
-            }
-            await LiveTrip.update(plan)
-            Push.sync(force: true)
-            Background.schedule()
+        Task { await applyPrefs() }
+    }
+
+    /// Turn off, on the Live Activity: the setting goes off, as Android's
+    /// Turn off on its live notification does, and the activity with it.
+    /// Done once the server knows, so it starts none by push.
+    static func liveTurnedOff() async {
+        TripPrefs.liveActivity = false
+        await applyPrefs()
+    }
+
+    private static func applyPrefs() async {
+        await Push.checkPermission()
+        let plan = WidgetStore.plan()?.0
+        if let plan {
+            Reminders.update(plan, checked: WidgetStore.answerAt.map { $0.addingTimeInterval(ServerClock.skew) } ?? ServerClock.now)
+        } else {
+            Reminders.clear()
         }
+        await LiveTrip.update(plan)
+        await Push.send(force: true)
+        Background.schedule()
     }
 
     /// Something outside the app shows the plan: a widget, the reminders or the Live Activity.

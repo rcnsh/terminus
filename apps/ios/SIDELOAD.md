@@ -7,8 +7,9 @@ Apple anything.
 **What's different from the App Store version.** A free Apple ID can't use
 push notifications, so:
 
-- The Live Activity only updates while the app is open or refreshing in
-  the background, not the moment your bus changes.
+- The Live Activity starts only when you open terminus, not by itself
+  when it's time to go, and only updates while the app is open or
+  refreshing in the background, not the moment your bus changes.
 - Leave reminders still come (the app sets them itself), but one won't
   move if your bus changes while the app is closed.
 - Reminders can't break through a Focus, as Time Sensitive ones would.

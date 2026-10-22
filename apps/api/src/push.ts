@@ -17,7 +17,10 @@
  * Activity runs, that activity's update with the card in it (apns.ts).
  * An iPhone whose leave alerts are off (sessions.push_alerts, as it said
  * when it registered) gets the silent push instead of the trip's alerts, as
- * Android words and shows its own only with them on.
+ * Android words and shows its own only with them on. An iPhone with its
+ * Live Activity setting on and none running has its Live Activity started
+ * by push (sessions.start_token) when the trip is due or missed, as
+ * Android's live notification starts from those pushes.
  */
 
 import type { Card } from './card.ts';
@@ -33,6 +36,8 @@ import {
   backgroundPush,
   livePush,
   liveActivityState,
+  liveActivityTrip,
+  liveStartPush,
   looksApns,
   newApnsRun,
   parseApnsToken,
@@ -76,6 +81,8 @@ export interface Nudge {
   tripOver?: boolean;
   /** The trip's phase changed since the last push: the Live Activity's update is priority 10 (Apple budgets those). */
   phaseChanged?: boolean;
+  /** Start the Live Activity on iPhones that can start one by push and have none running (tripdo.ts says when). */
+  startLive?: boolean;
 }
 
 function account(env: Env): ServiceAccount | null {
@@ -197,6 +204,17 @@ export async function nudgeUser(env: Env, userId: string, nudge: Nudge, nowMs: n
             return a ? { state: liveActivityState(a), event: ending ? 'end' : 'update', urgent: Boolean(nudge.phaseChanged) } : null;
           }
         : null,
+      // A Live Activity started where none runs, in the iPhone's language
+      // only: a start in the wrong one would show until the next update.
+      start:
+        answer && nudge.startLive && !ending
+          ? (l, alerts) => {
+              const a = worded.get(l);
+              return a
+                ? liveStartPush(liveActivityState(a), liveActivityTrip(a), cardWords(a.card), alerts, Math.floor(nowMs / 1000))
+                : null;
+            }
+          : null,
       urgent: nudge.urgent,
       collapse: 'card',
       ttlS: 600,
@@ -344,6 +362,12 @@ interface Delivery {
   ios?: (lang: Lang, hasLive: boolean, alerts: boolean) => ApnsPush | null;
   /** A Live Activity update for the iPhones running one, in the iPhone's language; null: none for it. */
   live?: ((lang: Lang) => LiveSend | null) | null;
+  /**
+   * A Live Activity's start, for the iPhones that registered a token to
+   * start one (their setting is on) and have none running, knowing whether
+   * their leave alerts are on; null: none for it.
+   */
+  start?: ((lang: Lang, alerts: boolean) => ApnsPush | null) | null;
   /** Only the Live Activities: no device is sent anything else. */
   onlyLive?: boolean;
   urgent: boolean;
@@ -363,8 +387,8 @@ async function deliver(env: Env, userId: string, msg: Delivery, nowMs: number, e
     ({ results } = await db
       .prepare(
         msg.onlyLive
-          ? 'SELECT token_hash, push_token, client, live_token, push_lang, push_alerts FROM sessions WHERE user_id = ? AND live_token IS NOT NULL AND token_hash != ?'
-          : 'SELECT token_hash, push_token, client, live_token, push_lang, push_alerts FROM sessions WHERE user_id = ? AND (push_token IS NOT NULL OR live_token IS NOT NULL) AND token_hash != ?',
+          ? 'SELECT token_hash, push_token, client, live_token, start_token, push_lang, push_alerts FROM sessions WHERE user_id = ? AND live_token IS NOT NULL AND token_hash != ?'
+          : 'SELECT token_hash, push_token, client, live_token, start_token, push_lang, push_alerts FROM sessions WHERE user_id = ? AND (push_token IS NOT NULL OR live_token IS NOT NULL) AND token_hash != ?',
       )
       .bind(userId, exceptTokenHash ?? '')
       .all<Row>());
@@ -373,8 +397,13 @@ async function deliver(env: Env, userId: string, msg: Delivery, nowMs: number, e
     return { sent: 0, failed: 1 };
   }
   const forget = (tokenHash: string) =>
-    db.prepare('UPDATE sessions SET push_token = NULL, live_token = NULL, push_alerts = NULL WHERE token_hash = ?').bind(tokenHash).run();
+    db
+      .prepare('UPDATE sessions SET push_token = NULL, live_token = NULL, start_token = NULL, push_alerts = NULL WHERE token_hash = ?')
+      .bind(tokenHash)
+      .run();
   const forgetLive = (tokenHash: string) => db.prepare('UPDATE sessions SET live_token = NULL WHERE token_hash = ?').bind(tokenHash).run();
+  const forgetStart = (tokenHash: string) =>
+    db.prepare('UPDATE sessions SET start_token = NULL WHERE token_hash = ?').bind(tokenHash).run();
   const count = async (res: PushResult, gone: () => Promise<unknown>) => {
     if (res === 'sent') out.sent++;
     else if (res === 'failed') out.failed++;
@@ -402,6 +431,10 @@ async function deliver(env: Env, userId: string, msg: Delivery, nowMs: number, e
         await count(res, () => forget(r.token_hash));
       }
       if (live && r.live_token) await count(await toLiveActivity(env, apns, r.live_token, live, nowMs), () => forgetLive(r.token_hash));
+      // None running: started, where the iPhone can start one by push.
+      const start =
+        !msg.onlyLive && !r.live_token && r.start_token && iphone ? (msg.start?.(langOf(r), r.push_alerts !== 0) ?? null) : null;
+      if (start && r.start_token) await count(await toStartToken(env, apns, r.start_token, start, nowMs), () => forgetStart(r.token_hash));
     } catch (err) {
       console.error('push failed', err instanceof Error ? err.message : typeof err);
       out.failed++;
@@ -415,6 +448,8 @@ interface Row {
   push_token: string | null;
   client: string | null;
   live_token: string | null;
+  /** An iPhone's token to start a Live Activity by push, kept while its Live Activity setting is on. */
+  start_token: string | null;
   push_lang: string | null;
   /** An iPhone's leave alerts: 0 off, 1 on, null not said (a build from before it was sent). */
   push_alerts: number | null;
@@ -459,14 +494,20 @@ async function toIphone(
   if (!push) return 'skip';
   // Stored only once checked (POST /me/push): one that doesn't read is gone.
   const token = parseApnsToken(pushToken);
-  if (!token || token.live) return 'gone';
+  if (!token || token.kind !== 'device') return 'gone';
   return sendApns(env, run, token, push, nowMs);
 }
 
 async function toLiveActivity(env: Env, run: ApnsRun, liveToken: string, live: LiveSend, nowMs: number): Promise<PushResult> {
   const token = parseApnsToken(liveToken);
-  if (!token?.live) return 'gone';
+  if (token?.kind !== 'live') return 'gone';
   return sendApns(env, run, token, livePush(live.state, live.event, Math.floor(nowMs / 1000), live.urgent), nowMs);
+}
+
+async function toStartToken(env: Env, run: ApnsRun, startToken: string, push: ApnsPush, nowMs: number): Promise<PushResult> {
+  const token = parseApnsToken(startToken);
+  if (token?.kind !== 'start') return 'gone';
+  return sendApns(env, run, token, push, nowMs);
 }
 
 /** One delivery's FCM access token, shared by its devices; `down` once it couldn't be had. */
@@ -588,8 +629,10 @@ export async function pushDevices(env: Env, userId: string): Promise<number> {
  * Registers (or with null, forgets) this device's push token: an FCM token,
  * a web subscription or an iPhone's `apns:` token, with the language an
  * iPhone's notifications are worded in and whether its leave alerts are on
- * (null: not said, so alerts as before). A token lives on one session only.
- * Forgetting it forgets the Live Activity's token too.
+ * (null: not said, so alerts as before). An iPhone's Live Activity setting
+ * turned off (`live` false) forgets its token to start one, so none is
+ * started by push. A token lives on one session only. Forgetting it forgets
+ * the Live Activity's tokens too.
  */
 export async function setPushToken(
   db: D1Database,
@@ -597,6 +640,7 @@ export async function setPushToken(
   pushToken: string | null,
   lang: Lang | null = null,
   alerts: boolean | null = null,
+  live: boolean | null = null,
 ): Promise<void> {
   const stmts = [];
   if (pushToken)
@@ -609,9 +653,12 @@ export async function setPushToken(
           .prepare('UPDATE sessions SET push_token = ?, push_lang = ?, push_alerts = ? WHERE token_hash = ?')
           .bind(pushToken, lang, alerts === null ? null : alerts ? 1 : 0, tokenHash)
       : db
-          .prepare('UPDATE sessions SET push_token = NULL, push_lang = NULL, push_alerts = NULL, live_token = NULL WHERE token_hash = ?')
+          .prepare(
+            'UPDATE sessions SET push_token = NULL, push_lang = NULL, push_alerts = NULL, live_token = NULL, start_token = NULL WHERE token_hash = ?',
+          )
           .bind(tokenHash),
   );
+  if (pushToken && live === false) stmts.push(db.prepare('UPDATE sessions SET start_token = NULL WHERE token_hash = ?').bind(tokenHash));
   await db.batch(stmts);
 }
 
@@ -620,6 +667,14 @@ export async function setLiveToken(db: D1Database, tokenHash: string, liveToken:
   await db.batch([
     db.prepare('UPDATE sessions SET live_token = NULL WHERE live_token = ?').bind(liveToken),
     db.prepare('UPDATE sessions SET live_token = ? WHERE token_hash = ?').bind(liveToken, tokenHash),
+  ]);
+}
+
+/** Registers this iPhone's token to start a Live Activity (`apnsstart:`), the latest replacing the last. One session only. */
+export async function setStartToken(db: D1Database, tokenHash: string, startToken: string): Promise<void> {
+  await db.batch([
+    db.prepare('UPDATE sessions SET start_token = NULL WHERE start_token = ?').bind(startToken),
+    db.prepare('UPDATE sessions SET start_token = ? WHERE token_hash = ?').bind(startToken, tokenHash),
   ]);
 }
 

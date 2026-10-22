@@ -964,7 +964,7 @@ export async function deleteAccount(db: D1Database, user: User): Promise<void> {
 function pushOf(token: string | null): { service: 'firebase' | 'web' | 'apple'; address: unknown } | null {
   if (!token) return null;
   // An iPhone's (and its Live Activity's) token, as the app sent it: apns.ts.
-  if (/^apns(la)?:/.test(token)) return { service: 'apple', address: token };
+  if (/^apns(la|start)?:/.test(token)) return { service: 'apple', address: token };
   if (!token.startsWith('web:')) return { service: 'firebase', address: token };
   try {
     return { service: 'web', address: JSON.parse(token.slice(4)) };
@@ -989,7 +989,7 @@ export async function exportAccount(db: D1Database, user: User, today: unknown =
   const profile = await loadProfileJson(db, user.id);
   const { results: sessions } = await db
     .prepare(
-      'SELECT kind, name, platform, client, push_token AS push, live_token AS live, push_lang AS pushLang, push_alerts AS pushAlerts, created, last_seen AS lastSeen, expires FROM sessions WHERE user_id = ? ORDER BY created',
+      'SELECT kind, name, platform, client, push_token AS push, live_token AS live, start_token AS liveStart, push_lang AS pushLang, push_alerts AS pushAlerts, created, last_seen AS lastSeen, expires FROM sessions WHERE user_id = ? ORDER BY created',
     )
     .bind(user.id)
     .all<{
@@ -999,6 +999,7 @@ export async function exportAccount(db: D1Database, user: User, today: unknown =
       client: string | null;
       push: string | null;
       live: string | null;
+      liveStart: string | null;
       pushLang: string | null;
       pushAlerts: number | null;
       created: number;
@@ -1047,9 +1048,10 @@ export async function exportAccount(db: D1Database, user: User, today: unknown =
       platform: r.platform,
       app: r.client,
       push: pushOf(r.push),
-      // An iPhone's: its trip Live Activity's push address, the language its
+      // An iPhone's: its trip Live Activity's push address, the one that starts it, the language its
       // notifications are worded in, and whether its leave alerts are on (null: not said).
       liveActivityPush: pushOf(r.live),
+      liveActivityStartPush: pushOf(r.liveStart),
       pushLanguage: r.pushLang,
       pushAlerts: r.pushAlerts === null ? null : r.pushAlerts !== 0,
       created: new Date(r.created).toISOString(),

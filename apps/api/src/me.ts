@@ -73,7 +73,7 @@ import {
   sgtDate,
   updateTrip,
 } from './trip.ts';
-import { nudgeUser, setLiveToken, setPushToken } from './push.ts';
+import { nudgeUser, setLiveToken, setPushToken, setStartToken } from './push.ts';
 import { formatApnsToken, looksApns, parseApnsToken } from './apns.ts';
 import { WEB_PREFIX, parseSubscription, vapidPublicKey, webPushEnabled } from './webpush.ts';
 import {
@@ -901,7 +901,7 @@ export const ME_ROUTES: MeRoute[] = [
     run: async ({ req, env, db, session }) => {
       // This device's push address: the Trip object nudges it when the card
       // changes. An app sends its Firebase token, or an iPhone its APNs
-      // token (and its trip Live Activity's); the web app its Web Push
+      // token (and its trip Live Activity's, and the one that starts it); the web app its Web Push
       // subscription (PushSubscription.toJSON()).
       const body = await readJson(req);
       if (body?.subscription !== undefined) {
@@ -917,14 +917,21 @@ export const ME_ROUTES: MeRoute[] = [
         const t = parseApnsToken(token);
         if (!t)
           return json(
-            { error: 'send token as apns:<hex device token> or apnsla:<hex Live Activity token>, with :sandbox from a development build' },
+            {
+              error:
+                'send token as apns:<hex device token>, apnsla:<hex Live Activity token> or apnsstart:<hex Live Activity start token>, with :sandbox from a development build',
+            },
             400,
           );
         // With the phone's token, whether its leave alerts are on: off, the
-        // trip's pushes to it are silent. Not said (an older build): alerts as before.
+        // trip's pushes to it are silent. Not said (an older build): alerts as
+        // before. And whether its Live Activity setting is on: off, it forgets
+        // the token that starts one, so none is started by push.
         const alerts = typeof body?.alerts === 'boolean' ? body.alerts : null;
-        if (t.live) await setLiveToken(db, session.tokenHash, formatApnsToken(t));
-        else await setPushToken(db, session.tokenHash, formatApnsToken(t), await pushLang(db, session.user.id), alerts);
+        const live = typeof body?.live === 'boolean' ? body.live : null;
+        if (t.kind === 'live') await setLiveToken(db, session.tokenHash, formatApnsToken(t));
+        else if (t.kind === 'start') await setStartToken(db, session.tokenHash, formatApnsToken(t));
+        else await setPushToken(db, session.tokenHash, formatApnsToken(t), await pushLang(db, session.user.id), alerts, live);
         return json({ ok: true });
       }
       if (!token || token.length > 4096 || token.startsWith(WEB_PREFIX))

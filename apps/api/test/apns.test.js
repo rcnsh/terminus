@@ -19,7 +19,9 @@ import {
   backgroundPush,
   formatApnsToken,
   liveActivityState,
+  liveActivityTrip,
   livePush,
+  liveStartPush,
   newApnsRun,
   parseApnsToken,
   sendApns,
@@ -33,6 +35,8 @@ const HEX = 'ab'.repeat(32);
 const HEX2 = 'cd'.repeat(32);
 const LIVE_HEX = 'ef'.repeat(80);
 const LIVE_HEX2 = '12'.repeat(80);
+const START_HEX = '34'.repeat(80);
+const START_HEX2 = '56'.repeat(80);
 const TOPIC = 'sh.rcn.terminus';
 const NOTICE = { title: 'a', body: 'b', zhTitle: 'a', zhBody: 'b' };
 const answer = (name) => JSON.parse(readFileSync(new URL(`./fixtures/answers/${name}.json`, import.meta.url), 'utf8'));
@@ -61,16 +65,16 @@ const quietly = async (fn) => {
   }
 };
 
-/** A user with these sessions ({push, live, lang}), and a fetch that plays Apple. */
+/** A user with these sessions ({push, live, start, lang, alerts}), and a fetch that plays Apple. */
 async function setup(sessions, { apple = () => new Response(null, { status: 200 }), secrets = true } = {}) {
   const db = makeD1();
   db._db.prepare("INSERT INTO users (id, email, created, last_seen) VALUES ('u1', 'a@u.nus.edu', 0, 0)").run();
   sessions.forEach((s, i) =>
     db._db
       .prepare(
-        "INSERT INTO sessions (token_hash, user_id, kind, created, last_seen, push_token, live_token, push_lang, push_alerts) VALUES (?, 'u1', 'device', 0, ?, ?, ?, ?, ?)",
+        "INSERT INTO sessions (token_hash, user_id, kind, created, last_seen, push_token, live_token, start_token, push_lang, push_alerts) VALUES (?, 'u1', 'device', 0, ?, ?, ?, ?, ?, ?)",
       )
-      .run(`h${i}`, i, s.push ?? null, s.live ?? null, s.lang ?? null, s.alerts === undefined ? null : s.alerts ? 1 : 0),
+      .run(`h${i}`, i, s.push ?? null, s.live ?? null, s.start ?? null, s.lang ?? null, s.alerts === undefined ? null : s.alerts ? 1 : 0),
   );
   const sent = [];
   globalThis.fetch = async (input, init) => {
@@ -91,15 +95,21 @@ async function setup(sessions, { apple = () => new Response(null, { status: 200 
   return { env, db, sent, row, publicKey };
 }
 
-test('an APNs token is apns: or apnsla:, hex, with :sandbox from a development build', () => {
-  assert.deepEqual(parseApnsToken(`apns:${HEX}`), { live: false, hex: HEX, sandbox: false });
-  assert.deepEqual(parseApnsToken(`apns:${HEX.toUpperCase()}:sandbox`), { live: false, hex: HEX, sandbox: true }, 'any case, kept lower');
+test('an APNs token is apns:, apnsla: or apnsstart:, hex, with :sandbox from a development build', () => {
+  assert.deepEqual(parseApnsToken(`apns:${HEX}`), { kind: 'device', hex: HEX, sandbox: false });
+  assert.deepEqual(
+    parseApnsToken(`apns:${HEX.toUpperCase()}:sandbox`),
+    { kind: 'device', hex: HEX, sandbox: true },
+    'any case, kept lower',
+  );
   assert.deepEqual(
     parseApnsToken(`apnsla:${LIVE_HEX}`),
-    { live: true, hex: LIVE_HEX, sandbox: false },
+    { kind: 'live', hex: LIVE_HEX, sandbox: false },
     "a Live Activity's token is longer",
   );
-  assert.deepEqual(parseApnsToken(` apnsla:${HEX}:sandbox `), { live: true, hex: HEX, sandbox: true });
+  assert.deepEqual(parseApnsToken(` apnsla:${HEX}:sandbox `), { kind: 'live', hex: HEX, sandbox: true });
+  assert.deepEqual(parseApnsToken(`apnsstart:${START_HEX}:sandbox`), { kind: 'start', hex: START_HEX, sandbox: true });
+  assert.equal(formatApnsToken(parseApnsToken(`APNSSTART:${START_HEX}`)), `apnsstart:${START_HEX}`);
   for (const bad of [
     'apns:',
     `apns:${HEX.slice(1)}`,
@@ -110,6 +120,8 @@ test('an APNs token is apns: or apnsla:, hex, with :sandbox from a development b
     HEX,
     `fcm:${HEX}`,
     `apns:${'ab'.repeat(256)}`,
+    `apnsstart:`,
+    `apnsend:${HEX}`,
   ]) {
     assert.equal(parseApnsToken(bad), null, bad);
   }
@@ -197,6 +209,44 @@ test('each kind of push carries what the app needs', () => {
   assert.equal(end.payload.aps['dismissal-date'], 1_000 + 600);
   assert.equal(end.payload.aps['stale-date'], undefined);
   assert.equal(end.priority, 10);
+
+  const start = liveStartPush(state, 'trip-1', { title: 'Time to get going', body: 'Leave by 09:36' }, true, 1_000);
+  assert.deepEqual(start.payload, {
+    aps: {
+      timestamp: 1_000,
+      event: 'start',
+      'content-state': state,
+      'attributes-type': 'TripAttributes',
+      attributes: { trip: 'trip-1' },
+      alert: { title: 'Time to get going', body: 'Leave by 09:36' },
+      sound: 'default',
+      'input-push-token': 1,
+      'stale-date': state.staleAt,
+    },
+  });
+  assert.equal(start.type, 'liveactivity');
+  assert.equal(start.priority, 10, 'time to go: shown at once');
+  assert.equal(
+    liveStartPush(state, 'trip-1', { title: 'a', body: 'b' }, false, 1_000).payload.aps.sound,
+    undefined,
+    'leave alerts off: no sound',
+  );
+  const startReq = apnsRequest(TOPIC, parseApnsToken(`apnsstart:${START_HEX}`), start, 'jwt');
+  assert.equal(startReq.url, `https://api.push.apple.com/3/device/${START_HEX}`);
+  assert.equal(startReq.init.headers['apns-topic'], `${TOPIC}.push-type.liveactivity`);
+});
+
+test("a Live Activity's trip is the card's, as the app names it: its first button's trip, else when the class starts", () => {
+  const a = answer('class-bus');
+  assert.equal(
+    liveActivityTrip({ ...a, card: { ...a.card, actions: [{ id: 'skipped', label: 'x', trip: '4:600:UTOWN' }] } }),
+    '4:600:UTOWN',
+  );
+  assert.equal(
+    liveActivityTrip({ ...a, card: { ...a.card, actions: [] }, timing: { ...a.timing, classAt: '2026-08-27T02:00:00.000Z' } }),
+    '2026-08-27T02:00:00.000Z',
+  );
+  assert.equal(liveActivityTrip({ ...a, card: { ...a.card, actions: [] }, timing: null }), 'trip');
 });
 
 test("the Live Activity's content-state comes from the card: before the bus, and on it", () => {
@@ -315,6 +365,61 @@ test('POST /api/me/push takes apns: and apnsla: tokens, with APNs off too, and r
   await call('/api/me/push', { method: 'DELETE', token: other });
   await call('/api/me/push', { method: 'DELETE', token: phone });
   assert.deepEqual(rows(), []);
+});
+
+test('POST /api/me/push takes an apnsstart: token while the Live Activity is on, and forgets it once it is off', async () => {
+  const db = makeD1();
+  const env = { ...makeEnv(), DB: db, EMAIL: makeEmail(), EMAIL_FROM: 'x@example.test' };
+  const call = async (token, method, body) => {
+    const headers = { authorization: `Bearer ${token}` };
+    if (body) headers['content-type'] = 'application/json';
+    const ctx = makeCtx();
+    const res = await worker.fetch(
+      new Request('https://bus.example.test/api/me/push', { method, headers, ...(body ? { body: JSON.stringify(body) } : {}) }),
+      env,
+      ctx,
+    );
+    await ctx.settle();
+    return res;
+  };
+  const anon = async () => {
+    const ctx = makeCtx();
+    const res = await worker.fetch(
+      new Request('https://bus.example.test/api/auth/anon', { method: 'POST', headers: { 'x-terminus-client': 'ios/3.6.0' } }),
+      env,
+      ctx,
+    );
+    await ctx.settle();
+    return (await res.json()).token;
+  };
+  const [phone, other] = [await anon(), await anon()];
+  const rows = () =>
+    db._db
+      .prepare('SELECT push_token, live_token, start_token FROM sessions ORDER BY created, rowid')
+      .all()
+      .map((r) => ({ ...r }));
+  const bad = await call(phone, 'POST', { token: 'apnsstart:xyz' });
+  assert.equal(bad.status, 400);
+  assert.match((await bad.json()).error, /apnsstart:/);
+  await call(phone, 'POST', { token: `apns:${HEX}`, alerts: true, live: true });
+  await call(phone, 'POST', { token: `apnsstart:${START_HEX}:sandbox` });
+  assert.deepEqual(rows()[0], { push_token: `apns:${HEX}`, live_token: null, start_token: `apnsstart:${START_HEX}:sandbox` });
+  // Left out (an older build), or on: kept.
+  await call(phone, 'POST', { token: `apns:${HEX}` });
+  await call(phone, 'POST', { token: `apns:${HEX}`, live: true });
+  assert.equal(rows()[0].start_token, `apnsstart:${START_HEX}:sandbox`);
+  // The Live Activity turned off: none may be started by push.
+  await call(phone, 'POST', { token: `apns:${HEX}`, alerts: true, live: false });
+  assert.deepEqual(rows()[0], { push_token: `apns:${HEX}`, live_token: null, start_token: null });
+  // The same token from another session moves there; DELETE forgets it with the rest.
+  await call(phone, 'POST', { token: `apnsstart:${START_HEX}` });
+  await call(other, 'POST', { token: `apnsstart:${START_HEX}` });
+  assert.deepEqual(
+    rows().map((r) => r.start_token),
+    [null, `apnsstart:${START_HEX}`],
+  );
+  await call(other, 'DELETE');
+  assert.deepEqual(rows()[1], { push_token: null, live_token: null, start_token: null });
 });
 
 test('without its secrets APNs is off: nothing is sent, said once, and the tokens are kept', async () => {
@@ -518,6 +623,71 @@ test("a Live Activity's later bus reaches each iPhone in its own language", asyn
   sent.length = 0;
   await updateLive(env, 'u1', { answer: en, lang: 'en', answerIn: async () => null }, 'end', NOW);
   assert.equal(to(LIVE_HEX).body.aps.event, 'end');
+});
+
+test('time to go starts the Live Activity on an iPhone that can and has none running, in its language', async () => {
+  const en = answer('class-bus');
+  const zh = JSON.parse(readFileSync(new URL('./fixtures/answers/zh/class-bus.json', import.meta.url), 'utf8'));
+  const due = (a) => ({ ...a, card: { ...a.card, phase: 'due', actions: [{ id: 'skipped', label: 'x', trip: '4:600:UTOWN' }] } });
+  const { env, sent } = await setup([
+    // Its setting on and none running: started.
+    { push: `apns:${HEX}`, start: `apnsstart:${START_HEX}`, lang: 'zh', alerts: false },
+    // One running: updated, not started again.
+    { push: `apns:${HEX2}`, live: `apnsla:${LIVE_HEX}`, start: `apnsstart:${START_HEX2}` },
+    // No token to start one (its setting off, or before iOS 17.2): nothing.
+    { push: `apns:${'ee'.repeat(32)}` },
+  ]);
+  const to = (hex) => sent.filter((s) => s.url.endsWith(hex));
+  const answerIn = async (l) => (l === 'zh' ? due(zh) : null);
+  const out = await nudgeUser(
+    env,
+    'u1',
+    { phase: 'due', urgent: true, remind: true, answer: due(en), lang: 'en', answerIn, startLive: true },
+    NOW,
+  );
+  assert.deepEqual(out, { sent: 5, failed: 0 });
+  const [start] = to(START_HEX);
+  assert.equal(start.headers['apns-push-type'], 'liveactivity');
+  assert.equal(start.headers['apns-topic'], `${TOPIC}.push-type.liveactivity`);
+  assert.equal(start.headers['apns-priority'], '10');
+  assert.equal(start.body.aps.event, 'start');
+  assert.equal(start.body.aps['attributes-type'], 'TripAttributes');
+  assert.deepEqual(start.body.aps.attributes, { trip: '4:600:UTOWN' }, 'the trip the app names it by');
+  assert.equal(start.body.aps['content-state'].phase, 'due');
+  assert.equal(start.body.aps['content-state'].line, zh.card.line, "in the iPhone's language");
+  assert.equal(start.body.aps.alert.body, zh.card.line);
+  assert.equal(start.body.aps.sound, undefined, 'its leave alerts are off: no sound');
+  assert.equal(to(HEX)[0].headers['apns-push-type'], 'background', 'and its leave alerts stay as they were');
+  assert.deepEqual(to(START_HEX2), [], 'one already running is not started again');
+  assert.equal(to(LIVE_HEX)[0].body.aps.event, 'update');
+
+  // Not asked to start (not due or missed, or started already for this trip): nothing started.
+  sent.length = 0;
+  await nudgeUser(env, 'u1', { phase: 'due', urgent: true, remind: true, answer: due(en), lang: 'en', answerIn }, NOW);
+  assert.deepEqual(to(START_HEX), []);
+  // No card in its language: no start, rather than one in English.
+  sent.length = 0;
+  await nudgeUser(env, 'u1', { phase: 'due', urgent: true, answer: due(en), lang: 'en', answerIn: async () => null, startLive: true }, NOW);
+  assert.deepEqual(to(START_HEX), []);
+  // The trip is over: nothing to start.
+  sent.length = 0;
+  await nudgeUser(
+    env,
+    'u1',
+    { phase: 'arrived', urgent: false, answer: { ...en, card: { ...en.card, phase: 'arrived' } }, startLive: true },
+    NOW,
+  );
+  assert.deepEqual(to(START_HEX), []);
+
+  // A start token Apple no longer knows is forgotten, and nothing else.
+  const gone = await setup([{ push: `apns:${HEX}`, start: `apnsstart:${START_HEX}` }], {
+    apple: (r) => (r.url.endsWith(START_HEX) ? Response.json({ reason: 'Unregistered' }, { status: 410 }) : new Response(null)),
+  });
+  await nudgeUser(gone.env, 'u1', { phase: 'due', urgent: true, answer: due(en), lang: 'en', startLive: true }, NOW);
+  assert.deepEqual(
+    { ...gone.db._db.prepare('SELECT push_token, start_token FROM sessions').get() },
+    { push_token: `apns:${HEX}`, start_token: null },
+  );
 });
 
 test("the semester's reminder reaches an iPhone in its language", async () => {

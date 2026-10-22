@@ -217,6 +217,64 @@ const APNS = `apns:${'ab'.repeat(32)}`;
 const LIVE = `apnsla:${'cd'.repeat(32)}`;
 const CHINESE = /[\u4e00-\u9fff]/;
 
+const START = `apnsstart:${'ef'.repeat(40)}`;
+
+test("time to go starts an iPhone's Live Activity by push, once per trip; with its setting off, never", async () => {
+  const { apple, wrap, extra } = await fakeApple();
+  const { call, phone, next, wakeUntil, TRIPS } = await setup({ push: false, wrap, extra });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: APNS, alerts: true, live: true } });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: START } });
+  const first = await next(phone);
+  await wakeUntil(() => apple.some((p) => p.body.aps?.event === 'start'));
+  const starts = () => apple.filter((p) => p.body.aps?.event === 'start');
+  const [start] = starts();
+  assert.equal(start.url, `https://api.push.apple.com/3/device/${'ef'.repeat(40)}`);
+  assert.equal(start.priority, '10');
+  assert.equal(start.body.aps['content-state'].phase, 'due');
+  const trip = first.card.actions[0]?.trip ?? first.timing?.classAt;
+  assert.ok(trip);
+  assert.deepEqual(start.body.aps.attributes, { trip }, 'the trip the app names its activity by');
+  assert.ok(
+    apple.some((p) => p.type === 'alert' && p.body.phase === 'due'),
+    'the leave alert goes as before',
+  );
+  const storage = () => [...TRIPS.instances.values()][0].storage._map;
+  assert.equal(storage().get('pushed').started, trip);
+
+  // Ended on the phone (swiped away) with no new token: the same trip due again (woken at the same moment) isn't started again.
+  storage().set('pushed', { ...storage().get('pushed'), phase: 'idle' });
+  apple.length = 0;
+  storage().set('wakeAt', Date.now());
+  await TRIPS.fireAlarms();
+  assert.ok(
+    apple.some((p) => p.type === 'alert' && p.body.phase === 'due'),
+    'pushed again',
+  );
+  assert.deepEqual(starts(), [], 'but not started again');
+
+  // Turned off on the phone: its token goes, and a new trip starts nothing either.
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: APNS, alerts: true, live: false } });
+  storage().set('pushed', { ...storage().get('pushed'), phase: 'idle', started: undefined });
+  apple.length = 0;
+  storage().set('wakeAt', Date.now());
+  await TRIPS.fireAlarms();
+  assert.ok(apple.some((p) => p.type === 'alert' && p.body.phase === 'due'));
+  assert.deepEqual(starts(), []);
+});
+
+test('a Live Activity already running counts as started: the trip due again starts no other', async () => {
+  const { apple, wrap, extra } = await fakeApple();
+  const { call, phone, next, wakeUntil, TRIPS } = await setup({ push: false, wrap, extra });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: APNS, live: true } });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: START } });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: LIVE } });
+  await next(phone);
+  await wakeUntil(() => apple.some((p) => p.body.phase === 'due'));
+  assert.ok(apple.some((p) => p.body.aps?.event === 'update'));
+  assert.ok(!apple.some((p) => p.body.aps?.event === 'start'));
+  assert.ok([...TRIPS.instances.values()][0].storage._map.get('pushed').started);
+});
+
 test('with APNs off, an iPhone alone is nobody to tell: the Trip object stops waking', async () => {
   // Push is on (Android's), so a card asks the object to watch; APNs isn't set up.
   const { call, phone, next, alarm, TRIPS, clock, fcm } = await setup({ extra: { APNS_TOPIC: 'sh.rcn.terminus' } });
