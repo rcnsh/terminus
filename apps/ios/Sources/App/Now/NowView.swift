@@ -187,8 +187,12 @@ struct NowView: View {
                     .padding(.vertical, 2)
                 }
                 .mask(FadeEnd())
+                // Chosen here, or on the map or Buses (Go there) while Now was away: in view either way.
                 .onChange(of: app.target) { _, t in
                     if case .code(let c, _) = t { withAnimation { reader.scrollTo(c, anchor: .trailing) } }
+                }
+                .onAppear {
+                    if case .code(let c, _) = app.target { reader.scrollTo(c, anchor: .trailing) }
                 }
             }
             // Worded, not a bare magnifier, so it reads as one more place to go,
