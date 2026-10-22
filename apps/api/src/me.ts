@@ -103,7 +103,7 @@ import { residenceStops } from './residences.ts';
 import { MAX_KEYS, createKey, listKeys, revokeKey } from './access.ts';
 import { buildingStops, footM, paceSpeed } from './walk.ts';
 import { clientKey, coords, coordsFrom, json } from './http.ts';
-import { linkOrigin } from './site.ts';
+import { linkOrigin } from './origin.ts';
 import { LANG_PREFS, type Lang, type LangPref, lang, m, useProfileLang, withLang } from './i18n.ts';
 import { bandCss, bandHtml, phaseAt, sgtMinute } from './pagesky.ts';
 

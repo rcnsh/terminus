@@ -15,7 +15,7 @@ import type { Env } from './types.ts';
 import { PLAY_URL, RELEASE_VERSION, latestRelease } from './downloads.ts';
 import { authenticate } from './accounts.ts';
 import { matchesEtag } from './map.ts';
-import { isBeta } from './site.ts';
+import { isBeta } from './origin.ts';
 
 /** Only a version as release.sh writes it goes into the page. */
 const VERSION = new RegExp(`^${RELEASE_VERSION}$`);

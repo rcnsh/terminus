@@ -23,7 +23,7 @@
  */
 
 import type { Env, FeedState } from './types.ts';
-import { isBeta } from './site.ts';
+import { isBeta } from './origin.ts';
 import { TTL } from './config.ts';
 
 export interface CachedOptions<T> {

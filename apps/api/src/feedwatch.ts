@@ -12,7 +12,7 @@
 
 import type { Env } from './types.ts';
 import { UpstreamRejected } from './auth.ts';
-import { isBeta } from './site.ts';
+import { isBeta } from './origin.ts';
 
 export type Feed = 'nus' | 'lta';
 

@@ -27,7 +27,7 @@ import { ACCOUNT_TTL, mail } from './accounts.ts';
 import { type Notice, pushEnabled, remindUser } from './push.ts';
 import { m, withLang } from './i18n.ts';
 import { clearTrip, sgtDate, watchTrip } from './trip.ts';
-import { isBeta, linkOrigin } from './site.ts';
+import { isBeta, linkOrigin } from './origin.ts';
 import { ensureRecorder } from './timelapse.ts';
 import { logCronError } from './analytics.ts';
 import { recordActive } from './usage.ts';
