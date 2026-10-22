@@ -15,7 +15,7 @@ import { boardAsOf, boardAt, displayName, indexGraph, serviceEndsAt, serviceResu
 import { buildCampusMap, buildDestinations, ROUTE_COLORS } from './campus.ts';
 import { busesOnLine, lineStops, trackedBuses } from './buses.ts';
 import { stopPairs } from './pairs.ts';
-import { adminStats, holdsHealthToken, isOperator } from './admin.ts';
+import { adminStats, handleDismissCrash, holdsHealthToken, isOperator } from './admin.ts';
 import { handleCollect } from './collect.ts';
 import { handleAppError } from './apperrors.ts';
 import { handlePasskey } from './passkey.ts';
@@ -481,6 +481,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
         url.pathname === '/api/status.json' ||
         url.pathname === '/api/admin/stats' ||
         url.pathname === '/api/admin/collect' ||
+        url.pathname === '/api/admin/crashes/dismiss' ||
         url.pathname === '/api/errors' ||
         url.pathname.startsWith('/api/admin/passkey/') ||
         url.pathname.startsWith('/download/') ||
@@ -581,6 +582,9 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
       case '/api/admin/collect':
         // The dashboard's switches for what's collected (collect.ts).
         return await handleCollect(req, env, nowMs);
+      case '/api/admin/crashes/dismiss':
+        // Hides a crash report from the dashboard (Analytics Engine can't delete one).
+        return await handleDismissCrash(req, env, nowMs);
       case '/api/errors':
         // Crash and error reports from the apps and the website, with no one's name on them.
         return await handleAppError(req, env);

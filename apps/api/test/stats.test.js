@@ -17,7 +17,7 @@ import { etaKey, etaSummary, passingsOf, recordEta, scoreEtas, statsOf } from '.
 import { countActive, recordActive } from '../src/usage.ts';
 import { fingerprintOf, scrub } from '../src/apperrors.ts';
 import { collecting } from '../src/collect.ts';
-import { adminStats } from '../src/admin.ts';
+import { adminStats, undismissed } from '../src/admin.ts';
 import { legacyUses, routeOf, senderOf } from '../src/legacy.ts';
 import { countSettings, readSettings, recordSettings, settingsOf } from '../src/settings.ts';
 import { API_VERSION } from '../src/openapi.ts';
@@ -148,6 +148,36 @@ test('POST /api/errors keeps a scrubbed report only while switched on, with no o
     assert.equal((await send(env, '/api/errors', { method: 'POST', body: bad })).status, 400, JSON.stringify(bad));
   }
   assert.equal(ae.rows('apperror').length, 2);
+});
+
+test('a dismissed crash is hidden until a report comes in after it was dismissed', async () => {
+  const env = { ...makeEnv(), HEALTH_TOKEN: 'op' };
+  const dismiss = (fingerprint, headers = { 'x-health-token': 'op' }) =>
+    send(env, '/api/admin/crashes/dismiss', { method: 'POST', body: { fingerprint }, headers });
+  assert.equal((await dismiss('18b32d7aae56', {})).status, 404, 'operator only');
+  assert.equal((await dismiss('not one')).status, 400);
+  const before = Date.now();
+  assert.equal((await dismiss('18b32d7aae56')).status, 204);
+  const dismissed = JSON.parse(await env.KV.get('config:crashes:dismissed'));
+  assert.ok(dismissed['18b32d7aae56'] >= before);
+
+  // Analytics Engine's max(timestamp): UTC, to the second.
+  const ae = (ms) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
+  const crashes = [
+    { fingerprint: '18b32d7aae56', last: ae(before - 60_000) },
+    { fingerprint: 'aaaaaaaaaaaa', last: ae(before - 60_000) },
+  ];
+  assert.deepEqual(
+    undismissed(crashes, dismissed).map((e) => e.fingerprint),
+    ['aaaaaaaaaaaa'],
+  );
+  const again = [{ fingerprint: '18b32d7aae56', last: ae(before + 60_000) }];
+  assert.deepEqual(undismissed(again, dismissed), again, 'reported again since: back');
+
+  // A dismissal from over a week ago goes when the next is written.
+  await env.KV.put('config:crashes:dismissed', JSON.stringify({ '000000000000': before - 9 * DAY }));
+  await dismiss('18b32d7aae56');
+  assert.deepEqual(Object.keys(JSON.parse(await env.KV.get('config:crashes:dismissed'))), ['18b32d7aae56']);
 });
 
 async function seedSessions(db, now) {

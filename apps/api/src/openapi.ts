@@ -2210,6 +2210,26 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           },
         },
       },
+      '/api/admin/crashes/dismiss': {
+        post: {
+          tags: ['Service'],
+          summary: 'Hide a crash from the operator’s dashboard',
+          description:
+            'Analytics Engine cannot delete a report, so this hides one crash, by its fingerprint, from `appErrors` in GET /api/admin/stats until a report of it comes in after now. Answers 404 without the operator token.',
+          operationId: 'adminDismissCrash',
+          security: [{ operator: [] }],
+          requestBody: jsonBody({
+            type: 'object',
+            required: ['fingerprint'],
+            properties: { fingerprint: { type: 'string', pattern: '^[0-9a-f]{1,32}$', example: '18b32d7aae56' } },
+          }),
+          responses: {
+            '204': { description: 'Hidden.' },
+            '400': errorResponse('No fingerprint, or not one.'),
+            '404': errorResponse('No operator token, or the wrong one.'),
+          },
+        },
+      },
       '/api/errors': {
         post: {
           tags: ['Service'],

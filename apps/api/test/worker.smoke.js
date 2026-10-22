@@ -307,6 +307,7 @@ test('the OpenAPI spec documents exactly the routes that exist', async () => {
       '/api/admin/passkey/register',
       '/api/admin/passkey/signin',
       '/api/admin/collect',
+      '/api/admin/crashes/dismiss',
       '/api/errors',
     ].map((p) => `POST ${p}`),
     ...['/map/style.json', '/map/campus.pmtiles', '/map/fonts/*/*.pbf', '/map/sprites/v4/*'].map((p) => `GET ${p}`),
