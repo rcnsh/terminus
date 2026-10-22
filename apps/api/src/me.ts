@@ -926,12 +926,15 @@ export const ME_ROUTES: MeRoute[] = [
         // With the phone's token, whether its leave alerts are on: off, the
         // trip's pushes to it are silent. Not said (an older build): alerts as
         // before. And whether its Live Activity setting is on: off, it forgets
-        // the token that starts one, so none is started by push.
+        // the token that starts one, so none is started by push. And whether
+        // a Live Activity of its runs: none, its token goes, so the next trip's
+        // can be started.
         const alerts = typeof body?.alerts === 'boolean' ? body.alerts : null;
         const live = typeof body?.live === 'boolean' ? body.live : null;
+        const activity = typeof body?.activity === 'boolean' ? body.activity : null;
         if (t.kind === 'live') await setLiveToken(db, session.tokenHash, formatApnsToken(t));
         else if (t.kind === 'start') await setStartToken(db, session.tokenHash, formatApnsToken(t));
-        else await setPushToken(db, session.tokenHash, formatApnsToken(t), await pushLang(db, session.user.id), alerts, live);
+        else await setPushToken(db, session.tokenHash, formatApnsToken(t), await pushLang(db, session.user.id), alerts, live, activity);
         return json({ ok: true });
       }
       if (!token || token.length > 4096 || token.startsWith(WEB_PREFIX))

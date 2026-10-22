@@ -83,6 +83,8 @@ export interface Nudge {
   phaseChanged?: boolean;
   /** Start the Live Activity on iPhones that can start one by push and have none running (tripdo.ts says when). */
   startLive?: boolean;
+  /** The sessions whose iPhone has shown this trip's Live Activity already: none is started there again. */
+  startedFor?: ReadonlySet<string>;
 }
 
 function account(env: Env): ServiceAccount | null {
@@ -162,6 +164,10 @@ async function accessToken(env: Env, a: ServiceAccount, nowMs: number): Promise<
 export interface Delivered {
   sent: number;
   failed: number;
+  /** The sessions a Live Activity's start went to. */
+  started?: string[];
+  /** Starts that didn't go and may another time (counted in `failed` too). */
+  startFailed?: number;
 }
 
 /**
@@ -206,21 +212,53 @@ export async function nudgeUser(env: Env, userId: string, nudge: Nudge, nowMs: n
         : null,
       // A Live Activity started where none runs, in the iPhone's language
       // only: a start in the wrong one would show until the next update.
-      start:
-        answer && nudge.startLive && !ending
-          ? (l, alerts) => {
-              const a = worded.get(l);
-              return a
-                ? liveStartPush(liveActivityState(a), liveActivityTrip(a), cardWords(a.card), alerts, Math.floor(nowMs / 1000))
-                : null;
-            }
-          : null,
+      start: answer && nudge.startLive && !ending ? startFrom(worded, nowMs) : null,
+      startedFor: nudge.startedFor,
       urgent: nudge.urgent,
       collapse: 'card',
       ttlS: 600,
     },
     nowMs,
     exceptTokenHash,
+  );
+}
+
+/** A Live Activity's start in the iPhone's language only: a start in the wrong one would show until the next update. */
+function startFrom(worded: Map<Lang, (MeAnswer & { card: Card }) | null>, nowMs: number): NonNullable<Delivery['start']> {
+  return (l, alerts) => {
+    const a = worded.get(l);
+    return a ? liveStartPush(liveActivityState(a), liveActivityTrip(a), cardWords(a.card), alerts, Math.floor(nowMs / 1000)) : null;
+  };
+}
+
+/**
+ * Starts the Live Activity again where a start didn't go (tripdo.ts keeps
+ * it pending): only the starts, to the iPhones that can start one by push,
+ * have none running and haven't shown this trip (`startedFor`). Nothing else
+ * is pushed.
+ */
+export async function retryLiveStart(
+  env: Env,
+  userId: string,
+  nudge: Pick<Nudge, 'lang' | 'answerIn'> & { answer: MeAnswer & { card: Card }; startedFor: ReadonlySet<string> },
+  nowMs: number,
+): Promise<Delivered> {
+  const { worded, prepare } = wordings(nudge.answer, nudge.lang, nudge.answerIn);
+  return deliver(
+    env,
+    userId,
+    {
+      web: null,
+      fcm: {},
+      prepare,
+      start: startFrom(worded, nowMs),
+      startedFor: nudge.startedFor,
+      onlyStart: true,
+      urgent: true,
+      collapse: 'card',
+      ttlS: 600,
+    },
+    nowMs,
   );
 }
 
@@ -368,8 +406,12 @@ interface Delivery {
    * their leave alerts are on; null: none for it.
    */
   start?: ((lang: Lang, alerts: boolean) => ApnsPush | null) | null;
+  /** The sessions not to start one on: their iPhone has shown this trip already. */
+  startedFor?: ReadonlySet<string>;
   /** Only the Live Activities: no device is sent anything else. */
   onlyLive?: boolean;
+  /** Only the Live Activities' starts. */
+  onlyStart?: boolean;
   urgent: boolean;
   /** A newer message with the same key replaces one not yet delivered. */
   collapse: string;
@@ -419,8 +461,8 @@ async function deliver(env: Env, userId: string, msg: Delivery, nowMs: number, e
     try {
       const token = r.push_token ?? '';
       const iphone = looksApns(token);
-      const live = r.live_token ? (msg.live?.(langOf(r)) ?? null) : null;
-      if (!msg.onlyLive && token) {
+      const live = r.live_token && !msg.onlyStart ? (msg.live?.(langOf(r)) ?? null) : null;
+      if (!msg.onlyLive && !msg.onlyStart && token) {
         const res = token.startsWith(WEB_PREFIX)
           ? await toBrowser(env, token, msg, nowMs)
           : iphone
@@ -431,10 +473,17 @@ async function deliver(env: Env, userId: string, msg: Delivery, nowMs: number, e
         await count(res, () => forget(r.token_hash));
       }
       if (live && r.live_token) await count(await toLiveActivity(env, apns, r.live_token, live, nowMs), () => forgetLive(r.token_hash));
-      // None running: started, where the iPhone can start one by push.
+      // None running: started, where the iPhone can start one by push and hasn't shown this trip.
       const start =
-        !msg.onlyLive && !r.live_token && r.start_token && iphone ? (msg.start?.(langOf(r), r.push_alerts !== 0) ?? null) : null;
-      if (start && r.start_token) await count(await toStartToken(env, apns, r.start_token, start, nowMs), () => forgetStart(r.token_hash));
+        !msg.onlyLive && !r.live_token && r.start_token && iphone && !msg.startedFor?.has(r.token_hash)
+          ? (msg.start?.(langOf(r), r.push_alerts !== 0) ?? null)
+          : null;
+      if (start && r.start_token) {
+        const res = await toStartToken(env, apns, r.start_token, start, nowMs);
+        if (res === 'sent') (out.started ??= []).push(r.token_hash);
+        else if (res === 'failed') out.startFailed = (out.startFailed ?? 0) + 1;
+        await count(res, () => forgetStart(r.token_hash));
+      }
     } catch (err) {
       console.error('push failed', err instanceof Error ? err.message : typeof err);
       out.failed++;
@@ -593,6 +642,8 @@ export interface Audience {
   devices: number;
   /** Of them, the iPhones' Live Activities running (0 with APNs off). */
   lives: number;
+  /** The sessions those run on. */
+  liveSessions: string[];
   /** The language the latest iPhone is pushed in; null with none, or APNs off. */
   iphoneLang: Lang | null;
 }
@@ -603,21 +654,34 @@ export interface Audience {
  * 30 s for a phone nothing can be sent to would wake all day for nothing.
  */
 export async function pushAudience(env: Env, userId: string): Promise<Audience> {
-  const none: Audience = { devices: 0, lives: 0, iphoneLang: null };
+  const none: Audience = { devices: 0, lives: 0, liveSessions: [], iphoneLang: null };
   if (!pushEnabled(env) || !env.DB) return none;
   const r = await env.DB.prepare(
     `SELECT COUNT(*) AS n,
        SUM(push_token IS NOT NULL AND push_token NOT LIKE 'apns:%') AS others,
        SUM(live_token IS NOT NULL) AS lives,
        (SELECT push_lang FROM sessions WHERE user_id = ? AND push_token LIKE 'apns:%' ORDER BY last_seen DESC LIMIT 1) AS lang,
-       SUM(push_token LIKE 'apns:%') AS iphones
+       SUM(push_token LIKE 'apns:%') AS iphones,
+       GROUP_CONCAT(CASE WHEN live_token IS NOT NULL THEN token_hash END) AS liveSessions
      FROM sessions WHERE user_id = ? AND (push_token IS NOT NULL OR live_token IS NOT NULL)`,
   )
     .bind(userId, userId)
-    .first<{ n: number; others: number | null; lives: number | null; lang: string | null; iphones: number | null }>();
+    .first<{
+      n: number;
+      others: number | null;
+      lives: number | null;
+      lang: string | null;
+      iphones: number | null;
+      liveSessions: string | null;
+    }>();
   if (!r) return none;
-  if (!apnsEnabled(env)) return { devices: r.others ?? 0, lives: 0, iphoneLang: null };
-  return { devices: r.n, lives: r.lives ?? 0, iphoneLang: r.iphones ? (r.lang === 'zh' ? 'zh' : 'en') : null };
+  if (!apnsEnabled(env)) return { ...none, devices: r.others ?? 0 };
+  return {
+    devices: r.n,
+    lives: r.lives ?? 0,
+    liveSessions: r.liveSessions ? r.liveSessions.split(',') : [],
+    iphoneLang: r.iphones ? (r.lang === 'zh' ? 'zh' : 'en') : null,
+  };
 }
 
 /** How many of a user's devices take push (pushAudience). */
@@ -631,8 +695,10 @@ export async function pushDevices(env: Env, userId: string): Promise<number> {
  * iPhone's notifications are worded in and whether its leave alerts are on
  * (null: not said, so alerts as before). An iPhone's Live Activity setting
  * turned off (`live` false) forgets its token to start one, so none is
- * started by push. A token lives on one session only. Forgetting it forgets
- * the Live Activity's tokens too.
+ * started by push. One saying no Live Activity of its runs (`activity`
+ * false: it ended, on the phone) forgets that activity's token, so it no
+ * longer counts as running. A token lives on one session only. Forgetting it
+ * forgets the Live Activity's tokens too.
  */
 export async function setPushToken(
   db: D1Database,
@@ -641,6 +707,7 @@ export async function setPushToken(
   lang: Lang | null = null,
   alerts: boolean | null = null,
   live: boolean | null = null,
+  activity: boolean | null = null,
 ): Promise<void> {
   const stmts = [];
   if (pushToken)
@@ -659,6 +726,7 @@ export async function setPushToken(
           .bind(tokenHash),
   );
   if (pushToken && live === false) stmts.push(db.prepare('UPDATE sessions SET start_token = NULL WHERE token_hash = ?').bind(tokenHash));
+  if (pushToken && activity === false) stmts.push(db.prepare('UPDATE sessions SET live_token = NULL WHERE token_hash = ?').bind(tokenHash));
   await db.batch(stmts);
 }
 

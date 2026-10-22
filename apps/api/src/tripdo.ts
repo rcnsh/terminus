@@ -23,7 +23,7 @@ import type { Env } from './types.ts';
 import { type Plan, type DayRecord, type TripUpdate, endOfDayMs, sgtDate } from './trip.ts';
 import type { MeDeps } from './me.ts';
 import { tripCardFor } from './me.ts';
-import { nudgeUser, pushAudience, updateLive } from './push.ts';
+import { type Delivered, nudgeUser, pushAudience, retryLiveStart, updateLive } from './push.ts';
 import { type LiveActivityState, apnsEnabled, liveActivityState } from './apns.ts';
 import { type Lang, withLang } from './i18n.ts';
 import { logTripWake } from './analytics.ts';
@@ -48,11 +48,24 @@ interface Pushed {
   /** What iPhones' Live Activities were last sent (apns.ts), as JSON. */
   live?: string;
   /**
-   * The trip an iPhone's Live Activity was last started by push for, or
-   * seen running for. Started once per trip only: again, it would bring back
-   * one the user ended.
+   * The trip iPhones' Live Activities were last started by push for, or seen
+   * running for, and the sessions they were on. Started once per trip and
+   * phone only: again, it would bring back one the user ended. `retry`: a
+   * start didn't go (Apple out of reach), so later wakes try it again while
+   * the trip is due or missed.
    */
-  started?: string;
+  started?: Started;
+}
+
+interface Started {
+  key: string;
+  sessions: string[];
+  retry?: boolean;
+}
+
+/** `started` with what a delivery's starts did: the sessions they reached, and whether any is left to try again. */
+function withStarts(s: Started, out: Delivered): Started {
+  return { key: s.key, sessions: [...new Set([...s.sessions, ...(out.started ?? [])])], ...(out.startFailed ? { retry: true } : {}) };
 }
 
 /** This object's last wake today, for the freshness log (analytics.ts logTripWake). */
@@ -292,7 +305,15 @@ export class Trip {
     }
 
     const live = liveActivityState(card.answer);
-    const started = audience.lives > 0 && card.key ? card.key : last?.started;
+    // The phones that have shown this trip: started for it, or running one now.
+    const shown = typeof last?.started === 'object' && last.started.key === card.key ? last.started : null;
+    const started: Started | undefined = card.key
+      ? {
+          key: card.key,
+          sessions: [...new Set([...(shown?.sessions ?? []), ...audience.liveSessions])],
+          ...(shown?.retry ? { retry: true } : {}),
+        }
+      : last?.started;
     const now: Pushed = {
       key: card.key,
       phase: card.phase,
@@ -312,6 +333,21 @@ export class Trip {
       );
     // A push due that reached no device: tried again at the next wake.
     let unsent = false;
+    // A Live Activity's start that didn't go, tried again on its own while
+    // the trip is due or missed: the leave alert that went with it did go.
+    if (!changed && last && now.started?.retry && (now.phase === 'due' || now.phase === 'missed') && apnsEnabled(env)) {
+      const out = await retryLiveStart(
+        env,
+        userId,
+        { answer: card.answer, lang, answerIn, startedFor: new Set(now.started.sessions) },
+        nowMs,
+      );
+      now.started = withStarts(now.started, out);
+      const kept = { ...last, started: now.started };
+      await this.state.blockConcurrencyWhile(async () => {
+        if (!(await this.cleared())) await this.storage.put('pushed', kept);
+      });
+    }
     if (changed) {
       // Wake the phone for what the user should see: time to go, a missed bus.
       // With reminders off too: these are what start the live notification on
@@ -319,7 +355,7 @@ export class Trip {
       // high-priority message.
       const urgent = now.phase === 'due' || now.phase === 'missed';
       // The same moments start an iPhone's Live Activity where none runs (push.ts).
-      const startLive = urgent && apnsEnabled(env) && card.key !== null && now.started !== card.key;
+      const startLive = urgent && apnsEnabled(env) && card.key !== null;
       const out = await nudgeUser(
         env,
         userId,
@@ -333,10 +369,11 @@ export class Trip {
           tripOver: card.key === null,
           phaseChanged: last?.phase !== now.phase,
           startLive,
+          startedFor: new Set(now.started?.sessions),
         },
         nowMs,
       );
-      if (startLive && card.key) now.started = card.key;
+      if (startLive && now.started) now.started = withStarts(now.started, out);
       // Pushed once a device has it, or when none could be sent to (a quiet
       // card for a browser): not when every send failed, so a later wake tries again.
       // Saved at once, held like a POST and not after a /clear: an alarm the
