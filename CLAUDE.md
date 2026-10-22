@@ -388,8 +388,9 @@ apps/ios/
   Tests/, UITests/    Unit tests on the API's fixtures; XCUITests against the dev stub
   scripts/            strings.py (fills and checks the Chinese), fetch-maplibre.sh, run.sh,
                       sideload.sh (a free Apple ID's build, on a plugged-in iPhone or as an .ipa; SIDELOAD.md)
-  store/              App Store listing (listing.md, English and Chinese), the screenshots, and
-                      capture.sh + frame.mjs, which take and frame them (StoreShotsUITests)
+  store/              App Store listing (listing.md, English and Chinese), the screenshots and
+                      header, capture.sh + frame.mjs, which take and draw them (StoreShotsUITests),
+                      and ExportOptions.plist for the upload
 scripts/              release.sh, release-beta.sh (+ release-lib.sh, their shared checks;
                       verify-sparkle.swift, release-check.py), github-release.sh, package-mac.sh,
                       appcast.py, release-notes.py, map-tiles.sh (+ map-tiles.lock),
@@ -628,7 +629,7 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
     the version on the API docs) together. A test fails if the versions
     differ, or if `versionCode`, `CFBundleVersion` and
     `CURRENT_PROJECT_VERSION` do. The release scripts don't build the
-    iPhone app yet.
+    iPhone app; it goes to the App Store by hand (below).
   - Push `main`, wait for CI to pass, deploy the Worker (`pnpm run deploy`),
     then run `scripts/release.sh --dry-run` and `scripts/release.sh` on the
     owner's Mac. It refuses a commit that isn't `origin/main` or whose CI
@@ -655,10 +656,41 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
     against the checksum in Sparkle's `Package.swift` first). The appcast
     itself is signed too, and nothing may edit it afterwards.
   - Agents don't create GitHub releases or tags by hand; the scripts do.
+  - **The iPhone app** goes to App Store Connect (app 6825759345, team
+    `BUKSCHP3SV`) from the owner's Mac, by hand, after the stable release,
+    from the same clean worktree. The listing is in `apps/ios/store/`.
+    - Xcode must be signed in to the team's Apple Account, and the team
+      needs a registered device (the Mac counts): automatic signing makes a
+      development profile before it archives, and fails with "no devices"
+      without one.
+    - In `apps/ios`: `scripts/fetch-maplibre.sh && xcodegen generate`, then
+      `xcodebuild -project terminus.xcodeproj -scheme Terminus
+      -configuration Release -destination generic/platform=iOS
+      -archivePath build/appstore/terminus.xcarchive
+      -derivedDataPath build/dd-release DEVELOPMENT_TEAM=BUKSCHP3SV
+      -allowProvisioningUpdates archive`.
+    - Check the archive's entitlements (`codesign -d --entitlements -` on
+      `Terminus.app` and each `PlugIns/*.appex`): the app group in all
+      three, and push, Time Sensitive and `applinks:terminus.run` in the
+      app. Never archive with `CODE_SIGNING_ALLOWED=NO`: the export then
+      signs the app without any of them, and widgets and push break.
+    - Upload: `xcodebuild -exportArchive -archivePath
+      build/appstore/terminus.xcarchive -exportPath build/appstore/upload
+      -exportOptionsPlist store/ExportOptions.plist
+      -allowProvisioningUpdates`. A warning that MapLibre has no dSYM is
+      expected.
+    - When Apple has processed it (an email, minutes to an hour), pick the
+      build on the version's page in App Store Connect and add it for
+      review. Release is manual: the owner presses Release after approval.
+      Push needs the stable Worker's `APNS_*` secrets (set; the key is
+      `~/.terminus/AuthKey_9NH85A3927.p8`).
 - **Signing keys.** The Android keystore (`~/.gradle/gradle.properties`
   `TERMINUS_*`), the Mac certificate (in the login keychain, from
-  `~/.terminus/mac-signing.p12`) and the Sparkle key
-  (`~/.terminus/sparkle-ed25519.key`) live off-repo, only on the owner's Mac.
+  `~/.terminus/mac-signing.p12`), the Sparkle key
+  (`~/.terminus/sparkle-ed25519.key`) and the APNs key
+  (`~/.terminus/AuthKey_*.p8`) live off-repo, only on the owner's Mac.
+  The iPhone's distribution certificate is Apple's cloud-managed one, used
+  through Xcode's sign-in.
 
 ## Code style
 
