@@ -723,8 +723,8 @@ struct BusCard: View {
             : stop(code: bus.nextStopCode ?? bus.upcomingCodes.first ?? nil, name: bus.nextStop, for: bus, svc: svc, in: campus)
     }
 
-    /// A stop on a bus's line: by its code; from an older API, by name: the
-    /// one on its own line nearest the bus (one name can be either side of a road).
+    /// A stop on a bus's line: by its code, else by name, worked out here for an older server:
+    /// the one on its own line nearest the bus (one name can be either side of a road).
     static func stop(code: String?, name: String?, for bus: LiveBus, svc: String, in campus: CampusMap) -> MapStop? {
         if let code, let s = campus.stop(code) { return s }
         guard let name else { return nil }
@@ -839,8 +839,8 @@ struct BusCard: View {
         }
     }
 
-    /// The stops ahead, the next first: the server's list, or (an older API)
-    /// just its next stop.
+    /// The stops ahead, the next first: the server's list, else just its next stop,
+    /// worked out here for an older server.
     private var stops: [String] {
         if !bus.upcoming.isEmpty { return bus.upcoming }
         return bus.nextStop.map { [$0] } ?? []
@@ -1096,8 +1096,8 @@ struct StopCard: View {
         }
     }
 
-    /// The server's "4 min" ("now", "~6 min"); for an older server's row,
-    /// worded as the popover's Nearby words it, so the two never differ.
+    /// The server's "4 min" ("now", "~6 min"), worked out here for an older server
+    /// as the popover's Nearby does it, so the two never differ.
     private func eta(_ r: BoardRow) -> String { FlowPills.eta(r) }
 }
 

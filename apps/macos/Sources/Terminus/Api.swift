@@ -292,7 +292,7 @@ struct NextAnswer: Decodable {
 
     var departure: Date? { departsAt.flatMap(parseISODate) }
     var planChanges: Date? { refreshAt.flatMap(parseISODate) }
-    /// The service, for an older server's answer without a card (the menu bar's fallback).
+    /// The service, for the menu bar without a card; worked out here for an older server.
     var service: String { label.components(separatedBy: " · ").first ?? label }
     var leaveAt: Date? { leave.flatMap { parseISODate($0.at) } }
     /// What the header counts down to: the leave-by, or at the stop (phase
@@ -492,7 +492,7 @@ struct BoardRow: Decodable, Hashable {
     var paid: Bool? = nil
     /// The buses after this one (/api/me/nearby), soonest first.
     var later: [Later]? = nil
-    /// "4 min", "now", "~6 min", worded on the server; nil from an older one (or with no time).
+    /// "4 min", "now", "~6 min", worded on the server; nil with no time, or from an older server.
     var eta: String? = nil
 
     struct Later: Decodable, Hashable {
@@ -777,7 +777,7 @@ struct DayPlan: Decodable {
         }
 
         /// "Leave by 09:38 · D2 from PGP", "On the D2 · off at UTown · arrive 09:52", or nil:
-        /// the server's `line`, worded here only for an older server's plan.
+        /// the server's `line`; worked out here for an older server.
         var sub: String? {
             if let line { return line }
             if serverTitle != nil || status == "done" { return nil }

@@ -24,7 +24,7 @@ final class SetupModel {
     private(set) var busy = false
     /// Imported classes whose room couldn't be placed, until each gets a stop or is skipped.
     private(set) var unplaced: [Unplaced] = []
-    /// Who's signed in (/me): the email, and whether the timetable needs importing again.
+    /// Who's signed in (/api/me): the email, and whether the timetable needs importing again.
     private(set) var me: Me?
     /// Classes with a bus earlier or no reminders, and the trips remembered (/api/me/choices).
     private(set) var choices: Choices?
@@ -135,7 +135,7 @@ final class SetupModel {
     var residence: Campus.Residence? { campus?.residences.first { $0.stops == homeStops } }
 
     /// The account's limits, as the server sends them with the profile
-    /// (`limits`); today's values until it does (an older server).
+    /// (`limits`); today's values, worked out here for an older server.
     struct Limits: Sendable {
         var homeStops = 3
         var places = 12
@@ -188,7 +188,7 @@ final class SetupModel {
     }
 
     /// The residence's walk to its stop at a normal pace, as the server works
-    /// it out (`walkMin`); an older server's in metres, at 1.3 m/s as it would have.
+    /// it out (`walkMin`); from `walkM` at 1.3 m/s, worked out here for an older server.
     nonisolated static func homeWalk(_ r: Campus.Residence, within range: ClosedRange<Int>) -> Int {
         let walk = r.walkMin ?? max(1, Int(((r.walkM ?? 0) / 1.3 / 60).rounded()))
         return min(range.upperBound, max(range.lowerBound, walk))
@@ -447,7 +447,7 @@ final class SetupModel {
         }
     }
 
-    /// A favourite at its usual time each week (from before favourites lost them), with its place.
+    /// A favourite at its usual time each week (the profile's `usual`), with its place.
     var usual: [(place: String, day: Int, atMin: Int, label: String, to: String)] {
         (profile?["usual"] as? [[String: Any]] ?? []).compactMap { u in
             guard let key = u["place"] as? String, let day = u["day"] as? Int, let at = u["atMin"] as? Int,

@@ -71,8 +71,8 @@ final class AppModel {
     private var otherAnswers: [Target: NextAnswer] = [:]
     var target: Target = .plan
     /// The last answer per view. Switching views shows the cached one at once
-    /// and refreshes it in place, instead of blanking the popover (which made
-    /// it collapse and then grow back when the data arrived).
+    /// and refreshes it in place, instead of blanking the popover, which would
+    /// collapse it and grow it back when the data arrives.
     var answers: [Target: NextAnswer] {
         get {
             var a = otherAnswers
@@ -264,10 +264,10 @@ final class AppModel {
 
     /// The menu bar text at `now` (on the server's clock): the card's glance,
     /// worded on the server as the phone's widget shows it, or nil for the
-    /// plain icon. An answer from an older server, without a card, counts
-    /// down from its departure time here. Offline with the plan gone stale
-    /// and no day plan to fall back on, the plain icon: the old glance would
-    /// pass for current.
+    /// plain icon. Without a card, a countdown to its departure, worked out
+    /// here for an older server. Offline with the plan gone stale and no day
+    /// plan to fall back on, the plain icon: the old glance would pass for
+    /// current.
     func menuTitle(at now: Date) -> String? {
         if let p = offlinePick(at: now) { return OfflineDay.menuTitle(p) }
         guard let plan, error == nil || !isOld(plan, at: now) else { return nil }
