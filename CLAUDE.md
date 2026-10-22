@@ -388,6 +388,8 @@ apps/ios/
   Tests/, UITests/    Unit tests on the API's fixtures; XCUITests against the dev stub
   scripts/            strings.py (fills and checks the Chinese), fetch-maplibre.sh, run.sh,
                       sideload.sh (a free Apple ID's build, on a plugged-in iPhone or as an .ipa; SIDELOAD.md)
+  store/              App Store listing (listing.md, English and Chinese), the screenshots, and
+                      capture.sh + frame.mjs, which take and frame them (StoreShotsUITests)
 scripts/              release.sh, release-beta.sh (+ release-lib.sh, their shared checks;
                       verify-sparkle.swift, release-check.py), github-release.sh, package-mac.sh,
                       appcast.py, release-notes.py, map-tiles.sh (+ map-tiles.lock),

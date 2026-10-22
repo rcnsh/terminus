@@ -148,7 +148,9 @@ terminus 是独立开发的应用，并非由新加坡国立大学（NUS）制�
 - Content rights: contains or accesses third-party content (NUS's shuttle feed, LTA DataMall, NUSMods, OpenStreetMap through Protomaps).
 - Age rating: every answer None or No, which gives 4+.
 - Price: free, in every country. Not offered on Apple silicon Macs or Apple Vision Pro: the Mac has its own app.
+- Version: the App Store version is the app's own, `MARKETING_VERSION` in `project.yml` (as on Android and the Mac); a build is only offered for the version it matches.
 - Release: manual, after approval.
+- EU Digital Services Act: the account is declared not a trader (Business › Agreements › Compliance), so no address, phone or email is shown; EU users see that consumer law doesn't apply. A trader would have to publish all three.
 - Encryption: `ITSAppUsesNonExemptEncryption` is false in `project.yml`, so builds ask nothing.
 
 ## App Review
