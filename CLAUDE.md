@@ -385,6 +385,9 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
   a trip from or to a class considers each, with the room's own walk to it.
   Where the map's nearest stop is the wrong one, fix it in
   `data/src/venue-stops.json` and run `scripts/walk_routes.py`.
+  Standing in a building, the walk to a stop is the path from it (`out` in
+  `venues.json`, `buildingStops()`), and only by its listed stops when it
+  has them, not the straight line.
 - **Quality ladder.** Each answer says how sure it is: `live`, `scheduled` (a
   headway guess inside operating hours, labelled as such), and so on. Never
   label a guess as live.

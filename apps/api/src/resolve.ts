@@ -33,7 +33,7 @@ import type { TransferRoute } from './transfer.ts';
 import { ROUTE_COLORS } from './campus.ts';
 import { haversineM } from './geo.ts';
 import { isPublic, publicRideS, rideMetres, svcName } from './public.ts';
-import { footM, stopFootM } from './walk.ts';
+import { buildingStops, footM, stopFootM } from './walk.ts';
 import { footS, mins } from './format.ts';
 import { listOf, m } from './i18n.ts';
 import { viaFrom } from './via.ts';
@@ -269,19 +269,22 @@ export function candidateStops(graph: Graph, input: ResolveInput, opts: { any?: 
       .sort((a, b) => a.distM - b.distM)
       .map((c) => ({ ...c, footM: footM(input.lat!, input.lon!, c.stop) }));
     const inRange = all.filter((c) => c.distM <= WALK.maxRadiusM);
+    // In a building, its shuttle stops by the paths from it: the straight
+    // line can cross a hill or a road nobody crosses (buildingStops).
+    const inside = buildingStops(input.lat, input.lon, idx.byCode);
     // The nearest few shuttle stops that go there, and the nearest stop only
     // public buses call at as one more: turning public buses on adds
     // options and never crowds a shuttle stop out of the answer. A closer
     // stop no bus to the destination calls at would only take a fetch and
     // push out one that does.
-    const shuttle = inRange.filter((c) => !c.stop.public);
+    const shuttle = (inside ?? inRange).filter((c) => !c.stop.public);
     const near = shuttle.filter((c) => reaches(c.stop)).slice(0, WALK.maxCandidates);
     const publicOnly = inRange.find((c) => c.stop.public && reaches(c.stop));
     if (publicOnly) near.push(publicOnly);
     // A user's usual stops (near home) join the set when in range, so a dense
     // cluster of closer stops cannot push out the one they actually use.
     for (const code of input.preferStops ?? []) {
-      const c = all.find((x) => x.stop.code === code);
+      const c = (inside ?? all).find((x) => x.stop.code === code);
       if (c && c.distM <= WALK.maxRadiusM && !near.includes(c)) near.push(c);
     }
     // Never answer "no stop nearby" -- degrade to the nearest one, however far.
@@ -1142,9 +1145,9 @@ export function walkAllTheWayS(
   const speed = input.walkSpeedMs ?? WALK.speedMs;
   if (input.lat != null && input.lon != null) {
     const { lat, lon } = input;
-    // In a residence, walk out by its own stops: the straight line can cross
-    // a hill the path goes round.
-    const home = residenceStops(lat, lon, idx.byCode, homeWalk(input));
+    // In a residence or a building, walk out by its own stops: the straight
+    // line can cross a hill the path goes round.
+    const home = residenceStops(lat, lon, idx.byCode, homeWalk(input)) ?? buildingStops(lat, lon, idx.byCode);
     if (home) {
       const via = Math.min(...home.map((h) => (h.stop.code === dest.code ? h.footM : h.footM + stopFootM(h.stop, dest))));
       return Math.round(Math.max(via, footM(lat, lon, dest)) / speed);
