@@ -19,7 +19,7 @@ const quality = {
   enum: ['live', 'scheduled', 'unknown', 'stale', 'ended'],
   description:
     'How reliable the answer is, best to worst. `live`: an ETA from the feed for a tracked bus. ' +
-    '`scheduled`: the feed responded but listed no bus, so the time is an estimate from the usual gap between buses. ' +
+    '`scheduled`: the feed responded but listed no bus, so the time is an estimate from the usual gap between buses; for a public bus, a time from LTA’s timetable rather than a bus on the road. ' +
     '`unknown`: the feed could not be reached, so no time is given. ' +
     '`stale`: the last cached live answer, returned because the feed is down; `asOf` is when it was originally fetched. ' +
     '`ended`: the service is outside its operating hours.',
@@ -770,7 +770,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           summary: 'Email a sign-in code and link',
           description:
             'Emails a 6-character sign-in code and a sign-in link to the address. The reply is the same whether or not the address is blocked or has an account. ' +
-            'One email per address per minute. Either the code (`/api/auth/code`) or the link signs in, once, within 15 minutes.',
+            'One email per address per minute, an app sign-in’s included. Either the code (`/api/auth/code`) or the link signs in, once, within 15 minutes.',
           operationId: 'login',
           security: [],
           requestBody: jsonBody(
@@ -855,7 +855,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           description:
             'Emails a code to type into the app, and a link to approve it from another device by typing the number the app shows (returned here). ' +
             'Send the anonymous token (if the app has one) as `Authorization: Bearer` to keep its setup. Then poll `/api/auth/app/poll`. ' +
-            'One email per address per minute; a request lasts 15 minutes. After “This wasn’t me” on the approval page, the address takes no app sign-ins for 6 hours (403).',
+            'One email per address per minute, a website sign-in’s included; a request lasts 15 minutes. After “This wasn’t me” on the approval page, the address takes no app sign-ins for 6 hours (403).',
           operationId: 'appStart',
           // The anonymous token is optional.
           security: [{}, { bearer: [] }],
@@ -1022,9 +1022,17 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             {
               type: 'object',
               required: ['code'],
-              properties: { code: { type: 'string' }, name: { type: 'string', maxLength: 40, description: 'Shown in the device list.' } },
+              properties: {
+                code: { type: 'string' },
+                name: { type: 'string', maxLength: 40, description: 'Shown in the device list.' },
+                platform: {
+                  type: 'string',
+                  enum: ['android', 'mac', 'ios'],
+                  description: 'The app’s platform, used when the request has no `x-terminus-client` header.',
+                },
+              },
             },
-            { code: 'K7QX4M', name: 'Pixel 8' },
+            { code: 'K7QX4M', name: 'Pixel 8', platform: 'android' },
           ),
           responses: {
             '200': ok({ type: 'object', required: ['token'], properties: { token: { type: 'string' } } }),
@@ -1626,7 +1634,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           ),
           responses: {
             '200': ok({ $ref: '#/components/schemas/MeAnswer' }),
-            '400': errorResponse('Unknown place, a time already past, or too many.'),
+            '400': errorResponse('Unknown place, a time already past, a date that is not today or in the next week, or too many.'),
             '409': errorResponse('Other devices kept saving the profile meanwhile; try again.'),
           },
         },
@@ -2055,6 +2063,12 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           responses: {
             '200': ok({ type: 'object', properties: { ok: { type: 'boolean' } } }),
             '403': errorResponse('The form was posted from another site.'),
+            '429': {
+              ...errorResponse('A token that is no session, sent too often from this IP. Wait for `Retry-After`.', {
+                error: 'too many attempts, try again in a minute',
+              }),
+              headers: RETRY_AFTER,
+            },
           },
         },
       },
@@ -3331,11 +3345,16 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             arriveByMin: { type: 'integer', minimum: 0, maximum: 1439, description: 'Class start, minutes past midnight SGT.' },
             endMin: { type: 'integer', maximum: 1440, description: 'Class end, minutes past midnight SGT. After `arriveByMin`.' },
             to: { type: 'string', description: 'Destination: a stop code, or a place code (a `landmark` in `/api/campus`).' },
-            label: { type: 'string', minLength: 1, maxLength: 60 },
+            label: {
+              type: 'string',
+              minLength: 1,
+              maxLength: 60,
+              description: 'Saved on one line: line breaks and control characters become spaces.',
+            },
             venue: { type: 'string', maxLength: 40, description: 'The NUSMods room, such as `COM1-0212`. Longer is cut to 40 characters.' },
             weeks: {
               description:
-                'From NUSMods: the teaching weeks the class runs in, or the dates it runs between (every `weekInterval` weeks, or only the `weeks` of the range counted from `start`). ' +
+                'From NUSMods: the teaching weeks the class runs in, or the dates it runs between (real dates, `start` not after `end`; every `weekInterval` weeks, or only the `weeks` of the range counted from `start`). ' +
                 'Absent: every teaching week of the semester in `term`. A class in `manual`, entered by hand, runs every week whatever this says.',
               oneOf: [
                 { type: 'array', maxItems: 20, items: { type: 'integer', minimum: 1, maximum: 20 } },
@@ -3468,7 +3487,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                 required: ['key', 'label', 'to'],
                 properties: {
                   key: { type: 'string', pattern: '^[a-z0-9-]{1,24}$' },
-                  label: { type: 'string', maxLength: 24 },
+                  label: { type: 'string', maxLength: 24, description: 'Saved on one line, as a class’s `label`.' },
                   to: { type: 'string' },
                 },
               },
