@@ -1125,16 +1125,32 @@ class Api(private val token: String?, private val fast: Boolean = false, private
                     val tries = Servers.tries()
                     for ((i, base) in tries.withIndex()) {
                         val conn = URL(base + path).openConnection() as HttpURLConnection
+                        val started = System.nanoTime()
+                        var status: Int? = null
+                        var failure: Throwable? = null
                         try {
                             // Any reply counts as the server answering (an error status,
                             // a 304 or a body this version can't read too), as on the Mac.
                             return@withTimeout blocking(conn) {
-                                exchange(conn, method, path, body, ifNoneMatch, ifMatch, seen) { Servers.answered(base) }
+                                exchange(conn, method, path, body, ifNoneMatch, ifMatch, seen) {
+                                    status = it
+                                    Servers.answered(base)
+                                }
                             }
                         } catch (e: IOException) {
+                            failure = e
                             if (i == tries.lastIndex || !Servers.unreached(e, method)) throw e
                         } finally {
                             conn.disconnect()
+                            // For the developer menu: an error status is an answer, not a failure.
+                            RequestLog.record(
+                                method,
+                                path,
+                                base,
+                                status,
+                                (System.nanoTime() - started) / 1_000_000,
+                                failure.takeIf { status == null },
+                            )
                         }
                     }
                     error("no server to try")
@@ -1152,7 +1168,7 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         ifNoneMatch: String?,
         ifMatch: String?,
         seen: ((HttpURLConnection) -> Unit)?,
-        reached: () -> Unit,
+        reached: (Int) -> Unit,
     ): JSONObject {
         conn.requestMethod = method
         // Fast: 2 s to connect plus 7 s to read stays under the broadcast's
@@ -1179,7 +1195,7 @@ class Api(private val token: String?, private val fast: Boolean = false, private
             conn.outputStream.use { it.write(body.toString().toByteArray()) }
         }
         val status = conn.responseCode
-        reached()
+        reached(status)
         // How far the phone's clock is out, from a reply fresh from the server.
         val cached =
             (conn.getHeaderField("age")?.trim()?.toLongOrNull() ?: 0) > 0 ||

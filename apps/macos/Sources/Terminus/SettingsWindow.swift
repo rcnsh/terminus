@@ -224,7 +224,7 @@ struct SettingsPaneView: View {
             case .account:
                 account
             case .about:
-                AboutPane()
+                AboutPane(app: app)
             case .feedback:
                 FeedbackPane(app: app, setup: setup)
             }

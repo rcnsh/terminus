@@ -293,7 +293,14 @@
             views.append(
                 ("devices", AnyView(DevicesView(setup: SetupModel(profile: profile, campus: campus, devices: devices, pairCode: "K7QX4M"))))
             )
-            // Settings' panes, as the window shows them beside its sidebar.
+            // Settings' panes, as the window shows them beside its sidebar;
+            // About with a few requests in its developer menu.
+            RequestLog.clear()
+            for (i, (path, status)) in [("/api/campus", 200), ("/api/me", 200), ("/api/me/next", nil), ("/api/me/next", 304)].enumerated() {
+                RequestLog.record(
+                    "GET", path, base: Api.base, status: status, tookMs: 80 + 40 * i, failure: status == nil ? URLError(.timedOut) : nil,
+                    at: Date().addingTimeInterval(Double(i - 4) * 20))
+            }
             app.places = [Place(key: "mrt", label: "KR MRT"), Place(key: "deck", label: "The Deck")]
             for pane in SettingsPane.allCases {
                 let setup = SetupModel(profile: profile, campus: campus, devices: devices)

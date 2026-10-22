@@ -1831,12 +1831,23 @@ to it, so it stays on the Worker; if the
 project changes hands, a small proxy on rcn.sh passing every request to
 terminus.run keeps them working until they're gone.
 
-Settings, About has a Developer group that picks the server from those built
-in (`Servers.kt`, `Servers` in `Api.swift`): the site's address and,
-in a debug build, the dev stub (Android: `localhost:8787` through `adb
-reverse`, or `10.0.2.2:8787` from the emulator; Mac: `localhost:8787`). It's
-always there in debug and beta builds, and in a stable release after seven
-taps on the version. Nothing can add a server: a saved choice that isn't
+Settings, About has a developer menu, always there in debug and beta
+builds, and in a stable release after seven taps on the version. It shows
+diagnostics for a bug report (`Diagnostics.kt` with `ui/DeveloperSettings.kt`,
+`Diagnostics.swift`): the server and how far the device's clock is from it,
+what the alerts and push depend on (notification and, on Android,
+exact-alarm permission, battery optimisation, the last push), the last
+answer and the next background refresh, and the last 50 requests to our
+server (`RequestLog`, in memory: method, path without its query, status,
+time taken), so no place is ever in it. Copy diagnostics puts it all on the
+clipboard as English text, times in Singapore's; nothing leaves the device
+otherwise.
+
+With more than one server built in, which is a debug build, the menu also
+picks the server (`Servers.kt`, `Servers` in `Api.swift`): the site's
+address or the dev stub (Android: `localhost:8787` through `adb
+reverse`, or `10.0.2.2:8787` from the emulator; Mac: `localhost:8787`).
+Nothing can add a server: a saved choice that isn't
 built in (dropped by a later version, or written by another app into the
 Mac's preferences) is ignored on every read, and the default used. The
 stub keeps its own sign-in, so a real token never goes to it over plain
