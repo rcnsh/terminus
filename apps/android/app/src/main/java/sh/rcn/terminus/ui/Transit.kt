@@ -55,7 +55,7 @@ import sh.rcn.terminus.R
 
 /**
  * A stop's name plate, as on the pole: a shade off the card with a hairline under it, the bus mark in the accent, the name, and anything to
- * say about it at the end (the walk there, a button), quieter. Not inverted: in the dark a near-white plate glared off every stop.
+ * say about it at the end (the walk there, a button), quieter. Not inverted: in the dark a near-white plate would glare off every stop.
  */
 @Composable
 internal fun StopPlate(name: String, modifier: Modifier = Modifier, big: Boolean = false, trailing: @Composable RowScope.() -> Unit = {}) {

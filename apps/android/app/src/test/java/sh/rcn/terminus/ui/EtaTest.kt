@@ -4,9 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 import sh.rcn.terminus.TestStrings
 
-/**
- * A row's time worded on the phone, for an older server: Nearby and the map's stop card both use [eta], so 4 min 30 s is "5 min" in both.
- */
+/** A row's time, worked out here for an older server: Nearby and the map's stop card both use [eta], so 4 min 30 s is "5 min" in both. */
 class EtaTest {
     init {
         TestStrings.install()

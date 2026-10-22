@@ -168,7 +168,6 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
     /** The page for [code] (null: the nearest stop) pulled down. */
     suspend fun pullPage(code: String?): PullOutcome = pulled(pageBoard(code) ?: NEAREST) { refreshPage(code, force = true) }
 
-    /** A service's line pulled down. */
     suspend fun pullLine(svc: String, from: String?): PullOutcome =
         pulled("line:${lineKey(svc, from)}") { refreshLine(svc, from, force = true) }
 
@@ -265,7 +264,7 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * The page for [code] (null: the nearest stop): its own board, or its opposite stop's when it's switched across the road. The nearest
-     * stop's opposite stop comes with /me/nearby, so that page asks only for that.
+     * stop's opposite stop comes with /api/me/nearby, so that page asks only for that.
      */
     suspend fun refreshPage(code: String?, force: Boolean = false) {
         val board = pageBoard(code)
@@ -297,7 +296,7 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
             throw e
         } catch (e: ApiError) {
             if (refused(e, token)) return
-            // The stop isn't on this service (or an older server without /line): the line without it.
+            // The stop isn't on this service (a 400): the line without it; worked out here for an older server.
             if (from != null && e.status == 400) {
                 try {
                     val line = api(token).line(svc).copy(gotMs = ServerClock.now())

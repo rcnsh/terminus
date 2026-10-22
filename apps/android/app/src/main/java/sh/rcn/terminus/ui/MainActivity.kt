@@ -275,7 +275,7 @@ private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel,
             screen = Screen.Main
         }
     }
-    // Signed in while /me couldn't be asked: asked again, and if it says the
+    // Signed in while /api/me couldn't be asked: asked again, and if it says the
     // account was never set up, setup takes over (AccountState.setupDue).
     // Asked again after each answer that came through, so a connection that
     // returns while the phone stays on Now settles it too.

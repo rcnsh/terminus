@@ -9,7 +9,7 @@ import org.junit.Test
 
 /**
  * The offline fallback, against the cases the web and Mac apps are checked against too (apps/api/test/fixtures/offline-day.json), on the
- * API's own /me/day golden.
+ * API's own /api/me/day golden.
  */
 class OfflineDayTest {
     init {

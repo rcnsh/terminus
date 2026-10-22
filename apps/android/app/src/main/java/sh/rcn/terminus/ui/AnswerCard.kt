@@ -161,7 +161,7 @@ internal fun AnswerCard(
                 Actions(answer, onAction, busy, onSuggestion)
                 return@Column
             }
-            // The server's ("Going to KR MRT", "Long gap · Home"); worked out here only for an older server.
+            // The server's ("Going to KR MRT", "Long gap · Home"); worked out here for an older server.
             val head =
                 answer.card?.heading
                     ?: when {

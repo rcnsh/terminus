@@ -112,7 +112,7 @@ internal data class Face(
                 journey != null && !old -> trip(answer, journey, problem, now, clock)
                 answer.isClassPlan ->
                     Face(
-                        // An older server's class, or one whose times are old: when to leave leads.
+                        // A class with no journey (worked out here for an older server), or one whose times are old: when to leave leads.
                         heading =
                             listOfNotNull(answer.phaseText, answer.destLabel, answer.classAtMs?.let { L.s(R.string.starts_at, clock(it)) })
                                 .joinToString(" · "),
@@ -176,7 +176,7 @@ internal data class Face(
     }
 }
 
-/** The line above the headline from an older server, without `card.heading`: where to, and a long gap. */
+/** The line above the headline (where to, and a long gap); worked out here for an older server. */
 private fun localHeading(answer: NextAnswer): String? =
     listOfNotNull(
             answer.destLabel ?: if (answer.mode == "nearby") L.s(R.string.chip_nearby) else null,

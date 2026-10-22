@@ -19,7 +19,7 @@ import org.json.JSONException
 import org.json.JSONObject
 
 /**
- * What the Map tab keeps on the phone so the campus map works offline after the first look: the stops and routes (`/campus`), the map's
+ * What the Map tab keeps on the phone so the campus map works offline after the first look: the stops and routes (`/api/campus`), the map's
  * style in each theme and language used, and the whole campus map file (about 3 MB). MapLibre doesn't cache PMTiles it streams, so the file
  * is downloaded once, checked weekly for a newer one, and read from storage (`pmtiles://file://…`); until then the map is plain. Fonts and
  * icons go through MapLibre's own cache.
@@ -32,7 +32,7 @@ object MapFiles {
     /** What the kept map file is: its name, size, ETag and when it was last checked. */
     private const val META = "$TILES.json"
     private const val CHECK_MS = 7 * 24 * 3_600_000L
-    /** `/campus` and the style say `max-age=3600`: a copy that young isn't asked about again. */
+    /** `/api/campus` and the style say `max-age=3600`: a copy that young isn't asked about again. */
     private const val FRESH_MS = 3_600_000L
     /** The campus file is about 3 MB: anything under this is not the map. */
     internal const val MIN_TILES_BYTES = 64 * 1024L
@@ -49,7 +49,7 @@ object MapFiles {
     private fun fresh(file: File) = file.exists() && System.currentTimeMillis() - file.lastModified() in 0 until FRESH_MS
 
     /**
-     * `/campus`: the kept copy while it's fresh; then from the network, sent with the kept copy's ETag so an unchanged one costs no
+     * `/api/campus`: the kept copy while it's fresh; then from the network, sent with the kept copy's ETag so an unchanged one costs no
      * download; the kept copy without a connection. Opening the Map or Buses tab doesn't fetch it whole each time.
      */
     suspend fun campus(ctx: Context, api: Api): JSONObject? =

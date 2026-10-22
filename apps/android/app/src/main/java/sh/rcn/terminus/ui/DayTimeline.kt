@@ -48,9 +48,9 @@ import sh.rcn.terminus.R
 import sh.rcn.terminus.widget.clock
 
 /**
- * Today at a glance, from /me/day: each class with its leave-by, and the trips home. What's done is dimmed. Anything still to come has an ×
- * to take it off today, whether it's timetabled or one you added (a swipe does the same); it goes at once, and its row says so with Undo
- * for [UNDO_MS], as on the web app.
+ * Today at a glance, from /api/me/day: each class with its leave-by, and the trips home. What's done is dimmed. Anything still to come has
+ * an × to take it off today, whether it's timetabled or one you added (a swipe does the same); it goes at once, and its row says so with
+ * Undo for [UNDO_MS], as on the web app.
  */
 @Composable
 internal fun DayTimeline(
@@ -208,7 +208,7 @@ private fun DayRow(item: DayItem, fmt: (Long) -> String, end: (@Composable () ->
                 modifier = Modifier.widthIn(min = 72.dp).padding(end = 8.dp),
             )
             Column(Modifier.weight(1f)) {
-                // The server's words (`title`, `line`); worked out here only for an older server.
+                // The server's words (`title`, `line`); worked out here for an older server.
                 val title =
                     item.title
                         ?: if (item.kind == "home")

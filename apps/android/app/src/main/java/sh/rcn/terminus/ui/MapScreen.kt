@@ -930,8 +930,8 @@ private fun BusSheet(bus: LiveBus, svc: String, color: Color, campus: CampusMap,
     val title = bus.towards?.let { stringResource(R.string.map_bus_towards, it) } ?: where ?: stringResource(R.string.a11y_bus, svc)
     val sub = if (bus.towards != null) where else null
     var expanded by rememberSaveable(bus.id) { mutableStateOf(sheet.stops) }
-    // A stop on its line by its code; from an older API, by name: the one on
-    // this service nearest the bus, as one name can be either side of a road.
+    // A stop on its line by its code, or by name: the one on this service nearest
+    // the bus, as one name can be either side of a road; worked out here for an older server.
     fun stopFor(code: String?, name: String?): MapStop? =
         code?.let(campus::stop)
             ?: name?.let { n ->
