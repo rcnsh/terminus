@@ -5,7 +5,8 @@ import SwiftUI
 /// stop, nearer the sooner they're due, the next one solid and the rest
 /// faded. The nearest stop is drawn larger. An estimate is an
 /// outline, never a filled bus, so it doesn't pass for live. Tapping a
-/// sign opens the stop in Buses. As Android's NearbyList.
+/// sign opens the stop on the map, with its sheet. As Android's NearbyList
+/// and the web app.
 struct NearbyList: View {
     @Environment(AppModel.self) private var app
 
@@ -22,7 +23,7 @@ struct NearbyList: View {
                         StopSign(stop: s, big: i == 0)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityHint(L("Opens this stop in Buses"))
+                    .accessibilityHint(L("Opens this stop on the map"))
                     .accessibilityIdentifier("nearby.\(s.stop.code)")
                 }
             }
@@ -31,10 +32,10 @@ struct NearbyList: View {
         }
     }
 
-    /// The stop on the Buses tab, with its services and what's coming.
+    /// The stop on the Map tab, with its sheet: where it is and what's coming.
     private func openStop(_ code: String) {
-        app.openStop = code
-        NotificationCenter.default.post(name: .openTab, object: MainTabs.Tab.buses)
+        MapModel.shared.showStop(code)
+        NotificationCenter.default.post(name: .openTab, object: MainTabs.Tab.map)
     }
 }
 

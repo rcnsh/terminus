@@ -62,7 +62,7 @@ final class NowUITests: XCTestCase {
         shot("now-zh-nearby", app)
     }
 
-    func testNearbyOpensAStopInBuses() {
+    func testNearbyOpensAStopOnTheMap() {
         let app = launch(sky: "night")
         app.buttons["chip.nearby"].tap()
         let stop = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'nearby.'")).firstMatch
@@ -72,7 +72,10 @@ final class NowUITests: XCTestCase {
         shot("now-nearby-down", app)
         app.swipeDown()
         stop.tap()
-        XCTAssertTrue(app.tabBars.buttons["Buses"].isSelected)
+        XCTAssertTrue(app.tabBars.buttons["Map"].isSelected)
+        // The map glides onto the stop.
+        sleep(3)
+        shot("now-nearby-map", app)
     }
 
     func testSearchAPlaceAndGoLater() {
