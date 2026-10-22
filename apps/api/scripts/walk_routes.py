@@ -517,7 +517,7 @@ def main():
     venues_doc["venues"] = dict(sorted(venues.items()))
     venues_doc["generated"] = date.today().isoformat()
     venues_doc["source"] = "uNivUS building->stop assignments; walks routed on OpenStreetMap paths (scripts/walk_routes.py); new buildings from the NUSMods room map"
-    # One line, as the file has always been: it is data, not something to read.
+    # One line: it is data, not something to read.
     emit("venues.json", json.dumps(venues_doc, separators=(",", ":"), ensure_ascii=False))
     print(f"{len(pairs)} stop pairs, {updated} buildings re-routed, {added} added, median detour {overall:.2f}")
     if CHECK:

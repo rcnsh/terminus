@@ -4,7 +4,7 @@ How often does the live-bus feed move a bus? Polls active-bus every 5 s per
 service (never more often: the map's own cache, TTL.busesMs), for at most
 MAX_SERVICES services, for a few minutes, at most MAX_MINUTES, and reports, per service, how long a moving
 bus's position stays the same between changes. That says how often the map
-can usefully poll (/buses caches TTL.busesMs).
+can usefully poll (/api/buses caches TTL.busesMs).
 
 Same guest token and bus proxy as scrape_stops.py, and the same config
 (environment, falling back to .dev.vars). Never prints a credential, and
