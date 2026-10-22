@@ -43,6 +43,7 @@ import { scopeCache } from './edgecache.ts';
 
 import { GRAPH, GRAPH_PUBLIC, oppositeOf } from './graph.ts';
 import { isBeta, linkOrigin, markBeta, movedApi, movedPage } from './site.ts';
+import { noteLegacy } from './legacy.ts';
 import { answerFor, arrivedAnswer, collectArrivals, needsSetupAnswer } from './answer.ts';
 import { lang, langOfRequest, m, withLang } from './i18n.ts';
 import type { Lang } from './i18n.ts';
@@ -444,6 +445,8 @@ export default {
     scopeCache(env);
     // Every word the server writes is in this request's language (i18n.ts).
     const [res, written] = await withLang(langOfRequest(req), async () => [await route(req, env, ctx), lang()] as const);
+    // What still uses the old address, the old paths or an app too old to serve (legacy.ts).
+    noteLegacy(env, ctx, req, res.status);
     const path = new URL(req.url).pathname;
     // A redirect or a download body passes through untouched apart from headers.
     const out = withSecurityHeaders(res, path);

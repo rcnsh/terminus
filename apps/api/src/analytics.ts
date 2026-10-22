@@ -24,7 +24,7 @@
  * starts lying.
  *
  *   blob1   kind        'answer' | 'arrival' | 'error' | 'timelapse' | 'signal'
- *                       | 'active' | 'apperror' | 'tripwake'
+ *                       | 'active' | 'apperror' | 'tripwake' | 'legacy' | 'settings'
  *   blob2   stop        boarding stop code; for 'error', the route (no query),
  *                       or 'cron <step>' for a cron step that failed;
  *                       for 'timelapse', the poll's outcome (see logPoll);
@@ -53,9 +53,9 @@
  *   double11 changeWaitS     answer rows: seconds waiting for the bus after a change, -1 on one bus
  *
  *   index1  stop code (the sampling key); 'error', 'timelapse', 'signal', 'active',
- *           'apperror' and 'tripwake' rows use their kind
+ *           'apperror', 'tripwake', 'legacy' and 'settings' rows use their kind
  *
- * Three kinds give the columns their own meaning:
+ * Five kinds give the columns their own meaning:
  *
  *   'active' (usage.ts logActive), once a Singapore day, counts only:
  *     blob2 scope 'all' | 'app' | 'version';  blob3 the app (web, android,
@@ -73,6 +73,15 @@
  *     blob2 'pushed' | 'same';  blob3 the card's phase;  blob4 its quality;
  *     blob5 'first' | 'again' (today's first wake or not);  double1 gapS;
  *     double2 feedAgeS;  double3 leaveShiftS;  double4 lateS.
+ *   'legacy' (legacy.ts), one request that used something on its way out:
+ *     blob2 what: 'address' (the old address), 'path' (the API's old path)
+ *     or 'outdated' (an app below config:minClient, answered 426);
+ *     blob3 the app and version ("android/3.2.0"), 'browser' or 'other';
+ *     blob4 the route, ids and query left out ("/api/me/next");  double1 1.
+ *   'settings' (settings.ts), once a Singapore day, counts only:
+ *     blob2 the setting ("publicBuses");  blob3 its value ("on", "fast");
+ *     blob4 the Singapore day counted, YYYY-MM-DD;  double1 accounts with
+ *     that value;  double2 accounts counted (used in the last 30 days).
  *
  * No row holds an account, email, IP address, device or install id, or
  * coordinates. An answer row's
@@ -261,6 +270,40 @@ export function logActive(env: Env, row: ActiveRow): void {
   if (!analyticsEnabled(env)) return;
   try {
     env.AE!.writeDataPoint({ blobs: ['active', row.scope, row.name, row.day], doubles: [row.d1, row.d7, row.d30], indexes: ['active'] });
+  } catch {
+    // Same rule as above: a lost count never stops the cron.
+  }
+}
+
+/** One request that used something on its way out (legacy.ts). */
+export interface LegacyRow {
+  what: 'address' | 'path' | 'outdated';
+  client: string;
+  route: string;
+}
+
+export function logLegacy(env: Env, r: LegacyRow): void {
+  if (!analyticsEnabled(env)) return;
+  try {
+    env.AE!.writeDataPoint({ blobs: ['legacy', r.what, r.client, r.route], doubles: [1], indexes: ['legacy'] });
+  } catch {
+    // Same rule as above: a lost count never stops a request.
+  }
+}
+
+/** One setting's value and how many accounts have it, on a day (settings.ts). */
+export interface SettingRow {
+  setting: string;
+  value: string;
+  day: string;
+  n: number;
+  of: number;
+}
+
+export function logSetting(env: Env, r: SettingRow): void {
+  if (!analyticsEnabled(env)) return;
+  try {
+    env.AE!.writeDataPoint({ blobs: ['settings', r.setting, r.value, r.day], doubles: [r.n, r.of], indexes: ['settings'] });
   } catch {
     // Same rule as above: a lost count never stops the cron.
   }

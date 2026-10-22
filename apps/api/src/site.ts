@@ -86,16 +86,27 @@ const OLD_API_UNDER = ['/me/', '/auth/', '/timelapse/'];
  * and the pairing page (GET /pair) never moved, so they aren't this.
  */
 export function movedApi(req: Request, url: URL): Response | null {
+  if (!oldApiPath(req, url)) return null;
+  if (req.headers.has('x-terminus-client')) return json(UPDATE_REQUIRED, 426);
+  return new Response(null, {
+    status: 308,
+    headers: { location: `/api${url.pathname}${url.search}`, 'cache-control': 'no-store', ...CORS },
+  });
+}
+
+/** A call to the API at its path from before 3.0 ([movedApi]). */
+export function oldApiPath(req: Request, url: URL): boolean {
   const path = url.pathname;
   const reading = req.method === 'GET' || req.method === 'HEAD';
-  const old =
+  return (
     OLD_API.has(path) ||
     (path === '/pair' && !reading) ||
-    (OLD_API_UNDER.some((p) => path.startsWith(p)) && path !== '/auth/verify' && path !== '/auth/approve');
-  if (!old) return null;
-  if (req.headers.has('x-terminus-client')) return json(UPDATE_REQUIRED, 426);
-  return new Response(null, { status: 308, headers: { location: `/api${path}${url.search}`, 'cache-control': 'no-store', ...CORS } });
+    (OLD_API_UNDER.some((p) => path.startsWith(p)) && path !== '/auth/verify' && path !== '/auth/approve')
+  );
 }
+
+/** One of the site's old addresses (terminus.rcn.sh, the beta's). */
+export const oldAddress = (hostname: string): boolean => hostname in MOVED;
 
 /** The sender's name on every email, so a beta email is never mistaken for the real one. */
 export const mailName = (env: Env): string => (isBeta(env) ? 'terminus beta' : 'terminus');

@@ -1718,7 +1718,7 @@ the fix commands naming the beta's KV namespace (`KV_NAMESPACE_IDS`, kept in
 step with `cloudflare.config.ts` by a test), and each run while its feed is
 down is counted on its dashboard as the error `cron feed down`.
 
-**The operator's switches.** Three statistics are collected only once
+**The operator's switches.** Five statistics are collected only once
 turned on, on the dashboard (`src/collect.ts`, KV `config:collect:<name>`,
 off when unset or unreadable):
 
@@ -1756,6 +1756,18 @@ off when unset or unreadable):
   stop. The server scrubs the message and stack (`scrub()`), fingerprints
   the top five frames without line numbers, and for the website fills in
   its own `API_VERSION`.
+- `legacy` ([`src/legacy.ts`](../src/legacy.ts)): after each request, the
+  Worker checks whether it used the old address, an API path from before
+  3.0, or was an app refused with 426 (`config:minClient`), and if so, in
+  `waitUntil`, writes one row each: what, the app and version (or
+  `browser`, `other`), and the route with no query and ids as `:id`. Most
+  requests use none, so most never read the switch.
+- `settings` ([`src/settings.ts`](../src/settings.ts)): with the active
+  counts, once a Singapore day (KV `settings:day`), the profiles of the
+  accounts used in 30 days are counted per setting and value
+  (`settingsOf`: a missing setting is its default, a list is `some` or
+  `none`, never its contents), with Android phones and web apps that have a
+  push address. Only the totals are written.
 
 ## Known weaknesses
 
@@ -2116,9 +2128,11 @@ src/pairs.ts      /api/stops/pairs
 src/analytics.ts  Analytics Engine logging: decisions and arrivals, errors
                   (logError, logCronError), timelapse polls (logPoll), Trip wakes
                   (logTripWake)
-src/collect.ts    The dashboard's switches for three statistics, off until turned on
+src/collect.ts    The dashboard's switches for five statistics, off until turned on
 src/usage.ts      Daily active counts; src/eta.ts the feed's arrival times scored
                   against the timelapse; src/apperrors.ts crash reports (/api/errors)
+src/legacy.ts     Requests on the old address and paths, by app version and route;
+                  src/settings.ts how many accounts have each setting, daily
 src/etamodel.ts   The arrival-time model (pure); src/etashadow.ts runs it in shadow
                   beside eta.ts when ETA_MODEL is shadow (docs/eta-model.md)
 src/openapi.ts    OpenAPI 3.1 spec and the Elements docs page

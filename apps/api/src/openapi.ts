@@ -2139,7 +2139,17 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                 },
                 clients: {
                   type: 'array',
-                  items: { type: 'object', properties: { client: { type: ['string', 'null'] }, n: { type: 'integer' } } },
+                  description:
+                    'App versions, from the version each device last sent: devices used in the last 7 days (`n`), 30 and 90. A device unused for 90 days is signed out.',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      client: { type: ['string', 'null'] },
+                      n: { type: 'integer' },
+                      d30: { type: 'integer' },
+                      d90: { type: 'integer' },
+                    },
+                  },
                 },
                 signups: { type: 'array', items: { type: 'object', properties: { day: { type: 'string' }, n: { type: 'integer' } } } },
                 apiKeys: { type: 'object', additionalProperties: { type: 'integer' } },
@@ -2147,7 +2157,13 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                 collect: {
                   type: 'object',
                   description: 'Which of the extra statistics are being collected: set with POST /api/admin/collect.',
-                  properties: { active: { type: 'boolean' }, eta: { type: 'boolean' }, errors: { type: 'boolean' } },
+                  properties: {
+                    active: { type: 'boolean' },
+                    eta: { type: 'boolean' },
+                    errors: { type: 'boolean' },
+                    legacy: { type: 'boolean' },
+                    settings: { type: 'boolean' },
+                  },
                 },
                 eta: {
                   type: ['object', 'null'],
@@ -2170,18 +2186,24 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Service'],
           summary: 'Turn one of the operator’s statistics on or off',
           description:
-            'The switches for what terminus collects beyond its answers: `active` (how many accounts used it each day, by app and version, counted from the sessions already kept), `eta` (the feed’s arrival times against when the timelapse recorder saw each bus arrive) and `errors` (crash and error reports from the apps and the website, POST /api/errors). Each is off until turned on. Answers every switch. Answers 404 without the operator token.',
+            'The switches for what terminus collects beyond its answers: `active` (how many accounts used it each day, by app and version, counted from the sessions already kept), `eta` (the feed’s arrival times against when the timelapse recorder saw each bus arrive), `errors` (crash and error reports from the apps and the website, POST /api/errors), `legacy` (requests that still use the old address, the API’s old paths or too old an app, by app version and route) and `settings` (how many active accounts have each setting, once a day). Each is off until turned on. Answers every switch. Answers 404 without the operator token.',
           operationId: 'adminCollect',
           security: [{ operator: [] }],
           requestBody: jsonBody({
             type: 'object',
             required: ['name', 'on'],
-            properties: { name: { type: 'string', enum: ['active', 'eta', 'errors'] }, on: { type: 'boolean' } },
+            properties: { name: { type: 'string', enum: ['active', 'eta', 'errors', 'legacy', 'settings'] }, on: { type: 'boolean' } },
           }),
           responses: {
             '200': ok({
               type: 'object',
-              properties: { active: { type: 'boolean' }, eta: { type: 'boolean' }, errors: { type: 'boolean' } },
+              properties: {
+                active: { type: 'boolean' },
+                eta: { type: 'boolean' },
+                errors: { type: 'boolean' },
+                legacy: { type: 'boolean' },
+                settings: { type: 'boolean' },
+              },
             }),
             '400': errorResponse('No such switch, or `on` is not true or false.'),
             '404': errorResponse('No operator token, or the wrong one.'),
