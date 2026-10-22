@@ -130,6 +130,7 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.withTimeoutOrNull
 import org.maplibre.compose.camera.CameraAnimation
+import org.maplibre.compose.camera.CameraFit
 import org.maplibre.compose.camera.CameraMoveReason
 import org.maplibre.compose.camera.CameraPosition
 import org.maplibre.compose.camera.CameraUpdate
@@ -165,7 +166,6 @@ import org.maplibre.compose.map.MapState
 import org.maplibre.compose.map.MapUiOptions
 import org.maplibre.compose.map.MaplibreMap
 import org.maplibre.compose.map.rememberMapState
-import org.maplibre.compose.map.renderMode
 import org.maplibre.compose.overlay.MapOverlay
 import org.maplibre.compose.overlay.include
 import org.maplibre.compose.sources.GeoJsonData
@@ -264,7 +264,7 @@ private suspend fun MapState.centreOn(lat: Double, lon: Double, cover: MapCover,
     withTimeoutOrNull(CENTRE_FOLLOW_MS) {
         snapshotFlow { cover.top to cover.sheet }
             .debounce { if (moved) 200L else 0L }
-            .takeWhile { !moved || cameraMoveReason != CameraMoveReason.GESTURE }
+            .takeWhile { !moved || cameraMoveReason != CameraMoveReason.Gesture }
             .collectLatest { (top, sheet) ->
                 moved = true
                 val view = viewport ?: awaitViewport()
@@ -276,9 +276,8 @@ private suspend fun MapState.centreOn(lat: Double, lon: Double, cover: MapCover,
                 // 512 dp round at zoom 0, its north-south scale cos(lat) of that).
                 val up = h / 2 - (topDp + h - sheetDp) / 2
                 val target = Position(longitude = lon, latitude = lat - up * 360 / (512 * 2.0.pow(zoom)) * cos(Math.toRadians(lat)))
-                // With animations off in the phone's settings, it jumps there.
-                if (ValueAnimator.areAnimatorsEnabled()) animateCamera(CameraUpdate(target = target, zoom = zoom), CameraAnimation.Ease())
-                else setCameraPosition(cameraPosition.copy(target = target, zoom = zoom))
+                // With animations off in the phone's settings, it jumps there (the library reads the setting).
+                animateCamera(CameraUpdate(center = target, zoom = zoom), CameraAnimation.Ease.Standard)
             }
     }
 }
@@ -505,8 +504,7 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
                 textHaloColor = const(paper),
                 textHaloWidth = const(1.5.dp),
                 // Below the dot, or another side of it when a bus is there.
-                textVariableAnchor =
-                    const(listOf(const(SymbolAnchor.Top), const(SymbolAnchor.Bottom), const(SymbolAnchor.Right), const(SymbolAnchor.Left))),
+                textVariableAnchor = const(listOf(SymbolAnchor.Top, SymbolAnchor.Bottom, SymbolAnchor.Right, SymbolAnchor.Left)),
                 textRadialOffset = const(0.9.em),
                 textOptional = const(true),
                 textMaxWidth = const(8.em),
@@ -540,13 +538,13 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
         framed = true
         // Opened on a stop from Nearby: that's the first view (below).
         if (ui.focus != null) return@LaunchedEffect
-        state.fitCameraToBounds(box(campus.coreBounds(ui.core)), fitPadding = CORE_PADDING)
+        state.fitCameraToBounds(box(campus.coreBounds(ui.core)), CameraFit(fitPadding = CORE_PADDING))
         val at = Locator.lastKnown(ctx) ?: return@LaunchedEffect
         val near =
             campus.stops.minByOrNull { (it.lat - at.latitude) * (it.lat - at.latitude) + (it.lon - at.longitude) * (it.lon - at.longitude) }
                 ?: return@LaunchedEffect
         if (abs(near.lat - at.latitude) < NEAR_CAMPUS_DEG && abs(near.lon - at.longitude) < NEAR_CAMPUS_DEG) {
-            state.setCameraPosition(CameraPosition(target = Position(longitude = near.lon, latitude = near.lat), zoom = 17.0))
+            state.setCameraPosition(CameraPosition(center = Position(longitude = near.lon, latitude = near.lat), zoom = 17.0))
         }
     }
     // A stop opened from Nearby or a bus's sheet: the map glides to it.
@@ -564,10 +562,12 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
     // Back to campus, from the button.
     LaunchedEffect(recentre) {
         if (recentre == 0) return@LaunchedEffect
-        // With animations off in the phone's settings, it jumps there.
-        if (ValueAnimator.areAnimatorsEnabled())
-            state.animateCameraToBounds(box(campus.coreBounds(ui.core)), fitPadding = CORE_PADDING, animation = CameraAnimation.Ease())
-        else state.fitCameraToBounds(box(campus.coreBounds(ui.core)), fitPadding = CORE_PADDING)
+        // With animations off in the phone's settings, it jumps there (the library reads the setting).
+        state.animateCameraToBounds(
+            box(campus.coreBounds(ui.core)),
+            CameraFit(fitPadding = CORE_PADDING),
+            animation = CameraAnimation.Ease.Standard,
+        )
     }
     // A pill: its whole line in view, when it's chosen (not again on coming back to the tab).
     var framedLine by rememberSaveable { mutableStateOf<String?>(null) }
@@ -576,9 +576,7 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
         framedLine = selected
         val r = selected?.let { campus.routes[it] } ?: return@LaunchedEffect
         val padding = DpPadding(left = 40.dp, top = 110.dp, right = 40.dp, bottom = 40.dp)
-        if (ValueAnimator.areAnimatorsEnabled())
-            state.animateCameraToBounds(box(r.bounds()), fitPadding = padding, animation = CameraAnimation.Ease())
-        else state.fitCameraToBounds(box(r.bounds()), fitPadding = padding)
+        state.animateCameraToBounds(box(r.bounds()), CameraFit(fitPadding = padding), animation = CameraAnimation.Ease.Standard)
     }
 
     // The map is drawn, and its stops and buses are only reached by a finger
@@ -597,10 +595,18 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
                 val w = view?.size?.width?.value?.toDouble() ?: 0.0
                 val h = view?.size?.height?.value?.toDouble() ?: 0.0
                 if (view == null || w <= 0 || h <= 0)
-                    return@derivedStateOf CameraConstraints(minZoom = 13.0, maxZoom = 19.0, boundingBox = box(PanLimit.EXTENT))
+                    return@derivedStateOf CameraConstraints {
+                        minZoom = 13.0
+                        maxZoom = 19.0
+                        boundingBox = box(PanLimit.EXTENT)
+                    }
                 val min = max(13.0, PanLimit.minZoom(w, h))
                 val zoom = floor(max(min, view.cameraPosition.zoom) * 16) / 16
-                CameraConstraints(minZoom = min, maxZoom = 19.0, boundingBox = box(PanLimit.centre(w, h, zoom)))
+                CameraConstraints {
+                    minZoom = min
+                    maxZoom = 19.0
+                    boundingBox = box(PanLimit.centre(w, h, zoom))
+                }
             }
         }
     MaplibreMap(
@@ -623,7 +629,7 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
             MapInteractions {
                 camera {
                     rotate { enabled = false }
-                    tilt { enabled = false }
+                    pitch { enabled = false }
                 }
                 callbacks {
                     // A tap anywhere closes the sheet; a tap on a stop or bus then opens its own.
