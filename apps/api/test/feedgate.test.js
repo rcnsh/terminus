@@ -123,6 +123,31 @@ test('an answer from a call that outlived its window does not replace a newer on
   assert.equal(await throughGate(env, makeCtx(), 'k', 15_000, async () => 'never'), 'new');
 });
 
+test('a claim that reaches the gate after its caller gave up on it holds nothing', async () => {
+  // The caller waits GATE_ASK_MS for the gate and then fetches by itself. A
+  // claim landing after that would mark a call pending that nobody is making,
+  // and every other data centre would wait on it for the rest of the window.
+  const { GATE_WAIT_MS } = await import('../src/feedgate.ts');
+  const ns = makeDurableObjects(FeedGate);
+  const claim = (body) =>
+    ns
+      .get('k')
+      .fetch('https://gate.internal/claim', { method: 'POST', body: JSON.stringify(body) })
+      .then((r) => r.json());
+  assert.deepEqual(await claim({ freshMs: 15_000, askedAt: Date.now() - GATE_WAIT_MS - 5_000 }), { value: null });
+  assert.equal((await claim({ freshMs: 15_000, askedAt: Date.now() })).go, true, 'the next caller may fetch');
+  // And the caller says when it asked.
+  const env = gated();
+  const real = env.FEED_GATE.get;
+  let sent = null;
+  env.FEED_GATE.get = (id) => {
+    const stub = real(id);
+    return { fetch: async (input, init) => (String(input).endsWith('/claim') && (sent = JSON.parse(init.body)), stub.fetch(input, init)) };
+  };
+  await elsewhere(env, makeFetch(), FROZEN_NOW, (ctx) => throughGate(env, ctx, 'k', 15_000, async () => 1));
+  assert.equal(typeof sent?.askedAt, 'number');
+});
+
 test("an unreachable gate is skipped: the call goes ahead on the data centre's own limits", async () => {
   const broken = {
     idFromName: (n) => n,

@@ -402,6 +402,17 @@ test('pairing: a code from the web session becomes a device token that can be re
   assert.equal((await call(env, '/api/me', { token })).status, 401, 'a revoked device is signed out');
 });
 
+test('pairing: an app that names its platform in the body, with no client header, is listed by it', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  const { code } = await (await call(env, '/api/me/pair-code', { method: 'POST', cookie })).json();
+  // As /api/auth/anon and /api/auth/app/start take it: an iPhone sideload has no header to send.
+  const paired = await call(env, '/api/pair', { method: 'POST', body: { code, name: 'iPhone', platform: 'ios' } });
+  assert.equal(paired.status, 200);
+  const { devices } = await (await call(env, '/api/me/devices', { cookie })).json();
+  assert.equal(devices[0].platform, 'ios');
+});
+
 test('an expired pairing code is refused', async () => {
   const { env, email, db } = setup();
   const cookie = await signIn(env, email);
