@@ -1,6 +1,6 @@
-<!-- 3.6.0 -->
-### terminus 3.6.0
+<!-- 3.6.1 -->
+### terminus 3.6.1
 
-**New:** the developer menu (Settings › About) shows diagnostics for a bug report: the server, notification and alarm permissions, the last push and refresh, and the app's recent requests. Copy diagnostics puts them on the clipboard; nothing leaves your device unless you paste it.
+**Mac:** the app is now notarised by Apple, so it opens straight from the download, without System Settings › Open Anyway. It also opens on a Mac without Homebrew, which 3.6.0 couldn't: if 3.6.0 never opened for you, download 3.6.1 from [terminus.run](https://terminus.run). The map window no longer crashes when it opens.
 
-**Fixes:** the apps call only terminus.run. Public buses as the second bus of a trip, or while you ride one, now show live times.
+**Android:** a newer version of the map library.
