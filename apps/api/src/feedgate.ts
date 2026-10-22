@@ -126,8 +126,13 @@ export class FeedGate {
       }
       if (!h.pending) return Response.json({ value: h.value });
       const value = await new Promise<unknown>((resolve) => {
-        this.waiters.push(resolve);
-        setTimeout(() => resolve(null), GATE_WAIT_MS);
+        // In case the call never puts; let go once it does, so an object busy
+        // in a window doesn't keep a timer alive for every caller it answered.
+        const timer = setTimeout(() => resolve(null), GATE_WAIT_MS);
+        this.waiters.push((v) => {
+          clearTimeout(timer);
+          resolve(v);
+        });
       });
       return Response.json({ value });
     }
