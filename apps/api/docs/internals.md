@@ -681,7 +681,11 @@ object at the change and once the second bus has gone.
   1 or 0; NULL from a build that doesn't say, which is pushed as before),
   and `live`, whether its Live Activity setting is on: `false` forgets its
   `apnsstart:` token, so nothing starts one by push (left out, nothing
-  changes). The data export lists all five for each device (`push`,
+  changes), and `activity`, whether a Live Activity of its runs: `false`
+  (it ended on the phone) forgets its `apnsla:` token, so the server no
+  longer counts one running there. The app sends one registration at a
+  time, so an older one can't bring back a start token after a newer one
+  turned the setting off. The data export lists all five for each device (`push`,
   `liveActivityPush`, `liveActivityStartPush`, `pushLanguage`,
   `pushAlerts`).
 - **Secrets and vars.** `APNS_KEY` (the .p8 from the Apple developer
@@ -786,9 +790,14 @@ object at the change and once the second bus has gone.
     with the card's words (Apple wants one with a start; a sound only with
     the iPhone's leave alerts on, whose own alert goes as before) and
     `input-push-token: 1`. In the iPhone's language only: with no card
-    worded in it, no start. Once per trip: the Trip object keeps the trip
-    it last started one for, or saw one running for (`pushed.started`), so
-    an activity the user ended isn't brought back for the same trip. The
+    worded in it, no start. Once per trip and phone: the Trip object keeps
+    the trip and the sessions it started one on, or saw one running on
+    (`pushed.started`), so an activity the user ended isn't brought back
+    for the same trip, and one iPhone's running activity doesn't stop
+    another's start. A start that didn't go (Apple out of reach) is kept
+    pending (`started.retry`), and each later wake while the trip is due or
+    missed sends only the starts again (`retryLiveStart`): the alert that
+    went with it isn't repeated. The
     started activity's own token then comes as `apnsla:`, and updates go
     as above. "Turn off" on the activity turns the setting off on the
     phone, which then registers with `live: false`.

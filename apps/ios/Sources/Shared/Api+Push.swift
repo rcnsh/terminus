@@ -56,10 +56,11 @@ extension Api {
     /// (apnsToken). With the phone's, whether its leave alerts are on (off,
     /// the server pushes the trip to it only silently, as Android shows
     /// nothing then) and whether its Live Activity is (off, none is started by push).
-    func registerPush(apple token: String, alerts: Bool? = nil, live: Bool? = nil) async throws {
+    func registerPush(apple token: String, alerts: Bool? = nil, live: Bool? = nil, activity: Bool? = nil) async throws {
         var body: [String: Any] = ["token": token, "platform": "ios"]
         if let alerts { body["alerts"] = alerts }
         if let live { body["live"] = live }
+        if let activity { body["activity"] = activity }
         _ = try await send("POST", "/api/me/push", json: JSONSerialization.data(withJSONObject: body))
     }
 }

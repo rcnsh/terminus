@@ -1302,7 +1302,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             'The web app gets the same as an encrypted payload `{kind, phase, urgent}`, only when there is something to show. ' +
             "An iPhone gets an alert with the card's words (`aps.alert` with `mutable-content: 1`, so its notification service extension may re-word it from /api/me/next, `interruption-level` time-sensitive when it's time to go, passive otherwise) and `kind` and `phase` beside `aps`; " +
             'when there is nothing to show (reminders off, no trip), its Live Activity already shows a quiet change, or it registered with `alerts: false`, a background push (`content-available: 1`) with the same `kind` and `phase`. ' +
-            'Its Live Activity is sent `liveactivity` pushes, `event` `update` or `end` with the trip as `content-state`; with none running, one is started when the trip is due or missed (`event: start` to its `apnsstart:` token, once per trip; see docs/internals.md, APNs). ' +
+            'Its Live Activity is sent `liveactivity` pushes, `event` `update` or `end` with the trip as `content-state`; with none running, one is started when the trip is due or missed (`event: start` to its `apnsstart:` token, once per trip and iPhone; see docs/internals.md, APNs). ' +
             "The week before a semester starts, a device whose account imported an older semester's timetable is sent the reminder to import the new one. " +
             "The Android app from 2.5.0 (by its `x-terminus-client` header) gets only `{kind: 'term'}` and fetches the words from GET /api/me/notice; older Android apps and the web app get `{kind: 'term', title, body, zhTitle, zhBody}`, a notification to show as it is; an iPhone gets an alert in its language with the same fields beside `aps`. " +
             'A push address lives on one session; one the push service no longer knows is dropped.',
@@ -1327,6 +1327,11 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                   type: 'boolean',
                   description:
                     'With an `apns:` token: whether the Live Activity setting is on on this iPhone. With `false`, its `apnsstart:` token is forgotten, so no Live Activity is started by push; left out, nothing changes.',
+                },
+                activity: {
+                  type: 'boolean',
+                  description:
+                    'With an `apns:` token: whether a Live Activity of this iPhone runs. With `false` (it ended on the phone), its `apnsla:` token is forgotten, so a later trip can start a new one; left out, nothing changes.',
                 },
                 subscription: {
                   type: 'object',

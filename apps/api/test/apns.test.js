@@ -645,7 +645,7 @@ test('time to go starts the Live Activity on an iPhone that can and has none run
     { phase: 'due', urgent: true, remind: true, answer: due(en), lang: 'en', answerIn, startLive: true },
     NOW,
   );
-  assert.deepEqual(out, { sent: 5, failed: 0 });
+  assert.deepEqual(out, { sent: 5, failed: 0, started: ['h0'] }, 'which phone it started on');
   const [start] = to(START_HEX);
   assert.equal(start.headers['apns-push-type'], 'liveactivity');
   assert.equal(start.headers['apns-topic'], `${TOPIC}.push-type.liveactivity`);
@@ -664,6 +664,15 @@ test('time to go starts the Live Activity on an iPhone that can and has none run
   // Not asked to start (not due or missed, or started already for this trip): nothing started.
   sent.length = 0;
   await nudgeUser(env, 'u1', { phase: 'due', urgent: true, remind: true, answer: due(en), lang: 'en', answerIn }, NOW);
+  assert.deepEqual(to(START_HEX), []);
+  // This phone has shown the trip already (started, or seen running): not started again there.
+  sent.length = 0;
+  await nudgeUser(
+    env,
+    'u1',
+    { phase: 'due', urgent: true, answer: due(en), lang: 'en', answerIn, startLive: true, startedFor: new Set(['h0']) },
+    NOW,
+  );
   assert.deepEqual(to(START_HEX), []);
   // No card in its language: no start, rather than one in English.
   sent.length = 0;

@@ -92,12 +92,29 @@ import UserNotifications
         Task { await send(force: force) }
     }
 
+    /// The send in progress: the next waits for it, so an older one can't
+    /// register a token after a newer one with the setting turned off.
+    private static var sending: Task<Void, Never>?
+
     /// `sync`, waited for: the Live Activity's Turn off is done once the server knows.
     static func send(force: Bool = false) async {
+        let before = sending
+        let task = Task {
+            await before?.value
+            await sendNow(force: force)
+        }
+        sending = task
+        await task.value
+    }
+
+    /// One send, with the settings and tokens as they are when it starts.
+    private static func sendNow(force: Bool) async {
         guard let auth = TokenStore.read(), let apns = d.string(forKey: "push.apns") else { return }
         let live = TripPrefs.liveActivity
         let tokens = [apns] + [liveToken, live ? startToken : nil].compactMap { $0 }
         let alerts = TripPrefs.leaveAlerts
+        // Whether a Live Activity of this phone's runs: none, and the server forgets the ended one's token.
+        let activity = liveToken != nil
         let sent = (tokens + [alerts ? "alerts" : "quiet", live ? "live" : "still"]).joined(separator: "|")
         let fresh =
             d.string(forKey: "push.sent") == sent && d.string(forKey: "push.for") == tag(auth)
@@ -106,7 +123,8 @@ import UserNotifications
         do {
             // One token a request: the phone's (with both settings), then the Live Activity's.
             for t in tokens {
-                try await Api(token: auth).registerPush(apple: t, alerts: t == apns ? alerts : nil, live: t == apns ? live : nil)
+                try await Api(token: auth).registerPush(
+                    apple: t, alerts: t == apns ? alerts : nil, live: t == apns ? live : nil, activity: t == apns ? activity : nil)
             }
             // Signed in again meanwhile: the new session hasn't got it.
             guard TokenStore.read() == auth else { return }
