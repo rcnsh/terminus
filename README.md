@@ -90,8 +90,8 @@ down the clock itself, so no screen ever shows a stale "4 min".
 | [`apps/macos`](apps/macos) | Menu bar app, with the campus map in a window. |
 | [`apps/ios`](apps/ios) | iPhone app and widgets: Now, Buses, the campus map, Settings, a Live Activity. In development, not released yet. |
 
-More in [ARCHITECTURE.md](ARCHITECTURE.md), and in depth in
-[apps/api/docs/internals.md](apps/api/docs/internals.md).
+More in [docs/architecture.md](docs/architecture.md), and in depth in
+[docs/internals.md](docs/internals.md).
 
 ## Quickstart
 
@@ -199,7 +199,7 @@ Use `pnpm run deploy`, not `pnpm deploy`, which is a pnpm built-in. Each runs
 uncommitted changes in `apps/api` or `apps/web/public`, then runs
 `pnpm check`), applies pending D1 migrations with `cf d1 migrations apply`,
 then runs `cf deploy` (`--mode beta` for the beta). Migrations must be
-additive; see [internals.md](apps/api/docs/internals.md).
+additive; see [internals.md](docs/internals.md).
 
 Check a deploy builds without sending anything:
 

@@ -53,7 +53,7 @@ skip the one-off reformat in `git blame`:
   an intended change, `UPDATE_GOLDEN=1 pnpm test` and review the fixture
   diff. The Android and Mac tests read the same fixtures.
 - **Endpoints.** A changed route or response shape updates
-  `apps/api/src/openapi.ts` and `apps/api/docs/internals.md`.
+  `apps/api/src/openapi.ts` and `docs/internals.md`.
 - **Migrations** in `apps/api/migrations` are additive only (no renames,
   drops or `NOT NULL` without a default), and an applied one is never edited.
   `test/deploy.test.js` checks this.

@@ -1,7 +1,7 @@
 # Architecture
 
 A map of the code. The reasoning behind each rule, endpoint by endpoint, is
-in [apps/api/docs/internals.md](apps/api/docs/internals.md). The story of
+in [docs/internals.md](internals.md). The story of
 building it is [Building terminus](https://rcn.sh/blog/building-terminus).
 
 ```
@@ -24,7 +24,7 @@ bug is fixed in one place.
 ## The Worker
 
 `apps/api`, TypeScript, one Worker per site (stable and beta) from
-[`cloudflare.config.ts`](apps/api/cloudflare.config.ts). It serves the API,
+[`cloudflare.config.ts`](../apps/api/cloudflare.config.ts). It serves the API,
 the website from `apps/web/public`, the app downloads and the map files.
 
 A request goes through `src/index.ts` (the router), which hands off to:
@@ -89,7 +89,7 @@ A request goes through `src/index.ts` (the router), which hands off to:
 | KV | Guest token and device id, calendar copy, feed state, runtime switches (`config:*`), sign-in codes |
 | R2 (`DOWNLOADS`) | App builds, `latest.json`, the Sparkle appcast, the PMTiles street map, fonts and icons, timelapse days, and each day's arrival-time scores (`eta/`) |
 | Durable Objects | `Trip` (per user, today only, deleted at midnight), `TimelapseRecorder`, `FeedGate` |
-| Analytics Engine (`AE`) | Usage and error counts for the operator dashboard; see [analytics.md](apps/api/docs/analytics.md) |
+| Analytics Engine (`AE`) | Usage and error counts for the operator dashboard; see [analytics.md](analytics.md) |
 
 ## Clients
 
