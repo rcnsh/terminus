@@ -6,9 +6,9 @@
 import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { useLang, web } from './_web.mjs';
-import { buildCampusMap, buildDestinations } from '../src/campus.ts';
-import { GRAPH } from '../src/graph.ts';
-import { residenceList } from '../src/residences.ts';
+import { buildCampusMap, buildDestinations } from '../../api/src/campus.ts';
+import { GRAPH } from '../../api/src/graph.ts';
+import { residenceList } from '../../api/src/residences.ts';
 
 useLang('en');
 const B = await web('app/buses.js');
@@ -239,7 +239,7 @@ test('an aged timetabled or live time keeps its "~", as the server words a guess
   assert.equal(Board.etaText(sched.etaS, sched.quality), '~6 min');
   assert.equal(Board.thenText(sched), 'then ~16, ~24 min');
   // No more of them than the server names.
-  const { THEN_MAX } = await import('../src/resolve.ts');
+  const { THEN_MAX } = await import('../../api/src/resolve.ts');
   assert.equal(Board.THEN_MAX, THEN_MAX);
   const many = B.aged(
     { svc: 'A1', etaS: 400, quality: 'live', later: [600, 900, 1_200, 1_500].map((etaS) => ({ etaS, quality: 'live' })) },

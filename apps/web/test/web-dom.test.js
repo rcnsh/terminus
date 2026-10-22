@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 // that never answers, or a page that isn't the API's (a captive portal),
 // must fail, so the page says it couldn't update rather than waiting or
 // taking it for an answer.
-import { api, quietMs, send, sentences } from '../../web/public/account/dom.js';
+import { api, quietMs, send, sentences } from '../public/account/dom.js';
 
 globalThis.window ??= {};
 const realFetch = globalThis.fetch;
@@ -109,7 +109,7 @@ test("signed out elsewhere: the account's things go, the browser's look stays, a
   Object.defineProperty(globalThis, 'localStorage', { value: store, configurable: true, writable: true });
   Object.defineProperty(globalThis, 'location', { value: { replace: (u) => went.push(u) }, configurable: true, writable: true });
   try {
-    const { signedOut } = await import('../../web/public/account/dom.js');
+    const { signedOut } = await import('../public/account/dom.js');
     await assert.rejects(signedOut(), { message: 'signed out' });
     assert.equal(store.getItem('added-places'), null);
     assert.equal(store.getItem('terminus-lang-applied'), null);
@@ -124,7 +124,7 @@ test("signed out elsewhere: the account's things go, the browser's look stays, a
 test('every 401 in the web app goes through signedOut, so none skips forgetting the account', async () => {
   const fs = await import('node:fs');
   for (const f of ['app/app.js', 'app/buses.js', 'app/map.js']) {
-    const src = fs.readFileSync(new URL(`../../web/public/${f}`, import.meta.url), 'utf8');
+    const src = fs.readFileSync(new URL(`../public/${f}`, import.meta.url), 'utf8');
     assert.match(src, /status === 401\) await signedOut\(\);/, f);
     assert.doesNotMatch(src, /location\.replace\('\/account\//, f);
   }

@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { useLang, web } from './_web.mjs';
-import { INCIDENTS_KEPT } from '../src/monitor.ts';
+import { INCIDENTS_KEPT } from '../../api/src/monitor.ts';
 
 const { KEPT, MONTH_MS, duration, month } = await web('status/outages.js');
 const { t } = await web('account/dom.js');

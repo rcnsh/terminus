@@ -9,7 +9,7 @@ import fs from 'node:fs';
 // changed without the scripts (by hand, by a bad merge, by a tool rewriting
 // it) fails here. The README is ours, written by hand, so it isn't listed.
 
-const VENDOR = new URL('../../web/public/vendor/', import.meta.url);
+const VENDOR = new URL('../public/vendor/', import.meta.url);
 const NOT_LISTED = new Set(['README.md', 'SHA256SUMS']);
 
 /** Every file under vendor/, as a path relative to it, but the README and the list. */

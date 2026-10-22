@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 // The web pages' clock correction (apps/web/public/account/dom.js): how far
 // this device's clock is off, from the Date header of the API's answers.
-import { noteServerDate, serverNow, skewOf, skewSample } from '../../web/public/account/dom.js';
+import { noteServerDate, serverNow, skewOf, skewSample } from '../public/account/dom.js';
 
 const at = (iso) => Date.parse(iso);
 const answer = (date, extra = {}) => ({ headers: new Headers({ date, ...extra }) });

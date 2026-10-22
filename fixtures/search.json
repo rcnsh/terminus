@@ -1,6 +1,6 @@
 {
   "about": [
-    "Destination search, as every client ranks it: the web app (apps/web/public/account/search.js, the reference, checked by apps/api/test/search.test.js) and the Android and Mac apps.",
+    "Destination search, as every client ranks it: the web app (apps/web/public/account/search.js, the reference, checked by apps/web/test/search.test.js) and the Android and Mac apps.",
     "Two sections. \"destinations\": the search on Now and in Settings, over /campus `destinations`, ranked by rank(). \"busesTab\": the Buses tab's search, over an index built from /campus by busesTabIndex(), then ranked by the same rank().",
     "Results are listed as \"kind:code\" ids, in order: a code alone is not unique (the stop COM3 and the building COM3)."
   ],

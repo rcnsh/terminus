@@ -8,20 +8,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
 
-import { buildCampusMap, shapeFor } from '../src/campus.ts';
-import { placeBuses, pointAlong } from '../src/buses.ts';
-import { GRAPH } from '../src/graph.ts';
-import { haversineM } from '../src/geo.ts';
+import { buildCampusMap, shapeFor } from '../../api/src/campus.ts';
+import { placeBuses, pointAlong } from '../../api/src/buses.ts';
+import { GRAPH } from '../../api/src/graph.ts';
+import { haversineM } from '../../api/src/geo.ts';
 
 // map.js imports by site path (/assets/ui.js), as the browser does; here
 // those are files under apps/web/public. Loading it adds one listener to
 // the document and nothing else that needs a page.
-const PUBLIC = new URL('../../web/public/', import.meta.url);
+const PUBLIC = new URL('../public/', import.meta.url);
 registerHooks({
   resolve: (spec, ctx, next) => next(/^\/(assets|account|app|vendor)\//.test(spec) ? new URL(`.${spec}`, PUBLIC).href : spec, ctx),
 });
 globalThis.document ??= { addEventListener() {} };
-const { aheadBy, busesWaitMs, pathOf, pointAt, positionAt, slideMs } = await import('../../web/public/app/map.js');
+const { aheadBy, busesWaitMs, pathOf, pointAt, positionAt, slideMs } = await import('../public/app/map.js');
 
 const CAMPUS = buildCampusMap(GRAPH);
 const SERVICES = Object.keys(GRAPH.routes).filter((svc) => shapeFor(svc, GRAPH.routes[svc]));

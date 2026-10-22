@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
-const css = fs.readFileSync(new URL('../../web/public/app/app.css', import.meta.url), 'utf8');
+const css = fs.readFileSync(new URL('../public/app/app.css', import.meta.url), 'utf8');
 
 /** The custom properties set by the rule whose selector is exactly `sel`. */
 function vars(sel) {
@@ -101,7 +101,7 @@ test("the sky's words read over the sky, the glass and the chip, at every hour",
 // The website's own pages (the landing page, status, privacy, pair, not
 // found) draw the same sky on an element (assets/sky.css), with the hour on
 // <html data-sky> from a script that runs before the page (assets/sky-phase.js).
-const siteCss = fs.readFileSync(new URL('../../web/public/assets/sky.css', import.meta.url), 'utf8');
+const siteCss = fs.readFileSync(new URL('../public/assets/sky.css', import.meta.url), 'utf8');
 
 /** Every rule in `src` whose body is only custom properties: selector -> body, spaces evened out. */
 function varRules(src) {
@@ -131,8 +131,8 @@ test("the website's sky has app.css's colours, rule for rule", () => {
 });
 
 test("the website's pages take the hour from the same clock as Now", async () => {
-  const { phaseAt } = await import('../../web/public/account/daylight.js');
-  const src = fs.readFileSync(new URL('../../web/public/assets/sky-phase.js', import.meta.url), 'utf8');
+  const { phaseAt } = await import('../public/account/daylight.js');
+  const src = fs.readFileSync(new URL('../public/assets/sky-phase.js', import.meta.url), 'utf8');
   for (let min = 0; min < 1440; min += 5) {
     const html = { dataset: {} };
     const at = new Date(2026, 9, 7, Math.floor(min / 60), min % 60);

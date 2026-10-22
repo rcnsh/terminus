@@ -3,7 +3,7 @@ package sh.rcn.terminus.ui
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** The sky over Now by the hour, at the web's hours (apps/api/test/daylight.test.js). */
+/** The sky over Now by the hour, at the web's hours (apps/web/test/daylight.test.js). */
 class SkyTest {
     private fun at(hhmm: String) = hhmm.split(":").let { (h, m) -> phaseAt(h.toInt() * 60 + m.toInt()) }
 

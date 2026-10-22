@@ -16,6 +16,7 @@
     "apps/web/public/vendor/**",
     "apps/api/data/**",
     "apps/api/test/fixtures/**",
+    "fixtures/**",
     "**/*.html",
     "**/*.css",
     "apps/api/cloudflare.config.ts",

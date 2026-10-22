@@ -7,7 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-import { offlineNext } from '../../web/public/app/offline.js';
+import { offlineNext } from '../public/app/offline.js';
 
 const FIXTURES = new URL('../../../fixtures/', import.meta.url);
 const spec = JSON.parse(fs.readFileSync(new URL('offline-day.json', FIXTURES), 'utf8'));

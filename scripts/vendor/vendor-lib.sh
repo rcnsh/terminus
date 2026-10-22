@@ -62,7 +62,7 @@ licence() {
 
 # Rewrites the entries of vendor/SHA256SUMS for the folders whose names start
 # with each prefix given, from the files now in them. The rest of the file is
-# kept. test/vendor.test.js (apps/api) fails when a file under vendor/ doesn't
+# kept. apps/web/test/vendor.test.js fails when a file under vendor/ doesn't
 # match it, so a vendored file can't change unnoticed.
 #   record <prefix>...
 record() {

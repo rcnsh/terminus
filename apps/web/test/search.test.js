@@ -4,7 +4,7 @@ import fs from 'node:fs';
 
 // The account page's search ranking, the reference; the Android and Mac apps
 // follow its rules, written out in fixtures/search.json with the cases below.
-import { busesTabIndex, grouped, rank, results, samePlace, score } from '../../web/public/account/search.js';
+import { busesTabIndex, grouped, rank, results, samePlace, score } from '../public/account/search.js';
 
 const FIXTURE = JSON.parse(fs.readFileSync(new URL('../../../fixtures/search.json', import.meta.url), 'utf8'));
 const ids = (list) => list.map((d) => `${d.kind}:${d.code}`);

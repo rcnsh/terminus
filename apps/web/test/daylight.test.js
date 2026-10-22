@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 // The sky over Now by the hour; the Android app keeps the same hours (NightSky.kt, SkyTest.kt).
-import { PHASES, parallax, phaseAt } from '../../web/public/account/daylight.js';
+import { PHASES, parallax, phaseAt } from '../public/account/daylight.js';
 
 const at = (hhmm) => {
   const [h, m] = hhmm.split(':').map(Number);

@@ -11,7 +11,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const PUBLIC = new URL('../../web/public/', import.meta.url);
+const PUBLIC = new URL('../public/', import.meta.url);
 const read = (p) => fs.readFileSync(new URL(p.replace(/^\//, ''), PUBLIC), 'utf8');
 
 function shellFiles() {

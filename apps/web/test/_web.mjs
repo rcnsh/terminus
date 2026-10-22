@@ -15,7 +15,7 @@ import { registerHooks } from 'node:module';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
-export const PUBLIC = new URL('../../web/public/', import.meta.url);
+export const PUBLIC = new URL('../public/', import.meta.url);
 export const read = (p) => fs.readFileSync(new URL(p.replace(/^\//, ''), PUBLIC), 'utf8');
 
 registerHooks({
