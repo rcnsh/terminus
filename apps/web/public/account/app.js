@@ -161,9 +161,9 @@ function SignIn({ adding }) {
 
   return html`
     <section class="signin">
-      <div class="card signin-card">
-        <div hidden=${step !== 'login'}>
-          ${adding ? html`<img class="signin-mark" src="/assets/mark.svg" alt="" />` : html`<${Livery} />`}
+      <${Livery} mark=${false} />
+      <div class="signin-step" hidden=${step !== 'login'}>
+        <div class="signin-intro">
           <h1>${adding ? t('Add an email') : t('Sign in to terminus')}</h1>
           <p class="hint">
             ${
@@ -172,6 +172,8 @@ function SignIn({ adding }) {
                 : t("Enter your email and we'll send you a code. No password, and the same code creates an account if you're new.")
             }
           </p>
+        </div>
+        <div class="signin-form">
           <form onSubmit=${send}>
             <label for="login-email">${t('Email')}</label>
             <input
@@ -192,11 +194,14 @@ function SignIn({ adding }) {
           <p class="form-error" id="login-error" role="alert">${error}</p>
           ${
             !adding &&
-            html`<div>
-            <p class="signin-or"><span>${t('or')}</span></p>
-            <button type="button" class="btn ghost wide" disabled=${busy} onClick=${noEmail}>${t('Use terminus without an email')}</button>
-            <p class="hint small">${t("Your setup stays in this browser. Add an email any time to use it on your other devices, or to keep it if this browser's data is cleared.")}</p>
-          </div>`
+            html`<p class="signin-alt">
+              <${Fill}
+                text=${t('No email? {0}', MARK)}
+                parts=${[
+                  html`<button type="button" class="link-btn" disabled=${busy} onClick=${noEmail}>${t('Use terminus in this browser only')}</button>`,
+                ]}
+              />
+            </p>`
           }
           ${
             adding &&
@@ -210,14 +215,19 @@ function SignIn({ adding }) {
             }}
           >${t('Cancel')}</button>`
           }
+          <${Rich} as="p" class="hint small" text=${t('By continuing you agree to the <a href="/privacy">privacy policy</a>.')} />
         </div>
+      </div>
 
-        <div id="sent-step" hidden=${step !== 'sent'}>
+      <div class="signin-step" id="sent-step" hidden=${step !== 'sent'}>
+        <div class="signin-intro">
           <div class="sent-icon" aria-hidden="true">
             <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></svg>
           </div>
           <h1>${t('Check your inbox')}</h1>
           <p class="hint" id="sent-hint"><${Fill} text=${t('We sent a code to {0}. Type it here, or open the link in the same email on this device. Both work once, for 15 minutes.', MARK)} parts=${[html`<strong>${email}</strong>`]} /></p>
+        </div>
+        <div class="signin-form">
           <form
             onSubmit=${(e) => {
               e.preventDefault();
@@ -276,7 +286,6 @@ function SignIn({ adding }) {
           >${t('Use a different email')}</button>
         </div>
       </div>
-      <${Rich} as="p" class="hint center" text=${t('By continuing you agree to the <a href="/privacy">privacy policy</a>.')} />
     </section>
   `;
 }
