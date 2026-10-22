@@ -12,6 +12,10 @@ struct BusEntry: TimelineEntry {
     var slotID: String?
     var day: DayPlan?
     var added: [(code: String, label: String)] = []
+    /// The shared board of buses near you (NearbyShared), for the Nearby chip
+    /// and the large widget's next buses; nil without one.
+    var nearby: [NearbyStop]?
+    var nearbyAt: Date?
     /// A made-up trip for the widget gallery, before the app has been opened.
     var sample = false
 
@@ -71,11 +75,15 @@ struct BusProvider: TimelineProvider {
             slot: id.map(WidgetStore.slot),
             slotID: id,
             day: paired ? WidgetStore.day() : nil,
-            added: WidgetStore.added
+            added: WidgetStore.added,
+            nearby: paired ? NearbyShared.stops() : nil,
+            nearbyAt: paired ? NearbyShared.fetchedAt : nil
         )
     }
 
-    /// A new answer when the kept one is due one, and this widget's place or Nearby when it's stale.
+    /// A new answer when the kept one is due one, and this widget's place or
+    /// Nearby when it's stale. The large widget's next buses: the shared board,
+    /// when it's due and the phone has a recent place (not the home stop).
     static func refreshIfDue(slot: String?) async {
         guard TokenStore.read() != nil, Date() >= Quiet.until(.app) else { return }
         let kept = WidgetStore.plan()
@@ -84,9 +92,11 @@ struct BusProvider: TimelineProvider {
         if let slot {
             let s = WidgetStore.slot(slot)
             if s.chosen != .timetable, let at = s.at, -at.timeIntervalSinceNow <= WidgetMode.keep,
-                s.fetchedAt.map({ -$0.timeIntervalSinceNow >= WidgetMode.refetch }) ?? true
+                s.shownAt.map({ -$0.timeIntervalSinceNow >= WidgetMode.refetch }) ?? true
             {
                 await WidgetStore.fetch(slot: slot)
+            } else if slot == "next.large" {
+                await NearbyShared.refreshIfDue(needsPlace: true)
             }
         }
     }
@@ -124,9 +134,18 @@ struct BusProvider: TimelineProvider {
         if first.error != nil, let change = OfflineDay.nextChange(first.day, now: now.addingTimeInterval(skew)) {
             moments.append(change.addingTimeInterval(-skew))
         }
+        // The shared board's buses going, their minutes, and the times turning
+        // old: on Nearby, and under the large widget's trip.
+        if let stops = first.nearby, let f = first.nearbyAt,
+            first.slot?.chosen == .nearby || family == .systemLarge
+        {
+            moments.append(f.addingTimeInterval(WidgetMode.nearbyOld + 1))
+            moments += NearbyBoard.redraws(
+                Array(stops.prefix(3)), fetchedAt: f, now: now, until: horizon, minutesUntil: f.addingTimeInterval(WidgetMode.nearbyOld),
+                skew: skew)
+        }
         if let s = first.slot, s.chosen != .timetable, let at = s.at {
             moments.append(at.addingTimeInterval(WidgetMode.keep + 1))
-            if s.chosen == .nearby, let f = s.fetchedAt { moments.append(f.addingTimeInterval(WidgetMode.nearbyOld + 1)) }
             if let a = s.answer {
                 moments += WidgetTiming.redraws(a, now: now.addingTimeInterval(skew), until: horizon.addingTimeInterval(skew)).map {
                     $0.addingTimeInterval(-skew)
@@ -134,7 +153,7 @@ struct BusProvider: TimelineProvider {
             }
         }
         moments += skyChanges(after: now, until: horizon)
-        let times = Array(Set(moments.filter { $0 > now && $0 < horizon }.map { $0.timeIntervalSince1970.rounded() })).sorted().prefix(40)
+        let times = Array(Set(moments.filter { $0 > now && $0 < horizon }.map { $0.timeIntervalSince1970.rounded() })).sorted().prefix(60)
         let entries =
             [first]
             + times.map { t in

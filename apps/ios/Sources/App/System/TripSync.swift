@@ -40,7 +40,6 @@ import WidgetKit
         // widgets kept was that one's, so they fetch this one's rather than show it.
         Shared.lastAnswer = nil
         Shared.lastDay = nil
-        Shared.lastNearby = nil
         WidgetStore.forget()
         shown = nil
         Push.signedIn()
@@ -103,7 +102,20 @@ import WidgetKit
         // The day plan kept for offline, when it's another day's or over an hour old.
         if before?.dest?.label != a.dest?.label || dayDue() { await keepDay() }
         await WidgetStore.refreshChosen()
+        // Buses near you, with the phone's last place only: not the home stop it may be far from.
+        if NearbyShared.wanted { await NearbyShared.refreshIfDue(needsPlace: true) }
         return true
+    }
+
+    /// A board of buses near you fetched in the app (Now's Nearby, the Buses
+    /// tab): kept for the widgets, which are redrawn with it while one shows it.
+    static func nearbyFetched(_ data: Data, token: String) {
+        guard NearbyShared.keep(data, sentWith: token) else { return }
+        if NearbyShared.wanted { WidgetCenter.shared.reloadTimelines(ofKind: "nearby") }
+        if NearbyShared.wanted || WidgetStore.slots.contains(where: { WidgetStore.slot($0).chosen == .nearby }) {
+            WidgetCenter.shared.reloadTimelines(ofKind: "next")
+            WidgetCenter.shared.reloadTimelines(ofKind: "places")
+        }
     }
 
     /// "Not going", from a reminder's button: the class taken off today, as
@@ -153,13 +165,16 @@ import WidgetKit
     private static var countedAt: Date?
 
     /// How many widgets are on the Home and Lock Screens, so the background
-    /// refresh and push run only while something shows them. Asked at most every ten minutes.
+    /// refresh and push run only while something shows them; and how many
+    /// show buses near you (Buses near you, the large widgets' next buses),
+    /// for NearbyShared.wanted. Asked at most every ten minutes.
     private static func countWidgets() {
         if let countedAt, -countedAt.timeIntervalSinceNow < 600 { return }
         countedAt = Date()
         WidgetCenter.shared.getCurrentConfigurations { result in
-            let n = (try? result.get())?.count ?? 0
-            Shared.defaults.set(n, forKey: "widgets.count")
+            let all = (try? result.get()) ?? []
+            Shared.defaults.set(all.count, forKey: "widgets.count")
+            Shared.defaults.set(all.filter { $0.kind == "nearby" || $0.family == .systemLarge }.count, forKey: "widgets.nearby")
         }
     }
 }

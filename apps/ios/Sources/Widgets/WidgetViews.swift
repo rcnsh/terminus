@@ -96,18 +96,21 @@ struct Scene {
     }
 
     var link: URL { entry.paired ? mode.link : URL(string: "terminus://plan")! }
+
+    /// The shared board of buses near you as this widget shows it: its own
+    /// swap, and `error` (Nearby's last fetch; none under the trip).
+    func nearbyModel(error: String?) -> NearbyModel {
+        NearbyModel(
+            paired: entry.paired, all: entry.nearby, swap: entry.slot?.swap, fetchedAt: entry.nearbyAt, error: error, now: entry.date,
+            skew: ServerClock.skew, slot: slot, refresh: refresh)
+    }
     var refresh: Bool { entry.paired && !entry.sample }
     /// The words on the chosen chip over the sky, and on the ground.
     var onChosenSky: Color { look.palette.lightInk ? Color(rgb: 0x1C1917) : Color(rgb: 0xFAFAF9) }
 
     /// What VoiceOver says for the widget, as one sentence rather than fragments.
     var spoken: String {
-        if mode == .nearby {
-            guard let first = entry.slot?.nearby?.first else { return entry.slot?.error ?? L("Checking…") }
-            return Spoken.sentences(
-                L("Nearby"), first.stop.longName ?? first.stop.name,
-                first.board.prefix(3).compactMap { r in r.etaText.map { "\(r.svc) \($0)" } }.joined(separator: " · "))
-        }
+        if mode == .nearby { return nearbyModel(error: entry.slot?.error).spoken }
         if let a = answer, entry.paired, !WidgetFace.isOld(a, now: entry.serverNow) { return Spoken.summary(a, now: entry.serverNow) }
         return Spoken.sentences(face.heading, face.headline, face.sub)
     }
@@ -262,7 +265,16 @@ struct DayLayout: View {
         let skyH = textH + 40
         let journey = s.answer?.phase == "riding" ? nil : f.journey
         let bodyH: CGFloat = journey.map { JourneyView.height($0, style: s.style) } ?? (f.leg != nil ? 30 : 0)
-        let left = h - skyH - bodyH - 12
+        var left = h - skyH - bodyH - 12
+        // The nearest stop's next two buses, under the trip, when they fit
+        // and the shared board is from the last half hour; then today's timetable.
+        // Under a trip there's seldom room for their tiles: then a line of them.
+        let tiles = left >= NearbyPair.head + NearbyPair.tile
+        let pairH = NearbyPair.head + (tiles ? NearbyPair.tile : NearbyPair.line)
+        let fresh = s.entry.nearbyAt.map { s.entry.date.timeIntervalSince($0) <= NearbyShared.keep } ?? false
+        let nearby =
+            left >= pairH && fresh && !s.entry.sample ? Optional(s.nearbyModel(error: nil)).flatMap { $0.buses.isEmpty ? nil : $0 } : nil
+        if nearby != nil { left -= pairH }
         let rows = max(0, min(6, Int((left - 26) / 28)))
         let now = s.entry.serverNow
         let today =
@@ -270,10 +282,13 @@ struct DayLayout: View {
             ? (s.entry.day.flatMap { $0.date == nil || $0.date == OfflineDay.sgtDate(now) ? $0 : nil }?.items.filter {
                 ["now", "next", "later"].contains($0.status)
             }.prefix(rows)).map(Array.init) ?? [] : []
+        // Nothing left of today: the room goes to two more of the stop's buses.
+        let pairRows = !tiles ? 0 : nearby.map { today.isEmpty && left >= NearbyPair.tile + 1 && $0.buses.count > 2 } == true ? 2 : 1
+        let nearbyH: CGFloat = nearby == nil ? 0 : pairH + (pairRows == 2 ? NearbyPair.tile + 1 : 0)
         // A widget's size is fixed: what the steps and today leave over goes
         // to the sky, rather than blank ground under them.
         let todayH: CGFloat = today.isEmpty ? 0 : 8 + 17 + 28 * CGFloat(today.count)
-        let tallSky = max(skyH, h - 6 - bodyH - todayH - 14)
+        let tallSky = max(skyH, h - 6 - bodyH - nearbyH - todayH - 14)
         return ZStack(alignment: .topLeading) {
             SkyBackdrop(look: s.look, height: tallSky, scale: 48 / 92, road: f.road, moon: CGPoint(x: 34, y: 66))
             VStack(alignment: .leading, spacing: 0) {
@@ -301,6 +316,7 @@ struct DayLayout: View {
                 } else if let leg = f.leg {
                     LegRow(leg: leg, inks: ground)
                 }
+                if let nearby { NearbyPair(v: nearby, inks: ground, rows: pairRows) }
                 if !today.isEmpty { TodayList(items: today, inks: ground).padding(.top, 8) }
                 Spacer(minLength: 0)
             }
@@ -334,7 +350,9 @@ private struct TodayList: View {
 
 /// Nearby, as the Buses tab's board: the nearest stop's name big on the sky
 /// (the one across the road a tap away), then each service with its badge,
-/// where it goes, Live and how full it is, and its minutes big at the end.
+/// where it stops next, Live and how full it is, and the time it's due at
+/// the end, with its minutes under 15. From the board every widget showing
+/// buses near you shares (NearbyShared), as Buses near you draws it.
 struct BoardLayout: View {
     let s: Scene
     let w: CGFloat, h: CGFloat
@@ -343,13 +361,10 @@ struct BoardLayout: View {
         let sky = s.look.sky
         let ground = s.look.ground
         let slotState = s.entry.slot
-        let now = s.entry.date
-        let stops = slotState?.nearby.map { WidgetSwap.order($0, slotState?.swap, now: now) }
-        let all = slotState?.nearby ?? []
-        let age = slotState?.fetchedAt.map { now.timeIntervalSince($0) } ?? 0
-        let old = age > WidgetMode.nearbyOld
-        let error = slotState?.error
-        let first = stops?.first
+        let v = s.nearbyModel(error: slotState?.error)
+        let all = v.all ?? []
+        let first = v.first
+        let buses = v.buses
         let large = h >= 290
         let chipsH: CGFloat = s.chips.isEmpty || large ? 0 : 42
         let skyH: CGFloat = 10 + (large ? 40 : 0) + 34 + (large ? 28 : 24) + 22
@@ -368,28 +383,27 @@ struct BoardLayout: View {
                         }
                         .frame(height: 40)
                     }
-                    let walk = first.map { $0.walkS < 60 ? L("here") : L("%@ min walk", "\(($0.walkS + 30) / 60)") }
-                    let other = first.flatMap { WidgetSwap.offer(all, slotState?.swap, now: now, onScreen: [$0.stop.code]) }
+                    let other = first.flatMap { WidgetSwap.offer(all, v.swap, now: v.now, onScreen: [$0.stop.code]) }
                     HStack(spacing: 6) {
-                        small(([L("Nearby")] + [walk].compactMap { $0 }).joined(separator: " · "), sky.muted, 12, bold: true)
+                        // Once the times may be old, the line says so, and when they came.
+                        if v.old, !buses.isEmpty, let at = v.fetchedAt {
+                            small(L("Nearby") + " · " + L("Times may be old · %@", v.clock(at)), sky.late, 12, bold: true)
+                        } else {
+                            small(
+                                ([L("Nearby")] + [first.map(NearbyModel.walk)].compactMap { $0 }).joined(separator: " · "), sky.muted, 12,
+                                bold: true)
+                        }
                         Spacer(minLength: 0)
                         if let other, let slot = s.slot, let nearest = all.first {
-                            Button(intent: SwapIntent(slot: slot, from: nearest.stop.code, to: other.stop.code)) {
-                                Image(systemName: "arrow.left.arrow.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(
-                                    sky.ink
-                                )
-                                .frame(width: 28, height: 28).background(sky.chip ?? sky.raised, in: Circle())
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(L("Show %@ first", other.stop.name))
+                            NearbySwapButton(slot: slot, from: nearest.stop.code, other: other, inks: sky)
                         }
                         if !large, s.refresh { RefreshButton(slot: s.slot, inks: sky) }
                     }
                     .frame(height: 34)
                     let name: String = {
                         if let first { return first.stop.longName ?? first.stop.name }
-                        if error == WidgetFace.updating || slotState?.json == nil { return L("Checking…") }
-                        return error ?? L("No stops near you")
+                        if v.error == WidgetFace.updating || v.all == nil { return L("Checking…") }
+                        return v.error ?? L("No stops near you")
                     }()
                     Text(verbatim: name).font(.system(size: large ? 22 : 19, weight: .bold)).foregroundStyle(sky.ink).lineLimit(1)
                         .minimumScaleFactor(0.7)
@@ -397,20 +411,22 @@ struct BoardLayout: View {
                 .padding(.top, 8)
                 .frame(height: skyH, alignment: .topLeading)
                 if let first {
-                    let board = first.board.filter { $0.etaS != nil }
-                    if error == WidgetFace.updating {
+                    if v.error == WidgetFace.updating {
                         small(L("Updating…"), ground.muted).padding(.top, 8)
-                    } else if old {
-                        small(L("Times may be out of date · tap ↻ to refresh"), ground.muted).padding(.top, 8)
-                    } else if board.isEmpty {
+                    } else if buses.isEmpty {
                         small(first.available ? L("No buses due") : L("No live data"), ground.muted).padding(.top, 8)
                     } else {
+                        let shown = Array(buses.prefix(rows))
                         VStack(spacing: 0) {
-                            ForEach(Array(board.prefix(rows).enumerated()), id: \.offset) { i, r in
+                            // The medium widget, under its chips: no room for a row, so a line of the next three.
+                            if rows == 0 { NearbyLine(v: v, buses: Array(buses.prefix(3)), inks: ground).frame(height: 34) }
+                            ForEach(Array(shown.enumerated()), id: \.offset) { i, b in
                                 if i > 0 { Rectangle().fill(ground.line).frame(height: 1) }
-                                BoardLine(row: r, ageS: Int(age), inks: ground)
+                                BoardLine(v: v, b: b, shown: shown, inks: ground)
                             }
                         }
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(v.spoken)
                     }
                 }
                 if chipsH > 0, let slot = s.slot {
@@ -426,54 +442,32 @@ struct BoardLayout: View {
     }
 }
 
-/// The server's own words for a time are kept while they're this fresh; then the widget counts down itself.
-private let serverEtaS = 30
-
-/// One service at the stop: its badge, where it goes with Live and how full, and its minutes.
+/// One service at the stop: its badge, where it stops next with Live and how
+/// full, and the time it's due with its minutes (or the bus after) under it.
 private struct BoardLine: View {
-    let row: BoardRow
-    let ageS: Int
+    let v: NearbyModel
+    let b: StopBus
+    let shown: [StopBus]
     let inks: Inks
 
     var body: some View {
-        let left = max(0, (row.etaS ?? 0) - ageS)
-        let eta =
-            ageS < serverEtaS
-            ? row.etaText ?? ""
-            : (left < BusTimes.arrivingS
-                ? L("Arriving")
-                : row.quality == "live" ? L("%@ min", "\(BusTimes.minutes(left))") : L("~%@ min", "\(BusTimes.minutes(left))"))
-        let crowd: (String, Color)? =
-            switch row.crowd {
-            case "low": (L("Seats"), inks.good)
-            case "medium": (L("Busy"), inks.muted)
-            case "high": (L("Packed"), inks.late)
-            default: nil
-            }
         HStack(spacing: 8) {
-            BusBadge(svc: row.svc, color: row.color, size: 14, paid: row.paid, even: true).frame(width: 46, alignment: .leading)
+            BusBadge(svc: b.svc, color: b.color, size: 14, paid: b.paid, even: true).frame(width: 46, alignment: .leading)
             VStack(alignment: .leading, spacing: 3) {
-                small(
-                    row.toText ?? (row.towards.isEmpty ? (row.endsHere ? L("Ends here") : row.svc) : row.towards.joined(separator: ", ")),
-                    inks.ink, 13)
-                HStack(spacing: 5) {
-                    PillView(
-                        pill: row.quality == "live"
-                            ? WidgetPill(text: L("Live"), good: true) : WidgetPill(text: L("Estimate"), good: false), inks: inks)
-                    if let crowd {
-                        Text(verbatim: crowd.0).font(.system(size: 11, weight: .medium)).foregroundStyle(crowd.1)
-                            .padding(.horizontal, 7).padding(.vertical, 2).background(inks.raised, in: Capsule())
-                    }
-                }
+                small(v.nextLine(b, shown).isEmpty ? b.svc : v.nextLine(b, shown), inks.ink, 13)
+                NearbyPills(v: v, b: b, inks: inks)
             }
             Spacer(minLength: 4)
             VStack(alignment: .trailing, spacing: 1) {
-                Text(verbatim: eta).font(.system(size: 19, weight: .bold)).foregroundStyle(inks.ink).lineLimit(1)
-                if ageS < serverEtaS, let later = row.thenText { small(later, inks.muted, 11) }
+                TimeText(v: v, b: b, inks: inks, size: 19)
+                if let left = v.minutes(b) {
+                    MinutesChip(b: b, left: left, inks: inks, size: 11)
+                } else if let next = b.later.first {
+                    small(L("then %@", v.clock(next)), inks.muted, 11)
+                }
             }
         }
         .frame(height: 45)
-        .accessibilityElement(children: .combine)
     }
 }
 

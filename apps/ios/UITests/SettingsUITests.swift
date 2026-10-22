@@ -271,6 +271,20 @@ final class SettingsUITests: XCTestCase {
         shot("settings-appearance-route", app)
     }
 
+    /// New to NUS, for the Buses near you widget: on, and the Appearance row says so.
+    func testNewToNus() throws {
+        let app = open()
+        tile(app, "appearance").tap()
+        let toggle = app.switches["settings.newToNus"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        while !toggle.isHittable { app.swipeUp() }
+        toggle.switches.firstMatch.exists ? toggle.switches.firstMatch.tap() : toggle.tap()
+        XCTAssertEqual(toggle.value as? String, "1")
+        shot("settings-appearance-new-to-nus", app)
+        back(app)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label ENDSWITH 'New to NUS'")).firstMatch.waitForExistence(timeout: 5))
+    }
+
     /// The developer settings: seven taps on the version (shown already in a debug build).
     func testAboutDeveloper() throws {
         let app = open()

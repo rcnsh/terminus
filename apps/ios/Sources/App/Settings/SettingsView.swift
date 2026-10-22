@@ -200,7 +200,8 @@ private struct SettingsList: View {
                 }
             return ([lang, clock].compactMap { $0 }.joined(separator: " · "), .plain)
         case .appearance:
-            return ("\(settingsThemeName(prefs.theme)) · \(settingsCardStyleName(prefs.cardStyle))", .plain)
+            let parts = [settingsThemeName(prefs.theme), settingsCardStyleName(prefs.cardStyle), prefs.newToNus ? L("New to NUS") : nil]
+            return (parts.compactMap { $0 }.joined(separator: " · "), .plain)
         case .devices:
             if app.email == nil { return (L("Add an email to use other devices"), .plain) }
             return (model.devices.map { settingsDeviceCount($0.count) }, .plain)

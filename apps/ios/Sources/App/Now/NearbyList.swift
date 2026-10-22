@@ -65,7 +65,8 @@ private struct StopSign: View {
             if !stop.available {
                 Text(L("No live data")).foregroundStyle(Color.muted).padding(14).frame(maxWidth: .infinity, alignment: .leading)
             }
-            ForEach(Array(stop.board.enumerated()), id: \.offset) { j, row in
+            // Running now: the board comes with the rest too, for the widgets' first buses.
+            ForEach(Array(stop.board.filter(\.running).enumerated()), id: \.offset) { j, row in
                 if j > 0 { Rectangle().fill(Color.line).frame(height: 1) }
                 HStack(spacing: 10) {
                     BusBadge(svc: row.svc, color: row.color, size: big ? 13 : 12, paid: row.paid)

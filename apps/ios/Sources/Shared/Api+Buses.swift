@@ -4,9 +4,10 @@ import Foundation
 /// "Updated 5 s ago"), and /campus read in its own order for the search.
 extension Api {
     /// /me/nearby's stops as boards, nearest first, with the services not
-    /// running now. Without a location the server answers from the home stop;
-    /// with neither it answers 400.
-    func nearbyBoards(lat: Double?, lon: Double?, acc: Double? = nil) async throws -> [Board] {
+    /// running now, and the answer as it came (kept for the widgets,
+    /// NearbyShared). Without a location the server answers from the home
+    /// stop; with neither it answers 400.
+    func nearbyBoards(lat: Double?, lon: Double?, acc: Double? = nil) async throws -> (boards: [Board], data: Data) {
         // Whether the twin is across the road, and its name, may come on the
         // stop or beside it (as Android reads them): the stop's first.
         struct Twin: Decodable {
@@ -28,7 +29,7 @@ extension Api {
         let twins = (try? JSONDecoder().decode(T.self, from: data).stops) ?? []
         let asOf = r.asOf.flatMap(parseISODate)
         let got = ServerClock.now
-        return r.stops.enumerated().map { i, s in
+        let boards = r.stops.enumerated().map { i, s in
             let t = twins.indices.contains(i) ? twins[i] : nil
             let name = t?.stop?.oppositeName ?? t?.oppositeName
             return Board(
@@ -37,6 +38,7 @@ extension Api {
                 oppositeName: name.flatMap { $0.isEmpty ? nil : $0 },
                 available: s.available, rows: s.board, asOf: asOf, distM: s.distM, got: got)
         }
+        return (boards, data)
     }
 
     /// `/api/campus` as the Buses tab uses it.

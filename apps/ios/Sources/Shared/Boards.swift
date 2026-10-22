@@ -35,6 +35,9 @@ struct BoardRow: Decodable, Hashable, Sendable {
     var later: [Later]
     /// The next stop's name, then where the route ends.
     let towards: [String]
+    /// The well-known places it passes from here ("UTown", "Kent Ridge MRT"),
+    /// for someone new to NUS; empty from an older server.
+    let via: [String]
     let crowd: String?
     let endsAt: String?
     /// The route ends at this stop.
@@ -52,7 +55,7 @@ struct BoardRow: Decodable, Hashable, Sendable {
     let toText: String?
 
     enum CodingKeys: String, CodingKey {
-        case svc, etaS, quality, color, paid, later, towards, crowd, endsAt, running, stopped, resumesAt, eta, laterText, toText
+        case svc, etaS, quality, color, paid, later, towards, via, crowd, endsAt, running, stopped, resumesAt, eta, laterText, toText
     }
 
     init(from d: Decoder) throws {
@@ -66,6 +69,7 @@ struct BoardRow: Decodable, Hashable, Sendable {
         let to = c.lenientList(String.self, forKey: .towards)
         towards = (to ?? []).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         endsHere = to.map { $0.allSatisfy { $0.trimmingCharacters(in: .whitespaces).isEmpty } } ?? false
+        via = (c.lenientList(String.self, forKey: .via) ?? []).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         crowd = c.string(.crowd).flatMap { ["low", "medium", "high"].contains($0) ? $0 : nil }
         endsAt = c.string(.endsAt)
         running = c.bool(.running) ?? true
@@ -112,9 +116,12 @@ struct NearbyStop: Decodable, Identifiable, Sendable {
     let oppositeAcross: Bool
     let oppositeName: String?
     let distM: Int?
+    /// Which way its buses go, by places a newcomer knows ("to UTown, Science,
+    /// Kent Ridge MRT"); nil with none, or from an older server.
+    let viaText: String?
     var id: String { stop.code }
 
-    enum CodingKeys: String, CodingKey { case stop, walkS, available, board, opposite, oppositeAcross, oppositeName, distM }
+    enum CodingKeys: String, CodingKey { case stop, walkS, available, board, opposite, oppositeAcross, oppositeName, distM, viaText }
 
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
@@ -126,6 +133,7 @@ struct NearbyStop: Decodable, Identifiable, Sendable {
         oppositeAcross = c.bool(.oppositeAcross) ?? stop.oppositeAcross ?? true
         oppositeName = c.string(.oppositeName) ?? stop.oppositeName
         distM = c.lenientInt(forKey: .distM)
+        viaText = c.string(.viaText).flatMap { $0.isEmpty ? nil : $0 }
     }
 }
 

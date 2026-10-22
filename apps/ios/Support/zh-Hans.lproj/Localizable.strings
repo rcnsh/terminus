@@ -28,6 +28,9 @@
 "Couldn't reach terminus. Try again in a moment." = "无法连接 terminus。请稍后再试。";
 "Couldn't save. Try again." = "无法保存，请再试一次。";
 "Couldn't send. Try again." = "无法发送，请再试一次。";
+"First bus" = "首班车";
+"First bus %@" = "%@首班车";
+"First bus tomorrow" = "明天首班车";
 "from %@" = "在 %@ 上车";
 "Getting off at %@" = "在 %@ 下车";
 "Home after your last class" = "下课后回家";
