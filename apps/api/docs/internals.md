@@ -848,7 +848,7 @@ bucket.
 
 Each Worker answers on two addresses: terminus.run, which people see and
 the apps call, and terminus.rcn.sh, the old one, which apps before 3.3.0
-(betas before 3.2.1-beta.2) call and which every app falls back to when terminus.run can't be reached
+(betas before 3.2.1-beta.2) call and which apps before 3.6.0 fall back to when terminus.run can't be reached
 (the beta's likewise). A page a browser opens on the old
 address is sent to the same path on the new one (`movedPage` in
 `src/site.ts`): a GET or HEAD asking for HTML, outside `/download/`,
@@ -1816,19 +1816,23 @@ and `SITE` in BuildConfig; the Mac as `Api.base`, `Api.linkBase` and
 `Api.site`, with `TerminusAPI` and `TerminusSite` in the beta's
 Info.plist. The Mac's Sparkle feed is there too.
 
-The old address is the backup (`SERVERS` on Android, `TerminusBackup` on
-the Mac). A request that can't reach the chosen address at all goes once to
+Neither app has a backup address built in. The old address was one until
+3.6.0; it's the owner's, so it doesn't go with the project, and an app
+shouldn't send its token to an address that might one day answer for
+someone else. The code stays: with a second address in `SERVERS` (Android)
+or `TerminusBackup` (Mac), a request that can't reach the chosen address at all goes once to
 the other, inside the same deadline (`Servers.order`): only when the server
 was never reached (no DNS answer, a refused connection, a TLS handshake cut
 off), so it can't arrive
 twice; a GET also after any other reset. Once the backup has answered, it
 goes first for 10 minutes, so a refused address doesn't slow every request.
-Apps before 3.3.0 call the old address, so it stays on the Worker; if the
+Apps before 3.3.0 call the old address, and apps before 3.6.0 fall back
+to it, so it stays on the Worker; if the
 project changes hands, a small proxy on rcn.sh passing every request to
 terminus.run keeps them working until they're gone.
 
 Settings, About has a Developer group that picks the server from those built
-in (`Servers.kt`, `Servers` in `Api.swift`): the site's two addresses and,
+in (`Servers.kt`, `Servers` in `Api.swift`): the site's address and,
 in a debug build, the dev stub (Android: `localhost:8787` through `adb
 reverse`, or `10.0.2.2:8787` from the emulator; Mac: `localhost:8787`). It's
 always there in debug and beta builds, and in a stable release after seven
@@ -1838,9 +1842,9 @@ Mac's preferences) is ignored on every read, and the default used. The
 stub keeps its own sign-in, so a real token never goes to it over plain
 HTTP: Android sets the session aside (`Store.swapSession`, `token-site` and
 `token-local`) and restarts the app; the Mac keeps a token per folder
-(`terminus`, `terminus-beta`, `terminus-dev`) and relaunches. The site's two
-addresses are one server with one token, so switching between them keeps
-you signed in.
+(`terminus`, `terminus-beta`, `terminus-dev`) and relaunches. The site's
+addresses are one server with one token, so a saved choice of the old
+address, dropped in 3.6.0, falls back to terminus.run still signed in.
 
 ### Live buses on the map
 

@@ -964,28 +964,29 @@ func sentence(_ text: String) -> String {
 }
 
 /// Which server the app talks to. Only ever one built in: the site's own
-/// two addresses, and in a debug build the local dev stub. The developer menu
+/// addresses, and in a debug build the local dev stub. The developer menu
 /// (Settings, About) picks one; nothing can add one, so it can't send the
 /// token anywhere but our own servers.
 ///
 /// The default is the address people see (terminus.run), the one that goes
-/// with the project if someone else takes it over. The other,
-/// terminus.rcn.sh, is the backup: a request that can't reach one at all
-/// goes to the other ([order]), so a network that refuses one of them (NUS
-/// Wi-Fi refused terminus.run in October 2026) doesn't stop the app.
+/// with the project if someone else takes it over, and for now the only
+/// one. With a backup built in (TerminusBackup), a request that can't reach
+/// one at all goes to the other ([order]), so a network that refuses one of
+/// them doesn't stop the app. The old address, terminus.rcn.sh, isn't one:
+/// it's the owner's, so it doesn't go with the project.
 enum Servers {
     /// The default: TerminusAPI in the beta build's Info.plist (build.sh), else the stable site's.
     static let defaultBase = Bundle.main.object(forInfoDictionaryKey: "TerminusAPI") as? String ?? "https://terminus.run"
-    /// The site's old address, the backup: TerminusBackup in the beta build's Info.plist, else the stable site's.
-    static let backupBase = Bundle.main.object(forInfoDictionaryKey: "TerminusBackup") as? String ?? "https://terminus.rcn.sh"
+    /// A second address of the site's, the backup: TerminusBackup in Info.plist. Neither build has one.
+    static let backupBase = Bundle.main.object(forInfoDictionaryKey: "TerminusBackup") as? String
     static let stub = "http://localhost:8787"
     private static let key = "server"
     private static let menuKey = "developerMenu"
 
-    /// [defaultBase] first, then the backup, then in a debug build the stub.
-    static func all(default base: String, backup: String, debug: Bool) -> [String] {
+    /// [defaultBase] first, then the backup if there is one, then in a debug build the stub.
+    static func all(default base: String, backup: String?, debug: Bool) -> [String] {
         var out: [String] = []
-        for s in [base, backup] + (debug ? [stub] : []) where !out.contains(s) { out.append(s) }
+        for s in [base] + (backup.map { [$0] } ?? []) + (debug ? [stub] : []) where !out.contains(s) { out.append(s) }
         return out
     }
 

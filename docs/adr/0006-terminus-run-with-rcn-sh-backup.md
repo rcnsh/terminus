@@ -1,3 +1,5 @@
 # terminus.run is the address; terminus.rcn.sh is the backup
 
 The apps' address flipped several times in October 2026 (7a275cc5, 3e924176, 98bdba11, 69c79c80). The deciding question turned out to be which domain goes with the project if someone else takes it over: terminus.run does, rcn.sh (the owner's own) doesn't (39e46e2e). So the apps, links and the Mac's update feed use terminus.run. A request that never reached the server (no DNS, refused connection, TLS reset, as NUS Wi-Fi once did) is tried once at terminus.rcn.sh. Both addresses stay attached to both Workers for older apps, and the remaining `rcn.sh` strings in the repo are deliberate.
+
+From 3.6.0 the apps have no backup address (the fallback code stays, with nothing to fall back to). Filters that refused terminus.run reclassified it, and an app that sends its token to rcn.sh would keep doing so after a handover, when rcn.sh is no longer the project's. The old address stays attached until no app before 3.6.0 is seen, then can be detached.
