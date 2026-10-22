@@ -174,6 +174,10 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate, Se
         if action == TripReminders.skipAction, let trip {
             // Waited for: iOS keeps the app awake until this returns.
             await TripSync.skip(trip: trip)
+        } else if action == UNNotificationDismissActionIdentifier {
+            // The heads-up swiped away: no "Leave now" after it, as on Android.
+            guard response.notification.request.identifier == TripReminders.soonID, let key = info["soonKey"] as? String else { return }
+            await MainActor.run { Reminders.dismissed(key) }
         } else if action == UNNotificationDefaultActionIdentifier {
             await MainActor.run { Links.open(URL(string: "terminus://plan")!) }
         }

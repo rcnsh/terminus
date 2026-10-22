@@ -30,7 +30,9 @@ import UserNotifications
             return
         }
         let now = ServerClock.now
-        let step = TripReminders.step(plan, soonTrip: d.string(forKey: "soonTrip"), soonAt: d.object(forKey: "soonAt") as? Date, now: now)
+        let step = TripReminders.step(
+            plan, soonTrip: d.string(forKey: "soonTrip"), soonAt: d.object(forKey: "soonAt") as? Date,
+            dismissed: d.string(forKey: "dismissedTrip"), now: now)
         switch step {
         case .heading:
             center.removePendingNotificationRequests(withIdentifiers: [TripReminders.soonID])
@@ -43,7 +45,9 @@ import UserNotifications
             if let soon {
                 d.set(TripReminders.soonKey(plan, now: now), forKey: "soonTrip")
                 d.set(max(soon, now), forKey: "soonAt")
-                schedule(TripReminders.soonID, at: soon, now: now, plan: plan, trip: trip, leaveNow: false, checked: checked)
+                schedule(
+                    TripReminders.soonID, at: soon, now: now, plan: plan, trip: trip, leaveNow: false, checked: checked,
+                    soonKey: TripReminders.soonKey(plan, now: now))
             }
             schedule(TripReminders.nowID, at: leaveAt, now: now, plan: plan, trip: trip, leaveNow: true, checked: checked)
         }
@@ -56,11 +60,17 @@ import UserNotifications
         center.removeDeliveredNotifications(withIdentifiers: ids)
     }
 
+    /// The heads-up for `key` was swiped away: "Leave now" doesn't follow
+    /// it, and no later answer brings either back for that trip.
+    static func dismissed(_ key: String) {
+        d.set(key, forKey: "dismissedTrip")
+        center.removePendingNotificationRequests(withIdentifiers: [TripReminders.nowID])
+    }
+
     /// Signed out: the reminders and what they were for.
     static func forget() {
         clear()
-        d.removeObject(forKey: "soonTrip")
-        d.removeObject(forKey: "soonAt")
+        for k in ["soonTrip", "soonAt", "dismissedTrip"] { d.removeObject(forKey: k) }
     }
 
     /// The card's "Not going", with the server's own words, as the reminders' one button.
@@ -73,12 +83,18 @@ import UserNotifications
     /// scheduled a reminder, and without it there'd be no button.
     static func registerCategories(skipLabel: String? = nil) {
         let skip = UNNotificationAction(identifier: TripReminders.skipAction, title: skipLabel ?? L("Not going"), options: [])
+        // Both tell the app when one is swiped away (customDismissAction).
         center.setNotificationCategories([
-            UNNotificationCategory(identifier: TripReminders.category, actions: [skip], intentIdentifiers: [])
+            UNNotificationCategory(
+                identifier: TripReminders.category, actions: [skip], intentIdentifiers: [], options: .customDismissAction),
+            UNNotificationCategory(
+                identifier: TripReminders.quietCategory, actions: [], intentIdentifiers: [], options: .customDismissAction),
         ])
     }
 
-    private static func schedule(_ id: String, at: Date, now: Date, plan: NextAnswer, trip: String, leaveNow: Bool, checked: Date) {
+    private static func schedule(
+        _ id: String, at: Date, now: Date, plan: NextAnswer, trip: String, leaveNow: Bool, checked: Date, soonKey: String? = nil
+    ) {
         let words = TripReminders.words(plan, leaveNow: leaveNow, firesAt: max(at, now), checked: checked)
         let c = UNMutableNotificationContent()
         c.title = words.title
@@ -86,8 +102,11 @@ import UserNotifications
         c.body = words.body
         c.sound = .default
         c.threadIdentifier = "trip"
-        c.categoryIdentifier = plan.card?.actions.contains { $0.id == "skipped" } == true ? TripReminders.category : ""
-        c.userInfo = ["trip": plan.card?.actions.first { $0.id == "skipped" }?.trip ?? trip]
+        c.categoryIdentifier =
+            plan.card?.actions.contains { $0.id == "skipped" } == true ? TripReminders.category : TripReminders.quietCategory
+        var info: [String: Any] = ["trip": plan.card?.actions.first { $0.id == "skipped" }?.trip ?? trip]
+        if let soonKey { info["soonKey"] = soonKey }
+        c.userInfo = info
         c.interruptionLevel = .timeSensitive
         c.relevanceScore = 1
         // Both on the server's clock, so the wait is right on a phone whose clock is out.

@@ -12,6 +12,8 @@ enum TripReminders {
     static let nowID = "leave-now"
     /// The notifications' category: the card's "Not going" button.
     static let category = "trip"
+    /// A heads-up without that button: its own category, so a dismissal is still heard.
+    static let quietCategory = "trip-quiet"
     static let skipAction = "skipped"
 
     enum Step: Equatable {
@@ -29,8 +31,9 @@ enum TripReminders {
     }
 
     /// `soonTrip` and `soonAt` are the trip the heads-up was last scheduled
-    /// for (its `soonKey`), and when. `now` is on the server's clock.
-    static func step(_ plan: NextAnswer, soonTrip: String?, soonAt lastSoonAt: Date?, now: Date) -> Step {
+    /// for (its `soonKey`), and when; `dismissed`, the trip whose heads-up
+    /// was swiped away. `now` is on the server's clock.
+    static func step(_ plan: NextAnswer, soonTrip: String?, soonAt lastSoonAt: Date?, dismissed: String? = nil, now: Date) -> Step {
         let card = plan.card
         let phase = card?.phase ?? "idle"
         // The bus gone with nothing known: you may be on it, so no "Leave now".
@@ -41,6 +44,8 @@ enum TripReminders {
             let leaveAt = plan.leaveAt, leaveAt > now
         else { return .clear }
         let key = soonKey(plan, now: now)
+        // Its heads-up swiped away: nothing more for this trip, so no "Leave now", as on Android.
+        if key != nil && key == dismissed { return .clear }
         let clearFirst = soonTrip != nil && soonTrip != key
         // The heads-up goes once per trip: once it has gone, a leave-by that
         // moves later doesn't bring it back.

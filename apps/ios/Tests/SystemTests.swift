@@ -93,6 +93,9 @@ private func answer(_ name: String) throws -> (NextAnswer, Date) {
     // Another trip's are cleared first.
     let other = TripReminders.step(a, soonTrip: "4:500:COM3", soonAt: nil, now: now)
     #expect(other == .schedule(clearFirst: true, trip: "4:600:UTOWN", soon: remindAt, leaveAt: leaveAt))
+    // Its heads-up swiped away: no "Leave now" either, and nothing comes back; another trip's still does.
+    #expect(TripReminders.step(a, soonTrip: key, soonAt: now.addingTimeInterval(-60), dismissed: key, now: now) == .clear)
+    #expect(TripReminders.step(a, soonTrip: key, soonAt: nil, dismissed: lastWeek, now: now) != .clear)
     // Past the leave-by, nothing to schedule.
     #expect(TripReminders.step(a, soonTrip: nil, soonAt: nil, now: leaveAt.addingTimeInterval(1)) == .clear)
 }
