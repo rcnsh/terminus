@@ -170,8 +170,8 @@ internal fun BusPull(
         fun kick() {
             pv.frame++
             pv.hint = motion.hint
-            // A job rather than an effect keyed on a flag: the loop ending and a touch starting it again inside one frame left the flag
-            // where it was, so no effect ran and a pull let go stayed at "Checking…" for good.
+            // A job rather than an effect keyed on a flag: the loop ending and a touch starting it again inside one frame leave the flag
+            // where it was, so no effect would run and a pull let go would stay at "Checking…" for good.
             if (!motion.moving || frames[0]?.isActive == true) return
             frames[0] = scope.launch {
                 var last = withFrameNanos { it }

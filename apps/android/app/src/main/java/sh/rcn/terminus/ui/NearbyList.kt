@@ -152,8 +152,8 @@ private fun Road(row: BoardRow, color: Color, modifier: Modifier) {
 }
 
 /**
- * The local wording, for an older server and the widget's own countdown: anything but a live time keeps its "~", as the server's `eta`
- * does.
+ * The local wording, for the widget's own countdown: anything but a live time keeps its "~", as the server's `eta` does; worked out here
+ * for an older server.
  */
 internal fun eta(s: Int?, quality: String) =
     when {

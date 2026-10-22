@@ -167,7 +167,7 @@ internal fun WelcomeScreen(
 
 /**
  * The services as NUS paints them, for the livery. The API's ROUTE_COLORS (campus.ts) is the source, and every other screen takes the
- * colours from /campus; this one shows before there's an account to ask with.
+ * colours from /api/campus; this one shows before there's an account to ask with.
  */
 internal val LIVERY =
     listOf(

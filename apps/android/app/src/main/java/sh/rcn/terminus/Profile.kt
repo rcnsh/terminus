@@ -35,13 +35,13 @@ data class Limits(
 }
 
 /**
- * The profile as the server keeps it (apps/api/src/profile.ts), edited in place and sent back whole with PUT /me/profile. Kept as JSON so
- * fields this version doesn't know about survive a save.
+ * The profile as the server keeps it (apps/api/src/profile.ts), edited in place and sent back whole with PUT /api/me/profile. Kept as JSON
+ * so fields this version doesn't know about survive a save.
  */
 class ProfileDoc(val json: JSONObject) {
     fun copy() = ProfileDoc(JSONObject(json.toString()))
 
-    /** What the server allows (its `limits`); today's values from an older server. */
+    /** What the server allows (its `limits`); today's values, worked out here for an older server. */
     val limits: Limits
         get() = Limits.parse(json.optJSONObject("limits"))
 

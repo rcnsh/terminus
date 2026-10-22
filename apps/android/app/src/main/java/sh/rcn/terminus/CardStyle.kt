@@ -21,7 +21,7 @@ object CardStyle {
     /** The trip as a line diagram, until another is chosen. */
     const val DEFAULT = STEPS
 
-    /** In terminusPrefs; a sign-out keeps it ([Store.clear]). A style since removed (the ticket) reads as [DEFAULT]. */
+    /** In terminusPrefs; a sign-out keeps it ([Store.clear]). A style not in [ALL] reads as [DEFAULT]. */
     const val KEY = "card_style"
 
     private fun prefs(ctx: Context) = terminusPrefs(ctx)

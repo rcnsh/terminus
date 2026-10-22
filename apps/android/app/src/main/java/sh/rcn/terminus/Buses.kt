@@ -6,14 +6,14 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * The Buses tab's data: a stop's board (`/arrivals`, or a `/me/nearby` stop), a service's line (`/line`), the pages to swipe between, and
- * the search. Plain JSON in and plain values out, so it's tested on the JVM (BusesTest); the screens only lay it out.
+ * The Buses tab's data: a stop's board (`/api/arrivals`, or a `/api/me/nearby` stop), a service's line (`/api/line`), the pages to swipe
+ * between, and the search. Plain JSON in and plain values out, so it's tested on the JVM (BusesTest); the screens only lay it out.
  *
  * Every time shown is one the API gave: the next bus and its `later` list. Nothing here works out a time from a headway or for another
  * stop.
  */
 
-/** A stop's board. [distM] only for the nearest stop, from /me/nearby. */
+/** A stop's board. [distM] only for the nearest stop, from /api/me/nearby. */
 data class Board(
     val code: String,
     val name: String,
@@ -52,7 +52,7 @@ data class Board(
             )
         }
 
-        /** A stop from /me/nearby, as a board; its answer's time is [asOfMs]. */
+        /** A stop from /api/me/nearby, as a board; its answer's time is [asOfMs]. */
         fun of(s: NearbyStop, asOfMs: Long?) =
             Board(s.code, s.longName ?: s.name, s.opposite, s.available, s.board, asOfMs, s.distM, s.oppositeAcross, s.oppositeName)
     }
@@ -70,7 +70,7 @@ data class LineBus(val id: String, val plate: String?, val crowd: String?, val a
 /** The stop the line was opened from: its place on the line and its board row there. */
 data class LineHere(val code: String, val index: Int, val row: BoardRow?)
 
-/** `/line`: one service's stops in route order and where its buses are. */
+/** `/api/line`: one service's stops in route order and where its buses are. */
 data class Line(
     val svc: String,
     val color: Long,
@@ -303,7 +303,7 @@ sealed interface BusHit {
             get() = SearchRank.Key("service", svc, svc)
     }
 
-    /** [name] is the full name; [aliases] its short name, lower case, and the nicknames /campus has for it ("library"). */
+    /** [name] is the full name; [aliases] its short name, lower case, and the nicknames /api/campus has for it ("library"). */
     data class Stop(val code: String, val name: String, val services: List<String>, val aliases: List<String> = emptyList()) : BusHit {
         override val key
             get() = SearchRank.Key("stop", code, name, aliases)
@@ -312,14 +312,14 @@ sealed interface BusHit {
 
 /**
  * What the tab's search looks through, as the web builds it (busesTabIndex): every service by its code, in code order, then every stop by
- * its full name, in /campus order, also found by its short name and its nicknames ([stopAliases], from /campus's destinations of kind
- * "stop").
+ * its full name, in /api/campus order, also found by its short name and its nicknames ([stopAliases], from /api/campus's destinations of
+ * kind "stop").
  */
 fun busesTabIndex(stops: List<MapStop>, services: List<String>, stopAliases: Map<String, List<String>>): List<BusHit> =
     services.sorted().map { BusHit.Service(it) } +
         stops.map { s -> BusHit.Stop(s.code, s.fullName, s.services, listOf(s.name.lowercase()) + stopAliases[s.code].orEmpty()) }
 
-/** The tab's index from the map's /campus. */
+/** The tab's index from the map's /api/campus. */
 fun busesTabIndex(campus: CampusMap): List<BusHit> = busesTabIndex(campus.stops, campus.serviceCodes, campus.stopAliases)
 
 /**

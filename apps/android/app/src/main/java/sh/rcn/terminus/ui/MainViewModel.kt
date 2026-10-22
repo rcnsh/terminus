@@ -75,7 +75,7 @@ data class UiState(
     val reportSending: Boolean = false,
     val reportResult: String? = null,
     val reportSent: Boolean = false,
-    /** Today's timeline (/me/day), for under the planned answer. */
+    /** Today's timeline (/api/me/day), for under the planned answer. */
     val day: DayPlan? = null,
     /** Just taken off Today: its row says so where it was, with Undo (or why it didn't go). */
     val removed: TodayNote? = null,
@@ -499,8 +499,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun dismissRemoved(key: String) = _state.update { if (it.removed?.item?.key == key) it.copy(removed = null) else it }
 
     /**
-     * A new plan from /me/signal, asked for with [token]: shown, cached for the widget, and the alarms moved. False, and none of it, when
-     * the phone signed out (or into another account) while it was asked for.
+     * A new plan from /api/me/signal, asked for with [token]: shown, cached for the widget, and the alarms moved. False, and none of it,
+     * when the phone signed out (or into another account) while it was asked for.
      */
     private fun applyPlan(ctx: Application, json: org.json.JSONObject, token: String): Boolean {
         val now = System.currentTimeMillis()
@@ -767,8 +767,8 @@ internal fun installedFromPlay(ctx: android.content.Context): Boolean = runCatch
 /**
  * The answer on Now is fetched again this often while it's on screen: the API caches 15 s, so sooner shows nothing new. Not sooner at the
  * server's own moments (the card's `nextChangeAt`, the plan's `refreshAt`) either: a leave time that keeps sliding (a late bus) moves them
- * a few seconds on with every answer, which brought the polling down to every 5 s. The countdown ticks on the phone in between; the Mac and
- * the server's trip engine wait 30 s too.
+ * a few seconds on with every answer, so following them would poll every 5 s. The countdown ticks on the phone in between; the Mac and the
+ * server's trip engine wait 30 s too.
  */
 internal const val POLL_MS = 30_000L
 

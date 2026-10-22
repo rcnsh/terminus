@@ -172,8 +172,7 @@ object WidgetModes {
     }
 
     /**
-     * Whether the widget shows the buttons at any of the sizes the home screen has given it (one each way up). True when it hasn't said, as
-     * before.
+     * Whether the widget shows the buttons at any of the sizes the home screen has given it (one each way up). True when it hasn't said.
      */
     private fun rowShownAnySize(ctx: Context, id: GlanceId, large: Boolean): Boolean =
         anySize(ctx, id, unknown = true) { w, h -> rowShown(w, h, large) }

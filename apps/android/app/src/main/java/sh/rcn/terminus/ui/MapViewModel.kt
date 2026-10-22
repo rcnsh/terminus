@@ -62,7 +62,7 @@ data class MapUi(
     val buses: List<LiveBus> = emptyList(),
     /** The buses are where they were last seen, the feed being down: shown dimmed, and said so. */
     val busesStale: Boolean = false,
-    /** Counts every answer from /buses, the same list or not, so the slides are planned again each time. */
+    /** Counts every answer from /api/buses, the same list or not, so the slides are planned again each time. */
     val busAnswers: Int = 0,
     val busStatus: BusStatus? = null,
     val sheet: MapSheet? = null,
@@ -104,7 +104,7 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
     private var styleFailed = false
     private var campusFailed = false
 
-    /** When /buses last answered (elapsedRealtime, which counts on in sleep), to tell when the buses shown are old. */
+    /** When /api/buses last answered (elapsedRealtime, which counts on in sleep), to tell when the buses shown are old. */
     private var busesAt = 0L
 
     private fun api(token: String?) = Api(token)

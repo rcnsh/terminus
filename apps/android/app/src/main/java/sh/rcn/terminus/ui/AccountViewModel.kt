@@ -75,12 +75,14 @@ data class AccountState(
      * in, so what was fetched between the switch and this save is in the old one.
      */
     val langSaved: Int = 0,
-    /** The timetable is for a semester that has ended (/me needsReimport), and which one. */
+    /** The timetable is for a semester that has ended (/api/me needsReimport), and which one. */
     val needsReimport: Boolean = false,
     val term: String? = null,
     /** Imported classes whose room couldn't be placed, until each gets a stop or is skipped. */
     val unplaced: List<sh.rcn.terminus.Unplaced> = emptyList(),
-    /** /me, unanswered at sign-in, has since said the account was never set up: the app switches to setup ([setupShown] once it has). */
+    /**
+     * /api/me, unanswered at sign-in, has since said the account was never set up: the app switches to setup ([setupShown] once it has).
+     */
     val setupDue: Boolean = false,
 )
 
@@ -194,7 +196,7 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Unknown since sign-in: settled now, and setup shown only if /me says so. */
+    /** Unknown since sign-in: settled now, and setup shown only if /api/me says so. */
     private fun settle(me: Me) {
         if (!store.setupUnknown) return
         store.setupUnknown = false
@@ -207,8 +209,8 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     private var settleJob: Job? = null
 
     /**
-     * Whether the account needs setup, while sign-in left it unknown: /me alone, one ask at a time, rather than the whole of [refresh] (the
-     * profile and the campus too) each time an answer comes through.
+     * Whether the account needs setup, while sign-in left it unknown: /api/me alone, one ask at a time, rather than the whole of [refresh]
+     * (the profile and the campus too) each time an answer comes through.
      */
     fun settleSetup() {
         val token = store.token ?: return
@@ -558,9 +560,9 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
             }
             Session.signedIn(getApplication())
             // A new account, or one that was never set up, goes through setup:
-            // only on /me's word, asked once more after a moment. Unanswered,
+            // only on /api/me's word, asked once more after a moment. Unanswered,
             // no setup now (its pickers save the whole profile, which could
-            // overwrite a real one); the next /me decides ([refresh]).
+            // overwrite a real one); the next /api/me decides ([refresh]).
             val me =
                 runCatching { Api(token).me() }.getOrNull()
                     ?: run {

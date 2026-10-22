@@ -33,8 +33,8 @@ class AnswerTest {
     private fun ms(iso: String) = Instant.parse(iso).toEpochMilli()
 
     /**
-     * Every golden there is, English and Chinese, by the endpoint it answers: /me/nearby has `stops`, /me/day `items`, the rest are
-     * /me/next. A new fixture is read without being listed here.
+     * Every golden there is, English and Chinese, by the endpoint it answers: /api/me/nearby has `stops`, /api/me/day `items`, the rest are
+     * /api/me/next. A new fixture is read without being listed here.
      */
     private fun everyGolden(): List<Pair<String, JSONObject>> {
         val dir = listOf("../../api/test/fixtures/answers", "../api/test/fixtures/answers").map(::File).first { it.isDirectory }
@@ -91,7 +91,6 @@ class AnswerTest {
 
     @Test
     fun aReplyOfTheWrongShapeIsAParseErrorNotOffline() {
-        // Read as offline before: "Couldn't reach terminus" for a server that answered.
         assertThrows(ParseError::class.java) { parseNearby(JSONObject("""{"stops":[{"board":[]}]}""")) }
         assertThrows(ParseError::class.java) { Campus.parse(JSONObject("{}")) }
         assertThrows(ParseError::class.java) { DayPlan.parse(JSONObject("""{"items":[1]}""")) }
@@ -217,7 +216,7 @@ class AnswerTest {
         val card = a.card!!
         assertFalse(card.remind)
         assertEquals("earlier:4:600:UTOWN", card.suggestion!!.id)
-        // Older cards have none of it, and still remind.
+        // A card with no suggestion still reminds.
         val golden = golden("class-bus").card!!
         assertNull(golden.suggestion)
         assertTrue(golden.remind)
@@ -444,7 +443,7 @@ class AnswerTest {
         assertEquals("14 min ride · off at Kent Vale", c.firstRideText)
         assertEquals("Change at Kent Vale · 5 min wait", c.changeText)
         assertNull(c.walk)
-        // A journey from a server before changes has none.
+        // A journey on one bus has no change.
         assertNull(golden("class-bus").card!!.journey!!.change)
     }
 

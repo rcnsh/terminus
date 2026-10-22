@@ -4,8 +4,8 @@ import androidx.annotation.StringRes
 
 /**
  * The few words the card styles put round the server's journey (Journey), shared by the app's card and the widgets. The server words them
- * (`journey.title`, `byText`, `arriveText`, `backupText`, ...); only the countdown is worked out here, because it ticks, and the rest only
- * for an older server that doesn't send them.
+ * (`journey.title`, `byText`, `arriveText`, `backupText`, ...); only the countdown is worked out here, because it ticks. The rest is worked
+ * out here for an older server.
  */
 object JourneyText {
     /**

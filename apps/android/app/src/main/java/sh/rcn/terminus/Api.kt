@@ -111,7 +111,7 @@ data class NextAnswer(
     val title: String
         get() = card?.title ?: label
 
-    /** [title], or for an older server without it, "D2 · 09:42" from the label and departure time; anything but a live time gets a "~". */
+    /** [title]; "D2 · 09:42" from the label and departure time (a "~" on anything but a live time), worked out here for an older server. */
     fun clockLabel(format: (Long) -> String): String {
         card?.title?.let {
             return it
@@ -158,7 +158,7 @@ data class NextAnswer(
     }
 }
 
-/** `card` in /me/next (apps/api/src/card.ts). Lines are shown verbatim. */
+/** `card` in /api/me/next (apps/api/src/card.ts). Lines are shown verbatim. */
 data class Card(
     val kind: String,
     /** Dim from this instant, epoch ms. */
@@ -174,7 +174,7 @@ data class Card(
     val goNow: String?,
     val note: String?,
     val estimate: String?,
-    /** v2: where the trip is: idle, due, heading, waiting, riding, missed, arrived. */
+    /** Where the trip is: idle, due, heading, waiting, riding, missed, arrived. */
     val phase: String = "idle",
     /** "On your way", above the answer. Null when idle. */
     val phaseText: String? = null,
@@ -182,7 +182,7 @@ data class Card(
     val glance: String? = null,
     /** One line: a collapsed notification, a compact widget. */
     val line: String? = null,
-    /** Buttons the server decided to show; tapping one sends it to /me/signal. */
+    /** Buttons the server decided to show; tapping one sends it to /api/me/signal. */
     val actions: List<CardAction> = emptyList(),
     /** "Last D2 from UTown in 18 min". */
     val warning: String? = null,
@@ -190,7 +190,7 @@ data class Card(
     val nextChangeAtMs: Long? = null,
     /** False when the user turned reminders off for this class: no leave notification. */
     val remind: Boolean = true,
-    /** "Leave one bus earlier for CS2030?", accepted or turned down with /me/choice. */
+    /** "Leave one bus earlier for CS2030?", accepted or turned down with /api/me/choice. */
     val suggestion: Suggestion? = null,
     /** On the bus: the stops from boarding to getting off, for a progress bar. */
     val ride: Ride? = null,
@@ -538,7 +538,7 @@ data class WalkTo(val name: String, val lat: Double, val lon: Double) {
     fun mapsUri(): android.net.Uri = "https://www.google.com/maps/dir/?api=1&destination=$lat,$lon&travelmode=walking".toUri()
 }
 
-/** Something terminus learned and offers to change; `id` goes back to /me/choice. */
+/** Something terminus learned and offers to change; `id` goes back to /api/me/choice. */
 data class Suggestion(val id: String, val text: String, val accept: String, val dismiss: String) {
     companion object {
         fun parse(o: JSONObject): Suggestion? =
@@ -645,7 +645,7 @@ data class DayPlan(val items: List<DayItem>, val note: String?, val date: String
  * A service at a stop and its next bus. `color` (#rrggbb), the service's colour. `paid`: a public bus, with a fare. `later`: the buses
  * after the next one the feed knows, soonest first: every later time there is, so nothing else is guessed. `towards`: the next stop's name,
  * then where the route ends (one entry when they're the same). `crowd`: the next bus's (low, medium, high). `endsAtMs`: when the service
- * stops for the day. An older server leaves the newer fields out: empty, or null.
+ * stops for the day. The newer fields are null or empty from an older server.
  */
 data class BoardRow(
     val svc: String,
@@ -659,7 +659,7 @@ data class BoardRow(
     val via: List<String> = emptyList(),
     val crowd: String? = null,
     val endsAtMs: Long? = null,
-    /** The route ends at this stop: the server gave `towards` and it's empty. An older server gives none. */
+    /** The route ends at this stop: the server gave `towards` and it's empty; false from an older server. */
     val endsHere: Boolean = false,
     /** False: a service that calls here but isn't running now (asked for with `stopped=1`). */
     val running: Boolean = true,
@@ -686,7 +686,7 @@ private fun parseLater(r: JSONObject): List<LaterBus> {
     }
 }
 
-/** One board row, wherever a board appears (/arrivals, /me/nearby, /line). */
+/** One board row, wherever a board appears (/api/arrivals, /api/me/nearby, /api/line). */
 fun parseBoardRow(r: JSONObject): BoardRow =
     BoardRow(
         svc = r.getString("svc"),
@@ -973,14 +973,14 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         }
     }
 
-    /** Something that happened on the trip ("boarded", "missed", ...). Answers with the new /me/next. */
+    /** Something that happened on the trip ("boarded", "missed", ...). Answers with the new /api/me/next. */
     suspend fun signal(kind: String, trip: String?): JSONObject {
         val body = JSONObject().put("kind", kind)
         trip?.let { body.put("trip", it) }
         return request("POST", "/api/me/signal" + if (hour12) "?h12=1" else "", body)
     }
 
-    /** A one-off trip later today: planned like a class. Answers with the new /me/next. */
+    /** A one-off trip later today: planned like a class. Answers with the new /api/me/next. */
     suspend fun once(target: Target, atMin: Int): JSONObject {
         val body = JSONObject().put("atMin", atMin)
         when (target) {
@@ -1042,9 +1042,9 @@ class Api(private val token: String?, private val fast: Boolean = false, private
     suspend fun day(lat: Double? = null, lon: Double? = null, acc: Double? = null): DayPlan = DayPlan.parse(dayJson(lat, lon, acc).first)
 
     /**
-     * /me/day as it came: kept for when the phone is offline ([Store.saveDay]). With a location, the next class is planned from there, as
-     * the card is. With the language it's written in, as [L.header] gives it: the account's choice wins over the one asked in, and a switch
-     * reaches the account a moment after the app shows it. An older server doesn't say: the one asked in.
+     * /api/me/day as it came: kept for when the phone is offline ([Store.saveDay]). With a location, the next class is planned from there,
+     * as the card is. With the language it's written in, as [L.header] gives it: the account's choice wins over the one asked in, and a
+     * switch reaches the account a moment after the app shows it. Null from an older server: the one asked in.
      */
     suspend fun dayJson(lat: Double? = null, lon: Double? = null, acc: Double? = null): Pair<JSONObject, String> {
         val q = buildList {
@@ -1157,7 +1157,7 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         conn.requestMethod = method
         // Fast: 2 s to connect plus 7 s to read stays under the broadcast's
         // budget. The Worker gives each NUS call up to 5 s, and a cold
-        // /me/next mints a guest token first, which usually fits in 7 s. A
+        // /api/me/next mints a guest token first, which usually fits in 7 s. A
         // connection is up in well under a second, or not at all within 2.
         // The read timeout counts each wait for bytes, but the answer is one
         // small JSON body sent at once, so it is in effect the wait for the
@@ -1397,12 +1397,12 @@ data class Residence(
     val common: Boolean = false,
     val walkMin: Int? = null,
 ) {
-    /** Minutes on foot to its stop, as the server works them out; at a steady 1.3 m/s from an older server. */
+    /** Minutes on foot to its stop, as the server works them out; from the metres at 1.3 m/s, worked out here for an older server. */
     val minutes: Int
         get() = walkMin ?: maxOf(1, Math.round(walkM / 1.3 / 60).toInt())
 }
 
-/** `colors`: each service's colour as NUS paints it, from /campus's routes. */
+/** `colors`: each service's colour as NUS paints it, from /api/campus's routes. */
 data class Campus(
     val stops: List<Stop>,
     val residences: List<Residence>,
@@ -1579,7 +1579,7 @@ fun isNewer(latest: String, current: String): Boolean {
 
 fun JSONObject.optStringOrNull(key: String): String? = if (!has(key) || isNull(key)) null else optString(key)
 
-/** /me/nearby's stops, nearest first. */
+/** /api/me/nearby's stops, nearest first. */
 fun parseNearby(json: JSONObject): List<NearbyStop> = parsing {
     val stops = json.getJSONArray("stops")
     (0 until stops.length()).map { i ->
@@ -1592,7 +1592,7 @@ fun parseNearby(json: JSONObject): List<NearbyStop> = parsing {
             available = s.optBoolean("available", true),
             opposite = s.optStringOrNull("opposite")?.ifEmpty { null },
             longName = s.getJSONObject("stop").optStringOrNull("longName")?.ifEmpty { null },
-            // On the stop object, or beside it as `opposite` is; an older server has neither: across, as before.
+            // On the stop object, or beside it as `opposite` is; across when null from an older server.
             oppositeAcross = (s.getJSONObject("stop").takeIf { it.has("oppositeAcross") } ?: s).optBoolean("oppositeAcross", true),
             oppositeName = (s.getJSONObject("stop").optStringOrNull("oppositeName") ?: s.optStringOrNull("oppositeName"))?.ifEmpty { null },
             distM = if (s.has("distM") && !s.isNull("distM")) s.optInt("distM") else null,

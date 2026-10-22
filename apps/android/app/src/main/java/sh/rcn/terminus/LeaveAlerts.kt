@@ -407,7 +407,7 @@ class LeaveReceiver : BroadcastReceiver() {
             // A fresh answer re-arms or posts, through Refresher -> LeaveAlerts.arm.
             // Fetched right here: the alarm's idle allowance is seconds long,
             // and a queued job could run after the heads-up was due. Only
-            // /me/next here; the day plan and chosen widgets follow in a job.
+            // /api/me/next here; the day plan and chosen widgets follow in a job.
             // An exact alarm may start the live notification: the trip is on,
             // and no push may come to start it (one at normal priority can't).
             LeaveAlerts.ACTION_CHECK ->

@@ -110,8 +110,8 @@ class Store(context: Context) {
     }
 
     /**
-     * Today's plan (/me/day) as last fetched, for when the phone is offline (OfflineDay), and the plan read from it; one this version can't
-     * read throws [ParseError] and isn't kept. Null, and nothing kept, when [sentWith] is no longer this phone's token, as for
+     * Today's plan (/api/me/day) as last fetched, for when the phone is offline (OfflineDay), and the plan read from it; one this version
+     * can't read throws [ParseError] and isn't kept. Null, and nothing kept, when [sentWith] is no longer this phone's token, as for
      * [saveAnswer]. [lang] is the language the server wrote it in ([Api.dayJson]), in [L.header]'s form: one in another language than the
      * app's is fetched again ([dayLang]).
      */
@@ -139,9 +139,9 @@ class Store(context: Context) {
     }
 
     /**
-     * The buses near you (/api/nearby) as last fetched, for the Nearby widget and the big widget's next buses: one board for every widget,
-     * whoever fetched it (a widget's ↻, the background refresh, the Buses tab). One this version can't read throws [ParseError] and isn't
-     * kept; nothing is kept when [sentWith] is no longer this phone's token.
+     * The buses near you (/api/me/nearby) as last fetched, for the Nearby widget and the big widget's next buses: one board for every
+     * widget, whoever fetched it (a widget's ↻, the background refresh, the Buses tab). One this version can't read throws [ParseError] and
+     * isn't kept; nothing is kept when [sentWith] is no longer this phone's token.
      */
     fun saveNearby(json: JSONObject, fetchedAtMs: Long, sentWith: String): List<NearbyStop>? {
         val stops = parseNearby(json)
@@ -199,8 +199,8 @@ class Store(context: Context) {
         set(value) = prefs.edit { putBoolean(KEY_NEEDS_SETUP, value) }
 
     /**
-     * Signed in without an answer from /me: whether the account needs setup isn't known yet. The next /me (AccountViewModel.refresh)
-     * settles it.
+     * Signed in without an answer from /api/me: whether the account needs setup isn't known yet. The next /api/me
+     * (AccountViewModel.refresh) settles it.
      */
     var setupUnknown: Boolean
         get() = prefs.getBoolean(KEY_SETUP_UNKNOWN, false)
@@ -256,7 +256,7 @@ class Store(context: Context) {
         get() = prefs.getString(KEY_ALERTED, null)
         set(value) = prefs.edit { putString(KEY_ALERTED, value) }
 
-    /** The Firebase token last sent to /me/push, so it's only sent when it changes (or now and then, Push). */
+    /** The Firebase token last sent to /api/me/push, so it's only sent when it changes (or now and then, Push). */
     var pushToken: String?
         get() = prefs.getString(KEY_PUSH, null)
         set(value) = prefs.edit { putString(KEY_PUSH, value) }

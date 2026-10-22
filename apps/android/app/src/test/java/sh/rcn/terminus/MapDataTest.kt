@@ -7,7 +7,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The Map tab's data, from replies shaped like the API's (see its /campus and /buses tests). */
+/** The Map tab's data, from replies shaped like the API's (see its /api/campus and /api/buses tests). */
 class MapDataTest {
     private val campusJson =
         JSONObject(
@@ -149,7 +149,7 @@ class MapDataTest {
     fun aLoopWhoseEndsDoNotMeetStillSlidesOnPastItsStart() {
         // Like A1 at KRB: out east about 1.1 km, then back west on the other
         // side of the road, ending some 40 m from where it started. The loop
-        // comes from /campus, not from where the line ends.
+        // comes from /api/campus, not from where the line ends.
         val campus =
             JSONObject(
                 """{"stops": [], "routes": {
@@ -296,7 +296,7 @@ class MapDataTest {
             BusStrip.of(b),
         )
         assertFalse(BusStrip.of(b).between)
-        // An older API: just its next stop.
+        // Just its next stop, worked out here for an older server.
         assertEquals(BusStrip(passed = null, here = null, next = "LT 13", after = emptyList(), more = 0), BusStrip.of(c))
         // Past a one-way line's end: nothing ahead to list.
         assertFalse(BusStrip.of(d).any)

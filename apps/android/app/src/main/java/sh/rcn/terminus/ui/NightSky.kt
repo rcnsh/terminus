@@ -118,8 +118,8 @@ internal fun parallax(s: Float): Parallax {
 internal data class RoadBus(val color: Long, val far: Float, val live: Boolean)
 
 /**
- * What's on the horizon's road: your stop's sign and your bus, or a shuttle going by. It's a picture with no words: drawn this small, they
- * were too hard to read, so the card says them under it ([RoadLine]).
+ * What's on the horizon's road: your stop's sign and your bus, or a shuttle going by. It's a picture with no words: drawn this small,
+ * they're too hard to read, so the card says them under it ([RoadLine]).
  */
 internal data class Road(val stop: Boolean = false, val bus: RoadBus? = null, val shuttle: Boolean = true)
 

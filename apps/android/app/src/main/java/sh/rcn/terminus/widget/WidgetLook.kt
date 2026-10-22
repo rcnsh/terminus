@@ -200,7 +200,7 @@ internal fun barBitmap(ctx: Context, look: WidgetLook, widthDp: Float, heightDp:
         val scale = 0.42f
         drawContext.canvas.saveLayer(Rect(left, 0f, size.width, size.height), Paint().apply { alpha = 0.55f })
         inset(left = left, top = 0f, right = 0f, bottom = 0f) {
-            // No near hill: drawn over the bar's own colour, it showed as a pale box.
+            // No near hill: drawn over the bar's own colour, it shows as a pale box.
             horizon(
                 size.height - 92 * scale * px * 0.86f,
                 Color.Transparent,
