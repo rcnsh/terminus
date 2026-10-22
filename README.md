@@ -139,6 +139,36 @@ down the clock itself, so no screen ever shows a stale "4 min".
 More in [ARCHITECTURE.md](ARCHITECTURE.md), and in depth in
 [apps/api/docs/internals.md](apps/api/docs/internals.md).
 
+### By the numbers
+
+<!-- loc -->
+About 148.3k lines of code in 586 files, not counting blank lines, vendored code, test fixtures
+or the bundled data. Each bar is solid for code and light for tests. `pnpm loc --readme` refreshes these tables.
+
+| Part | Code | Tests | |
+| --- | ---: | ---: | --- |
+| [API](apps/api) | 31.5k | 25.8k | `███████████░░░░░░░░░` |
+| [Website](apps/web) | 18.3k | – | `██████▍` |
+| [Android](apps/android) | 25.1k | 4.3k | `█████████░` |
+| [Mac](apps/macos) | 10.6k | 1.9k | `████░` |
+| [iPhone](apps/ios) | 22.9k | 4.1k | `████████░` |
+| [Scripts and CI](scripts) | 3.5k | – | `█▎` |
+| Other | 0.3k | – | `▏` |
+
+| Language | Lines | Share | |
+| --- | ---: | ---: | --- |
+| JavaScript | 43.4k | 29.2% | `████████████████████` |
+| Swift | 38.5k | 25.9% | `█████████████████▊` |
+| Kotlin | 28.9k | 19.5% | `█████████████▍` |
+| TypeScript | 27.4k | 18.5% | `████████████▋` |
+| Python | 2.5k | 1.7% | `█▏` |
+| CSS | 2.3k | 1.5% | `█` |
+| Shell | 2.0k | 1.3% | `▉` |
+| HTML | 1.9k | 1.3% | `▉` |
+| YAML | 1.2k | 0.8% | `▌` |
+| SQL | 0.3k | 0.2% | `▏` |
+<!-- /loc -->
+
 ## Quickstart
 
 Node 22.18 or later and pnpm (the version is pinned in `package.json`).
