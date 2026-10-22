@@ -49,9 +49,9 @@
     <string name="nearby_next">Next %1$s</string>
     <string name="nearby_next_to">Next %1$s, to %2$s</string>
     <string name="nearby_then_label">then</string>
-    <!-- How long until a bus on a Nearby widget, counted down by Android ("in 04:32"); %1$s is the count. -->
-    <string name="nearby_in">in %1$s</string>
-    <string name="nearby_in_approx">in ~%1$s</string>
+    <!-- How long until a bus on a Nearby widget, in whole minutes; "~" for a timetable's time. -->
+    <string name="nearby_min">%1$d min</string>
+    <string name="nearby_min_approx">~%1$d min</string>
     <string name="nearby_then">then %1$s</string>
     <string name="nearby_times_sep">", "</string>
     <string name="nearby_old">Times may be old · %1$s</string>

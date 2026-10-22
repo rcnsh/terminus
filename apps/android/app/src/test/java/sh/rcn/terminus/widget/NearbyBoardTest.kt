@@ -95,14 +95,35 @@ class NearbyBoardTest {
     }
 
     @Test
-    fun redrawnWhenACountdownTurnsToNowAndWhenItsBusGoes() {
+    fun redrawnWhenItsBusGoes() {
         val buses = NearbyBoard.buses(utown, fetched, fetched)
-        // D1 at 190 s: "now" half a minute before, then gone a minute after.
-        assertEquals(fetched + 190_000 - NearbyBoard.NOW_MS, NearbyBoard.redrawAt(buses, fetched))
-        assertEquals(fetched + 190_000 + NearbyBoard.GONE_MS, NearbyBoard.redrawAt(buses, fetched + 190_000))
-        // Past that, D2 at 370 s turning to "now".
-        assertEquals(fetched + 370_000 - NearbyBoard.NOW_MS, NearbyBoard.redrawAt(buses, fetched + 250_000))
+        // D1 at 190 s, gone a minute after; then D2 at 370 s.
+        assertEquals(fetched + 190_000 + NearbyBoard.GONE_MS, NearbyBoard.redrawAt(buses, fetched))
+        assertEquals(fetched + 370_000 + NearbyBoard.GONE_MS, NearbyBoard.redrawAt(buses, fetched + 250_000))
         assertNull(NearbyBoard.redrawAt(emptyList(), fetched))
+    }
+
+    @Test
+    fun redrawnAsEachMinuteGoesUntilTheTimesAreOld() {
+        val buses = NearbyBoard.buses(utown, fetched, fetched)
+        val old = fetched + 180_000
+        // D1 at 190 s and D2 at 370 s each go down a minute 10 s in and each minute after, R1 at 540 s on the minute.
+        val moments = generateSequence(fetched) { NearbyBoard.redrawAt(buses, it, old) }.drop(1).take(6).toList()
+        assertEquals(listOf(10_000, 60_000, 70_000, 120_000, 130_000, 250_000).map { fetched + it }, moments)
+        // The last of them is D1 going: after the times are old, nothing counts.
+    }
+
+    @Test
+    fun minutesRoundDownAndStopFarOff() {
+        val at = fetched + 3_600_000
+        assertEquals(6, NearbyBoard.minutesLeft(at, at - 6 * 60_000 - 59_000))
+        assertEquals(6, NearbyBoard.minutesLeft(at, at - 6 * 60_000))
+        assertEquals(5, NearbyBoard.minutesLeft(at, at - 6 * 60_000 + 1))
+        // Its last minute is "now", and stays so while it may still be at the stop.
+        assertEquals(0, NearbyBoard.minutesLeft(at, at - 59_999))
+        assertEquals(0, NearbyBoard.minutesLeft(at, at + 10_000))
+        assertEquals(14, NearbyBoard.minutesLeft(at, at - NearbyBoard.MINUTES_MS + 1))
+        assertNull(NearbyBoard.minutesLeft(at, at - NearbyBoard.MINUTES_MS))
     }
 
     private val night =

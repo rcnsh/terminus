@@ -32,6 +32,7 @@ import org.json.JSONObject
 import sh.rcn.terminus.Api
 import sh.rcn.terminus.ApiError
 import sh.rcn.terminus.L
+import sh.rcn.terminus.LeaveAlerts
 import sh.rcn.terminus.Locator
 import sh.rcn.terminus.NearbyStop
 import sh.rcn.terminus.ParseError
@@ -189,7 +190,7 @@ internal object NearbyShared {
 
     /**
      * When the board's widgets next look different with nothing new, on the phone's clock: a shown bus going ([NearbyBoard.GONE_MS] after
-     * it's due), or the times turning old. Null with no board.
+     * it's due), a minute ticking off its count with exact alarms, or the times turning old. Null with no board.
      */
     fun redrawAt(ctx: Context, now: Long): Long? {
         val store = Store(ctx)
@@ -197,6 +198,8 @@ internal object NearbyShared {
         val stops = store.nearbyJson?.let { runCatching { parseNearby(JSONObject(it)) }.getOrNull() } ?: return null
         // The nearest two: a swap shows the opposite stop, which is one of them.
         val buses = stops.take(2).flatMap { NearbyBoard.buses(it, at, now, sh.rcn.terminus.ServerClock.skewMs) }
-        return listOfNotNull(at + WidgetModes.NEARBY_OLD_MS, NearbyBoard.redrawAt(buses, now)).filter { it > now }.minOrNull()
+        val old = at + WidgetModes.NEARBY_OLD_MS
+        val minutes = old.takeIf { LeaveAlerts.canBeExact(ctx) }
+        return listOfNotNull(old, NearbyBoard.redrawAt(buses, now, minutes)).filter { it > now }.minOrNull()
     }
 }

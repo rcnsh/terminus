@@ -321,13 +321,14 @@ object WidgetModes {
             json?.takeIf { mode is Mode.To }?.let { runCatching { NextAnswer.parse(JSONObject(it)) }.getOrNull() }
         }
 
-        /** Nearby: when the next of its buses shown goes, read only when asked for. */
-        fun busGoes(now: Long): Long? {
+        /** Nearby: when the next of its buses shown goes, or with [exact] alarms its count ticks down; read only when asked for. */
+        fun busGoes(now: Long, exact: Boolean): Long? {
             if (mode != Mode.Nearby || fetchedAt == null) return null
             val stops = json?.let { runCatching { parseNearby(JSONObject(it)) }.getOrNull() } ?: return null
             return NearbyBoard.redrawAt(
                 stops.take(2).flatMap { NearbyBoard.buses(it, fetchedAt, now, sh.rcn.terminus.ServerClock.skewMs) },
                 now,
+                (fetchedAt + NEARBY_OLD_MS).takeIf { exact },
             )
         }
     }
@@ -380,18 +381,18 @@ object WidgetModes {
     suspend fun armChosen(ctx: Context) {
         val am = ctx.getSystemService(AlarmManager::class.java) ?: return
         val now = System.currentTimeMillis()
+        val exact = am.canScheduleExactAlarms()
         val at =
             if (Store(ctx).paired) {
-                val chosen = chosen(ctx, now).mapNotNull { redrawAt(it.mode, it.at, it.fetchedAt, it.answer, now, it.busGoes(now)) }
+                val chosen = chosen(ctx, now).mapNotNull { redrawAt(it.mode, it.at, it.fetchedAt, it.answer, now, it.busGoes(now, exact)) }
                 // The Nearby widgets and the big widget's next buses share one board.
                 val shared = if (NearbyShared.wanted(ctx)) NearbyShared.redrawAt(ctx, now) else null
                 (chosen + listOfNotNull(shared)).minOrNull()
             } else null
-        if (at == null) am.cancel(alarmIntent(ctx))
-        else am.setWhileIdle(stepTo(at + 1_000, now, am.canScheduleExactAlarms()), alarmIntent(ctx), wake = false)
+        if (at == null) am.cancel(alarmIntent(ctx)) else am.setWhileIdle(stepTo(at + 1_000, now, exact), alarmIntent(ctx), wake = false)
     }
 
-    /** The last inexact step: run this close to its moment, a redraw is late by less than a countdown's slack ([NearbyBoard.NOW_MS]). */
+    /** The last inexact step: run this close to its moment, a redraw is late by under half a minute. */
     const val LAST_STEP_MS = 25_000L
 
     /**
