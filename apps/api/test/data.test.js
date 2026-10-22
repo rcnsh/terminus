@@ -152,7 +152,7 @@ test('opposites.json: each stop in one pair at most, and each pair two sides of 
     'a stop in two pairs',
   );
   for (const [a, b] of [...opposites.pairs, ...opposites.nearby]) assert.notEqual(a, b);
-  // Every twin the graph ends up with, scraped or listed: the buses at one
+  // Every opposite stop the graph ends up with, scraped or listed: the buses at one
   // drive the other way from the buses at the other, never the same way.
   const ways = (code) =>
     Object.entries(GRAPH.routes).flatMap(([svc, seq]) => {
@@ -168,10 +168,14 @@ test('opposites.json: each stop in one pair at most, and each pair two sides of 
   for (const s of GRAPH.stops) {
     if (!s.opposite || s.code > s.opposite) continue;
     pairs++;
-    assert.equal(GRAPH.stops.find((x) => x.code === s.opposite)?.opposite, s.code, `${s.code} and ${s.opposite} are not each other's twin`);
+    assert.equal(
+      GRAPH.stops.find((x) => x.code === s.opposite)?.opposite,
+      s.code,
+      `${s.code} and ${s.opposite} are not each other's opposite`,
+    );
     for (const [p, x] of ways(s.code))
       for (const [q, y] of ways(s.opposite))
         assert.ok(apart(x, y) > 90, `${s.code} (${p}, ${Math.round(x)}°) and ${s.opposite} (${q}, ${Math.round(y)}°) are on the same side`);
   }
-  assert.ok(pairs >= opposites.pairs.length, `${pairs} twins in the graph`);
+  assert.ok(pairs >= opposites.pairs.length, `${pairs} opposite stops in the graph`);
 });

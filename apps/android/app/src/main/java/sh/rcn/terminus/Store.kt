@@ -101,7 +101,7 @@ class Store(context: Context) {
                     .putInt(KEY_REFRESH_FAILS, 0)
                     .remove(KEY_ERROR)
             }
-            // The app shortcuts follow the saved places (a no-op when they
+            // The app shortcuts follow the favourites (a no-op when they
             // haven't changed). Inside the lock: a sign-out's [clear] empties
             // them, and must not be undone by an answer kept just before it.
             runCatching { Shortcuts.update(app, answer.places) }
@@ -246,7 +246,7 @@ class Store(context: Context) {
             runCatching { Shortcuts.update(app, emptyList()) }
         }
 
-    /** The class (its start, epoch ms) the last heads-up was for: one per class. */
+    /** The trip the last heads-up was for (its key hashed, or an older note of a class by its start, epoch ms): one per trip. */
     var leaveNotifiedFor: Long
         get() = prefs.getLong(KEY_LEAVE_NOTIFIED, 0)
         set(value) = prefs.edit { putLong(KEY_LEAVE_NOTIFIED, value) }

@@ -44,7 +44,9 @@ export async function throughGate<T>(env: Env, ctx: ExecutionContext, key: strin
   try {
     claim = await within(
       GATE_ASK_MS,
-      ask('/claim', { freshMs }).then((r) => (r.ok ? (r.json() as Promise<Claim<T>>) : Promise.reject(new Error(`gate ${r.status}`)))),
+      ask('/claim', { freshMs, askedAt: Date.now() }).then((r) =>
+        r.ok ? (r.json() as Promise<Claim<T>>) : Promise.reject(new Error(`gate ${r.status}`)),
+      ),
     );
   } catch {
     return fetch();
@@ -101,11 +103,20 @@ export class FeedGate {
 
   async fetch(req: Request): Promise<Response> {
     const path = new URL(req.url).pathname;
-    const body = (await req.json().catch(() => null)) as { freshMs?: unknown; claimed?: unknown; value?: unknown } | null;
+    const body = (await req.json().catch(() => null)) as {
+      freshMs?: unknown;
+      askedAt?: unknown;
+      claimed?: unknown;
+      value?: unknown;
+    } | null;
     this.held ??= (await this.storage.get<Held>('held')) ?? null;
     const now = Date.now();
     if (path === '/claim') {
       const freshMs = typeof body?.freshMs === 'number' && body.freshMs > 0 ? body.freshMs : TTL.arrivalsMs;
+      // A claim arriving after its caller stopped waiting (throughGate's
+      // GATE_ASK_MS) must not win: the caller is fetching on its own and will
+      // never put, and the window would stay pending for everyone else.
+      if (typeof body?.askedAt === 'number' && now - body.askedAt > GATE_ASK_MS) return Response.json({ value: null });
       const h = this.held;
       if (!h || now - h.claimed >= freshMs) {
         // Set before anything awaits, so two claims at once can't both win.
@@ -115,8 +126,13 @@ export class FeedGate {
       }
       if (!h.pending) return Response.json({ value: h.value });
       const value = await new Promise<unknown>((resolve) => {
-        this.waiters.push(resolve);
-        setTimeout(() => resolve(null), GATE_WAIT_MS);
+        // In case the call never puts; let go once it does, so an object busy
+        // in a window doesn't keep a timer alive for every caller it answered.
+        const timer = setTimeout(() => resolve(null), GATE_WAIT_MS);
+        this.waiters.push((v) => {
+          clearTimeout(timer);
+          resolve(v);
+        });
       });
       return Response.json({ value });
     }

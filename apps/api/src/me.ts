@@ -60,7 +60,7 @@ import { hour12, planned, resolveTo } from './next.ts';
 import { dayPlan } from './day.ts';
 import { unlogged } from './answer.ts';
 import {
-  type Boarded,
+  type Plan,
   type DayRecord,
   PLATE_WINDOW_S,
   SIGNALS,
@@ -101,10 +101,10 @@ import { cardFor, nextPhaseAt } from './card.ts';
 import { feedDownSince, termNoticeFor } from './monitor.ts';
 import { WALK, sgt } from './config.ts';
 import { landmark } from './landmarks.ts';
-import { GRAPH_PUBLIC, nearbyTwin, twinOf } from './graph.ts';
+import { GRAPH_PUBLIC, oppositeOrPartner, oppositeOf } from './graph.ts';
 import { residenceStops } from './residences.ts';
 import { MAX_KEYS, createKey, listKeys, revokeKey } from './access.ts';
-import { footM, paceSpeed } from './walk.ts';
+import { buildingStops, footM, paceSpeed } from './walk.ts';
 import { clientKey, coordsFrom, json } from './http.ts';
 import { linkOrigin } from './site.ts';
 import { LANG_PREFS, lang, m, useProfileLang } from './i18n.ts';
@@ -1307,7 +1307,8 @@ export async function handleMe(
     // It goes into the email to the account's owner: cleaned as at /auth/app/start.
     const name = deviceName(body);
     if (!code) return json({ error: 'enter the 6-character code from the account page' }, 400);
-    const paired = await redeemPairCode(db, code, name, nowMs, clientFrom(req));
+    // The platform an app names in its body when it has no header, as /auth/anon takes it.
+    const paired = await redeemPairCode(db, code, name, nowMs, clientWith(req, body));
     if (!paired) return json({ error: 'that code is wrong or has expired' }, 400);
     ctx.waitUntil(mailDeviceAdded(env, paired.email, name, nowMs).catch(mailFailed));
     return json({ token: paired.token });
@@ -1317,6 +1318,9 @@ export async function handleMe(
 
   if (path === '/api/auth/logout' && req.method === 'POST') {
     if (session) await endSession(db, session.tokenHash);
+    // A token that isn't one cost a D1 read, as under /me: capped per address the same way.
+    else if (tokenFrom(req) && (await limited(env, req, 'badtoken')))
+      return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
     return json({ ok: true }, 200, { 'set-cookie': sessionCookie('', 0) });
   }
 
@@ -1412,7 +1416,7 @@ async function nextWithTrip(
   userId: string,
   prefs: TripPrefs = NO_PREFS,
   /** Inside the Trip object itself: write plans there, and don't ask it to watch. */
-  local?: { savePlan: (key: string, plan: Boarded) => Promise<void> },
+  local?: { savePlan: (key: string, plan: Plan) => Promise<void> },
 ) {
   const { answer, trip } = await planned(url, env, ctx, nowMs, deps, profile, day, prefs);
   // What this request changes in the Trip object, sent in one request at the end.
@@ -1471,8 +1475,17 @@ export async function tripCardFor(
   userId: string,
   day: DayRecord | null,
   nowMs: number,
-  savePlanLocal: (key: string, plan: Boarded) => Promise<void>,
-): Promise<{ key: string | null; phase: string; gone: boolean; remind: boolean; wakeAt: number | null } | null> {
+  savePlanLocal: (key: string, plan: Plan) => Promise<void>,
+): Promise<{
+  key: string | null;
+  phase: string;
+  gone: boolean;
+  remind: boolean;
+  wakeAt: number | null;
+  /** The leave-by and how sure the answer is, for the wake's freshness log (tripdo.ts). */
+  leaveAt: number | null;
+  quality: string;
+} | null> {
   if (!env.DB) return null;
   const profile = await getProfile(env.DB, userId, deps.graph);
   if (!classesOn(profile, nowMs).length) return null;
@@ -1485,6 +1498,8 @@ export async function tripCardFor(
     gone: body.card.gone,
     remind: body.card.remind !== false,
     wakeAt: nextPhaseAt(body, trip, nowMs),
+    leaveAt: body.leave?.at ? Date.parse(body.leave.at) : null,
+    quality: body.quality,
   };
 }
 
@@ -1545,16 +1560,17 @@ async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: numbe
     .map((stop) => ({ stop, distM: haversineM(lat!, lon!, stop.lat, stop.lon), footM: footM(lat!, lon!, stop) }))
     .sort((a, b) => a.distM - b.distM);
   const near = ranked.filter((c) => c.distM <= WALK.maxRadiusM).slice(0, WALK.maxCandidates);
-  // In a residence: its own stops, walked by the paths, like /me/next,
-  // and at home your own walk to your stop.
+  // In a residence or a building: its own stops, walked by the paths, like
+  // /me/next, and at home your own walk to your stop.
   const homeWalk = profile.home ? { stops: profile.home.stops, m: profile.homeWalkMin * 60 * paceSpeed(profile.walkPace) } : null;
-  const picked = residenceStops(lat, lon, idx.byCode, homeWalk)?.slice(0, WALK.maxCandidates) ?? (near.length ? near : ranked.slice(0, 1));
-  // The nearest stop's twin (across the road, or PGP and PGP Foyer), always:
+  const inside = residenceStops(lat, lon, idx.byCode, homeWalk) ?? buildingStops(lat, lon, idx.byCode);
+  const picked = inside?.slice(0, WALK.maxCandidates) ?? (near.length ? near : ranked.slice(0, 1));
+  // The nearest stop's opposite or partner stop (PGP and PGP Foyer), always:
   // a location a few metres out puts you at the wrong one, and the widget
   // offers the other.
-  const twinCode = picked[0] ? nearbyTwin(picked[0].stop) : null;
-  const twin = twinCode ? ranked.find((c) => c.stop.code === twinCode) : undefined;
-  if (twin && !picked.some((c) => c.stop.code === twin.stop.code)) picked.push(twin);
+  const otherCode = picked[0] ? oppositeOrPartner(picked[0].stop) : null;
+  const other = otherCode ? ranked.find((c) => c.stop.code === otherCode) : undefined;
+  if (other && !picked.some((c) => c.stop.code === other.stop.code)) picked.push(other);
 
   const byStop = await deps.collectArrivals(
     env,
@@ -1572,7 +1588,7 @@ async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: numbe
     const via = stopVia(board);
     return {
       stop: { code: stop.code, name: stop.name, longName: displayName(stop, stop.code) },
-      ...twinOf(stop, idx.byCode),
+      ...oppositeOf(stop, idx.byCode),
       distM: Math.round(distM),
       walkS: Math.round(foot / paceSpeed(profile.walkPace)),
       available: sa.available !== false,

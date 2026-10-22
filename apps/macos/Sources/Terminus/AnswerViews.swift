@@ -352,7 +352,7 @@ extension BoardRow {
 
 /// One pill per service: "D2  4 min · 14 min", the next bus solid and the
 /// ones after it faded, as on the web and Android. The times are the
-/// server's words ("~6 min" for a timetable guess).
+/// server's words ("~6 min" for an estimate).
 /// Wraps onto more lines instead of squeezing when a stop has many services.
 struct FlowPills: View {
     let rows: [BoardRow]
@@ -408,7 +408,7 @@ struct FlowPills: View {
     /// The server's "4 min"; worded here only for an older server's row.
     nonisolated static func eta(_ r: BoardRow) -> String { r.eta ?? eta(etaS: r.etaS, quality: r.quality) }
 
-    /// An older server's row: "4 min", "~6 min" for a timetable guess, "now",
+    /// An older server's row: "4 min", "~6 min" for an estimate, "now",
     /// or "ended", as the server words it ("4m" would be read as metres).
     nonisolated static func eta(etaS: Int?, quality: String) -> String {
         guard let s = etaS else { return quality == "ended" ? L("ended") : "–" }

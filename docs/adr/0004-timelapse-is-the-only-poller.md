@@ -1,0 +1,3 @@
+# The timelapse recorder is the only code that polls NUS on a schedule
+
+Everything else reads the feed only when a user asks. Recording a day of buses can't work that way, so it is a single, bounded exception rather than a precedent (9abc5663, 3f77f09e). It reads live buses only (never arrivals or LTA), at most once per 30 s per service, never below 15 s, at most 17,280 polls a day, only from 06:30 to 00:30 and only while a service runs. It reads through the map's own path, so the cache and breaker apply. It is off on the beta and has a KV kill switch. Another poller, or wider hours or rate for this one, needs a new decision.

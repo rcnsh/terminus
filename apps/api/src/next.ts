@@ -9,7 +9,7 @@ import type { MeDeps } from './me.ts';
 import {
   HOME_BY_MIN,
   MAX_VENUE_WALK_S,
-  type Plan,
+  type NextTrip,
   type Profile,
   classKey,
   classStartMs,
@@ -17,14 +17,14 @@ import {
   endOf,
   isResting,
   nextClass,
-  planFor,
+  nextTripFor,
   reachedEarly,
   restDetail,
   restLabel,
   timingFor,
   upcomingClass,
 } from './profile.ts';
-import { type ImportedTrip, venueAt, venueStops, venueToStop } from './nusmods.ts';
+import { type TimetableClass, venueAt, venueStops, venueToStop } from './nusmods.ts';
 import { feedFor, indexGraph, serviceEndsAt } from './resolve.ts';
 import { GRAPH } from './graph.ts';
 import { haversineM } from './geo.ts';
@@ -40,7 +40,7 @@ import { NO_PREFS, type TripPrefs } from './outcomes.ts';
 import {
   ASSUME_MS,
   AT_STOP_M,
-  type Boarded,
+  type Plan,
   CHANGE_GRACE_MS,
   type DayRecord,
   type Phase,
@@ -77,7 +77,7 @@ interface Dest {
   label: string;
   why: Why;
   from: string | null;
-  trip?: ImportedTrip | null;
+  trip?: TimetableClass | null;
   fromVenue?: string | null;
   /** A room or building searched for, reached on foot from its stop `to`. */
   venue?: string | null;
@@ -87,7 +87,7 @@ interface Dest {
 const destOf = (d: Dest): NonNullable<MeAnswer['dest']> => ({ to: d.to, label: d.label, why: d.why });
 
 /** A trip home's key: after the day's last class, or in a long gap. */
-const homeKey = (plan: Pick<Plan, 'why' | 'lastEndMin' | 'from'>) =>
+const homeKey = (plan: Pick<NextTrip, 'why' | 'lastEndMin' | 'from'>) =>
   plan.why === 'home' ? `home:${plan.lastEndMin}` : `gap-home:${plan.from}`;
 
 export interface Planned {
@@ -216,7 +216,7 @@ export function originOf(
 }
 
 /**
- * A walk by stop code, with each stop's twin across the road: a bus can
+ * A walk by stop code, with each stop's opposite stop: a bus can
  * leave you on either side (the crossing is counted with the ride), and a
  * building lists only one of them.
  */
@@ -224,8 +224,8 @@ function acrossTheRoad(walkS: Record<string, number>): Record<string, number> {
   const { byCode } = indexGraph(GRAPH);
   const out = { ...walkS };
   for (const [code, s] of Object.entries(walkS)) {
-    const twin = byCode.get(code)?.opposite;
-    if (twin && !(twin in out)) out[twin] = s;
+    const opp = byCode.get(code)?.opposite;
+    if (opp && !(opp in out)) out[opp] = s;
   }
   return out;
 }
@@ -366,7 +366,7 @@ function undoOf(day: DayRecord | null, nowMs: number): TripView['undo'] {
  * is in: LTA's for a public bus, through the public graph, so a ride on the
  * 151 never costs NUS a call that can't list it.
  */
-function rideStopArrivals(env: Env, ctx: ExecutionContext, deps: MeDeps, b: Boarded, nowMs: number): Promise<StopArrivals | undefined> {
+function rideStopArrivals(env: Env, ctx: ExecutionContext, deps: MeDeps, b: Plan, nowMs: number): Promise<StopArrivals | undefined> {
   const graph = b.paid ? (deps.publicGraph ?? deps.graph) : deps.graph;
   return deps.collectArrivals(env, ctx, [b.alightCode!], nowMs, graph).then((byStop) => byStop.get(b.alightCode!));
 }
@@ -377,20 +377,20 @@ function rideStopArrivals(env: Env, ctx: ExecutionContext, deps: MeDeps, b: Boar
  * two together (the older, stale when either is); the bus's times count
  * from its own feed's fetch.
  */
-export function rideFeed(sa: StopArrivals | undefined, b: Pick<Boarded, 'paid'>): FeedState | null {
+export function rideFeed(sa: StopArrivals | undefined, b: Pick<Plan, 'paid'>): FeedState | null {
   const feed = feedFor(sa, b.paid === true);
   return feed && feed.available !== false && !feed.stale ? feed : null;
 }
 
 /** The service as the feed's rows name it: a public bus's route (`151/1`) when its number can't. */
-const rideSvc = (b: Boarded): string => b.route ?? b.svc;
+const rideSvc = (b: Plan): string => b.route ?? b.svc;
 
 /**
  * When the bus you're on reaches your stop, from the feed: the same plate in
  * that stop's arrivals. Null without a plate, or once it's no longer listed
  * there (it has arrived, or the feed dropped it); the tap's estimate is used then.
  */
-export async function liveArrival(env: Env, ctx: ExecutionContext, deps: MeDeps, b: Boarded, nowMs: number): Promise<string | null> {
+export async function liveArrival(env: Env, ctx: ExecutionContext, deps: MeDeps, b: Plan, nowMs: number): Promise<string | null> {
   if (!b.plate || !b.alightCode) return null;
   const sa = await rideStopArrivals(env, ctx, deps, b, nowMs);
   const feed = rideFeed(sa, b);
@@ -408,7 +408,7 @@ export async function liveArrival(env: Env, ctx: ExecutionContext, deps: MeDeps,
  * should have got you there and nothing says you're there: you may have
  * caught the one after it. Null without the feed, or with nothing due.
  */
-export async function nextArrival(env: Env, ctx: ExecutionContext, deps: MeDeps, b: Boarded, nowMs: number): Promise<string | null> {
+export async function nextArrival(env: Env, ctx: ExecutionContext, deps: MeDeps, b: Plan, nowMs: number): Promise<string | null> {
   if (!b.alightCode) return null;
   const sa = await rideStopArrivals(env, ctx, deps, b, nowMs);
   const feed = rideFeed(sa, b);
@@ -452,7 +452,7 @@ function classTiming(
  * the first bus of a trip that changes buses, where to change; the trip's
  * end then rests on the second bus, which is still a plan.
  */
-function ridingAnswer(nowMs: number, dest: Dest, b: Boarded, live: boolean, places: PlaceChip[], h12: boolean, profile: Profile): MeAnswer {
+function ridingAnswer(nowMs: number, dest: Dest, b: Plan, live: boolean, places: PlaceChip[], h12: boolean, profile: Profile): MeAnswer {
   const end = tripEnd(b);
   const endMs = end ? Date.parse(end) : null;
   const c = b.change;
@@ -485,7 +485,7 @@ function ridingAnswer(nowMs: number, dest: Dest, b: Boarded, live: boolean, plac
  * second bus is the one to catch now, as a leave-by for it (so every client
  * shows it as the bus at your stop), and the trip's end where it gets you.
  */
-function changeAnswer(nowMs: number, dest: Dest, b: Boarded, live: boolean, places: PlaceChip[], h12: boolean, profile: Profile): MeAnswer {
+function changeAnswer(nowMs: number, dest: Dest, b: Plan, live: boolean, places: PlaceChip[], h12: boolean, profile: Profile): MeAnswer {
   const c = b.change!;
   const boardMs = c.board ? Date.parse(c.board) : nowMs;
   const wait = mins(Math.max(0, (boardMs - nowMs) / 1000));
@@ -515,13 +515,7 @@ function changeAnswer(nowMs: number, dest: Dest, b: Boarded, live: boolean, plac
  * now, and the trip's end moved with it. The plan's times when the feed has
  * no such bus, which are not live.
  */
-async function secondBus(
-  env: Env,
-  ctx: ExecutionContext,
-  deps: MeDeps,
-  b: Boarded,
-  nowMs: number,
-): Promise<{ change: Boarded; live: boolean }> {
+async function secondBus(env: Env, ctx: ExecutionContext, deps: MeDeps, b: Plan, nowMs: number): Promise<{ change: Plan; live: boolean }> {
   const c = b.change!;
   if (!c.board || !c.stopCode) return { change: c, live: false };
   const sa = (await deps.collectArrivals(env, ctx, [c.stopCode], nowMs, deps.graph)).get(c.stopCode);
@@ -631,7 +625,7 @@ async function plannedTrip(
       if (r) dest = { ...r, why: 'place', from: homeStop };
     }
     if (dest) return idle(await tripAnswer(env, ctx, nowMs, deps, profile, dest, at, places, h12));
-    // Not a stop, room or saved place (a favourite since removed, say): the
+    // Not a stop, room or favourite (one since removed, say): the
     // day's own answer, as if none had been asked for. A free day's "No more
     // classes today" would be untrue with a class still to come.
   }
@@ -648,7 +642,7 @@ async function plannedTrip(
   }
 
   const state = dayState(day);
-  const plan = planFor(profile, nowMs, state);
+  const plan = nextTripFor(profile, nowMs, state);
   if (!plan) {
     const free = freeAnswer(deps.graph, profile, nowMs, places, h12, state.skipped, state.away);
     return { answer: free, trip: { key: null, phase: 'idle', undo, ...(state.away ? { away: true } : {}) } };
@@ -746,8 +740,7 @@ async function plannedTrip(
     // Seen on it, now or by an earlier request (noted on the plan, so a
     // device without a location follows the phone).
     // On a trip that changes buses, on the second bus's road once it has left.
-    const onSecond = (b: Boarded) =>
-      Boolean(b.change?.board && nowMs >= Date.parse(b.change.board) && seenOnBus(b.change, lat!, lon!, nowMs));
+    const onSecond = (b: Plan) => Boolean(b.change?.board && nowMs >= Date.parse(b.change.board) && seenOnBus(b.change, lat!, lon!, nowMs));
     const seenNow = !bus.seen && lat !== null && lon !== null && (seenOnBus(bus, lat, lon, nowMs) || onSecond(bus));
     if (bus.seen || seenNow) {
       const onBus = await riding(bus);
@@ -784,7 +777,7 @@ async function plannedTrip(
    * first bus, then the change stop (`waiting`), then the second; `missed`
    * when you're still at the change stop once the second bus has left.
    */
-  async function riding(b: Boarded): Promise<{ answer: MeAnswer; b: Boarded; phase: Phase } | 'missed' | null> {
+  async function riding(b: Plan): Promise<{ answer: MeAnswer; b: Plan; phase: Phase } | 'missed' | null> {
     const c = b.change;
     if (c) {
       // Before the second bus leaves, the feed can say the first is still on its way.
@@ -846,7 +839,7 @@ function reachedOf(url: URL, nowMs: number, profile: Profile, day: DayRecord | n
   }
   if (url.searchParams.get('place') || url.searchParams.get('to') || isResting(profile, nowMs)) return {};
   if (!atHome(lat, lon, profile.home?.stops ?? [])) return {};
-  const plan = planFor(profile, nowMs, dayState(day));
+  const plan = nextTripFor(profile, nowMs, dayState(day));
   if (!plan || (plan.why !== 'home' && plan.why !== 'gap-home')) return {};
   const home = homeKey(plan);
   return day?.trips[home] ? {} : { reached: home };

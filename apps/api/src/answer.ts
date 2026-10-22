@@ -83,6 +83,8 @@ export async function answerFor(
   input: ResolveInput,
   destLabel: string | null,
   nowMs: number,
+  /** How to read the stops' arrivals; the Trip object passes one that notes how old they were. */
+  collect: typeof collectArrivals = collectArrivals,
 ): Promise<Answer> {
   // With public buses on, the graph that has them: more services at the same stops.
   const graph = input.publicBuses ? GRAPH_PUBLIC : GRAPH;
@@ -102,15 +104,17 @@ export async function answerFor(
     .map((c) => (c ? idx.byCode.get(c) : undefined))
     .filter((s): s is Stop => Boolean(s))
     .flatMap((s) => {
-      const twin = s.opposite ? idx.byCode.get(s.opposite) : undefined;
-      return twin ? [s, twin] : [s];
+      const opp = s.opposite ? idx.byCode.get(s.opposite) : undefined;
+      return opp ? [s, opp] : [s];
     });
-  const atDest = destSides.find((d) =>
-    input.lat != null ? haversineM(input.lat, input.lon!, d.lat, d.lon) / WALK.speedMs < 45 : input.originCode === d.code,
-  );
+  // The nearest side, not the first: opposite stops stand within the 45 s of each other.
+  const walkS = (d: Stop) =>
+    input.lat != null ? haversineM(input.lat, input.lon!, d.lat, d.lon) / WALK.speedMs : input.originCode === d.code ? 0 : Infinity;
+  const atDest = destSides.filter((d) => walkS(d) < 45).sort((a, b) => walkS(a) - walkS(b))[0];
   const atVenue =
     input.lat != null && input.destAt != null && haversineM(input.lat, input.lon!, input.destAt.lat, input.destAt.lon) <= WALK.atVenueM;
-  if (dest && (atDest || atVenue)) return arrivedAnswer(dest, destLabel, nowMs);
+  // Named for the side of the road you stand on: across from it, that is the opposite stop.
+  if (dest && (atDest || atVenue)) return arrivedAnswer(atDest ?? dest, destLabel, nowMs);
   // No coordinates and no origin stop: nothing to resolve from. Saying
   // "No buses running" here would be a claim about the network.
   if (!cands.length) {
@@ -121,7 +125,7 @@ export async function answerFor(
   // change stops to ask about is settled before any fetch, so it all goes
   // in one round, at most TRANSFER.maxFetch stops more.
   const transfers = planTransfers(graph, input, cands);
-  const byStop = await collectArrivals(env, ctx, [...cands.map((c) => c.stop.code), ...transfers.fetch], nowMs, graph);
+  const byStop = await collect(env, ctx, [...cands.map((c) => c.stop.code), ...transfers.fetch], nowMs, graph);
 
   // Tally who's packed for the full-bus risk, off the response path.
   if (env.DB) ctx.waitUntil(recordCrowds(env.DB, byStop, nowMs));

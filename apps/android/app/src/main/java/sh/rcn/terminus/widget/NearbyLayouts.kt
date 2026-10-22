@@ -64,7 +64,7 @@ import sh.rcn.terminus.ui.Road
 /** What a Nearby widget draws from: the board as last fetched, in the order shown, and how old it is. */
 internal class NearbyView(
     val paired: Boolean,
-    /** As shown: the twin first after a swap. Null before any board, or one that can't be read. */
+    /** As shown: the opposite stop first after a swap. Null before any board, or one that can't be read. */
     val stops: List<NearbyStop>?,
     /** In the API's order, for the swap button. */
     val all: List<NearbyStop>?,
@@ -243,7 +243,7 @@ private fun NearbySky(
     // The hills low, under the stop's name; no moon in the slim sky over both sides, where Now is.
     val moon = Offset(110f, 20f).takeIf { w >= 300f && beside == null }
     val bitmap = skyBitmap(ctx, look, w, skyH, 15f / 92f, Road(stop = true, shuttle = false), moon = moon)
-    // The twin across the road a tap away, unless it's the one shown already: beside it, or first.
+    // The opposite stop a tap away, unless it's the one shown already: beside it, or first.
     val other = v.first?.takeIf { beside == null }?.let { NearbySwap.offer(v.all.orEmpty(), v.swap, now, listOf(it.code)) }
     val swap: (@Composable () -> Unit)? = other?.let { o -> { SwapButton(o, v.all!!.first().code, sky) } }
     Box(GlanceModifier.fillMaxSize()) {

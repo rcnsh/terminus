@@ -48,7 +48,7 @@ import { webPushEnabled } from './webpush.ts';
 import { handleTimelapse } from './timelapse.ts';
 import { scopeCache } from './edgecache.ts';
 
-import { GRAPH, GRAPH_PUBLIC, twinOf } from './graph.ts';
+import { GRAPH, GRAPH_PUBLIC, oppositeOf } from './graph.ts';
 import { isBeta, linkOrigin, markBeta, movedApi, movedPage } from './site.ts';
 import { answerFor, arrivedAnswer, collectArrivals, needsSetupAnswer } from './answer.ts';
 import { lang, langOfRequest, m, withLang } from './i18n.ts';
@@ -227,9 +227,9 @@ async function handleArrivals(url: URL, env: Env, ctx: ExecutionContext, nowMs: 
   // `?stopped=1`: the services not running now too, for the Buses tab.
   const board = boardAt(graph, idx, code, sa, nowMs, { stopped: url.searchParams.get('stopped') === '1' });
   return json({
-    // Its twin, for "This side | Across the road" (or the twin's name, when
+    // Its opposite stop, for "This side | Across the road" (or the other stop's name, when
     // it's only near rather than across).
-    stop: { code: stop.code, name: stop.name, longName: displayName(stop, stop.code), ...twinOf(stop, idx.byCode) },
+    stop: { code: stop.code, name: stop.name, longName: displayName(stop, stop.code), ...oppositeOf(stop, idx.byCode) },
     board,
     // As old as the times on the board (counted from now in boardAt).
     asOf: new Date(boardAsOf([sa], nowMs)).toISOString(),

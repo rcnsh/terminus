@@ -20,7 +20,7 @@ import { MAX_ETA_S, TTL } from './config.ts';
 import { UpstreamUnreachable, timedFetch } from './http.ts';
 import { cacheBase, cachedFetch } from './edgecache.ts';
 import { GateBusy, throughGate } from './feedgate.ts';
-import { noteTrip } from './feedwatch.ts';
+import { noteBreakerOpen } from './feedwatch.ts';
 import { indexGraph } from './resolve.ts';
 
 export const LTA_BASE = 'https://datamall2.mytransport.sg/ltaodataservice/';
@@ -203,7 +203,15 @@ export async function fetchPublicArrivals(
   });
   if (res.status === 401 || res.status === 429 || res.status >= 500) throw new LtaRefused(res.status);
   if (!res.ok) throw new Error(`DataMall answered HTTP ${res.status}`);
-  const body: unknown = await res.json();
+  // A gateway's maintenance page comes as HTML with a 200: named, as fms.ts
+  // names the feed's, rather than a bare SyntaxError from the parse.
+  const text = await res.text();
+  let body: unknown;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    throw new Error(`DataMall answered non-JSON (${res.status}): ${text.slice(0, 80)}`);
+  }
   const arrivals = normalizePublic(body, code, graph, nowMs);
   const problem = publicProblem(body, code, graph, nowMs);
   if (problem) throw new Error(`DataMall answered in an unknown shape (${problem})`);
@@ -239,9 +247,9 @@ export async function getPublicArrivals(
     memoes: (err) => !(err instanceof GateBusy),
     breaker: {
       key: `${cacheBase()}/breaker-public`,
-      trips: (err) => err instanceof LtaRefused || err instanceof UpstreamUnreachable,
+      opens: (err) => err instanceof LtaRefused || err instanceof UpstreamUnreachable,
       maxAgeS: TTL.breakerS,
-      onTrip: (err) => noteTrip(env, 'lta', err, nowMs),
+      onOpen: (err) => noteBreakerOpen(env, 'lta', err, nowMs),
     },
     inflight,
   });

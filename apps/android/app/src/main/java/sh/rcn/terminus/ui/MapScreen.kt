@@ -1033,7 +1033,7 @@ private fun BusFacts(bus: LiveBus) {
             val word =
                 stringResource(
                     when (level) {
-                        1 -> R.string.map_bus_seats_free
+                        1 -> R.string.buses_seats
                         2 -> R.string.buses_busy
                         else -> R.string.buses_packed
                     }

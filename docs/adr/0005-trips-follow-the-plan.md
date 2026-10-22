@@ -1,0 +1,3 @@
+# Trips follow the plan; nothing asks what happened or detects boarding
+
+Two ways of finding out whether a user caught their bus were built and removed. Asking ("On the 9:41 D2?") was dropped in 431efd12. Detecting boarding from the phone's location, and measuring ride times from it, was dropped in ba7c68fb: it only noticed a boarding at the planned stop, within two minutes of the planned bus, after the app was opened, so it missed ordinary trips while costing battery and location. Now a trip is assumed to follow its plan. The user can say "Not going" or "Not on campus", rides are timed per hop from config, and migration 0013 deleted the measured ride times. Leftover fields (`card.ask`, the `location` signal) stay only so older apps keep working.

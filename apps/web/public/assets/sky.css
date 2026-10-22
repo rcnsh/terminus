@@ -135,7 +135,7 @@
 .sky-panel .horizon .sign .mark { fill: var(--h-post-ink); }
 .sky-panel .horizon :is(.coming, .driving, .parked) .body { fill: var(--svc); }
 .sky-panel .horizon :is(.coming, .driving, .parked) .band { fill: #fff; opacity: 0.85; }
-/* A timetable guess is the same bus in outline, so it never passes for live. */
+/* An estimate is the same bus in outline, so it never passes for live. */
 .sky-panel .horizon .coming.guess :is(.body, .arch) { fill: none; stroke: var(--svc); stroke-width: 1.2; stroke-linejoin: round; }
 .sky-panel .horizon .coming.guess .roof { stroke-width: 0.8; }
 .sky-panel .horizon .coming.guess .win { fill: none; stroke: var(--svc); stroke-width: 0.6; }

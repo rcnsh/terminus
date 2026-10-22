@@ -6,7 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { FROZEN_NOW, installGlobals, makeCtx, makeDurableObjects, makeEnv, makeFetch } from './_stubs.mjs';
+import { FROZEN_NOW, installGlobals, makeAnalytics, makeCtx, makeDurableObjects, makeEnv, makeFetch } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
 import { Trip } from '../src/tripdo.ts';
@@ -53,7 +53,7 @@ async function serviceAccount() {
 }
 
 /** `wrap` puts a fetch of the test's own in front of the fake feed and Firebase. */
-async function setup({ push = true, wrap = (f) => f } = {}) {
+async function setup({ push = true, wrap = (f) => f, ae } = {}) {
   const fcm = { sent: [], dead: new Set() };
   const fetchImpl = wrap(makeFetch({ byStop: FEED, fcm }));
   installGlobals(fetchImpl);
@@ -61,7 +61,7 @@ async function setup({ push = true, wrap = (f) => f } = {}) {
   let env;
   const TRIPS = makeDurableObjects(Trip, () => env);
   env = {
-    ...makeEnv(),
+    ...makeEnv(undefined, ae),
     DB: makeD1(),
     EMAIL: makeEmail(),
     EMAIL_FROM: 'x@example.test',
@@ -144,7 +144,7 @@ test('the Trip object wakes when the phase changes and nudges the phone, once pe
   assert.equal(alarm(), Date.parse(first.leave.at) - 5 * 60_000);
 
   // The phone already shows "idle": that is never pushed. (The 9:00 leave-by
-  // was a timetable estimate; live times firm it up, so it may take a wake or two.)
+  // was an estimate; live times firm it up, so it may take a wake or two.)
   const woke = await wakeUntil(() => fcm.sent.length > 0);
   assert.ok(woke <= 3);
   assert.equal(fcm.sent.length, 1);
@@ -159,6 +159,33 @@ test('the Trip object wakes when the phase changes and nudges the phone, once pe
   assert.ok(wake > Date.now(), 'it keeps waking');
   assert.equal(fcm.sent.length, before);
   assert.equal(fcm.oauth, 1, 'the access token is reused');
+});
+
+test('each wake logs how fresh its card was: the gap since the last, the feed age, the leave-by moving', async () => {
+  const ae = makeAnalytics();
+  const { call, phone, next, fcm, TRIPS, wakeUntil } = await setup({ ae });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  await next(phone);
+  await wakeUntil(() => ae.rows('tripwake').length >= 2 && fcm.sent.length > 0);
+  const rows = ae.rows('tripwake');
+  const [first, second] = rows;
+  assert.deepEqual(first.blobs.slice(4), ['first']);
+  assert.equal(first.doubles[0], 0, 'no gap before the first');
+  assert.deepEqual(second.blobs.slice(4), ['again']);
+  assert.ok(second.doubles[0] >= 30, 'the gap since the last wake');
+  for (const r of rows) {
+    const [, changed, phase, quality] = r.blobs;
+    assert.ok(['pushed', 'same'].includes(changed));
+    assert.ok(phase && quality);
+    const [gapS, feedAgeS, leaveShiftS, lateS] = r.doubles;
+    assert.ok([gapS, feedAgeS, leaveShiftS, lateS].every(Number.isFinite));
+    assert.ok(feedAgeS >= 0, 'the card read the feed');
+    assert.ok(lateS >= 0);
+  }
+  assert.equal(rows.filter((r) => r.blobs[1] === 'pushed').length, fcm.sent.length, 'pushed rows are the pushes');
+  // Nothing about who or where.
+  assert.ok(rows.every((r) => r.blobs.length === 5 && !r.blobs.some((b) => /@|fcm|COM|UTOWN|KR/.test(b))));
+  assert.equal(stored(TRIPS).get('lastWake').at, Date.now());
 });
 
 test('time to go wakes the phone with reminders off too: Android starts the live notification from it', async () => {

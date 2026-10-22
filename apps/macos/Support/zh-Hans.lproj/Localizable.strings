@@ -20,7 +20,7 @@
 "Add an email to your account first. Devices can only be added to an account with an email." = "请先为账户添加邮箱。只有绑定了邮箱的账户才能添加设备。";
 "Add where you live and your timetable" = "添加你住在哪里和你的课表";
 "Allow" = "允许";
-"Allow for busy buses" = "考虑巴士很挤的情况";
+"Allow for packed buses" = "考虑巴士很挤的情况";
 "Prefer the bus" = "优先搭巴士";
 "Wait a few minutes more for a bus rather than walk." = "宁可多等几分钟巴士，也不想步行。";
 "Public buses" = "公共巴士";
@@ -193,7 +193,7 @@
 "Walk from home to your stop: %@ min" = "从家步行到车站：%@ 分钟";
 "Walks follow the paths on campus. Your pace sets how long they take." = "步行按校园里的小路计算。你的步速决定要走多久。";
 "What was wrong?" = "哪里不对？";
-"When the bus you'd wait for is often full at that stop and time, aim one bus earlier." = "如果你要等的巴士在那个车站和时间经常满员，就提早一班。";
+"When the bus you'd wait for is often packed at that stop and time, aim one bus earlier." = "如果你要等的巴士在那个车站和时间经常很挤，就提早一班。";
 "Where do you live?" = "你住在哪里？";
 "Where you catch the bus in the morning and head back to at night. Only the stops are saved." = "早上在哪里搭巴士、晚上回到哪里。只保存车站。";
 "Works once, for 10 minutes." = "只能用一次，有效 10 分钟。";
@@ -243,7 +243,7 @@
 "Walking" = "步行";
 "Walks follow the paths on campus." = "步行时间按校园里的小路计算。";
 "Walking pace" = "步速";
-"Aim one bus earlier when yours is often full." = "你要搭的巴士经常满员时，提早一班。";
+"Aim one bus earlier when yours is often packed." = "你要搭的巴士经常很挤时，提早一班。";
 "Day starts" = "一天开始";
 "Day ends" = "一天结束";
 
@@ -349,7 +349,7 @@
 "Towards %@" = "开往 %@";
 "Moving" = "行驶中";
 "Stopped" = "已停下";
-"Seats free" = "有座位";
+"Seats" = "有座位";
 "Busy" = "有点挤";
 "Packed" = "很挤";
 "Stops ahead" = "前方车站";

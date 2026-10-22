@@ -169,22 +169,30 @@ object LeaveAlerts {
         val classAt = answer.classAtMs
         val card = answer.card
         val remindAt = card?.remindAtMs
-        // Which trip the heads-up was for: a class by its start, which stays put
-        // while its leave time moves with the buses.
-        val trip = classAt ?: remindAt
+        // Which trip the heads-up was for: the trip's key as the card's actions
+        // name it ("4:600:UTOWN"), which stays put while its leave time moves
+        // with the buses; a class by its start where an older heads-up was
+        // noted that way (the key only comes with the actions, the start only
+        // with an arrival time: a feed down at the reminder has neither
+        // fixed); the reminder's time with nothing else.
+        val ids = listOfNotNull(card?.actions?.firstOrNull()?.trip?.hashCode()?.toLong(), classAt, remindAt)
+        val trip = ids.firstOrNull()
+        val noted = trip != null && state.notifiedFor != 0L && state.notifiedFor in ids
         // "Not going" was just answered for the trip on
         // screen: its notification follows, even though the plan (and its
         // leave time) has moved on.
-        val following = trip != null && state.notifiedFor != 0L && state.notifiedFor == trip && showing
+        val following = noted && showing
         if (card?.remind == false || card?.phase == "arrived") {
             // Reminders off for this trip, or you're there: nothing more to say.
             return if (following || card.remind == false) Step.Cancel else Step.Keep
         }
         if (!state.alertsOn || trip == null || (classAt != null && now >= classAt) || (remindAt == null && !following))
             return Step.StopChecking
-        // One heads-up per trip. A new plan (the next class) has a new classAt.
-        // After it, the same notification follows the trip, but only while it's showing.
-        if (state.notifiedFor == trip) return Step.Follow(post = showing, checkAt = followUpAt(answer, pushActive, now))
+        // One heads-up per trip. A new plan (the next class) has a new key.
+        // After it, the same notification follows the trip, but only while
+        // it's showing: dismissed, nothing is posted for it again, so no check
+        // wakes the phone for it either.
+        if (noted) return Step.Follow(post = showing, checkAt = if (showing) followUpAt(answer, pushActive, now) else null)
         if (remindAt == null) return Step.Keep
         if (remindAt > now + CHECK_AHEAD_MS) return Step.CheckAt(remindAt - CHECK_AHEAD_MS)
         // Fresh times in hand, but not yet: the heads-up goes at remindAt, so
