@@ -55,7 +55,7 @@
  *   index1  stop code (the sampling key); 'error', 'timelapse', 'signal', 'active',
  *           'apperror' and 'tripwake' rows use their kind
  *
- * Two kinds give the columns their own meaning:
+ * Three kinds give the columns their own meaning:
  *
  *   'active' (usage.ts logActive), once a Singapore day, counts only:
  *     blob2 scope 'all' | 'app' | 'version';  blob3 the app (web, android,
@@ -69,6 +69,10 @@
  *     blob7 its stack, both scrubbed (apperrors.ts scrub);  blob8 the OS or
  *     browser and its major version;  double1 1;  double2 1 for a crash
  *     that ended the app, 0 for an error it carried on from.
+ *   'tripwake' (logTripWake), one Trip object wake (see WakeRow):
+ *     blob2 'pushed' | 'same';  blob3 the card's phase;  blob4 its quality;
+ *     blob5 'first' | 'again' (today's first wake or not);  double1 gapS;
+ *     double2 feedAgeS;  double3 leaveShiftS;  double4 lateS.
  *
  * No row holds an account, email, IP address, device or install id, or
  * coordinates. An answer row's
