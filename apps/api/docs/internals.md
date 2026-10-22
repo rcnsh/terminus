@@ -117,8 +117,9 @@ buses), `ANALYTICS_TOKEN` (the dashboard's Analytics Engine charts, with
 `/api/timelapse/*` only) and `HEARTBEAT_URL` (a healthchecks.io ping URL
 the cron calls after every run, so a cron that stops is noticed; stable
 site only, so the beta never pings for it). One plain var, not a secret,
-is unset everywhere: `ETA_MODEL` (`shadow` runs the arrival-time model
-beside the feed's times, answering no one; see "The operator's switches").
+is set in `cloudflare.config.ts`: `ETA_MODEL`, `shadow` on the stable site
+(the arrival-time model runs beside the feed's times, answering no one; see
+"The operator's switches") and `off` on the beta. Unset is off too.
 Everything in [src/types.ts](../src/types.ts)'s `Env`
 but KV is optional at run time: `/api/health` says what's missing.
 
