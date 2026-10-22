@@ -45,8 +45,14 @@ if [ -n "$DIRTY" ]; then
   printf '%s\n' "$DIRTY" >&2
   exit 1
 fi
+# MapLibre's Bazel files link -lpng -ljpeg -lwebp on macOS, though this
+# build decodes images with Apple's frameworks and calls none of them: the
+# linker then found Homebrew's copies and recorded them, so the framework
+# wouldn't load on a Mac without Homebrew. -dead_strip_dylibs drops a
+# library nothing uses; the check below fails the build if any remain.
 (cd "$SRC" && bazelisk build //platform/macos:MapLibre.dynamic \
-  --//:renderer=metal --//platform/macos:macos_loop=cfrunloop --compilation_mode=opt)
+  --//:renderer=metal --//platform/macos:macos_loop=cfrunloop --compilation_mode=opt \
+  --linkopt=-Wl,-dead_strip_dylibs)
 
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
@@ -58,6 +64,14 @@ FW="$XC/$SLICE/MapLibre.framework"
 mkdir -p "$FW/Versions/A/Resources"
 cp "$WORK/in/MapLibre.xcframework/Info.plist" "$XC/Info.plist"
 cp "$FLAT/MapLibre" "$FW/Versions/A/MapLibre"
+# Only macOS's own libraries (/System, /usr/lib) and @rpath: anything else
+# isn't on the Mac the app runs on.
+FOREIGN=$(otool -L "$FW/Versions/A/MapLibre" | grep -v ':$' | awk '{ print $1 }' | grep -vE '^(/System/|/usr/lib/|@rpath/)' || true)
+if [ -n "$FOREIGN" ]; then
+  echo "MapLibre links libraries a Mac doesn't have:" >&2
+  echo "$FOREIGN" >&2
+  exit 1
+fi
 cp -R "$FLAT/Headers" "$FLAT/Modules" "$FW/Versions/A/"
 cp "$FLAT/Info.plist" "$FW/Versions/A/Resources/Info.plist"
 # Only the languages the app speaks; MapLibre's strings are its accessibility labels.
