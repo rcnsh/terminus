@@ -679,7 +679,16 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
     wrangler is installed`.
   - A version bump is `chore(release): terminus <version>`.
   - The body is wrapped at about 72 characters and says what changed and
-    why. Merge commits keep Git's own message.
+    why.
+- **Merging.** Pull requests are squash-merged (GitHub's default here;
+  merge commits are off). The PR title becomes the commit on `main`, with
+  ` (#n)` added, so the title follows the commit rules above and stays
+  under 94 characters. Commits on the branch can be rough, and merging
+  `main` into it is fine; both are squashed away. Use rebase-and-merge
+  only for a PR whose commits each build and stand alone. GitHub deletes
+  the branch on merge; locally, `git branch -D <branch>` (a squashed
+  branch never looks merged to Git, so `-d` refuses) and
+  `git fetch --prune`.
 - **After pushing,** watch CI on the commit and fix anything red straight
   away.
 - **History.** Never rewrite pushed history unless asked. It was rewritten
