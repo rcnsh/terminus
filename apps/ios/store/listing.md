@@ -176,7 +176,7 @@ terminus is an independent student project, not affiliated with the National Uni
 
 ## Screenshots
 
-iPhone only (`TARGETED_DEVICE_FAMILY` is 1), so one set at 6.9" (1320×2868) covers every size. Upload in this order. English in `screenshots/`, Chinese in `screenshots/zh/` (for the zh-Hans localisation).
+iPhone only (`TARGETED_DEVICE_FAMILY` is 1). App Store Connect requires the 6.3" size (1206×2622) and scales it to every other iPhone, so upload copies scaled to that (`magick <file> -resize '1206x2622!'`: the same shape within 0.1%). The 6.9" originals (1320×2868) are optional. Upload in this order. English in `screenshots/`, Chinese in `screenshots/zh/` (for the zh-Hans localisation).
 
 They're the Play set's five, with its words and its look: each capture from `captures/en` or `captures/zh` in an iPhone under a two-line headline, and the five one picture cut in five (the app's sky from dawn to night, its hills, city and road running through, a shuttle crossing two of the joins). The home screen's capture is rebuilt around its own pixels (the two widgets and the app's icon as captured) on a wallpaper of the app's dusk, without the test runner's icon, the search pill and the dock; its status bar is redrawn with the capture's time. The words are in `frame.mjs` (`SLIDES`). After retaking a capture, or changing the words, run `node apps/ios/store/frame.mjs` (or `node apps/ios/store/frame.mjs 3-map` for one) on a Mac.
 
