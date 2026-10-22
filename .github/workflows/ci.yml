@@ -146,3 +146,11 @@ jobs:
       # The optimised build a release would make, for a device, unsigned.
       - run: xcodebuild build -project terminus.xcodeproj -scheme Terminus -configuration Release -destination generic/platform=iOS CODE_SIGNING_ALLOWED=NO -quiet
         working-directory: apps/ios
+      # What Xcode leaves running (the simulator, ibtoold), stopped here: left
+      # to the runner's own clean-up, the job can sit unfinished for 40 minutes
+      # after its last step.
+      - name: stop the simulator and Xcode's helpers
+        if: always()
+        run: |
+          xcrun simctl shutdown all || true
+          pkill -9 -x ibtoold || true
