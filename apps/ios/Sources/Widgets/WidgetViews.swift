@@ -459,7 +459,7 @@ private struct BoardLine: View {
                 HStack(spacing: 5) {
                     PillView(
                         pill: row.quality == "live"
-                            ? WidgetPill(text: L("Live"), good: true) : WidgetPill(text: L("Scheduled"), good: false), inks: inks)
+                            ? WidgetPill(text: L("Live"), good: true) : WidgetPill(text: L("Estimate"), good: false), inks: inks)
                     if let crowd {
                         Text(verbatim: crowd.0).font(.system(size: 11, weight: .medium)).foregroundStyle(crowd.1)
                             .padding(.horizontal, 7).padding(.vertical, 2).background(inks.raised, in: Capsule())

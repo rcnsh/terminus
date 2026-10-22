@@ -18,7 +18,7 @@
 "Add your email" = "添加你的邮箱";
 "Alerts" = "提醒";
 "All %@ halls and colleges" = "全部 %@ 个宿舍和学院";
-"Allow for busy buses" = "考虑巴士很挤的情况";
+"Allow for packed buses" = "考虑巴士很挤的情况";
 "Allow location" = "允许定位";
 "Allowed." = "已允许。";
 "Back" = "返回";
@@ -122,7 +122,7 @@
 "Walk from home to your stop" = "从家步行到车站";
 "Walks follow the paths on campus. Your pace sets how long they take." = "步行按校园里的小路计算。你的步速决定要走多久。";
 "Wed" = "周三";
-"When the bus you'd wait for is often full at that stop and time, aim one bus earlier." = "如果你要等的巴士在那个车站和时间经常满员，就提早一班。";
+"When the bus you'd wait for is often packed at that stop and time, aim one bus earlier." = "如果你要等的巴士在那个车站和时间经常很挤，就提早一班。";
 "When to leave for class, and which bus to catch." = "告诉你什么时候出发去上课，该搭哪班巴士。";
 "Where do you live?" = "你住在哪里？";
 "Where you catch the bus in the morning and head back to at night. Only the stops are saved." = "早上在哪里搭巴士、晚上回到哪里。只保存车站。";

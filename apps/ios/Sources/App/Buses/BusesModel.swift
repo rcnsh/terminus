@@ -168,7 +168,7 @@ final class BusesModel {
 
     // MARK: boards
 
-    /// The nearest stop, by location, else the home stop; its twin across the road comes with it.
+    /// The nearest stop, by location, else the home stop; its opposite stop comes with it.
     func refreshNearest(force: Bool = false) async {
         if !force && fresh(Self.nearestKey) { return }
         guard let token else { return }
@@ -220,14 +220,14 @@ final class BusesModel {
         }
     }
 
-    /// The board the page for `code` shows: its own, or its twin's across the road; nil for the nearest stop's page.
+    /// The board the page for `code` shows: its own, or its opposite stop's; nil for the nearest stop's page.
     func pageBoard(_ code: String?) -> String? {
         guard let code else { return nil }
         if across.contains(code), let o = boards[code]?.opposite { return o }
         return code
     }
 
-    /// The page for `code` (nil: the nearest stop). The nearest stop's twin
+    /// The page for `code` (nil: the nearest stop). The nearest stop's opposite stop
     /// comes with /me/nearby, so that page asks only for that.
     func refreshPage(_ code: String?, force: Bool = false) async {
         if let b = pageBoard(code) { await refreshBoard(b, force: force) } else { await refreshNearest(force: force) }

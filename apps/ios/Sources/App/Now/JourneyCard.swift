@@ -137,7 +137,7 @@ struct JourneyGround: View {
 }
 
 /// The horizon's road in words, just under it: your bus and when it reaches
-/// your stop ("about" for a timetable guess), the stop's name in bold.
+/// your stop ("about" for an estimate), the stop's name in bold.
 private struct RoadLine: View {
     let journey: Journey
     let now: Date

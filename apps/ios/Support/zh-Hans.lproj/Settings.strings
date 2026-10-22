@@ -46,9 +46,8 @@
 "Add your email" = "添加你的邮箱";
 "Add your email to send feedback" = "添加邮箱后才能发送反馈";
 "added by hand" = "手动添加";
-"Aim one bus earlier when yours is often full." = "你要搭的巴士经常满员时，提早一班。";
+"Aim one bus earlier when yours is often packed." = "你要搭的巴士经常很挤时，提早一班。";
 "All off" = "全部关闭";
-"Allow for busy buses" = "考虑巴士很挤的情况";
 "Allowed" = "已允许";
 "Already a favourite: %@" = "已在收藏中：%@";
 "Also used on your Mac, on the web and in emails. Place and bus names stay in English, as on the signs." = "也用于你的 Mac、网页和邮件。地点和巴士名称保持英文，与站牌一致。";

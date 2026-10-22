@@ -279,7 +279,7 @@ private struct WalkingGroup: View {
                 isOn: Binding(get: { profile.preferBus }, set: { v in model.edit { $0.preferBus = v } }), id: "settings.preferBus")
             GroupDivider()
             SettingSwitch(
-                label: L("Allow for busy buses"), sub: L("Aim one bus earlier when yours is often full."),
+                label: L("Allow for packed buses"), sub: L("Aim one bus earlier when yours is often packed."),
                 isOn: Binding(get: { profile.fullBusMargin }, set: { v in model.edit { $0.fullBusMargin = v } }), id: "settings.busy")
             GroupDivider()
             SettingSwitch(

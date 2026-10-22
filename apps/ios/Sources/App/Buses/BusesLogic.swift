@@ -124,7 +124,7 @@ enum BusWords {
         let mins = r.later.sorted { $0.etaS < $1.etaS }.prefix(3).map { "\(BusTimes.minutes($0.etaS))" }
         guard !mins.isEmpty else { return nil }
         let list = mins.joined(separator: L(", "))
-        return laterScheduled(r) ? L("then %@ min, scheduled", list) : L("then %@ min", list)
+        return laterScheduled(r) ? L("then %@ min, estimated", list) : L("then %@ min", list)
     }
 
     /// The services that stop within two hours, soonest first, once each:

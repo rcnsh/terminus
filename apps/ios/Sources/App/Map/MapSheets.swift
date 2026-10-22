@@ -527,7 +527,7 @@ private struct StopRow: View {
         } else if row.quality == "stale" {
             Tag(text: L("Last known"), color: .muted)
         } else {
-            Tag(text: L("Scheduled"), color: .warn)
+            Tag(text: L("Estimate"), color: .warn)
         }
     }
 
@@ -763,7 +763,7 @@ struct BusSheet: View {
 
     private var crowd: (Int, Color, String)? {
         switch bus.crowd {
-        case "low": (1, .good, L("Seats free"))
+        case "low": (1, .good, L("Seats"))
         case "medium": (2, .warn, L("Busy"))
         case "high": (3, .bad, L("Packed"))
         default: nil

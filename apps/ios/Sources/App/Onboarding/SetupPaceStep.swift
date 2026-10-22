@@ -2,7 +2,7 @@ import SwiftUI
 
 /// How you get around: the pace as a lap of a running track (400 m, something
 /// people have walked round) with the chosen pace's time in the middle; the
-/// three paces; "allow for busy buses", with the trade it makes drawn under
+/// three paces; "allow for packed buses", with the trade it makes drawn under
 /// it; then 12- or 24-hour times.
 struct SetupPaceStep: View {
     let model: OnboardingModel
@@ -96,7 +96,7 @@ private struct SetupTrack: View {
     }
 }
 
-/// "Allow for busy buses", with an example of what it does: the earlier R2 instead of the packed one.
+/// "Allow for packed buses", with an example of what it does: the earlier R2 instead of the packed one.
 private struct SetupBusyBuses: View {
     let model: OnboardingModel
 
@@ -105,8 +105,8 @@ private struct SetupBusyBuses: View {
         VStack(alignment: .leading, spacing: 10) {
             Toggle(isOn: Binding(get: { on }, set: { model.setFullBusMargin($0) })) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(L("Allow for busy buses")).font(.body).foregroundStyle(Color.ink)
-                    SetupHint(L("When the bus you'd wait for is often full at that stop and time, aim one bus earlier."))
+                    Text(L("Allow for packed buses")).font(.body).foregroundStyle(Color.ink)
+                    SetupHint(L("When the bus you'd wait for is often packed at that stop and time, aim one bus earlier."))
                 }
             }
             .tint(.brand)

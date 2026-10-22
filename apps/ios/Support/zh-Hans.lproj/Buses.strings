@@ -15,6 +15,7 @@
 "Close" = "关闭";
 "Couldn't update" = "无法更新";
 "Ends here" = "本站为终点站";
+"Estimate" = "估计";
 "Find your stop" = "找到你的车站";
 "Last known" = "最后已知";
 "Live" = "实时";
@@ -35,7 +36,6 @@
 "Pinned" = "已固定";
 "Public bus %@, fare applies" = "公共巴士 %@，需付车费";
 "Runs until %@" = "运行到 %@";
-"Scheduled" = "按时刻表";
 "Search a stop or service" = "搜索车站或线路";
 "Search for a stop above and pin it with the star, so it's here next time." = "在上面搜索车站，用星标固定它，下次就会在这里。";
 "Seats" = "有座位";
@@ -46,7 +46,7 @@
 "Stops" = "车站";
 "Swipe for %@" = "滑动查看 %@";
 "Tap a service to see its whole line." = "点一条线路，查看它经过的每个车站。";
-"then %@ min, scheduled" = "之后 %@ 分钟（按时刻表）";
+"then %@ min, estimated" = "之后 %@ 分钟（估计）";
 "This service's line isn't available." = "这条线路暂时无法显示。";
 "This side" = "这一边";
 "Times are shown for your stop only." = "只显示你的车站的时间。";

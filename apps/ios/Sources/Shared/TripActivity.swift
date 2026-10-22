@@ -41,7 +41,7 @@ struct TripAttributes: Sendable {
         var leaveAt: Int?
         var departAt: Int?
         var arriveAt: Int?
-        /// A timetable guess, not a bus seen: times shown with "~".
+        /// An estimate, not a bus seen: times shown with "~".
         var estimated: Bool
         /// The planned bus has left and nothing says whether you're on it: never "Leave now".
         var gone: Bool

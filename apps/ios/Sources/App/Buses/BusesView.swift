@@ -174,7 +174,7 @@ struct BusesHome: View {
         .toolbar(.hidden, for: .navigationBar)
         .busSkyChrome(strip: true)
         // The page in view only: swiping past one doesn't ask for it. The
-        // nearest stop's twin comes with it, so across the road costs nothing more.
+        // nearest stop's opposite stop comes with it, so across the road costs nothing more.
         .busRefreshing(searching ? "searching" : "page:\(current ?? nearestID):\(model.across.sorted())") {
             if !searching { await model.refreshPage(current) }
         }
@@ -461,7 +461,7 @@ private struct SwipeFor: View {
 
 /// A stop's header, in the sky: what it is ("Nearest stop · 40 m", "Pinned"),
 /// its name, its code and the star. Across the road, the stop shown is the
-/// twin, and the star is for that one.
+/// opposite stop, and the star is for that one.
 struct BusStopHeader: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     let code: String

@@ -12,7 +12,7 @@
 "1 minute" = "1 分钟";
 "about" = "约";
 "about %@" = "约 %@";
-"about %@, timetable" = "约 %@，按时刻表";
+"about %@, estimated" = "约 %@，估计";
 "Arrive %@" = "%@ 到达";
 "Arriving" = "即将到站";
 "at %@" = "在 %@";
@@ -66,7 +66,6 @@
 "Or %@ at %@ from %@" = "或在 %3$@ 搭 %2$@ 的 %1$@";
 "Or go now: %@ at %@ from %@" = "或现在走：在 %3$@ 搭 %2$@ 的 %1$@";
 "Pull to refresh" = "下拉刷新";
-"Scheduled" = "按时刻表";
 "Settings" = "设置";
 "starts %@" = "%@ 开始";
 "Starts at %@" = "%@ 开始";

@@ -74,7 +74,7 @@ final class BusesTests: XCTestCase {
             "then 10, 20 min")
         XCTAssertEqual(
             BusWords.then(try row(#"{"svc":"A1","etaS":60,"quality":"live","later":[{"etaS":600,"quality":"scheduled"}]}"#)),
-            "then 10 min, scheduled")
+            "then 10 min, estimated")
         XCTAssertNil(BusWords.then(try row(#"{"svc":"A1","etaS":60}"#)))
     }
 

@@ -80,14 +80,14 @@ enum Spoken {
         return m == 1 ? L("1 minute") : L("%@ minutes", "\(m)")
     }
 
-    /// A bus's time as it's said: "about 6 minutes, timetable" for a guess,
+    /// A bus's time as it's said: "about 6 minutes, estimated" for a guess,
     /// "6 minutes, live" for a bus seen. Nil without a time.
     static func eta(_ etaS: Int?, quality: String, withQuality: Bool = true) -> String? {
         guard let s = etaS else { return nil }
         if s < BusTimes.arrivingS { return L("Arriving") }
         let m = minutes(TimeInterval(s))
         switch quality {
-        case "scheduled": return withQuality ? L("about %@, timetable", m) : L("about %@", m)
+        case "scheduled": return withQuality ? L("about %@, estimated", m) : L("about %@", m)
         case "live": return withQuality ? L("%@, live", m) : m
         default: return L("about %@", m)
         }

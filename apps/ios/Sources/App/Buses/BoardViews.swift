@@ -235,7 +235,7 @@ struct BusQualityTag: View {
         } else if row.quality == "stale" {
             BusTag(text: L("Last known"), color: inks.muted)
         } else {
-            BusTag(text: L("Scheduled"), color: inks.warn)
+            BusTag(text: L("Estimate"), color: inks.warn)
         }
     }
 }

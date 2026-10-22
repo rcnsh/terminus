@@ -361,7 +361,7 @@ enum PullDraw {
     /// The pull on Now's horizon (`m`, the bus in `paint`), in place of the road's own sign and bus:
     /// the sign at `sign` (faded in by the pull when the road has none,
     /// `ownSign`), the puffs, and the bus on the road. `top` is the horizon's
-    /// top and `d` its points a unit; a timetable guess's bus stays an
+    /// top and `d` its points a unit; an estimate's bus stays an
     /// outline (not `live`). `lights`: after dark, its headlight on as it drives.
     static func road(
         _ g: inout GraphicsContext, _ m: PullFrame, paint: (Color, Color), p: SkyPalette, top: CGFloat, d: CGFloat, sign: CGFloat,

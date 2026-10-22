@@ -124,7 +124,7 @@ struct WidgetLeg: Equatable {
     var text: String
 }
 
-/// "Live" in green, or "Scheduled" plain: how sure the time is, as on Now.
+/// "Live" in green, or "Estimate" plain: how sure the time is, as on Now.
 struct WidgetPill: Equatable {
     var text: String
     var good: Bool
@@ -273,7 +273,7 @@ struct WidgetFace {
             accent: j.leave.flatMap { headline.contains($0) ? $0 : nil },
             late: a.leaveLate,
             sub: problem ?? JourneyText.arrive(j),
-            pill: bus.map { _ in j.live ? WidgetPill(text: L("Live"), good: true) : WidgetPill(text: L("Scheduled"), good: false) },
+            pill: bus.map { _ in j.live ? WidgetPill(text: L("Live"), good: true) : WidgetPill(text: L("Estimate"), good: false) },
             leg: leg,
             road: Road.of(j, now: now),
             journey: j

@@ -77,7 +77,7 @@ struct Headline: View {
     }
 }
 
-/// "Live" in green, or "Scheduled" plain, on a small pill.
+/// "Live" in green, or "Estimate" plain, on a small pill.
 struct PillView: View {
     let pill: WidgetPill
     let inks: Inks

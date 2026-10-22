@@ -3,7 +3,7 @@ import SwiftUI
 /// The stops near you as their signs: the name plate with the walk there,
 /// then a row per service, its buses coming up a short road towards the
 /// stop, nearer the sooner they're due, the next one solid and the rest
-/// faded. The nearest stop is drawn larger. A timetable guess is an
+/// faded. The nearest stop is drawn larger. An estimate is an
 /// outline, never a filled bus, so it doesn't pass for live. Tapping a
 /// sign opens the stop in Buses. As Android's NearbyList.
 struct NearbyList: View {
@@ -96,8 +96,8 @@ private struct StopSign: View {
 }
 
 /// A short road to the stop (the ring at its end), and the buses on it:
-/// filled in their colour when the time is live, an outline when it's a
-/// timetable guess; the next one solid, the ones after it faded.
+/// filled in their colour when the time is live, an outline when it's an
+/// estimate; the next one solid, the ones after it faded.
 /// How far up the road a bus is drawn: this many seconds away is the far end.
 private let roadS = 15 * 60
 
