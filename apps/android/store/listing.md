@@ -4,8 +4,10 @@ What goes into Play Console. The images are in this folder. Redraw the icon
 and feature graphics with `swift apps/android/store/render.swift apps/android/store`:
 `feature-graphic.png` for the main listing, `feature-graphic-zh.png` for the
 Chinese translation (Play shows the main one in every language otherwise).
-The phone screenshots are in `screenshots/`: 1080×1920, taken on the emulator
-against `apps/api/scripts/dev-stub.mjs` (fake buses and a test account, no real data).
+The phone screenshots are in `screenshots/`: 1080×1920, each an emulator capture
+from `captures/` (taken against `apps/api/scripts/dev-stub.mjs`: fake buses and a
+test account, no real data) in a phone under a headline, drawn with
+`node apps/android/store/frame.mjs`.
 
 ## App name (30 characters max)
 
@@ -133,13 +135,15 @@ terminus 是独立开发的应用，并非由新加坡国立大学（NUS）制�
 
 Upload in this order. English in `screenshots/`, Chinese in `screenshots/zh/`, all 1080×1920 (Play's phone limit is a 2:1 ratio, so the 1280×2856 emulator screen was set to `wm size 1080x1920`, density 420).
 
-1. `1-leave-by.png`: when to leave for the next class, counting down under the morning sky, and the trip below: the walk, then the bus in its colour.
-2. `2-widget.png`: two widgets on the home screen: the next bus with its buttons, and Buses near you below it (4×3) with both sides of the road.
-3. `3-map.png`: the campus map with A1 picked: its line, its three buses and its stops, with the street map and "National University of Singapore" underneath.
-4. `4-buses.png`: the Buses tab at the nearest stop, every service's next two buses, live, with how full they are.
-5. `5-on-the-bus.png`: on the bus, with how far along the ride you are, the next stop and the arrival.
+Each is framed: the capture from `captures/en` or `captures/zh`, unchanged, in a phone under a two-line headline, against the app's sky at a later hour each time (dawn, day, the golden hour, dusk, night), with its hills, rain trees and the city along the bottom. The words are in `frame.mjs` (`SLIDES`), English and Chinese. After retaking a capture, or changing the words, run `node apps/android/store/frame.mjs` (or `node apps/android/store/frame.mjs 3-map` for one) on a Mac: it draws with headless Chromium (Playwright's download, or Google Chrome, or `CHROME`) and the system's PingFang SC for the Chinese.
 
-How they were taken (9 October 2026, from main; 1, 2 and 5 again on 22 October): the dev stub started with the clock at 9:26 and a class at 10:00 (`STUB_NOW=2026-10-09T01:26:00Z`, and `CLASS_IN_MIN` worked out from the real time so the class lands at 10:00), then held still with `/__stub/freeze` and moved with `/__stub/at`. The emulator's clock set to the stub's time (`adb shell cmd alarm set-time`), the status bar cleaned with SystemUI demo mode and its clock set to the stub's. The phone was placed a few minutes' walk from PGP (1.29375, 103.7811) with a test location provider (`adb shell appops set com.android.shell android:mock_location allow`, then `cmd location providers add-test-provider` and `set-test-provider-location`), since `adb emu geo fix` stops working once the clock has been moved. The app is a debug build with `-PapiBase=http://localhost:8787` and `adb reverse tcp:8787 tcp:8787`, signed in as the stub's test account (I already have an account, then the code the stub prints); the Chinese set uses `adb shell cmd locale set-app-locales sh.rcn.terminus --locales zh-CN`, then Settings › Language › 中文 so the answers come in Chinese too. Gboard types pinyin while the app is in Chinese, so sign in before switching.
+1. `1-leave-by.png` "Know when to leave for class": when to leave for the next class, counting down under the morning sky, and the trip below: the walk, then the bus in its colour.
+2. `2-widget.png` "Your buses, on the home screen": two widgets on the home screen: the next bus with its buttons, and Buses near you below it (4×3) with both sides of the road.
+3. `3-map.png` "Every bus, live on the map": the campus map with A1 picked: its line, its three buses and its stops, with the street map and "National University of Singapore" underneath.
+4. `4-buses.png` "What's coming at your stop": the Buses tab at the nearest stop, every service's next two buses, live, with how full they are.
+5. `5-on-the-bus.png` "With you all the way": on the bus, with how far along the ride you are, the next stop and the arrival.
+
+How the captures were taken (9 October 2026, from main; 1, 2 and 5 again on 22 October): the dev stub started with the clock at 9:26 and a class at 10:00 (`STUB_NOW=2026-10-09T01:26:00Z`, and `CLASS_IN_MIN` worked out from the real time so the class lands at 10:00), then held still with `/__stub/freeze` and moved with `/__stub/at`. The emulator's clock set to the stub's time (`adb shell cmd alarm set-time`), the status bar cleaned with SystemUI demo mode and its clock set to the stub's. The phone was placed a few minutes' walk from PGP (1.29375, 103.7811) with a test location provider (`adb shell appops set com.android.shell android:mock_location allow`, then `cmd location providers add-test-provider` and `set-test-provider-location`), since `adb emu geo fix` stops working once the clock has been moved. The app is a debug build with `-PapiBase=http://localhost:8787` and `adb reverse tcp:8787 tcp:8787`, signed in as the stub's test account (I already have an account, then the code the stub prints); the Chinese set uses `adb shell cmd locale set-app-locales sh.rcn.terminus --locales zh-CN`, then Settings › Language › 中文 so the answers come in Chinese too. Gboard types pinyin while the app is in Chinese, so sign in before switching.
 
 - **The map** needs the street map, fonts and icons in `dev/map/`: `scripts/map-tiles.sh --dry-run`, then copy `build/map` there (the fonts include the Chinese ones). The campus's name hides under a bus that stops on it: move the clock a minute or two (`/__stub/at`) until the middle of campus is clear.
 - **On the bus** is only assumed where the phone is: step the clock through the bus's departure a few minutes at a time, with the phone at the stop until it leaves, then along its route (PGP, then Opp HSSML and Opp NUSS for the R2). A bigger jump, or a phone left at home, gives "If you missed it" instead.
