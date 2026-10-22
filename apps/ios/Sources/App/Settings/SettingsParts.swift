@@ -372,12 +372,7 @@ struct SettingsMark: View {
 enum SettingsTime {
     /// "9:30 AM" or "09:30" for minutes past midnight, in the account's clock style.
     static func clock(_ min: Int) -> String {
-        let f = DateFormatter()
-        f.locale = Lang.locale
-        f.timeZone = TimeZone(identifier: "UTC")!
-        f.setLocalizedDateFormatFromTemplate(Clock.hour12 ? "hmm" : "HHmm")
-        return f.string(from: Date(timeIntervalSince1970: TimeInterval(min * 60)))
-            .replacingOccurrences(of: #"([上下]午)(\d)"#, with: "$1 $2", options: .regularExpression)
+        clockText(Date(timeIntervalSince1970: TimeInterval(min * 60)), in: TimeZone(identifier: "UTC")!)
     }
 
     /// "Mon" in the app's language; `day` is 0 for Sunday, as the profile keeps it.

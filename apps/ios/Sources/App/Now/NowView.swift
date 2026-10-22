@@ -245,12 +245,7 @@ struct NowView: View {
 }
 
 /// A time on the phone's clock, in the account's style: "Updated 9:41".
-func deviceTime(_ d: Date) -> String {
-    let f = DateFormatter()
-    f.locale = Lang.locale
-    f.setLocalizedDateFormatFromTemplate(Clock.hour12 ? "hmm" : "HHmm")
-    return f.string(from: d)
-}
+func deviceTime(_ d: Date) -> String { clockText(d, in: .current) }
 
 /// The wordmark in the sky's ink, the accent the sky's.
 private struct NowWordmark: View {

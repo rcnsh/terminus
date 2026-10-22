@@ -94,13 +94,21 @@ enum Clock {
 }
 
 /// A clock time in campus time, in the account's 12- or 24-hour style, as the server writes the card.
-func campusTime(_ d: Date) -> String {
-    let f = DateFormatter()
-    f.locale = Lang.locale
-    f.timeZone = .campus
-    f.setLocalizedDateFormatFromTemplate(Clock.hour12 ? "hmm" : "HHmm")
-    // "下午 6:36", with the space the server's Chinese has.
-    return f.string(from: d).replacingOccurrences(of: #"([上下]午)(\d)"#, with: "$1 $2", options: .regularExpression)
+func campusTime(_ d: Date) -> String { clockText(d, in: .campus) }
+
+/// "18:36", or "6:36 PM" (下午 6:36) in 12-hour style: the server's
+/// `clockMin`, so a time the app writes matches the card's beside it rather
+/// than the phone's region ("6:36 pm" in British English).
+func clockText(_ d: Date, in zone: TimeZone) -> String {
+    var cal = Calendar(identifier: .gregorian)
+    cal.timeZone = zone
+    let c = cal.dateComponents([.hour, .minute], from: d)
+    let h = c.hour ?? 0
+    let mm = String(format: "%02d", c.minute ?? 0)
+    guard Clock.hour12 else { return String(format: "%02d", h) + ":" + mm }
+    let hm = "\(h % 12 == 0 ? 12 : h % 12):\(mm)"
+    if Lang.zh { return "\(h >= 12 ? "下午" : "上午")\u{00A0}\(hm)" }
+    return "\(hm)\u{00A0}\(h >= 12 ? "PM" : "AM")"
 }
 
 /// "1.0.10" > "1.0.9", and a release is newer than its own pre-release.
