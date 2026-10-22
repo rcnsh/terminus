@@ -313,7 +313,7 @@ export function adviceFor(reason: string | null, kv: string = KV_NAMESPACE_IDS.s
   }
   if (/10008/.test(reason)) return 'The device id no longer matches the access token. Clear auth:session in KV and let it re-mint.';
   if (/10000|Invalid API KEY/i.test(reason)) return 'The app API keys were rejected; they may have been rotated in a new uNivUS build.';
-  return 'Check `pnpm exec wrangler tail` and /health?probe=1.';
+  return 'Check `pnpm exec wrangler tail` (from apps/api) and /api/health?probe=1.';
 }
 
 /**
