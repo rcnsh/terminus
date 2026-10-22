@@ -208,9 +208,6 @@ struct NearbyModel {
         b.later.isEmpty ? "" : L("then %@", b.later.prefix(2).map(clock).joined(separator: L(", ")))
     }
 
-    /// Under the next stop where there are no pills: the buses after it, or which first bus it is.
-    func subLine(_ b: StopBus) -> String { b.first ? firstLabel(b) : laterLine(b) }
-
     /// The stop's name, or what to call the widget before there is one.
     var title: String {
         guard paired else { return "terminus" }

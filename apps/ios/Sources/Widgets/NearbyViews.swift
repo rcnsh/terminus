@@ -271,7 +271,9 @@ private struct NearbySides: View {
     }
 }
 
-/// Narrow widgets: a service a row, its next stop over the buses after it, its time at the end with its minutes under it.
+/// Narrow widgets: a service a row, its time and minutes beside its badge,
+/// and under them its next stop (or which first bus it is) across the
+/// row: beside the time it would have room for a word.
 private struct NearbyRows: View {
     let v: NearbyModel
     let buses: [StopBus]
@@ -283,18 +285,20 @@ private struct NearbyRows: View {
         VStack(spacing: 0) {
             ForEach(Array(buses.enumerated()), id: \.offset) { i, b in
                 if i > 0 { Rectangle().fill(inks.line).frame(height: 1) }
-                HStack(spacing: 6) {
-                    Badge(b: b, size: 12).frame(width: 34, alignment: .leading)
-                    VStack(alignment: .leading, spacing: 1) {
-                        small(v.nextLine(b, buses), inks.ink, 13, bold: true)
-                        if !b.later.isEmpty || b.first { small(v.subLine(b), inks.muted, 11) }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    VStack(alignment: .trailing, spacing: 1) {
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 6) {
+                        Badge(b: b, size: 12)
                         TimeText(v: v, b: b, inks: inks, size: 17)
+                        Spacer(minLength: 0)
                         if let left = v.minutes(b) { MinutesChip(b: b, left: left, inks: inks, size: 10) }
                     }
+                    if b.first {
+                        small(v.firstLabel(b), inks.muted, 12)
+                    } else {
+                        small(v.nextLine(b, buses), inks.ink, 12, bold: true)
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .frame(height: rowH)
             }
         }
