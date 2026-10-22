@@ -8,8 +8,6 @@ h2 { font-size: 1.05rem; margin: 0 0 14px; }
 code { font-size: 0.85em; }
 .unlock { max-width: 28rem; display: grid; gap: 8px; }
 .unlock label { font-weight: 600; }
-.unlock .add { display: grid; gap: 8px; border-top: 1px solid var(--line); padding-top: 14px; margin-top: 4px; }
-.unlock .add input { flex: 1; min-width: 0; }
 .row { display: flex; gap: 8px; }
 table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
@@ -35,8 +33,36 @@ td .btn { white-space: nowrap; }
 }
 :root[data-theme="dark"] { --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; }
 
-/* Before sign-in: the site's header and a narrow column. */
-.gate { max-width: 68rem; margin: 0 auto; padding: 0 16px; }
+/* Before sign-in: the site's header and one card in the middle of the page,
+   on a faint glow of the accent. */
+.gate {
+  min-height: calc(100dvh - 180px); display: grid; place-items: center; padding: 0 16px;
+  background: radial-gradient(40rem 24rem at 50% 42%, color-mix(in srgb, var(--accent-bright) 9%, transparent), transparent 70%);
+}
+.gate-card { width: min(100%, 25rem); padding: 32px 28px 24px; text-align: center; animation: rise 0.4s var(--ease); }
+.gate-card h1 { margin: 0 0 6px; font-size: 1.6rem; }
+.gate-card > .hint { margin: 0 auto 22px; max-width: 19rem; }
+.gate-icon {
+  display: inline-grid; place-items: center; width: 48px; height: 48px; margin-bottom: 16px; border-radius: 14px;
+  background: var(--accent-soft); color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.gate .unlock { max-width: none; gap: 0; text-align: left; }
+.gate .unlock > .btn { width: 100%; padding: 14px 18px; }
+.gate-msg { margin: 0; color: var(--bad-ink); font-size: 0.875rem; text-align: center; }
+.gate-msg:not(:empty) { margin-top: 12px; }
+.gate .add { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 14px; }
+.gate .add summary {
+  cursor: pointer; list-style: none; text-align: center; color: var(--muted); font-size: 0.875rem; padding: 4px 0;
+  transition: color 0.15s ease;
+}
+.gate .add summary::-webkit-details-marker { display: none; }
+.gate .add summary:hover, .gate .add[open] summary { color: var(--ink); }
+.gate .add summary::after { content: "›"; display: inline-block; margin-left: 8px; transition: transform 0.2s var(--ease); }
+.gate .add[open] summary::after { transform: rotate(90deg); }
+.gate .add form { animation: open 0.2s var(--ease); }
+.gate .add label { margin-top: 10px; }
+.gate .add .row input { flex: 1; }
+.gate .add .hint { margin: 8px 0 0; font-size: 0.8rem; }
 body.dash-on .gate-nav { display: none; }
 body.dash-on > main { padding: 0; }
 

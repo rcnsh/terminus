@@ -123,32 +123,54 @@ async function unlockWith(get, setBusy) {
   }
 }
 
+const KEY_ICON = html`<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5" /><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3" /></svg>`;
+
+/** The card the gate shows: the mark, the title, and what's below. */
+function GateCard({ sub, children }) {
+  return html`
+    <div class="gate">
+      <div class="card gate-card">
+        <span class="gate-icon">${KEY_ICON}</span>
+        <h1>Dashboard</h1>
+        <p class="hint">${sub}</p>
+        ${children}
+      </div>
+    </div>
+  `;
+}
+
 function Unlock({ msg }) {
   const box = useRef(null);
   const [busy, setBusy] = useState(false);
   if (!passkeysWork())
-    return html`<p class="card hint">This browser can’t use passkeys. Open the dashboard in a current Chrome, Safari or Firefox.</p>`;
+    return html`<${GateCard} sub="This browser can’t use passkeys. Open the dashboard in a current Chrome, Safari or Firefox." />`;
   return html`
-    <div class="card unlock">
-      <button type="button" class="btn accent" disabled=${busy} onClick=${() => unlockWith(signIn, setBusy)}>Sign in with a passkey</button>
-      <p class="hint" role="status">${msg}</p>
-      <form
-        class="add"
-        onSubmit=${(e) => {
-          e.preventDefault();
-          const token = box.current.value.trim();
-          box.current.value = '';
-          unlockWith(() => addPasskey(token, navigator.userAgentData?.platform || navigator.platform || ''), setBusy);
-        }}
-      >
-        <label for="token">Add a passkey on this device</label>
-        <p class="hint">Needs the <code>HEALTH_TOKEN</code> secret, once. It isn’t kept.</p>
-        <div class="row">
-          <input id="token" ref=${box} type="password" autocomplete="off" placeholder="Operator token" required />
-          <button type="submit" class="btn" disabled=${busy}>Add passkey</button>
-        </div>
-      </form>
-    </div>
+    <${GateCard} sub="For the operator of terminus. Sign in with the passkey on this device.">
+      <div class="unlock">
+        <button type="button" class="btn accent" disabled=${busy} onClick=${() => unlockWith(signIn, setBusy)}>
+          ${busy ? 'Waiting for your passkey…' : 'Sign in with a passkey'}
+        </button>
+        <p class="gate-msg" role="status">${msg}</p>
+        <details class="add" open=${/add one|operator token|token was not/i.test(msg)}>
+          <summary>First time on this device? Add a passkey</summary>
+          <form
+            onSubmit=${(e) => {
+              e.preventDefault();
+              const token = box.current.value.trim();
+              box.current.value = '';
+              unlockWith(() => addPasskey(token, navigator.userAgentData?.platform || navigator.platform || ''), setBusy);
+            }}
+          >
+            <label for="token">Operator token</label>
+            <div class="row">
+              <input id="token" ref=${box} type="password" autocomplete="off" placeholder="HEALTH_TOKEN" required />
+              <button type="submit" class="btn" disabled=${busy}>Add passkey</button>
+            </div>
+            <p class="hint">The <code>HEALTH_TOKEN</code> secret, once per device. It isn’t kept.</p>
+          </form>
+        </details>
+      </div>
+    <//>
   `;
 }
 
@@ -326,8 +348,8 @@ function Admin() {
   useEffect(() => {
     document.body.classList.toggle('dash-on', Boolean(v.stats));
   }, [Boolean(v.stats)]);
-  if (v.locked) return html`<div class="gate"><h1>Dashboard</h1><${Unlock} msg=${v.msg} /></div>`;
-  if (!v.stats) return html`<div class="gate"><h1>Dashboard</h1><p class="hint">${v.note || 'Loading…'}</p></div>`;
+  if (v.locked) return html`<${Unlock} msg=${v.msg} />`;
+  if (!v.stats) return html`<${GateCard} sub=${v.note || 'Loading…'} />`;
   return html`<${Dashboard} v=${v} />`;
 }
 
