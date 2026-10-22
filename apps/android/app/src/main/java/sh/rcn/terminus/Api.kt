@@ -1038,9 +1038,6 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         }
     }
 
-    /** Today's timeline. */
-    suspend fun day(lat: Double? = null, lon: Double? = null, acc: Double? = null): DayPlan = DayPlan.parse(dayJson(lat, lon, acc).first)
-
     /**
      * /api/me/day as it came: kept for when the phone is offline ([Store.saveDay]). With a location, the next class is planned from there,
      * as the card is. With the language it's written in, as [L.header] gives it: the account's choice wins over the one asked in, and a
