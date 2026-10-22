@@ -935,8 +935,8 @@ struct PaceStep: View {
         }
         Toggle(isOn: Binding(get: { setup.fullBusMargin }, set: { setup.setFullBusMargin($0) })) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(L("Allow for busy buses"))
-                Hint(L("When the bus you'd wait for is often full at that stop and time, aim one bus earlier."))
+                Text(L("Allow for packed buses"))
+                Hint(L("When the bus you'd wait for is often packed at that stop and time, aim one bus earlier."))
             }
         }
         .padding(.top, 6)

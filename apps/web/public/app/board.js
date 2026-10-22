@@ -30,11 +30,11 @@ export function Crowd({ crowd }) {
   return html`<span class=${`bt-crowd ${crowd}`}><${Icon} paths=${crowd === 'low' ? SEAT : PEOPLE} />${word}</span>`;
 }
 
-/** Live, Scheduled, or a live time that has stopped updating. Nothing without a time. */
+/** Live, Estimate, or a live time that has stopped updating. Nothing without a time. */
 export function Quality({ r }) {
   if (r.etaS == null) return null;
   if (r.quality === 'live') return html`<span class="bt-live"><span class="dot"></span>${t('Live')}</span>`;
-  if (r.quality === 'scheduled') return html`<span class="bt-sched">${t('Scheduled')}</span>`;
+  if (r.quality === 'scheduled') return html`<span class="bt-sched">${t('Estimate')}</span>`;
   if (r.quality === 'stale') return html`<span class="bt-stale">${t('Last known')}</span>`;
   return null;
 }

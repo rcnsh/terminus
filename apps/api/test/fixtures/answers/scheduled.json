@@ -70,7 +70,7 @@
     "kind": "trip",
     "staleAt": "2026-08-27T01:11:50Z",
     "crowd": null,
-    "quality": "Timetable estimate",
+    "quality": "Estimated time",
     "leaveBy": "Leave by ~09:06",
     "leaveVia": "catch the ~09:11 A1 at PGP",
     "catch": null,

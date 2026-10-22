@@ -324,7 +324,7 @@ class BusesTest {
     }
 
     @Test
-    fun aTwinOnlyNearByIsNotAcrossTheRoad() {
+    fun anOppositeOnlyNearByIsNotAcrossTheRoad() {
         val b =
             Board.parse(
                 JSONObject(

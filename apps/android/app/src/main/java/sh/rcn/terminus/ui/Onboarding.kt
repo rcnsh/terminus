@@ -86,7 +86,7 @@ import sh.rcn.terminus.ProfileDoc
 import sh.rcn.terminus.R
 import sh.rcn.terminus.Residence
 import sh.rcn.terminus.Stop
-import sh.rcn.terminus.Trip
+import sh.rcn.terminus.TimetableClass
 import sh.rcn.terminus.dayShort
 import sh.rcn.terminus.hour12
 
@@ -453,7 +453,7 @@ private fun ColumnScope.TimetableStep(state: AccountState, account: AccountViewM
  * going on.
  */
 @Composable
-private fun Week(classes: List<Trip>, campus: Campus?) {
+private fun Week(classes: List<TimetableClass>, campus: Campus?) {
     if (classes.isEmpty()) return
     val h12 = hour12(LocalContext.current)
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
@@ -708,7 +708,7 @@ private fun Track(lapMin: Int) {
 /** A running track's own red, the same in light and dark. */
 private val TRACK = Color(0xFFB4533A)
 
-/** "Allow for busy buses", with an example of what it does: the earlier R2 instead of the packed one. */
+/** "Allow for packed buses", with an example of what it does: the earlier R2 instead of the packed one. */
 @Composable
 private fun BusyBuses(profile: ProfileDoc, account: AccountViewModel) {
     val c = MaterialTheme.colorScheme

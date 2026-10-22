@@ -986,9 +986,9 @@ test('directional pairing is symmetric', () => {
   const byCode = new Map(realGraph.stops.map((s) => [s.code, s]));
   for (const s of realGraph.stops) {
     if (!s.opposite) continue;
-    const twin = byCode.get(s.opposite);
-    assert.ok(twin, `${s.code} points at missing twin ${s.opposite}`);
-    assert.equal(twin.opposite, s.code, `${s.code} <-> ${twin.code} is not symmetric`);
+    const opp = byCode.get(s.opposite);
+    assert.ok(opp, `${s.code} points at a missing opposite stop ${s.opposite}`);
+    assert.equal(opp.opposite, s.code, `${s.code} <-> ${opp.code} is not symmetric`);
   }
 });
 
@@ -1420,7 +1420,7 @@ test('the proxy reports failure at HTTP 200, so only code "00000" counts as succ
 });
 
 test('a place served by two stops: any bus to either one counts, the shorter ride wins', () => {
-  // From KR MRT itself (its twin across the road is a candidate of its own).
+  // From KR MRT itself (its opposite stop is a candidate of its own).
   const legs = (input) =>
     new Map((candidateStops(realGraph, input).find((c) => c.stop.code === 'KR-MRT')?.legs ?? []).map((l) => [l.svc, l.hops]));
   const base = { lat: null, lon: null, originCode: 'KR-MRT' };

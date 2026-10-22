@@ -34,7 +34,7 @@ A request goes through `src/index.ts` (the router), which hands off to:
 | `src/me.ts`, `src/accounts.ts`, `src/applogin.ts` | Accounts: emailed codes and links, device tokens, pairing |
 | `src/access.ts` | Who may call the keyed routes (API key or session) |
 | `src/next.ts` | `/api/me/next`: today's plan and the trip's phase |
-| `src/profile.ts`, `src/day.ts` | The saved setup, the planner (`planFor`), and today's timeline |
+| `src/profile.ts`, `src/day.ts` | The profile, the planner (`nextTripFor`), and today's timeline |
 | `src/answer.ts`, `src/resolve.ts`, `src/transfer.ts` | Stops near you, the stop on the right side of the road, scoring, one change of bus |
 | `src/walk.ts` | Walking times along campus paths |
 | `src/card.ts`, `src/format.ts`, `src/i18n.ts` | Everything a client shows, worded once |

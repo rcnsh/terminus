@@ -255,19 +255,19 @@ def opposite_of(stop: dict, by_name: dict, codes: set) -> str | None:
     signal, so try it first and fall back to the caption.
     """
     code = stop["code"]
-    twin_code = code[:-4] if code.endswith("-OPP") else f"{code}-OPP"
-    if twin_code in codes:
-        return twin_code
+    opp_code = code[:-4] if code.endswith("-OPP") else f"{code}-OPP"
+    if opp_code in codes:
+        return opp_code
 
     clean = stop["name"].strip()
     low = clean.lower()
     if low.startswith("opp "):
-        twin = clean[4:].strip()
+        opp_name = clean[4:].strip()
     elif low.startswith("opposite "):
-        twin = clean[9:].strip()
+        opp_name = clean[9:].strip()
     else:
-        twin = f"Opp {clean}"
-    return by_name.get(twin.lower())
+        opp_name = f"Opp {clean}"
+    return by_name.get(opp_name.lower())
 
 
 def scrape(session: dict, route_codes: list) -> dict:

@@ -18,7 +18,7 @@ export type Feed = 'nus' | 'lta';
 
 const KEYS: Record<Feed, string> = { nus: 'monitor:seen', lta: 'monitor:seen-public' };
 
-/** A breaker trip, as noted for the cron. */
+/** A breaker opening, as noted for the cron. */
 export interface Seen {
   at: number;
   reason: string;
@@ -30,13 +30,13 @@ export interface Seen {
   version?: string;
 }
 
-/** One note per feed per isolate per this long: a trip already quiets the
+/** One note per feed per isolate per this long: an open breaker already quiets the
  *  feed for breakerS, and KV takes one write a second to a key. */
 const NOTE_EVERY_MS = 60_000;
 const noted = new Map<Feed, number>();
 
-/** Notes a breaker trip on the beta; a no-op on the stable site, whose cron checks for itself. */
-export async function noteTrip(env: Env, feed: Feed, err: unknown, nowMs: number): Promise<void> {
+/** Notes a breaker opening on the beta; a no-op on the stable site, whose cron checks for itself. */
+export async function noteBreakerOpen(env: Env, feed: Feed, err: unknown, nowMs: number): Promise<void> {
   if (!isBeta(env) || !env.KV) return;
   const last = noted.get(feed);
   if (last !== undefined && nowMs - last < NOTE_EVERY_MS && nowMs >= last) return;
@@ -51,8 +51,8 @@ export async function noteTrip(env: Env, feed: Feed, err: unknown, nowMs: number
   await env.KV.put(KEYS[feed], JSON.stringify(seen), { expirationTtl: 86_400 }).catch(() => {});
 }
 
-/** The latest trip noted for `feed`, or null (none, or KV unreadable: no news reads as up). */
-export async function lastTrip(env: Env, feed: Feed): Promise<Seen | null> {
+/** The latest breaker opening noted for `feed`, or null (none, or KV unreadable: no news reads as up). */
+export async function lastBreakerOpen(env: Env, feed: Feed): Promise<Seen | null> {
   try {
     const raw = await env.KV.get(KEYS[feed]);
     const seen = raw ? (JSON.parse(raw) as Seen) : null;
@@ -62,8 +62,8 @@ export async function lastTrip(env: Env, feed: Feed): Promise<Seen | null> {
   }
 }
 
-/** The trip as the error it was, so the monitor treats it as it would a failed probe. */
-export function tripError(seen: Seen): Error {
+/** The breaker opening as the error it was, so the monitor treats it as it would a failed probe. */
+export function breakerError(seen: Seen): Error {
   if (!seen.code) return new Error(seen.reason);
   const err = new UpstreamRejected(seen.code, seen.reason, seen.detail ?? '');
   if (seen.version !== undefined) err.version = seen.version;

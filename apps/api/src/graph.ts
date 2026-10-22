@@ -16,7 +16,7 @@ import { type PublicData, withPublic } from './public.ts';
  * Hand-listed pairs over the scraped ones. The scrape can only pair stops by
  * name ("Opp X" and "X"); stops across a road from each other can have
  * unrelated names ("Opp NUSS" and "AS 5"). Pairs stay mutual: a listed pair
- * unpairs each stop's previous twin.
+ * unpairs each stop's previous opposite.
  */
 export function mergeOpposites(stops: Stop[], pairs: string[][]): Stop[] {
   const out = stops.map((s) => ({ ...s }));
@@ -51,26 +51,26 @@ export const GRAPH = {
 export const GRAPH_PUBLIC: Graph = withPublic(GRAPH, publicJson as unknown as PublicData);
 
 /**
- * The stop Nearby offers in place of `stop`: its twin across the road, or a
+ * The stop Nearby offers in place of `stop`: its opposite stop, or a
  * stop listed only for Nearby (data/opposites.json `nearby`), near enough for
  * a location to put you at the wrong one but kept apart for routing.
  */
-export function nearbyTwin(stop: Stop): string | null {
+export function oppositeOrPartner(stop: Stop): string | null {
   if (stop.opposite) return stop.opposite;
   const pair = oppositesJson.nearby.find((p) => p.includes(stop.code));
   return pair ? (pair[0] === stop.code ? pair[1] : pair[0]) : null;
 }
 
 /**
- * The twin as a stop page names it: `across` when it's on the other side of
+ * The opposite or partner stop as a stop page names it: `across` when it's on the other side of
  * the road ("Across the road"), false for a stop that's only near (PGP and
  * PGP Foyer), which goes by its own name.
  */
-export function twinOf(
+export function oppositeOf(
   stop: Stop,
   byCode: Map<string, Stop>,
 ): { opposite: string | null; oppositeAcross: boolean; oppositeName: string | null } {
-  const code = nearbyTwin(stop);
-  const twin = code ? byCode.get(code) : undefined;
-  return { opposite: code, oppositeAcross: !!stop.opposite, oppositeName: code ? (twin?.longName ?? twin?.name ?? code) : null };
+  const code = oppositeOrPartner(stop);
+  const other = code ? byCode.get(code) : undefined;
+  return { opposite: code, oppositeAcross: !!stop.opposite, oppositeName: code ? (other?.longName ?? other?.name ?? code) : null };
 }

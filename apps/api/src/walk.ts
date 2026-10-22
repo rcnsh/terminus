@@ -68,13 +68,13 @@ export function buildingStops(lat: number, lon: number, byCode: Map<string, Stop
     const distM = haversineM(lat, lon, stop.lat, stop.lon);
     out.push({ stop, distM, footM: Math.max(m, distM) });
   }
-  const twins: NearStop[] = [];
+  const across: NearStop[] = [];
   for (const near of out) {
     const opp = near.stop.opposite ? byCode.get(near.stop.opposite) : undefined;
-    if (opp && ![...out, ...twins].some((c) => c.stop.code === opp.code)) {
-      twins.push({ stop: opp, distM: haversineM(lat, lon, opp.lat, opp.lon), footM: near.footM + stopFootM(near.stop, opp) });
+    if (opp && ![...out, ...across].some((c) => c.stop.code === opp.code)) {
+      across.push({ stop: opp, distM: haversineM(lat, lon, opp.lat, opp.lon), footM: near.footM + stopFootM(near.stop, opp) });
     }
   }
-  const all = [...out, ...twins];
+  const all = [...out, ...across];
   return all.length ? all.sort((a, b) => a.footM - b.footM) : null;
 }

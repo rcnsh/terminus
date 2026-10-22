@@ -1,7 +1,7 @@
 # terminus for Mac
 
 A menu bar app in SwiftUI. It shows when to leave in the menu bar; click it for
-the bus, your saved places, nearby stops and search. macOS 14 or later on Apple
+the bus, your favourites, nearby stops and search. macOS 14 or later on Apple
 silicon.
 
 ## Run it

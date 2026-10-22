@@ -101,7 +101,7 @@ class Store(context: Context) {
                     .putInt(KEY_REFRESH_FAILS, 0)
                     .remove(KEY_ERROR)
             }
-            // The app shortcuts follow the saved places (a no-op when they
+            // The app shortcuts follow the favourites (a no-op when they
             // haven't changed). Inside the lock: a sign-out's [clear] empties
             // them, and must not be undone by an answer kept just before it.
             runCatching { Shortcuts.update(app, answer.places) }

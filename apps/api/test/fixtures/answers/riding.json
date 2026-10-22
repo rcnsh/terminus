@@ -39,7 +39,7 @@
     "kind": "trip",
     "staleAt": "2026-08-27T01:15:00Z",
     "crowd": null,
-    "quality": "Timetable estimate",
+    "quality": "Estimated time",
     "leaveBy": null,
     "leaveVia": null,
     "catch": null,
