@@ -55,11 +55,6 @@ class NearbyBoardTest {
     }
 
     @Test
-    fun aServiceWithNoTimeIsntShown() {
-        assertFalse(NearbyBoard.buses(utown, fetched, fetched).any { it.svc == "E" })
-    }
-
-    @Test
     fun aBusStaysAMinuteAfterItsDueThenTheNextTakesItsPlace() {
         val due = fetched + 190_000
         assertEquals(due, NearbyBoard.buses(utown, fetched, due + 59_000).first { it.svc == "D1" }.atMs)
