@@ -285,18 +285,24 @@ function SignIn({ adding }) {
 const latest = store({ a: null, load: null });
 
 /** "Your widget right now": /me/next as the widget shows it, so changes in Settings show up. */
-function Preview({ me }) {
+export function Preview({ me }) {
   const { a } = useStore(latest);
   const setA = (x) => latest.set({ a: x, load });
   const [failed, setFailed] = useState(false);
   const saved = useStore(saves);
+  // Only the newest answer asked for lands: one asked for before a save that
+  // comes back after the save's mustn't put the old card over the new.
+  const asked = useRef(0);
   const load = async () => {
+    const n = ++asked.current;
     try {
       const answer = await api(`/api/me/next${hour12() ? '?h12=1' : ''}`);
+      if (n !== asked.current) return;
       if (answer?.walkSpeedMs) walkSpeed.set(answer.walkSpeedMs);
       setA(answer);
       setFailed(false);
     } catch {
+      if (n !== asked.current) return;
       setA(null);
       setFailed(true);
     }
@@ -403,9 +409,11 @@ async function start() {
       // Signed out, or deleted, elsewhere: what this browser kept of it goes.
       forgetAccountHere();
       set({ view: 'signin' });
-      // Ready by the time they've signed in, without holding up the card.
-      if (document.readyState === 'complete') loadParts();
-      else addEventListener('load', () => loadParts(), { once: true });
+      // Ready by the time they've signed in, without holding up the card. If
+      // they can't be had now, signing in reloads the page, which asks again.
+      const warm = () => loadParts().catch(() => {});
+      if (document.readyState === 'complete') warm();
+      else addEventListener('load', warm, { once: true });
       return;
     }
     throw err;

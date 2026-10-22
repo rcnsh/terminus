@@ -18,7 +18,7 @@ export type DayType = 'term' | 'exam' | 'break' | 'sat' | 'sun';
 const NEAR_S = 120;
 /** Below this many sightings a group is noise. */
 export const MIN_SAMPLES = 10;
-/** Packed at least this often counts as "often full". */
+/** Packed at least this often counts as "often packed". */
 export const OFTEN_PACKED = 0.5;
 const KEEP_SEEN_DAYS = 2;
 

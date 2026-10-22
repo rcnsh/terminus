@@ -608,7 +608,7 @@ func rankDestinations(_ all: [Destination], _ query: String, max: Int = 8) -> [D
         .map(\.d)
 }
 
-/// What the popover shows: the planned trip, a saved place, or any stop/venue.
+/// What the popover shows: the planned trip, a favourite, or any stop/venue.
 enum Target: Hashable {
     case plan
     case place(key: String)

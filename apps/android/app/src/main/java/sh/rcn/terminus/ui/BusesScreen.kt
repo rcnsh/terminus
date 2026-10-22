@@ -259,7 +259,7 @@ private fun Home(state: BusesUi, vm: BusesViewModel, pins: List<String>, onPin: 
                 }
                 val shown = pages.getOrNull(boards.settledPage)
                 // The page in view only: swiping past one doesn't ask for it. The
-                // nearest stop's twin comes with it, so across the road costs nothing more.
+                // nearest stop's opposite stop comes with it, so across the road costs nothing more.
                 val first = boards.settledPage == 0
                 Refreshing(if (first) null else shown, first, state.across, next = { vm.nextTimedAt = it }) {
                     vm.refreshPage(if (first) null else shown)
@@ -528,7 +528,7 @@ private fun BackRow(text: String, modifier: Modifier = Modifier, trailing: @Comp
 
 /**
  * A stop's header, in the sky: what it is ("Nearest stop · 40 m", "Pinned"), its name, its code and the star. Across the road, the stop
- * shown is the twin, and the star is for that one.
+ * shown is the opposite stop, and the star is for that one.
  */
 @Composable
 private fun StopHeader(

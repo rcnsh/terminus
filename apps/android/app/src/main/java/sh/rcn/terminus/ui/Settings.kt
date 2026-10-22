@@ -106,7 +106,7 @@ import sh.rcn.terminus.RemovedPlace
 import sh.rcn.terminus.Servers
 import sh.rcn.terminus.Store
 import sh.rcn.terminus.Theme
-import sh.rcn.terminus.Trip
+import sh.rcn.terminus.TimetableClass
 import sh.rcn.terminus.WEEKDAYS
 import sh.rcn.terminus.dayShort
 import sh.rcn.terminus.hour12
@@ -1238,7 +1238,14 @@ private fun AddClass(destinations: List<Destination>, account: AccountViewModel,
                     if (s != null && w != null) {
                         account.edit {
                             it.addManual(
-                                Trip(day, s, end?.takeIf { e -> e > s }, if (w.kind == "landmark") w.code else w.stopCode, label.trim(), "")
+                                TimetableClass(
+                                    day,
+                                    s,
+                                    end?.takeIf { e -> e > s },
+                                    if (w.kind == "landmark") w.code else w.stopCode,
+                                    label.trim(),
+                                    "",
+                                )
                             )
                         }
                         onDone()

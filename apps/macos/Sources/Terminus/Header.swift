@@ -83,7 +83,7 @@ struct Header: View {
             head: head,
             big: model.showNearby ? L("Departures near you") : (a?.isClassPlan == true ? a?.leaveHeadline(now: now) ?? big(a) : big(a)),
             dimmed: old)
-        // How sure the time is, worded on the server ("Timetable estimate"),
+        // How sure the time is, worded on the server ("Estimated time"),
         // beside the countdown: the "~" alone is easy to miss.
         let sure = { (s: String) in [s, model.showNearby ? nil : a?.card?.quality].compactMap { $0 }.joined(separator: " · ") }
         if old {
@@ -117,7 +117,7 @@ struct Header: View {
         guard let a else { return L("Checking…") }
         if let title = a.card?.title { return title }
         guard a.hasLiveTime, let at = a.departure else { return a.label }
-        // A timetable estimate is not a live time: mark it, as the widget does.
+        // An estimate is not a live time: mark it, as the widget does.
         return "\(a.service) · \(a.quality == "scheduled" ? L("~%@", campusTime(at)) : campusTime(at))"
     }
 
@@ -179,7 +179,7 @@ struct Header: View {
     }
 
     /// The error, or how sure the answer is, worded on the server (`card.quality`:
-    /// "Timetable estimate", none for live times); nil for no line at all.
+    /// "Estimated time", none for live times); nil for no line at all.
     private func status(_ a: NextAnswer?) -> String? {
         if a?.isFree == true { return L("Nothing to catch") }
         if a?.arrived == true { return L("You're there") }

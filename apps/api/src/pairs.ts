@@ -1,5 +1,5 @@
 /**
- * GET /api/stops/pairs -- every stop grouped with its twin across the road, and
+ * GET /api/stops/pairs -- every stop grouped with its opposite stop, and
  * which buses call at each side and where they go next.
  *
  * NUS stops come in directional pairs a few metres apart ("KR MRT" and
@@ -87,9 +87,9 @@ export function stopPairs(graph: Graph): StopPairs {
   const places: PairPlace[] = [];
   for (const stop of graph.stops) {
     if (seen.has(stop.code)) continue;
-    const twin = stop.opposite ? byCode.get(stop.opposite) : undefined;
+    const opp = stop.opposite ? byCode.get(stop.opposite) : undefined;
     // Only a mutual pair is a pair: a one-way pointer is a scrape oddity.
-    const pair = twin && twin.opposite === stop.code ? [stop, twin] : [stop];
+    const pair = opp && opp.opposite === stop.code ? [stop, opp] : [stop];
     pair.sort((a, b) => Number(isOpp(a)) - Number(isOpp(b)) || a.code.localeCompare(b.code));
     for (const s of pair) seen.add(s.code);
     const [main, other] = pair;

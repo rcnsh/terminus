@@ -97,7 +97,7 @@ data class NextAnswer(
     val crowdText: String?
         get() = card?.crowd?.takeUnless { detail.contains(it, ignoreCase = true) }
 
-    /** "Timetable estimate", "Live times are a few minutes old", "No live data". */
+    /** "Estimated time", "Live times are a few minutes old", "No live data". */
     val qualityText: String?
         get() = card?.quality
 
@@ -770,7 +770,7 @@ fun whereResults(destinations: List<Destination>, pinned: List<Destination>, que
     return top to rankDestinations(destinations, query, max = 6).filter { d -> top.none { d.isPlaceOf(it) } }
 }
 
-/** What the user asked for: the planned trip, a saved place, or any stop/venue. */
+/** What the user asked for: the planned trip, a favourite, or any stop/venue. */
 sealed interface Target {
     data object Plan : Target
 
@@ -865,8 +865,8 @@ class Api(private val token: String?, private val fast: Boolean = false, private
     suspend fun buses(svc: String): BusList = parsing { BusList.parse(request("GET", "/api/buses?svc=${enc(svc)}")) }
 
     /**
-     * What's coming at one stop, for the Buses tab and the map's stop sheet: every row, the stop's name and its twin, and the services not
-     * running now (`stopped=1`), greyed. With [public], the public buses there too (the profile's `publicBuses`).
+     * What's coming at one stop, for the Buses tab and the map's stop sheet: every row, the stop's name and its opposite stop, and the
+     * services not running now (`stopped=1`), greyed. With [public], the public buses there too (the profile's `publicBuses`).
      */
     suspend fun board(stop: String, public: Boolean = false): Board = parsing {
         Board.parse(request("GET", "/api/arrivals?stop=${enc(stop)}&stopped=1" + if (public) "&public=1" else ""))

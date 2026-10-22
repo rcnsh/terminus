@@ -218,7 +218,7 @@ body.sky .bt-sky-top input::placeholder { color: var(--k-muted); opacity: 0.85; 
 .bt-dots .on i { width: 18px; height: 6px; border-radius: 3px; background: var(--ink); opacity: 1; }
 .bt-dots svg { width: 10px; height: 10px; fill: var(--muted); }
 .bt-sides { margin-top: 12px; }
-/* A twin named in full (PGP Foyer) may take two lines. */
+/* An opposite stop named in full (PGP Foyer) may take two lines. */
 .bt-sides span { line-height: 1.25; }
 
 /* The board: a row per service, sorted as the API sorts them. */
@@ -711,7 +711,7 @@ body.sky-dusk .horizon :is(.lit, .beam), body.sky-night .horizon :is(.lit, .beam
 .horizon .sign .mark { fill: var(--h-post-ink); }
 .horizon .coming .body { fill: var(--svc); }
 .horizon .coming .band { fill: #fff; opacity: 0.85; }
-/* A timetable guess is the same bus drawn in outline, so it never passes for live. */
+/* An estimate is the same bus drawn in outline, so it never passes for live. */
 .horizon .coming.guess :is(.body, .arch) { fill: none; stroke: var(--svc); stroke-width: 1.2; stroke-linejoin: round; }
 .horizon .coming.guess .roof { stroke-width: 0.8; }
 .horizon .coming.guess .win { fill: none; stroke: var(--svc); stroke-width: 0.6; }

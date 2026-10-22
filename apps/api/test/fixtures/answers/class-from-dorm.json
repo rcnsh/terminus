@@ -132,7 +132,7 @@
   "card": {
     "kind": "class",
     "staleAt": "2026-08-27T01:14:30Z",
-    "crowd": "Crowding: low",
+    "crowd": null,
     "quality": null,
     "leaveBy": "Leave by ~09:35",
     "leaveVia": "catch the ~09:42 R2 at PGP",

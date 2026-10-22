@@ -410,7 +410,7 @@ test('/api/arrivals names the stop across the road, and each row says where it g
   assert.equal(k.color, '#2b9ad6');
   assert.equal(k.crowd, 'high');
   assert.ok(k.endsAt === null || Number.isFinite(Date.parse(k.endsAt)));
-  // A stop with no twin says so.
+  // A stop with no opposite stop says so.
   const utown = await (await call('/api/arrivals?stop=UTOWN', { fetchImpl: makeFetch({}) })).res.json();
   assert.equal(utown.stop.opposite, null);
   assert.equal(utown.stop.oppositeName, null);

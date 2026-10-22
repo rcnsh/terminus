@@ -8,11 +8,11 @@
  * dimming once `card.staleAt` passes.
  */
 
-import type { BusLeg, Crowd, Dest, Leave, MeAnswer, Quality } from './types.ts';
+import type { Arrival, BusLeg, Crowd, Dest, Leave, MeAnswer, Quality } from './types.ts';
 import { clockAt, slackText } from './clock.ts';
 import {
   ASSUME_MS,
-  type Boarded,
+  type Plan,
   CHANGE_GRACE_MS,
   DUE_MS,
   type Phase,
@@ -53,7 +53,7 @@ export interface TripView {
   /** A trip skipped a moment ago, so it can be undone. */
   undo?: { key: string; label: string | null } | null;
   /** The bus the plan says to catch, kept once the answer has moved on to riding. */
-  plan?: Boarded | null;
+  plan?: Plan | null;
   /** The phase is the plan's, not something a signal said: on the bus a
    *  location saw you on, or missed it at the stop. */
   assumed?: boolean;
@@ -62,7 +62,7 @@ export interface TripView {
   gone?: boolean;
   /** The plan's bus, just seen ridden by this request's location (the
    *  caller saves it, so devices without a location follow). */
-  seenOn?: Boarded;
+  seenOn?: Plan;
   /** The plan's bus differs from the one remembered for this trip (the caller saves it). */
   planChanged?: boolean;
   /** False when the user turned reminders off for this trip. */
@@ -119,7 +119,7 @@ export interface JourneyChange {
 
 /**
  * The trip as steps, for the card styles that draw it (a line from you to
- * the destination, a ticket, a list of steps): walk to the stop, take the
+ * the destination, or a list of steps): walk to the stop, take the
  * bus, get there. On foot the whole way it's the walk alone, with no bus.
  * Every client draws the same steps from this; only the leave countdown
  * ticks on the client, from `leave.at` (and `boardAt`).
@@ -151,7 +151,7 @@ export interface Journey {
   arriveStop: string | null;
   /** A class only: "3 min early", "2 min late". */
   slack: string | null;
-  /** The bus's time is live, not a timetable estimate. */
+  /** The bus's time is live, not an estimate. */
   live: boolean;
   /** Another bus: the next one for a trip, the one to go now on for a class. */
   backup: JourneyBus | null;
@@ -225,7 +225,7 @@ export interface Card {
   staleAt: string | null;
   /** "Crowding: low" / "Crowding: medium" / "Crowding: high", for the bus in the headline. */
   crowd: string | null;
-  /** "Timetable estimate", "Live times are a few minutes old", "No live data". */
+  /** "Estimated time", "Live times are a few minutes old", "No live data". */
   quality: string | null;
   /** "Leave by ~6:36 PM". Clients say "Leave now" once `leave.at` passes,
    *  except at the stop (phase `waiting`), where it's the bus: "D2 at 6:41 PM". */
@@ -629,12 +629,27 @@ function footJourney(
   });
 }
 
+/**
+ * The board row the headline bus is: of its service's rows, the one whose
+ * time is the departure (`departsAt`), not the first listed, which may be a
+ * bus the walk can't catch. The first of them with no departure to go by.
+ */
+function headlineRow(a: MeAnswer, svc: string): Arrival | undefined {
+  const rows = a.arrivals.filter((x) => x.svc === svc);
+  const departs = a.departsAt ? Date.parse(a.departsAt) : NaN;
+  if (Number.isNaN(departs)) return rows[0];
+  // etaS counts from the feed's fetch, which asOf is or follows within a cache window.
+  const asOf = Date.parse(a.asOf);
+  const off = (x: Arrival) => (x.etaS === null ? Infinity : Math.abs(asOf + x.etaS * 1000 - departs));
+  return rows.reduce<Arrival | undefined>((best, x) => (best === undefined || off(x) < off(best) ? x : best), undefined);
+}
+
 function baseCard(a: MeAnswer, h12: boolean): BaseCard {
   const kind = kindOf(a);
   const at = (iso: string) => clockAt(Date.parse(iso), h12);
   const staleAt = staleAtOf(a, kind);
   const svc = a.label.split(' · ')[0];
-  const crowd = a.arrivals.find((x) => x.svc === svc)?.crowd ?? null;
+  const crowd = headlineRow(a, svc)?.crowd ?? null;
   const l = a.leave ?? null;
   // "~9:41" when the leave-by is an estimate.
   const est = (iso: string) => approx(l?.estimated, at(iso));
@@ -776,7 +791,7 @@ function walkToOf(a: MeAnswer, kind: CardKind, phase: Phase): Card['walkTo'] {
 }
 
 /** The ride on the bus you're on, and on the first of two, the bus to change to (Ride.change). */
-function rideWithChange(b: Boarded, h12: boolean): Ride | null {
+function rideWithChange(b: Plan, h12: boolean): Ride | null {
   const r = rideOf(b);
   const c = b.change;
   if (!r || !c) return r;

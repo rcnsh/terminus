@@ -11,8 +11,11 @@
     "",
     "Each entry lists stop codes, the usual one first: it becomes the",
     "building's stop for imports and search, and the planner leaves from and",
-    "arrives at whichever listed stop is quicker at the time. A stop's twin",
-    "across the road comes with it; don't list both. Say why in 'why'."
+    "arrives at whichever listed stop is quicker at the time. A stop's opposite stop",
+    "across the road comes with it; don't list both. Say why in 'why'.",
+    "",
+    "Standing in the building, the walk anywhere goes out by these stops too,",
+    "so a stop nearby that nobody can walk to is never a short walk from it."
   ],
   "venues": {
     "LT21": {

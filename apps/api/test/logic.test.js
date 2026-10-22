@@ -704,6 +704,16 @@ test('the same service from the other stop is an alternative only when it gets y
   assert.equal(pickAlt([at('KR-MRT', 600), { ...at('KR-MRT', 2000), svc: 'A1' }]).svc, 'A1');
 });
 
+test('standing across the road from the destination, the answer names the stop you are at', async () => {
+  const { answerFor } = await import('../src/answer.ts');
+  const { installGlobals, makeCtx, makeEnv, makeFetch } = await import('./_stubs.mjs');
+  installGlobals(makeFetch());
+  const a = await answerFor(makeEnv(), makeCtx(), { lat: KR_OPP.lat, lon: KR_OPP.lon, to: 'KR-MRT', originCode: null }, null, NOW);
+  assert.equal(a.arrived, true);
+  assert.equal(a.stop.code, 'KR-MRT-OPP');
+  assert.match(a.detail, /Opp/);
+});
+
 test('standing at the right stop does not invent a walk', () => {
   const input = { lat: KR.lat, lon: KR.lon, to: 'UTOWN', originCode: null };
   const cands = candidateStops(GRAPH, input);
@@ -976,9 +986,9 @@ test('directional pairing is symmetric', () => {
   const byCode = new Map(realGraph.stops.map((s) => [s.code, s]));
   for (const s of realGraph.stops) {
     if (!s.opposite) continue;
-    const twin = byCode.get(s.opposite);
-    assert.ok(twin, `${s.code} points at missing twin ${s.opposite}`);
-    assert.equal(twin.opposite, s.code, `${s.code} <-> ${twin.code} is not symmetric`);
+    const opp = byCode.get(s.opposite);
+    assert.ok(opp, `${s.code} points at a missing opposite stop ${s.opposite}`);
+    assert.equal(opp.opposite, s.code, `${s.code} <-> ${opp.code} is not symmetric`);
   }
 });
 
@@ -1410,7 +1420,7 @@ test('the proxy reports failure at HTTP 200, so only code "00000" counts as succ
 });
 
 test('a place served by two stops: any bus to either one counts, the shorter ride wins', () => {
-  // From KR MRT itself (its twin across the road is a candidate of its own).
+  // From KR MRT itself (its opposite stop is a candidate of its own).
   const legs = (input) =>
     new Map((candidateStops(realGraph, input).find((c) => c.stop.code === 'KR-MRT')?.legs ?? []).map((l) => [l.svc, l.hops]));
   const base = { lat: null, lon: null, originCode: 'KR-MRT' };

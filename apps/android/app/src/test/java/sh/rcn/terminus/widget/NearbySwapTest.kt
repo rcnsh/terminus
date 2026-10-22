@@ -20,9 +20,9 @@ class NearbySwapTest {
     private val swap = NearbySwap.Swap("KR-MRT-OPP", "KR-MRT", now)
 
     @Test
-    fun theTwinComesFirstAndTheNearestSecond() {
+    fun theOppositeStopComesFirstAndTheNearestSecond() {
         assertEquals(listOf("KR-MRT", "KR-MRT-OPP", "LT27"), NearbySwap.order(stops, swap, now).map { it.code })
-        assertEquals("KR-MRT", NearbySwap.twin(stops)?.code)
+        assertEquals("KR-MRT", NearbySwap.opposite(stops)?.code)
     }
 
     @Test
@@ -35,10 +35,10 @@ class NearbySwapTest {
     }
 
     @Test
-    fun theButtonOnlyOffersATwinThatIsntShown() {
-        // The large widget shows the twin third: nothing to swap for.
+    fun theButtonOnlyOffersAnOppositeStopThatIsntShown() {
+        // The large widget shows the opposite stop third: nothing to swap for.
         assertNull(NearbySwap.offer(stops, null, now, listOf("KR-MRT-OPP", "LT27", "KR-MRT")))
-        // The small one stops at LT27, so it offers the twin.
+        // The small one stops at LT27, so it offers the opposite stop.
         assertEquals("KR-MRT", NearbySwap.offer(stops, null, now, listOf("KR-MRT-OPP", "LT27"))?.code)
         // Swapped, it offers the nearest stop again, even with it on screen.
         assertEquals("KR-MRT-OPP", NearbySwap.offer(stops, swap, now, listOf("KR-MRT", "KR-MRT-OPP"))?.code)
@@ -55,9 +55,9 @@ class NearbySwapTest {
     }
 
     @Test
-    fun noTwinNoSwap() {
-        assertNull(NearbySwap.twin(listOf(stop("LT27"), stop("KR-MRT"))))
-        assertNull(NearbySwap.twin(listOf(stop("KR-MRT-OPP", "KR-MRT"), stop("LT27"))))
+    fun noOppositeStopNoSwap() {
+        assertNull(NearbySwap.opposite(listOf(stop("LT27"), stop("KR-MRT"))))
+        assertNull(NearbySwap.opposite(listOf(stop("KR-MRT-OPP", "KR-MRT"), stop("LT27"))))
     }
 
     @Test

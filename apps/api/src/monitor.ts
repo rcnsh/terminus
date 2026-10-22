@@ -33,7 +33,7 @@ import { logCronError } from './analytics.ts';
 import { recordActive } from './usage.ts';
 import { recordEta } from './eta.ts';
 import { shadowEta } from './etashadow.ts';
-import { type Feed, lastTrip, tripError } from './feedwatch.ts';
+import { type Feed, lastBreakerOpen, breakerError } from './feedwatch.ts';
 
 export interface UpstreamState {
   /** Confirmed state: it takes FAILS_TO_ALERT failed checks in a row to go down. */
@@ -696,10 +696,10 @@ export async function checkPublicFeed(
  */
 export function sawTrip(env: Env, feed: Feed, nowMs: number): () => Promise<void> {
   return async () => {
-    const seen = await lastTrip(env, feed);
+    const seen = await lastBreakerOpen(env, feed);
     if (!seen || seen.at > nowMs || nowMs - seen.at >= CHECK_EVERY_MS) return;
     if (feed === 'nus' && seen.version !== undefined && seen.version !== (await appVersion(env, nowMs))) return;
-    throw tripError(seen);
+    throw breakerError(seen);
   };
 }
 

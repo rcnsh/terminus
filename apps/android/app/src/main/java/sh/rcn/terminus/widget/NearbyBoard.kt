@@ -122,8 +122,8 @@ internal object NearbyBoard {
     data class Paged(val buses: List<StopBus>, val page: Int, val pages: Int)
 
     /**
-     * The stop beside the first of [stops] (as shown) on a widget showing both sides of the road: its twin where the board has it, else the
-     * next stop with a bus ([buses] gives each stop's). Null with neither: the widget shows the one stop.
+     * The stop beside the first of [stops] (as shown) on a widget showing both sides of the road: its opposite stop where the board has it,
+     * else the next stop with a bus ([buses] gives each stop's). Null with neither: the widget shows the one stop.
      */
     fun beside(stops: List<NearbyStop>, buses: (NearbyStop) -> List<StopBus>): NearbyStop? {
         val first = stops.firstOrNull() ?: return null

@@ -45,7 +45,7 @@ import {
   newToken,
   profileFor,
   removeAnonymous,
-  saveProfileJson,
+  profileUpsert,
   mail,
   sendMail,
   sessionFor,
@@ -289,7 +289,7 @@ export async function decide(
 }
 
 /** How a finished sign-in left the accounts. */
-export type Outcome =
+export type SignInOutcome =
   /** A new account with this email. */
   | 'created'
   /** The device's anonymous account now has the email; nothing moved. */
@@ -307,7 +307,7 @@ export type PollResult =
       status: 'approved';
       token: string;
       email: string;
-      outcome: Outcome;
+      outcome: SignInOutcome;
       userId: string;
       device: string;
       /** The anonymous account this sign-in deleted, if any. */
@@ -347,7 +347,7 @@ export async function pollAppLogin(db: D1Database, id: string, poll: string, cli
   // two racing polls only one is handed a token.
   const live: Live = { sql: "EXISTS (SELECT 1 FROM login_requests WHERE id = ? AND status = 'approved')", params: [id] };
   const work: D1PreparedStatement[] = [];
-  let outcome: Outcome;
+  let outcome: SignInOutcome;
   if (!existing && anon) {
     // The device's old anonymous token is replaced by the one returned here.
     work.push(...addEmailTo(db, anon.id, req.email, nowMs, live));
@@ -414,10 +414,9 @@ export async function mergeAnonymous(
     .bind(await hashToken(anonToken))
     .first<{ id: string }>();
   if (!anon || anon.id === userId) return 'not-anonymous';
-  if (keep === 'device') {
-    const mine = await loadProfileJson(db, anon.id);
-    if (mine) await saveProfileJson(db, userId, mine, nowMs);
-  }
-  await removeAnonymous(db, anon.id, userId);
+  // The setup and the removal in one batch: half a merge would leave the
+  // account with the device's setup and the device still signed in.
+  const mine = keep === 'device' ? await loadProfileJson(db, anon.id) : null;
+  await removeAnonymous(db, anon.id, userId, mine ? [profileUpsert(db, userId, mine, nowMs)] : []);
   return { removed: anon.id };
 }

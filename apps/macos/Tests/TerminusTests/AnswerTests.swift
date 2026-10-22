@@ -387,7 +387,7 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
     let bus = try golden("class-bus")
     #expect(bus.card?.title == "R2 · 09:06")
     #expect(bus.card?.heading == "Next class · GEA1000 @ UTown")
-    #expect(try golden("scheduled").card?.title == "A1 · ~09:11", "a timetable guess keeps its ~")
+    #expect(try golden("scheduled").card?.title == "A1 · ~09:11", "an estimate keeps its ~")
     #expect(try golden("free").card?.heading == nil)
     #expect(try golden("riding").card?.phaseText == "On the bus")
 }

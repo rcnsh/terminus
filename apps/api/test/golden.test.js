@@ -282,7 +282,7 @@ const CASES = {
       },
     },
   ],
-  // The feed answers with no buses at all: every time is a timetable estimate, marked "~".
+  // The feed answers with no buses at all: every time is an estimate, marked "~".
   'scheduled': [{ home: { stops: ['PGP'] }, places }, '/api/me/next?place=mrt', { feed: {} }],
   'nearby-list': [{ home: { stops: ['PGP'] } }, `/api/me/nearby?${DORM}`],
   // The day the apps keep for when they're offline (see offline-day.json):

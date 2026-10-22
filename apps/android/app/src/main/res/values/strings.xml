@@ -7,7 +7,6 @@
     <string name="map_bus_towards">Towards %1$s</string>
     <string name="map_bus_moving">Moving</string>
     <string name="map_bus_stopped">Stopped</string>
-    <string name="map_bus_seats_free">Seats free</string>
     <string name="map_buses_here">Buses here</string>
     <string name="map_open_stop">Show this stop</string>
     <string name="map_show_stop">Show %1$s</string>
@@ -98,7 +97,7 @@
     <string name="a11y_under_minute">under a minute</string>
     <string name="a11y_leave_in">Leave in %1$s</string>
     <string name="a11y_leaves_in">Leaves in %1$s</string>
-    <string name="a11y_eta_timetable">about %1$s, timetable</string>
+    <string name="a11y_eta_timetable">about %1$s, estimated</string>
     <string name="a11y_eta_about">about %1$s</string>
     <string name="a11y_eta_live">%1$s, live</string>
     <string name="account_page">Account page</string>
@@ -310,12 +309,12 @@
     <string name="pace_slow">Slow</string>
     <string name="pace_slow_hint">400 m in about 6 min. A relaxed pace, or if you often carry a bag.</string>
     <string name="pace_summary">%1$s pace</string>
-    <string name="packed">Allow for busy buses</string>
+    <string name="packed">Allow for packed buses</string>
     <string name="prefer_bus">Prefer the bus</string>
     <string name="prefer_bus_hint">Wait a few minutes more for a bus rather than walk.</string>
     <string name="public_buses">Public buses</string>
     <string name="public_buses_hint">Count the 95, 151 and other public buses at your stops too. They have a fare, so one is the answer only when it clearly saves time.</string>
-    <string name="packed_hint">When the bus you\'d wait for is often full at that stop and time, aim one bus earlier.</string>
+    <string name="packed_hint">When the bus you\'d wait for is often packed at that stop and time, aim one bus earlier.</string>
     <string name="pair">Pair</string>
     <string name="pair_instead">Pair with a code instead</string>
     <string name="pair_phone_text">This link pairs this phone with %1$s. Only continue if you created this code on your own account page. A code from someone else would send your trips and location to their account.</string>
@@ -455,7 +454,7 @@
     <string name="heading_walking">Walking</string>
     <string name="walks_follow_paths">Walks follow the paths on campus.</string>
     <string name="walking_pace">Walking pace</string>
-    <string name="busy_hint_short">Aim one bus earlier when yours is often full.</string>
+    <string name="busy_hint_short">Aim one bus earlier when yours is often packed.</string>
     <string name="history_kept">Kept for 35 days and used only to spot classes you often miss or skip.</string>
     <string name="trips_recorded_one">1 trip recorded</string>
     <string name="trips_recorded_n">%1$d trips recorded</string>
@@ -600,13 +599,13 @@
     <string name="buses_towards">to %1$s</string>
     <string name="buses_min">min</string>
     <string name="buses_live">Live</string>
-    <string name="buses_scheduled">Scheduled</string>
+    <string name="buses_scheduled">Estimate</string>
     <string name="buses_last_known">Last known</string>
     <string name="buses_seats">Seats</string>
     <string name="buses_busy">Busy</string>
     <string name="buses_packed">Packed</string>
     <string name="buses_then">then %1$s min</string>
-    <string name="buses_then_scheduled">then %1$s min, scheduled</string>
+    <string name="buses_then_scheduled">then %1$s min, estimated</string>
     <string name="buses_no_time_yet">No time yet</string>
     <string name="buses_no_live_times">No live times</string>
     <string name="buses_none_here">No buses are running here now</string>

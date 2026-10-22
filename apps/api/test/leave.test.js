@@ -96,6 +96,23 @@ test('class hours ahead with no live times: a full headway early', () => {
   assert.equal(l.estimated, true);
 });
 
+test('class after the service has closed, with no live times: the last buses before it closes, not "leave now"', () => {
+  // D2 runs 07:00 to 11:00 on a Tuesday (NOW); the class is at 13:00.
+  const graph = { ...GRAPH, serviceHours: { D2: { weekday: ['07:00', '11:00'], saturday: null, sunday: null } } };
+  const arriveBy = { atMs: NOW + 240 * MIN, venueWalkS: 0 };
+  const b = best({ quality: 'scheduled' });
+  const l = leaveBy({ ...base, graph, ...one(b, arrivals()), arriveBy });
+  const closes = NOW + 120 * MIN;
+  // A headway before the close, so a bus is sure to come before it.
+  assert.equal(Date.parse(l.board), closes - 600_000);
+  assert.equal(ms(l), closes - 600_000 - 100_000 - BUF);
+  assert.equal(Date.parse(l.arrive), closes + b.rideS * 1000);
+  assert.equal(l.estimated, true);
+  // Once the close is too near to be at the stop a headway before it: as soon as you can.
+  const soon = leaveBy({ ...base, graph, nowMs: closes - 5 * MIN, ...one(b, arrivals()), arriveBy });
+  assert.equal(ms(soon), closes - 5 * MIN);
+});
+
 test('class before buses run: falls back to the candidate legs', () => {
   const arriveBy = { atMs: NOW + 120 * MIN, venueWalkS: 0 };
   const candidates = [{ stop: { code: 'PGP', name: 'PGP' }, distM: 0, walkS: 300, legs: [{ svc: 'D2', hops: 2 }] }];
