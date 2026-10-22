@@ -901,10 +901,10 @@ test('a /clear or a sooner /watch while the object wakes is not undone by it', a
     assert.fail('never pushed');
   };
 
-  // A /watch for sooner than the wake would pick, while it's pushing.
+  // A watch for sooner than the wake would pick, while it's pushing.
   let { g, run } = await untilSending();
   const soon = Date.now() + 5_000;
-  await trip.fetch('https://trip/watch', { method: 'POST', body: JSON.stringify({ userId, date, at: soon, deleteAt }) });
+  await trip.fetch('https://trip/update', { method: 'POST', body: JSON.stringify({ date, watch: { userId, at: soon }, deleteAt }) });
   g.open();
   await run;
   assert.equal(fcm.sent.length, 1);

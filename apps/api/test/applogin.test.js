@@ -65,9 +65,13 @@ function anonId(db) {
 /** Gives a user some trip state today, as a "Not going" would. */
 async function seedTrip(env, userId) {
   const now = Date.now();
-  const res = await env.TRIPS.get(userId).fetch('https://trip/signal', {
+  const res = await env.TRIPS.get(userId).fetch('https://trip/update', {
     method: 'POST',
-    body: JSON.stringify({ date: sgtDate(now), key: '4:600:UTOWN', rec: { kind: 'skipped', at: now }, deleteAt: endOfDayMs(now) }),
+    body: JSON.stringify({
+      date: sgtDate(now),
+      items: [{ key: '4:600:UTOWN', rec: { kind: 'skipped', at: now } }],
+      deleteAt: endOfDayMs(now),
+    }),
   });
   assert.equal(res.status, 200);
 }

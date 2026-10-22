@@ -19,7 +19,7 @@
 
 import { loadCalendar } from './calendarsync.ts';
 import type { Env } from './types.ts';
-import { type Plan, type DayRecord, type TripRecord, type TripUpdate, endOfDayMs, sgtDate } from './trip.ts';
+import { type Plan, type DayRecord, type TripUpdate, endOfDayMs, sgtDate } from './trip.ts';
 import type { MeDeps } from './me.ts';
 import { tripCardFor } from './me.ts';
 import { nudgeUser, pushDevices } from './push.ts';
@@ -95,7 +95,6 @@ export class Trip {
     // A deleted account's object stores nothing more, and has no day to show.
     if (await this.storage.get<boolean>('gone')) {
       if (req.method === 'GET') return Response.json(null);
-      if (url.pathname === '/watch') return Response.json({ ok: true });
       const { date } = (await req.json().catch(() => ({}))) as { date?: string };
       return Response.json(today(null, date ?? ''));
     }
@@ -107,9 +106,8 @@ export class Trip {
       return Response.json(day && day.date === date ? day : null);
     }
 
-    if (req.method === 'POST') {
-      const u = updateOf(url.pathname, await req.json());
-      if (u) return Response.json(await this.update(u));
+    if (req.method === 'POST' && url.pathname === '/update') {
+      return Response.json(await this.update((await req.json()) as TripUpdate));
     }
 
     return new Response('not found', { status: 404 });
@@ -341,26 +339,4 @@ export class Trip {
 /** Today's record: the stored one if it's today's, else a fresh one. */
 function today(day: DayRecord | null, date: string): DayRecord {
   return day && day.date === date ? day : { date, trips: {} };
-}
-
-/**
- * The update a request asks for: /update carries any of the changes; the
- * single-purpose paths are what a Worker from before it sends, still taken
- * while a deploy rolls out.
- */
-function updateOf(path: string, body: unknown): TripUpdate | null {
-  const b = (body ?? {}) as Record<string, unknown> & { date: string; deleteAt: number };
-  const base = { date: b.date, deleteAt: b.deleteAt };
-  switch (path) {
-    case '/update':
-      return b as unknown as TripUpdate;
-    case '/signal':
-      return { ...base, items: (b.items as TripUpdate['items']) ?? [{ key: b.key as string, rec: (b.rec as TripRecord | null) ?? null }] };
-    case '/plan':
-      return { ...base, plans: { [b.key as string]: b.plan as Plan } };
-    case '/watch':
-      return { ...base, watch: { userId: b.userId as string, at: b.at as number } };
-    default:
-      return null;
-  }
 }
