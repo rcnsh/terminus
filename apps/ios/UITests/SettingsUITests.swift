@@ -147,10 +147,11 @@ final class SettingsUITests: XCTestCase {
         let result = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'where.'")).firstMatch
         XCTAssertTrue(result.waitForExistence(timeout: 8))
         shot("settings-favourites-search", app)
+        // The stop comes first, before the building of the same code.
         result.tap()
-        XCTAssertTrue(app.staticTexts["COM3"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["COM 3"].waitForExistence(timeout: 5))
         sleep(2)
-        XCTAssertTrue(places().contains("COM3"))
+        XCTAssertTrue(places().contains("COM 3"))
         shot("settings-favourites-added", app)
         let gym = app.buttons["Remove Gym"]
         XCTAssertTrue(gym.waitForExistence(timeout: 5))
