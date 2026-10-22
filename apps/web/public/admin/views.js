@@ -382,6 +382,7 @@ export function Accounts({ s, d }) {
       <//>
     </div>
     <${ActiveAccounts} d=${d} />
+    <${Settings} s=${s} />
   `;
 }
 
@@ -391,7 +392,15 @@ export function Devices({ s }) {
   const devices = (s.devices ?? []).map((x) => ({ ...x, key: x.platform, share: share(x.active7, x.total) }));
   const clients = (s.clients ?? []).map((c) => {
     const [p, v] = String(c.client).split('/');
-    return { key: c.client, client: c.client, platform: v ? p : '', version: v ?? c.client, n: Number(c.n) };
+    return {
+      key: c.client,
+      client: c.client,
+      platform: v ? p : '',
+      version: v ?? c.client,
+      n: Number(c.n),
+      d30: Number(c.d30 ?? c.n),
+      d90: Number(c.d90 ?? c.n),
+    };
   });
   const [plat, setPlat] = useState('');
   const platforms = [...new Set(clients.map((c) => c.platform))];
@@ -426,8 +435,8 @@ export function Devices({ s }) {
         />
       <//>
       <${Card}
-        title="App versions this week"
-        sub="From the version each device sends, for devices seen in the last 7 days (the top 20)."
+        title="App versions"
+        sub="From the version each device last sent, by when it was last used. A device unused for 90 days is signed out, so a version with none in 90 days is one nothing still runs."
         tools=${
           platforms.length > 1 &&
           html`<${Chips}
@@ -442,15 +451,123 @@ export function Devices({ s }) {
           cols=${[
             { key: 'platform', label: 'App', fmt: (v) => platform(v) || '—' },
             { key: 'version', label: 'Version', cell: (r) => html`<code>${r.version}</code>` },
-            { key: 'n', label: 'Devices', num: true, meter: true },
-            { key: 'share', label: 'Of the app', num: true, fmt: (v) => pct(v) },
+            { key: 'n', label: '7 days', num: true, meter: true },
+            { key: 'd30', label: '30 days', num: true },
+            { key: 'd90', label: '90 days', num: true },
+            { key: 'share', label: 'Of the app this week', num: true, fmt: (v) => pct(v) },
           ]}
           rows=${shown}
-          sort=${{ key: 'n', dir: 'desc' }}
+          sort=${{ key: 'd90', dir: 'desc' }}
           empty="No app has sent its version yet."
         />
       <//>
     </div>
+    <${Legacy} s=${s} />
+  `;
+}
+
+const LEGACY = {
+  address: 'The old address (terminus.rcn.sh)',
+  path: 'The API’s paths from before 3.0',
+  outdated: 'An app below the oldest version served',
+};
+
+/** What still uses something on its way out (legacy.ts): what, which app, which route, how often and when last. */
+function Legacy({ s }) {
+  const [what, setWhat] = useState('');
+  if (!s.analytics || s.analytics.error) return null;
+  const rows = (s.analytics.legacy ?? []).map((r, i) => ({ ...r, key: `${r.what} ${r.client} ${r.route} ${i}`, n: Number(r.n) }));
+  const kinds = Object.keys(LEGACY).filter((k) => rows.some((r) => r.what === k));
+  const shown = rows.filter((r) => !what || r.what === what);
+  return html`
+    <${Card}
+      title="Still using the old ways in"
+      sub=${
+        s.collect?.legacy
+          ? 'Requests in the last 30 days on the old address, the API’s old paths, or from an app too old to serve, by app version and route. When one has none for long enough, it can be switched off.'
+          : 'Not collecting: turn on “Old address and paths” under Collection to count them.'
+      }
+      tools=${
+        kinds.length > 1 &&
+        html`<${Chips}
+        label="What"
+        value=${what}
+        onChange=${setWhat}
+        options=${[['', 'All', rows.length], ...kinds.map((k) => [k, LEGACY[k], rows.filter((r) => r.what === k).length])]}
+      />`
+      }
+    >
+      <${Table}
+        cols=${[
+          { key: 'what', label: 'What', fmt: (v) => LEGACY[v] ?? v },
+          { key: 'client', label: 'Sent by', cell: (r) => html`<code>${r.client}</code>` },
+          { key: 'route', label: 'Route', cell: (r) => html`<code>${r.route}</code>` },
+          { key: 'n', label: 'Requests', num: true, meter: true },
+          { key: 'last', label: 'Last', fmt: (v) => ago(aeIso(v)) },
+        ]}
+        rows=${shown}
+        sort=${{ key: 'n', dir: 'desc' }}
+        empty=${s.collect?.legacy ? 'Nothing in the last 30 days.' : 'Not collecting.'}
+      />
+    <//>
+  `;
+}
+
+const SETTINGS = {
+  publicBuses: 'Public buses',
+  fullBusMargin: 'Allow for packed buses',
+  preferBus: 'Prefer the bus',
+  walkPace: 'Walking pace',
+  lang: 'Language',
+  clock: 'Time format',
+  gapHours: 'Home between classes (gap, hours)',
+  home: 'Home stops',
+  timetable: 'An imported timetable',
+  manualClasses: 'Classes added by hand',
+  favourites: 'Favourites',
+  usualTimes: 'Usual times',
+  pinnedStops: 'Stops pinned to Buses',
+  notifications: 'Devices taking pushes',
+};
+
+/** How many active accounts have each setting, on the latest day counted (settings.ts). */
+function Settings({ s }) {
+  if (!s.analytics || s.analytics.error) return null;
+  const all = s.analytics.settings ?? [];
+  const latest = all.reduce((m, r) => (day(r) > m ? day(r) : m), '');
+  const rows = all
+    .filter((r) => day(r) === latest)
+    .map((r) => ({
+      ...r,
+      key: `${r.setting} ${r.value}`,
+      name: SETTINGS[r.setting] ?? r.setting,
+      n: Number(r.n),
+      share: share(Number(r.n), Number(r.of)),
+    }));
+  const of = rows.find((r) => r.setting !== 'notifications')?.of;
+  return html`
+    <${Card}
+      title="Settings"
+      sub=${
+        s.collect?.settings
+          ? latest
+            ? `Accounts used in the 30 days to ${dayLong(latest)}${of ? ` (${fmt(of)})` : ''}, by each setting’s value; pushes are Android phones and web apps, by app. What a device keeps to itself (leave alerts, card style) isn’t sent, so isn’t here.`
+            : 'Counted once a day, after midnight: nothing yet.'
+          : 'Not collecting: turn on “Settings” under Collection to count them.'
+      }
+    >
+      <${Table}
+        cols=${[
+          { key: 'name', label: 'Setting' },
+          { key: 'value', label: 'Value', cell: (r) => html`<code>${r.value}</code>` },
+          { key: 'n', label: 'Count', num: true, meter: true },
+          { key: 'share', label: 'Share', num: true, fmt: (v) => pct(v) },
+        ]}
+        rows=${rows}
+        sort=${{ key: 'name', dir: 'asc' }}
+        empty=${s.collect?.settings ? 'Nothing counted yet.' : 'Not collecting.'}
+      />
+    <//>
   `;
 }
 
@@ -995,6 +1112,16 @@ export const SWITCHES = [
     'errors',
     'Crash reports',
     'Crashes and errors from the apps and the website, with no account, device or address. Each app has a switch to stop sending them.',
+  ],
+  [
+    'legacy',
+    'Old address and paths',
+    'Requests that still use terminus.rcn.sh, the API’s old paths or too old an app, counted by app version and route. Nothing about who sent them.',
+  ],
+  [
+    'settings',
+    'Settings',
+    'How many accounts used this month have each setting, and how many devices take notifications. Counted from the profiles already kept; only the totals are stored.',
   ],
 ];
 

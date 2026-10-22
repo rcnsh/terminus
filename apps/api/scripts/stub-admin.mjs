@@ -141,6 +141,40 @@ export function fakeAeRows(q, nowMs) {
       { fingerprint: 'c9d0', version: '3.4.3', os: 'macOS 26.1', n: 2 },
     ];
   }
+  if (q.includes("blob1 = 'legacy'")) {
+    const at = (h) => new Date(nowMs - h * 3_600_000).toISOString().replace('T', ' ').slice(0, 19);
+    return [
+      { what: 'address', client: 'android/3.2.0', route: '/api/me/next', n: 412, last: at(3) },
+      { what: 'address', client: 'android/3.2.0', route: '/download/latest.json', n: 38, last: at(5) },
+      { what: 'address', client: 'mac/3.1.2', route: '/download/appcast.xml', n: 29, last: at(30) },
+      { what: 'address', client: 'browser', route: '/', n: 17, last: at(50) },
+      { what: 'path', client: 'android/2.5.0', route: '/me/next', n: 6, last: at(200) },
+      { what: 'outdated', client: 'android/2.6.3', route: '/api/me/next', n: 3, last: at(400) },
+    ];
+  }
+  if (q.includes("blob1 = 'settings'")) {
+    const of = 31;
+    const counts = {
+      publicBuses: { on: 4, off: 27 },
+      fullBusMargin: { on: 28, off: 3 },
+      preferBus: { on: 30, off: 1 },
+      walkPace: { slow: 5, normal: 20, fast: 6 },
+      lang: { auto: 22, en: 5, zh: 4 },
+      clock: { auto: 25, 12: 2, 24: 4 },
+      gapHours: { 2: 26, 3: 5 },
+      home: { some: 27, none: 4 },
+      timetable: { some: 24, none: 7 },
+      manualClasses: { some: 6, none: 25 },
+      favourites: { some: 11, none: 20 },
+      usualTimes: { some: 3, none: 28 },
+      pinnedStops: { some: 9, none: 22 },
+    };
+    return days(nowMs, 3).flatMap((day) => [
+      ...Object.entries(counts).flatMap(([setting, vs]) => Object.entries(vs).map(([value, n]) => ({ day, setting, value, n, of }))),
+      { day, setting: 'notifications', value: 'android', n: 14, of: 18 },
+      { day, setting: 'notifications', value: 'web', n: 3, of: 9 },
+    ]);
+  }
   return null;
 }
 

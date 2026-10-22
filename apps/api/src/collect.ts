@@ -9,6 +9,11 @@
  *   timelapse recorder's buses.
  * - `errors`: crash and error reports from the apps and the website
  *   (apperrors.ts), with no account, device or address in them.
+ * - `legacy`: requests that still use something on its way out (the old
+ *   address, the API's old paths, an app too old to be served), counted by
+ *   app version and route (legacy.ts). Nothing about who sent them.
+ * - `settings`: how many active accounts have each setting, once a day
+ *   (settings.ts). Totals only, from the profiles D1 already keeps.
  *
  * Each is KV `config:collect:<name>`, "on" or "off". Unset is off, and so is
  * KV failing to answer: nothing new is collected until the operator turns
@@ -19,7 +24,7 @@ import type { Env } from './types.ts';
 import { isOperator } from './admin.ts';
 import { json } from './http.ts';
 
-export const COLLECTORS = ['active', 'eta', 'errors'] as const;
+export const COLLECTORS = ['active', 'eta', 'errors', 'legacy', 'settings'] as const;
 export type Collector = (typeof COLLECTORS)[number];
 
 const keyOf = (name: Collector) => `config:collect:${name}`;
@@ -44,7 +49,8 @@ export async function handleCollect(req: Request, env: Env, nowMs: number): Prom
   if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405, { allow: 'POST' });
   const body = (await req.json().catch(() => null)) as { name?: unknown; on?: unknown } | null;
   const name = COLLECTORS.find((c) => c === body?.name);
-  if (!name || typeof body?.on !== 'boolean') return json({ error: 'name must be active, eta or errors, and on true or false' }, 400);
+  if (!name || typeof body?.on !== 'boolean')
+    return json({ error: 'name must be active, eta, errors, legacy or settings, and on true or false' }, 400);
   await env.KV.put(keyOf(name), body.on ? 'on' : 'off');
   // KV may still read the old value back for a while: say what was just set.
   return json({ ...(await collectState(env)), [name]: body.on }, 200, { 'cache-control': 'no-store' });

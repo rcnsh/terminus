@@ -154,7 +154,7 @@ GROUP BY phase
 
 ## The operator's switches
 
-Three more kinds of statistics are collected only once switched on, on the
+Five more kinds of statistics are collected only once switched on, on the
 dashboard (`POST /api/admin/collect`, KV `config:collect:<name>`, `src/collect.ts`).
 All start off, and KV failing to answer reads as off.
 
@@ -202,6 +202,46 @@ FROM terminus WHERE blob1 = 'apperror' AND timestamp > NOW() - INTERVAL '7' DAY
 GROUP BY fingerprint, type, version ORDER BY n DESC
 ```
 
+### Old address and paths (`legacy`)
+
+Each request that still uses something on its way out writes one row
+(`src/legacy.ts`): `blob2` what (`address`: the old address,
+terminus.rcn.sh or the beta's; `path`: the API's paths from before 3.0;
+`outdated`: an app below `config:minClient`, answered 426), `blob3` who
+sent it (the app and version from `x-terminus-client`, `browser`, or
+`other`), `blob4` the route with no query, at most three parts, and any
+part with a digit in it as `:id`. Apps from 3.6.0 call only terminus.run,
+so the address is safe to detach once its rows stop.
+
+```sql
+SELECT blob2 AS what, blob3 AS client, blob4 AS route, SUM(_sample_interval) AS n, max(timestamp) AS last
+FROM terminus WHERE blob1 = 'legacy' AND timestamp > NOW() - INTERVAL '30' DAY
+GROUP BY what, client, route ORDER BY n DESC
+```
+
+### Settings (`settings`)
+
+Once a Singapore day, with the active counts, the cron reads the profiles
+of the accounts used in the last 30 days and counts each setting's values
+(`src/settings.ts`): `blob2` the setting, `blob3` the value (`on`/`off`, a
+pace, a language, `some`/`none` for lists such as favourites), `blob4` the
+day, `double1` the accounts with it, `double2` the accounts counted. One
+more setting, `notifications`, counts devices instead: Android phones and
+web apps used in the 30 days (`double2`) and those with a push address
+(`double1`), by app (`blob3`). What a device keeps to itself (leave
+alerts, the card's style) never reaches the server and isn't counted.
+
+```sql
+SELECT blob2 AS setting, blob3 AS value, max(double1) AS n, max(double2) AS of
+FROM terminus WHERE blob1 = 'settings' AND blob4 = '2026-10-22'
+GROUP BY setting, value ORDER BY setting, n DESC
+```
+
+The dashboard's app versions (Devices) are read from D1 on each load, not
+from these rows: each device's last version by when it was last used, over
+7, 30 and 90 days. A device unused for 90 days is signed out, so a version
+with none in 90 days is one no paired device still runs.
+
 ## What the rows hold about people
 
 None holds an account, email, IP address or coordinates, and none is
@@ -211,7 +251,10 @@ the caller when the app sent a location, `double6` is the walk to it, and
 time, that is a rough idea of where someone was and where they were
 going. The privacy policy says so; don't add anything finer.
 
-`active` rows are totals only; nothing in them names or follows an account.
+`active` and `settings` rows are totals only; nothing in them names or
+follows an account, and no setting's value is a stop, place or class. A
+`legacy` row holds the app version and a route with ids taken out, never
+the query, address or account.
 An `apperror` row holds no account, session, device or install id, and the
 address it came from is used only for the rate limit; its message and stack
 are scrubbed of URL queries, email addresses, home folder names, coordinates,

@@ -287,6 +287,8 @@ apps/api/
   src/collect.ts      The dashboard's switches for the statistics below, all off until turned on
   src/usage.ts, eta.ts, apperrors.ts  Daily active counts; the feed's arrival times against
                       the timelapse; crash reports (/api/errors), scrubbed, with no one on them
+  src/legacy.ts, settings.ts  What still uses the old address and paths, by app version and
+                      route; how many accounts have each setting, daily totals
   src/etamodel.ts, etashadow.ts  An arrival-time model (segment medians, the feed's usual
                       error, a blend), pure; run in shadow by the cron with ETA_MODEL=shadow,
                       answering no one (docs/eta-model.md)

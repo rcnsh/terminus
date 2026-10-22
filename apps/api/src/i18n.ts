@@ -737,7 +737,8 @@ export const ERRORS_ZH: Record<string, string> = {
   'not found': '找不到',
   'method not allowed': '不支持这个请求方法',
   'a report needs platform, version and type': '报告需要 platform、version 和 type',
-  'name must be active, eta or errors, and on true or false': 'name 必须是 active、eta 或 errors，on 必须是 true 或 false',
+  'name must be active, eta, errors, legacy or settings, and on true or false':
+    'name 必须是 active、eta、errors、legacy 或 settings，on 必须是 true 或 false',
   'something went wrong on our side': '我们这边出了问题',
   'delete the account from the account page': '请在账户页面删除账户',
   'send the profile as JSON': '请以 JSON 发送资料',

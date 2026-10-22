@@ -134,11 +134,14 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
       .bind(d7),
     db
       .prepare(
-        // App versions in use: the x-terminus-client header of devices seen this week.
-        `SELECT client, COUNT(*) AS n FROM sessions
-          WHERE kind = 'device' AND client IS NOT NULL AND last_seen > ? GROUP BY 1 ORDER BY n DESC LIMIT 20`,
+        // App versions in use: the x-terminus-client header each device last
+        // sent, by when it was last used. A device unused for 90 days is
+        // signed out, so the 90 days are every device still paired: a
+        // version at none there is one nothing can still be running.
+        `SELECT client, SUM(last_seen > ?1) AS n, SUM(last_seen > ?2) AS d30, SUM(last_seen > ?3) AS d90 FROM sessions
+          WHERE kind = 'device' AND client IS NOT NULL AND last_seen > ?3 GROUP BY 1 ORDER BY d90 DESC, n DESC LIMIT 40`,
       )
-      .bind(d7),
+      .bind(d7, d30, nowMs - 90 * DAY),
     db
       .prepare(
         // Per Singapore day, the last 30.
@@ -155,7 +158,7 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
   const n = (v: number | null | undefined) => v ?? 0;
   const [users, profiles, sessions, apiKeys] = [row(u), row(p), row(s), row(k)];
   const devices = dev.results as Array<{ platform: string; total: number; active7: number }>;
-  const clients = cli.results as Array<{ client: string; n: number }>;
+  const clients = cli.results as Array<{ client: string; n: number; d30: number; d90: number }>;
   const signups = sign.results as Array<{ day: string; n: number }>;
   const feedback = fb.results as Array<{
     id: string;
@@ -224,14 +227,15 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
 
 /** Answers, their quality, and errors per day for 14 days, the timelapse
  *  recorder's polls by what each cost NUS (logPoll), the daily active counts
- *  (usage.ts) and the apps' error reports (apperrors.ts), from Analytics
- *  Engine's SQL API. */
+ *  (usage.ts), the apps' error reports (apperrors.ts), what still uses
+ *  something on its way out (legacy.ts) and the settings' counts
+ *  (settings.ts), from Analytics Engine's SQL API. */
 async function analyticsStats(env: Env, fetchImpl: typeof fetch): Promise<Record<string, unknown> | null> {
   if (!env.ANALYTICS_TOKEN || !env.CF_ACCOUNT_ID) return null;
   const sql = (q: string) => aeSql(env, q, fetchImpl);
   const dataset = env.AE_DATASET || 'terminus';
   try {
-    const [daily, quality, errors, timelapse, active, appErrors, appErrorVersions] = await Promise.all([
+    const [daily, quality, errors, timelapse, active, appErrors, appErrorVersions, legacy, settings] = await Promise.all([
       // _sample_interval: each row may stand for several, at high volume.
       sql(`SELECT toDate(timestamp) AS day, blob1 AS kind, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '14' DAY AND blob1 IN ('answer', 'error')
@@ -252,8 +256,15 @@ async function analyticsStats(env: Env, fetchImpl: typeof fetch): Promise<Record
       sql(`SELECT blob4 AS fingerprint, blob3 AS version, blob8 AS os, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '7' DAY AND blob1 = 'apperror'
            GROUP BY fingerprint, version, os ORDER BY n DESC LIMIT 200`),
+      // What still uses the old address, old paths or too old an app (legacy.ts), and when it last did.
+      sql(`SELECT blob2 AS what, blob3 AS client, blob4 AS route, SUM(_sample_interval) AS n, max(timestamp) AS last FROM ${dataset}
+           WHERE timestamp > NOW() - INTERVAL '30' DAY AND blob1 = 'legacy'
+           GROUP BY what, client, route ORDER BY n DESC LIMIT 100`),
+      // Each setting's counts per day (settings.ts): max() in case a day was ever counted twice.
+      sql(`SELECT blob4 AS day, blob2 AS setting, blob3 AS value, max(double1) AS n, max(double2) AS of FROM ${dataset}
+           WHERE timestamp > NOW() - INTERVAL '31' DAY AND blob1 = 'settings' GROUP BY day, setting, value ORDER BY day`),
     ]);
-    return { daily, quality, errors, timelapse, active, appErrors: groupErrors(appErrors, appErrorVersions) };
+    return { daily, quality, errors, timelapse, active, appErrors: groupErrors(appErrors, appErrorVersions), legacy, settings };
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };
   }
