@@ -85,6 +85,24 @@ async function flip(name, on) {
   view.set((v) => ({ ...v, stats: v.stats && { ...v.stats, collect } }));
 }
 
+/** Hides a crash report until it's reported again; the stats then leave it out. */
+async function dismiss(fingerprint) {
+  const res = await fetch('/api/admin/crashes/dismiss', {
+    method: 'POST',
+    headers: { 'x-health-token': memory ?? token(), 'content-type': 'application/json' },
+    body: JSON.stringify({ fingerprint }),
+  }).catch(() => null);
+  if (!res) throw new Error("Couldn't reach terminus.");
+  if (!res.ok) throw new Error(`Dismissing answered ${res.status}.`);
+  view.set((v) => ({
+    ...v,
+    stats: v.stats?.analytics && {
+      ...v.stats,
+      analytics: { ...v.stats.analytics, appErrors: (v.stats.analytics.appErrors ?? []).filter((e) => e.fingerprint !== fingerprint) },
+    },
+  }));
+}
+
 function lock() {
   forget();
   signedOut();
@@ -296,7 +314,7 @@ function Dashboard({ v }) {
           </p>
         </header>
         <div class="page" key=${route.id}>
-          <${Page} s=${s} d=${d} query=${route.query} flip=${flip} />
+          <${Page} s=${s} d=${d} query=${route.query} flip=${flip} dismiss=${dismiss} />
         </div>
       </main>
     </div>

@@ -196,6 +196,11 @@ type, `blob6` message, `blob7` stack, `blob8` OS or browser, `double2` 1
 for a crash that ended the app. While switched off, reports are answered
 and dropped.
 
+Analytics Engine can't delete a row, so a crash dealt with is dismissed
+on the dashboard instead (`POST /api/admin/crashes/dismiss`, KV
+`config:crashes:dismissed`, fingerprint to when): the stats leave it out
+until a report of it comes in after that.
+
 ```sql
 SELECT blob4 AS fingerprint, blob5 AS type, blob3 AS version, SUM(_sample_interval) AS n
 FROM terminus WHERE blob1 = 'apperror' AND timestamp > NOW() - INTERVAL '7' DAY

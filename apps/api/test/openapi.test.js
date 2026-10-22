@@ -324,6 +324,9 @@ const CASES = [
   ['POST /api/admin/collect', 200, { auth: 'operator', body: { name: 'errors', on: true } }],
   ['POST /api/admin/collect', 400, { auth: 'operator', body: { name: 'everything', on: true } }],
   ['POST /api/admin/collect', 404, { body: { name: 'errors', on: true } }],
+  ['POST /api/admin/crashes/dismiss', 204, { auth: 'operator', body: { fingerprint: '18b32d7aae56' } }],
+  ['POST /api/admin/crashes/dismiss', 400, { auth: 'operator', body: { fingerprint: 'everything' } }],
+  ['POST /api/admin/crashes/dismiss', 404, { body: { fingerprint: '18b32d7aae56' } }],
   [
     'POST /api/errors',
     204,

@@ -924,8 +924,21 @@ const matches = (q, ...fields) =>
       .includes(q),
   );
 
-export function Crashes({ s, d, query }) {
+export function Crashes({ s, d, query, dismiss }) {
   const [plat, setPlat] = useState('');
+  const [busy, setBusy] = useState('');
+  const [msg, setMsg] = useState('');
+  const hide = async (fingerprint) => {
+    setBusy(fingerprint);
+    setMsg('');
+    try {
+      await dismiss(fingerprint);
+    } catch (err) {
+      setMsg(err.message);
+    } finally {
+      setBusy('');
+    }
+  };
   const [q, setQ] = useState('');
   const [order, setOrder] = useState('n');
   if (!s.analytics) return NEEDS_AE;
@@ -999,12 +1012,19 @@ export function Crashes({ s, d, query }) {
                 html`<div class="pre-h"><span class="hint">Stack</span><${Copy} text=${`${e.type}: ${e.message}\n${e.stack}`} label="Copy" /></div>
                 <pre>${e.stack}</pre>`
               }
-              <p class="hint">Fingerprint <code>${e.fingerprint}</code></p>
+              <div class="pre-h">
+                <p class="hint">Fingerprint <code>${e.fingerprint}</code></p>
+                <button type="button" class="btn small ghost" disabled=${busy === e.fingerprint} onClick=${() => hide(e.fingerprint)}>
+                  Dismiss
+                </button>
+              </div>
+              <p class="hint">Dismissing hides it until it’s reported again.</p>
             <//>`;
           })}
         </ul>`
         : html`<${Empty}>Nothing matches.<//>`
     }
+    ${msg && html`<p class="hint bad" role="status">${msg}</p>`}
   `;
 }
 

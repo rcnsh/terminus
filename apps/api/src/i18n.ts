@@ -739,6 +739,7 @@ export const ERRORS_ZH: Record<string, string> = {
   'a report needs platform, version and type': '报告需要 platform、version 和 type',
   'name must be active, eta, errors, legacy or settings, and on true or false':
     'name 必须是 active、eta、errors、legacy 或 settings，on 必须是 true 或 false',
+  'fingerprint must be a crash report fingerprint': 'fingerprint 必须是崩溃报告的 fingerprint',
   'something went wrong on our side': '我们这边出了问题',
   'delete the account from the account page': '请在账户页面删除账户',
   'send the profile as JSON': '请以 JSON 发送资料',
