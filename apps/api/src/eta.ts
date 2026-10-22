@@ -204,7 +204,7 @@ export function aeTime(s: unknown): number {
 }
 
 /** The predictions logged inside day [date]'s recording window, from Analytics Engine. */
-async function predictionsFor(env: Env, date: string, nowMs: number, fetchImpl: typeof fetch): Promise<Prediction[]> {
+export async function predictionsFor(env: Env, date: string, nowMs: number, fetchImpl: typeof fetch): Promise<Prediction[]> {
   const { open, close } = windowOf(date);
   // Days back to reach the window's start, with one to spare.
   const days = Math.ceil((nowMs - open) / DAY) + 1;
@@ -228,7 +228,7 @@ async function predictionsFor(env: Env, date: string, nowMs: number, fetchImpl: 
     .sort((a, b) => a.t - b.t);
 }
 
-async function gunzipJson<T>(gz: ArrayBuffer): Promise<T> {
+export async function gunzipJson<T>(gz: ArrayBuffer): Promise<T> {
   return (await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'))).json()) as T;
 }
 
