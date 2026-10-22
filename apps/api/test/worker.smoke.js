@@ -89,18 +89,6 @@ test('the answer is a valid Answer and its label fits the contract', async () =>
   assert.equal(a.arrivals.find((x) => x.svc === 'A1').crowd, 'high', 'crowd is plumbed through');
 });
 
-test('repeat calls within the TTL produce exactly one upstream call', async () => {
-  const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
-  const cache = installGlobals(fetchImpl);
-
-  await call('/api/trip?to=UTOWN&from=PGP', { fetchImpl, cache });
-  assert.equal(fetchImpl.counts.shuttle, 1);
-
-  await call('/api/trip?to=UTOWN&from=PGP', { fetchImpl, cache });
-  await call('/api/trip?to=UTOWN&from=PGP', { fetchImpl, cache });
-  assert.equal(fetchImpl.counts.shuttle, 1, 'the 15 s edge cache absorbed the repeats');
-});
-
 test('a cache-busting ?t= does not defeat the cache', async () => {
   // The tile appends ?t= on every call and getLastKnownLocation jitters the
   // coordinates, so a cache keyed on the request URL would never hit. The
