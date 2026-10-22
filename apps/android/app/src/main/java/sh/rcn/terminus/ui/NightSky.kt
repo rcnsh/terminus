@@ -113,7 +113,7 @@ internal fun parallax(s: Float): Parallax {
 
 /**
  * Your bus on the horizon's road: its colour, how far off it is (0 at the stop, 1 a quarter of an hour away), and whether that's live. A
- * timetable guess is drawn as an outline.
+ * estimate is drawn as an outline.
  */
 internal data class RoadBus(val color: Long, val far: Float, val live: Boolean)
 
@@ -565,9 +565,8 @@ internal fun DrawScope.rainTree(foot: Offset, d: Float, color: Color) {
 /**
  * A single-decker from the side, heading right: 38 by 12 from [o], its top left, [d] px a unit, standing on its wheels at 12. The air-con
  * on its roof, a row of windows ([glass]), the driver's, the door ahead of the front wheel, the windscreen raking back to the headlight, a
- * tail light, and the wheels in their arches. With no [band] it's an outline in [paint] (a timetable guess, so it never passes for live).
- * Window [dim] (0 to 3) has its light off. Without [wheels], just their arches, for wheels drawn turning ([shuttleWheel]). As the web's
- * busParts.
+ * tail light, and the wheels in their arches. With no [band] it's an outline in [paint] (an estimate, so it never passes for live). Window
+ * [dim] (0 to 3) has its light off. Without [wheels], just their arches, for wheels drawn turning ([shuttleWheel]). As the web's busParts.
  */
 internal fun DrawScope.shuttle(o: Offset, d: Float, paint: Color, band: Color?, glass: Color, dim: Int = -1, wheels: Boolean = true) {
     val solid = band != null

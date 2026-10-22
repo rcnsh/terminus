@@ -13,7 +13,7 @@ import { MAX_ETA_S, TTL } from './config.ts';
 import { UpstreamUnreachable, timedFetch } from './http.ts';
 import { cacheBase, cachedFetch, flagged } from './edgecache.ts';
 import { GateBusy, throughGate } from './feedgate.ts';
-import { noteTrip } from './feedwatch.ts';
+import { noteBreakerOpen } from './feedwatch.ts';
 import {
   UpstreamHttpError,
   UpstreamRejected,
@@ -623,7 +623,7 @@ export async function getArrivals(env: Env, ctx: ExecutionContext, code: string,
     failMemoS: TTL.failMemoS,
     raceMs: TTL.staleRaceMs,
     memoes: notOutdated,
-    breaker: { ...breaker(), onTrip: (err) => noteTrip(env, 'nus', err, nowMs) },
+    breaker: { ...breaker(), onOpen: (err) => noteBreakerOpen(env, 'nus', err, nowMs) },
     inflight,
   });
 }
@@ -636,7 +636,7 @@ export async function getArrivals(env: Env, ctx: ExecutionContext, code: string,
  * costs more: left to each key's failMemoS, every stop and service would
  * hold a connection open for the whole timeout, again and again.
  */
-export function tripsBreaker(err: unknown): boolean {
+export function opensBreaker(err: unknown): boolean {
   // A version refused after the switch away from it says nothing of the new one.
   if (err instanceof UpstreamRejected) return NO_REMINT_CODES.has(err.code) && !err.outdated;
   if (err instanceof UpstreamUnreachable) return true;
@@ -651,7 +651,7 @@ const notOutdated = (err: unknown): boolean => !(err instanceof UpstreamRejected
 
 /** The shuttle feed's breaker: such a failure stops every call for breakerS.
  *  Made at each call: its key depends on the site (cacheBase). */
-const breaker = () => ({ key: `${cacheBase()}/breaker`, trips: tripsBreaker, maxAgeS: TTL.breakerS });
+const breaker = () => ({ key: `${cacheBase()}/breaker`, opens: opensBreaker, maxAgeS: TTL.breakerS });
 
 /** Whether the feed's breaker is open here: NUS refused us a moment ago, and
  *  nothing should ask it again until it closes. */
@@ -755,7 +755,7 @@ export async function getBuses(
     staleMaxS: TTL.staleMaxS,
     failMemoS: TTL.failMemoS,
     memoes: notOutdated,
-    breaker: { ...breaker(), onTrip: (err) => noteTrip(env, 'nus', err, nowMs) },
+    breaker: { ...breaker(), onOpen: (err) => noteBreakerOpen(env, 'nus', err, nowMs) },
     inflight: inflightBuses,
   });
 }

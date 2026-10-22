@@ -5,19 +5,21 @@
  * It has one alarm, used for two things:
  *
  * - **End of day:** at the next Singapore midnight everything is deleted.
- *   An object emptied early (the account was deleted) keeps only a `gone`
- *   mark until then, and refuses every write: a request already under way
- *   when the account went can't store the user's trip again.
- * - **Push:** when the Worker has sent a card with a
- *   `nextChangeAt`, the object wakes then, works out the card again, and
- *   nudges the user's phones (push.ts) if the trip or its phase changed.
- *   It keeps waking at each new `nextChangeAt` while there's a trip and a
- *   device that takes push, and stops otherwise.
+ *   An object emptied early (the account was deleted) keeps only a
+ *   deleted mark (stored as 'gone', not the card's `gone`) until then, and
+ *   refuses every write: a request already under way when the account went
+ *   can't store the user's trip again.
+ * - **Push:** when the Worker has worked out a card, the object wakes at
+ *   its next phase change (`nextPhaseAt`, not the card's `nextChangeAt`,
+ *   which also counts going stale), works out the card again, and nudges
+ *   the user's phones (push.ts) if the trip or its phase changed. It keeps
+ *   waking at each new one while there's a trip and a device that takes
+ *   push, and stops otherwise.
  */
 
 import { loadCalendar } from './calendarsync.ts';
 import type { Env } from './types.ts';
-import { type Boarded, type DayRecord, type TripRecord, type TripUpdate, endOfDayMs, sgtDate } from './trip.ts';
+import { type Plan, type DayRecord, type TripRecord, type TripUpdate, endOfDayMs, sgtDate } from './trip.ts';
 import type { MeDeps } from './me.ts';
 import { tripCardFor } from './me.ts';
 import { nudgeUser, pushDevices } from './push.ts';
@@ -237,7 +239,7 @@ export class Trip {
     // read back to note the next wake. Only they are: the object is billed
     // for the time it's awake.
     const plans: Promise<unknown>[] = [];
-    const savePlan = (key: string, plan: Boarded) => {
+    const savePlan = (key: string, plan: Plan) => {
       const p = this.state.blockConcurrencyWhile(async () => {
         if (!(await this.cleared())) await this.putPlan(date, key, plan);
       });
@@ -301,7 +303,7 @@ export class Trip {
   }
 
   /**
-   * Whether /clear emptied the object (it leaves the 'gone' mark) or midnight
+   * Whether /clear emptied the object (it leaves the deleted mark) or midnight
    * did (every stored day has its deleteAt).
    */
   private async cleared(): Promise<boolean> {
@@ -313,7 +315,7 @@ export class Trip {
     return (await this.storage.get<DayRecord>('day')) ?? null;
   }
 
-  private async putPlan(date: string, key: string, plan: Boarded): Promise<DayRecord> {
+  private async putPlan(date: string, key: string, plan: Plan): Promise<DayRecord> {
     const next = today(await this.storedDay(), date);
     next.plans = { ...next.plans, [key]: plan };
     await this.storage.put('day', next);
@@ -356,7 +358,7 @@ function updateOf(path: string, body: unknown): TripUpdate | null {
     case '/signal':
       return { ...base, items: (b.items as TripUpdate['items']) ?? [{ key: b.key as string, rec: (b.rec as TripRecord | null) ?? null }] };
     case '/plan':
-      return { ...base, plans: { [b.key as string]: b.plan as Boarded } };
+      return { ...base, plans: { [b.key as string]: b.plan as Plan } };
     case '/watch':
       return { ...base, watch: { userId: b.userId as string, at: b.at as number } };
     default:

@@ -104,16 +104,16 @@ export async function answerFor(
     .map((c) => (c ? idx.byCode.get(c) : undefined))
     .filter((s): s is Stop => Boolean(s))
     .flatMap((s) => {
-      const twin = s.opposite ? idx.byCode.get(s.opposite) : undefined;
-      return twin ? [s, twin] : [s];
+      const opp = s.opposite ? idx.byCode.get(s.opposite) : undefined;
+      return opp ? [s, opp] : [s];
     });
-  // The nearest side, not the first: twins stand within the 45 s of each other.
+  // The nearest side, not the first: opposite stops stand within the 45 s of each other.
   const walkS = (d: Stop) =>
     input.lat != null ? haversineM(input.lat, input.lon!, d.lat, d.lon) / WALK.speedMs : input.originCode === d.code ? 0 : Infinity;
   const atDest = destSides.filter((d) => walkS(d) < 45).sort((a, b) => walkS(a) - walkS(b))[0];
   const atVenue =
     input.lat != null && input.destAt != null && haversineM(input.lat, input.lon!, input.destAt.lat, input.destAt.lon) <= WALK.atVenueM;
-  // Named for the side of the road you stand on: across from it, that is the twin.
+  // Named for the side of the road you stand on: across from it, that is the opposite stop.
   if (dest && (atDest || atVenue)) return arrivedAnswer(atDest ?? dest, destLabel, nowMs);
   // No coordinates and no origin stop: nothing to resolve from. Saying
   // "No buses running" here would be a claim about the network.

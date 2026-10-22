@@ -181,7 +181,7 @@ function homeWalk(input: ResolveInput): HomeWalk | null {
   return { stops: input.preferStops, m: input.homeWalkS * (input.walkSpeedMs ?? WALK.speedMs) };
 }
 
-/** A stop a trip can end at, and the walk across the road from it when it's the twin. */
+/** A stop a trip can end at, and the walk across the road from it when it's the opposite stop. */
 export interface Target {
   code: string;
   crossS: number;
@@ -200,8 +200,8 @@ export function targetsFor(idx: GraphIndex, input: ResolveInput): Target[] {
   return [input.to, ...(input.toAlso ?? [])].flatMap((code) => {
     const s = idx.byCode.get(code);
     if (!s) return [];
-    const twin = s.opposite ? idx.byCode.get(s.opposite) : undefined;
-    return [{ code, crossS: 0 }, ...(twin ? [{ code: twin.code, crossS: Math.round(stopFootM(twin, s) / speed) }] : [])];
+    const opp = s.opposite ? idx.byCode.get(s.opposite) : undefined;
+    return [{ code, crossS: 0 }, ...(opp ? [{ code: opp.code, crossS: Math.round(stopFootM(opp, s) / speed) }] : [])];
   });
 }
 
@@ -303,9 +303,9 @@ export function candidateStops(graph: Graph, input: ResolveInput, opts: { any?: 
     // The far side of the road, a crossing further: the bus you want may
     // only call there, and nothing says which side you'll come out on.
     for (const s of origins) {
-      const twin = s.opposite ? idx.byCode.get(s.opposite) : undefined;
-      if (twin && !base.some((b) => b.stop.code === twin.code)) {
-        base.push({ stop: twin, distM: haversineM(s.lat, s.lon, twin.lat, twin.lon), footM: stopFootM(s, twin), startS: startS(s.code) });
+      const opp = s.opposite ? idx.byCode.get(s.opposite) : undefined;
+      if (opp && !base.some((b) => b.stop.code === opp.code)) {
+        base.push({ stop: opp, distM: haversineM(s.lat, s.lon, opp.lat, opp.lon), footM: stopFootM(s, opp), startS: startS(s.code) });
       }
     }
     // From home, every home stop: the walk from home (originWalkS) is to each.

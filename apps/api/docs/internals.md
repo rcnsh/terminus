@@ -149,7 +149,7 @@ anything else (a script with an API key, a page open since before) gets a
 | `GET /map/style.json?theme=&lang=` | The map's MapLibre style, light or dark, English or Chinese: Protomaps' map without its points of interest, every URL on this domain. |
 | `GET /map/fonts/…`, `/map/sprites/…` | The map's label glyphs and icons, from R2. |
 | `GET /download/android`, `/download/mac` | The current app downloads from R2, as `latest.json` there names them. `?abi=` picks an Android APK by CPU type; `/download/appcast.xml` is the Mac app's Sparkle feed, `/download/latest.json` the version list, `/download/releases/<version>/<file>` a versioned file. `latest.json` and the appcast are read from R2 on every request, so a release is live the moment it's uploaded. |
-| `GET /api/stops/pairs` | Each stop with its twin across the road, and where the buses on each side go next. Cached hard. |
+| `GET /api/stops/pairs` | Each stop with its opposite stop, and where the buses on each side go next. Cached hard. |
 | `GET /api/health` | Graph age, how long the calendar lasts, the feed as the cron last saw it (`upstream`) and which config is present, never values (`config.pushAndroid` and `config.pushWeb`: push set up with a usable key). 503, with the same body, when the feed is confirmed down, the cron has stopped or the calendar has run out. With the operator's `x-health-token`, `?probe=1` mints a real token and says what came back, and `?versions=1` says what the version updater would find today in the app stores (see "The version string is a kill switch"); without it both are ignored. |
 | `GET /api/status.json` | Whether NUS's feed is up, as the 15-minute check saw it, and the last 20 outages, read from KV at most once a minute per isolate. Two failed checks in a row confirm an outage and two good ones end it, so a feed that answers every other time sends no emails by turns; the outage ends at the first of the two. `feed` (like `/api/health` and the card's notice) follows the last check, though: one good check and it says `up` again, rather than "down" for 15 minutes with the feed back. The [status page](../../web/public/status) shows it. |
 | `GET /api/admin/stats` | The operator dashboard's data (accounts, devices by app, sign-ups, reports, feed; answers and errors per day, and the timelapse recorder's polls by what they cost NUS, the daily active counts and the week's crash reports, from Analytics Engine when `ANALYTICS_TOKEN` and `CF_ACCOUNT_ID` are set; `collect`, the switches below; `eta`, arrival times scored). Needs `x-health-token` (`HEALTH_TOKEN` or a passkey session); anything else gets a 404. |
@@ -354,7 +354,7 @@ year's, with the old one to fall back on (`termsForImport`).
 Sign-up is open; addresses on the `blocklist` table are refused. The account
 page at `/account` signs in with an emailed code (or the link in the same
 email) and stores one profile per user in D1: timetable, home stops, gap threshold and
-saved places. A saved profile that no longer validates as a whole (a stop
+favourites. A saved profile that no longer validates as a whole (a stop
 dropped by the weekly scrape, say) is read back part by part
 (`salvageProfile` in `me.ts`): whatever still holds is kept, so the next save
 doesn't write defaults over the day's hours, usual times or one-off trips.
@@ -443,12 +443,12 @@ pnpm exec cf kv keys put config:minClient --namespace-id <KV id in cloudflare.co
 ```
 
 - `GET /api/me/next` is the widget's one call. It picks the destination from the
-  timetable (see `planFor` in [src/profile.ts](../src/profile.ts)) or from
+  timetable (see `nextTripFor` in [src/profile.ts](../src/profile.ts)) or from
   `?place=`/`?to=`, and returns the usual answer plus `dest` and `places`.
   A `place` or `to` that names nothing it knows is ignored: the answer is
   the timetable's.
 - `GET /api/me/nearby` lists departures at up to three stops near you, plus the
-  nearest one's twin across the road when it isn't among them (so up to
+  nearest one's opposite stop when it isn't among them (so up to
   four), each with
   its service's colour (`color`, as on the buses and the map). Each row
   (as on `/stops/{code}`) has the next bus in `etaS` and the ones after it
@@ -506,7 +506,7 @@ the change), `waiting` (at the change stop, `phaseText` "Change buses",
 the second bus as the leave-by to catch), then `riding` again on the
 second, with no phase of its own, so an app that knows nothing of changes
 still shows each part right. The plan and the `boarded` record are the
-first bus with the second in `change` (`Boarded.change`); `rideStage()`
+first bus with the second in `change` (`Plan.change`); `rideStage()`
 says which part you're on, from the clock, and from the feed while it still
 has the first bus on its way to the change. Off the first bus, the second
 bus's time is read from the feed at the change stop, and that time decides
@@ -525,7 +525,7 @@ object at the change and once the second bus has gone.
 
 - **One plan, everywhere** ([src/plan.ts](../src/plan.ts)). The Worker saves the bus a trip is for in the
   day's record (`DayRecord.plans`): from the moment the trip is due, or
-  earlier when it was planned from the phone's location (`Boarded.located`).
+  earlier when it was planned from the phone's location (`Plan.located`).
   Every device then says that bus (the card, the notifications, Today in
   `/api/me/day`). A device without a location
   (the widget, the background refresh, the Mac, the web) shows the phone's
@@ -637,7 +637,7 @@ object at the change and once the second bus has gone.
     logged once per isolate, and `/api/health` says which push is usable
     (`config.pushAndroid`, `config.pushWeb`).
 
-The planner ([src/profile.ts](../src/profile.ts), `planFor`):
+The planner ([src/profile.ts](../src/profile.ts), `nextTripFor`):
 
 - A class stays the target until 15 minutes after it starts (you may still
   be on the bus), unless you've reached it. A skipped class is left out.
@@ -682,7 +682,7 @@ for an estimate or an old reading), the label's own words when there's no
 time.
 
 The card also has its headline and the line above it worded: `title`, the
-departure as a clock time ("D2 · 09:42", "~09:42" for a timetable estimate),
+departure as a clock time ("D2 · 09:42", "~09:42" for an estimate),
 which stays true until the bus leaves, or the label when there's no time
 (`titleOf`); `heading`, from `dest.why` ("Next class · X", "Long gap ·
 Home", "Heading home", "Going to X"), null with no destination; and
@@ -866,7 +866,7 @@ with the domain if the project changes hands.
 ### The web app
 
 `/app/` is terminus as an installable web app, meant for iPhones: the answer
-card, chips for saved places and Nearby, and Today; the campus map; and
+card, chips for favourites and Nearby, and Today; the campus map; and
 Settings. It uses the same routes as the account page, with the session cookie.
 
 - **How the pages are built.** Preact components with htm templates
@@ -925,7 +925,7 @@ Settings. It uses the same routes as the account page, with the session cookie.
   with `venue` and `stop`: kept as feedback with the reason `better-stop`
   and the suggestion as its `context`, and emailed with the entry for
   `data/src/venue-stops.json`, ready to check and paste. A building the
-  table doesn't know, or the stop (or its twin) it has already, is refused. Feedback and wrong-answer reports both need a note and
+  table doesn't know, or the stop (or its opposite stop) it has already, is refused. Feedback and wrong-answer reports both need a note and
   an account with an email, so the operator's inbox only gets reports that
   say something, from someone who can be answered; an anonymous account is
   asked to sign in instead. (`reply_to` on old feedback rows is from when an
@@ -1065,7 +1065,7 @@ Android, × in the web app and on the Mac), then show Undo for a few seconds
 which sends `reset`. It's the same whatever the entry is: a timetabled class,
 one entered by hand, a usual time or a one-off trip is skipped for today only
 (deleting a weekly one is in Settings), and a trip home skipped means staying:
-`planFor` plans no trip home after the last class, and in a long gap plans the
+`nextTripFor` plans no trip home after the last class, and in a long gap plans the
 next class from where you are. Skipped entries aren't listed; a skipped trip
 home isn't an outcome.
 
@@ -1073,7 +1073,7 @@ home isn't an outcome.
 the imported and hand-entered classes, plus two kinds that are planned the
 same way (leave-by, push, "Not going"):
 
-- `profile.usual`: a saved place at a usual time, `{place, day, atMin}`,
+- `profile.usual`: a favourite at a usual time, `{place, day, atMin}`,
   kept apart from `places` so an older app rewriting the places can't drop it.
   The apps no longer add them (a place you go every week is added to the
   timetable by hand); ones already saved are listed in Timetable, where they
@@ -1118,7 +1118,7 @@ short walk away, the answer is a trip on two shuttles
 calls at, getting off there or crossing to the stop across the road. One
 change at most, never onto the same service or onto a public bus. Which
 change stops to ask about is settled from the route data alone, before any
-fetch: each route is ranked by a timetable guess of the whole trip (half a
+fetch: each route is ranked by an estimate of the whole trip (half a
 headway's wait for each bus, plus `TRANSFER.changeBufferS` to get off and
 cross), and at most `TRANSFER.maxFetch` stops are fetched for them beyond
 those the answer fetches anyway, all in the one round, through the same
@@ -1213,7 +1213,7 @@ and residence it's the straight line with the stop's detour, as before.
 **A room can have more than one stop.** A building between two stops is
 served by both (`stops` in `venues.json`, from `scripts/walk_routes.py`): its
 own stop, and one more when the walk to it is at most `VENUE_EXTRA_M` (100 m)
-longer than to the nearest, never a stop and its twin across the road (the
+longer than to the nearest, never a stop and its opposite stop (the
 resolver adds that itself). Where the map's nearest stop is the wrong one,
 `data/src/venue-stops.json` lists the stops students use instead, by hand:
 path length can't see a climb or a road with no crossing (LT21 is left from
@@ -1819,7 +1819,7 @@ is. So each bus is placed on its route line, the route's road shape from
 it is in the route:
 
 - Within 40 m of one of its stops, measured along the line (so never the
-  twin stop across the road), it's at that stop (`at`), drawn at the stop's
+  opposite stop), it's at that stop (`at`), drawn at the stop's
   dot. Stops are at least 136 m apart along every route, so a bus is never
   within 40 m of two. Several at one stop get a `slot` each, 0 for the one
   furthest on.
@@ -1866,7 +1866,7 @@ A track lasts ten minutes from the last time the feed reported the bus,
 moved or not: a bus standing still at a terminus for longer keeps its side.
 A bus with no track (just appeared, or nobody watched the service for ten
 minutes) is placed by its heading when moving; standing, by the stop it's
-at, if it's clearly nearer one stop than its twin across the road; otherwise
+at, if it's clearly nearer one stop than its opposite stop; otherwise
 on the nearer side. A track that started wrong gives way when the bus is
 seen moving the other way twice in a row; one odd heading doesn't move it.
 A tracked bus that strays more than 50 m off its line for under 30 s (a GPS

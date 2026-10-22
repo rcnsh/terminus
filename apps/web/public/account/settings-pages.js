@@ -329,7 +329,7 @@ export function Trips() {
             edit((x) => (x.preferBus = on));
           }} />
         <//>
-        <${Field} id="full-bus" label=${t('Allow for busy buses')} sub=${t('Aim one bus earlier when yours is often full.')}>
+        <${Field} id="full-bus" label=${t('Allow for packed buses')} sub=${t('Aim one bus earlier when yours is often packed.')}>
           <input id="full-bus" class="switch" type="checkbox" role="switch" checked=${p.fullBusMargin !== false} onChange=${(e) => {
             const on = e.currentTarget.checked;
             edit((x) => (x.fullBusMargin = on));

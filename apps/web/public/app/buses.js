@@ -439,8 +439,8 @@ function Dots({ index, count, nearestFirst, onDot }) {
 
 /**
  * A stop: what the page is (nearest, pinned), its name with a star to pin
- * it, This side | Across the road when it has a twin (both stops by
- * name when the twin is only nearby), and its board.
+ * it, This side | Across the road when it has an opposite stop (both stops by
+ * name when the opposite stop is only nearby), and its board.
  */
 function StopView({ code, kicker, dots, peek, above = null }) {
   const p = useStore(profile);
@@ -449,7 +449,7 @@ function StopView({ code, kicker, dots, peek, above = null }) {
   useStore(campus);
   const own = all.get(code)?.stop;
   const opposite = own?.opposite ?? stopOf(code)?.opposite ?? null;
-  // Its twin is across the road, or (PGP and its Foyer) just nearby: then both are named.
+  // Its opposite stop is across the road, or (PGP and its Foyer) just nearby: then both are named.
   // Always the page's own stop's words, whichever side is showing. Old answers without it were across.
   const twinAcross = own?.oppositeAcross !== false;
   const twinName = own?.oppositeName ?? stopName(opposite);

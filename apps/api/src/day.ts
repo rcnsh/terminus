@@ -9,7 +9,7 @@
 import type { Env, Leave, PlaceChip, Timing } from './types.ts';
 import type { MeDeps } from './me.ts';
 import { GAP_RETURN_MIN, HOME_BY_MIN, LATE_GRACE_MIN, type Profile, classKey, classesOn, endOf, restDetail, restSide } from './profile.ts';
-import type { ImportedTrip } from './nusmods.ts';
+import type { TimetableClass } from './nusmods.ts';
 import { sgt } from './config.ts';
 import { isoSeconds, named } from './format.ts';
 import { clockAt } from './clock.ts';
@@ -89,7 +89,7 @@ export async function dayPlan(
   const quiet = unlogged(deps);
 
   const items: DayItem[] = [];
-  let prev: ImportedTrip | null = null;
+  let prev: TimetableClass | null = null;
   const pending: Array<Promise<void>> = [];
   let nextTaken = false;
 
@@ -177,7 +177,7 @@ export async function dayPlan(
     }
     items.push(item);
     // A class whose bus was missed (and that nothing since says you reached)
-    // is not where you go on from (see planFor).
+    // is not where you go on from (see nextTripFor).
     if (!state.missed.has(key)) prev = c;
   }
   if (prev && homeStop && !state.skipped.has(`home:${endOf(prev)}`)) items.push(homeItem(`home:${endOf(prev)}`, prev, null));
@@ -198,7 +198,7 @@ export async function dayPlan(
     note: classes.length ? null : restDetail(profile, nowMs, h12),
   };
 
-  function homeItem(key: string, after: ImportedTrip, until: number | null): DayItem {
+  function homeItem(key: string, after: TimetableClass, until: number | null): DayItem {
     const leaveMin = endOf(after);
     const done = state.done.has(key) || t.minutes >= (until ?? leaveMin + HOME_BY_MIN);
     const now = !done && t.minutes >= leaveMin;

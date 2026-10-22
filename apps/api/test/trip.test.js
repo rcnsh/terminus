@@ -979,7 +979,7 @@ test('"Not on campus today" leaves a trip already answered alone', async () => {
   assert.equal((await tripRec(t, SECOND)).away, true);
 });
 
-test('a saved place with a usual time is a trip on that day, like a class', async () => {
+test('a favourite with a usual time is a trip on that day, like a class', async () => {
   const t = await setup({
     home: { stops: ['PGP'] },
     places: [{ key: 'gym', label: 'Gym', to: 'UHALL' }],
@@ -1035,7 +1035,7 @@ test('usual times and one-offs are checked like the rest of the profile', async 
   );
 });
 
-test('a one-off trip to a saved place, by its key', async () => {
+test('a one-off trip to a favourite, by its key', async () => {
   const t = await setup({ home: { stops: ['PGP'] }, places: [{ key: 'gym', label: 'Gym', to: 'UHALL' }] });
   const a = await (await t.call('/api/me/once', { method: 'POST', token: t.phone, body: { place: 'gym', atMin: 11 * 60 } })).json();
   assert.equal(a.dest.label, 'Gym');

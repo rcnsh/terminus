@@ -60,7 +60,7 @@ import { hour12, planned, resolveTo } from './next.ts';
 import { dayPlan } from './day.ts';
 import { unlogged } from './answer.ts';
 import {
-  type Boarded,
+  type Plan,
   type DayRecord,
   PLATE_WINDOW_S,
   SIGNALS,
@@ -101,7 +101,7 @@ import { cardFor, nextPhaseAt } from './card.ts';
 import { feedDownSince, termNoticeFor } from './monitor.ts';
 import { WALK, sgt } from './config.ts';
 import { landmark } from './landmarks.ts';
-import { GRAPH_PUBLIC, nearbyTwin, twinOf } from './graph.ts';
+import { GRAPH_PUBLIC, oppositeOrPartner, oppositeOf } from './graph.ts';
 import { residenceStops } from './residences.ts';
 import { MAX_KEYS, createKey, listKeys, revokeKey } from './access.ts';
 import { buildingStops, footM, paceSpeed } from './walk.ts';
@@ -1416,7 +1416,7 @@ async function nextWithTrip(
   userId: string,
   prefs: TripPrefs = NO_PREFS,
   /** Inside the Trip object itself: write plans there, and don't ask it to watch. */
-  local?: { savePlan: (key: string, plan: Boarded) => Promise<void> },
+  local?: { savePlan: (key: string, plan: Plan) => Promise<void> },
 ) {
   const { answer, trip } = await planned(url, env, ctx, nowMs, deps, profile, day, prefs);
   // What this request changes in the Trip object, sent in one request at the end.
@@ -1475,7 +1475,7 @@ export async function tripCardFor(
   userId: string,
   day: DayRecord | null,
   nowMs: number,
-  savePlanLocal: (key: string, plan: Boarded) => Promise<void>,
+  savePlanLocal: (key: string, plan: Plan) => Promise<void>,
 ): Promise<{
   key: string | null;
   phase: string;
@@ -1565,12 +1565,12 @@ async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: numbe
   const homeWalk = profile.home ? { stops: profile.home.stops, m: profile.homeWalkMin * 60 * paceSpeed(profile.walkPace) } : null;
   const inside = residenceStops(lat, lon, idx.byCode, homeWalk) ?? buildingStops(lat, lon, idx.byCode);
   const picked = inside?.slice(0, WALK.maxCandidates) ?? (near.length ? near : ranked.slice(0, 1));
-  // The nearest stop's twin (across the road, or PGP and PGP Foyer), always:
+  // The nearest stop's opposite or partner stop (PGP and PGP Foyer), always:
   // a location a few metres out puts you at the wrong one, and the widget
   // offers the other.
-  const twinCode = picked[0] ? nearbyTwin(picked[0].stop) : null;
-  const twin = twinCode ? ranked.find((c) => c.stop.code === twinCode) : undefined;
-  if (twin && !picked.some((c) => c.stop.code === twin.stop.code)) picked.push(twin);
+  const otherCode = picked[0] ? oppositeOrPartner(picked[0].stop) : null;
+  const other = otherCode ? ranked.find((c) => c.stop.code === otherCode) : undefined;
+  if (other && !picked.some((c) => c.stop.code === other.stop.code)) picked.push(other);
 
   const byStop = await deps.collectArrivals(
     env,
@@ -1588,7 +1588,7 @@ async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: numbe
     const via = stopVia(board);
     return {
       stop: { code: stop.code, name: stop.name, longName: displayName(stop, stop.code) },
-      ...twinOf(stop, idx.byCode),
+      ...oppositeOf(stop, idx.byCode),
       distM: Math.round(distM),
       walkS: Math.round(foot / paceSpeed(profile.walkPace)),
       available: sa.available !== false,
