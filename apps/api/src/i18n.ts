@@ -762,8 +762,8 @@ export const ERRORS_ZH: Record<string, string> = {
   'web push is not set up on this server': '这台服务器没有设置网页推送',
   'send subscription: an https endpoint with keys.p256dh and keys.auth': '请发送 subscription：带 keys.p256dh 和 keys.auth 的 https 端点',
   'send token (the FCM registration token) or subscription': '请发送 token（FCM 注册令牌）或 subscription',
-  'send token as apns:<hex device token> or apnsla:<hex Live Activity token>, with :sandbox from a development build':
-    '请以 apns:<十六进制设备令牌> 或 apnsla:<十六进制实时活动令牌> 发送 token，开发版本再加上 :sandbox',
+  'send token as apns:<hex device token>, apnsla:<hex Live Activity token> or apnsstart:<hex Live Activity start token>, with :sandbox from a development build':
+    '请以 apns:<十六进制设备令牌>、apnsla:<十六进制实时活动令牌> 或 apnsstart:<十六进制实时活动启动令牌> 发送 token，开发版本再加上 :sandbox',
   "send id (from card.suggestion) or trip and pref ('earlier' or 'quiet'), and choice: accept, dismiss or undo":
     "请发送 id（来自 card.suggestion）或 trip 和 pref（'earlier' 或 'quiet'），以及 choice：accept、dismiss 或 undo",
   "that's a lot of reports for one day; thanks, try again tomorrow": '今天的反馈已经很多了，谢谢！请明天再试',

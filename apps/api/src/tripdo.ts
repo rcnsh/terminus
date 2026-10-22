@@ -12,7 +12,8 @@
  * - **Push:** when the Worker has worked out a card, the object wakes at
  *   its next phase change (`nextPhaseAt`, not the card's `nextChangeAt`,
  *   which also counts going stale), works out the card again, and nudges
- *   the user's phones (push.ts) if the trip or its phase changed. It keeps
+ *   the user's phones (push.ts) if the trip or its phase changed, starting
+ *   an iPhone's Live Activity when it's due or missed. It keeps
  *   waking at each new one while there's a trip and a device that takes
  *   push, and stops otherwise.
  */
@@ -46,6 +47,12 @@ interface Pushed {
   gone?: boolean;
   /** What iPhones' Live Activities were last sent (apns.ts), as JSON. */
   live?: string;
+  /**
+   * The trip an iPhone's Live Activity was last started by push for, or
+   * seen running for. Started once per trip only: again, it would bring back
+   * one the user ended.
+   */
+  started?: string;
 }
 
 /** This object's last wake today, for the freshness log (analytics.ts logTripWake). */
@@ -285,7 +292,14 @@ export class Trip {
     }
 
     const live = liveActivityState(card.answer);
-    const now: Pushed = { key: card.key, phase: card.phase, ...(card.gone ? { gone: true } : {}), live: JSON.stringify(live) };
+    const started = audience.lives > 0 && card.key ? card.key : last?.started;
+    const now: Pushed = {
+      key: card.key,
+      phase: card.phase,
+      ...(card.gone ? { gone: true } : {}),
+      live: JSON.stringify(live),
+      ...(started ? { started } : {}),
+    };
     // Only what was actually pushed counts: one device having fetched a card
     // says nothing about the others. Nothing to say yet is never the first push.
     const changed = last
@@ -304,6 +318,8 @@ export class Trip {
       // Android, which may start it from the background only for a
       // high-priority message.
       const urgent = now.phase === 'due' || now.phase === 'missed';
+      // The same moments start an iPhone's Live Activity where none runs (push.ts).
+      const startLive = urgent && apnsEnabled(env) && card.key !== null && now.started !== card.key;
       const out = await nudgeUser(
         env,
         userId,
@@ -316,9 +332,11 @@ export class Trip {
           answerIn,
           tripOver: card.key === null,
           phaseChanged: last?.phase !== now.phase,
+          startLive,
         },
         nowMs,
       );
+      if (startLive && card.key) now.started = card.key;
       // Pushed once a device has it, or when none could be sent to (a quiet
       // card for a browser): not when every send failed, so a later wake tries again.
       // Saved at once, held like a POST and not after a /clear: an alarm the

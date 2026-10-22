@@ -2,10 +2,12 @@
  * APNs: push to the iPhone app, alongside FCM (Android) and Web Push
  * (push.ts sends all three).
  *
- * The app registers its device token as `apns:<hex>` and, while a trip's
- * Live Activity runs, that activity's token as `apnsla:<hex>`, each with
- * `:sandbox` from a development build (sent to Apple's sandbox host). A
- * session keeps its latest of each (sessions.push_token, sessions.live_token).
+ * The app registers its device token as `apns:<hex>`; while a trip's Live
+ * Activity runs, that activity's token as `apnsla:<hex>`; and, with its Live
+ * Activity setting on (iOS 17.2 and later), the token that starts one by push
+ * as `apnsstart:<hex>`. Each comes with `:sandbox` from a development build
+ * (sent to Apple's sandbox host). A session keeps its latest of each
+ * (sessions.push_token, sessions.live_token, sessions.start_token).
  *
  * Every request carries a provider token: a JWT signed with the team's .p8
  * key (ES256, WebCrypto), which Apple wants reused rather than minted per
@@ -31,11 +33,18 @@ import { b64url, warnUnusable } from './webpush.ts';
 
 export const APNS_PREFIX = 'apns:';
 export const LIVE_PREFIX = 'apnsla:';
+export const START_PREFIX = 'apnsstart:';
+
+/** What a token pushes to: the phone, its running Live Activity, or a Live Activity it starts. */
+export type ApnsTokenKind = 'device' | 'live' | 'start';
+
+const KIND_OF: Record<string, ApnsTokenKind> = { apns: 'device', apnsla: 'live', apnsstart: 'start' };
+const PREFIX_OF: Record<ApnsTokenKind, string> = { device: 'apns', live: 'apnsla', start: 'apnsstart' };
 
 /** A device's (or a Live Activity's) token, as registered. */
 export interface ApnsToken {
-  /** A Live Activity's push token (`apnsla:`), not the device's. */
-  live: boolean;
+  /** `apns:` the device's, `apnsla:` a running Live Activity's, `apnsstart:` the one that starts a Live Activity. */
+  kind: ApnsTokenKind;
   /** The token, lower-case hex. */
   hex: string;
   /** From a development build: Apple's sandbox host. */
@@ -43,19 +52,19 @@ export interface ApnsToken {
 }
 
 /** 32 bytes today; Apple says not to rely on the length, and an activity's token is longer. */
-const TOKEN_RE = /^(apns|apnsla):((?:[0-9a-f]{2}){32,255})(:sandbox)?$/;
+const TOKEN_RE = /^(apns|apnsla|apnsstart):((?:[0-9a-f]{2}){32,255})(:sandbox)?$/;
 
 /** Whether the app meant this as an APNs token, well formed or not. */
-export const looksApns = (s: string) => /^apns(la)?:/i.test(s);
+export const looksApns = (s: string) => /^apns(la|start)?:/i.test(s);
 
-/** `apns:<hex>[:sandbox]` or `apnsla:<hex>[:sandbox]`, in either case; null when it isn't one. */
+/** `apns:`, `apnsla:` or `apnsstart:`, then `<hex>[:sandbox]`, in either case; null when it isn't one. */
 export function parseApnsToken(s: string): ApnsToken | null {
   const m = TOKEN_RE.exec(s.trim().toLowerCase());
-  return m ? { live: m[1] === 'apnsla', hex: m[2], sandbox: Boolean(m[3]) } : null;
+  return m ? { kind: KIND_OF[m[1]], hex: m[2], sandbox: Boolean(m[3]) } : null;
 }
 
 /** The token as stored: lower case, so the same token from two sessions is one. */
-export const formatApnsToken = (t: ApnsToken) => `${t.live ? 'apnsla' : 'apns'}:${t.hex}${t.sandbox ? ':sandbox' : ''}`;
+export const formatApnsToken = (t: ApnsToken) => `${PREFIX_OF[t.kind]}:${t.hex}${t.sandbox ? ':sandbox' : ''}`;
 
 interface ApnsConfig {
   key: string;
@@ -278,6 +287,43 @@ export function livePush(state: LiveActivityState, event: 'update' | 'end', nowS
   };
 }
 
+/**
+ * Starts the trip's Live Activity on an iPhone that has none running
+ * (ActivityKit push-to-start, iOS 17.2 and later), sent to its `apnsstart:`
+ * token: the moments Android starts its live notification from a push.
+ * `attributes-type` and `attributes` are the app's `TripAttributes`; the
+ * alert is what the phone shows as it starts (Apple requires one), with a
+ * sound only when the iPhone's leave alerts are on. `input-push-token` asks
+ * iOS 18 for the new activity's update token, which the app sends as
+ * `apnsla:` (iOS 17 sends it anyway).
+ */
+export function liveStartPush(
+  state: LiveActivityState,
+  trip: string,
+  alert: { title: string; body: string },
+  sound: boolean,
+  nowS: number,
+): ApnsPush {
+  return {
+    type: 'liveactivity',
+    payload: {
+      aps: {
+        timestamp: nowS,
+        event: 'start',
+        'content-state': state,
+        'attributes-type': 'TripAttributes',
+        attributes: { trip },
+        alert,
+        ...(sound ? { sound: 'default' } : {}),
+        'input-push-token': 1,
+        ...(state.staleAt !== null ? { 'stale-date': state.staleAt } : {}),
+      },
+    },
+    priority: 10,
+    expiresS: nowS + 10 * 60,
+  };
+}
+
 /** The request for one push to one token: Apple's sandbox host for a development build's. */
 export function apnsRequest(topic: string, token: ApnsToken, push: ApnsPush, jwt: string): { url: string; init: RequestInit } {
   const host = token.sandbox ? 'api.sandbox.push.apple.com' : 'api.push.apple.com';
@@ -338,6 +384,14 @@ export interface LiveActivityState {
   /** From then on the activity is out of date (sent as `stale-date` too). */
   staleAt: number | null;
 }
+
+/**
+ * The trip a Live Activity is about, as the app names it (TripAttributes.trip,
+ * TripReminders.tripKey): the card's first button's trip, else when the
+ * class starts. The app keeps an activity whose trip matches its card, and
+ * ends one that doesn't.
+ */
+export const liveActivityTrip = (a: MeAnswer & { card: Card }): string => a.card.actions[0]?.trip ?? a.timing?.classAt ?? 'trip';
 
 const epochS = (iso: string | null | undefined): number | null => {
   const t = iso ? Date.parse(iso) : NaN;

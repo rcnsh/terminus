@@ -663,20 +663,27 @@ object at the change and once the second bus has gone.
     other device's;
   - `apnsla:<hex>`: the trip Live Activity's push token
     (`Activity.pushTokenUpdates`), in `sessions.live_token` (migration 0015);
-  - either with `:sandbox` on the end from a development build (Xcode,
+  - `apnsstart:<hex>`: the token that starts a Live Activity by push
+    (`Activity.pushToStartTokenUpdates`, iOS 17.2 and later), sent only
+    while the app's Live Activity setting is on, in `sessions.start_token`
+    (migration 0016);
+  - any of them with `:sandbox` on the end from a development build (Xcode,
     `aps-environment` development), which goes to
     `api.sandbox.push.apple.com` instead of `api.push.apple.com`. A token
     from one host is refused by the other (`BadDeviceToken`), and dropped.
 
   Hex of 32 to 255 bytes; anything else starting `apns` is a 400. A session
   keeps its latest of each; the same token on another session moves there;
-  `DELETE /api/me/push` forgets both. Registering also notes the language
+  `DELETE /api/me/push` forgets them all. Registering also notes the language
   the iPhone's notifications are worded in (`sessions.push_lang`): the
   account's choice, else the request's. With the `apns:` token the app
   sends `alerts`, whether its leave alerts are on (`sessions.push_alerts`,
-  1 or 0; NULL from a build that doesn't say, which is pushed as before).
-  The data export lists all four for each device (`push`,
-  `liveActivityPush`, `pushLanguage`, `pushAlerts`).
+  1 or 0; NULL from a build that doesn't say, which is pushed as before),
+  and `live`, whether its Live Activity setting is on: `false` forgets its
+  `apnsstart:` token, so nothing starts one by push (left out, nothing
+  changes). The data export lists all five for each device (`push`,
+  `liveActivityPush`, `liveActivityStartPush`, `pushLanguage`,
+  `pushAlerts`).
 - **Secrets and vars.** `APNS_KEY` (the .p8 from the Apple developer
   account, PEM, an ES256 key), `APNS_KEY_ID` (its 10-character id) and
   `APNS_TEAM_ID`, as Worker secrets; `APNS_TOPIC`, the bundle id, is a var
@@ -769,6 +776,22 @@ object at the change and once the second bus has gone.
     is `update`, or `end` once there, with no trip left, or with no class
     left today (the last state sent, ended; `dismissal-date` ten minutes
     on); `stale-date` is the card's `staleAt`.
+  - its Live Activity started, when it has none running (no `live_token`)
+    and an `apnsstart:` token: at the moments Android's live notification
+    starts from a push, the Trip object's due and missed (`startLive`), a
+    `liveactivity` push to that token, priority 10, with `event: start`,
+    `attributes-type: TripAttributes`, `attributes: {trip}` (the trip the
+    app names its activity by: the card's first button's trip, else
+    `timing.classAt`; `liveActivityTrip`), the `content-state`, an `alert`
+    with the card's words (Apple wants one with a start; a sound only with
+    the iPhone's leave alerts on, whose own alert goes as before) and
+    `input-push-token: 1`. In the iPhone's language only: with no card
+    worded in it, no start. Once per trip: the Trip object keeps the trip
+    it last started one for, or saw one running for (`pushed.started`), so
+    an activity the user ended isn't brought back for the same trip. The
+    started activity's own token then comes as `apnsla:`, and updates go
+    as above. "Turn off" on the activity turns the setting off on the
+    phone, which then registers with `live: false`.
   - With APNs off, an iPhone isn't counted as a device that takes push
     (`pushAudience`), so a Trip object with nothing else to tell stops
     waking; with APNs on, the read that counts devices also gives the
