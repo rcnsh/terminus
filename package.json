@@ -9,6 +9,7 @@
     "check": "pnpm --filter @terminus/api check",
     "deploy": "pnpm --filter @terminus/api run deploy",
     "format": "oxfmt",
+    "loc": "node scripts/loc.mjs",
     "format:check": "oxfmt --check",
     "format:swift": "scripts/format-swift.sh",
     "format:swift:check": "scripts/format-swift.sh --check",
