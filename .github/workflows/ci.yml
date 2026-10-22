@@ -101,7 +101,42 @@ jobs:
       - run: ./gradlew :app:assemble${{ matrix.flavour }}Release --console=plain
         working-directory: apps/android
 
+  # Gradle's build cache spares the android jobs a rebuild when nothing they
+  # read changed. Swift has no such cache, so the mac and ios jobs do it a
+  # level up: each is keyed on a hash of every file it builds, tests or
+  # checks, and skipped when a run with that key has passed. This job runs on
+  # Linux, so a skipped job never starts a macOS runner.
+  swift-changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      mac-key: ${{ steps.keys.outputs.mac }}
+      mac-passed: ${{ steps.mac.outputs.cache-hit }}
+      ios-key: ${{ steps.keys.outputs.ios }}
+      ios-passed: ${{ steps.ios.outputs.cache-hit }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The mac job's format check covers every Swift file, the iPhone's too.
+      - id: keys
+        run: |
+          echo "mac=mac-passed-${{ hashFiles('apps/macos/**', '**/*.swift', '.swift-format', 'scripts/format-swift.sh', 'apps/api/test/fixtures/**', '.github/workflows/ci.yml') }}" >> "$GITHUB_OUTPUT"
+          echo "ios=ios-passed-${{ hashFiles('apps/ios/**', 'apps/api/test/fixtures/**', '.github/workflows/ci.yml') }}" >> "$GITHUB_OUTPUT"
+      - id: mac
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .ci-passed
+          key: ${{ steps.keys.outputs.mac }}
+          lookup-only: true
+      - id: ios
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .ci-passed
+          key: ${{ steps.keys.outputs.ios }}
+          lookup-only: true
+
   mac:
+    needs: swift-changes
+    if: needs.swift-changes.outputs.mac-passed != 'true'
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
@@ -129,8 +164,16 @@ jobs:
       # flags: the debug build can pass where it fails.
       - run: swift build -c release --arch arm64 --force-resolved-versions
         working-directory: apps/macos
+      # Every step above passed: this job's inputs need no second run.
+      - run: touch .ci-passed
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .ci-passed
+          key: ${{ needs.swift-changes.outputs.mac-key }}
 
   ios:
+    needs: swift-changes
+    if: needs.swift-changes.outputs.ios-passed != 'true'
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
@@ -155,6 +198,12 @@ jobs:
       # The optimised build a release would make, for a device, unsigned.
       - run: xcodebuild build -project terminus.xcodeproj -scheme Terminus -configuration Release -destination generic/platform=iOS CODE_SIGNING_ALLOWED=NO -quiet
         working-directory: apps/ios
+      # Every step above passed: this job's inputs need no second run.
+      - run: touch .ci-passed
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .ci-passed
+          key: ${{ needs.swift-changes.outputs.ios-key }}
       # What Xcode leaves running (the simulator, ibtoold), stopped here: left
       # to the runner's own clean-up, the job can sit unfinished for 40 minutes
       # after its last step.
