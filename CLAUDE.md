@@ -184,6 +184,10 @@ node apps/api/scripts/dev-stub.mjs    # local Worker on :8787 with a fake feed a
 - the timelapse recorder on the fake buses. `POST /__stub/timelapse?minutes=N`
   records N minutes at once, moving the clock ahead. Then open
   `/admin/timelapse/` (token `dev`).
+- made-up numbers for the dashboard (`/admin/`, token `dev`): accounts,
+  answers, crash reports, reports and arrival-time scores
+  (`scripts/stub-admin.mjs`). `STUB_ADMIN=empty` shows it as a new install
+  would.
 - every service running at any hour, unless `STUB_HOURS=real` (real hours,
   and no buses or times outside them). `STUB_NOW=2026-10-07T13:30:00Z`
   starts the clock there (a Wednesday 21:30 in Singapore: R1 and R2 have

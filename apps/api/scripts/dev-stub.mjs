@@ -24,6 +24,10 @@
  *   - a fake NUSMods (every module has a lab, an online tutorial and an
  *     off-campus lecture; XX9999 is not offered; DOWN1000 fails)
  *
+ * The dashboard (/admin/, token "dev") shows made-up accounts, answers,
+ * crash reports and arrival-time scores (stub-admin.mjs); STUB_ADMIN=empty
+ * shows it as a new install would.
+ *
  * POST /__stub/freeze and /__stub/thaw stop and restart the clock, for
  * light and dark screenshots of the same moment. POST /__stub/skip?min=N
  * moves it ahead, to walk through a trip.
@@ -56,6 +60,7 @@ import { ensureRecorder, inWindow, nextOpen } from '../src/timelapse.ts';
 import { SESSION_COOKIE as DEV_COOKIE } from '../src/accounts.ts';
 import { API_VERSION } from '../src/openapi.ts';
 import { makeD1, makeEmail } from '../test/_d1.mjs';
+import { fakeAeRows, seedAdmin } from './stub-admin.mjs';
 
 const PORT = Number(process.env.PORT ?? 8787);
 // Anything the stub doesn't fake (Firebase, for push) goes out for real.
@@ -72,6 +77,8 @@ const stubNow = () => (frozenAt ?? realNow()) + skipMs;
 // STUB_HOURS=real: services keep their real hours, and the fake feed has
 // nothing for one outside them. Set once the Worker's graph is loaded.
 const REAL_HOURS = process.env.STUB_HOURS === 'real';
+// The dashboard's made-up numbers (stub-admin.mjs); STUB_ADMIN=empty for none.
+const DEMO_ADMIN = process.env.STUB_ADMIN !== 'empty';
 let running = (_svc) => true;
 
 const graph = (await import('../data/stops.json', { with: { type: 'json' } })).default;
@@ -169,6 +176,8 @@ async function feed(input, init = {}) {
       });
     return Response.json(shuttlePayload(shuttles));
   }
+  // Analytics Engine's SQL API, for the dashboard: made-up rows for its queries, none for any other.
+  if (url.includes('/analytics_engine/sql')) return Response.json({ data: fakeAeRows(String(init.body ?? ''), stubNow()) ?? [] });
   // Fake NUSMods: any module has a Monday lab, a Tuesday online tutorial and
   // a Wednesday off-campus lecture; XX9999 is not offered, DOWN1000 answers
   // 502 as NUSMods being down.
@@ -322,7 +331,9 @@ env = {
   TIMELAPSE_ENABLED: 'on',
   VAPID_PRIVATE_KEY: VAPID,
   ...(FCM ? { FCM_SERVICE_ACCOUNT: FCM } : {}),
+  ...(DEMO_ADMIN ? { ANALYTICS_TOKEN: 'dev', CF_ACCOUNT_ID: 'dev' } : {}),
 };
+if (DEMO_ADMIN) await seedAdmin({ db, kv: env.KV, downloads: DOWNLOADS, nowMs: stubNow() });
 console.log(FCM ? 'push: on (Firebase project from .private/)' : 'push: off (no .private/fcm-service-account.json)');
 setInterval(() => {
   const due = [...TRIPS.alarms.values()].filter((at) => at <= stubNow()).length;
