@@ -188,6 +188,8 @@ They're the Play set's five, with its words and its look: each capture from `cap
 4. `4-buses.png` "What's coming at your stop": the Buses tab at the nearest stop, every service's next two buses, live, with how full they are.
 5. `5-on-the-bus.png` "With you all the way": on the R2, with how far along the ride you are, the next stop and the arrival.
 
+The product page's header, `header.png` (3840×1646, under Header and Search Results on the version page; one for both languages, as it has no words): the same landscape from golden hour to night, larger, without phones or words, since the App Store crops it to each screen and sets the app's name beside it. `node apps/ios/store/frame.mjs header` draws it.
+
 How the captures are taken: `apps/ios/store/capture.sh` (on a Mac, with the iPhone 17 Pro Max simulator booted) starts a dev stub of its own on port 8791 and runs `StoreShotsUITests`, one test a scene, in both languages, setting the status bar's time for each. The stub's clock is held at 09:26 on a Thursday with GEA1000 at UTown at 10:00, and the phone a short walk north of PGP (1.2927, 103.7803), signed in as the stub's test account, light, with the sky's hour set (`TERMINUS_SKY`). On the bus is stepped through the R2's departure: at PGP until it leaves, then along its route past Opp HSSML and Opp NUSS, so the app takes it the user is on it.
 
 - **The widgets** draw their sky and "Now" from the phone's own clock, which a simulator can't move, so their scene runs at the real time with the class 34 minutes off: an evening's sky, coherent with its own times. It runs last, since it moves the stub's clock. The time it showed is kept in `captures/*/2-widget.time` for the redrawn status bar.
