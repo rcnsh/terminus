@@ -701,7 +701,7 @@ function AddClass() {
     if (!to) return refuse(where.current.input, t('Pick a stop, building or room from the list'));
     const a = toMin(start);
     const b = toMin(end);
-    // An end before the start was dropped without a word; say so instead.
+    // An end at or before the start is refused out loud, not left off the class.
     if (b != null && b <= a) return refuse(endBox.current, t('The end time must be after the start time'));
     edit((x) =>
       x.manual.push({ day: Number(day), arriveByMin: a, ...(b && b > a ? { endMin: b } : {}), to, label: label.trim(), venue: '' }),

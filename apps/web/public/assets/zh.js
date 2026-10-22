@@ -1,4 +1,4 @@
-// Simplified Chinese for the website (phase 10), keyed by the English it
+// Simplified Chinese for the website, keyed by the English it
 // replaces: text as it appears on the page, or a whole element's HTML where
 // a sentence has a link or a name inside it. i18n.js puts it in place.
 // Place and bus names stay English, as on the signs.

@@ -10,9 +10,9 @@ import { api, apiTagged, setClockPref, t } from './dom.js';
 export const profile = store(null);
 // Times everywhere follow the account's 12- or 24-hour choice.
 profile.subscribe((p) => p && setClockPref(p.clock));
-/** /campus: stops, routes, destinations (the search list) and residences. Null until loaded. */
+/** /api/campus: stops, routes, destinations (the search list) and residences. Null until loaded. */
 export const campus = store(null);
-/** The user's walking speed (m/s, from their pace), as /me/next last said, for walk times worked out here. */
+/** The user's walking speed (m/s, from their pace), as /api/me/next last said, for walk times worked out here. */
 export const walkSpeed = store(1.3);
 /** Bumped after each save: what depends on the profile (the account page's preview) redraws. */
 export const saves = store(0);
@@ -283,13 +283,13 @@ export function residenceFor(homeStops) {
   return residencesByName().find((r) => [...r.stops].sort().join() === key) ?? null;
 }
 
-/** A residence's walk to its stops, in minutes at a normal pace: /campus says (`walkMin`); worked out only from an older answer without it. */
+/** A residence's walk to its stops, in minutes at a normal pace (/api/campus `walkMin`); worked out here for an older server. */
 export const residenceWalkMin = (r) => r.walkMin ?? Math.max(1, Math.round(r.walkM / 1.3 / 60));
 
 /**
  * One of the account's limits (the profile's `limits`: pinnedStops, label,
  * homeWalkMin, …), so the page holds to what the server will take; `fallback`
- * until the profile has loaded, or from a server that doesn't send them.
+ * until the profile has loaded, and worked out here for an older server.
  */
 export const limit = (key, fallback) => profile.get()?.limits?.[key] ?? fallback;
 

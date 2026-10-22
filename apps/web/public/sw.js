@@ -336,7 +336,7 @@ async function keepShell(cache, path, res) {
 }
 
 // A push only says the card changed (the same nudge the Android app gets).
-// The notification is worded here from /me/next, the way the phone app words
+// The notification is worded here from /api/me/next, the way the phone app words
 // its own: the question at the departure, the ride or the next way there
 // while on the move, otherwise when to leave. One notification, replaced as
 // the trip goes on; it only buzzes when the push says it's worth it.
