@@ -180,7 +180,8 @@ feed said, with the plate) with the timelapse recording of the same day
 (where each plate was along its line every 30 s), and keeps the result in
 R2 as `eta/YYYY-MM-DD.json` (`src/eta.ts`): per prediction, the service,
 how far ahead it was, how much later than said the bus came, and the hour.
-It needs the recorder on, the downloads bucket and `ANALYTICS_TOKEN`; it
+It needs the recorder on, the downloads bucket, `ANALYTICS_TOKEN` and
+`CF_ACCOUNT_ID`; it
 calls nobody but Analytics Engine. A bus counts as arrived 25 m before its
 stop's mark on the line, interpolated between readings; the answer is good
 to about 15 s. With `ETA_MODEL=shadow`, the arrival-time model's answers to

@@ -34,7 +34,8 @@ pnpm check && (cd apps/api && pnpm exec cf deploy --dry-run)
 pnpm lint && pnpm format:check
 for f in $(find apps/web/public -name '*.js'); do node --check "$f" || exit 1; done
 (cd apps/android && ./gradlew :app:ktfmtCheck :app:lintStableDebug :app:testStableDebugUnitTest :app:compileBetaDebugKotlin)
-(cd apps/macos && swift build && swift test) && scripts/format-swift.sh --check
+(cd apps/android && ./gradlew :app:assembleStableRelease :app:assembleBetaRelease)
+scripts/format-swift.sh --check && (cd apps/macos && swift build && swift test && swift build -c release --arch arm64)
 ```
 
 Formatting is mechanical: Oxfmt (`.oxfmtrc.json`), swift-format
