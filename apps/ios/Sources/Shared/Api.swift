@@ -528,15 +528,29 @@ struct Api: Sendable {
         // The chosen address, then the site's other one if it couldn't be
         // reached at all (Servers.order), inside the same deadline: widgets
         // and the notification service have no time for a second full wait.
-        let deadline = Date().addingTimeInterval(fast ? 8 : 15)
-        var sent = Date()
-        let (data, resp) = try await Servers.reach(method: method) { base in
-            sent = Date()
-            guard sent < deadline else { throw URLError(.timedOut) }
-            return try await Self.session.data(for: urlRequest(base, timeout: max(1, deadline.timeIntervalSince(sent))))
+        let started = Date()
+        let deadline = started.addingTimeInterval(fast ? 8 : 15)
+        var sent = started
+        func logged(_ status: Int?, _ error: Error?) {
+            // For the developer menu: an error status is an answer, not a failure.
+            RequestLog.record(
+                method, path, base: Api.base, status: status, tookMs: Int(Date().timeIntervalSince(started) * 1000), failure: error)
+        }
+        let data: Data
+        let resp: URLResponse
+        do {
+            (data, resp) = try await Servers.reach(method: method) { base in
+                sent = Date()
+                guard sent < deadline else { throw URLError(.timedOut) }
+                return try await Self.session.data(for: urlRequest(base, timeout: max(1, deadline.timeIntervalSince(sent))))
+            }
+        } catch {
+            logged(nil, error)
+            throw error
         }
         let http = resp as? HTTPURLResponse
         let status = http?.statusCode ?? 0
+        logged(http?.statusCode, nil)
         if let http {
             ServerClock.observe(http, sent: sent)
             seen?(http)

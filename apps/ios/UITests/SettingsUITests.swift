@@ -281,6 +281,17 @@ final class SettingsUITests: XCTestCase {
         app.swipeUp()
         XCTAssertTrue(app.staticTexts["DEVELOPER"].waitForExistence(timeout: 3))
         shot("settings-about-developer", app)
+        // Diagnostics, then the requests this app made to get here.
+        let copy = app.buttons["settings.diagnostics.copy"]
+        while !copy.isHittable { app.swipeUp() }
+        XCTAssertTrue(app.staticTexts["DIAGNOSTICS"].exists)
+        shot("settings-about-diagnostics", app)
+        copy.tap()
+        XCTAssertTrue(app.staticTexts["Diagnostics copied"].waitForExistence(timeout: 3))
+        app.swipeUp()
+        XCTAssertTrue(app.staticTexts["RECENT REQUESTS"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["GET /api/me/next"].firstMatch.exists)
+        shot("settings-about-requests", app)
     }
 
     /// Sign out asks first, then the welcome screen.

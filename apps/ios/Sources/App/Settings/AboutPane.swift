@@ -43,7 +43,11 @@ struct SettingsAboutPane: View {
                 model.path.append(.licences)
             }
         }
-        if developer { DeveloperGroup() }
+        if developer {
+            if Servers.choices.count > 1 { ServerGroup() }
+            DiagnosticsGroup(model: model)
+            RequestsGroup()
+        }
     }
 
     /// Each link's name, where it goes (the address kept for good, as the
@@ -73,9 +77,10 @@ struct SettingsAboutPane: View {
     }
 }
 
-/// Which server the app talks to, from the ones built in (Servers). Each
+/// Which server the app talks to, from the ones built in (Servers): only
+/// shown with more than one, so in a debug build with the dev stub. Each
 /// keeps its own sign-in, so the app starts again on the one chosen.
-private struct DeveloperGroup: View {
+private struct ServerGroup: View {
     @State private var chosen = Servers.current
     @Environment(AppModel.self) private var app
 
@@ -130,6 +135,136 @@ private struct DeveloperGroup: View {
             app.clearLocal()
         }
     }
+}
+
+/// The state the alerts, push and the widgets depend on, each in a row;
+/// then Copy diagnostics. Read again every few seconds while open.
+private struct DiagnosticsGroup: View {
+    let model: SettingsModel
+    @Environment(AppModel.self) private var app
+    @State private var facts: Diagnostics.Facts?
+
+    var body: some View {
+        SettingsGroup(
+            title: L("Diagnostics"),
+            hint: L(
+                "What the app is doing, for a bug report. It stays on this phone unless you copy it, and leaves out your account and where you are."
+            )
+        ) {
+            if let f = facts {
+                TimelineView(.periodic(from: .now, by: 1)) { tick in
+                    VStack(alignment: .leading, spacing: 0) {
+                        DiagnosticRow(label: L("Server"), value: URL(string: f.server)?.host ?? f.server)
+                        GroupDivider()
+                        DiagnosticRow(label: L("Phone's clock"), value: clock(f.skewS))
+                        GroupDivider()
+                        DiagnosticRow(
+                            label: L("Notifications"),
+                            value: f.notifications.map { $0 ? L("Allowed") : L("Not allowed") } ?? L("Not asked yet"),
+                            warn: f.notifications == false)
+                        GroupDivider()
+                        DiagnosticRow(
+                            label: L("Background App Refresh"), value: f.backgroundRefresh ? L("Allowed") : L("Not allowed"),
+                            warn: !f.backgroundRefresh)
+                        GroupDivider()
+                        DiagnosticRow(
+                            label: L("Push"), value: f.pushToken ? L("Working") : L("Not working"),
+                            sub: f.pushHeardAt.map { L("Last push %@", ago($0, now: tick.date)) } ?? L("No push yet"), warn: !f.pushToken)
+                        GroupDivider()
+                        DiagnosticRow(label: L("Last answer"), value: f.answerAt.map { ago($0, now: tick.date) } ?? L("Never"))
+                        GroupDivider()
+                        DiagnosticRow(
+                            label: L("Next background refresh"),
+                            value: f.nextRefresh.map { $0.formatted(date: .omitted, time: .standard) } ?? L("None"))
+                    }
+                }
+                GroupDivider()
+            }
+            Button(action: copy) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L("Copy diagnostics")).foregroundStyle(Color.brand)
+                    SettingsHint(L("With the recent requests, as text to paste into a bug report"))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .frame(minHeight: 52)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(SettingsRowPressStyle())
+            .accessibilityIdentifier("settings.diagnostics.copy")
+        }
+        .task {
+            facts = Diagnostics.facts(app, notifications: nil, nextRefresh: nil, nextReminder: nil)
+            while !Task.isCancelled {
+                facts = await Diagnostics.facts(app)
+                try? await Task.sleep(for: .seconds(5))
+            }
+        }
+    }
+
+    private func clock(_ skew: TimeInterval) -> String {
+        let n = Int(skew.rounded(.towardZero))
+        if n == 0 { return L("Right") }
+        return n > 0 ? L("%@ s behind", String(n)) : L("%@ s ahead", String(-n))
+    }
+
+    private func copy() {
+        Task {
+            let f = await Diagnostics.facts(app)
+            facts = f
+            UIPasteboard.general.string = Diagnostics.report(f, requests: RequestLog.entries, now: Date())
+            model.say(L("Diagnostics copied"))
+        }
+    }
+}
+
+/// The last requests to our server, newest first: what was asked, and how it went.
+private struct RequestsGroup: View {
+    var body: some View {
+        SettingsGroup(
+            title: L("Recent requests"),
+            hint: L("The last 50 this app made to terminus since it started, newest first. Only the path is kept, never where you are.")
+        ) {
+            TimelineView(.periodic(from: .now, by: 1)) { _ in
+                let entries = RequestLog.entries
+                VStack(alignment: .leading, spacing: 0) {
+                    if entries.isEmpty { DiagnosticRow(label: L("None since the app started."), value: "") }
+                    ForEach(Array(entries.enumerated()), id: \.offset) { i, r in
+                        if i > 0 { GroupDivider() }
+                        DiagnosticRow(
+                            label: "\(r.method) \(r.path)",
+                            value: r.status.map(String.init) ?? ([L("No answer")] + [r.failure].compactMap { $0 }).joined(separator: " · "),
+                            sub: "\(r.at.formatted(date: .omitted, time: .standard)) · \(r.tookMs) ms · \(r.host)",
+                            warn: r.status.map { $0 >= 400 } ?? true)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// A name (and a line under it), and its value on the right in grey; `warn` in red.
+private struct DiagnosticRow: View {
+    let label: String
+    let value: String
+    var sub: String?
+    var warn = false
+
+    var body: some View {
+        SettingRow(label: label, sub: sub) {
+            Text(verbatim: value).font(.subheadline.monospacedDigit()).foregroundStyle(warn ? Color.bad : Color.muted)
+        }
+    }
+}
+
+/// "3 min ago", in the app's language.
+private func ago(_ at: Date, now: Date) -> String {
+    let s = max(0, Int(now.timeIntervalSince(at)))
+    if s < 60 { return L("%@ s ago", String(s)) }
+    if s < 3600 { return L("%@ min ago", String(s / 60)) }
+    if s < 48 * 3600 { return L("%@ h ago", String(s / 3600)) }
+    return L("%@ d ago", String(s / 86_400))
 }
 
 /// Settings › About › Licences: what terminus is built with, and the notices
