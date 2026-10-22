@@ -630,8 +630,8 @@ object at the change and once the second bus has gone.
     throws (D1, the feed) is tried again after 30 s, doubling up to 8 min.
     The wake owed is kept as `waking` until the wake is done, so an alarm
     the platform runs again still wakes.
-  - The wake's last writes hold the object like a POST: a `/watch` for
-    sooner, or a `/clear`, that came in meanwhile stands.
+  - The wake's last writes hold the object like a POST: an `/update` asking
+    for a sooner wake, or a `/clear`, that came in meanwhile stands.
   - At the Worker's compatibility date `deleteAll()` leaves the alarm, so
     `/clear` and midnight delete it first.
   - Each call to Firebase has a 5 s limit, and each device is sent to on
