@@ -7,10 +7,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { FROZEN_NOW, installGlobals, makeCtx, makeDurableObjects, makeEnv, makeFetch } from './_stubs.mjs';
-import { FeedGate, GateBusy, throughGate } from '../src/feedgate.ts';
-import { getArrivals, getBuses } from '../src/fms.ts';
-import { getPublicArrivals } from '../src/lta.ts';
-import { GRAPH_PUBLIC } from '../src/graph.ts';
+import { FeedGate, GateBusy, throughGate } from '../src/feeds/feedgate.ts';
+import { getArrivals, getBuses } from '../src/feeds/fms.ts';
+import { getPublicArrivals } from '../src/feeds/lta.ts';
+import { GRAPH_PUBLIC } from '../src/answer/graph.ts';
 import { TTL } from '../src/config.ts';
 
 const D2_IN_4 = [{ name: 'D2', arrivalTime: '4', nextArrivalTime: '14', passengers: 'low', arrivalTime_veh_plate: 'PA1234A' }];
@@ -127,7 +127,7 @@ test('a claim that reaches the gate after its caller gave up on it holds nothing
   // The caller waits GATE_ASK_MS for the gate and then fetches by itself. A
   // claim landing after that would mark a call pending that nobody is making,
   // and every other data centre would wait on it for the rest of the window.
-  const { GATE_WAIT_MS } = await import('../src/feedgate.ts');
+  const { GATE_WAIT_MS } = await import('../src/feeds/feedgate.ts');
   const ns = makeDurableObjects(FeedGate);
   const claim = (body) =>
     ns

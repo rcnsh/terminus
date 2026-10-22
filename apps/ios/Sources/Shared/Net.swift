@@ -203,7 +203,7 @@ enum Outdated {
     }
 
     /// Whether the server refuses this request to an outdated app (KEYED in
-    /// apps/api/src/index.ts): an account's routes and the answers asked with
+    /// apps/api's index.ts): an account's routes and the answers asked with
     /// its token; not signing in or out, nor leaving.
     static func gated(_ method: String, _ path: String) -> Bool {
         let p = path.split(separator: "?", maxSplits: 1).first.map(String.init) ?? path

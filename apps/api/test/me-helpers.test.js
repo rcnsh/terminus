@@ -6,7 +6,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { salvageProfile } from '../src/me.ts';
+import { salvageProfile } from '../src/accounts/me.ts';
 
 const known = new Set(['PGP', 'COM3', 'UTOWN']);
 const ok = (c) => known.has(c);
@@ -67,7 +67,7 @@ test('hours that make no sense fall back to the defaults', () => {
 });
 
 test('a request body past the limit is refused while it is read', async () => {
-  const { readCapped } = await import('../src/me.ts');
+  const { readCapped } = await import('../src/accounts/me.ts');
   // Chunked: no content-length to refuse it up front.
   const big = new ReadableStream({
     start(c) {

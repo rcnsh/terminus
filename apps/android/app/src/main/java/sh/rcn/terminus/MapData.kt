@@ -29,7 +29,7 @@ import org.json.JSONObject
  * limits the whole screen itself.
  */
 object PanLimit {
-    /** The map file's extent (MAP_BOUNDS in apps/api/src/map.ts): west, south, east, north. */
+    /** The map file's extent (MAP_BOUNDS in apps/api's map.ts): west, south, east, north. */
     val EXTENT = doubleArrayOf(103.755, 1.28, 103.83, 1.332)
     private const val TILE = 512.0
 
@@ -143,7 +143,7 @@ class RoutePath(private val line: List<DoubleArray>, loop: Boolean = false) {
         /** Further than this in one answer (back from the background), a bus jumps. */
         const val SLIDE_MAX_M = 1_500.0
 
-        /** As apps/api/src/geo.ts. */
+        /** As apps/api's geo.ts. */
         fun haversine(aLat: Double, aLon: Double, bLat: Double, bLon: Double): Double {
             val r = PI / 180
             val s = sin((bLat - aLat) * r / 2).pow(2) + cos(aLat * r) * cos(bLat * r) * sin((bLon - aLon) * r / 2).pow(2)

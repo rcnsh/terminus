@@ -1,6 +1,6 @@
 import Foundation
 
-/// The profile as the server keeps it (apps/api/src/profile.ts), edited in
+/// The profile as the server keeps it (apps/api's profile.ts), edited in
 /// place and sent back whole with PUT /api/me/profile. Kept as JSON so fields
 /// this version doesn't know about survive a save, as on Android (Profile.kt).
 struct ProfileDoc: @unchecked Sendable {

@@ -1,5 +1,5 @@
 /**
- * Public buses in the stop graph and the answer (src/public.ts, and what
+ * Public buses in the stop graph and the answer (src/answer/public.ts, and what
  * resolve.ts, answer.ts, format.ts and leave.ts do with them).
  */
 import test from 'node:test';
@@ -8,13 +8,13 @@ import assert from 'node:assert/strict';
 import { installGlobals, makeCtx, makeEnv, makeFetch, FROZEN_NOW } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
-import { GRAPH, GRAPH_PUBLIC } from '../src/graph.ts';
-import { isPublic, publicCodeOf, rideMetres, shuttleCalls, svcName } from '../src/public.ts';
-import { boardAt, candidateStops, feedFor, inService, indexGraph, legRideS, reach, scoreOptions } from '../src/resolve.ts';
-import { collectArrivals, mergeFeeds } from '../src/answer.ts';
-import { planOfLeave } from '../src/plan.ts';
-import { leaveOf } from '../src/trip.ts';
-import { leaveBy } from '../src/leave.ts';
+import { GRAPH, GRAPH_PUBLIC } from '../src/answer/graph.ts';
+import { isPublic, publicCodeOf, rideMetres, shuttleCalls, svcName } from '../src/answer/public.ts';
+import { boardAt, candidateStops, feedFor, inService, indexGraph, legRideS, reach, scoreOptions } from '../src/answer/resolve.ts';
+import { collectArrivals, mergeFeeds } from '../src/answer/answer.ts';
+import { planOfLeave } from '../src/answer/plan.ts';
+import { leaveOf } from '../src/answer/trip.ts';
+import { leaveBy } from '../src/answer/leave.ts';
 import { DEFAULT_HEADWAY_S, PUBLIC, RIDE, WALK } from '../src/config.ts';
 import pub from '../data/public.json' with { type: 'json' };
 
@@ -150,7 +150,7 @@ test('a public bus is the headline only when it clearly beats the free bus; othe
 });
 
 test('the same public service from the other stop, the other way, is named by its stop, as a shuttle is', async () => {
-  const { buildAnswer } = await import('../src/format.ts');
+  const { buildAnswer } = await import('../src/answer/format.ts');
   // 151 both ways reaches the target: one direction from here, the other from across the road.
   const opt = (code, svc, boardS) => ({
     stop: { code, name: code === 'KR-MRT' ? 'Kent Ridge MRT' : 'Opp Kent Ridge MRT', lat: 0, lon: 0 },

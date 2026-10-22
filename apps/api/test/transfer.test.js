@@ -6,12 +6,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { GRAPH, GRAPH_PUBLIC } from '../src/graph.ts';
-import { candidateStops, indexGraph, pickAlt, scoreOptions, targetsFor, worseOf } from '../src/resolve.ts';
-import { planTransfers, transferRoutes } from '../src/transfer.ts';
-import { buildAnswer } from '../src/format.ts';
-import { leaveBy } from '../src/leave.ts';
-import { isPublic } from '../src/public.ts';
+import { GRAPH, GRAPH_PUBLIC } from '../src/answer/graph.ts';
+import { candidateStops, indexGraph, pickAlt, scoreOptions, targetsFor, worseOf } from '../src/answer/resolve.ts';
+import { planTransfers, transferRoutes } from '../src/answer/transfer.ts';
+import { buildAnswer } from '../src/answer/format.ts';
+import { leaveBy } from '../src/answer/leave.ts';
+import { isPublic } from '../src/answer/public.ts';
 import { withLang } from '../src/i18n.ts';
 import { TRANSFER, WALK } from '../src/config.ts';
 
@@ -342,8 +342,8 @@ test('late whatever you do: the first bus you can catch, then the first second b
 
 /* Following a trip that changes buses (trip.ts, plan.ts). */
 
-import { CHANGE_GRACE_MS, laterChange, leaveOf, rideStage, secondBusOf, secondLeavesMs, tripEnd } from '../src/trip.ts';
-import { planOfLeave, sameBus } from '../src/plan.ts';
+import { CHANGE_GRACE_MS, laterChange, leaveOf, rideStage, secondBusOf, secondLeavesMs, tripEnd } from '../src/answer/trip.ts';
+import { planOfLeave, sameBus } from '../src/answer/plan.ts';
 
 /** A leave-by for K at PGP to Kent Vale, then P to College Green. */
 const TWO_BUS_LEAVE = {

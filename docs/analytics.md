@@ -3,7 +3,7 @@
 `pnpm exec cf analytics_engine sql query --file query.sql`, or the GraphQL API.
 
 Dataset: `terminus` (the beta's is `terminus_beta`). Positional schema lives
-in `src/analytics.ts`. It is the query contract, so it is append-only.
+in `src/ops/analytics.ts`. It is the query contract, so it is append-only.
 
 An `answer` row is an answer someone asked for: `/api/next`, `/api/trip` or
 `/api/me/next`. The Trip object's wakes and `/api/me/day`'s leave-bys are not
@@ -99,7 +99,7 @@ A lot of `unknown` means upstream is flaky or auth is failing. A lot of
 
 ## What the timelapse recorder costs NUS
 
-The recorder (`src/timelapse.ts`) is the only code that polls the feed's
+The recorder (`src/map/timelapse.ts`) is the only code that polls the feed's
 live buses on a schedule (the 15-minute health check reads one stop's
 arrivals), so every poll writes a `timelapse` row: `blob2` says what it cost
 (`upstream` a real request to NUS that was answered, `error` one that
@@ -135,8 +135,8 @@ FROM terminus WHERE blob1 = 'signal' GROUP BY signal ORDER BY n DESC
 
 ## How fresh the pushed cards are
 
-Each wake of a Trip object (`src/tripdo.ts`) that works out a card writes a
-`tripwake` row (`logTripWake` in `src/analytics.ts`): `blob2` `pushed` or
+Each wake of a Trip object (`src/push/tripdo.ts`) that works out a card writes a
+`tripwake` row (`logTripWake` in `src/ops/analytics.ts`): `blob2` `pushed` or
 `same`, `blob3` the phase, `blob4` the answer's quality, `blob5` `first`
 (its first wake today) or `again`; `double1` seconds since its last wake,
 `double2` the age of the oldest arrivals reading it used (-1: none),
@@ -155,13 +155,13 @@ GROUP BY phase
 ## The operator's switches
 
 Five more kinds of statistics are collected only once switched on, on the
-dashboard (`POST /api/admin/collect`, KV `config:collect:<name>`, `src/collect.ts`).
+dashboard (`POST /api/admin/collect`, KV `config:collect:<name>`, `src/ops/collect.ts`).
 All start off, and KV failing to answer reads as off.
 
 ### Active accounts (`active`)
 
 Once a Singapore day, the first cron run after midnight counts the accounts
-whose sessions were used in the last 1, 7 and 30 days (`src/usage.ts`), in
+whose sessions were used in the last 1, 7 and 30 days (`src/ops/usage.ts`), in
 all, by app (`web`, `android`, `mac`, `ios`, `unknown`; `api` counts keys
 used) and by version (devices, from `x-terminus-client`). Only the totals
 are written: `blob2` scope, `blob3` name, `blob4` the day, `double1..3` the
@@ -178,19 +178,19 @@ GROUP BY day, app ORDER BY day
 No rows of its own: the cron joins a closed day's `arrival` rows (what the
 feed said, with the plate) with the timelapse recording of the same day
 (where each plate was along its line every 30 s), and keeps the result in
-R2 as `eta/YYYY-MM-DD.json` (`src/eta.ts`): per prediction, the service,
+R2 as `eta/YYYY-MM-DD.json` (`src/ops/eta.ts`): per prediction, the service,
 how far ahead it was, how much later than said the bus came, and the hour.
 It needs the recorder on, the downloads bucket, `ANALYTICS_TOKEN` and
 `CF_ACCOUNT_ID`; it
 calls nobody but Analytics Engine. A bus counts as arrived 25 m before its
 stop's mark on the line, interpolated between readings; the answer is good
 to about 15 s. With `ETA_MODEL=shadow`, the arrival-time model's answers to
-the same predictions are kept beside it (`eta/model/`, `src/etashadow.ts`;
+the same predictions are kept beside it (`eta/model/`, `src/ops/etashadow.ts`;
 [eta-model.md](eta-model.md)).
 
 ### Crash reports (`errors`)
 
-`POST /api/errors` (`src/apperrors.ts`), from the apps and the website, one
+`POST /api/errors` (`src/ops/apperrors.ts`), from the apps and the website, one
 row each: `blob2` platform, `blob3` version, `blob4` fingerprint, `blob5`
 type, `blob6` message, `blob7` stack, `blob8` OS or browser, `double2` 1
 for a crash that ended the app. While switched off, reports are answered
@@ -210,7 +210,7 @@ GROUP BY fingerprint, type, version ORDER BY n DESC
 ### Old address and paths (`legacy`)
 
 Each request that still uses something on its way out writes one row
-(`src/legacy.ts`): `blob2` what (`address`: the old address,
+(`src/ops/legacy.ts`): `blob2` what (`address`: the old address,
 terminus.rcn.sh or the beta's; `path`: the API's paths from before 3.0;
 `outdated`: an app below `config:minClient`, answered 426), `blob3` who
 sent it (the app and version from `x-terminus-client`, `browser`, or
@@ -228,7 +228,7 @@ GROUP BY what, client, route ORDER BY n DESC
 
 Once a Singapore day, with the active counts, the cron reads the profiles
 of the accounts used in the last 30 days and counts each setting's values
-(`src/settings.ts`): `blob2` the setting, `blob3` the value (`on`/`off`, a
+(`src/ops/settings.ts`): `blob2` the setting, `blob3` the value (`on`/`off`, a
 pace, a language, `some`/`none` for lists such as favourites), `blob4` the
 day, `double1` the accounts with it, `double2` the accounts counted. One
 more setting, `notifications`, counts devices instead: Android phones and

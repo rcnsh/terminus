@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { CORS, UpstreamUnreachable, clientKey, coordsFrom, json, timedFetch, withSecurityHeaders } from '../src/http.ts';
-import { landmark, targetStops } from '../src/landmarks.ts';
-import { termDay } from '../src/calendar.ts';
+import { landmark, targetStops } from '../src/answer/landmarks.ts';
+import { termDay } from '../src/timetable/calendar.ts';
 import { FROZEN_NOW } from './_stubs.mjs';
 
 const req = (ip) => new Request('https://x.test/', { headers: ip ? { 'cf-connecting-ip': ip } : {} });

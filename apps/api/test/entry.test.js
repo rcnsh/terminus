@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 
 import { installGlobals, makeCtx, makeEnv, makeFetch, makeKV } from './_stubs.mjs';
 import worker from '../src/index.ts';
-import { APKCOMBO_URL, PLAY_URL } from '../src/appversion.ts';
+import { APKCOMBO_URL, PLAY_URL } from '../src/feeds/appversion.ts';
 
 const BASE = 'https://bus.example.test';
 const BETA = 'https://beta.terminus.run';

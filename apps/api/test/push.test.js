@@ -9,10 +9,10 @@ import assert from 'node:assert/strict';
 import { FROZEN_NOW, installGlobals, makeAnalytics, makeCtx, makeDurableObjects, makeEnv, makeFetch } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
-import { Trip } from '../src/tripdo.ts';
-import { armTrips, remindTerm } from '../src/monitor.ts';
-import { DUE_MS, endOfDayMs, sgtDate } from '../src/trip.ts';
-import { remindUser } from '../src/push.ts';
+import { Trip } from '../src/push/tripdo.ts';
+import { armTrips, remindTerm } from '../src/ops/monitor.ts';
+import { DUE_MS, endOfDayMs, sgtDate } from '../src/answer/trip.ts';
+import { remindUser } from '../src/push/push.ts';
 
 const BASE = 'https://bus.example.test';
 const THU = 4;
@@ -868,7 +868,7 @@ test('a retried semester reminder reads the profile again: imported since, nothi
 });
 
 test('which apps fetch the reminder words themselves: Android from 2.5.0', async () => {
-  const { fetchesNotice } = await import('../src/push.ts');
+  const { fetchesNotice } = await import('../src/push/push.ts');
   for (const c of ['android/2.5.0', 'android/2.5.0-beta.1', 'android/2.10.0', 'android/3.0.0']) assert.equal(fetchesNotice(c), true, c);
   for (const c of ['android/2.4.2', 'android/2.4.10', 'android/1.9.9', 'mac/3.0.0', 'web', null, ''])
     assert.equal(fetchesNotice(c), false, String(c));

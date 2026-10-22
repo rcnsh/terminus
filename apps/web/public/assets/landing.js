@@ -1,7 +1,7 @@
 // The landing page: the page itself is plain HTML (it should read without
 // any script); this adds the live parts. The Worker writes in the version
 // next to the download buttons and Account for someone signed in
-// (src/landing.ts), so neither changes once the page is up; the version is
+// (src/site/landing.ts), so neither changes once the page is up; the version is
 // asked for here only when it couldn't. The sky's horizon and night are
 // sky-page.js's. The install steps' and the download menu's placement are
 // behaviours on the page's own markup, so they stay plain functions.

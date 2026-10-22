@@ -8,7 +8,7 @@ first bus to a stop the shuttle also serves. This takes LTA DataMall's static
 stops, routes and services, keeps the stops within reach of a shuttle stop,
 and trims each public service to the stops it calls at there. The Worker
 merges the result into the stop graph for accounts that turn public buses
-on (src/graph.ts).
+on (src/answer/graph.ts).
 
 Runs weekly in CI like scrape_stops.py; the result is bundled into the Worker.
 Reads LTA_ACCOUNT_KEY from the environment, falling back to .dev.vars. Never

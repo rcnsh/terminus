@@ -1,13 +1,13 @@
 /**
- * The places a bus passes (src/via.ts), on the real stop graph: what a
+ * The places a bus passes (src/answer/via.ts), on the real stop graph: what a
  * board row's `via` and a nearby stop's heading say.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { GRAPH } from '../src/graph.ts';
-import { indexGraph } from '../src/resolve.ts';
-import { VIA_MAX, VIA_PLACES, stopVia, viaFrom, viaText } from '../src/via.ts';
+import { GRAPH } from '../src/answer/graph.ts';
+import { indexGraph } from '../src/answer/resolve.ts';
+import { VIA_MAX, VIA_PLACES, stopVia, viaFrom, viaText } from '../src/answer/via.ts';
 import { withLang } from '../src/i18n.ts';
 
 const idx = indexGraph(GRAPH);

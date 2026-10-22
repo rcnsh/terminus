@@ -1,5 +1,5 @@
 /**
- * The timelapse recorder (src/timelapse.ts, src/timelapsedo.ts) and the
+ * The timelapse recorder (src/map/timelapse.ts, src/map/timelapsedo.ts) and the
  * replay that reads its days back (apps/web/public/admin/timelapse/replay.js).
  *
  * The recorder is the one poller of the NUS feed, so most of this
@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 
 import { FROZEN_NOW, installGlobals, makeAnalytics, makeBucket, makeDurableObjects, makeEnv, makeFetch, makeKV } from './_stubs.mjs';
 import worker from '../src/index.ts';
-import { TimelapseRecorder } from '../src/timelapsedo.ts';
+import { TimelapseRecorder } from '../src/map/timelapsedo.ts';
 import { MIN_POLL_MS, TIMELAPSE } from '../src/config.ts';
 import {
   buildDayFile,
@@ -26,14 +26,14 @@ import {
   timelapseEnabled,
   windowLength,
   windowOf,
-} from '../src/timelapse.ts';
-import { getBuses } from '../src/fms.ts';
-import { pointAlong } from '../src/buses.ts';
-import { shapeFor } from '../src/campus.ts';
-import { inService } from '../src/resolve.ts';
-import { GRAPH } from '../src/graph.ts';
-import { BUNDLED } from '../src/calendar.ts';
-import { CALENDAR_DATA_KEY, resetCalendar } from '../src/calendarsync.ts';
+} from '../src/map/timelapse.ts';
+import { getBuses } from '../src/feeds/fms.ts';
+import { pointAlong } from '../src/map/buses.ts';
+import { shapeFor } from '../src/map/campus.ts';
+import { inService } from '../src/answer/resolve.ts';
+import { GRAPH } from '../src/answer/graph.ts';
+import { BUNDLED } from '../src/timetable/calendar.ts';
+import { CALENDAR_DATA_KEY, resetCalendar } from '../src/timetable/calendarsync.ts';
 import {
   busesAt,
   countBySvc,

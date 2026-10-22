@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SHAPES } from '../src/campus.ts';
+import { SHAPES } from '../src/map/campus.ts';
 import {
   alongLine,
   busesOnLine,
@@ -12,9 +12,9 @@ import {
   pointAlong,
   sectionOf,
   trackedBuses,
-} from '../src/buses.ts';
-import { GRAPH } from '../src/graph.ts';
-import { indexGraph } from '../src/resolve.ts';
+} from '../src/map/buses.ts';
+import { GRAPH } from '../src/answer/graph.ts';
+import { indexGraph } from '../src/answer/resolve.ts';
 import { makeCache } from './_stubs.mjs';
 
 const M_LAT = 110_574;

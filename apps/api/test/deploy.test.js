@@ -144,11 +144,11 @@ test('the release and map scripts upload to the buckets each site serves downloa
 });
 
 test('the street map is cut to the bounds the map style declares', async () => {
-  const { MAP_BOUNDS } = await import('../src/map.ts');
+  const { MAP_BOUNDS } = await import('../src/map/map.ts');
   const tiles = readFileSync(new URL('../../../scripts/map-tiles.sh', import.meta.url), 'utf8');
   const bbox = tiles.match(/^BBOX=([\d.,]+)$/m);
   assert.ok(bbox, 'scripts/map-tiles.sh sets BBOX');
-  assert.deepEqual(bbox[1].split(',').map(Number), [...MAP_BOUNDS], 'BBOX in scripts/map-tiles.sh is MAP_BOUNDS in src/map.ts');
+  assert.deepEqual(bbox[1].split(',').map(Number), [...MAP_BOUNDS], 'BBOX in scripts/map-tiles.sh is MAP_BOUNDS in src/map/map.ts');
 });
 
 test('a release takes the scrape commit for the same data files and bot that scrape.yml commits with', () => {

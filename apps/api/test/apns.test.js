@@ -26,9 +26,9 @@ import {
   parseApnsToken,
   sendApns,
   signProviderJwt,
-} from '../src/apns.ts';
-import { nudgeUser, pushEnabled, remindUser, setPushToken, updateLive } from '../src/push.ts';
-import { fromB64url } from '../src/webpush.ts';
+} from '../src/push/apns.ts';
+import { nudgeUser, pushEnabled, remindUser, setPushToken, updateLive } from '../src/push/push.ts';
+import { fromB64url } from '../src/push/webpush.ts';
 
 const NOW = Date.parse('2026-08-27T01:00:00Z');
 const HEX = 'ab'.repeat(32);

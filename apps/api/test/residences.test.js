@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { GPS_MARGIN_M, atHome, residenceAt, residenceStops } from '../src/residences.ts';
-import { GRAPH } from '../src/graph.ts';
-import { indexGraph } from '../src/resolve.ts';
+import { GPS_MARGIN_M, atHome, residenceAt, residenceStops } from '../src/answer/residences.ts';
+import { GRAPH } from '../src/answer/graph.ts';
+import { indexGraph } from '../src/answer/resolve.ts';
 import residences from '../data/residences.json' with { type: 'json' };
 
 // The middle of PGP's main outline, and a point just past its edge.

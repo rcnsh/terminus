@@ -11,10 +11,10 @@ import assert from 'node:assert/strict';
 import { FROZEN_NOW, installGlobals, makeCtx, makeEnv, makeFetch, makeKV } from './_stubs.mjs';
 import worker from '../src/index.ts';
 import { MIN_POLL_MS, TIMELAPSE, TTL } from '../src/config.ts';
-import { fetchArrivals, getArrivals } from '../src/fms.ts';
-import { getPublicArrivals } from '../src/lta.ts';
-import { GRAPH_PUBLIC } from '../src/graph.ts';
-import { cachedFetch } from '../src/edgecache.ts';
+import { fetchArrivals, getArrivals } from '../src/feeds/fms.ts';
+import { getPublicArrivals } from '../src/feeds/lta.ts';
+import { GRAPH_PUBLIC } from '../src/answer/graph.ts';
+import { cachedFetch } from '../src/feeds/edgecache.ts';
 
 const BASE = 'https://bus.example.test';
 const D2_IN_4 = [{ name: 'D2', arrivalTime: '4', nextArrivalTime: '14', passengers: 'low', arrivalTime_veh_plate: 'PA1234A' }];

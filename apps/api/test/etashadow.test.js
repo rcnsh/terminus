@@ -7,10 +7,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { makeBucket, makeEnv } from './_stubs.mjs';
-import { SHAPES } from '../src/campus.ts';
-import { buildDayFile, dayKey, encodeBus, gzip, mapSnapshot, windowOf } from '../src/timelapse.ts';
-import { etaKey, passingsOf, recordEta } from '../src/eta.ts';
-import { etaModelOn, modelBefore, segmentsKey, shadowEta, shadowKey, shadowSummary } from '../src/etashadow.ts';
+import { SHAPES } from '../src/map/campus.ts';
+import { buildDayFile, dayKey, encodeBus, gzip, mapSnapshot, windowOf } from '../src/map/timelapse.ts';
+import { etaKey, passingsOf, recordEta } from '../src/ops/eta.ts';
+import { etaModelOn, modelBefore, segmentsKey, shadowEta, shadowKey, shadowSummary } from '../src/ops/etashadow.ts';
 
 const DAYS = ['2026-08-25', '2026-08-26'];
 

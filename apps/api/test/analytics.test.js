@@ -9,9 +9,9 @@ import assert from 'node:assert/strict';
 import { installGlobals, makeAnalytics, makeCtx, makeEnv, makeFetch, makeKV } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
-import { answerFor, unlogged } from '../src/answer.ts';
-import { tripCardFor } from '../src/me.ts';
-import { GRAPH } from '../src/graph.ts';
+import { answerFor, unlogged } from '../src/answer/answer.ts';
+import { tripCardFor } from '../src/accounts/me.ts';
+import { GRAPH } from '../src/answer/graph.ts';
 
 const BASE = 'https://bus.example.test';
 const THU = 4;

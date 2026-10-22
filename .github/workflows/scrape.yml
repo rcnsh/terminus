@@ -49,7 +49,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      # Same guest-token flow and bus proxy as the Worker (see apps/api/src/auth.ts).
+      # Same guest-token flow and bus proxy as the Worker (see apps/api/src/feeds/auth.ts).
       - name: Scrape
         env:
           NEXTBUS_AUTH_BASE: ${{ secrets.NEXTBUS_AUTH_BASE }}
@@ -80,7 +80,7 @@ jobs:
 
       # Semester dates (NUSMods) and public holidays (MOM). No credentials.
       # On failure the committed calendar stays: the Worker's cron also
-      # fetches it into KV weekly (src/calendarsync.ts), so it needn't hold
+      # fetches it into KV weekly (src/timetable/calendarsync.ts), so it needn't hold
       # up the stop graph.
       - name: Refresh calendar
         id: calendar

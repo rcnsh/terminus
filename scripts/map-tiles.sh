@@ -1,5 +1,5 @@
 #!/bin/sh
-# The street map's files, onto R2 under map/ (served by apps/api/src/map.ts):
+# The street map's files, onto R2 under map/ (served by apps/api/src/map/map.ts):
 #   campus.pmtiles   the campus cut from a Protomaps daily build of
 #                    OpenStreetMap, zoom 12 and up (about 3.3 MB)
 #   fonts/           Noto Sans label glyphs (Regular, Medium, Italic), with

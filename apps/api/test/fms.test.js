@@ -1,5 +1,5 @@
 /**
- * The bus proxy client (src/fms.ts) on its own: one re-mint on a rejection a
+ * The bus proxy client (src/feeds/fms.ts) on its own: one re-mint on a rejection a
  * fresh token could fix, none on one it can't, and a refusal that names the
  * endpoint it came from. worker.smoke.js covers the same through /api/arrivals.
  */
@@ -7,9 +7,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { installGlobals, makeCtx, makeEnv, makeFetch, makeKV, FROZEN_NOW } from './_stubs.mjs';
-import { breakerOpen, crowdFromLoad, fetchActiveBuses, fetchArrivals, getArrivals, getBuses, stampLagS } from '../src/fms.ts';
-import { UpstreamRejected, appVersion, deviceId, redactDetail } from '../src/auth.ts';
-import { flagged } from '../src/edgecache.ts';
+import { breakerOpen, crowdFromLoad, fetchActiveBuses, fetchArrivals, getArrivals, getBuses, stampLagS } from '../src/feeds/fms.ts';
+import { UpstreamRejected, appVersion, deviceId, redactDetail } from '../src/feeds/auth.ts';
+import { flagged } from '../src/feeds/edgecache.ts';
 
 test('fetchArrivals and fetchActiveBuses retry a rejection once with a fresh token', async () => {
   for (const [name, call] of [
