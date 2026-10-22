@@ -233,8 +233,8 @@ Point a debug client at the dev stub: `-PapiBase=http://localhost:8787` plus
 `adb reverse tcp:8787 tcp:8787` on Android, `TERMINUS_API_BASE=http://localhost:8787`
 on the Mac.
 
-Releases run on my Mac with `scripts/release.sh` (betas:
-`scripts/release-beta.sh <x.y.z-beta.n>`), once the Worker serving that
+Releases run on my Mac with `scripts/release/release.sh` (betas:
+`scripts/release/release-beta.sh <x.y.z-beta.n>`), once the Worker serving that
 version is deployed. It runs the tests; builds one Android APK per CPU type
 and the signed Mac DMG with its Sparkle appcast; uploads them to R2; then
 tags the commit and publishes the GitHub release. `--dry-run` builds into

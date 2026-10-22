@@ -2,14 +2,14 @@
 # Build, sign and package the Mac app as build/release/<version>/terminus-<version>.dmg:
 # a disk image holding terminus.app and an Applications shortcut to drag it onto.
 #
-#   SIGN_IDENTITY=<certificate SHA-1> SIGN_KEYCHAIN=<keychain> scripts/package-mac.sh
+#   SIGN_IDENTITY=<certificate SHA-1> SIGN_KEYCHAIN=<keychain> scripts/release/package-mac.sh
 #
-# With CHANNEL=beta (and BETA_VERSION, BETA_BUILD; scripts/release-beta.sh
+# With CHANNEL=beta (and BETA_VERSION, BETA_BUILD; scripts/release/release-beta.sh
 # sets them) it packages "terminus beta.app" as
 # build/release/beta/<version>/terminus-<version>.dmg instead. RELEASES
 # moves build/release elsewhere (a dry run's build/dry-run).
 #
-# scripts/release.sh and scripts/release-beta.sh run this with the terminus
+# scripts/release/release.sh and scripts/release/release-beta.sh run this with the terminus
 # self-signed certificate,
 # from the login keychain. That certificate is not trusted by macOS
 # and the app is not notarised, so Gatekeeper still asks on first open; what
@@ -17,7 +17,7 @@
 # keeps the app's location permission and login item across updates.
 # Without SIGN_IDENTITY it signs ad-hoc, for trying the packaging locally.
 set -eu
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 ROOT=$(pwd)
 
 CHANNEL=${CHANNEL:-stable}

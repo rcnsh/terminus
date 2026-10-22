@@ -4,7 +4,7 @@
 # No macOS build is published, so this builds one: Metal, on the main run
 # loop, arm64 and x86_64. It takes a while the first time (Bazel).
 #
-#   scripts/vendor-maplibre-mac.sh [checkout]
+#   scripts/vendor/vendor-maplibre-mac.sh [checkout]
 #
 # The checkout defaults to ~/dev/vendor/maplibre-native, cloned if missing.
 # Bazel gives an iOS-style flat framework; macOS wants the versioned layout
@@ -21,7 +21,7 @@
 # leave their mark), so the hash records what was committed; it doesn't
 # prove which source it came from. The tag and commit say that.
 set -eu
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 TAG=ios-v6.31.0
 COMMIT=01791ad02c1bfe3b22c42a97619b972aba962f82
 SRC=${1:-$HOME/dev/vendor/maplibre-native}

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """The Sparkle appcast for one Mac release: one item, the new version.
 
-    scripts/appcast.py <version> <build> <min-os> <ed-signature> <dmg> <site> <stable|beta>
+    scripts/release/appcast.py <version> <build> <min-os> <ed-signature> <dmg> <site> <stable|beta>
 
 Sparkle compares <build> (CFBundleVersion). The DMG is named by its path
 under <site>/download/, as /download/releases/<version>/ serves it. A
-release's item links to its tag's page on GitHub: scripts/release.sh pushes
+release's item links to its tag's page on GitHub: scripts/release/release.sh pushes
 the tag before it uploads this, so the link never leads nowhere.
 """
 import email.utils, os, sys

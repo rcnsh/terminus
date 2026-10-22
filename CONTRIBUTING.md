@@ -62,8 +62,8 @@ skip the one-off reformat in `git blame`:
   built-in runner; D1 is emulated with `node:sqlite`.
 - **Website** (`apps/web/public`): HTML pages and Preact components (htm
   templates, no build step) served by the Worker. Third-party code is in
-  `vendor/`, refreshed only with `scripts/vendor-preact.sh`,
-  `scripts/vendor-map.sh` and `scripts/vendor-mediabunny.sh`; lint skips it.
+  `vendor/`, refreshed only with `scripts/vendor/vendor-preact.sh`,
+  `scripts/vendor/vendor-map.sh` and `scripts/vendor/vendor-mediabunny.sh`; lint skips it.
 - **Android** (`apps/android`): Kotlin, Compose and Glance. Point a debug build
   at the dev server with `./gradlew installStableDebug -PapiBase=http://localhost:8787`
   and `adb reverse tcp:8787 tcp:8787`.
@@ -71,7 +71,7 @@ skip the one-off reformat in `git blame`:
   `TERMINUS_API_BASE=http://localhost:8787` points it at the dev server, and
   `TERMINUS_SNAPSHOT=<dir>` on a debug build renders every state to PNGs.
   MapLibre Native, for the map window, is refreshed only with
-  `scripts/vendor-maplibre-mac.sh`.
+  `scripts/vendor/vendor-maplibre-mac.sh`.
 
 ## Sending a change
 
@@ -107,5 +107,5 @@ Place and service names (KR MRT, COM3, D2) stay English in both.
 - Tests for API changes, checked to fail without the fix.
 - Screenshots for UI changes, light and dark where it differs.
 - Both languages for any new text.
-- No version bumps or releases; I cut those with `scripts/release.sh`.
+- No version bumps or releases; I cut those with `scripts/release/release.sh`.
 - Keep a PR to one change. Deploys happen after merge, by hand.

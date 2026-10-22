@@ -1,4 +1,4 @@
-# Checks and steps shared by scripts/release.sh and scripts/release-beta.sh,
+# Checks and steps shared by scripts/release/release.sh and scripts/release/release-beta.sh,
 # which source this file from the repo root. Each check stops the release
 # and says what to do; they read VERSION, BUILD, OUT, BUCKET, DRY, ROOT,
 # SIGN_IDENTITY and SPARKLE_KEY from the script that sources them. Both run
@@ -108,7 +108,7 @@ finish_steps() {
   [ $TAG_LOCAL -eq 1 ] || [ $TAG_REMOTE -eq 0 ] || echo "  git fetch origin tag v$VERSION"
   [ $TAG_REMOTE -eq 1 ] || echo "  git push origin v$VERSION"
   [ "${FEEDS_AFTER_TAG:-0}" != 1 ] || upload_steps feeds
-  echo "  ${1:+$1 }scripts/github-release.sh $VERSION"
+  echo "  ${1:+$1 }scripts/release/github-release.sh $VERSION"
 }
 
 # What the site serves now: LIVE_VERSION from latest.json, LIVE_BUILD from
@@ -212,7 +212,7 @@ pins = [p for p in json.load(open(sys.argv[1]))["pins"] if p["identity"] == "spa
 print(pins[0]["state"].get("version", "") if pins else "")' apps/macos/Package.resolved) ||
     die "couldn't read apps/macos/Package.resolved"
   [ "$pinned" = "$SPARKLE_VERSION" ] ||
-    die "Package.resolved pins Sparkle ${pinned:-(none)}, but scripts/release-lib.sh trusts sign_update from $SPARKLE_VERSION: check the new one and update SPARKLE_VERSION and SIGN_UPDATE_SHA256"
+    die "Package.resolved pins Sparkle ${pinned:-(none)}, but scripts/release/release-lib.sh trusts sign_update from $SPARKLE_VERSION: check the new one and update SPARKLE_VERSION and SIGN_UPDATE_SHA256"
   SIGN_UPDATE="$ROOT/apps/macos/.build/artifacts/sparkle/Sparkle/bin/sign_update"
   [ -f "$SIGN_UPDATE" ] && [ ! -L "$SIGN_UPDATE" ] || die "no sign_update at $SIGN_UPDATE: did swift package resolve fetch Sparkle?"
   sum=$(shasum -a 256 "$SIGN_UPDATE") || die "couldn't hash $SIGN_UPDATE"
@@ -239,7 +239,7 @@ sign_appcast() {  # <appcast.xml>
 # so a wrong key in ~/.terminus fails here, not on every Mac that updates.
 sparkle_signed() {  # <app> <signature> <dmg>
   pub=$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "$1/Contents/Info.plist") || die "no SUPublicEDKey in $1"
-  swift scripts/verify-sparkle.swift "$pub" "$2" "$3" ||
+  swift scripts/release/verify-sparkle.swift "$pub" "$2" "$3" ||
     die "the Sparkle signature doesn't match SUPublicEDKey: is $SPARKLE_KEY the right key?"
 }
 

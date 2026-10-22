@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """A check against the live site before a release goes up.
 
-    scripts/release-check.py api <site> <version>      # the Worker is new enough
+    scripts/release/release-check.py api <site> <version>      # the Worker is new enough
 
 api: the apps of a version expect its API. The Worker's version is the one
 in its OpenAPI spec (/api/openapi.json, API_VERSION); it must be at least

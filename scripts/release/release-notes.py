@@ -1,16 +1,16 @@
 """
-Release notes for scripts/github-release.sh, as GitHub-flavoured Markdown:
+Release notes for scripts/release/github-release.sh, as GitHub-flavoured Markdown:
 a beta callout for a pre-release, the hand-written highlights in
 RELEASE_NOTES.md (when its first line is `<!-- <version> -->`), every commit
 since the previous tag (folded away when there are highlights), the downloads
 and the checksums. RELEASE_NOTES.md holds only the latest release's
 highlights: write over it for the next one.
 
-    python3 scripts/release-notes.py <version> <tag> <previous tag> <apk> <dmg> [beta]
+    python3 scripts/release/release-notes.py <version> <tag> <previous tag> <apk> <dmg> [beta]
 
 With `beta`, the notes are for terminus beta (beta.terminus.run), which
 installs beside terminus.
-    python3 scripts/release-notes.py --title 2.0.0-beta   # -> 2.0 beta
+    python3 scripts/release/release-notes.py --title 2.0.0-beta   # -> 2.0 beta
 """
 
 import hashlib

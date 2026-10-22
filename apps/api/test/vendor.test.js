@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 
 // The third-party code the website serves (apps/web/public/vendor/), copied
-// from npm by scripts/vendor-*.sh, which check each tarball's integrity and
+// from npm by scripts/vendor/vendor-*.sh, which check each tarball's integrity and
 // write every file's SHA-256 to vendor/SHA256SUMS. A file added, removed or
 // changed without the scripts (by hand, by a bad merge, by a tool rewriting
 // it) fails here. The README is ours, written by hand, so it isn't listed.
@@ -57,7 +57,7 @@ test('every vendored file is the one its script wrote, as SHA256SUMS records', (
   assert.deepEqual(
     mismatches(files, sums, hashOnDisk),
     [],
-    'a vendored file differs from SHA256SUMS: re-run its scripts/vendor-*.sh rather than editing it (the scripts rewrite the list)',
+    'a vendored file differs from SHA256SUMS: re-run its scripts/vendor/vendor-*.sh rather than editing it (the scripts rewrite the list)',
   );
 });
 
@@ -97,8 +97,8 @@ test('every vendored library carries its licence', () => {
 
 test('each vendor script pins its versions with their npm integrity and records what it writes', () => {
   for (const name of ['vendor-preact.sh', 'vendor-map.sh', 'vendor-mediabunny.sh']) {
-    const src = fs.readFileSync(new URL(`../../../scripts/${name}`, import.meta.url), 'utf8');
-    assert.match(src, /^\. scripts\/vendor-lib\.sh$/m, name);
+    const src = fs.readFileSync(new URL(`../../../scripts/vendor/${name}`, import.meta.url), 'utf8');
+    assert.match(src, /^\. scripts\/vendor\/vendor-lib\.sh$/m, name);
     assert.match(src, /integrity \S+ "\$\w+" [0-9.]+ 'sha512-[A-Za-z0-9+/]{86}==' \w+_INTEGRITY\)/, `${name} pins an integrity`);
     assert.match(src, /^record /m, `${name} rewrites its SHA256SUMS entries`);
     assert.doesNotMatch(src, /\|\| true/, `${name} hides no failure`);

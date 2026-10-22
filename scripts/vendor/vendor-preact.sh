@@ -15,17 +15,17 @@
 # Preact is refused here.
 #
 # Each tarball is checked against the npm integrity pinned below before
-# it's unpacked (scripts/vendor-lib.sh), and the files written are recorded
+# it's unpacked (scripts/vendor/vendor-lib.sh), and the files written are recorded
 # in vendor/SHA256SUMS. Another version needs its integrity passed in:
 #
-#   scripts/vendor-preact.sh [preact-version] [htm-version]
-#   PREACT_INTEGRITY=sha512-… scripts/vendor-preact.sh 10.30.0
+#   scripts/vendor/vendor-preact.sh [preact-version] [htm-version]
+#   PREACT_INTEGRITY=sha512-… scripts/vendor/vendor-preact.sh 10.30.0
 #
 # (from `npm view preact@10.30.0 dist.integrity`; HTM_INTEGRITY for htm).
 # Then pin the new version and integrity here.
 set -eu
-cd "$(dirname "$0")/.."
-. scripts/vendor-lib.sh
+cd "$(dirname "$0")/../.."
+. scripts/vendor/vendor-lib.sh
 PREACT=${1:-10.29.8}
 HTM=${2:-3.1.1}
 version preact "$PREACT"

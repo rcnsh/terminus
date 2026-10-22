@@ -29,12 +29,12 @@ PNGs and quits, for checking layout without clicking around.
 | `Sources/Terminus/AppModel.swift` | State, refresh timing and pairing |
 | `Sources/Terminus/*View*.swift`, `Header`, `Tabs`, `Search`, `Footer` | The popover |
 | `Sources/Terminus/MapWindow.swift`, `MapData.swift`, `MapFiles.swift` | The map window: MapLibre, live buses, the street map kept on disk |
-| `Vendor/MapLibre.xcframework.zip` | MapLibre Native for macOS, built by [`scripts/vendor-maplibre-mac.sh`](../../scripts/vendor-maplibre-mac.sh) from a pinned tag and commit; its SHA-256 is in `MapLibre.xcframework.zip.sha256`, which CI checks |
+| `Vendor/MapLibre.xcframework.zip` | MapLibre Native for macOS, built by [`scripts/vendor/vendor-maplibre-mac.sh`](../../scripts/vendor/vendor-maplibre-mac.sh) from a pinned tag and commit; its SHA-256 is in `MapLibre.xcframework.zip.sha256`, which CI checks |
 | `Support/` | `Info.plist`, `Terminus.entitlements`, the app icons (stable and beta, drawn by `make-icon.swift`) and the Chinese strings (`zh-Hans.lproj`) |
 
 Releases are built, signed and packaged as a DMG on the owner's Mac by
-[`scripts/release.sh`](../../scripts/release.sh) (via
-[`scripts/package-mac.sh`](../../scripts/package-mac.sh)) with the terminus
+[`scripts/release/release.sh`](../../scripts/release/release.sh) (via
+[`scripts/release/package-mac.sh`](../../scripts/release/package-mac.sh)) with the terminus
 self-signed certificate, so every version has the same code identity and macOS
 keeps its location permission and login item across updates. It isn't
 notarised, which needs a paid Apple Developer account, so macOS asks once on

@@ -3,8 +3,8 @@
 # Mac DMG and its Sparkle appcast; the APKs and the DMG onto R2, then the tag,
 # the appcast and latest.json, and the GitHub release with every file.
 #
-#   scripts/release.sh --dry-run   # test, build and sign; upload nothing
-#   scripts/release.sh             # also upload, tag v<version> and publish
+#   scripts/release/release.sh --dry-run   # test, build and sign; upload nothing
+#   scripts/release/release.sh             # also upload, tag v<version> and publish
 #
 # Bump versionName/versionCode (Android), CFBundleShortVersionString/
 # CFBundleVersion (apps/macos/Support/Info.plist) and API_VERSION
@@ -13,7 +13,7 @@
 # up until the live site's API is this version. The build must be above the
 # live one, and CI must have passed on the commit.
 #
-# Signs with the keys on this Mac, as scripts/release-beta.sh does: the
+# Signs with the keys on this Mac, as scripts/release/release-beta.sh does: the
 # Android release key in ~/.gradle/gradle.properties (TERMINUS_*), the
 # terminus certificate in the login keychain (~/.terminus/mac-signing.p12)
 # and the Sparkle key in ~/.terminus/sparkle-ed25519.key. Without them an
@@ -27,7 +27,7 @@
 # build/release/<version>. If a release stops after its first upload, it
 # says what's live and the commands that finish it.
 set -euo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 ROOT=$(pwd)
 DRY=0
 # Anything but --dry-run stops here: a mistyped one (--dryrun) would
@@ -35,13 +35,13 @@ DRY=0
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY=1 ;;
-    *) echo "usage: scripts/release.sh [--dry-run] (\"$arg\" isn't an option; the version comes from build.gradle.kts)"; exit 1 ;;
+    *) echo "usage: scripts/release/release.sh [--dry-run] (\"$arg\" isn't an option; the version comes from build.gradle.kts)"; exit 1 ;;
   esac
 done
 # These pick the beta in package-mac.sh and github-release.sh; one left in
 # the shell from a beta would make this release a beta's.
 unset CHANNEL BETA_VERSION BETA_BUILD
-. scripts/release-lib.sh
+. scripts/release/release-lib.sh
 
 [ "$(uname -s)" = Darwin ] || die "releases run on a Mac: the Mac app is built and signed here"
 # Only defaultConfig's literal lines: the beta's `versionCode = it.toInt()` isn't one.
@@ -52,7 +52,7 @@ CODE_RE='^[[:space:]]*versionCode = ([0-9]+)[[:space:]]*$'
 [ "$(grep -Ec "$CODE_RE" "$GRADLE")" = 1 ] || die "expected one versionCode = <number> line in $GRADLE"
 VERSION=$(sed -nE "s/$NAME_RE/\\1/p" "$GRADLE")
 ANDROID_BUILD=$(sed -nE "s/$CODE_RE/\\1/p" "$GRADLE")
-case "$VERSION" in *-*) die "$VERSION is a beta: release it with scripts/release-beta.sh" ;; esac
+case "$VERSION" in *-*) die "$VERSION is a beta: release it with scripts/release/release-beta.sh" ;; esac
 # It names a directory that's deleted, R2 keys and the tag: digits only.
 VERSION_RE='^[0-9]+\.[0-9]+\.[0-9]+$'
 [[ $VERSION =~ $VERSION_RE ]] || die "versionName \"$VERSION\" in $GRADLE isn't a version like 2.1.0"
@@ -110,7 +110,7 @@ build_goes_up "bump versionCode and CFBundleVersion"
 
 # This version's apps expect its API, so the Worker is deployed first.
 live_check() {
-  python3 scripts/release-check.py "$@" && return 0
+  python3 scripts/release/release-check.py "$@" && return 0
   [ $DRY -eq 1 ] && { echo "   (a release would stop here)"; return 0; }
   exit 1
 }
@@ -164,7 +164,7 @@ cp apps/android/app/build/outputs/bundle/stableRelease/app-stable-release.aab "$
 echo "Play bundle: $OUT/terminus-$VERSION.aab"
 
 echo "== mac"
-RELEASES="$RELEASES" PUBLISH=true scripts/package-mac.sh
+RELEASES="$RELEASES" PUBLISH=true scripts/release/package-mac.sh
 DMG="$OUT/terminus-$VERSION.dmg"
 # Installed Macs only take an update whose DMG this key signed. The tool is
 # checked again just before it gets the key: the builds since ran code too.
@@ -174,7 +174,7 @@ SIG=$("$SIGN_UPDATE" --ed-key-file "$SPARKLE_KEY" -p "$DMG")
 sparkle_signed apps/macos/build/terminus.app "$SIG" "$DMG"
 MIN_OS=$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$PLIST")
 # The appcast: one item, the new version. Sparkle compares CFBundleVersion.
-python3 scripts/appcast.py "$VERSION" "$BUILD" "$MIN_OS" "$SIG" "$DMG" "$SITE" stable > "$OUT/appcast.xml"
+python3 scripts/release/appcast.py "$VERSION" "$BUILD" "$MIN_OS" "$SIG" "$DMG" "$SITE" stable > "$OUT/appcast.xml"
 sign_appcast "$OUT/appcast.xml"
 
 # latest.json names every current file. Its top-level version is what the
@@ -223,6 +223,6 @@ upload_all feeds
 
 echo "== GitHub"
 STAGE=github
-scripts/github-release.sh "$VERSION"
+scripts/release/github-release.sh "$VERSION"
 STAGE=done
 echo "== released $VERSION"

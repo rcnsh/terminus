@@ -18,7 +18,7 @@ let package = Package(
             linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path"])]
         ),
         // The campus map: MapLibre Native, built for macOS by
-        // scripts/vendor-maplibre-mac.sh (none is published).
+        // scripts/vendor/vendor-maplibre-mac.sh (none is published).
         .binaryTarget(name: "MapLibre", path: "Vendor/MapLibre.xcframework.zip"),
         // Parses the API's golden answers (fixtures/answers).
         .testTarget(name: "TerminusTests", dependencies: ["Terminus"], path: "Tests/TerminusTests"),

@@ -9,7 +9,7 @@
 // bus) is drawn by Preact from the stores they share.
 //
 // Everything comes from our own domain: MapLibre and the PMTiles reader
-// (vendor/, scripts/vendor-map.sh), the map file and its style, fonts and
+// (vendor/, scripts/vendor/vendor-map.sh), the map file and its style, fonts and
 // icons (/map/*), routes and stops (/api/campus), buses (/api/buses), arrivals
 // (/api/arrivals). The service worker keeps all but the live ones for offline.
 

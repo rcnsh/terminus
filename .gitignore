@@ -25,7 +25,7 @@ dev/
 # Personal agent instructions (identity, how you push): never shared
 CLAUDE.local.md
 
-# Release builds (scripts/release.sh)
+# Release builds (scripts/release/release.sh)
 /build/
 
 # Private notes, never published

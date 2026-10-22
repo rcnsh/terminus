@@ -121,8 +121,8 @@ test('the release and map scripts upload to the buckets each site serves downloa
   const stable = STABLE.env.DOWNLOADS.name;
   const beta = BETA.env.DOWNLOADS.name;
   const script = (name) => readFileSync(new URL(`../../../scripts/${name}`, import.meta.url), 'utf8');
-  assert.deepEqual([...bucketsIn(script('release.sh'))], [stable], 'scripts/release.sh uploads to the stable bucket');
-  assert.deepEqual([...bucketsIn(script('release-beta.sh'))], [beta], 'scripts/release-beta.sh uploads to the beta bucket');
+  assert.deepEqual([...bucketsIn(script('release/release.sh'))], [stable], 'scripts/release/release.sh uploads to the stable bucket');
+  assert.deepEqual([...bucketsIn(script('release/release-beta.sh'))], [beta], 'scripts/release/release-beta.sh uploads to the beta bucket');
   const tiles = script('map-tiles.sh');
   assert.deepEqual([...bucketsIn(tiles)].sort(), [stable, beta].sort(), 'scripts/map-tiles.sh knows both buckets');
   // Its CHANNEL arms, where it still picks the bucket with a case.
@@ -137,7 +137,7 @@ test('the release and map scripts upload to the buckets each site serves downloa
   }
   // And no script names a bucket that is neither.
   const dir = new URL('../../../scripts/', import.meta.url);
-  for (const f of readdirSync(dir).filter((f) => f.endsWith('.sh'))) {
+  for (const f of readdirSync(dir, { recursive: true }).filter((f) => f.endsWith('.sh'))) {
     for (const b of bucketsIn(readFileSync(new URL(f, dir), 'utf8')))
       assert.ok(b === stable || b === beta, `scripts/${f} names bucket ${b}`);
   }
@@ -152,15 +152,15 @@ test('the street map is cut to the bounds the map style declares', async () => {
 });
 
 test('a release takes the scrape commit for the same data files and bot that scrape.yml commits with', () => {
-  const lib = readFileSync(new URL('../../../scripts/release-lib.sh', import.meta.url), 'utf8');
+  const lib = readFileSync(new URL('../../../scripts/release/release-lib.sh', import.meta.url), 'utf8');
   const yml = readFileSync(new URL('../../../.github/workflows/scrape.yml', import.meta.url), 'utf8');
   const words = (s) => s.split(/\s+/).filter(Boolean).sort();
   const data = yml.match(/^\s*DATA="([^"]+)"/m);
   assert.ok(data, 'scrape.yml commits a DATA list');
-  assert.deepEqual(words(lib.match(/^SCRAPE_DATA="([^"]+)"/m)[1]), words(data[1]), 'SCRAPE_DATA in scripts/release-lib.sh');
+  assert.deepEqual(words(lib.match(/^SCRAPE_DATA="([^"]+)"/m)[1]), words(data[1]), 'SCRAPE_DATA in scripts/release/release-lib.sh');
   const name = yml.match(/user\.name="([^"]+)"/)[1];
   const email = yml.match(/user\.email="([^"]+)"/)[1];
-  assert.equal(lib.match(/^SCRAPE_BOT="([^"]+)"/m)[1], `${name} <${email}>`, 'SCRAPE_BOT in scripts/release-lib.sh');
+  assert.equal(lib.match(/^SCRAPE_BOT="([^"]+)"/m)[1], `${name} <${email}>`, 'SCRAPE_BOT in scripts/release/release-lib.sh');
 });
 
 const MIGRATIONS = new URL('../migrations/', import.meta.url);

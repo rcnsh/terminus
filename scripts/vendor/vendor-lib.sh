@@ -1,4 +1,4 @@
-# Checks and steps shared by scripts/vendor-preact.sh, vendor-map.sh and
+# Checks and steps shared by scripts/vendor/vendor-preact.sh, vendor-map.sh and
 # vendor-mediabunny.sh, which source this file from the repo root after
 # setting OUT (apps/web/public/vendor) and WORK (their temporary folder).
 

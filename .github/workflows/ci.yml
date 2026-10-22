@@ -146,7 +146,7 @@ jobs:
       - run: shasum -a 256 -c MapLibre.xcframework.zip.sha256
         working-directory: apps/macos/Vendor
       # And it links only macOS's own libraries: one from Homebrew loads on
-      # the Mac that built it and nowhere else (scripts/vendor-maplibre-mac.sh).
+      # the Mac that built it and nowhere else (scripts/vendor/vendor-maplibre-mac.sh).
       - run: |
           dir=$(mktemp -d)
           ditto -x -k MapLibre.xcframework.zip "$dir"

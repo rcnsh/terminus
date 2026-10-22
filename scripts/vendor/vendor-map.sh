@@ -6,18 +6,18 @@
 # PMTILES in apps/web/public/app/map-files.js.
 #
 # Each tarball is checked against the npm integrity pinned below before
-# it's unpacked (scripts/vendor-lib.sh), and the files written are recorded
+# it's unpacked (scripts/vendor/vendor-lib.sh), and the files written are recorded
 # in vendor/SHA256SUMS. Another version needs its integrity passed in:
 #
-#   scripts/vendor-map.sh [maplibre-version] [pmtiles-version]
-#   MAPLIBRE_INTEGRITY=sha512-… scripts/vendor-map.sh 6.12.0
+#   scripts/vendor/vendor-map.sh [maplibre-version] [pmtiles-version]
+#   MAPLIBRE_INTEGRITY=sha512-… scripts/vendor/vendor-map.sh 6.12.0
 #
 # (from `npm view maplibre-gl@6.12.0 dist.integrity`; PMTILES_INTEGRITY for
 # pmtiles, with PMTILES_LICENSE_URL and PMTILES_LICENSE_SHA256 below). Then
 # pin the new version and integrity here.
 set -eu
-cd "$(dirname "$0")/.."
-. scripts/vendor-lib.sh
+cd "$(dirname "$0")/../.."
+. scripts/vendor/vendor-lib.sh
 ML=${1:-6.11.2}
 PM=${2:-4.5.0}
 version maplibre-gl "$ML"

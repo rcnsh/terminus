@@ -37,9 +37,9 @@ web app share Settings (`account/settings.js`), the card
 
 `public/assets/site.css` holds the colours and type shared by every page, and
 `public/assets/shots/` has the screenshots. `public/vendor/` has Preact and
-htm (`scripts/vendor-preact.sh`), MapLibre GL JS and the PMTiles reader
-(`scripts/vendor-map.sh`), and Mediabunny for the timelapse's video export
-(`scripts/vendor-mediabunny.sh`), copied from npm and never edited by hand.
+htm (`scripts/vendor/vendor-preact.sh`), MapLibre GL JS and the PMTiles reader
+(`scripts/vendor/vendor-map.sh`), and Mediabunny for the timelapse's video export
+(`scripts/vendor/vendor-mediabunny.sh`), copied from npm and never edited by hand.
 `public/sw.js` keeps the app, and the map once opened, for offline; a test
 fails if a module the app loads at startup isn't on its list.
 

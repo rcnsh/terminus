@@ -1,5 +1,5 @@
-Third-party code, copied from npm by `scripts/vendor-preact.sh`,
-`scripts/vendor-map.sh` and `scripts/vendor-mediabunny.sh`; never edited
+Third-party code, copied from npm by `scripts/vendor/vendor-preact.sh`,
+`scripts/vendor/vendor-map.sh` and `scripts/vendor/vendor-mediabunny.sh`; never edited
 by hand.
 
 Each script pins its versions with their npm integrity (sha512) and

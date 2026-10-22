@@ -1,8 +1,8 @@
 #!/bin/bash
 # Release a beta: everything at beta.terminus.run, from this commit.
 #
-#   scripts/release-beta.sh 2.0.1-beta.1 --dry-run   # tests and builds, nothing uploaded
-#   scripts/release-beta.sh 2.0.1-beta.1             # also deploys and uploads
+#   scripts/release/release-beta.sh 2.0.1-beta.1 --dry-run   # tests and builds, nothing uploaded
+#   scripts/release/release-beta.sh 2.0.1-beta.1             # also deploys and uploads
 #
 # In order: the tests; "terminus beta" for Android and the Mac; the beta
 # Worker's D1 migrations and the beta Worker (before any upload, as for
@@ -24,17 +24,17 @@
 #
 # Last, a beta version gets its tag (pushed) and a GitHub pre-release with
 # the APKs, the DMG and the commits since the previous tag. A release's version
-# already has its own, from scripts/release.sh.
+# already has its own, from scripts/release/release.sh.
 #
-# Each run starts from the lockfiles, as scripts/release.sh does.
+# Each run starts from the lockfiles, as scripts/release/release.sh does.
 #
 # A dry run builds into build/dry-run/beta/<version>; a release into
 # build/release/beta/<version>. If a release stops after it starts deploying,
 # it says what's live and the commands that finish it.
 set -euo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 ROOT=$(pwd)
-USAGE="usage: scripts/release-beta.sh <version, e.g. 2.0.1-beta.1> [--dry-run]"
+USAGE="usage: scripts/release/release-beta.sh <version, e.g. 2.0.1-beta.1> [--dry-run]"
 VERSION=
 DRY=0
 # --dry-run anywhere; any other option, or a second version, stops here: a
@@ -47,7 +47,7 @@ for arg in "$@"; do
   esac
 done
 [ -n "$VERSION" ] || { echo "$USAGE"; exit 1; }
-. scripts/release-lib.sh
+. scripts/release/release-lib.sh
 # As in release.sh: the address the apps call, the site's own.
 SITE=https://beta.terminus.run
 BUCKET=terminus-beta-downloads
@@ -108,9 +108,9 @@ fi
 build_goes_up "commit to main and run again (the build is the commit count)"
 
 # Whether the live beta's API version is at least this commit's
-# (scripts/release-check.py).
+# (scripts/release/release-check.py).
 live_check() {
-  python3 scripts/release-check.py "$@" && return 0
+  python3 scripts/release/release-check.py "$@" && return 0
   [ $DRY -eq 1 ] && { echo "   (a release would stop here)"; return 0; }
   exit 1
 }
@@ -162,14 +162,14 @@ apks_signed "$APK" "$OUT/terminus-$VERSION-armv7.apk" "$OUT/terminus-$VERSION-x8
 
 echo "== mac"
 # Set here, whatever the shell has: they make package-mac.sh build the beta.
-CHANNEL=beta BETA_VERSION="$VERSION" BETA_BUILD="$BUILD" RELEASES="$RELEASES" PUBLISH=true scripts/package-mac.sh
+CHANNEL=beta BETA_VERSION="$VERSION" BETA_BUILD="$BUILD" RELEASES="$RELEASES" PUBLISH=true scripts/release/package-mac.sh
 DMG="$OUT/terminus-$VERSION.dmg"
 sign_update_tool
 SIG=$("$SIGN_UPDATE" --ed-key-file "$SPARKLE_KEY" -p "$DMG")
 [ -n "$SIG" ] || die "sign_update gave no signature"
 sparkle_signed "apps/macos/build/terminus beta.app" "$SIG" "$DMG"
 MIN_OS=$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' apps/macos/Support/Info.plist)
-python3 scripts/appcast.py "$VERSION" "$BUILD" "$MIN_OS" "$SIG" "$DMG" "$SITE" beta > "$OUT/appcast.xml"
+python3 scripts/release/appcast.py "$VERSION" "$BUILD" "$MIN_OS" "$SIG" "$DMG" "$SITE" beta > "$OUT/appcast.xml"
 sign_appcast "$OUT/appcast.xml"
 
 python3 - "$VERSION" "$APK" "$DMG" > "$OUT/latest.json" <<'EOF'
@@ -212,7 +212,7 @@ echo "== live beta"
 live_release "$SITE"
 build_goes_up "commit to main and run again (the build is the commit count)"
 for try in 1 2 3 4 5 6; do
-  python3 scripts/release-check.py api "$SITE" "$API_VERSION" && break
+  python3 scripts/release/release-check.py api "$SITE" "$API_VERSION" && break
   [ "$try" = 6 ] && exit 1
   sleep 10
 done
@@ -229,6 +229,6 @@ if [ $BETA -eq 1 ]; then
   STAGE=push
   git push -q origin "v$VERSION"
   STAGE=github
-  CHANNEL=beta scripts/github-release.sh "$VERSION"
+  CHANNEL=beta scripts/release/github-release.sh "$VERSION"
 fi
 STAGE=done

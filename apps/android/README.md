@@ -102,7 +102,7 @@ the devices that registered.
 | `LeaveAlerts.kt`, `LiveService.kt` | Heads-up and live notifications |
 
 Release builds are signed with a key kept outside the repo; see
-[`scripts/release.sh`](../../scripts/release.sh). They come as one APK per
+[`scripts/release/release.sh`](../../scripts/release/release.sh). They come as one APK per
 CPU type (arm64, 32-bit ARM, x86_64): `terminus-<v>.apk` is the arm64 one,
 which the website serves by default; the app's update button asks for its
 own type (`/download/android?abi=`). Play builds from the bundle and splits

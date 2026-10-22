@@ -362,8 +362,8 @@ apps/web/public/
                       i18n.js, zh.js (Chinese), theme.js, landing.js, docs.js (/docs),
                       tabbar.css (the app's bar), fonts.css + fonts/ (self-hosted), shots/;
                       sky.css + sky-phase.js + sky-page.js: the app's sky on the site's pages
-  vendor/             Preact + htm (scripts/vendor-preact.sh), MapLibre GL + PMTiles
-                      (scripts/vendor-map.sh), Mediabunny (scripts/vendor-mediabunny.sh):
+  vendor/             Preact + htm (scripts/vendor/vendor-preact.sh), MapLibre GL + PMTiles
+                      (scripts/vendor/vendor-map.sh), Mediabunny (scripts/vendor/vendor-mediabunny.sh):
                       never hand-edited, not linted
   sw.js               Service worker: offline app shell and map
 apps/android/app/src/main/java/sh/rcn/terminus/
@@ -377,7 +377,7 @@ apps/android/app/src/main/java/sh/rcn/terminus/
 apps/macos/
   Sources/Terminus/   Api.swift (with Servers, the server it calls), AppModel.swift (state/refresh/pairing), views, Updater.swift,
                       MapWindow.swift + MapData.swift + MapFiles.swift (the map window)
-  Vendor/             MapLibre.xcframework.zip, from scripts/vendor-maplibre-mac.sh
+  Vendor/             MapLibre.xcframework.zip, from scripts/vendor/vendor-maplibre-mac.sh
   Support/            Info.plist (version, SUPublicEDKey), zh-Hans strings, app icons
   Tests/              swift test, on the API's answer fixtures
   build.sh            Builds terminus.app (CHANNEL=beta for the beta)
@@ -636,7 +636,7 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
     `CURRENT_PROJECT_VERSION` do. The release scripts don't build the
     iPhone app; it goes to the App Store by hand (below).
   - Push `main`, wait for CI to pass, deploy the Worker (`pnpm run deploy`),
-    then run `scripts/release.sh --dry-run` and `scripts/release.sh` on the
+    then run `scripts/release/release.sh --dry-run` and `scripts/release/release.sh` on the
     owner's Mac. It refuses a commit that isn't `origin/main` or whose CI
     hasn't passed, a live API older than this version (deploy first), a
     build number not above the live one, an APK not signed with the key in
@@ -648,7 +648,7 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
     the appcast and `latest.json`; and publishes the GitHub release. Nothing
     waits for an approval. A dry run builds into `build/dry-run/`; a release
     that stops partway prints what's live and the commands that finish it.
-  - Betas use `scripts/release-beta.sh <x.y.z-beta.n>`, on the same Mac,
+  - Betas use `scripts/release/release-beta.sh <x.y.z-beta.n>`, on the same Mac,
     with the same checks: also from `origin/main` with CI passed. It deploys
     the beta Worker itself and uploads nothing until that deploy has
     finished (a beta keeps `API_VERSION`, so the live API's version can't
@@ -656,7 +656,7 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
   - Both start from the lockfiles: they delete `node_modules` and
     `apps/macos/.build`, then install with `--frozen-lockfile` and
     `--force-resolved-versions`. The Sparkle key only goes to a `sign_update`
-    matching `SIGN_UPDATE_SHA256` in `scripts/release-lib.sh`; a Sparkle bump
+    matching `SIGN_UPDATE_SHA256` in `scripts/release/release-lib.sh`; a Sparkle bump
     means updating `SPARKLE_VERSION` and that hash (check the new zip
     against the checksum in Sparkle's `Package.swift` first). The appcast
     itself is signed too, and nothing may edit it afterwards.

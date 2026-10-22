@@ -2,7 +2,7 @@
 # Publish a GitHub release for a tagged version, with the APKs (one per CPU
 # type) and the Mac DMG attached, the hand-written highlights in
 # RELEASE_NOTES.md (when it's for this version) and the commits since the
-# previous tag. scripts/release.sh runs it once every file is in
+# previous tag. scripts/release/release.sh runs it once every file is in
 # build/release/<version>; run again, it re-uploads the files to the
 # existing release.
 #
@@ -10,15 +10,15 @@
 # marked a pre-release on GitHub. The site's downloads are unaffected: they
 # follow latest.json in R2.
 #
-# With CHANNEL=beta it publishes a beta from scripts/release-beta.sh: the
+# With CHANNEL=beta it publishes a beta from scripts/release/release-beta.sh: the
 # files in build/release/beta/<version>, as a pre-release for terminus beta.
 #
-#   scripts/github-release.sh 1.3.8          # publish
-#   scripts/github-release.sh 1.3.8 --notes  # print the notes only
-#   CHANNEL=beta scripts/github-release.sh 2.0.1-beta.1
+#   scripts/release/github-release.sh 1.3.8          # publish
+#   scripts/release/github-release.sh 1.3.8 --notes  # print the notes only
+#   CHANNEL=beta scripts/release/github-release.sh 2.0.1-beta.1
 set -euo pipefail
-cd "$(dirname "$0")/.."
-VERSION="${1:?usage: [CHANNEL=beta] scripts/github-release.sh <version> [--notes]}"
+cd "$(dirname "$0")/../.."
+VERSION="${1:?usage: [CHANNEL=beta] scripts/release/github-release.sh <version> [--notes]}"
 # It names the tag and the files: a version, as release.sh and release-beta.sh check.
 VERSION_RE='^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9]+)?)?$'
 [[ $VERSION =~ $VERSION_RE ]] || { echo "$VERSION isn't a version like 2.1.0 or 2.1.1-beta.1" >&2; exit 1; }
@@ -44,10 +44,10 @@ if [ -n "$EARLIER" ]; then
     { echo "couldn't find the tag before $TAG" >&2; exit 1; }
 fi
 NOTES="$DIR/notes.md"
-python3 scripts/release-notes.py "$VERSION" "$TAG" "$PREV" "$APK" "$MAC" "$CHANNEL" > "$NOTES"
+python3 scripts/release/release-notes.py "$VERSION" "$TAG" "$PREV" "$APK" "$MAC" "$CHANNEL" > "$NOTES"
 
 if [ "${2:-}" = "--notes" ]; then cat "$NOTES"; exit 0; fi
-TITLE="terminus $(python3 scripts/release-notes.py --title "$VERSION")"
+TITLE="terminus $(python3 scripts/release/release-notes.py --title "$VERSION")"
 PRE=""
 case "$VERSION" in *-*) PRE="--prerelease" ;; esac
 # The other CPU types' APKs, when this version has them.

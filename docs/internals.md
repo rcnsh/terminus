@@ -1087,7 +1087,7 @@ card, chips for favourites and Nearby, and Today; the campus map; and
 Settings. It uses the same routes as the account page, with the session cookie.
 
 - **How the pages are built.** Preact components with htm templates
-  (`assets/ui.js`, Preact vendored by `scripts/vendor-preact.sh`), loaded as
+  (`assets/ui.js`, Preact vendored by `scripts/vendor/vendor-preact.sh`), loaded as
   written: no build step, so the service worker keeps exact files and the
   API's tests import the plain modules (`search.js`, `offline.js`). htm needs
   no `eval`, so the CSP stays `script-src 'self'`. State several parts share
@@ -2020,7 +2020,7 @@ the campus map: `/api/campus`, `/api/buses`, `/api/arrivals` and `/map/*`. The B
 tab (web and Android) opens a service's whole line with `/api/line`. The apps
 download `campus.pmtiles` once and read it from disk, since MapLibre Native
 fails the whole style when one streamed piece fails. The Mac's MapLibre is
-built from source (`scripts/vendor-maplibre-mac.sh`; no macOS build is
+built from source (`scripts/vendor/vendor-maplibre-mac.sh`; no macOS build is
 published), and its Metal renderer draws the style's background layer over
 the street map's fills, so the Mac drops that layer when the street map is
 there.
@@ -2307,7 +2307,7 @@ Mediabunny then encodes that canvas, H.264 in MP4 (`fastStart:
 'in-memory'`) or VP9 in WebM where the browser can't do H.264. Awaiting
 each frame's `add()` respects the encoder's backpressure, so the video is
 the same however fast the machine is. Mediabunny is vendored
-(`scripts/vendor-mediabunny.sh`, MPL-2.0 with its licence), and the service
+(`scripts/vendor/vendor-mediabunny.sh`, MPL-2.0 with its licence), and the service
 worker never keeps it.
 
 ## Layout
