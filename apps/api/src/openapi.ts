@@ -22,7 +22,7 @@ export { docsPage, docsPageFor } from './openapi/docs.ts';
 /** The apps' version (Android versionName, the Mac's CFBundleShortVersionString, the iPhone's MARKETING_VERSION):
  *  the API and the apps are released together. A test fails when a version
  *  bump leaves this behind. */
-export const API_VERSION = '3.6.0';
+export const API_VERSION = '3.6.1';
 
 export function openApiSpec(origin: string): Record<string, unknown> {
   return withCommonErrors({
