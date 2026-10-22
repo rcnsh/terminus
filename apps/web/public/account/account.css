@@ -1,21 +1,32 @@
 /* Account page, on top of /assets/site.css. */
 
-/* Sign-in: one centred card, two steps (form, then "check your inbox"). */
-.signin { max-width: 25rem; margin: 6vh auto 0; }
-.signin-card { padding: 32px 28px; text-align: left; }
-.signin-mark { width: 44px; height: 44px; margin-bottom: 20px; }
-.signin h1 { font-size: 1.6rem; margin-bottom: 8px; }
+/* Sign-in: no card. The livery runs edge to edge under the header, and the
+   page itself holds two steps (form, then "check your inbox"): one column on
+   a phone, the words beside the form from 900px. */
+body:has(.signin) { overflow-x: clip; }
+.signin .livery { height: 110px; margin: 0 calc(50% - 50vw); border-radius: 0; }
+.signin-step { max-width: 28rem; margin: 0 auto; padding-top: 28px; }
+.signin h1 { font-size: 2rem; }
 .signin .hint { line-height: 1.5; }
-.signin .hint.small { font-size: 0.85rem; margin-top: 10px; }
-.signin form label { margin-top: 20px; }
-.signin .btn.wide { margin-top: 16px; }
-.signin-or { display: flex; align-items: center; gap: 12px; margin-top: 2px; color: var(--muted); font-size: 0.85rem; }
-.signin-or::before, .signin-or::after { content: ''; flex: 1; border-top: 1px solid var(--line); }
-.signin .signin-or + .btn.wide { margin-top: 12px; }
+.signin-intro .hint { font-size: 1rem; margin-top: 10px; }
+.signin .hint.small { font-size: 0.85rem; margin-top: 12px; }
+.signin-form { margin-top: 24px; }
+.signin form label { margin-top: 0; }
+.signin .btn.wide { margin-top: 12px; }
+/* Empty, the error line takes no room; the next line keeps its own gap. */
+.signin .form-error:empty { min-height: 0; margin-top: 0; }
+.signin-alt { color: var(--muted); font-size: 0.95rem; margin-top: 16px; }
+#sent-step .form-error:empty + .hint.small { margin-top: 16px; }
+.signin-alt .link-btn { font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+@media (min-width: 900px) {
+  .signin .livery { height: 160px; }
+  .signin-step { max-width: 60rem; display: grid; grid-template-columns: 1.1fr 1fr; gap: 80px; align-items: start; padding-top: 64px; }
+  .signin h1 { font-size: 3rem; }
+  .signin-form { margin-top: 4px; }
+}
 .form-error { color: var(--bad); font-size: 0.9rem; margin-top: 10px; min-height: 1.4em; }
 .sent-icon { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); margin-bottom: 16px; }
 #sent-step .btn { margin-top: 20px; }
-.center { text-align: center; margin-top: 18px; font-size: 0.85rem; }
 
 /* Settings (settings.js): a list of groups and their pages. On a phone one
    at a time, sliding; from 900px (as `wide` in settings.js) side by side. */
