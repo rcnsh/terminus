@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 // data and a server on 127.0.0.1: no network, no keys. Skipped where there
 // is no python3.
 
-const SCRIPTS = fileURLToPath(new URL('../scripts/', import.meta.url));
+const SCRIPTS = fileURLToPath(new URL('../scripts/data/', import.meta.url));
 const python = spawnSync('python3', ['--version']).status === 0;
 
 /** Runs [code] in python3 with the scripts importable; returns what it prints as JSON. */

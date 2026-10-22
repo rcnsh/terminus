@@ -183,7 +183,7 @@ export async function mailFeedback(env: Env, id: string, f: FeedbackInput, nowMs
     '',
     ...(s
       ? [
-          `If it's right, add this to apps/api/data/src/venue-stops.json and run scripts/walk_routes.py:`,
+          `If it's right, add this to apps/api/data/src/venue-stops.json and run scripts/data/walk_routes.py:`,
           '',
           venueStopsEntry(s, f.note),
           '',

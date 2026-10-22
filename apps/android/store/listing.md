@@ -5,7 +5,7 @@ and feature graphics with `swift apps/android/store/render.swift apps/android/st
 `feature-graphic.png` for the main listing, `feature-graphic-zh.png` for the
 Chinese translation (Play shows the main one in every language otherwise).
 The phone screenshots are in `screenshots/`: 1080×1920, each an emulator capture
-from `captures/` (taken against `apps/api/scripts/dev-stub.mjs`: fake buses and a
+from `captures/` (taken against `apps/api/scripts/dev/dev-stub.mjs`: fake buses and a
 test account, no real data) in a phone under a headline, drawn with
 `node apps/android/store/frame.mjs`.
 

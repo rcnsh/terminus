@@ -8,7 +8,7 @@
 # Signed with SIGN_IDENTITY (and SIGN_KEYCHAIN, optionally, the keychain
 # holding it); without it, with the terminus self-signed certificate if it's in
 # your keychain, else ad-hoc. Releases are signed with that certificate by
-# scripts/package-mac.sh, so every version has the same code identity and
+# scripts/release/package-mac.sh, so every version has the same code identity and
 # macOS keeps its permissions across updates.
 set -eu
 cd "$(dirname "$0")"
@@ -32,7 +32,7 @@ install_name_tool -add_rpath @executable_path/../Frameworks "$APP/Contents/MacOS
 codesign --verify --strict --deep "$OUT/Sparkle.framework"
 ditto "$OUT/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
 rm -rf "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices" "$APP/Contents/Frameworks/Sparkle.framework/XPCServices"
-# MapLibre, for the map (Vendor/, from scripts/vendor-maplibre-mac.sh). It's
+# MapLibre, for the map (Vendor/, from scripts/vendor/vendor-maplibre-mac.sh). It's
 # built for Intel too; this app is arm64 only, so that half is left out.
 ditto "$OUT/MapLibre.framework" "$APP/Contents/Frameworks/MapLibre.framework"
 ML="$APP/Contents/Frameworks/MapLibre.framework/Versions/A/MapLibre"
@@ -49,7 +49,7 @@ if [ "$CHANNEL" = beta ]; then
   PB "Set :SUFeedURL https://beta.terminus.run/download/appcast.xml"
   PB "Add :TerminusSite string https://beta.terminus.run"
   PB "Add :TerminusAPI string https://beta.terminus.run"
-  # Its own version line, from scripts/release-beta.sh. Sparkle compares the build.
+  # Its own version line, from scripts/release/release-beta.sh. Sparkle compares the build.
   if [ -n "${BETA_VERSION:-}" ]; then PB "Set :CFBundleShortVersionString $BETA_VERSION"; fi
   if [ -n "${BETA_BUILD:-}" ]; then PB "Set :CFBundleVersion $BETA_BUILD"; fi
 fi
@@ -66,7 +66,7 @@ fi
 # Support/Terminus.entitlements: library validation off (the self-signed
 # certificate has no Team ID, so it would refuse even our own frameworks)
 # and location.
-# A release (PUBLISH=true, from scripts/package-mac.sh) is also timestamped
+# A release (PUBLISH=true, from scripts/release/package-mac.sh) is also timestamped
 # by Apple's server, which stamps the self-signed certificate too: the
 # signature then outlives the certificate (it expires in 2036). Local builds
 # skip it so they work offline; an ad-hoc signature can't have one.

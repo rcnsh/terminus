@@ -24,7 +24,7 @@ serves the website in [`apps/web`](../web).
 pnpm install
 pnpm test                          # no network, no keys
 pnpm typecheck
-node scripts/dev-stub.mjs          # the Worker with fake buses on :8787
+node scripts/dev/dev-stub.mjs          # the Worker with fake buses on :8787
 pnpm dev                           # cf dev against the live feed (needs .dev.vars)
 ```
 
@@ -43,11 +43,13 @@ folder is set in [`wrangler.config.ts`](wrangler.config.ts).
 
 ## Where things are
 
+How it works in depth is in the repo's [docs/internals.md](../../docs/internals.md), and
+the analytics schema in [docs/analytics.md](../../docs/analytics.md).
+
 | | |
 | --- | --- |
 | `src/` | The Worker. `index.ts` routes, `me.ts` has the account routes, `resolve.ts` picks the stop and bus |
-| `test/` | Node's test runner. `golden.test.js` pins whole answers to `test/fixtures/answers` |
+| `test/` | Node's test runner. `golden.test.js` pins whole answers to the repo's [`fixtures/answers`](../../fixtures/answers) |
 | `data/` | Stops, routes, venues and walking paths, bundled into the Worker |
 | `migrations/` | D1 schema |
-| `scripts/` | Dev stub, and scrapers that rebuild `data/` (`route_shapes.py` makes `data/shapes.json`, the routes along the roads) |
-| [`docs/`](docs) | [How it works](docs/internals.md) in depth, and the [analytics](docs/analytics.md) schema |
+| `scripts/` | `dev/` the dev stub, `deploy/` the deploy check, `data/` the scrapers that rebuild `data/` (`route_shapes.py` makes `data/shapes.json`, the routes along the roads), `probes/` feed probes and the arrival-time backtest |

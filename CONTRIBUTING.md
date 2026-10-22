@@ -17,13 +17,13 @@ Android SDK, or Swift 6 on a Mac.
 
 ```bash
 pnpm install
-pnpm test                                 # API tests: no network, no keys
+pnpm test                                 # API and website tests: no network, no keys
 pnpm check                                # the tests, then tsc --noEmit
 pnpm lint                                 # oxlint: API, website and scripts; warnings fail CI
 pnpm format                               # oxfmt: JS, TS and JSON
 pnpm format:swift                         # swift-format (Xcode's `swift format`)
 pnpm format:kotlin                        # ktfmt, through Gradle (./gradlew ktfmtFormat)
-node apps/api/scripts/dev-stub.mjs        # local API with fake buses
+node apps/api/scripts/dev/dev-stub.mjs        # local API with fake buses
 ```
 
 What CI runs ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)), so
@@ -49,11 +49,12 @@ skip the one-off reformat in `git blame`:
 
 `cf deploy --dry-run` only bundles; it sends nothing.
 
-- **Golden answers.** `apps/api/test/golden.test.js` pins whole answers. After
-  an intended change, `UPDATE_GOLDEN=1 pnpm test` and review the fixture
-  diff. The Android and Mac tests read the same fixtures.
+- **Golden answers.** `apps/api/test/golden.test.js` pins whole answers to
+  `fixtures/answers`. After an intended change, `UPDATE_GOLDEN=1 pnpm test`
+  and review the fixture diff. The website's, Android, Mac and iPhone tests
+  read the same fixtures.
 - **Endpoints.** A changed route or response shape updates
-  `apps/api/src/openapi.ts` and `apps/api/docs/internals.md`.
+  the spec (`apps/api/src/openapi/`) and `docs/internals.md`.
 - **Migrations** in `apps/api/migrations` are additive only (no renames,
   drops or `NOT NULL` without a default), and an applied one is never edited.
   `test/deploy.test.js` checks this.
@@ -62,8 +63,8 @@ skip the one-off reformat in `git blame`:
   built-in runner; D1 is emulated with `node:sqlite`.
 - **Website** (`apps/web/public`): HTML pages and Preact components (htm
   templates, no build step) served by the Worker. Third-party code is in
-  `vendor/`, refreshed only with `scripts/vendor-preact.sh`,
-  `scripts/vendor-map.sh` and `scripts/vendor-mediabunny.sh`; lint skips it.
+  `vendor/`, refreshed only with `scripts/vendor/vendor-preact.sh`,
+  `scripts/vendor/vendor-map.sh` and `scripts/vendor/vendor-mediabunny.sh`; lint skips it.
 - **Android** (`apps/android`): Kotlin, Compose and Glance. Point a debug build
   at the dev server with `./gradlew installStableDebug -PapiBase=http://localhost:8787`
   and `adb reverse tcp:8787 tcp:8787`.
@@ -71,7 +72,7 @@ skip the one-off reformat in `git blame`:
   `TERMINUS_API_BASE=http://localhost:8787` points it at the dev server, and
   `TERMINUS_SNAPSHOT=<dir>` on a debug build renders every state to PNGs.
   MapLibre Native, for the map window, is refreshed only with
-  `scripts/vendor-maplibre-mac.sh`.
+  `scripts/vendor/vendor-maplibre-mac.sh`.
 
 ## Sending a change
 
@@ -91,7 +92,7 @@ string needs both; each platform's tests fail on one without its Chinese:
 
 - **API:** `apps/api/src/i18n.ts`, read with `m()`. Errors stay English in
   the code (`json({ error: '...' })`) and get an entry in `ERRORS_ZH`. Answers
-  are checked word for word by the Chinese goldens in `test/fixtures/answers/zh`.
+  are checked word for word by the Chinese goldens in `fixtures/answers/zh`.
 - **Android:** `res/values/strings.xml` and `res/values-zh/strings.xml`;
   `L.s(R.string.x)` outside Compose. Lint fails on a missing translation.
 - **Website:** `t('English {0}', value)` in scripts; page text needs nothing
@@ -107,5 +108,5 @@ Place and service names (KR MRT, COM3, D2) stay English in both.
 - Tests for API changes, checked to fail without the fix.
 - Screenshots for UI changes, light and dark where it differs.
 - Both languages for any new text.
-- No version bumps or releases; I cut those with `scripts/release.sh`.
+- No version bumps or releases; I cut those with `scripts/release/release.sh`.
 - Keep a PR to one change. Deploys happen after merge, by hand.

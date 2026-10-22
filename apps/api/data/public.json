@@ -1,6 +1,6 @@
 {
  "generated": "2026-10-12T10:11:10.057570+00:00",
- "source": "LTA DataMall (BusStops, BusRoutes, BusServices) via scripts/scrape_lta.py; Singapore Open Data Licence",
+ "source": "LTA DataMall (BusStops, BusRoutes, BusServices) via scripts/data/scrape_lta.py; Singapore Open Data Licence",
  "radiusM": 200,
  "stops": [
   {

@@ -1,5 +1,5 @@
 // The website's UI: Preact and its hooks, with htm for templates (vendor/,
-// copied by scripts/vendor-preact.sh), and the few helpers every page shares.
+// copied by scripts/vendor/vendor-preact.sh), and the few helpers every page shares.
 // No build step: pages import this file as it is. Components are written as
 //
 //   html`<button class="btn" onClick=${go}>${t('Go there')}</button>`

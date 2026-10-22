@@ -1,5 +1,5 @@
 {
- "_help": "Hand-maintained. Named places that are not buildings, with every stop that serves them; positions from OpenStreetMap, stops confirmed by a student who uses them. scripts/walk_routes.py routes the walks into data/landmarks.json.",
+ "_help": "Hand-maintained. Named places that are not buildings, with every stop that serves them; positions from OpenStreetMap, stops confirmed by a student who uses them. scripts/data/walk_routes.py routes the walks into data/landmarks.json.",
  "landmarks": {
   "THE-DECK": {
    "name": "The Deck",

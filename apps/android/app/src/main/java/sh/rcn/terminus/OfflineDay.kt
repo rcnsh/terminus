@@ -6,7 +6,7 @@ import java.time.ZoneOffset
 /**
  * What the widget and the app show when they're offline and the last answer has gone stale: the next thing on the day plan kept from
  * /api/me/day. The web and Mac apps follow the same rule (app/offline.js, OfflineDay.swift), checked against the same cases
- * (apps/api/test/fixtures/offline-day.json).
+ * (fixtures/offline-day.json).
  */
 object OfflineDay {
     /** A class still counts this long after it starts: late, but still the one to go to. */

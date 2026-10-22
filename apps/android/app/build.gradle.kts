@@ -28,7 +28,7 @@ android {
             dimension = "channel"
             applicationIdSuffix = ".beta"
             site("https://beta.terminus.run", "sh.rcn.terminus.beta", "terminus beta")
-            // Its own version line, from scripts/release-beta.sh: the next
+            // Its own version line, from scripts/release/release-beta.sh: the next
             // stable version's pre-release (2.0.1-beta.3), numbered by commit.
             providers.gradleProperty("betaVersion").orNull?.let { versionName = it }
             providers.gradleProperty("betaCode").orNull?.let { versionCode = it.toInt() }

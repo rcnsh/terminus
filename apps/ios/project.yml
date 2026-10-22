@@ -207,7 +207,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: sh.rcn.terminus.tests
         GENERATE_INFOPLIST_FILE: YES
         # The API's golden answers and search cases, read where they are.
-        FIXTURES: $(SRCROOT)/../api/test/fixtures
+        FIXTURES: $(SRCROOT)/../../fixtures
   TerminusUITests:
     type: bundle.ui-testing
     platform: iOS
@@ -234,7 +234,7 @@ schemes:
       gatherCoverageData: false
       targets: [TerminusTests, TerminusUITests]
       environmentVariables:
-        FIXTURES: $(SRCROOT)/../api/test/fixtures
+        FIXTURES: $(SRCROOT)/../../fixtures
     archive:
       config: Release
   Terminus Beta:

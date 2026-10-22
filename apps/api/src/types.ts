@@ -248,7 +248,7 @@ export interface Timing {
 
 /**
  * The /api/me/next response. Clients parse this in Api.kt, Api.swift and the
- * account page; test/fixtures/answers holds one of each kind, checked by the
+ * account page; fixtures/answers holds one of each kind, checked by the
  * golden test here and parsed by the Android and Mac unit tests.
  */
 export interface MeAnswer extends Answer {

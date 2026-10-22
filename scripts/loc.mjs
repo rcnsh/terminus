@@ -6,7 +6,7 @@
 //
 //   pnpm loc            a table (coloured on a terminal; NO_COLOR turns it off)
 //   pnpm loc --json     the same numbers as JSON, which the README's picture is drawn from
-//                       (sh .github/readme/loc.sh)
+//                       (sh docs/readme/loc.sh)
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, extname, join } from 'node:path';
@@ -30,12 +30,13 @@ const LANGUAGES = {
   '.yaml': 'YAML',
 };
 
-const SKIP = [/(^|\/)vendor\//, /\/test\/fixtures\//, /^apps\/api\/data\//, /(^|\/)pnpm-lock\.yaml$/];
+const SKIP = [/^apps\/web\/public\/vendor\//, /\/test\/fixtures\//, /^fixtures\//, /^apps\/api\/data\//, /(^|\/)pnpm-lock\.yaml$/];
 
 // First match wins, so each part's tests come before the part itself.
 const PARTS = [
   ['API', /^apps\/api\/test\//, true],
   ['API', /^apps\/api\//, false],
+  ['Website', /^apps\/web\/test\//, true],
   ['Website', /^apps\/web\//, false],
   ['Android', /^apps\/android\/app\/src\/(test|androidTest)\//, true],
   ['Android', /^apps\/android\//, false],
@@ -43,7 +44,7 @@ const PARTS = [
   ['Mac', /^apps\/macos\//, false],
   ['iPhone', /^apps\/ios\/(Tests|UITests)\//, true],
   ['iPhone', /^apps\/ios\//, false],
-  ['Scripts and CI', /^(scripts|\.github)\//, false],
+  ['Scripts and CI', /^(scripts|\.github|docs\/readme)\//, false],
   ['Other', /./, false],
 ];
 

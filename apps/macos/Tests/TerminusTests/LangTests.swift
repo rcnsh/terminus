@@ -68,12 +68,12 @@ private func literals(_ pattern: String, in text: String) throws -> [String] {
     #expect(found == [])
 }
 
-/// The API's Chinese answers (apps/api/test/fixtures/answers/zh, every
+/// The API's Chinese answers (fixtures/answers/zh, every
 /// /api/me/next one) are in Chinese. Some headlines are only a bus and a time,
 /// so the line under it counts too.
 @Test(arguments: goldenNames().filter { $0.hasPrefix("zh/") })
 func chineseAnswersAreInChinese(name: String) throws {
-    let url = root.appendingPathComponent("../api/test/fixtures/answers/\(name).json").standardized
+    let url = root.appendingPathComponent("../../fixtures/answers/\(name).json").standardized
     let data = try Data(contentsOf: url)
     let json = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
     guard json["label"] != nil else { return }

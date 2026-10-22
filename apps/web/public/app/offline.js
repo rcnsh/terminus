@@ -1,7 +1,7 @@
 // What the web app shows when it's offline and its last answer has gone
 // stale: the next thing on the day plan it kept (/api/me/day). The Android and
 // Mac apps follow the same rule (OfflineDay.kt, OfflineDay.swift), checked
-// against the same cases (apps/api/test/fixtures/offline-day.json).
+// against the same cases (fixtures/offline-day.json).
 
 /** A class still counts this long after it starts: late, but still the one to go to. */
 export const CLASS_GRACE_MS = 15 * 60_000;

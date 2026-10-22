@@ -1,5 +1,7 @@
 # Fixtures
 
+The API's own. Those every client reads are in [/fixtures](../../../../fixtures).
+
 - `stop-*.json`: real stop responses, captured 2026-08-27 ~19:55 SGT from
   `bus.hewliyang.com/api/stop/<CODE>` (below).
 - `connectx-ShuttleService-COM3.json`: a raw ConnectX `ShuttleService` body
@@ -8,22 +10,15 @@
   redacted.
 - `graph.json`: a frozen stop graph, so tests don't move when the weekly
   scrape changes `data/stops.json`.
-- `answers/`: golden answers (`UPDATE_GOLDEN=1 pnpm test` rewrites them),
-  read by the Android and Mac tests too; `answers/zh/` the Chinese.
 - `bus-trace.jsonl`: 15 minutes of the real live-bus feed for A1, A2, D1
   and D2 (3 October 2026, the probe workflow with `trace`), which
   `buses.test.js` replays; `bus-trace-routes.json`: those services' stops,
   routes and shapes as they were then, so the replay doesn't move with the
   weekly scrape.
-- `offline-day.json`: what each app shows offline from a kept day plan, for
-  the API, Android and Mac tests.
 - `lta-BusArrival-*.json`: real LTA DataMall `v3/BusArrival` replies for two
   campus shelters (YIH, 16171; UHC, 18329), captured 2026-10-06 17:28 SGT.
   The second has buses the feed marks `Monitored: 0` (timetabled, with no
   position), which `normalizePublic()` reads as `scheduled`.
-- `search.json`: the destination search's ranking rules and cases, which
-  the website's `search.js` (`search.test.js`) and the Android and Mac
-  tests are all held to.
 - `calendar/`: NUSMods' and data.gov.sg's real replies on 3 October 2026,
   cut to the fields the code reads, for the calendar refresh's tests.
 - `migrations.sha256`: the hash of every migration already applied, so

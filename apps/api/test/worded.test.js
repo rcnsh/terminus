@@ -14,7 +14,7 @@ import { DUE_MS } from '../src/trip.ts';
 import { withLang } from '../src/i18n.ts';
 
 const load = async (name) => {
-  const { default: fixture } = await import(`./fixtures/answers/${name}.json`, { with: { type: 'json' } });
+  const { default: fixture } = await import(`../../../fixtures/answers/${name}.json`, { with: { type: 'json' } });
   const { card: _card, refreshAt: _r, ...answer } = fixture;
   return answer;
 };
@@ -157,7 +157,7 @@ test('the journey comes worded: its title, the lines under each step, the backup
 
   // A room a walk from its stop: the walk on, under the stop and the arrival
   // (as the server sent it: the walk on isn't in the answer's own fields).
-  const { default: classRoom } = await import('./fixtures/answers/class-room.json', { with: { type: 'json' } });
+  const { default: classRoom } = await import('../../../fixtures/answers/class-room.json', { with: { type: 'json' } });
   const room = classRoom.card.journey;
   assert.equal(room.walkEndText, '2 min walk');
   assert.equal(room.arriveWhere, '2 min walk from UTown');
@@ -215,7 +215,7 @@ test("a Today row's second line: the leave-by and how, the bus you're on, or not
 });
 
 test('the Today golden has its rows worded, and a finished one says nothing', async () => {
-  const { default: day } = await import('./fixtures/answers/day.json', { with: { type: 'json' } });
+  const { default: day } = await import('../../../fixtures/answers/day.json', { with: { type: 'json' } });
   const first = day.items[0];
   assert.equal(first.title, 'GEA1000 @ UTown');
   assert.match(first.line, /^Leave by ~?\d{2}:\d{2} · R2 from PGP$/);

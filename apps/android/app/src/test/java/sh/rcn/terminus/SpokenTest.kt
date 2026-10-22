@@ -18,7 +18,7 @@ class SpokenTest {
     }
 
     private fun golden(name: String): NextAnswer {
-        val dir = listOf("../../api/test/fixtures/answers", "../api/test/fixtures/answers").map(::File).first { it.isDirectory }
+        val dir = listOf("../../../fixtures/answers", "../../fixtures/answers").map(::File).first { it.isDirectory }
         return NextAnswer.parse(JSONObject(File(dir, "$name.json").readText()))
     }
 

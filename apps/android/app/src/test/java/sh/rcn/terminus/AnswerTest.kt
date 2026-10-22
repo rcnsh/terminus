@@ -14,17 +14,14 @@ import sh.rcn.terminus.ui.withoutLocalUndo
 import sh.rcn.terminus.widget.Refresher
 import sh.rcn.terminus.widget.isOld
 
-/**
- * Parses the API's golden answers (apps/api/test/fixtures/answers, checked by the API's own tests), so a change in the response shape fails
- * here too.
- */
+/** Parses the API's golden answers (fixtures/answers, checked by the API's own tests), so a change in the response shape fails here too. */
 class AnswerTest {
     init {
         TestStrings.install()
     }
 
     private fun goldenJson(name: String): JSONObject {
-        val dir = listOf("../../api/test/fixtures/answers", "../api/test/fixtures/answers").map(::File).first { it.isDirectory }
+        val dir = listOf("../../../fixtures/answers", "../../fixtures/answers").map(::File).first { it.isDirectory }
         return JSONObject(File(dir, "$name.json").readText())
     }
 
@@ -37,7 +34,7 @@ class AnswerTest {
      * /api/me/next. A new fixture is read without being listed here.
      */
     private fun everyGolden(): List<Pair<String, JSONObject>> {
-        val dir = listOf("../../api/test/fixtures/answers", "../api/test/fixtures/answers").map(::File).first { it.isDirectory }
+        val dir = listOf("../../../fixtures/answers", "../../fixtures/answers").map(::File).first { it.isDirectory }
         return listOf(dir, File(dir, "zh")).flatMap { d ->
             d.listFiles { f -> f.extension == "json" }
                 .orEmpty()

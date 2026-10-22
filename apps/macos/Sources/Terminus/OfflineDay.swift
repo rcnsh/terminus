@@ -4,7 +4,7 @@ import SwiftUI
 /// last answer has gone stale: the next thing on the day plan kept from
 /// /api/me/day. The web and Android apps follow the same rule (app/offline.js,
 /// OfflineDay.kt), checked against the same cases
-/// (apps/api/test/fixtures/offline-day.json).
+/// (fixtures/offline-day.json).
 enum OfflineDay {
     /// A class still counts this long after it starts: late, but still the one to go to.
     static let classGrace: TimeInterval = 15 * 60

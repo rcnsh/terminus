@@ -10,16 +10,15 @@
     "test": "node --test test/*.test.js test/worker.smoke.js",
     "typecheck": "tsc --noEmit",
     "dev": "cf dev",
-    "deploy": "node scripts/predeploy.mjs && cf d1 migrations apply 27067356-8691-458f-bc69-fa5ca5bbc374 && cf deploy",
-    "deploy:beta": "node scripts/predeploy.mjs && cf d1 migrations apply d7f309ef-6e3a-457f-a106-154fa797b933 && cf deploy --mode beta",
-    "scrape": "python3 scripts/scrape_stops.py",
+    "deploy": "node scripts/deploy/predeploy.mjs && cf d1 migrations apply 27067356-8691-458f-bc69-fa5ca5bbc374 && cf deploy",
+    "deploy:beta": "node scripts/deploy/predeploy.mjs && cf d1 migrations apply d7f309ef-6e3a-457f-a106-154fa797b933 && cf deploy --mode beta",
+    "scrape": "python3 scripts/data/scrape_stops.py",
     "check": "pnpm test && pnpm typecheck"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20261016.1",
     "@types/react": "19.3.0",
     "cf": "1.0.0-beta.18",
-    "happy-dom": "21.0.3",
     "typescript": "7.0.2",
     "wrangler": "4.151.1"
   },

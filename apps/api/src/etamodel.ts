@@ -2,7 +2,7 @@
  * A second opinion on "the next D1 in 4 min": the feed's time corrected for
  * how it usually errs, blended with history's time for the bus's position.
  * Pure, with no I/O and nothing bigger than a Map: it runs in the Worker or
- * in scripts/eta_backtest.mjs. Nothing in the answer path uses it.
+ * in scripts/probes/eta_backtest.mjs. Nothing in the answer path uses it.
  * See docs/eta-model.md, *The model*.
  */
 
