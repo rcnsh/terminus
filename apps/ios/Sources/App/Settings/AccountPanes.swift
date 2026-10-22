@@ -253,8 +253,8 @@ struct SettingsAccountPane: View {
                     openInSafari("\(Api.linkBase)/account")
                 }
             }
-        }
-        SettingsGroup {
+            GroupDivider()
+            // Kept on this phone, not in the account: it's about this app's crashes.
             SettingSwitch(
                 label: L("Send crash reports"),
                 sub: L("When terminus crashes, send what broke and the app version. Never who you are or where."), isOn: $sendCrashReports,
