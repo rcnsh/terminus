@@ -15,6 +15,7 @@
 import { KEEP_DAYS } from '../accounts/outcomes.ts';
 import { FEEDBACK_KEEP_DAYS } from './feedback.ts';
 import type { Env } from '../types.ts';
+import { sgt } from '../config.ts';
 import { fetchArrivals } from '../feeds/fms.ts';
 import { fetchPublicArrivals, ltaConfigured } from '../feeds/lta.ts';
 import { GRAPH_PUBLIC } from '../answer/graph.ts';
@@ -97,6 +98,15 @@ export const FAILS_TO_ALERT = 2;
  *  every other check sends no "down" and "up" emails by turns, nor opens an
  *  incident each time. What users see follows the last check (answering). */
 export const OKS_TO_RECOVER = 2;
+/** Singapore time, in minutes from midnight, inside which a failing feed is
+ *  an outage. Outside it no bus runs, so failures there confirm nothing;
+ *  they still count, so a feed failing at 07:00 after a night of failures
+ *  is confirmed down at once. */
+export const OUTAGE_HOURS = { start: 7 * 60, end: 23 * 60 + 30 };
+export const inOutageHours = (nowMs: number): boolean => {
+  const { minutes } = sgt(nowMs);
+  return minutes >= OUTAGE_HOURS.start && minutes < OUTAGE_HOURS.end;
+};
 
 /**
  * Whether the feed is answering, as users are told it (the card's notice,
@@ -264,7 +274,8 @@ export async function checkUpstream(
   const oks = ok ? (prev?.oks ?? 0) + 1 : 0;
   const okSince = ok ? (prev?.oks && prev.okSince ? prev.okSince : nowMs) : null;
   const was = prev?.up ?? true;
-  const up = was ? failures < FAILS_TO_ALERT : oks >= OKS_TO_RECOVER;
+  // An outage already confirmed runs on past the hours until the feed answers.
+  const up = was ? failures < FAILS_TO_ALERT || !inOutageHours(nowMs) : oks >= OKS_TO_RECOVER;
   const changed = !prev || prev.up !== up;
   let pending = prev?.pending ?? null;
   if (pending && delivered === `${prev!.since} ${pending}`) pending = null;

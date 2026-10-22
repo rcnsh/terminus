@@ -112,6 +112,33 @@ async function confirmedDown(e) {
   assert.equal((await readUpstream(e)).up, false);
 }
 
+test('outside 07:00 to 23:30 Singapore time a failing feed is no outage', async () => {
+  const e = env();
+  // 23:30 to 07:00 SGT is 15:30 to 23:00 UTC.
+  const at = (h, m = 0) => Date.UTC(2026, 9, 22, h, m);
+  await checkUpstream(e, at(15, 0), ok);
+  await checkUpstream(e, at(15, 30), fail('network'));
+  await checkUpstream(e, at(15, 45), fail('network'));
+  await checkUpstream(e, at(22, 45), fail('network'));
+  assert.equal((await readUpstream(e)).up, true, 'no bus runs, so nothing is down');
+  assert.deepEqual(await readIncidents(e), []);
+  assert.equal(e.EMAIL.sent.length, 0);
+
+  // Still failing at 07:00 after a night of it: down at once, from 07:00.
+  await checkUpstream(e, at(23, 0), fail('network'));
+  assert.equal((await readUpstream(e)).up, false);
+  assert.deepEqual(await readIncidents(e), [{ start: at(23, 0), end: null, cause: 'feed' }]);
+  assert.equal(e.EMAIL.sent.length, 1);
+
+  // Down when the hours end, it stays down until the feed answers.
+  const d = env();
+  await checkUpstream(d, at(15, 0), fail('network'));
+  await checkUpstream(d, at(15, 15), fail('network'));
+  await checkUpstream(d, at(15, 45), fail('network'));
+  assert.equal((await readUpstream(d)).up, false);
+  assert.deepEqual(await readIncidents(d), [{ start: at(15, 15), end: null, cause: 'feed' }]);
+});
+
 test('a KV read that fails changes nothing: no state, no email, no incident', async () => {
   // While the feed is down: read as "never checked", it would be marked up
   // and the next failure would email "down" a second time.
