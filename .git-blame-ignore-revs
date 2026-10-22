@@ -4,3 +4,6 @@
 
 # chore: reformat with oxfmt, swift-format and ktfmt
 631fc0e6fbba3a438d0ae82aba54464466b8dde6
+
+# refactor(api): src grouped into folders by what each part does (#54)
+733781e928423672372ad1047c2fadd56f0b628e
