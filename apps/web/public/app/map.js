@@ -1151,7 +1151,7 @@ function SectionBand({ text, open = true, onToggle, controls }) {
 
 /** How full a bus is, as three rising bars (as many filled as it's full) and a word. */
 function CrowdMeter({ crowd }) {
-  const word = { low: t('Seats free'), medium: t('Busy'), high: t('Packed') }[crowd];
+  const word = { low: t('Seats'), medium: t('Busy'), high: t('Packed') }[crowd];
   if (!word) return null;
   return html`<span class=${`bus-crowd ${crowd}`}><span class="bars" aria-hidden="true"><i></i><i></i><i></i></span>${word}</span>`;
 }

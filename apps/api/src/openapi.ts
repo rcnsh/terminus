@@ -597,9 +597,9 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Stops'],
           summary: 'Stops by side of the road',
           description:
-            'Every stop grouped with its twin across the road, with the buses that call at each side and the stop each one goes to next. ' +
+            'Every stop grouped with its opposite stop, with the buses that call at each side and the stop each one goes to next. ' +
             'NUS stops come in pairs a few metres apart, one for each direction of travel, so this is how to tell which side goes where. ' +
-            'A stop with no twin is a place with one side.\n\n' +
+            'A stop with no opposite stop is a place with one side.\n\n' +
             '`crossingM` is the straight-line distance between the two stops, not a walking distance. ' +
             '`next` is null where the bus terminates. For whole routes in order, see `/api/campus`.\n\n' +
             'The data only changes when the stop graph is re-scraped; `version` says when that was, and stop codes can change between versions. ' +
@@ -1097,8 +1097,8 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Account'],
           summary: 'Departures near you',
           description:
-            "Upcoming buses at up to three stops within walking range, nearest first, plus the nearest stop's twin " +
-            "(across the road, or a stop easily mistaken for it) when it isn't one of them. `opposite` is each stop's twin, if it has one. Each departure has its service's `color`. Without coordinates, uses your home.",
+            "Upcoming buses at up to three stops within walking range, nearest first, plus the nearest stop's opposite stop " +
+            "(across the road, or a stop easily mistaken for it) when it isn't one of them. `opposite` is each stop's opposite or partner stop, if it has one. Each departure has its service's `color`. Without coordinates, uses your home.",
           operationId: 'meNearby',
           security: [{ bearer: [] }, { cookie: [] }],
           parameters: [...coordParams, stoppedParam, langParam],
@@ -3323,7 +3323,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             },
           },
         },
-        Trip: {
+        Class: {
           type: 'object',
           required: ['day', 'arriveByMin', 'to', 'label'],
           properties: {
@@ -3456,8 +3456,8 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               description:
                 'Clock times in answers and cards, 12-hour ("6:36 PM") or 24-hour ("18:36"). `auto` follows each request (`?h12=1` for 12-hour); `12` or `24` here overrides it, so every device shows the same.',
             },
-            trips: { type: 'array', items: { $ref: '#/components/schemas/Trip' }, description: 'From the NUSMods import.' },
-            manual: { type: 'array', items: { $ref: '#/components/schemas/Trip' }, description: 'Entered by hand. Kept on re-import.' },
+            trips: { type: 'array', items: { $ref: '#/components/schemas/Class' }, description: 'From the NUSMods import.' },
+            manual: { type: 'array', items: { $ref: '#/components/schemas/Class' }, description: 'Entered by hand. Kept on re-import.' },
             places: {
               type: 'array',
               maxItems: 12,
@@ -3576,7 +3576,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                       type: 'string',
                       example: 'D2 · 09:42',
                       description:
-                        'The headline. With a bus to count down to, its service and departure as a clock time ("D2 · 09:42", "~09:42" for a timetable estimate, Chinese "约 09:42"), which stays true until the bus leaves; otherwise `label` as it is ("Walk · 8 min", "No classes today").',
+                        'The headline. With a bus to count down to, its service and departure as a clock time ("D2 · 09:42", "~09:42" for an estimate, Chinese "约 09:42"), which stays true until the bus leaves; otherwise `label` as it is ("Walk · 8 min", "No classes today").',
                     },
                     heading: {
                       type: ['string', 'null'],
@@ -3605,9 +3605,9 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                     },
                     quality: {
                       type: ['string', 'null'],
-                      example: 'Timetable estimate',
+                      example: 'Estimated time',
                       description:
-                        'What is less than live about the times: "Timetable estimate", "Live times are a few minutes old", "No live data". Null when they are live.',
+                        'What is less than live about the times: "Estimated time", "Live times are a few minutes old", "No live data". Null when they are live.',
                     },
                     leaveBy: {
                       type: ['string', 'null'],
@@ -3747,7 +3747,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                     journey: {
                       type: ['object', 'null'],
                       description:
-                        'The trip as steps, for apps that draw it (a line from you to the destination, a ticket, a list of steps): walk to the stop, take the bus, get there, and walk on when the destination is a room or building away from the stop. ' +
+                        'The trip as steps, for apps that draw it (a line from you to the destination, or a list of steps): walk to the stop, take the bus, get there, and walk on when the destination is a room or building away from the stop. ' +
                         'On foot the whole way it is the walk alone: `bus`, `boardAt` and `ride` are null, `walk` is the whole walk and `why` says why not a bus. ' +
                         'Null on the bus, once there, and with no time to give. Count down to `leave.at` and `boardAt` yourself; show the strings as they are.',
                       required: [
@@ -3814,7 +3814,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                           description: 'When the bus gets to `toStop` ("4:06 PM"). The same as `arrive` when `walkEnd` is null.',
                         },
                         slack: { type: ['string', 'null'], description: 'A class only: "3 min early", "2 min late".' },
-                        live: { type: 'boolean', description: 'The bus’s time is live, not a timetable estimate.' },
+                        live: { type: 'boolean', description: 'The bus’s time is live, not an estimate.' },
                         backup: {
                           oneOf: [{ $ref: '#/components/schemas/JourneyBus' }, { type: 'null' }],
                           description: 'Another bus: the next one for a trip, or for a class the sooner bus to go now on.',

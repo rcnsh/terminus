@@ -168,15 +168,15 @@ class NearbyBoardTest {
         NearbyStop(code, code, 60, true, rows, opposite = opposite)
 
     @Test
-    fun besideIsTheTwinAcrossTheRoad() {
+    fun besideIsTheOppositeStopAcrossTheRoad() {
         val bus = listOf(BoardRow("A1", 120, "live"))
         val stops = listOf(stop("YIH", opposite = "YIH-OPP"), stop("CLB", rows = bus), stop("YIH-OPP"))
-        // The twin, even with no bus, over a nearer stop that has one.
+        // The opposite stop, even with no bus, over a nearer stop that has one.
         assertEquals("YIH-OPP", NearbyBoard.beside(stops) { NearbyBoard.buses(it, fetched, fetched) }?.code)
     }
 
     @Test
-    fun withNoTwinBesideIsTheNextStopWithABus() {
+    fun withNoOppositeStopBesideIsTheNextStopWithABus() {
         val bus = listOf(BoardRow("D2", 120, "live"))
         val stops = listOf(stop("COM3"), stop("TCOMS"), stop("BIZ2", rows = bus))
         assertEquals("BIZ2", NearbyBoard.beside(stops) { NearbyBoard.buses(it, fetched, fetched) }?.code)

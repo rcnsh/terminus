@@ -74,7 +74,7 @@ RESIDENCES = json.loads((ROOT / "data/src/residences.json").read_text())["reside
 RES_FILE = CACHE / "osm-residences.json"
 
 # Stops students use for a building where the map's nearest is wrong, and
-# the stops paired across the road (each brings its twin to the resolver).
+# the stops paired across the road (each brings its opposite stop to the resolver).
 VENUE_STOPS = json.loads((ROOT / "data/src/venue-stops.json").read_text())["venues"]
 OPPOSITES = json.loads((ROOT / "data/opposites.json").read_text())["pairs"]
 # A building is served by a second stop when the walk to it is at most this
@@ -303,9 +303,9 @@ def main():
 
     # The stop across the road: the resolver adds it to any stop it starts
     # from or heads for, so a building never needs to list both.
-    twin = {s["code"]: s["opposite"] for s in stops if s.get("opposite")}
+    opp = {s["code"]: s["opposite"] for s in stops if s.get("opposite")}
     for a, b in OPPOSITES:
-        twin[a], twin[b] = b, a
+        opp[a], opp[b] = b, a
     for code in VENUE_STOPS:
         unknown = [s for s in VENUE_STOPS[code]["stops"] if s not in stop_pt]
         if unknown:
@@ -323,7 +323,7 @@ def main():
         for w, s in walks:
             if len(out) >= MAX_VENUE_STOPS or w > nearest + VENUE_EXTRA_M:
                 break
-            if s not in out and twin.get(s) not in out:
+            if s not in out and opp.get(s) not in out:
                 out[s] = round(w)
         return out
 

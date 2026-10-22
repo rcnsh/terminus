@@ -380,7 +380,7 @@ class AnswerTest {
         assertEquals("R2 · 09:06", bus.card!!.title)
         assertEquals("R2 · 09:06", bus.clockLabel { "never" })
         assertEquals("Next class · GEA1000 @ UTown", bus.card.heading)
-        // A timetable estimate keeps its "~", in the server's words.
+        // An estimate keeps its "~", in the server's words.
         val scheduled = golden("scheduled")
         assertEquals("A1 · ~09:11", scheduled.title)
         assertEquals("Going to KR MRT", scheduled.card!!.heading)

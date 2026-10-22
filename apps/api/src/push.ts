@@ -240,9 +240,9 @@ async function deliver(env: Env, userId: string, msg: Delivery, nowMs: number, e
   return out;
 }
 
-type Outcome = 'sent' | 'failed' | 'gone' | 'skip';
+type PushResult = 'sent' | 'failed' | 'gone' | 'skip';
 
-async function toBrowser(env: Env, pushToken: string, msg: Delivery, nowMs: number): Promise<Outcome> {
+async function toBrowser(env: Env, pushToken: string, msg: Delivery, nowMs: number): Promise<PushResult> {
   // Without a usable VAPID key no browser can be sent to: nobody reached, not a failure to retry.
   if (!msg.web || !webPushEnabled(env)) return 'skip';
   let sub: WebSubscription | null = null;
@@ -271,7 +271,7 @@ async function toAndroid(
   to: { push_token: string; client: string | null },
   msg: Delivery,
   nowMs: number,
-): Promise<Outcome> {
+): Promise<PushResult> {
   // Without an access token no device can be sent to: asking again for each would only wait longer.
   if (fcm.down) return 'failed';
   const send = (token: string) =>

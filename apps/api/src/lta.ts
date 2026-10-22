@@ -20,7 +20,7 @@ import { MAX_ETA_S, TTL } from './config.ts';
 import { UpstreamUnreachable, timedFetch } from './http.ts';
 import { cacheBase, cachedFetch } from './edgecache.ts';
 import { GateBusy, throughGate } from './feedgate.ts';
-import { noteTrip } from './feedwatch.ts';
+import { noteBreakerOpen } from './feedwatch.ts';
 import { indexGraph } from './resolve.ts';
 
 export const LTA_BASE = 'https://datamall2.mytransport.sg/ltaodataservice/';
@@ -247,9 +247,9 @@ export async function getPublicArrivals(
     memoes: (err) => !(err instanceof GateBusy),
     breaker: {
       key: `${cacheBase()}/breaker-public`,
-      trips: (err) => err instanceof LtaRefused || err instanceof UpstreamUnreachable,
+      opens: (err) => err instanceof LtaRefused || err instanceof UpstreamUnreachable,
       maxAgeS: TTL.breakerS,
-      onTrip: (err) => noteTrip(env, 'lta', err, nowMs),
+      onOpen: (err) => noteBreakerOpen(env, 'lta', err, nowMs),
     },
     inflight,
   });

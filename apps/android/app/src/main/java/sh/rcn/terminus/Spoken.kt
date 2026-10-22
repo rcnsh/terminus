@@ -97,8 +97,8 @@ object Spoken {
     }
 
     /**
-     * A bus's time as it's said: "about 6 minutes, timetable" for a timetable guess (the screen's "~6 min"), "6 minutes, live" for a bus
-     * seen. Without [withQuality] (where a tag beside it says so already), only the "about". Null without a time.
+     * A bus's time as it's said: "about 6 minutes, estimated" for an estimate (the screen's "~6 min"), "6 minutes, live" for a bus seen.
+     * Without [withQuality] (where a tag beside it says so already), only the "about". Null without a time.
      */
     fun eta(etaS: Int?, quality: String, withQuality: Boolean = true): String? {
         val s = etaS ?: return null

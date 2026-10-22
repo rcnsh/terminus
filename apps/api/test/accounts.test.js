@@ -523,7 +523,7 @@ test('/api/me/next with nothing set up asks for setup instead of inventing a tri
   assert.deepEqual(body.arrivals, [], 'no bus it has no reason to suggest');
 });
 
-test('/api/me/next goes to a saved place by key and returns the chips', async () => {
+test('/api/me/next goes to a favourite by key and returns the chips', async () => {
   const { env, email } = setup();
   const cookie = await signIn(env, email);
   await call(env, '/api/me/profile', {
@@ -562,7 +562,7 @@ test('/api/me/nearby lists boards for stops near the given point', async () => {
   const body = await res.json();
   assert.ok(body.stops.length >= 1);
   assert.equal(body.stops[0].stop.code, 'PGP');
-  // Its twin is always there, for the widget to swap to.
+  // Its opposite or partner stop is always there, for the widget to swap to.
   assert.equal(body.stops[0].opposite, 'PGPR');
   assert.ok(body.stops.some((s) => s.stop.code === 'PGPR'));
   assert.ok(
@@ -602,7 +602,7 @@ test('pairing codes avoid look-alike characters and normalise user input', () =>
   assert.equal(normalizePairCode('ABCDE0'), null, 'zero is not in the alphabet');
 });
 
-test('/api/me/next rests outside the day, but saved places still answer', async () => {
+test('/api/me/next rests outside the day, but favourites still answer', async () => {
   const { env, email } = setup();
   const cookie = await signIn(env, email);
   await call(env, '/api/me/profile', {
@@ -1175,7 +1175,7 @@ test('/api/me: a new account gets the full setup, then never again', async () =>
   assert.equal(await me(), null);
 });
 
-test('a food court works as a saved place and a destination', async () => {
+test('a food court works as a favourite and a destination', async () => {
   const { env, email } = setup();
   const cookie = await signIn(env, email);
   const put = await call(env, '/api/me/profile', {

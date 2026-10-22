@@ -16,7 +16,7 @@ object Destinations {
     /** Added places kept: a new one past this drops the oldest. */
     const val MAX_ADDED = 5
 
-    /** A place to go: `place:<key>` for a saved place, `stop:<code>` for a stop or place looked up. */
+    /** A place to go: `place:<key>` for a favourite, `stop:<code>` for a stop or place looked up. */
     data class Dest(val id: String, val label: String)
 
     data class Use(val label: String, val count: Double, val lastMs: Long)

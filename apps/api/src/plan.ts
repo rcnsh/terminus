@@ -27,13 +27,13 @@
  */
 
 import type { Leave } from './types.ts';
-import { type Boarded, WAIT_EARLY_MS, secondBusOf, tripEnd } from './trip.ts';
+import { type Plan, WAIT_EARLY_MS, secondBusOf, tripEnd } from './trip.ts';
 
 /** Live times move this much from one answer to the next, and it's still the same bus. */
 export const SAME_BUS_MS = 3 * 60_000;
 
 /** The bus a leave-by is for, as a plan; null when it's a walk. */
-export function planOfLeave(l: Leave | null | undefined, located: boolean, alightCode: string): Boarded | null {
+export function planOfLeave(l: Leave | null | undefined, located: boolean, alightCode: string): Plan | null {
   if (!l?.svc || !l.board) return null;
   const change = secondBusOf(l, alightCode);
   if (change) {
@@ -65,7 +65,7 @@ export function planOfLeave(l: Leave | null | undefined, located: boolean, aligh
 }
 
 /** The same service from the same stop, its time moved a little by the feed. */
-export function sameBus(a: Boarded | null | undefined, b: Boarded | null | undefined): boolean {
+export function sameBus(a: Plan | null | undefined, b: Plan | null | undefined): boolean {
   if (!a?.board || !b?.board || a.svc !== b.svc || (a.stopCode ?? a.stop) !== (b.stopCode ?? b.stop)) return false;
   // A trip that changes buses is the same only with the same change.
   if (a.change?.svc !== b.change?.svc || a.change?.stopCode !== b.change?.stopCode) return false;
@@ -74,9 +74,9 @@ export function sameBus(a: Boarded | null | undefined, b: Boarded | null | undef
 
 export interface PlanInput {
   /** The plan in the day's record, if any. */
-  stored: Boarded | undefined;
+  stored: Plan | undefined;
   /** The bus this request's answer says. */
-  made: Boarded | null;
+  made: Plan | null;
   /** This request has a location. */
   located: boolean;
   /** When the class starts, for a class; null for a trip home. */
@@ -86,7 +86,7 @@ export interface PlanInput {
 
 export interface PlanChoice {
   /** The bus the trip is about: what every device shows and detection watches. */
-  bus: Boarded | null;
+  bus: Plan | null;
   /** The answer's own bus, to be saved as the plan. */
   save: boolean;
 }
