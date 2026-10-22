@@ -110,6 +110,14 @@
     <string name="add_favourite">Add a favourite</string>
     <string name="added_by_hand">added by hand</string>
     <string name="allow_exact">Allow alarms &amp; reminders</string>
+    <string name="allow">Allow</string>
+    <!-- Setup's last step: the card asking for "Alarms & reminders". -->
+    <string name="on_time_title">On time, to the minute</string>
+    <string name="on_time_text">Allow \"Alarms &amp; reminders\" so leave alerts arrive on time and the Buses near you widget shows how many minutes until each bus.</string>
+    <!-- Settings › Appearance › Buses near you widget: its minutes, which need "Alarms & reminders". -->
+    <string name="widget_minutes">Minutes until each bus</string>
+    <string name="widget_minutes_on">Allowed. Buses under 15 minutes away show how many minutes are left.</string>
+    <string name="widget_minutes_off">Needs \"Alarms &amp; reminders\", so the widget can update each minute. Until then it shows clock times.</string>
     <string name="allow_location">Allow location</string>
     <string name="allowed">Allowed.</string>
     <string name="already_favourite">Already a favourite: %1$s</string>
@@ -167,7 +175,7 @@
     <string name="email_me_code">Email me a code</string>
     <string name="ends">Ends</string>
     <string name="eta_ended">ended</string>
-    <string name="exact_off">\"Alarms &amp; reminders\" is off for terminus. Reminders may arrive a few minutes late, and the live notification may not start until you open the app.</string>
+    <string name="exact_off">\"Alarms &amp; reminders\" is off for terminus. Reminders may arrive a few minutes late, the live notification may not start until you open the app, and the Buses near you widget shows clock times instead of minutes.</string>
     <string name="favourites_hint">Available in one tap from the app, the widget and the Mac\'s menu bar. To go somewhere every week, add it to your timetable.</string>
     <string name="finding_stop">Finding the nearest stop…</string>
     <string name="follow_device">Follow this phone</string>
@@ -412,8 +420,8 @@
     <string name="turn_off">Turn off</string>
     <string name="turn_on_alerts">Turn on leave alerts</string>
     <string name="turn_on_location">Turn on location, or set a home</string>
-    <string name="two_things">Two more things</string>
-    <string name="two_things_sub">Both are optional. You can change them later in Settings.</string>
+    <string name="last_things">A few more things</string>
+    <string name="last_things_sub">All optional. You can change them later in Settings.</string>
     <string name="undo">Undo</string>
     <string name="unexpected_answer">Unexpected response from terminus</string>
     <string name="update">Update</string>
@@ -509,7 +517,7 @@
     <string name="nearby_widget">Buses near you widget</string>
     <string name="new_to_nus">New to NUS</string>
     <string name="new_to_nus_sub">Says where each bus goes, by places you\'ll know: the MRT, UTown, PGP.</string>
-    <string name="new_to_nus_hint">Only on this phone. Off, the widget fits in more buses.</string>
+    <string name="new_to_nus_hint">Only on this phone. With New to NUS off, the widget fits in more buses.</string>
     <string name="leave_in_min">Leave in %1$d min</string>
     <string name="leave_in_min_s">Leave in %1$d min %2$d s</string>
     <string name="leave_in_s">Leave in %1$d s</string>

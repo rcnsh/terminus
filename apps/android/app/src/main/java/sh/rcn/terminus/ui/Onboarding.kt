@@ -807,13 +807,16 @@ private fun ClockSwitch(profile: ProfileDoc, account: AccountViewModel) {
 }
 
 /**
- * Notifications and location, each showing what it gives before asking: the leave-by alert itself, and your dot finding its nearest stop.
+ * Notifications, location and "Alarms & reminders", each showing what it gives before asking: the leave-by alert itself, your dot finding
+ * its nearest stop, and the widget's minutes until each bus.
  */
 @Composable
 private fun ColumnScope.PermissionsStep(state: AccountState, main: MainViewModel, next: () -> Unit, back: () -> Unit) {
     val ctx = LocalContext.current
     val mainState by main.state.collectAsStateWithLifecycle()
     var hasLocation by remember { mutableStateOf(Locator.hasForeground(ctx)) }
+    // Allowed only on a system page, so checked again on coming back from it.
+    var exact by remember { mutableStateOf(LeaveAlerts.canBeExact(ctx)) }
     // After two refusals Android stops showing the dialog: then the app's settings page, as on Now.
     var blocked by rememberSaveable { mutableStateOf(false) }
     val activity = ctx as? android.app.Activity
@@ -835,6 +838,7 @@ private fun ColumnScope.PermissionsStep(state: AccountState, main: MainViewModel
     // Allowed in the phone's settings meanwhile: says so on coming back.
     LifecycleResumeEffect(Unit) {
         hasLocation = Locator.hasForeground(ctx)
+        exact = LeaveAlerts.canBeExact(ctx)
         onPauseOrDispose { if (asking) dialogShown = true }
     }
     val askNotify =
@@ -842,7 +846,7 @@ private fun ColumnScope.PermissionsStep(state: AccountState, main: MainViewModel
             if (granted && LeaveAlerts.canNotify(ctx, LeaveAlerts.CHANNEL)) main.setLeaveAlerts(true)
         }
     StepPage(state.message, { StepButtons(next = next, back = back, nextLabel = stringResource(R.string.start_using)) }) {
-        Title(stringResource(R.string.two_things), stringResource(R.string.two_things_sub))
+        Title(stringResource(R.string.last_things), stringResource(R.string.last_things_sub))
         PermissionCard(
             preview = { AlertPreview() },
             title = stringResource(R.string.alerts_title),
@@ -874,6 +878,17 @@ private fun ColumnScope.PermissionsStep(state: AccountState, main: MainViewModel
                 asking = true
                 askLocation.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
             }
+        }
+        Spacer(Modifier.height(12.dp))
+        PermissionCard(
+            preview = { MinutesPreview() },
+            title = stringResource(R.string.on_time_title),
+            text = stringResource(R.string.on_time_text),
+            done = exact,
+            doneText = stringResource(R.string.allowed),
+            ask = stringResource(R.string.allow_exact),
+        ) {
+            runCatching { ctx.startActivity(LeaveAlerts.exactAlarmSettings(ctx)) }
         }
     }
 }
@@ -940,6 +955,37 @@ private fun AlertPreview() {
             style = MaterialTheme.typography.bodySmall,
             color = c.onSurfaceVariant,
         )
+    }
+}
+
+/** Two buses on the Buses near you widget, each with how many minutes until it. */
+@Composable
+private fun MinutesPreview() {
+    val c = MaterialTheme.colorScheme
+    val h12 = hour12(LocalContext.current)
+    Column(
+        Modifier.padding(start = 12.dp, end = 12.dp, top = 12.dp)
+            .fillMaxWidth()
+            .background(c.surfaceVariant, RoundedCornerShape(18.dp))
+            .padding(horizontal = 14.dp, vertical = 8.dp)
+    ) {
+        for ((svc, at) in listOf("A1" to 9 * 60 + 43, "D2" to 9 * 60 + 47)) {
+            val color = LIVERY.first { it.first == svc }.second
+            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                BusBadge(svc, color, 13.sp, even = true)
+                Text(
+                    if (h12) "%d:%02d".format((at / 60 + 11) % 12 + 1, at % 60) else "%02d:%02d".format(at / 60, at % 60),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(start = 10.dp).weight(1f),
+                )
+                Text(
+                    stringResource(R.string.nearby_min, at - (9 * 60 + 41)),
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.background(c.surface, RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 2.dp),
+                )
+            }
+        }
     }
 }
 

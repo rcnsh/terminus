@@ -111,6 +111,7 @@ import sh.rcn.terminus.WEEKDAYS
 import sh.rcn.terminus.dayShort
 import sh.rcn.terminus.hour12
 import sh.rcn.terminus.id
+import sh.rcn.terminus.widget.NearbyShared
 import sh.rcn.terminus.widget.redrawWidgets
 
 /** Settings' pages, in the order the list shows them. */
@@ -516,7 +517,7 @@ private fun SettingsPageContent(
             Groups {
                 ThemePicker()
                 CardStylePicker()
-                NewToNusSwitch()
+                NearbyWidgetSettings()
             }
         SettingsPage.Account -> Groups { AccountSection(state, account, main, onAddEmail, onSignedOut) }
         SettingsPage.About -> Groups { AboutPage() }
@@ -722,7 +723,8 @@ private fun FeedbackPage(state: AccountState, account: AccountViewModel, onAddEm
 
 /**
  * Leave alerts and the live notification: on this phone only, in two groups (before class, during a trip), each row with a short line and
- * the details under the group. Exact alarms are asked for when either notification is on.
+ * the details under the group. Exact alarms are asked for when either notification is on, or a widget shows buses near you (its minutes
+ * need them too).
  */
 @Composable
 private fun NotificationSettings(main: MainViewModel) {
@@ -739,10 +741,12 @@ private fun NotificationSettings(main: MainViewModel) {
             (store.liveUpdates && !LeaveAlerts.canNotify(ctx, LiveService.CHANNEL))
     }
     var off by remember { mutableStateOf(blocked()) }
+    var nearbyWidget by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             exact = LeaveAlerts.canBeExact(ctx)
             off = blocked()
+            nearbyWidget = NearbyShared.wanted(ctx)
         }
     }
     val openSettings = { ctx.openAppSettings() }
@@ -769,7 +773,7 @@ private fun NotificationSettings(main: MainViewModel) {
             channel = LiveService.CHANNEL,
         )
     }
-    if ((ui.leaveAlerts || ui.liveUpdates) && !exact) {
+    if ((ui.leaveAlerts || ui.liveUpdates || nearbyWidget) && !exact) {
         Column {
             Hint(stringResource(R.string.exact_off), Modifier.padding(horizontal = 4.dp))
             TextButton(onClick = { runCatching { ctx.startActivity(LeaveAlerts.exactAlarmSettings(ctx)) } }) {
@@ -1356,13 +1360,34 @@ private fun Favourites(profile: ProfileDoc, campus: Campus?, account: AccountVie
     LaunchedEffect(Unit) { account.loadCampus() }
 }
 
-/** New to NUS: the Nearby widget explains the buses ([NewToNus]), on this phone only. */
+/**
+ * The Nearby widget, on this phone only: New to NUS, where it explains the buses ([NewToNus]); and its minutes until each bus, which need
+ * "Alarms & reminders", allowed on a system page (the row goes there, either way).
+ */
 @Composable
-private fun NewToNusSwitch() {
+private fun NearbyWidgetSettings() {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val on = NewToNus.on(ctx)
+    // Checked again on coming back from the system page; the widget follows by itself (Refresher hears the change).
+    var exact by remember { mutableStateOf(LeaveAlerts.canBeExact(ctx)) }
+    LifecycleResumeEffect(Unit) {
+        exact = LeaveAlerts.canBeExact(ctx)
+        onPauseOrDispose {}
+    }
     Group(stringResource(R.string.nearby_widget), stringResource(R.string.new_to_nus_hint)) {
+        FieldRow(
+            stringResource(R.string.widget_minutes),
+            Modifier.clickable { runCatching { ctx.startActivity(LeaveAlerts.exactAlarmSettings(ctx)) } },
+            sub = stringResource(if (exact) R.string.widget_minutes_on else R.string.widget_minutes_off),
+        ) {
+            // Allowed, the line under it says so; there's nothing to do here.
+            if (!exact)
+                OutlinedButton(onClick = { runCatching { ctx.startActivity(LeaveAlerts.exactAlarmSettings(ctx)) } }) {
+                    Text(stringResource(R.string.allow))
+                }
+        }
+        RowDivider()
         FieldRow(
             stringResource(R.string.new_to_nus),
             Modifier.toggleable(value = on, role = Role.Switch) {

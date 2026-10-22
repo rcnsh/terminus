@@ -292,6 +292,8 @@ object Refresher {
         if (store.paired && !online(ctx)) store.lastError = L.s(R.string.offline)
         armRedraw(ctx, store)
         redrawWidgets(ctx)
+        // Exact alarms just allowed, or all alarms gone after a reboot: the widgets' own moments too (Nearby's minutes need them).
+        WidgetModes.armChosen(ctx)
     }
 
     internal fun online(ctx: Context): Boolean {
