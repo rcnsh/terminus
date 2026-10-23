@@ -349,7 +349,11 @@ function Admin() {
     document.body.classList.toggle('dash-on', Boolean(v.stats));
   }, [Boolean(v.stats)]);
   if (v.locked) return html`<${Unlock} msg=${v.msg} />`;
-  if (!v.stats) return html`<${GateCard} sub=${v.note || 'Loading…'} />`;
+  // The first load failed: the dashboard's own Refresh isn't drawn yet, and nothing tries again by itself.
+  if (!v.stats)
+    return html`<${GateCard} sub=${v.note || 'Loading…'}>
+      ${v.note && html`<button type="button" class="btn" onClick=${load} disabled=${v.loading}>Try again</button>`}
+    <//>`;
   return html`<${Dashboard} v=${v} />`;
 }
 
