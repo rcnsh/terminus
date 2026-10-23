@@ -124,6 +124,24 @@ internal object NearbyBoard {
         return (gone + ticks.orEmpty()).filter { it > now }.minOrNull()
     }
 
+    /**
+     * When the shared board's widgets ([stops], fetched at [fetchedAt], the phone's clock like [now]) next look different with nothing new:
+     * the times turning old, or sooner [redrawAt]'s moments, counting minutes only with [exact] alarms. The nearest two stops: a swap shows
+     * the opposite stop, which is one of them.
+     */
+    fun boardRedrawAt(stops: List<NearbyStop>, fetchedAt: Long, now: Long, exact: Boolean, skewMs: Long = 0L): Long? {
+        val old = fetchedAt + WidgetModes.NEARBY_OLD_MS
+        val buses = stops.take(2).flatMap { buses(it, fetchedAt, now, skewMs) }
+        return listOfNotNull(old, redrawAt(buses, now, old.takeIf { exact })).filter { it > now }.minOrNull()
+    }
+
+    /**
+     * When a redraw of the shared board also fetches it again: once its times turn old, or sooner when a bus shown at [fetchedAt] goes. A
+     * minute ticking off a count only redraws; fetching then too would ask for the board every minute.
+     */
+    fun boardRefetchAt(stops: List<NearbyStop>, fetchedAt: Long, skewMs: Long = 0L): Long =
+        boardRedrawAt(stops, fetchedAt, fetchedAt, exact = false, skewMs) ?: (fetchedAt + WidgetModes.NEARBY_OLD_MS)
+
     /** Page [page] of [buses], [per] to a page, counting round; with which page it is and how many there are. */
     fun page(buses: List<StopBus>, per: Int, page: Int): Paged {
         val pages = maxOf(1, (buses.size + per - 1) / per)
