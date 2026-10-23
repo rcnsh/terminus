@@ -5,7 +5,7 @@
 import { Fill, MARK, announce, focusSoon, html, useEffect, useRef, useState, useStore } from '../assets/ui.js';
 import { api, clock, hour12, sentences, serverNow, t } from './dom.js';
 import { lists } from './profile.js';
-import { Journey, cardStyle, spokenJourney } from './journey.js';
+import { Journey, cardStyle, spokenJourney, startsAt } from './journey.js';
 import { Celestial, Horizon, NightSky } from './sky.js';
 
 /**
@@ -79,7 +79,7 @@ function spoken(a, now) {
   if (c?.journey) return spokenJourney(a, now);
   if (c?.kind === 'class') {
     const head = c.phase !== 'waiting' && now >= Date.parse(a.leave.at) ? t('Leave now') : c.leaveBy;
-    return sentences([`${a.dest.label} · ${t('starts {0}', clock(a.timing.classAt))}`, head, c.catch, c.late ? c.arrive : null]);
+    return sentences([`${a.dest.label} · ${startsAt(a)}`, head, c.catch, c.late ? c.arrive : null]);
   }
   return sentences([a.card?.title ?? a.label, a.detail]);
 }
@@ -121,7 +121,7 @@ function ClassPlan({ a }) {
   const c = a.card;
   const late = c.late ? ' late' : '';
   return html`
-    <div class="where">${`${a.dest.label} · ${t('starts {0}', clock(a.timing.classAt))}`}</div>
+    <div class="where">${`${a.dest.label} · ${startsAt(a)}`}</div>
     <${LeaveBy} a=${a} late=${late} />
     <div class=${`catch${late}`}>${c.catch}</div>
     ${c.arrive && html`<div class=${`arrive${late}`}>${c.arrive}</div>`}

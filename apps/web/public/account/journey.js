@@ -121,9 +121,10 @@ export const by = (a, j, now) =>
 
 /** "To GEA1000 @ UTown · starts 10:00": a class's start is what the arrival and slack are about. */
 export const to = (a, j) =>
-  said(j, 'title', () =>
-    [t('To {0}', j.to), a.card.kind === 'class' && a.timing ? t('starts {0}', clock(a.timing.classAt)) : null].filter(Boolean).join(' · '),
-  );
+  said(j, 'title', () => [t('To {0}', j.to), a.card.kind === 'class' && a.timing ? startsAt(a) : null].filter(Boolean).join(' · '));
+
+/** "starts 10:00" for a class; "arrive by 19:00" for a one-off trip or a usual time, which isn't one. */
+export const startsAt = (a) => t(a.dest?.place ? 'arrive by {0}' : 'starts {0}', clock(a.timing.classAt));
 
 /** "Arrive 4:08 PM", with a class's "9 min early". */
 export const arrive = (j) =>
