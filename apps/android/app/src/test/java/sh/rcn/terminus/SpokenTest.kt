@@ -38,6 +38,14 @@ class SpokenTest {
     }
 
     @Test
+    fun aOneOffTripIsSpokenAsArriveByNotStarts() {
+        val a = golden("once-from-home")
+        val said = Spoken.summary(true, a, null, before(a), clock = clock)
+        assertTrue(said, said.contains("COM 3, arrive by 12:00"))
+        assertFalse(said, said.contains("starts"))
+    }
+
+    @Test
     fun underItsOwnHeadingTheCardDoesNotSayWhereToAgain() {
         val a = golden("place")
         val said = Spoken.summary(true, a, null, before(a), withHead = false, clock = clock)

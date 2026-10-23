@@ -48,7 +48,7 @@ object JourneyText {
         journey.text.title
             ?: listOfNotNull(
                     L.s(R.string.journey_to, journey.to),
-                    answer.classAtMs?.takeIf { answer.isClassPlan }?.let { L.s(R.string.starts_at, clock(it)) },
+                    answer.classAtMs?.takeIf { answer.isClassPlan }?.let { L.s(answer.startsRes, clock(it)) },
                 )
                 .joinToString(" · ")
 

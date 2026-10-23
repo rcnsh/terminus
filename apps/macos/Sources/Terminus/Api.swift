@@ -16,6 +16,8 @@ struct NextAnswer: Decodable {
         let to: String?
         let label: String
         let why: String
+        /// A `class` that is a one-off trip or a favourite at its usual time: planned like one, not worded as one.
+        let place: Bool?
     }
 
     // Only `label` is required. Anything else missing (a newer or older API)
@@ -337,6 +339,8 @@ struct NextAnswer: Decodable {
 
     // Every line below is worded on the server (card.ts), once for all clients.
     var isClassPlan: Bool { card?.kind == "class" }
+    /// "starts 10:00" for a class; "arrive by 19:00" for a one-off trip or a usual time, which isn't one.
+    func startsAt(_ c: Date) -> String { dest?.place == true ? L("arrive by %@", campusTime(c)) : L("starts %@", campusTime(c)) }
     /// No classes today (or none left): nothing to catch.
     var isFree: Bool { mode == "free" }
     /// A trip under way: its phase is what the menu bar says.

@@ -76,6 +76,7 @@
     <string name="a11y_old">这些时间已过时</string>
     <string name="a11y_on_the_to">在 %1$s 上，去 %2$s</string>
     <string name="a11y_starts">%1$s，%2$s 开始</string>
+    <string name="a11y_arrive_by">%1$s，%2$s 前到</string>
     <string name="a11y_to">去 %1$s</string>
     <string name="a11y_map">校园地图。要以列表查看车站和巴士，请用“巴士”标签页。</string>
     <string name="a11y_show_list">以列表显示</string>
@@ -390,6 +391,7 @@
     <string name="starting">正在开始…</string>
     <string name="starts">开始</string>
     <string name="starts_at">%1$s 开始</string>
+    <string name="arrive_by">%1$s 前到</string>
     <string name="step_of">第 %1$d 步，共 %2$d 步</string>
     <string name="stop_suffix">%1$s 站</string>
     <string name="sunday">星期日</string>

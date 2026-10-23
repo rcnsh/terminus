@@ -322,7 +322,7 @@ class LiveService : Service() {
                             )
                     )
                     .setSubText(
-                        listOfNotNull(answer.destLabel, answer.classAtMs?.let { L.s(R.string.starts_at, fmt(it)) }).joinToString(" · ")
+                        listOfNotNull(answer.destLabel, answer.classAtMs?.let { L.s(answer.startsRes, fmt(it)) }).joinToString(" · ")
                     )
                 // A class card can come without a leave time: no countdown then.
                 return b.countdownTo(countdownAt(answer).takeIf { unconfirmed == null }, now).build()

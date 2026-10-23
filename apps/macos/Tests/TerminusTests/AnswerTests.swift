@@ -573,3 +573,15 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
     #expect(a.countdownAt == board)
     #expect(board > a.leaveAt!)
 }
+
+/// A one-off trip is planned like a class but isn't one: the app's own
+/// heading (for an older server) says "arrive by", a class "starts".
+@Test func aOneOffTripSaysArriveByNotStarts() throws {
+    let once = try golden("once-from-home")
+    #expect(once.isClassPlan)
+    #expect(once.dest?.place == true)
+    #expect(once.startsAt(try #require(once.classAt)).hasPrefix("arrive by "))
+    let lesson = try golden("class-bus")
+    #expect(lesson.dest?.place == nil)
+    #expect(lesson.startsAt(try #require(lesson.classAt)).hasPrefix("starts "))
+}

@@ -52,7 +52,7 @@ enum JourneyText {
     static func to(_ a: NextAnswer, _ j: Journey) -> String {
         if let t = j.title { return t }
         var parts = [L("To %@", j.to)]
-        if a.isClassPlan, let c = a.classAt { parts.append(L("starts %@", campusTime(c))) }
+        if a.isClassPlan, let c = a.classAt { parts.append(a.startsAt(c)) }
         return parts.joined(separator: " · ")
     }
 

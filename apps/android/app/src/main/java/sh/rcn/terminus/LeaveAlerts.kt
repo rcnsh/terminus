@@ -275,7 +275,7 @@ object LeaveAlerts {
             } else {
                 said
             }
-        val where = listOfNotNull(answer.destLabel, answer.classAtMs?.let { L.s(R.string.starts_at, fmt(it)) }).joinToString(" · ")
+        val where = listOfNotNull(answer.destLabel, answer.classAtMs?.let { L.s(answer.startsRes, fmt(it)) }).joinToString(" · ")
         val open =
             PendingIntent.getActivity(
                 ctx,
