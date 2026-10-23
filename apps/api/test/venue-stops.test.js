@@ -5,7 +5,7 @@ import { venueStops, venueToStop } from '../src/timetable/nusmods.ts';
 import { originOf } from '../src/answer/next.ts';
 import { candidateStops, indexGraph, walkAllTheWayS } from '../src/answer/resolve.ts';
 import { buildingStops, footM } from '../src/answer/walk.ts';
-import { GRAPH } from '../src/answer/graph.ts';
+import { GRAPH, GRAPH_PUBLIC } from '../src/answer/graph.ts';
 import venuesJson from '../data/venues.json' with { type: 'json' };
 import overrides from '../data/src/venue-stops.json' with { type: 'json' };
 
@@ -127,4 +127,20 @@ test('at a stop beside a building you are at the stop, not in the building', () 
   assert.equal(buildingStops(s17.lat, s17.lon, byCode), null);
   // Away from every building: the straight line, as before.
   assert.equal(buildingStops(1.3, 103.79, byCode), null);
+});
+
+test('in a building, a stop only public buses call at does not switch off the walks along its paths', () => {
+  // In CELC, nearer an LTA stop on the road outside than the building's point.
+  const [lat, lon] = [1.29644, 103.77087];
+  const walks = (graph, publicBuses) =>
+    candidateStops(graph, { lat, lon, to: 'UTOWN', walkSpeedMs: 1.25, publicBuses })
+      .filter((c) => !c.stop.public)
+      .map((c) => [c.stop.code, Math.round(c.walkS)]);
+  const along = [
+    ['LT13-OPP', 161],
+    ['CLB', 210],
+    ['LT13', 232],
+  ];
+  assert.deepEqual(walks(GRAPH, false), along);
+  assert.deepEqual(walks(GRAPH_PUBLIC, true), along);
 });

@@ -60,7 +60,9 @@ export function buildingStops(lat: number, lon: number, byCode: Map<string, Stop
     if (d <= atM) [at, atM] = [b, d];
   }
   if (!at) return null;
-  for (const stop of byCode.values()) if (haversineM(lat, lon, stop.lat, stop.lon) < atM) return null;
+  // Only a shuttle stop counts: the paths from the building lead to those,
+  // and public buses being on shouldn't change the walk to them.
+  for (const stop of byCode.values()) if (!stop.public && haversineM(lat, lon, stop.lat, stop.lon) < atM) return null;
   const out: NearStop[] = [];
   for (const [code, m] of Object.entries(at.out)) {
     const stop = byCode.get(code);
