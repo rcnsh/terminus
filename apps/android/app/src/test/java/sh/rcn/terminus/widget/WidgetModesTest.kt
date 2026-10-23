@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.mutablePreferencesOf
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import sh.rcn.terminus.Destinations
@@ -36,6 +37,16 @@ class WidgetModesTest {
         }
         assertTrue(at - t <= WidgetModes.LAST_STEP_MS)
         assertTrue(steps in 1..12)
+    }
+
+    @Test
+    fun anExactRedrawHasAnInexactOneBehindItInCaseAlarmsAndRemindersIsTurnedOff() {
+        val at = now + 60_000L
+        // Turning it off cancels the exact alarm and stops the app with no broadcast; the inexact one still comes, two minutes on, and
+        // redraws Nearby's counts as clock times. Each exact redraw moves it on, so while exact alarms work it never comes.
+        assertEquals(at + 120_000L, WidgetModes.backstopAt(at, exact = true))
+        assertNull(WidgetModes.backstopAt(at, exact = false))
+        assertNull(WidgetModes.backstopAt(null, exact = true))
     }
 
     @Test

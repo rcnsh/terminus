@@ -455,6 +455,7 @@ object Refresher {
             cancel(wakeIntent(ctx))
             cancel(redrawIntent(ctx))
             cancel(WidgetModes.alarmIntent(ctx))
+            cancel(WidgetModes.backstopIntent(ctx))
         }
         Store(ctx).refreshAlarmAt = 0
         LeaveAlerts.cancel(ctx)
@@ -466,6 +467,7 @@ object Refresher {
         ctx.getSystemService(AlarmManager::class.java)?.run {
             cancel(redrawIntent(ctx))
             cancel(WidgetModes.alarmIntent(ctx))
+            cancel(WidgetModes.backstopIntent(ctx))
         }
         if (active(ctx)) return
         WorkManager.getInstance(ctx).run {
