@@ -75,6 +75,21 @@ final class SettingsProfileTests: XCTestCase {
         XCTAssertEqual(p.places.map(\.label), ["MRT"])
     }
 
+    func testLabelsAreCutAsTheServerCountsThem() {
+        // The server counts UTF-16 units: an emoji is two, so 23 letters and
+        // one would be 25, over the 24 a favourite's name may have, and refused.
+        var p = doc(#"{"limits":{"placeLabel":24}}"#)
+        p.addPlace(label: String(repeating: "b", count: 23) + "🚌", to: "KR-MRT")
+        XCTAssertEqual(p.places.map(\.label), [String(repeating: "b", count: 23)])
+
+        // A class's name: 59 letters and an emoji is 61 of the 60.
+        XCTAssertEqual(clippedUTF16(String(repeating: "a", count: 59) + "🚌", 60), String(repeating: "a", count: 59))
+        XCTAssertEqual(clippedUTF16("ab🚌", 4), "ab🚌")
+        XCTAssertEqual(clippedUTF16("Gym", 60), "Gym")
+        // A flag is one character of four units: whole or not at all.
+        XCTAssertEqual(clippedUTF16("SG 🇸🇬", 5), "SG ")
+    }
+
     func testClassesAreMondayFirstThenByTime() {
         var p = doc(
             #"{"trips":[{"day":0,"arriveByMin":600,"to":"A","label":"Sun"},{"day":1,"arriveByMin":700,"to":"B","label":"Mon late"}],"manual":[{"day":1,"arriveByMin":500,"to":"C","label":"Mon early"}]}"#

@@ -324,14 +324,7 @@ struct SettingsFeedbackPane: View {
     /// The note's length as the server counts it (JavaScript's, in UTF-16 units).
     static func length(_ s: String) -> Int { s.utf16.count }
     /// At most `limit` of those, never cutting a character in half.
-    static func clipped(_ s: String) -> String {
-        var out = ""
-        for c in s {
-            if out.utf16.count + c.utf16.count > limit { break }
-            out.append(c)
-        }
-        return out
-    }
+    static func clipped(_ s: String) -> String { clippedUTF16(s, limit) }
 
     var body: some View {
         if let email = app.email {
