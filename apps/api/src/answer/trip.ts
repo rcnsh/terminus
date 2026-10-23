@@ -15,6 +15,7 @@
  */
 
 import type { Env, Graph, Leave, MeAnswer } from '../types.ts';
+import type { StepTarget } from './step.ts';
 import { haversineM } from '../geo.ts';
 import { MAX_FIX_ACC_M, WALK, sgt } from '../config.ts';
 import { sgtDate } from '../timetable/calendar.ts';
@@ -299,6 +300,9 @@ export interface DayRecord {
    *  and frozen once it left, so a trip taken to be on that bus ("On the
    *  D2") stays about it after the answer has moved on to the next one. */
   plans?: Record<string, Plan>;
+  /** The bus the user stepped to for a trip ("Later bus"), by trip key, in
+   *  place of the answer's own (step.ts). */
+  steps?: Record<string, StepTarget>;
   /** When the object next wakes to push (epoch ms), or absent when it
    *  won't: the Worker asks again only when that would be sooner
    *  (needsWatch). Push only. */
@@ -325,6 +329,9 @@ export interface TripUpdate {
   /** Trip records; null deletes one. */
   items?: Array<{ key: string; rec: TripRecord | null }>;
   plans?: Record<string, Plan>;
+  /** A bus stepped to for a trip, or null for the answer's own again. Either
+   *  drops the trip's plan, so the next answer's bus becomes it. */
+  steps?: Record<string, StepTarget | null>;
   /** Wake at `at` (no later than a wake already pending) to push the card. */
   watch?: { userId: string; at: number };
 }
@@ -441,7 +448,9 @@ export async function loadDay(env: Env, userId: string, nowMs: number): Promise<
     const res = await ask(s, `day?date=${sgtDate(nowMs)}`);
     if (!res.ok) return null;
     const day = (await res.json()) as DayRecord | null;
-    return day && (Object.keys(day.trips).length || Object.keys(day.plans ?? {}).length || day.watch) ? day : null;
+    return day && (Object.keys(day.trips).length || Object.keys(day.plans ?? {}).length || Object.keys(day.steps ?? {}).length || day.watch)
+      ? day
+      : null;
   } catch (err) {
     // The answer works without trip state; a failure only loses the phase.
     console.error('trip state unavailable', err instanceof Error ? err.name : typeof err);

@@ -278,6 +278,10 @@ The plan's bus left without the user on it.
 **Gone**:
 The plan's bus has left and nothing says whether the user caught it.
 
+**Step**:
+Moving a trip to the bus before or after the one shown ("Earlier bus", "Later bus"); "Best bus" goes back to the server's own.
+_Avoid_: skip (that's Not going), shift, snooze
+
 **Not going**:
 The user's choice to skip one trip today.
 _Avoid_: skip, cancel, not going today

@@ -60,6 +60,16 @@
     "paid": true,
     "route": "151/2"
   },
+  "steps": {
+    "trip": "to:CG",
+    "earlier": null,
+    "later": {
+      "svc": "151/2",
+      "stop": "IT",
+      "board": "2026-08-27T01:18:00Z"
+    },
+    "moved": false
+  },
   "mode": "trip",
   "dest": {
     "to": "CG",
@@ -150,6 +160,19 @@
       "summary": "在 IT 搭约 09:04 的 151 ($)"
     },
     "upcoming": null,
+    "step": {
+      "trip": "to:CG",
+      "earlier": null,
+      "later": {
+        "svc": "151/2",
+        "stop": "IT",
+        "board": "2026-08-27T01:18:00Z"
+      },
+      "moved": false,
+      "earlierLabel": "早一班",
+      "laterLabel": "晚一班",
+      "bestLabel": "最佳班次"
+    },
     "title": "151 · 约 09:04",
     "heading": "去 College Gr",
     "remindAt": null

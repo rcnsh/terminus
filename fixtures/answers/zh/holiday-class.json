@@ -38,6 +38,20 @@
     "toStop": "UTown",
     "toCode": "UTOWN"
   },
+  "steps": {
+    "trip": "1:600:UTOWN",
+    "earlier": {
+      "svc": "D2",
+      "stop": "PGP",
+      "board": "2026-11-09T01:24:00Z"
+    },
+    "later": {
+      "svc": "D2",
+      "stop": "PGP",
+      "board": "2026-11-09T01:36:00Z"
+    },
+    "moved": false
+  },
   "mode": "trip",
   "dest": {
     "to": "UTOWN",
@@ -144,6 +158,23 @@
       "summary": "约 09:57 到达 · 在 PGP 搭约 09:35 的 D2"
     },
     "upcoming": null,
+    "step": {
+      "trip": "1:600:UTOWN",
+      "earlier": {
+        "svc": "D2",
+        "stop": "PGP",
+        "board": "2026-11-09T01:24:00Z"
+      },
+      "later": {
+        "svc": "D2",
+        "stop": "PGP",
+        "board": "2026-11-09T01:36:00Z"
+      },
+      "moved": false,
+      "earlierLabel": "早一班",
+      "laterLabel": "晚一班",
+      "bestLabel": "最佳班次"
+    },
     "title": "D2 · 约 09:06",
     "heading": "下一节课 · GEA1000 @ UTown",
     "remindAt": "2026-11-09T01:25:10Z"

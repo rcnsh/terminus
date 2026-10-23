@@ -59,7 +59,7 @@ import {
   signalOf,
   tripEnd,
 } from './trip.ts';
-import { SAME_BUS_MS, choosePlan, planOfLeave } from './plan.ts';
+import { SAME_BUS_MS, choosePlan, planOfLeave, sameBus } from './plan.ts';
 import { m } from '../i18n.ts';
 import { feedDownSince } from '../ops/monitor.ts';
 import { pushEnabled } from '../push/push.ts';
@@ -311,6 +311,7 @@ export async function tripAnswer(
   places: PlaceChip[],
   h12: boolean,
   oneEarlier = false,
+  step?: ResolveInput['step'],
 ): Promise<MeAnswer> {
   const { lat, lon } = at;
   const speed = paceSpeed(profile.walkPace);
@@ -358,6 +359,7 @@ export async function tripAnswer(
     ...(endWalkByStopS ? { endWalkByStopS } : {}),
     destAt: venue ? venueAt(venue) : null,
     ...(profile.publicBuses ? { publicBuses: true } : {}),
+    ...(step ? { step } : {}),
   };
   const answer = await deps.answerFor(env, ctx, input, dest.label, nowMs);
   // For a class, say whether you'll make it: stop arrival plus the walk
@@ -681,6 +683,8 @@ async function plannedTrip(env: Env, ctx: ExecutionContext, deps: MeDeps, rider:
   const places: PlaceChip[] = profile.places.map(({ key, label }) => ({ key, label }));
   const undo = undoOf(day, nowMs);
   const idle = (answer: MeAnswer): Planned => ({ answer, trip: { key: null, phase: 'idle', undo } });
+  // A trip's steps between buses, with the bus chosen for it today (step.ts).
+  const stepOf = (key: string) => ({ trip: key, target: day?.steps?.[key] ?? null });
 
   // A place or stop you asked for: an ad-hoc trip, not tracked.
   const placeKey = ask.place;
@@ -694,7 +698,9 @@ async function plannedTrip(env: Env, ctx: ExecutionContext, deps: MeDeps, rider:
       const r = resolveTo(GRAPH, toRaw!);
       if (r) dest = { ...r, why: 'place', from: homeStop };
     }
-    if (dest) return idle(await tripAnswer(env, ctx, nowMs, deps, profile, dest, at, places, h12));
+    // Not one of the day's trips, but a bus can still be stepped from, kept by where it goes.
+    const stepKey = placeKey ? `place:${placeKey}` : `to:${dest?.to}`;
+    if (dest) return idle(await tripAnswer(env, ctx, nowMs, deps, profile, dest, at, places, h12, false, stepOf(stepKey)));
     // Not a stop, room or favourite (one since removed, say): the
     // day's own answer, as if none had been asked for. A free day's "No more
     // classes today" would be untrue with a class still to come.
@@ -705,7 +711,7 @@ async function plannedTrip(env: Env, ctx: ExecutionContext, deps: MeDeps, rider:
     // Evenings: on campus and not at home, the way home rather than a moon.
     if (homeStop && lat !== null && lon !== null && !homeHere && onCampus(GRAPH, lat, lon)) {
       const dest: Dest = { to: homeStop, label: m().home, why: 'home', from: null };
-      const answer = await tripAnswer(env, ctx, nowMs, deps, profile, dest, at, places, h12);
+      const answer = await tripAnswer(env, ctx, nowMs, deps, profile, dest, at, places, h12, false, stepOf('home:evening'));
       return withPhase({ ...answer, warning: lastBusWarning(GRAPH, answer, nowMs) }, 'home:evening');
     }
     return idle(restAnswer(GRAPH, profile, nowMs, places, h12));
@@ -766,7 +772,7 @@ async function plannedTrip(env: Env, ctx: ExecutionContext, deps: MeDeps, rider:
     return { answer: thereAnswer(profile, nowMs, dest, places, h12, state.skipped), trip: { key, phase: 'arrived', rec, undo } };
   }
 
-  const fresh = await tripAnswer(env, ctx, nowMs, deps, profile, dest, at, places, h12, prefs.earlier.has(key));
+  const fresh = await tripAnswer(env, ctx, nowMs, deps, profile, dest, at, places, h12, prefs.earlier.has(key), stepOf(key));
 
   // Seen at the class's stop before it starts: the same answer the next
   // request gives once this one has noted it reached (reachedEarly), not the
@@ -785,7 +791,10 @@ async function plannedTrip(env: Env, ctx: ExecutionContext, deps: MeDeps, rider:
   // then the answer is the next way there. The plan's times are from an
   // earlier answer: never shown as live.
   const kept = bus && bus !== made && rec?.kind !== 'missed';
-  const answer: MeAnswer = kept ? { ...fresh, leave: { ...leaveOf(bus), stale: true } } : fresh;
+  // Steps are from the answer's own bus: none from a kept plan's other one.
+  const answer: MeAnswer = kept
+    ? { ...fresh, leave: { ...leaveOf(bus), stale: true }, steps: sameBus(bus, made) ? fresh.steps : null }
+    : fresh;
 
   const home = dest.why === 'home' || dest.why === 'gap-home';
   const out = withPhase(home ? { ...answer, warning: lastBusWarning(GRAPH, answer, nowMs) } : answer, key);

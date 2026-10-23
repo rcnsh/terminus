@@ -32,6 +32,7 @@
     "why": "搭 D2 要 16 分钟"
   },
   "leave": null,
+  "steps": null,
   "mode": "trip",
   "dest": {
     "to": "KR-MRT",
@@ -107,6 +108,7 @@
       "summary": "步行 13 分钟 · 搭 D2 要 16 分钟"
     },
     "upcoming": null,
+    "step": null,
     "title": "步行 · 13 分钟",
     "heading": "去 KR MRT",
     "remindAt": null

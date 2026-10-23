@@ -95,6 +95,16 @@
     "endWalkS": 137
   },
   "leave": null,
+  "steps": {
+    "trip": "to:IT",
+    "earlier": null,
+    "later": {
+      "svc": "A1",
+      "stop": "PGP",
+      "board": "2026-08-27T01:09:00Z"
+    },
+    "moved": false
+  },
   "mode": "trip",
   "dest": {
     "to": "IT",
@@ -180,6 +190,19 @@
       "summary": "Walk to PGP · R2 09:06"
     },
     "upcoming": null,
+    "step": {
+      "trip": "to:IT",
+      "earlier": null,
+      "later": {
+        "svc": "A1",
+        "stop": "PGP",
+        "board": "2026-08-27T01:09:00Z"
+      },
+      "moved": false,
+      "earlierLabel": "Earlier bus",
+      "laterLabel": "Later bus",
+      "bestLabel": "Best bus"
+    },
     "title": "R2 · 09:06",
     "heading": "Going to LT3",
     "remindAt": null

@@ -364,6 +364,9 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 .list .meta { color: var(--muted); font-size: 0.82rem; }
 
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+/* Earlier bus, Best bus, Later bus: the earlier at the left, the later at the right, under the bus. */
+.step-bus { display: flex; gap: 8px; margin-top: 10px; }
+.step-bus .btn { flex: 1 1 0; white-space: nowrap; }
 .suggestion { margin-top: 14px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 0.93rem; line-height: 1.4; }
 #trip-choices h3, #trip-history h3 { margin: 18px 0 4px; font-size: 1rem; }
 #trip-history .btn { margin-top: 8px; }

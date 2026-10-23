@@ -71,6 +71,16 @@
     "toStop": "Opp KR MRT",
     "toCode": "KR-MRT-OPP"
   },
+  "steps": {
+    "trip": "to:KR-MRT-OPP",
+    "earlier": null,
+    "later": {
+      "svc": "A2",
+      "stop": "IT",
+      "board": "2026-08-27T01:16:00Z"
+    },
+    "moved": false
+  },
   "mode": "trip",
   "dest": {
     "to": "KR-MRT-OPP",
@@ -161,6 +171,19 @@
       "summary": "在 IT 搭 09:06 的 A2"
     },
     "upcoming": null,
+    "step": {
+      "trip": "to:KR-MRT-OPP",
+      "earlier": null,
+      "later": {
+        "svc": "A2",
+        "stop": "IT",
+        "board": "2026-08-27T01:16:00Z"
+      },
+      "moved": false,
+      "earlierLabel": "早一班",
+      "laterLabel": "晚一班",
+      "bestLabel": "最佳班次"
+    },
     "title": "A2 · 09:06",
     "heading": "去 Opp KR MRT",
     "remindAt": null

@@ -28,6 +28,7 @@ import { type LiveActivityState, apnsEnabled, liveActivityState } from './apns.t
 import { type Lang, withLang } from '../i18n.ts';
 import { logTripWake } from '../ops/analytics.ts';
 import { scopeCache } from '../feeds/edgecache.ts';
+import { STEP } from '../config.ts';
 import { answerFor, collectArrivals } from '../answer/answer.ts';
 
 /** Trip records one day keeps at most (see update). */
@@ -157,6 +158,20 @@ export class Trip {
     }
     if (u.plans && Object.keys(u.plans).length) {
       next.plans = { ...next.plans, ...u.plans };
+      changed = true;
+    }
+    for (const [key, step] of Object.entries(u.steps ?? {})) {
+      const steps = { ...next.steps };
+      // As for trips: past this many, a new one is refused.
+      if (step && !(key in steps) && Object.keys(steps).length >= STEP.maxTrips) continue;
+      if (step) steps[key] = step;
+      else delete steps[key];
+      next.steps = steps;
+      // The plan was the old bus: without it, the next answer's bus (the one chosen) is saved.
+      if (next.plans?.[key]) {
+        const { [key]: _old, ...plans } = next.plans;
+        next.plans = plans;
+      }
       changed = true;
     }
     if (u.watch) {

@@ -105,6 +105,16 @@
     "toStop": "UTown",
     "toCode": "UTOWN"
   },
+  "steps": {
+    "trip": "4:545:UTOWN",
+    "earlier": null,
+    "later": {
+      "svc": "R2",
+      "stop": "PGP",
+      "board": "2026-08-27T01:06:00Z"
+    },
+    "moved": false
+  },
   "mode": "trip",
   "dest": {
     "to": "UTOWN",
@@ -201,6 +211,7 @@
       "summary": "arrive 09:15 · R2 09:06 at PGP"
     },
     "upcoming": null,
+    "step": null,
     "title": "R2 · 09:06",
     "heading": "Next class · GEA1000 @ UTown",
     "remindAt": null

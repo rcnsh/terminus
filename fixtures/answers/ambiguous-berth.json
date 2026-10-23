@@ -65,6 +65,16 @@
     "toStop": "UTown",
     "toCode": "UTOWN"
   },
+  "steps": {
+    "trip": "to:UTOWN",
+    "earlier": null,
+    "later": {
+      "svc": "D2",
+      "stop": "COM3",
+      "board": "2026-08-27T01:13:00Z"
+    },
+    "moved": false
+  },
   "mode": "trip",
   "dest": {
     "to": "UTOWN",
@@ -154,6 +164,19 @@
       "summary": "D2 09:03 at COM 3"
     },
     "upcoming": null,
+    "step": {
+      "trip": "to:UTOWN",
+      "earlier": null,
+      "later": {
+        "svc": "D2",
+        "stop": "COM3",
+        "board": "2026-08-27T01:13:00Z"
+      },
+      "moved": false,
+      "earlierLabel": "Earlier bus",
+      "laterLabel": "Later bus",
+      "bestLabel": "Best bus"
+    },
     "title": "D2 · 09:03",
     "heading": "Going to UTown",
     "remindAt": null

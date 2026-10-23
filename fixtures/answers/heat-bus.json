@@ -63,6 +63,16 @@
     "toStop": "KR MRT",
     "toCode": "KR-MRT"
   },
+  "steps": {
+    "trip": "to:KR-MRT",
+    "earlier": null,
+    "later": {
+      "svc": "D2",
+      "stop": "PGP",
+      "board": "2026-08-27T01:24:00Z"
+    },
+    "moved": false
+  },
   "mode": "trip",
   "dest": {
     "to": "KR-MRT",
@@ -152,6 +162,19 @@
       "summary": "Walk to PGP · D2 09:14"
     },
     "upcoming": null,
+    "step": {
+      "trip": "to:KR-MRT",
+      "earlier": null,
+      "later": {
+        "svc": "D2",
+        "stop": "PGP",
+        "board": "2026-08-27T01:24:00Z"
+      },
+      "moved": false,
+      "earlierLabel": "Earlier bus",
+      "laterLabel": "Later bus",
+      "bestLabel": "Best bus"
+    },
     "title": "D2 · 09:14",
     "heading": "Going to KR MRT",
     "remindAt": null

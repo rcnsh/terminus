@@ -1118,6 +1118,38 @@ export function paths(): Record<string, unknown> {
         },
       },
     },
+    '/api/me/step': {
+      post: {
+        tags: ['Account'],
+        summary: 'Step to an earlier or later bus',
+        description:
+          'Takes the bus `card.step` offered for a trip in place of the best one, until the trip ends: `to` is `card.step.earlier` or `card.step.later` as it is, or null for the best bus again. ' +
+          'Kept for the day on every device; the leave reminder, widgets and Live Activity follow it. When the feed no longer lists that bus, the next of the same service from the same stop. ' +
+          '`dir` (`earlier` or `later`) only counts the step for the operator, by kind of trip, with no account on it. Answered with the new `/api/me/next` for that trip (a favourite or a stop asked for, by its key), from `lat` and `lon` when given; the location is not kept.',
+        operationId: 'meStep',
+        security: [{ bearer: [] }, { cookie: [] }],
+        parameters: [h12Param, langParam],
+        requestBody: jsonBody(
+          {
+            type: 'object',
+            required: ['trip', 'to'],
+            properties: {
+              trip: { type: 'string', maxLength: 80 },
+              to: { oneOf: [{ $ref: '#/components/schemas/StepTarget' }, { type: 'null' }] },
+              dir: { type: 'string', enum: ['earlier', 'later'] },
+              lat: { type: 'number' },
+              lon: { type: 'number' },
+            },
+          },
+          { trip: '4:600:UTOWN', to: { svc: 'D2', stop: 'COM3', board: '2026-10-07T01:52:00Z' }, dir: 'later' },
+        ),
+        responses: {
+          '200': ok({ $ref: '#/components/schemas/MeAnswer' }),
+          '400': errorResponse('No `trip` or `to`, or a `trip` that is not one of today’s.', { error: 'no such trip today' }),
+          '503': errorResponse('Trip tracking is not available.'),
+        },
+      },
+    },
     '/api/me/push': {
       post: {
         tags: ['Account'],

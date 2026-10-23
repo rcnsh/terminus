@@ -17,6 +17,7 @@
     "why": "Services ended for the night"
   },
   "leave": null,
+  "steps": null,
   "mode": "trip",
   "dest": {
     "to": "PGP",
@@ -94,6 +95,7 @@
       "summary": "27 min walk · Services ended for the night"
     },
     "upcoming": null,
+    "step": null,
     "title": "No bus · walk 27 min",
     "heading": "Heading home",
     "remindAt": null

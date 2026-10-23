@@ -45,6 +45,7 @@
     "h12": false,
     "journey": null,
     "upcoming": null,
+    "step": null,
     "title": "No timetable yet",
     "heading": null,
     "remindAt": null

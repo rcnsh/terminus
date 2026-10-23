@@ -54,6 +54,7 @@
     "h12": false,
     "journey": null,
     "upcoming": null,
+    "step": null,
     "title": "今天没有课",
     "heading": null,
     "remindAt": null

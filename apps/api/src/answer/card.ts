@@ -27,6 +27,7 @@ import {
 } from './trip.ts';
 import { LATE_GRACE_MIN } from '../timetable/profile.ts';
 import type { Suggestion } from '../accounts/outcomes.ts';
+import type { StepTarget } from './step.ts';
 import { GRAPH } from './graph.ts';
 import { indexGraph } from './resolve.ts';
 import { targetStops } from './landmarks.ts';
@@ -43,6 +44,22 @@ export interface CardAction {
   id: 'boarded' | 'missed' | 'skipped' | 'arrived' | 'reset' | 'away' | 'back';
   label: string;
   trip: string;
+}
+
+/**
+ * "Earlier bus", "Later bus" and "Best bus" (step.ts). A client sends `trip`
+ * and the bus to /api/me/step: `earlier` or `later` as it is, or null for
+ * the server's own bus. Greyed out where it's null.
+ */
+export interface CardStep {
+  trip: string;
+  earlier: StepTarget | null;
+  later: StepTarget | null;
+  /** The bus is the user's choice: show "Best bus". */
+  moved: boolean;
+  earlierLabel: string;
+  laterLabel: string;
+  bestLabel: string;
 }
 
 /** Where the day's trip is, for the card (trip.ts). */
@@ -295,6 +312,9 @@ export interface Card {
   /** Rest, free and home: the next class, for its own card. Null with none
    *  coming, and on every other kind. */
   upcoming: Upcoming | null;
+  /** Step to the bus before or after this one: before you set off on a
+   *  trip by bus. Null otherwise. */
+  step: CardStep | null;
 }
 
 /** Answers older than this are dimmed even if nothing else says so. */
@@ -344,7 +364,7 @@ type PhaseKeys =
   | 'ride'
   | 'gone'
   | 'walkTo';
-type BaseCard = Omit<Card, PhaseKeys | 'notice' | 'h12' | 'journey' | 'upcoming' | 'title' | 'heading' | 'remindAt'>;
+type BaseCard = Omit<Card, PhaseKeys | 'notice' | 'h12' | 'journey' | 'upcoming' | 'step' | 'title' | 'heading' | 'remindAt'>;
 
 /**
  * `feedDownSince`: when the monitor confirmed NUS's feed down, or null while
@@ -373,6 +393,7 @@ export function cardFor(
     h12,
     journey: journeyOf(a, card, h12, trip.phase, nowMs),
     upcoming: a.upcoming ?? null,
+    step: stepOf(a, card.kind, trip),
     title: titleOf(a, h12),
     heading: headingOf(a),
     remindAt: remindAtOf(a, card.kind, trip, nowMs),
@@ -387,6 +408,20 @@ export function cardFor(
 export function titleOf(a: MeAnswer, h12: boolean): string {
   if (!timedAt(a)) return a.label;
   return `${a.label.split(' · ')[0]} · ${approx(roughly(a), clockAt(Date.parse(a.departsAt!), h12))}`;
+}
+
+/**
+ * The card's steps: on a trip by bus (a class's, home, a favourite) until
+ * you set off. Not at the stop, on the bus or once it has gone: the trip
+ * follows its plan from there.
+ */
+function stepOf(a: MeAnswer, kind: CardKind, trip: TripView): CardStep | null {
+  const s = a.steps;
+  // A bus to step from: the leave-by's, or with none (it goes within a minute) the headline's.
+  if (!s || !(a.leave ? a.leave.svc : a.bus) || (kind !== 'class' && kind !== 'trip')) return null;
+  if (trip.phase !== 'idle' && trip.phase !== 'due') return null;
+  if (trip.gone || trip.rec) return null;
+  return { ...s, earlierLabel: m().earlierBus, laterLabel: m().laterBus, bestLabel: m().bestBus };
 }
 
 /** The answer has a departure to give as a clock time: not a sort key ('unknown'), and not nothing running. */

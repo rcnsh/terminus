@@ -25,6 +25,7 @@
     "arrive": "2026-08-27T16:34:52Z",
     "note": null
   },
+  "steps": null,
   "mode": "trip",
   "dest": {
     "to": "COM3",
@@ -116,6 +117,7 @@
       "summary": "00:34 到达 · 步行 15 分钟 · 今晚已停运"
     },
     "upcoming": null,
+    "step": null,
     "title": "无巴士 · 步行 15 分钟",
     "heading": "下一节课 · CS2030 @ COM1",
     "remindAt": null

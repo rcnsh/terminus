@@ -74,6 +74,7 @@
     "why": "搭 A1 要 31 分钟"
   },
   "leave": null,
+  "steps": null,
   "mode": "trip",
   "dest": {
     "to": "PGP",
@@ -151,6 +152,7 @@
       "summary": "步行 15 分钟 · 搭 A1 要 31 分钟"
     },
     "upcoming": null,
+    "step": null,
     "title": "步行 · 15 分钟",
     "heading": "回家",
     "remindAt": null

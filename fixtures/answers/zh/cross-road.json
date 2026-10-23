@@ -81,6 +81,16 @@
     "toStop": "COM 3",
     "toCode": "COM3"
   },
+  "steps": {
+    "trip": "to:COM3",
+    "earlier": null,
+    "later": {
+      "svc": "D2",
+      "stop": "KR-MRT-OPP",
+      "board": "2026-08-27T01:15:00Z"
+    },
+    "moved": false
+  },
   "mode": "trip",
   "dest": {
     "to": "COM3",
@@ -165,6 +175,19 @@
       "summary": "在 Opp KR MRT 搭 09:05 的 D2"
     },
     "upcoming": null,
+    "step": {
+      "trip": "to:COM3",
+      "earlier": null,
+      "later": {
+        "svc": "D2",
+        "stop": "KR-MRT-OPP",
+        "board": "2026-08-27T01:15:00Z"
+      },
+      "moved": false,
+      "earlierLabel": "早一班",
+      "laterLabel": "晚一班",
+      "bestLabel": "最佳班次"
+    },
     "title": "D2 · 09:05",
     "heading": "去 COM 3",
     "remindAt": null

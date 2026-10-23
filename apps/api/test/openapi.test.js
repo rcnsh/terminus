@@ -555,6 +555,14 @@ const CASES = [
   ['POST /api/me/signal', 400, { auth: 'cookie', body: { kind: 'skipped', trip: '1:2:NOPE' }, why: 'no such trip' }],
   ['POST /api/me/signal', 409, { auth: 'anon', body: { kind: 'boarded' } }],
   ['POST /api/me/signal', 503, { auth: 'cookie', before: (w) => delete w.env.TRIPS, body: { kind: 'reset' } }],
+  [
+    'POST /api/me/step',
+    200,
+    { auth: 'cookie', body: { trip: CLASS_KEY, to: { svc: 'D2', stop: 'COM3', board: '2099-01-01T01:00:00Z' }, dir: 'later' } },
+  ],
+  ['POST /api/me/step', 200, { auth: 'cookie', body: { trip: CLASS_KEY, to: null } }],
+  ['POST /api/me/step', 400, { auth: 'cookie', body: { trip: CLASS_KEY, to: { svc: 'D2' } } }],
+  ['POST /api/me/step', 503, { auth: 'cookie', before: (w) => delete w.env.TRIPS, body: { trip: CLASS_KEY, to: null } }],
   ['POST /api/me/push', 200, { auth: 'device', body: { token: 'fcm-token' } }],
   ['POST /api/me/push', 400, { auth: 'device', body: {} }],
   [

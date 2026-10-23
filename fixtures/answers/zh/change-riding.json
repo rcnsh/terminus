@@ -115,6 +115,7 @@
     "h12": false,
     "journey": null,
     "upcoming": null,
+    "step": null,
     "title": "在 R2 上",
     "heading": "下一节课 · GEH1001 @ CG",
     "remindAt": null

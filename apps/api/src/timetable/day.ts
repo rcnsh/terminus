@@ -165,6 +165,8 @@ export async function dayPlan(
           places,
           h12,
           earlier.has(key),
+          // The bus stepped to on the card, as the card shows it.
+          day?.steps?.[key] ? { trip: key, target: day.steps[key] } : undefined,
         )
           .then((a) => {
             item.leave = a.leave ?? null;

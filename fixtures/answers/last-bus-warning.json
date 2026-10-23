@@ -67,6 +67,16 @@
     "toStop": "UTown",
     "toCode": "UTOWN"
   },
+  "steps": {
+    "trip": "home:evening",
+    "earlier": null,
+    "later": {
+      "svc": "D2",
+      "stop": "PGP",
+      "board": "2026-08-27T14:54:00Z"
+    },
+    "moved": false
+  },
   "mode": "trip",
   "dest": {
     "to": "UTOWN",
@@ -149,6 +159,7 @@
       "summary": "D2 22:44 at PGP"
     },
     "upcoming": null,
+    "step": null,
     "title": "D2 · 22:44",
     "heading": "Heading home",
     "remindAt": null

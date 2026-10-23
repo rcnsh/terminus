@@ -100,6 +100,7 @@
     "h12": false,
     "journey": null,
     "upcoming": null,
+    "step": null,
     "title": "On the D2",
     "heading": "Next class · GEA1000 @ UTown",
     "remindAt": null

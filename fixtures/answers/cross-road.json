@@ -81,6 +81,16 @@
     "toStop": "COM 3",
     "toCode": "COM3"
   },
+  "steps": {
+    "trip": "to:COM3",
+    "earlier": null,
+    "later": {
+      "svc": "D2",
+      "stop": "KR-MRT-OPP",
+      "board": "2026-08-27T01:15:00Z"
+    },
+    "moved": false
+  },
   "mode": "trip",
   "dest": {
     "to": "COM3",
@@ -165,6 +175,19 @@
       "summary": "D2 09:05 at Opp KR MRT"
     },
     "upcoming": null,
+    "step": {
+      "trip": "to:COM3",
+      "earlier": null,
+      "later": {
+        "svc": "D2",
+        "stop": "KR-MRT-OPP",
+        "board": "2026-08-27T01:15:00Z"
+      },
+      "moved": false,
+      "earlierLabel": "Earlier bus",
+      "laterLabel": "Later bus",
+      "bestLabel": "Best bus"
+    },
     "title": "D2 · 09:05",
     "heading": "Going to COM 3",
     "remindAt": null

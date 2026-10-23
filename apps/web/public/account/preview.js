@@ -183,13 +183,13 @@ function Ride({ ride }) {
 }
 
 /** A button that's disabled while what it started is under way, and again if that fails. */
-function Busy({ onClick, class: cls, children, ...props }) {
+function Busy({ onClick, class: cls, children, disabled = false, ...props }) {
   const [busy, setBusy] = useState(false);
   return html`
     <button
       type="button"
       class=${cls}
-      disabled=${busy}
+      disabled=${busy || disabled}
       onClick=${async () => {
         setBusy(true);
         try {
@@ -226,6 +226,28 @@ function Actions({ a, onAnswer, onChoice }) {
     </div>`
     }
     <${Suggestion} a=${a} onChoice=${onChoice} />
+  `;
+}
+
+/** Steps to another bus, and returns the answer that comes back. */
+const stepTo = (body) => api(`/api/me/step${hour12() ? '?h12=1' : ''}`, { method: 'POST', body });
+
+/**
+ * "Earlier bus" and "Later bus" under the bus they change, and "Best bus"
+ * between them once you've moved: the server's buses either side of this
+ * one, on a trip by bus until you set off. Greyed out at the first bus you
+ * can catch and the last one offered.
+ */
+function StepBus({ a, onAnswer }) {
+  const s = a.card?.step ?? null;
+  if (!s) return null;
+  const go = (to, dir) => async () => onAnswer(await stepTo({ trip: s.trip, to, ...(dir ? { dir } : {}) }));
+  return html`
+    <div class="step-bus">
+      <${Busy} class="btn small ghost" disabled=${!s.earlier} onClick=${go(s.earlier, 'earlier')}>‹ ${s.earlierLabel}<//>
+      ${s.moved && html`<${Busy} class="btn small ghost best" onClick=${go(null)}>${s.bestLabel}<//>`}
+      <${Busy} class="btn small ghost" disabled=${!s.later} onClick=${go(s.later, 'later')}>${s.laterLabel} ›<//>
+    </div>
   `;
 }
 
@@ -328,6 +350,7 @@ export function Card({ a, onAnswer, onChoice, onPlace = null, chips = false, sky
     return () => clearTimeout(timer);
   }, [staleAt]);
   const actions = html`<${Actions} a=${a} onAnswer=${onAnswer} onChoice=${onChoice} />`;
+  const steps = html`<${StepBus} a=${a} onAnswer=${onAnswer} />`;
   const row = html`${chips && html`<${Chips} a=${a} />`}<${SayCard} a=${a} />`;
   // After your day, or no classes today: said plainly, with no bus to mistake
   // for advice. "Undo" when the class just taken off was the day's last, and
@@ -340,10 +363,10 @@ export function Card({ a, onAnswer, onChoice, onPlace = null, chips = false, sky
   // A trip by bus or on foot, in the style chosen in Settings › Appearance. Old
   // times fall through to the cards below, which say they're updating.
   if (a.card?.journey && !old && !a.arrived) {
-    return html`<div class="widget"><${Journey} a=${a} style=${style} sky=${sky} lead=${html`<${Phase} a=${a} />`} />${actions}${row}</div>`;
+    return html`<div class="widget"><${Journey} a=${a} style=${style} sky=${sky} lead=${html`<${Phase} a=${a} />`} steps=${steps} />${actions}${row}</div>`;
   }
   if (a.card?.kind === 'class' && !old) {
-    return html`<div class="widget"><${InSky} sky=${sky}><${Phase} a=${a} /><${ClassPlan} a=${a} /><//>${actions}${row}</div>`;
+    return html`<div class="widget"><${InSky} sky=${sky}><${Phase} a=${a} /><${ClassPlan} a=${a} /><//>${steps}${actions}${row}</div>`;
   }
   // The server's heading ("Next class · CS2030", "Heading home"); none without somewhere to go.
   const heading =
@@ -376,7 +399,7 @@ export function Card({ a, onAnswer, onChoice, onPlace = null, chips = false, sky
         ${a.timing && !old && !a.detail?.includes(a.timing.text) && html`<span class=${`ontime ${a.timing.status}`}>${a.timing.text}</span>`}
       <//>
       ${notes && html`<div class="note">${notes}</div>`}
-      ${actions}${row}
+      ${!old && steps}${actions}${row}
     </div>
   `;
 }

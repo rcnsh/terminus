@@ -92,6 +92,16 @@
     "toStop": "KR MRT"
   },
   "leave": null,
+  "steps": {
+    "trip": "place:mrt",
+    "earlier": null,
+    "later": {
+      "svc": "D2",
+      "stop": "PGP",
+      "board": "2026-08-27T01:11:00Z"
+    },
+    "moved": false
+  },
   "mode": "trip",
   "dest": {
     "to": "KR-MRT",
@@ -177,6 +187,19 @@
       "summary": "步行到 PGP · 约 09:06 的 A1"
     },
     "upcoming": null,
+    "step": {
+      "trip": "place:mrt",
+      "earlier": null,
+      "later": {
+        "svc": "D2",
+        "stop": "PGP",
+        "board": "2026-08-27T01:11:00Z"
+      },
+      "moved": false,
+      "earlierLabel": "早一班",
+      "laterLabel": "晚一班",
+      "bestLabel": "最佳班次"
+    },
     "title": "A1 · 约 09:06",
     "heading": "去 KR MRT",
     "remindAt": null

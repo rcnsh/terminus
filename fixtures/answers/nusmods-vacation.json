@@ -54,6 +54,7 @@
     "h12": false,
     "journey": null,
     "upcoming": null,
+    "step": null,
     "title": "No classes today",
     "heading": null,
     "remindAt": null

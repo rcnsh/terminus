@@ -138,6 +138,20 @@
       "estimated": false
     }
   },
+  "steps": {
+    "trip": "4:600:CG",
+    "earlier": {
+      "svc": "R2",
+      "stop": "PGP",
+      "board": "2026-08-27T01:18:00Z"
+    },
+    "later": {
+      "svc": "A1",
+      "stop": "PGP",
+      "board": "2026-08-27T01:31:00Z"
+    },
+    "moved": false
+  },
   "mode": "trip",
   "dest": {
     "to": "CG",
@@ -262,6 +276,23 @@
       "summary": "09:55 到达 · 在 PGP 搭 09:23 的 K · 在 Kent Vale 换乘 P"
     },
     "upcoming": null,
+    "step": {
+      "trip": "4:600:CG",
+      "earlier": {
+        "svc": "R2",
+        "stop": "PGP",
+        "board": "2026-08-27T01:18:00Z"
+      },
+      "later": {
+        "svc": "A1",
+        "stop": "PGP",
+        "board": "2026-08-27T01:31:00Z"
+      },
+      "moved": false,
+      "earlierLabel": "早一班",
+      "laterLabel": "晚一班",
+      "bestLabel": "最佳班次"
+    },
     "title": "R2 · 09:06",
     "heading": "下一节课 · GEH1001 @ CG",
     "remindAt": "2026-08-27T01:12:40Z"
