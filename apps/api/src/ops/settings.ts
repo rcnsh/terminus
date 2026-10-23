@@ -73,12 +73,12 @@ export async function readSettings(db: D1Database, nowMs: number): Promise<Count
   const since = nowMs - 30 * DAY;
   const [profiles, push] = await db.batch([
     db.prepare('SELECT p.json FROM profiles p JOIN users u ON u.id = p.user_id WHERE u.last_seen > ?').bind(since),
-    // Devices, not accounts: whether each takes pushes, on the two that can
+    // Devices, not accounts: whether each takes pushes, on the three that can
     // (the Mac's notifications are its own, and never reach the server).
     db
       .prepare(
         `SELECT CASE WHEN kind = 'web' THEN 'web' ELSE platform END AS app, SUM(push_token IS NOT NULL) AS n, COUNT(*) AS of
-           FROM sessions WHERE last_seen > ? AND (kind = 'web' OR platform = 'android') GROUP BY 1`,
+           FROM sessions WHERE last_seen > ? AND (kind = 'web' OR platform IN ('android', 'ios')) GROUP BY 1`,
       )
       .bind(since),
   ]);

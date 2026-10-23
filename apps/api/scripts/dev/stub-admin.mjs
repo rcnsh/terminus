@@ -174,6 +174,7 @@ export function fakeAeRows(q, nowMs) {
       ...Object.entries(counts).flatMap(([setting, vs]) => Object.entries(vs).map(([value, n]) => ({ day, setting, value, n, of }))),
       { day, setting: 'notifications', value: 'android', n: 14, of: 18 },
       { day, setting: 'notifications', value: 'web', n: 3, of: 9 },
+      { day, setting: 'notifications', value: 'ios', n: 5, of: 6 },
     ]);
   }
   return null;

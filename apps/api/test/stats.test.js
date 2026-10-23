@@ -373,10 +373,21 @@ test('the settings are read from the accounts used this month, written once a Si
     )
     .bind('s1', 'u1', 'device', null, now - 9 * DAY, now - DAY, null, 'android', 'android/3.6.0', 'fcm')
     .run();
+  for (const [hash, push] of [
+    ['s2', 'apns:abcd'],
+    ['s3', null],
+  ])
+    await db
+      .prepare(
+        'INSERT INTO sessions (token_hash, user_id, kind, name, created, last_seen, expires, platform, client, push_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      )
+      .bind(hash, 'u1', 'device', null, now - 9 * DAY, now - DAY, null, 'ios', 'ios/3.6.1', push)
+      .run();
   const rows = await readSettings(db, now);
   const find = (setting, value) => rows.find((r) => r.setting === setting && r.value === value);
   assert.deepEqual(find('publicBuses', 'on'), { setting: 'publicBuses', value: 'on', n: 1, of: 1 }, 'only the account used this month');
   assert.deepEqual(find('notifications', 'android'), { setting: 'notifications', value: 'android', n: 1, of: 1 });
+  assert.deepEqual(find('notifications', 'ios'), { setting: 'notifications', value: 'ios', n: 1, of: 2 }, 'iPhones, through APNs');
   assert.equal(await recordSettings(env, now), false, 'off');
   await env.KV.put('config:collect:settings', 'on');
   assert.equal(await recordSettings(env, now), true);

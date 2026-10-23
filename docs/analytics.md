@@ -231,8 +231,8 @@ of the accounts used in the last 30 days and counts each setting's values
 (`src/ops/settings.ts`): `blob2` the setting, `blob3` the value (`on`/`off`, a
 pace, a language, `some`/`none` for lists such as favourites), `blob4` the
 day, `double1` the accounts with it, `double2` the accounts counted. One
-more setting, `notifications`, counts devices instead: Android phones and
-web apps used in the 30 days (`double2`) and those with a push address
+more setting, `notifications`, counts devices instead: Android phones,
+iPhones and web apps used in the 30 days (`double2`) and those with a push address
 (`double1`), by app (`blob3`). What a device keeps to itself (leave
 alerts, the card's style) never reaches the server and isn't counted.
 

@@ -557,7 +557,7 @@ function Settings({ s }) {
       sub=${
         s.collect?.settings
           ? latest
-            ? `Accounts used in the 30 days to ${dayLong(latest)}${of ? ` (${fmt(of)})` : ''}, by each setting’s value; pushes are Android phones and web apps, by app. What a device keeps to itself (leave alerts, card style) isn’t sent, so isn’t here.`
+            ? `Accounts used in the 30 days to ${dayLong(latest)}${of ? ` (${fmt(of)})` : ''}, by each setting’s value; pushes are Android phones, iPhones and web apps, by app. What a device keeps to itself (leave alerts, card style) isn’t sent, so isn’t here.`
             : 'Counted once a day, after midnight: nothing yet.'
           : 'Not collecting: turn on “Settings” under Collection to count them.'
       }
