@@ -412,6 +412,29 @@ test('with no class left today, a running Live Activity is ended', async () => {
   assert.equal([...TRIPS.instances.values()][0].storage._map.get('pushed').live, undefined);
 });
 
+test("a tap on another device that ends the trip ends the iPhone's Live Activity at once", async () => {
+  const { apple, wrap, extra } = await fakeApple();
+  const { call, phone, tablet, next, wakeUntil } = await setup({ push: false, wrap, extra });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: APNS } });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: LIVE } });
+  await next(phone);
+  await wakeUntil(() => apple.some((p) => p.type === 'liveactivity'));
+  // "Not on campus today" on the tablet: the day's only class is off.
+  apple.length = 0;
+  await call('/api/me/signal', { method: 'POST', token: tablet, body: { kind: 'away' } });
+  assert.deepEqual(
+    apple.filter((p) => p.type === 'liveactivity').map((p) => p.body.aps.event),
+    ['end'],
+  );
+  // "Back on campus": the trip again, and no Live Activity to end.
+  apple.length = 0;
+  await call('/api/me/signal', { method: 'POST', token: tablet, body: { kind: 'back' } });
+  assert.deepEqual(
+    apple.filter((p) => p.type === 'liveactivity'),
+    [],
+  );
+});
+
 test('a Live Activity whose end could not be sent is ended at a later wake', async () => {
   const { apple, wrap: record, extra } = await fakeApple();
   let down = false;

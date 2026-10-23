@@ -804,13 +804,13 @@ export const ME_ROUTES: MeRoute[] = [
         const after = items.length ? await saveSignals(env, session.user.id, items, nowMs) : day;
         logSignal(env, kind);
         const rider = await loadRider(env, session.user.id, nowMs, { profile, day: after });
-        const out = await nextBody(env, ctx, deps, rider, asked, nowMs);
+        const { body: out, tripOver } = await nextTrip(env, ctx, deps, rider, asked, nowMs);
         const answerIn = rewordFor(env, ctx, deps, rider, asked, nowMs);
         ctx.waitUntil(
           nudgeUser(
             env,
             session.user.id,
-            { phase: out.card.phase, urgent: false, remind: out.card.remind !== false, answer: out, answerIn },
+            { phase: out.card.phase, urgent: false, remind: out.card.remind !== false, answer: out, answerIn, tripOver },
             nowMs,
             session.tokenHash,
           ),
@@ -914,15 +914,16 @@ export const ME_ROUTES: MeRoute[] = [
       // A trip home isn't a class: nothing to learn from skipping it.
       else if (outcome && !/^(gap-)?home:/.test(key)) await recordOutcome(db, session.user.id, key, outcome, nowMs);
       const rider = await loadRider(env, session.user.id, nowMs, { profile, day: next });
-      const out = await nextBody(env, ctx, deps, rider, asked, nowMs);
+      const { body: out, tripOver } = await nextTrip(env, ctx, deps, rider, asked, nowMs);
       // A tap here changes the other phones' cards now, not at their next
-      // refresh; an iPhone pushed in the other language gets the card in its own.
+      // refresh; an iPhone pushed in the other language gets the card in its
+      // own, and one whose trip the tap ended has its Live Activity ended.
       const answerIn = rewordFor(env, ctx, deps, rider, asked, nowMs);
       ctx.waitUntil(
         nudgeUser(
           env,
           session.user.id,
-          { phase: out.card.phase, urgent: false, remind: out.card.remind !== false, answer: out, answerIn },
+          { phase: out.card.phase, urgent: false, remind: out.card.remind !== false, answer: out, answerIn, tripOver },
           nowMs,
           session.tokenHash,
         ),
@@ -1500,7 +1501,12 @@ export async function loadRider(
 
 /** /api/me/next's body, with what it changes sent to the Trip object. */
 async function nextBody(env: Env, ctx: ExecutionContext, deps: MeDeps, rider: Rider, ask: Ask, nowMs: number) {
-  const { body, update } = await nextFor(env, ctx, deps, rider, ask, nowMs);
+  return (await nextTrip(env, ctx, deps, rider, ask, nowMs)).body;
+}
+
+/** nextBody, and whether the answer has no trip: a tap's push then ends the other iPhones' Live Activities. */
+async function nextTrip(env: Env, ctx: ExecutionContext, deps: MeDeps, rider: Rider, ask: Ask, nowMs: number) {
+  const { body, update, trip } = await nextFor(env, ctx, deps, rider, ask, nowMs);
   if (update.items || update.plans || update.watch) {
     // The answer doesn't wait for it; a failure loses the plan or a push, not the card.
     ctx.waitUntil(
@@ -1510,7 +1516,8 @@ async function nextBody(env: Env, ctx: ExecutionContext, deps: MeDeps, rider: Ri
       ),
     );
   }
-  return body;
+  // A place or stop asked for has no trip key either, but the day's trip goes on.
+  return { body, tripOver: trip.key === null && !ask.place && !ask.to };
 }
 
 /**
