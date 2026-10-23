@@ -1,3 +1,4 @@
+import ActivityKit
 import Foundation
 import Testing
 
@@ -35,6 +36,15 @@ private func answer(_ name: String) throws -> (NextAnswer, Date) {
         let (a, _) = try answer(name)
         #expect(TripAttributes.ContentState.of(a) == want, "\(name)")
     }
+}
+
+/// A stale activity (the phone offline a few minutes) is still the trip's:
+/// updated, not ended and left unstarted in the background.
+@Test func aStaleActivityIsUpdatedNotEnded() {
+    #expect(LiveTrip.onScreen(.active))
+    #expect(LiveTrip.onScreen(.stale))
+    #expect(!LiveTrip.onScreen(.ended))
+    #expect(!LiveTrip.onScreen(.dismissed))
 }
 
 @Test func onTheBusCountsDownToGettingOff() throws {
