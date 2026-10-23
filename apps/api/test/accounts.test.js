@@ -727,7 +727,7 @@ test("export: an iPhone's push address, its Live Activity's (and the one that st
   await call(env, '/api/pair', { method: 'POST', body: { code, name: 'iPhone' } });
   const [push, live, start] = [`apns:${'ab'.repeat(32)}`, `apnsla:${'cd'.repeat(40)}`, `apnsstart:${'ef'.repeat(40)}`];
   db.exec(
-    `UPDATE sessions SET platform = 'ios', push_token = '${push}', live_token = '${live}', start_token = '${start}', push_lang = 'zh' WHERE kind = 'device'`,
+    `UPDATE sessions SET platform = 'ios', push_token = '${push}', live_token = '${live}', start_token = '${start}', push_lang = 'zh', push_h12 = 1 WHERE kind = 'device'`,
   );
   const body = await (await call(env, '/api/me/export', { cookie })).json();
   const phone = body.sessions.find((s) => s.kind === 'device');
@@ -737,12 +737,14 @@ test("export: an iPhone's push address, its Live Activity's (and the one that st
       liveActivityPush: phone.liveActivityPush,
       liveActivityStartPush: phone.liveActivityStartPush,
       pushLanguage: phone.pushLanguage,
+      pushClock: phone.pushClock,
     },
     {
       push: { service: 'apple', address: push },
       liveActivityPush: { service: 'apple', address: live },
       liveActivityStartPush: { service: 'apple', address: start },
       pushLanguage: 'zh',
+      pushClock: '12',
     },
   );
 });

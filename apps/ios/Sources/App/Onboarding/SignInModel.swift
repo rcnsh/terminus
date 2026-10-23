@@ -209,6 +209,11 @@ final class SignInModel {
                 switch p.status {
                 case "pending":
                     continue
+                case "expired" where busy:
+                    // A typed code being checked may have collected the sign-in
+                    // first, which ends the request for the poll: that check's
+                    // answer decides, and stops this if it signed in.
+                    continue
                 case "approved":
                     // Approved always comes with both; one without is an answer this version can't use.
                     if let token = p.token, let email = p.email {

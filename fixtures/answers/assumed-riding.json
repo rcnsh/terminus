@@ -60,6 +60,7 @@
     "suggestion": null,
     "ride": {
       "svc": "D2",
+      "color": "#8e44c9",
       "stops": [
         {
           "code": "PGP",

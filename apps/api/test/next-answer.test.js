@@ -413,6 +413,9 @@ test('riding a public bus reads its arrival from the public graph, by its route'
 });
 
 test('a public second bus is looked for in the public graph, a shuttle one in the shuttle graph', async () => {
+  // Transfers are shuttle-only today (transfer.ts) and BusChange carries no
+  // fare mark, so no answer builds this change yet: it's built by hand, for
+  // when a public bus can be the second one.
   const { secondBus } = await import('../src/answer/next.ts');
   const nowMs = Date.parse('2026-08-27T02:00:00Z');
   const pidx = indexGraph(GRAPH_PUBLIC);

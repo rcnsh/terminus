@@ -29,6 +29,30 @@ private let now = Date(timeIntervalSince1970: 1_792_300_000)
         #expect(all.first?.path == "/api/campus/\(RequestLog.max + 4)")
         #expect(all.last?.path == "/api/campus/5")
     }
+
+    @Test func theMapsRequestsAreInTheLog() async throws {
+        URLProtocol.registerClass(MapAnswers.self)
+        defer { URLProtocol.unregisterClass(MapAnswers.self) }
+        RequestLog.clear()
+        _ = try await MapFiles.get("/api/buses?svc=A1", token: nil)
+        let e = RequestLog.entries.first
+        #expect(e?.method == "GET")
+        #expect(e?.path == "/api/buses")
+        #expect(e?.status == 200)
+    }
+}
+
+/// Answers the map's poll for A1's buses with an empty list.
+private final class MapAnswers: URLProtocol {
+    override class func canInit(with request: URLRequest) -> Bool { request.url?.query == "svc=A1" }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        let resp = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: [:])!
+        client?.urlProtocol(self, didReceive: resp, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(#"{"buses":[]}"#.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
 }
 
 @Test func aRequestWithNoAnswerSaysWhy() {

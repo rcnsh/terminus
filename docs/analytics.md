@@ -108,10 +108,10 @@ nothing new without asking, `skipped` the breaker was open), and each
 request past the first inside a poll (a token minted for it, a second call)
 adds a `retry` row, so requests to NUS are `upstream` + `error` + `retry`;
 `blob3` the service, `double1` the buses the feed reported. The dashboard
-shows the same per day.
+shows the same per Singapore day.
 
 ```sql
-SELECT toDate(timestamp) AS day, blob2 AS outcome, SUM(_sample_interval) AS n
+SELECT formatDateTime(timestamp, '%Y-%m-%d', 'Asia/Singapore') AS day, blob2 AS outcome, SUM(_sample_interval) AS n
 FROM terminus WHERE blob1 = 'timelapse'
 GROUP BY day, outcome ORDER BY day
 ```
@@ -231,8 +231,8 @@ of the accounts used in the last 30 days and counts each setting's values
 (`src/ops/settings.ts`): `blob2` the setting, `blob3` the value (`on`/`off`, a
 pace, a language, `some`/`none` for lists such as favourites), `blob4` the
 day, `double1` the accounts with it, `double2` the accounts counted. One
-more setting, `notifications`, counts devices instead: Android phones and
-web apps used in the 30 days (`double2`) and those with a push address
+more setting, `notifications`, counts devices instead: Android phones,
+iPhones and web apps used in the 30 days (`double2`) and those with a push address
 (`double1`), by app (`blob3`). What a device keeps to itself (leave
 alerts, the card's style) never reaches the server and isn't counted.
 

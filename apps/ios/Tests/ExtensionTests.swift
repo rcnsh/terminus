@@ -51,6 +51,11 @@ private let t0 = Date(timeIntervalSince1970: 1_800_000_000)
 
 // MARK: activities no push can end
 
+/// The app ends an arrived trip for as long as the server's push does (LIVE_DISMISS_S in apns.ts).
+@Test func anArrivedTripStaysAsLongAsTheServersEnd() {
+    #expect(LiveTrip.lingerS == 600)
+}
+
 @MainActor @Test func unpushedActivityEndsAfterArrivingAndTheLinger() {
     let arrive = t0.addingTimeInterval(600)
     let s = state(departAt: t0, arriveAt: arrive)

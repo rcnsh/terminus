@@ -133,17 +133,30 @@ internal object NearbyShared {
         }
     }
 
-    /** Whether a background fetch would ask for anything now: wanted, a minute since the last, and a fix to ask with. */
-    suspend fun due(ctx: Context): Boolean {
+    /**
+     * Whether a background fetch would ask for anything now: wanted, a minute since the last, and a fix to ask with. [onRedraw]: from the
+     * widgets' redraw alarm, which also fetches only at [NearbyBoard.boardRefetchAt], not at each minute it redraws for.
+     */
+    suspend fun due(ctx: Context, onRedraw: Boolean = false): Boolean {
         val store = Store(ctx)
+        val now = System.currentTimeMillis()
         return store.paired &&
-            System.currentTimeMillis() - store.nearbyFetchedAt >= REFETCH_MS &&
+            now - store.nearbyFetchedAt >= REFETCH_MS &&
+            (!onRedraw || now >= (refetchAt(store) ?: 0L)) &&
             Locator.lastKnown(ctx) != null &&
             wanted(ctx)
     }
 
-    suspend fun refreshIfDue(ctx: Context) {
-        if (due(ctx)) refresh(ctx, fresh = false, tapped = false)
+    suspend fun refreshIfDue(ctx: Context, onRedraw: Boolean = false) {
+        if (due(ctx, onRedraw)) refresh(ctx, fresh = false, tapped = false)
+    }
+
+    private fun board(store: Store): List<NearbyStop>? = store.nearbyJson?.let { runCatching { parseNearby(JSONObject(it)) }.getOrNull() }
+
+    /** When the redraw alarm next fetches the board ([NearbyBoard.boardRefetchAt]); null with no board, so any time. */
+    private fun refetchAt(store: Store): Long? {
+        val at = store.nearbyFetchedAt.takeIf { it > 0L } ?: return null
+        return NearbyBoard.boardRefetchAt(board(store) ?: return null, at, sh.rcn.terminus.ServerClock.skewMs)
     }
 
     /**
@@ -195,11 +208,7 @@ internal object NearbyShared {
     fun redrawAt(ctx: Context, now: Long): Long? {
         val store = Store(ctx)
         val at = store.nearbyFetchedAt.takeIf { it > 0L } ?: return null
-        val stops = store.nearbyJson?.let { runCatching { parseNearby(JSONObject(it)) }.getOrNull() } ?: return null
-        // The nearest two: a swap shows the opposite stop, which is one of them.
-        val buses = stops.take(2).flatMap { NearbyBoard.buses(it, at, now, sh.rcn.terminus.ServerClock.skewMs) }
-        val old = at + WidgetModes.NEARBY_OLD_MS
-        val minutes = old.takeIf { LeaveAlerts.canBeExact(ctx) }
-        return listOfNotNull(old, NearbyBoard.redrawAt(buses, now, minutes)).filter { it > now }.minOrNull()
+        val stops = board(store) ?: return null
+        return NearbyBoard.boardRedrawAt(stops, at, now, LeaveAlerts.canBeExact(ctx), sh.rcn.terminus.ServerClock.skewMs)
     }
 }

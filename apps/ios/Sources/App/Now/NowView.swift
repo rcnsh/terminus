@@ -118,6 +118,9 @@ struct NowView: View {
         .onChange(of: app.showNearby ? nil : Spoken.announcement(app.answer)) { old, said in
             if old != nil { announce(said) }
         }
+        // On the view itself, not the location notice: allowing location
+        // removes the notice in the same update, and its onChange with it.
+        .onChange(of: locator.status) { _, _ in Task { await app.load(restart: true) } }
         .onAppear { onScreen = true }
         .onDisappear { onScreen = false }
         .sheet(
@@ -167,7 +170,6 @@ struct NowView: View {
                 }
             }
             .padding(.bottom, 12)
-            .onChange(of: locator.status) { _, _ in Task { await app.load(restart: true) } }
         }
     }
 

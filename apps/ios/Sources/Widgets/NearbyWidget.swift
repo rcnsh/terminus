@@ -81,7 +81,7 @@ struct NearbyProvider: TimelineProvider {
     static func timeline(family: WidgetFamily) -> Timeline<NearbyEntry> {
         let now = Date()
         let first = entry(family: family, at: now)
-        guard first.paired else { return Timeline(entries: [first], policy: .never) }
+        guard first.paired else { return Timeline(entries: [first], policy: BusProvider.unpairedPolicy(now: now)) }
         let horizon = now.addingTimeInterval(3 * 3600)
         var moments = BusProvider.skyChanges(after: now, until: horizon)
         var running = false

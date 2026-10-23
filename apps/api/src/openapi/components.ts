@@ -1157,9 +1157,10 @@ export function components(): Record<string, unknown> {
                     type: ['object', 'null'],
                     description:
                       'On the bus: the stops from boarding to getting off, and the board and arrival times, for a progress bar. Null otherwise.',
-                    required: ['svc', 'stops', 'board', 'arrive'],
+                    required: ['svc', 'color', 'stops', 'board', 'arrive'],
                     properties: {
                       svc: { type: 'string', example: 'R2' },
+                      color: { type: 'string', example: '#34a853', description: 'The service’s colour, `#rrggbb`.' },
                       stops: {
                         type: 'array',
                         items: { type: 'object', properties: { code: { type: 'string' }, name: { type: 'string' } } },

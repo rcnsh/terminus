@@ -47,16 +47,22 @@ const NEEDS_AE = html`<${Empty}>
 export function derive(s) {
   const nowMs = Date.parse(s.now) || Date.now();
   const an = s.analytics && !s.analytics.error ? s.analytics : null;
-  const d14 = lastDays(14, nowMs);
+  const d15 = lastDays(15, nowMs);
+  const d14 = d15.slice(1);
   const d30 = lastDays(30, nowMs);
+  // 15 days: the charts show the last 14, today's so far included; the
+  // week's totals are the 7 full days to yesterday against the 7 before,
+  // so a morning's few hours don't read as a drop.
   const perDay = (kind) => {
     const m = new Map((an?.daily ?? []).filter((r) => r.kind === kind).map((r) => [day(r), Number(r.n)]));
-    return d14.map((d) => m.get(d) ?? 0);
+    return d15.map((d) => m.get(d) ?? 0);
   };
-  const answers = perDay('answer');
-  const errors = perDay('error');
+  const answers15 = perDay('answer');
+  const errors15 = perDay('error');
+  const answers = answers15.slice(1);
+  const errors = errors15.slice(1);
   const rate = answers.map((n, i) => (n ? errors[i] / n : null));
-  const week = (xs) => sum(xs.slice(7));
+  const week = (xs) => sum(xs.slice(7, 14));
   const before = (xs) => sum(xs.slice(0, 7));
   const change = (a, b) => (b ? (a - b) / b : null);
   const signMap = new Map((s.signups ?? []).map((r) => [r.day, Number(r.n)]));
@@ -74,11 +80,11 @@ export function derive(s) {
     answers,
     errors,
     rate,
-    answers7: week(answers),
-    answersChange: change(week(answers), before(answers)),
-    errors7: week(errors),
-    rate7: share(week(errors), week(answers)),
-    rateChange: change(share(week(errors), week(answers)) ?? 0, share(before(errors), before(answers)) ?? 0),
+    answers7: week(answers15),
+    answersChange: change(week(answers15), before(answers15)),
+    errors7: week(errors15),
+    rate7: share(week(errors15), week(answers15)),
+    rateChange: change(share(week(errors15), week(answers15)) ?? 0, share(before(errors15), before(answers15)) ?? 0),
     signups,
     accountsRun,
     active: d30.map((d) => activeAll.get(d) ?? null),
@@ -137,7 +143,7 @@ export function Overview({ s, d }) {
         k="Answers, last 7 days"
         n=${d.an ? d.answers7 : null}
         delta=${d.answersChange}
-        sub=${d.an ? 'vs the week before' : null}
+        sub=${d.an ? 'to yesterday, vs the week before' : null}
         spark=${d.an ? d.answers : null}
         href="#/answers"
       />
@@ -147,7 +153,7 @@ export function Overview({ s, d }) {
         show=${(x) => pct(x, 2)}
         delta=${d.an ? d.rateChange : null}
         upGood=${false}
-        sub=${d.an ? 'vs the week before' : null}
+        sub=${d.an ? 'to yesterday, vs the week before' : null}
         spark=${d.an ? d.rate.map((x) => x ?? 0) : null}
         sparkColor="var(--bad)"
         href="#/answers"
@@ -551,7 +557,7 @@ function Settings({ s }) {
       sub=${
         s.collect?.settings
           ? latest
-            ? `Accounts used in the 30 days to ${dayLong(latest)}${of ? ` (${fmt(of)})` : ''}, by each setting’s value; pushes are Android phones and web apps, by app. What a device keeps to itself (leave alerts, card style) isn’t sent, so isn’t here.`
+            ? `Accounts used in the 30 days to ${dayLong(latest)}${of ? ` (${fmt(of)})` : ''}, by each setting’s value; pushes are Android phones, iPhones and web apps, by app. What a device keeps to itself (leave alerts, card style) isn’t sent, so isn’t here.`
             : 'Counted once a day, after midnight: nothing yet.'
           : 'Not collecting: turn on “Settings” under Collection to count them.'
       }
@@ -605,14 +611,14 @@ export function Answers({ s, d }) {
   return html`
     <div class="tiles">
       <${Tile} k="Answers, 14 days" n=${total} sub=${`${fmt(Math.round(total / 14))} a day`} spark=${d.answers} />
-      <${Tile} k="Last 7 days" n=${d.answers7} delta=${d.answersChange} sub="vs the week before" />
+      <${Tile} k="Last 7 days" n=${d.answers7} delta=${d.answersChange} sub="to yesterday, vs the week before" />
       <${Tile} k="Errors, 14 days" n=${errs} spark=${d.errors} sparkColor="var(--bad)" />
-      <${Tile} k="Error rate, 7 days" n=${d.rate7} show=${(x) => pct(x, 2)} delta=${d.rateChange} upGood=${false} sub="vs the week before" />
+      <${Tile} k="Error rate, 7 days" n=${d.rate7} show=${(x) => pct(x, 2)} delta=${d.rateChange} upGood=${false} sub="to yesterday, vs the week before" />
       <${Tile} k="Live this week" n=${share(live, qTotal)} show=${(x) => pct(x, 1)} sub=${`${fmt(live)} of ${fmt(qTotal)} answers`} />
     </div>
     <${Card}
       title="Per day, last 14 days"
-      sub="Days are in UTC, as Analytics Engine counts them."
+      sub="Singapore days; today’s is so far."
       tools=${html`<${Segmented}
         label="Show"
         value=${show}

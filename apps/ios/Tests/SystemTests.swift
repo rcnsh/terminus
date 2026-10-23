@@ -1,3 +1,4 @@
+import ActivityKit
 import Foundation
 import Testing
 
@@ -21,6 +22,29 @@ private func answer(_ name: String) throws -> (NextAnswer, Date) {
     let (a, _) = try answer("class-bus")
     #expect(a.phase == "idle")
     #expect(TripAttributes.ContentState.of(a) == nil)
+}
+
+/// Between the server's pushes the app updates the activity from each answer
+/// it fetches: any field the two build differently flips back and forth on
+/// the Lock Screen. fixtures/live-activity.json is the server's state for
+/// every golden answer under way (written by apns.test.js).
+@Test func theStateIsTheServersForEveryAnswer() throws {
+    let server = try JSONDecoder().decode(
+        [String: TripAttributes.ContentState].self, from: Data(contentsOf: fixtures.appendingPathComponent("live-activity.json")))
+    #expect(server.count >= 10)
+    for (name, want) in server.sorted(by: { $0.key < $1.key }) {
+        let (a, _) = try answer(name)
+        #expect(TripAttributes.ContentState.of(a) == want, "\(name)")
+    }
+}
+
+/// A stale activity (the phone offline a few minutes) is still the trip's:
+/// updated, not ended and left unstarted in the background.
+@Test func aStaleActivityIsUpdatedNotEnded() {
+    #expect(LiveTrip.onScreen(.active))
+    #expect(LiveTrip.onScreen(.stale))
+    #expect(!LiveTrip.onScreen(.ended))
+    #expect(!LiveTrip.onScreen(.dismissed))
 }
 
 @Test func onTheBusCountsDownToGettingOff() throws {
@@ -165,6 +189,29 @@ private func answer(_ name: String) throws -> (NextAnswer, Date) {
     #expect(WidgetMode.effective(place, at: now, plan: a, rowShown: false, now: now) == .timetable)
 }
 
+/// The background refresh with the phone ten minutes fast: the kept answer
+/// came a day after its moments, so it's asked again the fallback's 15
+/// minutes after it came by the phone's clock, not 25.
+@Test func theBackgroundRefreshReadsBothClocksTheSameWay() throws {
+    let (a, asOf) = try answer("riding")
+    let fetched = asOf.addingTimeInterval(86_400)
+    #expect(Background.refreshAt((a, fetched), now: fetched, skew: -600) == fetched.addingTimeInterval(15 * 60))
+}
+
+// MARK: the keychain
+
+/// Before the first unlock after a restart the keychain answers nothing:
+/// that isn't signed out, and a widget asks again in five minutes rather
+/// than never.
+@Test func aLockedKeychainIsNotSignedOut() {
+    #expect(TokenStore.lookupAnswer(errSecInteractionNotAllowed, data: nil) == .locked)
+    #expect(TokenStore.lookupAnswer(errSecItemNotFound, data: nil) == .none)
+    #expect(TokenStore.lookupAnswer(errSecSuccess, data: Data("t".utf8)) == .found("t"))
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    #expect(WidgetTiming.signedOutReload(locked: true, now: now) == now.addingTimeInterval(300))
+    #expect(WidgetTiming.signedOutReload(locked: false, now: now) == nil)
+}
+
 // MARK: links
 
 @Test func widgetLinksOpenTheRightPlace() {
@@ -214,4 +261,16 @@ private func answer(_ name: String) throws -> (NextAnswer, Date) {
 
 @Test func aSavedPlacesLinkOpensItsTab() {
     #expect(Links.route(WidgetMode.to(id: "place:home", label: "Home").link, key: "") == .place("home"))
+}
+
+// MARK: the privacy manifest
+
+/// The app reads its own UserDefaults.standard (crash reports, @AppStorage)
+/// as well as the app group's the widgets share: each needs its reason.
+@Test func thePrivacyManifestGivesEveryUserDefaultsReason() throws {
+    let url = fixtures.deletingLastPathComponent().appendingPathComponent("apps/ios/Support/PrivacyInfo.xcprivacy")
+    let plist = try #require(PropertyListSerialization.propertyList(from: Data(contentsOf: url), format: nil) as? [String: Any])
+    let types = try #require(plist["NSPrivacyAccessedAPITypes"] as? [[String: Any]])
+    let defaults = try #require(types.first { $0["NSPrivacyAccessedAPIType"] as? String == "NSPrivacyAccessedAPICategoryUserDefaults" })
+    #expect(Set(defaults["NSPrivacyAccessedAPITypeReasons"] as? [String] ?? []) == ["1C8F.1", "CA92.1"])
 }

@@ -115,7 +115,8 @@ import UserNotifications
         let alerts = TripPrefs.leaveAlerts
         // Whether a Live Activity of this phone's runs: none, and the server forgets the ended one's token.
         let activity = liveToken != nil
-        let sent = (tokens + [alerts ? "alerts" : "quiet", live ? "live" : "still"]).joined(separator: "|")
+        let h12 = Clock.hour12
+        let sent = (tokens + [alerts ? "alerts" : "quiet", live ? "live" : "still", h12 ? "h12" : "h24"]).joined(separator: "|")
         let fresh =
             d.string(forKey: "push.sent") == sent && d.string(forKey: "push.for") == tag(auth)
             && (d.object(forKey: "push.sentAt") as? Date).map { -$0.timeIntervalSinceNow < resend } == true
@@ -124,7 +125,8 @@ import UserNotifications
             // One token a request: the phone's (with both settings), then the Live Activity's.
             for t in tokens {
                 try await Api(token: auth).registerPush(
-                    apple: t, alerts: t == apns ? alerts : nil, live: t == apns ? live : nil, activity: t == apns ? activity : nil)
+                    apple: t, alerts: t == apns ? alerts : nil, live: t == apns ? live : nil, activity: t == apns ? activity : nil,
+                    h12: t == apns ? h12 : nil)
             }
             // Signed in again meanwhile: the new session hasn't got it.
             guard TokenStore.read() == auth else { return }

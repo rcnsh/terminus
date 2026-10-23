@@ -6,7 +6,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 
 import { makeCtx, makeEnv } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
@@ -27,7 +27,7 @@ import {
   sendApns,
   signProviderJwt,
 } from '../src/push/apns.ts';
-import { nudgeUser, pushEnabled, remindUser, setPushToken, updateLive } from '../src/push/push.ts';
+import { nudgeUser, pushAudience, pushEnabled, remindUser, setPushToken, updateLive } from '../src/push/push.ts';
 import { fromB64url } from '../src/push/webpush.ts';
 
 const NOW = Date.parse('2026-08-27T01:00:00Z');
@@ -288,6 +288,31 @@ test("the Live Activity's content-state comes from the card: before the bus, and
   }
 });
 
+/**
+ * The iPhone builds the same state from each answer it fetches (ContentState.of)
+ * and updates its activity with it between the server's pushes: the two must
+ * agree, or the Lock Screen flips between them. This writes the server's for
+ * every golden answer the app shows one for (its TripPrefs.tripPhases) to
+ * fixtures/live-activity.json, which the iPhone's tests hold the app to.
+ * Re-recorded with UPDATE_GOLDEN=1 pnpm test.
+ */
+test("the Live Activity's state for every golden answer is the one the iPhone is held to", () => {
+  const dir = new URL('../../../fixtures/answers/', import.meta.url);
+  const file = new URL('../../../fixtures/live-activity.json', import.meta.url);
+  const states = {};
+  for (const f of readdirSync(dir)
+    .filter((f) => f.endsWith('.json'))
+    .sort()) {
+    const a = JSON.parse(readFileSync(new URL(f, dir), 'utf8'));
+    if (!a.card || a.mode === 'rest' || !['due', 'heading', 'waiting', 'riding', 'missed'].includes(a.card.phase)) continue;
+    states[f.slice(0, -'.json'.length)] = liveActivityState(a);
+  }
+  assert.ok(Object.keys(states).length >= 10, 'golden answers under way');
+  const text = JSON.stringify(states, null, 2) + '\n';
+  if (['1', 'true'].includes(process.env.UPDATE_GOLDEN ?? '')) writeFileSync(file, text);
+  assert.equal(text, readFileSync(file, 'utf8'), 'the state changed; if on purpose, UPDATE_GOLDEN=1 pnpm test');
+});
+
 test('POST /api/me/push takes apns: and apnsla: tokens, with APNs off too, and refuses a malformed one', async () => {
   const db = makeD1();
   const env = { ...makeEnv(), DB: db, EMAIL: makeEmail(), EMAIL_FROM: 'x@example.test' };
@@ -502,11 +527,6 @@ test("a nudge reaches an iPhone as Android's would: words when it's time to look
   assert.equal(sent[0].body.aps.alert.title, '错过了。这是下一种到达方式。');
   assert.equal(sent[1].body.aps.alert.title, "Missed it. Here's the next way there.");
 
-  // There: the Live Activity ends.
-  sent.length = 0;
-  await nudgeUser(env, 'u1', { phase: 'arrived', urgent: false, answer: as('arrived') }, NOW);
-  assert.equal(sent.at(-1).body.aps.event, 'end');
-
   // Only the Live Activity, when what it shows moved and the phase didn't.
   sent.length = 0;
   assert.deepEqual(await updateLive(env, 'u1', { state: liveActivityState(card) }, 'update', NOW), { sent: 1, failed: 0 });
@@ -514,6 +534,11 @@ test("a nudge reaches an iPhone as Android's would: words when it's time to look
     sent.map((s) => s.headers['apns-push-type']),
     ['liveactivity'],
   );
+
+  // There: the Live Activity ends.
+  sent.length = 0;
+  await nudgeUser(env, 'u1', { phase: 'arrived', urgent: false, answer: as('arrived') }, NOW);
+  assert.equal(sent.at(-1).body.aps.event, 'end');
 });
 
 test('a card worded in one language reaches each iPhone in its own: notification and Live Activity', async () => {
@@ -734,6 +759,26 @@ test('a token Apple has dropped is forgotten; a Live Activity that ended loses o
   assert.equal(ours.row(0).push_token, `apns:${HEX}`);
 });
 
+test("a Live Activity the server ended is forgotten, so the next trip's starts by push", async () => {
+  const en = answer('class-bus');
+  const arrived = { ...en, card: { ...en.card, phase: 'arrived' } };
+  const due = { ...en, card: { ...en.card, phase: 'due', actions: [{ id: 'skipped', label: 'x', trip: '4:780:COM3' }] } };
+  const { env, sent, row } = await setup([{ push: `apns:${HEX}`, live: `apnsla:${LIVE_HEX}`, start: `apnsstart:${START_HEX}` }]);
+  // The trip arrives: the server ends its Live Activity, and the app, closed, says nothing.
+  await nudgeUser(env, 'u1', { phase: 'arrived', urgent: false, answer: arrived, lang: 'en' }, NOW);
+  assert.equal(sent.find((s) => s.url.endsWith(LIVE_HEX)).body.aps.event, 'end');
+  assert.deepEqual(row(0), { push_token: `apns:${HEX}`, live_token: null });
+  sent.length = 0;
+  await nudgeUser(env, 'u1', { phase: 'due', urgent: true, answer: due, lang: 'en', startLive: true }, NOW + 3_600_000);
+  assert.equal(sent.filter((s) => s.url.endsWith(START_HEX)).length, 1);
+  // An end with no trip left goes the same way; an update keeps the token.
+  const two = await setup([{ push: `apns:${HEX}`, live: `apnsla:${LIVE_HEX}` }]);
+  await updateLive(two.env, 'u1', { state: liveActivityState(en) }, 'update', NOW);
+  assert.equal(two.row(0).live_token, `apnsla:${LIVE_HEX}`);
+  await updateLive(two.env, 'u1', { state: liveActivityState(en) }, 'end', NOW);
+  assert.equal(two.row(0).live_token, null);
+});
+
 test('the provider token is reused for 50 minutes, through KV, and signed again when Apple says it expired', async () => {
   const { env, sent, publicKey } = await setup([{ push: `apns:${HEX}` }]);
   const send = (ms) => sendApns(env, newApnsRun(), parseApnsToken(`apns:${HEX}`), backgroundPush({}, 0), ms);
@@ -810,6 +855,38 @@ test('setPushToken keeps the language an iPhone registered in, and forgets it wi
   assert.equal(db._db.prepare("SELECT push_lang FROM sessions WHERE token_hash = 'h0'").get().push_lang, 'zh');
   await setPushToken(db, 'h0', null);
   assert.equal(db._db.prepare("SELECT push_lang FROM sessions WHERE token_hash = 'h0'").get().push_lang, null);
+});
+
+test("setPushToken keeps an iPhone's clock; the Trip object's card takes 12-hour times from any iPhone, not the latest", async () => {
+  const { env, db } = await setup([{}, {}]);
+  const clock = (h) => db._db.prepare('SELECT push_h12 FROM sessions WHERE token_hash = ?').get(h).push_h12;
+  await setPushToken(db, 'h0', `apns:${HEX}`, 'en', null, null, null, true);
+  await setPushToken(db, 'h1', `apns:${HEX2}`, 'en', null, null, null, false);
+  assert.deepEqual([clock('h0'), clock('h1')], [1, 0]);
+  // Whichever was seen last: the two phones taking turns mustn't change the card (and so the Live Activity) each time.
+  const seen = (h, at) => db._db.prepare('UPDATE sessions SET last_seen = ? WHERE token_hash = ?').run(at, h);
+  seen('h0', 10);
+  assert.equal((await pushAudience(env, 'u1')).iphoneH12, true);
+  seen('h1', 20);
+  assert.equal((await pushAudience(env, 'u1')).iphoneH12, true);
+  // Not said: as before.
+  await setPushToken(db, 'h0', `apns:${HEX}`, 'en');
+  assert.equal(clock('h0'), null);
+  assert.equal((await pushAudience(env, 'u1')).iphoneH12, false);
+  await setPushToken(db, 'h1', null);
+  assert.equal(clock('h1'), null);
+});
+
+test("an iPhone's token moving to another session takes its Live Activity's tokens off the old one", async () => {
+  const { db } = await setup([{ push: `apns:${HEX}`, live: `apnsla:${LIVE_HEX}`, start: `apnsstart:${START_HEX}`, lang: 'zh' }, {}]);
+  const tokens = (h) => ({ ...db._db.prepare('SELECT push_token, live_token, start_token FROM sessions WHERE token_hash = ?').get(h) });
+  // The same session registering again keeps them.
+  await setPushToken(db, 'h0', `apns:${HEX}`, 'zh');
+  assert.deepEqual(tokens('h0'), { push_token: `apns:${HEX}`, live_token: `apnsla:${LIVE_HEX}`, start_token: `apnsstart:${START_HEX}` });
+  // Signed in again on the phone: the old session is pushed nothing more.
+  await setPushToken(db, 'h1', `apns:${HEX}`, 'en');
+  assert.deepEqual(tokens('h0'), { push_token: null, live_token: null, start_token: null });
+  assert.deepEqual(tokens('h1'), { push_token: `apns:${HEX}`, live_token: null, start_token: null });
 });
 
 test('a connection Apple refuses (no HTTP/2, a reset, a timeout) counts as failed, drops no token, and pauses like a 5xx', async () => {

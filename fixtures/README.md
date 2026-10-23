@@ -8,6 +8,9 @@ the iPhone's tests read them, so a change in one shows up in all.
   `answers/zh/` the Chinese, checked word for word.
 - `offline-day.json`: what each app shows offline from a kept day plan
   (`answers/day.json`).
+- `live-activity.json`: the iPhone Live Activity's state the server pushes
+  for each golden answer under way, which the app's own must equal
+  (`apns.test.js` writes it with `UPDATE_GOLDEN=1`).
 - `search.json`: the destination search's ranking rules and cases, which
   the website's `search.js` and the apps' searches are all held to.
 

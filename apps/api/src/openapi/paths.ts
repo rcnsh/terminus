@@ -1161,6 +1161,11 @@ export function paths(): Record<string, unknown> {
                 description:
                   'With an `apns:` token: whether a Live Activity of this iPhone runs. With `false` (it ended on the phone), its `apnsla:` token is forgotten, so a later trip can start a new one; left out, nothing changes.',
               },
+              h12: {
+                type: 'boolean',
+                description:
+                  'With an `apns:` token: whether this iPhone shows 12-hour times. Its notifications and Live Activity are worded so, unless the account chose a clock; left out, as the card pushed.',
+              },
               subscription: {
                 type: 'object',
                 required: ['endpoint', 'keys'],
@@ -1677,6 +1682,11 @@ export function paths(): Record<string, unknown> {
                     pushAlerts: {
                       type: ['boolean', 'null'],
                       description: 'An iPhone’s: whether its leave alerts are on, as it last said (null: not said).',
+                    },
+                    pushClock: {
+                      type: ['string', 'null'],
+                      enum: ['12', '24', null],
+                      description: 'An iPhone’s: whether it shows 12- or 24-hour times, as it last said (null: not said).',
                     },
                     created: { type: 'string', format: 'date-time' },
                     lastSeen: { type: 'string', format: 'date-time' },

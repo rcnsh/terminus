@@ -76,3 +76,13 @@ func everyGoldenIsSpokenInSentences(name: String) throws {
     #expect(!said.isEmpty, "\(name) says something")
     #expect(!said.contains(" · "), "\(name): \(said)")
 }
+
+/// The card's countdown, from the second the bus leaves: a minute ago at
+/// once, never "0 min ago", as the web, Android and the Mac say it.
+@Test func theCountdownSaysAMinuteAgoFromTheStart() {
+    #expect(Countdown.words(left: 61) == "Leaves in 1 min 1 s")
+    #expect(Countdown.words(left: 1) == "Leaves in 1 s")
+    #expect(Countdown.words(left: 0) == "Left 1 min ago")
+    #expect(Countdown.words(left: -1) == "Left 1 min ago")
+    #expect(Countdown.words(left: -61) == "Left 2 min ago")
+}

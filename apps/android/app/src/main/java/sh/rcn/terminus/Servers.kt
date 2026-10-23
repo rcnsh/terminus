@@ -106,21 +106,39 @@ internal object Servers {
 
     /**
      * [call] with each of [tries] in turn, the next only when one couldn't be reached ([unreached]); the one that answered goes to
-     * [answered]. For what doesn't go through Api's request (crash reports, the map files), so it falls back to the backup the same way.
+     * [answered]. For what doesn't go through Api's request (crash reports, the map files), so it falls back to the backup the same way and
+     * each attempt at [path] is in the developer menu's recent requests ([RequestLog]), with the HTTP [status] of what [call] returned.
      */
-    fun <T> through(tries: List<String>, method: String, answered: (String) -> Unit, call: (String) -> T): T {
+    fun <T> through(
+        tries: List<String>,
+        method: String,
+        path: String,
+        answered: (String) -> Unit,
+        status: (T) -> Int?,
+        call: (String) -> T,
+    ): T {
         for ((i, base) in tries.withIndex()) {
+            val started = System.nanoTime()
+            var code: Int? = null
+            var failure: Throwable? = null
             try {
-                return call(base).also { answered(base) }
-            } catch (e: IOException) {
-                if (i == tries.lastIndex || !unreached(e, method)) throw e
+                return call(base).also {
+                    code = status(it)
+                    answered(base)
+                }
+            } catch (e: Exception) {
+                failure = e
+                if (e !is IOException || i == tries.lastIndex || !unreached(e, method)) throw e
+            } finally {
+                RequestLog.record(method, path, base, code, (System.nanoTime() - started) / 1_000_000, failure)
             }
         }
         error("no server to try")
     }
 
     /** [through] the addresses requests go to now ([tries]). */
-    fun <T> through(method: String, call: (String) -> T): T = through(tries(), method, { answered(it) }, call)
+    fun <T> through(method: String, path: String, status: (T) -> Int?, call: (String) -> T): T =
+        through(tries(), method, path, { answered(it) }, status, call)
 
     fun init(ctx: Context) {
         current = pick(terminusPrefs(ctx).getString(KEY_SERVER, null), choices)

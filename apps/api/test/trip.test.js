@@ -1443,6 +1443,30 @@ test('a change to the Trip object that changes nothing writes nothing, and the a
   assert.equal(trips.alarms.get('u1'), FROZEN_NOW + 300_000);
 });
 
+test("a watch never brings the Trip object's wake within 30 s of its last one", async () => {
+  installGlobals(makeFetch({}));
+  const trips = makeDurableObjects(Trip);
+  const s = trips.get('u1');
+  const base = { date: sgtDate(FROZEN_NOW), deleteAt: endOfDayMs(FROZEN_NOW) };
+  const watch = (at) =>
+    s.fetch('https://trip/update', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...base, watch: { userId: 'u1', at } }),
+    });
+  // As a wake at FROZEN_NOW leaves it: the next wake 30 s on.
+  await watch(FROZEN_NOW + 30_000);
+  const storage = trips.instances.get('u1').storage;
+  await storage.put('lastWake', { at: FROZEN_NOW, leaveAt: null });
+  // Another phone refreshes 2 s later, its leave-by sliding 5 s on.
+  await watch(FROZEN_NOW + 7_000);
+  assert.equal(trips.alarms.get('u1'), FROZEN_NOW + 30_000);
+  // Past the gap, a watch moves it sooner as before.
+  await storage.put('lastWake', { at: FROZEN_NOW - 60_000, leaveAt: null });
+  await watch(FROZEN_NOW + 7_000);
+  assert.equal(trips.alarms.get('u1'), FROZEN_NOW + 7_000);
+});
+
 test('needsWatch: any sooner wake is booked, however little sooner; a later or equal one needs nothing', () => {
   const now = 1_000_000;
   const day = { date: '2026-10-08', trips: {}, watch: now + 60_000 };

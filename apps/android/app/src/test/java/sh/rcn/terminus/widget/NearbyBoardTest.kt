@@ -114,6 +114,27 @@ class NearbyBoardTest {
     }
 
     @Test
+    fun minuteRedrawsDontFetchTheBoardAgain() {
+        // The widgets' redraw alarm over ten minutes with exact alarms, each fetch giving the same board: it redraws at every minute off
+        // a count, but fetches only when the times turn old (180 s; D1 going at 250 s would be later), as without the minutes.
+        var fetchedAt = fetched
+        var now = fetched
+        val redraws = mutableListOf<Long>()
+        val fetches = mutableListOf<Long>()
+        while (true) {
+            now = NearbyBoard.boardRedrawAt(listOf(utown), fetchedAt, now, exact = true) ?: break
+            if (now > fetched + 600_000) break
+            redraws += now - fetched
+            if (now - fetchedAt >= 60_000 && now >= NearbyBoard.boardRefetchAt(listOf(utown), fetchedAt)) {
+                fetches += now - fetched
+                fetchedAt = now
+            }
+        }
+        assertEquals(listOf(180_000L, 360_000L, 540_000L), fetches)
+        assertEquals(listOf(10_000L, 60_000L, 70_000L, 120_000L, 130_000L, 180_000L), redraws.take(6))
+    }
+
+    @Test
     fun minutesRoundDownAndStopFarOff() {
         val at = fetched + 3_600_000
         assertEquals(6, NearbyBoard.minutesLeft(at, at - 6 * 60_000 - 59_000))

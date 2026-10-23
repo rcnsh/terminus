@@ -119,10 +119,15 @@ struct BusProvider: TimelineProvider {
         await task.value
     }
 
+    /// A widget with no token: asked again soon if the keychain was only locked, else when signing in reloads it.
+    static func unpairedPolicy(now: Date) -> TimelineReloadPolicy {
+        WidgetTiming.signedOutReload(locked: TokenStore.lookup() == .locked, now: now).map { .after($0) } ?? .never
+    }
+
     static func timeline(kind: String, family: WidgetFamily) -> Timeline<BusEntry> {
         let now = Date()
         let first = entry(kind: kind, family: family, at: now)
-        guard first.paired else { return Timeline(entries: [first], policy: .never) }
+        guard first.paired else { return Timeline(entries: [first], policy: unpairedPolicy(now: now)) }
         let skew = ServerClock.skew
         let horizon = now.addingTimeInterval(6 * 3600)
         var moments: [Date] = []

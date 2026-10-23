@@ -209,13 +209,17 @@ final class BusesModel {
         if !force && fresh(code) { return }
         guard let token else { return }
         asked[code] = Date()
+        let s = AppModel.shared.session
         await fetching(code) {
             do {
                 let b = try await Api(token: token).board(stop: code, publicBuses: publicBuses)
+                // Asked for by the account before a sign-in or sign-out, with its public buses setting.
+                guard current(s) else { return }
                 answeredAt[code] = Date()
                 boards[code] = b
                 failed.remove(code)
             } catch {
+                guard current(s) else { return }
                 if refused(error, token) { return }
                 failed.insert(code)
             }
@@ -249,16 +253,21 @@ final class BusesModel {
         if !force && fresh("line:" + key) { return }
         guard let token else { return }
         asked["line:" + key] = Date()
+        let s = AppModel.shared.session
         await fetching("line:" + key) {
             let api = Api(token: token)
             do {
-                lines[key] = try await api.line(svc: svc, stop: from)
+                let l = try await api.line(svc: svc, stop: from)
+                guard current(s) else { return }
+                lines[key] = l
                 answeredAt["line:" + key] = Date()
                 lineFailed.remove(key)
             } catch {
+                guard current(s) else { return }
                 if refused(error, token) { return }
                 // The stop isn't on this service: the line without it.
                 if from != nil, let e = error as? ApiError, e.status == 400, let l = try? await api.line(svc: svc) {
+                    guard current(s) else { return }
                     lines[key] = l
                     answeredAt["line:" + key] = Date()
                     lineFailed.remove(key)

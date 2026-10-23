@@ -36,6 +36,9 @@ struct NextAnswer: Decodable, Sendable {
         let board: String?
         let arrive: String?
         let note: String?
+        /// Where to get off, when it's across the road from the destination; else where the bus gets you.
+        let off: String?
+        let toStop: String?
     }
     struct ArrivalLite: Decodable, Sendable {
         let svc: String
@@ -304,16 +307,19 @@ struct Ride: Decodable, Sendable {
         let text: String
     }
     let svc: String
+    /// The service's colour; nil from a server that doesn't send it.
+    let color: String?
     let stops: [Stop]
     let board: String
     let arrive: String
     let change: Change?
 
-    enum CodingKeys: String, CodingKey { case svc, stops, board, arrive, change }
+    enum CodingKeys: String, CodingKey { case svc, color, stops, board, arrive, change }
 
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         svc = try c.decode(String.self, forKey: .svc)
+        color = c.string(.color)
         stops = c.lenientList(Stop.self, forKey: .stops) ?? []
         board = try c.decode(String.self, forKey: .board)
         arrive = try c.decode(String.self, forKey: .arrive)

@@ -238,14 +238,19 @@ struct Countdown: View {
     var body: some View {
         if let at = answer.departure {
             let left = Int(at.timeIntervalSince(now))
-            let text =
-                left > 60
-                ? L("Leaves in %@ min %@ s", "\(left / 60)", "\(left % 60)")
-                : left > 0
-                    ? L("Leaves in %@ s", "\(left)")
-                    : L("Left %@ min ago", "\((-left + 59) / 60)")
-            Text(text).font(.subheadline.weight(.semibold)).foregroundStyle(left > 0 ? inks.smallAccent : inks.muted).monospacedDigit()
+            Text(Self.words(left: left)).font(.subheadline.weight(.semibold)).foregroundStyle(left > 0 ? inks.smallAccent : inks.muted)
+                .monospacedDigit()
         }
+    }
+
+    /// `left` seconds to the departure, in words. Gone: a minute ago from the
+    /// moment it leaves, never "0 min ago", as the web, Android and the Mac say it.
+    nonisolated static func words(left: Int) -> String {
+        left > 60
+            ? L("Leaves in %@ min %@ s", "\(left / 60)", "\(left % 60)")
+            : left > 0
+                ? L("Leaves in %@ s", "\(left)")
+                : L("Left %@ min ago", "\(max(1, (-left + 59) / 60))")
     }
 }
 

@@ -499,7 +499,7 @@ final class MapModel {
             var list = p["places"] as? [[String: Any]] ?? []
             guard !list.contains(where: { $0["to"] as? String == code }) else { return }
             let labelMax = ((p["limits"] as? [String: Any])?["placeLabel"] as? Int).flatMap { $0 > 0 ? $0 : nil } ?? 24
-            let label = String(name.trimmingCharacters(in: .whitespaces).prefix(labelMax))
+            let label = clippedUTF16(name.trimmingCharacters(in: .whitespaces), labelMax)
             list.append(["key": placeKey(label, taken: list.compactMap { $0["key"] as? String }), "label": label, "to": code])
             p["places"] = list
         }

@@ -14,7 +14,7 @@
 import type { Env } from '../types.ts';
 import { clientFrom } from '../accounts/accounts.ts';
 import { analyticsEnabled, logLegacy, type LegacyRow } from './analytics.ts';
-import { collecting } from './collect.ts';
+import { collectingMemo } from './collect.ts';
 import { oldAddress, oldApiPath } from '../site/site.ts';
 
 /** What [req] used that is on its way out, given the [status] it was answered with; none for most requests. */
@@ -52,7 +52,7 @@ export function noteLegacy(env: Env, ctx: ExecutionContext, req: Request, status
   const client = senderOf(req);
   const route = routeOf(url.pathname);
   ctx.waitUntil(
-    collecting(env, 'legacy').then((on) => {
+    collectingMemo(env, 'legacy').then((on) => {
       if (on) for (const what of uses) logLegacy(env, { what, client, route });
     }),
   );
