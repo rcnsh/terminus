@@ -5,7 +5,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { installGlobals, makeCtx, makeEnv, makeFetch, FROZEN_NOW } from './_stubs.mjs';
+import { installGlobals, makeCtx, makeDurableObjects, makeEnv, makeFetch, FROZEN_NOW } from './_stubs.mjs';
+import { Trip } from '../src/push/tripdo.ts';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
 import { GRAPH, GRAPH_PUBLIC } from '../src/answer/graph.ts';
@@ -442,7 +443,6 @@ test('an account with publicBuses on gets public buses on /me/next and /me/nearb
   assert.equal(on.card.journey.backup.svc, 'A2');
   assert.equal(on.card.journey.backup.paid, undefined);
   // The card's words name it with its fare too, for the clients that show only them (the Mac, notifications).
-  assert.equal(on.leave.paid, true);
   assert.match(on.card.leaveVia, /\b95 \(\$\) at /);
   const nearby = await get(`/api/me/nearby?lat=${AT_IT.lat}&lon=${AT_IT.lon}`);
   const it = nearby.stops.find((s) => s.stop.code === 'IT');
@@ -507,4 +507,51 @@ test('a kept plan for a public bus keeps its fare mark and its route', () => {
   const again = leaveOf(plan);
   assert.equal(again.paid, true);
   assert.equal(again.route, '151/2');
+});
+
+test('"On it" for a public bus keeps its fare mark and route, so the ride is followed on its own route and feed', async () => {
+  // At IT, the 95 (LTA's 16189) beats the A2 to a class at KR MRT.
+  const publicStops = { 16189: [{ ServiceNo: '95', buses: [{ etaS: 90, dest: '16009' }] }] };
+  const fetch = makeFetch({ byStop: { IT: [{ name: 'A2', arrivalTime: '9', nextArrivalTime: '19' }] }, publicStops });
+  installGlobals(fetch, FROZEN_NOW);
+  const env = { ...key(), DB: makeD1(), EMAIL: makeEmail(), EMAIL_FROM: 'x@example.test', TRIPS: makeDurableObjects(Trip) };
+  const call = async (path, init = {}) => {
+    const ctx = makeCtx();
+    const res = await worker.fetch(new Request(BASE + path, init), env, ctx);
+    await ctx.settle();
+    return res;
+  };
+  const json = { 'content-type': 'application/json' };
+  await call('/api/auth/login', { method: 'POST', headers: json, body: JSON.stringify({ email: 'you@u.nus.edu' }) });
+  const verify = await call('/auth/verify', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: `t=${env.EMAIL.lastToken()}`,
+  });
+  const cookie = verify.headers.get('set-cookie').split(';')[0];
+  const manual = [{ day: 4, arriveByMin: 560, endMin: 620, to: 'KR-MRT', label: 'Lunch @ KR MRT', venue: '' }];
+  const profile = { home: { stops: ['PGP'] }, manual, publicBuses: true };
+  assert.equal((await call('/api/me/profile', { method: 'PUT', headers: { cookie, ...json }, body: JSON.stringify(profile) })).status, 200);
+  const q = `?lat=${AT_IT.lat}&lon=${AT_IT.lon}`;
+  const before = await call(`/api/me/next${q}`, { headers: { cookie } }).then((r) => r.json());
+  assert.equal(before.leave.svc, '95');
+  assert.equal(before.leave.paid, true);
+  const on = await call(`/api/me/signal${q}`, {
+    method: 'POST',
+    headers: { cookie, ...json },
+    body: JSON.stringify({ kind: 'boarded', lat: AT_IT.lat, lon: AT_IT.lon }),
+  }).then((r) => r.json());
+  assert.equal(on.card.phase, 'riding');
+  // The stops ridden, along the 95's own route, for the progress bar.
+  assert.equal(on.card.ride?.svc, '95');
+  assert.deepEqual([on.card.ride.stops[0].code, on.card.ride.stops.at(-1).code], ['IT', 'KR-MRT-OPP']);
+
+  // At 09:08, past its 09:07 arrival with nothing to say you're there: the
+  // next 95 due at Opp KR MRT, from LTA (18339), is the guess. The stub's
+  // times count from FROZEN_NOW, so 600 s is 09:10.
+  publicStops[18339] = [{ ServiceNo: '95', buses: [{ etaS: 600, dest: '16009' }] }];
+  installGlobals(fetch, FROZEN_NOW + 8 * 60_000);
+  const after = await call('/api/me/next', { headers: { cookie } }).then((r) => r.json());
+  assert.equal(after.card.phase, 'riding');
+  assert.equal(after.arriveAt, '2026-08-27T01:10:00Z');
 });

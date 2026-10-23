@@ -14,11 +14,11 @@
  * day with an alarm. An idle object costs nothing.
  */
 
-import type { Env, Leave, MeAnswer } from '../types.ts';
+import type { Env, Graph, Leave, MeAnswer } from '../types.ts';
 import { haversineM } from '../geo.ts';
 import { MAX_FIX_ACC_M, WALK, sgt } from '../config.ts';
 import { sgtDate } from '../timetable/calendar.ts';
-import { GRAPH } from './graph.ts';
+import { GRAPH, GRAPH_PUBLIC } from './graph.ts';
 import { headwayFor, indexGraph, rideSpan, rideStops } from './resolve.ts';
 import { shapeFor } from '../map/campus.ts';
 import { alongNear } from '../map/buses.ts';
@@ -135,13 +135,16 @@ export function leaveOf(b: Plan): Leave {
   };
 }
 
+/** The graph a bus's route and stops are in: a public bus's has LTA's. */
+const busGraph = (b: Pick<Plan, 'paid'>): Graph => (b.paid ? GRAPH_PUBLIC : GRAPH);
+
 /**
  * Where you get off the bus you're on: across the road when the plan said so,
  * else the stop it drops you at ("UTown"), never the class ("GEA1000 @ UTown").
  */
 export function offStop(b: Plan): string | null {
   if (b.off) return b.off;
-  const s = b.alightCode ? indexGraph(GRAPH).byCode.get(b.alightCode) : undefined;
+  const s = b.alightCode ? indexGraph(busGraph(b)).byCode.get(b.alightCode) : undefined;
   return s ? shortStop(s.name) : null;
 }
 
@@ -228,8 +231,8 @@ export interface Ride {
 /** The ride on the bus you're on, when its stops are known. */
 export function rideOf(b: Plan): Ride | null {
   if (!b.stopCode || !b.alightCode || !b.board || !b.arrive) return null;
-  const idx = indexGraph(GRAPH);
-  const codes = rideStops(idx, b.svc, b.stopCode, b.alightCode);
+  const idx = indexGraph(busGraph(b));
+  const codes = rideStops(idx, b.route ?? b.svc, b.stopCode, b.alightCode);
   if (!codes || codes.length < 2) return null;
   return {
     svc: b.svc,

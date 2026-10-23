@@ -471,7 +471,8 @@ interface MeRoute {
  * The plate of the `svc` bus at `stopCode` right now: the one due soonest,
  * within a few minutes (at the tap it's pulling in or just leaving), and
  * when it's due there (`at`, ISO). Empty when the feed has no plates or no
- * such bus is near, so the ride falls back to the estimate.
+ * such bus is near, so the ride falls back to the estimate. `graph` is the
+ * bus's own: a public bus's stop is asked of LTA, not NUS.
  */
 async function plateAt(
   env: Env,
@@ -480,10 +481,11 @@ async function plateAt(
   stopCode: string | undefined,
   svc: string,
   nowMs: number,
+  graph: Graph,
 ): Promise<{ plate?: string; at?: string }> {
   if (!stopCode) return {};
   try {
-    const sa = (await deps.collectArrivals(env, ctx, [stopCode], nowMs)).get(stopCode);
+    const sa = (await deps.collectArrivals(env, ctx, [stopCode], nowMs, graph)).get(stopCode);
     const near = (sa?.arrivals ?? [])
       .filter((x) => x.svc === svc && x.plate && x.etaS !== null && x.etaS <= PLATE_WINDOW_S)
       .sort((x, y) => x.etaS! - y.etaS!)[0];
@@ -861,8 +863,11 @@ export const ME_ROUTES: MeRoute[] = [
           }
           // The bus pulling in now, which may be one before or after the
           // plan's: its times are the plan's moved to when it's due here.
-          const { plate, at: boardAt } = await plateAt(env, ctx, deps, l.stopCode, l.svc, nowMs);
+          const graph = l.paid ? GRAPH_PUBLIC : GRAPH;
+          const { plate, at: boardAt } = await plateAt(env, ctx, deps, l.stopCode, l.route ?? l.svc, nowMs, graph);
           const shift = boardAt && l.board ? Date.parse(boardAt) - Date.parse(l.board) : 0;
+          // A public bus is followed on its own route and feed (trip.ts, next.ts).
+          const paid = l.paid ? { paid: true as const, ...(l.route ? { route: l.route } : {}) } : {};
           rec = {
             kind,
             at: nowMs,
@@ -878,6 +883,7 @@ export const ME_ROUTES: MeRoute[] = [
                   ...(l.stopCode ? { stopCode: l.stopCode } : {}),
                   alightCode: l.change.fromCode,
                   ...(plate ? { plate } : {}),
+                  ...paid,
                   ...(now.answer.dest?.to ? { change: laterChange(secondBusOf(l, now.answer.dest.to), l.change.reach, shift) } : {}),
                 }
               : {
@@ -889,6 +895,7 @@ export const ME_ROUTES: MeRoute[] = [
                   ...(l.stopCode ? { stopCode: l.stopCode } : {}),
                   ...(now.answer.dest?.to ? { alightCode: l.offCode ?? l.toCode ?? now.answer.dest.to } : {}),
                   ...(plate ? { plate } : {}),
+                  ...paid,
                 },
           };
           break;
