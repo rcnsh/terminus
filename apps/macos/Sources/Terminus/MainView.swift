@@ -70,7 +70,7 @@ struct Main: View {
                     AnswerDetail(
                         answer: answer, busy: model.signalling, undoShownFor: model.removed?.key,
                         old: !model.resting && answer?.arrived != true && model.isOld(answer, at: model.clock),
-                        onAction: model.signal, onChoice: model.choose
+                        onAction: model.signal, onChoice: model.choose, onStep: model.step
                     ).transition(.opacity.combined(with: .offset(y: 6)))
                 }
             }

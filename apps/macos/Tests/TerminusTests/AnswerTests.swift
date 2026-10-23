@@ -59,10 +59,29 @@ func everyGoldenAnswerDecodes(name: String) throws {
     if present("ride") { #expect(card.ride != nil, "card.ride") }
     if present("upcoming") { #expect(card.upcoming != nil, "card.upcoming") }
     if present("suggestion") { #expect(card.suggestion != nil, "card.suggestion") }
+    if present("step") { #expect(card.step != nil, "card.step") }
     // So does a change of bus, read leniently inside them.
     if (sent["journey"] as? [String: Any])?["change"] is [String: Any] { #expect(card.journey?.change != nil, "journey.change") }
     if (sent["ride"] as? [String: Any])?["change"] is [String: Any] { #expect(card.ride?.change != nil, "ride.change") }
     #expect(card.actions?.count ?? 0 == (sent["actions"] as? [Any])?.count ?? 0, "card.actions")
+}
+
+/// Earlier and Later bus, worded on the server; none once the trip's under way.
+@Test func stepDecodesFilledAndNull() throws {
+    let step = try #require(try golden("class-bus").card?.step)
+    #expect(step.trip == "4:600:UTOWN")
+    #expect(step.earlier == StepTarget(svc: "D2", stop: "PGP", board: "2026-08-27T01:38:00Z"))
+    #expect(step.later == StepTarget(svc: "D2", stop: "PGP", board: "2026-08-27T01:50:00Z"))
+    #expect(!step.moved)
+    #expect(step.earlierLabel == "Earlier bus" && step.laterLabel == "Later bus" && step.bestLabel == "Best bus")
+    #expect(try golden("arrived").card?.step == nil)
+    // A side with no bus is null, and the rest of the step still reads.
+    let json = #"""
+        {"trip":"t","earlier":null,"later":{"svc":"A1","stop":"COM3","board":"2026-08-27T01:50:00Z"},"moved":true,
+         "earlierLabel":"Earlier bus","laterLabel":"Later bus","bestLabel":"Best bus"}
+        """#
+    let s = try JSONDecoder().decode(NextAnswer.Step.self, from: Data(json.utf8))
+    #expect(s.earlier == nil && s.later?.svc == "A1" && s.moved)
 }
 
 @Test func crowdIsShownOnceWhenTheDetailSaysIt() throws {

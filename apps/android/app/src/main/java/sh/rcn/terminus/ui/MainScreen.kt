@@ -314,6 +314,7 @@ internal fun MainScreen(
                                     state.signalling,
                                     vm::choose,
                                     onPlace = { vm.select(Target.SavedPlace(it)) },
+                                    onStep = vm::step,
                                 )
                             }
                         }

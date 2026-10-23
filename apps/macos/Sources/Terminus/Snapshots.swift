@@ -142,6 +142,8 @@
                 ("golden-riding", "riding.json", "2026-08-27T01:47:00Z"),
                 ("golden-riding-zh", "zh/riding.json", "2026-08-27T01:47:00Z"),
                 ("golden-class", "class-bus.json", "2026-08-27T01:00:00Z"),
+                // Stepped to the last bus: Best bus, and Later bus greyed.
+                ("golden-class-moved", "class-bus.json", "2026-08-27T01:00:00Z"),
             ]
             for (name, file, at) in cases {
                 guard
@@ -155,6 +157,12 @@
                     card["staleAt"] = "2026-08-27T01:55:00Z"
                     o["card"] = card
                 }
+                if name.hasSuffix("-moved"), var card = o["card"] as? [String: Any], var step = card["step"] as? [String: Any] {
+                    step["moved"] = true
+                    step["later"] = NSNull()
+                    card["step"] = step
+                    o["card"] = card
+                }
                 guard let data = try? JSONSerialization.data(withJSONObject: o),
                     let a = try? JSONDecoder().decode(NextAnswer.self, from: data)
                 else { continue }
@@ -165,10 +173,15 @@
                 m.updated = now
                 m.clock = now
                 for (scheme, bg) in [(ColorScheme.dark, Color(white: 0.16)), (.light, Color(white: 0.95))] {
-                    write(
-                        Popover(model: m, startShown: true).environment(\.fixedNow, now).background(bg).environment(\.colorScheme, scheme),
-                        scale: 2, to: dir, as: "\(name)-\(scheme == .dark ? "dark" : "light")"
-                    )
+                    let view = Popover(model: m, startShown: true).environment(\.fixedNow, now).background(bg).environment(
+                        \.colorScheme, scheme)
+                    let file = "\(name)-\(scheme == .dark ? "dark" : "light")"
+                    // The class card's buttons (Earlier bus, Not going) as AppKit draws them.
+                    if name.hasPrefix("golden-class") {
+                        writeHosted(view, scale: 2, to: dir, as: file)
+                    } else {
+                        write(view, scale: 2, to: dir, as: file)
+                    }
                 }
             }
         }

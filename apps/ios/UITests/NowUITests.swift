@@ -120,6 +120,24 @@ final class NowUITests: XCTestCase {
         shot("now-undone", app)
     }
 
+    /// "Later bus" moves the card to the next bus, and "Best bus" comes
+    /// between the two to go back; back on the best one it goes again.
+    func testStepToALaterBusAndBack() {
+        let app = launch(sky: "day")
+        let later = app.buttons["step.later"]
+        reveal(later, in: app)
+        XCTAssertTrue(app.buttons["step.earlier"].exists)
+        XCTAssertFalse(app.buttons["step.best"].exists)
+        shot("now-step", app)
+        later.tap()
+        let best = app.buttons["step.best"]
+        XCTAssertTrue(best.waitForExistence(timeout: 10), "no Best bus after a step")
+        shot("now-step-later", app)
+        best.tap()
+        XCTAssertTrue(best.waitForNonExistence(timeout: 10), "Best bus stayed after going back")
+        shot("now-step-best", app)
+    }
+
     func testReportAWrongAnswer() {
         let app = launch(sky: "day")
         reveal(app.buttons["report"], in: app)

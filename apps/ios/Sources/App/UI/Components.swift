@@ -99,6 +99,8 @@ struct ChipButtonStyle: ButtonStyle {
     var filled = false
     /// Across the rest of its row, and taller: the one thing to do (directions, "Go there").
     var wide = false
+    /// An equal share of its row with the buttons beside it, narrower inside so three fit.
+    var even = false
     @Environment(\.isEnabled) private var enabled
 
     func makeBody(configuration: Configuration) -> some View {
@@ -106,8 +108,8 @@ struct ChipButtonStyle: ButtonStyle {
             .font(.subheadline.weight(.semibold))
             .multilineTextAlignment(.center)
             .foregroundStyle(filled ? Color.onBrand : (enabled ? Color.ink : Color.faint))
-            .padding(.horizontal, 16)
-            .frame(maxWidth: wide ? .infinity : nil, minHeight: wide ? 48 : 40)
+            .padding(.horizontal, even ? 8 : 16)
+            .frame(maxWidth: wide || even ? .infinity : nil, minHeight: wide ? 48 : 40)
             .background(filled ? (enabled ? Color.brand : Color.faint) : Color.surface, in: Capsule())
             .overlay(Capsule().strokeBorder(filled ? Color.clear : Color.line))
             .opacity(configuration.isPressed ? 0.75 : 1)

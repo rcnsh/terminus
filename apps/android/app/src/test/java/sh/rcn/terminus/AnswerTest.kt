@@ -619,4 +619,50 @@ class AnswerTest {
         assertTrue(withoutLocalUndo(a, trip)!!.card!!.actions.isEmpty())
         assertNull(withoutLocalUndo(null, trip))
     }
+
+    @Test
+    fun theBusesEitherSideComeWithTheCardAndGoBackAsTheyCame() {
+        val step = golden("class-bus").card!!.step!!
+        assertEquals("4:600:UTOWN", step.trip)
+        val earlier = step.earlier!!
+        val later = step.later!!
+        assertEquals("D2", earlier.svc)
+        assertEquals("PGP", earlier.stop)
+        assertEquals(ms("2026-08-27T01:38:00Z"), earlier.boardMs)
+        assertEquals(ms("2026-08-27T01:50:00Z"), later.boardMs)
+        assertFalse(step.moved)
+        assertEquals("Earlier bus", step.earlierLabel)
+        assertEquals("Later bus", step.laterLabel)
+        assertEquals("Best bus", step.bestLabel)
+        // Sent back exactly as the server sent it.
+        val sent = goldenJson("class-bus").getJSONObject("card").getJSONObject("step").getJSONObject("later")
+        assertEquals(sent.toString(), JSONObject(later.json).toString())
+        // The first bus you can catch: no earlier one, the button greyed rather than gone.
+        val first = golden("scheduled").card!!.step!!
+        assertNull(first.earlier)
+        assertNotNull(first.later)
+        // The labels come in the reply's language.
+        assertEquals("早一班", golden("zh/class-bus").card!!.step!!.earlierLabel)
+        // Nothing to step from: on the bus, or at home.
+        assertNull(golden("riding").card!!.step)
+        assertNull(golden("home").card!!.step)
+        // Moved off the best bus, at the last one offered; a step without its labels is left out, the card stands.
+        val moved =
+            NextAnswer.parse(
+                JSONObject(
+                    """{"label":"D2 · 9:50","detail":"","mode":"trip","card":{"kind":"class","step":{"trip":"4:600:UTOWN",
+                "earlier":{"svc":"D2","stop":"PGP","board":"2026-08-27T01:38:00Z"},"later":null,"moved":true,
+                "earlierLabel":"Earlier bus","laterLabel":"Later bus","bestLabel":"Best bus"}}}"""
+                )
+            )
+        val movedStep = moved.card!!.step!!
+        assertTrue(movedStep.moved)
+        assertNull(movedStep.later)
+        val broken =
+            NextAnswer.parse(
+                JSONObject("""{"label":"D2","detail":"","mode":"trip","card":{"kind":"class","step":{"trip":"4:600:UTOWN"}}}""")
+            )
+        assertNotNull(broken.card)
+        assertNull(broken.card!!.step)
+    }
 }

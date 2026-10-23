@@ -199,13 +199,15 @@ struct Card: Decodable, Sendable {
     let gone: Bool
     /// Where to walk to now, for walking directions.
     let walkTo: WalkTo?
+    /// "Earlier bus" and "Later bus" on a trip by bus you haven't set off on; nil otherwise.
+    let step: Step?
 
     static let kinds: Set = ["class", "trip", "nearby", "rest", "arrived", "setup", "free"]
 
     enum CodingKeys: String, CodingKey {
         case kind, staleAt, crowd, quality, leaveBy, leaveVia, `catch`, arrive, catchLine, late, goNow, note, estimate, phase, phaseText,
             glance, line, actions, warning, nextChangeAt, remind, suggestion, notice, upcoming
-        case title, heading, remindAt, journey, ride, gone, walkTo
+        case title, heading, remindAt, journey, ride, gone, walkTo, step
     }
 
     init(from d: Decoder) throws {
@@ -241,6 +243,63 @@ struct Card: Decodable, Sendable {
         ride = try? c.decodeIfPresent(Ride.self, forKey: .ride)
         gone = c.bool(.gone) ?? false
         walkTo = try? c.decodeIfPresent(WalkTo.self, forKey: .walkTo)
+        step = try? c.decodeIfPresent(Step.self, forKey: .step)
+    }
+}
+
+/// The buses either side of the one on the card, to step to: `trip` and a
+/// target (or nil for the best bus) go back to /me/step. The labels are the server's.
+struct Step: Decodable, Sendable {
+    let trip: String
+    let earlier: StepTarget?
+    let later: StepTarget?
+    /// The bus shown is one stepped to, not the best one: "Best bus" shows.
+    let moved: Bool
+    let earlierLabel: String
+    let laterLabel: String
+    let bestLabel: String
+
+    enum CodingKeys: String, CodingKey { case trip, earlier, later, moved, earlierLabel, laterLabel, bestLabel }
+
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        trip = try c.decode(String.self, forKey: .trip)
+        earlier = try? c.decodeIfPresent(StepTarget.self, forKey: .earlier)
+        later = try? c.decodeIfPresent(StepTarget.self, forKey: .later)
+        moved = c.bool(.moved) ?? false
+        earlierLabel = try c.decode(String.self, forKey: .earlierLabel)
+        laterLabel = try c.decode(String.self, forKey: .laterLabel)
+        bestLabel = try c.decode(String.self, forKey: .bestLabel)
+    }
+}
+
+/// A bus to step to, as the card offered it. `fields` is every one the
+/// server sent, so it goes back to /me/step as it came.
+struct StepTarget: Decodable, Hashable, Sendable {
+    let svc: String
+    let stop: String
+    let board: String
+    let fields: [String: String]
+
+    private struct Key: CodingKey {
+        let stringValue: String
+        var intValue: Int? { nil }
+        init(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { nil }
+    }
+
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: Key.self)
+        var fields: [String: String] = [:]
+        for k in c.allKeys { if let v = c.string(k) { fields[k.stringValue] = v } }
+        guard let svc = fields["svc"], let stop = fields["stop"], let board = fields["board"] else {
+            throw DecodingError.dataCorrupted(
+                .init(codingPath: d.codingPath, debugDescription: "a bus to step to needs svc, stop and board"))
+        }
+        self.svc = svc
+        self.stop = stop
+        self.board = board
+        self.fields = fields
     }
 }
 

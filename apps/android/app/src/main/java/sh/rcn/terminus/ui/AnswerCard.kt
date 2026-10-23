@@ -65,6 +65,8 @@ import sh.rcn.terminus.R
 import sh.rcn.terminus.Ride
 import sh.rcn.terminus.ServerClock
 import sh.rcn.terminus.Spoken
+import sh.rcn.terminus.Step
+import sh.rcn.terminus.StepTarget
 import sh.rcn.terminus.Suggestion
 import sh.rcn.terminus.Upcoming
 import sh.rcn.terminus.widget.clock
@@ -78,6 +80,7 @@ internal fun AnswerCard(
     busy: Boolean = false,
     onSuggestion: (Suggestion, Boolean) -> Unit = { _, _ -> },
     onPlace: (String) -> Unit = {},
+    onStep: (Step, StepTarget?, String?) -> Unit = { _, _, _ -> },
 ) {
     // Said when the card changes (a new bus, the trip's next phase), and
     // only then: nothing in it ticks. A node of its own, as the card's words
@@ -143,6 +146,7 @@ internal fun AnswerCard(
                     ) {
                         JourneyCard(answer, journey, CardStyle.pref(LocalContext.current), lead)
                     }
+                    StepBus(answer, onStep, busy)
                     Actions(answer, onAction, busy, onSuggestion)
                     return@Column
                 }
@@ -158,6 +162,7 @@ internal fun AnswerCard(
                     }
                 }
                 SkyGround()
+                StepBus(answer, onStep, busy)
                 Actions(answer, onAction, busy, onSuggestion)
                 return@Column
             }
@@ -204,6 +209,8 @@ internal fun AnswerCard(
                 }
             }
             SkyGround()
+            // Old times are being updated: no bus to step from until they are.
+            if (!old) StepBus(answer, onStep, busy)
             Actions(answer, onAction, busy, onSuggestion)
         }
     }
@@ -259,6 +266,44 @@ internal fun withoutLocalUndo(answer: NextAnswer?, undoing: String?): NextAnswer
     if (undoing == null || card.actions.none { it.id == "reset" && it.trip == undoing }) return answer
     return answer.copy(card = card.copy(actions = card.actions.filterNot { it.id == "reset" && it.trip == undoing }))
 }
+
+/**
+ * "‹ Earlier bus" and "Later bus ›" under the bus they change, and "Best bus" between them once you've moved: the server's buses either
+ * side of this one, on a trip by bus until you set off. Greyed out at the first bus you can catch and the last one offered, as on the web.
+ */
+@Composable
+private fun StepBus(answer: NextAnswer, onStep: (Step, StepTarget?, String?) -> Unit, busy: Boolean) {
+    val step = answer.card?.step ?: return
+    Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        val wide = Modifier.weight(1f).heightIn(min = 48.dp)
+        val pad = PaddingValues(horizontal = 8.dp)
+        OutlinedButton(
+            onClick = { onStep(step, step.earlier, "earlier") },
+            enabled = !busy && step.earlier != null,
+            modifier = wide,
+            contentPadding = pad,
+        ) {
+            Arrow("‹")
+            Text(step.earlierLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        if (step.moved)
+            OutlinedButton(onClick = { onStep(step, null, null) }, enabled = !busy, modifier = wide, contentPadding = pad) {
+                Text(step.bestLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        OutlinedButton(
+            onClick = { onStep(step, step.later, "later") },
+            enabled = !busy && step.later != null,
+            modifier = wide,
+            contentPadding = pad,
+        ) {
+            Text(step.laterLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Arrow("›")
+        }
+    }
+}
+
+/** Which way a step goes, drawn but not read out: the label says it. */
+@Composable private fun Arrow(glyph: String) = Text(glyph, Modifier.padding(horizontal = 4.dp).clearAndSetSemantics {})
 
 /**
  * The server's buttons (plans only: "Not going", "Not on campus today", "Back on campus", undo), in its order: the first one filled, the
