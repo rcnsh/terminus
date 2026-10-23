@@ -90,7 +90,7 @@ class ServersTest {
         val answered = mutableListOf<String>()
         val asked = mutableListOf<String>()
         val got =
-            Servers.through(site, "POST", { answered += it }) { base ->
+            Servers.through(site, "POST", "/api/errors", { answered += it }, { it }) { base ->
                 asked += base
                 if (base == site[0]) throw UnknownHostException("terminus.run") else 204
             }
@@ -102,7 +102,7 @@ class ServersTest {
         asked.clear()
         answered.clear()
         try {
-            Servers.through(site, "POST", { answered += it }) { base ->
+            Servers.through(site, "POST", "/api/errors", { answered += it }, { it }) { base ->
                 asked += base
                 throw SocketException("Connection reset")
             }
@@ -110,6 +110,23 @@ class ServersTest {
         } catch (_: SocketException) {}
         assertEquals(listOf(site[0]), asked)
         assertEquals(emptyList<String>(), answered)
+    }
+
+    @Test
+    fun throughIsInTheRecentRequestsByPathAlone() {
+        RequestLog.clear()
+        Servers.through(site, "GET", "/map/campus.pmtiles?v=2", {}, { it }) { base ->
+            if (base == site[0]) throw UnknownHostException("terminus.run") else 200
+        }
+        val entries = RequestLog.entries().map { listOf(it.method, it.path, it.host, it.status, it.failure) }
+        // Newest first: the backup's 200, after the chosen address was never reached.
+        assertEquals(
+            listOf(
+                listOf("GET", "/map/campus.pmtiles", "terminus.rcn.sh", 200, null),
+                listOf("GET", "/map/campus.pmtiles", "terminus.run", null, "UnknownHostException"),
+            ),
+            entries,
+        )
     }
 
     @Test

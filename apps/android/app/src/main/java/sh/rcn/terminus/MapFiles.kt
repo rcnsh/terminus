@@ -375,7 +375,7 @@ object MapFiles {
      * a failure there (a reset mid-download) isn't tried elsewhere, so megabytes aren't fetched twice.
      */
     private fun connect(path: String, setup: (HttpURLConnection) -> Unit): HttpURLConnection =
-        Servers.through("GET") { base ->
+        Servers.through("GET", path, { it.responseCode }) { base ->
             val conn = URL(base + path).openConnection() as HttpURLConnection
             try {
                 setup(conn)
