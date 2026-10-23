@@ -27,7 +27,7 @@ import {
   sendApns,
   signProviderJwt,
 } from '../src/push/apns.ts';
-import { nudgeUser, pushEnabled, remindUser, setPushToken, updateLive } from '../src/push/push.ts';
+import { nudgeUser, pushAudience, pushEnabled, remindUser, setPushToken, updateLive } from '../src/push/push.ts';
 import { fromB64url } from '../src/push/webpush.ts';
 
 const NOW = Date.parse('2026-08-27T01:00:00Z');
@@ -830,6 +830,26 @@ test('setPushToken keeps the language an iPhone registered in, and forgets it wi
   assert.equal(db._db.prepare("SELECT push_lang FROM sessions WHERE token_hash = 'h0'").get().push_lang, 'zh');
   await setPushToken(db, 'h0', null);
   assert.equal(db._db.prepare("SELECT push_lang FROM sessions WHERE token_hash = 'h0'").get().push_lang, null);
+});
+
+test("setPushToken keeps an iPhone's clock; the Trip object's card takes 12-hour times from any iPhone, not the latest", async () => {
+  const { env, db } = await setup([{}, {}]);
+  const clock = (h) => db._db.prepare('SELECT push_h12 FROM sessions WHERE token_hash = ?').get(h).push_h12;
+  await setPushToken(db, 'h0', `apns:${HEX}`, 'en', null, null, null, true);
+  await setPushToken(db, 'h1', `apns:${HEX2}`, 'en', null, null, null, false);
+  assert.deepEqual([clock('h0'), clock('h1')], [1, 0]);
+  // Whichever was seen last: the two phones taking turns mustn't change the card (and so the Live Activity) each time.
+  const seen = (h, at) => db._db.prepare('UPDATE sessions SET last_seen = ? WHERE token_hash = ?').run(at, h);
+  seen('h0', 10);
+  assert.equal((await pushAudience(env, 'u1')).iphoneH12, true);
+  seen('h1', 20);
+  assert.equal((await pushAudience(env, 'u1')).iphoneH12, true);
+  // Not said: as before.
+  await setPushToken(db, 'h0', `apns:${HEX}`, 'en');
+  assert.equal(clock('h0'), null);
+  assert.equal((await pushAudience(env, 'u1')).iphoneH12, false);
+  await setPushToken(db, 'h1', null);
+  assert.equal(clock('h1'), null);
 });
 
 test("an iPhone's token moving to another session takes its Live Activity's tokens off the old one", async () => {

@@ -684,11 +684,12 @@ object at the change and once the second bus has gone.
   `apnsstart:` token, so nothing starts one by push (left out, nothing
   changes), and `activity`, whether a Live Activity of its runs: `false`
   (it ended on the phone) forgets its `apnsla:` token, so the server no
-  longer counts one running there. The app sends one registration at a
-  time, so an older one can't bring back a start token after a newer one
-  turned the setting off. The data export lists all five for each device (`push`,
-  `liveActivityPush`, `liveActivityStartPush`, `pushLanguage`,
-  `pushAlerts`).
+  longer counts one running there, and `h12`, whether it shows 12-hour
+  times (`sessions.push_h12`, migration 0017; NULL when not said). The app
+  sends one registration at a time, so an older one can't bring back a
+  start token after a newer one turned the setting off. The data export
+  lists all six for each device (`push`, `liveActivityPush`,
+  `liveActivityStartPush`, `pushLanguage`, `pushAlerts`, `pushClock`).
 - **Secrets and vars.** `APNS_KEY` (the .p8 from the Apple developer
   account, PEM, an ES256 key), `APNS_KEY_ID` (its 10-character id) and
   `APNS_TEAM_ID`, as Worker secrets; `APNS_TOPIC`, the bundle id, is a var
@@ -762,7 +763,12 @@ object at the change and once the second bus has gone.
     i18n.ts). `push_lang` follows the account: saving the profile with a
     language sets every iPhone's to it; back to following each device, the
     saving iPhone's is its own, and another's catches up when it next
-    registers (each launch).
+    registers (each launch). Likewise in each iPhone's clock (`push_h12`)
+    unless the account chose one (`clock`): the Trip object's card is worded
+    in 12-hour times when any iPhone said so (not the latest one's, which
+    would alternate between two phones and change the Live Activity each
+    time), and worded again for an iPhone with the other clock; one that
+    hasn't said gets the card as worded.
   - nothing to show (an idle card, reminders off for the trip), an iPhone
     whose leave alerts are off (`push_alerts` 0: as Android, which shows
     its own notification only with them on, it gets no alert, due and

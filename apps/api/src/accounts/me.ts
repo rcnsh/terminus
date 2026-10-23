@@ -73,7 +73,7 @@ import {
   sgtDate,
   updateTrip,
 } from '../answer/trip.ts';
-import { nudgeUser, setLiveToken, setPushToken, setStartToken } from '../push/push.ts';
+import { type AnswerIn, nudgeUser, setLiveToken, setPushToken, setStartToken } from '../push/push.ts';
 import { formatApnsToken, looksApns, parseApnsToken } from '../push/apns.ts';
 import { WEB_PREFIX, parseSubscription, vapidPublicKey, webPushEnabled } from '../push/webpush.ts';
 import {
@@ -810,7 +810,15 @@ export const ME_ROUTES: MeRoute[] = [
           nudgeUser(
             env,
             session.user.id,
-            { phase: out.card.phase, urgent: false, remind: out.card.remind !== false, answer: out, answerIn, tripOver },
+            {
+              phase: out.card.phase,
+              urgent: false,
+              remind: out.card.remind !== false,
+              answer: out,
+              answerIn,
+              clockChosen: profile.clock !== 'auto',
+              tripOver,
+            },
             nowMs,
             session.tokenHash,
           ),
@@ -923,7 +931,15 @@ export const ME_ROUTES: MeRoute[] = [
         nudgeUser(
           env,
           session.user.id,
-          { phase: out.card.phase, urgent: false, remind: out.card.remind !== false, answer: out, answerIn, tripOver },
+          {
+            phase: out.card.phase,
+            urgent: false,
+            remind: out.card.remind !== false,
+            answer: out,
+            answerIn,
+            clockChosen: profile.clock !== 'auto',
+            tripOver,
+          },
           nowMs,
           session.tokenHash,
         ),
@@ -968,9 +984,12 @@ export const ME_ROUTES: MeRoute[] = [
         const alerts = typeof body?.alerts === 'boolean' ? body.alerts : null;
         const live = typeof body?.live === 'boolean' ? body.live : null;
         const activity = typeof body?.activity === 'boolean' ? body.activity : null;
+        // And whether it shows 12-hour times, for the words it's pushed.
+        const h12 = typeof body?.h12 === 'boolean' ? body.h12 : null;
         if (t.kind === 'live') await setLiveToken(db, session.tokenHash, formatApnsToken(t));
         else if (t.kind === 'start') await setStartToken(db, session.tokenHash, formatApnsToken(t));
-        else await setPushToken(db, session.tokenHash, formatApnsToken(t), await pushLang(db, session.user.id), alerts, live, activity);
+        else
+          await setPushToken(db, session.tokenHash, formatApnsToken(t), await pushLang(db, session.user.id), alerts, live, activity, h12);
         return json({ ok: true });
       }
       if (!token || token.length > 4096 || token.startsWith(WEB_PREFIX))
@@ -1521,13 +1540,13 @@ async function nextTrip(env: Env, ctx: ExecutionContext, deps: MeDeps, rider: Ri
 }
 
 /**
- * A tap's answer worded in another language, for an iPhone pushed in that
- * one (push.ts asks only then): worked out as the request did, from the
- * same moment, so its arrivals come from the edge cache, and saving
+ * A tap's answer worded in another language or clock, for an iPhone pushed
+ * in that one (push.ts asks only then): worked out as the request did, from
+ * the same moment, so its arrivals come from the edge cache, and saving
  * nothing (no plan, no watch, not logged), as the request already has.
  */
-function rewordFor(env: Env, ctx: ExecutionContext, deps: MeDeps, rider: Rider, ask: Ask, nowMs: number) {
-  return (l: Lang) => withLang(l, () => nextFor(env, ctx, unlogged(deps), rider, ask, nowMs)).then((r) => r.body);
+function rewordFor(env: Env, ctx: ExecutionContext, deps: MeDeps, rider: Rider, ask: Ask, nowMs: number): AnswerIn {
+  return (l, h12) => withLang(l, () => nextFor(env, ctx, unlogged(deps), rider, { ...ask, h12 }, nowMs)).then((r) => r.body);
 }
 
 /**
@@ -1535,6 +1554,7 @@ function rewordFor(env: Env, ctx: ExecutionContext, deps: MeDeps, rider: Rider, 
  * which trip, its phase, whether there's a question, when it next changes.
  * Of what the card changes, only the plan is kept (in the Trip object, by
  * `savePlan`): a wake neither ends a trip nor asks itself to watch.
+ * Worded with 12-hour times or not (`h12`) unless the account chose.
  */
 export async function tripCardFor(
   env: Env,
@@ -1544,6 +1564,7 @@ export async function tripCardFor(
   day: DayRecord | null,
   nowMs: number,
   savePlan: (key: string, plan: Plan) => Promise<void>,
+  h12 = false,
 ): Promise<{
   key: string | null;
   phase: string;
@@ -1554,12 +1575,14 @@ export async function tripCardFor(
   leaveAt: number | null;
   quality: string;
   answer: MeAnswer & { card: Card };
+  /** The account chose 12- or 24-hour times. */
+  clockChosen: boolean;
 } | null> {
   if (!env.DB) return null;
   const profile = await getProfile(env.DB, userId, GRAPH);
   if (!classesOn(profile, nowMs).length) return null;
   const rider = await loadRider(env, userId, nowMs, { profile, day });
-  const { body, trip, update, wakeAt } = await nextFor(env, ctx, unlogged(deps), rider, DAY_ASK, nowMs);
+  const { body, trip, update, wakeAt } = await nextFor(env, ctx, unlogged(deps), rider, { ...DAY_ASK, h12 }, nowMs);
   for (const [key, plan] of Object.entries(update.plans ?? {})) ctx.waitUntil(savePlan(key, plan));
   return {
     key: trip.key,
@@ -1570,6 +1593,7 @@ export async function tripCardFor(
     leaveAt: body.leave?.at ? Date.parse(body.leave.at) : null,
     quality: body.quality,
     answer: body,
+    clockChosen: profile.clock !== 'auto',
   };
 }
 

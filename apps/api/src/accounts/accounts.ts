@@ -990,7 +990,7 @@ export async function exportAccount(db: D1Database, user: User, today: unknown =
   const profile = await loadProfileJson(db, user.id);
   const { results: sessions } = await db
     .prepare(
-      'SELECT kind, name, platform, client, push_token AS push, live_token AS live, start_token AS liveStart, push_lang AS pushLang, push_alerts AS pushAlerts, created, last_seen AS lastSeen, expires FROM sessions WHERE user_id = ? ORDER BY created',
+      'SELECT kind, name, platform, client, push_token AS push, live_token AS live, start_token AS liveStart, push_lang AS pushLang, push_alerts AS pushAlerts, push_h12 AS pushH12, created, last_seen AS lastSeen, expires FROM sessions WHERE user_id = ? ORDER BY created',
     )
     .bind(user.id)
     .all<{
@@ -1003,6 +1003,7 @@ export async function exportAccount(db: D1Database, user: User, today: unknown =
       liveStart: string | null;
       pushLang: string | null;
       pushAlerts: number | null;
+      pushH12: number | null;
       created: number;
       lastSeen: number;
       expires: number | null;
@@ -1050,11 +1051,12 @@ export async function exportAccount(db: D1Database, user: User, today: unknown =
       app: r.client,
       push: pushOf(r.push),
       // An iPhone's: its trip Live Activity's push address, the one that starts it, the language its
-      // notifications are worded in, and whether its leave alerts are on (null: not said).
+      // notifications are worded in, whether its leave alerts are on and its clock (null: not said).
       liveActivityPush: pushOf(r.live),
       liveActivityStartPush: pushOf(r.liveStart),
       pushLanguage: r.pushLang,
       pushAlerts: r.pushAlerts === null ? null : r.pushAlerts !== 0,
+      pushClock: r.pushH12 === null ? null : r.pushH12 !== 0 ? '12' : '24',
       created: new Date(r.created).toISOString(),
       lastSeen: new Date(r.lastSeen).toISOString(),
       expires: iso(r.expires),
