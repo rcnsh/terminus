@@ -198,6 +198,20 @@ private func answer(_ name: String) throws -> (NextAnswer, Date) {
     #expect(Background.refreshAt((a, fetched), now: fetched, skew: -600) == fetched.addingTimeInterval(15 * 60))
 }
 
+// MARK: the keychain
+
+/// Before the first unlock after a restart the keychain answers nothing:
+/// that isn't signed out, and a widget asks again in five minutes rather
+/// than never.
+@Test func aLockedKeychainIsNotSignedOut() {
+    #expect(TokenStore.lookupAnswer(errSecInteractionNotAllowed, data: nil) == .locked)
+    #expect(TokenStore.lookupAnswer(errSecItemNotFound, data: nil) == .none)
+    #expect(TokenStore.lookupAnswer(errSecSuccess, data: Data("t".utf8)) == .found("t"))
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    #expect(WidgetTiming.signedOutReload(locked: true, now: now) == now.addingTimeInterval(300))
+    #expect(WidgetTiming.signedOutReload(locked: false, now: now) == nil)
+}
+
 // MARK: links
 
 @Test func widgetLinksOpenTheRightPlace() {
