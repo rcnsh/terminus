@@ -20,7 +20,7 @@ import { MAX_FIX_ACC_M, WALK, sgt } from '../config.ts';
 import { sgtDate } from '../timetable/calendar.ts';
 import { GRAPH, GRAPH_PUBLIC } from './graph.ts';
 import { headwayFor, indexGraph, rideSpan, rideStops } from './resolve.ts';
-import { shapeFor } from '../map/campus.ts';
+import { routeColor, shapeFor } from '../map/campus.ts';
 import { alongNear } from '../map/buses.ts';
 import { isoSeconds, shortStop } from './format.ts';
 
@@ -220,6 +220,8 @@ export function rideStage(b: Plan, nowMs: number, firstLate = false): 'first' | 
 /** The ride for a progress bar: the stops from boarding to getting off, and the times. */
 export interface Ride {
   svc: string;
+  /** The service's colour, `#rrggbb`: a card on the bus has no journey to take it from. */
+  color: string;
   stops: Array<{ code: string; name: string }>;
   board: string;
   arrive: string;
@@ -236,6 +238,7 @@ export function rideOf(b: Plan): Ride | null {
   if (!codes || codes.length < 2) return null;
   return {
     svc: b.svc,
+    color: routeColor(b.svc),
     stops: codes.map((code) => ({ code, name: shortStop(idx.byCode.get(code)?.name ?? code) })),
     board: b.board,
     arrive: b.arrive,

@@ -23,6 +23,20 @@ private func answer(_ name: String) throws -> (NextAnswer, Date) {
     #expect(TripAttributes.ContentState.of(a) == nil)
 }
 
+/// Between the server's pushes the app updates the activity from each answer
+/// it fetches: any field the two build differently flips back and forth on
+/// the Lock Screen. fixtures/live-activity.json is the server's state for
+/// every golden answer under way (written by apns.test.js).
+@Test func theStateIsTheServersForEveryAnswer() throws {
+    let server = try JSONDecoder().decode(
+        [String: TripAttributes.ContentState].self, from: Data(contentsOf: fixtures.appendingPathComponent("live-activity.json")))
+    #expect(server.count >= 10)
+    for (name, want) in server.sorted(by: { $0.key < $1.key }) {
+        let (a, _) = try answer(name)
+        #expect(TripAttributes.ContentState.of(a) == want, "\(name)")
+    }
+}
+
 @Test func onTheBusCountsDownToGettingOff() throws {
     let (a, now) = try answer("riding")
     let s = try #require(TripAttributes.ContentState.of(a))

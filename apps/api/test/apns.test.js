@@ -6,7 +6,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 
 import { makeCtx, makeEnv } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
@@ -286,6 +286,31 @@ test("the Live Activity's content-state comes from the card: before the bus, and
     for (const k of ['leaveAt', 'departAt', 'arriveAt', 'staleAt'])
       assert.ok(s[k] === null || Number.isInteger(s[k]), `${f}: ${k} in whole seconds`);
   }
+});
+
+/**
+ * The iPhone builds the same state from each answer it fetches (ContentState.of)
+ * and updates its activity with it between the server's pushes: the two must
+ * agree, or the Lock Screen flips between them. This writes the server's for
+ * every golden answer the app shows one for (its TripPrefs.tripPhases) to
+ * fixtures/live-activity.json, which the iPhone's tests hold the app to.
+ * Re-recorded with UPDATE_GOLDEN=1 pnpm test.
+ */
+test("the Live Activity's state for every golden answer is the one the iPhone is held to", () => {
+  const dir = new URL('../../../fixtures/answers/', import.meta.url);
+  const file = new URL('../../../fixtures/live-activity.json', import.meta.url);
+  const states = {};
+  for (const f of readdirSync(dir)
+    .filter((f) => f.endsWith('.json'))
+    .sort()) {
+    const a = JSON.parse(readFileSync(new URL(f, dir), 'utf8'));
+    if (!a.card || a.mode === 'rest' || !['due', 'heading', 'waiting', 'riding', 'missed'].includes(a.card.phase)) continue;
+    states[f.slice(0, -'.json'.length)] = liveActivityState(a);
+  }
+  assert.ok(Object.keys(states).length >= 10, 'golden answers under way');
+  const text = JSON.stringify(states, null, 2) + '\n';
+  if (['1', 'true'].includes(process.env.UPDATE_GOLDEN ?? '')) writeFileSync(file, text);
+  assert.equal(text, readFileSync(file, 'utf8'), 'the state changed; if on purpose, UPDATE_GOLDEN=1 pnpm test');
 });
 
 test('POST /api/me/push takes apns: and apnsla: tokens, with APNs off too, and refuses a malformed one', async () => {

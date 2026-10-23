@@ -902,7 +902,7 @@ Home", "Heading home", "Going to X"), null with no destination; and
 (five minutes, when the trip turns `due`), only for a class with reminders
 on, before the trip is under way and before the class starts, else null
 (`remindAtOf`). The apps used to hard-code the five minutes and the
-class-only rule. While riding, `ride` lists
+class-only rule. While riding, `ride` names the bus and its colour and lists
 the stops from boarding to getting off, with the board and arrival times (the
 arrival live when the bus's plate is known), for a progress bar. v1
 fields are unchanged. `notice` is a line above the answer while the monitor
