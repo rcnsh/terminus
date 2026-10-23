@@ -328,7 +328,8 @@ export interface TripUpdate {
   deleteAt: number;
   /** Trip records; null deletes one. */
   items?: Array<{ key: string; rec: TripRecord | null }>;
-  plans?: Record<string, Plan>;
+  /** Trip plans by key; null deletes one. */
+  plans?: Record<string, Plan | null>;
   /** A bus stepped to for a trip, or null for the answer's own again. Either
    *  drops the trip's plan, so the next answer's bus becomes it. */
   steps?: Record<string, StepTarget | null>;
@@ -368,11 +369,21 @@ export function signalOf(day: DayRecord | null, key: string): TripRecord | undef
   return day?.trips[key];
 }
 
-/** Keys reached or skipped today, for the planner. */
-export function dayState(day: DayRecord | null): { skipped: Set<string>; done: Set<string>; missed: Set<string>; away: boolean } {
+/** A trip home's bus has had this long past its arrival to get you indoors. */
+export const HOME_GRACE_MS = 10 * 60_000;
+
+/** Keys reached or skipped today, and when each planned trip home has got you there, for the planner. */
+export function dayState(day: DayRecord | null): {
+  skipped: Set<string>;
+  done: Set<string>;
+  missed: Set<string>;
+  homeBy: Map<string, number>;
+  away: boolean;
+} {
   const skipped = new Set<string>();
   const done = new Set<string>();
   const missed = new Set<string>();
+  const homeBy = new Map<string, number>();
   let away = false;
   for (const [k, r] of Object.entries(day?.trips ?? {})) {
     if (r.kind === 'skipped') skipped.add(k);
@@ -380,7 +391,12 @@ export function dayState(day: DayRecord | null): { skipped: Set<string>; done: S
     if (r.kind === 'missed') missed.add(k);
     if (r.away) away = true;
   }
-  return { skipped, done, missed, away };
+  // A missed bus got you nowhere.
+  for (const [k, p] of Object.entries(day?.plans ?? {})) {
+    const end = tripEnd(p);
+    if (isHomeKey(k) && end && !missed.has(k)) homeBy.set(k, Date.parse(end) + HOME_GRACE_MS);
+  }
+  return { skipped, done, missed, homeBy, away };
 }
 
 /**

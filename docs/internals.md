@@ -556,6 +556,13 @@ object at the change and once the second bus has gone.
   leaves if that comes first: after that the answer would name later buses
   (and, from a moving bus, other stops), but the trip, the card and the ride
   stay about this one, until a miss, when the card shows the next way there.
+  A plan made without a location (a wake, the widget, a one-off added from
+  an app that sent none) is only where the timetable puts you: a located
+  answer replaces it past its leave-by too, until its bus leaves or while
+  the phone is at its stop. Where the located answer is a walk, the plan is
+  deleted (`plans: { key: null }`), so Today doesn't keep its bus. The
+  card's `title` names the kept plan's bus, as the journey, the button and
+  Today do.
 - **Earlier bus, Later bus** ([src/answer/step.ts](../apps/api/src/answer/step.ts), ADR 0013). Before you
   set off on a trip by bus (a class, home, a favourite, a stop or room),
   `card.step` offers the bus before and after the one shown. Every bus that
@@ -581,6 +588,13 @@ object at the change and once the second bus has gone.
   its leave-by (`WAIT_EARLY_MS`): not hours before at a stop you live by, and
   not at a stop you're riding past. The headline is then the bus ("D2 at
   9:41"), never "Leave by" or "Leave now".
+- **Home since the last class.** Once a trip home after a class is over
+  (seen home, or with no location its planned bus's arrival plus
+  `HOME_GRACE_MS`, 10 min: `DayState.homeBy`), whatever comes next today
+  starts from home, however short the gap (`homeAfter` in profile.ts), and
+  Today keeps that trip home, done. A one-off added after you got home is
+  planned from there, not from the class. With no bus planned for the trip
+  home, `HOME_BY_MIN` after the class still says you're home.
 - **The next trip isn't planned from a missed class.** One whose last record is `missed`
   isn't where the next trip is planned from (`DayState.missed`), on the card
   or in Today: without a location, from the class before or from home.
@@ -959,11 +973,13 @@ response) says which, so the walk is never added twice. Apps count down to `leav
 
 The journey's lines come worded too (`worded` in `src/answer/card.ts`), so the three
 web styles, the app's card and the widgets say the same: `title` ("To
-GEA1000 @ UTown · starts 10:00"), `place` ("GEA1000"), `byText` ("by
+GEA1000 @ UTown · starts 10:00", "To COM 3 · by 19:00" for a one-off trip or a
+usual time, which `dest.place` marks and the heading calls "Going to COM 3"), `place` ("GEA1000"), `byText` ("by
 ~09:36", null at the stop), `walkText` ("5 min walk"), `rideText` ("10 min
 ride · off at Opp NUSS"), `walkEndText` ("2 min walk"), `arriveText`
 ("Arrive ~09:51 · 9 min early"), `arriveWhere` ("2 min walk from UTown" or
 "at UTown"), `backupText` ("Or go now: R2 at 09:06 from PGP" for a class,
+only when it gets there sooner than the planned bus,
 "Or A1 at 09:09 from PGP" for a trip, `why` on foot) and `summary`, one line
 for a compact widget, most needed first ("arrive ~09:51 · R2 ~09:42 at
 PGP", "Walk to PGP · A1 09:09", "A1 09:09 at PGP", "8 min walk · D1 would

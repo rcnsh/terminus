@@ -82,6 +82,8 @@ export interface TripView {
   seenOn?: Plan;
   /** The plan's bus differs from the one remembered for this trip (the caller saves it). */
   planChanged?: boolean;
+  /** The remembered plan was a guess this request's location replaced with a walk (the caller deletes it). */
+  planDropped?: boolean;
   /** False when the user turned reminders off for this trip. */
   remind?: boolean;
   /** Something terminus has learned and offers to change (outcomes.ts). */
@@ -406,6 +408,10 @@ export function cardFor(
  * give (on foot, nothing running, no live data), the label as it is.
  */
 export function titleOf(a: MeAnswer, h12: boolean): string {
+  // A kept plan is the bus the journey, the button and Today say: the
+  // headline says it too, not this answer's own. Its time is an older reading.
+  const l = a.leave;
+  if (l?.stale && l.svc && l.board) return `${named({ svc: l.svc, paid: l.paid })} · ${m().approx(clockAt(Date.parse(l.board), h12))}`;
   if (!timedAt(a)) return a.label;
   return `${a.label.split(' · ')[0]} · ${approx(roughly(a), clockAt(Date.parse(a.departsAt!), h12))}`;
 }
@@ -431,7 +437,7 @@ const timedAt = (a: MeAnswer): boolean => Boolean(a.departsAt) && a.quality !== 
 export function headingOf(a: MeAnswer): string | null {
   const d = a.dest;
   if (!d) return null;
-  if (d.why === 'class') return m().headClass(d.label);
+  if (d.why === 'class') return d.place ? m().headPlace(d.label) : m().headClass(d.label);
   if (d.why === 'gap-home') return m().headGap(d.label);
   if (d.why === 'home') return m().headHome;
   return m().headPlace(d.label);
@@ -568,7 +574,7 @@ const busName = (b: JourneyBus) => named({ svc: b.svc, paid: b.paid });
  */
 function worded(a: MeAnswer, card: BaseCard, h12: boolean, phase: Phase, j: Steps): Journey {
   const isClass = card.kind === 'class';
-  const starts = isClass && a.timing ? m().startsShort(clockAt(Date.parse(a.timing.classAt), h12)) : null;
+  const starts = isClass && a.timing ? (a.dest?.place ? m().thereBy : m().startsShort)(clockAt(Date.parse(a.timing.classAt), h12)) : null;
   const arriveText = j.arrive ? [m().arriveCap(j.arrive), j.slack].filter(Boolean).join(' · ') : null;
   const backupText = !j.bus
     ? j.why
@@ -724,11 +730,17 @@ function baseCard(a: MeAnswer, h12: boolean): BaseCard {
   } else {
     card.catchLine = card.catch;
   }
-  // The headline bus, when it isn't the one to wait for. A guessed time
-  // gets there at a guessed time too.
+  // The headline bus, when it isn't the one to wait for and gets you there
+  // sooner (by its arrival, else by when it goes): a later one is no "go
+  // now". A guessed time gets there at a guessed time too.
   const timed = a.departsAt && a.quality !== 'unknown' && a.quality !== 'ended';
   const same = timed && l.board && Math.abs(Date.parse(l.board) - Date.parse(a.departsAt!)) < 60_000;
-  if (timed && !same) {
+  const sooner =
+    timed &&
+    (a.timing.reachAt && l.arrive
+      ? Date.parse(a.timing.reachAt) < Date.parse(l.arrive)
+      : !l.board || Date.parse(a.departsAt!) < Date.parse(l.board));
+  if (timed && !same && sooner) {
     card.goNow = m().goNow(
       a.bus?.paid ? named({ svc, paid: true }) : svc,
       approx(roughly(a), at(a.departsAt!)),

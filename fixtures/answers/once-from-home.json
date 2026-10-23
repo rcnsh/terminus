@@ -1,0 +1,210 @@
+{
+  "stop": {
+    "code": "PGPR",
+    "name": "PGP Foyer",
+    "confidence": 0.97
+  },
+  "quality": "live",
+  "asOf": "2026-08-27T03:49:00.000Z",
+  "arrivals": [
+    {
+      "svc": "D2",
+      "etaS": 240,
+      "crowd": "low",
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "D2",
+      "etaS": 840,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "A1",
+      "etaS": 540,
+      "crowd": "high",
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "A1",
+      "etaS": 1140,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "R2",
+      "etaS": 360,
+      "crowd": "medium",
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "R2",
+      "etaS": 1080,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "D1",
+      "etaS": 420,
+      "crowd": "low",
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "D1",
+      "etaS": 1020,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    }
+  ],
+  "label": "D2 · 14 min",
+  "detail": "PGP Foyer · 4 min walk · COM 3 in ~17 min · walking 15 min",
+  "alt": null,
+  "departsAt": "2026-08-27T04:03:00Z",
+  "arriveAt": "2026-08-27T04:06:10Z",
+  "bus": {
+    "svc": "D2",
+    "stop": "PGP Foyer",
+    "stopCode": "PGPR",
+    "walkS": 235,
+    "rideS": 190,
+    "board": "2026-08-27T04:03:00Z",
+    "arrive": "2026-08-27T04:06:10Z",
+    "estimated": false,
+    "toStop": "COM 3"
+  },
+  "altBus": null,
+  "leave": {
+    "at": "2026-08-27T03:49:00Z",
+    "estimated": false,
+    "svc": "D2",
+    "stop": "PGP Foyer",
+    "stopCode": "PGPR",
+    "board": "2026-08-27T04:03:00Z",
+    "arrive": "2026-08-27T04:06:10Z",
+    "note": null,
+    "walkS": 235,
+    "rideS": 190,
+    "toStop": "COM 3",
+    "toCode": "COM3"
+  },
+  "steps": {
+    "trip": "4:720:COM3",
+    "earlier": null,
+    "later": {
+      "svc": "D2",
+      "stop": "PGPR",
+      "board": "2026-08-27T04:03:00Z"
+    },
+    "moved": false
+  },
+  "mode": "trip",
+  "dest": {
+    "to": "COM3",
+    "label": "COM 3",
+    "why": "class",
+    "place": true
+  },
+  "timing": {
+    "status": "late",
+    "text": "~6 min late",
+    "classAt": "2026-08-27T04:00:00Z",
+    "reachAt": "2026-08-27T04:06:10Z"
+  },
+  "places": [
+    {
+      "key": "mrt",
+      "label": "KR MRT"
+    },
+    {
+      "key": "deck",
+      "label": "The Deck"
+    }
+  ],
+  "refreshAt": "2026-08-27T04:00:00Z",
+  "walkSpeedMs": 1.3,
+  "card": {
+    "kind": "class",
+    "staleAt": "2026-08-27T04:00:00Z",
+    "crowd": null,
+    "quality": null,
+    "leaveBy": "Leave by 11:49",
+    "leaveVia": "catch the 12:03 D2 at PGP Foyer",
+    "catch": "Catch the 12:03 D2 at PGP Foyer",
+    "arrive": "Arrive 12:06 · ~6 min late",
+    "catchLine": "Catch the 12:03 D2 at PGP Foyer · arrive 12:06, ~6 min late",
+    "late": true,
+    "goNow": null,
+    "note": null,
+    "estimate": null,
+    "phase": "heading",
+    "phaseText": "On your way",
+    "glance": "D2 12:03",
+    "line": "D2 12:03 at PGP Foyer · arrive 12:06 · ~6 min late",
+    "actions": [
+      {
+        "id": "skipped",
+        "label": "Not going",
+        "trip": "4:720:COM3"
+      }
+    ],
+    "warning": null,
+    "nextChangeAt": "2026-08-27T04:00:00Z",
+    "remind": true,
+    "suggestion": null,
+    "ride": null,
+    "gone": false,
+    "walkTo": {
+      "name": "PGP Foyer",
+      "lat": 1.290994,
+      "lon": 103.781153
+    },
+    "notice": null,
+    "h12": false,
+    "journey": {
+      "leave": null,
+      "walk": "4 min",
+      "bus": {
+        "svc": "D2",
+        "color": "#8e44c9",
+        "stop": "PGP Foyer",
+        "board": "12:03"
+      },
+      "boardAt": "2026-08-27T04:03:00Z",
+      "ride": "3 min",
+      "off": null,
+      "to": "COM 3",
+      "toStop": "COM 3",
+      "arrive": "12:06",
+      "walkEnd": null,
+      "arriveStop": "12:06",
+      "slack": "~6 min late",
+      "live": true,
+      "backup": null,
+      "why": null,
+      "change": null,
+      "title": "To COM 3 · by 12:00",
+      "place": "COM 3",
+      "byText": null,
+      "walkText": "4 min walk",
+      "rideText": "3 min ride",
+      "walkEndText": null,
+      "arriveText": "Arrive 12:06 · ~6 min late",
+      "arriveWhere": "at COM 3",
+      "backupText": null,
+      "summary": "arrive 12:06 · D2 12:03 at PGP Foyer"
+    },
+    "upcoming": null,
+    "step": null,
+    "title": "D2 · 12:03",
+    "heading": "Going to COM 3",
+    "remindAt": null
+  }
+}

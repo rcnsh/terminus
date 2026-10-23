@@ -121,7 +121,12 @@ interface Dest {
 }
 
 /** The destination as the answer names it. */
-const destOf = (d: Dest): NonNullable<MeAnswer['dest']> => ({ to: d.to, label: d.label, why: d.why });
+const destOf = (d: Dest): NonNullable<MeAnswer['dest']> => ({
+  to: d.to,
+  label: d.label,
+  why: d.why,
+  ...(d.trip?.place ? { place: true as const } : {}),
+});
 
 /** A trip home's key: after the day's last class, or in a long gap. */
 const homeKey = (plan: Pick<NextTrip, 'why' | 'lastEndMin' | 'from'>) =>
@@ -598,9 +603,12 @@ function thereAnswer(
   const end = dest.trip?.endMin !== undefined ? endOf(dest.trip) : undefined;
   // There before it starts: when it starts, not "In GEA1000".
   const early = dest.trip && sgt(nowMs).minutes < dest.trip.arriveByMin;
-  const label = early ? m().youreThere : dest.trip ? m().inClass(dest.trip.label) : m().atPlace(dest.label);
+  const place = !dest.trip || dest.trip.place;
+  const label = early ? m().youreThere : place ? m().atPlace(dest.label) : m().inClass(dest.trip!.label);
   const when = early
-    ? m().startsAt(dest.trip!.label, clockMin(dest.trip!.arriveByMin, h12))
+    ? place
+      ? m().atPlace(dest.label)
+      : m().startsAt(dest.trip!.label, clockMin(dest.trip!.arriveByMin, h12))
     : end
       ? m().till(dest.trip?.nusmods ? m().approx(clockMin(end, h12)) : clockMin(end, h12))
       : null;
@@ -656,6 +664,7 @@ export async function nextFor(env: Env, ctx: ExecutionContext, deps: MeDeps, rid
   // or once its bus is seen ridden.
   const plan = trip.seenOn ?? (trip.planChanged ? trip.plan : null);
   if (plan && trip.key && (trip.phase !== 'idle' || plan.located)) update.plans = { [trip.key]: plan };
+  else if (trip.planDropped && trip.key) update.plans = { [trip.key]: null };
   // When the plan itself moves on (class starts, day ends). Only the planned
   // answer has one; a place or a stop never changes by itself.
   const isPlan = !ask.place && !ask.to;
@@ -753,9 +762,10 @@ async function plannedTrip(env: Env, ctx: ExecutionContext, deps: MeDeps, rider:
       plan.why === 'home' &&
       lat === null &&
       plan.lastEndMin !== undefined &&
-      sgt(nowMs).minutes >= plan.lastEndMin + HOME_BY_MIN
+      (state.homeBy.has(key) ? nowMs >= state.homeBy.get(key)! : sgt(nowMs).minutes >= plan.lastEndMin + HOME_BY_MIN)
     ) {
-      // No location, and long enough since the last class to be home by now.
+      // No location, and long enough since the last class to be home by now:
+      // its planned bus has got you there, or with none planned, HOME_BY_MIN.
       return idle(youreHome(GRAPH, profile, nowMs, homeStop, places, h12, state.skipped));
     }
   }
@@ -785,7 +795,16 @@ async function plannedTrip(env: Env, ctx: ExecutionContext, deps: MeDeps, rider:
   const located = lat !== null && lon !== null;
   const stored = day?.plans?.[key];
   const made = planOfLeave(fresh.leave, located, dest.to);
-  const { bus, save } = choosePlan({ stored, made, located, classAtMs: dest.trip ? classStartMs(dest.trip, nowMs) : null, nowMs });
+  const itsStop = stored?.stopCode ? indexGraph(GRAPH).byCode.get(stored.stopCode) : undefined;
+  const atItsStop = located && itsStop !== undefined && haversineM(lat!, lon!, itsStop.lat, itsStop.lon) <= AT_STOP_M;
+  const { bus, save, drop } = choosePlan({
+    stored,
+    made,
+    located,
+    atItsStop,
+    classAtMs: dest.trip ? classStartMs(dest.trip, nowMs) : null,
+    nowMs,
+  });
   // Every device says that bus: the card, the notifications and Today.
   // A miss is the exception:
   // then the answer is the next way there. The plan's times are from an
@@ -806,6 +825,7 @@ async function plannedTrip(env: Env, ctx: ExecutionContext, deps: MeDeps, rider:
   }
 
   if (save) out.trip.planChanged = true;
+  if (drop) out.trip.planDropped = true;
 
   // Nobody said what happened and the bus left a while ago. Only where you
   // are can say whether you caught it; never assumed without that, or

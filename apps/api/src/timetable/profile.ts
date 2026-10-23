@@ -390,11 +390,19 @@ export function classesOn(profile: Profile, atMs: number): TimetableClass[] {
   const stay = (arriveByMin: number) => Math.min(1440, arriveByMin + PLACE_STAY_MIN);
   const usual = (profile.usual ?? []).flatMap((u) => {
     const pl = u.day === day ? profile.places.find((p) => p.key === u.place) : undefined;
-    return pl ? [{ day, arriveByMin: u.atMin, endMin: stay(u.atMin), to: pl.to, label: pl.label, venue: '' }] : [];
+    return pl ? [{ day, arriveByMin: u.atMin, endMin: stay(u.atMin), to: pl.to, label: pl.label, venue: '', place: true as const }] : [];
   });
   const once = (profile.once ?? [])
     .filter((o) => o.date === date)
-    .map((o) => ({ day, arriveByMin: o.arriveByMin, endMin: stay(o.arriveByMin), to: o.to, label: o.label, venue: '' }));
+    .map((o) => ({
+      day,
+      arriveByMin: o.arriveByMin,
+      endMin: stay(o.arriveByMin),
+      to: o.to,
+      label: o.label,
+      venue: '',
+      place: true as const,
+    }));
   return [
     ...profile.trips
       .filter((x) => x.day === day && importedClassRuns(x.weeks, profile.term, atMs))
@@ -442,8 +450,9 @@ export interface NextTrip {
 /** A class stays the target this long after it starts: you may still be on
  *  the way, and "next: the 14:00" would be wrong while you're on the bus. */
 export const LATE_GRACE_MIN = 15;
-/** With no location, you're taken to be home this long after the last class
- *  ends; until then the answer is the trip home. */
+/** With no location and no bus planned for the trip home, you're taken to be
+ *  home this long after the last class ends (with one, see homeBy); until
+ *  then the answer is the trip home. */
 export const HOME_BY_MIN = 60;
 
 /** Which of today's classes a trip signal is about. Stable for the day. */
@@ -459,6 +468,19 @@ export interface DayState {
   done: ReadonlySet<string>;
   /** Its bus was missed and nothing since says you got there: not where you're coming from. */
   missed?: ReadonlySet<string>;
+  /** When each trip home's planned bus has got you home (epoch ms), by trip key. */
+  homeBy?: ReadonlyMap<string, number>;
+}
+
+/**
+ * The trip home after `prev` that has already taken you there, by its key:
+ * seen home, or its planned bus has had time to (homeBy). Then whatever comes
+ * next today starts from home, however short the gap. Null when it hasn't.
+ */
+export function homeAfter(prev: TimetableClass, state: DayState, nowMs: number): string | null {
+  for (const key of [`home:${endOf(prev)}`, `gap-home:${prev.to}`])
+    if (state.done.has(key) || (state.homeBy?.get(key) ?? Infinity) <= nowMs) return key;
+  return null;
 }
 
 export const NO_DAY_STATE: DayState = { skipped: new Set(), done: new Set() };
@@ -538,8 +560,9 @@ export function nextTripFor(profile: Profile, nowMs: number, state: DayState = N
     // Still in class: nothing to catch yet, but the answer is the trip home.
     return { to: homeStop, label: m().home, why: 'gap-home', from: prev.to, trip: null, fromVenue: prev.venue || null };
   }
-  // In a long gap after going home, the origin is home, not the last class.
-  const wentHome = goesHome && nowMin >= endOf(prev);
+  // In a long gap after going home, or home already since the last class,
+  // the origin is home.
+  const wentHome = (goesHome && nowMin >= endOf(prev)) || homeAfter(prev, state, nowMs) !== null;
   return {
     to: next.to,
     label: next.label,

@@ -111,3 +111,17 @@ test('a class reached before it starts is where you are', () => {
   assert.equal(reachedEarly(profile, FROZEN_NOW + 61 * min, done), null, 'once it has started, no');
   assert.equal(reachedEarly(profile, FROZEN_NOW, new Set()), null, 'not reached');
 });
+
+test("a plan made without a location gives way to the phone's, past its leave-by too", () => {
+  const guess = bus(1); // from where the timetable put you; its leave-by a minute ago
+  const here = bus(6, { svc: 'R2', stopCode: 'COM3', located: true });
+  assert.deepEqual(choose({ stored: guess, made: here }), { bus: here, save: true });
+  // Where the phone is, the answer is a walk: the guess goes, rather than stay on Today.
+  assert.deepEqual(choose({ stored: guess, made: null }), { bus: null, save: false, drop: true });
+  // Waiting at its stop, or with its bus gone (only it can say you're on it): kept.
+  assert.deepEqual(choose({ stored: guess, made: here, atItsStop: true }), { bus: guess, save: false });
+  const gone = bus(-1);
+  assert.deepEqual(choose({ stored: gone, made: here }), { bus: gone, save: false });
+  // A device without a location still says it.
+  assert.deepEqual(choose({ stored: guess, made: here, located: false }), { bus: guess, save: false });
+});

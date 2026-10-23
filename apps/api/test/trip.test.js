@@ -522,8 +522,8 @@ test('polls between the leave time and the departure keep the trip about the bus
   const later = await next(phone);
   assert.equal(later.leave.board, due.leave.board, 'still the bus you were told to catch');
   assert.equal(later.leave.svc, svc);
-  const elsewhere = await next(mac, '?lat=1.3048&lon=103.7735');
-  assert.equal(elsewhere.leave.board, due.leave.board, 'from anywhere, the same bus');
+  const blind = await next(mac);
+  assert.equal(blind.leave.board, due.leave.board, 'without a location, the same bus');
   clock(board - 10_000);
   await next(phone);
 
@@ -1564,4 +1564,45 @@ test('the spare time before a class is the same once you are on the bus: the wal
   assert.equal(riding.card.phase, 'riding');
   assert.equal(before.leave.toCode, 'LT13-OPP', 'the bus gets you off at the nearer stop');
   assert.equal(walk(riding), walk(before));
+});
+
+test('a one-off added once home: Today keeps the trip home, done, and plans the one-off from home', async () => {
+  const at = (hhmm) => Date.parse(`2026-08-27T${hhmm}:00+08:00`);
+  const t = await setup({ home: { stops: ['PGP'] }, manual: [{ ...cls(600, 'LT13', 'GEX1015 @ AS3'), endMin: 630 }] });
+  t.clock(at('10:40'));
+  await t.next(t.phone, '?lat=1.2915&lon=103.7828'); // inside PGP: home
+  t.clock(at('11:45'));
+  const added = await t.call('/api/me/once', { method: 'POST', token: t.phone, body: { to: 'COM3', label: 'COM 3', atMin: 720 } });
+  assert.equal(added.status, 200);
+  const day = await (await t.call('/api/me/day', { token: t.phone })).json();
+  assert.deepEqual(
+    day.items.map((i) => [i.kind, i.status, i.from]),
+    [
+      ['class', 'done', 'PGP'],
+      ['home', 'done', 'LT13'],
+      ['class', 'next', 'PGP'],
+      ['home', 'later', 'COM3'],
+    ],
+  );
+});
+
+test("a one-off planned from home while you're already by its stop: the phone's walk replaces that plan, on Today too", async () => {
+  const at = (hhmm) => Date.parse(`2026-08-27T${hhmm}:00+08:00`);
+  const t = await setup(
+    { home: { stops: ['PGPR'] }, manual: [{ ...cls(600, 'LT13', 'GEX1015 @ AS3'), endMin: 630 }] },
+    { feed: { PGPR: [{ name: 'D2', arrivalTime: '1', nextArrivalTime: '11' }] } },
+  );
+  t.clock(at('12:45'));
+  // Sent with no location: planned from home, two hours after the class.
+  const added = await (
+    await t.call('/api/me/once', { method: 'POST', token: t.phone, body: { to: 'COM3', label: 'COM 3', atMin: 766 } })
+  ).json();
+  assert.equal(added.leave.svc, 'D2');
+  t.clock(at('12:46'));
+  const here = await t.next(t.phone, '?lat=1.29474&lon=103.77395'); // inside the COM3 building
+  assert.equal(here.leave.svc, null);
+  assert.equal(here.card.walkTo.name, 'COM 3');
+  const day = await (await t.call('/api/me/day?lat=1.29474&lon=103.77395', { token: t.phone })).json();
+  const row = day.items.find((i) => i.key === '4:766:COM3');
+  assert.ok(!row.leave?.svc, `no bus from home on Today: ${row.line}`);
 });

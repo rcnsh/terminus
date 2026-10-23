@@ -173,6 +173,9 @@ export interface TimetableClass {
   /** From NUSMods, as today's classes have it (classesOn); never stored. Its
    *  end is taken as ENDS_EARLY_MIN before the timetable says (endOf). */
   nusmods?: true;
+  /** A favourite at its usual time or a one-off trip, as today's classes
+   *  have it (classesOn): planned like a class, but not worded as one. Never stored. */
+  place?: true;
   to: string; // destination stop code
   label: string; // e.g. "CS1010S @ COM1"
   venue: string;

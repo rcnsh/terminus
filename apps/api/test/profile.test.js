@@ -49,6 +49,20 @@ test('a class counts as next until it starts', () => {
   assert.equal(p.to, 'COM3');
 });
 
+test('home since the last class: the next trip starts from home, however short the gap', () => {
+  const tt = [cls(10, 12, 'COM3'), cls(13, 14, 'LT27')];
+  const none = { skipped: new Set(), done: new Set() };
+  // Seen home after the 10:00 (its trip home was the plan, before a later trip was added).
+  const seen = nextTripFor(profile(tt), thu(12, 40), { ...none, done: new Set(['home:720']) });
+  assert.deepEqual([seen.to, seen.from, seen.fromVenue], ['LT27', 'PGP', null]);
+  // No one saw: home once the trip home's bus has had time to get you there.
+  const homeBy = new Map([['home:720', thu(12, 30)]]);
+  assert.equal(nextTripFor(profile(tt), thu(12, 20), { ...none, homeBy }).from, 'COM3', 'still on the way');
+  assert.equal(nextTripFor(profile(tt), thu(12, 30), { ...none, homeBy }).from, 'PGP');
+  // Nothing says you went: from the class.
+  assert.equal(nextTripFor(profile(tt), thu(12, 40), none).from, 'COM3');
+});
+
 test('a gap longer than gapHours sends you home, then back', () => {
   const tt = [cls(10, 12, 'COM3'), cls(16, 18, 'UTOWN')];
   const during = nextTripFor(profile(tt), thu(12, 5));
