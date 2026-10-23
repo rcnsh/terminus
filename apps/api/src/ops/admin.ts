@@ -226,6 +226,9 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
   };
 }
 
+/** A row's Singapore day, "2026-10-24", in Analytics Engine's SQL (its toDate() gives the UTC day). */
+const SG_DAY = `formatDateTime(timestamp, '%Y-%m-%d', 'Asia/Singapore')`;
+
 /** Answers, their quality, and errors per day for 14 days, the timelapse
  *  recorder's polls by what each cost NUS (logPoll), the daily active counts
  *  (usage.ts), the apps' error reports (apperrors.ts), what still uses
@@ -239,15 +242,16 @@ async function analyticsStats(env: Env, fetchImpl: typeof fetch): Promise<Record
     const [dismissed, [daily, quality, errors, timelapse, active, appErrors, appErrorVersions, legacy, settings]] = await Promise.all([
       dismissedCrashes(env),
       Promise.all([
-        // _sample_interval: each row may stand for several, at high volume.
-        sql(`SELECT toDate(timestamp) AS day, blob1 AS kind, SUM(_sample_interval) AS n FROM ${dataset}
-           WHERE timestamp > NOW() - INTERVAL '14' DAY AND blob1 IN ('answer', 'error')
+        // _sample_interval: each row may stand for several, at high volume. Days are Singapore's, as the
+        // dashboard's are; 15 of them, so it can compare two full weeks and still chart today.
+        sql(`SELECT ${SG_DAY} AS day, blob1 AS kind, SUM(_sample_interval) AS n FROM ${dataset}
+           WHERE timestamp > NOW() - INTERVAL '15' DAY AND blob1 IN ('answer', 'error')
            GROUP BY day, kind ORDER BY day`),
         sql(`SELECT blob5 AS quality, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '7' DAY AND blob1 = 'answer' GROUP BY quality ORDER BY n DESC`),
         sql(`SELECT blob2 AS route, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '7' DAY AND blob1 = 'error' GROUP BY route ORDER BY n DESC LIMIT 10`),
-        sql(`SELECT toDate(timestamp) AS day, blob2 AS outcome, SUM(_sample_interval) AS n FROM ${dataset}
+        sql(`SELECT ${SG_DAY} AS day, blob2 AS outcome, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '14' DAY AND blob1 = 'timelapse' GROUP BY day, outcome ORDER BY day`),
         // One row per day and name: max() in case a day was ever counted twice.
         sql(`SELECT blob4 AS day, blob2 AS scope, blob3 AS name, max(double1) AS d1, max(double2) AS d7, max(double3) AS d30 FROM ${dataset}

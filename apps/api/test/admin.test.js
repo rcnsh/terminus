@@ -14,6 +14,9 @@ test('the dashboard asks Analytics Engine with the token, and says so when it fa
   const s = await adminStats(env, Date.now(), fetchImpl);
   assert.equal(asked.length, 9);
   assert.match(asked[3].sql, /blob1 = 'timelapse'/, "the recorder's polls, by what they cost NUS");
+  // The dashboard lines these up with Singapore days (parts.js lastDays), and compares two full weeks besides today.
+  for (const i of [0, 3]) assert.match(asked[i].sql, /formatDateTime\(timestamp, '%Y-%m-%d', 'Asia\/Singapore'\) AS day/);
+  assert.match(asked[0].sql, /INTERVAL '15' DAY/);
   assert.match(asked[4].sql, /blob1 = 'active'/, 'the daily active counts');
   assert.match(asked[5].sql, /blob1 = 'apperror'/, 'the error reports, by fingerprint');
   assert.match(asked[7].sql, /blob1 = 'legacy'/, 'what still uses the old address and paths');

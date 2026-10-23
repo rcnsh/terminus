@@ -108,10 +108,10 @@ nothing new without asking, `skipped` the breaker was open), and each
 request past the first inside a poll (a token minted for it, a second call)
 adds a `retry` row, so requests to NUS are `upstream` + `error` + `retry`;
 `blob3` the service, `double1` the buses the feed reported. The dashboard
-shows the same per day.
+shows the same per Singapore day.
 
 ```sql
-SELECT toDate(timestamp) AS day, blob2 AS outcome, SUM(_sample_interval) AS n
+SELECT formatDateTime(timestamp, '%Y-%m-%d', 'Asia/Singapore') AS day, blob2 AS outcome, SUM(_sample_interval) AS n
 FROM terminus WHERE blob1 = 'timelapse'
 GROUP BY day, outcome ORDER BY day
 ```

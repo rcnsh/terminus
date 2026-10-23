@@ -19,8 +19,9 @@ function rand(seed) {
   return ((h ^ (h >>> 15)) >>> 0) / 4294967296;
 }
 
-/** The last [n] days as YYYY-MM-DD, oldest first. */
-const days = (nowMs, n) => Array.from({ length: n }, (_, i) => new Date(nowMs - (n - 1 - i) * DAY).toISOString().slice(0, 10));
+/** The last [n] Singapore days as YYYY-MM-DD, oldest first, as the dashboard counts them. */
+const days = (nowMs, n) =>
+  Array.from({ length: n }, (_, i) => new Date(nowMs + 8 * 3_600_000 - (n - 1 - i) * DAY).toISOString().slice(0, 10));
 const weekday = (d) => new Date(`${d}T00:00:00Z`).getUTCDay();
 /** Busier on weekdays, as term is. */
 const busy = (d) => ([0, 6].includes(weekday(d)) ? 0.45 : 1);
@@ -31,7 +32,7 @@ const VERSIONS = ['android/3.5.0', 'android/3.4.3', 'android/3.4.2', 'mac/3.5.0'
 /** What Analytics Engine's SQL API would answer [q] with, or null for a query this doesn't know. */
 export function fakeAeRows(q, nowMs) {
   if (q.includes("blob1 IN ('answer', 'error')")) {
-    return days(nowMs, 14).flatMap((day) => {
+    return days(nowMs, 15).flatMap((day) => {
       const n = Math.round((1800 + rand(day) * 900) * busy(day));
       return [
         { day, kind: 'answer', n },
