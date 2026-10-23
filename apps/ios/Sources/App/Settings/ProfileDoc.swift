@@ -178,7 +178,7 @@ struct ProfileDoc: @unchecked Sendable {
     }
 
     mutating func addPlace(label: String, to: String) {
-        let name = String(label.trimmingCharacters(in: .whitespaces).prefix(limits.placeLabel))
+        let name = clippedUTF16(label.trimmingCharacters(in: .whitespaces), limits.placeLabel)
         let p: [String: Any] = ["key": placeKey(name, taken: places.map(\.key)), "label": name, "to": to]
         json["places"] = list("places") + [p]
     }
@@ -287,6 +287,19 @@ struct RemovedPlace: @unchecked Sendable {
     let place: [String: Any]
     let usual: [[String: Any]]
     var label: String { place["label"] as? String ?? "" }
+}
+
+/// At most `limit` UTF-16 units, the length the server checks (JavaScript's),
+/// as the web and Android count it; whole characters only, so an emoji is
+/// kept or left out, never halved.
+func clippedUTF16(_ s: String, _ limit: Int) -> String {
+    guard s.utf16.count > limit else { return s }
+    var n = 0
+    return String(
+        s.prefix { c in
+            n += c.utf16.count
+            return n <= limit
+        })
 }
 
 /// "gym", "gym-2": the same rule as the account page and Android.

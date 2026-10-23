@@ -124,28 +124,48 @@ enum TokenStore {
     }
 
     static func read() -> String? {
-        if let token = read(account: account) { return token }
+        if case .found(let token) = lookup() { return token }
+        return nil
+    }
+
+    /// What the keychain holds: a token, none (signed out), or nothing it
+    /// will say, locked before the first unlock after a restart.
+    enum Lookup: Equatable {
+        case found(String)
+        case none
+        case locked
+    }
+
+    static func lookup() -> Lookup {
+        let mine = lookup(account: account)
+        if mine != .none { return mine }
         // Builds before 3.2.0 kept the site's token under the address it was
         // saved on: moved over once, so nobody is signed out.
-        guard account == "site" else { return nil }
+        guard account == "site" else { return .none }
         for old in legacy {
-            guard let token = read(account: old) else { continue }
+            guard case .found(let token) = lookup(account: old) else { continue }
             save(token)
             SecItemDelete(query(account: old) as CFDictionary)
-            return token
+            return .found(token)
         }
-        return nil
+        return .none
     }
 
     /// Where builds before 3.2.0 kept the site's token: the address it was saved on.
     private static var legacy: [String] { [Servers.backupBase, Servers.defaultBase].compactMap { $0 } }
 
-    private static func read(account: String) -> String? {
+    private static func lookup(account: String) -> Lookup {
         var out: CFTypeRef?
         let status = SecItemCopyMatching(
             query([kSecReturnData: true, kSecMatchLimit: kSecMatchLimitOne], account: account) as CFDictionary, &out)
-        guard status == errSecSuccess, let data = out as? Data else { return nil }
-        return String(data: data, encoding: .utf8)
+        return lookupAnswer(status, data: out as? Data)
+    }
+
+    /// What a read's status says.
+    static func lookupAnswer(_ status: OSStatus, data: Data?) -> Lookup {
+        if status == errSecInteractionNotAllowed { return .locked }
+        guard status == errSecSuccess, let token = data.flatMap({ String(data: $0, encoding: .utf8) }) else { return .none }
+        return .found(token)
     }
 
     static func save(_ token: String) {

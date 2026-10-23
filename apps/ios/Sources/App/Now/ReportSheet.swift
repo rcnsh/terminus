@@ -134,7 +134,7 @@ struct ReportSheet: View {
                 .padding(12)
                 .background(Color.surface2, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .padding(.top, 12)
-                .onChange(of: note) { _, n in if n.count > 1000 { note = String(n.prefix(1000)) } }
+                .onChange(of: note) { _, n in if n.utf16.count > 1000 { note = clippedUTF16(n, 1000) } }
                 .accessibilityIdentifier("report.note")
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "envelope").foregroundStyle(Color.muted)

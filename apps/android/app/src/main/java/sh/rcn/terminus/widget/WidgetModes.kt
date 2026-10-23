@@ -389,7 +389,18 @@ object WidgetModes {
                 (chosen + listOfNotNull(shared)).minOrNull()
             } else null
         if (at == null) am.cancel(alarmIntent(ctx)) else am.setWhileIdle(stepTo(at + 1_000, now, exact), alarmIntent(ctx), wake = false)
+        val backstop = backstopAt(at, exact)
+        if (backstop == null) am.cancel(backstopIntent(ctx)) else am.setAndAllowWhileIdle(AlarmManager.RTC, backstop, backstopIntent(ctx))
     }
+
+    /**
+     * An inexact redraw [BACKSTOP_MS] behind an [exact] one at [at]. Turning off "Alarms & reminders" cancels exact alarms and stops the
+     * app with no broadcast, which would leave Nearby's minute counts standing; inexact alarms stay, so this one redraws them as clock
+     * times. Each redraw moves it on, so while exact alarms work it never comes.
+     */
+    internal fun backstopAt(at: Long?, exact: Boolean): Long? = at?.takeIf { exact }?.plus(BACKSTOP_MS)
+
+    private const val BACKSTOP_MS = 120_000L
 
     /** The last inexact step: run this close to its moment, a redraw is late by under half a minute. */
     const val LAST_STEP_MS = 25_000L
@@ -416,13 +427,15 @@ object WidgetModes {
             .filter { it > now }
             .minOrNull()
 
-    internal fun alarmIntent(ctx: Context): PendingIntent =
+    internal fun alarmIntent(ctx: Context, requestCode: Int = 2): PendingIntent =
         PendingIntent.getBroadcast(
             ctx,
-            2,
+            requestCode,
             Intent(ctx, RefreshReceiver::class.java).setAction(Refresher.ACTION_REDRAW_CHOSEN),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+
+    internal fun backstopIntent(ctx: Context): PendingIntent = alarmIntent(ctx, requestCode = 10)
 }
 
 /** A widget button that needs no location: Timetable (and every button without location permission). */

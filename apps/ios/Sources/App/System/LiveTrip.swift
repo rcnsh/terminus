@@ -11,8 +11,14 @@ import UIKit
 /// (the push-to-start token, `apnsstart:`) when the trip is due or missed
 /// with the app closed, as Android's starts from a push. Its countdown ticks by itself.
 @MainActor enum LiveTrip {
-    /// How long a finished trip stays on the Lock Screen, saying you're there.
-    nonisolated static let lingerS: TimeInterval = 5 * 60
+    /// How long a finished trip stays on the Lock Screen, saying you're there:
+    /// as long as the server's end by push keeps it (LIVE_DISMISS_S in apns.ts).
+    nonisolated static let lingerS: TimeInterval = 10 * 60
+
+    /// Whether an activity is still on the Lock Screen: a stale one (nothing
+    /// new for a while, the phone offline) is the trip's still, to update.
+    /// Ending it would leave nothing, since only the open app may start one.
+    nonisolated static func onScreen(_ state: ActivityState) -> Bool { state == .active || state == .stale }
 
     static var allowed: Bool { ActivityAuthorizationInfo().areActivitiesEnabled }
 
@@ -64,7 +70,7 @@ import UIKit
         let unpushedContent = ActivityContent(
             state: state, staleDate: (a.staleAt ?? state.overAt(linger: lingerS))?.addingTimeInterval(-ServerClock.skew),
             relevanceScore: 100)
-        if let act = Activity<TripAttributes>.activities.first(where: { $0.attributes.trip == trip && $0.activityState == .active }) {
+        if let act = Activity<TripAttributes>.activities.first(where: { $0.attributes.trip == trip && onScreen($0.activityState) }) {
             let same = act.id
             await Self.update(same, unpushed(act) ? unpushedContent : content)
             await end(running.filter { $0 != same }, arrived: nil)
@@ -167,7 +173,7 @@ import UIKit
         guard Push.liveToken != nil else { return }
         let owner = tokenFor
         if !Activity<TripAttributes>.activities.contains(where: {
-            $0.id == owner && ($0.activityState == .active || $0.activityState == .stale)
+            $0.id == owner && onScreen($0.activityState)
         }) {
             forgetToken()
         }

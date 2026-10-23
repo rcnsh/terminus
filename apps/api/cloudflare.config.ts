@@ -47,9 +47,10 @@ function site(mode: string | undefined) {
 				ETA_MODEL: bindings.text("shadow"),
 				// APNs's topic: the iPhone app's bundle id (src/push/apns.ts).
 				APNS_TOPIC: bindings.text("sh.rcn.terminus"),
-				// APPLE_TEAM_ID (not a secret) turns on iOS universal links:
-				// /.well-known/apple-app-site-association (src/site/site.ts). Unset
-				// until there's an Apple developer account; add it to both sites.
+				// APPLE_TEAM_ID turns on iOS universal links:
+				// /.well-known/apple-app-site-association (src/site/site.ts). The
+				// stable Worker has it as a secret (though it isn't one); the beta has
+				// none, so its universal links are off.
 				...moved(),
 			},
 		};

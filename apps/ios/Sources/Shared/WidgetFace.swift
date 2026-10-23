@@ -310,6 +310,14 @@ enum WidgetTiming {
         max(next, now.addingTimeInterval(minReload))
     }
 
+    /// When a widget with no token asks again: in `minReload` while the
+    /// keychain is locked (before the first unlock after a restart), as the
+    /// token may be there unread; never when signed out, since signing in
+    /// reloads it.
+    static func signedOutReload(locked: Bool, now: Date) -> Date? {
+        locked ? now.addingTimeInterval(minReload) : nil
+    }
+
     /// The next of the server's own moments for a refresh: the plan moving on
     /// (`refreshAt`) or the card changing (`nextChangeAt`, else `staleAt`).
     static func serverRefreshAt(_ a: NextAnswer, now: Date) -> Date? {

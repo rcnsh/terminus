@@ -134,7 +134,7 @@ and `/auth/approve`, so a link already sent keeps working), the downloads
 (the Mac's Sparkle feed is built into every copy) and the map's files.
 
 The old root paths (before 3.0) aren't served. `movedApi` in
-[src/site/site.ts](../apps/api/src/site.ts) answers them: a request with
+[src/site/site.ts](../apps/api/src/site/site.ts) answers them: a request with
 `x-terminus-client` is an app from before 3.0, so it gets the 426
 `config:minClient` gives (the app shows "update" rather than an error);
 anything else (a script with an API key, a page open since before) gets a
@@ -296,7 +296,7 @@ themselves, and drifted):
 Per-user trips come from the account (`/api/me/next`): a NUSMods timetable
 imported with `POST /api/me/import` (a profile keeps 100 classes a week; past that the
 week's latest are left out and the answer's `dropped` says how many), plus classes entered by hand. Imported classes only
-count in the weeks they run ([src/timetable/calendar.ts](../apps/api/src/calendar.ts), built from
+count in the weeks they run ([src/timetable/calendar.ts](../apps/api/src/timetable/calendar.ts), built from
 NUSMods' semester dates and MOM's public holidays by
 `scripts/data/fetch_calendar.py`). NUS's own days off, such as Well-Being Days,
 aren't in either source: they're kept by hand in `data/nus-days.json` (add
@@ -319,7 +319,7 @@ until it's saved, one save at a time, and on a 412 the page reads the
 profile again and makes only its own changes on that (three tries).
 
 The calendar keeps itself up to date without a deploy
-([src/timetable/calendarsync.ts](../apps/api/src/calendarsync.ts)). `data/calendar.json` is
+([src/timetable/calendarsync.ts](../apps/api/src/timetable/calendarsync.ts)). `data/calendar.json` is
 bundled at deploy time, and the scrape workflow refreshes it weekly, but a
 bundled file only changes when someone deploys. So the cron also fetches the
 same two sources once a week. The copy must pass checks:
@@ -378,7 +378,7 @@ get one of three ways:
   older than `FEEDBACK_KEEP_DAYS` (365), runs once a
   Singapore day (KV `housekeeping:day`), since each reads a whole table;
   expired sign-in links and codes go every run.
-- **Sign-in approved from the email** ([src/accounts/applogin.ts](../apps/api/src/applogin.ts),
+- **Sign-in approved from the email** ([src/accounts/applogin.ts](../apps/api/src/accounts/applogin.ts),
   modelled on RFC 8628). `POST /api/auth/app/start {email, name}` returns
   `{request, poll, match, expires}` and emails a 6-character code (in the subject
   too: filters hold back link-only mail) and a link. Typed into the app,
@@ -456,7 +456,7 @@ pnpm exec cf kv keys put config:minClient --namespace-id <KV id in cloudflare.co
 ```
 
 - `GET /api/me/next` is the widget's one call. It picks the destination from the
-  timetable (see `nextTripFor` in [src/timetable/profile.ts](../apps/api/src/profile.ts)) or from
+  timetable (see `nextTripFor` in [src/timetable/profile.ts](../apps/api/src/timetable/profile.ts)) or from
   `?place=`/`?to=`, and returns the usual answer plus `dest` and `places`.
   A `place` or `to` that names nothing it knows is ignored: the answer is
   the timetable's.
@@ -498,8 +498,8 @@ phase comes from the answer and the day's signals: `POST /api/me/signal` with
 names. Clients show `card.actions` as buttons and never decide them.
 
 The signals live in a Durable Object per user (`Trip` in
-[src/push/tripdo.ts](../apps/api/src/tripdo.ts), reached through
-[src/answer/trip.ts](../apps/api/src/trip.ts), bound as `TRIPS`, keyed by user id, created
+[src/push/tripdo.ts](../apps/api/src/push/tripdo.ts), reached through
+[src/answer/trip.ts](../apps/api/src/answer/trip.ts), bound as `TRIPS`, keyed by user id, created
 in Asia with `locationHint: 'apac'`). It's
 only touched on a day with classes and keeps only that day: its signals
 (`DayRecord.trips`), the bus each trip's plan is for (`plans`), the wake
@@ -538,7 +538,7 @@ object at the change and once the second bus has gone.
 
 ### One plan, and push
 
-- **One plan, everywhere** ([src/answer/plan.ts](../apps/api/src/plan.ts)). The Worker saves the bus a trip is for in the
+- **One plan, everywhere** ([src/answer/plan.ts](../apps/api/src/answer/plan.ts)). The Worker saves the bus a trip is for in the
   day's record (`DayRecord.plans`): from the moment the trip is due, or
   earlier when it was planned from the phone's location (`Plan.located`).
   Every device then says that bus (the card, the notifications, Today in
@@ -603,7 +603,7 @@ object at the change and once the second bus has gone.
   service due at your stop is the guess, marked `~`, or with nothing due
   only where to get off; ten minutes after the arrival (`RIDE_GRACE_MS`)
   you're taken to be there.
-- **Outcomes** ([src/accounts/outcomes.ts](../apps/api/src/outcomes.ts), `trip_outcomes`, 35
+- **Outcomes** ([src/accounts/outcomes.ts](../apps/api/src/accounts/outcomes.ts), `trip_outcomes`, 35
   days): what was said (boarded, missed, arrived, from older apps' taps or
   the phone reaching the destination) and "Not going",
   with the day it happened (`at` is that day's start, never the moment:
@@ -611,7 +611,7 @@ object at the change and once the second bus has gone.
   three misses of one class in 30 days suggest a bus earlier (`ArriveBy.oneEarlier`);
   three skips in a row offer to stop reminders (`card.remind: false`). Choices
   are `trip_prefs`; a turned-down suggestion waits 30 days.
-- **Push** ([src/push/push.ts](../apps/api/src/push.ts), [src/push/tripdo.ts](../apps/api/src/tripdo.ts)).
+- **Push** ([src/push/push.ts](../apps/api/src/push/push.ts), [src/push/tripdo.ts](../apps/api/src/push/tripdo.ts)).
   When push is set up (`pushEnabled`: `FCM_SERVICE_ACCOUNT` or
   `VAPID_PRIVATE_KEY` usable, or APNs's settings all there), a card served on a class day asks the
   Trip object to wake at `nextPhaseAt` (due, leave-by, departure, +3 min,
@@ -654,7 +654,7 @@ object at the change and once the second bus has gone.
 
 ### APNs: push to the iPhone app
 
-[src/push/apns.ts](../apps/api/src/apns.ts), sent by push.ts beside FCM and Web Push.
+[src/push/apns.ts](../apps/api/src/push/apns.ts), sent by push.ts beside FCM and Web Push.
 
 - **Tokens.** The app sends `POST /api/me/push` with `{token}`:
   - `apns:<hex>`: the device token from
@@ -673,7 +673,8 @@ object at the change and once the second bus has gone.
     from one host is refused by the other (`BadDeviceToken`), and dropped.
 
   Hex of 32 to 255 bytes; anything else starting `apns` is a 400. A session
-  keeps its latest of each; the same token on another session moves there;
+  keeps its latest of each; the same token on another session moves there
+  (an `apns:` one leaves that session none of the three);
   `DELETE /api/me/push` forgets them all. Registering also notes the language
   the iPhone's notifications are worded in (`sessions.push_lang`): the
   account's choice, else the request's. With the `apns:` token the app
@@ -683,11 +684,12 @@ object at the change and once the second bus has gone.
   `apnsstart:` token, so nothing starts one by push (left out, nothing
   changes), and `activity`, whether a Live Activity of its runs: `false`
   (it ended on the phone) forgets its `apnsla:` token, so the server no
-  longer counts one running there. The app sends one registration at a
-  time, so an older one can't bring back a start token after a newer one
-  turned the setting off. The data export lists all five for each device (`push`,
-  `liveActivityPush`, `liveActivityStartPush`, `pushLanguage`,
-  `pushAlerts`).
+  longer counts one running there, and `h12`, whether it shows 12-hour
+  times (`sessions.push_h12`, migration 0017; NULL when not said). The app
+  sends one registration at a time, so an older one can't bring back a
+  start token after a newer one turned the setting off. The data export
+  lists all six for each device (`push`, `liveActivityPush`,
+  `liveActivityStartPush`, `pushLanguage`, `pushAlerts`, `pushClock`).
 - **Secrets and vars.** `APNS_KEY` (the .p8 from the Apple developer
   account, PEM, an ES256 key), `APNS_KEY_ID` (its 10-character id) and
   `APNS_TEAM_ID`, as Worker secrets; `APNS_TOPIC`, the bundle id, is a var
@@ -761,7 +763,12 @@ object at the change and once the second bus has gone.
     i18n.ts). `push_lang` follows the account: saving the profile with a
     language sets every iPhone's to it; back to following each device, the
     saving iPhone's is its own, and another's catches up when it next
-    registers (each launch).
+    registers (each launch). Likewise in each iPhone's clock (`push_h12`)
+    unless the account chose one (`clock`): the Trip object's card is worded
+    in 12-hour times when any iPhone said so (not the latest one's, which
+    would alternate between two phones and change the Live Activity each
+    time), and worded again for an iPhone with the other clock; one that
+    hasn't said gets the card as worded.
   - nothing to show (an idle card, reminders off for the trip), an iPhone
     whose leave alerts are off (`push_alerts` 0: as Android, which shows
     its own notification only with them on, it gets no alert, due and
@@ -779,7 +786,9 @@ object at the change and once the second bus has gone.
     alert (`updateLive` with the answer and `answerIn`). `event`
     is `update`, or `end` once there, with no trip left, or with no class
     left today (the last state sent, ended; `dismissal-date` ten minutes
-    on); `stale-date` is the card's `staleAt`.
+    on); `stale-date` is the card's `staleAt`. An end Apple took forgets
+    the `apnsla:` token, as the app's `activity: false` would: it no longer
+    counts as running, so the next trip's can be started by push.
   - its Live Activity started, when it has none running (no `live_token`)
     and an `apnsstart:` token: at the moments Android's live notification
     starts from a push, the Trip object's due and missed (`startLive`), a
@@ -840,7 +849,7 @@ object at the change and once the second bus has gone.
   doubling each time to 15 minutes; the Trip object's wakes in that time
   send nothing to Apple, and try again after it.
 
-The planner ([src/timetable/profile.ts](../apps/api/src/profile.ts), `nextTripFor`):
+The planner ([src/timetable/profile.ts](../apps/api/src/timetable/profile.ts), `nextTripFor`):
 
 - A class stays the target until 15 minutes after it starts (you may still
   be on the bus), unless you've reached it. A skipped class is left out.
@@ -893,7 +902,7 @@ Home", "Heading home", "Going to X"), null with no destination; and
 (five minutes, when the trip turns `due`), only for a class with reminders
 on, before the trip is under way and before the class starts, else null
 (`remindAtOf`). The apps used to hard-code the five minutes and the
-class-only rule. While riding, `ride` lists
+class-only rule. While riding, `ride` names the bus and its colour and lists
 the stops from boarding to getting off, with the board and arrival times (the
 arrival live when the bus's plate is known), for a progress bar. v1
 fields are unchanged. `notice` is a line above the answer while the monitor
@@ -1059,9 +1068,9 @@ iPhone's, `apple-app-site-association`, is the Worker's
 hour, naming `<APPLE_TEAM_ID>.sh.rcn.terminus` (`.beta` on the beta) for
 `/pair` and `/pair/`, so a pairing link (`/pair?code=…`) opens the app,
 which claims `applinks:` on both of its site's addresses. Apple's CDN
-fetches it from each one and follows no redirect. `APPLE_TEAM_ID` is a
-var, not a secret, and stays unset until there's an Apple developer
-account; until then the path is a 404.
+fetches it from each one and follows no redirect. `APPLE_TEAM_ID` isn't
+secret in itself, but the stable Worker has it set as a secret; the beta
+has none, so there the path is a 404 and universal links are off.
 
 The redirect runs only with `MOVE_PAGES` set to `on`, as both Workers
 have it in `cloudflare.config.ts`. Links handed to people (sign-in and
@@ -1314,7 +1323,7 @@ important algorithm here. NUS stops come in directional pairs metres apart,
 `X` and `Opp X`. That gap is inside GPS error near dense buildings, so picking
 the nearer stop is wrong roughly half the time, and it is the wrong answer
 that makes you miss a bus you can see. Instead
-[`resolve.ts`](../apps/api/src/resolve.ts) checks whether the destination is
+[`resolve.ts`](../apps/api/src/answer/resolve.ts) checks whether the destination is
 downstream of each candidate in the scraped route sequence, and scores walking
 and riding in the same unit (seconds) so the trade-off is legible. On a loop
 route both sides technically reach the destination; the wrong side loses on hop
@@ -1333,7 +1342,7 @@ the same bus the wrong way round the loop.
 
 **Changing buses.** Where no single bus goes there, even from a stop a
 short walk away, the answer is a trip on two shuttles
-([`transfer.ts`](../apps/api/src/transfer.ts)): the first to a stop the second
+([`transfer.ts`](../apps/api/src/answer/transfer.ts)): the first to a stop the second
 calls at, getting off there or crossing to the stop across the road. One
 change at most, never onto the same service or onto a public bus. Which
 change stops to ask about is settled from the route data alone, before any
@@ -1408,7 +1417,7 @@ in the sun and arrive a little sooner. Only the choice is weighted: every time
 shown is real. A profile's `preferBus` off sets the weight to 1.
 
 **In a residence, the walk is from the building, then from your room.** A
-location inside a residence's outline ([`residences.ts`](../apps/api/src/residences.ts))
+location inside a residence's outline ([`residences.ts`](../apps/api/src/answer/residences.ts))
 starts from that residence's own stops, at the path distance from the
 building or from the fix, whichever is longer. When the residence is one your
 home stops serve, the walk to the nearest of them is your own `homeWalkMin`
@@ -1418,7 +1427,7 @@ the card, in walking the whole way, and on the Nearby tab.
 
 **In a building, the walk is by the paths from it too.** Within
 `WALK.atVenueM` of a building's point on the room map, and nearer it than to
-any stop, you're in it (`buildingStops` in [`walk.ts`](../apps/api/src/walk.ts)): the
+any stop, you're in it (`buildingStops` in [`walk.ts`](../apps/api/src/answer/walk.ts)): the
 stops are its `out` in `venues.json`, every stop within `WALK.maxRadiusM` with
 the routed walk from the building (`scripts/data/walk_routes.py`), and the far
 side of each one's road. The straight line with a stop's usual detour
@@ -1465,7 +1474,7 @@ anything else (CLAUDE.md, rule 2).
 The cache is one Cloudflare data centre's, shared by its isolates, so on
 its own "one call per stop per 15 s" would hold per data centre: traffic
 spread across many (a botnet) would multiply it. So a miss asks the **feed
-gate** first ([src/feeds/feedgate.ts](../apps/api/src/feedgate.ts), `FEED_GATE`): one
+gate** first ([src/feeds/feedgate.ts](../apps/api/src/feeds/feedgate.ts), `FEED_GATE`): one
 Durable Object per key (`arrivals/<stop>`, `buses/<service>`,
 `public/<LTA stop>`), in Asia. The first to ask in a window may call the
 feed and hands its answer back; anyone else in that window, from any data
@@ -1585,8 +1594,8 @@ without the token, then uploads in a separate step that downloads nothing;
 its twice-yearly schedule only runs `--check`, which fails as a reminder
 when a newer build exists.
 
-**Public buses are more services at the same stops** ([`public.ts`](../apps/api/src/public.ts),
-[`lta.ts`](../apps/api/src/lta.ts), `data/public.json`). Singapore's public buses stop
+**Public buses are more services at the same stops** ([`public.ts`](../apps/api/src/answer/public.ts),
+[`lta.ts`](../apps/api/src/feeds/lta.ts), `data/public.json`). Singapore's public buses stop
 at the shuttles' shelters along Kent Ridge Crescent and Lower Kent Ridge
 Road, and a 95 or 151 is often the first bus to a stop the shuttle also
 serves. `scripts/data/scrape_lta.py` takes LTA DataMall's stops, routes and
@@ -1796,7 +1805,7 @@ pnpm exec cf kv keys put config:appVersion --namespace-id <KV id in cloudflare.c
 the fallback while the key is unset; a malformed value is ignored. Tokens
 remember the version they were minted with, so the next call mints a new one.
 Usually nobody has to: on a 10009 the cron check runs
-[`src/feeds/appversion.ts`](../apps/api/src/appversion.ts), which reads the new version from
+[`src/feeds/appversion.ts`](../apps/api/src/feeds/appversion.ts), which reads the new version from
 NUS's refusal if it names one, or from the uNivUS pages on Google Play
 (versionName) and APKCombo (versionName and versionCode). It tries the
 likeliest strings with NUS (a token and one bus call each, three at most),
@@ -1910,7 +1919,7 @@ too would double that scheduled load for a site few people use. Instead,
 whenever a request on the beta opens a feed's breaker, the failure (with
 NUS's code, response and the version string it refused) is noted in the
 beta's KV (`monitor:seen`, `monitor:seen-public`; at most once a minute per
-isolate; [`src/feeds/feedwatch.ts`](../apps/api/src/feedwatch.ts)). The beta's cron reads a
+isolate; [`src/feeds/feedwatch.ts`](../apps/api/src/feeds/feedwatch.ts)). The beta's cron reads a
 note from the last 15 minutes as a failed check (`sawTrip`) and runs the same
 state machine on it, so its status page, the card's "down since" notice and
 `/api/health` follow its own traffic, and a note from a version since switched
@@ -1927,12 +1936,12 @@ down is counted on its dashboard as the error `cron feed down`.
 turned on, on the dashboard (`src/ops/collect.ts`, KV `config:collect:<name>`,
 off when unset or unreadable):
 
-- `active` ([`src/ops/usage.ts`](../apps/api/src/usage.ts)): the first cron run after
+- `active` ([`src/ops/usage.ts`](../apps/api/src/ops/usage.ts)): the first cron run after
   Singapore midnight counts accounts with a session used in the last 1, 7
   and 30 days, in all, by app and devices by version, and writes only the
   totals (KV `usage:day` marks the day done). D1 alone only knows "now";
   these rows give the dashboard its month.
-- `eta` ([`src/ops/eta.ts`](../apps/api/src/eta.ts)): the cron scores the newest closed
+- `eta` ([`src/ops/eta.ts`](../apps/api/src/ops/eta.ts)): the cron scores the newest closed
   recording day not yet scored, one a run, by joining its `arrival` rows
   (read back through Analytics Engine's SQL API) with the timelapse file:
   `passingsOf` reads when each plate passed 25 m before each stop along its
@@ -1944,14 +1953,14 @@ off when unset or unreadable):
   route line this deploy doesn't have is skipped for that service. It makes
   no call to NUS.
   With the `ETA_MODEL` var `shadow` as well, the next step
-  ([`src/ops/etashadow.ts`](../apps/api/src/etashadow.ts)) answers the same day's
-  predictions with the arrival-time model ([`src/ops/etamodel.ts`](../apps/api/src/etamodel.ts):
+  ([`src/ops/etashadow.ts`](../apps/api/src/ops/etashadow.ts)) answers the same day's
+  predictions with the arrival-time model ([`src/ops/etamodel.ts`](../apps/api/src/ops/etamodel.ts):
   segment medians from earlier days, the feed's usual error, a blend), built
   only from the 28 days before, and keeps the errors as
   `eta/model/YYYY-MM-DD.json` and the day's segment times as
   `eta/segments/YYYY-MM-DD.json`. Nobody is shown its times;
   [eta-model.md](eta-model.md) has the design and what it needs first.
-- `errors` ([`src/ops/apperrors.ts`](../apps/api/src/apperrors.ts)): `POST /api/errors`.
+- `errors` ([`src/ops/apperrors.ts`](../apps/api/src/ops/apperrors.ts)): `POST /api/errors`.
   The Android app saves an uncaught crash to a file and sends it on the next
   start; the Mac and iPhone apps send MetricKit's crash diagnostics and
   saved Objective-C exceptions on the next launch; the website's
@@ -1961,13 +1970,13 @@ off when unset or unreadable):
   stop. The server scrubs the message and stack (`scrub()`), fingerprints
   the top five frames without line numbers, and for the website fills in
   its own `API_VERSION`.
-- `legacy` ([`src/ops/legacy.ts`](../apps/api/src/legacy.ts)): after each request, the
+- `legacy` ([`src/ops/legacy.ts`](../apps/api/src/ops/legacy.ts)): after each request, the
   Worker checks whether it used the old address, an API path from before
   3.0, or was an app refused with 426 (`config:minClient`), and if so, in
   `waitUntil`, writes one row each: what, the app and version (or
   `browser`, `other`), and the route with no query and ids as `:id`. Most
   requests use none, so most never read the switch.
-- `settings` ([`src/ops/settings.ts`](../apps/api/src/settings.ts)): with the active
+- `settings` ([`src/ops/settings.ts`](../apps/api/src/ops/settings.ts)): with the active
   counts, once a Singapore day (KV `settings:day`), the profiles of the
   accounts used in 30 days are counted per setting and value
   (`settingsOf`: a missing setting is its default, a list is `some` or
@@ -2176,8 +2185,8 @@ going ("Towards Kent Ridge MRT"), with the stops ahead from `upcoming`.
 ### The timelapse recorder
 
 A day of every shuttle, for a timelapse video
-([`src/map/timelapse.ts`](../apps/api/src/timelapse.ts),
-[`src/map/timelapsedo.ts`](../apps/api/src/timelapsedo.ts)). It is the **only poller of
+([`src/map/timelapse.ts`](../apps/api/src/map/timelapse.ts),
+[`src/map/timelapsedo.ts`](../apps/api/src/map/timelapsedo.ts)). It is the **only poller of
 the NUS feed** and the one exception to "don't add load on NUS"
 (CLAUDE.md, rule 2). Answers fetch because someone asked; the only other
 scheduled reads are the stable cron's health check (one stop from NUS and one from

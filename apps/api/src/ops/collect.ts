@@ -37,6 +37,26 @@ export async function collecting(env: Env, name: Collector): Promise<boolean> {
   }
 }
 
+const SWITCH_MEMO_MS = 60_000;
+const switchMemo = new WeakMap<object, Map<Collector, { at: number; on: boolean }>>();
+
+/**
+ * Whether [name] is on, read from KV at most once a minute per isolate (as
+ * monitor.ts feedDownSince is): for a switch asked on requests, like
+ * `legacy`, which would otherwise cost a KV read on each. A flip on the
+ * dashboard clears it, so that isolate sees it at once.
+ */
+export async function collectingMemo(env: Env, name: Collector, nowMs = Date.now()): Promise<boolean> {
+  const kept = switchMemo.get(env.KV)?.get(name);
+  if (kept && nowMs - kept.at < SWITCH_MEMO_MS && nowMs >= kept.at) return kept.on;
+  const on = await collecting(env, name);
+  if (env.KV) {
+    const memo = switchMemo.get(env.KV) ?? new Map();
+    switchMemo.set(env.KV, memo.set(name, { at: nowMs, on }));
+  }
+  return on;
+}
+
 /** Every switch, for the dashboard. */
 export async function collectState(env: Env): Promise<Record<Collector, boolean>> {
   const on = await Promise.all(COLLECTORS.map((c) => collecting(env, c)));
@@ -52,6 +72,7 @@ export async function handleCollect(req: Request, env: Env, nowMs: number): Prom
   if (!name || typeof body?.on !== 'boolean')
     return json({ error: 'name must be active, eta, errors, legacy or settings, and on true or false' }, 400);
   await env.KV.put(keyOf(name), body.on ? 'on' : 'off');
+  switchMemo.get(env.KV)?.delete(name);
   // KV may still read the old value back for a while: say what was just set.
   return json({ ...(await collectState(env)), [name]: body.on }, 200, { 'cache-control': 'no-store' });
 }

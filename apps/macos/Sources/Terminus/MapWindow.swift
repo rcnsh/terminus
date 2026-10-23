@@ -1123,7 +1123,7 @@ private let meBlue = NSColor(rgb: 0x2B7BF3)
 
 /// MapLibre's own view, drawn from the model: sources and layers are added
 /// once each time a style loads, then only their data and filters change.
-private struct CampusMapView: NSViewRepresentable {
+struct CampusMapView: NSViewRepresentable {
     let map: MapModel
     let campus: CampusMap
     let style: URL
@@ -1253,18 +1253,18 @@ private struct CampusMapView: NSViewRepresentable {
 
         func mapView(_ mapView: MLNMapView, cameraDidChangeAnimated animated: Bool) { keepOnMap() }
 
-        func mapView(_ mapView: MLNMapView, regionDidChangeAnimated animated: Bool) { bringingBack = false }
-
-        /// A move back onto the street map is under way. MapLibre reports its
-        /// first frame as a camera change at once, before the centre has moved,
-        /// so without this each report would start the move again, inside the
-        /// last, until the stack ran out.
-        private var bringingBack = false
+        /// A move back onto the street map is being started. Starting it ends
+        /// any move under way, which MapLibre reports as a camera change inside
+        /// the call: without this, that report would start the move again,
+        /// inside the last, until the stack ran out. Only for the call: a move
+        /// that another one (a second zoom press) cuts short ends in a camera
+        /// change of its own, which brings the window back then.
+        private var adjusting = false
 
         /// Back onto the street map after a zoom out by its edge or a bigger window,
         /// and no further out than the window full of map.
         func keepOnMap() {
-            guard !bringingBack, let view, view.bounds.width > 0, view.bounds.height > 0 else { return }
+            guard !adjusting, let view, view.bounds.width > 0, view.bounds.height > 0 else { return }
             view.minimumZoomLevel = max(13, PanLimit.minZoom(width: view.bounds.width, height: view.bounds.height))
             let box = centreBox(view, zoom: view.zoomLevel)
             let c = view.centerCoordinate
@@ -1272,8 +1272,9 @@ private struct CampusMapView: NSViewRepresentable {
             let camera = view.camera
             camera.centerCoordinate = CLLocationCoordinate2D(
                 latitude: min(max(c.latitude, box[1]), box[3]), longitude: min(max(c.longitude, box[0]), box[2]))
-            bringingBack = true
-            view.setCamera(camera, withDuration: 0.3, animationTimingFunction: nil) { [weak self] in self?.bringingBack = false }
+            adjusting = true
+            defer { adjusting = false }
+            view.setCamera(camera, withDuration: 0.3, animationTimingFunction: nil)
         }
 
         private func centreBox(_ view: MLNMapView, zoom: Double) -> [Double] {

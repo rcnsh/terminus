@@ -166,6 +166,16 @@ dependencyLocking {
     lockAllConfigurations()
 }
 
+// The unit tests read files at run time: the API's golden answers and the
+// other shared cases (fixtures/ at the repo root), the strings, and the
+// Kotlin sources' text. Declared, so a change to any of them runs the tests
+// again rather than taking a cached pass.
+tasks.withType<Test>().configureEach {
+    inputs.dir(rootDir.resolve("../../fixtures")).withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("sharedFixtures")
+    inputs.dir("src/main/res").withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("resources")
+    inputs.dir("src/main/java").withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("sources")
+}
+
 // kotlin-stdlib-common is an empty module since Kotlin 1.9.20 (kotlin-stdlib
 // replaces it), and Gradle keeps it in the graph only while the lock pins
 // kotlin-stdlib: writing the locks drops it, and the next build then refuses

@@ -245,7 +245,7 @@ private struct AddClassSheet: View {
                     TextField(L("Name, e.g. Gym"), text: $name)
                         .onChange(of: name) { _, v in
                             let max = model.profile?.limits.label ?? 60
-                            if v.count > max { name = String(v.prefix(max)) }
+                            if v.utf16.count > max { name = clippedUTF16(v, max) }
                         }
                         .accessibilityIdentifier("settings.className")
                     Button {

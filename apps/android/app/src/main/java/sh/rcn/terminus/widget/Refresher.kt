@@ -455,6 +455,7 @@ object Refresher {
             cancel(wakeIntent(ctx))
             cancel(redrawIntent(ctx))
             cancel(WidgetModes.alarmIntent(ctx))
+            cancel(WidgetModes.backstopIntent(ctx))
         }
         Store(ctx).refreshAlarmAt = 0
         LeaveAlerts.cancel(ctx)
@@ -466,6 +467,7 @@ object Refresher {
         ctx.getSystemService(AlarmManager::class.java)?.run {
             cancel(redrawIntent(ctx))
             cancel(WidgetModes.alarmIntent(ctx))
+            cancel(WidgetModes.backstopIntent(ctx))
         }
         if (active(ctx)) return
         WorkManager.getInstance(ctx).run {
@@ -605,7 +607,7 @@ class RefreshReceiver : BroadcastReceiver() {
                 finishAsync(Dispatchers.IO) {
                     if (Store(context).paired && Refresher.online(context)) {
                         Refresher.chosen(context, staleOnly = true)
-                        NearbyShared.refreshIfDue(context)
+                        NearbyShared.refreshIfDue(context, onRedraw = true)
                     }
                     redrawWidgets(context)
                     WidgetModes.armChosen(context)

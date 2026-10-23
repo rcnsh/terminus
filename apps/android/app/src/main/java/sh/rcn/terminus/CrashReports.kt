@@ -95,7 +95,7 @@ internal object CrashReports {
     fun done(status: Int): Boolean = status in 200..499
 
     /** The chosen address, then the site's other one if it couldn't be reached at all, as for every request ([Servers.tries]). */
-    private fun post(body: String): Int = Servers.through("POST") { post(it, body) }
+    private fun post(body: String): Int = Servers.through("POST", PATH, { it }) { post(it, body) }
 
     private fun post(base: String, body: String): Int {
         val conn = URL(base + PATH).openConnection() as HttpURLConnection

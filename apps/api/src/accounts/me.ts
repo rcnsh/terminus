@@ -73,7 +73,7 @@ import {
   sgtDate,
   updateTrip,
 } from '../answer/trip.ts';
-import { nudgeUser, setLiveToken, setPushToken, setStartToken } from '../push/push.ts';
+import { type AnswerIn, nudgeUser, setLiveToken, setPushToken, setStartToken } from '../push/push.ts';
 import { formatApnsToken, looksApns, parseApnsToken } from '../push/apns.ts';
 import { WEB_PREFIX, parseSubscription, vapidPublicKey, webPushEnabled } from '../push/webpush.ts';
 import {
@@ -471,7 +471,8 @@ interface MeRoute {
  * The plate of the `svc` bus at `stopCode` right now: the one due soonest,
  * within a few minutes (at the tap it's pulling in or just leaving), and
  * when it's due there (`at`, ISO). Empty when the feed has no plates or no
- * such bus is near, so the ride falls back to the estimate.
+ * such bus is near, so the ride falls back to the estimate. `graph` is the
+ * bus's own: a public bus's stop is asked of LTA, not NUS.
  */
 async function plateAt(
   env: Env,
@@ -480,10 +481,11 @@ async function plateAt(
   stopCode: string | undefined,
   svc: string,
   nowMs: number,
+  graph: Graph,
 ): Promise<{ plate?: string; at?: string }> {
   if (!stopCode) return {};
   try {
-    const sa = (await deps.collectArrivals(env, ctx, [stopCode], nowMs)).get(stopCode);
+    const sa = (await deps.collectArrivals(env, ctx, [stopCode], nowMs, graph)).get(stopCode);
     const near = (sa?.arrivals ?? [])
       .filter((x) => x.svc === svc && x.plate && x.etaS !== null && x.etaS <= PLATE_WINDOW_S)
       .sort((x, y) => x.etaS! - y.etaS!)[0];
@@ -802,13 +804,21 @@ export const ME_ROUTES: MeRoute[] = [
         const after = items.length ? await saveSignals(env, session.user.id, items, nowMs) : day;
         logSignal(env, kind);
         const rider = await loadRider(env, session.user.id, nowMs, { profile, day: after });
-        const out = await nextBody(env, ctx, deps, rider, asked, nowMs);
+        const { body: out, tripOver } = await nextTrip(env, ctx, deps, rider, asked, nowMs);
         const answerIn = rewordFor(env, ctx, deps, rider, asked, nowMs);
         ctx.waitUntil(
           nudgeUser(
             env,
             session.user.id,
-            { phase: out.card.phase, urgent: false, remind: out.card.remind !== false, answer: out, answerIn },
+            {
+              phase: out.card.phase,
+              urgent: false,
+              remind: out.card.remind !== false,
+              answer: out,
+              answerIn,
+              clockChosen: profile.clock !== 'auto',
+              tripOver,
+            },
             nowMs,
             session.tokenHash,
           ),
@@ -861,8 +871,11 @@ export const ME_ROUTES: MeRoute[] = [
           }
           // The bus pulling in now, which may be one before or after the
           // plan's: its times are the plan's moved to when it's due here.
-          const { plate, at: boardAt } = await plateAt(env, ctx, deps, l.stopCode, l.svc, nowMs);
+          const graph = l.paid ? GRAPH_PUBLIC : GRAPH;
+          const { plate, at: boardAt } = await plateAt(env, ctx, deps, l.stopCode, l.route ?? l.svc, nowMs, graph);
           const shift = boardAt && l.board ? Date.parse(boardAt) - Date.parse(l.board) : 0;
+          // A public bus is followed on its own route and feed (trip.ts, next.ts).
+          const paid = l.paid ? { paid: true as const, ...(l.route ? { route: l.route } : {}) } : {};
           rec = {
             kind,
             at: nowMs,
@@ -878,6 +891,7 @@ export const ME_ROUTES: MeRoute[] = [
                   ...(l.stopCode ? { stopCode: l.stopCode } : {}),
                   alightCode: l.change.fromCode,
                   ...(plate ? { plate } : {}),
+                  ...paid,
                   ...(now.answer.dest?.to ? { change: laterChange(secondBusOf(l, now.answer.dest.to), l.change.reach, shift) } : {}),
                 }
               : {
@@ -889,6 +903,7 @@ export const ME_ROUTES: MeRoute[] = [
                   ...(l.stopCode ? { stopCode: l.stopCode } : {}),
                   ...(now.answer.dest?.to ? { alightCode: l.offCode ?? l.toCode ?? now.answer.dest.to } : {}),
                   ...(plate ? { plate } : {}),
+                  ...paid,
                 },
           };
           break;
@@ -907,15 +922,24 @@ export const ME_ROUTES: MeRoute[] = [
       // A trip home isn't a class: nothing to learn from skipping it.
       else if (outcome && !/^(gap-)?home:/.test(key)) await recordOutcome(db, session.user.id, key, outcome, nowMs);
       const rider = await loadRider(env, session.user.id, nowMs, { profile, day: next });
-      const out = await nextBody(env, ctx, deps, rider, asked, nowMs);
+      const { body: out, tripOver } = await nextTrip(env, ctx, deps, rider, asked, nowMs);
       // A tap here changes the other phones' cards now, not at their next
-      // refresh; an iPhone pushed in the other language gets the card in its own.
+      // refresh; an iPhone pushed in the other language gets the card in its
+      // own, and one whose trip the tap ended has its Live Activity ended.
       const answerIn = rewordFor(env, ctx, deps, rider, asked, nowMs);
       ctx.waitUntil(
         nudgeUser(
           env,
           session.user.id,
-          { phase: out.card.phase, urgent: false, remind: out.card.remind !== false, answer: out, answerIn },
+          {
+            phase: out.card.phase,
+            urgent: false,
+            remind: out.card.remind !== false,
+            answer: out,
+            answerIn,
+            clockChosen: profile.clock !== 'auto',
+            tripOver,
+          },
           nowMs,
           session.tokenHash,
         ),
@@ -960,9 +984,12 @@ export const ME_ROUTES: MeRoute[] = [
         const alerts = typeof body?.alerts === 'boolean' ? body.alerts : null;
         const live = typeof body?.live === 'boolean' ? body.live : null;
         const activity = typeof body?.activity === 'boolean' ? body.activity : null;
+        // And whether it shows 12-hour times, for the words it's pushed.
+        const h12 = typeof body?.h12 === 'boolean' ? body.h12 : null;
         if (t.kind === 'live') await setLiveToken(db, session.tokenHash, formatApnsToken(t));
         else if (t.kind === 'start') await setStartToken(db, session.tokenHash, formatApnsToken(t));
-        else await setPushToken(db, session.tokenHash, formatApnsToken(t), await pushLang(db, session.user.id), alerts, live, activity);
+        else
+          await setPushToken(db, session.tokenHash, formatApnsToken(t), await pushLang(db, session.user.id), alerts, live, activity, h12);
         return json({ ok: true });
       }
       if (!token || token.length > 4096 || token.startsWith(WEB_PREFIX))
@@ -1493,7 +1520,12 @@ export async function loadRider(
 
 /** /api/me/next's body, with what it changes sent to the Trip object. */
 async function nextBody(env: Env, ctx: ExecutionContext, deps: MeDeps, rider: Rider, ask: Ask, nowMs: number) {
-  const { body, update } = await nextFor(env, ctx, deps, rider, ask, nowMs);
+  return (await nextTrip(env, ctx, deps, rider, ask, nowMs)).body;
+}
+
+/** nextBody, and whether the answer has no trip: a tap's push then ends the other iPhones' Live Activities. */
+async function nextTrip(env: Env, ctx: ExecutionContext, deps: MeDeps, rider: Rider, ask: Ask, nowMs: number) {
+  const { body, update, trip } = await nextFor(env, ctx, deps, rider, ask, nowMs);
   if (update.items || update.plans || update.watch) {
     // The answer doesn't wait for it; a failure loses the plan or a push, not the card.
     ctx.waitUntil(
@@ -1503,17 +1535,18 @@ async function nextBody(env: Env, ctx: ExecutionContext, deps: MeDeps, rider: Ri
       ),
     );
   }
-  return body;
+  // A place or stop asked for has no trip key either, but the day's trip goes on.
+  return { body, tripOver: trip.key === null && !ask.place && !ask.to };
 }
 
 /**
- * A tap's answer worded in another language, for an iPhone pushed in that
- * one (push.ts asks only then): worked out as the request did, from the
- * same moment, so its arrivals come from the edge cache, and saving
+ * A tap's answer worded in another language or clock, for an iPhone pushed
+ * in that one (push.ts asks only then): worked out as the request did, from
+ * the same moment, so its arrivals come from the edge cache, and saving
  * nothing (no plan, no watch, not logged), as the request already has.
  */
-function rewordFor(env: Env, ctx: ExecutionContext, deps: MeDeps, rider: Rider, ask: Ask, nowMs: number) {
-  return (l: Lang) => withLang(l, () => nextFor(env, ctx, unlogged(deps), rider, ask, nowMs)).then((r) => r.body);
+function rewordFor(env: Env, ctx: ExecutionContext, deps: MeDeps, rider: Rider, ask: Ask, nowMs: number): AnswerIn {
+  return (l, h12) => withLang(l, () => nextFor(env, ctx, unlogged(deps), rider, { ...ask, h12 }, nowMs)).then((r) => r.body);
 }
 
 /**
@@ -1521,6 +1554,7 @@ function rewordFor(env: Env, ctx: ExecutionContext, deps: MeDeps, rider: Rider, 
  * which trip, its phase, whether there's a question, when it next changes.
  * Of what the card changes, only the plan is kept (in the Trip object, by
  * `savePlan`): a wake neither ends a trip nor asks itself to watch.
+ * Worded with 12-hour times or not (`h12`) unless the account chose.
  */
 export async function tripCardFor(
   env: Env,
@@ -1530,6 +1564,7 @@ export async function tripCardFor(
   day: DayRecord | null,
   nowMs: number,
   savePlan: (key: string, plan: Plan) => Promise<void>,
+  h12 = false,
 ): Promise<{
   key: string | null;
   phase: string;
@@ -1540,12 +1575,14 @@ export async function tripCardFor(
   leaveAt: number | null;
   quality: string;
   answer: MeAnswer & { card: Card };
+  /** The account chose 12- or 24-hour times. */
+  clockChosen: boolean;
 } | null> {
   if (!env.DB) return null;
   const profile = await getProfile(env.DB, userId, GRAPH);
   if (!classesOn(profile, nowMs).length) return null;
   const rider = await loadRider(env, userId, nowMs, { profile, day });
-  const { body, trip, update, wakeAt } = await nextFor(env, ctx, unlogged(deps), rider, DAY_ASK, nowMs);
+  const { body, trip, update, wakeAt } = await nextFor(env, ctx, unlogged(deps), rider, { ...DAY_ASK, h12 }, nowMs);
   for (const [key, plan] of Object.entries(update.plans ?? {})) ctx.waitUntil(savePlan(key, plan));
   return {
     key: trip.key,
@@ -1556,6 +1593,7 @@ export async function tripCardFor(
     leaveAt: body.leave?.at ? Date.parse(body.leave.at) : null,
     quality: body.quality,
     answer: body,
+    clockChosen: profile.clock !== 'auto',
   };
 }
 

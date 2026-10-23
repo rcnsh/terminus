@@ -60,6 +60,7 @@
     "suggestion": null,
     "ride": {
       "svc": "P",
+      "color": "#8a939c",
       "stops": [
         {
           "code": "KV",

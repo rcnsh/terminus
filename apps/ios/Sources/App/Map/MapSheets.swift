@@ -330,28 +330,33 @@ struct StopSheet: View {
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-        } else if let board = map.board?.aged(ServerClock.now) {
-            let sorted = board.rows.filter(\.running) + board.rows.filter { !$0.running }
-            let more = sorted.count - peekRows
-            let shown = all || more <= 1 ? sorted : Array(sorted.prefix(peekRows))
-            VStack(spacing: 0) {
-                ForEach(Array(shown.enumerated()), id: \.offset) { i, r in
-                    if i > 0 { Divider().overlay(Color.line) }
-                    StopRow(row: r, hex: r.color ?? campus.color(r.svc), picked: map.selected == r.svc) {
-                        // A row picks its line here, as the pills do, and again unpicks it.
-                        map.choose(r.svc)
+        } else if map.board != nil {
+            // Counted down every second, as the Buses tab's board is, between the 15 s refreshes.
+            TimelineView(.periodic(from: .now, by: 1)) { _ in
+                if let board = map.board?.aged(ServerClock.now) {
+                    let sorted = board.rows.filter(\.running) + board.rows.filter { !$0.running }
+                    let more = sorted.count - peekRows
+                    let shown = all || more <= 1 ? sorted : Array(sorted.prefix(peekRows))
+                    VStack(spacing: 0) {
+                        ForEach(Array(shown.enumerated()), id: \.offset) { i, r in
+                            if i > 0 { Divider().overlay(Color.line) }
+                            StopRow(row: r, hex: r.color ?? campus.color(r.svc), picked: map.selected == r.svc) {
+                                // A row picks its line here, as the pills do, and again unpicks it.
+                                map.choose(r.svc)
+                            }
+                        }
+                        if more > 1 {
+                            Divider().overlay(Color.line)
+                            Button(all ? L("Show fewer") : L("Show %@ more", "\(more)")) {
+                                withAnimation(.easeInOut(duration: 0.2)) { all.toggle() }
+                            }
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Color.brand)
+                            .padding(.horizontal, 16)
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                            .accessibilityIdentifier("map.sheet.more")
+                        }
                     }
-                }
-                if more > 1 {
-                    Divider().overlay(Color.line)
-                    Button(all ? L("Show fewer") : L("Show %@ more", "\(more)")) {
-                        withAnimation(.easeInOut(duration: 0.2)) { all.toggle() }
-                    }
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Color.brand)
-                    .padding(.horizontal, 16)
-                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                    .accessibilityIdentifier("map.sheet.more")
                 }
             }
         }

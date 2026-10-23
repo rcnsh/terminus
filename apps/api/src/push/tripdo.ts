@@ -23,7 +23,7 @@ import type { Env } from '../types.ts';
 import { type Plan, type DayRecord, type TripUpdate, endOfDayMs, sgtDate } from '../answer/trip.ts';
 import type { MeDeps } from '../accounts/me.ts';
 import { tripCardFor } from '../accounts/me.ts';
-import { type Delivered, nudgeUser, pushAudience, retryLiveStart, updateLive } from './push.ts';
+import { type AnswerIn, type Delivered, nudgeUser, pushAudience, retryLiveStart, updateLive } from './push.ts';
 import { type LiveActivityState, apnsEnabled, liveActivityState } from './apns.ts';
 import { type Lang, withLang } from '../i18n.ts';
 import { logTripWake } from '../ops/analytics.ts';
@@ -164,7 +164,11 @@ export class Trip {
       // Only ever sooner: a device refreshing after a moment the object still
       // owes a push for (say, "due") mustn't move that wake past it.
       const pending = await this.storage.get<number>('wakeAt');
-      const at = pending !== undefined ? Math.min(pending, u.watch.at) : u.watch.at;
+      // Nor sooner than the gap after the last wake: with several devices
+      // refreshing, a sliding leave-by would otherwise wake it on each request.
+      const last = await this.storage.get<LastWake>('lastWake');
+      const asked = last ? Math.max(u.watch.at, last.at + MIN_WAKE_GAP_MS) : u.watch.at;
+      const at = pending !== undefined ? Math.min(pending, asked) : asked;
       if (at !== pending) await this.storage.put('wakeAt', at);
       // The wake actually pending, so the Worker can tell whether asking
       // again would bring it any sooner (needsWatch).
@@ -280,10 +284,11 @@ export class Trip {
     const deps: MeDeps = { collectArrivals: collect, answerFor: (e, c, i, l, n) => answerFor(e, c, i, l, n, collect) };
     // Worded for the iPhones (their notifications and Live Activities): in
     // the account's language, or the latest iPhone's when it follows each
-    // device. Another iPhone in the other language gets the card worded
-    // again for it (answerIn), without saving plans a second time.
+    // device, and in 12-hour times if an iPhone shows them, unless the
+    // account chose. Another iPhone in the other language or clock gets the
+    // card worded again for it (answerIn), without saving plans a second time.
     const lang: Lang = audience.iphoneLang ?? 'en';
-    const card = await withLang(lang, () => tripCardFor(env, ctx, deps, userId, day, nowMs, savePlan));
+    const card = await withLang(lang, () => tripCardFor(env, ctx, deps, userId, day, nowMs, savePlan, audience.iphoneH12));
     await Promise.allSettled(plans);
     const last = (await this.storage.get<Pushed>('pushed')) ?? null;
     const apns = apnsEnabled(env) && audience.lives > 0;
@@ -326,11 +331,12 @@ export class Trip {
     const changed = last
       ? last.key !== now.key || last.phase !== now.phase || Boolean(last.gone) !== Boolean(now.gone)
       : now.phase !== 'idle';
-    // The card worded again for an iPhone in the other language (plans aren't saved twice).
-    const answerIn = (l: Lang) =>
-      withLang(l, () => tripCardFor(env, ctx, { answerFor, collectArrivals }, userId, day, nowMs, async () => {})).then(
+    // The card worded again for an iPhone in the other language or clock (plans aren't saved twice).
+    const answerIn: AnswerIn = (l, h12) =>
+      withLang(l, () => tripCardFor(env, ctx, { answerFor, collectArrivals }, userId, day, nowMs, async () => {}, h12)).then(
         (c) => c?.answer ?? null,
       );
+    const clockChosen = card.clockChosen;
     // A push due that reached no device: tried again at the next wake.
     let unsent = false;
     // A Live Activity's start that didn't go, tried again on its own while
@@ -339,7 +345,7 @@ export class Trip {
       const out = await retryLiveStart(
         env,
         userId,
-        { answer: card.answer, lang, answerIn, startedFor: new Set(now.started.sessions) },
+        { answer: card.answer, lang, answerIn, clockChosen, startedFor: new Set(now.started.sessions) },
         nowMs,
       );
       now.started = withStarts(now.started, out);
@@ -366,6 +372,7 @@ export class Trip {
           answer: card.answer,
           lang,
           answerIn,
+          clockChosen,
           tripOver: card.key === null,
           phaseChanged: last?.phase !== now.phase,
           startLive,
@@ -390,7 +397,7 @@ export class Trip {
       const out = await updateLive(
         env,
         userId,
-        { answer: card.answer, lang, answerIn },
+        { answer: card.answer, lang, answerIn, clockChosen },
         card.key === null || live.phase === 'arrived' ? 'end' : 'update',
         nowMs,
       );

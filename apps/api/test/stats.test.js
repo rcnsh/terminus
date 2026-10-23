@@ -284,7 +284,11 @@ test('a request on the old address or an old path is counted by app and route, w
 
 test('the old address and paths are counted only while switched on', async () => {
   const ae = makeAnalytics();
-  const env = { ...makeEnv(makeKV(), ae) };
+  const kv = makeKV();
+  let reads = 0;
+  const get = kv.get;
+  kv.get = (k, type) => (k === 'config:collect:legacy' && reads++, get(k, type));
+  const env = { ...makeEnv(kv, ae), HEALTH_TOKEN: 'op' };
   const call = async (url, headers) => {
     const ctx = makeCtx();
     const res = await worker.fetch(new Request(url, { headers }), env, ctx);
@@ -293,8 +297,11 @@ test('the old address and paths are counted only while switched on', async () =>
   };
   const app = { 'x-terminus-client': 'mac/3.2.0' };
   await call('https://terminus.rcn.sh/api/health', app);
+  await call('https://terminus.rcn.sh/api/health', app);
   assert.equal(ae.rows('legacy').length, 0, 'off');
-  await env.KV.put('config:collect:legacy', 'on');
+  assert.equal(reads, 1, 'the switch is read once a minute, not on every old request');
+  // Turned on from the dashboard: counted from the next request, not a minute later.
+  await send(env, '/api/admin/collect', { method: 'POST', body: { name: 'legacy', on: true }, headers: { 'x-health-token': 'op' } });
   await call('https://terminus.rcn.sh/api/health?x=1', app);
   assert.equal((await call('https://bus.example.test/next', app)).status, 426);
   await call('https://bus.example.test/api/health', app);
@@ -366,10 +373,21 @@ test('the settings are read from the accounts used this month, written once a Si
     )
     .bind('s1', 'u1', 'device', null, now - 9 * DAY, now - DAY, null, 'android', 'android/3.6.0', 'fcm')
     .run();
+  for (const [hash, push] of [
+    ['s2', 'apns:abcd'],
+    ['s3', null],
+  ])
+    await db
+      .prepare(
+        'INSERT INTO sessions (token_hash, user_id, kind, name, created, last_seen, expires, platform, client, push_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      )
+      .bind(hash, 'u1', 'device', null, now - 9 * DAY, now - DAY, null, 'ios', 'ios/3.6.1', push)
+      .run();
   const rows = await readSettings(db, now);
   const find = (setting, value) => rows.find((r) => r.setting === setting && r.value === value);
   assert.deepEqual(find('publicBuses', 'on'), { setting: 'publicBuses', value: 'on', n: 1, of: 1 }, 'only the account used this month');
   assert.deepEqual(find('notifications', 'android'), { setting: 'notifications', value: 'android', n: 1, of: 1 });
+  assert.deepEqual(find('notifications', 'ios'), { setting: 'notifications', value: 'ios', n: 1, of: 2 }, 'iPhones, through APNs');
   assert.equal(await recordSettings(env, now), false, 'off');
   await env.KV.put('config:collect:settings', 'on');
   assert.equal(await recordSettings(env, now), true);

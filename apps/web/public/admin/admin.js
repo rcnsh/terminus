@@ -38,11 +38,14 @@ function remember(t) {
 }
 
 let memory = null;
+/** Bumped by forget(): a stats reply asked for before then is dropped, not shown with the session gone. */
+let session = 0;
 
 /** Drops the token, from the tab and from this page. */
 function forget() {
   remember(null);
   memory = null;
+  session++;
 }
 
 const signedOut = (msg = '') => view.set({ locked: true, msg, stats: null, note: '', loading: false, at: 0 });
@@ -52,12 +55,14 @@ async function load() {
   if (!t) return signedOut();
   if (view.get().loading) return undefined;
   view.set((v) => ({ ...v, loading: true }));
+  const asked = session;
   // Given up on after a while: a hung call would leave old stats up with no word of it.
   const res = await fetch('/api/admin/stats', {
     headers: { 'x-health-token': t },
     cache: 'no-store',
     signal: AbortSignal.timeout?.(20_000),
   }).catch(() => null);
+  if (asked !== session || (memory ?? token()) !== t) return undefined;
   if (!res) return view.set((v) => ({ ...v, loading: false, note: "Couldn't reach terminus." }));
   if (res.status === 404) {
     forget();
@@ -65,7 +70,9 @@ async function load() {
   }
   if (!res.ok) return view.set((v) => ({ ...v, loading: false, note: `The stats answered ${res.status}.` }));
   try {
-    view.set({ locked: false, msg: '', stats: await res.json(), note: '', loading: false, at: Date.now() });
+    const stats = await res.json();
+    if (asked !== session) return undefined;
+    view.set({ locked: false, msg: '', stats, note: '', loading: false, at: Date.now() });
   } catch (err) {
     // A stats reply this page can't read: say so, not a blank page.
     view.set((v) => ({ ...v, loading: false, note: `Couldn't show the stats: ${err.message}` }));
@@ -349,7 +356,11 @@ function Admin() {
     document.body.classList.toggle('dash-on', Boolean(v.stats));
   }, [Boolean(v.stats)]);
   if (v.locked) return html`<${Unlock} msg=${v.msg} />`;
-  if (!v.stats) return html`<${GateCard} sub=${v.note || 'Loading…'} />`;
+  // The first load failed: the dashboard's own Refresh isn't drawn yet, and nothing tries again by itself.
+  if (!v.stats)
+    return html`<${GateCard} sub=${v.note || 'Loading…'}>
+      ${v.note && html`<button type="button" class="btn" onClick=${load} disabled=${v.loading}>Try again</button>`}
+    <//>`;
   return html`<${Dashboard} v=${v} />`;
 }
 

@@ -57,7 +57,6 @@ struct TripAttributes: Sendable {
 
 extension TripAttributes.ContentState {
     private static func date(_ s: Int?) -> Date? { s.map { Date(timeIntervalSince1970: TimeInterval($0)) } }
-    private static func secs(_ d: Date?) -> Int? { d.map { Int($0.timeIntervalSince1970.rounded()) } }
 
     var leaveDate: Date? { Self.date(leaveAt) }
     var departDate: Date? { Self.date(departAt) }
@@ -94,13 +93,21 @@ extension TripAttributes.ContentState {
         return (departDate ?? leaveDate).map { $0.addingTimeInterval(Self.unheardS) }
     }
 
-    /// The state for `answer`, or nil when there's no trip under way. One
-    /// function, the same mapping the server makes from the card.
+    /// The state for `answer`, or nil when there's no trip under way: the
+    /// server's (liveActivityState in apns.ts), rule for rule, since the app
+    /// and the server's pushes update the same activity in turn
+    /// (fixtures/live-activity.json holds the two together).
     static func of(_ a: NextAnswer) -> Self? {
         guard let card = a.card, TripPrefs.tripPhases.contains(card.phase), a.mode != "rest" else { return nil }
-        let ride = card.phase == "riding" ? card.ride : nil
+        let ride = card.ride
         let j = card.journey
         let bus = j?.bus
+        let leave = a.leave
+        let svc = ride?.svc ?? bus?.svc ?? leave?.svc
+        let onBoard = card.phase == "riding" || card.phase == "arrived"
+        func epoch(_ iso: String?) -> Int? { iso.flatMap(parseISODate).map { Int($0.timeIntervalSince1970.rounded(.down)) } }
+        let off: String? =
+            if let ride { ride.stops.last?.name } else if let j { j.off ?? j.toStop } else { leave?.off ?? leave?.toStop }
         return Self(
             phase: card.phase,
             phaseText: card.phaseText,
@@ -108,17 +115,17 @@ extension TripAttributes.ContentState {
             line: card.line ?? a.label,
             glance: card.glance ?? "",
             to: j?.place ?? a.dest?.label,
-            svc: ride?.svc ?? bus?.svc,
-            color: bus.flatMap { ride == nil || $0.svc == ride?.svc ? $0.color : nil },
-            stop: bus?.stop,
-            off: ride?.stops.last?.name ?? j.flatMap { $0.toStop.isEmpty ? nil : $0.toStop },
-            leaveAt: secs(a.leaveAt),
-            departAt: secs(ride?.boardAt ?? j?.boardDate),
-            arriveAt: secs(ride?.arriveAt),
-            estimated: a.leave?.estimated ?? (j.map { !$0.live } ?? false),
+            svc: svc,
+            color: svc == nil ? nil : bus?.svc == svc ? bus?.color : ride?.color,
+            stop: ride.map { $0.stops.first?.name } ?? bus?.stop ?? leave?.stop,
+            off: off,
+            leaveAt: onBoard ? nil : epoch(leave?.at),
+            departAt: ride.map { epoch($0.board) } ?? epoch(j?.boardAt ?? leave?.board),
+            arriveAt: ride.map { epoch($0.arrive) } ?? epoch(leave?.arrive),
+            estimated: leave?.estimated ?? false,
             gone: card.gone,
             late: card.late,
-            staleAt: secs(a.staleAt)
+            staleAt: epoch(card.staleAt)
         )
     }
 }

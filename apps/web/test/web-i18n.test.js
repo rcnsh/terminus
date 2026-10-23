@@ -21,38 +21,29 @@ function zh() {
 
 // The privacy policy has a page of its own in Chinese (privacy/zh/), checked below.
 const PAGES = ['index.html', 'account/index.html', 'app/index.html', 'pair/index.html', 'status/index.html', 'not-found/index.html'];
-const SCRIPTS = [
-  'account/app.js',
-  'account/dom.js',
-  'account/daylight.js',
-  'account/livery.js',
-  'account/sky.js',
-  'account/settings.js',
-  'account/settings-pages.js',
-  'account/onboarding.js',
-  'account/preview.js',
-  'account/journey.js',
-  'account/profile.js',
-  'account/search.js',
-  'account/search-box.js',
-  'app/app.js',
-  'app/buses.js',
-  'app/map.js',
-  'app/offline.js',
-  'app/timing.js',
-  'assets/landing.js',
-  'assets/sky-page.js',
-  'assets/theme.js',
-  'assets/ui.js',
-  'status/status.js',
-  'status/outages.js',
-  'pair/pair.js',
-];
+/**
+ * Every script of the site, so a new one is checked without being listed:
+ * all but vendor/ (others' code), admin/ (the operator's dashboard, English
+ * only) and zh.js (the translations themselves).
+ */
+function scriptsOf(dir = '') {
+  return fs.readdirSync(new URL(dir, PUBLIC), { withFileTypes: true }).flatMap((e) => {
+    const path = `${dir}${e.name}`;
+    if (e.isDirectory()) return ['vendor', 'admin'].includes(e.name) && !dir ? [] : scriptsOf(`${path}/`);
+    return path.endsWith('.js') && path !== 'assets/zh.js' ? [path] : [];
+  });
+}
+const SCRIPTS = scriptsOf();
 
 // Names and codes that read the same in Chinese: places and module codes too,
 // as on the signs (the landing page's pictures of the app).
 const SAME =
   /^(terminus|termi|nus|API|Android|Mac|English|中文|Apple|iPhone|PGP|UTown|Kent Ridge MRT|[A-Z]{2,3}\d{4}[A-Z]?|K7QX4M|x-api-key|you@u\.nus\.edu|terminus\.run\/account|------|https:\/\/nusmods\.com\/\S*|[-–·…×↻→\d\s:&;©]+)$/;
+
+test('the checks below read every script of the site, not a list kept by hand', () => {
+  for (const f of ['app/board.js', 'app/pull.js', 'account/app.js', 'status/status.js']) assert.ok(SCRIPTS.includes(f), f);
+  assert.ok(!SCRIPTS.some((f) => /^(vendor|admin)\//.test(f) || f === 'assets/zh.js'));
+});
 
 test('every t() string in the scripts is translated', () => {
   const dict = zh();

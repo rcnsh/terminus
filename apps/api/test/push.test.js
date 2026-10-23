@@ -393,6 +393,35 @@ test("a tap on an English device reaches a Chinese iPhone in Chinese; the accoun
   assert.equal(pushLang(), 'zh');
 });
 
+test("the Trip object words each iPhone's alert and Live Activity in its own clock, unless the account chose one", async () => {
+  const { apple, wrap, extra } = await fakeApple();
+  const { call, cookie, phone, mac, next, wakeUntil } = await setup({ push: false, wrap, extra });
+  const OTHER = `apns:${'12'.repeat(32)}`;
+  const OTHER_LIVE = `apnsla:${'34'.repeat(32)}`;
+  // Two iPhones following the system's clock: one 12-hour, one 24-hour.
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: APNS, h12: true } });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: LIVE } });
+  await call('/api/me/push', { method: 'POST', token: mac, body: { token: OTHER, h12: false } });
+  await call('/api/me/push', { method: 'POST', token: mac, body: { token: OTHER_LIVE } });
+  await next(phone);
+  await wakeUntil(() => apple.filter((p) => p.body.phase === 'due').length === 2);
+  const to = (token, type) => apple.findLast((p) => p.type === type && p.url.endsWith(token.split(':')[1]));
+  const words = (p) => (p.type === 'alert' ? p.body.aps.alert.body : p.body.aps['content-state'].glance);
+  const AMPM = /\d\s?[ap]\.?m?\b/i;
+  assert.match(words(to(APNS, 'alert')), AMPM, '12-hour on the 12-hour iPhone');
+  assert.match(words(to(LIVE, 'liveactivity')), AMPM);
+  assert.doesNotMatch(words(to(OTHER, 'alert')), AMPM, '24-hour on the other');
+  assert.doesNotMatch(words(to(OTHER_LIVE, 'liveactivity')), AMPM);
+  assert.match(words(to(OTHER_LIVE, 'liveactivity')), /\d\d:\d\d/);
+  // The account picks 24-hour: every iPhone gets it.
+  await call('/api/me/profile', { method: 'PUT', cookie, body: { ...PROFILE, clock: '24' } });
+  apple.length = 0;
+  await call('/api/me/signal', { method: 'POST', token: phone, body: { kind: 'boarded' } });
+  const live = apple.filter((p) => p.type === 'liveactivity');
+  assert.ok(live.length > 0);
+  for (const p of live) assert.doesNotMatch(words(p), AMPM);
+});
+
 test('with no class left today, a running Live Activity is ended', async () => {
   const { apple, wrap, extra } = await fakeApple();
   const { call, cookie, phone, next, wakeUntil, alarm, clock, TRIPS } = await setup({ push: false, wrap, extra });
@@ -410,6 +439,29 @@ test('with no class left today, a running Live Activity is ended', async () => {
   assert.equal(end[0].body.aps.event, 'end');
   // Noted as ended, so a later wake doesn't end it again.
   assert.equal([...TRIPS.instances.values()][0].storage._map.get('pushed').live, undefined);
+});
+
+test("a tap on another device that ends the trip ends the iPhone's Live Activity at once", async () => {
+  const { apple, wrap, extra } = await fakeApple();
+  const { call, phone, tablet, next, wakeUntil } = await setup({ push: false, wrap, extra });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: APNS } });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: LIVE } });
+  await next(phone);
+  await wakeUntil(() => apple.some((p) => p.type === 'liveactivity'));
+  // "Not on campus today" on the tablet: the day's only class is off.
+  apple.length = 0;
+  await call('/api/me/signal', { method: 'POST', token: tablet, body: { kind: 'away' } });
+  assert.deepEqual(
+    apple.filter((p) => p.type === 'liveactivity').map((p) => p.body.aps.event),
+    ['end'],
+  );
+  // "Back on campus": the trip again, and no Live Activity to end.
+  apple.length = 0;
+  await call('/api/me/signal', { method: 'POST', token: tablet, body: { kind: 'back' } });
+  assert.deepEqual(
+    apple.filter((p) => p.type === 'liveactivity'),
+    [],
+  );
 });
 
 test('a Live Activity whose end could not be sent is ended at a later wake', async () => {
