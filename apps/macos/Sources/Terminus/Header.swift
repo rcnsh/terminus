@@ -44,12 +44,13 @@ struct Header: View {
             } label: {
                 Image(systemName: "arrow.clockwise")
                     .font(.system(size: 12, weight: .semibold))
-                    .rotationEffect(.degrees(model.loading && !reduceMotion ? 360 : 0))
+                    // Only the turn repeats: an animation on the whole image
+                    // also repeats any move of it that lands in the same
+                    // update, and the arrow bobs up and down while it spins.
+                    .animation(model.loading && !reduceMotion ? .linear(duration: 0.8).repeatForever(autoreverses: false) : .default) {
+                        $0.rotationEffect(.degrees(model.loading && !reduceMotion ? 360 : 0))
+                    }
                     .opacity(model.loading && reduceMotion ? 0.4 : 1)
-                    .animation(
-                        model.loading && !reduceMotion ? .linear(duration: 0.8).repeatForever(autoreverses: false) : .default,
-                        value: model.loading
-                    )
                     .frame(width: 28, height: 28)
                     .background(Circle().fill(.primary.opacity(0.06)))
             }
