@@ -164,7 +164,11 @@ export class Trip {
       // Only ever sooner: a device refreshing after a moment the object still
       // owes a push for (say, "due") mustn't move that wake past it.
       const pending = await this.storage.get<number>('wakeAt');
-      const at = pending !== undefined ? Math.min(pending, u.watch.at) : u.watch.at;
+      // Nor sooner than the gap after the last wake: with several devices
+      // refreshing, a sliding leave-by would otherwise wake it on each request.
+      const last = await this.storage.get<LastWake>('lastWake');
+      const asked = last ? Math.max(u.watch.at, last.at + MIN_WAKE_GAP_MS) : u.watch.at;
+      const at = pending !== undefined ? Math.min(pending, asked) : asked;
       if (at !== pending) await this.storage.put('wakeAt', at);
       // The wake actually pending, so the Worker can tell whether asking
       // again would bring it any sooner (needsWatch).
