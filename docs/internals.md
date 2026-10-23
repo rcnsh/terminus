@@ -673,7 +673,8 @@ object at the change and once the second bus has gone.
     from one host is refused by the other (`BadDeviceToken`), and dropped.
 
   Hex of 32 to 255 bytes; anything else starting `apns` is a 400. A session
-  keeps its latest of each; the same token on another session moves there;
+  keeps its latest of each; the same token on another session moves there
+  (an `apns:` one leaves that session none of the three);
   `DELETE /api/me/push` forgets them all. Registering also notes the language
   the iPhone's notifications are worded in (`sessions.push_lang`): the
   account's choice, else the request's. With the `apns:` token the app

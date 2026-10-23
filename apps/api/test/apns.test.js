@@ -832,6 +832,18 @@ test('setPushToken keeps the language an iPhone registered in, and forgets it wi
   assert.equal(db._db.prepare("SELECT push_lang FROM sessions WHERE token_hash = 'h0'").get().push_lang, null);
 });
 
+test("an iPhone's token moving to another session takes its Live Activity's tokens off the old one", async () => {
+  const { db } = await setup([{ push: `apns:${HEX}`, live: `apnsla:${LIVE_HEX}`, start: `apnsstart:${START_HEX}`, lang: 'zh' }, {}]);
+  const tokens = (h) => ({ ...db._db.prepare('SELECT push_token, live_token, start_token FROM sessions WHERE token_hash = ?').get(h) });
+  // The same session registering again keeps them.
+  await setPushToken(db, 'h0', `apns:${HEX}`, 'zh');
+  assert.deepEqual(tokens('h0'), { push_token: `apns:${HEX}`, live_token: `apnsla:${LIVE_HEX}`, start_token: `apnsstart:${START_HEX}` });
+  // Signed in again on the phone: the old session is pushed nothing more.
+  await setPushToken(db, 'h1', `apns:${HEX}`, 'en');
+  assert.deepEqual(tokens('h0'), { push_token: null, live_token: null, start_token: null });
+  assert.deepEqual(tokens('h1'), { push_token: `apns:${HEX}`, live_token: null, start_token: null });
+});
+
 test('a connection Apple refuses (no HTTP/2, a reset, a timeout) counts as failed, drops no token, and pauses like a 5xx', async () => {
   const { env, row, sent } = await setup([{ push: `apns:${HEX}`, live: `apnsla:${LIVE_HEX}` }, { push: `apns:${HEX2}` }], {
     apple: () => {

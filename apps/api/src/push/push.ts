@@ -703,8 +703,8 @@ export async function pushDevices(env: Env, userId: string): Promise<number> {
  * turned off (`live` false) forgets its token to start one, so none is
  * started by push. One saying no Live Activity of its runs (`activity`
  * false: it ended, on the phone) forgets that activity's token, so it no
- * longer counts as running. A token lives on one session only. Forgetting it
- * forgets the Live Activity's tokens too.
+ * longer counts as running. A token lives on one session only: moved, or
+ * forgotten, it takes the Live Activity's tokens with it.
  */
 export async function setPushToken(
   db: D1Database,
@@ -716,9 +716,15 @@ export async function setPushToken(
   activity: boolean | null = null,
 ): Promise<void> {
   const stmts = [];
+  // The phone's token on another session (signed in again): that one is
+  // pushed nothing more, its Live Activity's tokens included.
   if (pushToken)
     stmts.push(
-      db.prepare('UPDATE sessions SET push_token = NULL, push_lang = NULL, push_alerts = NULL WHERE push_token = ?').bind(pushToken),
+      db
+        .prepare(
+          'UPDATE sessions SET push_token = NULL, push_lang = NULL, push_alerts = NULL, live_token = NULL, start_token = NULL WHERE push_token = ? AND token_hash != ?',
+        )
+        .bind(pushToken, tokenHash),
     );
   stmts.push(
     pushToken
