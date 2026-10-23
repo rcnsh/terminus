@@ -22,7 +22,11 @@ enum Spoken {
         if a.isClassPlan && !old {
             return sentences(
                 a.card?.phaseText,
-                a.dest.map { L("%@, starts %@", $0.label, a.classAt.map(campusTime) ?? "") },
+                a.dest.map {
+                    $0.place == true
+                        ? L("%@, arrive by %@", $0.label, a.classAt.map(campusTime) ?? "")
+                        : L("%@, starts %@", $0.label, a.classAt.map(campusTime) ?? "")
+                },
                 a.leaveHeadline(now: now),
                 a.card?.catchLine,
                 a.card?.goNow,

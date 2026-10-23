@@ -226,7 +226,7 @@ struct WidgetFace {
         if let journey, !old { return trip(answer, journey, problem: problem, now: now) }
         if answer.isClassPlan {
             // An older server's class, or one whose times are old: when to leave leads.
-            let heading = [card?.phaseText, answer.dest?.label, answer.classAt.map { L("starts %@", campusTime($0)) }].compactMap { $0 }
+            let heading = [card?.phaseText, answer.dest?.label, answer.classAt.map(answer.startsAt)].compactMap { $0 }
                 .joined(separator: " · ")
             return WidgetFace(
                 heading: heading.isEmpty ? nil : heading,

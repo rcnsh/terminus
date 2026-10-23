@@ -21,6 +21,8 @@ struct NextAnswer: Decodable, Sendable {
         let to: String?
         let label: String
         let why: String?
+        /// A `class` that is a one-off trip or a favourite at its usual time: planned like one, not worded as one.
+        let place: Bool?
     }
     struct Timing: Decodable, Sendable {
         let status: String?
@@ -108,6 +110,8 @@ struct NextAnswer: Decodable, Sendable {
     var planChanges: Date? { refreshAt.flatMap(parseISODate) }
 
     var isClassPlan: Bool { card?.kind == "class" }
+    /// "starts 10:00" for a class; "arrive by 19:00" for a one-off trip or a usual time, which isn't one.
+    func startsAt(_ c: Date) -> String { dest?.place == true ? L("arrive by %@", campusTime(c)) : L("starts %@", campusTime(c)) }
     /// No classes today (or none left): nothing to catch.
     var isFree: Bool { mode == "free" }
     var phase: String { card?.phase ?? "idle" }

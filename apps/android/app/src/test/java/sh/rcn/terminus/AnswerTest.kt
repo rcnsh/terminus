@@ -584,6 +584,18 @@ class AnswerTest {
         assertEquals("To KR MRT", JourneyText.to(p, p.card!!.journey!!) { "10:00" })
     }
 
+    /** A one-off trip is planned like a class but isn't one: the app's own words (an older server's card has no title) say arrive by. */
+    @Test
+    fun aOneOffTripSaysArriveByNotStarts() {
+        val untitled = { name: String -> goldenJson(name).apply { getJSONObject("card").getJSONObject("journey").remove("title") } }
+        val once = NextAnswer.parse(untitled("once-from-home"))
+        assertTrue(once.destPlace)
+        assertEquals("To COM 3 · arrive by 12:00", JourneyText.to(once, once.card!!.journey!!) { "12:00" })
+        val lesson = NextAnswer.parse(untitled("class-bus"))
+        assertFalse(lesson.destPlace)
+        assertEquals("To GEA1000 @ UTown · starts 10:00", JourneyText.to(lesson, lesson.card!!.journey!!) { "10:00" })
+    }
+
     /**
      * A newer server's phase and quality this version doesn't know: the answer still shows, no trip is followed for it, and its times are
      * never called live.

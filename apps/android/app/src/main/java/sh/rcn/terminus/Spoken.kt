@@ -39,7 +39,9 @@ object Spoken {
         if (answer.isClassPlan && !old) {
             return sentences(
                 answer.phaseText,
-                answer.destLabel?.let { L.s(R.string.a11y_starts, it, answer.classAtMs?.let(clock).orEmpty()) },
+                answer.destLabel?.let {
+                    L.s(if (answer.destPlace) R.string.a11y_arrive_by else R.string.a11y_starts, it, answer.classAtMs?.let(clock).orEmpty())
+                },
                 answer.leaveHeadline(now),
                 answer.catchLine,
                 answer.goNowLine,

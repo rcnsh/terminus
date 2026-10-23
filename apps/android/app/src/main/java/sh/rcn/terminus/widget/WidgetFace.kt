@@ -114,7 +114,7 @@ internal data class Face(
                     Face(
                         // A class with no journey (worked out here for an older server), or one whose times are old: when to leave leads.
                         heading =
-                            listOfNotNull(answer.phaseText, answer.destLabel, answer.classAtMs?.let { L.s(R.string.starts_at, clock(it)) })
+                            listOfNotNull(answer.phaseText, answer.destLabel, answer.classAtMs?.let { L.s(answer.startsRes, clock(it)) })
                                 .joinToString(" · "),
                         headline = answer.leaveHeadline(now).orEmpty(),
                         late = answer.leaveLate && !old,

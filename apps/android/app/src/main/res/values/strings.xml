@@ -77,6 +77,7 @@
     <string name="a11y_old">These times are old</string>
     <string name="a11y_on_the_to">On the %1$s, to %2$s</string>
     <string name="a11y_starts">%1$s, starts %2$s</string>
+    <string name="a11y_arrive_by">%1$s, arrive by %2$s</string>
     <string name="a11y_to">To %1$s</string>
     <string name="a11y_map">Campus map. For stops and buses as a list, use the Buses tab.</string>
     <string name="a11y_show_list">Show as list</string>
@@ -393,6 +394,7 @@
     <string name="starting">Starting…</string>
     <string name="starts">Starts</string>
     <string name="starts_at">starts %1$s</string>
+    <string name="arrive_by">arrive by %1$s</string>
     <string name="step_of">Step %1$d of %2$d</string>
     <string name="stop_suffix">%1$s stop</string>
     <string name="sunday">Sunday</string>

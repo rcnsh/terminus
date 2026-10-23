@@ -210,6 +210,7 @@
 "now" = "现在";
 "off at %@" = "在 %@ 下车";
 "starts %@" = "%@ 开始";
+"arrive by %@" = "%@ 前到";
 "terminus %@ is out" = "terminus %@ 已发布";
 "walk" = "步行";
 "Home after your last class" = "下课后回家";

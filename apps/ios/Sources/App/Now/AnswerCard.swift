@@ -268,7 +268,7 @@ struct ClassPlan: View {
         let a = answer
         if let at = a.leaveAt {
             let late = a.leaveLate
-            Text([a.dest?.label, a.classAt.map { L("starts %@", campusTime($0)) }].compactMap { $0 }.joined(separator: " · "))
+            Text([a.dest?.label, a.classAt.map(a.startsAt)].compactMap { $0 }.joined(separator: " · "))
                 .foregroundStyle(inks.muted)
             Text(a.leaveHeadline(now: now) ?? "")
                 .font(.system(size: 30 * scale, weight: .bold))

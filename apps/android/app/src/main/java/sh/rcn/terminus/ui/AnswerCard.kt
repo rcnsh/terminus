@@ -445,7 +445,7 @@ internal fun ClassPlan(answer: NextAnswer) {
         }
     val late = answer.leaveLate
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    val starts = answer.classAtMs?.let { stringResource(R.string.starts_at, fmt(it)) }
+    val starts = answer.classAtMs?.let { stringResource(answer.startsRes, fmt(it)) }
     Text(
         listOfNotNull(answer.destLabel, starts).joinToString(" · "),
         color = muted,

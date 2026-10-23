@@ -46,6 +46,8 @@ data class NextAnswer(
     val leaveNote: String? = null,
     /** For a class, when it starts, epoch ms. */
     val classAtMs: Long? = null,
+    /** A class plan that is a one-off trip or a favourite at its usual time (`dest.place`): [classAtMs] is when to arrive by. */
+    val destPlace: Boolean = false,
     /** Display-ready text from the server; null when there's no card. */
     val card: Card? = null,
     /** The user's walking speed (m/s, from their pace), for walk times the app works out itself. */
@@ -54,6 +56,10 @@ data class NextAnswer(
     /** The server's card (card.ts): every line below is worded there, once. */
     val isClassPlan: Boolean
         get() = card?.kind == "class"
+
+    /** "starts 10:00" for a class; "arrive by 19:00" for a one-off trip or a usual time, which isn't one. */
+    val startsRes: Int
+        get() = if (destPlace) R.string.arrive_by else R.string.starts_at
 
     /** No classes today (or none left): nothing to catch, said plainly. */
     val isFree: Boolean
@@ -149,6 +155,7 @@ data class NextAnswer(
                 leaveEstimated = o.optJSONObject("leave")?.optBoolean("estimated", false) ?: false,
                 leaveNote = o.optJSONObject("leave")?.optStringOrNull("note"),
                 classAtMs = o.optJSONObject("timing")?.optStringOrNull("classAt")?.let(::parseInstant),
+                destPlace = dest?.optBoolean("place", false) ?: false,
                 timingStatus = o.optJSONObject("timing")?.optStringOrNull("status"),
                 timingText = o.optJSONObject("timing")?.optStringOrNull("text"),
                 card = o.optJSONObject("card")?.let { lenient { Card.parse(it) } },

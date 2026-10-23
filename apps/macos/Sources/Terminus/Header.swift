@@ -168,7 +168,7 @@ struct Header: View {
         // A card with no heading has nowhere to go; the rest is worked out here for an older server.
         if a.card != nil { return L("Next bus") }
         guard let d = a.dest else { return L("Next bus") }
-        if a.isClassPlan, let c = a.classAt { return "\(d.label) · \(L("starts %@", campusTime(c)))" }
+        if a.isClassPlan, let c = a.classAt { return "\(d.label) · \(a.startsAt(c))" }
         let why =
             switch d.why {
             case "class": L("Next class")
