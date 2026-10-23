@@ -242,9 +242,9 @@ export function Journey({ a, style, sky = false, lead = null, steps = null }) {
   return html`
     <div class=${`journey ${style}`}>
       <${body} a=${a} j=${j} now=${now} late=${late} top=${top} />
-      ${steps}
       ${small && html`<div class="small-print">${small}</div>`}
       ${j.bus && !j.live && a.card.quality && html`<div class="note">${a.card.quality}</div>`}
+      ${steps}
     </div>
   `;
 }

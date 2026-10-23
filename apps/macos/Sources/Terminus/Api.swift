@@ -112,13 +112,16 @@ struct NextAnswer: Decodable {
         /// The planned bus has left and nothing says whether you're on it:
         /// `line` says so and gives the next way there. Never "Leave now".
         let gone: Bool
+        /// Earlier bus / Later bus (and Best bus once moved), on a trip by
+        /// bus not yet set off on; a click sends one to /api/me/step.
+        let step: Step?
 
         static let kinds: Set = ["class", "trip", "nearby", "rest", "arrived", "setup", "free"]
 
         enum CodingKeys: String, CodingKey {
             case kind, staleAt, crowd, quality, leaveBy, leaveVia, `catch`, arrive, late, goNow, note, estimate, phase, phaseText, glance,
                 line, actions, warning, nextChangeAt, remind, suggestion, notice, upcoming
-            case title, heading, remindAt, journey, ride, gone
+            case title, heading, remindAt, journey, ride, gone, step
         }
 
         init(from d: Decoder) throws {
@@ -153,6 +156,33 @@ struct NextAnswer: Decodable {
             journey = try? c.decodeIfPresent(Journey.self, forKey: .journey)
             ride = try? c.decodeIfPresent(Ride.self, forKey: .ride)
             gone = (try? c.decodeIfPresent(Bool.self, forKey: .gone)) == true
+            step = try? c.decodeIfPresent(Step.self, forKey: .step)
+        }
+    }
+
+    /// The buses either side of the one shown, worded on the server. A nil
+    /// target is a button shown greyed: there's no bus that way.
+    struct Step: Decodable, Equatable {
+        let trip: String
+        let earlier: StepTarget?
+        let later: StepTarget?
+        /// The bus shown is one stepped to, not the best: Best bus goes back.
+        let moved: Bool
+        let earlierLabel: String
+        let laterLabel: String
+        let bestLabel: String
+
+        enum CodingKeys: String, CodingKey { case trip, earlier, later, moved, earlierLabel, laterLabel, bestLabel }
+
+        init(from d: Decoder) throws {
+            let c = try d.container(keyedBy: CodingKeys.self)
+            trip = try c.decode(String.self, forKey: .trip)
+            earlier = try? c.decodeIfPresent(StepTarget.self, forKey: .earlier)
+            later = try? c.decodeIfPresent(StepTarget.self, forKey: .later)
+            moved = (try? c.decodeIfPresent(Bool.self, forKey: .moved)) == true
+            earlierLabel = try c.decode(String.self, forKey: .earlierLabel)
+            laterLabel = try c.decode(String.self, forKey: .laterLabel)
+            bestLabel = try c.decode(String.self, forKey: .bestLabel)
         }
     }
 
@@ -824,6 +854,17 @@ struct CardAction: Decodable, Hashable {
     let trip: String
 }
 
+/// A bus `card.step` offers, sent back to /api/me/step as it came.
+struct StepTarget: Decodable, Hashable {
+    let svc: String
+    let stop: String
+    let board: String
+}
+
+enum StepDirection: String {
+    case earlier, later
+}
+
 /// Something terminus learned and offers to change; `id` goes back to /api/me/choice.
 struct Suggestion: Decodable, Hashable {
     let id: String
@@ -1198,6 +1239,14 @@ struct Api {
     func signal(_ action: CardAction) async throws -> NextAnswer {
         let body: [String: Any] = ["kind": action.id, "trip": action.trip]
         return try await answer("POST", "/api/me/signal", query: Self.h12, json: try JSONSerialization.data(withJSONObject: body))
+    }
+
+    /// To the earlier or later bus `card.step` offered (`to` as it came), or
+    /// back to the best one (`to` nil); answers with the trip's new answer.
+    func step(trip: String, to: StepTarget?, dir: StepDirection?) async throws -> NextAnswer {
+        var body: [String: Any] = ["trip": trip, "to": to.map { ["svc": $0.svc, "stop": $0.stop, "board": $0.board] } ?? NSNull()]
+        if let dir { body["dir"] = dir.rawValue }
+        return try await answer("POST", "/api/me/step", query: Self.h12, json: try JSONSerialization.data(withJSONObject: body))
     }
 
     /// A suggestion accepted or turned down.

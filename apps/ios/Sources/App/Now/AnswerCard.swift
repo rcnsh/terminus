@@ -380,8 +380,13 @@ struct NowGround: View {
                 CardActions(answer: a)
             case .journey(let a, let j):
                 JourneyGround(answer: a, journey: j, style: JourneyStyle.of(prefs.cardStyle), now: now)
+                StepBus(answer: a)
                 CardActions(answer: a)
-            case .classPlan(let a), .plain(let a, _):
+            case .classPlan(let a):
+                StepBus(answer: a)
+                CardActions(answer: a)
+            case .plain(let a, let old):
+                if !old { StepBus(answer: a) }
                 CardActions(answer: a)
             }
         }
@@ -429,6 +434,44 @@ struct DayDoneGround: View {
                 }
             }
         }
+    }
+}
+
+/// "‹ Earlier bus" and "Later bus ›" under the bus they change, and "Best
+/// bus" between them once you've moved, as the website has them. A button
+/// with no bus that way is greyed out, not hidden, so the row keeps its place.
+struct StepBus: View {
+    let answer: NextAnswer
+    @Environment(AppModel.self) private var app
+
+    var body: some View {
+        if let s = answer.card?.step {
+            HStack(spacing: 8) {
+                button("‹ \(s.earlierLabel)", spoken: s.earlierLabel, id: "step.earlier", enabled: s.earlier != nil) {
+                    app.step(s, to: s.earlier, dir: "earlier")
+                }
+                if s.moved {
+                    button(s.bestLabel, spoken: s.bestLabel, id: "step.best", enabled: true) { app.step(s, to: nil, dir: nil) }
+                }
+                button("\(s.laterLabel) ›", spoken: s.laterLabel, id: "step.later", enabled: s.later != nil) {
+                    app.step(s, to: s.later, dir: "later")
+                }
+            }
+            .disabled(app.signalling)
+            .padding(.top, 14)
+        }
+    }
+
+    private func button(_ label: String, spoken: String, id: String, enabled: Bool, action: @escaping () -> Void)
+        -> some View
+    {
+        Button(action: action) {
+            Text(label).lineLimit(1).minimumScaleFactor(0.75)
+        }
+        .buttonStyle(ChipButtonStyle(even: true))
+        .disabled(!enabled)
+        .accessibilityLabel(spoken)
+        .accessibilityIdentifier(id)
     }
 }
 

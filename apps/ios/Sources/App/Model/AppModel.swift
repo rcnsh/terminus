@@ -416,6 +416,43 @@ final class AppModel {
         }
     }
 
+    /// "Earlier bus", "Later bus" (`to` the bus the card offered) or "Best bus"
+    /// (`to` nil). The server answers for the trip stepped on: a favourite's or
+    /// a stop's own card, else the plan, which goes to the widgets as a signal's does.
+    func step(_ s: Step, to: StepTarget?, dir: String?) {
+        guard let token, !signalling else { return }
+        signalling = true
+        error = nil
+        let gen = session
+        let t = s.trip.hasPrefix("place:") || s.trip.hasPrefix("to:") ? target : .plan
+        let loc = Locator.shared.last
+        Task {
+            defer { if gen == session { signalling = false } }
+            do {
+                let a = try await Api(token: token).step(
+                    trip: s.trip, to: to, dir: dir, lat: loc?.coordinate.latitude, lon: loc?.coordinate.longitude)
+                guard gen == session else { return }
+                if t == .plan {
+                    applyPlan(a)
+                } else {
+                    answers[t] = a
+                    places = a.places
+                    fetchedAt = Date()
+                    answeredAt[key(t)] = Date()
+                }
+                await loadDay()
+            } catch let e as ApiError {
+                if e.status == 401 {
+                    rejected(token, reason: L("This phone was signed out of your account. Sign in again with your email."))
+                } else {
+                    error = e.message
+                }
+            } catch {
+                self.error = L("Offline")
+            }
+        }
+    }
+
     /// "Leave earlier" or "No thanks" on a suggestion; the card then comes back without it.
     func choose(_ s: Suggestion, accept: Bool) {
         guard let token, !signalling else { return }

@@ -253,6 +253,19 @@ struct Api: Sendable {
             try await send("POST", "/api/me/signal", query: Self.h12, json: try JSONSerialization.data(withJSONObject: body)))
     }
 
+    /// "Earlier bus" or "Later bus" (`to`, as the card offered it, with its
+    /// direction), or "Best bus" (`to` nil); answers like a signal, for that trip.
+    func step(trip: String, to: StepTarget?, dir: String?, lat: Double?, lon: Double?) async throws -> NextAnswer {
+        var body: [String: Any] = ["trip": trip, "to": to?.fields ?? NSNull()]
+        if let dir { body["dir"] = dir }
+        if let lat, let lon {
+            body["lat"] = lat
+            body["lon"] = lon
+        }
+        return try NextAnswer.decode(
+            try await send("POST", "/api/me/step", query: Self.h12, json: try JSONSerialization.data(withJSONObject: body)))
+    }
+
     /// A suggestion accepted or turned down.
     func choice(id: String, accept: Bool) async throws {
         _ = try await send(

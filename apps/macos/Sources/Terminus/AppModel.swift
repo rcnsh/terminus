@@ -410,16 +410,48 @@ final class AppModel {
         Task { await send(CardAction(id: "reset", label: "", trip: item.key), token: token) }
     }
 
+    /// Earlier bus, Later bus or Best bus (`to` nil) on the card. Kept for
+    /// the day on every device. On the plan the reply is the new plan, taken
+    /// as a signal's is; on another tab it's asked for again, from where the
+    /// Mac is, since the reply was worked out without a location.
+    func step(_ step: NextAnswer.Step, to: StepTarget?, dir: StepDirection?) {
+        guard !signalling, let token = TokenStore.read() else { return }
+        signalling = true
+        let t = target
+        Task {
+            defer { signalling = false }
+            if t == .plan {
+                await send(token: token) { try await $0.step(trip: step.trip, to: to, dir: dir) }
+            } else {
+                let gen = session
+                do {
+                    _ = try await Api(token: token).step(trip: step.trip, to: to, dir: dir)
+                    guard gen == session else { return }
+                    _ = await refresh()
+                } catch {
+                    guard gen == session else { return }
+                    self.error = failureMessage(error, otherwise: L("Offline"))
+                }
+            }
+        }
+    }
+
     /// A signal, then the plan and Today again: "Not going", "Undo" and "Back
     /// on campus" change Today too, now rather than at the next refresh.
     /// Nil once it's done, else why it wasn't (also the popover's error,
     /// unless the caller shows it itself).
     @discardableResult
     private func send(_ action: CardAction, token: String, showingError: Bool = true) async -> String? {
+        await send(token: token, showingError: showingError) { try await $0.signal(action) }
+    }
+
+    /// `send` for any request whose reply is the new plan (a signal, a step).
+    @discardableResult
+    private func send(token: String, showingError: Bool = true, _ request: (Api) async throws -> NextAnswer) async -> String? {
         let gen = session
         do {
             let api = Api(token: token)
-            let a = try await api.signal(action)
+            let a = try await request(api)
             // Signed out meanwhile: the reply is the old account's.
             guard gen == session else { return nil }
             plan = a

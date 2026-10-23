@@ -213,6 +213,8 @@ data class Card(
     val heading: String? = null,
     /** When to send the leave reminder, epoch ms; null: no reminder for this trip. */
     val remindAtMs: Long? = null,
+    /** "Earlier bus", "Later bus", "Best bus" under the bus; null once you've set off, or with no bus to change. */
+    val step: Step? = null,
 ) {
     companion object {
         fun parse(o: JSONObject) =
@@ -253,6 +255,7 @@ data class Card(
                 title = o.optStringOrNull("title"),
                 heading = o.optStringOrNull("heading"),
                 remindAtMs = o.optStringOrNull("remindAt")?.let(::parseInstant),
+                step = o.optJSONObject("step")?.let { lenient { Step.parse(it) } },
             )
     }
 }
@@ -547,6 +550,46 @@ data class Suggestion(val id: String, val text: String, val accept: String, val 
                 o.optStringOrNull("text") ?: return null,
                 o.optStringOrNull("accept") ?: return null,
                 o.optStringOrNull("dismiss") ?: return null,
+            )
+    }
+}
+
+/**
+ * `card.step`: the buses either side of the one on the card, sent back to /api/me/step to change to one. A null side is the first bus you
+ * can catch, or the last one offered: its button greyed, not hidden. [moved]: not the bus terminus chose, so "Best bus" goes back.
+ */
+data class Step(
+    val trip: String,
+    val earlier: StepTarget?,
+    val later: StepTarget?,
+    val moved: Boolean,
+    val earlierLabel: String,
+    val laterLabel: String,
+    val bestLabel: String,
+) {
+    companion object {
+        fun parse(o: JSONObject): Step? =
+            Step(
+                o.optStringOrNull("trip") ?: return null,
+                o.optJSONObject("earlier")?.let(StepTarget::parse),
+                o.optJSONObject("later")?.let(StepTarget::parse),
+                o.optBoolean("moved", false),
+                o.optStringOrNull("earlierLabel") ?: return null,
+                o.optStringOrNull("laterLabel") ?: return null,
+                o.optStringOrNull("bestLabel") ?: return null,
+            )
+    }
+}
+
+/** A bus to step to. [json] is the server's object as it came, sent back as it is. */
+data class StepTarget(val svc: String, val stop: String, val boardMs: Long?, val json: String) {
+    companion object {
+        fun parse(o: JSONObject): StepTarget? =
+            StepTarget(
+                o.optStringOrNull("svc") ?: return null,
+                o.optStringOrNull("stop") ?: return null,
+                o.optStringOrNull("board")?.let(::parseInstant),
+                o.toString(),
             )
     }
 }
@@ -978,6 +1021,17 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         val body = JSONObject().put("kind", kind)
         trip?.let { body.put("trip", it) }
         return request("POST", "/api/me/signal" + if (hour12) "?h12=1" else "", body)
+    }
+
+    /**
+     * Another bus for [step]'s trip: [to] one of its sides, going [dir] ("earlier" or "later"), or null for the best bus again. Answers
+     * with the new /api/me/next for that trip, from [lat] and [lon] when given.
+     */
+    suspend fun step(step: Step, to: StepTarget?, dir: String?, lat: Double? = null, lon: Double? = null): JSONObject {
+        val body = JSONObject().put("trip", step.trip).put("to", to?.let { JSONObject(it.json) } ?: JSONObject.NULL)
+        dir?.let { body.put("dir", it) }
+        if (lat != null && lon != null) body.put("lat", coord(lat).toDouble()).put("lon", coord(lon).toDouble())
+        return request("POST", "/api/me/step" + if (hour12) "?h12=1" else "", body)
     }
 
     /** A one-off trip later today: planned like a class. Answers with the new /api/me/next. */

@@ -13,6 +13,7 @@ struct AnswerDetail: View {
     var old = false
     var onAction: (CardAction) -> Void = { _ in }
     var onChoice: (Suggestion, Bool) -> Void = { _, _ in }
+    var onStep: (NextAnswer.Step, StepTarget?, StepDirection?) -> Void = { _, _, _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -50,6 +51,10 @@ struct AnswerDetail: View {
                 } else {
                     Row(icon: a.mode == "rest" ? "calendar" : "text.alignleft", text: a.detail)
                     if let leave = a.leaveText() { Row(icon: "figure.walk", text: leave).fontWeight(.semibold) }
+                }
+                // Under the bus it's about, as on the web: the bus before or after it.
+                if !old, !a.isFree, let step = a.card?.step {
+                    StepButtons(step: step, onStep: onStep).disabled(busy).padding(.top, 2)
                 }
                 // On a ride, the detail already says when you get there, with
                 // its "~" on an estimate; the timing pill would say it again.
@@ -119,6 +124,46 @@ struct AnswerDetail: View {
             if !isSkip(a) { groups.append([a]) } else if a == skips[0] { groups.append(skips) }
         }
         return groups
+    }
+
+    /// "‹ Earlier bus", "Best bus" (once moved off it), "Later bus ›", the
+    /// same width each. One with no bus that way is greyed, not hidden, so
+    /// the other keeps its side.
+    struct StepButtons: View {
+        let step: NextAnswer.Step
+        let onStep: (NextAnswer.Step, StepTarget?, StepDirection?) -> Void
+
+        var body: some View {
+            HStack(spacing: 6) {
+                Button {
+                    onStep(step, step.earlier, .earlier)
+                } label: {
+                    // One Text, chevron and all, so its baseline is Best bus's.
+                    Text("\(Image(systemName: "chevron.left")) \(step.earlierLabel)")
+                        .frame(maxWidth: .infinity)
+                }
+                .disabled(step.earlier == nil)
+                .accessibilityLabel(step.earlierLabel)
+                if step.moved {
+                    Button {
+                        onStep(step, nil, nil)
+                    } label: {
+                        Text(step.bestLabel).frame(maxWidth: .infinity)
+                    }
+                }
+                Button {
+                    onStep(step, step.later, .later)
+                } label: {
+                    Text("\(step.laterLabel) \(Image(systemName: "chevron.right"))")
+                        .frame(maxWidth: .infinity)
+                }
+                .disabled(step.later == nil)
+                .accessibilityLabel(step.laterLabel)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .lineLimit(1)
+        }
     }
 
     /// "Not going ▾": each choice says underneath how much it skips.

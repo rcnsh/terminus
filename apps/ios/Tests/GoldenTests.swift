@@ -28,6 +28,42 @@ func goldenNames() -> [String] {
     #expect(foyer.oppositeName == "Prince George's Park")
 }
 
+/// "Earlier bus" and "Later bus" on a trip by bus, each bus kept as it came
+/// to go back to /me/step; none on a card with nothing to step.
+@Test func theStepBetweenBusesDecodes() throws {
+    let data = try Data(contentsOf: answers.appendingPathComponent("class-bus.json"))
+    let s = try #require(try NextAnswer.decode(data).card?.step)
+    let json = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+    let sent = try #require((json["card"] as? [String: Any])?["step"] as? [String: Any])
+    #expect(s.trip == sent["trip"] as? String)
+    #expect(s.moved == false)
+    #expect(s.earlierLabel == "Earlier bus")
+    #expect(s.laterLabel == "Later bus")
+    #expect(s.bestLabel == "Best bus")
+    let earlier = try #require(s.earlier)
+    #expect(earlier.svc == "D2")
+    #expect(earlier.fields == sent["earlier"] as? [String: String])
+    #expect(s.later?.fields == sent["later"] as? [String: String])
+
+    let zh = try #require(try NextAnswer.decode(Data(contentsOf: answers.appendingPathComponent("zh/class-bus.json"))).card?.step)
+    #expect(zh.laterLabel != "Later bus")
+
+    let arrived = try NextAnswer.decode(Data(contentsOf: answers.appendingPathComponent("arrived.json")))
+    #expect(arrived.card != nil)
+    #expect(arrived.card?.step == nil)
+}
+
+/// At the first bus there is, no earlier one: the button greys out rather than going.
+@Test func aStepWithNoBusThatWayIsNil() throws {
+    let json = Data(
+        #"{"trip":"t","earlier":null,"later":{"svc":"A1","stop":"COM3","board":"2026-10-07T01:00:00Z"},"moved":true,"earlierLabel":"E","laterLabel":"L","bestLabel":"B"}"#
+            .utf8)
+    let s = try JSONDecoder().decode(Step.self, from: json)
+    #expect(s.earlier == nil)
+    #expect(s.later?.stop == "COM3")
+    #expect(s.moved)
+}
+
 @Test func theGoldensAreFound() {
     #expect(goldenNames().count >= 40)
 }
@@ -60,6 +96,7 @@ func everyGoldenAnswerDecodes(name: String) throws {
     if present("upcoming") { #expect(card.upcoming != nil, "card.upcoming") }
     if present("suggestion") { #expect(card.suggestion != nil, "card.suggestion") }
     if present("walkTo") { #expect(card.walkTo != nil, "card.walkTo") }
+    if present("step") { #expect(card.step != nil, "card.step") } else { #expect(card.step == nil, "card.step") }
     if (sent["journey"] as? [String: Any])?["change"] is [String: Any] { #expect(card.journey?.change != nil, "journey.change") }
     if (sent["ride"] as? [String: Any])?["change"] is [String: Any] { #expect(card.ride?.change != nil, "ride.change") }
     #expect(card.actions.count == (sent["actions"] as? [Any])?.count ?? 0, "card.actions")

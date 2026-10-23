@@ -35,6 +35,8 @@ import sh.rcn.terminus.Push
 import sh.rcn.terminus.R
 import sh.rcn.terminus.ServerClock
 import sh.rcn.terminus.Session
+import sh.rcn.terminus.Step
+import sh.rcn.terminus.StepTarget
 import sh.rcn.terminus.Store
 import sh.rcn.terminus.Target
 import sh.rcn.terminus.UpdateRequired
@@ -380,31 +382,56 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     removeFromToday(it)
                     return
                 }
+        send(token, Target.Plan) { api, _ -> api.signal(action.id, action.trip) }
+    }
+
+    /**
+     * "Earlier bus" or "Later bus" under the card's bus ([to] that side's, going [dir]), or "Best bus" ([to] null) back to the one terminus
+     * chose. Kept for every device, like a signal, and answered with the new answer for the trip on screen (the plan, a favourite or a
+     * stop), from where the phone was a moment ago as the card was.
+     */
+    fun step(step: Step, to: StepTarget?, dir: String?) {
+        val token = store.token ?: return
+        send(token, _state.value.target) { api, ctx ->
+            val loc = Locator.lastKnown(ctx, maxAgeMs = 60_000)
+            api.step(step, to, dir, loc?.latitude, loc?.longitude)
+        }
+    }
+
+    /**
+     * A card button's request, one at a time: its reply is the new answer for [target], shown, and for the plan cached for the widget and
+     * its refresh moved.
+     */
+    private fun send(token: String, target: Target, call: suspend (Api, Application) -> org.json.JSONObject) {
         if (_state.value.signalling) return
         _state.update { it.copy(signalling = true, error = null) }
         viewModelScope.launch(account) {
             val ctx = getApplication<Application>()
             try {
-                val json = Api(token, hour12 = hour12(ctx)).signal(action.id, action.trip)
+                val json = call(Api(token, hour12 = hour12(ctx)), ctx)
                 val now = System.currentTimeMillis()
+                val plan = target == Target.Plan
                 val answer =
-                    store.saveAnswer(json, now, sentWith = token)
+                    (if (plan) store.saveAnswer(json, now, sentWith = token) else NextAnswer.parse(json))
                         ?: run {
                             // Signed out, or into another account, meanwhile: nothing to show, but the buttons work again.
                             _state.update { it.copy(signalling = false) }
                             return@launch
                         }
-                Refresher.scheduleNext(ctx, answer, now)
-                redrawWidgets(ctx)
+                if (plan) {
+                    Refresher.scheduleNext(ctx, answer, now)
+                    redrawWidgets(ctx)
+                }
+                answeredAt[target] = now
                 _state.update {
                     it.copy(
                         signalling = false,
-                        answers = it.answers + (Target.Plan to answer),
-                        rawAnswers = it.rawAnswers + (Target.Plan to json.toString()),
+                        answers = it.answers + (target to answer),
+                        rawAnswers = it.rawAnswers + (target to json.toString()),
                         fetchedAt = now,
                     )
                 }
-                loadDay()
+                if (plan) loadDay()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: ApiError) {
