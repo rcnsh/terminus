@@ -246,6 +246,9 @@ private fun spokenCard(answer: NextAnswer, withLead: Boolean): String {
 private fun stale(answer: NextAnswer): Boolean {
     val old by
         produceState(isOld(answer, ServerClock.now()), answer) {
+            // The state outlives a new answer (only the effect restarts), so a
+            // fresh answer after a dimmed one must clear it here.
+            value = isOld(answer, ServerClock.now())
             while (!value) {
                 val at = answer.card?.staleAtMs ?: break
                 // At most a minute at a time, in case the clock's correction moves.
