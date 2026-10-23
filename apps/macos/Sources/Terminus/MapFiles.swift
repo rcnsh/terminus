@@ -160,7 +160,9 @@ enum MapFiles {
     /// Quiet on failure; the next look tries again.
     @discardableResult
     static func keepTiles() async throws -> Bool {
-        try await keepTiles(in: dir, now: Date().timeIntervalSince1970) { try await URLSession.shared.download(for: $0) }
+        try await keepTiles(in: dir, now: Date().timeIntervalSince1970) { req in
+            try await logged(req) { try await URLSession.shared.download(for: req) }
+        }
     }
 
     /// `keepTiles()` in `dir` at `now` (seconds since 1970); `fetch` downloads
@@ -214,6 +216,24 @@ enum MapFiles {
         return fresh
     }
 
+    /// `fetch`, noted in the developer menu's recent requests (RequestLog) as the app's other requests are.
+    private static func logged<T>(_ req: URLRequest, _ fetch: () async throws -> (T, URLResponse)) async throws -> (T, URLResponse) {
+        let started = Date()
+        func note(_ status: Int?, _ error: Error?) {
+            RequestLog.record(
+                req.httpMethod ?? "GET", req.url?.path ?? "", base: req.url?.absoluteString ?? "", status: status,
+                tookMs: Int(Date().timeIntervalSince(started) * 1000), failure: error)
+        }
+        do {
+            let (body, resp) = try await fetch()
+            note((resp as? HTTPURLResponse)?.statusCode, nil)
+            return (body, resp)
+        } catch {
+            note(nil, error)
+            throw error
+        }
+    }
+
     /// A GET to the API with the app's headers; the body of a 200. It keeps
     /// to the same Retry-After as the answers (Quiet) and stops with them on
     /// a 426 (Outdated): the map polls every few seconds, and asking through
@@ -227,7 +247,7 @@ enum MapFiles {
             req.setValue(Api.client, forHTTPHeaderField: "x-terminus-client")
             req.setValue(Lang.header, forHTTPHeaderField: "accept-language")
             if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "authorization") }
-            return try await URLSession.shared.data(for: req)
+            return try await logged(req) { try await URLSession.shared.data(for: req) }
         }
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
         let retryAfter = (resp as? HTTPURLResponse)?.value(forHTTPHeaderField: "retry-after")
