@@ -229,7 +229,7 @@ function RoadLine({ j, now }) {
  * of it is up in the page's sky and the horizon under it has your bus on
  * its way to your stop; the steps are on the ground.
  */
-export function Journey({ a, style, sky = false, lead = null }) {
+export function Journey({ a, style, sky = false, lead = null, steps = null }) {
   const j = a.card.journey;
   const now = useNow(a, j);
   const late = a.card.late ? ' late' : '';
@@ -242,6 +242,7 @@ export function Journey({ a, style, sky = false, lead = null }) {
   return html`
     <div class=${`journey ${style}`}>
       <${body} a=${a} j=${j} now=${now} late=${late} top=${top} />
+      ${steps}
       ${small && html`<div class="small-print">${small}</div>`}
       ${j.bus && !j.live && a.card.quality && html`<div class="note">${a.card.quality}</div>`}
     </div>

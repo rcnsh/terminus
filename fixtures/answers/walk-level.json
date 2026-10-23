@@ -56,6 +56,20 @@
     "toStop": "UTown",
     "toCode": "UTOWN"
   },
+  "steps": {
+    "trip": "to:UTOWN",
+    "earlier": {
+      "svc": "R2",
+      "stop": "PGP",
+      "board": "2026-08-27T01:01:49Z"
+    },
+    "later": {
+      "svc": "D2",
+      "stop": "PGP",
+      "board": "2026-08-27T01:33:04Z"
+    },
+    "moved": false
+  },
   "mode": "trip",
   "dest": {
     "to": "UTOWN",
@@ -145,6 +159,23 @@
       "summary": "Walk to PGP · D2 09:21"
     },
     "upcoming": null,
+    "step": {
+      "trip": "to:UTOWN",
+      "earlier": {
+        "svc": "R2",
+        "stop": "PGP",
+        "board": "2026-08-27T01:01:49Z"
+      },
+      "later": {
+        "svc": "D2",
+        "stop": "PGP",
+        "board": "2026-08-27T01:33:04Z"
+      },
+      "moved": false,
+      "earlierLabel": "Earlier bus",
+      "laterLabel": "Later bus",
+      "bestLabel": "Best bus"
+    },
     "title": "D2 · 09:21",
     "heading": "Going to UTown",
     "remindAt": null

@@ -103,6 +103,7 @@ import { residenceStops } from '../answer/residences.ts';
 import { MAX_KEYS, createKey, listKeys, revokeKey } from './access.ts';
 import { buildingStops, footM, paceSpeed } from '../answer/walk.ts';
 import { clientKey, coords, coordsFrom, json } from '../http.ts';
+import { parseTarget } from '../answer/step.ts';
 import { linkOrigin } from '../origin.ts';
 import { LANG_PREFS, type Lang, type LangPref, lang, m, useProfileLang, withLang } from '../i18n.ts';
 import { ROUTE_COLORS } from '../map/campus.ts';
@@ -191,6 +192,13 @@ const mailFailed = (e: unknown) => console.error('device email failed', e instan
  * (signals, outcomes, choices), so anything else would let a script make as
  * many as it likes.
  */
+/** A trip a bus can be stepped on: one of today's, a favourite, or a stop or room asked for (next.ts). */
+function stepTrip(profile: Profile, key: string, nowMs: number): boolean {
+  if (key.startsWith('place:')) return profile.places.some((p) => `place:${p.key}` === key);
+  if (key.startsWith('to:')) return /^to:[A-Za-z0-9_-]{1,24}$/.test(key);
+  return knownTrip(profile, key, nowMs);
+}
+
 function knownTrip(profile: Profile, key: string, nowMs: number): boolean {
   if (/^home:(\d{1,4}|evening)$/.test(key) || /^gap-home:[A-Za-z0-9_-]{1,24}$/.test(key)) return true;
   return [...profile.trips, ...profile.manual, ...classesOn(profile, nowMs)].some((t) => classKey(t) === key);
@@ -949,6 +957,49 @@ export const ME_ROUTES: MeRoute[] = [
   },
   {
     method: 'POST',
+    path: '/api/me/step',
+    run: async ({ req, url, env, ctx, nowMs, deps, db, session }) => {
+      // "Earlier bus", "Later bus" or "Best bus" (step.ts): the bus the card
+      // offered, kept for the trip today on every device. Answers with the new /api/me/next.
+      if (!env.TRIPS) return json({ error: 'trip tracking is not available' }, 503);
+      const body = await readJson(req);
+      const trip = typeof body?.trip === 'string' ? body.trip : '';
+      const to = parseTarget(body?.to);
+      if (!trip || trip.length > 80 || (body?.to !== null && !to))
+        return json(
+          { error: 'send trip (card.step.trip) and to: card.step.earlier or card.step.later as it is, or null for the best bus' },
+          400,
+        );
+      const profile = await getProfile(db, session.user.id, GRAPH);
+      if (!stepTrip(profile, trip, nowMs)) return json({ error: 'no such trip today' }, 400);
+      const next = await updateTrip(env, session.user.id, { steps: { [trip]: to } }, nowMs);
+      logStep(env, body?.to === null ? 'best' : body?.dir === 'earlier' ? 'earlier' : 'later', trip);
+      // Answered for the trip stepped on: a favourite's or a stop's own card, whatever the query says.
+      const query = askOf(url);
+      const at = typeof body?.lat === 'number' && typeof body?.lon === 'number' ? coords(body.lat, body.lon) : query.at;
+      const asked = trip.startsWith('place:')
+        ? { ...query, at, place: trip.slice(6), to: null }
+        : trip.startsWith('to:')
+          ? { ...query, at, place: null, to: trip.slice(3) }
+          : { ...query, at };
+      const rider = await loadRider(env, session.user.id, nowMs, { profile, day: next });
+      const out = await nextBody(env, ctx, deps, rider, asked, nowMs);
+      // The other devices' cards and the leave reminder follow now, not at their next refresh.
+      const answerIn = rewordFor(env, ctx, deps, rider, asked, nowMs);
+      ctx.waitUntil(
+        nudgeUser(
+          env,
+          session.user.id,
+          { phase: out.card.phase, urgent: false, remind: out.card.remind !== false, answer: out, answerIn },
+          nowMs,
+          session.tokenHash,
+        ),
+      );
+      return json(out);
+    },
+  },
+  {
+    method: 'POST',
     path: '/api/me/push',
     run: async ({ req, env, db, session }) => {
       // This device's push address: the Trip object nudges it when the card
@@ -1623,6 +1674,20 @@ async function prefsFor(db: D1Database, userId: string, profile: Profile, nowMs:
 }
 
 /** Counts only: which signals people send, never who or where. */
+/**
+ * A step between buses, by direction and the kind of trip: whether people
+ * step later after a class (a trip home starts from one) says whether
+ * classes end when ENDS_EARLY_MIN assumes. Never the account or the class.
+ */
+function logStep(env: Env, dir: 'earlier' | 'later' | 'best', trip: string): void {
+  const kind = /^(gap-)?home:/.test(trip) ? 'home' : /^(place|to):/.test(trip) ? 'place' : 'class';
+  try {
+    env.AE?.writeDataPoint({ blobs: ['step', dir, kind], doubles: [1], indexes: ['step'] });
+  } catch {
+    // Analytics must never break an answer.
+  }
+}
+
 function logSignal(env: Env, kind: string): void {
   try {
     env.AE?.writeDataPoint({ blobs: ['signal', kind], doubles: [1], indexes: ['signal'] });

@@ -32,6 +32,7 @@
     "why": "D2 would be 16 min"
   },
   "leave": null,
+  "steps": null,
   "mode": "trip",
   "dest": {
     "to": "KR-MRT",
@@ -107,6 +108,7 @@
       "summary": "13 min walk · D2 would be 16 min"
     },
     "upcoming": null,
+    "step": null,
     "title": "Walk · 13 min",
     "heading": "Going to KR MRT",
     "remindAt": null

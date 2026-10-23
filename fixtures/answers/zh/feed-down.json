@@ -48,6 +48,20 @@
     "toStop": "UTown",
     "toCode": "UTOWN"
   },
+  "steps": {
+    "trip": "4:600:UTOWN",
+    "earlier": {
+      "svc": "D2",
+      "stop": "PGP",
+      "board": "2026-08-27T01:29:20Z"
+    },
+    "later": {
+      "svc": "D2",
+      "stop": "PGP",
+      "board": "2026-08-27T01:41:20Z"
+    },
+    "moved": false
+  },
   "mode": "trip",
   "dest": {
     "to": "UTOWN",
@@ -144,6 +158,23 @@
       "summary": "步行到 PGP · 约 09:35 的 D2"
     },
     "upcoming": null,
+    "step": {
+      "trip": "4:600:UTOWN",
+      "earlier": {
+        "svc": "D2",
+        "stop": "PGP",
+        "board": "2026-08-27T01:29:20Z"
+      },
+      "later": {
+        "svc": "D2",
+        "stop": "PGP",
+        "board": "2026-08-27T01:41:20Z"
+      },
+      "moved": false,
+      "earlierLabel": "早一班",
+      "laterLabel": "晚一班",
+      "bestLabel": "最佳班次"
+    },
     "title": "D2 · 暂无时间",
     "heading": "下一节课 · GEA1000 @ UTown",
     "remindAt": "2026-08-27T01:25:10Z"

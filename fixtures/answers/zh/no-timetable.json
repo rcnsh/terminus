@@ -45,6 +45,7 @@
     "h12": false,
     "journey": null,
     "upcoming": null,
+    "step": null,
     "title": "还没有课表",
     "heading": null,
     "remindAt": null

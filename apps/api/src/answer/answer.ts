@@ -5,14 +5,15 @@
  */
 
 import type { Answer, Arrival, Env, FeedState, Graph, ResolveInput, ScoredOption, Stop, StopArrivals } from '../types.ts';
-import { WALK } from '../config.ts';
+import { STEP, WALK } from '../config.ts';
 import { getArrivals } from '../feeds/fms.ts';
 import { getPublicArrivals } from '../feeds/lta.ts';
 import { publicCodeOf, shuttleCalls, svcName } from './public.ts';
 import { buildAnswer, shortStop } from './format.ts';
 import { candidateStops, confidence, haversineM, indexGraph, nearestStop, pickAlt, scoreOptions, wholeWalk } from './resolve.ts';
 import { logAnswer } from '../ops/analytics.ts';
-import { leaveBy } from './leave.ts';
+import { type LeaveInput, departures, leaveBy } from './leave.ts';
+import { sameAs, stepFrom } from './step.ts';
 import { loadCrowdRisk, recordCrowds } from './crowd.ts';
 import { planTransfers } from './transfer.ts';
 import { GRAPH, GRAPH_PUBLIC } from './graph.ts';
@@ -176,7 +177,7 @@ export async function answerFor(
   });
   // departsAt null with an arrival time: the answer is to walk.
   const walking = answer.departsAt == null && answer.arriveAt != null;
-  answer.leave = leaveBy({
+  const leaveInput: LeaveInput = {
     options,
     candidates: cands,
     byStop,
@@ -188,7 +189,9 @@ export async function answerFor(
     walkWeight,
     nowMs,
     crowdRisk,
-  });
+  };
+  answer.leave = leaveBy(leaveInput);
+  if (input.step) Object.assign(answer, withSteps(answer, leaveInput, input.step, walking, nowMs));
 
   // Synchronous, non-blocking, and swallows its own errors. Deliberately not
   // behind waitUntil: there is nothing to await.
@@ -203,6 +206,37 @@ export async function answerFor(
 
   return answer;
 }
+
+/**
+ * A trip's steps between buses (step.ts), and the bus the user chose in
+ * place of the leave-by's. The server's own bus is the leave-by's; with
+ * none (a trip whose bus goes within a minute), the headline bus.
+ */
+function withSteps(
+  answer: Answer,
+  f: LeaveInput,
+  step: NonNullable<ResolveInput['step']>,
+  walking: boolean,
+  nowMs: number,
+): Pick<Answer, 'steps' | 'leave'> {
+  const firstMs = answer.departsAt ? Date.parse(answer.departsAt) : nowMs;
+  const lastArriveMs = f.arriveBy ? f.arriveBy.atMs + STEP.lateMaxS * 1000 : null;
+  // Far enough on for any bus "Later" may offer: a bus leaves a stop a walk after you set off.
+  const until = lastArriveMs ?? Math.max(firstMs, nowMs) + STEP.laterMaxS * 1000 + STEP_WALK_MS;
+  const all = departures(f, until, step.target);
+  const best = f.options[0];
+  const headline =
+    !walking && best && answer.departsAt
+      ? (all.find((l) => sameAs(l, { svc: best.svc, stop: best.stop.code, board: answer.departsAt! })) ?? null)
+      : null;
+  const own = answer.leave ? (answer.leave.svc ? answer.leave : null) : headline;
+  const s = stepFrom({ trip: step.trip, own, all, target: step.target, lastArriveMs, nowMs });
+  if (!s) return { steps: null };
+  return s.steps.moved ? { steps: s.steps, leave: s.leave } : { steps: s.steps };
+}
+
+/** More than any walk to a stop: how far past the latest leave-by a bus may leave. */
+const STEP_WALK_MS = 30 * 60_000;
 
 /**
  * The same deps, with answers that aren't logged (`log: false`): for the

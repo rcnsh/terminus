@@ -65,6 +65,16 @@
     "toStop": "UTown",
     "toCode": "UTOWN"
   },
+  "steps": {
+    "trip": "to:UTOWN",
+    "earlier": null,
+    "later": {
+      "svc": "D2",
+      "stop": "COM3",
+      "board": "2026-08-27T01:13:00Z"
+    },
+    "moved": false
+  },
   "mode": "trip",
   "dest": {
     "to": "UTOWN",
@@ -154,6 +164,19 @@
       "summary": "在 COM 3 搭 09:03 的 D2"
     },
     "upcoming": null,
+    "step": {
+      "trip": "to:UTOWN",
+      "earlier": null,
+      "later": {
+        "svc": "D2",
+        "stop": "COM3",
+        "board": "2026-08-27T01:13:00Z"
+      },
+      "moved": false,
+      "earlierLabel": "早一班",
+      "laterLabel": "晚一班",
+      "bestLabel": "最佳班次"
+    },
     "title": "D2 · 09:03",
     "heading": "去 UTown",
     "remindAt": null

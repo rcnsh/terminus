@@ -141,6 +141,16 @@ export const TRANSFER: {
   mode: 'noDirect',
 };
 
+/** "Earlier bus" and "Later bus" on the card (step.ts): how far the user may step from the server's bus. */
+export const STEP = {
+  /** For a class: no bus that gets you to the room more than this late. */
+  lateMaxS: 20 * 60,
+  /** Without a class to be on time for: no bus you'd leave for more than this after the server's. */
+  laterMaxS: 60 * 60,
+  /** Trips with a bus chosen at once, today: more than a day has, so the record stays small. */
+  maxTrips: 20,
+} as const;
+
 /**
  * The timelapse recorder (timelapse.ts, timelapsedo.ts): the ONE poller of
  * the NUS feed. Answers fetch on demand; the cron's health check and the

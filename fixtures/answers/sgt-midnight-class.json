@@ -25,6 +25,7 @@
     "arrive": "2026-08-27T16:34:52Z",
     "note": null
   },
+  "steps": null,
   "mode": "trip",
   "dest": {
     "to": "COM3",
@@ -116,6 +117,7 @@
       "summary": "arrive 00:34 · 15 min walk · Services ended for the night"
     },
     "upcoming": null,
+    "step": null,
     "title": "No bus · walk 15 min",
     "heading": "Next class · CS2030 @ COM1",
     "remindAt": null

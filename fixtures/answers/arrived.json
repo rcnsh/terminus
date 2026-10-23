@@ -60,6 +60,7 @@
     "h12": false,
     "journey": null,
     "upcoming": null,
+    "step": null,
     "title": "You're here",
     "heading": "Going to COM 3",
     "remindAt": null

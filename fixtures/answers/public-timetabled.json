@@ -60,6 +60,16 @@
     "paid": true,
     "route": "151/2"
   },
+  "steps": {
+    "trip": "to:CG",
+    "earlier": null,
+    "later": {
+      "svc": "151/2",
+      "stop": "IT",
+      "board": "2026-08-27T01:18:00Z"
+    },
+    "moved": false
+  },
   "mode": "trip",
   "dest": {
     "to": "CG",
@@ -150,6 +160,19 @@
       "summary": "151 ($) ~09:04 at IT"
     },
     "upcoming": null,
+    "step": {
+      "trip": "to:CG",
+      "earlier": null,
+      "later": {
+        "svc": "151/2",
+        "stop": "IT",
+        "board": "2026-08-27T01:18:00Z"
+      },
+      "moved": false,
+      "earlierLabel": "Earlier bus",
+      "laterLabel": "Later bus",
+      "bestLabel": "Best bus"
+    },
     "title": "151 · ~09:04",
     "heading": "Going to College Gr",
     "remindAt": null

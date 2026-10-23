@@ -94,6 +94,16 @@
     "endWalkS": 162
   },
   "leave": null,
+  "steps": {
+    "trip": "place:deck",
+    "earlier": null,
+    "later": {
+      "svc": "R2",
+      "stop": "PGP",
+      "board": "2026-08-27T01:18:00Z"
+    },
+    "moved": false
+  },
   "mode": "trip",
   "dest": {
     "to": "THE-DECK",
@@ -179,6 +189,19 @@
       "summary": "步行到 PGP · 09:06 的 R2"
     },
     "upcoming": null,
+    "step": {
+      "trip": "place:deck",
+      "earlier": null,
+      "later": {
+        "svc": "R2",
+        "stop": "PGP",
+        "board": "2026-08-27T01:18:00Z"
+      },
+      "moved": false,
+      "earlierLabel": "早一班",
+      "laterLabel": "晚一班",
+      "bestLabel": "最佳班次"
+    },
     "title": "R2 · 09:06",
     "heading": "去 The Deck",
     "remindAt": null

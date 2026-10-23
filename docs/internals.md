@@ -556,6 +556,27 @@ object at the change and once the second bus has gone.
   leaves if that comes first: after that the answer would name later buses
   (and, from a moving bus, other stops), but the trip, the card and the ride
   stay about this one, until a miss, when the card shows the next way there.
+- **Earlier bus, Later bus** ([src/answer/step.ts](../apps/api/src/answer/step.ts), ADR 0013). Before you
+  set off on a trip by bus (a class, home, a favourite, a stop or room),
+  `card.step` offers the bus before and after the one shown. Every bus that
+  gets you there comes from `departures()` in leave.ts: each service from
+  each stop, live times then one headway at a time, a trip that changes
+  buses by its first bus. They're ordered by when you'd leave, and a step
+  keeps the arrival moving the same way. "Later" stops at the last bus
+  that gets a class's room no more than `STEP.lateMaxS` (20 min) late, or
+  on any other trip one leaving at most `STEP.laterMaxS` (an hour) after the
+  best; "Earlier" at the first bus you can still catch. POST /api/me/step
+  keeps the choice in the day's record (`DayRecord.steps`, by trip key;
+  `place:<key>` and `to:<code>` for a favourite or a stop asked for) and
+  drops the trip's plan, so the chosen bus becomes it and every device, the
+  leave reminder and Today follow. With no live times the buses it steps
+  between fall a headway apart from the chosen one, so it stays put as the
+  clock moves. When the feed no longer lists that bus, the next of the same
+  service from the same stop; once it leaves before any bus of that
+  service you can still catch (you didn't set off for it), the choice
+  lapses and the trip is back on the best bus. The steps go once you're on
+  your way. `ENDS_EARLY_MIN` stays 30 for every class: a tutorial that
+  lets out at :50 shows the trip home early, and "Later bus" is how to wait.
 - **"At the stop"** means at the plan's boarding stop from 15 minutes before
   its leave-by (`WAIT_EARLY_MS`): not hours before at a stop you live by, and
   not at a stop you're riding past. The headline is then the bus ("D2 at

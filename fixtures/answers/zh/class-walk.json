@@ -25,6 +25,7 @@
     "arrive": "2026-08-27T01:57:00Z",
     "note": null
   },
+  "steps": null,
   "mode": "trip",
   "dest": {
     "to": "COM3",
@@ -121,6 +122,7 @@
       "summary": "09:57 到达 · 步行 3 分钟 · 搭 D1 要 16 分钟"
     },
     "upcoming": null,
+    "step": null,
     "title": "步行 · 3 分钟",
     "heading": "下一节课 · CS2030 @ COM1",
     "remindAt": "2026-08-27T01:48:32Z"

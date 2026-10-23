@@ -133,6 +133,19 @@ SELECT blob2 AS signal, SUM(_sample_interval) AS n
 FROM terminus WHERE blob1 = 'signal' GROUP BY signal ORDER BY n DESC
 ```
 
+## Steps between buses
+
+Each "Earlier bus", "Later bus" or "Best bus" (`/api/me/step`) writes a
+`step` row: `blob2` is `earlier`, `later` or `best`, `blob3` the kind of
+trip (`class`, `home` or `place`), `double1` 1 and `index1` `step`. Never
+the account, the class or the bus. Many "later" on trips home say classes
+end later than `ENDS_EARLY_MIN` assumes (ADR 0013).
+
+```sql
+SELECT blob3 AS trip, blob2 AS step, SUM(_sample_interval) AS n
+FROM terminus WHERE blob1 = 'step' GROUP BY trip, step ORDER BY n DESC
+```
+
 ## How fresh the pushed cards are
 
 Each wake of a Trip object (`src/push/tripdo.ts`) that works out a card writes a

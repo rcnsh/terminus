@@ -105,6 +105,20 @@
     "toStop": "UTown",
     "toCode": "UTOWN"
   },
+  "steps": {
+    "trip": "4:600:UTOWN",
+    "earlier": {
+      "svc": "D2",
+      "stop": "PGP",
+      "board": "2026-08-27T01:38:00Z"
+    },
+    "later": {
+      "svc": "D2",
+      "stop": "PGP",
+      "board": "2026-08-27T01:50:00Z"
+    },
+    "moved": false
+  },
   "mode": "trip",
   "dest": {
     "to": "UTOWN",
@@ -211,6 +225,23 @@
       "summary": "arrive ~09:51 · R2 ~09:42 at PGP"
     },
     "upcoming": null,
+    "step": {
+      "trip": "4:600:UTOWN",
+      "earlier": {
+        "svc": "D2",
+        "stop": "PGP",
+        "board": "2026-08-27T01:38:00Z"
+      },
+      "later": {
+        "svc": "D2",
+        "stop": "PGP",
+        "board": "2026-08-27T01:50:00Z"
+      },
+      "moved": false,
+      "earlierLabel": "Earlier bus",
+      "laterLabel": "Later bus",
+      "bestLabel": "Best bus"
+    },
     "title": "R2 · 09:06",
     "heading": "Next class · GEA1000 @ UTown",
     "remindAt": "2026-08-27T01:31:40Z"

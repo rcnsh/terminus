@@ -17,6 +17,7 @@
     "why": "今晚已停运"
   },
   "leave": null,
+  "steps": null,
   "mode": "trip",
   "dest": {
     "to": "PGP",
@@ -94,6 +95,7 @@
       "summary": "步行 27 分钟 · 今晚已停运"
     },
     "upcoming": null,
+    "step": null,
     "title": "无巴士 · 步行 27 分钟",
     "heading": "回家",
     "remindAt": null

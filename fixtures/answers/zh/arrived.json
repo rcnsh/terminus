@@ -60,6 +60,7 @@
     "h12": false,
     "journey": null,
     "upcoming": null,
+    "step": null,
     "title": "你已经在这里",
     "heading": "去 COM 3",
     "remindAt": null

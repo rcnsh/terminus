@@ -160,6 +160,9 @@ export interface Answer {
    * it rests on a headway rather than a live time.
    */
   leave?: Leave | null;
+  /** A trip's "Earlier bus" and "Later bus" from the leave-by's bus (step.ts).
+   *  Absent on an answer that isn't a trip, and on a walk. */
+  steps?: import('./answer/step.ts').Steps | null;
   /** The headline bus as a leg, for the card's journey (card.ts). Absent
    *  when the answer is to walk or nothing runs. */
   bus?: BusLeg | null;
@@ -571,6 +574,8 @@ export interface ResolveInput {
   endWalkByStopS?: Record<string, number>;
   /** Where the room or building itself is, when known: within WALK.atVenueM of it you're there. */
   destAt?: { lat: number; lon: number } | null;
+  /** A trip the card can step between buses on (step.ts): its key, and the bus chosen for it, if any. */
+  step?: { trip: string; target: import('./answer/step.ts').StepTarget | null };
   /** Count the public buses at the stops too (the profile's `publicBuses`). */
   publicBuses?: boolean;
   /**

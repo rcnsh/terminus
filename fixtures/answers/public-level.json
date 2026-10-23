@@ -71,6 +71,16 @@
     "toStop": "Opp KR MRT",
     "toCode": "KR-MRT-OPP"
   },
+  "steps": {
+    "trip": "to:KR-MRT-OPP",
+    "earlier": null,
+    "later": {
+      "svc": "A2",
+      "stop": "IT",
+      "board": "2026-08-27T01:16:00Z"
+    },
+    "moved": false
+  },
   "mode": "trip",
   "dest": {
     "to": "KR-MRT-OPP",
@@ -161,6 +171,19 @@
       "summary": "A2 09:06 at IT"
     },
     "upcoming": null,
+    "step": {
+      "trip": "to:KR-MRT-OPP",
+      "earlier": null,
+      "later": {
+        "svc": "A2",
+        "stop": "IT",
+        "board": "2026-08-27T01:16:00Z"
+      },
+      "moved": false,
+      "earlierLabel": "Earlier bus",
+      "laterLabel": "Later bus",
+      "bestLabel": "Best bus"
+    },
     "title": "A2 · 09:06",
     "heading": "Going to Opp KR MRT",
     "remindAt": null

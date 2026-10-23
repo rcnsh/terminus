@@ -115,6 +115,7 @@
     "h12": false,
     "journey": null,
     "upcoming": null,
+    "step": null,
     "title": "On the R2",
     "heading": "Next class · GEH1001 @ CG",
     "remindAt": null

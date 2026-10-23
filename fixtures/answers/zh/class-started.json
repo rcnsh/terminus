@@ -105,6 +105,12 @@
     "toStop": "UTown",
     "toCode": "UTOWN"
   },
+  "steps": {
+    "trip": "4:530:UTOWN",
+    "earlier": null,
+    "later": null,
+    "moved": false
+  },
   "mode": "trip",
   "dest": {
     "to": "UTOWN",
@@ -201,6 +207,7 @@
       "summary": "09:15 到达 · 在 PGP 搭 09:06 的 R2"
     },
     "upcoming": null,
+    "step": null,
     "title": "R2 · 09:06",
     "heading": "下一节课 · GEA1000 @ UTown",
     "remindAt": null

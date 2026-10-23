@@ -94,6 +94,16 @@
     "endWalkS": 162
   },
   "leave": null,
+  "steps": {
+    "trip": "place:deck",
+    "earlier": null,
+    "later": {
+      "svc": "R2",
+      "stop": "PGP",
+      "board": "2026-08-27T01:18:00Z"
+    },
+    "moved": false
+  },
   "mode": "trip",
   "dest": {
     "to": "THE-DECK",
@@ -179,6 +189,19 @@
       "summary": "Walk to PGP · R2 09:06"
     },
     "upcoming": null,
+    "step": {
+      "trip": "place:deck",
+      "earlier": null,
+      "later": {
+        "svc": "R2",
+        "stop": "PGP",
+        "board": "2026-08-27T01:18:00Z"
+      },
+      "moved": false,
+      "earlierLabel": "Earlier bus",
+      "laterLabel": "Later bus",
+      "bestLabel": "Best bus"
+    },
     "title": "R2 · 09:06",
     "heading": "Going to The Deck",
     "remindAt": null

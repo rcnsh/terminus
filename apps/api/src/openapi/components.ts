@@ -82,6 +82,26 @@ export function components(): Record<string, unknown> {
               'The latest time to set off. On `/api/me/next` for a class, the latest that still gets you there on time; otherwise, for the bus in `departsAt`. ' +
               'When you will be late whatever you do, `at` is now, or, when the first bus waits for the service to start, when to leave for that one. Null or absent when you should go now. Once `at` has passed, show "Leave now".',
           },
+          steps: {
+            type: ['object', 'null'],
+            description:
+              'On `/api/me/next`, a trip by bus: the bus before and after the one in `leave` (or, with no `leave`, the headline bus), for "Earlier bus" and "Later bus". ' +
+              'Clients show `card.step`, which has these and their words. Absent on any other answer.',
+            required: ['trip', 'earlier', 'later', 'moved'],
+            properties: {
+              trip: { type: 'string', description: 'The trip to send with a step to POST /api/me/step.' },
+              earlier: {
+                oneOf: [{ $ref: '#/components/schemas/StepTarget' }, { type: 'null' }],
+                description: 'Null at the first bus you can still catch.',
+              },
+              later: {
+                oneOf: [{ $ref: '#/components/schemas/StepTarget' }, { type: 'null' }],
+                description:
+                  'Null past the last bus offered: one more than 20 min late for a class, or leaving over an hour after the best bus for any other trip.',
+              },
+              moved: { type: 'boolean', description: 'The bus is one the user stepped to, not the best one.' },
+            },
+          },
           bus: {
             oneOf: [{ $ref: '#/components/schemas/BusLeg' }, { type: 'null' }],
             description:
@@ -104,6 +124,20 @@ export function components(): Record<string, unknown> {
               },
             },
           },
+        },
+      },
+      StepTarget: {
+        type: 'object',
+        description: 'A bus to step to, as the card offered it: send it back to POST /api/me/step as it is.',
+        required: ['svc', 'stop', 'board'],
+        properties: {
+          svc: {
+            type: 'string',
+            example: 'D2',
+            description: 'The service, as the graph names it (`151/1` for one direction of a public bus).',
+          },
+          stop: { type: 'string', example: 'UTOWN', description: 'The code of the stop it goes from.' },
+          board: { type: 'string', format: 'date-time', description: 'When it leaves that stop.' },
         },
       },
       Leave: {
@@ -1382,6 +1416,23 @@ export function components(): Record<string, unknown> {
                         description:
                           'The trip on one line, most needed first, for a compact widget: a class’s arrival then its bus ("arrive ~09:51 · R2 ~09:42 at PGP"), the walk to the stop then the bus ("Walk to PGP · A1 09:09"), the bus at the stop ("A1 09:09 at PGP"), or on foot the walk and why ("8 min walk · D1 would be 16 min").',
                       },
+                    },
+                  },
+                  step: {
+                    type: ['object', 'null'],
+                    description:
+                      'Buttons to step to the bus before or after the one shown, on a trip by bus (a class, home, a favourite, a stop or room) until you set off: ' +
+                      'show `earlierLabel` and `laterLabel` beside the bus, greyed out where `earlier` or `later` is null, and `bestLabel` once `moved`. ' +
+                      'Send `trip` and the bus (`earlier` or `later` as it is, or null for `bestLabel`) to POST /api/me/step. Null otherwise.',
+                    required: ['trip', 'earlier', 'later', 'moved', 'earlierLabel', 'laterLabel', 'bestLabel'],
+                    properties: {
+                      trip: { type: 'string', example: '4:600:UTOWN' },
+                      earlier: { oneOf: [{ $ref: '#/components/schemas/StepTarget' }, { type: 'null' }] },
+                      later: { oneOf: [{ $ref: '#/components/schemas/StepTarget' }, { type: 'null' }] },
+                      moved: { type: 'boolean', description: 'The bus is one the user stepped to: show `bestLabel`.' },
+                      earlierLabel: { type: 'string', example: 'Earlier bus' },
+                      laterLabel: { type: 'string', example: 'Later bus' },
+                      bestLabel: { type: 'string', example: 'Best bus' },
                     },
                   },
                   upcoming: {
