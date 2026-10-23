@@ -286,8 +286,9 @@ struct Api: Sendable {
         _ = try await send("DELETE", "/api/me/history")
     }
 
-    /// A one-off trip later today, planned like a class. Answers with the new plan.
-    func once(_ target: Target, atMin: Int) async throws -> NextAnswer {
+    /// A one-off trip later today, planned like a class. Answers with the new
+    /// plan, from `lat` and `lon` when given, as `next` does.
+    func once(_ target: Target, atMin: Int, lat: Double? = nil, lon: Double? = nil, acc: Double? = nil) async throws -> NextAnswer {
         var body: [String: Any] = ["atMin": atMin]
         switch target {
         case .plan: break
@@ -297,7 +298,9 @@ struct Api: Sendable {
             body["label"] = label
         }
         return try NextAnswer.decode(
-            try await send("POST", "/api/me/once", query: Self.h12, json: try JSONSerialization.data(withJSONObject: body)))
+            try await send(
+                "POST", "/api/me/once", query: Self.coords(lat, lon, acc) + Self.h12, json: try JSONSerialization.data(withJSONObject: body)
+            ))
     }
 
     /// Today: each class with its leave-by, and the trips home. The JSON too,

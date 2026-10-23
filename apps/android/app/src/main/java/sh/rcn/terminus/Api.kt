@@ -1034,15 +1034,26 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         return request("POST", "/api/me/step" + if (hour12) "?h12=1" else "", body)
     }
 
-    /** A one-off trip later today: planned like a class. Answers with the new /api/me/next. */
-    suspend fun once(target: Target, atMin: Int): JSONObject {
+    /**
+     * A one-off trip later today: planned like a class. Answers with the new /api/me/next, planned from [lat] and [lon] when given, as
+     * [nextJson] is.
+     */
+    suspend fun once(target: Target, atMin: Int, lat: Double? = null, lon: Double? = null, acc: Double? = null): JSONObject {
         val body = JSONObject().put("atMin", atMin)
         when (target) {
             is Target.SavedPlace -> body.put("place", target.key)
             is Target.Code -> body.put("to", target.code).put("label", target.label)
             Target.Plan -> {}
         }
-        return request("POST", "/api/me/once" + if (hour12) "?h12=1" else "", body)
+        val q = buildList {
+            if (lat != null && lon != null) {
+                add("lat=${coord(lat)}")
+                add("lon=${coord(lon)}")
+                acc?.let { add("acc=${Math.round(it)}") }
+            }
+            if (hour12) add("h12=1")
+        }
+        return request("POST", "/api/me/once" + query(q), body)
     }
 
     /** This phone's Firebase token, so the server can say when the card changes. */
