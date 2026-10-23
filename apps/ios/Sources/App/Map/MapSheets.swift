@@ -424,7 +424,8 @@ private struct IconCircle: View {
 }
 
 /// One row of a stop's board, as the Buses tab's, smaller: the service, where
-/// it goes, live or scheduled and how full, and the minutes. Tapped, it shows
+/// it goes and its next stop, how sure the time is when it isn't live and how
+/// full, and the minutes, a green dot beside a live one. Tapped, it shows
 /// its line on the map; the line picked there has its row washed in its colour.
 private struct StopRow: View {
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -460,18 +461,28 @@ private struct StopRow: View {
     private var runningRow: some View {
         HStack(alignment: .top, spacing: 12) {
             SvcChip(svc: row.svc, hex: hex, paid: row.paid)
-            VStack(alignment: .leading, spacing: 6) {
-                if let to = towards {
-                    to.font(.body).foregroundStyle(Color.ink).lineLimit(2)
+            VStack(alignment: .leading, spacing: 4) {
+                if let to = BusWords.destination(row) {
+                    Text(verbatim: to).font(.body).bold().foregroundStyle(Color.ink).lineLimit(1)
                 }
-                HStack(spacing: 8) {
-                    quality
-                    if let word = crowdWord { CrowdPill(text: word, packed: row.crowd == "high") }
+                // The next stop and the tags on one line when they fit, the tags under it when not.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) {
+                        nextStop.fixedSize()
+                        tags
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        nextStop.lineLimit(2)
+                        HStack(spacing: 8) { tags }
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             VStack(alignment: .trailing, spacing: 4) {
-                bigTime
+                HStack(spacing: 5) {
+                    if BusWords.isLive(row) { BusLiveDot() }
+                    bigTime
+                }
                 if let then = row.thenText {
                     Text(verbatim: then).font(.caption).foregroundStyle(Color.muted).multilineTextAlignment(.trailing)
                 }
@@ -485,7 +496,7 @@ private struct StopRow: View {
         return HStack(alignment: .center, spacing: 12) {
             SvcChip(svc: row.svc, hex: hex, paid: row.paid, faded: true)
             VStack(alignment: .leading, spacing: 2) {
-                if let to = row.toText ?? (row.towards.isEmpty ? nil : L("to %@", row.towards.joined(separator: L(", ")))) {
+                if !row.endsHere, let to = BusWords.destination(row) {
                     Text(verbatim: to).font(.subheadline).foregroundStyle(Color.muted).lineLimit(typeSize.isAccessibilitySize ? nil : 1)
                 }
                 Text(why).font(.body.weight(.semibold)).foregroundStyle(Color.muted)
@@ -495,45 +506,21 @@ private struct StopRow: View {
         }
     }
 
-    /// The server's "to Central Library, Kent Vale" with the next stop in
-    /// bold; all of it bold at the end of the line; "Ends here" said, so no
-    /// direction doesn't read as missing.
-    private var towards: Text? {
-        if let to = row.toText {
-            if row.endsHere { return Text(verbatim: to).bold() }
-            if let next = row.towards.first, let r = to.range(of: next) {
-                return Text(verbatim: String(to[..<r.lowerBound])) + Text(verbatim: next).bold()
-                    + Text(verbatim: String(to[r.upperBound...]))
-            }
-            return Text(verbatim: to)
-        }
-        if let next = row.towards.first {
-            let rest = row.towards.dropFirst().map { L(", ") + $0 }.joined()
-            let full = L("to %@", "\u{1}")
-            let parts = full.components(separatedBy: "\u{1}")
-            return Text(verbatim: parts.first ?? "") + Text(verbatim: next).bold()
-                + Text(verbatim: rest + (parts.count > 1 ? parts[1] : ""))
-        }
-        if row.endsHere { return Text(L("Ends here")).bold() }
-        return nil
+    @ViewBuilder private var nextStop: some View {
+        if let next = BusWords.nextStop(row) { Text(verbatim: next).font(.footnote).foregroundStyle(Color.muted) }
     }
 
-    /// Live (a dot), Scheduled, or the last time known; why there's no time.
-    @ViewBuilder private var quality: some View {
+    /// How sure the time is, only when it isn't live (the dot says that), and how full the bus is.
+    @ViewBuilder private var tags: some View {
         if row.etaS == nil {
             Text(row.quality == "unknown" ? L("No live times") : L("No time yet"))
                 .font(.footnote.weight(.medium)).foregroundStyle(Color.muted)
-        } else if row.quality == "live" {
-            HStack(spacing: 5) {
-                Circle().fill(Color.good).frame(width: 7, height: 7)
-                    .background(Circle().fill(Color.good.opacity(0.25)).frame(width: 11, height: 11))
-                Text(L("Live")).font(.footnote.weight(.semibold)).foregroundStyle(Color.good)
-            }
         } else if row.quality == "stale" {
             Tag(text: L("Last known"), color: .muted)
-        } else {
+        } else if row.quality != "live" {
             Tag(text: L("Estimate"), color: .warn)
         }
+        if let word = crowdWord { CrowdPill(text: word, packed: row.crowd == "high") }
     }
 
     private var crowdWord: String? {
@@ -547,7 +534,8 @@ private struct StopRow: View {
 
     /// "4 min" with the number large, or "Arriving"; a dash without a time
     /// (the tag says why). The words are the server's ("4 min", "~6 min",
-    /// "约 6 分钟"), worded here only for an older server.
+    /// "约 6 分钟"), worded here only for an older server. One without a
+    /// number ("now") is as large as a number, so the column reads as one.
     @ViewBuilder private var bigTime: some View {
         let arriving = (row.etaS ?? .max) < BusTimes.arrivingS
         let color: Color = arriving ? .brand : row.quality == "live" ? .ink : .muted
@@ -560,7 +548,7 @@ private struct StopRow: View {
                         + Text(verbatim: String(eta[r])).font(.system(size: 26 * scale, weight: .heavy))
                         + Text(verbatim: String(eta[r.upperBound...])).font(.system(size: 14 * scale, weight: .semibold))
                 } else {
-                    Text(verbatim: eta).font(.system(size: 20 * scale, weight: .heavy))
+                    Text(verbatim: eta).font(.system(size: 26 * scale, weight: .heavy))
                 }
             }
             .foregroundStyle(color)

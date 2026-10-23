@@ -3,7 +3,7 @@
 // tab (buses.js) and the map's stop sheet (map.js), so a stop reads the same
 // in both.
 
-import { Fill, Icon, MARK, html } from '/assets/ui.js';
+import { Icon, html } from '/assets/ui.js';
 import { clock, inkOn, serverNow, t } from '/account/dom.js';
 import { campus } from '/account/profile.js';
 
@@ -53,7 +53,7 @@ export function Big({ r }) {
 }
 
 /** How many later buses "then …" names, as the server's (THEN_MAX in the API's src/answer/resolve.ts). */
-export const THEN_MAX = 3;
+export const THEN_MAX = 2;
 
 /** "then 12, ~20 min": the later buses the feed gave, a timetabled one marked, as the server words it. */
 export const thenText = (r) =>
@@ -68,19 +68,22 @@ export const thenText = (r) =>
       )
     : '');
 
-/** "to Central Library, Kent Vale" (the server's `toText`), the next stop in bold. */
-export function Towards({ r }) {
+/**
+ * Where the bus is going: the end of its line, the last of `towards` (the
+ * next stop and the end, one name when they're the same, none at the end of
+ * the line). An older server with no `towards` has only its `toText`.
+ */
+export function Dest({ r }) {
   const to = r.towards;
-  if (r.toText != null) {
-    const at = to?.length ? r.toText.indexOf(to[0]) : -1;
-    if (at < 0) return r.toText;
-    return html`${r.toText.slice(0, at)}<b>${to[0]}</b>${r.toText.slice(at + to[0].length)}`;
-  }
-  // Worked out here for an older server; the end of its line has nowhere further to say.
-  if (!to?.length) return t('Ends here');
-  const text = to.length > 1 ? t('to {0}, {1}', MARK, to[1]) : t('to {0}', MARK);
-  return html`<${Fill} text=${text} parts=${[html`<b>${to[0]}</b>`]} />`;
+  if (to == null) return r.toText ?? t('Ends here');
+  return to.length ? to[to.length - 1] : t('Ends here');
 }
+
+/** "Next stop AS 5", when the next stop isn't the end of the line already named. */
+const NextStop = ({ r }) => (r.towards?.length === 2 ? html`<span class="bt-next">${t('Next stop {0}', r.towards[0])}</span>` : null);
+
+/** A live time's mark beside it, said as "Live"; the board's foot explains it once (buses.js). */
+export const LiveDot = () => html`<span class="dot bt-dot" role="img" aria-label=${t('Live')}></span>`;
 
 export function Chip({ svc, color, paid, cls = '' }) {
   return html`<span class=${`svc-tag ${cls}`} style=${svcVars(color ?? colorOf(svc))}>${svc}${paid && html`<span class="fare" role="img" aria-label=${t('Public bus, fare applies')}>$</span>`}</span>`;
@@ -132,7 +135,7 @@ function StoppedRow({ r, now, onPick, chevron, picked }) {
   return html`
     <button type="button" class=${l.cls} style=${l.style} aria-pressed=${l.pressed} onClick=${() => onPick(r.svc)}>
       <${Chip} svc=${r.svc} color=${r.color} cls="bt-chip muted" />
-      <span class="bt-dir">${r.towards?.length ? html`<${Towards} r=${r} />` : ''}</span>
+      <span class="bt-dir">${r.towards?.length ? html`<${Dest} r=${r} />` : ''}</span>
       <span class="bt-big none">${first}</span>
       <span class="bt-meta">${second}</span>
       ${l.chev}
@@ -148,15 +151,16 @@ function StoppedRow({ r, now, onPick, chevron, picked }) {
  */
 export function Row({ r, now = serverNow(), onPick, chevron = false, picked }) {
   if (r.running === false) return html`<${StoppedRow} r=${r} now=${now} onPick=${onPick} chevron=${chevron} picked=${picked} />`;
-  // Due within the minute: tinted on the Buses tab. Not on the map, where a
-  // tinted row is the line picked there; the big minutes say it's soon.
-  const soon = picked == null && r.etaS != null && r.etaS < 60 && r.quality === 'live';
-  const cls = `bt-row${soon ? ' soon' : ''}${r.old ? ' old' : ''}`;
+  const cls = `bt-row run${r.old ? ' old' : ''}`;
+  // Live is the usual case, so it's a dot by the time rather than a word on every row; the other qualities still say so.
+  const live = r.quality === 'live' && r.etaS != null;
   const body = html`
     <${Chip} svc=${r.svc} color=${r.color} paid=${r.paid} cls="bt-chip" />
-    <span class="bt-dir"><${Towards} r=${r} /></span>
-    <${Big} r=${r} />
-    <span class="bt-meta"><${Quality} r=${r} /><${Crowd} crowd=${r.crowd} /></span>
+    <span class="bt-text">
+      <span class="bt-dir"><${Dest} r=${r} /></span>
+      <span class="bt-meta"><${NextStop} r=${r} />${!live && html`<${Quality} r=${r} />`}<${Crowd} crowd=${r.crowd} /></span>
+    </span>
+    <span class="bt-at">${live && html`<${LiveDot} />`}<${Big} r=${r} /></span>
     <span class="bt-then">${thenText(r)}</span>
   `;
   if (r.paid) return html`<div class=${cls}>${body}</div>`;

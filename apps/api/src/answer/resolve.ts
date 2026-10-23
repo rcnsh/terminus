@@ -612,7 +612,7 @@ export interface BoardRow {
 }
 
 /** How many later buses a row's `laterText` names: more is noise on a phone. */
-export const THEN_MAX = 3;
+export const THEN_MAX = 2;
 
 /**
  * A time on a board, in words: a timetable time is marked as an estimate

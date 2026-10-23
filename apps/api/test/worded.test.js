@@ -32,7 +32,7 @@ test('a board row says its time in words, with "~" for a timetable time', () => 
   );
 });
 
-test('"then" names up to three later buses, each timetable one marked', () => {
+test('"then" names up to two later buses, each timetable one marked', () => {
   assert.equal(thenText([]), null);
   assert.equal(thenText([{ etaS: 720, quality: 'live' }]), 'then 12 min');
   const later = [
@@ -41,10 +41,10 @@ test('"then" names up to three later buses, each timetable one marked', () => {
     { etaS: 1500, quality: 'live' },
     { etaS: 2400, quality: 'live' },
   ];
-  assert.equal(thenText(later), 'then 12, ~20, 25 min');
+  assert.equal(thenText(later), 'then 12, ~20 min');
   assert.equal(
     zh(() => thenText(later)),
-    '之后 12、约 20、25 分钟',
+    '之后 12、约 20 分钟',
   );
   assert.equal(thenText([{ etaS: 720, quality: 'stale' }]), 'then ~12 min', 'an old reading is a guess too');
   // Never "0": a bus under a minute away is still a minute.

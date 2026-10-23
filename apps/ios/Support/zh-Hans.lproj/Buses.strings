@@ -24,6 +24,7 @@
 "min" = "分钟";
 "Nearest stop" = "最近的车站";
 "Nearest stop · %@ m" = "最近的车站 · %@ 米";
+"Next stop %@" = "下一站 %@";
 "No buses are running here now" = "现在没有巴士在这里运行";
 "No buses running" = "没有巴士在运行";
 "No live times" = "暂无实时时间";

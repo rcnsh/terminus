@@ -113,15 +113,32 @@ enum BusWords {
         rows.filter(\.running) + rows.filter { !$0.running }
     }
 
+    /// The later buses a row shows, as many as the server words.
+    static let thenMax = 2
+
+    /// Where the bus is going, the row's bold line: the end of its line,
+    /// "Ends here" at the end of it, or an older server's "to …".
+    static func destination(_ r: BoardRow) -> String? {
+        r.towards.last ?? (r.endsHere ? L("Ends here") : r.toText)
+    }
+
+    /// "Next stop Central Library", under the destination; nothing when the next stop is where it ends.
+    static func nextStop(_ r: BoardRow) -> String? {
+        r.towards.count > 1 ? L("Next stop %@", r.towards[0]) : nil
+    }
+
+    /// A time that's live, the green dot beside it in place of the word.
+    static func isLive(_ r: BoardRow) -> Bool { r.etaS != nil && r.quality == "live" }
+
     /// A later bus is from the timetable while the next one isn't: the "then" line says so.
     static func laterScheduled(_ r: BoardRow) -> Bool {
-        r.quality != "scheduled" && r.later.prefix(3).contains { $0.quality == "scheduled" }
+        r.quality != "scheduled" && r.later.prefix(thenMax).contains { $0.quality == "scheduled" }
     }
 
     /// "then 12, ~20, 25 min", as the server words it; worked out here, from the later buses it gave, for an older server.
     static func then(_ r: BoardRow) -> String? {
         if let t = r.laterText { return t }
-        let mins = r.later.sorted { $0.etaS < $1.etaS }.prefix(3).map { "\(BusTimes.minutes($0.etaS))" }
+        let mins = r.later.sorted { $0.etaS < $1.etaS }.prefix(thenMax).map { "\(BusTimes.minutes($0.etaS))" }
         guard !mins.isEmpty else { return nil }
         let list = mins.joined(separator: L(", "))
         return laterScheduled(r) ? L("then %@ min, estimated", list) : L("then %@ min", list)
