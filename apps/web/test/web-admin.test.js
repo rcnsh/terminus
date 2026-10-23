@@ -32,7 +32,7 @@ const deferred = () => {
 };
 const STATS = { now: '2026-10-23T02:00:00Z', accounts: { total: 3 } };
 
-test('the dashboard: a failed first load can be tried again', async (t) => {
+test('the dashboard: a failed first load can be tried again, and Lock wins over a reply still on its way', async (t) => {
   // A page without charts: happy-dom has no layout for them to measure.
   page({ url: 'https://terminus.run/admin/#/reports', html: '<div id="admin"></div>' });
   globalThis.ResizeObserver ??= class {
@@ -60,4 +60,16 @@ test('the dashboard: a failed first load can be tried again', async (t) => {
   asked[1].answer(200, STATS);
   await settle();
   assert.ok(button('Lock'), 'the dashboard is up');
+
+  // A refresh on its way when Lock is pressed: its reply is dropped, not shown with the session gone.
+  button('Refresh').click();
+  await settle();
+  assert.equal(asked.length, 3);
+  button('Lock').click();
+  await settle();
+  asked[2].answer(200, STATS);
+  await settle();
+  // A boolean: a failing assert would print happy-dom's whole element graph.
+  assert.equal(Boolean(button('Lock')), false, 'still locked');
+  assert.equal(sessionStorage.getItem('terminus-operator-token'), null);
 });
