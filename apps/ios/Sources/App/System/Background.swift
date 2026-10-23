@@ -10,7 +10,7 @@ import Foundation
 @MainActor enum Background {
     static let id = "sh.rcn.terminus.refresh"
     /// iOS runs them no more often than this, whatever's asked.
-    static let minGap: TimeInterval = 15 * 60
+    nonisolated static let minGap: TimeInterval = 15 * 60
 
     /// At launch, before it ends (BGTaskScheduler's rule).
     static func register() {
@@ -30,12 +30,20 @@ import Foundation
     static func schedule(now: Date = Date()) {
         BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: id)
         guard TokenStore.read() != nil, TripSync.followed else { return }
-        let at =
-            WidgetStore.plan().map { a, fetched in
-                WidgetTiming.nextRefreshAt(a, fetchedAt: fetched, now: ServerClock.now).addingTimeInterval(-ServerClock.skew)
-            } ?? now
         let req = BGAppRefreshTaskRequest(identifier: id)
-        req.earliestBeginDate = max(at, now.addingTimeInterval(minGap))
+        req.earliestBeginDate = refreshAt(WidgetStore.plan(), now: now, skew: ServerClock.skew)
         try? BGTaskScheduler.shared.submit(req)
+    }
+
+    /// When to ask for the next refresh, on the phone's clock, for the kept
+    /// answer and when it came (`plan`, the phone's clock). The answer's
+    /// moments are the server's, so both ends go through `skew`.
+    nonisolated static func refreshAt(_ plan: (NextAnswer, Date)?, now: Date, skew: TimeInterval) -> Date {
+        let at =
+            plan.map { a, fetched in
+                WidgetTiming.nextRefreshAt(a, fetchedAt: fetched.addingTimeInterval(skew), now: now.addingTimeInterval(skew))
+                    .addingTimeInterval(-skew)
+            } ?? now
+        return max(at, now.addingTimeInterval(minGap))
     }
 }

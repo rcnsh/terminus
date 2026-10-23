@@ -189,6 +189,15 @@ private func answer(_ name: String) throws -> (NextAnswer, Date) {
     #expect(WidgetMode.effective(place, at: now, plan: a, rowShown: false, now: now) == .timetable)
 }
 
+/// The background refresh with the phone ten minutes fast: the kept answer
+/// came a day after its moments, so it's asked again the fallback's 15
+/// minutes after it came by the phone's clock, not 25.
+@Test func theBackgroundRefreshReadsBothClocksTheSameWay() throws {
+    let (a, asOf) = try answer("riding")
+    let fetched = asOf.addingTimeInterval(86_400)
+    #expect(Background.refreshAt((a, fetched), now: fetched, skew: -600) == fetched.addingTimeInterval(15 * 60))
+}
+
 // MARK: links
 
 @Test func widgetLinksOpenTheRightPlace() {
