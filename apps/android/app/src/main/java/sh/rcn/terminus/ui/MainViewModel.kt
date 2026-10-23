@@ -260,7 +260,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch(account) {
             val ctx = getApplication<Application>()
             try {
-                val json = Api(token, hour12 = hour12(ctx)).once(target, atMin)
+                // Where the phone is, as for the card: otherwise the first plan starts where the timetable puts you.
+                val loc = Locator.lastKnown(ctx, maxAgeMs = 60_000) ?: Locator.current(ctx)
+                val json = Api(token, hour12 = hour12(ctx)).once(target, atMin, loc?.latitude, loc?.longitude, Locator.accOf(loc))
                 val now = System.currentTimeMillis()
                 // Read before it's kept: one this version can't read leaves the last good one.
                 // Signed out meanwhile: none of it is this phone's any more.

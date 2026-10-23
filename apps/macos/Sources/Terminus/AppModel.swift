@@ -558,8 +558,13 @@ final class AppModel {
     func goLater(atMin: Int) async -> String? {
         guard let token = TokenStore.read(), target != .plan else { return nil }
         let gen = session
+        // Where the Mac is, as for the card: otherwise the first plan starts where the timetable puts you.
+        let fix = await locator.current(maxAge: 120)
+        let acc = fix.flatMap { fixUncertaintyM(accuracy: $0.horizontalAccuracy, ageS: -$0.timestamp.timeIntervalSinceNow) }
+        let loc = acc == nil ? nil : fix
         do {
-            let a = try await Api(token: token).once(target, atMin: atMin)
+            let a = try await Api(token: token).once(
+                target, atMin: atMin, lat: loc?.coordinate.latitude, lon: loc?.coordinate.longitude, acc: acc)
             guard gen == session else { return nil }
             plan = a
             updated = ServerClock.now

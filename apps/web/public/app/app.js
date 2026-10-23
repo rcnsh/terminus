@@ -1150,7 +1150,9 @@ function GoLater() {
     const where = to.kind === 'place' ? { place: to.key } : { to: to.to, label: to.label };
     setSending(true);
     try {
-      const a = await api(`/api/me/once${query()}`, { method: 'POST', body: { ...where, atMin: at, date } });
+      // From where the phone is, as the card is: otherwise the first plan starts where the timetable puts you.
+      const from = await here();
+      const a = await api(`/api/me/once${query(from ?? {})}`, { method: 'POST', body: { ...where, atMin: at, date } });
       target.set({ kind: 'plan' });
       card.set({ a });
       refresh();

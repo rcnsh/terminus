@@ -528,8 +528,11 @@ final class AppModel {
     func goLater(atMin: Int) async -> String? {
         guard let token, target != .plan else { return nil }
         let gen = session
+        // Where the phone is, as for the card: otherwise the first plan starts where the timetable puts you.
+        let loc = await Locator.shared.fix()
         do {
-            let a = try await Api(token: token).once(target, atMin: atMin)
+            let a = try await Api(token: token).once(
+                target, atMin: atMin, lat: loc?.coordinate.latitude, lon: loc?.coordinate.longitude, acc: loc?.acc)
             guard gen == session else { return nil }
             applyPlan(a)
             select(.plan)

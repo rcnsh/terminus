@@ -1344,7 +1344,9 @@ same way (leave-by, push, "Not going"):
 - `profile.once`: a one-off trip on a date, `{date, arriveByMin, to, label}`,
   added with `POST /api/me/once` and dropped once its date has passed. A
   date that doesn't exist (2026-02-30) is refused, since it would never
-  pass; so is a lesson's date range with one.
+  pass; so is a lesson's date range with one. The clients send the phone's
+  `lat`, `lon` and `acc` with it, as for `/api/me/next`, so the plan it
+  answers with starts from where you are, not where the timetable puts you.
 
 Each counts as an hour there, for what the planner does next. On an idle trip
 the card also offers `away` ("Not on campus today"), which records every trip

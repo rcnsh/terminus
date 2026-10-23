@@ -1511,10 +1511,11 @@ export function paths(): Record<string, unknown> {
         description:
           '"Science library at 14:00 today": `place` (a favourite\'s key) or `to` (a stop, place or room code), `atMin` (minutes past midnight, Singapore time), and optionally `label` ' +
           "and `date` (today by default, up to a week ahead). Kept in the profile's `once` and planned like a class that day, with its leave-by, " +
-          'question and "Not going". Answers with the new /me/next. A save from another device at the same moment is kept: the trip is added to it.',
+          'question and "Not going". Answers with the new /me/next, planned from `lat` and `lon` when given, as /me/next is. ' +
+          'A save from another device at the same moment is kept: the trip is added to it.',
         operationId: 'meOnce',
         security: [{ bearer: [] }, { cookie: [] }],
-        parameters: [h12Param, langParam],
+        parameters: [...coordParams, h12Param, langParam],
         requestBody: jsonBody(
           {
             type: 'object',
