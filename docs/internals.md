@@ -973,7 +973,7 @@ response) says which, so the walk is never added twice. Apps count down to `leav
 
 The journey's lines come worded too (`worded` in `src/answer/card.ts`), so the three
 web styles, the app's card and the widgets say the same: `title` ("To
-GEA1000 @ UTown · starts 10:00", "To COM 3 · by 19:00" for a one-off trip or a
+GEA1000 @ UTown · starts 10:00", "To COM 3 · arrive by 19:00" for a one-off trip or a
 usual time, which `dest.place` marks and the heading calls "Going to COM 3"), `place` ("GEA1000"), `byText` ("by
 ~09:36", null at the stop), `walkText` ("5 min walk"), `rideText` ("10 min
 ride · off at Opp NUSS"), `walkEndText` ("2 min walk"), `arriveText`

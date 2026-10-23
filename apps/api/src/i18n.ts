@@ -245,7 +245,7 @@ const en = {
   journeyTo: ((dest: string) => `To ${dest}`) as Fn<[string]>,
   startsShort: ((t: string) => `starts ${t}`) as Fn<[string]>,
   /** A one-off trip's or a usual time's arrive-by, where a class has startsShort. */
-  thereBy: ((t: string) => `by ${t}`) as Fn<[string]>,
+  thereBy: ((t: string) => `arrive by ${t}`) as Fn<[string]>,
   byTime: ((t: string) => `by ${t}`) as Fn<[string]>,
   arriveCap: ((t: string) => `Arrive ${t}`) as Fn<[string]>,
   /** A class's sooner bus: "Or go now: R2 at 09:06 from PGP". */

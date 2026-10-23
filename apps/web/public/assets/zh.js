@@ -370,6 +370,7 @@ window.TERMINUS_ZH = {
   'reaches {0} in about {1} min': '约 {1} 分钟后到达 {0}',
   'reaches {0} in {1} min': '{1} 分钟后到达 {0}',
   'starts {0}': '{0} 开始',
+  'arrive by {0}': '{0} 前到',
   'terminus': 'terminus',
   'terminus on GitHub': 'GitHub 上的 terminus',
   "terminus checks NUS's shuttle feed every 15 minutes. When the feed is down, the apps show estimated times based on the usual gap between buses and label them as estimates. Outages are on NUS's side.":
