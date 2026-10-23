@@ -244,6 +244,8 @@ const en = {
   // The trip as steps, worded (card.journey)
   journeyTo: ((dest: string) => `To ${dest}`) as Fn<[string]>,
   startsShort: ((t: string) => `starts ${t}`) as Fn<[string]>,
+  /** A one-off trip's or a usual time's arrive-by, where a class has startsShort. */
+  thereBy: ((t: string) => `by ${t}`) as Fn<[string]>,
   byTime: ((t: string) => `by ${t}`) as Fn<[string]>,
   arriveCap: ((t: string) => `Arrive ${t}`) as Fn<[string]>,
   /** A class's sooner bus: "Or go now: R2 at 09:06 from PGP". */
@@ -584,6 +586,7 @@ const zh: Msgs = {
   headPlace: (label) => zs`去${label}`,
   journeyTo: (dest) => (dest === '家' ? '回家' : zs`去${dest}`),
   startsShort: (t) => zs`${t}开始`,
+  thereBy: (t) => zs`${t}前到`,
   byTime: (t) => zs`${t}前出发`,
   arriveCap: (t) => zs`${t}到达`,
   orGoNowFrom: (svc, t, stop) => zs`或现在走：在${stop}搭${t}的${svc}`,

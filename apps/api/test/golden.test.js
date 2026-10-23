@@ -161,6 +161,11 @@ const TAP_FEED = {
 /** A signal's location: at the PGP bus stop. */
 const PGP_STOP = { lat: 1.291765, lon: 103.780419 };
 
+/** One class, 10:00 to 10:30 at LT 13, and home at PGP. */
+const onceDay = { home: { stops: ['PGP'] }, manual: [{ ...cls(600, 'LT13', 'GEX1015 @ AS3'), endMin: 630 }], places };
+/** Inside the COM3 building, a couple of minutes from its bus stop. */
+const IN_COM3 = 'lat=1.29474&lon=103.77395';
+
 /** A class at 09:15 at UTown: too soon for anything but the next bus. */
 const soon = { home: { stops: ['PGP'] }, manual: [cls(555, 'UTOWN', 'GEA1000 @ UTown')], places };
 
@@ -379,6 +384,37 @@ const CASES = {
         await get(`/api/me/next?${DORM}`);
         get.advance(MIN);
         get.upstream({ byStop: { PGP: [{ name: 'D2', arrivalTime: '7', nextArrivalTime: '17' }] } });
+      },
+    },
+  ],
+  // Home at PGP after a 10:00 class at LT 13, then COM 3 for 12:00 added
+  // from an app that sent no location: planned from home, where the phone
+  // is, not from the class (and "Going to", not "Next class").
+  'once-from-home': [
+    onceDay,
+    `/api/me/next?${DORM}`,
+    {
+      trips: true,
+      at: sgtAt(THU_DATE, '10:40'),
+      before: async (get) => {
+        await get(`/api/me/next?${DORM}`);
+        get.at(sgtAt(THU_DATE, '11:45'));
+        await get.post('/api/me/once', { to: 'COM3', label: 'COM 3', atMin: 720 });
+        get.advance(4 * MIN);
+      },
+    },
+  ],
+  // Inside the COM3 building, COM 3 added for a minute from now: the walk
+  // to its stop, not a bus from home, where the timetable put you.
+  'once-in-building': [
+    onceDay,
+    `/api/me/next?${IN_COM3}`,
+    {
+      trips: true,
+      at: sgtAt(THU_DATE, '12:45'),
+      before: async (get) => {
+        await get.post('/api/me/once', { to: 'COM3', label: 'COM 3', atMin: 766 });
+        get.advance(MIN);
       },
     },
   ],

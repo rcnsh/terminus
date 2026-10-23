@@ -1634,7 +1634,8 @@ export async function tripCardFor(
   if (!classesOn(profile, nowMs).length) return null;
   const rider = await loadRider(env, userId, nowMs, { profile, day });
   const { body, trip, update, wakeAt } = await nextFor(env, ctx, unlogged(deps), rider, { ...DAY_ASK, h12 }, nowMs);
-  for (const [key, plan] of Object.entries(update.plans ?? {})) ctx.waitUntil(savePlan(key, plan));
+  // Only a request with a location drops a plan: never a wake.
+  for (const [key, plan] of Object.entries(update.plans ?? {})) if (plan) ctx.waitUntil(savePlan(key, plan));
   return {
     key: trip.key,
     phase: body.card.phase,

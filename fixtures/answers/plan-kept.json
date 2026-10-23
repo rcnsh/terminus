@@ -109,7 +109,7 @@
     "arrive": "Arrive 09:15 · just in time",
     "catchLine": "Catch the 09:06 D2 at PGP · arrive 09:15, just in time",
     "late": true,
-    "goNow": "Or go now: D2 at 09:08 · arrive 09:17",
+    "goNow": null,
     "note": null,
     "estimate": null,
     "phase": "heading",
@@ -155,12 +155,7 @@
       "arriveStop": "09:15",
       "slack": "just in time",
       "live": false,
-      "backup": {
-        "svc": "D2",
-        "color": "#8e44c9",
-        "stop": "PGP",
-        "board": "09:08"
-      },
+      "backup": null,
       "why": null,
       "change": null,
       "title": "To GEA1000 @ UTown · starts 09:15",
@@ -171,12 +166,12 @@
       "walkEndText": null,
       "arriveText": "Arrive 09:15 · just in time",
       "arriveWhere": "at UTown",
-      "backupText": "Or go now: D2 at 09:08 from PGP",
+      "backupText": null,
       "summary": "arrive 09:15 · D2 09:06 at PGP"
     },
     "upcoming": null,
     "step": null,
-    "title": "D2 · 09:08",
+    "title": "D2 · ~09:06",
     "heading": "Next class · GEA1000 @ UTown",
     "remindAt": null
   }

@@ -157,7 +157,11 @@ export class Trip {
       changed = true;
     }
     if (u.plans && Object.keys(u.plans).length) {
-      next.plans = { ...next.plans, ...u.plans };
+      const plans = { ...next.plans };
+      for (const [key, plan] of Object.entries(u.plans))
+        if (plan) plans[key] = plan;
+        else delete plans[key];
+      next.plans = plans;
       changed = true;
     }
     for (const [key, step] of Object.entries(u.steps ?? {})) {

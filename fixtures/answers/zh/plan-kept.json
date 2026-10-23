@@ -109,7 +109,7 @@
     "arrive": "09:15 到达 · 刚好赶上",
     "catchLine": "在 PGP 搭 09:06 的 D2 · 09:15 到达，刚好赶上",
     "late": true,
-    "goNow": "或现在走：09:08 的 D2 · 09:17 到达",
+    "goNow": null,
     "note": null,
     "estimate": null,
     "phase": "heading",
@@ -155,12 +155,7 @@
       "arriveStop": "09:15",
       "slack": "刚好赶上",
       "live": false,
-      "backup": {
-        "svc": "D2",
-        "color": "#8e44c9",
-        "stop": "PGP",
-        "board": "09:08"
-      },
+      "backup": null,
       "why": null,
       "change": null,
       "title": "去 GEA1000 @ UTown · 09:15 开始",
@@ -171,12 +166,12 @@
       "walkEndText": null,
       "arriveText": "09:15 到达 · 刚好赶上",
       "arriveWhere": "在 UTown",
-      "backupText": "或现在走：在 PGP 搭 09:08 的 D2",
+      "backupText": null,
       "summary": "09:15 到达 · 在 PGP 搭 09:06 的 D2"
     },
     "upcoming": null,
     "step": null,
-    "title": "D2 · 09:08",
+    "title": "D2 · 约 09:06",
     "heading": "下一节课 · GEA1000 @ UTown",
     "remindAt": null
   }

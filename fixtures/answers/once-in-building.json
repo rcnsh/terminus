@@ -1,0 +1,183 @@
+{
+  "stop": {
+    "code": "CLB",
+    "name": "CLB",
+    "confidence": 0.5
+  },
+  "quality": "live",
+  "asOf": "2026-08-27T04:46:00.000Z",
+  "arrivals": [
+    {
+      "svc": "D2",
+      "etaS": 240,
+      "crowd": "low",
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "D2",
+      "etaS": 840,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "A1",
+      "etaS": 540,
+      "crowd": "high",
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "A1",
+      "etaS": 1140,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "R2",
+      "etaS": 360,
+      "crowd": "medium",
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "R2",
+      "etaS": 1080,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "D1",
+      "etaS": 420,
+      "crowd": "low",
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "D1",
+      "etaS": 1020,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    }
+  ],
+  "label": "Walk · 3 min",
+  "detail": "On foot to COM 3 · D1 would be 13 min · from CLB",
+  "alt": "D1 · 7 min · CLB",
+  "departsAt": null,
+  "arriveAt": "2026-08-27T04:48:52Z",
+  "foot": {
+    "s": 172,
+    "why": "D1 would be 13 min"
+  },
+  "leave": {
+    "at": "2026-08-27T04:46:00Z",
+    "estimated": false,
+    "svc": null,
+    "stop": null,
+    "board": null,
+    "arrive": "2026-08-27T04:48:52Z",
+    "note": null
+  },
+  "steps": null,
+  "mode": "trip",
+  "dest": {
+    "to": "COM3",
+    "label": "COM 3",
+    "why": "class",
+    "place": true
+  },
+  "timing": {
+    "status": "late",
+    "text": "~3 min late",
+    "classAt": "2026-08-27T04:46:00Z",
+    "reachAt": "2026-08-27T04:48:52Z"
+  },
+  "places": [
+    {
+      "key": "mrt",
+      "label": "KR MRT"
+    },
+    {
+      "key": "deck",
+      "label": "The Deck"
+    }
+  ],
+  "refreshAt": "2026-08-27T05:01:00Z",
+  "walkSpeedMs": 1.3,
+  "card": {
+    "kind": "class",
+    "staleAt": "2026-08-27T05:01:00Z",
+    "crowd": null,
+    "quality": null,
+    "leaveBy": "Leave by 12:46",
+    "leaveVia": null,
+    "catch": "Walk there",
+    "arrive": "Arrive 12:48 · ~3 min late",
+    "catchLine": "Walk there · arrive 12:48, ~3 min late",
+    "late": true,
+    "goNow": null,
+    "note": null,
+    "estimate": null,
+    "phase": "heading",
+    "phaseText": "On your way",
+    "glance": "Walk now",
+    "line": "Walk there now · arrive 12:48 · ~3 min late",
+    "actions": [
+      {
+        "id": "skipped",
+        "label": "Not going",
+        "trip": "4:766:COM3"
+      }
+    ],
+    "warning": null,
+    "nextChangeAt": "2026-08-27T05:01:00Z",
+    "remind": true,
+    "suggestion": null,
+    "ride": null,
+    "gone": false,
+    "walkTo": {
+      "name": "COM 3",
+      "lat": 1.294431,
+      "lon": 103.775217
+    },
+    "notice": null,
+    "h12": false,
+    "journey": {
+      "leave": null,
+      "walk": "3 min",
+      "bus": null,
+      "boardAt": null,
+      "ride": null,
+      "off": null,
+      "to": "COM 3",
+      "toStop": "COM 3",
+      "arrive": "12:48",
+      "walkEnd": null,
+      "arriveStop": "12:48",
+      "slack": "~3 min late",
+      "live": false,
+      "backup": null,
+      "why": "D1 would be 13 min",
+      "change": null,
+      "title": "To COM 3 · by 12:46",
+      "place": "COM 3",
+      "byText": null,
+      "walkText": "3 min walk",
+      "rideText": null,
+      "walkEndText": null,
+      "arriveText": "Arrive 12:48 · ~3 min late",
+      "arriveWhere": "at COM 3",
+      "backupText": "D1 would be 13 min",
+      "summary": "arrive 12:48 · 3 min walk · D1 would be 13 min"
+    },
+    "upcoming": null,
+    "step": null,
+    "title": "Walk · 3 min",
+    "heading": "Going to COM 3",
+    "remindAt": null
+  }
+}

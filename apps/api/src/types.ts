@@ -231,6 +231,8 @@ export interface Dest {
   to: string;
   label: string;
   why: Why;
+  /** A `class` that is a one-off trip or a favourite at its usual time: planned like a class, not worded as one. */
+  place?: true;
 }
 
 /** A favourite, as a one-tap chip. */

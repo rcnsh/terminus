@@ -8,7 +8,18 @@
 
 import type { Env, Leave, PlaceChip, Timing } from '../types.ts';
 import type { MeDeps } from '../accounts/me.ts';
-import { GAP_RETURN_MIN, HOME_BY_MIN, LATE_GRACE_MIN, type Profile, classKey, classesOn, endOf, restDetail, restSide } from './profile.ts';
+import {
+  GAP_RETURN_MIN,
+  HOME_BY_MIN,
+  LATE_GRACE_MIN,
+  type Profile,
+  classKey,
+  classesOn,
+  endOf,
+  homeAfter,
+  restDetail,
+  restSide,
+} from './profile.ts';
 import type { TimetableClass } from './nusmods.ts';
 import { sgt } from '../config.ts';
 import { isoSeconds, named } from '../answer/format.ts';
@@ -107,11 +118,17 @@ export async function dayPlan(
       homeStop !== c.to &&
       c.arriveByMin - endOf(prev) > profile.gapHours * 60 &&
       !state.skipped.has(`gap-home:${prev.to}`);
+    // Home already since the class before (seen there, or its bus has got
+    // you there): that trip stays on the day, done, and this one starts from home.
+    const wentHome = prev && homeStop && !longGap ? homeAfter(prev, state, nowMs) : null;
     if (prev && longGap) {
       items.push(homeItem(`gap-home:${prev.to}`, prev, c.arriveByMin - GAP_RETURN_MIN));
+    } else if (prev && wentHome) {
+      items.push(homeItem(wentHome, prev, null, true));
     }
-    const from = longGap || !prev ? homeStop : prev.to;
-    const fromVenue = longGap || !prev ? null : prev.venue || null;
+    const fromHome = longGap || wentHome || !prev;
+    const from = fromHome ? homeStop : prev!.to;
+    const fromVenue = fromHome ? null : prev!.venue || null;
     const done = state.done.has(key) || c.arriveByMin + LATE_GRACE_MIN <= t.minutes;
     const status: DayStatus = done ? 'done' : nextTaken ? 'later' : 'next';
     if (status === 'next') nextTaken = true;
@@ -183,7 +200,8 @@ export async function dayPlan(
     // is not where you go on from (see nextTripFor).
     if (!state.missed.has(key)) prev = c;
   }
-  if (prev && homeStop && !state.skipped.has(`home:${endOf(prev)}`)) items.push(homeItem(`home:${endOf(prev)}`, prev, null));
+  if (prev && homeStop && !state.skipped.has(`home:${endOf(prev)}`))
+    items.push(homeItem(`home:${endOf(prev)}`, prev, null, homeAfter(prev, state, nowMs) !== null));
   await Promise.all(pending);
   // Worded once every leave-by is in.
   for (const it of items) it.line = dayLine(it, h12);
@@ -201,9 +219,9 @@ export async function dayPlan(
     note: classes.length ? null : restDetail(profile, nowMs, h12),
   };
 
-  function homeItem(key: string, after: TimetableClass, until: number | null): DayItem {
+  function homeItem(key: string, after: TimetableClass, until: number | null, home = false): DayItem {
     const leaveMin = endOf(after);
-    const done = state.done.has(key) || t.minutes >= (until ?? leaveMin + HOME_BY_MIN);
+    const done = home || state.done.has(key) || t.minutes >= (until ?? leaveMin + HOME_BY_MIN);
     const now = !done && t.minutes >= leaveMin;
     const status: DayStatus = done ? 'done' : now ? 'now' : nextTaken ? 'later' : 'next';
     if (status === 'next' || status === 'now') nextTaken = true;

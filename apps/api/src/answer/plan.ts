@@ -1,7 +1,8 @@
 /**
  * Which bus a trip is about: one plan for every device. Frozen from its
- * leave-by, kept for a device without a location, held once you were told
- * it unless it would make you late (answers a minute apart can prefer another:
+ * leave-by (but a plan made without a location gives way to a located
+ * answer until its bus leaves), kept for a device without a location, held
+ * once you were told it unless it would make you late (answers a minute apart can prefer another:
  * the feed lists a later one, a crowd guess changes), else the fresh answer's
  * bus. See internals.md, *One plan, and push*.
  *
@@ -63,6 +64,8 @@ export interface PlanInput {
   made: Plan | null;
   /** This request has a location. */
   located: boolean;
+  /** This request's location is at the stored plan's boarding stop: waiting for that bus. */
+  atItsStop?: boolean;
   /** When the class starts, for a class; null for a trip home. */
   classAtMs: number | null;
   nowMs: number;
@@ -73,13 +76,20 @@ export interface PlanChoice {
   bus: Plan | null;
   /** Save the answer's own bus (`made`) as the plan. */
   save: boolean;
+  /** Delete the stored plan: a guess the phone's location has replaced with a walk. */
+  drop?: true;
 }
 
-export function choosePlan({ stored, made, located, classAtMs, nowMs }: PlanInput): PlanChoice {
+export function choosePlan({ stored, made, located, atItsStop = false, classAtMs, nowMs }: PlanInput): PlanChoice {
   const at = (iso: string | undefined) => (iso ? Date.parse(iso) : Infinity);
   const ahead = stored?.board ? at(stored.board) > nowMs : false;
 
-  const frozen = stored?.board && nowMs >= Math.min(at(stored.board), at(stored.leave)) ? stored : null;
+  // A plan made without a location starts where the timetable puts you; the
+  // phone knows better, past its leave-by too. Not while you wait at its
+  // stop, and not once its bus has left: then only that plan can tell
+  // whether you're on it (next.ts).
+  const guessed = located && !atItsStop && stored !== undefined && !stored.located && ahead;
+  const frozen = !guessed && stored?.board && nowMs >= Math.min(at(stored.board), at(stored.leave)) ? stored : null;
   if (frozen) return { bus: frozen, save: false };
   // Kept, but when this answer has that same bus its times are the newer:
   // the plan's are from when the phone made it, minutes ago.
@@ -99,5 +109,5 @@ export function choosePlan({ stored, made, located, classAtMs, nowMs }: PlanInpu
 
   const save =
     made !== null && (!sameBus(stored, made) || (stored?.estimated === true && !made.estimated)) && (located || !stored?.located);
-  return { bus: made, save };
+  return guessed && !made ? { bus: null, save: false, drop: true } : { bus: made, save };
 }

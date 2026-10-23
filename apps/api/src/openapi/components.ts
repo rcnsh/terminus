@@ -1472,6 +1472,10 @@ export function components(): Record<string, unknown> {
                   to: { type: 'string' },
                   label: { type: 'string' },
                   why: { type: 'string', enum: ['class', 'home', 'gap-home', 'place'] },
+                  place: {
+                    type: 'boolean',
+                    description: 'With `why: class`: a one-off trip or a favourite at its usual time, planned like a class but not one.',
+                  },
                 },
               },
               places: { type: 'array', items: { type: 'object', properties: { key: { type: 'string' }, label: { type: 'string' } } } },
