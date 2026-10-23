@@ -1068,9 +1068,9 @@ iPhone's, `apple-app-site-association`, is the Worker's
 hour, naming `<APPLE_TEAM_ID>.sh.rcn.terminus` (`.beta` on the beta) for
 `/pair` and `/pair/`, so a pairing link (`/pair?code=…`) opens the app,
 which claims `applinks:` on both of its site's addresses. Apple's CDN
-fetches it from each one and follows no redirect. `APPLE_TEAM_ID` is a
-var, not a secret, and stays unset until there's an Apple developer
-account; until then the path is a 404.
+fetches it from each one and follows no redirect. `APPLE_TEAM_ID` isn't
+secret in itself, but the stable Worker has it set as a secret; the beta
+has none, so there the path is a 404 and universal links are off.
 
 The redirect runs only with `MOVE_PAGES` set to `on`, as both Workers
 have it in `cloudflare.config.ts`. Links handed to people (sign-in and
