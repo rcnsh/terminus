@@ -53,3 +53,29 @@ test('the token compare gets every length and prefix right', () => {
     assert.equal(timingSafeEqual(given, 'secret'), ok, JSON.stringify(given));
   }
 });
+
+test('dismissed crashes are left out before the dashboard takes its 25', async () => {
+  const fp = (i) => (1000 + i).toString(16).padStart(12, '0');
+  const rows = Array.from({ length: 40 }, (_, i) => ({
+    fingerprint: fp(i),
+    platform: 'android',
+    type: 'E',
+    message: 'm',
+    stack: 's',
+    n: 100 - i,
+    fatal: 0,
+    last: '2026-10-20 10:00:00',
+  }));
+  // Analytics Engine as it would answer: the commonest crashes, up to the query's LIMIT.
+  const fetchImpl = async (_url, init) => {
+    const crashes = /blob5 AS type/.test(init.body);
+    return new Response(JSON.stringify({ data: crashes ? rows.slice(0, Number(/LIMIT (\d+)/.exec(init.body)[1])) : [] }));
+  };
+  // The ten commonest, dismissed after their last report.
+  const dismissed = Object.fromEntries(rows.slice(0, 10).map((r) => [r.fingerprint, Date.parse('2026-10-21T00:00:00Z')]));
+  const env = { KV: makeKV({ 'config:crashes:dismissed': dismissed }), ANALYTICS_TOKEN: 'ae-token', CF_ACCOUNT_ID: 'acct' };
+  const s = await adminStats(env, Date.now(), fetchImpl);
+  assert.equal(s.analytics.appErrors.length, 25);
+  assert.equal(s.analytics.appErrors[0].fingerprint, fp(10));
+  assert.equal(s.analytics.appErrors.at(-1).fingerprint, fp(34));
+});

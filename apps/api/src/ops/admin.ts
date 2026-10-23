@@ -229,6 +229,10 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
 /** A row's Singapore day, "2026-10-24", in Analytics Engine's SQL (its toDate() gives the UTC day). */
 const SG_DAY = `formatDateTime(timestamp, '%Y-%m-%d', 'Asia/Singapore')`;
 
+/** The dashboard's crashes: the commonest 25 not dismissed, from more rows than that, so dismissed ones don't leave it short. */
+const CRASHES_SHOWN = 25;
+const CRASH_ROWS = 100;
+
 /** Answers, their quality, and errors per day for 14 days, the timelapse
  *  recorder's polls by what each cost NUS (logPoll), the daily active counts
  *  (usage.ts), the apps' error reports (apperrors.ts), what still uses
@@ -259,10 +263,10 @@ async function analyticsStats(env: Env, fetchImpl: typeof fetch): Promise<Record
         sql(`SELECT blob4 AS fingerprint, blob2 AS platform, blob5 AS type, blob6 AS message, blob7 AS stack,
                   SUM(_sample_interval) AS n, SUM(_sample_interval * double2) AS fatal, max(timestamp) AS last FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '7' DAY AND blob1 = 'apperror'
-           GROUP BY fingerprint, platform, type, message, stack ORDER BY n DESC LIMIT 25`),
+           GROUP BY fingerprint, platform, type, message, stack ORDER BY n DESC LIMIT ${CRASH_ROWS}`),
         sql(`SELECT blob4 AS fingerprint, blob3 AS version, blob8 AS os, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '7' DAY AND blob1 = 'apperror'
-           GROUP BY fingerprint, version, os ORDER BY n DESC LIMIT 200`),
+           GROUP BY fingerprint, version, os ORDER BY n DESC LIMIT ${CRASH_ROWS * 5}`),
         // What still uses the old address, old paths or too old an app (legacy.ts), and when it last did.
         sql(`SELECT blob2 AS what, blob3 AS client, blob4 AS route, SUM(_sample_interval) AS n, max(timestamp) AS last FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '30' DAY AND blob1 = 'legacy'
@@ -278,7 +282,7 @@ async function analyticsStats(env: Env, fetchImpl: typeof fetch): Promise<Record
       errors,
       timelapse,
       active,
-      appErrors: undismissed(groupErrors(appErrors, appErrorVersions), dismissed),
+      appErrors: undismissed(groupErrors(appErrors, appErrorVersions), dismissed).slice(0, CRASHES_SHOWN),
       legacy,
       settings,
     };
