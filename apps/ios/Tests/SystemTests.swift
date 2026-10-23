@@ -262,3 +262,15 @@ private func answer(_ name: String) throws -> (NextAnswer, Date) {
 @Test func aSavedPlacesLinkOpensItsTab() {
     #expect(Links.route(WidgetMode.to(id: "place:home", label: "Home").link, key: "") == .place("home"))
 }
+
+// MARK: the privacy manifest
+
+/// The app reads its own UserDefaults.standard (crash reports, @AppStorage)
+/// as well as the app group's the widgets share: each needs its reason.
+@Test func thePrivacyManifestGivesEveryUserDefaultsReason() throws {
+    let url = fixtures.deletingLastPathComponent().appendingPathComponent("apps/ios/Support/PrivacyInfo.xcprivacy")
+    let plist = try #require(PropertyListSerialization.propertyList(from: Data(contentsOf: url), format: nil) as? [String: Any])
+    let types = try #require(plist["NSPrivacyAccessedAPITypes"] as? [[String: Any]])
+    let defaults = try #require(types.first { $0["NSPrivacyAccessedAPIType"] as? String == "NSPrivacyAccessedAPICategoryUserDefaults" })
+    #expect(Set(defaults["NSPrivacyAccessedAPITypeReasons"] as? [String] ?? []) == ["1C8F.1", "CA92.1"])
+}
