@@ -11,8 +11,9 @@ import UIKit
 /// (the push-to-start token, `apnsstart:`) when the trip is due or missed
 /// with the app closed, as Android's starts from a push. Its countdown ticks by itself.
 @MainActor enum LiveTrip {
-    /// How long a finished trip stays on the Lock Screen, saying you're there.
-    nonisolated static let lingerS: TimeInterval = 5 * 60
+    /// How long a finished trip stays on the Lock Screen, saying you're there:
+    /// as long as the server's end by push keeps it (LIVE_DISMISS_S in apns.ts).
+    nonisolated static let lingerS: TimeInterval = 10 * 60
 
     /// Whether an activity is still on the Lock Screen: a stale one (nothing
     /// new for a while, the phone offline) is the trip's still, to update.
