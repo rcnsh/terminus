@@ -472,7 +472,13 @@ async function deliver(env: Env, userId: string, msg: Delivery, nowMs: number, e
               : 'skip';
         await count(res, () => forget(r.token_hash));
       }
-      if (live && r.live_token) await count(await toLiveActivity(env, apns, r.live_token, live, nowMs), () => forgetLive(r.token_hash));
+      if (live && r.live_token) {
+        const res = await toLiveActivity(env, apns, r.live_token, live, nowMs);
+        await count(res, () => forgetLive(r.token_hash));
+        // Ended here, its token is no more use, and kept it would count as one
+        // running: the next trip's would never be started by push.
+        if (res === 'sent' && live.event === 'end') await forgetLive(r.token_hash);
+      }
       // None running: started, where the iPhone can start one by push and hasn't shown this trip.
       const start =
         !msg.onlyLive && !r.live_token && r.start_token && iphone && !msg.startedFor?.has(r.token_hash)

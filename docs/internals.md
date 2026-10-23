@@ -779,7 +779,9 @@ object at the change and once the second bus has gone.
     alert (`updateLive` with the answer and `answerIn`). `event`
     is `update`, or `end` once there, with no trip left, or with no class
     left today (the last state sent, ended; `dismissal-date` ten minutes
-    on); `stale-date` is the card's `staleAt`.
+    on); `stale-date` is the card's `staleAt`. An end Apple took forgets
+    the `apnsla:` token, as the app's `activity: false` would: it no longer
+    counts as running, so the next trip's can be started by push.
   - its Live Activity started, when it has none running (no `live_token`)
     and an `apnsstart:` token: at the moments Android's live notification
     starts from a push, the Trip object's due and missed (`startLive`), a

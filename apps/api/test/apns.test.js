@@ -502,11 +502,6 @@ test("a nudge reaches an iPhone as Android's would: words when it's time to look
   assert.equal(sent[0].body.aps.alert.title, '错过了。这是下一种到达方式。');
   assert.equal(sent[1].body.aps.alert.title, "Missed it. Here's the next way there.");
 
-  // There: the Live Activity ends.
-  sent.length = 0;
-  await nudgeUser(env, 'u1', { phase: 'arrived', urgent: false, answer: as('arrived') }, NOW);
-  assert.equal(sent.at(-1).body.aps.event, 'end');
-
   // Only the Live Activity, when what it shows moved and the phase didn't.
   sent.length = 0;
   assert.deepEqual(await updateLive(env, 'u1', { state: liveActivityState(card) }, 'update', NOW), { sent: 1, failed: 0 });
@@ -514,6 +509,11 @@ test("a nudge reaches an iPhone as Android's would: words when it's time to look
     sent.map((s) => s.headers['apns-push-type']),
     ['liveactivity'],
   );
+
+  // There: the Live Activity ends.
+  sent.length = 0;
+  await nudgeUser(env, 'u1', { phase: 'arrived', urgent: false, answer: as('arrived') }, NOW);
+  assert.equal(sent.at(-1).body.aps.event, 'end');
 });
 
 test('a card worded in one language reaches each iPhone in its own: notification and Live Activity', async () => {
@@ -732,6 +732,26 @@ test('a token Apple has dropped is forgotten; a Live Activity that ended loses o
   const { out } = await quietly(() => remindUser(ours.env, 'u1', NOTICE, NOW));
   assert.deepEqual(out, { sent: 0, failed: 1 });
   assert.equal(ours.row(0).push_token, `apns:${HEX}`);
+});
+
+test("a Live Activity the server ended is forgotten, so the next trip's starts by push", async () => {
+  const en = answer('class-bus');
+  const arrived = { ...en, card: { ...en.card, phase: 'arrived' } };
+  const due = { ...en, card: { ...en.card, phase: 'due', actions: [{ id: 'skipped', label: 'x', trip: '4:780:COM3' }] } };
+  const { env, sent, row } = await setup([{ push: `apns:${HEX}`, live: `apnsla:${LIVE_HEX}`, start: `apnsstart:${START_HEX}` }]);
+  // The trip arrives: the server ends its Live Activity, and the app, closed, says nothing.
+  await nudgeUser(env, 'u1', { phase: 'arrived', urgent: false, answer: arrived, lang: 'en' }, NOW);
+  assert.equal(sent.find((s) => s.url.endsWith(LIVE_HEX)).body.aps.event, 'end');
+  assert.deepEqual(row(0), { push_token: `apns:${HEX}`, live_token: null });
+  sent.length = 0;
+  await nudgeUser(env, 'u1', { phase: 'due', urgent: true, answer: due, lang: 'en', startLive: true }, NOW + 3_600_000);
+  assert.equal(sent.filter((s) => s.url.endsWith(START_HEX)).length, 1);
+  // An end with no trip left goes the same way; an update keeps the token.
+  const two = await setup([{ push: `apns:${HEX}`, live: `apnsla:${LIVE_HEX}` }]);
+  await updateLive(two.env, 'u1', { state: liveActivityState(en) }, 'update', NOW);
+  assert.equal(two.row(0).live_token, `apnsla:${LIVE_HEX}`);
+  await updateLive(two.env, 'u1', { state: liveActivityState(en) }, 'end', NOW);
+  assert.equal(two.row(0).live_token, null);
 });
 
 test('the provider token is reused for 50 minutes, through KV, and signed again when Apple says it expired', async () => {
