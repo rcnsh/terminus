@@ -246,7 +246,7 @@ test('an aged timetabled or live time keeps its "~", as the server words a guess
     got,
     got,
   );
-  assert.equal(Board.thenText(many), 'then 10, 15, 20 min');
+  assert.equal(Board.thenText(many), 'then 10, 15 min');
   const live = B.aged({ svc: 'D1', etaS: 400, eta: '7 min', quality: 'live', later: [] }, got, got + 40_000);
   assert.equal(Board.etaText(live.etaS, live.quality), '~6 min');
   assert.equal(Board.etaText(400, 'live'), '7 min');

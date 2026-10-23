@@ -320,7 +320,7 @@ export function components(): Record<string, unknown> {
             type: ['string', 'null'],
             example: 'then 12, ~20 min',
             description:
-              'The next few buses after this one, up to three, in whole minutes, each `scheduled` one marked `~`: "then 12, ~20 min" (Chinese "之后 12、约 20 分钟"). Null when `later` is empty.',
+              'The next few buses after this one, up to two, in whole minutes, each `scheduled` one marked `~`: "then 12, ~20 min" (Chinese "之后 12、约 20 分钟"). Null when `later` is empty.',
           },
           toText: {
             type: 'string',

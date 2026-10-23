@@ -92,7 +92,7 @@ struct BoardRow: Decodable, Hashable, Sendable {
     /// "then 12, 20 min", the server's or worded here.
     var thenText: String? {
         if let laterText { return laterText }
-        let mins = later.sorted { $0.etaS < $1.etaS }.prefix(3).map { "\(BusTimes.minutes($0.etaS))" }
+        let mins = later.sorted { $0.etaS < $1.etaS }.prefix(2).map { "\(BusTimes.minutes($0.etaS))" }
         return mins.isEmpty ? nil : L("then %@ min", mins.joined(separator: ", "))
     }
 }

@@ -76,6 +76,31 @@ final class BusesTests: XCTestCase {
             BusWords.then(try row(#"{"svc":"A1","etaS":60,"quality":"live","later":[{"etaS":600,"quality":"scheduled"}]}"#)),
             "then 10 min, estimated")
         XCTAssertNil(BusWords.then(try row(#"{"svc":"A1","etaS":60}"#)))
+        // Two later buses at most, as the server words them.
+        XCTAssertEqual(
+            BusWords.then(try row(#"{"svc":"A1","etaS":60,"later":[{"etaS":600},{"etaS":1200},{"etaS":1800}]}"#)), "then 10, 20 min")
+    }
+
+    func testDestinationIsTheEndOfTheLineWithTheNextStopUnder() throws {
+        Lang.pref = "en"
+        let two = try row(
+            #"{"svc":"A1","etaS":60,"towards":["AS 5","Kent Ridge Bus Terminal"],"toText":"to AS 5, Kent Ridge Bus Terminal"}"#)
+        XCTAssertEqual(BusWords.destination(two), "Kent Ridge Bus Terminal")
+        XCTAssertEqual(BusWords.nextStop(two), "Next stop AS 5")
+        let one = try row(#"{"svc":"A1","etaS":60,"towards":["Kent Ridge Bus Terminal"]}"#)
+        XCTAssertEqual(BusWords.destination(one), "Kent Ridge Bus Terminal")
+        XCTAssertNil(BusWords.nextStop(one))
+        let end = try row(#"{"svc":"A1","etaS":60,"towards":[],"endsHere":true}"#)
+        XCTAssertEqual(BusWords.destination(end), "Ends here")
+        XCTAssertNil(BusWords.nextStop(end))
+        // An older server's sentence, without the names.
+        XCTAssertEqual(BusWords.destination(try row(#"{"svc":"A1","etaS":60,"toText":"to Central Library"}"#)), "to Central Library")
+    }
+
+    func testLiveOnlyWithATime() throws {
+        XCTAssertTrue(BusWords.isLive(try row(#"{"svc":"A1","etaS":60,"quality":"live"}"#)))
+        XCTAssertFalse(BusWords.isLive(try row(#"{"svc":"A1","etaS":60,"quality":"scheduled"}"#)))
+        XCTAssertFalse(BusWords.isLive(try row(#"{"svc":"A1","quality":"live"}"#)))
     }
 
     func testRunningFirst() throws {

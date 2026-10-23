@@ -639,9 +639,10 @@
     <string name="buses_pins_full">You can pin up to %1$d stops</string>
     <string name="buses_this_side">This side</string>
     <string name="buses_across">Across the road</string>
-    <string name="buses_towards">to %1$s</string>
     <string name="buses_min">min</string>
     <string name="buses_live">Live</string>
+    <string name="buses_next_stop">Next stop %1$s</string>
+    <string name="buses_live_updated">Live · %1$s</string>
     <string name="buses_scheduled">Estimate</string>
     <string name="buses_last_known">Last known</string>
     <string name="buses_seats">Seats</string>

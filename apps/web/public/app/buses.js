@@ -378,17 +378,21 @@ export function aged(r, got, now) {
   };
 }
 
-/** "Updated 5 s ago": from the server's `asOf`, as old as the times are, not when this browser fetched them. */
-function Updated({ asOf }) {
+/**
+ * "Updated 5 s ago": from the server's `asOf`, as old as the times are, not
+ * when this browser fetched them. `live`: a row above has a live time, so
+ * "Live" first says once what the dot by it means (board.js LiveDot).
+ */
+function Updated({ asOf, live = false }) {
   const now = useStore(tick);
   if (!asOf) return null;
   const s = Math.max(0, Math.round((now - asOf) / 1000));
-  return html`<span class="bt-updated">${s < 5 ? t('Updated just now') : s < 60 ? t('Updated {0} s ago', s) : t('Updated {0} min ago', Math.floor(s / 60))}</span>`;
+  return html`<span class="bt-updated">${live && html`<span class="bt-live"><span class="dot" aria-hidden="true"></span>${t('Live')}</span> · `}${s < 5 ? t('Updated just now') : s < 60 ? t('Updated {0} s ago', s) : t('Updated {0} min ago', Math.floor(s / 60))}</span>`;
 }
 
 /** How old the times are, and under it why they couldn't be updated, if they couldn't. */
-function Status({ asOf, error }) {
-  return html`${error && html`<span class="bt-error">${error}</span>`}<${Updated} asOf=${asOf} />`;
+function Status({ asOf, error, live }) {
+  return html`${error && html`<span class="bt-error">${error}</span>`}<${Updated} asOf=${asOf} live=${live} />`;
 }
 
 /** A stop's board, then the services ending soon, and when it was updated. */
@@ -398,15 +402,17 @@ function Board({ code }) {
   const b = all.get(code);
   if (!b?.board) return html`<p class="hint bt-empty">${b?.error ?? t('Checking…')}</p>`;
   const ending = b.board.filter((r) => r.endsAt && Date.parse(r.endsAt) > now && Date.parse(r.endsAt) - now <= ENDS_SOON_MS);
+  const rows = b.board.map((r) => aged(r, b.got, now));
+  const live = rows.some((r) => r.running !== false && r.quality === 'live' && r.etaS != null);
   return html`
     ${
-      b.board.length
-        ? html`<div class="card bt-board">${b.board.map((r) => html`<${Row} key=${r.svc} r=${aged(r, b.got, now)} now=${now} chevron onPick=${(svc) => go(lineHash(svc, code))} />`)}</div>`
+      rows.length
+        ? html`<div class="card bt-board">${rows.map((r) => html`<${Row} key=${r.svc} r=${r} now=${now} chevron onPick=${(svc) => go(lineHash(svc, code))} />`)}</div>`
         : html`<p class="hint bt-empty">${b.available ? t('No buses due') : t('No times right now')}</p>`
     }
     <div class="bt-foot">
       <div class="bt-ends">${ending.map((r) => html`<div key=${r.svc}><${Chip} svc=${r.svc} color=${r.color} cls="small" /> ${t('Runs until {0}', clock(r.endsAt))}</div>`)}</div>
-      <div class="bt-status"><${Status} asOf=${b.asOf} error=${b.error} /></div>
+      <div class="bt-status"><${Status} asOf=${b.asOf} error=${b.error} live=${live} /></div>
     </div>
     ${b.board.some((r) => !r.paid) && html`<p class="bt-hint">${t('Tap a service to see its whole line.')}</p>`}
   `;

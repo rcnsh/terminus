@@ -669,7 +669,7 @@ data class BoardRow(
     val resumesAtMs: Long? = null,
     /** The server's words: "4 min", "now", "~6 min"; null without a time, or from an older server. */
     val eta: String? = null,
-    /** "then 12, ~20, 25 min"; null with no later buses, or from an older server. */
+    /** "then 12, ~20 min"; null with no later buses, or from an older server. */
     val laterText: String? = null,
     /** "to Central Library, Kent Vale", "Ends here"; null from an older server. */
     val toText: String? = null,

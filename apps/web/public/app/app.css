@@ -232,7 +232,6 @@ body.sky .bt-sky-top input::placeholder { color: var(--k-muted); opacity: 0.85; 
 button.bt-row { cursor: pointer; }
 @media (hover: hover) { button.bt-row:hover { background: var(--surface-2); } }
 button.bt-row:focus-visible { outline-offset: -2px; }
-.bt-row.soon { background: var(--accent-soft); }
 /* A row that opens its line's page (the Buses tab): a chevron at its end says so. */
 .bt-row.go { grid-template-columns: auto minmax(0, 1fr) auto auto; grid-template-areas: "chip dir big go" "meta meta then go"; padding-inline-end: 8px; }
 .bt-go { grid-area: go; align-self: center; width: 20px; height: 20px; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -248,16 +247,28 @@ button.bt-row:focus-visible { outline-offset: -2px; }
 /* Wide enough for two characters, so a stop's P and R2 are the same size. */
 .svc-tag.tiny { min-width: 2.4em; padding: 1px 5px; font-size: 0.65rem; border-radius: 4px; }
 .svc-tag .fare { margin-left: 3px; font-size: 0.8em; }
-.bt-dir { grid-area: dir; align-self: start; padding-top: 2px; font-size: 0.95rem; line-height: 1.3; color: var(--muted); }
-.bt-dir b { color: var(--ink); font-weight: 600; }
+/* A running service: where it's going over the next stop and its tags, one block down the rows beside the times. */
+.bt-row.run { grid-template-areas: "chip text big" "chip text then"; }
+.bt-row.run.go { grid-template-areas: "chip text big go" "chip text then go"; }
+.bt-text { grid-area: text; align-self: start; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+/* As wide as the column (not its words), so a long name ends in "…" before the time. */
+.bt-text .bt-dir { align-self: stretch; }
+.bt-row .bt-text .bt-meta { padding-left: 0; }
+/* Where it's going, on one line. */
+.bt-dir { grid-area: dir; align-self: start; padding-top: 2px; font-size: 0.95rem; font-weight: 600; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The big time, with the live dot beside it when it's live. */
+.bt-at { grid-area: big; justify-self: end; display: flex; align-items: center; gap: 8px; }
+.bt-dot { flex: none; }
 .bt-big { grid-area: big; justify-self: end; font: 700 2.6rem/0.9 var(--display); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .bt-big small { margin-left: 3px; font: 600 0.85rem var(--font); letter-spacing: 0; color: var(--muted); }
-.bt-big.now { font-size: 1.6rem; line-height: 1.2; color: var(--accent); letter-spacing: -0.02em; }
+.bt-big.now { color: var(--accent); }
 .bt-big.none { font: 500 0.9rem/1.3 var(--font); color: var(--muted); letter-spacing: 0; text-align: right; }
 /* Under the chip's column too, lined up with the words beside the chip. */
 .bt-meta { grid-area: meta; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; padding-left: 58px; font-size: 0.8rem; color: var(--muted); min-height: 1px; }
 .bt-live { display: inline-flex; align-items: center; gap: 6px; color: var(--good-ink); font-weight: 600; }
-.bt-live .dot { box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 22%, transparent); }
+.bt-live .dot, .bt-dot { box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 22%, transparent); }
+/* Under the board the word explains the rows' dot, in the line's own grey, as the apps say it. */
+.bt-updated .bt-live { color: inherit; font-weight: inherit; }
 .bt-sched, .bt-stale { padding: 2px 7px; border-radius: 6px; font-weight: 600; font-size: 0.75rem; }
 .bt-sched { color: var(--warn-ink); background: color-mix(in srgb, var(--warn) 14%, transparent); }
 .bt-stale { color: var(--muted); background: var(--surface-2); }
@@ -268,7 +279,7 @@ button.bt-row:focus-visible { outline-offset: -2px; }
 .bt-then { grid-area: then; justify-self: end; font: 600 0.85rem/1.2 var(--display); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* A service not running: greyed, its words where the minutes go. */
 .bt-row.stopped { color: var(--muted); }
-.bt-row.stopped .bt-dir, .bt-row.stopped .bt-dir b { color: var(--muted); font-weight: 500; }
+.bt-row.stopped .bt-dir { color: var(--muted); font-weight: 500; }
 .bt-chip.muted { background: color-mix(in srgb, var(--svc) 30%, var(--surface-2)); color: var(--ink); }
 .bt-row.stopped .bt-big.none { color: var(--muted); font-weight: 600; }
 /* No minutes after it: its line takes the row's width. */
@@ -507,9 +518,8 @@ button.svc-tag { cursor: pointer; }
 .sheet-board .bt-row { padding: 10px 16px; gap: 3px 12px; }
 .sheet-board .bt-chip { min-width: 40px; height: 26px; font-size: 0.85rem; border-radius: 7px; }
 .sheet-board .bt-dir { font-size: 0.9rem; }
-/* Only the minutes: a stopped service's words keep their own small size. */
+/* Only the minutes (and "now", the same size): a stopped service's words keep their own small size. */
 .sheet-board .bt-big:not(.none) { font-size: 1.6rem; }
-.sheet-board .bt-big.now { font-size: 1.15rem; }
 .sheet-board .bt-meta { padding-left: 52px; font-size: 0.75rem; }
 .sheet-board .bt-then { font-size: 0.78rem; }
 .sheet-more { display: block; width: 100%; margin: 0; padding: 10px 16px; border: 0; border-top: 1px solid var(--line); background: none; text-align: left; color: var(--accent); font: 600 0.875rem var(--font); cursor: pointer; }

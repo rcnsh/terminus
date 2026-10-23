@@ -197,11 +197,14 @@ object BusTimes {
     /** Rounded to the nearest minute, never below 1 (under [ARRIVING_S] is "Arriving"). */
     fun minutes(etaS: Int): Int = maxOf(1, (etaS + 30) / 60)
 
+    /** How many later buses "then …" names, as the server's (THEN_MAX in the API's src/answer/resolve.ts). */
+    const val THEN_MAX = 2
+
     /** The later buses as minutes, soonest first: "then 12, 20 min". Only the ones the API gave. */
-    fun later(row: BoardRow, max: Int = 3): List<Int> = row.later.sortedBy { it.etaS }.take(max).map { minutes(it.etaS) }
+    fun later(row: BoardRow, max: Int = THEN_MAX): List<Int> = row.later.sortedBy { it.etaS }.take(max).map { minutes(it.etaS) }
 
     /** A later bus is from the timetable while the next one isn't: the "then" line says so. */
-    fun laterScheduled(row: BoardRow): Boolean = row.quality != "scheduled" && row.later.take(3).any { it.quality == "scheduled" }
+    fun laterScheduled(row: BoardRow): Boolean = row.quality != "scheduled" && row.later.take(THEN_MAX).any { it.quality == "scheduled" }
 
     /**
      * The services that stop within [withinMs] (two hours), soonest first, once each: "Runs until 11:15 pm" only when it's worth knowing.

@@ -636,9 +636,10 @@
     <string name="buses_pins_full">最多可以固定 %1$d 个车站</string>
     <string name="buses_this_side">这一边</string>
     <string name="buses_across">马路对面</string>
-    <string name="buses_towards">开往 %1$s</string>
     <string name="buses_min">分钟</string>
     <string name="buses_live">实时</string>
+    <string name="buses_next_stop">下一站 %1$s</string>
+    <string name="buses_live_updated">实时 · %1$s</string>
     <string name="buses_scheduled">估计</string>
     <string name="buses_last_known">最后已知</string>
     <string name="buses_seats">有座位</string>

@@ -2,9 +2,10 @@ import SwiftUI
 
 /*
  * A stop's board, as the Android app draws it (BusesScreen.kt): a card with
- * a row per service, its colour chip, where it goes, Live or Scheduled and
- * how full it is, and the minutes large on the right. A service not running
- * is greyed, with why and when it's back. Every time is the server's.
+ * a row per service, its colour chip, where it goes and its next stop, how
+ * sure the time is when it isn't live and how full the bus is, and the
+ * minutes large on the right, a green dot beside a live one. A service not
+ * running is greyed, with why and when it's back. Every time is the server's.
  */
 
 /// A service as it's painted on the bus, larger, for the board's rows and the line's heading.
@@ -97,8 +98,6 @@ struct BusBoardRowView: View {
         .accessibilityIdentifier("board-row-\(row.svc)")
     }
 
-    private var arriving: Bool { (row.etaS ?? .max) < BusTimes.arrivingS }
-
     @ViewBuilder private var runningRow: some View {
         if typeSize.isAccessibilitySize { stackedRow } else { sideBySideRow }
     }
@@ -110,36 +109,46 @@ struct BusBoardRowView: View {
             HStack(alignment: .center, spacing: 12) {
                 BusChip(svc: row.svc, color: color, paid: row.paid)
                 Spacer(minLength: 8)
-                BusBigTime(etaS: row.etaS, quality: row.quality, eta: row.eta)
+                time
                 chevron
             }
-            if let to = towards { to.font(.body).foregroundStyle(Color.ink).fixedSize(horizontal: false, vertical: true) }
-            BusFlow(spacing: 8) {
-                BusQualityTag(row: row)
-                if let c = busCrowdWord(row.crowd) { BusCrowdPill(text: c, packed: row.crowd == "high") }
+            if let to = BusWords.destination(row) {
+                Text(verbatim: to).font(.body).bold().foregroundStyle(Color.ink).fixedSize(horizontal: false, vertical: true)
             }
+            if let next = BusWords.nextStop(row) {
+                Text(verbatim: next).font(.subheadline).foregroundStyle(Color.muted).fixedSize(horizontal: false, vertical: true)
+            }
+            BusFlow(spacing: 8) { tags }
             if let t = BusWords.then(row) {
                 Text(verbatim: t).font(.subheadline).foregroundStyle(Color.muted).accessibilityLabel(spokenTimes(t))
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 14)
-        .background(arriving ? Color.brandSoft : Color.clear)
     }
 
     private var sideBySideRow: some View {
         HStack(alignment: .top, spacing: 12) {
             BusChip(svc: row.svc, color: color, paid: row.paid)
-            VStack(alignment: .leading, spacing: 6) {
-                if let to = towards { to.font(.body).foregroundStyle(Color.ink).lineLimit(2).fixedSize(horizontal: false, vertical: true) }
-                HStack(spacing: 8) {
-                    BusQualityTag(row: row)
-                    if let c = busCrowdWord(row.crowd) { BusCrowdPill(text: c, packed: row.crowd == "high") }
+            VStack(alignment: .leading, spacing: 4) {
+                if let to = BusWords.destination(row) {
+                    Text(verbatim: to).font(.body).bold().foregroundStyle(Color.ink).lineLimit(1)
+                }
+                // The next stop and the tags on one line when they fit, the tags under it when not.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) {
+                        nextStop.fixedSize()
+                        tags
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        nextStop.lineLimit(2)
+                        BusFlow(spacing: 8) { tags }
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             VStack(alignment: .trailing, spacing: 4) {
-                BusBigTime(etaS: row.etaS, quality: row.quality, eta: row.eta)
+                time
                 if let t = BusWords.then(row) {
                     Text(verbatim: t).font(.subheadline).foregroundStyle(Color.muted).multilineTextAlignment(.trailing)
                         .accessibilityLabel(spokenTimes(t))
@@ -151,8 +160,24 @@ struct BusBoardRowView: View {
         .padding(.leading, 14)
         .padding(.trailing, onTap == nil ? 14 : 8)
         .padding(.vertical, 14)
-        // Due within the minute: tinted, as on Android.
-        .background(arriving ? Color.brandSoft : Color.clear)
+    }
+
+    /// The minutes, with the live dot to their left; VoiceOver says "Live" before the time.
+    private var time: some View {
+        HStack(spacing: 6) {
+            if BusWords.isLive(row) { BusLiveDot() }
+            BusBigTime(etaS: row.etaS, quality: row.quality, eta: row.eta)
+        }
+    }
+
+    @ViewBuilder private var nextStop: some View {
+        if let next = BusWords.nextStop(row) { Text(verbatim: next).font(.subheadline).foregroundStyle(Color.muted) }
+    }
+
+    /// How sure the time is, only when it isn't live (the dot says that), and how full the bus is.
+    @ViewBuilder private var tags: some View {
+        if !BusWords.isLive(row) { BusQualityTag(row: row) }
+        if let c = busCrowdWord(row.crowd) { BusCrowdPill(text: c, packed: row.crowd == "high") }
     }
 
     private func stoppedRow(_ s: Stopped) -> some View {
@@ -160,9 +185,9 @@ struct BusBoardRowView: View {
         return HStack(alignment: .center, spacing: 12) {
             BusChip(svc: row.svc, color: color, paid: row.paid).opacity(0.35)
             VStack(alignment: .leading, spacing: 2) {
-                if !row.towards.isEmpty {
+                if !row.endsHere, let to = BusWords.destination(row) {
                     // Whole at the largest text sizes, where one line holds a stop's name at most.
-                    Text(verbatim: row.toText ?? L("to %@", row.towards.joined(separator: L(", "))))
+                    Text(verbatim: to)
                         .font(.subheadline).foregroundStyle(Color.muted).lineLimit(typeSize.isAccessibilitySize ? nil : 1)
                 }
                 Text(why).font(.body.weight(.semibold)).foregroundStyle(Color.muted)
@@ -183,20 +208,6 @@ struct BusBoardRowView: View {
                 .accessibilityHidden(true)
         }
     }
-
-    /// The server's "to Central Library, Kent Vale" with the next stop in bold; all of it at the end of the line.
-    private var towards: Text? {
-        if let t = row.toText {
-            if row.endsHere { return Text(verbatim: t).bold() }
-            return Text(busBold: row.towards.first, in: t)
-        }
-        if !row.towards.isEmpty {
-            let joined = row.towards.joined(separator: L(", "))
-            return Text(busBold: row.towards.first, in: L("to %@", joined))
-        }
-        if row.endsHere { return Text(L("Ends here")).bold() }
-        return nil
-    }
 }
 
 extension Text {
@@ -215,6 +226,21 @@ struct BusRowPress: ButtonStyle {
     }
 }
 
+/// The green dot beside a live time, said "Live" by VoiceOver.
+struct BusLiveDot: View {
+    @Environment(\.inks) private var inks
+    @ScaledMetric(relativeTo: .body) private var scale: CGFloat = 1
+
+    var body: some View {
+        ZStack {
+            Circle().fill(inks.good.opacity(0.25)).frame(width: 10 * scale, height: 10 * scale)
+            Circle().fill(inks.good).frame(width: 6 * scale, height: 6 * scale)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(L("Live"))
+    }
+}
+
 /// Live (a dot), Scheduled (amber), or the last time known; why there's no time when there isn't one.
 struct BusQualityTag: View {
     let row: BoardRow
@@ -226,10 +252,7 @@ struct BusQualityTag: View {
                 .font(.subheadline.weight(.medium)).foregroundStyle(inks.muted)
         } else if row.quality == "live" {
             HStack(spacing: 6) {
-                ZStack {
-                    Circle().fill(inks.good.opacity(0.25)).frame(width: 10, height: 10)
-                    Circle().fill(inks.good).frame(width: 6, height: 6)
-                }
+                BusLiveDot().accessibilityHidden(true)
                 Text(L("Live")).font(.subheadline.weight(.semibold)).foregroundStyle(inks.good)
             }
         } else if row.quality == "stale" {
@@ -272,7 +295,8 @@ func busCrowdWord(_ crowd: String?) -> String? {
 
 /// "4 min" with the number large, or "Arriving"; a dash without a time (the
 /// tag says why). The words are the server's ("4 min", "~6 min", "约 6 分钟"),
-/// with its number drawn large; worked out here for an older server.
+/// with its number drawn large; worked out here for an older server. A time
+/// without a number ("now") is as large as a number, so the column reads as one.
 struct BusBigTime: View {
     let etaS: Int?
     let quality: String
@@ -291,7 +315,7 @@ struct BusBigTime: View {
             } else if let eta {
                 big(eta, size: size).foregroundStyle(color)
             } else if arriving {
-                Text(L("Arriving")).font(.system(size: 24 * scale, weight: .heavy)).foregroundStyle(Color.brand)
+                Text(L("Arriving")).font(.system(size: size, weight: .heavy)).foregroundStyle(Color.brand)
             } else {
                 (Text(verbatim: "\(BusTimes.minutes(etaS ?? 0))").font(.system(size: size, weight: .heavy))
                     + Text(verbatim: " " + L("min")).font(.system(size: 15 * scale, weight: .semibold)))
@@ -305,7 +329,7 @@ struct BusBigTime: View {
 
     private func big(_ s: String, size: CGFloat) -> Text {
         guard let r = s.range(of: #"\d+"#, options: .regularExpression) else {
-            return Text(verbatim: s).font(.system(size: 24 * scale, weight: .heavy))
+            return Text(verbatim: s).font(.system(size: size, weight: .heavy))
         }
         let small = Font.system(size: 15 * scale, weight: .semibold)
         return Text(verbatim: String(s[..<r.lowerBound])).font(small)
@@ -314,13 +338,16 @@ struct BusBigTime: View {
     }
 }
 
-/// Under the board: the services ending within two hours, and how old the times are.
+/// Under the board: the services ending within two hours, and how old the
+/// times are, with the live dot explained once when a row has it.
 struct BusBoardFoot: View {
     let board: Board
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { _ in
             let now = ServerClock.now
+            // Aged as the card ages its rows, so the dot here goes when theirs do.
+            let live = board.aged(now).rows.contains { $0.running && BusWords.isLive($0) }
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -331,7 +358,11 @@ struct BusBoardFoot: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     if let asOf = board.asOf {
-                        Text(BusWords.updated(asOf, now: now)).font(.subheadline).foregroundStyle(Color.muted).monospacedDigit()
+                        HStack(spacing: 6) {
+                            if live { BusLiveDot().accessibilityHidden(true) }
+                            Text(verbatim: (live ? L("Live") + " · " : "") + BusWords.updated(asOf, now: now))
+                                .font(.subheadline).foregroundStyle(Color.muted).monospacedDigit()
+                        }
                     }
                 }
                 if board.rows.contains(where: { !$0.paid }) {

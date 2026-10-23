@@ -76,7 +76,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -788,9 +787,7 @@ private fun BoardRowView(row: BoardRow, color: Long, onClick: (() -> Unit)?, cli
     val arriving = row.etaS != null && row.etaS < BusTimes.ARRIVING_S
     Row(
         Modifier.fillMaxWidth()
-            // Due within the minute: tinted on the Buses tab. Not on the map, where a
-            // tinted row is the line picked there; the big minutes say it's soon.
-            .rowGround(look, color, if (arriving && look.picked == null) c.primaryContainer else Color.Transparent)
+            .rowGround(look, color, Color.Transparent)
             .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClickLabel = clickLabel, onClick = onClick) else Modifier)
             .padding(
                 start = if (compact) 16.dp else 14.dp,
@@ -799,35 +796,44 @@ private fun BoardRowView(row: BoardRow, color: Long, onClick: (() -> Unit)?, cli
                 bottom = if (compact) 10.dp else 14.dp,
             ),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         SvcChip(row.svc, color, paid = row.paid, small = compact)
         Column(Modifier.weight(1f)) {
-            // Where it goes, as the server words it ("to Central Library, Kent Vale", "Ends here").
-            if (row.toText != null)
+            // Where it ends up, bold and on one line: what tells the rows apart.
+            destination(row)?.let {
                 Text(
-                    towards(row.toText, row.towards.firstOrNull(), row.towards.isEmpty()),
+                    it,
                     style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 2,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-            else if (row.towards.isNotEmpty())
-                Text(towards(row.towards), style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            // The end of its line: said, so no direction doesn't read as missing.
-            else if (row.endsHere)
-                Text(stringResource(R.string.buses_ends_here), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+            }
+            // Under it, the next stop, and only what's out of the ordinary: a time
+            // that isn't live, a full bus. Live is the dot by the time.
             @OptIn(ExperimentalLayoutApi::class)
             FlowRow(
-                Modifier.padding(top = if (row.toText == null && row.towards.isEmpty() && !row.endsHere) 2.dp else 6.dp),
+                Modifier.padding(top = 2.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
                 itemVerticalAlignment = Alignment.CenterVertically,
             ) {
+                if (row.towards.size > 1)
+                    Text(
+                        stringResource(R.string.buses_next_stop, row.towards.first()),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = c.onSurfaceVariant,
+                    )
                 QualityTag(row)
                 crowdWord(row.crowd)?.let { CrowdPill(it, row.crowd == "high") }
             }
         }
         Column(horizontalAlignment = Alignment.End, modifier = Modifier.widthIn(min = 72.dp)) {
-            BigTime(row.etaS, row.quality, arriving, row.eta, size = if (compact) 26.sp else 34.sp)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                if (row.etaS != null && row.quality == "live") LiveDot()
+                BigTime(row.etaS, row.quality, arriving, row.eta, size = if (compact) 24.sp else 28.sp)
+            }
             thenText(row)?.let {
                 Text(
                     it,
@@ -886,7 +892,7 @@ private fun StoppedRowView(
         Column(Modifier.weight(1f)) {
             if (row.towards.isNotEmpty()) {
                 Text(
-                    row.toText ?: stringResource(R.string.buses_towards, row.towards.joinToString(stringResource(R.string.list_sep))),
+                    row.towards.last(),
                     style = MaterialTheme.typography.bodyMedium,
                     color = c.onSurfaceVariant,
                     maxLines = 1,
@@ -900,27 +906,16 @@ private fun StoppedRowView(
     }
 }
 
-/** The server's "to Central Library, Kent Vale" with the next stop ([next]) in bold; all of it bold at the end of the line. */
-private fun towards(text: String, next: String?, endsHere: Boolean): AnnotatedString = buildAnnotatedString {
-    append(text)
-    val at = next?.let { text.indexOf(it) } ?: -1
-    if (endsHere) addStyle(SpanStyle(fontWeight = FontWeight.Bold), 0, text.length)
-    else if (at >= 0) addStyle(SpanStyle(fontWeight = FontWeight.Bold), at, at + next!!.length)
-}
-
-/** "to **Central Library**, Kent Vale"; worked out here for an older server. */
+/** Where a row's bus ends up: the last of its places, "Ends here" at the end of the line, the server's words from an older server. */
 @Composable
-private fun towards(names: List<String>): AnnotatedString {
-    val joined = names.joinToString(stringResource(R.string.list_sep))
-    val full = stringResource(R.string.buses_towards, joined)
-    val at = full.indexOf(joined)
-    return buildAnnotatedString {
-        append(full)
-        if (at >= 0) addStyle(SpanStyle(fontWeight = FontWeight.Bold), at, at + names.first().length)
+private fun destination(row: BoardRow): String? =
+    when {
+        row.towards.isNotEmpty() -> row.towards.last()
+        row.endsHere -> stringResource(R.string.buses_ends_here)
+        else -> row.toText
     }
-}
 
-/** Live (a dot), Scheduled (amber), or the last time known; nothing when there's no time. */
+/** Scheduled (amber) or the last time known, or why there's no time; nothing for a live time, which has [LiveDot] by it. */
 @Composable
 private fun QualityTag(row: BoardRow) {
     val c = MaterialTheme.colorScheme
@@ -931,22 +926,20 @@ private fun QualityTag(row: BoardRow) {
                 style = MaterialTheme.typography.labelLarge,
                 color = c.onSurfaceVariant,
             )
-        row.quality == "live" ->
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                val good = goodColor()
-                Canvas(Modifier.size(10.dp)) {
-                    drawCircle(good.copy(alpha = 0.25f))
-                    drawCircle(good, radius = size.minDimension / 3.2f)
-                }
-                Text(
-                    stringResource(R.string.buses_live),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = good,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
+        row.quality == "live" -> {}
         row.quality == "stale" -> Tag(stringResource(R.string.buses_last_known), c.onSurfaceVariant)
         else -> Tag(stringResource(R.string.buses_scheduled), c.tertiary)
+    }
+}
+
+/** A time seen on the road: by each live time, and once under the board saying so. */
+@Composable
+private fun LiveDot(said: Boolean = true) {
+    val good = goodColor()
+    val live = stringResource(R.string.buses_live)
+    Canvas(Modifier.size(10.dp).then(if (said) Modifier.semantics { contentDescription = live } else Modifier)) {
+        drawCircle(good.copy(alpha = 0.25f))
+        drawCircle(good, radius = size.minDimension / 3.2f)
     }
 }
 
@@ -1001,7 +994,7 @@ private fun BigTime(etaS: Int?, quality: String, arriving: Boolean, eta: String?
             Text(
                 buildAnnotatedString {
                     if (number == null) {
-                        withStyle(SpanStyle(fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)) { append(eta) }
+                        withStyle(SpanStyle(fontSize = size, fontWeight = FontWeight.ExtraBold)) { append(eta) }
                     } else {
                         withStyle(SpanStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold)) {
                             append(eta.substring(0, number.range.first))
@@ -1017,7 +1010,7 @@ private fun BigTime(etaS: Int?, quality: String, arriving: Boolean, eta: String?
                 // "about 6 minutes", not "tilde 6 min": the tag beside it says live or timetable.
                 modifier = Modifier.semantics { contentDescription = Spoken.eta(etaS, quality, withQuality = false) ?: eta },
             )
-        arriving -> Text(stringResource(R.string.map_arriving), fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = c.primary)
+        arriving -> Text(stringResource(R.string.map_arriving), fontSize = size, fontWeight = FontWeight.ExtraBold, color = c.primary)
         else -> {
             val unit = stringResource(R.string.buses_min)
             Text(
@@ -1037,7 +1030,7 @@ private fun BigTime(etaS: Int?, quality: String, arriving: Boolean, eta: String?
     }
 }
 
-/** "then 12, ~20, 25 min", as the server words it, from the later buses it gave; worked out here for an older server. */
+/** "then 12, ~20 min", as the server words it, from the later buses it gave; worked out here for an older server. */
 private fun thenText(row: BoardRow): String? {
     row.laterText?.let {
         return it
@@ -1071,7 +1064,19 @@ private fun Foot(board: Board) {
             }
         }
         board.asOfMs?.let {
-            Text(updated(it, now), style = MaterialTheme.typography.bodyMedium, color = muted, modifier = Modifier.padding(start = 8.dp))
+            // The rows' dot, said once: "● Live · Updated just now".
+            val live = board.available && board.rows.any { r -> r.running && r.etaS != null && r.quality == "live" }
+            Row(Modifier.padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (live) {
+                    LiveDot(said = false)
+                    Text(
+                        stringResource(R.string.buses_live_updated, updated(it, now)),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = muted,
+                        modifier = Modifier.padding(start = 6.dp),
+                    )
+                } else Text(updated(it, now), style = MaterialTheme.typography.bodyMedium, color = muted)
+            }
         }
     }
     if (board.rows.any { !it.paid })
