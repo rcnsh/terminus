@@ -2350,7 +2350,10 @@ After its last reading a bus stays for one poll, then fades. The page draws the 
 at the video's exact size with `preserveDrawingBuffer` and no label fades.
 For each frame it sets the time, gives the buses' GeoJSON source their
 places, waits for the map's `idle`, and draws the map and the overlay
-(clock, date, buses per service, wordmark, map credit) onto one canvas.
+(clock, date, buses per service, wordmark, map credit) onto one canvas. With the overlay
+off (`--clean` in `render-timelapse.mjs`) only the map credit is drawn and the
+campus is centred, for footage cut into another video
+(`marketing/videos/`).
 Mediabunny then encodes that canvas, H.264 in MP4 (`fastStart:
 'in-memory'`) or VP9 in WebM where the browser can't do H.264. Awaiting
 each frame's `add()` respects the encoder's backpressure, so the video is

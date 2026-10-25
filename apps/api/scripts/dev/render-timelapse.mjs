@@ -12,8 +12,11 @@
  * software WebGL a frame takes about 6 s, so a 60 s video is about 3 hours.
  *
  *   TIMELAPSE_TOKEN=... node render-timelapse.mjs --date 2026-10-08 \
- *     [--preset story|wide] [--theme dark|light] [--seconds 60] \
+ *     [--preset story|wide] [--theme dark|light] [--clean] [--seconds 60] \
  *     [--from 07:00] [--to 00:00] [--out ./videos] [--base https://terminus.run]
+ *
+ * --clean leaves out the clock, the counts and the wordmark (the map's
+ * credit stays), for footage that gets its own words in another video.
  *
  * The token is TIMELAPSE_TOKEN (it opens /api/timelapse/* and nothing else), or
  * a file named by TIMELAPSE_TOKEN_FILE. It is never printed, and only sent
@@ -33,6 +36,7 @@ const { values: o } = parseArgs({
     date: { type: 'string' },
     preset: { type: 'string', default: 'story' },
     theme: { type: 'string', default: 'dark' },
+    clean: { type: 'boolean', default: false },
     seconds: { type: 'string', default: '60' },
     from: { type: 'string', default: '' },
     to: { type: 'string', default: '' },
@@ -137,6 +141,7 @@ try {
   await pick(0, o.date);
   await pick(1, o.preset);
   await pick(2, o.theme);
+  if (o.clean) await pick(3, 'off');
   await page.fill('.controls input[type=number]', String(seconds));
   for (const [n, v] of [
     [0, o.from],

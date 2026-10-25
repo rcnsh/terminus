@@ -5,7 +5,8 @@
 // The export never records the screen. Each frame is made on purpose: the
 // clock is set, the buses' source gets their places at that moment, the
 // map is left to finish drawing, and the map and the overlay (clock, date,
-// buses per service, the wordmark) are drawn onto one canvas, which
+// buses per service, the wordmark; or only the map's credit, for footage
+// that gets its own words on top) are drawn onto one canvas, which
 // Mediabunny encodes. Awaiting each frame's add() lets the encoder set the
 // pace, so a slow machine makes the same video, only more slowly.
 //
@@ -44,6 +45,8 @@ const view = store({
   loading: false,
   preset: 'story',
   theme: 'dark',
+  /** Off: the map and its buses only, centred, for footage cut into another video. */
+  overlay: true,
   seconds: 60,
   from: '',
   to: '',
@@ -174,7 +177,7 @@ const mapEvent = (event) =>
   });
 
 async function prepare() {
-  const { day, theme } = view.get();
+  const { day, theme, overlay: words } = view.get();
   if (!day) return;
   const { w, h } = sizeOf();
   const stage = document.getElementById('stage');
@@ -184,7 +187,7 @@ async function prepare() {
     c.width = w;
     c.height = h;
   }
-  const want = `${w}x${h} ${theme} ${day.date}`;
+  const want = `${w}x${h} ${theme} ${day.date} ${words}`;
   if (shape === want && map) return;
   // Unknown until this finishes: a change that fails part way leaves the map
   // in neither shape, and the next setup redoes it in full.
@@ -205,7 +208,7 @@ async function prepare() {
     document.fonts.load('500 40px Inter'),
     mark.decode().catch(() => {}),
   ]);
-  const f = framing(day, w, h);
+  const f = framing(day, w, h, words);
   if (!map) {
     map = new ml.Map({
       container: stage,
@@ -238,8 +241,8 @@ async function prepare() {
   await settled();
 }
 
-/** Where the campus sits in the frame: clear of the clock (above in a story, to the left in landscape). */
-function framing(day, w, h) {
+/** Where the campus sits in the frame: clear of the clock (above in a story, to the left in landscape), or centred without it. */
+function framing(day, w, h, words) {
   const core = day.stops.filter((s) => s.core);
   const lons = core.map((s) => s.lon);
   const lats = core.map((s) => s.lat);
@@ -247,8 +250,9 @@ function framing(day, w, h) {
     [Math.min(...lons), Math.min(...lats)],
     [Math.max(...lons), Math.max(...lats)],
   ];
-  const padding =
-    h > w
+  const padding = !words
+    ? { top: h * 0.08, bottom: h * 0.08, left: w * 0.06, right: w * 0.06 }
+    : h > w
       ? { top: h * 0.24, bottom: h * 0.08, left: w * 0.06, right: w * 0.06 }
       : { top: h * 0.08, bottom: h * 0.08, left: w * 0.3, right: w * 0.05 };
   return { bounds, padding };
@@ -368,6 +372,7 @@ function drawOverlay(t, counts) {
   const story = h > w;
   const g = overlay.getContext('2d');
   g.clearRect(0, 0, w, h);
+  if (!view.get().overlay) return credit(g, w, h, k, c);
 
   // A wash behind the text, so it reads over the streets.
   const wash = story ? g.createLinearGradient(0, 0, 0, h * 0.3) : g.createLinearGradient(0, 0, w * 0.36, 0);
@@ -441,7 +446,11 @@ function drawOverlay(t, counts) {
   g.font = `700 ${size}px "Space Grotesk", sans-serif`;
   g.fillText('nus', left + termi, by);
   if (mark.complete && mark.naturalWidth) g.drawImage(mark, left - size * 1.25, by - size * 0.95, size, size);
-  // The street map's data, credited as its licence asks.
+  credit(g, w, h, k, c);
+}
+
+/** The street map's data, credited as its licence asks: with the overlay off too. */
+function credit(g, w, h, k, c) {
   g.font = `400 ${20 * k}px Inter, sans-serif`;
   g.fillStyle = c.muted;
   g.fillText('Map data © OpenStreetMap contributors', 56 * k, h - 56 * k);
@@ -531,7 +540,8 @@ async function exportVideo() {
     }
     await output.finalize();
     const blob = new Blob([output.target.buffer], { type: avc ? 'video/mp4' : 'video/webm' });
-    update({ running: false, url: URL.createObjectURL(blob), size: blob.size, name: `terminus-${date}-${preset}.${avc ? 'mp4' : 'webm'}` });
+    const name = `terminus-${date}-${preset}${view.get().overlay ? '' : '-clean'}.${avc ? 'mp4' : 'webm'}`;
+    update({ running: false, url: URL.createObjectURL(blob), size: blob.size, name });
   } catch (err) {
     if (output && output.state !== 'canceled' && output.state !== 'finalized') await output.cancel().catch(() => {});
     update({ running: false, error: err.message ?? String(err) });
@@ -656,6 +666,12 @@ function Studio() {
           <select value=${v.theme} disabled=${busy} onChange=${(e) => set({ theme: e.currentTarget.value }, 'setup')}>
             <option value="dark">Dark</option>
             <option value="light">Light</option>
+          </select>
+        </label>
+        <label>Overlay
+          <select value=${v.overlay ? 'on' : 'off'} disabled=${busy} onChange=${(e) => set({ overlay: e.currentTarget.value === 'on' }, 'setup')}>
+            <option value="on">Clock, buses out and wordmark</option>
+            <option value="off">None: the map and its buses</option>
           </select>
         </label>
         <label>Length of the video, seconds
