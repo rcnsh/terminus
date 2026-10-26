@@ -11,7 +11,7 @@ import nusmods from './fixtures/calendar/nusmods.json' with { type: 'json' };
 import holidays from './fixtures/calendar/holidays.json' with { type: 'json' };
 
 import { FROZEN_NOW, installGlobals, makeAnalytics, makeEnv, makeFetch, makeKV, shuttlePayload } from './_stubs.mjs';
-import { APKCOMBO_URL, PLAY_URL, autoUpdateVersion } from '../src/feeds/appversion.ts';
+import { PLAY_URL, autoUpdateVersion } from '../src/feeds/appversion.ts';
 import { PROBE_STOP, PUBLIC_PROBE, checkPublicFeed, checkUpstream, readPublicFeed, readUpstream, runCron } from '../src/ops/monitor.ts';
 import {
   CALENDAR_DATA_KEY,
@@ -90,7 +90,7 @@ test('the public feed is not checked at all without an LTA key', async () => {
 });
 
 /**
- * NUS plus the two pages, which both show 2.60.0 (141). `mint` and `proxy`
+ * NUS plus the Play page, which shows 2.60.0. `mint` and `proxy`
  * answer for a version string: a Response, or undefined for the usual
  * accepted answer.
  */
@@ -106,10 +106,6 @@ function world({ mint = () => undefined, proxy = () => undefined } = {}) {
     if (url === PLAY_URL) {
       hits.pages++;
       return new Response('<script>[[["2.60.0"]],[[[35]],[[[23,"6.0"]]]]]</script>');
-    }
-    if (url === APKCOMBO_URL) {
-      hits.pages++;
-      return new Response('<h2><a>Latest Version</a></h2> <div><a>2.60.0 <span class="blur">(141)</span></a></div>');
     }
     const body = JSON.parse(init.body ?? '{}');
     if (url.includes('get-access-token')) {
@@ -142,17 +138,17 @@ test('a candidate whose token mint is refused (10009) is refused, tried once, an
   assert.equal(hits.mint, 3);
   assert.equal(hits.proxy, 0, 'a refused mint asks the proxy nothing');
   const again = await autoUpdateVersion(env, FROZEN_NOW + 15 * 60_000, `{"want":"${NEW}"}`, 'COM3');
-  assert.match(again.note, /nothing new to try/, 'not tried again, even when the refusal names it');
-  assert.equal(hits.mint, 3);
+  assert.match(again.note, /NUS refused univus_android_2\.60\.0_144, univus_android_2\.60\.0_145, univus_android_2\.60\.0_146/);
+  assert.doesNotMatch(again.note.split(';')[0], /_14[1-3]\b/, 'not tried again, even when the refusal names it');
+  assert.equal(hits.mint, 6);
 });
 
 test('a candidate the proxy refuses with 10009 is refused, and not tried again', async () => {
-  const { env, hits } = world({ proxy: () => refused10009() });
+  const { env } = world({ proxy: () => refused10009() });
   const r = await autoUpdateVersion(env, FROZEN_NOW, `{"want":"${NEW}"}`, 'COM3');
   assert.match(r.note, /NUS refused univus_android_2\.60\.0_141/);
-  const calls = hits.proxy;
-  await autoUpdateVersion(env, FROZEN_NOW + 15 * 60_000, `{"want":"${NEW}"}`, 'COM3');
-  assert.equal(hits.proxy, calls);
+  const again = await autoUpdateVersion(env, FROZEN_NOW + 15 * 60_000, `{"want":"${NEW}"}`, 'COM3');
+  assert.doesNotMatch(again.note.split(';')[0], /_141\b/);
 });
 
 test('a candidate check that fails for another reason stops, says so, and tries the same version next time', async () => {
@@ -181,7 +177,7 @@ test('a candidate check that fails for another reason stops, says so, and tries 
     assert.match(r.note, why, what);
     assert.doesNotMatch(r.note, /NUS refused/, `${what}: no verdict on the version`);
     assert.equal(hits.mint, 1, `${what}: stopped at the first candidate`);
-    // Fifteen minutes on, the pages aren't read again; the refusal still
+    // Fifteen minutes on, Play isn't read again; the refusal still
     // names the version, which wasn't marked tried, so it's tried again.
     broken = false;
     const again = await autoUpdateVersion(env, FROZEN_NOW + 15 * 60_000, `{"want":"${NEW}"}`, 'COM3');

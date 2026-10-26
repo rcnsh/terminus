@@ -1579,11 +1579,10 @@ export function components(): Record<string, unknown> {
           versions: {
             type: 'object',
             description:
-              'Operator only, with `versions=1`: the uNivUS version sent now, what the app stores list, and the versions an automatic update would try.',
+              'Operator only, with `versions=1`: the uNivUS version sent now, what Google Play lists, and the versions an automatic update would try.',
             properties: {
               current: { type: 'string' },
               play: { type: ['string', 'null'] },
-              apkcombo: { type: ['string', 'null'] },
               errors: { type: 'array', items: { type: 'string' } },
               wouldTry: { type: 'array', items: { type: 'string' } },
             },
