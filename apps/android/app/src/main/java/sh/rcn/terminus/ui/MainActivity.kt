@@ -41,6 +41,7 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -57,6 +58,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -191,10 +194,38 @@ class MainActivity : ComponentActivity() {
 private fun TerminusTheme(content: @Composable () -> Unit) {
     // The Surface sets the default text colour to onBackground. Without it,
     // any Text with no explicit colour is black, invisible in dark mode.
-    MaterialTheme(colorScheme = fading(if (isSystemInDarkTheme()) BrandDark else BrandLight)) {
+    MaterialTheme(colorScheme = fading(if (isSystemInDarkTheme()) BrandDark else BrandLight), typography = TerminusType) {
         Surface(color = MaterialTheme.colorScheme.background, content = content)
     }
 }
+
+/**
+ * Material's type with tabular digits, so a countdown or a clock time keeps its width as it ticks; headings wrap into even lines rather
+ * than leaving one word alone, and body text avoids a one-word last line.
+ */
+private val TerminusType =
+    Typography().run {
+        fun TextStyle.digits() = copy(fontFeatureSettings = "tnum")
+        fun TextStyle.heading() = digits().copy(lineBreak = LineBreak.Heading)
+        fun TextStyle.body() = digits().copy(lineBreak = LineBreak.Paragraph)
+        Typography(
+            displayLarge = displayLarge.heading(),
+            displayMedium = displayMedium.heading(),
+            displaySmall = displaySmall.heading(),
+            headlineLarge = headlineLarge.heading(),
+            headlineMedium = headlineMedium.heading(),
+            headlineSmall = headlineSmall.heading(),
+            titleLarge = titleLarge.heading(),
+            titleMedium = titleMedium.heading(),
+            titleSmall = titleSmall.heading(),
+            bodyLarge = bodyLarge.body(),
+            bodyMedium = bodyMedium.body(),
+            bodySmall = bodySmall.body(),
+            labelLarge = labelLarge.digits(),
+            labelMedium = labelMedium.digits(),
+            labelSmall = labelSmall.digits(),
+        )
+    }
 
 /** The colours, fading from light to dark or back rather than swapping in one frame. */
 @Composable
