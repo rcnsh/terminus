@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 
 import { installGlobals, makeCtx, makeEnv, makeFetch, makeKV } from './_stubs.mjs';
 import worker from '../src/index.ts';
-import { APKCOMBO_URL, PLAY_URL } from '../src/feeds/appversion.ts';
+import { PLAY_URL } from '../src/feeds/appversion.ts';
 
 const BASE = 'https://bus.example.test';
 const BETA = 'https://beta.terminus.run';
@@ -110,14 +110,12 @@ test('/api/health?versions=1 for the operator: what the version update would fin
   installGlobals(async (input, init) => {
     const url = String(typeof input === 'string' ? input : input.url);
     if (url === PLAY_URL) return new Response('x[[["2.60.0"]],[[[34]],[[[1,"y');
-    if (url === APKCOMBO_URL) return new Response('<a>Latest Version</a></h2><div> 2.60.0 <span class="blur">(141)</span></div>');
     return base(input, init);
   });
   const env = { ...makeEnv(makeKV({})), HEALTH_TOKEN: 'op-secret', NEXTBUS_APP_VERSION: 'univus_android_2.59.2_140' };
   const v = (await (await call(env, '/api/health?versions=1', { 'x-health-token': 'op-secret' })).json()).versions;
   assert.equal(v.current, 'univus_android_2.59.2_140');
   assert.equal(v.play, '2.60.0');
-  assert.equal(v.apkcombo, 'univus_android_2.60.0_141');
   assert.deepEqual(v.errors, []);
   assert.ok(v.wouldTry.length > 0 && v.wouldTry.every((s) => s.startsWith('univus_android_2.60.0_')), JSON.stringify(v.wouldTry));
   assert.equal((await (await call(env, '/api/health?versions=1')).json()).versions, undefined, 'not without the token');

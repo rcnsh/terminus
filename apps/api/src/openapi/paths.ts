@@ -547,7 +547,7 @@ export function paths(): Record<string, unknown> {
             name: 'versions',
             in: 'query',
             description:
-              'Operator only: send `1` to read the uNivUS version from Google Play and APKCombo (no NUS calls), as the automatic version update would. Adds `versions`.',
+              'Operator only: send `1` to read the uNivUS version from Google Play (no NUS calls), as the automatic version update would. Adds `versions`.',
             schema: { type: 'string', enum: ['1'] },
           },
         ],

@@ -1845,12 +1845,13 @@ the fallback while the key is unset; a malformed value is ignored. Tokens
 remember the version they were minted with, so the next call mints a new one.
 Usually nobody has to: on a 10009 the cron check runs
 [`src/feeds/appversion.ts`](../apps/api/src/feeds/appversion.ts), which reads the new version from
-NUS's refusal if it names one, or from the uNivUS pages on Google Play
-(versionName) and APKCombo (versionName and versionCode). It tries the
-likeliest strings with NUS (a token and one bus call each, three at most),
-writes the one NUS accepts to `config:appVersion`, and emails to say so. Each
-candidate is tried once, and the pages are read at most hourly while NUS keeps
-refusing. If nothing works, the usual "feed is down" email follows, saying what
+NUS's refusal if it names one, or takes the versionName from uNivUS's page
+on Google Play. Play doesn't show the versionCode, so it guesses the next
+`CODE_GUESSES` (10) after ours, lowest first: builds that never reach Play use
+codes up (2.59.2 was 140, 2.60.3 was 144). It tries them with NUS (a token and
+one bus call each, three at most per check), writes the one NUS accepts to
+`config:appVersion`, and emails to say so. Each candidate is tried once, and
+Play is read at most hourly while NUS keeps refusing. If nothing works, the usual "feed is down" email follows, saying what
 it tried, with the command above and NUS's full response. After a switch, the
 isolates still sending the old version (for up to `versionMemoMs`) are refused
 too; a refusal of a version `config:appVersion` no longer holds opens neither
