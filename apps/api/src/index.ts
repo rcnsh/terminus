@@ -381,7 +381,7 @@ async function handleHealth(req: Request, url: URL, env: Env, nowMs: number): Pr
   // The probe spends an upstream call, so only the operator gets it.
   const operator = await isOperator(env, req, nowMs);
   const probe = operator && url.searchParams.get('probe') === '1';
-  // Reads the Play and APKCombo pages (no NUS calls), to see what the
+  // Reads the Play page (no NUS calls), to see what the
   // automatic version update would find today.
   const versions = operator && url.searchParams.get('versions') === '1';
   return json(
@@ -428,7 +428,6 @@ async function versionLookup(env: Env, nowMs: number): Promise<Record<string, un
   return {
     current,
     play: found.play,
-    apkcombo: found.apkcombo ? versionString(found.apkcombo) : null,
     errors: found.errors,
     wouldTry: cur ? candidates(cur, { refusal: [], ...found }).map(versionString) : [],
   };

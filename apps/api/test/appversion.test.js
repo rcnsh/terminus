@@ -4,33 +4,28 @@ import assert from 'node:assert/strict';
 import { installGlobals, makeEnv, makeKV, shuttlePayload } from './_stubs.mjs';
 import { makeEmail } from './_d1.mjs';
 import {
-  APKCOMBO_URL,
+  CODE_GUESSES,
   LOOKUP_EVERY_MS,
   PLAY_URL,
   autoUpdateVersion,
   candidates,
   compareNames,
-  versionFromApkCombo,
   versionFromPlay,
   versionsFromRefusal,
 } from '../src/feeds/appversion.ts';
 import { appVersion, getSession } from '../src/feeds/auth.ts';
 import { checkUpstream, readUpstream } from '../src/ops/monitor.ts';
 
-// The shapes of the real pages, not copies of them: on Play the app's version
+// The shape of the real page, not a copy of it: on Play the app's version
 // sits before its SDK levels, and a review's version comes earlier.
 const playPage = (v) => `<script>AF_initDataCallback({data:[["review",null,"2.58.1",null],[[["${v}"]],[[[35]],[[[23,"6.0"]]]]]]})</script>`;
-const comboPage = (name, code) =>
-  `<h2 class="title"><a href="/univus/sg.edu.nus.univus/download/apk" >Latest Version</a></h2> <div class="information-table"> <div class="item"> <div class="name">Version</div> <div class="value"> <a href="/univus/sg.edu.nus.univus/download/apk" >${name} <span class="blur">(${code})</span></a> </div> </div>`;
 
 const V = (name, code) => ({ name, code });
 const OLD = 'univus_android_2.59.2_140';
 
-test('reads the version from each page, and nothing from a changed page', () => {
+test('reads the version from the page, and nothing from a changed page', () => {
   assert.equal(versionFromPlay(playPage('2.60.0')), '2.60.0', 'not the review version before it');
   assert.equal(versionFromPlay('<html>redesigned</html>'), null);
-  assert.deepEqual(versionFromApkCombo(comboPage('2.60.0', 141)), V('2.60.0', 141));
-  assert.equal(versionFromApkCombo('<html>redesigned</html>'), null);
   assert.deepEqual(versionsFromRefusal('{"code":"10009","msg":"update to univus_android_2.60.0_141"}'), [V('2.60.0', 141)]);
   assert.deepEqual(versionsFromRefusal(null), []);
 });
@@ -44,41 +39,22 @@ test('versionNames compare by number, not as text', () => {
 test('candidates: likeliest first, only newer than what we send', () => {
   const cur = V('2.59.2', 140);
   const s = (vs) => vs.map((v) => `${v.name}_${v.code}`);
-  assert.deepEqual(
-    s(candidates(cur, { refusal: [], play: '2.60.0', apkcombo: V('2.60.0', 141) })),
-    ['2.60.0_141', '2.60.0_142', '2.60.0_143'],
-    'both pages agree: their code first, then the next codes in case it was wrong',
-  );
-  assert.deepEqual(
-    s(candidates(cur, { refusal: [], play: '2.60.0', apkcombo: V('2.59.2', 140) })),
-    ['2.60.0_141', '2.60.0_142', '2.60.0_143'],
-    'APKCombo lagging behind Play: its old code is skipped',
-  );
-  assert.deepEqual(
-    s(candidates(cur, { refusal: [], play: null, apkcombo: V('2.60.0', 141) })).slice(0, 1),
-    ['2.60.0_141'],
-    'Play unreadable',
-  );
-  assert.deepEqual(candidates(cur, { refusal: [], play: '2.59.2', apkcombo: V('2.59.2', 140) }), [], 'pages not caught up yet: no guesses');
-  assert.deepEqual(
-    s(candidates(cur, { refusal: [], play: '2.59.2', apkcombo: V('2.59.2', 141) })),
-    ['2.59.2_141'],
-    'a newer code under the same name is still tried',
-  );
-  assert.deepEqual(candidates(cur, { refusal: [], play: '2.58.1', apkcombo: null }), [], 'nothing older');
-  assert.deepEqual(
-    s(candidates(cur, { refusal: [V('2.61.0', 150)], play: '2.60.0', apkcombo: null }))[0],
-    '2.61.0_150',
-    'the refusal wins',
-  );
+  const guesses = s(candidates(cur, { refusal: [], play: '2.60.3' }));
+  assert.equal(guesses.length, CODE_GUESSES);
+  assert.deepEqual(guesses.slice(0, 2), ['2.60.3_141', '2.60.3_142'], 'the next codes, lowest first');
+  assert.ok(guesses.includes('2.60.3_144'), 'far enough ahead for the real 2.60.3, four codes on');
+  assert.deepEqual(candidates(cur, { refusal: [], play: null }), [], 'Play unreadable: no guesses');
+  assert.deepEqual(candidates(cur, { refusal: [], play: '2.59.2' }), [], 'Play not caught up yet: no guesses');
+  assert.deepEqual(candidates(cur, { refusal: [], play: '2.58.1' }), [], 'nothing older');
+  assert.deepEqual(s(candidates(cur, { refusal: [V('2.61.0', 150)], play: '2.60.0' }))[0], '2.61.0_150', 'the refusal wins');
 });
 
 /**
- * Fake NUS plus the two pages. NUS accepts only `accepts` (null: nothing);
+ * Fake NUS plus the Play page. NUS accepts only `accepts` (null: nothing);
  * the refusal comes from the bus proxy, the way it would on the real feed.
  */
-function world({ accepts, play = '2.60.0', combo = ['2.60.0', 141] } = {}) {
-  const hits = { play: 0, combo: 0, mint: 0, proxy: 0 };
+function world({ accepts, play = '2.60.0' } = {}) {
+  const hits = { play: 0, mint: 0, proxy: 0 };
   const versionsTried = [];
   let serial = 0;
   const jwt = () => {
@@ -90,10 +66,6 @@ function world({ accepts, play = '2.60.0', combo = ['2.60.0', 141] } = {}) {
     if (url === PLAY_URL) {
       hits.play++;
       return new Response(playPage(play));
-    }
-    if (url === APKCOMBO_URL) {
-      hits.combo++;
-      return new Response(comboPage(...combo));
     }
     const body = JSON.parse(init.body ?? '{}');
     if (url.includes('get-access-token')) {
@@ -119,25 +91,32 @@ function world({ accepts, play = '2.60.0', combo = ['2.60.0', 141] } = {}) {
   return { env, hits, versionsTried };
 }
 
-test('a new release on both pages: tried with NUS, switched to, and used from then on', async () => {
+test('a new release on Play: tried with NUS, switched to, and used from then on', async () => {
   const { env, versionsTried } = world({ accepts: 'univus_android_2.60.0_141' });
   const now = Date.now();
   const r = await autoUpdateVersion(env, now, '{"code":"10009"}', 'COM3');
   assert.deepEqual(r, { status: 'switched', from: OLD, to: 'univus_android_2.60.0_141' });
-  assert.deepEqual(versionsTried, ['univus_android_2.60.0_141'], 'the right one first, so one try');
+  assert.deepEqual(versionsTried, ['univus_android_2.60.0_141'], 'the next code first, so one try');
   assert.equal(await env.KV.get('config:appVersion'), 'univus_android_2.60.0_141');
   assert.equal(await appVersion(env, now), 'univus_android_2.60.0_141', 'this isolate switches at once');
   assert.equal((await getSession(env, now)).version, 'univus_android_2.60.0_141');
 });
 
-test('a wrong code on the page: the next codes are tried, three at most', async () => {
-  const { env, versionsTried } = world({ accepts: 'univus_android_2.60.0_142', combo: ['2.60.0', 141] });
-  const r = await autoUpdateVersion(env, Date.now(), null, 'COM3');
+test('a code several builds on: found over a few checks, three tries each', async () => {
+  const { env, versionsTried } = world({ accepts: 'univus_android_2.60.0_144' });
+  const now = Date.now();
+  assert.equal((await autoUpdateVersion(env, now, null, 'COM3')).status, 'failed');
+  assert.equal(versionsTried.length, 3);
+  const r = await autoUpdateVersion(env, now + 15 * 60_000, null, 'COM3');
   assert.equal(r.status, 'switched');
-  assert.deepEqual(versionsTried, ['univus_android_2.60.0_141', 'univus_android_2.60.0_142']);
+  assert.deepEqual(
+    versionsTried,
+    [141, 142, 143, 144].map((c) => `univus_android_2.60.0_${c}`),
+    'each once, in order',
+  );
 });
 
-test('nothing works: each candidate is tried once, and the pages are read at most hourly', async () => {
+test('nothing works: each candidate is tried once, CODE_GUESSES in all, and Play is read at most hourly', async () => {
   const { env, hits } = world({ accepts: null });
   const now = Date.now();
   const first = await autoUpdateVersion(env, now, null, 'COM3');
@@ -145,22 +124,22 @@ test('nothing works: each candidate is tried once, and the pages are read at mos
   assert.match(first.note, /NUS refused univus_android_2\.60\.0_141, univus_android_2\.60\.0_142, univus_android_2\.60\.0_143/);
   assert.equal(hits.proxy, 3);
 
-  const again = await autoUpdateVersion(env, now + 15 * 60_000, null, 'COM3');
-  assert.equal(again.status, 'failed');
+  let t = now;
+  for (let i = 0; i < 6; i++) await autoUpdateVersion(env, (t += 15 * 60_000), null, 'COM3');
+  assert.equal(hits.proxy, CODE_GUESSES, 'every guess once, never more');
+  const again = await autoUpdateVersion(env, (t += 15 * 60_000), null, 'COM3');
   assert.match(again.note, /nothing new to try/);
-  assert.deepEqual([hits.play, hits.combo, hits.proxy], [1, 1, 3]);
-
-  await autoUpdateVersion(env, now + LOOKUP_EVERY_MS, null, 'COM3');
-  assert.deepEqual([hits.play, hits.combo, hits.proxy], [2, 2, 3]);
+  assert.equal(hits.proxy, CODE_GUESSES);
+  assert.equal(hits.play, Math.floor((t - now) / LOOKUP_EVERY_MS) + 1, 'once an hour');
   assert.equal(await env.KV.get('config:appVersion'), null, 'nothing was switched');
 });
 
-test('pages that have not caught up: nothing to try, so no NUS calls', async () => {
-  const { env, hits } = world({ accepts: null, play: '2.59.2', combo: ['2.59.2', 140] });
+test('Play not caught up: nothing to try, so no NUS calls', async () => {
+  const { env, hits } = world({ accepts: null, play: '2.59.2' });
   const r = await autoUpdateVersion(env, Date.now(), null, 'COM3');
   assert.match(r.note, /nothing new to try.*Google Play shows 2\.59\.2/);
   assert.equal(hits.proxy, 0);
-  const lagging = world({ accepts: null, play: '2.58.1', combo: ['2.58.1', 139] });
+  const lagging = world({ accepts: null, play: '2.58.1' });
   const r2 = await autoUpdateVersion(lagging.env, Date.now(), null, 'COM3');
   assert.match(r2.note, /nothing new to try/);
   assert.equal(lagging.hits.proxy, 0);

@@ -106,8 +106,8 @@ root path gets 426 from an app, 308 from anything else (`movedApi` in
    The stable Worker's 15-minute cron health check asks NUS for one stop
    and LTA for one stop each run, past the cache on purpose
    (`src/ops/monitor.ts`). While NUS refuses our uNivUS version, the same check
-   reads Google Play and APKCombo at most hourly and tries at most three new
-   version strings on that stop per run, never one twice
+   reads Google Play at most hourly and tries at most three new version
+   strings on that stop per run, ten per release, never one twice
    (`src/feeds/appversion.ts`). The beta's cron makes no health check: it reads
    the breakers its own traffic opened (`src/feeds/feedwatch.ts`), and runs
    the version search only while NUS is refusing the beta. Each push
