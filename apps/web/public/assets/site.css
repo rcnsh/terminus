@@ -107,8 +107,9 @@ img, svg { display: block; }
 .i18n-wait body { visibility: hidden; }
 /* Letter-spacing and capitals are for Latin text. */
 :lang(zh) .eyebrow { letter-spacing: 0.02em; }
-h1, h2, h3 { font-family: var(--display); letter-spacing: -0.02em; line-height: 1.15; margin: 0; }
-p { margin: 0; }
+/* Headings wrap into even lines, and paragraphs don't end on one word alone. */
+h1, h2, h3 { font-family: var(--display); letter-spacing: -0.02em; line-height: 1.15; margin: 0; text-wrap: balance; }
+p { margin: 0; text-wrap: pretty; }
 
 .wrap { max-width: 68rem; margin: 0 auto; padding: 0 16px; }
 .narrow { max-width: 40rem; }
