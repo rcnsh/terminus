@@ -150,45 +150,57 @@ export async function cachedFetch<T extends { fetchedAt: number }>(o: CachedOpti
 
   let job = o.inflight.get(o.key);
   if (!job) {
-    job = (async () => {
-      await cache.put(pendingKey, memo('fetching', PENDING_S)).catch(() => {});
-      return o.fetch();
-    })()
-      .then(
-        async (fresh) => {
-          // A failed write loses the cache, not the answer: it's still good,
-          // and turning it into a failure would quiet the key for failMemoS.
-          await cache
-            .put(
-              key,
-              new Response(JSON.stringify(fresh), {
-                headers: {
-                  'content-type': 'application/json',
-                  // Long max-age so the stale fallback survives; freshness is
-                  // decided above from fetchedAt, not by the cache.
-                  'cache-control': `max-age=${o.staleMaxS}`,
-                },
-              }),
-            )
-            .catch(() => {});
-          return fresh;
-        },
-        async (err) => {
-          const reason = String((err as Error)?.message ?? err);
-          if (o.memoes?.(err) ?? true) await cache.put(o.failKey, memo(reason, o.failMemoS)).catch(() => {});
-          if (o.breaker?.opens(err)) {
-            await cache.put(o.breaker.key, memo(reason, o.breaker.maxAgeS)).catch(() => {});
-            // After the answer, so a failing request waits for no extra write.
-            if (o.breaker.onOpen) o.ctx.waitUntil(o.breaker.onOpen(err).catch(() => {}));
-          }
-          throw err;
-        },
-      )
-      .finally(() => {
-        o.inflight.delete(o.key);
-        o.ctx.waitUntil(cache.delete(pendingKey).catch(() => false));
-      });
-    o.inflight.set(o.key, job);
+    // The marker goes up as the fetch starts rather than before it: another
+    // isolate that misses it in those few ms fetches too, and meets this
+    // fetch at the feed gate, which lets one of them call the feed.
+    const marked = cache.put(pendingKey, memo('fetching', PENDING_S)).catch(() => {});
+    // The cache writes after the fetch don't hold up the answer. Until they
+    // land, this isolate's callers share the settled job (the map entry stays)
+    // and the marker stays up, so no one fetches for want of a write.
+    let writes: Promise<unknown> = Promise.resolve();
+    const mine: Promise<T> = (async () => o.fetch())().then(
+      (fresh) => {
+        // A failed write loses the cache, not the answer: it's still good,
+        // and turning it into a failure would quiet the key for failMemoS.
+        writes = cache
+          .put(
+            key,
+            new Response(JSON.stringify(fresh), {
+              headers: {
+                'content-type': 'application/json',
+                // Long max-age so the stale fallback survives; freshness is
+                // decided above from fetchedAt, not by the cache.
+                'cache-control': `max-age=${o.staleMaxS}`,
+              },
+            }),
+          )
+          .catch(() => {});
+        return fresh;
+      },
+      (err) => {
+        const reason = String((err as Error)?.message ?? err);
+        const memos: Promise<void>[] = [];
+        if (o.memoes?.(err) ?? true) memos.push(cache.put(o.failKey, memo(reason, o.failMemoS)).catch(() => {}));
+        if (o.breaker?.opens(err)) {
+          memos.push(cache.put(o.breaker.key, memo(reason, o.breaker.maxAgeS)).catch(() => {}));
+          if (o.breaker.onOpen) o.ctx.waitUntil(o.breaker.onOpen(err).catch(() => {}));
+        }
+        writes = Promise.all(memos);
+        throw err;
+      },
+    );
+    job = mine;
+    o.inflight.set(o.key, mine);
+    o.ctx.waitUntil(
+      mine
+        .catch(() => {})
+        .then(() => Promise.all([marked, writes]))
+        .then(() => {
+          if (o.inflight.get(o.key) === mine) o.inflight.delete(o.key);
+          // After the marker's own write, or a slow put could land after this delete.
+          return cache.delete(pendingKey).catch(() => false);
+        }),
+    );
   }
   // The fetch finishes (and fills the cache) even when this request stops
   // waiting for it.

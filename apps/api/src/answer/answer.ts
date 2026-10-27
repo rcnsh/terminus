@@ -126,18 +126,21 @@ export async function answerFor(
   // change stops to ask about is settled before any fetch, so it all goes
   // in one round, at most TRANSFER.maxFetch stops more.
   const transfers = planTransfers(graph, input, cands);
-  const byStop = await collect(env, ctx, [...cands.map((c) => c.stop.code), ...transfers.fetch], nowMs, graph);
-
-  // Tally who's packed for the full-bus risk, off the response path.
-  if (env.DB) ctx.waitUntil(recordCrowds(env.DB, byStop, nowMs));
-  const crowdRisk =
+  // The full-bus risk needs only the stops, so D1 is asked while the feeds
+  // are; it never throws (an empty table on failure).
+  const crowdLoad =
     input.arriveBy && env.DB
-      ? await loadCrowdRisk(
+      ? loadCrowdRisk(
           env.DB,
           cands.map((c) => c.stop.code),
           nowMs,
         )
       : undefined;
+  const byStop = await collect(env, ctx, [...cands.map((c) => c.stop.code), ...transfers.fetch], nowMs, graph);
+
+  // Tally who's packed for the full-bus risk, off the response path.
+  if (env.DB) ctx.waitUntil(recordCrowds(env.DB, byStop, nowMs));
+  const crowdRisk = await crowdLoad;
 
   // On from where a bus gets you off to the place itself, from that stop: a
   // food court's other stop can be further from it than its first.

@@ -4,6 +4,7 @@
  */
 
 import { mailFeedback, parseFeedback, saveFeedback } from '../ops/feedback.ts';
+import { logNextTook } from '../ops/analytics.ts';
 import { approvable, decide, enterCode, holdAppLogins, mergeAnonymous, pollAppLogin, startAppLogin } from './applogin.ts';
 import type { Answer, Env, Graph, MeAnswer, ResolveInput, StopArrivals } from '../types.ts';
 import {
@@ -757,15 +758,18 @@ export const ME_ROUTES: MeRoute[] = [
   {
     method: 'GET',
     path: '/api/me/next',
-    run: async ({ url, env, ctx, nowMs, deps, session }) => {
-      return json(await nextBody(env, ctx, deps, await loadRider(env, session.user.id, nowMs), askOf(url), nowMs));
+    run: async ({ url, env, ctx, nowMs, deps, db, session }) => {
+      const profile = await getProfile(db, session.user.id, GRAPH, session.profileJson);
+      const body = await nextBody(env, ctx, deps, await loadRider(env, session.user.id, nowMs, { profile }), askOf(url), nowMs);
+      logNextTook(env, Date.now() - nowMs);
+      return json(body);
     },
   },
   {
     method: 'GET',
     path: '/api/me/day',
     run: async ({ url, env, ctx, nowMs, deps, db, session }) => {
-      const profile = await getProfile(db, session.user.id, GRAPH);
+      const profile = await getProfile(db, session.user.id, GRAPH, session.profileJson);
       const [day, prefs] = await Promise.all([
         tripDay(env, session.user.id, profile, nowMs),
         prefsFor(db, session.user.id, profile, nowMs),
@@ -1465,7 +1469,9 @@ export async function handleMe(
     return json({ token: paired.token });
   }
 
-  const session = await authenticate(db, req, nowMs, ctx);
+  // The answers read the profile straight after: it comes with the session, in one D1 round trip.
+  const readsProfile = req.method === 'GET' && (path === '/api/me/next' || path === '/api/me/day');
+  const session = await authenticate(db, req, nowMs, ctx, readsProfile);
 
   if (path === '/api/auth/logout' && req.method === 'POST') {
     if (session) await endSession(db, session.tokenHash);

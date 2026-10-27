@@ -99,7 +99,7 @@ export const SECTIONS = [
   ['overview', 'Overview', 'The headline numbers and anything that needs you.'],
   ['accounts', 'Accounts', 'Who uses terminus: sign-ups, setup, and active accounts by app and version.'],
   ['devices', 'Devices', 'Paired apps, the versions they run, API keys and web sessions.'],
-  ['answers', 'Answers', 'Answers given per day, how sure they were, and the errors.'],
+  ['answers', 'Answers', 'Answers given per day, how sure they were, how long they took, and the errors.'],
   ['arrivals', 'Arrival times', 'How close the feed’s “in 4 min” came to when the bus arrived.'],
   [
     'model',
@@ -595,6 +595,8 @@ export function Answers({ s, d }) {
   const qTotal = sum(quality.map((q) => q.n));
   const live = quality.find((q) => q.quality === 'live')?.n ?? 0;
   const routes = (d.an.errors ?? []).map((e) => ({ key: e.route, route: e.route, n: Number(e.n) }));
+  // How long /api/me/next took, from the request reaching the Worker to the card built (admin.ts nextTook).
+  const next = d.an.next ?? null;
   const total = sum(d.answers);
   const errs = sum(d.errors);
   const rows = d.d14.map((x, i) => ({
@@ -615,6 +617,12 @@ export function Answers({ s, d }) {
       <${Tile} k="Errors, 14 days" n=${errs} spark=${d.errors} sparkColor="var(--bad)" />
       <${Tile} k="Error rate, 7 days" n=${d.rate7} show=${(x) => pct(x, 2)} delta=${d.rateChange} upGood=${false} sub="to yesterday, vs the week before" />
       <${Tile} k="Live this week" n=${share(live, qTotal)} show=${(x) => pct(x, 1)} sub=${`${fmt(live)} of ${fmt(qTotal)} answers`} />
+      <${Tile}
+        k="Time to answer, last 24 h"
+        n=${next?.p50 ?? null}
+        show=${(x) => `${fmt(Math.round(x))} ms`}
+        sub=${next ? `median of ${fmt(next.n)} cards · 95% within ${fmt(next.p95)} ms` : 'No cards timed yet.'}
+      />
     </div>
     <${Card}
       title="Per day, last 14 days"
