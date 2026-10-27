@@ -232,26 +232,58 @@ function useAuto() {
   return [auto, setAuto];
 }
 
-/** Whether the sidebar is hidden on a wide window, as last chosen on this browser. */
-function useSideHidden() {
-  const [hidden, setHidden] = useState(() => {
+/** Whether the sidebar is narrowed to icons on a wide window, as last chosen on this browser. */
+function useSideNarrow() {
+  const [narrow, setNarrow] = useState(() => {
     try {
-      return localStorage.getItem(SIDE) === 'hidden';
+      return localStorage.getItem(SIDE) === 'narrow';
     } catch {
       return false;
     }
   });
   useEffect(() => {
     try {
-      localStorage.setItem(SIDE, hidden ? 'hidden' : 'shown');
+      localStorage.setItem(SIDE, narrow ? 'narrow' : 'wide');
     } catch {
       // Kept for this page only.
     }
-  }, [hidden]);
-  return [hidden, setHidden];
+  }, [narrow]);
+  return [narrow, setNarrow];
 }
 
-const SIDE_ICON = html`<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3" /><path d="M9 4v16" /></svg>`;
+const icon = (paths, size = 20) =>
+  html`<svg viewBox="0 0 24 24" width=${size} height=${size} fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+
+const SIDE_ICON = icon(html`<rect x="3" y="4" width="18" height="16" rx="3" /><path d="M9 4v16" />`, 18);
+
+/** Each section's icon and the short name under it in the narrow sidebar. */
+const RAIL = {
+  overview: [
+    'Overview',
+    html`<rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" />`,
+  ],
+  accounts: [
+    'Accounts',
+    html`<circle cx="9" cy="8" r="4" /><path d="M2 21a7 7 0 0 1 14 0" /><path d="M16 4.2a4 4 0 0 1 0 7.6M22 21a7 7 0 0 0-4-6.3" />`,
+  ],
+  devices: ['Devices', html`<rect x="6" y="2" width="12" height="20" rx="2.5" /><path d="M11 18h2" />`],
+  answers: ['Answers', html`<path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12z" /><path d="m8.5 12 2.5 2.5 4.5-5" />`],
+  arrivals: ['Arrivals', html`<circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" />`],
+  model: ['Model', html`<path d="M3 3v18h18" /><path d="m7 15 4-4 3 3 5-6" />`],
+  feed: [
+    'Feed',
+    html`<circle cx="12" cy="12" r="2" /><path d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19 5a10 10 0 0 1 0 14M5 19A10 10 0 0 1 5 5" />`,
+  ],
+  crashes: [
+    'Crashes',
+    html`<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /><path d="M12 9v4M12 17h.01" />`,
+  ],
+  reports: ['Reports', html`<path d="M4 22V4M4 4h13l-2.5 4.5L17 13H4" />`],
+  collection: ['Collection', html`<rect x="2" y="7" width="20" height="10" rx="5" /><circle cx="16" cy="12" r="3" />`],
+  timelapse: ['Timelapse', html`<circle cx="12" cy="12" r="9" /><path d="m10 8.5 5.5 3.5-5.5 3.5z" />`],
+};
+const REFRESH_ICON = icon(html`<path d="M21 12a9 9 0 1 1-2.6-6.4L21 8" /><path d="M21 3v5h-5" />`, 18);
+const LOCK_ICON = icon(html`<rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" />`, 18);
 
 /** A clock for "updated 20 s ago". */
 function useNow(ms = 5_000) {
@@ -292,7 +324,7 @@ function Dashboard({ v }) {
   const s = v.stats;
   const route = useRoute();
   const [auto, setAuto] = useAuto();
-  const [sideHidden, setSideHidden] = useSideHidden();
+  const [narrow, setNarrow] = useSideNarrow();
   const now = useNow();
   const d = useMemo(() => derive(s), [s]);
   const [, title, what] = SECTIONS.find(([id]) => id === route.id);
@@ -313,7 +345,7 @@ function Dashboard({ v }) {
       const n = e.key === '0' ? 10 : Number(e.key);
       if (n >= 1 && n <= SECTIONS.length) location.hash = `#/${SECTIONS[n - 1][0]}`;
       else if (e.key === 'r') load();
-      else if (e.key === '[') setSideHidden((h) => !h);
+      else if (e.key === '[') setNarrow((n) => !n);
       else if (e.key === '/') {
         const box = document.querySelector('[data-search]');
         if (!box) return;
@@ -326,7 +358,7 @@ function Dashboard({ v }) {
   }, []);
 
   return html`
-    <div class=${`dash ${v.loading ? 'loading' : ''} ${sideHidden ? 'side-hidden' : ''}`}>
+    <div class=${`dash ${v.loading ? 'loading' : ''} ${narrow ? 'side-rail' : ''}`}>
       <div class="progress" aria-hidden="true"></div>
       <aside class="side" id="side">
         <div class="side-top">
@@ -334,25 +366,32 @@ function Dashboard({ v }) {
           <button
             type="button"
             class="side-toggle"
-            title="Hide sidebar ( [ )"
-            aria-label="Hide sidebar"
+            title=${`${narrow ? 'Widen' : 'Narrow'} sidebar ( [ )`}
+            aria-label=${narrow ? 'Widen sidebar' : 'Narrow sidebar'}
             aria-controls="side"
-            aria-expanded="true"
-            onClick=${() => setSideHidden(true)}
+            aria-expanded=${narrow ? 'false' : 'true'}
+            onClick=${() => setNarrow(!narrow)}
           >
             ${SIDE_ICON}
           </button>
         </div>
         <nav aria-label="Sections">
           ${SECTIONS.map(
-            (
-              [id, name],
-              i,
-            ) => html`<a href=${`#/${id}`} class=${route.id === id ? 'on' : ''} aria-current=${route.id === id ? 'page' : null}>
-              <span>${name}</span>${badge(id, s, d)}<kbd>${(i + 1) % 10}</kbd>
+            ([id, name], i) => html`<a
+              href=${`#/${id}`}
+              class=${route.id === id ? 'on' : ''}
+              aria-current=${route.id === id ? 'page' : null}
+              title=${narrow ? name : null}
+            >
+              <span class="ic">${icon(RAIL[id][1])}</span><span class="name">${name}</span><span class="short">${RAIL[id][0]}</span>${badge(id, s, d)}<kbd
+                >${(i + 1) % 10}</kbd
+              >
             </a>`,
           )}
-          <a href="/admin/timelapse/" class="out"><span>Timelapse</span><span aria-hidden="true">↗</span></a>
+          <a href="/admin/timelapse/" class="out"
+            ><span class="ic">${icon(RAIL.timelapse[1])}</span><span class="name">Timelapse</span><span class="short">Timelapse</span
+            ><span class="arrow" aria-hidden="true">↗</span></a
+          >
         </nav>
         <div class="side-foot">
           <label class="auto">
@@ -360,8 +399,10 @@ function Dashboard({ v }) {
             <span class="long">Refresh every minute</span><span class="short">Auto</span>
           </label>
           <div class="row">
-            <button type="button" class="btn small ghost" onClick=${load} disabled=${v.loading}>${v.loading ? 'Refreshing…' : 'Refresh'}</button>
-            <button type="button" class="btn small ghost" onClick=${lock}>Lock</button>
+            <button type="button" class="btn small ghost" onClick=${load} disabled=${v.loading} title=${narrow ? 'Refresh ( r )' : null}>
+              ${REFRESH_ICON}<span class="t">${v.loading ? 'Refreshing…' : 'Refresh'}</span>
+            </button>
+            <button type="button" class="btn small ghost" onClick=${lock} title=${narrow ? 'Lock' : null}>${LOCK_ICON}<span class="t">Lock</span></button>
           </div>
           <p class="hint keys">
             <span><kbd>1</kbd>–<kbd>0</kbd> section</span><span><kbd>r</kbd> refresh</span><span><kbd>/</kbd> search</span><span><kbd>[</kbd> sidebar</span>
@@ -370,21 +411,7 @@ function Dashboard({ v }) {
       </aside>
       <main class="dash-main">
         <header class="dash-h">
-          <div class="dash-title">
-            ${
-              sideHidden &&
-              html`<button
-              type="button"
-              class="side-toggle"
-              title="Show sidebar ( [ )"
-              aria-label="Show sidebar"
-              aria-controls="side"
-              aria-expanded="false"
-              onClick=${() => setSideHidden(false)}
-            >
-              ${SIDE_ICON}
-            </button>`
-            }
+          <div>
             <h1>${title}</h1>
             <p class="hint">${what}</p>
           </div>
