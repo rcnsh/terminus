@@ -88,19 +88,14 @@ body.dash-on > main { padding: 0; }
   transition: background 0.15s ease, color 0.15s ease;
 }
 .side-toggle:hover { background: var(--surface-2); color: var(--ink); }
-/* Hidden on a wide window: the column closes and the page takes the room. */
-@media (width > 56rem) {
-  .dash { transition: grid-template-columns 0.25s var(--ease); }
-  .dash.side-hidden { grid-template-columns: 0 minmax(0, 1fr); }
-  .dash.side-hidden .side { visibility: hidden; overflow: hidden; padding-inline: 0; border-right: 0; }
-}
 .side nav { display: grid; gap: 2px; }
 .side nav a {
   display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 9px;
   color: var(--muted); text-decoration: none; font-size: 0.93rem; position: relative;
   transition: background 0.15s ease, color 0.15s ease;
 }
-.side nav a > span:first-child { flex: 1; }
+.side nav a > .name { flex: 1; }
+.side .ic, .side .short, .side-foot .btn svg { display: none; }
 .side nav a:hover { background: var(--surface-2); color: var(--ink); }
 .side nav a.on { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
 .side nav a.on::before {
@@ -133,9 +128,6 @@ kbd {
 .dash-main { min-width: 0; padding: 24px clamp(16px, 3vw, 40px) 64px; }
 .dash-h { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 6px 24px; margin-bottom: 20px; max-width: 96rem; }
 .dash-h h1 { margin: 0 0 4px; font-size: 1.9rem; }
-.dash-title { display: grid; grid-template-columns: auto 1fr; align-items: center; }
-.dash-title > :not(.side-toggle) { grid-column: 2; }
-.dash-title > .side-toggle { margin: 0 10px 4px -6px; }
 .asof { font-size: 0.82rem; }
 .page { max-width: 96rem; animation: page-in 0.32s var(--ease); transition: opacity 0.2s ease; }
 @keyframes page-in { from { opacity: 0; transform: translateY(6px); } }
@@ -395,6 +387,39 @@ table.data td.best { font-weight: 700; color: var(--good-ink); }
 .switch[aria-checked="true"] { background: var(--good); }
 .switch[aria-checked="true"] i { transform: translateX(18px); }
 .switch:disabled { opacity: 0.6; cursor: progress; }
+
+/* Narrowed on a wide window: each section an icon over its short name, and
+   the page takes the room, past its usual width. */
+@media (width > 56rem) {
+  .dash { transition: grid-template-columns 0.25s var(--ease); }
+  .dash.side-rail { grid-template-columns: 84px minmax(0, 1fr); }
+  .dash.side-rail .dash-h, .dash.side-rail .page { max-width: none; }
+  .side-rail .side { padding: 16px 10px; gap: 12px; scrollbar-width: none; }
+  .side-rail .side-top { flex-direction: column; gap: 8px; }
+  .side-rail .side .brand { padding: 0; }
+  .side-rail .side .wordmark, .side-rail .side .name, .side-rail .side .arrow, .side-rail .side kbd, .side-rail .keys { display: none; }
+  .side-rail .side nav a {
+    flex-direction: column; gap: 3px; padding: 6px 0 5px; font-size: 0.68rem; font-weight: 500; line-height: 1; text-align: center;
+  }
+  .side-rail .side nav a.on { font-weight: 600; }
+  .side-rail .side nav a.on::before { left: -10px; }
+  .side-rail .side nav a.out { padding-top: 12px; }
+  .side-rail .side .ic { display: grid; place-items: center; }
+  .side-rail .side .short { display: block; }
+  /* The count or dot sits on the icon's corner. */
+  .side-rail .side nav a > .count, .side-rail .side nav a > .dot { position: absolute; top: 2px; left: calc(50% + 6px); box-shadow: 0 0 0 2px var(--surface); }
+  .side-rail .side nav a > .count { min-width: 16px; padding: 0 4px; font-size: 0.65rem; line-height: 16px; }
+  .side-rail .side nav a > .count.quiet { display: none; }
+  .side-rail .side nav a > .dot { top: 5px; left: calc(50% + 9px); }
+  .side-rail .side-foot { padding: 0; gap: 8px; }
+  .side-rail .auto { justify-content: center; gap: 5px; font-size: 0.72rem; }
+  .side-rail .auto .long { display: none; }
+  .side-rail .auto .short { display: inline; }
+  .side-rail .side-foot .row { gap: 4px; }
+  .side-rail .side-foot .btn { padding: 0; min-height: 34px; }
+  .side-rail .side-foot .btn svg { display: block; }
+  .side-rail .side-foot .btn .t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
 
 /* A phone or a narrow window: the sidebar becomes a bar across the top. */
 @media (max-width: 56rem) {
