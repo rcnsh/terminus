@@ -1,3 +1,4 @@
+import CoreLocation
 import Foundation
 import Observation
 
@@ -174,8 +175,13 @@ final class BusesModel {
         guard let token else { return }
         asked[Self.nearestKey] = Date()
         let s = AppModel.shared.session
+        var sent: CLLocation?
+        var sentAt = Date()
+        var later: Task<CLLocation?, Never>?
         await fetching(Self.nearestKey) {
-            let loc = await Locator.shared.fix(maxAge: 60)
+            let (loc, coming) = await Locator.shared.quickFix()
+            (sent, later) = (loc, coming)
+            sentAt = Date()
             do {
                 let (stops, data) = try await Api(token: token).nearbyBoards(
                     lat: loc?.coordinate.latitude, lon: loc?.coordinate.longitude, acc: loc?.acc)
@@ -201,6 +207,15 @@ final class BusesModel {
                 } else if nearest == nil {
                     nearestState = .failed
                 }
+            }
+        }
+        // Asked without waiting for the new fix, as the Now card does
+        // (AppModel.fetch): once more when it comes, if it moves you.
+        if let later, case let sent = sent {
+            Task {
+                let new = await later.value
+                guard current(s), Locator.refreshAgain(sent: sent, new: new, sentAt: sentAt) else { return }
+                await refreshNearest(force: true)
             }
         }
     }
