@@ -24,7 +24,7 @@ import {
   takeMailBudget,
   takeGlobalMail,
   loadProfileJson,
-  newPairCode,
+  newEmailCode,
   newToken,
   profileFor,
   removeAnonymous,
@@ -112,8 +112,8 @@ export async function startAppLogin(
   const id = crypto.randomUUID();
   const poll = newToken();
   const link = newToken();
-  // Same alphabet as pairing codes: no 0/O or 1/I/L to misread.
-  const code = newPairCode();
+  // Digits, for the keyboard to offer (newEmailCode).
+  const code = newEmailCode();
   const match = randomMatch();
   const expires = nowMs + LOGIN_TTL.requestMs;
   // The cooldown checked again in the insert itself: two requests at once
@@ -164,6 +164,17 @@ export async function startAppLogin(
 }
 
 /**
+ * The device as the sign-in email names it: up to its first word with a digit
+ * ("iPhone 17 Pro" is "iPhone"), since the keyboard offering the code from
+ * the email could take the model's number for it.
+ */
+export function mailDevice(name: string): string {
+  const words = name.trim().split(/\s+/);
+  const n = words.findIndex((w) => /\d/.test(w));
+  return (n < 0 ? words : words.slice(0, n)).join(' ');
+}
+
+/**
  * Worded like the web's sign-in email: the code up front, in the subject too,
  * since a lone link under "Sign in to ..." is the shape of a phishing mail.
  * The device's number is never in it: it's only on the device's screen.
@@ -171,7 +182,7 @@ export async function startAppLogin(
 async function sendApproval(env: Env, email: string, device: string, code: string, link: string, origin: string): Promise<void> {
   const site = new URL(origin).host;
   const t = m();
-  device ||= t.aDevice;
+  device = mailDevice(device) || t.aDevice;
   const why = t.codeWhyApp(site, device);
   await sendMail(env, {
     from: { email: env.EMAIL_FROM!, name: mailName(env) },

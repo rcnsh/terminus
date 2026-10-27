@@ -266,7 +266,7 @@ test('the emailed code signs in once, and spends the link with it', async () => 
   await call(env, '/api/auth/login', { method: 'POST', body: { email: INVITED } });
   const msg = email.sent.at(-1);
   const code = email.lastCode();
-  assert.match(code, /^[A-Z0-9]{6}$/);
+  assert.match(code, /^[2-9]{6}$/, 'digits, which the keyboard offers from the email');
   assert.equal(msg.subject, `Your terminus code: ${code}`);
   assert.match(msg.text, /because someone entered this address/);
 

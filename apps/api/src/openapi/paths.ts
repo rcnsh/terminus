@@ -598,7 +598,7 @@ export function paths(): Record<string, unknown> {
         tags: ['Account'],
         summary: 'Email a sign-in code and link',
         description:
-          'Emails a 6-character sign-in code and a sign-in link to the address. The reply is the same whether or not the address is blocked or has an account. ' +
+          'Emails a 6-digit sign-in code and a sign-in link to the address. The reply is the same whether or not the address is blocked or has an account. ' +
           'One email per address per minute, an app sign-in’s included. Either the code (`/api/auth/code`) or the link signs in, once, within 15 minutes.',
         operationId: 'login',
         security: [],
@@ -763,7 +763,7 @@ export function paths(): Record<string, unknown> {
         tags: ['Account'],
         summary: 'Confirm with the code from the email',
         description:
-          'The 6-character code from the `/api/auth/app/start` email, typed into the app. Right, it answers like an approved poll, with the token. ' +
+          'The 6-digit code from the `/api/auth/app/start` email, typed into the app. Right, it answers like an approved poll, with the token. ' +
           'Five wrong codes end the request. The link in the same email (choosing the number) is the alternative.',
         operationId: 'appCode',
         security: [],

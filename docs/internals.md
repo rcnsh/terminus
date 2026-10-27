@@ -380,8 +380,13 @@ get one of three ways:
   expired sign-in links and codes go every run.
 - **Sign-in approved from the email** ([src/accounts/applogin.ts](../apps/api/src/accounts/applogin.ts),
   modelled on RFC 8628). `POST /api/auth/app/start {email, name}` returns
-  `{request, poll, match, expires}` and emails a 6-character code (in the subject
-  too: filters hold back link-only mail) and a link. Typed into the app,
+  `{request, poll, match, expires}` and emails a 6-digit code (in the subject
+  too: filters hold back link-only mail) and a link. The code is digits from
+  2 to 9 (`newEmailCode`), the web's sign-in email's too: with letters in it,
+  an iPhone's keyboard offered a code from the email that didn't work (October
+  2026). Nor does the email have any other number near it: it names the device
+  without its model number (`mailDevice`). Clients still take the pairing
+  code's letters. Typed into the app,
   `POST /api/auth/app/code {request, poll, code}` answers with the token; five
   wrong codes kill the request. Reading mail on another device, the link's
   page (`GET /auth/approve?r=`) asks for the number the app shows

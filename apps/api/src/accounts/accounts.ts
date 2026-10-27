@@ -77,15 +77,29 @@ export async function hashToken(token: string): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-export function newPairCode(): string {
+function newCode(alphabet: string): string {
   // Rejection sampling keeps every character equally likely.
+  const under = 256 - (256 % alphabet.length);
   const out: string[] = [];
   while (out.length < 6) {
     for (const b of crypto.getRandomValues(new Uint8Array(12))) {
-      if (b < 240 && out.length < 6) out.push(PAIR_ALPHABET[b % PAIR_ALPHABET.length]);
+      if (b < under && out.length < 6) out.push(alphabet[b % alphabet.length]);
     }
   }
   return out.join('');
+}
+
+export function newPairCode(): string {
+  return newCode(PAIR_ALPHABET);
+}
+
+/**
+ * The code in a sign-in email: digits only, still from PAIR_ALPHABET so every
+ * client takes it. A phone's keyboard offers the code from the email, and with
+ * letters in it an iPhone offered one that didn't work (October 2026).
+ */
+export function newEmailCode(): string {
+  return newCode('23456789');
 }
 
 /**
@@ -189,7 +203,7 @@ export async function requestLink(
   // filters (NUS's among them) hold back mail that is only a link; a code
   // needs no click. It lives in KV and points at the link's row, so spending
   // either one spends both.
-  const code = newPairCode();
+  const code = newEmailCode();
   const codeKey = await signInCodeKey(email);
   const pending: PendingCode = { c: await hashToken(code), t: tokenHash, e: nowMs + ACCOUNT_TTL.linkMs };
 
