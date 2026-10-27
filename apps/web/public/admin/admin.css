@@ -95,7 +95,8 @@ body.dash-on > main { padding: 0; }
   transition: background 0.15s ease, color 0.15s ease;
 }
 .side nav a > .name { flex: 1; }
-.side .ic, .side .short, .side-foot .btn svg { display: none; }
+.side .ic { position: relative; display: grid; place-items: center; flex: none; }
+.side .pip, .side-foot .btn svg { display: none; }
 .side nav a:hover { background: var(--surface-2); color: var(--ink); }
 .side nav a.on { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
 .side nav a.on::before {
@@ -130,6 +131,8 @@ kbd {
 .dash-h h1 { margin: 0 0 4px; font-size: 1.9rem; }
 .asof { font-size: 0.82rem; }
 .page { max-width: 96rem; animation: page-in 0.32s var(--ease); transition: opacity 0.2s ease; }
+@keyframes side-in-wide { 0%, 35% { opacity: 0; } }
+@keyframes side-in-rail { 0%, 35% { opacity: 0; } }
 @keyframes page-in { from { opacity: 0; transform: translateY(6px); } }
 
 .dash .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr)); gap: 12px; margin-bottom: 16px; }
@@ -388,37 +391,50 @@ table.data td.best { font-weight: 700; color: var(--good-ink); }
 .switch[aria-checked="true"] i { transform: translateX(18px); }
 .switch:disabled { opacity: 0.6; cursor: progress; }
 
-/* Narrowed on a wide window: each section an icon over its short name, and
-   the page takes the room, past its usual width. */
+/* On a wide window the sidebar collapses to its icons. They stay where they
+   are: only the width moves and the names fade, and the page takes the room,
+   past its usual width. */
 @media (width > 56rem) {
-  .dash { transition: grid-template-columns 0.25s var(--ease); }
-  .dash.side-rail { grid-template-columns: 84px minmax(0, 1fr); }
+  .dash { transition: grid-template-columns 0.3s cubic-bezier(0.32, 0.72, 0, 1); }
+  .dash.side-rail { grid-template-columns: 64px minmax(0, 1fr); }
   .dash.side-rail .dash-h, .dash.side-rail .page { max-width: none; }
-  .side-rail .side { padding: 16px 10px; gap: 12px; scrollbar-width: none; }
-  .side-rail .side-top { flex-direction: column; gap: 8px; }
-  .side-rail .side .brand { padding: 0; }
-  .side-rail .side .wordmark, .side-rail .side .name, .side-rail .side .arrow, .side-rail .side kbd, .side-rail .keys { display: none; }
-  .side-rail .side nav a {
-    flex-direction: column; gap: 3px; padding: 6px 0 5px; font-size: 0.68rem; font-weight: 500; line-height: 1; text-align: center;
-  }
-  .side-rail .side nav a.on { font-weight: 600; }
-  .side-rail .side nav a.on::before { left: -10px; }
-  .side-rail .side nav a.out { padding-top: 12px; }
-  .side-rail .side .ic { display: grid; place-items: center; }
-  .side-rail .side .short { display: block; }
-  /* The count or dot sits on the icon's corner. */
-  .side-rail .side nav a > .count, .side-rail .side nav a > .dot { position: absolute; top: 2px; left: calc(50% + 6px); box-shadow: 0 0 0 2px var(--surface); }
-  .side-rail .side nav a > .count { min-width: 16px; padding: 0 4px; font-size: 0.65rem; line-height: 16px; }
-  .side-rail .side nav a > .count.quiet { display: none; }
-  .side-rail .side nav a > .dot { top: 5px; left: calc(50% + 9px); }
+  /* Above the page, for the names drawn beside it when narrow. */
+  .side { z-index: 10; padding-inline: 10px; overflow-x: hidden; }
+  /* Nothing in the sidebar is wider than it, or focus and the pointer would
+     scroll it sideways: names shrink and clip, the rest leaves when narrow. */
+  .side .brand { min-width: 0; max-width: 100%; overflow: hidden; padding: 1px 7px; }
+  .side nav a { gap: 10px; padding: 8px 12px; white-space: nowrap; }
+  .side nav { grid-template-columns: minmax(0, 1fr); }
+  .side nav a > .name { min-width: 0; overflow: hidden; }
+  .side nav a > :is(.count, .dot, .arrow) { animation: side-in-wide 0.3s ease-out both; }
+  .side-rail .side nav a > :is(.count, .dot, .arrow, kbd) { display: none; }
+  .side nav a.on::before { left: -10px; }
+  .side nav a > :not(.ic), .side .wordmark { transition: opacity 0.2s ease 0.08s; }
+  .side-rail .side nav a > :not(.ic), .side-rail .side .wordmark { opacity: 0; transition: opacity 0.12s ease; }
+  /* The count or dot moves onto the icon's corner. */
+  .side .pip { display: block; position: absolute; top: -6px; right: -9px; opacity: 0; transition: opacity 0.12s ease; }
+  .side-rail .side .pip { opacity: 1; transition: opacity 0.2s ease 0.08s; }
+  .side .pip .count { display: block; min-width: 16px; padding: 0 4px; font-size: 0.65rem; line-height: 16px; box-shadow: 0 0 0 2px var(--surface); }
+  .side .pip .dot { display: block; margin: 4px 0 0 -2px; box-shadow: 0 0 0 2px var(--surface); }
+  /* The toggle and the foot change place, so they fade in at the new one.
+     Two names, so the animation runs again each way. */
+  .side-toggle, .side-foot { animation: side-in-wide 0.3s ease-out both; }
+  .side-rail .side-toggle, .side-rail .side-foot { animation-name: side-in-rail; }
+  .side-rail .side-top { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .side-rail .side-toggle { margin-left: 6px; }
   .side-rail .side-foot { padding: 0; gap: 8px; }
-  .side-rail .auto { justify-content: center; gap: 5px; font-size: 0.72rem; }
-  .side-rail .auto .long { display: none; }
-  .side-rail .auto .short { display: inline; }
-  .side-rail .side-foot .row { gap: 4px; }
-  .side-rail .side-foot .btn { padding: 0; min-height: 34px; }
+  .side-rail .auto { justify-content: center; }
+  .side-rail .auto span, .side-rail .keys { display: none; }
+  .side-rail .side-foot .row { flex-direction: column; gap: 6px; }
+  .side-rail .side-foot .btn { padding: 0; min-height: 36px; }
   .side-rail .side-foot .btn svg { display: block; }
   .side-rail .side-foot .btn .t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  /* Names, beside the sidebar (placeTip in admin.js puts them level). */
+  .side-rail .side [data-tip]:hover::after, .side-rail .side [data-tip]:focus-visible::after {
+    content: attr(data-tip); position: fixed; left: 70px; top: var(--tip-y); transform: translateY(-50%); z-index: 40; pointer-events: none;
+    padding: 6px 10px; border-radius: 8px; background: var(--ink); color: var(--bg); font: 500 0.82rem/1.2 var(--font); white-space: nowrap;
+    animation: tip-in 0.12s ease;
+  }
 }
 
 /* A phone or a narrow window: the sidebar becomes a bar across the top. */
@@ -434,7 +450,7 @@ table.data td.best { font-weight: 700; color: var(--good-ink); }
   .side nav a { white-space: nowrap; flex: none; padding: 7px 10px; }
   .side nav a.on::before { left: 10px; right: 10px; top: auto; bottom: -4px; width: auto; height: 3px; border-radius: 3px 3px 0 0; }
   .side nav a.out { margin: 0; border: 0; padding-top: 7px; }
-  .side kbd, .keys, .side-toggle { display: none; }
+  .side kbd, .keys, .side-toggle, .side .ic { display: none; }
   .side-foot { margin: 0 0 0 auto; padding: 0; grid-auto-flow: column; align-items: center; }
   .side-foot .btn { min-height: 34px; }
   .auto .long { display: none; }
