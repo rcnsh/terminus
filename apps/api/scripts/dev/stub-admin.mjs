@@ -40,6 +40,7 @@ export function fakeAeRows(q, nowMs) {
       ];
     });
   }
+  if (q.includes("blob1 = 'next'")) return [{ p50: 640, p95: 1870, n: 3_412 }];
   if (q.includes('blob5 AS quality')) {
     return [
       { quality: 'live', n: 11_842 },

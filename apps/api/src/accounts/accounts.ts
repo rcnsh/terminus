@@ -54,6 +54,8 @@ export interface SessionInfo {
   user: User;
   kind: 'web' | 'device';
   tokenHash: string;
+  /** The saved profile as read with the session (authenticate's `withProfile`): null for none, absent when not read. */
+  profileJson?: unknown;
 }
 
 export function accountsConfigured(env: Env): boolean {
@@ -695,15 +697,30 @@ export function hasSessionCookie(req: Request): boolean {
   return cookieToken(req) !== null;
 }
 
-export async function authenticate(db: D1Database, req: Request, nowMs: number, ctx?: ExecutionContext): Promise<SessionInfo | null> {
+/**
+ * The session a request's token opens, or null. With `withProfile`, the
+ * account's saved profile comes in the same D1 read (`profileJson`, null
+ * when it has none), for a route that reads it next: one round trip, not two.
+ */
+export async function authenticate(
+  db: D1Database,
+  req: Request,
+  nowMs: number,
+  ctx?: ExecutionContext,
+  withProfile = false,
+): Promise<SessionInfo | null> {
   const token = tokenFrom(req);
   if (!token) return null;
   const hash = await hashToken(token);
   const row = await db
     .prepare(
-      `SELECT s.kind, s.created, s.last_seen, s.expires, s.client, u.id, u.email
-         FROM sessions s JOIN users u ON u.id = s.user_id
-        WHERE s.token_hash = ?`,
+      withProfile
+        ? `SELECT s.kind, s.created, s.last_seen, s.expires, s.client, u.id, u.email, p.json AS profile
+             FROM sessions s JOIN users u ON u.id = s.user_id LEFT JOIN profiles p ON p.user_id = u.id
+            WHERE s.token_hash = ?`
+        : `SELECT s.kind, s.created, s.last_seen, s.expires, s.client, u.id, u.email
+             FROM sessions s JOIN users u ON u.id = s.user_id
+            WHERE s.token_hash = ?`,
     )
     .bind(hash)
     .first<{
@@ -714,6 +731,7 @@ export async function authenticate(db: D1Database, req: Request, nowMs: number, 
       client: string | null;
       id: string;
       email: string | null;
+      profile?: string | null;
     }>();
   if (!row) return null;
   if (row.expires !== null && row.expires < nowMs) return null;
@@ -738,7 +756,9 @@ export async function authenticate(db: D1Database, req: Request, nowMs: number, 
     if (ctx) ctx.waitUntil(touch.catch((err) => console.error('last_seen not updated:', err instanceof Error ? err.message : String(err))));
     else await touch;
   }
-  return { user: { id: row.id, email: row.email }, kind: row.kind, tokenHash: hash };
+  const session: SessionInfo = { user: { id: row.id, email: row.email }, kind: row.kind, tokenHash: hash };
+  if (withProfile) session.profileJson = row.profile ? JSON.parse(row.profile) : null;
+  return session;
 }
 
 /**

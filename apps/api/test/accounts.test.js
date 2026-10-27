@@ -546,6 +546,46 @@ test('/api/me/next goes to a favourite by key and returns the chips', async () =
   assert.equal(body.stop.code, 'PGP', 'no coordinates: starts from home');
 });
 
+test('/api/me/next reads the profile with the session, in one D1 round trip, and logs how long it took', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  await call(env, '/api/me/profile', {
+    method: 'PUT',
+    cookie,
+    body: { home: { lat: 1.2918, lon: 103.7804, stops: ['PGP'] }, places: [{ key: 'mrt', label: 'KR MRT', to: 'KR-MRT' }] },
+  });
+  const asked = [];
+  const prepare = env.DB.prepare;
+  env.DB.prepare = (sql) => (asked.push(sql), prepare(sql));
+  const points = [];
+  env.AE = { writeDataPoint: (p) => points.push(p) };
+  const body = await (await call(env, '/api/me/next?place=mrt', { cookie })).json();
+  assert.equal(body.stop.code, 'PGP', "the profile's home, read with the session");
+  assert.ok(asked.some((q) => /FROM sessions s JOIN users u .* LEFT JOIN profiles p/s.test(q)));
+  assert.ok(!asked.some((q) => /FROM profiles WHERE user_id/.test(q)), 'no second read for the profile');
+  const next = points.filter((p) => p.blobs[0] === 'next');
+  assert.equal(next.length, 1, 'one row per answer');
+  assert.equal(next[0].doubles.length, 12, "tookMs is double12, after the answer rows' eleven");
+  assert.ok(next[0].doubles[11] >= 0);
+  assert.deepEqual(next[0].indexes, ['next']);
+
+  // Other routes read the session alone, and the profile as they did.
+  asked.length = 0;
+  await call(env, '/api/me/profile', { cookie });
+  assert.ok(!asked.some((q) => /LEFT JOIN profiles/.test(q)));
+  assert.ok(asked.some((q) => /FROM profiles WHERE user_id/.test(q)));
+});
+
+test('/api/me/next for an account with no profile saved gets the default one', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  const res = await call(env, '/api/me/next', { cookie });
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).label, 'No timetable yet');
+  const day = await call(env, '/api/me/day', { cookie });
+  assert.equal(day.status, 200);
+});
+
 test('/api/me/next follows the timetable (Thursday 09:00 frozen clock)', async () => {
   const { env, email } = setup();
   const cookie = await signIn(env, email);

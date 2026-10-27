@@ -5,6 +5,8 @@ import { makeD1 } from './_d1.mjs';
 import { MIN_SAMPLES, dayType, forgetSent, loadCrowdRisk, pruneCrowdSeen, recordCrowds } from '../src/answer/crowd.ts';
 import { leaveBy } from '../src/answer/leave.ts';
 import { RIDE, WALK } from '../src/config.ts';
+import { answerFor } from '../src/answer/answer.ts';
+import { makeCtx, makeEnv } from './_stubs.mjs';
 
 // Thursday 27 Aug 2026, 09:00 SGT: a teaching day.
 const THU = Date.UTC(2026, 7, 27, 1, 0);
@@ -106,4 +108,24 @@ test('often packed: leave-by aims one bus earlier and says why; off, it only war
   const warned = leaveBy({ ...base, arriveBy: { ...arriveBy, fullBusMargin: false }, crowdRisk: risk });
   assert.equal(Date.parse(warned.at), THU + 25 * MIN - walk);
   assert.equal(warned.note, 'D2 is often busy at COM 3 around then, and may be full');
+});
+
+test("a class's full-bus risk is read from D1 while the arrivals are, not after", async () => {
+  const db = makeD1();
+  const asked = [];
+  const prepare = db.prepare;
+  db.prepare = (sql) => (asked.push(sql), prepare(sql));
+  const env = { ...makeEnv(), DB: db };
+  let crowdFirst = null;
+  const collect = async (_env, _ctx, codes) => {
+    // Still collecting: the crowd lookup has gone out already.
+    await new Promise((r) => setTimeout(r, 5));
+    crowdFirst = asked.some((q) => /FROM crowd_stats/.test(q));
+    return new Map(codes.map((c) => [c, { code: c, arrivals: [], fetchedAt: THU, stale: false, available: true }]));
+  };
+  const ctx = makeCtx();
+  const input = { lat: null, lon: null, to: 'COM3', originCode: 'PGP', arriveBy: { atMs: THU + 40 * MIN, venueWalkS: 0 }, log: false };
+  await answerFor(env, ctx, input, 'CS2030 @ COM1', THU, collect);
+  await ctx.settle();
+  assert.equal(crowdFirst, true);
 });
