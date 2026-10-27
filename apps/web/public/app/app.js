@@ -39,7 +39,18 @@ import { SearchBox } from '/account/search-box.js';
 import '/app/board.js';
 import { offlineNext } from '/app/offline.js';
 import { preloadMap } from '/app/map-files.js';
-import { PULL_FRESH_MS, REFRESH_MS, markWaitMs, slowRetryMs, staleText } from '/app/timing.js';
+import {
+  FIX_FRESH_MS,
+  FIX_GRACE_MS,
+  PULL_FRESH_MS,
+  REFRESH_MS,
+  fixQuery,
+  fixToSend,
+  markWaitMs,
+  refreshAgain,
+  slowRetryMs,
+  staleText,
+} from '/app/timing.js';
 import { PullToRefresh } from '/app/pull.js';
 
 /** How often the timed refresh asks for Today too: it moves slowly, and
@@ -202,12 +213,15 @@ function query(params = {}) {
   return s ? `?${s}` : '';
 }
 
+/** The last fix this page got ({ lat, lon, accuracy, at }), for a card asked before a fresh one comes. */
+let lastFix = null;
+
 /**
  * Where the phone is, only when location is already allowed: the plan then
  * starts from the nearest stop, as in the phone app. Never asks by itself;
- * the Nearby chip does. Rounded to about 11 m, like the apps.
+ * the Nearby chip does. Null without one.
  */
-async function here({ ask = false } = {}) {
+async function position({ ask = false } = {}) {
   if (!navigator.geolocation) return null;
   if (!ask) {
     const state = await navigator.permissions
@@ -219,15 +233,29 @@ async function here({ ask = false } = {}) {
   return new Promise((resolve) => {
     navigator.geolocation.getCurrentPosition(
       (p) => {
-        // How far out it may be: its accuracy, plus a walk's worth of its age.
-        // The API drops a fix too rough to say where you are.
-        const acc = Math.round((p.coords.accuracy || 0) + (Math.max(0, Date.now() - p.timestamp) / 1000) * 1.3);
-        resolve({ lat: p.coords.latitude.toFixed(4), lon: p.coords.longitude.toFixed(4), acc: String(acc) });
+        lastFix = { lat: p.coords.latitude, lon: p.coords.longitude, accuracy: p.coords.accuracy, at: p.timestamp };
+        resolve(lastFix);
       },
       () => resolve(null),
-      { maximumAge: 60_000, timeout: 8_000 },
+      { maximumAge: FIX_FRESH_MS, timeout: 8_000 },
     );
   });
+}
+
+/** position() as the API's query: lat, lon and acc. */
+async function here(opts) {
+  const fix = await position(opts);
+  return fix && fixQuery(fix, Date.now());
+}
+
+/**
+ * The fix for Now's card without the wait for GPS: the fresh one if it comes
+ * within FIX_GRACE_MS, else the last one (fixToSend). `fresh` keeps coming.
+ */
+async function hereSoon() {
+  const fresh = position();
+  const grace = new Promise((resolve) => setTimeout(() => resolve(undefined), FIX_GRACE_MS));
+  return { sent: fixToSend(await Promise.race([fresh, grace]), lastFix, Date.now()), fresh };
 }
 
 /** Counts refreshes: one that finishes after a newer one started (a chip tapped meanwhile) is dropped. */
@@ -266,7 +294,12 @@ async function refreshNow(timed) {
   const to = target.get();
   if (to.kind === 'nearby') return refreshNearby(mine);
   try {
-    const at = await here();
+    const { sent, fresh } = await hereSoon();
+    if (mine !== generation) return;
+    const sentAt = Date.now();
+    // Asked without the fresh fix, or from somewhere else: once more when it comes.
+    fresh.then((f) => mine === generation && refreshAgain(sent, f, sentAt) && refresh());
+    const at = sent && fixQuery(sent, sentAt);
     const params = { ...(to.kind === 'place' ? { place: to.key } : to.kind === 'stop' ? { to: to.to } : {}), ...at };
     // Today gets the location too: its next class is planned from here, as the card is.
     const askDay = !timed || !lastPlan || Date.now() - planAt >= DAY_MS;
