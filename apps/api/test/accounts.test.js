@@ -7,7 +7,9 @@ import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
 import {
   MAIL_TIMEOUT_MS,
+  WRONG_CODES_PER_DAY,
   checkTurnstile,
+  countWrongCode,
   hashToken,
   newPairCode,
   normalizePairCode,
@@ -266,7 +268,7 @@ test('the emailed code signs in once, and spends the link with it', async () => 
   await call(env, '/api/auth/login', { method: 'POST', body: { email: INVITED } });
   const msg = email.sent.at(-1);
   const code = email.lastCode();
-  assert.match(code, /^[A-Z0-9]{6}$/);
+  assert.match(code, /^[2-9]{6}$/, 'digits, which the keyboard offers from the email');
   assert.equal(msg.subject, `Your terminus code: ${code}`);
   assert.match(msg.text, /because someone entered this address/);
 
@@ -281,6 +283,16 @@ test('the emailed code signs in once, and spends the link with it', async () => 
 
   assert.equal((await call(env, '/api/auth/code', { method: 'POST', body: { email: INVITED, code } })).status, 400, 'code is single-use');
   assert.equal((await call(env, '/auth/verify', { method: 'POST', form: { t: email.lastToken() } })).status, 400, 'its link went with it');
+});
+
+test("a day's wrong codes for an address stop its codes, not its link", async () => {
+  const { env, email } = setup();
+  for (let i = 0; i < WRONG_CODES_PER_DAY; i++) await countWrongCode(env, INVITED, Date.now());
+  await call(env, '/api/auth/login', { method: 'POST', body: { email: INVITED } });
+  const res = await call(env, '/api/auth/code', { method: 'POST', body: { email: INVITED, code: email.lastCode() } });
+  assert.equal(res.status, 400);
+  assert.match((await res.json()).error, /use the link in the email/);
+  assert.equal((await call(env, '/auth/verify', { method: 'POST', form: { t: email.lastToken() } })).status, 303);
 });
 
 test('a spent link kills its code', async () => {

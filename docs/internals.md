@@ -380,10 +380,20 @@ get one of three ways:
   expired sign-in links and codes go every run.
 - **Sign-in approved from the email** ([src/accounts/applogin.ts](../apps/api/src/accounts/applogin.ts),
   modelled on RFC 8628). `POST /api/auth/app/start {email, name}` returns
-  `{request, poll, match, expires}` and emails a 6-character code (in the subject
-  too: filters hold back link-only mail) and a link. Typed into the app,
+  `{request, poll, match, expires}` and emails a 6-digit code (in the subject
+  too: filters hold back link-only mail) and a link. The code is digits from
+  2 to 9 (`newEmailCode`), the web's sign-in email's too: with letters in it,
+  an iPhone's keyboard offered a code from the email that didn't work (October
+  2026). Nor does the email have any other number near it: it names the device
+  without its model number (`mailDevice`). Clients still take the pairing
+  code's letters. Typed into the app,
   `POST /api/auth/app/code {request, poll, code}` answers with the token; five
-  wrong codes kill the request. Reading mail on another device, the link's
+  wrong codes kill the request. Since a new code can be asked for every
+  minute, ten an hour, an address also gets `WRONG_CODES_PER_DAY` (20) wrong
+  codes a UTC day across all its codes, the web's too (KV `wrongcodes:`):
+  then no code is checked until the next day, and the link still works.
+  Uncapped, 1,200 guesses a day at 8⁶ codes would be 1 in 220; capped, 1 in
+  13,000. Reading mail on another device, the link's
   page (`GET /auth/approve?r=`) asks for the number the app shows
   (`match`): typed right, it approves; a wrong one or "This wasn't me" kills
   it. Typed rather than picked from a few, so someone tapping whatever is

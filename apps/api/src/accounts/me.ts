@@ -293,6 +293,9 @@ export async function readCapped(req: Request, max: number): Promise<string | nu
   return new TextDecoder().decode(all);
 }
 
+/** Past WRONG_CODES_PER_DAY: the link in the email is the way in until tomorrow. */
+const LOCKED = 'too many wrong codes for this address today; use the link in the email';
+
 /** The header every 429 carries, saying when to try again: [seconds], by
  *  default the window of the per-minute limiters (RL_*) and the sign-in
  *  cooldowns. Clients wait this long rather than guessing. */
@@ -1256,6 +1259,7 @@ export async function handleMe(
     if (!email || !code) return json({ error: 'enter the 6-character code from the email' }, 400);
     const done = await redeemCode(env, db, email, code, nowMs, await browserAnon(db, req, nowMs));
     if (!done) return json({ error: 'that code is wrong or has expired' }, 400);
+    if (done === 'locked') return json({ error: LOCKED }, 400);
     if (done.removed) await clearTrip(env, done.removed);
     return json({ ok: true }, 200, {
       'set-cookie': sessionCookie(done.token, ACCOUNT_TTL.webSessionMs / 1000),
@@ -1383,8 +1387,9 @@ export async function handleMe(
     if (typeof body?.request !== 'string' || typeof body?.poll !== 'string') return json({ error: 'send request and poll' }, 400);
     if (path === '/api/auth/app/code') {
       const code = normalizePairCode(body.code);
-      const entered = code ? await enterCode(db, body.request, body.poll, code, nowMs) : 'wrong';
+      const entered = code ? await enterCode(env, db, body.request, body.poll, code, nowMs) : 'wrong';
       if (entered === 'wrong') return json({ status: 'pending', error: "that code isn't right; check the email and try again" }, 400);
+      if (entered === 'locked') return json({ status: 'pending', error: LOCKED }, 400);
       if (entered !== 'approved')
         return json(
           { status: entered, error: entered === 'denied' ? 'too many wrong codes; start again' : 'that request expired; start again' },

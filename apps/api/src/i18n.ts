@@ -805,6 +805,7 @@ export const ERRORS_ZH: Record<string, string> = {
   'do this from the account page': '请在账户页面进行',
   'add an email to this account first': '请先给这个账户添加邮箱',
   'too many wrong codes; start again': '验证码错误次数太多，请重新开始',
+  'too many wrong codes for this address today; use the link in the email': '这个邮箱今天输错验证码的次数太多，请用邮件里的链接',
   'that request expired; start again': '这个请求已失效，请重新开始',
   'turn on location, or add a home stop in Settings': '打开定位，或在设置里添加家附近的车站',
   'profile must be an object': '资料必须是一个对象',
