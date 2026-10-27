@@ -6,8 +6,8 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { installGlobals, makeCtx, makeDurableObjects, makeEnv, makeFetch, makeKV } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
-import { clientFrom, hashToken, inboxKey, versionBelow } from '../src/accounts/accounts.ts';
-import { hasSetup } from '../src/accounts/applogin.ts';
+import { WRONG_CODES_PER_DAY, clientFrom, countWrongCode, hashToken, inboxKey, versionBelow } from '../src/accounts/accounts.ts';
+import { hasSetup, mailDevice } from '../src/accounts/applogin.ts';
 import { housekeeping } from '../src/ops/monitor.ts';
 import { endOfDayMs, sgtDate } from '../src/answer/trip.ts';
 import { Trip } from '../src/push/tripdo.ts';
@@ -165,7 +165,7 @@ test('app sign-in: the email carries a link, never the number; the page asks for
   assert.ok(s.request && s.poll && s.match >= 10 && s.match <= 99);
   const mail = email.sent.at(-1);
   assert.equal(mail.to, ME);
-  assert.match(mail.subject, /^Your terminus code: [2-9A-HJ-NP-TV-Z]{6}$/);
+  assert.match(mail.subject, /^Your terminus code: [2-9]{6}$/);
   assert.match(mail.text, /in terminus on MacBook Air/);
   const words = mail.text.replace(/https?:\/\/\S+/g, '').replace('15 minutes', '');
   assert.doesNotMatch(words, new RegExp(`\\b${s.match}\\b`), 'the number is only on the device');
@@ -188,6 +188,26 @@ test('app sign-in: the email carries a link, never the number; the page asks for
   // Opening the page twice (a mail scanner, then the user) changes nothing.
   assert.equal((await call(env, `/auth/approve?r=${lastLink(email)}`)).status, 200);
   assert.equal((await (await call(env, '/api/auth/app/poll', { method: 'POST', body: s })).json()).status, 'pending');
+});
+
+test('app sign-in: the code is the only number the keyboard could offer from the email', async () => {
+  const { env, email } = setup();
+  await call(env, '/api/auth/app/start', { method: 'POST', body: { email: ME, name: 'iPhone 17 Pro' } });
+  const mail = email.sent.at(-1);
+  const code = mail.subject.match(/(\d{6})$/)[1];
+  assert.match(mail.text, /in terminus on iPhone\. /);
+  for (const body of [mail.text, mail.html.replace(/<(style|head)\b[\s\S]*?<\/\1>/g, ' ').replace(/<[^>]*>|&[a-z0-9#]+;/g, ' ')]) {
+    const numbers = new Set(body.replace(/https?:\/\/\S+/g, '').match(/\b\d+\b/g));
+    assert.deepEqual([...numbers].sort(), ['15', code].sort());
+  }
+});
+
+test('the sign-in email names a device without its model number', () => {
+  assert.equal(mailDevice('iPhone 17 Pro'), 'iPhone');
+  assert.equal(mailDevice('Pixel 8a'), 'Pixel');
+  assert.equal(mailDevice('Galaxy S24 Ultra'), 'Galaxy');
+  assert.equal(mailDevice('MacBook Air'), 'MacBook Air');
+  assert.equal(mailDevice('2nd phone'), '');
 });
 
 test('app sign-in: a wrong number kills the request', async () => {
@@ -491,6 +511,26 @@ test('app sign-in: five wrong codes kill the request; the code needs the poll se
   assert.equal((await (await call(env, '/api/auth/app/code', { method: 'POST', body: { ...s, code: wrong } })).json()).status, 'denied');
   assert.equal((await (await call(env, '/api/auth/app/code', { method: 'POST', body: { ...s, code } })).json()).status, 'denied');
   assert.equal((await (await call(env, '/api/auth/app/poll', { method: 'POST', body: s })).json()).status, 'denied');
+});
+
+test("app sign-in: a day's wrong codes for an address stop its codes, not its link", async () => {
+  const { env, email } = setup();
+  for (let i = 1; i < WRONG_CODES_PER_DAY; i++) await countWrongCode(env, ME, Date.now());
+  const s = await (await call(env, '/api/auth/app/start', { method: 'POST', body: { email: ME, name: 'Pixel' } })).json();
+  const code = lastCode(email);
+  const wrong = code === '222222' ? '333333' : '222222';
+  assert.match(
+    (await (await call(env, '/api/auth/app/code', { method: 'POST', body: { ...s, code: wrong } })).json()).error,
+    /isn't right/,
+  );
+  const res = await call(env, '/api/auth/app/code', { method: 'POST', body: { ...s, code } });
+  assert.equal(res.status, 400);
+  assert.deepEqual(await res.json(), {
+    status: 'pending',
+    error: 'too many wrong codes for this address today; use the link in the email',
+  });
+  assert.equal((await call(env, '/auth/approve', { method: 'POST', form: { r: lastLink(email), n: String(s.match) } })).status, 200);
+  assert.equal((await (await call(env, '/api/auth/app/poll', { method: 'POST', body: s })).json()).status, 'approved');
 });
 
 test("app sign-in: the code keeps a device's setup just like the link", async () => {

@@ -77,15 +77,29 @@ export async function hashToken(token: string): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-export function newPairCode(): string {
+function newCode(alphabet: string): string {
   // Rejection sampling keeps every character equally likely.
+  const under = 256 - (256 % alphabet.length);
   const out: string[] = [];
   while (out.length < 6) {
     for (const b of crypto.getRandomValues(new Uint8Array(12))) {
-      if (b < 240 && out.length < 6) out.push(PAIR_ALPHABET[b % PAIR_ALPHABET.length]);
+      if (b < under && out.length < 6) out.push(alphabet[b % alphabet.length]);
     }
   }
   return out.join('');
+}
+
+export function newPairCode(): string {
+  return newCode(PAIR_ALPHABET);
+}
+
+/**
+ * The code in a sign-in email: digits only, still from PAIR_ALPHABET so every
+ * client takes it. A phone's keyboard offers the code from the email, and with
+ * letters in it an iPhone offered one that didn't work (October 2026).
+ */
+export function newEmailCode(): string {
+  return newCode('23456789');
 }
 
 /**
@@ -189,7 +203,7 @@ export async function requestLink(
   // filters (NUS's among them) hold back mail that is only a link; a code
   // needs no click. It lives in KV and points at the link's row, so spending
   // either one spends both.
-  const code = newPairCode();
+  const code = newEmailCode();
   const codeKey = await signInCodeKey(email);
   const pending: PendingCode = { c: await hashToken(code), t: tokenHash, e: nowMs + ACCOUNT_TTL.linkMs };
 
@@ -469,16 +483,40 @@ export async function mailBudgetLeft(env: Env, inbox: string, nowMs: number): Pr
 
 const mailHourKey = async (inbox: string, nowMs: number) => `mailhour:${await hashToken(inbox)}:${Math.floor(nowMs / 3_600_000)}`;
 
+/**
+ * Wrong sign-in codes an address may have in a (UTC) day, across every code
+ * sent to it, the web's and the apps'. Each code dies after `codeTries`, but
+ * a new one can be asked for every minute, MAILS_PER_HOUR an hour: 1,200
+ * guesses a day at 8⁶ codes would be 1 in 220. Capped, it's 1 in 13,000.
+ * Codes then stop working for the address until the next day; the email's
+ * link still does.
+ */
+export const WRONG_CODES_PER_DAY = 20;
+
+const wrongCodesKey = async (email: string, nowMs: number) => `wrongcodes:${await hashToken(email)}:${Math.floor(nowMs / 86_400_000)}`;
+
+/** Whether codes still work for the address today. A soft cap (KV is not
+ *  atomic); each code's own tries are counted atomically in D1. */
+export async function codesLeft(env: Env, email: string, nowMs: number): Promise<boolean> {
+  return Number((await env.KV.get(await wrongCodesKey(email, nowMs)).catch(() => null)) ?? 0) < WRONG_CODES_PER_DAY;
+}
+
+export async function countWrongCode(env: Env, email: string, nowMs: number): Promise<void> {
+  const key = await wrongCodesKey(email, nowMs);
+  const n = Number((await env.KV.get(key).catch(() => null)) ?? 0);
+  await env.KV.put(key, String(n + 1), { expirationTtl: 2 * 86_400 }).catch(() => {});
+}
+
 async function signInCodeKey(email: string): Promise<string> {
   return `code:${await hashToken(email)}`;
 }
 
 /**
- * Spends an emailed sign-in code and opens a web session, or returns null.
- * A code is tied to the address it was sent to and dies after a few wrong
- * guesses, so with about 7×10⁸ possible codes guessing is hopeless. The
- * session itself comes from spending the link's D1 row, which is atomic, so
- * a code and its link together still sign in exactly once.
+ * Spends an emailed sign-in code and opens a web session; null for a wrong or
+ * spent code, 'locked' once the address has had WRONG_CODES_PER_DAY. A code
+ * is tied to the address it was sent to and dies after a few wrong guesses.
+ * The session itself comes from spending the link's D1 row, which is atomic,
+ * so a code and its link together still sign in exactly once.
  */
 export async function redeemCode(
   env: Env,
@@ -487,10 +525,11 @@ export async function redeemCode(
   code: string,
   nowMs: number,
   anonId: string | null = null,
-): Promise<Redeemed | null> {
+): Promise<Redeemed | 'locked' | null> {
   const key = await signInCodeKey(email);
   const pending = await env.KV.get<PendingCode>(key, 'json').catch(() => null);
   if (!pending || pending.e < nowMs) return null;
+  if (!(await codesLeft(env, email, nowMs))) return 'locked';
   // Spend a try on the link's row before checking, in one statement: KV's
   // read-then-write let guesses sent all at once past the limit.
   const spent = await db
@@ -504,6 +543,7 @@ export async function redeemCode(
     return null;
   }
   if ((await hashToken(code)) !== pending.c) {
+    await countWrongCode(env, email, nowMs);
     if (spent.code_tries >= ACCOUNT_TTL.codeTries) await env.KV.delete(key).catch(() => {});
     return null;
   }
