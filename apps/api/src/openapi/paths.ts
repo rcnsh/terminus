@@ -783,7 +783,8 @@ export function paths(): Record<string, unknown> {
             },
           }),
           '400': errorResponse(
-            'No `request` or `poll`, a wrong code (`status: pending`), too many wrong codes (`denied`), or an old request (`expired`).',
+            'No `request` or `poll`, a wrong code (`status: pending`), too many wrong codes (`denied`), or an old request (`expired`). ' +
+              'After 20 wrong codes for the address in a day (UTC), every code is refused (`status: pending`) until the next day; the email’s link still works.',
           ),
           '429': {
             ...errorResponse(
@@ -828,11 +829,13 @@ export function paths(): Record<string, unknown> {
             required: ['email', 'code'],
             properties: { email: { type: 'string', format: 'email' }, code: { type: 'string' } },
           },
-          { email: 'you@u.nus.edu', code: 'K7QX4M' },
+          { email: 'you@u.nus.edu', code: '482735' },
         ),
         responses: {
           '200': ok({ type: 'object', properties: { ok: { type: 'boolean' } } }),
-          '400': errorResponse('Wrong or expired code.'),
+          '400': errorResponse(
+            'Wrong or expired code, or 20 wrong codes for the address today (UTC): then every code is refused until the next day, and the email’s link still works.',
+          ),
           '403': errorResponse('The request came from another site.'),
           '429': { ...errorResponse('Too many attempts from this IP.'), headers: RETRY_AFTER },
         },

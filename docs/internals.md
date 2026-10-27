@@ -388,7 +388,12 @@ get one of three ways:
   without its model number (`mailDevice`). Clients still take the pairing
   code's letters. Typed into the app,
   `POST /api/auth/app/code {request, poll, code}` answers with the token; five
-  wrong codes kill the request. Reading mail on another device, the link's
+  wrong codes kill the request. Since a new code can be asked for every
+  minute, ten an hour, an address also gets `WRONG_CODES_PER_DAY` (20) wrong
+  codes a UTC day across all its codes, the web's too (KV `wrongcodes:`):
+  then no code is checked until the next day, and the link still works.
+  Uncapped, 1,200 guesses a day at 8⁶ codes would be 1 in 220; capped, 1 in
+  13,000. Reading mail on another device, the link's
   page (`GET /auth/approve?r=`) asks for the number the app shows
   (`match`): typed right, it approves; a wrong one or "This wasn't me" kills
   it. Typed rather than picked from a few, so someone tapping whatever is

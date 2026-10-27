@@ -24,6 +24,8 @@ import {
   takeMailBudget,
   takeGlobalMail,
   loadProfileJson,
+  codesLeft,
+  countWrongCode,
   newEmailCode,
   newToken,
   profileFor,
@@ -203,24 +205,28 @@ ${why}`,
 /**
  * The code from the email, typed into the app that asked. Right: the
  * request is approved (the caller then collects the token as a poll would).
- * Wrong five times, or for another request: it dies.
+ * Wrong five times, or for another request: it dies. Once the address has
+ * had WRONG_CODES_PER_DAY, no code is checked ('locked').
  */
 export async function enterCode(
+  env: Env,
   db: D1Database,
   id: string,
   poll: string,
   code: string,
   nowMs: number,
-): Promise<'approved' | 'wrong' | 'denied' | 'expired'> {
+): Promise<'approved' | 'wrong' | 'locked' | 'denied' | 'expired'> {
   const row = await db
-    .prepare('SELECT poll_hash, code_hash, code_tries, status, expires FROM login_requests WHERE id = ?')
+    .prepare('SELECT email, poll_hash, code_hash, code_tries, status, expires FROM login_requests WHERE id = ?')
     .bind(id)
-    .first<{ poll_hash: string; code_hash: string; code_tries: number; status: string; expires: number }>();
+    .first<{ email: string; poll_hash: string; code_hash: string; code_tries: number; status: string; expires: number }>();
   if (!row || row.poll_hash !== (await hashToken(poll)) || row.expires < nowMs) return 'expired';
   if (row.status === 'approved') return 'approved';
   if (row.status === 'denied') return 'denied';
   // A blocked address was never sent a code: every guess is simply wrong.
   if (row.status !== 'pending' && row.status !== 'blocked') return 'expired';
+  // The request stays alive: the email's link can still approve it.
+  if (!(await codesLeft(env, row.email, nowMs))) return 'locked';
   // Spend the try before checking the code, in one statement: guesses sent
   // all at once can't each see the count from before the others.
   const spent = await db
@@ -237,6 +243,7 @@ export async function enterCode(
       .first();
     return ok ? 'approved' : 'expired';
   }
+  await countWrongCode(env, row.email, nowMs);
   if (spent.code_tries < LOGIN_TTL.codeTries) return 'wrong';
   await db.prepare("UPDATE login_requests SET status = 'denied' WHERE id = ? AND status IN ('pending', 'blocked')").bind(id).run();
   return 'denied';

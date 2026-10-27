@@ -6,7 +6,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { installGlobals, makeCtx, makeDurableObjects, makeEnv, makeFetch, makeKV } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
-import { clientFrom, hashToken, inboxKey, versionBelow } from '../src/accounts/accounts.ts';
+import { WRONG_CODES_PER_DAY, clientFrom, countWrongCode, hashToken, inboxKey, versionBelow } from '../src/accounts/accounts.ts';
 import { hasSetup, mailDevice } from '../src/accounts/applogin.ts';
 import { housekeeping } from '../src/ops/monitor.ts';
 import { endOfDayMs, sgtDate } from '../src/answer/trip.ts';
@@ -511,6 +511,26 @@ test('app sign-in: five wrong codes kill the request; the code needs the poll se
   assert.equal((await (await call(env, '/api/auth/app/code', { method: 'POST', body: { ...s, code: wrong } })).json()).status, 'denied');
   assert.equal((await (await call(env, '/api/auth/app/code', { method: 'POST', body: { ...s, code } })).json()).status, 'denied');
   assert.equal((await (await call(env, '/api/auth/app/poll', { method: 'POST', body: s })).json()).status, 'denied');
+});
+
+test("app sign-in: a day's wrong codes for an address stop its codes, not its link", async () => {
+  const { env, email } = setup();
+  for (let i = 1; i < WRONG_CODES_PER_DAY; i++) await countWrongCode(env, ME, Date.now());
+  const s = await (await call(env, '/api/auth/app/start', { method: 'POST', body: { email: ME, name: 'Pixel' } })).json();
+  const code = lastCode(email);
+  const wrong = code === '222222' ? '333333' : '222222';
+  assert.match(
+    (await (await call(env, '/api/auth/app/code', { method: 'POST', body: { ...s, code: wrong } })).json()).error,
+    /isn't right/,
+  );
+  const res = await call(env, '/api/auth/app/code', { method: 'POST', body: { ...s, code } });
+  assert.equal(res.status, 400);
+  assert.deepEqual(await res.json(), {
+    status: 'pending',
+    error: 'too many wrong codes for this address today; use the link in the email',
+  });
+  assert.equal((await call(env, '/auth/approve', { method: 'POST', form: { r: lastLink(email), n: String(s.match) } })).status, 200);
+  assert.equal((await (await call(env, '/api/auth/app/poll', { method: 'POST', body: s })).json()).status, 'approved');
 });
 
 test("app sign-in: the code keeps a device's setup just like the link", async () => {
