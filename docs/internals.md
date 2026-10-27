@@ -158,7 +158,7 @@ anything else (a script with an API key, a page open since before) gets a
 | `GET /api/stops/pairs` | Each stop with its opposite stop, and where the buses on each side go next. Cached hard. |
 | `GET /api/health` | Graph age, how long the calendar lasts, the feed as the cron last saw it (`upstream`) and which config is present, never values (`config.pushAndroid`, `config.pushWeb` and `config.pushIos`: push set up with a usable key, or for APNs all four settings). 503, with the same body, when the feed is confirmed down, the cron has stopped or the calendar has run out. With the operator's `x-health-token`, `?probe=1` mints a real token and says what came back, and `?versions=1` says what the version updater would find today in the app stores (see "The version string is a kill switch"); without it both are ignored. |
 | `GET /api/status.json` | Whether NUS's feed is up, as the 15-minute check saw it, and the last 20 outages, read from KV at most once a minute per isolate. Two failed checks in a row confirm an outage and two good ones end it, so a feed that answers every other time sends no emails by turns; the outage ends at the first of the two. Only a check between 07:00 and 23:30 Singapore time can confirm one (`OUTAGE_HOURS`): no bus runs outside it, and `feed` says `maintenance` instead, with no incident and no email. A refused uNivUS version (10009) is the exception: it confirms an outage at any hour, as it needs fixing before the buses run. `cause` says why the feed is down (`version` or `feed`), and the page says so. Failures at night still count, so a feed still failing at 07:00 is down from then, and an outage under way at 23:30 lasts until the feed answers. `feed` (like `/api/health` and the card's notice) follows the last check, though: one good check and it says `up` again, rather than "down" for 15 minutes with the feed back. The [status page](../apps/web/public/status) shows it. |
-| `GET /api/admin/stats` | The operator dashboard's data (accounts, devices by app, sign-ups, reports, feed; answers and errors per day, and the timelapse recorder's polls by what they cost NUS, the daily active counts and the week's crash reports, from Analytics Engine when `ANALYTICS_TOKEN` and `CF_ACCOUNT_ID` are set; `collect`, the switches below; `eta`, arrival times scored; `model`, the arrival-time model's days in shadow, `eta/model/*.json` without their weight grids). Needs `x-health-token` (`HEALTH_TOKEN` or a passkey session); anything else gets a 404. |
+| `GET /api/admin/stats` | The operator dashboard's data (accounts, devices by app, sign-ups, reports, feed; answers and errors per day, and the timelapse recorder's polls by what they cost NUS, the daily active counts, the week's crash reports and the last day's `/api/me/next` times (`next`: median and 95th percentile, ms), from Analytics Engine when `ANALYTICS_TOKEN` and `CF_ACCOUNT_ID` are set; `collect`, the switches below; `eta`, arrival times scored; `model`, the arrival-time model's days in shadow, `eta/model/*.json` without their weight grids). Needs `x-health-token` (`HEALTH_TOKEN` or a passkey session); anything else gets a 404. |
 | `POST /api/admin/collect` | `{name, on}`: turns one of the operator's statistics on or off (`active`, `eta`, `errors`; see Analytics). Operator only, like `/api/admin/stats`. |
 | `POST /api/admin/crashes/dismiss` | `{fingerprint}`: hides a crash report from the dashboard until it's reported again (Analytics Engine can't delete one). Operator only. |
 | `POST /api/errors` | A crash or error report from an app or the website: platform, version, OS, type, message, stack, `fatal`. No account or device id; scrubbed, then kept in Analytics Engine while `errors` is on, dropped otherwise. Always 204 for a well-formed report. Limited per IP (`RL_PUBLIC`). |
@@ -992,6 +992,10 @@ when it's a break. It's the timetable alone, with no bus or leave-by:
 tomorrow's buses aren't known, and a guess there would read as a plan.
 `detail` still says the same in a line, for the widgets and the Mac. The
 route moves it from the answer into the card (`profile.ts` `upcomingClass`).
+- `GET /api/me/next` and `GET /api/me/day` read the account's profile in
+  the same D1 query as the session (`authenticate`'s `withProfile`, a
+  `LEFT JOIN profiles`): one round trip to D1 before the answer, not two.
+  Other routes read the session alone.
 - Tokens are stored as SHA-256 hashes. A web session lasts 30 days from its
   last use: `GET /api/me` pushes the expiry back 30 days, and sends the cookie
   again, once fewer than 23 days are left. However much it's used, a web
@@ -1501,6 +1505,18 @@ from the stop the bus gets you to (`endWalkByStopS`, `ArriveBy.walkByStopS`),
 as for a food court. Standing at a room's other stop is not "You're there":
 it can be 300 m from the room.
 
+**The Worker runs in Singapore.** `placement.region` in
+`cloudflare.config.ts` (`aws:ap-southeast-1`, both sites) runs every request
+in the data centre nearest Singapore, wherever it came in. An answer makes
+several round trips in a row (D1 in APAC, the feed gate in Asia, NUS's feed
+in Singapore); run where a request enters, a student on a VPN through
+Frankfurt would pay each of them across the world, seconds in all, against one
+hop for the request itself. So nearly every request shares one data
+centre's edge cache, and one set of rate-limit counters (they count per
+data centre). Static files skip the Worker and are still served near the
+user; the cron and the Durable Objects aren't placed. Placement only
+affects `fetch`.
+
 **Fetch-on-demand with a 15-second edge cache; no poll loop.** Workers has no
 long-lived process and Cron Triggers bottom out at one-minute granularity. The
 cache entry is keyed on the **resolved stop code**, not the request URL:
@@ -1529,9 +1545,17 @@ a waiter lets go of its timer once the answer comes. The gate keeps its claim an
 storage, since an idle object may leave memory between windows; it is
 billed only while it answers. Within a data centre, concurrent misses
 in one isolate share a fetch (the in-flight map), and the isolate fetching
-leaves a `#pending` marker beside the key: other isolates serve their stale
-answer until it's done rather than fetch too. A cold key with nothing stale
-is fetched by whoever asks. The beta's keys live on their own host
+leaves a marker beside the key (`<key>/pending`): other isolates serve their
+stale answer until it's done rather than fetch too. The marker is written as
+the fetch starts, not before it; an isolate that misses it in those few ms
+fetches too and meets this one at the feed gate, which lets one call the
+feed. The answer doesn't wait for the cache writes after the fetch (the
+answer itself, a failure's memo, the breaker): they finish under
+`waitUntil`, and until they land the isolate keeps the settled fetch in its
+in-flight map and the marker stays up, so nobody fetches again for want of
+a write. The marker is cleared after its own write has landed, so a slow
+write can't leave it behind. A cold key with nothing stale is fetched by
+whoever asks. The beta's keys live on their own host
 (`beta.terminus.internal`, `scopeCache()`), since the cache may be the
 zone's and both sites share one: the beta's breaker never quiets the
 stable site.
@@ -1930,6 +1954,11 @@ algorithm is right, which nothing else measures, and inter-stop
 travel times from the feed's own predictions (`plate` is the join key), a
 check on `RIDE.secondsPerHop`. Queries and
 the schema contract are in [docs/analytics.md](analytics.md).
+
+Each `/api/me/next` also writes a `next` row (`logNextTook`): how many ms
+passed from the request reaching the Worker to its answer built, with or
+without a bus in it. The dashboard shows the last day's median and 95th
+percentile; it's how the time to open the app is watched.
 
 A Trip object's wake that works out a card writes one `tripwake` row
 instead (`logTripWake`): the gap since its last wake, the age of the oldest

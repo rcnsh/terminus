@@ -62,23 +62,24 @@ object Locator {
     }
 
     /** For the app in the foreground: a fresh fix, or the last known one. */
-    suspend fun current(ctx: Context): Location? {
+    suspend fun current(ctx: Context): Location? = fresh(ctx) ?: lastKnown(ctx)
+
+    /** A new fix only, waited for at most 6 s; null without one (no permission, no provider on, or none in time). */
+    suspend fun fresh(ctx: Context): Location? {
         if (!hasForeground(ctx)) return null
         val lm = ctx.getSystemService(LocationManager::class.java) ?: return null
-        val provider = PROVIDERS.firstOrNull { lm.allProviders.contains(it) && lm.isProviderEnabled(it) } ?: return lastKnown(ctx)
-        val fresh =
-            withTimeoutOrNull(6_000) {
-                suspendCancellableCoroutine { cont ->
-                    val cancel = CancellationSignal()
-                    cont.invokeOnCancellation { cancel.cancel() }
-                    try {
-                        lm.getCurrentLocation(provider, cancel, ctx.mainExecutor) { cont.resume(it) }
-                    } catch (_: SecurityException) {
-                        cont.resume(null)
-                    }
+        val provider = PROVIDERS.firstOrNull { lm.allProviders.contains(it) && lm.isProviderEnabled(it) } ?: return null
+        return withTimeoutOrNull(6_000) {
+            suspendCancellableCoroutine { cont ->
+                val cancel = CancellationSignal()
+                cont.invokeOnCancellation { cancel.cancel() }
+                try {
+                    lm.getCurrentLocation(provider, cancel, ctx.mainExecutor) { cont.resume(it) }
+                } catch (_: SecurityException) {
+                    cont.resume(null)
                 }
             }
-        return fresh ?: lastKnown(ctx)
+        }
     }
 
     private fun granted(ctx: Context, perm: String) = ctx.checkSelfPermission(perm) == PackageManager.PERMISSION_GRANTED

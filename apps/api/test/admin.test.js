@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { makeKV } from './_stubs.mjs';
-import { adminStats, isOperator, timingSafeEqual } from '../src/ops/admin.ts';
+import { adminStats, isOperator, nextTook, timingSafeEqual } from '../src/ops/admin.ts';
 
 test('the dashboard asks Analytics Engine with the token, and says so when it fails', async () => {
   const asked = [];
@@ -12,7 +12,8 @@ test('the dashboard asks Analytics Engine with the token, and says so when it fa
   };
   const env = { KV: makeKV(), ANALYTICS_TOKEN: 'ae-token', CF_ACCOUNT_ID: 'acct' };
   const s = await adminStats(env, Date.now(), fetchImpl);
-  assert.equal(asked.length, 9);
+  assert.equal(asked.length, 10);
+  assert.match(asked[9].sql, /quantileExactWeighted\(0\.95\)\(double12, _sample_interval\)[\s\S]*blob1 = 'next'/, "/api/me/next's times");
   assert.match(asked[3].sql, /blob1 = 'timelapse'/, "the recorder's polls, by what they cost NUS");
   // The dashboard lines these up with Singapore days (parts.js lastDays), and compares two full weeks besides today.
   for (const i of [0, 3]) assert.match(asked[i].sql, /formatDateTime\(timestamp, '%Y-%m-%d', 'Asia\/Singapore'\) AS day/);
@@ -78,4 +79,10 @@ test('dismissed crashes are left out before the dashboard takes its 25', async (
   assert.equal(s.analytics.appErrors.length, 25);
   assert.equal(s.analytics.appErrors[0].fingerprint, fp(10));
   assert.equal(s.analytics.appErrors.at(-1).fingerprint, fp(34));
+});
+
+test("the day's /api/me/next times come rounded to the ms, or null with none", () => {
+  assert.deepEqual(nextTook([{ p50: 412.6, p95: 1290.2, n: 3150 }]), { p50: 413, p95: 1290, n: 3150 });
+  assert.equal(nextTook([{ p50: 0, p95: 0, n: 0 }]), null);
+  assert.equal(nextTook([]), null);
 });

@@ -6,7 +6,21 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { useLang, web } from './_web.mjs';
 
-const { MARK_GAP_MS, MARK_MIN_MS, REFRESH_MS, markWaitMs, slowRetryMs, staleText } = await web('app/timing.js');
+const {
+  FIX_FRESH_MS,
+  FIX_GRACE_MS,
+  FIX_LAST_MS,
+  FIX_MOVED_M,
+  MARK_GAP_MS,
+  MARK_MIN_MS,
+  REFRESH_MS,
+  fixQuery,
+  fixToSend,
+  markWaitMs,
+  refreshAgain,
+  slowRetryMs,
+  staleText,
+} = await web('app/timing.js');
 const { t } = await web('account/dom.js');
 
 test('the banner says why the card is old: offline, a failed update, or a slow connection', () => {
@@ -80,4 +94,50 @@ test("marks are on the server's clock; the hold after the last is on this device
   const device = NOW - 60_000;
   assert.equal(wait(answer({ next: 12_000 }), { now: device, serverNow: NOW }), 12_000);
   assert.equal(wait(answer({ next: 12_000 }), { now: device, serverNow: NOW, markAt: device - 5_000 }), 25_000);
+});
+
+// Two fixes by the Central Library, about 33 m and 111 m north of `fix`.
+const fix = { lat: 1.2966, lon: 103.7724, accuracy: 12, at: NOW };
+const near = { ...fix, lat: 1.2969 };
+const far = { ...fix, lat: 1.2976 };
+
+test('the card waits at most a short grace for a fresh fix, then goes with the last one if it is recent', () => {
+  assert.equal(FIX_FRESH_MS, 60_000);
+  assert.equal(FIX_GRACE_MS, 1_500);
+  // The fresh fix came within the grace: that one.
+  assert.equal(fixToSend(near, fix, NOW), near);
+  // The browser had none to give (no permission, an error): no location, not an old one.
+  assert.equal(fixToSend(null, fix, NOW), null);
+  // Still on its way: the last fix while it is under ten minutes old.
+  const last = { ...fix, at: NOW - 9 * 60_000 };
+  assert.equal(fixToSend(undefined, last, NOW), last);
+  assert.equal(fixToSend(undefined, { ...fix, at: NOW - FIX_LAST_MS }, NOW), null);
+  assert.equal(fixToSend(undefined, null, NOW), null);
+});
+
+test("a fix is sent rounded to about 11 m, its accuracy grown by a walk's worth of its age", () => {
+  assert.deepEqual(fixQuery(fix, NOW), { lat: '1.2966', lon: '103.7724', acc: '12' });
+  // Two minutes old: 12 m + 120 s at 1.3 m/s. Past 200 m, the API drops it.
+  assert.equal(fixQuery(fix, NOW + 120_000).acc, '168');
+  assert.equal(fixQuery({ ...fix, accuracy: null }, NOW + 10_000).acc, '13');
+  // A timestamp ahead of this clock doesn't make it more accurate.
+  assert.equal(fixQuery(fix, NOW - 5_000).acc, '12');
+});
+
+test('the fresh fix brings the card once more only when it went without one, or from over 50 m away', () => {
+  assert.equal(FIX_MOVED_M, 50);
+  assert.equal(refreshAgain(null, fix), true);
+  assert.equal(refreshAgain(fix, far, NOW), true);
+  assert.equal(refreshAgain(fix, near, NOW), false);
+  // The fresh fix was the one sent: no second refresh, so no loop.
+  assert.equal(refreshAgain(fix, fix, NOW), false);
+  // No fresh fix came (timed out, refused): nothing to refresh for.
+  assert.equal(refreshAgain(null, null), false);
+  assert.equal(refreshAgain(fix, null, NOW), false);
+  // A fresh fix the API would drop too, or the one already sent, brings nothing.
+  assert.equal(refreshAgain(null, { ...fix, accuracy: 500 }, NOW), false);
+  assert.equal(refreshAgain(far, far, NOW), false);
+  // A sent fix the API drops (five minutes old: over 200 m) counts as none.
+  const old = { ...fix, at: NOW - 300_000 };
+  assert.equal(refreshAgain(old, near, NOW), true);
 });

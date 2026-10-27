@@ -110,6 +110,18 @@ export default defineConfig(({ mode }) => {
 			limits: {
 				cpuMs: 5_000,
 			},
+			// Run every request in Singapore, wherever it came in. An answer is
+			// several round trips in a row to D1 (in APAC), the feed gate (apac)
+			// and NUS's feed (Singapore); from a far data centre (a student on
+			// a VPN through Frankfurt, say) each costs a few hundred ms more,
+			// against one hop for the request itself. Static files skip the
+			// Worker and are still served near the user; the cron and the
+			// Durable Objects aren't placed. Rate limits count per data centre,
+			// so with nearly all requests in one, the ceilings are close to
+			// worldwide, as RL_ANON and RL_PAIR mean them to be.
+			placement: {
+				region: "aws:ap-southeast-1",
+			},
 			domains: [
 				s.domain,
 				s.oldDomain,

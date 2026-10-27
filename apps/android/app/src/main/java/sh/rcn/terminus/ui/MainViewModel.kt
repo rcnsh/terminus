@@ -1,18 +1,22 @@
 package sh.rcn.terminus.ui
 
 import android.app.Application
+import android.location.Location
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import sh.rcn.terminus.Api
 import sh.rcn.terminus.ApiError
 import sh.rcn.terminus.CardAction
@@ -20,6 +24,7 @@ import sh.rcn.terminus.DayItem
 import sh.rcn.terminus.DayPlan
 import sh.rcn.terminus.Destination
 import sh.rcn.terminus.Destinations
+import sh.rcn.terminus.FirstFix
 import sh.rcn.terminus.L
 import sh.rcn.terminus.LeaveAlerts
 import sh.rcn.terminus.LiveService
@@ -165,6 +170,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val state: StateFlow<UiState> = _state
     private var loadJob: Job? = null
 
+    /** The fresh fix on its way, shared by every load meanwhile so none asks for a second; and the last one that came. */
+    private var freshFix: Deferred<Location?>? = null
+    private var lastFresh: Location? = null
+
+    /** After an answer asked for before the fresh fix came: waits for it, to ask again if it puts you somewhere else. */
+    private var refixJob: Job? = null
+
     /** When each view's answer last came back ([viewOf]), for a pull sooner than [Pull.FRESH_MS] to ask nothing. */
     private val answeredAt = mutableMapOf<Any, Long>()
 
@@ -261,7 +273,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val ctx = getApplication<Application>()
             try {
                 // Where the phone is, as for the card: otherwise the first plan starts where the timetable puts you.
-                val loc = Locator.lastKnown(ctx, maxAgeMs = 60_000) ?: Locator.current(ctx)
+                val (loc, _) = locate(ctx)
                 val json = Api(token, hour12 = hour12(ctx)).once(target, atMin, loc?.latitude, loc?.longitude, Locator.accOf(loc))
                 val now = System.currentTimeMillis()
                 // Read before it's kept: one this version can't read leaves the last good one.
@@ -661,10 +673,39 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Fetch whatever is on screen. Safe to call repeatedly; only one runs. `restart` drops a fetch in flight, so a newly chosen view loads
-     * now rather than after the one it replaced.
+     * Where to ask from: a fix from the last minute at once; else a fresh one, waited for [FirstFix.FIX_GRACE_MS], then the best from the
+     * last ten minutes or none. Also the fresh fix still on its way when it didn't come in time: it isn't cancelled (capped at 6 s by
+     * [Locator.fresh]), so the next ask has it.
      */
-    fun load(restart: Boolean = false) {
+    private suspend fun locate(ctx: Application): Pair<Location?, Deferred<Location?>?> {
+        val now = System.currentTimeMillis()
+        val recent = lastFresh?.takeIf { now - it.time < FirstFix.RECENT_MS } ?: Locator.lastKnown(ctx, maxAgeMs = FirstFix.RECENT_MS)
+        if (recent != null) return recent to null
+        val fresh =
+            freshFix?.takeIf { it.isActive } ?: viewModelScope.async { Locator.fresh(ctx)?.also { lastFresh = it } }.also { freshFix = it }
+        val got = withTimeoutOrNull(FirstFix.FIX_GRACE_MS) { fresh.await() }
+        val loc = FirstFix.toSend(got, Locator.lastKnown(ctx, maxAgeMs = FirstFix.FALLBACK_MS))
+        return loc to (if (got == null) fresh else null)
+    }
+
+    /** Once [fresh] comes, what's on screen asked for again if [sent] wasn't where it puts you. That ask doesn't wait for another. */
+    private fun refixLater(fresh: Deferred<Location?>, sent: Location?) {
+        val sentAccM = Locator.accOf(sent)
+        refixJob =
+            viewModelScope.launch(account) {
+                val got = fresh.await()
+                if (FirstFix.reload(sent?.latitude, sent?.longitude, got?.latitude, got?.longitude, sentAccM, Locator.accOf(got))) {
+                    load(restart = true, refix = false)
+                }
+            }
+    }
+
+    /**
+     * Fetch whatever is on screen. Safe to call repeatedly; only one runs. `restart` drops a fetch in flight, so a newly chosen view loads
+     * now rather than after the one it replaced. `refix` false: this is the ask again after a fresh fix ([refixLater]), which doesn't set
+     * up another.
+     */
+    fun load(restart: Boolean = false, refix: Boolean = true) {
         val token = store.token
         if (token == null) {
             // Signed out while this screen was alive (by a 401 elsewhere, or
@@ -676,13 +717,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (!restart) return
             loadJob?.cancel()
         }
+        // This load sends its own fix; one waited for by an earlier load is no longer the one on screen.
+        refixJob?.cancel()
         loadJob =
             viewModelScope.launch(account) {
                 _state.update { it.copy(loading = true, liveUpdates = store.liveUpdates) }
                 val ctx = getApplication<Application>()
-                // A fix from the last minute is as good as a new one, and costs no
-                // wait: polling every 30 s must not mean a GPS request every 30 s.
-                val loc = Locator.lastKnown(ctx, maxAgeMs = 60_000) ?: Locator.current(ctx)
+                val (loc, fresh) = locate(ctx)
+                if (fresh != null && refix) refixLater(fresh, loc)
                 val api = Api(token, hour12 = hour12(ctx))
                 val s = _state.value
                 try {

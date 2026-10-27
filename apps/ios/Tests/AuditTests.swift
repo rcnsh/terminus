@@ -1,3 +1,4 @@
+import CoreLocation
 import Foundation
 import Security
 import Testing
@@ -42,6 +43,48 @@ import Testing
     let now = Date()
     #expect(Locator.fresh(now.addingTimeInterval(-30), maxAge: 60, now: now))
     #expect(!Locator.fresh(now.addingTimeInterval(-3 * 3600), maxAge: 60, now: now))
+}
+
+private func fix(_ lat: Double, _ lon: Double = 103.776, acc: Double = 10, at: Date) -> CLLocation {
+    CLLocation(
+        coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon), altitude: 0, horizontalAccuracy: acc,
+        verticalAccuracy: -1, timestamp: at)
+}
+
+@Test func withoutANewFixTheLastStandsInForTenMinutes() {
+    let now = Date()
+    let new = fix(1.2966, at: now)
+    let fiveMin = fix(1.2970, at: now.addingTimeInterval(-5 * 60))
+    let hour = fix(1.2970, at: now.addingTimeInterval(-3600))
+    #expect(Locator.toSend(new, last: fiveMin, now: now) === new)
+    #expect(Locator.toSend(nil, last: fiveMin, now: now) === fiveMin)
+    #expect(Locator.toSend(nil, last: hour, now: now) == nil)
+    #expect(Locator.toSend(nil, last: nil, now: now) == nil)
+}
+
+@Test func theNewFixAsksAgainOnlyWhenItMovesYou() {
+    let now = Date()
+    let sent = fix(1.2966, at: now.addingTimeInterval(-30))
+    // 0.0003° of latitude is about 33 m; 0.0009° about 100 m.
+    #expect(!Locator.refreshAgain(sent: sent, new: fix(1.2969, at: now)))
+    #expect(Locator.refreshAgain(sent: sent, new: fix(1.2975, at: now)))
+    #expect(Locator.refreshAgain(sent: nil, new: fix(1.2966, at: now)))
+    #expect(!Locator.refreshAgain(sent: sent, new: nil))
+    // A new fix the server would drop too brings nothing.
+    #expect(!Locator.refreshAgain(sent: nil, new: fix(1.2966, acc: 500, at: now)))
+    // A fallback five minutes old is one the server drops: any new fix brings the card again.
+    let old = fix(1.2966, at: now.addingTimeInterval(-300))
+    #expect(Locator.refreshAgain(sent: old, new: fix(1.2969, at: now), sentAt: now))
+    #expect(!Locator.refreshAgain(sent: nil, new: nil))
+}
+
+@Test func anOldFixSaysHowFarYouMayHaveWalked() throws {
+    let now = Date()
+    #expect(fix(1.2966, acc: 12, at: now).accAt(now) == 12)
+    // Five minutes at 1.3 m/s: past the server's 200 m, so it plans without it.
+    let five = try #require(fix(1.2966, acc: 12, at: now.addingTimeInterval(-300)).accAt(now))
+    #expect(abs(five - 402) < 0.001)
+    #expect(fix(1.2966, acc: -1, at: now).accAt(now) == nil)
 }
 
 // MARK: the server's clock

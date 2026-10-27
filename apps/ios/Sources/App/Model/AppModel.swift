@@ -298,7 +298,19 @@ final class AppModel {
         let gen = session
         loading = true
         defer { if gen == session { loading = false } }
-        let loc = await Locator.shared.fix()
+        let (loc, later) = await Locator.shared.quickFix()
+        let sentAt = Date()
+        let mine = loadID
+        if let later {
+            // Asked without waiting for the new fix: once more when it comes,
+            // if it puts you somewhere else, so the card is for where you are.
+            Task {
+                let new = await later.value
+                // Not if a newer load has begun since: it asks for itself.
+                guard gen == session, mine == loadID, Locator.refreshAgain(sent: loc, new: new, sentAt: sentAt) else { return }
+                await load(restart: true)
+            }
+        }
         let api = Api(token: token)
         let nearbyView = showNearby
         let t = target
@@ -529,7 +541,7 @@ final class AppModel {
         guard let token, target != .plan else { return nil }
         let gen = session
         // Where the phone is, as for the card: otherwise the first plan starts where the timetable puts you.
-        let loc = await Locator.shared.fix()
+        let loc = await Locator.shared.quickFix().fix
         do {
             let a = try await Api(token: token).once(
                 target, atMin: atMin, lat: loc?.coordinate.latitude, lon: loc?.coordinate.longitude, acc: loc?.acc)

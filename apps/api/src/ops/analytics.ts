@@ -25,6 +25,7 @@
  *
  *   blob1   kind        'answer' | 'arrival' | 'error' | 'timelapse' | 'signal'
  *                       | 'active' | 'apperror' | 'tripwake' | 'legacy' | 'settings'
+                       | 'next'
  *   blob2   stop        boarding stop code; for 'error', the route (no query),
  *                       or 'cron <step>' for a cron step that failed;
  *                       for 'timelapse', the poll's outcome (see logPoll);
@@ -51,11 +52,12 @@
  *   double9  hadCoords       0 | 1
  *   double10 walkAllS        whole-way walk, -1 when unknown
  *   double11 changeWaitS     answer rows: seconds waiting for the bus after a change, -1 on one bus
+ *   double12 tookMs          'next' rows: ms from the request's start to its answer built
  *
  *   index1  stop code (the sampling key); 'error', 'timelapse', 'signal', 'active',
- *           'apperror', 'tripwake', 'legacy' and 'settings' rows use their kind
+ *           'apperror', 'tripwake', 'legacy', 'settings' and 'next' rows use their kind
  *
- * Five kinds give the columns their own meaning:
+ * Six kinds give the columns their own meaning:
  *
  *   'active' (usage.ts logActive), once a Singapore day, counts only:
  *     blob2 scope 'all' | 'app' | 'version';  blob3 the app (web, android,
@@ -82,6 +84,11 @@
  *     blob2 the setting ("publicBuses");  blob3 its value ("on", "fast");
  *     blob4 the Singapore day counted, YYYY-MM-DD;  double1 accounts with
  *     that value;  double2 accounts counted (used in the last 30 days).
+ *   'next' (logNextTook), one /api/me/next answered: double12 tookMs, from
+ *     the request reaching the Worker to its answer built, D1, the Trip
+ *     object and the feeds included (not the trip to and from the Worker);
+ *     double1..11 are 0, no blobs past blob1. A row for every answer, a bus
+ *     in it or not, so its quantiles are what opening the app costs.
  *
  * No row holds an account, email, IP address, device or install id, or
  * coordinates. An answer row's
@@ -164,6 +171,18 @@ export function logAnswer(env: Env, input: LogInput): void {
     }
   } catch {
     // Deliberately swallowed. Losing a metric is not worth losing an answer.
+  }
+}
+
+/** One /api/me/next answered, and how long it took (the 'next' kind above). */
+export function logNextTook(env: Env, tookMs: number): void {
+  if (!analyticsEnabled(env)) return;
+  try {
+    // Eleven zeros for the columns other kinds use, then double12.
+    const doubles = [...Array.from({ length: 11 }, () => 0), Math.max(0, Math.round(tookMs))];
+    env.AE!.writeDataPoint({ blobs: ['next'], doubles, indexes: ['next'] });
+  } catch {
+    // Same rule as above: logging never breaks a response.
   }
 }
 

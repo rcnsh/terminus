@@ -165,6 +165,25 @@ FROM terminus WHERE blob1 = 'tripwake' AND blob5 = 'again' AND timestamp > NOW()
 GROUP BY phase
 ```
 
+## How long a card takes
+
+Each `/api/me/next` writes a `next` row (`logNextTook` in
+`src/ops/analytics.ts`): `double12` the ms from the request reaching the
+Worker to its answer built, with the session and profile read, the Trip
+object asked and the feeds fetched; not the trip between the user and the
+Worker. Every answer gets one, with a bus in it or not, so the quantiles are
+what opening the app costs. The dashboard's Answers page shows the last
+day's median and 95th percentile (`/api/admin/stats` `analytics.next`).
+
+```sql
+SELECT formatDateTime(timestamp, '%Y-%m-%d', 'Asia/Singapore') AS day, SUM(_sample_interval) AS n,
+  quantileExactWeighted(0.5)(double12, _sample_interval) AS p50_ms,
+  quantileExactWeighted(0.9)(double12, _sample_interval) AS p90_ms,
+  quantileExactWeighted(0.99)(double12, _sample_interval) AS p99_ms
+FROM terminus WHERE blob1 = 'next' AND timestamp > NOW() - INTERVAL '7' DAY
+GROUP BY day ORDER BY day
+```
+
 ## The operator's switches
 
 Five more kinds of statistics are collected only once switched on, on the
@@ -269,7 +288,7 @@ the caller when the app sent a location, `double6` is the walk to it, and
 time, that is a rough idea of where someone was and where they were
 going. The privacy policy says so; don't add anything finer.
 
-`active` and `settings` rows are totals only; nothing in them names or
+A `next` row is a time and nothing else. `active` and `settings` rows are totals only; nothing in them names or
 follows an account, and no setting's value is a stop, place or class. A
 `legacy` row holds the app version and a route with ids taken out, never
 the query, address or account.
