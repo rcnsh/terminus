@@ -219,7 +219,7 @@ pnpm exec cf workers secrets update NEXTBUS_AUTH_BASE --worker terminus --type s
 
 Email Sending needs the Workers Paid plan and the sender's domain onboarded
 under Email Service in the dashboard. The custom domains in the config are
-mine; change them, and `EMAIL_FROM` with them.
+the project's; replace them with your own, and `EMAIL_FROM` with them.
 
 ## Clients
 
@@ -233,14 +233,16 @@ Point a debug client at the dev stub: `-PapiBase=http://localhost:8787` plus
 `adb reverse tcp:8787 tcp:8787` on Android, `TERMINUS_API_BASE=http://localhost:8787`
 on the Mac.
 
-Releases run on my Mac with `scripts/release/release.sh` (betas:
-`scripts/release/release-beta.sh <x.y.z-beta.n>`), once the Worker serving that
-version is deployed. It runs the tests; builds one Android APK per CPU type
-and the signed Mac DMG with its Sparkle appcast; uploads them to R2; then
-tags the commit and publishes the GitHub release. `--dry-run` builds into
-`build/dry-run/`. The signing keys live off the repo, so a build without
-them comes out unsigned (Android) or ad-hoc signed (Mac). The campus street
-map goes to R2 with the **map tiles** workflow or `scripts/map-tiles.sh`.
+Releases are cut on a Mac that holds the signing keys, with
+`scripts/release/release.sh` (betas:
+`scripts/release/release-beta.sh <x.y.z-beta.n>`), once the Worker serving
+that version is deployed. It runs the tests; builds one Android APK per CPU
+type and the signed Mac DMG with its Sparkle appcast; uploads them to R2;
+then tags the commit and publishes the GitHub release. `--dry-run` builds
+into `build/dry-run/`. The signing keys are kept outside the repository, so
+a build without them comes out unsigned (Android) or ad-hoc signed (Mac).
+The campus street map goes to R2 with the **map tiles** workflow or
+`scripts/map-tiles.sh`.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) to send a change.
 
