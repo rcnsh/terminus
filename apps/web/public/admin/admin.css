@@ -81,6 +81,19 @@ body.dash-on > main { padding: 0; }
   padding: 20px 14px; border-right: 1px solid var(--line); background: var(--surface); overflow-y: auto;
 }
 .side .brand { padding: 0 8px; }
+.side-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.side-toggle {
+  display: inline-grid; place-items: center; width: 32px; height: 32px; padding: 0; flex: none;
+  border: 0; border-radius: 8px; background: none; color: var(--muted); cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.side-toggle:hover { background: var(--surface-2); color: var(--ink); }
+/* Hidden on a wide window: the column closes and the page takes the room. */
+@media (width > 56rem) {
+  .dash { transition: grid-template-columns 0.25s var(--ease); }
+  .dash.side-hidden { grid-template-columns: 0 minmax(0, 1fr); }
+  .dash.side-hidden .side { visibility: hidden; overflow: hidden; padding-inline: 0; border-right: 0; }
+}
 .side nav { display: grid; gap: 2px; }
 .side nav a {
   display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 9px;
@@ -120,6 +133,9 @@ kbd {
 .dash-main { min-width: 0; padding: 24px clamp(16px, 3vw, 40px) 64px; }
 .dash-h { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 6px 24px; margin-bottom: 20px; max-width: 96rem; }
 .dash-h h1 { margin: 0 0 4px; font-size: 1.9rem; }
+.dash-title { display: grid; grid-template-columns: auto 1fr; align-items: center; }
+.dash-title > :not(.side-toggle) { grid-column: 2; }
+.dash-title > .side-toggle { margin: 0 10px 4px -6px; }
 .asof { font-size: 0.82rem; }
 .page { max-width: 96rem; animation: page-in 0.32s var(--ease); transition: opacity 0.2s ease; }
 @keyframes page-in { from { opacity: 0; transform: translateY(6px); } }
@@ -393,7 +409,7 @@ table.data td.best { font-weight: 700; color: var(--good-ink); }
   .side nav a { white-space: nowrap; flex: none; padding: 7px 10px; }
   .side nav a.on::before { left: 10px; right: 10px; top: auto; bottom: -4px; width: auto; height: 3px; border-radius: 3px 3px 0 0; }
   .side nav a.out { margin: 0; border: 0; padding-top: 7px; }
-  .side kbd, .keys { display: none; }
+  .side kbd, .keys, .side-toggle { display: none; }
   .side-foot { margin: 0 0 0 auto; padding: 0; grid-auto-flow: column; align-items: center; }
   .side-foot .btn { min-height: 34px; }
   .auto .long { display: none; }

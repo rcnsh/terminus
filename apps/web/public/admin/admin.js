@@ -15,6 +15,7 @@ import { Accounts, Answers, Arrivals, Collection, Crashes, Devices, Feed, Overvi
 
 const KEY = 'terminus-operator-token';
 const AUTO = 'terminus-admin-auto';
+const SIDE = 'terminus-admin-side';
 const EVERY_MS = 60_000;
 
 /** The stats once unlocked, or the token form (with why), or a line saying what went wrong. */
@@ -231,6 +232,27 @@ function useAuto() {
   return [auto, setAuto];
 }
 
+/** Whether the sidebar is hidden on a wide window, as last chosen on this browser. */
+function useSideHidden() {
+  const [hidden, setHidden] = useState(() => {
+    try {
+      return localStorage.getItem(SIDE) === 'hidden';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDE, hidden ? 'hidden' : 'shown');
+    } catch {
+      // Kept for this page only.
+    }
+  }, [hidden]);
+  return [hidden, setHidden];
+}
+
+const SIDE_ICON = html`<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3" /><path d="M9 4v16" /></svg>`;
+
 /** A clock for "updated 20 s ago". */
 function useNow(ms = 5_000) {
   const [now, setNow] = useState(Date.now());
@@ -270,6 +292,7 @@ function Dashboard({ v }) {
   const s = v.stats;
   const route = useRoute();
   const [auto, setAuto] = useAuto();
+  const [sideHidden, setSideHidden] = useSideHidden();
   const now = useNow();
   const d = useMemo(() => derive(s), [s]);
   const [, title, what] = SECTIONS.find(([id]) => id === route.id);
@@ -290,6 +313,7 @@ function Dashboard({ v }) {
       const n = e.key === '0' ? 10 : Number(e.key);
       if (n >= 1 && n <= SECTIONS.length) location.hash = `#/${SECTIONS[n - 1][0]}`;
       else if (e.key === 'r') load();
+      else if (e.key === '[') setSideHidden((h) => !h);
       else if (e.key === '/') {
         const box = document.querySelector('[data-search]');
         if (!box) return;
@@ -302,10 +326,23 @@ function Dashboard({ v }) {
   }, []);
 
   return html`
-    <div class=${`dash ${v.loading ? 'loading' : ''}`}>
+    <div class=${`dash ${v.loading ? 'loading' : ''} ${sideHidden ? 'side-hidden' : ''}`}>
       <div class="progress" aria-hidden="true"></div>
-      <aside class="side">
-        <a class="brand" href="/"><img src="/assets/mark.svg" alt="" /><span class="wordmark">termi<b>nus</b></span></a>
+      <aside class="side" id="side">
+        <div class="side-top">
+          <a class="brand" href="/"><img src="/assets/mark.svg" alt="" /><span class="wordmark">termi<b>nus</b></span></a>
+          <button
+            type="button"
+            class="side-toggle"
+            title="Hide sidebar ( [ )"
+            aria-label="Hide sidebar"
+            aria-controls="side"
+            aria-expanded="true"
+            onClick=${() => setSideHidden(true)}
+          >
+            ${SIDE_ICON}
+          </button>
+        </div>
         <nav aria-label="Sections">
           ${SECTIONS.map(
             (
@@ -327,13 +364,27 @@ function Dashboard({ v }) {
             <button type="button" class="btn small ghost" onClick=${lock}>Lock</button>
           </div>
           <p class="hint keys">
-            <span><kbd>1</kbd>–<kbd>0</kbd> section</span><span><kbd>r</kbd> refresh</span><span><kbd>/</kbd> search</span>
+            <span><kbd>1</kbd>–<kbd>0</kbd> section</span><span><kbd>r</kbd> refresh</span><span><kbd>/</kbd> search</span><span><kbd>[</kbd> sidebar</span>
           </p>
         </div>
       </aside>
       <main class="dash-main">
         <header class="dash-h">
-          <div>
+          <div class="dash-title">
+            ${
+              sideHidden &&
+              html`<button
+              type="button"
+              class="side-toggle"
+              title="Show sidebar ( [ )"
+              aria-label="Show sidebar"
+              aria-controls="side"
+              aria-expanded="false"
+              onClick=${() => setSideHidden(false)}
+            >
+              ${SIDE_ICON}
+            </button>`
+            }
             <h1>${title}</h1>
             <p class="hint">${what}</p>
           </div>
