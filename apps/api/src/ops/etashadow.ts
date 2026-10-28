@@ -3,7 +3,7 @@
  * scoring of the feed: nobody is shown its times. Once a run, the cron takes
  * the oldest closed day of the last CATCH_UP_DAYS that eta.ts has scored and
  * this hasn't, scores it with a model built from the HISTORY_DAYS before it,
- * and keeps its segment times and errors in the downloads bucket. Nothing
+ * and keeps its segment times and errors in the R2 bucket. Nothing
  * calls NUS. Off unless ETA_MODEL is "shadow" and the operator collects `eta`.
  * See docs/eta-model.md, *In shadow*.
  */
@@ -153,27 +153,24 @@ export function shadowOf(
  * scored and this hasn't, one a run, so each is built on the ones before.
  */
 export async function shadowEta(env: Env, nowMs: number, fetchImpl: typeof fetch = fetch): Promise<string | null> {
-  if (!etaModelOn(env) || !env.DOWNLOADS || !env.ANALYTICS_TOKEN || !env.CF_ACCOUNT_ID || !(await collecting(env, 'eta'))) return null;
+  if (!etaModelOn(env) || !env.FILES || !env.ANALYTICS_TOKEN || !env.CF_ACCOUNT_ID || !(await collecting(env, 'eta'))) return null;
   let latest = serviceDate(nowMs);
   if (windowOf(latest).close > nowMs) latest = before(latest, 1);
   for (let i = CATCH_UP_DAYS - 1; i >= 0; i--) {
     const date = before(latest, i);
-    if (await env.DOWNLOADS.head(shadowKey(date))) continue;
+    if (await env.FILES.head(shadowKey(date))) continue;
     // Scored first: its errors are the next day's bias.
-    if (!(await env.DOWNLOADS.head(etaKey(date)))) continue;
-    const stored = await env.DOWNLOADS.get(dayKey(date));
+    if (!(await env.FILES.head(etaKey(date)))) continue;
+    const stored = await env.FILES.get(dayKey(date));
     if (!stored) continue;
     const day = await gunzipJson<DayFile>(await stored.arrayBuffer());
     const passings = passingsOf(day);
-    const [predictions, { model, days }] = await Promise.all([
-      predictionsFor(env, date, nowMs, fetchImpl),
-      modelBefore(env.DOWNLOADS, date),
-    ]);
+    const [predictions, { model, days }] = await Promise.all([predictionsFor(env, date, nowMs, fetchImpl), modelBefore(env.FILES, date)]);
     const json = { httpMetadata: { contentType: 'application/json' } };
     const segments: SegmentDay = { v: 1, date, times: timesOf(segmentsOf(passings, routes())) };
-    await env.DOWNLOADS.put(segmentsKey(date), JSON.stringify(segments), json);
+    await env.FILES.put(segmentsKey(date), JSON.stringify(segments), json);
     // Last: it marks the day done.
-    await env.DOWNLOADS.put(shadowKey(date), JSON.stringify(shadowOf(date, model, days, passings, predictions, day.pollMs)), json);
+    await env.FILES.put(shadowKey(date), JSON.stringify(shadowOf(date, model, days, passings, predictions, day.pollMs)), json);
     return date;
   }
   return null;
@@ -185,15 +182,15 @@ export async function shadowEta(env: Env, nowMs: number, fetchImpl: typeof fetch
  * (only the next day's model needs those). Null without the bucket.
  */
 export async function shadowSummary(
-  env: Pick<Env, 'DOWNLOADS' | 'ETA_MODEL'>,
+  env: Pick<Env, 'FILES' | 'ETA_MODEL'>,
   nowMs: number,
   days = HISTORY_DAYS,
 ): Promise<{ on: boolean; historyDays: number; days: Omit<ShadowDay, 'grid'>[] } | null> {
-  if (!env.DOWNLOADS) return null;
+  if (!env.FILES) return null;
   // The latest service day too: once its window closes, it's scored that night.
   const latest = serviceDate(nowMs);
   const dates = Array.from({ length: days }, (_, i) => before(latest, days - 1 - i));
-  const kept = await Promise.all(dates.map((d) => readJson<ShadowDay>(env.DOWNLOADS!, shadowKey(d))));
+  const kept = await Promise.all(dates.map((d) => readJson<ShadowDay>(env.FILES!, shadowKey(d))));
   return {
     on: etaModelOn(env),
     historyDays: HISTORY_DAYS,

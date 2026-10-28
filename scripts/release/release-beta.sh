@@ -50,7 +50,7 @@ done
 . scripts/release/release-lib.sh
 # As in release.sh: the address the apps call, the site's own.
 SITE=https://beta.terminus.run
-BUCKET=terminus-beta-downloads
+BUCKET=terminus-beta
 
 # Not `echo | grep`: grep passes a version with a newline in it if any one
 # line matches, and it names a directory that's deleted, R2 keys and the tag.

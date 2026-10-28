@@ -12,7 +12,7 @@
  *
  * scripts/map-tiles.sh cuts the file from the Protomaps build of
  * OpenStreetMap and uploads it, the fonts and the icons, under map/ in the
- * DOWNLOADS bucket. Map data (c) OpenStreetMap contributors, ODbL.
+ * FILES bucket. Map data (c) OpenStreetMap contributors, ODbL.
  *
  * Every map open asks for dozens of pieces, the same pieces for everyone,
  * so each piece is kept in the edge cache (edgePart, edgeFile) and R2 is
@@ -94,7 +94,7 @@ export async function handleMap(req: Request, url: URL, env: Env, ctx?: Executio
     });
   }
 
-  if (!env.DOWNLOADS) return json({ error: 'not found' }, 404);
+  if (!env.FILES) return json({ error: 'not found' }, 404);
   // Asked at most once per request, and only when R2 is about to be read:
   // never for what the edge cache already has.
   let allowed: Promise<boolean> | null = null;
@@ -106,7 +106,7 @@ export async function handleMap(req: Request, url: URL, env: Env, ctx?: Executio
         )
       : Promise.resolve(true));
 
-  if (path === `/map/${TILES}`) return edgePart(req, env.DOWNLOADS, PREFIX + TILES, 'application/vnd.pmtiles', 86400, mayRead, ctx);
+  if (path === `/map/${TILES}`) return edgePart(req, env.FILES, PREFIX + TILES, 'application/vnd.pmtiles', 86400, mayRead, ctx);
 
   // A malformed escape ("%E0") is a bad path: not found, not an error.
   let decoded: string;
@@ -117,7 +117,7 @@ export async function handleMap(req: Request, url: URL, env: Env, ctx?: Executio
   }
   // Fonts and icons never change at their path (a new set of icons gets a
   // new folder, as v4 is; new fonts a new ?v=), so they're kept by path alone.
-  const file = (key: string, type: string, cacheAs = key) => edgeFile(req, env.DOWNLOADS!, key, cacheAs, type, 30 * 86400, mayRead, ctx);
+  const file = (key: string, type: string, cacheAs = key) => edgeFile(req, env.FILES!, key, cacheAs, type, 30 * 86400, mayRead, ctx);
   const font = FONT.exec(decoded);
   if (font && glyphRange(font[2])) {
     const key = `${PREFIX}fonts/${font[1]}/${font[2]}.pbf`;

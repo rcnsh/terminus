@@ -2,7 +2,7 @@
  * Made-up numbers for the dashboard (/admin/), so the dev stub shows every
  * part of it filled in: Analytics Engine's answers to the queries admin.ts
  * makes, a feed state with past incidents in KV, two weeks of scored arrival
- * times and the arrival-time model's days in shadow in the downloads
+ * times and the arrival-time model's days in shadow in the R2
  * bucket, and accounts, devices and reports in D1.
  * Nothing here is real; STUB_ADMIN=empty leaves the dashboard as a fresh
  * install would see it.
@@ -264,10 +264,9 @@ function shadowDay(date, i) {
 }
 
 /** Fills the stub's D1, KV and bucket with the dashboard's made-up data. */
-export async function seedAdmin({ db, kv, downloads, nowMs }) {
-  for (const date of days(nowMs - DAY, 14)) await downloads.put(`eta/${date}.json`, JSON.stringify(etaDay(date)));
-  for (const [i, date] of days(nowMs - DAY, 12).entries())
-    await downloads.put(`eta/model/${date}.json`, JSON.stringify(shadowDay(date, i)));
+export async function seedAdmin({ db, kv, files, nowMs }) {
+  for (const date of days(nowMs - DAY, 14)) await files.put(`eta/${date}.json`, JSON.stringify(etaDay(date)));
+  for (const [i, date] of days(nowMs - DAY, 12).entries()) await files.put(`eta/model/${date}.json`, JSON.stringify(shadowDay(date, i)));
   await kv.put(
     'monitor:upstream',
     JSON.stringify({ up: true, since: nowMs - 2.3 * DAY, reason: null, checkedAt: nowMs - 6 * 60_000, failures: 0, oks: 40 }),
