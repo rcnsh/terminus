@@ -506,7 +506,7 @@ test('the cron scores a closed day once, from the recording and Analytics Engine
   };
   const bucket = makeBucket(async () => null);
   await bucket.put(dayKey(DATE), await gzip(JSON.stringify(day)));
-  const env = { ...makeEnv(), DOWNLOADS: bucket, ANALYTICS_TOKEN: 'ae', CF_ACCOUNT_ID: 'acct' };
+  const env = { ...makeEnv(), FILES: bucket, ANALYTICS_TOKEN: 'ae', CF_ACCOUNT_ID: 'acct' };
   const now = windowOf(DATE).close + 3_600_000;
 
   assert.equal(await recordEta(env, now, fetchImpl), null, 'off');

@@ -165,7 +165,7 @@ in [eta-model.md](eta-model.md), under "On production data". For a verdict:
 
 Shadow mode has scored every day on its own on the stable site since
 22 October 2026 (`ETA_MODEL=shadow`, with the `eta` collector on). The
-results are in the downloads bucket as `eta/model/<date>.json`, one file a
+results are in the R2 bucket as `eta/model/<date>.json`, one file a
 day. Give it about 4 weeks, to around 19 November, before deciding whether
 the model should answer anyone, and weigh it alongside the VM recordings'
 backtest.

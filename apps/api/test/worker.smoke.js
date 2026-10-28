@@ -1052,7 +1052,7 @@ test('downloads serve whatever latest.json points at', async () => {
     },
   };
   const reads = [];
-  const env = { ...makeEnv(), DOWNLOADS: bucket };
+  const env = { ...makeEnv(), FILES: bucket };
   // latest.json and the appcast are read on every request: a put shows at once.
   const putLater = put;
   const get = async (p) => {
@@ -1230,7 +1230,7 @@ test('/map serves the map file in pieces, and its fonts and icons', async () => 
     ['map/fonts/Noto Sans Regular/0-255.pbf', 'GLYPHS'],
     ['map/sprites/v4/dark@2x.png', 'PNG'],
   ]);
-  const env = { ...makeEnv(), DOWNLOADS: rangedBucket(files) };
+  const env = { ...makeEnv(), FILES: rangedBucket(files) };
   const get = async (p, headers) => (await call(p, { fetchImpl: makeFetch({}), env, headers })).res;
 
   const part = await get('/map/campus.pmtiles', { range: 'bytes=0-6' });
@@ -1261,7 +1261,7 @@ test('/map serves the map file in pieces, and its fonts and icons', async () => 
 test('map pieces are kept at the edge: R2 is read once per piece, and a new upload is seen', async () => {
   const files = new Map([['map/campus.pmtiles', 'PMTiles-0123456789']]);
   const bucket = rangedBucket(files);
-  const env = { ...makeEnv(), DOWNLOADS: bucket };
+  const env = { ...makeEnv(), FILES: bucket };
   const cache = installGlobals(makeFetch({}));
   const get = async (p, headers) => (await call(p, { env, cache, headers })).res;
 
@@ -1308,7 +1308,7 @@ test('map pieces are kept at the edge: R2 is read once per piece, and a new uplo
 test('when R2 fails, map pieces in the edge cache are still served and the rest are 503, never 416', async () => {
   const files = new Map([['map/campus.pmtiles', 'PMTiles-0123456789']]);
   const bucket = rangedBucket(files);
-  const env = { ...makeEnv(), DOWNLOADS: bucket };
+  const env = { ...makeEnv(), FILES: bucket };
   const cache = installGlobals(makeFetch({}));
   const get = async (p, headers) => (await call(p, { env, cache, headers })).res;
   // Past what earlier tests taught this isolate of the file.
@@ -1364,7 +1364,7 @@ test('new fonts reach maps that kept the old: the style names a glyph version th
   const v = new URL(style.glyphs.replace('{fontstack}', 'x').replace('{range}', '0-255')).searchParams.get('v');
   assert.ok(v, 'the glyphs URL carries a version');
   const files = new Map([['map/fonts/Noto Sans Regular/19968-20223.pbf', 'EMPTY']]);
-  const env = { ...makeEnv(), DOWNLOADS: rangedBucket(files) };
+  const env = { ...makeEnv(), FILES: rangedBucket(files) };
   const cache = installGlobals(makeFetch({}));
   const get = async (p) => (await (await call(p, { env, cache })).res).text();
   const old = '/map/fonts/Noto%20Sans%20Regular/19968-20223.pbf';
@@ -1386,7 +1386,7 @@ test('reads from R2 for the map are limited per IP; pieces in the edge cache are
   bucket.head = (k) => (headCalls++, heads(k));
   const asked = [];
   const RL_MAP = { limit: async ({ key }) => (asked.push(key), { success: asked.length <= 1 }) };
-  const env = { ...makeEnv(), DOWNLOADS: bucket, RL_MAP };
+  const env = { ...makeEnv(), FILES: bucket, RL_MAP };
   const cache = installGlobals(makeFetch({}));
   const get = async (p) => (await call(p, { env, cache, headers: { 'cf-connecting-ip': '203.0.113.9' } })).res;
 
@@ -1414,7 +1414,7 @@ test('fonts and icons are kept by path: no look at R2 for what the edge has, and
   bucket.head = (k) => (headCalls++, heads(k));
   const asked = [];
   const RL_MAP = { limit: async ({ key }) => (asked.push(key), { success: asked.length <= 1 }) };
-  const env = { ...makeEnv(), DOWNLOADS: bucket, RL_MAP };
+  const env = { ...makeEnv(), FILES: bucket, RL_MAP };
   const cache = installGlobals(makeFetch({}));
   const get = async (p, headers = {}) => (await call(p, { env, cache, headers: { 'cf-connecting-ip': '203.0.113.9', ...headers } })).res;
 
@@ -1453,7 +1453,7 @@ test('a piece of the map in the edge cache is served even once R2 may not be rea
   bucket.head = (k) => (headCalls++, heads(k));
   let open = true;
   const RL_MAP = { limit: async () => ({ success: open }) };
-  const env = { ...makeEnv(), DOWNLOADS: bucket, RL_MAP };
+  const env = { ...makeEnv(), FILES: bucket, RL_MAP };
   const cache = installGlobals(makeFetch({}));
   const get = async (p, headers) => (await call(p, { env, cache, headers })).res;
 

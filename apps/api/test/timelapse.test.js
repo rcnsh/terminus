@@ -68,7 +68,7 @@ function harness({ enabled = 'on', buses = {}, kv = makeKV() } = {}) {
   const bucket = makeBucket(async () => null);
   let env;
   const ns = makeDurableObjects(TimelapseRecorder, () => env);
-  env = { ...makeEnv(kv, ae), TIMELAPSE: ns, TIMELAPSE_ENABLED: enabled, DOWNLOADS: bucket, HEALTH_TOKEN: 'op' };
+  env = { ...makeEnv(kv, ae), TIMELAPSE: ns, TIMELAPSE_ENABLED: enabled, FILES: bucket, HEALTH_TOKEN: 'op' };
   const busCalls = () => fetchImpl.requests.filter((r) => r.url.endsWith('/active-bus'));
   return { env, ns, fetchImpl, cache, ae, bucket, busCalls, buses };
 }

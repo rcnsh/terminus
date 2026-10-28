@@ -47,7 +47,7 @@ function harness({ fetchImpl = makeFetch() } = {}) {
   const ae = makeAnalytics();
   let env;
   const ns = makeDurableObjects(TimelapseRecorder, () => env);
-  env = { ...makeEnv(makeKV(), ae), TIMELAPSE: ns, TIMELAPSE_ENABLED: 'on', DOWNLOADS: makeBucket(async () => null), HEALTH_TOKEN: 'op' };
+  env = { ...makeEnv(makeKV(), ae), TIMELAPSE: ns, TIMELAPSE_ENABLED: 'on', FILES: makeBucket(async () => null), HEALTH_TOKEN: 'op' };
   return { env, ns, feed, cache, ae };
 }
 
@@ -146,5 +146,5 @@ test('a whole recorded day asks NUS for live buses only: never arrivals, never L
     asks.every((r) => r.at >= open && r.at < close && inService(GRAPH, r.body.route_code, r.at)),
     'inside the window and the service hours',
   );
-  assert.equal(h.env.DOWNLOADS._written.size, 1, 'and the day went to R2');
+  assert.equal(h.env.FILES._written.size, 1, 'and the day went to R2');
 });

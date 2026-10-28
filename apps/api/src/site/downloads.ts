@@ -78,10 +78,10 @@ export async function latestRelease(bucket: R2Bucket): Promise<Latest | null> {
 
 export async function handleDownload(path: string, env: Env, url: URL): Promise<Response | null> {
   if (!path.startsWith('/download/')) return null;
-  if (!env.DOWNLOADS) return json({ error: 'downloads are not configured' }, 503);
+  if (!env.FILES) return json({ error: 'downloads are not configured' }, 503);
 
   if (path === '/download/appcast.xml') {
-    const feed = await releaseText(env.DOWNLOADS, APPCAST);
+    const feed = await releaseText(env.FILES, APPCAST);
     if (feed === null) return json({ error: 'no release yet' }, 404);
     return new Response(feed, {
       headers: { 'content-type': 'application/xml; charset=utf-8', 'cache-control': 'public, max-age=300' },
@@ -89,9 +89,9 @@ export async function handleDownload(path: string, env: Env, url: URL): Promise<
   }
 
   const release = RELEASE_FILE.exec(path);
-  if (release) return serveFile(env.DOWNLOADS, release[1]);
+  if (release) return serveFile(env.FILES, release[1]);
 
-  const latest = await latestRelease(env.DOWNLOADS);
+  const latest = await latestRelease(env.FILES);
   if (!latest) return json({ error: 'no release yet' }, 404);
 
   if (path === '/download/latest.json') {
@@ -103,7 +103,7 @@ export async function handleDownload(path: string, env: Env, url: URL): Promise<
   const android = Object.hasOwn(abis, abi) ? abis[abi] : latest.android;
   const which = path === '/download/android' ? android : path === '/download/mac' ? latest.mac : null;
   if (!which) return json({ error: 'not found' }, 404);
-  return serveFile(env.DOWNLOADS, which.file, which.sha256);
+  return serveFile(env.FILES, which.file, which.sha256);
 }
 
 async function serveFile(bucket: R2Bucket, key: string, sha256?: string): Promise<Response> {

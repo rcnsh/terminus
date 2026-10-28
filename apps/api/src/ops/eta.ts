@@ -223,7 +223,7 @@ export async function gunzipJson<T>(gz: ArrayBuffer): Promise<T> {
 
 /** Day [date] scored, as kept: reads the recording and the day's predictions. */
 export async function scoreDay(env: Env, date: string, nowMs: number, fetchImpl: typeof fetch = fetch): Promise<EtaDay | null> {
-  const stored = await env.DOWNLOADS!.get(dayKey(date));
+  const stored = await env.FILES!.get(dayKey(date));
   if (!stored) return null;
   const day = await gunzipJson<DayFile>(await stored.arrayBuffer());
   const { scored, predictions, matched } = scoreEtas(await predictionsFor(env, date, nowMs, fetchImpl), passingsOf(day));
@@ -245,18 +245,18 @@ export async function scoreDay(env: Env, date: string, nowMs: number, fetchImpl:
  * day) and Analytics Engine's SQL API to read the predictions with.
  */
 export async function recordEta(env: Env, nowMs: number, fetchImpl: typeof fetch = fetch): Promise<string | null> {
-  if (!env.DOWNLOADS || !env.ANALYTICS_TOKEN || !env.CF_ACCOUNT_ID || !(await collecting(env, 'eta'))) return null;
+  if (!env.FILES || !env.ANALYTICS_TOKEN || !env.CF_ACCOUNT_ID || !(await collecting(env, 'eta'))) return null;
   // The latest service day may still be recording (or closed an hour ago,
   // before the next opens): only a closed window is done.
   const previous = (date: string) => new Date(Date.parse(`${date}T00:00:00Z`) - DAY).toISOString().slice(0, 10);
   let date = serviceDate(nowMs);
   if (windowOf(date).close > nowMs) date = previous(date);
   for (let i = 0; i < 2; date = previous(date), i++) {
-    if (await env.DOWNLOADS.head(etaKey(date))) continue;
-    if (!(await env.DOWNLOADS.head(dayKey(date)))) continue;
+    if (await env.FILES.head(etaKey(date))) continue;
+    if (!(await env.FILES.head(dayKey(date)))) continue;
     const scored = await scoreDay(env, date, nowMs, fetchImpl);
     if (!scored) continue;
-    await env.DOWNLOADS.put(etaKey(date), JSON.stringify(scored), { httpMetadata: { contentType: 'application/json' } });
+    await env.FILES.put(etaKey(date), JSON.stringify(scored), { httpMetadata: { contentType: 'application/json' } });
     return date;
   }
   return null;
@@ -292,10 +292,10 @@ export function statsOf(errs: number[]): EtaStats {
 
 /** The last [days] scored days, together: by how far ahead, by service, by hour. */
 export async function etaSummary(env: Env, nowMs: number, days = 14): Promise<Record<string, unknown> | null> {
-  if (!env.DOWNLOADS) return null;
+  if (!env.FILES) return null;
   const dates = Array.from({ length: days }, (_, i) => new Date(nowMs + SGT_MS - (i + 1) * DAY).toISOString().slice(0, 10));
   const kept = (
-    await Promise.all(dates.map(async (d) => (await env.DOWNLOADS!.get(etaKey(d)))?.json<EtaDay>().catch(() => null) ?? null))
+    await Promise.all(dates.map(async (d) => (await env.FILES!.get(etaKey(d)))?.json<EtaDay>().catch(() => null) ?? null))
   ).filter((d): d is EtaDay => d?.v === 1);
   const all: Scored[] = kept.flatMap((d) => d.rows.map(([s, etaS, errS, hour]) => ({ svc: d.services[s], etaS, errS, hour })));
   const group = <K extends string | number>(key: (s: Scored) => K) => {
