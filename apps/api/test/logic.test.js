@@ -139,6 +139,42 @@ test('a service whose times the feed garbled is no data, never the "no bus" head
   assert.equal(guess.quality, 'scheduled', 'with the rows read, an empty board is the feed saying no bus');
 });
 
+test('standing at the stop, the bus pulling in is the one to catch', () => {
+  const at = { ...TO_CLB, lat: KR.lat, lon: KR.lon };
+  const [c] = candidateStops(GRAPH, at);
+  assert.equal(c.stop.code, 'KR-MRT');
+  assert.equal(c.walkS, 0, 'no walk to the stop you are at');
+  // "Arr" in a reading ten seconds old: the bus is at the stop now.
+  const arriving = (ageMs) =>
+    arrivalsFor(
+      Object.fromEntries([
+        sa(
+          'KR-MRT',
+          [
+            { svc: 'A1', etaS: 0, crowd: null, plate: 'PA1' },
+            { svc: 'A1', etaS: 600, crowd: null, plate: 'PA2' },
+          ],
+          NOW - ageMs,
+        ),
+      ]),
+    );
+  const [best] = scoreOptions(GRAPH, [c], arriving(10_000), NOW);
+  assert.equal(best.arrival.plate, 'PA1', 'not the bus after it');
+  assert.equal(best.quality, 'live');
+  // Once that reading is older than a bus stands at a stop, it has gone.
+  const [later] = scoreOptions(GRAPH, [c], arriving((WALK.dwellS + 15) * 1000), NOW);
+  assert.equal(later.arrival.plate, 'PA2');
+});
+
+test('a stop is only "here" on your side of the road', () => {
+  // On Opp KR MRT, 22 m from KR MRT: crossing to it is still a walk.
+  const [c] = candidateStops(GRAPH, TO_CLB);
+  assert.equal(c.stop.code, 'KR-MRT');
+  assert.ok(haversineM(TO_CLB.lat, TO_CLB.lon, KR.lat, KR.lon) <= WALK.atStopM, 'precondition: within reach of "here"');
+  assert.equal(c.here, undefined);
+  assert.ok(c.walkS > 0);
+});
+
 test('a bus that left while the answer aged is not offered as catchable', () => {
   const cands = candidateStops(GRAPH, TO_CLB).map((c) => ({ ...c, walkS: 0 }));
   // Fetched four minutes ago (now stale), when the bus was two minutes out.

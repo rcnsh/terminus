@@ -1175,7 +1175,8 @@ test('at the stop you live by, hours before the trip, you are not "at the stop";
   assert.ok(Date.parse(first.leave.at) - Date.now() > 15 * 60_000, 'the leave-by is a while off');
   assert.equal((await next(phone, here)).card.phase, 'idle', 'standing by your home stop is not waiting for a bus');
 
-  clock(Date.parse(first.leave.at) - 2 * 60_000);
+  // A few minutes before the bus, with the feed's (six minutes out) about it.
+  clock(Date.parse(first.leave.board) - 7 * 60_000);
   const due = await next(phone, here);
   assert.equal(due.card.phase, 'waiting');
   assert.equal(due.card.leaveBy, `${due.leave.svc} at ${clockAt(Date.parse(due.leave.board))}`, 'no "Leave by" at the stop');

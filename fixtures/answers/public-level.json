@@ -2,7 +2,7 @@
   "stop": {
     "code": "IT",
     "name": "IT",
-    "confidence": 0.96
+    "confidence": 0.97
   },
   "quality": "live",
   "asOf": "2026-08-27T01:00:00.000Z",
@@ -38,7 +38,7 @@
     "svc": "A2",
     "stop": "IT",
     "stopCode": "IT",
-    "walkS": 2,
+    "walkS": 0,
     "rideS": 570,
     "board": "2026-08-27T01:06:00Z",
     "arrive": "2026-08-27T01:15:30Z",
@@ -49,7 +49,7 @@
     "svc": "95",
     "stop": "IT",
     "stopCode": "IT",
-    "walkS": 2,
+    "walkS": 0,
     "rideS": 327,
     "board": "2026-08-27T01:07:03Z",
     "arrive": "2026-08-27T01:12:30Z",
@@ -58,7 +58,7 @@
     "paid": true
   },
   "leave": {
-    "at": "2026-08-27T01:05:38Z",
+    "at": "2026-08-27T01:06:00Z",
     "estimated": false,
     "svc": "A2",
     "stop": "IT",
@@ -66,7 +66,7 @@
     "board": "2026-08-27T01:06:00Z",
     "arrive": "2026-08-27T01:15:30Z",
     "note": null,
-    "walkS": 2,
+    "walkS": 0,
     "rideS": 570,
     "toStop": "Opp KR MRT",
     "toCode": "KR-MRT-OPP"
@@ -104,7 +104,7 @@
     "staleAt": "2026-08-27T01:06:30Z",
     "crowd": null,
     "quality": null,
-    "leaveBy": "Leave by 09:05",
+    "leaveBy": "Leave by 09:06",
     "leaveVia": "catch the 09:06 A2 at IT",
     "catch": null,
     "arrive": null,
@@ -132,7 +132,7 @@
     "notice": null,
     "h12": false,
     "journey": {
-      "leave": "09:05",
+      "leave": "09:06",
       "walk": null,
       "bus": {
         "svc": "A2",
@@ -161,7 +161,7 @@
       "change": null,
       "title": "To Opp KR MRT",
       "place": "Opp KR MRT",
-      "byText": "by 09:05",
+      "byText": "by 09:06",
       "walkText": null,
       "rideText": "10 min ride",
       "walkEndText": null,

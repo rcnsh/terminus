@@ -237,6 +237,18 @@ export function bestLeg(graph: Graph, idx: GraphIndex, svc: string, fromCode: st
 }
 
 /**
+ * Located at `stop` (WALK.atStopM), on its side of the road: the stop
+ * across is a crossing away, however close it looks.
+ */
+function atStop(input: ResolveInput, idx: GraphIndex, stop: Stop): boolean {
+  if (input.lat == null || input.lon == null) return false;
+  const d = haversineM(input.lat, input.lon, stop.lat, stop.lon);
+  if (d > WALK.atStopM) return false;
+  const opp = stop.opposite ? idx.byCode.get(stop.opposite) : undefined;
+  return !opp || haversineM(input.lat, input.lon, opp.lat, opp.lon) >= d;
+}
+
+/**
  * Stops worth fetching arrivals for. Bounded by WALK.maxCandidates so one
  * request never fans out into a dozen upstream calls.
  *
@@ -333,6 +345,9 @@ export function candidateStops(graph: Graph, input: ResolveInput, opts: { any?: 
     }
     // Starting from home or a room without coordinates: that walk comes
     // first, and a crossing to the far side's stop after it.
+    // Standing at the stop by where the phone is, there's no walk to it:
+    // a few metres of GPS drift mustn't cost you the bus pulling in.
+    if (atStop(input, idx, stop)) return { stop, distM, walkS: 0, here: true as const, legs };
     const walkS = input.lat != null ? Math.round(foot / speed) : (startS ?? input.originWalkS ?? 0) + Math.round(foot / speed);
     return { stop, distM, walkS, legs };
   });
@@ -822,6 +837,13 @@ export interface ScoredLeg {
 }
 
 /**
+ * How soon from now you can board a bus, in seconds: the walk to the stop
+ * and WALK.boardBufferS to spare. At the stop, a little before now: a bus
+ * the feed had as arriving is still standing there (WALK.dwellS).
+ */
+export const readyS = (o: { walkS: number; here?: true }): number => (o.here ? -WALK.dwellS : o.walkS + WALK.boardBufferS);
+
+/**
  * The bus of `leg`'s service you can board at the stop whose arrivals are
  * `sa`, being there `earliestS` from now at the soonest. Null when there is
  * none to catch: the service has ended, or doesn't start in time.
@@ -958,7 +980,7 @@ export function scoreOptions(
   const legOpts = opts.openBy !== undefined ? { openBy: opts.openBy } : {};
 
   for (const r of opts.transfers ?? []) {
-    const s1 = scoreLeg(graph, r.leg1, arrivalsByStop.get(r.origin.code), nowMs, r.walkS + WALK.boardBufferS, legOpts);
+    const s1 = scoreLeg(graph, r.leg1, arrivalsByStop.get(r.origin.code), nowMs, readyS(r), legOpts);
     if (!s1) continue;
     // The second bus is the first you can catch once the first gets you
     // there: off it, across the road if need be, and ready to board.
@@ -970,6 +992,7 @@ export function scoreOptions(
       svc: r.leg1.svc,
       distM: r.distM,
       walkS: r.walkS,
+      ...(r.here ? { here: true as const } : {}),
       hops: r.leg1.hops + r.leg2.hops,
       boardS: s1.boardS,
       rideS: s1.rideS,
@@ -1004,13 +1027,14 @@ export function scoreOptions(
   for (const c of candidates) {
     const sa = arrivalsByStop.get(c.stop.code);
     for (const leg of c.legs) {
-      const s = scoreLeg(graph, leg, sa, nowMs, c.walkS + WALK.boardBufferS, legOpts);
+      const s = scoreLeg(graph, leg, sa, nowMs, readyS(c), legOpts);
       if (!s) continue;
       out.push({
         stop: c.stop,
         svc: leg.svc,
         distM: c.distM,
         walkS: c.walkS,
+        ...(c.here ? { here: true as const } : {}),
         hops: leg.hops,
         boardS: s.boardS,
         rideS: s.rideS,

@@ -50,6 +50,14 @@ export const WALK = {
   maxCandidates: 3,
   /** Do not claim you can catch a bus arriving this soon after you get there. */
   boardBufferS: 20,
+  /** Located this close to a stop, you are at it: no walk, and no buffer. */
+  atStopM: 30,
+  /**
+   * At the stop, a bus the feed had as due this long ago is still one you can
+   * get on: it counts in whole minutes ("Arr" is anything under one), and a
+   * bus pulling in stands there a while.
+   */
+  dwellS: 30,
   /**
    * Walking must beat the bus by this much before we say "just walk". Several
    * trips on this campus are genuinely faster on foot, and an engine that will
