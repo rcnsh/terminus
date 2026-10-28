@@ -93,7 +93,7 @@ The `NEXTBUS_*` names match `hewliyang/nus-nextbus-web`'s `.env.example`.
 Deploy. The Worker's config is [cloudflare.config.ts](../apps/api/cloudflare.config.ts)
 (the website directory is in [wrangler.config.ts](../apps/api/wrangler.config.ts), which
 `cf` builds with). It names a D1 database, a KV namespace and an R2 bucket
-(`terminus-downloads`, the beta's `terminus-beta-downloads`) for each site, so a new account creates those first
+(`terminus`, the beta's `terminus-beta`) for each site, so a new account creates those first
 and puts their ids there. The recipe below covers the KV namespace and the
 feed's secrets only:
 
@@ -1635,7 +1635,7 @@ until the next run. The NUS feed has no route shapes of its own.
 **map tiles** workflow, cuts the campus (about 3.3 MB) from the Protomaps
 build of OpenStreetMap, from zoom 12 up (the clients never zoom out past
 13), and uploads it, with Noto Sans glyphs and the light
-and dark icons, under `map/` in each site's downloads bucket (stable and
+and dark icons, under `map/` in each site's R2 bucket (stable and
 beta have their own; the workflow does both by default).
 
 Protomaps' Noto Sans has no Chinese, so on the Chinese map every Chinese

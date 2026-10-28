@@ -78,7 +78,7 @@ SPARKLE_KEY="$HOME/.terminus/sparkle-ed25519.key"
 # The address the apps are built to call and the appcast's links: the
 # site's own (Servers.kt), which goes with the project if it changes hands.
 SITE=https://terminus.run
-BUCKET=terminus-downloads
+BUCKET=terminus
 # A dry run builds apart, so it never wipes the files a stopped release
 # needs to finish (github-release.sh reads build/release/<version>).
 RELEASES="$ROOT/build/release"

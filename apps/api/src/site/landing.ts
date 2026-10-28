@@ -22,9 +22,9 @@ const VERSION = new RegExp(`^${RELEASE_VERSION}$`);
 
 /** The current release's version, from latest.json as it is now, or null. */
 export async function latestVersion(env: Env): Promise<string | null> {
-  if (!env.DOWNLOADS) return null;
+  if (!env.FILES) return null;
   try {
-    const v = (await latestRelease(env.DOWNLOADS))?.version;
+    const v = (await latestRelease(env.FILES))?.version;
     return typeof v === 'string' && VERSION.test(v) ? v : null;
   } catch {
     // No version is the page as written: its script asks for it.

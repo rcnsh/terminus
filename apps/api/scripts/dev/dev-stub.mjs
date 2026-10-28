@@ -303,7 +303,7 @@ const ASSETS = {
 // standing in for R2, byte ranges and all. latest.json names this version,
 // for the landing page; there are no app files behind it.
 const MAP_DIR = new URL('../../../../dev/map/', import.meta.url).pathname;
-const DOWNLOADS = makeBucket(async (key) => {
+const FILES = makeBucket(async (key) => {
   if (key === 'latest.json') return new TextEncoder().encode(JSON.stringify({ version: API_VERSION }));
   if (!key.startsWith('map/')) return null;
   const file = path.join(MAP_DIR, key.slice(4));
@@ -333,7 +333,7 @@ env = {
   EMAIL: email,
   EMAIL_FROM: 'login@example.test',
   ASSETS,
-  DOWNLOADS,
+  FILES,
   HEALTH_TOKEN: 'dev',
   TRIPS,
   TIMELAPSE,
@@ -343,7 +343,7 @@ env = {
   ...(FCM ? { FCM_SERVICE_ACCOUNT: FCM } : {}),
   ...(DEMO_ADMIN ? { ANALYTICS_TOKEN: 'dev', CF_ACCOUNT_ID: 'dev', ETA_MODEL: 'shadow' } : {}),
 };
-if (DEMO_ADMIN) await seedAdmin({ db, kv: env.KV, downloads: DOWNLOADS, nowMs: stubNow() });
+if (DEMO_ADMIN) await seedAdmin({ db, kv: env.KV, files: FILES, nowMs: stubNow() });
 console.log(FCM ? 'push: on (Firebase project from .private/)' : 'push: off (no .private/fcm-service-account.json)');
 setInterval(() => {
   const due = [...TRIPS.alarms.values()].filter((at) => at <= stubNow()).length;

@@ -282,13 +282,13 @@ export interface RecorderStatus {
 export async function handleTimelapse(req: Request, url: URL, env: Env, nowMs: number): Promise<Response | null> {
   if (!url.pathname.startsWith('/api/timelapse/')) return null;
   if (req.method !== 'GET' || !(await canReadTimelapse(env, req, nowMs))) return json({ error: 'not found' }, 404);
-  if (!env.DOWNLOADS) return json({ error: 'timelapse storage is not configured' }, 503);
+  if (!env.FILES) return json({ error: 'timelapse storage is not configured' }, 503);
 
   if (url.pathname === '/api/timelapse/days') {
     const days: { date: string; closed: boolean; bytes: number | null; samples: number | null }[] = [];
     let cursor: string | undefined;
     do {
-      const page = await env.DOWNLOADS.list({ prefix: 'timelapse/', cursor });
+      const page = await env.FILES.list({ prefix: 'timelapse/', cursor });
       for (const o of page.objects) {
         const date = /^timelapse\/(\d{4}-\d{2}-\d{2})\.json\.gz$/.exec(o.key)?.[1];
         if (date) days.push({ date, closed: true, bytes: o.size, samples: null });
@@ -315,7 +315,7 @@ export async function handleTimelapse(req: Request, url: URL, env: Env, nowMs: n
 
   const date = DAY_PATH.exec(url.pathname)?.[1];
   if (!date) return json({ error: 'not found' }, 404);
-  const stored = await env.DOWNLOADS.get(dayKey(date));
+  const stored = await env.FILES.get(dayKey(date));
   if (stored) {
     return new Response(stored.body, {
       headers: { 'content-type': 'application/gzip', 'cache-control': 'private, max-age=31536000, immutable', etag: stored.httpEtag },

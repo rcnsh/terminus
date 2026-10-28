@@ -117,9 +117,9 @@ function bucketsIn(script) {
   return names;
 }
 
-test('the release and map scripts upload to the buckets each site serves downloads from', () => {
-  const stable = STABLE.env.DOWNLOADS.name;
-  const beta = BETA.env.DOWNLOADS.name;
+test('the release and map scripts upload to the buckets each site reads from', () => {
+  const stable = STABLE.env.FILES.name;
+  const beta = BETA.env.FILES.name;
   const script = (name) => readFileSync(new URL(`../../../scripts/${name}`, import.meta.url), 'utf8');
   assert.deepEqual([...bucketsIn(script('release/release.sh'))], [stable], 'scripts/release/release.sh uploads to the stable bucket');
   assert.deepEqual([...bucketsIn(script('release/release-beta.sh'))], [beta], 'scripts/release/release-beta.sh uploads to the beta bucket');

@@ -404,9 +404,9 @@ export class TimelapseRecorder {
       // and this runs once a day.
       const samples = this.count();
       if (samples > 0) {
-        if (!this.env.DOWNLOADS) throw new Error('no DOWNLOADS bucket');
+        if (!this.env.FILES) throw new Error('no FILES bucket');
         const body = await gzip(JSON.stringify(this.dayFile(meta)));
-        await this.env.DOWNLOADS.put(dayKey(meta.date), body, {
+        await this.env.FILES.put(dayKey(meta.date), body, {
           httpMetadata: { contentType: 'application/gzip' },
           customMetadata: { samples: String(samples) },
         });

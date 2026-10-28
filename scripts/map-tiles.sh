@@ -33,7 +33,7 @@
 # GLYPHS in map.ts (the style's glyphs URL ends ?v=) and deploy after
 # uploading; move changed icons to a new folder (sprites/v5, with SPRITES).
 #
-# Each site reads the map from its own downloads bucket (cloudflare.config.ts).
+# Each site reads the map from its own R2 bucket (cloudflare.config.ts).
 # A couple of times a year is plenty: it only picks up new buildings and
 # paths. Uses `pmtiles` from the PATH if it's PMTILES_VERSION (the cut must
 # come out byte for byte the same); otherwise, on Linux or an Apple silicon
@@ -51,9 +51,9 @@ case "${1:-}" in
   *) echo "usage: scripts/map-tiles.sh [--check | --update | --dry-run | --upload]"; exit 1 ;;
 esac
 case "${CHANNEL:-stable}" in
-  stable) BUCKETS=terminus-downloads ;;
-  beta) BUCKETS=terminus-beta-downloads ;;
-  both) BUCKETS="terminus-downloads terminus-beta-downloads" ;;
+  stable) BUCKETS=terminus ;;
+  beta) BUCKETS=terminus-beta ;;
+  both) BUCKETS="terminus terminus-beta" ;;
   *) echo "CHANNEL is stable, beta or both, not $CHANNEL"; exit 1 ;;
 esac
 BBOX=103.755,1.280,103.830,1.332

@@ -87,7 +87,7 @@ A request goes through `src/index.ts` (the router), which hands off to:
 | --- | --- |
 | D1 (`DB`) | Users, sessions (devices included), profiles, API keys, trip outcomes, crowding, feedback. Schema in `migrations/`, additive only |
 | KV | Guest token and device id, calendar copy, feed state, runtime switches (`config:*`), sign-in codes |
-| R2 (`DOWNLOADS`) | App builds, `latest.json`, the Sparkle appcast, the PMTiles street map, fonts and icons, timelapse days, and each day's arrival-time scores (`eta/`) |
+| R2 (`FILES`) | App builds, `latest.json`, the Sparkle appcast, the PMTiles street map, fonts and icons, timelapse days, and each day's arrival-time scores (`eta/`) |
 | Durable Objects | `Trip` (per user, today only, deleted at midnight), `TimelapseRecorder`, `FeedGate` |
 | Analytics Engine (`AE`) | Usage and error counts for the operator dashboard; see [analytics.md](analytics.md) |
 

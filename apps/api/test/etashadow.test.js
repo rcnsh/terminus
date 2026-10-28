@@ -47,7 +47,7 @@ async function setUp(env = {}) {
   for (const d of days) await bucket.put(dayKey(d.date), await gzip(JSON.stringify(d)));
   const rows = predictionsOf(days, 90);
   const fetchImpl = async () => new Response(JSON.stringify({ data: rows }));
-  const base = { ...makeEnv(), DOWNLOADS: bucket, ANALYTICS_TOKEN: 'ae', CF_ACCOUNT_ID: 'acct', ...env };
+  const base = { ...makeEnv(), FILES: bucket, ANALYTICS_TOKEN: 'ae', CF_ACCOUNT_ID: 'acct', ...env };
   return { days, bucket, fetchImpl, env: base, now: windowOf(DAYS[1]).close + 3_600_000 };
 }
 
@@ -119,5 +119,5 @@ test('the dashboard reads the days in shadow, oldest first, without their weight
     'grids stay in the bucket',
   );
   assert.equal(summary.days[1].coverage, 1);
-  assert.equal((await shadowSummary({ DOWNLOADS: bucket }, now)).on, false, 'ETA_MODEL unset: off, days still shown');
+  assert.equal((await shadowSummary({ FILES: bucket }, now)).on, false, 'ETA_MODEL unset: off, days still shown');
 });

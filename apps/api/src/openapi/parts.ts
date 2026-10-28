@@ -123,7 +123,7 @@ export const KEYED_ERRORS = {
   ),
 };
 
-/** Every /download/* route, on a server with no downloads bucket. */
+/** Every /download/* route, on a server with no R2 bucket. */
 export const DOWNLOADS_OFF = errorResponse('Downloads are not set up on this server.', { error: 'downloads are not configured' });
 
 export const answerExample = {

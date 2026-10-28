@@ -172,7 +172,7 @@ Bindings:
 | --- | --- |
 | `DB` | D1: accounts, sessions, profiles ([`migrations/`](apps/api/migrations)) |
 | `KV` | KV: tokens, calendar, feed state, runtime config |
-| `DOWNLOADS` | R2: app builds, `latest.json`, the appcast, the street map, timelapse days |
+| `FILES` | R2: app builds, `latest.json`, the appcast, the street map, timelapse days |
 | `TRIPS`, `TIMELAPSE`, `FEED_GATE` | Durable Objects (`Trip`, `TimelapseRecorder`, `FeedGate`) |
 | `AE` | Analytics Engine dataset |
 | `EMAIL` | Email Sending |
@@ -213,7 +213,7 @@ in `cloudflare.config.ts`, then set the secrets:
 ```bash
 pnpm exec cf d1 create --name terminus
 pnpm exec cf kv namespaces create --title terminus
-pnpm exec cf r2 buckets create --name terminus-downloads
+pnpm exec cf r2 buckets create --name terminus
 pnpm exec cf workers secrets update NEXTBUS_AUTH_BASE --worker terminus --type secret_text --text '…'
 ```
 

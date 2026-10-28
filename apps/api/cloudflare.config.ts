@@ -8,7 +8,7 @@ import { bindings, defineConfig, exports, triggers } from "cf/config";
 //
 // Two Workers from one config. `cf deploy` is the stable site; `cf deploy
 // --mode beta` (pnpm run deploy:beta) is the beta at beta.terminus.run,
-// with its own database, KV, trips, downloads and analytics, so beta accounts
+// with its own database, KV, trips, files and analytics, so beta accounts
 // and migrations never touch the stable ones (ids in BETA).
 
 const BETA = {
@@ -34,7 +34,7 @@ function site(mode: string | undefined) {
 			oldDomain: "terminus.rcn.sh",
 			d1: { name: "terminus", id: "27067356-8691-458f-bc69-fa5ca5bbc374" },
 			kv: "1f88f570f6e04f78aa2888ee7aa78e6a",
-			downloads: "terminus-downloads",
+			bucket: "terminus",
 			dataset: "terminus",
 			// Rate limit counters are per namespace; the beta has its own.
 			rl: { auth: "1001", public: "1002", me: "1003", mail: "1004", anon: "1005", map: "1006", pair: "1007" },
@@ -63,7 +63,7 @@ function site(mode: string | undefined) {
 		oldDomain: "beta.terminus.rcn.sh",
 		d1: { name: "terminus-beta", id: BETA.d1 },
 		kv: BETA.kv,
-		downloads: "terminus-beta-downloads",
+		bucket: "terminus-beta",
 		dataset: "terminus_beta",
 		rl: { auth: "2001", public: "2002", me: "2003", mail: "2004", anon: "2005", map: "2006", pair: "2007" },
 		env: {
@@ -165,8 +165,8 @@ export default defineConfig(({ mode }) => {
 				KV: bindings.kv({
 					id: s.kv,
 				}),
-				DOWNLOADS: bindings.r2({
-					name: s.downloads,
+				FILES: bindings.r2({
+					name: s.bucket,
 				}),
 				EMAIL: bindings.sendEmail({
 					// The old address stays allowed, so sending from it again is

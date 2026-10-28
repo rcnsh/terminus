@@ -72,7 +72,7 @@ export function Model({ s }) {
   const m = s.model;
   const [metric, setMetric] = useState('mae');
   const [picked, setPicked] = useState(null);
-  if (!m) return html`<${Empty}>Needs the downloads bucket, where the model keeps its days.<//>`;
+  if (!m) return html`<${Empty}>Needs the R2 bucket, where the model keeps its days.<//>`;
   if (m.error) return html`<${Empty}><span class="bad">${m.error}</span><//>`;
   const days = m.days ?? [];
   const scored = days.filter((d) => d.coverage > 0 && d.overall?.blend?.n);

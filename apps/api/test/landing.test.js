@@ -61,7 +61,7 @@ test("landing: signed in by a live session only, never the file's own 304, priva
   const db = makeD1();
   const user = await ensureUser(db, 'you@u.nus.edu', NOW);
   const token = await openSession(db, user.id, 'web', null, NOW);
-  const env = { DB: db, DOWNLOADS: downloads({ version: '2.4.2' }) };
+  const env = { DB: db, FILES: downloads({ version: '2.4.2' }) };
   const get = (cookie) =>
     landingPage(
       new Request('https://x.test/', { headers: { accept: 'text/html', 'if-none-match': '"abc"', ...(cookie ? { cookie } : {}) } }),
@@ -84,7 +84,7 @@ test("landing: signed in by a live session only, never the file's own 304, priva
 });
 
 test('landing: no release yet leaves the version to the page', async () => {
-  const res = await landingPage(new Request('https://x.test/'), ASSETS, { DOWNLOADS: downloads(null) }, NOW);
+  const res = await landingPage(new Request('https://x.test/'), ASSETS, { FILES: downloads(null) }, NOW);
   assert.ok((await res.text()).includes('<span id="version"></span>'));
 });
 
@@ -93,7 +93,7 @@ test('landing: a copy that is still what would be sent gets a 304; a change to a
   const user = await ensureUser(db, 'you@u.nus.edu', NOW);
   const token = await openSession(db, user.id, 'web', null, NOW);
   const cookie = `${SESSION_COOKIE}=${token}`;
-  const env = { DB: db, DOWNLOADS: downloads({ version: '2.4.2' }) };
+  const env = { DB: db, FILES: downloads({ version: '2.4.2' }) };
   const get = (headers = {}, e = env, now = NOW) =>
     landingPage(new Request('https://x.test/', { headers: { accept: 'text/html', ...headers } }), ASSETS, e, now);
 
@@ -112,7 +112,7 @@ test('landing: a copy that is still what would be sent gets a 304; a change to a
   assert.equal(out.status, 200);
   assert.ok((await out.text()).includes('id="account-link">Sign in</a>'));
   assert.notEqual(out.headers.get('etag'), etag);
-  assert.equal((await get({ cookie, 'if-none-match': etag }, { ...env, DOWNLOADS: downloads({ version: '2.5.0' }) })).status, 200);
+  assert.equal((await get({ cookie, 'if-none-match': etag }, { ...env, FILES: downloads({ version: '2.5.0' }) })).status, 200);
   assert.equal((await get({ cookie, 'if-none-match': etag }, { ...env, PUBLIC_ORIGIN: 'https://beta.example.test' })).status, 200);
   const etags = new Set([
     await landingEtag('"abc"', '2.4.2', true, false),
@@ -128,7 +128,7 @@ test('landing: a copy that is still what would be sent gets a 304; a change to a
 test('landing: a new release shows on the very next request, with no wait', async () => {
   let latest = { version: '2.4.2' };
   const bucket = makeBucket(async (key) => (key === 'latest.json' ? new TextEncoder().encode(JSON.stringify(latest)) : null));
-  const get = () => landingPage(new Request('https://x.test/', { headers: { accept: 'text/html' } }), ASSETS, { DOWNLOADS: bucket }, NOW);
+  const get = () => landingPage(new Request('https://x.test/', { headers: { accept: 'text/html' } }), ASSETS, { FILES: bucket }, NOW);
   const before = await get();
   assert.ok((await before.text()).includes('>Version 2.4.2.</span>'));
   latest = { version: '2.4.3' };

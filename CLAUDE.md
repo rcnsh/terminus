@@ -529,8 +529,8 @@ marketing/posters/    A3 campus posters (never-run, ticket, board): each .html (
   `/admin/timelapse/` replays a day (`replay.js`, which the tests share) and
   exports a video with Mediabunny, frame by frame. Details in internals.md.
 - **Map.** `/api/campus` returns stops and route lines. The street map is a
-  PMTiles extract on R2, in each site's own downloads bucket
-  (`terminus-downloads`, `terminus-beta-downloads`), uploaded by the
+  PMTiles extract in each site's own R2 bucket
+  (`terminus`, `terminus-beta`), uploaded by the
   `map tiles` workflow or `scripts/map-tiles.sh` (`CHANNEL=stable|beta|both`).
   What goes up is pinned in `scripts/map-tiles.lock` (the Protomaps build,
   the basemaps-assets commit, the Noto Sans SC tag that fills in Chinese,

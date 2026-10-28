@@ -205,7 +205,7 @@ async function world() {
     HEALTH_TOKEN: 'op-token',
     TRIPS: makeDurableObjects(Trip),
     VAPID_PRIVATE_KEY: VAPID,
-    DOWNLOADS: downloads(),
+    FILES: downloads(),
     ...w.limit,
   };
   // The answer routes as deployed: a key or a session, nothing open.
@@ -246,7 +246,7 @@ const turnstile = (state) => (w) => {
   w.turnstile = state;
 };
 const r2Fails = (w) => {
-  w.env.DOWNLOADS.get = async () => {
+  w.env.FILES.get = async () => {
     throw new Error('R2 down');
   };
 };
@@ -684,7 +684,7 @@ const CASES = [
     404,
     {
       before: (w) => {
-        w.env.DOWNLOADS = downloads({});
+        w.env.FILES = downloads({});
       },
     },
   ],
@@ -720,19 +720,19 @@ const CASES = [
     404,
     {
       before: (w) => {
-        w.env.DOWNLOADS = downloads({});
+        w.env.FILES = downloads({});
       },
     },
   ],
   ['GET /download/latest.json', 429, { block: ['RL_PUBLIC'] }],
-  ['GET /download/latest.json', 503, { before: (w) => delete w.env.DOWNLOADS }],
+  ['GET /download/latest.json', 503, { before: (w) => delete w.env.FILES }],
   ['GET /download/android', 200, {}],
   [
     'GET /download/android',
     404,
     {
       before: (w) => {
-        w.env.DOWNLOADS = downloads({});
+        w.env.FILES = downloads({});
       },
     },
   ],
@@ -743,7 +743,7 @@ const CASES = [
     404,
     {
       before: (w) => {
-        w.env.DOWNLOADS = downloads({});
+        w.env.FILES = downloads({});
       },
     },
   ],

@@ -21,7 +21,7 @@ function setup(files) {
   clock += 3_600_000;
   installGlobals(makeFetch(), clock);
   const bucket = makeBucket(async (key) => files.get(key));
-  const env = { ...makeEnv(), DOWNLOADS: bucket };
+  const env = { ...makeEnv(), FILES: bucket };
   const get = async (path, headers = {}) => {
     const ctx = makeCtx();
     const res = await worker.fetch(new Request(BASE + path, { headers }), env, ctx);
@@ -139,7 +139,7 @@ test('the stable site and the beta share one edge cache but never serve each oth
   const betaEnv = {
     ...makeEnv(),
     PUBLIC_ORIGIN: 'https://beta.terminus.run',
-    DOWNLOADS: makeBucket(async (key) =>
+    FILES: makeBucket(async (key) =>
       new Map([
         ['map/fonts/Noto Sans Regular/0-255.pbf', betaFont],
         ['map/campus.pmtiles', bytesOf(9)],

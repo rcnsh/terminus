@@ -696,7 +696,7 @@ const statCols = (first, max) => [
 export function Arrivals({ s }) {
   const eta = s.eta;
   const [hourShow, setHourShow] = useState('shares');
-  if (!eta) return html`<${Empty}>Needs the downloads bucket, where the recorder keeps its days.<//>`;
+  if (!eta) return html`<${Empty}>Needs the R2 bucket, where the recorder keeps its days.<//>`;
   if (eta.error) return html`<${Empty}><span class="bad">${eta.error}</span><//>`;
   if (!eta.days.length)
     return html`<${Empty}>No days scored yet. Turn on <a href="#/collection">Arrival-time accuracy</a>; it needs the timelapse recorder on and ANALYTICS_TOKEN. A day is scored the night after.<//>`;

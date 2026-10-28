@@ -31,7 +31,7 @@ All of it is in production, none of it in the repo:
 
 | What | Where | Shape | Since |
 | --- | --- | --- | --- |
-| Where every bus was, every 30 s | R2 `timelapse/YYYY-MM-DD.json.gz` (downloads bucket) | `DayFile`: per sample, each bus's plate, position and metres along its line | Since the recorder was turned on (stable site) |
+| Where every bus was, every 30 s | R2 `timelapse/YYYY-MM-DD.json.gz` | `DayFile`: per sample, each bus's plate, position and metres along its line | Since the recorder was turned on (stable site) |
 | What the feed predicted | Analytics Engine, `blob1 = 'arrival'` | per answer, up to 8 arrivals at the chosen stop: plate, stop, service, `etaS` (`analytics.ts`, "the segment-time seed"); sampled at high volume (`_sample_interval`) | AE keeps about 3 months |
 | How wrong the feed was | R2 `eta/YYYY-MM-DD.json` | `EtaDay` rows `[service, etaS, errS, hour]` (`src/ops/eta.ts`) | Only while the operator collects `eta` |
 
@@ -114,9 +114,9 @@ aren't asked.
 
 ```bash
 cd apps/api
-# Recorded days, from the stable site's downloads bucket:
-pnpm exec cf r2 object get terminus-downloads/timelapse/2026-10-20.json.gz --file /tmp/day-2026-10-20.json.gz
-pnpm exec cf r2 object get terminus-downloads/timelapse/2026-10-21.json.gz --file /tmp/day-2026-10-21.json.gz
+# Recorded days, from the stable site's R2 bucket:
+pnpm exec cf r2 object get terminus/timelapse/2026-10-20.json.gz --file /tmp/day-2026-10-20.json.gz
+pnpm exec cf r2 object get terminus/timelapse/2026-10-21.json.gz --file /tmp/day-2026-10-21.json.gz
 # The feed's predictions, from Analytics Engine's SQL API (ANALYTICS_TOKEN, CF_ACCOUNT_ID), as it answers:
 curl -s "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/analytics_engine/sql" \
   -H "Authorization: Bearer $ANALYTICS_TOKEN" \
@@ -161,7 +161,7 @@ first, up to three days back), one a run:
    errors and the day's weight grid as `eta/model/<date>.json`;
 3. it keeps the day's own segment times.
 
-It writes only those two files to the downloads bucket and calls no one
+It writes only those two files to the R2 bucket and calls no one
 but Analytics Engine. Each day is scored by a model that never saw it.
 
 `ETA_MODEL` is set in `cloudflare.config.ts`: `shadow` on the stable site,
