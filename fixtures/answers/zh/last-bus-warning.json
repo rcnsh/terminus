@@ -37,7 +37,7 @@
     }
   ],
   "label": "D2 · 4 分钟",
-  "detail": "PGP · 步行 1 分钟 · 约 14 分钟到家 · 拥挤程度：低",
+  "detail": "PGP · 就在这里 · 约 14 分钟到家 · 拥挤程度：低",
   "alt": null,
   "departsAt": "2026-08-27T14:44:00Z",
   "arriveAt": "2026-08-27T14:53:30Z",
@@ -45,7 +45,7 @@
     "svc": "D2",
     "stop": "PGP",
     "stopCode": "PGP",
-    "walkS": 89,
+    "walkS": 0,
     "rideS": 570,
     "board": "2026-08-27T14:44:00Z",
     "arrive": "2026-08-27T14:53:30Z",
@@ -54,7 +54,7 @@
   },
   "altBus": null,
   "leave": {
-    "at": "2026-08-27T14:42:11Z",
+    "at": "2026-08-27T14:44:00Z",
     "estimated": false,
     "svc": "D2",
     "stop": "PGP",
@@ -62,7 +62,7 @@
     "board": "2026-08-27T14:44:00Z",
     "arrive": "2026-08-27T14:53:30Z",
     "note": null,
-    "walkS": 89,
+    "walkS": 0,
     "rideS": 570,
     "toStop": "UTown",
     "toCode": "UTOWN"
@@ -117,7 +117,7 @@
     "line": "在 PGP 搭 22:44 的 D2",
     "actions": [],
     "warning": "PGP 的末班 D2 还有 20 分钟",
-    "nextChangeAt": "2026-08-27T14:42:11Z",
+    "nextChangeAt": "2026-08-27T14:44:00Z",
     "remind": true,
     "suggestion": null,
     "ride": null,
@@ -126,7 +126,7 @@
     "notice": null,
     "h12": false,
     "journey": {
-      "leave": "22:42",
+      "leave": "22:44",
       "walk": null,
       "bus": {
         "svc": "D2",

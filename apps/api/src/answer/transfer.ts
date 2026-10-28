@@ -27,6 +27,7 @@ export interface TransferRoute {
   origin: Stop;
   distM: number;
   walkS: number;
+  here?: true;
   /** The first bus, to `at`. */
   leg1: Leg;
   at: Stop;
@@ -161,7 +162,18 @@ export function planTransfers(graph: Graph, input: ResolveInput, cands: Candidat
         halfWay(graph, r.leg2.svc) +
         legRideS(r.leg2) +
         endS(r.leg2);
-      return { origin: o.stop, distM: o.distM, walkS: o.walkS, leg1: r.leg1, at: r.at, board: r.board, crossS, leg2: r.leg2, costS };
+      return {
+        origin: o.stop,
+        distM: o.distM,
+        walkS: o.walkS,
+        ...(o.here ? { here: true as const } : {}),
+        leg1: r.leg1,
+        at: r.at,
+        board: r.board,
+        crossS,
+        leg2: r.leg2,
+        costS,
+      };
     }),
   );
   const worth = all.filter((r) => r.costS + TRANSFER.worthS < beat).sort((a, b) => a.costS - b.costS);

@@ -1744,6 +1744,14 @@ from an old answer stays `scheduled`. A stale bus's leg (`bus`, `altBus`) is
 fetched, so a bus that has left since then (by the walk to it) is never
 offered as catchable.
 
+A bus is catchable once you can reach the stop with `WALK.boardBufferS` to
+spare (`readyS` in `resolve.ts`, used by the leave-by too). Located within
+`WALK.atStopM` of a stop, on its side of the road (no nearer its opposite),
+you are at it (`here`): no walk, no buffer, and a bus the feed had as
+arriving stays catchable for `WALK.dwellS` after the reading. Otherwise GPS
+drift plus the buffer plus a cached reading's age add up to most of a
+minute, and the bus pulling in is passed over for the one after it.
+
 ## What the feed looks like
 
 `test/fixtures/` holds real captured responses and `test/fixtures/README.md`

@@ -439,6 +439,8 @@ export interface Candidate {
   stop: Stop;
   distM: number;
   walkS: number;
+  /** Located at the stop (WALK.atStopM): the bus pulling in is one you can catch. */
+  here?: true;
   legs: Leg[];
 }
 
@@ -477,8 +479,10 @@ export interface ScoredOption {
   svc: string;
   distM: number;
   walkS: number;
+  /** Located at the stop, as the candidate's. */
+  here?: true;
   hops: number;
-  /** Seconds from now until you can board. Always >= walkS + buffer. */
+  /** Seconds from now until you can board: no sooner than readyS() allows. */
   boardS: number;
   rideS: number;
   totalS: number;

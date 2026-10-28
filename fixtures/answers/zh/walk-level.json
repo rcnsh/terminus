@@ -16,15 +16,15 @@
     }
   ],
   "label": "D2 · 21 分钟",
-  "detail": "PGP · 步行 1 分钟 · 约 31 分钟到 UTown · 步行要 29 分钟 · 或 R2，约 8 分钟后",
-  "alt": "R2 · 约 8 分钟 · PGP",
+  "detail": "PGP · 就在这里 · 约 31 分钟到 UTown · 步行要 29 分钟 · 或 R2，约 6 分钟后",
+  "alt": "R2 · 约 6 分钟 · PGP",
   "departsAt": "2026-08-27T01:21:04Z",
   "arriveAt": "2026-08-27T01:30:34Z",
   "bus": {
     "svc": "D2",
     "stop": "PGP",
     "stopCode": "PGP",
-    "walkS": 89,
+    "walkS": 0,
     "rideS": 570,
     "board": "2026-08-27T01:21:04Z",
     "arrive": "2026-08-27T01:30:34Z",
@@ -35,15 +35,15 @@
     "svc": "R2",
     "stop": "PGP",
     "stopCode": "PGP",
-    "walkS": 89,
+    "walkS": 0,
     "rideS": 570,
-    "board": "2026-08-27T01:07:49Z",
-    "arrive": "2026-08-27T01:17:19Z",
+    "board": "2026-08-27T01:05:30Z",
+    "arrive": "2026-08-27T01:15:00Z",
     "estimated": true,
     "toStop": "UTown"
   },
   "leave": {
-    "at": "2026-08-27T01:19:15Z",
+    "at": "2026-08-27T01:21:04Z",
     "estimated": false,
     "svc": "D2",
     "stop": "PGP",
@@ -51,18 +51,14 @@
     "board": "2026-08-27T01:21:04Z",
     "arrive": "2026-08-27T01:30:34Z",
     "note": null,
-    "walkS": 89,
+    "walkS": 0,
     "rideS": 570,
     "toStop": "UTown",
     "toCode": "UTOWN"
   },
   "steps": {
     "trip": "to:UTOWN",
-    "earlier": {
-      "svc": "R2",
-      "stop": "PGP",
-      "board": "2026-08-27T01:01:49Z"
-    },
+    "earlier": null,
     "later": {
       "svc": "D2",
       "stop": "PGP",
@@ -93,7 +89,7 @@
     "staleAt": "2026-08-27T01:15:00Z",
     "crowd": null,
     "quality": null,
-    "leaveBy": "09:19 前出发",
+    "leaveBy": "09:21 前出发",
     "leaveVia": "在 PGP 搭 09:21 的 D2",
     "catch": null,
     "arrive": null,
@@ -121,8 +117,8 @@
     "notice": null,
     "h12": false,
     "journey": {
-      "leave": "09:19",
-      "walk": "1 分钟",
+      "leave": "09:21",
+      "walk": null,
       "bus": {
         "svc": "D2",
         "color": "#8e44c9",
@@ -143,29 +139,25 @@
         "svc": "R2",
         "color": "#34a853",
         "stop": "PGP",
-        "board": "约 09:07"
+        "board": "约 09:05"
       },
       "why": null,
       "change": null,
       "title": "去 UTown",
       "place": "UTown",
-      "byText": "09:19 前出发",
-      "walkText": "步行 1 分钟",
+      "byText": "09:21 前出发",
+      "walkText": null,
       "rideText": "乘车 10 分钟",
       "walkEndText": null,
       "arriveText": "09:30 到达",
       "arriveWhere": "在 UTown",
-      "backupText": "或在 PGP 搭约 09:07 的 R2",
-      "summary": "步行到 PGP · 09:21 的 D2"
+      "backupText": "或在 PGP 搭约 09:05 的 R2",
+      "summary": "在 PGP 搭 09:21 的 D2"
     },
     "upcoming": null,
     "step": {
       "trip": "to:UTOWN",
-      "earlier": {
-        "svc": "R2",
-        "stop": "PGP",
-        "board": "2026-08-27T01:01:49Z"
-      },
+      "earlier": null,
       "later": {
         "svc": "D2",
         "stop": "PGP",

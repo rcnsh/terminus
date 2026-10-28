@@ -25,7 +25,7 @@
     "svc": "151",
     "stop": "IT",
     "stopCode": "IT",
-    "walkS": 2,
+    "walkS": 0,
     "rideS": 1800,
     "board": "2026-08-27T01:04:00Z",
     "arrive": "2026-08-27T01:34:00Z",
@@ -45,7 +45,7 @@
     "toStop": "College Gr"
   },
   "leave": {
-    "at": "2026-08-27T01:03:38Z",
+    "at": "2026-08-27T01:04:00Z",
     "estimated": true,
     "svc": "151",
     "stop": "IT",
@@ -53,7 +53,7 @@
     "board": "2026-08-27T01:04:00Z",
     "arrive": "2026-08-27T01:34:00Z",
     "note": null,
-    "walkS": 2,
+    "walkS": 0,
     "rideS": 1800,
     "toStop": "College Gr",
     "toCode": "CG",
@@ -93,7 +93,7 @@
     "staleAt": "2026-08-27T01:04:30Z",
     "crowd": "Crowding: low",
     "quality": "Estimated time",
-    "leaveBy": "Leave by ~09:03",
+    "leaveBy": "Leave by ~09:04",
     "leaveVia": "catch the ~09:04 151 ($) at IT",
     "catch": null,
     "arrive": null,
@@ -121,7 +121,7 @@
     "notice": null,
     "h12": false,
     "journey": {
-      "leave": "~09:03",
+      "leave": "~09:04",
       "walk": null,
       "bus": {
         "svc": "151",
@@ -150,7 +150,7 @@
       "change": null,
       "title": "To College Gr",
       "place": "College Gr",
-      "byText": "by ~09:03",
+      "byText": "by ~09:04",
       "walkText": null,
       "rideText": "30 min ride",
       "walkEndText": null,
