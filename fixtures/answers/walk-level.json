@@ -16,15 +16,15 @@
     }
   ],
   "label": "D2 · 21 min",
-  "detail": "PGP · 1 min walk · UTown in ~31 min · walking 29 min · or R2 in ~8 min",
-  "alt": "R2 · ~8 min · PGP",
+  "detail": "PGP · right here · UTown in ~31 min · walking 29 min · or R2 in ~6 min",
+  "alt": "R2 · ~6 min · PGP",
   "departsAt": "2026-08-27T01:21:04Z",
   "arriveAt": "2026-08-27T01:30:34Z",
   "bus": {
     "svc": "D2",
     "stop": "PGP",
     "stopCode": "PGP",
-    "walkS": 89,
+    "walkS": 0,
     "rideS": 570,
     "board": "2026-08-27T01:21:04Z",
     "arrive": "2026-08-27T01:30:34Z",
@@ -35,15 +35,15 @@
     "svc": "R2",
     "stop": "PGP",
     "stopCode": "PGP",
-    "walkS": 89,
+    "walkS": 0,
     "rideS": 570,
-    "board": "2026-08-27T01:07:49Z",
-    "arrive": "2026-08-27T01:17:19Z",
+    "board": "2026-08-27T01:05:30Z",
+    "arrive": "2026-08-27T01:15:00Z",
     "estimated": true,
     "toStop": "UTown"
   },
   "leave": {
-    "at": "2026-08-27T01:19:15Z",
+    "at": "2026-08-27T01:21:04Z",
     "estimated": false,
     "svc": "D2",
     "stop": "PGP",
@@ -51,18 +51,14 @@
     "board": "2026-08-27T01:21:04Z",
     "arrive": "2026-08-27T01:30:34Z",
     "note": null,
-    "walkS": 89,
+    "walkS": 0,
     "rideS": 570,
     "toStop": "UTown",
     "toCode": "UTOWN"
   },
   "steps": {
     "trip": "to:UTOWN",
-    "earlier": {
-      "svc": "R2",
-      "stop": "PGP",
-      "board": "2026-08-27T01:01:49Z"
-    },
+    "earlier": null,
     "later": {
       "svc": "D2",
       "stop": "PGP",
@@ -93,7 +89,7 @@
     "staleAt": "2026-08-27T01:15:00Z",
     "crowd": null,
     "quality": null,
-    "leaveBy": "Leave by 09:19",
+    "leaveBy": "Leave by 09:21",
     "leaveVia": "catch the 09:21 D2 at PGP",
     "catch": null,
     "arrive": null,
@@ -121,8 +117,8 @@
     "notice": null,
     "h12": false,
     "journey": {
-      "leave": "09:19",
-      "walk": "1 min",
+      "leave": "09:21",
+      "walk": null,
       "bus": {
         "svc": "D2",
         "color": "#8e44c9",
@@ -143,29 +139,25 @@
         "svc": "R2",
         "color": "#34a853",
         "stop": "PGP",
-        "board": "~09:07"
+        "board": "~09:05"
       },
       "why": null,
       "change": null,
       "title": "To UTown",
       "place": "UTown",
-      "byText": "by 09:19",
-      "walkText": "1 min walk",
+      "byText": "by 09:21",
+      "walkText": null,
       "rideText": "10 min ride",
       "walkEndText": null,
       "arriveText": "Arrive 09:30",
       "arriveWhere": "at UTown",
-      "backupText": "Or R2 at ~09:07 from PGP",
-      "summary": "Walk to PGP · D2 09:21"
+      "backupText": "Or R2 at ~09:05 from PGP",
+      "summary": "D2 09:21 at PGP"
     },
     "upcoming": null,
     "step": {
       "trip": "to:UTOWN",
-      "earlier": {
-        "svc": "R2",
-        "stop": "PGP",
-        "board": "2026-08-27T01:01:49Z"
-      },
+      "earlier": null,
       "later": {
         "svc": "D2",
         "stop": "PGP",

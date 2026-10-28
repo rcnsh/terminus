@@ -14,7 +14,17 @@
 
 import type { ArriveBy, BusChange, Candidate, Graph, Leave, ScoredOption, StopArrivals } from '../types.ts';
 import { PUBLIC, TRANSFER, WALK } from '../config.ts';
-import { beforeOpening, feedFor, headwayFor, inService, legRideS, resolveBerths, serviceClosedAt, serviceResumesAt } from './resolve.ts';
+import {
+  beforeOpening,
+  feedFor,
+  headwayFor,
+  inService,
+  legRideS,
+  readyS,
+  resolveBerths,
+  serviceClosedAt,
+  serviceResumesAt,
+} from './resolve.ts';
 import { isPublic, svcName } from './public.ts';
 import { ON_TIME_SLACK_S } from '../timetable/profile.ts';
 import { busChange, isoSeconds, shortStop } from './format.ts';
@@ -47,11 +57,15 @@ export interface LeaveInput {
 /** Nothing worth saying: leaving within this is just "now". */
 const NOW_S = 60;
 const BUFFER_MS = WALK.boardBufferS * 1000;
+/** From leaving to being ready at the stop; none when you're at it already. */
+const walkMs = (leg: { walkS: number; here?: true }) => (leg.here ? 0 : leg.walkS * 1000 + BUFFER_MS);
 
 interface Leg {
   svc: string;
   stop: { code: string; name: string };
   walkS: number;
+  /** Located at the stop (readyS). */
+  here?: true;
   rideS: number;
   off?: { code: string; name: string };
   to?: { code: string; name: string };
@@ -86,6 +100,7 @@ const legOf = (o: ScoredOption): Leg => ({
   svc: o.svc,
   stop: o.stop,
   walkS: o.walkS,
+  ...(o.here ? { here: true as const } : {}),
   rideS: o.rideS,
   off: o.off,
   to: o.to,
@@ -135,7 +150,7 @@ export function leaveBy(f: LeaveInput): Leave | null {
   if (!f.arriveBy) {
     const b = f.options[0];
     if (!b || b.quality === 'unknown') return null;
-    const at = b.fromMs + b.boardS * 1000 - b.walkS * 1000 - BUFFER_MS;
+    const at = b.fromMs + b.boardS * 1000 - walkMs(b);
     if (at - f.nowMs < NOW_S * 1000) return null;
     const endWalkS = f.endWalk?.(b) ?? 0;
     return {
@@ -237,7 +252,7 @@ function forLeg(
   risk?: CrowdRisk,
 ): LegLeave | null {
   const headway = Math.max(60, headwayFor(graph, leg.svc)) * 1000;
-  const walk = leg.walkS * 1000 + BUFFER_MS;
+  const walk = walkMs(leg);
   const venueWalkS = venueWalkOf(arriveBy, leg);
   const latestBoard = arriveBy.atMs - (ON_TIME_SLACK_S + venueWalkS + leg.rideS) * 1000;
   const arriveAfter = (boardMs: number) => boardMs + (leg.rideS + venueWalkS) * 1000;
@@ -292,7 +307,7 @@ function forLeg(
     };
   }
 
-  const earliest = nowMs + walk;
+  const earliest = nowMs + readyS(leg) * 1000;
   const buses = live.filter((b) => b.at >= earliest);
   // Past the last live time, one headway at a time, while the service runs.
   const last = live[live.length - 1].at;
@@ -431,7 +446,7 @@ function forTransfer(
 ): LegLeave | null {
   const t = leg.change!;
   const venueWalkS = venueWalkOf(arriveBy, leg);
-  const walk = leg.walkS * 1000 + BUFFER_MS;
+  const walk = walkMs(leg);
   const ride1 = leg.rideS * 1000;
   const change = (t.crossS + TRANSFER.changeBufferS) * 1000;
   const live1 = liveBuses(leg.svc, false, sa1, graph, nowMs);
@@ -450,7 +465,7 @@ function forTransfer(
     change: changeOf(t, b1.latest + ride1, b2),
   });
 
-  const earliest1 = nowMs + walk;
+  const earliest1 = nowMs + readyS(leg) * 1000;
   const by2 = arriveBy.atMs - (ON_TIME_SLACK_S + venueWalkS + t.rideS) * 1000;
   const last2 = lastBus(graph, t.svc, live2, earliest1 + ride1 + change, by2);
   const last1 = last2 && lastBus(graph, leg.svc, live1, earliest1, last2.atStop - change - ride1);
@@ -490,10 +505,10 @@ export function departures(f: LeaveInput, untilMs: number, anchor?: { svc: strin
     const live = liveBuses(leg.svc, Boolean(leg.paid), f.byStop.get(leg.stop.code), f.graph, f.nowMs);
     const t = leg.change;
     const live2 = t ? liveBuses(t.svc, false, f.byStop.get(t.stop.code), f.graph, f.nowMs) : [];
-    const walk = leg.walkS * 1000 + BUFFER_MS;
+    const walk = walkMs(leg);
     // A class's arrival is at the room; any other trip's at the stop, with the walk on beside it.
     const onS = f.arriveBy ? venueWalkOf(f.arriveBy, leg) : 0;
-    let from = f.nowMs + walk;
+    let from = f.nowMs + readyS(leg) * 1000;
     if (!live.length && anchor && anchor.svc === leg.svc && anchor.stop === leg.stop.code) {
       const headway = Math.max(60, headwayFor(f.graph, leg.svc)) * 1000;
       const at = Date.parse(anchor.board);
@@ -551,6 +566,7 @@ function fallbackLegs(cands: Candidate[], graph: Graph): Leg[] {
       svc: l.svc,
       stop: c.stop,
       walkS: c.walkS,
+      ...(c.here ? { here: true as const } : {}),
       rideS: legRideS(l),
       off: l.off,
       to: l.to,
