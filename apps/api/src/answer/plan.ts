@@ -2,7 +2,8 @@
  * Which bus a trip is about: one plan for every device. Frozen from its
  * leave-by (but a plan made without a location gives way to a located
  * answer until its bus leaves), kept for a device without a location, held
- * once you were told it unless it would make you late (answers a minute apart can prefer another:
+ * once you were told it unless it would make you late or you're now too far
+ * from its stop to catch it (answers a minute apart can prefer another:
  * the feed lists a later one, a crowd guess changes), else the fresh answer's
  * bus. See internals.md, *One plan, and push*.
  *
@@ -12,6 +13,7 @@
  */
 
 import type { Leave } from '../types.ts';
+import { WALK } from '../config.ts';
 import { type Plan, WAIT_EARLY_MS, secondBusOf, tripEnd } from './trip.ts';
 
 /** Live times move this much from one answer to the next, and it's still the same bus. */
@@ -66,6 +68,8 @@ export interface PlanInput {
   located: boolean;
   /** This request's location is at the stored plan's boarding stop: waiting for that bus. */
   atItsStop?: boolean;
+  /** This request's walk to the stored plan's stop, in seconds; null without a location. */
+  walkToItsStopS?: number | null;
   /** When the class starts, for a class; null for a trip home. */
   classAtMs: number | null;
   nowMs: number;
@@ -80,8 +84,8 @@ export interface PlanChoice {
   drop?: true;
 }
 
-export function choosePlan({ stored, made, located, atItsStop = false, classAtMs, nowMs }: PlanInput): PlanChoice {
-  const at = (iso: string | undefined) => (iso ? Date.parse(iso) : Infinity);
+export function choosePlan({ stored, made, located, atItsStop = false, walkToItsStopS = null, classAtMs, nowMs }: PlanInput): PlanChoice {
+  const at = (iso: string | null | undefined) => (iso ? Date.parse(iso) : Infinity);
   const ahead = stored?.board ? at(stored.board) > nowMs : false;
 
   // A plan made without a location starts where the timetable puts you; the
@@ -95,8 +99,14 @@ export function choosePlan({ stored, made, located, atItsStop = false, classAtMs
   // the plan's are from when the phone made it, minutes ago.
   if (!located && stored?.located && ahead) return { bus: sameBus(stored, made) ? made : stored, save: false };
 
+  // Too far from its stop to be there before its bus has gone (WALK.dwellS):
+  // the plan came from a fix somewhere else, a stray one, and holding it
+  // would send you to a stop you can't reach.
+  const outOfReach =
+    located && !atItsStop && walkToItsStopS !== null && nowMs + walkToItsStopS * 1000 > at(stored?.board) + WALK.dwellS * 1000;
   const told =
     located &&
+    !outOfReach &&
     stored?.located &&
     ahead &&
     stored.leave &&
@@ -109,5 +119,5 @@ export function choosePlan({ stored, made, located, atItsStop = false, classAtMs
 
   const save =
     made !== null && (!sameBus(stored, made) || (stored?.estimated === true && !made.estimated)) && (located || !stored?.located);
-  return guessed && !made ? { bus: null, save: false, drop: true } : { bus: made, save };
+  return (guessed || outOfReach) && !made ? { bus: null, save: false, drop: true } : { bus: made, save };
 }

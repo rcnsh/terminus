@@ -34,7 +34,7 @@ import { sgt } from '../config.ts';
 import { isoSeconds, mins, shortStop } from './format.ts';
 import { landmark, targetStops } from './landmarks.ts';
 import { atHome } from './residences.ts';
-import { paceSpeed } from './walk.ts';
+import { footM, paceSpeed } from './walk.ts';
 import { type Coords, coordsFrom } from '../http.ts';
 import { type TripView, cardFor, nextPhaseAt } from './card.ts';
 import type { TripPrefs } from '../accounts/outcomes.ts';
@@ -795,13 +795,16 @@ async function plannedTrip(env: Env, ctx: ExecutionContext, deps: MeDeps, rider:
   const located = lat !== null && lon !== null;
   const stored = day?.plans?.[key];
   const made = planOfLeave(fresh.leave, located, dest.to);
-  const itsStop = stored?.stopCode ? indexGraph(GRAPH).byCode.get(stored.stopCode) : undefined;
+  const itsStop = stored?.stopCode ? indexGraph(graphOf(stored)).byCode.get(stored.stopCode) : undefined;
   const atItsStop = located && itsStop !== undefined && haversineM(lat!, lon!, itsStop.lat, itsStop.lon) <= AT_STOP_M;
+  // By the straight line with the stop's usual detour, not the paths from where you are.
+  const walkToItsStopS = located && itsStop ? footM(lat!, lon!, itsStop) / paceSpeed(profile.walkPace) : null;
   const { bus, save, drop } = choosePlan({
     stored,
     made,
     located,
     atItsStop,
+    walkToItsStopS,
     classAtMs: dest.trip ? classStartMs(dest.trip, nowMs) : null,
     nowMs,
   });

@@ -562,7 +562,9 @@ object at the change and once the second bus has gone.
   minutes before its leave-by (at the stop, and the heads-up), the bus you
   were told stays the plan while it still gets you there on time, even if a
   fresh answer would prefer another; only one that would now make you late
-  gives way. The plan freezes at its leave-by, or when its bus
+  gives way, or one whose stop the phone is now too far from to reach
+  before its bus has gone (the straight line with the stop's detour, and
+  `WALK.dwellS`): a plan made from one stray fix a kilometre off. The plan freezes at its leave-by, or when its bus
   leaves if that comes first: after that the answer would name later buses
   (and, from a moving bus, other stops), but the trip, the card and the ride
   stay about this one, until a miss, when the card shows the next way there.

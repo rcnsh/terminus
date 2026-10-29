@@ -102,6 +102,21 @@ test('at the stop, the bus you were told stays while it still gets you there in 
   assert.deepEqual(choose({ stored, made: other, classAtMs: null }), { bus: other, save: true });
 });
 
+test('a bus you were told gives way when the phone is now too far from its stop to catch it', () => {
+  // One stray fix by KR MRT made the plan; the phone is at COM 3 now, a kilometre away.
+  const stored = bus(10, { located: true });
+  const other = bus(14, { svc: 'R2' });
+  assert.deepEqual(choose({ stored, made: other, walkToItsStopS: 13 * 60 }), { bus: other, save: true });
+  // From there it's a walk: the plan goes, so no device keeps it.
+  assert.deepEqual(choose({ stored, made: null, walkToItsStopS: 13 * 60 }), { bus: null, save: false, drop: true });
+  // Within reach, with the bus standing at the stop (WALK.dwellS) for a few seconds behind: kept.
+  assert.deepEqual(choose({ stored, made: other, walkToItsStopS: 10 * 60 + 20 }), { bus: stored, save: false });
+  // Waiting at its stop, the plan stands; from its leave-by it's frozen.
+  assert.deepEqual(choose({ stored, made: other, walkToItsStopS: 13 * 60, atItsStop: true }), { bus: stored, save: false });
+  const due = bus(1, { located: true });
+  assert.deepEqual(choose({ stored: due, made: other, walkToItsStopS: 5 * 60 }), { bus: due, save: false });
+});
+
 test('a class reached before it starts is where you are', () => {
   installGlobals(makeFetch({}));
   const cls = (arriveByMin, to) => ({ day: 4, arriveByMin, endMin: arriveByMin + 60, to, label: to, venue: '' });
