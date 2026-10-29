@@ -265,6 +265,8 @@ test('a request on the old address or an old path is counted by app and route, w
     [],
     'most requests are nothing',
   );
+  const probe = req('https://terminus.rcn.sh/wordpress/.env');
+  assert.deepEqual(legacyUses(probe, new URL(probe.url), 404), [], 'a route that does not exist is a scanner, not a client');
   assert.equal(senderOf(old), 'android/3.2.0');
   assert.equal(senderOf(req('https://terminus.rcn.sh/', { accept: 'text/html' })), 'browser');
   assert.equal(
@@ -305,6 +307,7 @@ test('the old address and paths are counted only while switched on', async () =>
   await call('https://terminus.rcn.sh/api/health?x=1', app);
   assert.equal((await call('https://bus.example.test/next', app)).status, 426);
   await call('https://bus.example.test/api/health', app);
+  assert.equal((await call('https://terminus.rcn.sh/.env.bak', {})).status, 404);
   assert.deepEqual(
     ae.rows('legacy').map((r) => r.blobs),
     [

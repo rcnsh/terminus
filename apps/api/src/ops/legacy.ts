@@ -17,9 +17,13 @@ import { analyticsEnabled, logLegacy, type LegacyRow } from './analytics.ts';
 import { collectingMemo } from './collect.ts';
 import { oldAddress, oldApiPath } from '../site/site.ts';
 
-/** What [req] used that is on its way out, given the [status] it was answered with; none for most requests. */
+/**
+ * What [req] used that is on its way out, given the [status] it was answered with; none for most requests.
+ * Nor for a 404: a route that doesn't exist is a scanner after `/.env` and the like, not a client to wait for.
+ */
 export function legacyUses(req: Request, url: URL, status: number): LegacyRow['what'][] {
   const out: LegacyRow['what'][] = [];
+  if (status === 404) return out;
   if (oldAddress(url.hostname)) out.push('address');
   const oldPath = oldApiPath(req, url);
   if (oldPath) out.push('path');
