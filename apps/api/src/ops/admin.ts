@@ -381,6 +381,17 @@ export function undismissed<T extends Record<string, unknown>>(crashes: T[], dis
   return crashes.filter((e) => !(dismissed[String(e.fingerprint)] >= aeMs(String(e.last))));
 }
 
+/** POST /api/admin/reports/delete {id}: operator only. Deletes one user report from D1 for good; 204 whether or not it was still there. */
+export async function handleDeleteReport(req: Request, env: Env, nowMs: number): Promise<Response> {
+  if (!(await isOperator(env, req, nowMs))) return json({ error: 'not found' }, 404);
+  if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405, { allow: 'POST' });
+  const b = (await req.json().catch(() => null)) as { id?: unknown } | null;
+  const id = typeof b?.id === 'string' && /^[\w-]{1,64}$/.test(b.id) ? b.id : null;
+  if (!id) return json({ error: 'id must be a report id' }, 400);
+  await env.DB?.prepare('DELETE FROM feedback WHERE id = ?').bind(id).run();
+  return new Response(null, { status: 204 });
+}
+
 /** POST /api/admin/crashes/dismiss {fingerprint}: operator only. Analytics Engine can't delete a row, so the dashboard hides it. */
 export async function handleDismissCrash(req: Request, env: Env, nowMs: number): Promise<Response> {
   if (!(await isOperator(env, req, nowMs))) return json({ error: 'not found' }, 404);
