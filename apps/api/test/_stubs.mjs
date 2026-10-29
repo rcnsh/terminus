@@ -325,6 +325,7 @@ export function ltaPayload(code, services) {
 export function makeBucket(readFrom) {
   // What put() wrote, in front of [readFrom]: the timelapse days.
   const written = new Map();
+  const metadata = new Map();
   const read = async (key) => written.get(key) ?? (await readFrom(key));
   const etagOf = (data) => {
     let h = 0;
@@ -334,7 +335,7 @@ export function makeBucket(readFrom) {
   const bucket = {
     gets: 0,
     _written: written,
-    async put(key, body) {
+    async put(key, body, opts = {}) {
       const data =
         body instanceof Uint8Array
           ? body
@@ -342,6 +343,7 @@ export function makeBucket(readFrom) {
             ? new TextEncoder().encode(body)
             : new Uint8Array(await new Response(body).arrayBuffer());
       written.set(key, data);
+      metadata.set(key, opts.customMetadata ?? {});
       return { key, size: data.length };
     },
     async list({ prefix = '' } = {}) {
@@ -352,7 +354,7 @@ export function makeBucket(readFrom) {
       const data = await read(key);
       if (!data) return null;
       const etag = etagOf(data);
-      return { size: data.length, etag, httpEtag: `"${etag}"` };
+      return { size: data.length, etag, httpEtag: `"${etag}"`, customMetadata: metadata.get(key) ?? {} };
     },
     async get(key, opts = {}) {
       const data = await read(key);

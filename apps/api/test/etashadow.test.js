@@ -69,10 +69,15 @@ test('off unless ETA_MODEL is shadow and eta is collected', async () => {
 test('each day is answered by the model of the days before it, oldest first, once', async () => {
   const { env, bucket, fetchImpl, now } = await setUp({ ETA_MODEL: 'shadow' });
   await env.KV.put('config:collect:eta', 'on');
-  // eta.ts scores both days first: newest, then the one before.
+  assert.equal(await shadowEta(env, now, fetchImpl), null, 'the older day waits for eta.ts, and the newer for it');
+  // eta.ts scores both days first, oldest first; a day it scored the older
+  // way (no version in its metadata) doesn't count.
+  await bucket.put(etaKey(DAYS[0]), JSON.stringify({ v: 1, date: DAYS[0], predictions: 0, matched: 0, services: [], rows: [] }));
+  assert.equal(await shadowEta(env, now, fetchImpl), null, 'the older day scored the older way: still waiting');
+  assert.equal(await recordEta(env, now, fetchImpl), DAYS[0], 'scored again');
+  assert.equal(readJson(bucket, etaKey(DAYS[0])).v, 2);
   assert.equal(await recordEta(env, now, fetchImpl), DAYS[1]);
-  assert.equal(await recordEta(env, now, fetchImpl), DAYS[0]);
-  assert.ok(bucket._written.has(etaKey(DAYS[0])));
+  assert.equal(await recordEta(env, now, fetchImpl), null, 'both scored');
 
   assert.equal(await shadowEta(env, now, fetchImpl), DAYS[0], 'the older day first');
   const first = readJson(bucket, shadowKey(DAYS[0]));
@@ -95,6 +100,14 @@ test('each day is answered by the model of the days before it, oldest first, onc
   assert.deepEqual(second.grid.n, [0, 1, 0, 0], 'one case, said 2 to 5 minutes ahead');
 
   assert.equal(await shadowEta(env, now, fetchImpl), null, 'both done');
+  // A day kept by an older model is run again.
+  await bucket.put(shadowKey(DAYS[0]), JSON.stringify({ ...first, v: 1 }));
+  assert.equal(await shadowEta(env, now, fetchImpl), DAYS[0]);
+  assert.equal(readJson(bucket, shadowKey(DAYS[0])).v, 2);
+  assert.deepEqual(
+    (await shadowSummary(env, now)).days.map((d) => d.date),
+    DAYS,
+  );
   const { model } = await modelBefore(bucket, '2026-08-27');
   assert.equal(model.bias['K|1'][1], 90, 'the feed is 90 s early for K');
   assert.equal(model.weights[1], 0, 'the corrected feed was exact: no weight on history');

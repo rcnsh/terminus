@@ -26,6 +26,14 @@ const HELD = { factor: 2, overS: 120 };
 /** A bus still this far from its next stop when overdue: it is held, not there. */
 const OVERDUE_LEFT_S = 10;
 /**
+ * The check (checkS): a time this far outside what history says the bus
+ * could do is wrong, for a bus seen at a stop no longer ago than [maxAgeS],
+ * on stop pairs driven at least [minN] times (fewer give no real range).
+ * On 19 October 2026 the feed held a D2 at 3 minutes from PGP for many
+ * reads while the bus was half a lap away; it came 25 to 30 minutes later.
+ */
+const CHECK = { maxAgeS: 90, marginS: 240, minN: 5 };
+/**
  * A bus said to be about there may already have reached the stop: for a
  * plate said to be 2 minutes or less away, a minute back (as eta.ts
  * scoreEtas); for a board's next bus of any plate, said to be a minute or
@@ -156,29 +164,44 @@ export function slotOf(t: number): string {
   return `${day === 0 || day === 6 ? 'we' : 'wd'}|${d.getUTCHours()}`;
 }
 
-/** Median segment times: [count, median s], by stop pair and by stop pair and slot. */
+/** Segment times: [count, median, 10th and 90th percentile s], by stop pair and by stop pair and slot. */
 export interface SegmentTable {
-  v: 1;
+  v: 2;
   /** `svc|from|to` */
-  all: Record<string, [number, number]>;
+  all: Record<string, Spread>;
   /** `svc|from|to|wd|7` */
-  slot: Record<string, [number, number]>;
+  slot: Record<string, Spread>;
 }
 
+export type Spread = [number, number, number, number];
+/** Which of a Spread's times: the median, or the quick and slow ends (the check's bounds). */
+export type Pace = 'median' | 'quick' | 'slow';
+const PACE: Record<Pace, 1 | 2 | 3> = { median: 1, quick: 2, slow: 3 };
+
+const sorted = (xs: number[]) => [...xs].sort((a, b) => a - b);
+const middle = (s: number[]) => (s.length % 2 ? s[s.length >> 1] : (s[(s.length >> 1) - 1] + s[s.length >> 1]) / 2);
+const rank = (s: number[], q: number) => s[Math.min(s.length - 1, Math.max(0, Math.ceil(q * s.length) - 1))];
+
 export function median(xs: number[]): number {
-  const s = [...xs].sort((a, b) => a - b);
-  const mid = s.length >> 1;
-  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+  return middle(sorted(xs));
 }
 
 /** The value at fraction [q] of the way up [xs] (nearest rank). */
 export function quantile(xs: number[], q: number): number {
-  const s = [...xs].sort((a, b) => a - b);
-  return s[Math.min(s.length - 1, Math.max(0, Math.ceil(q * s.length) - 1))];
+  return rank(sorted(xs), q);
 }
 
 function medians(groups: Map<string, number[]>): Record<string, [number, number]> {
   return Object.fromEntries([...groups].map(([k, xs]) => [k, [xs.length, Math.round(median(xs))]]));
+}
+
+function spreads(groups: Map<string, number[]>): Record<string, Spread> {
+  return Object.fromEntries(
+    [...groups].map(([k, xs]) => {
+      const s = sorted(xs);
+      return [k, [s.length, Math.round(middle(s)), rank(s, 0.1), rank(s, 0.9)]];
+    }),
+  );
 }
 
 function push(m: Map<string, number[]>, k: string, x: number) {
@@ -209,7 +232,7 @@ export function tableOf(days: SegmentTimes[]): SegmentTable {
       }
     }
   }
-  return { v: 1, all: medians(all), slot: medians(slot) };
+  return { v: 2, all: spreads(all), slot: spreads(slot) };
 }
 
 export function buildTable(segments: Segment[]): SegmentTable {
@@ -217,17 +240,19 @@ export function buildTable(segments: Segment[]): SegmentTable {
 }
 
 /**
- * The time from [from] to [to] at [t]: the slot's median, pulled towards
- * the stop pair's overall median the fewer it has (SLOT_PRIOR). Null with
- * no history for the pair.
+ * The time from [from] to [to] at [t]: the slot's median (or [pace]'s end),
+ * pulled towards the stop pair's overall one the fewer it has
+ * (SLOT_PRIOR). Null with no history for the pair, or for an end too
+ * little to tell one (CHECK.minN).
  */
-export function segmentS(table: SegmentTable, svc: string, from: string, to: string, t: number): number | null {
+export function segmentS(table: SegmentTable, svc: string, from: string, to: string, t: number, pace: Pace = 'median'): number | null {
   const k = `${svc}|${from}|${to}`;
+  const i = PACE[pace];
   const all = table.all[k];
-  if (!all) return null;
+  if (!all || (pace !== 'median' && all[0] < CHECK.minN)) return null;
   const slot = table.slot[`${k}|${slotOf(t)}`];
-  if (!slot) return all[1];
-  return (slot[0] * slot[1] + SLOT_PRIOR * all[1]) / (slot[0] + SLOT_PRIOR);
+  if (!slot) return all[i];
+  return (slot[0] * slot[i] + SLOT_PRIOR * all[i]) / (slot[0] + SLOT_PRIOR);
 }
 
 /**
@@ -284,11 +309,13 @@ export interface HistoryOptions {
   gate?: boolean;
   /** Segments just driven, with these settings, beside history's medians. */
   recent?: { index: RecentIndex; at: number } & Recent;
+  /** Each segment's quick or slow end instead of its median. */
+  pace?: Pace;
 }
 
 /** The time from [from] to [to] at [t]: history's median, with the buses just ahead's (HistoryOptions.recent) where there are enough. */
 function segmentWith(table: SegmentTable, svc: string, from: string, to: string, t: number, opts: HistoryOptions): number | null {
-  const hist = segmentS(table, svc, from, to, t);
+  const hist = segmentS(table, svc, from, to, t, opts.pace);
   const r = opts.recent;
   if (!r) return hist;
   const seen = recentS(r.index, svc, from, to, r.at, r.windowMs);
@@ -423,14 +450,16 @@ export function biasS(model: Pick<EtaModel, 'bias'>, svc: string, feedS: number)
 
 /**
  * Every way of answering one question, s from now; null where it can't be.
- * [history] is history alone; [gated], history through the layover gate,
- * and [recent], that with the buses just ahead (HistoryOptions), each the
- * feed's time where they can't answer, as they would be served; [blend],
- * the corrected feed with [recent]'s history.
+ * [checked] is the corrected feed through checkS; [history] is history
+ * alone; [gated], history through the layover gate, and [recent], that
+ * with the buses just ahead (HistoryOptions), each the feed's time where
+ * they can't answer, as they would be served; [blend], the corrected feed
+ * weighted with [gated]'s history, through checkS.
  */
 export interface Answers {
   feed: number | null;
   corrected: number | null;
+  checked: number | null;
   history: number | null;
   gated: number | null;
   recent: number | null;
@@ -495,6 +524,24 @@ export function historyFor(table: SegmentTable, route: Route, states: BusState[]
 }
 
 /**
+ * [s] for [q], unless history says it can't be: sooner by CHECK.marginS
+ * than the plate's bus could get there at its quickest, or later by as much
+ * than it would at its slowest on its way (gated). Then history's median,
+ * ungated for the first (a layover only adds time) and gated for the
+ * second. Only for a plate whose bus was seen at a stop in the last
+ * CHECK.maxAgeS: longer ago, it may have gone on unseen.
+ */
+export function checkS(table: SegmentTable, route: Route, states: BusState[], q: Query, s: number): number {
+  const bus = q.plate ? states.find((b) => b.plate === q.plate) : undefined;
+  if (!bus || q.t - bus.t > CHECK.maxAgeS * 1000) return s;
+  const quick = historyFor(table, route, [bus], q, { pace: 'quick' });
+  if (quick !== null && s < quick - CHECK.marginS) return historyFor(table, route, [bus], q) ?? s;
+  const slow = historyFor(table, route, [bus], q, { gate: true, pace: 'slow' });
+  if (slow !== null && s > slow + CHECK.marginS) return historyFor(table, route, [bus], q, { gate: true }) ?? s;
+  return s;
+}
+
+/**
  * When the bus [q] asks about did reach the stop: the plate's first
  * passing (or, without one, any of the service's buses') from earlyS(q)
  * before asking to 30 minutes after the time said.
@@ -533,7 +580,7 @@ export interface Case {
   feedS: number;
   actualS: number;
   answers: Answers;
-  /** History's own answers, null where it couldn't: alone, gated, and gated with the buses just ahead (the blend's). */
+  /** History's own answers, null where it couldn't: alone, gated (the blend's), and gated with the buses just ahead. */
   hist: { alone: number | null; gated: number | null; recent: number | null };
 }
 
@@ -558,14 +605,22 @@ export function casesOf(model: EtaModel, routes: Record<string, Route>, rec: Rec
       gated: historyFor(model.table, route, buses, q, { gate: true }),
       recent: historyFor(model.table, route, buses, q, { gate: true, recent: { ...recent, index: driven, at: q.t } }),
     };
-    const blended = predictS(model, q.svc, q.etaS, hist.recent);
+    const blended = predictS(model, q.svc, q.etaS, hist.gated);
+    const check = (s: number) => checkS(model.table, route, buses, q, s);
     out.push({
       svc: q.svc,
       stop: q.stop,
       t: q.t,
       feedS: q.etaS,
       actualS: (came - q.t) / 1000,
-      answers: { ...blended, history: hist.alone, gated: hist.gated ?? q.etaS, recent: hist.recent ?? q.etaS },
+      answers: {
+        ...blended,
+        checked: check(blended.corrected!),
+        blend: check(blended.blend!),
+        history: hist.alone,
+        gated: hist.gated ?? q.etaS,
+        recent: hist.recent ?? q.etaS,
+      },
       hist,
     });
   }
@@ -576,9 +631,8 @@ const WEIGHT_STEPS = 10;
 
 /**
  * For each horizon, the blend's summed absolute error at each weight on
- * history from 0 to 1 in tenths, over the cases the blend's history (gated,
- * with the buses just ahead) could answer, and
- * how many there were. Sums add up across days, so a day's grid can be kept
+ * history from 0 to 1 in tenths, over the cases the blend's history
+ * (gated) could answer, and how many there were, before checkS. Sums add up across days, so a day's grid can be kept
  * and the weights fitted from many.
  */
 export interface WeightGrid {
@@ -590,7 +644,7 @@ export function weightGrid(model: Pick<EtaModel, 'bias'>, cases: Case[]): Weight
   const sums = HORIZONS.map(() => Array.from({ length: WEIGHT_STEPS + 1 }, () => 0));
   const n = HORIZONS.map(() => 0);
   for (const c of cases) {
-    const hist = c.hist.recent;
+    const hist = c.hist.gated;
     if (hist === null) continue;
     const h = horizonOf(c.feedS);
     const corrected = Math.max(0, c.feedS + biasS(model, c.svc, c.feedS));
@@ -670,7 +724,7 @@ export function errorStats(errs: number[]): ErrorStats {
   };
 }
 
-export const METHODS = ['feed', 'corrected', 'history', 'gated', 'recent', 'blend'] as const;
+export const METHODS = ['feed', 'corrected', 'checked', 'history', 'gated', 'recent', 'blend'] as const;
 export type Method = (typeof METHODS)[number];
 
 /**

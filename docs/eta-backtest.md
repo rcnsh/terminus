@@ -1,5 +1,64 @@
 # Arrival-time backtest: results
 
+## Round 3: production days, walked forward, and the check
+
+**The checked feed beats the feed by a tenth, on every day.** On the
+stable site's recorder days from 7 to 28 October 2026, with the feed's
+plated predictions from Analytics Engine, each weekday from 12 October
+was answered by a model built only from the days before it (up to 28),
+as the shadow does. That's 13 test days and 3,369 questions history
+could answer.
+
+| method | MAE | p90 | under 2 min | 2 to 5 | 5 to 10 | 10 to 30 | days beating the feed |
+|---|---|---|---|---|---|---|---|
+| feed | 110.0 s | 179.3 s | 78.9 | 121.5 | 60.0 | 134.4 | |
+| corrected | 106.0 s | 163.7 s | 77.9 | 120.9 | 56.4 | 128.6 | 13 of 13 |
+| **checked** | **99.1 s** | **159.2 s** | 70.6 | 104.6 | 56.4 | 121.6 | **13 of 13** |
+| history | 267.0 s | 753.6 s | 87.1 | 113.8 | 140.0 | 404.8 | |
+| history+gate | 106.0 s | 170.4 s | 77.6 | 121.9 | 59.4 | 127.0 | |
+| history+gate+recent | 109.5 s | 179.4 s | 78.7 | 124.9 | 64.1 | 130.8 | |
+| blend | 99.0 s | 160.9 s | 68.5 | 103.7 | 55.8 | 122.4 | 12 of 13 |
+
+The horizon columns are MAE in seconds.
+
+- **The feed's errors are mostly a few big ones.** Its median error is
+  under a minute, but the 5% of questions it got over 5 minutes wrong
+  make up 44% of its absolute error. The corrected feed can't fix those,
+  since a median shift only moves the middle.
+- **Many of them are times history can rule out.** On 19 October the
+  feed held a D2 at about 3 minutes from PGP for many reads in a row,
+  while the bus was on the far side of its loop (MUSEUM, UHC-OPP). It came
+  25 to 30 minutes later, close to what history said. The gate had handed
+  these to the feed, since the way there passes COM3, where buses wait.
+  But a wait only adds time, so history at its quickest is still a floor.
+- **The check** (eta-model.md, *The model*, 7) uses that: a time over 4
+  minutes outside what the bus could do, at its quickest or at its
+  slowest on its way, gives way to history's median. It only counts when
+  the bus was seen at a stop in the last 90 s. Without that limit it
+  misfired on buses last seen 8 to 17 minutes before, which had gone on
+  unseen. It changes about 1 answer in 100, never made a day worse, and
+  cut 19 October's MAE from 401 s to 325 s. The 4 minutes and 90 s were
+  the strictest of the settings tried (1, 2 or 4 minutes; 90, 180 or
+  300 s, or the bus's segment): looser ones gained a little more on
+  average and lost on some days.
+- **The buses just ahead hurt** on production days, at every setting
+  tried (minimum 2 or 3, history's median worth 0, 4 or 10). The blend now
+  weights gated history instead. The blend and the checked feed tie
+  overall, but the blend's 10-to-30-minute weight on history went to 0.9
+  or 1 from 20 October, and lost on that day (120 s against 105 s).
+- **Finer feed corrections don't help.** A bias per stop, or per minute
+  of the feed's time, did no better than per service and horizon.
+- **Departures were scored as arrivals.** A time at COM3 for a D1 or D2
+  leaving (the `-S` berth) was matched with the bus's arrival there,
+  minutes earlier or a lap later: 176 predictions with a MAE of 793 s,
+  adding about 30 s to every method's MAE in the shadow days so far. They
+  aren't scored now, by eta.ts, the shadow or the backtest. The rest of
+  this round leaves them out too.
+- **Unused history.** The recorder has run since 7 October, but the
+  shadow model built only on days it had scored itself, from 20 October.
+  Both eta.ts and the shadow now look 28 days back, so the shadow runs
+  every recorded day from the start, in order.
+
 ## Round 2: the gate and the buses just ahead (the same morning)
 
 **Still nothing beats the feed overall, but history got much better.** On
