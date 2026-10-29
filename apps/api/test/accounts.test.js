@@ -1601,6 +1601,30 @@ test('feedback: a reason picked from the sheet is enough on its own, said in wor
     await worker.fetch(new Request(BASE + '/api/admin/stats', { headers: { 'x-health-token': 'operator-secret' } }), env, makeCtx())
   ).json();
   assert.deepEqual(stats.feedback.latest.map((f) => f.reason).sort(), ['The bus never came', 'The times were off']);
+
+  const del = (body, headers = { 'x-health-token': 'operator-secret' }) =>
+    worker.fetch(
+      new Request(BASE + '/api/admin/reports/delete', {
+        method: 'POST',
+        headers: { ...headers, 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+      env,
+      makeCtx(),
+    );
+  const gone = stats.feedback.latest.find((f) => f.reason === 'The bus never came').id;
+  assert.equal((await del({ id: gone }, {})).status, 404, 'operator only');
+  assert.equal((await del({ id: 'not one' })).status, 400);
+  assert.equal(db._db.prepare('SELECT count(*) AS n FROM feedback').get().n, 2);
+  assert.equal((await del({ id: gone })).status, 204);
+  assert.equal((await del({ id: gone })).status, 204, 'already gone');
+  assert.deepEqual(
+    db._db
+      .prepare('SELECT reason FROM feedback')
+      .all()
+      .map((r) => r.reason),
+    ['times-off'],
+  );
 });
 
 test('feedback: the iPhone app sends both kinds as platform ios; an unknown platform is refused', async () => {
