@@ -212,6 +212,8 @@ feed said, with the plate) with the timelapse recording of the same day
 (where each plate was along its line every 30 s), and keeps the result in
 R2 as `eta/YYYY-MM-DD.json` (`src/ops/eta.ts`): per prediction, the service,
 how far ahead it was, how much later than said the bus came, and the hour.
+A time for a bus leaving a route's first stop (`blob9`, the berth, ending
+`-S`) isn't scored: its arrival there says nothing about when it leaves.
 It needs the recorder on, the R2 bucket, `ANALYTICS_TOKEN` and
 `CF_ACCOUNT_ID`; it
 calls nobody but Analytics Engine. A bus counts as arrived 25 m before its

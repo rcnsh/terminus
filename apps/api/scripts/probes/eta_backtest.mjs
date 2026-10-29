@@ -37,7 +37,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { GRAPH } from '../../src/answer/graph.ts';
-import { HORIZONS, aeTime, passingsOf } from '../../src/ops/eta.ts';
+import { HORIZONS, aeTime, departs, passingsOf } from '../../src/ops/eta.ts';
 import { windowOf } from '../../src/map/timelapse.ts';
 import { SGT_MS } from '../../src/config.ts';
 import {
@@ -133,8 +133,9 @@ for (const path of recordings) {
 
 /**
  * The feed's predictions in [path]: JSON lines of {t, svc, plate, stop,
- * etaS}, or Analytics Engine's SQL reply as it comes ({data: [{plate, stop,
- * svc, eta, timestamp}]}, the query in docs/eta-model.md).
+ * etaS, berth?}, or Analytics Engine's SQL reply as it comes ({data:
+ * [{plate, stop, svc, berth, eta, timestamp}]}, the query in
+ * docs/eta-model.md).
  */
 function predictionsIn(path) {
   const text = readFileSync(path, 'utf8');
@@ -151,6 +152,7 @@ function predictionsIn(path) {
       plate: String(r.plate),
       stop: String(r.stop),
       etaS: Number(r.eta),
+      ...(r.berth ? { berth: String(r.berth) } : {}),
     }));
   }
   return jsonLines(path);
@@ -161,12 +163,13 @@ for (let i = 0; i < days.length; i++) {
   const day = JSON.parse((days[i].endsWith('.gz') ? gunzipSync(raw) : raw).toString('utf8'));
   const passings = passingsOf(day);
   // The day's own predictions (one file can serve several days), each
-  // cached answer once (as eta.ts scoreEtas), up to 30 minutes ahead.
+  // cached answer once and none for a bus leaving its first stop (as eta.ts
+  // scoreEtas), up to 30 minutes ahead.
   const { open, close } = windowOf(day.date);
   const seen = new Set();
   const queries = predictionsIn(predictionFiles[i])
     .filter((q) => {
-      if (!(q.t >= open && q.t < close && q.etaS >= 0 && q.etaS <= 30 * 60)) return false;
+      if (!(q.t >= open && q.t < close && q.etaS >= 0 && q.etaS <= 30 * 60) || departs(q)) return false;
       const once = `${q.svc}|${q.plate}|${q.stop}|${Math.floor(q.t / 15_000)}`;
       if (seen.has(once)) return false;
       seen.add(once);
@@ -246,13 +249,16 @@ p();
 p(
   "Methods: **feed**, the feed's time as served; **corrected**, plus the feed's median error at that horizon for that service in training;",
 );
+p(
+  "**checked**, corrected, or history's time where corrected is over 4 minutes outside what the plate's bus could do (seen in the last 90 s);",
+);
 p("**history**, the bus's last stop and the segment medians on from it; **history+gate**, history only where the bus needn't");
 p("leave a route's first stop (where buses wait for their departure time), the feed's time otherwise; **history+gate+recent**,");
 p(
   `that with each segment's median from the service's buses just ahead (the last ${recent.windowMs / 60_000} min, ` +
     `at least ${recent.minN}, ${recent.prior ? `history's median worth ${recent.prior}` : 'replacing history'}) where there are enough;`,
 );
-p('**blend**, history+gate+recent and corrected, weighted per horizon (corrected where the gate refuses).');
+p('**blend**, history+gate and corrected, weighted per horizon (corrected where the gate refuses), then checked.');
 p();
 p('## Errors in seconds (actual minus predicted: positive is the bus coming later)');
 p();

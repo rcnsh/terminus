@@ -13,14 +13,15 @@ import { Card, Empty, S, Segmented, Table, Tile, dayLong, dayShort, fmt, pct } f
 export const METHODS = [
   ['feed', 'Feed', 'The feed’s time, as users see it now.'],
   ['corrected', 'Corrected feed', 'The feed’s time plus its usual error for that service and horizon.'],
+  ['checked', 'Checked', 'The corrected feed, or history’s time when the feed’s is far outside what the bus could do.'],
   ['history', 'History', 'Segment times alone, from the bus’s last stop.'],
   ['gated', 'History, gated', 'History, but the feed’s time at a layover or for a held bus.'],
   ['recent', 'With buses ahead', 'Gated history, using the buses that just drove each segment.'],
-  ['blend', 'Blend', 'The corrected feed and history, weighted per horizon: what would ship.'],
+  ['blend', 'Blend', 'The corrected feed and gated history, weighted per horizon, then checked: what would ship.'],
 ];
 const LABEL = Object.fromEntries(METHODS.map(([k, l]) => [k, l]));
-/** The chart's lines: five colours, so raw history (far off beyond 2 minutes) is in the tables only. */
-const CHARTED = ['feed', 'corrected', 'gated', 'recent', 'blend'];
+/** The chart's lines: five colours, so raw history (far off beyond 2 minutes) and the buses ahead are in the tables only. */
+const CHARTED = ['feed', 'corrected', 'checked', 'gated', 'blend'];
 const METRICS = [
   ['mae', 'Mean error'],
   ['p90', '90th percentile'],

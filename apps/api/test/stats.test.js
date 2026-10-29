@@ -463,6 +463,7 @@ test('each prediction is scored against its own plate at its own stop, and a cac
       p(open + 31_000, 0), // the same cached answer, a second later
       p(open + 60_000, Math.round((came - open - 60_000) / 1000) + 45), // said 45 s too late
       p(open + 60_000, 120, 'PZ9Z'), // a plate never seen: not scored
+      { ...p(open + 90_000, 30), berth: 'PGP-K-S' }, // leaving its first stop: not scored, nor counted
     ],
     passingsOf(day),
   );
@@ -513,8 +514,10 @@ test('the cron scores a closed day once, from the recording and Analytics Engine
   await env.KV.put('config:collect:eta', 'on');
   assert.equal(await recordEta(env, now, fetchImpl), DATE);
   assert.match(queries[0], /blob1 = 'arrival'/);
+  assert.match(queries[0], /blob9 AS berth/);
+  assert.match(queries[0], /INTERVAL '2' DAY\s+AND timestamp < NOW\(\) - INTERVAL '1' HOUR/, "the day's window, not everything since");
   const kept = JSON.parse(new TextDecoder().decode(bucket._written.get(etaKey(DATE))));
-  assert.deepEqual({ ...kept, rows: undefined }, { v: 1, date: DATE, predictions: 1, matched: 1, services: ['K'], rows: undefined });
+  assert.deepEqual({ ...kept, rows: undefined }, { v: 2, date: DATE, predictions: 1, matched: 1, services: ['K'], rows: undefined });
   assert.deepEqual(kept.rows[0].slice(2), [-30, 6], 'the bus came 30 s before it said, at 6');
   assert.equal(await recordEta(env, now + 900_000, fetchImpl), null, 'scored once');
 

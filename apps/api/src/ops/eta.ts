@@ -30,6 +30,8 @@ const LATE_LIMIT_MS = 30 * 60_000;
 const MAX_ETA_S = 30 * 60;
 /** Rows kept per day, so one busy day can't make a huge file. */
 const MAX_ROWS = 20_000;
+/** A recorded day this many days back not yet scored is still picked up: the model's window (etashadow.ts). */
+const SCORE_DAYS = 28;
 
 export const etaKey = (date: string) => `eta/${date}.json`;
 
@@ -51,6 +53,17 @@ export interface Prediction {
   /** The rows this one stands for: Analytics Engine samples at high volume
    *  (its `_sample_interval`). 1 when absent. */
   w?: number;
+  /** The feed's busStopCode: `-S` at a route's first stop is a bus leaving (see departs). */
+  berth?: string;
+}
+
+/**
+ * A time for a bus leaving a route's first stop (the `-S` berth), not
+ * arriving: buses wait there for their departure time, so its arrival,
+ * minutes before, says nothing about it. Not scored.
+ */
+export function departs(p: Pick<Prediction, 'berth'>): boolean {
+  return !!p.berth?.toUpperCase().endsWith('-S');
 }
 
 /** One scored prediction: [errS] is how much later than said the bus came (negative: earlier). */
@@ -62,9 +75,18 @@ export interface Scored {
   hour: number;
 }
 
-/** The day as kept in R2: rows are [service index, etaS, errS, hour]. */
+/**
+ * How eta.ts scores a day: kept as the file's `v` and in its R2 metadata,
+ * so a day scored the older way is scored again (2: departures left out).
+ */
+export const ETA_V = 2;
+
+/** Whether the R2 object [head] is a day scored as ETA_V says. */
+export const scoredNow = (head: R2Object | null) => head?.customMetadata?.v === String(ETA_V);
+
+/** The day as kept in R2: rows are [service index, etaS, errS, hour]. Version 1 has the same rows, departures in. */
 export interface EtaDay {
-  v: 1;
+  v: 1 | typeof ETA_V;
   date: string;
   /** Predictions read (after dropping repeats of one cached answer), and how
    *  many found their bus, each sampled row counted for the rows it stands
@@ -154,8 +176,9 @@ export function passingsOf(day: DayFile): Passing[] {
  * the moment it was given (a minute earlier for one that said under two
  * minutes, since a bus about to arrive may already be there), to
  * LATE_LIMIT_MS after the time it said. A prediction that never found its
- * bus (off its line, or a gap in the recording) isn't scored. Repeats of
- * one cached answer (the same plate, stop and 15 s) count once.
+ * bus (off its line, or a gap in the recording) isn't scored, nor is a
+ * bus leaving its first stop (departs). Repeats of one cached answer (the
+ * same plate, stop and 15 s) count once.
  */
 export function scoreEtas(predictions: Prediction[], passings: Passing[]): { scored: Scored[]; predictions: number; matched: number } {
   const byKey = new Map<string, number[]>();
@@ -170,7 +193,7 @@ export function scoreEtas(predictions: Prediction[], passings: Passing[]): { sco
   let count = 0;
   let matched = 0;
   for (const p of predictions) {
-    if (!(p.etaS >= 0 && p.etaS <= MAX_ETA_S) || !p.plate) continue;
+    if (!(p.etaS >= 0 && p.etaS <= MAX_ETA_S) || !p.plate || departs(p)) continue;
     const once = `${p.svc}|${p.plate}|${p.stop}|${Math.floor(p.t / 15_000)}`;
     if (seen.has(once)) continue;
     seen.add(once);
@@ -195,13 +218,16 @@ export function aeTime(s: unknown): number {
 /** The predictions logged inside day [date]'s recording window, from Analytics Engine. */
 export async function predictionsFor(env: Env, date: string, nowMs: number, fetchImpl: typeof fetch): Promise<Prediction[]> {
   const { open, close } = windowOf(date);
-  // Days back to reach the window's start, with one to spare.
+  // Days back to reach the window's start, with one to spare, and whole
+  // hours back to its close, at most: Analytics Engine's SQL counts back from now.
   const days = Math.ceil((nowMs - open) / DAY) + 1;
+  const hours = Math.max(0, Math.floor((nowMs - close) / 3_600_000));
   const dataset = env.AE_DATASET || 'terminus';
   const rows = await aeSql(
     env,
-    `SELECT blob6 AS plate, blob2 AS stop, blob3 AS svc, double1 AS eta, _sample_interval AS w, timestamp FROM ${dataset}
-      WHERE blob1 = 'arrival' AND blob6 != '' AND timestamp > NOW() - INTERVAL '${days}' DAY`,
+    `SELECT blob6 AS plate, blob2 AS stop, blob3 AS svc, blob9 AS berth, double1 AS eta, _sample_interval AS w, timestamp FROM ${dataset}
+      WHERE blob1 = 'arrival' AND blob6 != '' AND timestamp > NOW() - INTERVAL '${days}' DAY
+      AND timestamp < NOW() - INTERVAL '${hours}' HOUR`,
     fetchImpl,
   );
   return rows
@@ -212,6 +238,7 @@ export async function predictionsFor(env: Env, date: string, nowMs: number, fetc
       svc: String(r.svc),
       etaS: Number(r.eta),
       w: Number(r.w) >= 1 ? Number(r.w) : 1,
+      ...(r.berth ? { berth: String(r.berth) } : {}),
     }))
     .filter((p) => p.t >= open && p.t < close)
     .sort((a, b) => a.t - b.t);
@@ -230,7 +257,7 @@ export async function scoreDay(env: Env, date: string, nowMs: number, fetchImpl:
   const services = [...new Set(scored.map((s) => s.svc))].sort();
   const index = new Map(services.map((s, i) => [s, i]));
   return {
-    v: 1,
+    v: ETA_V,
     date,
     predictions,
     matched,
@@ -240,8 +267,8 @@ export async function scoreDay(env: Env, date: string, nowMs: number, fetchImpl:
 }
 
 /**
- * The cron's step: the newest of the last two recorded days not yet
- * scored, one a run. Needs the recording (so the recorder has closed the
+ * The cron's step: the oldest of the last SCORE_DAYS recorded days not yet
+ * scored (as ETA_V says), one a run, the order the shadow model needs them in. Needs the recording (so the recorder has closed the
  * day) and Analytics Engine's SQL API to read the predictions with.
  */
 export async function recordEta(env: Env, nowMs: number, fetchImpl: typeof fetch = fetch): Promise<string | null> {
@@ -249,14 +276,19 @@ export async function recordEta(env: Env, nowMs: number, fetchImpl: typeof fetch
   // The latest service day may still be recording (or closed an hour ago,
   // before the next opens): only a closed window is done.
   const previous = (date: string) => new Date(Date.parse(`${date}T00:00:00Z`) - DAY).toISOString().slice(0, 10);
-  let date = serviceDate(nowMs);
-  if (windowOf(date).close > nowMs) date = previous(date);
-  for (let i = 0; i < 2; date = previous(date), i++) {
-    if (await env.FILES.head(etaKey(date))) continue;
+  let latest = serviceDate(nowMs);
+  if (windowOf(latest).close > nowMs) latest = previous(latest);
+  const dates = [latest];
+  while (dates.length < SCORE_DAYS) dates.unshift(previous(dates[0]));
+  for (const date of dates) {
+    if (scoredNow(await env.FILES.head(etaKey(date)))) continue;
     if (!(await env.FILES.head(dayKey(date)))) continue;
     const scored = await scoreDay(env, date, nowMs, fetchImpl);
     if (!scored) continue;
-    await env.FILES.put(etaKey(date), JSON.stringify(scored), { httpMetadata: { contentType: 'application/json' } });
+    await env.FILES.put(etaKey(date), JSON.stringify(scored), {
+      httpMetadata: { contentType: 'application/json' },
+      customMetadata: { v: String(ETA_V) },
+    });
     return date;
   }
   return null;
@@ -296,7 +328,7 @@ export async function etaSummary(env: Env, nowMs: number, days = 14): Promise<Re
   const dates = Array.from({ length: days }, (_, i) => new Date(nowMs + SGT_MS - (i + 1) * DAY).toISOString().slice(0, 10));
   const kept = (
     await Promise.all(dates.map(async (d) => (await env.FILES!.get(etaKey(d)))?.json<EtaDay>().catch(() => null) ?? null))
-  ).filter((d): d is EtaDay => d?.v === 1);
+  ).filter((d): d is EtaDay => d?.v === 1 || d?.v === ETA_V);
   const all: Scored[] = kept.flatMap((d) => d.rows.map(([s, etaS, errS, hour]) => ({ svc: d.services[s], etaS, errS, hour })));
   const group = <K extends string | number>(key: (s: Scored) => K) => {
     const m = new Map<K, number[]>();

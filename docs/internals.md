@@ -2030,22 +2030,24 @@ off when unset or unreadable):
   and 30 days, in all, by app and devices by version, and writes only the
   totals (KV `usage:day` marks the day done). D1 alone only knows "now";
   these rows give the dashboard its month.
-- `eta` ([`src/ops/eta.ts`](../apps/api/src/ops/eta.ts)): the cron scores the newest closed
-  recording day not yet scored, one a run, by joining its `arrival` rows
+- `eta` ([`src/ops/eta.ts`](../apps/api/src/ops/eta.ts)): the cron scores the oldest closed
+  recording day of the last 28 not yet scored its current way (`ETA_V`, kept in the file's R2
+  metadata), one a run, by joining its `arrival` rows
   (read back through Analytics Engine's SQL API) with the timelapse file:
   `passingsOf` reads when each plate passed 25 m before each stop along its
   line, interpolated between readings (gaps over 2 minutes and impossible
   speeds skipped; a one-way route's first stop is a start, not an arrival);
   `scoreEtas` gives each prediction its plate's first arrival, counting one
-  cached answer once. The result is `eta/YYYY-MM-DD.json` in the downloads
+  cached answer once, and none for a bus leaving its first stop (the `-S`
+  berth, whose arrival says nothing about when it leaves). The result is `eta/YYYY-MM-DD.json` in the downloads
   bucket, read for the last 14 days by the dashboard. A day recorded on a
   route line this deploy doesn't have is skipped for that service. It makes
   no call to NUS.
   With the `ETA_MODEL` var `shadow` as well, the next step
   ([`src/ops/etashadow.ts`](../apps/api/src/ops/etashadow.ts)) answers the same day's
   predictions with the arrival-time model ([`src/ops/etamodel.ts`](../apps/api/src/ops/etamodel.ts):
-  segment medians from earlier days, the feed's usual error, a blend), built
-  only from the 28 days before, and keeps the errors as
+  segment times from earlier days, the feed's usual error, a check against
+  where the bus is, a blend), oldest day first, built only from the 28 days before, and keeps the errors as
   `eta/model/YYYY-MM-DD.json` and the day's segment times as
   `eta/segments/YYYY-MM-DD.json`. Nobody is shown its times;
   [eta-model.md](eta-model.md) has the design and what it needs first.

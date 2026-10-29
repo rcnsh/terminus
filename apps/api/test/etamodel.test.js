@@ -9,6 +9,7 @@ import { readFileSync } from 'node:fs';
 
 import { placeBuses } from '../src/map/buses.ts';
 import {
+  checkS,
   actualFor,
   biasS,
   buildTable,
@@ -181,12 +182,15 @@ test('a segment takes its slot median, pulled towards its overall median the few
   const table = buildTable(segs);
   assert.equal(slotOf(weekday8), 'wd|8');
   assert.equal(slotOf(Date.UTC(2026, 9, 24, 2)), 'we|10', 'Saturday');
-  assert.deepEqual(table.all['L|A|B'], [8, 120]);
-  assert.deepEqual(table.slot['L|A|B|wd|8'], [3, 62]);
+  assert.deepEqual(table.all['L|A|B'], [8, 120, 60, 120], 'count, median, 10th and 90th percentile');
+  assert.deepEqual(table.slot['L|A|B|wd|8'], [3, 62, 60, 64]);
   // (3 × 62 + 4 × 120) / 7
   assert.equal(Math.round(segmentS(table, 'L', 'A', 'B', weekday8)), 95);
   assert.equal(segmentS(table, 'L', 'A', 'B', weekday8 + 3 * 3600 * S), 120, 'an hour with none: the overall median');
   assert.equal(segmentS(table, 'L', 'B', 'C', weekday8), null, 'a pair never driven');
+  // (3 × 60 + 4 × 60) / 7, and (3 × 64 + 4 × 120) / 7
+  assert.equal(segmentS(table, 'L', 'A', 'B', weekday8, 'quick'), 60);
+  assert.equal(Math.round(segmentS(table, 'L', 'A', 'B', weekday8, 'slow')), 96);
 });
 
 /** A table with the same time for each segment, in every slot. */
@@ -328,6 +332,40 @@ test('the blend: the feed corrected by its usual error, weighted with history pe
   assert.equal(predictS(model, 'L', 5, null).corrected, 0, 'never in the past');
 });
 
+test("the check: a time far outside what history says the bus could do gives way to history's", () => {
+  // B to C takes 60 to 120 s (90 s the median); C to D 50 s, D to A 100 s, A to B 60 s. Each driven 5 times or more (CHECK.minN).
+  const five = (segments) => segments.flatMap((g) => Array(5).fill(g));
+  const table = buildTable([
+    ...[60, 90, 90, 90, 120].map((s) => ({ svc: 'L', from: 'B', to: 'C', t: T0, s })),
+    ...five(Object.entries({ CD: 50, DA: 100, AB: 60 }).map(([pair, s]) => ({ svc: 'L', from: pair[0], to: pair[1], t: T0, s }))),
+  ]);
+  const q = (s, o = {}) => ({ t: T0, svc: 'L', stop: 'C', etaS: s, plate: 'PA1', ...o });
+  // From D, 30 s in: at its quickest 70 + 60 + 60 = 190 s to C, through A.
+  const fromD = [{ plate: 'PA1', stop: 'D', t: T0 - 30 * S }];
+  assert.equal(checkS(table, LOOP, fromD, q(200), 200), 200, 'about right: the feed');
+  assert.equal(checkS(table, LOOP, fromD, q(0), 0), 0, 'under 4 minutes sooner than its quickest: the feed');
+  // On its way from B to D, at its slowest 120 + 50 = 170 s.
+  const fromB = [{ plate: 'PA1', stop: 'B', t: T0 }];
+  assert.equal(checkS(table, LOOP, fromB, q(420, { stop: 'D' }), 420), 140, 'over 4 minutes later than its slowest: the median');
+  assert.equal(checkS(table, LOOP, fromB, q(400, { stop: 'D' }), 400), 400);
+  assert.equal(checkS(table, LOOP, fromD, q(900), 900), 900, 'through A, the first stop, it may wait: no slowest');
+
+  // The bus left C 70 s ago, so it has a lap to come round: at the quickest 130 + 300 + 60 + 90 = 580 s.
+  const lapSegments = Object.entries({ CD: 200, DA: 300, AB: 60, BC: 90 }).map(([pair, s]) => ({
+    svc: 'L',
+    from: pair[0],
+    to: pair[1],
+    t: T0,
+    s,
+  }));
+  const lap = buildTable(five(lapSegments));
+  const left = [{ plate: 'PA1', stop: 'C', t: T0 - 70 * S }];
+  assert.equal(checkS(lap, LOOP, left, q(30), 30), 580, 'said 30 s: history, ungated, since a layover only adds time');
+  assert.equal(checkS(lap, LOOP, [{ ...left[0], t: T0 - 100 * S }], q(30), 30), 30, 'seen 100 s ago: it may have gone on unseen');
+  assert.equal(checkS(lap, LOOP, left, q(30, { plate: undefined }), 30), 30, 'no plate: no bus to check');
+  assert.equal(checkS(buildTable(lapSegments), LOOP, left, q(30), 30), 30, 'each driven once: too little to rule anything out');
+});
+
 /**
  * A morning on route L: [buses] buses a lap apart in time, each driving
  * the segments of TABLE exactly, with the feed asked at every stop each
@@ -363,7 +401,7 @@ function morning({ minutes, buses = 3, feedErrS = 0, noise = () => 0 }) {
 test('fitted on a morning where the feed says a minute too soon, the model learns the minute and beats the feed', () => {
   const train = morning({ minutes: 60, feedErrS: 60 });
   const model = fitModel({ L: LOOP }, [train]);
-  assert.deepEqual(model.table.all['L|B|C'], [36, 90]);
+  assert.deepEqual(model.table.all['L|B|C'], [36, 90, 90, 90]);
   assert.equal(model.bias['*|1'][1], 60, 'the bus comes a minute after the feed said');
   const cases = casesOf(model, { L: LOOP }, morning({ minutes: 30, feedErrS: 60 }));
   const scored = scoreCases(cases);

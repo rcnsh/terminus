@@ -1,8 +1,8 @@
 /**
  * The arrival-time model (etamodel.ts) run in shadow, beside eta.ts's
  * scoring of the feed: nobody is shown its times. Once a run, the cron takes
- * the oldest closed day of the last CATCH_UP_DAYS that eta.ts has scored and
- * this hasn't, scores it with a model built from the HISTORY_DAYS before it,
+ * the oldest recorded day of the last CATCH_UP_DAYS this hasn't scored
+ * (waiting for eta.ts to score it first), scores it with a model built from the HISTORY_DAYS before it,
  * and keeps its segment times and errors in the R2 bucket. Nothing
  * calls NUS. Off unless ETA_MODEL is "shadow" and the operator collects `eta`.
  * See docs/eta-model.md, *In shadow*.
@@ -12,7 +12,18 @@ import type { Env } from '../types.ts';
 import { GRAPH } from '../answer/graph.ts';
 import { collecting } from './collect.ts';
 import { type DayFile, dayKey, serviceDate, windowOf } from '../map/timelapse.ts';
-import { type EtaDay, type Passing, type Prediction, etaKey, gunzipJson, passingsOf, predictionsFor } from './eta.ts';
+import {
+  type EtaDay,
+  type Passing,
+  type Prediction,
+  departs,
+  etaKey,
+  gunzipJson,
+  passingsOf,
+  predictionsFor,
+  scoredNow,
+  ETA_V,
+} from './eta.ts';
 import {
   type EtaModel,
   type ErrorStats,
@@ -34,8 +45,10 @@ import {
 const DAY = 86_400_000;
 /** Days of history the model is built from. */
 const HISTORY_DAYS = 28;
-/** A scored day this many days back not yet run in shadow is still picked up. */
-const CATCH_UP_DAYS = 3;
+/** A recorded day this many days back not yet run in shadow is still picked up: the whole window, so it fills as it's recorded. */
+const CATCH_UP_DAYS = HISTORY_DAYS;
+/** ShadowDay's version: a day kept by an older model is run again, and its grid isn't this blend's. */
+const SHADOW_V = 2;
 /** Predictions further ahead than this aren't scored (as eta.ts). */
 const MAX_ETA_S = 30 * 60;
 
@@ -56,7 +69,7 @@ export interface SegmentDay {
 
 /** One day answered by the model the days before it built. */
 export interface ShadowDay {
-  v: 1;
+  v: typeof SHADOW_V;
   date: string;
   /** What the model was built from: days with segment times, and stop pairs known. */
   built: { days: number; pairs: number };
@@ -102,9 +115,9 @@ export async function modelBefore(bucket: R2Bucket, date: string): Promise<{ mod
   const kept = segments.filter((s): s is SegmentDay => s?.v === 1);
   // eta.ts's rows are the feed's errors, the bus's arrival minus the time said.
   const errors = scored
-    .filter((d): d is EtaDay => d?.v === 1)
+    .filter((d): d is EtaDay => d?.v === 1 || d?.v === ETA_V)
     .flatMap((d) => d.rows.map(([s, etaS, errS]) => ({ svc: d.services[s], feedS: etaS, errS })));
-  const grids = shadows.filter((s): s is ShadowDay => s?.v === 1).map((s) => s.grid);
+  const grids = shadows.filter((s): s is ShadowDay => s?.v === SHADOW_V).map((s) => s.grid);
   return {
     model: { v: 1, table: tableOf(kept.map((s) => s.times)), bias: biasOf(errors), weights: weightsFrom(grids) },
     days: kept.length,
@@ -113,7 +126,8 @@ export async function modelBefore(bucket: R2Bucket, date: string): Promise<{ mod
 
 /**
  * Day [date] answered by [model]: each prediction with a plate, one cached
- * answer once (as eta.ts scoreEtas), against [passings]. [lagMs]: the
+ * answer once, and not for a bus leaving its first stop (as eta.ts
+ * scoreEtas), against [passings]. [lagMs]: the
  * recorder's poll, after which a passing could be known.
  */
 export function shadowOf(
@@ -126,7 +140,7 @@ export function shadowOf(
 ): ShadowDay {
   const seen = new Set<string>();
   const queries = predictions.filter((p) => {
-    if (!p.plate || !(p.etaS >= 0 && p.etaS <= MAX_ETA_S)) return false;
+    if (!p.plate || !(p.etaS >= 0 && p.etaS <= MAX_ETA_S) || departs(p)) return false;
     const once = `${p.svc}|${p.plate}|${p.stop}|${Math.floor(p.t / 15_000)}`;
     if (seen.has(once)) return false;
     seen.add(once);
@@ -135,7 +149,7 @@ export function shadowOf(
   const cases = casesOf(model, routes(), { passings, queries, lagMs });
   const scored = scoreCases(cases);
   return {
-    v: 1,
+    v: SHADOW_V,
     date,
     built: { days, pairs: Object.keys(model.table.all).length },
     predictions: queries.length,
@@ -149,8 +163,10 @@ export function shadowOf(
 }
 
 /**
- * The cron's step: the oldest of the last CATCH_UP_DAYS days eta.ts has
- * scored and this hasn't, one a run, so each is built on the ones before.
+ * The cron's step: the oldest of the last CATCH_UP_DAYS recorded days this
+ * hasn't scored (by this model: SHADOW_V), one a run, so each is built on
+ * the ones before. Until eta.ts has scored it, it waits, rather than
+ * running a newer day on a model missing that one.
  */
 export async function shadowEta(env: Env, nowMs: number, fetchImpl: typeof fetch = fetch): Promise<string | null> {
   if (!etaModelOn(env) || !env.FILES || !env.ANALYTICS_TOKEN || !env.CF_ACCOUNT_ID || !(await collecting(env, 'eta'))) return null;
@@ -158,9 +174,10 @@ export async function shadowEta(env: Env, nowMs: number, fetchImpl: typeof fetch
   if (windowOf(latest).close > nowMs) latest = before(latest, 1);
   for (let i = CATCH_UP_DAYS - 1; i >= 0; i--) {
     const date = before(latest, i);
-    if (await env.FILES.head(shadowKey(date))) continue;
+    if ((await env.FILES.head(shadowKey(date)))?.customMetadata?.v === String(SHADOW_V)) continue;
+    if (!(await env.FILES.head(dayKey(date)))) continue;
     // Scored first: its errors are the next day's bias.
-    if (!(await env.FILES.head(etaKey(date)))) continue;
+    if (!scoredNow(await env.FILES.head(etaKey(date)))) return null;
     const stored = await env.FILES.get(dayKey(date));
     if (!stored) continue;
     const day = await gunzipJson<DayFile>(await stored.arrayBuffer());
@@ -170,7 +187,10 @@ export async function shadowEta(env: Env, nowMs: number, fetchImpl: typeof fetch
     const segments: SegmentDay = { v: 1, date, times: timesOf(segmentsOf(passings, routes())) };
     await env.FILES.put(segmentsKey(date), JSON.stringify(segments), json);
     // Last: it marks the day done.
-    await env.FILES.put(shadowKey(date), JSON.stringify(shadowOf(date, model, days, passings, predictions, day.pollMs)), json);
+    await env.FILES.put(shadowKey(date), JSON.stringify(shadowOf(date, model, days, passings, predictions, day.pollMs)), {
+      ...json,
+      customMetadata: { v: String(SHADOW_V) },
+    });
     return date;
   }
   return null;
@@ -194,6 +214,6 @@ export async function shadowSummary(
   return {
     on: etaModelOn(env),
     historyDays: HISTORY_DAYS,
-    days: kept.filter((d): d is ShadowDay => d?.v === 1).map(({ grid: _grid, ...d }) => d),
+    days: kept.filter((d): d is ShadowDay => d?.v === SHADOW_V).map(({ grid: _grid, ...d }) => d),
   };
 }
