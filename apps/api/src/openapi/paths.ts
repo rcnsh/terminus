@@ -2154,6 +2154,26 @@ export function paths(): Record<string, unknown> {
         },
       },
     },
+    '/api/admin/reports/delete': {
+      post: {
+        tags: ['Service'],
+        summary: 'Delete a user’s report from the operator’s dashboard',
+        description:
+          'Deletes one “This was wrong” report or stop suggestion, by the `id` in `feedback.latest` of GET /api/admin/stats, for good. Answers 204 whether or not it was still there, and 404 without the operator token.',
+        operationId: 'adminDeleteReport',
+        security: [{ operator: [] }],
+        requestBody: jsonBody({
+          type: 'object',
+          required: ['id'],
+          properties: { id: { type: 'string', pattern: '^[\\w-]{1,64}$', example: '0b9f3c2e-5d1a-4c7e-9a8b-2f6d4e1c3a70' } },
+        }),
+        responses: {
+          '204': { description: 'Deleted, or already gone.' },
+          '400': errorResponse('No id, or not a report’s.'),
+          '404': errorResponse('No operator token, or the wrong one.'),
+        },
+      },
+    },
     '/api/errors': {
       post: {
         tags: ['Service'],

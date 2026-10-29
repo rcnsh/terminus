@@ -1044,8 +1044,24 @@ export function Crashes({ s, d, query, dismiss }) {
 
 /* ----------------------------------------------------------------- Reports */
 
-export function Reports({ s, d, query }) {
+export function Reports({ s, d, query, remove }) {
   const fb = s.feedback ?? { latest: [], last7d: 0 };
+  // Per report, so deletes that overlap don't free each other's button, and each error shows by its own.
+  const [busy, setBusy] = useState({});
+  const [msg, setMsg] = useState({});
+  const mark = (set, id, value) => set((m) => ({ ...m, [id]: value }));
+  const drop = async (f) => {
+    if (!confirm(`Delete this report${f.note ? ` (“${f.note.slice(0, 60)}”)` : ''} for good?`)) return;
+    mark(setBusy, f.id, true);
+    mark(setMsg, f.id, '');
+    try {
+      await remove(f.id);
+    } catch (err) {
+      mark(setMsg, f.id, err.message);
+    } finally {
+      mark(setBusy, f.id, false);
+    }
+  };
   const [reason, setReason] = useState('');
   const [plat, setPlat] = useState('');
   const [q, setQ] = useState('');
@@ -1120,6 +1136,11 @@ export function Reports({ s, d, query }) {
                 html`<div class="pre-h"><span class="hint">The answer they saw</span><${Copy} text=${JSON.stringify(f.context, null, 2)} label="Copy JSON" /></div>
                 <pre>${JSON.stringify(f.context, null, 2)}</pre>`
               }
+              <div class="pre-h">
+                <p class="hint">Deleting removes it from terminus for good.</p>
+                <button type="button" class="btn small ghost" disabled=${busy[f.id]} onClick=${() => drop(f)}>Delete</button>
+              </div>
+              ${msg[f.id] && html`<p class="hint bad" role="status">${msg[f.id]}</p>`}
             <//>`;
           })}
         </ul>`

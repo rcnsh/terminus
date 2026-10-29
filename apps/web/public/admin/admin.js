@@ -73,7 +73,7 @@ async function load() {
   try {
     const stats = await res.json();
     if (asked !== session) return undefined;
-    view.set({ locked: false, msg: '', stats, note: '', loading: false, at: Date.now() });
+    view.set({ locked: false, msg: '', stats: withoutDeleted(stats), note: '', loading: false, at: Date.now() });
   } catch (err) {
     // A stats reply this page can't read: say so, not a blank page.
     view.set((v) => ({ ...v, loading: false, note: `Couldn't show the stats: ${err.message}` }));
@@ -109,6 +109,47 @@ async function dismiss(fingerprint) {
       analytics: { ...v.stats.analytics, appErrors: (v.stats.analytics.appErrors ?? []).filter((e) => e.fingerprint !== fingerprint) },
     },
   }));
+}
+
+/** Reports deleted in this tab: a stats load already under way when one was deleted still has it. */
+const deleted = new Set();
+
+/** The stats without the reports deleted here, the week's count with them. */
+function withoutDeleted(stats) {
+  const fb = stats?.feedback;
+  const gone = fb?.latest.filter((f) => deleted.has(f.id)) ?? [];
+  if (!gone.length) return stats;
+  const week = Date.parse(stats.now) - 7 * 86_400_000;
+  return {
+    ...stats,
+    feedback: {
+      ...fb,
+      last7d: fb.last7d - gone.filter((f) => Date.parse(f.created) > week).length,
+      latest: fb.latest.filter((f) => !deleted.has(f.id)),
+    },
+  };
+}
+
+/** Deletes a user's report for good; the dashboard then leaves it out. */
+async function remove(id) {
+  const asked = session;
+  const t = memory ?? token();
+  const res = await fetch('/api/admin/reports/delete', {
+    method: 'POST',
+    headers: { 'x-health-token': t, 'content-type': 'application/json' },
+    body: JSON.stringify({ id }),
+  }).catch(() => null);
+  if (!res) throw new Error("Couldn't reach terminus.");
+  // A reply to a session since replaced says nothing about the new one.
+  const stale = asked !== session || (memory ?? token()) !== t;
+  if (res.status === 404) {
+    if (stale) return undefined;
+    forget();
+    return signedOut('Signed out. Sign in again.');
+  }
+  if (!res.ok) throw new Error(`Deleting answered ${res.status}.`);
+  deleted.add(id);
+  view.set((v) => ({ ...v, stats: withoutDeleted(v.stats) }));
 }
 
 function lock() {
@@ -419,7 +460,7 @@ function Dashboard({ v }) {
           </p>
         </header>
         <div class="page" key=${route.id}>
-          <${Page} s=${s} d=${d} query=${route.query} flip=${flip} dismiss=${dismiss} />
+          <${Page} s=${s} d=${d} query=${route.query} flip=${flip} dismiss=${dismiss} remove=${remove} />
         </div>
       </main>
     </div>

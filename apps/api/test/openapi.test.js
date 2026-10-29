@@ -327,6 +327,9 @@ const CASES = [
   ['POST /api/admin/crashes/dismiss', 204, { auth: 'operator', body: { fingerprint: '18b32d7aae56' } }],
   ['POST /api/admin/crashes/dismiss', 400, { auth: 'operator', body: { fingerprint: 'everything' } }],
   ['POST /api/admin/crashes/dismiss', 404, { body: { fingerprint: '18b32d7aae56' } }],
+  ['POST /api/admin/reports/delete', 204, { auth: 'operator', body: { id: '0b9f3c2e-5d1a-4c7e-9a8b-2f6d4e1c3a70' } }],
+  ['POST /api/admin/reports/delete', 400, { auth: 'operator', body: { id: 'not one' } }],
+  ['POST /api/admin/reports/delete', 404, { body: { id: '0b9f3c2e-5d1a-4c7e-9a8b-2f6d4e1c3a70' } }],
   [
     'POST /api/errors',
     204,

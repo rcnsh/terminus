@@ -15,7 +15,7 @@ import { boardAsOf, boardAt, displayName, indexGraph, serviceEndsAt, serviceResu
 import { buildCampusMap, buildDestinations, ROUTE_COLORS } from './map/campus.ts';
 import { busesOnLine, lineStops, trackedBuses } from './map/buses.ts';
 import { stopPairs } from './map/pairs.ts';
-import { adminStats, handleDismissCrash, holdsHealthToken, isOperator } from './ops/admin.ts';
+import { adminStats, handleDeleteReport, handleDismissCrash, holdsHealthToken, isOperator } from './ops/admin.ts';
 import { handleCollect } from './ops/collect.ts';
 import { handleAppError } from './ops/apperrors.ts';
 import { handlePasskey } from './accounts/passkey.ts';
@@ -487,6 +487,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
         url.pathname === '/api/admin/stats' ||
         url.pathname === '/api/admin/collect' ||
         url.pathname === '/api/admin/crashes/dismiss' ||
+        url.pathname === '/api/admin/reports/delete' ||
         url.pathname === '/api/errors' ||
         url.pathname.startsWith('/api/admin/passkey/') ||
         url.pathname.startsWith('/download/') ||
@@ -599,6 +600,9 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
       case '/api/admin/crashes/dismiss':
         // Hides a crash report from the dashboard (Analytics Engine can't delete one).
         return await handleDismissCrash(req, env, nowMs);
+      case '/api/admin/reports/delete':
+        // Deletes a user's report from the dashboard and D1.
+        return await handleDeleteReport(req, env, nowMs);
       case '/api/errors':
         // Crash and error reports from the apps and the website, with no one's name on them.
         return await handleAppError(req, env);
