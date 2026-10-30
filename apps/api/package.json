@@ -16,11 +16,11 @@
     "check": "pnpm test && pnpm typecheck"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "5.20261018.1",
+    "@cloudflare/workers-types": "5.20261025.1",
     "@types/react": "19.3.0",
-    "cf": "1.0.0-beta.18",
+    "cf": "1.0.0-beta.21",
     "typescript": "7.0.2",
-    "wrangler": "4.151.1"
+    "wrangler": "4.152.0"
   },
   "dependencies": {
     "@protomaps/basemaps": "5.7.2",
