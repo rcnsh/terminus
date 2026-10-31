@@ -328,7 +328,9 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 .journey .line .ride .rail::after { background: var(--ride, var(--ink)); }
 .journey .line .bus-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
 .journey .line .bus-line small { white-space: nowrap; }
-.journey .backup-box { margin-top: 14px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; font-size: 0.9rem; color: var(--muted); }
+/* The bus to go on instead: information, not a control, so no box (journey.js Steps). */
+.journey .backup-line { display: flex; gap: 8px; align-items: center; margin: 14px 0 0; font-size: 0.9rem; color: var(--muted); }
+.journey .backup-line svg { flex: none; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .journey .tag.live .dot { width: 7px; height: 7px; }
 
 .banner {
