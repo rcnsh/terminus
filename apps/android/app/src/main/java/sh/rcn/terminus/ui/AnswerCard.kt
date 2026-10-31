@@ -199,7 +199,8 @@ internal fun AnswerCard(
                         LeaveLine(answer)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
-                        answer.timingText?.takeIf { !old }?.let { Pill(it, timingColor(answer.timingStatus)) }
+                        // On the bus, `detail` already says when it arrives: the pill would say it again, as on the Mac.
+                        answer.timingText?.takeIf { !old && answer.card?.ride == null }?.let { Pill(it, timingColor(answer.timingStatus)) }
                         answer.crowdText?.let { Pill(it, muted) }
                     }
                     // The alternative is already at the end of `detail`.
