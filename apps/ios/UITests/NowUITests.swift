@@ -98,6 +98,17 @@ final class NowUITests: XCTestCase {
         // Back on Next, with the trip planned.
         XCTAssertTrue(app.buttons["chip.next"].waitForExistence(timeout: 10))
         shot("now-after-go-later", app)
+        // Taken off today again, so the trip planned here isn't the card the
+        // tests after this one find (/__stub/reset keeps the accounts).
+        let card = app.descendants(matching: .any)["now.card"]
+        for _ in 0..<20 where !card.label.contains("COM 3") { usleep(500_000) }
+        XCTAssertTrue(card.label.contains("COM 3"), "the planned trip is Next")
+        let remove = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'remove.' AND label CONTAINS 'COM 3'")).firstMatch
+        reveal(remove, in: app)
+        remove.tap()
+        for _ in 0..<20 where card.label.contains("COM 3") { usleep(500_000) }
+        XCTAssertFalse(card.label.contains("COM 3"), "the planned trip was taken off")
+        app.swipeDown()
         // A favourite's chip shows its own card.
         let chip = app.buttons["chip.KR MRT"]
         for _ in 0..<6 where !chip.isHittable { app.swipeDown() }
@@ -123,6 +134,9 @@ final class NowUITests: XCTestCase {
     /// "Later bus" moves the card to the next bus, and "Best bus" comes
     /// between the two to go back; back on the best one it goes again.
     func testStepToALaterBusAndBack() {
+        // Held still: the fake times go round every 12 minutes, and whether
+        // there's a bus to step to depends on where in that the test lands.
+        stubPost("/__stub/freeze")
         let app = launch(sky: "day")
         let later = app.buttons["step.later"]
         reveal(later, in: app)
