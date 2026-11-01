@@ -151,7 +151,7 @@ struct MapTab: View {
                 if Locator.shared.denied { locationOff = true } else { Task { await map.locateMe() } }
             }
             // Lost after a pinch or a drag: one tap back to the whole campus.
-            MapButton(symbol: "scope", label: L("Back to campus"), id: "map.recentre") { map.recentre += 1 }
+            MapButton(symbol: "building.columns", label: L("Back to campus"), id: "map.recentre") { map.recentre += 1 }
         }
     }
 
