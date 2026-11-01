@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync, readdirSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import defineSite from '../cloudflare.config.ts';
 import { conflictMarkers, problems } from '../scripts/deploy/predeploy.mjs';
@@ -161,6 +165,42 @@ test('a release takes the scrape commit for the same data files and bot that scr
   const name = yml.match(/user\.name="([^"]+)"/)[1];
   const email = yml.match(/user\.email="([^"]+)"/)[1];
   assert.equal(lib.match(/^SCRAPE_BOT="([^"]+)"/m)[1], `${name} <${email}>`, 'SCRAPE_BOT in scripts/release/release-lib.sh');
+});
+
+test('a release takes APKs signed with the release key, as apksigner 36 and 37 print it', () => {
+  const root = fileURLToPath(new URL('../../../', import.meta.url));
+  const links = JSON.parse(readFileSync(new URL('../../web/public/.well-known/assetlinks.json', import.meta.url), 'utf8'));
+  const ours = links[0].target.sha256_cert_fingerprints[0].replaceAll(':', '').toLowerCase();
+  const foreign = 'ab'.repeat(32);
+  /** apks_signed on one APK, with an apksigner that prints `out`: what it says and whether it passed. */
+  const check = (out) => {
+    const sdk = mkdtempSync(join(tmpdir(), 'sdk-'));
+    try {
+      mkdirSync(join(sdk, 'build-tools/99.0.0'), { recursive: true });
+      writeFileSync(join(sdk, 'printed'), out);
+      writeFileSync(join(sdk, 'build-tools/99.0.0/apksigner'), `#!/bin/sh\ncat '${join(sdk, 'printed')}'\n`, { mode: 0o755 });
+      const run = spawnSync('bash', ['-c', 'set -euo pipefail; source scripts/release/release-lib.sh; apks_signed terminus.apk'], {
+        cwd: root,
+        env: { ...process.env, ANDROID_HOME: sdk },
+        encoding: 'utf8',
+      });
+      return { ok: run.status === 0, said: run.stdout + run.stderr };
+    } finally {
+      rmSync(sdk, { recursive: true, force: true });
+    }
+  };
+  const v36 = (d) =>
+    `Signer #1 certificate DN: CN=terminus\nSigner #1 certificate SHA-256 digest: ${d}\nSigner #1 certificate SHA-1 digest: 00\n`;
+  const v37 = (d) =>
+    `V2 Signer: certificate DN: CN=terminus\nV2 Signer: certificate SHA-256 digest: ${d}\nV3 Signer: certificate SHA-256 digest: ${d}\n`;
+  assert.ok(check(v36(ours)).ok, 'build-tools 36');
+  assert.ok(check(v37(ours)).ok, 'build-tools 37, a line per scheme');
+  for (const out of [v36(foreign), v37(foreign), v37(ours) + v37(foreign).replaceAll('V2', 'V1')]) {
+    const { ok, said } = check(out);
+    assert.ok(!ok && said.includes(`signed by ${foreign}`), said);
+  }
+  const unsigned = check('DOES NOT VERIFY\n');
+  assert.ok(!unsigned.ok && unsigned.said.includes('has no signer'), unsigned.said);
 });
 
 const MIGRATIONS = new URL('../migrations/', import.meta.url);

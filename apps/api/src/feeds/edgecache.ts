@@ -60,6 +60,9 @@ export interface CachedOptions<T> {
   breaker?: { key: string; opens: (err: unknown) => boolean; maxAgeS: number; onOpen?: (err: unknown) => Promise<void> };
   /** One in-flight fetch per key per isolate. The caller owns the map, so each feed has its own. */
   inflight: Map<string, Promise<T>>;
+  /** Hears each failed fetch (not a memo or breaker that kept it from
+   *  running), so why it failed is kept somewhere; its own failure is shrugged off. */
+  onFail?: (err: unknown) => void;
 }
 
 /**
@@ -179,6 +182,11 @@ export async function cachedFetch<T extends { fetchedAt: number }>(o: CachedOpti
       },
       (err) => {
         const reason = String((err as Error)?.message ?? err);
+        try {
+          o.onFail?.(err);
+        } catch {
+          // Noting the failure must never change what it does.
+        }
         const memos: Promise<void>[] = [];
         if (o.memoes?.(err) ?? true) memos.push(cache.put(o.failKey, memo(reason, o.failMemoS)).catch(() => {}));
         if (o.breaker?.opens(err)) {
