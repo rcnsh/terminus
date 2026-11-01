@@ -16,7 +16,7 @@ import { KEEP_DAYS } from '../accounts/outcomes.ts';
 import { FEEDBACK_KEEP_DAYS } from './feedback.ts';
 import type { Env } from '../types.ts';
 import { sgt } from '../config.ts';
-import { fetchArrivals } from '../feeds/fms.ts';
+import { fetchArrivals, renewToken } from '../feeds/fms.ts';
 import { fetchPublicArrivals, ltaConfigured } from '../feeds/lta.ts';
 import { GRAPH_PUBLIC } from '../answer/graph.ts';
 import { KV_APP_VERSION, UpstreamRejected, appVersion } from '../feeds/auth.ts';
@@ -741,13 +741,16 @@ export async function runCron(env: Env, nowMs: number): Promise<void> {
       logCronError(env, name);
     }
   };
+  let feedUp = false;
   if (isBeta(env)) {
-    // No call to NUS or LTA: the stable site's checks are the scheduled
-    // load, and the beta's own traffic says how the feeds treat it. Its
-    // status page, card notice and automatic version update run on that.
+    // No feed call to NUS or LTA (only the token below): the stable site's
+    // checks are the scheduled load, and the beta's own traffic says how
+    // the feeds treat it. Its status page, card notice and automatic
+    // version update run on that.
     // While down, each run counts on the dashboard, as nothing is emailed.
     await step('upstream', async () => {
       const { state } = await checkUpstream(env, nowMs, sawTrip(env, 'nus', nowMs));
+      feedUp = state.up && !state.failures;
       if (!state.up) {
         console.error('beta: NUS feed down', state.reason);
         logCronError(env, 'feed down');
@@ -755,9 +758,18 @@ export async function runCron(env: Env, nowMs: number): Promise<void> {
     });
     await step('public feed', () => checkPublicFeed(env, nowMs, sawTrip(env, 'lta', nowMs)));
   } else {
-    await step('upstream', () => checkUpstream(env, nowMs));
+    await step('upstream', async () => {
+      const { state } = await checkUpstream(env, nowMs);
+      feedUp = state.up && !state.failures;
+    });
     await step('public feed', () => checkPublicFeed(env, nowMs));
   }
+  // A guest token before the kept one runs out, on both sites: about one
+  // mint a day, as without it, but by the cron rather than by the first
+  // person to open the app after a quiet spell. After the check, so its
+  // reading is the feed's own, and only when that check passed: while NUS
+  // refuses us, the version search does the minting.
+  if (feedUp) await step('token', () => renewToken(env, nowMs));
   await step('calendar', async () => {
     await loadCalendar(env, nowMs);
     try {

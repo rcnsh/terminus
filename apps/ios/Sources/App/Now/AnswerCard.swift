@@ -215,8 +215,10 @@ struct PlainCard: View {
                     Text(leave).font(.headline).padding(.top, 4)
                 }
             }
+            // On the bus, `detail` already says when it arrives: the pill would say it again, as on the Mac.
             let pills = [
-                (!old ? a.timing?.text : nil).map { ($0, timingColor(a.timing?.status, inks)) }, a.crowdText.map { ($0, inks.muted) },
+                (!old && a.card?.ride == nil ? a.timing?.text : nil).map { ($0, timingColor(a.timing?.status, inks)) },
+                a.crowdText.map { ($0, inks.muted) },
             ].compactMap { $0 }
             if !pills.isEmpty {
                 HStack(spacing: 6) { ForEach(pills, id: \.0) { SkyPill(text: $0.0, color: $0.1) } }.padding(.top, 4)
@@ -509,6 +511,7 @@ struct CardActions: View {
                         SkipMenu(skips: skips, label: nil)
                     } else if let a = actions.first {
                         Button(a.label) { app.signal(a) }.buttonStyle(ChipButtonStyle()).disabled(busy)
+                            .accessibilityIdentifier("action.\(a.id)")
                     }
                 }
                 .padding(.top, 14)
