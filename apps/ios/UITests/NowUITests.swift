@@ -108,8 +108,11 @@ final class NowUITests: XCTestCase {
         let remove = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'remove.' AND label CONTAINS 'COM 3'")).firstMatch
         reveal(remove, in: app)
         remove.tap()
-        for _ in 0..<20 where card.label.contains("COM 3") { usleep(500_000) }
-        XCTAssertFalse(card.label.contains("COM 3"), "the planned trip was taken off")
+        // A card that isn't COM 3, not one that says nothing while it's updating:
+        // the server's answer, so the trip is off before the app is closed.
+        let off = { !card.label.isEmpty && !card.label.contains("COM 3") }
+        for _ in 0..<30 where !off() { usleep(500_000) }
+        XCTAssertTrue(off(), "the planned trip was taken off")
         app.swipeDown()
         // A favourite's chip shows its own card.
         let chip = app.buttons["chip.KR MRT"]
@@ -131,6 +134,28 @@ final class NowUITests: XCTestCase {
         undo.tap()
         XCTAssertTrue(remove.waitForExistence(timeout: 10))
         shot("now-undone", app)
+    }
+
+    /// A Today row goes on where it's heading when let go: a short slow drag
+    /// springs back, a flick over the same short distance takes it off, with Undo.
+    func testAFlickTakesARowOffAndASlowDragDoesNot() {
+        let app = launch(sky: "day")
+        let remove = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'remove.'")).firstMatch
+        reveal(remove, in: app)
+        let key = remove.identifier
+        // On the row, left of its ×, and 80 pt to the left: short of the bin (140 pt).
+        let start = remove.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).withOffset(CGVector(dx: -120, dy: 0))
+        let short = start.withOffset(CGVector(dx: -80, dy: 0))
+        start.press(forDuration: 0.05, thenDragTo: short, withVelocity: XCUIGestureVelocity(150), thenHoldForDuration: 0.4)
+        sleep(1)
+        XCTAssertTrue(app.buttons[key].exists, "a slow short drag left the row in place")
+        XCTAssertFalse(app.buttons["undo"].exists)
+        start.press(forDuration: 0.05, thenDragTo: short, withVelocity: XCUIGestureVelocity(2_500), thenHoldForDuration: 0)
+        XCTAssertTrue(app.buttons["undo"].waitForExistence(timeout: 5), "a flick took the row off, with Undo")
+        XCTAssertFalse(app.buttons[key].exists)
+        shot("now-flicked", app)
+        app.buttons["undo"].tap()
+        XCTAssertTrue(app.buttons[key].waitForExistence(timeout: 10), "Undo put it back")
     }
 
     /// "Later bus" moves the card to the next bus, and "Best bus" comes
