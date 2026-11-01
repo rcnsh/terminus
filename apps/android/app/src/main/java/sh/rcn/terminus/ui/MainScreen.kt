@@ -75,6 +75,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -238,6 +239,24 @@ internal fun MainScreen(
                             // scrolls, and the edge fades while there's more.
                             val chips = rememberScrollState()
                             var searching by rememberSaveable { mutableStateOf(false) }
+                            // Go somewhere else: worded, not a bare magnifier, so it reads as one
+                            // more place to go. The search opens under the chips.
+                            val elsewhere: @Composable () -> Unit = {
+                                AssistChip(
+                                    onClick = { searching = !searching },
+                                    label = { Text(stringResource(R.string.elsewhere)) },
+                                    leadingIcon = {
+                                        Icon(
+                                            painterResource(R.drawable.ic_search),
+                                            contentDescription = null,
+                                            Modifier.size(AssistChipDefaults.IconSize),
+                                        )
+                                    },
+                                )
+                            }
+                            // At the largest text sizes, Elsewhere beside the row would leave it room
+                            // for barely one chip: it's the row's last chip instead, as on the iPhone.
+                            val searchInRow = LocalDensity.current.fontScale >= SEARCH_IN_ROW_SCALE
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Row(
                                     Modifier.weight(1f).fadeEnd(chips).horizontalScroll(chips),
@@ -272,21 +291,12 @@ internal fun MainScreen(
                                             onRemove = { vm.removeAdded(d) },
                                         )
                                     }
+                                    if (searchInRow) elsewhere()
                                 }
-                                // Go somewhere else: worded, not a bare magnifier, so it reads as one
-                                // more place to go. The search opens under the chips.
-                                Spacer(Modifier.width(8.dp))
-                                AssistChip(
-                                    onClick = { searching = !searching },
-                                    label = { Text(stringResource(R.string.elsewhere)) },
-                                    leadingIcon = {
-                                        Icon(
-                                            painterResource(R.drawable.ic_search),
-                                            contentDescription = null,
-                                            Modifier.size(AssistChipDefaults.IconSize),
-                                        )
-                                    },
-                                )
+                                if (!searchInRow) {
+                                    Spacer(Modifier.width(8.dp))
+                                    elsewhere()
+                                }
                             }
                             if (searching) Search(state, vm) { searching = false }
                         }
@@ -707,6 +717,9 @@ private fun AddedChip(label: String, selected: Boolean, onClick: () -> Unit, onR
             },
     )
 }
+
+/** The text size (font scale) from which Now's Elsewhere chip goes at the end of the chip row rather than beside it. */
+private const val SEARCH_IN_ROW_SCALE = 1.5f
 
 /** Fades the trailing edge out while [scroll] can still go further, so a cut-off row reads as scrollable. */
 private fun Modifier.fadeEnd(scroll: ScrollState, width: Dp = 32.dp): Modifier =
