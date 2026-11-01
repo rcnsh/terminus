@@ -82,6 +82,18 @@ test('after a renewal, none for twelve hours, however short the new token', asyn
   assert.equal(fetchImpl.counts.auth, 1);
 });
 
+test('a token that could not be saved is not counted as a renewal', async () => {
+  const fetchImpl = makeFetch();
+  installGlobals(fetchImpl);
+  const env = makeEnv();
+  scopeCache(env);
+  await keep(env.KV, 10 * 60_000);
+  const put = env.KV.put.bind(env.KV);
+  env.KV.put = (key, ...rest) => (key === 'auth:session' ? Promise.reject(new Error('KV down')) : put(key, ...rest));
+  assert.equal(await renewToken(env, FROZEN_NOW), true);
+  assert.equal(await env.KV.get('auth:renewed'), null, 'the next run tries again');
+});
+
 test('a renewal that fails leaves the kept token in use, and is tried again next run', async () => {
   const fetchImpl = makeFetch({ mintStatus: 400, byStop: { COM3: [] } });
   installGlobals(fetchImpl);
@@ -114,8 +126,22 @@ test('nothing is minted while the breaker is open', async () => {
   assert.equal(fetchImpl.counts.auth, 0);
 });
 
+test("a request's mint that failed a moment ago skips the renewal quietly", async () => {
+  const fetchImpl = makeFetch();
+  const cache = installGlobals(fetchImpl);
+  const env = makeEnv();
+  scopeCache(env);
+  await keep(env.KV, 10 * 60_000);
+  await cache.put(
+    new Request('https://terminus.internal/mint-failed'),
+    new Response('auth HTTP 503', { headers: { 'cache-control': 'max-age=20' } }),
+  );
+  assert.equal(await renewToken(env, FROZEN_NOW), false);
+  assert.equal(fetchImpl.counts.auth, 0);
+});
+
 test('the stable cron renews after its health check, and not while the feed is down', async () => {
-  // Up: the check mints for its own call, then the token step finds a near-expiry one and renews it.
+  // Up: the check calls with the kept token, then the token step finds it near its end and renews it.
   {
     const fetchImpl = makeFetch({ byStop: { COM3: [] } });
     installGlobals(fetchImpl);
@@ -188,4 +214,15 @@ test('a reason carries no credentials and stays short', () => {
   const reason = failureReason(new Error(`shuttle-service non-JSON (200): {"token":"${jwt}"} ${'x'.repeat(300)}`));
   assert.ok(!reason.includes(jwt));
   assert.ok(reason.length <= 160);
+  // Cut short at 80 characters, as proxyCall does: half a JWT, no closing quote.
+  for (const cut of [
+    `{"token":"${jwt.slice(0, 20)}`,
+    '{"userid":"STUB-USER-ID-1234',
+    '{"x-api-key":"abcd1234secretvalue',
+    '{"secret": "hunter2-not-closed',
+  ]) {
+    const r = failureReason(new Error(`shuttle-service non-JSON (200): ${cut}`));
+    assert.ok(!r.includes(cut.split('"')[3]), r);
+    assert.ok(r.includes('[redacted]'), r);
+  }
 });

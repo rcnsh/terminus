@@ -310,8 +310,11 @@ export async function renewAhead(env: Env, nowMs: number, aheadMs: number): Prom
   // getSession's own path: a mint already under way here is shared, and a
   // failed one waits failMemoS. The kept token is still good, so a
   // request that sees that memo uses it rather than minting.
-  await getSession(env, nowMs, { force: true });
-  await env.KV.put(KV_RENEWED, String(nowMs), { expirationTtl: RENEW_GAP_S }).catch(() => {});
+  const fresh = await getSession(env, nowMs, { force: true });
+  // mint ignores a failed write, and a token only this isolate holds isn't
+  // a renewal: the next run tries again.
+  const saved = (await env.KV.get(KV_TOKEN, 'json').catch(() => null)) as Session | null;
+  if (saved?.token === fresh.token) await env.KV.put(KV_RENEWED, String(nowMs), { expirationTtl: RENEW_GAP_S }).catch(() => {});
   return true;
 }
 
@@ -417,19 +420,23 @@ export class UpstreamRejected extends Error {
   }
 }
 
+const SECRET_FIELD =
+  '"(?:token|access_?token|refresh_?token|id_?token|userid|user_?id|deviceid|device_?id|authorization|password|passwd|secret|api_?key|x-api-key)"';
+
 /**
  * Blanks what could let someone call the feed as us, should a refusal echo
  * our request back: the envelope's token, user and device ids, any JWT, and
  * any field named like a key or password. The rest is kept as the clue.
  */
 export function redactDetail(detail: string): string {
-  return detail
-    .replace(
-      /("(?:token|access_?token|refresh_?token|id_?token|userid|user_?id|deviceid|device_?id|authorization|password|passwd|secret|api_?key|x-api-key)"\s*:\s*)(?:"(?:\\.|[^"\\])*"|-?\d[\d.eE+-]*)/gi,
-      '$1"[redacted]"',
-    )
-    .replace(/eyJ[\w-]{4,}\.[\w-]{4,}\.[\w-]*/g, '[redacted]')
-    .replace(/(Bearer\s+)[\w.~+/=-]+/gi, '$1[redacted]');
+  return (
+    detail
+      .replace(new RegExp(`(${SECRET_FIELD}\\s*:\\s*)(?:"(?:\\\\.|[^"\\\\])*"|-?\\d[\\d.eE+-]*)`, 'gi'), '$1"[redacted]"')
+      // A value cut short before its closing quote.
+      .replace(new RegExp(`(${SECRET_FIELD}\\s*:\\s*")(?:\\\\.|[^"\\\\])*$`, 'i'), '$1[redacted]')
+      .replace(/eyJ[\w-]{4,}\.[\w-]{4,}\.[\w-]*/g, '[redacted]')
+      .replace(/(Bearer\s+)[\w.~+/=-]+/gi, '$1[redacted]')
+  );
 }
 
 /**

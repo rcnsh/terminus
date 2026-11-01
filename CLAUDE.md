@@ -102,7 +102,7 @@ root path gets 426 from an app, 308 from anything else (`movedApi` in
    hours or rate, don't point it at arrivals or LTA, and don't reuse its
    alarm for anything else that calls NUS.
 
-   Two other scheduled reads exist, small and bounded; don't grow them.
+   A few other scheduled calls exist, small and bounded; don't grow them.
    The stable Worker's 15-minute cron health check asks NUS for one stop
    and LTA for one stop each run, past the cache on purpose
    (`src/ops/monitor.ts`). While NUS refuses our uNivUS version, the same check
@@ -112,8 +112,8 @@ root path gets 426 from an app, 308 from anything else (`movedApi` in
    the breakers its own traffic opened (`src/feeds/feedwatch.ts`), and runs
    the version search only while NUS is refusing the beta. Both crons
    mint a new guest token while the kept one is still good with under 30
-   minutes left (`renewToken` in `src/feeds/fms.ts`): one mint a day, only
-   earlier, and at most two (`auth:renewed`). Each push
+   minutes left (`renewToken` in `src/feeds/fms.ts`): one mint per token
+   (a day), only earlier, and at most two a day (`auth:renewed`). Each push
    user's Trip object (`src/push/tripdo.ts`) wakes at most every 30 s to
    recompute the card, asking for its stops through the cache.
 3. **`src/feeds/fms.ts` is the only file that touches the raw feed shape.** The

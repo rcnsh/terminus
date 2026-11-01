@@ -627,7 +627,7 @@ export async function getArrivals(env: Env, ctx: ExecutionContext, code: string,
     memoes: notOutdated,
     breaker: { ...breaker(), onOpen: (err) => noteBreakerOpen(env, 'nus', err, nowMs) },
     inflight,
-    onFail: (err) => noteFailure(env, 'arrivals', code, err),
+    onFail: (err) => noteFailure(env, 'arrivals', code, err, nowMs),
   });
 }
 
@@ -655,7 +655,12 @@ const notOutdated = (err: unknown): boolean => !(err instanceof UpstreamRejected
 /** Why a NUS call failed, in a line short enough for a log or an Analytics Engine blob, credentials blanked. */
 export function failureReason(err: unknown): string {
   const msg = err instanceof Error ? (err.name && err.name !== 'Error' ? `${err.name}: ${err.message}` : err.message) : String(err);
-  return redactDetail(msg).slice(0, 160);
+  return (
+    redactDetail(msg)
+      // A body cut short can leave a JWT without its last part (redactDetail covers a quoted value with no closing quote).
+      .replace(/eyJ[\w.-]{8,}/g, '[redacted]')
+      .slice(0, 160)
+  );
 }
 
 /** A failure already noted in this isolate, by what, key and reason: when. */
@@ -680,7 +685,7 @@ export function noteFailure(env: Env, what: 'arrivals' | 'buses', key: string, e
   if (!notOutdated(err) || err instanceof MintQuiet) return;
   const reason = failureReason(err);
   // The same failure again (the timelapse recorder polls every 30 s) says nothing new.
-  const seen = `${what} ${key} ${reason}`;
+  const seen = `${what} ${key} ${reason.replace(/\d+/g, '#').slice(0, 60)}`;
   const last = noted.get(seen);
   if (last !== undefined && nowMs - last < NOTE_AGAIN_MS && nowMs >= last) return;
   if (noted.size > 500) noted.clear();
@@ -701,7 +706,11 @@ export function noteFailure(env: Env, what: 'arrivals' | 'buses', key: string, e
  */
 export async function renewToken(env: Env, nowMs: number): Promise<boolean> {
   if (!fmsConfigured(env) || (await breakerOpen())) return false;
-  return renewAhead(env, nowMs, TTL.tokenRenewAheadMs);
+  // A request's mint failed here a moment ago: none was tried, and the next run tries again.
+  return renewAhead(env, nowMs, TTL.tokenRenewAheadMs).catch((err) => {
+    if (err instanceof MintQuiet) return false;
+    throw err;
+  });
 }
 
 /** The shuttle feed's breaker: such a failure stops every call for breakerS.
@@ -812,7 +821,7 @@ export async function getBuses(
     memoes: notOutdated,
     breaker: { ...breaker(), onOpen: (err) => noteBreakerOpen(env, 'nus', err, nowMs) },
     inflight: inflightBuses,
-    onFail: (err) => noteFailure(env, 'buses', svc, err),
+    onFail: (err) => noteFailure(env, 'buses', svc, err, nowMs),
   });
 }
 
