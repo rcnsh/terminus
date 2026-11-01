@@ -17,6 +17,7 @@ import { noteBreakerOpen } from './feedwatch.ts';
 import {
   UpstreamHttpError,
   UpstreamRejected,
+  MintQuiet,
   getSession,
   markIfOutdated,
   mintWith,
@@ -657,17 +658,33 @@ export function failureReason(err: unknown): string {
   return redactDetail(msg).slice(0, 160);
 }
 
+/** A failure already noted in this isolate, by what, key and reason: when. */
+const noted = new Map<string, number>();
+const NOTE_AGAIN_MS = 10 * 60_000;
+
+/** For tests: forget what this isolate noted. */
+export function resetFailureNotes(): void {
+  noted.clear();
+}
+
 /**
  * Keeps why a call for a stop's arrivals or a service's buses failed: in
  * the Worker's logs, and as an Analytics Engine 'error' row (route
  * `feed arrivals` or `feed buses`, the reason in blob3), which the
  * dashboard counts with the other errors. A failure that doesn't open the
  * breaker leaves no other trace: the stop only reads as unavailable. Not
- * the ones that say nothing of the feed (notOutdated).
+ * the ones that say nothing of the feed (notOutdated) or made no call
+ * (MintQuiet), and the same one at most once per NOTE_AGAIN_MS.
  */
-export function noteFailure(env: Env, what: 'arrivals' | 'buses', key: string, err: unknown): void {
-  if (!notOutdated(err)) return;
+export function noteFailure(env: Env, what: 'arrivals' | 'buses', key: string, err: unknown, nowMs: number = Date.now()): void {
+  if (!notOutdated(err) || err instanceof MintQuiet) return;
   const reason = failureReason(err);
+  // The same failure again (the timelapse recorder polls every 30 s) says nothing new.
+  const seen = `${what} ${key} ${reason}`;
+  const last = noted.get(seen);
+  if (last !== undefined && nowMs - last < NOTE_AGAIN_MS && nowMs >= last) return;
+  if (noted.size > 500) noted.clear();
+  noted.set(seen, nowMs);
   console.warn(`NUS ${what} for ${key} failed: ${reason}`);
   if (typeof env.AE?.writeDataPoint !== 'function') return;
   try {

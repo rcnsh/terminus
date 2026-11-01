@@ -1,7 +1,7 @@
 /**
  * The beta's cron makes no feed call to NUS or LTA (CLAUDE.md, rule 2), only
- * the token's renewal: it reads the breaker trips its own traffic noted
- * (src/feeds/feedwatch.ts) as its check.
+ * the token's renewal, ahead of its end (feed-token.test.js): it reads the
+ * breaker trips its own traffic noted (src/feeds/feedwatch.ts) as its check.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -62,7 +62,7 @@ test('the beta cron makes no feed call to NUS or LTA; the stable one asks each o
     scopeCache(env);
     await quietly(() => runCron(env, FROZEN_NOW));
     if (beta) {
-      assert.deepEqual(fetchImpl.counts, { auth: 1, shuttle: 0, public: 0 }, 'the beta asked NUS for a token alone (renewToken)');
+      assert.deepEqual(fetchImpl.counts, { auth: 0, shuttle: 0, public: 0 }, 'the beta made no call to either feed');
       assert.equal((await readUpstream(env)).up, true, 'nothing seen failing: up, and checked');
       assert.equal((await readUpstream(env)).checkedAt, FROZEN_NOW, 'so /health does not take the cron for stopped');
     } else {

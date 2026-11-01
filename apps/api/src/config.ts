@@ -42,7 +42,7 @@ export const TTL = {
   tokenDefaultS: 3600,
   /** The 15-minute cron mints a new token once the kept one has less than
    *  this left (fms.ts renewToken): longer than a cron interval, so one run
-   *  always sees it before it runs out. */
+   *  always sees it before it runs out, and at most two runs try. */
   tokenRenewAheadMs: 30 * 60_000,
 } as const;
 

@@ -8,10 +8,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { FROZEN_NOW, installGlobals, makeAnalytics, makeCtx, makeEnv, makeFetch, makeKV } from './_stubs.mjs';
-import { failureReason, getArrivals, noteFailure, renewToken } from '../src/feeds/fms.ts';
+import { failureReason, getArrivals, noteFailure, renewToken, resetFailureNotes } from '../src/feeds/fms.ts';
 import { scopeCache } from '../src/feeds/edgecache.ts';
 import { GateBusy } from '../src/feeds/feedgate.ts';
-import { UpstreamRejected } from '../src/feeds/auth.ts';
+import { MintQuiet, UpstreamRejected } from '../src/feeds/auth.ts';
 import { runCron } from '../src/ops/monitor.ts';
 import { TTL } from '../src/config.ts';
 
@@ -40,12 +40,13 @@ async function collected(fn) {
   return lines;
 }
 
-test('a token with more than tokenRenewAheadMs left is kept; one nearer its end, or none, is renewed', async () => {
+test('only a token still good with less than tokenRenewAheadMs left is renewed', async () => {
   for (const [leftMs, mints] of [
     [TTL.tokenRenewAheadMs + 60_000, 0],
     [TTL.tokenRenewAheadMs - 60_000, 1],
-    [-60_000, 1],
-    [null, 1],
+    // Run out, or none kept: the next request mints, as without the cron.
+    [-60_000, 0],
+    [null, 0],
   ]) {
     const fetchImpl = makeFetch();
     installGlobals(fetchImpl);
@@ -59,29 +60,45 @@ test('a token with more than tokenRenewAheadMs left is kept; one nearer its end,
   }
 });
 
-test('a token minted with another version is renewed at once', async () => {
+test('a token for another version is left to the next request', async () => {
   const fetchImpl = makeFetch();
   installGlobals(fetchImpl);
   const env = makeEnv();
   scopeCache(env);
-  await keep(env.KV, 20 * 3_600_000, 'univus_android_1.0.0_1');
-  assert.equal(await renewToken(env, FROZEN_NOW), true);
-  assert.equal((await kept(env.KV)).version, VERSION);
+  await keep(env.KV, 10 * 60_000, 'univus_android_1.0.0_1');
+  assert.equal(await renewToken(env, FROZEN_NOW), false);
+  assert.equal(fetchImpl.counts.auth, 0);
 });
 
-test('a renewal that fails leaves the kept token in use and quiets nothing', async () => {
-  const fetchImpl = makeFetch({ mintStatus: 400, byStop: { COM3: [] } });
-  const cache = installGlobals(fetchImpl);
+test('after a renewal, none for twelve hours, however short the new token', async () => {
+  const fetchImpl = makeFetch();
+  installGlobals(fetchImpl);
   const env = makeEnv();
   scopeCache(env);
   await keep(env.KV, 10 * 60_000);
+  assert.equal(await renewToken(env, FROZEN_NOW), true);
+  await keep(env.KV, 10 * 60_000);
+  assert.equal(await renewToken(env, FROZEN_NOW + 15 * 60_000), false);
+  assert.equal(fetchImpl.counts.auth, 1);
+});
+
+test('a renewal that fails leaves the kept token in use, and is tried again next run', async () => {
+  const fetchImpl = makeFetch({ mintStatus: 400, byStop: { COM3: [] } });
+  installGlobals(fetchImpl);
+  const env = makeEnv();
+  scopeCache(env);
+  await keep(env.KV, 20 * 60_000);
   await assert.rejects(renewToken(env, FROZEN_NOW), /auth HTTP 400/);
-  assert.equal(await cache.match('https://terminus.internal/mint-failed'), undefined, 'no mint memo');
+  assert.equal(await env.KV.get('auth:renewed'), null, 'not counted as a renewal');
   // The stop is still answered with the kept token, without another mint.
   const sa = await getArrivals(env, makeCtx(), 'COM3', FROZEN_NOW);
   assert.equal(sa.available, true);
   assert.equal(fetchImpl.counts.auth, 1);
   assert.equal(fetchImpl.requests[0].headers.get('authorization'), 'Bearer kept.token.x');
+  // The next run, 15 minutes on and the token still good, tries once more.
+  installGlobals(fetchImpl, FROZEN_NOW + 15 * 60_000);
+  await assert.rejects(renewToken(env, FROZEN_NOW + 15 * 60_000), /auth HTTP 400/);
+  assert.equal(fetchImpl.counts.auth, 2);
 });
 
 test('nothing is minted while the breaker is open', async () => {
@@ -130,6 +147,7 @@ test('the stable cron renews after its health check, and not while the feed is d
 test("a failed call is logged with its reason and counted as an 'error' row of route 'feed arrivals'", async () => {
   // Refused with a code a new token doesn't cure: the stop fails without opening the breaker.
   installGlobals(makeFetch({ reject: 2, rejectCode: '401' }));
+  resetFailureNotes();
   const ae = makeAnalytics();
   const env = makeEnv(makeKV(), ae);
   scopeCache(env);
@@ -145,7 +163,8 @@ test("a failed call is logged with its reason and counted as an 'error' row of r
   assert.ok(lines.some((l) => /NUS arrivals for PGP failed: shuttle-service rejected: code=401/.test(l)));
 });
 
-test('the gate having nothing to share yet, or a version already switched away from, is not noted', async () => {
+test('the gate having nothing to share yet, a version switched away from, or no call made, is not noted; a repeat is noted once', async () => {
+  resetFailureNotes();
   const ae = makeAnalytics();
   const env = makeEnv(makeKV(), ae);
   const outdated = new UpstreamRejected('10009', 'refused');
@@ -153,7 +172,9 @@ test('the gate having nothing to share yet, or a version already switched away f
   const lines = await collected(() => {
     noteFailure(env, 'buses', 'A1', new GateBusy('elsewhere'));
     noteFailure(env, 'buses', 'A1', outdated);
-    noteFailure(env, 'buses', 'A1', new TypeError('x is undefined'));
+    noteFailure(env, 'buses', 'A1', new MintQuiet('token mint failed a moment ago'));
+    noteFailure(env, 'buses', 'A1', new TypeError('x is undefined'), FROZEN_NOW);
+    noteFailure(env, 'buses', 'A1', new TypeError('x is undefined'), FROZEN_NOW + 30_000);
   });
   assert.deepEqual(
     ae.rows('error').map((r) => r.blobs),

@@ -111,8 +111,9 @@ root path gets 426 from an app, 308 from anything else (`movedApi` in
    (`src/feeds/appversion.ts`). The beta's cron makes no health check: it reads
    the breakers its own traffic opened (`src/feeds/feedwatch.ts`), and runs
    the version search only while NUS is refusing the beta. Both crons
-   mint a new guest token once the kept one has under 30 minutes left
-   (`renewToken` in `src/feeds/fms.ts`): one mint a day, only earlier. Each push
+   mint a new guest token while the kept one is still good with under 30
+   minutes left (`renewToken` in `src/feeds/fms.ts`): one mint a day, only
+   earlier, and at most two (`auth:renewed`). Each push
    user's Trip object (`src/push/tripdo.ts`) wakes at most every 30 s to
    recompute the card, asking for its stops through the cache.
 3. **`src/feeds/fms.ts` is the only file that touches the raw feed shape.** The

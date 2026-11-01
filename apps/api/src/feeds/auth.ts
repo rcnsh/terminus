@@ -261,7 +261,7 @@ export async function getSession(
   let minting = inflight.get(version);
   if (!minting) {
     minting = (async () => {
-      if (await flagged(mintFailedKey())) throw new Error('token mint failed a moment ago');
+      if (await flagged(mintFailedKey())) throw new MintQuiet('token mint failed a moment ago');
       onMint?.();
       return mint(env, nowMs, version).catch(async (err) => {
         // A version refused after the switch away from it is this isolate's
@@ -279,30 +279,44 @@ export async function getSession(
   return minting;
 }
 
+/** Set for RENEW_GAP_S after a renewal: at most two a day, whatever the token's lifetime. */
+const KV_RENEWED = 'auth:renewed';
+const RENEW_GAP_S = 12 * 3_600;
+
 /**
- * Mints a token ahead of time when the kept one has less than [aheadMs]
- * left, is for another version or is missing. True when it minted. The
- * cron calls it (fms.ts renewToken), so the first request after a quiet
- * spell finds a token ready instead of minting one, and a mint that fails
- * fails for the cron, not for someone waiting for a bus. A token lasts a
- * day, so that's still one mint a day, only earlier. A KV it can't read
- * mints nothing: every run would mint otherwise.
+ * Mints a new token when the kept one is still good but has less than
+ * [aheadMs] left. True when it minted. The cron calls it (fms.ts
+ * renewToken), so the first request after a quiet spell finds a token
+ * ready instead of minting one, and a mint that fails fails for the cron,
+ * not for someone waiting for a bus.
+ *
+ * Bounded so it can't grow into a poller: no kept token, one already run
+ * out, one for another version or a KV it can't read, and it leaves the
+ * mint to the next request, as without it. So a mint that keeps failing is
+ * tried at most twice before the token runs out (two cron runs), and a
+ * renewal that worked waits RENEW_GAP_S before the next.
  */
 export async function renewAhead(env: Env, nowMs: number, aheadMs: number): Promise<boolean> {
   if (!authConfigured(env)) return false;
   let kept: Session | null;
+  let renewed: string | null;
   try {
-    kept = (await env.KV.get(KV_TOKEN, 'json')) as Session | null;
+    [kept, renewed] = await Promise.all([env.KV.get(KV_TOKEN, 'json') as Promise<Session | null>, env.KV.get(KV_RENEWED)]);
   } catch {
     return false;
   }
-  const version = await appVersion(env, nowMs);
-  if (kept && kept.version === version && kept.expMs - nowMs > aheadMs) return false;
-  // Straight to mint, past getSession's failed-mint memo: a renewal that
-  // fails leaves the kept token in use, and quiets nothing for the requests.
-  await mint(env, nowMs, version);
+  const leftMs = kept ? kept.expMs - nowMs : 0;
+  if (!kept || renewed || leftMs <= 0 || leftMs > aheadMs || kept.version !== (await appVersion(env, nowMs))) return false;
+  // getSession's own path: a mint already under way here is shared, and a
+  // failed one waits failMemoS. The kept token is still good, so a
+  // request that sees that memo uses it rather than minting.
+  await getSession(env, nowMs, { force: true });
+  await env.KV.put(KV_RENEWED, String(nowMs), { expirationTtl: RENEW_GAP_S }).catch(() => {});
   return true;
 }
+
+/** A mint wasn't tried: one failed a moment ago (failMemoS). No call was made. */
+export class MintQuiet extends Error {}
 
 const mintFailedKey = () => `${cacheBase()}/mint-failed`;
 const remintedKey = () => `${cacheBase()}/reminted`;
