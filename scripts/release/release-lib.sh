@@ -213,7 +213,7 @@ fresh_deps() {
 # Sparkle update: check the new Sparkle-for-Swift-Package-Manager.zip's
 # SHA-256 against the checksum in Sparkle's Package.swift at that tag, then
 # set these to the version and to `shasum -a 256 bin/sign_update` from it.
-SPARKLE_VERSION=2.10.0
+SPARKLE_VERSION=2.10.1
 SIGN_UPDATE_SHA256=43c249771bafc3aa581228abae00731a012d324691b8292860896635050be76b
 sign_update_tool() {
   pinned=$(python3 -c '
