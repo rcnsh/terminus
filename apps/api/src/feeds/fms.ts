@@ -22,6 +22,8 @@ import {
   mintWith,
   proxyEnvelope,
   proxyHeaders,
+  redactDetail,
+  renewAhead,
   renewSession,
 } from './auth.ts';
 import type { Session } from './auth.ts';
@@ -624,6 +626,7 @@ export async function getArrivals(env: Env, ctx: ExecutionContext, code: string,
     memoes: notOutdated,
     breaker: { ...breaker(), onOpen: (err) => noteBreakerOpen(env, 'nus', err, nowMs) },
     inflight,
+    onFail: (err) => noteFailure(env, 'arrivals', code, err),
   });
 }
 
@@ -647,6 +650,42 @@ export function opensBreaker(err: unknown): boolean {
  *  and the gate having nothing to share yet (feedgate.ts), which says
  *  nothing of the next call. */
 const notOutdated = (err: unknown): boolean => !(err instanceof UpstreamRejected && err.outdated) && !(err instanceof GateBusy);
+
+/** Why a NUS call failed, in a line short enough for a log or an Analytics Engine blob, credentials blanked. */
+export function failureReason(err: unknown): string {
+  const msg = err instanceof Error ? (err.name && err.name !== 'Error' ? `${err.name}: ${err.message}` : err.message) : String(err);
+  return redactDetail(msg).slice(0, 160);
+}
+
+/**
+ * Keeps why a call for a stop's arrivals or a service's buses failed: in
+ * the Worker's logs, and as an Analytics Engine 'error' row (route
+ * `feed arrivals` or `feed buses`, the reason in blob3), which the
+ * dashboard counts with the other errors. A failure that doesn't open the
+ * breaker leaves no other trace: the stop only reads as unavailable. Not
+ * the ones that say nothing of the feed (notOutdated).
+ */
+export function noteFailure(env: Env, what: 'arrivals' | 'buses', key: string, err: unknown): void {
+  if (!notOutdated(err)) return;
+  const reason = failureReason(err);
+  console.warn(`NUS ${what} for ${key} failed: ${reason}`);
+  if (typeof env.AE?.writeDataPoint !== 'function') return;
+  try {
+    env.AE.writeDataPoint({ blobs: ['error', `feed ${what}`, reason], doubles: [], indexes: ['error'] });
+  } catch {
+    // A lost row never changes the answer.
+  }
+}
+
+/**
+ * The cron's token step: a new guest token before the kept one runs out
+ * (renewAhead), unless the breaker says NUS is refusing us. True when it
+ * minted.
+ */
+export async function renewToken(env: Env, nowMs: number): Promise<boolean> {
+  if (!fmsConfigured(env) || (await breakerOpen())) return false;
+  return renewAhead(env, nowMs, TTL.tokenRenewAheadMs);
+}
 
 /** The shuttle feed's breaker: such a failure stops every call for breakerS.
  *  Made at each call: its key depends on the site (cacheBase). */
@@ -756,6 +795,7 @@ export async function getBuses(
     memoes: notOutdated,
     breaker: { ...breaker(), onOpen: (err) => noteBreakerOpen(env, 'nus', err, nowMs) },
     inflight: inflightBuses,
+    onFail: (err) => noteFailure(env, 'buses', svc, err),
   });
 }
 

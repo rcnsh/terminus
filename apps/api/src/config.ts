@@ -40,6 +40,10 @@ export const TTL = {
   tokenSkewS: 60,
   /** Fallback token lifetime when the token (a JWT) carries no exp. */
   tokenDefaultS: 3600,
+  /** The 15-minute cron mints a new token once the kept one has less than
+   *  this left (fms.ts renewToken): longer than a cron interval, so one run
+   *  always sees it before it runs out. */
+  tokenRenewAheadMs: 30 * 60_000,
 } as const;
 
 export const WALK = {

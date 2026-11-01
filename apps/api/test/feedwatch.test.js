@@ -1,6 +1,7 @@
 /**
- * The beta's cron asks neither NUS nor LTA (CLAUDE.md, rule 2): it reads the
- * breaker trips its own traffic noted (src/feeds/feedwatch.ts) as its check.
+ * The beta's cron makes no feed call to NUS or LTA (CLAUDE.md, rule 2), only
+ * the token's renewal: it reads the breaker trips its own traffic noted
+ * (src/feeds/feedwatch.ts) as its check.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -53,7 +54,7 @@ async function quietly(fn) {
   return logged;
 }
 
-test('the beta cron asks neither NUS nor LTA; the stable one asks each once', async () => {
+test('the beta cron makes no feed call to NUS or LTA; the stable one asks each once', async () => {
   for (const beta of [false, true]) {
     const fetchImpl = makeFetch({ byStop: { COM3: [] } });
     installGlobals(fetchImpl);
@@ -61,7 +62,7 @@ test('the beta cron asks neither NUS nor LTA; the stable one asks each once', as
     scopeCache(env);
     await quietly(() => runCron(env, FROZEN_NOW));
     if (beta) {
-      assert.deepEqual(fetchImpl.counts, { auth: 0, shuttle: 0, public: 0 }, 'the beta made no call to either feed');
+      assert.deepEqual(fetchImpl.counts, { auth: 1, shuttle: 0, public: 0 }, 'the beta asked NUS for a token alone (renewToken)');
       assert.equal((await readUpstream(env)).up, true, 'nothing seen failing: up, and checked');
       assert.equal((await readUpstream(env)).checkedAt, FROZEN_NOW, 'so /health does not take the cron for stopped');
     } else {

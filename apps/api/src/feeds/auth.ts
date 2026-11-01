@@ -279,6 +279,31 @@ export async function getSession(
   return minting;
 }
 
+/**
+ * Mints a token ahead of time when the kept one has less than [aheadMs]
+ * left, is for another version or is missing. True when it minted. The
+ * cron calls it (fms.ts renewToken), so the first request after a quiet
+ * spell finds a token ready instead of minting one, and a mint that fails
+ * fails for the cron, not for someone waiting for a bus. A token lasts a
+ * day, so that's still one mint a day, only earlier. A KV it can't read
+ * mints nothing: every run would mint otherwise.
+ */
+export async function renewAhead(env: Env, nowMs: number, aheadMs: number): Promise<boolean> {
+  if (!authConfigured(env)) return false;
+  let kept: Session | null;
+  try {
+    kept = (await env.KV.get(KV_TOKEN, 'json')) as Session | null;
+  } catch {
+    return false;
+  }
+  const version = await appVersion(env, nowMs);
+  if (kept && kept.version === version && kept.expMs - nowMs > aheadMs) return false;
+  // Straight to mint, past getSession's failed-mint memo: a renewal that
+  // fails leaves the kept token in use, and quiets nothing for the requests.
+  await mint(env, nowMs, version);
+  return true;
+}
+
 const mintFailedKey = () => `${cacheBase()}/mint-failed`;
 const remintedKey = () => `${cacheBase()}/reminted`;
 
