@@ -156,7 +156,9 @@ for e in json.load(open(sys.argv[1])):
   [ -n "$keys" ] || die "no fingerprints in apps/web/public/.well-known/assetlinks.json"
   for apk in "$@"; do
     certs=$("$signer" verify --print-certs "$apk" 2>&1) || die "$apk doesn't verify: $certs"
-    digests=$(printf '%s\n' "$certs" | sed -n 's/^Signer #[0-9]* certificate SHA-256 digest: \([0-9a-f]*\)$/\1/p')
+    # build-tools 36 prints "Signer #1 certificate SHA-256 digest: …",
+    # 37 "V2 Signer: certificate SHA-256 digest: …" (a line per scheme).
+    digests=$(printf '%s\n' "$certs" | sed -nE 's/^(V[0-9.]+ )?Signer( #[0-9]+)?:? certificate SHA-256 digest: ([0-9a-f]+)$/\3/p' | sort -u)
     [ -n "$digests" ] || die "$apk has no signer"
     for d in $digests; do
       printf '%s\n' "$keys" | grep -qx "$d" ||

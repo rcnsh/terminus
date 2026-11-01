@@ -54,7 +54,8 @@ object Spoken {
             if (answer.mode == "rest") answer.label else answer.clockLabel(clock).replace(" · ", L.s(R.string.a11y_leaves)),
             if (old) L.s(R.string.a11y_old) else answer.detail,
             answer.leaveText(now)?.takeIf { !old },
-            answer.timingText?.takeIf { !old },
+            // On the bus `detail` says when it arrives; the pill is left out too.
+            answer.timingText?.takeIf { !old && answer.card?.ride == null },
             answer.qualityText?.takeIf { !old },
             error?.takeIf { it != UPDATING },
         )

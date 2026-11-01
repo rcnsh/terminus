@@ -322,6 +322,16 @@ const TRIPS = makeDurableObjects(Trip, () => env);
 // The timelapse recorder, in-process too, on the fake feed.
 const TIMELAPSE = makeDurableObjects(TimelapseRecorder, () => env);
 const FEED_GATE = makeDurableObjects(FeedGate);
+/**
+ * Forgets every feed answer held: the edge cache's and the feed gates'. Each
+ * is fresh until its window has passed since it was fetched, so once the
+ * clock goes back before that (/__stub/at) it stays fresh for good, and the
+ * card counts from the other date's bus times.
+ */
+function forgetFeeds() {
+  edgeCache._store.clear();
+  FEED_GATE.instances.clear();
+}
 // Web Push: a fresh VAPID key each run (browsers subscribed to an old one just subscribe again).
 const vapid = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
 const VAPID = JSON.stringify(await crypto.subtle.exportKey('jwk', vapid.privateKey));
@@ -417,7 +427,7 @@ async function serve(req, res) {
   }
   if (req.method === 'POST' && req.url.startsWith('/__stub/hours')) {
     realHours(new URL(req.url, 'http://x').searchParams.get('real') === '1');
-    edgeCache._store.clear();
+    forgetFeeds();
     res.writeHead(200, { 'content-type': 'text/plain' });
     return res.end('ok\n');
   }
@@ -427,7 +437,7 @@ async function serve(req, res) {
     skipMs = process.env.STUB_NOW ? Date.parse(process.env.STUB_NOW) - realNow() : 0;
     frozenAt = null;
     realHours(process.env.STUB_HOURS === 'real');
-    edgeCache._store.clear();
+    forgetFeeds();
     res.writeHead(200, { 'content-type': 'text/plain' });
     return res.end(`now ${new Date(stubNow()).toISOString()}\n`);
   }
@@ -456,8 +466,7 @@ async function serve(req, res) {
       return res.end('t must be an ISO time, such as 2026-10-07T13:30:00Z\n');
     }
     skipMs = at - (frozenAt ?? realNow());
-    // What's cached was cached at the old time: going back, it would never expire.
-    edgeCache._store.clear();
+    forgetFeeds();
     res.writeHead(200, { 'content-type': 'text/plain' });
     return res.end(`now ${new Date(stubNow()).toISOString()}\n`);
   }

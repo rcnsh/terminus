@@ -2,7 +2,6 @@ package sh.rcn.terminus.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +20,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -342,17 +343,13 @@ private fun Steps(answer: NextAnswer, journey: Journey, now: Long, top: Top) {
             )
         }
     }
+    // Information, not a control: a line with the bus's icon, as on the Mac, never in a box that looks tappable.
     JourneyText.backup(answer, journey)?.let {
-        Text(
-            it,
-            style = MaterialTheme.typography.bodyMedium,
-            color = muted,
-            modifier =
-                Modifier.padding(top = 14.dp)
-                    .fillMaxWidth()
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(14.dp))
-                    .padding(horizontal = 14.dp, vertical = 11.dp),
-        )
+        Row(Modifier.padding(top = 14.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Icon(painterResource(R.drawable.ic_bus), contentDescription = null, tint = muted, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(it, style = MaterialTheme.typography.bodyMedium, color = muted)
+        }
     }
 }
 

@@ -5,8 +5,9 @@ import android.content.Intent
 import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -66,6 +67,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -73,6 +76,7 @@ import androidx.compose.runtime.withFrameMillis
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -121,6 +125,7 @@ import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.pow
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -128,6 +133,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.takeWhile
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import org.maplibre.compose.camera.CameraAnimation
 import org.maplibre.compose.camera.CameraFit
@@ -798,9 +804,10 @@ internal fun SvcTag(svc: String, color: Color, onClick: (() -> Unit)? = null) {
  * The frame a stop's sheet and a bus's share, so the two read alike: a grab handle; a [lead] tile beside the [title], [sub] and close; a
  * line of [facts]; then [body] (a [SectionBand] and its rows); then the [footer]'s buttons.
  *
- * The grab handle does what it promises: dragged down, the sheet follows the finger and closes, as a bottom sheet does. [handle], when set,
- * comes first: a drag up or a tap on the handle opens what it holds (true, or null to toggle), and a drag down closes that (false) before
- * the sheet, returning whether it changed anything.
+ * The grab handle does what it promises: dragged down, the sheet follows the finger and, let go, slides off at the finger's speed, as a
+ * bottom sheet does; dragged up, it gives a little and springs back. [handle], when set, comes first: a drag up or a tap on the handle
+ * opens what it holds (true, or null to toggle), and a drag down closes that (false) before the sheet, returning whether it changed
+ * anything.
  */
 @Composable
 private fun MapSheetFrame(
@@ -819,21 +826,47 @@ private fun MapSheetFrame(
     // A pane of its own, named for what's in it, and a screen reader's focus
     // moved to its title when it opens or shows another stop or bus.
     val focus = remember { FocusRequester() }
-    LaunchedEffect(focusKey) { runCatching { focus.requestFocus() } }
     // Up past a few dp, [handle] opens; down far enough or flung, [handle]
     // closes, else the sheet does. While dragging down the sheet follows the
-    // finger, and springs back if let go short.
+    // finger; up, it gives less and less (Fling.rubber). Let go, it carries on
+    // from where it is at the finger's speed: off the bottom, or back.
     var dragged by remember { mutableFloatStateOf(0f) }
     var dragging by remember { mutableStateOf(false) }
+    // Where this drag took it from: a catch mid-slide starts away from rest, and
+    // what decides is how far the finger then moved it, so a catch and let go keeps it.
+    var caught by remember { mutableFloatStateOf(0f) }
     val drag = rememberDraggableState { dragged += it }
     val density = LocalDensity.current
     val dragMin = with(density) { 24.dp.toPx() }
     val closeMin = with(density) { 96.dp.toPx() }
     val flingMin = with(density) { 800.dp.toPx() }
-    val follow by animateFloatAsState(if (dragging) dragged.coerceAtLeast(0f) else 0f, if (dragging) snap() else spring(), label = "sheet")
+    val lift = with(density) { 22.dp.toPx() }
+    val settle = remember { Animatable(0f) }
+    var height by remember { mutableIntStateOf(0) }
+    val scope = rememberCoroutineScope()
+    // Another stop or bus opened while this one slides off stays open.
+    val showing by rememberUpdatedState(focusKey)
+    val y = { if (dragging) Fling.rubber(dragged, lift) else settle.value }
+    LaunchedEffect(focusKey) {
+        settle.snapTo(0f)
+        runCatching { focus.requestFocus() }
+    }
+    // No bounce, about 0.3 s, as on the iPhone; done within a pixel, so a closing sheet goes when it's out of sight.
+    val motion = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessMediumLow, visibilityThreshold = 1f)
+    val surface = c.surface
     Surface(
         modifier =
-            Modifier.fillMaxWidth().heightIn(max = 480.dp).offset { IntOffset(0, follow.roundToInt()) }.semantics { paneTitle = paneName },
+            Modifier.fillMaxWidth()
+                .heightIn(max = 480.dp)
+                .onSizeChanged { height = it.height }
+                .offset { IntOffset(0, y().roundToInt()) }
+                // Lifted, the sheet's colour carries on under it, so the map doesn't show through below; over the
+                // sheet's shadow, which would draw a grey band there.
+                .drawWithContent {
+                    drawContent()
+                    if (y() < 0f) drawRect(surface, Offset(0f, size.height - 1f), Size(size.width, -y() + 1f))
+                }
+                .semantics { paneTitle = paneName },
         shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
         color = c.surface,
         shadowElevation = 8.dp,
@@ -845,15 +878,34 @@ private fun MapSheetFrame(
                     Modifier.draggable(
                         drag,
                         Orientation.Vertical,
-                        onDragStarted = { dragging = true },
+                        // Caught on its way off or back, at a touch, it stays under the finger from where
+                        // it's drawn: the finger first, then the slide stopped.
+                        startDragImmediately = settle.isRunning,
+                        onDragStarted = {
+                            dragged = Fling.unrubber(settle.value, lift)
+                            caught = dragged
+                            dragging = true
+                            settle.stop()
+                        },
                         onDragStopped = { velocity ->
-                            when {
-                                dragged < -dragMin -> handle?.invoke(true)
-                                dragged > closeMin || (dragged > dragMin && velocity > flingMin) ->
-                                    if (handle?.invoke(false) != true) onClose()
-                            }
+                            val d = dragged
+                            val moved = d - caught
+                            // Drawn where the finger left it, then let go of: no jump.
+                            settle.snapTo(Fling.rubber(d, lift))
                             dragging = false
                             dragged = 0f
+                            val closing = (d > closeMin && moved > dragMin) || (moved > dragMin && velocity > flingMin)
+                            if (closing && handle?.invoke(false) != true) {
+                                val mine = focusKey
+                                scope.launch {
+                                    settle.animateTo(height + lift, motion, initialVelocity = velocity)
+                                    if (showing == mine) onClose()
+                                }
+                            } else {
+                                if (moved < -dragMin) handle?.invoke(true)
+                                val back = Fling.backSpeed(velocity, d, lift, sqrt(motion.stiffness))
+                                scope.launch { settle.animateTo(0f, motion, initialVelocity = back) }
+                            }
                         },
                     )
                 ) {

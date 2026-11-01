@@ -1,5 +1,6 @@
 /**
- * The beta's cron asks neither NUS nor LTA (CLAUDE.md, rule 2): it reads the
+ * The beta's cron makes no feed call to NUS or LTA (CLAUDE.md, rule 2), only
+ * the token's renewal, ahead of its end (feed-token.test.js): it reads the
  * breaker trips its own traffic noted (src/feeds/feedwatch.ts) as its check.
  */
 import test from 'node:test';
@@ -53,7 +54,7 @@ async function quietly(fn) {
   return logged;
 }
 
-test('the beta cron asks neither NUS nor LTA; the stable one asks each once', async () => {
+test('the beta cron makes no feed call to NUS or LTA; the stable one asks each once', async () => {
   for (const beta of [false, true]) {
     const fetchImpl = makeFetch({ byStop: { COM3: [] } });
     installGlobals(fetchImpl);
