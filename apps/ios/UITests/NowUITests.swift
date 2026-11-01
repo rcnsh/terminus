@@ -30,7 +30,9 @@ final class NowUITests: XCTestCase {
 
     /// Scrolls until `e` is on screen, clear of the tab bar.
     private func reveal(_ e: XCUIElement, in app: XCUIApplication) {
-        XCTAssertTrue(e.waitForExistence(timeout: 15), "\(e) never came")
+        let came = e.waitForExistence(timeout: 15)
+        if !came { shot("failed-reveal-\(name)", app) }
+        XCTAssertTrue(came, "\(e) never came")
         let bar = app.tabBars.firstMatch.frame
         for _ in 0..<8 where !(e.isHittable && e.frame.maxY < bar.minY) {
             app.swipeUp(velocity: .slow)
