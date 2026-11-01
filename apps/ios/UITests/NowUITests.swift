@@ -1,3 +1,4 @@
+import CoreLocation
 import XCTest
 
 /// Now against the dev stub: the trip, its card styles, Nearby, the search,
@@ -10,6 +11,11 @@ final class NowUITests: XCTestCase {
         // A Wednesday at 09:30, with every service running; each launch puts the class 50 minutes on.
         stubPost("/__stub/reset")
         stubPost("/__stub/at?t=2026-10-07T01:30:00Z")
+        // A short walk north of PGP, not at its stop, where the Buses suite leaves
+        // the simulator: there the card is "At the stop", which has no Later bus.
+        MainActor.assumeIsolated {
+            XCUIDevice.shared.location = XCUILocation(location: CLLocation(latitude: 1.2927, longitude: 103.7803))
+        }
     }
 
     override func tearDown() {
