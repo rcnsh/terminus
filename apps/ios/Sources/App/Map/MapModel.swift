@@ -23,6 +23,14 @@ final class MapModel {
         }
         case stop(String, from: Bus? = nil)
         case bus(Bus)
+
+        /// The stop or bus it's about, whatever else about it changes.
+        var subject: String {
+            switch self {
+            case .stop(let code, _): "stop:\(code)"
+            case .bus(let b): "bus:\(b.id)"
+            }
+        }
     }
 
     /// What the line under the pills says about the live buses.
@@ -269,6 +277,13 @@ final class MapModel {
         }
         focus = Spot(lat: stop.lat, lon: stop.lon)
         focusCount += 1
+    }
+
+    /// Closes the sheet only while it still shows `shown`'s stop or bus: a
+    /// sheet flung away just as another was opened closes nothing.
+    func closeSheet(ifShowing shown: Sheet?) {
+        guard let shown, let now = sheet, now.subject == shown.subject else { return }
+        closeSheet()
     }
 
     func closeSheet() {

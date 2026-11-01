@@ -144,13 +144,16 @@ private struct RemovedRow: View {
 
 /// Swipe either way to take it off today, a shortcut for the ×. The row
 /// lifts onto a card as it moves; behind it a bin, grey until it's far
-/// enough to let go, then red.
+/// enough to let go, then red. A quick flick goes too, short of that: what
+/// counts is where the row is heading when it's let go.
 private struct SwipeAway<Content: View>: View {
     let onRemove: () -> Void
     @ViewBuilder var content: Content
     @State private var dx: CGFloat = 0
     @State private var width: CGFloat = 1
-    private var armed: Bool { abs(dx) > min(140, width * 0.4) }
+    @Environment(\.accessibilityReduceMotion) private var still
+    private var reach: CGFloat { min(140, width * 0.4) }
+    private var armed: Bool { abs(dx) > reach }
 
     var body: some View {
         content
@@ -184,15 +187,26 @@ private struct SwipeAway<Content: View>: View {
                         guard abs(v.translation.width) > abs(v.translation.height) else { return }
                         dx = v.translation.width
                     }
-                    .onEnded { _ in
-                        if armed {
-                            withAnimation(.easeOut(duration: 0.2)) { dx = dx > 0 ? width : -width }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    .onEnded { v in
+                        guard dx != 0 else { return }
+                        let speed = v.velocity.width
+                        // It carries on at the finger's speed, out or back. A
+                        // flick counts only while it's still sideways: a drag
+                        // that turned into a scroll removes nothing short of the bin.
+                        let heading = dx + Fling.project(speed)
+                        let sideways =
+                            abs(v.velocity.width) > abs(v.velocity.height) && abs(v.translation.width) > abs(v.translation.height)
+                        if (armed || sideways) && abs(heading) > reach && (heading > 0) == (dx > 0) {
+                            let out = dx > 0 ? width : -width
+                            withAnimation(still ? nil : Fling.spring(speed: speed, from: dx, to: out)) {
+                                dx = out
+                            } completion: {
+                                // The row leaves the list at once (one that comes back is a new
+                                // row), so it stays out here rather than flashing back as it goes.
                                 onRemove()
-                                dx = 0
                             }
                         } else {
-                            withAnimation(.spring(duration: 0.3)) { dx = 0 }
+                            withAnimation(still ? nil : Fling.spring(speed: speed, from: dx, to: 0)) { dx = 0 }
                         }
                     }
             )

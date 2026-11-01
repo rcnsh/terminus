@@ -11,6 +11,7 @@ struct NowView: View {
     @Environment(Prefs.self) private var prefs
     @Environment(\.colorScheme) private var scheme
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dynamicTypeSize) private var typeSize
     private let sky = SkyClock.shared
     private let locator = Locator.shared
     @State private var searching = false
@@ -175,9 +176,12 @@ struct NowView: View {
 
     /// Next and Nearby first, as on the widget, then favourites and the
     /// places added from "Go somewhere else" (each with an ×); the row
-    /// scrolls, its end fading while there's more. Then the search.
+    /// scrolls, its end fading while there's more. Then the search: kept in
+    /// view after the row, or at the largest text sizes, where the two
+    /// wouldn't both fit, the row's last chip.
     private var chips: some View {
-        HStack(spacing: 4) {
+        let searchInRow = typeSize.isAccessibilitySize
+        return HStack(spacing: 8) {
             ScrollViewReader { reader in
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -194,8 +198,11 @@ struct NowView: View {
                             }
                             .id(a.code)
                         }
+                        if searchInRow { elsewhere }
                     }
                     .padding(.vertical, 2)
+                    // Scrolled to the end, the last chip clears the fade.
+                    .padding(.trailing, FadeEnd.width)
                 }
                 .mask(FadeEnd())
                 // Chosen here, or on the map or Buses (Go there) while Now was away: in view either way.
@@ -206,10 +213,14 @@ struct NowView: View {
                     if case .code(let c, _) = app.target { reader.scrollTo(c, anchor: .trailing) }
                 }
             }
-            // Worded, not a bare magnifier, so it reads as one more place to go,
-            // as on the web and Android. The search opens under the chips.
-            ElsewhereChip(open: searching) { withAnimation(.snappy) { searching.toggle() } }
+            if !searchInRow { elsewhere }
         }
+    }
+
+    /// Worded, not a bare magnifier, so it reads as one more place to go,
+    /// as on the web and Android. The search opens under the chips.
+    private var elsewhere: some View {
+        ElsewhereChip(open: searching) { withAnimation(.snappy) { searching.toggle() } }
     }
 
     private func isTarget(_ a: AppModel.Added) -> Bool {
@@ -220,8 +231,12 @@ struct NowView: View {
     // MARK: the foot
 
     /// One quiet line, as the web shows it: "Updated 9:41 · Is this wrong?".
+    /// In campus time on the server's clock, as the card's own times and the
+    /// web's and Android's footers are, so it never sits hours from "Arrive".
     private var footer: some View {
-        let parts = [app.error, app.fetchedAt.map { L("Updated %@", deviceTime($0)) }].compactMap { $0 }
+        let parts = [app.error, app.fetchedAt.map { L("Updated %@", campusTime($0.addingTimeInterval(ServerClock.skew))) }].compactMap {
+            $0
+        }
         return HStack(spacing: 0) {
             if app.loading {
                 ProgressView()
@@ -258,9 +273,6 @@ struct NowView: View {
 @MainActor func openAppSettings() {
     if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
 }
-
-/// A time on the phone's clock, in the account's style: "Updated 9:41".
-func deviceTime(_ d: Date) -> String { clockText(d, in: .current) }
 
 /// The wordmark in the sky's ink, the accent the sky's.
 private struct NowWordmark: View {
@@ -313,10 +325,13 @@ struct NowChip: View {
 
 /// The chips' row fades out at its end while there's more to scroll to.
 private struct FadeEnd: View {
+    /// Wide enough that a chip cut off at the end reads as going on, not as clipped.
+    static let width: CGFloat = 44
+
     var body: some View {
         HStack(spacing: 0) {
             Rectangle()
-            LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: 24)
+            LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: Self.width)
         }
     }
 }

@@ -114,15 +114,17 @@ struct JourneyGround: View {
                 Tags(answer: a, journey: j)
             case .steps:
                 StepsLine(answer: a, journey: j, now: now).padding(.top, 18)
+                // Information, not a control: a line with the bus's icon, as on the Mac, never in a box that looks tappable.
                 if let backup = JourneyText.backup(a, j) {
-                    Text(backup)
-                        .font(.subheadline)
-                        .foregroundStyle(Color.muted)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 11)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.line))
-                        .padding(.top, 14)
+                    Label {
+                        Text(backup)
+                    } icon: {
+                        Image(systemName: "bus")
+                    }
+                    .font(.subheadline)
+                    .foregroundStyle(Color.muted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 14)
                 }
             }
             // A busy bus and an estimate are small print, not more headlines.

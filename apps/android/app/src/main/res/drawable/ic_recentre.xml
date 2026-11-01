@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- "Back to campus" on the map: a target. -->
+<!-- "Back to campus" on the map: a building with columns, the campus, never a target, which reads as "where I am". -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
@@ -10,8 +10,6 @@
         android:strokeColor="#FF000000"
         android:strokeWidth="1.8"
         android:strokeLineCap="round"
-        android:pathData="M12,5a7,7 0,1 1,0 14a7,7 0,1 1,0 -14zM12,2v3M12,19v3M2,12h3M19,12h3" />
-    <path
-        android:fillColor="#FF000000"
-        android:pathData="M12,9.5a2.5,2.5 0,1 1,0 5a2.5,2.5 0,1 1,0 -5z" />
+        android:strokeLineJoin="round"
+        android:pathData="M3,9.5L12,4l9,5.5zM6,12.5v5M10,12.5v5M14,12.5v5M18,12.5v5M3,20.5h18" />
 </vector>

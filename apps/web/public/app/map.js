@@ -319,7 +319,7 @@ async function build(container) {
         b.setAttribute('aria-label', t('Back to campus'));
         // A constant, never data.
         b.innerHTML =
-          '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/></svg>';
+          '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M3,9.5L12,4l9,5.5zM6,12.5v5M10,12.5v5M14,12.5v5M18,12.5v5M3,20.5h18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
         b.onclick = toCampus;
         this.box.append(b);
         return this.box;

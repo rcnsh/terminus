@@ -44,7 +44,8 @@ enum Spoken {
             head,
             old ? L("These times are old") : a.detail,
             old ? nil : a.leaveText(now: now),
-            old ? nil : a.timing?.text,
+            // On the bus `detail` says when it arrives; the pill is left out too.
+            old || a.card?.ride != nil ? nil : a.timing?.text,
             old ? nil : a.qualityText
         )
     }

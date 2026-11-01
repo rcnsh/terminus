@@ -32,6 +32,15 @@ private struct SheetFrame<Lead: View, Facts: View, Content: View, Footer: View>:
     @ViewBuilder let footer: () -> Footer
 
     @State private var dragged: CGFloat = 0
+    /// How tall the whole sheet is, for a fling to carry it off the bottom.
+    @State private var sheetHeight: CGFloat = 400
+    /// Taken off the screen, or replaced by another stop's or bus's sheet:
+    /// a fling still on its way out then closes nothing.
+    @State private var gone = false
+    /// Bumped by each fling and each touch: a fling's close runs only if nothing came after it.
+    @State private var flight = 0
+    /// How far an upward drag can lift the sheet, however far the finger goes.
+    private let lift: CGFloat = 22
     /// How tall the header and rows are, for the sheet to be no taller.
     @State private var contentHeight: CGFloat = 200
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -60,17 +69,30 @@ private struct SheetFrame<Lead: View, Facts: View, Content: View, Footer: View>:
         }
         .clipShape(UnevenRoundedRectangle(topLeadingRadius: 20, topTrailingRadius: 20, style: .continuous))
         // The shadow is the sheet's own, not cast by each band and row inside it.
+        // Pulled up, it runs on below the sheet, so no gap opens under it.
         .background {
             UnevenRoundedRectangle(topLeadingRadius: 20, topTrailingRadius: 20, style: .continuous)
                 .fill(Color.surface)
+                .padding(.bottom, dragged < 0 ? -lift : 0)
                 .shadow(color: .black.opacity(0.16), radius: 12, y: -2)
         }
         .overlay(
             UnevenRoundedRectangle(topLeadingRadius: 20, topTrailingRadius: 20, style: .continuous).strokeBorder(Color.line, lineWidth: 0.5)
         )
-        .offset(y: max(0, dragged))
+        .onGeometryChange(for: CGFloat.self) {
+            $0.size.height
+        } action: {
+            sheetHeight = $0
+        }
+        .offset(y: Fling.rubber(dragged, limit: lift))
         // VoiceOver moves to its title when it opens, or shows another stop or bus.
-        .onAppear { titleFocused = true }
+        // Back from another tab mid-fling, it's in place again rather than parked off the screen.
+        .onAppear {
+            titleFocused = true
+            gone = false
+            dragged = 0
+        }
+        .onDisappear { gone = true }
     }
 
     /// No taller than about half the screen, so the map stays in view above it.
@@ -146,20 +168,42 @@ private struct SheetFrame<Lead: View, Facts: View, Content: View, Footer: View>:
     }
 
     /// Up past a few points, `handle` opens; down far enough or flung,
-    /// `handle` closes, else the sheet does. While dragging down the sheet
-    /// follows the finger, and springs back if let go short.
+    /// `handle` closes, else the sheet does. Down, the sheet follows the
+    /// finger; up, it gives a little and resists. Let go, it moves on at the
+    /// finger's speed: back into place, or off the bottom and then closed.
     private var drag: some Gesture {
         DragGesture(minimumDistance: 8)
-            .onChanged { dragged = $0.translation.height }
+            .onChanged {
+                flight += 1
+                dragged = $0.translation.height
+            }
             .onEnded { v in
                 let d = v.translation.height
+                let speed = v.velocity.height
                 let flung = v.predictedEndTranslation.height - d > 200
                 if d < -24 {
                     _ = handle?(true)
-                } else if d > 96 || (d > 24 && flung) {
-                    if handle?(false) != true { close() }
+                } else if d > 96 || (d > 24 && flung), handle?(false) != true {
+                    if reduceMotion {
+                        close()
+                        return
+                    }
+                    let off = sheetHeight + lift
+                    flight += 1
+                    let mine = flight
+                    withAnimation(Fling.spring(speed: speed, from: dragged, to: off)) {
+                        dragged = off
+                    } completion: {
+                        // Caught again on its way out, or gone already: it stays.
+                        if mine == flight && !gone { close() }
+                    }
+                    return
                 }
-                withAnimation(reduceMotion ? nil : .spring(duration: 0.3)) { dragged = 0 }
+                // What springs back is where the sheet is drawn, at the speed it was moving there.
+                let shownSpeed = Fling.rubberSpeed(speed, at: dragged, limit: lift)
+                withAnimation(reduceMotion ? nil : Fling.spring(speed: shownSpeed, from: Fling.rubber(dragged, limit: lift), to: 0)) {
+                    dragged = 0
+                }
             }
     }
 }
@@ -253,16 +297,18 @@ private struct SvcChip: View {
     let hex: String?
     var paid = false
     var faded = false
+    /// Grows with the phone's text size, as the times beside it and the Buses tab's chips do.
+    @ScaledMetric(relativeTo: .body) private var scale: CGFloat = 1
 
     var body: some View {
         let rgb = hex.flatMap(hexRGB) ?? 0x8A939C
         Text(verbatim: paid ? "\(svc) $" : svc)
-            .font(.system(size: 14, weight: .heavy))
+            .font(.system(size: 14 * scale, weight: .heavy))
             .lineLimit(1)
             .fixedSize()
             .foregroundStyle(inkOn(rgb))
             .padding(.horizontal, 8)
-            .frame(minWidth: 42, minHeight: 28)
+            .frame(minWidth: 42 * scale, minHeight: 28 * scale)
             .background(Color(rgb: rgb), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
             .opacity(faded ? 0.35 : 1)
             .accessibilityLabel(paid ? L("Public bus %@, fare applies", svc) : L("Bus %@", svc))
@@ -287,7 +333,7 @@ struct StopSheet: View {
         SheetFrame(
             title: stop.name,
             sub: stop.longName.flatMap { $0 == stop.name ? nil : $0 },
-            close: map.closeSheet,
+            close: { [shown = map.sheet] in map.closeSheet(ifShowing: shown) },
             back: back ? { map.back() } : nil
         ) {
             // A stop's tile, where a bus's has its service: the two headers line up.
@@ -639,7 +685,7 @@ struct BusSheet: View {
         SheetFrame(
             title: title,
             sub: bus.towards != nil ? where_ : nil,
-            close: map.closeSheet,
+            close: { [shown = map.sheet] in map.closeSheet(ifShowing: shown) },
             handle: strip.any
                 ? { want in
                     let next = want ?? !open

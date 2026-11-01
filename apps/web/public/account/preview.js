@@ -13,6 +13,14 @@ import { Celestial, Horizon, NightSky } from './sky.js';
  * it's 15 minutes old), as every client rules. A card with no staleAt
  * (setup, rest, free) never is; an answer with no card at all always is.
  */
+/**
+ * Whether the card shows its "Arrive 09:51 · 9 min early" pill: not when the
+ * line above already says it, and never on the bus, where `detail` always
+ * does (as on the Mac, iPhone and Android).
+ */
+export const showsTiming = (a) =>
+  Boolean(a.timing?.text) && !a.card?.ride && !a.detail?.toLowerCase().includes(a.timing.text.toLowerCase());
+
 export const isStale = (a) => (!a?.card ? true : a.card.staleAt ? serverNow() >= Date.parse(a.card.staleAt) : false);
 
 /** The only part that ticks: "Leave now" once leave.at passes. The words are the server's (card.ts);
@@ -396,7 +404,7 @@ export function Card({ a, onAnswer, onChoice, onPlace = null, chips = false, sky
         ${timed && !old && html`<${Countdown} at=${a.departsAt} />`}
         <div class="detail">${old ? t('Updating times…') : a.detail}</div>
         ${a.leave && a.card && !old && html`<div class="leave">${leaveText(a)}</div>`}
-        ${a.timing && !old && !a.detail?.includes(a.timing.text) && html`<span class=${`ontime ${a.timing.status}`}>${a.timing.text}</span>`}
+        ${!old && showsTiming(a) && html`<span class=${`ontime ${a.timing.status}`}>${a.timing.text}</span>`}
       <//>
       ${notes && html`<div class="note">${notes}</div>`}
       ${!old && steps}${actions}${row}

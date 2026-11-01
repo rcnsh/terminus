@@ -126,6 +126,7 @@ struct BusesHome: View {
     @FocusState private var focused: Bool
     @State private var page: String? = nearestID
     @State private var pull = SkyPull()
+    @State private var spot = PagerSpot()
     private let sky = SkyClock.shared
 
     private var searching: Bool { focused || !query.trimmingCharacters(in: .whitespaces).isEmpty }
@@ -185,28 +186,17 @@ struct BusesHome: View {
 
     // MARK: the headers in the sky
 
-    /// The page in view's header; every header laid out under it, unseen, so
-    /// the band is as tall as the longest name and doesn't jump on a swipe.
     private var headers: some View {
-        ZStack(alignment: .topLeading) {
-            ForEach(Array(ids.enumerated()), id: \.element) { i, _ in
-                PageHeader(index: i, code: pages[i]).hidden().accessibilityHidden(true)
-            }
-            PageHeader(index: index, code: pages[index])
-                .id(ids[index])
-                .transition(.opacity)
-        }
-        .animation(.easeOut(duration: 0.2), value: index)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(Rectangle())
-        // The name swipes as the board does.
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 24).onEnded { g in
-                guard abs(g.translation.width) > abs(g.translation.height) else { return }
-                let to = g.translation.width < -40 ? index + 1 : g.translation.width > 40 ? index - 1 : index
-                guard to != index, ids.indices.contains(to) else { return }
-                withAnimation(.snappy) { page = ids[to] }
-            })
+        PageHeaders(ids: ids, pages: pages, index: index, spot: spot)
+            .contentShape(Rectangle())
+            // The name swipes as the board does.
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 24).onEnded { g in
+                    guard abs(g.translation.width) > abs(g.translation.height) else { return }
+                    let to = g.translation.width < -40 ? index + 1 : g.translation.width > 40 ? index - 1 : index
+                    guard to != index, ids.indices.contains(to) else { return }
+                    withAnimation(.snappy) { page = ids[to] }
+                })
     }
 
     /// The pages as dots, the one in view long; the nearest stop's an arrow.
@@ -259,11 +249,95 @@ struct BusesHome: View {
                 }
             }
             .scrollTargetLayout()
+            .onGeometryChange(for: CGFloat.self) {
+                $0.frame(in: .named("pager")).minX
+            } action: {
+                spot.x = $0
+            }
+        }
+        .coordinateSpace(name: "pager")
+        .onGeometryChange(for: CGFloat.self) {
+            $0.size.width
+        } action: {
+            spot.width = $0
         }
         .scrollTargetBehavior(.paging)
         .scrollPosition(id: $page)
         .scrollIndicators(.hidden)
         .scrollClipDisabled()
+    }
+}
+
+/// Where the boards are as the finger moves them, apart from the tab's own
+/// state, so a swipe redraws only the names that follow it.
+@MainActor @Observable
+final class PagerSpot {
+    /// How far the boards are scrolled, in points; nil until they're laid out.
+    var x: CGFloat?
+    var width: CGFloat = 0
+    /// Where the boards are, in pages: 1.5 is halfway from the second to the third.
+    var pages: CGFloat? { x.flatMap { width > 0 ? -$0 / width : nil } }
+}
+
+/// The page in view's header; every header laid out under it, unseen, so
+/// the band is as tall as the longest name and doesn't jump on a swipe.
+/// The names move with the boards under the finger: the one going fades
+/// and slides the way the board does as the next comes in.
+private struct PageHeaders: View {
+    let ids: [String]
+    let pages: [String?]
+    let index: Int
+    let spot: PagerSpot
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            // Apart from the moving names, so a swipe doesn't lay these out again each frame.
+            PageHeaderSizes(ids: ids, pages: pages)
+            MovingPageHeaders(ids: ids, pages: pages, index: index, spot: spot)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Every page's header, unseen: the band's height.
+private struct PageHeaderSizes: View {
+    let ids: [String]
+    let pages: [String?]
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            ForEach(Array(ids.enumerated()), id: \.element) { i, _ in
+                PageHeader(index: i, code: pages[i]).hidden().accessibilityHidden(true)
+            }
+        }
+    }
+}
+
+/// The names that follow the boards, from where the pager says it is.
+private struct MovingPageHeaders: View {
+    let ids: [String]
+    let pages: [String?]
+    let index: Int
+    let spot: PagerSpot
+    @Environment(\.accessibilityReduceMotion) private var still
+
+    var body: some View {
+        // Within a page of the one in view, as during a swipe (it lands a page on
+        // before `index` follows); anything further
+        // is the pager being laid out again (after a search), so the page in view.
+        let at = spot.pages.flatMap { abs($0 - CGFloat(index)) <= 1 ? $0 : nil } ?? CGFloat(index)
+        ZStack(alignment: .topLeading) {
+            ForEach(Array(ids.enumerated()), id: \.element) { i, _ in
+                let away = CGFloat(i) - at
+                if abs(away) < 1 {
+                    // Each is gone by halfway, so the two names never sit over each other half-drawn.
+                    PageHeader(index: i, code: pages[i])
+                        .opacity(max(0, 1 - abs(away) * 2))
+                        .offset(x: still ? 0 : away * 56)
+                        .accessibilityHidden(i != index)
+                }
+            }
+        }
     }
 }
 

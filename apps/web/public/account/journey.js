@@ -404,7 +404,13 @@ function Steps({ a, j, now, late, top }) {
       ${j.bus && j.walkEnd && html`<${LinePoint} time=${j.arriveStop ?? ''} dot="stop" line="walk" below=${walkEndText(j)}><strong>${j.toStop}</strong><//>`}
       <${LinePoint} time=${j.arrive ?? ''} dot="end" late=${Boolean(late)}><strong>${!j.bus || j.walkEnd ? place(j) : j.toStop}</strong><//>
     </ol>
-    ${b && html`<div class="backup-box">${b}</div>`}
+    ${
+      b &&
+      html`<p class="backup-line">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="3" width="15" height="15" rx="3"/><path d="M4.5 11h15M8 21v-3M16 21v-3"/><circle cx="8.5" cy="14.5" r="1" fill="currentColor"/><circle cx="15.5" cy="14.5" r="1" fill="currentColor"/></svg
+      ><span>${b}</span>
+    </p>`
+    }
   `;
 }
 

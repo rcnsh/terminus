@@ -11,8 +11,10 @@ import { GRAPH } from '../../api/src/answer/graph.ts';
 import { haversineM } from '../../api/src/geo.ts';
 import { residenceList, residenceWalkMin as serverWalkMin } from '../../api/src/answer/residences.ts';
 import classBus from '../../../fixtures/answers/class-bus.json' with { type: 'json' };
+import riding from '../../../fixtures/answers/riding.json' with { type: 'json' };
+import ridingZh from '../../../fixtures/answers/zh/riding.json' with { type: 'json' };
 
-const { isStale, leaveHead, leaveText } = await web('account/preview.js');
+const { isStale, leaveHead, leaveText, showsTiming } = await web('account/preview.js');
 const P = await web('account/profile.js');
 const { t } = await web('account/dom.js');
 
@@ -430,4 +432,19 @@ test('a failed import keeps the changes made while it ran, and saves them', asyn
     await until(() => server.puts.length === 1 && server.doc.walkPace === 'fast');
     assert.deepEqual(server.doc.trips, []);
   });
+});
+
+test('on the bus the arrival is said once, in the line under the headline, not again in a pill', () => {
+  for (const a of [riding, ridingZh]) {
+    assert.ok(a.card.ride && a.timing.text, 'the fixture is a ride with a timing');
+    assert.equal(showsTiming(a), false);
+    // On the bus even when the line words the arrival differently: still no pill.
+    assert.equal(showsTiming({ ...a, detail: 'Off at UTown' }), false);
+  }
+  // Off the bus, a pill that says something the line doesn't is shown.
+  const off = { ...riding, card: { ...riding.card, ride: null }, detail: 'Off at UTown' };
+  assert.equal(showsTiming(off), true);
+  // The line saying it already, whatever its case: no pill.
+  assert.equal(showsTiming({ ...off, detail: `Off at UTown · ${riding.timing.text.toLowerCase()}` }), false);
+  assert.equal(showsTiming({ ...off, timing: { status: 'late' } }), false);
 });

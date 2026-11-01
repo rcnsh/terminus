@@ -47,7 +47,7 @@ final class SystemUITests: XCTestCase {
         addWidget(page: 2)
         addWidget(page: 4)
         doneEditing()
-        XCTAssertEqual(widgets().count, 3)
+        XCTAssertEqual(shownWidgets(), 3)
         sleep(3)
         shot("widgets-small-medium-\(tag)", springboard)
     }
@@ -78,7 +78,7 @@ final class SystemUITests: XCTestCase {
         addWidget(page: 6)
         addWidget(page: 7)
         doneEditing()
-        XCTAssertEqual(widgets().count, 2)
+        XCTAssertEqual(shownWidgets(), 2)
         sleep(3)
         shot("widgets-nearby-small-medium-\(tag)", springboard)
         clearWidgets()
@@ -300,6 +300,13 @@ final class SystemUITests: XCTestCase {
 
     func widgets() -> XCUIElementQuery {
         springboard.icons.matching(NSPredicate(format: "identifier == 'terminus' AND value == 'Widget'"))
+    }
+
+    /// How many terminus widgets are on the screen, not counting the copies
+    /// SpringBoard lists off its left edge (see `shownWidget`), whose number varies.
+    func shownWidgets() -> Int {
+        let screen = springboard.frame
+        return widgets().allElementsBoundByIndex.filter { screen.contains($0.frame) }.count
     }
 
     /// The terminus widget on the screen. SpringBoard also lists one off its

@@ -512,7 +512,7 @@ private struct MapControls: View {
             Button {
                 map.recentre += 1
             } label: {
-                Image(systemName: "scope")
+                Image(systemName: "building.columns")
             }
             .control(L("Back to campus"))
         }

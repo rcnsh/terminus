@@ -1,3 +1,4 @@
+import CoreLocation
 import XCTest
 
 /// Now against the dev stub: the trip, its card styles, Nearby, the search,
@@ -10,6 +11,11 @@ final class NowUITests: XCTestCase {
         // A Wednesday at 09:30, with every service running; each launch puts the class 50 minutes on.
         stubPost("/__stub/reset")
         stubPost("/__stub/at?t=2026-10-07T01:30:00Z")
+        // A short walk north of PGP, not at its stop, where the Buses suite leaves
+        // the simulator: there the card is "At the stop", which has no Later bus.
+        MainActor.assumeIsolated {
+            XCUIDevice.shared.location = XCUILocation(location: CLLocation(latitude: 1.2927, longitude: 103.7803))
+        }
     }
 
     override func tearDown() {
@@ -30,7 +36,9 @@ final class NowUITests: XCTestCase {
 
     /// Scrolls until `e` is on screen, clear of the tab bar.
     private func reveal(_ e: XCUIElement, in app: XCUIApplication) {
-        XCTAssertTrue(e.waitForExistence(timeout: 15), "\(e) never came")
+        let came = e.waitForExistence(timeout: 15)
+        if !came { shot("failed-reveal-\(name)", app) }
+        XCTAssertTrue(came, "\(e) never came")
         let bar = app.tabBars.firstMatch.frame
         for _ in 0..<8 where !(e.isHittable && e.frame.maxY < bar.minY) {
             app.swipeUp(velocity: .slow)
@@ -98,6 +106,20 @@ final class NowUITests: XCTestCase {
         // Back on Next, with the trip planned.
         XCTAssertTrue(app.buttons["chip.next"].waitForExistence(timeout: 10))
         shot("now-after-go-later", app)
+        // Taken off today again, so the trip planned here isn't the card the
+        // tests after this one find (/__stub/reset keeps the accounts).
+        let card = app.descendants(matching: .any)["now.card"]
+        for _ in 0..<20 where !card.label.contains("COM 3") { usleep(500_000) }
+        XCTAssertTrue(card.label.contains("COM 3"), "the planned trip is Next")
+        let remove = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'remove.' AND label CONTAINS 'COM 3'")).firstMatch
+        reveal(remove, in: app)
+        remove.tap()
+        // A card that isn't COM 3, not one that says nothing while it's updating:
+        // the server's answer, so the trip is off before the app is closed.
+        let off = { !card.label.isEmpty && !card.label.contains("COM 3") }
+        for _ in 0..<30 where !off() { usleep(500_000) }
+        XCTAssertTrue(off(), "the planned trip was taken off")
+        app.swipeDown()
         // A favourite's chip shows its own card.
         let chip = app.buttons["chip.KR MRT"]
         for _ in 0..<6 where !chip.isHittable { app.swipeDown() }
@@ -120,9 +142,34 @@ final class NowUITests: XCTestCase {
         shot("now-undone", app)
     }
 
+    /// A Today row goes on where it's heading when let go: a short slow drag
+    /// springs back, a flick over the same short distance takes it off, with Undo.
+    func testAFlickTakesARowOffAndASlowDragDoesNot() {
+        let app = launch(sky: "day")
+        let remove = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'remove.'")).firstMatch
+        reveal(remove, in: app)
+        let key = remove.identifier
+        // On the row, left of its ×, and 80 pt to the left: short of the bin (140 pt).
+        let start = remove.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).withOffset(CGVector(dx: -120, dy: 0))
+        let short = start.withOffset(CGVector(dx: -80, dy: 0))
+        start.press(forDuration: 0.05, thenDragTo: short, withVelocity: XCUIGestureVelocity(150), thenHoldForDuration: 0.4)
+        sleep(1)
+        XCTAssertTrue(app.buttons[key].exists, "a slow short drag left the row in place")
+        XCTAssertFalse(app.buttons["undo"].exists)
+        start.press(forDuration: 0.05, thenDragTo: short, withVelocity: XCUIGestureVelocity(2_500), thenHoldForDuration: 0)
+        XCTAssertTrue(app.buttons["undo"].waitForExistence(timeout: 5), "a flick took the row off, with Undo")
+        XCTAssertFalse(app.buttons[key].exists)
+        shot("now-flicked", app)
+        app.buttons["undo"].tap()
+        XCTAssertTrue(app.buttons[key].waitForExistence(timeout: 10), "Undo put it back")
+    }
+
     /// "Later bus" moves the card to the next bus, and "Best bus" comes
     /// between the two to go back; back on the best one it goes again.
     func testStepToALaterBusAndBack() {
+        // Held still: the fake times go round every 12 minutes, and whether
+        // there's a bus to step to depends on where in that the test lands.
+        stubPost("/__stub/freeze")
         let app = launch(sky: "day")
         let later = app.buttons["step.later"]
         reveal(later, in: app)
