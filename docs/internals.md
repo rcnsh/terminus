@@ -1586,6 +1586,16 @@ refusal gets one retry: with another isolate's newer token if there is one
 data centre; with neither, no retry. So a code that keeps coming back costs
 one call per key per `failMemoS`.
 
+Each failed call for a stop or a service, other than the gate having
+nothing to share yet or a version already switched away from, is logged
+with its reason (`noteFailure` in `fms.ts`, credentials blanked) and
+written to Analytics Engine as an `error` row: route `feed arrivals` or
+`feed buses`, the reason in `blob3`. A failure that doesn't open the
+breaker leaves no other trace, so this is where to look when a site says
+"No live data" while the feed is up. The same failure is noted at most
+once per 10 minutes per stop or service, and none is noted when no call
+was made (a mint memo, `MintQuiet`).
+
 **KV holds small, slow-changing state; arrivals stay in the edge cache.** The guest token
 and device id, the `config:appVersion` override and the `config:timelapse`
 switch, the fetched calendar (`calendar:data`), the monitor's view of the
@@ -1958,6 +1968,22 @@ Four things that will bite you:
 - **Do not send `X-Forwarded-Proto`.** It makes the NUS load balancer
   intermittently answer 400 "Contradictory scheme headers" (2 of 6 mints in a
   direct A/B, 0 of 6 without).
+
+A new mint doesn't end the device's earlier tokens: on 2026-11-01 a token
+still worked after a second one was minted for the same device id.
+
+The 15-minute cron renews the token on both sites while the kept one is
+still good but has under `tokenRenewAheadMs` (30 minutes) left
+(`renewToken` in `fms.ts`, `renewAhead` in `auth.ts`), after the health
+check and only when that check passed. That's still one mint a day, but it
+happens before the first request after a quiet spell, which would otherwise
+mint for itself. On the beta, with little traffic, that first request is
+usually someone opening the app. It is bounded so it can't grow into a
+poller. With no token, one already expired, one for another version or KV
+it can't read, it leaves the mint to the next request. A renewal that fails
+leaves the kept token in use and is tried at most once more before that
+token runs out. One that works sets `auth:renewed` for 12 hours: at most two
+a day, whatever the token's lifetime.
 
 The feed's secrets are its three API keys (`X-HTD-API`, `X-APP-API`, the
 proxy's `x-api-key`); the rest of its settings are URLs, the version, the

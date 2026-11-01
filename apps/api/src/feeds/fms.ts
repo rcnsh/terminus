@@ -17,11 +17,14 @@ import { noteBreakerOpen } from './feedwatch.ts';
 import {
   UpstreamHttpError,
   UpstreamRejected,
+  MintQuiet,
   getSession,
   markIfOutdated,
   mintWith,
   proxyEnvelope,
   proxyHeaders,
+  redactDetail,
+  renewAhead,
   renewSession,
 } from './auth.ts';
 import type { Session } from './auth.ts';
@@ -624,6 +627,7 @@ export async function getArrivals(env: Env, ctx: ExecutionContext, code: string,
     memoes: notOutdated,
     breaker: { ...breaker(), onOpen: (err) => noteBreakerOpen(env, 'nus', err, nowMs) },
     inflight,
+    onFail: (err) => noteFailure(env, 'arrivals', code, err, nowMs),
   });
 }
 
@@ -647,6 +651,67 @@ export function opensBreaker(err: unknown): boolean {
  *  and the gate having nothing to share yet (feedgate.ts), which says
  *  nothing of the next call. */
 const notOutdated = (err: unknown): boolean => !(err instanceof UpstreamRejected && err.outdated) && !(err instanceof GateBusy);
+
+/** Why a NUS call failed, in a line short enough for a log or an Analytics Engine blob, credentials blanked. */
+export function failureReason(err: unknown): string {
+  const msg = err instanceof Error ? (err.name && err.name !== 'Error' ? `${err.name}: ${err.message}` : err.message) : String(err);
+  return (
+    redactDetail(msg)
+      // A body cut short can leave a JWT without its last part (redactDetail covers a quoted value with no closing quote).
+      .replace(/eyJ[\w.-]{8,}/g, '[redacted]')
+      .slice(0, 160)
+  );
+}
+
+/** A failure already noted in this isolate, by what, key and reason: when. */
+const noted = new Map<string, number>();
+const NOTE_AGAIN_MS = 10 * 60_000;
+
+/** For tests: forget what this isolate noted. */
+export function resetFailureNotes(): void {
+  noted.clear();
+}
+
+/**
+ * Keeps why a call for a stop's arrivals or a service's buses failed: in
+ * the Worker's logs, and as an Analytics Engine 'error' row (route
+ * `feed arrivals` or `feed buses`, the reason in blob3), which the
+ * dashboard counts with the other errors. A failure that doesn't open the
+ * breaker leaves no other trace: the stop only reads as unavailable. Not
+ * the ones that say nothing of the feed (notOutdated) or made no call
+ * (MintQuiet), and the same one at most once per NOTE_AGAIN_MS.
+ */
+export function noteFailure(env: Env, what: 'arrivals' | 'buses', key: string, err: unknown, nowMs: number = Date.now()): void {
+  if (!notOutdated(err) || err instanceof MintQuiet) return;
+  const reason = failureReason(err);
+  // The same failure again (the timelapse recorder polls every 30 s) says nothing new.
+  const seen = `${what} ${key} ${reason.replace(/\d+/g, '#').slice(0, 60)}`;
+  const last = noted.get(seen);
+  if (last !== undefined && nowMs - last < NOTE_AGAIN_MS && nowMs >= last) return;
+  if (noted.size > 500) noted.clear();
+  noted.set(seen, nowMs);
+  console.warn(`NUS ${what} for ${key} failed: ${reason}`);
+  if (typeof env.AE?.writeDataPoint !== 'function') return;
+  try {
+    env.AE.writeDataPoint({ blobs: ['error', `feed ${what}`, reason], doubles: [], indexes: ['error'] });
+  } catch {
+    // A lost row never changes the answer.
+  }
+}
+
+/**
+ * The cron's token step: a new guest token before the kept one runs out
+ * (renewAhead), unless the breaker says NUS is refusing us. True when it
+ * minted.
+ */
+export async function renewToken(env: Env, nowMs: number): Promise<boolean> {
+  if (!fmsConfigured(env) || (await breakerOpen())) return false;
+  // A request's mint failed here a moment ago: none was tried, and the next run tries again.
+  return renewAhead(env, nowMs, TTL.tokenRenewAheadMs).catch((err) => {
+    if (err instanceof MintQuiet) return false;
+    throw err;
+  });
+}
 
 /** The shuttle feed's breaker: such a failure stops every call for breakerS.
  *  Made at each call: its key depends on the site (cacheBase). */
@@ -756,6 +821,7 @@ export async function getBuses(
     memoes: notOutdated,
     breaker: { ...breaker(), onOpen: (err) => noteBreakerOpen(env, 'nus', err, nowMs) },
     inflight: inflightBuses,
+    onFail: (err) => noteFailure(env, 'buses', svc, err, nowMs),
   });
 }
 

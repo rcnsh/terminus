@@ -31,7 +31,9 @@
  *                       for 'timelapse', the poll's outcome (see logPoll);
  *                       for 'signal', the kind of trip signal (me.ts), a count
  *                       with no account, stop or location
- *   blob3   svc         service, '' on an ended answer
+ *   blob3   svc         service, '' on an ended answer; for an 'error' row of
+ *                       route 'feed arrivals' or 'feed buses', why the NUS call
+ *                       failed (fms.ts noteFailure)
  *   blob4   dest        destination stop code, '' for a bare /next
  *   blob5   quality     live | scheduled | unknown | stale | ended
  *   blob6   plate       arrival rows only
