@@ -27,4 +27,16 @@ object Fling {
         val give = limit / (limit - dy)
         return speed * give * give
     }
+
+    /**
+     * The speed something let go at [dy] springs back to rest from: [rubberSpeed], but going up no faster than keeps a critically damped
+     * spring of natural frequency [omega] (rad/s) inside 90% of the give, where [rubber] (and so [unrubber], for a catch) can still draw
+     * it. From x with speed v it gets no further than |x + v / omega| beyond rest.
+     */
+    fun backSpeed(speed: Float, dy: Float, limit: Float, omega: Float): Float {
+        val v = rubberSpeed(speed, dy, limit)
+        if (v >= 0f) return v
+        val room = (limit * 0.9f + rubber(dy, limit)).coerceAtLeast(0f)
+        return v.coerceAtLeast(-room * omega)
+    }
 }

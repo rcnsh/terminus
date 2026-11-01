@@ -125,6 +125,7 @@ import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.pow
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -831,6 +832,9 @@ private fun MapSheetFrame(
     // from where it is at the finger's speed: off the bottom, or back.
     var dragged by remember { mutableFloatStateOf(0f) }
     var dragging by remember { mutableStateOf(false) }
+    // Where this drag took it from: a catch mid-slide starts away from rest, and
+    // what decides is how far the finger then moved it, so a catch and let go keeps it.
+    var caught by remember { mutableFloatStateOf(0f) }
     val drag = rememberDraggableState { dragged += it }
     val density = LocalDensity.current
     val dragMin = with(density) { 24.dp.toPx() }
@@ -879,16 +883,18 @@ private fun MapSheetFrame(
                         startDragImmediately = settle.isRunning,
                         onDragStarted = {
                             dragged = Fling.unrubber(settle.value, lift)
+                            caught = dragged
                             dragging = true
                             settle.stop()
                         },
                         onDragStopped = { velocity ->
                             val d = dragged
+                            val moved = d - caught
                             // Drawn where the finger left it, then let go of: no jump.
                             settle.snapTo(Fling.rubber(d, lift))
                             dragging = false
                             dragged = 0f
-                            val closing = d > closeMin || (d > dragMin && velocity > flingMin)
+                            val closing = (d > closeMin && moved > dragMin) || (moved > dragMin && velocity > flingMin)
                             if (closing && handle?.invoke(false) != true) {
                                 val mine = focusKey
                                 scope.launch {
@@ -896,8 +902,9 @@ private fun MapSheetFrame(
                                     if (showing == mine) onClose()
                                 }
                             } else {
-                                if (d < -dragMin) handle?.invoke(true)
-                                scope.launch { settle.animateTo(0f, motion, initialVelocity = Fling.rubberSpeed(velocity, d, lift)) }
+                                if (moved < -dragMin) handle?.invoke(true)
+                                val back = Fling.backSpeed(velocity, d, lift, sqrt(motion.stiffness))
+                                scope.launch { settle.animateTo(0f, motion, initialVelocity = back) }
                             }
                         },
                     )
