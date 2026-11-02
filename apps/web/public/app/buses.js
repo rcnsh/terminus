@@ -167,21 +167,23 @@ export async function pullRefresh() {
     return (r.kind === 'stop' ? [shownCode(r.code)] : pins()).map((code) => boards.get().get(code));
   };
   const fresh = (b) => b?.at && !b.error && Date.now() - b.at < PULL_FRESH_MS;
-  // Nothing pinned: nothing on the home to fetch.
+  // Nothing pinned: nothing on the home to fetch, and nothing that will change.
+  if (!shown().length) return { state: 'fresh', inS: null };
   if (shown().every(fresh)) return { state: 'fresh', inS: nextTimedAt ? Math.max(1, Math.ceil((nextTimedAt - Date.now()) / 1000)) : null };
   const asked = Date.now();
   await refreshNow();
   return shown().every((b) => b?.at >= asked && !b.error) ? 'updated' : 'failed';
 }
 
-/** A board just brought on screen: fetched unless it's fresh. */
-function showBoard(code) {
-  if (!code) return;
-  const b = boards.get().get(shownCode(code));
-  if (!b?.at || Date.now() - b.at > REFRESH_MS) loadBoard(shownCode(code));
+/** Stop `code`'s own board, fetched unless it's fresh. */
+function freshen(code) {
+  const b = boards.get().get(code);
+  if (!b?.at || Date.now() - b.at > REFRESH_MS) loadBoard(code);
 }
-
-export { togglePin };
+/** A stop's page just brought on screen: the side of the road it shows, fetched unless it's fresh. */
+function showBoard(code) {
+  if (code) freshen(shownCode(code));
+}
 
 export function parse(hash) {
   // A stray % (an address typed or edited by hand) is kept as it is rather than throwing.
@@ -389,7 +391,8 @@ function PinnedStop({ code }) {
   const now = useStore(tick);
   useStore(campus);
   // Its times when it comes on the home: pinned just now, or from the start.
-  useEffect(() => showBoard(code), [code]);
+  // Its own side, whichever its page was last showing.
+  useEffect(() => freshen(code), [code]);
   const b = all.get(code);
   const name = longName(b?.stop) ?? stopName(code);
   const rows = b?.board?.map((r) => aged(r, b.got, now)) ?? [];
@@ -618,13 +621,16 @@ export function BusesTab({ visible }) {
 
   useEffect(() => {
     if (!visible) return;
+    // Come in from another tab (Nearby's links, the tab bar): Back goes up
+    // the tab, to the home, not back through what was before.
+    trail.length = 0;
     route.set(parse(location.hash));
     // Fresh each time it's shown: the pins may have changed on another device.
     loadCampus().catch(() => {});
     reloadProfile()
       .catch(() => {})
       .then(() => {
-        if (route.get().kind === 'home') for (const code of pins()) showBoard(code);
+        if (route.get().kind === 'home') for (const code of pins()) freshen(code);
       });
     const now = route.get();
     if (now.kind === 'stop') showBoard(now.code);

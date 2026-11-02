@@ -120,7 +120,7 @@ test('up to 8 stops pinned (or as many as the profile allows), then a message an
   try {
     await P.loadProfile();
     P.toastText.set(null);
-    await B.togglePin('UHC');
+    await P.togglePin('UHC');
     assert.deepEqual(P.profile.get().pinnedStops, eight);
     assert.equal(P.toastText.get(), null);
     // The save goes once the edits settle.
@@ -129,12 +129,12 @@ test('up to 8 stops pinned (or as many as the profile allows), then a message an
     assert.deepEqual(saved.at(-1).pinnedStops, eight);
     assert.deepEqual(P.toastText.get(), { text: 'Saved', error: false });
 
-    await B.togglePin('PGP');
+    await P.togglePin('PGP');
     assert.deepEqual(P.profile.get().pinnedStops, eight);
     assert.deepEqual(P.toastText.get(), { text: 'You can pin up to 8 stops.', error: true });
 
     // Unpinning is always allowed.
-    await B.togglePin('YIH');
+    await P.togglePin('YIH');
     assert.deepEqual(
       P.profile.get().pinnedStops,
       eight.filter((c) => c !== 'YIH'),
@@ -142,7 +142,7 @@ test('up to 8 stops pinned (or as many as the profile allows), then a message an
 
     // The profile's own limit, when it sends one.
     P.profile.set({ pinnedStops: ['COM3', 'YIH', 'UTOWN'], limits: { pinnedStops: 3 } });
-    await B.togglePin('PGP');
+    await P.togglePin('PGP');
     assert.deepEqual(P.profile.get().pinnedStops, ['COM3', 'YIH', 'UTOWN']);
     assert.deepEqual(P.toastText.get(), { text: 'You can pin up to 3 stops.', error: true });
   } finally {

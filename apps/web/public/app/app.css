@@ -238,7 +238,6 @@ body.sky .bt-sky-top input::placeholder { color: var(--k-muted); opacity: 0.85; 
 .bt-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px 4px 0; }
 .bt-title { min-width: 0; }
 .bt-kicker { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 0.85rem; font-weight: 500; color: var(--muted); }
-.bt-kicker .link-btn { padding: 0; font-size: inherit; font-weight: 600; }
 .bt-kicker-icon { width: 13px; height: 13px; fill: var(--accent); }
 .bt-kicker-icon.star { fill: var(--warn); }
 .bt-title h2 { margin-top: 6px; font: 700 2.2rem/1.05 var(--display); letter-spacing: -0.025em; overflow-wrap: anywhere; }

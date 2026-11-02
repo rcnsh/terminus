@@ -97,8 +97,6 @@ const tab = store(null);
 const busesModule = store(null);
 /** app/map.js, once the map has been opened. */
 const mapModule = store(null);
-/** A stop to open on the map once it's on screen (a stop tapped in Nearby). */
-const stopToShow = store(null);
 /** Settings: account/settings.js once loaded, or why not. */
 const settings = store({ status: 'idle', mod: null });
 /** A NUSMods link shared to the app, for Settings to offer to import. */
@@ -1364,10 +1362,9 @@ function BusesArea() {
 function MapArea() {
   const mod = useStore(mapModule);
   const now = useStore(tab);
-  const focus = useStore(stopToShow);
   if (mod?.failed) return html`<p class="hint">${t('The map needs a connection the first time.')}</p>`;
   if (!mod) return null;
-  return html`<${mod.MapTab} visible=${now === 'map'} focus=${focus} onFocused=${() => stopToShow.set(null)} onGoTo=${goToStop} onSaved=${refresh} />`;
+  return html`<${mod.MapTab} visible=${now === 'map'} onGoTo=${goToStop} onSaved=${refresh} />`;
 }
 
 /** A row of the list as a shape: an icon, a name and what's set. */

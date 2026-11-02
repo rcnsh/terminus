@@ -114,7 +114,7 @@ const NEXT = '<path d="m9 6 6 6-6 6"/>';
 
 /**
  * How a row looks for what a tap on it does: `chevron`, it opens a page (the
- * Buses tab); `picked` set, it picks its line on the map, and true when that
+ * Stops tab); `picked` set, it picks its line on the map, and true when that
  * line is the one picked there (washed in its colour, and pressed).
  */
 function look(r, cls, chevron, picked) {
@@ -144,7 +144,7 @@ function StoppedRow({ r, now, onPick, chevron, picked }) {
 }
 
 /**
- * A service's row on a board. Tapped, `onPick(svc)`: the Buses tab opens its
+ * A service's row on a board. Tapped, `onPick(svc)`: the Stops tab opens its
  * line (`chevron`, which says so), the map picks it (`picked`: whether it's
  * the line picked there). A public bus has no line here. `now`, on the
  * server's clock, says "tomorrow" for a service that isn't running.

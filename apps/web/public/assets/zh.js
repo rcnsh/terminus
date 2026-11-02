@@ -632,7 +632,7 @@ window.TERMINUS_ZH = {
   'No bus stops here.': '这里没有巴士停靠。',
   "This page isn't on any route. It may have moved, or the link has a typo.": '这个页面不在任何路线上。它可能已经移走了，或者链接打错了。',
   'Go home': '回首页',
-  // The Buses tab (app/buses.js).
+  // The Stops tab (app/buses.js).
   'Services': '线路',
   'Stops need a connection.': '车站页面需要联网。',
   "Tap the star on any stop to keep it here: in Nearby, on the stop's page, or after searching for it.":
@@ -703,7 +703,7 @@ window.TERMINUS_ZH = {
   'Stops on this map': '地图上的车站',
   'Open a stop…': '打开一个车站…',
   'Open': '打开',
-  'The Buses tab lists every stop and its buses in words.': '“巴士”标签页以文字列出每个车站和它的巴士。',
+  "The Stops tab has every stop's buses in words.": '“车站”标签页以文字列出每个车站的巴士。',
   'Pause the moving buses': '暂停行驶中的巴士',
   'Bus never came': '车一直没来',
   'Times were off': '时间不准',
