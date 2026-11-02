@@ -33,10 +33,10 @@ import { Card, InSky, Message, Report, Say, isStale, signal } from '/account/pre
 import { Celestial, Horizon, useNowSky, useSkyPhase } from '/account/sky.js';
 import { Toast, campus, lists, loadCampus, loadProfile, profile, reloadProfile, toast, togglePin, walkSpeed } from '/account/profile.js';
 import { SearchBox } from '/account/search-box.js';
-// Not used here: loaded with the page so that the Stops and Map tabs, which
-// both import it, don't depend on it arriving later (a failed import can't be
-// retried at the same address; loadTab's retry renews only the tab's file).
-import '/app/board.js';
+// Loaded with the page (its icons are used here too) so that the Stops and Map
+// tabs, which both import it, don't depend on it arriving later (a failed import
+// can't be retried at the same address; loadTab's retry renews only the tab's file).
+import { NEXT, STAR } from '/app/board.js';
 import { offlineNext } from '/app/offline.js';
 import { preloadMap } from '/app/map-files.js';
 import {
@@ -991,8 +991,6 @@ const BUS =
 /** A bus stop's sign on its pole: the Stops tab, and Nearby's way to it. */
 const STOP_SIGN = '<rect x="6" y="2.5" width="12" height="9.5" rx="2.5"/><path d="M12 12v9.5M9 21.5h6M9.5 7.25h5"/>';
 
-const STAR = '<path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z"/>';
-const CHEVRON = '<path d="m9 6 6 6-6 6"/>';
 /** How far up the road a bus is drawn: this many seconds away is the far end. */
 const ROAD_S = 15 * 60;
 
@@ -1024,6 +1022,11 @@ const etaText = (b) =>
 function NearbyCard({ stops }) {
   const p = useStore(profile);
   const pinned = p?.pinnedStops ?? [];
+  // Until the profile has come, what's pinned isn't known: no star to read wrong, or to unpin with.
+  // Now doesn't need it otherwise, so Nearby asks for it (the account, not the feed).
+  useEffect(() => {
+    if (!profile.get()) loadProfile().catch(() => {});
+  }, []);
   // Heard once for these stops, not again on every refresh: their names.
   const names = stops.map((s) => s.stop.name).join(', ');
   return html`
@@ -1039,7 +1042,9 @@ function NearbyCard({ stops }) {
                 ${s.stop.name}
               </button>
               <span class="plate-walk">${t('{0} min walk', Math.max(1, mins(s.walkS)))}</span>
-              <button
+              ${
+                p &&
+                html`<button
                 type="button"
                 class=${`plate-star${pinned.includes(s.stop.code) ? ' on' : ''}`}
                 aria-pressed=${String(pinned.includes(s.stop.code))}
@@ -1047,7 +1052,8 @@ function NearbyCard({ stops }) {
                 onClick=${() => togglePin(s.stop.code)}
               >
                 <${Icon} paths=${STAR} />
-              </button>
+              </button>`
+              }
             </header>
             ${
               s.board.length
@@ -1077,7 +1083,7 @@ function NearbyCard({ stops }) {
       <button type="button" class="to-stops" onClick=${() => (location.hash = '#buses')}>
         <${Icon} paths=${STOP_SIGN} class="to-stops-icon" />
         <span><b>${t('Another stop, or a whole line')}</b><span>${t('Search, pinned stops and services are in Stops.')}</span></span>
-        <${Icon} paths=${CHEVRON} class="to-stops-go" />
+        <${Icon} paths=${NEXT} class="to-stops-go" />
       </button>
     </div>
   `;

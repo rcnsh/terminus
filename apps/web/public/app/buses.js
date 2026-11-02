@@ -17,7 +17,7 @@ import { campus, loadCampus, profile, reloadProfile, togglePin } from '/account/
 import { SearchBox } from '/account/search-box.js';
 import { Celestial, Horizon } from '/account/sky.js';
 import { busesTabIndex } from '/account/search.js';
-import { Big, Chip, Crowd, Quality, Row, colorOf, stoppedWords, svcVars, thenText } from '/app/board.js';
+import { NEXT, STAR, Big, Chip, Crowd, Quality, Row, colorOf, stoppedWords, svcVars, thenText } from '/app/board.js';
 import { PULL_FRESH_MS } from '/app/timing.js';
 
 /** The page on screen refreshes this often (the API caches arrivals 15 s). */
@@ -82,6 +82,9 @@ export const failedWords = (shown, online = navigator.onLine) =>
   !online ? t('Live times need a connection.') : shown ? t("Couldn't update. Trying again soon.") : t('No times right now');
 
 /** One stop's board. A failure keeps the board already there, saying it couldn't update. */
+/** The stops whose board is being fetched, so a second ask for one waits on the first rather than asking again. */
+const fetching = new Set();
+
 export async function loadBoard(code) {
   // The public buses there too, when the account has them on.
   const pub = profile.get()?.publicBuses ? '&public=1' : '';
@@ -175,10 +178,14 @@ export async function pullRefresh() {
   return shown().every((b) => b?.at >= asked && !b.error) ? 'updated' : 'failed';
 }
 
-/** Stop `code`'s own board, fetched unless it's fresh. */
+/** Stop `code`'s own board, fetched unless it's fresh or already on its way. */
 function freshen(code) {
   const b = boards.get().get(code);
-  if (!b?.at || Date.now() - b.at > REFRESH_MS) loadBoard(code);
+  if (fetching.has(code)) return;
+  if (!b?.at || Date.now() - b.at > REFRESH_MS) {
+    fetching.add(code);
+    loadBoard(code).finally(() => fetching.delete(code));
+  }
 }
 /** A stop's page just brought on screen: the side of the road it shows, fetched unless it's fresh. */
 function showBoard(code) {
@@ -237,9 +244,7 @@ export const lineHash = (svc, stop) => `#buses/line/${encodeURIComponent(svc)}${
 const openStop = (code) => go(stopHash(code));
 
 const SEARCH = '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/>';
-const STAR = '<path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z"/>';
 const BACK = '<path d="m15 5-7 7 7 7"/>';
-const NEXT = '<path d="m9 6 6 6-6 6"/>';
 const BUS = '<rect x="5" y="3.5" width="14" height="13.5" rx="3"/><path d="M5 10.5h14M8 17v2.5M16 17v2.5"/>';
 const PIN = '<path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.3"/>';
 
@@ -319,9 +324,10 @@ function Board({ code }) {
 const Sky = ({ children }) =>
   html`<div class="bt-sky"><div class="sky-head"><${Celestial} band />${children}</div><${Horizon} on=${null} low /></div>`;
 
-/** The star that pins stop `code` (called `name`), filled while it's pinned. `cls` for a smaller one. */
+/** The star that pins stop `code` (called `name`), filled while it's pinned. `cls` for a smaller one. Absent until the pins are known. */
 function Star({ code, name, cls = '' }) {
   const p = useStore(profile);
+  if (!p) return null;
   const pinned = (p?.pinnedStops ?? []).includes(code);
   return html`
     <button type="button" class=${`bt-star${pinned ? ' on' : ''} ${cls}`} aria-pressed=${String(pinned)} aria-label=${pinned ? t('Unpin {0}', name) : t('Pin {0}', name)} onClick=${() => togglePin(code)}>
@@ -488,7 +494,15 @@ function Find() {
   `;
 }
 
-function BackBar({ label, parent }) {
+/** What a page at address `hash` in the tab is called on a Back button: the home, a stop, a service. */
+function placeName(hash) {
+  const r = parse(hash);
+  return r.kind === 'stop' ? stopName(r.code) : r.kind === 'line' ? r.svc : t('Stops');
+}
+
+/** Back, named for where it goes: the page before in the tab, else `parent`. */
+function BackBar({ parent }) {
+  const label = placeName(trail.at(-1) ?? parent);
   return html`
     <nav class="bt-nav" aria-label=${t('Back')}>
       <button type="button" class="bt-back" aria-label=${t('Back to {0}', label)} onClick=${() => back(parent)}><${Icon} paths=${BACK} /><span>${label}</span></button>
@@ -503,7 +517,7 @@ function StopPage({ code }) {
   const pinned = (p?.pinnedStops ?? []).includes(code);
   return html`
     <section class="bt-page alone">
-      <${StopView} code=${code} above=${html`<${BackBar} label=${t('Stops')} parent="#buses" />`} kicker=${pinned ? html`<${Icon} paths=${STAR} class="bt-kicker-icon star" />${t('Pinned')}` : null} />
+      <${StopView} code=${code} above=${html`<${BackBar} parent="#buses" />`} kicker=${pinned ? html`<${Icon} paths=${STAR} class="bt-kicker-icon star" />${t('Pinned')}` : null} />
     </section>
   `;
 }
@@ -545,14 +559,12 @@ function LinePage({ svc, stop }) {
     document.querySelector('.bt-stop.mine')?.scrollIntoView({ block: 'center' });
   }, [key, Boolean(data)]);
 
-  const label = stop ? (longName(data?.stops.find((s) => s.code === stop)) ?? stopName(stop)) : t('Stops');
-  const parent = stop ? stopHash(stop) : '#buses';
   const color = data?.color ?? colorOf(svc);
   const r = c?.routes[svc];
   const where = r && routeWords(r);
   const head = html`
     <${Sky}>
-      <${BackBar} label=${label} parent=${parent} />
+      <${BackBar} parent="#buses" />
       <div class="bt-line-title">
         <${Chip} svc=${svc} color=${color} cls="bt-chip big" />
         <div><h2 class="bt-head" tabindex="-1">${svc}</h2>${where && html`<p class="hint">${where}</p>`}</div>
