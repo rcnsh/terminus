@@ -212,7 +212,8 @@ body.sky .bt-sky-top input::placeholder { color: var(--k-muted); opacity: 0.85; 
 /* The home (buses.js Home): its title in the sky, then your pinned stops,
    each a name with its star over its first rows, then every service. */
 .bt-home .bt-top { padding-bottom: 6px; }
-.bt-section { margin: 22px 6px 8px; }
+.bt-section { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 22px 6px 8px; }
+.bt-section > span { font-size: 0.75rem; color: var(--muted); text-align: right; }
 .bt-pin + .bt-pin { margin-top: 18px; }
 .bt-pin-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 0 0 6px; }
 .bt-pin-name { display: flex; align-items: center; gap: 4px; min-width: 0; padding: 6px 0; border: 0; background: none; color: var(--ink); font: 700 1.1rem/1.2 var(--font); text-align: left; cursor: pointer; }

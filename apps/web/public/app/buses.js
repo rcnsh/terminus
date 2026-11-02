@@ -437,7 +437,7 @@ function Home() {
       <//>
       <h3 class="bt-section eyebrow">${t('Pinned')}</h3>
       ${pins}
-      <h3 class="bt-section eyebrow">${t('Services')}</h3>
+      <div class="bt-section"><h3 class="eyebrow">${t('Services')}</h3><span>${t('Tap one to see its whole line.')}</span></div>
       ${
         routes.length
           ? html`<div class="card bt-services">
@@ -448,8 +448,7 @@ function Home() {
                   <${Icon} paths=${NEXT} class="bt-go" />
                 </button>`,
               )}
-            </div>
-            <p class="bt-hint">${t('Tap one to see its whole line.')}</p>`
+            </div>`
           : html`<p class="hint bt-empty">${t('Checking…')}</p>`
       }
     </div>
