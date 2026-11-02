@@ -2,18 +2,18 @@
 
 ## Round 5: the recorder's buses kept to their side of the road
 
-**With the passings repaired, the blend beats the feed by 15%, not 9%.**
+**With the passings repaired, the blend beats the feed by 16%, not 9%.**
 Round 4's "went by" misses came from the timelapse recorder, not the
 feed. Rerun on the same 27 days and predictions, walked forward from 12
 October as before:
 
 | method | MAE | p50 | p90 | over 5 min | under 2 min | 2 to 5 | 5 to 10 | 10 to 30 |
 |---|---|---|---|---|---|---|---|---|
-| feed | 95.6 s | 47.9 s | 175.6 s | 4.1% | 48.6 | 89.7 | 57.2 | 124.2 |
-| checked | 83.0 s | 45.1 s | 154.8 s | 3.1% | 40.0 | 75.8 | 53.1 | 107.6 |
-| blend | 81.3 s | 44.0 s | 154.8 s | 3.1% | 37.9 | 74.0 | 52.3 | 105.6 |
+| feed | 95.5 s | 47.9 s | 175.6 s | 4.1% | 48.5 | 89.7 | 57.2 | 124.1 |
+| checked | 82.2 s | 44.9 s | 153.9 s | 3.0% | 39.9 | 73.9 | 53.1 | 106.5 |
+| blend | 79.9 s | 44.0 s | 154.9 s | 3.0% | 36.9 | 72.6 | 52.2 | 103.7 |
 
-The horizon columns are MAE in seconds; 4,117 questions (more than round
+The horizon columns are MAE in seconds; 4,127 questions (more than round
 4's 3,904, since more passings are found). Every method gains on every
 horizon, the feed included: these were errors in the scoring.
 
