@@ -78,11 +78,10 @@
     <string name="a11y_starts">%1$s，%2$s 开始</string>
     <string name="a11y_arrive_by">%1$s，%2$s 前到</string>
     <string name="a11y_to">去 %1$s</string>
-    <string name="a11y_map">校园地图。要以列表查看车站和巴士，请用“巴士”标签页。</string>
+    <string name="a11y_map">校园地图。要以列表查看车站和巴士，请用“车站”标签页。</string>
     <string name="a11y_show_list">以列表显示</string>
     <string name="email_label">邮箱</string>
     <string name="report_note">你的说明</string>
-    <string name="a11y_page">第 %1$d 页，共 %2$d 页</string>
     <string name="a11y_open_line">查看 %1$s 线路</string>
     <string name="a11y_open_stop">查看这个车站的巴士</string>
     <string name="a11y_change_stop">更改 %1$s 的车站</string>
@@ -623,15 +622,12 @@
     <string name="heading_more">更多</string>
     <string name="get_apps">下载应用</string>
 
-    <!-- The Buses tab -->
-    <string name="tab_buses">巴士</string>
+    <!-- The Stops tab (its ids say buses: tab_buses, buses_*) -->
+    <string name="tab_buses">车站</string>
     <string name="buses_search">搜索车站或线路</string>
     <string name="buses_search_none">没有这个名字的车站或线路</string>
     <string name="buses_group_services">线路</string>
     <string name="buses_n_stops">%1$d 个车站</string>
-    <string name="buses_nearest">最近的车站</string>
-    <string name="buses_nearest_m">最近的车站 · %1$d 米</string>
-    <string name="buses_near_home">你家附近的车站</string>
     <string name="buses_pinned">已固定</string>
     <string name="buses_pin">固定这个车站</string>
     <string name="buses_unpin">取消固定这个车站</string>
@@ -658,10 +654,6 @@
     <string name="buses_updated_s">%1$d 秒前更新</string>
     <string name="buses_updated_min">%1$d 分钟前更新</string>
     <string name="buses_tap_hint">点一条线路，查看它经过的每个车站。</string>
-    <string name="buses_swipe_for">滑动查看 %1$s</string>
-    <string name="buses_find_title">找到你的车站</string>
-    <string name="buses_find_text">允许定位，就能看到离你最近的车站；也可以搜索车站，用星标固定它。</string>
-    <string name="buses_find_text_search">在上面搜索车站，用星标固定它，下次就会在这里。</string>
     <string name="buses_one_running">1 辆巴士在运行</string>
     <string name="buses_n_running">%1$d 辆巴士在运行</string>
     <string name="buses_none_running">没有巴士在运行</string>
@@ -678,7 +670,16 @@
     <string name="buses_back_tomorrow">明天 %1$s 恢复</string>
     <string name="buses_back_on">%1$s %2$s 恢复</string>
     <string name="buses_starts_at">%1$s 开始</string>
-    <!-- Pull to refresh (Now and Buses): the words over the road, and how it went. -->
+    <string name="buses_more_here">这个车站还有 %1$d 条线路</string>
+    <string name="buses_no_pins">点任意车站的星标，把它固定在这里：在“附近”、车站页面或搜索结果里都可以。</string>
+    <string name="buses_services_hint">点一条线路，查看它经过的所有车站。</string>
+    <string name="buses_loop_from">从 %1$s 出发的环线</string>
+    <string name="buses_from_to">%1$s 至 %2$s</string>
+    <string name="buses_pin_stop">固定 %1$s</string>
+    <string name="buses_unpin_stop">取消固定 %1$s</string>
+    <string name="nearby_more_title">其他车站或整条线路</string>
+    <string name="nearby_more_text">搜索、已固定的车站和线路都在“车站”里。</string>
+    <!-- Pull to refresh (Now and Stops): the words over the road, and how it went. -->
     <string name="pull_to_refresh">下拉刷新</string>
     <string name="pull_let_go">松开刷新</string>
     <string name="pull_updated">刚刚更新</string>

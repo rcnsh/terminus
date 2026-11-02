@@ -7,7 +7,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The Buses tab's data, from replies shaped like the API's (/api/arrivals, /api/me/nearby, /api/line). */
+/** The Stops tab's data, from replies shaped like the API's (/api/arrivals, /api/me/nearby, /api/line). */
 class BusesTest {
     private val arrivals =
         JSONObject(
@@ -249,9 +249,45 @@ class BusesTest {
     }
 
     @Test
-    fun pagesAreTheNearestThenThePinnedOnes() {
-        assertEquals(listOf("YIH", "CLB", "COM3"), Pins.pages("YIH", listOf("CLB", "YIH", "COM3")))
-        assertEquals(listOf(null, "CLB"), Pins.pages(null, listOf("CLB", "CLB")))
+    fun theHomeShowsEachPinnedStopOnceUpToTheLimit() {
+        assertEquals(listOf("CLB", "YIH", "COM3"), Pins.shown(listOf("CLB", "YIH", "CLB", "COM3")))
+        // A profile saved with more than the limit (an older one, a smaller limit) asks for no more boards than the limit.
+        val many = (1..10).map { "S$it" }
+        assertEquals(many.take(8), Pins.shown(many))
+        assertEquals(many.take(2), Pins.shown(many, max = 2))
+        assertEquals(emptyList<String>(), Pins.shown(emptyList()))
+    }
+
+    @Test
+    fun aPinnedBoardShowsItsFirstThreeRowsRunningFirst() {
+        fun row(svc: String, running: Boolean = true) = BoardRow(svc, etaS = if (running) 60 else null, quality = "live", running = running)
+        val five = BoardPreview.of(listOf(row("A1"), row("D1", running = false), row("D2"), row("K"), row("E")))
+        assertEquals("the stopped one waits for the page", listOf("A1", "D2", "K"), five.rows.map { it.svc })
+        assertEquals(2, five.more)
+        val two = BoardPreview.of(listOf(row("A1"), row("K")))
+        assertEquals(listOf("A1", "K"), two.rows.map { it.svc })
+        assertEquals("no row for more when there are none", 0, two.more)
+        assertEquals(0, BoardPreview.of(listOf(row("A1"), row("A2"), row("K"))).more)
+    }
+
+    @Test
+    fun aServiceSaysWhereItGoes() {
+        val names = mapOf("KR-MRT" to "Kent Ridge MRT", "COM3" to "COM 3", "UTOWN" to "University Town")
+        val name = { code: String -> names[code] ?: code }
+        TestStrings.install()
+        try {
+            assertEquals("Loop from Kent Ridge MRT", serviceWhere(ServiceRoute("A1", listOf("KR-MRT", "COM3"), loop = true), name))
+            assertEquals(
+                "COM 3 to University Town",
+                serviceWhere(ServiceRoute("D1", listOf("COM3", "KR-MRT", "UTOWN"), loop = false), name),
+            )
+            assertNull("no stops, no words", serviceWhere(ServiceRoute("X", emptyList(), loop = false), name))
+            TestStrings.install("values-zh")
+            assertEquals("从 Kent Ridge MRT 出发的环线", serviceWhere(ServiceRoute("A1", listOf("KR-MRT"), loop = true), name))
+            assertEquals("COM 3 至 University Town", serviceWhere(ServiceRoute("D1", listOf("COM3", "UTOWN"), loop = false), name))
+        } finally {
+            TestStrings.install()
+        }
     }
 
     @Test

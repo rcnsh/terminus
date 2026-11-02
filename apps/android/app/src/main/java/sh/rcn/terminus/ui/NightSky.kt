@@ -847,7 +847,7 @@ private val LOW_STARS =
  * low horizon (just the hills, no road). The page's controls stay on the plain page under it. It's the top of the page's scroll, not pinned
  * over it, so the page is one piece that scrolls away under a [StatusStrip], as Now's sky does. As the web's (.page-band).
  *
- * A taller band (the Buses tab's search and stop) puts the moon low on the right, just over the hills, with the stars beside it, clear of a
+ * A taller band (the Stops tab's search and stop) puts the moon low on the right, just over the hills, with the stars beside it, clear of a
  * button at the top right ([moonLow]), on a line of its own unless the content's last one has room on the right ([moonLine]). Unpadded,
  * [content] runs edge to edge and keeps its own margins: a pager in it swipes off the screen's edges rather than 16 dp in. Without [moon],
  * no moon or stars: a band with only a field in it.
@@ -891,7 +891,7 @@ internal fun SkyBand(
             clipRect(top = end - LOW.toPx(), bottom = end) {
                 // Just the hills: the sun stays for Now's horizon.
                 horizon(strip, page, p, phase, Road(shuttle = false), 0f, withSun = false)
-                // Pulled down (the Buses tab): a sign grows out of the near hill and a bus drives to it.
+                // Pulled down (the Stops tab): a sign grows out of the near hill and a bus drives to it.
                 if (pull?.read()?.open == true)
                     pullHill(pull, p, strip, d, size.width / d, lights = phase == Phase.DUSK || phase == Phase.NIGHT)
             }

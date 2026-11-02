@@ -25,6 +25,15 @@ class MapDataTest {
         )
 
     @Test
+    fun campusKeepsEveryServicesStopsForTheStopsTab() {
+        val (campus, _) = CampusMap.parse(campusJson)
+        // Every service, drawn or not (X has no line): the Stops tab lists them all.
+        assertEquals(setOf("D2", "A1", "X"), campus.lines.map { it.svc }.toSet())
+        assertEquals(ServiceRoute("D2", listOf("COM3"), loop = true), campus.lines.first { it.svc == "D2" })
+        assertEquals(ServiceRoute("X", emptyList(), loop = false), campus.lines.first { it.svc == "X" })
+    }
+
+    @Test
     fun campusParsesStopsRoutesAndColours() {
         val (campus, core) = CampusMap.parse(campusJson)
         assertEquals(listOf("A1", "D2"), campus.services)

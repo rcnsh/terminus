@@ -1,6 +1,8 @@
 package sh.rcn.terminus.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,20 +11,25 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -39,12 +46,25 @@ import sh.rcn.terminus.Spoken
 import sh.rcn.terminus.parseColor
 
 /**
- * The stops near you as their signs: the name plate with the walk there, then a row per service, its buses coming up a short road towards
- * the stop, nearer the sooner they're due, the next one solid and the rest faded. The nearest stop is drawn larger. An estimate is an
- * outline, never a filled bus, so it doesn't pass for live.
+ * What Nearby's taps do: a stop's name opens its board and a row its line, on the Stops tab, where the last row goes too; the star pins the
+ * stop there, up to [pinLimit].
+ */
+internal class NearbyActions(
+    val pins: List<String>,
+    val pinLimit: Int,
+    val onPin: (String) -> Unit,
+    val openStop: (String) -> Unit,
+    val openLine: (svc: String, stop: String) -> Unit,
+    val openStops: () -> Unit,
+)
+
+/**
+ * The stops near you as their signs: the name plate with the walk there and the star, then a row per service, its buses coming up a short
+ * road towards the stop, nearer the sooner they're due, the next one solid and the rest faded. The nearest stop is drawn larger. An
+ * estimate is an outline, never a filled bus, so it doesn't pass for live. Under them, the way to the Stops tab, for any other stop.
  */
 @Composable
-internal fun NearbyList(stops: List<NearbyStop>?, loading: Boolean, onOpenStop: (String) -> Unit) {
+internal fun NearbyList(stops: List<NearbyStop>?, loading: Boolean, act: NearbyActions) {
     if (stops == null) {
         Text(if (loading) stringResource(R.string.checking) else stringResource(R.string.nothing_yet))
         return
@@ -52,17 +72,18 @@ internal fun NearbyList(stops: List<NearbyStop>?, loading: Boolean, onOpenStop: 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         for ((i, s) in stops.withIndex()) {
             val big = i == 0
-            // The sign opens its stop on the map, with its services and what's coming.
+            // The plate opens the stop's whole board, as the Stops tab has it; each row its service's line from here.
             StopSign(
                 s.name,
-                Modifier.clickable(role = Role.Button, onClickLabel = stringResource(R.string.on_the_map, s.name)) { onOpenStop(s.code) },
                 big = big,
+                plate =
+                    Modifier.clickable(role = Role.Button, onClickLabel = stringResource(R.string.a11y_open_stop)) { act.openStop(s.code) },
                 trailing = {
                     Text(
                         if (s.walkS < 60) stringResource(R.string.here) else stringResource(R.string.min_walk, (s.walkS + 30) / 60),
                         style = MaterialTheme.typography.labelLarge,
-                        modifier = Modifier.padding(end = 6.dp),
                     )
+                    PinStar(s.code, act.pins, act.pinLimit, act.onPin, name = s.longName ?: s.name)
                 },
             ) {
                 if (!s.available)
@@ -82,8 +103,16 @@ internal fun NearbyList(stops: List<NearbyStop>?, loading: Boolean, onOpenStop: 
                                 Spoken.eta(row.etaS, row.quality) ?: Spoken.spell(row.eta ?: eta(row.etaS, row.quality)),
                             )
                             .joinToString(", ")
+                    // A public bus has no line page: /api/line is the shuttles'.
+                    val open =
+                        if (row.paid) Modifier
+                        else
+                            Modifier.clickable(role = Role.Button, onClickLabel = stringResource(R.string.a11y_open_line, row.svc)) {
+                                act.openLine(row.svc, s.code)
+                            }
                     Row(
                         Modifier.fillMaxWidth()
+                            .then(open)
                             .clearAndSetSemantics { contentDescription = said }
                             .padding(horizontal = 14.dp, vertical = if (big) 10.dp else 7.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -106,6 +135,31 @@ internal fun NearbyList(stops: List<NearbyStop>?, loading: Boolean, onOpenStop: 
                 }
             }
         }
+        ToStops(act.openStops)
+    }
+}
+
+/** Under the last sign: any other stop, or a service's whole line, is on the Stops tab. */
+@Composable
+private fun ToStops(onClick: () -> Unit) {
+    val c = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(16.dp)
+    Row(
+        Modifier.fillMaxWidth()
+            .clip(shape)
+            .background(c.surface)
+            .border(1.dp, c.outlineVariant, shape)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(start = 14.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(painterResource(R.drawable.ic_tab_buses), contentDescription = null, tint = c.primary, modifier = Modifier.size(24.dp))
+        Column(Modifier.weight(1f)) {
+            Text(stringResource(R.string.nearby_more_title), fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.nearby_more_text), style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant)
+        }
+        Icon(painterResource(R.drawable.ic_chevron), contentDescription = null, tint = c.onSurfaceVariant, modifier = Modifier.size(20.dp))
     }
 }
 

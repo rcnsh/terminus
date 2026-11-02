@@ -9,7 +9,7 @@ import kotlin.math.sin
 
 /*
  * Pull to refresh, "the sky stretches": pulled down at the top of its
- * content, Now and the Buses tab stretch their own sky. The room above the
+ * content, Now and the Stops tab stretch their own sky. The room above the
  * card's words (or the stop's name) grows with the pull, the sky's gradient
  * runs down to the horizon's new place, and the horizon is the animation:
  * a bus drives to your stop's sign as you pull, and letting go past the

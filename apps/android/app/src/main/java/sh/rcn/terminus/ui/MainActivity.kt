@@ -455,6 +455,20 @@ private fun Tabs(
     val scope = rememberCoroutineScope()
     // Settings tapped while already on it: back to its list of all settings.
     val settingsAgain = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
+    // The pinned stops are the profile's, starred on the Stops tab or in Nearby.
+    val pins = acct.profile?.pinnedStops.orEmpty()
+    val pinLimit = (acct.profile?.limits ?: sh.rcn.terminus.Limits.DEFAULT).pinnedStops
+    val onPin = { code: String ->
+        // Pin or unpin as the tap meant on the pins shown, also when it's saved on a newer profile.
+        val on = code !in account.state.value.profile?.pinnedStops.orEmpty()
+        account.edit { it.pinnedStops = sh.rcn.terminus.Pins.set(it.pinnedStops, code, on, it.limits.pinnedStops) }
+    }
+    // A page of the Stops tab, over its home, as if opened there: Back goes to the home.
+    val openStops = { route: BusRoute? ->
+        buses.home()
+        route?.let(buses::open)
+        onTab(Tab.Buses)
+    }
     Scaffold(
         snackbarHost = { SnackbarHost(snackbars) { NoticeBar(it) } },
         bottomBar = {
@@ -539,12 +553,13 @@ private fun Tabs(
                                         },
                                     ),
                                 onShowList = { svc, stop ->
-                                    buses.home()
-                                    when {
-                                        stop != null -> buses.open(BusRoute.Stop(stop))
-                                        svc != null -> buses.open(BusRoute.Line(svc, null))
-                                    }
-                                    onTab(Tab.Buses)
+                                    openStops(
+                                        when {
+                                            stop != null -> BusRoute.Stop(stop)
+                                            svc != null -> BusRoute.Line(svc, null)
+                                            else -> null
+                                        }
+                                    )
                                 },
                             )
                         }
@@ -555,16 +570,10 @@ private fun Tabs(
                             BusesScreen(
                                 buses,
                                 insets = inner,
-                                pins = acct.profile?.pinnedStops.orEmpty(),
+                                pins = pins,
                                 publicBuses = acct.profile?.publicBuses == true,
-                                pinLimit = (acct.profile?.limits ?: sh.rcn.terminus.Limits.DEFAULT).pinnedStops,
-                                onPin = { code ->
-                                    // Pin or unpin as the tap meant on the pins shown, also when it's saved on a newer profile.
-                                    val on = code !in account.state.value.profile?.pinnedStops.orEmpty()
-                                    account.edit {
-                                        it.pinnedStops = sh.rcn.terminus.Pins.set(it.pinnedStops, code, on, it.limits.pinnedStops)
-                                    }
-                                },
+                                pinLimit = pinLimit,
+                                onPin = onPin,
                                 onShowOnMap = { svc ->
                                     map.show(svc)
                                     onTab(Tab.Map)
@@ -594,17 +603,24 @@ private fun Tabs(
                     // Edge to edge, the insets inside its scrolling, so the sky can reach the top.
                     Tab.Now ->
                         Box(Modifier.fillMaxSize().consumeWindowInsets(inner).imePadding()) {
-                            // A stop tapped in Nearby: open on the map, with its sheet.
+                            // The stars need the profile's pins.
+                            LaunchedEffect(Unit) { if (acct.profile == null) account.refresh() }
+                            // A stop or a row tapped in Nearby: its board or its line, on the Stops tab.
                             MainScreen(
                                 state,
                                 vm,
                                 insets = inner,
                                 email = acct.email,
                                 onAddEmail = onAddEmail,
-                                onOpenStop = { code ->
-                                    map.showStop(code)
-                                    onTab(Tab.Map)
-                                },
+                                nearby =
+                                    NearbyActions(
+                                        pins,
+                                        pinLimit,
+                                        onPin,
+                                        openStop = { openStops(BusRoute.Stop(it)) },
+                                        openLine = { svc, stop -> openStops(BusRoute.Line(svc, stop)) },
+                                        openStops = { openStops(null) },
+                                    ),
                             )
                         }
                 }

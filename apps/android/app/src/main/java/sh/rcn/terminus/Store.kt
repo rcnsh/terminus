@@ -140,8 +140,8 @@ class Store(context: Context) {
 
     /**
      * The buses near you (/api/me/nearby) as last fetched, for the Nearby widget and the big widget's next buses: one board for every
-     * widget, whoever fetched it (a widget's ↻, the background refresh, the Buses tab). One this version can't read throws [ParseError] and
-     * isn't kept; nothing is kept when [sentWith] is no longer this phone's token.
+     * widget, whoever fetched it (a widget's ↻ or the background refresh). One this version can't read throws [ParseError] and isn't kept;
+     * nothing is kept when [sentWith] is no longer this phone's token.
      */
     fun saveNearby(json: JSONObject, fetchedAtMs: Long, sentWith: String): List<NearbyStop>? {
         val stops = parseNearby(json)

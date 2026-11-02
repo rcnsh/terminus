@@ -91,12 +91,13 @@ internal fun StopPlate(name: String, modifier: Modifier = Modifier, big: Boolean
     }
 }
 
-/** A stop's sign: the plate, then what's under it. Rounded, with a hairline round the lot. */
+/** A stop's sign: the plate ([plate] on it alone: a tap on the name), then what's under it. Rounded, with a hairline round the lot. */
 @Composable
 internal fun StopSign(
     name: String,
     modifier: Modifier = Modifier,
     big: Boolean = false,
+    plate: Modifier = Modifier,
     trailing: @Composable RowScope.() -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -104,7 +105,7 @@ internal fun StopSign(
     Column(
         modifier.clip(shape).background(MaterialTheme.colorScheme.surface).border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)
     ) {
-        StopPlate(name, big = big, trailing = trailing)
+        StopPlate(name, plate, big = big, trailing = trailing)
         content()
     }
 }

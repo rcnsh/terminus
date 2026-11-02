@@ -53,7 +53,7 @@ class ProfileDoc(val json: JSONObject) {
         json.put("home", if (unique.isEmpty()) JSONObject.NULL else JSONObject().put("stops", JSONArray(unique)))
     }
 
-    /** The stops pinned on the Buses tab, in their order. */
+    /** The stops pinned on the Stops tab, in their order. */
     var pinnedStops: List<String>
         get() = json.optJSONArray("pinnedStops")?.strings().orEmpty()
         set(v) {
