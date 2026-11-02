@@ -33,7 +33,9 @@ struct SetupAlertsStep: View {
                         "So directions start from your nearest stop. Your location is used only for that request, rounded to about 11 m, and never stored. Without it, terminus assumes you're at your last class or at home."
                     ),
                     done: locator.allowed ? L("Allowed.") : nil,
-                    ask: locator.denied ? L("Turn on in Settings") : L("Allow location"),
+                    // A neutral word before the system's own question: App Review
+                    // rejects a button that answers it for you ("Allow location").
+                    ask: locator.denied ? L("Turn on in Settings") : L("Continue"),
                     id: "alerts.location"
                 ) {
                     if locator.denied {

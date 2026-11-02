@@ -26,6 +26,8 @@ shuttle,ISB,internal,campus,NUSMods,timetable,Kent Ridge,UTown,PGP,arrival,commu
 
 ## Description (4000 characters max)
 
+No other platform is named here, Android least of all: App Review rejects a description that mentions one (guideline 2.3.10). The Mac and the website are fine.
+
 ```
 terminus tells you when to leave for your next class at NUS, and which NUS shuttle bus to catch to get there on time. It works only with the NUS campus shuttles.
 
@@ -60,7 +62,7 @@ Nothing changes unless you say yes, and every choice can be undone.
 ALSO
 • Today: your classes, when to leave for each, and the trip home.
 • In English and Simplified Chinese (简体中文).
-• Works with terminus for Android, the menu bar app for Mac and the website. Add an email and they all show the same trip.
+• Works with the terminus menu bar app for Mac and the website. Add an email and they all show the same trip.
 
 YOUR PRIVACY
 • No sign-up: the app makes an account of its own. Adding an email is optional, and only needed to use terminus on another device.
@@ -129,7 +131,7 @@ terminus 告诉你什么时候该出发去上 NUS 的下一节课，以及该搭
 还有
 • 今天：你的课、每节课什么时候出发，以及回家的行程。
 • 支持英文和简体中文。
-• 可以配合 terminus 的 Android 应用、Mac 菜单栏应用和网站使用。添加邮箱后，它们都显示同一段行程。
+• 可以配合 terminus 的 Mac 菜单栏应用和网站使用。添加邮箱后，它们都显示同一段行程。
 
 你的隐私
 • 不用注册：应用会自己创建一个账户。添加邮箱是可选的，只有想在其他设备上使用 terminus 时才需要。
