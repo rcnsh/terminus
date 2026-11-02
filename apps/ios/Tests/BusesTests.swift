@@ -18,10 +18,51 @@ final class BusesTests: XCTestCase {
         XCTAssertEqual(BusPins.toggle(["A", "B"], "A", max: 2), ["B"])
     }
 
-    func testPagesPutTheNearestStopFirstOnce() {
-        XCTAssertEqual(BusPins.pages(nearest: nil, pins: []), [nil])
-        XCTAssertEqual(BusPins.pages(nearest: "PGP", pins: ["COM3", "PGP", "COM3"]), ["PGP", "COM3"])
-        XCTAssertEqual(BusPins.pages(nearest: nil, pins: ["COM3"]), [nil, "COM3"])
+    func testTheHomeShowsEachPinOnceUpToTheLimit() {
+        XCTAssertEqual(BusPins.shown([]), [])
+        XCTAssertEqual(BusPins.shown(["COM3", "PGP", "COM3"]), ["COM3", "PGP"])
+        XCTAssertEqual(BusPins.shown(["A", "B", "C"], max: 2), ["A", "B"])
+    }
+
+    // MARK: the home
+
+    func testAPinnedBoardShowsItsFirstThreeRowsAndCountsTheRest() throws {
+        let rows = try ["R1", "A1", "A2", "D1", "K"].map { svc in
+            try row(svc == "R1" ? #"{"svc":"R1","running":false}"# : #"{"svc":"\#(svc)","etaS":60}"#)
+        }
+        let (shown, more) = BusWords.preview(rows)
+        // Running first, as the board: the stopped R1 is one of the rest.
+        XCTAssertEqual(shown.map(\.svc), ["A1", "A2", "D1"])
+        XCTAssertEqual(more, 2)
+        let (few, none) = BusWords.preview(Array(rows.prefix(2)))
+        XCTAssertEqual(few.map(\.svc), ["A1", "R1"])
+        XCTAssertEqual(none, 0)
+    }
+
+    func testAServiceSaysWhereItGoes() throws {
+        Lang.pref = "en"
+        let json = #"""
+            {"stops":[{"code":"COM3","name":"COM 3","services":["D1"]},{"code":"PGP","name":"PGP","longName":"Prince George's Park"},
+              {"code":"PGPR","name":"PGP Foyer"}],
+             "routes":{"D1":{"seq":["COM3","PGP"],"loop":true,"color":"#c1a6ff"},"K":{"seq":["PGP","COM3","PGPR"],"loop":false},"X":{}}}
+            """#
+        let campus = try JSONDecoder().decode(BusCampus.self, from: Data(json.utf8))
+        XCTAssertEqual(campus.services, ["D1", "K", "X"])
+        XCTAssertEqual(campus.color("D1"), "#c1a6ff")
+        // Stops by their long names where they have one, as the web and Android say them.
+        let name = { (code: String) in campus.stop(code)?.fullName ?? code }
+        XCTAssertEqual(campus.routes["D1"].flatMap { BusWords.route($0, name: name) }, "Loop from COM 3")
+        XCTAssertEqual(campus.routes["K"].flatMap { BusWords.route($0, name: name) }, "Prince George's Park to PGP Foyer")
+        // A route without its stops: nothing under the service.
+        XCTAssertNil(campus.routes["X"].flatMap { BusWords.route($0, name: name) })
+    }
+
+    func testPinnedBoardsPulledTogetherSayHowTheyWentAsOne() {
+        XCTAssertEqual(PullOutcome.combined([.failed, .updated, .upToDate(nextInS: 4)]), .updated)
+        XCTAssertEqual(PullOutcome.combined([.upToDate(nextInS: 9), .failed]), .failed)
+        XCTAssertEqual(
+            PullOutcome.combined([.upToDate(nextInS: 9), .upToDate(nextInS: 4), .upToDate(nextInS: nil)]), .upToDate(nextInS: 4))
+        XCTAssertEqual(PullOutcome.combined([]), .upToDate(nextInS: nil))
     }
 
     // MARK: the search

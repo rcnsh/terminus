@@ -1,24 +1,20 @@
-import CoreLocation
 import Foundation
 import Observation
 
-/// Where the nearest stop's page is.
-enum BusNearest { case loading, ready, none, failed }
+/// Whether the account's pins are known yet: the home shows them only once they are.
+enum BusPinsState { case loading, ready, failed }
 
 /// The Buses tab's data, as Android's BusesViewModel. The screens drive the
-/// refreshing, only while the tab is on screen and the app in front: the
-/// page in view every 15 s, the API's own cache, so asking sooner would
-/// show nothing new. A failed refresh keeps the last answer, shown aged.
+/// refreshing, only while the tab is on screen and the app in front: what's
+/// in view every 15 s (the home's pinned boards, or the page over it), the
+/// API's own cache, so asking sooner would show nothing new. A failed
+/// refresh keeps the last answer, shown aged.
 @MainActor @Observable
 final class BusesModel {
     static let shared = BusesModel()
 
     /// The stops and services, for the search and names before a board loads.
     private(set) var campus: BusCampus?
-    private(set) var nearest: Board?
-    private(set) var nearestState = BusNearest.loading
-    /// The nearest stop is from a location; false: from the home stop.
-    private(set) var located = false
     /// Boards by stop code: pinned stops, opened ones, the twins across the road.
     private(set) var boards: [String: Board] = [:]
     /// Stops whose board couldn't be fetched (offline), until one is.
@@ -31,6 +27,7 @@ final class BusesModel {
 
     /// The account's pinned stops, its limit, and whether boards have the public buses too.
     private(set) var pins: [String] = []
+    private(set) var pinsState = BusPinsState.loading
     private(set) var pinLimit = BusPins.defaultMax
     private(set) var publicBuses = false
 
@@ -53,7 +50,6 @@ final class BusesModel {
 
     /// Shorter than the refresh, so the 15 s tick always asks; longer than a swipe back.
     static let minGapS: TimeInterval = 10
-    static let nearestKey = "nearest"
 
     static func lineKey(_ svc: String, _ from: String?) -> String { "\(svc)|\(from ?? "")" }
 
@@ -74,15 +70,13 @@ final class BusesModel {
         guard s != session else { return }
         session = s
         campus = nil
-        nearest = nil
-        nearestState = .loading
-        located = false
         boards = [:]
         failed = []
         across = []
         lines = [:]
         lineFailed = []
         pins = []
+        pinsState = .loading
         publicBuses = false
         path = []
         asked = [:]
@@ -124,12 +118,20 @@ final class BusesModel {
     func loadProfile() async {
         guard let token else { return }
         let s = AppModel.shared.session
-        guard let p = try? await Api(token: token).profile(), current(s) else { return }
-        apply(p)
+        do {
+            let p = try await Api(token: token).profile()
+            guard current(s) else { return }
+            apply(p)
+        } catch {
+            guard current(s) else { return }
+            // Known once already: the pins stay as they were.
+            if pinsState != .ready { pinsState = .failed }
+        }
     }
 
     private func apply(_ p: [String: Any]) {
         pins = (p["pinnedStops"] as? [String]) ?? []
+        pinsState = .ready
         if let limits = p["limits"] as? [String: Any], let n = limits["pinnedStops"] as? Int { pinLimit = n }
         let pub = (p["publicBuses"] as? Bool) ?? false
         // A change asks again at the next refresh rather than waiting out the gap.
@@ -169,57 +171,6 @@ final class BusesModel {
 
     // MARK: boards
 
-    /// The nearest stop, by location, else the home stop; its opposite stop comes with it.
-    func refreshNearest(force: Bool = false) async {
-        if !force && fresh(Self.nearestKey) { return }
-        guard let token else { return }
-        asked[Self.nearestKey] = Date()
-        let s = AppModel.shared.session
-        var sent: CLLocation?
-        var sentAt = Date()
-        var later: Task<CLLocation?, Never>?
-        await fetching(Self.nearestKey) {
-            let (loc, coming) = await Locator.shared.quickFix()
-            (sent, later) = (loc, coming)
-            sentAt = Date()
-            do {
-                let (stops, data) = try await Api(token: token).nearbyBoards(
-                    lat: loc?.coordinate.latitude, lon: loc?.coordinate.longitude, acc: loc?.acc)
-                // Without a location, the nearest is the home stop: another account's, after a sign-in.
-                guard current(s) else { return }
-                // The widgets showing buses near you draw this board too.
-                TripSync.nearbyFetched(data, token: token)
-                answeredAt[Self.nearestKey] = Date()
-                nearest = stops.first
-                nearestState = stops.isEmpty ? .none : .ready
-                located = loc != nil
-                for b in stops {
-                    boards[b.code] = b
-                    failed.remove(b.code)
-                }
-            } catch {
-                guard current(s) else { return }
-                if refused(error, token) { return }
-                if let e = error as? ApiError, e.status == 400 {
-                    // No location and no home stop: nothing to call nearest.
-                    nearest = nil
-                    nearestState = .none
-                } else if nearest == nil {
-                    nearestState = .failed
-                }
-            }
-        }
-        // Asked without waiting for the new fix, as the Now card does
-        // (AppModel.fetch): once more when it comes, if it moves you.
-        if let later, case let sent = sent {
-            Task {
-                let new = await later.value
-                guard current(s), Locator.refreshAgain(sent: sent, new: new, sentAt: sentAt) else { return }
-                await refreshNearest(force: true)
-            }
-        }
-    }
-
     func refreshBoard(_ code: String, force: Bool = false) async {
         if !force && fresh(code) { return }
         guard let token else { return }
@@ -241,17 +192,23 @@ final class BusesModel {
         }
     }
 
-    /// The board the page for `code` shows: its own, or its opposite stop's; nil for the nearest stop's page.
-    func pageBoard(_ code: String?) -> String? {
-        guard let code else { return nil }
+    /// The board the page for `code` shows: its own, or its opposite stop's.
+    func pageBoard(_ code: String) -> String {
         if across.contains(code), let o = boards[code]?.opposite { return o }
         return code
     }
 
-    /// The page for `code` (nil: the nearest stop). The nearest stop's opposite stop
-    /// comes with /me/nearby, so that page asks only for that.
-    func refreshPage(_ code: String?, force: Bool = false) async {
-        if let b = pageBoard(code) { await refreshBoard(b, force: force) } else { await refreshNearest(force: force) }
+    func refreshPage(_ code: String, force: Bool = false) async {
+        await refreshBoard(pageBoard(code), force: force)
+    }
+
+    /// The pinned stops the home shows, at most the profile's limit.
+    var shownPins: [String] { BusPins.shown(pins, max: pinLimit) }
+
+    /// The home's pinned boards, all at once: each its own stop's, as the home shows it.
+    func refreshPins(force: Bool = false) async {
+        let asks = shownPins.map { code in Task { await refreshBoard(code, force: force) } }
+        for a in asks { await a.value }
     }
 
     /// This side or across the road, for the page of stop `code`.
@@ -317,18 +274,31 @@ final class BusesModel {
         return (answeredAt[key] ?? .distantPast) >= start ? .updated : .failed
     }
 
-    /// The pull's bus for the page of `code` (nil: the nearest stop): the
-    /// first service on the board it shows, in its colour; nil before there's one.
+    /// The pull's bus for the page of `code` (nil: the home, its first pinned
+    /// stop): the first service on the board it shows, in its colour; nil before there's one.
     func livery(_ code: String?) -> UInt32? {
-        guard let own = code ?? nearest?.code, let row = boards[pageBoard(own) ?? own].map({ BusWords.runningFirst($0.rows) })?.first else {
-            return nil
-        }
+        // The home shows each pinned stop's own board, whichever side its page is on.
+        let board = code.map { boards[pageBoard($0)] } ?? shownPins.first.flatMap { boards[$0] }
+        guard let row = board.flatMap({ BusWords.runningFirst($0.rows).first }) else { return nil }
         return (row.color ?? color(row.svc)).flatMap(hexRGB)
     }
 
-    /// Pulled down on the page for `code` (nil: the nearest stop): asked again, and how it went.
-    func pullPage(_ code: String?) async -> PullOutcome {
-        await pulled(pageBoard(code) ?? Self.nearestKey) { await refreshPage(code, force: true) }
+    /// Pulled down on the page for `code`: asked again, and how it went.
+    func pullPage(_ code: String) async -> PullOutcome {
+        await pulled(pageBoard(code)) { await refreshPage(code, force: true) }
+    }
+
+    /// Pulled down on the home: the pins asked for again (a change in
+    /// Settings shows at once), then each pinned board, and how they went as one.
+    func pullPins() async -> PullOutcome {
+        await loadCampus()
+        await loadProfile()
+        if pinsState == .failed { return .failed }
+        let codes = shownPins
+        let pulls = codes.map { code in Task { await pulled(code) { await refreshBoard(code, force: true) } } }
+        var all: [PullOutcome] = []
+        for p in pulls { all.append(await p.value) }
+        return PullOutcome.combined(all)
     }
 
     /// Pulled down on a line's page.

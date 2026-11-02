@@ -1,10 +1,10 @@
 import CoreLocation
 import XCTest
 
-/// The Buses tab against the dev stub, tapped through: the nearest stop's
-/// board, across the road, a pinned stop's page, the search, a service's
-/// line, a service not running, the public buses, and the states without a
-/// stop or a connection; with screenshots in light and dark, English and
+/// The Buses tab, called Stops, against the dev stub, tapped through: the
+/// home with nothing pinned and with pinned boards, a stop's page and across
+/// the road, the search, a service's line, a service not running, the public
+/// buses, and no connection; with screenshots in light and dark, English and
 /// Chinese. Each test puts the stub on real hours on a Wednesday at 21:30,
 /// when R1 and R2 have stopped and P has too, so a board has services
 /// running and not.
@@ -51,7 +51,7 @@ final class BusesUITests: XCTestCase {
     }
 
     private func openBuses(_ app: XCUIApplication, lang: String = "en") {
-        let tab = app.tabBars.buttons[lang == "zh" ? "巴士" : "Buses"]
+        let tab = app.tabBars.buttons[lang == "zh" ? "车站" : "Stops"]
         XCTAssertTrue(tab.waitForExistence(timeout: 10))
         tab.tap()
     }
@@ -64,17 +64,39 @@ final class BusesUITests: XCTestCase {
 
     // MARK: tests
 
-    func testNearestStopBoard() {
+    func testHomeWithNothingPinned() {
+        let app = launch()
+        openBuses(app)
+        XCTAssertTrue(app.descendants(matching: .any)["pinned-none"].firstMatch.waitForExistence(timeout: 10))
+        // Every service, with where it goes.
+        let k = app.buttons["service-K"]
+        XCTAssertTrue(k.waitForExistence(timeout: 10))
+        XCTAssertTrue(k.label.contains("PGP to PGP Foyer"), k.label)
+        XCTAssertTrue(app.buttons["service-D1"].label.contains("Loop from COM 3"))
+        shot("buses-home-empty-en-light", app)
+        app.swipeUp()
+        shot("buses-home-empty-services-en-light", app)
+        // A service opens its whole line, with no stop of yours on it.
+        app.buttons["service-K"].tap()
+        XCTAssertTrue(app.buttons["line-show-on-map"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.staticTexts["Your stop"].exists)
+        XCTAssertEqual(app.navigationBars.buttons.element(boundBy: 0).label, "Stops")
+    }
+
+    func testPinnedBoardsAndAcrossTheRoad() {
+        setProfile { $0["pinnedStops"] = ["PGPR", "COM3"] }
         let app = launch()
         openBuses(app)
         waitForBoard(app)
-        XCTAssertTrue(
-            app.staticTexts["Nearest stop · 80 m"].exists
-                || app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Nearest stop'")).firstMatch.exists)
-        shot("buses-home-en-light", app)
-        // PGP Foyer and PGP are near each other, not across a road: their names.
+        XCTAssertTrue(app.buttons["pinned-PGPR"].exists)
+        XCTAssertTrue(app.buttons["pinned-COM3"].exists)
+        XCTAssertEqual(app.buttons["star-PGPR"].label, "Unpin Prince George's Park Foyer")
+        shot("buses-home-pinned-en-light", app)
+        // The name opens the stop's page. PGP Foyer and PGP are near each other, not across a road: their names.
+        app.buttons["pinned-PGPR"].tap()
+        XCTAssertEqual(app.staticTexts["stop-name"].label, "Prince George's Park Foyer")
         let other = app.buttons["side-1"]
-        XCTAssertTrue(other.exists)
+        XCTAssertTrue(other.waitForExistence(timeout: 10))
         XCTAssertEqual(other.label, "Prince George's Park")
         other.tap()
         XCTAssertTrue(app.staticTexts["Prince George's Park"].waitForExistence(timeout: 10))
@@ -86,11 +108,11 @@ final class BusesUITests: XCTestCase {
         shot("buses-across-foot-en-light", app)
     }
 
-    func testSearchPinAndSwipe() {
+    func testSearchPinAndHome() {
         let app = launch()
         openBuses(app)
-        waitForBoard(app)
         let field = app.textFields["buses-search"]
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
         field.tap()
         // Nothing typed: every service.
         XCTAssertTrue(app.buttons["hit-service:A1"].waitForExistence(timeout: 5))
@@ -107,20 +129,16 @@ final class BusesUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Unpin this stop"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Pinned"].waitForExistence(timeout: 5))
         shot("buses-stop-pinned-en-light", app)
+        XCTAssertEqual(app.navigationBars.buttons.element(boundBy: 0).label, "Stops")
         app.navigationBars.buttons.element(boundBy: 0).tap()
-        // Home now has a second page, the pinned stop, and a way to it.
-        let next = app.buttons["buses-swipe-for"]
-        XCTAssertTrue(next.waitForExistence(timeout: 10))
-        XCTAssertTrue(next.label.contains("COM 3"))
-        app.swipeLeft()
-        XCTAssertTrue(app.staticTexts["Pinned"].waitForExistence(timeout: 10))
+        // Home has it now, with its board.
+        XCTAssertTrue(app.buttons["pinned-COM3"].waitForExistence(timeout: 10))
         waitForBoard(app, svc: "D1")
-        shot("buses-home-pinned-page-en-light", app)
-        // Unpinned there, its page goes.
-        app.buttons["Unpin this stop"].tap()
-        XCTAssertTrue(
-            app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Nearest stop'")).firstMatch.waitForExistence(timeout: 10))
-        XCTAssertFalse(app.buttons["buses-swipe-for"].exists)
+        shot("buses-home-pinned-one-en-light", app)
+        // Unpinned there, it goes.
+        app.buttons["star-COM3"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["pinned-none"].firstMatch.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["pinned-COM3"].exists)
     }
 
     func testNoSuchStop() {
@@ -133,10 +151,11 @@ final class BusesUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["No stop or service by that name"].waitForExistence(timeout: 5))
         shot("buses-search-none-en-light", app)
         app.buttons["buses-search-close"].tap()
-        waitForBoard(app)
+        XCTAssertTrue(app.buttons["service-A1"].waitForExistence(timeout: 10))
     }
 
     func testLineFromTheBoard() {
+        setProfile { $0["pinnedStops"] = ["PGPR"] }
         let app = launch()
         openBuses(app)
         waitForBoard(app, svc: "A2")
@@ -168,6 +187,20 @@ final class BusesUITests: XCTestCase {
         XCTAssertTrue(app.tabBars.buttons["Map"].isSelected)
         sleep(2)
         shot("buses-show-on-map-en-light", app)
+    }
+
+    func testMoreAtThisStop() {
+        // UTown has five services: three on the home, then the rest on its page.
+        setProfile { $0["pinnedStops"] = ["UTOWN"] }
+        let app = launch()
+        openBuses(app)
+        let more = app.buttons["board-more"]
+        XCTAssertTrue(more.waitForExistence(timeout: 15))
+        XCTAssertEqual(more.label, "2 more at this stop")
+        shot("buses-home-more-en-light", app)
+        more.tap()
+        XCTAssertEqual(app.staticTexts["stop-name"].label, "University Town")
+        waitForBoard(app, svc: "R2")
     }
 
     func testServiceNotRunning() {
@@ -208,6 +241,8 @@ final class BusesUITests: XCTestCase {
         setProfile { $0["pinnedStops"] = stops }
         let app = launch()
         openBuses(app)
+        // All eight on the home, in their order.
+        XCTAssertTrue(app.buttons["pinned-LT27"].waitForExistence(timeout: 15))
         let field = app.textFields["buses-search"]
         XCTAssertTrue(field.waitForExistence(timeout: 10))
         field.tap()
@@ -226,9 +261,12 @@ final class BusesUITests: XCTestCase {
     func testOpenedFromElsewhere() {
         let app = launch(extra: ["TERMINUS_OPEN_STOP": "UTOWN"])
         XCTAssertTrue(app.staticTexts["University Town"].waitForExistence(timeout: 15))
-        XCTAssertTrue(app.tabBars.buttons["Buses"].isSelected)
+        XCTAssertTrue(app.tabBars.buttons["Stops"].isSelected)
         waitForBoard(app, svc: "D2")
         shot("buses-opened-stop-en-light", app)
+        // Back is the tab's home.
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.buttons["service-A1"].waitForExistence(timeout: 10))
     }
 
     func testNoConnection() {
@@ -239,47 +277,25 @@ final class BusesUITests: XCTestCase {
         shot("buses-offline-en-light", app)
     }
 
-    func testZHomeStopWithoutLocation() {
-        app0.resetAuthorizationStatus(for: .location)
-        let app = XCUIApplication.terminus(signedIn: true, lang: "en", theme: "light")
-        app.launch()
-        openBuses(app)
-        waitForBoard(app)
-        XCTAssertTrue(app.staticTexts["Your home stop"].waitForExistence(timeout: 5))
-        shot("buses-home-stop-en-light", app)
-    }
-
-    func testZZNoStopAtAll() {
-        // A new account has no home stop; without a location there's nothing to call nearest.
-        app0.resetAuthorizationStatus(for: .location)
-        let anon = apiJSON("POST", "/api/auth/anon", token: nil, body: ["name": "UI test", "platform": "ios"])
-        let token = anon?["token"] as? String ?? ""
-        let app = XCUIApplication.terminus(signedIn: false, lang: "en", theme: "light", extra: ["TERMINUS_TOKEN": token])
-        app.launch()
-        openBuses(app)
-        XCTAssertTrue(app.staticTexts["Find your stop"].waitForExistence(timeout: 15))
-        XCTAssertTrue(app.staticTexts["Allow location to see the stop nearest you, or search for a stop and pin it with the star."].exists)
-        shot("buses-find-your-stop-en-light", app)
-        app.buttons["buses-allow-location"].tap()
-        allowLocation()
-        // Allowed: the stop nearest you.
-        waitForBoard(app)
-        XCTAssertTrue(
-            app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Nearest stop'")).firstMatch.waitForExistence(timeout: 10))
-        _ = apiJSON("DELETE", "/api/me", token: token)
-    }
-
     /// The same screens in dark, in Chinese, and at a large text size.
     func testLooks() {
         for (lang, theme, big) in [("en", "dark", false), ("zh", "light", false), ("zh", "dark", false), ("en", "light", true)] {
             let tag = "\(lang)-\(theme)\(big ? "-xxl" : "")"
+            resetProfile()
             let app = XCUIApplication.terminus(signedIn: true, lang: lang, theme: theme)
             if big { app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityL"] }
             app.launch()
             allowLocation()
             openBuses(app, lang: lang)
+            XCTAssertTrue(app.buttons["service-A1"].waitForExistence(timeout: 10))
+            shot("buses-home-empty-\(tag)", app)
+            app.terminate()
+            setProfile { $0["pinnedStops"] = ["PGPR", "UTOWN"] }
+            app.launch()
+            openBuses(app, lang: lang)
             waitForBoard(app)
-            shot("buses-home-\(tag)", app)
+            shot("buses-home-pinned-\(tag)", app)
+            app.buttons["pinned-PGPR"].tap()
             app.buttons["side-1"].tap()
             waitForBoard(app, svc: "A1")
             shot("buses-across-\(tag)", app)
@@ -287,6 +303,7 @@ final class BusesUITests: XCTestCase {
             XCTAssertTrue(app.buttons["line-show-on-map"].waitForExistence(timeout: 10))
             sleep(1)
             shot("buses-line-\(tag)", app)
+            app.navigationBars.buttons.element(boundBy: 0).tap()
             app.navigationBars.buttons.element(boundBy: 0).tap()
             let field = app.textFields["buses-search"]
             XCTAssertTrue(field.waitForExistence(timeout: 5))
@@ -297,8 +314,6 @@ final class BusesUITests: XCTestCase {
             app.terminate()
         }
     }
-
-    private var app0: XCUIApplication { XCUIApplication() }
 }
 
 // MARK: the stub's account

@@ -1,10 +1,10 @@
 import SwiftUI
 import UIKit
 
-/// The Buses tab: a search, then pages to swipe between, the nearest stop
-/// and each pinned one, each with its board. A row opens its service's
-/// line; a stop on the line, or found in the search, opens its board.
-/// As Android's BusesScreen, in the hour's sky.
+/// The Buses tab, called Stops: a search, then each pinned stop with the
+/// top of its board, then every service. A row opens its service's line; a
+/// stop on the line, or found in the search, opens its board. The stops
+/// around you are Now's Nearby. As Android's BusesScreen, in the hour's sky.
 struct BusesView: View {
     @State private var model = BusesModel.shared
     @Environment(AppModel.self) private var app
@@ -31,21 +31,15 @@ struct BusesView: View {
             Task { await model.loadProfile() }
             openPicked()
         }
-        // A stop picked elsewhere (Now's nearby stops): its board, over the tab's home.
-        .onChange(of: app.openStop) { openPicked() }
-        .onChange(of: app.openLine) { openPicked() }
+        // A stop or line picked elsewhere (Now's Nearby, the map): its page, over the tab's home.
+        .onChange(of: app.openBuses) { openPicked() }
     }
 
     private func openPicked() {
-        if let code = app.openStop {
-            app.openStop = nil
-            model.sync()
-            model.path = [.stop(code)]
-        } else if let svc = app.openLine {
-            app.openLine = nil
-            model.sync()
-            model.path = [.line(svc: svc, from: nil)]
-        }
+        guard let pages = app.openBuses else { return }
+        app.openBuses = nil
+        model.sync()
+        model.path = pages
     }
 
     #if DEBUG
@@ -54,18 +48,16 @@ struct BusesView: View {
         init() {
             guard let code = ProcessInfo.processInfo.environment["TERMINUS_OPEN_STOP"], !BusesView.debugOpened else { return }
             BusesView.debugOpened = true
-            DispatchQueue.main.async {
-                AppModel.shared.openStop = code
-                NotificationCenter.default.post(name: .openTab, object: MainTabs.Tab.buses)
-            }
+            DispatchQueue.main.async { AppModel.shared.showInBuses([.stop(code)]) }
         }
 
         @MainActor private static var debugOpened = false
     #endif
 }
 
-/// A short note at the top, where the pull was: how it went, or the pins full.
-private struct NoteView: View {
+/// A short note at the top, where the pull was: how it went, or the pins
+/// full. On Now too, for Nearby's stars.
+struct NoteView: View {
     let text: String?
 
     var body: some View {
@@ -117,24 +109,13 @@ extension View {
 
 // MARK: home
 
-private let nearestID = "·nearest"
-
 struct BusesHome: View {
     @Environment(BusesModel.self) private var model
-    @Environment(\.colorScheme) private var scheme
     @State private var query = ""
     @FocusState private var focused: Bool
-    @State private var page: String? = nearestID
     @State private var pull = SkyPull()
-    @State private var spot = PagerSpot()
-    private let sky = SkyClock.shared
 
     private var searching: Bool { focused || !query.trimmingCharacters(in: .whitespaces).isEmpty }
-    private var pages: [String?] { BusPins.pages(nearest: model.nearest?.code, pins: model.pins) }
-    private var ids: [String] { pages.map { $0 ?? nearestID } }
-    private var index: Int { ids.firstIndex(of: page ?? nearestID) ?? 0 }
-    /// The stop on the page in view; nil for the nearest stop's.
-    private var current: String? { index == 0 ? nil : pages[index] }
 
     var body: some View {
         ScrollView {
@@ -146,8 +127,7 @@ struct BusesHome: View {
                             .pullLead()
                         if !searching {
                             PullRoom(above: 8, below: 8)
-                            headers.padding(.top, 8)
-                            if pages.count > 1 { dots.padding(.top, 10) }
+                            HomeTitle().padding(.top, 8)
                         }
                     }
                     .padding(.horizontal, 16)
@@ -163,211 +143,207 @@ struct BusesHome: View {
                         }
                     }
                 } else {
-                    pager
+                    VStack(alignment: .leading, spacing: 0) {
+                        PinnedStops()
+                        ServiceList()
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 24)
                 }
             }
         }
         .scrollDismissesKeyboard(.immediately)
         .background(Color.page)
-        .skyPull(pull, enabled: !searching, livery: model.livery(current), scene: { .hill($0) }) { [current] in
-            await model.pullPage(current)
+        .skyPull(pull, enabled: !searching, livery: model.livery(nil), scene: { .hill($0) }) {
+            await model.pullPins()
         }
+        // Not shown (the title is in the sky): the Back on a page over the home.
+        .navigationTitle(L("Stops"))
         .toolbar(.hidden, for: .navigationBar)
         .busSkyChrome(strip: true)
-        // The page in view only: swiping past one doesn't ask for it. The
-        // nearest stop's opposite stop comes with it, so across the road costs nothing more.
-        .busRefreshing(searching ? "searching" : "page:\(current ?? nearestID):\(model.across.sorted())") {
-            if !searching { await model.refreshPage(current) }
-        }
-        .onChange(of: ids) { _, new in
-            if let p = page, !new.contains(p) { page = nearestID }
-        }
-    }
-
-    // MARK: the headers in the sky
-
-    private var headers: some View {
-        PageHeaders(ids: ids, pages: pages, index: index, spot: spot)
-            .contentShape(Rectangle())
-            // The name swipes as the board does.
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 24).onEnded { g in
-                    guard abs(g.translation.width) > abs(g.translation.height) else { return }
-                    let to = g.translation.width < -40 ? index + 1 : g.translation.width > 40 ? index - 1 : index
-                    guard to != index, ids.indices.contains(to) else { return }
-                    withAnimation(.snappy) { page = ids[to] }
-                })
-    }
-
-    /// The pages as dots, the one in view long; the nearest stop's an arrow.
-    private var dots: some View {
-        HStack(spacing: 6) {
-            ForEach(Array(ids.enumerated()), id: \.element) { i, _ in
-                if i == 0 {
-                    Image(systemName: "location.fill").font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(index == 0 ? inks.ink : inks.muted.opacity(0.6))
-                } else {
-                    Capsule().fill(i == index ? inks.ink : inks.muted.opacity(0.45))
-                        .frame(width: i == index ? 18 : 6, height: 6)
-                }
-            }
-        }
-        .animation(.snappy, value: index)
-        .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(L("Page %@ of %@", "\(index + 1)", "\(ids.count)"))
-        .accessibilityAdjustableAction { d in
-            let to = d == .increment ? index + 1 : index - 1
-            if ids.indices.contains(to) { withAnimation { page = ids[to] } }
-        }
-    }
-
-    private var inks: Inks { Inks.sky(light: SkyPalette.of(sky.phase, dark: scheme == .dark).lightInk) }
-
-    // MARK: the boards
-
-    private var pager: some View {
-        ScrollView(.horizontal) {
-            HStack(alignment: .top, spacing: 0) {
-                ForEach(Array(ids.enumerated()), id: \.element) { i, id in
-                    VStack(alignment: .leading, spacing: 0) {
-                        if let code = pages[i] {
-                            BusStopBody(code: code)
-                        } else {
-                            NoNearest()
-                        }
-                        if i + 1 < ids.count, let next = pages[i + 1] {
-                            SwipeFor(name: model.stopName(next)) { withAnimation(.snappy) { page = ids[i + 1] } }
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 24)
-                    // Its own height, not the tallest page's: a short board isn't stretched.
-                    .fixedSize(horizontal: false, vertical: true)
-                    .containerRelativeFrame(.horizontal)
-                    .id(id)
-                }
-            }
-            .scrollTargetLayout()
-            .onGeometryChange(for: CGFloat.self) {
-                $0.frame(in: .named("pager")).minX
-            } action: {
-                spot.x = $0
-            }
-        }
-        .coordinateSpace(name: "pager")
-        .onGeometryChange(for: CGFloat.self) {
-            $0.size.width
-        } action: {
-            spot.width = $0
-        }
-        .scrollTargetBehavior(.paging)
-        .scrollPosition(id: $page)
-        .scrollIndicators(.hidden)
-        .scrollClipDisabled()
-    }
-}
-
-/// Where the boards are as the finger moves them, apart from the tab's own
-/// state, so a swipe redraws only the names that follow it.
-@MainActor @Observable
-final class PagerSpot {
-    /// How far the boards are scrolled, in points; nil until they're laid out.
-    var x: CGFloat?
-    var width: CGFloat = 0
-    /// Where the boards are, in pages: 1.5 is halfway from the second to the third.
-    var pages: CGFloat? { x.flatMap { width > 0 ? -$0 / width : nil } }
-}
-
-/// The page in view's header; every header laid out under it, unseen, so
-/// the band is as tall as the longest name and doesn't jump on a swipe.
-/// The names move with the boards under the finger: the one going fades
-/// and slides the way the board does as the next comes in.
-private struct PageHeaders: View {
-    let ids: [String]
-    let pages: [String?]
-    let index: Int
-    let spot: PagerSpot
-
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            // Apart from the moving names, so a swipe doesn't lay these out again each frame.
-            PageHeaderSizes(ids: ids, pages: pages)
-            MovingPageHeaders(ids: ids, pages: pages, index: index, spot: spot)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-/// Every page's header, unseen: the band's height.
-private struct PageHeaderSizes: View {
-    let ids: [String]
-    let pages: [String?]
-
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            ForEach(Array(ids.enumerated()), id: \.element) { i, _ in
-                PageHeader(index: i, code: pages[i]).hidden().accessibilityHidden(true)
-            }
+        // Every pinned board on the home, each at most every 15 s (the API's
+        // own cache); none while searching or with a page over the home.
+        .busRefreshing(searching ? "searching" : "pins:\(model.shownPins)") {
+            if !searching { await model.refreshPins() }
         }
     }
 }
 
-/// The names that follow the boards, from where the pager says it is.
-private struct MovingPageHeaders: View {
-    let ids: [String]
-    let pages: [String?]
-    let index: Int
-    let spot: PagerSpot
-    @Environment(\.accessibilityReduceMotion) private var still
-
-    var body: some View {
-        // Within a page of the one in view, as during a swipe (it lands a page on
-        // before `index` follows); anything further
-        // is the pager being laid out again (after a search), so the page in view.
-        let at = spot.pages.flatMap { abs($0 - CGFloat(index)) <= 1 ? $0 : nil } ?? CGFloat(index)
-        ZStack(alignment: .topLeading) {
-            ForEach(Array(ids.enumerated()), id: \.element) { i, _ in
-                let away = CGFloat(i) - at
-                if abs(away) < 1 {
-                    // Each is gone by halfway, so the two names never sit over each other half-drawn.
-                    PageHeader(index: i, code: pages[i])
-                        .opacity(max(0, 1 - abs(away) * 2))
-                        .offset(x: still ? 0 : away * 56)
-                        .accessibilityHidden(i != index)
-                }
-            }
-        }
-    }
-}
-
-/// Page `index`'s header in the sky: the nearest stop (`code` nil until it's known) or a pinned one.
-private struct PageHeader: View {
-    let index: Int
-    let code: String?
-    @Environment(BusesModel.self) private var model
+/// The tab's name, large in the sky.
+private struct HomeTitle: View {
     @Environment(\.inks) private var inks
 
     var body: some View {
-        if let code {
-            let label: String =
-                index == 0
-                ? (model.located
-                    ? (model.boards[code]?.distM.map { L("Nearest stop · %@ m", "\($0)") } ?? L("Nearest stop")) : L("Your home stop"))
-                : L("Pinned")
-            let plain = index == 0 ? (model.located ? L("Nearest stop") : L("Your home stop")) : label
-            BusStopHeader(code: code, label: label, plainLabel: plain, nearest: index == 0 && model.located)
-        } else {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(L("Nearest stop")).font(.subheadline).foregroundStyle(inks.muted)
-                Text(model.nearestState == .loading ? L("Checking…") : L("Find your stop"))
-                    .font(.title.weight(.heavy))
-                    .foregroundStyle(inks.ink)
-                    .accessibilityAddTraits(.isHeader)
-            }
-            .padding(.top, 8)
+        Text(L("Stops"))
+            .font(.title.weight(.heavy))
+            .foregroundStyle(inks.ink)
+            .accessibilityAddTraits(.isHeader)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 8)
+    }
+}
+
+/// Each pinned stop: its name, which opens its page, its star, and the top
+/// of its board; with nothing pinned, how to pin one.
+private struct PinnedStops: View {
+    @Environment(BusesModel.self) private var model
+
+    var body: some View {
+        SectionLabel(L("Pinned")).padding(.top, 20).padding(.bottom, 4)
+        switch model.pinsState {
+        case .loading:
+            Text(L("Checking…")).foregroundStyle(Color.muted).padding(.vertical, 12)
+        case .failed:
+            VStack(alignment: .leading, spacing: 8) {
+                Text(L("Couldn't reach terminus. Check your connection and try again.")).foregroundStyle(Color.muted)
+                Button(L("Try again")) { Task { await model.loadProfile() } }
+                    .buttonStyle(ChipButtonStyle())
+            }
+            .padding(.vertical, 8)
+        case .ready:
+            let pins = model.shownPins
+            if pins.isEmpty {
+                NoPins()
+            } else {
+                VStack(alignment: .leading, spacing: 16) {
+                    ForEach(pins, id: \.self) { PinnedStop(code: $0) }
+                }
+            }
         }
+    }
+}
+
+private struct PinnedStop: View {
+    let code: String
+    @Environment(BusesModel.self) private var model
+
+    var body: some View {
+        let name = model.stopName(code)
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 4) {
+                Button {
+                    model.path.append(.stop(code))
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(verbatim: name).font(.headline).foregroundStyle(Color.ink).multilineTextAlignment(.leading)
+                        Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Color.faint)
+                            .accessibilityHidden(true)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint(L("See this stop's buses"))
+                .accessibilityIdentifier("pinned-\(code)")
+                BusStar(code: code, name: name)
+            }
+            .padding(.leading, 4)
+            BusBoardCard(
+                board: model.boards[code], failed: model.failed.contains(code), colors: model.campus?.colors ?? [:],
+                limit: BusWords.homeRows, onMore: { model.path.append(.stop(code)) }
+            ) { row in
+                model.path.append(.line(svc: row.svc, from: code))
+            }
+        }
+    }
+}
+
+/// Nothing pinned: where the star is that pins a stop.
+private struct NoPins: View {
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "star").font(.title3.weight(.semibold)).foregroundStyle(Color.muted).accessibilityHidden(true)
+            Text(L("Tap the star on any stop to keep it here: in Nearby, on the stop's page, or after searching for it."))
+                .foregroundStyle(Color.muted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(
+                Color.line, style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+        )
+        .padding(.top, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("pinned-none")
+    }
+}
+
+/// Every shuttle service, each opening its whole line, with where it goes.
+/// No live counts: they'd be a request per service.
+private struct ServiceList: View {
+    @Environment(BusesModel.self) private var model
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            SectionLabel(L("Services")).fixedSize()
+            Spacer(minLength: 0)
+            Text(L("Tap one to see its whole line.")).font(.footnote).foregroundStyle(Color.muted).multilineTextAlignment(.trailing)
+        }
+        .padding(.top, 28)
+        .padding(.bottom, 8)
+        if let campus = model.campus {
+            VStack(spacing: 0) {
+                ForEach(Array(campus.services.enumerated()), id: \.element) { i, svc in
+                    if i > 0 { Divider().overlay(Color.line) }
+                    Button {
+                        model.path.append(.line(svc: svc, from: nil))
+                    } label: {
+                        row(svc, campus)
+                    }
+                    .buttonStyle(BusRowPress())
+                    .accessibilityHint(L("See the %@ line", svc))
+                    .accessibilityIdentifier("service-\(svc)")
+                }
+            }
+            .background(Color.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Color.line))
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        } else {
+            Text(L("Checking…")).foregroundStyle(Color.muted).padding(.vertical, 12)
+        }
+    }
+
+    private func row(_ svc: String, _ campus: BusCampus) -> some View {
+        HStack(spacing: 12) {
+            BusChip(svc: svc, color: campus.color(svc))
+            if let words = campus.routes[svc].flatMap({ BusWords.route($0, name: { campus.stop($0)?.fullName ?? $0 }) }) {
+                Text(verbatim: words).foregroundStyle(Color.ink).multilineTextAlignment(.leading)
+            }
+            Spacer(minLength: 8)
+            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Color.faint).accessibilityHidden(true)
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, 10)
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+    }
+}
+
+/// A stop's star, small, beside its name on the home and on Nearby's signs:
+/// filled when it's pinned. Pins or unpins it, as the star on its page does.
+struct BusStar: View {
+    let code: String
+    let name: String
+    private let model = BusesModel.shared
+    @Environment(\.inks) private var inks
+    @ScaledMetric(relativeTo: .body) private var scale: CGFloat = 1
+
+    var body: some View {
+        let starred = model.pins.contains(code)
+        Button {
+            model.togglePin(code)
+        } label: {
+            Image(systemName: starred ? "star.fill" : "star")
+                .font(.system(size: 18 * scale, weight: .semibold))
+                .foregroundStyle(starred ? inks.accent : Color.muted)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(starred ? L("Unpin %@", name) : L("Pin %@", name))
+        .accessibilityAddTraits(starred ? .isSelected : [])
+        .accessibilityIdentifier("star-\(code)")
     }
 }
 
@@ -463,86 +439,14 @@ private struct BusSearchResults: View {
     }
 }
 
-/// Page one without a nearest stop: no location and no home stop, or no answer.
-private struct NoNearest: View {
-    @Environment(BusesModel.self) private var model
-    private let locator = Locator.shared
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            switch model.nearestState {
-            case .loading:
-                EmptyView()
-            case .failed:
-                Text(L("Couldn't reach terminus. Check your connection and try again.")).foregroundStyle(Color.muted)
-                Button(L("Try again")) { Task { await model.refreshNearest(force: true) } }
-                    .buttonStyle(ChipButtonStyle())
-            default:
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(
-                        locator.allowed
-                            ? L("Search for a stop above and pin it with the star, so it's here next time.")
-                            : L("Allow location to see the stop nearest you, or search for a stop and pin it with the star.")
-                    )
-                    .foregroundStyle(Color.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-                    if !locator.allowed {
-                        Button(L("Allow location")) {
-                            if locator.undecided {
-                                locator.ask()
-                            } else if let url = URL(string: UIApplication.openSettingsURLString) {
-                                UIApplication.shared.open(url)
-                            }
-                        }
-                        .buttonStyle(ChipButtonStyle(filled: true))
-                        .accessibilityIdentifier("buses-allow-location")
-                    }
-                }
-                .cardStyle()
-            }
-        }
-        .padding(.top, 16)
-        .onChange(of: locator.allowed) { _, on in
-            if on { Task { await model.refreshNearest(force: true) } }
-        }
-    }
-}
-
-/// The next page's name, to go to it without swiping.
-private struct SwipeFor: View {
-    let name: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack {
-                Text(busBold: name, in: L("Swipe for %@", name)).foregroundStyle(Color.muted).multilineTextAlignment(.leading)
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.right").foregroundStyle(Color.muted).accessibilityHidden(true)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.line))
-        }
-        .buttonStyle(.plain)
-        .padding(.top, 16)
-        .accessibilityIdentifier("buses-swipe-for")
-    }
-}
-
 // MARK: a stop's page
 
-/// A stop's header, in the sky: what it is ("Nearest stop · 40 m", "Pinned"),
-/// its name, its code and the star. Across the road, the stop shown is the
-/// opposite stop, and the star is for that one.
+/// A stop's header, in the sky: "Pinned" when it is, its name, its code and
+/// the star. Across the road, the stop shown is the opposite stop, and the
+/// star is for that one.
 struct BusStopHeader: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     let code: String
-    let label: String?
-    /// The label across the road, where the distance is the other stop's.
-    let plainLabel: String?
-    let nearest: Bool
     @Environment(BusesModel.self) private var model
     @Environment(\.inks) private var inks
 
@@ -553,12 +457,7 @@ struct BusStopHeader: View {
         let starred = model.pins.contains(shown)
         HStack(alignment: .top, spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
-                if let label {
-                    HStack(spacing: 6) {
-                        if nearest && !across { Image(systemName: "location.fill").font(.caption).foregroundStyle(inks.smallAccent) }
-                        Text(across ? (plainLabel ?? "") : label).font(.subheadline).foregroundStyle(inks.muted)
-                    }
-                }
+                if starred { Text(L("Pinned")).font(.subheadline).foregroundStyle(inks.muted) }
                 Text(verbatim: model.stopName(shown))
                     .font(.title.weight(.heavy))
                     .foregroundStyle(inks.ink)
@@ -658,7 +557,7 @@ private struct Sides: View {
     }
 }
 
-/// A stop opened from the search or a line: its page, with Back.
+/// A stop opened from the home, the search, a line or Nearby: its page, with Back.
 struct BusStopPage: View {
     let code: String
     @Environment(BusesModel.self) private var model
@@ -668,10 +567,9 @@ struct BusStopPage: View {
         ScrollView {
             VStack(spacing: 0) {
                 SkyBand(moonLow: true) {
-                    let label = model.pins.contains(code) ? L("Pinned") : nil
                     VStack(alignment: .leading, spacing: 0) {
                         PullRoom(below: 8)
-                        BusStopHeader(code: code, label: label, plainLabel: label, nearest: false).padding(.horizontal, 16)
+                        BusStopHeader(code: code).padding(.horizontal, 16)
                     }
                 }
                 .busBandEnd()

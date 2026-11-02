@@ -86,15 +86,13 @@ final class AppModel {
         var failed = false
     }
 
-    /// A stop to show on the Buses tab, picked elsewhere (Now's Nearby, a
-    /// widget): Buses shows it and sets this back to nil.
-    var openStop: String?
+    /// The pages to put the Buses tab on, picked elsewhere (Now's Nearby,
+    /// the map's "Show as list"): a stop's board or a service's line over its
+    /// home, or [] for the home itself. Buses shows them and sets this back to nil.
+    var openBuses: [BusRoute]?
     /// The tab on screen. Kept here, not in the view, so a new language
     /// (which redraws everything) leaves you where you were.
     var tab: MainTabs.Tab = .now
-    /// A service's line to show on the Buses tab (the map's "Show as list"
-    /// with no stop open): Buses shows it and sets this back to nil.
-    var openLine: String?
 
     // MARK: "Is this wrong?"
 
@@ -250,6 +248,12 @@ final class AppModel {
         showNearby = false
         error = nil
         Task { await load(restart: true) }
+    }
+
+    /// The Buses tab on `pages` over its home ([] for the home alone), from another tab.
+    func showInBuses(_ pages: [BusRoute]) {
+        openBuses = pages
+        NotificationCenter.default.post(name: .openTab, object: MainTabs.Tab.buses)
     }
 
     func selectNearby() {

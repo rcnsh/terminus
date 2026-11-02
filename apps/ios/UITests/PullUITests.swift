@@ -58,9 +58,12 @@ final class PullUITests: XCTestCase {
     }
 
     func testTheBusesSkyStretchesAndAsksAgain() {
+        // A pinned stop, so the home has a board to ask for again.
+        setProfile { $0["pinnedStops"] = ["COM3"] }
+        defer { resetProfile() }
         let app = XCUIApplication.terminus(signedIn: true, extra: ["TERMINUS_SKY": "day"])
         app.launch()
-        app.tabBars.buttons["Buses"].tap()
+        app.tabBars.buttons["Stops"].tap()
         XCTAssertTrue(
             app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'board-row-'")).firstMatch.waitForExistence(
                 timeout: 15))
