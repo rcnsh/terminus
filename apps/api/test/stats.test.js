@@ -426,6 +426,61 @@ function dayWith(buses) {
   return buildDayFile({ date: DATE, t0: open, pollMs: 30_000, plates, rows, map: mapSnapshot() });
 }
 
+/** A recorded day of one bus on [svc], read every 30 s at each of [alongs] metres along its line. */
+function dayAlong(svc, alongs, plate = 'PD539C') {
+  const rows = alongs.map((along, k) => ({ dt: k ? 30_000 : 0, svc, buses: encodeBus({ plate, lat: 1.3, lon: 103.78, along }, 0) }));
+  return buildDayFile({ date: DATE, t0: open, pollMs: 30_000, plates: [plate], rows, map: mapSnapshot() });
+}
+
+test('a reading on the far side of a road the line takes both ways is passed over, and the stops either side still count', () => {
+  // D1 on 13 October 2026, CLB to BIZ2: LT13 (3,929 m) and LT13-OPP (1,005 m) are the two sides of one
+  // road, as are AS5 (4,086 m) and NUSS-OPP (617 m); twice the bus was placed on the far side.
+  const at = (stop) => SHAPES.D1.at[SHAPES.D1.stops.indexOf(stop)];
+  assert.deepEqual([at('LT13'), at('AS5')].map(Math.round), [3929, 4086]);
+  const passed = passingsOf(dayAlong('D1', [3580, 3676, 1034, 3916, 4006, 709, 4273, 4438, 4572, 4622]));
+  assert.deepEqual(
+    passed.map((p) => p.stop),
+    ['LT13', 'AS5', 'BIZ2'],
+    'nothing at LT13-OPP or NUSS-OPP',
+  );
+  // LT13's mark, 25 m before it, between the readings at 30 s (3,676 m) and 90 s (3,916 m).
+  assert.equal(passed[0].t, open + 30_000 + Math.round(((at('LT13') - 25 - 3676) / (3916 - 3676)) * 60_000));
+  // Two readings in a row that agree are where the bus is, even away from the last good one.
+  const moved = passingsOf(dayAlong('D1', [3580, 900, 930, 960, 990, 1020, 1300, 1400]));
+  assert.deepEqual(
+    moved.map((p) => p.stop),
+    ['LT13-OPP', 'IT'],
+  );
+});
+
+test('a wrong first reading invents nothing, and a bus round the end of its line goes on', () => {
+  // Its first reading on the far side, 668 m back; then driving at 7 m/s from 2,880 m.
+  const d1 = passingsOf(dayAlong('D1', [2212, 3090, 3300, 3510, 3720]));
+  const mark = (svc, stop) => SHAPES[svc].at[SHAPES[svc].stops.indexOf(stop)] - 25;
+  assert.deepEqual(
+    d1.map((p) => p.stop),
+    ['YIH', 'CLB'],
+    'not UTOWN, which it passed before',
+  );
+  assert.equal(d1[0].t, open + 30_000 + Math.round(((mark('D1', 'YIH') - 3090) / 210) * 30_000));
+  // K ends at PGPR and starts its next trip at PGP straight away.
+  const k = SHAPES.K;
+  const kTotal = k.at.at(-1);
+  const trip = passingsOf(dayAlong('K', [kTotal - 150, kTotal - 15, kTotal, 0, 0, 300, 600, 900, 1200, 1500], 'PK1'));
+  assert.ok(
+    trip.some((p) => p.stop === k.stops[1]),
+    `${k.stops[1]} on the next trip: ${trip.map((p) => p.stop)}`,
+  );
+  assert.ok(!trip.some((p) => p.stop === k.stops[0]), 'starting at PGP is not arriving there');
+  // A2 round its loop's end with a reading missing (off its line) between.
+  const a2 = SHAPES.A2.at.at(-1);
+  const round = passingsOf(dayAlong('A2', [a2 - 300, a2 - 150, -1, 350, 650], 'PA2'));
+  assert.ok(
+    round.some((p) => p.stop === 'KRB'),
+    `KRB: ${round.map((p) => p.stop)}`,
+  );
+});
+
 test('a bus reaches each stop on its line as it passes it, round a loop too, and never "arrives" where a route starts', () => {
   const d2 = SHAPES.D2;
   const total = d2.at.at(-1);
@@ -520,7 +575,7 @@ test('the cron scores a closed day once, from the recording and Analytics Engine
   assert.match(queries[0], /blob9 AS berth/);
   assert.match(queries[0], /INTERVAL '2' DAY\s+AND timestamp < NOW\(\) - INTERVAL '1' HOUR/, "the day's window, not everything since");
   const kept = JSON.parse(new TextDecoder().decode(bucket._written.get(etaKey(DATE))));
-  assert.deepEqual({ ...kept, rows: undefined }, { v: 2, date: DATE, predictions: 1, matched: 1, services: ['K'], rows: undefined });
+  assert.deepEqual({ ...kept, rows: undefined }, { v: 3, date: DATE, predictions: 1, matched: 1, services: ['K'], rows: undefined });
   assert.deepEqual(kept.rows[0].slice(2), [-30, 6], 'the bus came 30 s before it said, at 6');
   assert.equal(await recordEta(env, now + 900_000, fetchImpl), null, 'scored once');
 

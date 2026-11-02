@@ -503,21 +503,6 @@ export async function trackedBuses(
   live: { buses: RawBus[]; fetchedAt: number },
   ctx: { waitUntil(p: Promise<unknown>): void },
 ): Promise<LiveBus[]> {
-  return (await trackedPlacement(graph, svc, live, ctx)).buses;
-}
-
-/**
- * trackedBuses with the tracks too: each bus's own place on its line
- * (tracks[id].along), not the stop or midpoint it's drawn at. The timelapse
- * recorder keeps that, so a replay can move a bus along the road between
- * readings.
- */
-export async function trackedPlacement(
-  graph: Graph,
-  svc: string,
-  live: { buses: RawBus[]; fetchedAt: number },
-  ctx: { waitUntil(p: Promise<unknown>): void },
-): Promise<Placed> {
   const cache = caches.default;
   const key = placedKey(svc);
   let kept: Placed | null = null;
@@ -528,7 +513,7 @@ export async function trackedPlacement(
     kept = null;
   }
   // This update, or a newer one, placed already.
-  if (kept && kept.fetchedAt >= live.fetchedAt) return kept;
+  if (kept && kept.fetchedAt >= live.fetchedAt) return kept.buses;
   const placed = await placeBuses(graph, svc, live.buses, live.fetchedAt, kept?.tracks ?? {});
   const body: Placed = { fetchedAt: live.fetchedAt, ...placed };
   ctx.waitUntil(
@@ -541,7 +526,7 @@ export async function trackedPlacement(
       )
       .catch(() => {}),
   );
-  return body;
+  return body.buses;
 }
 
 /** A stop on a service's line (/api/line): its name and the other services there. */

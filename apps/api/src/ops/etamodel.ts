@@ -32,7 +32,7 @@ const OVERDUE_LEFT_S = 10;
  * On 19 October 2026 the feed held a D2 at 3 minutes from PGP for many
  * reads while the bus was half a lap away; it came 25 to 30 minutes later.
  */
-const CHECK = { maxAgeS: 90, marginS: 240, minN: 5 };
+export const CHECK = { maxAgeS: 90, marginS: 240, minN: 5 };
 /**
  * A bus said to be about there may already have reached the stop: for a
  * plate said to be 2 minutes or less away, a minute back (as eta.ts
@@ -582,6 +582,146 @@ export interface Case {
   answers: Answers;
   /** History's own answers, null where it couldn't: alone, gated (the blend's), and gated with the buses just ahead. */
   hist: { alone: number | null; gated: number | null; recent: number | null };
+  /** What was known about the bus when asked: why an answer may be far off (causeOf). */
+  why: Why;
+}
+
+/** Reads of one time: within a minute (the feed says whole minutes), and no more than 5 minutes apart. */
+const STEADY = { withinS: 60, gapS: 300 };
+/** A time given this long is stuck: a bus at lights can hold a minute for a minute; three is the feed not counting down. */
+export const STUCK_S = 180;
+
+/** What was known about [q]'s bus when asked, and one thing found after. A board's time (no plate) has no bus: unseen. */
+export interface Why {
+  /** The bus went by the stop unseen before the arrival matched (wentBy): that arrival is likely a lap late. */
+  wentBy: boolean;
+  /** The stop the bus was last seen reaching is this one: it may still be there, and the arrival matched its next lap's. */
+  atStop: boolean;
+  /** Seconds since the bus was last seen reaching a stop; null when it wasn't in the last STATE_MAX_AGE_MS. */
+  seenS: number | null;
+  /**
+   * Its way to the stop leaves a route's first stop, its own included: it
+   * may wait there for its departure time (the gate's layover). Or the stop
+   * is a first stop: buses queue there, so when one arrived is unclear.
+   */
+  firstStop: boolean;
+  /** So overdue on its current segment that it's taken as held (heldAfterS, the gate's other refusal). */
+  held: boolean;
+  /** How long the feed had given about this time for this bus at this stop, s (steadyS). */
+  steadyS: number;
+}
+
+/** Reads of the feed by `svc|plate|stop` (or `svc|stop` for a board), sorted by time: for steadyS. */
+export type ReadIndex = Map<string, { t: number; etaS: number }[]>;
+
+export function readIndex(queries: Query[]): ReadIndex {
+  const out: ReadIndex = new Map();
+  for (const q of queries) {
+    if (q.etaS === null) continue;
+    const k = q.plate ? `${q.svc}|${q.plate}|${q.stop}` : `${q.svc}|${q.stop}`;
+    const list = out.get(k);
+    if (list) list.push({ t: q.t, etaS: q.etaS });
+    else out.set(k, [{ t: q.t, etaS: q.etaS }]);
+  }
+  for (const list of out.values()) list.sort((a, b) => a.t - b.t);
+  return out;
+}
+
+/** How long, up to [q], the feed had given [q]'s time to within STEADY.withinS, in reads no more than STEADY.gapS apart: stuck from STUCK_S. */
+export function steadyS(index: ReadIndex, q: Query): number {
+  if (q.etaS === null) return 0;
+  const list = index.get(q.plate ? `${q.svc}|${q.plate}|${q.stop}` : `${q.svc}|${q.stop}`) ?? [];
+  let lo = 0;
+  let hi = list.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (list[mid].t <= q.t) lo = mid + 1;
+    else hi = mid;
+  }
+  let since = q.t;
+  for (let i = lo - 1; i >= 0; i--) {
+    const r = list[i];
+    if (since - r.t > STEADY.gapS * 1000 || Math.abs(r.etaS - q.etaS) > STEADY.withinS) break;
+    since = r.t;
+  }
+  return Math.round((q.t - since) / 1000);
+}
+
+/** The most stops, and time, two passings in a row may span for wentBy: past that, a bus out of service or a reading a stop back. */
+const WENT_BY = { skipped: 3, gapMs: 10 * 60_000 };
+
+/**
+ * Whether two of the plate's passings [list] (sorted) in a row span [q]'s
+ * stop, the bus passing it (halfway between them) between earlyS(q) before
+ * asking and [came]: it went by unseen, so [came], the arrival matched, is
+ * likely its next lap's. The recorder lost it there (on 13 October 2026
+ * D1s were seen at CLB and then BIZ2, and at neither LT13 nor AS5 between)
+ * or it went another way. Only over WENT_BY's gap at most.
+ */
+export function wentBy(route: Route, list: Passing[], q: Query, came: number): boolean {
+  const from = q.t - earlyS(q) * 1000;
+  for (let k = 1; k < list.length; k++) {
+    const [a, b] = [list[k - 1], list[k]];
+    const mid = (a.t + b.t) / 2;
+    // Twice at one stop is a bus waiting there.
+    if (mid < from || b.t >= came || a.stop === b.stop || b.t - a.t > WENT_BY.gapMs) continue;
+    for (let i = 0; i < route.seq.length; i++) {
+      if (route.seq[i] !== a.stop) continue;
+      let passed = false;
+      for (let j = after(route, i), step = 0; j !== null && step <= WENT_BY.skipped; j = after(route, j), step++) {
+        if (route.seq[j] === b.stop) {
+          if (passed) return true;
+          break;
+        }
+        if (route.seq[j] === q.stop) passed = true;
+      }
+    }
+  }
+  return false;
+}
+
+/** What was known about [q]'s bus: see Why. [bus] is the plate's, if it was seen. */
+export function whyOf(table: SegmentTable, route: Route, bus: BusState | undefined, q: Query, steady: number, went = false): Why {
+  if (!bus) return { wentBy: went, atStop: false, seenS: null, firstStop: false, held: false, steadyS: steady };
+  const elapsed = Math.max(0, (q.t - bus.t) / 1000);
+  const atStop = bus.stop === q.stop;
+  let firstStop = q.stop === route.seq[0];
+  let i = route.seq.indexOf(bus.stop);
+  // Not from the stop itself: the whole lap would always pass a loop's first stop.
+  for (let step = 0; !firstStop && !atStop && i >= 0 && step < route.seq.length; step++) {
+    const j = after(route, i);
+    if (j === null) break;
+    if (i === 0) {
+      firstStop = true;
+      break;
+    }
+    if (route.seq[j] === q.stop) break;
+    i = j;
+  }
+  const k = route.seq.indexOf(bus.stop);
+  const next = k < 0 ? null : after(route, k);
+  const s = next === null ? null : segmentS(table, q.svc, bus.stop, route.seq[next], bus.t);
+  return { wentBy: went, atStop, seenS: Math.round(elapsed), firstStop, held: s !== null && elapsed > heldAfterS(s), steadyS: steady };
+}
+
+/**
+ * Why a far-off answer was far off, the first that fits: the bus went by
+ * unseen, or was last seen at the stop itself (either way the arrival it's
+ * scored against may be its next lap's); the feed's time stuck (the feed's own reads say so, wherever the bus is); the bus
+ * not seen (nothing to tell from); its way leaving a route's first stop,
+ * or ending at one; held on its segment; or none of these.
+ */
+export const CAUSES = ['wentBy', 'atStop', 'stuck', 'unseen', 'firstStop', 'held', 'other'] as const;
+export type Cause = (typeof CAUSES)[number];
+
+export function causeOf(why: Why): Cause {
+  if (why.wentBy) return 'wentBy';
+  if (why.atStop) return 'atStop';
+  if (why.steadyS >= STUCK_S) return 'stuck';
+  if (why.seenS === null) return 'unseen';
+  if (why.firstStop) return 'firstStop';
+  if (why.held) return 'held';
+  return 'other';
 }
 
 /**
@@ -593,6 +733,14 @@ export function casesOf(model: EtaModel, routes: Record<string, Route>, rec: Rec
   const index = passingIndex(rec.passings);
   const states = stateIndex(rec.passings, rec.lagMs);
   const driven = recentIndex(segmentsOf(rec.passings, routes, rec.lagMs));
+  const reads = readIndex(rec.queries);
+  const byBus = new Map<string, Passing[]>();
+  for (const p of rec.passings) {
+    const list = byBus.get(`${p.svc}|${p.plate}`);
+    if (list) list.push(p);
+    else byBus.set(`${p.svc}|${p.plate}`, [p]);
+  }
+  for (const list of byBus.values()) list.sort((a, b) => a.t - b.t);
   const out: Case[] = [];
   for (const q of rec.queries) {
     const route = routes[q.svc];
@@ -622,6 +770,14 @@ export function casesOf(model: EtaModel, routes: Record<string, Route>, rec: Rec
         recent: hist.recent ?? q.etaS,
       },
       hist,
+      why: whyOf(
+        model.table,
+        route,
+        q.plate ? buses.find((b) => b.plate === q.plate) : undefined,
+        q,
+        steadyS(reads, q),
+        !!q.plate && wentBy(route, byBus.get(`${q.svc}|${q.plate}`) ?? [], q, came),
+      ),
     });
   }
   return out;
@@ -702,17 +858,25 @@ export function fitModel(routes: Record<string, Route>, train: Recorded[]): EtaM
   return { ...model, weights: weightsFrom([weightGrid(model, cases)]) };
 }
 
-/** How far off a set of answers was: absolute errors' mean and quantiles, and the mean signed error (positive: later than said). */
+/**
+ * An answer off by more than this is a miss. The feed's misses are 1 in
+ * 20 of its answers and nearly half its error (docs/eta-backtest.md,
+ * round 3): what a user feels, and what the mean hides.
+ */
+export const MISS_S = 300;
+
+/** How far off a set of answers was: absolute errors' mean and quantiles, the mean signed error (positive: later than said), and the share of misses (MISS_S). */
 export interface ErrorStats {
   n: number;
   mae: number | null;
   p50: number | null;
   p90: number | null;
   bias: number | null;
+  miss: number | null;
 }
 
 export function errorStats(errs: number[]): ErrorStats {
-  if (!errs.length) return { n: 0, mae: null, p50: null, p90: null, bias: null };
+  if (!errs.length) return { n: 0, mae: null, p50: null, p90: null, bias: null, miss: null };
   const abs = errs.map(Math.abs);
   const r = (x: number) => Math.round(x * 10) / 10;
   return {
@@ -721,6 +885,7 @@ export function errorStats(errs: number[]): ErrorStats {
     p50: r(quantile(abs, 0.5)),
     p90: r(quantile(abs, 0.9)),
     bias: r(errs.reduce((a, b) => a + b, 0) / errs.length),
+    miss: Math.round((abs.filter((x) => x > MISS_S).length / abs.length) * 1000) / 1000,
   };
 }
 
@@ -728,14 +893,36 @@ export const METHODS = ['feed', 'corrected', 'checked', 'history', 'gated', 'rec
 export type Method = (typeof METHODS)[number];
 
 /**
+ * The feed's misses (MISS_S) by cause (causeOf): how many, how many of
+ * those buses came later than said, and every method's summed absolute
+ * error on them, s, so days add up and each method's share of the fix shows.
+ */
+export type Misses = Record<Cause, { n: number; late: number; err: Record<Method, number> }>;
+
+export function missesOf(cases: Case[]): Misses {
+  const out = Object.fromEntries(CAUSES.map((c) => [c, { n: 0, late: 0, err: Object.fromEntries(METHODS.map((m) => [m, 0])) }])) as Misses;
+  for (const c of cases) {
+    if (Math.abs(c.actualS - c.feedS) <= MISS_S) continue;
+    const o = out[causeOf(c.why)];
+    o.n++;
+    if (c.actualS > c.feedS) o.late++;
+    for (const m of METHODS) if (c.answers[m] !== null) o.err[m] += Math.abs(c.actualS - c.answers[m]!);
+  }
+  for (const o of Object.values(out)) for (const m of METHODS) o.err[m] = Math.round(o.err[m]);
+  return out;
+}
+
+/**
  * Every method scored on the same cases, those every method could answer
  * (so history's gaps don't flatter or sink it), overall and by horizon
- * (by the feed's time). [coverage]: the share of cases history could answer.
+ * (by the feed's time), and the feed's misses among them by cause.
+ * [coverage]: the share of cases history could answer.
  */
 export function scoreCases(cases: Case[]): {
   coverage: number | null;
   overall: Record<Method, ErrorStats>;
   horizons: { label: string; stats: Record<Method, ErrorStats> }[];
+  misses: Misses;
 } {
   const full = cases.filter((c) => METHODS.every((m) => c.answers[m] !== null));
   const statsFor = (cs: Case[]) =>
@@ -744,5 +931,6 @@ export function scoreCases(cases: Case[]): {
     coverage: cases.length ? Math.round((full.length / cases.length) * 1000) / 1000 : null,
     overall: statsFor(full),
     horizons: HORIZONS.map((h, i) => ({ label: h.label, stats: statsFor(full.filter((c) => horizonOf(c.feedS) === i)) })),
+    misses: missesOf(full),
   };
 }

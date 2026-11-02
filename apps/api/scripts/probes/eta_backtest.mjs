@@ -21,12 +21,14 @@
  *
  * With data from two Singapore days or more, the last day is the test and
  * the rest train; with one, the first --split of its time trains (0.6 by
- * default) and the rest tests. A question whose bus could have come after
+ * default) and the rest tests. With --walk-from a date, each day from it
+ * on is tested on a model fitted on the WALK_DAYS days before it, as the
+ * shadow does (etashadow.ts), and the days' questions are scored together. A question whose bus could have come after
  * the data ends isn't asked, so a short recording can't favour short
  * horizons. Nothing here is random: the same files give the same report.
  *
  *   node scripts/probes/eta_backtest.mjs [--recording f.jsonl]... [--day d.json.gz --predictions p.jsonl]...
- *                                 [--split 0.6] [--out results.md] [--model-out model.json]
+ *                                 [--split 0.6] [--walk-from 2026-10-12] [--out results.md] [--model-out model.json]
  *                                 [--recent-min 30] [--recent-n 2] [--recent-prior 0]
  *
  * The --recent-* settings are the buses just ahead's (etamodel.ts Recent):
@@ -41,9 +43,15 @@ import { HORIZONS, aeTime, departs, passingsOf } from '../../src/ops/eta.ts';
 import { windowOf } from '../../src/map/timelapse.ts';
 import { SGT_MS } from '../../src/config.ts';
 import {
+  CAUSES,
+  CHECK,
   METHODS,
+  MISS_S,
   RECENT,
+  STUCK_S,
+  causeOf,
   casesOf,
+  horizonOf,
   errorStats,
   fitModel,
   passingsFromReadings,
@@ -73,6 +81,9 @@ const days = all('day');
 const predictionFiles = all('predictions');
 const SPLIT = Number(one('split', '0.6'));
 const OUT = one('out', null);
+const WALK_FROM = one('walk-from', null);
+/** Days a walked day's model is fitted on: the shadow's history. */
+const WALK_DAYS = 28;
 const MODEL_OUT = one('model-out', null);
 const recent = {
   windowMs: Number(one('recent-min', `${RECENT.windowMs / 60_000}`)) * 60_000,
@@ -83,6 +94,7 @@ if (args.length) usage(`unknown arguments: ${args.join(' ')}`);
 if (!recordings.length && !days.length) usage('give at least one --recording, or --day with --predictions');
 if (days.length !== predictionFiles.length) usage('each --day needs its --predictions, in the same order');
 if (!(SPLIT > 0 && SPLIT < 1)) usage('--split is between 0 and 1');
+if (WALK_FROM !== null && !/^\d{4}-\d{2}-\d{2}$/.test(WALK_FROM)) usage('--walk-from is a date, YYYY-MM-DD');
 if (!(recent.windowMs > 0 && recent.minN >= 1 && recent.prior >= 0))
   usage('--recent-min over 0, --recent-n 1 or more, --recent-prior 0 or more');
 
@@ -187,10 +199,24 @@ if (!units.length) usage('no usable data');
 const answerable = (end, q) => q.t + (q.etaS ?? 0) * 1000 + TAIL_MS <= end;
 
 const dates = [...new Set(units.map((u) => u.date))].sort();
+const answerableIn = (u) => ({ ...u, queries: u.queries.filter((q) => answerable(u.end, q)) });
 let train;
 let test;
 let how;
-if (dates.length >= 2) {
+/** Walked: each test day with the model fitted on the days before it. */
+let walked = null;
+if (WALK_FROM !== null) {
+  const tested = dates.filter((d) => d >= WALK_FROM && dates.some((x) => x < d));
+  if (!tested.length) usage(`no day from ${WALK_FROM} on has a day before it`);
+  walked = tested.map((date) => {
+    const from = new Date(Date.parse(`${date}T00:00:00Z`) - WALK_DAYS * 86_400_000).toISOString().slice(0, 10);
+    const before = units.filter((u) => u.date < date && u.date >= from).map(answerableIn);
+    return { date, train: before, test: units.filter((u) => u.date === date).map(answerableIn) };
+  });
+  train = walked.at(-1).train;
+  test = walked.flatMap((w) => w.test);
+  how = `walked forward: each of ${tested.length} days from ${tested[0]} to ${tested.at(-1)} tested on a model fitted on the up to ${WALK_DAYS} days before it (its weights and bias fitted on those days' own questions, not the shadow's earlier grids)`;
+} else if (dates.length >= 2) {
   const last = dates.at(-1);
   train = units.filter((u) => u.date !== last).map((u) => ({ ...u, queries: u.queries.filter((q) => answerable(u.end, q)) }));
   test = units.filter((u) => u.date === last).map((u) => ({ ...u, queries: u.queries.filter((q) => answerable(u.end, q)) }));
@@ -211,7 +237,12 @@ if (dates.length >= 2) {
 }
 
 const model = fitModel(routes, train);
-const cases = test.flatMap((u) => casesOf(model, routes, u, recent));
+const cases = walked
+  ? walked.flatMap((w) => {
+      const m = w.date === walked.at(-1).date ? model : fitModel(routes, w.train);
+      return w.test.flatMap((u) => casesOf(m, routes, u, recent));
+    })
+  : test.flatMap((u) => casesOf(model, routes, u, recent));
 const result = scoreCases(cases);
 const trainCases = train.flatMap((u) => casesOf(model, routes, u, recent)).length;
 const segments = train.flatMap((u) => segmentsOf(u.passings, routes));
@@ -238,7 +269,7 @@ for (const u of units) {
 }
 p();
 p(
-  `Training: ${segments.length} segment times over ${pairs.length} stop pairs ` +
+  `Training${walked ? " (the last day's model)" : ''}: ${segments.length} segment times over ${pairs.length} stop pairs ` +
     `(${pairs.filter(([n]) => n >= 5).length} with 5 or more), and ${trainCases} questions with an actual arrival for the bias and weights.`,
 );
 p(
@@ -262,13 +293,14 @@ p('**blend**, history+gate and corrected, weighted per horizon (corrected where 
 p();
 p('## Errors in seconds (actual minus predicted: positive is the bus coming later)');
 p();
+const share = (x) => (x == null ? '–' : `${Math.round(x * 1000) / 10}%`);
 const table = (stats) => {
-  p('| method | n | MAE | p50 abs | p90 abs | mean signed | MAE vs feed |');
-  p('|---|---|---|---|---|---|---|');
+  p(`| method | n | MAE | p50 abs | p90 abs | mean signed | over ${MISS_S / 60} min | MAE vs feed |`);
+  p('|---|---|---|---|---|---|---|---|');
   for (const m of METHODS) {
     const s = stats[m];
     p(
-      `| ${LABELS[m]} | ${s.n} | ${fmt(s.mae)} | ${fmt(s.p50)} | ${fmt(s.p90)} | ${fmt(s.bias)} | ${m === 'feed' ? '' : vs(s.mae, stats.feed.mae)} |`,
+      `| ${LABELS[m]} | ${s.n} | ${fmt(s.mae)} | ${fmt(s.p50)} | ${fmt(s.p90)} | ${fmt(s.bias)} | ${share(s.miss)} | ${m === 'feed' ? '' : vs(s.mae, stats.feed.mae)} |`,
     );
   }
 };
@@ -319,9 +351,98 @@ for (const h of result.horizons) {
   p();
   table(h.stats);
 }
+
+p();
+p(`## Where the feed is over ${MISS_S / 60} minutes off`);
+p();
+const CAUSE_LABELS = {
+  wentBy:
+    'went by: the bus was seen at stops before and after this one, one straight after the other, but not at it, so the arrival scored is likely its next lap (the recorder lost it, or it went another way)',
+  atStop:
+    'at the stop: the stop the bus was last seen reaching is this one, so it may still have been there and the arrival scored is likely its next lap',
+  stuck: 'stuck: the feed gave about the same time for that bus at that stop for 3 minutes or more',
+  unseen: 'unseen: the bus not seen reaching a stop in the last 20 minutes',
+  firstStop:
+    "first stop: the bus's way to the stop leaves a route's first stop, where buses wait to depart, or the stop is one, where they queue",
+  held: 'held: the bus far overdue on its current segment',
+  other: 'other: none of these',
+};
+const feedErr = result.overall.feed.mae == null ? 0 : result.overall.feed.mae * result.overall.feed.n;
+const missTotal = CAUSES.reduce((t, c) => t + result.misses[c].n, 0);
+p(
+  `On the ${result.overall.feed.n} questions scored above, the feed was over ${MISS_S / 60} minutes off on ${missTotal} ` +
+    `(${share(missTotal / (result.overall.feed.n || 1))}), and those made up ` +
+    `${share(CAUSES.reduce((t, c) => t + result.misses[c].err.feed, 0) / (feedErr || 1))} of its absolute error. ` +
+    'Each is put down to the first cause that fits, in this order:',
+);
+p();
+for (const c of CAUSES) p(`- ${CAUSE_LABELS[c]}`);
+p();
+p('Error columns are MAE on those questions, s; "of the feed\'s error" is their share of the feed\'s whole absolute error.');
+p();
+p("| cause | n | of the misses | bus later than said | of the feed's error | feed | checked | blend | history+gate |");
+p('|---|---|---|---|---|---|---|---|---|');
+for (const c of CAUSES) {
+  const o = result.misses[c];
+  const mean = (m) => (o.n ? Math.round(o.err[m] / o.n) : '–');
+  p(
+    `| ${c} | ${o.n} | ${share(o.n / (missTotal || 1))} | ${share(o.n ? o.late / o.n : null)} | ${share(o.err.feed / (feedErr || 1))} | ` +
+      `${mean('feed')} | ${mean('checked')} | ${mean('blend')} | ${mean('gated')} |`,
+  );
+}
+const scoredCases = cases.filter((c) => METHODS.every((m) => c.answers[m] !== null));
+const missed = scoredCases.filter((c) => Math.abs(c.actualS - c.feedS) > MISS_S);
+p();
+p('### By how far ahead');
+p();
+p(
+  `The feed's misses by cause and by the time it said; the last row is every scored question, and the share of them over ${MISS_S / 60} minutes off.`,
+);
+p();
+p(`| cause | ${HORIZONS.map((h) => h.label).join(' | ')} |`);
+p(`|---|${HORIZONS.map(() => '---').join('|')}|`);
+for (const c of CAUSES) {
+  const n = HORIZONS.map((_, i) => missed.filter((x) => causeOf(x.why) === c && horizonOf(x.feedS) === i).length);
+  p(`| ${c} | ${n.join(' | ')} |`);
+}
+p(
+  `| all questions | ${HORIZONS.map((_, i) => {
+    const all = scoredCases.filter((x) => horizonOf(x.feedS) === i);
+    const miss = all.filter((x) => Math.abs(x.actualS - x.feedS) > MISS_S).length;
+    return `${all.length} (${share(miss / (all.length || 1))} off)`;
+  }).join(' | ')} |`,
+);
+p();
+p('### Overlaps');
+p();
+const flag = (xs, f) => xs.filter(f).length;
+p(
+  `Of the ${missed.length} misses: ${flag(missed, (x) => x.why.wentBy)} went by, ${flag(missed, (x) => x.why.firstStop)} on a way through a first stop, ` +
+    `${flag(missed, (x) => x.why.held)} held, ${flag(missed, (x) => x.why.steadyS >= STUCK_S)} stuck, ` +
+    `${flag(missed, (x) => x.why.steadyS >= STUCK_S && x.why.firstStop)} both stuck and through a first stop; ` +
+    `${flag(missed, (x) => x.why.seenS !== null && x.why.seenS > CHECK.maxAgeS)} with the bus last seen at a stop over ${CHECK.maxAgeS} s before (too long for the check).`,
+);
+const unscored = cases.filter((c) => !METHODS.every((m) => c.answers[m] !== null) && Math.abs(c.actualS - c.feedS) > MISS_S);
+const wentBy = scoredCases.filter((c) => c.why.wentBy);
+const rest = scoredCases.filter((c) => !c.why.wentBy);
+const restMae = (m) =>
+  rest.length ? Math.round((rest.reduce((t, c) => t + Math.abs(c.actualS - c.answers[m]), 0) / rest.length) * 10) / 10 : '–';
+p(
+  `${wentBy.length} scored questions (${share(wentBy.length / (scoredCases.length || 1))}) went by, missed or not; without them, MAE is ` +
+    `${restMae('feed')} s for the feed, ${restMae('checked')} s checked and ${restMae('blend')} s for the blend.`,
+);
+p(
+  `A further ${unscored.length} misses were on questions history couldn't answer, so aren't scored above: ` +
+    CAUSES.map((c) => `${c} ${flag(unscored, (x) => causeOf(x.why) === c)}`).join(', ') +
+    '.',
+);
 p();
 p('## Fitted model');
 p();
+if (walked) {
+  p(`The last day's (${walked.at(-1).date}); each day before it had its own.`);
+  p();
+}
 p(`Weight on history, by horizon: ${HORIZONS.map((h, i) => `${h.label} ${model.weights[i]}`).join('; ')}.`);
 p();
 p(

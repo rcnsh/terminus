@@ -77,16 +77,17 @@ export interface Scored {
 
 /**
  * How eta.ts scores a day: kept as the file's `v` and in its R2 metadata,
- * so a day scored the older way is scored again (2: departures left out).
+ * so a day scored the older way is scored again (2: departures left out;
+ * 3: passings measured from the last good reading).
  */
-export const ETA_V = 2;
+export const ETA_V = 3;
 
 /** Whether the R2 object [head] is a day scored as ETA_V says. */
 export const scoredNow = (head: R2Object | null) => head?.customMetadata?.v === String(ETA_V);
 
-/** The day as kept in R2: rows are [service index, etaS, errS, hour]. Version 1 has the same rows, departures in. */
+/** The day as kept in R2: rows are [service index, etaS, errS, hour]. Older versions have the same rows, scored the older way. */
 export interface EtaDay {
-  v: 1 | typeof ETA_V;
+  v: 1 | 2 | typeof ETA_V;
   date: string;
   /** Predictions read (after dropping repeats of one cached answer), and how
    *  many found their bus, each sampled row counted for the rows it stands
@@ -114,12 +115,30 @@ function linesOf(day: Pick<DayFile, 'routes' | 'services'>): Map<string, { shape
 }
 
 /**
+ * A reading up to this far behind the last is the bus there: GPS error, or
+ * reversing (A1 and A2 back out of Kent Ridge Bus Terminal along the road
+ * they came in by, as buses.ts HOLD_BACK_M). Further back is a bus placed
+ * on the far side of a road its line takes both ways.
+ */
+const BACK_M = 500;
+/** Readings in a row that agree with each other, not with where the bus was, before it's taken to have moved there. */
+const RUN_TO_MOVE = 3;
+/** Round a loop's end and back to its start, or on to a one-way route's next trip, within this of the two ends together. */
+const WRAP_M = 1200;
+
+/**
  * Every time a recorded bus reached a stop on its line, from its metres
  * along the line in successive readings: the moment it passed the mark
- * ARRIVE_BEFORE_M before the stop, interpolated between the two readings
- * either side. Readings too far apart, a bus going backwards, or one too
- * fast to be real count for nothing. A one-way route's first stop is where
- * a bus starts, not arrives, so it has none.
+ * ARRIVE_BEFORE_M before the stop, interpolated between the reading before
+ * and the one after. Each reading is measured from the last good one (it
+ * could have driven there: not far back, nor faster than a bus). One that
+ * couldn't is passed over, a bus placed for a reading or two on the far
+ * side of a road its line takes both ways, until RUN_TO_MOVE in a row agree
+ * with each other: then the bus is there. With no good reading in the last
+ * MAX_GAP_MS, two agreeing are enough. From a loop's end its start is
+ * ahead, and from a one-way route's end a new trip begins, within WRAP_M of
+ * the two ends together. A one-way route's first stop is where a bus
+ * starts, not arrives, so it has none.
  */
 export function passingsOf(day: DayFile): Passing[] {
   const lines = linesOf(day);
@@ -148,15 +167,16 @@ export function passingsOf(day: DayFile): Passing[] {
     const stops = loop
       ? shape.stops.slice(0, -1).map((code, k) => ({ code, mark: shape.at[k] }))
       : shape.stops.slice(1).map((code, k) => ({ code, mark: shape.at[k + 1] }));
-    for (let i = 1; i < fixes.length; i++) {
-      const [t1, a1] = fixes[i - 1];
-      const [t2, a2] = fixes[i];
+    /** Metres driven from [from] to [to], or null when no bus could have: far back, too fast, or too long apart. */
+    const drive = ([t1, a1]: [number, number], [t2, a2]: [number, number]): number | null => {
       const dt = t2 - t1;
-      if (dt <= 0 || dt > MAX_GAP_MS) continue;
+      if (dt <= 0 || dt > MAX_GAP_MS) return null;
       let d = a2 - a1;
-      // Round a loop's end and back to its start.
-      if (loop && total > 0 && d < -total / 2) d += total;
-      if (d <= 0 || d / (dt / 1000) > MAX_SPEED_MPS) continue;
+      // Round the end: anywhere else, a reading far back is the far side of the road, not a lap ahead.
+      if (total > 0 && total - a1 + a2 <= WRAP_M && d < 0) d = loop ? d + total : 0;
+      return d < -BACK_M || d / (dt / 1000) > MAX_SPEED_MPS ? null : d;
+    };
+    const cross = ([t1, a1]: [number, number], d: number, dt: number) => {
       for (const { code, mark } of stops) {
         let target = mark - ARRIVE_BEFORE_M;
         if (loop && total > 0) {
@@ -166,6 +186,34 @@ export function passingsOf(day: DayFile): Passing[] {
         }
         if (target > a1 && target <= a1 + d) out.push({ svc, plate, stop: code, t: Math.round(t1 + ((target - a1) / d) * dt) });
       }
+    };
+    // Where the bus is: the last reading that agreed with the one before.
+    let good: [number, number] | null = null;
+    // Readings since that agree with each other but not with it.
+    let run: [number, number][] = [];
+    for (const fix of fixes) {
+      const fromGood = good && drive(good, fix);
+      if (good && fromGood != null) {
+        if (fromGood > 0) cross(good, fromGood, fix[0] - good[0]);
+        good = fix;
+        run = [];
+        continue;
+      }
+      const last = run.at(-1);
+      const fromRun = last ? drive(last, fix) : null;
+      if (fromRun == null) {
+        run = [fix];
+        continue;
+      }
+      run.push(fix);
+      // Against where it was, three readings say it's moved; with nowhere to go on, two.
+      if (run.length < (good && fix[0] - good[0] <= MAX_GAP_MS ? RUN_TO_MOVE : 2)) continue;
+      for (let k = 1; k < run.length; k++) {
+        const d = drive(run[k - 1], run[k])!;
+        if (d > 0) cross(run[k - 1], d, run[k][0] - run[k - 1][0]);
+      }
+      good = fix;
+      run = [];
     }
   }
   return out.sort((a, b) => a.t - b.t);
@@ -328,7 +376,7 @@ export async function etaSummary(env: Env, nowMs: number, days = 14): Promise<Re
   const dates = Array.from({ length: days }, (_, i) => new Date(nowMs + SGT_MS - (i + 1) * DAY).toISOString().slice(0, 10));
   const kept = (
     await Promise.all(dates.map(async (d) => (await env.FILES!.get(etaKey(d)))?.json<EtaDay>().catch(() => null) ?? null))
-  ).filter((d): d is EtaDay => d?.v === 1 || d?.v === ETA_V);
+  ).filter((d): d is EtaDay => d?.v === 1 || d?.v === 2 || d?.v === ETA_V);
   const all: Scored[] = kept.flatMap((d) => d.rows.map(([s, etaS, errS, hour]) => ({ svc: d.services[s], etaS, errS, hour })));
   const group = <K extends string | number>(key: (s: Scored) => K) => {
     const m = new Map<K, number[]>();
