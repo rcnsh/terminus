@@ -1,8 +1,6 @@
-<!-- 3.7.0 -->
-### terminus 3.7.0
+<!-- 3.8.0 -->
+### terminus 3.8.0
 
-**New:** Earlier bus and Later bus under the card, to plan around another bus than the one it picked; your devices, the leave reminder and Today follow your choice for the day. A stop's board leads with where each bus is going.
+**New:** the Buses tab is now Stops. It opens on the stops you've pinned, each with its next three buses, then every service. On Now, Nearby's signs open a stop's board or a service's line there, each with a star to pin the stop, and a row under them leads to the tab.
 
-**Faster:** the card no longer waits for your location. It asks at once with the last one it has, and again if a fresh one puts you somewhere else.
-
-**Fixes:** a one-off trip or a usual time says "arrive by", not "starts", and is planned from where your phone is. At the stop, the bus pulling in is the one to catch. The card says each thing once, and the map's button back to campus is a building, not a target. On Android, the back gesture and the map's sheet follow your finger as Android's own do, times keep their width as they tick, and autofill can fill in the sign-in code.
+**Fixes:** a service that loops (D1, D2, A1, A2, P) shows its line all the way back to the stop it started from, and a bus on its last stretch sits between the last two stops instead of past the end.
