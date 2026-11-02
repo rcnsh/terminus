@@ -553,9 +553,16 @@ export interface LineStop {
   services: string[];
 }
 
-/** A service's stops in route order; a loop's first stop isn't listed again at the end. */
+/**
+ * A service's stops in route order. A loop's first stop is listed again at
+ * the end, where its buses finish: the buses are placed on the route's own
+ * list, so one standing there is at the first, about to set off again, and
+ * one on its last stretch is between the last two.
+ */
 export function lineStops(idx: GraphIndex, svc: string): LineStop[] {
-  const seq = idx.routes.get(svc)?.seq ?? [];
+  const route = idx.routes.get(svc);
+  if (!route) return [];
+  const seq = route.loop && route.seq.length > 1 ? [...route.seq, route.seq[0]] : route.seq;
   return seq.map((code) => ({
     code,
     name: idx.byCode.get(code)?.name ?? code,
@@ -571,7 +578,7 @@ export interface LineBus {
   crowd: Crowd | null;
   /** The index of the stop it's at, or null between stops. */
   at: number | null;
-  /** Between stops `after` and the one after it (the first again, after a loop's last); null at a stop. */
+  /** Between stops `after` and the one after it; null at a stop. */
   after: number | null;
 }
 

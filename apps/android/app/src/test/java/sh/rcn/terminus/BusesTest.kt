@@ -218,7 +218,7 @@ class BusesTest {
                 is LineItem.Between -> "~${it.after}"
             }
         }
-        // The bus after the last stop is on its way round to the first.
+        // The bus after the last stop is drawn after it.
         assertEquals(listOf("COM3", "~0", "IT", "YIH-OPP*!", "UTOWN", "~3"), shape)
     }
 

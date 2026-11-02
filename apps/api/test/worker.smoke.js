@@ -539,7 +539,7 @@ test('/api/line: a service’s stops in order, its buses on them, and with a sto
   assert.equal(body.svc, 'D1');
   assert.equal(body.color, '#ec4fa0');
   assert.equal(body.available, true);
-  assert.equal(body.stops.length, 13, 'COM3 is listed once though the loop ends there');
+  assert.deepEqual([body.stops.length, body.stops[0].code, body.stops[13].code], [14, 'COM3', 'COM3'], 'the loop ends where it began');
   assert.equal(body.stops[8].code, 'YIH');
   assert.deepEqual(body.stop.code, 'YIH');
   assert.equal(body.stop.index, 8);

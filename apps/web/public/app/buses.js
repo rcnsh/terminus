@@ -573,7 +573,8 @@ function LinePage({ svc, stop }) {
   `;
   if (!data) return html`${head}<p class="hint bt-empty">${mine?.error ?? t('Checking…')}</p>`;
 
-  const n = data.stops.length;
+  // A loop's first stop is listed again at its end: one stop, two rows.
+  const n = new Set(data.stops.map((s) => s.code)).size;
   // Not running: its stops, no buses, and why.
   const stopped = data.running === false;
   const buses = data.available && !stopped ? data.buses : [];
@@ -613,7 +614,7 @@ function LinePage({ svc, stop }) {
           ${between.map(
             (b) => html`<li key=${b.id} class="bt-gap">
               <${BusMark} between />
-              <span class="bt-bus-info"><${Plate} b=${b} /><span>${t('Next: {0}', longName(data.stops[(i + 1) % n]))}</span></span>
+              <span class="bt-bus-info"><${Plate} b=${b} /><span>${t('Next: {0}', longName(data.stops[i + 1] ?? data.stops[0]))}</span></span>
             </li>`,
           )}
         `;

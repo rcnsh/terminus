@@ -1299,7 +1299,7 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
                                 Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Label(stringResource(R.string.buses_n_stops, line.stops.size), Modifier.weight(1f))
+                                Label(stringResource(R.string.buses_n_stops, line.stops.distinctBy { it.code }.size), Modifier.weight(1f))
                                 line.asOfMs?.let {
                                     Text(updated(it, now), style = MaterialTheme.typography.bodySmall, color = c.onSurfaceVariant)
                                 }

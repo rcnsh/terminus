@@ -87,7 +87,7 @@ struct BusLinePage: View {
         Divider().overlay(Color.line).padding(.top, 16)
         if let line {
             HStack {
-                SectionLabel(L("%@ stops", "\(line.stops.count)"))
+                SectionLabel(L("%@ stops", "\(Set(line.stops.map(\.code)).count)"))
                 Spacer()
                 if let asOf = line.asOf {
                     Text(BusWords.updated(asOf, now: now)).font(.footnote).foregroundStyle(Color.muted).monospacedDigit()

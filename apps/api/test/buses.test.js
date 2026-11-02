@@ -432,13 +432,14 @@ test('replaying 15 minutes of the real feed: no bus changes side, and none is sh
   assert.ok(atStops > 100 && between > 100, `shown at stops ${atStops} times, between ${between}`);
 });
 
-test('/api/line: D1’s stops in route order, its loop’s first stop not listed again, each with the other services there', () => {
+test('/api/line: D1’s stops in route order, ending where its loop began, each with the other services there', () => {
   const idx = indexGraph(GRAPH);
   const stops = lineStops(idx, 'D1');
   assert.deepEqual(
     stops.map((s) => s.code),
-    ['COM3', 'HSSML-OPP', 'NUSS-OPP', 'LT13-OPP', 'IT', 'YIH-OPP', 'MUSEUM', 'UTOWN', 'YIH', 'CLB', 'LT13', 'AS5', 'BIZ2'],
+    ['COM3', 'HSSML-OPP', 'NUSS-OPP', 'LT13-OPP', 'IT', 'YIH-OPP', 'MUSEUM', 'UTOWN', 'YIH', 'CLB', 'LT13', 'AS5', 'BIZ2', 'COM3'],
   );
+  assert.deepEqual(stops.at(-1), stops[0], 'the loop’s last stop is its first');
   assert.deepEqual(stops[0], { code: 'COM3', name: 'COM 3', longName: 'COM 3', services: ['D2'] });
   // The full name too, for a list with room for it: CLB is Central Library.
   assert.equal(stops.find((s) => s.code === 'CLB').longName, 'Central Library');
@@ -447,6 +448,7 @@ test('/api/line: D1’s stops in route order, its loop’s first stop not listed
   const k = lineStops(idx, 'K');
   assert.equal(k[0].code, 'PGP');
   assert.equal(k.at(-1).code, 'PGPR');
+  assert.equal(k.length, idx.routes.get('K').seq.length, 'K: nothing added');
 });
 
 test('/api/line: a real D1 bus between YIH and Central Library is after YIH; one at a stop is at it', async () => {
