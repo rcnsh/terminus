@@ -278,7 +278,7 @@ export function paths(): Record<string, unknown> {
         tags: ['Stops'],
         summary: 'One service’s line',
         description:
-          'A service’s whole line, for a page about it: its stops in route order (a loop’s first stop is not listed again at its end), each with the other shuttle services that call there, and its buses placed on that list, each at a stop (`at`, an index into `stops`) or between two (`after`: between `stops[after]` and the next, which on a loop’s last stop is the first again). The buses are the same ones as `/api/buses`, placed the same way, from the same 5-second cache. With `stop`, `stop.row` is the service’s board row at that stop, as on `/api/arrivals?stopped=1`, through the same 15-second cache. `running`, `stopped` and `resumesAt` say whether the service is running now, and if not, why and when it starts again: it runs inside its hours, and whenever one of its buses is out on the line. No times are worked out for the other stops: only the live feed’s own are given.',
+          'A service’s whole line, for a page about it: its stops in route order (a loop’s first stop listed again at its end, where its buses finish), each with the other shuttle services that call there, and its buses placed on that list, each at a stop (`at`, an index into `stops`) or between two (`after`: between `stops[after]` and the next; a bus at a loop’s first stop is at the top, `at: 0`, never at its end). The buses are the same ones as `/api/buses`, placed the same way, from the same 5-second cache. With `stop`, `stop.row` is the service’s board row at that stop, as on `/api/arrivals?stopped=1`, through the same 15-second cache. `running`, `stopped` and `resumesAt` say whether the service is running now, and if not, why and when it starts again: it runs inside its hours, and whenever one of its buses is out on the line. No times are worked out for the other stops: only the live feed’s own are given.',
         operationId: 'getLine',
         parameters: [
           {
@@ -2014,6 +2014,28 @@ export function paths(): Record<string, unknown> {
         operationId: 'openapi',
         security: [],
         responses: { '200': ok({ type: 'object' }) },
+      },
+    },
+    '/api/admin/appversion': {
+      get: {
+        tags: ['Service'],
+        summary: 'The uNivUS version the feed takes',
+        description:
+          'The version string this server sends NUS, which it keeps up with new uNivUS releases on its own, for the weekly scrape of the stop graph. Needs the operator token, or the scrape token (which opens this route and nothing else), in `x-health-token`: answers 404 without one.',
+        operationId: 'adminAppVersion',
+        security: [{ operator: [] }],
+        responses: {
+          '200': ok(
+            {
+              type: 'object',
+              required: ['version'],
+              properties: { version: { type: 'string', description: 'As uNivUS sends it: `univus_android_<versionName>_<versionCode>`.' } },
+            },
+            { version: 'univus_android_2.60.3_144' },
+          ),
+          '404': errorResponse('No operator or scrape token, or the wrong one.'),
+          '503': errorResponse('This server has no version to send.', { error: 'the NUS feed is not configured' }),
+        },
       },
     },
     '/api/admin/stats': {

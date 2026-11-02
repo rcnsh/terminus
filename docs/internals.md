@@ -115,8 +115,9 @@ pass counts only for the `signin` action on the Worker's own
 Not declared, so a site deploys without them: `APNS_KEY`, `APNS_KEY_ID` and
 `APNS_TEAM_ID` (push to the iPhone app; see "APNs"), `LTA_ACCOUNT_KEY` (public
 buses), `ANALYTICS_TOKEN` (the dashboard's Analytics Engine charts, with
-`CF_ACCOUNT_ID`, which is in the config) and `TIMELAPSE_TOKEN` (opens
-`/api/timelapse/*` only) and `HEARTBEAT_URL` (a healthchecks.io ping URL
+`CF_ACCOUNT_ID`, which is in the config), `TIMELAPSE_TOKEN` (opens
+`/api/timelapse/*` only), `SCRAPE_TOKEN` (opens `/api/admin/appversion`
+only, for the weekly scrape; stable site only) and `HEARTBEAT_URL` (a healthchecks.io ping URL
 the cron calls after every run, so a cron that stops is noticed; stable
 site only, so the beta never pings for it). One plain var, not a secret,
 is set in `cloudflare.config.ts`: `ETA_MODEL`, `shadow` on the stable site
@@ -149,7 +150,7 @@ anything else (a script with an API key, a page open since before) gets a
 | `GET /api/trip?to=<stop\|venue>&lat&lon` | The answer for a stop or venue code. Without coordinates, `&from=<stop>` sets the origin. |
 | `GET /api/arrivals?stop=<code>` | One stop's board, through the same per-stop cache, with the stop across the road (`stop.opposite`, as `/api/me/nearby` gives it). See "Board rows" below. |
 | `GET /api/buses?svc=<service>` | One service's live buses for the map: the stop each is at (within 40 m along its route) or the two it's between, where to draw it (the stop's dot, or a point on the route line between the stops), the road's heading there, crowding and the next stop; between stops, the stretch of route it's on. A bus away from its route is left out. One upstream call per service per 5 s; each bus with its number plate. |
-| `GET /api/line?svc=<service>[&stop=<code>]` | One service's whole line, for the Stops tab's service page: its stops in route order (a loop's first stop not listed again at the end), each with the other shuttle services there; its buses from `/api/buses`, each by index into that list (`at` a stop, or `after` the stop it passed); with `stop`, that stop's index and the service's board row there (a stopped row too); whether the service is running now, and if not why and when it's back (`running`, `stopped`, `resumesAt`). One `/api/buses` read, plus one `/api/arrivals` read with `stop`, both through their caches. No times are worked out for the other stops. 400 for an unknown service or a stop it doesn't call at. |
+| `GET /api/line?svc=<service>[&stop=<code>]` | One service's whole line, for the Stops tab's service page: its stops in route order (a loop's first stop listed again at the end, where its buses finish; a bus standing there is shown at the top), each with the other shuttle services there; its buses from `/api/buses`, each by index into that list (`at` a stop, or `after` the stop it passed); with `stop`, that stop's index and the service's board row there (a stopped row too); whether the service is running now, and if not why and when it's back (`running`, `stopped`, `resumesAt`). One `/api/buses` read, plus one `/api/arrivals` read with `stop`, both through their caches. No times are worked out for the other stops. 400 for an unknown service or a stop it doesn't call at. |
 | `GET /api/campus` | Stops (with the services that call there), each route's path along the roads, the services' colours, destination search data, and the residences for "Where do you live?" (PGP and UTown Residence, where most students live, first and marked `common`; the pickers show them in their own group), each with its walk to its nearest stop in metres (`walkM`) and in whole minutes at the normal pace (`walkMin`, never under 1). A landmark's `detail` ("Food court") is in the request's language. Written once per isolate and language, with an ETag: a client revalidating gets a 304. The apps' saved copy keeps the old language's landmark `detail` after a language switch, until their next fetch. |
 | `GET /map/campus.pmtiles` | The campus street map from R2, by byte range (PMTiles). Open, like the website. Each piece is kept in the edge cache under the file's ETag and its byte range, so R2 is read once per piece per data centre; the ETag itself is looked up at most every 5 minutes per data centre, so a new upload is seen within 5 minutes. Fonts and icons never change at their path (new icons get a new folder, like `v4`), so they're kept by path alone, with no look at R2. When R2 fails, cached pieces are still served (the last ETag R2 gave stays in the edge cache, and R2 is asked again every 30 s) and the rest are 503 with `Retry-After: 60`; 416 is only for a range past the file's end. |
 | `GET /map/style.json?theme=&lang=` | The map's MapLibre style, light or dark, English or Chinese: Protomaps' map without its points of interest, every URL on this domain. |
@@ -159,6 +160,7 @@ anything else (a script with an API key, a page open since before) gets a
 | `GET /api/health` | Graph age, how long the calendar lasts, the feed as the cron last saw it (`upstream`) and which config is present, never values (`config.pushAndroid`, `config.pushWeb` and `config.pushIos`: push set up with a usable key, or for APNs all four settings). 503, with the same body, when the feed is confirmed down, the cron has stopped or the calendar has run out. With the operator's `x-health-token`, `?probe=1` mints a real token and says what came back, and `?versions=1` says what the version updater would find today in the app stores (see "The version string is a kill switch"); without it both are ignored. |
 | `GET /api/status.json` | Whether NUS's feed is up, as the 15-minute check saw it, and the last 20 outages, read from KV at most once a minute per isolate. Two failed checks in a row confirm an outage and two good ones end it, so a feed that answers every other time sends no emails by turns; the outage ends at the first of the two. Only a check between 07:00 and 23:30 Singapore time can confirm one (`OUTAGE_HOURS`): no bus runs outside it, and `feed` says `maintenance` instead, with no incident and no email. A refused uNivUS version (10009) is the exception: it confirms an outage at any hour, as it needs fixing before the buses run. `cause` says why the feed is down (`version` or `feed`), and the page says so. Failures at night still count, so a feed still failing at 07:00 is down from then, and an outage under way at 23:30 lasts until the feed answers. `feed` (like `/api/health` and the card's notice) follows the last check, though: one good check and it says `up` again, rather than "down" for 15 minutes with the feed back. The [status page](../apps/web/public/status) shows it. |
 | `GET /api/admin/stats` | The operator dashboard's data (accounts, devices by app, sign-ups, reports, feed; answers and errors per day, and the timelapse recorder's polls by what they cost NUS, the daily active counts, the week's crash reports and the last day's `/api/me/next` times (`next`: median and 95th percentile, ms), from Analytics Engine when `ANALYTICS_TOKEN` and `CF_ACCOUNT_ID` are set; `collect`, the switches below; `eta`, arrival times scored; `model`, the arrival-time model's days in shadow, `eta/model/*.json` without their weight grids). Needs `x-health-token` (`HEALTH_TOKEN` or a passkey session); anything else gets a 404. |
+| `GET /api/admin/appversion` | `{version}`: the uNivUS version string the Worker sends NUS (`config:appVersion`, else the `NEXTBUS_APP_VERSION` secret), for the weekly scrape. Needs `x-health-token`: the operator's, or `SCRAPE_TOKEN`, which opens this route and nothing else. 404 without one; 503 when the Worker has no version. |
 | `POST /api/admin/collect` | `{name, on}`: turns one of the operator's statistics on or off (`active`, `eta`, `errors`; see Analytics). Operator only, like `/api/admin/stats`. |
 | `POST /api/admin/crashes/dismiss` | `{fingerprint}`: hides a crash report from the dashboard until it's reported again (Analytics Engine can't delete one). Operator only. |
 | `POST /api/admin/reports/delete` | `{id}`: deletes one user report ("This was wrong" or a stop suggestion) from D1 for good. Operator only. |
@@ -1622,7 +1624,8 @@ The proxy has no `ServiceDescription`, so the route codes to fetch come from
 the existing graph plus `KNOWN_ROUTES` in the script; a new service with an
 unlisted code needs adding there. The **scrape stop graph** workflow
 (`.github/workflows/scrape.yml`) runs the same scrape every Monday in three
-jobs: `scrape` holds the feed and DataMall secrets and runs only the repo's
+jobs: `scrape` holds the feed and DataMall secrets (and
+`TERMINUS_SCRAPE_TOKEN`, below) and runs only the repo's
 standard-library Python; `test` runs the test suite and `check_scraped.py`
 on the scraped files, with no secrets; `commit` is the only job that can
 push, runs no npm code, and fast-forwards `main` to a commit of just the
@@ -1633,6 +1636,16 @@ deploy then puts the data live. A fourth job, `heartbeat`, holds only the
 curl: it pings on success, a commit skipped because nothing changed
 included, and `/fail` on anything else, so a scrape that fails or stops
 running is noticed. Without the secret it skips the ping.
+
+The scrape sends NUS the uNivUS version the stable Worker sends, which the
+cron keeps up with new releases (see "The version string is a kill
+switch"): with the `TERMINUS_SCRAPE_TOKEN` repository secret, which matches
+the stable Worker's `SCRAPE_TOKEN`, `scrape_stops.py` reads it from
+`GET /api/admin/appversion` on terminus.run. When that doesn't answer it
+falls back to the `NEXTBUS_APP_VERSION` repository secret, which only
+changes by hand. Either way the run's log says which it sent (never the
+value), so a scrape that fell back is plain to see. The feed probes
+(`probe_buses.py`, `probe_arrivals.py`) do the same.
 
 The scrapers that send keys (`scrape_stops.py`, `scrape_lta.py`) refuse
 every redirect, since urllib re-sends every header to wherever one points;
@@ -1922,7 +1935,9 @@ the breaker nor the mint memo, nor quiets its stop or service for
 `failMemoS`, so it doesn't stop the isolates already
 sending the new one, and that isolate forgets its old version. To see what it would
 find today, without calling NUS: `GET /api/health?versions=1` with the
-`x-health-token` header.
+`x-health-token` header. The weekly scrape reads the version the Worker
+settled on from `/api/admin/appversion`, so it follows without anyone
+touching its secrets.
 
 ## Operator passkeys
 
