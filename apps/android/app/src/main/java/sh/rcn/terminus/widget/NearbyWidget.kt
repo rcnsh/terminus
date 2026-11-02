@@ -117,9 +117,9 @@ class NearbyRefreshAction : ActionCallback {
 }
 
 /**
- * The board of buses near you that the Nearby widgets and the big widget's next buses share: fetched by a tap on ↻, by the Buses tab, and
- * in the background at most once a minute while a widget shows it. The background has no location of its own (the app doesn't ask for
- * "Allow all the time"), so it asks only with a recent fix from the app, through the same cached arrivals as everything else.
+ * The board of buses near you that the Nearby widgets and the big widget's next buses share: fetched by a tap on ↻, and in the background
+ * at most once a minute while a widget shows it. The background has no location of its own (the app doesn't ask for "Allow all the time"),
+ * so it asks only with a recent fix from the app, through the same cached arrivals as everything else.
  */
 internal object NearbyShared {
     private const val REFETCH_MS = 60_000L

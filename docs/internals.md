@@ -149,7 +149,7 @@ anything else (a script with an API key, a page open since before) gets a
 | `GET /api/trip?to=<stop\|venue>&lat&lon` | The answer for a stop or venue code. Without coordinates, `&from=<stop>` sets the origin. |
 | `GET /api/arrivals?stop=<code>` | One stop's board, through the same per-stop cache, with the stop across the road (`stop.opposite`, as `/api/me/nearby` gives it). See "Board rows" below. |
 | `GET /api/buses?svc=<service>` | One service's live buses for the map: the stop each is at (within 40 m along its route) or the two it's between, where to draw it (the stop's dot, or a point on the route line between the stops), the road's heading there, crowding and the next stop; between stops, the stretch of route it's on. A bus away from its route is left out. One upstream call per service per 5 s; each bus with its number plate. |
-| `GET /api/line?svc=<service>[&stop=<code>]` | One service's whole line, for the Buses tab's service page: its stops in route order (a loop's first stop not listed again at the end), each with the other shuttle services there; its buses from `/api/buses`, each by index into that list (`at` a stop, or `after` the stop it passed); with `stop`, that stop's index and the service's board row there (a stopped row too); whether the service is running now, and if not why and when it's back (`running`, `stopped`, `resumesAt`). One `/api/buses` read, plus one `/api/arrivals` read with `stop`, both through their caches. No times are worked out for the other stops. 400 for an unknown service or a stop it doesn't call at. |
+| `GET /api/line?svc=<service>[&stop=<code>]` | One service's whole line, for the Stops tab's service page: its stops in route order (a loop's first stop not listed again at the end), each with the other shuttle services there; its buses from `/api/buses`, each by index into that list (`at` a stop, or `after` the stop it passed); with `stop`, that stop's index and the service's board row there (a stopped row too); whether the service is running now, and if not why and when it's back (`running`, `stopped`, `resumesAt`). One `/api/buses` read, plus one `/api/arrivals` read with `stop`, both through their caches. No times are worked out for the other stops. 400 for an unknown service or a stop it doesn't call at. |
 | `GET /api/campus` | Stops (with the services that call there), each route's path along the roads, the services' colours, destination search data, and the residences for "Where do you live?" (PGP and UTown Residence, where most students live, first and marked `common`; the pickers show them in their own group), each with its walk to its nearest stop in metres (`walkM`) and in whole minutes at the normal pace (`walkMin`, never under 1). A landmark's `detail` ("Food court") is in the request's language. Written once per isolate and language, with an ETag: a client revalidating gets a 304. The apps' saved copy keeps the old language's landmark `detail` after a language switch, until their next fetch. |
 | `GET /map/campus.pmtiles` | The campus street map from R2, by byte range (PMTiles). Open, like the website. Each piece is kept in the edge cache under the file's ETag and its byte range, so R2 is read once per piece per data centre; the ETag itself is looked up at most every 5 minutes per data centre, so a new upload is seen within 5 minutes. Fonts and icons never change at their path (new icons get a new folder, like `v4`), so they're kept by path alone, with no look at R2. When R2 fails, cached pieces are still served (the last ETag R2 gave stays in the edge cache, and R2 is asked again every 30 s) and the rest are 503 with `Retry-After: 60`; 416 is only for a range past the file's end. |
 | `GET /map/style.json?theme=&lang=` | The map's MapLibre style, light or dark, English or Chinese: Protomaps' map without its points of interest, every URL on this domain. |
@@ -280,7 +280,7 @@ and `resumesAt` at the top (null while it runs).
 Only the feed's own times are given: a later bus the feed doesn't report
 has no row of its own and no guessed time.
 
-Each row also comes worded, in the request's language, so the Buses tab,
+Each row also comes worded, in the request's language, so the Stops tab,
 Nearby and the map say the same thing (they used to word these
 themselves, and drifted):
 
@@ -483,8 +483,9 @@ pnpm exec cf kv keys put config:minClient --namespace-id <KV id in cloudflare.co
   two, the most shared first, up to three), and `viaText` ("to UTown,
   Science, Kent Ridge MRT"), the heading the widget puts over each side
   of the road.
-- The profile's `pinnedStops` are the stops pinned to the Buses tab, in the
-  user's order: up to 8, each a shuttle stop or a public stop of its own
+- The profile's `pinnedStops` are the stops pinned to the Stops tab, in the
+  user's order (its home shows them all, each with its first three rows; the
+  star on a stop's board or its Nearby sign pins it): up to 8, each a shuttle stop or a public stop of its own
   (LTA's code), repeats dropped. A pinned stop gone from a new scrape is
   dropped on read, with the other pins kept.
 - The profile comes with `limits` wherever it's sent (GET and PUT
@@ -1233,8 +1234,15 @@ Settings. It uses the same routes as the account page, with the session cookie.
   `Report`, a modal `<dialog>`): the answer it's about, the reasons as
   chips, a note, and who the reply goes to. It sends to `/api/me/feedback`
   and then says so in the sheet, which is the only confirmation; Android's
-  sheet is the same. Not for Nearby. A stop's name in Nearby opens it on the map
-  (MapTab's `focus` in map.js).
+  sheet is the same. Not for Nearby. A stop's name in Nearby opens its board
+  in the Stops tab, a row its service's line there, and the star on its sign
+  pins it; under the signs, a row leads to the Stops tab for any other stop.
+- **Stops tab** (app/buses.js). Its home is the search, then the pinned
+  stops, each with its first three rows (`/api/arrivals`, refreshed every
+  15 s while the home is on screen), then every service in `/api/campus`
+  `routes`, which opens its line (`/api/line`). A stop opens its own page
+  (`#buses/stop/<code>`), a service its line (`#buses/line/<svc>/<stop>`).
+  The stops around you aren't here: they're Nearby's (ADR 0014).
 - **Theme.** Appearance's switch chooses light, dark or the device's own, for this
   browser only (`localStorage` `terminus-theme`). `assets/theme.js`, in every
   page's `<head>`, sets `<html data-theme>` before the page draws; `site.css`
@@ -2143,8 +2151,8 @@ The Android widget and app ([apps/android](../apps/android)), the Mac menu bar a
 ([apps/macos](../apps/macos)), the iPhone app and widgets ([apps/ios](../apps/ios), not
 released yet) and the website ([apps/web](../apps/web)) all use `/api/me/next`.
 The Android app, the web app and the Mac (in a window of its own) also have
-the campus map: `/api/campus`, `/api/buses`, `/api/arrivals` and `/map/*`. The Buses
-tab (web and Android) opens a service's whole line with `/api/line`. The apps
+the campus map: `/api/campus`, `/api/buses`, `/api/arrivals` and `/map/*`. The Stops
+tab (web, Android and iPhone) opens a service's whole line with `/api/line`. The apps
 download `campus.pmtiles` once and read it from disk, since MapLibre Native
 fails the whole style when one streamed piece fails. The Mac's MapLibre is
 built from source (`scripts/vendor/vendor-maplibre-mac.sh`; no macOS build is

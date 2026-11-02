@@ -915,7 +915,7 @@ class Api(private val token: String?, private val fast: Boolean = false, private
     suspend fun buses(svc: String): BusList = parsing { BusList.parse(request("GET", "/api/buses?svc=${enc(svc)}")) }
 
     /**
-     * What's coming at one stop, for the Buses tab and the map's stop sheet: every row, the stop's name and its opposite stop, and the
+     * What's coming at one stop, for the Stops tab and the map's stop sheet: every row, the stop's name and its opposite stop, and the
      * services not running now (`stopped=1`), greyed. With [public], the public buses there too (the profile's `publicBuses`).
      */
     suspend fun board(stop: String, public: Boolean = false): Board = parsing {
@@ -1007,7 +1007,7 @@ class Api(private val token: String?, private val fast: Boolean = false, private
 
     suspend fun nearby(lat: Double?, lon: Double?, acc: Double? = null): List<NearbyStop> = parseNearby(nearbyJson(lat, lon, acc))
 
-    /** [stopped]: the services not running now too, greyed on the Buses tab; Nearby and the widgets leave them out. */
+    /** [stopped]: the services not running now too, greyed on the Stops tab; Nearby and the widgets leave them out. */
     suspend fun nearbyJson(lat: Double?, lon: Double?, acc: Double? = null, stopped: Boolean = false): JSONObject {
         val q =
             (if (lat != null && lon != null) listOfNotNull("lat=${coord(lat)}", "lon=${coord(lon)}", acc?.let { "acc=${Math.round(it)}" })

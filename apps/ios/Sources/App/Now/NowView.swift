@@ -109,6 +109,8 @@ struct NowView: View {
                     .accessibilityHidden(true)
             }
         }
+        // Nearby's stars: the pins full, or a pin that didn't save.
+        .overlay(alignment: .top) { PinNote() }
         .task(id: onScreen && scenePhase == .active) {
             // Fresh while it's on screen and the app's in front: every 30 s.
             guard onScreen && scenePhase == .active else { return }
@@ -272,6 +274,11 @@ struct NowView: View {
 /// The phone's settings page for this app, where a refused permission can be allowed.
 @MainActor func openAppSettings() {
     if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+}
+
+/// The Stops tab's note, read here alone so a new one redraws only it.
+private struct PinNote: View {
+    var body: some View { NoteView(text: BusesModel.shared.note) }
 }
 
 /// The wordmark in the sky's ink, the accent the sky's.

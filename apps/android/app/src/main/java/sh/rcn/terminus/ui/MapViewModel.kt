@@ -109,7 +109,7 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun api(token: String?) = Api(token)
 
-    /** The profile's "public buses": a stop's sheet has them too, as its Buses tab board does. */
+    /** The profile's "public buses": a stop's sheet has them too, as its Stops tab board does. */
     var publicBuses = false
 
     /** Nothing to draw the map with: no stops and routes, or no style, and the last try for it failed. */
@@ -184,7 +184,7 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** A service from the Buses tab: its pill on, never toggled off. */
+    /** A service from the Stops tab: its pill on, never toggled off. */
     fun show(svc: String) {
         if (_state.value.selected != svc) choose(svc)
     }

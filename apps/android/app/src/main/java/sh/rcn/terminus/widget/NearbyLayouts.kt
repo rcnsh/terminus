@@ -495,7 +495,7 @@ private fun Tiles(
     val rows = minOf(fit.rows, (buses.size + cols - 1) / cols)
     val rest = buses.drop(rows * cols)
     val foot = if (fit.footer && rest.isNotEmpty()) NearbyFit.FOOTER_DP else 0f
-    // Spare rows: the next stop with buses, as the Buses tab lists it, as
+    // Spare rows: the next stop with buses, as the Stops tab lists it, as
     // many as fit under its name without squeezing a tile below its smallest.
     val room = area - BOTTOM_DP
     // A few dp under a tile's smallest is fine: it leaves room for a later line seldom used.

@@ -13,7 +13,7 @@ class PullTest {
     private val sign = Pull.roadSign(width)
     private val road = PullScene(width, sign, home = Pull.roadBus(sign, 0.5f))
 
-    /** The Buses tab's low hills: no bus of the card's. */
+    /** The Stops tab's low hills: no bus of the card's. */
     private val hill = PullScene(393f, Pull.hillSign(393f))
 
     private fun motion(scene: PullScene = road, calm: Boolean = false) = PullMotion(scene, calm = calm)
@@ -292,7 +292,7 @@ class PullTest {
         assertEquals(PullMotion.Phase.Idle, m.phase)
         assertTrue(m.puffs.isEmpty())
 
-        // Buses: one stands at the stop, faded in as the sky opens.
+        // Stops: one stands at the stop, faded in as the sky opens.
         val h = motion(hill, calm = true)
         h.drag(5f)
         h.step(1 / 60f)

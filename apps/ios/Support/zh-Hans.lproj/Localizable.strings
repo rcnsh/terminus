@@ -22,7 +22,6 @@
 "Back tomorrow at %@" = "明天 %@ 恢复";
 "Bus %@" = "%@ 巴士";
 "Bus %@ from %@" = "在 %2$@ 搭 %1$@ 巴士";
-"Buses" = "巴士";
 "by %@" = "%@ 前出发";
 "Couldn't add it. Try again." = "无法添加，请再试一次。";
 "Couldn't put it back. Try again." = "无法放回，请再试一次。";

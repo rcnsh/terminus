@@ -6,7 +6,7 @@
 
 import { t } from './dom.js';
 
-// A service (in the Buses tab's search) before a stop that matches as well:
+// A service (in the Stops tab's search) before a stop that matches as well:
 // "a" lists A1 and A2 before AS 5.
 const KINDS = { timetable: 0, place: 1, class: 2, service: 3, stop: 4, landmark: 5, building: 6, room: 7 };
 /** A kind this page doesn't know yet (a newer server's) still lists, after every known one. */
@@ -111,7 +111,7 @@ export const pickedText = (d) => (d.kind === 'room' || d.label === d.code ? d.co
 export const pickedStop = (d) => (d.kind === 'landmark' ? d.code : d.stopCode);
 
 /**
- * The Buses tab's search, from /api/campus `c`: every service, by its code
+ * The Stops tab's search, from /api/campus `c`: every service, by its code
  * (with where it runs), then every stop by its long name, found by that, its
  * short name, its code and the nicknames /api/campus has for it ("library").
  */

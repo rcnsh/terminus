@@ -348,7 +348,7 @@ private struct TodayList: View {
     }
 }
 
-/// Nearby, as the Buses tab's board: the nearest stop's name big on the sky
+/// Nearby, as the Stops tab's board: the nearest stop's name big on the sky
 /// (the one across the road a tap away), then each service with its badge,
 /// where it stops next, Live and how full it is, and the time it's due at
 /// the end, with its minutes under 15. From the board every widget showing

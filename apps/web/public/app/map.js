@@ -953,7 +953,7 @@ function Pills() {
  * The map's stops as a list, for a keyboard or a screen reader: a stop picked
  * and then Open (or Enter) opens its sheet, as tapping it on the map does.
  * Not on picking alone: on Windows and Linux the arrow keys pick as they
- * move through the list. Seen only while it has the focus; the Buses tab has
+ * move through the list. Seen only while it has the focus; the Stops tab has
  * every stop and bus in words too.
  */
 function StopList() {
@@ -986,7 +986,7 @@ function StopList() {
       </select>
       <button type="submit" class="btn">${t('Open')}</button>
     </form>
-    <p class="sr-only">${t('The Buses tab lists every stop and its buses in words.')}</p>
+    <p class="sr-only">${t("The Stops tab has every stop's buses in words.")}</p>
   `;
 }
 
@@ -1313,7 +1313,7 @@ const STAR =
   '<path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>';
 
 /**
- * A stop: its board as the Buses tab has it (refreshed while open), the first
+ * A stop: its board as the Stops tab has it (refreshed while open), the first
  * few rows until asked for the rest, and ways to go there. A row tapped picks
  * its service on the map, and tapped again unpicks it, as its pill does.
  */
@@ -1339,7 +1339,7 @@ function StopSheet({ code, box, onGoTo, onSaved, active }) {
       .finally(() => setAsked(true));
   }, [code]);
 
-  // The public buses there too when the account has them on, as the Buses tab.
+  // The public buses there too when the account has them on, as the Stops tab.
   const pub = p?.publicBuses === true;
   const known = Boolean(p) || asked;
   useEffect(() => {
@@ -1456,11 +1456,9 @@ function StopSheet({ code, box, onGoTo, onSaved, active }) {
 
 /**
  * The Map tab. `visible`: its tab is on screen (the map pauses otherwise).
- * `focus`: a stop to open, centred above its sheet (from Nearby); `onFocused`
- * says it's done. `onGoTo` takes Go there to Now; `onSaved` follows a stop
- * saved as a place.
+ * `onGoTo` takes Go there to Now; `onSaved` follows a stop saved as a place.
  */
-export function MapTab({ visible: on, focus, onFocused, onGoTo, onSaved }) {
+export function MapTab({ visible: on, onGoTo, onSaved }) {
   const container = useRef(null);
   const sheetBox = useRef(null);
   const open = useStore(sheet);
@@ -1483,12 +1481,6 @@ export function MapTab({ visible: on, focus, onFocused, onGoTo, onSaved }) {
       .catch((err) => setState(err.message === 'signed out' ? 'idle' : 'failed'));
   }, [on]);
 
-  // A stop opened from elsewhere: its sheet, then the map centred in what the sheet leaves uncovered.
-  useEffect(() => {
-    if (!focus || state !== 'ready') return;
-    showStop(focus);
-    onFocused?.();
-  }, [focus, state]);
   useLayoutEffect(() => {
     const code = centreOn;
     const bus = code?.bus;

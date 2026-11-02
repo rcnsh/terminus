@@ -70,20 +70,63 @@ final class NowUITests: XCTestCase {
         shot("now-zh-nearby", app)
     }
 
-    func testNearbyOpensAStopOnTheMap() {
+    func testNearbyOpensAStopsBoardAndLine() {
+        resetProfile()
+        defer { resetProfile() }
         let app = launch(sky: "night")
         app.buttons["chip.nearby"].tap()
         let stop = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'nearby.'")).firstMatch
         XCTAssertTrue(stop.waitForExistence(timeout: 15))
+        let code = String(stop.identifier.dropFirst("nearby.".count))
+        // The star pins the stop, as the one on its page does.
+        let star = app.buttons["star-\(code)"]
+        XCTAssertTrue(star.label.hasPrefix("Pin "), star.label)
+        star.tap()
+        XCTAssertTrue(
+            app.buttons.matching(NSPredicate(format: "identifier == %@ AND label BEGINSWITH 'Unpin '", "star-\(code)")).firstMatch
+                .waitForExistence(timeout: 5))
         shot("now-nearby", app)
-        app.swipeUp()
+        let link = app.buttons["nearbyStops"]
+        reveal(link, in: app)
         shot("now-nearby-down", app)
+        // The plate: the stop's board on Stops, over its home.
+        app.swipeDown()
         app.swipeDown()
         stop.tap()
-        XCTAssertTrue(app.tabBars.buttons["Map"].isSelected)
-        // The map glides onto the stop.
-        sleep(3)
-        shot("now-nearby-map", app)
+        XCTAssertTrue(app.tabBars.buttons["Stops"].isSelected)
+        XCTAssertTrue(app.staticTexts["stop-name"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Unpin this stop"].exists)
+        shot("now-nearby-stop", app)
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        // Pinned from Nearby, it's on the home.
+        XCTAssertTrue(app.buttons["pinned-\(code)"].waitForExistence(timeout: 10))
+        // A row: its line from that stop.
+        app.tabBars.buttons["Now"].tap()
+        let row = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "nearbyRow.\(code).")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        row.tap()
+        XCTAssertTrue(app.tabBars.buttons["Stops"].isSelected)
+        XCTAssertTrue(app.buttons["line-show-on-map"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Your stop"].waitForExistence(timeout: 10))
+        shot("now-nearby-line", app)
+        // The row under the signs: the Stops home.
+        app.tabBars.buttons["Now"].tap()
+        reveal(link, in: app)
+        link.tap()
+        XCTAssertTrue(app.buttons["service-A1"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["line-show-on-map"].exists)
+    }
+
+    func testNearbyDark() {
+        setProfile { $0["pinnedStops"] = ["PGP"] }
+        defer { resetProfile() }
+        let app = launch(theme: "dark", sky: "night")
+        app.buttons["chip.nearby"].tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'nearby.'")).firstMatch.waitForExistence(timeout: 15))
+        sleep(1)
+        shot("now-nearby-dark", app)
+        reveal(app.buttons["nearbyStops"], in: app)
+        shot("now-nearby-down-dark", app)
     }
 
     func testSearchAPlaceAndGoLater() {

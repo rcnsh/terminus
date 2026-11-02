@@ -107,8 +107,8 @@ import WidgetKit
         return true
     }
 
-    /// A board of buses near you fetched in the app (Now's Nearby, the Buses
-    /// tab): kept for the widgets, which are redrawn with it while one shows it.
+    /// A board of buses near you fetched in the app (Now's Nearby): kept for
+    /// the widgets, which are redrawn with it while one shows it.
     static func nearbyFetched(_ data: Data, token: String) {
         guard NearbyShared.keep(data, sentWith: token) else { return }
         if NearbyShared.wanted { WidgetCenter.shared.reloadTimelines(ofKind: "nearby") }

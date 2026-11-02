@@ -50,7 +50,7 @@ object MapFiles {
 
     /**
      * `/api/campus`: the kept copy while it's fresh; then from the network, sent with the kept copy's ETag so an unchanged one costs no
-     * download; the kept copy without a connection. Opening the Map or Buses tab doesn't fetch it whole each time.
+     * download; the kept copy without a connection. Opening the Map or Stops tab doesn't fetch it whole each time.
      */
     suspend fun campus(ctx: Context, api: Api): JSONObject? =
         withContext(Dispatchers.IO) {
@@ -65,7 +65,7 @@ object MapFiles {
                     file.setLastModified(System.currentTimeMillis())
                     kept
                 } else {
-                    // The Map and Buses tabs can both be writing it: each write whole, or not at all.
+                    // The Map and Stops tabs can both be writing it: each write whole, or not at all.
                     writeWhole(file, got.first.toString())
                     if (got.second != null) writeWhole(tagFile, got.second!!) else tagFile.delete()
                     got.first

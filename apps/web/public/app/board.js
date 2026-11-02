@@ -110,11 +110,13 @@ export function stoppedWords(stopped, resumesAt, now = serverNow()) {
 }
 
 /** The "opens a page" mark at a row's end (mirrored right to left, app.css). */
-const NEXT = '<path d="m9 6 6 6-6 6"/>';
+export const NEXT = '<path d="m9 6 6 6-6 6"/>';
+/** The star that pins a stop: on its page, on the Stops tab's home and on Nearby's signs. */
+export const STAR = '<path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z"/>';
 
 /**
  * How a row looks for what a tap on it does: `chevron`, it opens a page (the
- * Buses tab); `picked` set, it picks its line on the map, and true when that
+ * Stops tab); `picked` set, it picks its line on the map, and true when that
  * line is the one picked there (washed in its colour, and pressed).
  */
 function look(r, cls, chevron, picked) {
@@ -144,7 +146,7 @@ function StoppedRow({ r, now, onPick, chevron, picked }) {
 }
 
 /**
- * A service's row on a board. Tapped, `onPick(svc)`: the Buses tab opens its
+ * A service's row on a board. Tapped, `onPick(svc)`: the Stops tab opens its
  * line (`chevron`, which says so), the map picks it (`picked`: whether it's
  * the line picked there). A public bus has no line here. `now`, on the
  * server's clock, says "tomorrow" for a service that isn't running.

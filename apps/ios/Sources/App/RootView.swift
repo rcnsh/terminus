@@ -51,8 +51,9 @@ struct MainTabs: View {
             NowView()
                 .tabItem { Label(L("Now"), systemImage: "clock") }
                 .tag(Tab.now)
+            // Stops: a stop sign on its pole, drawn (Support/Assets.xcassets), as SF Symbols has none.
             BusesView()
-                .tabItem { Label(L("Buses"), systemImage: "bus") }
+                .tabItem { Label(L("Stops"), image: "StopSign") }
                 .tag(Tab.buses)
             MapTab()
                 .tabItem { Label(L("Map"), systemImage: "map") }
@@ -64,7 +65,7 @@ struct MainTabs: View {
         .onReceive(NotificationCenter.default.publisher(for: .openTab)) { n in
             if let t = n.object as? Tab { app.tab = t }
         }
-        // Now, Buses and Settings start in the hour's sky: light icons over a
+        // Now, Stops and Settings start in the hour's sky: light icons over a
         // dark one. The map is the theme's.
         .statusBar(light: app.tab == .map ? nil : SkyPalette.of(sky.phase, dark: scheme == .dark).lightInk)
     }

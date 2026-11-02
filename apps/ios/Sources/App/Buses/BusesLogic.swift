@@ -1,10 +1,10 @@
 import Foundation
 
 /*
- * The Buses tab's rules, apart from its screens so they're unit tested
- * (Tests/BusesTests.swift), as Android's Buses.kt: the pages to swipe
- * between, the pins, the search, a line as it's drawn, and the words worked
- * out here for an older server. Every time shown is one the API gave.
+ * The Stops tab's rules, apart from its screens so they're unit tested
+ * (Tests/BusesTests.swift), as Android's Buses.kt: the pins and the part of
+ * each board the home shows, the search, a line as it's drawn, and the words
+ * worked out here for an older server. Every time shown is one the API gave.
  */
 
 /// A page opened over the tab's home: a stop's board, or a service's line.
@@ -25,12 +25,10 @@ enum BusPins {
         return pins.count >= max ? pins : pins + [code]
     }
 
-    /// The pages to swipe between: the nearest stop first (nil until it's
-    /// known, or when there's none), then each pinned stop, except the nearest again.
-    static func pages(nearest: String?, pins: [String]) -> [String?] {
+    /// The pinned stops the tab's home shows, in the profile's order: each once, at most `max`.
+    static func shown(_ pins: [String], max: Int = defaultMax) -> [String] {
         var seen = Set<String>()
-        let rest = pins.filter { $0 != nearest && seen.insert($0).inserted }
-        return [nearest] + rest.map { Optional($0) }
+        return Array(pins.filter { seen.insert($0).inserted }.prefix(max))
     }
 }
 
@@ -113,6 +111,15 @@ enum BusWords {
         rows.filter(\.running) + rows.filter { !$0.running }
     }
 
+    /// The rows a pinned stop's board shows on the home, the running ones
+    /// first, and how many more its own page has.
+    static let homeRows = 3
+
+    static func preview(_ rows: [BoardRow], max: Int = homeRows) -> (rows: [BoardRow], more: Int) {
+        let all = runningFirst(rows)
+        return (Array(all.prefix(max)), Swift.max(0, all.count - max))
+    }
+
     /// The later buses a row shows, as many as the server words.
     static let thenMax = 2
 
@@ -173,6 +180,14 @@ enum BusWords {
         return quality == "live" ? mins : L("about %@", mins)
     }
 
+    /// Where a service goes, as the web app says under its name on its line:
+    /// "Loop from COM 3", "Kent Vale to Prince George's Park". `name` gives a
+    /// stop's name as people say it (its long name), as the web and Android do.
+    static func route(_ r: BusCampus.Route, name: (String) -> String) -> String? {
+        guard let first = r.seq.first, let last = r.seq.last else { return nil }
+        return r.loop ? L("Loop from %@", name(first)) : L("%@ to %@", name(first), name(last))
+    }
+
     /// How many buses a line has out.
     static func running(_ line: Line) -> String {
         if !line.available { return L("Live buses aren't available right now.") }
@@ -181,5 +196,16 @@ enum BusWords {
         case 1: return L("1 bus running")
         case let n: return L("%@ buses running", "\(n)")
         }
+    }
+}
+
+extension PullOutcome {
+    /// Several boards pulled at once, as one: updated if any came back, up
+    /// to date if none needed asking (the soonest next update), else failed.
+    static func combined(_ all: [PullOutcome]) -> PullOutcome {
+        if all.contains(.updated) { return .updated }
+        if all.contains(.failed) { return .failed }
+        let next = all.compactMap { if case .upToDate(let s) = $0 { s } else { nil } }.min()
+        return .upToDate(nextInS: next)
     }
 }

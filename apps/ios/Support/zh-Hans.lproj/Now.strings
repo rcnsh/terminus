@@ -8,6 +8,7 @@
 "Add your email to report a wrong answer, so we can reply to you." = "添加邮箱后才能反馈错误的结果，方便我们回复你。";
 "Allow location" = "允许定位";
 "Allow location so directions start from your nearest stop. Without it, terminus assumes you're at your last class or at home." = "允许定位，路线就会从离你最近的车站开始。否则，terminus 会假设你在上一节课的地点或在家。";
+"Another stop, or a whole line" = "其他车站或整条线路";
 "arrive %@" = "%@ 到达";
 "arriving at %@" = "即将到达 %@";
 "Buildings" = "建筑";
@@ -44,7 +45,6 @@
 "now" = "现在";
 "OK" = "确定";
 "Open settings to allow location" = "打开设置以允许定位";
-"Opens this stop on the map" = "在地图上打开这个车站";
 "Pick one, or say what happened" = "选一个，或者说说发生了什么";
 "Plan a trip" = "规划行程";
 "Public bus %@, fare applies" = "公共巴士 %@，需付车费";
@@ -56,6 +56,7 @@
 "Remove %@ from today" = "从今天移除 %@";
 "Rooms" = "教室";
 "Route" = "路线";
+"Search, pinned stops and services are in Stops." = "搜索、已固定的车站和线路都在“车站”里。";
 "Send" = "发送";
 "Sending…" = "正在发送…";
 "Skip every trip left today" = "今天剩下的行程都不去";

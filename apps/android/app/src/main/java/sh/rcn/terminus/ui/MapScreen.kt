@@ -193,6 +193,7 @@ import sh.rcn.terminus.PanLimit
 import sh.rcn.terminus.Quiet
 import sh.rcn.terminus.R
 import sh.rcn.terminus.Slides
+import sh.rcn.terminus.runningFirst
 
 /** Further than this from campus (in degrees, about 3 km), the map opens on campus, not on you. */
 private const val NEAR_CAMPUS_DEG = 0.027
@@ -308,7 +309,7 @@ internal class MapActions(
     val closeSheet: () -> Unit,
     val goThere: (code: String, name: String) -> Unit,
     val places: PlacesForMap,
-    /** The Buses tab, on the open stop or the chosen service's line: the map as a list, for a screen reader. */
+    /** The Stops tab, on the open stop or the chosen service's line: the map as a list, for a screen reader. */
     val showList: (svc: String?, stop: String?) -> Unit = { _, _ -> },
     /** A stop's sheet with the map moved to it, from a bus's sheet ([from]), which back returns to. */
     val showStop: (code: String, from: MapSheet.Bus?) -> Unit = { code, _ -> openStop(code) },
@@ -587,7 +588,7 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
 
     // The map is drawn, and its stops and buses are only reached by a finger
     // on them. To a screen reader it says so, and offers the same as a list:
-    // the open stop's board, or the chosen service's line, on the Buses tab.
+    // the open stop's board, or the chosen service's line, on the Stops tab.
     val mapLabel = stringResource(R.string.a11y_map)
     val listLabel = stringResource(R.string.a11y_show_list)
     val openStop = (ui.sheet as? MapSheet.Stop)?.code
@@ -1251,7 +1252,7 @@ private fun BusStripList(strip: BusStrip, color: Color, stopFor: (code: String?,
 
 /**
  * The line beside one row of the strip, in the service's [color] (grey up to the bus, where it's been), and the row's stop dot or the bus.
- * [mark] null: just the line, fading out ("+3 more"). As the Buses tab's line, smaller.
+ * [mark] null: just the line, fading out ("+3 more"). As the Stops tab's line, smaller.
  */
 @Composable
 private fun StripRail(color: Color, mark: StripMark?, first: Boolean, last: Boolean) {
@@ -1299,7 +1300,7 @@ internal class PlacesForMap(
 private const val PEEK_ROWS = 3
 
 /**
- * A stop: its board as the Buses tab has it, the first few rows until asked for the rest, and ways to go there. A row tapped shows its
+ * A stop: its board as the Stops tab has it, the first few rows until asked for the rest, and ways to go there. A row tapped shows its
  * service on the map.
  */
 @Composable

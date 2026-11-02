@@ -6,8 +6,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * The Buses tab's data: a stop's board (`/api/arrivals`, or a `/api/me/nearby` stop), a service's line (`/api/line`), the pages to swipe
- * between, and the search. Plain JSON in and plain values out, so it's tested on the JVM (BusesTest); the screens only lay it out.
+ * The Stops tab's data: a stop's board (`/api/arrivals`, or a `/api/me/nearby` stop), a service's line (`/api/line`), the pinned stops on
+ * its home, and the search. Plain JSON in and plain values out, so it's tested on the JVM (BusesTest); the screens only lay it out.
  *
  * Every time shown is one the API gave: the next bus and its `later` list. Nothing here works out a time from a headway or for another
  * stop.
@@ -290,11 +290,31 @@ object Pins {
             else -> pins + code
         }
 
-    /**
-     * The pages to swipe between: the nearest stop first (null until it's known, or when there's none), then each pinned stop, except the
-     * nearest one again.
-     */
-    fun pages(nearest: String?, pins: List<String>): List<String?> = listOf(nearest) + pins.distinct().filter { it != nearest }
+    /** The pinned stops the Stops tab's home shows and refreshes, in the profile's order: each once, no more than [max]. */
+    fun shown(pins: List<String>, max: Int = Limits.DEFAULT.pinnedStops): List<String> = pins.distinct().take(max)
+}
+
+/** The services not running come after the ones that are, as the API sorts them. */
+fun runningFirst(rows: List<BoardRow>): List<BoardRow> = rows.filter { it.running } + rows.filter { !it.running }
+
+/** A pinned stop's board on the Stops tab's home: its first [rows], running ones first, and how many more its own page has. */
+data class BoardPreview(val rows: List<BoardRow>, val more: Int) {
+    companion object {
+        /** Three rows: enough for most stops, short enough for several pinned ones on a screen. */
+        const val SHOWN = 3
+
+        fun of(rows: List<BoardRow>, shown: Int = SHOWN): BoardPreview =
+            runningFirst(rows).let { BoardPreview(it.take(shown), maxOf(0, it.size - shown)) }
+    }
+}
+
+/**
+ * Where a service goes, from /api/campus's route: "Loop from Kent Ridge MRT", or "Kent Ridge MRT to Opp HSSML". [name] gives a stop's name
+ * from its code. Null without its stops.
+ */
+fun serviceWhere(route: ServiceRoute, name: (String) -> String): String? {
+    val first = route.seq.firstOrNull() ?: return null
+    return if (route.loop) L.s(R.string.buses_loop_from, name(first)) else L.s(R.string.buses_from_to, name(first), name(route.seq.last()))
 }
 
 /** A search result: a stop opens its board, a service its line. */

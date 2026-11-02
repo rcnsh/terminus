@@ -59,7 +59,7 @@ class ProfileSaveTest {
     fun `saved elsewhere meanwhile, only this phone's changes go on top of it`() {
         val server = Server("""{"walkPace":"normal","pinnedStops":["COM3"],"places":[]}""")
         val base = ProfileDoc(server.load().json)
-        // A pin from the Buses tab on another device, after this phone loaded the profile.
+        // A pin from the Stops tab on another device, after this phone loaded the profile.
         server.elsewhere { it.put("pinnedStops", org.json.JSONArray(listOf("COM3", "PGP"))) }
         val r = save(server, base, "\"1\"", listOf({ it.walkPace = "fast" }, { it.addPlace("Gym", "UTOWN") }))
         assertEquals(listOf<String?>("\"1\"", "\"2\""), server.saves)

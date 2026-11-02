@@ -320,7 +320,7 @@ private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel,
             account.setupShown()
         }
     }
-    // Signed in and set up: Now · Buses · Map · Settings along the bottom.
+    // Signed in and set up: Now · Stops · Map · Settings along the bottom.
     if (state.paired && !setup && screen == Screen.Main) {
         Tabs(
             tab,
@@ -435,8 +435,8 @@ private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel,
 }
 
 /**
- * Now · Buses · Map · Settings. Now scrolls under the status bar (its sky reaches the top), and the map runs under it, with its pills below
- * it. Buses and Settings are edge to edge too, keeping the insets inside.
+ * Now · Stops · Map · Settings. Now scrolls under the status bar (its sky reaches the top), and the map runs under it, with its pills below
+ * it. Stops and Settings are edge to edge too, keeping the insets inside.
  */
 @Composable
 private fun Tabs(
@@ -455,6 +455,22 @@ private fun Tabs(
     val scope = rememberCoroutineScope()
     // Settings tapped while already on it: back to its list of all settings.
     val settingsAgain = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
+    // The pinned stops are the profile's, starred on the Stops tab or in Nearby.
+    val pins = acct.profile?.pinnedStops.orEmpty()
+    // Until the profile has come, nothing is known to be pinned: no stars to tap, no "nothing pinned".
+    val pinsKnown = acct.profile != null
+    val pinLimit = (acct.profile?.limits ?: sh.rcn.terminus.Limits.DEFAULT).pinnedStops
+    val onPin = { code: String ->
+        // Pin or unpin as the tap meant on the pins shown, also when it's saved on a newer profile.
+        val on = code !in account.state.value.profile?.pinnedStops.orEmpty()
+        account.edit { it.pinnedStops = sh.rcn.terminus.Pins.set(it.pinnedStops, code, on, it.limits.pinnedStops) }
+    }
+    // A page of the Stops tab, over its home, as if opened there: Back goes to the home.
+    val openStops = { route: BusRoute? ->
+        buses.home()
+        route?.let(buses::open)
+        onTab(Tab.Buses)
+    }
     Scaffold(
         snackbarHost = { SnackbarHost(snackbars) { NoticeBar(it) } },
         bottomBar = {
@@ -471,7 +487,7 @@ private fun Tabs(
                         onClick = {
                             if (t == Tab.Now && tab != Tab.Now) vm.load(restart = true)
                             if (t == Tab.Settings && tab == Tab.Settings) settingsAgain.tryEmit(Unit)
-                            // Buses tapped while on it: back to its home, from a line or a stop.
+                            // Stops tapped while on it: back to its home, from a line or a stop.
                             if (t == Tab.Buses && tab == Tab.Buses) buses.home()
                             // Map tapped while on it: the whole campus, nothing open or chosen.
                             if (t == Tab.Map && tab == Tab.Map) map.home()
@@ -484,7 +500,7 @@ private fun Tabs(
             }
         },
     ) { inner ->
-        // Back from Buses, Map or Settings goes to Now, as from any other tab bar.
+        // Back from Stops, Map or Settings goes to Now, as from any other tab bar.
         BackHandler(enabled = tab != Tab.Now) {
             onTab(Tab.Now)
             vm.load(restart = true)
@@ -539,12 +555,13 @@ private fun Tabs(
                                         },
                                     ),
                                 onShowList = { svc, stop ->
-                                    buses.home()
-                                    when {
-                                        stop != null -> buses.open(BusRoute.Stop(stop))
-                                        svc != null -> buses.open(BusRoute.Line(svc, null))
-                                    }
-                                    onTab(Tab.Buses)
+                                    openStops(
+                                        when {
+                                            stop != null -> BusRoute.Stop(stop)
+                                            svc != null -> BusRoute.Line(svc, null)
+                                            else -> null
+                                        }
+                                    )
                                 },
                             )
                         }
@@ -555,16 +572,11 @@ private fun Tabs(
                             BusesScreen(
                                 buses,
                                 insets = inner,
-                                pins = acct.profile?.pinnedStops.orEmpty(),
+                                pins = pins,
+                                pinsKnown = pinsKnown,
                                 publicBuses = acct.profile?.publicBuses == true,
-                                pinLimit = (acct.profile?.limits ?: sh.rcn.terminus.Limits.DEFAULT).pinnedStops,
-                                onPin = { code ->
-                                    // Pin or unpin as the tap meant on the pins shown, also when it's saved on a newer profile.
-                                    val on = code !in account.state.value.profile?.pinnedStops.orEmpty()
-                                    account.edit {
-                                        it.pinnedStops = sh.rcn.terminus.Pins.set(it.pinnedStops, code, on, it.limits.pinnedStops)
-                                    }
-                                },
+                                pinLimit = pinLimit,
+                                onPin = onPin,
                                 onShowOnMap = { svc ->
                                     map.show(svc)
                                     onTab(Tab.Map)
@@ -594,17 +606,25 @@ private fun Tabs(
                     // Edge to edge, the insets inside its scrolling, so the sky can reach the top.
                     Tab.Now ->
                         Box(Modifier.fillMaxSize().consumeWindowInsets(inner).imePadding()) {
-                            // A stop tapped in Nearby: open on the map, with its sheet.
+                            // The stars need the profile's pins.
+                            LaunchedEffect(Unit) { if (acct.profile == null) account.refresh() }
+                            // A stop or a row tapped in Nearby: its board or its line, on the Stops tab.
                             MainScreen(
                                 state,
                                 vm,
                                 insets = inner,
                                 email = acct.email,
                                 onAddEmail = onAddEmail,
-                                onOpenStop = { code ->
-                                    map.showStop(code)
-                                    onTab(Tab.Map)
-                                },
+                                nearby =
+                                    NearbyActions(
+                                        pins,
+                                        pinsKnown,
+                                        pinLimit,
+                                        onPin,
+                                        openStop = { openStops(BusRoute.Stop(it)) },
+                                        openLine = { svc, stop -> openStops(BusRoute.Line(svc, stop)) },
+                                        openStops = { openStops(null) },
+                                    ),
                             )
                         }
                 }

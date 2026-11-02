@@ -10,7 +10,7 @@ final class PullTests: XCTestCase {
     private var sign: CGFloat { roadSign(width) }
     private var road: PullScene { PullScene(width: width, sign: sign, home: Pull.roadBus(sign, 0.5)) }
 
-    /// The Buses tab's low hills: no bus of the card's.
+    /// The Stops tab's low hills: no bus of the card's.
     private let hill = PullScene.hill(393)
 
     private func motion(_ scene: PullScene? = nil, calm: Bool = false) -> PullMotion { PullMotion(scene: scene ?? road, calm: calm) }

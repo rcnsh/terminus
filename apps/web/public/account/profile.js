@@ -293,6 +293,30 @@ export const residenceWalkMin = (r) => r.walkMin ?? Math.max(1, Math.round(r.wal
  */
 export const limit = (key, fallback) => profile.get()?.limits?.[key] ?? fallback;
 
+/** As many stops as the profile keeps pinned (its `limits`; 8 before it has loaded). */
+export const pinMax = () => limit('pinnedStops', 8);
+
+/**
+ * Pins stop `code`, or unpins it if it's pinned: from the Stops tab and
+ * from Nearby's signs, so both keep to the same limit and say the same.
+ */
+export async function togglePin(code) {
+  if (!profile.get()) await reloadProfile().catch(() => {});
+  if (!profile.get()) return toast(t("Couldn't pin that. Check your connection."), { error: true });
+  const pins = profile.get().pinnedStops ?? [];
+  if (pins.includes(code)) {
+    edit((p) => {
+      p.pinnedStops = (p.pinnedStops ?? []).filter((c) => c !== code);
+    });
+  } else if (pins.length >= pinMax()) {
+    toast(t('You can pin up to {0} stops.', pinMax()), { error: true });
+  } else {
+    edit((p) => {
+      p.pinnedStops = [...(p.pinnedStops ?? []), code];
+    });
+  }
+}
+
 /**
  * Adds a favourite, called what was picked, short, as it reads on a button
  * ("KR MRT", "The Deck", "COM1" for School of Computing). One per stop.

@@ -97,6 +97,9 @@ final class StoreShotsUITests: XCTestCase {
     }
 
     func test4Buses() {
+        // The Stops tab's home with two pinned boards.
+        setProfile { $0["pinnedStops"] = ["COM3", "UTOWN"] }
+        defer { resetProfile() }
         let app = launch(sky: "day")
         app.tabBars.buttons.element(boundBy: 1).tap()
         XCTAssertTrue(
