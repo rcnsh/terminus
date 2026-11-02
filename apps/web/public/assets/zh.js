@@ -723,7 +723,4 @@ window.TERMINUS_ZH = {
     '每一辆正在运行的校园巴士，都显示在它穿过校园的路线上：在应用里、Mac 上和网页上都能看到。',
   "The campus map: the D2's route across NUS, with three D2 buses on it and a button for each service.":
     '校园地图：D2 穿过 NUS 的路线，路线上有三辆 D2，每条线路各有一个按钮。',
-  'shuttle services': '条校园巴士线路',
-  "times from NUS's shuttle feed": '来自 NUS 校园巴士数据的时间',
-  'passwords to set up': '无需设置密码',
 };
