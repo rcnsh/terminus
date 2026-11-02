@@ -6,8 +6,6 @@
 ", %@ min walk" = "，步行 %@ 分钟";
 "Add your email" = "添加你的邮箱";
 "Add your email to report a wrong answer, so we can reply to you." = "添加邮箱后才能反馈错误的结果，方便我们回复你。";
-"Allow location" = "允许定位";
-"Allow location so directions start from your nearest stop. Without it, terminus assumes you're at your last class or at home." = "允许定位，路线就会从离你最近的车站开始。否则，terminus 会假设你在上一节课的地点或在家。";
 "Another stop, or a whole line" = "其他车站或整条线路";
 "arrive %@" = "%@ 到达";
 "arriving at %@" = "即将到达 %@";
@@ -19,6 +17,7 @@
 "Clear" = "清除";
 "Close" = "关闭";
 "Couldn't remove it. Check your connection." = "无法移除。请检查网络连接。";
+"Directions can start from your nearest stop, using your location. Without it, terminus assumes you're at your last class or at home." = "路线可以从离你最近的车站开始，这需要用到你的位置。否则，terminus 会假设你在上一节课的地点或在家。";
 "Directions to %@" = "到 %@ 的路线";
 "Done" = "完成";
 "Food & places" = "餐饮和地点";

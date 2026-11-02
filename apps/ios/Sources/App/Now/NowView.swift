@@ -163,13 +163,14 @@ struct NowView: View {
         if !locator.allowed {
             SkyNotice(
                 text: L(
-                    "Allow location so directions start from your nearest stop. Without it, terminus assumes you're at your last class or at home."
+                    "Directions can start from your nearest stop, using your location. Without it, terminus assumes you're at your last class or at home."
                 )
             ) {
                 if locator.denied {
                     Button(L("Open settings to allow location")) { openAppSettings() }
                 } else {
-                    Button(L("Allow location")) { locator.ask() }
+                    // Neutral, as in setup: the system's question is the one that asks.
+                    Button(L("Continue")) { locator.ask() }
                 }
             }
             .padding(.bottom, 12)
