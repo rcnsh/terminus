@@ -1,32 +1,19 @@
-// The Buses tab: what's coming at a stop, and where a service's buses are
+// The Stops tab: what's coming at any stop, and where a service's buses are
 // along its line. Loaded the first time the tab is opened (app.js).
 //
-// Its home is a row of pages you swipe between: the stop nearest you
-// (/api/me/nearby), then each stop you've pinned (/api/arrivals). A service
-// tapped on a board opens its line (/api/line), and a stop on the line opens
-// its board.
+// Its home is the stops you've pinned, each with its first few rows
+// (/api/arrivals), then every service. The stops around you are Nearby's
+// job, on Now. A service tapped on a board opens its line (/api/line), and a
+// stop on the line opens its board.
 // Where you are in the tab is in the address (#buses, #buses/stop/YIH,
 // #buses/line/D1/YIH), so Back and a reload keep it.
 //
 // Only the times the API gives are shown: `later` is every later bus the
 // feed reported, and a line shows no times at stops other than yours.
 
-import {
-  Fill,
-  Icon,
-  MARK,
-  focusSoon,
-  html,
-  reducedMotion,
-  store,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useStore,
-} from '/assets/ui.js';
+import { Icon, focusSoon, html, store, useEffect, useMemo, useRef, useStore } from '/assets/ui.js';
 import { clock, send, serverNow, signedOut, t } from '/account/dom.js';
-import { campus, edit, limit, loadCampus, profile, reloadProfile, toast } from '/account/profile.js';
+import { campus, loadCampus, profile, reloadProfile, togglePin } from '/account/profile.js';
 import { SearchBox } from '/account/search-box.js';
 import { Celestial, Horizon } from '/account/sky.js';
 import { busesTabIndex } from '/account/search.js';
@@ -35,8 +22,8 @@ import { PULL_FRESH_MS } from '/app/timing.js';
 
 /** The page on screen refreshes this often (the API caches arrivals 15 s). */
 const REFRESH_MS = 15_000;
-/** As many stops as the profile keeps pinned (its `limits`; 8 before it has loaded). */
-const pinMax = () => limit('pinnedStops', 8);
+/** A pinned stop's rows on the home; the rest are on its own page. */
+const PINNED_ROWS = 3;
 /**
  * Times fetched longer ago than this have missed a refresh at least:
  * counted down here from when they came, and no longer shown as live.
@@ -47,8 +34,6 @@ const ENDS_SOON_MS = 2 * 3600_000;
 
 /** Where in the tab: its home, a stop's board, or a service's line. From the address. */
 export const route = store({ kind: 'home' });
-/** The stop nearest you: { status: 'loading' | 'ready' | 'none', code, distM, fromHome }. */
-export const nearest = store({ status: 'loading' });
 /**
  * Each stop's board as last fetched, by code: { stop, board, available, at,
  * got, asOf, error }. `at` is when this browser fetched it (Date.now(), for
@@ -60,20 +45,10 @@ export const nearest = store({ status: 'loading' });
 export const boards = store(new Map());
 /** The stops showing the board across the road, by the page's own stop. */
 export const across = store(new Set());
-/** Which of the home's pages is on screen. */
-const active = store(0);
-/** A stop to scroll the home to, once it's drawn (a search result that has a page). */
-const wantPage = store(null);
 /** The line on screen: { key, data, at, got, asOf } or { key, error }. */
 export const line = store(null);
 /** Now on the server's clock (dom.js), every few seconds, for "Updated 5 s ago". */
 const tick = store(serverNow());
-/** Location can be asked for (it isn't blocked), for the nearest stop. */
-const canAsk = store(false);
-
-/** app.js's here(): where the phone is, asking first only when told to. */
-let locate = async () => null;
-
 async function getJSON(path) {
   const res = await send(path, { credentials: 'same-origin', headers: { 'accept-language': window.i18n?.header ?? 'en' } });
   if (res.status === 401) await signedOut();
@@ -133,43 +108,6 @@ export async function loadBoard(code) {
   }
 }
 
-/**
- * The stop nearest you, with its board and the one across the road (both
- * come with /api/me/nearby). Uses your location only when it's already allowed,
- * unless `ask`; without it, /api/me/nearby starts from your home.
- */
-async function findNearest({ ask = false } = {}) {
-  const state = await navigator.permissions
-    ?.query({ name: 'geolocation' })
-    .then((p) => p.state)
-    .catch(() => null);
-  canAsk.set(Boolean(navigator.geolocation) && state !== 'denied');
-  const at = await locate({ ask });
-  if (ask && !at) toast(t('Location is off for this site. Search for a stop instead.'), { error: true });
-  try {
-    const q = `?${new URLSearchParams({ ...at, stopped: '1' })}`;
-    const data = await getJSON(`/api/me/nearby${q}`);
-    const first = data.stops?.[0];
-    if (!first) return nearest.set({ status: 'none' });
-    const asOf = asOfMs(data);
-    const got = serverNow();
-    for (const s of data.stops)
-      keep(s.stop.code, {
-        stop: { ...s.stop, opposite: s.opposite ?? null, oppositeAcross: s.oppositeAcross, oppositeName: s.oppositeName },
-        board: s.board,
-        available: s.available,
-        at: Date.now(),
-        got,
-        asOf,
-      });
-    nearest.set({ status: 'ready', code: first.stop.code, distM: first.distM, fromHome: !at });
-  } catch (err) {
-    if (err.message === 'signed out') return;
-    // 400: no location and no home. Offline: what was found before stays.
-    if (err.status === 400 || nearest.get().status === 'loading') nearest.set({ status: 'none' });
-  }
-}
-
 export async function loadLine(svc, stop) {
   const key = `${svc}/${stop ?? ''}`;
   // As for a board: a call that hung can end after a newer one, and mustn't
@@ -191,22 +129,14 @@ const lineKey = () => {
   return r.kind === 'line' ? `${r.svc}/${r.stop ?? ''}` : null;
 };
 
-/** Page 1 is the nearest stop (or finding it), then each pinned stop not already there. */
-export function pagesOf(n, pinned) {
-  const list = [n.status === 'ready' ? { kind: 'nearest', code: n.code } : { kind: n.status === 'loading' ? 'loading' : 'find' }];
-  for (const code of pinned) if (code !== n.code) list.push({ kind: 'pinned', code });
-  return list;
-}
-const homePages = () => pagesOf(nearest.get(), pins());
-
 /** A timed refresh still on its way: the next one waits for it, rather than piling up on a slow connection. */
 let pending = null;
 /** When the next timed refresh runs (Date.now()), for a pull that brought nothing new to say; 0 while the tab is hidden. */
 let nextTimedAt = 0;
 
 /**
- * The board on screen, fetched again: the page shown, the stop's own page, or
- * the line. [back]: the tab shown again, which asks even with a call on its
+ * What's on screen, fetched again: the pinned stops' boards, the stop's own
+ * page, or the line. [back]: the tab shown again, which asks even with a call on its
  * way, as that call may have hung while the phone slept.
  */
 function refresh({ back = false } = {}) {
@@ -219,38 +149,29 @@ function refresh({ back = false } = {}) {
 function refreshNow() {
   const r = route.get();
   if (r.kind === 'line') return loadLine(r.svc, r.stop);
-  const code = r.kind === 'stop' ? r.code : homePages()[active.get()]?.code;
-  return code ? loadBoard(shownCode(code)) : null;
+  if (r.kind === 'stop') return loadBoard(shownCode(r.code));
+  return Promise.all(pins().map((code) => loadBoard(code)));
 }
 
 /**
- * Pulled down to refresh (pull.js): what's on screen fetched again, the
- * nearest stop found again too (you may have moved), unless its times came
- * under PULL_FRESH_MS ago. How it went: 'updated', 'failed', or
- * { state: 'fresh', inS }: nothing asked, and the timed refresh brings new
- * times in `inS` seconds (null if none is due), so "Updated 9 s ago" still
- * counting doesn't read as the pull having failed.
+ * Pulled down to refresh (pull.js): what's on screen fetched again, unless
+ * its times came under PULL_FRESH_MS ago. How it went: 'updated', 'failed',
+ * or { state: 'fresh', inS }: nothing asked, and the timed refresh brings
+ * new times in `inS` seconds (null if none is due), so "Updated 9 s ago"
+ * still counting doesn't read as the pull having failed.
  */
 export async function pullRefresh() {
   const r = route.get();
-  const page = r.kind === 'home' ? homePages()[active.get()] : null;
   const shown = () => {
-    if (r.kind === 'line') return line.get()?.key === lineKey() ? line.get() : null;
-    // The nearest stop's page as it is now: the pull may have just found it (the page was still finding it).
-    const code = r.kind === 'stop' ? r.code : page && page.kind !== 'pinned' ? nearest.get().code : page?.code;
-    return code ? boards.get().get(shownCode(code)) : null;
+    if (r.kind === 'line') return [line.get()?.key === lineKey() ? line.get() : null];
+    return (r.kind === 'stop' ? [shownCode(r.code)] : pins()).map((code) => boards.get().get(code));
   };
-  const was = shown();
-  if (was?.at && !was.error && Date.now() - was.at < PULL_FRESH_MS)
-    return { state: 'fresh', inS: nextTimedAt ? Math.max(1, Math.ceil((nextTimedAt - Date.now()) / 1000)) : null };
+  const fresh = (b) => b?.at && !b.error && Date.now() - b.at < PULL_FRESH_MS;
+  // Nothing pinned: nothing on the home to fetch.
+  if (shown().every(fresh)) return { state: 'fresh', inS: nextTimedAt ? Math.max(1, Math.ceil((nextTimedAt - Date.now()) / 1000)) : null };
   const asked = Date.now();
-  // The nearest stop's page, or the page still finding it: found again, its board with it.
-  if (page && page.kind !== 'pinned') {
-    await findNearest();
-    if (nearest.get().status === 'none') return 'failed';
-  } else await refreshNow();
-  const now = shown();
-  return now?.at >= asked && !now.error ? 'updated' : 'failed';
+  await refreshNow();
+  return shown().every((b) => b?.at >= asked && !b.error) ? 'updated' : 'failed';
 }
 
 /** A board just brought on screen: fetched unless it's fresh. */
@@ -260,21 +181,7 @@ function showBoard(code) {
   if (!b?.at || Date.now() - b.at > REFRESH_MS) loadBoard(shownCode(code));
 }
 
-export async function togglePin(code) {
-  if (!profile.get()) await reloadProfile().catch(() => {});
-  if (!profile.get()) return toast(t("Couldn't pin that. Check your connection."), { error: true });
-  if (pins().includes(code)) {
-    edit((p) => {
-      p.pinnedStops = (p.pinnedStops ?? []).filter((c) => c !== code);
-    });
-  } else if (pins().length >= pinMax()) {
-    toast(t('You can pin up to {0} stops.', pinMax()), { error: true });
-  } else {
-    edit((p) => {
-      p.pinnedStops = [...(p.pinnedStops ?? []), code];
-    });
-  }
-}
+export { togglePin };
 
 export function parse(hash) {
   // A stray % (an address typed or edited by hand) is kept as it is rather than throwing.
@@ -313,39 +220,22 @@ function onHash() {
   if (JSON.stringify(next) === JSON.stringify(route.get())) return;
   route.set(next);
   window.scrollTo(0, 0);
-  // What was focused (a row, Back) has gone with the page: its heading takes
-  // it. On the home, the heading of the page it's back on (Home puts the
-  // pager there before this runs), without scrolling the pager to it.
-  if (document.activeElement !== document.body) focusSoon(() => headOnScreen(next), { preventScroll: true });
+  // What was focused (a row, Back) has gone with the page: its heading takes it.
+  if (document.activeElement !== document.body) focusSoon(headOnScreen, { preventScroll: true });
   if (next.kind === 'stop') showBoard(next.code);
   else if (next.kind === 'line') loadLine(next.svc, next.stop);
 }
 
-/** The heading of what the tab shows: the home's page on screen, else the stop's or line's. */
-function headOnScreen(r) {
-  if (r.kind === 'home') {
-    const pages = document.querySelectorAll('#tab-buses .bt-pages > .bt-page');
-    const page = pages[Math.min(active.get(), pages.length - 1)];
-    if (page) return page.querySelector('.bt-head');
-  }
-  return document.querySelector('#tab-buses .bt-head');
-}
+/** The heading of what the tab shows: the home's title, the stop's or the line's. */
+const headOnScreen = () => document.querySelector('#tab-buses .bt-head');
 
-/** A stop picked: its page on the home if it has one, else its own. */
-function openStop(code) {
-  if (homePages().some((p) => p.code === code)) {
-    wantPage.set(code);
-    if (route.get().kind !== 'home') go('#buses');
-  } else {
-    go(`#buses/stop/${encodeURIComponent(code)}`);
-  }
-}
+export const stopHash = (code) => `#buses/stop/${encodeURIComponent(code)}`;
 export const lineHash = (svc, stop) => `#buses/line/${encodeURIComponent(svc)}${stop ? `/${encodeURIComponent(stop)}` : ''}`;
-export const stopParent = (code) => (homePages().some((p) => p.code === code) ? '#buses' : `#buses/stop/${encodeURIComponent(code)}`);
+/** A stop picked: its own page. */
+const openStop = (code) => go(stopHash(code));
 
 const SEARCH = '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/>';
 const STAR = '<path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z"/>';
-const ARROW = '<path d="M20.5 3.5 3.5 10.6l7 2.9 2.9 7z"/>';
 const BACK = '<path d="m15 5-7 7 7 7"/>';
 const NEXT = '<path d="m9 6 6 6-6 6"/>';
 const BUS = '<rect x="5" y="3.5" width="14" height="13.5" rx="3"/><path d="M5 10.5h14M8 17v2.5M16 17v2.5"/>';
@@ -427,29 +317,23 @@ function Board({ code }) {
 const Sky = ({ children }) =>
   html`<div class="bt-sky"><div class="sky-head"><${Celestial} band />${children}</div><${Horizon} on=${null} low /></div>`;
 
-/** The dots under a page's name: where it is in the row. The nearest stop's is an arrow. */
-function Dots({ index, count, nearestFirst, onDot }) {
-  if (count < 2) return null;
+/** The star that pins stop `code` (called `name`), filled while it's pinned. `cls` for a smaller one. */
+function Star({ code, name, cls = '' }) {
+  const p = useStore(profile);
+  const pinned = (p?.pinnedStops ?? []).includes(code);
   return html`
-    <div class="bt-dots">
-      ${Array.from(
-        { length: count },
-        (_, j) =>
-          html`<button type="button" key=${j} class=${j === index ? 'on' : ''} aria-label=${t('Page {0} of {1}', j + 1, count)} aria-current=${j === index ? 'true' : undefined} onClick=${() => onDot(j)}>
-          ${j === 0 && nearestFirst && j !== index ? html`<${Icon} paths=${ARROW} />` : html`<i></i>`}
-        </button>`,
-      )}
-    </div>
+    <button type="button" class=${`bt-star${pinned ? ' on' : ''} ${cls}`} aria-pressed=${String(pinned)} aria-label=${pinned ? t('Unpin {0}', name) : t('Pin {0}', name)} onClick=${() => togglePin(code)}>
+      <${Icon} paths=${STAR} />
+    </button>
   `;
 }
 
 /**
- * A stop: what the page is (nearest, pinned), its name with a star to pin
+ * A stop: whether it's pinned, its name with a star to pin
  * it, This side | Across the road when it has an opposite stop (both stops by
  * name when the opposite stop is only nearby), and its board.
  */
-function StopView({ code, kicker, dots, peek, above = null }) {
-  const p = useStore(profile);
+function StopView({ code, kicker, above = null }) {
   const all = useStore(boards);
   const side = useStore(across);
   useStore(campus);
@@ -461,7 +345,6 @@ function StopView({ code, kicker, dots, peek, above = null }) {
   const twinName = own?.oppositeName ?? stopName(opposite);
   const shown = (side.has(code) && opposite) || code;
   const name = longName(all.get(shown)?.stop) ?? stopName(shown);
-  const pinned = (p?.pinnedStops ?? []).includes(shown);
   const setSide = (other) => {
     across.set((s) => {
       const next = new Set(s);
@@ -480,11 +363,8 @@ function StopView({ code, kicker, dots, peek, above = null }) {
         <h2 class="bt-head" tabindex="-1">${name}</h2>
         ${shown !== name && html`<p class="bt-code">${shown}</p>`}
       </div>
-      <button type="button" class=${pinned ? 'bt-star on' : 'bt-star'} aria-pressed=${String(pinned)} aria-label=${pinned ? t('Unpin {0}', name) : t('Pin {0}', name)} onClick=${() => togglePin(shown)}>
-        <${Icon} paths=${STAR} />
-      </button>
+      <${Star} code=${shown} name=${name} />
     </div>
-    ${dots}
     <//>
     ${
       opposite &&
@@ -494,96 +374,85 @@ function StopView({ code, kicker, dots, peek, above = null }) {
     </div>`
     }
     <${Board} code=${shown} />
-    ${peek}
   `;
 }
 
-/** No nearest stop: no location and no home. Search, or allow location. */
-function FindPage({ dots }) {
-  const ask = useStore(canAsk);
-  return html`
-    <div class="bt-find">
-      <h2 class="bt-head" tabindex="-1">${t('Find the stop nearest you')}</h2>
-      <p class="hint">${t('Or search for a stop above, and pin it with the star to keep it here.')}</p>
-      ${ask && html`<button type="button" class="btn small ghost" onClick=${() => findNearest({ ask: true })}><${Icon} paths=${ARROW} class="bt-btn-icon" />${t('Use my location')}</button>`}
-      ${dots}
-    </div>
-  `;
-}
+/** How a service runs, as under its name on its line: "Loop from COM 3", "Kent Ridge MRT to UTown". */
+const routeWords = (r) => (r.loop ? t('Loop from {0}', stopName(r.seq[0])) : t('{0} to {1}', stopName(r.seq[0]), stopName(r.seq.at(-1))));
 
-/** The pages you swipe between: the nearest stop, then each pinned one. */
-function Home() {
-  const n = useStore(nearest);
-  const p = useStore(profile);
-  const index = useStore(active);
-  const want = useStore(wantPage);
-  const ask = useStore(canAsk);
+/**
+ * A pinned stop on the home: its name, which opens its page, and its star;
+ * its first PINNED_ROWS rows, then the way to the rest on its page.
+ */
+function PinnedStop({ code }) {
+  const all = useStore(boards);
+  const now = useStore(tick);
   useStore(campus);
-  const pages = pagesOf(n, p?.pinnedStops ?? []);
-  const row = useRef(null);
-  const at = Math.min(index, pages.length - 1);
-
-  const scrollTo = (j, smooth = true) => {
-    const el = row.current;
-    if (el) el.scrollTo({ left: j * el.clientWidth, behavior: smooth && !reducedMotion() ? 'smooth' : 'auto' });
-  };
-  // A dot or "Swipe for" pressed: the page it brings in has the focus, at its
-  // stop's name (the button pressed is on the page going out of view).
-  const turnTo = (j) => {
-    scrollTo(j);
-    const head = row.current?.children[j]?.querySelector('.bt-head');
-    head?.focus({ preventScroll: true });
-  };
-  // Back on the home: the page it was on. A page unpinned: the one before it.
-  useLayoutEffect(() => {
-    if (index !== at) active.set(at);
-    scrollTo(at, false);
-  }, [pages.length]);
-  useEffect(() => {
-    if (!want) return;
-    const j = pages.findIndex((x) => x.code === want);
-    wantPage.set(null);
-    if (j >= 0) scrollTo(j);
-  }, [want]);
-
-  const onScroll = (e) => {
-    const el = e.currentTarget;
-    const j = Math.round(el.scrollLeft / el.clientWidth);
-    if (j === active.get() || j < 0 || j >= pages.length) return;
-    active.set(j);
-    showBoard(pages[j].code);
-  };
-
+  // Its times when it comes on the home: pinned just now, or from the start.
+  useEffect(() => showBoard(code), [code]);
+  const b = all.get(code);
+  const name = longName(b?.stop) ?? stopName(code);
+  const rows = b?.board?.map((r) => aged(r, b.got, now)) ?? [];
+  const more = rows.length - PINNED_ROWS;
+  let body;
+  if (!b?.board) body = html`<p class="hint bt-empty">${b?.error ?? t('Checking…')}</p>`;
+  else if (!rows.length) body = html`<p class="hint bt-empty">${b.available ? t('No buses due') : t('No times right now')}</p>`;
+  else
+    body = html`
+      <div class="card bt-board">
+        ${rows.slice(0, PINNED_ROWS).map((r) => html`<${Row} key=${r.svc} r=${r} now=${now} chevron onPick=${(svc) => go(lineHash(svc, code))} />`)}
+        ${more > 0 && html`<button type="button" class="bt-more" onClick=${() => openStop(code)}><span>${t('{0} more at this stop', more)}</span><${Icon} paths=${NEXT} class="bt-go" /></button>`}
+      </div>
+      ${b.error && html`<p class="bt-pin-error"><span class="bt-error">${b.error}</span></p>`}
+    `;
   return html`
-    <div class="bt-pages" ref=${row} onScroll=${onScroll}>
-      ${pages.map((pg, j) => {
-        const dots = html`<${Dots} index=${j} count=${pages.length} nearestFirst=${pages[0].kind === 'nearest'} onDot=${turnTo} />`;
-        const nextPage = pages[j + 1];
-        const peek = nextPage?.code && html`<${Peek} code=${nextPage.code} onClick=${() => turnTo(j + 1)} />`;
-        if (pg.kind === 'loading')
-          return html`<section class="bt-page" key="loading"><${Sky}><p class="hint bt-empty">${t('Checking…')}</p>${dots}<//>${peek}</section>`;
-        if (pg.kind === 'find') return html`<section class="bt-page" key="find"><${Sky}><${FindPage} dots=${dots} /><//>${peek}</section>`;
-        let kicker;
-        if (pg.kind === 'pinned') kicker = html`<${Icon} paths=${STAR} class="bt-kicker-icon star" />${t('Pinned')}`;
-        else if (n.fromHome) {
-          kicker = html`${t('Your home stop')}${ask && html` · <button type="button" class="link-btn" onClick=${() => findNearest({ ask: true })}>${t('Use my location')}</button>`}`;
-        } else {
-          kicker = html`<${Icon} paths=${ARROW} class="bt-kicker-icon" />${n.distM >= 1000 ? t('Nearest stop · {0} km', (n.distM / 1000).toFixed(1)) : t('Nearest stop · {0} m', n.distM)}`;
-        }
-        return html`<section class="bt-page" key=${`${pg.kind}-${pg.code}`}><${StopView} code=${pg.code} kicker=${kicker} dots=${dots} peek=${peek} /></section>`;
-      })}
-    </div>
+    <section class="bt-pin" aria-label=${name}>
+      <div class="bt-pin-head">
+        <button type="button" class="bt-pin-name" onClick=${() => openStop(code)}><span>${name}</span><${Icon} paths=${NEXT} /></button>
+        <${Star} code=${code} name=${name} cls="small" />
+      </div>
+      ${body}
+    </section>
   `;
 }
 
-/** "Swipe for Central Library", with its services, under a page with another after it. */
-function Peek({ code, onClick }) {
-  const s = stopOf(code);
+/**
+ * The home: your pinned stops, each with its first rows, then every
+ * service, which opens its line. The stops around you are on Now (Nearby).
+ */
+function Home() {
+  const p = useStore(profile);
+  const c = useStore(campus);
+  const pinned = p?.pinnedStops ?? [];
+  const routes = Object.entries(c?.routes ?? {});
+  let pins;
+  if (!p) pins = html`<p class="hint bt-empty">${t('Checking…')}</p>`;
+  else if (!pinned.length)
+    pins = html`<p class="bt-no-pins"><${Icon} paths=${STAR} />${t("Tap the star on any stop to keep it here: in Nearby, on the stop's page, or after searching for it.")}</p>`;
+  else pins = pinned.map((code) => html`<${PinnedStop} key=${code} code=${code} />`);
   return html`
-    <button type="button" class="bt-peek" onClick=${onClick}>
-      <span><${Fill} text=${t('Swipe for {0}', MARK)} parts=${[html`<b>${longName(s) ?? code}</b>`]} /></span>
-      <span class="bt-peek-chips">${(s?.services ?? []).map((svc) => html`<${Chip} key=${svc} svc=${svc} cls="small" />`)}<${Icon} paths=${NEXT} /></span>
-    </button>
+    <div class="bt-home">
+      <${Sky}>
+        <div class="bt-top"><div class="bt-title"><h2 class="bt-head" tabindex="-1">${t('Stops')}</h2></div></div>
+      <//>
+      <h3 class="bt-section eyebrow">${t('Pinned')}</h3>
+      ${pins}
+      <h3 class="bt-section eyebrow">${t('Services')}</h3>
+      ${
+        routes.length
+          ? html`<div class="card bt-services">
+              ${routes.map(
+                ([svc, r]) => html`<button type="button" key=${svc} class="bt-service" onClick=${() => go(lineHash(svc, null))}>
+                  <${Chip} svc=${svc} color=${r.color} cls="bt-chip" />
+                  <span>${routeWords(r)}</span>
+                  <${Icon} paths=${NEXT} class="bt-go" />
+                </button>`,
+              )}
+            </div>
+            <p class="bt-hint">${t('Tap one to see its whole line.')}</p>`
+          : html`<p class="hint bt-empty">${t('Checking…')}</p>`
+      }
+    </div>
   `;
 }
 
@@ -610,8 +479,7 @@ function Find() {
         onPick=${(d) => {
           box.current?.clear();
           box.current?.input?.blur();
-          if (d.kind === 'service') go(lineHash(d.code, null));
-          else openStop(d.code);
+          go(d.kind === 'service' ? lineHash(d.code, null) : stopHash(d.code));
         }}
       />
     </div>
@@ -626,14 +494,14 @@ function BackBar({ label, parent }) {
   `;
 }
 
-/** A stop's board on a page of its own: from the search or a line. */
+/** A stop's board on a page of its own: from the home, the search, a line or Nearby. */
 function StopPage({ code }) {
   const p = useStore(profile);
   useStore(campus);
   const pinned = (p?.pinnedStops ?? []).includes(code);
   return html`
     <section class="bt-page alone">
-      <${StopView} code=${code} above=${html`<${BackBar} label=${t('Buses')} parent="#buses" />`} kicker=${pinned ? html`<${Icon} paths=${STAR} class="bt-kicker-icon star" />${t('Pinned')}` : null} />
+      <${StopView} code=${code} above=${html`<${BackBar} label=${t('Stops')} parent="#buses" />`} kicker=${pinned ? html`<${Icon} paths=${STAR} class="bt-kicker-icon star" />${t('Pinned')}` : null} />
     </section>
   `;
 }
@@ -675,11 +543,11 @@ function LinePage({ svc, stop }) {
     document.querySelector('.bt-stop.mine')?.scrollIntoView({ block: 'center' });
   }, [key, Boolean(data)]);
 
-  const label = stop ? (longName(data?.stops.find((s) => s.code === stop)) ?? stopName(stop)) : t('Buses');
-  const parent = stop ? stopParent(stop) : '#buses';
+  const label = stop ? (longName(data?.stops.find((s) => s.code === stop)) ?? stopName(stop)) : t('Stops');
+  const parent = stop ? stopHash(stop) : '#buses';
   const color = data?.color ?? colorOf(svc);
   const r = c?.routes[svc];
-  const where = r && (r.loop ? t('Loop from {0}', stopName(r.seq[0])) : t('{0} to {1}', stopName(r.seq[0]), stopName(r.seq.at(-1))));
+  const where = r && routeWords(r);
   const head = html`
     <${Sky}>
       <${BackBar} label=${label} parent=${parent} />
@@ -740,12 +608,8 @@ function LinePage({ svc, stop }) {
   `;
 }
 
-/**
- * The tab. `visible`: it's on screen (refreshing stops otherwise). `here`:
- * app.js's way to the phone's location.
- */
-export function BusesTab({ visible, here }) {
-  locate = here;
+/** The tab. `visible`: it's on screen (refreshing stops otherwise). */
+export function BusesTab({ visible }) {
   const r = useStore(route);
 
   useEffect(() => {
@@ -756,10 +620,13 @@ export function BusesTab({ visible, here }) {
   useEffect(() => {
     if (!visible) return;
     route.set(parse(location.hash));
-    // Fresh each time it's shown: the pins may have changed on another device, and you may have moved.
+    // Fresh each time it's shown: the pins may have changed on another device.
     loadCampus().catch(() => {});
-    reloadProfile().catch(() => {});
-    findNearest();
+    reloadProfile()
+      .catch(() => {})
+      .then(() => {
+        if (route.get().kind === 'home') for (const code of pins()) showBoard(code);
+      });
     const now = route.get();
     if (now.kind === 'stop') showBoard(now.code);
     else if (now.kind === 'line') loadLine(now.svc, now.stop);
@@ -785,6 +652,6 @@ export function BusesTab({ visible, here }) {
 
   if (r.kind === 'line') return html`<${LinePage} svc=${r.svc} stop=${r.stop} />`;
   if (r.kind === 'stop') return html`<${StopPage} code=${r.code} />`;
-  // The search at the top of the sky, each page's own sky running on from it.
+  // The search at the top of the sky, the home's own sky running on from it.
   return html`<div class="bt-sky-top"><${Find} /></div><${Home} />`;
 }

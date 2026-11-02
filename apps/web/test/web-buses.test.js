@@ -1,7 +1,7 @@
 /**
- * The web app's Buses tab (apps/web/public/app/buses.js): where you are in
- * it, from the address (#buses/stop/YIH, #buses/line/D1/YIH), the home's
- * pages, the board across the road, and pinning stops.
+ * The web app's Stops tab (apps/web/public/app/buses.js): where you are in
+ * it, from the address (#buses/stop/YIH, #buses/line/D1/YIH), the pinned
+ * stops' boards, the board across the road, and pinning stops.
  */
 import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
@@ -53,24 +53,38 @@ test("a stop's address, and anything else is the home", () => {
     assert.deepEqual(B.parse(hash), { kind: 'home' }, hash);
 });
 
-test('the home: the nearest stop (or finding it), then each pinned stop not already there', () => {
-  assert.deepEqual(B.pagesOf({ status: 'loading' }, []), [{ kind: 'loading' }]);
-  assert.deepEqual(B.pagesOf({ status: 'none' }, ['YIH']), [{ kind: 'find' }, { kind: 'pinned', code: 'YIH' }]);
-  assert.deepEqual(B.pagesOf({ status: 'ready', code: 'COM3' }, ['YIH', 'COM3', 'UTOWN']), [
-    { kind: 'nearest', code: 'COM3' },
-    { kind: 'pinned', code: 'YIH' },
-    { kind: 'pinned', code: 'UTOWN' },
-  ]);
+test("a stop's page is its own address, whether it's pinned or not, and reads back as the stop", () => {
+  P.profile.set({ pinnedStops: ['YIH'] });
+  for (const code of ['YIH', 'UTOWN', 'KR-MRT-OPP', 'A/B']) assert.deepEqual(B.parse(B.stopHash(code)), { kind: 'stop', code });
+  assert.equal(B.stopHash('YIH'), '#buses/stop/YIH');
 });
 
-test("Back from a line goes to the stop's page on the home if it has one, else to the stop's own", () => {
-  B.nearest.set({ status: 'ready', code: 'COM3' });
-  P.profile.set({ pinnedStops: ['YIH'] });
-  assert.equal(B.stopParent('COM3'), '#buses');
-  assert.equal(B.stopParent('YIH'), '#buses');
-  assert.equal(B.stopParent('UTOWN'), '#buses/stop/UTOWN');
-  assert.deepEqual(B.parse(B.stopParent('KR-MRT-OPP')), { kind: 'stop', code: 'KR-MRT-OPP' });
-  assert.deepEqual(B.parse(B.stopParent('COM3')), { kind: 'home' });
+test("pulled down on the home: every pinned stop's board fetched again, and with nothing pinned, nothing asked", async () => {
+  const realFetch = globalThis.fetch;
+  const asked = [];
+  globalThis.fetch = async (url) => {
+    const code = new URL(url, 'http://x').searchParams.get('stop');
+    asked.push(code);
+    return new Response(JSON.stringify({ asOf: new Date().toISOString(), stop: { code, name: code }, available: true, board: [] }), {
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+  try {
+    B.route.set({ kind: 'home' });
+    B.boards.set(new Map());
+    P.profile.set({ pinnedStops: [] });
+    assert.equal((await B.pullRefresh()).state, 'fresh');
+    assert.deepEqual(asked, []);
+    P.profile.set({ pinnedStops: ['YIH', 'UTOWN'] });
+    assert.equal(await B.pullRefresh(), 'updated');
+    assert.deepEqual(asked.sort(), ['UTOWN', 'YIH']);
+    // Just fetched: not asked again.
+    assert.equal((await B.pullRefresh()).state, 'fresh');
+    assert.equal(asked.length, 2);
+  } finally {
+    globalThis.fetch = realFetch;
+    B.boards.set(new Map());
+  }
 });
 
 test('the stop across the road: from its board, else the campus map; the board shown is that one when asked', () => {

@@ -12,6 +12,7 @@ const { OFF_LEFT, PULL, busAt, groundAt, pullWords, rubber, stopAt } = await web
 const { PULL_FRESH_MS } = await web('app/timing.js');
 const { signX } = await web('account/sky.js');
 const B = await web('app/buses.js');
+const P = await web('account/profile.js');
 const { t } = await web('account/dom.js');
 
 test('the sky follows the finger less the further it goes, and never past its most', () => {
@@ -77,16 +78,17 @@ test('the words say what letting go does, then how it went, in English and Chine
   assert.equal(pullWords('failed'), "Couldn't update");
 });
 
-test('Buses fetches again on a pull only when its times are old enough to change', async () => {
+test('Stops fetches again on a pull only when its times are old enough to change', async () => {
   const realFetch = globalThis.fetch;
   let calls = 0;
-  const nearby = () =>
-    new Response(JSON.stringify({ stops: [{ stop: { code: 'YIH', name: 'YIH' }, board: [], available: true, distM: 40 }] }), {
+  const arrivals = () =>
+    new Response(JSON.stringify({ stop: { code: 'YIH', name: 'YIH' }, board: [], available: true }), {
       headers: { 'content-type': 'application/json' },
     });
-  globalThis.fetch = async () => (calls++, nearby());
+  globalThis.fetch = async () => (calls++, arrivals());
   try {
-    B.nearest.set({ status: 'ready', code: 'YIH', distM: 40 });
+    B.route.set({ kind: 'home' });
+    P.profile.set({ pinnedStops: ['YIH'] });
     B.boards.set(new Map([['YIH', { stop: { code: 'YIH' }, board: [], at: Date.now() - 2_000 }]]));
     assert.deepEqual(await B.pullRefresh(), { state: 'fresh', inS: null }, 'no timed refresh due with the tab not shown');
     assert.equal(calls, 0, 'times 2 s old: the server would send the same ones');
@@ -101,6 +103,6 @@ test('Buses fetches again on a pull only when its times are old enough to change
   } finally {
     globalThis.fetch = realFetch;
     B.boards.set(new Map());
-    B.nearest.set({ status: 'loading' });
+    P.profile.set(null);
   }
 });

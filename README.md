@@ -60,7 +60,7 @@ On Android, the web and the Mac (in a window of its own): every bus route in its
 2. **Import** your NUSMods share link and pick your home stop.
 3. **Install** the Mac menu bar app and sign in with the same email: approve it from the link we email you, on any device, by choosing the number the Mac shows. Or pair it with a code from the account page or the Android app's Settings.
 
-It updates through the day and goes quiet in the evening. The app has four tabs: **Now** (the card and your places), **Buses** (any stop's buses, live), **Map** and **Settings**.
+It updates through the day and goes quiet in the evening. The app has four tabs: **Now** (the card and your places), **Stops** (your pinned stops, any stop's buses live, and each service's line), **Map** and **Settings**.
 
 <details>
 <summary><b>Installing outside the app stores</b></summary>
@@ -85,10 +85,10 @@ down the clock itself, so no screen ever shows a stale "4 min".
 | Path | What |
 | --- | --- |
 | [`apps/api`](apps/api) | Cloudflare Worker: the API, accounts (D1), the cron monitor, and the website. API docs at [/docs](https://terminus.run/docs). |
-| [`apps/web`](apps/web) | Landing page, account page, the web app (Now, Buses, the campus map, Settings), privacy and pairing pages. HTML and Preact components with no build step, served by the Worker. |
-| [`apps/android`](apps/android) | Home-screen widgets (compact, with places, and buses near you) and the app: Now, Buses, the campus map, Settings. |
+| [`apps/web`](apps/web) | Landing page, account page, the web app (Now, Stops, the campus map, Settings), privacy and pairing pages. HTML and Preact components with no build step, served by the Worker. |
+| [`apps/android`](apps/android) | Home-screen widgets (compact, with places, and buses near you) and the app: Now, Stops, the campus map, Settings. |
 | [`apps/macos`](apps/macos) | Menu bar app, with the campus map in a window. |
-| [`apps/ios`](apps/ios) | iPhone app and widgets: Now, Buses, the campus map, Settings, a Live Activity. In development, not released yet. |
+| [`apps/ios`](apps/ios) | iPhone app and widgets: Now, Stops, the campus map, Settings, a Live Activity. In development, not released yet. |
 
 More in [docs/architecture.md](docs/architecture.md), and in depth in
 [docs/internals.md](docs/internals.md).
