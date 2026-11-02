@@ -125,10 +125,6 @@
   .does .map { padding: 0; overflow: hidden; grid-template-rows: auto 1fr; }
   .does .map img { display: block; width: 100%; height: auto; aspect-ratio: 2400 / 1290; object-fit: cover; object-position: 50% 0; border-bottom: 1px solid var(--line); }
   .does .map > div { padding: 0 18px 18px; }
-  .stats { grid-column: 1 / -1; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: auto !important; align-items: start; padding: 26px 28px !important; background: linear-gradient(135deg, color-mix(in srgb, #fb923c 22%, var(--surface-2)), var(--surface-2) 70%) !important; }
-  .stats div { display: grid; gap: 4px; }
-  .stats b { font: 700 2.6rem/1 var(--display); letter-spacing: -0.03em; color: var(--accent); }
-  .stats span { color: var(--muted); font-size: 0.9rem; }
   .show { display: grid; align-content: center; min-height: 170px; padding: 14px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); font-size: 14px; }
   .week { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; font-size: 0.75rem; }
   .week b { text-align: center; color: var(--muted); font-weight: 600; }
@@ -208,18 +204,10 @@
     .places { grid-template-columns: minmax(0, 1fr); }
     .does > div { grid-column: 1 / -1 !important; }
     .does .wide { grid-template-columns: minmax(0, 1fr); }
-    .stats b { font-size: 2rem; }
     .setup { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   }
   @media (max-width: 520px) {
     .setup { grid-template-columns: minmax(0, 1fr); }
-    /* One row each, the figures sharing a column as wide as the widest,
-       so every label starts at the same place. */
-    .stats { grid-template-columns: auto minmax(0, 1fr); gap: 0 !important; padding: 6px 20px !important; }
-    .stats div { grid-column: 1 / -1; grid-template-columns: subgrid; align-items: baseline; gap: 18px; padding: 14px 0; }
-    .stats div + div { border-top: 1px solid var(--line); }
-    .stats b { font-size: 1.9rem; }
-    .stats span { font-size: 0.95rem; }
   }
   .nav-links .gh svg { display: block; }
 </style>
@@ -362,11 +350,6 @@
         <img src="/assets/shots/map-light.webp" width="2400" height="1400" loading="lazy" alt="The campus map: the D2's route across NUS, with three D2 buses on it and a button for each service.">
       </picture>
       <div><h3>Every bus on the map</h3><p>Each shuttle that's out, on its route across campus, in the app, on your Mac and on the web.</p></div>
-    </div>
-    <div class="stats">
-      <div><b>8</b><span>shuttle services</span></div>
-      <div><b>Live</b><span>times from NUS's shuttle feed</span></div>
-      <div><b>0</b><span>passwords to set up</span></div>
     </div>
   </section>
 
