@@ -129,6 +129,7 @@ internal fun BusesScreen(
     pins: List<String>,
     onPin: (String) -> Unit,
     onShowOnMap: (String) -> Unit,
+    pinsKnown: Boolean = true,
     publicBuses: Boolean = false,
     pinLimit: Int = sh.rcn.terminus.Limits.DEFAULT.pinnedStops,
 ) {
@@ -142,8 +143,8 @@ internal fun BusesScreen(
     // Each stop or line opened slides over the last, and a back gesture can seek between them.
     PageStack(state.stack, onBack = vm::back, Modifier.fillMaxSize().padding(bottom = insets.calculateBottomPadding())) { top ->
         when (top) {
-            null -> Home(state, vm, pins, onPin, bar)
-            is BusRoute.Stop -> StopRoute(state, vm, top.code, pins, onPin, bar)
+            null -> Home(state, vm, pins, pinsKnown, onPin, bar)
+            is BusRoute.Stop -> StopRoute(state, vm, top.code, pins, pinsKnown, onPin, bar)
             is BusRoute.Line -> LineRoute(state, vm, top, onShowOnMap, bar)
         }
     }
@@ -184,7 +185,7 @@ private fun ticking(): Long {
 }
 
 @Composable
-private fun Home(state: BusesUi, vm: BusesViewModel, pins: List<String>, onPin: (String) -> Unit, top: Dp) {
+private fun Home(state: BusesUi, vm: BusesViewModel, pins: List<String>, pinsKnown: Boolean, onPin: (String) -> Unit, top: Dp) {
     var query by rememberSaveable { mutableStateOf("") }
     BackHandler(enabled = query.isNotEmpty()) { query = "" }
     val pinned = Pins.shown(pins, vm.pinLimit)
@@ -234,7 +235,14 @@ private fun Home(state: BusesUi, vm: BusesViewModel, pins: List<String>, onPin: 
                 Refreshing(pinned, next = { vm.nextTimedAt = it }) { vm.refreshHome(pinned) }
                 Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
                     Label(stringResource(R.string.buses_pinned), Modifier.padding(top = 16.dp, bottom = 4.dp))
-                    if (pinned.isEmpty()) NoPins()
+                    // Before the profile has come, "nothing pinned" may not be true.
+                    if (!pinsKnown)
+                        Text(
+                            stringResource(R.string.checking),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 16.dp),
+                        )
+                    else if (pinned.isEmpty()) NoPins()
                     for (code in pinned) PinnedStop(state, vm, code, pins, onPin)
                     Row(Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Label(stringResource(R.string.buses_group_services), Modifier.padding(end = 12.dp))
@@ -296,7 +304,14 @@ private fun PinnedStop(state: BusesUi, vm: BusesViewModel, code: String, pins: L
                 modifier = Modifier.size(20.dp),
             )
         }
-        PinStar(code, pins, vm.pinLimit, onPin, Modifier.padding(start = 8.dp).size(44.dp).background(c.surfaceVariant, CircleShape))
+        PinStar(
+            code,
+            pins,
+            vm.pinLimit,
+            onPin,
+            Modifier.padding(start = 8.dp).size(44.dp).background(c.surfaceVariant, CircleShape),
+            name = stopName(state, code),
+        )
     }
     BoardCard(
         state.boards[code],
@@ -515,7 +530,15 @@ private fun SearchResults(state: BusesUi, query: String, onPick: (BusHit) -> Uni
 
 /** A stop opened from the search or a line: its page, with Back. */
 @Composable
-private fun StopRoute(state: BusesUi, vm: BusesViewModel, code: String, pins: List<String>, onPin: (String) -> Unit, top: Dp) {
+private fun StopRoute(
+    state: BusesUi,
+    vm: BusesViewModel,
+    code: String,
+    pins: List<String>,
+    pinsKnown: Boolean,
+    onPin: (String) -> Unit,
+    top: Dp,
+) {
     Refreshing(code, state.across, next = { vm.nextTimedAt = it }) { vm.refreshPage(code) }
     val phase = skyPhase()
     val scroll = rememberScrollState()
@@ -528,7 +551,7 @@ private fun StopRoute(state: BusesUi, vm: BusesViewModel, code: String, pins: Li
                         BackRow(stringResource(R.string.back), Modifier.pullLead(pull)) { vm.back() }
                         PullRoom(below = 8.dp)
                         val label = if (code in pins) stringResource(R.string.buses_pinned) else null
-                        StopHeader(state, vm, code, label, pins = pins, onPin = onPin)
+                        StopHeader(state, vm, code, label, pins = pins, pinsKnown = pinsKnown, onPin = onPin)
                     }
                 }
                 Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
@@ -578,7 +601,15 @@ private fun BackRow(text: String, modifier: Modifier = Modifier, trailing: @Comp
  * and the star is for that one.
  */
 @Composable
-private fun StopHeader(state: BusesUi, vm: BusesViewModel, code: String, label: String?, pins: List<String>, onPin: (String) -> Unit) {
+private fun StopHeader(
+    state: BusesUi,
+    vm: BusesViewModel,
+    code: String,
+    label: String?,
+    pins: List<String>,
+    pinsKnown: Boolean,
+    onPin: (String) -> Unit,
+) {
     val own = state.boards[code]
     val opposite = own?.opposite
     val across = opposite != null && code in state.across
@@ -599,7 +630,14 @@ private fun StopHeader(state: BusesUi, vm: BusesViewModel, code: String, label: 
             Text(shownCode, style = MaterialTheme.typography.labelMedium, color = c.onSurfaceVariant, letterSpacing = 0.8.sp)
         }
         // A pane of the sky's glass, as the search is.
-        PinStar(shownCode, pins, vm.pinLimit, onPin, Modifier.padding(start = 8.dp).size(44.dp).background(c.surfaceVariant, CircleShape))
+        if (pinsKnown)
+            PinStar(
+                shownCode,
+                pins,
+                vm.pinLimit,
+                onPin,
+                Modifier.padding(start = 8.dp).size(44.dp).background(c.surfaceVariant, CircleShape),
+            )
     }
 }
 
@@ -1172,8 +1210,13 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
                 Box(Modifier.onSizeChanged { band = it.height }) {
                     SkyBand(phase, top, moonLow = true) {
                         Column {
+                            // Back says where it goes: the page under this one, else the tab's home.
                             BackRow(
-                                route.from?.let { stopName(state, it) } ?: stringResource(R.string.back),
+                                when (val under = state.stack.getOrNull(state.stack.size - 2)) {
+                                    is BusRoute.Stop -> stopName(state, under.code)
+                                    is BusRoute.Line -> under.svc
+                                    null -> stringResource(R.string.tab_buses)
+                                },
                                 Modifier.pullLead(pull),
                                 trailing = {
                                     TextButton(onClick = { onShowOnMap(route.svc) }) {

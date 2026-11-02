@@ -56,9 +56,16 @@ import sh.rcn.terminus.R
 /**
  * A stop's name plate, as on the pole: a shade off the card with a hairline under it, the bus mark in the accent, the name, and anything to
  * say about it at the end (the walk there, a button), quieter. Not inverted: in the dark a near-white plate would glare off every stop.
+ * [onName] is on the mark and the name alone (a tap there), so a button at the end isn't inside it.
  */
 @Composable
-internal fun StopPlate(name: String, modifier: Modifier = Modifier, big: Boolean = false, trailing: @Composable RowScope.() -> Unit = {}) {
+internal fun StopPlate(
+    name: String,
+    modifier: Modifier = Modifier,
+    big: Boolean = false,
+    onName: Modifier = Modifier,
+    trailing: @Composable RowScope.() -> Unit = {},
+) {
     val c = MaterialTheme.colorScheme
     Row(
         modifier
@@ -67,31 +74,40 @@ internal fun StopPlate(name: String, modifier: Modifier = Modifier, big: Boolean
             .drawBehind {
                 drawLine(c.outlineVariant, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx())
             }
-            .padding(start = 14.dp, end = 8.dp)
-            .heightIn(min = if (big) 46.dp else 38.dp),
+            .padding(end = 8.dp)
+            // The nearest stop's plate stays the larger with a 48 dp button at its end.
+            .heightIn(min = if (big) 54.dp else 38.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Icon(
-            painterResource(R.drawable.ic_bus),
-            contentDescription = null,
-            tint = c.primary,
-            modifier = Modifier.size(if (big) 18.dp else 16.dp),
-        )
-        Text(
-            name,
-            color = c.onSurface,
-            fontWeight = FontWeight.Bold,
-            fontSize = if (big) 17.sp else 15.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
+        Row(
+            Modifier.weight(1f).heightIn(min = if (big) 54.dp else 38.dp).then(onName).padding(start = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(
+                painterResource(R.drawable.ic_bus),
+                contentDescription = null,
+                tint = c.primary,
+                modifier = Modifier.size(if (big) 18.dp else 16.dp),
+            )
+            Text(
+                name,
+                color = c.onSurface,
+                fontWeight = FontWeight.Bold,
+                fontSize = if (big) 17.sp else 15.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+        }
         CompositionLocalProvider(LocalContentColor provides c.onSurfaceVariant) { trailing() }
     }
 }
 
-/** A stop's sign: the plate ([plate] on it alone: a tap on the name), then what's under it. Rounded, with a hairline round the lot. */
+/**
+ * A stop's sign: the plate ([plate] on its name alone: a tap on the name), then what's under it. Rounded, with a hairline round the lot.
+ */
 @Composable
 internal fun StopSign(
     name: String,
@@ -105,7 +121,7 @@ internal fun StopSign(
     Column(
         modifier.clip(shape).background(MaterialTheme.colorScheme.surface).border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)
     ) {
-        StopPlate(name, plate, big = big, trailing = trailing)
+        StopPlate(name, big = big, onName = plate, trailing = trailing)
         content()
     }
 }

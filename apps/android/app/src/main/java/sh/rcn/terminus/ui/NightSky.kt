@@ -847,10 +847,10 @@ private val LOW_STARS =
  * low horizon (just the hills, no road). The page's controls stay on the plain page under it. It's the top of the page's scroll, not pinned
  * over it, so the page is one piece that scrolls away under a [StatusStrip], as Now's sky does. As the web's (.page-band).
  *
- * A taller band (the Stops tab's search and stop) puts the moon low on the right, just over the hills, with the stars beside it, clear of a
- * button at the top right ([moonLow]), on a line of its own unless the content's last one has room on the right ([moonLine]). Unpadded,
- * [content] runs edge to edge and keeps its own margins: a pager in it swipes off the screen's edges rather than 16 dp in. Without [moon],
- * no moon or stars: a band with only a field in it.
+ * A taller band (the Stops tab's search and title, a stop's page) puts the moon low on the right, just over the hills, with the stars
+ * beside it, clear of a button at the top right ([moonLow]), on a line of its own unless the content's last one has room on the right
+ * ([moonLine]). Unpadded, [content] runs edge to edge and keeps its own margins. Without [moon], no moon or stars: a band with only a field
+ * in it.
  */
 @Composable
 internal fun SkyBand(

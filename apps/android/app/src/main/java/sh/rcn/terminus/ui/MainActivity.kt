@@ -320,7 +320,7 @@ private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel,
             account.setupShown()
         }
     }
-    // Signed in and set up: Now · Buses · Map · Settings along the bottom.
+    // Signed in and set up: Now · Stops · Map · Settings along the bottom.
     if (state.paired && !setup && screen == Screen.Main) {
         Tabs(
             tab,
@@ -435,8 +435,8 @@ private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel,
 }
 
 /**
- * Now · Buses · Map · Settings. Now scrolls under the status bar (its sky reaches the top), and the map runs under it, with its pills below
- * it. Buses and Settings are edge to edge too, keeping the insets inside.
+ * Now · Stops · Map · Settings. Now scrolls under the status bar (its sky reaches the top), and the map runs under it, with its pills below
+ * it. Stops and Settings are edge to edge too, keeping the insets inside.
  */
 @Composable
 private fun Tabs(
@@ -457,6 +457,8 @@ private fun Tabs(
     val settingsAgain = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
     // The pinned stops are the profile's, starred on the Stops tab or in Nearby.
     val pins = acct.profile?.pinnedStops.orEmpty()
+    // Until the profile has come, nothing is known to be pinned: no stars to tap, no "nothing pinned".
+    val pinsKnown = acct.profile != null
     val pinLimit = (acct.profile?.limits ?: sh.rcn.terminus.Limits.DEFAULT).pinnedStops
     val onPin = { code: String ->
         // Pin or unpin as the tap meant on the pins shown, also when it's saved on a newer profile.
@@ -485,7 +487,7 @@ private fun Tabs(
                         onClick = {
                             if (t == Tab.Now && tab != Tab.Now) vm.load(restart = true)
                             if (t == Tab.Settings && tab == Tab.Settings) settingsAgain.tryEmit(Unit)
-                            // Buses tapped while on it: back to its home, from a line or a stop.
+                            // Stops tapped while on it: back to its home, from a line or a stop.
                             if (t == Tab.Buses && tab == Tab.Buses) buses.home()
                             // Map tapped while on it: the whole campus, nothing open or chosen.
                             if (t == Tab.Map && tab == Tab.Map) map.home()
@@ -498,7 +500,7 @@ private fun Tabs(
             }
         },
     ) { inner ->
-        // Back from Buses, Map or Settings goes to Now, as from any other tab bar.
+        // Back from Stops, Map or Settings goes to Now, as from any other tab bar.
         BackHandler(enabled = tab != Tab.Now) {
             onTab(Tab.Now)
             vm.load(restart = true)
@@ -571,6 +573,7 @@ private fun Tabs(
                                 buses,
                                 insets = inner,
                                 pins = pins,
+                                pinsKnown = pinsKnown,
                                 publicBuses = acct.profile?.publicBuses == true,
                                 pinLimit = pinLimit,
                                 onPin = onPin,
@@ -615,6 +618,7 @@ private fun Tabs(
                                 nearby =
                                     NearbyActions(
                                         pins,
+                                        pinsKnown,
                                         pinLimit,
                                         onPin,
                                         openStop = { openStops(BusRoute.Stop(it)) },

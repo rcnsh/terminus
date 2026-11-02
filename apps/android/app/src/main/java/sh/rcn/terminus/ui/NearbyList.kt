@@ -51,6 +51,8 @@ import sh.rcn.terminus.parseColor
  */
 internal class NearbyActions(
     val pins: List<String>,
+    /** The profile has come, so [pins] are what's pinned: until then, no stars. */
+    val pinsKnown: Boolean,
     val pinLimit: Int,
     val onPin: (String) -> Unit,
     val openStop: (String) -> Unit,
@@ -83,7 +85,7 @@ internal fun NearbyList(stops: List<NearbyStop>?, loading: Boolean, act: NearbyA
                         if (s.walkS < 60) stringResource(R.string.here) else stringResource(R.string.min_walk, (s.walkS + 30) / 60),
                         style = MaterialTheme.typography.labelLarge,
                     )
-                    PinStar(s.code, act.pins, act.pinLimit, act.onPin, name = s.longName ?: s.name)
+                    if (act.pinsKnown) PinStar(s.code, act.pins, act.pinLimit, act.onPin, name = s.longName ?: s.name)
                 },
             ) {
                 if (!s.available)
