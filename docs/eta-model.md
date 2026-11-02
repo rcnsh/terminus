@@ -23,7 +23,8 @@ needs before it answers anyone. The backtest's numbers are in
 - **The one poller** is the timelapse recorder (`src/map/timelapse.ts`,
   `src/map/timelapsedo.ts`): every service's buses every 30 s, 06:30 to 00:30,
   through `getBuses()`, bounded by CLAUDE.md rule 2. It keeps each bus's
-  own track position (metres along its line, not the drawn spot).
+  own track position (metres along its line, not the drawn spot), from
+  tracks it keeps itself.
 
 ## What history already exists
 
@@ -97,6 +98,40 @@ beyond the language.
 
 Nothing in the answer path calls it. Users see the feed's times as before.
 
+### Why an answer is far off
+
+An answer over 5 minutes off (`MISS_S`) is a **miss**. The feed's misses
+are about 1 question in 20 and nearly half its error, so each method's
+share of misses (`ErrorStats.miss`) is scored beside its MAE, and each of
+the feed's misses is put down to the first cause that fits (`causeOf`, on
+what `casesOf` keeps about the bus in `Case.why`):
+
+1. **Went by** (`wentBy`): two of the bus's passings in a row span the
+   stop, with at most 3 stops and 10 minutes between, the bus passing it
+   (halfway between them) after the question, or up to a minute before
+   for a bus said to be about there (`earlyS`). It was never seen there,
+   so the arrival it's scored against is its next lap's: an error in the
+   scoring, not the feed. Two passings at one stop are a bus waiting, not
+   a lap.
+2. **At the stop**: the stop the bus was last seen reaching is the one
+   asked about. It may still be there, and the arrival scored its next
+   lap's.
+3. **Stuck**: the feed gave that bus about the same time at that stop
+   (within a minute) for 3 minutes or more, in reads no more than 5
+   minutes apart (`steadyS`).
+4. **Unseen**: the bus wasn't seen reaching a stop in the last 20
+   minutes. History can't answer these, so they're only in the backtest's
+   unscored count, and the dashboard has no row for them.
+5. **First stop**: the way to the stop leaves a route's first stop, where
+   buses wait for their departure time, or the stop is one, where buses
+   queue and an arrival is unclear.
+6. **Held**: the bus is far overdue on its current segment (`heldAfterS`).
+7. **Other.**
+
+`scoreCases` returns the misses by cause (`Misses`): how many, how many
+came later than said, and every method's summed error on them, so days
+add up.
+
 ## The backtest (`scripts/probes/eta_backtest.mjs`)
 
 Fits the model on the earlier data and scores the feed, the corrected
@@ -106,9 +141,14 @@ answer, with the share given). The gated methods fall back to the feed's
 time where the gate refuses, as they would be served; a second table
 compares them with the feed on just the questions the gate lets through.
 `--recent-min`, `--recent-n` and `--recent-prior` change the buses just
-ahead's settings. It reports
-MAE, the median and 90th-percentile absolute error and the mean signed
-error, overall and by horizon. Errors are the actual arrival minus the
+ahead's settings. With `--walk-from <date>`, each day from that one on is
+answered by a model fitted on the 28 days before it, and the days'
+questions are scored together. Unlike the shadow, which takes the bias
+from eta.ts's rows and the weights from earlier days' grids, it fits both
+on those days' own questions (`fitModel`). It reports
+MAE, the median and 90th-percentile absolute error, the mean signed
+error and the share over 5 minutes off, overall and by horizon, then the
+feed's misses by cause and by horizon. Errors are the actual arrival minus the
 time given: positive is the bus coming later.
 
 What counts as the actual arrival (`actualFor`): the first arrival of that
@@ -137,6 +177,13 @@ curl -s "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/analytics_
 node scripts/probes/eta_backtest.mjs --day /tmp/day-2026-10-20.json.gz --predictions /tmp/ae.json \
   --day /tmp/day-2026-10-21.json.gz --predictions /tmp/ae.json --out /tmp/backtest.md
 ```
+
+The Cloudflare login on the owner's Mac can read both: `cf r2 objects
+list --bucket-name terminus --prefix timelapse/` and `cf r2 objects get
+<key> --bucket-name terminus > <file>` for the days, and its OAuth token
+(`oauth_token` in `cf`'s config file) for the SQL API, with
+`_sample_interval AS w` added to the query to weight sampled rows. Every
+day then goes in with `--walk-from`.
 
 Each `--day` keeps only the predictions inside its own recording window,
 each cached answer once, so one predictions file can serve every day. With
@@ -173,13 +220,17 @@ too scores the last 28 days oldest first, so the two move together:
    (`eta/segments/<date>.json`), the feed's errors (`eta/<date>.json`'s
    rows) and their weight grids;
 2. it answers each of the day's plated predictions every way, and keeps the
-   errors and the day's weight grid as `eta/model/<date>.json`;
+   errors, the feed's misses by cause and the day's weight grid as
+   `eta/model/<date>.json`;
 3. it keeps the day's own segment times.
 
 It writes only those two files to the R2 bucket and calls no one
 but Analytics Engine. Each day is scored by a model that never saw it.
 When the model changes, `ShadowDay.v` goes up, and every recorded day of
-the last 28 is run again, oldest first, one every 15 minutes. When how
+the last 28 is run again, oldest first, one every 15 minutes. A version
+that keeps more without answering differently (3 added the misses) lists
+the one before in `SAME_MODEL`: its days still show and their grids still
+count until they're run again. When how
 eta.ts scores a day changes, `ETA_V` goes up: it scores the 28 days again,
 and the shadow runs each again once it has.
 

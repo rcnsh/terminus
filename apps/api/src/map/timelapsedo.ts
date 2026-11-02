@@ -15,7 +15,7 @@ import { TIMELAPSE } from '../config.ts';
 import { scopeCache } from '../feeds/edgecache.ts';
 import { GRAPH } from '../answer/graph.ts';
 import { breakerOpen, getBuses } from '../feeds/fms.ts';
-import { trackedPlacement } from './buses.ts';
+import { placeBuses, type Track } from './buses.ts';
 import { inService } from '../answer/resolve.ts';
 import { logPoll } from '../ops/analytics.ts';
 import { loadCalendar } from '../timetable/calendarsync.ts';
@@ -345,8 +345,13 @@ export class TimelapseRecorder {
         return live.stale ? null : live.buses.length;
       }
       logPoll(env, upstream ? 'upstream' : 'hit', svc, live.buses.length);
-      // Placed as the map places them, so `along` is the bus's own place on its line.
-      const placed = await trackedPlacement(GRAPH, svc, live, ctx);
+      // Placed as the map places them, so `along` is the bus's own place on
+      // its line, from tracks kept here: the map's, in the edge cache, don't
+      // come back to this object between polls. Placed afresh, a bus on a
+      // road its line takes both ways can land on the far side, and loses
+      // its passings there (docs/eta-backtest.md, round 5).
+      const tracksKey = `tracks:${svc}`;
+      const placed = await placeBuses(GRAPH, svc, live.buses, live.fetchedAt, this.read<Record<string, Track>>(tracksKey) ?? {});
       // Measured on today's line only: after a deploy that changed it, the
       // positions are kept and the metres along aren't (the replay leaves
       // those buses out rather than draw them in the wrong place).
@@ -366,6 +371,7 @@ export class TimelapseRecorder {
       this.storage.transactionSync(() => {
         this.schema().exec('INSERT INTO samples (dt, svc, buses) VALUES (?, ?, ?)', dt, svc, JSON.stringify(buses));
         this.write('meta', next);
+        this.write(tracksKey, placed.tracks);
       });
       meta.lastT = next.lastT;
       meta.last = next.last;

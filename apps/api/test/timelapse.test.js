@@ -28,7 +28,7 @@ import {
   windowOf,
 } from '../src/map/timelapse.ts';
 import { getBuses } from '../src/feeds/fms.ts';
-import { pointAlong } from '../src/map/buses.ts';
+import { alongNear, pointAlong } from '../src/map/buses.ts';
 import { shapeFor } from '../src/map/campus.ts';
 import { inService } from '../src/answer/resolve.ts';
 import { GRAPH } from '../src/answer/graph.ts';
@@ -602,6 +602,39 @@ test("a reading keeps each bus's plate, position and metres along its line, as b
   assert.ok(
     haversineM(tracks.PD111A.lat, tracks.PD111A.lon, busOn('D2', 400).lat, busOn('D2', 400).lng) < 1.6,
     'quantised to about a metre',
+  );
+});
+
+test('the recorder keeps its own tracks: a bus stays on its side of a road its line takes both ways', async () => {
+  // On D2's real line, a spot where the other way along the same road is within 20 m.
+  const shape = shapeFor('D2', GRAPH.routes.D2);
+  const total = shape.at.at(-1);
+  let mine = null;
+  let far = null;
+  for (let m = 300; m < total - 300 && far === null; m += 10) {
+    const p = pointAlong(shape, m);
+    const other = alongNear(shape, p.lat, p.lon, 20).find((a) => Math.abs(a - m) > 600);
+    if (other !== undefined) [mine, far] = [m, other];
+  }
+  assert.ok(far !== null, 'D2 has a road it takes both ways');
+  const [a, b] = [pointAlong(shape, mine), pointAlong(shape, far)];
+  // Standing still (no heading), a little nearer the far side: with no track, that's where it would go.
+  const standing = { ...busOn('D2', mine), lat: a.lat + (b.lat - a.lat) * 0.6, lng: a.lon + (b.lon - a.lon) * 0.6, speed: 0 };
+  const h = harness({ buses: { D2: [busOn('D2', mine - 150)] } });
+  await start(h);
+  await runUntil(h, FROZEN_NOW + 30_000 - 1);
+  h.buses.D2 = [standing];
+  // The edge cache keeps nothing for the recorder between polls, as in production.
+  const forget = async () => {
+    for (const k of h.cache._store.keys()) if (k.includes('/bus-tracks/')) h.cache._store.delete(k);
+  };
+  await runUntil(h, FROZEN_NOW + 60_000 - 1, forget);
+  const res = await h.ns.get(DATE).fetch(`https://timelapse.internal/day?date=${DATE}`);
+  const pts = decodeDay(await gunzip(new Uint8Array(await res.arrayBuffer()))).tracks.find((t) => t.plate === 'PXD21').pts;
+  assert.equal(pts.length, 2);
+  assert.ok(
+    Math.abs(pts[1].along - mine) < 30,
+    `at ${Math.round(pts[1].along)}, not across the road at ${Math.round(far)} (its side: ${mine})`,
   );
 });
 

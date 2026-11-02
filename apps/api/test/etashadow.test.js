@@ -75,7 +75,7 @@ test('each day is answered by the model of the days before it, oldest first, onc
   await bucket.put(etaKey(DAYS[0]), JSON.stringify({ v: 1, date: DAYS[0], predictions: 0, matched: 0, services: [], rows: [] }));
   assert.equal(await shadowEta(env, now, fetchImpl), null, 'the older day scored the older way: still waiting');
   assert.equal(await recordEta(env, now, fetchImpl), DAYS[0], 'scored again');
-  assert.equal(readJson(bucket, etaKey(DAYS[0])).v, 2);
+  assert.equal(readJson(bucket, etaKey(DAYS[0])).v, 3);
   assert.equal(await recordEta(env, now, fetchImpl), DAYS[1]);
   assert.equal(await recordEta(env, now, fetchImpl), null, 'both scored');
 
@@ -98,16 +98,38 @@ test('each day is answered by the model of the days before it, oldest first, onc
   assert.ok(second.overall.corrected.mae <= 1);
   assert.ok(second.overall.history.mae <= 15, `history ${second.overall.history.mae} s out: the bus's last stop, read every 30 s`);
   assert.deepEqual(second.grid.n, [0, 1, 0, 0], 'one case, said 2 to 5 minutes ahead');
+  assert.equal(second.overall.feed.miss, 0, '90 s out: no miss');
+  assert.deepEqual(
+    Object.values(second.misses).map((o) => o.n),
+    [0, 0, 0, 0, 0, 0, 0],
+    'the misses, by cause, kept',
+  );
 
   assert.equal(await shadowEta(env, now, fetchImpl), null, 'both done');
   // A day kept by an older model is run again.
   await bucket.put(shadowKey(DAYS[0]), JSON.stringify({ ...first, v: 1 }));
   assert.equal(await shadowEta(env, now, fetchImpl), DAYS[0]);
-  assert.equal(readJson(bucket, shadowKey(DAYS[0])).v, 2);
+  assert.equal(readJson(bucket, shadowKey(DAYS[0])).v, 3);
   assert.deepEqual(
     (await shadowSummary(env, now)).days.map((d) => d.date),
     DAYS,
   );
+  // Version 2 answered as this model does, without the misses: shown, and
+  // its grid counted, until it's run again.
+  const { misses: _misses, ...older } = second;
+  // A grid where all weight on history erred least, under 2 minutes.
+  const grid = { sums: [[10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0], [], [], []], n: [1, 0, 0, 0] };
+  await bucket.put(shadowKey(DAYS[1]), JSON.stringify({ ...older, v: 2, grid }), { customMetadata: { v: '2' } });
+  assert.deepEqual(
+    (await shadowSummary(env, now)).days.map((d) => [d.date, d.v]),
+    [
+      [DAYS[0], 3],
+      [DAYS[1], 2],
+    ],
+  );
+  assert.equal((await modelBefore(bucket, '2026-08-27')).model.weights[0], 1, "version 2's grid counts");
+  assert.equal(await shadowEta(env, now, fetchImpl), DAYS[1], 'and run again');
+  assert.equal(readJson(bucket, shadowKey(DAYS[1])).v, 3);
   const { model } = await modelBefore(bucket, '2026-08-27');
   assert.equal(model.bias['K|1'][1], 90, 'the feed is 90 s early for K');
   assert.equal(model.weights[1], 0, 'the corrected feed was exact: no weight on history');
