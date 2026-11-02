@@ -3,7 +3,7 @@ import Foundation
 
 /*
  * Pull to refresh, "the sky stretches": pulled down at the top of its
- * content, Now and the Buses tab stretch their own sky. The room above the
+ * content, Now and the Stops tab stretch their own sky. The room above the
  * card's words (or the stop's name) grows with the pull, the sky's gradient
  * runs down to the horizon's new place, and the horizon is the animation:
  * a bus drives to your stop's sign as you pull, and letting go past the
@@ -165,7 +165,7 @@ struct PullScene: Equatable {
         return PullScene(width: width, sign: sign, home: card.map { Pull.roadBus(sign, $0.far) } ?? (road.shuttle ? shuttleX(width) : nil))
     }
 
-    /// The Buses tab's low hills, `width` units across: no bus of its own.
+    /// The Stops tab's low hills, `width` units across: no bus of its own.
     static func hill(_ width: CGFloat) -> PullScene { PullScene(width: width, sign: Pull.hillSign(width)) }
 }
 

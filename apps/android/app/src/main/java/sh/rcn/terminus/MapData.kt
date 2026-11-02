@@ -72,6 +72,9 @@ data class MapStop(
         get() = longName ?: name
 }
 
+/** A service's stops in the order it calls ([seq], a loop's first stop once), from /api/campus's `routes`. */
+data class ServiceRoute(val svc: String, val seq: List<String>, val loop: Boolean)
+
 /** A service: its colour (ARGB), its path along the roads as [lon, lat] pairs, and whether it's a loop. */
 data class MapRoute(val svc: String, val color: Long, val line: List<DoubleArray>, val loop: Boolean = false) {
     /** [west, south, east, north] of the line. */
@@ -161,13 +164,15 @@ class RoutePath(private val line: List<DoubleArray>, loop: Boolean = false) {
 
 /**
  * [serviceCodes]: every service in /api/campus's routes, drawn or not, in code order. [stopAliases]: each stop's nicknames, from
- * /api/campus's destinations of kind "stop", for the Buses tab's search.
+ * /api/campus's destinations of kind "stop", for the Stops tab's search.
  */
 data class CampusMap(
     val stops: List<MapStop>,
     val routes: Map<String, MapRoute>,
     val serviceCodes: List<String> = routes.keys.sorted(),
     val stopAliases: Map<String, List<String>> = emptyMap(),
+    /** Every service's stops in order, in /api/campus's own order, drawn or not: the Stops tab's list of services. */
+    val lines: List<ServiceRoute> = emptyList(),
 ) {
     /** The services in pill order: A1, A2, D1, … */
     val services: List<String>
@@ -224,8 +229,15 @@ data class CampusMap(
                         )
                     }
                     .filterValues { it.line.size >= 2 }
-            return CampusMap(stops, routes, serviceCodes(r), stopAliases(o.optJSONArray("destinations"))) to core
+            return CampusMap(stops, routes, serviceCodes(r), stopAliases(o.optJSONArray("destinations")), serviceRoutes(r)) to core
         }
+
+        /** Each service's stops and whether it's a loop, in the order /api/campus lists them. */
+        fun serviceRoutes(routes: JSONObject): List<ServiceRoute> =
+            routes.keys().asSequence().toList().map { svc ->
+                val x = routes.optJSONObject(svc) ?: JSONObject()
+                ServiceRoute(svc, x.optJSONArray("seq").stringList(), x.optBoolean("loop"))
+            }
 
         /** Every service in /api/campus's `routes`, in plain code order. */
         fun serviceCodes(routes: JSONObject): List<String> = routes.keys().asSequence().toList().sorted()

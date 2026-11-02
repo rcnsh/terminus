@@ -370,7 +370,7 @@ apps/web/public/
                       as on Android); dom.js has t, api, clock; sky.js (Now's sky
                       and horizon), daylight.js (its colours by the hour), livery.js
                       (the services' stripes)
-  app/                Installed web app: app.js (Now, tabs), buses.js (Buses tab), map.js
+  app/                Installed web app: app.js (Now, tabs), buses.js (Stops tab), map.js
                       (Map tab), board.js (a stop's board, shared by both), map-files.js,
                       offline.js, pull.js (pull to refresh), timing.js (when Now refetches)
   admin/, status/, pair/, privacy/ (the summary; privacy/policy/ the full policy;

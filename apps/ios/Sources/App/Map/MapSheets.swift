@@ -297,7 +297,7 @@ private struct SvcChip: View {
     let hex: String?
     var paid = false
     var faded = false
-    /// Grows with the phone's text size, as the times beside it and the Buses tab's chips do.
+    /// Grows with the phone's text size, as the times beside it and the Stops tab's chips do.
     @ScaledMetric(relativeTo: .body) private var scale: CGFloat = 1
 
     var body: some View {
@@ -317,7 +317,7 @@ private struct SvcChip: View {
 
 // MARK: - A stop
 
-/// A tapped stop: its board as the Buses tab has it, the first few rows
+/// A tapped stop: its board as the Stops tab has it, the first few rows
 /// until asked for the rest, and ways to go there. A row tapped shows its
 /// service on the map, and again hides it.
 struct StopSheet: View {
@@ -377,7 +377,7 @@ struct StopSheet: View {
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
         } else if map.board != nil {
-            // Counted down every second, as the Buses tab's board is, between the 15 s refreshes.
+            // Counted down every second, as the Stops tab's board is, between the 15 s refreshes.
             TimelineView(.periodic(from: .now, by: 1)) { _ in
                 if let board = map.board?.aged(ServerClock.now) {
                     let sorted = board.rows.filter(\.running) + board.rows.filter { !$0.running }
@@ -469,7 +469,7 @@ private struct IconCircle: View {
     }
 }
 
-/// One row of a stop's board, as the Buses tab's, smaller: the service, where
+/// One row of a stop's board, as the Stops tab's, smaller: the service, where
 /// it goes and its next stop, how sure the time is when it isn't live and how
 /// full, and the minutes, a green dot beside a live one. Tapped, it shows
 /// its line on the map; the line picked there has its row washed in its colour.

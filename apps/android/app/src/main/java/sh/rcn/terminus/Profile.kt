@@ -53,7 +53,7 @@ class ProfileDoc(val json: JSONObject) {
         json.put("home", if (unique.isEmpty()) JSONObject.NULL else JSONObject().put("stops", JSONArray(unique)))
     }
 
-    /** The stops pinned on the Buses tab, in their order. */
+    /** The stops pinned on the Stops tab, in their order. */
     var pinnedStops: List<String>
         get() = json.optJSONArray("pinnedStops")?.strings().orEmpty()
         set(v) {
@@ -299,7 +299,7 @@ class SavedProfile(val doc: ProfileDoc, val version: String?, val missed: Boolea
 
 /**
  * Saves [changes], made on [base], the profile as the server had it at [version]. With If-Match, so a save never overwrites what another
- * device (or a pin on Buses, a favourite from the map) saved since: refused for that (412), or with no version to go by, only [changes] are
+ * device (or a pin on Stops, a favourite from the map) saved since: refused for that (412), or with no version to go by, only [changes] are
  * made again on the profile as the server has it now ([load]) and saved on that, up to [tries] times.
  */
 suspend fun saveChanges(

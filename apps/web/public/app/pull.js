@@ -106,7 +106,7 @@ function blocked(el) {
   return false;
 }
 
-/** The first of `sel` in the tab on screen that's on screen too: Buses' home has a page per stop, side by side. */
+/** The first of `sel` in the tab on screen that's on screen too. */
 function onScreen(sel) {
   for (const el of document.querySelectorAll(`#root > main:not([hidden]) ${sel}`)) {
     const r = el.getBoundingClientRect();

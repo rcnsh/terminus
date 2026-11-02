@@ -39,7 +39,7 @@ struct MapTab: View {
                 .ignoresSafeArea(edges: .top)
                 // The stops and buses are reached only by a finger on them. To
                 // VoiceOver it says so, and offers the same as a list.
-                .accessibilityLabel(L("Campus map. For stops and buses as a list, use the Buses tab."))
+                .accessibilityLabel(L("Campus map. For stops and buses as a list, use the Stops tab."))
                 .accessibilityAction(named: L("Show as list")) { showList() }
             } else if map.failed {
                 Text(L("The map needs a connection the first time."))
@@ -189,10 +189,15 @@ struct MapTab: View {
         .onChange(of: map.sheet == nil) { _, none in if none { sheetCover = 0 } }
     }
 
-    /// The map as a list, for VoiceOver: the Buses tab, on the open stop or the chosen service's line.
+    /// The map as a list, for VoiceOver: the Stops tab, on the open stop or the chosen service's line.
     private func showList() {
-        if let stop = map.openStop { AppModel.shared.openStop = stop } else if let svc = map.selected { AppModel.shared.openLine = svc }
-        NotificationCenter.default.post(name: .openTab, object: MainTabs.Tab.buses)
+        if let stop = map.openStop {
+            AppModel.shared.showInBuses([.stop(stop)])
+        } else if let svc = map.selected {
+            AppModel.shared.showInBuses([.line(svc: svc, from: nil)])
+        } else {
+            NotificationCenter.default.post(name: .openTab, object: MainTabs.Tab.buses)
+        }
     }
 }
 

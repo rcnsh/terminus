@@ -10,7 +10,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Both searches against the cases every client is held to (fixtures/search.json): the destination search, and the Buses tab's, with its
+ * Both searches against the cases every client is held to (fixtures/search.json): the destination search, and the Stops tab's, with its
  * index built from the fixture's /api/campus.
  */
 class SearchTest {

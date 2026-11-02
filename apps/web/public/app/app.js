@@ -31,12 +31,12 @@ import {
 import { ADDED_PLACES_KEY, api, clock, hour12, inkOn, send, serverNow, signedOut, t } from '/account/dom.js';
 import { Card, InSky, Message, Report, Say, isStale, signal } from '/account/preview.js';
 import { Celestial, Horizon, useNowSky, useSkyPhase } from '/account/sky.js';
-import { Toast, campus, lists, loadCampus, loadProfile, profile, reloadProfile, toast, walkSpeed } from '/account/profile.js';
+import { Toast, campus, lists, loadCampus, loadProfile, profile, reloadProfile, toast, togglePin, walkSpeed } from '/account/profile.js';
 import { SearchBox } from '/account/search-box.js';
-// Not used here: loaded with the page so that the Buses and Map tabs, which
-// both import it, don't depend on it arriving later (a failed import can't be
-// retried at the same address; loadTab's retry renews only the tab's file).
-import '/app/board.js';
+// Loaded with the page (its icons are used here too) so that the Stops and Map
+// tabs, which both import it, don't depend on it arriving later (a failed import
+// can't be retried at the same address; loadTab's retry renews only the tab's file).
+import { NEXT, STAR } from '/app/board.js';
 import { offlineNext } from '/app/offline.js';
 import { preloadMap } from '/app/map-files.js';
 import {
@@ -91,14 +91,12 @@ const undo = store(null);
 const searching = store(false);
 /** /api/me, once fetched: who's signed in. */
 const me = store(null);
-/** Now, Buses, Map or Settings; null until the first draw. */
+/** Now, Stops (`buses`), Map or Settings; null until the first draw. */
 const tab = store(null);
-/** app/buses.js, once the Buses tab has been opened. */
+/** app/buses.js, once the Stops tab has been opened. */
 const busesModule = store(null);
 /** app/map.js, once the map has been opened. */
 const mapModule = store(null);
-/** A stop to open on the map once it's on screen (a stop tapped in Nearby). */
-const stopToShow = store(null);
 /** Settings: account/settings.js once loaded, or why not. */
 const settings = store({ status: 'idle', mod: null });
 /** A NUSMods link shared to the app, for Settings to offer to import. */
@@ -454,7 +452,7 @@ async function pullNow() {
   return fetchedAt >= asked ? 'updated' : 'failed';
 }
 
-/** Pulled down on the tab on screen: Now, or Buses once it has loaded. */
+/** Pulled down on the tab on screen: Now, or Stops once it has loaded. */
 function pullTab() {
   if (tab.get() === 'now') return pullNow();
   return busesModule.get()?.pullRefresh?.() ?? Promise.resolve('failed');
@@ -596,7 +594,7 @@ const fadeOut = (node) =>
   node.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 90, easing: 'cubic-bezier(0.4, 0, 1, 1)', fill: 'forwards' });
 
 /**
- * Now, Buses, Map or Settings, from the address (#buses, #buses/line/D1,
+ * Now, Stops, Map or Settings, from the address (#buses, #buses/line/D1,
  * #map, #settings, #settings/trips),
  * so Back and a reload keep the tab. The sections are shown and hidden here,
  * not by Preact, so the fade can swap them between its two halves.
@@ -990,6 +988,9 @@ const mins = (s) => Math.round(s / 60);
 /** A bus from the side, for a stop's name plate. */
 const BUS =
   '<rect x="4.5" y="3" width="15" height="15" rx="3"/><path d="M4.5 11h15M8 21v-3M16 21v-3"/><circle cx="8.5" cy="14.5" r="1" fill="currentColor"/><circle cx="15.5" cy="14.5" r="1" fill="currentColor"/>';
+/** A bus stop's sign on its pole: the Stops tab, and Nearby's way to it. */
+const STOP_SIGN = '<rect x="6" y="2.5" width="12" height="9.5" rx="2.5"/><path d="M12 12v9.5M9 21.5h6M9.5 7.25h5"/>';
+
 /** How far up the road a bus is drawn: this many seconds away is the far end. */
 const ROAD_S = 15 * 60;
 
@@ -1014,10 +1015,18 @@ const etaText = (b) =>
  * there, then a row per service, its buses coming up a short road towards
  * the stop, nearer the sooner they're due, the next one solid and the rest
  * faded. The nearest stop is drawn larger. An estimate is an outline,
- * never a filled bus, so it doesn't pass for live. The name opens the stop
- * on the map.
+ * never a filled bus, so it doesn't pass for live. The name opens the
+ * stop's board and a row its service's line, both in the Stops tab; the star
+ * pins the stop there. Last, the way to the Stops tab, for any other stop.
  */
 function NearbyCard({ stops }) {
+  const p = useStore(profile);
+  const pinned = p?.pinnedStops ?? [];
+  // Until the profile has come, what's pinned isn't known: no star to read wrong, or to unpin with.
+  // Now doesn't need it otherwise, so Nearby asks for it (the account, not the feed).
+  useEffect(() => {
+    if (!profile.get()) loadProfile().catch(() => {});
+  }, []);
   // Heard once for these stops, not again on every refresh: their names.
   const names = stops.map((s) => s.stop.name).join(', ');
   return html`
@@ -1029,22 +1038,31 @@ function NearbyCard({ stops }) {
           <section class=${i === 0 ? 'stop-sign nearest' : 'stop-sign'} key=${s.stop.code}>
             <header class="plate">
               <${Icon} paths=${BUS} class="plate-bus" />
-              <button
-                type="button"
-                class="plate-name"
-                aria-label=${t('{0} on the map', s.stop.name)}
-                onClick=${() => {
-                  stopToShow.set(s.stop.code);
-                  location.hash = '#map';
-                }}
-              >${s.stop.name}</button>
+              <button type="button" class="plate-name" onClick=${() => (location.hash = `#buses/stop/${encodeURIComponent(s.stop.code)}`)}>
+                ${s.stop.name}
+              </button>
               <span class="plate-walk">${t('{0} min walk', Math.max(1, mins(s.walkS)))}</span>
+              ${
+                p &&
+                html`<button
+                type="button"
+                class=${`plate-star${pinned.includes(s.stop.code) ? ' on' : ''}`}
+                aria-pressed=${String(pinned.includes(s.stop.code))}
+                aria-label=${pinned.includes(s.stop.code) ? t('Unpin {0}', s.stop.name) : t('Pin {0}', s.stop.name)}
+                onClick=${() => togglePin(s.stop.code)}
+              >
+                <${Icon} paths=${STAR} />
+              </button>`
+              }
             </header>
             ${
               s.board.length
-                ? s.board.map(
-                    (b) => html`
-                    <div class="nearby-row" key=${b.svc}>
+                ? s.board.map((b) => {
+                    const go = () => (location.hash = `#buses/line/${encodeURIComponent(b.svc)}/${encodeURIComponent(s.stop.code)}`);
+                    // A public bus has no line page, as on a stop's board.
+                    const Tag = b.paid ? 'div' : 'button';
+                    return html`
+                    <${Tag} type=${b.paid ? undefined : 'button'} class="nearby-row" key=${b.svc} onClick=${b.paid ? undefined : go}>
                       <span class="svc-col"
                         ><span class="svc-tag" style=${b.color ? `--svc:${b.color};--svc-ink:${inkOn(b.color)}` : ''}
                           >${b.svc}${b.paid && html`<span class="fare" role="img" aria-label=${t('Public bus, fare applies')}>$</span>`}</span
@@ -1054,14 +1072,19 @@ function NearbyCard({ stops }) {
                         >${[...(b.later ?? []), ...(b.etaS != null ? [b] : [])].map((bus, j) => html`<${RoadBus} key=${bus === b ? 'next' : j} bus=${bus} next=${bus === b} />`)}</span
                       >
                       <span class="eta">${etaText(b)}</span>
-                    </div>
-                  `,
-                  )
+                    <//>
+                  `;
+                  })
                 : html`<div class="detail">${s.available ? t('No buses due') : t('No times right now')}</div>`
             }
           </section>
         `,
       )}
+      <button type="button" class="to-stops" onClick=${() => (location.hash = '#buses')}>
+        <${Icon} paths=${STOP_SIGN} class="to-stops-icon" />
+        <span><b>${t('Another stop, or a whole line')}</b><span>${t('Search, pinned stops and services are in Stops.')}</span></span>
+        <${Icon} paths=${NEXT} class="to-stops-go" />
+      </button>
     </div>
   `;
 }
@@ -1337,18 +1360,17 @@ function Banner() {
 function BusesArea() {
   const mod = useStore(busesModule);
   const now = useStore(tab);
-  if (mod?.failed) return html`<p class="hint">${t('Buses need a connection.')}</p>`;
+  if (mod?.failed) return html`<p class="hint">${t('Stops need a connection.')}</p>`;
   if (!mod) return html`<p class="hint">${t('Loading…')}</p>`;
-  return html`<${mod.BusesTab} visible=${now === 'buses'} here=${here} />`;
+  return html`<${mod.BusesTab} visible=${now === 'buses'} />`;
 }
 
 function MapArea() {
   const mod = useStore(mapModule);
   const now = useStore(tab);
-  const focus = useStore(stopToShow);
   if (mod?.failed) return html`<p class="hint">${t('The map needs a connection the first time.')}</p>`;
   if (!mod) return null;
-  return html`<${mod.MapTab} visible=${now === 'map'} focus=${focus} onFocused=${() => stopToShow.set(null)} onGoTo=${goToStop} onSaved=${refresh} />`;
+  return html`<${mod.MapTab} visible=${now === 'map'} onGoTo=${goToStop} onSaved=${refresh} />`;
 }
 
 /** A row of the list as a shape: an icon, a name and what's set. */
@@ -1414,8 +1436,8 @@ const TABBAR = [
   {
     id: 'buses',
     href: '#buses',
-    label: () => t('Buses'),
-    icon: '<rect x="5" y="3" width="14" height="14.5" rx="3"/><path d="M5 10.5h14M8 17.5V20M16 17.5V20"/><path d="M8.5 14h.01M15.5 14h.01"/>',
+    label: () => t('Stops'),
+    icon: STOP_SIGN,
   },
   {
     id: 'map',
@@ -1477,7 +1499,7 @@ function App() {
       <${GoLater} />
       <${Today} />
     </main>
-    <main id="tab-buses" class="wrap buses-tab" hidden=${first !== 'buses'} ref=${keep('buses')}><h1 class="sr-only">${t('Buses')}</h1><${BusesArea} /></main>
+    <main id="tab-buses" class="wrap buses-tab" hidden=${first !== 'buses'} ref=${keep('buses')}><h1 class="sr-only">${t('Stops')}</h1><${BusesArea} /></main>
     <main id="tab-map" class="map-tab" hidden=${first !== 'map'} ref=${keep('map')}><h1 class="sr-only">${t('Map')}</h1><${MapArea} /></main>
     <main id="tab-settings" class="wrap settings-tab" hidden=${first !== 'settings'} ref=${keep('settings')}><${SettingsArea} /></main>
     <${PullToRefresh} enabled=${pullable} refresh=${pullTab} />

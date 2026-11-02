@@ -5,6 +5,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -17,17 +20,12 @@ import sh.rcn.terminus.Board
 import sh.rcn.terminus.BusTimes
 import sh.rcn.terminus.CampusMap
 import sh.rcn.terminus.Line
-import sh.rcn.terminus.Locator
 import sh.rcn.terminus.MapFiles
 import sh.rcn.terminus.Pull
 import sh.rcn.terminus.PullOutcome
 import sh.rcn.terminus.ServerClock
 import sh.rcn.terminus.Session
 import sh.rcn.terminus.Store
-import sh.rcn.terminus.parseInstant
-import sh.rcn.terminus.parseNearby
-import sh.rcn.terminus.widget.NearbyShared
-import sh.rcn.terminus.widget.redrawWidgets
 
 /** A page opened over the tab's home: a stop's board, or a service's line. */
 sealed interface BusRoute {
@@ -37,21 +35,9 @@ sealed interface BusRoute {
     data class Line(val svc: String, val from: String?) : BusRoute
 }
 
-/** Where the nearest stop's page is. */
-enum class Nearest {
-    Loading,
-    Ready,
-    None,
-    Failed,
-}
-
 data class BusesUi(
     /** The stops and services, for the search and names before a board loads. */
     val campus: CampusMap? = null,
-    val nearest: Board? = null,
-    val nearestState: Nearest = Nearest.Loading,
-    /** The nearest stop is from a location; false: from the home stop. */
-    val located: Boolean = false,
     /**
      * Boards by stop code: pinned stops, opened ones, the opposite stops. A failed refresh keeps the last one; the screen shows it
      * [Board.aged].
@@ -71,15 +57,15 @@ data class BusesUi(
 fun lineKey(svc: String, from: String?) = "$svc|${from.orEmpty()}"
 
 /**
- * The Buses tab. The screen drives the refreshing, only while the tab is on screen and the app in front: the page in view every 15 s, the
- * API's own cache, so asking sooner would show nothing new.
+ * The Stops tab. The screen drives the refreshing, only while the tab is on screen and the app in front: the page in view (on the home,
+ * every pinned stop's board) every 15 s, the API's own cache, so asking sooner would show nothing new.
  */
 class BusesViewModel(app: Application) : AndroidViewModel(app) {
     private val store = Store(app)
     private val _state = MutableStateFlow(BusesUi())
     val state: StateFlow<BusesUi> = _state
 
-    /** When each board or line was last asked for, so swiping back and forth doesn't ask again at once. */
+    /** When each board or line was last asked for, so going back and forth between pages doesn't ask again at once. */
     private val asked = mutableMapOf<String, Long>()
 
     private fun api(token: String) = Api(token)
@@ -159,14 +145,28 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
         return if (at - (asked[key] ?: 0) < MIN_GAP_MS) at + BusTimes.REFRESH_MS else at
     }
 
-    /** When new times come for the page for [code] (null: the nearest stop), for its pull. */
-    fun pageNextAt(code: String?): Long? = nextUpdateAt(pageBoard(code) ?: NEAREST)
+    /** When new times come for the page for [code], for its pull. */
+    fun pageNextAt(code: String): Long? = nextUpdateAt(pageBoard(code))
+
+    /** When new times come for the home's pinned stops [codes], for its pull: the soonest of theirs. */
+    fun homeNextAt(codes: List<String>): Long? = codes.mapNotNull(::nextUpdateAt).minOrNull()
 
     /** When new times come for a service's line, for its pull. */
     fun lineNextAt(svc: String, from: String?): Long? = nextUpdateAt("line:${lineKey(svc, from)}")
 
-    /** The page for [code] (null: the nearest stop) pulled down. */
-    suspend fun pullPage(code: String?): PullOutcome = pulled(pageBoard(code) ?: NEAREST) { refreshPage(code, force = true) }
+    /** The page for [code] pulled down. */
+    suspend fun pullPage(code: String): PullOutcome = pulled(pageBoard(code)) { refreshPage(code, force = true) }
+
+    /** The home pulled down: each pinned stop's board, together; updated if any came back, failed if none did and one was asked. */
+    suspend fun pullHome(codes: List<String>): PullOutcome {
+        if (codes.isEmpty()) return PullOutcome.UpToDate
+        val outcomes = coroutineScope { codes.map { code -> async { pulled(code) { refreshBoard(code, force = true) } } }.awaitAll() }
+        return when {
+            PullOutcome.Updated in outcomes -> PullOutcome.Updated
+            PullOutcome.Failed in outcomes -> PullOutcome.Failed
+            else -> PullOutcome.UpToDate
+        }
+    }
 
     suspend fun pullLine(svc: String, from: String?): PullOutcome =
         pulled("line:${lineKey(svc, from)}") { refreshLine(svc, from, force = true) }
@@ -191,58 +191,6 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** The nearest stop, by location, else the home stop; its opposite stop comes with it. */
-    suspend fun refreshNearest(force: Boolean = false) {
-        if (!force && fresh(NEAREST)) return
-        val token = store.token ?: return
-        mark(NEAREST)
-        fetching(NEAREST) { nearest(token) }
-    }
-
-    private suspend fun nearest(token: String) {
-        val ctx = getApplication<Application>()
-        val loc = Locator.lastKnown(ctx, maxAgeMs = 60_000) ?: Locator.current(ctx)
-        try {
-            val json = api(token).nearbyJson(loc?.latitude, loc?.longitude, Locator.accOf(loc), stopped = true)
-            // The Nearby widgets draw this board too: kept for them, and they're redrawn.
-            if (
-                runCatching { store.saveNearby(json, System.currentTimeMillis(), sentWith = token) }.getOrNull() != null &&
-                    NearbyShared.wanted(ctx)
-            )
-                redrawWidgets(ctx)
-            val asOf = json.optString("asOf").takeIf { it.isNotEmpty() }?.let(::parseInstant)
-            val got = ServerClock.now()
-            val stops = parseNearby(json).map { Board.of(it, asOf).copy(gotMs = got) }
-            val first = stops.firstOrNull()
-            answered(NEAREST)
-            _state.update { s ->
-                s.copy(
-                    nearest = first,
-                    nearestState = if (first == null) Nearest.None else Nearest.Ready,
-                    located = loc != null,
-                    boards = s.boards + stops.associateBy { it.code },
-                    failed = s.failed - stops.map { it.code }.toSet(),
-                )
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: ApiError) {
-            if (refused(e, token)) return
-            // Busy or down (429, 5xx, or a Retry-After hold): like no
-            // network, the board already shown stays.
-            if (e.status == 429 || e.status >= 500) return keepNearest()
-            // No location and no home stop: nothing to call nearest.
-            _state.update { it.copy(nearest = null, nearestState = if (e.status == 400) Nearest.None else Nearest.Failed) }
-        } catch (e: Exception) {
-            keepNearest()
-        }
-    }
-
-    /** A failed ask that says nothing about the stop: keep the board shown, if there is one. */
-    private fun keepNearest() {
-        _state.update { it.copy(nearestState = if (it.nearest == null) Nearest.Failed else it.nearestState) }
-    }
-
     suspend fun refreshBoard(code: String, force: Boolean = false) {
         if (!force && fresh(code)) return
         val token = store.token ?: return
@@ -262,18 +210,17 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /**
-     * The page for [code] (null: the nearest stop): its own board, or its opposite stop's when it's switched across the road. The nearest
-     * stop's opposite stop comes with /api/me/nearby, so that page asks only for that.
-     */
-    suspend fun refreshPage(code: String?, force: Boolean = false) {
-        val board = pageBoard(code)
-        if (board == null) refreshNearest(force) else refreshBoard(board, force)
-    }
+    /** The page for [code]: its own board, or its opposite stop's when it's switched across the road. */
+    suspend fun refreshPage(code: String, force: Boolean = false) = refreshBoard(pageBoard(code), force)
 
-    /** The board the page for [code] shows: its own, or its opposite stop's; null for the nearest stop's page. */
-    private fun pageBoard(code: String?): String? {
-        if (code == null) return null
+    /**
+     * The home's pinned stops [codes] (at most the pin limit, [Pins.shown]), together: their own boards, as the home shows no opposite
+     * stop.
+     */
+    suspend fun refreshHome(codes: List<String>) = coroutineScope { for (code in codes) launch { refreshBoard(code) } }
+
+    /** The board the page for [code] shows: its own, or its opposite stop's. */
+    private fun pageBoard(code: String): String {
         val s = _state.value
         val opposite = s.boards[code]?.opposite
         return if (code in s.across && opposite != null) opposite else code
@@ -330,8 +277,7 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
     fun home() = _state.update { it.copy(stack = emptyList()) }
 
     private companion object {
-        const val NEAREST = "nearest"
-        /** Shorter than the refresh, so the 15 s tick always asks; longer than a swipe back. */
+        /** Shorter than the refresh, so the 15 s tick always asks; longer than a quick back and forth. */
         const val MIN_GAP_MS = 10_000L
     }
 }

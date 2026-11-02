@@ -19,7 +19,7 @@ final class LinksUITests: XCTestCase {
         if !came { shot("links-no-card", app) }
         XCTAssertTrue(came, "no card")
         let tabs = app.tabBars.buttons
-        for (link, tab) in [("map", "Map"), ("buses", "Buses"), ("settings", "Settings")] {
+        for (link, tab) in [("map", "Map"), ("buses", "Stops"), ("settings", "Settings")] {
             app.open(URL(string: "terminus://\(link)")!)
             XCTAssertTrue(selected(tabs[tab]), "terminus://\(link) didn't open \(tab)")
         }

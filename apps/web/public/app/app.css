@@ -89,7 +89,9 @@ body.is-offline .app-card .widget.offline-plan { opacity: 1; }
    sign's inverted colours; under it a row per service, its bus on a road. */
 .nearby { display: grid; gap: 12px; }
 .stop-sign .detail { padding: 12px 14px; }
-.nearby-row { display: flex; align-items: center; gap: 10px; padding: 7px 14px; font-variant-numeric: tabular-nums; }
+.nearby-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 14px; border: 0; background: none; color: inherit; font: inherit; text-align: left; font-variant-numeric: tabular-nums; }
+button.nearby-row { cursor: pointer; }
+button.nearby-row:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); }
 .nearby-row + .nearby-row { border-top: 1px solid var(--line); }
 .stop-sign.nearest .nearby-row { padding-block: 10px; }
 /* Fixed columns either side (in rem, the same on every sign), so every road
@@ -97,6 +99,18 @@ body.is-offline .app-card .widget.offline-plan { opacity: 1; }
 .nearby-row .svc-col { flex: none; display: flex; width: 3.4rem; }
 .nearby-row .eta { flex: none; min-width: 4.6rem; text-align: right; font-weight: 800; font-size: 0.95rem; white-space: nowrap; }
 .stop-sign.nearest .nearby-row .eta { font-size: 1.1rem; }
+/* The star on a sign's plate: pins the stop to the Stops tab. */
+.plate-star { flex: none; display: grid; place-items: center; width: 34px; height: 34px; margin-right: -2px; border: 0; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; }
+.plate-star svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linejoin: round; }
+.plate-star.on { color: var(--warn); }
+.plate-star.on svg { fill: currentColor; }
+/* Under the signs: the way to the Stops tab, for any other stop or a whole line. */
+.to-stops { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 10px 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.to-stops > span { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.to-stops b { font-weight: 600; font-size: 0.95rem; }
+.to-stops > span > span { color: var(--muted); font-size: 0.82rem; }
+.to-stops-icon { flex: none; width: 22px; height: 22px; fill: none; stroke: var(--accent); stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.to-stops-go { flex: none; width: 18px; height: 18px; fill: none; stroke: var(--muted); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 /* The road to the stop (the ring at its end), and the buses on it, nearer the sooner they're due. */
 .road { position: relative; flex: 1; height: 18px; min-width: 40px; }
 .road::before { content: ''; position: absolute; left: 0; right: 10px; top: 8px; height: 2px; background: repeating-linear-gradient(90deg, var(--line-strong) 0 6px, transparent 6px 10px); }
@@ -153,18 +167,17 @@ body.on-buses > .nav { display: none; }
 
 /* The sky (buses.js Sky), as Settings' band: the search at its top, then
    each page's own sky from the same colour down to its low hills, so the
-   two meet without a seam and the sky swipes with its page. The stop's
-   name, a line's title and Back sit in it, in the sky's ink (.sky-head). */
-/* Above the pages under it, so its search's list comes down over them. */
+   two meet without a seam. The home's title, a stop's name, a line's
+   title and Back sit in it, in the sky's ink (.sky-head). */
+/* Above the page under it, so its search's list comes down over it. */
 .bt-sky-top { position: relative; z-index: 5; isolation: isolate; margin: 0 -16px; padding: max(12px, env(safe-area-inset-top)) 16px 0; background: var(--s0); }
 /* Overscrolled at the top: still the sky up there. */
 .bt-sky-top::before { content: ''; position: absolute; z-index: -1; inset: -240px 0 auto 0; height: 240px; background: var(--s0); }
 .bt-sky { margin: 0 -16px; padding: 0 16px; background: linear-gradient(var(--s0), var(--s1) 45%, var(--s2) 80%, var(--s3)); }
-.bt-page > .bt-sky { margin: 0 -16px; }
 /* A page of its own starts the sky itself. */
 .bt-page.alone > .bt-sky, .buses-tab > .bt-sky { padding-top: env(safe-area-inset-top); }
 .bt-sky .sky-head { --room: 0px; --moon: 22px; padding-bottom: 2px; }
-/* Stars across the whole sky; the moon low on the right, by the dots, clear of a long name. */
+/* Stars across the whole sky; the moon low on the right, clear of a long name. */
 .bt-sky .celestial { height: 100%; }
 body.sky .bt-sky .night-sky .moon { top: auto; bottom: 0; right: 30px; }
 /* A line's title has its words on the right: the moon up by Back instead. */
@@ -174,7 +187,6 @@ body.sky .buses-tab > .bt-sky .night-sky .moon { top: calc(env(safe-area-inset-t
 .bt-sky + .bt-sides { margin-top: 4px; }
 .bt-sky .bt-nav { height: 48px; }
 .bt-sky .bt-kicker-icon { fill: var(--k-accent-small); }
-.bt-sky .bt-find { padding-top: 22px; }
 /* The search box takes the sky's colours; its list comes down over the
    page, so it keeps the page's own. */
 body.sky .bt-sky-top :is(input, .bt-search-icon) {
@@ -193,16 +205,39 @@ body.sky .bt-sky-top input::placeholder { color: var(--k-muted); opacity: 0.85; 
 .bt-search input:focus-visible { outline-offset: 0; }
 .bt-search-icon { position: absolute; z-index: 1; left: 14px; top: 13px; width: 20px; height: 20px; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; pointer-events: none; }
 
-/* The pages, swiped sideways; each the column's width, edge to edge. */
-.bt-pages { display: flex; align-items: flex-start; margin: 0 -16px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scrollbar-width: none; }
-.bt-pages::-webkit-scrollbar { display: none; }
-.bt-page { flex: 0 0 100%; min-width: 0; padding: 0 16px; scroll-snap-align: start; scroll-snap-stop: always; }
+/* A stop's own page, the column's width, edge to edge. */
+.bt-page { min-width: 0; padding: 0 16px; }
 .bt-page.alone { margin: 0 -16px; }
+
+/* The home (buses.js Home): its title in the sky, then your pinned stops,
+   each a name with its star over its first rows, then every service. */
+.bt-home .bt-top { padding-bottom: 6px; }
+.bt-section { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 22px 6px 8px; }
+.bt-section > span { font-size: 0.75rem; color: var(--muted); text-align: right; }
+.bt-pin + .bt-pin { margin-top: 18px; }
+.bt-pin-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 0 0 6px; }
+.bt-pin-name { display: flex; align-items: center; gap: 4px; min-width: 0; padding: 6px 0; border: 0; background: none; color: var(--ink); font: 700 1.1rem/1.2 var(--font); text-align: left; cursor: pointer; }
+.bt-pin-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bt-pin-name svg { flex: none; width: 16px; height: 16px; fill: none; stroke: var(--muted); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.bt-pin-name:hover span { text-decoration: underline; text-underline-offset: 3px; }
+.bt-star.small { width: 36px; height: 36px; background: none; }
+.bt-pin .bt-board { margin-top: 6px; }
+.bt-pin .bt-empty { padding: 14px 4px; }
+.bt-pin-error { padding: 6px 6px 0; font-size: 0.8rem; text-align: right; }
+.bt-more { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 12px 14px; border: 0; border-top: 1px solid var(--line); background: none; color: var(--accent); font: 600 0.9rem var(--font); text-align: left; cursor: pointer; }
+.bt-more .bt-go { stroke: currentColor; }
+/* Nothing pinned yet: where the star is, said once, in a dashed outline. */
+.bt-no-pins { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 1.5px dashed var(--line-strong); border-radius: 14px; color: var(--muted); font-size: 0.9rem; line-height: 1.45; }
+.bt-no-pins svg { flex: none; width: 20px; height: 20px; fill: none; stroke: var(--warn); stroke-width: 1.9; stroke-linejoin: round; }
+.bt-services { padding: 0; overflow: hidden; }
+.bt-service { display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 10px 11px 14px; border: 0; border-top: 1px solid var(--line); background: none; color: var(--ink); font: 600 0.95rem/1.3 var(--font); text-align: left; cursor: pointer; }
+.bt-service:first-child { border-top: 0; }
+.bt-service > span { flex: 1; min-width: 0; }
+.bt-service .bt-chip { flex: none; }
 
 .bt-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px 4px 0; }
 .bt-title { min-width: 0; }
 .bt-kicker { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 0.85rem; font-weight: 500; color: var(--muted); }
-.bt-kicker .link-btn { padding: 0; font-size: inherit; font-weight: 600; }
 .bt-kicker-icon { width: 13px; height: 13px; fill: var(--accent); }
 .bt-kicker-icon.star { fill: var(--warn); }
 .bt-title h2 { margin-top: 6px; font: 700 2.2rem/1.05 var(--display); letter-spacing: -0.025em; overflow-wrap: anywhere; }
@@ -212,11 +247,6 @@ body.sky .bt-sky-top input::placeholder { color: var(--k-muted); opacity: 0.85; 
 .bt-star.on { color: var(--warn); }
 .bt-star.on svg { fill: currentColor; }
 
-.bt-dots { display: flex; align-items: center; justify-content: center; gap: 2px; margin: 10px 0 2px; }
-.bt-dots button { display: grid; place-items: center; min-width: 18px; height: 22px; padding: 0 3px; border: 0; background: none; cursor: pointer; color: var(--ink); }
-.bt-dots i { display: block; width: 6px; height: 6px; border-radius: 50%; background: var(--line-strong); }
-.bt-dots .on i { width: 18px; height: 6px; border-radius: 3px; background: var(--ink); opacity: 1; }
-.bt-dots svg { width: 10px; height: 10px; fill: var(--muted); }
 .bt-sides { margin-top: 12px; }
 /* An opposite stop named in full (PGP Foyer) may take two lines. */
 .bt-sides span { line-height: 1.25; }
@@ -294,13 +324,6 @@ button.bt-row:focus-visible { outline-offset: -2px; }
 .bt-error { color: var(--warn-ink); }
 .bt-hint { margin-top: 6px; padding: 0 6px; font-size: 0.78rem; color: var(--muted); }
 .bt-empty { padding: 28px 4px; text-align: center; }
-.bt-peek { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; margin: 16px 0 4px; padding: 11px 14px; border: 1px dashed var(--line-strong); border-radius: 12px; background: none; color: var(--muted); font: inherit; font-size: 0.85rem; text-align: left; cursor: pointer; }
-.bt-peek b { color: var(--ink); font-weight: 600; }
-.bt-peek-chips { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
-.bt-peek svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.bt-find { padding: 28px 4px 8px; display: grid; gap: 10px; justify-items: start; }
-.bt-find h2 { font: 700 1.6rem/1.15 var(--display); letter-spacing: -0.02em; }
-.bt-btn-icon { width: 14px; height: 14px; fill: currentColor; }
 
 /* A page of its own (a stop, a line): Back to where it came from. */
 .bt-nav { display: flex; align-items: center; height: 40px; }

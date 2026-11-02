@@ -79,11 +79,10 @@
     <string name="a11y_starts">%1$s, starts %2$s</string>
     <string name="a11y_arrive_by">%1$s, arrive by %2$s</string>
     <string name="a11y_to">To %1$s</string>
-    <string name="a11y_map">Campus map. For stops and buses as a list, use the Buses tab.</string>
+    <string name="a11y_map">Campus map. For stops and buses as a list, use the Stops tab.</string>
     <string name="a11y_show_list">Show as list</string>
     <string name="email_label">Email</string>
     <string name="report_note">Your note</string>
-    <string name="a11y_page">Page %1$d of %2$d</string>
     <string name="a11y_open_line">See the %1$s line</string>
     <string name="a11y_open_stop">See this stop\'s buses</string>
     <string name="a11y_change_stop">Change the stop for %1$s</string>
@@ -626,15 +625,12 @@
     <string name="heading_more">More</string>
     <string name="get_apps">Get the apps</string>
 
-    <!-- The Buses tab -->
-    <string name="tab_buses">Buses</string>
+    <!-- The Stops tab (its ids say buses: tab_buses, buses_*) -->
+    <string name="tab_buses">Stops</string>
     <string name="buses_search">Search a stop or service</string>
     <string name="buses_search_none">No stop or service by that name</string>
     <string name="buses_group_services">Services</string>
     <string name="buses_n_stops">%1$d stops</string>
-    <string name="buses_nearest">Nearest stop</string>
-    <string name="buses_nearest_m">Nearest stop · %1$d m</string>
-    <string name="buses_near_home">Your home stop</string>
     <string name="buses_pinned">Pinned</string>
     <string name="buses_pin">Pin this stop</string>
     <string name="buses_unpin">Unpin this stop</string>
@@ -661,10 +657,6 @@
     <string name="buses_updated_s">Updated %1$d s ago</string>
     <string name="buses_updated_min">Updated %1$d min ago</string>
     <string name="buses_tap_hint">Tap a service to see its whole line.</string>
-    <string name="buses_swipe_for">Swipe for %1$s</string>
-    <string name="buses_find_title">Find your stop</string>
-    <string name="buses_find_text">Allow location to see the stop nearest you, or search for a stop and pin it with the star.</string>
-    <string name="buses_find_text_search">Search for a stop above and pin it with the star, so it\'s here next time.</string>
     <string name="buses_one_running">1 bus running</string>
     <string name="buses_n_running">%1$d buses running</string>
     <string name="buses_none_running">No buses running</string>
@@ -681,7 +673,17 @@
     <string name="buses_back_tomorrow">Back tomorrow at %1$s</string>
     <string name="buses_back_on">Back %1$s at %2$s</string>
     <string name="buses_starts_at">Starts at %1$s</string>
-    <!-- Pull to refresh (Now and Buses): the words over the road, and how it went. -->
+    <string name="buses_more_here">%1$d more at this stop</string>
+    <string name="buses_no_pins">Tap the star on any stop to keep it here: in Nearby, on the stop\'s page, or after searching for it.</string>
+    <string name="buses_services_hint">Tap one to see its whole line.</string>
+    <string name="buses_loop_from">Loop from %1$s</string>
+    <string name="buses_from_to">%1$s to %2$s</string>
+    <string name="buses_pin_stop">Pin %1$s</string>
+    <string name="buses_unpin_stop">Unpin %1$s</string>
+    <!-- Under Nearby's last stop: the way to the Stops tab. -->
+    <string name="nearby_more_title">Another stop, or a whole line</string>
+    <string name="nearby_more_text">Search, pinned stops and services are in Stops.</string>
+    <!-- Pull to refresh (Now and Stops): the words over the road, and how it went. -->
     <string name="pull_to_refresh">Pull to refresh</string>
     <string name="pull_let_go">Let go to refresh</string>
     <string name="pull_updated">Updated just now</string>

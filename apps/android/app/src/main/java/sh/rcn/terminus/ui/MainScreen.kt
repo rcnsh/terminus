@@ -127,7 +127,7 @@ internal fun MainScreen(
     insets: PaddingValues,
     email: String?,
     onAddEmail: () -> Unit,
-    onOpenStop: (String) -> Unit,
+    nearby: NearbyActions,
 ) {
     val ctx = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -310,7 +310,7 @@ internal fun MainScreen(
                             Column {
                                 SkyHead(26.dp) {}
                                 SkyGround()
-                                NearbyList(state.nearby, state.loading, onOpenStop)
+                                NearbyList(state.nearby, state.loading, nearby)
                             }
                         else {
                             // The last refresh failed: offline, the day plan kept for it stands in for a stale answer.
