@@ -1,7 +1,7 @@
 import CoreLocation
 import XCTest
 
-/// The Buses tab, called Stops, against the dev stub, tapped through: the
+/// The Stops tab, called Stops, against the dev stub, tapped through: the
 /// home with nothing pinned and with pinned boards, a stop's page and across
 /// the road, the search, a service's line, a service not running, the public
 /// buses, and no connection; with screenshots in light and dark, English and
@@ -68,10 +68,10 @@ final class BusesUITests: XCTestCase {
         let app = launch()
         openBuses(app)
         XCTAssertTrue(app.descendants(matching: .any)["pinned-none"].firstMatch.waitForExistence(timeout: 10))
-        // Every service, with where it goes.
+        // Every service, with where it goes, its stops by their long names as the web and Android say them.
         let k = app.buttons["service-K"]
         XCTAssertTrue(k.waitForExistence(timeout: 10))
-        XCTAssertTrue(k.label.contains("PGP to PGP Foyer"), k.label)
+        XCTAssertTrue(k.label.contains("Prince George's Park to Prince George's Park Foyer"), k.label)
         XCTAssertTrue(app.buttons["service-D1"].label.contains("Loop from COM 3"))
         shot("buses-home-empty-en-light", app)
         app.swipeUp()

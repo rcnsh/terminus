@@ -69,7 +69,11 @@ private struct StopSign: View {
                 .accessibilityHint(L("See this stop's buses"))
                 .accessibilityAddTraits(.isButton)
                 .accessibilityIdentifier("nearby.\(stop.stop.code)")
-                BusStar(code: stop.stop.code, name: stop.stop.name).padding(.trailing, 2)
+                // Only once the pins have come: before, a pinned stop's star would
+                // read hollow, and a tap on it would unpin it.
+                if BusesModel.shared.pinsState == .ready {
+                    BusStar(code: stop.stop.code, name: stop.stop.name).padding(.trailing, 2)
+                }
             }
             .fixedSize(horizontal: false, vertical: true)
             .frame(minHeight: big ? 46 : 38)

@@ -318,7 +318,7 @@ struct Api: Sendable {
     }
 
     /// /me/nearby's stops, nearest first, and the JSON for the widget. With
-    /// `stopped`, the services not running now too (the Buses tab greys them).
+    /// `stopped`, the services not running now too (the Stops tab greys them).
     func nearby(lat: Double?, lon: Double?, acc: Double? = nil, stopped: Bool = false) async throws -> ([NearbyStop], Data) {
         struct R: Decodable { let stops: [NearbyStop] }
         let data = try await send(

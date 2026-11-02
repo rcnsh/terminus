@@ -86,7 +86,7 @@ final class AppModel {
         var failed = false
     }
 
-    /// The pages to put the Buses tab on, picked elsewhere (Now's Nearby,
+    /// The pages to put the Stops tab on, picked elsewhere (Now's Nearby,
     /// the map's "Show as list"): a stop's board or a service's line over its
     /// home, or [] for the home itself. Buses shows them and sets this back to nil.
     var openBuses: [BusRoute]?
@@ -250,7 +250,7 @@ final class AppModel {
         Task { await load(restart: true) }
     }
 
-    /// The Buses tab on `pages` over its home ([] for the home alone), from another tab.
+    /// The Stops tab on `pages` over its home ([] for the home alone), from another tab.
     func showInBuses(_ pages: [BusRoute]) {
         openBuses = pages
         NotificationCenter.default.post(name: .openTab, object: MainTabs.Tab.buses)

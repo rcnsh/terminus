@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-/// The Buses tab, called Stops: a search, then each pinned stop with the
+/// The Stops tab, called Stops: a search, then each pinned stop with the
 /// top of its board, then every service. A row opens its service's line; a
 /// stop on the line, or found in the search, opens its board. The stops
 /// around you are Now's Nearby. As Android's BusesScreen, in the hour's sky.
@@ -468,19 +468,21 @@ struct BusStopHeader: View {
                 Text(verbatim: shown).font(.caption.weight(.semibold)).tracking(0.8).foregroundStyle(inks.muted)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            Button {
-                model.togglePin(shown)
-            } label: {
-                Image(systemName: starred ? "star.fill" : "star")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(starred ? inks.accent : inks.ink)
-                    .frame(width: 44, height: 44)
-                    .background(inks.raised, in: Circle())
-                    .overlay(Circle().strokeBorder(inks.line))
+            if model.pinsState == .ready {
+                Button {
+                    model.togglePin(shown)
+                } label: {
+                    Image(systemName: starred ? "star.fill" : "star")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(starred ? inks.accent : inks.ink)
+                        .frame(width: 44, height: 44)
+                        .background(inks.raised, in: Circle())
+                        .overlay(Circle().strokeBorder(inks.line))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(starred ? L("Unpin this stop") : L("Pin this stop"))
+                .accessibilityIdentifier("buses-pin")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(starred ? L("Unpin this stop") : L("Pin this stop"))
-            .accessibilityIdentifier("buses-pin")
         }
         .padding(.top, 8)
     }

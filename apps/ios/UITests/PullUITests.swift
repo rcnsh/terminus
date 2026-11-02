@@ -1,7 +1,7 @@
 import XCTest
 
 /// Pull to refresh, the sky stretching: pulled far enough, Now and the
-/// Buses tab ask again and the pill says how it went; pulled a little, nothing.
+/// Stops tab ask again and the pill says how it went; pulled a little, nothing.
 @MainActor
 final class PullUITests: XCTestCase {
     nonisolated override func setUp() {

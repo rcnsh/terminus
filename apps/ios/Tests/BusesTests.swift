@@ -2,7 +2,7 @@ import XCTest
 
 @testable import Terminus
 
-/// The Buses tab's rules (BusesLogic.swift), as Android's BusesTest.
+/// The Stops tab's rules (BusesLogic.swift), as Android's BusesTest.
 final class BusesTests: XCTestCase {
     private func row(_ json: String) throws -> BoardRow {
         try JSONDecoder().decode(BoardRow.self, from: Data(json.utf8))

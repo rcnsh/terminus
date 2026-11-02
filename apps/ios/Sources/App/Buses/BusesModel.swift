@@ -4,7 +4,7 @@ import Observation
 /// Whether the account's pins are known yet: the home shows them only once they are.
 enum BusPinsState { case loading, ready, failed }
 
-/// The Buses tab's data, as Android's BusesViewModel. The screens drive the
+/// The Stops tab's data, as Android's BusesViewModel. The screens drive the
 /// refreshing, only while the tab is on screen and the app in front: what's
 /// in view every 15 s (the home's pinned boards, or the page over it), the
 /// API's own cache, so asking sooner would show nothing new. A failed

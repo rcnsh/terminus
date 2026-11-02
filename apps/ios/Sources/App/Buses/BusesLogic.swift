@@ -1,7 +1,7 @@
 import Foundation
 
 /*
- * The Buses tab's rules, apart from its screens so they're unit tested
+ * The Stops tab's rules, apart from its screens so they're unit tested
  * (Tests/BusesTests.swift), as Android's Buses.kt: the pins and the part of
  * each board the home shows, the search, a line as it's drawn, and the words
  * worked out here for an older server. Every time shown is one the API gave.

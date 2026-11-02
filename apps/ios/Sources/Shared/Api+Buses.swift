@@ -1,14 +1,14 @@
 import Foundation
 
-/// The Buses tab's own request: /campus read in its own order for the search.
+/// The Stops tab's own request: /campus read in its own order for the search.
 extension Api {
-    /// `/api/campus` as the Buses tab uses it.
+    /// `/api/campus` as the Stops tab uses it.
     func busCampus() async throws -> BusCampus {
         try JSONDecoder().decode(BusCampus.self, from: await send("GET", "/api/campus"))
     }
 }
 
-/// `/api/campus` for the Buses tab: its stops in the order the server gives
+/// `/api/campus` for the Stops tab: its stops in the order the server gives
 /// them (the search's last tie-break is that order, as on Android and the
 /// web), each service's colour, and each stop's nicknames.
 struct BusCampus: Decodable, Sendable {

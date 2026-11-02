@@ -267,7 +267,7 @@ struct Line: Decodable, Sendable {
     }
 }
 
-/// How the Buses tab shows one time.
+/// How the Stops tab shows one time.
 enum BusTimes {
     /// Under this long away: "Arriving", not "0 min" (the server's own threshold, format.ts).
     static let arrivingS = 45

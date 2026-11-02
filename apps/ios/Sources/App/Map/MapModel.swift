@@ -178,7 +178,7 @@ final class MapModel {
         if case .stop(let code, _?) = sheet { sheet = .stop(code) }
     }
 
-    /// A service from another tab (the Buses tab's "Show on map"): its pill on, never toggled off.
+    /// A service from another tab (the Stops tab's "Show on map"): its pill on, never toggled off.
     func show(_ svc: String) {
         if selected != svc { choose(svc) }
     }
@@ -418,7 +418,7 @@ final class MapModel {
         profile = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? profile
     }
 
-    /// The profile's "public buses": a stop's sheet has them too, as its Buses tab board does.
+    /// The profile's "public buses": a stop's sheet has them too, as its Stops tab board does.
     var publicBuses: Bool { profile?["publicBuses"] as? Bool ?? false }
 
     private var places: [[String: Any]] { profile?["places"] as? [[String: Any]] ?? [] }
