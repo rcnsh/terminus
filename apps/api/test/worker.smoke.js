@@ -294,6 +294,7 @@ test('the OpenAPI spec documents exactly the routes that exist', async () => {
       '/api/health',
       '/api/status.json',
       '/api/admin/stats',
+      '/api/admin/appversion',
       '/api/admin/passkey/challenge',
       '/docs',
       '/api/openapi.json',
