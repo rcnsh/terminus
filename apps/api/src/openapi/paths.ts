@@ -2016,6 +2016,28 @@ export function paths(): Record<string, unknown> {
         responses: { '200': ok({ type: 'object' }) },
       },
     },
+    '/api/admin/appversion': {
+      get: {
+        tags: ['Service'],
+        summary: 'The uNivUS version the feed takes',
+        description:
+          'The version string this server sends NUS, which it keeps up with new uNivUS releases on its own, for the weekly scrape of the stop graph. Needs the operator token, or the scrape token (which opens this route and nothing else), in `x-health-token`: answers 404 without one.',
+        operationId: 'adminAppVersion',
+        security: [{ operator: [] }],
+        responses: {
+          '200': ok(
+            {
+              type: 'object',
+              required: ['version'],
+              properties: { version: { type: 'string', description: 'As uNivUS sends it: `univus_android_<versionName>_<versionCode>`.' } },
+            },
+            { version: 'univus_android_2.60.3_144' },
+          ),
+          '404': errorResponse('No operator or scrape token, or the wrong one.'),
+          '503': errorResponse('This server has no version to send.', { error: 'the NUS feed is not configured' }),
+        },
+      },
+    },
     '/api/admin/stats': {
       get: {
         tags: ['Service'],

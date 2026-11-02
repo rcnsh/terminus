@@ -38,6 +38,9 @@ jobs:
         env:
           NEXTBUS_AUTH_BASE: ${{ secrets.NEXTBUS_AUTH_BASE }}
           NEXTBUS_APP_VERSION: ${{ secrets.NEXTBUS_APP_VERSION }}
+          # Opens one route on terminus: the version the Worker sends NUS, kept
+          # current with uNivUS releases. The secret above is then the fallback.
+          TERMINUS_SCRAPE_TOKEN: ${{ secrets.TERMINUS_SCRAPE_TOKEN }}
           NEXTBUS_HTD_API: ${{ secrets.NEXTBUS_HTD_API }}
           NEXTBUS_APP_API: ${{ secrets.NEXTBUS_APP_API }}
           NEXTBUS_PROXY_BASE: ${{ secrets.NEXTBUS_PROXY_BASE }}

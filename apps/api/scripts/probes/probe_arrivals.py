@@ -37,7 +37,7 @@ from datetime import datetime, timedelta, timezone
 
 # The feed client is the weekly scrape's (scripts/data/scrape_stops.py).
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data"))
-from scrape_stops import REQUIRED, ROOT, get_session, load_dev_vars, pick_list, proxy
+from scrape_stops import REQUIRED, ROOT, get_session, load_dev_vars, pick_list, proxy, use_live_version
 
 
 # Limits, enforced here rather than left as defaults: the test must stay small.
@@ -132,6 +132,7 @@ def main() -> int:
         args.minutes = MAX_MINUTES
 
     load_dev_vars()
+    use_live_version()
     # Never the Worker's device id: a fresh random one (scrape_stops.device_id),
     # as each uNivUS install has its own.
     os.environ.pop("NEXTBUS_DEVICE_ID", None)

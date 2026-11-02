@@ -47,6 +47,8 @@ export interface Env {
   HEALTH_TOKEN?: string;
   /** Opens /api/timelapse/* only (same header), for a machine that renders the videos. Unset: operator only. */
   TIMELAPSE_TOKEN?: string;
+  /** Opens /api/admin/appversion only (same header), for the weekly scrape. Unset: operator only. */
+  SCRAPE_TOKEN?: string;
   /** Optional. An API token with Account Analytics Read, so the dashboard can
    *  query Analytics Engine. Without it the dashboard skips those charts. */
   ANALYTICS_TOKEN?: string;

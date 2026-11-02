@@ -27,6 +27,12 @@ NEXTBUS_PROXY_API_KEY=""
 # univus_android_<versionName>_<versionCode>.
 NEXTBUS_APP_VERSION="univus_android_2.59.2_140"
 
+# Optional, for the scrapers: the stable Worker's SCRAPE_TOKEN (or the
+# operator's HEALTH_TOKEN). With it they send the version the Worker sends,
+# read from /api/admin/appversion on TERMINUS_ORIGIN (terminus.run unless
+# set), and NEXTBUS_APP_VERSION is only the fallback. The Worker ignores both.
+TERMINUS_SCRAPE_TOKEN=""
+
 # The auth headers for get-access-token. Without them the endpoint returns
 # HTTP 200 with {"code":"10000","msg":"Invalid API KEY"}.
 NEXTBUS_HTD_API=""

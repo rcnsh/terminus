@@ -236,8 +236,10 @@ export default defineConfig(({ mode }) => {
 				ALERT_EMAIL: bindings.secret(),
 				HEALTH_TOKEN: bindings.secret(),
 				// TIMELAPSE_TOKEN, which opens /api/timelapse/* only for the VPS that renders
-				// the videos (scripts/dev/render-timelapse.mjs), is an optional secret like
-				// ANALYTICS_TOKEN: not declared, so a site without one (the beta) deploys.
+				// the videos (scripts/dev/render-timelapse.mjs), and SCRAPE_TOKEN, which opens
+				// /api/admin/appversion only for the weekly scrape (scrape_stops.py), are
+				// optional secrets like ANALYTICS_TOKEN: not declared, so a site without one
+				// (the beta) deploys.
 				NEXTBUS_APP_API: bindings.secret(),
 				NEXTBUS_APP_VERSION: bindings.secret(),
 				NEXTBUS_AUTH_BASE: bindings.secret(),

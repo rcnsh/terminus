@@ -43,6 +43,16 @@ export async function canReadTimelapse(env: Env, req: Request, nowMs = Date.now(
   return sentToken(req, env.TIMELAPSE_TOKEN) || (await isOperator(env, req, nowMs));
 }
 
+/**
+ * Whoever may read the uNivUS version the feed takes: the operator, or a
+ * holder of SCRAPE_TOKEN (the weekly scrape, scrape_stops.py), in the same
+ * header. That token opens /api/admin/appversion and nothing else, so the
+ * scrape job never holds the key to the dashboard.
+ */
+export async function canReadAppVersion(env: Env, req: Request, nowMs = Date.now()): Promise<boolean> {
+  return sentToken(req, env.SCRAPE_TOKEN) || (await isOperator(env, req, nowMs));
+}
+
 /** The x-health-token header holds `token`; never true when the token is unset. */
 function sentToken(req: Request, token: string | undefined): boolean {
   const given = req.headers.get('x-health-token');

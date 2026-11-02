@@ -29,7 +29,7 @@ import time
 
 # The feed client is the weekly scrape's (scripts/data/scrape_stops.py).
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data"))
-from scrape_stops import REQUIRED, get_session, load_dev_vars, pick_list, proxy
+from scrape_stops import REQUIRED, get_session, load_dev_vars, pick_list, proxy, use_live_version
 
 
 # The floor under --every, and the cap on --minutes: this calls NUS directly,
@@ -71,6 +71,7 @@ def main() -> int:
         args.minutes = MAX_MINUTES
 
     load_dev_vars()
+    use_live_version()
     missing = [k for k in REQUIRED if not os.environ.get(k)]
     if missing:
         print(f"missing config: {', '.join(missing)}", file=sys.stderr)

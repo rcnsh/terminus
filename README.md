@@ -146,6 +146,7 @@ Secrets go in `apps/api/.dev.vars` locally (template:
 | `LTA_ACCOUNT_KEY` | no | LTA DataMall key, for public buses. Unset: shuttles only |
 | `ANALYTICS_TOKEN` | no | Lets the dashboard query Analytics Engine |
 | `TIMELAPSE_TOKEN` | no | Opens `/api/timelapse/*` for the machine that renders videos |
+| `SCRAPE_TOKEN` | no | Opens `/api/admin/appversion` for the weekly scrape (repo secret `TERMINUS_SCRAPE_TOKEN`), so it sends the uNivUS version the Worker found |
 | `HEARTBEAT_URL` | no | Pinged after every cron run (healthchecks.io), so a stopped cron is noticed. Unset: no ping |
 | `NEXTBUS_DEVICE_ID` | no | 16 hex characters. Unset: one is made and kept in KV |
 | `NEXTBUS_REQUESTED_BY`, `NEXTBUS_SECURED_REQUEST` | no | Sent if set; not required upstream |
