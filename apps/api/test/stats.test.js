@@ -433,7 +433,7 @@ function dayAlong(svc, alongs, plate = 'PD539C') {
 }
 
 test('a reading on the far side of a road the line takes both ways is passed over, and the stops either side still count', () => {
-  // D1 on 13 October 2026, CLB to BIZ2: LT13 (3,929 m) and LT13-OPP (1,005 m) are the two sides of one
+  // D1 from CLB to BIZ2, as recorded: LT13 (3,929 m) and LT13-OPP (1,005 m) are the two sides of one
   // road, as are AS5 (4,086 m) and NUSS-OPP (617 m); twice the bus was placed on the far side.
   const at = (stop) => SHAPES.D1.at[SHAPES.D1.stops.indexOf(stop)];
   assert.deepEqual([at('LT13'), at('AS5')].map(Math.round), [3929, 4086]);
@@ -445,6 +445,9 @@ test('a reading on the far side of a road the line takes both ways is passed ove
   );
   // LT13's mark, 25 m before it, between the readings at 30 s (3,676 m) and 90 s (3,916 m).
   assert.equal(passed[0].t, open + 30_000 + Math.round(((at('LT13') - 25 - 3676) / (3916 - 3676)) * 60_000));
+  // It is known only when the reading after the crossing arrives (the one at 90 s), not a poll later.
+  assert.equal(passed[0].seen, open + 90_000);
+  assert.ok(passed.every((p) => p.seen >= p.t));
   // Two readings in a row that agree are where the bus is, even away from the last good one.
   const moved = passingsOf(dayAlong('D1', [3580, 900, 930, 960, 990, 1020, 1300, 1400]));
   assert.deepEqual(
@@ -478,6 +481,13 @@ test('a wrong first reading invents nothing, and a bus round the end of its line
   assert.ok(
     round.some((p) => p.stop === 'KRB'),
     `KRB: ${round.map((p) => p.stop)}`,
+  );
+  // Into Kent Ridge Bus Terminal, backing out the way it came in, then off on its next lap: there once.
+  const layover = passingsOf(dayAlong('A2', [a2 - 300, a2 - 150, a2 - 10, a2 - 8, a2 - 60, 212, 350], 'PA2'));
+  assert.deepEqual(
+    layover.filter((p) => p.stop === 'KRB').map((p) => p.t),
+    [open + 30_000 + Math.round((125 / 140) * 30_000)],
+    'arriving, not again on leaving',
   );
 });
 

@@ -349,7 +349,7 @@ export class TimelapseRecorder {
       // its line, from tracks kept here: the map's, in the edge cache, don't
       // come back to this object between polls. Placed afresh, a bus on a
       // road its line takes both ways can land on the far side, and loses
-      // its passings there (docs/eta-backtest.md, round 4).
+      // its passings there (docs/eta-backtest.md, round 5).
       const tracksKey = `tracks:${svc}`;
       const placed = await placeBuses(GRAPH, svc, live.buses, live.fetchedAt, this.read<Record<string, Track>>(tracksKey) ?? {});
       // Measured on today's line only: after a deploy that changed it, the

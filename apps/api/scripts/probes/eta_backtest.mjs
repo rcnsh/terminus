@@ -206,11 +206,12 @@ let how;
 /** Walked: each test day with the model fitted on the days before it. */
 let walked = null;
 if (WALK_FROM !== null) {
-  const tested = dates.filter((d) => d >= WALK_FROM && dates.some((x) => x < d));
-  if (!tested.length) usage(`no day from ${WALK_FROM} on has a day before it`);
+  const fromOf = (date) => new Date(Date.parse(`${date}T00:00:00Z`) - WALK_DAYS * 86_400_000).toISOString().slice(0, 10);
+  // A day with nothing recorded in the days before it has no model to test.
+  const tested = dates.filter((d) => d >= WALK_FROM && dates.some((x) => x < d && x >= fromOf(d)));
+  if (!tested.length) usage(`no day from ${WALK_FROM} on has a day in the ${WALK_DAYS} before it`);
   walked = tested.map((date) => {
-    const from = new Date(Date.parse(`${date}T00:00:00Z`) - WALK_DAYS * 86_400_000).toISOString().slice(0, 10);
-    const before = units.filter((u) => u.date < date && u.date >= from).map(answerableIn);
+    const before = units.filter((u) => u.date < date && u.date >= fromOf(date)).map(answerableIn);
     return { date, train: before, test: units.filter((u) => u.date === date).map(answerableIn) };
   });
   train = walked.at(-1).train;

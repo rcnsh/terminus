@@ -2,18 +2,18 @@
 
 ## Round 5: the recorder's buses kept to their side of the road
 
-**With the passings repaired, the blend beats the feed by 14%, not 9%.**
+**With the passings repaired, the blend beats the feed by 15%, not 9%.**
 Round 4's "went by" misses came from the timelapse recorder, not the
 feed. Rerun on the same 27 days and predictions, walked forward from 12
 October as before:
 
 | method | MAE | p50 | p90 | over 5 min | under 2 min | 2 to 5 | 5 to 10 | 10 to 30 |
 |---|---|---|---|---|---|---|---|---|
-| feed | 96.2 s | 47.9 s | 175.6 s | 4.1% | 53.6 | 89.7 | 57.2 | 124.2 |
-| checked | 83.4 s | 45.2 s | 154.9 s | 3.1% | 45.1 | 75.8 | 53.1 | 107.2 |
-| blend | 82.3 s | 44.0 s | 155.3 s | 3.1% | 43.1 | 74.1 | 52.4 | 106.3 |
+| feed | 95.6 s | 47.9 s | 175.6 s | 4.1% | 48.6 | 89.7 | 57.2 | 124.2 |
+| checked | 83.0 s | 45.1 s | 154.8 s | 3.1% | 40.0 | 75.8 | 53.1 | 107.6 |
+| blend | 81.3 s | 44.0 s | 154.8 s | 3.1% | 37.9 | 74.0 | 52.3 | 105.6 |
 
-The horizon columns are MAE in seconds; 4,122 questions (more than round
+The horizon columns are MAE in seconds; 4,117 questions (more than round
 4's 3,904, since more passings are found). Every method gains on every
 horizon, the feed included: these were errors in the scoring.
 
@@ -36,19 +36,23 @@ horizon, the feed included: these were errors in the scoring.
   good reading: two far-side readings in a row are common (about 100 a
   day). A loop's end leads to its start only within 1,200 m of the two
   ends together: a reading far back could otherwise pass for a lap ahead.
-  A1 and A2 reversing out of KRB (up to 500 m back) still count.
-- **On the 27 days,** passings rise by 5% (D2 10%, D1 6%), passings in a
-  row that skip a stop fall from 9,545 to 3,986, and one is lost. Impossibly
-  quick ones (adjacent stops under 8 s apart: 33 against 30) and a stop
-  twice within 5 minutes (2,502 against 2,422) barely move.
+  A1 and A2 reversing out of KRB (up to 500 m back) still count, and a
+  stop is passed once: driving on after a step back doesn't pass the
+  stops it already had again.
+- **On the 27 days,** passings rise by 2% (D2 8%, D1 5%), passings in a
+  row that skip a stop fall from 9,545 to 4,218, a stop twice within 5
+  minutes from 2,422 to 274, and impossibly quick ones (adjacent stops
+  under 8 s apart) from 30 to 20. What's gone is mostly A1 and A2 at KRB:
+  a bus that reversed out of the terminal and drove off passed KRB a
+  second time, on leaving.
 - **Went by: 36 misses to 7.** What's left looks like something else: D1
   off its line in the COM3 bay, an A1 seen at neither BIZ2 nor TCOMS-OPP
   between AS5 and PGP on 22 October, and a run of far-side readings
   longer than 2 minutes.
-- **The misses now:** 170 (4.1%), 37.5% of the feed's error. Waiting at a
-  first stop is the biggest cause (66, 13.7%), then other (43, 8.7%) and
-  stuck (40, 8.5%).
-- **Under 2 minutes**, only 2% of the feed's answers are misses (round 4:
+- **The misses now:** 168 (4.1%), 37% of the feed's error. Waiting at a
+  first stop is the biggest cause (64, 13.1%), then other (43, 8.8%) and
+  stuck (40, 8.6%).
+- **Under 2 minutes**, only 1.6% of the feed's answers are misses (round 4:
   4.2%): most of those were the scoring's.
 
 ## Round 4: where the feed's worst answers come from

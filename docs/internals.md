@@ -2090,7 +2090,8 @@ off when unset or unreadable):
   Each reading is measured from the bus's last good one: one far back or
   too far ahead (a bus placed on the far side of the road) is passed over,
   until three in a row agree with each other (two, with no good one in the
-  last two minutes).
+  last two minutes). A stop is passed once: after a step back (A1 and A2
+  reversing out of KRB), the bus driving on doesn't pass it again.
   `scoreEtas` gives each prediction its plate's first arrival, counting one
   cached answer once, and none for a bus leaving its first stop (the `-S`
   berth, whose arrival says nothing about when it leaves). The result is `eta/YYYY-MM-DD.json` in the downloads

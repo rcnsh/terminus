@@ -133,18 +133,23 @@ export interface Segment {
   known: number;
 }
 
-/** Each bus's consecutive passings at adjacent stops of its route, as segments. */
-export function segmentsOf(passings: (Passing & { seen?: number })[], routes: Record<string, Route>, lagMs = 0): Segment[] {
-  const byBus = new Map<string, (Passing & { seen?: number })[]>();
+/** Each bus's passings, keyed `svc|plate`, in time order. */
+function byBusOf<P extends Passing>(passings: P[]): Map<string, P[]> {
+  const byBus = new Map<string, P[]>();
   for (const p of passings) {
     const k = `${p.svc}|${p.plate}`;
     const list = byBus.get(k);
     if (list) list.push(p);
     else byBus.set(k, [p]);
   }
+  for (const list of byBus.values()) list.sort((a, b) => a.t - b.t);
+  return byBus;
+}
+
+/** Each bus's consecutive passings at adjacent stops of its route, as segments. */
+export function segmentsOf(passings: (Passing & { seen?: number })[], routes: Record<string, Route>, lagMs = 0): Segment[] {
   const out: Segment[] = [];
-  for (const list of byBus.values()) {
-    list.sort((a, b) => a.t - b.t);
+  for (const list of byBusOf(passings).values()) {
     for (let i = 1; i < list.length; i++) {
       const a = list[i - 1];
       const b = list[i];
@@ -654,9 +659,8 @@ const WENT_BY = { skipped: 3, gapMs: 10 * 60_000 };
  * Whether two of the plate's passings [list] (sorted) in a row span [q]'s
  * stop, the bus passing it (halfway between them) between earlyS(q) before
  * asking and [came]: it went by unseen, so [came], the arrival matched, is
- * likely its next lap's. The recorder lost it there (on 13 October 2026
- * D1s were seen at CLB and then BIZ2, and at neither LT13 nor AS5 between)
- * or it went another way. Only over WENT_BY's gap at most.
+ * likely its next lap's. The recorder lost it there, or it went another
+ * way. Only over WENT_BY's gap at most.
  */
 export function wentBy(route: Route, list: Passing[], q: Query, came: number): boolean {
   const from = q.t - earlyS(q) * 1000;
@@ -734,13 +738,7 @@ export function casesOf(model: EtaModel, routes: Record<string, Route>, rec: Rec
   const states = stateIndex(rec.passings, rec.lagMs);
   const driven = recentIndex(segmentsOf(rec.passings, routes, rec.lagMs));
   const reads = readIndex(rec.queries);
-  const byBus = new Map<string, Passing[]>();
-  for (const p of rec.passings) {
-    const list = byBus.get(`${p.svc}|${p.plate}`);
-    if (list) list.push(p);
-    else byBus.set(`${p.svc}|${p.plate}`, [p]);
-  }
-  for (const list of byBus.values()) list.sort((a, b) => a.t - b.t);
+  const byBus = byBusOf(rec.passings);
   const out: Case[] = [];
   for (const q of rec.queries) {
     const route = routes[q.svc];

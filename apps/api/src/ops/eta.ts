@@ -41,6 +41,8 @@ export interface Passing {
   plate: string;
   stop: string;
   t: number;
+  /** When it could first be known: the reading that confirmed it, later than [t] when the bus was seen on either side of the stop. */
+  seen?: number;
 }
 
 /** What the feed said: at [t], [plate] would reach [stop] in [etaS]. */
@@ -137,8 +139,12 @@ const WRAP_M = 1200;
  * with each other: then the bus is there. With no good reading in the last
  * MAX_GAP_MS, two agreeing are enough. From a loop's end its start is
  * ahead, and from a one-way route's end a new trip begins, within WRAP_M of
- * the two ends together. A one-way route's first stop is where a bus
- * starts, not arrives, so it has none.
+ * the two ends together. Each passing carries `seen`, the reading that
+ * confirmed it (an accepted run's last), so a score never uses a reading
+ * that hadn't arrived. A stop is passed once: after a step back, the bus
+ * driving on doesn't pass the stops it already had again (A1 and A2 would
+ * otherwise reach KRB on arriving and again on leaving). A one-way route's
+ * first stop is where a bus starts, not arrives, so it has none.
  */
 export function passingsOf(day: DayFile): Passing[] {
   const lines = linesOf(day);
@@ -176,7 +182,15 @@ export function passingsOf(day: DayFile): Passing[] {
       if (total > 0 && total - a1 + a2 <= WRAP_M && d < 0) d = loop ? d + total : 0;
       return d < -BACK_M || d / (dt / 1000) > MAX_SPEED_MPS ? null : d;
     };
-    const cross = ([t1, a1]: [number, number], d: number, dt: number) => {
+    // Metres driven since the bus was last found somewhere new, and the
+    // furthest it got: a stop is passed once, not again after a step back.
+    let odo = 0;
+    let peak = 0;
+    const cross = ([t1, a1]: [number, number], d: number, dt: number, seen: number) => {
+      const from = a1 + Math.max(0, peak - odo);
+      odo += d;
+      peak = Math.max(peak, odo);
+      if (d <= 0) return;
       for (const { code, mark } of stops) {
         let target = mark - ARRIVE_BEFORE_M;
         if (loop && total > 0) {
@@ -184,7 +198,7 @@ export function passingsOf(day: DayFile): Passing[] {
           // Crossed after wrapping round: measure it on the far side of the end.
           if (target <= a1) target += total;
         }
-        if (target > a1 && target <= a1 + d) out.push({ svc, plate, stop: code, t: Math.round(t1 + ((target - a1) / d) * dt) });
+        if (target > from && target <= a1 + d) out.push({ svc, plate, stop: code, t: Math.round(t1 + ((target - a1) / d) * dt), seen });
       }
     };
     // Where the bus is: the last reading that agreed with the one before.
@@ -194,7 +208,7 @@ export function passingsOf(day: DayFile): Passing[] {
     for (const fix of fixes) {
       const fromGood = good && drive(good, fix);
       if (good && fromGood != null) {
-        if (fromGood > 0) cross(good, fromGood, fix[0] - good[0]);
+        cross(good, fromGood, fix[0] - good[0], fix[0]);
         good = fix;
         run = [];
         continue;
@@ -208,10 +222,8 @@ export function passingsOf(day: DayFile): Passing[] {
       run.push(fix);
       // Against where it was, three readings say it's moved; with nowhere to go on, two.
       if (run.length < (good && fix[0] - good[0] <= MAX_GAP_MS ? RUN_TO_MOVE : 2)) continue;
-      for (let k = 1; k < run.length; k++) {
-        const d = drive(run[k - 1], run[k])!;
-        if (d > 0) cross(run[k - 1], d, run[k][0] - run[k - 1][0]);
-      }
+      odo = peak = 0;
+      for (let k = 1; k < run.length; k++) cross(run[k - 1], drive(run[k - 1], run[k])!, run[k][0] - run[k - 1][0], fix[0]);
       good = fix;
       run = [];
     }
