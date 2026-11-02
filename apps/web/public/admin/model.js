@@ -26,13 +26,36 @@ const METRICS = [
   ['mae', 'Mean error'],
   ['p90', '90th percentile'],
   ['bias', 'Signed'],
+  ['miss', 'Over 5 min off'],
+];
+/**
+ * Why the feed was over 5 minutes off, in etamodel.ts causeOf's order: each
+ * put down to the first that fits. A bus unseen for 20 minutes has no
+ * history to answer with, so its questions aren't scored and it has no row.
+ */
+const CAUSES = [
+  [
+    'wentBy',
+    'Went by unseen',
+    'Seen at stops before and after this one but not at it, so the arrival scored is likely its next lap: a gap in the recording, not the feed.',
+  ],
+  [
+    'atStop',
+    'At the stop',
+    'Last seen reaching this very stop, so it may still have been there and the arrival scored is likely its next lap.',
+  ],
+  ['stuck', 'Stuck', 'The feed gave about the same time for this bus here for 3 minutes or more.'],
+  ['firstStop', 'First stop', 'Its way leaves a route’s first stop, where buses wait to depart, or ends at one, where they queue.'],
+  ['held', 'Held', 'Far overdue on its current stretch.'],
+  ['other', 'Other', 'None of these.'],
 ];
 /** Days scored before the numbers are worth reading (docs/eta-model.md). */
 const READ_FROM = 7;
 
 const secs = (s) => (s == null ? '—' : `${Math.round(s)} s`);
 const signed = (s) => (s == null ? '—' : s === 0 ? '0 s' : `${s > 0 ? '+' : '−'}${Math.abs(Math.round(s))} s`);
-const show = (metric) => (metric === 'bias' ? signed : secs);
+const show = (metric) => (metric === 'bias' ? signed : metric === 'miss' ? (x) => pct(x, 1) : secs);
+const axis = (metric) => (metric === 'miss' ? (x) => pct(x, 1) : (x) => `${x} s`);
 
 /** [method]'s [metric] over [days], weighted by how many questions each scored: [mean, questions]. */
 function pooled(days, method, metric, h = null) {
@@ -58,6 +81,23 @@ function wins(days, h, metric) {
     if (st.blend[metric] < st.feed[metric]) won++;
   }
   return [won, of];
+}
+
+/** The feed's misses by cause over [days] (those that keep them): per cause, questions and every method's summed error; and the feed's whole error on those days. */
+function missesOver(days) {
+  const kept = days.filter((d) => d.misses);
+  const out = Object.fromEntries(CAUSES.map(([k]) => [k, { n: 0, late: 0, err: {} }]));
+  for (const d of kept) {
+    for (const [k] of CAUSES) {
+      const o = d.misses[k];
+      if (!o) continue;
+      out[k].n += o.n;
+      out[k].late += o.late;
+      for (const [m, e] of Object.entries(o.err)) out[k].err[m] = (out[k].err[m] ?? 0) + e;
+    }
+  }
+  const feedErr = kept.reduce((t, d) => t + (d.overall?.feed?.n ?? 0) * (d.overall?.feed?.mae ?? 0), 0);
+  return { days: kept.length, causes: out, feedErr };
 }
 
 /** What a horizon's record says so far, in a word. */
@@ -115,6 +155,11 @@ export function Model({ s }) {
   const [blendMae] = pooled(scored, 'blend', 'mae');
   const [feedMae, questions] = pooled(scored, 'feed', 'mae');
   const gain = blendMae != null && feedMae ? (feedMae - blendMae) / feedMae : null;
+  const [blendMiss] = pooled(scored, 'blend', 'miss');
+  const [feedMiss] = pooled(scored, 'feed', 'miss');
+  const missGain = blendMiss != null && feedMiss ? (feedMiss - blendMiss) / feedMiss : null;
+  const misses = missesOver(scored);
+  const missCount = CAUSES.reduce((t, [k]) => t + misses.causes[k].n, 0);
   const warming = !scored.length;
   const pickedDay = days.find((d) => d.date === picked) ?? scored.at(-1) ?? latest;
   const horizons = (pickedDay.horizons ?? []).map((x) => x.label);
@@ -142,6 +187,16 @@ export function Model({ s }) {
         sub="against the feed"
         tone=${gain == null ? '' : gain > 0 ? 'good' : 'bad'}
       />
+      <${Tile} k="Feed, over 5 min off" n=${feedMiss} show=${(x) => pct(x, 1)} sub="of the questions scored" />
+      <${Tile}
+        k="Blend, over 5 min off"
+        n=${blendMiss}
+        show=${(x) => pct(x, 1)}
+        delta=${missGain == null ? null : -missGain}
+        upGood=${false}
+        sub="against the feed"
+        tone=${missGain == null ? '' : missGain > 0 ? 'good' : 'bad'}
+      />
     </div>
     ${
       warming
@@ -165,6 +220,14 @@ export function Model({ s }) {
             num: true,
             fmt: (v, r) =>
               html`<span class=${r.blend != null && r.feed != null ? (r.blend < r.feed ? 'good' : 'bad') : ''}>${secs(v)}</span>`,
+          },
+          { key: 'feedMiss', label: 'Feed, over 5 min', num: true, fmt: (v) => pct(v, 1) },
+          {
+            key: 'blendMiss',
+            label: 'Blend, over 5 min',
+            num: true,
+            fmt: (v, r) =>
+              html`<span class=${r.blendMiss != null && r.feedMiss != null ? (r.blendMiss < r.feedMiss ? 'good' : r.blendMiss > r.feedMiss ? 'bad' : '') : ''}>${pct(v, 1)}</span>`,
           },
           {
             key: 'mae',
@@ -190,13 +253,59 @@ export function Model({ s }) {
             label,
             feed: pooled(scored, 'feed', 'mae', h)[0],
             blend: pooled(scored, 'blend', 'mae', h)[0],
+            feedMiss: pooled(scored, 'feed', 'miss', h)[0],
+            blendMiss: pooled(scored, 'blend', 'miss', h)[0],
             mae,
             p90,
             verdict: verdict(mae, p90, Math.min(mae[1], p90[1])),
           };
         })}
       />
-      <p class="hint chart-note">Feed and Blend are mean errors over every scored day, weighted by questions.</p>
+      <p class="hint chart-note">
+        Feed and Blend are mean errors over every scored day, weighted by questions; over 5 min, the share of answers more than 5 minutes off.
+      </p>
+    <//>
+    <${Card}
+      title="Where the feed is over 5 minutes off"
+      sub=${
+        misses.days
+          ? `${fmt(missCount)} questions on ${fmt(misses.days)} ${misses.days === 1 ? 'day' : 'days'}, each put down to the first cause that fits, in this order. Errors are the mean on those questions. A bus unseen for 20 minutes isn’t scored.`
+          : 'Kept from the next days the model answers.'
+      }
+    >
+      ${
+        misses.days
+          ? html`<${Table}
+              cols=${[
+                { key: 'label', label: 'Cause' },
+                { key: 'n', label: 'Questions', num: true },
+                { key: 'late', label: 'Bus later than said', num: true, fmt: (v) => pct(v) },
+                { key: 'share', label: 'Of the feed’s error', num: true, meter: true, fmt: (v) => pct(v) },
+                { key: 'feed', label: 'Feed', num: true, fmt: (v) => secs(v) },
+                { key: 'checked', label: 'Checked', num: true, fmt: (v) => secs(v) },
+                { key: 'blend', label: 'Blend', num: true, fmt: (v) => secs(v) },
+              ]}
+              rows=${CAUSES.map(([k, label]) => {
+                const o = misses.causes[k];
+                const mean = (m) => (o.n && o.err[m] != null ? o.err[m] / o.n : null);
+                return {
+                  key: k,
+                  label,
+                  n: o.n,
+                  late: o.n ? o.late / o.n : null,
+                  share: misses.feedErr ? (o.err.feed ?? 0) / misses.feedErr : null,
+                  feed: mean('feed'),
+                  checked: mean('checked'),
+                  blend: mean('blend'),
+                };
+              })}
+            />
+            <details class="more-table">
+              <summary>What each cause is</summary>
+              ${CAUSES.map(([, label, what]) => html`<p class="hint"><b>${label}:</b> ${what}</p>`)}
+            </details>`
+          : html`<${Empty}>No day answered keeps its misses yet.<//>`
+      }
     <//>
     <${Card}
       title="Error per day, every way"
@@ -207,9 +316,10 @@ export function Model({ s }) {
         line
         fromZero=${false}
         rows=${rowsFor(CHARTED)}
+        whole=${metric !== 'miss'}
         series=${CHARTED.map((k, i) => ({ name: LABEL[k], color: S(i) }))}
         fmt=${show(metric)}
-        yfmt=${(x) => `${x} s`}
+        yfmt=${axis(metric)}
         picked=${days.indexOf(pickedDay)}
         onPick=${(i) => setPicked(days[i].date)}
         pickNote="Click for this day by horizon"

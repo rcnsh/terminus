@@ -2119,7 +2119,7 @@ export function paths(): Record<string, unknown> {
               model: {
                 type: ['object', 'null'],
                 description:
-                  'The arrival-time model run in shadow (it answers no one): whether it runs (`on`), and each of the last 28 days it answered, every method’s error overall and by how far ahead, with the share of questions history could answer. null without storage.',
+                  'The arrival-time model run in shadow (it answers no one): whether it runs (`on`), and each of the last 28 days it answered, every method’s error overall and by how far ahead (with the share over 5 minutes off, `miss`), the share of questions history could answer, and the feed’s misses by cause (`misses`). null without storage.',
               },
             },
           }),

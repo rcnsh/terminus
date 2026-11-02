@@ -203,7 +203,8 @@ function etaDay(date) {
   };
 }
 
-const METHODS = ['feed', 'corrected', 'history', 'gated', 'recent', 'blend'];
+const METHODS = ['feed', 'corrected', 'checked', 'history', 'gated', 'recent', 'blend'];
+const CAUSES = ['wentBy', 'atStop', 'stuck', 'unseen', 'firstStop', 'held', 'other'];
 const HORIZONS = ['under 2 min', '2 to 5 min', '5 to 10 min', '10 to 30 min'];
 
 /**
@@ -218,6 +219,7 @@ function shadowDay(date, i) {
     const by = {
       feed: 1,
       corrected: 0.97,
+      checked: 0.95 - learnt * 0.06,
       history: [0.85, 1.15, 1.45, 1.9][h] - learnt * 0.1,
       gated: 1.02 - learnt * 0.05,
       recent: 1 - learnt * 0.08,
@@ -231,6 +233,7 @@ function shadowDay(date, i) {
       p50: Math.round(mae * 0.7 * 10) / 10,
       p90: Math.round(mae * 2.3 * 10) / 10,
       bias: Math.round((rand(`b${date}${h}${m}`) - 0.3) * mae * 0.6 * 10) / 10,
+      miss: Math.round([0.04, 0.055, 0.007, 0.065][h] * by * (0.8 + rand(`m${date}${h}${m}`) * 0.4) * 1000) / 1000,
     };
   };
   const horizons = HORIZONS.map((label, h) => ({ label, stats: Object.fromEntries(METHODS.map((m) => [m, stats(h, m)])) }));
@@ -239,26 +242,47 @@ function shadowDay(date, i) {
       const hs = horizons.map((x) => x.stats[m]);
       const n = hs.reduce((t, x) => t + x.n, 0);
       const w = (k) => Math.round((hs.reduce((t, x) => t + x.n * x[k], 0) / n) * 10) / 10;
-      return [m, { n, mae: w('mae'), p50: w('p50'), p90: w('p90'), bias: w('bias') }];
+      const miss = Math.round((hs.reduce((t, x) => t + x.n * x.miss, 0) / n) * 1000) / 1000;
+      return [m, { n, mae: w('mae'), p50: w('p50'), p90: w('p90'), bias: w('bias'), miss }];
+    }),
+  );
+  // The feed's misses by cause, about as production's: most went by unseen or at a first stop.
+  const share = { wentBy: 0.19, atStop: 0.05, stuck: 0.18, unseen: 0, firstStop: 0.4, held: 0.01, other: 0.17 };
+  const fix = { feed: 1, corrected: 0.97, checked: 0.85, history: 1.6, gated: 0.97, recent: 0.98, blend: 0.83 };
+  const missed = Math.round(overall.feed.n * overall.feed.miss);
+  const misses = Object.fromEntries(
+    CAUSES.map((c) => {
+      const n = Math.round(missed * share[c]);
+      const each = { wentBy: 1640, atStop: 1500, stuck: 880, unseen: 900, firstStop: 880, held: 340, other: 850 }[c];
+      return [
+        c,
+        {
+          n,
+          late: Math.round(n * 0.8),
+          err: Object.fromEntries(METHODS.map((m) => [m, Math.round(n * each * (c === 'wentBy' || c === 'atStop' ? 1.05 : fix[m]))])),
+        },
+      ];
     }),
   );
   const predictions = 520 + Math.round(rand(`p${date}`) * 200);
   const cases = Math.round(predictions * 0.86);
+  const none = { n: 0, mae: null, p50: null, p90: null, bias: null, miss: null };
   return {
-    v: 1,
+    v: 3,
     date,
     built: { days: i, pairs: Math.round(Math.min(105, i * 30)) },
     predictions,
     cases,
     coverage: i ? Math.round(Math.min(0.88, 0.25 + learnt * 0.6) * 1000) / 1000 : 0,
     weights: HORIZONS.map((_, h) => (i ? Math.round(learnt * [0.6, 0.4, 0.2, 0.1][h] * 10) / 10 : 0)),
-    overall: i ? overall : Object.fromEntries(METHODS.map((m) => [m, { n: 0, mae: null, p50: null, p90: null, bias: null }])),
+    overall: i ? overall : Object.fromEntries(METHODS.map((m) => [m, none])),
     horizons: i
       ? horizons
       : horizons.map((x) => ({
           label: x.label,
-          stats: Object.fromEntries(METHODS.map((m) => [m, { n: 0, mae: null, p50: null, p90: null, bias: null }])),
+          stats: Object.fromEntries(METHODS.map((m) => [m, none])),
         })),
+    ...(i ? { misses } : {}),
     grid: { sums: [], n: [] },
   };
 }

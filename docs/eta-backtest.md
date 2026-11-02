@@ -1,5 +1,124 @@
 # Arrival-time backtest: results
 
+## Round 5: the recorder's buses kept to their side of the road
+
+**With the passings repaired, the blend beats the feed by 15%, not 9%.**
+Round 4's "went by" misses came from the timelapse recorder, not the
+feed. Rerun on the same 27 days and predictions, walked forward from 12
+October as before:
+
+| method | MAE | p50 | p90 | over 5 min | under 2 min | 2 to 5 | 5 to 10 | 10 to 30 |
+|---|---|---|---|---|---|---|---|---|
+| feed | 95.6 s | 47.9 s | 175.6 s | 4.1% | 48.6 | 89.7 | 57.2 | 124.2 |
+| checked | 83.0 s | 45.1 s | 154.8 s | 3.1% | 40.0 | 75.8 | 53.1 | 107.6 |
+| blend | 81.3 s | 44.0 s | 154.8 s | 3.1% | 37.9 | 74.0 | 52.3 | 105.6 |
+
+The horizon columns are MAE in seconds; 4,117 questions (more than round
+4's 3,904, since more passings are found). Every method gains on every
+horizon, the feed included: these were errors in the scoring.
+
+- **What went wrong.** The recorder places each bus as the map does, from
+  its track (buses.ts `follow`), but the tracks it saved to the edge cache
+  never came back to its Durable Object between polls. Placed afresh every
+  30 s, a bus on a road its line takes both ways (LT13 and LT13-OPP, AS5
+  and NUSS-OPP, TCOMS and TCOMS-OPP) was put on the far side for a
+  reading: 3.8% of D1's readings and 2.8% of D2's, against 0.01% of A1's,
+  whose line has no such road. `passingsOf` compared each reading only with
+  the one before, so a far-side reading cost the passings either side of
+  it. Replaying the feed trace (`bus-trace.jsonl`) every 30 s through
+  `follow` gives no such reading with the track kept, and 4 to 7% on D1
+  and D2 without it.
+- **The fix**, in two parts. The recorder keeps its tracks in its own
+  storage, so new days are placed right. `passingsOf` measures each
+  reading from the last good one, passing over one more than 500 m back or
+  too far ahead until three in a row agree with each other, so the
+  recorded days are repaired too. Two agreeing aren't enough against a
+  good reading: two far-side readings in a row are common (about 100 a
+  day). A loop's end leads to its start only within 1,200 m of the two
+  ends together: a reading far back could otherwise pass for a lap ahead.
+  A1 and A2 reversing out of KRB (up to 500 m back) still count, and a
+  stop is passed once: driving on after a step back doesn't pass the
+  stops it already had again.
+- **On the 27 days,** passings rise by 2% (D2 8%, D1 5%), passings in a
+  row that skip a stop fall from 9,545 to 4,218, a stop twice within 5
+  minutes from 2,422 to 274, and impossibly quick ones (adjacent stops
+  under 8 s apart) from 30 to 20. What's gone is mostly A1 and A2 at KRB:
+  a bus that reversed out of the terminal and drove off passed KRB a
+  second time, on leaving.
+- **Went by: 36 misses to 7.** What's left looks like something else: D1
+  off its line in the COM3 bay, an A1 seen at neither BIZ2 nor TCOMS-OPP
+  between AS5 and PGP on 22 October, and a run of far-side readings
+  longer than 2 minutes.
+- **The misses now:** 168 (4.1%), 37% of the feed's error. Waiting at a
+  first stop is the biggest cause (64, 13.1%), then other (43, 8.8%) and
+  stuck (40, 8.6%).
+- **Under 2 minutes**, only 1.6% of the feed's answers are misses (round 4:
+  4.2%): most of those were the scoring's.
+
+## Round 4: where the feed's worst answers come from
+
+**A fifth of the feed's worst answers are the scoring's mistake, not the
+feed's.** The stable site's recorder days from 7 October to 2 November
+2026 and the feed's plated predictions from Analytics Engine, walked
+forward from 12 October (`--walk-from`: each day answered by a model
+fitted on the 28 days before it): 22 test days, 3,904 questions history
+could answer. Each of the feed's answers over 5 minutes off was put down
+to its cause (eta-model.md, *Why an answer is far off*).
+
+| method | MAE | p50 | p90 | over 5 min |
+|---|---|---|---|---|
+| feed | 108.7 s | 48.6 s | 182.9 s | 4.9% |
+| checked | 98.1 s | 45.6 s | 159.7 s | 4.1% |
+| blend | 98.5 s | 44.7 s | 161.3 s | 4.1% |
+
+The feed was over 5 minutes off on 190 questions (4.9%), and those were
+45% of its absolute error:
+
+| cause | misses | bus later than said | of the feed's error | feed | checked | blend |
+|---|---|---|---|---|---|---|
+| went by | 36 | 100% | 13.9% | 1,638 s | 1,753 s | 1,800 s |
+| at the stop | 12 | 58% | 3.4% | 1,190 s | 905 s | 905 s |
+| stuck | 34 | 74% | 6.9% | 864 s | 613 s | 607 s |
+| first stop | 74 | 91% | 14.6% | 838 s | 731 s | 725 s |
+| held | 2 | 100% | 0.2% | 344 s | 314 s | 314 s |
+| other | 32 | 38% | 6.4% | 854 s | 586 s | 456 s |
+
+The last three columns are the mean error on those questions. 25 more
+misses were on buses unseen for 20 minutes, which history can't answer
+and so aren't scored.
+
+- **Went by: the scoring's mistake.** The recorder saw the bus at stops
+  before and after the one asked about, one straight after the other, and
+  never at it, so the question was matched with the bus's next lap, 25 to
+  30 minutes later. It happens at a few stops: AS5 and LT13 for D1 (seen
+  at CLB, then at BIZ2), LT13-OPP for A2, BIZ2 for A1, and S17 for every D2
+  on the morning of 19 October. Only 36 questions, but each about 27
+  minutes "late". Without them, every method's MAE drops by 14 to 16 s:
+  the feed 94.5 s, the checked feed and the blend 82.7 s (−12%). The 12
+  "at the stop" misses may be the same kind: the bus last seen reaching
+  the stop asked about, so possibly still there, and matched with its
+  next lap.
+- **The 2-to-5-minute rise is two things.** Its median error (34 s) is
+  below 5 to 10 minutes' (45 s); only its misses (5.5% against 0.7%) put
+  its mean above. 11 of them went by. Of the other 21, 17 are D2 at PGP
+  on 19 October, 07:28 to 08:14: the feed said about 3 minutes for every
+  D2 while the buses still waited at COM3, two stops back, and they came
+  14 to 31 minutes later. Without the went-by questions, the feed's MAE
+  at 2 to 5 minutes is 84.8 s and the blend's 68.4 s.
+- **Waiting at a first stop is the biggest cause the feed owns**: 74
+  misses, 14.6% of its error, 91% of them buses coming later than said.
+  The check helps a little (838 s to 731 s on them); nothing in the model
+  knows when a bus will leave COM3 or KRB.
+- **Stuck times are fewer than expected** (34, 6.9%), almost all at 10 to
+  30 minutes. The check already takes about a third off them. A stuck
+  time across buses, as on 19 October at PGP, isn't caught: each bus's
+  time moved a little.
+- **The check's 90 s limit stops it on most misses**: 107 of the 190 were
+  on a bus last seen at a stop more than 90 s before.
+
+**What's next:** fix the scoring first (round 5). Then the departures
+from a first stop, the biggest cause that is the feed's own.
+
 ## Round 3: production days, walked forward, and the check
 
 **The checked feed beats the feed by a tenth, on every day.** On the

@@ -28,6 +28,7 @@ import {
   type EtaModel,
   type ErrorStats,
   type Method,
+  type Misses,
   type Route,
   type SegmentTimes,
   type WeightGrid,
@@ -47,8 +48,10 @@ const DAY = 86_400_000;
 const HISTORY_DAYS = 28;
 /** A recorded day this many days back not yet run in shadow is still picked up: the whole window, so it fills as it's recorded. */
 const CATCH_UP_DAYS = HISTORY_DAYS;
-/** ShadowDay's version: a day kept by an older model is run again, and its grid isn't this blend's. */
-const SHADOW_V = 2;
+/** ShadowDay's version: a day kept by an older one is run again (3: the misses kept). */
+const SHADOW_V = 3;
+/** Versions whose model answered as this one does: their grids are this blend's, and the dashboard shows them until they're run again. */
+const SAME_MODEL = new Set([2, SHADOW_V]);
 /** Predictions further ahead than this aren't scored (as eta.ts). */
 const MAX_ETA_S = 30 * 60;
 
@@ -69,7 +72,7 @@ export interface SegmentDay {
 
 /** One day answered by the model the days before it built. */
 export interface ShadowDay {
-  v: typeof SHADOW_V;
+  v: 2 | typeof SHADOW_V;
   date: string;
   /** What the model was built from: days with segment times, and stop pairs known. */
   built: { days: number; pairs: number };
@@ -81,6 +84,8 @@ export interface ShadowDay {
   weights: number[];
   overall: Record<Method, ErrorStats>;
   horizons: { label: string; stats: Record<Method, ErrorStats> }[];
+  /** The feed's misses among the scored questions, by cause (etamodel.ts missesOf). Not in version 2. */
+  misses?: Misses;
   /** The day's own weight grid, for the weights of the days after. */
   grid: WeightGrid;
 }
@@ -115,9 +120,9 @@ export async function modelBefore(bucket: R2Bucket, date: string): Promise<{ mod
   const kept = segments.filter((s): s is SegmentDay => s?.v === 1);
   // eta.ts's rows are the feed's errors, the bus's arrival minus the time said.
   const errors = scored
-    .filter((d): d is EtaDay => d?.v === 1 || d?.v === ETA_V)
+    .filter((d): d is EtaDay => d?.v === 1 || d?.v === 2 || d?.v === ETA_V)
     .flatMap((d) => d.rows.map(([s, etaS, errS]) => ({ svc: d.services[s], feedS: etaS, errS })));
-  const grids = shadows.filter((s): s is ShadowDay => s?.v === SHADOW_V).map((s) => s.grid);
+  const grids = shadows.filter((s): s is ShadowDay => !!s && SAME_MODEL.has(s.v)).map((s) => s.grid);
   return {
     model: { v: 1, table: tableOf(kept.map((s) => s.times)), bias: biasOf(errors), weights: weightsFrom(grids) },
     days: kept.length,
@@ -158,6 +163,7 @@ export function shadowOf(
     weights: model.weights,
     overall: scored.overall,
     horizons: scored.horizons,
+    misses: scored.misses,
     grid: weightGrid(model, cases),
   };
 }
@@ -174,7 +180,9 @@ export async function shadowEta(env: Env, nowMs: number, fetchImpl: typeof fetch
   if (windowOf(latest).close > nowMs) latest = before(latest, 1);
   for (let i = CATCH_UP_DAYS - 1; i >= 0; i--) {
     const date = before(latest, i);
-    if ((await env.FILES.head(shadowKey(date)))?.customMetadata?.v === String(SHADOW_V)) continue;
+    // Done by this model on the passings as eta.ts now finds them.
+    const done = (await env.FILES.head(shadowKey(date)))?.customMetadata;
+    if (done?.v === String(SHADOW_V) && done.eta === String(ETA_V)) continue;
     if (!(await env.FILES.head(dayKey(date)))) continue;
     // Scored first: its errors are the next day's bias.
     if (!scoredNow(await env.FILES.head(etaKey(date)))) return null;
@@ -189,7 +197,7 @@ export async function shadowEta(env: Env, nowMs: number, fetchImpl: typeof fetch
     // Last: it marks the day done.
     await env.FILES.put(shadowKey(date), JSON.stringify(shadowOf(date, model, days, passings, predictions, day.pollMs)), {
       ...json,
-      customMetadata: { v: String(SHADOW_V) },
+      customMetadata: { v: String(SHADOW_V), eta: String(ETA_V) },
     });
     return date;
   }
@@ -214,6 +222,6 @@ export async function shadowSummary(
   return {
     on: etaModelOn(env),
     historyDays: HISTORY_DAYS,
-    days: kept.filter((d): d is ShadowDay => d?.v === SHADOW_V).map(({ grid: _grid, ...d }) => d),
+    days: kept.filter((d): d is ShadowDay => !!d && SAME_MODEL.has(d.v)).map(({ grid: _grid, ...d }) => d),
   };
 }

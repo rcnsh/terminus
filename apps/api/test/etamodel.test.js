@@ -16,6 +16,7 @@ import {
   earlyS,
   busStates,
   casesOf,
+  causeOf,
   errorStats,
   fitModel,
   heldAfterS,
@@ -26,6 +27,7 @@ import {
   passingsFromReadings,
   predictS,
   quantile,
+  readIndex,
   recentIndex,
   recentS,
   ringOf,
@@ -33,6 +35,9 @@ import {
   segmentS,
   segmentsOf,
   slotOf,
+  steadyS,
+  wentBy,
+  whyOf,
 } from '../src/ops/etamodel.ts';
 
 // Wednesday 21 October 2026, 08:00 Singapore time.
@@ -426,7 +431,97 @@ test('with a noisy feed and buses that keep to time, the blend leans on history'
 });
 
 test('error statistics: mean and quantiles of the absolute error, and the signed mean', () => {
-  assert.deepEqual(errorStats([]), { n: 0, mae: null, p50: null, p90: null, bias: null });
-  assert.deepEqual(errorStats([10, -20, 30, -40, 50, 60, -70, 80, 90, -100]), { n: 10, mae: 55, p50: 50, p90: 90, bias: 9 });
+  assert.deepEqual(errorStats([]), { n: 0, mae: null, p50: null, p90: null, bias: null, miss: null });
+  assert.deepEqual(errorStats([10, -20, 30, -40, 50, 60, -70, 80, 90, -100]), { n: 10, mae: 55, p50: 50, p90: 90, bias: 9, miss: 0 });
+  assert.equal(errorStats([300, -301, 30, 1500]).miss, 0.5, 'over 5 minutes off either way, not at 5 minutes');
   assert.equal(quantile([3, 1, 2], 0.5), 2);
+});
+
+test("a stuck time: the feed giving the same bus's time at a stop, read after read, for minutes", () => {
+  const read = (s, etaS, o = {}) => ({ t: T0 + s * S, svc: 'L', stop: 'C', etaS, plate: 'PA1', ...o });
+  const reads = [read(0, 180), read(70, 180), read(130, 170), read(200, 180), read(250, 100), read(900, 100), read(1000, 100)];
+  const index = readIndex([...reads, read(100, 180, { plate: 'PA2' }), read(100, 180, { stop: 'D' })]);
+  assert.equal(steadyS(index, reads[3]), 200, 'within a minute of 180 since the first read');
+  assert.equal(steadyS(index, reads[4]), 0, 'counting down');
+  assert.equal(steadyS(index, reads[5]), 0, '650 s since the read before: nothing known between');
+  assert.equal(steadyS(index, reads[6]), 100);
+  // Another bus, and this one at another stop, said 180 too at 100 s: not this bus's time here.
+  const other = readIndex([read(0, 180), read(100, 180, { plate: 'PA2' }), read(100, 180, { stop: 'D' }), read(350, 180)]);
+  assert.equal(steadyS(other, read(350, 180)), 0, '350 s since its own last read');
+  assert.equal(steadyS(readIndex([read(0, 180), read(300, 180)]), read(300, 180)), 300, '5 minutes apart still counts');
+  assert.equal(
+    steadyS(readIndex([read(0, 60, { plate: undefined }), read(200, 60, { plate: undefined })]), read(200, 60, { plate: undefined })),
+    200,
+    'a board too',
+  );
+});
+
+test('a bus that went by unseen: seen before the stop and after it, one straight after the other, never at it', () => {
+  const big = ringOf(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'A'], true);
+  const q = { t: T0, svc: 'L', stop: 'C', etaS: 300, plate: 'PA1' };
+  const came = T0 + 2000 * S;
+  assert.ok(wentBy(big, [at('B', 60), at('D', 200)], q, came), 'B, then D: it passed C');
+  assert.ok(wentBy(big, [at('A', 60), at('E', 300)], q, came), 'three stops unseen');
+  assert.ok(!wentBy(big, [at('B', 60), at('C', 120), at('D', 200)], q, came), 'seen at C');
+  assert.ok(!wentBy(big, [at('A', 60), at('F', 300)], q, came), 'four stops unseen: more likely a bad reading');
+  assert.ok(!wentBy(big, [at('D', 60), at('B', 120)], q, came), 'a stop back is a reading, not a lap');
+  assert.ok(!wentBy(big, [at('B', -200), at('D', -100)], q, came), 'passed before asking: the question was about the next lap');
+  assert.ok(wentBy(big, [at('B', -40), at('D', 100)], q, came), 'from before asking, passing C after');
+  assert.ok(!wentBy(big, [at('B', -140), at('D', 100)], q, came), 'passing C, halfway, before asking');
+  assert.ok(!wentBy(big, [at('B', 0), at('D', 700)], q, came), 'over 10 minutes between: out of service, perhaps');
+  assert.ok(!wentBy(big, [at('A', 0), at('A', 300)], q, came), 'twice at A: waiting there');
+  assert.ok(!wentBy(big, [at('B', 60), at('D', 200)], q, T0 + 150 * S), 'the gap after the arrival matched');
+});
+
+test('why: a far-off answer put down to the first cause that fits', () => {
+  const q = { t: T0, svc: 'L', stop: 'C', etaS: 120, plate: 'PA1' };
+  const why = (bus, o = {}) => whyOf(TABLE, LOOP, bus, { ...q, ...o }, 0);
+  assert.deepEqual(why({ plate: 'PA1', stop: 'B', t: T0 - 30 * S }), {
+    wentBy: false,
+    atStop: false,
+    seenS: 30,
+    firstStop: false,
+    held: false,
+    steadyS: 0,
+  });
+  assert.equal(why({ plate: 'PA1', stop: 'D', t: T0 }).firstStop, true, 'D to C goes through A, the first stop');
+  assert.equal(why({ plate: 'PA1', stop: 'A', t: T0 }).firstStop, true, 'at A');
+  assert.equal(why({ plate: 'PA1', stop: 'A', t: T0 }, { stop: 'B' }).firstStop, true, 'at A, asked about B: leaving the first stop');
+  const there = why({ plate: 'PA1', stop: 'C', t: T0 - 90 * S });
+  assert.deepEqual([there.atStop, there.firstStop], [true, false], 'seen at C itself: not a lap through A');
+  assert.equal(why({ plate: 'PA1', stop: 'C', t: T0 }, { stop: 'A' }).firstStop, true, 'arriving at A: buses queue there');
+  assert.equal(why({ plate: 'PA1', stop: 'B', t: T0 - 211 * S }).held, true, 'B to C usually 90 s: held after 210');
+  assert.equal(why(undefined).seenS, null);
+  const base = { wentBy: false, atStop: false, seenS: 30, firstStop: false, held: false, steadyS: 0 };
+  assert.equal(causeOf(base), 'other');
+  assert.equal(causeOf({ ...base, held: true }), 'held');
+  assert.equal(causeOf({ ...base, held: true, firstStop: true }), 'firstStop');
+  assert.equal(causeOf({ ...base, seenS: null }), 'unseen');
+  assert.equal(causeOf({ ...base, seenS: null, steadyS: 180 }), 'stuck');
+  assert.equal(causeOf({ ...base, steadyS: 180, atStop: true }), 'atStop');
+  assert.equal(causeOf({ ...base, atStop: true, wentBy: true }), 'wentBy');
+});
+
+test("the feed's misses by cause: how many, and every method's error on them", () => {
+  // PA1 from A to B, then unseen at C and seen at D: asked about C, it's matched with the next lap.
+  const passings = [at('A', -60), at('B', 0), at('D', 140), at('A', 240), at('B', 300), at('C', 390)];
+  const queries = [
+    { t: T0 + 10 * S, svc: 'L', stop: 'C', etaS: 60, plate: 'PA1' },
+    { t: T0 + 310 * S, svc: 'L', stop: 'C', etaS: 60, plate: 'PA1' },
+  ];
+  const model = { v: 1, table: TABLE, bias: {}, weights: [0, 0, 0, 0] };
+  const cases = casesOf(model, ROUTES, { passings, queries, lagMs: 0 });
+  assert.deepEqual(
+    cases.map((c) => [c.actualS, c.why.wentBy]),
+    [
+      [380, true],
+      [80, false],
+    ],
+  );
+  const scored = scoreCases(cases);
+  assert.equal(scored.misses.wentBy.n, 1, '320 s late: a miss');
+  assert.equal(scored.misses.wentBy.late, 1);
+  assert.equal(scored.misses.wentBy.err.feed, 320);
+  assert.equal(scored.misses.other.n, 0, '20 s late: not a miss');
+  assert.equal(scored.overall.feed.miss, 0.5);
 });

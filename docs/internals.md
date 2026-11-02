@@ -2086,7 +2086,12 @@ off when unset or unreadable):
   (read back through Analytics Engine's SQL API) with the timelapse file:
   `passingsOf` reads when each plate passed 25 m before each stop along its
   line, interpolated between readings (gaps over 2 minutes and impossible
-  speeds skipped; a one-way route's first stop is a start, not an arrival);
+  speeds skipped; a one-way route's first stop is a start, not an arrival).
+  Each reading is measured from the bus's last good one: one far back or
+  too far ahead (a bus placed on the far side of the road) is passed over,
+  until three in a row agree with each other (two, with no good one in the
+  last two minutes). A stop is passed once: after a step back (A1 and A2
+  reversing out of KRB), the bus driving on doesn't pass it again.
   `scoreEtas` gives each prediction its plate's first arrival, counting one
   cached answer once, and none for a bus leaving its first stop (the `-S`
   berth, whose arrival says nothing about when it leaves). The result is `eta/YYYY-MM-DD.json` in the downloads
@@ -2097,7 +2102,8 @@ off when unset or unreadable):
   ([`src/ops/etashadow.ts`](../apps/api/src/ops/etashadow.ts)) answers the same day's
   predictions with the arrival-time model ([`src/ops/etamodel.ts`](../apps/api/src/ops/etamodel.ts):
   segment times from earlier days, the feed's usual error, a check against
-  where the bus is, a blend), oldest day first, built only from the 28 days before, and keeps the errors as
+  where the bus is, a blend), oldest day first, built only from the 28 days before, and keeps the errors,
+  with the share over 5 minutes off and the feed's misses by cause, as
   `eta/model/YYYY-MM-DD.json` and the day's segment times as
   `eta/segments/YYYY-MM-DD.json`. Nobody is shown its times;
   [eta-model.md](eta-model.md) has the design and what it needs first.
@@ -2339,7 +2345,7 @@ LTA every 15 minutes, past the cache; the beta's cron asks neither) and each pus
   by default and never below `MIN_POLL_MS`, 15 s (`pollInterval()` enforces
   it). The services are spread across the interval: with eight running, one
   every 3.75 s rather than all at once. Arrivals are never polled.
-- **Path.** Through `getBuses()` and `trackedPlacement()`, exactly as `/api/buses`
+- **Path.** Through `getBuses()`, exactly as `/api/buses`
   asks: the 5 s edge cache, one fetch in flight per service, `failMemoS`
   after a failure and the breaker after a refusal. When the map has just
   asked for a service, the poll is a cache hit and costs NUS nothing. With
@@ -2409,8 +2415,12 @@ service, and four whole numbers per bus. Those are the plate's index in a
 day's list of plates, latitude and longitude in steps of 1/100,000 of a
 degree (about 1.1 m) from a fixed point by campus, and metres along the
 route line. That is the bus's own place on the line from its track
-(`trackedPlacement`, the same placement the map uses), not the stop or
-midpoint the map draws it at; `-1` off the line. A poll with no buses is a
+(`placeBuses`, the same placement the map uses), not the stop or
+midpoint the map draws it at; `-1` off the line. The recorder keeps the
+tracks in its own storage (`tracks:<service>`), not the edge cache: the
+map's tracks there don't come back to the Durable Object between polls,
+and placed afresh every 30 s, a bus on a road its line takes both ways
+lands on the far side now and then (docs/eta-backtest.md, round 5). A poll with no buses is a
 row with none; a failed poll is no row. The route lines and stops are kept
 with the day, so the replay draws each `along` on the line it was measured
 on. A deploy that changes a line mid-day is caught by a fingerprint of each
