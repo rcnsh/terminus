@@ -537,7 +537,7 @@ export function components(): Record<string, unknown> {
           },
           stops: {
             type: 'array',
-            description: 'The stops in route order. A loop’s first stop is not listed again at its end.',
+            description: 'The stops in route order. A loop’s first stop is listed again at its end, where its buses finish.',
             items: {
               type: 'object',
               required: ['code', 'name', 'longName', 'services'],
@@ -565,7 +565,7 @@ export function components(): Record<string, unknown> {
                 after: {
                   type: ['integer', 'null'],
                   description:
-                    'Between stops: the index in `stops` of the stop it passed. It is on its way to the next one (the first, after a loop’s last). Null at a stop.',
+                    'Between stops: the index in `stops` of the stop it passed. It is on its way to the next one in `stops`. Null at a stop.',
                 },
               },
             },

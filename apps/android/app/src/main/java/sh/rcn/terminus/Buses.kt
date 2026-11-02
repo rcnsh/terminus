@@ -62,8 +62,8 @@ data class Board(
 data class LineStop(val code: String, val name: String, val services: List<String>)
 
 /**
- * A bus on a line: at stop [at] (an index into the line's stops), or between stop [after] and the one after it, round to the first on a
- * loop.
+ * A bus on a line: at stop [at] (an index into the line's stops), or between stop [after] and the one after it. A loop's line ends with its
+ * first stop again, so a bus on its last stretch is between the last two.
  */
 data class LineBus(val id: String, val plate: String?, val crowd: String?, val at: Int?, val after: Int?)
 
