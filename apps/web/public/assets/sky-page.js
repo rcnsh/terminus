@@ -54,7 +54,20 @@ if (top?.classList.contains('sky-panel')) {
     root.style.backgroundColor = high ? getComputedStyle(top).getPropertyValue('--s0') : '';
   };
   paint();
-  addEventListener('scroll', paint, { passive: true });
+  // Changing it repaints the whole page, which flickers faintly mid-scroll,
+  // so it changes once scrolling stops, or at once at the very top or
+  // bottom, where the pull is about to show it.
+  let idle;
+  addEventListener(
+    'scroll',
+    () => {
+      clearTimeout(idle);
+      const edge = window.scrollY <= 0 || window.scrollY >= root.scrollHeight - window.innerHeight - 1;
+      if (edge) paint();
+      else idle = setTimeout(paint, 150);
+    },
+    { passive: true },
+  );
   addEventListener('resize', paint);
   // The sky's colour changes with the hour (sky-phase.js) and the theme.
   new MutationObserver(paint).observe(root, { attributes: true, attributeFilter: ['data-sky', 'data-theme'] });
