@@ -12,7 +12,9 @@ The `routes` ordering is what makes direction resolution work. It is the part
 to get right; everything else in this file is bookkeeping.
 
 Reads config from the environment, falling back to .dev.vars. Never prints or
-commits any credential value.
+commits any credential value. With TERMINUS_SCRAPE_TOKEN set, the uNivUS version
+comes from the stable Worker (use_live_version), which keeps up with releases;
+NEXTBUS_APP_VERSION is then only the fallback.
 
     python3 scripts/data/scrape_stops.py [--out data/stops.json] [--dry-run]
 """
@@ -20,6 +22,7 @@ commits any credential value.
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
 import os
 import pathlib
@@ -44,6 +47,10 @@ REQUIRED = [
 
 # Mirrors src/feeds/auth.ts.
 AUTH_PATH = "/get-access-token"
+VERSION_FORMAT = re.compile(r"univus_android_\d+(?:\.\d+)+_\d+")
+# The Worker whose version the scrape takes; TERMINUS_ORIGIN points it at
+# another (the dev stub, say).
+TERMINUS_ORIGIN = "https://terminus.run"
 # The feed's replies are a few KB; anything near this is not the feed.
 MAX_BYTES = 5_000_000
 
@@ -162,6 +169,52 @@ def post_json(url: str, headers: dict, body: dict) -> dict:
     if len(raw) > MAX_BYTES:
         raise SystemExit(f"POST {path} -> more than {MAX_BYTES} bytes; not the feed's usual reply")
     return json.loads(raw.decode("utf-8"))
+
+
+def use_live_version() -> None:
+    """Send the version the stable Worker sends. NUS refuses an old one
+    (10009), and the Worker finds each new release on its own
+    (src/feeds/appversion.ts), while the NEXTBUS_APP_VERSION secret only
+    changes by hand. Without TERMINUS_SCRAPE_TOKEN, or when the Worker doesn't
+    answer, the secret stays. Says which it used, never the value, so a run
+    that fell back shows in its log."""
+    say = lambda msg: print(f"uNivUS version: {msg}", file=sys.stderr)
+    token = os.environ.get("TERMINUS_SCRAPE_TOKEN")
+    if not token:
+        say("no TERMINUS_SCRAPE_TOKEN; using NEXTBUS_APP_VERSION")
+        return
+    origin = (os.environ.get("TERMINUS_ORIGIN") or TERMINUS_ORIGIN).rstrip("/")
+    # The token may be the operator's, so never in the clear, except to this machine.
+    parts = urllib.parse.urlsplit(origin)
+    if not (parts.scheme == "https" or (parts.scheme == "http" and parts.hostname in ("localhost", "127.0.0.1", "::1"))):
+        say("TERMINUS_ORIGIN isn't https; using NEXTBUS_APP_VERSION")
+        return
+    req = urllib.request.Request(
+        origin + "/api/admin/appversion",
+        headers={"x-health-token": token, "Accept": "application/json", "User-Agent": "terminus-scrape"},
+    )
+    try:
+        with OPENER.open(req, timeout=30) as res:
+            raw = res.read(10_000)
+    except urllib.error.HTTPError as exc:
+        say(f"terminus answered HTTP {exc.code}; using NEXTBUS_APP_VERSION")
+        return
+    except (urllib.error.URLError, http.client.HTTPException, OSError) as exc:
+        say(f"terminus didn't answer ({type(exc).__name__}); using NEXTBUS_APP_VERSION")
+        return
+    try:
+        body = json.loads(raw.decode("utf-8"))
+    except ValueError:
+        body = None
+    version = body.get("version") if isinstance(body, dict) else None
+    if not isinstance(version, str) or not VERSION_FORMAT.fullmatch(version):
+        say("terminus sent no version; using NEXTBUS_APP_VERSION")
+        return
+    if os.environ.get("NEXTBUS_APP_VERSION") == version:
+        say("terminus's, the same as NEXTBUS_APP_VERSION")
+    else:
+        say("terminus's, which differs from NEXTBUS_APP_VERSION (update the secret)")
+    os.environ["NEXTBUS_APP_VERSION"] = version
 
 
 def device_id() -> str:
@@ -367,6 +420,7 @@ def main() -> int:
     args = ap.parse_args()
 
     load_dev_vars()
+    use_live_version()
     missing = [k for k in REQUIRED if not os.environ.get(k)]
     if missing:
         print(f"missing config: {', '.join(missing)} (see .dev.vars.example)", file=sys.stderr)

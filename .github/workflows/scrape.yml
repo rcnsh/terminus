@@ -10,7 +10,8 @@ on:
 # Separate jobs, so no job holds both third-party code and something worth
 # stealing. Anything running in a job can read every secret mapped into it,
 # whichever step gets them, so:
-#   scrape     has the feed and DataMall secrets, runs only this repo's Python
+#   scrape     has the feed and DataMall secrets and the token that reads the
+#              Worker's uNivUS version, runs only this repo's Python
 #              (standard library only), and can't push;
 #   test       runs the npm dev dependencies, with no secrets and no push;
 #   commit     can push, and runs no npm code at all;
@@ -54,6 +55,9 @@ jobs:
         env:
           NEXTBUS_AUTH_BASE: ${{ secrets.NEXTBUS_AUTH_BASE }}
           NEXTBUS_APP_VERSION: ${{ secrets.NEXTBUS_APP_VERSION }}
+          # Opens one route on terminus: the version the Worker sends NUS, kept
+          # current with uNivUS releases. The secret above is then the fallback.
+          TERMINUS_SCRAPE_TOKEN: ${{ secrets.TERMINUS_SCRAPE_TOKEN }}
           NEXTBUS_HTD_API: ${{ secrets.NEXTBUS_HTD_API }}
           NEXTBUS_APP_API: ${{ secrets.NEXTBUS_APP_API }}
           NEXTBUS_PROXY_BASE: ${{ secrets.NEXTBUS_PROXY_BASE }}

@@ -115,8 +115,9 @@ pass counts only for the `signin` action on the Worker's own
 Not declared, so a site deploys without them: `APNS_KEY`, `APNS_KEY_ID` and
 `APNS_TEAM_ID` (push to the iPhone app; see "APNs"), `LTA_ACCOUNT_KEY` (public
 buses), `ANALYTICS_TOKEN` (the dashboard's Analytics Engine charts, with
-`CF_ACCOUNT_ID`, which is in the config) and `TIMELAPSE_TOKEN` (opens
-`/api/timelapse/*` only) and `HEARTBEAT_URL` (a healthchecks.io ping URL
+`CF_ACCOUNT_ID`, which is in the config), `TIMELAPSE_TOKEN` (opens
+`/api/timelapse/*` only), `SCRAPE_TOKEN` (opens `/api/admin/appversion`
+only, for the weekly scrape; stable site only) and `HEARTBEAT_URL` (a healthchecks.io ping URL
 the cron calls after every run, so a cron that stops is noticed; stable
 site only, so the beta never pings for it). One plain var, not a secret,
 is set in `cloudflare.config.ts`: `ETA_MODEL`, `shadow` on the stable site
@@ -159,6 +160,7 @@ anything else (a script with an API key, a page open since before) gets a
 | `GET /api/health` | Graph age, how long the calendar lasts, the feed as the cron last saw it (`upstream`) and which config is present, never values (`config.pushAndroid`, `config.pushWeb` and `config.pushIos`: push set up with a usable key, or for APNs all four settings). 503, with the same body, when the feed is confirmed down, the cron has stopped or the calendar has run out. With the operator's `x-health-token`, `?probe=1` mints a real token and says what came back, and `?versions=1` says what the version updater would find today in the app stores (see "The version string is a kill switch"); without it both are ignored. |
 | `GET /api/status.json` | Whether NUS's feed is up, as the 15-minute check saw it, and the last 20 outages, read from KV at most once a minute per isolate. Two failed checks in a row confirm an outage and two good ones end it, so a feed that answers every other time sends no emails by turns; the outage ends at the first of the two. Only a check between 07:00 and 23:30 Singapore time can confirm one (`OUTAGE_HOURS`): no bus runs outside it, and `feed` says `maintenance` instead, with no incident and no email. A refused uNivUS version (10009) is the exception: it confirms an outage at any hour, as it needs fixing before the buses run. `cause` says why the feed is down (`version` or `feed`), and the page says so. Failures at night still count, so a feed still failing at 07:00 is down from then, and an outage under way at 23:30 lasts until the feed answers. `feed` (like `/api/health` and the card's notice) follows the last check, though: one good check and it says `up` again, rather than "down" for 15 minutes with the feed back. The [status page](../apps/web/public/status) shows it. |
 | `GET /api/admin/stats` | The operator dashboard's data (accounts, devices by app, sign-ups, reports, feed; answers and errors per day, and the timelapse recorder's polls by what they cost NUS, the daily active counts, the week's crash reports and the last day's `/api/me/next` times (`next`: median and 95th percentile, ms), from Analytics Engine when `ANALYTICS_TOKEN` and `CF_ACCOUNT_ID` are set; `collect`, the switches below; `eta`, arrival times scored; `model`, the arrival-time model's days in shadow, `eta/model/*.json` without their weight grids). Needs `x-health-token` (`HEALTH_TOKEN` or a passkey session); anything else gets a 404. |
+| `GET /api/admin/appversion` | `{version}`: the uNivUS version string the Worker sends NUS (`config:appVersion`, else the `NEXTBUS_APP_VERSION` secret), for the weekly scrape. Needs `x-health-token`: the operator's, or `SCRAPE_TOKEN`, which opens this route and nothing else. 404 without one; 503 when the Worker has no version. |
 | `POST /api/admin/collect` | `{name, on}`: turns one of the operator's statistics on or off (`active`, `eta`, `errors`; see Analytics). Operator only, like `/api/admin/stats`. |
 | `POST /api/admin/crashes/dismiss` | `{fingerprint}`: hides a crash report from the dashboard until it's reported again (Analytics Engine can't delete one). Operator only. |
 | `POST /api/admin/reports/delete` | `{id}`: deletes one user report ("This was wrong" or a stop suggestion) from D1 for good. Operator only. |
@@ -1622,7 +1624,8 @@ The proxy has no `ServiceDescription`, so the route codes to fetch come from
 the existing graph plus `KNOWN_ROUTES` in the script; a new service with an
 unlisted code needs adding there. The **scrape stop graph** workflow
 (`.github/workflows/scrape.yml`) runs the same scrape every Monday in three
-jobs: `scrape` holds the feed and DataMall secrets and runs only the repo's
+jobs: `scrape` holds the feed and DataMall secrets (and
+`TERMINUS_SCRAPE_TOKEN`, below) and runs only the repo's
 standard-library Python; `test` runs the test suite and `check_scraped.py`
 on the scraped files, with no secrets; `commit` is the only job that can
 push, runs no npm code, and fast-forwards `main` to a commit of just the
@@ -1633,6 +1636,16 @@ deploy then puts the data live. A fourth job, `heartbeat`, holds only the
 curl: it pings on success, a commit skipped because nothing changed
 included, and `/fail` on anything else, so a scrape that fails or stops
 running is noticed. Without the secret it skips the ping.
+
+The scrape sends NUS the uNivUS version the stable Worker sends, which the
+cron keeps up with new releases (see "The version string is a kill
+switch"): with the `TERMINUS_SCRAPE_TOKEN` repository secret, which matches
+the stable Worker's `SCRAPE_TOKEN`, `scrape_stops.py` reads it from
+`GET /api/admin/appversion` on terminus.run. When that doesn't answer it
+falls back to the `NEXTBUS_APP_VERSION` repository secret, which only
+changes by hand. Either way the run's log says which it sent (never the
+value), so a scrape that fell back is plain to see. The feed probes
+(`probe_buses.py`, `probe_arrivals.py`) do the same.
 
 The scrapers that send keys (`scrape_stops.py`, `scrape_lta.py`) refuse
 every redirect, since urllib re-sends every header to wherever one points;
@@ -1922,7 +1935,9 @@ the breaker nor the mint memo, nor quiets its stop or service for
 `failMemoS`, so it doesn't stop the isolates already
 sending the new one, and that isolate forgets its old version. To see what it would
 find today, without calling NUS: `GET /api/health?versions=1` with the
-`x-health-token` header.
+`x-health-token` header. The weekly scrape reads the version the Worker
+settled on from `/api/admin/appversion`, so it follows without anyone
+touching its secrets.
 
 ## Operator passkeys
 

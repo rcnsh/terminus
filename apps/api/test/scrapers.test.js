@@ -108,6 +108,73 @@ print(json.dumps(r))
   assert.equal(out.more.pageHits, 3);
 });
 
+test("scrape_stops takes the version the Worker sends, and keeps the secret when it can't", { skip: !python }, () => {
+  const out = py(`import http.server, threading, os, io, contextlib, socket
+import scrape_stops
+hits = []
+class H(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+    def do_GET(self):
+        hits.append({"path": self.path, "token": self.headers.get("x-health-token")})
+        if self.path.startswith("/moved/"):
+            self.send_response(302); self.send_header("Location", base + "/api/admin/appversion"); self.end_headers(); return
+        token = self.headers.get("x-health-token")
+        body = {"good": {"version": "univus_android_2.60.3_144"}, "junk": {"version": "2.60.3"}}.get(token)
+        if body is None:
+            self.send_response(404); self.end_headers(); return
+        data = json.dumps(body).encode()
+        self.send_response(200); self.send_header("Content-Length", str(len(data))); self.end_headers(); self.wfile.write(data)
+srv = http.server.HTTPServer(("127.0.0.1", 0), H)
+base = f"http://127.0.0.1:{srv.server_port}"
+threading.Thread(target=srv.serve_forever, daemon=True).start()
+def run(token, origin=base):
+    os.environ["NEXTBUS_APP_VERSION"] = "univus_android_2.59.2_140"
+    os.environ["TERMINUS_ORIGIN"] = origin
+    os.environ.pop("TERMINUS_SCRAPE_TOKEN", None)
+    if token: os.environ["TERMINUS_SCRAPE_TOKEN"] = token
+    err = io.StringIO()
+    with contextlib.redirect_stderr(err):
+        scrape_stops.use_live_version()
+    return {"version": os.environ["NEXTBUS_APP_VERSION"], "said": err.getvalue()}
+r = {k: run(t) for k, t in (("none", None), ("good", "good"), ("wrong", "wrong"), ("junk", "junk"))}
+r["moved"] = run("good", base + "/moved")
+r["plain"] = run("good", "http://terminus.example")
+# A server that answers with something that isn't HTTP.
+raw = socket.socket(); raw.bind(("127.0.0.1", 0)); raw.listen(1)
+def garbage():
+    conn, _ = raw.accept(); conn.recv(4096); conn.sendall(b"GARBAGE\\r\\n\\r\\n"); conn.close()
+threading.Thread(target=garbage, daemon=True).start()
+r["garbage"] = run("good", f"http://127.0.0.1:{raw.getsockname()[1]}")
+srv.server_close()
+r["down"] = run("good")
+print(json.dumps({"r": r, "hits": hits}))
+`);
+  const { r, hits } = out;
+  const OLD = 'univus_android_2.59.2_140';
+  assert.equal(r.none.version, OLD);
+  assert.match(r.none.said, /no TERMINUS_SCRAPE_TOKEN; using NEXTBUS_APP_VERSION/, 'a missing token shows in the log');
+  assert.equal(r.good.version, 'univus_android_2.60.3_144');
+  assert.match(r.good.said, /update the secret/);
+  assert.doesNotMatch(r.good.said, /univus_android/, 'no version printed');
+  assert.equal(r.wrong.version, OLD);
+  assert.match(r.wrong.said, /HTTP 404; using NEXTBUS_APP_VERSION/);
+  assert.equal(r.junk.version, OLD, 'a malformed version is never sent');
+  assert.equal(r.moved.version, OLD);
+  assert.match(r.moved.said, /HTTP 302/, 'a redirect is refused');
+  assert.equal(r.plain.version, OLD);
+  assert.match(r.plain.said, /isn't https/, 'the token never goes out in the clear');
+  assert.equal(r.garbage.version, OLD);
+  assert.match(r.garbage.said, /didn't answer \(BadStatusLine\)/, 'a reply that is not HTTP falls back too');
+  assert.equal(r.down.version, OLD);
+  assert.match(r.down.said, /didn't answer/);
+  assert.deepEqual(
+    hits.map((h) => h.path),
+    ['/api/admin/appversion', '/api/admin/appversion', '/api/admin/appversion', '/moved/api/admin/appversion'],
+    'one request each, none without a token, and the redirect never followed',
+  );
+  assert.ok(hits.every((h) => h.token));
+});
+
 test('route_shapes asks only the Overpass project itself', { skip: !python }, () => {
   const out = py(`import route_shapes
 print(json.dumps({"url": route_shapes.OVERPASS, "mirrors": hasattr(route_shapes, "MIRRORS")}))`);

@@ -838,6 +838,7 @@ export const ERRORS_ZH: Record<string, string> = {
   'the day must start before it ends': '一天的开始时间必须早于结束时间',
   'no timelapse for that day': '那天没有延时回放',
   'timelapse storage is not configured': '延时回放存储未配置',
+  'the NUS feed is not configured': 'NUS 数据源未配置',
   'expected id, key, alg, clientData and authData': '需要 id、key、alg、clientData 和 authData',
   'expected id, clientData, authData and signature': '需要 id、clientData、authData 和 signature',
   'passkey not accepted': '通行密钥未被接受',

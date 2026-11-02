@@ -121,6 +121,28 @@ test('/api/health?versions=1 for the operator: what the version update would fin
   assert.equal((await (await call(env, '/api/health?versions=1')).json()).versions, undefined, 'not without the token');
 });
 
+test('/api/admin/appversion: the version the cron keeps, for SCRAPE_TOKEN alone among the narrow tokens', async () => {
+  installGlobals(makeFetch());
+  const kv = makeKV();
+  await kv.put('config:appVersion', 'univus_android_2.60.3_144');
+  const env = { ...makeEnv(kv), HEALTH_TOKEN: 'op-secret', SCRAPE_TOKEN: 'scrape-only', TIMELAPSE_TOKEN: 'render-only' };
+  const read = (token) => call(env, '/api/admin/appversion', token ? { 'x-health-token': token } : {});
+  const ok = await read('scrape-only');
+  assert.equal(ok.status, 200);
+  assert.equal(ok.headers.get('cache-control'), 'no-store');
+  assert.deepEqual(await ok.json(), { version: 'univus_android_2.60.3_144' }, 'KV over the secret');
+  assert.equal((await read('op-secret')).status, 200, 'the operator still can');
+  for (const token of ['render-only', 'scrape-onl', '']) assert.equal((await read(token)).status, 404, `not with ${JSON.stringify(token)}`);
+  assert.equal((await call(env, '/api/admin/stats', { 'x-health-token': 'scrape-only' })).status, 404, 'not the dashboard');
+  assert.equal((await call(env, '/api/timelapse/days', { 'x-health-token': 'scrape-only' })).status, 404, 'nor the timelapse');
+  const probe = await (await call(env, '/api/health?probe=1&versions=1', { 'x-health-token': 'scrape-only' })).json();
+  assert.equal(probe.auth, undefined, 'nor the auth probe');
+  assert.equal(probe.versions, undefined, 'nor the version lookup, which asks Google Play');
+  // Unset, it opens nothing.
+  const none = { ...env, SCRAPE_TOKEN: undefined };
+  assert.equal((await call(none, '/api/admin/appversion', { 'x-health-token': 'scrape-only' })).status, 404);
+});
+
 test("opening the web app signed out goes straight to sign-in; signed in, or the service worker's copy, is the app", async () => {
   installGlobals(makeFetch());
   const env = {

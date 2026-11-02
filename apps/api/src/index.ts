@@ -15,7 +15,7 @@ import { boardAsOf, boardAt, displayName, indexGraph, serviceEndsAt, serviceResu
 import { buildCampusMap, buildDestinations, ROUTE_COLORS } from './map/campus.ts';
 import { busesOnLine, lineStops, trackedBuses } from './map/buses.ts';
 import { stopPairs } from './map/pairs.ts';
-import { adminStats, handleDeleteReport, handleDismissCrash, holdsHealthToken, isOperator } from './ops/admin.ts';
+import { adminStats, canReadAppVersion, handleDeleteReport, handleDismissCrash, holdsHealthToken, isOperator } from './ops/admin.ts';
 import { handleCollect } from './ops/collect.ts';
 import { handleAppError } from './ops/apperrors.ts';
 import { handlePasskey } from './accounts/passkey.ts';
@@ -485,6 +485,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
       (url.pathname === '/api/health' ||
         url.pathname === '/api/status.json' ||
         url.pathname === '/api/admin/stats' ||
+        url.pathname === '/api/admin/appversion' ||
         url.pathname === '/api/admin/collect' ||
         url.pathname === '/api/admin/crashes/dismiss' ||
         url.pathname === '/api/admin/reports/delete' ||
@@ -594,6 +595,14 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
         // The dashboard's data: operator only, never cached.
         if (!(await isOperator(env, req, nowMs))) return json({ error: 'not found' }, 404);
         return json(await adminStats(env, nowMs), 200, { 'cache-control': 'no-store' });
+      case '/api/admin/appversion': {
+        // The version string the Workers send NUS, kept current by the cron
+        // (appversion.ts), so the weekly scrape sends the one the cron found.
+        if (!(await canReadAppVersion(env, req, nowMs))) return json({ error: 'not found' }, 404);
+        const version = await appVersion(env, nowMs);
+        if (!version) return json({ error: 'the NUS feed is not configured' }, 503);
+        return json({ version }, 200, { 'cache-control': 'no-store' });
+      }
       case '/api/admin/collect':
         // The dashboard's switches for what's collected (collect.ts).
         return await handleCollect(req, env, nowMs);
