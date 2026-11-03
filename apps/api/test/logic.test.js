@@ -42,7 +42,7 @@ import {
 } from '../src/feeds/fms.ts';
 import { buildAnswer, clampLabel, fitsTile, mins, shortStop, walkVerdict } from '../src/answer/format.ts';
 import { LABEL_MAX, PUBLIC, WALK } from '../src/config.ts';
-import { apiKeyHeaders, authUrl, extractSession, jwtExpMs, proxyHeaders } from '../src/feeds/auth.ts';
+import { apiKeyHeaders, authUrl, extractSession, jwtExpMs, jwtLifeMs, proxyHeaders } from '../src/feeds/auth.ts';
 import { GRAPH as BUNDLED_GRAPH } from '../src/answer/graph.ts';
 
 const GRAPH = graphJson;
@@ -1060,6 +1060,15 @@ test('the token lifetime comes from the JWT, because the response has no expires
   assert.equal(jwtExpMs('not-a-jwt'), null);
   assert.equal(jwtExpMs(''), null);
   assert.equal(jwtExpMs('a.!!!not-base64!!!.c'), null);
+});
+
+test('the token lifetime is iat to exp: 24 hours in the captured token, none without both', () => {
+  assert.equal(jwtLifeMs(TOKEN_RESPONSE.data.token), 86_400_000);
+  assert.equal(jwtLifeMs('not-a-jwt'), null);
+  const unsigned = (claims) => ['e30', Buffer.from(JSON.stringify(claims)).toString('base64url'), 'sig'].join('.');
+  assert.equal(jwtLifeMs(unsigned({ exp: 1_787_931_982 })), null, 'no iat');
+  assert.equal(jwtLifeMs(unsigned({ iat: '1787845582', exp: 1_787_931_982 })), null, 'iat not a number');
+  assert.equal(jwtLifeMs(unsigned({ iat: 1_787_931_982, exp: 1_787_845_582 })), null, 'iat after exp');
 });
 
 test('a session carries userid, not just the token', () => {

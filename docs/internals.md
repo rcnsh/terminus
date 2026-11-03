@@ -2000,17 +2000,27 @@ A new mint doesn't end the device's earlier tokens: on 2026-11-01 a token
 still worked after a second one was minted for the same device id.
 
 The 15-minute cron renews the token on both sites while the kept one is
-still good but has under `tokenRenewAheadMs` (30 minutes) left
-(`renewToken` in `fms.ts`, `renewAhead` in `auth.ts`), after the health
-check and only when that check passed. That's still one mint a day, but it
-happens before the first request after a quiet spell, which would otherwise
-mint for itself. On the beta, with little traffic, that first request is
+still good but has under `tokenRenewShare` (half) of its lifetime left,
+read from the JWT's `iat` and `exp` (12 hours of a 24-hour token; a token
+without `iat` counts as `tokenDefaultS`) (`renewToken` in `fms.ts`,
+`renewAhead` in `auth.ts`), after the health check and only when that
+check passed. That's two mints a day rather than one, but they happen
+before the first request after a quiet spell, which would otherwise mint
+for itself, and with hours to spare. NUS's auth host refuses every mint
+with HTTP 400 for a while at times (about an hour on 2026-11-03, while
+calls with a token already held kept working); a renewal that starts with
+only a few runs to go can fall wholly inside such a spell and leave the
+site with no token. On the beta, with little traffic, the first request is
 usually someone opening the app. It is bounded so it can't grow into a
 poller. With no token, one already expired, one for another version or KV
 it can't read, it leaves the mint to the next request. A renewal that fails
-leaves the kept token in use and is tried at most once more before that
-token runs out. One that works sets `auth:renewed` for 12 hours: at most two
-a day, whatever the token's lifetime.
+leaves the kept token in use and is tried again each run until that token
+runs out, except one NUS refused for its version or key (10009, 10000):
+`auth:renewRefused` marks that token until it runs out and no renewal
+tries again, so a new uNivUS release costs one refused mint. Once the
+token is gone the next request mints, or the version search takes over.
+One that works sets `auth:renewed` for 12 hours: at most two a day,
+whatever the token's lifetime.
 
 The feed's secrets are its three API keys (`X-HTD-API`, `X-APP-API`, the
 proxy's `x-api-key`); the rest of its settings are URLs, the version, the
