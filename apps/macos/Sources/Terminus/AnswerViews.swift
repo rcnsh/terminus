@@ -757,7 +757,7 @@ struct NearbyBoard: View {
         guard let s = etaS else { return quality == "ended" ? L("ended") : "–" }
         if s < 45 { return quality == "scheduled" || quality == "stale" ? L("~%@", L("%@ min", "1")) : L("now") }
         let m = L("%@ min", "\((s + 30) / 60)")
-        return quality == "scheduled" ? L("~%@", m) : m
+        return quality == "scheduled" || quality == "stale" ? L("~%@", m) : m
     }
 
     /// A bus's minutes as words: the server's ("4 min", "约 6 分钟"), or

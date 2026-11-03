@@ -283,7 +283,7 @@ final class AppModel {
         // A timetable guess is never "now": "~1 min", as the server words it.
         let guess = plan.quality == "scheduled" || plan.quality == "stale"
         if left < 45 { return "\(plan.service) \(guess ? L("~%@", L("%@ min", "1")) : L("now"))" }
-        return "\(plan.service) \(plan.quality == "scheduled" ? L("~%@", mins) : mins)"
+        return "\(plan.service) \(guess ? L("~%@", mins) : mins)"
     }
 
     /// Dimmed once the server's `card.staleAt` has passed (`now` on the

@@ -421,6 +421,7 @@ private func nearbyFixture() throws -> [NearbyStop] {
     // A guess is never "now", from the server or worked out here.
     #expect(NearbyBoard.eta(etaS: 30, quality: "scheduled") == "~1 min")
     #expect(NearbyBoard.eta(etaS: 30, quality: "stale") == "~1 min")
+    #expect(NearbyBoard.eta(etaS: 300, quality: "stale") == "~5 min")
     #expect(NearbyBoard.words(NearbyBus(etaS: 30, quality: "scheduled", eta: "now")) == "~1 min")
     #expect(
         NearbyBoard.cell(NearbyBus(etaS: 30, quality: "scheduled", eta: "now"), first: true)
