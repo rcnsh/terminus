@@ -1056,7 +1056,7 @@ function NearbyCard({ stops }) {
   // Heard once for these stops, not again on every refresh: their names.
   const names = stops.map((s) => s.stop.name).join(', ');
   return html`
-    <div class=${asClock ? 'widget nearby clock' : 'widget nearby'}>
+    <div class="widget nearby">
       <h2 class="sr-only">${t('Buses near you')}</h2>
       <${Say} text=${t('Buses near you: {0}', names)} />
       <div class="segmented full nb-times" role="radiogroup" aria-label=${t('Show times')}>

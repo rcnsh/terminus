@@ -90,8 +90,15 @@ body.is-offline .app-card .widget.offline-plan { opacity: 1; }
    stop's board: where it's going, its next bus, and the one after. */
 .nearby { display: grid; gap: 12px; }
 .stop-sign .detail { padding: 12px 14px; }
-/* The same columns on every sign and its heading (in rem), so the times line up down the page. */
-.nearby-row, .nb-head { display: grid; grid-template-columns: 3.4rem minmax(0, 1fr) 4.4rem 3.8rem; align-items: center; column-gap: 10px; width: 100%; padding: 7px 14px; }
+/* One set of columns for every sign, its heading and its rows (subgrid),
+   so the times line up down the page and each time column is as wide as
+   its longest time ("~10:12 PM", "约 下午 10:12"), never spilling into the
+   next. Without subgrid, fixed columns. */
+.nearby { grid-template-columns: 3.4rem minmax(0, 1fr) minmax(4.4rem, auto) minmax(3.8rem, auto); column-gap: 10px; }
+.nearby > * { grid-column: 1 / -1; }
+.stop-sign, .nearby-row, .nb-head { display: grid; grid-template-columns: 3.4rem minmax(0, 1fr) 4.4rem 3.8rem; grid-template-columns: subgrid; }
+.stop-sign > :not(.nearby-row, .nb-head) { grid-column: 1 / -1; }
+.nearby-row, .nb-head { grid-column: 1 / -1; align-items: center; column-gap: 10px; width: 100%; padding: 7px 14px; }
 .nearby-row { border: 0; background: none; color: inherit; font: inherit; text-align: left; font-variant-numeric: tabular-nums; }
 button.nearby-row { cursor: pointer; }
 button.nearby-row:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); }
@@ -107,8 +114,6 @@ button.nearby-row:hover { background: color-mix(in srgb, var(--ink) 4%, transpar
 .stop-sign.nearest .nb-time.next { font-size: 1.1rem; }
 /* Due before you could walk there: shown, so the board is whole, but not offered. */
 .nb-time.gone { color: var(--faint); text-decoration: line-through; text-decoration-thickness: 1.5px; }
-/* Clock times ("12:05 PM") need wider columns than minutes. */
-.nearby.clock :is(.nearby-row, .nb-head) { grid-template-columns: 3.4rem minmax(0, 1fr) 4.9rem 4.4rem; }
 /* Minutes or clock times, for every sign at once. */
 .nb-times { margin-bottom: -2px; }
 /* The star on a sign's plate: pins the stop to the Stops tab. */
