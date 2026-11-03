@@ -203,41 +203,58 @@ func theNextClassComesWithTheCard(name: String) throws {
     #expect(!u.when.isEmpty)
 }
 
-@Test func nearbyShowsTheBusesAfterTheNextFaded() throws {
+@Test func nearbyWritesTheNextBusAndTheOneAfter() throws {
     struct R: Decodable { let stops: [NearbyStop] }
     let dir = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("../../fixtures/answers").standardized
     let r = try JSONDecoder().decode(R.self, from: Data(contentsOf: dir.appendingPathComponent("nearby-list.json")))
     let d2 = try #require(r.stops.first?.board.first { $0.svc == "D2" })
-    #expect(d2.later?.first?.etaS == 840)
-    #expect(FlowPills.eta(d2) == "4 min", "the server's words")
-    #expect(FlowPills.later(d2) == ["14 min"])
-    #expect(FlowPills.spoken(d2) == "D2: 4 min, 14 min")
+    #expect(NearbyBoard.eta(d2) == "4 min", "the server's words")
+    #expect(NearbyBoard.to(d2) == "to COM 3", "the end of its line")
+    let k = try #require(r.stops.first?.board.first { $0.svc == "K" })
+    #expect(NearbyBoard.to(k) == "Ends here")
+    #expect(NearbyBoard.time(d2.etaS, d2.quality, d2.eta, d2.at, clock: false) == "4 min")
+    let at = try #require(d2.at.flatMap(parseISODate))
+    #expect(NearbyBoard.time(d2.etaS, d2.quality, d2.eta, d2.at, clock: true) == campusTime(at))
+    let then = try #require(d2.then)
+    #expect(then.etaS == 840)
+    #expect(NearbyBoard.time(then.etaS, then.quality, then.eta, then.at, clock: false) == "14 min")
+    #expect(NearbyBoard.spoken(d2, clock: false) == "D2: to COM 3, 4 min, 14 min")
+    // At the next stop it's due before you could walk there.
+    let gone = try #require(r.stops.dropFirst().first?.board.first { $0.svc == "D2" })
+    #expect(gone.tooSoon == true)
+    #expect(NearbyBoard.spoken(gone, clock: false) == "D2: to COM 3, 4 min, too soon to catch, 14 min")
 }
 
 /// A row's time, worked out here for an older server: the map's stop card uses
 /// this too, so 4 min 30 s is "5 min" in both, not "4 min" on the map.
 @Test func aRowsTimeRoundsToTheNearestMinute() {
-    #expect(FlowPills.eta(BoardRow(svc: "D2", etaS: 270, quality: "live")) == "5 min")
-    #expect(FlowPills.eta(BoardRow(svc: "D2", etaS: 269, quality: "live")) == "4 min")
-    #expect(FlowPills.eta(BoardRow(svc: "D2", etaS: 50, quality: "live")) == "1 min")
-    #expect(FlowPills.eta(BoardRow(svc: "D2", etaS: 44, quality: "live")) == "now")
-    #expect(FlowPills.eta(BoardRow(svc: "D2", etaS: 270, quality: "scheduled")) == "~5 min")
+    #expect(NearbyBoard.eta(BoardRow(svc: "D2", etaS: 270, quality: "live")) == "5 min")
+    #expect(NearbyBoard.eta(BoardRow(svc: "D2", etaS: 269, quality: "live")) == "4 min")
+    #expect(NearbyBoard.eta(BoardRow(svc: "D2", etaS: 50, quality: "live")) == "1 min")
+    #expect(NearbyBoard.eta(BoardRow(svc: "D2", etaS: 44, quality: "live")) == "now")
+    #expect(NearbyBoard.eta(BoardRow(svc: "D2", etaS: 270, quality: "scheduled")) == "~5 min")
 }
 
-@Test func aTimetableGuessInNearbyIsNeverShownAsLive() {
-    #expect(FlowPills.eta(etaS: 360, quality: "live") == "6 min")
-    #expect(FlowPills.eta(etaS: 360, quality: "scheduled") == "~6 min")
-    #expect(FlowPills.eta(etaS: 20, quality: "live") == "now")
-    #expect(FlowPills.eta(etaS: nil, quality: "ended") == "ended")
+@Test func aTimetableGuessInNearbyIsNeverShownAsLive() throws {
+    #expect(NearbyBoard.eta(etaS: 360, quality: "live") == "6 min")
+    #expect(NearbyBoard.eta(etaS: 360, quality: "scheduled") == "~6 min")
+    #expect(NearbyBoard.eta(etaS: 20, quality: "live") == "now")
+    #expect(NearbyBoard.eta(etaS: nil, quality: "ended") == "ended")
+    // As a clock time too: an estimate keeps its "~".
+    let at = "2026-08-27T01:15:00Z"
+    let t = campusTime(try #require(parseISODate(at)))
+    #expect(NearbyBoard.time(900, "scheduled", "~15 min", at, clock: true) == "~" + t)
+    #expect(NearbyBoard.time(900, "stale", "15 min", at, clock: true) == "~" + t)
+    #expect(NearbyBoard.time(900, "live", "15 min", at, clock: true) == t)
+    // An older server sends no clock time: minutes still.
+    #expect(NearbyBoard.time(900, "scheduled", nil, nil, clock: true) == "~15 min")
     let row = BoardRow(
         svc: "D2", etaS: 240, quality: "live",
-        later: [.init(etaS: 900, quality: "scheduled"), .init(etaS: 1500, quality: "live"), .init(etaS: 2100, quality: "live")])
-    // At most two after the next one.
-    #expect(FlowPills.later(row) == ["~15 min", "25 min"])
-    // Spoken, the "~" is a word: VoiceOver doesn't read it.
-    #expect(FlowPills.spoken(row) == "D2: 4 min, about 15 min, 25 min")
+        later: [.init(etaS: 900, quality: "scheduled"), .init(etaS: 1500, quality: "live")], towards: ["UTown"])
+    // Only the bus after the next; spoken, the "~" is a word: VoiceOver doesn't read it.
+    #expect(NearbyBoard.spoken(row, clock: false) == "D2: to UTown, 4 min, about 15 min")
 }
 
 @Test func theTwoWaysOfNotGoingShareOneMenu() {

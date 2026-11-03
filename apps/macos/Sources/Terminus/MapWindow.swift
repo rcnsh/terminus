@@ -1098,7 +1098,7 @@ struct StopCard: View {
 
     /// The server's "4 min" ("now", "~6 min"), worked out here for an older server
     /// as the popover's Nearby does it, so the two never differ.
-    private func eta(_ r: BoardRow) -> String { FlowPills.eta(r) }
+    private func eta(_ r: BoardRow) -> String { NearbyBoard.eta(r) }
 }
 
 // MARK: - MapLibre

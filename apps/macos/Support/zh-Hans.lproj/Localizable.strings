@@ -102,6 +102,13 @@
 "Nearby" = "附近";
 "Next" = "下一个";
 "Next bus" = "下一班巴士";
+"Then" = "再下一班";
+"In minutes" = "几分钟后";
+"Clock time" = "几点几分";
+"Show times" = "时间显示方式";
+"to %@" = "开往 %@";
+", too soon to catch" = "，走过去已来不及搭";
+"Ends here" = "本站为终点站";
 "Next class" = "下一节课";
 "No buses until your day starts" = "你的一天开始前不显示巴士";
 "No live data" = "没有实时数据";

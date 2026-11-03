@@ -357,12 +357,28 @@ struct Pill: View {
     }
 }
 
+/// Nearby: the stops around you, each with a row per service read like a
+/// stop's board, as on the web: where it's going, its next bus and the one
+/// after, in minutes or as clock times (the switch above the stops, for
+/// every stop at once and kept on this Mac). A bus due before you could
+/// walk to the stop is struck out.
 struct NearbyList: View {
     let stops: [NearbyStop]?
+    @AppStorage(NearbyBoard.clockKey) private var asClock = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let all = stops {
+                if !all.isEmpty {
+                    Picker(L("Show times"), selection: $asClock) {
+                        Text(L("In minutes")).tag(false)
+                        Text(L("Clock time")).tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(maxWidth: .infinity)
+                    .accessibilityLabel(L("Show times"))
+                }
                 ForEach(all) { s in
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
@@ -374,7 +390,7 @@ struct NearbyList: View {
                         if s.board.isEmpty || !s.available {
                             Text(s.available ? L("Nothing due") : L("No live data")).font(.caption).foregroundStyle(.secondary)
                         } else {
-                            FlowPills(rows: s.board)
+                            NearbyBoard(rows: s.board, asClock: asClock)
                         }
                     }
                     .card(padding: 10)
@@ -391,51 +407,96 @@ struct NearbyList: View {
 }
 
 extension BoardRow {
-    /// One pill per service; a public bus is its own even under a shuttle's name.
+    /// One row per service; a public bus is its own even under a shuttle's name.
     var pillID: String { paid == true ? "\(svc) $" : svc }
+    /// The bus after this one, for Nearby's second column.
+    var then: Later? { later?.first }
 }
 
-/// One pill per service: "D2  4 min · 14 min", the next bus solid and the
-/// ones after it faded, as on the web and Android. The times are the
-/// server's words ("~6 min" for an estimate).
-/// Wraps onto more lines instead of squeezing when a stop has many services.
-struct FlowPills: View {
+/// A stop's rows in Nearby: the service in its colour, where it's going,
+/// its next bus (bold) and the one after, under a small heading. The columns
+/// are the same width on every stop, so the times line up down the list.
+struct NearbyBoard: View {
     let rows: [BoardRow]
+    let asClock: Bool
     @Environment(\.colorSchemeContrast) private var contrast
-    /// At most this many after the next one: a pill, not a timetable.
-    nonisolated static let laterShown = 2
+
+    /// Where the choice of minutes or clock times is kept.
+    nonisolated static let clockKey = "nearbyClock"
+    nonisolated static let svcWidth: CGFloat = 46
+    /// The time columns: clock times ("12:05 PM") need more room than minutes.
+    nonisolated static func widths(clock: Bool) -> (next: CGFloat, then: CGFloat) { clock ? (70, 62) : (54, 48) }
 
     var body: some View {
-        Flow(spacing: 6) {
-            // By service, not by the whole row: a new time is the same pill
+        let w = Self.widths(clock: asClock)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Spacer(minLength: 0)
+                heading(L("Next bus")).frame(width: w.next, alignment: .trailing)
+                heading(L("Then")).frame(width: w.then, alignment: .trailing)
+            }
+            .accessibilityHidden(true)
+            // By service, not by the whole row: a new time is the same row
             // counting down (.numericText), not a new one replacing it.
             ForEach(Array(zip(Self.pillIDs(rows), rows)), id: \.0) { _, r in
-                HStack(spacing: 5) {
-                    // In the service's colour, as on the buses and the map. A
-                    // public bus carries a $ so the fare is never a surprise.
-                    let name = r.paid == true ? "\(r.svc) $" : r.svc
-                    if let c = r.color.flatMap(Color.init(hex:)) {
-                        Text(name).font(.system(size: 11, weight: .bold)).foregroundStyle(inkOn(r.color ?? ""))
-                            .padding(.horizontal, 5).padding(.vertical, 1)
-                            .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(c))
-                    } else {
-                        Text(name).font(.system(size: 11, weight: .bold))
-                    }
-                    let later = Self.later(r)
-                    (Text(Self.eta(r)).foregroundColor(.secondary)
-                        + Text(later.isEmpty ? "" : " · " + later.joined(separator: " · ")).foregroundColor(
-                            Color.secondary.opacity(contrast == .increased ? 0.85 : 0.55)))
-                        .font(.system(size: 11, weight: .medium).monospacedDigit())
-                        .contentTransition(.numericText())
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    chip(r).frame(width: Self.svcWidth, alignment: .leading)
+                    Text(Self.to(r))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .truncationMode(.tail)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    time(Self.time(r.etaS, r.quality, r.eta, r.at, clock: asClock), gone: r.tooSoon == true, next: true)
+                        .frame(width: w.next, alignment: .trailing)
+                    time(
+                        r.then.map { Self.time($0.etaS, $0.quality, $0.eta, $0.at, clock: asClock) } ?? "–", gone: r.then?.tooSoon == true,
+                        next: false
+                    )
+                    .frame(width: w.then, alignment: .trailing)
                 }
-                .fixedSize()
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Capsule().fill(.primary.opacity(0.07)))
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(Self.spoken(r))
+                .accessibilityLabel(Self.spoken(r, clock: asClock))
             }
         }
+    }
+
+    private func heading(_ s: String) -> some View {
+        Text(s.uppercased(with: Lang.locale))
+            .font(.system(size: 9, weight: .semibold))
+            .tracking(0.5)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .fixedSize()
+    }
+
+    /// In the service's colour, as on the buses and the map. A public bus
+    /// carries a $ so the fare is never a surprise.
+    @ViewBuilder private func chip(_ r: BoardRow) -> some View {
+        let name = r.paid == true ? "\(r.svc) $" : r.svc
+        if let c = r.color.flatMap(Color.init(hex:)) {
+            Text(name).font(.system(size: 11, weight: .bold)).foregroundStyle(inkOn(r.color ?? ""))
+                .padding(.horizontal, 5).padding(.vertical, 1)
+                .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(c))
+                .fixedSize()
+        } else {
+            Text(name).font(.system(size: 11, weight: .bold)).padding(.horizontal, 5).padding(.vertical, 1)
+                .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(.primary.opacity(0.1)))
+                .fixedSize()
+        }
+    }
+
+    /// The next bus bold and in full; the one after regular and muted. One
+    /// too soon to catch is struck out and faint: there, but not offered.
+    private func time(_ s: String, gone: Bool, next: Bool) -> some View {
+        Text(s)
+            .font(.system(size: next ? 13 : 12, weight: next ? .bold : .regular).monospacedDigit())
+            .strikethrough(gone)
+            .foregroundStyle(gone ? (contrast == .increased ? .secondary : .tertiary) : next ? .primary : .secondary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+            .contentTransition(.numericText())
     }
 
     /// Each row's id: its service, and a repeat numbered (a two-way public
@@ -462,17 +523,32 @@ struct FlowPills: View {
         return quality == "scheduled" ? L("~%@", m) : m
     }
 
-    nonisolated static func later(_ r: BoardRow) -> [String] {
-        (r.later ?? []).filter { $0.etaS != nil || $0.eta != nil }.prefix(laterShown).map {
-            $0.eta ?? eta(etaS: $0.etaS, quality: $0.quality)
+    /// One bus's time: the server's words ("4 min", "~6 min"), or as a
+    /// clock time ("~12:05 PM" for an estimate), as the web writes it; a
+    /// dash with no bus. Minutes from an older server that sends no clock time.
+    nonisolated static func time(_ etaS: Int?, _ quality: String, _ eta: String?, _ at: String?, clock: Bool) -> String {
+        guard etaS != nil else { return "–" }
+        if clock, let d = at.flatMap(parseISODate) {
+            let t = campusTime(d)
+            return quality == "scheduled" || quality == "stale" ? L("~%@", t) : t
         }
+        return eta ?? Self.eta(etaS: etaS, quality: quality)
     }
 
-    /// "D2, public bus, fare applies: 4 min, about 14 min", with Chinese punctuation in Chinese.
-    nonisolated static func spoken(_ r: BoardRow) -> String {
+    /// Where a row's bus is going, "to Kent Ridge MRT", or that this is the end of its line.
+    nonisolated static func to(_ r: BoardRow) -> String {
+        if let end = r.towards?.last { return L("to %@", end) }
+        return r.toText ?? L("Ends here")
+    }
+
+    /// "D2: to COM 3, 4 min, too soon to catch, 14 min", with Chinese
+    /// punctuation in Chinese; the "~" said as a word.
+    nonisolated static func spoken(_ r: BoardRow, clock: Bool) -> String {
         let who = r.paid == true ? r.svc + L(", ") + L("Public bus, fare applies") : r.svc
-        let times = [eta(r)] + later(r)
-        return spokenTimes(L("%@: %@", who, times.joined(separator: L(", "))))
+        let soon = L(", too soon to catch")
+        var said = [to(r), time(r.etaS, r.quality, r.eta, r.at, clock: clock) + (r.tooSoon == true ? soon : "")]
+        if let t = r.then { said.append(time(t.etaS, t.quality, t.eta, t.at, clock: clock) + (t.tooSoon == true ? soon : "")) }
+        return spokenTimes(L("%@: %@", who, said.joined(separator: L(", "))))
     }
 }
 

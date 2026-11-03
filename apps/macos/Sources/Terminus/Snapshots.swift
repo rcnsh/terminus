@@ -28,8 +28,8 @@
                 """
             let answer = try! JSONDecoder().decode(NextAnswer.self, from: Data(json.utf8))
             let nearbyJSON = """
-                [{"stop":{"code":"PGP","name":"PGP"},"walkS":200,"available":true,"board":[{"svc":"D2","etaS":240,"eta":"4 min","quality":"live","color":"#8e44c9","later":[{"etaS":840,"eta":"14 min","quality":"live"},{"etaS":1500,"eta":"~25 min","quality":"scheduled"}]},{"svc":"A1","etaS":540,"eta":"9 min","quality":"live","color":"#e5484d","later":[{"etaS":1260,"eta":"21 min","quality":"live"}]},{"svc":"K","etaS":20,"eta":"now","quality":"live","color":"#2b9ad6"},{"svc":"R2","etaS":780,"eta":"13 min","quality":"live","color":"#34a853"},{"svc":"BTC1","etaS":1260,"eta":"~21 min","quality":"scheduled","later":[{"etaS":3060,"eta":"~51 min","quality":"scheduled"}]},{"svc":"95","etaS":360,"eta":"6 min","quality":"live","paid":true},{"svc":"E","etaS":null,"quality":"ended"}]},
-                 {"stop":{"code":"PGPR","name":"PGP Foyer"},"walkS":150,"available":true,"board":[{"svc":"A2","etaS":660,"eta":"11 min","quality":"live"}]}]
+                [{"stop":{"code":"PGP","name":"PGP"},"walkS":200,"available":true,"board":[{"svc":"D2","etaS":240,"eta":"4 min","at":"\(iso(240))","quality":"live","color":"#8e44c9","towards":["Kent Ridge MRT","COM 3"],"later":[{"etaS":840,"eta":"14 min","at":"\(iso(840))","quality":"live"},{"etaS":1500,"eta":"~25 min","quality":"scheduled"}]},{"svc":"A1","etaS":540,"eta":"9 min","at":"\(iso(540))","quality":"live","color":"#e5484d","towards":["Kent Ridge Bus Terminal"],"later":[{"etaS":1260,"eta":"21 min","at":"\(iso(1260))","quality":"live"}]},{"svc":"K","etaS":20,"eta":"now","at":"\(iso(20))","quality":"live","color":"#2b9ad6","tooSoon":true,"towards":["Prince George's Park Foyer"],"later":[{"etaS":180,"eta":"3 min","at":"\(iso(180))","quality":"live","tooSoon":true}]},{"svc":"R2","etaS":780,"eta":"13 min","at":"\(iso(780))","quality":"live","color":"#34a853","towards":[],"toText":"Ends here"},{"svc":"BTC1","etaS":1260,"eta":"~21 min","at":"\(iso(1260))","quality":"scheduled","towards":["Oei Tiong Ham Building"],"later":[{"etaS":3060,"eta":"~51 min","at":"\(iso(3060))","quality":"scheduled"}]},{"svc":"95","etaS":360,"eta":"6 min","at":"\(iso(360))","quality":"live","paid":true,"towards":["Buona Vista Int"]},{"svc":"E","etaS":null,"quality":"ended","towards":["UTown"]}]},
+                 {"stop":{"code":"PGPR","name":"PGP Foyer"},"walkS":150,"available":true,"board":[{"svc":"A2","etaS":660,"eta":"11 min","at":"\(iso(660))","quality":"live","towards":["TCOMS","Kent Ridge Bus Terminal"]}]}]
                 """
             let nearby = try! JSONDecoder().decode([NearbyStop].self, from: Data(nearbyJSON.utf8))
 
@@ -124,8 +124,24 @@
                         .environment(\.fixedNow, Date())
                         .background(bg)
                         .environment(\.colorScheme, scheme)
-                    write(view, scale: 2, to: dir, as: "\(name)-\(scheme == .dark ? "dark" : "light")")
+                    // Nearby's switch is an AppKit control, which only a hosting view draws.
+                    if name == "nearby" {
+                        writeHosted(view, scale: 2, to: dir, as: "\(name)-\(scheme == .dark ? "dark" : "light")")
+                    } else {
+                        write(view, scale: 2, to: dir, as: "\(name)-\(scheme == .dark ? "dark" : "light")")
+                    }
                 }
+            }
+            // Nearby with clock times: the choice read from a store of the snapshots' own.
+            let clock = UserDefaults(suiteName: "terminus-snapshots") ?? .standard
+            clock.set(true, forKey: NearbyBoard.clockKey)
+            for (scheme, bg) in [(ColorScheme.dark, Color(white: 0.16)), (.light, Color(white: 0.95))] {
+                let view = Popover(model: model(nearbyTab: true), startShown: true)
+                    .environment(\.fixedNow, Date())
+                    .background(bg)
+                    .environment(\.colorScheme, scheme)
+                    .defaultAppStorage(clock)
+                writeHosted(view, scale: 2, to: dir, as: "nearby-clock-\(scheme == .dark ? "dark" : "light")")
             }
         }
 

@@ -528,11 +528,21 @@ struct BoardRow: Decodable, Hashable {
     var later: [Later]? = nil
     /// "4 min", "now", "~6 min", worded on the server; nil with no time, or from an older server.
     var eta: String? = nil
+    /// When it's due, minute-rounded ("2026-08-27T01:04:00Z"), for Nearby's clock times; nil from an older server.
+    var at: String? = nil
+    /// Where it goes from here, its last stop last (/api/me/nearby).
+    var towards: [String]? = nil
+    /// "to TCOMS, COM 3", or "Ends here" at the end of its line, worded on the server.
+    var toText: String? = nil
+    /// Due before you could walk to the stop: shown, but not one to catch.
+    var tooSoon: Bool? = nil
 
     struct Later: Decodable, Hashable {
         let etaS: Int?
         let quality: String
         var eta: String? = nil
+        var at: String? = nil
+        var tooSoon: Bool? = nil
     }
 }
 
