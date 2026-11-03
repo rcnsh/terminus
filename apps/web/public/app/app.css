@@ -91,31 +91,45 @@ body.is-offline .app-card .widget.offline-plan { opacity: 1; }
 .nearby { display: grid; gap: 12px; }
 .stop-sign .detail { padding: 12px 14px; }
 /* One set of columns for every sign, its heading and its rows (subgrid),
-   so the times line up down the page and each time column is as wide as
-   its longest time ("~10:12 PM", "约 下午 10:12"), never spilling into the
-   next. Without subgrid, fixed columns. */
-.nearby { grid-template-columns: 3.4rem minmax(0, 1fr) minmax(4.4rem, auto) minmax(3.8rem, auto); column-gap: 10px; }
+   so the times line up down the page and each column is as wide as its
+   widest content: the longest time ("~10:12 PM"), the widest line badge
+   ("188e $"), never spilling into the next. Without subgrid, fixed columns. */
+.nearby { grid-template-columns: minmax(2.9rem, auto) minmax(0, 1fr) repeat(3, minmax(2.6rem, auto)); column-gap: 14px; }
 .nearby > * { grid-column: 1 / -1; }
-.stop-sign, .nearby-row, .nb-head { display: grid; grid-template-columns: 3.4rem minmax(0, 1fr) 4.4rem 3.8rem; grid-template-columns: subgrid; }
+.stop-sign, .nearby-row, .nb-head { display: grid; grid-template-columns: 2.9rem minmax(0, 1fr) repeat(3, 3.4rem); grid-template-columns: subgrid; }
 .stop-sign > :not(.nearby-row, .nb-head) { grid-column: 1 / -1; }
-.nearby-row, .nb-head { grid-column: 1 / -1; align-items: center; column-gap: 10px; width: 100%; padding: 7px 14px; }
-.nearby-row { border: 0; background: none; color: inherit; font: inherit; text-align: left; font-variant-numeric: tabular-nums; }
+.nearby-row, .nb-head { grid-column: 1 / -1; align-items: center; width: 100%; padding: 0 14px; }
+.nearby-row { min-height: 52px; border: 0; background: none; color: inherit; font: inherit; text-align: left; font-variant-numeric: tabular-nums; }
+/* The badge sits close to where its bus is going; the times keep their wider gaps. */
+.nearby-row .nb-to, .nb-head span:nth-child(2) { margin-left: -6px; }
 button.nearby-row { cursor: pointer; }
 button.nearby-row:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); }
 .nearby-row + .nearby-row { border-top: 1px solid var(--line); }
-.stop-sign.nearest .nearby-row { padding-block: 10px; }
+/* Every line's badge the same size, as on a stop's board (.bt-chip), so the column reads as one. */
 .nearby-row .svc-col { display: flex; }
-.nb-head { padding-block: 7px 0; color: var(--muted); font-size: 0.68rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.nearby-row .svc-tag { width: 100%; min-width: 0; height: 28px; padding: 0 5px; border-radius: 8px; font: 700 0.9rem/1 var(--display); white-space: nowrap; }
+.nb-head { padding-block: 8px 2px; color: var(--muted); font-size: 0.66rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
 .nb-head span:nth-child(n + 3) { text-align: right; }
-/* Two lines at most, so a long name (Prince George's Park) is read whole, not cut. */
-.nb-to { min-width: 0; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; color: var(--muted); font-size: 0.82rem; line-height: 1.25; overflow-wrap: anywhere; }
-.nb-time { text-align: right; color: var(--muted); font-size: 0.9rem; font-weight: 600; white-space: nowrap; }
-.nb-time.next { color: var(--ink); font-size: 0.95rem; font-weight: 800; }
-.stop-sign.nearest .nb-time.next { font-size: 1.1rem; }
-/* Due before you could walk there: shown, so the board is whole, but not offered. */
-.nb-time.gone { color: var(--faint); text-decoration: line-through; text-decoration-thickness: 1.5px; }
+/* As a board row's title: the place in ink, the words around it ("to", "via") muted. */
+.nb-to { min-width: 0; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; color: var(--muted); font-size: 0.9rem; line-height: 1.25; overflow-wrap: anywhere; }
+.nb-to b { color: var(--ink); font-weight: 600; }
+/* The times in the board's figures (.bt-big, .bt-then): the number large, its unit small. */
+.nb-time { text-align: right; color: var(--muted); font: 600 1rem/1 var(--display); letter-spacing: -0.01em; white-space: nowrap; }
+.nb-time small { margin-left: 1px; font: 500 0.68rem/1 var(--font); letter-spacing: 0; }
+/* The first bus you can catch, in whichever column: the one to act on. */
+.nb-time.pick { color: var(--ink); font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em; }
+.nearby.clock .nb-time { font-size: 0.92rem; }
+.nearby.clock .nb-time.pick { font-size: 1.1rem; }
+/* Due before you could walk there: shown, so the board is whole, but not offered. Plain
+   text at one size, so the strike is one straight line and can't turn a 1 into a 4. */
+.nb-time.gone, .nearby.clock .nb-time.gone { color: var(--muted); font: 500 0.9rem/1 var(--font); letter-spacing: 0; text-decoration: line-through; text-decoration-thickness: 1.5px; }
 /* Minutes or clock times, for every sign at once. */
 .nb-times { margin-bottom: -2px; }
+/* Under the signs, as under a stop's board (.bt-foot). */
+.nb-foot { display: grid; gap: 2px; padding: 0 6px; font-size: 0.8rem; color: var(--muted); }
+.nb-foot p { margin: 0; }
+/* The stop's name opens its board: a chevron says so, as on the Stops tab's pinned stops. */
+.plate-go { display: inline-block; flex: none; width: 15px; height: 15px; margin-left: 3px; vertical-align: -2px; fill: none; stroke: var(--muted); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 /* The star on a sign's plate: pins the stop to the Stops tab. */
 .plate-star { flex: none; display: grid; place-items: center; width: 34px; height: 34px; margin-right: -2px; border: 0; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; }
 .plate-star svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linejoin: round; }

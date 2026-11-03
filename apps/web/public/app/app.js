@@ -1017,23 +1017,77 @@ const etaText = (b) =>
     : (b.eta ??
       (b.etaS < 60 ? t('Arriving') : b.quality === 'scheduled' ? t('~{0}', t('{0} min', mins(b.etaS))) : t('{0} min', mins(b.etaS))));
 
+/** A clock time's words around its figures ("PM", "下午"): none in 24-hour time. */
+const meridiem = (iso) =>
+  clock(iso)
+    .replace(/[\d:]+/, '')
+    .trim();
+
 /**
- * One bus in a Nearby column: the server's words ("4 min", "~6 min") or its
- * clock time, struck out when it's too soon to catch. A dash with no bus.
+ * One bus in a Nearby column, as on a stop's board: the figures large and
+ * the words small. The Next column carries the unit ("4 min", "6:02 PM");
+ * Then and After only their figures ("16", "~28"), lined up down the column,
+ * with AM/PM where the day's half changes, as a printed timetable does. An
+ * estimate is marked "~" in both languages: in a column of figures a word
+ * ("约") reads as part of the next. The first bus you can catch is the large
+ * one (`pick`), in whichever column. One too soon to catch is plain text,
+ * one size, struck through once: a strike through the display font's 1
+ * reads as a 4. A dash with no bus.
  */
-function NearbyTime({ bus, asClock, next }) {
-  const cls = `nb-time${next ? ' next' : ''}${bus?.tooSoon ? ' gone' : ''}`;
+function NearbyTime({ bus, prev, asClock, pick, first }) {
+  const approx = bus?.quality === 'scheduled' || bus?.quality === 'stale';
+  const cls = `nb-time${pick ? ' pick' : ''}${bus?.tooSoon ? ' gone' : ''}`;
   if (bus?.etaS == null) return html`<span class=${cls}>–</span>`;
-  const approx = bus.quality === 'scheduled' || bus.quality === 'stale';
-  const text = asClock && bus.at ? (approx ? t('~{0}', clock(bus.at)) : clock(bus.at)) : etaText(bus);
-  return html`<span class=${cls}>${text}${bus.tooSoon && html`<span class="sr-only">${t(', too soon to catch')}</span>`}</span>`;
+  const mark = approx ? '~' : '';
+  const sr = bus.tooSoon && html`<span class="sr-only">${t(', too soon to catch')}</span>`;
+  if (asClock && bus.at) {
+    const whole = clock(bus.at).trim();
+    const figure = whole.match(/[\d:]+/)?.[0] ?? whole;
+    const half = meridiem(bus.at);
+    const sayHalf = half && (first || !prev?.at || meridiem(prev.at) !== half);
+    if (bus.tooSoon) return html`<span class=${cls}>${mark}${sayHalf ? whole : figure}${sr}</span>`;
+    // zh writes 下午 before the time, en PM after it.
+    const before = half && whole.startsWith(half);
+    return html`<span class=${cls}>${mark}${sayHalf && before ? html`<small>${half} </small>` : ''}${figure}${sayHalf && !before ? html`<small> ${half}</small>` : ''}</span>`;
+  }
+  const words = etaText(bus);
+  const n = words.match(/\d+/)?.[0];
+  // "now": no figure to set large; said as it is.
+  if (!n) return html`<span class=${cls}>${words}${sr}</span>`;
+  const unit = first ? words.slice(words.indexOf(n) + n.length) : '';
+  if (bus.tooSoon) return html`<span class=${cls}>${mark}${n}${unit}${sr}</span>`;
+  return html`<span class=${cls}>${mark}${n}${unit ? html`<small>${unit}</small>` : ''}</span>`;
 }
 
-/** Where a row's bus is going, "to Kent Ridge MRT", or that this is the end of its line. */
-const nearbyTo = (b) => {
-  const end = b.towards?.at(-1);
-  return end ? t('to {0}', end) : (b.toText ?? t('Ends here'));
-};
+/**
+ * Where a row's bus is going, as the server words it ("to PGP Foyer", "via
+ * UTown"), the place set in ink and the words around it muted; an older
+ * server's end of the line otherwise.
+ */
+function NearbyDest({ b }) {
+  if (!b.dest) {
+    const end = b.towards?.at(-1);
+    return html`<span class="nb-to">${end ? t('to {0}', end) : (b.toText ?? t('Ends here'))}</span>`;
+  }
+  const i = b.destPlace ? b.dest.indexOf(b.destPlace) : -1;
+  if (i < 0) return html`<span class="nb-to">${b.dest}</span>`;
+  return html`<span class="nb-to">${b.dest.slice(0, i)}<b>${b.destPlace}</b>${b.dest.slice(i + b.destPlace.length)}</span>`;
+}
+
+/**
+ * Under the signs, once, as under a stop's board: what a struck-out time and
+ * a "~" mean, each only when one is showing, and that a row opens its line.
+ */
+function NearbyFoot({ stops }) {
+  const buses = stops.flatMap((s) => s.board.flatMap((b) => [b, ...(b.later ?? []).slice(0, 2)]));
+  const struck = buses.some((x) => x.tooSoon);
+  const guessed = buses.some((x) => x.etaS != null && (x.quality === 'scheduled' || x.quality === 'stale'));
+  return html`<div class="nb-foot">
+    ${struck && html`<p>${t("Crossed out: you can't walk there in time.")}</p>`}
+    ${guessed && html`<p>${t('~ is a guess from the timetable, not a live time.')}</p>`}
+    <p>${t('Tap a service to see its whole line.')}</p>
+  </div>`;
+}
 
 /**
  * Nearby: the stops around you as their signs, the name plate with the walk
@@ -1056,7 +1110,7 @@ function NearbyCard({ stops }) {
   // Heard once for these stops, not again on every refresh: their names.
   const names = stops.map((s) => s.stop.name).join(', ');
   return html`
-    <div class="widget nearby">
+    <div class=${asClock ? 'widget nearby clock' : 'widget nearby'}>
       <h2 class="sr-only">${t('Buses near you')}</h2>
       <${Say} text=${t('Buses near you: {0}', names)} />
       <div class="segmented full nb-times" role="radiogroup" aria-label=${t('Show times')}>
@@ -1069,7 +1123,7 @@ function NearbyCard({ stops }) {
             <header class="plate">
               <${Icon} paths=${BUS} class="plate-bus" />
               <button type="button" class="plate-name" onClick=${() => (location.hash = `#buses/stop/${encodeURIComponent(s.stop.code)}`)}>
-                ${s.stop.name}
+                ${s.stop.name}<${Icon} paths=${NEXT} class="plate-go" />
               </button>
               <span class="plate-walk">${t('{0} min walk', Math.max(1, mins(s.walkS)))}</span>
               ${
@@ -1087,7 +1141,7 @@ function NearbyCard({ stops }) {
             </header>
             ${
               s.board.length
-                ? html`<div class="nb-head" aria-hidden="true"><span></span><span></span><span>${t('Next bus')}</span><span>${t('Then')}</span></div>`
+                ? html`<div class="nb-head" aria-hidden="true"><span></span><span></span><span>${t('Next')}</span><span>${t('Then')}</span><span>${t('After')}</span></div>`
                 : ''
             }
             ${
@@ -1103,9 +1157,11 @@ function NearbyCard({ stops }) {
                           >${b.svc}${b.paid && html`<span class="fare" role="img" aria-label=${t('Public bus, fare applies')}>$</span>`}</span
                         ></span
                       >
-                      <span class="nb-to">${nearbyTo(b)}</span>
-                      <${NearbyTime} bus=${b} asClock=${asClock} next />
-                      <${NearbyTime} bus=${b.later?.[0]} asClock=${asClock} />
+                      <${NearbyDest} b=${b} />
+                      ${[b, b.later?.[0], b.later?.[1]].map(
+                        (bus, j, all) =>
+                          html`<${NearbyTime} key=${j} bus=${bus} prev=${all[j - 1]} first=${j === 0} asClock=${asClock} pick=${j === all.findIndex((x) => x?.etaS != null && !x.tooSoon)} />`,
+                      )}
                     <//>
                   `;
                   })
@@ -1114,6 +1170,7 @@ function NearbyCard({ stops }) {
           </section>
         `,
       )}
+      <${NearbyFoot} stops=${stops} />
       <button type="button" class="to-stops" onClick=${() => (location.hash = '#buses')}>
         <${Icon} paths=${STOP_SIGN} class="to-stops-icon" />
         <span><b>${t('Another stop, or a whole line')}</b><span>${t('Search, pinned stops and services are in Stops.')}</span></span>
