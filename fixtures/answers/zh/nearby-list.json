@@ -152,7 +152,6 @@
           "laterText": "之后 14 分钟",
           "toText": "经 Kent Ridge MRT，开往 COM 3",
           "at": "2026-08-27T01:04:00Z",
-          "tooSoon": true,
           "dest": "经 Kent Ridge MRT",
           "destPlace": "Kent Ridge MRT"
         },

@@ -384,11 +384,6 @@ export function components(): Record<string, unknown> {
                   format: 'date-time',
                   description: 'Only on `/api/me/nearby`: when it arrives, rounded to the minute, as the row’s `at`.',
                 },
-                tooSoon: {
-                  type: 'boolean',
-                  enum: [true],
-                  description: 'Only on `/api/me/nearby`: too soon to catch, as the row’s `tooSoon`.',
-                },
               },
             },
           },
@@ -440,7 +435,7 @@ export function components(): Record<string, unknown> {
       },
       NearbyRow: {
         description:
-          'A `BoardRow` on Nearby, each bus timed against the walk to its stop (`walkS`): its clock time, and whether it comes before you could get there. `later` has two buses where it can: when the feed gives fewer for a shuttle, the rest are guessed a headway apart after the last, `scheduled` (never past the service’s last bus; never for a public bus).',
+          'A `BoardRow` on Nearby, with each bus’s clock time. Every bus is shown as it comes, without weighing the walk to the stop. `later` has two buses where it can: when the feed gives fewer for a shuttle, the rest are guessed a headway apart after the last, `scheduled` (never past the service’s last bus; never for a public bus).',
         allOf: [
           { $ref: '#/components/schemas/BoardRow' },
           {
@@ -464,11 +459,6 @@ export function components(): Record<string, unknown> {
                 format: 'date-time',
                 example: '2026-08-27T08:25:00Z',
                 description: 'When the bus in `etaS` arrives, rounded to the minute, for a clock time. Null when `etaS` is.',
-              },
-              tooSoon: {
-                type: 'boolean',
-                enum: [true],
-                description: 'The bus in `etaS` comes before the walk to the stop is over: too soon to catch. Absent when it isn’t.',
               },
             },
           },

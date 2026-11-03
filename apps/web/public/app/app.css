@@ -117,13 +117,10 @@ button.nearby-row:hover { background: color-mix(in srgb, var(--ink) 4%, transpar
 /* The times in the board's figures (.bt-big, .bt-then): the number large, its unit small. */
 .nb-time { text-align: right; color: var(--muted); font: 600 1rem/1 var(--display); letter-spacing: -0.01em; white-space: nowrap; }
 .nb-time small { margin-left: 1px; font: 500 0.68rem/1 var(--font); letter-spacing: 0; }
-/* The first bus you can catch, in whichever column: the one to act on. */
+/* The next bus: the one to act on. */
 .nb-time.pick { color: var(--ink); font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em; }
 .nearby.clock .nb-time { font-size: 0.92rem; }
 .nearby.clock .nb-time.pick { font-size: 1.1rem; }
-/* Due before you could walk there: shown, so the board is whole, but not offered. Plain
-   text at one size, so the strike is one straight line and can't turn a 1 into a 4. */
-.nb-time.gone, .nearby.clock .nb-time.gone { color: var(--muted); font: 500 0.9rem/1 var(--font); letter-spacing: 0; text-decoration: line-through; text-decoration-thickness: 1.5px; }
 /* Minutes or clock times, for every sign at once. */
 .nb-times { margin-bottom: -2px; }
 /* Under the signs, as under a stop's board (.bt-foot). */

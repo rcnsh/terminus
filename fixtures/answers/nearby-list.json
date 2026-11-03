@@ -152,7 +152,6 @@
           "laterText": "then 14 min",
           "toText": "to Kent Ridge MRT, COM 3",
           "at": "2026-08-27T01:04:00Z",
-          "tooSoon": true,
           "dest": "via Kent Ridge MRT",
           "destPlace": "Kent Ridge MRT"
         },

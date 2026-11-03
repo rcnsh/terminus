@@ -91,7 +91,7 @@ import {
 } from './outcomes.ts';
 import { ImportInputError, parseShareUrl, resolveTrips } from '../timetable/nusmods.ts';
 import { termName } from '../timetable/calendar.ts';
-import { boardAsOf, boardAt, displayName, headwayFor, indexGraph, nearbyDest, withWalk } from '../answer/resolve.ts';
+import { boardAsOf, boardAt, displayName, headwayFor, indexGraph, nearbyDest, nearbyRow } from '../answer/resolve.ts';
 import { stopVia, viaText } from '../answer/via.ts';
 import { haversineM } from '../geo.ts';
 import { isoSeconds } from '../answer/format.ts';
@@ -1766,7 +1766,7 @@ async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: numbe
       available: sa.available !== false,
       via,
       viaText: viaText(via),
-      board: board.map((r) => ({ ...withWalk(r, walkS, nowMs, headwayFor(graph, r.svc)), ...nearbyDest(idx, r.svc, stop.code, r.via) })),
+      board: board.map((r) => ({ ...nearbyRow(r, nowMs, headwayFor(graph, r.svc)), ...nearbyDest(idx, r.svc, stop.code, r.via) })),
     };
   });
   // As old as the oldest times on it, so "Updated N ago" is true.

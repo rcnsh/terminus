@@ -626,15 +626,13 @@ export interface BoardRow {
   toText: string;
 }
 
-/** A bus on a Nearby row: when it comes by the clock, and whether it's too soon to catch. */
+/** A bus on a Nearby row: when it comes by the clock. */
 interface NearbyTimes {
   /** When it arrives, to the minute (ISO). */
   at: string;
-  /** It comes before the walk to the stop is over. Absent when it doesn't. */
-  tooSoon?: true;
 }
 
-/** A board row on Nearby, its buses timed against the walk there. */
+/** A board row on Nearby, with each bus's clock time. */
 export type NearbyRow = Omit<BoardRow, 'later'> & {
   /** Where it's going, short: "to PGP Foyer", "via UTown" for a loop (nearbyDest). */
   dest?: string;
@@ -642,7 +640,6 @@ export type NearbyRow = Omit<BoardRow, 'later'> & {
   destPlace?: string | null;
   /** When the first bus arrives, to the minute (ISO); null with no time. */
   at: string | null;
-  tooSoon?: true;
   later: (BoardRow['later'][number] & NearbyTimes)[];
 };
 
@@ -650,9 +647,9 @@ export type NearbyRow = Omit<BoardRow, 'later'> & {
 export const NEARBY_LATER = 2;
 
 /**
- * A Nearby row with each bus's clock time and, on one due before you could
- * walk to the stop, `tooSoon`, so a client strikes it out rather than offer
- * a bus nobody can catch. The time is rounded to the minute, as it's read.
+ * A Nearby row with each bus's clock time, rounded to the minute, as it's
+ * read. Nearby shows every bus as it comes, whoever is asking: it doesn't
+ * weigh the walk to the stop.
  *
  * The shuttle feed gives two buses a service; where it gives fewer than
  * Nearby's three, the rest are guessed a headway apart after the last one,
@@ -660,9 +657,8 @@ export const NEARBY_LATER = 2;
  * live. Not past the service's last bus, and not for a public bus, whose
  * own timetable LTA gives.
  */
-export function withWalk(r: BoardRow, walkS: number, nowMs: number, headwayS = 0): NearbyRow {
+export function nearbyRow(r: BoardRow, nowMs: number, headwayS = 0): NearbyRow {
   const at = (etaS: number) => new Date(Math.round((nowMs + etaS * 1000) / 60_000) * 60_000).toISOString().replace('.000Z', 'Z');
-  const soon = (etaS: number) => (etaS < walkS ? { tooSoon: true as const } : {});
   const later = [...r.later];
   const endsMs = r.endsAt ? Date.parse(r.endsAt) : null;
   if (r.running && r.etaS != null && !r.paid && headwayS > 0) {
@@ -675,8 +671,7 @@ export function withWalk(r: BoardRow, walkS: number, nowMs: number, headwayS = 0
   return {
     ...r,
     at: r.etaS == null ? null : at(r.etaS),
-    ...(r.etaS == null ? {} : soon(r.etaS)),
-    later: later.map((b) => ({ ...b, at: at(b.etaS), ...soon(b.etaS) })),
+    later: later.map((b) => ({ ...b, at: at(b.etaS) })),
   };
 }
 

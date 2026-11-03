@@ -1033,23 +1033,19 @@ const meridiem = (iso) =>
  * Then and After only their figures ("16", "~28"), lined up down the column,
  * with AM/PM where the day's half changes, as a printed timetable does. An
  * estimate is marked "~" in both languages: in a column of figures a word
- * ("约") reads as part of the next. The first bus you can catch is the large
- * one (`pick`), in whichever column. One too soon to catch is plain text,
- * one size, struck through once: a strike through the display font's 1
- * reads as a 4. A dash with no bus.
+ * ("约") reads as part of the next. The next bus is the large one. A dash
+ * with no bus.
  */
-function NearbyTime({ bus, prev, asClock, pick, first }) {
+function NearbyTime({ bus, prev, asClock, first }) {
   const approx = bus?.quality === 'scheduled' || bus?.quality === 'stale';
-  const cls = `nb-time${pick ? ' pick' : ''}${bus?.tooSoon ? ' gone' : ''}`;
+  const cls = `nb-time${first && bus?.etaS != null ? ' pick' : ''}`;
   if (bus?.etaS == null) return html`<span class=${cls}>–</span>`;
   const mark = approx ? '~' : '';
-  const sr = bus.tooSoon && html`<span class="sr-only">${t(', too soon to catch')}</span>`;
   if (asClock && bus.at) {
     const whole = clock(bus.at).trim();
     const figure = whole.match(/[\d:]+/)?.[0] ?? whole;
     const half = meridiem(bus.at);
     const sayHalf = half && (first || !prev?.at || meridiem(prev.at) !== half);
-    if (bus.tooSoon) return html`<span class=${cls}>${mark}${sayHalf ? whole : figure}${sr}</span>`;
     // zh writes 下午 before the time, en PM after it.
     const before = half && whole.startsWith(half);
     return html`<span class=${cls}>${mark}${sayHalf && before ? html`<small>${half} </small>` : ''}${figure}${sayHalf && !before ? html`<small> ${half}</small>` : ''}</span>`;
@@ -1057,9 +1053,8 @@ function NearbyTime({ bus, prev, asClock, pick, first }) {
   const words = etaText(bus);
   const n = words.match(/\d+/)?.[0];
   // "now": no figure to set large; said as it is.
-  if (!n) return html`<span class=${cls}>${words}${sr}</span>`;
+  if (!n) return html`<span class=${cls}>${words}</span>`;
   const unit = first ? words.slice(words.indexOf(n) + n.length) : '';
-  if (bus.tooSoon) return html`<span class=${cls}>${mark}${n}${unit}${sr}</span>`;
   return html`<span class=${cls}>${mark}${n}${unit ? html`<small>${unit}</small>` : ''}</span>`;
 }
 
@@ -1079,18 +1074,16 @@ function NearbyDest({ b }) {
 }
 
 /**
- * Under the signs, once, as under a stop's board: what a struck-out time and
- * a "~" mean, each only when one is showing, and that a row opens its line.
+ * Under the signs, once, as under a stop's board: what a "~" means, only
+ * when one is showing, and that a row opens its line.
  */
 function NearbyFoot({ stops, asClock }) {
   const buses = stops.flatMap((s) => s.board.flatMap((b) => [b, ...(b.later ?? []).slice(0, 2)]));
-  const struck = buses.some((x) => x.tooSoon);
   // Only a "~" on the screen needs explaining: a guessed "now" has none.
   const guessed = buses.some(
     (x) => x.etaS != null && (x.quality === 'scheduled' || x.quality === 'stale') && (asClock ? x.at : /\d/.test(etaText(x))),
   );
   return html`<div class="nb-foot">
-    ${struck && html`<p>${t("Crossed out: you can't walk there in time.")}</p>`}
     ${guessed && html`<p>${t('~ is a guess from the timetable, not a live time.')}</p>`}
     <p>${t('Tap a service to see its whole line.')}</p>
   </div>`;
@@ -1100,8 +1093,8 @@ function NearbyFoot({ stops, asClock }) {
  * Nearby: the stops around you as their signs, the name plate with the walk
  * there, then a row per service read like a stop's board: where it's going,
  * its next bus and the one after (the shuttle feed gives two), in minutes or
- * as clock times. A bus due before you could walk there is struck out. The
- * nearest stop is drawn larger. The name opens the stop's board and a row
+ * as clock times, the next one large. Every bus is shown as it comes: Nearby
+ * doesn't weigh the walk there. The nearest stop is drawn larger. The name opens the stop's board and a row
  * its service's line, both in the Stops tab; the star pins the stop there.
  * Last, the way to the Stops tab, for any other stop.
  */
@@ -1166,8 +1159,7 @@ function NearbyCard({ stops }) {
                       >
                       <${NearbyDest} b=${b} />
                       ${[b, b.later?.[0], b.later?.[1]].map(
-                        (bus, j, all) =>
-                          html`<${NearbyTime} key=${j} bus=${bus} prev=${all[j - 1]} first=${j === 0} asClock=${asClock} pick=${j === all.findIndex((x) => x?.etaS != null && !x.tooSoon)} />`,
+                        (bus, j, all) => html`<${NearbyTime} key=${j} bus=${bus} prev=${all[j - 1]} first=${j === 0} asClock=${asClock} />`,
                       )}
                     <//>
                   `;
