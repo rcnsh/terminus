@@ -1762,33 +1762,37 @@ const STOPS_MAX = 8;
  * says your walk; without, `walkS` is null.
  */
 async function stopsFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: number, deps: MeDeps, profile: Profile) {
-  const graph = profile.publicBuses ? GRAPH_PUBLIC : GRAPH;
-  const idx = indexGraph(graph);
   const asked = (url.searchParams.get('codes') ?? '')
     .split(',')
     .map((c) => c.trim().toUpperCase())
     .filter((c, i, all) => c && all.indexOf(c) === i);
   if (!asked.length) return json({ error: 'codes is required' }, 400);
   if (asked.length > STOPS_MAX) return json({ error: 'too many stops at once' }, 400);
-  const found = asked.map((c) => idx.byCode.get(c)).filter((s): s is Stop => Boolean(s));
+  // With public buses on, the graph that has them. A pinned stop only public
+  // buses call at (LTA's code) has them whatever the setting, as on
+  // /api/arrivals, without adding them to the other stops' boards.
+  const shuttles = indexGraph(GRAPH);
+  const pub = indexGraph(GRAPH_PUBLIC);
+  const graphOf = (code: string): Graph => (profile.publicBuses || !shuttles.byCode.has(code) ? GRAPH_PUBLIC : GRAPH);
+  const found = asked
+    .map((code) => ({ graph: graphOf(code), stop: (graphOf(code) === GRAPH ? shuttles : pub).byCode.get(code) }))
+    .filter((f): f is { graph: Graph; stop: Stop } => Boolean(f.stop));
+  const byStop = new Map<string, StopArrivals>();
+  for (const graph of [GRAPH, GRAPH_PUBLIC]) {
+    const codes = found.filter((f) => f.graph === graph).map((f) => f.stop.code);
+    if (codes.length) for (const [k, v] of await deps.collectArrivals(env, ctx, codes, nowMs, graph)) byStop.set(k, v);
+  }
   const { lat, lon } = coordsFrom(url);
-  const byStop = await deps.collectArrivals(
-    env,
-    ctx,
-    found.map((s) => s.code),
-    nowMs,
-    graph,
-  );
   const stopped = url.searchParams.get('stopped') === '1';
   // Walked as Nearby walks it: in a residence or a building by its paths, else from where you are.
   const homeWalk = profile.home ? { stops: profile.home.stops, m: profile.homeWalkMin * 60 * paceSpeed(profile.walkPace) } : null;
   const inside =
-    lat === null || lon === null ? null : (residenceStops(lat, lon, idx.byCode, homeWalk) ?? buildingStops(lat, lon, idx.byCode));
+    lat === null || lon === null ? null : (residenceStops(lat, lon, pub.byCode, homeWalk) ?? buildingStops(lat, lon, pub.byCode));
   const walkM = (stop: Stop): number | null =>
     lat === null || lon === null ? null : (inside?.find((c) => c.stop.code === stop.code)?.footM ?? footM(lat, lon, stop));
-  const stops = found.map((stop) => {
+  const stops = found.map(({ graph, stop }) => {
     const m = walkM(stop);
-    return nearbyStop(graph, idx, stop, byStop.get(stop.code)!, nowMs, stopped, {
+    return nearbyStop(graph, graph === GRAPH ? shuttles : pub, stop, byStop.get(stop.code)!, nowMs, stopped, {
       walkS: m === null ? null : Math.round(m / paceSpeed(profile.walkPace)),
     });
   });
@@ -1796,7 +1800,7 @@ async function stopsFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: number
     stops,
     asOf: new Date(
       boardAsOf(
-        found.map((s) => byStop.get(s.code)),
+        found.map((f) => byStop.get(f.stop.code)),
         nowMs,
       ),
     ).toISOString(),

@@ -648,6 +648,15 @@ test('/api/me/stops: the stops asked for, as Nearby shows them, with your walk o
   assert.equal(body.stops[0].walkS, pgp.walkS, 'and the same walk');
   assert.ok(body.stops[0].board.every((r) => typeof r.dest === 'string'));
 
+  // A pinned stop only public buses call at is there with public buses off, as on /api/arrivals.
+  const pub = await (await call(env, '/api/me/stops?codes=YIH,16009', { cookie })).json();
+  assert.deepEqual(
+    pub.stops.map((s) => s.stop.code),
+    ['YIH', '16009'],
+  );
+  const yih = (body) => body.stops[0].board.map((r) => r.svc);
+  const yihAlone = await (await call(env, '/api/me/stops?codes=YIH', { cookie })).json();
+  assert.deepEqual(yih(pub), yih(yihAlone), "a public-only pin doesn't add public buses to the other stops' boards");
   const away = await (await call(env, '/api/me/stops?codes=PGP', { cookie })).json();
   assert.equal(away.stops[0].walkS, null, 'no location: no walk');
   assert.equal((await call(env, '/api/me/stops', { cookie })).status, 400);
