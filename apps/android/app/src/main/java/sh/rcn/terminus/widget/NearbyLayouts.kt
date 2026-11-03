@@ -436,23 +436,21 @@ private fun SideRowExplained(b: StopBus, shown: List<StopBus>, inks: Inks, old: 
 private fun minutes(ctx: Context, b: StopBus, old: Boolean): Int? =
     if (old || b.first || !LeaveAlerts.canBeExact(ctx)) null else NearbyBoard.minutesLeft(b.atMs, System.currentTimeMillis())
 
-/** How long until a bus, [left] whole minutes: "6 min", "~6 min" for a timetable's time, "now" in its last minute. */
+/** How long until a bus, [left] whole minutes ([NearbyBoard.minutesWords]), "now" in its own colour. */
 @Composable
 private fun Minutes(b: StopBus, left: Int, inks: Inks, sizeSp: Float) {
     Box(GlanceModifier.cornerRadius(8.dp).background(inks.chip).padding(horizontal = 6.dp, vertical = 1.dp)) {
-        if (left == 0) {
-            Text(
-                L.s(R.string.now),
-                style = TextStyle(color = inks.good, fontSize = sizeSp.sp, fontWeight = FontWeight.Bold),
-                maxLines = 1,
-            )
-        } else {
-            Text(
-                L.s(if (b.live) R.string.nearby_min else R.string.nearby_min_approx, left),
-                style = TextStyle(color = inks.ink, fontSize = sizeSp.sp, fontWeight = FontWeight.Medium),
-                maxLines = 1,
-            )
-        }
+        val now = left == 0 && b.live
+        Text(
+            NearbyBoard.minutesWords(left, b.live),
+            style =
+                TextStyle(
+                    color = if (now) inks.good else inks.ink,
+                    fontSize = sizeSp.sp,
+                    fontWeight = if (now) FontWeight.Bold else FontWeight.Medium,
+                ),
+            maxLines = 1,
+        )
     }
 }
 

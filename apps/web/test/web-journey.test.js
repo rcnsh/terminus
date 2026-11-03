@@ -226,3 +226,12 @@ test("the livery (drawn before sign-in, with no /api/campus to ask) has the API'
   const { ROUTE_COLORS } = await import('../../api/src/map/campus.ts');
   assert.deepEqual(Object.fromEntries(LIVERY), ROUTE_COLORS);
 });
+
+test('the road line: an estimate is about 1 min in its last minute, never "arriving", which would pass for a bus at the stop', () => {
+  useLang('en');
+  assert.equal(J.roadWords({ live: false }, 30, 'COM3'), 'reaches COM3 in about 1 min');
+  assert.equal(J.roadWords({ live: true }, 30, 'COM3'), 'arriving at COM3');
+  assert.equal(J.roadWords({ live: false }, 240, 'COM3'), 'reaches COM3 in about 4 min');
+  assert.equal(J.roadWords({ live: true }, 240, 'COM3'), 'reaches COM3 in 4 min');
+  assert.equal(J.roadWords({ live: true }, 0, 'COM3'), 'from COM3');
+});

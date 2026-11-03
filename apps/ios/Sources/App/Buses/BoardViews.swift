@@ -336,19 +336,14 @@ struct BusBigTime: View {
 
     var body: some View {
         let size = self.size * scale
-        let arriving = (etaS ?? .max) < BusTimes.arrivingS
+        // Only a bus seen is arriving: an estimate is "~1 min" however close.
+        let arriving = (etaS ?? .max) < BusTimes.arrivingS && quality == "live"
         let color: Color = arriving ? .brand : (quality == "live" ? .ink : .muted)
         Group {
-            if etaS == nil {
-                Text(verbatim: "–").font(.system(size: 28 * scale, weight: .bold)).foregroundStyle(Color.faint)
-            } else if let eta {
-                big(eta, size: size).foregroundStyle(color)
-            } else if arriving {
-                Text(L("Arriving")).font(.system(size: size, weight: .heavy)).foregroundStyle(Color.brand)
+            if let etaS {
+                big(eta ?? BusTimes.words(etaS, quality: quality), size: size).foregroundStyle(color)
             } else {
-                (Text(verbatim: "\(BusTimes.minutes(etaS ?? 0))").font(.system(size: size, weight: .heavy))
-                    + Text(verbatim: " " + L("min")).font(.system(size: 15 * scale, weight: .semibold)))
-                    .foregroundStyle(color)
+                Text(verbatim: "–").font(.system(size: 28 * scale, weight: .bold)).foregroundStyle(Color.faint)
             }
         }
         .lineLimit(1)

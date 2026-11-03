@@ -334,7 +334,16 @@ class Store(context: Context) {
     fun clear() =
         synchronized(Store) {
             val keep =
-                listOf(KEY_LANG, KEY_THEME, CardStyle.KEY, NewToNus.KEY, KEY_INTENT, Servers.KEY_SERVER, KEY_TOKEN_SITE, KEY_TOKEN_LOCAL)
+                listOf(
+                        KEY_LANG,
+                        KEY_THEME,
+                        CardStyle.KEY,
+                        NewToNus.KEY,
+                        KEY_INTENT,
+                        Servers.KEY_SERVER,
+                        KEY_TOKEN_SITE,
+                        KEY_TOKEN_LOCAL,
+                    )
                     .associateWith {
                         prefs.getString(it, null)
                     }

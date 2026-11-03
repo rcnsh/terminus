@@ -2,8 +2,8 @@ import SwiftUI
 import WidgetKit
 
 /// The choices kept on this phone that redraw the app: its language, its
-/// appearance, the card's style and New to NUS. The account keeps its own copy of the
-/// language and the clock; Settings saves both.
+/// appearance, the card's style and New to NUS.
+/// The account keeps its own copy of the language and the clock; Settings saves both.
 @MainActor @Observable
 final class Prefs {
     static let shared = Prefs()

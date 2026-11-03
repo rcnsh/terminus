@@ -583,7 +583,7 @@ private struct StopRow: View {
     /// "约 6 分钟"), worded here only for an older server. One without a
     /// number ("now") is as large as a number, so the column reads as one.
     @ViewBuilder private var bigTime: some View {
-        let arriving = (row.etaS ?? .max) < BusTimes.arrivingS
+        let arriving = (row.etaS ?? .max) < BusTimes.arrivingS && row.quality == "live"
         let color: Color = arriving ? .brand : row.quality == "live" ? .ink : .muted
         if row.etaS == nil {
             Text(verbatim: "–").font(.system(size: 24 * scale, weight: .bold)).foregroundStyle(Color.faint)

@@ -7,11 +7,14 @@ struct BoardRow: Decodable, Hashable, Sendable {
         var etaS: Int
         var quality: String
         var eta: String?
-        enum CodingKeys: String, CodingKey { case etaS, quality, eta }
-        init(etaS: Int, quality: String, eta: String?) {
+        /// When it's due (ISO, to the minute); nil from an older server.
+        var at: String?
+        enum CodingKeys: String, CodingKey { case etaS, quality, eta, at }
+        init(etaS: Int, quality: String, eta: String?, at: String? = nil) {
             self.etaS = etaS
             self.quality = quality
             self.eta = eta
+            self.at = at
         }
         init(from d: Decoder) throws {
             let c = try d.container(keyedBy: CodingKeys.self)
@@ -21,7 +24,11 @@ struct BoardRow: Decodable, Hashable, Sendable {
             etaS = e
             quality = c.string(.quality) ?? "live"
             eta = c.string(.eta)
+            at = c.string(.at).flatMap { $0.isEmpty ? nil : $0 }
         }
+
+        /// "14 min", "~20 min": the server's words, else worded here.
+        var etaText: String { eta ?? BusTimes.words(etaS, quality: quality) }
     }
 
     let svc: String
@@ -53,9 +60,17 @@ struct BoardRow: Decodable, Hashable, Sendable {
     var laterText: String?
     /// "to Central Library, Kent Vale", "Ends here".
     let toText: String?
+    /// When the next bus is due (ISO, to the minute); nil without one, or from an older server.
+    let at: String?
+    /// Where it's going, worded and translated on the server ("to PGP Foyer",
+    /// "via UTown", "Ends here"); nil from an older server.
+    let dest: String?
+    /// The place inside `dest`, set apart from the words around it; nil with none.
+    let destPlace: String?
 
     enum CodingKeys: String, CodingKey {
-        case svc, etaS, quality, color, paid, later, towards, via, crowd, endsAt, running, stopped, resumesAt, eta, laterText, toText
+        case svc, etaS, quality, color, paid, later, towards, via, crowd, endsAt, running, stopped, resumesAt, eta, laterText, toText, at,
+            dest, destPlace
     }
 
     init(from d: Decoder) throws {
@@ -78,16 +93,13 @@ struct BoardRow: Decodable, Hashable, Sendable {
         eta = c.string(.eta).flatMap { $0.isEmpty ? nil : $0 }
         laterText = c.string(.laterText).flatMap { $0.isEmpty ? nil : $0 }
         toText = c.string(.toText).flatMap { $0.isEmpty ? nil : $0 }
+        at = c.string(.at).flatMap { $0.isEmpty ? nil : $0 }
+        dest = c.string(.dest).flatMap { $0.isEmpty ? nil : $0 }
+        destPlace = c.string(.destPlace).flatMap { $0.isEmpty ? nil : $0 }
     }
 
     /// "4 min", "Arriving", "~6 min": the server's words, else worded here from etaS.
-    var etaText: String? {
-        if let eta { return eta }
-        guard let s = etaS else { return nil }
-        if s < BusTimes.arrivingS { return L("Arriving") }
-        let m = "\(BusTimes.minutes(s))"
-        return quality == "live" ? L("%@ min", m) : L("~%@ min", m)
-    }
+    var etaText: String? { eta ?? etaS.map { BusTimes.words($0, quality: quality) } }
 
     /// "then 12, 20 min", the server's or worded here.
     var thenText: String? {
@@ -289,8 +301,18 @@ enum BusTimes {
         out.eta = nil
         out.quality = r.quality == "live" ? "stale" : r.quality
         out.laterText = nil
-        out.later = r.later.map { BoardRow.Later(etaS: $0.etaS - s, quality: $0.quality, eta: nil) }.filter { $0.etaS > 0 }
+        out.later = r.later.map { BoardRow.Later(etaS: $0.etaS - s, quality: $0.quality, eta: nil, at: $0.at) }
+            .filter { $0.etaS > 0 }
         return out
+    }
+
+    /// "4 min", "Arriving", "~6 min" for a bus `etaS` away, worded here as
+    /// the server words it: an estimate is never "Arriving", which would pass
+    /// for a bus at the stop, but "~1 min" under a minute.
+    static func words(_ etaS: Int, quality: String) -> String {
+        let m = "\(minutes(etaS))"
+        guard quality == "live" else { return L("~%@ min", m) }
+        return etaS < arrivingS ? L("Arriving") : L("%@ min", m)
     }
 
     /// Rounded to the nearest minute, never below 1.

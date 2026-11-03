@@ -6,6 +6,7 @@
 ", %@ min walk" = "，步行 %@ 分钟";
 "Add your email" = "添加你的邮箱";
 "Add your email to report a wrong answer, so we can reply to you." = "添加邮箱后才能反馈错误的结果，方便我们回复你。";
+"After" = "再之后";
 "Another stop, or a whole line" = "其他车站或整条线路";
 "arrive %@" = "%@ 到达";
 "arriving at %@" = "即将到达 %@";
@@ -66,6 +67,7 @@
 "Tap Nearby for buses around you." = "点按“附近”查看你周围的巴士。";
 "Thanks, it's sent" = "谢谢，已发送";
 "The trip home" = "回家的行程";
+"Then" = "之后";
 "Time" = "时间";
 "Times were off" = "时间不准";
 "Today" = "今天";
@@ -82,3 +84,4 @@
 "Wrong stop" = "车站不对";
 "You" = "你";
 "Your note" = "你的说明";
+"~ is a guess from the timetable, not a live time." = "~ 是按时刻表估计的，不是实时时间。";

@@ -25,7 +25,7 @@ test('a board row says its time in words, with "~" for a timetable time', () => 
   assert.equal(etaText(360, 'scheduled'), '~6 min');
   assert.equal(etaText(240, 'stale'), '~4 min', 'an old live time, counted down since, is a guess as on the card');
   assert.equal(etaText(20, 'live'), 'now');
-  assert.equal(etaText(20, 'scheduled'), 'now', '"~now" says nothing more than "now"');
+  assert.equal(etaText(20, 'scheduled'), '~1 min', 'an estimate is never "now", which would pass for a bus at the stop');
   assert.equal(
     zh(() => etaText(360, 'scheduled')),
     '约 6 分钟',

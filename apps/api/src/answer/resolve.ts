@@ -626,17 +626,69 @@ export interface BoardRow {
   toText: string;
 }
 
+/** A bus on a Nearby row: when it comes by the clock. */
+interface NearbyTimes {
+  /** When it arrives, to the minute (ISO). */
+  at: string;
+}
+
+/** A board row on Nearby, with each bus's clock time. */
+export type NearbyRow = Omit<BoardRow, 'later'> & {
+  /** Where it's going, short: "to PGP Foyer", "via UTown" for a loop (nearbyDest). */
+  dest?: string;
+  /** The place named in `dest`, for a client that sets it apart from the words around it; null with none. */
+  destPlace?: string | null;
+  /** When the first bus arrives, to the minute (ISO); null with no time. */
+  at: string | null;
+  later: (BoardRow['later'][number] & NearbyTimes)[];
+};
+
+/** How many buses after the next one a Nearby row shows: its Then and After columns. */
+export const NEARBY_LATER = 2;
+
+/**
+ * A Nearby row with each bus's clock time, rounded to the minute, as it's
+ * read. Nearby shows every bus as it comes, whoever is asking: it doesn't
+ * weigh the walk to the stop.
+ *
+ * The shuttle feed gives two buses a service; where it gives fewer than
+ * Nearby's three, the rest are guessed a headway apart after the last one,
+ * as the answer guesses past the feed's list, and marked `scheduled`, never
+ * live. Only while the service's hours are known and it's inside them, and not
+ * past its last bus; not for a public bus, whose
+ * own timetable LTA gives.
+ */
+export function nearbyRow(r: BoardRow, nowMs: number, headwayS = 0): NearbyRow {
+  const at = (etaS: number) => new Date(Math.round((nowMs + etaS * 1000) / 60_000) * 60_000).toISOString().replace('.000Z', 'Z');
+  const later = [...r.later];
+  const endsMs = r.endsAt ? Date.parse(r.endsAt) : null;
+  if (r.running && r.etaS != null && !r.paid && headwayS > 0 && endsMs !== null) {
+    while (later.length < NEARBY_LATER) {
+      const etaS = (later.at(-1)?.etaS ?? r.etaS) + headwayS;
+      if (nowMs + etaS * 1000 > endsMs) break;
+      later.push({ etaS, quality: 'scheduled', eta: etaText(etaS, 'scheduled') });
+    }
+  }
+  return {
+    ...r,
+    laterText: thenText(later),
+    at: r.etaS == null ? null : at(r.etaS),
+    later: later.map((b) => ({ ...b, at: at(b.etaS) })),
+  };
+}
+
 /** How many later buses a row's `laterText` names: more is noise on a phone. */
 export const THEN_MAX = 2;
 
 /**
  * A time on a board, in words: a timetable time is marked as an estimate
  * ("~6 min"), and so is a stale one, counted down from an old reading as the
- * card's are; but not "now", which "~" can't make vaguer.
+ * card's are. An estimate is never "now", which would pass for a bus at the
+ * stop: under a minute it's "~1 min".
  */
 export function etaText(etaS: number, quality: Quality): string {
-  const t = mins(etaS);
-  return approxQ(quality) && t !== m().now ? m().approx(t) : t;
+  if (!approxQ(quality)) return mins(etaS);
+  return m().approx(mins(Math.max(etaS, 60)));
 }
 
 /** Whether a board time is a guess rather than a fresh live one. */
@@ -678,6 +730,45 @@ export function towardsFrom(idx: GraphIndex, svc: string, stopCode: string): str
   const end = r.loop ? r.seq[0] : r.seq[r.seq.length - 1];
   const codes = next === end ? [next] : [next, end];
   return codes.map((c) => displayName(idx.byCode.get(c), c));
+}
+
+/** How long a place's name may be and still be kept on one line (its spaces made non-breaking), so "via" wraps alone. */
+const ONE_LINE_PLACE = 12;
+
+/**
+ * Where a Nearby row's bus is going, short enough for a row beside three
+ * times, in the names the stops' plates use: "to PGP Foyer". A loop ends
+ * where it started, which says nothing about which way it's going (both D1
+ * and D2 end at COM 3, even at COM 3), so a loop says the first well-known
+ * place it passes from here ("via UTown"); with none, where it ends ("to KR
+ * Bus Ter"), unless that's this stop, its first, where it says its next.
+ * `destPlace` is the place alone, for a client that sets it apart from the
+ * words around it. A short name is kept whole on one line. `svc` is the
+ * row's name: a two-way public bus ("151") is two routes ("151/1",
+ * "151/2"), and the one meant is the one calling here; where both do, the
+ * one whose way on is the row's `towards`.
+ */
+export function nearbyDest(
+  idx: GraphIndex,
+  svc: string,
+  stopCode: string,
+  via: string[],
+  towards: string[] = [],
+): { dest: string; destPlace: string | null } {
+  const here = (idx.servingStop.get(stopCode) ?? []).filter((k) => svcName(k) === svc);
+  const same = (k: string) => towardsFrom(idx, k, stopCode).join('\u0000') === towards.join('\u0000');
+  const key = idx.routes.has(svc) ? svc : (here.find(same) ?? here[0] ?? svc);
+  const r = idx.routes.get(key);
+  const at = r?.pos.get(stopCode);
+  if (!r || !at) return { dest: towardsText(towardsFrom(idx, key, stopCode)), destPlace: null };
+  const short = (c: string) => idx.byCode.get(c)?.name ?? c;
+  const n = at[0] + 1 < r.seq.length ? at[0] + 1 : r.loop ? 0 : null;
+  if (n === null) return { dest: m().endsHere, destPlace: null };
+  const end = r.loop ? r.seq[0] : r.seq[r.seq.length - 1];
+  const viaPlace = r.loop ? (via[0] ?? (end === stopCode ? short(r.seq[n]) : null)) : null;
+  const raw = viaPlace ?? short(end);
+  const place = raw.length <= ONE_LINE_PLACE ? raw.replaceAll(' ', '\u00a0') : raw;
+  return { dest: viaPlace ? m().loopVia(place) : m().towardsOne(place), destPlace: place };
 }
 
 /**

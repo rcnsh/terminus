@@ -124,6 +124,7 @@ private let utown = stop(
 
 @Test func nearbyMinutesAreWorded() {
     #expect(NearbyBoard.minutesText(0, live: true) == L("now"))
+    #expect(NearbyBoard.minutesText(0, live: false) == L("~%@ min", "1"))
     #expect(NearbyBoard.minutesText(6, live: true) == L("%@ min", "6"))
     #expect(NearbyBoard.minutesText(6, live: false) == L("~%@ min", "6"))
 }
@@ -255,4 +256,187 @@ private let night = stop(
     // Taller: more rows a side, up to eight (the iPhone's large widget fits ten).
     #expect(NearbyFit.sides(width: 387, height: 312, sky: sky, newcomer: false)?.rows == 7)
     #expect(NearbyFit.sides(width: 364, height: 382, sky: sky, newcomer: false)?.rows == 8)
+}
+
+// MARK: Nearby's board in the app (NearbyCells)
+
+private func nearbyList() throws -> [NearbyStop] {
+    struct R: Decodable { let stops: [NearbyStop] }
+    return try JSONDecoder().decode(R.self, from: Data(contentsOf: fixtures.appendingPathComponent("answers/nearby-list.json"))).stops
+}
+
+private func row(_ json: String) -> BoardRow { stop("X", board: "[\(json)]").board[0] }
+
+/// At 11:55 AM on campus: 2 min, then 14, then a guess at ~26. Its clock times (`at`) go unused.
+private let noon = row(
+    #"{"svc":"D1","etaS":120,"quality":"live","eta":"2 min","at":"2026-11-04T03:57:00Z","dest":"via UTown","destPlace":"UTown","later":[{"etaS":840,"quality":"live","eta":"14 min","at":"2026-11-04T04:09:00Z"},{"etaS":1560,"quality":"scheduled","eta":"~26 min","at":"2026-11-04T04:21:00Z"}]}"#
+)
+
+@Test func nearbyRowsCarryWhereTheyreGoing() throws {
+    let pgp = try #require(try nearbyList().first { $0.stop.code == "PGP" })
+    let d2 = try #require(pgp.board.first { $0.svc == "D2" })
+    #expect(d2.dest == "via Kent Ridge MRT")
+    #expect(d2.destPlace == "Kent Ridge MRT")
+    #expect(NearbyCells.dest(d2) == ("via ", "Kent Ridge MRT", ""))
+    // "Ends here": no place to set apart, the whole of it muted.
+    let r1 = try #require(pgp.board.first { $0.svc == "R1" })
+    #expect(r1.destPlace == nil)
+    #expect(NearbyCells.dest(r1) == ("Ends here", nil, ""))
+    // An older server: the end of its line, else its own words.
+    let old = row(#"{"svc":"A1","etaS":60,"quality":"live","towards":["LT27","Kent Ridge Bus Terminal"]}"#)
+    #expect(old.dest == nil)
+    #expect(NearbyCells.dest(old) == (L("to %@", "Kent Ridge Bus Terminal"), nil, ""))
+    #expect(NearbyCells.dest(row(#"{"svc":"K","etaS":60,"quality":"live","toText":"to PGP"}"#)) == ("to PGP", nil, ""))
+}
+
+@Test func nearbyDestinationNeedsItsNarrowestTwoLines() {
+    func dest(_ d: String, _ p: String?) -> BoardRow {
+        row(#"{"svc":"A1","etaS":60,"quality":"live","dest":"\#(d)","destPlace":\#(p.map { "\"\($0)\"" } ?? "null")}"#)
+    }
+    // Broken at any space, a place's no-break ones too: keeping the place whole is never a reason to stack.
+    #expect(NearbyCells.lines(dest("to KR\u{00A0}Bus\u{00A0}Ter", "KR\u{00A0}Bus\u{00A0}Ter")) == ["to KR", "Bus Ter"])
+    #expect(NearbyCells.lines(dest("via Kent Ridge MRT", "Kent Ridge MRT")) == ["via Kent", "Ridge MRT"])
+    #expect(NearbyCells.lines(dest("Ends here", nil)) == ["Ends", "here"])
+    #expect(NearbyCells.lines(dest("UTown", "UTown")) == ["UTown"])
+    // Kept whole when there's room: the place alone on its line.
+    #expect(NearbyCells.wholeLines(dest("via Kent Ridge MRT", "Kent Ridge MRT")) == ["via", "Kent Ridge MRT"])
+    #expect(NearbyCells.wholeLines(dest("UTown", "UTown")) == ["UTown"])
+    #expect(NearbyCells.wholeLines(dest("Ends here", nil)) == ["Ends", "here"])
+}
+
+@Test func nearbyMinutesTheUnitOnlyInNextAndNextIsLarge() throws {
+    let pgp = try #require(try nearbyList().first { $0.stop.code == "PGP" })
+    let d2 = try #require(pgp.board.first { $0.svc == "D2" })
+    let c = NearbyCells.cells(d2)
+    // Next is large, with its unit; Then bare; After a guess, marked.
+    #expect(c[0] == NearbyCell(figure: "4", trail: " min", pick: true, spoken: c[0].spoken))
+    #expect(c[0].text == "4 min")
+    #expect(c[1] == NearbyCell(figure: "14", spoken: c[1].spoken))
+    #expect(c[2] == NearbyCell(mark: "~", figure: "26", spoken: c[2].spoken))
+    let r2 = try #require(pgp.board.first { $0.svc == "R2" })
+    #expect(NearbyCells.cells(r2).map(\.pick) == [true, false, false])
+}
+
+/// The walk to the stop isn't counted: an older answer's tooSoon changes nothing.
+@Test func nearbyIgnoresAnOlderAnswersTooSoon() {
+    let old = row(
+        #"{"svc":"A1","etaS":60,"quality":"live","eta":"1 min","tooSoon":true,"later":[{"etaS":600,"quality":"live","eta":"10 min","tooSoon":true}]}"#
+    )
+    let plain = row(#"{"svc":"A1","etaS":60,"quality":"live","eta":"1 min","later":[{"etaS":600,"quality":"live","eta":"10 min"}]}"#)
+    #expect(NearbyCells.cells(old) == NearbyCells.cells(plain))
+    #expect(NearbyCells.cells(old).map(\.pick) == [true, false, false])
+    #expect(!NearbyCells.spoken(old, cells: NearbyCells.cells(old)).contains("too soon"))
+}
+
+@Test func nearbyNoBusIsADashAndNeverThePick() throws {
+    let k = try #require(try nearbyList().first { $0.stop.code == "PGP" }?.board.first { $0.svc == "K" })
+    let c = NearbyCells.cells(k)
+    #expect(c.map(\.text) == ["–", "–", "–"])
+    #expect(!c.contains { $0.pick || $0.hasBus })
+    // One bus: it's the large one, dashes after it.
+    let one = row(#"{"svc":"A1","etaS":60,"quality":"live","eta":"1 min"}"#)
+    #expect(NearbyCells.cells(one).map(\.pick) == [true, false, false])
+    #expect(NearbyCells.cells(one).map(\.text) == ["1 min", "–", "–"])
+    // No first bus: nothing is large, even with a later one.
+    let none = row(#"{"svc":"A1","quality":"live","later":[{"etaS":600,"quality":"live","eta":"10 min"}]}"#)
+    #expect(NearbyCells.cells(none).map(\.pick) == [false, false, false])
+}
+
+@Test func nearbyServersWordsGiveTheNumberAndUnitWithAGuessMarkedTheSameInChinese() {
+    let zh = row(#"{"svc":"D1","etaS":360,"quality":"scheduled","eta":"约 6 分钟"}"#)
+    #expect(
+        NearbyCells.cells(zh)[0]
+            == NearbyCell(mark: "~", figure: "6", trail: " 分钟", pick: true, spoken: NearbyCells.cells(zh)[0].spoken))
+    // No figures from a bus seen: said as it is, no mark.
+    let now = row(#"{"svc":"D1","etaS":20,"quality":"live","eta":"now"}"#)
+    #expect(NearbyCells.cells(now)[0].text == "now")
+}
+
+@Test func nearbyRowIsReadBusByBus() {
+    let c = NearbyCells.cells(noon)
+    let said = NearbyCells.spoken(noon, cells: c)
+    print("A row is read: \(said)")
+    // Live or estimated only for the first bus; "about" marks a later guess.
+    let next = Spoken.eta(120, quality: "live")!
+    let then = L("then %@", Spoken.eta(840, quality: "live", withQuality: false)!)
+    let after = L("then %@", Spoken.eta(1560, quality: "scheduled", withQuality: false)!)
+    #expect(said == [L("Bus %@", "D1"), "via UTown", next, then, after].joined(separator: Lang.zh ? "，" : ", "))
+    // As Android reads it.
+    if !Lang.zh { #expect(said == "Bus D1, via UTown, 2 minutes, live, then 14 minutes, then about 26 minutes") }
+}
+
+@Test func nearbyFootExplainsOnlyWhatsShowing() {
+    let tap = L("Tap a service to see its whole line.")
+    let guess = L("~ is a guess from the timetable, not a live time.")
+    #expect(NearbyCells.foot([NearbyCells.cells(noon)]) == [guess, tap])
+    let plain = row(#"{"svc":"A1","etaS":300,"quality":"live","eta":"5 min","later":[{"etaS":1020,"quality":"live","eta":"17 min"}]}"#)
+    #expect(NearbyCells.foot([NearbyCells.cells(plain)]) == [tap])
+    #expect(NearbyCells.foot([]) == [tap])
+}
+
+/// What gives way when the rows are short of room, in order: the gaps, then
+/// the times to 0.85 at most, then every row on two lines with its times at
+/// full size, or none: the columns read straight down the page.
+@Test func nearbyColumnsGiveWayInOrderForEveryRowAtOnce() {
+    let t: [CGFloat] = [60, 50, 40]
+    let h: [CGFloat] = [30, 30, 30]
+    func at(_ room: CGFloat) -> NearbyCells.Layout { NearbyCells.layout(times: t, heads: h, need: 50, room: room, line: room + 60) }
+    #expect(at(228) == .init(between: 14, zoom: 1, widths: t, stacked: false))
+    #expect(at(216) == .init(between: 8, zoom: 1, widths: t, stacked: false))
+    #expect(at(200) == .init(between: 8, zoom: 0.88, widths: [53, 44, 36], stacked: false))
+    // Under 0.85 it would need: every row stacks, its times at full size, 14 pt apart on their own line.
+    #expect(at(190) == .init(between: 14, zoom: 1, widths: t, stacked: true))
+    #expect(NearbyCells.layout(times: t, heads: h, need: 50, room: 100, line: 170).between == 8)
+    // A heading is never shrunk: its column is at least as wide.
+    #expect(NearbyCells.layout(times: [20, 20, 20], heads: h, need: 10, room: 300, line: 360).widths == [30, 30, 30])
+    // A place kept whole is asked for first, but never stacks the rows: then the place breaks.
+    func keeping(_ whole: CGFloat, _ room: CGFloat) -> NearbyCells.Layout {
+        NearbyCells.layout(times: t, heads: h, whole: whole, need: 50, room: room, line: room + 60)
+    }
+    #expect(keeping(80, 258) == .init(between: 14, zoom: 1, widths: t, stacked: false))
+    #expect(keeping(80, 230) == .init(between: 8, zoom: 0.88, widths: [53, 44, 36], stacked: false))
+    #expect(keeping(80, 216) == at(216))
+    #expect(keeping(80, 190) == at(190))
+}
+
+/// An estimate is never "now" or "Arriving", which would pass for a bus at the stop: "~1 min".
+@Test func nearbyEstimateUnderAMinuteIsAboutAMinute() {
+    #expect(BusTimes.words(20, quality: "scheduled") == L("~%@ min", "1"))
+    #expect(BusTimes.words(20, quality: "stale") == L("~%@ min", "1"))
+    #expect(BusTimes.words(20, quality: "live") == L("Arriving"))
+    #expect(NearbyBoard.minutesText(0, live: false) == L("~%@ min", "1"))
+    #expect(Spoken.eta(20, quality: "scheduled") == L("about %@, estimated", L("1 minute")))
+    #expect(Spoken.eta(20, quality: "live") == L("Arriving"))
+    // In the grid: the mark and the figure, as any other guess.
+    let soon = row(#"{"svc":"D1","etaS":20,"quality":"scheduled"}"#)
+    #expect(
+        NearbyCells.cells(soon)[0]
+            == NearbyCell(
+                mark: "~", figure: "1", trail: L("~%@ min", "1").replacingOccurrences(of: "~1", with: ""), pick: true,
+                spoken: L("about %@, estimated", L("1 minute"))))
+    // Aged past its reading, a live time under a minute is stale: "~1 min" too.
+    let live = row(#"{"svc":"D1","etaS":90,"quality":"live","eta":"2 min"}"#)
+    let aged = BusTimes.aged(live, got: fetched, now: at(60))
+    #expect(aged.etaText == L("~%@ min", "1"))
+}
+
+/// An older server's "now" for a guess is worded here: "~1 min", never "now".
+@Test func nearbyAnOlderServersNowForAGuessIsAboutAMinute() {
+    for quality in ["scheduled", "stale"] {
+        let old = row(
+            #"{"svc":"D1","etaS":20,"quality":"\#(quality)","eta":"now","later":[{"etaS":40,"quality":"\#(quality)","eta":"now"}]}"#)
+        let c = NearbyCells.cells(old)
+        #expect(c[0].text == L("~%@ min", "1"))
+        #expect(c[0].mark == "~" && c[0].figure == "1")
+        #expect(c[1].mark == "~" && c[1].figure == "1")
+    }
+}
+
+/// The road line says "arriving at" only for a bus seen; a guess is "about 1 min" to the end.
+@Test func theRoadLineSaysArrivingOnlyForALiveBus() {
+    #expect(RoadLine.words(stop: "COM3", left: 20, live: true) == L("arriving at %@", "COM3"))
+    #expect(RoadLine.words(stop: "COM3", left: 20, live: false) == L("reaches %@ in about %@ min", "COM3", "1"))
+    #expect(RoadLine.words(stop: "COM3", left: 300, live: true) == L("reaches %@ in %@ min", "COM3", "5"))
+    #expect(RoadLine.words(stop: "COM3", left: 300, live: false) == L("reaches %@ in about %@ min", "COM3", "5"))
+    #expect(RoadLine.words(stop: "COM3", left: 0, live: false) == L("from %@", "COM3"))
 }

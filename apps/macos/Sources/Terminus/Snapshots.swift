@@ -27,11 +27,7 @@
                  "places":[{"key":"mrt","label":"KR MRT"},{"key":"utown","label":"UTown"},{"key":"gym","label":"Gym"}]}
                 """
             let answer = try! JSONDecoder().decode(NextAnswer.self, from: Data(json.utf8))
-            let nearbyJSON = """
-                [{"stop":{"code":"PGP","name":"PGP"},"walkS":200,"available":true,"board":[{"svc":"D2","etaS":240,"eta":"4 min","quality":"live","color":"#8e44c9","later":[{"etaS":840,"eta":"14 min","quality":"live"},{"etaS":1500,"eta":"~25 min","quality":"scheduled"}]},{"svc":"A1","etaS":540,"eta":"9 min","quality":"live","color":"#e5484d","later":[{"etaS":1260,"eta":"21 min","quality":"live"}]},{"svc":"K","etaS":20,"eta":"now","quality":"live","color":"#2b9ad6"},{"svc":"R2","etaS":780,"eta":"13 min","quality":"live","color":"#34a853"},{"svc":"BTC1","etaS":1260,"eta":"~21 min","quality":"scheduled","later":[{"etaS":3060,"eta":"~51 min","quality":"scheduled"}]},{"svc":"95","etaS":360,"eta":"6 min","quality":"live","paid":true},{"svc":"E","etaS":null,"quality":"ended"}]},
-                 {"stop":{"code":"PGPR","name":"PGP Foyer"},"walkS":150,"available":true,"board":[{"svc":"A2","etaS":660,"eta":"11 min","quality":"live"}]}]
-                """
-            let nearby = try! JSONDecoder().decode([NearbyStop].self, from: Data(nearbyJSON.utf8))
+            let nearby = nearbySample(at: Date(), zh: false)
 
             let restJSON = """
                 {"label":"Done for today","detail":"Next: CS2030 @ COM1, tomorrow 10:00","alt":null,"stop":{"code":"","name":""},
@@ -55,7 +51,6 @@
 
             let cases: [(String, AppModel)] = [
                 ("next", model(nearbyTab: false)),
-                ("nearby", model(nearbyTab: true)),
                 ("pair", model(nearbyTab: false, paired: false)),
                 (
                     "signin",
@@ -127,6 +122,69 @@
                     write(view, scale: 2, to: dir, as: "\(name)-\(scheme == .dark ? "dark" : "light")")
                 }
             }
+            renderNearby(to: dir, answer: answer)
+        }
+
+        /// Nearby's board in each state it has: a "~" After, a timetable guess a
+        /// minute away ("~1 min"), a loop's "via", "to KR Bus Ter", a "–", and
+        /// public buses' "$" and long places. At 11:55 in Singapore, in English and in Chinese.
+        static func renderNearby(to dir: String, answer: NextAnswer) {
+            defer { Lang.snapshotTable = nil }
+            let strings = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+                .deletingLastPathComponent().appendingPathComponent("Support/zh-Hans.lproj/Localizable.strings")
+            let zh = (try? Data(contentsOf: strings)).flatMap {
+                try? PropertyListSerialization.propertyList(from: $0, format: nil) as? [String: String]
+            }
+            guard let now = parseISODate("2026-11-04T03:55:00Z") else { return }
+            for (name, inZh) in [("nearby", false), ("nearby-zh", true)] where !inZh || zh != nil {
+                Lang.snapshotTable = inZh ? zh : nil
+                let m = AppModel(snapshot: true)
+                m.paired = true
+                m.answers = [.plan: answer]
+                m.places = answer.places ?? []
+                m.nearby = nearbySample(at: now, zh: inZh)
+                m.showNearby = true
+                m.updated = now
+                m.clock = now
+                for (scheme, bg) in [(ColorScheme.dark, Color(white: 0.16)), (.light, Color(white: 0.95))] {
+                    let view = Popover(model: m, startShown: true)
+                        .environment(\.fixedNow, now)
+                        .background(bg)
+                        .environment(\.colorScheme, scheme)
+                    // In a window, so the rows' measured width reaches the layout before it's drawn.
+                    writeHosted(view, scale: 2, to: dir, as: "\(name)-\(scheme == .dark ? "dark" : "light")")
+                }
+            }
+        }
+
+        /// Two stops' boards at `now`, worded as the server words them in English
+        /// or Chinese, with the clock times (`at`) the server also sends, which Nearby doesn't show.
+        static func nearbySample(at now: Date, zh: Bool) -> [NearbyStop] {
+            let iso = { (s: Double) in ISO8601DateFormatter().string(from: now.addingTimeInterval(s)) }
+            let mins = { (s: Int, guess: Bool) in
+                let m = zh ? "\((s + 30) / 60) 分钟" : "\((s + 30) / 60) min"
+                return guess ? (zh ? "约 " : "~") + m : m
+            }
+            // One bus: its time in seconds and whether it's a timetable guess.
+            let bus = { (s: Int, guess: Bool) in
+                #""etaS":\#(s),"eta":"\#(mins(s, guess))","at":"\#(iso(Double(s)))","quality":"\#(guess ? "scheduled" : "live")""#
+            }
+            let later = { (b: [(Int, Bool)]) in "[" + b.map { "{" + bus($0.0, $0.1) + "}" }.joined(separator: ",") + "]" }
+            let to = zh ? "开往 " : "to "
+            let via = zh ? "经 " : "via "
+            let nb = "\u{00a0}"
+            let json = """
+                [{"stop":{"code":"COM3","name":"COM 3"},"walkS":180,"available":true,"board":[
+                  {"svc":"D2","color":"#8e44c9",\(bus(120, false)),"later":\(later([(840, false), (1560, true)])),"dest":"\(via)PGP","destPlace":"PGP"},
+                  {"svc":"D1","color":"#c93ba4",\(bus(480, false)),"later":\(later([(1200, false), (1920, true)])),"dest":"\(via)UTown","destPlace":"UTown"},
+                  {"svc":"95","paid":true,\(bus(360, false)),"later":\(later([(1260, false)])),"dest":"\(to)Buona Vista Int","destPlace":"Buona Vista Int"}]},
+                 {"stop":{"code":"CLB","name":"CLB"},"walkS":200,"available":true,"board":[
+                  {"svc":"A1","color":"#e5484d",\(bus(240, false)),"later":\(later([(960, false), (1680, true)])),"dest":"\(to)KR\(nb)Bus\(nb)Ter","destPlace":"KR\(nb)Bus\(nb)Ter"},
+                  {"svc":"K","color":"#2b9ad6",\(bus(420, false)),"later":\(later([(1140, false), (1860, true)])),"dest":"\(to)PGP\(nb)Foyer","destPlace":"PGP\(nb)Foyer"},
+                  {"svc":"151","paid":true,\(bus(540, false)),"later":\(later([(1380, false)])),"dest":"\(to)Hougang Central Int","destPlace":"Hougang Central Int"},
+                  {"svc":"BTC1",\(bus(40, true)),"later":\(later([(1860, true)])),"dest":"\(to)Oei Tiong Ham","destPlace":"Oei Tiong Ham"}]}]
+                """
+            return try! JSONDecoder().decode([NearbyStop].self, from: Data(json.utf8))
         }
 
         /// The API's golden answers (fixtures/answers), at the
@@ -372,10 +430,17 @@
         /// behind others.
         private static func writeHosted(_ view: some View, scale: CGFloat, to dir: String, as name: String) {
             let host = NSHostingView(rootView: view)
-            let size = host.fittingSize
+            var size = host.fittingSize
             host.frame = NSRect(origin: .zero, size: size)
             let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
             window.contentView = host
+            host.layoutSubtreeIfNeeded()
+            // What a view measures on its first layout (Nearby's columns) lands
+            // in the next: let it, then size the window again.
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+            size = host.fittingSize
+            host.frame = NSRect(origin: .zero, size: size)
+            window.setContentSize(size)
             host.layoutSubtreeIfNeeded()
             guard
                 let rep = NSBitmapImageRep(

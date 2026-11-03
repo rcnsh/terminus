@@ -723,6 +723,12 @@ data class BoardRow(
     val laterText: String? = null,
     /** "to Central Library, Kent Vale", "Ends here"; null from an older server. */
     val toText: String? = null,
+    /**
+     * Where it's going, worded and translated: "to PGP Foyer", "via UTown", "Ends here" (Nearby's boards only); null from an older server.
+     */
+    val dest: String? = null,
+    /** The place inside [dest] ("PGP Foyer"), set apart from the words round it; null when there's none, or from an older server. */
+    val destPlace: String? = null,
 )
 
 /** A bus after the next one, with its own quality: a timetabled one stays a guess. [eta] is the server's "12 min". */
@@ -732,7 +738,13 @@ private fun parseLater(r: JSONObject): List<LaterBus> {
     val a = r.optJSONArray("later") ?: return emptyList()
     return (0 until a.length()).mapNotNull { k ->
         val b = a.optJSONObject(k) ?: return@mapNotNull null
-        if (b.isNull("etaS")) null else LaterBus(b.optInt("etaS"), b.optString("quality"), b.optStringOrNull("eta"))
+        if (b.isNull("etaS")) null
+        else
+            LaterBus(
+                b.optInt("etaS"),
+                b.optString("quality"),
+                b.optStringOrNull("eta"),
+            )
     }
 }
 
@@ -756,6 +768,8 @@ fun parseBoardRow(r: JSONObject): BoardRow =
         eta = r.optStringOrNull("eta")?.ifEmpty { null },
         laterText = r.optStringOrNull("laterText")?.ifEmpty { null },
         toText = r.optStringOrNull("toText")?.ifEmpty { null },
+        dest = r.optStringOrNull("dest")?.ifEmpty { null },
+        destPlace = r.optStringOrNull("destPlace")?.ifEmpty { null },
     )
 
 private val CROWDS = setOf("low", "medium", "high")
