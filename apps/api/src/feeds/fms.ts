@@ -18,6 +18,7 @@ import {
   UpstreamHttpError,
   UpstreamRejected,
   MintQuiet,
+  NO_REMINT_CODES,
   getSession,
   markIfOutdated,
   mintWith,
@@ -464,12 +465,6 @@ async function proxyCall(env: Env, session: Session, endpoint: string, params: R
 }
 
 /**
- * Codes a fresh token cannot fix: a refused app version (10009) and refused
- * API keys (10000). Re-minting on these only adds load while NUS is unhappy.
- */
-export const NO_REMINT_CODES = new Set(['10009', '10000']);
-
-/**
  * After a refused call: the session to try once more with, or null for no
  * retry. Only a refusal a token might fix gets one, and only with a token
  * other than the refused one (renewSession), so a code that keeps coming
@@ -707,7 +702,7 @@ export function noteFailure(env: Env, what: 'arrivals' | 'buses', key: string, e
 export async function renewToken(env: Env, nowMs: number): Promise<boolean> {
   if (!fmsConfigured(env) || (await breakerOpen())) return false;
   // A request's mint failed here a moment ago: none was tried, and the next run tries again.
-  return renewAhead(env, nowMs, TTL.tokenRenewAheadMs).catch((err) => {
+  return renewAhead(env, nowMs).catch((err) => {
     if (err instanceof MintQuiet) return false;
     throw err;
   });

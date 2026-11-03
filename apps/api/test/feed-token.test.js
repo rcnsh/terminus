@@ -11,7 +11,7 @@ import { FROZEN_NOW, installGlobals, makeAnalytics, makeCtx, makeEnv, makeFetch,
 import { failureReason, getArrivals, noteFailure, renewToken, resetFailureNotes } from '../src/feeds/fms.ts';
 import { scopeCache } from '../src/feeds/edgecache.ts';
 import { GateBusy } from '../src/feeds/feedgate.ts';
-import { MintQuiet, UpstreamRejected } from '../src/feeds/auth.ts';
+import { MintQuiet, UpstreamRejected, forgetAppVersion } from '../src/feeds/auth.ts';
 import { runCron } from '../src/ops/monitor.ts';
 import { TTL } from '../src/config.ts';
 
@@ -40,10 +40,35 @@ async function collected(fn) {
   return lines;
 }
 
-test('only a token still good with less than tokenRenewAheadMs left is renewed', async () => {
+/** A JWT issued [lifeMs] before it expires, at [expMs]: NUS's carry iat and exp. */
+function jwt(expMs, lifeMs) {
+  const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  return [b64({ alg: 'HS256' }), b64({ domain: 'PUBLIC', iat: (expMs - lifeMs) / 1000, exp: expMs / 1000 }), 'sig'].join('.');
+}
+
+test('a 24-hour token is renewed once less than half its life is left', async () => {
+  const DAY = 86_400_000;
   for (const [leftMs, mints] of [
-    [TTL.tokenRenewAheadMs + 60_000, 0],
-    [TTL.tokenRenewAheadMs - 60_000, 1],
+    [13 * 3_600_000, 0],
+    [11 * 3_600_000, 1],
+    [-60_000, 0],
+  ]) {
+    const fetchImpl = makeFetch();
+    installGlobals(fetchImpl);
+    const env = makeEnv();
+    scopeCache(env);
+    const expMs = FROZEN_NOW + leftMs;
+    await env.KV.put('auth:session', JSON.stringify({ token: jwt(expMs, DAY), userid: 'U', domain: 'PUBLIC', expMs, version: VERSION }));
+    assert.equal(await renewToken(env, FROZEN_NOW), mints === 1, `left ${leftMs}`);
+    assert.equal(fetchImpl.counts.auth, mints, `left ${leftMs}`);
+  }
+});
+
+test('a token without iat counts as the default lifetime, renewed in its last half', async () => {
+  const halfMs = TTL.tokenDefaultS * 1000 * TTL.tokenRenewShare;
+  for (const [leftMs, mints] of [
+    [halfMs + 60_000, 0],
+    [halfMs - 60_000, 1],
     // Run out, or none kept: the next request mints, as without the cron.
     [-60_000, 0],
     [null, 0],
@@ -111,6 +136,27 @@ test('a renewal that fails leaves the kept token in use, and is tried again next
   installGlobals(fetchImpl, FROZEN_NOW + 15 * 60_000);
   await assert.rejects(renewToken(env, FROZEN_NOW + 15 * 60_000), /auth HTTP 400/);
   assert.equal(fetchImpl.counts.auth, 2);
+});
+
+test('a renewal NUS refused for its version or key is not tried again for that token', async () => {
+  for (const code of ['10009', '10000']) {
+    const fetchImpl = makeFetch({ mintReject: code });
+    installGlobals(fetchImpl);
+    const env = makeEnv();
+    scopeCache(env);
+    await keep(env.KV, 20 * 60_000);
+    await assert.rejects(renewToken(env, FROZEN_NOW), new RegExp(`code=${code}`));
+    installGlobals(fetchImpl, FROZEN_NOW + 15 * 60_000);
+    assert.equal(await renewToken(env, FROZEN_NOW + 15 * 60_000), false, code);
+    assert.equal(fetchImpl.counts.auth, 1, `${code}: one refused mint, not one a run`);
+    // The next token, here one for a new version, is renewed as usual.
+    await keep(env.KV, 50 * 60_000, 'univus_android_9.9.9_999');
+    await env.KV.put('config:appVersion', 'univus_android_9.9.9_999');
+    forgetAppVersion(env);
+    installGlobals(fetchImpl, FROZEN_NOW + 30 * 60_000);
+    await assert.rejects(renewToken(env, FROZEN_NOW + 30 * 60_000), new RegExp(`code=${code}`));
+    assert.equal(fetchImpl.counts.auth, 2, code);
+  }
 });
 
 test('nothing is minted while the breaker is open', async () => {
