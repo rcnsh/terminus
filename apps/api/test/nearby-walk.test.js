@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { GRAPH } from '../src/answer/graph.ts';
-import { indexGraph, nearbyDest, withWalk } from '../src/answer/resolve.ts';
+import { etaText, indexGraph, nearbyDest, withWalk } from '../src/answer/resolve.ts';
 import { viaFrom } from '../src/answer/via.ts';
 
 const NOW = Date.parse('2026-08-27T08:21:00Z');
@@ -99,4 +99,10 @@ test('nearbyDest: a loop with no well-known place ahead says where it ends, not 
 test('nearbyDest: a short place stays on one line; a long one may wrap', () => {
   const { destPlace } = nearbyDest(IDX, 'A1', 'CLB', viaFrom(IDX, 'A1', 'CLB'));
   assert.equal(destPlace, 'KR\u00a0Bus\u00a0Ter');
+});
+
+test('etaText: an estimate under a minute is ~1 min, never now, which would pass for a bus at the stop', () => {
+  assert.equal(etaText(20, 'scheduled'), '~1 min');
+  assert.equal(etaText(20, 'stale'), '~1 min');
+  assert.equal(etaText(20, 'live'), 'now');
 });

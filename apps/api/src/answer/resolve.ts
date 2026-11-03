@@ -686,11 +686,12 @@ export const THEN_MAX = 2;
 /**
  * A time on a board, in words: a timetable time is marked as an estimate
  * ("~6 min"), and so is a stale one, counted down from an old reading as the
- * card's are; but not "now", which "~" can't make vaguer.
+ * card's are. An estimate is never "now", which would pass for a bus at the
+ * stop: under a minute it's "~1 min".
  */
 export function etaText(etaS: number, quality: Quality): string {
-  const t = mins(etaS);
-  return approxQ(quality) && t !== m().now ? m().approx(t) : t;
+  if (!approxQ(quality)) return mins(etaS);
+  return m().approx(mins(Math.max(etaS, 60)));
 }
 
 /** Whether a board time is a guess rather than a fresh live one. */
