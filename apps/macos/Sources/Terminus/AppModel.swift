@@ -280,7 +280,10 @@ final class AppModel {
         let left = at.timeIntervalSince(now)
         if left < -30 { return nil }
         let mins = L("%@ min", "\(Int((left / 60).rounded()))")
-        return left < 45 ? "\(plan.service) \(L("now"))" : "\(plan.service) \(plan.quality == "scheduled" ? L("~%@", mins) : mins)"
+        // A timetable guess is never "now": "~1 min", as the server words it.
+        let guess = plan.quality == "scheduled" || plan.quality == "stale"
+        if left < 45 { return "\(plan.service) \(guess ? L("~%@", L("%@ min", "1")) : L("now"))" }
+        return "\(plan.service) \(plan.quality == "scheduled" ? L("~%@", mins) : mins)"
     }
 
     /// Dimmed once the server's `card.staleAt` has passed (`now` on the

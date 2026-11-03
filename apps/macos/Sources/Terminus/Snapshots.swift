@@ -27,11 +27,7 @@
                  "places":[{"key":"mrt","label":"KR MRT"},{"key":"utown","label":"UTown"},{"key":"gym","label":"Gym"}]}
                 """
             let answer = try! JSONDecoder().decode(NextAnswer.self, from: Data(json.utf8))
-            let nearbyJSON = """
-                [{"stop":{"code":"PGP","name":"PGP"},"walkS":200,"available":true,"board":[{"svc":"D2","etaS":240,"eta":"4 min","at":"\(iso(240))","quality":"live","color":"#8e44c9","towards":["Kent Ridge MRT","COM 3"],"later":[{"etaS":840,"eta":"14 min","at":"\(iso(840))","quality":"live"},{"etaS":1500,"eta":"~25 min","quality":"scheduled"}]},{"svc":"A1","etaS":540,"eta":"9 min","at":"\(iso(540))","quality":"live","color":"#e5484d","towards":["Kent Ridge Bus Terminal"],"later":[{"etaS":1260,"eta":"21 min","at":"\(iso(1260))","quality":"live"}]},{"svc":"K","etaS":20,"eta":"now","at":"\(iso(20))","quality":"live","color":"#2b9ad6","tooSoon":true,"towards":["Prince George's Park Foyer"],"later":[{"etaS":180,"eta":"3 min","at":"\(iso(180))","quality":"live","tooSoon":true}]},{"svc":"R2","etaS":780,"eta":"13 min","at":"\(iso(780))","quality":"live","color":"#34a853","towards":[],"toText":"Ends here"},{"svc":"BTC1","etaS":1260,"eta":"~21 min","at":"\(iso(1260))","quality":"scheduled","towards":["Oei Tiong Ham Building"],"later":[{"etaS":3060,"eta":"~51 min","at":"\(iso(3060))","quality":"scheduled"}]},{"svc":"95","etaS":360,"eta":"6 min","at":"\(iso(360))","quality":"live","paid":true,"towards":["Buona Vista Int"]},{"svc":"E","etaS":null,"quality":"ended","towards":["UTown"]}]},
-                 {"stop":{"code":"PGPR","name":"PGP Foyer"},"walkS":150,"available":true,"board":[{"svc":"A2","etaS":660,"eta":"11 min","at":"\(iso(660))","quality":"live","towards":["TCOMS","Kent Ridge Bus Terminal"]}]}]
-                """
-            let nearby = try! JSONDecoder().decode([NearbyStop].self, from: Data(nearbyJSON.utf8))
+            let nearby = nearbySample(at: Date(), zh: false)
 
             let restJSON = """
                 {"label":"Done for today","detail":"Next: CS2030 @ COM1, tomorrow 10:00","alt":null,"stop":{"code":"","name":""},
@@ -55,7 +51,6 @@
 
             let cases: [(String, AppModel)] = [
                 ("next", model(nearbyTab: false)),
-                ("nearby", model(nearbyTab: true)),
                 ("pair", model(nearbyTab: false, paired: false)),
                 (
                     "signin",
@@ -124,25 +119,90 @@
                         .environment(\.fixedNow, Date())
                         .background(bg)
                         .environment(\.colorScheme, scheme)
-                    // Nearby's switch is an AppKit control, which only a hosting view draws.
-                    if name == "nearby" {
-                        writeHosted(view, scale: 2, to: dir, as: "\(name)-\(scheme == .dark ? "dark" : "light")")
-                    } else {
-                        write(view, scale: 2, to: dir, as: "\(name)-\(scheme == .dark ? "dark" : "light")")
-                    }
+                    write(view, scale: 2, to: dir, as: "\(name)-\(scheme == .dark ? "dark" : "light")")
                 }
             }
-            // Nearby with clock times: the choice read from a store of the snapshots' own.
-            let clock = UserDefaults(suiteName: "terminus-snapshots") ?? .standard
-            clock.set(true, forKey: NearbyBoard.clockKey)
-            for (scheme, bg) in [(ColorScheme.dark, Color(white: 0.16)), (.light, Color(white: 0.95))] {
-                let view = Popover(model: model(nearbyTab: true), startShown: true)
-                    .environment(\.fixedNow, Date())
-                    .background(bg)
-                    .environment(\.colorScheme, scheme)
-                    .defaultAppStorage(clock)
-                writeHosted(view, scale: 2, to: dir, as: "nearby-clock-\(scheme == .dark ? "dark" : "light")")
+            renderNearby(to: dir, answer: answer)
+        }
+
+        /// Nearby's board in each state it has: a struck Next with a 1 in it
+        /// and the bus to catch in Then, a "~" After, a timetable guess a
+        /// minute away ("~1 min"), a loop's "via", "to KR Bus Ter", a "–",
+        /// public buses' "$" and long places and, in clock times, a row where
+        /// AM turns to PM. At 11:55 in Singapore; in 24-hour time at 18:01, so
+        /// the struck time is an 18:0x. In English and in Chinese.
+        static func renderNearby(to dir: String, answer: NextAnswer) {
+            let store = UserDefaults(suiteName: "terminus-snapshots") ?? .standard
+            let hours = Clock.pref
+            defer {
+                Clock.pref = hours
+                Lang.snapshotTable = nil
             }
+            let strings = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+                .deletingLastPathComponent().appendingPathComponent("Support/zh-Hans.lproj/Localizable.strings")
+            let zh = (try? Data(contentsOf: strings)).flatMap {
+                try? PropertyListSerialization.propertyList(from: $0, format: nil) as? [String: String]
+            }
+            let cases: [(name: String, zh: Bool, clock: Bool, hours: String, at: String)] = [
+                ("nearby", false, false, "12", "2026-11-04T03:55:00Z"),
+                ("nearby-clock", false, true, "12", "2026-11-04T03:55:00Z"),
+                ("nearby-zh", true, false, "12", "2026-11-04T03:55:00Z"),
+                ("nearby-clock-zh", true, true, "12", "2026-11-04T03:55:00Z"),
+                ("nearby-clock24-zh", true, true, "24", "2026-11-04T10:01:00Z"),
+            ]
+            for c in cases {
+                guard let now = parseISODate(c.at), !c.zh || zh != nil else { continue }
+                Lang.snapshotTable = c.zh ? zh : nil
+                Clock.pref = c.hours
+                store.set(c.clock, forKey: NearbyBoard.clockKey)
+                let m = AppModel(snapshot: true)
+                m.paired = true
+                m.answers = [.plan: answer]
+                m.places = answer.places ?? []
+                m.nearby = nearbySample(at: now, zh: c.zh)
+                m.showNearby = true
+                m.updated = now
+                m.clock = now
+                for (scheme, bg) in [(ColorScheme.dark, Color(white: 0.16)), (.light, Color(white: 0.95))] {
+                    let view = Popover(model: m, startShown: true)
+                        .environment(\.fixedNow, now)
+                        .background(bg)
+                        .environment(\.colorScheme, scheme)
+                        .defaultAppStorage(store)
+                    // Nearby's switch is an AppKit control, which only a hosting view draws.
+                    writeHosted(view, scale: 2, to: dir, as: "\(c.name)-\(scheme == .dark ? "dark" : "light")")
+                }
+            }
+        }
+
+        /// Two stops' boards at `now`, worded as the server words them in English or Chinese.
+        static func nearbySample(at now: Date, zh: Bool) -> [NearbyStop] {
+            let iso = { (s: Double) in ISO8601DateFormatter().string(from: now.addingTimeInterval(s)) }
+            let mins = { (s: Int, guess: Bool) in
+                let m = zh ? "\((s + 30) / 60) 分钟" : "\((s + 30) / 60) min"
+                return guess ? (zh ? "约 " : "~") + m : m
+            }
+            // One bus: its time in seconds, whether it's a timetable guess and whether it's too soon to catch.
+            let bus = { (s: Int, guess: Bool, soon: Bool) in
+                #""etaS":\#(s),"eta":"\#(mins(s, guess))","at":"\#(iso(Double(s)))","quality":"\#(guess ? "scheduled" : "live")""#
+                    + (soon ? #","tooSoon":true"# : "")
+            }
+            let later = { (b: [(Int, Bool)]) in "[" + b.map { "{" + bus($0.0, $0.1, false) + "}" }.joined(separator: ",") + "]" }
+            let to = zh ? "开往 " : "to "
+            let via = zh ? "经 " : "via "
+            let nb = "\u{00a0}"
+            let json = """
+                [{"stop":{"code":"COM3","name":"COM 3"},"walkS":180,"available":true,"board":[
+                  {"svc":"D2","color":"#8e44c9",\(bus(60, false, true)),"later":\(later([(780, false), (1500, true)])),"dest":"\(via)PGP","destPlace":"PGP"},
+                  {"svc":"D1","color":"#c93ba4",\(bus(480, false, false)),"later":\(later([(1200, false), (1920, true)])),"dest":"\(via)UTown","destPlace":"UTown"},
+                  {"svc":"95","paid":true,\(bus(360, false, false)),"later":\(later([(1260, false)])),"dest":"\(to)Buona Vista Int","destPlace":"Buona Vista Int"}]},
+                 {"stop":{"code":"CLB","name":"CLB"},"walkS":200,"available":true,"board":[
+                  {"svc":"A1","color":"#e5484d",\(bus(240, false, false)),"later":\(later([(960, false), (1680, true)])),"dest":"\(to)KR\(nb)Bus\(nb)Ter","destPlace":"KR\(nb)Bus\(nb)Ter"},
+                  {"svc":"K","color":"#2b9ad6",\(bus(420, false, false)),"later":\(later([(1140, false), (1860, true)])),"dest":"\(to)PGP\(nb)Foyer","destPlace":"PGP\(nb)Foyer"},
+                  {"svc":"151","paid":true,\(bus(540, false, false)),"later":\(later([(1380, false)])),"dest":"\(to)Hougang Central Int","destPlace":"Hougang Central Int"},
+                  {"svc":"BTC1",\(bus(40, true, false)),"later":\(later([(1860, true)])),"dest":"\(to)Oei Tiong Ham","destPlace":"Oei Tiong Ham"}]}]
+                """
+            return try! JSONDecoder().decode([NearbyStop].self, from: Data(json.utf8))
         }
 
         /// The API's golden answers (fixtures/answers), at the
@@ -388,10 +448,17 @@
         /// behind others.
         private static func writeHosted(_ view: some View, scale: CGFloat, to dir: String, as name: String) {
             let host = NSHostingView(rootView: view)
-            let size = host.fittingSize
+            var size = host.fittingSize
             host.frame = NSRect(origin: .zero, size: size)
             let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
             window.contentView = host
+            host.layoutSubtreeIfNeeded()
+            // What a view measures on its first layout (Nearby's columns) lands
+            // in the next: let it, then size the window again.
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+            size = host.fittingSize
+            host.frame = NSRect(origin: .zero, size: size)
+            window.setContentSize(size)
             host.layoutSubtreeIfNeeded()
             guard
                 let rep = NSBitmapImageRep(

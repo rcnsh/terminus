@@ -536,6 +536,11 @@ struct BoardRow: Decodable, Hashable {
     var toText: String? = nil
     /// Due before you could walk to the stop: shown, but not one to catch.
     var tooSoon: Bool? = nil
+    /// Where it's going, worded and translated on the server: "to PGP Foyer",
+    /// "via UTown", "Ends here". Nil from an older server ([NearbyBoard.to]).
+    var dest: String? = nil
+    /// The place inside `dest`, set apart from the words round it; nil when it has none.
+    var destPlace: String? = nil
 
     struct Later: Decodable, Hashable {
         let etaS: Int?
