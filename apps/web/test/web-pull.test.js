@@ -81,28 +81,26 @@ test('the words say what letting go does, then how it went, in English and Chine
 test('Stops fetches again on a pull only when its times are old enough to change', async () => {
   const realFetch = globalThis.fetch;
   let calls = 0;
-  const arrivals = () =>
-    new Response(JSON.stringify({ stop: { code: 'YIH', name: 'YIH' }, board: [], available: true }), {
-      headers: { 'content-type': 'application/json' },
-    });
-  globalThis.fetch = async () => (calls++, arrivals());
+  const sign = { stop: { code: 'YIH', name: 'YIH' }, walkS: null, board: [], available: true };
+  const stops = () => new Response(JSON.stringify({ stops: [sign] }), { headers: { 'content-type': 'application/json' } });
+  globalThis.fetch = async () => (calls++, stops());
   try {
     B.route.set({ kind: 'home' });
     P.profile.set({ pinnedStops: ['YIH'] });
-    B.boards.set(new Map([['YIH', { stop: { code: 'YIH' }, board: [], at: Date.now() - 2_000 }]]));
+    B.signs.set(new Map([['YIH', { s: sign, at: Date.now() - 2_000 }]]));
     assert.deepEqual(await B.pullRefresh(), { state: 'fresh', inS: null }, 'no timed refresh due with the tab not shown');
     assert.equal(calls, 0, 'times 2 s old: the server would send the same ones');
 
-    B.boards.set(new Map([['YIH', { stop: { code: 'YIH' }, board: [], at: Date.now() - PULL_FRESH_MS - 1 }]]));
+    B.signs.set(new Map([['YIH', { s: sign, at: Date.now() - PULL_FRESH_MS - 1 }]]));
     assert.equal(await B.pullRefresh(), 'updated');
     assert.equal(calls, 1, 'one fetch for one pull');
 
-    B.boards.set(new Map([['YIH', { stop: { code: 'YIH' }, board: [], at: Date.now() - PULL_FRESH_MS - 1 }]]));
+    B.signs.set(new Map([['YIH', { s: sign, at: Date.now() - PULL_FRESH_MS - 1 }]]));
     globalThis.fetch = async () => new Response('{}', { status: 503, headers: { 'content-type': 'application/json' } });
     assert.equal(await B.pullRefresh(), 'failed');
   } finally {
     globalThis.fetch = realFetch;
-    B.boards.set(new Map());
+    B.signs.set(new Map());
     P.profile.set(null);
   }
 });

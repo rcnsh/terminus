@@ -74,7 +74,7 @@ class NearbyTextTest {
         val cells = NearbyText.cells(d2)
         assertEquals(listOf(true, false, false), cells.map { it.next })
         assertEquals("4 min", cells[0].text)
-        assertEquals("Bus D2, via Kent Ridge MRT, 4 minutes, live, then 14 minutes, then about 26 minutes", NearbyText.said(d2, cells))
+        assertEquals("Bus D2, via KR\u00a0MRT, 4 minutes, live, then 14 minutes, then about 26 minutes", NearbyText.said(d2, cells))
     }
 
     @Test

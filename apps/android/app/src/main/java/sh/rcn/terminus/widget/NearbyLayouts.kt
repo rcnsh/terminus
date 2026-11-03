@@ -457,9 +457,8 @@ private fun Minutes(b: StopBus, left: Int, inks: Inks, sizeSp: Float) {
 /** Wide enough for a badge and the gap after it ("R1"; a public bus's "95 $" a little over). */
 private const val BADGE_DP = 36f
 
-/** "2 min walk", or "here" under a minute. */
-private fun walkWords(stop: NearbyStop): String =
-    if (stop.walkS < 60) L.s(R.string.here) else L.s(R.string.min_walk, (stop.walkS + 30) / 60)
+/** "2 min walk", or "here" under a minute; nothing without a walk. */
+private fun walkWords(stop: NearbyStop): String = stop.walkWords.orEmpty()
 
 /** The biggest a tile grows: past this, the room is better spent on the next stop's buses. */
 private const val TILE_MAX_DP = 128f
@@ -520,9 +519,9 @@ private fun Tiles(
     }
     if (foot > 0f) Footer(rest, inks, old)
     next?.let { (stop, more) ->
-        val walk = if (stop.walkS < 60) L.s(R.string.here) else L.s(R.string.min_walk, (stop.walkS + 30) / 60)
+        val walk = stop.walkWords?.let { " · $it" }.orEmpty()
         Box(GlanceModifier.fillMaxWidth().height(STOP_HEAD_DP.dp).padding(horizontal = PAD), contentAlignment = Alignment.BottomStart) {
-            Small("${stop.longName ?: stop.name} · $walk", inks.muted, 12.sp, bold = true)
+            Small("${stop.longName ?: stop.name}$walk", inks.muted, 12.sp, bold = true)
         }
         Column(GlanceModifier.fillMaxWidth()) {
             for (r in 0 until nextRows) {
@@ -541,7 +540,7 @@ private fun Tiles(
 private fun HeadWords(v: NearbyView, buses: List<StopBus>, old: Boolean, inks: Inks, walk: Boolean) {
     val ctx = LocalContext.current
     val first = v.first
-    val walkText = first?.takeIf { walk }?.let { if (it.walkS < 60) L.s(R.string.here) else L.s(R.string.min_walk, (it.walkS + 30) / 60) }
+    val walkText = first?.takeIf { walk }?.walkWords
     when {
         v.error == UPDATING -> Small(L.s(R.string.updating), inks.muted, 12.sp)
         v.error != null && buses.isNotEmpty() -> Small(v.error, inks.late, 12.sp)

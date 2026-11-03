@@ -1,10 +1,52 @@
 import Foundation
 
-/// The Stops tab's own request: /campus read in its own order for the search.
+/// The Stops tab's own requests: /campus read in its own order for the
+/// search, the pinned stops as Nearby shows them, and each line's buses out.
 extension Api {
     /// `/api/campus` as the Stops tab uses it.
     func busCampus() async throws -> BusCampus {
         try JSONDecoder().decode(BusCampus.self, from: await send("GET", "/api/campus"))
+    }
+
+    /// `/api/me/stops`: the stops asked for, each exactly as Nearby shows it;
+    /// with a location, the walk to each, else none.
+    func pinnedStops(_ codes: [String], lat: Double?, lon: Double?, acc: Double? = nil) async throws -> [NearbyStop] {
+        struct R: Decodable { let stops: [NearbyStop] }
+        let q = [URLQueryItem(name: "codes", value: codes.joined(separator: ","))] + Self.coords(lat, lon, acc)
+        return try JSONDecoder().decode(R.self, from: await send("GET", "/api/me/stops", query: q)).stops
+    }
+
+    /// `/api/lines`: how many of each service's buses are out, by service; a
+    /// service the feed didn't answer for is left out.
+    func lineCounts() async throws -> [String: LineCount] {
+        struct R: Decodable { let lines: [String: Lossy<LineCount>] }
+        return try JSONDecoder().decode(R.self, from: await send("GET", "/api/lines")).lines.compactMapValues(\.value)
+    }
+}
+
+/// One service's buses out now, worded by the server ("3 out", "None out").
+struct LineCount: Decodable, Equatable, Sendable {
+    let out: Int
+    let outText: String
+    /// The feed's last answer rather than a new one.
+    let stale: Bool
+
+    enum CodingKeys: String, CodingKey { case out, outText, stale }
+
+    init(out: Int, outText: String, stale: Bool = false) {
+        self.out = out
+        self.outText = outText
+        self.stale = stale
+    }
+
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        guard let out = c.lenientInt(forKey: .out), let text = c.string(.outText), !text.isEmpty else {
+            throw DecodingError.dataCorruptedError(forKey: .outText, in: c, debugDescription: "no count")
+        }
+        self.out = out
+        outText = text
+        stale = c.bool(.stale) ?? false
     }
 }
 
@@ -34,22 +76,29 @@ struct BusCampus: Decodable, Sendable {
         /// The full name ("Kent Ridge Bus Terminal"); `name` is the short one.
         var fullName: String { longName ?? name }
     }
-    /// A service's stops in the order it calls (a loop's first stop once), and whether it's a loop.
+    /// A service's stops in the order it calls (a loop's first stop once), and whether it's a loop;
+    /// its name ("Loop from KR Bus Ter") and the stops it passes ("via AS 5, PGP, KR MRT"), worded by the server.
     struct Route: Decodable, Hashable, Sendable {
         let seq: [String]
         let loop: Bool
         let color: String?
-        enum CodingKeys: String, CodingKey { case seq, loop, color }
-        init(seq: [String], loop: Bool, color: String? = nil) {
+        let name: String?
+        let via: String?
+        enum CodingKeys: String, CodingKey { case seq, loop, color, name, via }
+        init(seq: [String], loop: Bool, color: String? = nil, name: String? = nil, via: String? = nil) {
             self.seq = seq
             self.loop = loop
             self.color = color
+            self.name = name
+            self.via = via
         }
         init(from d: Decoder) throws {
             let c = try d.container(keyedBy: CodingKeys.self)
             seq = c.lenientList(String.self, forKey: .seq) ?? []
             loop = (try? c.decodeIfPresent(Bool.self, forKey: .loop)) ?? false
             color = c.string(.color)
+            name = c.string(.name).flatMap { $0.isEmpty ? nil : $0 }
+            via = c.string(.via).flatMap { $0.isEmpty ? nil : $0 }
         }
     }
     private struct Dest: Decodable {

@@ -21,6 +21,39 @@ import {
   answerExample,
 } from './parts.ts';
 
+/** One stop's board as Nearby shows it: /api/me/nearby and /api/me/stops. */
+const nearbyStop = (): Record<string, unknown> => ({
+  type: 'object',
+  properties: {
+    stop: {
+      type: 'object',
+      properties: { code: { type: 'string' }, name: { type: 'string' }, longName: { type: 'string' } },
+    },
+    opposite: { type: ['string', 'null'] },
+    oppositeAcross: { type: 'boolean' },
+    oppositeName: { type: ['string', 'null'] },
+    distM: { type: 'integer' },
+    walkS: {
+      type: ['integer', 'null'],
+      description: 'Seconds on foot at your pace. On /api/me/stops, null without `lat` and `lon`.',
+    },
+    available: { type: 'boolean' },
+    via: {
+      type: 'array',
+      items: { type: 'string' },
+      example: ['UTown', 'S 17', 'KR MRT'],
+      description:
+        'Which way this stop’s buses go, by the stops worth naming (by their plate names): the ones most of its buses (`board[].via`) pass first, the most shared first, up to three. Empty when they pass none.',
+    },
+    viaText: {
+      type: ['string', 'null'],
+      example: 'to UTown, S 17, KR MRT',
+      description: '`via` in words (Chinese "往 UTown、S 17 方向"). Null when `via` is empty.',
+    },
+    board: { type: 'array', items: { $ref: '#/components/schemas/NearbyRow' } },
+  },
+});
+
 export function paths(): Record<string, unknown> {
   return {
     '/api/next': {
@@ -180,7 +213,7 @@ export function paths(): Record<string, unknown> {
                       ],
                       color: '#2b9ad6',
                       towards: ['Central Library', 'Prince George’s Park Foyer'],
-                      via: ['Central Library', 'Engineering', 'Kent Vale'],
+                      via: ['CLB', 'Opp SDE 3', 'Kent Vale'],
                       crowd: 'low',
                       endsAt: '2026-09-28T15:04:00.000Z',
                       running: true,
@@ -196,7 +229,7 @@ export function paths(): Record<string, unknown> {
                       later: [],
                       color: '#ec4fa0',
                       towards: ['Central Library', 'COM 3'],
-                      via: ['Central Library', 'Arts', 'BIZ'],
+                      via: ['CLB', 'AS 5', 'BIZ 2'],
                       crowd: 'high',
                       endsAt: '2026-09-28T15:00:00.000Z',
                       running: true,
@@ -331,7 +364,7 @@ export function paths(): Record<string, unknown> {
                       later: [],
                       color: '#ec4fa0',
                       towards: ['Central Library', 'COM 3'],
-                      via: ['Central Library', 'Arts', 'BIZ'],
+                      via: ['CLB', 'AS 5', 'BIZ 2'],
                       crowd: 'low',
                       endsAt: '2026-10-07T15:00:00.000Z',
                       running: true,
@@ -351,6 +384,45 @@ export function paths(): Record<string, unknown> {
             svc: 'D1',
             stop: 'PGP',
           }),
+          ...KEYED_ERRORS,
+        },
+      },
+    },
+    '/api/lines': {
+      get: {
+        tags: ['Stops'],
+        summary: 'How many buses each service has out',
+        description:
+          'For a list of every service: how many of its buses are on the road now, counted as GET /api/buses places them, and in words for the request’s language. Each service is read through the same 5-second cache as /api/buses, and the answer may be up to 30 seconds old; ask at most once a minute. A service whose live feed could not be reached is null, which is not the same as none out.',
+        operationId: 'getLines',
+        parameters: [langParam],
+        responses: {
+          '200': ok(
+            {
+              type: 'object',
+              required: ['lines', 'asOf'],
+              properties: {
+                lines: {
+                  type: 'object',
+                  description: 'Keyed by service code.',
+                  additionalProperties: {
+                    type: ['object', 'null'],
+                    required: ['out', 'outText', 'stale'],
+                    properties: {
+                      out: { type: 'integer', description: 'Buses on the road now.' },
+                      outText: { type: 'string', description: '"3 out", "None out" (Chinese "3 辆在路上", "暂无巴士").' },
+                      stale: { type: 'boolean', description: 'The feed did not answer just now; this is how many there were last time.' },
+                    },
+                  },
+                },
+                asOf: { type: 'string', format: 'date-time' },
+              },
+            },
+            {
+              lines: { A1: { out: 3, outText: '3 out', stale: false }, K: { out: 0, outText: 'None out', stale: false }, P: null },
+              asOf: '2026-08-27T01:00:00.000Z',
+            },
+          ),
           ...KEYED_ERRORS,
         },
       },
@@ -395,6 +467,8 @@ export function paths(): Record<string, unknown> {
                         [103.77421, 1.29475],
                       ],
                       shaped: true,
+                      name: 'Loop from KR Bus Ter',
+                      via: 'via AS 5, PGP, KR MRT',
                     },
                   },
                   destinations: [
@@ -948,34 +1022,7 @@ export function paths(): Record<string, unknown> {
             properties: {
               stops: {
                 type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    stop: {
-                      type: 'object',
-                      properties: { code: { type: 'string' }, name: { type: 'string' }, longName: { type: 'string' } },
-                    },
-                    opposite: { type: ['string', 'null'] },
-                    oppositeAcross: { type: 'boolean' },
-                    oppositeName: { type: ['string', 'null'] },
-                    distM: { type: 'integer' },
-                    walkS: { type: 'integer' },
-                    available: { type: 'boolean' },
-                    via: {
-                      type: 'array',
-                      items: { type: 'string' },
-                      example: ['UTown', 'Science', 'Kent Ridge MRT'],
-                      description:
-                        'Which way this stop’s buses go, by places someone new to NUS knows: the ones most of its buses (`board[].via`) pass first, the most shared first, up to three. Empty when they pass none.',
-                    },
-                    viaText: {
-                      type: ['string', 'null'],
-                      example: 'to UTown, Science, Kent Ridge MRT',
-                      description: '`via` in words (Chinese "往 UTown、理学院 方向"). Null when `via` is empty.',
-                    },
-                    board: { type: 'array', items: { $ref: '#/components/schemas/NearbyRow' } },
-                  },
-                },
+                items: nearbyStop(),
               },
               asOf: {
                 type: 'string',
@@ -986,6 +1033,40 @@ export function paths(): Record<string, unknown> {
             },
           }),
           '400': errorResponse('No coordinates and no home set.'),
+          '401': errorResponse('No valid session.'),
+        },
+      },
+    },
+    '/api/me/stops': {
+      get: {
+        tags: ['Account'],
+        summary: 'Your pinned stops’ boards',
+        description:
+          'The boards of the stops asked for (usually the pinned stop on screen), each as GET /api/me/nearby shows a stop, through the same per-stop cache. With `lat` and `lon`, each says your walk to it. Unknown codes are left out.',
+        operationId: 'meStops',
+        security: [{ bearer: [] }, { cookie: [] }],
+        parameters: [
+          {
+            name: 'codes',
+            in: 'query',
+            required: true,
+            description: 'Stop codes, comma-separated, at most 8.',
+            schema: { type: 'string' },
+            example: 'UTOWN,KR-MRT',
+          },
+          ...coordParams,
+          stoppedParam,
+          langParam,
+        ],
+        responses: {
+          '200': ok({
+            type: 'object',
+            properties: {
+              stops: { type: 'array', items: nearbyStop() },
+              asOf: { type: 'string', format: 'date-time', description: 'When the oldest times on these boards were fetched.' },
+            },
+          }),
+          '400': errorResponse('No codes, or more than 8.', { error: 'codes is required' }),
           '401': errorResponse('No valid session.'),
         },
       },

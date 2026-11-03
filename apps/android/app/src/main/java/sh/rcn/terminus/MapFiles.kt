@@ -54,8 +54,10 @@ object MapFiles {
      */
     suspend fun campus(ctx: Context, api: Api): JSONObject? =
         withContext(Dispatchers.IO) {
-            val file = File(dir(ctx), "campus.json")
-            val tagFile = File(dir(ctx), "campus.etag")
+            // The server words lines' names and stops in the language asked in: a copy for each.
+            val lang = if (L.zh) "zh" else "en"
+            val file = File(dir(ctx), "campus-$lang.json")
+            val tagFile = File(dir(ctx), "campus-$lang.etag")
             val kept = runCatching { JSONObject(file.readText()) }.getOrNull()
             if (kept != null && fresh(file)) return@withContext kept
             try {
@@ -285,7 +287,7 @@ object MapFiles {
                 when {
                     f.name.endsWith(".pmtiles") -> f != keep
                     f.name.endsWith(".part") -> true
-                    // Another tab may be writing campus.json right now: only ones long left.
+                    // Another tab may be writing a campus file right now: only ones long left.
                     f.name.endsWith(".tmp") -> now - f.lastModified() > STALE_TEMP_MS
                     else -> false
                 }

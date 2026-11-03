@@ -59,31 +59,115 @@ test("a stop's page is its own address, whether it's pinned or not, and reads ba
   assert.equal(B.stopHash('YIH'), '#buses/stop/YIH');
 });
 
-test("pulled down on the home: every pinned stop's board fetched again, and with nothing pinned, nothing asked", async () => {
+/** A fetch answering /api/me/stops with an empty board for each stop asked, noting each ask's codes. */
+function stopsFetch(asked, { fail = false } = {}) {
+  return async (url) => {
+    const u = new URL(url, 'http://x');
+    assert.equal(u.pathname, '/api/me/stops');
+    const codes = u.searchParams.get('codes').split(',');
+    asked.push(codes);
+    if (fail) return new Response('{}', { status: 503, headers: { 'content-type': 'application/json' } });
+    const stops = codes
+      .filter((c) => c !== 'NOPE')
+      .map((code) => ({ stop: { code, name: code, longName: code }, walkS: null, available: true, via: [], viaText: null, board: [] }));
+    return new Response(JSON.stringify({ stops, asOf: new Date().toISOString() }), { headers: { 'content-type': 'application/json' } });
+  };
+}
+
+test('the home fetches the pinned stop on screen and the ones either side of it, and the last page the last stop', () => {
+  const pinned = ['COM3', 'YIH', 'UTOWN', 'KR-MRT'];
+  assert.deepEqual(B.signWindow(pinned, null), ['COM3', 'YIH']);
+  assert.deepEqual(B.signWindow(pinned, 'COM3'), ['COM3', 'YIH']);
+  assert.deepEqual(B.signWindow(pinned, 'UTOWN'), ['YIH', 'UTOWN', 'KR-MRT']);
+  assert.deepEqual(B.signWindow(pinned, 'KR-MRT'), ['UTOWN', 'KR-MRT']);
+  assert.deepEqual(B.signWindow(pinned, B.ADD), ['KR-MRT']);
+  // A pick no longer pinned is the first page until the home settles it.
+  assert.deepEqual(B.signWindow(pinned, 'PGP'), ['COM3', 'YIH']);
+  assert.deepEqual(B.signWindow([], null), []);
+  assert.equal(B.pageOf(pinned, B.ADD), 4);
+});
+
+test('pulled down on the home: the pinned stop on screen fetched again, and with nothing pinned or on the last page, nothing asked', async () => {
   const realFetch = globalThis.fetch;
   const asked = [];
-  globalThis.fetch = async (url) => {
-    const code = new URL(url, 'http://x').searchParams.get('stop');
-    asked.push(code);
-    return new Response(JSON.stringify({ asOf: new Date().toISOString(), stop: { code, name: code }, available: true, board: [] }), {
-      headers: { 'content-type': 'application/json' },
-    });
-  };
+  globalThis.fetch = stopsFetch(asked);
   try {
     B.route.set({ kind: 'home' });
-    B.boards.set(new Map());
+    B.signs.set(new Map());
+    B.chosen.set(null);
     P.profile.set({ pinnedStops: [] });
     assert.equal((await B.pullRefresh()).state, 'fresh');
     assert.deepEqual(asked, []);
-    P.profile.set({ pinnedStops: ['YIH', 'UTOWN'] });
+    P.profile.set({ pinnedStops: ['YIH', 'UTOWN', 'COM3'] });
+    B.chosen.set('UTOWN');
     assert.equal(await B.pullRefresh(), 'updated');
-    assert.deepEqual(asked.sort(), ['UTOWN', 'YIH']);
+    // One ask, for it and its neighbours.
+    assert.deepEqual(asked, [['YIH', 'UTOWN', 'COM3']]);
     // Just fetched: not asked again.
     assert.equal((await B.pullRefresh()).state, 'fresh');
-    assert.equal(asked.length, 2);
+    assert.equal(asked.length, 1);
+    B.chosen.set(B.ADD);
+    B.signs.set(new Map());
+    assert.equal((await B.pullRefresh()).state, 'fresh');
+    assert.equal(asked.length, 1);
   } finally {
     globalThis.fetch = realFetch;
-    B.boards.set(new Map());
+    B.signs.set(new Map());
+    B.chosen.set(null);
+  }
+});
+
+test("a pinned stop's sign that couldn't update keeps its times and says so; a stop the server doesn't know has none", async () => {
+  const realFetch = globalThis.fetch;
+  const asked = [];
+  try {
+    B.signs.set(new Map());
+    globalThis.fetch = stopsFetch(asked);
+    await B.loadSigns(['YIH', 'NOPE']);
+    const was = B.signs.get().get('YIH');
+    assert.equal(was.s.stop.code, 'YIH');
+    assert.equal(was.error, undefined);
+    assert.equal(B.signs.get().get('NOPE').gone, true);
+    globalThis.fetch = stopsFetch(asked, { fail: true });
+    await B.loadSigns(['YIH', 'UTOWN']);
+    assert.equal(B.signs.get().get('YIH').s, was.s, 'the last times stay');
+    assert.equal(B.signs.get().get('YIH').error, B.failedWords(true));
+    assert.equal(B.signs.get().get('UTOWN').error, B.failedWords(false));
+  } finally {
+    globalThis.fetch = realFetch;
+    B.signs.set(new Map());
+  }
+});
+
+test("the lines' counts are asked for at most once a minute, however often the home asks", async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.now() });
+  const realFetch = globalThis.fetch;
+  let asked = 0;
+  globalThis.fetch = async (url) => {
+    assert.equal(String(url), '/api/lines');
+    asked++;
+    const lines = { D1: { out: 3, outText: '3 out', stale: false }, A1: null };
+    return new Response(JSON.stringify({ lines, asOf: new Date().toISOString() }), { headers: { 'content-type': 'application/json' } });
+  };
+  try {
+    await B.loadOuts();
+    assert.equal(asked, 1);
+    assert.deepEqual(B.outs.get().D1, { out: 3, outText: '3 out', stale: false });
+    assert.equal(B.outs.get().A1, null);
+    await B.loadOuts();
+    t.mock.timers.tick(59_000);
+    await B.loadOuts();
+    assert.equal(asked, 1);
+    t.mock.timers.tick(1_000);
+    await B.loadOuts();
+    assert.equal(asked, 2);
+    // Counts that can't be brought up to date go, as for a feed that didn't answer.
+    globalThis.fetch = async () => new Response('{}', { status: 503, headers: { 'content-type': 'application/json' } });
+    t.mock.timers.tick(60_000);
+    await B.loadOuts();
+    assert.equal(B.outs.get(), null);
+  } finally {
+    globalThis.fetch = realFetch;
   }
 });
 
@@ -173,7 +257,8 @@ test('a board kept by the server (asOf minutes old) is counted down from when it
     assert.equal(old.etaS, 260);
     assert.equal(old.quality, 'stale');
     assert.equal(old.old, true);
-    assert.deepEqual(old.later, [{ etaS: 860 }]);
+    // The later buses' words are from then: worded again from their seconds.
+    assert.deepEqual(old.later, [{ etaS: 860, eta: null }]);
     // A failed refresh keeps when the board last came.
     globalThis.fetch = async () => new Response('{}', { status: 503, headers: { 'content-type': 'application/json' } });
     await B.loadBoard('YIH');

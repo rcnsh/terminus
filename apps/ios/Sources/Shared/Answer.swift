@@ -619,8 +619,8 @@ struct DayPlan: Decodable, Sendable {
     }
 }
 
-/// One element of a list that may not decode: nil instead of failing the list.
-private struct Lossy<T: Decodable>: Decodable {
+/// One element of a list or map that may not decode: nil instead of failing the whole.
+struct Lossy<T: Decodable>: Decodable {
     let value: T?
     init(from d: Decoder) throws { value = try? T(from: d) }
 }

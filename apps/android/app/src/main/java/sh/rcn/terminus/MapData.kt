@@ -72,8 +72,12 @@ data class MapStop(
         get() = longName ?: name
 }
 
-/** A service's stops in the order it calls ([seq], a loop's first stop once), from /api/campus's `routes`. */
-data class ServiceRoute(val svc: String, val seq: List<String>, val loop: Boolean)
+/**
+ * A service's stops in the order it calls ([seq], a loop's first stop once), from /api/campus's `routes`, with the server's words for it:
+ * [name] ("Loop from KR Bus Ter") and [via] ("via AS 5, PGP, KR MRT"). Both null from an older server; [via] null too for a line with no
+ * stop worth naming between its ends.
+ */
+data class ServiceRoute(val svc: String, val seq: List<String>, val loop: Boolean, val name: String? = null, val via: String? = null)
 
 /** A service: its colour (ARGB), its path along the roads as [lon, lat] pairs, and whether it's a loop. */
 data class MapRoute(val svc: String, val color: Long, val line: List<DoubleArray>, val loop: Boolean = false) {
@@ -236,7 +240,13 @@ data class CampusMap(
         fun serviceRoutes(routes: JSONObject): List<ServiceRoute> =
             routes.keys().asSequence().toList().map { svc ->
                 val x = routes.optJSONObject(svc) ?: JSONObject()
-                ServiceRoute(svc, x.optJSONArray("seq").stringList(), x.optBoolean("loop"))
+                ServiceRoute(
+                    svc,
+                    x.optJSONArray("seq").stringList(),
+                    x.optBoolean("loop"),
+                    x.optStringOrNull("name")?.ifEmpty { null },
+                    x.optStringOrNull("via")?.ifEmpty { null },
+                )
             }
 
         /** Every service in /api/campus's `routes`, in plain code order. */

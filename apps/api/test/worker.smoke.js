@@ -288,6 +288,7 @@ test('the OpenAPI spec documents exactly the routes that exist', async () => {
       '/api/trip',
       '/api/arrivals',
       '/api/buses',
+      '/api/lines',
       '/api/line',
       '/api/campus',
       '/api/stops/pairs',
@@ -508,6 +509,31 @@ test('/api/buses: an unknown service is a 400; an unreachable feed is unavailabl
   const body = await res.json();
   assert.equal(body.available, false);
   assert.deepEqual(body.buses, []);
+});
+
+test('/api/lines: each service’s buses out, counted as /api/buses places them, worded; one feed read a service, then cached', async () => {
+  const shape = (await import('../data/shapes.json', { with: { type: 'json' } })).default.routes.D2;
+  const [lon, lat] = shape.line[Math.floor(shape.line.length / 3)];
+  const fetchImpl = makeFetch({ buses: { D2: [{ ...D2_BUSES[0], lat, lng: lon }, D2_BUSES[1]] } });
+  const cache = installGlobals(fetchImpl);
+  const { res } = await call('/api/lines', { fetchImpl, cache });
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('cache-control'), /max-age=30/);
+  const body = await res.json();
+  assert.deepEqual(body.lines.D2, { out: 1, outText: '1 out', stale: false }, 'the bus off its line is not counted');
+  assert.deepEqual(body.lines.A1, { out: 0, outText: 'None out', stale: false });
+  assert.deepEqual(
+    Object.keys(body.lines).sort(),
+    Object.keys((await import('../data/stops.json', { with: { type: 'json' } })).default.routes).sort(),
+  );
+  const reads = fetchImpl.counts.shuttle;
+  assert.equal(reads, Object.keys(body.lines).length, 'one read a service');
+  await call('/api/lines', { fetchImpl, cache });
+  assert.equal(fetchImpl.counts.shuttle, reads, 'asked again at once: from the cache');
+
+  // A feed that doesn't answer is "don't know", not "none out".
+  const { res: down } = await call('/api/lines', { fetchImpl: makeFetch({ fail: true }) });
+  assert.equal((await down.json()).lines.K, null);
 });
 
 test('/api/line: a service’s stops in order, its buses on them, and with a stop that stop’s row; one read of each feed', async () => {

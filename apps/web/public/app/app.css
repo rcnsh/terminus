@@ -226,30 +226,47 @@ body.sky .bt-sky-top input::placeholder { color: var(--k-muted); opacity: 0.85; 
 .bt-page.alone { margin: 0 -16px; }
 
 /* The home (buses.js Home): its title in the sky, then your pinned stops,
-   each a name with its star over its first rows, then every service. */
+   one at a time as Nearby's sign, then every service. */
 .bt-home .bt-top { padding-bottom: 6px; }
 .bt-section { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 22px 6px 8px; }
 .bt-section > span { font-size: 0.75rem; color: var(--muted); text-align: right; }
-.bt-pin + .bt-pin { margin-top: 18px; }
-.bt-pin-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 0 0 6px; }
-.bt-pin-name { display: flex; align-items: center; gap: 4px; min-width: 0; padding: 6px 0; border: 0; background: none; color: var(--ink); font: 700 1.1rem/1.2 var(--font); text-align: left; cursor: pointer; }
-.bt-pin-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bt-pin-name svg { flex: none; width: 16px; height: 16px; fill: none; stroke: var(--muted); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-.bt-pin-name:hover span { text-decoration: underline; text-underline-offset: 3px; }
 .bt-star.small { width: 36px; height: 36px; background: none; }
-.bt-pin .bt-board { margin-top: 6px; }
-.bt-pin .bt-empty { padding: 14px 4px; }
-.bt-pin-error { padding: 6px 6px 0; font-size: 0.8rem; text-align: right; }
-.bt-more { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 12px 14px; border: 0; border-top: 1px solid var(--line); background: none; color: var(--accent); font: 600 0.9rem var(--font); text-align: left; cursor: pointer; }
-.bt-more .bt-go { stroke: currentColor; }
+.bt-pin-error { margin: 0; padding: 0 6px; font-size: 0.8rem; text-align: right; }
+/* The pinned stops' names, as a stop's page picks its side (.segmented):
+   each name whole, scrolling sideways when they don't all fit. */
+.segmented.bt-pins { position: relative; overflow-x: auto; scrollbar-width: none; margin-bottom: 10px; }
+.segmented.bt-pins::-webkit-scrollbar { display: none; }
+.segmented.bt-pins label { flex: 1 0 auto; }
+.segmented.bt-pins span { white-space: nowrap; padding-inline: 14px; }
+/* One page per pinned stop, the column's width, swiped sideways and
+   settling on a page. Each starts at the top: a short stop leaves room
+   under its sign rather than the list below moving up. Positioned, so the
+   rows' screen-reader words (.sr-only, absolute) scroll inside it rather
+   than widening the page. */
+.bt-pager { position: relative; display: flex; align-items: flex-start; gap: 16px; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; }
+.bt-pager::-webkit-scrollbar { display: none; }
+.bt-pager-page { flex: 0 0 100%; min-width: 0; scroll-snap-align: start; scroll-snap-stop: always; }
+/* The last page: how to pin another, in the no-pins hint's dashed outline. */
+.bt-add { display: grid; justify-items: center; align-content: center; gap: 8px; min-height: 180px; padding: 22px 20px; border: 1.5px dashed var(--line-strong); border-radius: 14px; color: var(--muted); font-size: 0.9rem; line-height: 1.45; text-align: center; }
+.bt-add b { color: var(--ink); font: 700 1.05rem/1.2 var(--font); }
+.bt-add svg { width: 22px; height: 22px; fill: none; stroke: var(--warn); stroke-width: 1.9; stroke-linejoin: round; }
 /* Nothing pinned yet: where the star is, said once, in a dashed outline. */
 .bt-no-pins { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 1.5px dashed var(--line-strong); border-radius: 14px; color: var(--muted); font-size: 0.9rem; line-height: 1.45; }
 .bt-no-pins svg { flex: none; width: 20px; height: 20px; fill: none; stroke: var(--warn); stroke-width: 1.9; stroke-linejoin: round; }
-.bt-services { padding: 0; overflow: hidden; }
-.bt-service { display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 10px 11px 14px; border: 0; border-top: 1px solid var(--line); background: none; color: var(--ink); font: 600 0.95rem/1.3 var(--font); text-align: left; cursor: pointer; }
+/* Every service: one set of columns for all its rows (subgrid), so each
+   badge is as wide as the widest and the names line up. */
+.bt-services { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; padding: 0; overflow: hidden; }
+.bt-service { grid-column: 1 / -1; display: grid; grid-template-columns: 3.4rem minmax(0, 1fr) auto auto; grid-template-columns: subgrid; align-items: center; column-gap: 12px; width: 100%; padding: 11px 8px 11px 14px; border: 0; border-top: 1px solid var(--line); background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
 .bt-service:first-child { border-top: 0; }
-.bt-service > span { flex: 1; min-width: 0; }
-.bt-service .bt-chip { flex: none; }
+.bt-service:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); }
+.bt-service-chip { display: flex; }
+.bt-service .bt-chip { width: 100%; min-width: 0; height: 28px; padding: 0 5px; border-radius: 8px; font: 700 0.9rem/1 var(--display); white-space: nowrap; }
+.bt-service-text { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.bt-service-name { font: 600 0.95rem/1.3 var(--font); }
+.bt-service-via { color: var(--muted); font-size: 0.82rem; line-height: 1.3; }
+.bt-out { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 0.85rem; white-space: nowrap; }
+.bt-out:empty { display: none; }
+.bt-service .bt-go { grid-area: auto; grid-column: 4; }
 
 .bt-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px 4px 0; }
 .bt-title { min-width: 0; }

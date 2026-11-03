@@ -28,15 +28,16 @@ import {
   useState,
   useStore,
 } from '/assets/ui.js';
-import { ADDED_PLACES_KEY, api, clock, hour12, inkOn, send, serverNow, signedOut, t } from '/account/dom.js';
+import { ADDED_PLACES_KEY, api, clock, hour12, send, serverNow, signedOut, t } from '/account/dom.js';
 import { Card, InSky, Message, Report, Say, isStale, signal } from '/account/preview.js';
 import { Celestial, Horizon, useNowSky, useSkyPhase } from '/account/sky.js';
-import { Toast, campus, lists, loadCampus, loadProfile, profile, reloadProfile, toast, togglePin, walkSpeed } from '/account/profile.js';
+import { Toast, campus, lists, loadCampus, loadProfile, profile, reloadProfile, toast, walkSpeed } from '/account/profile.js';
 import { SearchBox } from '/account/search-box.js';
 // Loaded with the page (its icons are used here too) so that the Stops and Map
 // tabs, which both import it, don't depend on it arriving later (a failed import
 // can't be retried at the same address; loadTab's retry renews only the tab's file).
-import { NEXT, STAR, saidRow } from '/app/board.js';
+import { NEXT } from '/app/board.js';
+import { StopSign, anyGuess } from '/app/sign.js';
 import { offlineNext } from '/app/offline.js';
 import { preloadMap } from '/app/map-files.js';
 import {
@@ -254,6 +255,16 @@ async function hereSoon() {
   const fresh = position();
   const grace = new Promise((resolve) => setTimeout(() => resolve(undefined), FIX_GRACE_MS));
   return { sent: fixToSend(await Promise.race([fresh, grace]), lastFix, Date.now()), fresh };
+}
+
+/**
+ * Where you are for the Stops tab's pinned stops, as Now's card gets it
+ * (hereSoon): only when location is already allowed, never asking. The
+ * API's query (lat, lon, acc), or null.
+ */
+async function stopsFix() {
+  const { sent } = await hereSoon();
+  return sent && fixQuery(sent, Date.now());
 }
 
 /** Counts refreshes: one that finishes after a newer one started (a chip tapped meanwhile) is dropped. */
@@ -983,71 +994,16 @@ function OfflineCard({ item, step }) {
   `;
 }
 
-const mins = (s) => Math.round(s / 60);
-
-/** A bus from the side, for a stop's name plate. */
-const BUS =
-  '<rect x="4.5" y="3" width="15" height="15" rx="3"/><path d="M4.5 11h15M8 21v-3M16 21v-3"/><circle cx="8.5" cy="14.5" r="1" fill="currentColor"/><circle cx="15.5" cy="14.5" r="1" fill="currentColor"/>';
 /** A bus stop's sign on its pole: the Stops tab, and Nearby's way to it. */
 const STOP_SIGN = '<rect x="6" y="2.5" width="12" height="9.5" rx="2.5"/><path d="M12 12v9.5M9 21.5h6M9.5 7.25h5"/>';
-
-/** The server's "4 min", "now", "~6 min" for an estimate (never "now": ~1 min), or "–"; worked out here for an older server. */
-const etaText = (b) =>
-  b.etaS == null
-    ? '–'
-    : (b.eta ??
-      (b.quality === 'scheduled' || b.quality === 'stale'
-        ? t('~{0}', t('{0} min', Math.max(1, mins(b.etaS))))
-        : b.etaS < 45
-          ? t('Arriving')
-          : t('{0} min', mins(b.etaS))));
-
-/**
- * One bus in a Nearby column, as on a stop's board: the figures large and
- * the words small. The Next column carries the unit ("4 min"); Then and
- * After only their figures ("16", "~28"), lined up down the column. An
- * estimate is marked "~" in both languages: in a column of figures a word
- * ("约") reads as part of the next. The next bus is the large one. A dash
- * with no bus.
- */
-function NearbyTime({ bus, first }) {
-  const approx = bus?.quality === 'scheduled' || bus?.quality === 'stale';
-  const cls = `nb-time${first && bus?.etaS != null ? ' pick' : ''}`;
-  if (bus?.etaS == null) return html`<span class=${cls} aria-hidden="true">–</span>`;
-  const mark = approx ? '~' : '';
-  const words = etaText(bus);
-  const n = words.match(/\d+/)?.[0];
-  // "now": no figure to set large; said as it is.
-  if (!n) return html`<span class=${cls} aria-hidden="true">${words}</span>`;
-  const unit = first ? words.slice(words.indexOf(n) + n.length) : '';
-  return html`<span class=${cls} aria-hidden="true">${mark}${n}${unit ? html`<small>${unit}</small>` : ''}</span>`;
-}
-
-/**
- * Where a row's bus is going, as the server words it ("to PGP Foyer", "via
- * UTown"), the place set in ink and the words around it muted; an older
- * server's end of the line otherwise.
- */
-function NearbyDest({ b }) {
-  if (!b.dest) {
-    const end = b.towards?.at(-1);
-    return html`<span class="nb-to" aria-hidden="true">${end ? t('to {0}', end) : (b.toText ?? t('Ends here'))}</span>`;
-  }
-  const i = b.destPlace ? b.dest.indexOf(b.destPlace) : -1;
-  if (i < 0) return html`<span class="nb-to" aria-hidden="true">${b.dest}</span>`;
-  return html`<span class="nb-to" aria-hidden="true">${b.dest.slice(0, i)}<b>${b.destPlace}</b>${b.dest.slice(i + b.destPlace.length)}</span>`;
-}
 
 /**
  * Under the signs, once, as under a stop's board: what a "~" means, only
  * when one is showing, and that a row opens its line.
  */
 function NearbyFoot({ stops }) {
-  const buses = stops.flatMap((s) => s.board.flatMap((b) => [b, ...(b.later ?? []).slice(0, 2)]));
-  // Only a "~" on the screen needs explaining: a guessed "now" has none.
-  const guessed = buses.some((x) => x.etaS != null && (x.quality === 'scheduled' || x.quality === 'stale') && /\d/.test(etaText(x)));
   return html`<div class="nb-foot">
-    ${guessed && html`<p>${t('~ is a guess from the timetable, not a live time.')}</p>`}
+    ${anyGuess(stops) && html`<p>${t('~ is a guess from the timetable, not a live time.')}</p>`}
     <p>${t('Tap a service to see its whole line.')}</p>
   </div>`;
 }
@@ -1062,7 +1018,6 @@ function NearbyFoot({ stops }) {
  */
 function NearbyCard({ stops }) {
   const p = useStore(profile);
-  const pinned = p?.pinnedStops ?? [];
   // Until the profile has come, what's pinned isn't known: no star to read wrong, or to unpin with.
   // Now doesn't need it otherwise, so Nearby asks for it (the account, not the feed).
   useEffect(() => {
@@ -1075,55 +1030,13 @@ function NearbyCard({ stops }) {
       <h2 class="sr-only">${t('Buses near you')}</h2>
       <${Say} text=${t('Buses near you: {0}', names)} />
       ${stops.map(
-        (s) => html`
-          <section class="stop-sign" key=${s.stop.code}>
-            <header class="plate">
-              <${Icon} paths=${BUS} class="plate-bus" />
-              <button type="button" class="plate-name" onClick=${() => (location.hash = `#buses/stop/${encodeURIComponent(s.stop.code)}`)}>
-                ${s.stop.name}<${Icon} paths=${NEXT} class="plate-go" />
-              </button>
-              <span class="plate-walk">${t('{0} min walk', Math.max(1, mins(s.walkS)))}</span>
-              ${
-                p &&
-                html`<button
-                type="button"
-                class=${`plate-star${pinned.includes(s.stop.code) ? ' on' : ''}`}
-                aria-pressed=${String(pinned.includes(s.stop.code))}
-                aria-label=${pinned.includes(s.stop.code) ? t('Unpin {0}', s.stop.name) : t('Pin {0}', s.stop.name)}
-                onClick=${() => togglePin(s.stop.code)}
-              >
-                <${Icon} paths=${STAR} />
-              </button>`
-              }
-            </header>
-            ${
-              s.board.length
-                ? html`<div class="nb-head" aria-hidden="true"><span></span><span></span><span>${t('Next')}</span><span>${t('Then')}</span><span>${t('After')}</span></div>`
-                : ''
-            }
-            ${
-              s.board.length
-                ? s.board.map((b) => {
-                    const go = () => (location.hash = `#buses/line/${encodeURIComponent(b.svc)}/${encodeURIComponent(s.stop.code)}`);
-                    // A public bus has no line page, as on a stop's board.
-                    const Tag = b.paid ? 'div' : 'button';
-                    return html`
-                    <${Tag} type=${b.paid ? undefined : 'button'} class="nearby-row" key=${`${b.svc} ${b.dest ?? b.toText}`} onClick=${b.paid ? undefined : go}>
-                      <span class="sr-only">${saidRow(b)}</span>
-                      <span class="svc-col" aria-hidden="true"
-                        ><span class="svc-tag" style=${b.color ? `--svc:${b.color};--svc-ink:${inkOn(b.color)}` : ''}
-                          >${b.svc}${b.paid && html`<span class="fare" role="img" aria-label=${t('Public bus, fare applies')}>$</span>`}</span
-                        ></span
-                      >
-                      <${NearbyDest} b=${b} />
-                      ${[b, b.later?.[0], b.later?.[1]].map((bus, j) => html`<${NearbyTime} key=${j} bus=${bus} first=${j === 0} />`)}
-                    <//>
-                  `;
-                  })
-                : html`<div class="detail">${s.available ? t('No buses due') : t('No times right now')}</div>`
-            }
-          </section>
-        `,
+        (s) => html`<${StopSign}
+          key=${s.stop.code}
+          s=${s}
+          pinned=${p ? (p.pinnedStops ?? []) : null}
+          onStop=${(code) => (location.hash = `#buses/stop/${encodeURIComponent(code)}`)}
+          onLine=${(svc, code) => (location.hash = `#buses/line/${encodeURIComponent(svc)}/${encodeURIComponent(code)}`)}
+        />`,
       )}
       <${NearbyFoot} stops=${stops} />
       <button type="button" class="to-stops" onClick=${() => (location.hash = '#buses')}>
@@ -1408,7 +1321,7 @@ function BusesArea() {
   const now = useStore(tab);
   if (mod?.failed) return html`<p class="hint">${t('Stops need a connection.')}</p>`;
   if (!mod) return html`<p class="hint">${t('Loading…')}</p>`;
-  return html`<${mod.BusesTab} visible=${now === 'buses'} />`;
+  return html`<${mod.BusesTab} visible=${now === 'buses'} locate=${stopsFix} />`;
 }
 
 function MapArea() {

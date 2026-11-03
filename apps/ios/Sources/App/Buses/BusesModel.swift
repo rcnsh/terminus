@@ -6,15 +6,18 @@ enum BusPinsState { case loading, ready, failed }
 
 /// The Stops tab's data, as Android's BusesViewModel. The screens drive the
 /// refreshing, only while the tab is on screen and the app in front: what's
-/// in view every 15 s (the home's pinned boards, or the page over it), the
-/// API's own cache, so asking sooner would show nothing new. A failed
-/// refresh keeps the last answer, shown aged.
+/// in view every 15 s (the pinned stop showing on the home and the one either
+/// side, or the page over it), the API's own cache, so asking sooner would
+/// show nothing new; the lines' buses out once a minute. A failed refresh
+/// keeps the last answer.
 @MainActor @Observable
 final class BusesModel {
     static let shared = BusesModel()
 
     /// The stops and services, for the search and names before a board loads.
     private(set) var campus: BusCampus?
+    /// The language `campus` is worded in.
+    private var campusZh: Bool?
     /// Boards by stop code: pinned stops, opened ones, the twins across the road.
     private(set) var boards: [String: Board] = [:]
     /// Stops whose board couldn't be fetched (offline), until one is.
@@ -24,6 +27,21 @@ final class BusesModel {
     /// Lines by `lineKey`.
     private(set) var lines: [String: Line] = [:]
     private(set) var lineFailed: Set<String> = []
+
+    /// The pinned stops as Nearby shows them (/me/stops), by code.
+    private(set) var pinned: [String: NearbyStop] = [:]
+    private(set) var pinnedFailed: Set<String> = []
+    /// Pinned stops the server didn't answer for (one it doesn't know).
+    private(set) var pinnedMissing: Set<String> = []
+    /// When each pinned stop came, on the server's clock, for counting its times down.
+    private(set) var pinnedGot: [String: Date] = [:]
+    /// The page showing on the home: a pinned stop, or BusPinned.addPage; nil, the first.
+    /// Kept while the app runs, so coming back to the tab finds the same stop.
+    var pinSelected: String?
+    /// Each service's buses out (/api/lines); a service left out says nothing.
+    private(set) var lineCounts: [String: LineCount] = [:]
+    /// When they were last asked for: at most once every BusLines.pollS.
+    private(set) var linesAskedAt: Date?
 
     /// The account's pinned stops, its limit, and whether boards have the public buses too.
     private(set) var pins: [String] = []
@@ -75,6 +93,13 @@ final class BusesModel {
         across = []
         lines = [:]
         lineFailed = []
+        pinned = [:]
+        pinnedFailed = []
+        pinnedMissing = []
+        pinnedGot = [:]
+        pinSelected = nil
+        lineCounts = [:]
+        linesAskedAt = nil
         pins = []
         pinsState = .loading
         publicBuses = false
@@ -104,9 +129,12 @@ final class BusesModel {
     // MARK: the campus and the profile
 
     func loadCampus() async {
-        guard campus == nil, let token else { return }
+        // Its lines' names and stops are worded by the server in the language asked in: a new language asks again.
+        guard campus == nil || campusZh != Lang.zh, let token else { return }
+        let zh = Lang.zh
         do {
             campus = try await Api(token: token).busCampus()
+            campusZh = zh
         } catch {
             // Without it, names come with the boards.
             _ = refused(error, token)
@@ -130,7 +158,7 @@ final class BusesModel {
     }
 
     private func apply(_ p: [String: Any]) {
-        pins = (p["pinnedStops"] as? [String]) ?? []
+        setPins((p["pinnedStops"] as? [String]) ?? [])
         pinsState = .ready
         if let limits = p["limits"] as? [String: Any], let n = limits["pinnedStops"] as? Int { pinLimit = n }
         let pub = (p["publicBuses"] as? Bool) ?? false
@@ -147,7 +175,7 @@ final class BusesModel {
             return
         }
         let before = pins
-        pins = BusPins.toggle(pins, code, max: pinLimit)
+        setPins(BusPins.toggle(pins, code, max: pinLimit))
         let s = AppModel.shared.session
         Task {
             do {
@@ -163,10 +191,17 @@ final class BusesModel {
             } catch {
                 guard current(s) else { return }
                 if refused(error, token) { return }
-                pins = before
+                setPins(before)
                 say(L("Couldn't save. Try again."))
             }
         }
+    }
+
+    /// New pins, and the home's page kept sensible: one unpinned gives way to the next.
+    private func setPins(_ new: [String]) {
+        let old = shownPins
+        pins = new
+        pinSelected = BusPinned.selection(old: old, new: shownPins, selected: pinSelected)
     }
 
     // MARK: boards
@@ -205,10 +240,97 @@ final class BusesModel {
     /// The pinned stops the home shows, at most the profile's limit.
     var shownPins: [String] { BusPins.shown(pins, max: pinLimit) }
 
-    /// The home's pinned boards, all at once: each its own stop's, as the home shows it.
-    func refreshPins(force: Bool = false) async {
-        let asks = shownPins.map { code in Task { await refreshBoard(code, force: force) } }
-        for a in asks { await a.value }
+    /// The pinned stop the home is showing, or the last for the page after them.
+    var pinFocus: String? { BusPinned.focus(shownPins, selected: pinSelected) }
+
+    /// The pinned stop showing on the home and the one either side, in one
+    /// request; those asked for within minGapS aren't asked again unless forced.
+    /// Walked from where you are only when the phone already may say.
+    func refreshPinned(force: Bool = false) async {
+        guard let token else { return }
+        let window = BusPinned.window(shownPins, selected: pinSelected)
+        let codes = BusPinned.toFetch(window, now: Date(), gap: Self.minGapS, force: force) { asked["pin:" + $0] }
+        guard !codes.isEmpty else { return }
+        let now = Date()
+        for c in codes {
+            asked["pin:" + c] = now
+            asking.insert("pin:" + c)
+        }
+        defer { for c in codes { asking.remove("pin:" + c) } }
+        let s = AppModel.shared.session
+        // Not cancelled with the refresh a swipe restarts: the next one skips
+        // these codes as just asked, so this answer is the one that fills them.
+        let answer = await Task { () -> Result<[NearbyStop], Error> in
+            let (loc, _) = await Locator.shared.quickFix()
+            do {
+                return .success(
+                    try await Api(token: token).pinnedStops(
+                        codes, lat: loc?.coordinate.latitude, lon: loc?.coordinate.longitude, acc: loc?.acc))
+            } catch {
+                return .failure(error)
+            }
+        }.value
+        guard current(s) else { return }
+        let stops = try? answer.get()
+        var failure: Error?
+        if case .failure(let e) = answer { failure = e }
+        if let failure, refused(failure, token) { return }
+        // Cancelled all the same (the session went): not failed, asked again.
+        let cancelled = failure is CancellationError || (failure as? URLError)?.code == .cancelled
+        let result = BusPinnedResult.of(asked: codes, returned: stops?.map(\.stop.code), cancelled: cancelled)
+        let at = Date()
+        let got = ServerClock.now
+        for stop in stops ?? [] {
+            guard let code = codes.first(where: { $0.uppercased() == stop.stop.code.uppercased() }) else { continue }
+            pinned[code] = stop
+            pinnedGot[code] = got
+            answeredAt["pin:" + code] = at
+        }
+        for code in result.askAgain { asked["pin:" + code] = nil }
+        // A stop the server no longer answers for: no old board kept under "No live data".
+        for code in result.missing {
+            pinned[code] = nil
+            pinnedGot[code] = nil
+        }
+        pinnedFailed.subtract(result.answered + result.missing)
+        pinnedFailed.formUnion(result.failed)
+        pinnedMissing.subtract(result.answered)
+        pinnedMissing.formUnion(result.missing)
+    }
+
+    /// A pinned stop as it stands at `now`, its times counted down since it came.
+    func pinnedStop(_ code: String, now: Date) -> NearbyStop? {
+        pinned[code]?.aged(got: pinnedGot[code], now: now)
+    }
+
+    /// A pinned stop's short name, as on its plate, for the names over the card.
+    func pinName(_ code: String) -> String {
+        pinned[code]?.stop.name ?? campus?.stop(code)?.name ?? code
+    }
+
+    // MARK: the lines' buses out
+
+    /// How many buses each line has out. A failure says nothing rather than an old count.
+    static let noTokenRetryS: TimeInterval = 5
+
+    func refreshLines() async {
+        // With no account yet, nothing is asked: look again in a few seconds rather than a minute,
+        // so the counts come soon after sign-in, without the loop spinning.
+        guard let token else {
+            linesAskedAt = Date().addingTimeInterval(Self.noTokenRetryS - BusLines.pollS)
+            return
+        }
+        linesAskedAt = Date()
+        let s = AppModel.shared.session
+        do {
+            let counts = try await Api(token: token).lineCounts()
+            guard current(s) else { return }
+            lineCounts = counts
+        } catch {
+            guard current(s) else { return }
+            if refused(error, token) { return }
+            lineCounts = [:]
+        }
     }
 
     /// This side or across the road, for the page of stop `code`.
@@ -274,12 +396,12 @@ final class BusesModel {
         return (answeredAt[key] ?? .distantPast) >= start ? .updated : .failed
     }
 
-    /// The pull's bus for the page of `code` (nil: the home, its first pinned
-    /// stop): the first service on the board it shows, in its colour; nil before there's one.
+    /// The pull's bus for the page of `code` (nil: the home, its pinned stop
+    /// showing): the first service on the board it shows, in its colour; nil before there's one.
     func livery(_ code: String?) -> UInt32? {
         // The home shows each pinned stop's own board, whichever side its page is on.
-        let board = code.map { boards[pageBoard($0)] } ?? shownPins.first.flatMap { boards[$0] }
-        guard let row = board.flatMap({ BusWords.runningFirst($0.rows).first }) else { return nil }
+        let rows = code.map { boards[pageBoard($0)]?.rows } ?? pinFocus.flatMap { pinned[$0]?.board }
+        guard let row = rows.flatMap({ BusWords.runningFirst($0).first }) else { return nil }
         return (row.color ?? color(row.svc)).flatMap(hexRGB)
     }
 
@@ -289,16 +411,14 @@ final class BusesModel {
     }
 
     /// Pulled down on the home: the pins asked for again (a change in
-    /// Settings shows at once), then each pinned board, and how they went as one.
+    /// Settings shows at once), then the pinned stop showing and its neighbours;
+    /// how it went is the one showing's.
     func pullPins() async -> PullOutcome {
         await loadCampus()
         await loadProfile()
         if pinsState == .failed { return .failed }
-        let codes = shownPins
-        let pulls = codes.map { code in Task { await pulled(code) { await refreshBoard(code, force: true) } } }
-        var all: [PullOutcome] = []
-        for p in pulls { all.append(await p.value) }
-        return PullOutcome.combined(all)
+        guard let code = pinFocus else { return .upToDate(nextInS: nil) }
+        return await pulled("pin:" + code) { await refreshPinned(force: true) }
     }
 
     /// Pulled down on a line's page.

@@ -14,6 +14,8 @@ struct BusChip: View {
     let color: String?
     var paid = false
     var big = false
+    /// At least this wide: a list's badges all as wide as its widest.
+    var width: CGFloat = 0
     @ScaledMetric(relativeTo: .body) private var scale: CGFloat = 1
 
     var body: some View {
@@ -24,21 +26,18 @@ struct BusChip: View {
             .fixedSize()
             .foregroundStyle(inkOn(rgb))
             .padding(.horizontal, 8)
-            .frame(minWidth: (big ? 64 : 46) * scale, minHeight: (big ? 44 : 32) * scale)
+            .frame(minWidth: max((big ? 64 : 46) * scale, width), minHeight: (big ? 44 : 32) * scale)
             .background(Color(rgb: rgb), in: RoundedRectangle(cornerRadius: big ? 12 : 9, style: .continuous))
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(paid ? L("Public bus %@, fare applies", svc) : L("Bus %@", svc))
     }
 }
 
-/// The board: a row per service, the running ones first. With `limit`, the
-/// first that many, then a row to the stop's page for the rest.
+/// The board: a row per service, the running ones first.
 struct BusBoardCard: View {
     let board: Board?
     let failed: Bool
     let colors: [String: String]
-    var limit: Int?
-    var onMore: (() -> Void)?
     let onRow: (BoardRow) -> Void
 
     var body: some View {
@@ -55,14 +54,10 @@ struct BusBoardCard: View {
                             message(L("Live times aren't available right now."))
                             Divider().overlay(Color.line)
                         }
-                        let (rows, more) = limit.map { BusWords.preview(b.rows, max: $0) } ?? (BusWords.runningFirst(b.rows), 0)
+                        let rows = BusWords.runningFirst(b.rows)
                         ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
                             if i > 0 { Divider().overlay(Color.line) }
                             BusBoardRowView(row: row, color: row.color ?? colors[row.svc], now: now, onTap: row.paid ? nil : { onRow(row) })
-                        }
-                        if more > 0, let onMore {
-                            Divider().overlay(Color.line)
-                            MoreRow(count: more, action: onMore)
                         }
                     }
                 } else {
@@ -78,28 +73,6 @@ struct BusBoardCard: View {
 
     private func message(_ text: String) -> some View {
         Text(text).foregroundStyle(Color.muted).padding(16).frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-/// "2 more at this stop", under a board cut short: its page.
-private struct MoreRow: View {
-    let count: Int
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Text(L("%@ more at this stop", "\(count)")).font(.subheadline.weight(.semibold)).foregroundStyle(Color.brand)
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Color.faint).accessibilityHidden(true)
-            }
-            .padding(.leading, 14)
-            .padding(.trailing, 8)
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(BusRowPress())
-        .accessibilityIdentifier("board-more")
     }
 }
 

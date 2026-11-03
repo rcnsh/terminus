@@ -275,9 +275,9 @@ private let noon = row(
 @Test func nearbyRowsCarryWhereTheyreGoing() throws {
     let pgp = try #require(try nearbyList().first { $0.stop.code == "PGP" })
     let d2 = try #require(pgp.board.first { $0.svc == "D2" })
-    #expect(d2.dest == "via Kent Ridge MRT")
-    #expect(d2.destPlace == "Kent Ridge MRT")
-    #expect(NearbyCells.dest(d2) == ("via ", "Kent Ridge MRT", ""))
+    #expect(d2.dest == "via KR\u{00A0}MRT")
+    #expect(d2.destPlace == "KR\u{00A0}MRT")
+    #expect(NearbyCells.dest(d2) == ("via ", "KR\u{00A0}MRT", ""))
     // "Ends here": no place to set apart, the whole of it muted.
     let r1 = try #require(pgp.board.first { $0.svc == "R1" })
     #expect(r1.destPlace == nil)

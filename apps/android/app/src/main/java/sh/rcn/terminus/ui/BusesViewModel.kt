@@ -5,9 +5,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -19,8 +16,14 @@ import sh.rcn.terminus.ApiError
 import sh.rcn.terminus.Board
 import sh.rcn.terminus.BusTimes
 import sh.rcn.terminus.CampusMap
+import sh.rcn.terminus.L
 import sh.rcn.terminus.Line
+import sh.rcn.terminus.LineOut
+import sh.rcn.terminus.LinesPoll
+import sh.rcn.terminus.Locator
 import sh.rcn.terminus.MapFiles
+import sh.rcn.terminus.PinPages
+import sh.rcn.terminus.PinnedStop
 import sh.rcn.terminus.Pull
 import sh.rcn.terminus.PullOutcome
 import sh.rcn.terminus.ServerClock
@@ -47,6 +50,12 @@ data class BusesUi(
     val failed: Set<String> = emptySet(),
     /** Pages switched to the stop across the road, by the page's own stop. */
     val across: Set<String> = emptySet(),
+    /** The pinned stops on the home's card, by code, as Nearby shows them. A failed refresh keeps the last one. */
+    val pinned: Map<String, PinnedStop> = emptyMap(),
+    /** Pinned stops that couldn't be fetched (offline), until one is. */
+    val pinFailed: Set<String> = emptySet(),
+    /** Each service's buses out, for the list of lines; empty until /api/lines answers. */
+    val out: Map<String, LineOut?> = emptyMap(),
     /** Lines by [lineKey]. */
     val lines: Map<String, Line> = emptyMap(),
     val lineFailed: Set<String> = emptySet(),
@@ -57,8 +66,9 @@ data class BusesUi(
 fun lineKey(svc: String, from: String?) = "$svc|${from.orEmpty()}"
 
 /**
- * The Stops tab. The screen drives the refreshing, only while the tab is on screen and the app in front: the page in view (on the home,
- * every pinned stop's board) every 15 s, the API's own cache, so asking sooner would show nothing new.
+ * The Stops tab. The screen drives the refreshing, only while the tab is on screen and the app in front: the page in view (on the home, the
+ * pinned stop showing and its neighbours) every 15 s, the API's own cache, so asking sooner would show nothing new; on the home, each
+ * service's buses out once a minute ([LinesPoll]).
  */
 class BusesViewModel(app: Application) : AndroidViewModel(app) {
     private val store = Store(app)
@@ -148,8 +158,8 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
     /** When new times come for the page for [code], for its pull. */
     fun pageNextAt(code: String): Long? = nextUpdateAt(pageBoard(code))
 
-    /** When new times come for the home's pinned stops [codes], for its pull: the soonest of theirs. */
-    fun homeNextAt(codes: List<String>): Long? = codes.mapNotNull(::nextUpdateAt).minOrNull()
+    /** When new times come for the pinned stop [code] on the home, for its pull. */
+    fun pinNextAt(code: String): Long? = nextUpdateAt(pinKey(code))
 
     /** When new times come for a service's line, for its pull. */
     fun lineNextAt(svc: String, from: String?): Long? = nextUpdateAt("line:${lineKey(svc, from)}")
@@ -157,30 +167,28 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
     /** The page for [code] pulled down. */
     suspend fun pullPage(code: String): PullOutcome = pulled(pageBoard(code)) { refreshPage(code, force = true) }
 
-    /** The home pulled down: each pinned stop's board, together; updated if any came back, failed if none did and one was asked. */
-    suspend fun pullHome(codes: List<String>): PullOutcome {
-        if (codes.isEmpty()) return PullOutcome.UpToDate
-        val outcomes = coroutineScope { codes.map { code -> async { pulled(code) { refreshBoard(code, force = true) } } }.awaitAll() }
-        return when {
-            PullOutcome.Updated in outcomes -> PullOutcome.Updated
-            PullOutcome.Failed in outcomes -> PullOutcome.Failed
-            else -> PullOutcome.UpToDate
-        }
-    }
+    /** The home pulled down: the pinned stop showing ([code]) asked for again, with its neighbours ([codes]); nothing with none showing. */
+    suspend fun pullPinned(code: String?, codes: List<String>): PullOutcome =
+        if (code == null) PullOutcome.UpToDate else pulled(pinKey(code)) { refreshPinned(codes, force = true) }
 
     suspend fun pullLine(svc: String, from: String?): PullOutcome =
         pulled("line:${lineKey(svc, from)}") { refreshLine(svc, from, force = true) }
 
     private var campusJob: kotlinx.coroutines.Job? = null
 
+    /** The language the campus in [_state] is worded in: its lines' names and stops come from the server in it. */
+    private var campusZh: Boolean? = null
+
     fun loadCampus() {
-        if (_state.value.campus != null || campusJob?.isActive == true) return
+        val zh = L.zh
+        if (campusJob?.isActive == true || (_state.value.campus != null && campusZh == zh)) return
         val token = store.token ?: return
         campusJob = viewModelScope.launch {
             try {
                 val json = MapFiles.campus(getApplication(), api(token)) ?: return@launch
                 // Reading it takes a moment: not on the main thread.
                 val c = withContext(Dispatchers.Default) { CampusMap.parse(json).first }
+                campusZh = zh
                 _state.update { it.copy(campus = c) }
             } catch (e: CancellationException) {
                 throw e
@@ -213,11 +221,105 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
     /** The page for [code]: its own board, or its opposite stop's when it's switched across the road. */
     suspend fun refreshPage(code: String, force: Boolean = false) = refreshBoard(pageBoard(code), force)
 
+    /** The page of the home's card showing, by its stop's code ([PinPages]); null for the first. Kept while the app runs. */
+    var pinShown: String? = null
+
+    /** The pins the card was last laid out for, for [PinPages.kept]. */
+    private var pinsBefore: List<String> = emptyList()
+
+    /** The page to show for [pins], the one showing kept through a change to them ([PinPages.kept]). */
+    fun pinPage(pins: List<String>): Int {
+        if (pins != pinsBefore) {
+            pinShown = PinPages.kept(pinsBefore, pins, pinShown)
+            pinsBefore = pins
+        }
+        return PinPages.index(pins, pinShown)
+    }
+
     /**
-     * The home's pinned stops [codes] (at most the pin limit, [Pins.shown]), together: their own boards, as the home shows no opposite
-     * stop.
+     * The pinned stops [codes] from /api/me/stops, in one request: those not asked for in the last [MIN_GAP_MS], or all of them when
+     * [force]d. With a location this phone already has, each says the walk there.
      */
-    suspend fun refreshHome(codes: List<String>) = coroutineScope { for (code in codes) launch { refreshBoard(code) } }
+    suspend fun refreshPinned(codes: List<String>, force: Boolean = false) {
+        val ask = if (force) codes.distinct() else PinPages.due(codes, { asked[pinKey(it)] }, System.currentTimeMillis(), MIN_GAP_MS)
+        if (ask.isEmpty()) return
+        val token = store.token ?: return
+        val keys = ask.map(::pinKey)
+        keys.forEach(::mark)
+        lastPinned = ask
+        asking.update { it + keys }
+        try {
+            val loc = location()
+            val (stops, _) = api(token).stops(ask, loc?.latitude, loc?.longitude)
+            val got = ServerClock.now()
+            keys.forEach(::answered)
+            // Keyed by the code asked for, whatever case the server writes it in; one it doesn't know is one it couldn't get.
+            val byCode =
+                ask.mapNotNull { code ->
+                        stops.firstOrNull { it.code.equals(code, ignoreCase = true) }?.let { code to PinnedStop(it, got) }
+                    }
+                    .toMap()
+            _state.update { s -> s.copy(pinned = s.pinned + byCode, pinFailed = s.pinFailed - byCode.keys + (ask - byCode.keys)) }
+        } catch (e: CancellationException) {
+            // Not asked after all (the page moved on mid-request): due again at once, rather than "Checking…" until the next refresh.
+            keys.forEach { asked.remove(it) }
+            throw e
+        } catch (e: Exception) {
+            if (refused(e, token)) return
+            _state.update { it.copy(pinFailed = it.pinFailed + ask) }
+        } finally {
+            asking.update { it - keys.toSet() }
+        }
+    }
+
+    private fun pinKey(code: String) = "pin:$code"
+
+    /** The stops the last [refreshPinned] asked for, asked again once a location comes. */
+    private var lastPinned: List<String> = emptyList()
+
+    private var fixing: kotlinx.coroutines.Job? = null
+
+    /**
+     * Where the phone is, for the walk to each pinned stop: a fix it already has (up to 10 minutes old), never a permission asked for. With
+     * the permission and no such fix, a new one is asked for, once, and the stops asked for again when it comes.
+     */
+    private fun location(): android.location.Location? {
+        val ctx = getApplication<Application>()
+        Locator.lastKnown(ctx)?.let {
+            return it
+        }
+        if (fixing == null && Locator.hasForeground(ctx)) {
+            fixing = viewModelScope.launch {
+                if (Locator.fresh(ctx) != null && lastPinned.isNotEmpty()) refreshPinned(lastPinned, force = true)
+            }
+        }
+        return null
+    }
+
+    /** When /api/lines was last asked, for [LinesPoll]. */
+    private var linesAskedAt: Long? = null
+
+    /** How long until the list of lines may ask for its buses out again. */
+    fun linesWaitMs(): Long = LinesPoll.waitMs(linesAskedAt, System.currentTimeMillis())
+
+    /** How long the list of lines sleeps before it tries again ([LinesPoll.nextMs]). */
+    fun linesNextMs(): Long = LinesPoll.nextMs(linesAskedAt, System.currentTimeMillis())
+
+    /** Each service's buses out, when [LinesPoll] allows: a failure says nothing rather than an old count, and waits out the minute too. */
+    suspend fun refreshLines() {
+        if (linesWaitMs() > 0) return
+        val token = store.token ?: return
+        linesAskedAt = System.currentTimeMillis()
+        try {
+            val out = api(token).lines()
+            _state.update { it.copy(out = out) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (refused(e, token)) return
+            _state.update { it.copy(out = emptyMap()) }
+        }
+    }
 
     /** The board the page for [code] shows: its own, or its opposite stop's. */
     private fun pageBoard(code: String): String {

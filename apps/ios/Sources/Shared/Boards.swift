@@ -109,7 +109,7 @@ struct BoardRow: Decodable, Hashable, Sendable {
     }
 }
 
-/// A stop from /me/nearby, nearest first.
+/// A stop from /me/nearby, nearest first, or from /me/stops, as asked.
 struct NearbyStop: Decodable, Identifiable, Sendable {
     struct Stop: Decodable, Sendable {
         let code: String
@@ -119,9 +119,10 @@ struct NearbyStop: Decodable, Identifiable, Sendable {
         let oppositeName: String?
     }
     let stop: Stop
-    let walkS: Int
+    /// The walk there; nil from /me/stops without a location.
+    let walkS: Int?
     let available: Bool
-    let board: [BoardRow]
+    var board: [BoardRow]
     let opposite: String?
     /// Whether `opposite` is across the road (else only near), and its name:
     /// sent beside `stop`, or inside it by an older server.
@@ -135,10 +136,32 @@ struct NearbyStop: Decodable, Identifiable, Sendable {
 
     enum CodingKeys: String, CodingKey { case stop, walkS, available, board, opposite, oppositeAcross, oppositeName, distM, viaText }
 
+    /// The stop as it stands at `now`, got at `got`: its rows aged as a board's
+    /// are (BusTimes.aged), so a time is counted down and stops passing as live.
+    func aged(got: Date?, now: Date) -> NearbyStop {
+        guard let got else { return self }
+        var s = self
+        s.board = board.map { BusTimes.aged($0, got: got, now: now) }
+        return s
+    }
+
+    /// A stop not answered for yet: its plate, with nothing under it.
+    init(placeholder code: String, name: String) {
+        stop = Stop(code: code, name: name, longName: nil, oppositeAcross: nil, oppositeName: nil)
+        walkS = nil
+        available = true
+        board = []
+        opposite = nil
+        oppositeAcross = true
+        oppositeName = nil
+        distM = nil
+        viaText = nil
+    }
+
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         stop = try c.decode(Stop.self, forKey: .stop)
-        walkS = c.lenientInt(forKey: .walkS) ?? 0
+        walkS = c.lenientInt(forKey: .walkS)
         available = c.bool(.available) ?? true
         board = c.lenientList(BoardRow.self, forKey: .board) ?? []
         opposite = c.string(.opposite).flatMap { $0.isEmpty ? nil : $0 }

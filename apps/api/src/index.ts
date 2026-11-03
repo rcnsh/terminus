@@ -258,6 +258,27 @@ async function handleBuses(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
 }
 
 /**
+ * GET /api/lines -- how many of each service's buses are out now, worded, for
+ * the list of lines on the Stops tab. The one read of every service at once:
+ * each goes through getBuses, so its 5 s cache and the feed gate hold (one
+ * feed call per service per window, however many ask), and the response is
+ * kept 30 s; the apps ask at most once a minute while the list is on screen.
+ * A service the feed didn't answer for is null, not "None out".
+ */
+async function handleLines(env: Env, ctx: ExecutionContext, nowMs: number): Promise<Response> {
+  const svcs = Object.keys(GRAPH.routes ?? {});
+  const got = await Promise.all(
+    svcs.map(async (svc) => {
+      const live = await getBuses(env, ctx, svc, nowMs).catch(() => null);
+      if (!live) return [svc, null] as const;
+      const out = (await trackedBuses(GRAPH, svc, live, ctx)).length;
+      return [svc, { out, outText: out ? m().busesOut(out) : m().noneOut, stale: Boolean(live.stale) }] as const;
+    }),
+  );
+  return json({ lines: Object.fromEntries(got), asOf: new Date(nowMs).toISOString() }, 200, { 'cache-control': 'private, max-age=30' });
+}
+
+/**
  * GET /api/line?svc=<service>[&stop=<code>] -- one service's whole line, for a
  * service's page: its stops in route order, its buses placed on that list,
  * and with `stop`, that service's board row there. Costs what /api/buses does,
@@ -436,7 +457,7 @@ async function versionLookup(env: Env, nowMs: number): Promise<Record<string, un
 const ME_DEPS: MeDeps = { answerFor, collectArrivals };
 
 /** Routes that need an API key or a signed-in account. */
-const KEYED = ['/api/next', '/api/trip', '/api/arrivals', '/api/buses', '/api/line', '/api/campus', '/api/stops/pairs'];
+const KEYED = ['/api/next', '/api/trip', '/api/arrivals', '/api/buses', '/api/lines', '/api/line', '/api/campus', '/api/stops/pairs'];
 
 export default {
   async scheduled(_event: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
@@ -626,6 +647,8 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
         return await handleBuses(url, env, ctx, nowMs);
       case '/api/line':
         return await handleLine(url, env, ctx, nowMs);
+      case '/api/lines':
+        return await handleLines(env, ctx, nowMs);
       default:
         // Everything else is the website; the landing page with its version and account link.
         if (env.ASSETS && (req.method === 'GET' || req.method === 'HEAD')) {

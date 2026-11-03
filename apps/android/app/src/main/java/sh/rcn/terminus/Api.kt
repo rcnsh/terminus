@@ -778,7 +778,8 @@ internal val STOPPED = setOf("ended", "notYet", "noService")
 data class NearbyStop(
     val code: String,
     val name: String,
-    val walkS: Int,
+    /** Seconds on foot; null for a pinned stop asked for without a location (/api/me/stops). */
+    val walkS: Int?,
     val available: Boolean,
     val board: List<BoardRow>,
     /** The stop across the road, if it has one. */
@@ -793,7 +794,11 @@ data class NearbyStop(
     val oppositeName: String? = null,
     /** Which way its buses go, by places a newcomer knows: "to UTown, Science, Kent Ridge MRT". Null with none, or from an older server. */
     val viaText: String? = null,
-)
+) {
+    /** "2 min walk", or "here" under a minute; null without a walk. */
+    val walkWords: String?
+        get() = walkS?.let { if (it < 60) L.s(R.string.here) else L.s(R.string.min_walk, (it + 30) / 60) }
+}
 
 data class Destination(
     val code: String,
@@ -1028,6 +1033,21 @@ class Api(private val token: String?, private val fast: Boolean = false, private
             else emptyList()) + listOfNotNull("stopped=1".takeIf { stopped })
         return request("GET", "/api/me/nearby" + query(q))
     }
+
+    /**
+     * The pinned stops [codes] as Nearby shows them (/api/me/stops), for the Stops tab's card, with the answer's time. With a location,
+     * each says the walk there; without one, none does.
+     */
+    suspend fun stops(codes: List<String>, lat: Double?, lon: Double?): Pair<List<NearbyStop>, Long?> {
+        val q =
+            listOf("codes=" + codes.joinToString(",") { enc(it) }) +
+                (if (lat != null && lon != null) listOf("lat=${coord(lat)}", "lon=${coord(lon)}") else emptyList())
+        val json = request("GET", "/api/me/stops" + query(q))
+        return parseNearby(json) to json.optStringOrNull("asOf")?.let(::parseInstant)
+    }
+
+    /** How many buses each service has out (/api/lines), for the Stops tab's list of lines. */
+    suspend fun lines(): Map<String, LineOut?> = parsing { LineOut.parse(request("GET", "/api/lines")) }
 
     suspend fun destinations(): List<Destination> {
         val o = request("GET", "/api/campus")
@@ -1687,7 +1707,7 @@ fun parseNearby(json: JSONObject): List<NearbyStop> = parsing {
         NearbyStop(
             code = s.getJSONObject("stop").getString("code"),
             name = s.getJSONObject("stop").getString("name"),
-            walkS = s.optInt("walkS"),
+            walkS = if (s.has("walkS") && !s.isNull("walkS")) s.optInt("walkS") else null,
             available = s.optBoolean("available", true),
             opposite = s.optStringOrNull("opposite")?.ifEmpty { null },
             longName = s.getJSONObject("stop").optStringOrNull("longName")?.ifEmpty { null },
