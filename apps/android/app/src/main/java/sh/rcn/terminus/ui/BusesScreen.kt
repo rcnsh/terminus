@@ -668,9 +668,15 @@ private fun StopBody(state: BusesUi, vm: BusesViewModel, code: String) {
     board?.let { Foot(it) }
 }
 
-/** Two choices side by side, the chosen one raised: "This side | Across the road". */
+/** Two choices side by side, the chosen one raised: "This side | Across the road". [label] names the choice for a screen reader. */
 @Composable
-private fun Segmented(options: List<String>, selected: Int, modifier: Modifier = Modifier, onSelect: (Int) -> Unit) {
+internal fun Segmented(
+    options: List<String>,
+    selected: Int,
+    modifier: Modifier = Modifier,
+    label: String? = null,
+    onSelect: (Int) -> Unit,
+) {
     val c = MaterialTheme.colorScheme
     Row(
         modifier
@@ -680,6 +686,7 @@ private fun Segmented(options: List<String>, selected: Int, modifier: Modifier =
             .background(c.secondaryContainer)
             .padding(4.dp)
             .selectableGroup()
+            .then(if (label != null) Modifier.semantics { contentDescription = label } else Modifier)
     ) {
         for ((i, text) in options.withIndex()) {
             val on = i == selected

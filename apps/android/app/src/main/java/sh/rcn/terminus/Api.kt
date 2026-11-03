@@ -723,16 +723,31 @@ data class BoardRow(
     val laterText: String? = null,
     /** "to Central Library, Kent Vale", "Ends here"; null from an older server. */
     val toText: String? = null,
+    /** When the next bus comes, to the minute (`at`); null without a time, or from an older server. */
+    val atMs: Long? = null,
+    /** The next bus comes before you could walk to the stop (Nearby's boards only); false from an older server. */
+    val tooSoon: Boolean = false,
 )
 
-/** A bus after the next one, with its own quality: a timetabled one stays a guess. [eta] is the server's "12 min". */
-data class LaterBus(val etaS: Int, val quality: String, val eta: String? = null)
+/**
+ * A bus after the next one, with its own quality: a timetabled one stays a guess. [eta] is the server's "12 min", [atMs] when it comes, to
+ * the minute, and [tooSoon] that it comes before you could walk to the stop (Nearby's boards only).
+ */
+data class LaterBus(val etaS: Int, val quality: String, val eta: String? = null, val atMs: Long? = null, val tooSoon: Boolean = false)
 
 private fun parseLater(r: JSONObject): List<LaterBus> {
     val a = r.optJSONArray("later") ?: return emptyList()
     return (0 until a.length()).mapNotNull { k ->
         val b = a.optJSONObject(k) ?: return@mapNotNull null
-        if (b.isNull("etaS")) null else LaterBus(b.optInt("etaS"), b.optString("quality"), b.optStringOrNull("eta"))
+        if (b.isNull("etaS")) null
+        else
+            LaterBus(
+                b.optInt("etaS"),
+                b.optString("quality"),
+                b.optStringOrNull("eta"),
+                atMs = b.optStringOrNull("at")?.let(::parseInstant),
+                tooSoon = b.optBoolean("tooSoon", false),
+            )
     }
 }
 
@@ -756,6 +771,8 @@ fun parseBoardRow(r: JSONObject): BoardRow =
         eta = r.optStringOrNull("eta")?.ifEmpty { null },
         laterText = r.optStringOrNull("laterText")?.ifEmpty { null },
         toText = r.optStringOrNull("toText")?.ifEmpty { null },
+        atMs = r.optStringOrNull("at")?.let(::parseInstant),
+        tooSoon = r.optBoolean("tooSoon", false),
     )
 
 private val CROWDS = setOf("low", "medium", "high")
