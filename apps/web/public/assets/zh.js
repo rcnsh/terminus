@@ -645,7 +645,8 @@ window.TERMINUS_ZH = {
   'Stops need a connection.': '车站页面需要联网。',
   "Tap the star on any stop to keep it here: in Nearby, on the stop's page, or after searching for it.":
     '点任意车站的星标，把它固定在这里：在“附近”、车站页面或搜索结果里都可以。',
-  '{0} more at this stop': '这个车站还有 {0} 条线路',
+  'Pin another stop': '再固定一个车站',
+  'Tap the star on a stop in Nearby or on its page to keep it here.': '在附近或车站页面点星标，就能把它固定在这里。',
   'Tap one to see its whole line.': '点一条线路，查看它经过的所有车站。',
   'Another stop, or a whole line': '其他车站或整条线路',
   'Search, pinned stops and services are in Stops.': '搜索、已固定的车站和线路都在“车站”里。',
