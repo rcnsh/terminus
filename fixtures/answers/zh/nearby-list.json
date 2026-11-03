@@ -28,6 +28,12 @@
               "quality": "live",
               "eta": "14 分钟",
               "at": "2026-08-27T01:14:00Z"
+            },
+            {
+              "etaS": 1560,
+              "quality": "scheduled",
+              "eta": "约 26 分钟",
+              "at": "2026-08-27T01:26:00Z"
             }
           ],
           "color": "#8e44c9",
@@ -44,7 +50,9 @@
           "eta": "4 分钟",
           "laterText": "之后 14 分钟",
           "toText": "经 TCOMS，开往 COM 3",
-          "at": "2026-08-27T01:04:00Z"
+          "at": "2026-08-27T01:04:00Z",
+          "dest": "经 COM 3",
+          "destPlace": "COM 3"
         },
         {
           "svc": "A2",
@@ -64,7 +72,9 @@
           "eta": null,
           "laterText": null,
           "toText": "经 TCOMS，开往 Kent Ridge Bus Terminal",
-          "at": null
+          "at": null,
+          "dest": "经 TCOMS",
+          "destPlace": "TCOMS"
         },
         {
           "svc": "K",
@@ -81,7 +91,9 @@
           "eta": null,
           "laterText": null,
           "toText": "本站为终点站",
-          "at": null
+          "at": null,
+          "dest": "本站为终点站",
+          "destPlace": null
         }
       ]
     },
@@ -115,6 +127,12 @@
               "quality": "live",
               "eta": "14 分钟",
               "at": "2026-08-27T01:14:00Z"
+            },
+            {
+              "etaS": 1560,
+              "quality": "scheduled",
+              "eta": "约 26 分钟",
+              "at": "2026-08-27T01:26:00Z"
             }
           ],
           "color": "#8e44c9",
@@ -134,7 +152,9 @@
           "laterText": "之后 14 分钟",
           "toText": "经 Kent Ridge MRT，开往 COM 3",
           "at": "2026-08-27T01:04:00Z",
-          "tooSoon": true
+          "tooSoon": true,
+          "dest": "经 Kent Ridge MRT",
+          "destPlace": "Kent Ridge MRT"
         },
         {
           "svc": "R2",
@@ -147,6 +167,12 @@
               "quality": "live",
               "eta": "18 分钟",
               "at": "2026-08-27T01:18:00Z"
+            },
+            {
+              "etaS": 1800,
+              "quality": "scheduled",
+              "eta": "约 30 分钟",
+              "at": "2026-08-27T01:30:00Z"
             }
           ],
           "color": "#34a853",
@@ -164,7 +190,9 @@
           "eta": "6 分钟",
           "laterText": "之后 18 分钟",
           "toText": "经 Opp HSSML，开往 Kent Vale",
-          "at": "2026-08-27T01:06:00Z"
+          "at": "2026-08-27T01:06:00Z",
+          "dest": "开往 Kent Vale",
+          "destPlace": "Kent Vale"
         },
         {
           "svc": "A1",
@@ -177,6 +205,12 @@
               "quality": "live",
               "eta": "19 分钟",
               "at": "2026-08-27T01:19:00Z"
+            },
+            {
+              "etaS": 1860,
+              "quality": "scheduled",
+              "eta": "约 31 分钟",
+              "at": "2026-08-27T01:31:00Z"
             }
           ],
           "color": "#d32f2f",
@@ -194,7 +228,9 @@
           "eta": "9 分钟",
           "laterText": "之后 19 分钟",
           "toText": "经 Kent Ridge MRT，开往 Kent Ridge Bus Terminal",
-          "at": "2026-08-27T01:09:00Z"
+          "at": "2026-08-27T01:09:00Z",
+          "dest": "经 Kent Ridge MRT",
+          "destPlace": "Kent Ridge MRT"
         },
         {
           "svc": "K",
@@ -218,7 +254,9 @@
           "eta": null,
           "laterText": null,
           "toText": "经 Kent Ridge MRT，开往 Prince George's Park Foyer",
-          "at": null
+          "at": null,
+          "dest": "开往 PGP Foyer",
+          "destPlace": "PGP Foyer"
         },
         {
           "svc": "R1",
@@ -235,7 +273,9 @@
           "eta": null,
           "laterText": null,
           "toText": "本站为终点站",
-          "at": null
+          "at": null,
+          "dest": "本站为终点站",
+          "destPlace": null
         }
       ]
     }

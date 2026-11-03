@@ -636,25 +636,47 @@ interface NearbyTimes {
 
 /** A board row on Nearby, its buses timed against the walk there. */
 export type NearbyRow = Omit<BoardRow, 'later'> & {
+  /** Where it's going, short: "to PGP Foyer", "via UTown" for a loop (nearbyDest). */
+  dest?: string;
+  /** The place named in `dest`, for a client that sets it apart from the words around it; null with none. */
+  destPlace?: string | null;
   /** When the first bus arrives, to the minute (ISO); null with no time. */
   at: string | null;
   tooSoon?: true;
   later: (BoardRow['later'][number] & NearbyTimes)[];
 };
 
+/** How many buses after the next one a Nearby row shows: its Then and After columns. */
+export const NEARBY_LATER = 2;
+
 /**
  * A Nearby row with each bus's clock time and, on one due before you could
  * walk to the stop, `tooSoon`, so a client strikes it out rather than offer
  * a bus nobody can catch. The time is rounded to the minute, as it's read.
+ *
+ * The shuttle feed gives two buses a service; where it gives fewer than
+ * Nearby's three, the rest are guessed a headway apart after the last one,
+ * as the answer guesses past the feed's list, and marked `scheduled`, never
+ * live. Not past the service's last bus, and not for a public bus, whose
+ * own timetable LTA gives.
  */
-export function withWalk(r: BoardRow, walkS: number, nowMs: number): NearbyRow {
+export function withWalk(r: BoardRow, walkS: number, nowMs: number, headwayS = 0): NearbyRow {
   const at = (etaS: number) => new Date(Math.round((nowMs + etaS * 1000) / 60_000) * 60_000).toISOString().replace('.000Z', 'Z');
   const soon = (etaS: number) => (etaS < walkS ? { tooSoon: true as const } : {});
+  const later = [...r.later];
+  const endsMs = r.endsAt ? Date.parse(r.endsAt) : null;
+  if (r.running && r.etaS != null && !r.paid && headwayS > 0) {
+    while (later.length < NEARBY_LATER) {
+      const etaS = (later.at(-1)?.etaS ?? r.etaS) + headwayS;
+      if (endsMs !== null && nowMs + etaS * 1000 > endsMs) break;
+      later.push({ etaS, quality: 'scheduled', eta: etaText(etaS, 'scheduled') });
+    }
+  }
   return {
     ...r,
     at: r.etaS == null ? null : at(r.etaS),
     ...(r.etaS == null ? {} : soon(r.etaS)),
-    later: r.later.map((b) => ({ ...b, at: at(b.etaS), ...soon(b.etaS) })),
+    later: later.map((b) => ({ ...b, at: at(b.etaS), ...soon(b.etaS) })),
   };
 }
 
@@ -710,6 +732,25 @@ export function towardsFrom(idx: GraphIndex, svc: string, stopCode: string): str
   const end = r.loop ? r.seq[0] : r.seq[r.seq.length - 1];
   const codes = next === end ? [next] : [next, end];
   return codes.map((c) => displayName(idx.byCode.get(c), c));
+}
+
+/**
+ * Where a Nearby row's bus is going, short enough for a row beside three
+ * times, in the names the stops' plates use: "to PGP Foyer". A loop ends
+ * where it started, which says nothing about which way it's going (both D1
+ * and D2 end at COM 3, even at COM 3), so a loop says the first well-known
+ * place it passes from here, else its next stop: "via UTown". `destPlace` is
+ * the place alone, for a client that sets it apart from the words around it.
+ */
+export function nearbyDest(idx: GraphIndex, svc: string, stopCode: string, via: string[]): { dest: string; destPlace: string | null } {
+  const r = idx.routes.get(svc);
+  const at = r?.pos.get(stopCode);
+  if (!r || !at) return { dest: towardsText(towardsFrom(idx, svc, stopCode)), destPlace: null };
+  const short = (c: string) => idx.byCode.get(c)?.name ?? c;
+  const n = at[0] + 1 < r.seq.length ? at[0] + 1 : r.loop ? 0 : null;
+  if (n === null) return { dest: m().endsHere, destPlace: null };
+  const place = r.loop ? (via[0] ?? short(r.seq[n])) : short(r.seq[r.seq.length - 1]);
+  return { dest: r.loop ? m().loopVia(place) : m().towardsOne(place), destPlace: place };
 }
 
 /**

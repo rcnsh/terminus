@@ -482,9 +482,11 @@ pnpm exec cf kv keys put config:minClient --namespace-id <KV id in cloudflare.co
   the feed knows in `later`, each with its own quality. Nearby times each
   bus against the walk to its stop (`withWalk`): `at`, its clock time to
   the minute, and `tooSoon` on one due before you could get there. Nearby
-  shows them as a board, a column for the next bus and one for the bus
-  after (the shuttle feed gives two), in minutes or as clock times, a bus
-  too soon to catch struck out. Each stop has
+  shows them as a board, a column each for the next three buses, in
+  minutes or as clock times, a bus too soon to catch struck out. The
+  shuttle feed gives two a service, so the third is guessed a headway
+  after the second (`withWalk`, `NEARBY_LATER`), `scheduled` and shown
+  with "~", never past the service's last bus or for a public bus. Each stop has
   `via` too: the places most of its buses pass first (each row's first
   two, the most shared first, up to three), and `viaText` ("to UTown,
   Science, Kent Ridge MRT"), the heading the widget puts over each side

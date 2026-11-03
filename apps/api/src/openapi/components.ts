@@ -440,13 +440,25 @@ export function components(): Record<string, unknown> {
       },
       NearbyRow: {
         description:
-          'A `BoardRow` on Nearby, each bus timed against the walk to its stop (`walkS`): its clock time, and whether it comes before you could get there.',
+          'A `BoardRow` on Nearby, each bus timed against the walk to its stop (`walkS`): its clock time, and whether it comes before you could get there. `later` has two buses where it can: when the feed gives fewer for a shuttle, the rest are guessed a headway apart after the last, `scheduled` (never past the service’s last bus; never for a public bus).',
         allOf: [
           { $ref: '#/components/schemas/BoardRow' },
           {
             type: 'object',
-            required: ['at'],
+            required: ['at', 'dest', 'destPlace'],
             properties: {
+              destPlace: {
+                type: ['string', 'null'],
+                example: 'UTown',
+                description:
+                  'The place named in `dest`, for a client that sets it apart from the words around it ("to", "via"). Null when `dest` names none ("Ends here").',
+              },
+              dest: {
+                type: 'string',
+                example: 'via UTown',
+                description:
+                  'Where it is going, short, for a row beside its times: "to PGP Foyer" (the stop’s short name, as on its plate), or for a loop the first well-known place it passes from here, else its next stop: "via UTown" (Chinese "经 UTown"). "Ends here" at the end of the line.',
+              },
               at: {
                 type: ['string', 'null'],
                 format: 'date-time',
