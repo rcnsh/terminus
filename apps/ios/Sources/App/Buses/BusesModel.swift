@@ -16,6 +16,8 @@ final class BusesModel {
 
     /// The stops and services, for the search and names before a board loads.
     private(set) var campus: BusCampus?
+    /// The language `campus` is worded in.
+    private var campusZh: Bool?
     /// Boards by stop code: pinned stops, opened ones, the twins across the road.
     private(set) var boards: [String: Board] = [:]
     /// Stops whose board couldn't be fetched (offline), until one is.
@@ -127,9 +129,12 @@ final class BusesModel {
     // MARK: the campus and the profile
 
     func loadCampus() async {
-        guard campus == nil, let token else { return }
+        // Its lines' names and stops are worded by the server in the language asked in: a new language asks again.
+        guard campus == nil || campusZh != Lang.zh, let token else { return }
+        let zh = Lang.zh
         do {
             campus = try await Api(token: token).busCampus()
+            campusZh = zh
         } catch {
             // Without it, names come with the boards.
             _ = refused(error, token)
@@ -282,6 +287,11 @@ final class BusesModel {
             answeredAt["pin:" + code] = at
         }
         for code in result.askAgain { asked["pin:" + code] = nil }
+        // A stop the server no longer answers for: no old board kept under "No live data".
+        for code in result.missing {
+            pinned[code] = nil
+            pinnedGot[code] = nil
+        }
         pinnedFailed.subtract(result.answered + result.missing)
         pinnedFailed.formUnion(result.failed)
         pinnedMissing.subtract(result.answered)
@@ -301,10 +311,16 @@ final class BusesModel {
     // MARK: the lines' buses out
 
     /// How many buses each line has out. A failure says nothing rather than an old count.
+    static let noTokenRetryS: TimeInterval = 5
+
     func refreshLines() async {
-        // Set first, so the minute's wait holds even with no account to ask for.
+        // With no account yet, nothing is asked: look again in a few seconds rather than a minute,
+        // so the counts come soon after sign-in, without the loop spinning.
+        guard let token else {
+            linesAskedAt = Date().addingTimeInterval(Self.noTokenRetryS - BusLines.pollS)
+            return
+        }
         linesAskedAt = Date()
-        guard let token else { return }
         let s = AppModel.shared.session
         do {
             let counts = try await Api(token: token).lineCounts()
