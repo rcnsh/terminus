@@ -707,7 +707,7 @@ export function noteFailure(env: Env, what: 'arrivals' | 'buses', key: string, e
 export async function renewToken(env: Env, nowMs: number): Promise<boolean> {
   if (!fmsConfigured(env) || (await breakerOpen())) return false;
   // A request's mint failed here a moment ago: none was tried, and the next run tries again.
-  return renewAhead(env, nowMs, TTL.tokenRenewAheadMs).catch((err) => {
+  return renewAhead(env, nowMs).catch((err) => {
     if (err instanceof MintQuiet) return false;
     throw err;
   });

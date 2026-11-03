@@ -63,7 +63,7 @@ root path gets 426 from an app, 308 from anything else (`movedApi` in
    returns a ready-made card (labels, times, which bus). Clients only count
    down the clock. Never move logic into a client: four clients would then
    drift apart.
-2. **Don't add load on NUS.** Arrivals are cached 15 s per stop
+2. **Don't add unnecessary load on NUS.** Arrivals are cached 15 s per stop
    (`TTL.arrivalsMs`), live buses 5 s per service (`TTL.busesMs`), all in
    `src/config.ts`. Never lower these, poll in bulk, or scan for endpoints.
    Upstream failures back off (`failMemoS`, `breakerS`): a refused version
@@ -111,9 +111,10 @@ root path gets 426 from an app, 308 from anything else (`movedApi` in
    (`src/feeds/appversion.ts`). The beta's cron makes no health check: it reads
    the breakers its own traffic opened (`src/feeds/feedwatch.ts`), and runs
    the version search only while NUS is refusing the beta. Both crons
-   mint a new guest token while the kept one is still good with under 30
-   minutes left (`renewToken` in `src/feeds/fms.ts`): one mint per token
-   (a day), only earlier, and at most two a day (`auth:renewed`). Each push
+   mint a new guest token while the kept one is still good with under
+   half its lifetime left (`renewToken` in `src/feeds/fms.ts`), trying
+   each run until one works, but never again with a version NUS refused
+   (`auth:renewRefused`): at most two a day (`auth:renewed`). Each push
    user's Trip object (`src/push/tripdo.ts`) wakes at most every 30 s to
    recompute the card, asking for its stops through the cache.
 3. **`src/feeds/fms.ts` is the only file that touches the raw feed shape.** The
