@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { GRAPH } from '../src/answer/graph.ts';
+import { GRAPH, GRAPH_PUBLIC } from '../src/answer/graph.ts';
 import { etaText, indexGraph, nearbyDest, nearbyRow } from '../src/answer/resolve.ts';
 import { viaFrom } from '../src/answer/via.ts';
 
@@ -100,4 +100,11 @@ test('etaText: an estimate under a minute is ~1 min, never now, which would pass
   assert.equal(etaText(20, 'scheduled'), '~1 min');
   assert.equal(etaText(20, 'stale'), '~1 min');
   assert.equal(etaText(20, 'live'), 'now');
+});
+
+test('nearbyDest: a two-way public bus, named on its row as one service, says where the direction calling here goes', () => {
+  const pub = indexGraph(GRAPH_PUBLIC);
+  const code = pub.routes.get('151/1').seq[2];
+  assert.deepEqual(nearbyDest(pub, '151', code, viaFrom(pub, '151/1', code)), nearbyDest(pub, '151/1', code, viaFrom(pub, '151/1', code)));
+  assert.notEqual(nearbyDest(pub, '151', code, []).dest, 'Ends here');
 });

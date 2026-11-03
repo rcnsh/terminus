@@ -741,12 +741,17 @@ const ONE_LINE_PLACE = 12;
  * place it passes from here ("via UTown"); with none, where it ends ("to KR
  * Bus Ter"), unless that's this stop, its first, where it says its next.
  * `destPlace` is the place alone, for a client that sets it apart from the
- * words around it. A short name is kept whole on one line.
+ * words around it. A short name is kept whole on one line. `svc` is the
+ * row's name: a two-way public bus ("151") is two routes ("151/1",
+ * "151/2"), and the one that calls here is the one meant.
  */
 export function nearbyDest(idx: GraphIndex, svc: string, stopCode: string, via: string[]): { dest: string; destPlace: string | null } {
-  const r = idx.routes.get(svc);
+  const key = idx.routes.has(svc)
+    ? svc
+    : ([...idx.routes.keys()].find((k) => svcName(k) === svc && idx.routes.get(k)!.pos.has(stopCode)) ?? svc);
+  const r = idx.routes.get(key);
   const at = r?.pos.get(stopCode);
-  if (!r || !at) return { dest: towardsText(towardsFrom(idx, svc, stopCode)), destPlace: null };
+  if (!r || !at) return { dest: towardsText(towardsFrom(idx, key, stopCode)), destPlace: null };
   const short = (c: string) => idx.byCode.get(c)?.name ?? c;
   const n = at[0] + 1 < r.seq.length ? at[0] + 1 : r.loop ? 0 : null;
   if (n === null) return { dest: m().endsHere, destPlace: null };

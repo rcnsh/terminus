@@ -452,7 +452,7 @@ export function components(): Record<string, unknown> {
                 type: 'string',
                 example: 'via UTown',
                 description:
-                  'Where it is going, short, for a row beside its times: "to PGP Foyer" (the stop’s short name, as on its plate), or for a loop the first well-known place it passes from here, else its next stop: "via UTown" (Chinese "经 UTown"). "Ends here" at the end of the line.',
+                  'Where it is going, short, for a row beside its times: "to PGP Foyer" (the stop’s short name, as on its plate), or for a loop the first well-known place it passes from here: "via UTown" (Chinese "经 UTown"); with none, where the loop ends, or at its first stop its next stop. A two-way public bus says where the direction calling here goes. "Ends here" at the end of the line.',
               },
               at: {
                 type: ['string', 'null'],
