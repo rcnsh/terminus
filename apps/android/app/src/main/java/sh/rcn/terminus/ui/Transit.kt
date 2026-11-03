@@ -18,31 +18,45 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.text
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import sh.rcn.terminus.R
 
@@ -56,7 +70,9 @@ import sh.rcn.terminus.R
 /**
  * A stop's name plate, as on the pole: a shade off the card with a hairline under it, the bus mark in the accent, the name, and anything to
  * say about it at the end (the walk there, a button), quieter. Not inverted: in the dark a near-white plate would glare off every stop.
- * [onName] is on the mark and the name alone (a tap there), so a button at the end isn't inside it.
+ * [onName] is on the mark and the name alone (a tap there), so a button at the end isn't inside it; with [opens], a chevron right after the
+ * name's last word says the tap opens the stop. A long name, or large text, takes the name to a second line rather than cutting it; the
+ * mark and what's at the end stay with its first line.
  */
 @Composable
 internal fun StopPlate(
@@ -64,9 +80,33 @@ internal fun StopPlate(
     modifier: Modifier = Modifier,
     big: Boolean = false,
     onName: Modifier = Modifier,
+    opens: Boolean = false,
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
     val c = MaterialTheme.colorScheme
+    val style = TextStyle(color = c.onSurface, fontWeight = FontWeight.Bold, fontSize = if (big) 17.sp else 15.sp)
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    // The band the name's first line is centred in, with the mark and the end's things: the plate's height, or a line's and its margin
+    // where the text is large.
+    val line = remember(style, density) { with(density) { measurer.measure("Ag", style).size.height.toDp() } }
+    val band = maxOf(if (big) 54.dp else 38.dp, line + 12.dp)
+    val top = (band - line) / 2
+    val middle = with(density) { (band / 2).roundToPx() }
+    // The chevron as a glyph after the name, joined to its last word by a no-break space, so it wraps with it.
+    val chevron =
+        mapOf(
+            CHEVRON to
+                InlineTextContent(Placeholder(0.8.em, 1.2.em, PlaceholderVerticalAlign.TextCenter)) {
+                    Icon(
+                        painterResource(R.drawable.ic_chevron),
+                        contentDescription = null,
+                        tint = c.onSurfaceVariant,
+                        // The glyph sits inside its box: centred over the narrower slot, so it reads as part of the name.
+                        modifier = Modifier.requiredSize(with(density) { (style.fontSize * 1.2f).toDp() }),
+                    )
+                }
+        )
     Row(
         modifier
             .fillMaxWidth()
@@ -74,36 +114,49 @@ internal fun StopPlate(
             .drawBehind {
                 drawLine(c.outlineVariant, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx())
             }
-            .padding(end = 8.dp)
-            // The nearest stop's plate stays the larger with a 48 dp button at its end.
-            .heightIn(min = if (big) 54.dp else 38.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(end = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        // The name's first line and the end's things share a middle, whichever is taller (a 48 dp button).
         Row(
-            Modifier.weight(1f).heightIn(min = if (big) 54.dp else 38.dp).then(onName).padding(start = 14.dp),
+            Modifier.weight(1f).alignBy { middle }.then(onName).padding(start = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Box(Modifier.height(band), contentAlignment = Alignment.Center) {
+                Icon(
+                    painterResource(R.drawable.ic_bus),
+                    contentDescription = null,
+                    tint = c.primary,
+                    modifier = Modifier.size(if (big) 18.dp else 16.dp),
+                )
+            }
+            Text(
+                buildAnnotatedString {
+                    append(name)
+                    if (opens) {
+                        append('\u00a0')
+                        appendInlineContent(CHEVRON)
+                    }
+                },
+                style = style,
+                inlineContent = chevron,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                // Said as the name alone, without the chevron's stand-in character.
+                modifier = Modifier.weight(1f).clearAndSetSemantics { text = AnnotatedString(name) }.padding(top = top, bottom = top),
+            )
+        }
+        Row(
+            Modifier.heightIn(min = band).alignBy { it.measuredHeight / 2 },
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Icon(
-                painterResource(R.drawable.ic_bus),
-                contentDescription = null,
-                tint = c.primary,
-                modifier = Modifier.size(if (big) 18.dp else 16.dp),
-            )
-            Text(
-                name,
-                color = c.onSurface,
-                fontWeight = FontWeight.Bold,
-                fontSize = if (big) 17.sp else 15.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
+            CompositionLocalProvider(LocalContentColor provides c.onSurfaceVariant) { trailing() }
         }
-        CompositionLocalProvider(LocalContentColor provides c.onSurfaceVariant) { trailing() }
     }
 }
+
+private const val CHEVRON = "chevron"
 
 /**
  * A stop's sign: the plate ([plate] on its name alone: a tap on the name), then what's under it. Rounded, with a hairline round the lot.
@@ -114,6 +167,7 @@ internal fun StopSign(
     modifier: Modifier = Modifier,
     big: Boolean = false,
     plate: Modifier = Modifier,
+    opens: Boolean = false,
     trailing: @Composable RowScope.() -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -121,7 +175,7 @@ internal fun StopSign(
     Column(
         modifier.clip(shape).background(MaterialTheme.colorScheme.surface).border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)
     ) {
-        StopPlate(name, big = big, onName = plate, trailing = trailing)
+        StopPlate(name, big = big, onName = plate, opens = opens, trailing = trailing)
         content()
     }
 }

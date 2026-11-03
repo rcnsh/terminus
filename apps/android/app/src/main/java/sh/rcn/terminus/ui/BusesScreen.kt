@@ -829,7 +829,7 @@ private fun RowScope.RowChevron(look: RowLook) {
 @Composable
 private fun BoardRowView(row: BoardRow, color: Long, onClick: (() -> Unit)?, clickLabel: String, compact: Boolean, look: RowLook) {
     val c = MaterialTheme.colorScheme
-    val arriving = row.etaS != null && row.etaS < BusTimes.ARRIVING_S
+    val arriving = BusTimes.arriving(row.etaS, row.quality)
     Row(
         Modifier.fillMaxWidth()
             .rowGround(look, color, Color.Transparent)
@@ -1027,11 +1027,13 @@ private val DIGITS = Regex("\\d+")
 
 /**
  * "4 min" with the number large ([size]), or "Arriving"; nothing without a time (the tag says why). The words are the server's ([eta]: "4
- * min", "~6 min", "约 6 分钟", "now"), with its number drawn large; worked out here for an older server.
+ * min", "~6 min", "约 6 分钟", "now"), with its number drawn large; worked out here for an older server, or one that said "now" for an
+ * estimate, which is "~1 min".
  */
 @Composable
-private fun BigTime(etaS: Int?, quality: String, arriving: Boolean, eta: String? = null, size: TextUnit = 34.sp) {
+private fun BigTime(etaS: Int?, quality: String, arriving: Boolean, words: String? = null, size: TextUnit = 34.sp) {
     val c = MaterialTheme.colorScheme
+    val eta = words?.takeUnless { quality != "live" && DIGITS.find(it) == null }
     val number = eta?.let { DIGITS.find(it) }
     when {
         etaS == null -> Text("–", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = c.outline)
@@ -1060,6 +1062,8 @@ private fun BigTime(etaS: Int?, quality: String, arriving: Boolean, eta: String?
             val unit = stringResource(R.string.buses_min)
             Text(
                 buildAnnotatedString {
+                    // "~" for an estimate, as the server writes one.
+                    if (quality != "live") withStyle(SpanStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold)) { append("~") }
                     withStyle(SpanStyle(fontSize = size, fontWeight = FontWeight.ExtraBold)) { append("${BusTimes.minutes(etaS)}") }
                     withStyle(SpanStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold)) { append(" $unit") }
                 },
@@ -1425,7 +1429,7 @@ private fun Plate(text: String) {
 @Composable
 private fun HereTime(row: BoardRow) {
     Column(horizontalAlignment = Alignment.End) {
-        BigTime(row.etaS, row.quality, row.etaS != null && row.etaS < BusTimes.ARRIVING_S, row.eta)
+        BigTime(row.etaS, row.quality, BusTimes.arriving(row.etaS, row.quality), row.eta)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             QualityTag(row)
         }

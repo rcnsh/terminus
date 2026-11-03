@@ -101,12 +101,13 @@ object Spoken {
 
     /**
      * A bus's time as it's said: "about 6 minutes, estimated" for an estimate (the screen's "~6 min"), "6 minutes, live" for a bus seen.
-     * Without [withQuality] (where a tag beside it says so already), only the "about". Null without a time.
+     * Without [withQuality] (where a tag beside it says so already), only the "about". Null without a time. An estimate is never
+     * "Arriving", which would pass for a bus at the stop: under a minute it's "about 1 minute", as the server's "~1 min".
      */
     fun eta(etaS: Int?, quality: String, withQuality: Boolean = true): String? {
         val s = etaS ?: return null
-        if (s < BusTimes.ARRIVING_S) return L.s(R.string.map_arriving)
-        val m = minutes(s.toLong())
+        if (BusTimes.arriving(s, quality)) return L.s(R.string.map_arriving)
+        val m = minutes(maxOf(s, if (quality == "live") 0 else 60).toLong())
         return when {
             quality == "scheduled" -> L.s(if (withQuality) R.string.a11y_eta_timetable else R.string.a11y_eta_about, m)
             quality == "live" -> if (withQuality) L.s(R.string.a11y_eta_live, m) else m

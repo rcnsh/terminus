@@ -197,6 +197,12 @@ object BusTimes {
     /** Rounded to the nearest minute, never below 1 (under [ARRIVING_S] is "Arriving"). */
     fun minutes(etaS: Int): Int = maxOf(1, (etaS + 30) / 60)
 
+    /**
+     * A bus seen under [ARRIVING_S] away, said "Arriving". Only a live time: an estimate that close is "~1 min", never one that passes for
+     * a bus at the stop.
+     */
+    fun arriving(etaS: Int?, quality: String): Boolean = etaS != null && etaS < ARRIVING_S && quality == "live"
+
     /** How many later buses "then …" names, as the server's (THEN_MAX in the API's src/answer/resolve.ts). */
     const val THEN_MAX = 2
 

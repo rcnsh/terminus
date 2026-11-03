@@ -727,6 +727,12 @@ data class BoardRow(
     val atMs: Long? = null,
     /** The next bus comes before you could walk to the stop (Nearby's boards only); false from an older server. */
     val tooSoon: Boolean = false,
+    /**
+     * Where it's going, worded and translated: "to PGP Foyer", "via UTown", "Ends here" (Nearby's boards only); null from an older server.
+     */
+    val dest: String? = null,
+    /** The place inside [dest] ("PGP Foyer"), set apart from the words round it; null when there's none, or from an older server. */
+    val destPlace: String? = null,
 )
 
 /**
@@ -773,6 +779,8 @@ fun parseBoardRow(r: JSONObject): BoardRow =
         toText = r.optStringOrNull("toText")?.ifEmpty { null },
         atMs = r.optStringOrNull("at")?.let(::parseInstant),
         tooSoon = r.optBoolean("tooSoon", false),
+        dest = r.optStringOrNull("dest")?.ifEmpty { null },
+        destPlace = r.optStringOrNull("destPlace")?.ifEmpty { null },
     )
 
 private val CROWDS = setOf("low", "medium", "high")
