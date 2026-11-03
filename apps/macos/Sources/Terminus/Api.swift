@@ -534,8 +534,6 @@ struct BoardRow: Decodable, Hashable {
     var towards: [String]? = nil
     /// "to TCOMS, COM 3", or "Ends here" at the end of its line, worded on the server.
     var toText: String? = nil
-    /// Due before you could walk to the stop: shown, but not one to catch.
-    var tooSoon: Bool? = nil
     /// Where it's going, worded and translated on the server: "to PGP Foyer",
     /// "via UTown", "Ends here". Nil from an older server ([NearbyBoard.to]).
     var dest: String? = nil
@@ -547,7 +545,6 @@ struct BoardRow: Decodable, Hashable {
         let quality: String
         var eta: String? = nil
         var at: String? = nil
-        var tooSoon: Bool? = nil
     }
 }
 

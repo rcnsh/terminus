@@ -115,14 +115,11 @@
 "about %@, estimated" = "约 %@，估计";
 "Arriving" = "即将到站";
 "under a minute" = "不到 1 分钟";
-"next you can catch, %@" = "能搭上的下一班，%@";
-"Crossed out: you can't walk there in time." = "划掉的：走过去来不及。";
 "~ is a guess from the timetable, not a live time." = "~ 是按时刻表估计的，不是实时时间。";
 "In minutes" = "几分钟后";
 "Clock time" = "几点几分";
 "Show times" = "时间显示方式";
 "to %@" = "开往 %@";
-", too soon to catch" = "，走过去已来不及搭";
 "Ends here" = "本站为终点站";
 "Next class" = "下一节课";
 "No buses until your day starts" = "你的一天开始前不显示巴士";

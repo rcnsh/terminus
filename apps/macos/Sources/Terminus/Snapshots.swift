@@ -125,12 +125,11 @@
             renderNearby(to: dir, answer: answer)
         }
 
-        /// Nearby's board in each state it has: a struck Next with a 1 in it
-        /// and the bus to catch in Then, a "~" After, a timetable guess a
+        /// Nearby's board in each state it has: a "~" After, a timetable guess a
         /// minute away ("~1 min"), a loop's "via", "to KR Bus Ter", a "–",
         /// public buses' "$" and long places and, in clock times, a row where
         /// AM turns to PM. At 11:55 in Singapore; in 24-hour time at 18:01, so
-        /// the struck time is an 18:0x. In English and in Chinese.
+        /// the next bus is an 18:0x. In English and in Chinese.
         static func renderNearby(to dir: String, answer: NextAnswer) {
             let store = UserDefaults(suiteName: "terminus-snapshots") ?? .standard
             let hours = Clock.pref
@@ -182,25 +181,24 @@
                 let m = zh ? "\((s + 30) / 60) 分钟" : "\((s + 30) / 60) min"
                 return guess ? (zh ? "约 " : "~") + m : m
             }
-            // One bus: its time in seconds, whether it's a timetable guess and whether it's too soon to catch.
-            let bus = { (s: Int, guess: Bool, soon: Bool) in
+            // One bus: its time in seconds and whether it's a timetable guess.
+            let bus = { (s: Int, guess: Bool) in
                 #""etaS":\#(s),"eta":"\#(mins(s, guess))","at":"\#(iso(Double(s)))","quality":"\#(guess ? "scheduled" : "live")""#
-                    + (soon ? #","tooSoon":true"# : "")
             }
-            let later = { (b: [(Int, Bool)]) in "[" + b.map { "{" + bus($0.0, $0.1, false) + "}" }.joined(separator: ",") + "]" }
+            let later = { (b: [(Int, Bool)]) in "[" + b.map { "{" + bus($0.0, $0.1) + "}" }.joined(separator: ",") + "]" }
             let to = zh ? "开往 " : "to "
             let via = zh ? "经 " : "via "
             let nb = "\u{00a0}"
             let json = """
                 [{"stop":{"code":"COM3","name":"COM 3"},"walkS":180,"available":true,"board":[
-                  {"svc":"D2","color":"#8e44c9",\(bus(60, false, true)),"later":\(later([(780, false), (1500, true)])),"dest":"\(via)PGP","destPlace":"PGP"},
-                  {"svc":"D1","color":"#c93ba4",\(bus(480, false, false)),"later":\(later([(1200, false), (1920, true)])),"dest":"\(via)UTown","destPlace":"UTown"},
-                  {"svc":"95","paid":true,\(bus(360, false, false)),"later":\(later([(1260, false)])),"dest":"\(to)Buona Vista Int","destPlace":"Buona Vista Int"}]},
+                  {"svc":"D2","color":"#8e44c9",\(bus(120, false)),"later":\(later([(840, false), (1560, true)])),"dest":"\(via)PGP","destPlace":"PGP"},
+                  {"svc":"D1","color":"#c93ba4",\(bus(480, false)),"later":\(later([(1200, false), (1920, true)])),"dest":"\(via)UTown","destPlace":"UTown"},
+                  {"svc":"95","paid":true,\(bus(360, false)),"later":\(later([(1260, false)])),"dest":"\(to)Buona Vista Int","destPlace":"Buona Vista Int"}]},
                  {"stop":{"code":"CLB","name":"CLB"},"walkS":200,"available":true,"board":[
-                  {"svc":"A1","color":"#e5484d",\(bus(240, false, false)),"later":\(later([(960, false), (1680, true)])),"dest":"\(to)KR\(nb)Bus\(nb)Ter","destPlace":"KR\(nb)Bus\(nb)Ter"},
-                  {"svc":"K","color":"#2b9ad6",\(bus(420, false, false)),"later":\(later([(1140, false), (1860, true)])),"dest":"\(to)PGP\(nb)Foyer","destPlace":"PGP\(nb)Foyer"},
-                  {"svc":"151","paid":true,\(bus(540, false, false)),"later":\(later([(1380, false)])),"dest":"\(to)Hougang Central Int","destPlace":"Hougang Central Int"},
-                  {"svc":"BTC1",\(bus(40, true, false)),"later":\(later([(1860, true)])),"dest":"\(to)Oei Tiong Ham","destPlace":"Oei Tiong Ham"}]}]
+                  {"svc":"A1","color":"#e5484d",\(bus(240, false)),"later":\(later([(960, false), (1680, true)])),"dest":"\(to)KR\(nb)Bus\(nb)Ter","destPlace":"KR\(nb)Bus\(nb)Ter"},
+                  {"svc":"K","color":"#2b9ad6",\(bus(420, false)),"later":\(later([(1140, false), (1860, true)])),"dest":"\(to)PGP\(nb)Foyer","destPlace":"PGP\(nb)Foyer"},
+                  {"svc":"151","paid":true,\(bus(540, false)),"later":\(later([(1380, false)])),"dest":"\(to)Hougang Central Int","destPlace":"Hougang Central Int"},
+                  {"svc":"BTC1",\(bus(40, true)),"later":\(later([(1860, true)])),"dest":"\(to)Oei Tiong Ham","destPlace":"Oei Tiong Ham"}]}]
                 """
             return try! JSONDecoder().decode([NearbyStop].self, from: Data(json.utf8))
         }
