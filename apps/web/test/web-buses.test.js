@@ -265,3 +265,35 @@ test('an aged timetabled or live time keeps its "~", as the server words a guess
   assert.equal(Board.etaText(live.etaS, live.quality), '~6 min');
   assert.equal(Board.etaText(400, 'live'), '7 min');
 });
+
+test('an estimate under a minute is ~1 min, never Arriving, which would pass for a bus at the stop', async () => {
+  const Board = await web('app/board.js');
+  const text = (v) =>
+    v == null || typeof v === 'boolean' ? '' : typeof v !== 'object' ? String(v) : [v.props?.children].flat(Infinity).map(text).join('');
+  const got = 1_000_000;
+  const aged = (quality) => B.aged({ svc: 'A1', etaS: 60, eta: '1 min', quality, later: [] }, got, got + 40_000);
+  assert.equal(text(Board.Big({ r: aged('scheduled') })), '~1 min');
+  assert.equal(text(Board.Big({ r: aged('live') })), '~1 min');
+  assert.equal(text(Board.Big({ r: { svc: 'A1', etaS: 20, quality: 'live', later: [] } })), 'Arriving');
+});
+
+test("a Nearby row is said as the apps say it: the line, where it's going, each bus, never a tilde", async () => {
+  const Board = await web('app/board.js');
+  const row = {
+    svc: 'D2',
+    dest: 'via PGP',
+    etaS: 120,
+    quality: 'live',
+    later: [
+      { etaS: 840, quality: 'live' },
+      { etaS: 1560, quality: 'scheduled' },
+    ],
+  };
+  assert.equal(Board.saidRow(row), 'Bus D2, via PGP, 2 minutes, live, then 14 minutes, then about 26 minutes');
+  assert.equal(Board.saidRow({ ...row, etaS: 20, quality: 'scheduled', later: [] }), 'Bus D2, via PGP, about 1 minute, estimated');
+  assert.equal(Board.saidRow({ ...row, etaS: 20, later: [] }), 'Bus D2, via PGP, Arriving');
+  assert.equal(
+    Board.saidRow({ svc: '151', paid: true, dest: 'to Kent Ridge Ter', etaS: 360, quality: 'live', later: [] }),
+    'Public bus 151, fare applies, to Kent Ridge Ter, 6 minutes, live',
+  );
+});

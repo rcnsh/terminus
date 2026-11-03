@@ -46,10 +46,40 @@ export function Quality({ r }) {
  */
 export function Big({ r }) {
   if (r.etaS == null) return html`<span class="bt-big none">${r.quality === 'unknown' ? t('No live times') : t('No time yet')}</span>`;
-  if (r.eta == null && r.etaS < 60) return html`<span class="bt-big now">${t('Arriving')}</span>`;
+  // An estimate is never "Arriving": that would pass for a bus at the stop; it says ~1 min.
+  if (r.eta == null && r.etaS < 60 && !approx(r.quality)) return html`<span class="bt-big now">${t('Arriving')}</span>`;
   const parts = (r.eta ?? etaText(r.etaS, r.quality)).split(/(\d+)/).filter(Boolean);
   if (!parts.some((x) => /^\d+$/.test(x))) return html`<span class="bt-big now">${r.eta}</span>`;
   return html`<span class="bt-big">${parts.map((x) => (/^\d+$/.test(x) ? x : html`<small>${x}</small>`))}</span>`;
+}
+
+/** A time as it's said: "1 minute", "14 minutes", as the apps say it. Under 45 s a live bus is arriving; a guess is never under a minute. */
+const minutesSaid = (s) => (Math.round(s / 60) === 1 ? t('1 minute') : t('{0} minutes', Math.round(s / 60)));
+
+/**
+ * A Nearby row as a screen reader says it, as the apps do: the line, where
+ * it's going, then each bus in order, the first with whether it's live:
+ * "Bus D2, via PGP, 2 minutes, live, then 14 minutes, then about 26
+ * minutes". An estimate is "about", never "~" (read as "tilde"), and never
+ * arriving.
+ */
+export function saidRow(b) {
+  const end = b.towards?.at(-1);
+  const where = b.dest ? b.dest.replaceAll('\u00a0', ' ') : end ? t('to {0}', end) : (b.toText ?? t('Ends here'));
+  const buses = [b, b.later?.[0], b.later?.[1]].map((bus, i) => {
+    if (bus?.etaS == null) return null;
+    if (bus.quality === 'live' && bus.etaS < 45) return i ? t('then {0}', t('Arriving')) : t('Arriving');
+    const m = minutesSaid(Math.max(bus.etaS, bus.quality === 'live' ? 0 : 60));
+    const w = approx(bus.quality)
+      ? i === 0 && bus.quality === 'scheduled'
+        ? t('about {0}, estimated', m)
+        : t('about {0}', m)
+      : i === 0
+        ? t('{0}, live', m)
+        : m;
+    return i ? t('then {0}', w) : w;
+  });
+  return [b.paid ? t('Public bus {0}, fare applies', b.svc) : t('Bus {0}', b.svc), where, ...buses.filter(Boolean)].join(t(', '));
 }
 
 /** How many later buses "then …" names, as the server's (THEN_MAX in the API's src/answer/resolve.ts). */

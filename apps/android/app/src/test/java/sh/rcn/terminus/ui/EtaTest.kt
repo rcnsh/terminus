@@ -19,4 +19,11 @@ class EtaTest {
         assertEquals("~5 min", eta(270, "scheduled"))
         assertEquals("–", eta(null, "unknown"))
     }
+
+    @Test
+    fun anEstimateIsNeverNow() {
+        assertEquals("~1 min", eta(20, "scheduled"))
+        assertEquals("~1 min", eta(0, "stale"))
+        assertEquals("~1 min", eta(80, "scheduled"))
+    }
 }

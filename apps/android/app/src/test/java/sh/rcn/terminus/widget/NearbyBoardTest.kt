@@ -8,6 +8,7 @@ import org.junit.Test
 import sh.rcn.terminus.BoardRow
 import sh.rcn.terminus.LaterBus
 import sh.rcn.terminus.NearbyStop
+import sh.rcn.terminus.TestStrings
 
 /** Nearby on a widget: clock times worked out once, a gone bus giving way to the next, which next stop to name. */
 class NearbyBoardTest {
@@ -292,5 +293,20 @@ class NearbyFitTest {
         assertNull(NearbyFit.sides(387f, 130f, sky, newcomer = true))
         // Taller: up to five rows a side, no more than a Glance Column holds.
         assertEquals(5, NearbyFit.sides(387f, 436f, sky, newcomer = false)!!.rows)
+    }
+
+    @Test
+    fun anEstimateIsNeverNow() {
+        TestStrings.install()
+        assertEquals("now", NearbyBoard.minutesWords(0, live = true))
+        assertEquals("6 min", NearbyBoard.minutesWords(6, live = true))
+        assertEquals("~1 min", NearbyBoard.minutesWords(0, live = false))
+        assertEquals("~6 min", NearbyBoard.minutesWords(6, live = false))
+        TestStrings.install("values-zh")
+        try {
+            assertEquals("约 1 分钟", NearbyBoard.minutesWords(0, live = false))
+        } finally {
+            TestStrings.install()
+        }
     }
 }

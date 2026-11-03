@@ -28,8 +28,19 @@ enum Lang {
         }
     }
 
+    #if DEBUG
+        /// The snapshots' Chinese (Snapshots.swift): `swift run` has no
+        /// zh-Hans.lproj beside it, so `L` reads this table when it's set.
+        nonisolated(unsafe) static var snapshotTable: [String: String]? = nil
+    #endif
+
     /// Whether the app is showing Chinese.
-    static var zh: Bool { Bundle.main.preferredLocalizations.first?.hasPrefix("zh") == true }
+    static var zh: Bool {
+        #if DEBUG
+            if snapshotTable != nil { return true }
+        #endif
+        return Bundle.main.preferredLocalizations.first?.hasPrefix("zh") == true
+    }
 
     /// Accept-Language for the API.
     static var header: String { zh ? "zh-Hans" : "en" }
@@ -72,7 +83,10 @@ enum Lang {
 /// "Leave by %@" in the app's language, with the blanks filled. Every word the
 /// app writes itself goes through here; the server's come already written.
 func L(_ en: String, _ args: String...) -> String {
-    let s = Bundle.main.localizedString(forKey: en, value: en, table: nil)
+    var s = Bundle.main.localizedString(forKey: en, value: en, table: nil)
+    #if DEBUG
+        if let t = Lang.snapshotTable { s = t[en] ?? en }
+    #endif
     return args.isEmpty ? s : String(format: s, locale: Lang.locale, arguments: args)
 }
 

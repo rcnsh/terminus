@@ -56,6 +56,7 @@ import sh.rcn.terminus.CardStyle
 import sh.rcn.terminus.Journey
 import sh.rcn.terminus.JourneyBus
 import sh.rcn.terminus.JourneyText
+import sh.rcn.terminus.L
 import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.R
 import sh.rcn.terminus.ServerClock
@@ -451,6 +452,19 @@ internal fun roadFor(journey: Journey, now: Long): Road {
 }
 
 /**
+ * When your bus reaches [stop], [left] seconds away: "arriving at COM3" only for a bus seen; an estimate is "in about 1 min" to the end.
+ */
+internal fun roadWords(stop: String, left: Int, live: Boolean): String {
+    val n = (left / 60f).roundToInt()
+    return when {
+        left <= 0 -> L.s(R.string.journey_from, stop)
+        live && BusTimes.arriving(left, "live") -> L.s(R.string.road_arriving, stop)
+        live -> L.s(R.string.road_reaches, stop, n)
+        else -> L.s(R.string.road_reaches_about, stop, maxOf(1, n))
+    }
+}
+
+/**
  * The horizon's road in words, on the ground just under it at the page's size: your bus and when it reaches your stop ("about" for a
  * estimate), the stop's name in bold. Only on Now, where the horizon is. As the web's (journey.js RoadLine).
  */
@@ -458,15 +472,7 @@ internal fun roadFor(journey: Journey, now: Long): Road {
 private fun RoadLine(journey: Journey, now: Long) {
     if (LocalSky.current == null) return
     val bus = journey.bus ?: return
-    val left = dueIn(journey, now)
-    val n = (left / 60f).roundToInt()
-    val text =
-        when {
-            left <= 0 -> stringResource(R.string.journey_from, bus.stop)
-            left < BusTimes.ARRIVING_S -> stringResource(R.string.road_arriving, bus.stop)
-            journey.live -> stringResource(R.string.road_reaches, bus.stop, n)
-            else -> stringResource(R.string.road_reaches_about, bus.stop, n)
-        }
+    val text = roadWords(bus.stop, dueIn(journey, now), journey.live)
     Row(
         // Up into the strip under the road, which is just the near hill.
         Modifier.layout { m, c ->

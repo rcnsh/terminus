@@ -6,6 +6,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import sh.rcn.terminus.ui.roadWords
 
 /** The Stops tab's data, from replies shaped like the API's (/api/arrivals, /api/me/nearby, /api/line). */
 class BusesTest {
@@ -449,5 +450,23 @@ class BusesTest {
         } finally {
             TestStrings.install()
         }
+    }
+
+    @Test
+    fun onlyABusSeenIsArriving() {
+        assertTrue(BusTimes.arriving(30, "live"))
+        assertFalse(BusTimes.arriving(45, "live"))
+        assertFalse(BusTimes.arriving(30, "scheduled"))
+        assertFalse(BusTimes.arriving(0, "stale"))
+        assertFalse(BusTimes.arriving(null, "live"))
+    }
+
+    @Test
+    fun theRoadSaysAnEstimateIsAboutAMinuteNeverArriving() {
+        TestStrings.install()
+        assertEquals("arriving at COM3", roadWords("COM3", 30, live = true))
+        assertEquals("reaches COM3 in about 1 min", roadWords("COM3", 30, live = false))
+        assertEquals("reaches COM3 in about 6 min", roadWords("COM3", 360, live = false))
+        assertEquals("from COM3", roadWords("COM3", 0, live = false))
     }
 }

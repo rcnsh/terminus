@@ -379,6 +379,11 @@ export function components(): Record<string, unknown> {
                 etaS: { type: 'integer' },
                 quality: { $ref: '#/components/schemas/Quality' },
                 eta: { type: 'string', example: '~15 min', description: '`etaS` in words, as the row’s `eta`.' },
+                at: {
+                  type: 'string',
+                  format: 'date-time',
+                  description: 'Only on `/api/me/nearby`: when it arrives, rounded to the minute, as the row’s `at`.',
+                },
               },
             },
           },
@@ -427,6 +432,37 @@ export function components(): Record<string, unknown> {
             description: 'Only when `running` is false: when it next starts, looking up to 8 days ahead. Null when no start is found.',
           },
         },
+      },
+      NearbyRow: {
+        description:
+          'A `BoardRow` on Nearby, with each bus’s clock time. Every bus is shown as it comes, without weighing the walk to the stop. `later` has two buses where it can: when the feed gives fewer for a shuttle, the rest are guessed a headway apart after the last, `scheduled` (never past the service’s last bus; never for a public bus).',
+        allOf: [
+          { $ref: '#/components/schemas/BoardRow' },
+          {
+            type: 'object',
+            required: ['at', 'dest', 'destPlace'],
+            properties: {
+              destPlace: {
+                type: ['string', 'null'],
+                example: 'UTown',
+                description:
+                  'The place named in `dest`, for a client that sets it apart from the words around it ("to", "via"). Null when `dest` names none ("Ends here").',
+              },
+              dest: {
+                type: 'string',
+                example: 'via UTown',
+                description:
+                  'Where it is going, short, for a row beside its times: "to PGP Foyer" (the stop’s short name, as on its plate), or for a loop the first well-known place it passes from here: "via UTown" (Chinese "经 UTown"); with none, where the loop ends, or at its first stop its next stop. A two-way public bus says where the direction calling here goes. "Ends here" at the end of the line.',
+              },
+              at: {
+                type: ['string', 'null'],
+                format: 'date-time',
+                example: '2026-08-27T08:25:00Z',
+                description: 'When the bus in `etaS` arrives, rounded to the minute, for a clock time. Null when `etaS` is.',
+              },
+            },
+          },
+        ],
       },
       StopBoard: {
         type: 'object',

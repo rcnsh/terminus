@@ -26,7 +26,14 @@
             {
               "etaS": 840,
               "quality": "live",
-              "eta": "14 min"
+              "eta": "14 min",
+              "at": "2026-08-27T01:14:00Z"
+            },
+            {
+              "etaS": 1560,
+              "quality": "scheduled",
+              "eta": "~26 min",
+              "at": "2026-08-27T01:26:00Z"
             }
           ],
           "color": "#8e44c9",
@@ -41,8 +48,11 @@
           "endsAt": "2026-08-27T15:00:00.000Z",
           "running": true,
           "eta": "4 min",
-          "laterText": "then 14 min",
-          "toText": "to TCOMS, COM 3"
+          "laterText": "then 14, ~26 min",
+          "toText": "to TCOMS, COM 3",
+          "at": "2026-08-27T01:04:00Z",
+          "dest": "via COM 3",
+          "destPlace": "COM 3"
         },
         {
           "svc": "A2",
@@ -61,7 +71,10 @@
           "running": true,
           "eta": null,
           "laterText": null,
-          "toText": "to TCOMS, Kent Ridge Bus Terminal"
+          "toText": "to TCOMS, Kent Ridge Bus Terminal",
+          "at": null,
+          "dest": "to KR Bus Ter",
+          "destPlace": "KR Bus Ter"
         },
         {
           "svc": "K",
@@ -77,7 +90,10 @@
           "running": true,
           "eta": null,
           "laterText": null,
-          "toText": "Ends here"
+          "toText": "Ends here",
+          "at": null,
+          "dest": "Ends here",
+          "destPlace": null
         }
       ]
     },
@@ -109,7 +125,14 @@
             {
               "etaS": 840,
               "quality": "live",
-              "eta": "14 min"
+              "eta": "14 min",
+              "at": "2026-08-27T01:14:00Z"
+            },
+            {
+              "etaS": 1560,
+              "quality": "scheduled",
+              "eta": "~26 min",
+              "at": "2026-08-27T01:26:00Z"
             }
           ],
           "color": "#8e44c9",
@@ -126,8 +149,11 @@
           "endsAt": "2026-08-27T15:00:00.000Z",
           "running": true,
           "eta": "4 min",
-          "laterText": "then 14 min",
-          "toText": "to Kent Ridge MRT, COM 3"
+          "laterText": "then 14, ~26 min",
+          "toText": "to Kent Ridge MRT, COM 3",
+          "at": "2026-08-27T01:04:00Z",
+          "dest": "via Kent Ridge MRT",
+          "destPlace": "Kent Ridge MRT"
         },
         {
           "svc": "R2",
@@ -138,7 +164,14 @@
             {
               "etaS": 1080,
               "quality": "live",
-              "eta": "18 min"
+              "eta": "18 min",
+              "at": "2026-08-27T01:18:00Z"
+            },
+            {
+              "etaS": 1800,
+              "quality": "scheduled",
+              "eta": "~30 min",
+              "at": "2026-08-27T01:30:00Z"
             }
           ],
           "color": "#34a853",
@@ -154,8 +187,11 @@
           "endsAt": "2026-08-27T11:30:00.000Z",
           "running": true,
           "eta": "6 min",
-          "laterText": "then 18 min",
-          "toText": "to Opp HSSML, Kent Vale"
+          "laterText": "then 18, ~30 min",
+          "toText": "to Opp HSSML, Kent Vale",
+          "at": "2026-08-27T01:06:00Z",
+          "dest": "to Kent Vale",
+          "destPlace": "Kent Vale"
         },
         {
           "svc": "A1",
@@ -166,7 +202,14 @@
             {
               "etaS": 1140,
               "quality": "live",
-              "eta": "19 min"
+              "eta": "19 min",
+              "at": "2026-08-27T01:19:00Z"
+            },
+            {
+              "etaS": 1860,
+              "quality": "scheduled",
+              "eta": "~31 min",
+              "at": "2026-08-27T01:31:00Z"
             }
           ],
           "color": "#d32f2f",
@@ -182,8 +225,11 @@
           "endsAt": "2026-08-27T15:00:00.000Z",
           "running": true,
           "eta": "9 min",
-          "laterText": "then 19 min",
-          "toText": "to Kent Ridge MRT, Kent Ridge Bus Terminal"
+          "laterText": "then 19, ~31 min",
+          "toText": "to Kent Ridge MRT, Kent Ridge Bus Terminal",
+          "at": "2026-08-27T01:09:00Z",
+          "dest": "via Kent Ridge MRT",
+          "destPlace": "Kent Ridge MRT"
         },
         {
           "svc": "K",
@@ -206,7 +252,10 @@
           "running": true,
           "eta": null,
           "laterText": null,
-          "toText": "to Kent Ridge MRT, Prince George's Park Foyer"
+          "toText": "to Kent Ridge MRT, Prince George's Park Foyer",
+          "at": null,
+          "dest": "to PGP Foyer",
+          "destPlace": "PGP Foyer"
         },
         {
           "svc": "R1",
@@ -222,7 +271,10 @@
           "running": true,
           "eta": null,
           "laterText": null,
-          "toText": "Ends here"
+          "toText": "Ends here",
+          "at": null,
+          "dest": "Ends here",
+          "destPlace": null
         }
       ]
     }

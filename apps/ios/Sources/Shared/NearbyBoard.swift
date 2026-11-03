@@ -148,10 +148,12 @@ enum NearbyBoard {
         return L("First bus %@", f.string(from: at))
     }
 
-    /// How long until a bus `left` whole minutes off: "6 min", "~6 min" for a timetable's time, "now" in its last minute.
+    /// How long until a bus `left` whole minutes off: "6 min", "~6 min" for a
+    /// timetable's time, "now" in its last minute; a timetable's time is never
+    /// "now", which would pass for a bus at the stop, but "~1 min".
     static func minutesText(_ left: Int, live: Bool) -> String {
-        if left == 0 { return L("now") }
-        return live ? L("%@ min", "\(left)") : L("~%@ min", "\(left)")
+        guard live else { return L("~%@ min", "\(max(1, left))") }
+        return left == 0 ? L("now") : L("%@ min", "\(left)")
     }
 }
 

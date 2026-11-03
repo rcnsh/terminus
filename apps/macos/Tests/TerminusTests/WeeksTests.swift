@@ -37,7 +37,7 @@ import Testing
         BoardRow(svc: "33", etaS: 200, quality: "scheduled", paid: true),
         BoardRow(svc: "33", etaS: 400, quality: "scheduled", paid: true),
     ]
-    let ids = FlowPills.pillIDs(rows)
+    let ids = NearbyBoard.pillIDs(rows)
     #expect(ids == ["D2", "151 $", "151 $#1", "33 $", "33 $#1"])
     #expect(Set(ids).count == rows.count)
 }

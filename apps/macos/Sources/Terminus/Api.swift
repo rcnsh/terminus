@@ -528,6 +528,15 @@ struct BoardRow: Decodable, Hashable {
     var later: [Later]? = nil
     /// "4 min", "now", "~6 min", worded on the server; nil with no time, or from an older server.
     var eta: String? = nil
+    /// Where it goes from here, its last stop last (/api/me/nearby).
+    var towards: [String]? = nil
+    /// "to TCOMS, COM 3", or "Ends here" at the end of its line, worded on the server.
+    var toText: String? = nil
+    /// Where it's going, worded and translated on the server: "to PGP Foyer",
+    /// "via UTown", "Ends here". Nil from an older server ([NearbyBoard.to]).
+    var dest: String? = nil
+    /// The place inside `dest`, set apart from the words round it; nil when it has none.
+    var destPlace: String? = nil
 
     struct Later: Decodable, Hashable {
         let etaS: Int?

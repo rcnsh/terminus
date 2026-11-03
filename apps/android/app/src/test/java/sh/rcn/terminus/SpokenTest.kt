@@ -122,6 +122,13 @@ class SpokenTest {
     }
 
     @Test
+    fun anEstimateIsNeverArriving() {
+        assertEquals("about 1 minute, estimated", Spoken.eta(20, "scheduled"))
+        assertEquals("about 1 minute", Spoken.eta(20, "scheduled", withQuality = false))
+        assertEquals("about 1 minute", Spoken.eta(0, "stale"))
+    }
+
+    @Test
     fun inChinese() {
         TestStrings.install("values-zh")
         try {

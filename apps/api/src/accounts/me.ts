@@ -91,7 +91,7 @@ import {
 } from './outcomes.ts';
 import { ImportInputError, parseShareUrl, resolveTrips } from '../timetable/nusmods.ts';
 import { termName } from '../timetable/calendar.ts';
-import { boardAsOf, boardAt, displayName, indexGraph } from '../answer/resolve.ts';
+import { boardAsOf, boardAt, displayName, headwayFor, indexGraph, nearbyDest, nearbyRow } from '../answer/resolve.ts';
 import { stopVia, viaText } from '../answer/via.ts';
 import { haversineM } from '../geo.ts';
 import { isoSeconds } from '../answer/format.ts';
@@ -1757,15 +1757,19 @@ async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: numbe
     const board = boardAt(graph, idx, stop.code, sa, nowMs, { stopped });
     // Which way this side of the road's buses go, for a heading over its board.
     const via = stopVia(board);
+    const walkS = Math.round(foot / paceSpeed(profile.walkPace));
     return {
       stop: { code: stop.code, name: stop.name, longName: displayName(stop, stop.code) },
       ...oppositeOf(stop, idx.byCode),
       distM: Math.round(distM),
-      walkS: Math.round(foot / paceSpeed(profile.walkPace)),
+      walkS,
       available: sa.available !== false,
       via,
       viaText: viaText(via),
-      board,
+      board: board.map((r) => ({
+        ...nearbyRow(r, nowMs, headwayFor(graph, r.svc)),
+        ...nearbyDest(idx, r.svc, stop.code, r.via, r.towards),
+      })),
     };
   });
   // As old as the oldest times on it, so "Updated N ago" is true.

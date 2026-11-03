@@ -206,21 +206,24 @@ function onTheRoad(j, now) {
 }
 
 /**
+ * The road line's sentence, `stop` in its blank: "reaches {stop} in 4 min",
+ * "about" for an estimate, which is never "arriving" (that would pass for a
+ * bus at the stop) but about 1 min.
+ */
+export function roadWords(j, left, stop) {
+  const n = Math.max(1, Math.round(left / 60));
+  if (left <= 0) return t('from {0}', stop);
+  if (!j.live) return t('reaches {0} in about {1} min', stop, n);
+  return left < 60 ? t('arriving at {0}', stop) : t('reaches {0} in {1} min', stop, n);
+}
+
+/**
  * The horizon's road in words, on the ground under it at the page's size:
  * your bus and when it reaches your stop ("about" for an estimate),
  * the stop's name in bold.
  */
 function RoadLine({ j, now }) {
-  const left = dueIn(j, now);
-  const n = Math.round(left / 60);
-  const text =
-    left <= 0
-      ? t('from {0}', MARK)
-      : left < 60
-        ? t('arriving at {0}', MARK)
-        : j.live
-          ? t('reaches {0} in {1} min', MARK, n)
-          : t('reaches {0} in about {1} min', MARK, n);
+  const text = roadWords(j, dueIn(j, now), MARK);
   return html`<div class="road-line"><${Badge} bus=${j.bus} /><span><${Fill} text=${text} parts=${[html`<strong>${j.bus.stop}</strong>`]} /></span></div>`;
 }
 

@@ -89,8 +89,9 @@ enum Spoken {
     /// "6 minutes, live" for a bus seen. Nil without a time.
     static func eta(_ etaS: Int?, quality: String, withQuality: Bool = true) -> String? {
         guard let s = etaS else { return nil }
-        if s < BusTimes.arrivingS { return L("Arriving") }
-        let m = minutes(TimeInterval(s))
+        // An estimate is never "Arriving": about a minute, however close.
+        if s < BusTimes.arrivingS && quality == "live" { return L("Arriving") }
+        let m = minutes(TimeInterval(quality == "live" ? s : max(s, 60)))
         switch quality {
         case "scheduled": return withQuality ? L("about %@, estimated", m) : L("about %@", m)
         case "live": return withQuality ? L("%@, live", m) : m

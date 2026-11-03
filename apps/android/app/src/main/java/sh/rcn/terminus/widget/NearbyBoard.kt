@@ -1,6 +1,8 @@
 package sh.rcn.terminus.widget
 
+import sh.rcn.terminus.L
 import sh.rcn.terminus.NearbyStop
+import sh.rcn.terminus.R
 import sh.rcn.terminus.parseColor
 
 /**
@@ -110,6 +112,17 @@ internal object NearbyBoard {
      * minute ("now"); null from [MINUTES_MS] away.
      */
     fun minutesLeft(atMs: Long, now: Long): Int? = (atMs - now).takeIf { it < MINUTES_MS }?.let { maxOf(0L, it / 60_000L).toInt() }
+
+    /**
+     * [left] whole minutes in words: "6 min", "~6 min" for a timetable's time, "now" in a seen bus's last minute; an estimate's is "~1
+     * min".
+     */
+    fun minutesWords(left: Int, live: Boolean): String =
+        when {
+            !live -> L.s(R.string.nearby_min_approx, maxOf(1, left))
+            left == 0 -> L.s(R.string.now)
+            else -> L.s(R.string.nearby_min, left)
+        }
 
     /**
      * When the widget next looks different with nothing new: a shown bus going ([GONE_MS] after it's due), and before [minutesUntil] each

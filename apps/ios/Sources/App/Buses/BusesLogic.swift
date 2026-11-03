@@ -174,7 +174,8 @@ enum BusWords {
     /// A time as VoiceOver says it: "about 6 minutes", not "tilde 6 min".
     static func spoken(_ etaS: Int?, quality: String) -> String? {
         guard let s = etaS else { return nil }
-        if s < BusTimes.arrivingS { return L("Arriving") }
+        // An estimate is never "Arriving": about a minute, however close.
+        if s < BusTimes.arrivingS && quality == "live" { return L("Arriving") }
         let m = BusTimes.minutes(s)
         let mins = m == 1 ? L("1 minute") : L("%@ minutes", "\(m)")
         return quality == "live" ? mins : L("about %@", mins)

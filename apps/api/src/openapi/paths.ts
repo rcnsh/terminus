@@ -973,7 +973,7 @@ export function paths(): Record<string, unknown> {
                       example: 'to UTown, Science, Kent Ridge MRT',
                       description: '`via` in words (Chinese "往 UTown、理学院 方向"). Null when `via` is empty.',
                     },
-                    board: { type: 'array', items: { $ref: '#/components/schemas/BoardRow' } },
+                    board: { type: 'array', items: { $ref: '#/components/schemas/NearbyRow' } },
                   },
                 },
               },
