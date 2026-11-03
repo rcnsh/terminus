@@ -14,6 +14,7 @@
  */
 
 import type { Leave } from '../types.ts';
+import { type Plan, tripEnd } from './trip.ts';
 import { SAME_BUS_MS } from './plan.ts';
 import { STEP } from '../config.ts';
 
@@ -33,6 +34,23 @@ export interface Steps {
   later: StepTarget | null;
   /** The bus is the user's choice, not the server's: "Best bus" puts it back. */
   moved: boolean;
+}
+
+/**
+ * The steps from a plan kept past its leave-by while the answer names
+ * another bus (next.ts): "Later bus" is the answer's, the next you can
+ * still catch, for someone who hasn't set off, when it boards after the
+ * plan's and gets you there no sooner. Nothing earlier, since the plan's
+ * leave-by has passed too. Null once the plan's bus leaves, when you may
+ * be on it. `moved`: the answer's bus is one you chose (its own steps say).
+ */
+export function stepsPastLeave(plan: Plan, l: Leave | null | undefined, moved: boolean, trip: string, nowMs: number): Steps | null {
+  const later = targetOf(l);
+  if (!later || !l!.arrive || !plan.leave || !plan.board) return null;
+  const end = tripEnd(plan);
+  if (nowMs < Date.parse(plan.leave) || Date.parse(plan.board) <= nowMs) return null;
+  if (boardMs(l!) <= Date.parse(plan.board) || (end && arriveMs(l!) < Date.parse(end))) return null;
+  return { trip, earlier: null, later, moved };
 }
 
 /** A leave-by's bus as a step target; null when it's a walk. */
