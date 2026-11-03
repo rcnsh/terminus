@@ -481,8 +481,8 @@ pnpm exec cf kv keys put config:minClient --namespace-id <KV id in cloudflare.co
   (as on `/api/arrivals`; see "Board rows") has the next bus in `etaS` and the ones after it
   the feed knows in `later`, each with its own quality. Each bus has `at`,
   its clock time to the minute (`nearbyRow`). Nearby shows them as a
-  board, a column each for the next three buses, in minutes or as clock
-  times, the next one large. It doesn't weigh the walk to the stop: every
+  board, a column each for the next three buses, in minutes, the next one
+  large. It doesn't weigh the walk to the stop: every
   bus is shown as it comes, whoever is asking. The
   shuttle feed gives two a service, so the third is guessed a headway
   after the second (`nearbyRow`, `NEARBY_LATER`), `scheduled` and shown
