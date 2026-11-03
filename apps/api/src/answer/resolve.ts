@@ -654,22 +654,24 @@ export const NEARBY_LATER = 2;
  * The shuttle feed gives two buses a service; where it gives fewer than
  * Nearby's three, the rest are guessed a headway apart after the last one,
  * as the answer guesses past the feed's list, and marked `scheduled`, never
- * live. Not past the service's last bus, and not for a public bus, whose
+ * live. Only while the service's hours are known and it's inside them, and not
+ * past its last bus; not for a public bus, whose
  * own timetable LTA gives.
  */
 export function nearbyRow(r: BoardRow, nowMs: number, headwayS = 0): NearbyRow {
   const at = (etaS: number) => new Date(Math.round((nowMs + etaS * 1000) / 60_000) * 60_000).toISOString().replace('.000Z', 'Z');
   const later = [...r.later];
   const endsMs = r.endsAt ? Date.parse(r.endsAt) : null;
-  if (r.running && r.etaS != null && !r.paid && headwayS > 0) {
+  if (r.running && r.etaS != null && !r.paid && headwayS > 0 && endsMs !== null) {
     while (later.length < NEARBY_LATER) {
       const etaS = (later.at(-1)?.etaS ?? r.etaS) + headwayS;
-      if (endsMs !== null && nowMs + etaS * 1000 > endsMs) break;
+      if (nowMs + etaS * 1000 > endsMs) break;
       later.push({ etaS, quality: 'scheduled', eta: etaText(etaS, 'scheduled') });
     }
   }
   return {
     ...r,
+    laterText: thenText(later),
     at: r.etaS == null ? null : at(r.etaS),
     later: later.map((b) => ({ ...b, at: at(b.etaS) })),
   };

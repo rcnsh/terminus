@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { GRAPH, GRAPH_PUBLIC } from '../src/answer/graph.ts';
-import { etaText, indexGraph, nearbyDest, nearbyRow, towardsFrom } from '../src/answer/resolve.ts';
+import { etaText, indexGraph, nearbyDest, nearbyRow, thenText, towardsFrom } from '../src/answer/resolve.ts';
 import { viaFrom } from '../src/answer/via.ts';
 
 const NOW = Date.parse('2026-08-27T08:21:00Z');
@@ -16,7 +16,7 @@ const row = (etaS, later = []) => ({
   towards: ['LT 27', 'Kent Ridge MRT'],
   via: [],
   crowd: null,
-  endsAt: null,
+  endsAt: new Date(NOW + 6 * 3600_000).toISOString(),
   running: true,
   eta: etaS == null ? null : `${Math.round(etaS / 60)} min`,
   laterText: null,
@@ -66,6 +66,17 @@ test('nearbyRow: no bus is guessed past the last one, or for a public bus, or wi
   assert.equal(nearbyRow(ends, NOW, 12 * 60).later.length, 1);
   assert.equal(nearbyRow({ ...row(4 * 60, [16 * 60]), paid: true }, NOW, 12 * 60).later.length, 1);
   assert.equal(nearbyRow(row(null), NOW, 12 * 60).later.length, 0);
+});
+
+test('nearbyRow: with no end time (outside its hours, or hours unknown) nothing is guessed', () => {
+  const r = nearbyRow({ ...row(4 * 60), endsAt: null }, NOW, 10 * 60);
+  assert.deepEqual(r.later, []);
+});
+
+test('nearbyRow: laterText names the buses the row now has, guessed ones too', () => {
+  const r = nearbyRow(row(4 * 60), NOW, 10 * 60);
+  assert.equal(r.laterText, thenText(r.later));
+  assert.match(r.laterText, /14/);
 });
 
 const IDX = indexGraph(GRAPH);
