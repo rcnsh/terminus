@@ -48,7 +48,7 @@
     "later": {
       "svc": "D2",
       "stop": "PGP",
-      "board": "2026-11-09T01:36:00Z"
+      "board": "2026-11-09T01:48:00Z"
     },
     "moved": false
   },
@@ -168,7 +168,7 @@
       "later": {
         "svc": "D2",
         "stop": "PGP",
-        "board": "2026-11-09T01:36:00Z"
+        "board": "2026-11-09T01:48:00Z"
       },
       "moved": false,
       "earlierLabel": "Earlier bus",

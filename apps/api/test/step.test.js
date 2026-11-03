@@ -212,6 +212,19 @@ test('a step never gets you there sooner going later, or later going earlier', (
   assert.equal(far.steps.later, null);
 });
 
+test('a step is never to the bus already shown, though a late leave-by is now and its departure a little after', () => {
+  // Late for a class: the leave-by is now, the same R2 among the departures leaves a minute on.
+  const own = leave('R2', 'PGP', T, T + 6 * MIN, T + 15 * MIN);
+  const all = [leave('R2', 'PGP', T + MIN, T + 6 * MIN, T + 15 * MIN), leave('D2', 'PGP', T + 9 * MIN, T + 14 * MIN, T + 23 * MIN)];
+  const s = stepFrom({ trip: 'k', own, all, target: null, lastArriveMs: null, nowMs: T });
+  assert.deepEqual(s.steps.later, targetOf(all[1]));
+  assert.equal(s.steps.earlier, null);
+  // Another R2 two minutes behind it (bunched) is a different bus: still the later one.
+  const bunched = [all[0], leave('R2', 'PGP', T + 3 * MIN, T + 8 * MIN, T + 17 * MIN), all[1]];
+  const b = stepFrom({ trip: 'k', own, all: bunched, target: null, lastArriveMs: null, nowMs: T });
+  assert.deepEqual(b.steps.later, targetOf(bunched[1]));
+});
+
 test('with no live times the buses fall a headway apart from the chosen one, however the clock moves', () => {
   const pgp = GRAPH.stops.find((s) => s.code === 'PGP');
   const opt = (nowMs) => ({

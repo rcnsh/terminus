@@ -57,6 +57,12 @@ const isService = (l: Leave, t: StepTarget) => (l.route ?? l.svc) === t.svc && l
 /** The same service from the same stop within SAME_BUS_MS: the feed moved its time a little. */
 export const sameAs = (l: Leave, t: StepTarget) => isService(l, t) && Math.abs(boardMs(l) - Date.parse(t.board)) <= SAME_BUS_MS;
 
+/** Of the buses `sameAs` the target, the one whose time is nearest it. */
+function closestSame(all: Leave[], t: StepTarget): Leave | undefined {
+  const at = Date.parse(t.board);
+  return all.filter((l) => sameAs(l, t)).sort((a, b) => Math.abs(boardMs(a) - at) - Math.abs(boardMs(b) - at))[0];
+}
+
 /**
  * The bus a target stands for now: the same bus, its time as the feed has
  * it now; when the feed no longer lists it, the next of that service from
@@ -67,7 +73,7 @@ export const sameAs = (l: Leave, t: StepTarget) => isService(l, t) && Math.abs(b
 export function findTarget(all: Leave[], t: StepTarget): Leave | null {
   const at = Date.parse(t.board);
   const mine = all.filter((l) => l.board && isService(l, t)).sort((a, b) => boardMs(a) - boardMs(b));
-  const same = mine.filter((l) => sameAs(l, t)).sort((a, b) => Math.abs(boardMs(a) - at) - Math.abs(boardMs(b) - at))[0];
+  const same = closestSame(mine, t);
   if (same) return same;
   if (!mine.length || at < boardMs(mine[0]) - SAME_BUS_MS) return null;
   return mine.find((l) => boardMs(l) >= at) ?? null;
@@ -105,13 +111,18 @@ export function stepFrom(f: StepInput): { leave: Leave; steps: Steps } | null {
     Boolean(l.board && l.arrive) &&
     (f.lastArriveMs === null || arriveMs(l) <= f.lastArriveMs) &&
     (lastLeaveMs === null || atMs(l) <= lastLeaveMs);
+  // Never the bus itself: when you're late its leave-by is now, and the same
+  // bus among the departures leaves a little after. Only that one: another
+  // of its service minutes behind (bunched) is still a step.
+  const self = closestSame(f.all, targetOf(pick)!);
+  const other = (l: Leave) => l !== self;
   const later =
     f.all
-      .filter((l) => fits(l) && atMs(l) > atMs(pick) && arriveMs(l) >= arriveMs(pick))
+      .filter((l) => fits(l) && other(l) && atMs(l) > atMs(pick) && arriveMs(l) >= arriveMs(pick))
       .sort((a, b) => arriveMs(a) - arriveMs(b) || atMs(b) - atMs(a))[0] ?? null;
   const earlier =
     f.all
-      .filter((l) => l.board && l.arrive && atMs(l) < atMs(pick) && atMs(l) >= f.nowMs && arriveMs(l) <= arriveMs(pick))
+      .filter((l) => l.board && l.arrive && other(l) && atMs(l) < atMs(pick) && atMs(l) >= f.nowMs && arriveMs(l) <= arriveMs(pick))
       .sort((a, b) => atMs(b) - atMs(a) || arriveMs(a) - arriveMs(b))[0] ?? null;
   return { leave: pick, steps: { trip: f.trip, earlier: targetOf(earlier), later: targetOf(later), moved: moved || own !== f.own } };
 }

@@ -109,9 +109,9 @@
     "trip": "4:600:UTOWN",
     "earlier": null,
     "later": {
-      "svc": "R2",
+      "svc": "D2",
       "stop": "PGP",
-      "board": "2026-08-27T01:51:00Z"
+      "board": "2026-08-27T01:59:00Z"
     },
     "moved": false
   },
