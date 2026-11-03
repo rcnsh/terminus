@@ -126,39 +126,23 @@
         }
 
         /// Nearby's board in each state it has: a "~" After, a timetable guess a
-        /// minute away ("~1 min"), a loop's "via", "to KR Bus Ter", a "–",
-        /// public buses' "$" and long places and, in clock times, a row where
-        /// AM turns to PM. At 11:55 in Singapore; in 24-hour time at 18:01, so
-        /// the next bus is an 18:0x. In English and in Chinese.
+        /// minute away ("~1 min"), a loop's "via", "to KR Bus Ter", a "–", and
+        /// public buses' "$" and long places. At 11:55 in Singapore, in English and in Chinese.
         static func renderNearby(to dir: String, answer: NextAnswer) {
-            let store = UserDefaults(suiteName: "terminus-snapshots") ?? .standard
-            let hours = Clock.pref
-            defer {
-                Clock.pref = hours
-                Lang.snapshotTable = nil
-            }
+            defer { Lang.snapshotTable = nil }
             let strings = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
                 .deletingLastPathComponent().appendingPathComponent("Support/zh-Hans.lproj/Localizable.strings")
             let zh = (try? Data(contentsOf: strings)).flatMap {
                 try? PropertyListSerialization.propertyList(from: $0, format: nil) as? [String: String]
             }
-            let cases: [(name: String, zh: Bool, clock: Bool, hours: String, at: String)] = [
-                ("nearby", false, false, "12", "2026-11-04T03:55:00Z"),
-                ("nearby-clock", false, true, "12", "2026-11-04T03:55:00Z"),
-                ("nearby-zh", true, false, "12", "2026-11-04T03:55:00Z"),
-                ("nearby-clock-zh", true, true, "12", "2026-11-04T03:55:00Z"),
-                ("nearby-clock24-zh", true, true, "24", "2026-11-04T10:01:00Z"),
-            ]
-            for c in cases {
-                guard let now = parseISODate(c.at), !c.zh || zh != nil else { continue }
-                Lang.snapshotTable = c.zh ? zh : nil
-                Clock.pref = c.hours
-                store.set(c.clock, forKey: NearbyBoard.clockKey)
+            guard let now = parseISODate("2026-11-04T03:55:00Z") else { return }
+            for (name, inZh) in [("nearby", false), ("nearby-zh", true)] where !inZh || zh != nil {
+                Lang.snapshotTable = inZh ? zh : nil
                 let m = AppModel(snapshot: true)
                 m.paired = true
                 m.answers = [.plan: answer]
                 m.places = answer.places ?? []
-                m.nearby = nearbySample(at: now, zh: c.zh)
+                m.nearby = nearbySample(at: now, zh: inZh)
                 m.showNearby = true
                 m.updated = now
                 m.clock = now
@@ -167,14 +151,14 @@
                         .environment(\.fixedNow, now)
                         .background(bg)
                         .environment(\.colorScheme, scheme)
-                        .defaultAppStorage(store)
-                    // Nearby's switch is an AppKit control, which only a hosting view draws.
-                    writeHosted(view, scale: 2, to: dir, as: "\(c.name)-\(scheme == .dark ? "dark" : "light")")
+                    // In a window, so the rows' measured width reaches the layout before it's drawn.
+                    writeHosted(view, scale: 2, to: dir, as: "\(name)-\(scheme == .dark ? "dark" : "light")")
                 }
             }
         }
 
-        /// Two stops' boards at `now`, worded as the server words them in English or Chinese.
+        /// Two stops' boards at `now`, worded as the server words them in English
+        /// or Chinese, with the clock times (`at`) the server also sends, which Nearby doesn't show.
         static func nearbySample(at now: Date, zh: Bool) -> [NearbyStop] {
             let iso = { (s: Double) in ISO8601DateFormatter().string(from: now.addingTimeInterval(s)) }
             let mins = { (s: Int, guess: Bool) in

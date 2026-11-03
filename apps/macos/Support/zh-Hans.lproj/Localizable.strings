@@ -106,7 +106,6 @@
 "After" = "再之后";
 "1 minute" = "1 分钟";
 "%@ minutes" = "%@ 分钟";
-"%@, in %@" = "%@，%@后";
 "Bus %@" = "%@ 巴士";
 "Public bus %@, fare applies" = "公共巴士 %@，需付车费";
 "then %@" = "之后 %@";
@@ -114,11 +113,7 @@
 "about %@" = "约 %@";
 "about %@, estimated" = "约 %@，估计";
 "Arriving" = "即将到站";
-"under a minute" = "不到 1 分钟";
 "~ is a guess from the timetable, not a live time." = "~ 是按时刻表估计的，不是实时时间。";
-"In minutes" = "几分钟后";
-"Clock time" = "几点几分";
-"Show times" = "时间显示方式";
 "to %@" = "开往 %@";
 "Ends here" = "本站为终点站";
 "Next class" = "下一节课";

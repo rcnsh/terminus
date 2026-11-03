@@ -23,8 +23,8 @@ struct NearbyAccessibilityTests {
 
     private let stops = Snapshots.nearbySample(at: parseISODate("2026-11-04T03:55:00Z")!, zh: false)
 
-    @Test func minutesInOneLine() throws {
-        let elements = tree(clock: false, width: 336)
+    @Test func oneLine() throws {
+        let elements = tree(width: 336)
         let rows = try check(elements)
         for svc in ["D2", "BTC1"] {
             let label = try #require(rows.first { $0.label.hasPrefix("Bus \(svc), ") }).label
@@ -38,32 +38,15 @@ struct NearbyAccessibilityTests {
         #expect(d2 == "Bus D2, via PGP, 2 minutes, live, then 14 minutes, then about 26 minutes")
     }
 
-    @Test func clockTimesStacked() throws {
-        // Narrow enough that rows stack, their times on a second line.
-        let width: CGFloat = 300
-        let layout = NearbyLayout(stops, clock: true, rowWidth: width - 20)
-        #expect(layout.stacks)
-        try clockPick(check(tree(clock: true, width: width)))
-    }
-
-    @Test func clockTimesInOneLine() throws {
-        let width: CGFloat = 560
-        #expect(!NearbyLayout(stops, clock: true, rowWidth: width - 20).stacks)
-        try clockPick(check(tree(clock: true, width: width)))
-    }
-
-    /// In clock times the next bus also says the wait, as Android does; no other bus does.
-    private func clockPick(_ rows: [Element]) throws {
-        let d2 = try #require(rows.first { $0.label.hasPrefix("Bus D2, ") }).label
-        #expect(d2.contains(", in 2 minutes, then ") && d2.contains(", then about "), "the next bus's wait, then the others: \(d2)")
-        let btc = try #require(rows.first { $0.label.hasPrefix("Bus BTC1, ") }).label
-        #expect(btc.hasPrefix("Bus BTC1, to Oei Tiong Ham, about ") && btc.contains(", in about 1 minute, then about "), "\(btc)")
-        for r in rows {
-            #expect(!r.label.contains("catch"), "\(r.label)")
-            #expect(r.label.components(separatedBy: ", in ").count == 2, "only the next bus says its wait: \(r.label)")
-            #expect(!r.label.contains("~"), "\(r.label)")
-            #expect(r.label.range(of: #"\bmin\b"#, options: .regularExpression) == nil, "\(r.label)")
-        }
+    @Test func stacked() throws {
+        // Narrow enough that every row stacks, its times on a second line.
+        let width: CGFloat = 200
+        #expect(NearbyLayout(stops, rowWidth: width - 20).stacks)
+        let rows = try check(tree(width: width))
+        #expect(
+            rows.first { $0.label.hasPrefix("Bus D2, ") }?.label
+                == "Bus D2, via PGP, 2 minutes, live, then 14 minutes, then about 26 minutes"
+        )
     }
 
     /// The order and shape every layout shares; the rows, in order.
@@ -74,6 +57,8 @@ struct NearbyAccessibilityTests {
         }
         #expect(rows.count == board.count, "each row one element")
         #expect(rows.allSatisfy { $0.children == 0 }, "nothing inside a row is an element of its own")
+        #expect(!elements.contains { $0.role == "AXRadioGroup" }, "minutes only: no switch to clock times")
+        #expect(!rows.contains { $0.label.contains(", in ") }, "no clock time's wait: \(rows.map(\.label))")
         let heads = ["Next", "Then", "After"].map { $0.uppercased() }
         #expect(!elements.contains { heads.contains($0.text) }, "the heading isn't read")
         let texts = elements.map(\.text)
@@ -87,13 +72,11 @@ struct NearbyAccessibilityTests {
     }
 
     /// Nearby in a window of its own, `width` wide, as the accessibility tree has it: every element, in order.
-    private func tree(clock: Bool, width: CGFloat) -> [Element] {
-        let store = UserDefaults(suiteName: "terminus-ax-test")!
-        store.set(clock, forKey: NearbyBoard.clockKey)
+    private func tree(width: CGFloat) -> [Element] {
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)
         app.finishLaunching()
-        let host = NSHostingView(rootView: NearbyList(stops: stops).frame(width: width).defaultAppStorage(store))
+        let host = NSHostingView(rootView: NearbyList(stops: stops).frame(width: width))
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: width, height: 1400), styleMask: [.borderless], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false

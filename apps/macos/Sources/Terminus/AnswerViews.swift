@@ -359,28 +359,16 @@ struct Pill: View {
 
 /// Nearby: the stops around you, each with a row per service read like a
 /// stop's board, as on the web: where it's going and its next three buses,
-/// in minutes or as clock times (the switch above the stops, for every stop
-/// at once and kept on this Mac). The next bus is the large one. Under the
-/// stops, what a "~" means.
+/// in minutes. The next bus is the large one. Under the stops, what a "~" means.
 struct NearbyList: View {
     let stops: [NearbyStop]?
-    @AppStorage(NearbyBoard.clockKey) private var asClock = false
     /// The width of a stop's rows, for [NearbyLayout]: nil until it's laid out.
     @State private var rowWidth: CGFloat? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let all = stops {
-                let layout = NearbyLayout(all, clock: asClock, rowWidth: rowWidth)
-                if !all.isEmpty {
-                    Picker(L("Show times"), selection: $asClock) {
-                        Text(L("In minutes")).tag(false)
-                        Text(L("Clock time")).tag(true)
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .frame(maxWidth: .infinity)
-                }
+                let layout = NearbyLayout(all, rowWidth: rowWidth)
                 ForEach(all) { s in
                     VStack(alignment: .leading, spacing: 2) {
                         HStack {
@@ -393,7 +381,7 @@ struct NearbyList: View {
                         if s.board.isEmpty || !s.available {
                             Text(s.available ? L("Nothing due") : L("No live data")).font(.caption).foregroundStyle(.secondary)
                         } else {
-                            NearbyBoard(rows: s.board, asClock: asClock, layout: layout)
+                            NearbyBoard(rows: s.board, layout: layout)
                                 .onGeometryChange(for: CGFloat.self) {
                                     $0.size.width
                                 } action: {
@@ -403,7 +391,7 @@ struct NearbyList: View {
                     }
                     .card(padding: 10)
                 }
-                let foot = NearbyBoard.foot(all, clock: asClock)
+                let foot = NearbyBoard.foot(all)
                 if !foot.isEmpty {
                     VStack(alignment: .leading, spacing: 2) {
                         ForEach(foot, id: \.self) { Text($0) }
@@ -453,12 +441,12 @@ struct NearbyLayout {
     static let headingTracking: CGFloat = 0.6
 
     /// The figures, in the board's rounded face: the next bus larger and bold.
-    static func figures(pick: Bool, clock: Bool, scale: CGFloat = 1) -> NSFont {
-        let size = (pick ? (clock ? 15.5 : 19) : (clock ? 13 : 14)) * scale
+    static func figures(pick: Bool, scale: CGFloat = 1) -> NSFont {
+        let size = (pick ? 19 : 14) * scale
         let plain = NSFont.monospacedDigitSystemFont(ofSize: size, weight: pick ? .bold : .semibold)
         return plain.fontDescriptor.withDesign(.rounded).flatMap { NSFont(descriptor: $0, size: size) } ?? plain
     }
-    /// "min", "PM", "下午": small, beside the figures.
+    /// "min", "分钟": small, beside the figures.
     static func unit(scale: CGFloat = 1) -> NSFont { .systemFont(ofSize: 10 * scale, weight: .medium) }
     /// A service's name on its badge, in the board's face.
     static func badgeFont() -> NSFont {
@@ -472,7 +460,7 @@ struct NearbyLayout {
     static var badgeMin: CGFloat { width("D2", badgeFont()) + 2 * badgePadding }
 
     /// The layout for `stops`' boards, in rows `rowWidth` wide (nil: not laid out yet, so at full size).
-    init(_ stops: [NearbyStop], clock: Bool, rowWidth: CGFloat?) {
+    init(_ stops: [NearbyStop], rowWidth: CGFloat?) {
         let rows = stops.filter(\.available).flatMap(\.board)
         badge = max(Self.badgeMin, rows.map { Self.width($0.pillID, Self.badgeFont()) + 2 * Self.badgePadding }.max() ?? 0)
         let heads = [L("Next"), L("Then"), L("After")].map {
@@ -482,8 +470,7 @@ struct NearbyLayout {
             (0..<3).map { i in
                 rows.map { r in
                     let b = r.buses
-                    let c = NearbyBoard.cell(b[i], prev: i > 0 ? b[i - 1] : nil, first: i == 0, clock: clock)
-                    return Self.width(c, pick: i == NearbyBoard.pick(b), clock: clock, scale: scale)
+                    return Self.width(NearbyBoard.cell(b[i], first: i == 0), pick: i == NearbyBoard.pick(b), scale: scale)
                 }
                 .reduce(heads[i], max)
             }
@@ -540,11 +527,11 @@ struct NearbyLayout {
     }
 
     /// A cell's width as drawn, a point over for rounding.
-    static func width(_ c: NearbyBoard.Cell, pick: Bool, clock: Bool, scale: CGFloat = 1) -> CGFloat {
-        let big = figures(pick: pick, clock: clock, scale: scale)
+    static func width(_ c: NearbyBoard.Cell, pick: Bool, scale: CGFloat = 1) -> CGFloat {
+        let big = figures(pick: pick, scale: scale)
         let small = unit(scale: scale)
         let s = NSMutableAttributedString()
-        for (text, font) in [(c.mark, big), (c.lead, small), (c.figure, big), (c.trail, small)] where !text.isEmpty {
+        for (text, font) in [(c.mark, big), (c.figure, big), (c.trail, small)] where !text.isEmpty {
             s.append(NSAttributedString(string: text, attributes: [.font: font]))
         }
         return ceil(s.size().width) + 1
@@ -560,16 +547,14 @@ struct NearbyBus: Hashable {
     let etaS: Int?
     let quality: String
     var eta: String? = nil
-    var at: String? = nil
 
-    init(etaS: Int?, quality: String, eta: String? = nil, at: String? = nil) {
+    init(etaS: Int?, quality: String, eta: String? = nil) {
         self.etaS = etaS
         self.quality = quality
         self.eta = eta
-        self.at = at
     }
-    init(_ r: BoardRow) { self.init(etaS: r.etaS, quality: r.quality, eta: r.eta, at: r.at) }
-    init(_ l: BoardRow.Later) { self.init(etaS: l.etaS, quality: l.quality, eta: l.eta, at: l.at) }
+    init(_ r: BoardRow) { self.init(etaS: r.etaS, quality: r.quality, eta: r.eta) }
+    init(_ l: BoardRow.Later) { self.init(etaS: l.etaS, quality: l.quality, eta: l.eta) }
 
     /// A timetable guess or an old live time: marked "~".
     var approx: Bool { quality == "scheduled" || quality == "stale" }
@@ -589,11 +574,7 @@ extension BoardRow {
 /// its next three buses under a small heading, in [NearbyLayout]'s columns.
 struct NearbyBoard: View {
     let rows: [BoardRow]
-    let asClock: Bool
     let layout: NearbyLayout
-
-    /// Where the choice of minutes or clock times is kept.
-    nonisolated static let clockKey = "nearbyClock"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -650,7 +631,7 @@ struct NearbyBoard: View {
         }
         // The whole row, its second line too, is one element.
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Self.spoken(r, clock: asClock))
+        .accessibilityLabel(Self.spoken(r))
     }
 
     /// Next, Then and After, on one baseline, so a large figure sits level with the small ones.
@@ -659,7 +640,7 @@ struct NearbyBoard: View {
         let pick = Self.pick(buses)
         return HStack(alignment: .lastTextBaseline, spacing: 0) {
             ForEach(0..<3, id: \.self) { i in
-                time(Self.cell(buses[i], prev: i > 0 ? buses[i - 1] : nil, first: i == 0, clock: asClock), pick: i == pick)
+                time(Self.cell(buses[i], first: i == 0), pick: i == pick)
                     .fixedSize()
                     .frame(width: layout.columns[i], alignment: .trailing)
                     .padding(.leading, layout.gap)
@@ -703,20 +684,19 @@ struct NearbyBoard: View {
     /// the words small; the next bus large and in ink.
     private func time(_ c: Cell, pick: Bool) -> some View {
         let s = layout.scale
-        let big = Font(NearbyLayout.figures(pick: pick, clock: asClock, scale: s))
+        let big = Font(NearbyLayout.figures(pick: pick, scale: s))
         let small = Font(NearbyLayout.unit(scale: s))
-        return (Text(c.mark).font(big) + Text(c.lead).font(small) + Text(c.figure).font(big) + Text(c.trail).font(small))
+        return (Text(c.mark).font(big) + Text(c.figure).font(big) + Text(c.trail).font(small))
             .foregroundStyle(pick ? .primary : .secondary).lineLimit(1).contentTransition(.numericText())
     }
 
     /// A time as Nearby sets it: `mark` ("~") and `figure` ("4", "6:02")
-    /// large, `lead` ("下午 ") and `trail` (" min", " PM") small around the figure.
+    /// large, `trail` (" min") small after it.
     struct Cell: Equatable {
         var mark = ""
-        var lead = ""
         var figure: String
         var trail = ""
-        var whole: String { mark + lead + figure + trail }
+        var whole: String { mark + figure + trail }
     }
 
     /// The bus set large: Next, when it has a time; nil when it hasn't.
@@ -725,42 +705,16 @@ struct NearbyBoard: View {
     }
 
     /// One cell of Next, Then or After. Only Next (`first`) carries a unit
-    /// ("4 min", "6:02 PM"); Then and After are figures ("16", "~28"), with
-    /// AM/PM where the half of the day changes from the cell before (`prev`),
-    /// as a printed timetable does. An estimate is "~" in both languages: in
-    /// a column of figures "约" reads as part of the next. A dash with no bus.
-    nonisolated static func cell(_ bus: NearbyBus?, prev: NearbyBus?, first: Bool, clock: Bool) -> Cell {
+    /// ("4 min"); Then and After are figures ("16", "~28"). An estimate is
+    /// "~" in both languages: in a column of figures "约" reads as part of
+    /// the next. A dash with no bus.
+    nonisolated static func cell(_ bus: NearbyBus?, first: Bool) -> Cell {
         guard let b = bus, b.etaS != nil else { return Cell(figure: "–") }
         let mark = b.approx ? "~" : ""
-        if clock, let d = b.at.flatMap(parseISODate) {
-            let whole = campusTime(d).trimmingCharacters(in: .whitespaces)
-            let (figure, half) = clockParts(whole)
-            // By the hour, not the words: Chinese names more parts of the day (中午, 晚上) than two halves.
-            let changed = prev?.at.flatMap(parseISODate).map { isPM($0) != isPM(d) } ?? true
-            guard !half.isEmpty, first || changed else { return Cell(mark: mark, figure: figure) }
-            // Chinese writes 下午 before the time, English PM after it.
-            return whole.hasPrefix(half)
-                ? Cell(mark: mark, lead: half + " ", figure: figure)
-                : Cell(mark: mark, figure: figure, trail: " " + half)
-        }
         let words = words(b)
         // "now": no figure to set large; shown as it is.
         guard let n = words.range(of: #"\d+"#, options: .regularExpression) else { return Cell(figure: words) }
         return Cell(mark: mark, figure: String(words[n]), trail: first ? String(words[n.upperBound...]) : "")
-    }
-
-    /// A clock time's figures ("6:02", "18.02" where the Mac's region writes
-    /// a dot) and the words round them ("PM", "下午"): none in 24-hour time.
-    nonisolated static func clockParts(_ time: String) -> (figure: String, half: String) {
-        guard let r = time.range(of: #"\d+(?:[:.]\d+)*"#, options: .regularExpression) else { return (time, "") }
-        return (String(time[r]), (time[..<r.lowerBound] + time[r.upperBound...]).trimmingCharacters(in: .whitespaces))
-    }
-
-    /// Whether `d` is after noon on campus.
-    nonisolated static func isPM(_ d: Date) -> Bool {
-        var c = Calendar(identifier: .gregorian)
-        c.timeZone = .campus
-        return c.component(.hour, from: d) >= 12
     }
 
     /// Where a row's bus is going, as the server words it ("to PGP Foyer",
@@ -773,10 +727,10 @@ struct NearbyBoard: View {
     }
 
     /// Under the stops: what a "~" means, only when one is showing.
-    nonisolated static func foot(_ stops: [NearbyStop], clock: Bool) -> [String] {
+    nonisolated static func foot(_ stops: [NearbyStop]) -> [String] {
         let cells = stops.filter(\.available).flatMap(\.board).flatMap { r in
             let b = r.buses
-            return (0..<3).map { cell(b[$0], prev: $0 > 0 ? b[$0 - 1] : nil, first: $0 == 0, clock: clock) }
+            return (0..<3).map { cell(b[$0], first: $0 == 0) }
         }
         return cells.contains { $0.mark == "~" } ? [L("~ is a guess from the timetable, not a live time.")] : []
     }
@@ -814,32 +768,19 @@ struct NearbyBoard: View {
         return L("~%@", L("%@ min", "1"))
     }
 
-    /// A wait in words, from its seconds: "1 minute", "6 minutes", "under a minute", as the iPhone and Android say it.
+    /// A wait in words, from its seconds: "1 minute", "6 minutes", as the iPhone and Android say it.
     nonisolated static func saidMinutes(_ seconds: Int) -> String {
-        if seconds < 30 { return L("under a minute") }
         let m = (seconds + 30) / 60
         return m == 1 ? L("1 minute") : L("%@ minutes", "\(m)")
-    }
-
-    /// "~09:42" as it's said: "about 09:42".
-    nonisolated static func spell(_ text: String) -> String {
-        text.replacingOccurrences(of: #"~\s?"#, with: L("about") + (Lang.zh ? "" : " "), options: .regularExpression)
     }
 
     /// One bus as VoiceOver says it, worded as Android and the iPhone word it:
     /// in minutes "13 minutes", "about 25 minutes" for a guess, "Arriving" for
     /// a live bus under 45 s, and the first bus (`first`) with how sure it is
-    /// ("1 minute, live", "about 6 minutes, estimated"); in clock times
-    /// "12:20 PM", "about 12:20 PM", the first with its wait ("12:09 PM, in
-    /// 13 minutes"). Nil with no bus. Minutes from an older server that sends no clock time.
-    nonisolated static func said(_ b: NearbyBus, clock: Bool, first: Bool) -> String? {
+    /// ("1 minute, live", "about 6 minutes, estimated"). A guess is never
+    /// under a minute away. Nil with no bus.
+    nonisolated static func said(_ b: NearbyBus, first: Bool) -> String? {
         guard let s = b.etaS else { return nil }
-        if clock, let d = b.at.flatMap(parseISODate) {
-            let t = spell((b.approx ? "~" : "") + campusTime(d))
-            // A guess is never under a minute away.
-            let wait = b.quality == "live" ? saidMinutes(s) : L("about %@", saidMinutes(max(s, 60)))
-            return first ? L("%@, in %@", t, wait) : t
-        }
         if s < 45 && b.quality == "live" { return L("Arriving") }
         let m = saidMinutes(max(s, b.quality == "live" ? 0 : 60))
         return switch b.quality {
@@ -860,11 +801,11 @@ struct NearbyBoard: View {
     /// "Bus D2, via PGP, 2 minutes, live, then 14 minutes, then about 26
     /// minutes", as Android reads a row: the line, where it's going, then each
     /// bus in order. Chinese punctuation in Chinese.
-    nonisolated static func spoken(_ r: BoardRow, clock: Bool) -> String {
+    nonisolated static func spoken(_ r: BoardRow) -> String {
         let d = dest(r)
         var parts = [r.paid == true ? L("Public bus %@, fare applies", r.svc) : L("Bus %@", r.svc), d.lead + (d.place ?? "") + d.trail]
         for (i, b) in r.buses.enumerated() {
-            guard let b, let t = said(b, clock: clock, first: i == 0) else { continue }
+            guard let b, let t = said(b, first: i == 0) else { continue }
             parts.append(i > 0 ? L("then %@", t) : t)
         }
         return parts.filter { !$0.isEmpty }.joined(separator: L(", "))
