@@ -256,3 +256,32 @@ private let night = stop(
     #expect(NearbyFit.sides(width: 387, height: 312, sky: sky, newcomer: false)?.rows == 7)
     #expect(NearbyFit.sides(width: 364, height: 382, sky: sky, newcomer: false)?.rows == 8)
 }
+
+/// Nearby's columns from the golden answer: the server's words in minutes,
+/// its `at` as a clock time otherwise, a bus too soon to catch marked, and
+/// where each row's bus goes.
+@Test func nearbyTimesInMinutesOrClockTime() throws {
+    struct R: Decodable { let stops: [NearbyStop] }
+    let data = try Data(contentsOf: fixtures.appendingPathComponent("answers/nearby-list.json"))
+    let pgp = try #require(try JSONDecoder().decode(R.self, from: data).stops.first { $0.stop.code == "PGP" })
+    let d2 = try #require(pgp.board.first { $0.svc == "D2" })
+    #expect(d2.tooSoon)
+    #expect(d2.later.first?.tooSoon == false)
+
+    let mins = try #require(NearbyTime.of(d2, asClock: false))
+    #expect(mins.text == "4 min")
+    #expect(mins.tooSoon)
+    let clock = try #require(NearbyTime.of(d2, asClock: true))
+    #expect(clock.text == campusTime(try #require(parseISODate("2026-08-27T01:04:00Z"))))
+    let then = NearbyTime.of(try #require(d2.later.first), asClock: true)
+    #expect(then.text == campusTime(try #require(parseISODate("2026-08-27T01:14:00Z"))))
+    #expect(!then.tooSoon)
+
+    // A service running with no time: a dash, not a bus.
+    let k = try #require(pgp.board.first { $0.svc == "K" })
+    #expect(NearbyTime.of(k, asClock: true) == nil)
+
+    // An older server: no `at`, so minutes either way.
+    let old = stop("UTOWN", board: #"[{"svc":"D1","etaS":190,"quality":"live","later":[{"etaS":660,"quality":"scheduled"}]}]"#)
+    #expect(NearbyTime.of(old.board[0], asClock: true)?.text == NearbyTime.of(old.board[0], asClock: false)?.text)
+}

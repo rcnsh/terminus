@@ -2,8 +2,8 @@ import SwiftUI
 import WidgetKit
 
 /// The choices kept on this phone that redraw the app: its language, its
-/// appearance, the card's style and New to NUS. The account keeps its own copy of the
-/// language and the clock; Settings saves both.
+/// appearance, the card's style, New to NUS and how Nearby gives its times.
+/// The account keeps its own copy of the language and the clock; Settings saves both.
 @MainActor @Observable
 final class Prefs {
     static let shared = Prefs()
@@ -34,6 +34,11 @@ final class Prefs {
             NewToNus.on = newToNus
             WidgetCenter.shared.reloadTimelines(ofKind: "nearby")
         }
+    }
+
+    /// Nearby's times as clock times ("12:05 PM") rather than minutes, for every stop at once.
+    var nearbyClock: Bool = Shared.defaults.string(forKey: "nearbyTimes") == "clock" {
+        didSet { Shared.defaults.set(nearbyClock ? "clock" : "minutes", forKey: "nearbyTimes") }
     }
 
     /// auto, 12 or 24 (Clock.pref).

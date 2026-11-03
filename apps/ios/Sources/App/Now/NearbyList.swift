@@ -1,15 +1,16 @@
 import SwiftUI
 
 /// The stops near you as their signs: the name plate with the walk there
-/// and the stop's star, then a row per service, its buses coming up a short
-/// road towards the stop, nearer the sooner they're due, the next one solid
-/// and the rest faded. The nearest stop is drawn larger. An estimate is an
-/// outline, never a filled bus, so it doesn't pass for live. The plate opens
-/// the stop's board on the Stops tab, a row its service's line from there;
-/// under the signs, a way to any other stop or line. As Android's NearbyList
-/// and the web app.
+/// and the stop's star, then a row per service read like a stop's board:
+/// where it's going, its next bus and the one after, in minutes or as clock
+/// times (the switch over the signs, kept on this phone). A bus due before
+/// you could walk there is struck out. The nearest stop is drawn larger. The
+/// plate opens the stop's board on the Stops tab, a row its service's line
+/// from there; under the signs, a way to any other stop or line. As
+/// Android's NearbyList and the web app.
 struct NearbyList: View {
     @Environment(AppModel.self) private var app
+    @State private var prefs = Prefs.shared
 
     var body: some View {
         if let stops = app.nearby {
@@ -17,9 +18,18 @@ struct NearbyList: View {
                 Text(L("Nothing yet")).foregroundStyle(Color.muted)
             }
             VStack(spacing: 12) {
+                if !stops.isEmpty {
+                    Picker(L("Show times"), selection: $prefs.nearbyClock) {
+                        Text(L("In minutes")).tag(false)
+                        Text(L("Clock time")).tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityLabel(L("Show times"))
+                    .accessibilityIdentifier("nearbyTimes")
+                }
                 ForEach(Array(stops.enumerated()), id: \.element.id) { i, s in
                     let code = s.stop.code
-                    StopSign(stop: s, big: i == 0, onStop: { app.showInBuses([.stop(code)]) }) { svc in
+                    StopSign(stop: s, big: i == 0, asClock: prefs.nearbyClock, onStop: { app.showInBuses([.stop(code)]) }) { svc in
                         app.showInBuses([.line(svc: svc, from: code)])
                     }
                 }
@@ -41,10 +51,17 @@ private struct StopSign: View {
     @ScaledMetric(relativeTo: .title) private var scale: CGFloat = 1
     let stop: NearbyStop
     let big: Bool
+    let asClock: Bool
     let onStop: () -> Void
     let onRow: (String) -> Void
 
     private var walk: String { stop.walkS < 60 ? L("here") : L("%@ min walk", "\((stop.walkS + 30) / 60)") }
+
+    /// The columns, the same on every sign and its heading so the times line
+    /// up down the page; clock times ("12:05 PM") need more room than minutes.
+    private var svcW: CGFloat { 52 }
+    private var nextW: CGFloat { (asClock ? 92 : 72) * scale }
+    private var thenW: CGFloat { (asClock ? 80 : 62) * scale }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -84,21 +101,46 @@ private struct StopSign: View {
                 Text(L("No live data")).foregroundStyle(Color.muted).padding(14).frame(maxWidth: .infinity, alignment: .leading)
             }
             // Running now: the board comes with the rest too, for the widgets' first buses.
-            ForEach(Array(stop.board.filter(\.running).enumerated()), id: \.offset) { j, row in
+            let rows = stop.board.filter(\.running)
+            if !rows.isEmpty {
+                HStack(spacing: 10) {
+                    Spacer(minLength: svcW)
+                    Text(L("Next bus")).frame(width: nextW, alignment: .trailing)
+                    Text(L("Then")).frame(width: thenW, alignment: .trailing)
+                }
+                .font(.caption2.weight(.semibold))
+                .textCase(.uppercase)
+                .tracking(0.6)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .foregroundStyle(Color.muted)
+                .padding(.horizontal, 14)
+                .padding(.top, 8)
+                .accessibilityHidden(true)
+            }
+            ForEach(Array(rows.enumerated()), id: \.offset) { j, row in
                 if j > 0 { Rectangle().fill(Color.line).frame(height: 1) }
+                let next = NearbyTime.of(row, asClock: asClock)
+                let then = row.later.first.flatMap { NearbyTime.of($0, asClock: asClock) }
                 // A public bus has no line here (/line is the shuttles'), as on a board.
                 Button {
                     onRow(row.svc)
                 } label: {
                     HStack(spacing: 10) {
                         BusBadge(svc: row.svc, color: row.color, size: big ? 13 : 12, paid: row.paid)
-                            .frame(width: row.paid ? 52 : 34, alignment: .leading)
-                        BusRoad(row: row).frame(height: 18)
-                        Text(row.etaText ?? "–")
+                            .frame(width: svcW, alignment: .leading)
+                        Text(NearbyTime.towards(row))
+                            .font(.footnote)
+                            .foregroundStyle(Color.muted)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        time(next)
                             .font(.system(size: (big ? 18 : 15) * scale, weight: .heavy))
-                            .monospacedDigit()
-                            .lineLimit(1)
-                            .frame(minWidth: 56, alignment: .trailing)
+                            .frame(width: nextW, alignment: .trailing)
+                        time(then, color: .muted)
+                            .font(.system(size: 14 * scale, weight: .semibold))
+                            .frame(width: thenW, alignment: .trailing)
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, big ? 10 : 7)
@@ -110,8 +152,11 @@ private struct StopSign: View {
                 .accessibilityLabel(
                     [
                         row.paid ? L("Public bus %@, fare applies", row.svc) : L("Bus %@", row.svc),
-                        Spoken.eta(row.etaS, quality: row.quality) ?? Spoken.spell(row.etaText ?? ""),
-                    ].joined(separator: ", ")
+                        NearbyTime.towards(row),
+                        next?.spoken,
+                        then.map { L("then %@", $0.spoken) },
+                    ]
+                    .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
                 )
                 .accessibilityHint(row.paid ? "" : L("See the %@ line", row.svc))
                 .accessibilityAddTraits(row.paid ? [] : .isButton)
@@ -124,6 +169,56 @@ private struct StopSign: View {
         .overlay(RoundedRectangle(cornerRadius: big ? 18 : 14, style: .continuous).strokeBorder(Color.line))
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(stop.stop.name), \(walk)")
+    }
+
+    /// A bus's time in its column, or a dash with none; struck out and faint when it's too soon to catch.
+    private func time(_ t: NearbyTime?, color: Color = .ink) -> some View {
+        Text(t?.text ?? "–")
+            .monospacedDigit()
+            .strikethrough(t?.tooSoon == true, color: .faint)
+            .foregroundStyle(t?.tooSoon == true ? Color.faint : color)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+    }
+}
+
+/// One bus in a Nearby column, as the web's NearbyTime: the server's words
+/// ("4 min", "~6 min") or its clock time ("~12:05 PM" for an estimate), how
+/// it's said, and whether it's too soon to catch.
+struct NearbyTime: Equatable {
+    let text: String
+    let spoken: String
+    let tooSoon: Bool
+
+    /// A row's next bus; nil with none.
+    static func of(_ row: BoardRow, asClock: Bool) -> NearbyTime? {
+        guard let s = row.etaS else { return nil }
+        return of(
+            etaS: s, words: row.etaText ?? BusTimes.words(s, quality: row.quality), quality: row.quality, at: row.at, tooSoon: row.tooSoon,
+            asClock: asClock)
+    }
+
+    /// A bus after a row's next.
+    static func of(_ bus: BoardRow.Later, asClock: Bool) -> NearbyTime {
+        of(etaS: bus.etaS, words: bus.etaText, quality: bus.quality, at: bus.at, tooSoon: bus.tooSoon, asClock: asClock)
+    }
+
+    static func of(etaS: Int, words: String, quality: String, at: String?, tooSoon: Bool, asClock: Bool) -> NearbyTime {
+        var text = words
+        var spoken = Spoken.eta(etaS, quality: quality) ?? Spoken.spell(words)
+        if asClock, let d = at.flatMap(parseISODate) {
+            let approx = quality == "scheduled" || quality == "stale"
+            text = approx ? L("~%@", campusTime(d)) : campusTime(d)
+            spoken = Spoken.spell(text)
+        }
+        if tooSoon { spoken += L(", too soon to catch") }
+        return NearbyTime(text: text, spoken: spoken, tooSoon: tooSoon)
+    }
+
+    /// Where a row's bus is going, "to Kent Ridge MRT", or that this is the end of its line.
+    static func towards(_ row: BoardRow) -> String {
+        if let end = row.towards.last { return L("to %@", end) }
+        return row.toText ?? (row.endsHere ? L("Ends here") : "")
     }
 }
 
@@ -153,45 +248,5 @@ private struct StopsLink: View {
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.line))
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("nearbyStops")
-    }
-}
-
-/// A short road to the stop (the ring at its end), and the buses on it:
-/// filled in their colour when the time is live, an outline when it's an
-/// estimate; the next one solid, the ones after it faded.
-/// How far up the road a bus is drawn: this many seconds away is the far end.
-private let roadS = 15 * 60
-
-private struct BusRoad: View {
-    let row: BoardRow
-
-    var body: some View {
-        let color = serviceColor(row.color)
-        Canvas { g, size in
-            let y = size.height / 2
-            let ring: CGFloat = 5
-            let end = size.width - ring - 1
-            var road = Path()
-            road.move(to: CGPoint(x: 0, y: y))
-            road.addLine(to: CGPoint(x: end, y: y))
-            g.stroke(road, with: .color(.line), style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
-            let stop = Path(ellipseIn: CGRect(x: end - ring, y: y - ring, width: 2 * ring, height: 2 * ring))
-            g.fill(stop, with: .color(.surface))
-            g.stroke(stop, with: .color(.ink), lineWidth: 2.5)
-            let w: CGFloat = 18
-            let h: CGFloat = 12
-            func bus(_ etaS: Int, live: Bool, alpha: Double) {
-                let far = CGFloat(min(max(etaS, 0), roadS)) / CGFloat(roadS)
-                let x = (end - ring - w - 2) * (1 - far)
-                let r = Path(roundedRect: CGRect(x: x, y: y - h / 2, width: w, height: h), cornerRadius: 4)
-                if live {
-                    g.fill(r, with: .color(color.opacity(alpha)))
-                } else {
-                    g.stroke(r, with: .color(color.opacity(alpha)), lineWidth: 2)
-                }
-            }
-            for b in row.later.reversed() { bus(b.etaS, live: b.quality == "live", alpha: 0.35) }
-            if let s = row.etaS { bus(s, live: row.quality == "live", alpha: 1) }
-        }
     }
 }
