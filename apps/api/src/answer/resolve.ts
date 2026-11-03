@@ -734,13 +734,18 @@ export function towardsFrom(idx: GraphIndex, svc: string, stopCode: string): str
   return codes.map((c) => displayName(idx.byCode.get(c), c));
 }
 
+/** How long a place's name may be and still be kept on one line (its spaces made non-breaking), so "via" wraps alone. */
+const ONE_LINE_PLACE = 12;
+
 /**
  * Where a Nearby row's bus is going, short enough for a row beside three
  * times, in the names the stops' plates use: "to PGP Foyer". A loop ends
  * where it started, which says nothing about which way it's going (both D1
  * and D2 end at COM 3, even at COM 3), so a loop says the first well-known
- * place it passes from here, else its next stop: "via UTown". `destPlace` is
- * the place alone, for a client that sets it apart from the words around it.
+ * place it passes from here ("via UTown"); with none, where it ends ("to KR
+ * Bus Ter"), unless that's this stop, its first, where it says its next.
+ * `destPlace` is the place alone, for a client that sets it apart from the
+ * words around it. A short name is kept whole on one line.
  */
 export function nearbyDest(idx: GraphIndex, svc: string, stopCode: string, via: string[]): { dest: string; destPlace: string | null } {
   const r = idx.routes.get(svc);
@@ -749,8 +754,11 @@ export function nearbyDest(idx: GraphIndex, svc: string, stopCode: string, via: 
   const short = (c: string) => idx.byCode.get(c)?.name ?? c;
   const n = at[0] + 1 < r.seq.length ? at[0] + 1 : r.loop ? 0 : null;
   if (n === null) return { dest: m().endsHere, destPlace: null };
-  const place = r.loop ? (via[0] ?? short(r.seq[n])) : short(r.seq[r.seq.length - 1]);
-  return { dest: r.loop ? m().loopVia(place) : m().towardsOne(place), destPlace: place };
+  const end = r.loop ? r.seq[0] : r.seq[r.seq.length - 1];
+  const viaPlace = r.loop ? (via[0] ?? (end === stopCode ? short(r.seq[n]) : null)) : null;
+  const raw = viaPlace ?? short(end);
+  const place = raw.length <= ONE_LINE_PLACE ? raw.replaceAll(' ', '\u00a0') : raw;
+  return { dest: viaPlace ? m().loopVia(place) : m().towardsOne(place), destPlace: place };
 }
 
 /**

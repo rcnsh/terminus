@@ -74,7 +74,7 @@ test('withWalk: no bus is guessed past the last one, or for a public bus, or wit
 });
 
 const IDX = indexGraph(GRAPH);
-const dest = (svc, code) => nearbyDest(IDX, svc, code, viaFrom(IDX, svc, code)).dest;
+const dest = (svc, code) => nearbyDest(IDX, svc, code, viaFrom(IDX, svc, code)).dest.replaceAll('\u00a0', ' ');
 
 test('nearbyDest: the two loops from COM 3 are told apart at COM 3, by the place each goes first', () => {
   assert.equal(dest('D1', 'COM3'), 'via UTown');
@@ -90,4 +90,13 @@ test('nearbyDest: a line says its end by the short name on that stop’s plate; 
 test('nearbyDest: destPlace is the place alone, null where there is none', () => {
   assert.deepEqual(nearbyDest(IDX, 'D1', 'COM3', viaFrom(IDX, 'D1', 'COM3')), { dest: 'via UTown', destPlace: 'UTown' });
   assert.equal(nearbyDest(IDX, 'R1', 'PGP', viaFrom(IDX, 'R1', 'PGP')).destPlace, null);
+});
+
+test('nearbyDest: a loop with no well-known place ahead says where it ends, not that it goes through it', () => {
+  assert.equal(dest('A1', 'CLB'), 'to KR Bus Ter');
+});
+
+test('nearbyDest: a short place stays on one line; a long one may wrap', () => {
+  const { destPlace } = nearbyDest(IDX, 'A1', 'CLB', viaFrom(IDX, 'A1', 'CLB'));
+  assert.equal(destPlace, 'KR\u00a0Bus\u00a0Ter');
 });

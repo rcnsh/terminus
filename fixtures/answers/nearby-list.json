@@ -51,8 +51,8 @@
           "laterText": "then 14 min",
           "toText": "to TCOMS, COM 3",
           "at": "2026-08-27T01:04:00Z",
-          "dest": "via COM 3",
-          "destPlace": "COM 3"
+          "dest": "via COM 3",
+          "destPlace": "COM 3"
         },
         {
           "svc": "A2",
@@ -73,8 +73,8 @@
           "laterText": null,
           "toText": "to TCOMS, Kent Ridge Bus Terminal",
           "at": null,
-          "dest": "via TCOMS",
-          "destPlace": "TCOMS"
+          "dest": "to KR Bus Ter",
+          "destPlace": "KR Bus Ter"
         },
         {
           "svc": "K",
@@ -191,8 +191,8 @@
           "laterText": "then 18 min",
           "toText": "to Opp HSSML, Kent Vale",
           "at": "2026-08-27T01:06:00Z",
-          "dest": "to Kent Vale",
-          "destPlace": "Kent Vale"
+          "dest": "to Kent Vale",
+          "destPlace": "Kent Vale"
         },
         {
           "svc": "A1",
@@ -255,8 +255,8 @@
           "laterText": null,
           "toText": "to Kent Ridge MRT, Prince George's Park Foyer",
           "at": null,
-          "dest": "to PGP Foyer",
-          "destPlace": "PGP Foyer"
+          "dest": "to PGP Foyer",
+          "destPlace": "PGP Foyer"
         },
         {
           "svc": "R1",
