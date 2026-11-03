@@ -626,6 +626,38 @@ export interface BoardRow {
   toText: string;
 }
 
+/** A bus on a Nearby row: when it comes by the clock, and whether it's too soon to catch. */
+interface NearbyTimes {
+  /** When it arrives, to the minute (ISO). */
+  at: string;
+  /** It comes before the walk to the stop is over. Absent when it doesn't. */
+  tooSoon?: true;
+}
+
+/** A board row on Nearby, its buses timed against the walk there. */
+export type NearbyRow = Omit<BoardRow, 'later'> & {
+  /** When the first bus arrives, to the minute (ISO); null with no time. */
+  at: string | null;
+  tooSoon?: true;
+  later: (BoardRow['later'][number] & NearbyTimes)[];
+};
+
+/**
+ * A Nearby row with each bus's clock time and, on one due before you could
+ * walk to the stop, `tooSoon`, so a client strikes it out rather than offer
+ * a bus nobody can catch. The time is rounded to the minute, as it's read.
+ */
+export function withWalk(r: BoardRow, walkS: number, nowMs: number): NearbyRow {
+  const at = (etaS: number) => new Date(Math.round((nowMs + etaS * 1000) / 60_000) * 60_000).toISOString().replace('.000Z', 'Z');
+  const soon = (etaS: number) => (etaS < walkS ? { tooSoon: true as const } : {});
+  return {
+    ...r,
+    at: r.etaS == null ? null : at(r.etaS),
+    ...(r.etaS == null ? {} : soon(r.etaS)),
+    later: r.later.map((b) => ({ ...b, at: at(b.etaS), ...soon(b.etaS) })),
+  };
+}
+
 /** How many later buses a row's `laterText` names: more is noise on a phone. */
 export const THEN_MAX = 2;
 

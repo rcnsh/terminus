@@ -479,8 +479,12 @@ pnpm exec cf kv keys put config:minClient --namespace-id <KV id in cloudflare.co
   paths, as `/api/me/next` takes them), each with
   its service's colour (`color`, as on the buses and the map). Each row
   (as on `/api/arrivals`; see "Board rows") has the next bus in `etaS` and the ones after it
-  the feed knows in `later`, each with its own quality; Nearby draws them
-  all on the road, the next one solid and the rest faded. Each stop has
+  the feed knows in `later`, each with its own quality. Nearby times each
+  bus against the walk to its stop (`withWalk`): `at`, its clock time to
+  the minute, and `tooSoon` on one due before you could get there. Nearby
+  shows them as a board, a column for the next bus and one for the bus
+  after (the shuttle feed gives two), in minutes or as clock times, a bus
+  too soon to catch struck out. Each stop has
   `via` too: the places most of its buses pass first (each row's first
   two, the most shared first, up to three), and `viaText` ("to UTown,
   Science, Kent Ridge MRT"), the heading the widget puts over each side

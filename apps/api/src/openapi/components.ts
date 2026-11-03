@@ -379,6 +379,16 @@ export function components(): Record<string, unknown> {
                 etaS: { type: 'integer' },
                 quality: { $ref: '#/components/schemas/Quality' },
                 eta: { type: 'string', example: '~15 min', description: '`etaS` in words, as the row’s `eta`.' },
+                at: {
+                  type: 'string',
+                  format: 'date-time',
+                  description: 'Only on `/api/me/nearby`: when it arrives, rounded to the minute, as the row’s `at`.',
+                },
+                tooSoon: {
+                  type: 'boolean',
+                  enum: [true],
+                  description: 'Only on `/api/me/nearby`: too soon to catch, as the row’s `tooSoon`.',
+                },
               },
             },
           },
@@ -427,6 +437,30 @@ export function components(): Record<string, unknown> {
             description: 'Only when `running` is false: when it next starts, looking up to 8 days ahead. Null when no start is found.',
           },
         },
+      },
+      NearbyRow: {
+        description:
+          'A `BoardRow` on Nearby, each bus timed against the walk to its stop (`walkS`): its clock time, and whether it comes before you could get there.',
+        allOf: [
+          { $ref: '#/components/schemas/BoardRow' },
+          {
+            type: 'object',
+            required: ['at'],
+            properties: {
+              at: {
+                type: ['string', 'null'],
+                format: 'date-time',
+                example: '2026-08-27T08:25:00Z',
+                description: 'When the bus in `etaS` arrives, rounded to the minute, for a clock time. Null when `etaS` is.',
+              },
+              tooSoon: {
+                type: 'boolean',
+                enum: [true],
+                description: 'The bus in `etaS` comes before the walk to the stop is over: too soon to catch. Absent when it isn’t.',
+              },
+            },
+          },
+        ],
       },
       StopBoard: {
         type: 'object',

@@ -26,7 +26,8 @@
             {
               "etaS": 840,
               "quality": "live",
-              "eta": "14 分钟"
+              "eta": "14 分钟",
+              "at": "2026-08-27T01:14:00Z"
             }
           ],
           "color": "#8e44c9",
@@ -42,7 +43,8 @@
           "running": true,
           "eta": "4 分钟",
           "laterText": "之后 14 分钟",
-          "toText": "经 TCOMS，开往 COM 3"
+          "toText": "经 TCOMS，开往 COM 3",
+          "at": "2026-08-27T01:04:00Z"
         },
         {
           "svc": "A2",
@@ -61,7 +63,8 @@
           "running": true,
           "eta": null,
           "laterText": null,
-          "toText": "经 TCOMS，开往 Kent Ridge Bus Terminal"
+          "toText": "经 TCOMS，开往 Kent Ridge Bus Terminal",
+          "at": null
         },
         {
           "svc": "K",
@@ -77,7 +80,8 @@
           "running": true,
           "eta": null,
           "laterText": null,
-          "toText": "本站为终点站"
+          "toText": "本站为终点站",
+          "at": null
         }
       ]
     },
@@ -109,7 +113,8 @@
             {
               "etaS": 840,
               "quality": "live",
-              "eta": "14 分钟"
+              "eta": "14 分钟",
+              "at": "2026-08-27T01:14:00Z"
             }
           ],
           "color": "#8e44c9",
@@ -127,7 +132,9 @@
           "running": true,
           "eta": "4 分钟",
           "laterText": "之后 14 分钟",
-          "toText": "经 Kent Ridge MRT，开往 COM 3"
+          "toText": "经 Kent Ridge MRT，开往 COM 3",
+          "at": "2026-08-27T01:04:00Z",
+          "tooSoon": true
         },
         {
           "svc": "R2",
@@ -138,7 +145,8 @@
             {
               "etaS": 1080,
               "quality": "live",
-              "eta": "18 分钟"
+              "eta": "18 分钟",
+              "at": "2026-08-27T01:18:00Z"
             }
           ],
           "color": "#34a853",
@@ -155,7 +163,8 @@
           "running": true,
           "eta": "6 分钟",
           "laterText": "之后 18 分钟",
-          "toText": "经 Opp HSSML，开往 Kent Vale"
+          "toText": "经 Opp HSSML，开往 Kent Vale",
+          "at": "2026-08-27T01:06:00Z"
         },
         {
           "svc": "A1",
@@ -166,7 +175,8 @@
             {
               "etaS": 1140,
               "quality": "live",
-              "eta": "19 分钟"
+              "eta": "19 分钟",
+              "at": "2026-08-27T01:19:00Z"
             }
           ],
           "color": "#d32f2f",
@@ -183,7 +193,8 @@
           "running": true,
           "eta": "9 分钟",
           "laterText": "之后 19 分钟",
-          "toText": "经 Kent Ridge MRT，开往 Kent Ridge Bus Terminal"
+          "toText": "经 Kent Ridge MRT，开往 Kent Ridge Bus Terminal",
+          "at": "2026-08-27T01:09:00Z"
         },
         {
           "svc": "K",
@@ -206,7 +217,8 @@
           "running": true,
           "eta": null,
           "laterText": null,
-          "toText": "经 Kent Ridge MRT，开往 Prince George's Park Foyer"
+          "toText": "经 Kent Ridge MRT，开往 Prince George's Park Foyer",
+          "at": null
         },
         {
           "svc": "R1",
@@ -222,7 +234,8 @@
           "running": true,
           "eta": null,
           "laterText": null,
-          "toText": "本站为终点站"
+          "toText": "本站为终点站",
+          "at": null
         }
       ]
     }
