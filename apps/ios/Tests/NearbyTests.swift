@@ -267,11 +267,7 @@ private func nearbyList() throws -> [NearbyStop] {
 
 private func row(_ json: String) -> BoardRow { stop("X", board: "[\(json)]").board[0] }
 
-private func clock12(_ d: Date) -> String { clockText(d, in: .campus, hour12: true, zh: false) }
-private func clockZh(_ d: Date) -> String { clockText(d, in: .campus, hour12: true, zh: true) }
-private func clock24(_ d: Date) -> String { clockText(d, in: .campus, hour12: false, zh: true) }
-
-/// At 11:55 AM on campus: 11:57, then 12:09 PM, then a guess at 12:21 PM.
+/// At 11:55 AM on campus: 2 min, then 14, then a guess at ~26. Its clock times (`at`) go unused.
 private let noon = row(
     #"{"svc":"D1","etaS":120,"quality":"live","eta":"2 min","at":"2026-11-04T03:57:00Z","dest":"via UTown","destPlace":"UTown","later":[{"etaS":840,"quality":"live","eta":"14 min","at":"2026-11-04T04:09:00Z"},{"etaS":1560,"quality":"scheduled","eta":"~26 min","at":"2026-11-04T04:21:00Z"}]}"#
 )
@@ -311,14 +307,14 @@ private let noon = row(
 @Test func nearbyMinutesTheUnitOnlyInNextAndNextIsLarge() throws {
     let pgp = try #require(try nearbyList().first { $0.stop.code == "PGP" })
     let d2 = try #require(pgp.board.first { $0.svc == "D2" })
-    let c = NearbyCells.cells(d2, asClock: false)
+    let c = NearbyCells.cells(d2)
     // Next is large, with its unit; Then bare; After a guess, marked.
     #expect(c[0] == NearbyCell(figure: "4", trail: " min", pick: true, spoken: c[0].spoken))
     #expect(c[0].text == "4 min")
     #expect(c[1] == NearbyCell(figure: "14", spoken: c[1].spoken))
     #expect(c[2] == NearbyCell(mark: "~", figure: "26", spoken: c[2].spoken))
     let r2 = try #require(pgp.board.first { $0.svc == "R2" })
-    #expect(NearbyCells.cells(r2, asClock: false).map(\.pick) == [true, false, false])
+    #expect(NearbyCells.cells(r2).map(\.pick) == [true, false, false])
 }
 
 /// The walk to the stop isn't counted: an older answer's tooSoon changes nothing.
@@ -327,68 +323,37 @@ private let noon = row(
         #"{"svc":"A1","etaS":60,"quality":"live","eta":"1 min","tooSoon":true,"later":[{"etaS":600,"quality":"live","eta":"10 min","tooSoon":true}]}"#
     )
     let plain = row(#"{"svc":"A1","etaS":60,"quality":"live","eta":"1 min","later":[{"etaS":600,"quality":"live","eta":"10 min"}]}"#)
-    #expect(NearbyCells.cells(old, asClock: false) == NearbyCells.cells(plain, asClock: false))
-    #expect(NearbyCells.cells(old, asClock: false).map(\.pick) == [true, false, false])
-    #expect(!NearbyCells.spoken(old, cells: NearbyCells.cells(old, asClock: false)).contains("too soon"))
+    #expect(NearbyCells.cells(old) == NearbyCells.cells(plain))
+    #expect(NearbyCells.cells(old).map(\.pick) == [true, false, false])
+    #expect(!NearbyCells.spoken(old, cells: NearbyCells.cells(old)).contains("too soon"))
 }
 
 @Test func nearbyNoBusIsADashAndNeverThePick() throws {
     let k = try #require(try nearbyList().first { $0.stop.code == "PGP" }?.board.first { $0.svc == "K" })
-    let c = NearbyCells.cells(k, asClock: true)
+    let c = NearbyCells.cells(k)
     #expect(c.map(\.text) == ["–", "–", "–"])
     #expect(!c.contains { $0.pick || $0.hasBus })
     // One bus: it's the large one, dashes after it.
     let one = row(#"{"svc":"A1","etaS":60,"quality":"live","eta":"1 min"}"#)
-    #expect(NearbyCells.cells(one, asClock: false).map(\.pick) == [true, false, false])
-    #expect(NearbyCells.cells(one, asClock: false).map(\.text) == ["1 min", "–", "–"])
+    #expect(NearbyCells.cells(one).map(\.pick) == [true, false, false])
+    #expect(NearbyCells.cells(one).map(\.text) == ["1 min", "–", "–"])
     // No first bus: nothing is large, even with a later one.
     let none = row(#"{"svc":"A1","quality":"live","later":[{"etaS":600,"quality":"live","eta":"10 min"}]}"#)
-    #expect(NearbyCells.cells(none, asClock: false).map(\.pick) == [false, false, false])
+    #expect(NearbyCells.cells(none).map(\.pick) == [false, false, false])
 }
 
 @Test func nearbyServersWordsGiveTheNumberAndUnitWithAGuessMarkedTheSameInChinese() {
     let zh = row(#"{"svc":"D1","etaS":360,"quality":"scheduled","eta":"约 6 分钟"}"#)
     #expect(
-        NearbyCells.cells(zh, asClock: false)[0]
-            == NearbyCell(mark: "~", figure: "6", trail: " 分钟", pick: true, spoken: NearbyCells.cells(zh, asClock: false)[0].spoken))
+        NearbyCells.cells(zh)[0]
+            == NearbyCell(mark: "~", figure: "6", trail: " 分钟", pick: true, spoken: NearbyCells.cells(zh)[0].spoken))
     // No figures from a bus seen: said as it is, no mark.
     let now = row(#"{"svc":"D1","etaS":20,"quality":"live","eta":"now"}"#)
-    #expect(NearbyCells.cells(now, asClock: false)[0].text == "now")
-}
-
-@Test func nearbyClockAmOrPmOnNextAndWhereTheHalfChanges() {
-    let c = NearbyCells.cells(noon, asClock: true, clock: clock12)
-    #expect(c.map(\.figure) == ["11:57", "12:09", "12:21"])
-    #expect(c.map(\.trail) == ["\u{00A0}AM", "\u{00A0}PM", ""])
-    #expect(c.map(\.lead) == ["", "", ""])
-    #expect(c.map(\.mark) == ["", "", "~"])
-    #expect(c.map(\.pick) == [true, false, false])
-    #expect(c[0].text == "11:57\u{00A0}AM")
-    // Read out whole, every time with its half.
-    #expect(c[2].spoken == Spoken.spell("~12:21\u{00A0}PM"))
-}
-
-@Test func nearbyClockInChineseHasTheHalfBefore() {
-    let c = NearbyCells.cells(noon, asClock: true, clock: clockZh)
-    #expect(c.map(\.lead) == ["上午\u{00A0}", "下午\u{00A0}", ""])
-    #expect(c.map(\.trail) == ["", "", ""])
-    #expect(c[0].text == "上午\u{00A0}11:57")
-    #expect(NearbyCells.clockParts("下午\u{00A0}6:02") == ("6:02", "下午", true))
-    #expect(NearbyCells.clockParts("6:02\u{00A0}PM") == ("6:02", "PM", false))
-}
-
-@Test func nearbyClock24HourHasNoHalf() {
-    let c = NearbyCells.cells(noon, asClock: true, clock: clock24)
-    #expect(c.map(\.text) == ["11:57", "12:09", "~12:21"])
-}
-
-@Test func nearbyClockWithoutTheServersTimeShowsMinutes() {
-    let old = row(#"{"svc":"D1","etaS":190,"quality":"live","later":[{"etaS":660,"quality":"scheduled"}]}"#)
-    #expect(NearbyCells.cells(old, asClock: true, clock: clock12).map(\.text) == NearbyCells.cells(old, asClock: false).map(\.text))
+    #expect(NearbyCells.cells(now)[0].text == "now")
 }
 
 @Test func nearbyRowIsReadBusByBus() {
-    let c = NearbyCells.cells(noon, asClock: false)
+    let c = NearbyCells.cells(noon)
     let said = NearbyCells.spoken(noon, cells: c)
     print("A row is read: \(said)")
     // Live or estimated only for the first bus; "about" marks a later guess.
@@ -398,19 +363,14 @@ private let noon = row(
     #expect(said == [L("Bus %@", "D1"), "via UTown", next, then, after].joined(separator: Lang.zh ? "，" : ", "))
     // As Android reads it.
     if !Lang.zh { #expect(said == "Bus D1, via UTown, 2 minutes, live, then 14 minutes, then about 26 minutes") }
-    let clock = NearbyCells.spoken(noon, cells: NearbyCells.cells(noon, asClock: true, clock: clock12))
-    print("In clock time: \(clock)")
-    if !Lang.zh {
-        #expect(clock == "Bus D1, via UTown, 11:57\u{00A0}AM, in 2 minutes, then 12:09\u{00A0}PM, then about 12:21\u{00A0}PM")
-    }
 }
 
 @Test func nearbyFootExplainsOnlyWhatsShowing() {
     let tap = L("Tap a service to see its whole line.")
     let guess = L("~ is a guess from the timetable, not a live time.")
-    #expect(NearbyCells.foot([NearbyCells.cells(noon, asClock: false)]) == [guess, tap])
+    #expect(NearbyCells.foot([NearbyCells.cells(noon)]) == [guess, tap])
     let plain = row(#"{"svc":"A1","etaS":300,"quality":"live","eta":"5 min","later":[{"etaS":1020,"quality":"live","eta":"17 min"}]}"#)
-    #expect(NearbyCells.foot([NearbyCells.cells(plain, asClock: false)]) == [tap])
+    #expect(NearbyCells.foot([NearbyCells.cells(plain)]) == [tap])
     #expect(NearbyCells.foot([]) == [tap])
 }
 
@@ -450,7 +410,7 @@ private let noon = row(
     // In the grid: the mark and the figure, as any other guess.
     let soon = row(#"{"svc":"D1","etaS":20,"quality":"scheduled"}"#)
     #expect(
-        NearbyCells.cells(soon, asClock: false)[0]
+        NearbyCells.cells(soon)[0]
             == NearbyCell(
                 mark: "~", figure: "1", trail: L("~%@ min", "1").replacingOccurrences(of: "~1", with: ""), pick: true,
                 spoken: L("about %@, estimated", L("1 minute"))))
@@ -460,32 +420,12 @@ private let noon = row(
     #expect(aged.etaText == L("~%@ min", "1"))
 }
 
-@Test func nearbyClockSaysHowLongThereIsForTheFirst() {
-    let c = NearbyCells.cells(noon, asClock: true, clock: clock12)
-    #expect(c[0].spoken == L("%@, in %@", Spoken.spell("11:57\u{00A0}AM"), Spoken.eta(120, quality: "live", withQuality: false)!))
-    #expect(!c[1].spoken.contains("minute") && !c[2].spoken.contains("minute"))
-    // An estimate: "in about 13 minutes".
-    let guess = row(#"{"svc":"D1","etaS":780,"quality":"scheduled","at":"2026-11-04T04:08:00Z"}"#)
-    let g = NearbyCells.cells(guess, asClock: true, clock: clock12)[0]
-    #expect(g.spoken == L("%@, in %@", Spoken.spell("~12:08\u{00A0}PM"), L("about %@", L("%@ minutes", "13"))))
-    print("An estimated pick in clock time is read: \(g.spoken)")
-    // A bus seen at the stop: "in under a minute", never "in Arriving"; a guess as close, "in about 1 minute".
-    let here = row(#"{"svc":"D1","etaS":20,"quality":"live","eta":"Arriving","at":"2026-11-04T04:08:00Z"}"#)
-    #expect(
-        NearbyCells.cells(here, asClock: true, clock: clock12)[0].spoken
-            == L("%@, in %@", Spoken.spell("12:08\u{00A0}PM"), L("under a minute")))
-    let near = row(#"{"svc":"D1","etaS":20,"quality":"scheduled","at":"2026-11-04T04:08:00Z"}"#)
-    #expect(
-        NearbyCells.cells(near, asClock: true, clock: clock12)[0].spoken
-            == L("%@, in %@", Spoken.spell("~12:08\u{00A0}PM"), L("about %@", L("1 minute"))))
-}
-
 /// An older server's "now" for a guess is worded here: "~1 min", never "now".
 @Test func nearbyAnOlderServersNowForAGuessIsAboutAMinute() {
     for quality in ["scheduled", "stale"] {
         let old = row(
             #"{"svc":"D1","etaS":20,"quality":"\#(quality)","eta":"now","later":[{"etaS":40,"quality":"\#(quality)","eta":"now"}]}"#)
-        let c = NearbyCells.cells(old, asClock: false)
+        let c = NearbyCells.cells(old)
         #expect(c[0].text == L("~%@ min", "1"))
         #expect(c[0].mark == "~" && c[0].figure == "1")
         #expect(c[1].mark == "~" && c[1].figure == "1")

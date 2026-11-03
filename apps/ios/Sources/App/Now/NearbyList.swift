@@ -2,17 +2,13 @@ import SwiftUI
 
 /// The stops near you as their signs: the name plate with the walk there
 /// and the stop's star, then a row per service read like a stop's board:
-/// where it's going and its next three buses, in minutes or as clock times
-/// (the switch over the signs, kept on this phone). The first bus is set
-/// large.
-/// Every sign has the same columns, each as wide as its widest value on any
-/// of them, so the figures line up down the page. The plate opens the
+/// where it's going and its next three buses, in minutes, the first set
+/// large. Every sign has the same columns, each as wide as its widest value
+/// on any of them, so the figures line up down the page. The plate opens the
 /// stop's board on the Stops tab, a row its service's line from there; under
-/// the signs, what a "~" means, and a way to any other stop
-/// or line. As Android's NearbyList and the web app (NearbyCells has the words).
+/// the signs, what a "~" means, and a way to any other stop or line. As Android's NearbyList and the web app (NearbyCells has the words).
 struct NearbyList: View {
     @Environment(AppModel.self) private var app
-    @State private var prefs = Prefs.shared
     /// The widest badge, times and destination line on every sign, as drawn.
     @State private var widest = NearbyWidths()
     @State private var width: CGFloat = 0
@@ -27,22 +23,12 @@ struct NearbyList: View {
             if stops.isEmpty {
                 Text(L("Nothing yet")).foregroundStyle(Color.muted)
             }
-            let asClock = prefs.nearbyClock
-            let cells = stops.map { s in s.board.filter(\.running).map { NearbyCells.cells($0, asClock: asClock) } }
+            let cells = stops.map { s in s.board.filter(\.running).map(NearbyCells.cells) }
             VStack(spacing: 12) {
-                if !stops.isEmpty {
-                    Picker(L("Show times"), selection: $prefs.nearbyClock) {
-                        Text(L("In minutes")).tag(false)
-                        Text(L("Clock time")).tag(true)
-                    }
-                    .pickerStyle(.segmented)
-                    .accessibilityLabel(L("Show times"))
-                    .accessibilityIdentifier("nearbyTimes")
-                }
                 let cols = columns
                 ForEach(Array(stops.enumerated()), id: \.element.id) { i, s in
                     let code = s.stop.code
-                    StopSign(stop: s, cells: cells[i], asClock: asClock, cols: cols, onStop: { app.showInBuses([.stop(code)]) }) { svc in
+                    StopSign(stop: s, cells: cells[i], cols: cols, onStop: { app.showInBuses([.stop(code)]) }) { svc in
                         app.showInBuses([.line(svc: svc, from: code)])
                     }
                 }
@@ -137,7 +123,6 @@ private struct StopSign: View {
     private var scale: CGFloat { percent / 100 }
     let stop: NearbyStop
     let cells: [[NearbyCell]]
-    let asClock: Bool
     let cols: NearbyColumns
     let onStop: () -> Void
     let onRow: (String) -> Void
@@ -190,7 +175,7 @@ private struct StopSign: View {
             if !rows.isEmpty { heading }
             ForEach(Array(rows.enumerated()), id: \.offset) { j, row in
                 if j > 0 { Rectangle().fill(Color.line).frame(height: 1) }
-                let cells = j < self.cells.count ? self.cells[j] : NearbyCells.cells(row, asClock: asClock)
+                let cells = j < self.cells.count ? self.cells[j] : NearbyCells.cells(row)
                 let id = "nearbyRow.\(stop.stop.code).\(row.svc)"
                 let stacked = cols.layout.stacked
                 // A public bus has no line here (/line is the shuttles'), as on a board.
@@ -204,7 +189,7 @@ private struct StopSign: View {
                     let times = HStack(spacing: cols.layout.between) {
                         ForEach(0..<3, id: \.self) { k in
                             NearbyTimeView(
-                                cell: cells[k], col: k, asClock: asClock, width: cols.layout.widths[k], zoom: stacked ? 1 : cols.layout.zoom
+                                cell: cells[k], col: k, width: cols.layout.widths[k], zoom: stacked ? 1 : cols.layout.zoom
                             )
                         }
                     }
@@ -353,13 +338,12 @@ private struct NearbyDest: View {
 }
 
 /// One bus's cell (NearbyCell has what it says): the figures in the board's
-/// display weights, the unit or AM/PM small.
+/// display weights, the unit small.
 private struct NearbyTimeView: View {
     @ScaledMetric(relativeTo: .body) private var percent: CGFloat = 100
     private var scale: CGFloat { percent / 100 }
     let cell: NearbyCell
     let col: Int
-    let asClock: Bool
     let width: CGFloat
     let zoom: CGFloat
 
@@ -379,7 +363,7 @@ private struct NearbyTimeView: View {
 
     private func styled(_ zoom: CGFloat) -> Text {
         let scale = scale * zoom
-        let size: CGFloat = cell.pick ? (asClock ? 17.5 : 21.5) : (asClock ? 14.7 : 16)
+        let size: CGFloat = cell.pick ? 21.5 : 16
         let big = Font.system(size: size * scale, weight: cell.pick ? .bold : .semibold).monospacedDigit()
         let small = Font.system(size: 11 * scale, weight: .medium)
         func run(_ s: String, _ f: Font) -> AttributedString {
@@ -387,7 +371,7 @@ private struct NearbyTimeView: View {
             a.font = f
             return a
         }
-        var a = run(cell.mark, big) + run(cell.lead, small) + run(cell.figure, big) + run(cell.trail, small)
+        var a = run(cell.mark, big) + run(cell.figure, big) + run(cell.trail, small)
         a.foregroundColor = cell.pick ? Color.ink : Color.muted
         return Text(a).tracking(cell.pick ? -0.02 * size * scale : -0.01 * size * scale)
     }

@@ -86,10 +86,6 @@ final class NowUITests: XCTestCase {
             app.buttons.matching(NSPredicate(format: "identifier == %@ AND label BEGINSWITH 'Unpin '", "star-\(code)")).firstMatch
                 .waitForExistence(timeout: 5))
         shot("now-nearby", app)
-        // Every sign's times as clock times, then back to minutes, which the phone keeps.
-        app.buttons["Clock time"].tap()
-        shot("now-nearby-clock", app)
-        app.buttons["In minutes"].tap()
         let link = app.buttons["nearbyStops"]
         reveal(link, in: app)
         shot("now-nearby-down", app)
@@ -129,9 +125,6 @@ final class NowUITests: XCTestCase {
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'nearby.'")).firstMatch.waitForExistence(timeout: 15))
         sleep(1)
         shot("now-nearby-dark", app)
-        app.buttons["Clock time"].tap()
-        shot("now-nearby-clock-dark", app)
-        app.buttons["In minutes"].tap()
         reveal(app.buttons["nearbyStops"], in: app)
         shot("now-nearby-down-dark", app)
     }

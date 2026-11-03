@@ -36,11 +36,6 @@ final class Prefs {
         }
     }
 
-    /// Nearby's times as clock times ("12:05 PM") rather than minutes, for every stop at once.
-    var nearbyClock: Bool = Shared.defaults.string(forKey: "nearbyTimes") == "clock" {
-        didSet { Shared.defaults.set(nearbyClock ? "clock" : "minutes", forKey: "nearbyTimes") }
-    }
-
     /// auto, 12 or 24 (Clock.pref).
     var clock: String = Clock.pref {
         didSet { Clock.pref = clock }

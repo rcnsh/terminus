@@ -2,29 +2,26 @@ import CoreGraphics
 import Foundation
 
 /// One bus in a Nearby column, as on a stop's board: the figures large and
-/// the words small. Only the Next column carries the unit ("4 min",
-/// "6:02 PM"); Then and After only their figures ("16", "~28"), with AM/PM
-/// where the day's half changes, as a printed timetable does. An estimate is
-/// marked "~" in both languages: in a column of figures a word ("约") reads
-/// as part of the next. The first bus, in Next, is the large one (`pick`).
-/// A dash with no bus. As the web's NearbyTime.
+/// the words small. Only the Next column carries the unit ("4 min"); Then
+/// and After only their figures ("16", "~28"). An estimate is marked "~" in
+/// both languages: in a column of figures a word ("约") reads as part of the
+/// next. The first bus, in Next, is the large one (`pick`). A dash with no
+/// bus. As the web's NearbyTime.
 struct NearbyCell: Equatable {
     /// "~" for an estimate, else empty.
     var mark = ""
-    /// Small, before the figures: 下午 in Chinese 12-hour time.
-    var lead = ""
-    /// The figures: "4", "6:02"; "now" as the server words it; "–" with no bus.
+    /// The figures: "4"; "now" as the server words it; "–" with no bus.
     var figure = "–"
-    /// Small, after the figures: " min", " PM".
+    /// Small, after the figures: " min".
     var trail = ""
     /// The row's first bus, set large.
     var pick = false
-    /// How VoiceOver says the time alone ("about 6:02 PM"); empty with no bus.
+    /// How VoiceOver says the time alone ("about 6 minutes"); empty with no bus.
     var spoken = ""
 
     var hasBus: Bool { !spoken.isEmpty }
     /// The whole cell as one run of text.
-    var text: String { mark + lead + figure + trail }
+    var text: String { mark + figure + trail }
 }
 
 /// What a Nearby row says: its three buses' cells, where it's going, how
@@ -35,77 +32,41 @@ enum NearbyCells {
         let etaS: Int
         let quality: String
         let words: String
-        let at: String?
 
         var approx: Bool { quality == "scheduled" || quality == "stale" }
     }
 
     /// The row's three buses (`[row, later[0], later[1]]`), nil where there's none.
     static func buses(_ row: BoardRow) -> [Bus?] {
-        let first = row.etaS.map {
-            Bus(etaS: $0, quality: row.quality, words: row.etaText ?? BusTimes.words($0, quality: row.quality), at: row.at)
-        }
-        let later = row.later.prefix(2).map { Bus(etaS: $0.etaS, quality: $0.quality, words: $0.etaText, at: $0.at) }
+        let first = row.etaS.map { Bus(etaS: $0, quality: row.quality, words: row.etaText ?? BusTimes.words($0, quality: row.quality)) }
+        let later = row.later.prefix(2).map { Bus(etaS: $0.etaS, quality: $0.quality, words: $0.etaText) }
         return (0..<3).map { $0 == 0 ? first : ($0 - 1 < later.count ? later[$0 - 1] : nil) }
     }
 
-    /// The row's three cells. `clock` writes a time as the account has it
-    /// (12- or 24-hour, the language's AM/PM), passed in for the tests.
-    static func cells(_ row: BoardRow, asClock: Bool, clock: (Date) -> String = campusTime) -> [NearbyCell] {
+    /// The row's three cells. Next is the large one; with no first bus, none is.
+    static func cells(_ row: BoardRow) -> [NearbyCell] {
         let all = buses(row)
-        // Next is the large one; with no first bus, none is.
-        return all.indices.map { j in
-            cell(all[j], prev: j > 0 ? all[j - 1] : nil, first: j == 0, pick: j == 0, asClock: asClock, clock: clock)
-        }
+        return all.indices.map { cell(all[$0], first: $0 == 0) }
     }
 
-    static func cell(_ bus: Bus?, prev: Bus?, first: Bool, pick: Bool, asClock: Bool, clock: (Date) -> String = campusTime) -> NearbyCell {
+    static func cell(_ bus: Bus?, first: Bool) -> NearbyCell {
         guard let bus else { return NearbyCell() }
-        var c = NearbyCell(mark: bus.approx ? "~" : "", pick: pick)
-        if asClock, let d = bus.at.flatMap(parseISODate) {
-            let (figure, half, before) = clockParts(clock(d))
-            // AM/PM on Next, and after it only where the day's half changes from the cell before.
-            let sayHalf = !half.isEmpty && (first || prev?.at.flatMap(parseISODate).map { clockParts(clock($0)).half != half } ?? true)
-            c.figure = figure
-            if sayHalf { if before { c.lead = half + "\u{00A0}" } else { c.trail = "\u{00A0}" + half } }
-            c.spoken = Spoken.spell(c.mark + clock(d))
-            // The first says how long there is, as minutes would.
-            if pick { c.spoken = L("%@, in %@", c.spoken, wait(bus)) }
+        var c = NearbyCell(mark: bus.approx ? "~" : "", pick: first)
+        // An older server's "now" for a guess: worded here instead, "~1 min", as the server words it now.
+        let words =
+            bus.approx && bus.words.range(of: #"\d"#, options: .regularExpression) == nil
+            ? BusTimes.words(bus.etaS, quality: bus.quality) : bus.words
+        if let r = words.range(of: #"\d+"#, options: .regularExpression) {
+            c.figure = String(words[r])
+            if first { c.trail = String(words[r.upperBound...]) }
         } else {
-            // An older server's "now" for a guess: worded here instead, "~1 min", as the server words it now.
-            let words =
-                bus.approx && bus.words.range(of: #"\d"#, options: .regularExpression) == nil
-                ? BusTimes.words(bus.etaS, quality: bus.quality) : bus.words
-            if let r = words.range(of: #"\d+"#, options: .regularExpression) {
-                c.figure = String(words[r])
-                if first { c.trail = String(words[r.upperBound...]) }
-            } else {
-                // "now", "Arriving": no figures to set large, said as they are.
-                c.mark = ""
-                c.figure = words
-            }
-            // Live or estimated only for Next; Then and After have "about" for a guess.
-            c.spoken = Spoken.eta(bus.etaS, quality: bus.quality, withQuality: first) ?? Spoken.spell(words)
+            // "now", "Arriving": no figures to set large, said as they are.
+            c.mark = ""
+            c.figure = words
         }
+        // Live or estimated only for Next; Then and After have "about" for a guess.
+        c.spoken = Spoken.eta(bus.etaS, quality: bus.quality, withQuality: first) ?? Spoken.spell(words)
         return c
-    }
-
-    /// How long until the first bus, said after its clock time: "under a
-    /// minute" for a bus seen at the stop, never "Arriving"; "about 1 minute"
-    /// for a guess, however close.
-    static func wait(_ bus: Bus) -> String {
-        bus.quality == "live"
-            ? Spoken.minutes(TimeInterval(bus.etaS)) : L("about %@", Spoken.minutes(TimeInterval(max(bus.etaS, 60))))
-    }
-
-    /// "6:02 PM" as its figures and the half of the day ("PM", "下午"), and
-    /// whether the half comes first, as in Chinese. 24-hour time has no half.
-    static func clockParts(_ whole: String) -> (figure: String, half: String, before: Bool) {
-        guard let r = whole.range(of: #"[\d:]+"#, options: .regularExpression) else { return (whole, "", false) }
-        let blank = CharacterSet.whitespaces.union(CharacterSet(charactersIn: "\u{00A0}"))
-        let lead = whole[..<r.lowerBound].trimmingCharacters(in: blank)
-        let trail = whole[r.upperBound...].trimmingCharacters(in: blank)
-        return (String(whole[r]), lead.isEmpty ? trail : lead, !lead.isEmpty)
     }
 
     /// Where the row's bus is going as the server words it, split around the

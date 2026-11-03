@@ -3,7 +3,6 @@
 "%@ removed from today" = "已从今天移除 %@";
 "%@ stop" = "%@ 站";
 "%@ · long gap" = "%@ · 空档较长";
-"%@, in %@" = "%@，%@后";
 ", %@ min walk" = "，步行 %@ 分钟";
 "Add your email" = "添加你的邮箱";
 "Add your email to report a wrong answer, so we can reply to you." = "添加邮箱后才能反馈错误的结果，方便我们回复你。";
@@ -17,7 +16,6 @@
 "Cancel" = "取消";
 "Checking…" = "正在查询…";
 "Clear" = "清除";
-"Clock time" = "几点几分";
 "Close" = "关闭";
 "Couldn't remove it. Check your connection." = "无法移除。请检查网络连接。";
 "Directions can start from your nearest stop, using your location. Without it, terminus assumes you're at your last class or at home." = "路线可以从离你最近的车站开始，这需要用到你的位置。否则，terminus 会假设你在上一节课的地点或在家。";
@@ -29,7 +27,6 @@
 "Go somewhere else" = "去别的地方";
 "Going somewhere anyway?" = "还是要去别的地方？";
 "here" = "在这里";
-"In minutes" = "几分钟后";
 "Is this wrong?" = "答案不对？";
 "Leave" = "出发";
 "Leaves in %@ min %@ s" = "%1$@ 分 %2$@ 秒后开";
@@ -62,7 +59,6 @@
 "Search, pinned stops and services are in Stops." = "搜索、已固定的车站和线路都在“车站”里。";
 "Send" = "发送";
 "Sending…" = "正在发送…";
-"Show times" = "时间显示方式";
 "Skip every trip left today" = "今天剩下的行程都不去";
 "Skip this class" = "这节课不去";
 "Steps" = "步骤";
