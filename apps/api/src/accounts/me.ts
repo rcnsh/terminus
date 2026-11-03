@@ -1766,7 +1766,10 @@ async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: numbe
       available: sa.available !== false,
       via,
       viaText: viaText(via),
-      board: board.map((r) => ({ ...nearbyRow(r, nowMs, headwayFor(graph, r.svc)), ...nearbyDest(idx, r.svc, stop.code, r.via) })),
+      board: board.map((r) => ({
+        ...nearbyRow(r, nowMs, headwayFor(graph, r.svc)),
+        ...nearbyDest(idx, r.svc, stop.code, r.via, r.towards),
+      })),
     };
   });
   // As old as the oldest times on it, so "Updated N ago" is true.

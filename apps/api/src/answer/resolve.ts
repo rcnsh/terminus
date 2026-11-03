@@ -743,12 +743,19 @@ const ONE_LINE_PLACE = 12;
  * `destPlace` is the place alone, for a client that sets it apart from the
  * words around it. A short name is kept whole on one line. `svc` is the
  * row's name: a two-way public bus ("151") is two routes ("151/1",
- * "151/2"), and the one that calls here is the one meant.
+ * "151/2"), and the one meant is the one calling here; where both do, the
+ * one whose way on is the row's `towards`.
  */
-export function nearbyDest(idx: GraphIndex, svc: string, stopCode: string, via: string[]): { dest: string; destPlace: string | null } {
-  const key = idx.routes.has(svc)
-    ? svc
-    : ([...idx.routes.keys()].find((k) => svcName(k) === svc && idx.routes.get(k)!.pos.has(stopCode)) ?? svc);
+export function nearbyDest(
+  idx: GraphIndex,
+  svc: string,
+  stopCode: string,
+  via: string[],
+  towards: string[] = [],
+): { dest: string; destPlace: string | null } {
+  const here = (idx.servingStop.get(stopCode) ?? []).filter((k) => svcName(k) === svc);
+  const same = (k: string) => towardsFrom(idx, k, stopCode).join('\u0000') === towards.join('\u0000');
+  const key = idx.routes.has(svc) ? svc : (here.find(same) ?? here[0] ?? svc);
   const r = idx.routes.get(key);
   const at = r?.pos.get(stopCode);
   if (!r || !at) return { dest: towardsText(towardsFrom(idx, key, stopCode)), destPlace: null };

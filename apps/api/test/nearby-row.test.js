@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { GRAPH, GRAPH_PUBLIC } from '../src/answer/graph.ts';
-import { etaText, indexGraph, nearbyDest, nearbyRow } from '../src/answer/resolve.ts';
+import { etaText, indexGraph, nearbyDest, nearbyRow, towardsFrom } from '../src/answer/resolve.ts';
 import { viaFrom } from '../src/answer/via.ts';
 
 const NOW = Date.parse('2026-08-27T08:21:00Z');
@@ -107,4 +107,14 @@ test('nearbyDest: a two-way public bus, named on its row as one service, says wh
   const code = pub.routes.get('151/1').seq[2];
   assert.deepEqual(nearbyDest(pub, '151', code, viaFrom(pub, '151/1', code)), nearbyDest(pub, '151/1', code, viaFrom(pub, '151/1', code)));
   assert.notEqual(nearbyDest(pub, '151', code, []).dest, 'Ends here');
+});
+
+test('nearbyDest: at a stop both ways of a public bus call at, each row says where its own way goes', () => {
+  const pub = indexGraph(GRAPH_PUBLIC);
+  const [one, two] = ['151/1', '151/2'].map(
+    (k) => nearbyDest(pub, '151', '16009', viaFrom(pub, k, '16009'), towardsFrom(pub, k, '16009')).dest,
+  );
+  assert.equal(one, nearbyDest(pub, '151/1', '16009', []).dest);
+  assert.equal(two, nearbyDest(pub, '151/2', '16009', []).dest);
+  assert.notEqual(one, two);
 });
