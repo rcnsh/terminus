@@ -597,9 +597,13 @@ object at the change and once the second bus has gone.
   clock moves. When the feed no longer lists that bus, the next of the same
   service from the same stop; once it leaves before any bus of that
   service you can still catch (you didn't set off for it), the choice
-  lapses and the trip is back on the best bus. The steps go once you're on
-  your way. `ENDS_EARLY_MIN` stays 30 for every class: a tutorial that
-  lets out at :50 shows the trip home early, and "Later bus" is how to wait.
+  lapses and the trip is back on the best bus. Past the leave-by with
+  nothing said, you may not have set off: "Later bus" stays while there's
+  one ("Earlier bus" is always empty), and from a plan kept past its
+  leave-by it's the answer's own bus, until the plan's bus leaves. The steps go once you say you've left, are
+  at the stop or on the bus. A step is never to the bus already shown.
+  `ENDS_EARLY_MIN` stays 30 for every class: a tutorial that lets out at
+  :50 shows the trip home early, and "Later bus" is how to wait.
 - **"At the stop"** means at the plan's boarding stop from 15 minutes before
   its leave-by (`WAIT_EARLY_MS`): not hours before at a stop you live by, and
   not at a stop you're riding past. The headline is then the bus ("D2 at

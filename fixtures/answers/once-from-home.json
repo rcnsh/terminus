@@ -202,7 +202,19 @@
       "summary": "arrive 12:06 · D2 12:03 at PGP Foyer"
     },
     "upcoming": null,
-    "step": null,
+    "step": {
+      "trip": "4:720:COM3",
+      "earlier": null,
+      "later": {
+        "svc": "D2",
+        "stop": "PGPR",
+        "board": "2026-08-27T04:15:00Z"
+      },
+      "moved": false,
+      "earlierLabel": "Earlier bus",
+      "laterLabel": "Later bus",
+      "bestLabel": "Best bus"
+    },
     "title": "D2 · 12:03",
     "heading": "Going to COM 3",
     "remindAt": null

@@ -1421,7 +1421,7 @@ export function components(): Record<string, unknown> {
                   step: {
                     type: ['object', 'null'],
                     description:
-                      'Buttons to step to the bus before or after the one shown, on a trip by bus (a class, home, a favourite, a stop or room) until you set off: ' +
+                      'Buttons to step to the bus before or after the one shown, on a trip by bus (a class, home, a favourite, a stop or room) until you set off (past the leave-by, `earlier` is null, and only while there is a later bus or `moved`): ' +
                       'show `earlierLabel` and `laterLabel` beside the bus, greyed out where `earlier` or `later` is null, and `bestLabel` once `moved`. ' +
                       'Send `trip` and the bus (`earlier` or `later` as it is, or null for `bestLabel`) to POST /api/me/step. Null otherwise.',
                     required: ['trip', 'earlier', 'later', 'moved', 'earlierLabel', 'laterLabel', 'bestLabel'],

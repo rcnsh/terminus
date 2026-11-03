@@ -418,16 +418,21 @@ export function titleOf(a: MeAnswer, h12: boolean): string {
 
 /**
  * The card's steps: on a trip by bus (a class's, home, a favourite) until
- * you set off. Not at the stop, on the bus or once it has gone: the trip
- * follows its plan from there.
+ * you set off. Past the leave-by with nothing said, you may not have: a
+ * later bus is still yours to take. Not once you've said you left, at the
+ * stop, on the bus or once it has gone: the trip follows its plan from there.
  */
 function stepOf(a: MeAnswer, kind: CardKind, trip: TripView): CardStep | null {
   const s = a.steps;
   // A bus to step from: the leave-by's, or with none (it goes within a minute) the headline's.
   if (!s || !(a.leave ? a.leave.svc : a.bus) || (kind !== 'class' && kind !== 'trip')) return null;
-  if (trip.phase !== 'idle' && trip.phase !== 'due') return null;
+  if (trip.phase !== 'idle' && trip.phase !== 'due' && trip.phase !== 'heading') return null;
   if (trip.gone || trip.rec) return null;
-  return { ...s, earlierLabel: m().earlierBus, laterLabel: m().laterBus, bestLabel: m().bestBus };
+  // Past the leave-by only a later bus is worth offering, or the best bus
+  // back from one you chose: neither, no row.
+  if (trip.phase === 'heading' && !s.later && !s.moved) return null;
+  const earlier = trip.phase === 'heading' ? null : s.earlier;
+  return { ...s, earlier, earlierLabel: m().earlierBus, laterLabel: m().laterBus, bestLabel: m().bestBus };
 }
 
 /** The answer has a departure to give as a clock time: not a sort key ('unknown'), and not nothing running. */

@@ -60,6 +60,7 @@ import {
   tripEnd,
 } from './trip.ts';
 import { SAME_BUS_MS, choosePlan, planOfLeave, sameBus } from './plan.ts';
+import { stepsPastLeave } from './step.ts';
 import { m } from '../i18n.ts';
 import { feedDownSince } from '../ops/monitor.ts';
 import { pushEnabled } from '../push/push.ts';
@@ -813,9 +814,14 @@ async function plannedTrip(env: Env, ctx: ExecutionContext, deps: MeDeps, rider:
   // then the answer is the next way there. The plan's times are from an
   // earlier answer: never shown as live.
   const kept = bus && bus !== made && rec?.kind !== 'missed';
-  // Steps are from the answer's own bus: none from a kept plan's other one.
+  // Steps are from the answer's own bus. From a kept plan's other one, only
+  // past its leave-by: the answer's bus, later, for someone who hasn't set off.
   const answer: MeAnswer = kept
-    ? { ...fresh, leave: { ...leaveOf(bus), stale: true }, steps: sameBus(bus, made) ? fresh.steps : null }
+    ? {
+        ...fresh,
+        leave: { ...leaveOf(bus), stale: true },
+        steps: sameBus(bus, made) ? fresh.steps : stepsPastLeave(bus, fresh.leave, fresh.steps?.moved ?? false, key, nowMs),
+      }
     : fresh;
 
   const home = dest.why === 'home' || dest.why === 'gap-home';

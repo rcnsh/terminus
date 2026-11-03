@@ -211,7 +211,19 @@
       "summary": "09:15 到达 · 在 PGP 搭 09:06 的 R2"
     },
     "upcoming": null,
-    "step": null,
+    "step": {
+      "trip": "4:545:UTOWN",
+      "earlier": null,
+      "later": {
+        "svc": "D2",
+        "stop": "PGP",
+        "board": "2026-08-27T01:14:00Z"
+      },
+      "moved": false,
+      "earlierLabel": "早一班",
+      "laterLabel": "晚一班",
+      "bestLabel": "最佳班次"
+    },
     "title": "R2 · 09:06",
     "heading": "下一节课 · GEA1000 @ UTown",
     "remindAt": null

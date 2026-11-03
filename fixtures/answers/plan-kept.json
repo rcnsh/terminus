@@ -170,7 +170,19 @@
       "summary": "arrive 09:15 · D2 09:06 at PGP"
     },
     "upcoming": null,
-    "step": null,
+    "step": {
+      "trip": "4:555:UTOWN",
+      "earlier": null,
+      "later": {
+        "svc": "D2",
+        "stop": "PGP",
+        "board": "2026-08-27T01:18:00Z"
+      },
+      "moved": false,
+      "earlierLabel": "Earlier bus",
+      "laterLabel": "Later bus",
+      "bestLabel": "Best bus"
+    },
     "title": "D2 · ~09:06",
     "heading": "Next class · GEA1000 @ UTown",
     "remindAt": null
