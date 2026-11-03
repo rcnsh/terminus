@@ -1078,10 +1078,13 @@ function NearbyDest({ b }) {
  * Under the signs, once, as under a stop's board: what a struck-out time and
  * a "~" mean, each only when one is showing, and that a row opens its line.
  */
-function NearbyFoot({ stops }) {
+function NearbyFoot({ stops, asClock }) {
   const buses = stops.flatMap((s) => s.board.flatMap((b) => [b, ...(b.later ?? []).slice(0, 2)]));
   const struck = buses.some((x) => x.tooSoon);
-  const guessed = buses.some((x) => x.etaS != null && (x.quality === 'scheduled' || x.quality === 'stale'));
+  // Only a "~" on the screen needs explaining: a guessed "now" has none.
+  const guessed = buses.some(
+    (x) => x.etaS != null && (x.quality === 'scheduled' || x.quality === 'stale') && (asClock ? x.at : /\d/.test(etaText(x))),
+  );
   return html`<div class="nb-foot">
     ${struck && html`<p>${t("Crossed out: you can't walk there in time.")}</p>`}
     ${guessed && html`<p>${t('~ is a guess from the timetable, not a live time.')}</p>`}
@@ -1170,7 +1173,7 @@ function NearbyCard({ stops }) {
           </section>
         `,
       )}
-      <${NearbyFoot} stops=${stops} />
+      <${NearbyFoot} stops=${stops} asClock=${asClock} />
       <button type="button" class="to-stops" onClick=${() => (location.hash = '#buses')}>
         <${Icon} paths=${STOP_SIGN} class="to-stops-icon" />
         <span><b>${t('Another stop, or a whole line')}</b><span>${t('Search, pinned stops and services are in Stops.')}</span></span>

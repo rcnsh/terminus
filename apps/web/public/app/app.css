@@ -112,7 +112,8 @@ button.nearby-row:hover { background: color-mix(in srgb, var(--ink) 4%, transpar
 .nb-head span:nth-child(n + 3) { text-align: right; }
 /* As a board row's title: the place in ink, the words around it ("to", "via") muted. */
 .nb-to { min-width: 0; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; color: var(--muted); font-size: 0.9rem; line-height: 1.25; overflow-wrap: anywhere; }
-.nb-to b { color: var(--ink); font-weight: 600; }
+/* The place moves to its own line whole when it fits there, breaking only when wider than the column. */
+.nb-to b { display: inline-block; max-width: 100%; color: var(--ink); font-weight: 600; }
 /* The times in the board's figures (.bt-big, .bt-then): the number large, its unit small. */
 .nb-time { text-align: right; color: var(--muted); font: 600 1rem/1 var(--display); letter-spacing: -0.01em; white-space: nowrap; }
 .nb-time small { margin-left: 1px; font: 500 0.68rem/1 var(--font); letter-spacing: 0; }

@@ -673,7 +673,7 @@ window.TERMINUS_ZH = {
   'Up to date': '已是最新',
   'Up to date, next update in {0} s': '已是最新，{0} 秒后更新',
   "Couldn't update": '无法更新',
-  'Tap a service to see its whole line.': '点一条线路，查看它经过的所有车站。',
+  'Tap a service to see its whole line.': '点一条线路，查看它经过的每个车站。',
   'No line to show for {0}.': '{0} 没有可显示的路线。',
   'No buses running': '没有巴士在运行',
   '1 bus running': '1 辆巴士在运行',
