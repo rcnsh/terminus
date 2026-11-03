@@ -6,9 +6,8 @@ import Foundation
 /// "6:02 PM"); Then and After only their figures ("16", "~28"), with AM/PM
 /// where the day's half changes, as a printed timetable does. An estimate is
 /// marked "~" in both languages: in a column of figures a word ("约") reads
-/// as part of the next. The first bus you can catch is the large one
-/// (`pick`), in whichever column. One too soon to catch is struck through
-/// once, as one run of text. A dash with no bus. As the web's NearbyTime.
+/// as part of the next. The first bus, in Next, is the large one (`pick`).
+/// A dash with no bus. As the web's NearbyTime.
 struct NearbyCell: Equatable {
     /// "~" for an estimate, else empty.
     var mark = ""
@@ -18,15 +17,13 @@ struct NearbyCell: Equatable {
     var figure = "–"
     /// Small, after the figures: " min", " PM".
     var trail = ""
-    /// Due before you could walk to the stop.
-    var struck = false
-    /// The first bus you can catch.
+    /// The row's first bus, set large.
     var pick = false
-    /// How VoiceOver says the time alone ("about 6:02 PM, too soon to catch"); empty with no bus.
+    /// How VoiceOver says the time alone ("about 6:02 PM"); empty with no bus.
     var spoken = ""
 
     var hasBus: Bool { !spoken.isEmpty }
-    /// The whole cell as one run of text, as a struck one is drawn.
+    /// The whole cell as one run of text.
     var text: String { mark + lead + figure + trail }
 }
 
@@ -39,7 +36,6 @@ enum NearbyCells {
         let quality: String
         let words: String
         let at: String?
-        let tooSoon: Bool
 
         var approx: Bool { quality == "scheduled" || quality == "stale" }
     }
@@ -47,30 +43,25 @@ enum NearbyCells {
     /// The row's three buses (`[row, later[0], later[1]]`), nil where there's none.
     static func buses(_ row: BoardRow) -> [Bus?] {
         let first = row.etaS.map {
-            Bus(
-                etaS: $0, quality: row.quality, words: row.etaText ?? BusTimes.words($0, quality: row.quality), at: row.at,
-                tooSoon: row.tooSoon)
+            Bus(etaS: $0, quality: row.quality, words: row.etaText ?? BusTimes.words($0, quality: row.quality), at: row.at)
         }
-        let later = row.later.prefix(2).map { Bus(etaS: $0.etaS, quality: $0.quality, words: $0.etaText, at: $0.at, tooSoon: $0.tooSoon) }
+        let later = row.later.prefix(2).map { Bus(etaS: $0.etaS, quality: $0.quality, words: $0.etaText, at: $0.at) }
         return (0..<3).map { $0 == 0 ? first : ($0 - 1 < later.count ? later[$0 - 1] : nil) }
     }
-
-    /// Which of the buses is the one to catch: the first with a time that isn't too soon.
-    static func pick(_ buses: [Bus?]) -> Int? { buses.firstIndex { $0.map { !$0.tooSoon } ?? false } }
 
     /// The row's three cells. `clock` writes a time as the account has it
     /// (12- or 24-hour, the language's AM/PM), passed in for the tests.
     static func cells(_ row: BoardRow, asClock: Bool, clock: (Date) -> String = campusTime) -> [NearbyCell] {
         let all = buses(row)
-        let p = pick(all)
+        // Next is the large one; with no first bus, none is.
         return all.indices.map { j in
-            cell(all[j], prev: j > 0 ? all[j - 1] : nil, first: j == 0, pick: j == p, asClock: asClock, clock: clock)
+            cell(all[j], prev: j > 0 ? all[j - 1] : nil, first: j == 0, pick: j == 0, asClock: asClock, clock: clock)
         }
     }
 
     static func cell(_ bus: Bus?, prev: Bus?, first: Bool, pick: Bool, asClock: Bool, clock: (Date) -> String = campusTime) -> NearbyCell {
         guard let bus else { return NearbyCell() }
-        var c = NearbyCell(mark: bus.approx ? "~" : "", struck: bus.tooSoon, pick: pick)
+        var c = NearbyCell(mark: bus.approx ? "~" : "", pick: pick)
         if asClock, let d = bus.at.flatMap(parseISODate) {
             let (figure, half, before) = clockParts(clock(d))
             // AM/PM on Next, and after it only where the day's half changes from the cell before.
@@ -78,7 +69,7 @@ enum NearbyCells {
             c.figure = figure
             if sayHalf { if before { c.lead = half + "\u{00A0}" } else { c.trail = "\u{00A0}" + half } }
             c.spoken = Spoken.spell(c.mark + clock(d))
-            // The one to catch says how long there is, as minutes would.
+            // The first says how long there is, as minutes would.
             if pick { c.spoken = L("%@, in %@", c.spoken, wait(bus)) }
         } else {
             // An older server's "now" for a guess: worded here instead, "~1 min", as the server words it now.
@@ -96,11 +87,10 @@ enum NearbyCells {
             // Live or estimated only for Next; Then and After have "about" for a guess.
             c.spoken = Spoken.eta(bus.etaS, quality: bus.quality, withQuality: first) ?? Spoken.spell(words)
         }
-        if bus.tooSoon { c.spoken += L(", too soon to catch") }
         return c
     }
 
-    /// How long until the one to catch, said after its clock time: "under a
+    /// How long until the first bus, said after its clock time: "under a
     /// minute" for a bus seen at the stop, never "Arriving"; "about 1 minute"
     /// for a guess, however close.
     static func wait(_ bus: Bus) -> String {
@@ -162,21 +152,20 @@ enum NearbyCells {
     }
 
     /// The row as VoiceOver reads it: the line, where it's going, then each
-    /// bus in order, the one to catch said so.
+    /// bus in order.
     static func spoken(_ row: BoardRow, cells: [NearbyCell]) -> String {
         var parts = [row.paid ? L("Public bus %@, fare applies", row.svc) : L("Bus %@", row.svc), destText(row)]
         for (j, c) in cells.enumerated() where c.hasBus {
-            parts.append(c.pick ? L("next you can catch, %@", c.spoken) : j > 0 ? L("then %@", c.spoken) : c.spoken)
+            parts.append(j > 0 ? L("then %@", c.spoken) : c.spoken)
         }
         return parts.filter { !$0.isEmpty }.joined(separator: Lang.zh ? "，" : ", ")
     }
 
-    /// Under the signs, once: what a struck-out time and a "~" mean, each
-    /// only when one is showing, and that a row opens its line.
+    /// Under the signs, once: what a "~" means, only when one is showing,
+    /// and that a row opens its line.
     static func foot(_ shown: [[NearbyCell]]) -> [String] {
         let all = shown.joined()
         var out: [String] = []
-        if all.contains(where: \.struck) { out.append(L("Crossed out: you can't walk there in time.")) }
         if all.contains(where: { $0.mark == "~" }) { out.append(L("~ is a guess from the timetable, not a live time.")) }
         out.append(L("Tap a service to see its whole line."))
         return out

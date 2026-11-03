@@ -5,7 +5,6 @@
 "%@ · long gap" = "%@ · 空档较长";
 "%@, in %@" = "%@，%@后";
 ", %@ min walk" = "，步行 %@ 分钟";
-", too soon to catch" = "，走过去已来不及搭";
 "Add your email" = "添加你的邮箱";
 "Add your email to report a wrong answer, so we can reply to you." = "添加邮箱后才能反馈错误的结果，方便我们回复你。";
 "After" = "再之后";
@@ -21,7 +20,6 @@
 "Clock time" = "几点几分";
 "Close" = "关闭";
 "Couldn't remove it. Check your connection." = "无法移除。请检查网络连接。";
-"Crossed out: you can't walk there in time." = "划掉的：走过去来不及。";
 "Directions can start from your nearest stop, using your location. Without it, terminus assumes you're at your last class or at home." = "路线可以从离你最近的车站开始，这需要用到你的位置。否则，terminus 会假设你在上一节课的地点或在家。";
 "Directions to %@" = "到 %@ 的路线";
 "Done" = "完成";
@@ -41,7 +39,6 @@
 "More options" = "更多选项";
 "Nearby" = "附近";
 "Next" = "下一个";
-"next you can catch, %@" = "能搭上的下一班，%@";
 "No answer yet" = "还没有答案";
 "No buses are shown until your day starts. Tap Nearby to check anyway." = "在你的一天开始前不显示巴士。仍可点按“附近”查看。";
 "No live data" = "没有实时数据";

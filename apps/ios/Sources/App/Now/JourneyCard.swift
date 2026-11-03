@@ -162,7 +162,7 @@ struct RoadLine: View {
 
     /// When your bus reaches `stop`, `left` seconds away: "arriving at COM3"
     /// only for a bus seen; an estimate is "in about 1 min" to the end.
-    static func words(stop: String, left: Int, live: Bool) -> String {
+    nonisolated static func words(stop: String, left: Int, live: Bool) -> String {
         let n = Int((Double(left) / 60).rounded())
         if left <= 0 { return L("from %@", stop) }
         if !live { return L("reaches %@ in about %@ min", stop, "\(max(1, n))") }

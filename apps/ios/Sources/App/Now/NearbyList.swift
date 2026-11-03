@@ -3,12 +3,12 @@ import SwiftUI
 /// The stops near you as their signs: the name plate with the walk there
 /// and the stop's star, then a row per service read like a stop's board:
 /// where it's going and its next three buses, in minutes or as clock times
-/// (the switch over the signs, kept on this phone). The first bus you can
-/// catch is set large; one due before you could walk there is struck out.
+/// (the switch over the signs, kept on this phone). The first bus is set
+/// large.
 /// Every sign has the same columns, each as wide as its widest value on any
 /// of them, so the figures line up down the page. The plate opens the
 /// stop's board on the Stops tab, a row its service's line from there; under
-/// the signs, what a struck time and a "~" mean, and a way to any other stop
+/// the signs, what a "~" means, and a way to any other stop
 /// or line. As Android's NearbyList and the web app (NearbyCells has the words).
 struct NearbyList: View {
     @Environment(AppModel.self) private var app
@@ -353,8 +353,7 @@ private struct NearbyDest: View {
 }
 
 /// One bus's cell (NearbyCell has what it says): the figures in the board's
-/// display weights, the unit or AM/PM small; struck out as plain text at one
-/// size, so the line through it is straight and can't turn a 1 into a 4.
+/// display weights, the unit or AM/PM small.
 private struct NearbyTimeView: View {
     @ScaledMetric(relativeTo: .body) private var percent: CGFloat = 100
     private var scale: CGFloat { percent / 100 }
@@ -380,12 +379,6 @@ private struct NearbyTimeView: View {
 
     private func styled(_ zoom: CGFloat) -> Text {
         let scale = scale * zoom
-        if cell.struck {
-            return Text(verbatim: cell.text)
-                .font(.system(size: 14.5 * scale, weight: .medium))
-                .foregroundStyle(Color.muted)
-                .strikethrough(true, color: Color.muted)
-        }
         let size: CGFloat = cell.pick ? (asClock ? 17.5 : 21.5) : (asClock ? 14.7 : 16)
         let big = Font.system(size: size * scale, weight: cell.pick ? .bold : .semibold).monospacedDigit()
         let small = Font.system(size: 11 * scale, weight: .medium)

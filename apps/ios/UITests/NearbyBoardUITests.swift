@@ -8,7 +8,7 @@ import XCTest
 /// clock held still so both themes show one moment.
 @MainActor
 final class NearbyBoardUITests: XCTestCase {
-    /// 11:55:30 AM on campus: COM 3's D1 struck at "1 min" (11:57 AM), then 12:09 PM.
+    /// 11:55:30 AM on campus: COM 3's D1 due at 11:57 AM, then 12:09 PM.
     private let noon = "2026-11-04T03:55:30Z"
 
     override func setUp() {
@@ -91,20 +91,22 @@ final class NearbyBoardUITests: XCTestCase {
         }
     }
 
-    /// Item 1, a struck "1 min" Next and the large time in Then; item 8, the
-    /// plates with the chevron, the star pinned (COM 3) and not (CLB); item 7,
-    /// the foot with all three lines.
+    /// Item 1, Next large with its unit, nothing struck; item 8, the plates
+    /// with the chevron, the star pinned (COM 3) and not (CLB); item 7, the
+    /// foot with the "~" line.
     func testMinutes() {
         at(noon)
         for theme in ["light", "dark"] {
             let app = nearby(theme: theme, clock: false)
             reveal(app.buttons["nearbyRow.COM3.D1"], in: app)
-            shot("nearby-1-minutes-struck-\(theme)", app)
+            shot("nearby-1-minutes-\(theme)", app)
             reveal(app.buttons["nearby.CLB"], in: app, margin: 120)
             shot("nearby-8-plates-pinned-and-not-\(theme)", app)
-            reveal(app.descendants(matching: .any)["nearbyFoot"], in: app)
-            XCTAssertTrue(app.descendants(matching: .any)["nearbyFoot"].label.contains("Crossed out"))
-            shot("nearby-7-foot-all-three-\(theme)", app)
+            let foot = app.descendants(matching: .any)["nearbyFoot"]
+            reveal(foot, in: app)
+            XCTAssertFalse(foot.label.contains("Crossed out"), foot.label)
+            XCTAssertTrue(foot.label.contains("guess"), foot.label)
+            shot("nearby-7-foot-\(theme)", app)
             app.terminate()
         }
     }
@@ -121,7 +123,7 @@ final class NearbyBoardUITests: XCTestCase {
         }
     }
 
-    /// Item 3: Chinese, 上午/下午 before the time; then 24-hour with a struck 18:0x.
+    /// Item 3: Chinese, 上午/下午 before the time; then 24-hour.
     func testClockChinese() {
         at(noon)
         for theme in ["light", "dark"] {
@@ -130,30 +132,35 @@ final class NearbyBoardUITests: XCTestCase {
             shot("nearby-3-clock-zh-12h-\(theme)", app)
             app.terminate()
         }
-        // 5:59:30 PM: COM 3's D2 struck at 18:01.
+        // 5:59:30 PM: COM 3's D2 due at 18:01.
         at("2026-11-04T09:59:30Z")
         setProfile { $0["clock"] = "24" }
         for theme in ["light", "dark"] {
             let app = nearby(lang: "zh", theme: theme, clock: true, hours: "24", waitFor: "nearbyRow.COM3.D2")
             reveal(app.buttons["nearbyRow.COM3.D2"], in: app)
-            shot("nearby-3-clock-zh-24h-struck-\(theme)", app)
+            shot("nearby-3-clock-zh-24h-\(theme)", app)
             app.terminate()
         }
     }
 
-    /// Item 4, on the smallest screen (an iPhone SE): clock times at the
-    /// usual text size and one step up; the places wrap, no time spills over,
-    /// and when a row can't fit at 0.85 every row's times go under it at full size.
+    /// Item 4, on the smallest screen (an iPhone SE): minutes and clock
+    /// times at the usual text size, clock times up to three steps up; the
+    /// places wrap, no time spills over, and when a row can't fit at 0.85
+    /// every row's times go under it at full size.
     func testSmallScreen() {
         at(noon)
         let w = Int(XCUIScreen.main.screenshot().image.size.width)
-        for (size, cat) in [("default", nil), ("xl", "UICTContentSizeCategoryXL"), ("xxl", "UICTContentSizeCategoryXXL")] {
+        let sizes: [(mode: String, size: String, category: String?)] = [
+            ("minutes", "default", nil), ("clock", "default", nil), ("clock", "xl", "UICTContentSizeCategoryXL"),
+            ("clock", "xxxl", "UICTContentSizeCategoryXXXL"),
+        ]
+        for (mode, size, category) in sizes {
             for theme in ["light", "dark"] {
-                let app = nearby(theme: theme, clock: true, textSize: cat)
+                let app = nearby(theme: theme, clock: mode == "clock", textSize: category)
                 reveal(app.buttons["nearbyRow.COM3.D1"], in: app)
-                shot("r5-clock-\(w)pt-text-\(size)-\(theme)", app)
+                shot("r7-\(mode)-\(w)pt-text-\(size)-\(theme)", app)
                 reveal(app.buttons["nearbyRow.CLB.A1"], in: app)
-                shot("r5-clock-\(w)pt-text-\(size)-down-\(theme)", app)
+                shot("r7-\(mode)-\(w)pt-text-\(size)-down-\(theme)", app)
                 app.terminate()
             }
         }
@@ -174,9 +181,9 @@ final class NearbyBoardUITests: XCTestCase {
     /// Item 6, the destinations: a loop at its first stop ("via UTown", D1 at
     /// COM 3), one with no landmark ahead ("to KR Bus Ter", A1 at CLB) and a
     /// "–" (the last buses of the night, real hours); item 7, the foot with
-    /// nothing struck or guessed: only "Tap a service…".
+    /// nothing guessed: only "Tap a service…".
     func testDestinationsAndALastBus() {
-        // 10:50 PM: every bus live, none too soon, the last of each with no bus after it.
+        // 10:50 PM: every bus live, the last of each with no bus after it.
         at("2026-11-04T14:50:00Z", realHours: true)
         for theme in ["light", "dark"] {
             let app = nearby(theme: theme, clock: false)
@@ -197,19 +204,19 @@ final class NearbyBoardUITests: XCTestCase {
     func testAccessibilityOneLine() {
         at(noon)
         let app = nearby(theme: "light", clock: false)
-        let rows = checkAccessibility(app, struck: "nearbyRow.COM3.D1", estimate: "nearbyRow.COM3.D2")
+        let rows = checkAccessibility(app, clock: false)
         // None stacked.
         for id in rows { XCTAssertLessThan(app.buttons[id].frame.height, 66, "\(id) is on two lines") }
         XCTAssertEqual(refreshed(app), rows, "the rows keep their identifiers across a refresh")
     }
 
-    /// Round 4, item 6, on stacked rows: an iPhone SE, clock times, two text
-    /// sizes up (one up, every row still fits beside its times at 0.85 or more).
+    /// Round 4, item 6, on stacked rows: an iPhone SE, clock times, three text
+    /// sizes up (two up, every row still fits beside its times at 0.85 or more).
     func testAccessibilityStacked() throws {
         try XCTSkipUnless(XCUIScreen.main.screenshot().image.size.width <= 375, "rows stack only on a small screen: run it on an SE")
         at(noon)
-        let app = nearby(theme: "light", clock: true, textSize: "UICTContentSizeCategoryXXL")
-        let rows = checkAccessibility(app, struck: "nearbyRow.COM3.D1", estimate: "nearbyRow.COM3.D2")
+        let app = nearby(theme: "light", clock: true, textSize: "UICTContentSizeCategoryXXXL")
+        let rows = checkAccessibility(app, clock: true)
         // Every row stacked, or none: here, every one.
         for id in rows { XCTAssertGreaterThan(app.buttons[id].frame.height, 66, "\(id) isn't stacked") }
         XCTAssertEqual(refreshed(app), rows, "the rows keep their identifiers across a refresh")
@@ -217,7 +224,7 @@ final class NearbyBoardUITests: XCTestCase {
 
     /// The checks both layouts share; the rows' identifiers, in order.
     @discardableResult
-    private func checkAccessibility(_ app: XCUIApplication, struck: String, estimate: String) -> [String] {
+    private func checkAccessibility(_ app: XCUIApplication, clock: Bool) -> [String] {
         let all = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'nearby'")).allElementsBoundByIndex
         // As VoiceOver goes through them: top to bottom. (XCUITest lists a container's
         // own elements first, so its order isn't the reading order.)
@@ -253,21 +260,26 @@ final class NearbyBoardUITests: XCTestCase {
         let foot = ids.firstIndex(of: "nearbyFoot")
         XCTAssertNotNil(foot)
         XCTAssertGreaterThan(foot ?? -1, ids.lastIndex { $0.hasPrefix("nearbyRow.") } ?? .max, "the foot isn't after the last card")
-        // A struck row and an estimate's, as said.
-        for (id, struck) in [(struck, true), (estimate, false)] {
-            let said = app.buttons[id].label
-            print("\(id) says: \(said)")
-            if struck { XCTAssertTrue(said.contains("too soon to catch"), said) }
-            for word in ["next you can catch", "about", "minutes"] { XCTAssertTrue(said.contains(word), "\(word) not in: \(said)") }
-            XCTAssertFalse(said.contains("~"), said)
-            // Live or estimated for the first bus only, as Android reads it.
-            let tags = said.ranges(of: /\b(live|estimated)\b/)
-            XCTAssertLessThanOrEqual(tags.count, 1, said)
-            if let tag = tags.first, let then = said.range(of: "then ") {
-                XCTAssertLessThan(tag.lowerBound, then.lowerBound, said)
-            }
+        // Every row as Android reads it: the first bus with live or estimated (and in
+        // clock time its wait), then each later one, "about" for a guess. Nothing too soon.
+        let time = clock ? #"(about )?\d{1,2}:\d{2}\s[AP]M"# : #"(about )?(\d+ minutes?|under a minute)"#
+        let wait = #"(about )?(\d+ minutes?|under a minute)"#
+        // A stale time has "about" alone; a bus seen at the stop is "Arriving".
+        let first = clock ? "\(time), in \(wait)" : "(\(time)(, (live|estimated))?|Arriving)"
+        let shape = #"^(Bus|Public bus) [^,]+(, [^,]+)?(, "# + first + #")?(, then "# + time + ")*$"
+        var checked = 0
+        for r in rows {
+            let said = app.buttons[r.id].label
+            if r.id == "nearbyRow.COM3.D1" || r.id == "nearbyRow.COM3.D2" { print("\(r.id) says: \(said)") }
+            for word in ["too soon", "next you can catch", "~"] { XCTAssertFalse(said.contains(word), "\(word) in: \(said)") }
             XCTAssertNil(said.range(of: #"\bmin\b"#, options: .regularExpression), "a bare min in: \(said)")
+            guard !said.contains("fare applies") else { continue }
+            XCTAssertNotNil(said.range(of: shape, options: .regularExpression), "not as Android reads it: \(said)")
+            checked += 1
         }
+        XCTAssertGreaterThan(checked, 3)
+        // An estimate's row says so: "then about".
+        XCTAssertTrue(app.buttons["nearbyRow.COM3.D2"].label.contains("then about"), app.buttons["nearbyRow.COM3.D2"].label)
         return rows.map(\.id)
     }
 

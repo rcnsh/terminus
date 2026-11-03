@@ -9,15 +9,12 @@ struct BoardRow: Decodable, Hashable, Sendable {
         var eta: String?
         /// When it's due (ISO, to the minute); nil from an older server.
         var at: String?
-        /// Due before you could walk to the stop (Nearby only).
-        var tooSoon = false
-        enum CodingKeys: String, CodingKey { case etaS, quality, eta, at, tooSoon }
-        init(etaS: Int, quality: String, eta: String?, at: String? = nil, tooSoon: Bool = false) {
+        enum CodingKeys: String, CodingKey { case etaS, quality, eta, at }
+        init(etaS: Int, quality: String, eta: String?, at: String? = nil) {
             self.etaS = etaS
             self.quality = quality
             self.eta = eta
             self.at = at
-            self.tooSoon = tooSoon
         }
         init(from d: Decoder) throws {
             let c = try d.container(keyedBy: CodingKeys.self)
@@ -28,7 +25,6 @@ struct BoardRow: Decodable, Hashable, Sendable {
             quality = c.string(.quality) ?? "live"
             eta = c.string(.eta)
             at = c.string(.at).flatMap { $0.isEmpty ? nil : $0 }
-            tooSoon = c.bool(.tooSoon) ?? false
         }
 
         /// "14 min", "~20 min": the server's words, else worded here.
@@ -66,8 +62,6 @@ struct BoardRow: Decodable, Hashable, Sendable {
     let toText: String?
     /// When the next bus is due (ISO, to the minute); nil without one, or from an older server.
     let at: String?
-    /// The next bus is due before you could walk to the stop (Nearby only).
-    let tooSoon: Bool
     /// Where it's going, worded and translated on the server ("to PGP Foyer",
     /// "via UTown", "Ends here"); nil from an older server.
     let dest: String?
@@ -76,7 +70,7 @@ struct BoardRow: Decodable, Hashable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case svc, etaS, quality, color, paid, later, towards, via, crowd, endsAt, running, stopped, resumesAt, eta, laterText, toText, at,
-            tooSoon, dest, destPlace
+            dest, destPlace
     }
 
     init(from d: Decoder) throws {
@@ -100,7 +94,6 @@ struct BoardRow: Decodable, Hashable, Sendable {
         laterText = c.string(.laterText).flatMap { $0.isEmpty ? nil : $0 }
         toText = c.string(.toText).flatMap { $0.isEmpty ? nil : $0 }
         at = c.string(.at).flatMap { $0.isEmpty ? nil : $0 }
-        tooSoon = c.bool(.tooSoon) ?? false
         dest = c.string(.dest).flatMap { $0.isEmpty ? nil : $0 }
         destPlace = c.string(.destPlace).flatMap { $0.isEmpty ? nil : $0 }
     }
@@ -308,7 +301,7 @@ enum BusTimes {
         out.eta = nil
         out.quality = r.quality == "live" ? "stale" : r.quality
         out.laterText = nil
-        out.later = r.later.map { BoardRow.Later(etaS: $0.etaS - s, quality: $0.quality, eta: nil, at: $0.at, tooSoon: $0.tooSoon) }
+        out.later = r.later.map { BoardRow.Later(etaS: $0.etaS - s, quality: $0.quality, eta: nil, at: $0.at) }
             .filter { $0.etaS > 0 }
         return out
     }
