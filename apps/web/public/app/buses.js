@@ -75,8 +75,22 @@ const stopOf = (code) => campus.get()?.stops.find((s) => s.code === code) ?? nul
 const longName = (s) => s?.longName ?? s?.name;
 const stopName = (code) => longName(stopOf(code)) ?? code;
 const pins = () => profile.get()?.pinnedStops ?? [];
-/** Where on the home's pager `pick` is (chosen): a pinned stop's place, the last page for ADD, else the first. */
-export const pageOf = (pinned, pick) => (pick === ADD ? pinned.length : Math.max(0, pinned.indexOf(pick)));
+/**
+ * The pins as the home last drew them. Kept here, not in the home, so a stop
+ * unpinned on its own page still finds its place when the home comes back.
+ */
+let pinsShown = [];
+/**
+ * Where on the home's pager `pick` is (chosen): a pinned stop's place, the
+ * last page for ADD, else the first. A stop unpinned since the home drew
+ * `was`: the one now in its place, else the one before it.
+ */
+export function pageOf(pinned, pick, was = pinsShown) {
+  if (pick === ADD) return pinned.length;
+  const i = pinned.indexOf(pick);
+  if (i >= 0 || pick == null) return Math.max(0, i);
+  return Math.min(Math.max(0, was.indexOf(pick)), Math.max(0, pinned.length - 1));
+}
 /**
  * The pinned stops fetched for the page on screen: its stop and the ones
  * either side of it, so a swipe shows times at once.
@@ -521,14 +535,12 @@ function PinnedStops({ pinned }) {
   useStore(campus);
   const pager = useRef(null);
   const segs = useRef(null);
-  // The pins as last drawn, for where an unpinned stop's page was.
-  const before = useRef(pinned);
   // The page came from a swipe: the pager is there already.
   const swiped = useRef(false);
   const moved = useRef(false);
-  // A stop just unpinned (its star): the one now in its place, else the one before it.
+  // A stop unpinned (its star, here or on its page): pageOf finds the page that took its place.
   const gone = pick != null && pick !== ADD && !pinned.includes(pick);
-  const index = gone ? Math.min(Math.max(0, before.current.indexOf(pick)), pinned.length - 1) : pageOf(pinned, pick);
+  const index = pageOf(pinned, pick);
   const at = useRef(index);
   at.current = index;
   // Swiped: once the pager settles, the page it rests on is the one picked.
@@ -542,7 +554,7 @@ function PinnedStops({ pinned }) {
   };
 
   useEffect(() => {
-    before.current = pinned;
+    pinsShown = pinned;
     if (gone) chosen.set(pinned[index]);
   }, [pinned.join()]);
 
