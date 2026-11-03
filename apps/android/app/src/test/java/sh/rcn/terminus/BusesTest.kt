@@ -260,15 +260,129 @@ class BusesTest {
     }
 
     @Test
-    fun aPinnedBoardShowsItsFirstThreeRowsRunningFirst() {
-        fun row(svc: String, running: Boolean = true) = BoardRow(svc, etaS = if (running) 60 else null, quality = "live", running = running)
-        val five = BoardPreview.of(listOf(row("A1"), row("D1", running = false), row("D2"), row("K"), row("E")))
-        assertEquals("the stopped one waits for the page", listOf("A1", "D2", "K"), five.rows.map { it.svc })
-        assertEquals(2, five.more)
-        val two = BoardPreview.of(listOf(row("A1"), row("K")))
-        assertEquals(listOf("A1", "K"), two.rows.map { it.svc })
-        assertEquals("no row for more when there are none", 0, two.more)
-        assertEquals(0, BoardPreview.of(listOf(row("A1"), row("A2"), row("K"))).more)
+    fun thePinnedCardKeepsTheStopShowingWhenThePinsChange() {
+        val pins = listOf("UTOWN", "KR-MRT", "COM3")
+        assertEquals("unpinned, the next one takes its place", "COM3", PinPages.kept(pins, listOf("UTOWN", "COM3"), "KR-MRT"))
+        assertEquals("the last one unpinned: the one before it", "KR-MRT", PinPages.kept(pins, listOf("UTOWN", "KR-MRT"), "COM3"))
+        assertEquals("another unpinned: it stays", "COM3", PinPages.kept(pins, listOf("KR-MRT", "COM3"), "COM3"))
+        assertEquals("pinned since: it stays", "KR-MRT", PinPages.kept(pins, pins + "PGP", "KR-MRT"))
+        assertNull("the only one unpinned: nothing", PinPages.kept(listOf("UTOWN"), emptyList(), "UTOWN"))
+        assertEquals("two gone at once: the next still pinned", "UTOWN", PinPages.kept(pins, listOf("UTOWN"), "KR-MRT"))
+        assertEquals("the last page stays the last page", PinPages.ADD, PinPages.kept(pins, listOf("UTOWN"), PinPages.ADD))
+        assertNull("nothing chosen: the first", PinPages.kept(pins, listOf("COM3"), null))
+        assertEquals("one never seen (the profile came): the first", "COM3", PinPages.kept(emptyList(), listOf("COM3", "PGP"), "UTOWN"))
+    }
+
+    @Test
+    fun eachPinnedStopIsAPageAndTheLastSaysHowToPinAnother() {
+        val pins = listOf("UTOWN", "KR-MRT", "COM3")
+        assertEquals(1, PinPages.index(pins, "KR-MRT"))
+        assertEquals(3, PinPages.index(pins, PinPages.ADD))
+        assertEquals("nothing chosen, or one not pinned: the first", 0, PinPages.index(pins, null))
+        assertEquals(0, PinPages.index(pins, "PGP"))
+        assertEquals("COM3", PinPages.at(pins, 2))
+        assertEquals(PinPages.ADD, PinPages.at(pins, 3))
+    }
+
+    @Test
+    fun theStopShowingIsAskedForWithItsNeighbours() {
+        val pins = listOf("A", "B", "C", "D")
+        assertEquals(listOf("A", "B"), PinPages.around(pins, 0))
+        assertEquals(listOf("B", "C", "D"), PinPages.around(pins, 2))
+        assertEquals("on the last page, the last stop", listOf("D"), PinPages.around(pins, 4))
+        assertEquals(emptyList<String>(), PinPages.around(emptyList(), 0))
+        // A swipe back and forth doesn't ask again for a stop asked for 4 s ago, only for one asked 12 s ago or never.
+        val asked = mapOf("A" to 96_000L, "B" to 88_000L)
+        assertEquals(listOf("B", "C"), PinPages.due(listOf("A", "B", "C", "C"), { asked[it] }, 100_000L, 10_000L))
+    }
+
+    @Test
+    fun theLinesAreAskedForAtMostOnceAMinute() {
+        assertEquals("never asked: now", 0L, LinesPoll.waitMs(null, 1_000_000L))
+        assertEquals(40_000L, LinesPoll.waitMs(1_000_000L, 1_020_000L))
+        assertEquals("a minute on: now", 0L, LinesPoll.waitMs(1_000_000L, 1_060_000L))
+        assertEquals("the clock put back: no more than a minute", 60_000L, LinesPoll.waitMs(1_000_000L, 900_000L))
+        // Asleep until it's due; a whole minute when it couldn't be asked (no account yet), not a busy loop.
+        assertEquals(40_000L, LinesPoll.nextMs(1_000_000L, 1_020_000L))
+        assertEquals(60_000L, LinesPoll.nextMs(null, 1_020_000L))
+    }
+
+    @Test
+    fun theLinesCountsParseAndAnUnreachableOneIsNull() {
+        val out =
+            LineOut.parse(
+                JSONObject(
+                    """{"lines": {"A1": {"out": 3, "outText": "3 out", "stale": false}, "K": {"out": 0, "outText": "None out", "stale": true}, "P": null},
+                    "asOf": "2026-08-27T01:00:00.000Z"}"""
+                )
+            )
+        assertEquals(LineOut(3, "3 out", false), out["A1"])
+        assertEquals(LineOut(0, "None out", true), out["K"])
+        assertTrue("P is there, unknown", out.containsKey("P"))
+        assertNull(out["P"])
+        assertEquals(emptyMap<String, LineOut?>(), LineOut.parse(JSONObject("{}")))
+    }
+
+    @Test
+    fun aLineIsNamedAndSaidAsTheServerWordsIt() {
+        val routes =
+            CampusMap.serviceRoutes(
+                JSONObject(
+                    """{"A1": {"seq": ["KR-BT", "AS5"], "loop": true, "name": "Loop from KR Bus Ter", "via": "via AS 5, PGP, KR MRT"},
+                    "R2": {"seq": ["PGP", "KV"], "loop": false, "name": "PGP to Kent Vale", "via": null},
+                    "D1": {"seq": ["COM3", "UTOWN"], "loop": true}}"""
+                )
+            )
+        assertEquals(ServiceRoute("A1", listOf("KR-BT", "AS5"), true, "Loop from KR Bus Ter", "via AS 5, PGP, KR MRT"), routes[0])
+        TestStrings.install()
+        try {
+            val a1 = LineRow.of(routes[0], LineOut(3, "3 out", false)) { it }
+            assertTrue(a1.live)
+            assertEquals("Bus A1, Loop from KR Bus Ter, via AS 5, PGP, KR MRT, 3 out", a1.said())
+            val r2 = LineRow.of(routes[1], LineOut(0, "None out", false)) { it }
+            assertNull(r2.via)
+            assertFalse("none out: the words without the dot", r2.live)
+            assertEquals("Bus R2, PGP to Kent Vale, None out", r2.said())
+            // Unreachable: nothing said or shown for its buses.
+            assertEquals("Bus A1, Loop from KR Bus Ter, via AS 5, PGP, KR MRT", LineRow.of(routes[0], null) { it }.said())
+            // A campus kept from an older server, without the name: worded here from its stops.
+            val names = mapOf("COM3" to "COM 3")
+            assertEquals("Loop from COM 3", LineRow.of(routes[2], null) { names[it] ?: it }.name)
+            TestStrings.install("values-zh")
+            val zh = LineRow("A1", "从 KR Bus Ter 出发的环线", "经 AS 5、PGP、KR MRT", LineOut(3, "3 辆在路上", false))
+            assertEquals("A1 巴士，从 KR Bus Ter 出发的环线，经 AS 5、PGP、KR MRT，3 辆在路上", zh.said())
+        } finally {
+            TestStrings.install()
+        }
+    }
+
+    @Test
+    fun aPinnedStopWithoutALocationHasNoWalk() {
+        TestStrings.install()
+        val stops =
+            parseNearby(
+                JSONObject(
+                    """{"stops": [{"stop": {"code": "UTOWN", "name": "UTown"}, "walkS": null, "available": true, "board": []},
+                    {"stop": {"code": "COM3", "name": "COM 3"}, "walkS": 540, "available": true, "board": []},
+                    {"stop": {"code": "PGP", "name": "PGP"}, "walkS": 20, "available": true, "board": []}], "asOf": "2026-08-27T01:00:00.000Z"}"""
+                )
+            )
+        assertNull(stops[0].walkS)
+        assertNull(stops[0].walkWords)
+        assertEquals("9 min walk", stops[1].walkWords)
+        assertEquals("here", stops[2].walkWords)
+    }
+
+    @Test
+    fun aPinnedStopsTimesAreCountedDownOnceOld() {
+        val row = BoardRow("D2", etaS = 600, quality = "live")
+        val stop = NearbyStop("COM3", "COM 3", null, true, listOf(row))
+        val pinned = PinnedStop(stop, gotMs = 1_000_000L)
+        assertEquals("fresh: as it came", stop, pinned.aged(1_010_000L))
+        val old = pinned.aged(1_000_000L + 120_000L).board.single()
+        assertEquals(480, old.etaS)
+        assertEquals("not passed off as live", "stale", old.quality)
+        assertEquals("no time to count from: as it came", stop, PinnedStop(stop, null).aged(9_999_999L))
     }
 
     @Test

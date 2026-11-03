@@ -300,19 +300,98 @@ object Pins {
     fun shown(pins: List<String>, max: Int = Limits.DEFAULT.pinnedStops): List<String> = pins.distinct().take(max)
 }
 
-/** The services not running come after the ones that are, as the API sorts them. */
-fun runningFirst(rows: List<BoardRow>): List<BoardRow> = rows.filter { it.running } + rows.filter { !it.running }
+/**
+ * The Stops tab's pinned stops as pages, one card at a time: a page per pinned stop in pin order, then a last one saying how to pin another
+ * ([ADD]). The page showing is kept by its stop's code, so it stays on the same stop when the pins change around it.
+ */
+object PinPages {
+    /** The last page, "Pin another stop". */
+    const val ADD = ""
 
-/** A pinned stop's board on the Stops tab's home: its first [rows], running ones first, and how many more its own page has. */
-data class BoardPreview(val rows: List<BoardRow>, val more: Int) {
+    /** The page for [selected] among [pins]: its own, the last for [ADD], else the first. */
+    fun index(pins: List<String>, selected: String?): Int = if (selected == ADD) pins.size else pins.indexOf(selected).coerceAtLeast(0)
+
+    /** What page [page] shows: a pinned stop's code, or [ADD]. */
+    fun at(pins: List<String>, page: Int): String = pins.getOrNull(page) ?: ADD
+
+    /**
+     * The page to show once the pins have gone from [before] to [after]: the same one while it's still there; for a stop unpinned, the one
+     * that came after it, else the one before it; null (the first) when nothing was chosen or nothing is left.
+     */
+    fun kept(before: List<String>, after: List<String>, selected: String?): String? {
+        if (selected == null || selected == ADD || selected in after) return selected
+        val i = before.indexOf(selected)
+        if (i < 0) return after.firstOrNull()
+        return (before.drop(i + 1) + before.take(i).reversed()).firstOrNull { it in after } ?: after.firstOrNull()
+    }
+
+    /** The stops to ask for with page [page] showing: its own and its two neighbours', so a swipe shows the next at once. */
+    fun around(pins: List<String>, page: Int): List<String> = (page - 1..page + 1).mapNotNull { pins.getOrNull(it) }
+
+    /**
+     * Of the stops [codes], the ones to ask for now, each once: those not asked within [gapMs] ([askedAt] says when each last was), so a
+     * swipe back and forth doesn't ask again at once.
+     */
+    fun due(codes: List<String>, askedAt: (String) -> Long?, nowMs: Long, gapMs: Long): List<String> =
+        codes.distinct().filter { code -> askedAt(code)?.let { nowMs - it < gapMs } != true }
+}
+
+/** A pinned stop as Nearby shows it (/api/me/stops), and when this phone got it, on the server's clock ([ServerClock]). */
+data class PinnedStop(val stop: NearbyStop, val gotMs: Long?) {
+    /** The stop as it stands at [nowMs]: its rows [BusTimes.aged], so nothing old passes for live while refreshes fail. */
+    fun aged(nowMs: Long): NearbyStop = if (gotMs == null) stop else stop.copy(board = stop.board.map { BusTimes.aged(it, gotMs, nowMs) })
+}
+
+/** One service's buses on the road (/api/lines), in the server's words ([outText]: "3 out", "None out"). */
+data class LineOut(val out: Int, val outText: String, val stale: Boolean) {
     companion object {
-        /** Three rows: enough for most stops, short enough for several pinned ones on a screen. */
-        const val SHOWN = 3
-
-        fun of(rows: List<BoardRow>, shown: Int = SHOWN): BoardPreview =
-            runningFirst(rows).let { BoardPreview(it.take(shown), maxOf(0, it.size - shown)) }
+        /** By service; null for one whose live feed couldn't be reached, which isn't the same as none out. */
+        fun parse(o: JSONObject): Map<String, LineOut?> {
+            val lines = o.optJSONObject("lines") ?: return emptyMap()
+            return lines.keys().asSequence().associateWith { svc ->
+                lines.optJSONObject(svc)?.let { x ->
+                    x.optStringOrNull("outText")?.ifEmpty { null }?.let { LineOut(x.optInt("out"), it, x.optBoolean("stale")) }
+                }
+            }
+        }
     }
 }
+
+/**
+ * How often the Stops tab asks /api/lines: when its list comes on screen, then at most once a minute while it stays there. It reads every
+ * service from NUS, so never more often.
+ */
+object LinesPoll {
+    const val EVERY_MS = 60_000L
+
+    /** How long until it may be asked again, [lastMs] the last time it was: now for never. */
+    fun waitMs(lastMs: Long?, nowMs: Long): Long = if (lastMs == null) 0 else (lastMs + EVERY_MS - nowMs).coerceIn(0, EVERY_MS)
+
+    /** How long to sleep before trying again: until it's due, or a whole minute when it wasn't asked (no account yet) or is due now. */
+    fun nextMs(lastMs: Long?, nowMs: Long): Long = waitMs(lastMs, nowMs).takeIf { it > 0 } ?: EVERY_MS
+}
+
+/**
+ * A row of the Stops tab's list of lines: the service, its [name] and [via] as the server words them ("Loop from KR Bus Ter", "via AS 5,
+ * PGP, KR MRT"), and its buses out, if known.
+ */
+data class LineRow(val svc: String, val name: String?, val via: String?, val out: LineOut?) {
+    /** The green dot by the count: buses on the road. */
+    val live: Boolean
+        get() = out != null && out.out > 0
+
+    /** The row as one thing said: "Bus D2, Loop from COM 3, via PGP, KR MRT, UTown, 3 out". */
+    fun said(): String = listOfNotNull(L.s(R.string.a11y_bus, svc), name, via, out?.outText).joinToString(L.s(R.string.clause_sep))
+
+    companion object {
+        /** From /api/campus's route; without the server's `name` (a copy kept from an older server), worded here from its stops. */
+        fun of(route: ServiceRoute, out: LineOut?, stopName: (String) -> String) =
+            LineRow(route.svc, route.name ?: serviceWhere(route, stopName), route.via, out)
+    }
+}
+
+/** The services not running come after the ones that are, as the API sorts them. */
+fun runningFirst(rows: List<BoardRow>): List<BoardRow> = rows.filter { it.running } + rows.filter { !it.running }
 
 /**
  * Where a service goes, from /api/campus's route: "Loop from Kent Ridge MRT", or "Kent Ridge MRT to Opp HSSML". [name] gives a stop's name

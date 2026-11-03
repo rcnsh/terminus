@@ -5,8 +5,10 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -24,6 +26,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -42,12 +46,16 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -60,6 +68,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
@@ -68,6 +77,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.selected
@@ -88,8 +98,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import sh.rcn.terminus.Board
-import sh.rcn.terminus.BoardPreview
 import sh.rcn.terminus.BoardRow
 import sh.rcn.terminus.BusHit
 import sh.rcn.terminus.BusTimes
@@ -97,6 +107,9 @@ import sh.rcn.terminus.L
 import sh.rcn.terminus.Line
 import sh.rcn.terminus.LineBus
 import sh.rcn.terminus.LineItem
+import sh.rcn.terminus.LineRow
+import sh.rcn.terminus.LinesPoll
+import sh.rcn.terminus.PinPages
 import sh.rcn.terminus.Pins
 import sh.rcn.terminus.Pull
 import sh.rcn.terminus.PullScene
@@ -114,11 +127,10 @@ import sh.rcn.terminus.hour12
 import sh.rcn.terminus.parseColor
 import sh.rcn.terminus.runningFirst
 import sh.rcn.terminus.searchBuses
-import sh.rcn.terminus.serviceWhere
 
 /**
- * The Stops tab: a search, then the pinned stops, each with the first rows of its board, then every service. A row opens its service's
- * line; a stop's name, a stop on a line, or one found in the search, opens its board. Stops near you are Nearby's, on Now.
+ * The Stops tab: a search, then the pinned stops in one card, a stop at a time as Nearby shows it, then every service. A row opens its
+ * service's line; a stop's name, a stop on a line, or one found in the search, opens its board. Stops near you are Nearby's, on Now.
  *
  * Only the times the API gives are shown: the next bus and its `later` buses. A timetabled time says so; no time is guessed.
  */
@@ -189,18 +201,27 @@ private fun Home(state: BusesUi, vm: BusesViewModel, pins: List<String>, pinsKno
     var query by rememberSaveable { mutableStateOf("") }
     BackHandler(enabled = query.isNotEmpty()) { query = "" }
     val pinned = Pins.shown(pins, vm.pinLimit)
+    // A page per pinned stop, then "Pin another stop"; laid out again when the pins change, on the stop that was showing.
+    val pager = remember(pinned) { PagerState(vm.pinPage(pinned)) { pinned.size + 1 } }
+    LaunchedEffect(pager) {
+        // Before the profile has come there's only the last page, which isn't a choice.
+        if (pinned.isNotEmpty()) snapshotFlow { pager.currentPage }.collect { vm.pinShown = PinPages.at(pinned, it) }
+    }
+    val showing = PinPages.at(pinned, pager.currentPage).takeIf { it != PinPages.ADD }
+    // Asked for by the page settled on, so a tap on a far name doesn't ask for each page passed on the way.
+    val around = PinPages.around(pinned, pager.settledPage)
     val phase = skyPhase()
-    // Pulled down, every pinned board asks again, as their 15 s refresh does; not while searching.
-    // The sky stretches over the title, and the first pinned stop's first service drives to a sign on the hill.
-    // The band, then the boards or the search's results, scroll as one, so the
+    // Pulled down, the pinned stop showing asks again, as its 15 s refresh does; not while searching.
+    // The sky stretches over the title, and the stop's first service drives to a sign on the hill.
+    // The band, then the card or the search's results, scroll as one, so the
     // sky goes up with the page rather than staying over it.
     val scroll = rememberScrollState()
     BusPull(
-        pinned.firstNotNullOfOrNull { boardLivery(state, it) },
+        showing?.let { pinLivery(state, it) },
         ::hillScene,
         enabled = query.isBlank(),
-        onRefresh = { vm.pullHome(pinned) },
-        nextUpdateAt = { vm.homeNextAt(pinned) },
+        onRefresh = { vm.pullPinned(showing, around) },
+        nextUpdateAt = { showing?.let(vm::pinNextAt) },
     ) { pull ->
         Box(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
@@ -232,18 +253,22 @@ private fun Home(state: BusesUi, vm: BusesViewModel, pins: List<String>, pinsKno
                     }
                     return@Column
                 }
-                Refreshing(pinned, next = { vm.nextTimedAt = it }) { vm.refreshHome(pinned) }
+                // The stop showing and its neighbours, so a swipe has the next one ready.
+                Refreshing(pinned, pager.settledPage, next = { vm.nextTimedAt = it }) { vm.refreshPinned(around) }
+                LinesPolling(vm)
                 Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
                     Label(stringResource(R.string.buses_pinned), Modifier.padding(top = 16.dp, bottom = 4.dp))
                     // Before the profile has come, "nothing pinned" may not be true.
-                    if (!pinsKnown)
-                        Text(
-                            stringResource(R.string.checking),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(vertical = 16.dp),
-                        )
-                    else if (pinned.isEmpty()) NoPins()
-                    for (code in pinned) PinnedStop(state, vm, code, pins, onPin)
+                    when {
+                        !pinsKnown ->
+                            Text(
+                                stringResource(R.string.checking),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(vertical = 16.dp),
+                            )
+                        pinned.isEmpty() -> NoPins()
+                        else -> PinnedCard(state, vm, pinned, pager, pins, onPin)
+                    }
                     Row(Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Label(stringResource(R.string.buses_group_services), Modifier.padding(end = 12.dp))
                         Text(
@@ -262,6 +287,23 @@ private fun Home(state: BusesUi, vm: BusesViewModel, pins: List<String>, pinsKno
     }
 }
 
+/**
+ * Asks how many buses each service has out when the list of lines comes on screen, then once a minute ([LinesPoll]) while it stays there
+ * and the app is in front.
+ */
+@Composable
+private fun LinesPolling(vm: BusesViewModel) {
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(Unit) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (true) {
+                vm.refreshLines()
+                delay(maxOf(vm.linesNextMs(), Quiet.waitMs()))
+            }
+        }
+    }
+}
+
 /** The scene for a pull on the Stops tab's low horizon, [width] dp across: the sign on the near hill, the bus in from the left. */
 private fun hillScene(width: Float) = PullScene(width, Pull.hillSign(width))
 
@@ -273,75 +315,135 @@ private fun boardLivery(state: BusesUi, code: String): Long? {
     return row.color?.let(::parseColor) ?: state.campus?.routes?.get(row.svc)?.color
 }
 
+/** The pull's bus on the home: the first service at the pinned stop showing, in its colour; null before there's one. */
+private fun pinLivery(state: BusesUi, code: String): Long? {
+    val row = state.pinned[code]?.stop?.board?.firstOrNull() ?: return null
+    return row.color?.let(::parseColor) ?: state.campus?.routes?.get(row.svc)?.color
+}
+
+/** A pinned stop's short name, as on its plate: from its answer, else the campus data, else its code. */
+private fun pinName(state: BusesUi, code: String) = state.pinned[code]?.stop?.name ?: state.campus?.stop(code)?.name ?: code
+
 /**
- * A pinned stop on the home: its name, which opens its page (the whole board, and across the road), with its star, then the first rows of
- * its board and how many more there are.
+ * The pinned stops in one card, one at a time: their names above it, which say which is showing and switch to it, and the card, swiped
+ * sideways from stop to stop. Each is its Nearby sign; the last page says how to pin another. The card is as tall as the tallest page seen,
+ * so nothing under it jumps while swiping.
  */
 @Composable
-private fun PinnedStop(state: BusesUi, vm: BusesViewModel, code: String, pins: List<String>, onPin: (String) -> Unit) {
-    val c = MaterialTheme.colorScheme
-    Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Row(
-            Modifier.weight(1f)
-                .clip(RoundedCornerShape(12.dp))
-                .clickable(role = Role.Button, onClickLabel = stringResource(R.string.a11y_open_stop)) { vm.open(BusRoute.Stop(code)) }
-                .padding(vertical = 8.dp, horizontal = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Text(
-                stopName(state, code),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false).semantics { heading() },
-            )
-            Icon(
-                painterResource(R.drawable.ic_chevron),
-                contentDescription = null,
-                tint = c.onSurfaceVariant,
-                modifier = Modifier.size(20.dp),
-            )
-        }
-        PinStar(
-            code,
+private fun PinnedCard(
+    state: BusesUi,
+    vm: BusesViewModel,
+    pinned: List<String>,
+    pager: PagerState,
+    pins: List<String>,
+    onPin: (String) -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val act =
+        NearbyActions(
             pins,
-            vm.pinLimit,
-            onPin,
-            Modifier.padding(start = 8.dp).size(44.dp).background(c.surfaceVariant, CircleShape),
-            name = stopName(state, code),
+            pinsKnown = true,
+            pinLimit = vm.pinLimit,
+            onPin = onPin,
+            openStop = { vm.open(BusRoute.Stop(it)) },
+            openLine = { svc, stop -> vm.open(BusRoute.Line(svc, stop)) },
+            openStops = {},
+        )
+    PinTabs(
+        pinned.map { pinName(state, it) },
+        pager.currentPage.takeIf { it < pinned.size },
+        Modifier.padding(top = 4.dp, bottom = 10.dp),
+    ) {
+        scope.launch { pager.animateScrollToPage(it) }
+    }
+    // Refreshes failing: the times counted down, none passed off as live.
+    val now = ticking()
+    val loaded = pinned.mapNotNull { code -> state.pinned[code]?.let { code to it.aged(now) } }
+    var tallest by remember(pinned) { mutableIntStateOf(0) }
+    val tallestDp = with(density) { tallest.toDp() }
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        // Every stop's columns measured together, so the times line up from one page to the next.
+        val signs = nearbySigns(loaded.map { it.second }, maxWidth)
+        HorizontalPager(
+            pager,
+            Modifier.fillMaxWidth().heightIn(min = tallestDp),
+            pageSpacing = 16.dp,
+            verticalAlignment = Alignment.Top,
+            key = { PinPages.at(pinned, it) },
+        ) { page ->
+            Box(Modifier.fillMaxWidth().onSizeChanged { if (it.height > tallest) tallest = it.height }) {
+                val code = PinPages.at(pinned, page)
+                val i = loaded.indexOfFirst { it.first == code }
+                when {
+                    code == PinPages.ADD -> PinAnother(tallestDp)
+                    i >= 0 -> NearbySign(signs, i, act)
+                    else -> PinnedWaiting(state, code, failed = code in state.pinFailed, act)
+                }
+            }
+        }
+    }
+}
+
+/** A pinned stop before its answer has come: its plate, and checking, or that it couldn't be got. */
+@Composable
+private fun PinnedWaiting(state: BusesUi, code: String, failed: Boolean, act: NearbyActions) {
+    val name = pinName(state, code)
+    StopSign(
+        name,
+        plate = Modifier.clickable(role = Role.Button, onClickLabel = stringResource(R.string.a11y_open_stop)) { act.openStop(code) },
+        opens = true,
+        trailing = {
+            PinStar(code, act.pins, act.pinLimit, act.onPin, name = state.campus?.stop(code)?.fullName ?: name)
+        },
+    ) {
+        Text(
+            stringResource(if (failed) R.string.cant_reach else R.string.checking),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(14.dp),
         )
     }
-    BoardCard(
-        state.boards[code],
-        failed = code in state.failed,
-        colors = state.campus?.routes?.mapValues { it.value.color }.orEmpty(),
-        onMore = { vm.open(BusRoute.Stop(code)) },
-    ) { row ->
-        vm.open(BusRoute.Line(row.svc, code))
+}
+
+/** The card's last page: how to pin another stop, in the outline of a card, as tall as the stops' ([height]). */
+@Composable
+private fun PinAnother(height: Dp) {
+    val c = MaterialTheme.colorScheme
+    Column(
+        Modifier.fillMaxWidth().heightIn(min = maxOf(height, 160.dp)).dashed(c.outline).padding(horizontal = 20.dp, vertical = 22.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(painterResource(R.drawable.ic_star), contentDescription = null, tint = c.onSurfaceVariant, modifier = Modifier.size(24.dp))
+        Text(
+            stringResource(R.string.buses_pin_another),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.semantics { heading() },
+        )
+        Text(stringResource(R.string.buses_pin_another_how), color = c.onSurfaceVariant, textAlign = TextAlign.Center)
     }
+}
+
+/** The dashed outline of a card not there yet: no pins, or another to pin. */
+private fun Modifier.dashed(line: Color): Modifier = drawBehind {
+    val d = 1.dp.toPx()
+    drawRoundRect(
+        line,
+        topLeft = Offset(d / 2, d / 2),
+        size = Size(size.width - d, size.height - d),
+        cornerRadius = CornerRadius(18.dp.toPx()),
+        style = Stroke(1.5f * d, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6 * d, 5 * d))),
+    )
 }
 
 /** Nothing pinned: where the star is, in an outline the size of a pinned stop. */
 @Composable
 private fun NoPins() {
     val c = MaterialTheme.colorScheme
-    val line = c.outline
     Row(
-        Modifier.fillMaxWidth()
-            .padding(top = 8.dp)
-            .drawBehind {
-                val d = 1.dp.toPx()
-                drawRoundRect(
-                    line,
-                    topLeft = Offset(d / 2, d / 2),
-                    size = Size(size.width - d, size.height - d),
-                    cornerRadius = CornerRadius(18.dp.toPx()),
-                    style = Stroke(1.5f * d, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6 * d, 5 * d))),
-                )
-            }
-            .padding(horizontal = 16.dp, vertical = 18.dp),
+        Modifier.fillMaxWidth().padding(top = 8.dp).dashed(c.outline).padding(horizontal = 16.dp, vertical = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
@@ -350,7 +452,10 @@ private fun NoPins() {
     }
 }
 
-/** Every shuttle service, as /api/campus lists them: its chip and where it goes; a row opens its line. */
+/**
+ * Every shuttle service, as /api/campus lists them, a row each: its badge (all as wide as the widest), its name and the stops it goes by,
+ * and how many of its buses are out. A row opens its line.
+ */
 @Composable
 private fun Services(state: BusesUi, onOpen: (String) -> Unit) {
     val c = MaterialTheme.colorScheme
@@ -363,25 +468,29 @@ private fun Services(state: BusesUi, onOpen: (String) -> Unit) {
         }
         // From an older server without each service's stops: the codes alone.
         val routes = campus.lines.ifEmpty { campus.serviceCodes.map { ServiceRoute(it, emptyList(), false) } }
-        for ((i, route) in routes.withIndex()) {
+        val rows = routes.map { route -> LineRow.of(route, state.out[route.svc]) { campus.stop(it)?.fullName ?: it } }
+        val badge = badgeWidth(rows.map { it.svc })
+        for ((i, row) in rows.withIndex()) {
             if (i > 0) HorizontalDivider(color = c.outlineVariant)
-            val where = serviceWhere(route) { campus.stop(it)?.fullName ?: it }
             Row(
                 Modifier.fillMaxWidth()
-                    .clickable(role = Role.Button, onClickLabel = stringResource(R.string.a11y_open_line, route.svc)) { onOpen(route.svc) }
+                    .clickable(role = Role.Button, onClickLabel = stringResource(R.string.a11y_open_line, row.svc)) { onOpen(row.svc) }
+                    .clearAndSetSemantics { contentDescription = row.said() }
                     .padding(start = 14.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                SvcChip(route.svc, campus.routes[route.svc]?.color ?: GREY)
-                Text(
-                    where.orEmpty(),
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
+                ServiceBadge(row.svc, Color(campus.routes[row.svc]?.color ?: GREY), badge)
+                Column(Modifier.weight(1f)) {
+                    row.name?.let { Text(it, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold) }
+                    row.via?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant) }
+                }
+                row.out?.let { out ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (row.live) LiveDot(said = false)
+                        Text(out.outText, style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant)
+                    }
+                }
                 Icon(
                     painterResource(R.drawable.ic_chevron),
                     contentDescription = null,
@@ -677,49 +786,91 @@ internal fun Segmented(
     label: String? = null,
     onSelect: (Int) -> Unit,
 ) {
-    val c = MaterialTheme.colorScheme
     Row(
         modifier
             .fillMaxWidth()
             .height(IntrinsicSize.Min)
-            .clip(RoundedCornerShape(14.dp))
-            .background(c.secondaryContainer)
-            .padding(4.dp)
-            .selectableGroup()
+            .segments()
             .then(if (label != null) Modifier.semantics { contentDescription = label } else Modifier)
     ) {
         for ((i, text) in options.withIndex()) {
-            val on = i == selected
-            Box(
-                Modifier.weight(1f)
-                    .fillMaxHeight()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(if (on) c.surface else Color.Transparent)
-                    .selectable(selected = on, role = Role.Tab) { onSelect(i) }
-                    .padding(vertical = 9.dp, horizontal = 8.dp),
-                contentAlignment = Alignment.Center,
-            ) {
+            Box(Modifier.weight(1f).fillMaxHeight().segment(i == selected) { onSelect(i) }, contentAlignment = Alignment.Center) {
                 // A long stop name takes two lines, centred; both halves keep one height.
-                Text(
-                    text,
-                    fontWeight = if (on) FontWeight.Bold else FontWeight.Medium,
-                    color = if (on) c.onSurface else c.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center,
-                    lineHeight = 18.sp,
-                )
+                SegmentText(text, i == selected, maxLines = 2)
             }
         }
     }
 }
 
 /**
- * The board: a row per service, sorted as the API sorts them. With [onMore] (a pinned stop on the home), only its first few rows, then a
- * row saying how many more there are, which opens the stop's page.
+ * The pinned stops' names, in [Segmented]'s look: the one showing ([selected], none on the card's last page) raised. They share the width
+ * while they fit; more than fit scroll sideways, the one showing kept in view.
  */
 @Composable
-private fun BoardCard(got: Board?, failed: Boolean, colors: Map<String, Long>, onMore: (() -> Unit)? = null, onRow: (BoardRow) -> Unit) {
+private fun PinTabs(names: List<String>, selected: Int?, modifier: Modifier = Modifier, onSelect: (Int) -> Unit) {
+    val scroll = rememberScrollState()
+    // Where each name is along the row, in pixels, to bring the one showing into view once it's laid out.
+    val spans = remember(names) { mutableStateMapOf<Int, IntRange>() }
+    val span = selected?.let { spans[it] }
+    LaunchedEffect(span) {
+        if (span == null) return@LaunchedEffect
+        val view = scroll.viewportSize
+        when {
+            span.first < scroll.value -> scroll.animateScrollTo(span.first)
+            span.last > scroll.value + view -> scroll.animateScrollTo(span.last - view)
+        }
+    }
+    BoxWithConstraints(modifier.fillMaxWidth().segments()) {
+        val share = maxWidth / names.size
+        Row(Modifier.horizontalScroll(scroll)) {
+            for ((i, name) in names.withIndex()) {
+                Box(
+                    Modifier.widthIn(min = share)
+                        .onPlaced { at ->
+                            val x = at.positionInParent().x.toInt()
+                            (x..x + at.size.width).let { if (spans[i] != it) spans[i] = it }
+                        }
+                        .segment(i == selected, side = 12.dp) { onSelect(i) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    SegmentText(name, i == selected, maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
+/** The ground the segments sit in, as one group of choices. */
+@Composable
+private fun Modifier.segments(): Modifier =
+    clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.secondaryContainer).padding(4.dp).selectableGroup()
+
+/** One segment: raised when [on], a tab to a screen reader. [side]: the room either side of its words. */
+@Composable
+private fun Modifier.segment(on: Boolean, side: Dp = 8.dp, onClick: () -> Unit): Modifier =
+    clip(RoundedCornerShape(10.dp))
+        .background(if (on) MaterialTheme.colorScheme.surface else Color.Transparent)
+        .selectable(selected = on, role = Role.Tab, onClick = onClick)
+        .padding(vertical = 9.dp, horizontal = side)
+
+@Composable
+private fun SegmentText(text: String, on: Boolean, maxLines: Int) {
+    val c = MaterialTheme.colorScheme
+    Text(
+        text,
+        fontWeight = if (on) FontWeight.Bold else FontWeight.Medium,
+        color = if (on) c.onSurface else c.onSurfaceVariant,
+        maxLines = maxLines,
+        softWrap = maxLines > 1,
+        overflow = TextOverflow.Ellipsis,
+        textAlign = TextAlign.Center,
+        lineHeight = 18.sp,
+    )
+}
+
+/** The board: a row per service, sorted as the API sorts them. */
+@Composable
+private fun BoardCard(got: Board?, failed: Boolean, colors: Map<String, Long>, onRow: (BoardRow) -> Unit) {
     val c = MaterialTheme.colorScheme
     // Refreshes failing: the times counted down, none passed off as live.
     val board = got?.aged(ticking())
@@ -745,32 +896,9 @@ private fun BoardCard(got: Board?, failed: Boolean, colors: Map<String, Long>, o
                         color = c.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                     )
-                if (onMore == null) BoardRows(runningFirst(board.rows), colors, dividerFirst = !board.available, onRow = onRow)
-                else {
-                    val preview = BoardPreview.of(board.rows)
-                    BoardRows(preview.rows, colors, dividerFirst = !board.available, onRow = onRow)
-                    if (preview.more > 0) {
-                        HorizontalDivider(color = c.outlineVariant)
-                        MoreRow(stringResource(R.string.buses_more_here, preview.more), onMore)
-                    }
-                }
+                BoardRows(runningFirst(board.rows), colors, dividerFirst = !board.available, onRow = onRow)
             }
         }
-    }
-}
-
-/** The last row of a pinned stop's board: how many more services its page has, opening it. */
-@Composable
-private fun MoreRow(text: String, onClick: () -> Unit) {
-    val c = MaterialTheme.colorScheme
-    Row(
-        Modifier.fillMaxWidth()
-            .clickable(role = Role.Button, onClick = onClick)
-            .padding(start = 14.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(text, color = c.primary, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-        Icon(painterResource(R.drawable.ic_chevron), contentDescription = null, tint = c.onSurfaceVariant, modifier = Modifier.size(20.dp))
     }
 }
 

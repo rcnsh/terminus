@@ -670,8 +670,9 @@
     <string name="buses_back_tomorrow">明天 %1$s 恢复</string>
     <string name="buses_back_on">%1$s %2$s 恢复</string>
     <string name="buses_starts_at">%1$s 开始</string>
-    <string name="buses_more_here">这个车站还有 %1$d 条线路</string>
     <string name="buses_no_pins">点任意车站的星标，把它固定在这里：在“附近”、车站页面或搜索结果里都可以。</string>
+    <string name="buses_pin_another">再固定一个车站</string>
+    <string name="buses_pin_another_how">在附近或车站页面点星标，就能把它固定在这里。</string>
     <string name="buses_services_hint">点一条线路，查看它经过的所有车站。</string>
     <string name="buses_loop_from">从 %1$s 出发的环线</string>
     <string name="buses_from_to">%1$s 至 %2$s</string>
