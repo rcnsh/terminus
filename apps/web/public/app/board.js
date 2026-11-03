@@ -46,7 +46,8 @@ export function Quality({ r }) {
  */
 export function Big({ r }) {
   if (r.etaS == null) return html`<span class="bt-big none">${r.quality === 'unknown' ? t('No live times') : t('No time yet')}</span>`;
-  if (r.eta == null && r.etaS < 60) return html`<span class="bt-big now">${t('Arriving')}</span>`;
+  // An estimate is never "Arriving": that would pass for a bus at the stop; it says ~1 min.
+  if (r.eta == null && r.etaS < 60 && !approx(r.quality)) return html`<span class="bt-big now">${t('Arriving')}</span>`;
   const parts = (r.eta ?? etaText(r.etaS, r.quality)).split(/(\d+)/).filter(Boolean);
   if (!parts.some((x) => /^\d+$/.test(x))) return html`<span class="bt-big now">${r.eta}</span>`;
   return html`<span class="bt-big">${parts.map((x) => (/^\d+$/.test(x) ? x : html`<small>${x}</small>`))}</span>`;

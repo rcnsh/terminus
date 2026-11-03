@@ -1010,12 +1010,16 @@ function setNearbyClock(on) {
   }
 }
 
-/** The server's "4 min", "now", "~6 min" for an estimate, or "–"; worked out here for an older server. */
+/** The server's "4 min", "now", "~6 min" for an estimate (never "now": ~1 min), or "–"; worked out here for an older server. */
 const etaText = (b) =>
   b.etaS == null
     ? '–'
     : (b.eta ??
-      (b.etaS < 60 ? t('Arriving') : b.quality === 'scheduled' ? t('~{0}', t('{0} min', mins(b.etaS))) : t('{0} min', mins(b.etaS))));
+      (b.quality === 'scheduled' || b.quality === 'stale'
+        ? t('~{0}', t('{0} min', Math.max(1, mins(b.etaS))))
+        : b.etaS < 60
+          ? t('Arriving')
+          : t('{0} min', mins(b.etaS))));
 
 /** A clock time's words around its figures ("PM", "下午"): none in 24-hour time. */
 const meridiem = (iso) =>
