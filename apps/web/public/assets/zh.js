@@ -652,7 +652,7 @@ window.TERMINUS_ZH = {
   'Search, pinned stops and services are in Stops.': '搜索、已固定的车站和线路都在“车站”里。',
   'Search a stop or service': '搜索车站或线路',
   'No stop or service by that name': '没有叫这个名字的车站或线路',
-  'Loop from {0}': '从 {0} 出发的环线',
+  'Loop from {0}': '{0} 环线',
   '{0} to {1}': '{0} 至 {1}',
   'Location is off for this site. Choose your stop instead.': '这个网站的定位已关闭。请自己选择车站。',
   'Pinned': '已固定',

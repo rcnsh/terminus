@@ -776,7 +776,7 @@ export function components(): Record<string, unknown> {
                   type: 'string',
                   example: 'Loop from KR Bus Ter',
                   description:
-                    'How it runs, by its stops’ plate names, in the request’s language: "Loop from KR Bus Ter" (Chinese "从 KR Bus Ter 出发的环线"), "Kent Vale to PGP" ("Kent Vale 至 PGP").',
+                    'How it runs, by its stops’ plate names, in the request’s language: "Loop from KR Bus Ter" (Chinese "KR Bus Ter 环线"), "Kent Vale to PGP" ("Kent Vale 至 PGP").',
                 },
                 via: {
                   type: ['string', 'null'],

@@ -528,7 +528,7 @@ const zh: Msgs = {
   viaTo: (places) => zs`往${places}方向`,
   loopVia: (place) => zs`经${place}`,
 
-  lineLoop: (stop) => zs`从${stop}出发的环线`,
+  lineLoop: (stop) => zs`${stop}环线`,
   lineEnds: (from, to) => zs`${from}至${to}`,
   busesOut: (n) => `${n} 辆在路上`,
   noneOut: '没有巴士在路上',

@@ -349,8 +349,8 @@ class BusesTest {
             val names = mapOf("COM3" to "COM 3")
             assertEquals("Loop from COM 3", LineRow.of(routes[2], null) { names[it] ?: it }.name)
             TestStrings.install("values-zh")
-            val zh = LineRow("A1", "从 KR Bus Ter 出发的环线", "经 AS 5、PGP、KR MRT", LineOut(3, "3 辆在路上", false))
-            assertEquals("A1 巴士，从 KR Bus Ter 出发的环线，经 AS 5、PGP、KR MRT，3 辆在路上", zh.said())
+            val zh = LineRow("A1", "KR Bus Ter 环线", "经 AS 5、PGP、KR MRT", LineOut(3, "3 辆在路上", false))
+            assertEquals("A1 巴士，KR Bus Ter 环线，经 AS 5、PGP、KR MRT，3 辆在路上", zh.said())
         } finally {
             TestStrings.install()
         }
@@ -398,7 +398,7 @@ class BusesTest {
             )
             assertNull("no stops, no words", serviceWhere(ServiceRoute("X", emptyList(), loop = false), name))
             TestStrings.install("values-zh")
-            assertEquals("从 Kent Ridge MRT 出发的环线", serviceWhere(ServiceRoute("A1", listOf("KR-MRT"), loop = true), name))
+            assertEquals("Kent Ridge MRT 环线", serviceWhere(ServiceRoute("A1", listOf("KR-MRT"), loop = true), name))
             assertEquals("COM 3 至 University Town", serviceWhere(ServiceRoute("D1", listOf("COM3", "UTOWN"), loop = false), name))
         } finally {
             TestStrings.install()

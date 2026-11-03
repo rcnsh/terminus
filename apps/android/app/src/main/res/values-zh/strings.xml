@@ -674,7 +674,7 @@
     <string name="buses_pin_another">再固定一个车站</string>
     <string name="buses_pin_another_how">在附近或车站页面点星标，就能把它固定在这里。</string>
     <string name="buses_services_hint">点一条线路，查看它经过的所有车站。</string>
-    <string name="buses_loop_from">从 %1$s 出发的环线</string>
+    <string name="buses_loop_from">%1$s 环线</string>
     <string name="buses_from_to">%1$s 至 %2$s</string>
     <string name="buses_pin_stop">固定 %1$s</string>
     <string name="buses_unpin_stop">取消固定 %1$s</string>

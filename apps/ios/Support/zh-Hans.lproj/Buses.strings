@@ -20,7 +20,7 @@
 "Live" = "实时";
 "Live buses aren't available right now." = "暂时看不到实时巴士。";
 "Live times aren't available right now." = "现在无法获取实时时间。";
-"Loop from %@" = "从 %@ 出发的环线";
+"Loop from %@" = "%@ 环线";
 "min" = "分钟";
 "Next stop %@" = "下一站 %@";
 "No buses are running here now" = "现在没有巴士在这里运行";

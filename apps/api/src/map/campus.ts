@@ -182,7 +182,8 @@ export function buildCampusMap(graph: Graph): CampusMap {
   });
 
   const idx = indexGraph(graph);
-  const plate = (code: string | undefined) => (code ? (byCode.get(code)?.name ?? code) : '');
+  // A stop's plate name kept on one line, so a wrap falls between names, never inside "KR Bus Ter".
+  const plate = (code: string | undefined) => (code ? (byCode.get(code)?.name ?? code).replaceAll(' ', '\u00a0') : '');
   const routes: Record<string, ProjectedRoute> = {};
   for (const [svc, seq] of Object.entries(graph.routes ?? {})) {
     // graph.routes stores the raw scraped sequence, which for a loop repeats
@@ -205,7 +206,6 @@ export function buildCampusMap(graph: Graph): CampusMap {
       name: loop ? m().lineLoop(plate(seq[0])) : m().lineEnds(plate(seq[0]), plate(seq[seq.length - 1])),
       via: (() => {
         const v = lineVia(idx, svc);
-        // Each stop's name kept on one line, so a wrap falls between stops, never inside "KR MRT".
         return v.length ? m().loopVia(listOf(v.map((n) => n.replaceAll(' ', '\u00a0')))) : null;
       })(),
     };
