@@ -242,7 +242,7 @@ private func nearbyFixture() throws -> [NearbyStop] {
     #expect(NearbyBoard.pick(older.buses) == 0)
     #expect(NearbyBoard.cell(older.buses[0], first: true) == .init(figure: "4", trail: " min"))
     #expect(
-        NearbyBoard.spoken(older) == "Bus D2, via Kent Ridge MRT, 4 minutes, live, then 14 minutes, then about 26 minutes")
+        NearbyBoard.spoken(older) == "Bus D2, via KR\u{a0}MRT, 4 minutes, live, then 14 minutes, then about 26 minutes")
 }
 
 /// An older server sends no `dest`: the end of the line, all muted.

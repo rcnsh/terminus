@@ -6,7 +6,7 @@
 import { mailFeedback, parseFeedback, saveFeedback } from '../ops/feedback.ts';
 import { logNextTook } from '../ops/analytics.ts';
 import { approvable, decide, enterCode, holdAppLogins, mergeAnonymous, pollAppLogin, startAppLogin } from './applogin.ts';
-import type { Answer, Env, Graph, MeAnswer, ResolveInput, StopArrivals } from '../types.ts';
+import type { Answer, Env, Graph, GraphIndex, MeAnswer, ResolveInput, Stop, StopArrivals } from '../types.ts';
 import {
   ACCOUNT_TTL,
   type SessionInfo,
@@ -1154,6 +1154,14 @@ export const ME_ROUTES: MeRoute[] = [
       return nearbyFor(url, env, ctx, nowMs, deps, profile);
     },
   },
+  {
+    method: 'GET',
+    path: '/api/me/stops',
+    run: async ({ url, env, ctx, nowMs, deps, db, session }) => {
+      const profile = await getProfile(db, session.user.id, GRAPH);
+      return stopsFor(url, env, ctx, nowMs, deps, profile);
+    },
+  },
 ];
 
 /** The browser's own account without an email, when its session is one: a sign-in from it adds the email there. */
@@ -1716,6 +1724,85 @@ export function onboardingFor(hasProfile: boolean, seen: string[]): 'full' | nul
   return !hasProfile && !seen.includes('onboarding') ? 'full' : null;
 }
 
+/** One stop's board as Nearby shows it: Nearby's own stops and the pinned ones. */
+function nearbyStop<T extends object>(
+  graph: Graph,
+  idx: GraphIndex,
+  stop: Stop,
+  sa: StopArrivals,
+  nowMs: number,
+  stopped: boolean,
+  where: T,
+) {
+  const board = boardAt(graph, idx, stop.code, sa, nowMs, { stopped });
+  // Which way this side of the road's buses go, for a heading over its board.
+  const via = stopVia(board);
+  return {
+    stop: { code: stop.code, name: stop.name, longName: displayName(stop, stop.code) },
+    ...oppositeOf(stop, idx.byCode),
+    // How far it is: before the board, where Nearby has always had it.
+    ...where,
+    available: sa.available !== false,
+    via,
+    viaText: viaText(via),
+    board: board.map((r) => ({
+      ...nearbyRow(r, nowMs, headwayFor(graph, r.svc)),
+      ...nearbyDest(idx, r.svc, stop.code, r.via, r.towards),
+    })),
+  };
+}
+
+/** How many stops one /api/me/stops call may ask for: the most a profile can pin. */
+const STOPS_MAX = 8;
+
+/**
+ * GET /api/me/stops?codes=<code>,<code>[&lat&lon]: the pinned stops' boards,
+ * as Nearby shows them, for the Stops tab. Only the stops asked for (the one
+ * on screen, usually), each through the per-stop cache. With a location, each
+ * says your walk; without, `walkS` is null.
+ */
+async function stopsFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: number, deps: MeDeps, profile: Profile) {
+  const graph = profile.publicBuses ? GRAPH_PUBLIC : GRAPH;
+  const idx = indexGraph(graph);
+  const asked = (url.searchParams.get('codes') ?? '')
+    .split(',')
+    .map((c) => c.trim().toUpperCase())
+    .filter((c, i, all) => c && all.indexOf(c) === i);
+  if (!asked.length) return json({ error: 'codes is required' }, 400);
+  if (asked.length > STOPS_MAX) return json({ error: 'too many stops at once' }, 400);
+  const found = asked.map((c) => idx.byCode.get(c)).filter((s): s is Stop => Boolean(s));
+  const { lat, lon } = coordsFrom(url);
+  const byStop = await deps.collectArrivals(
+    env,
+    ctx,
+    found.map((s) => s.code),
+    nowMs,
+    graph,
+  );
+  const stopped = url.searchParams.get('stopped') === '1';
+  // Walked as Nearby walks it: in a residence or a building by its paths, else from where you are.
+  const homeWalk = profile.home ? { stops: profile.home.stops, m: profile.homeWalkMin * 60 * paceSpeed(profile.walkPace) } : null;
+  const inside =
+    lat === null || lon === null ? null : (residenceStops(lat, lon, idx.byCode, homeWalk) ?? buildingStops(lat, lon, idx.byCode));
+  const walkM = (stop: Stop): number | null =>
+    lat === null || lon === null ? null : (inside?.find((c) => c.stop.code === stop.code)?.footM ?? footM(lat, lon, stop));
+  const stops = found.map((stop) => {
+    const m = walkM(stop);
+    return nearbyStop(graph, idx, stop, byStop.get(stop.code)!, nowMs, stopped, {
+      walkS: m === null ? null : Math.round(m / paceSpeed(profile.walkPace)),
+    });
+  });
+  return json({
+    stops,
+    asOf: new Date(
+      boardAsOf(
+        found.map((s) => byStop.get(s.code)),
+        nowMs,
+      ),
+    ).toISOString(),
+  });
+}
+
 async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: number, deps: MeDeps, profile: Profile) {
   let { lat, lon } = coordsFrom(url);
   // With public buses on, the graph that has them: the same stops with more
@@ -1752,26 +1839,12 @@ async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: numbe
   );
   // `?stopped=1`: the services not running now too, for the Buses tab.
   const stopped = url.searchParams.get('stopped') === '1';
-  const stops = picked.map(({ stop, distM, footM: foot }) => {
-    const sa = byStop.get(stop.code)!;
-    const board = boardAt(graph, idx, stop.code, sa, nowMs, { stopped });
-    // Which way this side of the road's buses go, for a heading over its board.
-    const via = stopVia(board);
-    const walkS = Math.round(foot / paceSpeed(profile.walkPace));
-    return {
-      stop: { code: stop.code, name: stop.name, longName: displayName(stop, stop.code) },
-      ...oppositeOf(stop, idx.byCode),
+  const stops = picked.map(({ stop, distM, footM: foot }) =>
+    nearbyStop(graph, idx, stop, byStop.get(stop.code)!, nowMs, stopped, {
       distM: Math.round(distM),
-      walkS,
-      available: sa.available !== false,
-      via,
-      viaText: viaText(via),
-      board: board.map((r) => ({
-        ...nearbyRow(r, nowMs, headwayFor(graph, r.svc)),
-        ...nearbyDest(idx, r.svc, stop.code, r.via, r.towards),
-      })),
-    };
-  });
+      walkS: Math.round(foot / paceSpeed(profile.walkPace)),
+    }),
+  );
   // As old as the oldest times on it, so "Updated N ago" is true.
   return json({
     stops,

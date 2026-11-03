@@ -110,11 +110,11 @@
       "walkS": 300,
       "available": true,
       "via": [
-        "Kent Ridge MRT",
+        "KR MRT",
         "UTown",
-        "Central Library"
+        "CLB"
       ],
-      "viaText": "to Kent Ridge MRT, UTown, Central Library",
+      "viaText": "to KR MRT, UTown, CLB",
       "board": [
         {
           "svc": "D2",
@@ -141,9 +141,9 @@
             "COM 3"
           ],
           "via": [
-            "Kent Ridge MRT",
+            "KR MRT",
             "UTown",
-            "Science"
+            "S 17"
           ],
           "crowd": "low",
           "endsAt": "2026-08-27T15:00:00.000Z",
@@ -152,8 +152,8 @@
           "laterText": "then 14, ~26 min",
           "toText": "to Kent Ridge MRT, COM 3",
           "at": "2026-08-27T01:04:00Z",
-          "dest": "via Kent Ridge MRT",
-          "destPlace": "Kent Ridge MRT"
+          "dest": "via KR MRT",
+          "destPlace": "KR MRT"
         },
         {
           "svc": "R2",
@@ -218,8 +218,8 @@
             "Kent Ridge Bus Terminal"
           ],
           "via": [
-            "Kent Ridge MRT",
-            "Central Library"
+            "KR MRT",
+            "CLB"
           ],
           "crowd": "high",
           "endsAt": "2026-08-27T15:00:00.000Z",
@@ -228,8 +228,8 @@
           "laterText": "then 19, ~31 min",
           "toText": "to Kent Ridge MRT, Kent Ridge Bus Terminal",
           "at": "2026-08-27T01:09:00Z",
-          "dest": "via Kent Ridge MRT",
-          "destPlace": "Kent Ridge MRT"
+          "dest": "via KR MRT",
+          "destPlace": "KR MRT"
         },
         {
           "svc": "K",
@@ -243,9 +243,9 @@
             "Prince George's Park Foyer"
           ],
           "via": [
-            "Kent Ridge MRT",
-            "Central Library",
-            "Engineering"
+            "KR MRT",
+            "CLB",
+            "Opp SDE 3"
           ],
           "crowd": null,
           "endsAt": "2026-08-27T15:04:00.000Z",

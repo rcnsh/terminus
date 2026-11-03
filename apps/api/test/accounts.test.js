@@ -631,6 +631,29 @@ test('/api/me/nearby lists boards for stops near the given point', async () => {
   );
 });
 
+test('/api/me/stops: the stops asked for, as Nearby shows them, with your walk only when it knows where you are', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  const near = await (await call(env, '/api/me/nearby?lat=1.2918&lon=103.7804', { cookie })).json();
+  const res = await call(env, '/api/me/stops?codes=pgp,NOWHERE,COM3&lat=1.2918&lon=103.7804', { cookie });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.deepEqual(
+    body.stops.map((s) => s.stop.code),
+    ['PGP', 'COM3'],
+    'in the order asked, an unknown code left out',
+  );
+  const pgp = near.stops.find((s) => s.stop.code === 'PGP');
+  assert.deepEqual(body.stops[0].board, pgp.board, "the same board as Nearby's");
+  assert.equal(body.stops[0].walkS, pgp.walkS, 'and the same walk');
+  assert.ok(body.stops[0].board.every((r) => typeof r.dest === 'string'));
+
+  const away = await (await call(env, '/api/me/stops?codes=PGP', { cookie })).json();
+  assert.equal(away.stops[0].walkS, null, 'no location: no walk');
+  assert.equal((await call(env, '/api/me/stops', { cookie })).status, 400);
+  assert.equal((await call(env, `/api/me/stops?codes=${'A,B,C,D,E,F,G,H,I'}`, { cookie })).status, 400, 'more than can be pinned');
+});
+
 test('/api/me/nearby?stopped=1 lists the services not running too', async () => {
   const { env, email } = setup();
   const realNow = Date.now;

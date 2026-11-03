@@ -154,8 +154,16 @@ const en = {
   endsHere: 'Ends here',
   /** Where a stop's buses go, by places a newcomer knows (via.ts): "to UTown, Kent Ridge MRT". */
   viaTo: ((places: string) => `to ${places}`) as Fn<[string]>,
-  /** A loop on Nearby, by the first well-known place it passes: "via UTown". */
+  /** A loop on Nearby, by the first well-known stop it passes: "via UTown". A line's stops too: "via AS 5, PGP". */
   loopVia: ((place: string) => `via ${place}`) as Fn<[string]>,
+
+  // The list of lines on the Stops tab (campus.ts, lines.ts)
+  /** A line that comes back to where it starts. */
+  lineLoop: ((stop: string) => `Loop from ${stop}`) as Fn<[string]>,
+  lineEnds: ((from: string, to: string) => `${from} to ${to}`) as Fn<[string, string]>,
+  /** How many of a line's buses are on the road now. */
+  busesOut: ((n: number) => `${n} out`) as Fn<[number]>,
+  noneOut: 'None out',
 
   // Clock and lateness (clock.ts)
   /** "6:36 PM", with a no-break space so a line never ends between the two. */
@@ -520,6 +528,11 @@ const zh: Msgs = {
   viaTo: (places) => zs`往${places}方向`,
   loopVia: (place) => zs`经${place}`,
 
+  lineLoop: (stop) => zs`从${stop}出发的环线`,
+  lineEnds: (from, to) => zs`${from}至${to}`,
+  busesOut: (n) => `${n} 辆在路上`,
+  noneOut: '没有巴士在路上',
+
   clock12: (hm, pm) => `${pm ? '下午' : '上午'}\u00a0${hm}`,
   earlyBy: (n) => `早到 ${n} 分钟`,
   justInTime: '刚好赶上',
@@ -747,6 +760,8 @@ export const ERRORS_ZH: Record<string, string> = {
   'unknown destination: pass ?to= a stop or venue code': '未知的目的地：用 ?to= 指定车站或地点代码',
   'pass lat and lon, or ?from= a stop code': '请提供 lat 和 lon，或用 ?from= 指定车站代码',
   'unknown stop': '未知的车站',
+  'codes is required': '需要 codes 参数',
+  'too many stops at once': '一次请求的车站太多',
   'unknown service': '未知的线路',
   'stop not on this service': '这条线路不经过这个车站',
   'that request came from another site': '这个请求来自其他网站',
