@@ -36,7 +36,7 @@ import { SearchBox } from '/account/search-box.js';
 // Loaded with the page (its icons are used here too) so that the Stops and Map
 // tabs, which both import it, don't depend on it arriving later (a failed import
 // can't be retried at the same address; loadTab's retry renews only the tab's file).
-import { NEXT, STAR } from '/app/board.js';
+import { NEXT, STAR, saidRow } from '/app/board.js';
 import { offlineNext } from '/app/offline.js';
 import { preloadMap } from '/app/map-files.js';
 import {
@@ -1013,14 +1013,14 @@ const etaText = (b) =>
 function NearbyTime({ bus, first }) {
   const approx = bus?.quality === 'scheduled' || bus?.quality === 'stale';
   const cls = `nb-time${first && bus?.etaS != null ? ' pick' : ''}`;
-  if (bus?.etaS == null) return html`<span class=${cls}>–</span>`;
+  if (bus?.etaS == null) return html`<span class=${cls} aria-hidden="true">–</span>`;
   const mark = approx ? '~' : '';
   const words = etaText(bus);
   const n = words.match(/\d+/)?.[0];
   // "now": no figure to set large; said as it is.
-  if (!n) return html`<span class=${cls}>${words}</span>`;
+  if (!n) return html`<span class=${cls} aria-hidden="true">${words}</span>`;
   const unit = first ? words.slice(words.indexOf(n) + n.length) : '';
-  return html`<span class=${cls}>${mark}${n}${unit ? html`<small>${unit}</small>` : ''}</span>`;
+  return html`<span class=${cls} aria-hidden="true">${mark}${n}${unit ? html`<small>${unit}</small>` : ''}</span>`;
 }
 
 /**
@@ -1031,11 +1031,11 @@ function NearbyTime({ bus, first }) {
 function NearbyDest({ b }) {
   if (!b.dest) {
     const end = b.towards?.at(-1);
-    return html`<span class="nb-to">${end ? t('to {0}', end) : (b.toText ?? t('Ends here'))}</span>`;
+    return html`<span class="nb-to" aria-hidden="true">${end ? t('to {0}', end) : (b.toText ?? t('Ends here'))}</span>`;
   }
   const i = b.destPlace ? b.dest.indexOf(b.destPlace) : -1;
-  if (i < 0) return html`<span class="nb-to">${b.dest}</span>`;
-  return html`<span class="nb-to">${b.dest.slice(0, i)}<b>${b.destPlace}</b>${b.dest.slice(i + b.destPlace.length)}</span>`;
+  if (i < 0) return html`<span class="nb-to" aria-hidden="true">${b.dest}</span>`;
+  return html`<span class="nb-to" aria-hidden="true">${b.dest.slice(0, i)}<b>${b.destPlace}</b>${b.dest.slice(i + b.destPlace.length)}</span>`;
 }
 
 /**
@@ -1056,7 +1056,7 @@ function NearbyFoot({ stops }) {
  * Nearby: the stops around you as their signs, the name plate with the walk
  * there, then a row per service read like a stop's board: where it's going,
  * its next bus and the two after, in minutes, the next one large. Every bus is shown as it comes: Nearby
- * doesn't weigh the walk there. The nearest stop is drawn larger. The name opens the stop's board and a row
+ * doesn't weigh the walk there. Every sign is the same size. The name opens the stop's board and a row
  * its service's line, both in the Stops tab; the star pins the stop there.
  * Last, the way to the Stops tab, for any other stop.
  */
@@ -1075,8 +1075,8 @@ function NearbyCard({ stops }) {
       <h2 class="sr-only">${t('Buses near you')}</h2>
       <${Say} text=${t('Buses near you: {0}', names)} />
       ${stops.map(
-        (s, i) => html`
-          <section class=${i === 0 ? 'stop-sign nearest' : 'stop-sign'} key=${s.stop.code}>
+        (s) => html`
+          <section class="stop-sign" key=${s.stop.code}>
             <header class="plate">
               <${Icon} paths=${BUS} class="plate-bus" />
               <button type="button" class="plate-name" onClick=${() => (location.hash = `#buses/stop/${encodeURIComponent(s.stop.code)}`)}>
@@ -1109,7 +1109,8 @@ function NearbyCard({ stops }) {
                     const Tag = b.paid ? 'div' : 'button';
                     return html`
                     <${Tag} type=${b.paid ? undefined : 'button'} class="nearby-row" key=${b.svc} onClick=${b.paid ? undefined : go}>
-                      <span class="svc-col"
+                      <span class="sr-only">${saidRow(b)}</span>
+                      <span class="svc-col" aria-hidden="true"
                         ><span class="svc-tag" style=${b.color ? `--svc:${b.color};--svc-ink:${inkOn(b.color)}` : ''}
                           >${b.svc}${b.paid && html`<span class="fare" role="img" aria-label=${t('Public bus, fare applies')}>$</span>`}</span
                         ></span
