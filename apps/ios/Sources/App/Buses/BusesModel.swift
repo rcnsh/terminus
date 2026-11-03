@@ -29,6 +29,10 @@ final class BusesModel {
     /// The pinned stops as Nearby shows them (/me/stops), by code.
     private(set) var pinned: [String: NearbyStop] = [:]
     private(set) var pinnedFailed: Set<String> = []
+    /// Pinned stops the server didn't answer for (one it doesn't know).
+    private(set) var pinnedMissing: Set<String> = []
+    /// When each pinned stop came, on the server's clock, for counting its times down.
+    private(set) var pinnedGot: [String: Date] = [:]
     /// The page showing on the home: a pinned stop, or BusPinned.addPage; nil, the first.
     /// Kept while the app runs, so coming back to the tab finds the same stop.
     var pinSelected: String?
@@ -89,6 +93,8 @@ final class BusesModel {
         lineFailed = []
         pinned = [:]
         pinnedFailed = []
+        pinnedMissing = []
+        pinnedGot = [:]
         pinSelected = nil
         lineCounts = [:]
         linesAskedAt = nil
@@ -247,22 +253,44 @@ final class BusesModel {
         }
         defer { for c in codes { asking.remove("pin:" + c) } }
         let s = AppModel.shared.session
-        let (loc, _) = await Locator.shared.quickFix()
-        do {
-            let stops = try await Api(token: token).pinnedStops(
-                codes, lat: loc?.coordinate.latitude, lon: loc?.coordinate.longitude, acc: loc?.acc)
-            guard current(s) else { return }
-            let at = Date()
-            for stop in stops {
-                pinned[stop.stop.code] = stop
-                answeredAt["pin:" + stop.stop.code] = at
+        // Not cancelled with the refresh a swipe restarts: the next one skips
+        // these codes as just asked, so this answer is the one that fills them.
+        let answer = await Task { () -> Result<[NearbyStop], Error> in
+            let (loc, _) = await Locator.shared.quickFix()
+            do {
+                return .success(
+                    try await Api(token: token).pinnedStops(
+                        codes, lat: loc?.coordinate.latitude, lon: loc?.coordinate.longitude, acc: loc?.acc))
+            } catch {
+                return .failure(error)
             }
-            pinnedFailed.subtract(codes)
-        } catch {
-            guard current(s) else { return }
-            if refused(error, token) { return }
-            pinnedFailed.formUnion(codes)
+        }.value
+        guard current(s) else { return }
+        let stops = try? answer.get()
+        var failure: Error?
+        if case .failure(let e) = answer { failure = e }
+        if let failure, refused(failure, token) { return }
+        // Cancelled all the same (the session went): not failed, asked again.
+        let cancelled = failure is CancellationError || (failure as? URLError)?.code == .cancelled
+        let result = BusPinnedResult.of(asked: codes, returned: stops?.map(\.stop.code), cancelled: cancelled)
+        let at = Date()
+        let got = ServerClock.now
+        for stop in stops ?? [] {
+            guard let code = codes.first(where: { $0.uppercased() == stop.stop.code.uppercased() }) else { continue }
+            pinned[code] = stop
+            pinnedGot[code] = got
+            answeredAt["pin:" + code] = at
         }
+        for code in result.askAgain { asked["pin:" + code] = nil }
+        pinnedFailed.subtract(result.answered + result.missing)
+        pinnedFailed.formUnion(result.failed)
+        pinnedMissing.subtract(result.answered)
+        pinnedMissing.formUnion(result.missing)
+    }
+
+    /// A pinned stop as it stands at `now`, its times counted down since it came.
+    func pinnedStop(_ code: String, now: Date) -> NearbyStop? {
+        pinned[code]?.aged(got: pinnedGot[code], now: now)
     }
 
     /// A pinned stop's short name, as on its plate, for the names over the card.
@@ -274,8 +302,9 @@ final class BusesModel {
 
     /// How many buses each line has out. A failure says nothing rather than an old count.
     func refreshLines() async {
-        guard let token else { return }
+        // Set first, so the minute's wait holds even with no account to ask for.
         linesAskedAt = Date()
+        guard let token else { return }
         let s = AppModel.shared.session
         do {
             let counts = try await Api(token: token).lineCounts()

@@ -122,7 +122,7 @@ struct NearbyStop: Decodable, Identifiable, Sendable {
     /// The walk there; nil from /me/stops without a location.
     let walkS: Int?
     let available: Bool
-    let board: [BoardRow]
+    var board: [BoardRow]
     let opposite: String?
     /// Whether `opposite` is across the road (else only near), and its name:
     /// sent beside `stop`, or inside it by an older server.
@@ -135,6 +135,15 @@ struct NearbyStop: Decodable, Identifiable, Sendable {
     var id: String { stop.code }
 
     enum CodingKeys: String, CodingKey { case stop, walkS, available, board, opposite, oppositeAcross, oppositeName, distM, viaText }
+
+    /// The stop as it stands at `now`, got at `got`: its rows aged as a board's
+    /// are (BusTimes.aged), so a time is counted down and stops passing as live.
+    func aged(got: Date?, now: Date) -> NearbyStop {
+        guard let got else { return self }
+        var s = self
+        s.board = board.map { BusTimes.aged($0, got: got, now: now) }
+        return s
+    }
 
     /// A stop not answered for yet: its plate, with nothing under it.
     init(placeholder code: String, name: String) {

@@ -81,6 +81,27 @@ enum BusPinned {
     }
 }
 
+/// What one /me/stops request leaves behind, for the stops it asked for.
+struct BusPinnedResult: Equatable {
+    /// Answered.
+    var answered: [String] = []
+    /// The request failed: "couldn't reach".
+    var failed: [String] = []
+    /// Not in the answer: a stop the server doesn't know.
+    var missing: [String] = []
+    /// Not settled (the request was cancelled by a swipe): asked for again at once, not shown as failed.
+    var askAgain: [String] = []
+
+    /// `returned`: the codes in the answer, nil when the request failed.
+    static func of(asked: [String], returned: [String]?, cancelled: Bool) -> BusPinnedResult {
+        if cancelled { return BusPinnedResult(askAgain: asked) }
+        guard let returned else { return BusPinnedResult(failed: asked) }
+        let got = Set(returned.map { $0.uppercased() })
+        return BusPinnedResult(
+            answered: asked.filter { got.contains($0.uppercased()) }, missing: asked.filter { !got.contains($0.uppercased()) })
+    }
+}
+
 /// The list of lines: each one's name, where it goes, and its buses out.
 enum BusLines {
     /// /api/lines reads every service from NUS: at most once a minute.
@@ -97,6 +118,10 @@ enum BusLines {
     static func name(_ r: BusCampus.Route, stopName: (String) -> String) -> String? {
         r.name ?? BusWords.route(r, name: stopName)
     }
+
+    /// The green dot beside a count: buses out, counted from a new answer. A
+    /// stale count isn't live, so it has its words alone.
+    static func showsDot(_ c: LineCount) -> Bool { c.out > 0 && !c.stale }
 
     /// A row as VoiceOver reads it: "Bus D2, Loop from COM 3, via PGP, KR MRT, UTown, 3 out".
     static func spoken(svc: String, name: String?, via: String?, count: LineCount?) -> String {

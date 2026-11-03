@@ -81,10 +81,12 @@ final class BusesUITests: XCTestCase {
         openBuses(app)
         XCTAssertTrue(app.descendants(matching: .any)["pinned-none"].firstMatch.waitForExistence(timeout: 10))
         // Every service, read as one: its name, the stops it passes and its buses out, as the server words them.
+        // A name keeps together (no-break spaces inside "KR MRT"): read here as plain spaces.
+        let plain = { (e: XCUIElement) in e.label.replacingOccurrences(of: "\u{00A0}", with: " ") }
         let k = app.buttons["service-K"]
         XCTAssertTrue(k.waitForExistence(timeout: 10))
-        XCTAssertTrue(k.label.hasPrefix("Bus K, PGP to PGP Foyer, via KR MRT, CLB, Kent Vale"), k.label)
-        XCTAssertTrue(app.buttons["service-D1"].label.hasPrefix("Bus D1, Loop from COM 3, via UTown, CLB, AS 5"))
+        XCTAssertTrue(plain(k).hasPrefix("Bus K, PGP to PGP Foyer, via KR MRT, CLB, Kent Vale"), k.label)
+        XCTAssertTrue(plain(app.buttons["service-D1"]).hasPrefix("Bus D1, Loop from COM 3, via UTown, CLB, AS 5"))
         // The buses out come once the list is on screen.
         let out = NSPredicate(format: "label ENDSWITH ', 3 out'")
         expectation(for: out, evaluatedWith: app.buttons["service-A1"])
@@ -244,8 +246,15 @@ final class BusesUITests: XCTestCase {
         // Unpinning the stop showing shows the one that took its place.
         app.buttons["pinned-KR-MRT"].tap()
         XCTAssertTrue(app.buttons["pinned-KR-MRT"].waitForSelected())
-        app.buttons["star-KR-MRT"].tap()
-        XCTAssertTrue(app.buttons["pinned-COM3"].waitForSelected())
+        // The card has come back to KR MRT before its star is tapped.
+        let star = app.buttons["star-KR-MRT"]
+        expectation(for: NSPredicate(format: "isHittable == true"), evaluatedWith: star)
+        waitForExpectations(timeout: 5)
+        sleep(1)
+        star.tap()
+        let next = app.buttons["pinned-COM3"].waitForSelected()
+        if !next { shot("failed-unpin", app) }
+        XCTAssertTrue(next)
         XCTAssertFalse(app.buttons["pinned-KR-MRT"].exists)
         XCTAssertTrue(waitForSign(app, "COM3", svc: "D1").isHittable)
         shot("buses-pinned-unpinned-en-light", app)

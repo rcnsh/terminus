@@ -276,16 +276,32 @@ private struct PinnedPager: View {
         .onChange(of: pins) { tallest = 0 }
     }
 
-    /// A pinned stop's page: its sign as Nearby draws it, or its plate alone while it's asked for.
+    /// A pinned stop's page: its sign as Nearby draws it, its times counted
+    /// down while refreshes fail; or its plate alone while it's asked for.
     private func sign(_ code: String, _ cols: NearbyColumns) -> some View {
-        let stop = model.pinned[code] ?? NearbyStop(placeholder: code, name: model.pinName(code))
-        let cells = stop.board.filter(\.running).map(NearbyCells.cells)
-        let note =
-            model.pinned[code] != nil
-            ? L("No buses are running here now")
-            : model.pinnedFailed.contains(code) ? L("Couldn't reach terminus. Check your connection and try again.") : L("Checking…")
-        return StopSign(stop: stop, cells: cells, cols: cols, note: note, onStop: { model.path.append(.stop(code)) }) { svc in
-            model.path.append(.line(svc: svc, from: code))
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+            let answered = model.pinnedStop(code, now: ServerClock.now)
+            let stop = answered ?? NearbyStop(placeholder: code, name: model.pinName(code))
+            let cells = stop.board.filter(\.running).map(NearbyCells.cells)
+            let note =
+                answered != nil
+                ? L("No buses are running here now")
+                : model.pinnedMissing.contains(code)
+                    ? L("No live data")
+                    : model.pinnedFailed.contains(code)
+                        ? L("Couldn't reach terminus. Check your connection and try again.") : L("Checking…")
+            VStack(alignment: .leading, spacing: 8) {
+                StopSign(stop: stop, cells: cells, cols: cols, note: note, onStop: { model.path.append(.stop(code)) }) { svc in
+                    model.path.append(.line(svc: svc, from: code))
+                }
+                // As under Nearby's signs and the web's pinned card: what a "~" means, only while one is showing.
+                if cells.joined().contains(where: { $0.mark == "~" }) {
+                    Text(L("~ is a guess from the timetable, not a live time."))
+                        .font(.footnote)
+                        .foregroundStyle(Color.muted)
+                        .padding(.horizontal, 6)
+                }
+            }
         }
     }
 }
@@ -476,7 +492,7 @@ private struct ServiceList: View {
             Spacer(minLength: 8)
             if let count {
                 HStack(spacing: 6) {
-                    if count.out > 0 { BusLiveDot() }
+                    if BusLines.showsDot(count) { BusLiveDot() }
                     Text(verbatim: count.outText).font(.subheadline).foregroundStyle(Color.muted)
                 }
                 .fixedSize()

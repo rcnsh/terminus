@@ -72,6 +72,44 @@ final class BusesTests: XCTestCase {
         XCTAssertEqual(BusPinned.toFetch(["A"], now: now, gap: 10) { asked[$0] }, [])
     }
 
+    func testAPinnedRequestSettlesEachStopItAskedFor() {
+        // Answered: each one that came back; one the server left out is missing, not still "Checking…".
+        XCTAssertEqual(
+            BusPinnedResult.of(asked: ["A", "B", "C"], returned: ["A", "C"], cancelled: false),
+            BusPinnedResult(answered: ["A", "C"], missing: ["B"]))
+        // Codes as the server writes them, whatever case they were asked in.
+        XCTAssertEqual(BusPinnedResult.of(asked: ["kv"], returned: ["KV"], cancelled: false), BusPinnedResult(answered: ["kv"]))
+        // Failed: every one couldn't be reached.
+        XCTAssertEqual(BusPinnedResult.of(asked: ["A", "B"], returned: nil, cancelled: false), BusPinnedResult(failed: ["A", "B"]))
+        // Cancelled (a swipe): none failed, all asked for again.
+        XCTAssertEqual(BusPinnedResult.of(asked: ["A", "B"], returned: nil, cancelled: true), BusPinnedResult(askAgain: ["A", "B"]))
+    }
+
+    func testAPinnedStopsTimesCountDownOnceItsOld() throws {
+        let json =
+            #"{"stop":{"code":"COM3","name":"COM 3"},"walkS":60,"board":[{"svc":"D1","etaS":240,"quality":"live","eta":"4 min","later":[{"etaS":900,"quality":"live"}]}]}"#
+        let stop = try JSONDecoder().decode(NearbyStop.self, from: Data(json.utf8))
+        let got = Date(timeIntervalSince1970: 1_000_000)
+        // Fresh: as it came.
+        XCTAssertEqual(stop.aged(got: got, now: got.addingTimeInterval(10)).board[0].etaS, 240)
+        XCTAssertEqual(stop.aged(got: got, now: got.addingTimeInterval(10)).board[0].quality, "live")
+        // Old: counted down, and no longer passed off as live.
+        let old = stop.aged(got: got, now: got.addingTimeInterval(120)).board[0]
+        XCTAssertEqual(old.etaS, 120)
+        XCTAssertEqual(old.quality, "stale")
+        XCTAssertNil(old.eta)
+        XCTAssertEqual(old.later.map(\.etaS), [780])
+        XCTAssertEqual(NearbyCells.cells(old)[0].mark, "~")
+        // Never got (a placeholder): nothing to age.
+        XCTAssertEqual(stop.aged(got: nil, now: got.addingTimeInterval(600)).board[0].etaS, 240)
+    }
+
+    func testTheLiveDotIsOnlyForAFreshCountOfBusesOut() {
+        XCTAssertTrue(BusLines.showsDot(LineCount(out: 3, outText: "3 out")))
+        XCTAssertFalse(BusLines.showsDot(LineCount(out: 3, outText: "3 out", stale: true)))
+        XCTAssertFalse(BusLines.showsDot(LineCount(out: 0, outText: "None out")))
+    }
+
     func testTheLinesCountsAreAskedAtMostOnceAMinute() {
         let now = Date()
         XCTAssertEqual(BusLines.wait(last: nil, now: now), 0)
