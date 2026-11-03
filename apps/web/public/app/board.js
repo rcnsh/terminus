@@ -53,8 +53,8 @@ export function Big({ r }) {
   return html`<span class="bt-big">${parts.map((x) => (/^\d+$/.test(x) ? x : html`<small>${x}</small>`))}</span>`;
 }
 
-/** A time as it's said: "1 minute", "under a minute", "14 minutes", as the apps say it. */
-const minutesSaid = (s) => (s < 30 ? t('under a minute') : Math.round(s / 60) === 1 ? t('1 minute') : t('{0} minutes', Math.round(s / 60)));
+/** A time as it's said: "1 minute", "14 minutes", as the apps say it. Under 45 s a live bus is arriving; a guess is never under a minute. */
+const minutesSaid = (s) => (Math.round(s / 60) === 1 ? t('1 minute') : t('{0} minutes', Math.round(s / 60)));
 
 /**
  * A Nearby row as a screen reader says it, as the apps do: the line, where

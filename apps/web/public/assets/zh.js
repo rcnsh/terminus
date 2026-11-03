@@ -164,7 +164,6 @@ window.TERMINUS_ZH = {
   '6:36 PM': '下午 6:36',
   'Bus {0}': '{0} 巴士',
   'Public bus {0}, fare applies': '公共巴士 {0}，需付车费',
-  'under a minute': '不到 1 分钟',
   '1 minute': '1 分钟',
   '{0} minutes': '{0} 分钟',
   'about {0}, estimated': '约 {0}，估计',

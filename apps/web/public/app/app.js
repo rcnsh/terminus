@@ -998,7 +998,7 @@ const etaText = (b) =>
     : (b.eta ??
       (b.quality === 'scheduled' || b.quality === 'stale'
         ? t('~{0}', t('{0} min', Math.max(1, mins(b.etaS))))
-        : b.etaS < 60
+        : b.etaS < 45
           ? t('Arriving')
           : t('{0} min', mins(b.etaS))));
 
@@ -1108,7 +1108,7 @@ function NearbyCard({ stops }) {
                     // A public bus has no line page, as on a stop's board.
                     const Tag = b.paid ? 'div' : 'button';
                     return html`
-                    <${Tag} type=${b.paid ? undefined : 'button'} class="nearby-row" key=${b.svc} onClick=${b.paid ? undefined : go}>
+                    <${Tag} type=${b.paid ? undefined : 'button'} class="nearby-row" key=${`${b.svc} ${b.dest ?? b.toText}`} onClick=${b.paid ? undefined : go}>
                       <span class="sr-only">${saidRow(b)}</span>
                       <span class="svc-col" aria-hidden="true"
                         ><span class="svc-tag" style=${b.color ? `--svc:${b.color};--svc-ink:${inkOn(b.color)}` : ''}
