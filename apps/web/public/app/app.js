@@ -991,17 +991,24 @@ const BUS =
 /** A bus stop's sign on its pole: the Stops tab, and Nearby's way to it. */
 const STOP_SIGN = '<rect x="6" y="2.5" width="12" height="9.5" rx="2.5"/><path d="M12 12v9.5M9 21.5h6M9.5 7.25h5"/>';
 
-/** How far up the road a bus is drawn: this many seconds away is the far end. */
-const ROAD_S = 15 * 60;
-
-/**
- * A bus on a Nearby road, nearer the stop the sooner it's due. The next one
- * is solid; the ones after it, faded. Drawn after them, it sits on top.
- */
-const RoadBus = ({ bus, next }) => html`<span
-  class=${`road-bus${bus.quality === 'live' ? ' live' : ''}${next ? '' : ' later'}`}
-  style=${{ '--far': Math.min(1, Math.max(0, bus.etaS / ROAD_S)) }}
-></span>`;
+/** Nearby's times as clock times rather than minutes: this device's choice, kept between visits. */
+const NEARBY_TIMES_KEY = 'nearby-times';
+const readNearbyClock = () => {
+  try {
+    return globalThis.localStorage?.getItem(NEARBY_TIMES_KEY) === 'clock';
+  } catch {
+    return false;
+  }
+};
+const nearbyClock = store(readNearbyClock());
+function setNearbyClock(on) {
+  nearbyClock.set(on);
+  try {
+    globalThis.localStorage?.setItem(NEARBY_TIMES_KEY, on ? 'clock' : 'minutes');
+  } catch {
+    // Not kept: private browsing, or storage refused. It still switches for now.
+  }
+}
 
 /** The server's "4 min", "now", "~6 min" for an estimate, or "–"; worked out here for an older server. */
 const etaText = (b) =>
@@ -1011,16 +1018,35 @@ const etaText = (b) =>
       (b.etaS < 60 ? t('Arriving') : b.quality === 'scheduled' ? t('~{0}', t('{0} min', mins(b.etaS))) : t('{0} min', mins(b.etaS))));
 
 /**
+ * One bus in a Nearby column: the server's words ("4 min", "~6 min") or its
+ * clock time, struck out when it's too soon to catch. A dash with no bus.
+ */
+function NearbyTime({ bus, asClock, next }) {
+  const cls = `nb-time${next ? ' next' : ''}${bus?.tooSoon ? ' gone' : ''}`;
+  if (bus?.etaS == null) return html`<span class=${cls}>–</span>`;
+  const approx = bus.quality === 'scheduled' || bus.quality === 'stale';
+  const text = asClock && bus.at ? (approx ? t('~{0}', clock(bus.at)) : clock(bus.at)) : etaText(bus);
+  return html`<span class=${cls}>${text}${bus.tooSoon && html`<span class="sr-only">${t(', too soon to catch')}</span>`}</span>`;
+}
+
+/** Where a row's bus is going, "to Kent Ridge MRT", or that this is the end of its line. */
+const nearbyTo = (b) => {
+  const end = b.towards?.at(-1);
+  return end ? t('to {0}', end) : (b.toText ?? t('Ends here'));
+};
+
+/**
  * Nearby: the stops around you as their signs, the name plate with the walk
- * there, then a row per service, its buses coming up a short road towards
- * the stop, nearer the sooner they're due, the next one solid and the rest
- * faded. The nearest stop is drawn larger. An estimate is an outline,
- * never a filled bus, so it doesn't pass for live. The name opens the
- * stop's board and a row its service's line, both in the Stops tab; the star
- * pins the stop there. Last, the way to the Stops tab, for any other stop.
+ * there, then a row per service read like a stop's board: where it's going,
+ * its next bus and the one after (the shuttle feed gives two), in minutes or
+ * as clock times. A bus due before you could walk there is struck out. The
+ * nearest stop is drawn larger. The name opens the stop's board and a row
+ * its service's line, both in the Stops tab; the star pins the stop there.
+ * Last, the way to the Stops tab, for any other stop.
  */
 function NearbyCard({ stops }) {
   const p = useStore(profile);
+  const asClock = useStore(nearbyClock);
   const pinned = p?.pinnedStops ?? [];
   // Until the profile has come, what's pinned isn't known: no star to read wrong, or to unpin with.
   // Now doesn't need it otherwise, so Nearby asks for it (the account, not the feed).
@@ -1030,9 +1056,13 @@ function NearbyCard({ stops }) {
   // Heard once for these stops, not again on every refresh: their names.
   const names = stops.map((s) => s.stop.name).join(', ');
   return html`
-    <div class="widget nearby">
+    <div class=${asClock ? 'widget nearby clock' : 'widget nearby'}>
       <h2 class="sr-only">${t('Buses near you')}</h2>
       <${Say} text=${t('Buses near you: {0}', names)} />
+      <div class="segmented full nb-times" role="radiogroup" aria-label=${t('Show times')}>
+        <label><input type="radio" name="nearby-times" checked=${!asClock} onChange=${() => setNearbyClock(false)} /><span>${t('In minutes')}</span></label>
+        <label><input type="radio" name="nearby-times" checked=${asClock} onChange=${() => setNearbyClock(true)} /><span>${t('Clock time')}</span></label>
+      </div>
       ${stops.map(
         (s, i) => html`
           <section class=${i === 0 ? 'stop-sign nearest' : 'stop-sign'} key=${s.stop.code}>
@@ -1057,6 +1087,11 @@ function NearbyCard({ stops }) {
             </header>
             ${
               s.board.length
+                ? html`<div class="nb-head" aria-hidden="true"><span></span><span></span><span>${t('Next bus')}</span><span>${t('Then')}</span></div>`
+                : ''
+            }
+            ${
+              s.board.length
                 ? s.board.map((b) => {
                     const go = () => (location.hash = `#buses/line/${encodeURIComponent(b.svc)}/${encodeURIComponent(s.stop.code)}`);
                     // A public bus has no line page, as on a stop's board.
@@ -1068,10 +1103,9 @@ function NearbyCard({ stops }) {
                           >${b.svc}${b.paid && html`<span class="fare" role="img" aria-label=${t('Public bus, fare applies')}>$</span>`}</span
                         ></span
                       >
-                      <span class="road" style=${{ '--svc': b.color ?? 'var(--muted)' }} aria-hidden="true"
-                        >${[...(b.later ?? []), ...(b.etaS != null ? [b] : [])].map((bus, j) => html`<${RoadBus} key=${bus === b ? 'next' : j} bus=${bus} next=${bus === b} />`)}</span
-                      >
-                      <span class="eta">${etaText(b)}</span>
+                      <span class="nb-to">${nearbyTo(b)}</span>
+                      <${NearbyTime} bus=${b} asClock=${asClock} next />
+                      <${NearbyTime} bus=${b.later?.[0]} asClock=${asClock} />
                     <//>
                   `;
                   })

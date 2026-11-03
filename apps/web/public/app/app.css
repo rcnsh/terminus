@@ -41,7 +41,7 @@ body.is-offline .app-card .widget.offline-plan { opacity: 1; }
 .app-chips button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
 @media (forced-colors: active) {
   .app-chips button[aria-pressed="true"], .app-chips .chip-added:has(> button[aria-pressed="true"]) .chip-x { forced-color-adjust: none; background: Highlight; border-color: Highlight; color: HighlightText; }
-  .map-pills .dot, .road-bus, .bt-bus { forced-color-adjust: none; }
+  .map-pills .dot, .bt-bus { forced-color-adjust: none; }
 }
 /* Elsewhere at the end of the chips, worded so it reads as one more place to go, and the search it opens. */
 .app-chips .chip-search { display: inline-flex; align-items: center; gap: 5px; padding: 7px 14px 7px 10px; }
@@ -86,19 +86,31 @@ body.is-offline .app-card .widget.offline-plan { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { .go-later-error { animation: none; } }
 
 /* Nearby: each stop as its sign (app.js NearbyCard). The plate is the
-   sign's inverted colours; under it a row per service, its bus on a road. */
+   sign's inverted colours; under it a row per service, read like a bus
+   stop's board: where it's going, its next bus, and the one after. */
 .nearby { display: grid; gap: 12px; }
 .stop-sign .detail { padding: 12px 14px; }
-.nearby-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 14px; border: 0; background: none; color: inherit; font: inherit; text-align: left; font-variant-numeric: tabular-nums; }
+/* The same columns on every sign and its heading (in rem), so the times line up down the page. */
+.nearby-row, .nb-head { display: grid; grid-template-columns: 3.4rem minmax(0, 1fr) 4.4rem 3.8rem; align-items: center; column-gap: 10px; width: 100%; padding: 7px 14px; }
+.nearby-row { border: 0; background: none; color: inherit; font: inherit; text-align: left; font-variant-numeric: tabular-nums; }
 button.nearby-row { cursor: pointer; }
 button.nearby-row:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); }
 .nearby-row + .nearby-row { border-top: 1px solid var(--line); }
 .stop-sign.nearest .nearby-row { padding-block: 10px; }
-/* Fixed columns either side (in rem, the same on every sign), so every road
-   starts and ends at the same place and a bus is as far along on each. */
-.nearby-row .svc-col { flex: none; display: flex; width: 3.4rem; }
-.nearby-row .eta { flex: none; min-width: 4.6rem; text-align: right; font-weight: 800; font-size: 0.95rem; white-space: nowrap; }
-.stop-sign.nearest .nearby-row .eta { font-size: 1.1rem; }
+.nearby-row .svc-col { display: flex; }
+.nb-head { padding-block: 7px 0; color: var(--muted); font-size: 0.68rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.nb-head span:nth-child(n + 3) { text-align: right; }
+/* Two lines at most, so a long name (Prince George's Park) is read whole, not cut. */
+.nb-to { min-width: 0; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; color: var(--muted); font-size: 0.82rem; line-height: 1.25; overflow-wrap: anywhere; }
+.nb-time { text-align: right; color: var(--muted); font-size: 0.9rem; font-weight: 600; white-space: nowrap; }
+.nb-time.next { color: var(--ink); font-size: 0.95rem; font-weight: 800; }
+.stop-sign.nearest .nb-time.next { font-size: 1.1rem; }
+/* Due before you could walk there: shown, so the board is whole, but not offered. */
+.nb-time.gone { color: var(--faint); text-decoration: line-through; text-decoration-thickness: 1.5px; }
+/* Clock times ("12:05 PM") need wider columns than minutes. */
+.nearby.clock :is(.nearby-row, .nb-head) { grid-template-columns: 3.4rem minmax(0, 1fr) 4.9rem 4.4rem; }
+/* Minutes or clock times, for every sign at once. */
+.nb-times { margin-bottom: -2px; }
 /* The star on a sign's plate: pins the stop to the Stops tab. */
 .plate-star { flex: none; display: grid; place-items: center; width: 34px; height: 34px; margin-right: -2px; border: 0; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; }
 .plate-star svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linejoin: round; }
@@ -111,15 +123,6 @@ button.nearby-row:hover { background: color-mix(in srgb, var(--ink) 4%, transpar
 .to-stops > span > span { color: var(--muted); font-size: 0.82rem; }
 .to-stops-icon { flex: none; width: 22px; height: 22px; fill: none; stroke: var(--accent); stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 .to-stops-go { flex: none; width: 18px; height: 18px; fill: none; stroke: var(--muted); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-/* The road to the stop (the ring at its end), and the buses on it, nearer the sooner they're due. */
-.road { position: relative; flex: 1; height: 18px; min-width: 40px; }
-.road::before { content: ''; position: absolute; left: 0; right: 10px; top: 8px; height: 2px; background: repeating-linear-gradient(90deg, var(--line-strong) 0 6px, transparent 6px 10px); }
-.road::after { content: ''; position: absolute; right: 0; top: 3px; width: 12px; height: 12px; box-sizing: border-box; border-radius: 50%; border: 2.5px solid var(--ink); background: var(--surface); }
-.road-bus { position: absolute; top: 3px; left: calc((100% - 38px) * (1 - var(--far))); width: 18px; height: 12px; box-sizing: border-box; border-radius: 4px; border: 2px solid var(--svc); }
-.road-bus.live { background: var(--svc); }
-/* The buses after the next one: there, but not the one to catch. */
-.road-bus.later { opacity: 0.6; }
-
 /* Its status line stays on the page; empty, it takes no room in Now's column. */
 .banner-slot:empty { position: absolute; }
 .offline {
