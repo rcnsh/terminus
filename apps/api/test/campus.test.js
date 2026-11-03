@@ -18,6 +18,7 @@ import {
 } from '../src/answer/resolve.ts';
 import { GRAPH as REAL, GRAPH_PUBLIC } from '../src/answer/graph.ts';
 import { haversineM } from '../src/geo.ts';
+import { withLang } from '../src/i18n.ts';
 
 const GRAPH = graphJson;
 
@@ -72,6 +73,21 @@ test('buildCampusMap drops the closing repeat of a loop route so the polyline ha
       assert.notEqual(seq[0], map.routes[svc].seq.at(-1), `${svc}: loop-closing repeat was not dropped`);
     }
   }
+});
+
+test("each line is worded once, by its stops' plate names, each name kept on one line, in both languages", () => {
+  const nb = (t) => t.replaceAll('\u00a0', ' ');
+  const { routes } = buildCampusMap(REAL);
+  assert.equal(routes.A1.name, 'Loop from KR Bus Ter');
+  assert.equal(nb(routes.A1.via), 'via AS 5, PGP, KR MRT');
+  assert.equal(routes.R1.name, 'Kent Vale to PGP');
+  assert.equal(nb(routes.P.via), 'via BG MRT, KR MRT, UTown');
+  assert.ok(!routes.P.via.includes('BG MRT'), 'no ordinary space inside a stop name');
+  withLang('zh', () => {
+    const zh = buildCampusMap(REAL).routes;
+    assert.equal(zh.A1.name, '从 KR Bus Ter 出发的环线');
+    assert.equal(nb(zh.A1.via), '经 AS 5、PGP、KR MRT');
+  });
 });
 
 test('every route gets a distinct, defined color', () => {

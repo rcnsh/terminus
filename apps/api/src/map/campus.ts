@@ -205,7 +205,8 @@ export function buildCampusMap(graph: Graph): CampusMap {
       name: loop ? m().lineLoop(plate(seq[0])) : m().lineEnds(plate(seq[0]), plate(seq[seq.length - 1])),
       via: (() => {
         const v = lineVia(idx, svc);
-        return v.length ? m().loopVia(listOf(v)) : null;
+        // Each stop's name kept on one line, so a wrap falls between stops, never inside "KR MRT".
+        return v.length ? m().loopVia(listOf(v.map((n) => n.replaceAll(' ', '\u00a0')))) : null;
       })(),
     };
   }
