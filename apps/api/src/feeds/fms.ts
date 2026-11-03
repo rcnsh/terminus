@@ -18,6 +18,7 @@ import {
   UpstreamHttpError,
   UpstreamRejected,
   MintQuiet,
+  NO_REMINT_CODES,
   getSession,
   markIfOutdated,
   mintWith,
@@ -462,12 +463,6 @@ async function proxyCall(env: Env, session: Session, endpoint: string, params: R
     throw new Error(`${endpoint} non-JSON (${res.status}): ${text.slice(0, 80)}`);
   }
 }
-
-/**
- * Codes a fresh token cannot fix: a refused app version (10009) and refused
- * API keys (10000). Re-minting on these only adds load while NUS is unhappy.
- */
-export const NO_REMINT_CODES = new Set(['10009', '10000']);
 
 /**
  * After a refused call: the session to try once more with, or null for no

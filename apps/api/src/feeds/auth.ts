@@ -144,7 +144,7 @@ export function apiKeyHeaders(env: Env): Record<string, string> {
  * the audience, and a forged expiry would only cost us an early refresh.
  */
 export function jwtExpMs(token: string): number | null {
-  return jwtTimeMs(token, 'exp');
+  return timeMs(jwtClaims(token)?.exp);
 }
 
 /**
@@ -152,24 +152,27 @@ export function jwtExpMs(token: string): number | null {
  * both, 24 hours apart. Null when either is missing.
  */
 export function jwtLifeMs(token: string): number | null {
-  const exp = jwtTimeMs(token, 'exp');
-  const iat = jwtTimeMs(token, 'iat');
+  const claims = jwtClaims(token);
+  const exp = timeMs(claims?.exp);
+  const iat = timeMs(claims?.iat);
   return exp !== null && iat !== null && exp > iat ? exp - iat : null;
 }
 
-/** A time claim (seconds since the epoch) from the JWT payload, in ms. */
-function jwtTimeMs(token: string, claim: 'exp' | 'iat'): number | null {
+/** The JWT's payload, or null when it isn't one. */
+function jwtClaims(token: string): Record<string, unknown> | null {
   const part = token.split('.')[1];
   if (!part) return null;
   try {
     const pad = part.replace(/-/g, '+').replace(/_/g, '/');
-    const json = atob(pad + '='.repeat((4 - (pad.length % 4)) % 4));
-    const value = (JSON.parse(json) as Record<string, unknown>)[claim];
-    return typeof value === 'number' && Number.isFinite(value) ? value * 1000 : null;
+    const claims = JSON.parse(atob(pad + '='.repeat((4 - (pad.length % 4)) % 4))) as unknown;
+    return claims && typeof claims === 'object' ? (claims as Record<string, unknown>) : null;
   } catch {
     return null;
   }
 }
+
+/** A time claim, in seconds since the epoch, as ms. */
+const timeMs = (value: unknown): number | null => (typeof value === 'number' && Number.isFinite(value) ? value * 1000 : null);
 
 /** Pull the session out of the response envelope, tolerating a reshape. */
 export function extractSession(body: unknown, nowMs: number): Session | null {
@@ -298,13 +301,19 @@ export async function getSession(
 const KV_RENEWED = 'auth:renewed';
 const RENEW_GAP_S = 12 * 3_600;
 /**
- * The version a renewal's mint was refused for (10009). No renewal tries it
- * again: the kept token still works, and the version search, which starts
- * once NUS refuses the feed calls or the token runs out, finds the new one.
- * Kept longer than a token lives, so it outlasts the token it was refused for.
+ * The kept token (by its expMs) whose renewal NUS refused with a code a new
+ * token can't cure: a refused version or key (NO_REMINT_CODES). No renewal
+ * tries again while it lasts, which is until that token runs out: the kept
+ * token still works, and once it's gone the next request mints, or the
+ * version search finds the new version.
  */
 const KV_RENEW_REFUSED = 'auth:renewRefused';
-const RENEW_REFUSED_S = 2 * 86_400;
+
+/**
+ * Codes a fresh token cannot fix: a refused app version (10009) and refused
+ * API keys (10000). Re-minting on these only adds load while NUS is unhappy.
+ */
+export const NO_REMINT_CODES = new Set(['10009', '10000']);
 
 /**
  * Mints a new token when the kept one is still good but has less than
@@ -323,20 +332,15 @@ const RENEW_REFUSED_S = 2 * 86_400;
  * out, one for another version or a KV it can't read, and it leaves the
  * mint to the next request, as without it. A mint that keeps failing is
  * tried once a cron run until the token runs out, unless NUS refused its
- * version (KV_RENEW_REFUSED), and a renewal that worked waits RENEW_GAP_S
- * before the next.
+ * version or key (KV_RENEW_REFUSED), and a renewal that worked waits
+ * RENEW_GAP_S before the next.
  */
 export async function renewAhead(env: Env, nowMs: number): Promise<boolean> {
   if (!authConfigured(env)) return false;
   let kept: Session | null;
   let renewed: string | null;
-  let refused: string | null;
   try {
-    [kept, renewed, refused] = await Promise.all([
-      env.KV.get(KV_TOKEN, 'json') as Promise<Session | null>,
-      env.KV.get(KV_RENEWED),
-      env.KV.get(KV_RENEW_REFUSED),
-    ]);
+    [kept, renewed] = await Promise.all([env.KV.get(KV_TOKEN, 'json') as Promise<Session | null>, env.KV.get(KV_RENEWED)]);
   } catch {
     return false;
   }
@@ -344,16 +348,16 @@ export async function renewAhead(env: Env, nowMs: number): Promise<boolean> {
   const leftMs = kept.expMs - nowMs;
   // A token without iat counts as the default lifetime, as extractSession does without exp.
   const aheadMs = (jwtLifeMs(kept.token) ?? TTL.tokenDefaultS * 1000) * TTL.tokenRenewShare;
-  if (renewed || leftMs <= 0 || leftMs > aheadMs || kept.version !== (await appVersion(env, nowMs)) || refused === kept.version)
-    return false;
+  if (renewed || leftMs <= 0 || leftMs > aheadMs || kept.version !== (await appVersion(env, nowMs))) return false;
+  const keptId = String(kept.expMs);
+  if ((await env.KV.get(KV_RENEW_REFUSED).catch(() => keptId)) === keptId) return false;
   // getSession's own path: a mint already under way here is shared, and a
   // failed one waits failMemoS. The kept token is still good, so a
   // request that sees that memo uses it rather than minting.
-  const keptVersion = kept.version;
   const fresh = await getSession(env, nowMs, { force: true }).catch(async (err) => {
     // A refusal of a version already switched away from says nothing of the new one (markIfOutdated).
-    if (err instanceof UpstreamRejected && err.code === '10009' && !err.outdated && err.version === keptVersion)
-      await env.KV.put(KV_RENEW_REFUSED, err.version, { expirationTtl: RENEW_REFUSED_S }).catch(() => {});
+    if (err instanceof UpstreamRejected && NO_REMINT_CODES.has(err.code) && !err.outdated)
+      await env.KV.put(KV_RENEW_REFUSED, keptId, { expirationTtl: Math.max(60, Math.ceil(leftMs / 1000)) }).catch(() => {});
     throw err;
   });
   // mint ignores a failed write, and a token only this isolate holds isn't

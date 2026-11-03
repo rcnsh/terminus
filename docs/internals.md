@@ -2015,11 +2015,12 @@ usually someone opening the app. It is bounded so it can't grow into a
 poller. With no token, one already expired, one for another version or KV
 it can't read, it leaves the mint to the next request. A renewal that fails
 leaves the kept token in use and is tried again each run until that token
-runs out, except one NUS refused for its version (10009): that version is
-kept in `auth:renewRefused` and no renewal tries it again, so a release
-costs one refused mint, and the version search takes over once the feed
-calls are refused or the token runs out. One that works sets `auth:renewed` for 12 hours: at most two a
-day, whatever the token's lifetime.
+runs out, except one NUS refused for its version or key (10009, 10000):
+`auth:renewRefused` marks that token until it runs out and no renewal
+tries again, so a new uNivUS release costs one refused mint. Once the
+token is gone the next request mints, or the version search takes over.
+One that works sets `auth:renewed` for 12 hours: at most two a day,
+whatever the token's lifetime.
 
 The feed's secrets are its three API keys (`X-HTD-API`, `X-APP-API`, the
 proxy's `x-api-key`); the rest of its settings are URLs, the version, the

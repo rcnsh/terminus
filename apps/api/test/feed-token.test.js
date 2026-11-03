@@ -138,24 +138,25 @@ test('a renewal that fails leaves the kept token in use, and is tried again next
   assert.equal(fetchImpl.counts.auth, 2);
 });
 
-test('a renewal NUS refused for its version (10009) is not tried again with that version', async () => {
-  const fetchImpl = makeFetch({ mintReject: '10009' });
-  installGlobals(fetchImpl);
-  const env = makeEnv();
-  scopeCache(env);
-  await keep(env.KV, 20 * 60_000);
-  await assert.rejects(renewToken(env, FROZEN_NOW), /code=10009/);
-  installGlobals(fetchImpl, FROZEN_NOW + 15 * 60_000);
-  assert.equal(await renewToken(env, FROZEN_NOW + 15 * 60_000), false);
-  assert.equal(fetchImpl.counts.auth, 1, 'one refused mint, not one a run');
-  // A token for another version is renewed as usual.
-  // Still good 30 minutes on, with 20 minutes left.
-  await keep(env.KV, 50 * 60_000, 'univus_android_9.9.9_999');
-  await env.KV.put('config:appVersion', 'univus_android_9.9.9_999');
-  forgetAppVersion(env);
-  installGlobals(fetchImpl, FROZEN_NOW + 30 * 60_000);
-  await assert.rejects(renewToken(env, FROZEN_NOW + 30 * 60_000), /code=10009/);
-  assert.equal(fetchImpl.counts.auth, 2);
+test('a renewal NUS refused for its version or key is not tried again for that token', async () => {
+  for (const code of ['10009', '10000']) {
+    const fetchImpl = makeFetch({ mintReject: code });
+    installGlobals(fetchImpl);
+    const env = makeEnv();
+    scopeCache(env);
+    await keep(env.KV, 20 * 60_000);
+    await assert.rejects(renewToken(env, FROZEN_NOW), new RegExp(`code=${code}`));
+    installGlobals(fetchImpl, FROZEN_NOW + 15 * 60_000);
+    assert.equal(await renewToken(env, FROZEN_NOW + 15 * 60_000), false, code);
+    assert.equal(fetchImpl.counts.auth, 1, `${code}: one refused mint, not one a run`);
+    // The next token, here one for a new version, is renewed as usual.
+    await keep(env.KV, 50 * 60_000, 'univus_android_9.9.9_999');
+    await env.KV.put('config:appVersion', 'univus_android_9.9.9_999');
+    forgetAppVersion(env);
+    installGlobals(fetchImpl, FROZEN_NOW + 30 * 60_000);
+    await assert.rejects(renewToken(env, FROZEN_NOW + 30 * 60_000), new RegExp(`code=${code}`));
+    assert.equal(fetchImpl.counts.auth, 2, code);
+  }
 });
 
 test('nothing is minted while the breaker is open', async () => {

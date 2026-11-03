@@ -113,8 +113,9 @@ root path gets 426 from an app, 308 from anything else (`movedApi` in
    the version search only while NUS is refusing the beta. Both crons
    mint a new guest token while the kept one is still good with under
    half its lifetime left (`renewToken` in `src/feeds/fms.ts`), trying
-   each run until one works, but never again with a version NUS refused
-   (`auth:renewRefused`): at most two a day (`auth:renewed`). Each push
+   each run until one works, but not again for a token whose renewal NUS
+   refused for its version or key (`auth:renewRefused`): at most two a day
+   (`auth:renewed`). Each push
    user's Trip object (`src/push/tripdo.ts`) wakes at most every 30 s to
    recompute the card, asking for its stops through the cache.
 3. **`src/feeds/fms.ts` is the only file that touches the raw feed shape.** The

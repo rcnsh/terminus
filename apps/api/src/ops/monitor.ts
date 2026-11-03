@@ -764,9 +764,9 @@ export async function runCron(env: Env, nowMs: number): Promise<void> {
     });
     await step('public feed', () => checkPublicFeed(env, nowMs));
   }
-  // A guest token before the kept one runs out, on both sites: about one
-  // mint a day, as without it, but by the cron rather than by the first
-  // person to open the app after a quiet spell. After the check, so its
+  // A guest token before the kept one runs out, on both sites: two mints a
+  // day, by the cron rather than by the first person to open the app after
+  // a quiet spell, and hours before it's needed. After the check, so its
   // reading is the feed's own, and only when that check passed: while NUS
   // refuses us, the version search does the minting.
   if (feedUp) await step('token', () => renewToken(env, nowMs));
