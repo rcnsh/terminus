@@ -31,6 +31,7 @@
 "On the way" = "在路上";
 "Packed" = "很挤";
 "Pin %@" = "固定 %@";
+"Pin another stop" = "再固定一个车站";
 "Pin this stop" = "固定这个车站";
 "Pinned" = "已固定";
 "Public bus %@, fare applies" = "公共巴士 %@，需付车费";
@@ -44,6 +45,7 @@
 "Stops" = "车站";
 "Tap a service to see its whole line." = "点一条线路，查看它经过的每个车站。";
 "Tap one to see its whole line." = "点一条线路，查看它经过的所有车站。";
+"Tap the star on a stop in Nearby or on its page to keep it here." = "在附近或车站页面点星标，就能把它固定在这里。";
 "Tap the star on any stop to keep it here: in Nearby, on the stop's page, or after searching for it." = "点任意车站的星标，把它固定在这里：在“附近”、车站页面或搜索结果里都可以。";
 "then %@ min, estimated" = "之后 %@ 分钟（估计）";
 "This service's line isn't available." = "这条线路暂时无法显示。";

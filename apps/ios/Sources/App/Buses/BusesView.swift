@@ -1,10 +1,11 @@
 import SwiftUI
 import UIKit
 
-/// The Stops tab, called Stops: a search, then each pinned stop with the
-/// top of its board, then every service. A row opens its service's line; a
-/// stop on the line, or found in the search, opens its board. The stops
-/// around you are Now's Nearby. As Android's BusesScreen, in the hour's sky.
+/// The Stops tab, called Stops: a search, then the pinned stops in one card
+/// that swipes from stop to stop, each as Nearby shows it, then every line
+/// with its buses out. A row opens its service's line; a stop on the line,
+/// or found in the search, opens its board. The stops around you are Now's
+/// Nearby. As Android's BusesScreen, in the hour's sky.
 struct BusesView: View {
     @State private var model = BusesModel.shared
     @Environment(AppModel.self) private var app
@@ -111,7 +112,10 @@ extension View {
 
 struct BusesHome: View {
     @Environment(BusesModel.self) private var model
+    @Environment(\.scenePhase) private var phase
     @State private var query = ""
+    /// The list of lines has been on screen: its buses out are asked for from then.
+    @State private var linesSeen = false
     @FocusState private var focused: Bool
     @State private var pull = SkyPull()
 
@@ -145,7 +149,7 @@ struct BusesHome: View {
                 } else {
                     VStack(alignment: .leading, spacing: 0) {
                         PinnedStops()
-                        ServiceList()
+                        ServiceList(seen: $linesSeen)
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, 24)
@@ -161,10 +165,21 @@ struct BusesHome: View {
         .navigationTitle(L("Stops"))
         .toolbar(.hidden, for: .navigationBar)
         .busSkyChrome(strip: true)
-        // Every pinned board on the home, each at most every 15 s (the API's
-        // own cache); none while searching or with a page over the home.
-        .busRefreshing(searching ? "searching" : "pins:\(model.shownPins)") {
-            if !searching { await model.refreshPins() }
+        // The pinned stop showing and its neighbours, at most every 15 s (the
+        // API's own cache); none while searching or with a page over the home.
+        .busRefreshing(searching ? "searching" : "pins:\(model.shownPins):\(model.pinFocus ?? "")") {
+            if !searching { await model.refreshPinned() }
+        }
+        // The lines' buses out, from when the list is first on screen, at most once a minute
+        // while the home is (it reads every service from NUS); none with a page over it.
+        .task(id: "\(phase == .active)|\(searching)|\(linesSeen)") {
+            guard phase == .active, !searching, linesSeen else { return }
+            while !Task.isCancelled {
+                let wait = max(BusLines.wait(last: model.linesAskedAt, now: Date()), Quiet.wait())
+                if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
+                if Task.isCancelled { return }
+                await model.refreshLines()
+            }
         }
     }
 }
@@ -183,8 +198,7 @@ private struct HomeTitle: View {
     }
 }
 
-/// Each pinned stop: its name, which opens its page, its star, and the top
-/// of its board; with nothing pinned, how to pin one.
+/// The pinned stops, in one card that swipes; with nothing pinned, how to pin one.
 private struct PinnedStops: View {
     @Environment(BusesModel.self) private var model
 
@@ -205,46 +219,169 @@ private struct PinnedStops: View {
             if pins.isEmpty {
                 NoPins()
             } else {
-                VStack(alignment: .leading, spacing: 16) {
-                    ForEach(pins, id: \.self) { PinnedStop(code: $0) }
-                }
+                PinnedPager(pins: pins)
             }
         }
     }
 }
 
-private struct PinnedStop: View {
-    let code: String
+/// The pinned stops' names, then one card at a time: each stop as Nearby
+/// shows it, and last, how to pin another. A swipe moves the chosen name, a
+/// tap on a name moves the card. The card is as tall as the tallest page
+/// so far, so nothing under it jumps while swiping.
+private struct PinnedPager: View {
+    let pins: [String]
     @Environment(BusesModel.self) private var model
+    @State private var tallest: CGFloat = 0
+
+    /// The pages' gutters: the home's own, so a page sliding in comes from the screen's edge.
+    private static let gutter: CGFloat = 16
 
     var body: some View {
-        let name = model.stopName(code)
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 4) {
-                Button {
-                    model.path.append(.stop(code))
-                } label: {
-                    HStack(spacing: 6) {
-                        Text(verbatim: name).font(.headline).foregroundStyle(Color.ink).multilineTextAlignment(.leading)
-                        Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Color.faint)
-                            .accessibilityHidden(true)
+        @Bindable var model = model
+        let page = BusPinned.page(pins, selected: model.pinSelected)
+        VStack(alignment: .leading, spacing: 10) {
+            PinSegments(codes: pins, names: pins.map(model.pinName), selected: page) { code in
+                withAnimation(.snappy) { model.pinSelected = code }
+            }
+            NearbySigns(inset: 2 * Self.gutter) { cols in
+                ScrollView(.horizontal) {
+                    HStack(alignment: .top, spacing: 0) {
+                        ForEach(pins, id: \.self) { code in
+                            sign(code, cols)
+                                .onGeometryChange(for: CGFloat.self) {
+                                    $0.size.height
+                                } action: {
+                                    tallest = max(tallest, $0)
+                                }
+                                .padding(.horizontal, Self.gutter)
+                                .containerRelativeFrame(.horizontal)
+                                .id(code)
+                        }
+                        AddPin()
+                            .padding(.horizontal, Self.gutter)
+                            .containerRelativeFrame(.horizontal)
+                            .id(BusPinned.addPage)
                     }
-                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                    .contentShape(Rectangle())
+                    .frame(minHeight: tallest, alignment: .top)
+                    .scrollTargetLayout()
                 }
-                .buttonStyle(.plain)
-                .accessibilityHint(L("See this stop's buses"))
-                .accessibilityIdentifier("pinned-\(code)")
-                BusStar(code: code, name: name)
+                .scrollTargetBehavior(.paging)
+                .scrollIndicators(.hidden)
+                .scrollPosition(id: $model.pinSelected)
             }
-            .padding(.leading, 4)
-            BusBoardCard(
-                board: model.boards[code], failed: model.failed.contains(code), colors: model.campus?.colors ?? [:],
-                limit: BusWords.homeRows, onMore: { model.path.append(.stop(code)) }
-            ) { row in
-                model.path.append(.line(svc: row.svc, from: code))
-            }
+            .padding(.horizontal, -Self.gutter)
         }
+        // Other stops: the tallest is theirs from now.
+        .onChange(of: pins) { tallest = 0 }
+    }
+
+    /// A pinned stop's page: its sign as Nearby draws it, or its plate alone while it's asked for.
+    private func sign(_ code: String, _ cols: NearbyColumns) -> some View {
+        let stop = model.pinned[code] ?? NearbyStop(placeholder: code, name: model.pinName(code))
+        let cells = stop.board.filter(\.running).map(NearbyCells.cells)
+        let note =
+            model.pinned[code] != nil
+            ? L("No buses are running here now")
+            : model.pinnedFailed.contains(code) ? L("Couldn't reach terminus. Check your connection and try again.") : L("Checking…")
+        return StopSign(stop: stop, cells: cells, cols: cols, note: note, onStop: { model.path.append(.stop(code)) }) { svc in
+            model.path.append(.line(svc: svc, from: code))
+        }
+    }
+}
+
+/// The pinned stops' names over the card, the one showing raised, as the
+/// stop page's "This side | Across the road". Side by side, each as wide as
+/// the widest, when they fit; else in a row that scrolls, the chosen one kept in view.
+private struct PinSegments: View {
+    let codes: [String]
+    let names: [String]
+    let selected: String?
+    let onSelect: (String) -> Void
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ViewThatFits(in: .horizontal) {
+                EvenRow(spacing: 4) { segments(fill: true) }
+                    .segmentTrack()
+                ScrollView(.horizontal) {
+                    HStack(spacing: 4) { segments(fill: false) }
+                        .segmentTrack()
+                }
+                .scrollIndicators(.hidden)
+            }
+            .onChange(of: selected) {
+                guard let selected else { return }
+                withAnimation(.snappy) { proxy.scrollTo(selected, anchor: .center) }
+            }
+            .onAppear { if let selected { proxy.scrollTo(selected, anchor: .center) } }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(.isTabBar)
+    }
+
+    private func segments(fill: Bool) -> some View {
+        ForEach(Array(codes.enumerated()), id: \.element) { i, code in
+            Segment(text: names[i], on: code == selected, lines: 1, wide: fill) { onSelect(code) }
+                .id(code)
+                .accessibilityIdentifier("pinned-\(code)")
+        }
+    }
+}
+
+/// Side by side, each as wide as the widest needs, sharing any room left equally.
+private struct EvenRow: Layout {
+    var spacing: CGFloat
+
+    private func width(_ proposal: ProposedViewSize, _ subviews: Subviews) -> CGFloat {
+        let gaps = spacing * CGFloat(max(0, subviews.count - 1))
+        let need = (subviews.map { $0.sizeThatFits(.unspecified).width }.max() ?? 0) * CGFloat(subviews.count) + gaps
+        guard let w = proposal.width, w.isFinite else { return need }
+        return max(need, w)
+    }
+
+    private func column(_ width: CGFloat, _ count: Int) -> CGFloat {
+        count == 0 ? 0 : (width - spacing * CGFloat(count - 1)) / CGFloat(count)
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let w = width(proposal, subviews)
+        let col = column(w, subviews.count)
+        let h = subviews.map { $0.sizeThatFits(ProposedViewSize(width: col, height: nil)).height }.max() ?? 0
+        return CGSize(width: w, height: h)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let col = column(bounds.width, subviews.count)
+        for (i, v) in subviews.enumerated() {
+            v.place(
+                at: CGPoint(x: bounds.minX + CGFloat(i) * (col + spacing), y: bounds.minY), anchor: .topLeading,
+                proposal: ProposedViewSize(width: col, height: bounds.height))
+        }
+    }
+}
+
+/// The last page: how to pin another stop.
+private struct AddPin: View {
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "star").font(.title3.weight(.semibold)).foregroundStyle(Color.muted).accessibilityHidden(true)
+            Text(L("Pin another stop")).font(.headline).foregroundStyle(Color.ink)
+            Text(L("Tap the star on a stop in Nearby or on its page to keep it here."))
+                .font(.subheadline)
+                .foregroundStyle(Color.muted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .multilineTextAlignment(.center)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 22)
+        .frame(maxWidth: .infinity, minHeight: 180)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(
+                Color.line, style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("pinned-add")
     }
 }
 
@@ -269,10 +406,14 @@ private struct NoPins: View {
     }
 }
 
-/// Every shuttle service, each opening its whole line, with where it goes.
-/// No live counts: they'd be a request per service.
+/// Every shuttle service, each opening its whole line: its name, the stops
+/// it passes, and how many of its buses are out (BusesHome asks, once a minute).
 private struct ServiceList: View {
+    /// Set once the list is on screen.
+    @Binding var seen: Bool
     @Environment(BusesModel.self) private var model
+    /// The widest badge, so every one is as wide.
+    @State private var badge: CGFloat = 0
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
@@ -283,15 +424,23 @@ private struct ServiceList: View {
         .padding(.top, 28)
         .padding(.bottom, 8)
         if let campus = model.campus {
+            // The screen's height, to tell when the list has come up onto it.
+            let screen = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.bounds.height ?? 800
             VStack(spacing: 0) {
                 ForEach(Array(campus.services.enumerated()), id: \.element) { i, svc in
                     if i > 0 { Divider().overlay(Color.line) }
+                    let route = campus.routes[svc]
+                    let name = route.flatMap { BusLines.name($0, stopName: { campus.stop($0)?.fullName ?? $0 }) }
+                    let count = model.lineCounts[svc]
                     Button {
                         model.path.append(.line(svc: svc, from: nil))
                     } label: {
-                        row(svc, campus)
+                        row(svc, color: campus.color(svc), name: name, via: route?.via, count: count)
                     }
                     .buttonStyle(BusRowPress())
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(BusLines.spoken(svc: svc, name: name, via: route?.via, count: count))
+                    .accessibilityAddTraits(.isButton)
                     .accessibilityHint(L("See the %@ line", svc))
                     .accessibilityIdentifier("service-\(svc)")
                 }
@@ -299,23 +448,45 @@ private struct ServiceList: View {
             .background(Color.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Color.line))
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .onGeometryChange(for: Bool.self) {
+                let f = $0.frame(in: .global)
+                return f.minY < screen && f.maxY > 0
+            } action: {
+                if $0 { seen = true }
+            }
         } else {
             Text(L("Checking…")).foregroundStyle(Color.muted).padding(.vertical, 12)
         }
     }
 
-    private func row(_ svc: String, _ campus: BusCampus) -> some View {
+    private func row(_ svc: String, color: String?, name: String?, via: String?, count: LineCount?) -> some View {
         HStack(spacing: 12) {
-            BusChip(svc: svc, color: campus.color(svc))
-            if let words = campus.routes[svc].flatMap({ BusWords.route($0, name: { campus.stop($0)?.fullName ?? $0 }) }) {
-                Text(verbatim: words).foregroundStyle(Color.ink).multilineTextAlignment(.leading)
+            BusChip(svc: svc, color: color, width: badge)
+                .onGeometryChange(for: CGFloat.self) {
+                    $0.size.width
+                } action: {
+                    badge = max(badge, $0)
+                }
+            VStack(alignment: .leading, spacing: 2) {
+                if let name { Text(verbatim: name).font(.body.weight(.semibold)).foregroundStyle(Color.ink) }
+                if let via { Text(verbatim: via).font(.subheadline).foregroundStyle(Color.muted) }
             }
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 8)
-            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Color.faint).accessibilityHidden(true)
+            if let count {
+                HStack(spacing: 6) {
+                    if count.out > 0 { BusLiveDot() }
+                    Text(verbatim: count.outText).font(.subheadline).foregroundStyle(Color.muted)
+                }
+                .fixedSize()
+            }
+            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Color.faint)
         }
         .padding(.leading, 14)
         .padding(.trailing, 10)
         .padding(.vertical, 10)
+        .frame(minHeight: 56)
         .contentShape(Rectangle())
     }
 }
@@ -523,7 +694,6 @@ struct BusStopBody: View {
 /// Two choices side by side, the chosen one raised: "This side | Across the road".
 /// A long stop name takes two lines, which a system segmented control can't.
 private struct Sides: View {
-    @Environment(\.dynamicTypeSize) private var typeSize
     let options: [String]
     let selected: Int
     let onSelect: (Int) -> Void
@@ -531,31 +701,50 @@ private struct Sides: View {
     var body: some View {
         HStack(spacing: 4) {
             ForEach(Array(options.enumerated()), id: \.offset) { i, text in
-                let on = i == selected
-                Button {
-                    onSelect(i)
-                } label: {
-                    Text(verbatim: text)
-                        .font(.subheadline.weight(on ? .bold : .medium))
-                        .foregroundStyle(on ? Color.ink : Color.muted)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(typeSize.isAccessibilitySize ? 4 : 2)
-                        .padding(.vertical, 9)
-                        .padding(.horizontal, 8)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(on ? Color.surface : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        .shadow(color: .black.opacity(on ? 0.08 : 0), radius: 2, y: 1)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(on ? [.isSelected] : [])
-                .accessibilityIdentifier("side-\(i)")
+                Segment(text: text, on: i == selected) { onSelect(i) }
+                    .accessibilityIdentifier("side-\(i)")
             }
         }
         .fixedSize(horizontal: false, vertical: true)
-        .padding(4)
-        .background(Color.surface2, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.line))
+        .segmentTrack()
+    }
+}
+
+/// One choice in a row of them, raised when it's the one chosen: the stop
+/// page's sides, the home's pinned stops. `wide`: as wide as it's given.
+private struct Segment: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
+    let text: String
+    let on: Bool
+    var lines = 2
+    var wide = true
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(verbatim: text)
+                .font(.subheadline.weight(on ? .bold : .medium))
+                .foregroundStyle(on ? Color.ink : Color.muted)
+                .multilineTextAlignment(.center)
+                .lineLimit(typeSize.isAccessibilitySize ? lines * 2 : lines)
+                .padding(.vertical, 9)
+                .padding(.horizontal, wide ? 8 : 14)
+                .frame(maxWidth: wide ? .infinity : nil, maxHeight: .infinity)
+                .background(on ? Color.surface : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .shadow(color: .black.opacity(on ? 0.08 : 0), radius: 2, y: 1)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? [.isSelected] : [])
+    }
+}
+
+extension View {
+    /// The well a row of segments sits in.
+    fileprivate func segmentTrack() -> some View {
+        padding(4)
+            .background(Color.surface2, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.line))
     }
 }
 

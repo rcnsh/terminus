@@ -2,9 +2,9 @@ import Foundation
 
 /*
  * The Stops tab's rules, apart from its screens so they're unit tested
- * (Tests/BusesTests.swift), as Android's Buses.kt: the pins and the part of
- * each board the home shows, the search, a line as it's drawn, and the words
- * worked out here for an older server. Every time shown is one the API gave.
+ * (Tests/BusesTests.swift), as Android's Buses.kt: the pins and the home's
+ * pages of them, the list of lines, the search, a line as it's drawn, and
+ * the words worked out here for an older server. Every time shown is one the API gave.
  */
 
 /// A page opened over the tab's home: a stop's board, or a service's line.
@@ -29,6 +29,79 @@ enum BusPins {
     static func shown(_ pins: [String], max: Int = defaultMax) -> [String] {
         var seen = Set<String>()
         return Array(pins.filter { seen.insert($0).inserted }.prefix(max))
+    }
+}
+
+/// The home's pinned stops, one page each in a card that swipes, then a
+/// last page saying how to pin another.
+enum BusPinned {
+    /// The last page's id, beside the pinned stops' codes.
+    static let addPage = "+"
+
+    /// The page showing: `selected` while it's still there, else the first.
+    static func page(_ pins: [String], selected: String?) -> String? {
+        guard let first = pins.first else { return nil }
+        if let selected, selected == addPage || pins.contains(selected) { return selected }
+        return first
+    }
+
+    /// The page to show once the pins change from `old` to `new`: the same
+    /// one while it's still there; one unpinned, the stop that took its place,
+    /// or the one before it when it was the last; nil with none left.
+    static func selection(old: [String], new: [String], selected: String?) -> String? {
+        guard !new.isEmpty else { return nil }
+        guard let selected, selected != addPage else { return selected }
+        if new.contains(selected) { return selected }
+        guard let i = old.firstIndex(of: selected) else { return new[0] }
+        // The stops after it in `old` that are still pinned: the first takes its place.
+        if let next = old[(i + 1)...].first(where: { new.contains($0) }) { return next }
+        return new.last
+    }
+
+    /// The stop a page is about: its own, or the last pinned stop for the last page.
+    static func focus(_ pins: [String], selected: String?) -> String? {
+        let p = page(pins, selected: selected)
+        return p == addPage ? pins.last : p
+    }
+
+    /// The stops asked for together: the one showing and the one either side,
+    /// so a swipe to either has its buses already.
+    static func window(_ pins: [String], selected: String?) -> [String] {
+        guard let code = focus(pins, selected: selected), let i = pins.firstIndex(of: code) else { return [] }
+        return Array(pins[max(0, i - 1)...min(pins.count - 1, i + 1)])
+    }
+
+    /// Of `window`, the stops not asked for within `gap` (`askedAt` says
+    /// when each was), so going back and forth doesn't ask again at once; all
+    /// of them when forced.
+    static func toFetch(
+        _ window: [String], now: Date, gap: TimeInterval, force: Bool = false, askedAt: (String) -> Date?
+    ) -> [String] {
+        force ? window : window.filter { askedAt($0).map { now.timeIntervalSince($0) >= gap } ?? true }
+    }
+}
+
+/// The list of lines: each one's name, where it goes, and its buses out.
+enum BusLines {
+    /// /api/lines reads every service from NUS: at most once a minute.
+    static let pollS: TimeInterval = 60
+
+    /// How long to wait before asking for the counts again, last asked at `last`.
+    static func wait(last: Date?, now: Date) -> TimeInterval {
+        guard let last else { return 0 }
+        return min(pollS, max(0, pollS - now.timeIntervalSince(last)))
+    }
+
+    /// The line's name as the server words it ("Loop from KR Bus Ter"), else
+    /// worded here for an older campus.
+    static func name(_ r: BusCampus.Route, stopName: (String) -> String) -> String? {
+        r.name ?? BusWords.route(r, name: stopName)
+    }
+
+    /// A row as VoiceOver reads it: "Bus D2, Loop from COM 3, via PGP, KR MRT, UTown, 3 out".
+    static func spoken(svc: String, name: String?, via: String?, count: LineCount?) -> String {
+        [L("Bus %@", svc), name, via, count?.outText].compactMap { $0 }.filter { !$0.isEmpty }
+            .joined(separator: Lang.zh ? "，" : ", ")
     }
 }
 
@@ -111,15 +184,6 @@ enum BusWords {
         rows.filter(\.running) + rows.filter { !$0.running }
     }
 
-    /// The rows a pinned stop's board shows on the home, the running ones
-    /// first, and how many more its own page has.
-    static let homeRows = 3
-
-    static func preview(_ rows: [BoardRow], max: Int = homeRows) -> (rows: [BoardRow], more: Int) {
-        let all = runningFirst(rows)
-        return (Array(all.prefix(max)), Swift.max(0, all.count - max))
-    }
-
     /// The later buses a row shows, as many as the server words.
     static let thenMax = 2
 
@@ -197,16 +261,5 @@ enum BusWords {
         case 1: return L("1 bus running")
         case let n: return L("%@ buses running", "\(n)")
         }
-    }
-}
-
-extension PullOutcome {
-    /// Several boards pulled at once, as one: updated if any came back, up
-    /// to date if none needed asking (the soonest next update), else failed.
-    static func combined(_ all: [PullOutcome]) -> PullOutcome {
-        if all.contains(.updated) { return .updated }
-        if all.contains(.failed) { return .failed }
-        let next = all.compactMap { if case .upToDate(let s) = $0 { s } else { nil } }.min()
-        return .upToDate(nextInS: next)
     }
 }

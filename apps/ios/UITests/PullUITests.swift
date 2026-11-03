@@ -58,15 +58,15 @@ final class PullUITests: XCTestCase {
     }
 
     func testTheBusesSkyStretchesAndAsksAgain() {
-        // A pinned stop, so the home has a board to ask for again.
+        // A pinned stop, so the home has its buses to ask for again.
         setProfile { $0["pinnedStops"] = ["COM3"] }
         defer { resetProfile() }
         let app = XCUIApplication.terminus(signedIn: true, extra: ["TERMINUS_SKY": "day"])
         app.launch()
         app.tabBars.buttons["Stops"].tap()
         XCTAssertTrue(
-            app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'board-row-'")).firstMatch.waitForExistence(
-                timeout: 15))
+            app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'nearbyRow.COM3.'")).firstMatch
+                .waitForExistence(timeout: 15))
         pull(app, by: 320)
         _ = pillSays(app) { $0.hasPrefix("Up to date") || $0 == "Updated just now" }
         shot("pull-buses", app)
