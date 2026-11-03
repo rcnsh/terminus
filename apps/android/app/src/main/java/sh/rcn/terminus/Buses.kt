@@ -376,9 +376,9 @@ object LinesPoll {
  * PGP, KR MRT"), and its buses out, if known.
  */
 data class LineRow(val svc: String, val name: String?, val via: String?, val out: LineOut?) {
-    /** The green dot by the count: buses on the road. */
+    /** The green dot by the count: buses on the road just now. A count from last time ([LineOut.stale]) isn't live: its words alone. */
     val live: Boolean
-        get() = out != null && out.out > 0
+        get() = out != null && out.out > 0 && !out.stale
 
     /** The row as one thing said: "Bus D2, Loop from COM 3, via PGP, KR MRT, UTown, 3 out". */
     fun said(): String = listOfNotNull(L.s(R.string.a11y_bus, svc), name, via, out?.outText).joinToString(L.s(R.string.clause_sep))

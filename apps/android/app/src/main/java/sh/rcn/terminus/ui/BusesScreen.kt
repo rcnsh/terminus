@@ -377,7 +377,20 @@ private fun PinnedCard(
                 val i = loaded.indexOfFirst { it.first == code }
                 when {
                     code == PinPages.ADD -> PinAnother(tallestDp)
-                    i >= 0 -> NearbySign(signs, i, act)
+                    i >= 0 ->
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            NearbySign(signs, i, act, saysNone = true)
+                            // As under Nearby's signs and the web's pinned card: what a "~" means, only while one is showing.
+                            if (signs.cells[i].any { row -> row.any { it.mark.isNotEmpty() } }) {
+                                Text(
+                                    L.s(R.string.nearby_guess),
+                                    Modifier.padding(horizontal = 6.dp),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 13.sp,
+                                    lineHeight = 18.sp,
+                                )
+                            }
+                        }
                     else -> PinnedWaiting(state, code, failed = code in state.pinFailed, act)
                 }
             }

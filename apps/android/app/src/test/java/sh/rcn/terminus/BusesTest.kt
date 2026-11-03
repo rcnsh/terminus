@@ -342,6 +342,7 @@ class BusesTest {
             val r2 = LineRow.of(routes[1], LineOut(0, "None out", false)) { it }
             assertNull(r2.via)
             assertFalse("none out: the words without the dot", r2.live)
+            assertFalse("a count from last time isn't live: no dot", LineRow("K", "K", null, LineOut(2, "2 out", true)).live)
             assertEquals("Bus R2, PGP to Kent Vale, None out", r2.said())
             // Unreachable: nothing said or shown for its buses.
             assertEquals("Bus A1, Loop from KR Bus Ter, via AS 5, PGP, KR MRT", LineRow.of(routes[0], null) { it }.said())

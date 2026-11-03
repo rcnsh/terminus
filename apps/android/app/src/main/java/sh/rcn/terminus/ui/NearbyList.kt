@@ -102,9 +102,12 @@ internal fun NearbyList(stops: List<NearbyStop>?, loading: Boolean, act: NearbyA
  */
 internal class NearbySigns(val stops: List<NearbyStop>, val cells: List<List<List<NearbyText.Cell>>>, val grid: NearbyGrid)
 
-/** Stop [i] of [signs] as its sign: the plate with the walk there and the star, then its rows. */
+/**
+ * Stop [i] of [signs] as its sign: the plate with the walk there and the star, then its rows. [saysNone]: with no rows, says no buses are
+ * running there (a pinned stop's page, which is there whatever the hour); Nearby's own signs leave it bare.
+ */
 @Composable
-internal fun NearbySign(signs: NearbySigns, i: Int, act: NearbyActions) {
+internal fun NearbySign(signs: NearbySigns, i: Int, act: NearbyActions, saysNone: Boolean = false) {
     val s = signs.stops[i]
     val grid = signs.grid
     // The plate opens the stop's whole board, as the Stops tab has it; each row its service's line from here.
@@ -120,7 +123,8 @@ internal fun NearbySign(signs: NearbySigns, i: Int, act: NearbyActions) {
     ) {
         val muted = MaterialTheme.colorScheme.onSurfaceVariant
         if (!s.available) Text(stringResource(R.string.no_live_data), color = muted, modifier = Modifier.padding(14.dp))
-        else if (s.board.isEmpty()) Text(stringResource(R.string.buses_none_here), color = muted, modifier = Modifier.padding(14.dp))
+        else if (saysNone && s.board.isEmpty())
+            Text(stringResource(R.string.buses_none_here), color = muted, modifier = Modifier.padding(14.dp))
         if (s.board.isNotEmpty()) Heads(grid)
         for ((j, row) in s.board.withIndex()) {
             if (j > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
