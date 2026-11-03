@@ -410,7 +410,7 @@ export function paths(): Record<string, unknown> {
                     required: ['out', 'outText', 'stale'],
                     properties: {
                       out: { type: 'integer', description: 'Buses on the road now.' },
-                      outText: { type: 'string', description: '"3 out", "None out" (Chinese "3 辆在路上", "没有巴士在路上").' },
+                      outText: { type: 'string', description: '"3 out", "None out" (Chinese "3 辆在路上", "暂无巴士").' },
                       stale: { type: 'boolean', description: 'The feed did not answer just now; this is how many there were last time.' },
                     },
                   },

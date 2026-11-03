@@ -531,7 +531,7 @@ const zh: Msgs = {
   lineLoop: (stop) => zs`${stop}环线`,
   lineEnds: (from, to) => zs`${from}至${to}`,
   busesOut: (n) => `${n} 辆在路上`,
-  noneOut: '没有巴士在路上',
+  noneOut: '暂无巴士',
 
   clock12: (hm, pm) => `${pm ? '下午' : '上午'}\u00a0${hm}`,
   earlyBy: (n) => `早到 ${n} 分钟`,
