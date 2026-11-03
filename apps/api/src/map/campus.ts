@@ -12,7 +12,9 @@ import venuesJson from '../../data/venues.json' with { type: 'json' };
 import roomsJson from '../../data/rooms.json' with { type: 'json' };
 import shapesJson from '../../data/shapes.json' with { type: 'json' };
 import { allLandmarks } from '../answer/landmarks.ts';
-import { m } from '../i18n.ts';
+import { indexGraph } from '../answer/resolve.ts';
+import { lineVia } from '../answer/via.ts';
+import { listOf, m } from '../i18n.ts';
 import type { Graph, Stop } from '../types.ts';
 
 const VENUES = venuesJson as { venues: Record<string, { stop: string; m: number }> };
@@ -58,6 +60,10 @@ export interface ProjectedRoute {
   /** True when `line` follows the roads; false when it is straight lines
    *  between stops, because the stops changed since the shapes were made. */
   shaped: boolean;
+  /** How it runs, by its stops' plate names: "Loop from KR Bus Ter", "Kent Vale to PGP". */
+  name: string;
+  /** The stops worth naming on its way (via.ts): "via AS 5, PGP, KR MRT"; null when it passes none. */
+  via: string | null;
 }
 
 export interface CampusMap {
@@ -175,6 +181,9 @@ export function buildCampusMap(graph: Graph): CampusMap {
     };
   });
 
+  const idx = indexGraph(graph);
+  // A stop's plate name kept on one line, so a wrap falls between names, never inside "KR Bus Ter".
+  const plate = (code: string | undefined) => (code ? (byCode.get(code)?.name ?? code).replaceAll(' ', '\u00a0') : '');
   const routes: Record<string, ProjectedRoute> = {};
   for (const [svc, seq] of Object.entries(graph.routes ?? {})) {
     // graph.routes stores the raw scraped sequence, which for a loop repeats
@@ -194,6 +203,11 @@ export function buildCampusMap(graph: Graph): CampusMap {
           return st ? [[st.lon, st.lat] as [number, number]] : [];
         }),
       shaped: Boolean(shape),
+      name: loop ? m().lineLoop(plate(seq[0])) : m().lineEnds(plate(seq[0]), plate(seq[seq.length - 1])),
+      via: (() => {
+        const v = lineVia(idx, svc);
+        return v.length ? m().loopVia(listOf(v.map((n) => n.replaceAll(' ', '\u00a0')))) : null;
+      })(),
     };
   }
 

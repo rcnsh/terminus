@@ -1,8 +1,9 @@
 // The Stops tab: what's coming at any stop, and where a service's buses are
 // along its line. Loaded the first time the tab is opened (app.js).
 //
-// Its home is the stops you've pinned, each with its first few rows
-// (/api/arrivals), then every service. The stops around you are Nearby's
+// Its home is the stops you've pinned, one at a time as Nearby's sign
+// (/api/me/stops), picked by name or swiped, then every service with how
+// many of its buses are out (/api/lines). The stops around you are Nearby's
 // job, on Now. A service tapped on a board opens its line (/api/line), and a
 // stop on the line opens its board.
 // Where you are in the tab is in the address (#buses, #buses/stop/YIH,
@@ -11,19 +12,20 @@
 // Only the times the API gives are shown: `later` is every later bus the
 // feed reported, and a line shows no times at stops other than yours.
 
-import { Icon, focusSoon, html, store, useEffect, useMemo, useRef, useStore } from '/assets/ui.js';
-import { clock, send, serverNow, signedOut, t } from '/account/dom.js';
+import { Icon, focusSoon, html, reducedMotion, store, useEffect, useMemo, useRef, useStore } from '/assets/ui.js';
+import { clock, hour12, send, serverNow, signedOut, t } from '/account/dom.js';
 import { campus, loadCampus, profile, reloadProfile, togglePin } from '/account/profile.js';
 import { SearchBox } from '/account/search-box.js';
 import { Celestial, Horizon } from '/account/sky.js';
 import { busesTabIndex } from '/account/search.js';
 import { NEXT, STAR, Big, Chip, Crowd, Quality, Row, colorOf, stoppedWords, svcVars, thenText } from '/app/board.js';
+import { StopSign, anyGuess } from '/app/sign.js';
 import { PULL_FRESH_MS } from '/app/timing.js';
 
 /** The page on screen refreshes this often (the API caches arrivals 15 s). */
 const REFRESH_MS = 15_000;
-/** A pinned stop's rows on the home; the rest are on its own page. */
-const PINNED_ROWS = 3;
+/** The lines' counts of buses out are asked for no more often than this: each ask reads every service from NUS. */
+const LINES_MS = 60_000;
 /**
  * Times fetched longer ago than this have missed a refresh at least:
  * counted down here from when they came, and no longer shown as live.
@@ -43,6 +45,18 @@ export const route = store({ kind: 'home' });
  * when it served one it had kept; it's only for "Updated 5 s ago".
  */
 export const boards = store(new Map());
+/**
+ * Each pinned stop as Nearby shows it, by code: { s, at, got, error }, `s`
+ * one stop of /api/me/stops, `at` and `got` as for a board. `gone`: the
+ * server doesn't know the stop.
+ */
+export const signs = store(new Map());
+/** The pinned stop on screen on the home (its code, or ADD for the last page), kept while the app runs. Null: the first. */
+export const chosen = store(null);
+/** The pager's last page: how to pin another stop. */
+export const ADD = '+';
+/** How many of each service's buses are out: /api/lines's `lines`, null until it has answered. */
+export const outs = store(null);
 /** The stops showing the board across the road, by the page's own stop. */
 export const across = store(new Set());
 /** The line on screen: { key, data, at, got, asOf } or { key, error }. */
@@ -61,6 +75,32 @@ const stopOf = (code) => campus.get()?.stops.find((s) => s.code === code) ?? nul
 const longName = (s) => s?.longName ?? s?.name;
 const stopName = (code) => longName(stopOf(code)) ?? code;
 const pins = () => profile.get()?.pinnedStops ?? [];
+/**
+ * The pins as the home last drew them. Kept here, not in the home, so a stop
+ * unpinned on its own page still finds its place when the home comes back.
+ */
+let pinsShown = [];
+/**
+ * Where on the home's pager `pick` is (chosen): a pinned stop's place, the
+ * last page for ADD, else the first. A stop unpinned since the home drew
+ * `was`: the one now in its place, else the one before it.
+ */
+export function pageOf(pinned, pick, was = pinsShown) {
+  if (pick === ADD) return pinned.length;
+  const i = pinned.indexOf(pick);
+  if (i >= 0 || pick == null) return Math.max(0, i);
+  return Math.min(Math.max(0, was.indexOf(pick)), Math.max(0, pinned.length - 1));
+}
+/**
+ * The pinned stops fetched for the page on screen: its stop and the ones
+ * either side of it, so a swipe shows times at once.
+ */
+export function signWindow(pinned = pins(), pick = chosen.get()) {
+  const i = pageOf(pinned, pick);
+  return [pinned[i - 1], pinned[i], pinned[i + 1]].filter(Boolean);
+}
+/** Where you are, for the walk to each pinned stop: the API's lat, lon and acc, or null. Set by the tab (app.js), never asking. */
+let locate = async () => null;
 /** The stop across the road from `code`, from its board, else the campus's map. */
 export const oppositeOf = (code) => boards.get().get(code)?.stop?.opposite ?? stopOf(code)?.opposite ?? null;
 /** The stop whose board a page shows: its own, or the one across the road. */
@@ -111,6 +151,68 @@ export async function loadBoard(code) {
   }
 }
 
+/** Pinned stops `codes`, as Nearby shows them. A failure keeps what's there, saying it couldn't update. */
+export async function loadSigns(codes) {
+  if (!codes.length) return;
+  // As for a board: a call that hung can end after a newer one.
+  const asked = Date.now();
+  const newer = (code) => signs.get().get(code)?.at > asked;
+  try {
+    const fix = await locate().catch(() => null);
+    const q = new URLSearchParams({ codes: codes.join(','), ...fix });
+    if (hour12()) q.set('h12', '1');
+    const data = await getJSON(`/api/me/stops?${q}`);
+    const got = serverNow();
+    signs.set((m) => {
+      const next = new Map(m);
+      for (const code of codes) {
+        if (newer(code)) continue;
+        const s = data.stops.find((x) => x.stop.code === code);
+        next.set(code, s ? { s, at: Date.now(), got } : { gone: true, at: Date.now(), got });
+      }
+      return next;
+    });
+  } catch (err) {
+    if (err.message === 'signed out') return;
+    signs.set((m) => {
+      const next = new Map(m);
+      for (const code of codes) {
+        if (newer(code)) continue;
+        const was = m.get(code);
+        next.set(code, { ...was, error: failedWords(Boolean(was?.s)) });
+      }
+      return next;
+    });
+  }
+}
+
+/** The pinned stops being fetched, so a swipe back and forth doesn't ask for one twice at once. */
+const signsFetching = new Set();
+/** The page on screen and its neighbours, those not fetched in the last REFRESH_MS. */
+function freshenSigns() {
+  const want = signWindow().filter((code) => !signsFetching.has(code) && !(Date.now() - (signs.get().get(code)?.at ?? 0) < REFRESH_MS));
+  if (!want.length) return;
+  for (const code of want) signsFetching.add(code);
+  loadSigns(want).finally(() => {
+    for (const code of want) signsFetching.delete(code);
+  });
+}
+
+/** When /api/lines was last asked (Date.now()), however the tab came and went: never sooner than LINES_MS after. */
+let linesAt = 0;
+/** How many of each service's buses are out, unless asked within LINES_MS. A failure keeps the counts there. */
+export async function loadOuts() {
+  if (Date.now() - linesAt < LINES_MS) return;
+  linesAt = Date.now();
+  try {
+    const data = await getJSON('/api/lines');
+    outs.set(data.lines ?? {});
+  } catch {
+    // Counts that can't be brought up to date aren't shown: nothing, as for a feed that didn't answer.
+    outs.set(null);
+  }
+}
+
 export async function loadLine(svc, stop) {
   const key = `${svc}/${stop ?? ''}`;
   // As for a board: a call that hung can end after a newer one, and mustn't
@@ -153,7 +255,7 @@ function refreshNow() {
   const r = route.get();
   if (r.kind === 'line') return loadLine(r.svc, r.stop);
   if (r.kind === 'stop') return loadBoard(shownCode(r.code));
-  return Promise.all(pins().map((code) => loadBoard(code)));
+  return loadSigns(signWindow());
 }
 
 /**
@@ -167,10 +269,13 @@ export async function pullRefresh() {
   const r = route.get();
   const shown = () => {
     if (r.kind === 'line') return [line.get()?.key === lineKey() ? line.get() : null];
-    return (r.kind === 'stop' ? [shownCode(r.code)] : pins()).map((code) => boards.get().get(code));
+    if (r.kind === 'stop') return [boards.get().get(shownCode(r.code))];
+    // The home: the pinned stop on screen, none on the last page.
+    const code = pins()[pageOf(pins(), chosen.get())];
+    return code ? [signs.get().get(code)] : [];
   };
   const fresh = (b) => b?.at && !b.error && Date.now() - b.at < PULL_FRESH_MS;
-  // Nothing pinned: nothing on the home to fetch, and nothing that will change.
+  // Nothing pinned (or the last page): nothing on the home to fetch, and nothing that will change.
   if (!shown().length) return { state: 'fresh', inS: null };
   if (shown().every(fresh)) return { state: 'fresh', inS: nextTimedAt ? Math.max(1, Math.ceil((nextTimedAt - Date.now()) / 1000)) : null };
   const asked = Date.now();
@@ -270,7 +375,7 @@ export function aged(r, got, now) {
     quality: r.quality === 'live' ? 'stale' : r.quality,
     laterText: null,
     later: r.later
-      ?.map((x) => ({ ...x, etaS: x.etaS - s, ...(x.quality === 'live' ? { quality: 'stale' } : {}) }))
+      ?.map((x) => ({ ...x, etaS: x.etaS - s, eta: null, ...(x.quality === 'live' ? { quality: 'stale' } : {}) }))
       .filter((x) => x.etaS > 0),
   };
 }
@@ -385,49 +490,183 @@ function StopView({ code, kicker, above = null }) {
   `;
 }
 
-/** How a service runs, as under its name on its line: "Loop from COM 3", "Kent Ridge MRT to UTown". */
-const routeWords = (r) => (r.loop ? t('Loop from {0}', stopName(r.seq[0])) : t('{0} to {1}', stopName(r.seq[0]), stopName(r.seq.at(-1))));
+/** How a service runs, as under its name on its line: "Loop from COM 3", "Kent Ridge MRT to UTown". The server's `name`, else worked out here for an older campus. */
+const routeWords = (r) =>
+  r.name ?? (r.loop ? t('Loop from {0}', stopName(r.seq[0])) : t('{0} to {1}', stopName(r.seq[0]), stopName(r.seq.at(-1))));
+
+/** A pinned stop's short name, as on its plate ("UTown"), for its segment. */
+const plateName = (code) => signs.get().get(code)?.s?.stop.name ?? stopOf(code)?.name ?? code;
+
+/** Stop `s`'s times as they stand at `now`, counted from `got` (aged): nothing old passes for live. */
+const agedSign = (s, got, now) => ({ ...s, board: s.board.map((r) => aged(r, got, now)) });
 
 /**
- * A pinned stop on the home: its name, which opens its page, and its star;
- * its first PINNED_ROWS rows, then the way to the rest on its page.
+ * One pinned stop's page: its sign as Nearby shows it, and under it why it
+ * couldn't update, or what a "~" means when one is showing. Before its
+ * times come, its plate with "Checking…".
  */
-function PinnedStop({ code }) {
-  const all = useStore(boards);
-  const now = useStore(tick);
-  useStore(campus);
-  // Its times when it comes on the home: pinned just now, or from the start.
-  // Its own side, whichever its page was last showing.
-  useEffect(() => freshen(code), [code]);
-  const b = all.get(code);
-  const name = longName(b?.stop) ?? stopName(code);
-  const rows = b?.board?.map((r) => aged(r, b.got, now)) ?? [];
-  const more = rows.length - PINNED_ROWS;
-  let body;
-  if (!b?.board) body = html`<p class="hint bt-empty">${b?.error ?? t('Checking…')}</p>`;
-  else if (!rows.length) body = html`<p class="hint bt-empty">${b.available ? t('No buses due') : t('No times right now')}</p>`;
-  else
-    body = html`
-      <div class="card bt-board">
-        ${rows.slice(0, PINNED_ROWS).map((r) => html`<${Row} key=${r.svc} r=${r} now=${now} chevron onPick=${(svc) => go(lineHash(svc, code))} />`)}
-        ${more > 0 && html`<button type="button" class="bt-more" onClick=${() => openStop(code)}><span>${t('{0} more at this stop', more)}</span><${Icon} paths=${NEXT} class="bt-go" /></button>`}
-      </div>
-      ${b.error && html`<p class="bt-pin-error"><span class="bt-error">${b.error}</span></p>`}
-    `;
+function PinPage({ code, entry, pinned, now }) {
+  const s = entry?.s
+    ? agedSign(entry.s, entry.got, now)
+    : { stop: { code, name: plateName(code) }, walkS: null, available: true, board: [] };
+  const note = entry?.s ? null : entry?.gone ? t('No times right now') : (entry?.error ?? t('Checking…'));
   return html`
-    <section class="bt-pin" aria-label=${name}>
-      <div class="bt-pin-head">
-        <button type="button" class="bt-pin-name" onClick=${() => openStop(code)}><span>${name}</span><${Icon} paths=${NEXT} /></button>
-        <${Star} code=${code} name=${name} cls="small" />
+    <div class="bt-pager-page" role="group" aria-label=${s.stop.name}>
+      <div class="nearby">
+        <${StopSign} s=${s} pinned=${pinned} note=${note} onStop=${openStop} onLine=${(svc, at) => go(lineHash(svc, at))} />
+        ${entry?.s && entry.error && html`<p class="bt-pin-error"><span class="bt-error">${entry.error}</span></p>`}
+        ${!note && anyGuess([s]) && html`<p class="nb-foot">${t('~ is a guess from the timetable, not a live time.')}</p>`}
       </div>
-      ${body}
-    </section>
+    </div>
   `;
 }
 
 /**
- * The home: your pinned stops, each with its first rows, then every
- * service, which opens its line. The stops around you are on Now (Nearby).
+ * The pinned stops: their names as one segmented control, as a stop's
+ * page picks its side of the road, over a pager of their signs, one page
+ * each and a last one saying how to pin another. Swiping picks the name,
+ * and a name picked swipes there. The pager is as tall as its tallest page
+ * so far, so nothing under it jumps while swiping.
+ */
+function PinnedStops({ pinned }) {
+  const pick = useStore(chosen);
+  const all = useStore(signs);
+  const now = useStore(tick);
+  useStore(campus);
+  const pager = useRef(null);
+  const segs = useRef(null);
+  // The page came from a swipe: the pager is there already.
+  const swiped = useRef(false);
+  const moved = useRef(false);
+  // A stop unpinned (its star, here or on its page): pageOf finds the page that took its place.
+  const gone = pick != null && pick !== ADD && !pinned.includes(pick);
+  const index = pageOf(pinned, pick);
+  const at = useRef(index);
+  at.current = index;
+  // Swiped: once the pager settles, the page it rests on is the one picked.
+  const settle = useRef(0);
+  /** Where page `i` starts in the pager: its width and the gap between pages, each. */
+  const leftOf = (el, i) => i * (el.children[1] ? el.children[1].offsetLeft - el.children[0].offsetLeft : el.clientWidth);
+  /** A name picked: a swipe's settling that hasn't fired yet would put the old page back. */
+  const choose = (code) => {
+    clearTimeout(settle.current);
+    chosen.set(code);
+  };
+
+  useEffect(() => {
+    pinsShown = pinned;
+    if (gone) chosen.set(pinned[index]);
+  }, [pinned.join()]);
+
+  // The page picked: the pager there (at once the first time), its name in view, its times fetched.
+  useEffect(() => {
+    const el = pager.current;
+    if (el && !swiped.current) {
+      const left = leftOf(el, index);
+      if (Math.abs(el.scrollLeft - left) > 1) el.scrollTo({ left, behavior: moved.current && !reducedMotion() ? 'smooth' : 'instant' });
+    }
+    swiped.current = false;
+    moved.current = true;
+    const box = segs.current;
+    const seg = box?.children[index];
+    if (seg) {
+      if (seg.offsetLeft < box.scrollLeft) box.scrollLeft = seg.offsetLeft;
+      else if (seg.offsetLeft + seg.offsetWidth > box.scrollLeft + box.clientWidth)
+        box.scrollLeft = seg.offsetLeft + seg.offsetWidth - box.clientWidth;
+    }
+    freshenSigns();
+  }, [index, pinned.join()]);
+
+  // As tall as the tallest page so far; measured again when the width changes (a phone turned).
+  useEffect(() => {
+    const el = pager.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    let tallest = 0;
+    let width = el.clientWidth;
+    const ro = new ResizeObserver(() => {
+      // A new width (a phone turned, the tab shown again): the page picked kept in place.
+      if (el.clientWidth !== width) {
+        width = el.clientWidth;
+        tallest = 0;
+        el.style.minHeight = '';
+        el.scrollLeft = leftOf(el, at.current);
+      }
+      if (el.offsetHeight > tallest) {
+        tallest = el.offsetHeight;
+        el.style.minHeight = `${tallest}px`;
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const onScroll = () => {
+    clearTimeout(settle.current);
+    settle.current = setTimeout(() => {
+      const el = pager.current;
+      if (!el?.clientWidth) return;
+      const i = Math.round(el.scrollLeft / leftOf(el, 1));
+      if (i === at.current) return;
+      swiped.current = true;
+      chosen.set(i < pinned.length ? pinned[i] : ADD);
+    }, 120);
+  };
+
+  return html`
+    <div class="segmented full bt-pins" role="radiogroup" aria-label=${t('Pinned')} ref=${segs}>
+      ${pinned.map(
+        (code, i) =>
+          html`<label key=${code}><input type="radio" name="pinned-stop" checked=${i === index} onChange=${() => choose(code)} /><span>${plateName(code)}</span></label>`,
+      )}
+    </div>
+    <div class="bt-pager" ref=${pager} onScroll=${onScroll}>
+      ${pinned.map((code) => html`<${PinPage} key=${code} code=${code} entry=${all.get(code)} pinned=${pinned} now=${now} />`)}
+      <div class="bt-pager-page" role="group" aria-label=${t('Pin another stop')}>
+        <div class="bt-add">
+          <${Icon} paths=${STAR} />
+          <b>${t('Pin another stop')}</b>
+          <span>${t('Tap the star on a stop in Nearby or on its page to keep it here.')}</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Every service, each opening its line: its badge, how it runs and the
+ * stops it passes (the server's words), and how many of its buses are out.
+ * Every badge is as wide as the widest, so the names line up.
+ */
+function Lines({ routes }) {
+  const counts = useStore(outs);
+  return html`
+    <div class="card bt-services">
+      ${routes.map(([svc, r]) => {
+        const name = routeWords(r);
+        const via = r.via ?? null;
+        // Null: the feed didn't answer for it, so nothing is said. A count from a
+        // kept feed answer (stale) is said without the dot that marks live.
+        const n = counts?.[svc] ?? null;
+        return html`<button
+          type="button"
+          key=${svc}
+          class="bt-service"
+          aria-label=${[t('Bus {0}', svc), name, via, n?.outText].filter(Boolean).join(t(', '))}
+          onClick=${() => go(lineHash(svc, null))}
+        >
+          <span class="bt-service-chip"><${Chip} svc=${svc} color=${r.color} cls="bt-chip" /></span>
+          <span class="bt-service-text"><span class="bt-service-name">${name}</span>${via && html`<span class="bt-service-via">${via}</span>`}</span>
+          <span class="bt-out">${n?.out > 0 && !n.stale && html`<span class="dot"></span>`}${n?.outText}</span>
+          <${Icon} paths=${NEXT} class="bt-go" />
+        </button>`;
+      })}
+    </div>
+  `;
+}
+
+/**
+ * The home: your pinned stops, one at a time as Nearby shows them, then
+ * every service, which opens its line. The stops around you are on Now (Nearby).
  */
 function Home() {
   const p = useStore(profile);
@@ -438,7 +677,7 @@ function Home() {
   if (!p) pins = html`<p class="hint bt-empty">${t('Checking…')}</p>`;
   else if (!pinned.length)
     pins = html`<p class="bt-no-pins"><${Icon} paths=${STAR} />${t("Tap the star on any stop to keep it here: in Nearby, on the stop's page, or after searching for it.")}</p>`;
-  else pins = pinned.map((code) => html`<${PinnedStop} key=${code} code=${code} />`);
+  else pins = html`<${PinnedStops} pinned=${pinned} />`;
   return html`
     <div class="bt-home">
       <${Sky}>
@@ -447,19 +686,7 @@ function Home() {
       <h3 class="bt-section eyebrow">${t('Pinned')}</h3>
       ${pins}
       <div class="bt-section"><h3 class="eyebrow">${t('Services')}</h3><span>${t('Tap one to see its whole line.')}</span></div>
-      ${
-        routes.length
-          ? html`<div class="card bt-services">
-              ${routes.map(
-                ([svc, r]) => html`<button type="button" key=${svc} class="bt-service" onClick=${() => go(lineHash(svc, null))}>
-                  <${Chip} svc=${svc} color=${r.color} cls="bt-chip" />
-                  <span>${routeWords(r)}</span>
-                  <${Icon} paths=${NEXT} class="bt-go" />
-                </button>`,
-              )}
-            </div>`
-          : html`<p class="hint bt-empty">${t('Checking…')}</p>`
-      }
+      ${routes.length ? html`<${Lines} routes=${routes} />` : html`<p class="hint bt-empty">${t('Checking…')}</p>`}
     </div>
   `;
 }
@@ -623,9 +850,14 @@ function LinePage({ svc, stop }) {
   `;
 }
 
-/** The tab. `visible`: it's on screen (refreshing stops otherwise). */
-export function BusesTab({ visible }) {
+/**
+ * The tab. `visible`: it's on screen (refreshing stops otherwise).
+ * `locate`: where you are, for the walk to each pinned stop (app.js), never asking.
+ */
+export function BusesTab({ visible, locate: where = null }) {
   const r = useStore(route);
+  if (where) locate = where;
+  const home = visible && r.kind === 'home';
 
   useEffect(() => {
     window.addEventListener('hashchange', onHash);
@@ -643,7 +875,7 @@ export function BusesTab({ visible }) {
     reloadProfile()
       .catch(() => {})
       .then(() => {
-        if (route.get().kind === 'home') for (const code of pins()) freshen(code);
+        if (route.get().kind === 'home') freshenSigns();
       });
     const now = route.get();
     if (now.kind === 'stop') showBoard(now.code);
@@ -667,6 +899,20 @@ export function BusesTab({ visible }) {
       document.removeEventListener('visibilitychange', back);
     };
   }, [visible]);
+
+  // The lines' counts while the home is on screen and the app in front: at once, then each LINES_MS
+  // (loadOuts keeps to that; checked more often so a timer firing early doesn't skip a round).
+  useEffect(() => {
+    if (!home) return;
+    const ask = () => document.visibilityState === 'visible' && loadOuts();
+    ask();
+    const timer = setInterval(ask, 5_000);
+    document.addEventListener('visibilitychange', ask);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', ask);
+    };
+  }, [home]);
 
   if (r.kind === 'line') return html`<${LinePage} svc=${r.svc} stop=${r.stop} />`;
   if (r.kind === 'stop') return html`<${StopPage} code=${r.code} />`;

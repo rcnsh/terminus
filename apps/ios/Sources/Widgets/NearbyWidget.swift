@@ -218,7 +218,10 @@ struct NearbyModel {
     var shortTitle: String { paired ? first?.stop.name ?? title : title }
 
     /// "2 min walk", or "here" under a minute.
-    static func walk(_ stop: NearbyStop) -> String { stop.walkS < 60 ? L("here") : L("%@ min walk", "\((stop.walkS + 30) / 60)") }
+    static func walk(_ stop: NearbyStop) -> String {
+        let s = stop.walkS ?? 0
+        return s < 60 ? L("here") : L("%@ min walk", "\((s + 30) / 60)")
+    }
 
     /// The words shown instead of buses; nil when there are buses to show.
     func problem(_ buses: [StopBus]) -> String? {

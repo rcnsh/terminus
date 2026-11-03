@@ -402,8 +402,8 @@ export function components(): Record<string, unknown> {
             type: 'array',
             items: { type: 'string' },
             description:
-              'The well-known places the service passes from this stop, in order, up to three (the MRT stations, UTown, PGP, Kent Vale, Central Library, COM 3, BIZ, and the faculties: Arts, Science, Engineering), for someone who does not know the routes yet. Each once, never the place this stop is. A faculty is in the request’s language; a place keeps its English name. Empty when it passes none: show `toText` then.',
-            example: ['Central Library', 'Arts', 'BIZ'],
+              'The stops worth naming that the service passes from this stop, in order, up to three (the MRT stations, UTown, PGP, Kent Vale, Central Library, COM 3, BIZ 2, AS 5, S 17 and Opp SDE 3), for someone who does not know the routes yet, each by the name on its plate, in both languages. One place once (the MRT’s two sides of the road are one), never the place this stop is. Empty when it passes none: show `toText` then.',
+            example: ['CLB', 'AS 5', 'BIZ 2'],
           },
           crowd: {
             type: ['string', 'null'],
@@ -452,7 +452,7 @@ export function components(): Record<string, unknown> {
                 type: 'string',
                 example: 'via UTown',
                 description:
-                  'Where it is going, short, for a row beside its times: "to PGP Foyer" (the stop’s short name, as on its plate), or for a loop the first well-known place it passes from here: "via UTown" (Chinese "经 UTown"); with none, where the loop ends, or at its first stop its next stop. A two-way public bus says where the direction calling here goes. "Ends here" at the end of the line.',
+                  'Where it is going, short, for a row beside its times: "to PGP Foyer" (the stop’s short name, as on its plate), or for a loop the first stop worth naming it passes from here (`via`): "via UTown" (Chinese "经 UTown"); with none, where the loop ends, or at its first stop its next stop. A two-way public bus says where the direction calling here goes. "Ends here" at the end of the line.',
               },
               at: {
                 type: ['string', 'null'],
@@ -771,6 +771,18 @@ export function components(): Record<string, unknown> {
                   type: 'boolean',
                   description:
                     'True when `line` follows the roads (OpenStreetMap); false when it is straight lines between stops, because the stops changed since the road shapes were last made.',
+                },
+                name: {
+                  type: 'string',
+                  example: 'Loop from KR Bus Ter',
+                  description:
+                    'How it runs, by its stops’ plate names, in the request’s language: "Loop from KR Bus Ter" (Chinese "KR Bus Ter 环线"), "Kent Vale to PGP" ("Kent Vale 至 PGP").',
+                },
+                via: {
+                  type: ['string', 'null'],
+                  example: 'via AS 5, PGP, KR MRT',
+                  description:
+                    'The stops worth naming on its way (as a board row’s `via`), up to three, in the order it reaches them, an MRT kept first when there are more; never its own ends. Chinese "经 AS 5、PGP、KR MRT". Null when it passes none.',
                 },
               },
             },

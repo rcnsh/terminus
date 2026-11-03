@@ -26,17 +26,146 @@ final class BusesTests: XCTestCase {
 
     // MARK: the home
 
-    func testAPinnedBoardShowsItsFirstThreeRowsAndCountsTheRest() throws {
-        let rows = try ["R1", "A1", "A2", "D1", "K"].map { svc in
-            try row(svc == "R1" ? #"{"svc":"R1","running":false}"# : #"{"svc":"\#(svc)","etaS":60}"#)
-        }
-        let (shown, more) = BusWords.preview(rows)
-        // Running first, as the board: the stopped R1 is one of the rest.
-        XCTAssertEqual(shown.map(\.svc), ["A1", "A2", "D1"])
-        XCTAssertEqual(more, 2)
-        let (few, none) = BusWords.preview(Array(rows.prefix(2)))
-        XCTAssertEqual(few.map(\.svc), ["A1", "R1"])
-        XCTAssertEqual(none, 0)
+    func testThePageShowingIsTheChosenOneWhileItsPinnedElseTheFirst() {
+        XCTAssertNil(BusPinned.page([], selected: "COM3"))
+        XCTAssertEqual(BusPinned.page(["COM3", "UTOWN"], selected: nil), "COM3")
+        XCTAssertEqual(BusPinned.page(["COM3", "UTOWN"], selected: "UTOWN"), "UTOWN")
+        XCTAssertEqual(BusPinned.page(["COM3", "UTOWN"], selected: "KV"), "COM3")
+        XCTAssertEqual(BusPinned.page(["COM3", "UTOWN"], selected: BusPinned.addPage), BusPinned.addPage)
+    }
+
+    func testUnpinningTheStopShowingShowsTheOneThatTookItsPlace() {
+        // Another stop unpinned: the same one stays.
+        XCTAssertEqual(BusPinned.selection(old: ["A", "B", "C"], new: ["A", "C"], selected: "C"), "C")
+        // The one showing: the next takes its place, or the one before when it was last.
+        XCTAssertEqual(BusPinned.selection(old: ["A", "B", "C"], new: ["A", "C"], selected: "B"), "C")
+        XCTAssertEqual(BusPinned.selection(old: ["A", "B", "C"], new: ["A", "B"], selected: "C"), "B")
+        // It and the one after it gone at once (Settings): the next still pinned.
+        XCTAssertEqual(BusPinned.selection(old: ["A", "B", "C", "D"], new: ["A", "D"], selected: "B"), "D")
+        // None left: no page; a new pin keeps the page; the last page stays the last page.
+        XCTAssertNil(BusPinned.selection(old: ["A"], new: [], selected: "A"))
+        XCTAssertEqual(BusPinned.selection(old: ["A", "B"], new: ["A", "B", "C"], selected: "B"), "B")
+        XCTAssertEqual(BusPinned.selection(old: ["A", "B"], new: ["A"], selected: BusPinned.addPage), BusPinned.addPage)
+        // Never chosen: still the first.
+        XCTAssertNil(BusPinned.selection(old: ["A", "B"], new: ["B"], selected: nil))
+        // Chosen while not yet shown (pinned elsewhere, then unpinned): the first.
+        XCTAssertEqual(BusPinned.selection(old: ["A"], new: ["A", "B"], selected: "Z"), "A")
+    }
+
+    func testTheStopShowingIsAskedForWithItsNeighbours() {
+        let pins = ["A", "B", "C", "D"]
+        XCTAssertEqual(BusPinned.window(pins, selected: nil), ["A", "B"])
+        XCTAssertEqual(BusPinned.window(pins, selected: "C"), ["B", "C", "D"])
+        XCTAssertEqual(BusPinned.window(pins, selected: "D"), ["C", "D"])
+        // The last page: its neighbour is the last stop.
+        XCTAssertEqual(BusPinned.window(pins, selected: BusPinned.addPage), ["C", "D"])
+        XCTAssertEqual(BusPinned.focus(pins, selected: BusPinned.addPage), "D")
+        XCTAssertEqual(BusPinned.window(["A"], selected: "A"), ["A"])
+        XCTAssertEqual(BusPinned.window([], selected: nil), [])
+    }
+
+    func testAStopAskedForMomentsAgoIsntAskedAgainUnlessPulled() {
+        let now = Date()
+        let asked = ["A": now.addingTimeInterval(-3), "B": now.addingTimeInterval(-12)]
+        XCTAssertEqual(BusPinned.toFetch(["A", "B", "C"], now: now, gap: 10) { asked[$0] }, ["B", "C"])
+        XCTAssertEqual(BusPinned.toFetch(["A", "B", "C"], now: now, gap: 10, force: true) { asked[$0] }, ["A", "B", "C"])
+        XCTAssertEqual(BusPinned.toFetch(["A"], now: now, gap: 10) { asked[$0] }, [])
+    }
+
+    func testAPinnedRequestSettlesEachStopItAskedFor() {
+        // Answered: each one that came back; one the server left out is missing, not still "Checking…".
+        XCTAssertEqual(
+            BusPinnedResult.of(asked: ["A", "B", "C"], returned: ["A", "C"], cancelled: false),
+            BusPinnedResult(answered: ["A", "C"], missing: ["B"]))
+        // Codes as the server writes them, whatever case they were asked in.
+        XCTAssertEqual(BusPinnedResult.of(asked: ["kv"], returned: ["KV"], cancelled: false), BusPinnedResult(answered: ["kv"]))
+        // Failed: every one couldn't be reached.
+        XCTAssertEqual(BusPinnedResult.of(asked: ["A", "B"], returned: nil, cancelled: false), BusPinnedResult(failed: ["A", "B"]))
+        // Cancelled (a swipe): none failed, all asked for again.
+        XCTAssertEqual(BusPinnedResult.of(asked: ["A", "B"], returned: nil, cancelled: true), BusPinnedResult(askAgain: ["A", "B"]))
+    }
+
+    func testAPinnedStopsTimesCountDownOnceItsOld() throws {
+        let json =
+            #"{"stop":{"code":"COM3","name":"COM 3"},"walkS":60,"board":[{"svc":"D1","etaS":240,"quality":"live","eta":"4 min","later":[{"etaS":900,"quality":"live"}]}]}"#
+        let stop = try JSONDecoder().decode(NearbyStop.self, from: Data(json.utf8))
+        let got = Date(timeIntervalSince1970: 1_000_000)
+        // Fresh: as it came.
+        XCTAssertEqual(stop.aged(got: got, now: got.addingTimeInterval(10)).board[0].etaS, 240)
+        XCTAssertEqual(stop.aged(got: got, now: got.addingTimeInterval(10)).board[0].quality, "live")
+        // Old: counted down, and no longer passed off as live.
+        let old = stop.aged(got: got, now: got.addingTimeInterval(120)).board[0]
+        XCTAssertEqual(old.etaS, 120)
+        XCTAssertEqual(old.quality, "stale")
+        XCTAssertNil(old.eta)
+        XCTAssertEqual(old.later.map(\.etaS), [780])
+        XCTAssertEqual(NearbyCells.cells(old)[0].mark, "~")
+        // Never got (a placeholder): nothing to age.
+        XCTAssertEqual(stop.aged(got: nil, now: got.addingTimeInterval(600)).board[0].etaS, 240)
+    }
+
+    func testTheLiveDotIsOnlyForAFreshCountOfBusesOut() {
+        XCTAssertTrue(BusLines.showsDot(LineCount(out: 3, outText: "3 out")))
+        XCTAssertFalse(BusLines.showsDot(LineCount(out: 3, outText: "3 out", stale: true)))
+        XCTAssertFalse(BusLines.showsDot(LineCount(out: 0, outText: "None out")))
+    }
+
+    func testTheLinesCountsAreAskedAtMostOnceAMinute() {
+        let now = Date()
+        XCTAssertEqual(BusLines.wait(last: nil, now: now), 0)
+        XCTAssertEqual(BusLines.wait(last: now.addingTimeInterval(-20), now: now), 40, accuracy: 0.001)
+        XCTAssertEqual(BusLines.wait(last: now.addingTimeInterval(-60), now: now), 0)
+        XCTAssertEqual(BusLines.wait(last: now.addingTimeInterval(-300), now: now), 0)
+        // A clock put back: never longer than a minute.
+        XCTAssertEqual(BusLines.wait(last: now.addingTimeInterval(30), now: now), 60, accuracy: 0.001)
+    }
+
+    func testALineRowIsReadAsOne() {
+        Lang.pref = "en"
+        let count = LineCount(out: 3, outText: "3 out")
+        XCTAssertEqual(
+            BusLines.spoken(svc: "D2", name: "Loop from COM 3", via: "via PGP, KR MRT, UTown", count: count),
+            "Bus D2, Loop from COM 3, via PGP, KR MRT, UTown, 3 out")
+        // No stops between its ends, and the feed not answering: neither said.
+        XCTAssertEqual(BusLines.spoken(svc: "K", name: "PGP to PGP Foyer", via: nil, count: nil), "Bus K, PGP to PGP Foyer")
+        Lang.pref = "zh"
+        defer { Lang.pref = "en" }
+        XCTAssertEqual(
+            BusLines.spoken(svc: "R1", name: "Kent Vale 至 PGP", via: "经 UTown", count: LineCount(out: 2, outText: "2 辆在路上")),
+            "R1 巴士，Kent Vale 至 PGP，经 UTown，2 辆在路上")
+    }
+
+    func testTheLinesAndTheirCountsAsTheServerWordsThem() throws {
+        Lang.pref = "en"
+        let json = #"""
+            {"stops":[{"code":"COM3","name":"COM 3"},{"code":"PGP","name":"PGP"}],
+             "routes":{"D1":{"seq":["COM3","PGP"],"loop":true,"name":"Loop from COM 3","via":"via UTown, CLB, AS 5"},
+               "K":{"seq":["PGP","COM3"],"loop":false,"via":null}}}
+            """#
+        let campus = try JSONDecoder().decode(BusCampus.self, from: Data(json.utf8))
+        let name = { (code: String) in campus.stop(code)?.fullName ?? code }
+        XCTAssertEqual(campus.routes["D1"].flatMap { BusLines.name($0, stopName: name) }, "Loop from COM 3")
+        XCTAssertEqual(campus.routes["D1"]?.via, "via UTown, CLB, AS 5")
+        // An older campus without a name: worded here.
+        XCTAssertEqual(campus.routes["K"].flatMap { BusLines.name($0, stopName: name) }, "PGP to COM 3")
+        XCTAssertNil(campus.routes["K"]?.via)
+        // A service the feed didn't answer for (null) is left out, not "None out".
+        struct R: Decodable { let lines: [String: Lossy<LineCount>] }
+        let lines = try JSONDecoder().decode(
+            R.self,
+            from: Data(
+                #"{"lines":{"A1":{"out":3,"outText":"3 out","stale":false},"A2":{"out":0,"outText":"None out"},"K":null},"asOf":"x"}"#.utf8)
+        ).lines.compactMapValues(\.value)
+        XCTAssertEqual(lines, ["A1": LineCount(out: 3, outText: "3 out"), "A2": LineCount(out: 0, outText: "None out")])
+    }
+
+    func testAPinnedStopWithoutALocationHasNoWalk() throws {
+        let json =
+            #"{"stops":[{"stop":{"code":"COM3","name":"COM 3"},"walkS":null,"available":true,"board":[]},{"stop":{"code":"KV","name":"Kent Vale"},"walkS":240,"board":[]}],"asOf":"x"}"#
+        struct R: Decodable { let stops: [NearbyStop] }
+        let stops = try JSONDecoder().decode(R.self, from: Data(json.utf8)).stops
+        XCTAssertNil(stops[0].walkS)
+        XCTAssertEqual(stops[1].walkS, 240)
     }
 
     func testAServiceSaysWhereItGoes() throws {
@@ -55,14 +184,6 @@ final class BusesTests: XCTestCase {
         XCTAssertEqual(campus.routes["K"].flatMap { BusWords.route($0, name: name) }, "Prince George's Park to PGP Foyer")
         // A route without its stops: nothing under the service.
         XCTAssertNil(campus.routes["X"].flatMap { BusWords.route($0, name: name) })
-    }
-
-    func testPinnedBoardsPulledTogetherSayHowTheyWentAsOne() {
-        XCTAssertEqual(PullOutcome.combined([.failed, .updated, .upToDate(nextInS: 4)]), .updated)
-        XCTAssertEqual(PullOutcome.combined([.upToDate(nextInS: 9), .failed]), .failed)
-        XCTAssertEqual(
-            PullOutcome.combined([.upToDate(nextInS: 9), .upToDate(nextInS: 4), .upToDate(nextInS: nil)]), .upToDate(nextInS: 4))
-        XCTAssertEqual(PullOutcome.combined([]), .upToDate(nextInS: nil))
     }
 
     // MARK: the search

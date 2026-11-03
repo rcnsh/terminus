@@ -79,49 +79,13 @@ internal fun NearbyList(stops: List<NearbyStop>?, loading: Boolean, act: NearbyA
         Text(if (loading) stringResource(R.string.checking) else stringResource(R.string.nothing_yet))
         return
     }
-    val cells = stops.map { s -> s.board.map(NearbyText::cells) }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         BoxWithConstraints {
-            val grid = nearbyGrid(stops, cells, maxWidth)
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                for ((i, s) in stops.withIndex()) {
-                    // The plate opens the stop's whole board, as the Stops tab has it; each row its service's line from here.
-                    StopSign(
-                        s.name,
-                        plate =
-                            Modifier.clickable(role = Role.Button, onClickLabel = stringResource(R.string.a11y_open_stop)) {
-                                act.openStop(s.code)
-                            },
-                        opens = true,
-                        trailing = {
-                            Text(
-                                if (s.walkS < 60) stringResource(R.string.here) else stringResource(R.string.min_walk, (s.walkS + 30) / 60),
-                                style = MaterialTheme.typography.labelLarge,
-                            )
-                            if (act.pinsKnown) PinStar(s.code, act.pins, act.pinLimit, act.onPin, name = s.longName ?: s.name)
-                        },
-                    ) {
-                        if (!s.available)
-                            Text(
-                                stringResource(R.string.no_live_data),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(14.dp),
-                            )
-                        if (s.board.isNotEmpty()) Heads(grid)
-                        for ((j, row) in s.board.withIndex()) {
-                            if (j > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                            // Keyed by its service, so a screen reader's focus stays on the D1 as the rows reorder on a refresh,
-                            // rather than on whichever service moves into its place.
-                            key(row.svc, row.dest ?: row.toText) {
-                                BoardLine(row, cells[i][j], grid, grid.wholePlace[i][j]) { act.openLine(row.svc, s.code) }
-                            }
-                        }
-                    }
-                }
-            }
+            val signs = nearbySigns(stops, maxWidth)
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { for (i in stops.indices) NearbySign(signs, i, act) }
         }
         Column(Modifier.padding(horizontal = 6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            for (line in NearbyText.foot(cells.flatten().flatten())) Text(
+            for (line in NearbyText.foot(stops.flatMap { s -> s.board.flatMap(NearbyText::cells) })) Text(
                 line,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 13.sp,
@@ -133,13 +97,61 @@ internal fun NearbyList(stops: List<NearbyStop>?, loading: Boolean, act: NearbyA
 }
 
 /**
+ * Stops drawn as Nearby's signs, one at a time where they're laid out ([NearbySign]), in the same columns ([NearbyGrid]): Nearby's list,
+ * and the Stops tab's pinned stops, a page each.
+ */
+internal class NearbySigns(val stops: List<NearbyStop>, val cells: List<List<List<NearbyText.Cell>>>, val grid: NearbyGrid)
+
+/**
+ * Stop [i] of [signs] as its sign: the plate with the walk there and the star, then its rows. [saysNone]: with no rows, says no buses are
+ * running there (a pinned stop's page, which is there whatever the hour); Nearby's own signs leave it bare.
+ */
+@Composable
+internal fun NearbySign(signs: NearbySigns, i: Int, act: NearbyActions, saysNone: Boolean = false) {
+    val s = signs.stops[i]
+    val grid = signs.grid
+    // The plate opens the stop's whole board, as the Stops tab has it; each row its service's line from here.
+    StopSign(
+        s.name,
+        plate = Modifier.clickable(role = Role.Button, onClickLabel = stringResource(R.string.a11y_open_stop)) { act.openStop(s.code) },
+        opens = true,
+        trailing = {
+            // Without a location (a pinned stop), no walk.
+            s.walkWords?.let { Text(it, style = MaterialTheme.typography.labelLarge) }
+            if (act.pinsKnown) PinStar(s.code, act.pins, act.pinLimit, act.onPin, name = s.longName ?: s.name)
+        },
+    ) {
+        val muted = MaterialTheme.colorScheme.onSurfaceVariant
+        if (!s.available) Text(stringResource(R.string.no_live_data), color = muted, modifier = Modifier.padding(14.dp))
+        else if (saysNone && s.board.isEmpty())
+            Text(stringResource(R.string.buses_none_here), color = muted, modifier = Modifier.padding(14.dp))
+        if (s.board.isNotEmpty()) Heads(grid)
+        for ((j, row) in s.board.withIndex()) {
+            if (j > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            // Keyed by its service, so a screen reader's focus stays on the D1 as the rows reorder on a refresh,
+            // rather than on whichever service moves into its place.
+            key(row.svc, row.dest ?: row.toText) {
+                BoardLine(row, signs.cells[i][j], grid, grid.wholePlace[i][j]) { act.openLine(row.svc, s.code) }
+            }
+        }
+    }
+}
+
+/** [stops] as signs [width] wide, their columns measured together. */
+@Composable
+internal fun nearbySigns(stops: List<NearbyStop>, width: Dp): NearbySigns {
+    val cells = remember(stops) { stops.map { s -> s.board.map(NearbyText::cells) } }
+    return NearbySigns(stops, cells, nearbyGrid(stops, cells, width))
+}
+
+/**
  * Nearby's columns, the same on every sign and its heads so the figures line up down the page: every badge as wide as the widest on screen
  * ("188e \$"), each time column as wide as its widest time or its head. Where a row would leave where-it's-going too little room for two
  * lines (a small screen, large text), the columns close up ([gap]), then the times are drawn a little smaller ([scale], to 0.85), and
  * failing that every row's times go full size on a second line under its badge ([stacked]), in the same columns (smaller only when that
  * line is too narrow for them). [wholePlace]: each row's place kept on one line, where it fits there.
  */
-private class NearbyGrid(
+internal class NearbyGrid(
     val badge: Dp,
     val cols: List<Dp>,
     val gap: Dp,
@@ -173,9 +185,8 @@ private fun nearbyGrid(stops: List<NearbyStop>, cells: List<List<List<NearbyText
             }
         with(density) {
             val boards = stops.map { it.board }
-            // A two-character line ("D2") with its padding at least, so a one-letter K isn't a dot.
             val badge =
-                ((boards.flatten().map { badgeText(it.svc, it.paid) } + "D2").maxOf { px(AnnotatedString(it), BADGE) }.toDp() + BADGE_PAD)
+                widestBadge(boards.flatten().map { badgeText(it.svc, it.paid) }) { px(AnnotatedString(it), BADGE) }.toDp() + BADGE_PAD
             // Inside the sign's hairline and the row's padding; where it's going has what the badge and the times leave.
             val inside = (width - 2.dp - 28.dp).toPx()
             val line = inside - (badge + DEST_GAP).toPx()
@@ -245,12 +256,7 @@ private fun BoardLine(
         if (row.paid) Modifier
         else Modifier.clickable(role = Role.Button, onClickLabel = stringResource(R.string.a11y_open_line, row.svc), onClick = onOpen)
     val badge: @Composable () -> Unit = {
-        Box(
-            Modifier.width(grid.badge).heightIn(min = 28.dp).background(color, RoundedCornerShape(8.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(badgeText(row.svc, row.paid), style = BADGE, color = inkOn(color), maxLines = 1, softWrap = false)
-        }
+        ServiceBadge(badgeText(row.svc, row.paid), color, grid.badge)
         Spacer(Modifier.width(DEST_GAP))
     }
     // Two lines at most, the place whole on the second when it fits there, so "to" or "via" wraps alone; otherwise free to break inside it.
@@ -295,6 +301,30 @@ private fun BoardLine(
             times()
         }
 }
+
+/** A service's badge, [width] wide (every badge in a list as wide as the widest, [badgeWidth]), in its colour. */
+@Composable
+internal fun ServiceBadge(label: String, color: Color, width: Dp) {
+    Box(Modifier.width(width).heightIn(min = 28.dp).background(color, RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
+        Text(label, style = BADGE, color = inkOn(color), maxLines = 1, softWrap = false)
+    }
+}
+
+/** The width a list's badges share: the widest of [labels], with its padding. */
+@Composable
+internal fun badgeWidth(labels: List<String>): Dp {
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    return remember(labels, density) {
+        with(density) {
+            widestBadge(labels) { measurer.measure(AnnotatedString(it), BADGE, softWrap = false, maxLines = 1).size.width }.toDp() +
+                BADGE_PAD
+        }
+    }
+}
+
+/** The widest of [labels] in pixels ([px]), and a two-character line's ("D2") at least, so a one-letter K isn't a dot. */
+private fun widestBadge(labels: List<String>, px: (String) -> Int): Int = (labels + "D2").maxOf(px)
 
 /** Where a row's bus is going, its place in ink and semibold, the words round it ("to", "via") left in the text's own colour. */
 private fun placeText(d: NearbyText.Dest, ink: Color = Color.Unspecified): AnnotatedString = buildAnnotatedString {

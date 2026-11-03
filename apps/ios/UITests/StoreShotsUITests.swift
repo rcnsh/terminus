@@ -97,13 +97,13 @@ final class StoreShotsUITests: XCTestCase {
     }
 
     func test4Buses() {
-        // The Stops tab's home with two pinned boards.
+        // The Stops tab's home with two pinned stops, the first showing.
         setProfile { $0["pinnedStops"] = ["COM3", "UTOWN"] }
         defer { resetProfile() }
         let app = launch(sky: "day")
         app.tabBars.buttons.element(boundBy: 1).tap()
         XCTAssertTrue(
-            app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'board-row-'")).firstMatch.waitForExistence(timeout: 15))
+            app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'nearbyRow.COM3.'")).firstMatch.waitForExistence(timeout: 15))
         sleep(3)
         save("4-buses", app)
     }

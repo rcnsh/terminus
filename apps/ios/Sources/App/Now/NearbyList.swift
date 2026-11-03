@@ -9,14 +9,6 @@ import SwiftUI
 /// the signs, what a "~" means, and a way to any other stop or line. As Android's NearbyList and the web app (NearbyCells has the words).
 struct NearbyList: View {
     @Environment(AppModel.self) private var app
-    /// The widest badge, times and destination line on every sign, as drawn.
-    @State private var widest = NearbyWidths()
-    @State private var width: CGFloat = 0
-    /// Scaled from 100, not 1: a scaled metric is rounded to the pixel, so 1
-    /// would stay 1 a text size or two up.
-    @ScaledMetric(relativeTo: .body) private var percent: CGFloat = 100
-    /// How much larger than at the usual text size, as the phone is set.
-    private var scale: CGFloat { percent / 100 }
 
     var body: some View {
         if let stops = app.nearby {
@@ -24,32 +16,27 @@ struct NearbyList: View {
                 Text(L("Nothing yet")).foregroundStyle(Color.muted)
             }
             let cells = stops.map { s in s.board.filter(\.running).map(NearbyCells.cells) }
-            VStack(spacing: 12) {
-                let cols = columns
-                ForEach(Array(stops.enumerated()), id: \.element.id) { i, s in
-                    let code = s.stop.code
-                    StopSign(stop: s, cells: cells[i], cols: cols, onStop: { app.showInBuses([.stop(code)]) }) { svc in
-                        app.showInBuses([.line(svc: svc, from: code)])
+            NearbySigns { cols in
+                VStack(spacing: 12) {
+                    ForEach(Array(stops.enumerated()), id: \.element.id) { i, s in
+                        let code = s.stop.code
+                        StopSign(stop: s, cells: cells[i], cols: cols, onStop: { app.showInBuses([.stop(code)]) }) { svc in
+                            app.showInBuses([.line(svc: svc, from: code)])
+                        }
                     }
-                }
-                if !stops.isEmpty {
-                    VStack(alignment: .leading, spacing: 2) {
-                        ForEach(NearbyCells.foot(cells.flatMap { $0 }), id: \.self) { Text($0) }
+                    if !stops.isEmpty {
+                        VStack(alignment: .leading, spacing: 2) {
+                            ForEach(NearbyCells.foot(cells.flatMap { $0 }), id: \.self) { Text($0) }
+                        }
+                        .font(.footnote)
+                        .foregroundStyle(Color.muted)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 6)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("nearbyFoot")
                     }
-                    .font(.footnote)
-                    .foregroundStyle(Color.muted)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 6)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityIdentifier("nearbyFoot")
+                    StopsLink { app.showInBuses([]) }
                 }
-                StopsLink { app.showInBuses([]) }
-            }
-            .onPreferenceChange(NearbyWidths.Key.self) { widest = $0 }
-            .onGeometryChange(for: CGFloat.self) {
-                $0.size.width
-            } action: {
-                width = $0
             }
             // The stars need the account's pins, which the Stops tab keeps.
             .task(id: app.session) {
@@ -60,13 +47,35 @@ struct NearbyList: View {
             Text(app.loading ? L("Checking…") : L("Nothing yet")).font(.title3)
         }
     }
+}
+
+/// Stop signs drawn together, as Nearby and the Stops tab's pinned stops do:
+/// it measures the widest of each thing on every sign inside it, and the
+/// room it has, and gives `content` the columns they all share.
+struct NearbySigns<Content: View>: View {
+    /// How much narrower a sign is than this (the pinned pages' gutters).
+    var inset: CGFloat = 0
+    @ViewBuilder let content: (NearbyColumns) -> Content
+    /// The widest badge, times and destination line on every sign, as drawn.
+    @State private var widest = NearbyWidths()
+    @State private var width: CGFloat = 0
+
+    var body: some View {
+        content(columns)
+            .onPreferenceChange(NearbyWidths.Key.self) { widest = $0 }
+            .onGeometryChange(for: CGFloat.self) {
+                $0.size.width
+            } action: {
+                width = $0
+            }
+    }
 
     /// The columns every sign draws: the widest badge (never narrower than
     /// "D2"), and the time columns as NearbyCells.layout gives way to fit.
     private var columns: NearbyColumns {
         let badge = widest.badge.rounded(.up)
         // A point spare, for the rounding.
-        let line = width - 2 * NearbyColumns.inset - 2
+        let line = width - inset - 2 * NearbyColumns.inset - 2
         let room = line - badge - NearbyColumns.toDest - NearbyColumns.gap
         let layout = NearbyCells.layout(
             times: widest.times, heads: widest.heads, whole: widest.whole, need: widest.need, room: room, line: line)
@@ -117,17 +126,26 @@ extension View {
     }
 }
 
-private struct StopSign: View {
+/// A stop's sign: its plate, then its running services' rows. On Nearby,
+/// and a page each for the Stops tab's pinned stops.
+struct StopSign: View {
+    /// Scaled from 100, not 1: a scaled metric is rounded to the pixel, so 1
+    /// would stay 1 a text size or two up.
     @ScaledMetric(relativeTo: .body) private var percent: CGFloat = 100
-    /// Follows the text size the phone is set to (NearbyList.scale).
+    /// How much larger than at the usual text size, as the phone is set.
     private var scale: CGFloat { percent / 100 }
     let stop: NearbyStop
     let cells: [[NearbyCell]]
     let cols: NearbyColumns
+    /// Under the plate when nothing is running: why (still asking, offline, none now).
+    var note: String?
     let onStop: () -> Void
     let onRow: (String) -> Void
 
-    private var walk: String { stop.walkS < 60 ? L("here") : L("%@ min walk", "\((stop.walkS + 30) / 60)") }
+    /// Without a location (a pinned stop's), no walk.
+    private var walk: String? { stop.walkS.map { $0 < 60 ? L("here") : L("%@ min walk", "\(($0 + 30) / 60)") } }
+    /// The plate as VoiceOver reads it.
+    private var spoken: String { [stop.stop.name, walk].compactMap { $0 }.joined(separator: ", ") }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -143,9 +161,11 @@ private struct StopSign: View {
                                 Color.muted)
                         }
                         Spacer(minLength: 4)
-                        Text(walk)
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(Color.muted)
+                        if let walk {
+                            Text(walk)
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(Color.muted)
+                        }
                     }
                     .padding(.leading, 14)
                     .frame(maxHeight: .infinity)
@@ -153,7 +173,7 @@ private struct StopSign: View {
                 }
                 .buttonStyle(BusRowPress())
                 // One element in its own words, its icon, chevron and walk not each their own.
-                .accessibilityRepresentation { Button("\(stop.stop.name), \(walk)", action: onStop) }
+                .accessibilityRepresentation { Button(spoken, action: onStop) }
                 .accessibilityHint(L("See this stop's buses"))
                 .accessibilityIdentifier("nearby.\(stop.stop.code)")
                 // Only once the pins have come: before, a pinned stop's star would
@@ -172,6 +192,9 @@ private struct StopSign: View {
             }
             // Running now: the board comes with the rest too, for the widgets' first buses.
             let rows = stop.board.filter(\.running)
+            if stop.available, rows.isEmpty, let note {
+                Text(note).foregroundStyle(Color.muted).padding(14).frame(maxWidth: .infinity, alignment: .leading)
+            }
             if !rows.isEmpty { heading }
             ForEach(Array(rows.enumerated()), id: \.offset) { j, row in
                 if j > 0 { Rectangle().fill(Color.line).frame(height: 1) }
@@ -223,7 +246,7 @@ private struct StopSign: View {
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.line))
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(stop.stop.name), \(walk)")
+        .accessibilityLabel(spoken)
     }
 
     /// NEXT, THEN, AFTER over the time columns; the rows read their own times out.
