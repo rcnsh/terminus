@@ -690,13 +690,9 @@
     <string name="nearby_then_bus">Then</string>
     <string name="nearby_after_bus">After</string>
     <string name="nearby_to">to %1$s</string>
-    <!-- Said after a bus's time when it comes before you could walk to the stop (shown struck through). -->
-    <string name="nearby_too_soon">, too soon to catch</string>
-    <!-- Said before the first bus in a row you can walk to the stop in time for. -->
+    <!-- A row's next bus as a clock time, said with how long it is: "12:09 PM, in 13 minutes". -->
     <string name="nearby_wait">%1$s, in %2$s</string>
-    <string name="nearby_catch">next you can catch, %1$s</string>
-    <!-- Under Nearby's boards, each only while such a time is showing. -->
-    <string name="nearby_crossed_out">Crossed out: you can\'t walk there in time.</string>
+    <!-- Under Nearby's boards, only while a "~" time is showing. -->
     <string name="nearby_guess">~ is a guess from the timetable, not a live time.</string>
     <!-- Pull to refresh (Now and Stops): the words over the road, and how it went. -->
     <string name="pull_to_refresh">Pull to refresh</string>

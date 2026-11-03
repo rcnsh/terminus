@@ -41,7 +41,6 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Constraints
@@ -75,8 +74,7 @@ internal class NearbyActions(
 /**
  * The stops near you as their signs: the name plate with the walk there and the star, then a row per service read like a stop's board:
  * where it's going and its next three buses (Next, Then, After), in minutes or as clock times (the switch above them, kept on this phone).
- * The first bus you can catch is drawn large, in whichever column; one due before you could walk there is struck through. Under them, what
- * a struck time and a "~" mean, and the way to the Stops tab, for any other stop.
+ * The next bus is drawn large. Under them, what a "~" means, and the way to the Stops tab, for any other stop.
  */
 @Composable
 internal fun NearbyList(stops: List<NearbyStop>?, loading: Boolean, act: NearbyActions) {
@@ -317,10 +315,7 @@ private fun placeText(d: NearbyText.Dest, ink: Color = Color.Unspecified): Annot
     d.place?.let { addStyle(PLACE.copy(color = ink), it.first, it.last + 1) }
 }
 
-/**
- * A bus's time as its column draws it: the figure in the board's weight, its unit or AM/PM small, the first you can catch large and in ink.
- * One too soon to catch is plain text at one size, struck through once, so the strike is one straight line through every figure.
- */
+/** A bus's time as its column draws it: the figure in the board's weight, its unit or AM/PM small, the next large and in ink. */
 private fun timeText(
     cell: NearbyText.Cell,
     asClock: Boolean,
@@ -329,20 +324,15 @@ private fun timeText(
     muted: Color = Color.Unspecified,
 ): AnnotatedString {
     fun size(sp: Float) = (sp * scale).sp
-    if (cell.tooSoon)
-        return AnnotatedString(
-            cell.text,
-            SpanStyle(color = muted, fontSize = size(14.5f), fontWeight = FontWeight.Medium, textDecoration = TextDecoration.LineThrough),
-        )
-    val big = size(if (cell.pick) (if (asClock) 17.5f else 21.5f) else (if (asClock) 14.7f else 16f))
+    val big = size(if (cell.next) (if (asClock) 17.5f else 21.5f) else (if (asClock) 14.7f else 16f))
     val small = SpanStyle(fontSize = size(11f), fontWeight = FontWeight.Medium, letterSpacing = 0.sp)
     return buildAnnotatedString {
         val figures =
             SpanStyle(
-                color = if (cell.pick) ink else muted,
+                color = if (cell.next) ink else muted,
                 fontSize = big,
-                fontWeight = if (cell.pick) FontWeight.Bold else FontWeight.SemiBold,
-                letterSpacing = if (cell.pick) (-0.02).em else (-0.01).em,
+                fontWeight = if (cell.next) FontWeight.Bold else FontWeight.SemiBold,
+                letterSpacing = if (cell.next) (-0.02).em else (-0.01).em,
             )
         withStyle(figures) {
             append(cell.mark)

@@ -7,27 +7,26 @@ import sh.rcn.terminus.Spoken
 
 /**
  * What Nearby's rows show and say, worded here so the JVM tests can check it: where each bus is going, and its three buses (Next, Then,
- * After) read like a stop's board, the first you can catch picked out.
+ * After) read like a stop's board, the next one large.
  */
 internal object NearbyText {
     /** One of a row's three buses, the row's own or one of its `later`. */
-    data class Bus(val etaS: Int?, val quality: String, val eta: String?, val atMs: Long?, val tooSoon: Boolean)
+    data class Bus(val etaS: Int?, val quality: String, val eta: String?, val atMs: Long?)
 
     /**
      * A bus in its column. [figure] is drawn large and [before]/[after] small around it ("4" " min", "下午 " "6:02", "12:04" " PM"), after
-     * [mark] ("~" for a guess, in both languages). [pick]: the first bus you can catch, the one drawn largest. [tooSoon]: due before you
-     * could walk there, shown whole at one size and struck through. [said] is how a screen reader says it; null with no bus.
+     * [mark] ("~" for a guess, in both languages). [next]: the Next column's bus, drawn large and in ink. [said] is how a screen reader
+     * says it; null with no bus.
      */
     data class Cell(
         val figure: String,
         val mark: String = "",
         val before: String = "",
         val after: String = "",
-        val pick: Boolean = false,
-        val tooSoon: Boolean = false,
+        val next: Boolean = false,
         val said: String? = null,
     ) {
-        /** As one string, as a struck-out cell shows it. */
+        /** As one string. */
         val text: String
             get() = mark + before + figure + after
     }
@@ -60,28 +59,24 @@ internal object NearbyText {
 
     /** The row's three buses in order, Next, Then, After; null where there's none. */
     fun buses(row: BoardRow): List<Bus?> =
-        listOf(Bus(row.etaS, row.quality, row.eta, row.atMs, row.tooSoon)) +
-            (0..1).map { k -> row.later.getOrNull(k)?.let { Bus(it.etaS, it.quality, it.eta, it.atMs, it.tooSoon) } }
-
-    /** Which of [buses] is the first you can catch: the first with a time that isn't too soon; -1 with none. */
-    fun pick(buses: List<Bus?>): Int = buses.indexOfFirst { it?.etaS != null && !it.tooSoon }
+        listOf(Bus(row.etaS, row.quality, row.eta, row.atMs)) +
+            (0..1).map { k -> row.later.getOrNull(k)?.let { Bus(it.etaS, it.quality, it.eta, it.atMs) } }
 
     /** A row's three cells, Next, Then, After. [clock] writes a time in the app's 12- or 24-hour style, in Singapore. */
     fun cells(row: BoardRow, asClock: Boolean, clock: (Long) -> String): List<Cell> {
         val buses = buses(row)
-        val pick = pick(buses)
-        return buses.mapIndexed { i, bus -> cell(bus, buses.getOrNull(i - 1), first = i == 0, pick = i == pick, asClock, clock) }
+        return buses.mapIndexed { i, bus -> cell(bus, buses.getOrNull(i - 1), first = i == 0, asClock, clock) }
     }
 
     /**
-     * One bus. Only the Next column ([first]) carries a unit ("4 min"; Then and After are bare figures, "16", "~28"), and in clock time
-     * always its AM/PM, which Then and After show only where the day's half changes from the cell before, as a printed timetable does.
+     * One bus. Only the Next column ([first]), drawn large, carries a unit ("4 min"; Then and After are bare figures, "16", "~28"), and in
+     * clock time always its AM/PM, which Then and After show only where the day's half changes from the cell before, as a printed timetable
+     * does.
      */
-    fun cell(bus: Bus?, prev: Bus?, first: Boolean, pick: Boolean, asClock: Boolean, clock: (Long) -> String): Cell {
+    fun cell(bus: Bus?, prev: Bus?, first: Boolean, asClock: Boolean, clock: (Long) -> String): Cell {
         if (bus?.etaS == null) return NONE
         val guess = bus.quality == "scheduled" || bus.quality == "stale"
         val mark = if (guess) "~" else ""
-        val soon = if (bus.tooSoon) L.s(R.string.nearby_too_soon) else ""
         if (asClock && bus.atMs != null) {
             val whole = clock(bus.atMs).trim()
             val figure = CLOCK_FIGURE.find(whole)?.value ?: whole
@@ -94,28 +89,20 @@ internal object NearbyText {
                 mark,
                 before = if (sayHalf && before) "$half " else "",
                 after = if (sayHalf && !before) " $half" else "",
-                pick = pick,
-                tooSoon = bus.tooSoon,
-                // The one to catch says how long it is too, as minutes mode shows it: "12:09 PM, in about 13 minutes".
-                said = Spoken.spell(mark + whole).let { if (pick) L.s(R.string.nearby_wait, it, wait(bus)) else it } + soon,
+                next = first,
+                // The next says how long it is too, as minutes mode shows it: "12:09 PM, in about 13 minutes".
+                said = Spoken.spell(mark + whole).let { if (first) L.s(R.string.nearby_wait, it, wait(bus)) else it },
             )
         }
         // An older server's "now" for a guess: worded here instead, "~1 min", as the server words it now.
         val words = bus.eta?.takeUnless { guess && DIGITS.find(it) == null } ?: eta(bus.etaS, bus.quality)
-        val said = (Spoken.eta(bus.etaS, bus.quality, withQuality = first) ?: Spoken.spell(words)) + soon
+        val said = Spoken.eta(bus.etaS, bus.quality, withQuality = first) ?: Spoken.spell(words)
         // "now": no figure to set large; shown as it is.
-        val n = DIGITS.find(words) ?: return Cell(words, pick = pick, tooSoon = bus.tooSoon, said = said)
-        return Cell(
-            n.value,
-            mark,
-            after = if (first) words.substring(n.range.last + 1) else "",
-            pick = pick,
-            tooSoon = bus.tooSoon,
-            said = said,
-        )
+        val n = DIGITS.find(words) ?: return Cell(words, next = first, said = said)
+        return Cell(n.value, mark, after = if (first) words.substring(n.range.last + 1) else "", next = first, said = said)
     }
 
-    /** How long until [bus], said: "13 minutes", "about 13 minutes" for a guess, never under a minute for one. */
+    /** How long until [bus], said: "13 minutes", "under a minute", "about 13 minutes" for a guess, never under a minute for one. */
     private fun wait(bus: Bus): String {
         val s = bus.etaS?.toLong() ?: 0
         return if (bus.quality == "live") Spoken.minutes(s) else L.s(R.string.a11y_eta_about, Spoken.minutes(maxOf(s, 60)))
@@ -125,29 +112,17 @@ internal object NearbyText {
     private fun meridiem(time: String) = time.replaceFirst(CLOCK_FIGURE, "").trim()
 
     /**
-     * The whole row as one line: the line, where it's going, then each bus in order, the first you can catch said so: "Bus D2, via Kent
-     * Ridge MRT, 4 minutes, live, too soon to catch, next you can catch, 14 minutes, then about 26 minutes".
+     * The whole row as one line: the line, where it's going, then each bus in order: "Bus D2, via PGP, 2 minutes, live, then 14 minutes,
+     * then about 26 minutes".
      */
     fun said(row: BoardRow, cells: List<Cell>): String =
         (listOf(L.s(if (row.paid) R.string.a11y_bus_paid else R.string.a11y_bus, row.svc), dest(row).text) +
-                cells.mapIndexedNotNull { i, c ->
-                    c.said?.let {
-                        when {
-                            c.pick -> L.s(R.string.nearby_catch, it)
-                            i > 0 -> L.s(R.string.nearby_then, it)
-                            else -> it
-                        }
-                    }
-                })
+                cells.mapIndexedNotNull { i, c -> c.said?.let { if (i > 0) L.s(R.string.nearby_then, it) else it } })
             .joinToString(L.s(R.string.clause_sep))
 
-    /**
-     * The lines under the signs, as under a stop's board: what a struck-out time and a "~" mean, each only while one is showing, then that
-     * a row opens its line.
-     */
+    /** The lines under the signs, as under a stop's board: what a "~" means, only while one is showing, then that a row opens its line. */
     fun foot(cells: List<Cell>): List<String> =
         listOfNotNull(
-            L.s(R.string.nearby_crossed_out).takeIf { cells.any { it.tooSoon } },
             L.s(R.string.nearby_guess).takeIf { cells.any { it.mark.isNotEmpty() } },
             L.s(R.string.buses_tap_hint),
         )

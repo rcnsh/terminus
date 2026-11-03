@@ -7,7 +7,6 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -18,9 +17,7 @@ import sh.rcn.terminus.TestStrings
 import sh.rcn.terminus.parseNearby
 import sh.rcn.terminus.ui.NearbyText.Cell
 
-/**
- * Nearby's rows as a stop's board, on the API's golden answer: where each bus is going and its next three buses, the one to catch picked.
- */
+/** Nearby's rows as a stop's board, on the API's golden answer: where each bus is going and its next three buses, the next large. */
 class NearbyTextTest {
     init {
         TestStrings.install()
@@ -36,31 +33,16 @@ class NearbyTextTest {
     // As the app writes it: "下午 6:36", with the space the server's Chinese has.
     private val clockZh = { ms: Long -> zh12.format(Instant.ofEpochMilli(ms)).replace(Regex("([上下]午)(\\d)"), "$1 $2") }
 
-    private val stops =
-        parseNearby(
-            JSONObject(
-                listOf("../../../fixtures/answers", "../../fixtures/answers")
-                    .map(::File)
-                    .first { it.isDirectory }
-                    .resolve("nearby-list.json")
-                    .readText()
-            )
-        )
+    private val fixtures = listOf("../../../fixtures/answers", "../../fixtures/answers").map(::File).first { it.isDirectory }
+    private val stops = parseNearby(JSONObject(File(fixtures, "nearby-list.json").readText()))
 
     private fun row(stop: String, svc: String) = stops.first { it.code == stop }.board.first { it.svc == svc }
 
     private fun sgt(hhmm: String) = Instant.parse("2026-11-04T${hhmm}:00+08:00").toEpochMilli()
 
-    /** Three live buses at these Singapore times, the first [soon] too soon to catch. */
-    private fun at(vararg times: String, soon: Boolean = false) =
-        BoardRow(
-            "D1",
-            60,
-            "live",
-            atMs = sgt(times[0]),
-            tooSoon = soon,
-            later = times.drop(1).map { LaterBus(600, "live", atMs = sgt(it)) },
-        )
+    /** Three live buses at these Singapore times. */
+    private fun at(vararg times: String) =
+        BoardRow("D1", 60, "live", atMs = sgt(times[0]), later = times.drop(1).map { LaterBus(600, "live", atMs = sgt(it)) })
 
     @Test
     fun aRowSaysWhereItsBusIsGoingWithItsPlaceSetApart() {
@@ -88,41 +70,40 @@ class NearbyTextTest {
         val cells = NearbyText.cells(row("PGPR", "D2"), asClock = false, clock24)
         assertEquals(
             listOf(
-                Cell("4", after = " min", pick = true, said = "4 minutes, live"),
+                Cell("4", after = " min", next = true, said = "4 minutes, live"),
                 Cell("14", said = "14 minutes"),
                 Cell("26", mark = "~", said = "about 26 minutes"),
             ),
             cells,
         )
         assertEquals(
-            "Bus D2, via COM\u00a03, next you can catch, 4 minutes, live, then 14 minutes, then about 26 minutes",
+            "Bus D2, via COM\u00a03, 4 minutes, live, then 14 minutes, then about 26 minutes",
             NearbyText.said(row("PGPR", "D2"), cells),
         )
     }
 
     @Test
-    fun aBusTooSoonToCatchIsStruckAndTheNextYouCanCatchIsPicked() {
-        val d2 = row("PGP", "D2")
+    fun theNextBusIsAlwaysTheLargeOneWhateverTheWalk() {
+        // An older answer's tooSoon is no longer read: the first bus is shown and said like any other.
+        val older = JSONObject(File(fixtures, "nearby-list.json").readText())
+        for (stop in older.getJSONArray("stops").let { a -> (0 until a.length()).map(a::getJSONObject) }) stop.getJSONArray("board").let { b
+            ->
+            (0 until b.length()).forEach { b.getJSONObject(it).put("tooSoon", true) }
+        }
+        val d2 = parseNearby(older).first { it.code == "PGP" }.board.first { it.svc == "D2" }
         val cells = NearbyText.cells(d2, asClock = false, clock24)
-        assertTrue(cells[0].tooSoon)
-        assertFalse(cells[0].pick)
-        // Shown whole, unit and all, at one size, under one strike.
+        assertEquals(listOf(true, false, false), cells.map { it.next })
         assertEquals("4 min", cells[0].text)
-        assertTrue(cells[1].pick)
-        assertFalse(cells[2].pick)
-        assertEquals(
-            "Bus D2, via Kent Ridge MRT, 4 minutes, live, too soon to catch, next you can catch, 14 minutes, then about 26 minutes",
-            NearbyText.said(d2, cells),
-        )
-        // In clock time too.
-        assertEquals("09:04", NearbyText.cells(d2, asClock = true, clock24)[0].text)
+        assertEquals("Bus D2, via Kent Ridge MRT, 4 minutes, live, then 14 minutes, then about 26 minutes", NearbyText.said(d2, cells))
+        val clock = NearbyText.cells(d2, asClock = true, clock24)
+        assertEquals("09:04", clock[0].text)
+        assertTrue(clock[0].next)
     }
 
     @Test
-    fun noBusYouCanCatchPicksNone() {
-        val r = BoardRow("A1", 60, "live", tooSoon = true, later = listOf(LaterBus(300, "live", tooSoon = true)))
-        assertEquals(-1, NearbyText.pick(NearbyText.buses(r)))
-        assertTrue(NearbyText.cells(r, false, clock24).none { it.pick })
+    fun aFirstBusWithNoTimeLeavesNothingLarge() {
+        val r = BoardRow("A1", null, "ended", later = listOf(LaterBus(300, "live")))
+        assertTrue(NearbyText.cells(r, false, clock24).none { it.next })
     }
 
     @Test
@@ -138,7 +119,7 @@ class NearbyTextTest {
     @Test
     fun nowHasNoFigureAndIsShownAsItIs() {
         val c = NearbyText.cells(BoardRow("A1", 20, "live", eta = "now"), asClock = false, clock24)[0]
-        assertEquals(Cell("now", pick = true, said = "Arriving"), c)
+        assertEquals(Cell("now", next = true, said = "Arriving"), c)
     }
 
     @Test
@@ -146,7 +127,7 @@ class NearbyTextTest {
         // The server's words, and an older server's "now" for a timetabled bus, worded here.
         for (words in listOf("~1 min", "now", null)) {
             val c = NearbyText.cells(BoardRow("A2", 30, "scheduled", eta = words), asClock = false, clock24)[0]
-            assertEquals(Cell("1", mark = "~", after = " min", pick = true, said = "about 1 minute, estimated"), c)
+            assertEquals(Cell("1", mark = "~", after = " min", next = true, said = "about 1 minute, estimated"), c)
         }
         TestStrings.install("values-zh")
         assertEquals("~1 分钟", NearbyText.cells(BoardRow("A2", 30, "stale", eta = "约 1 分钟"), false, clock24)[0].text)
@@ -167,7 +148,7 @@ class NearbyTextTest {
         assertEquals(" AM", cells[0].after)
         assertEquals("11:52", cells[1].figure)
         assertEquals(" PM", cells[2].after)
-        // The one to catch says how long it is, too; the others only their time.
+        // The next says how long it is, too; the others only their time.
         assertEquals("11:40 AM, in 1 minute", cells[0].said)
         // Said whole, though shown bare.
         assertEquals("11:52 AM", cells[1].said)
@@ -178,24 +159,26 @@ class NearbyTextTest {
     @Test
     fun chineseWritesTheHalfOfTheDayBeforeTheTime() {
         TestStrings.install("values-zh")
-        val cells = NearbyText.cells(at("11:52", "12:04", "12:16", soon = true), asClock = true, clockZh)
+        val cells = NearbyText.cells(at("11:52", "12:04", "12:16"), asClock = true, clockZh)
         assertEquals("上午 ", cells[0].before)
         assertEquals("", cells[0].after)
-        // Struck through, whole.
         assertEquals("上午 11:52", cells[0].text)
         assertEquals("下午 ", cells[1].before)
         assertEquals("12:16", cells[2].text)
-        assertTrue(cells[1].pick)
-        assertEquals("下午 12:04，10 分钟后", cells[1].said)
+        assertEquals("上午 11:52，1 分钟后", cells[0].said)
+        assertEquals("下午 12:04", cells[1].said)
     }
 
     @Test
     fun twentyFourHourTimesHaveNoHalf() {
-        val cells = NearbyText.cells(at("18:02", "18:14", "18:26", soon = true), asClock = true, clock24)
+        val cells = NearbyText.cells(at("18:02", "18:14", "18:26"), asClock = true, clock24)
         assertEquals(listOf("18:02", "18:14", "18:26"), cells.map { it.text })
-        assertEquals("18:02, too soon to catch", cells[0].said)
-        assertEquals("18:14, in 10 minutes", cells[1].said)
-        assertEquals("18:26", cells[2].said)
+        assertEquals("18:02, in 1 minute", cells[0].said)
+        assertEquals("18:14", cells[1].said)
+        assertEquals(
+            "Bus D1, to PGP, 18:02, in 1 minute, then 18:14, then 18:26",
+            NearbyText.said(at("18:02", "18:14", "18:26").copy(dest = "to PGP"), cells),
+        )
     }
 
     @Test
@@ -203,7 +186,7 @@ class NearbyTextTest {
         val at = Instant.parse("2026-08-27T01:09:00Z").toEpochMilli()
         val r = BoardRow("A1", 540, "scheduled", eta = "~9 min", atMs = at, later = listOf(LaterBus(1140, "stale", atMs = at + 600_000)))
         val clock = NearbyText.cells(r, asClock = true, clock24)
-        assertEquals(Cell("09:09", mark = "~", pick = true, said = "about 09:09, in about 9 minutes"), clock[0])
+        assertEquals(Cell("09:09", mark = "~", next = true, said = "about 09:09, in about 9 minutes"), clock[0])
         assertEquals("~09:19", clock[1].text)
         assertEquals("~9 min", NearbyText.cells(r, asClock = false, clock24)[0].text)
     }
@@ -222,11 +205,7 @@ class NearbyTextTest {
         fun foot(stops: List<NearbyStop>, asClock: Boolean = false) =
             NearbyText.foot(stops.flatMap { s -> s.board.flatMap { NearbyText.cells(it, asClock, clock24) } })
         assertEquals(
-            listOf(
-                "Crossed out: you can't walk there in time.",
-                "~ is a guess from the timetable, not a live time.",
-                "Tap a service to see its whole line.",
-            ),
+            listOf("~ is a guess from the timetable, not a live time.", "Tap a service to see its whole line."),
             foot(stops),
         )
         val live = NearbyStop("PGP", "PGP", 120, true, listOf(BoardRow("A1", 300, "live", later = listOf(LaterBus(900, "live")))))
@@ -256,8 +235,12 @@ class NearbyTextTest {
     }
 
     @Test
-    fun aGuessedPickUnderAMinuteIsAboutAMinuteAway() {
+    fun theNextAsAClockTimeSaysItsWait() {
         val r = BoardRow("A1", 20, "scheduled", atMs = sgt("12:09"))
         assertEquals("about 12:09 PM, in about 1 minute", NearbyText.cells(r, asClock = true, clock12)[0].said)
+        val live = BoardRow("A1", 20, "live", atMs = sgt("12:09"))
+        assertEquals("12:09 PM, in under a minute", NearbyText.cells(live, asClock = true, clock12)[0].said)
+        val later = BoardRow("A1", 780, "live", atMs = sgt("12:09"))
+        assertEquals("12:09 PM, in 13 minutes", NearbyText.cells(later, asClock = true, clock12)[0].said)
     }
 }
