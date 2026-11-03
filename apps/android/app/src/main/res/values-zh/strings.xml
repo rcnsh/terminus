@@ -679,13 +679,9 @@
     <string name="buses_unpin_stop">取消固定 %1$s</string>
     <string name="nearby_more_title">其他车站或整条线路</string>
     <string name="nearby_more_text">搜索、已固定的车站和线路都在“车站”里。</string>
-    <string name="nearby_show_times">时间显示方式</string>
-    <string name="nearby_in_minutes">几分钟后</string>
-    <string name="nearby_clock_time">几点几分</string>
     <string name="nearby_then_bus">之后</string>
     <string name="nearby_after_bus">再之后</string>
     <string name="nearby_to">开往 %1$s</string>
-    <string name="nearby_wait">%1$s，%2$s后</string>
     <string name="nearby_guess">~ 是按时刻表估计的，不是实时时间。</string>
     <!-- Pull to refresh (Now and Stops): the words over the road, and how it went. -->
     <string name="pull_to_refresh">下拉刷新</string>

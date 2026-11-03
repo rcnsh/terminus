@@ -27,7 +27,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -51,10 +50,8 @@ import androidx.compose.ui.unit.sp
 import sh.rcn.terminus.BoardRow
 import sh.rcn.terminus.L
 import sh.rcn.terminus.NearbyStop
-import sh.rcn.terminus.NearbyTimes
 import sh.rcn.terminus.R
 import sh.rcn.terminus.parseColor
-import sh.rcn.terminus.widget.clock
 
 /**
  * What Nearby's taps do: a stop's name opens its board and a row its line, on the Stops tab, where the last row goes too; the star pins the
@@ -73,8 +70,8 @@ internal class NearbyActions(
 
 /**
  * The stops near you as their signs: the name plate with the walk there and the star, then a row per service read like a stop's board:
- * where it's going and its next three buses (Next, Then, After), in minutes or as clock times (the switch above them, kept on this phone).
- * The next bus is drawn large. Under them, what a "~" means, and the way to the Stops tab, for any other stop.
+ * where it's going and its next three buses (Next, Then, After), in minutes. The next bus is drawn large. Under them, what a "~" means, and
+ * the way to the Stops tab, for any other stop.
  */
 @Composable
 internal fun NearbyList(stops: List<NearbyStop>?, loading: Boolean, act: NearbyActions) {
@@ -82,19 +79,10 @@ internal fun NearbyList(stops: List<NearbyStop>?, loading: Boolean, act: NearbyA
         Text(if (loading) stringResource(R.string.checking) else stringResource(R.string.nothing_yet))
         return
     }
-    val ctx = LocalContext.current
-    val asClock = NearbyTimes.clock(ctx)
-    val cells = stops.map { s -> s.board.map { row -> NearbyText.cells(row, asClock) { clock(ctx, it) } } }
+    val cells = stops.map { s -> s.board.map(NearbyText::cells) }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Segmented(
-            listOf(stringResource(R.string.nearby_in_minutes), stringResource(R.string.nearby_clock_time)),
-            if (asClock) 1 else 0,
-            label = stringResource(R.string.nearby_show_times),
-        ) {
-            NearbyTimes.set(ctx, it == 1)
-        }
         BoxWithConstraints {
-            val grid = nearbyGrid(stops, cells, asClock, maxWidth)
+            val grid = nearbyGrid(stops, cells, maxWidth)
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 for ((i, s) in stops.withIndex()) {
                     // The plate opens the stop's whole board, as the Stops tab has it; each row its service's line from here.
@@ -125,7 +113,7 @@ internal fun NearbyList(stops: List<NearbyStop>?, loading: Boolean, act: NearbyA
                             // Keyed by its service, so a screen reader's focus stays on the D1 as the rows reorder on a refresh,
                             // rather than on whichever service moves into its place.
                             key(row.svc, row.dest ?: row.toText) {
-                                BoardLine(row, cells[i][j], asClock, grid, grid.wholePlace[i][j]) { act.openLine(row.svc, s.code) }
+                                BoardLine(row, cells[i][j], grid, grid.wholePlace[i][j]) { act.openLine(row.svc, s.code) }
                             }
                         }
                     }
@@ -171,17 +159,17 @@ private val COL_GAP = 14.dp
 private val COL_GAP_TIGHT = 8.dp
 
 @Composable
-private fun nearbyGrid(stops: List<NearbyStop>, cells: List<List<List<NearbyText.Cell>>>, asClock: Boolean, width: Dp): NearbyGrid {
+private fun nearbyGrid(stops: List<NearbyStop>, cells: List<List<List<NearbyText.Cell>>>, width: Dp): NearbyGrid {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val heads = heads()
-    return remember(stops, cells, asClock, width, density, heads) {
+    return remember(stops, cells, width, density, heads) {
         fun px(text: AnnotatedString, style: TextStyle) = measurer.measure(text, style, softWrap = false, maxLines = 1).size.width
         val all = cells.flatten()
         // Each column as wide as its widest time at [scale], or its head, which keeps its size.
         fun widths(scale: Float) =
             (0..2).map { k ->
-                maxOf(all.maxOfOrNull { px(timeText(it[k], asClock, scale), TIME) } ?: 0, px(AnnotatedString(heads[k]), HEAD))
+                maxOf(all.maxOfOrNull { px(timeText(it[k], scale), TIME) } ?: 0, px(AnnotatedString(heads[k]), HEAD))
             }
         with(density) {
             val boards = stops.map { it.board }
@@ -246,7 +234,6 @@ private fun Heads(grid: NearbyGrid) {
 private fun BoardLine(
     row: BoardRow,
     cells: List<NearbyText.Cell>,
-    asClock: Boolean,
     grid: NearbyGrid,
     wholePlace: Boolean,
     onOpen: () -> Unit,
@@ -281,7 +268,7 @@ private fun BoardLine(
         for ((k, cell) in cells.withIndex()) {
             Spacer(Modifier.width(grid.gap))
             Text(
-                timeText(cell, asClock, grid.scale, ink = c.onSurface, muted = c.onSurfaceVariant),
+                timeText(cell, grid.scale, ink = c.onSurface, muted = c.onSurfaceVariant),
                 style = TIME,
                 maxLines = 1,
                 softWrap = false,
@@ -315,16 +302,15 @@ private fun placeText(d: NearbyText.Dest, ink: Color = Color.Unspecified): Annot
     d.place?.let { addStyle(PLACE.copy(color = ink), it.first, it.last + 1) }
 }
 
-/** A bus's time as its column draws it: the figure in the board's weight, its unit or AM/PM small, the next large and in ink. */
+/** A bus's time as its column draws it: the figure in the board's weight, its unit small, the next large and in ink. */
 private fun timeText(
     cell: NearbyText.Cell,
-    asClock: Boolean,
     scale: Float,
     ink: Color = Color.Unspecified,
     muted: Color = Color.Unspecified,
 ): AnnotatedString {
     fun size(sp: Float) = (sp * scale).sp
-    val big = size(if (cell.next) (if (asClock) 17.5f else 21.5f) else (if (asClock) 14.7f else 16f))
+    val big = size(if (cell.next) 21.5f else 16f)
     val small = SpanStyle(fontSize = size(11f), fontWeight = FontWeight.Medium, letterSpacing = 0.sp)
     return buildAnnotatedString {
         val figures =
@@ -336,7 +322,6 @@ private fun timeText(
             )
         withStyle(figures) {
             append(cell.mark)
-            if (cell.before.isNotEmpty()) withStyle(small) { append(cell.before) }
             append(cell.figure)
             if (cell.after.isNotEmpty()) withStyle(small) { append(cell.after) }
         }

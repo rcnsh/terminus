@@ -723,8 +723,6 @@ data class BoardRow(
     val laterText: String? = null,
     /** "to Central Library, Kent Vale", "Ends here"; null from an older server. */
     val toText: String? = null,
-    /** When the next bus comes, to the minute (`at`); null without a time, or from an older server. */
-    val atMs: Long? = null,
     /**
      * Where it's going, worded and translated: "to PGP Foyer", "via UTown", "Ends here" (Nearby's boards only); null from an older server.
      */
@@ -733,11 +731,8 @@ data class BoardRow(
     val destPlace: String? = null,
 )
 
-/**
- * A bus after the next one, with its own quality: a timetabled one stays a guess. [eta] is the server's "12 min", [atMs] when it comes, to
- * the minute.
- */
-data class LaterBus(val etaS: Int, val quality: String, val eta: String? = null, val atMs: Long? = null)
+/** A bus after the next one, with its own quality: a timetabled one stays a guess. [eta] is the server's "12 min". */
+data class LaterBus(val etaS: Int, val quality: String, val eta: String? = null)
 
 private fun parseLater(r: JSONObject): List<LaterBus> {
     val a = r.optJSONArray("later") ?: return emptyList()
@@ -749,7 +744,6 @@ private fun parseLater(r: JSONObject): List<LaterBus> {
                 b.optInt("etaS"),
                 b.optString("quality"),
                 b.optStringOrNull("eta"),
-                atMs = b.optStringOrNull("at")?.let(::parseInstant),
             )
     }
 }
@@ -774,7 +768,6 @@ fun parseBoardRow(r: JSONObject): BoardRow =
         eta = r.optStringOrNull("eta")?.ifEmpty { null },
         laterText = r.optStringOrNull("laterText")?.ifEmpty { null },
         toText = r.optStringOrNull("toText")?.ifEmpty { null },
-        atMs = r.optStringOrNull("at")?.let(::parseInstant),
         dest = r.optStringOrNull("dest")?.ifEmpty { null },
         destPlace = r.optStringOrNull("destPlace")?.ifEmpty { null },
     )
