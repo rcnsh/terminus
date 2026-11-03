@@ -140,23 +140,14 @@ struct JourneyGround: View {
 
 /// The horizon's road in words, just under it: your bus and when it reaches
 /// your stop ("about" for an estimate), the stop's name in bold.
-private struct RoadLine: View {
+struct RoadLine: View {
     let journey: Journey
     let now: Date
 
     var body: some View {
         if let bus = journey.bus {
             let left = Int(journey.boardDate?.timeIntervalSince(now) ?? 0)
-            let n = "\(Int((Double(left) / 60).rounded()))"
-            let text =
-                left <= 0
-                ? L("from %@", bus.stop)
-                : left < BusTimes.arrivingS
-                    ? L("arriving at %@", bus.stop)
-                    : journey.live
-                        ? L("reaches %@ in %@ min", bus.stop, n)
-                        : L("reaches %@ in about %@ min", bus.stop, n)
-            var s = AttributedString(text)
+            var s = AttributedString(Self.words(stop: bus.stop, left: left, live: journey.live))
             if let r = s.range(of: bus.stop) { s[r].font = .body.weight(.bold) }
             return AnyView(
                 HStack(spacing: 8) {
@@ -167,6 +158,15 @@ private struct RoadLine: View {
                 .padding(.top, -12))
         }
         return AnyView(EmptyView())
+    }
+
+    /// When your bus reaches `stop`, `left` seconds away: "arriving at COM3"
+    /// only for a bus seen; an estimate is "in about 1 min" to the end.
+    static func words(stop: String, left: Int, live: Bool) -> String {
+        let n = Int((Double(left) / 60).rounded())
+        if left <= 0 { return L("from %@", stop) }
+        if !live { return L("reaches %@ in about %@ min", stop, "\(max(1, n))") }
+        return left < BusTimes.arrivingS ? L("arriving at %@", stop) : L("reaches %@ in %@ min", stop, "\(n)")
     }
 }
 
