@@ -123,8 +123,8 @@ enum NearbyCells {
     }
 
     /// Under the signs, once: what a "~" means, only when one is showing.
-    static func foot(_ shown: [[NearbyCell]]) -> [String] {
-        shown.joined().contains(where: { $0.mark == "~" }) ? [L("~ is a guess from the timetable, not a live time.")] : []
+    static func foot(_ shown: [[NearbyCell]]) -> String? {
+        shown.joined().contains(where: { $0.mark == "~" }) ? L("~ is a guess from the timetable, not a live time.") : nil
     }
 
     /// How the time columns are laid out on every sign at once.

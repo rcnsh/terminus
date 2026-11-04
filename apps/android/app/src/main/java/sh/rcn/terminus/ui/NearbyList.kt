@@ -78,11 +78,15 @@ internal fun NearbyList(stops: List<NearbyStop>?, loading: Boolean, act: NearbyA
             val signs = nearbySigns(stops, maxWidth)
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { for (i in stops.indices) NearbySign(signs, i, act) }
         }
-        val foot = NearbyText.foot(stops.flatMap { s -> s.board.flatMap(NearbyText::cells) })
-        if (foot.isNotEmpty())
-            Column(Modifier.padding(horizontal = 6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                for (line in foot) Text(line, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp, lineHeight = 18.sp)
-            }
+        NearbyText.foot(stops.flatMap { s -> s.board.flatMap(NearbyText::cells) })?.let {
+            Text(
+                it,
+                Modifier.padding(horizontal = 6.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+            )
+        }
     }
 }
 

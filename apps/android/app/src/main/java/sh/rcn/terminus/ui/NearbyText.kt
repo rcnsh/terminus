@@ -88,7 +88,7 @@ internal object NearbyText {
             .joinToString(L.s(R.string.clause_sep))
 
     /** The line under the signs: what a "~" means, only while one is showing. */
-    fun foot(cells: List<Cell>): List<String> = listOfNotNull(L.s(R.string.nearby_guess).takeIf { cells.any { it.mark.isNotEmpty() } })
+    fun foot(cells: List<Cell>): String? = L.s(R.string.nearby_guess).takeIf { cells.any { it.mark.isNotEmpty() } }
 }
 
 /**

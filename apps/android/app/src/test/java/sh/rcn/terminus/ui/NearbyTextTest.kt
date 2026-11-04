@@ -3,6 +3,7 @@ package sh.rcn.terminus.ui
 import java.io.File
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -130,13 +131,13 @@ class NearbyTextTest {
     @Test
     fun theFootExplainsOnlyWhatIsShowing() {
         fun foot(stops: List<NearbyStop>) = NearbyText.foot(stops.flatMap { s -> s.board.flatMap(NearbyText::cells) })
-        assertEquals(listOf("~ is a guess from the timetable, not a live time."), foot(stops))
+        assertEquals("~ is a guess from the timetable, not a live time.", foot(stops))
         val live = NearbyStop("PGP", "PGP", 120, true, listOf(BoardRow("A1", 300, "live", later = listOf(LaterBus(900, "live")))))
-        assertEquals(emptyList<String>(), foot(listOf(live)))
+        assertNull(foot(listOf(live)))
         // A row with no time says nothing about guesses, whatever its quality.
-        assertEquals(0, foot(listOf(live.copy(board = listOf(BoardRow("K", null, "scheduled"))))).size)
+        assertNull(foot(listOf(live.copy(board = listOf(BoardRow("K", null, "scheduled"))))))
         // A timetabled bus under a minute away is "~1 min", so it's explained.
         val soon = live.copy(board = listOf(BoardRow("A1", 30, "scheduled", eta = "now")))
-        assertEquals(1, foot(listOf(soon)).size)
+        assertNotNull(foot(listOf(soon)))
     }
 }

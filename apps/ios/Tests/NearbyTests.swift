@@ -367,10 +367,10 @@ private let noon = row(
 
 @Test func nearbyFootExplainsOnlyWhatsShowing() {
     let guess = L("~ is a guess from the timetable, not a live time.")
-    #expect(NearbyCells.foot([NearbyCells.cells(noon)]) == [guess])
+    #expect(NearbyCells.foot([NearbyCells.cells(noon)]) == guess)
     let plain = row(#"{"svc":"A1","etaS":300,"quality":"live","eta":"5 min","later":[{"etaS":1020,"quality":"live","eta":"17 min"}]}"#)
-    #expect(NearbyCells.foot([NearbyCells.cells(plain)]) == [])
-    #expect(NearbyCells.foot([]) == [])
+    #expect(NearbyCells.foot([NearbyCells.cells(plain)]) == nil)
+    #expect(NearbyCells.foot([]) == nil)
 }
 
 /// What gives way when the rows are short of room, in order: the gaps, then

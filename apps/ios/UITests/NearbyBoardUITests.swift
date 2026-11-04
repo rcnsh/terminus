@@ -202,9 +202,9 @@ final class NearbyBoardUITests: XCTestCase {
             }
             XCTAssertEqual(inside.map(\.label), [], "elements in the \(p) sign besides its plate, star and rows")
         }
-        // Each plate before its own rows, the foot last, after the last card.
+        // Each plate before its own rows, the foot (there while a "~" is showing) last, after the last card.
         XCTAssertEqual(found.first?.id.hasPrefix("nearby."), true, "\(found.first?.id ?? "nothing") before the first plate")
-        XCTAssertEqual(found.last?.id, "nearbyFoot")
+        if found.contains(where: { $0.id == "nearbyFoot" }) { XCTAssertEqual(found.last?.id, "nearbyFoot") }
         var plate: String?
         for f in found {
             if f.id.hasPrefix("nearby.") { plate = String(f.id.dropFirst("nearby.".count)) }
@@ -213,9 +213,9 @@ final class NearbyBoardUITests: XCTestCase {
             }
         }
         let ids = found.map(\.id)
-        let foot = ids.firstIndex(of: "nearbyFoot")
-        XCTAssertNotNil(foot)
-        XCTAssertGreaterThan(foot ?? -1, ids.lastIndex { $0.hasPrefix("nearbyRow.") } ?? .max, "the foot isn't after the last card")
+        if let foot = ids.firstIndex(of: "nearbyFoot") {
+            XCTAssertGreaterThan(foot, ids.lastIndex { $0.hasPrefix("nearbyRow.") } ?? .max, "the foot isn't after the last card")
+        }
         // Every row as Android reads it: the first bus with live or estimated, then each
         // later one, "about" for a guess. Nothing too soon, and no clock time.
         let time = #"(about )?(\d+ minutes?|under a minute)"#

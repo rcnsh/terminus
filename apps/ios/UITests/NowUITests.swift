@@ -45,6 +45,13 @@ final class NowUITests: XCTestCase {
         }
     }
 
+    /// Nearby's lowest row: the end of the list, whether or not a foot is under it.
+    private func lastNearbyRow(_ app: XCUIApplication) -> XCUIElement {
+        let rows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'nearbyRow.'"))
+        XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 15))
+        return rows.allElementsBoundByIndex.max { $0.frame.maxY < $1.frame.maxY } ?? rows.firstMatch
+    }
+
     func testTheTripInEveryStyleAndSky() {
         for (style, sky, theme) in [
             ("steps", "night", "light"), ("route", "day", "light"), ("route", "golden", "dark"), ("steps", "dawn", "dark"),
@@ -86,8 +93,7 @@ final class NowUITests: XCTestCase {
             app.buttons.matching(NSPredicate(format: "identifier == %@ AND label BEGINSWITH 'Unpin '", "star-\(code)")).firstMatch
                 .waitForExistence(timeout: 5))
         shot("now-nearby", app)
-        app.swipeUp()
-        app.swipeUp()
+        reveal(lastNearbyRow(app), in: app)
         shot("now-nearby-down", app)
         // The plate: the stop's board on Stops, over its home.
         app.swipeDown()
@@ -119,8 +125,7 @@ final class NowUITests: XCTestCase {
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'nearby.'")).firstMatch.waitForExistence(timeout: 15))
         sleep(1)
         shot("now-nearby-dark", app)
-        app.swipeUp()
-        app.swipeUp()
+        reveal(lastNearbyRow(app), in: app)
         shot("now-nearby-down-dark", app)
     }
 

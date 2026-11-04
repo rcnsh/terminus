@@ -345,21 +345,19 @@ struct BusBoardFoot: View {
             let now = ServerClock.now
             // Aged as the card ages its rows, so the dot here goes when theirs do.
             let live = board.aged(now).rows.contains { $0.running && BusWords.isLive($0) }
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        ForEach(BusWords.endingSoon(board.rows.filter(\.running), now: now), id: \.svc) { e in
-                            Text(busBold: e.svc, in: L("%@ runs until %@", e.svc, campusTime(e.at))).font(.subheadline).foregroundStyle(
-                                Color.ink)
-                        }
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(BusWords.endingSoon(board.rows.filter(\.running), now: now), id: \.svc) { e in
+                        Text(busBold: e.svc, in: L("%@ runs until %@", e.svc, campusTime(e.at))).font(.subheadline).foregroundStyle(
+                            Color.ink)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    if let asOf = board.asOf {
-                        HStack(spacing: 6) {
-                            if live { BusLiveDot().accessibilityHidden(true) }
-                            Text(verbatim: (live ? L("Live") + " · " : "") + BusWords.updated(asOf, now: now))
-                                .font(.subheadline).foregroundStyle(Color.muted).monospacedDigit()
-                        }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                if let asOf = board.asOf {
+                    HStack(spacing: 6) {
+                        if live { BusLiveDot().accessibilityHidden(true) }
+                        Text(verbatim: (live ? L("Live") + " · " : "") + BusWords.updated(asOf, now: now))
+                            .font(.subheadline).foregroundStyle(Color.muted).monospacedDigit()
                     }
                 }
             }
