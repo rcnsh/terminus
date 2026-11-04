@@ -681,9 +681,6 @@
     <string name="buses_from_to">%1$s to %2$s</string>
     <string name="buses_pin_stop">Pin %1$s</string>
     <string name="buses_unpin_stop">Unpin %1$s</string>
-    <!-- Under Nearby's last stop: the way to the Stops tab. -->
-    <string name="nearby_more_title">Another stop, or a whole line</string>
-    <string name="nearby_more_text">Search, pinned stops and services are in Stops.</string>
     <!-- Nearby's boards: the columns' heads; where a row's bus is going. -->
     <string name="nearby_then_bus">Then</string>
     <string name="nearby_after_bus">After</string>

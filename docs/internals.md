@@ -1248,7 +1248,7 @@ Settings. It uses the same routes as the account page, with the session cookie.
   and then says so in the sheet, which is the only confirmation; Android's
   sheet is the same. Not for Nearby. A stop's name in Nearby opens its board
   in the Stops tab, a row its service's line there, and the star on its sign
-  pins it; under the signs, a row leads to the Stops tab for any other stop.
+  pins it. Any other stop is on the Stops tab, from the tab bar.
 - **Stops tab** (app/buses.js). Its home is the search, then the pinned
   stops, each with its first three rows (`/api/arrivals`, refreshed every
   15 s while the home is on screen), then every service in `/api/campus`

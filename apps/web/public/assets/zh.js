@@ -648,8 +648,6 @@ window.TERMINUS_ZH = {
   'Pin another stop': '再固定一个车站',
   'Tap the star on a stop in Nearby or on its page to keep it here.': '在附近或车站页面点星标，就能把它固定在这里。',
   'Tap one to see its whole line.': '点一条线路，查看它经过的所有车站。',
-  'Another stop, or a whole line': '其他车站或整条线路',
-  'Search, pinned stops and services are in Stops.': '搜索、已固定的车站和线路都在“车站”里。',
   'Search a stop or service': '搜索车站或线路',
   'No stop or service by that name': '没有叫这个名字的车站或线路',
   'Loop from {0}': '{0} 环线',

@@ -33,10 +33,9 @@ import { Card, InSky, Message, Report, Say, isStale, signal } from '/account/pre
 import { Celestial, Horizon, useNowSky, useSkyPhase } from '/account/sky.js';
 import { Toast, campus, lists, loadCampus, loadProfile, profile, reloadProfile, toast, walkSpeed } from '/account/profile.js';
 import { SearchBox } from '/account/search-box.js';
-// Loaded with the page (its icons are used here too) so that the Stops and Map
-// tabs, which both import it, don't depend on it arriving later (a failed import
-// can't be retried at the same address; loadTab's retry renews only the tab's file).
-import { NEXT } from '/app/board.js';
+// sign.js brings board.js with the page, so that the Stops and Map tabs, which
+// both import it, don't depend on it arriving later (a failed import can't be
+// retried at the same address; loadTab's retry renews only the tab's file).
 import { StopSign, anyGuess } from '/app/sign.js';
 import { offlineNext } from '/app/offline.js';
 import { preloadMap } from '/app/map-files.js';
@@ -994,7 +993,7 @@ function OfflineCard({ item, step }) {
   `;
 }
 
-/** A bus stop's sign on its pole: the Stops tab, and Nearby's way to it. */
+/** A bus stop's sign on its pole: the Stops tab's icon. */
 const STOP_SIGN = '<rect x="6" y="2.5" width="12" height="9.5" rx="2.5"/><path d="M12 12v9.5M9 21.5h6M9.5 7.25h5"/>';
 
 /**
@@ -1039,11 +1038,6 @@ function NearbyCard({ stops }) {
         />`,
       )}
       <${NearbyFoot} stops=${stops} />
-      <button type="button" class="to-stops" onClick=${() => (location.hash = '#buses')}>
-        <${Icon} paths=${STOP_SIGN} class="to-stops-icon" />
-        <span><b>${t('Another stop, or a whole line')}</b><span>${t('Search, pinned stops and services are in Stops.')}</span></span>
-        <${Icon} paths=${NEXT} class="to-stops-go" />
-      </button>
     </div>
   `;
 }
