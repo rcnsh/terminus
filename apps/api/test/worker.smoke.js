@@ -585,13 +585,18 @@ test('/api/line: a service’s stops in order, its buses on them, and with a sto
   assert.equal(map.stretch.last.code, 'YIH-OPP');
   assert.deepEqual([bus.at, body.stops[bus.after].code], [null, 'YIH-OPP']);
   assert.equal(fetchImpl.counts.shuttle, 2, 'one buses read (cached for /buses after) and one arrivals read');
+  // Its count as /api/lines words it, so the list of services can match the page.
+  assert.deepEqual(body.out, { out: 1, outText: '1 out', stale: false });
 
   // Without a stop: no `stop`, and no arrivals read.
   const plain = makeFetch({ buses: { D1: [] } });
   const bare = await (await call('/api/line?svc=D1', { fetchImpl: plain })).res.json();
   assert.equal('stop' in bare, false);
   assert.deepEqual(bare.buses, []);
+  assert.deepEqual(bare.out, { out: 0, outText: 'None out', stale: false });
   assert.equal(plain.counts.shuttle, 1);
+  const down = await (await call('/api/line?svc=D1', { fetchImpl: makeFetch({ fail: true }) })).res.json();
+  assert.deepEqual([down.available, down.out], [false, null], 'no count when the feed was not reached');
 });
 
 test('/api/line says whether the service is running, and its row at the stop comes even when it is not', async () => {

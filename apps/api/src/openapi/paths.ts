@@ -353,6 +353,7 @@ export function paths(): Record<string, unknown> {
                     { id: '3f9a1c0b7e21', plate: 'PD418C', crowd: 'low', at: 6, after: null },
                     { id: '9be0d4a1c377', plate: 'PD562E', crowd: null, at: null, after: 1 },
                   ],
+                  out: { out: 2, outText: '2 out', stale: false },
                   stop: {
                     code: 'YIH',
                     index: 8,
@@ -405,15 +406,7 @@ export function paths(): Record<string, unknown> {
                 lines: {
                   type: 'object',
                   description: 'Keyed by service code.',
-                  additionalProperties: {
-                    type: ['object', 'null'],
-                    required: ['out', 'outText', 'stale'],
-                    properties: {
-                      out: { type: 'integer', description: 'Buses on the road now.' },
-                      outText: { type: 'string', description: '"3 out", "None out" (Chinese "3 辆在路上", "暂无巴士").' },
-                      stale: { type: 'boolean', description: 'The feed did not answer just now; this is how many there were last time.' },
-                    },
-                  },
+                  additionalProperties: { oneOf: [{ $ref: '#/components/schemas/LineOut' }, { type: 'null' }] },
                 },
                 asOf: { type: 'string', format: 'date-time' },
               },

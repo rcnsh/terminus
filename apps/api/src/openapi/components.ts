@@ -545,9 +545,18 @@ export function components(): Record<string, unknown> {
           },
         },
       },
+      LineOut: {
+        type: 'object',
+        required: ['out', 'outText', 'stale'],
+        properties: {
+          out: { type: 'integer', description: 'Buses on the road now.' },
+          outText: { type: 'string', description: '"3 out", "None out" (Chinese "3 辆在路上", "暂无巴士").' },
+          stale: { type: 'boolean', description: 'The feed did not answer just now; this is how many there were last time.' },
+        },
+      },
       Line: {
         type: 'object',
-        required: ['svc', 'color', 'endsAt', 'running', 'stopped', 'resumesAt', 'stops', 'buses', 'available', 'asOf'],
+        required: ['svc', 'color', 'endsAt', 'running', 'stopped', 'resumesAt', 'stops', 'buses', 'out', 'available', 'asOf'],
         properties: {
           svc: { type: 'string' },
           color: { type: ['string', 'null'] },
@@ -619,6 +628,11 @@ export function components(): Record<string, unknown> {
                   'The service’s row on the stop’s board, as `/api/arrivals?stopped=1` gives it: a service outside its hours has a row with `running: false`.',
               },
             },
+          },
+          out: {
+            oneOf: [{ $ref: '#/components/schemas/LineOut' }, { type: 'null' }],
+            description:
+              'Its buses out, as its entry on `/api/lines`, so a list of services can show the count this page shows. Null when the live feed could not be reached.',
           },
           available: { type: 'boolean', description: 'False when the live feed could not be reached.' },
           asOf: {
