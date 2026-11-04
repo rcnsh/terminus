@@ -257,6 +257,11 @@ async function handleBuses(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
   );
 }
 
+/** A service's buses out, worded: /api/lines's entry, and /api/line's `out`, so the list can match a page just opened. */
+function lineOut(out: number, stale: boolean): { out: number; outText: string; stale: boolean } {
+  return { out, outText: out ? m().busesOut(out) : m().noneOut, stale };
+}
+
 /**
  * GET /api/lines -- how many of each service's buses are out now, worded, for
  * the list of lines on the Stops tab. The one read of every service at once:
@@ -271,8 +276,7 @@ async function handleLines(env: Env, ctx: ExecutionContext, nowMs: number): Prom
     svcs.map(async (svc) => {
       const live = await getBuses(env, ctx, svc, nowMs).catch(() => null);
       if (!live) return [svc, null] as const;
-      const out = (await trackedBuses(GRAPH, svc, live, ctx)).length;
-      return [svc, { out, outText: out ? m().busesOut(out) : m().noneOut, stale: Boolean(live.stale) }] as const;
+      return [svc, lineOut((await trackedBuses(GRAPH, svc, live, ctx)).length, Boolean(live.stale))] as const;
     }),
   );
   return json({ lines: Object.fromEntries(got), asOf: new Date(nowMs).toISOString() }, 200, { 'cache-control': 'private, max-age=30' });
@@ -317,6 +321,8 @@ async function handleLine(url: URL, env: Env, ctx: ExecutionContext, nowMs: numb
       resumesAt: resumes === null ? null : new Date(resumes).toISOString(),
       stops: lineStops(idx, svc),
       buses: busesOnLine(route.seq, route.loop, placed),
+      // Counted as /api/lines counts, and fresher than the list's minute-old copy.
+      out: live ? lineOut(placed.length, Boolean(live.stale)) : null,
       ...(code
         ? { stop: { code, index, row: boardAt(GRAPH, idx, code, sa, nowMs, { stopped: true }).find((r) => r.svc === svc) ?? null } }
         : {}),
