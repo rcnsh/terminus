@@ -38,8 +38,11 @@ final class BusesModel {
     /// The page showing on the home: a pinned stop, or BusPinned.addPage; nil, the first.
     /// Kept while the app runs, so coming back to the tab finds the same stop.
     var pinSelected: String?
-    /// Each service's buses out (/api/lines); a service left out says nothing.
+    /// Each service's buses out (/api/lines, or a newer count from its page); a service left out says nothing.
     private(set) var lineCounts: [String: LineCount] = [:]
+    private var outs = BusOuts() {
+        didSet { lineCounts = outs.shown }
+    }
     /// When they were last asked for: at most once every BusLines.pollS.
     private(set) var linesAskedAt: Date?
 
@@ -98,7 +101,7 @@ final class BusesModel {
         pinnedMissing = []
         pinnedGot = [:]
         pinSelected = nil
-        lineCounts = [:]
+        outs = BusOuts()
         linesAskedAt = nil
         pins = []
         pinsState = .loading
@@ -323,13 +326,13 @@ final class BusesModel {
         linesAskedAt = Date()
         let s = AppModel.shared.session
         do {
-            let counts = try await Api(token: token).lineCounts()
+            let (counts, asOf) = try await Api(token: token).lineCounts()
             guard current(s) else { return }
-            lineCounts = counts
+            outs = outs.listed(counts, asOf: asOf ?? ServerClock.now)
         } catch {
             guard current(s) else { return }
             if refused(error, token) { return }
-            lineCounts = [:]
+            outs = outs.listed([:], asOf: .distantPast)
         }
     }
 
@@ -353,23 +356,28 @@ final class BusesModel {
             do {
                 let l = try await api.line(svc: svc, stop: from)
                 guard current(s) else { return }
-                lines[key] = l
-                answeredAt["line:" + key] = Date()
-                lineFailed.remove(key)
+                got(key, l)
             } catch {
                 guard current(s) else { return }
                 if refused(error, token) { return }
                 // The stop isn't on this service: the line without it.
                 if from != nil, let e = error as? ApiError, e.status == 400, let l = try? await api.line(svc: svc) {
                     guard current(s) else { return }
-                    lines[key] = l
-                    answeredAt["line:" + key] = Date()
-                    lineFailed.remove(key)
+                    got(key, l)
                     return
                 }
                 lineFailed.insert(key)
             }
         }
+    }
+
+    /// A line come in: shown, and its count taken into the list of lines, which is older (BusOuts).
+    private func got(_ key: String, _ l: Line) {
+        lines[key] = l
+        answeredAt["line:" + key] = Date()
+        lineFailed.remove(key)
+        // When it came: the line's asOf can be pulled back by an old stop row.
+        outs = outs.paged(l.svc, l.out, at: l.got ?? ServerClock.now)
     }
 
     // MARK: pulled down

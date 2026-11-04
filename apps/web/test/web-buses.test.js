@@ -171,6 +171,44 @@ test("the lines' counts are asked for at most once a minute, however often the h
   }
 });
 
+test("a service's page brings the list its newer count, and an older list doesn't put the old one back", async (t) => {
+  // Well after the last test's asks, which set when the list may ask again.
+  const start = Date.now() + 3_600_000;
+  t.mock.timers.enable({ apis: ['Date'], now: start });
+  const realFetch = globalThis.fetch;
+  const at = (s) => new Date(start + s * 1000).toISOString();
+  const json = (body) => new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
+  const one = { out: 1, outText: '1 out', stale: false };
+  const none = { out: 0, outText: 'None out', stale: false };
+  try {
+    // The list counted K's last bus a moment before it left the feed.
+    globalThis.fetch = async () => json({ lines: { K: one, D1: one }, asOf: at(0) });
+    await B.loadOuts();
+    assert.deepEqual(B.outs.get().K, one);
+    // K's page, opened later, has none out: the list says so too, even when the page's asOf is pulled back by an old stop row.
+    t.mock.timers.tick(30_000);
+    globalThis.fetch = async () => json({ svc: 'K', stops: [], buses: [], out: none, asOf: at(-120) });
+    await B.loadLine('K', null);
+    assert.deepEqual(B.outs.get(), { K: none, D1: one });
+    // A list counted before the page (a kept copy) keeps the page's count; a newer one wins.
+    globalThis.fetch = async () => json({ lines: { K: one, D1: one }, asOf: at(10) });
+    t.mock.timers.tick(60_000);
+    await B.loadOuts();
+    assert.deepEqual(B.outs.get(), { K: none, D1: one });
+    globalThis.fetch = async () => json({ lines: { K: one, D1: none }, asOf: at(50) });
+    t.mock.timers.tick(60_000);
+    await B.loadOuts();
+    assert.deepEqual(B.outs.get(), { K: one, D1: none });
+    // An older server's page, with no count, leaves the list as it is.
+    globalThis.fetch = async () => json({ svc: 'D1', stops: [], buses: [{ id: 'x' }], asOf: at(55) });
+    await B.loadLine('D1', null);
+    assert.deepEqual(B.outs.get().D1, none);
+  } finally {
+    globalThis.fetch = realFetch;
+    B.line.set(null);
+  }
+});
+
 test('the stop across the road: from its board, else the campus map; the board shown is that one when asked', () => {
   B.boards.set(new Map());
   B.across.set(new Set());

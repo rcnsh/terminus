@@ -324,6 +324,28 @@ class BusesTest {
     }
 
     @Test
+    fun aServicesPageBringsTheListItsNewerCountAndAnOlderListKeepsIt() {
+        val one = LineOut(1, "1 out", false)
+        val none = LineOut(0, "None out", false)
+        // The page's own count, as /api/line gives it; none from an older server.
+        val line =
+            Line.parse(JSONObject("""{"svc": "K", "stops": [], "buses": [], "out": {"out": 0, "outText": "None out", "stale": false}}"""))
+        assertEquals(none, line.out)
+        assertNull(Line.parse(JSONObject("""{"svc": "K", "stops": [], "buses": []}""")).out)
+        // The list counted K's last bus a moment before it left the feed; K's page, later, has none out.
+        var outs = Outs().listed(mapOf("K" to one, "D1" to one), 1_000L)
+        outs = outs.paged("K", line.out, 31_000L)
+        assertEquals(mapOf("K" to none, "D1" to one), outs.shown)
+        // A list counted before the page keeps the page's count; a newer one wins.
+        assertEquals(mapOf("K" to none, "D1" to one), outs.listed(mapOf("K" to one, "D1" to one), 11_000L).shown)
+        assertEquals(mapOf("K" to one, "D1" to none), outs.listed(mapOf("K" to one, "D1" to none), 51_000L).shown)
+        // An older answer for the page changes nothing; no count, nothing; no list, nothing shown.
+        assertEquals(outs, outs.paged("K", one, 21_000L))
+        assertEquals(outs, outs.paged("K", null, 41_000L))
+        assertEquals(emptyMap<String, LineOut?>(), outs.listed(emptyMap(), 0).shown)
+    }
+
+    @Test
     fun aLineIsNamedAndSaidAsTheServerWordsIt() {
         val routes =
             CampusMap.serviceRoutes(

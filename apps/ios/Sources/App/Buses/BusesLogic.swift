@@ -102,6 +102,40 @@ struct BusPinnedResult: Equatable {
     }
 }
 
+/// The list of lines' counts: /api/lines's (`list`, counted at `listAsOf`),
+/// with a newer count from a service's own page in its place (`pages`), so
+/// going back from a page never shows an older count than the page did.
+struct BusOuts: Equatable {
+    struct Page: Equatable {
+        let at: Date
+        let count: LineCount
+    }
+    private(set) var list: [String: LineCount] = [:]
+    private(set) var listAsOf = Date.distantPast
+    private(set) var pages: [String: Page] = [:]
+
+    /// By service, as the list shows them; nothing while the list itself has none.
+    var shown: [String: LineCount] {
+        guard !list.isEmpty else { return list }
+        return list.merging(pages.filter { $0.value.at > listAsOf }.mapValues(\.count)) { $1 }
+    }
+
+    func listed(_ counts: [String: LineCount], asOf: Date) -> BusOuts {
+        var o = self
+        o.list = counts
+        o.listAsOf = asOf
+        return o
+    }
+
+    /// `svc`'s page counted `count` at `at`; an answer older than the one kept changes nothing.
+    func paged(_ svc: String, _ count: LineCount?, at: Date) -> BusOuts {
+        guard let count, pages[svc].map({ $0.at <= at }) ?? true else { return self }
+        var o = self
+        o.pages[svc] = Page(at: at, count: count)
+        return o
+    }
+}
+
 /// The list of lines: each one's name, where it goes, and its buses out.
 enum BusLines {
     /// /api/lines reads every service from NUS: at most once a minute.

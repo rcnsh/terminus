@@ -104,6 +104,27 @@ final class BusesTests: XCTestCase {
         XCTAssertEqual(stop.aged(got: nil, now: got.addingTimeInterval(600)).board[0].etaS, 240)
     }
 
+    func testAServicesPageBringsTheListItsNewerCountAndAnOlderListKeepsIt() throws {
+        let one = LineCount(out: 1, outText: "1 out")
+        let none = LineCount(out: 0, outText: "None out")
+        // The page's own count, as /api/line gives it; none from an older server.
+        let page = #"{"svc": "K", "stops": [], "buses": [], "out": {"out": 0, "outText": "None out", "stale": false}}"#
+        let line = try JSONDecoder().decode(Line.self, from: Data(page.utf8))
+        XCTAssertEqual(line.out, none)
+        XCTAssertNil(try JSONDecoder().decode(Line.self, from: Data(#"{"svc": "K", "stops": [], "buses": []}"#.utf8)).out)
+        let t = { (s: TimeInterval) in Date(timeIntervalSince1970: 1_000_000 + s) }
+        // The list counted K's last bus a moment before it left the feed; K's page, later, has none out.
+        let outs = BusOuts().listed(["K": one, "D1": one], asOf: t(0)).paged("K", line.out, at: t(30))
+        XCTAssertEqual(outs.shown, ["K": none, "D1": one])
+        // A list counted before the page keeps the page's count; a newer one wins.
+        XCTAssertEqual(outs.listed(["K": one, "D1": one], asOf: t(10)).shown, ["K": none, "D1": one])
+        XCTAssertEqual(outs.listed(["K": one, "D1": none], asOf: t(50)).shown, ["K": one, "D1": none])
+        // An older answer for the page changes nothing; no count, nothing; no list, nothing shown.
+        XCTAssertEqual(outs.paged("K", one, at: t(20)), outs)
+        XCTAssertEqual(outs.paged("K", nil, at: t(40)), outs)
+        XCTAssertEqual(outs.listed([:], asOf: .distantPast).shown, [:])
+    }
+
     func testTheLiveDotIsOnlyForAFreshCountOfBusesOut() {
         XCTAssertTrue(BusLines.showsDot(LineCount(out: 3, outText: "3 out")))
         XCTAssertFalse(BusLines.showsDot(LineCount(out: 3, outText: "3 out", stale: true)))

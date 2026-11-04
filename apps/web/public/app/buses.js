@@ -200,13 +200,21 @@ function freshenSigns() {
 
 /** When /api/lines was last asked (Date.now()), however the tab came and went: never sooner than LINES_MS after. */
 let linesAt = 0;
+/** Counts taken from a service's own page (/api/line's `out`), by service: { at (when it came, on the server's clock), out }. */
+const pageOuts = new Map();
+/** When the list's counts were made (its asOf). */
+let listAt = 0;
 /** How many of each service's buses are out, unless asked within LINES_MS. A failure keeps the counts there. */
 export async function loadOuts() {
   if (Date.now() - linesAt < LINES_MS) return;
   linesAt = Date.now();
   try {
     const data = await getJSON('/api/lines');
-    outs.set(data.lines ?? {});
+    const lines = { ...data.lines };
+    // A page opened since this list was counted knows better: the list shows what that page did.
+    listAt = asOfMs(data);
+    for (const [svc, p] of pageOuts) if (p.at > listAt) lines[svc] = p.out;
+    outs.set(lines);
   } catch {
     // Counts that can't be brought up to date aren't shown: nothing, as for a feed that didn't answer.
     outs.set(null);
@@ -222,12 +230,23 @@ export async function loadLine(svc, stop) {
   try {
     const data = await getJSON(`/api/line?svc=${encodeURIComponent(svc)}${stop ? `&stop=${encodeURIComponent(stop)}` : ''}`);
     if (lineKey() === key && !newer()) line.set({ key, data, at: Date.now(), got: serverNow(), asOf: asOfMs(data) });
+    takeOut(svc, data);
   } catch (err) {
     if (err.message === 'signed out' || lineKey() !== key || newer()) return;
     const was = line.get()?.key === key ? line.get() : null;
     const error = err.status === 400 ? t('No line to show for {0}.', svc) : failedWords(Boolean(was?.data));
     line.set({ ...was, key, error });
   }
+}
+/**
+ * The list of lines shows the count a service's page just got, not its own older one: the two never disagree on going back. Dated by
+ * when it came, not the page's asOf, which an old stop row can pull back.
+ */
+function takeOut(svc, data) {
+  if (!data?.out) return;
+  const at = serverNow();
+  pageOuts.set(svc, { at, out: data.out });
+  if (outs.get() && at > listAt) outs.set({ ...outs.get(), [svc]: data.out });
 }
 const lineKey = () => {
   const r = route.get();

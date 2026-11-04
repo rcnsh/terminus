@@ -16,11 +16,15 @@ extension Api {
         return try JSONDecoder().decode(R.self, from: await send("GET", "/api/me/stops", query: q)).stops
     }
 
-    /// `/api/lines`: how many of each service's buses are out, by service; a
-    /// service the feed didn't answer for is left out.
-    func lineCounts() async throws -> [String: LineCount] {
-        struct R: Decodable { let lines: [String: Lossy<LineCount>] }
-        return try JSONDecoder().decode(R.self, from: await send("GET", "/api/lines")).lines.compactMapValues(\.value)
+    /// `/api/lines`: how many of each service's buses are out, by service (a
+    /// service the feed didn't answer for is left out), and when they were counted.
+    func lineCounts() async throws -> (counts: [String: LineCount], asOf: Date?) {
+        struct R: Decodable {
+            let lines: [String: Lossy<LineCount>]
+            let asOf: String?
+        }
+        let r = try JSONDecoder().decode(R.self, from: await send("GET", "/api/lines"))
+        return (r.lines.compactMapValues(\.value), r.asOf.flatMap(parseISODate))
     }
 }
 
