@@ -86,8 +86,8 @@ final class NowUITests: XCTestCase {
             app.buttons.matching(NSPredicate(format: "identifier == %@ AND label BEGINSWITH 'Unpin '", "star-\(code)")).firstMatch
                 .waitForExistence(timeout: 5))
         shot("now-nearby", app)
-        let link = app.buttons["nearbyStops"]
-        reveal(link, in: app)
+        let foot = app.descendants(matching: .any)["nearbyFoot"]
+        reveal(foot, in: app)
         shot("now-nearby-down", app)
         // The plate: the stop's board on Stops, over its home.
         app.swipeDown()
@@ -109,12 +109,6 @@ final class NowUITests: XCTestCase {
         XCTAssertTrue(app.buttons["line-show-on-map"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Your stop"].waitForExistence(timeout: 10))
         shot("now-nearby-line", app)
-        // The row under the signs: the Stops home.
-        app.tabBars.buttons["Now"].tap()
-        reveal(link, in: app)
-        link.tap()
-        XCTAssertTrue(app.buttons["service-A1"].waitForExistence(timeout: 10))
-        XCTAssertFalse(app.buttons["line-show-on-map"].exists)
     }
 
     func testNearbyDark() {
@@ -125,7 +119,7 @@ final class NowUITests: XCTestCase {
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'nearby.'")).firstMatch.waitForExistence(timeout: 15))
         sleep(1)
         shot("now-nearby-dark", app)
-        reveal(app.buttons["nearbyStops"], in: app)
+        reveal(app.descendants(matching: .any)["nearbyFoot"], in: app)
         shot("now-nearby-down-dark", app)
     }
 

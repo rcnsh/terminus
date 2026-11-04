@@ -678,8 +678,6 @@
     <string name="buses_from_to">%1$s 至 %2$s</string>
     <string name="buses_pin_stop">固定 %1$s</string>
     <string name="buses_unpin_stop">取消固定 %1$s</string>
-    <string name="nearby_more_title">其他车站或整条线路</string>
-    <string name="nearby_more_text">搜索、已固定的车站和线路都在“车站”里。</string>
     <string name="nearby_then_bus">之后</string>
     <string name="nearby_after_bus">再之后</string>
     <string name="nearby_to">开往 %1$s</string>

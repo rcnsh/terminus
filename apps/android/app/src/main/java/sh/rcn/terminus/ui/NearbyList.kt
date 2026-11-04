@@ -1,7 +1,6 @@
 package sh.rcn.terminus.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,7 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,10 +23,8 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -54,8 +50,8 @@ import sh.rcn.terminus.R
 import sh.rcn.terminus.parseColor
 
 /**
- * What Nearby's taps do: a stop's name opens its board and a row its line, on the Stops tab, where the last row goes too; the star pins the
- * stop there, up to [pinLimit].
+ * What Nearby's taps do: a stop's name opens its board and a row its line, on the Stops tab; the star pins the stop there, up to
+ * [pinLimit].
  */
 internal class NearbyActions(
     val pins: List<String>,
@@ -65,13 +61,11 @@ internal class NearbyActions(
     val onPin: (String) -> Unit,
     val openStop: (String) -> Unit,
     val openLine: (svc: String, stop: String) -> Unit,
-    val openStops: () -> Unit,
 )
 
 /**
  * The stops near you as their signs: the name plate with the walk there and the star, then a row per service read like a stop's board:
- * where it's going and its next three buses (Next, Then, After), in minutes. The next bus is drawn large. Under them, what a "~" means, and
- * the way to the Stops tab, for any other stop.
+ * where it's going and its next three buses (Next, Then, After), in minutes. The next bus is drawn large. Under them, what a "~" means.
  */
 @Composable
 internal fun NearbyList(stops: List<NearbyStop>?, loading: Boolean, act: NearbyActions) {
@@ -92,7 +86,6 @@ internal fun NearbyList(stops: List<NearbyStop>?, loading: Boolean, act: NearbyA
                 lineHeight = 18.sp,
             )
         }
-        ToStops(act.openStops)
     }
 }
 
@@ -355,30 +348,6 @@ private fun timeText(
             append(cell.figure)
             if (cell.after.isNotEmpty()) withStyle(small) { append(cell.after) }
         }
-    }
-}
-
-/** Under the last sign: any other stop, or a service's whole line, is on the Stops tab. */
-@Composable
-private fun ToStops(onClick: () -> Unit) {
-    val c = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(16.dp)
-    Row(
-        Modifier.fillMaxWidth()
-            .clip(shape)
-            .background(c.surface)
-            .border(1.dp, c.outlineVariant, shape)
-            .clickable(role = Role.Button, onClick = onClick)
-            .padding(start = 14.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Icon(painterResource(R.drawable.ic_tab_buses), contentDescription = null, tint = c.primary, modifier = Modifier.size(24.dp))
-        Column(Modifier.weight(1f)) {
-            Text(stringResource(R.string.nearby_more_title), fontWeight = FontWeight.SemiBold)
-            Text(stringResource(R.string.nearby_more_text), style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant)
-        }
-        Icon(painterResource(R.drawable.ic_chevron), contentDescription = null, tint = c.onSurfaceVariant, modifier = Modifier.size(20.dp))
     }
 }
 
