@@ -86,6 +86,8 @@ data class Line(
     val resumesAtMs: Long? = null,
     /** When this phone got the line, on the server's clock; null: not known. See [BusTimes.aged]. */
     val gotMs: Long? = null,
+    /** Its buses out, as /api/lines words them, for the list of lines ([Outs]); null from an older server or with no feed. */
+    val out: LineOut? = null,
 ) {
     /** The line as it stands at [nowMs]: your stop's row [BusTimes.aged]. */
     fun aged(nowMs: Long): Line =
@@ -145,6 +147,7 @@ data class Line(
                 running = o.optBoolean("running", true),
                 stopped = o.optStringOrNull("stopped")?.takeIf { it in STOPPED },
                 resumesAtMs = o.optStringOrNull("resumesAt")?.let(::parseInstant),
+                out = LineOut.of(o.optJSONObject("out")),
             )
         }
     }
@@ -348,13 +351,33 @@ data class LineOut(val out: Int, val outText: String, val stale: Boolean) {
         /** By service; null for one whose live feed couldn't be reached, which isn't the same as none out. */
         fun parse(o: JSONObject): Map<String, LineOut?> {
             val lines = o.optJSONObject("lines") ?: return emptyMap()
-            return lines.keys().asSequence().associateWith { svc ->
-                lines.optJSONObject(svc)?.let { x ->
-                    x.optStringOrNull("outText")?.ifEmpty { null }?.let { LineOut(x.optInt("out"), it, x.optBoolean("stale")) }
-                }
-            }
+            return lines.keys().asSequence().associateWith { svc -> of(lines.optJSONObject(svc)) }
         }
+
+        /** One service's entry, as /api/lines and /api/line (`out`) give it. */
+        fun of(x: JSONObject?): LineOut? =
+            x?.optStringOrNull("outText")?.ifEmpty { null }?.let { LineOut(x.optInt("out"), it, x.optBoolean("stale")) }
     }
+}
+
+/**
+ * The list of lines' counts: /api/lines's ([list], counted at [listAsOfMs]), with a newer count from a service's own page in its place
+ * ([pages]: when it was counted, and the count), so going back from a page never shows an older count than the page did.
+ */
+data class Outs(
+    val list: Map<String, LineOut?> = emptyMap(),
+    val listAsOfMs: Long = 0,
+    val pages: Map<String, Pair<Long, LineOut>> = emptyMap(),
+) {
+    /** By service, as the list shows them; nothing while the list itself has none. */
+    val shown: Map<String, LineOut?>
+        get() = if (list.isEmpty()) list else list + pages.filterValues { it.first > listAsOfMs }.mapValues { it.value.second }
+
+    fun listed(lines: Map<String, LineOut?>, asOfMs: Long) = copy(list = lines, listAsOfMs = asOfMs)
+
+    /** [svc]'s page counted [out] at [asOfMs]; an answer older than the one kept changes nothing. */
+    fun paged(svc: String, out: LineOut?, asOfMs: Long): Outs =
+        if (out == null || (pages[svc]?.first ?: Long.MIN_VALUE) > asOfMs) this else copy(pages = pages + (svc to (asOfMs to out)))
 }
 
 /**

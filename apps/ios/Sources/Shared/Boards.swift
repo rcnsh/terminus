@@ -266,12 +266,15 @@ struct Line: Decodable, Sendable {
     let running: Bool
     let stopped: String?
     let resumesAt: String?
+    /// Its buses out, as /api/lines words them, for the list of lines (BusOuts);
+    /// nil from an older server or with no feed.
+    let out: LineCount?
     var got: Date? = nil
 
     enum CodingKeys: String, CodingKey {
         case svc, color, endsAt, stops, buses
         case here = "stop"
-        case available, asOf, running, stopped, resumesAt
+        case available, asOf, running, stopped, resumesAt, out
     }
 
     init(from d: Decoder) throws {
@@ -292,6 +295,7 @@ struct Line: Decodable, Sendable {
         running = c.bool(.running) ?? true
         stopped = c.string(.stopped)
         resumesAt = c.string(.resumesAt)
+        out = (try? c.decodeIfPresent(LineCount.self, forKey: .out)).flatMap { $0 }
     }
 
     func aged(_ now: Date) -> Line {

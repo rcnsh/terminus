@@ -22,6 +22,7 @@ import sh.rcn.terminus.LineOut
 import sh.rcn.terminus.LinesPoll
 import sh.rcn.terminus.Locator
 import sh.rcn.terminus.MapFiles
+import sh.rcn.terminus.Outs
 import sh.rcn.terminus.PinPages
 import sh.rcn.terminus.PinnedStop
 import sh.rcn.terminus.Pull
@@ -55,13 +56,16 @@ data class BusesUi(
     /** Pinned stops that couldn't be fetched (offline), until one is. */
     val pinFailed: Set<String> = emptySet(),
     /** Each service's buses out, for the list of lines; empty until /api/lines answers. */
-    val out: Map<String, LineOut?> = emptyMap(),
+    val outs: Outs = Outs(),
     /** Lines by [lineKey]. */
     val lines: Map<String, Line> = emptyMap(),
     val lineFailed: Set<String> = emptySet(),
     /** The pages opened over the home, the top one last. */
     val stack: List<BusRoute> = emptyList(),
-)
+) {
+    /** [outs] as the list shows them, merged once. */
+    val out: Map<String, LineOut?> = outs.shown
+}
 
 fun lineKey(svc: String, from: String?) = "$svc|${from.orEmpty()}"
 
@@ -311,13 +315,13 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
         val token = store.token ?: return
         linesAskedAt = System.currentTimeMillis()
         try {
-            val out = api(token).lines()
-            _state.update { it.copy(out = out) }
+            val (lines, asOfMs) = api(token).lines()
+            _state.update { it.copy(outs = it.outs.listed(lines, asOfMs ?: ServerClock.now())) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             if (refused(e, token)) return
-            _state.update { it.copy(out = emptyMap()) }
+            _state.update { it.copy(outs = it.outs.listed(emptyMap(), 0)) }
         }
     }
 
@@ -338,9 +342,7 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
 
     private suspend fun line(token: String, svc: String, from: String?, key: String) {
         try {
-            val line = api(token).line(svc, from).copy(gotMs = ServerClock.now())
-            answered("line:$key")
-            _state.update { it.copy(lines = it.lines + (key to line), lineFailed = it.lineFailed - key) }
+            got(key, svc, api(token).line(svc, from).copy(gotMs = ServerClock.now()))
         } catch (e: CancellationException) {
             throw e
         } catch (e: ApiError) {
@@ -348,9 +350,7 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
             // The stop isn't on this service (a 400): the line without it; worked out here for an older server.
             if (from != null && e.status == 400) {
                 try {
-                    val line = api(token).line(svc).copy(gotMs = ServerClock.now())
-                    answered("line:$key")
-                    _state.update { it.copy(lines = it.lines + (key to line), lineFailed = it.lineFailed - key) }
+                    got(key, svc, api(token).line(svc).copy(gotMs = ServerClock.now()))
                     return
                 } catch (e: CancellationException) {
                     throw e
@@ -359,6 +359,19 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
             _state.update { it.copy(lineFailed = it.lineFailed + key) }
         } catch (e: Exception) {
             _state.update { it.copy(lineFailed = it.lineFailed + key) }
+        }
+    }
+
+    /** A line come in: shown, and its count taken into the list of lines, which is older ([Outs]). */
+    private fun got(key: String, svc: String, line: Line) {
+        answered("line:$key")
+        _state.update {
+            it.copy(
+                lines = it.lines + (key to line),
+                lineFailed = it.lineFailed - key,
+                // When it came: the line's asOf can be pulled back by an old stop row.
+                outs = it.outs.paged(svc, line.out, line.gotMs ?: ServerClock.now()),
+            )
         }
     }
 

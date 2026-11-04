@@ -1046,8 +1046,10 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         return parseNearby(json) to json.optStringOrNull("asOf")?.let(::parseInstant)
     }
 
-    /** How many buses each service has out (/api/lines), for the Stops tab's list of lines. */
-    suspend fun lines(): Map<String, LineOut?> = parsing { LineOut.parse(request("GET", "/api/lines")) }
+    /** How many buses each service has out (/api/lines), for the Stops tab's list of lines, and when they were counted. */
+    suspend fun lines(): Pair<Map<String, LineOut?>, Long?> = parsing {
+        request("GET", "/api/lines").let { LineOut.parse(it) to it.optStringOrNull("asOf")?.let(::parseInstant) }
+    }
 
     suspend fun destinations(): List<Destination> {
         val o = request("GET", "/api/campus")
