@@ -653,7 +653,6 @@
     <string name="buses_svc_runs_until">%1$s 运行到 %2$s</string>
     <string name="buses_updated_s">%1$d 秒前更新</string>
     <string name="buses_updated_min">%1$d 分钟前更新</string>
-    <string name="buses_tap_hint">点一条线路，查看它经过的每个车站。</string>
     <string name="buses_one_running">1 辆巴士在运行</string>
     <string name="buses_n_running">%1$d 辆巴士在运行</string>
     <string name="buses_none_running">没有巴士在运行</string>

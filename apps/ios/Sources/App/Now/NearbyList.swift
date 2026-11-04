@@ -6,7 +6,7 @@ import SwiftUI
 /// large. Every sign has the same columns, each as wide as its widest value
 /// on any of them, so the figures line up down the page. The plate opens the
 /// stop's board on the Stops tab, a row its service's line from there; under
-/// the signs, what a "~" means, and a way to any other stop or line. As Android's NearbyList and the web app (NearbyCells has the words).
+/// the signs, what a "~" means, while one is showing. As Android's NearbyList and the web app (NearbyCells has the words).
 struct NearbyList: View {
     @Environment(AppModel.self) private var app
 
@@ -24,16 +24,14 @@ struct NearbyList: View {
                             app.showInBuses([.line(svc: svc, from: code)])
                         }
                     }
-                    if !stops.isEmpty {
-                        VStack(alignment: .leading, spacing: 2) {
-                            ForEach(NearbyCells.foot(cells.flatMap { $0 }), id: \.self) { Text($0) }
-                        }
-                        .font(.footnote)
-                        .foregroundStyle(Color.muted)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 6)
-                        .accessibilityElement(children: .combine)
-                        .accessibilityIdentifier("nearbyFoot")
+                    if let foot = NearbyCells.foot(cells.flatMap { $0 }) {
+                        Text(foot)
+                            .font(.footnote)
+                            .foregroundStyle(Color.muted)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 6)
+                            .accessibilityElement(children: .combine)
+                            .accessibilityIdentifier("nearbyFoot")
                     }
                 }
             }

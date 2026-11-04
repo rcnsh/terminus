@@ -1268,13 +1268,6 @@ private fun Foot(board: Board) {
             }
         }
     }
-    if (board.rows.any { !it.paid })
-        Text(
-            stringResource(R.string.buses_tap_hint),
-            style = MaterialTheme.typography.bodySmall,
-            color = muted,
-            modifier = Modifier.padding(top = 10.dp, start = 4.dp),
-        )
 }
 
 /** "Updated just now" for the first few seconds, as the web app says, never "0 s ago". */

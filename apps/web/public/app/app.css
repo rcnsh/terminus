@@ -348,7 +348,6 @@ button.bt-row:focus-visible { outline-offset: -2px; }
 .bt-ends > div { display: flex; align-items: center; gap: 6px; }
 .bt-status { display: grid; gap: 2px; margin-left: auto; text-align: right; }
 .bt-error { color: var(--warn-ink); }
-.bt-hint { margin-top: 6px; padding: 0 6px; font-size: 0.78rem; color: var(--muted); }
 .bt-empty { padding: 28px 4px; text-align: center; }
 
 /* A page of its own (a stop, a line): Back to where it came from. */
