@@ -656,7 +656,6 @@
     <string name="buses_svc_runs_until">%1$s runs until %2$s</string>
     <string name="buses_updated_s">Updated %1$d s ago</string>
     <string name="buses_updated_min">Updated %1$d min ago</string>
-    <string name="buses_tap_hint">Tap a service to see its whole line.</string>
     <string name="buses_one_running">1 bus running</string>
     <string name="buses_n_running">%1$d buses running</string>
     <string name="buses_none_running">No buses running</string>
