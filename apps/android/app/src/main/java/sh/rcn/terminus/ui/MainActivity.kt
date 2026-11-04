@@ -623,7 +623,6 @@ private fun Tabs(
                                         onPin,
                                         openStop = { openStops(BusRoute.Stop(it)) },
                                         openLine = { svc, stop -> openStops(BusRoute.Line(svc, stop)) },
-                                        openStops = { openStops(null) },
                                     ),
                             )
                         }

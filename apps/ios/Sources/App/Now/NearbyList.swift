@@ -35,7 +35,6 @@ struct NearbyList: View {
                         .accessibilityElement(children: .combine)
                         .accessibilityIdentifier("nearbyFoot")
                     }
-                    StopsLink { app.showInBuses([]) }
                 }
             }
             // The stars need the account's pins, which the Stops tab keeps.
@@ -397,34 +396,5 @@ private struct NearbyTimeView: View {
         var a = run(cell.mark, big) + run(cell.figure, big) + run(cell.trail, small)
         a.foregroundColor = cell.pick ? Color.ink : Color.muted
         return Text(a).tracking(cell.pick ? -0.02 * size * scale : -0.01 * size * scale)
-    }
-}
-
-/// Under the signs: what the Stops tab is for, and the way there.
-private struct StopsLink: View {
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                Image("StopSign").renderingMode(.template).foregroundStyle(Color.brand).accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L("Another stop, or a whole line")).font(.body.weight(.semibold)).foregroundStyle(Color.ink)
-                    Text(L("Search, pinned stops and services are in Stops.")).font(.subheadline).foregroundStyle(Color.muted)
-                }
-                .multilineTextAlignment(.leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Color.faint).accessibilityHidden(true)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(BusRowPress())
-        .background(Color.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.line))
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("nearbyStops")
     }
 }

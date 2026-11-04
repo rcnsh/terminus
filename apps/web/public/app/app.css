@@ -129,13 +129,6 @@ button.nearby-row:hover { background: color-mix(in srgb, var(--ink) 4%, transpar
 .plate-star svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linejoin: round; }
 .plate-star.on { color: var(--warn); }
 .plate-star.on svg { fill: currentColor; }
-/* Under the signs: the way to the Stops tab, for any other stop or a whole line. */
-.to-stops { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 10px 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
-.to-stops > span { flex: 1; min-width: 0; display: grid; gap: 2px; }
-.to-stops b { font-weight: 600; font-size: 0.95rem; }
-.to-stops > span > span { color: var(--muted); font-size: 0.82rem; }
-.to-stops-icon { flex: none; width: 22px; height: 22px; fill: none; stroke: var(--accent); stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
-.to-stops-go { flex: none; width: 18px; height: 18px; fill: none; stroke: var(--muted); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 /* Its status line stays on the page; empty, it takes no room in Now's column. */
 .banner-slot:empty { position: absolute; }
 .offline {

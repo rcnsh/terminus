@@ -348,7 +348,6 @@ private fun PinnedCard(
             onPin = onPin,
             openStop = { vm.open(BusRoute.Stop(it)) },
             openLine = { svc, stop -> vm.open(BusRoute.Line(svc, stop)) },
-            openStops = {},
         )
     PinTabs(
         pinned.map { pinName(state, it) },

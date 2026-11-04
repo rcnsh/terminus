@@ -206,9 +206,9 @@ final class NearbyBoardUITests: XCTestCase {
             }
             XCTAssertEqual(inside.map(\.label), [], "elements in the \(p) sign besides its plate, star and rows")
         }
-        // Each plate before its own rows, the foot after the last card, the Stops row after it.
+        // Each plate before its own rows, the foot last, after the last card.
         XCTAssertEqual(found.first?.id.hasPrefix("nearby."), true, "\(found.first?.id ?? "nothing") before the first plate")
-        XCTAssertEqual(found.last?.id, "nearbyStops")
+        XCTAssertEqual(found.last?.id, "nearbyFoot")
         var plate: String?
         for f in found {
             if f.id.hasPrefix("nearby.") { plate = String(f.id.dropFirst("nearby.".count)) }

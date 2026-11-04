@@ -7,7 +7,6 @@
 "Add your email" = "添加你的邮箱";
 "Add your email to report a wrong answer, so we can reply to you." = "添加邮箱后才能反馈错误的结果，方便我们回复你。";
 "After" = "再之后";
-"Another stop, or a whole line" = "其他车站或整条线路";
 "arrive %@" = "%@ 到达";
 "arriving at %@" = "即将到达 %@";
 "Buildings" = "建筑";
@@ -56,7 +55,6 @@
 "Remove %@ from today" = "从今天移除 %@";
 "Rooms" = "教室";
 "Route" = "路线";
-"Search, pinned stops and services are in Stops." = "搜索、已固定的车站和线路都在“车站”里。";
 "Send" = "发送";
 "Sending…" = "正在发送…";
 "Skip every trip left today" = "今天剩下的行程都不去";
