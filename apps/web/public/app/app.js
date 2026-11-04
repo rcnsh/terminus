@@ -996,15 +996,9 @@ function OfflineCard({ item, step }) {
 /** A bus stop's sign on its pole: the Stops tab's icon. */
 const STOP_SIGN = '<rect x="6" y="2.5" width="12" height="9.5" rx="2.5"/><path d="M12 12v9.5M9 21.5h6M9.5 7.25h5"/>';
 
-/**
- * Under the signs, once, as under a stop's board: what a "~" means, only
- * when one is showing, and that a row opens its line.
- */
+/** Under the signs, once: what a "~" means, only when one is showing. */
 function NearbyFoot({ stops }) {
-  return html`<div class="nb-foot">
-    ${anyGuess(stops) && html`<p>${t('~ is a guess from the timetable, not a live time.')}</p>`}
-    <p>${t('Tap a service to see its whole line.')}</p>
-  </div>`;
+  return anyGuess(stops) && html`<div class="nb-foot"><p>${t('~ is a guess from the timetable, not a live time.')}</p></div>`;
 }
 
 /**

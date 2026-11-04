@@ -362,9 +362,6 @@ struct BusBoardFoot: View {
                         }
                     }
                 }
-                if board.rows.contains(where: { !$0.paid }) {
-                    Text(L("Tap a service to see its whole line.")).font(.footnote).foregroundStyle(Color.muted)
-                }
             }
             .padding(.horizontal, 4)
         }

@@ -416,7 +416,6 @@ function Board({ code }) {
       <div class="bt-ends">${ending.map((r) => html`<div key=${r.svc}><${Chip} svc=${r.svc} color=${r.color} cls="small" /> ${t('Runs until {0}', clock(r.endsAt))}</div>`)}</div>
       <div class="bt-status"><${Status} asOf=${b.asOf} error=${b.error} live=${live} /></div>
     </div>
-    ${b.board.some((r) => !r.paid) && html`<p class="bt-hint">${t('Tap a service to see its whole line.')}</p>`}
   `;
 }
 

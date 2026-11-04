@@ -122,14 +122,9 @@ enum NearbyCells {
         return parts.filter { !$0.isEmpty }.joined(separator: Lang.zh ? "，" : ", ")
     }
 
-    /// Under the signs, once: what a "~" means, only when one is showing,
-    /// and that a row opens its line.
+    /// Under the signs, once: what a "~" means, only when one is showing.
     static func foot(_ shown: [[NearbyCell]]) -> [String] {
-        let all = shown.joined()
-        var out: [String] = []
-        if all.contains(where: { $0.mark == "~" }) { out.append(L("~ is a guess from the timetable, not a live time.")) }
-        out.append(L("Tap a service to see its whole line."))
-        return out
+        shown.joined().contains(where: { $0.mark == "~" }) ? [L("~ is a guess from the timetable, not a live time.")] : []
     }
 
     /// How the time columns are laid out on every sign at once.

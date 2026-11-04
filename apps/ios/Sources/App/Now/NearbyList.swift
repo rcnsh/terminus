@@ -24,9 +24,9 @@ struct NearbyList: View {
                             app.showInBuses([.line(svc: svc, from: code)])
                         }
                     }
-                    if !stops.isEmpty {
+                    if case let foot = NearbyCells.foot(cells.flatMap { $0 }), !foot.isEmpty {
                         VStack(alignment: .leading, spacing: 2) {
-                            ForEach(NearbyCells.foot(cells.flatMap { $0 }), id: \.self) { Text($0) }
+                            ForEach(foot, id: \.self) { Text($0) }
                         }
                         .font(.footnote)
                         .foregroundStyle(Color.muted)

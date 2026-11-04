@@ -86,8 +86,8 @@ final class NowUITests: XCTestCase {
             app.buttons.matching(NSPredicate(format: "identifier == %@ AND label BEGINSWITH 'Unpin '", "star-\(code)")).firstMatch
                 .waitForExistence(timeout: 5))
         shot("now-nearby", app)
-        let foot = app.descendants(matching: .any)["nearbyFoot"]
-        reveal(foot, in: app)
+        app.swipeUp()
+        app.swipeUp()
         shot("now-nearby-down", app)
         // The plate: the stop's board on Stops, over its home.
         app.swipeDown()
@@ -119,7 +119,8 @@ final class NowUITests: XCTestCase {
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'nearby.'")).firstMatch.waitForExistence(timeout: 15))
         sleep(1)
         shot("now-nearby-dark", app)
-        reveal(app.descendants(matching: .any)["nearbyFoot"], in: app)
+        app.swipeUp()
+        app.swipeUp()
         shot("now-nearby-down-dark", app)
     }
 

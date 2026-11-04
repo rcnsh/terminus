@@ -87,12 +87,8 @@ internal object NearbyText {
                 cells.mapIndexedNotNull { i, c -> c.said?.let { if (i > 0) L.s(R.string.nearby_then, it) else it } })
             .joinToString(L.s(R.string.clause_sep))
 
-    /** The lines under the signs, as under a stop's board: what a "~" means, only while one is showing, then that a row opens its line. */
-    fun foot(cells: List<Cell>): List<String> =
-        listOfNotNull(
-            L.s(R.string.nearby_guess).takeIf { cells.any { it.mark.isNotEmpty() } },
-            L.s(R.string.buses_tap_hint),
-        )
+    /** The line under the signs: what a "~" means, only while one is showing. */
+    fun foot(cells: List<Cell>): List<String> = listOfNotNull(L.s(R.string.nearby_guess).takeIf { cells.any { it.mark.isNotEmpty() } })
 }
 
 /**

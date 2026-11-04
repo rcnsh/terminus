@@ -138,8 +138,8 @@ final class NearbyBoardUITests: XCTestCase {
 
     /// Item 6, the destinations: a loop at its first stop ("via UTown", D1 at
     /// COM 3), one with no landmark ahead ("to KR Bus Ter", A1 at CLB) and a
-    /// "–" (the last buses of the night, real hours); item 7, the foot with
-    /// nothing guessed: only "Tap a service…".
+    /// "–" (the last buses of the night, real hours); item 7, no foot with
+    /// nothing guessed.
     func testDestinationsAndALastBus() {
         // 10:50 PM: every bus live, the last of each with no bus after it.
         at("2026-11-04T14:50:00Z", realHours: true)
@@ -147,11 +147,7 @@ final class NearbyBoardUITests: XCTestCase {
             let app = nearby(theme: theme)
             reveal(app.buttons["nearbyRow.CLB.A1"], in: app)
             shot("nearby-6-destinations-and-dash-\(theme)", app)
-            let foot = app.descendants(matching: .any)["nearbyFoot"]
-            reveal(foot, in: app)
-            XCTAssertFalse(foot.label.contains("Crossed out"), foot.label)
-            XCTAssertFalse(foot.label.contains("guess"), foot.label)
-            shot("nearby-7-foot-tap-only-\(theme)", app)
+            XCTAssertFalse(app.descendants(matching: .any)["nearbyFoot"].exists, "a foot with nothing guessed")
             app.terminate()
         }
     }
