@@ -183,9 +183,14 @@ has_sign_identity() {
 # Apple's notary service, before anything is built: credentials that have
 # expired (the app-specific password was revoked, say) would stop the
 # release after the Android build. They're in the keychain, never in a file.
+# While the screen is locked, notarytool says the profile is missing when it
+# isn't, so that's checked first. (Not `ioreg | grep -q`, as above.)
 has_notary_profile() {
-  xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 ||
-    die "the notary credentials $NOTARY_PROFILE don't work: xcrun notarytool store-credentials $NOTARY_PROFILE --apple-id <email> --team-id BUKSCHP3SV"
+  xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 && return
+  case "$(ioreg -l -d1 -k IOConsoleUsers 2>/dev/null)" in
+    *'"CGSSessionScreenIsLocked"=Yes'*) die "the Mac's screen is locked, so the keychain won't give out the notary credentials: unlock it and run this again" ;;
+  esac
+  die "the notary credentials $NOTARY_PROFILE don't work: xcrun notarytool store-credentials $NOTARY_PROFILE --apple-id <email> --team-id BUKSCHP3SV"
 }
 
 # The dependencies, from the lockfiles only. node_modules and
