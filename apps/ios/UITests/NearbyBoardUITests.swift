@@ -27,8 +27,10 @@ final class NearbyBoardUITests: XCTestCase {
         resetProfile()
     }
 
-    /// The stub's clock at `t`, held there.
-    private func at(_ t: String, realHours: Bool = false) {
+    /// The stub's clock at `t`, held there, with the services' real hours: the
+    /// buses Nearby guesses past the feed's two (the "~" times) come only
+    /// while a service's hours are known.
+    private func at(_ t: String, realHours: Bool = true) {
         // Running again first: /__stub/at counts from where a held clock was held.
         stubPost("/__stub/thaw")
         stubPost("/__stub/hours?real=\(realHours ? 1 : 0)")
@@ -142,7 +144,7 @@ final class NearbyBoardUITests: XCTestCase {
     /// nothing guessed.
     func testDestinationsAndALastBus() {
         // 10:50 PM: every bus live, the last of each with no bus after it.
-        at("2026-11-04T14:50:00Z", realHours: true)
+        at("2026-11-04T14:50:00Z")
         for theme in ["light", "dark"] {
             let app = nearby(theme: theme)
             reveal(app.buttons["nearbyRow.CLB.A1"], in: app)
