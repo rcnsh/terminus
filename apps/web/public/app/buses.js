@@ -552,7 +552,7 @@ function PinPage({ code, entry, pinned, now }) {
   const note = entry?.s ? null : entry?.gone ? t('No times right now') : (entry?.error ?? null);
   const waiting = !entry?.s && !note;
   return html`
-    <div class="bt-pager-page" role="group" aria-label=${s.stop.name}>
+    <div class="bt-pager-page" role="group" aria-label=${s.stop.name} data-answered=${entry?.s ? '' : undefined}>
       <div class="nearby">
         <${StopSign}
           s=${s}
@@ -626,30 +626,44 @@ function PinnedStops({ pinned }) {
     freshenSigns();
   }, [index, pinned.join()]);
 
-  // As tall as the tallest page so far; measured again when the width changes (a phone turned).
+  // As tall as the tallest answer so far, so nothing under it jumps while swiping, or as the pages on
+  // screen when they're taller. A skeleton (a row per service) or the last page never holds it open: at
+  // night the answer is one line. The pages off screen overflow it, hidden.
+  const tallest = useRef(0);
+  const fit = () => {
+    const el = pager.current;
+    if (!el) return;
+    for (const page of el.querySelectorAll(':scope > [data-answered]')) tallest.current = Math.max(tallest.current, page.offsetHeight);
+    const x = el.scrollLeft / (leftOf(el, 1) || 1);
+    const shown = [Math.floor(x), Math.ceil(x)].map((n) => el.children[n]?.offsetHeight ?? 0);
+    el.style.height = `${Math.max(tallest.current, ...shown)}px`;
+  };
+  // Other stops: the tallest is theirs from now.
+  useEffect(() => {
+    tallest.current = 0;
+  }, [pinned.join()]);
+  // An answer can land at its skeleton's height, so nothing resizes: measured after every render too.
+  useEffect(fit);
   useEffect(() => {
     const el = pager.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
-    let tallest = 0;
     let width = el.clientWidth;
     const ro = new ResizeObserver(() => {
       // A new width (a phone turned, the tab shown again): the page picked kept in place.
       if (el.clientWidth !== width) {
         width = el.clientWidth;
-        tallest = 0;
-        el.style.minHeight = '';
+        tallest.current = 0;
+        el.style.height = '';
         el.scrollLeft = leftOf(el, at.current);
       }
-      if (el.offsetHeight > tallest) {
-        tallest = el.offsetHeight;
-        el.style.minHeight = `${tallest}px`;
-      }
+      fit();
     });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
 
   const onScroll = () => {
+    fit();
     clearTimeout(settle.current);
     settle.current = setTimeout(() => {
       const el = pager.current;
