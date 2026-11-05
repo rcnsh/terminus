@@ -95,6 +95,26 @@ struct CrashReport: Codable, Equatable, Sendable {
         }
     }
 
+    /// Binaries a Mac app never loads: the Simulator's loader and iOS's UIKit.
+    static let foreignBinaries: Set<String> = ["dyld_sim", "UIKitCore"]
+
+    /// Whether a MetricKit call stack tree is this Mac app's own crash.
+    /// MetricKit goes by bundle id, which the iPhone app shares, so it also
+    /// hands over the iPhone app's crashes in the Simulator (and on a Mac
+    /// with Apple silicon); their stacks name a binary the Mac app never loads.
+    static func isMacCrash(callStackJSON data: Data) -> Bool {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let stacks = root["callStacks"] as? [[String: Any]]
+        else { return true }
+        func foreign(_ frames: [[String: Any]]) -> Bool {
+            frames.contains { f in
+                (f["binaryName"] as? String).map(foreignBinaries.contains) == true
+                    || foreign(f["subFrames"] as? [[String: Any]] ?? [])
+            }
+        }
+        return !stacks.contains { foreign($0["callStackRootFrames"] as? [[String: Any]] ?? []) }
+    }
+
     /// A MetricKit call stack tree (its jsonRepresentation) as one frame a
     /// line, the crashed thread first: "Terminus +0x1a2b (0x10234a2b)".
     /// Binary names, offsets and addresses only; anything that doesn't parse
@@ -217,7 +237,10 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber, @unchecked Senda
     func didReceive(_ payloads: [MXDiagnosticPayload]) {
         guard Self.enabled else { return }
         for payload in payloads {
-            for crash in payload.crashDiagnostics ?? [] { Self.store.add(Self.report(crash)) }
+            for crash in payload.crashDiagnostics ?? []
+            where CrashReport.isMacCrash(callStackJSON: crash.callStackTree.jsonRepresentation()) {
+                Self.store.add(Self.report(crash))
+            }
         }
         Task.detached(priority: .utility) { await Self.sendPending() }
     }
