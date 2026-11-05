@@ -1,6 +1,6 @@
 /**
- * The timelapse recorder's limits on NUS (CLAUDE.md, rule 2's one
- * exception), in time: the back-off while the feed fails, the interval a
+ * The timelapse recorder's limits on NUS (docs/agents/feeds.md, rule 2's
+ * one exception), in time: the back-off while the feed fails, the interval a
  * day keeps once it has a longer one, a service that closes mid-round, and
  * a whole recorded day that asks for live buses and nothing else.
  * timelapse.test.js has the rest; this file has its own small harness.

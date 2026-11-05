@@ -22,7 +22,8 @@ needs before it answers anyone. The backtest's numbers are in
   halfway between two (`sectionOf`), so the public `along` is quantised.
 - **The one poller** is the timelapse recorder (`src/map/timelapse.ts`,
   `src/map/timelapsedo.ts`): every service's buses every 30 s, 06:30 to 00:30,
-  through `getBuses()`, bounded by CLAUDE.md rule 2. It keeps each bus's
+  through `getBuses()`, bounded by
+  [agents/feeds.md](agents/feeds.md). It keeps each bus's
   own track position (metres along its line, not the drawn spot), from
   tracks it keeps itself.
 
@@ -40,7 +41,7 @@ There is nothing in D1 or KV, and the repo's only real trace is
 `test/fixtures/bus-trace.jsonl`: 15 minutes of four services.
 
 So a new logger isn't needed, and CLAUDE.md rule 2 forbids one in the
-Worker ("Don't add another poller"). Positions are the recorder's;
+Worker (["Don't add another poller"](agents/feeds.md)). Positions are the recorder's;
 predictions are what users were already shown. This work reads those two,
 and adds no call to NUS.
 

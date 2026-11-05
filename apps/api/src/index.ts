@@ -1,7 +1,7 @@
 /**
  * terminus: answers one question, when is my bus and should I run. Fetch on
  * demand through a 15-second edge cache, with no poll loop. See internals.md,
- * *How it works*, and CLAUDE.md rule 2 for the few reads made on a schedule.
+ * *How it works*, and docs/agents/feeds.md for the few reads made on a schedule.
  */
 
 import type { Env, ResolveInput } from './types.ts';

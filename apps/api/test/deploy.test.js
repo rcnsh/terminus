@@ -92,7 +92,7 @@ test('the beta knows it is the beta, and writes its analytics to its own dataset
   assert.equal(BETA.env.PUBLIC_ORIGIN.value, `https://${BETA.domains[0]}`);
   assert.equal(STABLE.env.AE.name, 'terminus', 'admin.ts falls back to "terminus" without AE_DATASET');
   assert.equal(BETA.env.AE_DATASET.value, BETA.env.AE.name);
-  // Only one site polls NUS for the timelapse (CLAUDE.md, rule 2).
+  // Only one site polls NUS for the timelapse (docs/agents/feeds.md).
   assert.equal(STABLE.env.TIMELAPSE_ENABLED.value, 'on');
   assert.equal(BETA.env.TIMELAPSE_ENABLED.value, 'off');
 });

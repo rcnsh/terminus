@@ -2354,8 +2354,8 @@ going ("Towards Kent Ridge MRT"), with the stops ahead from `upcoming`.
 A day of every shuttle, for a timelapse video
 ([`src/map/timelapse.ts`](../apps/api/src/map/timelapse.ts),
 [`src/map/timelapsedo.ts`](../apps/api/src/map/timelapsedo.ts)). It is the **only poller of
-the NUS feed** and the one exception to "don't add load on NUS"
-(CLAUDE.md, rule 2). Answers fetch because someone asked; the only other
+the NUS feed** and the one exception to "don't add unnecessary load on NUS"
+(CLAUDE.md, rule 2; the limits in [agents/feeds.md](agents/feeds.md)). Answers fetch because someone asked; the only other
 scheduled reads are the stable cron's health check (one stop from NUS and one from
 LTA every 15 minutes, past the cache; the beta's cron asks neither) and each push user's Trip object
 (a card at most every 30 s, through the cache). It is bounded on every side:

@@ -1,5 +1,5 @@
 /**
- * What the 15-minute cron asks of the feeds (CLAUDE.md, rule 2): one NUS
+ * What the 15-minute cron asks of the feeds (docs/agents/feeds.md): one NUS
  * stop and one LTA stop a run, past the cache; the public feed's record;
  * the app-version candidate check, which costs NUS a mint and a call per
  * candidate and so must not spend them on failures that say nothing of the

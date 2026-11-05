@@ -1,5 +1,5 @@
 /**
- * The beta's cron makes no feed call to NUS or LTA (CLAUDE.md, rule 2), only
+ * The beta's cron makes no feed call to NUS or LTA (docs/agents/feeds.md), only
  * the token's renewal, ahead of its end (feed-token.test.js): it reads the
  * breaker trips its own traffic noted (src/feeds/feedwatch.ts) as its check.
  */

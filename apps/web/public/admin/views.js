@@ -839,7 +839,7 @@ function Recorder({ s, d }) {
     </div>
     <${Card}
       title="What each poll did, last 14 days"
-      sub="The only scheduled reads of the live buses (CLAUDE.md, rule 2): every 30 s per service, 06:30 to 00:30, at most 17,280 polls a day."
+      sub="The only scheduled reads of the live buses (docs/agents/feeds.md): every 30 s per service, 06:30 to 00:30, at most 17,280 polls a day."
       tools=${html`<a class="btn small ghost" href="/admin/timelapse/">Replay a day</a>`}
     >
       <${Chart}
