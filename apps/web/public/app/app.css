@@ -353,7 +353,6 @@ button.bt-row:focus-visible { outline-offset: -2px; }
 /* A service not running: greyed, its words where the minutes go. */
 .bt-row.stopped { color: var(--muted); }
 .bt-row.stopped .bt-dir { color: var(--muted); font-weight: 500; }
-.bt-chip.muted { background: color-mix(in srgb, var(--svc) 30%, var(--surface-2)); color: var(--ink); }
 .bt-row.stopped .bt-big.none { color: var(--muted); font-weight: 600; }
 /* No minutes after it: its line takes the row's width. */
 .bt-row.stopped .bt-meta { grid-column: meta-start / then-end; color: var(--muted); }

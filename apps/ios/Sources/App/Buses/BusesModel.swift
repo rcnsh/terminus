@@ -414,7 +414,8 @@ final class BusesModel {
     /// showing): the first service on the board it shows, in its colour; nil before there's one.
     func livery(_ code: String?) -> UInt32? {
         // The home shows each pinned stop's own board, whichever side its page is on.
-        let rows = code.map { boards[pageBoard($0)]?.rows } ?? pinFocus.flatMap { pinned[$0]?.board }
+        // A pinned stop's not-running services (listed when none runs) aren't buses to draw.
+        let rows = code.map { boards[pageBoard($0)]?.rows } ?? pinFocus.flatMap { pinned[$0]?.board.filter(\.running) }
         guard let row = rows.flatMap({ BusWords.runningFirst($0).first }) else { return nil }
         return (row.color ?? color(row.svc)).flatMap(hexRGB)
     }

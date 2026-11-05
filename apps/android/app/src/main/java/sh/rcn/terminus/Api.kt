@@ -1033,12 +1033,14 @@ class Api(internal val token: String?, private val fast: Boolean = false, privat
 
     /**
      * The pinned stops [codes] as Nearby shows them (/api/me/stops), for the Stops tab's card, with the answer's time. With a location,
-     * each says the walk there; without one, none does.
+     * each says the walk there; without one, none does. The services not running now come too, after the others: a stop with none running
+     * lists them, with when each starts again.
      */
     suspend fun stops(codes: List<String>, lat: Double?, lon: Double?): Pair<List<NearbyStop>, Long?> {
         val q =
             listOf("codes=" + codes.joinToString(",") { enc(it) }) +
-                (if (lat != null && lon != null) listOf("lat=${coord(lat)}", "lon=${coord(lon)}") else emptyList())
+                (if (lat != null && lon != null) listOf("lat=${coord(lat)}", "lon=${coord(lon)}") else emptyList()) +
+                "stopped=1"
         val json = request("GET", "/api/me/stops" + query(q))
         return parseNearby(json) to json.optStringOrNull("asOf")?.let(::parseInstant)
     }

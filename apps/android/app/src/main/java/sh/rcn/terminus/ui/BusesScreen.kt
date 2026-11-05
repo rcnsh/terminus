@@ -58,7 +58,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
@@ -314,7 +313,7 @@ private fun boardLivery(state: BusesUi, code: String): Long? {
 
 /** The pull's bus on the home: the first service at the pinned stop showing, in its colour; null before there's one. */
 private fun pinLivery(state: BusesUi, code: String): Long? {
-    val row = state.pinned[code]?.stop?.board?.firstOrNull() ?: return null
+    val row = state.pinned[code]?.stop?.board?.firstOrNull { it.running } ?: return null
     return row.color?.let(::parseColor) ?: state.campus?.routes?.get(row.svc)?.color
 }
 
@@ -355,7 +354,10 @@ private fun PinnedCard(
     }
     // Refreshes failing: the times counted down, none passed off as live.
     val now = ticking()
-    val loaded = pinned.mapNotNull { code -> state.pinned[code]?.let { code to it.aged(now) } }
+    // The sign's rows are the services running; those that aren't are listed under it only when none is.
+    val all = pinned.mapNotNull { code -> state.pinned[code]?.let { code to it.aged(now) } }
+    val loaded = all.map { (code, s) -> code to s.copy(board = s.board.filter { it.running }) }
+    val stopped = all.associate { (code, s) -> code to s.board.filterNot { it.running } }
     var tallest by remember(pinned) { mutableIntStateOf(0) }
     val tallestDp = with(density) { tallest.toDp() }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
@@ -378,7 +380,7 @@ private fun PinnedCard(
                     code == PinPages.ADD -> PinAnother(tallestDp)
                     i >= 0 ->
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            NearbySign(signs, i, act, saysNone = true)
+                            NearbySign(signs, i, act, saysNone = true, stopped = stopped[code].orEmpty())
                             // As under Nearby's signs and the web's pinned card: what a "~" means, only while one is showing.
                             if (signs.cells[i].any { row -> row.any { it.mark.isNotEmpty() } }) {
                                 Text(
@@ -1148,8 +1150,8 @@ private fun StoppedRow(row: BoardRow, color: Long, onClick: (() -> Unit)?, click
 }
 
 /**
- * A service that calls here but isn't running: greyed, its chip faded, and where the minutes go, why and when it's back. No time, no Live,
- * no crowd.
+ * A service that calls here but isn't running: its words greyed, and where the minutes go, why and when it's back. No time, no Live, no
+ * crowd.
  */
 @Composable
 private fun StoppedRowView(
@@ -1177,7 +1179,8 @@ private fun StoppedRowView(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.alpha(0.35f)) { SvcChip(row.svc, color, paid = row.paid, small = compact) }
+        // Its badge in full colour: the row still opens the line, so it mustn't look switched off.
+        SvcChip(row.svc, color, paid = row.paid, small = compact)
         Column(Modifier.weight(1f)) {
             if (row.towards.isNotEmpty()) {
                 Text(
