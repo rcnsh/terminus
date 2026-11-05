@@ -20,6 +20,9 @@
   --good-ink: #166534;
   --warn-ink: #92400e;
   --bad-ink: #991b1b;
+  /* A skeleton's bars (.sk) and the highlight that sweeps them: a little darker than the page. */
+  --sk: #ebe8e4;
+  --sk-hi: #f8f6f3;
   --radius: 14px;
   --shadow: 0 1px 2px rgb(28 25 23 / 0.04), 0 8px 24px -12px rgb(28 25 23 / 0.12);
   /* Chinese falls back to each system's own CJK face. */
@@ -50,6 +53,8 @@
     --good-ink: #4ade80;
     --warn-ink: #fbbf24;
     --bad-ink: #f87171;
+    --sk: #2a2622;
+    --sk-hi: #3c3731;
     --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -12px rgb(0 0 0 / 0.6);
     color-scheme: dark;
   }
@@ -72,6 +77,8 @@
   --good-ink: #4ade80;
   --warn-ink: #fbbf24;
   --bad-ink: #f87171;
+  --sk: #2a2622;
+  --sk-hi: #3c3731;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -12px rgb(0 0 0 / 0.6);
   color-scheme: dark;
 }
@@ -254,7 +261,29 @@ label { display: block; font-size: 0.875rem; color: var(--muted); margin: 12px 0
   :root:not([data-theme="light"]) { --muted: #d6d3d1; --faint: #a39d97; --line: #6f6964; --line-strong: #a39d97; }
 }
 
+/* A skeleton: where words are still to come, a bar in the line box they'll
+   take (.sk-line, as tall as the line, so nothing moves when they land), or
+   a shape sized by what it stands for (.sk on a badge, a dot). A soft
+   highlight sweeps each one, moved by transform alone so it costs no
+   repaint. They fade in after 150 ms, so a quick answer never flashes. A
+   badge's shape (.svc-tag) takes the skeleton's colour over its own. */
+.sk-line { display: inline-flex; align-items: center; vertical-align: top; height: 1lh; max-width: 100%; }
+.sk-line > .sk { display: block; flex: none; width: 100%; height: 0.72em; }
+.sk { border-radius: 6px; }
+.sk, .sk.svc-tag { position: relative; overflow: hidden; background: var(--sk); color: transparent; animation: sk-in 0.2s ease-out 0.15s both; }
+.sk::after {
+  content: ''; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(100deg, transparent 20%, var(--sk-hi) 50%, transparent 80%);
+  animation: sk-sweep 1.6s ease-in-out infinite;
+}
+.sk.round { border-radius: 999px; }
+/* On the sky the bars are its ink, faint, so the hour's colours show through. */
+.sky-head, .sky-panel { --sk: color-mix(in srgb, var(--ink) 13%, transparent); --sk-hi: color-mix(in srgb, var(--ink) 26%, transparent); }
+@keyframes sk-in { from { opacity: 0; } }
+@keyframes sk-sweep { to { transform: translateX(100%); } }
+
 @media (prefers-reduced-motion: reduce) {
+  .sk::after { display: none; }
   *, *::before, *::after { transition: none !important; animation: none !important; }
   .btn:hover { transform: none; }
 }

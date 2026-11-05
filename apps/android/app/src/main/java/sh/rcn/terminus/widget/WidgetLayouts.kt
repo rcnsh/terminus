@@ -266,6 +266,8 @@ internal fun SquareLayout(s: Scene, w: Float, h: Float) {
                                 Small(it, sky.muted, 13.sp, modifier = GlanceModifier.padding(start = 4.dp, bottom = 7.dp))
                             }
                     }
+                } else if (face.placeholder) {
+                    HeadlineBar(face.headline, sky, 28.sp, width = (w - 48f).coerceIn(60f, 150f).dp)
                 } else {
                     // No time in it ("Leave now", "No classes today"): the headline itself, as big as fits.
                     Text(

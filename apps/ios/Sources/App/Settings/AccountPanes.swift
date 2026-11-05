@@ -40,7 +40,25 @@ struct SettingsDevicesPane: View {
                     }
                 }
             } else {
-                ProgressView().frame(maxWidth: .infinity).padding(20)
+                // The devices on their way: two rows in bars, in a device row's box.
+                SettingsGroup(title: L("Your devices")) {
+                    ForEach(0..<2, id: \.self) { i in
+                        if i > 0 { GroupDivider() }
+                        HStack(spacing: 12) {
+                            SkeletonBar(width: 24, height: 20).frame(width: 28)
+                            VStack(alignment: .leading, spacing: 2) {
+                                SkeletonLine(font: .body.weight(.medium), fraction: SkeletonWidths.name(i) * 0.7)
+                                SkeletonLine(font: .footnote, fraction: SkeletonWidths.sub(i))
+                            }
+                        }
+                        .padding(.leading, 16)
+                        .padding(.trailing, 8)
+                        .padding(.vertical, 8)
+                        .frame(minHeight: 52)
+                    }
+                }
+                .shimmering()
+                .skeletonSpoken()
             }
             VStack(alignment: .leading, spacing: 8) {
                 Button(L("Add a device")) { model.newPairCode() }

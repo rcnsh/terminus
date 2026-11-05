@@ -38,6 +38,8 @@ struct BusBoardCard: View {
     let board: Board?
     let failed: Bool
     let colors: [String: String]
+    /// The services the campus data says call here, for the rows' badges before the board comes.
+    var services: [String] = []
     let onRow: (BoardRow) -> Void
 
     var body: some View {
@@ -60,8 +62,10 @@ struct BusBoardCard: View {
                             BusBoardRowView(row: row, color: row.color ?? colors[row.svc], now: now, onTap: row.paid ? nil : { onRow(row) })
                         }
                     }
+                } else if failed {
+                    message(L("Couldn't reach terminus. Check your connection and try again."))
                 } else {
-                    message(failed ? L("Couldn't reach terminus. Check your connection and try again.") : L("Checking…"))
+                    BoardSkeleton(services: services, colors: colors)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -73,6 +77,50 @@ struct BusBoardCard: View {
 
     private func message(_ text: String) -> some View {
         Text(text).foregroundStyle(Color.muted).padding(16).frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// The board before it comes: a row per service known to call here, its
+/// badge real, where it goes and its times as bars, in the running rows'
+/// boxes; three rows of bars when none is known.
+private struct BoardSkeleton: View {
+    let services: [String]
+    let colors: [String: String]
+    @ScaledMetric(relativeTo: .largeTitle) private var scale: CGFloat = 1
+
+    var body: some View {
+        let rows: [String?] = services.isEmpty ? [nil, nil, nil] : services
+        VStack(spacing: 0) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { i, svc in
+                if i > 0 { Divider().overlay(Color.line) }
+                HStack(alignment: .top, spacing: 12) {
+                    if let svc {
+                        BusChip(svc: svc, color: colors[svc])
+                    } else {
+                        SkeletonBar(width: 46, height: 32, radius: 9)
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        SkeletonLine(font: .body.bold(), fraction: SkeletonWidths.name(i))
+                        SkeletonLine(font: .subheadline, fraction: SkeletonWidths.sub(i))
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    VStack(alignment: .trailing, spacing: 4) {
+                        SkeletonLine(font: .system(size: 34 * scale, weight: .heavy), points: [58, 62, 66][i % 3])
+                        SkeletonLine(font: .subheadline, points: 44)
+                    }
+                    .frame(minWidth: 72, alignment: .trailing)
+                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Color.line)
+                        .frame(maxHeight: .infinity)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.leading, 14)
+                .padding(.trailing, 8)
+                .padding(.vertical, 14)
+            }
+        }
+        // One wave over the bars; the badges are real and stay still.
+        .shimmering()
+        .skeletonSpoken()
     }
 }
 

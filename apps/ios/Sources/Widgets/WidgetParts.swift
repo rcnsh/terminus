@@ -73,7 +73,7 @@ struct Headline: View {
                 + Text(verbatim: big).foregroundColor(inks.accent)
                 + Text(verbatim: String(face.headline[r.upperBound...])).foregroundColor(base)
         }()
-        text.font(.system(size: size, weight: .bold)).lineLimit(lines).minimumScaleFactor(0.7)
+        text.font(.system(size: size, weight: .bold)).lineLimit(lines).minimumScaleFactor(0.7).standInSpoken()
     }
 }
 
@@ -104,6 +104,7 @@ struct LegRow: View {
             if let svc = leg.svc { BusBadge(svc: svc, color: leg.color, size: 12, paid: leg.paid) }
             Text(verbatim: leg.text).font(.system(size: size)).foregroundStyle(inks.ink).lineLimit(1).minimumScaleFactor(0.8)
         }
+        .standInHidden()
     }
 }
 
@@ -123,6 +124,8 @@ struct RefreshButton: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(L("Refresh"))
+        // Real while the rest is a placeholder: it works.
+        .unredacted()
     }
 }
 
@@ -154,6 +157,8 @@ struct ModeChips: View {
                 .accessibilityLabel(on ? L("Showing %@", m.label) : L("Show %@", m.label))
             }
         }
+        // Real while the rest is a placeholder: they work.
+        .unredacted()
     }
 }
 
@@ -172,6 +177,7 @@ struct TileView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
+        .standInHidden()
         .background(inks.pane, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }

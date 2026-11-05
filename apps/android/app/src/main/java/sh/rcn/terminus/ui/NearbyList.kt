@@ -1,6 +1,7 @@
 package sh.rcn.terminus.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,12 +11,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,8 +26,12 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -70,7 +77,7 @@ internal class NearbyActions(
 @Composable
 internal fun NearbyList(stops: List<NearbyStop>?, loading: Boolean, act: NearbyActions) {
     if (stops == null) {
-        Text(if (loading) stringResource(R.string.checking) else stringResource(R.string.nothing_yet))
+        if (loading) NearbySkeleton() else Text(stringResource(R.string.nothing_yet))
         return
     }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -363,3 +370,88 @@ internal fun eta(s: Int?, quality: String) =
         s < 45 -> L.s(R.string.now)
         else -> L.s(R.string.n_min, (s + 30) / 60)
     }
+
+/** Nearby before its first answer: two signs' shape, a plate and three rows each. */
+@Composable
+private fun NearbySkeleton() {
+    Skeleton(stringResource(R.string.checking), Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        for (sign in 0 until 2) {
+            val shape = RoundedCornerShape(14.dp)
+            Column(
+                Modifier.fillMaxWidth()
+                    .clip(shape)
+                    .background(MaterialTheme.colorScheme.surface)
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)
+            ) {
+                PlateSkeleton(barFraction(sign + 2))
+                SkeletonBoardLines(List(3) { null }, first = sign * 3)
+            }
+        }
+    }
+}
+
+/** A stop's plate before its name has come: the mark, and a bar for the name, as tall as the plate with its star. */
+@Composable
+internal fun PlateSkeleton(name: Float) {
+    val c = MaterialTheme.colorScheme
+    Row(
+        Modifier.fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .background(c.secondaryContainer)
+            .drawBehind {
+                drawLine(c.outlineVariant, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx())
+            }
+            .padding(start = 14.dp, end = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(painterResource(R.drawable.ic_bus), contentDescription = null, tint = c.primary, modifier = Modifier.size(16.dp))
+        TextBar(TextStyle(fontSize = 15.sp), Modifier.weight(1f), fraction = name)
+    }
+}
+
+/**
+ * A sign's rows before their times have come, laid out as [BoardLine]'s: the badge, where it's going, the next three buses. A service known
+ * already (from the campus's stops) draws its own badge; null draws a bar in its place. [first] staggers the bars' widths.
+ */
+@Composable
+internal fun SkeletonBoardLines(services: List<Pair<String, Color>?>, first: Int = 0) {
+    val labels = services.mapNotNull { it?.first }
+    val badge = if (labels.isEmpty()) 32.dp else badgeWidth(labels)
+    // Next, Then and After over the times, as Heads has them, over the skeleton's own columns.
+    Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 2.dp)) {
+        Spacer(Modifier.weight(1f))
+        for (head in heads()) {
+            Spacer(Modifier.width(SKELETON_GAP))
+            Text(
+                head,
+                style = HEAD,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier.width(SKELETON_COL),
+            )
+        }
+    }
+    for ((j, svc) in services.withIndex()) {
+        if (j > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 14.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (svc != null) ServiceBadge(svc.first, svc.second, badge) else Bar(Modifier.size(badge, 28.dp), RoundedCornerShape(8.dp))
+            Spacer(Modifier.width(DEST_GAP))
+            TextBar(DEST, Modifier.weight(1f), fraction = barFraction(first + j, 1) + 0.2f)
+            for (w in listOf(34.dp, 26.dp, 26.dp)) {
+                Spacer(Modifier.width(SKELETON_GAP))
+                Box(Modifier.width(SKELETON_COL), contentAlignment = Alignment.CenterEnd) {
+                    TextBar(TextStyle(fontSize = 16.sp, lineHeight = 20.sp), width = w)
+                }
+            }
+        }
+    }
+}
+
+/** A skeleton's time columns, before the real ones are measured: wide enough for "AFTER" and "11 min". */
+private val SKELETON_COL = 48.dp
+private val SKELETON_GAP = 8.dp

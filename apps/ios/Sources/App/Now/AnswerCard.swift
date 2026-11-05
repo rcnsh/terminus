@@ -5,7 +5,9 @@ import SwiftUI
 /// under the horizon ([NowGround]).
 enum NowShows {
     case nearby
-    /// No answer yet: "Checking…", or "No answer yet".
+    /// No answer yet and one on its way: the card's shape in bars.
+    case checking
+    /// No answer yet, and none coming: "No answer yet".
     case waiting(String)
     /// Offline with the plan's answer stale: the next thing on the kept day plan.
     case offline(OfflineDay.Lines)
@@ -26,7 +28,7 @@ enum NowShows {
         {
             return .offline(OfflineDay.lines(pick))
         }
-        guard let a else { return .waiting(app.loading || app.error == nil ? L("Checking…") : L("No answer yet")) }
+        guard let a else { return app.loading || app.error == nil ? .checking : .waiting(L("No answer yet")) }
         if a.mode == "rest" || a.isFree || a.arrived { return .dayDone(a) }
         let old = a.isOld(at: now)
         if let j = a.card?.journey, !old { return .journey(a, j) }
@@ -64,6 +66,8 @@ struct NowHead: View {
             switch shows {
             case .nearby:
                 EmptyView()
+            case .checking:
+                NowSkeletonHead()
             case .waiting(let text):
                 Text(text).font(.title2.weight(.semibold)).accessibilityIdentifier("now.waiting")
             case .offline(let lines):
@@ -375,6 +379,8 @@ struct NowGround: View {
             switch shows {
             case .nearby:
                 NearbyList()
+            case .checking:
+                NowSkeletonGround()
             case .waiting, .offline:
                 EmptyView()
             case .dayDone(let a):

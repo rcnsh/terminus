@@ -67,6 +67,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.onSizeChanged
@@ -83,6 +84,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -260,12 +262,7 @@ private fun Home(state: BusesUi, vm: BusesViewModel, pins: List<String>, pinsKno
                     Label(stringResource(R.string.buses_pinned), Modifier.padding(top = 16.dp, bottom = 4.dp))
                     // Before the profile has come, "nothing pinned" may not be true.
                     when {
-                        !pinsKnown ->
-                            Text(
-                                stringResource(R.string.checking),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(vertical = 16.dp),
-                            )
+                        !pinsKnown -> PinnedSkeleton()
                         pinned.isEmpty() -> NoPins()
                         else -> PinnedCard(state, vm, pinned, pager, pins, onPin)
                     }
@@ -409,11 +406,50 @@ private fun PinnedWaiting(state: BusesUi, code: String, failed: Boolean, act: Ne
             PinStar(code, act.pins, act.pinLimit, act.onPin, name = state.campus?.stop(code)?.fullName ?: name)
         },
     ) {
-        Text(
-            stringResource(if (failed) R.string.cant_reach else R.string.checking),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(14.dp),
-        )
+        if (failed)
+            Text(
+                stringResource(R.string.cant_reach),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(14.dp),
+            )
+        else
+            Skeleton(stringResource(R.string.checking)) {
+                SkeletonBoardLines(stopServices(state, code).map { it.first to Color(it.second) }.ifEmpty { List(3) { null } })
+            }
+    }
+}
+
+/** The services that call at [code], with their colours, from the campus's stops: what a board skeleton can draw as itself. */
+private fun stopServices(state: BusesUi, code: String): List<Pair<String, Long>> {
+    val campus = state.campus ?: return emptyList()
+    return campus.stop(code)?.services.orEmpty().map { it to (campus.routes[it]?.color ?: GREY) }
+}
+
+/** Before the profile has come, whether anything's pinned isn't known: a pinned stop's shape, its tabs and its sign. */
+@Composable
+private fun PinnedSkeleton() {
+    Skeleton(stringResource(R.string.checking), Modifier.fillMaxWidth().padding(top = 4.dp)) {
+        Box(
+            Modifier.fillMaxWidth()
+                .padding(bottom = 10.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(MaterialTheme.colorScheme.secondaryContainer)
+                .padding(4.dp)
+        ) {
+            Box(Modifier.fillMaxWidth().padding(vertical = 9.dp, horizontal = 12.dp), contentAlignment = Alignment.Center) {
+                TextBar(MaterialTheme.typography.bodyLarge.copy(lineHeight = 18.sp), width = 96.dp)
+            }
+        }
+        val shape = RoundedCornerShape(14.dp)
+        Column(
+            Modifier.fillMaxWidth()
+                .clip(shape)
+                .background(MaterialTheme.colorScheme.surface)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)
+        ) {
+            PlateSkeleton(0.48f)
+            SkeletonBoardLines(List(3) { null })
+        }
     }
 }
 
@@ -475,7 +511,7 @@ private fun Services(state: BusesUi, onOpen: (String) -> Unit) {
     val shape = RoundedCornerShape(18.dp)
     Column(Modifier.fillMaxWidth().clip(shape).background(c.surface).border(1.dp, c.outlineVariant, shape)) {
         if (campus == null) {
-            Text(stringResource(R.string.checking), color = c.onSurfaceVariant, modifier = Modifier.padding(16.dp))
+            ServicesSkeleton()
             return@Column
         }
         // From an older server without each service's stops: the codes alone.
@@ -509,6 +545,31 @@ private fun Services(state: BusesUi, onOpen: (String) -> Unit) {
                     tint = c.onSurfaceVariant,
                     modifier = Modifier.size(20.dp),
                 )
+            }
+        }
+    }
+}
+
+/** The services list before /api/campus has come: six rows of its shape. */
+@Composable
+private fun ServicesSkeleton() {
+    val c = MaterialTheme.colorScheme
+    Skeleton(stringResource(R.string.checking)) {
+        for (i in 0 until 6) {
+            if (i > 0) HorizontalDivider(color = c.outlineVariant)
+            Row(
+                Modifier.fillMaxWidth().padding(start = 14.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Bar(Modifier.size(32.dp, 28.dp), RoundedCornerShape(8.dp))
+                Column(Modifier.weight(1f)) {
+                    TextBar(MaterialTheme.typography.bodyLarge, fraction = barFraction(i))
+                    TextBar(MaterialTheme.typography.bodyMedium, fraction = barFraction(i, 1))
+                }
+                TextBar(MaterialTheme.typography.bodyMedium, width = 44.dp)
+                // Where the chevron goes, so the rows keep their width.
+                Spacer(Modifier.width(20.dp))
             }
         }
     }
@@ -783,7 +844,12 @@ private fun StopBody(state: BusesUi, vm: BusesViewModel, code: String) {
         }
     }
     Spacer(Modifier.height(12.dp))
-    BoardCard(board, failed = shownCode in state.failed, colors = state.campus?.routes?.mapValues { it.value.color }.orEmpty()) { row ->
+    BoardCard(
+        board,
+        failed = shownCode in state.failed,
+        colors = state.campus?.routes?.mapValues { it.value.color }.orEmpty(),
+        services = stopServices(state, shownCode),
+    ) { row ->
         vm.open(BusRoute.Line(row.svc, shownCode))
     }
     board?.let { Foot(it) }
@@ -882,19 +948,22 @@ private fun SegmentText(text: String, on: Boolean, maxLines: Int) {
 
 /** The board: a row per service, sorted as the API sorts them. */
 @Composable
-private fun BoardCard(got: Board?, failed: Boolean, colors: Map<String, Long>, onRow: (BoardRow) -> Unit) {
+private fun BoardCard(
+    got: Board?,
+    failed: Boolean,
+    colors: Map<String, Long>,
+    services: List<Pair<String, Long>>,
+    onRow: (BoardRow) -> Unit,
+) {
     val c = MaterialTheme.colorScheme
     // Refreshes failing: the times counted down, none passed off as live.
     val board = got?.aged(ticking())
     val shape = RoundedCornerShape(18.dp)
     Column(Modifier.fillMaxWidth().clip(shape).background(c.surface).border(1.dp, c.outlineVariant, shape)) {
         when {
-            board == null ->
-                Text(
-                    stringResource(if (failed) R.string.cant_reach else R.string.checking),
-                    color = c.onSurfaceVariant,
-                    modifier = Modifier.padding(16.dp),
-                )
+            board == null && failed ->
+                Text(stringResource(R.string.cant_reach), color = c.onSurfaceVariant, modifier = Modifier.padding(16.dp))
+            board == null -> BoardSkeleton(services)
             board.rows.isEmpty() ->
                 Text(
                     stringResource(if (board.available) R.string.buses_none_here else R.string.buses_feed_down),
@@ -909,6 +978,38 @@ private fun BoardCard(got: Board?, failed: Boolean, colors: Map<String, Long>, o
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                     )
                 BoardRows(runningFirst(board.rows), colors, dividerFirst = !board.available, onRow = onRow)
+            }
+        }
+    }
+}
+
+/**
+ * A board before its times have come: a row per service that calls here, from the campus's stops (three when they aren't known), each with
+ * its own chip; where it's going and the times are bars, in [BoardRowView]'s places.
+ */
+@Composable
+private fun BoardSkeleton(services: List<Pair<String, Long>>) {
+    val c = MaterialTheme.colorScheme
+    val type = MaterialTheme.typography
+    Skeleton(stringResource(R.string.checking)) {
+        val rows: List<Pair<String, Long>?> = services.ifEmpty { List(3) { null } }
+        for ((i, svc) in rows.withIndex()) {
+            if (i > 0) HorizontalDivider(color = c.outlineVariant)
+            Row(
+                Modifier.fillMaxWidth().padding(start = 14.dp, end = 8.dp, top = 14.dp, bottom = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (svc != null) SvcChip(svc.first, svc.second) else Bar(Modifier.size(46.dp, 32.dp), RoundedCornerShape(9.dp))
+                Column(Modifier.weight(1f)) {
+                    TextBar(type.bodyLarge, fraction = barFraction(i))
+                    TextBar(type.bodyMedium, Modifier.padding(top = 2.dp), fraction = barFraction(i, 1))
+                }
+                Column(horizontalAlignment = Alignment.End, modifier = Modifier.widthIn(min = 72.dp)) {
+                    TextBar(TextStyle(fontSize = 28.sp, lineHeight = 34.sp), width = listOf(58.dp, 62.dp, 66.dp)[i % 3])
+                    TextBar(type.bodyMedium, Modifier.padding(top = 4.dp), width = 40.dp)
+                }
+                Spacer(Modifier.width(20.dp))
             }
         }
     }
@@ -1432,12 +1533,7 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
                                 color = c.onSurfaceVariant,
                                 modifier = Modifier.padding(vertical = 16.dp),
                             )
-                        line == null ->
-                            Text(
-                                stringResource(R.string.checking),
-                                color = c.onSurfaceVariant,
-                                modifier = Modifier.padding(vertical = 16.dp),
-                            )
+                        line == null -> LineSkeleton(state, route.svc, Color(color))
                         else -> {
                             Row(
                                 Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 8.dp),
@@ -1521,6 +1617,49 @@ private fun LineList(line: Line, color: Color, colors: Map<String, Long>, onHere
                         BusesOnLine(item.buses, stringResource(R.string.buses_on_the_way))
                     }
                 }
+        }
+    }
+}
+
+/**
+ * A service's line before it has come: its stops' shape on a rail in the service's colour, faded. As many rows as the line has stops in the
+ * campus's routes, else six. No buses: a placeholder bus would read as a real one.
+ */
+@Composable
+private fun LineSkeleton(state: BusesUi, svc: String, color: Color) {
+    val c = MaterialTheme.colorScheme
+    val campus = state.campus
+    val route = campus?.lines?.firstOrNull { it.svc == svc }
+    val seq = route?.seq.orEmpty()
+    // A loop comes back to where it started: /api/line lists its first stop again at the end.
+    val stops: List<String?> = if (seq.isEmpty()) List(6) { null } else if (route?.loop == true) seq + seq.first() else seq
+    val faded = lerp(c.background, color, 0.3f)
+    Skeleton(stringResource(R.string.checking)) {
+        Box(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 8.dp)) {
+            // The line's own count, as the loaded page has it, when the campus's routes say; else a bar.
+            if (seq.isEmpty()) TextBar(MaterialTheme.typography.labelMedium, fraction = 0.22f)
+            else Label(stringResource(R.string.buses_n_stops, seq.distinct().size))
+        }
+        for ((i, code) in stops.withIndex()) {
+            // The services that share the stop, from the campus's stops, drawn as themselves; a bar when the stop isn't known.
+            val others = code?.let { campus?.stop(it)?.services?.filter { s -> s != svc } }
+            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                Rail(faded, first = i == 0, last = i == stops.lastIndex, bus = false, here = false)
+                Column(Modifier.weight(1f).padding(vertical = 10.dp).padding(end = 10.dp)) {
+                    TextBar(MaterialTheme.typography.titleMedium, fraction = barFraction(i))
+                    if (others == null) Bar(Modifier.padding(top = 4.dp).size(24.dp, 26.dp), RoundedCornerShape(6.dp))
+                    else if (others.isNotEmpty()) {
+                        @OptIn(ExperimentalLayoutApi::class)
+                        FlowRow(
+                            Modifier.padding(top = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            for (s in others) BusBadge(s, campus?.routes?.get(s)?.color ?: GREY, 10.sp, pad = 4.dp, even = true)
+                        }
+                    }
+                }
+            }
         }
     }
 }

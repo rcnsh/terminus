@@ -719,10 +719,10 @@ struct SetupView: View {
                             Text(m).foregroundStyle(Color.bad).announced(m)
                             Button(L("Try again")) { Task { await setup.load() } }
                         } else {
-                            ProgressView()
+                            SetupSkeleton()
                         }
                     }
-                    .frame(maxWidth: .infinity, minHeight: 240)
+                    .frame(maxWidth: .infinity, minHeight: 240, alignment: .top)
                 } else {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 12) {
@@ -865,8 +865,40 @@ struct HomeStep: View {
             .padding(.top, 6)
             Hint(L("Included in your departure time when your location isn't available."))
         } else {
-            ProgressView()
+            SkeletonRows(count: 3)
         }
+    }
+}
+
+/// A setup step in bars while the profile is on its way: its title, the line under it, its settings.
+struct SetupSkeleton: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SkeletonLine(font: .title2.weight(.semibold), fraction: 0.5)
+            SkeletonLine(font: .callout, fraction: 0.85)
+            SkeletonRows(count: 3, spoken: false)
+        }
+        .shimmering()
+        .skeletonSpoken()
+    }
+}
+
+/// Settings rows in bars: a name, and its control's place at the end.
+struct SkeletonRows: View {
+    let count: Int
+    /// Read as "Checking…" on its own; off inside a skeleton that already is.
+    var spoken = true
+
+    var body: some View {
+        let rows = VStack(alignment: .leading, spacing: 10) {
+            ForEach(0..<count, id: \.self) { i in
+                HStack(spacing: 12) {
+                    SkeletonLine(font: .body, fraction: SkeletonWidths.name(i) * 0.7)
+                    SkeletonBar(width: 90, height: 18, radius: 5)
+                }
+            }
+        }
+        if spoken { rows.shimmering().skeletonSpoken() } else { rows }
     }
 }
 
@@ -1037,7 +1069,18 @@ struct DevicesView: View {
                 }
                 Hint(L("Removing a device signs it out. You'll get an email whenever a device is added or removed."))
             } else {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                // The devices on their way: two rows in bars, a name and a line under it.
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(0..<2, id: \.self) { i in
+                        VStack(alignment: .leading, spacing: 2) {
+                            SkeletonLine(font: .body, fraction: SkeletonWidths.name(i) * 0.6)
+                            SkeletonLine(font: .caption, fraction: SkeletonWidths.sub(i) * 0.8)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
+                .shimmering()
+                .skeletonSpoken()
             }
             Button(L("Add a device…")) { Task { await setup.newPairCode() } }.disabled(setup.busy)
         }

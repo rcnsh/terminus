@@ -101,11 +101,66 @@ struct BusLinePage: View {
             if line.here != nil && line.running {
                 Text(L("Times are shown for your stop only.")).font(.footnote).foregroundStyle(Color.muted).padding(.top, 12)
             }
-        } else {
-            Text(model.lineFailed.contains(key) ? L("This service's line isn't available.") : L("Checking…"))
+        } else if model.lineFailed.contains(key) {
+            Text(L("This service's line isn't available."))
                 .foregroundStyle(Color.muted)
                 .padding(.vertical, 16)
+        } else {
+            LineSkeleton(svc: svc, campus: model.campus, color: color)
         }
+    }
+}
+
+/// The line before it comes: its rail in a faded shade of the service's
+/// colour, a row per stop it calls at (from the campus data; six without
+/// it), each stop's name a bar and the other services there their own
+/// badges. No buses: a made-up one would read as real.
+private struct LineSkeleton: View {
+    let svc: String
+    let campus: BusCampus?
+    let color: String?
+
+    var body: some View {
+        // A route with no stops is as good as none: six rows, the count a bar, never "0 stops".
+        let route = campus?.routes[svc].flatMap { $0.seq.isEmpty ? nil : $0 }
+        // A loop's line ends back at its first stop, listed again, as the line has it.
+        let seq: [String?] = route.map { r in r.seq + (r.loop && !r.seq.isEmpty ? [r.seq[0]] : []) } ?? Array(repeating: nil, count: 6)
+        let rgb = color.flatMap(hexRGB) ?? 0x8A847E
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                if let route {
+                    SectionLabel(L("%@ stops", "\(Set(route.seq).count)"))
+                } else {
+                    SkeletonLine(font: .caption.weight(.semibold), points: 70)
+                }
+                Spacer()
+            }
+            .padding(.top, 14)
+            .padding(.bottom, 8)
+            VStack(spacing: 0) {
+                ForEach(Array(seq.enumerated()), id: \.offset) { i, code in
+                    let others = code.flatMap { campus?.stop($0)?.services.filter { $0 != svc } } ?? []
+                    VStack(alignment: .leading, spacing: 4) {
+                        SkeletonLine(font: .headline, fraction: [0.72, 0.3, 0.24, 0.3, 0.42, 0.68, 0.5][i % 7])
+                        if !others.isEmpty {
+                            BusFlow(spacing: 4) {
+                                ForEach(others, id: \.self) { BusBadge(svc: $0, color: campus?.colors[$0], size: 10, even: true) }
+                            }
+                        }
+                    }
+                    .padding(.leading, 48)
+                    .padding(.trailing, 10)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(alignment: .leading) {
+                        Rail(rgb: rgb, first: i == 0, last: i == seq.count - 1, bus: false, here: false, faded: true).frame(width: 48)
+                    }
+                }
+            }
+        }
+        // One wave over the bars; the rail and the badges are real and stay still.
+        .shimmering()
+        .skeletonSpoken()
     }
 }
 
@@ -248,9 +303,11 @@ private struct Rail: View {
     let last: Bool
     let bus: Bool
     let here: Bool
+    /// The line still on its way: the service's colour faded, as a skeleton.
+    var faded = false
 
     var body: some View {
-        let color = Color(rgb: rgb)
+        let color = Color(rgb: rgb).opacity(faded ? 0.3 : 1)
         return ZStack {
             Canvas { g, size in
                 let x = size.width / 2
