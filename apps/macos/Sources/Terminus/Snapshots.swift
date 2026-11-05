@@ -62,6 +62,25 @@
                 ),
                 ("rest", model(nearbyTab: false, resting: true)),
                 (
+                    "loading",
+                    {
+                        // Before the first answer: the card's skeleton.
+                        let m = model(nearbyTab: false)
+                        m.answers = [:]
+                        m.updated = nil
+                        return m
+                    }()
+                ),
+                (
+                    "loading-nearby",
+                    {
+                        let m = model(nearbyTab: true)
+                        m.nearby = nil
+                        m.updated = nil
+                        return m
+                    }()
+                ),
+                (
                     "later",
                     {
                         let m = model(nearbyTab: false)

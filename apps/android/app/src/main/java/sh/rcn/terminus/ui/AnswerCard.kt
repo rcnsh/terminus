@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
@@ -37,6 +39,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -44,6 +47,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -101,12 +105,11 @@ internal fun AnswerCard(
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             if (answer == null) {
-                SkyHead {
-                    Text(
-                        if (loading) stringResource(R.string.checking) else stringResource(R.string.no_answer_yet),
-                        style = MaterialTheme.typography.titleLarge,
-                    )
+                if (loading) {
+                    NowSkeleton()
+                    return@Column
                 }
+                SkyHead { Text(stringResource(R.string.no_answer_yet), style = MaterialTheme.typography.titleLarge) }
                 SkyGround()
                 return@Column
             }
@@ -768,5 +771,48 @@ private fun RideProgress(ride: Ride) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 4.dp),
         )
+    }
+}
+
+/**
+ * The first answer on its way: the card's shape in the steps style, bars in the sky where the line, "Leave in" and the time go, and the
+ * trip's points under the road. No buttons: one that can't be pressed yet would read as broken.
+ */
+@Composable
+private fun NowSkeleton() {
+    Skeleton(stringResource(R.string.checking), Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        SkyHead {
+            TextBar(LocalTextStyle.current, fraction = 0.62f, sky = true)
+            // LeaveHead's line: 34 sp on 38, with its padding.
+            TextBar(TextStyle(fontSize = 34.sp, lineHeight = 38.sp), Modifier.padding(vertical = 2.dp), fraction = 0.78f, sky = true)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextBar(LocalTextStyle.current, Modifier.weight(1f, fill = false), fraction = 0.5f, sky = true)
+                Bar(Modifier.size(58.dp, 24.dp), RoundedCornerShape(50), sky = true)
+            }
+        }
+        SkyGround()
+        Column(Modifier.padding(top = 18.dp)) {
+            SkeletonPoint(rail = true, title = 0.30f, below = 0.38f)
+            SkeletonPoint(rail = true, title = 0.42f, below = 0.34f)
+            SkeletonPoint(rail = false, title = 0.34f, below = null)
+        }
+    }
+}
+
+/** One of the trip's points as the steps style lays it out (JourneyCard's LinePoint): the time, the dot and the line on, the words. */
+@Composable
+private fun SkeletonPoint(rail: Boolean, title: Float, below: Float?) {
+    val type = MaterialTheme.typography
+    Row(Modifier.height(IntrinsicSize.Min)) {
+        val wide = LocalDensity.current.fontScale.coerceIn(1f, 1.8f)
+        TextBar(type.bodyMedium, Modifier.width(72.dp * wide).padding(top = 3.dp), width = 42.dp)
+        Column(Modifier.width(26.dp).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
+            Bar(Modifier.padding(top = 7.dp).size(14.dp), CircleShape)
+            if (rail) Bar(Modifier.padding(vertical = 6.dp).weight(1f).width(3.dp), RoundedCornerShape(2.dp))
+        }
+        Column(Modifier.weight(1f).padding(start = 10.dp, top = 1.dp, bottom = if (rail) 14.dp else 0.dp)) {
+            TextBar(type.titleMedium, fraction = title)
+            below?.let { TextBar(type.bodySmall, Modifier.padding(top = 6.dp), fraction = it) }
+        }
     }
 }

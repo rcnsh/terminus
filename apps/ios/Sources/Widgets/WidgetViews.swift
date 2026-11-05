@@ -23,7 +23,10 @@ struct BusWidgetView: View {
                 GeometryReader { geo in
                     let w = geo.size.width
                     let h = geo.size.height
-                    let sc = s.withChips(width: w)
+                    // Before the first answer: a made-up one in its place, redacted to bars, so the
+                    // widget has the shape it will have. Widgets don't animate, so it doesn't shimmer.
+                    let chipped = s.withChips(width: w)
+                    let sc = chipped.waiting ? chipped.standIn(family: family) : chipped
                     Group {
                         if sc.mode == .nearby {
                             BoardLayout(s: sc, w: w, h: h)
@@ -35,12 +38,60 @@ struct BusWidgetView: View {
                             TripLayout(s: sc, w: w, h: h)
                         }
                     }
+                    .standingIn(sc.stood, spoken: sc.spoken)
                     .frame(width: w, height: h, alignment: .topLeading)
                 }
             }
         }
         .widgetURL(s.link)
         .containerBackground(for: .widget) { family.isAccessory ? Color.clear : s.look.page }
+    }
+}
+
+private struct StandInKey: EnvironmentKey { static let defaultValue: String? = nil }
+
+extension EnvironmentValues {
+    /// Set while a widget draws a made-up answer in place of the one on its way:
+    /// what VoiceOver says for it instead.
+    var widgetStandIn: String? {
+        get { self[StandInKey.self] }
+        set { self[StandInKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// Drawn from a made-up answer while the real one is on its way: redacted
+    /// to bars. Its words are kept from VoiceOver (`standInHidden`, `standInSpoken`),
+    /// which says `spoken` instead; its buttons stay real and reachable.
+    @ViewBuilder func standingIn(_ on: Bool, spoken: String) -> some View {
+        if on {
+            redacted(reason: .placeholder).environment(\.widgetStandIn, spoken)
+        } else {
+            self
+        }
+    }
+
+    /// Made-up words while standing in: not read.
+    func standInHidden() -> some View { modifier(StandInWords(spoken: false)) }
+
+    /// The headline while standing in: read as what the widget is waiting for.
+    func standInSpoken() -> some View { modifier(StandInWords(spoken: true)) }
+}
+
+private struct StandInWords: ViewModifier {
+    let spoken: Bool
+    @Environment(\.widgetStandIn) private var standIn
+
+    func body(content: Content) -> some View {
+        if let standIn {
+            if spoken {
+                content.accessibilityElement(children: .ignore).accessibilityLabel(standIn)
+            } else {
+                content.accessibilityHidden(true)
+            }
+        } else {
+            content
+        }
     }
 }
 
@@ -59,6 +110,12 @@ struct Scene {
     var face: WidgetFace
     /// The card style chosen in Settings: steps or route.
     let style: String
+    /// No answer yet, and one on its way (or none asked for yet).
+    var waiting = false
+    /// Drawing a made-up answer in place of the one on its way (`standIn`), to be redacted.
+    var stood = false
+    /// The made-up stops Nearby draws while it's `stood`.
+    private var standInStops: [NearbyStop]?
 
     init(entry: BusEntry, kind: String, family: WidgetFamily, dark: Bool) {
         self.entry = entry
@@ -93,6 +150,30 @@ struct Scene {
             offline = OfflineDay.next(entry.day, now: now)
         }
         face = WidgetFace.of(paired: entry.paired, mode: mode, answer: answer, error: error, offline: offline, now: now)
+        if mode == .nearby {
+            // Only while it's being fetched: a failed first fetch shows its error, as the Nearby widget does.
+            waiting = entry.paired && !entry.sample && (entry.nearby?.isEmpty ?? true) && entry.slot?.error == WidgetFace.updating
+        } else {
+            let updating = error == nil || error == WidgetFace.updating
+            waiting = entry.paired && !entry.sample && answer == nil && offline == nil && updating
+        }
+    }
+
+    /// This scene with the gallery's made-up trip (or Nearby's made-up stops)
+    /// in place of the answer still to come, for drawing redacted. Its road has
+    /// no bus: a made-up one would read as real, even greyed.
+    func standIn(family: WidgetFamily) -> Scene {
+        var s = self
+        s.stood = true
+        if mode == .nearby {
+            s.standInStops = NearbyProvider.sampleEntry(family: family).stops
+        } else {
+            let sample = BusProvider.sampleEntry(kind: "next", family: family)
+            s.answer = sample.plan
+            s.face = WidgetFace.of(paired: true, mode: mode, answer: sample.plan, error: nil, offline: nil, now: sample.serverNow)
+            s.face.road = Road()
+        }
+        return s
     }
 
     var link: URL { entry.paired ? mode.link : URL(string: "terminus://plan")! }
@@ -101,8 +182,9 @@ struct Scene {
     /// swap, and `error` (Nearby's last fetch; none under the trip).
     func nearbyModel(error: String?) -> NearbyModel {
         NearbyModel(
-            paired: entry.paired, all: entry.nearby, swap: entry.slot?.swap, fetchedAt: entry.nearbyAt, error: error, now: entry.date,
-            skew: ServerClock.skew, slot: slot, refresh: refresh)
+            paired: entry.paired, all: standInStops ?? entry.nearby, swap: entry.slot?.swap,
+            fetchedAt: standInStops != nil ? entry.date : entry.nearbyAt, error: standInStops != nil ? nil : error, now: entry.date,
+            skew: ServerClock.skew, slot: slot, refresh: refresh, standIn: standInStops != nil)
     }
     var refresh: Bool { entry.paired && !entry.sample }
     /// The words on the chosen chip over the sky, and on the ground.
@@ -110,6 +192,7 @@ struct Scene {
 
     /// What VoiceOver says for the widget, as one sentence rather than fragments.
     var spoken: String {
+        if stood { return mode == .nearby ? L("Checking…") : L("Loading…") }
         if mode == .nearby { return nearbyModel(error: entry.slot?.error).spoken }
         if let a = answer, entry.paired, !WidgetFace.isOld(a, now: entry.serverNow) { return Spoken.summary(a, now: entry.serverNow) }
         return Spoken.sentences(face.heading, face.headline, face.sub)
@@ -129,6 +212,7 @@ private struct HeadRow: View {
         HStack(spacing: 6) {
             small(text ?? "", inks.muted, 12, bold: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .standInHidden()
             if s.refresh { RefreshButton(slot: s.slot, inks: inks, side: side) }
         }
         .frame(height: side + 6)
@@ -150,6 +234,7 @@ private struct SubLine: View {
             if let pill = f.pill { PillView(pill: pill, inks: inks).layoutPriority(1) }
             Spacer(minLength: 0)
         }
+        .standInHidden()
     }
 }
 
@@ -312,7 +397,7 @@ struct DayLayout: View {
                 .frame(height: tallSky, alignment: .topLeading)
                 Spacer().frame(height: 6)
                 if let journey, let a = s.answer {
-                    JourneyView(answer: a, journey: journey, style: s.style, inks: ground, page: s.look.page, now: now)
+                    JourneyView(answer: a, journey: journey, style: s.style, inks: ground, page: s.look.page, now: now).standInHidden()
                 } else if let leg = f.leg {
                     LegRow(leg: leg, inks: ground)
                 }
@@ -391,10 +476,13 @@ struct BoardLayout: View {
                         } else {
                             small(
                                 ([L("Nearby")] + [first.map(NearbyModel.walk)].compactMap { $0 }).joined(separator: " · "), sky.muted, 12,
-                                bold: true)
+                                bold: true
+                            )
+                            .standInHidden()
                         }
                         Spacer(minLength: 0)
-                        if let other, let slot = s.slot, let nearest = all.first {
+                        // None for made-up stops: there's no real one to swap to yet.
+                        if let other, let slot = s.slot, let nearest = all.first, !v.standIn {
                             NearbySwapButton(slot: slot, from: nearest.stop.code, other: other, inks: sky)
                         }
                         if !large, s.refresh { RefreshButton(slot: s.slot, inks: sky) }
@@ -407,6 +495,7 @@ struct BoardLayout: View {
                     }()
                     Text(verbatim: name).font(.system(size: large ? 22 : 19, weight: .bold)).foregroundStyle(sky.ink).lineLimit(1)
                         .minimumScaleFactor(0.7)
+                        .standInHidden()
                 }
                 .padding(.top, 8)
                 .frame(height: skyH, alignment: .topLeading)

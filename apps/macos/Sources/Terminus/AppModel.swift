@@ -92,6 +92,9 @@ final class AppModel {
     var destinations: [Destination] = []
 
     var error: String?
+    /// Why the last answer refresh failed, set only by `refresh`: `error` also
+    /// holds the login item's and saving's, which say nothing about the answer.
+    var answerError: String?
     var updated: Date?
 
     /// Today, for the popover, and kept for when the Mac goes offline (OfflineDay).
@@ -789,6 +792,7 @@ final class AppModel {
         target = .plan
         showNearby = false
         error = nil
+        answerError = nil
     }
 
     func openLocationSettings() {
@@ -1106,6 +1110,7 @@ final class AppModel {
                 if !located && p.mode != "rest" { rerun = true }
             }
             if error != nil { error = nil }
+            if answerError != nil { answerError = nil }
             if updateRequired { updateRequired = false }
             serverWait = nil
             updated = ServerClock.now
@@ -1151,15 +1156,18 @@ final class AppModel {
             // The update banner says it all: no red status line besides, nor
             // the offline day plan in the card's place while online.
             error = nil
+            answerError = L("Update terminus to continue")
             return .failed
         } catch let e as ApiError {
             log.error("api error \(e.status): \(e.message, privacy: .public)")
             serverWait = e.retryAfter
             error = e.message
+            answerError = e.message
             return .failed
         } catch is DecodingError {
             // Not the network: the API sent something this version can't read.
             error = update != nil ? L("Update terminus to continue") : L("terminus sent something this version can't read.")
+            answerError = error
             return .failed
         } catch {
             // kick() restarts the loop and cancels a refresh in flight; that
@@ -1167,6 +1175,7 @@ final class AppModel {
             if Task.isCancelled || (error as? URLError)?.code == .cancelled { return .skipped }
             log.error("refresh failed: \(error.localizedDescription, privacy: .public)")
             self.error = L("Offline")
+            answerError = self.error
             return .failed
         }
     }

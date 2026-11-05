@@ -42,20 +42,33 @@ struct OnboardingFlow: View {
     }
 
     @ViewBuilder private var loading: some View {
-        VStack(spacing: 16) {
-            if let m = model.message {
+        if let m = model.message {
+            VStack(spacing: 16) {
                 Text(m)
                     .foregroundStyle(Color.bad)
                     .multilineTextAlignment(.center)
                     .announced(m)
                 Button(L("Try again")) { Task { await model.load() } }
                     .buttonStyle(ChipButtonStyle(filled: true))
-            } else {
-                ProgressView()
             }
+            .padding(32)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            // The first step's page in bars, in SetupPage's boxes: its title, the line under it, then its tiles.
+            VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 0) {
+                    SkeletonLine(font: .largeTitle.bold(), fraction: 0.75)
+                    SkeletonLine(font: .body, fraction: 0.9).padding(.top, 6)
+                    SkeletonLine(font: .body, fraction: 0.6).padding(.bottom, 20)
+                }
+                SetupTilesSkeleton()
+            }
+            .shimmering()
+            .skeletonSpoken()
+            .padding(.horizontal, 20)
+            .padding(.top, 14)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
-        .padding(32)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder private var page: some View {
@@ -260,6 +273,26 @@ struct SetupChoiceTile<Content: View>: View {
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
         .accessibilityIdentifier(id ?? "")
+    }
+}
+
+/// Setup's choice tiles in bars while what they offer is on its way: six,
+/// two to a row, each in a tile's box. Shimmered by the view around it.
+struct SetupTilesSkeleton: View {
+    var body: some View {
+        SetupTwoColumns(items: Array(0..<6)) { i in
+            VStack(alignment: .leading, spacing: 3) {
+                SkeletonLine(font: .subheadline.weight(.semibold), fraction: SkeletonWidths.name(i))
+                SkeletonLine(font: .footnote, fraction: SkeletonWidths.sub(i))
+            }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .padding(.horizontal, 13)
+            .padding(.vertical, 11)
+            .frame(minHeight: 64)
+            .background(Color.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.line))
+        }
+        .skeletonSpoken()
     }
 }
 

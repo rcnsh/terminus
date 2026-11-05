@@ -4,7 +4,7 @@
 // showing timetable estimates, as the apps draw a guess, and an empty road
 // overnight, when no shuttle runs.
 
-import { html, render, useEffect, useState } from '/assets/ui.js';
+import { Bar, html, render, useEffect, useState } from '/assets/ui.js';
 import { t, timeout } from '/account/dom.js';
 import { drawHorizon } from '/assets/sky-page.js';
 import { duration, month } from '/status/outages.js';
@@ -78,26 +78,61 @@ function now(s) {
   return state;
 }
 
+/**
+ * The feed's state: its headline, what it means and when it was checked.
+ * Before the status comes, the same live region holds its shapes, heard as
+ * "Checking…", so the headline that replaces them is announced.
+ */
 function Head({ s, failed }) {
   const head = failed
     ? { kind: 'off', headline: t("Couldn't load the status"), detail: t('Try again in a minute.'), chip: '' }
     : s
       ? now(s)
-      : { kind: 'off', headline: t('Checking…'), detail: '', chip: '' };
+      : null;
   return html`
     <div aria-live="polite">
       <p class="eyebrow">${t('Status')}</p>
-      <h1>${head.headline}</h1>
-      ${head.detail && html`<p>${head.detail}</p>`}
+      ${
+        head
+          ? html`<h1>${head.headline}</h1>${head.detail && html`<p>${head.detail}</p>`}`
+          : html`<h1><${Bar} w="82%" h="0.62em" /><span class="sk-more"><${Bar} w="50%" h="0.62em" /></span><span class="sr-only">${t('Checking…')}</span></h1>
+              <p><${Bar} w="56%" /></p>`
+      }
     </div>
-    ${head.checked && html`<p class="checked">${head.checked}</p>`}
-    ${head.chip && html`<span class=${`sky-chip ${head.kind}`}><span class="dot"></span>${head.chip}</span>`}
+    ${head ? head.checked && html`<p class="checked">${head.checked}</p>` : html`<p class="checked"><${Bar} w="42%" /></p>`}
+    ${head ? head.chip && html`<span class=${`sky-chip ${head.kind}`}><span class="dot"></span>${head.chip}</span>` : html`<span class="sk round sk-chip"></span>`}
   `;
 }
 
+/** The 30 days' figures and two outages, as shapes, while the status is on its way. */
+const FactsSkeleton = () => html`
+  <div class="facts" aria-hidden="true">
+    ${[
+      ['3.5rem', '9rem'],
+      ['1.2rem', '11rem'],
+      ['3.8rem', '6.5rem'],
+    ].map(([big, small], i) => html`<div key=${i}><strong><${Bar} w=${big} /></strong><small><${Bar} w=${small} /></small></div>`)}
+  </div>
+`;
+const OutagesSkeleton = () => html`
+  <ol class="outages" aria-hidden="true">
+    ${[
+      ['9.5rem', '13rem'],
+      ['8rem', '11rem'],
+    ].map(
+      ([when, what], i) => html`<li key=${i}>
+        <div><div class="when"><${Bar} w=${when} /></div><div class="what"><${Bar} w=${what} /></div></div>
+        <div class="how-long"><${Bar} w="4rem" /></div>
+      </li>`,
+    )}
+  </ol>
+`;
+
 function History({ s, failed }) {
   const m = s && month(s.incidents, Date.now());
+  const waiting = !s && !failed;
   return html`
+    ${waiting && html`<${FactsSkeleton} />`}
     ${
       m &&
       html`<div class="facts">
@@ -107,7 +142,7 @@ function History({ s, failed }) {
     </div>`
     }
     <h2>${t('Recent outages')}</h2>
-    ${!s && html`<p class="hint">${failed ? '' : t('Loading…')}</p>`}
+    ${waiting && html`<${OutagesSkeleton} />`}
     ${s && !s.incidents.length && html`<p class="hint">${t('None recorded.')}</p>`}
     ${
       s?.incidents.length > 0 &&

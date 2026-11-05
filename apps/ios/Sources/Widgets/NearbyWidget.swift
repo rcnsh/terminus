@@ -31,11 +31,13 @@ struct NearbyEntry: TimelineEntry {
     var newcomer: Bool
     /// Made-up buses for the widget gallery, before the app has fetched any.
     var sample = false
+    /// Drawing made-up stops while the real board is on its way (NearbyWidgetView.shown).
+    var standIn = false
 
     var model: NearbyModel {
         NearbyModel(
             paired: paired, all: stops, swap: swap, fetchedAt: fetchedAt, error: error, now: date, skew: ServerClock.skew, slot: slot,
-            refresh: paired && !sample)
+            refresh: paired && !sample, standIn: standIn)
     }
 }
 
@@ -166,6 +168,8 @@ struct NearbyModel {
     /// Where its ↻ and swap button keep their state; nil for none.
     let slot: String?
     let refresh: Bool
+    /// Made-up stops drawn redacted while the real board is on its way: said as "Checking…".
+    var standIn = false
 
     /// As shown: the stop across the road first after a swap.
     var stops: [NearbyStop]? { all.map { WidgetSwap.order($0, swap, now: now) } }
@@ -235,6 +239,7 @@ struct NearbyModel {
 
     /// What VoiceOver says: the stop and its next few buses, as one sentence.
     var spoken: String {
+        if standIn { return L("Checking…") }
         let buses = buses
         guard let first, problem(buses) == nil else { return Spoken.sentences(L("Buses near you"), problem(buses)) }
         let due = buses.prefix(3).map { b in

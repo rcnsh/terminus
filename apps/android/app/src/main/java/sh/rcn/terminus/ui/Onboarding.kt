@@ -117,6 +117,14 @@ internal fun OnboardingScreen(state: AccountState, account: AccountViewModel, ma
         }
         val profile = state.profile
         if (profile == null) {
+            // The first step's question is known: the picker under it waits as its shape.
+            if (state.message == null && step == 0) {
+                Column(Modifier.weight(1f).fillMaxWidth().padding(top = 12.dp)) {
+                    Title(stringResource(R.string.where_live), stringResource(R.string.where_live_sub))
+                    HomePickerSkeleton()
+                }
+                return@Column
+            }
             Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                 if (state.message == null) CircularProgressIndicator()
                 else
@@ -249,7 +257,26 @@ private fun ColumnScope.HomeStep(profile: ProfileDoc, state: AccountState, accou
     StepPage(state.message, { StepButtons(next = next, back = null, skip = if (home) null else stringResource(R.string.later)) }) {
         Title(stringResource(R.string.where_live), stringResource(R.string.where_live_sub))
         val campus = state.campus
-        if (campus == null) CircularProgressIndicator() else HomePicker(profile, campus, account)
+        if (campus == null) HomePickerSkeleton() else HomePicker(profile, campus, account)
+    }
+}
+
+/** The home picker before the campus's residences have come: its tiles' shape, two to a row, with nothing to choose yet. */
+@Composable
+private fun HomePickerSkeleton() {
+    val c = MaterialTheme.colorScheme
+    Skeleton(stringResource(R.string.checking)) {
+        TextBar(MaterialTheme.typography.labelMedium, Modifier.padding(bottom = 8.dp), width = 110.dp)
+        TwoColumns((0 until 6).toList()) { i, mod ->
+            Column(
+                mod.heightIn(min = 64.dp)
+                    .border(1.dp, c.outlineVariant, RoundedCornerShape(16.dp))
+                    .padding(horizontal = 13.dp, vertical = 11.dp)
+            ) {
+                TextBar(MaterialTheme.typography.titleSmall, fraction = barFraction(i))
+                TextBar(MaterialTheme.typography.bodySmall, fraction = barFraction(i, 1) + 0.2f)
+            }
+        }
     }
 }
 

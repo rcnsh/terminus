@@ -3,7 +3,7 @@
 // tab (buses.js) and the map's stop sheet (map.js), so a stop reads the same
 // in both.
 
-import { Icon, html } from '/assets/ui.js';
+import { Bar, Icon, html, widthOf } from '/assets/ui.js';
 import { clock, inkOn, serverNow, t } from '/account/dom.js';
 import { campus } from '/account/profile.js';
 
@@ -199,3 +199,41 @@ export function Row({ r, now = serverNow(), onPick, chevron = false, picked }) {
   const l = look(r, cls, chevron, picked);
   return html`<button type="button" class=${l.cls} style=${l.style} aria-pressed=${l.pressed} onClick=${() => onPick(r.svc)}>${body}${l.chev}</button>`;
 }
+
+/**
+ * A board's rows while its times are on the way: a row per service that
+ * calls there (`services`, from the campus data) with its badge drawn,
+ * else `n` rows; where each is going and its times are bars. Laid out as
+ * a running service's row, so nothing moves when the times land. Not
+ * pressable yet: `chevron` only keeps the row's width.
+ */
+export const WaitingRows = ({ services, n = 3, chevron = false }) =>
+  (services?.length ? services : Array.from({ length: n }, () => null)).map(
+    (svc, i) => html`
+      <div class=${`bt-row run${chevron ? ' go' : ''}`} key=${svc ?? i}>
+        ${svc ? html`<${Chip} svc=${svc} cls="bt-chip" />` : html`<span class="svc-tag bt-chip sk"></span>`}
+        <span class="bt-text"><span class="bt-dir"><${Bar} w=${widthOf(['62%', '48%', '56%', '42%'], i)} /></span><span class="bt-meta"><${Bar} w="6.5rem" /><span class="sk round sk-pill"></span></span></span>
+        <span class="bt-at"><span class="bt-big"><${Bar} w=${widthOf(['3.4rem', '3rem', '3.8rem'], i)} h="0.62em" /></span></span>
+        <span class="bt-then"><${Bar} w="5.5rem" /></span>
+        ${chevron && html`<${Icon} paths=${NEXT} class="bt-go sk-go" />`}
+      </div>
+    `,
+  );
+
+/** The Stops tab's services before the campus data comes: `n` rows of shapes, as tall as its rows (buses.js Lines). */
+export const ServicesSkeleton = ({ n = 6 }) => html`
+  <div class="card bt-services">
+    ${Array.from(
+      { length: n },
+      (_, i) => html`<div class="bt-service" key=${i}>
+        <span class="bt-service-chip"><span class="svc-tag bt-chip sk"></span></span>
+        <span class="bt-service-text"
+          ><span class="bt-service-name"><${Bar} w=${widthOf(['70%', '58%', '64%', '52%', '66%', '60%'], i)} /></span
+          ><span class="bt-service-via"><${Bar} w=${widthOf(['50%', '62%', '44%', '56%', '48%', '40%'], i)} /></span
+        ></span>
+        <span class="bt-out"><${Bar} w="2.8rem" /></span>
+        <${Icon} paths=${NEXT} class="bt-go sk-go" />
+      </div>`,
+    )}
+  </div>
+`;

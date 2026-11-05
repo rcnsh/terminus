@@ -10,7 +10,8 @@ struct NearbyWidgetView: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        let v = entry.model
+        let waiting = Self.waiting(entry)
+        let v = Self.shown(entry, family: family).model
         let look = WidgetLook(date: entry.date, dark: scheme == .dark)
         Group {
             if family == .accessoryRectangular {
@@ -22,8 +23,27 @@ struct NearbyWidgetView: View {
                 }
             }
         }
+        .standingIn(waiting, spoken: L("Checking…"))
         .widgetURL(URL(string: entry.paired ? "terminus://nearby" : "terminus://plan"))
         .containerBackground(for: .widget) { family.isAccessory ? Color.clear : look.page }
+    }
+
+    /// Before the first board, while it's being fetched.
+    static func waiting(_ entry: NearbyEntry) -> Bool {
+        entry.paired && !entry.sample && (entry.stops?.isEmpty ?? true) && entry.error == WidgetFace.updating
+    }
+
+    /// What's drawn: while `waiting`, the gallery's made-up stops in place of
+    /// the board, redacted to bars, so the widget has its shape; the rest is
+    /// this widget's own, so ↻ and the swap stay.
+    static func shown(_ entry: NearbyEntry, family: WidgetFamily) -> NearbyEntry {
+        guard waiting(entry) else { return entry }
+        var e = entry
+        e.stops = NearbyProvider.sampleEntry(family: family).stops
+        e.fetchedAt = entry.date
+        e.error = nil
+        e.standIn = true
+        return e
     }
 }
 
@@ -87,14 +107,17 @@ private struct NearbySky: View {
                         HStack(spacing: 6) {
                             Text(verbatim: v.title).font(.system(size: 17, weight: .bold)).foregroundStyle(sky.ink).lineLimit(1)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                            HeadWords(v: v, buses: buses + besideBuses, inks: sky, walk: false)
+                                .standInHidden()
+                            HeadWords(v: v, buses: buses + besideBuses, inks: sky, walk: false).standInHidden()
                             if v.refresh { RefreshButton(slot: v.slot, inks: sky, side: 24) }
                         }
                         .frame(height: 30)
                     } else {
                         HStack(spacing: 6) {
                             HeadWords(v: v, buses: buses, inks: sky, walk: !narrow).frame(maxWidth: .infinity, alignment: .leading)
-                            if let other, let slot = v.slot, let nearest = v.all?.first {
+                                .standInHidden()
+                            // None for made-up stops: there's no real one to swap to yet.
+                            if let other, let slot = v.slot, let nearest = v.all?.first, !v.standIn {
                                 NearbySwapButton(slot: slot, from: nearest.stop.code, other: other, inks: sky, side: 24)
                             }
                             if v.refresh { RefreshButton(slot: v.slot, inks: sky, side: 24) }
@@ -103,6 +126,7 @@ private struct NearbySky: View {
                         Text(verbatim: narrow ? v.shortTitle : v.title).font(.system(size: 18, weight: .bold)).foregroundStyle(sky.ink)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
+                            .standInHidden()
                     }
                 }
                 .padding(.horizontal, pad)

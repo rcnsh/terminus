@@ -39,6 +39,8 @@ internal data class Face(
     val tile: Tile? = null,
     /** The trip's steps, for a widget with room to draw them. */
     val journey: Journey? = null,
+    /** Nothing yet and nothing wrong: the headline is drawn as a bar where the answer will be, and said as [headline]. */
+    val placeholder: Boolean = false,
 ) {
     /** The accent part, when the headline has one: what a small widget shows big. */
     val big: String?
@@ -78,7 +80,13 @@ internal data class Face(
             }
             val onTimetable = mode == Mode.Timetable
             if (answer == null) {
-                return Face(mode.label.takeIf { !onTimetable }, problem ?: L.s(R.string.loading), sub = L.s(R.string.tap_to_refresh))
+                val waiting = error == null || error == UPDATING
+                return Face(
+                    mode.label.takeIf { !onTimetable },
+                    if (waiting) L.s(R.string.loading) else problem.orEmpty(),
+                    sub = L.s(R.string.tap_to_refresh),
+                    placeholder = waiting,
+                )
             }
             val old = isOld(answer, now)
             val card = answer.card

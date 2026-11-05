@@ -58,6 +58,10 @@ internal fun Headline(face: Face, inks: Inks, size: TextUnit) {
             face.late -> inks.late
             else -> inks.ink
         }
+    if (face.placeholder) {
+        HeadlineBar(face.headline, inks, size)
+        return
+    }
     fun style(c: ColorProvider) = TextStyle(color = c, fontWeight = FontWeight.Bold, fontSize = size)
     val accent = face.big?.takeIf { !face.dim && !face.late }
     if (accent == null) {
@@ -71,6 +75,26 @@ internal fun Headline(face: Face, inks: Inks, size: TextUnit) {
         Text(accent, style = style(inks.accent), maxLines = 1)
         face.headline.substring(at + accent.length).takeIf { it.isNotEmpty() }?.let { Text(it, style = style(base), maxLines = 1) }
     }
+}
+
+/**
+ * Where the headline will be, before there is one: a bar centred in a line of [size] text, said as [said]. Still: a widget can't animate.
+ * Rounded from Android 12; before it, square.
+ */
+@Composable
+internal fun HeadlineBar(said: String, inks: Inks, size: TextUnit, width: Dp = 150.dp) {
+    Box(
+        GlanceModifier.height((size.value * 1.25f).dp).semantics { contentDescription = said },
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        WidgetBar(width, (size.value * 0.72f).dp, inks)
+    }
+}
+
+/** One placeholder shape, in the pill's ground, which reads on the sky and on the ground alike. */
+@Composable
+internal fun WidgetBar(width: Dp, height: Dp, inks: Inks) {
+    Box(GlanceModifier.width(width).height(height).cornerRadius(6.dp).background(inks.chip)) {}
 }
 
 private fun solid(argb: Long) = ColorProvider(Color(argb))

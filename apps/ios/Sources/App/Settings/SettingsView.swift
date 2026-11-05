@@ -260,9 +260,41 @@ private struct SettingsPageView: View {
     }
 }
 
-/// While the profile is on its way: a spinner where the page will be.
+/// While the profile is on its way: the page's groups in bars, each row in
+/// a setting row's box, so the settings fill in where they'll stay.
 struct SettingsProfileLoading: View {
     var body: some View {
-        ProgressView().frame(maxWidth: .infinity).padding(40)
+        VStack(alignment: .leading, spacing: 24) {
+            ForEach(0..<2, id: \.self) { g in
+                VStack(alignment: .leading, spacing: 8) {
+                    SkeletonLine(font: .caption.weight(.semibold), points: [90, 120][g]).padding(.horizontal, 4)
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(0..<3, id: \.self) { i in
+                            if i > 0 { GroupDivider() }
+                            SettingsSkeletonRow(seed: g * 3 + i)
+                        }
+                    }
+                    .background(Color.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.line))
+                }
+            }
+        }
+        .shimmering()
+        .skeletonSpoken()
+    }
+}
+
+/// One setting in bars: its name, and its control's place at the end.
+struct SettingsSkeletonRow: View {
+    var seed = 0
+
+    var body: some View {
+        HStack(spacing: 12) {
+            SkeletonLine(font: .body, fraction: SkeletonWidths.name(seed) * 0.8)
+            SkeletonBar(width: 64, height: 24, radius: 12)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(minHeight: 52)
     }
 }
