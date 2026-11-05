@@ -206,11 +206,7 @@ struct Popover: View {
         }
         // Opening is a plain fade of the whole popover; nothing moves.
         .opacity(shown ? 1 : 0)
-        // Always the window's height, the content pinned to its top: while
-        // a tab switch animates, what's drawn is taller or shorter than the
-        // window for a moment, and without minHeight it would be centred,
-        // jumping the whole popover up and back down.
-        .frame(minHeight: 0, maxHeight: .infinity, alignment: .top)
+        .frame(maxHeight: .infinity, alignment: .top)
         .ignoresSafeArea()
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { n in
             if window == nil || n.object as? NSWindow === window { open() }
