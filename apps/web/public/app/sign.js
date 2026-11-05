@@ -6,7 +6,7 @@
 import { Bar, Icon, Skeleton, html, store, useStore, widthOf } from '/assets/ui.js';
 import { PIN_COUNT_KEY, inkOn, t } from '/account/dom.js';
 import { togglePin } from '/account/profile.js';
-import { NEXT, STAR, colorOf, saidRow, svcVars } from '/app/board.js';
+import { NEXT, Row, STAR, colorOf, saidRow, svcVars } from '/app/board.js';
 
 const mins = (s) => Math.round(s / 60);
 
@@ -164,11 +164,16 @@ export function PinnedSkeleton() {
  * wrong, or to unpin with). No walk without one (`walkS` null). `note`, in
  * place of the rows: why there are none. `waiting`: its times are on the
  * way, so its rows are drawn as shapes (`services`, the ones that call
- * there), quiet: the Stops tab says "Checking…" (buses.js).
+ * there), quiet: the Stops tab says "Checking…" (buses.js). The services
+ * not running now (asked for with `stopped=1`) show only when none is: under
+ * the note, greyed, with when each starts again, as on the stop's board.
  */
 export function StopSign({ s, pinned, note = null, waiting = false, services = null, onStop, onLine }) {
   const code = s.stop.code;
   const on = pinned?.includes(code) ?? false;
+  const running = s.board.filter((b) => b.running !== false);
+  // Not with no live data, as the apps: "No times right now" says it all.
+  const stopped = note || !s.available ? [] : s.board.filter((b) => b.running === false);
   return html`
     <section class="stop-sign">
       <header class="plate">
@@ -188,12 +193,12 @@ export function StopSign({ s, pinned, note = null, waiting = false, services = n
           </button>`
         }
       </header>
-      ${(waiting || (!note && s.board.length > 0)) && html`<${SignHead} />`}
+      ${(waiting || (!note && running.length > 0)) && html`<${SignHead} />`}
       ${
         waiting
           ? html`<${Skeleton} said=${t('Checking…')} quiet cls="nb-rows" inner="nb-rows"><${SignRows} services=${services} /><//>`
-          : !note && s.board.length
-            ? s.board.map((b) => {
+          : !note && running.length
+            ? running.map((b) => {
                 // A public bus has no line page, as on a stop's board.
                 const Tag = b.paid ? 'div' : 'button';
                 return html`
@@ -209,7 +214,8 @@ export function StopSign({ s, pinned, note = null, waiting = false, services = n
                 <//>
               `;
               })
-            : html`<div class="detail">${note ?? (s.available ? t('No buses due') : t('No times right now'))}</div>`
+            : html`<div class="detail">${note ?? (s.available ? t('No buses due') : t('No times right now'))}</div>
+                ${stopped.map((r) => html`<${Row} key=${r.svc} r=${r} chevron onPick=${(svc) => onLine(svc, code)} />`)}`
       }
     </section>
   `;
