@@ -10,6 +10,8 @@ struct Main: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var answer: NextAnswer? { model.shown }
+    /// How long a tab switch animates; the popover's window resizes over the same time.
+    static let switchSeconds = 0.22
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -75,8 +77,8 @@ struct Main: View {
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 120, alignment: .top)
-            .animation(reduceMotion ? nil : .snappy(duration: 0.22), value: model.showNearby)
-            .animation(reduceMotion ? nil : .snappy(duration: 0.22), value: model.target)
+            .animation(reduceMotion ? nil : .snappy(duration: Self.switchSeconds), value: model.showNearby)
+            .animation(reduceMotion ? nil : .snappy(duration: Self.switchSeconds), value: model.target)
 
             // Somewhere other than the plan: going there later today, as on the phone and the web.
             if !model.showNearby, model.target != .plan {
