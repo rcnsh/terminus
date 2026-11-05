@@ -182,4 +182,18 @@ class MapFilesKeepTest {
         assertFalse(File(dir, "campus.pmtiles").exists())
         assertTrue(File(path).exists())
     }
+
+    @Test
+    fun aKeptCampusIsUsedAtOnceWhateverItsAge() {
+        val hour = 3_600_000L
+        // Young: no need to ask. Over an hour, or from the future (the clock moved): used now, and checked in the background.
+        assertEquals(MapFiles.CampusStep.KEPT, MapFiles.campusStep(kept = true, ageMs = 0))
+        assertEquals(MapFiles.CampusStep.KEPT, MapFiles.campusStep(kept = true, ageMs = hour - 1))
+        assertEquals(MapFiles.CampusStep.KEPT_THEN_CHECK, MapFiles.campusStep(kept = true, ageMs = hour))
+        assertEquals(MapFiles.CampusStep.KEPT_THEN_CHECK, MapFiles.campusStep(kept = true, ageMs = 30L * 24 * hour))
+        assertEquals(MapFiles.CampusStep.KEPT_THEN_CHECK, MapFiles.campusStep(kept = true, ageMs = -1))
+        // Nothing kept: only then does anything wait on the network.
+        assertEquals(MapFiles.CampusStep.FETCH, MapFiles.campusStep(kept = false, ageMs = 0))
+        assertEquals(MapFiles.CampusStep.FETCH, MapFiles.campusStep(kept = false, ageMs = 30L * 24 * hour))
+    }
 }

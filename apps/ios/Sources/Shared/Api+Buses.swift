@@ -1,13 +1,9 @@
 import Foundation
 
-/// The Stops tab's own requests: /campus read in its own order for the
-/// search, the pinned stops as Nearby shows them, and each line's buses out.
+/// The Stops tab's own requests: the pinned stops as Nearby shows them, and
+/// each line's buses out. `/api/campus` comes through CampusStore, read as
+/// BusCampus.
 extension Api {
-    /// `/api/campus` as the Stops tab uses it.
-    func busCampus() async throws -> BusCampus {
-        try JSONDecoder().decode(BusCampus.self, from: await send("GET", "/api/campus"))
-    }
-
     /// `/api/me/stops`: the stops asked for, each exactly as Nearby shows it;
     /// with a location, the walk to each, else none.
     func pinnedStops(_ codes: [String], lat: Double?, lon: Double?, acc: Double? = nil) async throws -> [NearbyStop] {

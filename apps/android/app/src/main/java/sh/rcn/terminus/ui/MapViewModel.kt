@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import sh.rcn.terminus.Api
 import sh.rcn.terminus.ApiError
 import sh.rcn.terminus.Board
@@ -112,6 +113,27 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
     /** The profile's "public buses": a stop's sheet has them too, as its Stops tab board does. */
     var publicBuses = false
 
+    init {
+        // A newer campus found in the background: the map takes it where it is.
+        viewModelScope.launch {
+            MapFiles.onCampusChange({ _state.value.campus != null }, ::readCampus, ::showCampus)
+        }
+    }
+
+    /** [json] read into the stops, the main campus's, and the routes' and stops' GeoJSON. Takes a moment: not on the main thread. */
+    private fun readCampus(json: JSONObject): Triple<CampusMap, Set<String>, Pair<String, String>> {
+        val (campus, core) = CampusMap.parse(json)
+        return Triple(campus, core, MapGeoJson.routes(campus) to MapGeoJson.stops(campus))
+    }
+
+    /** What [readCampus] read, shown. */
+    private fun showCampus(read: Triple<CampusMap, Set<String>, Pair<String, String>>) {
+        val (campus, core, lines) = read
+        _state.update { s ->
+            s.copy(campus = campus, core = core, routesJson = lines.first, stopsJson = lines.second).let { it.copy(failed = failed(it)) }
+        }
+    }
+
     /** Nothing to draw the map with: no stops and routes, or no style, and the last try for it failed. */
     private fun failed(s: MapUi) = (s.campus == null && campusFailed) || (s.style == null && styleFailed)
 
@@ -142,17 +164,7 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
                     if (json == null) {
                         _state.update { it.copy(failed = failed(it)) }
                     } else {
-                        // Reading it and making the GeoJSON takes a moment: not on the main thread.
-                        val (campus, core, lines) =
-                            withContext(Dispatchers.Default) {
-                                val (campus, core) = CampusMap.parse(json)
-                                Triple(campus, core, MapGeoJson.routes(campus) to MapGeoJson.stops(campus))
-                            }
-                        _state.update { s ->
-                            s.copy(campus = campus, core = core, routesJson = lines.first, stopsJson = lines.second).let {
-                                it.copy(failed = failed(it))
-                            }
-                        }
+                        showCampus(withContext(Dispatchers.Default) { readCampus(json) })
                     }
                 } catch (e: CancellationException) {
                     throw e

@@ -19,6 +19,10 @@
 //   it used, and the whole campus map file, which is then read from here in
 //   the pieces MapLibre asks for. So the campus map works offline after the
 //   first look. Live buses and arrivals are never kept.
+// - The stops and routes (/api/campus) change only with a deploy: a kept
+//   copy answers at once, and one over an hour old is checked in the
+//   background. A changed one replaces it, and the pages are told to read
+//   it again; a 401 there is passed on, as it would have been in front.
 
 const SHELL = 'shell-v22';
 const DATA = 'data-v3';
@@ -123,8 +127,8 @@ self.addEventListener('fetch', (event) => {
   else if (url.pathname.startsWith('/vendor/mediabunny')) return;
   else if (url.pathname.startsWith('/vendor/') || url.pathname.startsWith('/map/fonts/') || url.pathname.startsWith('/map/sprites/'))
     event.respondWith(cacheFirst(req));
-  else if (url.pathname === '/app/map.js' || url.pathname === '/api/campus' || url.pathname === '/map/style.json')
-    event.respondWith(networkThenKept(req, event));
+  else if (url.pathname === '/api/campus') event.respondWith(campusKept(req, event));
+  else if (url.pathname === '/app/map.js' || url.pathname === '/map/style.json') event.respondWith(networkThenKept(req, event));
 });
 
 /** On a slow connection, how long to wait for the network before using the
@@ -198,16 +202,89 @@ async function dropOtherVersions(cache, url) {
   }
 }
 
-/** The newest from the network, the kept copy without one. */
-async function networkThenKept(req, event) {
+/** The newest from the network, the kept copy without one. `keep` puts a good reply in the cache. */
+async function networkThenKept(req, event, keep = (cache, res) => cache.put(req, res)) {
   const cache = await caches.open(MAP);
   const network = (async () => {
     const res = await fetch(req);
-    if (res.ok) await cache.put(req, res.clone());
+    if (res.ok) await keep(cache, res.clone());
     return res;
   })();
   // Any language's copy: /api/campus varies by it, and one in the other language beats no map.
   return soonest(network, () => cache.match(req, { ignoreVary: true }), event);
+}
+
+/** A kept /api/campus younger than this is used without asking: the API's own max-age. */
+const CAMPUS_FRESH_MS = 3_600_000;
+
+/**
+ * Keeps a /api/campus reply with when it was fetched, which says when it's
+ * next checked. Only the API's JSON: a 200 that isn't (a captive portal's
+ * sign-in page) would be served for an hour and break the Stops tab and the
+ * map. Whether it was kept.
+ */
+async function keepCampus(cache, req, res) {
+  if (!/json/i.test(res.headers.get('content-type') ?? '')) return false;
+  const body = await res.text();
+  try {
+    JSON.parse(body);
+  } catch {
+    return false;
+  }
+  const headers = new Headers(res.headers);
+  headers.set('x-terminus-cached', String(Date.now()));
+  await cache.put(req, new Response(body, { status: 200, headers }));
+  return true;
+}
+
+/**
+ * /api/campus: the kept copy in the page's language at once, checked in the
+ * background (with its ETag) once it's an hour old. Without one, as the
+ * map's other files: the network, the copy in another language offline.
+ */
+async function campusKept(req, event) {
+  const cache = await caches.open(MAP);
+  const kept = await cache.match(req);
+  if (!kept) return networkThenKept(req, event, (c, res) => keepCampus(c, req, res));
+  if (Date.now() - Number(kept.headers.get('x-terminus-cached') ?? 0) >= CAMPUS_FRESH_MS)
+    event.waitUntil(recheckCampus(req, cache, kept.clone()));
+  return kept;
+}
+
+/** One check at a time per language: the pages ask for /api/campus in several places at once. */
+const campusChecking = new Map();
+
+/**
+ * Asks whether the kept /api/campus is still the newest. Unchanged (304, or
+ * the same ETag), it's kept as fresh for another hour; changed, it's
+ * replaced and the pages read it again. A 401 is told to the pages, which
+ * sign out as they would had it come in front. Offline, nothing changes.
+ */
+function recheckCampus(req, cache, kept) {
+  const lang = req.headers.get('accept-language') ?? '';
+  if (campusChecking.has(lang)) return campusChecking.get(lang);
+  const check = (async () => {
+    const etag = kept.headers.get('etag');
+    const headers = new Headers(req.headers);
+    if (etag) headers.set('if-none-match', etag);
+    const res = await fetch(new Request(req.url, { headers, credentials: 'same-origin', cache: 'no-store' }));
+    if (res.status === 304 || (res.ok && etag && res.headers.get('etag') === etag)) {
+      res.body?.cancel();
+      return keepCampus(cache, req, kept);
+    }
+    if (res.status === 401) return tellPages({ kind: 'campus', status: 401 });
+    // Not the API's answer: the copy stays, still due a check.
+    if (!res.ok || !(await keepCampus(cache, req, res))) return undefined;
+    return tellPages({ kind: 'campus' });
+  })()
+    .catch(() => {})
+    .finally(() => campusChecking.delete(lang));
+  campusChecking.set(lang, check);
+  return check;
+}
+
+async function tellPages(message) {
+  for (const w of await self.clients.matchAll({ type: 'window', includeUncontrolled: true })) w.postMessage(message);
 }
 
 /** The kept map file, read once per worker. */

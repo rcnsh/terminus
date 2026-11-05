@@ -18,6 +18,10 @@ struct BusLinePage: View {
             // Refreshes failing: your stop's time counted down, not passed off as live.
             let line = model.lines[key]?.aged(now)
             let color = line?.color ?? model.color(svc)
+            // Your stop, where the line drawn from the campus data has it while the line comes.
+            let waitingAt =
+                line == nil && !model.lineFailed.contains(key)
+                ? from.flatMap { LineSkeleton.stops(svc, campus: model.campus)?.firstIndex(of: $0) } : nil
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
@@ -28,18 +32,26 @@ struct BusLinePage: View {
                             }
                         }
                         .busBandEnd()
-                        content(line, color, now)
+                        .id("top")
+                        // One stack, so the padding goes round the whole of it and not round each part.
+                        VStack(alignment: .leading, spacing: 0) { content(line, color, now) }
                             .padding(.horizontal, 16)
                             .padding(.bottom, 24)
                     }
                 }
                 .background(Color.page)
-                // Opened from a stop: scrolled to it once, so your stop is in view with the buses coming to it.
+                // Opened from a stop: scrolled to it once, so your stop is in view with the buses coming to it,
+                // already while the line is on its way, so it doesn't jump when it comes.
                 // Not running, the note at the top says it all: no scrolling past it.
-                .onChange(of: line?.here?.index) { _, i in
+                .onChange(of: line?.here?.index ?? waitingAt, initial: true) { _, i in
                     guard let i, !scrolled, line?.running != false else { return }
                     scrolled = true
                     withAnimation(.snappy) { proxy.scrollTo("s\(i)", anchor: UnitPoint(x: 0.5, y: 0.35)) }
+                }
+                // The line's first arrival shows it isn't running: back up to the note, scrolled past it while waiting.
+                .onChange(of: line == nil) { _, waiting in
+                    guard !waiting, line?.running == false, scrolled else { return }
+                    withAnimation(.snappy) { proxy.scrollTo("top", anchor: .top) }
                 }
             }
         }
@@ -63,7 +75,9 @@ struct BusLinePage: View {
 
     /// The service and how many buses it has out, in the sky.
     private func heading(_ line: Line?, _ color: String?) -> some View {
-        SkyHeading(svc: svc, line: line, color: color)
+        // The line drawn from the campus data while it comes: only its summary is a bar.
+        let waiting = line == nil && !model.lineFailed.contains(key) && LineSkeleton.stops(svc, campus: model.campus) != nil
+        return SkyHeading(svc: svc, line: line, color: color, waiting: waiting)
             .padding(.horizontal, 16)
             .padding(.top, 8)
     }
@@ -106,61 +120,119 @@ struct BusLinePage: View {
                 .foregroundStyle(Color.muted)
                 .padding(.vertical, 16)
         } else {
-            LineSkeleton(svc: svc, campus: model.campus, color: color)
+            LineSkeleton(svc: svc, from: from, campus: model.campus, color: color)
         }
     }
 }
 
-/// The line before it comes: its rail in a faded shade of the service's
-/// colour, a row per stop it calls at (from the campus data; six without
-/// it), each stop's name a bar and the other services there their own
-/// badges. No buses: a made-up one would read as real.
+/// The line before it comes. With the campus data it's drawn for real, as
+/// the line will have it: the rail in the service's colour, each stop's
+/// name, the other services there and how many stops; only "Updated" is a
+/// bar. Without it, six rows on a faded rail, each name a bar. No buses
+/// either way: a made-up one would read as real.
 private struct LineSkeleton: View {
     let svc: String
+    /// The stop it was opened from: marked as yours, its time a bar.
+    let from: String?
     let campus: BusCampus?
     let color: String?
 
+    /// The stops the line will list, from the campus data: a loop's first
+    /// stop again at the end, as `/api/line` has it. Nil without the
+    /// route, or with one of no stops (never "0 stops").
+    static func stops(_ svc: String, campus: BusCampus?) -> [String]? {
+        guard let r = campus?.routes[svc], !r.seq.isEmpty else { return nil }
+        return r.seq + (r.loop && r.seq.count > 1 ? [r.seq[0]] : [])
+    }
+
     var body: some View {
-        // A route with no stops is as good as none: six rows, the count a bar, never "0 stops".
-        let route = campus?.routes[svc].flatMap { $0.seq.isEmpty ? nil : $0 }
-        // A loop's line ends back at its first stop, listed again, as the line has it.
-        let seq: [String?] = route.map { r in r.seq + (r.loop && !r.seq.isEmpty ? [r.seq[0]] : []) } ?? Array(repeating: nil, count: 6)
         let rgb = color.flatMap(hexRGB) ?? 0x8A847E
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                if let route {
-                    SectionLabel(L("%@ stops", "\(Set(route.seq).count)"))
-                } else {
-                    SkeletonLine(font: .caption.weight(.semibold), points: 70)
+        if let seq = Self.stops(svc, campus: campus) {
+            // Your stop where the line first calls there, as `/api/line` places it.
+            let here = from.flatMap { seq.firstIndex(of: $0) }
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    SectionLabel(L("%@ stops", "\(Set(seq).count)"))
+                    Spacer()
+                    SkeletonLine(font: .footnote, points: 90).skeletonSpoken()
                 }
-                Spacer()
-            }
-            .padding(.top, 14)
-            .padding(.bottom, 8)
-            VStack(spacing: 0) {
-                ForEach(Array(seq.enumerated()), id: \.offset) { i, code in
-                    let others = code.flatMap { campus?.stop($0)?.services.filter { $0 != svc } } ?? []
-                    VStack(alignment: .leading, spacing: 4) {
-                        SkeletonLine(font: .headline, fraction: [0.72, 0.3, 0.24, 0.3, 0.42, 0.68, 0.5][i % 7])
-                        if !others.isEmpty {
-                            BusFlow(spacing: 4) {
-                                ForEach(others, id: \.self) { BusBadge(svc: $0, color: campus?.colors[$0], size: 10, even: true) }
+                .padding(.top, 14)
+                .padding(.bottom, 8)
+                VStack(spacing: 0) {
+                    ForEach(Array(seq.enumerated()), id: \.offset) { i, code in
+                        let stop = campus?.stop(code)
+                        // The same layout and padding as LineList's rows, so nothing moves when the line comes.
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(alignment: .center, spacing: 8) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(verbatim: Line.Stop.named(code, name: stop?.name, longName: stop?.longName))
+                                        .font(.headline).foregroundStyle(Color.ink)
+                                    badges(stop)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                if i == here { hereTime }
                             }
+                            if i == here { BusTag(text: L("Your stop"), color: .brand) }
                         }
-                    }
-                    .padding(.leading, 48)
-                    .padding(.trailing, 10)
-                    .padding(.vertical, 10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(alignment: .leading) {
-                        Rail(rgb: rgb, first: i == 0, last: i == seq.count - 1, bus: false, here: false, faded: true).frame(width: 48)
+                        .padding(.leading, 48)
+                        .padding(.trailing, 10)
+                        .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(alignment: .leading) {
+                            Rail(rgb: rgb, first: i == 0, last: i == seq.count - 1, bus: false, here: i == here).frame(width: 48)
+                        }
+                        .background(i == here ? Color.brandSoft : .clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .id("s\(i)")
                     }
                 }
+            }
+            .shimmering()
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    SkeletonLine(font: .caption.weight(.semibold), points: 70)
+                    Spacer()
+                }
+                .padding(.top, 14)
+                .padding(.bottom, 8)
+                VStack(spacing: 0) {
+                    ForEach(0..<6, id: \.self) { i in
+                        SkeletonLine(font: .headline, fraction: [0.72, 0.3, 0.24, 0.3, 0.42, 0.68][i])
+                            .padding(.leading, 48)
+                            .padding(.trailing, 10)
+                            .padding(.vertical, 10)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(alignment: .leading) {
+                                Rail(rgb: rgb, first: i == 0, last: i == 5, bus: false, here: false, faded: true).frame(width: 48)
+                            }
+                    }
+                }
+            }
+            // One wave over the bars; the rail is real and stays still.
+            .shimmering()
+            .skeletonSpoken()
+        }
+    }
+
+    /// Your stop's time on its way, in HereTime's place: the time, how it's known, the next ones.
+    private var hereTime: some View {
+        VStack(alignment: .trailing, spacing: 2) {
+            SkeletonLine(font: .system(size: 34, weight: .bold), points: 64).frame(width: 64)
+            SkeletonLine(font: .subheadline.weight(.medium), points: 44).frame(width: 44)
+            SkeletonLine(font: .footnote, points: 70).frame(width: 70)
+        }
+        .fixedSize()
+        .accessibilityHidden(true)
+    }
+
+    /// The other services at the stop, as the line lists them.
+    @ViewBuilder private func badges(_ stop: BusCampus.Stop?) -> some View {
+        let others = stop?.services.filter { $0 != svc } ?? []
+        if !others.isEmpty {
+            BusFlow(spacing: 4) {
+                ForEach(others, id: \.self) { BusBadge(svc: $0, color: campus?.colors[$0], size: 10, even: true) }
             }
         }
-        // One wave over the bars; the rail and the badges are real and stay still.
-        .shimmering()
-        .skeletonSpoken()
     }
 }
 
@@ -168,12 +240,22 @@ private struct SkyHeading: View {
     let svc: String
     let line: Line?
     let color: String?
+    /// The line is on its way: its summary is a bar.
+    var waiting = false
     @Environment(\.inks) private var inks
 
     var body: some View {
         HStack(spacing: 14) {
             BusChip(svc: svc, color: color, big: true)
-            if let line {
+            if waiting {
+                // Room for "Runs until" under it too, so the band doesn't grow when the line comes.
+                VStack(alignment: .leading, spacing: 2) {
+                    SkeletonLine(font: .title3.weight(.semibold), points: 150)
+                    Text(verbatim: " ").hidden()
+                }
+                .shimmering()
+                .skeletonSpoken()
+            } else if let line {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(BusWords.running(line)).font(.title3.weight(.semibold)).foregroundStyle(inks.ink)
                     if let end = line.endsAt.flatMap(parseISODate) {

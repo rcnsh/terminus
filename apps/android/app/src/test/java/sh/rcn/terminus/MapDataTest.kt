@@ -399,4 +399,35 @@ class MapDataTest {
 
     /** Web Mercator's y, a fraction of the world from the top. */
     private fun merc(lat: Double) = (1 - Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360)) / Math.PI) / 2
+
+    @Test
+    fun aLineFromTheCampusDataListsItsStopsAsApiLineDoes() {
+        val (campus, _) =
+            CampusMap.parse(
+                JSONObject(
+                    """
+            {"stops": [
+              {"code": "KR-BT", "name": "KR Bus Ter", "longName": "Kent Ridge Bus Terminal", "lat": 1.294, "lon": 103.769, "services": ["A1", "A2"]},
+              {"code": "LT13", "name": "LT 13", "lat": 1.295, "lon": 103.770, "services": ["A1", "D1"]},
+              {"code": "AS5", "name": "AS 5", "lat": 1.293, "lon": 103.772, "services": ["A1"]}
+             ],
+             "routes": {
+              "A1": {"seq": ["KR-BT", "LT13", "AS5"], "loop": true, "color": "#d32f2f", "line": [[103.769, 1.294], [103.772, 1.293]], "shaped": true}
+             }}
+            """
+                )
+            )
+        val line = Line.fromCampus(campus, "A1", from = "LT13")!!
+        // A loop's first stop again at the end; each stop by its full name, with the other services there.
+        assertEquals(listOf("KR-BT", "LT13", "AS5", "KR-BT"), line.stops.map { it.code })
+        assertEquals("Kent Ridge Bus Terminal", line.stops[0].name)
+        assertEquals("LT 13", line.stops[1].name)
+        assertEquals(listOf("A2"), line.stops[0].services)
+        assertEquals(listOf("D1"), line.stops[1].services)
+        assertEquals(1, line.here?.index)
+        // No buses or times: only /api/line has those.
+        assertTrue(line.buses.isEmpty())
+        assertNull(line.here?.row)
+        assertNull(Line.fromCampus(campus, "Z", from = null))
+    }
 }

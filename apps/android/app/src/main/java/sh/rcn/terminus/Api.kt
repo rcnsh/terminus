@@ -874,7 +874,7 @@ class ParseError(message: String, cause: Throwable? = null) : Exception(message,
 class NotModified : Exception("not modified")
 
 /** `fast` is for the widget: a tap runs inside a broadcast, which can be killed. */
-class Api(private val token: String?, private val fast: Boolean = false, private val hour12: Boolean = false) {
+class Api(internal val token: String?, private val fast: Boolean = false, private val hour12: Boolean = false) {
 
     suspend fun pair(code: String, name: String): String {
         val body = JSONObject().put("code", code).put("name", name)
@@ -912,12 +912,9 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         return Imported(ImportResult.parse(json), tag)
     }
 
-    /** Stops and residences, for the home and place pickers. */
-    suspend fun campus(): Campus = Campus.parse(request("GET", "/api/campus"))
-
     /**
-     * `/api/campus` as it came, with its ETag, for the map (MapData), which keeps a copy for offline. Null when [etag] says the kept copy
-     * is still current.
+     * `/api/campus` as it came, with its ETag, for [MapFiles], which keeps a copy for the map, the Stops tab and the pickers. Null when
+     * [etag] says the kept copy is still current.
      */
     suspend fun campusJson(etag: String? = null): Pair<JSONObject, String?>? {
         var tag: String? = null

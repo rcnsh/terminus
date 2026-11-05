@@ -574,7 +574,10 @@ final class AppModel {
     func loadDestinations() {
         guard destinations.isEmpty, let token else { return }
         Task {
-            if let c = try? await Api(token: token).campus() { destinations = c.destinations }
+            let copy = try? await CampusStore.shared.load(self, token: token) { [weak self] in
+                if let c = $0.campus { self?.destinations = c.destinations }
+            }
+            if let c = copy?.campus { destinations = c.destinations }
         }
     }
 

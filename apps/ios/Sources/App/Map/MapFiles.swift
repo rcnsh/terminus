@@ -1,7 +1,8 @@
 import Foundation
 
 /// What the Map tab keeps on the phone so the campus map works offline after
-/// the first look: the stops and routes (`/api/campus`), the map's style in
+/// the first look: the stops and routes (`/api/campus`, which the Stops tab
+/// and the pickers read too, through CampusStore), the map's style in
 /// each theme and language used, and the whole campus map file (about 4 MB).
 /// MapLibre doesn't cache PMTiles it streams, so the file is downloaded once,
 /// checked weekly for a newer one, and read from storage
@@ -18,7 +19,7 @@ enum MapFiles {
     private static let tiles = "campus.pmtiles"
     private static let checkS: TimeInterval = 7 * 24 * 3600
     /// `/api/campus` and the style say `max-age=3600`: a copy that young isn't asked about again.
-    private static let freshS: TimeInterval = 3600
+    static let freshS: TimeInterval = 3600
     /// The campus map is about 4 MB; anything this small is an error page or cut off.
     static let minTilesBytes = 64 * 1024
 
@@ -47,35 +48,53 @@ enum MapFiles {
 
     // MARK: the stops and routes
 
-    /// `/api/campus`: the kept copy while it's fresh; then from the network,
-    /// sent with the kept copy's ETag so an unchanged one costs no download;
-    /// the kept copy without a connection. A refusal (signed out, or this
-    /// version too old) isn't hidden by the kept copy.
-    static func campus(token: String?) async throws -> CampusMap? {
-        let file = dir.appendingPathComponent("campus.json")
-        let tagFile = dir.appendingPathComponent("campus.etag")
-        let kept = (try? Data(contentsOf: file)).flatMap { CampusMap.parse($0) == nil ? nil : $0 }
-        if let kept, fresh(file) { return CampusMap.parse(kept) }
-        do {
-            let etag = kept == nil ? nil : (try? String(contentsOf: tagFile, encoding: .utf8)).flatMap { $0.isEmpty ? nil : $0 }
-            guard let (data, tag) = try await Api(token: token).campusJSON(etag: etag) else {
-                // Unchanged: the kept copy is current for another hour.
-                try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: file.path)
-                return kept.flatMap(CampusMap.parse)
-            }
-            if let map = CampusMap.parse(data) {
-                try? data.write(to: file, options: .atomic)
-                if let tag {
-                    try? Data(tag.utf8).write(to: tagFile, options: .atomic)
-                } else {
-                    try? FileManager.default.removeItem(at: tagFile)
-                }
-                return map
-            }
-        } catch let e as ApiError where e.status == 401 || e.status == 426 {
-            throw e
-        } catch {}
-        return kept.flatMap(CampusMap.parse)
+    /// What a look at `/api/campus` does, by the age of the copy kept: a
+    /// copy of any age shows at once, and one over an hour old is asked
+    /// about in the background (CampusStore); with none, it waits for the
+    /// network.
+    enum CampusRead: Equatable {
+        case kept, keptThenCheck, wait
+
+        static func of(age: TimeInterval?) -> CampusRead {
+            guard let age else { return .wait }
+            return age >= 0 && age < freshS ? .kept : .keptThenCheck
+        }
+    }
+
+    /// A copy per language: the server words the stops and lines in the one asked in.
+    static func campusFile(zh: Bool, in dir: URL) -> URL { dir.appendingPathComponent("campus-\(zh ? "zh" : "en").json") }
+    private static func campusTag(zh: Bool, in dir: URL) -> URL { dir.appendingPathComponent("campus-\(zh ? "zh" : "en").etag") }
+
+    /// The copy kept in `dir` as saved: its body, when it was saved or last
+    /// found current, and its ETag. Read as the campus by CampusStore, once.
+    static func readCampus(zh: Bool, in dir: URL) -> (data: Data, savedAt: Date?, etag: String?)? {
+        let file = campusFile(zh: zh, in: dir)
+        // The one copy kept before there was one per language becomes this
+        // language's, so an update opened offline still has it. Its language
+        // isn't known, so it's due a check at once: worded in the other one,
+        // its ETag doesn't match and it's replaced.
+        let old = dir.appendingPathComponent("campus.json")
+        if !FileManager.default.fileExists(atPath: file.path), FileManager.default.fileExists(atPath: old.path) {
+            try? FileManager.default.moveItem(at: old, to: file)
+            try? FileManager.default.moveItem(at: dir.appendingPathComponent("campus.etag"), to: campusTag(zh: zh, in: dir))
+            try? FileManager.default.setAttributes([.modificationDate: Date.distantPast], ofItemAtPath: file.path)
+        }
+        guard let data = try? Data(contentsOf: file) else { return nil }
+        let at = (try? FileManager.default.attributesOfItem(atPath: file.path))?[.modificationDate] as? Date
+        let etag = (try? String(contentsOf: campusTag(zh: zh, in: dir), encoding: .utf8)).flatMap { $0.isEmpty ? nil : $0 }
+        return (data, at, etag)
+    }
+
+    /// Keeps a body that read as the campus, with its ETag.
+    static func saveCampus(_ data: Data, etag: String?, zh: Bool, in dir: URL) {
+        try? data.write(to: campusFile(zh: zh, in: dir), options: .atomic)
+        let tagFile = campusTag(zh: zh, in: dir)
+        if let etag { try? Data(etag.utf8).write(to: tagFile, options: .atomic) } else { try? FileManager.default.removeItem(at: tagFile) }
+    }
+
+    /// The server said the kept copy is current: it counts as new for another hour.
+    static func touchCampus(zh: Bool, in dir: URL) {
+        try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: campusFile(zh: zh, in: dir).path)
     }
 
     private static func fresh(_ file: URL) -> Bool {

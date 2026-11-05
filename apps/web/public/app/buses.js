@@ -816,32 +816,49 @@ function YourTime({ r }) {
 }
 
 /**
- * A service's line before it comes: its stops as shapes on a line in a
- * tint of its colour, a row for each stop the campus data has (a loop's
- * first stop again at its end, as the line lists it), with no buses.
+ * A service's stops as /api/line lists them (its lineStops), from the
+ * campus data: in route order, a loop's first stop again at its end, each
+ * with its names and the other services there.
  */
-function LineSkeleton({ svc, color, r }) {
-  const seq = r ? (r.loop ? [...r.seq, r.seq[0]] : r.seq) : Array.from({ length: 6 }, () => null);
-  const n = r && new Set(r.seq).size;
+export function campusLine(svc, r, stopsOf = stopOf) {
+  const seq = r.loop && r.seq.length > 1 ? [...r.seq, r.seq[0]] : r.seq;
+  return seq.map((code) => {
+    const s = stopsOf(code);
+    return {
+      code,
+      name: s?.name ?? code,
+      longName: s?.longName ?? s?.name ?? code,
+      services: (s?.services ?? []).filter((x) => x !== svc),
+    };
+  });
+}
+
+/** Your stop's time before the line comes: its shapes, as tall as YourTime. */
+const YourTimeWaiting = () => html`
+  <span class="bt-yours" aria-hidden="true"
+    ><span class="bt-big"><${Bar} w="3.2rem" h="0.62em" /></span><span class="bt-meta"><${Bar} w="4.5rem" /></span
+  ></span>
+`;
+
+/**
+ * A service's line before it comes, without the campus data to draw it
+ * from: its stops as shapes on a line in a tint of its colour, no buses.
+ */
+function LineSkeleton({ color }) {
   return html`
     <${Skeleton} said=${t('Checking…')} quiet>
       <p class="bt-summary"><${Bar} w="40%" /></p>
-      <div class="bt-line-label">
-        <span class="eyebrow">${n ? t('{0} stops', n) : html`<${Bar} w="4rem" />`}</span><span class="bt-status"><${Bar} w="6rem" /></span>
-      </div>
+      <div class="bt-line-label"><span class="eyebrow"><${Bar} w="4rem" /></span><span class="bt-status"><${Bar} w="6rem" /></span></div>
       <ol class="bt-route" style=${`--svc:color-mix(in srgb, ${color} 30%, var(--bg))`}>
-        ${seq.map((code, i) => {
-          const others = (stopOf(code)?.services ?? []).filter((x) => x !== svc);
-          return html`<li class="bt-stop" key=${i}>
+        ${Array.from(
+          { length: 6 },
+          (_, i) => html`<li class="bt-stop" key=${i}>
             <div class="sk-stop">
               <span class="bt-node"></span>
-              <span class="bt-stop-text">
-                <span class="bt-stop-name"><${Bar} w=${widthOf(['72%', '30%', '24%', '36%', '42%', '64%', '50%'], i)} /></span>
-                ${others.length > 0 && html`<span class="bt-others">${others.map((x) => html`<${Chip} key=${x} svc=${x} cls="tiny" />`)}</span>`}
-              </span>
+              <span class="bt-stop-text"><span class="bt-stop-name"><${Bar} w=${widthOf(['72%', '30%', '24%', '36%', '42%', '64%'], i)} /></span></span>
             </div>
-          </li>`;
-        })}
+          </li>`,
+        )}
       </ol>
     <//>
   `;
@@ -859,15 +876,25 @@ function LinePage({ svc, stop }) {
   const mine = l?.key === key ? l : null;
   const data = mine?.data;
   const scrolled = useRef(null);
-  // Your stop in view the first time the line comes, not on every refresh.
-  useEffect(() => {
-    if (!data || scrolled.current === key) return;
-    scrolled.current = key;
-    document.querySelector('.bt-stop.mine')?.scrollIntoView({ block: 'center' });
-  }, [key, Boolean(data)]);
-
   const color = data?.color ?? colorOf(svc);
   const r = c?.routes[svc];
+  // The campus data can draw the line only with its stops: an empty one is as good as none.
+  const known = r?.seq?.length > 0;
+  // Your stop in view the first time the list shows (from the campus data or the line), not on every refresh.
+  const drawn = Boolean(data) || known;
+  useEffect(() => {
+    if (!drawn || scrolled.current === key) return;
+    scrolled.current = key;
+    document.querySelector('.bt-stop.mine')?.scrollIntoView({ block: 'center' });
+  }, [key, drawn]);
+  // Scrolled there before the line said the service isn't running: back up to
+  // the note saying so, once, when it first comes (not on later refreshes).
+  const arrived = useRef(null);
+  useEffect(() => {
+    if (!data || arrived.current === key) return;
+    arrived.current = key;
+    if (data.running === false && stop) window.scrollTo({ top: 0 });
+  }, [key, Boolean(data)]);
   const where = r && routeWords(r);
   const head = html`
     <${Sky}>
@@ -879,30 +906,40 @@ function LinePage({ svc, stop }) {
     <//>
   `;
   if (mine?.error && !data) return html`${head}<p class="hint bt-empty">${mine.error}</p>`;
-  if (!data) return html`${head}<${LineSkeleton} svc=${svc} color=${color} r=${r} />`;
+  // Before the line comes: drawn from the campus data when it has the route
+  // (its stops, their names and the services there are the same words the
+  // line brings), with bars only for what's live; without it, shapes.
+  if (!data && !known) return html`${head}<${LineSkeleton} color=${color} />`;
+  const stops = data?.stops ?? campusLine(svc, r);
 
   // A loop's first stop is listed again at its end: one stop, two rows.
-  const n = new Set(data.stops.map((s) => s.code)).size;
+  const n = new Set(stops.map((s) => s.code)).size;
   // Not running: its stops, no buses, and why.
-  const stopped = data.running === false;
-  const buses = data.available && !stopped ? data.buses : [];
+  const stopped = data?.running === false;
+  const buses = data?.available && !stopped ? data.buses : [];
   const running =
     buses.length === 0 ? t('No buses running') : buses.length === 1 ? t('1 bus running') : t('{0} buses running', buses.length);
-  const ends = data.endsAt && Date.parse(data.endsAt) > now ? t('Runs until {0}', clock(data.endsAt)) : null;
-  const yours = data.stop?.index ?? -1;
+  const ends = data?.endsAt && Date.parse(data.endsAt) > now ? t('Runs until {0}', clock(data.endsAt)) : null;
+  // Your stop: where the line says, or before it comes, its first place on the line, as the API finds it.
+  const yours = data ? (data.stop?.index ?? -1) : stop ? stops.findIndex((s) => s.code === stop) : -1;
   return html`
     ${head}
     ${
-      stopped
-        ? html`<p class="bt-stopped-note">${stoppedWords(data.stopped, data.resumesAt, now)
-            .filter(Boolean)
-            .map((w, i) => html`<span key=${i}>${w}</span>`)}</p>`
-        : html`<p class="bt-summary">${[data.available ? running : null, ends].filter(Boolean).join(' · ')}</p>`
+      !data
+        ? html`<p class="bt-summary" aria-hidden="true"><${Bar} w="40%" /></p>`
+        : stopped
+          ? html`<p class="bt-stopped-note">${stoppedWords(data.stopped, data.resumesAt, now)
+              .filter(Boolean)
+              .map((w, i) => html`<span key=${i}>${w}</span>`)}</p>`
+          : html`<p class="bt-summary">${[data.available ? running : null, ends].filter(Boolean).join(' · ')}</p>`
     }
-    ${!data.available && !stopped && html`<p class="bt-note">${t('Bus positions are unavailable right now.')}</p>`}
-    <div class="bt-line-label"><span class="eyebrow">${t('{0} stops', n)}</span><span class="bt-status"><${Status} asOf=${mine.asOf} error=${mine.error} /></span></div>
+    ${data && !data.available && !stopped && html`<p class="bt-note">${t('Bus positions are unavailable right now.')}</p>`}
+    <div class="bt-line-label">
+      <span class="eyebrow">${t('{0} stops', n)}</span>
+      <span class="bt-status">${data ? html`<${Status} asOf=${mine.asOf} error=${mine.error} />` : html`<span aria-hidden="true"><${Bar} w="6rem" /></span>`}</span>
+    </div>
     <ol class="bt-route" style=${svcVars(color)}>
-      ${data.stops.map((s, i) => {
+      ${stops.map((s, i) => {
         const here = buses.filter((b) => b.at === i);
         const between = buses.filter((b) => b.at == null && b.after === i);
         const isMine = i === yours;
@@ -916,13 +953,13 @@ function LinePage({ svc, stop }) {
                 ${here.map((b) => html`<span class="bt-bus-info" key=${b.id}><${Plate} b=${b} /></span>`)}
                 ${s.services?.length > 0 && html`<span class="bt-others">${s.services.map((x) => html`<${Chip} key=${x} svc=${x} cls="tiny" />`)}</span>`}
               </span>
-              ${isMine && html`<${YourTime} r=${aged(data.stop.row, mine.got, now)} />`}
+              ${isMine && (data ? html`<${YourTime} r=${aged(data.stop.row, mine.got, now)} />` : html`<${YourTimeWaiting} />`)}
             </button>
           </li>
           ${between.map(
             (b) => html`<li key=${b.id} class="bt-gap">
               <${BusMark} between />
-              <span class="bt-bus-info"><${Plate} b=${b} /><span>${t('Next: {0}', longName(data.stops[i + 1] ?? data.stops[0]))}</span></span>
+              <span class="bt-bus-info"><${Plate} b=${b} /><span>${t('Next: {0}', longName(stops[i + 1] ?? stops[0]))}</span></span>
             </li>`,
           )}
         `;

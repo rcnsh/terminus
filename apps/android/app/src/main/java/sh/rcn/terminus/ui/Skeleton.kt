@@ -42,6 +42,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -65,12 +66,16 @@ private const val SWEEP_MS = 1_600L
 /** Before this, nothing shows: a quick answer never flashes grey. */
 private const val SHOW_AFTER_MS = 150L
 
-/** A skeleton: [content]'s bars, said as [said] (the screen's own "Checking…") and nothing else, its shapes hidden from a screen reader. */
+/**
+ * A skeleton: [content]'s bars, said as [said] (the screen's own "Checking…") and nothing else, its shapes hidden from a screen reader.
+ * With [real], what's real in it (a line's stops from the campus data) is read and can be tapped as usual, and [said] is said beside it.
+ */
 @Composable
 internal fun Skeleton(
     said: String,
     modifier: Modifier = Modifier,
     verticalArrangement: Arrangement.Vertical = Arrangement.Top,
+    real: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val still = animationsOff()
@@ -83,7 +88,7 @@ internal fun Skeleton(
     val sweep = if (still) null else sweep()
     CompositionLocalProvider(LocalSweep provides sweep, LocalFade provides fade) {
         Column(
-            modifier.clearAndSetSemantics { contentDescription = said },
+            if (real) modifier.semantics { contentDescription = said } else modifier.clearAndSetSemantics { contentDescription = said },
             verticalArrangement = verticalArrangement,
             content = content,
         )

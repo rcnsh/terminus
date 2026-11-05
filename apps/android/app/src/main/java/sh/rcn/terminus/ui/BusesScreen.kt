@@ -1434,6 +1434,15 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
     val gap = with(LocalDensity.current) { 160.dp.roundToPx() }
     // Not running, the banner at the top says it all: no scrolling past it.
     val running = line?.running != false
+    // The line drawn from the campus data scrolls to your stop before /api/line says whether the service runs: when its first answer says
+    // it
+    // doesn't, back to the top once, to the banner.
+    var arrived by rememberSaveable(key) { mutableStateOf(false) }
+    LaunchedEffect(line != null) {
+        if (line == null || arrived) return@LaunchedEffect
+        arrived = true
+        if (!line.running) scroll.animateScrollTo(0)
+    }
     LaunchedEffect(hereY, running) {
         val y = hereY ?: return@LaunchedEffect
         if (!scrolled && running) {
@@ -1484,6 +1493,11 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
                             ) {
                                 SvcChip(route.svc, color, big = true)
                                 Column {
+                                    // Still coming: how many buses are out is the server's to say.
+                                    if (line == null && key !in state.lineFailed)
+                                        Skeleton(stringResource(R.string.checking)) {
+                                            TextBar(MaterialTheme.typography.titleMedium, width = 150.dp, sky = true)
+                                        }
                                     if (line != null) {
                                         val n = line.buses.size
                                         Text(
@@ -1525,6 +1539,10 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
                                 back?.let { Text(it, color = c.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp)) }
                             }
                         }
+                    // Worked out once per campus and line, not on every tick of the clock.
+                    val routeColors = remember(state.campus) { state.campus?.routes?.mapValues { it.value.color }.orEmpty() }
+                    val known =
+                        remember(state.campus, route.svc, route.from) { state.campus?.let { Line.fromCampus(it, route.svc, route.from) } }
                     HorizontalDivider(Modifier.padding(top = 16.dp), color = c.outlineVariant)
                     when {
                         line == null && key in state.lineFailed ->
@@ -1533,7 +1551,32 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
                                 color = c.onSurfaceVariant,
                                 modifier = Modifier.padding(vertical = 16.dp),
                             )
-                        line == null -> LineSkeleton(state, route.svc, Color(color))
+                        line == null -> {
+                            // The campus data has the line: its stops drawn for real, only the server's words as bars.
+                            if (known == null) LineSkeleton(Color(color))
+                            else
+                                Skeleton(stringResource(R.string.checking), real = true) {
+                                    Row(
+                                        Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Label(
+                                            stringResource(R.string.buses_n_stops, known.stops.distinctBy { it.code }.size),
+                                            Modifier.weight(1f),
+                                        )
+                                        TextBar(MaterialTheme.typography.bodySmall, width = 96.dp)
+                                    }
+                                    LineList(
+                                        known,
+                                        Color(color),
+                                        colors = routeColors,
+                                        onHere = { hereY = it },
+                                        waiting = true,
+                                    ) { code ->
+                                        vm.open(BusRoute.Stop(code))
+                                    }
+                                }
+                        }
                         else -> {
                             Row(
                                 Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 8.dp),
@@ -1547,7 +1590,7 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
                             LineList(
                                 line,
                                 Color(color),
-                                colors = state.campus?.routes?.mapValues { it.value.color }.orEmpty(),
+                                colors = routeColors,
                                 onHere = { hereY = it },
                             ) { code ->
                                 vm.open(BusRoute.Stop(code))
@@ -1570,7 +1613,14 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
 
 /** The line top to bottom in the service's colour: a node per stop, the buses on it at a stop or between two. */
 @Composable
-private fun LineList(line: Line, color: Color, colors: Map<String, Long>, onHere: (Int) -> Unit, onStop: (String) -> Unit) {
+private fun LineList(
+    line: Line,
+    color: Color,
+    colors: Map<String, Long>,
+    onHere: (Int) -> Unit,
+    waiting: Boolean = false,
+    onStop: (String) -> Unit,
+) {
     val items = line.items()
     val c = MaterialTheme.colorScheme
     for ((i, item) in items.withIndex()) {
@@ -1603,6 +1653,7 @@ private fun LineList(line: Line, color: Color, colors: Map<String, Long>, onHere
                                     }
                                 }
                             }
+                            if (here && waiting) HereTimeWaiting()
                             if (here) line.here?.row?.takeIf { it.running }?.let { HereTime(it) }
                         }
                         if (here) Box(Modifier.padding(top = 6.dp)) { Tag(stringResource(R.string.buses_your_stop), c.primary) }
@@ -1622,42 +1673,20 @@ private fun LineList(line: Line, color: Color, colors: Map<String, Long>, onHere
 }
 
 /**
- * A service's line before it has come: its stops' shape on a rail in the service's colour, faded. As many rows as the line has stops in the
- * campus's routes, else six. No buses: a placeholder bus would read as a real one.
+ * A service's line before it has come, when the campus data doesn't have it: six stops' shape on a rail in the service's colour, faded. No
+ * buses: a placeholder bus would read as a real one.
  */
 @Composable
-private fun LineSkeleton(state: BusesUi, svc: String, color: Color) {
-    val c = MaterialTheme.colorScheme
-    val campus = state.campus
-    val route = campus?.lines?.firstOrNull { it.svc == svc }
-    val seq = route?.seq.orEmpty()
-    // A loop comes back to where it started: /api/line lists its first stop again at the end.
-    val stops: List<String?> = if (seq.isEmpty()) List(6) { null } else if (route?.loop == true) seq + seq.first() else seq
-    val faded = lerp(c.background, color, 0.3f)
+private fun LineSkeleton(color: Color) {
+    val faded = lerp(MaterialTheme.colorScheme.background, color, 0.3f)
     Skeleton(stringResource(R.string.checking)) {
-        Box(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 8.dp)) {
-            // The line's own count, as the loaded page has it, when the campus's routes say; else a bar.
-            if (seq.isEmpty()) TextBar(MaterialTheme.typography.labelMedium, fraction = 0.22f)
-            else Label(stringResource(R.string.buses_n_stops, seq.distinct().size))
-        }
-        for ((i, code) in stops.withIndex()) {
-            // The services that share the stop, from the campus's stops, drawn as themselves; a bar when the stop isn't known.
-            val others = code?.let { campus?.stop(it)?.services?.filter { s -> s != svc } }
+        Box(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 8.dp)) { TextBar(MaterialTheme.typography.labelMedium, fraction = 0.22f) }
+        for (i in 0 until 6) {
             Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-                Rail(faded, first = i == 0, last = i == stops.lastIndex, bus = false, here = false)
+                Rail(faded, first = i == 0, last = i == 5, bus = false, here = false)
                 Column(Modifier.weight(1f).padding(vertical = 10.dp).padding(end = 10.dp)) {
                     TextBar(MaterialTheme.typography.titleMedium, fraction = barFraction(i))
-                    if (others == null) Bar(Modifier.padding(top = 4.dp).size(24.dp, 26.dp), RoundedCornerShape(6.dp))
-                    else if (others.isNotEmpty()) {
-                        @OptIn(ExperimentalLayoutApi::class)
-                        FlowRow(
-                            Modifier.padding(top = 4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            for (s in others) BusBadge(s, campus?.routes?.get(s)?.color ?: GREY, 10.sp, pad = 4.dp, even = true)
-                        }
-                    }
+                    Bar(Modifier.padding(top = 4.dp).size(24.dp, 26.dp), RoundedCornerShape(6.dp))
                 }
             }
         }
@@ -1695,6 +1724,15 @@ private fun Plate(text: String) {
                 .border(1.dp, c.outlineVariant, RoundedCornerShape(6.dp))
                 .padding(horizontal = 6.dp, vertical = 1.dp),
     )
+}
+
+/** Where your stop's time goes on its line (the line from the campus data, [waiting] for /api/line): bars in [HereTime]'s places. */
+@Composable
+private fun HereTimeWaiting() {
+    Column(horizontalAlignment = Alignment.End) {
+        TextBar(TextStyle(fontSize = 34.sp, lineHeight = 40.sp), width = 64.dp)
+        TextBar(MaterialTheme.typography.bodySmall, width = 52.dp)
+    }
 }
 
 /** Your stop's time on the line, from its board row: the only time on the page. */

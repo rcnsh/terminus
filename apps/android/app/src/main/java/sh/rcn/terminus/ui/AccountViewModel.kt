@@ -25,6 +25,7 @@ import sh.rcn.terminus.Device
 import sh.rcn.terminus.ImportResult
 import sh.rcn.terminus.L
 import sh.rcn.terminus.Lang
+import sh.rcn.terminus.MapFiles
 import sh.rcn.terminus.Me
 import sh.rcn.terminus.ParseError
 import sh.rcn.terminus.ProfileChange
@@ -101,6 +102,10 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     init {
         // Signed out by a refused token (here or anywhere else): nothing of the account stays on screen.
         viewModelScope.launch { Session.signedOut.collect { reset() } }
+        // A newer campus found in the background: the pickers take it in place.
+        viewModelScope.launch {
+            MapFiles.onCampusChange({ _state.value.campus != null }, Campus::parse) { c -> _state.update { it.copy(campus = c) } }
+        }
     }
 
     private fun api() = Api(store.token)
@@ -231,7 +236,9 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         if (_state.value.campus != null) return
         viewModelScope.launch {
             try {
-                val c = Api(store.token).campus()
+                // The kept copy the Stops and Map tabs use, so a picker opens with it at once.
+                val json = MapFiles.campus(getApplication(), Api(store.token)) ?: return@launch
+                val c = withContext(Dispatchers.Default) { Campus.parse(json) }
                 _state.update { it.copy(campus = c) }
             } catch (e: CancellationException) {
                 throw e

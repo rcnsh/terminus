@@ -97,7 +97,11 @@ final class SettingsModel {
     func loadCampus() async {
         guard campus == nil else { return }
         do {
-            campus = try await Api(token: app.token).campus()
+            let copy = try await CampusStore.shared.load(self, token: app.token) { [weak self] in
+                if let c = $0.campus { self?.campus = c }
+            }
+            guard let c = copy.campus else { throw CampusCopy.unreadable }
+            campus = c
         } catch is DecodingError {
             say(L("terminus sent something this version can't read."))
         } catch {

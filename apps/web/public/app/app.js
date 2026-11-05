@@ -33,7 +33,18 @@ import {
 import { ADDED_PLACES_KEY, api, clock, hour12, send, serverNow, signedOut, t } from '/account/dom.js';
 import { Card, InSky, Message, Report, Say, isStale, signal } from '/account/preview.js';
 import { Celestial, Horizon, useNowSky, useSkyPhase } from '/account/sky.js';
-import { Toast, campus, lists, loadCampus, loadProfile, profile, reloadProfile, toast, walkSpeed } from '/account/profile.js';
+import {
+  Toast,
+  campus,
+  campusRefused,
+  lists,
+  loadCampus,
+  loadProfile,
+  profile,
+  reloadProfile,
+  toast,
+  walkSpeed,
+} from '/account/profile.js';
 import { SearchBox } from '/account/search-box.js';
 // sign.js brings board.js with the page, so that the Stops and Map tabs, which
 // both import it, don't depend on it arriving later (a failed import can't be
@@ -1538,7 +1549,11 @@ function App() {
 async function start() {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
   // A tap on a notification with the app already open: show the new card.
-  navigator.serviceWorker?.addEventListener('message', (e) => e.data?.kind === 'refresh' && refresh());
+  navigator.serviceWorker?.addEventListener('message', (e) => {
+    if (e.data?.kind === 'refresh') refresh();
+  });
+  // The kept stops and routes were answered for an account that's since signed out: as any 401 here.
+  campusRefused.subscribe((refused) => refused && signedOut().catch(() => {}));
   // The tab in the address is marked before the first frame: showTab() comes
   // only after the awaits below, and until then a tab with its own top
   // (Settings) would show under the header and Now's sky.

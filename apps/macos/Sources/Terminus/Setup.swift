@@ -13,6 +13,7 @@ final class SetupModel {
     /// The profile as the server keeps it; unknown fields survive a save.
     private(set) var profile: [String: Any]?
     private(set) var campus: Campus?
+    @ObservationIgnored private var campusChanges = 0
     var message: String?
     private(set) var importing = false
     private(set) var imported: ImportResult?
@@ -92,11 +93,17 @@ final class SetupModel {
         message = nil
         do {
             async let p = api.profile()
-            async let c = api.campus()
+            // A newer campus from the background check, landing while the rest is on its way, isn't put back.
+            let changes = campusChanges
+            async let c = CampusStore.shared.load(self, token: TokenStore.read()) { [weak self] in
+                guard let self, let c = $0.campus else { return }
+                campus = c
+                campusChanges += 1
+            }
             async let m = try? api.me()
             async let ch = try? api.choices()
             let loaded = try object(await p)
-            let cam = try await c
+            guard let cam = try await c.campus else { throw CampusCopy.unreadable }
             let who = await m
             let chosen = await ch
             guard current(s) else { return }
@@ -104,7 +111,7 @@ final class SetupModel {
             // A change still being saved stays on screen.
             if !saving { profile = loaded }
             Clock.pref = clock
-            campus = cam
+            if campusChanges == changes { campus = cam }
             me = who
             choices = chosen
         } catch {

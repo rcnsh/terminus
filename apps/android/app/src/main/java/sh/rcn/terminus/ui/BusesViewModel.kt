@@ -183,6 +183,16 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
     /** The language the campus in [_state] is worded in: its lines' names and stops come from the server in it. */
     private var campusZh: Boolean? = null
 
+    init {
+        // A newer campus found in the background (a stop renamed, a line changed): the names on screen take it in place.
+        viewModelScope.launch {
+            MapFiles.onCampusChange({ _state.value.campus != null }, { CampusMap.parse(it).first }) { c ->
+                campusZh = L.zh
+                _state.update { it.copy(campus = c) }
+            }
+        }
+    }
+
     fun loadCampus() {
         val zh = L.zh
         if (campusJob?.isActive == true || (_state.value.campus != null && campusZh == zh)) return

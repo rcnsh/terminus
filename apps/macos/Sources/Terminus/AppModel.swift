@@ -906,7 +906,12 @@ final class AppModel {
 
     func loadDestinations() {
         guard destinations.isEmpty else { return }
-        Task { destinations = (try? await Api(token: TokenStore.read()).destinations()) ?? [] }
+        Task {
+            let copy = try? await CampusStore.shared.load(self, token: TokenStore.read()) { [weak self] in
+                if let d = $0.destinations { self?.destinations = d }
+            }
+            destinations = copy?.destinations ?? []
+        }
     }
 
     // MARK: language

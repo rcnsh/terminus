@@ -6,7 +6,7 @@
 import { Fill, MARK, Rich, html, render, store, useEffect, useInterval, useRef, useState, useStore } from '../assets/ui.js';
 import { api, forgetAccountHere, hour12, t } from './dom.js';
 import { Card, Message, Report } from './preview.js';
-import { Toast, loadCampus, loadProfile, saves, walkSpeed } from './profile.js';
+import { Toast, campusRefused, loadCampus, loadProfile, saves, walkSpeed } from './profile.js';
 import { Livery } from './livery.js';
 
 /** Settings and first-time setup ({ Settings, Onboarding }), once loaded. */
@@ -437,4 +437,12 @@ async function start() {
 
 render(html`<${AccountPage} />`, document.getElementById('root'));
 render(html`<${Who} />`, document.getElementById('who'));
+// The kept stops and routes were answered for an account that's since been
+// signed out elsewhere (the service worker's check behind them): as a 401 from /api/me.
+campusRefused.subscribe((refused) => {
+  if (!refused) return;
+  forgetAccountHere();
+  set({ view: 'signin' });
+});
+
 start().catch((err) => set({ view: 'error', error: err.message }));

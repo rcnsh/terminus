@@ -63,7 +63,11 @@ final class OnboardingModel {
     func loadCampus() async {
         guard campus == nil else { return }
         do {
-            campus = try await api.campus()
+            let copy = try await CampusStore.shared.load(self, token: AppModel.shared.token) { [weak self] in
+                if let c = $0.campus { self?.campus = c }
+            }
+            guard let c = copy.campus else { throw CampusCopy.unreadable }
+            campus = c
         } catch {
             // The home step offers to try again.
             message = failureMessage(error)
