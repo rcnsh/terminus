@@ -152,7 +152,7 @@ test('each address gets its way of fetching, and the live ones are left alone', 
   const w = worker({ fetch: () => Promise.resolve(new Response('')) });
   const calls = [];
   // The strategies are the script's own functions: swapped for ones that only note the call.
-  for (const name of ['networkFirst', 'cacheFirst', 'shellFile', 'tiles', 'networkThenKept']) {
+  for (const name of ['networkFirst', 'cacheFirst', 'shellFile', 'tiles', 'networkThenKept', 'campusKept']) {
     w.ctx[name] = (req, arg) => {
       calls.push([name, typeof arg === 'string' ? arg : null]);
       return new Response('');
@@ -180,7 +180,7 @@ test('each address gets its way of fetching, and the live ones are left alone', 
     ['/map/sprites/v4/light.png', ['cacheFirst', null]],
     ['/map/campus.pmtiles', ['tiles', null]],
     ['/app/map.js', ['networkThenKept', null]],
-    ['/api/campus', ['networkThenKept', null]],
+    ['/api/campus', ['campusKept', null]],
     ['/map/style.json', ['networkThenKept', null]],
     // Never kept: live times, other pages, the timelapse's encoder, other sites.
     ['/api/arrivals?stop=COM3', null],
@@ -422,4 +422,107 @@ test('offline, the campus kept in the other language is used rather than no map'
   const res = await within(w.dispatch('/api/campus', { headers: { 'accept-language': 'zh' } }).responded);
   assert.ok(res.ok);
   assert.deepEqual(await res.json(), { stops: [] });
+});
+
+/** A worker with /api/campus kept `age` ms ago (ETag "v1"), whose pages' messages land in `told`, and whose fetches are noted. */
+async function campusKeptFor(age, answer) {
+  const asked = [];
+  const told = [];
+  const w = worker({
+    fetch: async (req) => {
+      asked.push(req);
+      return answer(req);
+    },
+  });
+  // Copied out of the worker's realm, so they compare as plain objects.
+  w.ctx.self.clients.matchAll = async () => [{ postMessage: (m) => told.push(JSON.parse(JSON.stringify(m))) }];
+  const cache = await w.caches.open(w.get('MAP'));
+  const headers = { 'content-type': 'application/json', etag: '"v1"', 'x-terminus-cached': String(Date.now() - age) };
+  await cache.put(new Request(new URL('/api/campus', ORIGIN)), json({ stops: ['old'] }, { headers }));
+  return { w, cache, asked, told };
+}
+const HOUR = 3_600_000;
+
+test('/api/campus: a kept copy under an hour old answers at once, without asking the network', async () => {
+  const { w, asked } = await campusKeptFor(HOUR / 2, () => json({ stops: ['new'] }));
+  const { responded, waits } = w.dispatch('/api/campus');
+  assert.deepEqual(await (await within(responded)).json(), { stops: ['old'] });
+  await Promise.all(waits);
+  assert.equal(asked.length, 0);
+});
+
+test('/api/campus: an older kept copy answers at once; a changed one found behind it replaces it and the pages are told', async () => {
+  const net = held();
+  const { w, cache, asked, told } = await campusKeptFor(2 * HOUR, () => net.promise);
+  const { responded, waits } = w.dispatch('/api/campus');
+  // The kept copy, while the network still hasn't answered.
+  assert.deepEqual(await (await within(responded)).json(), { stops: ['old'] });
+  assert.equal(asked.length, 1);
+  assert.equal(asked[0].headers.get('if-none-match'), '"v1"');
+  net.release(json({ stops: ['new'] }, { headers: { 'content-type': 'application/json', etag: '"v2"' } }));
+  await Promise.all(waits);
+  assert.deepEqual(told, [{ kind: 'campus' }]);
+  const now = await cache.match(new Request(new URL('/api/campus', ORIGIN)));
+  assert.deepEqual(await now.json(), { stops: ['new'] });
+  // Kept as fresh: the next ask doesn't check again.
+  const again = w.dispatch('/api/campus');
+  assert.deepEqual(await (await within(again.responded)).json(), { stops: ['new'] });
+  await Promise.all(again.waits);
+  assert.equal(asked.length, 1);
+});
+
+test('/api/campus: unchanged (304) keeps the copy for another hour, and tells no one', async () => {
+  const { w, cache, told } = await campusKeptFor(2 * HOUR, () => new Response(null, { status: 304 }));
+  const { responded, waits } = w.dispatch('/api/campus');
+  await within(responded);
+  await Promise.all(waits);
+  assert.deepEqual(told, []);
+  const kept = await cache.match(new Request(new URL('/api/campus', ORIGIN)));
+  assert.deepEqual(await kept.json(), { stops: ['old'] });
+  assert.ok(Date.now() - Number(kept.headers.get('x-terminus-cached')) < HOUR);
+});
+
+test('/api/campus: a 401 behind the kept copy is passed on to the pages, not hidden by it', async () => {
+  const { w, cache, told } = await campusKeptFor(2 * HOUR, () => json({ error: 'sign in' }, { status: 401 }));
+  const { responded, waits } = w.dispatch('/api/campus');
+  await within(responded);
+  await Promise.all(waits);
+  assert.deepEqual(told, [{ kind: 'campus', status: 401 }]);
+  assert.deepEqual(await (await cache.match(new Request(new URL('/api/campus', ORIGIN)))).json(), { stops: ['old'] });
+});
+
+test('/api/campus: offline, an older kept copy still answers and stays', async () => {
+  const { w, told } = await campusKeptFor(2 * HOUR, () => Promise.reject(new TypeError('offline')));
+  const { responded, waits } = w.dispatch('/api/campus');
+  assert.deepEqual(await (await within(responded)).json(), { stops: ['old'] });
+  await Promise.all(waits);
+  assert.deepEqual(told, []);
+});
+
+test("/api/campus: a 200 that isn't the API's JSON (a captive portal's page) is never kept, nor told", async () => {
+  const portal = () => new Response('<html>Sign in to the Wi-Fi</html>', { status: 200, headers: { 'content-type': 'text/html' } });
+  // Behind an older copy: the copy stays, still due a check.
+  const { w, cache, told } = await campusKeptFor(2 * HOUR, portal);
+  const { responded, waits } = w.dispatch('/api/campus');
+  await within(responded);
+  await Promise.all(waits);
+  assert.deepEqual(told, []);
+  const kept = await cache.match(new Request(new URL('/api/campus', ORIGIN)));
+  assert.deepEqual(await kept.json(), { stops: ['old'] });
+  assert.ok(Date.now() - Number(kept.headers.get('x-terminus-cached')) >= HOUR);
+  // JSON's content type over a body that isn't JSON: the same.
+  const { w: w2, cache: cache2 } = await campusKeptFor(
+    2 * HOUR,
+    () => new Response('<html>', { headers: { 'content-type': 'application/json' } }),
+  );
+  const second = w2.dispatch('/api/campus');
+  await within(second.responded);
+  await Promise.all(second.waits);
+  assert.deepEqual(await (await cache2.match(new Request(new URL('/api/campus', ORIGIN)))).json(), { stops: ['old'] });
+  // With nothing kept: passed to the page as it came, and not kept.
+  const fresh = worker({ fetch: async () => portal() });
+  const first = fresh.dispatch('/api/campus');
+  assert.equal((await within(first.responded)).headers.get('content-type'), 'text/html');
+  await Promise.all(first.waits);
+  assert.equal(await (await fresh.caches.open(fresh.get('MAP'))).match(new Request(new URL('/api/campus', ORIGIN))), undefined);
 });

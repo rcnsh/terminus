@@ -237,8 +237,13 @@ struct Line: Decodable, Sendable {
         init(from d: Decoder) throws {
             let c = try d.container(keyedBy: CodingKeys.self)
             code = try c.decode(String.self, forKey: .code)
-            name = [c.string(.longName), c.string(.name)].compactMap { $0 }.first { !$0.isEmpty } ?? code
+            name = Self.named(code, name: c.string(.name), longName: c.string(.longName))
             services = c.lenientList(String.self, forKey: .services) ?? []
+        }
+        /// A stop's name on the line: its full one, then its short one, then its code. The
+        /// line page drawn from the campus data before the line comes names its stops by this too.
+        static func named(_ code: String, name: String?, longName: String?) -> String {
+            [longName, name].compactMap { $0 }.first { !$0.isEmpty } ?? code
         }
     }
     /// At stop `at`, or between stop `after` and the next.

@@ -8,9 +8,14 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -27,6 +32,9 @@ import org.json.JSONObject
  * Each version of the map file has a name of its own: MapLibre keeps a file's header and directories by its URL, so a newer one written
  * over the same path could be read with the old one's. Older versions go at the next check, once no map shows them.
  */
+/** A newer `/api/campus`, in [lang] ("en" or "zh"), found and kept. */
+class CampusChange(val lang: String, val json: JSONObject)
+
 object MapFiles {
     private const val TILES = "campus.pmtiles"
     /** What the kept map file is: its name, size, ETag and when it was last checked. */
@@ -48,38 +56,110 @@ object MapFiles {
 
     private fun fresh(file: File) = file.exists() && System.currentTimeMillis() - file.lastModified() in 0 until FRESH_MS
 
+    /** What [campusStep] says to do with `/api/campus`. */
+    internal enum class CampusStep {
+        /** The kept copy, young enough not to ask about. */
+        KEPT,
+        /** The kept copy now, and a check in the background. */
+        KEPT_THEN_CHECK,
+        /** Nothing kept: wait for the network. */
+        FETCH,
+    }
+
     /**
-     * `/api/campus`: the kept copy while it's fresh; then from the network, sent with the kept copy's ETag so an unchanged one costs no
-     * download; the kept copy without a connection. Opening the Map or Stops tab doesn't fetch it whole each time.
+     * With a copy kept, it's used at once whatever its age; one [ageMs] old past an hour (or from the future, the clock moved) is checked
+     * too.
+     */
+    internal fun campusStep(kept: Boolean, ageMs: Long): CampusStep =
+        when {
+            !kept -> CampusStep.FETCH
+            ageMs in 0 until FRESH_MS -> CampusStep.KEPT
+            else -> CampusStep.KEPT_THEN_CHECK
+        }
+
+    /** The background checks of `/api/campus` under way, by language: one at a time. */
+    private val checking = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    /** Outlives the screen that asked: a check started as one closes still saves what it gets. */
+    private val background = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private val changed = MutableSharedFlow<CampusChange>(extraBufferCapacity = 4)
+
+    /** A newer `/api/campus` found by a background check and saved: what's on screen in its language takes it in place. */
+    val campusChanged: SharedFlow<CampusChange> = changed
+
+    /**
+     * Each newer campus in the language shown now, while [shown] (a screen with campus data on it), read by [read] off the main thread and
+     * handed to [use]. One that can't be read is left: the copy shown stays.
+     */
+    suspend fun <T> onCampusChange(shown: () -> Boolean, read: (JSONObject) -> T, use: (T) -> Unit) {
+        campusChanged.collect { change ->
+            if (!shown() || change.lang != campusLang()) return@collect
+            val got =
+                try {
+                    withContext(Dispatchers.Default) { read(change.json) }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    return@collect
+                }
+            use(got)
+        }
+    }
+
+    /** The campus data's language now: the server words lines' names and stops in the language asked in, and a copy is kept for each. */
+    fun campusLang(): String = if (L.zh) "zh" else "en"
+
+    /**
+     * `/api/campus`: the kept copy at once, whatever its age, so nothing that only needs names waits on the network; one over an hour old
+     * is then checked in the background with its ETag ([campusChanged] says when it changed). With no copy, from the network, its errors
+     * thrown to the caller.
      */
     suspend fun campus(ctx: Context, api: Api): JSONObject? =
         withContext(Dispatchers.IO) {
-            // The server words lines' names and stops in the language asked in: a copy for each.
-            val lang = if (L.zh) "zh" else "en"
+            val lang = campusLang()
             val file = File(dir(ctx), "campus-$lang.json")
-            val tagFile = File(dir(ctx), "campus-$lang.etag")
             val kept = runCatching { JSONObject(file.readText()) }.getOrNull()
-            if (kept != null && fresh(file)) return@withContext kept
-            try {
-                val etag = if (kept != null) runCatching { tagFile.readText() }.getOrNull()?.takeIf { it.isNotEmpty() } else null
-                val got = api.campusJson(etag)
-                if (got == null) {
-                    file.setLastModified(System.currentTimeMillis())
+            when (campusStep(kept != null, System.currentTimeMillis() - file.lastModified())) {
+                CampusStep.KEPT -> kept
+                CampusStep.KEPT_THEN_CHECK -> {
+                    if (checking.add(lang))
+                        background.launch {
+                            try {
+                                fetchCampus(ctx, api, lang, withTag = true)?.let { changed.tryEmit(CampusChange(lang, it)) }
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                // Refused found here is acted on as it is when nothing's kept: a 401 signs the phone out (a 426 was
+                                // already noted by the request itself); anything else waits for the next look.
+                                if (e is ApiError && e.status == 401) Session.rejected(ctx, api.token)
+                            } finally {
+                                checking.remove(lang)
+                            }
+                        }
                     kept
-                } else {
-                    // The Map and Stops tabs can both be writing it: each write whole, or not at all.
-                    writeWhole(file, got.first.toString())
-                    if (got.second != null) writeWhole(tagFile, got.second!!) else tagFile.delete()
-                    got.first
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                // Signed out or refused: not something a kept copy should hide.
-                if (e is ApiError && e.status == 401) throw e
-                kept
+                // Nothing kept to fall back on: whatever goes wrong (offline, signed out, a reply this version can't read) is the caller's
+                // to say.
+                CampusStep.FETCH -> fetchCampus(ctx, api, lang, withTag = false)
             }
         }
+
+    /** Asks for `/api/campus` and keeps it; with [withTag], the kept copy's ETag, and null when the server says it's unchanged. */
+    private suspend fun fetchCampus(ctx: Context, api: Api, lang: String, withTag: Boolean): JSONObject? {
+        val file = File(dir(ctx), "campus-$lang.json")
+        val tagFile = File(dir(ctx), "campus-$lang.etag")
+        val etag = if (withTag) runCatching { tagFile.readText() }.getOrNull()?.takeIf { it.isNotEmpty() } else null
+        val got = api.campusJson(etag)
+        if (got == null) {
+            file.setLastModified(System.currentTimeMillis())
+            return null
+        }
+        // The Map and Stops tabs can both be writing it: each write whole, or not at all.
+        writeWhole(file, got.first.toString())
+        if (got.second != null) writeWhole(tagFile, got.second!!) else tagFile.delete()
+        return got.first
+    }
 
     /**
      * The style for [dark] and [zh]: the street map from the downloaded file, or, until it's downloaded, the routes and stops on a plain

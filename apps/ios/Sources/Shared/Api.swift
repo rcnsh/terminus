@@ -360,10 +360,6 @@ struct Api: Sendable {
         }
     }
 
-    func campus() async throws -> Campus {
-        try JSONDecoder().decode(Campus.self, from: await send("GET", "/api/campus"))
-    }
-
     // MARK: the account
 
     func me() async throws -> Me {

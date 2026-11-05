@@ -234,6 +234,26 @@ export async function loadCampus() {
   return campus.get();
 }
 
+/**
+ * Set when the service worker's check behind its kept /api/campus was
+ * refused (401): signed out elsewhere. Each page acts on it as on any 401
+ * of its own, so the kept copy never hides it.
+ */
+export const campusRefused = store(false);
+
+// The service worker answers /api/campus from its kept copy and checks it
+// behind: when a newer one has replaced it, it's read again (from the
+// worker's copy, at once) and what's drawn from it redraws in place.
+globalThis.navigator?.serviceWorker?.addEventListener('message', (e) => {
+  if (e.data?.kind !== 'campus') return;
+  if (e.data.status === 401) campusRefused.set(true);
+  else if (!e.data.status && campus.get())
+    api('/api/campus').then(
+      (c) => campus.set(c),
+      () => {},
+    );
+});
+
 /** Every stop, by name, for menus. */
 export const stopsByName = (c = campus.get()) =>
   (c?.stops ?? []).map(({ code, name, lat, lon }) => ({ code, name, lat, lon })).sort((a, b) => a.name.localeCompare(b.name));

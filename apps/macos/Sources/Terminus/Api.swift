@@ -570,6 +570,12 @@ struct NearbyStop: Decodable, Identifiable {
 }
 
 struct Destination: Decodable, Hashable {
+    /// The places to go in a `/api/campus` body.
+    static func list(_ campus: Data) -> [Destination]? {
+        struct R: Decodable { let destinations: [Destination] }
+        return (try? JSONDecoder().decode(R.self, from: campus))?.destinations
+    }
+
     let code: String
     let label: String
     let stopCode: String
@@ -1324,9 +1330,14 @@ struct Api {
         try await send("POST", "/api/me/import", json: JSONSerialization.data(withJSONObject: ["share": share]))
     }
 
-    /// Stops and residences, for the home picker.
-    func campus() async throws -> Campus {
-        try JSONDecoder().decode(Campus.self, from: await send("GET", "/api/campus"))
+    /// `/api/campus` as it came, with its ETag; nil when `etag` says the kept copy is current.
+    /// Read through CampusStore, as Campus for the home picker and for the places to go.
+    func campusJSON(etag: String? = nil) async throws -> (Data, String?)? {
+        do {
+            return try await sendTagged("GET", "/api/campus", ifNoneMatch: etag)
+        } catch let e as ApiError where e.status == 304 {
+            return nil
+        }
     }
 
     /// A pairing code for another device (accounts with an email only).
@@ -1356,12 +1367,6 @@ struct Api {
         struct R: Decodable { let stops: [NearbyStop] }
         let r: R = try await request("GET", "/api/me/nearby", query: Self.coords(lat, lon, acc))
         return r.stops
-    }
-
-    func destinations() async throws -> [Destination] {
-        struct R: Decodable { let destinations: [Destination] }
-        let r: R = try await request("GET", "/api/campus")
-        return r.destinations
     }
 
     /// Starts without an email: an account of its own for this Mac, as the phone's first launch.
@@ -1490,9 +1495,9 @@ struct Api {
     }
 
     /// `send`, with the response's ETag: the profile's version, for a later If-Match.
-    private func sendTagged(_ method: String, _ path: String, query: [URLQueryItem] = [], json: Data? = nil, ifMatch: String? = nil)
-        async throws -> (Data, String?)
-    {
+    private func sendTagged(
+        _ method: String, _ path: String, query: [URLQueryItem] = [], json: Data? = nil, ifMatch: String? = nil, ifNoneMatch: String? = nil
+    ) async throws -> (Data, String?) {
         let scope = Quiet.scope(path)
         if token != nil, Outdated.gated(method, path), Outdated.active {
             throw ApiError(status: 426, message: L("Update terminus to keep using it."))
@@ -1513,6 +1518,7 @@ struct Api {
             req.setValue(Lang.header, forHTTPHeaderField: "accept-language")
             if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "authorization") }
             if let ifMatch { req.setValue(ifMatch, forHTTPHeaderField: "if-match") }
+            if let ifNoneMatch { req.setValue(ifNoneMatch, forHTTPHeaderField: "if-none-match") }
             if let json {
                 req.setValue("application/json", forHTTPHeaderField: "content-type")
                 req.httpBody = json

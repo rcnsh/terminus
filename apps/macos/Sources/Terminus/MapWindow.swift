@@ -108,7 +108,9 @@ final class MapModel {
         if mayAsk(), campus == nil {
             let token = TokenStore.read()
             do {
-                campus = try await MapFiles.campus(token: token)
+                campus = try await CampusStore.shared.load(
+                    self, token: token, refused: { [weak self] e, token in self?.refuse(e, token: token, app: app) }
+                ) { [weak self] in self?.campus = $0.map }.map
             } catch {
                 if let e = Self.refusal(error) { refuse(e, token: token, app: app) }
             }

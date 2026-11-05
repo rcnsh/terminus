@@ -28,7 +28,18 @@ import {
   useStore,
 } from '/assets/ui.js';
 import { inkOn, quietMs, send, signedOut, t } from '/account/dom.js';
-import { haversineM, loadCampus, profile, reloadProfile, restorePlace, saveNow, toast, withPlace, withoutPlace } from '/account/profile.js';
+import {
+  campus as campusStore,
+  haversineM,
+  loadCampus,
+  profile,
+  reloadProfile,
+  restorePlace,
+  saveNow,
+  toast,
+  withPlace,
+  withoutPlace,
+} from '/account/profile.js';
 import { MAPLIBRE, PMTILES } from '/app/map-files.js';
 import { Row, WaitingRows } from '/app/board.js';
 
@@ -429,32 +440,41 @@ function resume() {
 
 const empty = { type: 'FeatureCollection', features: [] };
 
+/** The route lines, for the map's `routes` source. */
+const routesOf = (campus) => ({
+  type: 'FeatureCollection',
+  features: Object.entries(campus.routes).map(([svc, r]) => ({
+    type: 'Feature',
+    properties: { svc, color: r.color },
+    geometry: { type: 'LineString', coordinates: r.line },
+  })),
+});
+
+/** The stops, for the map's `stops` source. */
+const stopsOf = (campus) => ({
+  type: 'FeatureCollection',
+  features: campus.stops.map((s) => ({
+    type: 'Feature',
+    properties: { code: s.code, name: s.name, services: ` ${s.services.join(' ')} ` },
+    geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
+  })),
+});
+
+// A newer /api/campus found behind the kept one (sw.js): an open map takes
+// it in place, its lines and stops, and the sheets their names.
+campusStore.subscribe((c) => {
+  if (!c || !campusData.get() || c === campusData.get()) return;
+  campusData.set(c);
+  map?.getSource('routes')?.setData(routesOf(c));
+  map?.getSource('stops')?.setData(stopsOf(c));
+});
+
 function addLayers() {
   const campus = campusData.get();
   const ink = pageInk();
   const paper = pagePaper();
-  map.addSource('routes', {
-    type: 'geojson',
-    data: {
-      type: 'FeatureCollection',
-      features: Object.entries(campus.routes).map(([svc, r]) => ({
-        type: 'Feature',
-        properties: { svc, color: r.color },
-        geometry: { type: 'LineString', coordinates: r.line },
-      })),
-    },
-  });
-  map.addSource('stops', {
-    type: 'geojson',
-    data: {
-      type: 'FeatureCollection',
-      features: campus.stops.map((s) => ({
-        type: 'Feature',
-        properties: { code: s.code, name: s.name, services: ` ${s.services.join(' ')} ` },
-        geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
-      })),
-    },
-  });
+  map.addSource('routes', { type: 'geojson', data: routesOf(campus) });
+  map.addSource('stops', { type: 'geojson', data: stopsOf(campus) });
   map.addSource('buses', { type: 'geojson', data: empty });
   map.addSource('me', { type: 'geojson', data: empty });
   map.addSource('stretch', { type: 'geojson', data: empty });

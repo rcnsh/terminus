@@ -133,7 +133,7 @@ final class MapModel {
         if campus == nil {
             let token = app.token
             do {
-                campus = try await MapFiles.campus(token: token)
+                campus = try await CampusStore.shared.load(self, token: token) { [weak self] in self?.campus = $0.map }.map
                 campusArrived()
             } catch let e as ApiError where e.status == 401 {
                 if let token { app.rejected(token, reason: L("This phone was signed out of your account. Sign in again with your email.")) }
