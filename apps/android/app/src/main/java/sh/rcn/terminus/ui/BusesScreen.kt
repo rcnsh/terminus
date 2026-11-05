@@ -368,9 +368,12 @@ private fun PinnedCard(
             verticalAlignment = Alignment.Top,
             key = { PinPages.at(pinned, it) },
         ) { page ->
-            Box(Modifier.fillMaxWidth().onSizeChanged { if (it.height > tallest) tallest = it.height }) {
-                val code = PinPages.at(pinned, page)
-                val i = loaded.indexOfFirst { it.first == code }
+            val code = PinPages.at(pinned, page)
+            val i = loaded.indexOfFirst { it.first == code }
+            // Only answers hold the card open: a skeleton (a row per service) or the last page would leave a gap under a one-line
+            // "No buses". The pager is as tall as the pages on screen anyway.
+            val measured = if (i >= 0) Modifier.onSizeChanged { if (it.height > tallest) tallest = it.height } else Modifier
+            Box(Modifier.fillMaxWidth().then(measured)) {
                 when {
                     code == PinPages.ADD -> PinAnother(tallestDp)
                     i >= 0 ->

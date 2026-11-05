@@ -227,12 +227,16 @@ private struct PinnedStops: View {
 
 /// The pinned stops' names, then one card at a time: each stop as Nearby
 /// shows it, and last, how to pin another. A swipe moves the chosen name, a
-/// tap on a name moves the card. The card is as tall as the tallest page
-/// so far, so nothing under it jumps while swiping.
+/// tap on a name moves the card. The card is as tall as the tallest answer
+/// so far, so nothing under it jumps while swiping, or as the page showing
+/// when that's taller. A skeleton (a row per service) or the last page never
+/// holds it open: at night the answer is one line.
 private struct PinnedPager: View {
     let pins: [String]
     @Environment(BusesModel.self) private var model
     @State private var tallest: CGFloat = 0
+    /// Each page's own height, by its id: a stop's code or the last page's.
+    @State private var heights: [String: CGFloat] = [:]
 
     /// The pages' gutters: the home's own, so a page sliding in comes from the screen's edge.
     private static let gutter: CGFloat = 16
@@ -249,21 +253,34 @@ private struct PinnedPager: View {
                     HStack(alignment: .top, spacing: 0) {
                         ForEach(pins, id: \.self) { code in
                             sign(code, cols)
+                                .fixedSize(horizontal: false, vertical: true)
                                 .onGeometryChange(for: CGFloat.self) {
                                     $0.size.height
                                 } action: {
-                                    tallest = max(tallest, $0)
+                                    heights[code] = $0
+                                    if model.pinned[code] != nil { tallest = max(tallest, $0) }
+                                }
+                                // An answer can come at its skeleton's height, so nothing resizes.
+                                .onChange(of: model.pinned[code] != nil) { _, answered in
+                                    if answered, let h = heights[code] { tallest = max(tallest, h) }
                                 }
                                 .padding(.horizontal, Self.gutter)
                                 .containerRelativeFrame(.horizontal)
                                 .id(code)
                         }
                         AddPin()
+                            .fixedSize(horizontal: false, vertical: true)
+                            .onGeometryChange(for: CGFloat.self) {
+                                $0.size.height
+                            } action: {
+                                heights[BusPinned.addPage] = $0
+                            }
                             .padding(.horizontal, Self.gutter)
                             .containerRelativeFrame(.horizontal)
                             .id(BusPinned.addPage)
                     }
-                    .frame(minHeight: tallest, alignment: .top)
+                    // The other pages are drawn past it, clipped by the scroll view.
+                    .frame(height: page.flatMap { heights[$0] }.map { max(tallest, $0) }, alignment: .top)
                     .scrollTargetLayout()
                 }
                 .scrollTargetBehavior(.paging)
@@ -272,8 +289,8 @@ private struct PinnedPager: View {
             }
             .padding(.horizontal, -Self.gutter)
         }
-        // Other stops: the tallest is theirs from now.
-        .onChange(of: pins) { tallest = 0 }
+        // Other stops: the tallest is theirs from now. Pages that stay don't resize, so their heights are kept.
+        .onChange(of: pins) { tallest = pins.filter { model.pinned[$0] != nil }.compactMap { heights[$0] }.max() ?? 0 }
     }
 
     /// A pinned stop's page: its sign as Nearby draws it, its times counted
