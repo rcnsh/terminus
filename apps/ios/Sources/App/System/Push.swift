@@ -192,8 +192,10 @@ import UserNotifications
 }
 
 /// What the app hears about its notifications: shown in the foreground too,
-/// a tap opens Now, and "Not going" takes the class off today.
-final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate, Sendable {
+/// a tap opens Now, and "Not going" takes the class off today. On the main
+/// actor: iOS's completion handler, which the async methods call when they
+/// return, throws when it's called from any other thread.
+@MainActor final class NotificationDelegate: NSObject, @preconcurrency UNUserNotificationCenterDelegate {
     static let shared = NotificationDelegate()
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async
@@ -212,9 +214,9 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate, Se
         } else if action == UNNotificationDismissActionIdentifier {
             // The heads-up swiped away: no "Leave now" after it, as on Android.
             guard response.notification.request.identifier == TripReminders.soonID, let key = info["soonKey"] as? String else { return }
-            await MainActor.run { Reminders.dismissed(key) }
+            Reminders.dismissed(key)
         } else if action == UNNotificationDefaultActionIdentifier {
-            await MainActor.run { Links.open(URL(string: "terminus://plan")!) }
+            Links.open(URL(string: "terminus://plan")!)
         }
     }
 }
