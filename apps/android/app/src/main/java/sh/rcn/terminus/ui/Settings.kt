@@ -452,6 +452,27 @@ private fun paceName(pace: String) =
         else -> R.string.pace_normal
     }
 
+/** A page waiting for the profile: a group of rows in Settings' shape (a name and a line under it), with no controls to press. */
+@Composable
+private fun SettingsSkeleton() {
+    Skeleton(stringResource(R.string.checking)) {
+        Groups {
+            Column {
+                TextBar(MaterialTheme.typography.labelMedium, Modifier.padding(start = 4.dp, bottom = 8.dp), width = 96.dp)
+                Group(null) {
+                    for (i in 0 until 3) {
+                        if (i > 0) RowDivider()
+                        Column(Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 10.dp)) {
+                            TextBar(MaterialTheme.typography.bodyLarge, fraction = barFraction(i) - 0.2f)
+                            TextBar(MaterialTheme.typography.bodyMedium, fraction = barFraction(i, 1))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 /** One page of Settings: that group's controls. */
 @Composable
 private fun SettingsPageContent(
@@ -465,7 +486,7 @@ private fun SettingsPageContent(
     val profile = state.profile
     val needsProfile = page in setOf(SettingsPage.Trips, SettingsPage.Timetable, SettingsPage.Favourites)
     if (needsProfile && profile == null) {
-        Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+        SettingsSkeleton()
         return
     }
     when (page) {

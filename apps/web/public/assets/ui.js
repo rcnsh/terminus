@@ -136,6 +136,27 @@ export const Icon = ({ paths, size, ...props }) =>
     dangerouslySetInnerHTML: { __html: paths },
   });
 
+/**
+ * A skeleton's bar where words are still to come (site.css .sk-line): as
+ * tall as the line it stands in for, the bar centred in it. `w` its width,
+ * `h` the bar's height when the words' own would look wrong (a large figure).
+ */
+export const Bar = ({ w, h = null }) =>
+  html`<span class="sk-line" style=${{ width: w }} aria-hidden="true"><span class="sk" style=${h ? { height: h } : undefined}></span></span>`;
+
+/**
+ * Something still on its way, drawn as `children`'s shapes: hidden from
+ * screen readers, which hear `said` ("Checking…") instead. `quiet`: there to
+ * be read, not announced (a status elsewhere says it, or nothing should be
+ * heard). `cls` is the box's class, `inner` the shapes' own box's, for a
+ * layout that needs its items directly inside it (a grid).
+ */
+export const Skeleton = ({ said, quiet = false, cls = null, inner = null, children }) =>
+  html`<div class=${cls} aria-busy="true"><div class=${inner} aria-hidden="true">${children}</div><p class="sr-only" role=${quiet ? undefined : 'status'}>${said}</p></div>`;
+
+/** A width from `set` for row `i`: bars that differ row to row, the same on every draw. */
+export const widthOf = (set, i) => set[i % set.length];
+
 /** Prefers reduced motion, read when asked. */
 export const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 

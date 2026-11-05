@@ -12,14 +12,28 @@
 // Only the times the API gives are shown: `later` is every later bus the
 // feed reported, and a line shows no times at stops other than yours.
 
-import { Icon, focusSoon, html, reducedMotion, store, useEffect, useMemo, useRef, useStore } from '/assets/ui.js';
+import { Bar, Icon, Skeleton, focusSoon, html, reducedMotion, store, useEffect, useMemo, useRef, useStore, widthOf } from '/assets/ui.js';
 import { clock, hour12, send, serverNow, signedOut, t } from '/account/dom.js';
 import { campus, loadCampus, profile, reloadProfile, togglePin } from '/account/profile.js';
 import { SearchBox } from '/account/search-box.js';
 import { Celestial, Horizon } from '/account/sky.js';
 import { busesTabIndex } from '/account/search.js';
-import { NEXT, STAR, Big, Chip, Crowd, Quality, Row, colorOf, stoppedWords, svcVars, thenText } from '/app/board.js';
-import { StopSign, anyGuess } from '/app/sign.js';
+import {
+  NEXT,
+  STAR,
+  Big,
+  Chip,
+  Crowd,
+  Quality,
+  Row,
+  ServicesSkeleton,
+  WaitingRows,
+  colorOf,
+  stoppedWords,
+  svcVars,
+  thenText,
+} from '/app/board.js';
+import { NoPins, PinnedSkeleton, StopSign, anyGuess } from '/app/sign.js';
 import { PULL_FRESH_MS } from '/app/timing.js';
 
 /** The page on screen refreshes this often (the API caches arrivals 15 s). */
@@ -421,7 +435,15 @@ function Board({ code }) {
   const all = useStore(boards);
   const now = useStore(tick);
   const b = all.get(code);
-  if (!b?.board) return html`<p class="hint bt-empty">${b?.error ?? t('Checking…')}</p>`;
+  if (b?.error && !b.board) return html`<p class="hint bt-empty">${b.error}</p>`;
+  if (!b?.board) {
+    return html`
+      <${Skeleton} said=${t('Checking…')} quiet>
+        <div class="card bt-board"><${WaitingRows} services=${stopOf(code)?.services} chevron /></div>
+        <div class="bt-foot"><div class="bt-ends"></div><div class="bt-status"><span class="bt-updated"><${Bar} w="7rem" /></span></div></div>
+      <//>
+    `;
+  }
   const ending = b.board.filter((r) => r.endsAt && Date.parse(r.endsAt) > now && Date.parse(r.endsAt) - now <= ENDS_SOON_MS);
   const rows = b.board.map((r) => aged(r, b.got, now));
   const live = rows.some((r) => r.running !== false && r.quality === 'live' && r.etaS != null);
@@ -521,17 +543,26 @@ const agedSign = (s, got, now) => ({ ...s, board: s.board.map((r) => aged(r, got
 /**
  * One pinned stop's page: its sign as Nearby shows it, and under it why it
  * couldn't update, or what a "~" means when one is showing. Before its
- * times come, its plate with "Checking…".
+ * times come, its plate with its rows as shapes.
  */
 function PinPage({ code, entry, pinned, now }) {
   const s = entry?.s
     ? agedSign(entry.s, entry.got, now)
     : { stop: { code, name: plateName(code) }, walkS: null, available: true, board: [] };
-  const note = entry?.s ? null : entry?.gone ? t('No times right now') : (entry?.error ?? t('Checking…'));
+  const note = entry?.s ? null : entry?.gone ? t('No times right now') : (entry?.error ?? null);
+  const waiting = !entry?.s && !note;
   return html`
     <div class="bt-pager-page" role="group" aria-label=${s.stop.name}>
       <div class="nearby">
-        <${StopSign} s=${s} pinned=${pinned} note=${note} onStop=${openStop} onLine=${(svc, at) => go(lineHash(svc, at))} />
+        <${StopSign}
+          s=${s}
+          pinned=${pinned}
+          note=${note}
+          waiting=${waiting}
+          services=${stopOf(code)?.services}
+          onStop=${openStop}
+          onLine=${(svc, at) => go(lineHash(svc, at))}
+        />
         ${entry?.s && entry.error && html`<p class="bt-pin-error"><span class="bt-error">${entry.error}</span></p>`}
         ${!note && anyGuess([s]) && html`<p class="nb-foot">${t('~ is a guess from the timetable, not a live time.')}</p>`}
       </div>
@@ -692,9 +723,8 @@ function Home() {
   const pinned = p?.pinnedStops ?? [];
   const routes = Object.entries(c?.routes ?? {});
   let pins;
-  if (!p) pins = html`<p class="hint bt-empty">${t('Checking…')}</p>`;
-  else if (!pinned.length)
-    pins = html`<p class="bt-no-pins"><${Icon} paths=${STAR} />${t("Tap the star on any stop to keep it here: in Nearby, on the stop's page, or after searching for it.")}</p>`;
+  if (!p) pins = html`<${PinnedSkeleton} />`;
+  else if (!pinned.length) pins = html`<${NoPins} />`;
   else pins = html`<${PinnedStops} pinned=${pinned} />`;
   return html`
     <div class="bt-home">
@@ -704,7 +734,7 @@ function Home() {
       <h3 class="bt-section eyebrow">${t('Pinned')}</h3>
       ${pins}
       <div class="bt-section"><h3 class="eyebrow">${t('Services')}</h3><span>${t('Tap one to see its whole line.')}</span></div>
-      ${routes.length ? html`<${Lines} routes=${routes} />` : html`<p class="hint bt-empty">${t('Checking…')}</p>`}
+      ${routes.length ? html`<${Lines} routes=${routes} />` : html`<${Skeleton} said=${t('Checking…')} quiet><${ServicesSkeleton} /><//>`}
     </div>
   `;
 }
@@ -786,6 +816,38 @@ function YourTime({ r }) {
 }
 
 /**
+ * A service's line before it comes: its stops as shapes on a line in a
+ * tint of its colour, a row for each stop the campus data has (a loop's
+ * first stop again at its end, as the line lists it), with no buses.
+ */
+function LineSkeleton({ svc, color, r }) {
+  const seq = r ? (r.loop ? [...r.seq, r.seq[0]] : r.seq) : Array.from({ length: 6 }, () => null);
+  const n = r && new Set(r.seq).size;
+  return html`
+    <${Skeleton} said=${t('Checking…')} quiet>
+      <p class="bt-summary"><${Bar} w="40%" /></p>
+      <div class="bt-line-label">
+        <span class="eyebrow">${n ? t('{0} stops', n) : html`<${Bar} w="4rem" />`}</span><span class="bt-status"><${Bar} w="6rem" /></span>
+      </div>
+      <ol class="bt-route" style=${`--svc:color-mix(in srgb, ${color} 30%, var(--bg))`}>
+        ${seq.map((code, i) => {
+          const others = (stopOf(code)?.services ?? []).filter((x) => x !== svc);
+          return html`<li class="bt-stop" key=${i}>
+            <div class="sk-stop">
+              <span class="bt-node"></span>
+              <span class="bt-stop-text">
+                <span class="bt-stop-name"><${Bar} w=${widthOf(['72%', '30%', '24%', '36%', '42%', '64%', '50%'], i)} /></span>
+                ${others.length > 0 && html`<span class="bt-others">${others.map((x) => html`<${Chip} key=${x} svc=${x} cls="tiny" />`)}</span>`}
+              </span>
+            </div>
+          </li>`;
+        })}
+      </ol>
+    <//>
+  `;
+}
+
+/**
  * A service's whole line: its stops in order on a line in its colour, its
  * buses at a stop or between two, and the stop you came from with its time.
  */
@@ -816,7 +878,8 @@ function LinePage({ svc, stop }) {
       </div>
     <//>
   `;
-  if (!data) return html`${head}<p class="hint bt-empty">${mine?.error ?? t('Checking…')}</p>`;
+  if (mine?.error && !data) return html`${head}<p class="hint bt-empty">${mine.error}</p>`;
+  if (!data) return html`${head}<${LineSkeleton} svc=${svc} color=${color} r=${r} />`;
 
   // A loop's first stop is listed again at its end: one stop, two rows.
   const n = new Set(data.stops.map((s) => s.code)).size;
@@ -866,6 +929,36 @@ function LinePage({ svc, stop }) {
       })}
     </ol>
   `;
+}
+
+/**
+ * The tab's one "Checking…" for screen readers, while what's on screen is
+ * still coming: the services or the pins on the home, the pinned stop in
+ * view's times, a stop's board or a line. Every skeleton in the tab is quiet.
+ */
+function TabStatus({ r }) {
+  const p = useStore(profile);
+  const c = useStore(campus);
+  const all = useStore(boards);
+  const pins = useStore(signs);
+  const pick = useStore(chosen);
+  const l = useStore(line);
+  useStore(across);
+  const coming = (x) => !x?.error && !x?.gone;
+  let pending;
+  if (r.kind === 'line') {
+    const mine = l?.key === `${r.svc}/${r.stop ?? ''}` ? l : null;
+    pending = !mine?.data && coming(mine);
+  } else if (r.kind === 'stop') {
+    const b = all.get(shownCode(r.code));
+    pending = !b?.board && coming(b);
+  } else {
+    const pinned = p?.pinnedStops ?? [];
+    const shown = pinned[pageOf(pinned, pick)];
+    const entry = shown && pins.get(shown);
+    pending = !p || !Object.keys(c?.routes ?? {}).length || Boolean(shown && !entry?.s && coming(entry));
+  }
+  return html`<p class="sr-only" role="status">${pending ? t('Checking…') : ''}</p>`;
 }
 
 /**
@@ -932,8 +1025,10 @@ export function BusesTab({ visible, locate: where = null }) {
     };
   }, [home]);
 
-  if (r.kind === 'line') return html`<${LinePage} svc=${r.svc} stop=${r.stop} />`;
-  if (r.kind === 'stop') return html`<${StopPage} code=${r.code} />`;
+  // First, so it stays the same status line whichever page is showing.
+  const status = html`<${TabStatus} r=${r} />`;
+  if (r.kind === 'line') return html`${status}<${LinePage} svc=${r.svc} stop=${r.stop} />`;
+  if (r.kind === 'stop') return html`${status}<${StopPage} code=${r.code} />`;
   // The search at the top of the sky, the home's own sky running on from it.
-  return html`<div class="bt-sky-top"><${Find} /></div><${Home} />`;
+  return html`${status}<div class="bt-sky-top"><${Find} /></div><${Home} />`;
 }

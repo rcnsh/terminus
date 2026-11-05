@@ -20,23 +20,34 @@ struct Header: View {
             // computed from the departure time, never from `label`.
             Ticking(every: 1) { now in
                 let l = lines(a, resting: resting, offline: offline, now: now)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(l.head)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                    Text(l.big)
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
-                        .foregroundStyle(l.dimmed ? .secondary : .primary)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.8)
-                    if let st = l.status { StatusLine(color: st.color, text: st.text) }
+                if a == nil && !model.showNearby && offline == nil && model.answerError == nil {
+                    // No answer yet, one on its way: the heading, the headline and the status line in bars.
+                    VStack(alignment: .leading, spacing: 3) {
+                        SkeletonLine(font: .system(size: 12, weight: .medium), points: 120)
+                        SkeletonLine(font: .system(size: 20, weight: .bold, design: .rounded), points: 170)
+                        SkeletonLine(font: .caption, points: 90)
+                    }
+                    .shimmering()
+                    .skeletonSpoken()
+                } else {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(l.head)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        Text(l.big)
+                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                            .foregroundStyle(l.dimmed ? .secondary : .primary)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.8)
+                        if let st = l.status { StatusLine(color: st.color, text: st.text) }
+                    }
+                    // One element, read as a sentence. Its words change once a
+                    // minute at most, so VoiceOver isn't fed a new second each tick.
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(spokenTimes([l.head, l.big, l.status?.spoken].compactMap { $0 }.joined(separator: L(", "))))
+                    .accessibilityAddTraits([.isHeader, .updatesFrequently])
                 }
-                // One element, read as a sentence. Its words change once a
-                // minute at most, so VoiceOver isn't fed a new second each tick.
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(spokenTimes([l.head, l.big, l.status?.spoken].compactMap { $0 }.joined(separator: L(", "))))
-                .accessibilityAddTraits([.isHeader, .updatesFrequently])
             }
             Spacer(minLength: 0)
             Button {

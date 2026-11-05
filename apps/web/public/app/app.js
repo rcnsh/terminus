@@ -13,10 +13,12 @@
 // they were fetched, so the page can say it's showing old times.
 
 import {
+  Bar,
   Fill,
   Icon,
   MARK,
   Rich,
+  Skeleton,
   announce,
   focusSoon,
   html,
@@ -36,7 +38,8 @@ import { SearchBox } from '/account/search-box.js';
 // sign.js brings board.js with the page, so that the Stops and Map tabs, which
 // both import it, don't depend on it arriving later (a failed import can't be
 // retried at the same address; loadTab's retry renews only the tab's file).
-import { StopSign, anyGuess } from '/app/sign.js';
+import { ServicesSkeleton } from '/app/board.js';
+import { PinnedSkeleton, SignSkeleton, StopSign, anyGuess, keepPinCount, pinAccount } from '/app/sign.js';
 import { offlineNext } from '/app/offline.js';
 import { preloadMap } from '/app/map-files.js';
 import {
@@ -68,6 +71,17 @@ const target = store({ kind: 'plan' });
 /** The favourites, for their chips: from the last answer, and from the profile as Settings or the map change it. */
 const places = store([]);
 profile.subscribe((p) => p && places.set(p.places.map(({ key, label }) => ({ key, label }))));
+/** /api/me, once fetched: who's signed in. */
+const me = store(null);
+me.subscribe((m) => pinAccount.set(m?.email ?? null));
+// The pins' count, kept with whose account it is for the Stops tab's shapes
+// the next time it opens before they're known. Only for a profile that came
+// once this page knew who's signed in, and under that account: one that came
+// before is kept at its next load (each opening of the Stops tab reloads it).
+profile.subscribe((p) => {
+  const account = pinAccount.get();
+  if (p && account) keepPinCount(account, (p.pinnedStops ?? []).length);
+});
 /**
  * The card: an answer (`a`), "Checking…" or another line (`text`), the
  * offline plan (`offline`), or Nearby's stops (`nearby`).
@@ -89,8 +103,6 @@ const removed = store(new Map());
 const undo = store(null);
 /** The search under the chips is open. */
 const searching = store(false);
-/** /api/me, once fetched: who's signed in. */
-const me = store(null);
 /** Now, Stops (`buses`), Map or Settings; null until the first draw. */
 const tab = store(null);
 /** app/buses.js, once the Stops tab has been opened. */
@@ -1036,6 +1048,50 @@ function NearbyCard({ stops }) {
   `;
 }
 
+/** A point on the skeleton's line: its time, its dot, and what's there with what's under it, as bars. */
+const SkPoint = ({ dot, line = null, what, below = null }) => html`
+  <li class=${['pt', dot, line].filter(Boolean).join(' ')}>
+    <span class="time"><${Bar} w="3.2rem" /></span>
+    <span class="rail"></span>
+    <span class="what"><strong><${Bar} w=${what} /></strong>${below && html`<small><${Bar} w=${below} /></small>`}</span>
+  </li>
+`;
+
+/**
+ * Now before its first answer, drawn as a trip's card (journey.js Steps):
+ * where it's for and the large "Leave in" in the sky, the bus idling on
+ * the road, then the bus's line and the trip's three points. For Nearby,
+ * its signs. Buttons aren't drawn: nothing there can be pressed yet. Its
+ * "Checking…" is there to be read, not announced, as the card says itself when it comes.
+ */
+function CardSkeleton({ nearby }) {
+  if (nearby) {
+    return html`<div class="sky-head nearby-sky"><${Celestial} /></div>
+      <${Horizon} />
+      <${Skeleton} said=${t('Checking…')} quiet cls="widget" inner="nearby"><${SignSkeleton} /><${SignSkeleton} /><//>`;
+  }
+  return html`
+    <${Skeleton} said=${t('Checking…')} quiet cls="widget">
+      <div class="journey steps sk-card">
+        <div class="sky-head">
+          <${Celestial} />
+          <div class="where"><${Bar} w="62%" /></div>
+          <h2 class="lead"><${Bar} w="78%" h="0.8em" /></h2>
+          <div class="steps-under"><span class="under"><${Bar} w="10rem" /></span><span class="sk round sk-tag"></span></div>
+        </div>
+        <${Horizon} />
+        <div class="road-line"><span class="bus-badge sk">R2</span><${Bar} w="52%" /></div>
+        <ol class="line">
+          <${SkPoint} dot="start" line="walk" what="5rem" below="6rem" />
+          <${SkPoint} dot="stop" line="ride" what="7rem" below="5.5rem" />
+          <${SkPoint} dot="end" what="5.5rem" />
+        </ol>
+        <p class="backup-line"><${Bar} w="64%" /></p>
+      </div>
+    <//>
+  `;
+}
+
 /**
  * The card for what's chosen, under Now's sky (sky.js): whatever it shows,
  * its top is up in the sky and it ends on the horizon, so the sky stays as
@@ -1059,7 +1115,9 @@ function CardArea() {
       ? html`<${InSky} sky><${OfflineCard} ...${c.offline} /><//>`
       : c.nearby
         ? html`<div class="sky-head nearby-sky"><${Celestial} /></div><${Horizon} /><${NearbyCard} stops=${c.nearby} />`
-        : html`<${InSky} sky><${Message} text=${c.text} quiet=${c.loading === true} /><//>`;
+        : c.loading
+          ? html`<${CardSkeleton} nearby=${to.kind === 'nearby'} />`
+          : html`<${InSky} sky><${Message} text=${c.text} /><//>`;
   return html`
     <section class=${c.loading ? 'card app-card loading' : 'card app-card'}>
       ${body}
@@ -1304,11 +1362,33 @@ function Banner() {
   return html`<div class="banner-slot" role="status">${text !== null && html`<p class="offline">${text}</p>`}</div>`;
 }
 
+/**
+ * The Stops tab's home before its code arrives (buses.js Home): the search
+ * and the title in the sky, the headings, and the pinned stop and the
+ * services as shapes. Its stop's board or a line opened from elsewhere
+ * draws its own shapes once the code is here.
+ */
+const StopsSkeleton = () => html`
+  <${Skeleton} said=${t('Loading…')}>
+    <div class="bt-sky-top"><div class="bt-search"><span class="sk sk-field"></span></div></div>
+    <div class="bt-home">
+    <div class="bt-sky">
+      <div class="sky-head"><${Celestial} band /><div class="bt-top"><div class="bt-title"><h2 class="bt-head">${t('Stops')}</h2></div></div></div>
+      <${Horizon} on=${null} low />
+    </div>
+    <h3 class="bt-section eyebrow">${t('Pinned')}</h3>
+    <${PinnedSkeleton} />
+    <div class="bt-section"><h3 class="eyebrow">${t('Services')}</h3><span>${t('Tap one to see its whole line.')}</span></div>
+    <${ServicesSkeleton} />
+    </div>
+  <//>
+`;
+
 function BusesArea() {
   const mod = useStore(busesModule);
   const now = useStore(tab);
   if (mod?.failed) return html`<p class="hint">${t('Stops need a connection.')}</p>`;
-  if (!mod) return html`<p class="hint">${t('Loading…')}</p>`;
+  if (!mod) return html`<${StopsSkeleton} />`;
   return html`<${mod.BusesTab} visible=${now === 'buses'} locate=${stopsFix} />`;
 }
 

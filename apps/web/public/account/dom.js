@@ -85,6 +85,8 @@ export async function send(path, { timeoutMs = SEND_TIMEOUT_MS, ...init } = {}) 
 
 /** Where the web app keeps the places searched for (app/app.js). */
 export const ADDED_PLACES_KEY = 'added-places';
+/** Where the web app keeps how many stops the account has pinned, with whose account it is (app/sign.js). */
+export const PIN_COUNT_KEY = 'pinned-count';
 /**
  * The account language this browser last applied or saved (assets/i18n.js's
  * followAccount): the account's, not the browser's. The browser's own
@@ -95,14 +97,14 @@ const LANG_APPLIED_KEY = 'terminus-lang-applied';
 /**
  * Signing out, or the account deleted or signed out elsewhere: what this
  * browser kept of the account goes, so the next person to sign in here
- * doesn't see it. That's the places searched for, the account's language
+ * doesn't see it. That's the places searched for, the pinned stops' count, the account's language
  * as last applied here, and the push subscription (the server has already
  * dropped its address). The look (language, theme, clock, card style) is
  * the browser's and stays.
  */
 export async function forgetAccountHere() {
   try {
-    for (const k of [ADDED_PLACES_KEY, LANG_APPLIED_KEY]) globalThis.localStorage?.removeItem(k);
+    for (const k of [ADDED_PLACES_KEY, PIN_COUNT_KEY, LANG_APPLIED_KEY]) globalThis.localStorage?.removeItem(k);
   } catch {
     // Storage blocked: nothing was kept.
   }

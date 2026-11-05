@@ -18,7 +18,7 @@ struct SetupHomeStep: View {
                 Button(L("Try again")) { Task { await model.loadCampus() } }
                     .buttonStyle(ChipButtonStyle(filled: true))
             } else {
-                ProgressView().frame(maxWidth: .infinity).padding(.vertical, 40)
+                SetupTilesSkeleton().shimmering()
             }
         }
     }

@@ -30,17 +30,33 @@ struct SettingsWherePicker: View {
                     Section { ForEach(rest) { row($0) } }
                 }
                 if top.isEmpty && rest.isEmpty {
-                    Section {
-                        Text(
-                            q.isEmpty
-                                ? L("Type a stop, building or room, like COM3 or UTown.")
-                                : destinations.isEmpty ? L("Loading…") : L("No stop, building or room by that name")
-                        )
-                        .foregroundStyle(Color.muted)
+                    if !q.isEmpty && destinations.isEmpty {
+                        // The places to search are on their way: the results' rows in bars, read once as "Loading…".
+                        Section {
+                            ForEach(0..<6, id: \.self) { i in
+                                VStack(alignment: .leading, spacing: 2) {
+                                    SkeletonLine(font: .body, fraction: SkeletonWidths.name(i))
+                                    SkeletonLine(font: .footnote, fraction: SkeletonWidths.sub(i) * 0.6)
+                                }
+                                .listRowBackground(Color.surface)
+                                .skeletonSpoken(L("Loading…"))
+                                .accessibilityHidden(i > 0)
+                            }
+                        }
+                    } else {
+                        Section {
+                            Text(
+                                q.isEmpty
+                                    ? L("Type a stop, building or room, like COM3 or UTown.") : L("No stop, building or room by that name")
+                            )
+                            .foregroundStyle(Color.muted)
+                        }
                     }
                 }
             }
             .listStyle(.insetGrouped)
+            // One sweep for the list's rows of bars, running only while they show.
+            .shimmering(!query.trimmingCharacters(in: .whitespaces).isEmpty && destinations.isEmpty)
             .scrollContentBackground(.hidden)
             .background(Color.page)
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: L("Stop, building or room"))

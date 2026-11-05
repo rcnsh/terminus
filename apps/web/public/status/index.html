@@ -28,6 +28,10 @@
   /* Close under the line above it; with no line under the headline, the usual gap. */
   .state [aria-live]:has(h1 + p) + p.checked { margin-top: 2px; }
   .state .sky-chip { margin-top: 16px; }
+  /* The headline takes two lines on a phone, one wider. */
+  .state .sk-more { display: block; }
+  @media (min-width: 640px) { .state .sk-more { display: none; } }
+  .state .sk-chip { display: block; width: 5.4rem; height: 2.05rem; margin-top: 16px; }
   .state .sky-chip .dot { background: currentColor; }
   .state .up { color: var(--good); }
   .state .down, .state .paused { color: var(--warn); }

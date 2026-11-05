@@ -148,11 +148,33 @@ private fun problem(v: NearbyView, buses: List<StopBus>): String? {
     val first = v.first
     return when {
         !v.paired -> L.s(R.string.tap_to_pair)
-        v.error == UPDATING && (first == null || buses.isEmpty()) -> L.s(R.string.checking)
+        checking(v) -> L.s(R.string.checking)
         v.stops == null -> v.error ?: L.s(R.string.nearby_tap_refresh)
         first == null -> v.error ?: L.s(R.string.no_stops_near)
         buses.isEmpty() -> if (first.available) L.s(R.string.no_buses_due) else L.s(R.string.no_live_data)
         else -> null
+    }
+}
+
+/**
+ * The first look under way, with no stops to show yet: bars where the buses will be, rather than the word. A stop already shown with no
+ * buses due keeps saying so while it refreshes.
+ */
+private fun checking(v: NearbyView): Boolean = v.paired && v.error == UPDATING && v.stops.isNullOrEmpty()
+
+/** Buses on their way, as rows of bars: a badge, its next stop, its time. Still, as a widget can't animate; said as "Checking…". */
+@Composable
+private fun SkeletonRows(rows: Int, inks: Inks) {
+    Column(GlanceModifier.fillMaxWidth().semantics { contentDescription = L.s(R.string.checking) }) {
+        for (i in 0 until rows) {
+            Row(GlanceModifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                WidgetBar(28.dp, 20.dp, inks)
+                Spacer(GlanceModifier.width(10.dp))
+                WidgetBar(listOf(120.dp, 96.dp, 108.dp)[i % 3], 12.dp, inks)
+                Spacer(GlanceModifier.defaultWeight())
+                WidgetBar(44.dp, 14.dp, inks)
+            }
+        }
     }
 }
 
@@ -176,7 +198,8 @@ private fun NearbyMini(look: WidgetLook, v: NearbyView, now: Long) {
         }
         val b = buses.firstOrNull()
         if (b == null) {
-            Small(problem(v, buses).orEmpty(), ink.ink, 12.sp, lines = 2, modifier = GlanceModifier.padding(top = 2.dp))
+            if (checking(v)) Box(GlanceModifier.padding(top = 4.dp)) { HeadlineBar(L.s(R.string.checking), ink, 16.sp, 90.dp) }
+            else Small(problem(v, buses).orEmpty(), ink.ink, 12.sp, lines = 2, modifier = GlanceModifier.padding(top = 2.dp))
             return@Column
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -199,7 +222,8 @@ private fun NearbyBar(look: WidgetLook, v: NearbyView, now: Long, c: NearbyContr
         if (shown.isEmpty()) {
             Column(GlanceModifier.defaultWeight().padding(horizontal = 8.dp)) {
                 Small(title(v), ink.muted, 11.sp)
-                Small(problem(v, buses).orEmpty(), ink.ink, 13.sp, lines = 2)
+                if (checking(v)) HeadlineBar(L.s(R.string.checking), ink, 16.sp, 120.dp)
+                else Small(problem(v, buses).orEmpty(), ink.ink, 13.sp, lines = 2)
             }
         } else {
             shown.forEachIndexed { i, b ->
@@ -283,7 +307,11 @@ private fun NearbySky(
             }
             val area = h - skyH
             val message = problem(v, buses + besideBuses)
-            if (message != null) {
+            if (message != null && checking(v)) {
+                Box(GlanceModifier.fillMaxWidth().padding(horizontal = PAD).padding(top = 4.dp)) {
+                    SkeletonRows(((area - 12f) / 32f).toInt().coerceIn(1, 3), ground)
+                }
+            } else if (message != null) {
                 Box(GlanceModifier.fillMaxWidth().height((area - 8f).dp).padding(horizontal = PAD), contentAlignment = Alignment.Center) {
                     Text(
                         message,

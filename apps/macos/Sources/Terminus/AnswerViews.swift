@@ -5,6 +5,9 @@ import SwiftUI
 struct AnswerDetail: View {
     let answer: NextAnswer?
     var busy = false
+    /// Why the last refresh failed: with no answer, that in place of the skeleton,
+    /// no spinner, so the card says what the header says rather than that it's still checking.
+    var failed: String? = nil
     /// Today's entry just taken off, whose row has Undo: the card doesn't offer it as well.
     var undoShownFor: String? = nil
     /// Past the card's staleAt (AppModel.isOld): its times may be gone, so
@@ -99,11 +102,20 @@ struct AnswerDetail: View {
                     .padding(8)
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(.quaternary))
                 }
+            } else if let failed {
+                Text(failed).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             } else {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text(L("Checking…")).foregroundStyle(.secondary)
+                // The card's rows in bars while the answer is on its way: an icon and a line each.
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(0..<3, id: \.self) { i in
+                        HStack(spacing: 8) {
+                            SkeletonBar(width: 12, height: 12, radius: 6).frame(width: 14)
+                            SkeletonLine(font: .callout, fraction: [0.8, 0.62, 0.5][i])
+                        }
+                    }
                 }
+                .shimmering()
+                .skeletonSpoken()
             }
         }
         // Fill the area's fixed height (120 with the card's padding), so a
@@ -402,11 +414,33 @@ struct NearbyList: View {
                     .padding(.horizontal, 4)
                 }
             } else {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text(L("Checking…")).foregroundStyle(.secondary)
+                // Two stops' shape while they're on their way: the name, then three rows of bars.
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(0..<2, id: \.self) { k in
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack {
+                                SkeletonLine(font: .system(size: 13, weight: .semibold), points: [70, 90][k])
+                                Spacer()
+                                SkeletonLine(font: .system(size: 11), points: 50)
+                            }
+                            .padding(.bottom, 4)
+                            ForEach(0..<3, id: \.self) { i in
+                                if i > 0 { Rectangle().fill(.primary.opacity(0.08)).frame(height: 1) }
+                                HStack(spacing: 8) {
+                                    SkeletonBar(width: 30, height: 18)
+                                    SkeletonLine(font: Font(NearbyLayout.words()), fraction: SkeletonWidths.sub(k * 3 + i))
+                                    SkeletonLine(font: .system(size: 17, weight: .bold), points: 38)
+                                    SkeletonLine(font: .system(size: 13), points: 20)
+                                    SkeletonLine(font: .system(size: 13), points: 20)
+                                }
+                                .padding(.vertical, 5)
+                            }
+                        }
+                        .card(padding: 10)
+                    }
                 }
-                .card()
+                .shimmering()
+                .skeletonSpoken()
             }
         }
     }

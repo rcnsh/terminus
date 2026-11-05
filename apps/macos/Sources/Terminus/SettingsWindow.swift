@@ -524,7 +524,7 @@ struct TripsPane: View {
                     in: setup.limits.homeWalkMin)
             }
         } else {
-            ProgressView()
+            SkeletonRows(count: 2)
         }
     }
 

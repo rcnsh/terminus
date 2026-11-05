@@ -3,10 +3,10 @@
 // Nearby on Now (app.js) and the Stops tab's pinned stops (buses.js), so a
 // stop reads the same in both.
 
-import { Icon, html } from '/assets/ui.js';
-import { inkOn, t } from '/account/dom.js';
+import { Bar, Icon, Skeleton, html, store, useStore, widthOf } from '/assets/ui.js';
+import { PIN_COUNT_KEY, inkOn, t } from '/account/dom.js';
 import { togglePin } from '/account/profile.js';
-import { NEXT, STAR, saidRow } from '/app/board.js';
+import { NEXT, STAR, colorOf, saidRow, svcVars } from '/app/board.js';
 
 const mins = (s) => Math.round(s / 60);
 
@@ -67,15 +67,106 @@ function SignDest({ b }) {
   return html`<span class="nb-to" aria-hidden="true">${b.dest.slice(0, i)}<b>${b.destPlace}</b>${b.dest.slice(i + b.destPlace.length)}</span>`;
 }
 
+/** The sign's column headings, said by each row instead. */
+const SignHead = () =>
+  html`<div class="nb-head" aria-hidden="true"><span></span><span></span><span>${t('Next')}</span><span>${t('Then')}</span><span>${t('After')}</span></div>`;
+
+/**
+ * A sign's rows before its times come: a row per service that calls there
+ * (`services`, from the campus data), its badge drawn; without them `n`
+ * rows. Where it's going and the times are bars.
+ */
+const SignRows = ({ services, n = 3 }) =>
+  (services?.length ? services : Array.from({ length: n }, () => null)).map(
+    (svc, i) => html`
+      <div class="nearby-row" key=${svc ?? i}>
+        <span class="svc-col">${svc ? html`<span class="svc-tag" style=${svcVars(colorOf(svc))}>${svc}</span>` : html`<span class="svc-tag sk"></span>`}</span>
+        <span class="nb-to"><${Bar} w=${widthOf(['72%', '56%', '64%', '48%'], i)} /></span>
+        <span class="nb-time pick"><${Bar} w="2.9rem" /></span>
+        <span class="nb-time"><${Bar} w="1.3rem" /></span>
+        <span class="nb-time"><${Bar} w="1.3rem" /></span>
+      </div>
+    `,
+  );
+
+/**
+ * A stop's sign while Nearby looks for the stops around you: the plate's
+ * name and the rows as bars. No star or links yet: nothing there to press.
+ * Inside a Skeleton, which hides it from screen readers.
+ */
+export const SignSkeleton = ({ rows = 3 }) => html`
+  <section class="stop-sign">
+    <header class="plate"><${Icon} paths=${BUS} class="plate-bus" /><span class="plate-name"><${Bar} w="8rem" /></span></header>
+    <${SignHead} />
+    <${SignRows} n=${rows} />
+  </section>
+`;
+
+/** The account signed in here (its email), set by app.js: a kept pin count is only believed for it. Null until known. */
+export const pinAccount = store(null);
+
+/** The pinned stops' count last kept here for `account`, or null when none is. */
+export function keptPinCount(account) {
+  if (!account) return null;
+  try {
+    const kept = JSON.parse(localStorage.getItem(PIN_COUNT_KEY) ?? 'null');
+    return kept?.account === account && Number.isInteger(kept.n) && kept.n >= 0 ? kept.n : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Keeps `account`'s count of pinned stops, for the shapes the next time the Stops tab opens. */
+export function keepPinCount(account, n) {
+  if (!account) return;
+  try {
+    localStorage.setItem(PIN_COUNT_KEY, JSON.stringify({ account, n }));
+  } catch {
+    // Private mode or storage blocked: the shapes fall back to one sign.
+  }
+}
+
+/** Nothing pinned yet: where the star is, said once. */
+export const NoPins = () =>
+  html`<p class="bt-no-pins"><${Icon} paths=${STAR} />${t("Tap the star on any stop to keep it here: in Nearby, on the stop's page, or after searching for it.")}</p>`;
+
+/**
+ * The Stops tab's pinned stops before the pins are known, as many as this
+ * browser last saw for this account: none, the hint's box with its words
+ * as bars (pins may have been added elsewhere since, so the hint waits for
+ * them); some, their names' control and one sign, as the pager shows one at
+ * a time; not known, one sign. Quiet: the tab says "Checking…" (buses.js).
+ */
+export function PinnedSkeleton() {
+  const n = keptPinCount(useStore(pinAccount));
+  return html`
+    <${Skeleton} said=${t('Checking…')} quiet>
+      ${
+        n === 0
+          ? html`<p class="bt-no-pins sk-hint"><span class="sk round"></span><span><span class="sk-words">${t("Tap the star on any stop to keep it here: in Nearby, on the stop's page, or after searching for it.")}</span></span></p>`
+          : html`${
+              n > 0 &&
+              html`<div class="segmented full bt-pins">
+                ${Array.from({ length: n }, (_, i) => html`<label key=${i}><span><${Bar} w=${widthOf(['4.5rem', '3.5rem', '5rem'], i)} /></span></label>`)}
+              </div>`
+            }
+            <div class="nearby"><${SignSkeleton} /></div>`
+      }
+    <//>
+  `;
+}
+
 /**
  * Stop `s` (one stop of /api/me/nearby or /api/me/stops) as its sign. The
  * name opens the stop's board (`onStop(code)`) and a row its service's line
  * (`onLine(svc, code)`), both in the Stops tab; the star pins the stop
  * there, once the pins are known (`pinned`, else null: no star to read
  * wrong, or to unpin with). No walk without one (`walkS` null). `note`, in
- * place of the rows: why there are none yet ("Checking…").
+ * place of the rows: why there are none. `waiting`: its times are on the
+ * way, so its rows are drawn as shapes (`services`, the ones that call
+ * there), quiet: the Stops tab says "Checking…" (buses.js).
  */
-export function StopSign({ s, pinned, note = null, onStop, onLine }) {
+export function StopSign({ s, pinned, note = null, waiting = false, services = null, onStop, onLine }) {
   const code = s.stop.code;
   const on = pinned?.includes(code) ?? false;
   return html`
@@ -97,17 +188,15 @@ export function StopSign({ s, pinned, note = null, onStop, onLine }) {
           </button>`
         }
       </header>
+      ${(waiting || (!note && s.board.length > 0)) && html`<${SignHead} />`}
       ${
-        !note && s.board.length
-          ? html`<div class="nb-head" aria-hidden="true"><span></span><span></span><span>${t('Next')}</span><span>${t('Then')}</span><span>${t('After')}</span></div>`
-          : ''
-      }
-      ${
-        !note && s.board.length
-          ? s.board.map((b) => {
-              // A public bus has no line page, as on a stop's board.
-              const Tag = b.paid ? 'div' : 'button';
-              return html`
+        waiting
+          ? html`<${Skeleton} said=${t('Checking…')} quiet cls="nb-rows" inner="nb-rows"><${SignRows} services=${services} /><//>`
+          : !note && s.board.length
+            ? s.board.map((b) => {
+                // A public bus has no line page, as on a stop's board.
+                const Tag = b.paid ? 'div' : 'button';
+                return html`
                 <${Tag} type=${b.paid ? undefined : 'button'} class="nearby-row" key=${`${b.svc} ${b.dest ?? b.toText}`} onClick=${b.paid ? undefined : () => onLine(b.svc, code)}>
                   <span class="sr-only">${saidRow(b)}</span>
                   <span class="svc-col" aria-hidden="true"
@@ -119,8 +208,8 @@ export function StopSign({ s, pinned, note = null, onStop, onLine }) {
                   ${[b, b.later?.[0], b.later?.[1]].map((bus, j) => html`<${SignTime} key=${j} bus=${bus} first=${j === 0} />`)}
                 <//>
               `;
-            })
-          : html`<div class="detail">${note ?? (s.available ? t('No buses due') : t('No times right now'))}</div>`
+              })
+            : html`<div class="detail">${note ?? (s.available ? t('No buses due') : t('No times right now'))}</div>`
       }
     </section>
   `;

@@ -68,7 +68,7 @@ struct Main: View {
                     OfflineDetail(pick: p).transition(.opacity.combined(with: .offset(y: 6)))
                 } else {
                     AnswerDetail(
-                        answer: answer, busy: model.signalling, undoShownFor: model.removed?.key,
+                        answer: answer, busy: model.signalling, failed: model.answerError, undoShownFor: model.removed?.key,
                         old: !model.resting && answer?.arrived != true && model.isOld(answer, at: model.clock),
                         onAction: model.signal, onChoice: model.choose, onStep: model.step
                     ).transition(.opacity.combined(with: .offset(y: 6)))

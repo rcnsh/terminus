@@ -9,10 +9,18 @@
 .app-card .widget .chips { display: none; }
 /* One quiet line: "Updated 9:41 · Is this wrong?". */
 .app-card .card-foot { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 6px; margin-top: 12px; }
-/* "Checking…" takes the room the usual card will (a trip: three lines in the
-   sky, its steps below the horizon), so the card arrives in place. */
-.app-card.loading .sky-head { min-height: 7.9rem; }
-.app-card.loading .card-foot { margin-top: 23rem; }
+/* Before the first answer, a trip's card as shapes (app.js CardSkeleton):
+   its dots and line in the skeleton's colour, faint, so it reads as waiting. */
+.journey.sk-card .line .pt .rail::before { background: var(--sk); border-color: var(--sk); }
+.journey.sk-card .line .pt .rail::after { left: 9.5px; width: 3px; background: var(--sk); }
+.sk-card .sk-tag { width: 4.4rem; height: 1.65rem; }
+/* Rows still to come: nothing on them to press yet. */
+.bt-stop div.sk-stop { cursor: default; }
+.bt-go.sk-go { stroke: var(--sk); }
+/* A badge with no name in it yet, as wide as a short one. */
+.bt-service .bt-chip.sk { min-width: 28px; }
+/* As tall as a row's crowd (.bt-crowd), which most rows have. */
+.bt-meta .sk-pill { width: 4.4rem; height: 22px; }
 .app-card .updated { font-size: 0.8rem; }
 .app-card .updated:empty { display: none; }
 .app-card .updated:has(+ .report-open)::after { content: '·'; margin-left: 6px; }
@@ -96,8 +104,10 @@ body.is-offline .app-card .widget.offline-plan { opacity: 1; }
    ("188e $"), never spilling into the next. Without subgrid, fixed columns. */
 .nearby { grid-template-columns: minmax(2.9rem, auto) minmax(0, 1fr) repeat(3, minmax(2.6rem, auto)); column-gap: 14px; }
 .nearby > * { grid-column: 1 / -1; }
-.stop-sign, .nearby-row, .nb-head { display: grid; grid-template-columns: 2.9rem minmax(0, 1fr) repeat(3, 3.4rem); grid-template-columns: subgrid; }
+.stop-sign, .nearby-row, .nb-head, .nb-rows { display: grid; grid-template-columns: 2.9rem minmax(0, 1fr) repeat(3, 3.4rem); grid-template-columns: subgrid; }
 .stop-sign > :not(.nearby-row, .nb-head) { grid-column: 1 / -1; }
+/* A sign's rows still to come, in boxes of their own (ui.js Skeleton): on the sign's columns too. */
+.nb-rows > :not(.sr-only) { grid-column: 1 / -1; }
 .nearby-row, .nb-head { grid-column: 1 / -1; align-items: center; width: 100%; padding: 0 14px; }
 .nearby-row { min-height: 52px; border: 0; background: none; color: inherit; font: inherit; text-align: left; font-variant-numeric: tabular-nums; }
 /* The badge sits close to where its bus is going; the times keep their wider gaps. */
@@ -203,6 +213,9 @@ body.sky .bt-sky-top :is(input, .bt-search-icon) {
   color-scheme: var(--k-scheme); color: var(--ink);
 }
 body.sky .bt-sky-top input::placeholder { color: var(--k-muted); opacity: 0.85; }
+/* The search's shape while the tab's code loads (app.js StopsSkeleton), in the sky's ink. */
+.bt-search .sk-field { display: block; height: 46px; border-radius: 14px; }
+body.sky .bt-sky-top { --sk: color-mix(in srgb, var(--k-ink) 13%, transparent); --sk-hi: color-mix(in srgb, var(--k-ink) 26%, transparent); }
 /* Wider than a phone, the column's sky has rounded top corners rather than
    stopping short of the window's edges. */
 @media (min-width: 600px) {
@@ -228,6 +241,7 @@ body.sky .bt-sky-top input::placeholder { color: var(--k-muted); opacity: 0.85; 
 /* The pinned stops' names, as a stop's page picks its side (.segmented):
    each name whole, scrolling sideways when they don't all fit. */
 .segmented.bt-pins { position: relative; overflow-x: auto; scrollbar-width: none; margin-bottom: 10px; }
+.segmented.bt-pins .sk-line { display: flex; margin-inline: auto; }
 .segmented.bt-pins::-webkit-scrollbar { display: none; }
 .segmented.bt-pins label { flex: 1 0 auto; }
 .segmented.bt-pins span { white-space: nowrap; padding-inline: 14px; }
@@ -245,6 +259,9 @@ body.sky .bt-sky-top input::placeholder { color: var(--k-muted); opacity: 0.85; 
 .bt-add svg { width: 22px; height: 22px; fill: none; stroke: var(--warn); stroke-width: 1.9; stroke-linejoin: round; }
 /* Nothing pinned yet: where the star is, said once, in a dashed outline. */
 .bt-no-pins { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 1.5px dashed var(--line-strong); border-radius: 14px; color: var(--muted); font-size: 0.9rem; line-height: 1.45; }
+/* The hint's box before the pins are known (sign.js PinnedSkeleton): its words as bars, line by line. */
+.sk-hint .sk { flex: none; width: 20px; height: 20px; }
+.sk-words { color: transparent; -webkit-box-decoration-break: clone; box-decoration-break: clone; background: linear-gradient(var(--sk), var(--sk)) 0 50% / 100% 0.72em no-repeat; }
 .bt-no-pins svg { flex: none; width: 20px; height: 20px; fill: none; stroke: var(--warn); stroke-width: 1.9; stroke-linejoin: round; }
 /* Every service: one set of columns for all its rows (subgrid), so each
    badge is as wide as the widest and the names line up. */
@@ -365,9 +382,9 @@ button.bt-row:focus-visible { outline-offset: -2px; }
 .bt-line-label { display: flex; justify-content: space-between; align-items: baseline; margin: 14px 4px 0; padding-top: 12px; border-top: 1px solid var(--line); font-size: 0.8rem; color: var(--muted); }
 .bt-route { position: relative; list-style: none; margin: 6px 0 0; padding: 0; }
 .bt-route::before { content: ''; position: absolute; z-index: 1; left: 21px; top: 24px; bottom: 24px; width: 6px; border-radius: 3px; background: var(--svc); pointer-events: none; }
-.bt-stop button { position: relative; display: flex; align-items: center; gap: 14px; width: 100%; min-height: 50px; padding: 6px 8px 6px 14px; border: 0; border-radius: 12px; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.bt-stop :is(button, .sk-stop) { position: relative; display: flex; align-items: center; gap: 14px; width: 100%; min-height: 50px; padding: 6px 8px 6px 14px; border: 0; border-radius: 12px; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
 @media (hover: hover) { .bt-stop button:hover { background: var(--surface-2); } }
-.bt-stop + .bt-stop button::after { content: ''; position: absolute; left: 50px; right: 8px; top: 0; height: 1px; background: var(--line); }
+.bt-stop + .bt-stop :is(button, .sk-stop)::after { content: ''; position: absolute; left: 50px; right: 8px; top: 0; height: 1px; background: var(--line); }
 .bt-stop.mine button::after, .bt-stop.mine + .bt-stop button::after { display: none; }
 .bt-node { flex: none; width: 20px; height: 20px; display: grid; place-items: center; z-index: 2; }
 .bt-node::before { content: ''; width: 14px; height: 14px; border-radius: 50%; box-sizing: border-box; background: var(--surface); border: 3px solid var(--svc); }

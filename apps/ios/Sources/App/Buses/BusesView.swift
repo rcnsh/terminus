@@ -206,7 +206,7 @@ private struct PinnedStops: View {
         SectionLabel(L("Pinned")).padding(.top, 20).padding(.bottom, 4)
         switch model.pinsState {
         case .loading:
-            Text(L("Checking…")).foregroundStyle(Color.muted).padding(.vertical, 12)
+            StopSignSkeleton().shimmering().skeletonSpoken().padding(.top, 4)
         case .failed:
             VStack(alignment: .leading, spacing: 8) {
                 Text(L("Couldn't reach terminus. Check your connection and try again.")).foregroundStyle(Color.muted)
@@ -289,9 +289,12 @@ private struct PinnedPager: View {
                 : model.pinnedMissing.contains(code)
                     ? L("No live data")
                     : model.pinnedFailed.contains(code)
-                        ? L("Couldn't reach terminus. Check your connection and try again.") : L("Checking…")
+                        ? L("Couldn't reach terminus. Check your connection and try again.") : nil
+            // Still on its way: its rows in bars, a badge for each service the campus data says calls there.
+            let pending = note == nil ? model.campus?.stop(code)?.services ?? [] : nil
             VStack(alignment: .leading, spacing: 8) {
-                StopSign(stop: stop, cells: cells, cols: cols, note: note, onStop: { model.path.append(.stop(code)) }) { svc in
+                StopSign(stop: stop, cells: cells, cols: cols, note: note, pending: pending, onStop: { model.path.append(.stop(code)) }) {
+                    svc in
                     model.path.append(.line(svc: svc, from: code))
                 }
                 // As under Nearby's signs and the web's pinned card: what a "~" means, only while one is showing.
@@ -471,8 +474,36 @@ private struct ServiceList: View {
                 if $0 { seen = true }
             }
         } else {
-            Text(L("Checking…")).foregroundStyle(Color.muted).padding(.vertical, 12)
+            skeleton
         }
+    }
+
+    /// The list's shape while the services are on their way: six rows of bars
+    /// in the loaded rows' boxes, the chevron real, as the list will have it.
+    private var skeleton: some View {
+        VStack(spacing: 0) {
+            ForEach(0..<6, id: \.self) { i in
+                if i > 0 { Divider().overlay(Color.line) }
+                HStack(spacing: 12) {
+                    SkeletonBar(width: 46, height: 32, radius: 9)
+                    VStack(alignment: .leading, spacing: 2) {
+                        SkeletonLine(font: .body.weight(.semibold), fraction: SkeletonWidths.name(i))
+                        SkeletonLine(font: .subheadline, fraction: SkeletonWidths.sub(i))
+                    }
+                    Spacer(minLength: 8)
+                    SkeletonBar(width: 44, height: 12)
+                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Color.line)
+                }
+                .padding(.leading, 14)
+                .padding(.trailing, 10)
+                .padding(.vertical, 10)
+                .frame(minHeight: 56)
+            }
+        }
+        .shimmering()
+        .background(Color.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Color.line))
+        .skeletonSpoken()
     }
 
     private func row(_ svc: String, color: String?, name: String?, via: String?, count: LineCount?) -> some View {
@@ -698,7 +729,10 @@ struct BusStopBody: View {
                     model.setAcross(code, $0 == 1)
                 }
             }
-            BusBoardCard(board: board, failed: model.failed.contains(shown), colors: model.campus?.colors ?? [:]) { row in
+            BusBoardCard(
+                board: board, failed: model.failed.contains(shown), colors: model.campus?.colors ?? [:],
+                services: model.campus?.stop(shown)?.services ?? []
+            ) { row in
                 model.path.append(.line(svc: row.svc, from: shown))
             }
             if let board { BusBoardFoot(board: board) }

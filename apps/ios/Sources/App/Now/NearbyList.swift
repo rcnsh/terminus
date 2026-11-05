@@ -40,8 +40,100 @@ struct NearbyList: View {
                 BusesModel.shared.sync()
                 await BusesModel.shared.loadProfile()
             }
+        } else if app.loading {
+            // The signs' shape while the stops near you are on their way.
+            VStack(spacing: 12) {
+                ForEach(0..<2, id: \.self) { i in StopSignSkeleton(seed: i) }
+            }
+            .shimmering()
+            .skeletonSpoken()
         } else {
-            Text(app.loading ? L("Checking…") : L("Nothing yet")).font(.title3)
+            Text(L("Nothing yet")).font(.title3)
+        }
+    }
+}
+
+/// A stop's sign before even the stop is known: the plate with its name in
+/// bars, then three rows of bars. Shimmered by the view around it.
+struct StopSignSkeleton: View {
+    @ScaledMetric(relativeTo: .body) private var percent: CGFloat = 100
+    private var scale: CGFloat { percent / 100 }
+    /// Which of the fixed widths to start from, so two signs don't match.
+    var seed = 0
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Image(systemName: "bus.fill").font(.system(size: 14 * scale)).foregroundStyle(Color.brand)
+                SkeletonLine(font: .system(size: 16 * scale, weight: .bold), fraction: SkeletonWidths.name(seed) * 0.7)
+                Spacer(minLength: 4)
+            }
+            .padding(.horizontal, 14)
+            .frame(minHeight: 44)
+            .background(Color.surface2)
+            .overlay(alignment: .bottom) { Rectangle().fill(Color.line).frame(height: 1) }
+            StopSignSkeletonRows(seed: seed)
+        }
+        .foregroundStyle(Color.ink)
+        .background(Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.line))
+    }
+}
+
+/// A sign's rows in bars, under its plate: NEXT, THEN, AFTER, then each
+/// service's badge (or a bar), where it's going and its three times as bars:
+/// a row for each service known to call there, else three. Shimmered by the view around it.
+struct StopSignSkeletonRows: View {
+    @ScaledMetric(relativeTo: .body) private var percent: CGFloat = 100
+    private var scale: CGFloat { percent / 100 }
+    var services: [String] = []
+    var colors: [String: String] = [:]
+    /// The badges' shared width on the signs around it (NearbyColumns.badge); 0 for their own.
+    var badgeWidth: CGFloat = 0
+    var seed = 0
+
+    /// The time columns' widths: the first bus large, the next two small.
+    private var widths: [CGFloat] { [52 * scale, 24 * scale, 24 * scale] }
+
+    var body: some View {
+        let rows: [String?] = services.isEmpty ? [nil, nil, nil] : services
+        VStack(spacing: 0) {
+            HStack(spacing: 14) {
+                Spacer(minLength: 0)
+                ForEach(Array([L("Next"), L("Then"), L("After")].enumerated()), id: \.offset) { k, title in
+                    Text(title).font(.system(size: 10.5 * scale, weight: .semibold)).textCase(.uppercase).tracking(0.63 * scale)
+                        .lineLimit(1).fixedSize().frame(minWidth: widths[k], alignment: .trailing)
+                }
+            }
+            .foregroundStyle(Color.muted)
+            .padding(.horizontal, NearbyColumns.inset)
+            .padding(.top, 8)
+            .padding(.bottom, 2)
+            ForEach(Array(rows.enumerated()), id: \.offset) { j, svc in
+                if j > 0 { Rectangle().fill(Color.line).frame(height: 1) }
+                HStack(spacing: NearbyColumns.gap) {
+                    HStack(spacing: NearbyColumns.toDest) {
+                        if let svc {
+                            NearbyBadge(svc: svc, color: colors[svc], paid: false, width: badgeWidth)
+                        } else {
+                            SkeletonBar(width: 36 * scale, height: 28 * scale, radius: 8)
+                        }
+                        SkeletonLine(font: .system(size: 14.5 * scale), fraction: SkeletonWidths.sub(seed + j) * 1.2)
+                    }
+                    HStack(spacing: 14) {
+                        SkeletonLine(font: .system(size: 21.5 * scale, weight: .bold), points: widths[0] * 0.8)
+                            .frame(width: widths[0], alignment: .trailing)
+                        SkeletonLine(font: .system(size: 16 * scale, weight: .semibold), points: widths[1] * 0.8)
+                            .frame(width: widths[1], alignment: .trailing)
+                        SkeletonLine(font: .system(size: 16 * scale, weight: .semibold), points: widths[2] * 0.8)
+                            .frame(width: widths[2], alignment: .trailing)
+                    }
+                }
+                .padding(.horizontal, NearbyColumns.inset)
+                .padding(.vertical, 6)
+                .frame(minHeight: 52)
+            }
         }
     }
 }
@@ -134,8 +226,11 @@ struct StopSign: View {
     let stop: NearbyStop
     let cells: [[NearbyCell]]
     let cols: NearbyColumns
-    /// Under the plate when nothing is running: why (still asking, offline, none now).
+    /// Under the plate when nothing is running: why (offline, none now).
     var note: String?
+    /// Its buses still on their way: rows of bars in place of the note, a
+    /// badge each for the services known to call there (none known: three bars).
+    var pending: [String]?
     let onStop: () -> Void
     let onRow: (String) -> Void
 
@@ -189,7 +284,10 @@ struct StopSign: View {
             }
             // Running now: the board comes with the rest too, for the widgets' first buses.
             let rows = stop.board.filter(\.running)
-            if stop.available, rows.isEmpty, let note {
+            if stop.available, rows.isEmpty, let pending {
+                StopSignSkeletonRows(services: pending, colors: BusesModel.shared.campus?.colors ?? [:], badgeWidth: cols.badge)
+                    .shimmering().skeletonSpoken()
+            } else if stop.available, rows.isEmpty, let note {
                 Text(note).foregroundStyle(Color.muted).padding(14).frame(maxWidth: .infinity, alignment: .leading)
             }
             if !rows.isEmpty { heading }

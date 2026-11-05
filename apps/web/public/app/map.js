@@ -15,6 +15,7 @@
 
 import {
   Icon,
+  Skeleton,
   focusSoon,
   html,
   reducedMotion,
@@ -29,7 +30,7 @@ import {
 import { inkOn, quietMs, send, signedOut, t } from '/account/dom.js';
 import { haversineM, loadCampus, profile, reloadProfile, restorePlace, saveNow, toast, withPlace, withoutPlace } from '/account/profile.js';
 import { MAPLIBRE, PMTILES } from '/app/map-files.js';
-import { Row } from '/app/board.js';
+import { Row, WaitingRows } from '/app/board.js';
 
 /** Live buses refresh this often while a pill is on (the API caches 5 s). */
 const BUSES_MS = 5_000;
@@ -1433,11 +1434,19 @@ function StopSheet({ code, box, onGoTo, onSaved, active }) {
     <${Frame} id=${`stop-${code}`} title=${stop.name} sub=${sub} lead=${tile} footer=${footer} box=${box}>
       <${SectionBand} text=${t('Buses here')} />
       ${
-        (!board || board.text) &&
+        !board &&
+        html`
+        <${Skeleton} said=${t('Checking…')} cls="sheet-board"
+          ><${WaitingRows} services=${stop.services.length - PEEK_ROWS > 1 ? stop.services.slice(0, PEEK_ROWS) : stop.services}
+        /><//>
+      `
+      }
+      ${
+        board?.text &&
         html`
         <div class="sheet-note">
-          <div class="hint">${board?.text ?? t('Checking…')}</div>
-          ${board?.text && html`<div class="svc-tags">${stop.services.map((svc) => html`<${SvcTag} svc=${svc} key=${svc} onClick=${() => choose(svc)} />`)}</div>`}
+          <div class="hint">${board.text}</div>
+          <div class="svc-tags">${stop.services.map((svc) => html`<${SvcTag} svc=${svc} key=${svc} onClick=${() => choose(svc)} />`)}</div>
         </div>
       `
       }
