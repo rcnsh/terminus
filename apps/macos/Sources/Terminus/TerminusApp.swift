@@ -146,7 +146,6 @@ struct Popover: View {
     @State private var window: NSWindow?
     /// The content is taller than the screen, so it scrolls.
     @State private var overflows = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(model: AppModel, startShown: Bool = false) {
         self.model = model
@@ -256,10 +255,7 @@ struct Popover: View {
     }
 
     /// After SwiftUI's update, not inside it: resizing the window there lays
-    /// the popover out again in the middle of laying it out. The height
-    /// measured is where the layout ends up, while what's drawn animates
-    /// there (a tab switch, `Main`), so an open popover's bottom edge moves
-    /// over the same time rather than snapping ahead of its content.
+    /// the popover out again in the middle of laying it out.
     private func fit(height: CGFloat) {
         DispatchQueue.main.async {
             guard let window, height > 0 else { return }
@@ -267,15 +263,7 @@ struct Popover: View {
             guard abs(content.height - height) > 0.5 else { return }
             var frame = window.frameRect(forContentRect: NSRect(x: content.minX, y: content.minY, width: content.width, height: height))
             frame.origin.y = window.frame.maxY - frame.height
-            guard shown, window.isVisible, !reduceMotion else {
-                window.setFrame(frame, display: true, animate: false)
-                return
-            }
-            NSAnimationContext.runAnimationGroup { ctx in
-                ctx.duration = Main.switchSeconds
-                ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                window.animator().setFrame(frame, display: true)
-            }
+            window.setFrame(frame, display: true, animate: false)
         }
     }
 }
