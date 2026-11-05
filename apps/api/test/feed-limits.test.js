@@ -47,7 +47,7 @@ function htmlFrom(re, base) {
   return fn;
 }
 
-test('no limit on the feeds is below what CLAUDE.md and internals.md promise', () => {
+test('no limit on the feeds is below what docs/agents/feeds.md and internals.md promise', () => {
   // Raising any of these is fine; lowering one sends more to NUS or LTA.
   assert.ok(TTL.arrivalsMs >= 15_000, `arrivalsMs ${TTL.arrivalsMs}`);
   assert.ok(TTL.busesMs >= 5_000, `busesMs ${TTL.busesMs}`);

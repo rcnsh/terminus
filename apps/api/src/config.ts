@@ -166,7 +166,7 @@ export const STEP = {
 /**
  * The timelapse recorder (timelapse.ts, timelapsedo.ts): the ONE poller of
  * the NUS feed. Answers fetch on demand; the cron's health check and the
- * Trip objects read a stop at a time (CLAUDE.md, rule 2). It asks for each
+ * Trip objects read a stop at a time (docs/agents/feeds.md). It asks for each
  * service's buses through the same edge cache as the map, so a poll a user
  * already paid for costs NUS nothing, and it never asks faster than this.
  */
