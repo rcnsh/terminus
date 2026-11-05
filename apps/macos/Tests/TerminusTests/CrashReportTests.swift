@@ -52,6 +52,19 @@ import Testing
     #expect(CrashReport.frames(fromCallStackJSON: Data("not json".utf8)) == "not json")
 }
 
+@Test func theIPhoneAppsCrashesAreNotTheMacs() {
+    func tree(_ frames: String) -> Data {
+        Data(#"{"callStacks":[{"threadAttributed":true,"callStackRootFrames":[\#(frames)]}]}"#.utf8)
+    }
+    let mac = #"{"binaryName":"Terminus","subFrames":[{"binaryName":"AppKit"},{"binaryName":"dyld"}]}"#
+    #expect(CrashReport.isMacCrash(callStackJSON: tree(mac)))
+    // The Simulator's: the iPhone app shares the Mac app's bundle id.
+    let simulator = #"{"binaryName":"Terminus.debug.dylib","subFrames":[{"binaryName":"SwiftUI","subFrames":[{"binaryName":"dyld_sim"}]}]}"#
+    #expect(!CrashReport.isMacCrash(callStackJSON: tree(simulator)))
+    #expect(!CrashReport.isMacCrash(callStackJSON: tree(#"{"binaryName":"Terminus"},{"binaryName":"UIKitCore"}"#)))
+    #expect(CrashReport.isMacCrash(callStackJSON: Data("not json".utf8)))
+}
+
 @Test func anAnswerDropsTheReportNoAnswerKeepsIt() {
     #expect(CrashReporter.shouldDrop(status: 204))
     #expect(CrashReporter.shouldDrop(status: 400))
