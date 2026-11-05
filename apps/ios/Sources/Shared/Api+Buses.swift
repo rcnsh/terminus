@@ -5,10 +5,14 @@ import Foundation
 /// BusCampus.
 extension Api {
     /// `/api/me/stops`: the stops asked for, each exactly as Nearby shows it;
-    /// with a location, the walk to each, else none.
+    /// with a location, the walk to each, else none. The services not running
+    /// now come too, after the others: a stop with none running lists them,
+    /// with when each starts again.
     func pinnedStops(_ codes: [String], lat: Double?, lon: Double?, acc: Double? = nil) async throws -> [NearbyStop] {
         struct R: Decodable { let stops: [NearbyStop] }
-        let q = [URLQueryItem(name: "codes", value: codes.joined(separator: ","))] + Self.coords(lat, lon, acc)
+        let q =
+            [URLQueryItem(name: "codes", value: codes.joined(separator: ","))] + Self.coords(lat, lon, acc)
+            + [URLQueryItem(name: "stopped", value: "1")]
         return try JSONDecoder().decode(R.self, from: await send("GET", "/api/me/stops", query: q)).stops
     }
 

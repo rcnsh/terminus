@@ -310,7 +310,10 @@ private struct PinnedPager: View {
             // Still on its way: its rows in bars, a badge for each service the campus data says calls there.
             let pending = note == nil ? model.campus?.stop(code)?.services ?? [] : nil
             VStack(alignment: .leading, spacing: 8) {
-                StopSign(stop: stop, cells: cells, cols: cols, note: note, pending: pending, onStop: { model.path.append(.stop(code)) }) {
+                StopSign(
+                    stop: stop, cells: cells, cols: cols, note: note, pending: pending, listsStopped: answered != nil,
+                    onStop: { model.path.append(.stop(code)) }
+                ) {
                     svc in
                     model.path.append(.line(svc: svc, from: code))
                 }

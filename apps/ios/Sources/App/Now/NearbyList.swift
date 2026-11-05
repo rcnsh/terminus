@@ -231,6 +231,9 @@ struct StopSign: View {
     /// Its buses still on their way: rows of bars in place of the note, a
     /// badge each for the services known to call there (none known: three bars).
     var pending: [String]?
+    /// Under the note, the services that call here but aren't running, greyed
+    /// with when each starts again, as on the stop's board: a pinned stop's.
+    var listsStopped = false
     let onStop: () -> Void
     let onRow: (String) -> Void
 
@@ -289,6 +292,12 @@ struct StopSign: View {
                     .shimmering().skeletonSpoken()
             } else if stop.available, rows.isEmpty, let note {
                 Text(note).foregroundStyle(Color.muted).padding(14).frame(maxWidth: .infinity, alignment: .leading)
+                if listsStopped {
+                    ForEach(stop.board.filter { !$0.running }, id: \.svc) { row in
+                        Rectangle().fill(Color.line).frame(height: 1)
+                        BusBoardRowView(row: row, color: row.color, now: ServerClock.now, onTap: row.paid ? nil : { onRow(row.svc) })
+                    }
+                }
             }
             if !rows.isEmpty { heading }
             ForEach(Array(rows.enumerated()), id: \.offset) { j, row in

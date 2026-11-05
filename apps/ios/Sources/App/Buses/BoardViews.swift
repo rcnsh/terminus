@@ -233,7 +233,8 @@ struct BusBoardRowView: View {
     private func stoppedRow(_ s: Stopped) -> some View {
         let (why, back) = s.lines
         return HStack(alignment: .center, spacing: 12) {
-            BusChip(svc: row.svc, color: color, paid: row.paid).opacity(0.35)
+            // Its badge in full colour: the row still opens the line, so it mustn't look switched off.
+            BusChip(svc: row.svc, color: color, paid: row.paid)
             VStack(alignment: .leading, spacing: 2) {
                 if !row.endsHere, let to = BusWords.destination(row) {
                     // Whole at the largest text sizes, where one line holds a stop's name at most.

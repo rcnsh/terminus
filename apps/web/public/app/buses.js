@@ -175,6 +175,8 @@ export async function loadSigns(codes) {
     const fix = await locate().catch(() => null);
     const q = new URLSearchParams({ codes: codes.join(','), ...fix });
     if (hour12()) q.set('h12', '1');
+    // The services not running now too: a stop with none running lists them, with when each starts again.
+    q.set('stopped', '1');
     const data = await getJSON(`/api/me/stops?${q}`);
     const got = serverNow();
     signs.set((m) => {

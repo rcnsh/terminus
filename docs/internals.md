@@ -255,8 +255,8 @@ a 95 due in a minute still sits below an A1 due in fifteen; then live or
 stale times before guesses, soonest first, then by name.
 
 A service outside its hours (`inService`) with no time from the feed is
-left off the board. With `?stopped=1` (`/api/arrivals`, `/api/me/nearby`; `/api/line`
-always asks this way) it's listed after every running row, by name, with
+left off the board. With `?stopped=1` (`/api/arrivals`, `/api/me/nearby`,
+`/api/me/stops`; `/api/line` always asks this way) it's listed after every running row, by name, with
 `running: false`, no time (`quality: ended`), and
 
 - `stopped`: why (`stoppedReason`): `ended` (it ran today and has
@@ -1250,9 +1250,14 @@ Settings. It uses the same routes as the account page, with the session cookie.
   in the Stops tab, a row its service's line there, and the star on its sign
   pins it. Any other stop is on the Stops tab, from the tab bar.
 - **Stops tab** (app/buses.js). Its home is the search, then the pinned
-  stops, each with its first three rows (`/api/arrivals`, refreshed every
-  15 s while the home is on screen), then every service in `/api/campus`
-  `routes`, which opens its line (`/api/line`). A stop opens its own page
+  stops in one card, a page each, as Nearby's signs (`/api/me/stops`,
+  refreshed every 15 s while the home is on screen), then every service in
+  `/api/campus` `routes`, which opens its line (`/api/line`). A pinned stop
+  with nothing running lists the services that call there as a board lists
+  them when they've stopped (`?stopped=1`): greyed words, the badge in its
+  colour, why and when each starts again, each opening its line. The card is
+  as tall as the tallest answer so far, or the page on screen when taller; a
+  skeleton never holds it open. A stop opens its own page
   (`#buses/stop/<code>`), a service its line (`#buses/line/<svc>/<stop>`).
   The stops around you aren't here: they're Nearby's (ADR 0014).
 - **Theme.** Appearance's switch chooses light, dark or the device's own, for this

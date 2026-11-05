@@ -159,20 +159,23 @@ function look(r, cls, chevron, picked) {
   };
 }
 
-/** A service that isn't running: greyed, saying so where the minutes go, still opening its line. */
+/**
+ * A service that isn't running: its words greyed, saying so where the minutes go, still opening its line.
+ * Its badge keeps its colour, so the row doesn't look switched off.
+ */
 function StoppedRow({ r, now, onPick, chevron, picked }) {
   const [first, second] = stoppedWords(r.stopped, r.resumesAt, now);
-  const l = look(r, 'bt-row stopped', chevron, picked);
   // "Ends here" says nothing about a bus that isn't coming: no line then.
-  return html`
-    <button type="button" class=${l.cls} style=${l.style} aria-pressed=${l.pressed} onClick=${() => onPick(r.svc)}>
-      <${Chip} svc=${r.svc} color=${r.color} cls="bt-chip muted" />
-      <span class="bt-dir">${r.towards?.length ? html`<${Dest} r=${r} />` : ''}</span>
-      <span class="bt-big none">${first}</span>
-      <span class="bt-meta">${second}</span>
-      ${l.chev}
-    </button>
+  const body = html`
+    <${Chip} svc=${r.svc} color=${r.color} paid=${r.paid} cls="bt-chip" />
+    <span class="bt-dir">${r.towards?.length ? html`<${Dest} r=${r} />` : ''}</span>
+    <span class="bt-big none">${first}</span>
+    <span class="bt-meta">${second}</span>
   `;
+  // A public bus has no line here, as when it's running.
+  if (r.paid) return html`<div class="bt-row stopped">${body}</div>`;
+  const l = look(r, 'bt-row stopped', chevron, picked);
+  return html`<button type="button" class=${l.cls} style=${l.style} aria-pressed=${l.pressed} onClick=${() => onPick(r.svc)}>${body}${l.chev}</button>`;
 }
 
 /**
