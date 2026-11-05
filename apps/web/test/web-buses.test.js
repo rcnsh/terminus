@@ -9,6 +9,8 @@ import { useLang, web } from './_web.mjs';
 import { buildCampusMap, buildDestinations } from '../../api/src/map/campus.ts';
 import { GRAPH } from '../../api/src/answer/graph.ts';
 import { residenceList } from '../../api/src/answer/residences.ts';
+import { indexGraph } from '../../api/src/answer/resolve.ts';
+import { lineStops } from '../../api/src/map/buses.ts';
 
 useLang('en');
 const B = await web('app/buses.js');
@@ -419,4 +421,13 @@ test("a Nearby row is said as the apps say it: the line, where it's going, each 
     Board.saidRow({ svc: '151', paid: true, dest: 'to Kent Ridge Ter', etaS: 360, quality: 'live', later: [] }),
     'Public bus 151, fare applies, to Kent Ridge Ter, 6 minutes, live',
   );
+});
+
+test("before /api/line comes, every service's line drawn from the campus data is the one it brings: stops, names and services", () => {
+  const routes = P.campus.get().routes;
+  const idx = indexGraph(GRAPH);
+  assert.ok(Object.keys(routes).length >= 6, 'found the routes');
+  for (const [svc, r] of Object.entries(routes)) {
+    assert.deepEqual(JSON.parse(JSON.stringify(B.campusLine(svc, r))), JSON.parse(JSON.stringify(lineStops(idx, svc))), svc);
+  }
 });

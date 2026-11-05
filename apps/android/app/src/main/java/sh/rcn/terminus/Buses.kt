@@ -108,6 +108,22 @@ data class Line(
     }
 
     companion object {
+        /**
+         * Service [svc]'s line as the campus data already says it, while /api/line is on its way: its stops in order (a loop's first again
+         * at the end, as /api/line lists it), each named and with the other services there as /api/line has them, opened from [from]. No
+         * buses, no times: only the server knows those. Null when the campus data doesn't have the service.
+         */
+        fun fromCampus(campus: CampusMap, svc: String, from: String?): Line? {
+            val route = campus.lines.firstOrNull { it.svc == svc }?.takeIf { it.seq.isNotEmpty() } ?: return null
+            val seq = if (route.loop && route.seq.size > 1) route.seq + route.seq.first() else route.seq
+            val stops = seq.map { code ->
+                val stop = campus.stop(code)
+                LineStop(code, stop?.fullName ?: code, stop?.services.orEmpty().filter { it != svc })
+            }
+            val here = from?.let { seq.indexOf(it) }?.takeIf { it >= 0 }?.let { LineHere(from, it, null) }
+            return Line(svc, campus.routes[svc]?.color ?: 0xFF8A939C, null, stops, emptyList(), here, available = true, asOfMs = null)
+        }
+
         fun parse(o: JSONObject): Line {
             val s = o.optJSONArray("stops") ?: JSONArray()
             val b = o.optJSONArray("buses") ?: JSONArray()

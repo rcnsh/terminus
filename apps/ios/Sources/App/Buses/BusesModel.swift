@@ -136,7 +136,13 @@ final class BusesModel {
         guard campus == nil || campusZh != Lang.zh, let token else { return }
         let zh = Lang.zh
         do {
-            campus = try await Api(token: token).busCampus()
+            let copy = try await CampusStore.shared.load(self, token: token) { [weak self] copy in
+                guard let self, let c = copy.buses else { return }
+                campus = c
+                campusZh = Lang.zh
+            }
+            guard let c = copy.buses else { return }
+            campus = c
             campusZh = zh
         } catch {
             // Without it, names come with the boards.
