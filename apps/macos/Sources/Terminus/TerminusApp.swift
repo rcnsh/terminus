@@ -146,6 +146,8 @@ struct Popover: View {
     @State private var window: NSWindow?
     /// The content is taller than the screen, so it scrolls.
     @State private var overflows = false
+    /// The window's height, as the content's least: see `fit`.
+    @State private var floor: CGFloat = 0
 
     init(model: AppModel, startShown: Bool = false) {
         self.model = model
@@ -186,12 +188,14 @@ struct Popover: View {
         .environment(\.ticking, model.popoverOpen)
         .frame(width: 360)
         .fixedSize(horizontal: false, vertical: true)
-        // The menu bar window grows to fit taller content but never shrinks
-        // back on its own, leaving the shorter content centred with a gap
-        // above it. Measure the content and size the window to it, top edge
-        // pinned under the menu bar.
+        // The menu bar window grows to fit taller content, top edge fixed,
+        // but shrinks around its middle and then slides back up under the
+        // menu bar: a jump on every switch to a shorter tab. So the content
+        // never gets shorter than the window (`floor`); `fit` measures it and
+        // shrinks the window itself, top edge pinned.
         .background(GeometryReader { g in Color.clear.preference(key: ContentHeight.self, value: g.size.height) })
         .onPreferenceChange(ContentHeight.self) { h in fit(height: h) }
+        .frame(minHeight: floor, alignment: .top)
         // A snapshot has no window, and ImageRenderer can't draw an NSView.
         // Updater tells it apart from the windows that hold back an install.
         .background {
@@ -256,10 +260,17 @@ struct Popover: View {
         DispatchQueue.main.async {
             guard let window, height > 0 else { return }
             let content = window.contentRect(forFrameRect: window.frame)
-            guard abs(content.height - height) > 0.5 else { return }
+            guard abs(content.height - height) > 0.5 else {
+                floor = height
+                return
+            }
             var frame = window.frameRect(forContentRect: NSRect(x: content.minX, y: content.minY, width: content.width, height: height))
             frame.origin.y = window.frame.maxY - frame.height
-            window.setFrame(frame, display: true, animate: false)
+            // The window and the floor change in the same pass, drawn together:
+            // the content is never taller than the window, nor the window
+            // resized by the system, in between.
+            window.setFrame(frame, display: false, animate: false)
+            floor = height
         }
     }
 }
