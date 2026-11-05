@@ -70,8 +70,8 @@ final class Updater: NSObject, SPUUpdaterDelegate {
     }
 
     /// A window is open (Settings, Setup, the map, Sparkle's own): relaunching
-    /// would close it from under the user.
-    private var windowOpen: Bool {
+    /// would close it from under the user. DockIcon shows the Dock icon then.
+    var windowOpen: Bool {
         NSApp.windows.contains { w in
             w !== popoverWindow
                 && Self.blocksInstall(id: w.identifier?.rawValue ?? "", shown: w.isVisible || w.isMiniaturized, level: w.level)

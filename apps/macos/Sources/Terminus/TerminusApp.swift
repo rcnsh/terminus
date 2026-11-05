@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainActor.assumeIsolated {
             Appearance.apply()
             _ = AppModel.shared
+            DockIcon.start()
         }
     }
 }
