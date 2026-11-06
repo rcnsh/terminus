@@ -1479,6 +1479,26 @@ it starts: at 06:30 the 08:00 class's bus is the D2 from 07:15, not
 walking is weighed. With no live times and too late for the usual bus, the
 leave-by boards when you can reach the stop, never in the past.
 
+**Headways are measured, by the hour.** The feed says nothing about a
+shuttle's headway, so `data/headways.json` holds the gaps the buses keep:
+the median between two buses at a stop on the recorder's days (one bus
+running alone counts by its lap), by period (term or vacation), kind of day
+(weekday, Saturday, Sunday and public holidays) and SGT hour.
+`headwayFor(graph, svc, atMs)` reads the hour the bus is caught in (for a
+class, the latest it can be boarded, not now), else the nearest hour
+measured that day (the quiet early and late hours run like their neighbours,
+not like the day's median), else the service's usual one. A period with no
+days measured, or a day past the calendar, is the longer of
+`DEFAULT_HEADWAY_S` and the usual one, so the vacation isn't guessed busier
+than term time. Costs with no time (riding on past a terminal, a change's
+half-wait in `transfer.ts`) use the usual one. In term the A and D lines run
+about every 7 minutes on a weekday, 10 to 15 in the late evening and 15 to
+30 at weekends; R1 and R2 every 20, K 40, P an hour. Refresh it with
+`scripts/data/measure_headways.mjs` over the recorder's day files from R2
+(`timelapse/YYYY-MM-DD.json.gz`); nothing in it calls NUS. Guessed buses
+either side of one already chosen keep that bus's headway, so the chosen bus
+stays among them (`departures`).
+
 **The walk the whole way follows the paths.** With a location, out by the
 stops near you and on by the routed walks between stops (`walks.json`); the
 straight line with its detour only for a stop or room within
@@ -1502,8 +1522,9 @@ location inside a residence's outline ([`residences.ts`](../apps/api/src/answer/
 starts from that residence's own stops, at the path distance from the
 building or from the fix, whichever is longer. When the residence is one your
 home stops serve, the walk to the nearest of them is your own `homeWalkMin`
-(the lift, the stairs, the far block, which a phone indoors can't see), and
-its other stops are as much further as the paths say. The same walk counts on
+(the lift, the stairs, the far block, which a phone indoors can't see), even
+with the fix within `WALK.atStopM` of the stop, and its other stops are as
+much further as the paths say. The same walk counts on
 the card, in walking the whole way, and on the Nearby tab.
 
 **In a building, the walk is by the paths from it too.** Within

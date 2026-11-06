@@ -86,6 +86,7 @@ apps/api/
                       venues/rooms/landmarks/residences; hand-kept: service-hours.json,
                       opposites.json (stops across the road the scrape can't pair),
                       nus-days.json (NUS's days off, e.g. Well-Being Days: holiday hours),
+                      headways.json (each shuttle's gaps by hour, from measure_headways.mjs),
                       src/venue-stops.json (the stops students use for a building,
                       where the map's nearest is wrong; then run walk_routes.py)
   migrations/         D1 schema, numbered NNNN_name.sql
@@ -93,7 +94,8 @@ apps/api/
                       render-timelapse.mjs (renders a recorded day headless, e.g. on a VPS)
   scripts/deploy/     predeploy.mjs (first step of a deploy); vapid-key.mjs (makes the Web Push key, once)
   scripts/data/       The weekly scrapers (scrape_stops.py, scrape_lta.py, route_shapes.py,
-                      fetch_calendar.py), walk_routes.py, check_scraped.py
+                      fetch_calendar.py), walk_routes.py, check_scraped.py;
+                      measure_headways.mjs (data/headways.json from the recorder's days, by hand)
   scripts/probes/     probe_buses.py (feed update-rate probe); probe_arrivals.py (how often
                       arrival times change, run by hand); record_buses.mjs (checks /api/buses on a live site);
                       record_eta.mjs + eta_backtest.mjs (the arrival-time model's data and backtest)

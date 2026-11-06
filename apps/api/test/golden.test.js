@@ -22,6 +22,12 @@ import worker from '../src/index.ts';
 import { Trip } from '../src/push/tripdo.ts';
 import { ASSUME_MS, CHANGE_GRACE_MS, RIDE_GRACE_MS } from '../src/answer/trip.ts';
 import { onRideQuery, rideLength } from './_ride.mjs';
+import { withoutMeasuredHeadways } from './_headways.mjs';
+
+// The goldens pin how an answer is made and worded, and every client's tests
+// read them, so they keep one guess for every shuttle: measuring the
+// headways again mustn't change them (headways.test.js covers those).
+withoutMeasuredHeadways();
 
 const DIR = new URL('../../../fixtures/answers/', import.meta.url);
 const ZH_DIR = new URL('./zh/', DIR);
