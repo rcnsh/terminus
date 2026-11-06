@@ -181,7 +181,32 @@ test('a request from the stop before the leave-by still has the Trip object wake
   // The phone at the stop is waiting until its bus goes; the object, with no
   // location, still owes "due" five minutes before the leave-by.
   assert.equal(there.card.phase, 'waiting');
-  assert.equal(alarm(), Date.parse(there.leave.at) - DUE_MS);
+  assert.ok(alarm() <= Date.parse(there.leave.at) - DUE_MS);
+  await wakeUntil(() => fcm.sent.length > 0);
+  assert.deepEqual(
+    fcm.sent.map((m) => m.data.phase),
+    ['due'],
+  );
+  assert.equal(fcm.sent[0].android.priority, 'HIGH');
+});
+
+test('a request from near the stop, with a long walk from home, still has the Trip object wake for its own time to go', async () => {
+  // Twelve minutes from home to its stop (one outside any residence): the
+  // object plans from home, so it has to go well before a phone at the stop.
+  const profile = { ...PROFILE, home: { stops: ['KR-MRT'] }, homeWalkMin: 12 };
+  const pilot = await setup();
+  await pilot.call('/api/me/profile', { method: 'PUT', cookie: pilot.cookie, body: profile });
+  const { call, cookie, phone, fcm, clock, alarm, wakeUntil } = await setup();
+  await call('/api/me/profile', { method: 'PUT', cookie, body: profile });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  clock(Date.parse((await pilot.next(pilot.phone)).leave.at) - 10 * 60_000);
+  // The object's view, from another account with no location, and the phone's.
+  const own = (await pilot.next(pilot.phone)).leave;
+  const stop = indexGraph(GRAPH).byCode.get(own.stopCode);
+  const there = await (await call(`/api/me/next?lat=${stop.lat}&lon=${stop.lon}`, { token: phone })).json();
+  assert.equal(there.leave.board, own.board, 'the same bus');
+  assert.ok(Date.parse(there.leave.at) - DUE_MS > Date.parse(own.at), "the phone's due is after the object's leave-by");
+  assert.ok(alarm() <= Date.parse(own.at) - DUE_MS, "the object wakes by its own due, not the phone's");
   await wakeUntil(() => fcm.sent.length > 0);
   assert.deepEqual(
     fcm.sent.map((m) => m.data.phase),

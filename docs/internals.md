@@ -534,7 +534,10 @@ change stop after the second bus left) in the card's `nextChangeAt`. The
 Trip object has no location, so it wakes at `wakesAt`: the same rules from
 nowhere, on what the request planned and read. A phone at the stop is
 `waiting` until its bus goes, but the object still owes the phones "due"
-and "Leave now", and never wakes for a moment only a location sees. Feed reads
+and "Leave now", and never wakes for a moment only a location sees. The
+object plans from where the timetable puts you, so its leave-by can be
+earlier than a phone's by the stop: a request that saves a plan made from
+its location has the object wake at once, to work out its own. Feed reads
 for the bus you're on come through `Lookups`, asked only when a rule needs
 them; later moments reuse what was read now and take anything not read as
 the plan's times, so working out the next change costs no feed call.

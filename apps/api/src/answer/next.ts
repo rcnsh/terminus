@@ -680,7 +680,13 @@ export async function nextFor(env: Env, ctx: ExecutionContext, deps: MeDeps, rid
   const card = cardFor(full, hour12(ask.h12, profile), trip, await feedDownSince(env, nowMs), nowMs);
   // Push: have the Trip object wake when the trip next changes as it sees
   // it, to tell the phones, unless it already wakes about then or sooner.
-  const wakeAt = trip.wakesAt?.at ?? null;
+  // A plan this request made from where the phone is: the object, with no
+  // location, plans the same bus from where the timetable puts you, and its
+  // leave-by can be well before this one (a longer walk), so its "due" too.
+  // It wakes now to work out its own moments: a wake too early only
+  // reschedules, one too late misses the push.
+  const fromHere = !trip.seenOn && trip.key !== null && update.plans?.[trip.key]?.located === true;
+  const wakeAt = fromHere ? nowMs : (trip.wakesAt?.at ?? null);
   if (wakeAt !== null && pushEnabled(env) && needsWatch(day, wakeAt, nowMs) && classesOn(profile, nowMs).length) {
     update.watch = { userId, at: wakeAt };
   }
