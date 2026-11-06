@@ -2,12 +2,29 @@
 
 `pnpm exec cf analytics_engine sql query --file query.sql`, or the GraphQL API.
 
-Dataset: `terminus` (the beta's is `terminus_beta`). Positional schema lives
-in `src/ops/analytics.ts`. It is the query contract, so it is append-only.
+Dataset: `terminus` (the beta's is `terminus_beta`). Analytics Engine
+names columns only by position (`blob1`..`blob20`, `double1`..`double20`),
+and `blob1` is always the row's kind. Which field each kind keeps where is
+declared once, in `ROWS` in `src/analytics-rows.ts`: the Worker writes and
+reads the rows through it, so read a column's number there, with what it
+holds and its placeholder (-1 for unknown, '' for none) beside it. Kinds
+give `blob2` on and `double1` on their own meanings. Rows already written
+can't be rewritten (they are kept about three months), so existing
+positions never move: a new field takes a position unused within its own
+kind and by any kind read in the same query (`arrival` and `board`). Each
+kind has a section below (`analytics-rows.test.js` checks).
+
+The queries here have no time bound unless they say so, so they read all
+three months; add `AND timestamp > NOW() - INTERVAL '7' DAY` for less.
+
+## Answers and their buses (`answer`, `arrival`)
 
 An `answer` row is an answer someone asked for: `/api/next`, `/api/trip` or
 `/api/me/next`. The Trip object's wakes and `/api/me/day`'s leave-bys are not
-logged, and neither are their `arrival` rows.
+logged, and neither are their `arrival` rows. Each answer also writes an
+`arrival` row for each timed bus at its stop (at most 8), with the bus's
+plate, crowd and berth, and the answer's stop, destination, quality,
+confidence and whether a location was sent. `index1` is the stop.
 
 ## Is the direction algorithm right?
 
@@ -97,7 +114,7 @@ FROM terminus WHERE blob1 = 'answer' GROUP BY quality ORDER BY n DESC
 A lot of `unknown` means upstream is flaky or auth is failing. A lot of
 `stale` means the 15-second cache is doing its job during outages.
 
-## What the timelapse recorder costs NUS
+## What the timelapse recorder costs NUS (`timelapse`)
 
 The recorder (`src/map/timelapse.ts`) is the only code that polls the feed's
 live buses on a schedule (the 15-minute health check reads one stop's
@@ -121,7 +138,24 @@ load. The polls themselves are at most 17,280 a day at the defaults (8
 services, one poll each per 30 s, 18 hours), and fewer on the days the
 services keep shorter hours.
 
-## Trip signals
+## Errors (`error`)
+
+One row per error, counted on the dashboard's Answers page: `blob2` is the
+route of a request that failed unhandled (no query, `/api/me/devices/abc`
+as `/api/me/devices`), `cron <step>` for a cron step that failed, or `feed
+arrivals` / `feed buses` for a call to NUS that failed, with why in
+`blob3`. A feed failure is written at most once in 10 minutes per feed,
+stop or service and reason, remembered in memory by each Worker isolate
+(so each isolate writes its own), and the memory is cleared once it holds
+more than 500.
+
+```sql
+SELECT blob2 AS route, blob3 AS reason, SUM(_sample_interval) AS n
+FROM terminus WHERE blob1 = 'error' AND timestamp > NOW() - INTERVAL '7' DAY
+GROUP BY route, reason ORDER BY n DESC
+```
+
+## Trip signals (`signal`)
 
 Each trip signal (`/api/me/signal`: on the bus, missed, not going, arrived,
 and the rest) writes a `signal` row: `blob2` is the kind, `double1` is 1
@@ -133,7 +167,7 @@ SELECT blob2 AS signal, SUM(_sample_interval) AS n
 FROM terminus WHERE blob1 = 'signal' GROUP BY signal ORDER BY n DESC
 ```
 
-## Steps between buses
+## Steps between buses (`step`)
 
 Each "Earlier bus", "Later bus" or "Best bus" (`/api/me/step`) writes a
 `step` row: `blob2` is `earlier`, `later` or `best`, `blob3` the kind of
@@ -146,7 +180,7 @@ SELECT blob3 AS trip, blob2 AS step, SUM(_sample_interval) AS n
 FROM terminus WHERE blob1 = 'step' GROUP BY trip, step ORDER BY n DESC
 ```
 
-## How fresh the pushed cards are
+## How fresh the pushed cards are (`tripwake`)
 
 Each wake of a Trip object (`src/push/tripdo.ts`) that works out a card writes a
 `tripwake` row (`logTripWake` in `src/ops/analytics.ts`): `blob2` `pushed` or
@@ -165,7 +199,7 @@ FROM terminus WHERE blob1 = 'tripwake' AND blob5 = 'again' AND timestamp > NOW()
 GROUP BY phase
 ```
 
-## How long a card takes
+## How long a card takes (`next`)
 
 Each `/api/me/next` writes a `next` row (`logNextTook` in
 `src/ops/analytics.ts`): `double12` the ms from the request reaching the
@@ -186,7 +220,7 @@ GROUP BY day ORDER BY day
 
 ## The operator's switches
 
-Five more kinds of statistics are collected only once switched on, on the
+Six more kinds of statistics are collected only once switched on, on the
 dashboard (`POST /api/admin/collect`, KV `config:collect:<name>`, `src/ops/collect.ts`).
 All start off, and KV failing to answer reads as off.
 
@@ -207,8 +241,9 @@ GROUP BY day, app ORDER BY day
 
 ### Arrival-time accuracy (`eta`)
 
-No rows of its own: the cron joins a closed day's `arrival` rows (what the
-feed said, with the plate) with the timelapse recording of the same day
+The cron joins a closed day's predictions (what the feed said, with the
+plate: the `board` rows below, and before the first of them the `arrival`
+rows, never both for the same time) with the timelapse recording of the same day
 (where each plate was along its line every 30 s), and keeps the result in
 R2 as `eta/YYYY-MM-DD.json` (`src/ops/eta.ts`): per prediction, the service,
 how far ahead it was, how much later than said the bus came, and the hour.
@@ -222,7 +257,24 @@ to about 15 s. With `ETA_MODEL=shadow`, the arrival-time model's answers to
 the same predictions are kept beside it (`eta/model/`, `src/ops/etashadow.ts`;
 [eta-model.md](eta-model.md)).
 
-### Crash reports (`errors`)
+### Shuttle boards (`board`)
+
+While `eta` is on, each board the Worker fetches from NUS (not a cached
+copy read again) writes a row per bus with a plate and a live time, at
+most 16: the arrival-time job's questions, at every stop anyone asks
+about rather than only the stops answers chose. It keeps the columns of
+an `arrival` row, so one query reads both: `blob2` the stop, `blob3` the
+service, `blob6` the plate, `blob7` the crowd, `blob9` the berth,
+`double1` the seconds to arrival from when the board was fetched; `blob4`
+is `''` and `blob5` `live`. No destination, request or location.
+
+```sql
+SELECT blob2 AS stop, blob3 AS svc, count() AS n, avg(double1) AS eta_s
+FROM terminus WHERE blob1 = 'board' AND timestamp > NOW() - INTERVAL '1' DAY
+GROUP BY stop, svc ORDER BY n DESC
+```
+
+### Crash reports (switch `errors`, rows `apperror`)
 
 `POST /api/errors` (`src/ops/apperrors.ts`), from the apps and the website, one
 row each: `blob2` platform, `blob3` version, `blob4` fingerprint, `blob5`
@@ -276,6 +328,20 @@ FROM terminus WHERE blob1 = 'settings' AND blob4 = '2026-10-22'
 GROUP BY setting, value ORDER BY setting, n DESC
 ```
 
+### Requests with an API key (switch `keys`, rows `apikey`)
+
+Each request made with an API key (`src/ops/keyuse.ts`) writes one row:
+`blob2` the key's id (`api_keys.id`), `blob3` the route with no query,
+`blob4` `ok` or `limited` (turned away by the key's rate limit), `double1`
+1, and `index1` the key's id, so a busy key never thins out a quiet one's
+counts. The dashboard joins the id to its owner while the key exists.
+
+```sql
+SELECT blob2 AS keyId, blob3 AS route, blob4 AS outcome, SUM(_sample_interval) AS n
+FROM terminus WHERE blob1 = 'apikey' AND timestamp > NOW() - INTERVAL '7' DAY
+GROUP BY keyId, route, outcome ORDER BY n DESC
+```
+
 The dashboard's app versions (Devices) are read from D1 on each load, not
 from these rows: each device's last version by when it was last used, over
 7, 30 and 90 days. A device unused for 90 days is signed out, so a version
@@ -283,8 +349,10 @@ with none in 90 days is one no paired device still runs.
 
 ## What the rows hold about people
 
-None holds an account, email, IP address or coordinates, and none is
-indexed by person. An `answer` or `arrival` row's stop is the one nearest
+No row holds an account id, email, IP address or coordinates. `apikey`
+rows are indexed by the key's id, and a key belongs to one account, which
+the operator's dashboard shows while the key exists; no other row is
+indexed by anything about a person. An `answer` or `arrival` row's stop is the one nearest
 the caller when the app sent a location, `double6` is the walk to it, and
 `blob4` is the destination (a class's venue, a place): together with the
 time, that is a rough idea of where someone was and where they were

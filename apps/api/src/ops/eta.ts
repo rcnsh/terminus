@@ -15,6 +15,7 @@ import { shapeFor, type RouteShape } from '../map/campus.ts';
 import { type DayFile, dayKey, lineKeys, serviceDate, windowOf } from '../map/timelapse.ts';
 import { collecting } from './collect.ts';
 import { aeSql } from './analytics.ts';
+import { sharedColumns } from '../analytics-rows.ts';
 import { SGT_MS } from '../config.ts';
 
 const DAY = 86_400_000;
@@ -307,10 +308,12 @@ export async function predictionsFor(env: Env, date: string, nowMs: number, fetc
   const days = Math.ceil((nowMs - open) / DAY) + 1;
   const hours = Math.max(0, Math.floor((nowMs - close) / 3_600_000));
   const dataset = env.AE_DATASET || 'terminus';
+  // One query for both kinds: 'board' rows keep the columns 'arrival' rows do (analytics-rows.ts ROWS).
+  const c = sharedColumns('arrival', 'board');
   const rows = await aeSql(
     env,
-    `SELECT blob1 AS kind, blob6 AS plate, blob2 AS stop, blob3 AS svc, blob9 AS berth, double1 AS eta, _sample_interval AS w, timestamp FROM ${dataset}
-      WHERE blob1 IN ('arrival', 'board') AND blob6 != '' AND timestamp > NOW() - INTERVAL '${days}' DAY
+    `SELECT ${c.kind} AS kind, ${c.plate} AS plate, ${c.stop} AS stop, ${c.svc} AS svc, ${c.berth} AS berth, ${c.etaS} AS eta, _sample_interval AS w, timestamp FROM ${dataset}
+      WHERE ${c.kind} IN ('arrival', 'board') AND ${c.plate} != '' AND timestamp > NOW() - INTERVAL '${days}' DAY
       AND timestamp < NOW() - INTERVAL '${hours}' HOUR`,
     fetchImpl,
   );

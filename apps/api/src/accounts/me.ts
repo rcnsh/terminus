@@ -4,7 +4,7 @@
  */
 
 import { mailFeedback, parseFeedback, saveFeedback } from '../ops/feedback.ts';
-import { logNextTook } from '../ops/analytics.ts';
+import { logNextTook, logSignal, logStep } from '../ops/analytics.ts';
 import { approvable, decide, enterCode, holdAppLogins, mergeAnonymous, pollAppLogin, startAppLogin } from './applogin.ts';
 import type { Answer, Env, Graph, GraphIndex, MeAnswer, ResolveInput, Stop, StopArrivals } from '../types.ts';
 import {
@@ -1690,29 +1690,6 @@ async function prefsFor(db: D1Database, userId: string, profile: Profile, nowMs:
   } catch (err) {
     outcomeFailed(err);
     return NO_PREFS;
-  }
-}
-
-/** Counts only: which signals people send, never who or where. */
-/**
- * A step between buses, by direction and the kind of trip: whether people
- * step later after a class (a trip home starts from one) says whether
- * classes end when ENDS_EARLY_MIN assumes. Never the account or the class.
- */
-function logStep(env: Env, dir: 'earlier' | 'later' | 'best', trip: string): void {
-  const kind = /^(gap-)?home:/.test(trip) ? 'home' : /^(place|to):/.test(trip) ? 'place' : 'class';
-  try {
-    env.AE?.writeDataPoint({ blobs: ['step', dir, kind], doubles: [1], indexes: ['step'] });
-  } catch {
-    // Analytics must never break an answer.
-  }
-}
-
-function logSignal(env: Env, kind: string): void {
-  try {
-    env.AE?.writeDataPoint({ blobs: ['signal', kind], doubles: [1], indexes: ['signal'] });
-  } catch {
-    // Analytics must never break an answer.
   }
 }
 

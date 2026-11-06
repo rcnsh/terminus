@@ -2068,8 +2068,10 @@ decision row, plus one row per timed arrival (eight at most,
 `/api/me/day`. They would cost rows and count as answers on the dashboard. Two purposes: checking whether the direction
 algorithm is right, which nothing else measures, and inter-stop
 travel times from the feed's own predictions (`plate` is the join key), a
-check on `RIDE.secondsPerHop`. Queries and
-the schema contract are in [docs/analytics.md](analytics.md).
+check on `RIDE.secondsPerHop`. Each kind's columns are declared once,
+in `ROWS` (`src/analytics-rows.ts`), which writes every row and builds
+every query that reads them; queries and what each kind holds are in
+[docs/analytics.md](analytics.md).
 
 Each `/api/me/next` also writes a `next` row (`logNextTook`): how many ms
 passed from the request reaching the Worker to its answer built, with or
@@ -2604,6 +2606,7 @@ src/map/timelapsedo.ts     The recorder's Durable Object: one per Singapore day
 src/map/map.ts             /map/*: the street map file, its style, fonts and icons
 src/map/pairs.ts           /api/stops/pairs
 
+src/analytics-rows.ts      Every Analytics Engine row's columns (ROWS), writeRow, and COL for queries
 src/ops/analytics.ts       Analytics Engine logging: decisions and arrivals, errors
                            (logError, logCronError), timelapse polls (logPoll), Trip wakes
                            (logTripWake)
