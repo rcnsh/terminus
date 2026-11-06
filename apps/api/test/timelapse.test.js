@@ -36,6 +36,7 @@ import { BUNDLED } from '../src/timetable/calendar.ts';
 import { CALENDAR_DATA_KEY, resetCalendar } from '../src/timetable/calendarsync.ts';
 import {
   busesAt,
+  busesOut,
   countBySvc,
   decodeDay,
   FADE_MS,
@@ -994,6 +995,20 @@ test('a reading further on than a bus can drive is a jump: out at one place, in 
     [5 * 60_000, 700],
   ]);
   assert.deepEqual(countBySvc(busesAt(gap, FROZEN_NOW + 2.5 * 60_000)), {});
+});
+
+test("the timeline's chart counts each bus once per slice it was seen in", () => {
+  const day = oneBus([
+    [0, 100],
+    [30_000, 300],
+    [70_000, 600],
+    [250_000, 900],
+  ]);
+  // Four one-minute slices: two readings in the first are one bus, none in the third.
+  assert.deepEqual(busesOut(day, FROZEN_NOW, FROZEN_NOW + 240_000, 4), [1, 1, 0, 0]);
+  // A reading at the end of the span is outside it; one before the start too.
+  assert.deepEqual(busesOut(day, FROZEN_NOW + 30_000, FROZEN_NOW + 250_000, 2), [1, 0]);
+  assert.deepEqual(busesOut(day, FROZEN_NOW, FROZEN_NOW, 3), [0, 0, 0]);
 });
 
 test("start and end times on the day's timeline: after midnight is the next morning", () => {
