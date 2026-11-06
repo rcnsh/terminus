@@ -771,8 +771,8 @@ export const ERRORS_ZH: Record<string, string> = {
   'not found': '找不到',
   'method not allowed': '不支持这个请求方法',
   'a report needs platform, version and type': '报告需要 platform、version 和 type',
-  'name must be active, eta, errors, legacy or settings, and on true or false':
-    'name 必须是 active、eta、errors、legacy 或 settings，on 必须是 true 或 false',
+  'name must be active, eta, errors, legacy, settings or keys, and on true or false':
+    'name 必须是 active、eta、errors、legacy、settings 或 keys，on 必须是 true 或 false',
   'fingerprint must be a crash report fingerprint': 'fingerprint 必须是崩溃报告的 fingerprint',
   'id must be a report id': 'id 必须是一条反馈的 id',
   'something went wrong on our side': '我们这边出了问题',

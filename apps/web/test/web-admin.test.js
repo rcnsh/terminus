@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { page, settle } from './_dom.mjs';
 import { memoryStorage, web } from './_web.mjs';
 
-const { derive } = await web('admin/views.js');
+const { derive, keyRows } = await web('admin/views.js');
 const { render } = await web('assets/ui.js');
 
 test("the dashboard's days are Singapore days, and the week leaves today's few hours out", () => {
@@ -21,6 +21,38 @@ test("the dashboard's days are Singapore days, and the week leaves today's few h
   // Seven full days against the seven before: the same, not down by today's missing hours.
   assert.equal(d.answers7, 700);
   assert.equal(d.answersChange, 0);
+});
+
+test("each API key's requests: today and the 7 full days before it, what was turned away, its commonest route, and revoked keys counted apart", () => {
+  const d14 = Array.from({ length: 14 }, (_, i) => new Date(Date.UTC(2026, 9, 11 + i)).toISOString().slice(0, 10));
+  const s = {
+    apiKeys: {
+      list: [
+        { id: 'k1', name: 'Bot', hint: 'abcd', email: 'a@u.nus.edu', userId: 'u1' },
+        { id: 'k2', name: 'Idle', hint: 'efgh', email: null, userId: 'u2' },
+      ],
+    },
+    analytics: {
+      keys: [
+        { keyId: 'k1', day: '2026-10-12', route: '/api/arrivals', outcome: 'ok', n: '500' },
+        { keyId: 'k1', day: '2026-10-23', route: '/api/next', outcome: 'ok', n: '30' },
+        { keyId: 'k1', day: '2026-10-24', route: '/api/buses', outcome: 'ok', n: '10' },
+        { keyId: 'k1', day: '2026-10-24', route: '/api/buses', outcome: 'limited', n: '25' },
+        { keyId: 'k1', day: '2026-10-01', route: '/api/next', outcome: 'ok', n: '999' },
+        { keyId: 'gone', day: '2026-10-20', route: '/api/next', outcome: 'ok', n: '7' },
+      ],
+    },
+  };
+  const { rows, revoked14 } = keyRows(s, d14);
+  assert.deepEqual(
+    rows.map((r) => [r.id, r.today, r.n7, r.limited7, r.route]),
+    [
+      ['k1', 35, 30, 0, '/api/next'],
+      ['k2', 0, 0, 0, ''],
+    ],
+  );
+  assert.equal(revoked14, 7);
+  assert.deepEqual(keyRows({ apiKeys: s.apiKeys, analytics: { error: 'x' } }, d14).rows[0].n7, 0, 'Analytics Engine failing: no counts');
 });
 
 /** A fetch whose /api/admin/stats answers wait for the test: `asked[i].answer(status, body)`. */

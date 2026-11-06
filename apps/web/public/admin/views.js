@@ -394,7 +394,7 @@ export function Accounts({ s, d }) {
 
 /* ----------------------------------------------------------------- Devices */
 
-export function Devices({ s }) {
+export function Devices({ s, d }) {
   const devices = (s.devices ?? []).map((x) => ({ ...x, key: x.platform, share: share(x.active7, x.total) }));
   const clients = (s.clients ?? []).map((c) => {
     const [p, v] = String(c.client).split('/');
@@ -468,7 +468,92 @@ export function Devices({ s }) {
         />
       <//>
     </div>
+    <${ApiKeys} s=${s} d=${d} />
     <${Legacy} s=${s} />
+  `;
+}
+
+/**
+ * Every API key with whose it is (admin.ts apiKeys.list), beside the
+ * requests each made (analytics.keys, keyuse.ts): today so far, and the
+ * 7 full Singapore days to yesterday, as the dashboard's other weeks are.
+ * The 14 days, today included, count only what came from revoked keys. Rows for a key since revoked have no owner left, so they
+ * are only counted.
+ */
+export function keyRows(s, d14) {
+  const days = new Set(d14);
+  const today = d14.at(-1);
+  const week = new Set(d14.slice(-8, -1));
+  const use = new Map();
+  for (const r of s.analytics && !s.analytics.error ? (s.analytics.keys ?? []) : []) {
+    const day = String(r.day).slice(0, 10);
+    if (!days.has(day)) continue;
+    const n = Number(r.n) || 0;
+    const u = use.get(r.keyId) ?? { n14: 0, today: 0, n7: 0, limited7: 0, routes: new Map() };
+    u.n14 += n;
+    if (day === today) u.today += n;
+    if (week.has(day)) {
+      u.n7 += n;
+      if (r.outcome === 'limited') u.limited7 += n;
+      u.routes.set(r.route, (u.routes.get(r.route) ?? 0) + n);
+    }
+    use.set(r.keyId, u);
+  }
+  const rows = (s.apiKeys?.list ?? []).map((k) => {
+    const u = use.get(k.id);
+    use.delete(k.id);
+    const top = [...(u?.routes ?? [])].sort((a, b) => b[1] - a[1])[0];
+    return { ...k, key: k.id, today: u?.today ?? 0, n7: u?.n7 ?? 0, limited7: u?.limited7 ?? 0, route: top?.[0] ?? '' };
+  });
+  return { rows, revoked14: sum([...use.values()].map((u) => u.n14)) };
+}
+
+function ApiKeys({ s, d }) {
+  const [q, setQ] = useState('');
+  const counting = Boolean(s.collect?.keys && d.an);
+  const { rows, revoked14 } = keyRows(s, d.d14);
+  const needle = q.trim().toLowerCase();
+  const shown = rows.filter(
+    (r) => !needle || [r.name, r.email ?? 'no email', r.hint].some((x) => String(x).toLowerCase().includes(needle)),
+  );
+  const sub = !d.an
+    ? 'Requests per key need Analytics Engine connected.'
+    : !s.collect?.keys
+      ? 'Not counting requests: turn on “API key requests” under Collection to count them.'
+      : `Requests made with each key, by Singapore day: today so far, and the 7 full days before; turned away means its rate limit refused them.${revoked14 ? ` ${plural(revoked14, 'request')} in 14 days came from keys since revoked.` : ''}`;
+  return html`
+    <${Card}
+      title="API keys"
+      sub=${sub}
+      tools=${rows.length > 8 && html`<${Search} value=${q} onChange=${setQ} placeholder="Search name, owner, last four" />`}
+    >
+      <${Table}
+        cols=${[
+          { key: 'name', label: 'Name' },
+          {
+            key: 'email',
+            label: 'Owner',
+            sort: (r) => r.email ?? '',
+            cell: (r) => r.email ?? html`<span class="muted">No email (account ${r.userId.slice(0, 8)})</span>`,
+          },
+          { key: 'hint', label: 'Ends in', cell: (r) => html`<code>${`…${r.hint}`}</code>` },
+          { key: 'created', label: 'Made', fmt: (v) => ago(v) },
+          { key: 'lastUsed', label: 'Last used', sort: (r) => r.lastUsed ?? '', fmt: (v) => (v ? ago(v) : 'Never') },
+          ...(counting
+            ? [
+                { key: 'today', label: 'Today', num: true },
+                { key: 'n7', label: '7 days to yesterday', num: true, meter: true },
+                { key: 'limited7', label: 'Turned away, 7 days', num: true },
+                { key: 'route', label: 'Most asked, 7 days', cell: (r) => (r.route ? html`<code>${r.route}</code>` : '—') },
+              ]
+            : []),
+        ]}
+        rows=${shown}
+        sort=${counting ? { key: 'n7', dir: 'desc' } : { key: 'lastUsed', dir: 'desc' }}
+        limit=${25}
+        empty=${rows.length ? 'No key matches.' : 'No API keys yet.'}
+      />
+    <//>
   `;
 }
 
@@ -1177,6 +1262,11 @@ export const SWITCHES = [
     'settings',
     'Settings',
     'How many accounts used this month have each setting, and how many devices take notifications. Counted from the profiles already kept; only the totals are stored.',
+  ],
+  [
+    'keys',
+    'API key requests',
+    'Each request made with an API key, counted against that key by route, and whether its rate limit turned it away. The key and nothing else from the request.',
   ],
 ];
 

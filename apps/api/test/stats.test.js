@@ -21,6 +21,7 @@ import { adminStats, undismissed } from '../src/ops/admin.ts';
 import { legacyUses, routeOf, senderOf } from '../src/ops/legacy.ts';
 import { countSettings, readSettings, recordSettings, settingsOf } from '../src/ops/settings.ts';
 import { API_VERSION } from '../src/openapi.ts';
+import { hashToken } from '../src/accounts/accounts.ts';
 
 const BASE = 'https://bus.example.test';
 const DAY = 86_400_000;
@@ -42,7 +43,7 @@ async function send(env, path, { method = 'GET', body, headers = {} } = {}) {
 
 test('every collector is off until the operator turns it on, and only the operator can', async () => {
   const env = { ...makeEnv(), HEALTH_TOKEN: 'op' };
-  for (const name of ['active', 'eta', 'errors', 'legacy', 'settings'])
+  for (const name of ['active', 'eta', 'errors', 'legacy', 'settings', 'keys'])
     assert.equal(await collecting(env, name), false, `${name} starts off`);
   assert.equal(
     (await send(env, '/api/admin/collect', { method: 'POST', body: { name: 'errors', on: true } })).status,
@@ -56,7 +57,7 @@ test('every collector is off until the operator turns it on, and only the operat
     headers: { 'x-health-token': 'op' },
   });
   assert.equal(res.status, 200);
-  assert.deepEqual(await res.json(), { active: false, eta: false, errors: true, legacy: false, settings: false });
+  assert.deepEqual(await res.json(), { active: false, eta: false, errors: true, legacy: false, settings: false, keys: false });
   assert.equal(await collecting(env, 'errors'), true);
   assert.equal(
     (await send(env, '/api/admin/collect', { method: 'POST', body: { name: 'errors', on: 'yes' }, headers: { 'x-health-token': 'op' } }))
@@ -338,6 +339,48 @@ test('the old address and paths are counted only while switched on', async () =>
     ],
     'one row for each, and none for a request on the new address',
   );
+});
+
+test("requests made with an API key are counted against it only while switched on, and the dashboard names the key's owner", async () => {
+  const ae = makeAnalytics();
+  const db = makeD1();
+  const env = { ...makeEnv(makeKV(), ae), DB: db, HEALTH_TOKEN: 'op' };
+  delete env[Symbol.for('terminus.testOpen')];
+  const now = Date.now();
+  db._db.prepare('INSERT INTO users (id, email, created, last_seen) VALUES (?, ?, ?, ?)').run('u1', 'dev@u.nus.edu', now, now);
+  db._db.prepare('INSERT INTO users (id, email, created, last_seen) VALUES (?, ?, ?, ?)').run('u2', null, now, now);
+  const insert = db._db.prepare(
+    'INSERT INTO api_keys (id, user_id, key_hash, name, hint, created, last_used) VALUES (?, ?, ?, ?, ?, ?, ?)',
+  );
+  insert.run('k1', 'u1', await hashToken('tk_one'), 'Bot', '_one', now - DAY, null);
+  insert.run('k2', 'u2', await hashToken('tk_two'), 'Script', '_two', now - 2 * DAY, null);
+  const ask = (key) => send(env, '/api/stops/pairs', { headers: { 'x-api-key': key } });
+
+  assert.equal((await ask('tk_one')).status, 200);
+  assert.equal(ae.rows('apikey').length, 0, 'off');
+  await send(env, '/api/admin/collect', { method: 'POST', body: { name: 'keys', on: true }, headers: { 'x-health-token': 'op' } });
+  assert.equal((await ask('tk_one')).status, 200);
+  assert.equal((await send(env, '/api/stops/pairs?x=1')).status, 401, 'no key: nothing counted');
+  env.RL_PUBLIC = { limit: async () => ({ success: false }) };
+  assert.equal((await ask('tk_two')).status, 429);
+  assert.deepEqual(
+    ae.rows('apikey').map((r) => r.blobs),
+    [
+      ['apikey', 'k1', '/api/stops/pairs', 'ok'],
+      ['apikey', 'k2', '/api/stops/pairs', 'limited'],
+    ],
+  );
+
+  const s = await adminStats({ ...env, DB: db }, now + 1000);
+  assert.deepEqual(
+    s.apiKeys.list.map((k) => [k.id, k.name, k.hint, k.email, k.userId, k.lastUsed !== null]),
+    [
+      ['k2', 'Script', '_two', null, 'u2', true],
+      ['k1', 'Bot', '_one', 'dev@u.nus.edu', 'u1', true],
+    ],
+    'every key, most lately used first (k2 asked last), with its owner',
+  );
+  assert.equal(s.collect.keys, true);
 });
 
 test('the settings: each value counted over the accounts, an older profile at the defaults', () => {

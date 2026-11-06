@@ -26,6 +26,16 @@ const weekday = (d) => new Date(`${d}T00:00:00Z`).getUTCDay();
 /** Busier on weekdays, as term is. */
 const busy = (d) => ([0, 6].includes(weekday(d)) ? 0.45 : 1);
 
+/** Made-up API keys: [id, owner (a demo account), name, requests a weekday]; the last is never used. */
+const KEYS = [
+  ['demo-key-0', 'demo-0', 'Home Assistant', 420],
+  ['demo-key-1', 'demo-3', 'Telegram bot', 1900],
+  ['demo-key-2', 'demo-3', 'Laptop script', 35],
+  ['demo-key-3', 'demo-8', 'Shortcut', 60],
+  ['demo-key-4', 'demo-11', 'Old test', 0],
+];
+const KEY_ROUTES = ['/api/next', '/api/arrivals', '/api/buses'];
+
 const SERVICES = ['A1', 'A2', 'D1', 'D2', 'BTC', 'E', 'K', 'L'];
 const VERSIONS = ['android/3.5.0', 'android/3.4.3', 'android/3.4.2', 'mac/3.5.0', 'mac/3.4.3', 'android/3.5.1-beta.1'];
 
@@ -153,6 +163,19 @@ export function fakeAeRows(q, nowMs) {
       { what: 'path', client: 'android/2.5.0', route: '/me/next', n: 6, last: at(200) },
       { what: 'outdated', client: 'android/2.6.3', route: '/api/me/next', n: 3, last: at(400) },
     ];
+  }
+  if (q.includes("blob1 = 'apikey'")) {
+    return days(nowMs, 15).flatMap((day) =>
+      [...KEYS.filter(([, , , n]) => n), ['demo-key-gone', '', '', 80]].flatMap(([keyId, , , perDay]) =>
+        KEY_ROUTES.map((route, r) => ({
+          keyId,
+          day,
+          route,
+          outcome: 'ok',
+          n: Math.round((perDay * busy(day) * (0.6 + rand(`${keyId}${day}`) * 0.8)) / (r + 1)),
+        })).concat(keyId === 'demo-key-1' && rand(`l${day}`) > 0.6 ? [{ keyId, day, route: '/api/buses', outcome: 'limited', n: 40 }] : []),
+      ),
+    );
   }
   if (q.includes("blob1 = 'settings'")) {
     const of = 31;
@@ -329,6 +352,10 @@ export async function seedAdmin({ db, kv, files, nowMs }) {
     };
     profiles.run(id, JSON.stringify(profile));
   }
+  const keys = db._db.prepare('INSERT INTO api_keys (id, user_id, key_hash, name, hint, created, last_used) VALUES (?, ?, ?, ?, ?, ?, ?)');
+  KEYS.forEach(([id, user, name, perDay], i) =>
+    keys.run(id, user, `demo-hash-${i}`, name, `x${i}k${i}`, nowMs - (20 + i * 9) * DAY, perDay ? nowMs - (i + 1) * 4 * 60_000 : null),
+  );
   const feedback = db._db.prepare(
     'INSERT INTO feedback (id, user_id, created, kind, note, platform, app_version, context, reply_to, reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
   );

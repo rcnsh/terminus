@@ -9,6 +9,8 @@
  * null and the page says how to turn them on. `collect` is the switches for
  * what's collected (collect.ts), `eta` the arrival times scored (eta.ts),
  * `model` the arrival-time model's days in shadow (etashadow.ts).
+ * `apiKeys.list` is every key with its owner's email, for the dashboard
+ * to set beside the requests each made (`analytics.keys`).
  */
 
 import type { Env } from '../types.ts';
@@ -22,6 +24,8 @@ import { etaSummary } from './eta.ts';
 import { shadowSummary } from './etashadow.ts';
 
 const DAY = 86_400_000;
+/** API keys the dashboard lists, most lately used first: five an account, so this is every key for a long while. */
+const KEYS_LISTED = 500;
 
 /** HEALTH_TOKEN itself, or an operator session that hasn't run out. */
 export async function isOperator(env: Env, req: Request, nowMs = Date.now()): Promise<boolean> {
@@ -104,7 +108,7 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
   const d30 = nowMs - 30 * DAY;
   // One pass over each table, and every query in one round trip: the counts read whole tables.
   // SUM of a comparison counts the rows where it's true (NULL counts none).
-  const [u, p, s, k, f, o, dev, cli, sign, fb] = await db.batch([
+  const [u, p, s, k, f, o, dev, cli, sign, fb, kl] = await db.batch([
     db
       .prepare(
         `SELECT COUNT(*) AS total, SUM(created > ?1) AS new7, SUM(created > ?2) AS new30,
@@ -164,6 +168,11 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
       `SELECT f.id, f.created, f.kind, f.reason, f.note, f.platform, f.app_version AS appVersion, f.context, f.reply_to AS replyTo, u.email
          FROM feedback f JOIN users u ON u.id = f.user_id ORDER BY f.created DESC LIMIT 25`,
     ),
+    // Every key and whose it is: the email, or none for an account without one.
+    db.prepare(
+      `SELECT k.id, k.name, k.hint, k.created, k.last_used AS lastUsed, k.user_id AS userId, u.email
+         FROM api_keys k JOIN users u ON u.id = k.user_id ORDER BY k.last_used IS NULL, k.last_used DESC LIMIT ${KEYS_LISTED}`,
+    ),
   ]);
   const row = (r: D1Result) => (r.results?.[0] ?? {}) as Record<string, number | null>;
   const n = (v: number | null | undefined) => v ?? 0;
@@ -195,6 +204,15 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
   const [withTimetable, withHome] = [profiles.withTimetable, profiles.withHome].map(n);
   const [active1, active7, web7] = [sessions.active1, sessions.active7, sessions.web7].map(n);
   const [keys, keysUsed7] = [apiKeys.total, apiKeys.used7].map(n);
+  const keyList = kl.results as Array<{
+    id: string;
+    name: string;
+    hint: string;
+    created: number;
+    lastUsed: number | null;
+    userId: string;
+    email: string | null;
+  }>;
   const fb7 = n(row(f).n);
   const onboarded30 = n(row(o).n);
 
@@ -215,7 +233,15 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
     devices,
     clients,
     signups,
-    apiKeys: { total: keys, used7d: keysUsed7 },
+    apiKeys: {
+      total: keys,
+      used7d: keysUsed7,
+      list: keyList.map((key) => ({
+        ...key,
+        created: new Date(key.created).toISOString(),
+        lastUsed: key.lastUsed === null ? null : new Date(key.lastUsed).toISOString(),
+      })),
+    },
     feedback: {
       last7d: fb7,
       latest: feedback.map((f) => ({
@@ -247,14 +273,15 @@ const CRASH_ROWS = 100;
  *  recorder's polls by what each cost NUS (logPoll), the daily active counts
  *  (usage.ts), the apps' error reports (apperrors.ts), what still uses
  *  something on its way out (legacy.ts), the settings' counts
- *  (settings.ts) and how long /api/me/next took in the last day, from
- *  Analytics Engine's SQL API. */
+ *  (settings.ts), how long /api/me/next took in the last day and the
+ *  requests made with each API key per day (keyuse.ts), from Analytics
+ *  Engine's SQL API. */
 async function analyticsStats(env: Env, fetchImpl: typeof fetch): Promise<Record<string, unknown> | null> {
   if (!env.ANALYTICS_TOKEN || !env.CF_ACCOUNT_ID) return null;
   const sql = (q: string) => aeSql(env, q, fetchImpl);
   const dataset = env.AE_DATASET || 'terminus';
   try {
-    const [dismissed, [daily, quality, errors, timelapse, active, appErrors, appErrorVersions, legacy, settings, nextMs]] =
+    const [dismissed, [daily, quality, errors, timelapse, active, appErrors, appErrorVersions, legacy, settings, nextMs, keyUse]] =
       await Promise.all([
         dismissedCrashes(env),
         Promise.all([
@@ -290,6 +317,11 @@ async function analyticsStats(env: Env, fetchImpl: typeof fetch): Promise<Record
           sql(`SELECT quantileExactWeighted(0.5)(double12, _sample_interval) AS p50,
                   quantileExactWeighted(0.95)(double12, _sample_interval) AS p95, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '1' DAY AND blob1 = 'next'`),
+          // Requests made with each API key (keyuse.ts), per Singapore day, route and whether its limit turned them away;
+          // newest first, so a limit drops the oldest days.
+          sql(`SELECT blob2 AS keyId, ${SG_DAY} AS day, blob3 AS route, blob4 AS outcome, SUM(_sample_interval) AS n FROM ${dataset}
+           WHERE timestamp > NOW() - INTERVAL '15' DAY AND blob1 = 'apikey'
+           GROUP BY keyId, day, route, outcome ORDER BY day DESC LIMIT 10000`),
         ]),
       ]);
     return {
@@ -302,6 +334,7 @@ async function analyticsStats(env: Env, fetchImpl: typeof fetch): Promise<Record
       legacy,
       settings,
       next: nextTook(nextMs),
+      keys: keyUse,
     };
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };
