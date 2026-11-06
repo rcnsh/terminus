@@ -297,6 +297,48 @@ test('a wake whose plan a step made stale pushes nothing from it, and wakes agai
   assert.equal(alarm(), Date.now() + 30_000, 'it wakes again after the shortest gap');
 });
 
+test('a wake made stale is logged as pushing nothing, and keeps the leave-by the wake before it saw', async () => {
+  const ae = makeAnalytics();
+  const feed = heldFeed();
+  const { call, phone, next, TRIPS, clock } = await setup({ wrap: feed.wrap, ae });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  const first = await next(phone);
+  const key = first.card.step?.trip;
+  const to = first.card.step?.later;
+  assert.ok(key && to, 'the card offers a later bus');
+  const storage = () => [...TRIPS.instances.values()][0].storage._map;
+
+  // A wake that sees the leave-by.
+  clock(Date.parse(first.leave.at) - 4 * 60_000);
+  storage().set('wakeAt', Date.now());
+  await TRIPS.fireAlarms();
+  const seen = storage().get('lastWake');
+  assert.ok(seen.leaveAt, 'the wake saw a leave-by');
+  assert.equal(ae.rows('tripwake').length, 1);
+
+  // The next one goes stale: "Later bus" while it waits for the feed.
+  clock(Date.now() + 40_000);
+  storage().set('wakeAt', Date.now());
+  feed.hold();
+  const woke = TRIPS.fireAlarms();
+  await feed.asked('the wake');
+  await TRIPS.get([...TRIPS.instances.keys()][0]).fetch('https://trip/update', {
+    method: 'POST',
+    body: JSON.stringify({ date: sgtDate(Date.now()), steps: { [key]: to }, deleteAt: endOfDayMs(Date.now()) }),
+  });
+  feed.release();
+  await woke;
+
+  assert.deepEqual(storage().get('lastWake'), { at: Date.now(), leaveAt: seen.leaveAt }, 'the leave-by last seen stays');
+  const rows = ae.rows('tripwake');
+  assert.equal(rows.length, 2, 'the stale wake is logged');
+  assert.equal(rows[1].blobs[1], 'same', 'as pushing nothing');
+  assert.deepEqual(rows[1].blobs.slice(4), ['again']);
+  const [gapS, , leaveShiftS] = rows[1].doubles;
+  assert.equal(gapS, 40, 'the gap since the wake before');
+  assert.equal(leaveShiftS, 0);
+});
+
 test('a step made while the Trip object wakes, with its plan already saved, stops the wake pushing the old bus', async () => {
   const feed = heldFeed();
   const { call, phone, next, fcm, TRIPS, clock, alarm } = await setup({ wrap: feed.wrap });

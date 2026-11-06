@@ -342,9 +342,27 @@ export class Trip {
       const stored = today(await this.storedDay(), date);
       stale = [...keys].some((k) => tripRev(stored, k) !== expected(k));
     }
+    const prev = (await this.storage.get<LastWake>('lastWake')) ?? null;
+    const before = prev && sgtDate(prev.at) === date ? prev : null;
+    const log = (changed: boolean, phase: string, quality: string, leaveAt: number | null) =>
+      logTripWake(env, {
+        changed,
+        phase,
+        quality,
+        first: !before,
+        gapS: before ? Math.round((nowMs - before.at) / 1000) : 0,
+        feedAgeS: read.length ? Math.max(0, Math.round((nowMs - Math.min(...read)) / 1000)) : -1,
+        leaveShiftS: before?.leaveAt != null && leaveAt !== null ? Math.round((leaveAt - before.leaveAt) / 1000) : 0,
+        lateS: Math.max(0, Math.round((nowMs - askedAt) / 1000)),
+      });
     // Pushing it would tell the phones about the bus the user just stepped
     // off (or a trip already signalled): wake again soon, from the new day.
-    if (stale) return { next: nowMs + MIN_WAKE_GAP_MS, seen: { at: nowMs, leaveAt: null } };
+    // Logged as a wake that pushed nothing, keeping the leave-by last seen:
+    // this card's is from the day that's gone, and the next wake's shift is from that one.
+    if (stale) {
+      if (card) log(false, card.phase, card.quality, null);
+      return { next: nowMs + MIN_WAKE_GAP_MS, seen: { at: nowMs, leaveAt: before?.leaveAt ?? null } };
+    }
     const last = (await this.storage.get<Pushed>('pushed')) ?? null;
     const apns = apnsEnabled(env) && audience.lives > 0;
     if (!card) {
@@ -465,18 +483,7 @@ export class Trip {
     // The trip is over but its end didn't go: with no next change to wake
     // for, the wake is tried again, as a failed one is.
     if (unsent && !card.key) throw new Error('trip end not sent');
-    const prev = (await this.storage.get<LastWake>('lastWake')) ?? null;
-    const before = prev && sgtDate(prev.at) === date ? prev : null;
-    logTripWake(env, {
-      changed,
-      phase: now.phase,
-      quality: card.quality,
-      first: !before,
-      gapS: before ? Math.round((nowMs - before.at) / 1000) : 0,
-      feedAgeS: read.length ? Math.max(0, Math.round((nowMs - Math.min(...read)) / 1000)) : -1,
-      leaveShiftS: before?.leaveAt != null && card.leaveAt !== null ? Math.round((card.leaveAt - before.leaveAt) / 1000) : 0,
-      lateS: Math.max(0, Math.round((nowMs - askedAt) / 1000)),
-    });
+    log(changed, now.phase, card.quality, card.leaveAt);
     const seen = { at: nowMs, leaveAt: card.leaveAt };
     // Keep waking while there's a trip and someone to tell.
     // A leave-by that keeps sliding (a late bus) mustn't wake it every few seconds.
