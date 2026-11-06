@@ -87,3 +87,36 @@ test('with no live times, the card and the leave-by read one window: the card it
   assert.equal(hhmmss(Date.parse(l.board)), '22:46:20');
   assert.equal(hhmmss(Date.parse(l.arrive) - rideS * 1000), '23:00:00', 'counted on the end, not a headway past the close');
 });
+
+test('before the service starts, the first bus is due within a headway of the start, and the leave-by follows on from it', () => {
+  // D2 starts at 07:15 on a weekday, every 430 s at 07:00; the feed lists nothing yet.
+  const now = at('2026-08-27T06:30');
+  const sa = board('PGP', now, 'D2', []);
+  const chain = departuresFrom(GRAPH, sa, 'D2', { now, from: now + 80_000 });
+  assert.deepEqual([hhmmss(chain[0].earliest), hhmmss(chain[0].latest), chain[0].opens], ['07:15:00', '07:22:10', true]);
+
+  // Reaching the stop after it starts: what's left of that first window, not a headway from when you get there.
+  const late = at('2026-08-27T07:10');
+  const s = scoreLeg(GRAPH, leg, board('PGP', late, 'D2', []), late, 600, { openBy: at('2026-08-27T08:00') });
+  assert.equal(hhmmss(late + s.boardS * 1000), '07:21:05');
+
+  // An 08:00 class: the last of those windows that ends by the latest you can board.
+  const rideS = 600;
+  const latestBoard = at('2026-08-27T07:50');
+  const arriveBy = { atMs: latestBoard + (ON_TIME_SLACK_S + rideS) * 1000, venueWalkS: 0 };
+  const option = { svc: 'D2', stop: PGP, walkS: 60, rideS, boardS: 0, totalS: 0, fromMs: now, quality: 'scheduled', hops: 5 };
+  const l = leaveBy({
+    options: [option],
+    candidates: [],
+    byStop: new Map([['PGP', sa]]),
+    graph: GRAPH,
+    arriveBy,
+    walkAllS: null,
+    nowMs: now,
+  });
+  const want = chain.filter((d) => d.latest <= latestBoard).at(-1);
+  assert.deepEqual(
+    [l.board, l.arrive],
+    [new Date(want.earliest).toISOString().replace('.000', ''), new Date(want.latest + rideS * 1000).toISOString().replace('.000', '')],
+  );
+});

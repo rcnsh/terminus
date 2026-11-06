@@ -1020,32 +1020,21 @@ export function scoreLeg(
   // Waiting for the service to start, which you can do wherever you are.
   let opensInS = 0;
   const running = inService(graph, leg.svc, nowMs);
-  const middle = (d: Departure) => sOf((d.earliest + d.latest) / 2);
 
-  // The first bus you can physically reach, not the first bus listed.
-  let d = nextDeparture(graph, sa, leg.svc, fromMs, nowMs);
-  let boardS: number;
-  if (d?.arrival) {
-    boardS = sOf(d.earliest);
-  } else if (!running) {
-    // The published hours are ours, not the feed's, so this holds even
-    // when we have no data at all, or only buses you can't reach.
-    const opens = opts.openBy !== undefined ? serviceResumesAt(graph, leg.svc, nowMs) : null;
-    if (opens === null || opens > opts.openBy!) return null; // ended, or not started in time
-    // It starts before you need it: a bus somewhere in the headway after
-    // it does, or after you reach the stop, whichever is later.
-    opensInS = Math.max(0, sOf(opens) - earliest);
-    d = nextDeparture(graph, undefined, leg.svc, Math.max(fromMs, opens), nowMs);
-    if (!d) return null;
-    boardS = middle(d);
-  } else {
-    // Past the feed's list, a guess, the middle of its window: half a
-    // headway's wait. None once the service has closed: the feed still
-    // lists its last buses, and there's no bus after them; nor when you'd
-    // reach the stop after the last bus.
-    if (!d || d.opens) return null;
-    boardS = middle(d);
+  // The first bus you can physically reach, not the first bus listed; past
+  // the feed's list, a guess. None once the service has closed: the feed
+  // still lists its last buses, and there's no bus after them.
+  const d = nextDeparture(graph, sa, leg.svc, fromMs, nowMs);
+  if (!d) return null;
+  if (d.opens) {
+    // It waits for the service to start, which only a class can do
+    // (`openBy`), and only when it starts in time. Running now, the next
+    // start is tomorrow's: you'd reach the stop after the last bus.
+    if (running || opts.openBy === undefined || d.earliest > opts.openBy) return null;
+    opensInS = Math.max(0, sOf(d.earliest) - earliest);
   }
+  // A guess with nothing to step from is the middle of its window: half a headway's wait.
+  const boardS = sOf((d.earliest + d.latest) / 2);
   // A time from the operator's timetable (a public bus not yet on the
   // road) is an estimate, however exact it looks. Unreached: keep the
   // option -- the graph still says this service goes where you are going

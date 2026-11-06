@@ -39,7 +39,7 @@ export interface Departure {
   latest: number;
   /** The feed's row, for a time from the feed. */
   arrival?: Arrival;
-  /** The first bus after the service starts: you wait for it to start. */
+  /** The first bus after the service starts again: before it, you wait for the start. */
   opens?: true;
 }
 
@@ -103,25 +103,25 @@ export function departuresFrom(graph: Graph, board: StopArrivals | undefined, sv
     if (b.at >= w.from && b.at <= until) out.push({ id: b.id, kind: b.kind, earliest: b.at, latest: b.at, arrival: b.arrival });
   }
 
+  // Past the last live time, one headway at a time while the service
+  // runs: a bus a headway after the one before it, an instant as the live
+  // times are. One due after the close is no bus: that was the last.
   const last = live.at(-1);
-  if (last) {
-    // Past the last live time, one headway at a time while the service
-    // runs: a bus a headway after the one before it, an instant as the
-    // live times are. One due after the close is no bus: that was the last.
-    for (let n = 1, t = last.at + headwayAt(last.at); out.length < max && t <= until && t <= last.at + PROJECT_MS; n++) {
-      if (!runs(t)) break;
-      if (t >= w.from) out.push({ id: `${last.id}+${n}`, kind: 'estimate', earliest: t, latest: t });
-      t += headwayAt(t);
-    }
-    return out;
+  let t = last ? last.at + headwayAt(last.at) : w.from;
+  for (let n = 1; last && out.length < max && t <= until && runs(t); n++) {
+    if (t > last.at + PROJECT_MS) return out;
+    if (t >= w.from) out.push({ id: `${last.id}+${n}`, kind: 'estimate', earliest: t, latest: t });
+    t += headwayAt(t);
   }
 
-  // No live times: a bus somewhere in the headway after you can be at the
-  // stop, the next in the headway after that, and so on. Around a bus
-  // already chosen, the windows meet at it, so it stays among them as the
-  // clock moves on: back from it a headway at a time to `from`.
+  // With nothing to step from: a bus somewhere in the headway from when
+  // you can be at the stop, the next in the headway after that, and so
+  // on. Around a bus already chosen, the windows meet at it, so it stays
+  // among them as the clock moves on: back from it a headway at a time to
+  // `from`. Before the service starts, or after it has stopped for the
+  // day, the first bus is due within a headway of the next start.
   let fixed: number[] = [];
-  if (w.around !== undefined) {
+  if (!last && w.around !== undefined) {
     let b = w.around;
     // Closed by then, after running: the windows meet at the close, so the
     // last one before it is a whole headway, and a bus sure to come.
@@ -134,18 +134,18 @@ export function departuresFrom(graph: Graph, board: StopArrivals | undefined, sv
       while (b < w.from) b += headwayAt(b);
       fixed = [b];
     }
+    t = fixed[0];
   }
   let anchor = fixed.length ? 'around' : 'reach';
-  let t = fixed.length ? fixed[0] : w.from;
+  let opens = false;
+  // Not started yet, and starting before you get there: from its start.
+  const starts = last || runs(w.now) ? null : serviceResumesAt(graph, svc, w.now);
+  if (starts !== null && starts <= t) [t, fixed, anchor, opens] = [starts, [], 'opens', true];
   for (let n = 1, i = 0; out.length < max && t <= until; n++, i++) {
-    let opens = false;
     if (!runs(t)) {
       const s = serviceResumesAt(graph, svc, t);
       if (s === null || s > t + PROJECT_MS || s > until) break;
-      // Around a chosen bus, the window it opens in starts with the service.
-      fixed = [s, ...fixed.filter((f) => f > s)];
-      [t, opens, i] = [s, true, 0];
-      if (fixed.length === 1) [fixed, anchor, n] = [[], 'opens', 1];
+      [t, fixed, anchor, opens, n, i] = [s, [], 'opens', true, 1, 0];
     }
     // A bus may still come before the service closes, not after.
     const closes = serviceEndsAt(graph, svc, t);
@@ -159,6 +159,7 @@ export function departuresFrom(graph: Graph, board: StopArrivals | undefined, sv
         ...(opens ? { opens: true as const } : {}),
       });
     }
+    opens = false;
     t = end;
   }
   return out;

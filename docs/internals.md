@@ -1479,10 +1479,11 @@ close, since a bus may still come before it. The card shows the window's
 middle (half a headway's wait) and the leave-by counts on its end (a whole
 headway), so the two read the same guess. For a class the windows end at
 the latest you can board, or meet at the close when the class is after it:
-the last bus before the close is a headway before it. For a class,
-a service that starts before the class is kept, its first bus a headway after
-it starts: at 06:30 the 08:00 class's bus is the D2 from 07:15, not
-"Services ended". The wait for it to start doesn't count against it when
+the last bus before the close is a headway before it. Before the service
+starts, or after it has stopped for the day, the first bus is due within a
+headway of the start, and the windows run on from it. For a class, a
+service that starts before the class is kept: at 06:30 the 08:00 class's
+bus is one of the D2's from 07:15, not "Services ended". The wait for it to start doesn't count against it when
 walking is weighed. With no live times and too late for the usual bus, the
 leave-by boards when you can be at the stop, and counts on a bus by the end
 of that headway, or by the close.
