@@ -14,7 +14,7 @@ import { TIMELAPSE } from '../src/config.ts';
 import { pollInterval, serviceDate, windowOf } from '../src/map/timelapse.ts';
 import { pointAlong } from '../src/map/buses.ts';
 import { shapeFor } from '../src/map/campus.ts';
-import { inService } from '../src/answer/resolve.ts';
+import { inService } from '../src/answer/hours.ts';
 import { GRAPH } from '../src/answer/graph.ts';
 
 const sgt = (date, hhmm) => Date.parse(`${date}T${hhmm}:00+08:00`);

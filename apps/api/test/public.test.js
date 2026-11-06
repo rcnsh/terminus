@@ -11,17 +11,9 @@ import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
 import { GRAPH, GRAPH_PUBLIC } from '../src/answer/graph.ts';
 import { isPublic, publicCodeOf, rideMetres, shuttleCalls, svcName } from '../src/answer/public.ts';
-import {
-  boardAt,
-  candidateStops,
-  feedFor,
-  headwayFor,
-  inService,
-  indexGraph,
-  legRideS,
-  reach,
-  scoreOptions,
-} from '../src/answer/resolve.ts';
+import { boardAt, candidateStops, indexGraph, legRideS, reach, scoreOptions } from '../src/answer/resolve.ts';
+import { headwayFor, inService } from '../src/answer/hours.ts';
+import { feedFor } from '../src/answer/departures.ts';
 import { collectArrivals, mergeFeeds } from '../src/answer/answer.ts';
 import { planOfLeave } from '../src/answer/plan.ts';
 import { leaveOf } from '../src/answer/trip.ts';

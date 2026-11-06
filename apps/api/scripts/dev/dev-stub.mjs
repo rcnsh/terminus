@@ -221,7 +221,7 @@ const edgeCache = installGlobals(feed);
 Date.now = stubNow; // installGlobals freezes the clock for tests; the dev server wants real time.
 
 const { default: worker, GRAPH } = await import('../../src/index.ts');
-const { inService } = await import('../../src/answer/resolve.ts');
+const { inService } = await import('../../src/answer/hours.ts');
 const serviceHours = GRAPH.serviceHours;
 // The real hours, or every service "running" whatever the hour (POST /__stub/hours?real=1|0).
 const realHours = (on) => {

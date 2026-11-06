@@ -26,7 +26,9 @@ import {
   upcomingClass,
 } from '../timetable/profile.ts';
 import { type TimetableClass, venueAt, venueStops, venueToStop } from '../timetable/nusmods.ts';
-import { feedFor, indexGraph, serviceEndsAt } from './resolve.ts';
+import { indexGraph } from './resolve.ts';
+import { serviceEndsAt } from './hours.ts';
+import { feedFor } from './departures.ts';
 import { GRAPH, GRAPH_PUBLIC } from './graph.ts';
 import { haversineM } from '../geo.ts';
 import { clockAt, clockMin, slackText } from '../clock.ts';

@@ -16,7 +16,7 @@ import { scopeCache } from '../feeds/edgecache.ts';
 import { GRAPH } from '../answer/graph.ts';
 import { breakerOpen, getBuses } from '../feeds/fms.ts';
 import { placeBuses, type Track } from './buses.ts';
-import { inService } from '../answer/resolve.ts';
+import { inService } from '../answer/hours.ts';
 import { logPoll } from '../ops/analytics.ts';
 import { loadCalendar } from '../timetable/calendarsync.ts';
 import {

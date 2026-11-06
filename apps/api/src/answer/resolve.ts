@@ -11,13 +11,10 @@
  * the same unit (seconds) so the trade-off is legible.
  */
 
-import { termDay } from '../timetable/calendar.ts';
 import type {
   Arrival,
   Candidate,
   Crowd,
-  DayKind,
-  FeedState,
   Graph,
   GraphIndex,
   Leg,
@@ -25,11 +22,10 @@ import type {
   ResolveInput,
   RouteIndex,
   ScoredOption,
-  ServiceHours,
   Stop,
   StopArrivals,
 } from '../types.ts';
-import { DEFAULT_HEADWAY_S, PUBLIC, RIDE, TRANSFER, WALK, isMeasured, sgt } from '../config.ts';
+import { PUBLIC, RIDE, TRANSFER, WALK, isMeasured } from '../config.ts';
 import type { TransferRoute } from './transfer.ts';
 import { ROUTE_COLORS } from '../map/campus.ts';
 import { haversineM } from '../geo.ts';
@@ -38,6 +34,8 @@ import { buildingStops, footM, stopFootM } from './walk.ts';
 import { footS, mins } from './format.ts';
 import { listOf, m } from '../i18n.ts';
 import { viaFrom } from './via.ts';
+import { type Departure, type ServiceBoard, nextDeparture, serviceBoard } from './departures.ts';
+import { type StoppedReason, headwayFor, inService, serviceEndsAt, serviceResumesAt, stoppedReason } from './hours.ts';
 import { type HomeWalk, atHome, residenceStops } from './residences.ts';
 
 export { haversineM };
@@ -365,274 +363,6 @@ export function candidateStops(graph: Graph, input: ResolveInput, opts: { any?: 
   return useful.length ? useful : out.slice(0, 1);
 }
 
-/** Minutes past midnight, or null if this is not an HH:MM string. */
-export function hhmmToMin(v: unknown): number | null {
-  if (typeof v !== 'string') return null;
-  const m = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(v.trim());
-  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
-}
-
-/**
- * Merge hand-maintained hours over whatever the scraper produced.
- *
- * Only well-formed entries win, so a half-filled template cannot clobber real
- * data with `["", ""]`.
- */
-export function mergeServiceHours(
-  base: Record<string, ServiceHours> | undefined,
-  hand: Record<string, unknown> | undefined,
-): Record<string, ServiceHours> {
-  const out: Record<string, ServiceHours> = { ...base };
-  for (const [svc, value] of Object.entries(hand ?? {})) {
-    if (svc.startsWith('_') || !value || typeof value !== 'object') continue;
-    const src = value as Record<string, unknown>;
-    const merged: ServiceHours = { ...out[svc] };
-    let touched = false;
-    for (const day of ['weekday', 'saturday', 'sunday'] as const) {
-      if (!(day in src)) continue;
-      const win = src[day];
-      // [null, null] is how the file says it too: closed at both ends.
-      if (win === null || (Array.isArray(win) && win.length === 2 && win[0] === null && win[1] === null)) {
-        merged[day] = null; // an explicit "does not run"
-        touched = true;
-      } else if (Array.isArray(win) && hhmmToMin(win[0]) !== null && hhmmToMin(win[1]) !== null) {
-        merged[day] = [String(win[0]), String(win[1])];
-        touched = true;
-      }
-      // Anything else -- ["", ""], a typo, a number -- is left unset, which
-      // reads downstream as "hours unknown, assume running".
-    }
-    if (touched) out[svc] = merged;
-  }
-  return out;
-}
-
-/** The timetable the SGT day `ms` falls on runs: Sunday's on public holidays. */
-export function dayKindOf(ms: number): DayKind {
-  return kindOn(sgt(ms).day, termDay(ms).holiday);
-}
-
-function kindOn(day: number, holiday: string | null): DayKind {
-  // NUS runs the Sunday timetable on public holidays. Without this a holiday
-  // morning gets a headway guess for services that are not running.
-  if (day === 0 || holiday !== null) return 'sunday';
-  return day === 6 ? 'saturday' : 'weekday';
-}
-
-/** The window `hours` gives the SGT day `ms` falls on: Sunday hours on public holidays. */
-function windowOn(hours: ServiceHours, ms: number): ServiceHours['weekday'] | undefined {
-  return hours[dayKindOf(ms)];
-}
-
-/** A window's open and close in minutes, or null when it isn't a usable window. */
-function parseWindow(win: ServiceHours['weekday'] | undefined): { open: number; close: number } | null {
-  if (!win) return null;
-  const open = hhmmToMin(win[0]);
-  const close = hhmmToMin(win[1]);
-  return open === null || close === null ? null : { open, close };
-}
-
-/**
- * Minutes into today that yesterday's window still runs, when it crosses
- * midnight (Fri 07:00 -> 01:00 runs until 01:00 on Saturday). 0 otherwise.
- */
-function yesterdayRunsUntil(hours: ServiceHours, nowMs: number): number {
-  const y = parseWindow(windowOn(hours, nowMs - 86_400_000));
-  return y && y.close < y.open ? y.close : 0;
-}
-
-/** Is `svc` inside its published operating window right now (SGT)? */
-export function inService(graph: Graph, svc: string, nowMs: number): boolean {
-  const hours: ServiceHours | undefined = graph.serviceHours?.[svc];
-  if (!hours) return true; // unknown hours: assume running, let the feed decide
-  const { minutes } = sgt(nowMs);
-  // Just past midnight: still yesterday's service, by yesterday's hours.
-  if (minutes < yesterdayRunsUntil(hours, nowMs)) return true;
-  const win = windowOn(hours, nowMs);
-  if (win === null) return false; // explicitly does not run today
-  if (!win) return true; // hours unknown: assume running, let the feed decide
-  const w = parseWindow(win);
-  // An unparseable window is unknown, NOT "ended all day". Getting this
-  // backwards would turn a half-filled template into a Worker that reports no
-  // buses ever, which is a far worse failure than reporting them at 3am.
-  if (!w) return true;
-  // A window that crosses midnight runs from its open to the end of today;
-  // the rest belongs to tomorrow (above).
-  return w.close >= w.open ? minutes >= w.open && minutes < w.close : minutes >= w.open;
-}
-
-/**
- * When `svc` stops running (SGT), epoch ms: the close of the window it's in
- * now. Null when the hours are unknown or it isn't running now. A window
- * that crosses midnight closes tomorrow.
- */
-export function serviceEndsAt(graph: Graph, svc: string, nowMs: number): number | null {
-  if (!inService(graph, svc, nowMs)) return null;
-  const hours: ServiceHours | undefined = graph.serviceHours?.[svc];
-  if (!hours) return null;
-  const { minutes } = sgt(nowMs);
-  const midnight = nowMs - (minutes * 60_000 + (nowMs % 60_000));
-  const tail = yesterdayRunsUntil(hours, nowMs);
-  if (minutes < tail) return midnight + tail * 60_000;
-  const w = parseWindow(windowOn(hours, nowMs));
-  if (!w) return null;
-  return midnight + ((w.close >= w.open ? 0 : 1440) + w.close) * 60_000;
-}
-
-/**
- * When `svc` last stopped running at or before `ms` (SGT), epoch ms: the
- * close of the most recent window ending by then, today's or yesterday's.
- * Null when the hours are unknown, or neither day has a window closing by `ms`.
- */
-export function serviceClosedAt(graph: Graph, svc: string, ms: number): number | null {
-  const hours = graph.serviceHours?.[svc];
-  if (!hours) return null;
-  const { minutes } = sgt(ms);
-  const midnight = ms - (minutes * 60_000 + (ms % 60_000));
-  for (let d = 0; d <= 1; d++) {
-    const day = midnight - d * 86_400_000;
-    const w = parseWindow(windowOn(hours, day));
-    if (!w) continue;
-    const close = day + ((w.close >= w.open ? 0 : 1440) + w.close) * 60_000;
-    if (close <= ms) return close;
-  }
-  return null;
-}
-
-/** Why a service isn't running now: it has finished for today, it starts
- *  later today, or it doesn't run today at all. */
-export type StoppedReason = 'ended' | 'notYet' | 'noService';
-
-/** How far ahead serviceResumesAt looks: past a week, so a service off for a weekend and a holiday still has a next start. */
-const RESUME_DAYS = 8;
-
-/**
- * Why `svc` isn't running now (SGT), or null when it is, by inService's
- * rules: unknown hours count as running, Sunday hours on public holidays.
- */
-export function stoppedReason(graph: Graph, svc: string, nowMs: number): StoppedReason | null {
-  if (inService(graph, svc, nowMs)) return null;
-  const hours = graph.serviceHours?.[svc];
-  const w = hours ? parseWindow(windowOn(hours, nowMs)) : null;
-  if (!w) return 'noService';
-  return sgt(nowMs).minutes < w.open ? 'notYet' : 'ended';
-}
-
-/**
- * When `svc` next starts running (SGT), epoch ms: the first opening after
- * now, today or up to RESUME_DAYS ahead, by each day's hours (Sunday's on a
- * public holiday). Null when the hours are unknown or none open in that time.
- */
-export function serviceResumesAt(graph: Graph, svc: string, nowMs: number): number | null {
-  const hours = graph.serviceHours?.[svc];
-  if (!hours) return null;
-  const { minutes } = sgt(nowMs);
-  const midnight = nowMs - (minutes * 60_000 + (nowMs % 60_000));
-  for (let d = 0; d <= RESUME_DAYS; d++) {
-    const day = midnight + d * 86_400_000;
-    const w = parseWindow(windowOn(hours, day));
-    if (w && day + w.open * 60_000 > nowMs) return day + w.open * 60_000;
-  }
-  return null;
-}
-
-/**
- * How close to its time a feed time for a service that hasn't opened yet is
- * believed. Outside its hours NUS's feed still lists times hours ahead that
- * don't match the published start (an A2 at 09:16, when its hours start at
- * 07:15); this close, it is the first buses getting ready.
- */
-export const FIRST_BUS_LEAD_S = 30 * 60;
-
-/**
- * `svc`'s feed times as they can be believed (times from `fetchedAt`).
- * Outside its hours, a time at or after the service next opens is no bus on
- * the road: dropped, or kept as a timetable time when it is within
- * FIRST_BUS_LEAD_S of now. A time before the opening is a bus still out from
- * the day that just ended, and stays as it is.
- */
-export function beforeOpening(graph: Graph, svc: string, rows: Arrival[], fetchedAt: number, nowMs: number): Arrival[] {
-  if (!rows.length || inService(graph, svc, nowMs)) return rows;
-  const opens = serviceResumesAt(graph, svc, nowMs);
-  if (opens === null) return rows;
-  const out: Arrival[] = [];
-  for (const a of rows) {
-    const at = a.etaS == null ? null : fetchedAt + a.etaS * 1000;
-    if (at === null || at < opens) out.push(a);
-    else if (at - nowMs <= FIRST_BUS_LEAD_S * 1000) out.push({ ...a, scheduled: true });
-  }
-  return out;
-}
-
-/**
- * Pick the boardable rows when one service reports under several berths.
- *
- * Returns everything unchanged for the ordinary single-berth stop. When the
- * suffix cannot tell the berths apart, says so instead of guessing: that is
- * the one case where the earliest ETA might be a bus going the wrong way.
- */
-export function resolveBerths(rows: Arrival[]): { usable: Arrival[]; ambiguousBerth: boolean } {
-  // Drop the run that TERMINATES here rather than preferring the one marked
-  // -S: route P starts at a bare `KV` and ends at `KV-P-E`, so a start suffix
-  // is not guaranteed but an end suffix is what makes a row unboardable.
-  const notEnding = rows.filter((a) => !a.ends);
-
-  // Every run terminates here and none departs. Show them, but do not pretend
-  // to be confident about a bus that ends its journey as you reach it.
-  if (!notEnding.length) return { usable: rows, ambiguousBerth: rows.length > 0 };
-
-  const distinct = new Set(notEnding.map((a) => a.berth).filter((b) => b != null));
-  return { usable: notEnding, ambiguousBerth: distinct.size > 1 };
-}
-
-/**
- * The gap between `svc`'s buses, s: the headway a guess counts in. At
- * `atMs`, the measured one for that hour, day kind and period
- * (data/headways.json), else the nearest hour measured that day, else the
- * service's usual one. In a period nothing was recorded in (the vacation
- * runs its own timetable), or past the calendar, never shorter than
- * DEFAULT_HEADWAY_S or term time's: too short a headway tells someone to
- * leave too late. Without a time (a route's cost before any fetch), the
- * usual one.
- */
-export function headwayFor(graph: Graph, svc: string, atMs?: number): number {
-  const usual = graph.headwayS?.[svc] ?? DEFAULT_HEADWAY_S;
-  const byTime = atMs === undefined ? undefined : graph.headwaysByTime?.[svc];
-  if (!byTime || atMs === undefined) return usual;
-  const { kind, holiday } = termDay(atMs);
-  const period = kind === 'unknown' ? undefined : byTime[kind === 'vacation' ? 'vacation' : 'term'];
-  if (!period) return Math.max(DEFAULT_HEADWAY_S, usual);
-  const { day, hour } = sgt(atMs);
-  const measured = period[kindOn(day, holiday)];
-  return measured ? nearestHour(measured, hour) : usual;
-}
-
-/**
- * That hour's headway, or the nearest hour's: the hours too quiet to measure
- * are the early and late ones, which run like their neighbours, not like the
- * day's median. On a tie, the longer.
- */
-function nearestHour(day: { all: number; hours: Record<string, number> }, hour: number): number {
-  let best = day.all;
-  let dist = Infinity;
-  for (const [h, s] of Object.entries(day.hours)) {
-    const d = Math.abs(Number(h) - hour);
-    if (d < dist || (d === dist && s > best)) [best, dist] = [s, d];
-  }
-  return best;
-}
-
-/**
- * The state of the feed a service's arrivals came from. A shelter both the
- * shuttle and public buses call at was asked of two feeds, and one can be
- * down or stale while the other answers; a stop asked of one feed is that
- * feed's state. Undefined when the stop was never asked.
- */
-export function feedFor(sa: StopArrivals | undefined, pub: boolean): FeedState | undefined {
-  if (!sa) return undefined;
-  return sa.feeds?.[pub ? 'public' : 'shuttle'] ?? sa;
-}
-
 export interface BoardRow {
   /** What's on the bus ("D2", "151"). */
   svc: string;
@@ -699,20 +429,21 @@ export const NEARBY_LATER = 2;
  * weigh the walk to the stop.
  *
  * The shuttle feed gives two buses a service; where it gives fewer than
- * Nearby's three, the rest are guessed a headway apart after the last one,
- * as the answer guesses past the feed's list, and marked `scheduled`, never
- * live. Only while the service's hours are known and it's inside them, and not
- * past its last bus; not for a public bus, whose
- * own timetable LTA gives.
+ * Nearby's three, the rest are the service's estimated departures after
+ * the last one (`guessed`, departures.ts, which keeps them to the
+ * service's hours), marked `scheduled`, never live. Not for a public bus,
+ * whose own timetable LTA gives.
  */
-export function nearbyRow(r: BoardRow, nowMs: number, headwayS = 0): NearbyRow {
+export function nearbyRow(r: BoardRow, nowMs: number, guessed: Departure[] = []): NearbyRow {
   const at = (etaS: number) => new Date(Math.round((nowMs + etaS * 1000) / 60_000) * 60_000).toISOString().replace('.000Z', 'Z');
   const later = [...r.later];
-  const endsMs = r.endsAt ? Date.parse(r.endsAt) : null;
-  if (r.running && r.etaS != null && !r.paid && headwayS > 0 && endsMs !== null) {
-    while (later.length < NEARBY_LATER) {
-      const etaS = (later.at(-1)?.etaS ?? r.etaS) + headwayS;
-      if (nowMs + etaS * 1000 > endsMs) break;
+  if (r.running && r.etaS != null && !r.paid) {
+    for (const d of guessed) {
+      if (later.length >= NEARBY_LATER) break;
+      if (d.kind !== 'estimate' || d.arrival) continue;
+      // Past its last bus, the next are when it starts again: not "then".
+      if (d.opens) break;
+      const etaS = Math.round((d.earliest - nowMs) / 1000);
       later.push({ etaS, quality: 'scheduled', eta: etaText(etaS, 'scheduled') });
     }
   }
@@ -847,6 +578,10 @@ export function boardAsOf(sas: (StopArrivals | undefined)[], nowMs: number): num
  * with `stopped`, listed after the others as not running, with why and when
  * it starts again. One the feed still gives a time for is running: the feed
  * is what's on the road, the hours only a guide.
+ *
+ * `boards`, when given, gets each service's board as read here, by the
+ * graph's service, so a caller asking more of it (Nearby's guessed buses)
+ * doesn't read the feed's rows again.
  */
 export function boardAt(
   graph: Graph,
@@ -854,24 +589,23 @@ export function boardAt(
   stopCode: string,
   sa: StopArrivals | undefined,
   nowMs: number,
-  opts: { stopped?: boolean } = {},
+  opts: { stopped?: boolean; boards?: Map<string, ServiceBoard> } = {},
 ): BoardRow[] {
   const services = idx.servingStop.get(stopCode) ?? [];
   const out: BoardRow[] = [];
 
   for (const svc of services) {
-    const pub = isPublic(graph, svc);
-    const feed = feedFor(sa, pub);
-    const available = feed !== undefined && feed.available !== false && !sa?.unread?.includes(svc);
-    const forSvc = (sa?.arrivals ?? []).filter((a) => a.svc === svc);
-    const { usable, ambiguousBerth } = resolveBerths(forSvc);
+    const sb = serviceBoard(graph, sa, svc, nowMs);
+    opts.boards?.set(svc, sb);
+    const { paid: pub, available, ambiguousBerth, stale, fetchedAt, live } = sb;
     // The feed's times count from its fetch, and a cached or stale answer is
     // that much older: counted from now, as scoreOptions does, and a bus
     // whose time is well past is gone, not "now".
-    const ageS = feed && available ? Math.max(0, (nowMs - feed.fetchedAt) / 1000) : 0;
-    const etas = beforeOpening(graph, svc, usable, feed?.fetchedAt ?? nowMs, nowMs)
-      .filter((a) => a.etaS != null && (a.etaS as number) - ageS >= -BOARD_GONE_S)
-      .map((a) => ({ ...a, etaS: Math.max(0, Math.round((a.etaS as number) - ageS)) }))
+    const ageS = fetchedAt !== undefined && available ? Math.max(0, (nowMs - fetchedAt) / 1000) : 0;
+    const etas = live
+      .map((b) => b.arrival as Arrival & { etaS: number })
+      .filter((a) => a.etaS - ageS >= -BOARD_GONE_S)
+      .map((a) => ({ ...a, etaS: Math.max(0, Math.round(a.etaS - ageS)) }))
       .sort((a, b) => a.etaS - b.etaS);
 
     let quality: Quality;
@@ -909,7 +643,7 @@ export function boardAt(
       quality = 'scheduled';
     }
     // Only a real arrival goes stale; a guess stays a guess.
-    const aged = (q: Quality): Quality => (feed?.stale && q === 'live' ? 'stale' : q);
+    const aged = (q: Quality): Quality => (stale && q === 'live' ? 'stale' : q);
     quality = aged(quality);
     // Each later bus keeps its own quality: a timetabled one after a live one stays a guess.
     const later = etas.slice(1).map((a) => {
@@ -967,6 +701,8 @@ export interface ScoredLeg {
   rideS: number;
   quality: Quality;
   arrival: Arrival | null;
+  /** Which departure it is (departures.ts `id`). */
+  bus: string;
   fetchedAt: number;
   /** Of `boardS`, the wait for the service to start; 0 when it's running. */
   opensInS: number;
@@ -994,96 +730,64 @@ export function scoreLeg(
   earliestS: number,
   opts: { openBy?: number } = {},
 ): ScoredLeg | null {
-  const forSvc = (sa?.arrivals ?? []).filter((a) => a.svc === leg.svc);
-
-  // At a terminus the feed splits one service into two berths: COM3-D2-S
-  // is the run STARTING here, COM3-D2-E is a run ENDING here. Only the
-  // first is boardable. Nothing orders them: whenever no bus is waiting
-  // to depart, the -E arrival is the sooner of the two, and the earliest
-  // ETA hands you a bus that terminates on arrival. resolveBerths drops
-  // the -E run (route P starts at a bare KV, with no -S to prefer).
-  const { usable, ambiguousBerth } = resolveBerths(forSvc);
-
   // The feed this service's arrivals came from: at a shelter the shuttle
   // and public buses share, each feed's own fetch time and state.
-  const pub = isPublic(graph, leg.svc);
-  const feed = feedFor(sa, pub);
-
-  const etas = beforeOpening(graph, leg.svc, usable, feed?.fetchedAt ?? nowMs, nowMs)
-    .filter((a) => a.etaS != null)
-    .sort((a, b) => (a.etaS as number) - (b.etaS as number));
+  const sb = serviceBoard(graph, sa, leg.svc, nowMs);
   // Times here count from when the arrivals were fetched (departsAt is
   // fetchedAt + boardS), so the walk counts from then too: a bus that
   // left while a cached or stale answer aged can't be caught.
-  const fetchedAt = feed?.fetchedAt ?? nowMs;
+  const fetchedAt = sb.fetchedAt ?? nowMs;
   const ageS = Math.max(0, (nowMs - fetchedAt) / 1000);
   const earliest = earliestS + ageS;
+  const fromMs = fetchedAt + earliest * 1000;
+  const sOf = (ms: number) => (ms - fetchedAt) / 1000;
   // A missing entry means we never reached the feed -- not that no bus is
   // coming. Those are different answers and must not collapse into one.
-  // A service whose rows didn't read has no data, though the rest of the board does.
-  const available = feed !== undefined && feed.available !== false && !sa?.unread?.includes(leg.svc);
-  let boardS: number;
-  let quality: Quality;
-  let arrival = null;
+  const available = sb.available;
   // Waiting for the service to start, which you can do wherever you are.
   let opensInS = 0;
-  // When the service stops today, for the guesses below: a bus guessed
-  // after it is no bus. Null when its hours are unknown or it isn't running.
   const running = inService(graph, leg.svc, nowMs);
-  const endsAt = serviceEndsAt(graph, leg.svc, nowMs);
-  const pastEnd = (s: number) => endsAt !== null && fetchedAt + s * 1000 > endsAt;
 
-  // The first bus you can physically reach, not the first bus listed.
-  const catchable = etas.find((a) => (a.etaS as number) >= earliest);
-  if (catchable) {
-    boardS = catchable.etaS as number;
-    // A time from the operator's timetable (a public bus not yet on the
-    // road) is an estimate, however exact it looks.
-    quality = catchable.scheduled ? 'scheduled' : 'live';
-    arrival = catchable;
-  } else if (etas.length && running) {
-    // Every listed bus leaves before you can get there: the first one
-    // after the last listed, a headway apart, that you can reach. Not
-    // once the service has closed: the feed still lists its last buses,
-    // and there is no bus after them to guess (below).
-    const lastS = etas[etas.length - 1].etaS as number;
-    const headway = headwayFor(graph, leg.svc, fetchedAt + lastS * 1000);
-    boardS = lastS + headway;
-    if (headway > 0 && boardS < earliest) boardS += Math.ceil((earliest - boardS) / headway) * headway;
-    if (pastEnd(boardS)) return null; // that was the last bus
-    quality = 'scheduled';
-  } else if (!running) {
-    // The published hours are ours, not the feed's, so this holds even
-    // when we have no data at all, or only buses you can't reach.
-    const opens = opts.openBy !== undefined ? serviceResumesAt(graph, leg.svc, nowMs) : null;
-    if (opens === null || opens > opts.openBy!) return null; // ended, or not started in time
-    // It starts before you need it: a bus somewhere in the headway after
-    // it does, or after you reach the stop, whichever is later.
-    const startS = (opens - fetchedAt) / 1000;
-    opensInS = Math.max(0, startS - earliest);
-    boardS = Math.max(earliest, startS) + headwayFor(graph, leg.svc, opens) / 2;
-    quality = 'scheduled';
-  } else {
-    // You'd reach the stop after the last bus.
-    if (pastEnd(earliest)) return null;
-    // The feed answered and had nothing: a headway is the honest guess,
-    // no later than the last bus. Unreached: keep the option -- the
-    // graph still says this service goes where you are going -- but
-    // boardS here is only an ordering key. The formatter must never
-    // print a time for an 'unknown' option.
-    boardS = earliest + headwayFor(graph, leg.svc, nowMs) / 2;
-    if (pastEnd(boardS)) boardS = (endsAt! - fetchedAt) / 1000;
-    quality = available ? 'scheduled' : 'unknown';
+  // The first bus you can physically reach, not the first bus listed; past
+  // the feed's list, a guess. None once the service has closed: the feed
+  // still lists its last buses, and there's no bus after them.
+  const d = nextDeparture(graph, sb, leg.svc, fromMs, nowMs);
+  if (!d) return null;
+  if (d.opens) {
+    // It waits for the service to start, which only a class can do
+    // (`openBy`), and only when it starts in time. Running now, the next
+    // start is tomorrow's: you'd reach the stop after the last bus.
+    if (running || opts.openBy === undefined || d.earliest > opts.openBy) return null;
+    opensInS = Math.max(0, sOf(d.earliest) - earliest);
   }
+  // A guess with nothing to step from is the middle of its window: half a headway's wait.
+  const boardS = sOf((d.earliest + d.latest) / 2);
+  // A time from the operator's timetable (a public bus not yet on the
+  // road) is an estimate, however exact it looks. Unreached: keep the
+  // option -- the graph still says this service goes where you are going
+  // -- but boardS here is only an ordering key. The formatter must never
+  // print a time for an 'unknown' option.
+  let quality: Quality = d.arrival ? (d.arrival.scheduled ? 'scheduled' : 'live') : !running || available ? 'scheduled' : 'unknown';
+  const arrival = d.arrival ?? null;
 
   // Only a real arrival goes stale; a headway guess stays a guess, never
   // ranked or worded as measured.
-  if (feed?.stale && quality === 'live') quality = 'stale';
+  if (sb.stale && quality === 'live') quality = 'stale';
 
   // From now: the times above count from the fetch, and a cached or
   // stale answer is that much older. Comparing them with a walk that
   // starts now, or with another stop's fresher times, needs one clock.
-  return { boardS: Math.round(boardS - ageS), rideS: legRideS(leg), quality, arrival, fetchedAt, opensInS, ambiguousBerth, paid: pub };
+  return {
+    boardS: Math.round(boardS - ageS),
+    rideS: legRideS(leg),
+    quality,
+    arrival,
+    bus: d.id,
+    fetchedAt,
+    opensInS,
+    ambiguousBerth: sb.ambiguousBerth,
+    paid: sb.paid,
+  };
 }
 
 /** What an option costs as the options are ranked, in seconds to the place itself (see scoreOptions). */
@@ -1140,6 +844,7 @@ export function scoreOptions(
       // the whole of it a guess, never ranked over a measured single bus.
       quality: worseOf(s1.quality, s2.quality),
       arrival: s1.arrival,
+      bus: s1.bus,
       fetchedAt: Math.min(s1.fetchedAt, s2.fetchedAt),
       fromMs: nowMs,
       ...(s1.opensInS > 0 ? { opensInS: Math.round(s1.opensInS) } : {}),
@@ -1180,6 +885,7 @@ export function scoreOptions(
         totalS: s.boardS + s.rideS,
         quality: s.quality,
         arrival: s.arrival,
+        bus: s.bus,
         fetchedAt: s.fetchedAt,
         fromMs: nowMs,
         ...(s.opensInS > 0 ? { opensInS: Math.round(s.opensInS) } : {}),

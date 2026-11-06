@@ -116,7 +116,7 @@ A live time from a feed answer that has aged a few minutes.
 _Avoid_: old, cached
 
 **Estimate**:
-A time not taken from any bus in the feed: a shuttle time guessed from the headway, shown with "~".
+A shuttle time not taken from any bus in the feed, guessed from the headway and shown with "~". After a live bus it is a headway later; with no bus to go on, it stands for a bus due somewhere within one headway (from when you can be at the stop, or from when the service starts), so the card shows the middle of that headway and the leave-by plans on its end.
 _Avoid_: scheduled, timetable estimate, guess
 
 **Timetabled**:

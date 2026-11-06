@@ -6,16 +6,9 @@ import realGraph from '../data/stops.json' with { type: 'json' };
 import venuesJson from '../data/venues.json' with { type: 'json' };
 
 import { buildCampusMap, buildDestinations, friendlyLabel, ROUTE_COLORS, shapeFor } from '../src/map/campus.ts';
-import {
-  beforeOpening,
-  boardAsOf,
-  boardAt,
-  FIRST_BUS_LEAD_S,
-  indexGraph,
-  serviceResumesAt,
-  stoppedReason,
-  towardsFrom,
-} from '../src/answer/resolve.ts';
+import { boardAsOf, boardAt, indexGraph, towardsFrom } from '../src/answer/resolve.ts';
+import { serviceResumesAt, stoppedReason } from '../src/answer/hours.ts';
+import { beforeOpening, FIRST_BUS_LEAD_S } from '../src/answer/departures.ts';
 import { GRAPH as REAL, GRAPH_PUBLIC } from '../src/answer/graph.ts';
 import { haversineM } from '../src/geo.ts';
 import { withLang } from '../src/i18n.ts';

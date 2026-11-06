@@ -484,9 +484,11 @@ pnpm exec cf kv keys put config:minClient --namespace-id <KV id in cloudflare.co
   board, a column each for the next three buses, in minutes, the next one
   large. It doesn't weigh the walk to the stop: every
   bus is shown as it comes, whoever is asking. The
-  shuttle feed gives two a service, so the third is guessed a headway
-  after the second (`nearbyRow`, `NEARBY_LATER`), `scheduled` and shown
-  with "~", never past the service's last bus or for a public bus. Each stop has
+  shuttle feed gives two a service, so the third is the service's next
+  estimate, a headway after the second (`departures.ts`, `nearbyRow`,
+  `NEARBY_LATER`), `scheduled` and shown with "~", never past the
+  service's last bus or for a public bus. With its hours unknown it is
+  guessed all the same, as every estimate is, up to a day ahead. Each stop has
   `via` too: the places most of its buses pass first (each row's first
   two, the most shared first, up to three), and `viaText` ("to UTown,
   Science, Kent Ridge MRT"), the heading the widget puts over each side
@@ -599,8 +601,11 @@ object at the change and once the second bus has gone.
   set off on a trip by bus (a class, home, a favourite, a stop or room),
   `card.step` offers the bus before and after the one shown. Every bus that
   gets you there comes from `departures()` in leave.ts: each service from
-  each stop, live times then one headway at a time, a trip that changes
-  buses by its first bus. They're ordered by when you'd leave, and a step
+  each stop, its departures from `departures.ts`, a trip that changes
+  buses by its first bus. With no leave-by of its own, the bus shown is
+  found among them by which departure it is (the live bus's plate, or the
+  nth estimate after its anchor), not by time: an estimate's card time is
+  the middle of its window, the step's its start. They're ordered by when you'd leave, and a step
   keeps the arrival moving the same way. "Later" stops at the last bus
   that gets a class's room no more than `STEP.lateMaxS` (20 min) late, or
   on any other trip one leaving at most `STEP.laterMaxS` (an hour) after the
@@ -1480,22 +1485,37 @@ cached or stale answer's bus is compared with a walk that starts now, and
 with another stop's fresher times, on one clock. A stale answer's `asOf`
 stays its fetch time. The card is made with the request's now too.
 
-**Operating hours bound every guess.** A headway guess, from the last bus the
-feed lists or from nothing, is dropped once it's after the service stops
-(`serviceEndsAt`), and the leave-by never projects a bus past it. For a class,
-a service that starts before the class is kept, its first bus a headway after
-it starts: at 06:30 the 08:00 class's bus is the D2 from 07:15, not
-"Services ended". The wait for it to start doesn't count against it when
+**Operating hours bound every guess.** No guess is more than a day ahead,
+unless asked for up to a later time (a class's leave-by, which lines up on
+its latest board however far off), and with a service's hours unknown that
+is the only bound. A headway guess stepped on from the
+last bus the feed lists is an instant, a headway after the bus before it,
+and is dropped once it's after the service stops (`serviceEndsAt`): that was
+the last bus. With no live time to step from, a guess is a bus due somewhere
+in a window a headway wide, from when you can be at the stop, and cut at the
+close, since a bus may still come before it. The card shows the window's
+middle (half a headway's wait) and the leave-by counts on its end (a whole
+headway), so the two read the same guess. For a class the windows end at
+the latest you can board, or meet at the close when the class is after it:
+the last bus before the close is a headway before it. Before the service
+starts, or after it has stopped for the day, the first bus is due within a
+headway of the start, and the windows run on from it; for a class, after
+that first one they are the windows that end at the latest you can board,
+as once the service runs, so its leave-by doesn't move when it starts. The
+first one's window runs on to the first of those, so they meet with no
+gap: it's at least a headway, and may hold the second bus too. For a class, a
+service that starts before the class is kept: at 06:30 the 08:00 class's
+bus is one of the D2's from 07:15, not "Services ended". The wait for it to start doesn't count against it when
 walking is weighed. With no live times and too late for the usual bus, the
-leave-by boards when you can reach the stop, never in the past.
+leave-by boards when you can be at the stop, and counts on a bus by the end
+of that headway, or by the close.
 
 **Headways are measured, by the hour.** The feed says nothing about a
 shuttle's headway, so `data/headways.json` holds the gaps the buses keep:
 the median between two buses at a stop on the recorder's days (one bus
 running alone counts by its lap), by period (term or vacation), kind of day
 (weekday, Saturday, Sunday and public holidays) and SGT hour.
-`headwayFor(graph, svc, atMs)` reads the hour the bus is caught in (for a
-class, the latest it can be boarded, not now), else the nearest hour
+`headwayFor(graph, svc, atMs)` reads the hour asked about, else the nearest hour
 measured that day (the quiet early and late hours run like their neighbours,
 not like the day's median), else the service's usual one. A period with no
 days measured, or a day past the calendar, is the longer of
@@ -1505,9 +1525,19 @@ half-wait in `transfer.ts`) use the usual one. In term the A and D lines run
 about every 7 minutes on a weekday, 10 to 15 in the late evening and 15 to
 30 at weekends; R1 and R2 every 20, K 40, P an hour. Refresh it with
 `scripts/data/measure_headways.mjs` over the recorder's day files from R2
-(`timelapse/YYYY-MM-DD.json.gz`); nothing in it calls NUS. Guessed buses
-either side of one already chosen keep that bus's headway, so the chosen bus
-stays among them (`departures`).
+(`timelapse/YYYY-MM-DD.json.gz`); nothing in it calls NUS. Every guess
+comes from [`departures.ts`](../apps/api/src/answer/departures.ts), and each
+estimate counts the headway in force at the bus before it, stepping on
+from the last live bus: the card, the leave-by and Nearby guess the same
+buses across an hour, where D2 goes from 7 to 11 minutes at 20:00.
+With no live times, estimates either side of a bus already chosen meet at
+it, so the chosen bus stays among them as the clock moves on. They line
+up as far back as the start of that day's service: after a start, they
+meet at the chosen bus whatever the feed listed before it, so a leave-by
+for tomorrow morning doesn't move when tonight's live times run out. The window
+you reach the stop in is one of them, cut at when you get there, so
+"Earlier" still has the bus before the chosen one; its bus may already
+have gone, so no leave-by counts on it.
 
 **The walk the whole way follows the paths.** With a location, out by the
 stops near you and on by the routed walks between stops (`walks.json`); the
@@ -2577,6 +2607,8 @@ src/feeds/feedwatch.ts     The beta's feed checks, from the breakers its own tra
 src/feeds/appversion.ts    Finding the new uNivUS version when NUS refuses the old one
 
 src/answer/resolve.ts      Haversine, directional pairing, downstream reachability, scoring
+src/answer/departures.ts   A service's buses from a stop: feed rows, berths, live times, estimates
+src/answer/hours.ts        Operating hours and day kinds; the headway by the hour (headwayFor)
 src/answer/transfer.ts     Changing buses: which change stops to fetch, the two-bus trip
 src/answer/via.ts          The places a bus passes, by names a new student knows (hand-kept)
 src/answer/format.ts       label/detail strings, the degrade ladder

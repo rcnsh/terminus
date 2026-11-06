@@ -92,7 +92,8 @@ import {
 } from './outcomes.ts';
 import { ImportInputError, parseShareUrl, resolveTrips } from '../timetable/nusmods.ts';
 import { termName } from '../timetable/calendar.ts';
-import { boardAsOf, boardAt, displayName, headwayFor, indexGraph, nearbyDest, nearbyRow } from '../answer/resolve.ts';
+import { NEARBY_LATER, boardAsOf, boardAt, displayName, indexGraph, nearbyDest, nearbyRow } from '../answer/resolve.ts';
+import { type ServiceBoard, departuresFrom } from '../answer/departures.ts';
 import { stopVia, viaText } from '../answer/via.ts';
 import { haversineM } from '../geo.ts';
 import { isoSeconds } from '../answer/format.ts';
@@ -1745,7 +1746,8 @@ function nearbyStop<T extends object>(
   stopped: boolean,
   where: T,
 ) {
-  const board = boardAt(graph, idx, stop.code, sa, nowMs, { stopped });
+  const boards = new Map<string, ServiceBoard>();
+  const board = boardAt(graph, idx, stop.code, sa, nowMs, { stopped, boards });
   // Which way this side of the road's buses go, for a heading over its board.
   const via = stopVia(board);
   return {
@@ -1757,7 +1759,14 @@ function nearbyStop<T extends object>(
     via,
     viaText: viaText(via),
     board: board.map((r) => ({
-      ...nearbyRow(r, nowMs, headwayFor(graph, r.svc, nowMs)),
+      // Guessed buses only where nearbyRow adds them: a shuttle with a time to follow.
+      ...nearbyRow(
+        r,
+        nowMs,
+        !r.paid && r.etaS != null
+          ? departuresFrom(graph, boards.get(r.svc), r.svc, { now: nowMs, from: nowMs, max: NEARBY_LATER + 3 })
+          : [],
+      ),
       ...nearbyDest(idx, r.svc, stop.code, r.via, r.towards),
     })),
   };
