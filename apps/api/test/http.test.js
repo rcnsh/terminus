@@ -65,7 +65,7 @@ test('security headers: every response; CSP on HTML only; /docs may load unpkg',
   assert.equal(withSecurityHeaders(new Response(''), '/auth/verify').headers.get('referrer-policy'), 'no-referrer');
 });
 
-test('the CSP: blob: workers only on the timelapse page, whose video encoder starts them', async () => {
+test('the CSP: blob: workers only on the dashboard, whose Timelapse section’s video encoder starts them', async () => {
   const { readFile } = await import('node:fs/promises');
   const workers = (path) => {
     const page = withSecurityHeaders(new Response('<p>', { headers: { 'content-type': 'text/html' } }), path);
@@ -74,13 +74,13 @@ test('the CSP: blob: workers only on the timelapse page, whose video encoder sta
       .split('; ')
       .find((d) => d.startsWith('worker-src '));
   };
-  for (const path of ['/', '/app/', '/account/', '/admin/', '/docs', '/status/']) {
+  for (const path of ['/', '/app/', '/account/', '/docs', '/status/', '/administrator', '/admin/timelapse/']) {
     assert.equal(workers(path), "worker-src 'self'", path);
   }
-  assert.equal(workers('/admin/timelapse/'), "worker-src 'self' blob:");
-  // The rest of the timelapse page's policy is the site's.
+  assert.equal(workers('/admin/'), "worker-src 'self' blob:");
+  // The rest of the dashboard's policy is the site's.
   const site = withSecurityHeaders(new Response('<p>', { headers: { 'content-type': 'text/html' } }), '/app/');
-  const tl = withSecurityHeaders(new Response('<p>', { headers: { 'content-type': 'text/html' } }), '/admin/timelapse/');
+  const tl = withSecurityHeaders(new Response('<p>', { headers: { 'content-type': 'text/html' } }), '/admin/');
   const others = (h) =>
     h
       .get('content-security-policy')

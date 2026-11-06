@@ -2,7 +2,7 @@
 // recorder writes (DayFile in apps/api/src/map/timelapse.ts) turned into one
 // track per bus, and where each bus is at any moment of the day.
 //
-// Shared: the timelapse page draws with it, and the API's tests check it
+// Shared: the dashboard's Timelapse draws with it, and the API's tests check it
 // against the encoder (apps/api/test/timelapse.test.js). Plain functions,
 // no DOM, no imports.
 //

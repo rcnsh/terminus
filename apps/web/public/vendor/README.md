@@ -20,6 +20,6 @@ match it, is missing, or isn't listed.
   no licence file, so LICENSE comes from the repository at the commit 4.5.0
   was published from (3b10e67).
 - `mediabunny@1.61.3/`: Mediabunny by Vanilagy, MPL-2.0 (LICENSE), the
-  video encoder of the timelapse page (admin/timelapse/). Its minified
+  video encoder of the dashboard's Timelapse (admin/timelapse/). Its minified
   browser build, one self-contained module, unchanged; the source is at
   https://github.com/Vanilagy/mediabunny.

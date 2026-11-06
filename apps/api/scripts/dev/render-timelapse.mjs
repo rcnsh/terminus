@@ -1,6 +1,7 @@
 /**
- * Renders a recorded day as a video, unattended: opens the timelapse page
- * (/admin/timelapse/) in headless Chromium, picks the day, size, map and
+ * Renders a recorded day as a video, unattended: opens the dashboard's
+ * Timelapse (/admin/#/timelapse) in headless Chromium, signs in with the
+ * timelapse token, picks the day, size, map and
  * times, exports, and saves the file. The page does the work, exactly as
  * in a browser, so the video is the same; headless, it never pauses for a
  * hidden tab.
@@ -115,11 +116,12 @@ try {
   const context = await browser.newContext({ serviceWorkers: 'block', acceptDownloads: true, viewport: { width: 1280, height: 1000 } });
   const page = await context.newPage();
   page.on('pageerror', (e) => log('page error:', e.message));
-  await page.goto(`${BASE}/admin/timelapse/`);
+  await page.goto(`${BASE}/admin/#/timelapse`);
   // The token is typed into the page: only if it is still --base's.
-  if (new URL(page.url()).origin !== BASE) throw new Error(`${BASE}/admin/timelapse/ went to ${new URL(page.url()).origin}`);
-  await page.fill('#token', token);
-  await page.click('text=Unlock');
+  if (new URL(page.url()).origin !== BASE) throw new Error(`${BASE}/admin/ went to ${new URL(page.url()).origin}`);
+  // The sign-in opens the timelapse token's form by itself on this address.
+  await page.fill('#timelapse-token', token);
+  await page.click('text=Open the timelapse');
   // Ready once the Export button is there and on: a page without it isn't.
   const ready = () =>
     page.waitForFunction(
@@ -164,10 +166,10 @@ try {
       .textContent({ timeout: 1_000 })
       .catch(() => null);
     if (failed) throw new Error(failed);
-    log((await page.textContent('.progress .meta').catch(() => ''))?.trim() || 'starting');
+    log((await page.textContent('.job .meta').catch(() => ''))?.trim() || 'starting');
     if (Date.now() - started > RENDER_LIMIT_MS) throw new Error(`still rendering after ${Math.round(RENDER_LIMIT_MS / 3_600_000)} hours`);
   }
-  log((await page.textContent('.progress .meta'))?.trim());
+  log((await page.textContent('.job .meta'))?.trim());
   mkdirSync(o.out, { recursive: true });
   const [download] = await Promise.all([page.waitForEvent('download'), page.click('text=Download the video')]);
   const file = path.resolve(o.out, download.suggestedFilename());

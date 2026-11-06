@@ -1956,7 +1956,7 @@ touching its secrets.
 
 ## Operator passkeys
 
-The dashboard (`/admin/`) and the timelapse page open with a passkey
+The dashboard (`/admin/`, its Timelapse section included) opens with a passkey
 (`src/accounts/passkey.ts`, `apps/web/public/admin/passkey.js`). Adding one needs
 `HEALTH_TOKEN`, typed once on that device; signing in with it answers an
 operator session, `op1.<expiry ms>.<HMAC>`, which the pages send in
@@ -2479,9 +2479,17 @@ opens these routes and nothing else, so the machine that renders the videos
 unattended (`scripts/dev/render-timelapse.mjs`, on a VPS) never holds the
 dashboard's key.
 
-**Replaying it.** The operator's page,
-[`/admin/timelapse/`](../apps/web/public/admin/timelapse), reads a day with
-[`replay.js`](../apps/web/public/admin/timelapse/replay.js). The API's tests
+**Replaying it.** The dashboard's Timelapse section (`/admin/#/timelapse`,
+[`timelapse.js`](../apps/web/public/admin/timelapse/timelapse.js), loaded when
+it's opened) reads a day with
+[`replay.js`](../apps/web/public/admin/timelapse/replay.js). The timelapse
+token signs in to the dashboard too, and opens this section alone: the
+API answers it nothing else. Mediabunny starts its workers from blob:
+URLs, so the dashboard's CSP allows blob: workers (`cspFor()` in
+`src/http.ts`); a hash route never reaches the server, so the dashboard's page
+(`/admin/`) has it, and no other. The section's state, its map (drawn into an off-screen
+`#stage` on `body`) and an export in progress live in its module, so
+an export keeps going while another section is open. The API's tests
 read it with the same module. Between two readings a bus moves along its
 route line from one `along` to the next (forward past the end of a loop),
 not in a straight line. Readings more than 2 minutes apart are not joined:
