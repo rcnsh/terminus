@@ -14,6 +14,9 @@ import { isPublic } from './public.ts';
 /** How far ahead of now a bus is looked for: past a day it's no bus, whatever the hours say (or don't). */
 const PROJECT_MS = 86_400_000;
 
+/** The next hour after `ms`, when a headway can change: Singapore is a whole number of hours ahead of UTC. */
+const nextHour = (ms: number) => (Math.floor(ms / 3_600_000) + 1) * 3_600_000;
+
 /** One bus of a service leaving a stop. */
 export interface Departure {
   /**
@@ -206,7 +209,17 @@ export function departuresFrom(graph: Graph, board: StopArrivals | ServiceBoard 
   const last = live.at(-1);
   let t = last ? last.at + headwayAt(last.at) : w.from;
   for (let n = 1; last && out.length < max && t <= until && runs(t); n++) {
-    if (t >= w.from) out.push({ id: `${last.id}+${n}`, kind: 'estimate', earliest: t, latest: t });
+    if (t < w.from) {
+      // None to catch yet: as many headways at once as stay within the
+      // hour (the headway is the same through it), before the close and
+      // short of `from`, so a bus hours after the last live one costs a
+      // step an hour, the same buses as one a headway.
+      const h = headwayAt(t);
+      const k = Math.ceil((Math.min(w.from, nextHour(t), serviceEndsAt(graph, svc, t) ?? Infinity) - t) / h);
+      [t, n] = [t + k * h, n + k - 1];
+      continue;
+    }
+    out.push({ id: `${last.id}+${n}`, kind: 'estimate', earliest: t, latest: t });
     t += headwayAt(t);
   }
 

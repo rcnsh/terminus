@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 
 import { GRAPH } from '../src/answer/graph.ts';
 import { departuresFrom } from '../src/answer/departures.ts';
+import { headwayFor } from '../src/answer/hours.ts';
 import { nearbyRow, scoreLeg, scoreOptions } from '../src/answer/resolve.ts';
 import { departureOf, departures, leaveBy } from '../src/answer/leave.ts';
 import { withSteps } from '../src/answer/answer.ts';
@@ -225,4 +226,18 @@ test('with a bus chosen and no live times, the card\'s own bus is still the one 
   const later = s.steps?.later;
   // Never a bus you'd leave for more than STEP.laterMaxS after the card's own (leave now, 16:00).
   assert.ok(!later || Date.parse(later.board) - 80_000 <= now + STEP.laterMaxS * 1000, later?.board);
+});
+
+test('estimates long after the last live bus are the same buses as stepping a headway at a time, across the hours', () => {
+  // The last live D2 at 08:00; you can be at the stop from 14:31, past six hours of changing headways.
+  const now = at('2026-08-27T07:59');
+  const sa = board('PGP', now, 'D2', [at('2026-08-27T08:00')]);
+  const from = at('2026-08-27T14:31');
+  const step = (ms) => Math.max(60, headwayFor(GRAPH, 'D2', ms)) * 1000;
+  const expected = [];
+  let t = at('2026-08-27T08:00') + step(at('2026-08-27T08:00'));
+  for (let n = 1; expected.length < 12; n++, t += step(t)) if (t >= from) expected.push({ id: `P0+${n}`, at: t });
+  assert.ok(new Set(expected.map((e) => step(e.at))).size > 1, 'the headway changes among them');
+  const got = departuresFrom(GRAPH, sa, 'D2', { now, from, max: 12 }).map((d) => ({ id: d.id, at: d.earliest }));
+  assert.deepEqual(got, expected);
 });
