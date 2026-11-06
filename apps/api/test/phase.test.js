@@ -256,18 +256,26 @@ const SIGNALS = {
   homeUnplanned: (plan, now) => ({ bus: plan, home: { lastEndMs: now - 10 * MIN } }),
 };
 
-test('for every golden trip, the phase holds until changesAt and differs at it, with a location and without', async () => {
+test('for every golden trip, the phase holds until changesAt and differs at it, with a location and without; and the object’s until wakesAt', async () => {
   assert.ok(goldenTrips.length >= 10, `${goldenTrips.length} golden trips`);
   let checked = 0;
+  let apart = 0;
   for (const { name, answer, plan } of goldenTrips) {
     const leave = Date.parse(answer.leave.at);
     const end = Date.parse(tripEnd(plan) ?? plan.board);
     // The feed, fixed: the bus a little late by its plate, the second bus a minute late, a later one due.
-    const feed = fixtureFeed({
+    const fixtures = {
       live: plan.arrive ? { [plan.svc]: iso(Date.parse(plan.arrive) + 2 * MIN) } : {},
       second: (c) => ({ change: { ...c, board: iso(Date.parse(c.board) + MIN) }, live: true }),
       next: iso(end + 12 * MIN),
-    }).look;
+    };
+    const feed = fixtureFeed(fixtures).look;
+    // The feed as far as one request read it, and the plan's times for the rest (as phase.ts's `remembered`).
+    const readBy = (asked) => ({
+      liveArrival: async (b) => (asked.includes(`live ${b.svc}`) ? feed.liveArrival(b) : null),
+      secondBus: async (b) => (asked.includes(`second ${b.change.svc}`) ? feed.secondBus(b) : { change: b.change, live: false }),
+      nextArrival: async (b) => (asked.includes(`next ${b.svc}`) ? feed.nextArrival(b) : null),
+    });
     const stop = GRAPH.stops.find((s) => s.code === (plan.stopCode ?? answer.stop.code));
     // On the bus's road near the end of the ride, where a location sees you on it.
     const road = (() => {
@@ -294,12 +302,22 @@ test('for every golden trip, the phase holds until changesAt and differs at it, 
         for (let t = from; t <= to; t += 20_000) times.push(t);
         const seen = [];
         const changes = [];
+        const wakes = [];
+        const reads = [];
         for (const t of times) {
-          const { verdict, changesAt } = await tripPhase(tripAt(t), t, feed);
+          const read = fixtureFeed(fixtures);
+          const { verdict, changesAt, wakesAt } = await tripPhase(tripAt(t), t, read.look);
+          reads.push(readBy(read.asked));
           if (verdict.kind === 'seen' && verdict.seenNow && seenFrom === Infinity) seenFrom = t;
           seen.push(shown(verdict));
           changes.push(changesAt);
+          wakes.push(wakesAt);
         }
+        // The Trip object's view of the same trip: from nowhere, on the plan as this request leaves it.
+        const fromNowhere = async (ms, i) => {
+          const bus = times[i] >= seenFrom ? { ...made.bus, seen: true } : made.bus;
+          return shown((await tripPhase(tripOf(answer, { ...made, bus, at: nowhere, classAtMs }), ms, reads[i])).verdict);
+        };
         for (const [i, t] of times.entries()) {
           const changesAt = changes[i];
           const label = `${name}, ${signal}, ${where}, at ${iso(t)}`;
@@ -311,10 +329,20 @@ test('for every golden trip, the phase holds until changesAt and differs at it, 
             assert.equal(await what(until - 1), seen[i], `${label}: unchanged just before ${iso(until)}`);
             assert.notEqual(await what(until), seen[i], `${label}: changed at ${iso(until)}`);
           }
+          // With a location, the object wakes when its own view changes.
+          const wake = wakes[i];
+          if (at !== nowhere && wake) {
+            if (wake.at !== changesAt?.at) apart++;
+            const was = await fromNowhere(t, i);
+            assert.ok(wake.at > t, `${label}: wakes after now`);
+            assert.equal(await fromNowhere(wake.at - 1, i), was, `${label}: object unchanged just before ${iso(wake.at)}`);
+            assert.notEqual(await fromNowhere(wake.at, i), was, `${label}: object changed at ${iso(wake.at)}`);
+          }
           checked++;
         }
       }
     }
   }
   assert.ok(checked > 10_000, `${checked} moments checked`);
+  assert.ok(apart > 100, `${apart} moments where the object wakes other than the card changes`);
 });
