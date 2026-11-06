@@ -117,8 +117,9 @@ apps/web/public/
                       offline.js, pull.js (pull to refresh), timing.js (when Now refetches)
   admin/, status/, pair/, privacy/ (the summary; privacy/policy/ the full policy;
                       each with zh/), not-found/ (the Worker's 404 page)
-  admin/timelapse/    Replays a recorded day on the map and exports a video
-                      (replay.js, shared with the API tests; Mediabunny encodes)
+  admin/timelapse/    The dashboard's Timelapse section (#/timelapse): replays a recorded
+                      day on the map and exports a video (replay.js, shared with the
+                      API tests; Mediabunny encodes). index.html only forwards there
   assets/             ui.js (Preact, hooks, htm, stores), site.css (shared colours/type),
                       i18n.js, zh.js (Chinese), theme.js, landing.js, docs.js (/docs),
                       tabbar.css (the app's bar), fonts.css + fonts/ (self-hosted), shots/;

@@ -2489,7 +2489,7 @@ export function paths(): Record<string, unknown> {
         tags: ['Service'],
         summary: 'One recorded day of shuttles',
         description:
-          'The day’s readings as one gzipped JSON file: every service’s buses about every 30 s, as service, number plate, position (whole steps of 1/q degree from `origin`) and metres along the route line, with the route lines and stops they were measured on. Times are deltas from `t0`. A closed day never changes and is cached for a year; today’s is built from what the recorder holds so far and is not cached. The timelapse page (/admin/timelapse/) reads it. Needs the operator token or the timelapse token.',
+          'The day’s readings as one gzipped JSON file: every service’s buses about every 30 s, as service, number plate, position (whole steps of 1/q degree from `origin`) and metres along the route line, with the route lines and stops they were measured on. Times are deltas from `t0`. A closed day never changes and is cached for a year; today’s is built from what the recorder holds so far and is not cached. The dashboard’s Timelapse (/admin/#/timelapse) reads it. Needs the operator token or the timelapse token.',
         operationId: 'timelapseDay',
         security: [{ operator: [] }],
         parameters: [

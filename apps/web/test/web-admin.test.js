@@ -111,3 +111,96 @@ test('the dashboard: a failed first load can be tried again, and Lock wins over 
   assert.equal(Boolean(button('Lock')), false, 'still locked');
   assert.equal(sessionStorage.getItem('terminus-operator-token'), null);
 });
+
+test('the timelapse token opens the Timelapse alone: no stats asked for, no other section', async (t) => {
+  const w = page({ url: 'https://terminus.run/admin/#/timelapse', html: '<div id="admin"></div>' });
+  globalThis.Image = w.Image;
+  globalThis.sessionStorage = memoryStorage();
+  const calls = [];
+  let days = 404;
+  globalThis.fetch = async (url, init) => {
+    calls.push([String(url), init?.headers?.['x-health-token']]);
+    if (String(url) === '/api/timelapse/days') return Response.json({ days: [], recording: null }, { status: days });
+    return Response.json({}, { status: 404 });
+  };
+  // A fresh copy: the test above has its own, signed out.
+  await web('admin/admin.js?timelapse');
+  const root = document.getElementById('admin');
+  t.after(() => render(null, root));
+  await settle();
+  // Booleans and strings only: a failing assert on an element prints happy-dom's whole graph.
+  const box = () => root.querySelector('#timelapse-token');
+  assert.equal(Boolean(box()), true, "the timelapse token's form, on the timelapse's address");
+  assert.equal(Boolean(box().closest('details')?.open), true, 'and open there');
+  const submit = async (token) => {
+    box().value = token;
+    box()
+      .closest('form')
+      .dispatchEvent(new Event('submit', { cancelable: true }));
+    await settle(10);
+  };
+
+  // A refused token stays at the gate, with why, and keeps nothing.
+  await submit('wrong');
+  assert.match(root.querySelector('.gate-msg')?.textContent ?? '', /timelapse token was not accepted/);
+  assert.equal(sessionStorage.getItem('terminus-operator-token'), null);
+
+  days = 200;
+  await submit('tl-token');
+  // The section's module loads with import(): wait for it, briefly.
+  for (let i = 0; i < 100 && !/No days recorded yet/.test(root.textContent); i++) await settle();
+  assert.match(root.textContent.slice(-200), /No days recorded yet/);
+  assert.deepEqual(
+    calls.map(([url, token]) => `${url} ${token}`),
+    ['/api/timelapse/days wrong', '/api/timelapse/days tl-token', '/api/timelapse/days tl-token'],
+  );
+  assert.deepEqual(
+    [...root.querySelectorAll('.side nav a')].map((a) => a.textContent.trim()),
+    ['Timelapse'],
+  );
+  assert.equal(sessionStorage.getItem('terminus-timelapse-only'), '1');
+
+  // Another section's address still shows the Timelapse: the token opens nothing else.
+  location.hash = '#/reports';
+  await settle(10);
+  assert.equal(root.querySelector('.dash-h h1')?.textContent, 'Timelapse');
+  assert.equal(calls.length, 3, 'no stats asked for');
+
+  root.querySelector('.side-foot button')?.click();
+  await settle();
+  assert.equal(Boolean(root.querySelector('.side')), false, 'locked');
+  assert.equal(sessionStorage.getItem('terminus-timelapse-only'), null);
+});
+
+test('the operator reaches the Timelapse when the stats fail: it needs none of them', async (t) => {
+  const w = page({ url: 'https://terminus.run/admin/#/timelapse', html: '<div id="admin"></div>' });
+  globalThis.Image = w.Image;
+  globalThis.sessionStorage = memoryStorage({ 'terminus-operator-token': 'op' });
+  globalThis.fetch = async (url) =>
+    String(url) === '/api/timelapse/days' ? Response.json({ days: [], recording: null }) : Response.json({}, { status: 500 });
+  await web('admin/admin.js?stats-down');
+  const root = document.getElementById('admin');
+  t.after(() => render(null, root));
+  for (let i = 0; i < 100 && !/No days recorded yet/.test(root.textContent); i++) await settle();
+  assert.match(root.textContent.slice(-200), /No days recorded yet/);
+  // Every other section needs the stats: it says why, with a way to try again.
+  location.hash = '#/reports';
+  await settle(10);
+  assert.match(root.textContent, /The stats answered 500\./);
+});
+
+test('a refused timelapse token leaves the address as it was', async (t) => {
+  page({ url: 'https://terminus.run/admin/#/reports', html: '<div id="admin"></div>' });
+  globalThis.sessionStorage = memoryStorage();
+  globalThis.fetch = async () => Response.json({}, { status: 404 });
+  await web('admin/admin.js?refused');
+  const root = document.getElementById('admin');
+  t.after(() => render(null, root));
+  await settle();
+  const box = root.querySelector('#timelapse-token');
+  box.value = 'wrong';
+  box.closest('form').dispatchEvent(new Event('submit', { cancelable: true }));
+  await settle(10);
+  assert.match(root.querySelector('.gate-msg')?.textContent ?? '', /timelapse token was not accepted/);
+  assert.equal(location.hash, '#/reports');
+});

@@ -46,7 +46,7 @@
  * window (the cron that starts it is a timer here). POST
  * /__stub/timelapse?minutes=N records N minutes at once, moving the clock
  * ahead with it (from the window's opening if it's closed now): an hour of
- * buses for the timelapse page (/admin/timelapse/, token "dev") in a few
+ * buses for the dashboard's Timelapse (/admin/#/timelapse, token "dev") in a few
  * seconds. Past the window's close, the day is written to the fake R2.
  *
  * Point a debug Android build at it:

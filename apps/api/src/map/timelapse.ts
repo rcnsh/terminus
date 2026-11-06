@@ -1,6 +1,6 @@
 /**
- * A day of NUS shuttles, recorded for a timelapse (/admin/timelapse/ replays
- * it). The one scheduled poller of the NUS feed (docs/agents/feeds.md), bounded:
+ * A day of NUS shuttles, recorded for a timelapse (the dashboard's
+ * Timelapse, /admin/#/timelapse, replays it). The one scheduled poller of the NUS feed (docs/agents/feeds.md), bounded:
  *
  * - rate: each service once per TIMELAPSE.pollMs, never below MIN_POLL_MS,
  *   spread across that time (pollInterval());

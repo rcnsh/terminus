@@ -1,6 +1,11 @@
-// The timelapse: a day of NUS shuttles, as the recorder kept it
+// The dashboard's Timelapse section (#/timelapse, loaded by admin.js when
+// it's opened): a day of NUS shuttles, as the recorder kept it
 // (/api/timelapse/days, apps/api/src/map/timelapse.ts), replayed on the campus map
 // and exported as a video. English only: it's for the operator.
+//
+// Its state, the map and an export in progress live in this module, not in
+// the section: leaving for another section and coming back finds the export
+// still running.
 //
 // The export never records the screen. Each frame is made on purpose: the
 // clock is set, the buses' source gets their places at that moment, the
@@ -14,15 +19,13 @@
 // the app's interactive map, with its stores, sheets and live polling. This
 // one is fixed to the video's size, drawn once per frame, and never moves.
 
-import { html, render, store, useEffect, useRef, useState, useStore } from '/assets/ui.js';
-import { passkeysWork, signIn } from '/admin/passkey.js';
+import { html, store, useEffect, useRef, useStore } from '/assets/ui.js';
 import { busesAt, clockAt, countBySvc, decodeDay, timeOn } from '/admin/timelapse/replay.js';
 import { MAPLIBRE, PMTILES } from '/app/map-files.js';
 import { inkOn } from '/account/dom.js';
 
 // "@" spelled %40, as in app/map-files.js: the static assets redirect the "@" form.
 const MEDIABUNNY = '/vendor/mediabunny%401.61.3/mediabunny.min.mjs';
-const KEY = 'terminus-operator-token';
 const FPS = 30;
 const PRESETS = {
   story: { w: 1080, h: 1920, label: 'Stories, 1080 × 1920' },
@@ -36,8 +39,6 @@ const THEMES = {
 };
 
 const view = store({
-  locked: false,
-  msg: '',
   days: null,
   recording: null,
   date: '',
@@ -58,37 +59,31 @@ const view = store({
   note: '',
 });
 
-function token() {
-  try {
-    return sessionStorage.getItem(KEY);
-  } catch {
-    return null;
-  }
+/** The dashboard's session: its token, and how to sign out when it's refused. Set by connect(). */
+let session = { token: () => null, signedOut: () => {} };
+
+export function connect(s) {
+  session = s;
 }
 
-function remember(t) {
-  try {
-    if (t) sessionStorage.setItem(KEY, t);
-    else sessionStorage.removeItem(KEY);
-  } catch {
-    // Without storage the token lasts until the page reloads.
-  }
+/** What was there when the dashboard signs out (Lock, or a refused token): an export stops, and the day and video go. */
+export function forget() {
+  const { job } = view.get();
+  if (job?.running) job.cancelled = true;
+  if (job?.url) URL.revokeObjectURL(job.url);
+  view.set((v) => ({ ...v, days: null, recording: null, date: '', day: null, loading: false, job: null, note: '', scrub: 0 }));
 }
-
-let memory = null;
 
 async function api(path) {
-  const t = memory ?? token();
+  const t = session.token();
   if (!t) {
-    view.set((v) => ({ ...v, locked: true }));
+    session.signedOut();
     return null;
   }
   const res = await fetch(path, { headers: { 'x-health-token': t } }).catch(() => null);
   if (!res) throw new Error("Couldn't reach terminus.");
   if (res.status === 404 && path === '/api/timelapse/days') {
-    remember(null);
-    memory = null;
-    view.set((v) => ({ ...v, locked: true, msg: 'Signed out, or that token was not accepted.' }));
+    session.signedOut();
     return null;
   }
   if (!res.ok) throw new Error(res.status === 404 ? 'Nothing was recorded that day.' : `The server answered ${res.status}.`);
@@ -100,7 +95,7 @@ async function loadDays() {
     const res = await api('/api/timelapse/days');
     if (!res) return;
     const { days, recording } = await res.json();
-    view.set((v) => ({ ...v, locked: false, msg: '', days, recording, note: '' }));
+    view.set((v) => ({ ...v, days, recording, note: '' }));
     if (days.length && !view.get().date) await pick(days[0].date);
   } catch (err) {
     view.set((v) => ({ ...v, note: err.message }));
@@ -141,6 +136,12 @@ const composite = document.createElement('canvas');
 const overlay = document.createElement('canvas');
 const mark = new Image();
 mark.src = '/assets/mark.svg';
+/** The map draws here at the video's exact size, off screen; the preview shows its frames. Outside
+ *  the section, so the map outlives a visit to another one. */
+const stage = document.createElement('div');
+stage.id = 'stage';
+stage.setAttribute('aria-hidden', 'true');
+document.body.append(stage);
 
 const sizeOf = () => PRESETS[view.get().preset];
 const scaleOf = ({ w, h }) => Math.min(w, h) / 1080;
@@ -180,7 +181,6 @@ async function prepare() {
   const { day, theme, overlay: words } = view.get();
   if (!day) return;
   const { w, h } = sizeOf();
-  const stage = document.getElementById('stage');
   stage.style.width = `${w}px`;
   stage.style.height = `${h}px`;
   for (const c of [composite, overlay]) {
@@ -502,7 +502,8 @@ async function exportVideo() {
     size: 0,
   };
   view.set((v) => ({ ...v, job, note: '' }));
-  const update = (patch) => view.set((v) => ({ ...v, job: Object.assign(job, patch) }));
+  // Not once forget() has dropped it: a stopped export doesn't come back.
+  const update = (patch) => view.set((v) => (v.job === job ? { ...v, job: Object.assign(job, patch) } : v));
 
   let output = null;
   try {
@@ -554,46 +555,6 @@ const mins = (ms) => {
 };
 const mb = (n) => `${(n / 1_048_576).toFixed(1)} MB`;
 
-function Unlock() {
-  const v = useStore(view);
-  const input = useRef(null);
-  const [busy, setBusy] = useState(false);
-  const open = (t) => {
-    memory = t;
-    remember(t);
-    return loadDays();
-  };
-  const submit = (e) => {
-    e.preventDefault();
-    const t = input.current.value.trim();
-    if (t) open(t);
-  };
-  const passkey = async () => {
-    setBusy(true);
-    view.set((x) => ({ ...x, msg: '' }));
-    try {
-      await open(await signIn());
-    } catch (err) {
-      view.set((x) => ({ ...x, msg: err.message }));
-    } finally {
-      setBusy(false);
-    }
-  };
-  return html`
-    <form class="unlock" onSubmit=${submit}>
-      ${passkeysWork() && html`<button class="btn accent" type="button" disabled=${busy} onClick=${passkey}>Sign in with a passkey</button>`}
-      <p class="hint">A passkey is added on <a href="/admin/">the dashboard</a>.</p>
-      <label for="token">Timelapse token</label>
-      <div class="row">
-        <input id="token" ref=${input} type="password" autocomplete="off" />
-        <button class="btn" type="submit">Unlock</button>
-      </div>
-      ${v.msg && html`<p class="bad">${v.msg}</p>`}
-      <p class="hint">TIMELAPSE_TOKEN, which opens only this page.</p>
-    </form>
-  `;
-}
-
 function Recording({ r }) {
   if (!r) return null;
   const words = {
@@ -611,7 +572,7 @@ function Progress({ job }) {
   if (job.error) return html`<p class="bad">${`The export stopped: ${job.error}`}</p>`;
   if (job.running) {
     return html`
-      <div class="progress">
+      <div class="job">
         <div class="bar"><div style=${{ width: `${(job.done / job.total) * 100}%` }}></div></div>
         <div class="meta">${`Frame ${job.done} of ${job.total}${job.codec ? ` · ${job.codec}` : ''}${job.eta != null ? ` · about ${mins(job.eta)} left` : ''}`}</div>
         <button class="btn ghost small" type="button" onClick=${() => (job.cancelled = true)}>Cancel</button>
@@ -620,7 +581,7 @@ function Progress({ job }) {
   }
   if (job.url) {
     return html`
-      <div class="progress">
+      <div class="job">
         <div class="meta">${`${job.codec} · ${mb(job.size)} · ${job.total} frames in ${mins(performance.now() - job.started)}`}</div>
         <a class="btn accent" href=${job.url} download=${job.name}>Download the video</a>
       </div>
@@ -677,7 +638,7 @@ function Studio() {
         <label>Length of the video, seconds
           <input type="number" min="2" max="600" step="1" value=${v.seconds} disabled=${busy} onInput=${(e) => view.set((x) => ({ ...x, seconds: Math.max(2, Math.min(600, Number(e.currentTarget.value) || 60)) }))} />
           <span class="chips">
-            ${[60, 90].map((s) => html`<button type="button" class=${`btn small ${v.seconds === s ? 'soft' : 'ghost'}`} disabled=${busy} onClick=${() => view.set((x) => ({ ...x, seconds: s }))}>${`${s} s`}</button>`)}
+            ${[60, 90].map((s) => html`<button type="button" class=${v.seconds === s ? 'on' : ''} aria-pressed=${v.seconds === s} disabled=${busy} onClick=${() => view.set((x) => ({ ...x, seconds: s }))}>${`${s} s`}</button>`)}
           </span>
         </label>
         <div class="pair">
@@ -708,13 +669,16 @@ function Studio() {
   `;
 }
 
-function App() {
+/** The section. Each visit asks for the days again, so today's count of readings is current. */
+export function Timelapse() {
   const v = useStore(view);
+  useEffect(() => {
+    loadDays();
+  }, []);
   return html`
-    ${v.note && html`<p class="bad">${v.note}</p>`}
-    ${v.locked ? html`<${Unlock} />` : v.days ? html`<${Studio} />` : html`<p class="hint">Loading…</p>`}
+    <div class="timelapse">
+      ${v.note && html`<p class="bad">${v.note}</p>`}
+      ${v.days ? html`<${Studio} />` : html`<p class="hint">Loading…</p>`}
+    </div>
   `;
 }
-
-render(html`<${App} />`, document.getElementById('timelapse'));
-loadDays();

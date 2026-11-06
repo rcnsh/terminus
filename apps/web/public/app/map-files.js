@@ -1,6 +1,6 @@
 // Where the map's libraries live: MapLibre and the PMTiles reader, vendored
 // with their version in the folder's name (scripts/vendor/vendor-map.sh). The one
-// place that names them, for the Map tab (map.js), the timelapse page, and
+// place that names them, for the Map tab (map.js), the dashboard's Timelapse, and
 // the hint below that fetches them early.
 
 // "@" spelled %40: Cloudflare's static assets redirect the "@" form to it,

@@ -89,7 +89,7 @@ depth. Read the bullet for the part you're changing.
   exception: a Durable Object per Singapore day records every service's
   buses every 30 s through `getBuses()`, inside 06:30 to 00:30, and writes
   the day to R2 (`timelapse/YYYY-MM-DD.json.gz`) at the close.
-  `/admin/timelapse/` replays a day (`replay.js`, which the tests share) and
+  The dashboard's Timelapse (`/admin/#/timelapse`) replays a day (`replay.js`, which the tests share) and
   exports a video with Mediabunny, frame by frame. Details in internals.md.
 - **Map.** `/api/campus` returns stops and route lines. The street map is a
   PMTiles extract in each site's own R2 bucket

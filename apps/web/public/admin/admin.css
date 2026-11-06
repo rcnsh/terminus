@@ -1,6 +1,5 @@
-/* The operator's pages. The first block is shared with the timelapse page
-   (admin/timelapse/), which loads this file too; the dashboard's own rules
-   follow, under .dash and the classes only it uses. */
+/* The operator's dashboard: the base rules, then the dashboard's own under
+   .dash and the classes only it uses, then its Timelapse section's. */
 
 main { padding-top: 16px; padding-bottom: 64px; }
 h1 { font-size: 2rem; margin: 8px 0 20px; }
@@ -102,7 +101,7 @@ body.dash-on > main { padding: 0; }
 .side nav a.on::before {
   content: ""; position: absolute; left: -14px; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent-bright);
 }
-.side nav a.out { margin-top: 10px; border-top: 1px solid var(--line); border-radius: 0 0 9px 9px; padding-top: 14px; }
+.side nav a.apart { margin-top: 10px; border-top: 1px solid var(--line); border-radius: 0 0 9px 9px; padding-top: 14px; }
 .side nav kbd { opacity: 0; transition: opacity 0.15s ease; }
 .side nav:hover kbd, .side nav a:focus-visible kbd { opacity: 1; }
 .side .count {
@@ -406,8 +405,8 @@ table.data td.best { font-weight: 700; color: var(--good-ink); }
   .side nav a { gap: 10px; padding: 8px 12px; white-space: nowrap; }
   .side nav { grid-template-columns: minmax(0, 1fr); }
   .side nav a > .name { min-width: 0; overflow: hidden; }
-  .side nav a > :is(.count, .dot, .arrow) { animation: side-in-wide 0.3s ease-out both; }
-  .side-rail .side nav a > :is(.count, .dot, .arrow, kbd) { display: none; }
+  .side nav a > :is(.count, .dot) { animation: side-in-wide 0.3s ease-out both; }
+  .side-rail .side nav a > :is(.count, .dot, kbd) { display: none; }
   .side nav a.on::before { left: -10px; }
   .side nav a > :not(.ic), .side .wordmark { transition: opacity 0.2s ease 0.08s; }
   .side-rail .side nav a > :not(.ic), .side-rail .side .wordmark { opacity: 0; transition: opacity 0.12s ease; }
@@ -449,7 +448,7 @@ table.data td.best { font-weight: 700; color: var(--good-ink); }
   .side nav { order: 3; flex: 1 0 100%; display: flex; overflow-x: auto; scrollbar-width: none; margin: 0 -12px; padding: 0 12px; }
   .side nav a { white-space: nowrap; flex: none; padding: 7px 10px; }
   .side nav a.on::before { left: 10px; right: 10px; top: auto; bottom: -4px; width: auto; height: 3px; border-radius: 3px 3px 0 0; }
-  .side nav a.out { margin: 0; border: 0; padding-top: 7px; }
+  .side nav a.apart { margin: 0; border: 0; padding-top: 7px; }
   .side kbd, .keys, .side-toggle, .side .ic { display: none; }
   .side-foot { margin: 0 0 0 auto; padding: 0; grid-auto-flow: column; align-items: center; }
   .side-foot .btn { min-height: 34px; }
@@ -461,6 +460,24 @@ table.data td.best { font-weight: 700; color: var(--good-ink); }
   .dash-h h1 { font-size: 1.5rem; }
   .item > summary { flex-wrap: wrap; }
 }
+
+/* ------------------------------------------------------------ Timelapse */
+
+/* The map draws at the video's exact pixel size, out of sight; the preview canvas shows the frames. */
+#stage { position: fixed; left: -100000px; top: 0; }
+.timelapse .studio { display: grid; grid-template-columns: minmax(16rem, 22rem) 1fr; gap: 20px; align-items: start; }
+.timelapse .controls { display: grid; gap: 14px; }
+.timelapse .controls label { display: grid; gap: 6px; font-weight: 600; font-size: 0.9rem; }
+.timelapse .controls .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.timelapse .preview { display: grid; gap: 10px; justify-items: center; background: var(--surface-2, var(--surface)); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
+.timelapse .preview canvas { max-width: 100%; max-height: 72vh; height: auto; border-radius: 10px; box-shadow: var(--shadow); background: #000; }
+.timelapse .preview input[type="range"] { width: 100%; }
+.timelapse .scrub { display: flex; justify-content: space-between; width: 100%; color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.timelapse .job { display: grid; gap: 6px; }
+.timelapse .job .bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.timelapse .job .bar > div { height: 100%; background: var(--accent-bright); }
+.timelapse .job .meta { color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+@media (max-width: 52rem) { .timelapse .studio { grid-template-columns: 1fr; } }
 
 @media (prefers-reduced-motion: reduce) {
   .dash *, .dash *::before, .dash *::after { animation: none !important; transition: none !important; }

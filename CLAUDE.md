@@ -217,7 +217,7 @@ node apps/api/scripts/dev/dev-stub.mjs # local Worker on :8787 with a fake feed 
     `vendor/SHA256SUMS` records every vendored file and `vendor.test.js`
     fails when one changes without its script.
   - The CSP is in `src/http.ts`; a new origin needs adding there. Workers
-    come from `'self'` only; blob: workers are allowed on `/admin/timelapse/`
+    come from `'self'` only; blob: workers are allowed on `/admin/`
     alone (Mediabunny), via `cspFor()`.
 - **Kotlin:** keep logic that can be tested on the JVM out of composables
   (see `MapData.kt`).

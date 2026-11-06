@@ -182,9 +182,12 @@ const DOCS_EXTRA: Record<string, string> = {
   'font-src': `data: ${ELEMENTS}/`,
 };
 /**
- * What the timelapse page (admin/timelapse/) adds: Mediabunny, its video
- * encoder, starts its workers from blob: URLs of code it carries inline.
- * No other page needs blob: workers, so only this one may start them.
+ * What the dashboard (/admin/) adds for its Timelapse section: Mediabunny,
+ * its video encoder, starts its workers from blob: URLs of code it carries
+ * inline. The section is a hash route (#/timelapse), which the server never
+ * sees, so the dashboard's page has it; no other page needs blob: workers.
+ * It lets the page's own scripts start a worker from code they hold, and
+ * nothing more: script-src still decides what code runs.
  */
 const TIMELAPSE_EXTRA: Record<string, string> = {
   'worker-src': 'blob:',
@@ -199,7 +202,7 @@ const CSP_TIMELAPSE = widen(TIMELAPSE_EXTRA);
 
 export function cspFor(path: string): string {
   if (path === '/docs') return CSP_DOCS;
-  if (path.startsWith('/admin/timelapse/')) return CSP_TIMELAPSE;
+  if (path === '/admin/') return CSP_TIMELAPSE;
   return CSP_SITE;
 }
 
