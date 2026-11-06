@@ -8,6 +8,8 @@
  * install would see it.
  */
 
+import { COL } from '../../src/analytics-rows.ts';
+
 const DAY = 86_400_000;
 
 /** A number from 0 to 1 that's the same every run for the same seed. */
@@ -39,9 +41,15 @@ const KEY_ROUTES = ['/api/next', '/api/arrivals', '/api/buses'];
 const SERVICES = ['A1', 'A2', 'D1', 'D2', 'BTC', 'E', 'K', 'L'];
 const VERSIONS = ['android/3.5.0', 'android/3.4.3', 'android/3.4.2', 'mac/3.5.0', 'mac/3.4.3', 'android/3.5.1-beta.1'];
 
-/** What Analytics Engine's SQL API would answer [q] with, or null for a query this doesn't know. */
+/**
+ * What Analytics Engine's SQL API would answer [q] with, or null for a query
+ * this doesn't know. Each query is told by its columns, named from the same
+ * declaration admin.ts builds them from (analytics-rows.ts), so a moved
+ * column moves here too.
+ */
 export function fakeAeRows(q, nowMs) {
-  if (q.includes("blob1 IN ('answer', 'error')")) {
+  const is = (kind) => q.includes(`${COL[kind].kind} = '${kind}'`);
+  if (q.includes(`${COL.answer.kind} IN ('answer', 'error')`)) {
     return days(nowMs, 15).flatMap((day) => {
       const n = Math.round((1800 + rand(day) * 900) * busy(day));
       return [
@@ -50,8 +58,8 @@ export function fakeAeRows(q, nowMs) {
       ];
     });
   }
-  if (q.includes("blob1 = 'next'")) return [{ p50: 640, p95: 1870, n: 3_412 }];
-  if (q.includes('blob5 AS quality')) {
+  if (is('next')) return [{ p50: 640, p95: 1870, n: 3_412 }];
+  if (q.includes(`${COL.answer.quality} AS quality`)) {
     return [
       { quality: 'live', n: 11_842 },
       { quality: 'scheduled', n: 2_315 },
@@ -60,7 +68,7 @@ export function fakeAeRows(q, nowMs) {
       { quality: 'unknown', n: 37 },
     ];
   }
-  if (q.includes('blob2 AS route')) {
+  if (q.includes(`${COL.error.route} AS route`)) {
     return [
       { route: '/api/me/next', n: 81 },
       { route: '/api/buses', n: 34 },
@@ -69,7 +77,7 @@ export function fakeAeRows(q, nowMs) {
       { route: '/api/campus', n: 3 },
     ];
   }
-  if (q.includes("blob1 = 'timelapse'")) {
+  if (is('timelapse')) {
     return days(nowMs, 14).flatMap((day) => {
       const polls = Math.round(15_000 + rand(`t${day}`) * 2000);
       const err = Math.round(polls * rand(`te${day}`) * 0.01);
@@ -84,7 +92,7 @@ export function fakeAeRows(q, nowMs) {
       ];
     });
   }
-  if (q.includes("blob1 = 'active'")) {
+  if (is('active')) {
     // Counted after midnight for the day before: none for today.
     return days(nowMs - DAY, 30).flatMap((day, i) => {
       const growth = 0.7 + i / 100;
@@ -107,7 +115,7 @@ export function fakeAeRows(q, nowMs) {
       ];
     });
   }
-  if (q.includes('blob7 AS stack')) {
+  if (q.includes(`${COL.apperror.stack} AS stack`)) {
     const ago = (h) => new Date(nowMs - h * 3_600_000).toISOString().replace('T', ' ').slice(0, 19);
     return [
       {
@@ -144,7 +152,7 @@ export function fakeAeRows(q, nowMs) {
       },
     ];
   }
-  if (q.includes('blob8 AS os')) {
+  if (q.includes(`${COL.apperror.os} AS os`)) {
     return [
       { fingerprint: 'a1f3', version: '3.5.0', os: 'Android 15', n: 9 },
       { fingerprint: 'a1f3', version: '3.4.3', os: 'Android 14', n: 5 },
@@ -153,7 +161,7 @@ export function fakeAeRows(q, nowMs) {
       { fingerprint: 'c9d0', version: '3.4.3', os: 'macOS 26.1', n: 2 },
     ];
   }
-  if (q.includes("blob1 = 'legacy'")) {
+  if (is('legacy')) {
     const at = (h) => new Date(nowMs - h * 3_600_000).toISOString().replace('T', ' ').slice(0, 19);
     return [
       { what: 'address', client: 'android/3.2.0', route: '/api/me/next', n: 412, last: at(3) },
@@ -164,9 +172,9 @@ export function fakeAeRows(q, nowMs) {
       { what: 'outdated', client: 'android/2.6.3', route: '/api/me/next', n: 3, last: at(400) },
     ];
   }
-  if (q.includes("blob1 = 'apikey'")) {
+  if (is('apikey')) {
     const used = [...KEYS.filter(([, , , n]) => n), ['demo-key-gone', '', '', 80]];
-    if (q.includes('blob3 AS route')) {
+    if (q.includes(`${COL.apikey.route} AS route`)) {
       return used.flatMap(([keyId, , , perDay]) => KEY_ROUTES.map((route, r) => ({ keyId, route, n: Math.round((perDay * 6) / (r + 1)) })));
     }
     return days(nowMs, 9).flatMap((day) =>
@@ -176,7 +184,7 @@ export function fakeAeRows(q, nowMs) {
       ]),
     );
   }
-  if (q.includes("blob1 = 'settings'")) {
+  if (is('settings')) {
     const of = 31;
     const counts = {
       publicBuses: { on: 4, off: 27 },

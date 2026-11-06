@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { FROZEN_NOW, installGlobals, makeAnalytics, makeBucket, makeCtx, makeEnv, makeFetch, makeKV } from './_stubs.mjs';
+import { FROZEN_NOW, installGlobals, makeAnalytics, makeBucket, makeCtx, makeEnv, makeFetch, makeKV, named } from './_stubs.mjs';
 import worker, { coordsFrom, numParam } from '../src/index.ts';
 import { LABEL_MAX } from '../src/config.ts';
 import { ME_ROUTES } from '../src/accounts/me.ts';
@@ -691,31 +691,29 @@ test('an answer logs one decision row plus a row per timed arrival', async () =>
   const answers = ae.rows('answer');
   assert.equal(answers.length, 1, 'exactly one decision per request');
 
+  // Its raw positions are pinned in analytics-rows.test.js; here, what it says.
   const [row] = answers;
-  // The positional schema is the query contract; assert it, or it will drift.
-  assert.equal(row.blobs[0], 'answer');
-  assert.equal(row.blobs[1], a.stop.code);
-  assert.equal(row.blobs[2], 'D2');
-  assert.equal(row.blobs[3], 'UTOWN', 'destination, for checking the direction later');
-  assert.equal(row.blobs[4], 'live');
-  assert.equal(row.blobs[7], '', 'no configured trips any more');
+  const r = named(row);
+  assert.equal(r.stop, a.stop.code);
+  assert.equal(r.svc, 'D2');
+  assert.equal(r.dest, 'UTOWN', 'destination, for checking the direction later');
+  assert.equal(r.quality, 'live');
   assert.deepEqual(row.indexes, [a.stop.code]);
-  assert.equal(row.doubles[6], a.stop.confidence);
-  assert.equal(row.doubles[8], 0, 'no coordinates were sent');
-  assert.equal(row.doubles.length, 11);
-  assert.equal(row.blobs[9], '', 'one bus: no change stop');
-  assert.equal(row.doubles[10], -1, 'one bus: no wait at a change');
+  assert.equal(r.confidence, a.stop.confidence);
+  assert.equal(r.hadCoords, 0, 'no coordinates were sent');
+  assert.equal(r.via, '', 'one bus: no change stop');
+  assert.equal(r.changeWaitS, -1, 'one bus: no wait at a change');
 
   // The segment-time seed: plate is the join key across stops.
-  const arrivals = ae.rows('arrival');
+  const arrivals = ae.named('arrival');
   assert.ok(arrivals.length > 0);
   assert.ok(
-    arrivals.every((r) => r.doubles[0] >= 0),
+    arrivals.every((r) => r.etaS >= 0),
     'a null eta carries no timing information and is not logged',
   );
   assert.equal(arrivals.length, a.arrivals.filter((x) => x.etaS != null).length, 'one row per timed arrival, none for "-"');
   assert.ok(
-    arrivals.some((r) => r.blobs[5].length > 0),
+    arrivals.some((r) => r.plate.length > 0),
     'plate is recorded',
   );
 });

@@ -7,7 +7,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { FROZEN_NOW, installGlobals, makeAnalytics, makeCtx, makeEnv, makeFetch, makeKV } from './_stubs.mjs';
+import { FROZEN_NOW, installGlobals, makeAnalytics, makeCtx, makeEnv, makeFetch, makeKV, named } from './_stubs.mjs';
 import { failureReason, getArrivals, noteFailure, renewToken, resetFailureNotes } from '../src/feeds/fms.ts';
 import { scopeCache } from '../src/feeds/edgecache.ts';
 import { GateBusy } from '../src/feeds/feedgate.ts';
@@ -230,8 +230,8 @@ test("a failed call is logged with its reason and counted as an 'error' row of r
   assert.ok(err instanceof UpstreamRejected);
   const rows = ae.rows('error');
   assert.equal(rows.length, 1);
-  assert.equal(rows[0].blobs[1], 'feed arrivals');
-  assert.match(rows[0].blobs[2], /shuttle-service rejected: code=401/);
+  assert.equal(named(rows[0]).route, 'feed arrivals');
+  assert.match(named(rows[0]).reason, /shuttle-service rejected: code=401/);
   assert.ok(lines.some((l) => /NUS arrivals for PGP failed: shuttle-service rejected: code=401/.test(l)));
 });
 
@@ -248,10 +248,7 @@ test('the gate having nothing to share yet, a version switched away from, or no 
     noteFailure(env, 'buses', 'A1', new TypeError('x is undefined'), FROZEN_NOW);
     noteFailure(env, 'buses', 'A1', new TypeError('x is undefined'), FROZEN_NOW + 30_000);
   });
-  assert.deepEqual(
-    ae.rows('error').map((r) => r.blobs),
-    [['error', 'feed buses', 'TypeError: x is undefined']],
-  );
+  assert.deepEqual(ae.named('error'), [{ kind: 'error', route: 'feed buses', reason: 'TypeError: x is undefined' }]);
   assert.equal(lines.length, 1);
 });
 

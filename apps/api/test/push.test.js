@@ -508,21 +508,19 @@ test('each wake logs how fresh its card was: the gap since the last, the feed ag
   await next(phone);
   await wakeUntil(() => ae.rows('tripwake').length >= 2 && fcm.sent.length > 0);
   const rows = ae.rows('tripwake');
-  const [first, second] = rows;
-  assert.deepEqual(first.blobs.slice(4), ['first']);
-  assert.equal(first.doubles[0], 0, 'no gap before the first');
-  assert.deepEqual(second.blobs.slice(4), ['again']);
-  assert.ok(second.doubles[0] >= 30, 'the gap since the last wake');
-  for (const r of rows) {
-    const [, changed, phase, quality] = r.blobs;
+  const [first, second] = ae.named('tripwake');
+  assert.equal(first.first, 'first');
+  assert.equal(first.gapS, 0, 'no gap before the first');
+  assert.equal(second.first, 'again');
+  assert.ok(second.gapS >= 30, 'the gap since the last wake');
+  for (const { changed, phase, quality, gapS, feedAgeS, leaveShiftS, lateS } of ae.named('tripwake')) {
     assert.ok(['pushed', 'same'].includes(changed));
     assert.ok(phase && quality);
-    const [gapS, feedAgeS, leaveShiftS, lateS] = r.doubles;
     assert.ok([gapS, feedAgeS, leaveShiftS, lateS].every(Number.isFinite));
     assert.ok(feedAgeS >= 0, 'the card read the feed');
     assert.ok(lateS >= 0);
   }
-  assert.equal(rows.filter((r) => r.blobs[1] === 'pushed').length, fcm.sent.length, 'pushed rows are the pushes');
+  assert.equal(ae.named('tripwake').filter((r) => r.changed === 'pushed').length, fcm.sent.length, 'pushed rows are the pushes');
   // Nothing about who or where.
   assert.ok(rows.every((r) => r.blobs.length === 5 && !r.blobs.some((b) => /@|fcm|COM|UTOWN|KR/.test(b))));
   assert.equal(stored(TRIPS).get('lastWake').at, Date.now());

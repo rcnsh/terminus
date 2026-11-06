@@ -235,7 +235,7 @@ test('each round asks each running service at most once, spread across the inter
   const twice = h.busCalls().map((r) => r.body.route_code);
   for (const svc of RUNNING) assert.equal(twice.filter((s) => s === svc).length, 2, `${svc}: once per 30 s`);
   // Each one counted as a real request to NUS.
-  assert.equal(h.ae.rows('timelapse').filter((r) => r.blobs[1] === 'upstream').length, RUNNING.length * 2);
+  assert.equal(h.ae.named('timelapse').filter((r) => r.outcome === 'upstream').length, RUNNING.length * 2);
 });
 
 test('a public holiday known only from KV runs holiday hours: services not running are not asked', async () => {
@@ -297,11 +297,11 @@ test('with the cache warm (the map just asked), a round costs NUS nothing', asyn
     byRecorder += h.busCalls().length - before;
   });
   assert.equal(byRecorder, 0, 'every poll was a cache hit');
-  const rows = h.ae.rows('timelapse');
+  const rows = h.ae.named('timelapse');
   assert.equal(rows.length, RUNNING.length);
   assert.ok(
-    rows.every((r) => r.blobs[1] === 'hit'),
-    rows.map((r) => r.blobs[1]).join(),
+    rows.every((r) => r.outcome === 'hit'),
+    rows.map((r) => r.outcome).join(),
   );
   assert.equal((await status(h)).samples, RUNNING.length, 'and still recorded');
 });
@@ -312,8 +312,8 @@ test('with the breaker open, a poll is skipped, not retried harder', async () =>
   h.cache.seed(BREAKER, 'shuttle-service rejected: code=10009', 60);
   await h.ns.fireDue(FROZEN_NOW);
   assert.equal(h.busCalls().length, 0, 'nothing asked');
-  const [row] = h.ae.rows('timelapse');
-  assert.deepEqual(row.blobs, ['timelapse', 'skipped', RUNNING[0]]);
+  const [row] = h.ae.named('timelapse');
+  assert.deepEqual([row.outcome, row.svc], ['skipped', RUNNING[0]]);
   // The next poll is the next slot, as usual: no sooner.
   assert.equal(h.ns.alarms.get(DATE), FROZEN_NOW + 30_000 / RUNNING.length);
   assert.equal((await status(h)).samples, 0);
@@ -329,7 +329,7 @@ test('a failed poll records nothing, but a request that reached NUS still counts
   // It asked, and the request failed: an `error`, counted with the requests,
   // as is the token it minted first (the recorder's first poll, cold).
   assert.deepEqual(
-    h.ae.rows('timelapse').map((r) => r.blobs[1]),
+    h.ae.named('timelapse').map((r) => r.outcome),
     ['retry', 'error'],
   );
   assert.equal((await status(h)).samples, 0);
@@ -342,7 +342,7 @@ test('a failed poll records nothing, but a request that reached NUS still counts
   h.ns.alarms.set(DATE, FROZEN_NOW + 1_000);
   await h.ns.fireDue(FROZEN_NOW + 1_000);
   assert.deepEqual(
-    h.ae.rows('timelapse').map((r) => r.blobs[1]),
+    h.ae.named('timelapse').map((r) => r.outcome),
     ['retry', 'error', 'failed'],
   );
 });
@@ -423,7 +423,7 @@ test('a retry inside a poll is counted as the request to NUS it is', async () =>
   // A token (none yet), a refused call, a fresh token, and the call again:
   // four requests.
   assert.deepEqual(
-    h.ae.rows('timelapse').map((r) => r.blobs[1]),
+    h.ae.named('timelapse').map((r) => r.outcome),
     ['retry', 'retry', 'retry', 'upstream'],
   );
 });

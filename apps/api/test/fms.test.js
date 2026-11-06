@@ -6,7 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { installGlobals, makeAnalytics, makeCtx, makeEnv, makeFetch, makeKV, FROZEN_NOW } from './_stubs.mjs';
+import { installGlobals, makeAnalytics, makeCtx, makeEnv, makeFetch, makeKV, FROZEN_NOW, named } from './_stubs.mjs';
 import { breakerOpen, crowdFromLoad, fetchActiveBuses, fetchArrivals, getArrivals, getBuses, stampLagS } from '../src/feeds/fms.ts';
 import { UpstreamRejected, appVersion, deviceId, redactDetail } from '../src/feeds/auth.ts';
 import { flagged } from '../src/feeds/edgecache.ts';
@@ -273,7 +273,7 @@ test('a board fetched from NUS is handed on once per call, and logged bus by bus
   const { rows, calls } = await board(kv);
   assert.equal(calls, 1, 'one call to NUS for three reads');
   assert.deepEqual(
-    rows.map((r) => [r.blobs[1], r.blobs[2], r.blobs[5], r.doubles[0]]),
+    rows.map(named).map((r) => [r.stop, r.svc, r.plate, r.etaS]),
     [
       ['COM3', 'D2', 'PA1234A', 240],
       ['COM3', 'D2', 'PB5678B', 840],
@@ -281,7 +281,7 @@ test('a board fetched from NUS is handed on once per call, and logged bus by bus
     'each bus with a time and a plate, once: "no bus" is not a question',
   );
   assert.ok(
-    rows.every((r) => r.blobs[3] === '' && r.doubles.length === 1),
+    rows.every((r) => named(r).dest === '' && r.doubles.length === 1),
     'no destination, location or request',
   );
   // A hook that throws costs the log, never the board.

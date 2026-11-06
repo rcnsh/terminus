@@ -14,6 +14,7 @@ import { UpstreamUnreachable, timedFetch } from '../http.ts';
 import { cacheBase, cachedFetch, flagged } from './edgecache.ts';
 import { GateBusy, throughGate } from './feedgate.ts';
 import { noteBreakerOpen } from './feedwatch.ts';
+import { writeRow } from '../analytics-rows.ts';
 import {
   UpstreamHttpError,
   UpstreamRejected,
@@ -687,7 +688,7 @@ export function resetFailureNotes(): void {
 /**
  * Keeps why a call for a stop's arrivals or a service's buses failed: in
  * the Worker's logs, and as an Analytics Engine 'error' row (route
- * `feed arrivals` or `feed buses`, the reason in blob3), which the
+ * `feed arrivals` or `feed buses`, with the reason), which the
  * dashboard counts with the other errors. A failure that doesn't open the
  * breaker leaves no other trace: the stop only reads as unavailable. Not
  * the ones that say nothing of the feed (notOutdated) or made no call
@@ -703,12 +704,7 @@ export function noteFailure(env: Env, what: 'arrivals' | 'buses', key: string, e
   if (noted.size > 500) noted.clear();
   noted.set(seen, nowMs);
   console.warn(`NUS ${what} for ${key} failed: ${reason}`);
-  if (typeof env.AE?.writeDataPoint !== 'function') return;
-  try {
-    env.AE.writeDataPoint({ blobs: ['error', `feed ${what}`, reason], doubles: [], indexes: ['error'] });
-  } catch {
-    // A lost row never changes the answer.
-  }
+  writeRow(env, 'error', { route: `feed ${what}`, reason });
 }
 
 /**

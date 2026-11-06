@@ -6,7 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { FROZEN_NOW, installGlobals, makeCtx, makeEnv, makeFetch, makeKV } from './_stubs.mjs';
+import { FROZEN_NOW, installGlobals, makeCtx, makeEnv, makeFetch, makeKV, named } from './_stubs.mjs';
 import {
   CHECK_EVERY_MS,
   KV_NAMESPACE_IDS,
@@ -140,7 +140,7 @@ test('the beta goes down on trips in two runs in a row, and back up after two wi
     logged.join('\n'),
   );
   assert.ok(logged.some((l) => /beta: terminus: NUS bus feed recovered/.test(l)));
-  assert.equal(ae.filter((p) => p.blobs[1] === 'cron feed down').length, 2, 'each run while down counts on the dashboard');
+  assert.equal(ae.filter((p) => named(p).route === 'cron feed down').length, 2, 'each run while down counts on the dashboard');
 });
 
 test('a version refusal the beta saw runs the automatic update, with the fix in the beta store', async () => {

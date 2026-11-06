@@ -201,7 +201,7 @@ test('the automatic update throwing inside the cron is noted, and the rest of th
   assert.equal(u.up, true, 'one failed check is not yet an outage');
   assert.equal(u.failures, 1);
   assert.match(u.auto, /the automatic update failed: KV write quota/);
-  assert.ok(!ae.rows('error').some((r) => r.blobs[1] === 'cron upstream'), 'the upstream step did not fail');
+  assert.ok(!ae.named('error').some((r) => r.route === 'cron upstream'), 'the upstream step did not fail');
   assert.ok(await readPublicFeed(env), 'the next step ran');
   // And checkUpstream on its own, with a fix that throws.
   const state = (

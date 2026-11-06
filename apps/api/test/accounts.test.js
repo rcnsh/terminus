@@ -2,7 +2,7 @@ import test from 'node:test';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 
-import { FROZEN_NOW, installGlobals, makeCtx, makeEnv, makeFetch } from './_stubs.mjs';
+import { FROZEN_NOW, installGlobals, makeCtx, makeEnv, makeFetch, named } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
 import {
@@ -577,8 +577,7 @@ test('/api/me/next reads the profile with the session, in one D1 round trip, and
   assert.ok(!asked.some((q) => /FROM profiles WHERE user_id/.test(q)), 'no second read for the profile');
   const next = points.filter((p) => p.blobs[0] === 'next');
   assert.equal(next.length, 1, 'one row per answer');
-  assert.equal(next[0].doubles.length, 12, "tookMs is double12, after the answer rows' eleven");
-  assert.ok(next[0].doubles[11] >= 0);
+  assert.ok(named(next[0]).tookMs >= 0);
   assert.deepEqual(next[0].indexes, ['next']);
 
   // Other routes read the session alone, and the profile as they did.

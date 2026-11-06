@@ -8,12 +8,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { makeAnalytics, makeBucket, makeCtx, makeEnv, makeKV } from './_stubs.mjs';
+import { makeAnalytics, makeBucket, makeCtx, makeEnv, makeKV, named } from './_stubs.mjs';
 import { makeD1 } from './_d1.mjs';
 import worker from '../src/index.ts';
 import { SHAPES } from '../src/map/campus.ts';
 import { buildDayFile, dayKey, encodeBus, gzip, mapSnapshot, windowOf } from '../src/map/timelapse.ts';
 import { askedOnce, etaKey, etaSummary, passingsOf, predictionsFor, recordEta, scoreEtas, statsOf } from '../src/ops/eta.ts';
+import { sharedColumns } from '../src/analytics-rows.ts';
 import { countActive, recordActive } from '../src/ops/usage.ts';
 import { fingerprintOf, scrub, scrubStack } from '../src/ops/apperrors.ts';
 import { collecting } from '../src/ops/collect.ts';
@@ -152,15 +153,16 @@ test('POST /api/errors keeps a scrubbed report only while switched on, with no o
   await env.KV.put('config:collect:errors', 'on');
   assert.equal((await send(env, '/api/errors', { method: 'POST', body: report, headers })).status, 204);
   const [row] = ae.rows('apperror');
-  assert.deepEqual(row.blobs.slice(0, 3), ['apperror', 'android', '3.1.0']);
-  assert.equal(row.blobs[4], 'java.lang.IllegalStateException');
-  assert.equal(row.blobs[5], 'at <number>,<number>');
-  assert.equal(row.blobs[7], 'Android 15');
-  assert.deepEqual(row.doubles, [1, 1]);
+  const r = named(row);
+  assert.deepEqual([r.platform, r.version], ['android', '3.1.0']);
+  assert.equal(r.type, 'java.lang.IllegalStateException');
+  assert.equal(r.message, 'at <number>,<number>');
+  assert.equal(r.os, 'Android 15');
+  assert.deepEqual([r.n, r.fatal], [1, 1]);
   assert.ok(!JSON.stringify(row).includes('abc') && !JSON.stringify(row).includes('xyz'));
 
   await send(env, '/api/errors', { method: 'POST', body: { platform: 'web', version: 'anything', os: 'Chrome 140', type: 'TypeError' } });
-  assert.equal(ae.rows('apperror')[1].blobs[2], API_VERSION, "the website's version is the Worker's");
+  assert.equal(ae.named('apperror')[1].version, API_VERSION, "the website's version is the Worker's");
 
   for (const bad of [
     { ...report, platform: 'pager' },
@@ -265,13 +267,14 @@ test('the counts are written once a Singapore day, and not at all while switched
   assert.equal(ae.rows('active').length, 0);
   await env.KV.put('config:collect:active', 'on');
   assert.equal(await recordActive(env, now), true);
-  const rows = ae.rows('active');
+  const rows = ae.named('active');
   assert.ok(rows.length >= 6);
   assert.ok(
-    rows.every((r) => r.blobs[3] === '2026-10-11'),
+    rows.every((r) => r.day === '2026-10-11'),
     'named after the day that just ended',
   );
-  assert.deepEqual(rows.find((r) => r.blobs[1] === 'all').doubles, [1, 2, 3]);
+  const all = rows.find((r) => r.scope === 'all');
+  assert.deepEqual([all.d1, all.d7, all.d30], [1, 2, 3]);
   assert.equal(await recordActive(env, now + 15 * 60_000), false, 'the next run that day writes nothing');
   assert.equal(await recordActive(env, now + DAY), true, 'the next day counts again');
 });
@@ -332,10 +335,10 @@ test('the old address and paths are counted only while switched on', async () =>
   await call('https://bus.example.test/api/health', app);
   assert.equal((await call('https://terminus.rcn.sh/.env.bak', {})).status, 404);
   assert.deepEqual(
-    ae.rows('legacy').map((r) => r.blobs),
+    ae.named('legacy'),
     [
-      ['legacy', 'address', 'mac/3.2.0', '/api/health'],
-      ['legacy', 'path', 'mac/3.2.0', '/next'],
+      { kind: 'legacy', what: 'address', client: 'mac/3.2.0', route: '/api/health', n: 1 },
+      { kind: 'legacy', what: 'path', client: 'mac/3.2.0', route: '/next', n: 1 },
     ],
     'one row for each, and none for a request on the new address',
   );
@@ -363,13 +366,10 @@ test("requests made with an API key are counted against it only while switched o
   assert.equal((await send(env, '/api/stops/pairs?x=1')).status, 401, 'no key: nothing counted');
   env.RL_PUBLIC = { limit: async () => ({ success: false }) };
   assert.equal((await ask('tk_two')).status, 429);
-  assert.deepEqual(
-    ae.rows('apikey').map((r) => r.blobs),
-    [
-      ['apikey', 'k1', '/api/stops/pairs', 'ok'],
-      ['apikey', 'k2', '/api/stops/pairs', 'limited'],
-    ],
-  );
+  assert.deepEqual(ae.named('apikey'), [
+    { kind: 'apikey', keyId: 'k1', route: '/api/stops/pairs', outcome: 'ok', n: 1 },
+    { kind: 'apikey', keyId: 'k2', route: '/api/stops/pairs', outcome: 'limited', n: 1 },
+  ]);
   assert.deepEqual(
     ae.rows('apikey').map((r) => r.indexes),
     [['k1'], ['k2']],
@@ -467,8 +467,9 @@ test('the settings are read from the accounts used this month, written once a Si
   assert.equal(await recordSettings(env, now), false, 'off');
   await env.KV.put('config:collect:settings', 'on');
   assert.equal(await recordSettings(env, now), true);
-  assert.ok(ae.rows('settings').every((r) => r.blobs[3] === '2026-10-11'));
-  assert.deepEqual(ae.rows('settings').find((r) => r.blobs[1] === 'publicBuses').doubles, [1, 1]);
+  assert.ok(ae.named('settings').every((r) => r.day === '2026-10-11'));
+  const pb = ae.named('settings').find((r) => r.setting === 'publicBuses');
+  assert.deepEqual([pb.n, pb.of], [1, 1]);
   assert.equal(await recordSettings(env, now + 15 * 60_000), false, 'once a day');
 });
 
@@ -654,8 +655,9 @@ test('the cron scores a closed day once, from the recording and Analytics Engine
   assert.equal(await recordEta(env, now, fetchImpl), null, 'off');
   await env.KV.put('config:collect:eta', 'on');
   assert.equal(await recordEta(env, now, fetchImpl), DATE);
-  assert.match(queries[0], /blob1 IN \('arrival', 'board'\)/);
-  assert.match(queries[0], /blob9 AS berth/);
+  const c = sharedColumns('arrival', 'board');
+  assert.ok(queries[0].includes(`${c.kind} IN ('arrival', 'board')`), 'both kinds, by their shared columns');
+  assert.ok(queries[0].includes(`${c.berth} AS berth`));
   assert.match(queries[0], /INTERVAL '2' DAY\s+AND timestamp < NOW\(\) - INTERVAL '1' HOUR/, "the day's window, not everything since");
   const kept = JSON.parse(new TextDecoder().decode(bucket._written.get(etaKey(DATE))));
   assert.deepEqual({ ...kept, rows: undefined }, { v: 3, date: DATE, predictions: 1, matched: 1, services: ['K'], rows: undefined });

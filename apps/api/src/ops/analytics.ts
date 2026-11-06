@@ -17,112 +17,20 @@
  * volume. Nothing here may ever throw into a response path -- an answer that
  * fails because logging failed would be an absurd way to miss a bus.
  *
- * ---------------------------------------------------------------------------
- * POSITIONAL SCHEMA. Analytics Engine SQL addresses columns as blob1..blob20
- * and double1..double20, so these positions are the contract. APPEND ONLY --
- * never reorder, never repurpose, or every query written before the change
- * starts lying.
- *
- *   blob1   kind        'answer' | 'arrival' | 'error' | 'timelapse' | 'signal'
- *                       | 'active' | 'apperror' | 'tripwake' | 'legacy' | 'settings'
- *                       | 'next' | 'apikey' | 'board'
- *   blob2   stop        boarding stop code; for 'error', the route (no query),
- *                       or 'cron <step>' for a cron step that failed;
- *                       for 'timelapse', the poll's outcome (see logPoll);
- *                       for 'signal', the kind of trip signal (me.ts), a count
- *                       with no account, stop or location
- *   blob3   svc         service, '' on an ended answer; for an 'error' row of
- *                       route 'feed arrivals' or 'feed buses', why the NUS call
- *                       failed (fms.ts noteFailure)
- *   blob4   dest        destination stop code, '' for a bare /next
- *   blob5   quality     live | scheduled | unknown | stale | ended
- *   blob6   plate       arrival rows only
- *   blob7   crowd       low | medium | high | ''
- *   blob8   trip        unused since configured trips were removed; always ''
- *   blob9   berth       raw busStopCode, arrival rows only
- *   blob10  via         answer rows: the stop a trip changes buses at, '' on one bus
- *   blob11  svc2        answer rows: the bus after the change, '' on one bus
- *
- *   double1  etaS            arrival rows: seconds to arrival; timelapse rows: buses seen
- *   double2  boardS          answer rows: seconds until you can board
- *   double3  rideS
- *   double4  totalS
- *   double5  hops
- *   double6  walkS           to the boarding stop
- *   double7  confidence      0..1
- *   double8  ambiguousBerth  0 | 1
- *   double9  hadCoords       0 | 1
- *   double10 walkAllS        whole-way walk, -1 when unknown
- *   double11 changeWaitS     answer rows: seconds waiting for the bus after a change, -1 on one bus
- *   double12 tookMs          'next' rows: ms from the request's start to its answer built
- *
- *   index1  stop code (the sampling key); 'error', 'timelapse', 'signal', 'active',
- *           'apperror', 'tripwake', 'legacy', 'settings' and 'next' rows use their
- *           kind; 'apikey' rows the key's id
- *
- * Seven kinds give the columns their own meaning:
- *
- *   'active' (usage.ts logActive), once a Singapore day, counts only:
- *     blob2 scope 'all' | 'app' | 'version';  blob3 the app (web, android,
- *     mac, ios, api, unknown) or version ("android/3.1.0"), 'all' for all;
- *     blob4 the Singapore day counted, YYYY-MM-DD;
- *     double1..3 used in the last 1, 7 and 30 days (accounts; devices for a
- *     version; keys for 'api').
- *   'apperror' (apperrors.ts), one report from an app or the website:
- *     blob2 platform;  blob3 app version;  blob4 fingerprint (the same crash
- *     gets the same one);  blob5 the error's type;  blob6 its message and
- *     blob7 its stack, both scrubbed (apperrors.ts scrub);  blob8 the OS or
- *     browser and its major version;  double1 1;  double2 1 for a crash
- *     that ended the app, 0 for an error it carried on from.
- *   'tripwake' (logTripWake), one Trip object wake (see WakeRow):
- *     blob2 'pushed' | 'same';  blob3 the card's phase;  blob4 its quality;
- *     blob5 'first' | 'again' (today's first wake or not);  double1 gapS;
- *     double2 feedAgeS;  double3 leaveShiftS;  double4 lateS.
- *   'legacy' (legacy.ts), one request that used something on its way out:
- *     blob2 what: 'address' (the old address), 'path' (the API's old path)
- *     or 'outdated' (an app below config:minClient, answered 426);
- *     blob3 the app and version ("android/3.2.0"), 'browser' or 'other';
- *     blob4 the route, ids and query left out ("/api/me/next");  double1 1.
- *   'settings' (settings.ts), once a Singapore day, counts only:
- *     blob2 the setting ("publicBuses");  blob3 its value ("on", "fast");
- *     blob4 the Singapore day counted, YYYY-MM-DD;  double1 accounts with
- *     that value;  double2 accounts counted (used in the last 30 days).
- *   'next' (logNextTook), one /api/me/next answered: double12 tookMs, from
- *     the request reaching the Worker to its answer built, D1, the Trip
- *     object and the feeds included (not the trip to and from the Worker);
- *     double1..11 are 0, no blobs past blob1. A row for every answer, a bus
- *     in it or not, so its quantiles are what opening the app costs.
- *
- *   'board' (logBoard), one bus on a shuttle board, written once per call to
- *     NUS (fms.ts getArrivals), only while the operator collects `eta`:
- *     the arrival model's questions (eta.ts predictionsFor), at every stop
- *     the Worker asks about, timed from when the board was fetched rather
- *     than when a cached copy was read. As an 'arrival' row, but blob4 is
- *     '', blob5 'live' and double1 (etaS) the only double: no destination,
- *     request or location.
- *
- *   'apikey' (keyuse.ts), one request made with an API key, only while the
- *     operator collects `keys`: blob2 the key's id (api_keys.id);  blob3 the
- *     keyed route ("/api/next"), never a query;  blob4 'ok' | 'limited'
- *     (turned away by the key's rate limit);  double1 1.
- *
- * Apart from 'apikey' rows, whose key id the dashboard joins to its owner
- * while the key exists, no row holds an account, email, IP address, device
- * or install id, or coordinates. An answer row's
- * stop is the one nearest the caller when a location was sent, and its
- * destination comes from the timetable: the privacy policy says so.
- * ---------------------------------------------------------------------------
+ * Each kind's columns are declared once, in ROWS (analytics-rows.ts), and
+ * written by name through writeRow there. What each kind means, and what
+ * the rows hold about people, is in docs/analytics.md.
  */
 
 import type { Answer, Env, ScoredOption, StopArrivals } from '../types.ts';
 import { collectingMemo } from './collect.ts';
+import { analyticsEnabled, writeRow } from '../analytics-rows.ts';
+import type { RowFields } from '../analytics-rows.ts';
+
+export { analyticsEnabled };
 
 /** Arrival rows per request. Bounded so one tap cannot write a hundred rows. */
 const MAX_ARRIVAL_ROWS = 8;
-
-export function analyticsEnabled(env: Env): boolean {
-  return typeof env.AE?.writeDataPoint === 'function';
-}
 
 export interface LogInput {
   answer: Answer;
@@ -133,62 +41,56 @@ export interface LogInput {
 }
 
 export function logAnswer(env: Env, input: LogInput): void {
+  // writeRow checks too; this saves building rows nobody keeps.
   if (!analyticsEnabled(env)) return;
-  try {
-    const { answer, best } = input;
-    const stop = answer.stop.code || 'none';
+  const { answer, best } = input;
+  const stop = answer.stop.code || 'none';
+  const hadCoords = input.hadCoords ? 1 : 0;
 
-    env.AE!.writeDataPoint({
-      blobs: [
-        'answer',
-        stop,
-        best?.svc ?? '',
-        input.dest ?? '',
-        answer.quality,
-        '',
-        best?.arrival?.crowd ?? '',
-        '', // blob8: always empty, kept so the columns after it don't shift
-        best?.arrival?.berth ?? '',
-        best?.change?.stop.code ?? '',
-        best?.change?.svc ?? '',
-      ],
-      doubles: [
-        0,
-        best?.boardS ?? -1,
-        best?.rideS ?? -1,
-        best?.totalS ?? -1,
-        best?.hops ?? -1,
-        best?.walkS ?? -1,
-        answer.stop.confidence,
-        best?.ambiguousBerth ? 1 : 0,
-        input.hadCoords ? 1 : 0,
-        input.walkAllS ?? -1,
-        best?.change ? best.change.boardS - best.change.reachS - best.change.crossS : -1,
-      ],
-      indexes: [stop],
+  writeRow(env, 'answer', {
+    stop,
+    svc: best?.svc ?? '',
+    dest: input.dest ?? '',
+    quality: answer.quality,
+    crowd: best?.arrival?.crowd ?? '',
+    berth: best?.arrival?.berth ?? '',
+    via: best?.change?.stop.code ?? '',
+    svc2: best?.change?.svc ?? '',
+    boardS: best?.boardS ?? -1,
+    rideS: best?.rideS ?? -1,
+    totalS: best?.totalS ?? -1,
+    hops: best?.hops ?? -1,
+    walkS: best?.walkS ?? -1,
+    confidence: answer.stop.confidence,
+    ambiguousBerth: best?.ambiguousBerth ? 1 : 0,
+    hadCoords,
+    walkAllS: input.walkAllS ?? -1,
+    changeWaitS: best?.change ? best.change.boardS - best.change.reachS - best.change.crossS : -1,
+  });
+
+  // The segment-time seed. Every arrival at the chosen stop, with its plate.
+  for (const a of answer.arrivals.slice(0, MAX_ARRIVAL_ROWS)) {
+    if (a.etaS == null) continue; // "no bus" carries no timing information
+    writeRow(env, 'arrival', {
+      stop,
+      svc: a.svc,
+      dest: input.dest ?? '',
+      quality: answer.quality,
+      plate: a.plate ?? '',
+      crowd: a.crowd ?? '',
+      berth: a.berth ?? '',
+      etaS: a.etaS,
+      // The answer's own columns, which an arrival doesn't have: -1 as an answer without a bus writes them.
+      boardS: -1,
+      rideS: -1,
+      totalS: -1,
+      hops: -1,
+      walkS: -1,
+      confidence: answer.stop.confidence,
+      ambiguousBerth: 0,
+      hadCoords,
+      walkAllS: -1,
     });
-
-    // The segment-time seed. Every arrival at the chosen stop, with its plate.
-    for (const a of answer.arrivals.slice(0, MAX_ARRIVAL_ROWS)) {
-      if (a.etaS == null) continue; // "no bus" carries no timing information
-      env.AE!.writeDataPoint({
-        blobs: [
-          'arrival',
-          stop,
-          a.svc,
-          input.dest ?? '',
-          answer.quality,
-          a.plate ?? '',
-          a.crowd ?? '',
-          '', // blob8: always empty, kept so the columns after it don't shift
-          a.berth ?? '',
-        ],
-        doubles: [a.etaS, -1, -1, -1, -1, -1, answer.stop.confidence, 0, input.hadCoords ? 1 : 0, -1],
-        indexes: [stop],
-      });
-    }
-  } catch {
-    // Deliberately swallowed. Losing a metric is not worth losing an answer.
   }
 }
 
@@ -200,41 +102,42 @@ export function logAnswer(env: Env, input: LogInput): void {
 const MAX_BOARD_ROWS = 16;
 
 /**
- * A shuttle board just fetched from NUS, as 'board' rows (above), when the
- * operator collects `eta`. Called once per call to NUS, so a cached copy
- * read again adds nothing. Each time counts from when the row is written,
- * so a few hundred ms of fetch and switch read don't make the bus look late.
+ * A shuttle board just fetched from NUS, as 'board' rows, when the operator
+ * collects `eta`: the arrival model's questions (eta.ts predictionsFor), at
+ * every stop the Worker asks about. Called once per call to NUS, so a
+ * cached copy read again adds nothing. Each time counts from when the row
+ * is written, so a few hundred ms of fetch and switch read don't make the
+ * bus look late. No destination, request or location.
  */
 export async function logBoard(env: Env, sa: StopArrivals): Promise<void> {
   if (!analyticsEnabled(env) || !(await collectingMemo(env, 'eta'))) return;
-  try {
-    const lagS = Math.max(0, (Date.now() - sa.fetchedAt) / 1000);
-    let n = 0;
-    for (const a of sa.arrivals) {
-      // A board's "no bus" and a timetabled first bus aren't a bus on the road to check.
-      if (a.etaS == null || !a.plate || a.scheduled) continue;
-      if (++n > MAX_BOARD_ROWS) break;
-      env.AE!.writeDataPoint({
-        blobs: ['board', sa.code, a.svc, '', 'live', a.plate, a.crowd ?? '', '', a.berth ?? ''],
-        doubles: [Math.max(0, a.etaS - lagS)],
-        indexes: [sa.code],
-      });
-    }
-  } catch {
-    // Same rule as above: logging never breaks a response.
+  const lagS = Math.max(0, (Date.now() - sa.fetchedAt) / 1000);
+  let n = 0;
+  for (const a of sa.arrivals) {
+    // A board's "no bus" and a timetabled first bus aren't a bus on the road to check.
+    if (a.etaS == null || !a.plate || a.scheduled) continue;
+    if (++n > MAX_BOARD_ROWS) break;
+    writeRow(env, 'board', {
+      stop: sa.code,
+      svc: a.svc,
+      dest: '',
+      quality: 'live',
+      plate: a.plate,
+      crowd: a.crowd ?? '',
+      berth: a.berth ?? '',
+      etaS: Math.max(0, a.etaS - lagS),
+    });
   }
 }
 
-/** One /api/me/next answered, and how long it took (the 'next' kind above). */
+/**
+ * One /api/me/next answered, and how long it took: from the request
+ * reaching the Worker to its answer built, D1, the Trip object and the
+ * feeds included (not the trip to and from the Worker). A row for every
+ * answer, a bus in it or not, so its quantiles are what opening the app costs.
+ */
 export function logNextTook(env: Env, tookMs: number): void {
-  if (!analyticsEnabled(env)) return;
-  try {
-    // Eleven zeros for the columns other kinds use, then double12.
-    const doubles = [...Array.from({ length: 11 }, () => 0), Math.max(0, Math.round(tookMs))];
-    env.AE!.writeDataPoint({ blobs: ['next'], doubles, indexes: ['next'] });
-  } catch {
-    // Same rule as above: logging never breaks a response.
-  }
+  writeRow(env, 'next', { tookMs: Math.max(0, Math.round(tookMs)) });
 }
 
 /**
@@ -242,15 +145,10 @@ export function logNextTook(env: Env, tookMs: number): void {
  * a query string can hold coordinates. Nothing else is filled in.
  */
 export function logError(env: Env, path: string): void {
-  if (!analyticsEnabled(env)) return;
-  try {
-    // /api/me/devices/abc123 is one route, not one per device.
-    const parts = path.split('/');
-    const route = parts.slice(0, parts[1] === 'api' ? 4 : 3).join('/') || '/';
-    env.AE!.writeDataPoint({ blobs: ['error', route], doubles: [], indexes: ['error'] });
-  } catch {
-    // Same rule as above: logging never breaks a response.
-  }
+  // /api/me/devices/abc123 is one route, not one per device.
+  const parts = path.split('/');
+  const route = parts.slice(0, parts[1] === 'api' ? 4 : 3).join('/') || '/';
+  writeRow(env, 'error', { route });
 }
 
 /**
@@ -258,12 +156,7 @@ export function logError(env: Env, path: string): void {
  * the dashboard as the route 'cron <step>'. No email: the logs say why.
  */
 export function logCronError(env: Env, step: string): void {
-  if (!analyticsEnabled(env)) return;
-  try {
-    env.AE!.writeDataPoint({ blobs: ['error', `cron ${step}`], doubles: [], indexes: ['error'] });
-  } catch {
-    // Same rule as above: a lost count never stops the cron.
-  }
+  writeRow(env, 'error', { route: `cron ${step}` });
 }
 
 /**
@@ -283,12 +176,7 @@ export function logCronError(env: Env, step: string): void {
 export type PollOutcome = 'upstream' | 'error' | 'hit' | 'stale' | 'failed' | 'skipped' | 'retry';
 
 export function logPoll(env: Env, outcome: PollOutcome, svc: string, buses: number): void {
-  if (!analyticsEnabled(env)) return;
-  try {
-    env.AE!.writeDataPoint({ blobs: ['timelapse', outcome, svc], doubles: [buses], indexes: ['timelapse'] });
-  } catch {
-    // Same rule as above: a lost count never stops a poll.
-  }
+  writeRow(env, 'timelapse', { outcome, svc, buses });
 }
 
 /**
@@ -314,35 +202,23 @@ export interface WakeRow {
 }
 
 export function logTripWake(env: Env, r: WakeRow): void {
-  if (!analyticsEnabled(env)) return;
-  try {
-    env.AE!.writeDataPoint({
-      blobs: ['tripwake', r.changed ? 'pushed' : 'same', r.phase, r.quality, r.first ? 'first' : 'again'],
-      doubles: [r.gapS, r.feedAgeS, r.leaveShiftS, r.lateS],
-      indexes: ['tripwake'],
-    });
-  } catch {
-    // Same rule as above: a lost count never stops a wake.
-  }
+  writeRow(env, 'tripwake', {
+    changed: r.changed ? 'pushed' : 'same',
+    phase: r.phase,
+    quality: r.quality,
+    first: r.first ? 'first' : 'again',
+    gapS: r.gapS,
+    feedAgeS: r.feedAgeS,
+    leaveShiftS: r.leaveShiftS,
+    lateS: r.lateS,
+  });
 }
 
-/** One row of the daily active counts (usage.ts). */
-export interface ActiveRow {
-  scope: 'all' | 'app' | 'version';
-  name: string;
-  day: string;
-  d1: number;
-  d7: number;
-  d30: number;
-}
+/** One row of the daily active counts (usage.ts): ROWS.active's fields, its scope one of three. */
+export type ActiveRow = RowFields<'active'> & { scope: 'all' | 'app' | 'version' };
 
 export function logActive(env: Env, row: ActiveRow): void {
-  if (!analyticsEnabled(env)) return;
-  try {
-    env.AE!.writeDataPoint({ blobs: ['active', row.scope, row.name, row.day], doubles: [row.d1, row.d7, row.d30], indexes: ['active'] });
-  } catch {
-    // Same rule as above: a lost count never stops the cron.
-  }
+  writeRow(env, 'active', row);
 }
 
 /** One request that used something on its way out (legacy.ts). */
@@ -353,30 +229,14 @@ export interface LegacyRow {
 }
 
 export function logLegacy(env: Env, r: LegacyRow): void {
-  if (!analyticsEnabled(env)) return;
-  try {
-    env.AE!.writeDataPoint({ blobs: ['legacy', r.what, r.client, r.route], doubles: [1], indexes: ['legacy'] });
-  } catch {
-    // Same rule as above: a lost count never stops a request.
-  }
+  writeRow(env, 'legacy', { what: r.what, client: r.client, route: r.route, n: 1 });
 }
 
-/** One setting's value and how many accounts have it, on a day (settings.ts). */
-export interface SettingRow {
-  setting: string;
-  value: string;
-  day: string;
-  n: number;
-  of: number;
-}
+/** One setting's value and how many accounts have it, on a day (settings.ts): ROWS.settings's fields. */
+export type SettingRow = RowFields<'settings'>;
 
 export function logSetting(env: Env, r: SettingRow): void {
-  if (!analyticsEnabled(env)) return;
-  try {
-    env.AE!.writeDataPoint({ blobs: ['settings', r.setting, r.value, r.day], doubles: [r.n, r.of], indexes: ['settings'] });
-  } catch {
-    // Same rule as above: a lost count never stops the cron.
-  }
+  writeRow(env, 'settings', r);
 }
 
 /** One request made with an API key (keyuse.ts). */
@@ -387,13 +247,8 @@ export interface KeyUseRow {
 }
 
 export function logKeyUse(env: Env, r: KeyUseRow): void {
-  if (!analyticsEnabled(env)) return;
-  try {
-    // Indexed by key, so Analytics Engine samples each key apart: a busy one never thins out a quiet one's counts.
-    env.AE!.writeDataPoint({ blobs: ['apikey', r.keyId, r.route, r.outcome], doubles: [1], indexes: [r.keyId] });
-  } catch {
-    // Same rule as above: a lost count never stops a request.
-  }
+  // Indexed by key (ROWS.apikey), so Analytics Engine samples each key apart: a busy one never thins out a quiet one's counts.
+  writeRow(env, 'apikey', { keyId: r.keyId, route: r.route, outcome: r.outcome, n: 1 });
 }
 
 /** One error report, already scrubbed (apperrors.ts). */
@@ -410,16 +265,22 @@ export interface AppErrorRow {
 }
 
 export function logAppError(env: Env, r: AppErrorRow): void {
-  if (!analyticsEnabled(env)) return;
-  try {
-    env.AE!.writeDataPoint({
-      blobs: ['apperror', r.platform, r.version, r.fingerprint, r.type, r.message, r.stack, r.os],
-      doubles: [1, r.fatal ? 1 : 0],
-      indexes: ['apperror'],
-    });
-  } catch {
-    // Same rule as above.
-  }
+  writeRow(env, 'apperror', { ...r, n: 1, fatal: r.fatal ? 1 : 0 });
+}
+
+/** One trip signal (me.ts): which signals people send, never who or where. */
+export function logSignal(env: Env, signal: string): void {
+  writeRow(env, 'signal', { signal, n: 1 });
+}
+
+/**
+ * A step between buses (me.ts), by direction and the kind of trip: whether
+ * people step later after a class (a trip home starts from one) says
+ * whether classes end when ENDS_EARLY_MIN assumes. Never the account or the class.
+ */
+export function logStep(env: Env, dir: 'earlier' | 'later' | 'best', trip: string): void {
+  const kind = /^(gap-)?home:/.test(trip) ? 'home' : /^(place|to):/.test(trip) ? 'place' : 'class';
+  writeRow(env, 'step', { dir, trip: kind, n: 1 });
 }
 
 /** Rows from Analytics Engine's SQL API; needs ANALYTICS_TOKEN and CF_ACCOUNT_ID. Throws when it refuses. */

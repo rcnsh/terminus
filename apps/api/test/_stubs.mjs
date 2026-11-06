@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
+import { COL } from '../src/analytics-rows.ts';
 
 /**
  * Test doubles for the Workers runtime. The suite must run with NO
@@ -139,6 +140,12 @@ function fakeJwt(serial = 0) {
   ].join('.');
 }
 
+/** An Analytics Engine data point by its fields' names (ROWS in analytics-rows.ts), with blob1 as `kind`. */
+export function named(p) {
+  const at = (c) => (c.startsWith('blob') ? p.blobs[Number(c.slice(4)) - 1] : p.doubles[Number(c.slice(6)) - 1]);
+  return Object.fromEntries(Object.entries(COL[p.blobs[0]] ?? { kind: 'blob1' }).map(([f, c]) => [f, at(c)]));
+}
+
 export function makeAnalytics() {
   const events = [];
   return {
@@ -148,6 +155,10 @@ export function makeAnalytics() {
     },
     rows(kind) {
       return events.filter((e) => e.blobs[0] === kind);
+    },
+    /** The [kind] rows by field name. */
+    named(kind) {
+      return events.filter((e) => e.blobs[0] === kind).map(named);
     },
   };
 }
