@@ -201,3 +201,13 @@ test("the card's bus is found among the departures by which bus it is, though it
   const s = withSteps({ departsAt, leave: null }, f, { trip: 'to:UTOWN', target: null }, false, now);
   assert.ok(s.steps?.later, 'a later bus to step to');
 });
+
+test('a chosen bus from long ago is no guide to the estimates, and costs nothing to ignore', () => {
+  const now = at('2026-08-27T16:00');
+  const sa = board('PGP', now, 'D2', []);
+  const plain = departuresFrom(GRAPH, sa, 'D2', { now, from: now, until: now + 3600_000 });
+  const started = performance.now();
+  const old = departuresFrom(GRAPH, sa, 'D2', { now, from: now, until: now + 3600_000, around: Date.parse('1970-01-01T00:00:00Z') });
+  assert.ok(performance.now() - started < 100, `${Math.round(performance.now() - started)} ms`);
+  assert.deepEqual(old, plain);
+});

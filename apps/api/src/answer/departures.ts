@@ -127,7 +127,10 @@ export function departuresFrom(graph: Graph, board: StopArrivals | undefined, sv
   // that one, the windows around a chosen bus carry on as they would with
   // the service running, so a class's leave-by is the same at 06:30 as at 07:30.
   let fixed: number[] = [];
-  if (!last && w.around !== undefined) {
+  // A chosen bus more than a day off (a step target kept, or sent, from
+  // long ago) says nothing of today's buses, and walking to it a headway
+  // at a time would take millions of steps.
+  if (!last && w.around !== undefined && Math.abs(w.around - w.now) <= PROJECT_MS) {
     let b = w.around;
     // Closed by then, after running: the windows meet at the close, so the
     // last one before it is a whole headway, and a bus sure to come.
