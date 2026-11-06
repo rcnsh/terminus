@@ -315,3 +315,17 @@ test('with no live times, a class less than a headway off is not counted on the 
     'a bus by the end of a headway',
   );
 });
+
+test('a chosen bus that has left lines up nothing: the steps are as if none was chosen', () => {
+  // D2 every 494 s at 16:00, no live times; the chosen bus left 10 s ago.
+  const now = at('2026-08-27T16:00');
+  const byStop = new Map([['PGP', board('PGP', now, 'D2', [])]]);
+  const candidates = [{ stop: PGP, distM: 0, walkS: 60, legs: [{ svc: 'D2', hops: 5, to: { code: 'UTOWN', name: 'UTown' } }] }];
+  const options = scoreOptions(GRAPH, candidates, byStop, now);
+  const f = { options, candidates, byStop, graph: GRAPH, arriveBy: null, walkAllS: null, nowMs: now };
+  const gone = { svc: 'D2', stop: 'PGP', board: new Date(now - 10_000).toISOString().replace('.000Z', 'Z') };
+  assert.deepEqual(departures(f, now + 3600_000, gone), departures(f, now + 3600_000, null));
+  const departsAt = new Date(now + options[0].boardS * 1000).toISOString();
+  const steps = (target) => withSteps({ departsAt, leave: null }, f, { trip: 'to:UTOWN', target }, false, now).steps;
+  assert.deepEqual(steps(gone), steps(null));
+});

@@ -423,8 +423,11 @@ export function departures(f: LeaveInput, untilMs: number, anchor?: { svc: strin
     // A class's arrival is at the room; any other trip's at the stop, with the walk on beside it.
     const onS = f.arriveBy ? venueWalkOf(f.arriveBy, leg) : 0;
     const from = f.nowMs + readyS(leg) * 1000;
-    // With no live times, the estimates fall either side of the chosen bus, so it stays among them.
-    const chosen = anchor && anchor.svc === leg.svc && anchor.stop === leg.stop.code ? Date.parse(anchor.board) : undefined;
+    // With no live times, the estimates fall either side of the chosen bus,
+    // so it stays among them. One that has left is no longer a choice
+    // (stepFrom), and lines up nothing.
+    const chosenMs = anchor && anchor.svc === leg.svc && anchor.stop === leg.stop.code ? Date.parse(anchor.board) : undefined;
+    const chosen = chosenMs !== undefined && chosenMs > f.nowMs ? chosenMs : undefined;
     const buses = departuresFrom(f.graph, sb, leg.svc, {
       now: f.nowMs,
       from,
