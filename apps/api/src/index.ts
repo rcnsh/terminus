@@ -24,7 +24,7 @@ import { analyticsEnabled, logError } from './ops/analytics.ts';
 import { docsPageFor, openApiJson } from './openapi.ts';
 import { phaseAt, sgtMinute } from './site/pagesky.ts';
 import { CORS, clientKey, coordsFrom, json, jsonCached, numParam, withSecurityHeaders } from './http.ts';
-import { type MeDeps, handleMe } from './accounts/me.ts';
+import { handleMe } from './accounts/me.ts';
 import { UPDATE_REQUIRED, accountsConfigured, clientOutdated, hasSessionCookie } from './accounts/accounts.ts';
 import { answering, answeringSince, feedStatus, readUpstream, runCron, statusRecords } from './ops/monitor.ts';
 import { ltaConfigured } from './feeds/lta.ts';
@@ -48,7 +48,7 @@ import { appSiteAssociation, markBeta, movedApi, movedPage } from './site/site.t
 import { isBeta, linkOrigin } from './origin.ts';
 import { noteLegacy } from './ops/legacy.ts';
 import { noteKeyUse } from './ops/keyuse.ts';
-import { answerFor, arrivedAnswer, collectArrivals, needsSetupAnswer } from './answer/answer.ts';
+import { type MeDeps, answerFor, arrivedAnswer, collectArrivals, needsSetupAnswer } from './answer/answer.ts';
 import { lang, langOfRequest, m, withLang } from './i18n.ts';
 import type { Lang } from './i18n.ts';
 

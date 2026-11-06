@@ -6,11 +6,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { installGlobals, makeAnalytics, makeCtx, makeEnv, makeFetch, makeKV } from './_stubs.mjs';
+import { installGlobals, makeAnalytics, makeCtx, makeDurableObjects, makeEnv, makeFetch, makeKV } from './_stubs.mjs';
+import { Trip } from '../src/push/tripdo.ts';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
 import { answerFor, unlogged } from '../src/answer/answer.ts';
-import { tripCardFor } from '../src/accounts/me.ts';
+import { answerWake } from '../src/answer/rider.ts';
 import { GRAPH } from '../src/answer/graph.ts';
 
 const BASE = 'https://bus.example.test';
@@ -26,7 +27,7 @@ async function setup() {
   const fetchImpl = makeFetch({ byStop: FEED });
   installGlobals(fetchImpl);
   const ae = makeAnalytics();
-  const env = { ...makeEnv(makeKV(), ae), DB: makeD1(), EMAIL: makeEmail(), EMAIL_FROM: 'x@example.test' };
+  const env = { ...makeEnv(makeKV(), ae), DB: makeD1(), EMAIL: makeEmail(), EMAIL_FROM: 'x@example.test', TRIPS: makeDurableObjects(Trip) };
   const call = async (path, { method = 'GET', cookie, body } = {}) => {
     const headers = {};
     if (cookie) headers.cookie = cookie;
@@ -73,6 +74,18 @@ test('/api/me/next, which someone asked for, is still logged', async () => {
   assert.ok(ae.rows('answer').length >= 1);
 });
 
+test('a signal logs one answer, the one it answers with, not the one it plans from first', async () => {
+  const { ae, call, cookie } = await setup();
+  // "Not going" to the first class: the answer is the next one's bus.
+  assert.equal((await call('/api/me/signal', { method: 'POST', cookie, body: { kind: 'skipped' } })).status, 200);
+  const bySignal = ae.rows('answer').length;
+  assert.ok(bySignal >= 1);
+  // The same answer asked for again, with the day as the signal left it.
+  ae.events.length = 0;
+  assert.equal((await call('/api/me/next', { cookie })).status, 200);
+  assert.equal(bySignal, ae.rows('answer').length);
+});
+
 test("the Trip object's card is worked out without logging", async () => {
   const { env, ae } = await setup();
   const { id: userId } = await env.DB.prepare('SELECT id FROM users').first();
@@ -86,7 +99,7 @@ test("the Trip object's card is worked out without logging", async () => {
     collectArrivals: async () => new Map(),
   };
   const ctx = makeCtx();
-  const card = await tripCardFor(env, ctx, deps, userId, null, Date.now(), async () => {});
+  const card = await answerWake(env, ctx, deps, userId, null, Date.now(), { savePlan: async () => {} });
   await ctx.settle();
   assert.ok(card, 'a card for a day with classes');
   assert.ok(seen.length > 0);

@@ -19,6 +19,16 @@ import { planTransfers } from './transfer.ts';
 import { GRAPH, GRAPH_PUBLIC } from './graph.ts';
 import { m } from '../i18n.ts';
 
+/**
+ * The engine's two calls that reach the feeds, passed in by whoever answers
+ * (index.ts, the Trip object, which counts its own reads), so a test or a
+ * wake can wrap them.
+ */
+export interface MeDeps {
+  answerFor: (env: Env, ctx: ExecutionContext, input: ResolveInput, label: string | null, nowMs: number) => Promise<Answer>;
+  collectArrivals: (env: Env, ctx: ExecutionContext, codes: string[], nowMs: number, graph?: Graph) => Promise<Map<string, StopArrivals>>;
+}
+
 /** The feed could not be reached: no data, as opposed to no bus. */
 const unreached = (code: string, nowMs: number): StopArrivals => ({ code, arrivals: [], fetchedAt: nowMs, stale: false, available: false });
 

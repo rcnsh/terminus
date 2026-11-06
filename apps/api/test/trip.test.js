@@ -22,7 +22,7 @@ import {
 } from '../src/answer/trip.ts';
 import { ASSUME_MS, DUE_MS, RIDE_GRACE_MS, WAIT_EARLY_MS } from '../src/answer/phase.ts';
 import { Trip } from '../src/push/tripdo.ts';
-import { tripCardFor } from '../src/accounts/me.ts';
+import { answerWake } from '../src/answer/rider.ts';
 import { answerFor, collectArrivals } from '../src/answer/answer.ts';
 import { GRAPH } from '../src/answer/graph.ts';
 import { indexGraph, rideStops } from '../src/answer/resolve.ts';
@@ -685,9 +685,11 @@ test('a trip home taken to be riding wakes the Trip object when its bus arrives,
   const arrive = Date.parse(plan.arrive);
   clock(arrive + 60_000);
 
-  const card = await tripCardFor(env, makeCtx(), { answerFor, collectArrivals }, userOf(env), await dayOf(), Date.now(), async () => {});
+  const card = await answerWake(env, makeCtx(), { answerFor, collectArrivals }, userOf(env), await dayOf(), Date.now(), {
+    savePlan: async () => {},
+  });
   assert.equal(card.key, key);
-  assert.equal(card.phase, 'riding');
+  assert.equal(card.answer.card.phase, 'riding');
   assert.equal(card.answer.arriveAt, undefined, 'no later bus to guess with');
   // The ride counts as over RIDE_GRACE_MS after the arrival it passed: the wake is then, so the trip's end is pushed.
   assert.equal(card.wakeAt, arrive + RIDE_GRACE_MS);
@@ -697,7 +699,7 @@ test('a trip home taken to be riding wakes the Trip object when its bus arrives,
 async function wakeCard(env, TRIPS) {
   const trip = TRIPS.get([...TRIPS.instances.keys()][0]);
   const day = await (await trip.fetch(`https://trip/day?date=${sgtDate(Date.now())}`)).json();
-  return tripCardFor(env, makeCtx(), { answerFor, collectArrivals }, userOf(env), day, Date.now(), async () => {});
+  return answerWake(env, makeCtx(), { answerFor, collectArrivals }, userOf(env), day, Date.now(), { savePlan: async () => {} });
 }
 
 test('heading for the bus, the Trip object next wakes when the bus is taken to have gone, not as it leaves', async () => {
@@ -709,7 +711,7 @@ test('heading for the bus, the Trip object next wakes when the bus is taken to h
   clock(Date.parse(due.leave.at) + 30_000);
   assert.ok(Date.now() < board);
   const card = await wakeCard(env, TRIPS);
-  assert.equal(card.phase, 'heading');
+  assert.equal(card.answer.card.phase, 'heading');
   // Nothing changes as the bus leaves; ASSUME_MS later the card says it has gone.
   assert.equal(card.wakeAt, board + ASSUME_MS);
 });
@@ -720,7 +722,7 @@ test('after "Missed it", the Trip object next wakes when the class\'s trip is ov
   const missed = await (await signal(phone, { kind: 'missed', trip: FIRST })).json();
   assert.equal(missed.card.phase, 'missed');
   const card = await wakeCard(env, TRIPS);
-  assert.equal(card.phase, 'missed');
+  assert.equal(card.answer.card.phase, 'missed');
   // The next bus's leave-by changes nothing: missed stays missed. GEA1000
   // starts at 10:00, and the trip moves on to the next one LATE_GRACE_MIN later.
   assert.equal(card.wakeAt, Date.parse('2026-08-27T10:15:00+08:00'));
@@ -732,7 +734,7 @@ test('there early for a class, the Trip object still wakes when the plan moves o
   await signal(phone, { kind: 'arrived', trip: FIRST });
   const there = await wakeCard(env, TRIPS);
   assert.equal(there.key, FIRST);
-  assert.equal(there.phase, 'arrived');
+  assert.equal(there.answer.card.phase, 'arrived');
   // Nothing about the trip itself changes again; the timetable's next moment is GEA1000 starting.
   assert.equal(there.wakeAt, Date.parse('2026-08-27T10:00:00+08:00'));
   clock(there.wakeAt);
@@ -1065,7 +1067,7 @@ test('in the last class, the Trip object wakes as it ends, to say it is time to 
   t.clock(FROZEN_NOW + 70 * 60_000); // 10:10, in class
   const card = await wakeCard(t.env, t.TRIPS);
   assert.equal(card.key, 'home:660');
-  assert.equal(card.phase, 'idle');
+  assert.equal(card.answer.card.phase, 'idle');
   assert.equal(card.wakeAt, FROZEN_NOW + 120 * 60_000, '11:00, when the class ends');
 });
 

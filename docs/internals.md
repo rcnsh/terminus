@@ -367,7 +367,7 @@ page at `/account` signs in with an emailed code (or the link in the same
 email) and stores one profile per user in D1: timetable, home stops, gap threshold and
 favourites. A saved profile that no longer validates as a whole (a stop
 dropped by the weekly scrape, say) is read back part by part
-(`salvageProfile` in `me.ts`): whatever still holds is kept, so the next save
+(`salvageProfile` in `accounts/profiles.ts`): whatever still holds is kept, so the next save
 doesn't write defaults over the day's hours, usual times or one-off trips.
 Request bodies are read with a hard cap as they arrive (`readCapped`, 64 KB
 for JSON), whether or not they declare a length. Apps hold a device token (`Authorization: Bearer`), which they
@@ -554,7 +554,26 @@ reduced to what it means, arrived. An alarm deletes everything at the
 next Singapore midnight. A request reads
 the day once and sends everything it changes in one `POST /update`
 (`updateTrip`): a signal, or a reached trip, a plan and
-a watch. The object writes only what changed and sets its alarm only when
+a watch.
+
+Routes change the day first, then answer through the rider's answer
+([src/answer/rider.ts](../apps/api/src/answer/rider.ts)), which decides
+what each kind of caller saves and who is nudged. A **request** is
+logged, saves everything the answer changes (arrived, the plan, a watch)
+in `waitUntil` after the response, and, for a tap (a signal, a step,
+"Not on campus"), nudges every device but the one that asked. A **wake**
+(the Trip object's) isn't logged and keeps only the plans, through the
+object's own save; it nudges every device. A **reword** (the
+same answer in another language or clock, for an iPhone) saves nothing.
+The nudge is built from the card in that one place; the wake adds only
+what it alone knows (urgent, Live Activity starts, its language). A
+signal's change to the day is one pure function (`applySignal` in
+`src/answer/signal.ts`, apart from trip.ts's storage): from the answer planned before it (not logged), the day and a
+plate lookup, the trip's new record and its outcome. The route saves the
+record, then the outcome in D1, and only then answers, so the trip
+choices it reads include the outcome.
+
+The object writes only what changed and sets its alarm only when
 the time moves. Each trip has a revision in the day (`revs`, `tripRev`),
 moved on by every write to its plan, step or signal. A plan comes with the
 revision it was worked out from (`basis`), and the object drops a plan
@@ -2651,6 +2670,8 @@ src/answer/answer.ts       The answer engine: stops near you, their arrivals, th
 src/answer/card.ts         The card every client shows, worded once
 src/answer/leave.ts        When to set off; src/clock.ts clock times and lateness
 src/answer/plan.ts         Which bus a trip is about: one plan for every device
+src/answer/rider.ts        The rider's answer: answers for a request, a wake or a reword, saves
+                           what each should, and nudges the rider's devices
 src/answer/crowd.ts        Full buses: a packed bus can pass a stop
 src/answer/walk.ts         Walking along campus paths (data/walks.json), and out of a building
                            by its paths (buildingStops)

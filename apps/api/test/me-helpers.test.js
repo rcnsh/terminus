@@ -6,7 +6,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { salvageProfile } from '../src/accounts/me.ts';
+import { salvageProfile } from '../src/accounts/profiles.ts';
 
 const known = new Set(['PGP', 'COM3', 'UTOWN']);
 const ok = (c) => known.has(c);

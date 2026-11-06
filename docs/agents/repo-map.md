@@ -28,10 +28,13 @@ apps/api/
     feedwatch.ts      The beta's feed health, from the breakers its own traffic opened
   src/answer/         The answer engine: which bus, from which stop, when to leave
     next.ts           /api/me/next: the plan, free days, riding, the trip's phase
+    rider.ts          The rider's answer: answered for a request, a wake or a reword;
+                      saves what each should and nudges the rider's devices
     answer.ts         Stops near you, arrivals, the best option, worded
     card.ts           What every client shows, worded once (the card's lines)
     plan.ts, leave.ts Which bus a trip is about; when to set off
-    trip.ts           Today's trip signals and the day's state
+    trip.ts           Today's trip signals and the day's state, kept in the Trip object
+    signal.ts         A signal applied to the day (applySignal): the trip's record, its outcome
     phase.ts          A trip's phase now, and when it next changes (the Trip object's wake)
     resolve.ts        Stop + bus choice: haversine, directional pairing, scoring
     departures.ts     A service's buses from a stop: its feed rows and berths, live times, then
@@ -53,6 +56,7 @@ apps/api/
     calendarsync.ts   The academic calendar, refreshed into KV by the cron
   src/accounts/       Who you are: sign-in, sessions, devices
     me.ts             /api/auth, /api/pair, /api/me/* (accounts)
+    profiles.ts       The profile read back from D1 (getProfile), what still holds kept
     accounts.ts       Sign-in codes/links, sessions, anonymous accounts, pairing (D1)
     applogin.ts       App sign-in approved from the email (RFC 8628-like)
     access.ts         Who may call the keyed routes (an API key or a session)
