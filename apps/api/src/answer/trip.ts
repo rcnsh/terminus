@@ -303,6 +303,8 @@ export interface DayRecord {
   /** The bus the user stepped to for a trip ("Later bus"), by trip key, in
    *  place of the answer's own (step.ts). */
   steps?: Record<string, StepTarget>;
+  /** Each trip's revision, by trip key (tripRev). */
+  revs?: Record<string, number>;
   /** When the object next wakes to push (epoch ms), or absent when it
    *  won't: the Worker asks again only when that would be sooner
    *  (needsWatch). Push only. */
@@ -333,8 +335,25 @@ export interface TripUpdate {
   /** A bus stepped to for a trip, or null for the answer's own again. Either
    *  drops the trip's plan, so the next answer's bus becomes it. */
   steps?: Record<string, StepTarget | null>;
+  /** The revision of each of `plans`' trips that the plan was worked out
+   *  from (tripRev): a plan whose trip has changed since is dropped. */
+  basis?: Record<string, number>;
   /** Wake at `at` (no later than a wake already pending) to push the card. */
   watch?: { userId: string; at: number };
+  /** The day's card a tap pushed to the other devices, so the next wake
+   *  doesn't push it again (me.ts tapNudge). */
+  pushed?: { key: string | null; phase: string; gone?: boolean; at: number };
+}
+
+/**
+ * A trip's revision in the day: the Trip object moves it on with every write
+ * to the trip's plan, step or record. An answer reads the day, then waits for
+ * D1 and the feed; a POST meanwhile (a step, a signal or a reset, another
+ * device's plan) is newer, and the plan worked out before it would undo it,
+ * so a plan is saved only while the revision it read is still the stored one.
+ */
+export function tripRev(day: DayRecord | null, key: string): number {
+  return day?.revs?.[key] ?? 0;
 }
 
 /** Heads-up window: the trip is "due" this long before its leave-by. */
@@ -464,7 +483,14 @@ export async function loadDay(env: Env, userId: string, nowMs: number): Promise<
     const res = await ask(s, `day?date=${sgtDate(nowMs)}`);
     if (!res.ok) return null;
     const day = (await res.json()) as DayRecord | null;
-    return day && (Object.keys(day.trips).length || Object.keys(day.plans ?? {}).length || Object.keys(day.steps ?? {}).length || day.watch)
+    // A day with only revisions left (a signal undone) is kept: a plan from
+    // revision 0 would be dropped against the one stored.
+    return day &&
+      (Object.keys(day.trips).length ||
+        Object.keys(day.plans ?? {}).length ||
+        Object.keys(day.steps ?? {}).length ||
+        Object.keys(day.revs ?? {}).length ||
+        day.watch)
       ? day
       : null;
   } catch (err) {

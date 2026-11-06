@@ -84,6 +84,9 @@ export interface TripView {
   planChanged?: boolean;
   /** The remembered plan was a guess this request's location replaced with a walk (the caller deletes it). */
   planDropped?: boolean;
+  /** On the bus past its arrival, with the card guessing at a later one:
+   *  the arrival that passed, which the ride still ends RIDE_GRACE_MS after. */
+  rideEnd?: string;
   /** False when the user turned reminders off for this trip. */
   remind?: boolean;
   /** Something terminus has learned and offers to change (outcomes.ts). */
@@ -811,7 +814,8 @@ export function nextPhaseAt(a: MeAnswer, trip: TripView, nowMs: number, leaveGap
   if (l?.at) for (const t of [Date.parse(l.at) - DUE_MS, Date.parse(l.at)]) if (t > nowMs) marks.push(Math.max(t, nowMs + leaveGapMs));
   if (a.timing?.classAt) marks.push(Date.parse(a.timing.classAt) + LATE_GRACE_MIN * 60_000);
   const onBus = trip.rec?.boarded ?? (trip.assumed ? plan : null);
-  if (trip.phase === 'riding' && onBus?.arrive) marks.push(Date.parse(onBus.arrive) + RIDE_GRACE_MS);
+  const rideEnd = trip.rideEnd ?? onBus?.arrive;
+  if (trip.phase === 'riding' && onBus && rideEnd) marks.push(Date.parse(rideEnd) + RIDE_GRACE_MS);
   return marks.filter((m) => m > nowMs).sort((x, y) => x - y)[0] ?? null;
 }
 

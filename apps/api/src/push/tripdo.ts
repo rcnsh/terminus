@@ -20,7 +20,7 @@
 
 import { loadCalendar } from '../timetable/calendarsync.ts';
 import type { Env } from '../types.ts';
-import { type Plan, type DayRecord, type TripUpdate, endOfDayMs, sgtDate } from '../answer/trip.ts';
+import { type Plan, type DayRecord, type TripUpdate, endOfDayMs, sgtDate, tripRev } from '../answer/trip.ts';
 import type { MeDeps } from '../accounts/me.ts';
 import { tripCardFor } from '../accounts/me.ts';
 import { type AnswerIn, type Delivered, nudgeUser, pushAudience, retryLiveStart, updateLive } from './push.ts';
@@ -43,6 +43,8 @@ const MAX_RETRY_GAP_MS = 8 * 60_000;
 interface Pushed {
   key: string | null;
   phase: string;
+  /** When the card was worked out: a tap's note that lands after a newer wake's push is dropped. */
+  at?: number;
   /** The card's `gone`: the phase stays `heading` when the bus leaves, but
    *  the phones' "Leave now" must give way to it. */
   gone?: boolean;
@@ -148,19 +150,27 @@ export class Trip {
     const stored = await this.storedDay();
     const next = today(stored, u.date);
     let changed = next !== stored;
+    // A plan worked out from a trip that has changed since is dropped,
+    // checked before this update's own changes (tripRev). An older Worker
+    // sends no basis, and its plan is saved as it always was.
+    const fresh = (key: string) => typeof u.basis?.[key] !== 'number' || tripRev(next, key) === u.basis[key];
+    const plansIn = Object.entries(u.plans ?? {}).filter(([key]) => fresh(key));
     for (const { key, rec } of u.items ?? []) {
       // A day has a handful of trips; past this many a new one is refused,
       // so the record stays far below a stored value's size limit.
       if (rec && !(key in next.trips) && Object.keys(next.trips).length >= MAX_DAY_TRIPS) continue;
       if (rec) next.trips[key] = rec;
       else delete next.trips[key];
+      bump(next, key);
       changed = true;
     }
-    if (u.plans && Object.keys(u.plans).length) {
+    if (plansIn.length) {
       const plans = { ...next.plans };
-      for (const [key, plan] of Object.entries(u.plans))
+      for (const [key, plan] of plansIn) {
         if (plan) plans[key] = plan;
         else delete plans[key];
+        bump(next, key);
+      }
       next.plans = plans;
       changed = true;
     }
@@ -176,9 +186,13 @@ export class Trip {
         const { [key]: _old, ...plans } = next.plans;
         next.plans = plans;
       }
+      bump(next, key);
       changed = true;
     }
-    if (u.watch) {
+    // A watch comes with the plan it was worked out with: a refused plan's
+    // could arm an early wake for a bus that's no longer the trip's.
+    const refused = plansIn.length < Object.keys(u.plans ?? {}).length;
+    if (u.watch && !refused) {
       if ((await this.storage.get<string>('userId')) !== u.watch.userId) await this.storage.put('userId', u.watch.userId);
       // Only ever sooner: a device refreshing after a moment the object still
       // owes a push for (say, "due") mustn't move that wake past it.
@@ -194,6 +208,18 @@ export class Trip {
       if (next.watch !== at) {
         next.watch = at;
         changed = true;
+      }
+    }
+    if (u.pushed) {
+      // What the phones were last told of the trip, unless a wake has pushed
+      // a newer card while the tap's nudge was sending. A Live Activity's
+      // state and starts are the wake's own, and stay.
+      const last = await this.storage.get<Pushed>('pushed');
+      if (!(last?.at !== undefined && last.at > u.pushed.at)) {
+        const now: Pushed = { ...last, key: u.pushed.key, phase: u.pushed.phase, at: u.pushed.at };
+        if (u.pushed.gone) now.gone = true;
+        else delete now.gone;
+        await this.storage.put('pushed', now);
       }
     }
     if (changed) await this.storage.put('day', next);
@@ -286,9 +312,14 @@ export class Trip {
     // read back to note the next wake. Only they are: the object is billed
     // for the time it's awake.
     const plans: Promise<unknown>[] = [];
+    // The revision each trip the card planned for should still have: as read,
+    // or as this wake's own plan moved it on. A plan refused leaves it as read.
+    const revs = new Map<string, number>();
+    const expected = (key: string) => revs.get(key) ?? tripRev(day, key);
     const savePlan = (key: string, plan: Plan) => {
       const p = this.state.blockConcurrencyWhile(async () => {
-        if (!(await this.cleared())) await this.putPlan(date, key, plan);
+        if (await this.cleared()) return;
+        revs.set(key, (await this.putPlan(date, key, plan, expected(key))) ?? expected(key));
       });
       plans.push(p);
       return p;
@@ -309,6 +340,35 @@ export class Trip {
     const lang: Lang = audience.iphoneLang ?? 'en';
     const card = await withLang(lang, () => tripCardFor(env, ctx, deps, userId, day, nowMs, savePlan, audience.iphoneH12));
     await Promise.allSettled(plans);
+    // A step, a signal or another device's plan while the wake ran moved the
+    // trip's revision on: its card (or a plan it couldn't save) is from a day that's gone.
+    const keys = new Set([...revs.keys(), ...(card?.key ? [card.key] : [])]);
+    let stale = false;
+    if (keys.size && !(await this.cleared())) {
+      const stored = today(await this.storedDay(), date);
+      stale = [...keys].some((k) => tripRev(stored, k) !== expected(k));
+    }
+    const prev = (await this.storage.get<LastWake>('lastWake')) ?? null;
+    const before = prev && sgtDate(prev.at) === date ? prev : null;
+    const log = (changed: boolean, phase: string, quality: string, leaveAt: number | null) =>
+      logTripWake(env, {
+        changed,
+        phase,
+        quality,
+        first: !before,
+        gapS: before ? Math.round((nowMs - before.at) / 1000) : 0,
+        feedAgeS: read.length ? Math.max(0, Math.round((nowMs - Math.min(...read)) / 1000)) : -1,
+        leaveShiftS: before?.leaveAt != null && leaveAt !== null ? Math.round((leaveAt - before.leaveAt) / 1000) : 0,
+        lateS: Math.max(0, Math.round((nowMs - askedAt) / 1000)),
+      });
+    // Pushing it would tell the phones about the bus the user just stepped
+    // off (or a trip already signalled): wake again soon, from the new day.
+    // Logged as a wake that pushed nothing, keeping the leave-by last seen:
+    // this card's is from the day that's gone, and the next wake's shift is from that one.
+    if (stale) {
+      if (card) log(false, card.phase, card.quality, null);
+      return { next: nowMs + MIN_WAKE_GAP_MS, seen: { at: nowMs, leaveAt: before?.leaveAt ?? null } };
+    }
     const last = (await this.storage.get<Pushed>('pushed')) ?? null;
     const apns = apnsEnabled(env) && audience.lives > 0;
     if (!card) {
@@ -341,6 +401,7 @@ export class Trip {
     const now: Pushed = {
       key: card.key,
       phase: card.phase,
+      at: nowMs,
       ...(card.gone ? { gone: true } : {}),
       live: JSON.stringify(live),
       ...(started ? { started } : {}),
@@ -429,18 +490,7 @@ export class Trip {
     // The trip is over but its end didn't go: with no next change to wake
     // for, the wake is tried again, as a failed one is.
     if (unsent && !card.key) throw new Error('trip end not sent');
-    const prev = (await this.storage.get<LastWake>('lastWake')) ?? null;
-    const before = prev && sgtDate(prev.at) === date ? prev : null;
-    logTripWake(env, {
-      changed,
-      phase: now.phase,
-      quality: card.quality,
-      first: !before,
-      gapS: before ? Math.round((nowMs - before.at) / 1000) : 0,
-      feedAgeS: read.length ? Math.max(0, Math.round((nowMs - Math.min(...read)) / 1000)) : -1,
-      leaveShiftS: before?.leaveAt != null && card.leaveAt !== null ? Math.round((card.leaveAt - before.leaveAt) / 1000) : 0,
-      lateS: Math.max(0, Math.round((nowMs - askedAt) / 1000)),
-    });
+    log(changed, now.phase, card.quality, card.leaveAt);
     const seen = { at: nowMs, leaveAt: card.leaveAt };
     // Keep waking while there's a trip and someone to tell.
     // A leave-by that keeps sliding (a late bus) mustn't wake it every few seconds.
@@ -461,11 +511,18 @@ export class Trip {
     return (await this.storage.get<DayRecord>('day')) ?? null;
   }
 
-  private async putPlan(date: string, key: string, plan: Plan): Promise<DayRecord> {
+  /**
+   * Saves a plan a wake worked out from the trip at revision `rev`, unless
+   * the trip has changed since (tripRev): the next answer then plans from
+   * what's stored. The trip's new revision, or null when it was dropped.
+   */
+  private async putPlan(date: string, key: string, plan: Plan, rev: number): Promise<number | null> {
     const next = today(await this.storedDay(), date);
+    if (tripRev(next, key) !== rev) return null;
     next.plans = { ...next.plans, [key]: plan };
+    const r = bump(next, key);
     await this.storage.put('day', next);
-    return next;
+    return r;
   }
 
   /**
@@ -483,6 +540,13 @@ export class Trip {
     // No alarm is pending while alarm() runs, so one is always set again then.
     if (Number.isFinite(at) && (await this.storage.getAlarm()) !== at) await this.storage.setAlarm(at);
   }
+}
+
+/** Moves a trip's revision on, for a write to its plan, step or record (tripRev); the new one. */
+function bump(day: DayRecord, key: string): number {
+  const r = tripRev(day, key) + 1;
+  day.revs = { ...day.revs, [key]: r };
+  return r;
 }
 
 /** Today's record: the stored one if it's today's, else a fresh one. */

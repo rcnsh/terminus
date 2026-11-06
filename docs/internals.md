@@ -530,7 +530,17 @@ next Singapore midnight. A request reads
 the day once and sends everything it changes in one `POST /update`
 (`updateTrip`): a signal, or a reached trip, a plan and
 a watch. The object writes only what changed and sets its alarm only when
-the time moves. Deleting an account empties it at once (`clearTrip`, tried
+the time moves. Each trip has a revision in the day (`revs`, `tripRev`),
+moved on by every write to its plan, step or signal. A plan comes with the
+revision it was worked out from (`basis`), and the object drops a plan
+whose trip has changed since: a step or signal from another device while
+the request waited for the feed stays. A wake saves its plans the same way,
+then compares each trip's stored revision with the one it expects; when the
+trip moved on, it pushes nothing from that card and wakes again
+`MIN_WAKE_GAP_MS` later, from the new day. The tap that moved it on has
+already nudged the other devices, and notes that card as pushed in the
+same object (`pushed`, except time to go or a missed bus, which the wake
+pushes loudly), so that wake doesn't push it again. Deleting an account empties it at once (`clearTrip`, tried
 twice), and so does signing an anonymous account into another one, or the
 cron deleting an idle one. An emptied object keeps only a `gone` mark until
 midnight and refuses every write, so a `/api/me/next` already under way when
