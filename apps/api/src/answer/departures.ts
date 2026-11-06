@@ -46,6 +46,12 @@ export interface Departure {
   arrival?: Arrival;
   /** The first bus after the service starts again: before it, you wait for the start. */
   opens?: true;
+  /**
+   * Around a chosen bus, the window you reach the stop in, cut at `from`:
+   * its bus may have gone before you get there, so it's a bus to step to,
+   * not one a leave-by can count on.
+   */
+  partial?: true;
 }
 
 /** The times to look in, epoch ms. */
@@ -238,6 +244,7 @@ export function departuresFrom(graph: Graph, board: StopArrivals | ServiceBoard 
   // that one, the windows around a chosen bus carry on as they would with
   // the service running, so a class's leave-by is the same at 06:30 as at 07:30.
   let fixed: number[] = [];
+  let partial = false;
   // A chosen bus more than a day off (a step target kept, or sent, from
   // long ago) says nothing of today's buses, and walking to it a headway
   // at a time would take millions of steps.
@@ -247,14 +254,17 @@ export function departuresFrom(graph: Graph, board: StopArrivals | ServiceBoard 
     // last one before it is a whole headway, and a bus sure to come.
     const closed = runs(b) ? null : serviceClosedAt(graph, svc, b);
     if (closed !== null && closed > w.from) b = closed;
+    // Back, or on, to the window `from` falls in: its bus may still be one you can catch.
     if (b >= w.from) {
       fixed = [b];
-      for (let x = b - headwayAt(b - headwayAt(b)); x >= w.from && fixed.length < 2000; x -= headwayAt(x - headwayAt(x))) fixed.unshift(x);
+      while (fixed[0] > w.from && fixed.length < 2000) fixed.unshift(fixed[0] - headwayAt(fixed[0] - headwayAt(fixed[0])));
     } else {
-      while (b < w.from) b += headwayAt(b);
-      fixed = [b];
+      let before = b;
+      while (b < w.from) [before, b] = [b, b + headwayAt(b)];
+      fixed = b > w.from ? [before, b] : [b];
     }
-    t = fixed[0];
+    partial = fixed[0] < w.from;
+    t = Math.max(fixed[0], w.from);
   }
   let anchor = fixed.length ? 'around' : 'reach';
   let opens = false;
@@ -262,7 +272,7 @@ export function departuresFrom(graph: Graph, board: StopArrivals | ServiceBoard 
   let resume: number[] = [];
   const startAt = (s: number) => {
     resume = fixed.filter((f) => f >= s + headwayAt(s));
-    [t, fixed, anchor, opens] = [s, [], `opens@${s}`, true];
+    [t, fixed, anchor, opens, partial] = [s, [], `opens@${s}`, true, false];
   };
   // Not started yet, and starting before you get there: from its start.
   const starts = last || runs(w.now) ? null : serviceResumesAt(graph, svc, w.now);
@@ -274,6 +284,8 @@ export function departuresFrom(graph: Graph, board: StopArrivals | ServiceBoard 
       startAt(s);
       [n, i] = [1, 0];
     }
+    const cut = partial;
+    partial = false;
     // A bus may still come before the service closes, not after.
     const closes = serviceEndsAt(graph, svc, t);
     const end = Math.min(i + 1 < fixed.length ? fixed[i + 1] : t + headwayAt(t), closes ?? Infinity);
@@ -284,6 +296,7 @@ export function departuresFrom(graph: Graph, board: StopArrivals | ServiceBoard 
         earliest: Math.max(t, w.from),
         latest: end,
         ...(opens ? { opens: true as const } : {}),
+        ...(cut ? { partial: true as const } : {}),
       });
       // Only once one is pushed: reaching the stop after the start's own
       // window, the first you can catch still waits for the start.

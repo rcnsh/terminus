@@ -1517,7 +1517,10 @@ estimate counts the headway in force at the bus before it, stepping on
 from the last live bus: the card, the leave-by and Nearby guess the same
 buses across an hour, where D2 goes from 7 to 11 minutes at 20:00.
 With no live times, estimates either side of a bus already chosen meet at
-it, so the chosen bus stays among them as the clock moves on.
+it, so the chosen bus stays among them as the clock moves on. The window
+you reach the stop in is one of them, cut at when you get there, so
+"Earlier" still has the bus before the chosen one; its bus may already
+have gone, so no leave-by counts on it.
 
 **The walk the whole way follows the paths.** With a location, out by the
 stops near you and on by the routed walks between stops (`walks.json`); the

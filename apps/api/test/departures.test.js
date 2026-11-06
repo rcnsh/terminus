@@ -273,3 +273,45 @@ test('late for a class, a bus you reach after the service starts is "leave now",
   });
   assert.equal(l.at, new Date(now).toISOString().replace('.000Z', 'Z'));
 });
+
+test('with no live times, after "Later", "Earlier" still goes back to the bus before it as the clock moves on', () => {
+  // D2 every 422 s at 19:00; the feed answers with nothing.
+  const answerAt = (now, target) => {
+    const byStop = new Map([['PGP', board('PGP', now, 'D2', [])]]);
+    const candidates = [{ stop: PGP, distM: 0, walkS: 60, legs: [{ svc: 'D2', hops: 5, to: { code: 'UTOWN', name: 'UTown' } }] }];
+    const options = scoreOptions(GRAPH, candidates, byStop, now);
+    const f = { options, candidates, byStop, graph: GRAPH, arriveBy: null, walkAllS: null, nowMs: now };
+    const departsAt = new Date(now + options[0].boardS * 1000).toISOString();
+    return withSteps({ departsAt, leave: null }, f, { trip: 'to:UTOWN', target }, false, now).steps;
+  };
+  const now = at('2026-08-27T19:10');
+  const later = answerAt(now, null).later;
+  assert.ok(later);
+  for (const s of [5, 60]) {
+    const steps = answerAt(now + s * 1000, later);
+    assert.ok(steps?.moved, `${s} s on: still the bus chosen`);
+    assert.ok(steps.earlier, `${s} s on: a bus before it`);
+  }
+});
+
+test('with no live times, a class less than a headway off is not counted on the part of a window left', () => {
+  // D2 every 494 s at 16:00; the latest you can board is 2 min after you can be at the stop.
+  const now = at('2026-08-27T16:00');
+  const rideS = 600;
+  const from = now + readyS({ walkS: 60 }) * 1000;
+  const arriveBy = { atMs: from + 120_000 + (ON_TIME_SLACK_S + rideS) * 1000, venueWalkS: 0 };
+  const l = leaveBy({
+    options: [{ svc: 'D2', stop: PGP, walkS: 60, rideS, boardS: 0, totalS: 0, fromMs: now, quality: 'scheduled', hops: 5 }],
+    candidates: [],
+    byStop: new Map([['PGP', board('PGP', now, 'D2', [])]]),
+    graph: GRAPH,
+    arriveBy,
+    walkAllS: null,
+    nowMs: now,
+  });
+  assert.equal(
+    Date.parse(l.arrive) - rideS * 1000,
+    from + Math.max(60, headwayFor(GRAPH, 'D2', from)) * 1000,
+    'a bus by the end of a headway',
+  );
+});
