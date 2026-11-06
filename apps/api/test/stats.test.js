@@ -15,7 +15,7 @@ import { SHAPES } from '../src/map/campus.ts';
 import { buildDayFile, dayKey, encodeBus, gzip, mapSnapshot, windowOf } from '../src/map/timelapse.ts';
 import { etaKey, etaSummary, passingsOf, recordEta, scoreEtas, statsOf } from '../src/ops/eta.ts';
 import { countActive, recordActive } from '../src/ops/usage.ts';
-import { fingerprintOf, scrub } from '../src/ops/apperrors.ts';
+import { fingerprintOf, scrub, scrubStack } from '../src/ops/apperrors.ts';
 import { collecting } from '../src/ops/collect.ts';
 import { adminStats, undismissed } from '../src/ops/admin.ts';
 import { legacyUses, routeOf, senderOf } from '../src/ops/legacy.ts';
@@ -94,6 +94,28 @@ test('a crash report loses what could say who or where, and keeps what says what
   assert.ok(!out.includes('a1b2c3d4e5f6a7b8c9d0e1f2') && !out.includes('123456'), 'no tokens or long numbers');
   assert.match(out, /https:\/\/terminus\.rcn\.sh\/api\/me\/next failed/, 'the address without its query');
   assert.match(out, /ComposableSingletonsMainScreenKt\.lambda\$1\(MainScreen\.kt:42\)/, 'a long class name is not a token');
+});
+
+test('a stack frame keeps its offset, which is what symbolicates it', () => {
+  const frame = '7   Terminus   0x00000001002244b1 Terminus + 1234567';
+  assert.equal(scrubStack(frame), frame);
+  assert.equal(scrubStack('call + 6591234567'), 'call + <number>', 'a long number elsewhere still goes');
+  assert.equal(scrub('call me on + 6591234567'), 'call me on + <number>', 'and always from a message');
+});
+
+test('bare frames alike, the message tells two crashes apart', async () => {
+  const stack = (t) => `CoreFoundation +0x${t} (0x18f96b8ec)\nlibobjc.A.dylib +0x1e390 (0x18f6e8390)\nTerminus +0x298a94 (0x1004aca94)`;
+  const main = await fingerprintOf('ios', 'NSInternalInconsistencyException', 'Call must be made on main thread', stack('c38ec'));
+  assert.equal(
+    main,
+    await fingerprintOf('ios', 'NSInternalInconsistencyException', 'Call must be made on main thread', stack('d38ec')),
+    'another OS build',
+  );
+  assert.notEqual(main, await fingerprintOf('ios', 'NSInternalInconsistencyException', 'Invalid update: 3 sections', stack('c38ec')));
+  assert.equal(
+    await fingerprintOf('ios', 'NSRangeException', 'index 3 at 0x1f00a', stack('c38ec')),
+    await fingerprintOf('ios', 'NSRangeException', 'index 4 at 0x2ab0c', stack('c38ec')),
+  );
 });
 
 test('the same crash gets the same fingerprint, whatever its line numbers', async () => {

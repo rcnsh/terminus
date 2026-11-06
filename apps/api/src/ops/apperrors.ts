@@ -48,21 +48,43 @@ export function scrub(text: string): string {
   );
 }
 
+/**
+ * [stack] scrubbed line by line, keeping the offset at the end of an Apple
+ * frame ("7   Terminus   0x00000001002244b1 Terminus + 66737"): it says
+ * where in the app, which is what symbolicates the frame.
+ */
+export function scrubStack(stack: string): string {
+  return stack
+    .split('\n')
+    .map((line) => {
+      const frame = /^(\d+\s+\S+\s+0x[0-9a-f]+ .* \+ )(\d+)$/i.exec(line);
+      return frame ? scrub(frame[1]) + frame[2] : scrub(line);
+    })
+    .join('\n');
+}
+
+/** A MetricKit-style frame, "Terminus +0x298a94 (0x1004aca94)": a binary and an offset, no symbol. */
+const BARE_FRAME = /^(\S+ \+0x[0-9a-f]+ |\?\?\? )\(0x[0-9a-f]+\)$|^--$/i;
+
 /** The same crash, the same fingerprint: its platform, type and top frames, without line numbers. */
 export async function fingerprintOf(platform: string, type: string, message: string, stack: string): Promise<string> {
-  const frames = stack
+  const top = stack
     .split('\n')
     .map((l) => l.trim())
     .filter(Boolean)
-    .slice(0, FINGERPRINT_FRAMES)
-    .map((l) =>
-      l
-        .replace(/:\d+(:\d+)?/g, '')
-        .replace(/\b0x[0-9a-f]+\b/gi, '')
-        .replace(/\+ ?\d+\b/g, ''),
-    );
-  // With no stack, the message with its numbers blanked, so "index 3" and "index 4" are one.
-  const basis = [platform, type, ...(frames.length ? frames : [message.replace(/\d+/g, '#')])].join('\n');
+    .slice(0, FINGERPRINT_FRAMES);
+  const frames = top.map((l) =>
+    l
+      .replace(/:\d+(:\d+)?/g, '')
+      .replace(/\b0x[0-9a-f]+\b/gi, '')
+      .replace(/\+ ?\d+\b/g, ''),
+  );
+  // With no stack, the message with its numbers blanked, so "index 3" and "index 4" are one. A
+  // stack of bare frames names only binaries, so the same type thrown anywhere looks alike: the
+  // message, with its addresses blanked too, tells those apart.
+  const bare = top.length > 0 && top.every((f) => BARE_FRAME.test(f));
+  const said = bare ? message.replace(/0x[0-9a-f]+/gi, '#').replace(/\d+/g, '#') : message.replace(/\d+/g, '#');
+  const basis = [platform, type, ...frames, ...(frames.length && !bare ? [] : [said])].join('\n');
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(basis));
   return [...new Uint8Array(digest).slice(0, 6)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
@@ -83,7 +105,7 @@ export async function handleAppError(req: Request, env: Env): Promise<Response> 
   }
   if (!(await collecting(env, 'errors'))) return new Response(null, { status: 204 });
   const message = scrub(str(b.message, 2000)).slice(0, MESSAGE_MAX);
-  const stack = scrub(str(b.stack, 20_000)).split('\n').slice(0, STACK_LINES).join('\n').slice(0, STACK_MAX);
+  const stack = scrubStack(str(b.stack, 20_000)).split('\n').slice(0, STACK_LINES).join('\n').slice(0, STACK_MAX);
   logAppError(env, {
     platform,
     version,
