@@ -18,6 +18,7 @@ import {
   nextClass,
   nextTripFor,
   planChangesAt,
+  restsAtMs,
   reachedEarly,
   restDetail,
   restLabel,
@@ -831,6 +832,7 @@ async function plannedTrip(env: Env, ctx: ExecutionContext, deps: MeDeps, rider:
         ? {
             lastEndMs: endOfDayMs(nowMs) - 86_400_000 + plan.lastEndMin * 60_000,
             ...(state.homeBy.has(key) ? { homeBy: state.homeBy.get(key)! } : {}),
+            restsMs: restsAtMs(profile, nowMs),
           }
         : null,
     classAtMs: dest.why === 'class' && dest.trip ? classStartMs(dest.trip, nowMs) : null,

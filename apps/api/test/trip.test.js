@@ -1042,6 +1042,23 @@ test('after the last class, with no location, the trip home is over once its bus
   assert.equal((await wakeCard(t.env, t.TRIPS)).key, null, 'home by now');
 });
 
+test('a trip home whose bus has gone: the Trip object wakes when the day rests, if that comes before it would be home', async () => {
+  // The class ends at 18:00, so the day rests at 18:45: before the 18:34 D2 home plus HOME_GRACE_MS.
+  const t = await setup({ home: { stops: ['PGPR'] }, manual: [cls(1020, 'UTOWN', 'GEA1000 @ UTown')] });
+  await t.signal(t.phone, { kind: 'arrived', trip: `${THU}:1020:UTOWN` });
+  t.clock(FROZEN_NOW + 9.5 * 3_600_000); // 18:30
+  const due = await t.next(t.phone);
+  assert.equal(due.card.phase, 'due');
+  t.clock(Date.parse(due.leave.board) + ASSUME_MS + 60_000);
+  const gone = await wakeCard(t.env, t.TRIPS);
+  assert.equal(gone.key, 'home:1080');
+  assert.equal(gone.answer.card.gone, true);
+  const rests = Date.parse(gone.answer.refreshAt);
+  assert.equal(gone.wakeAt, rests, 'the trip ends as the day rests: the wake pushes it then');
+  t.clock(rests);
+  assert.equal((await wakeCard(t.env, t.TRIPS)).key, null, 'resting: no trip');
+});
+
 test('in the last class, the Trip object wakes as it ends, to say it is time to go home', async () => {
   const t = await setup({ home: { stops: ['PGPR'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')] });
   await t.signal(t.phone, { kind: 'arrived', trip: FIRST });

@@ -128,9 +128,10 @@ export interface TripPlan {
 export interface TripIn {
   at: At;
   rec?: TripRecord;
-  /** A trip home after the day's last class: when that class ends, and
-   *  when the trip's planned bus has got you home (dayState's homeBy). */
-  home?: { lastEndMs: number; homeBy?: number } | null;
+  /** A trip home after the day's last class: when that class ends, when
+   *  the trip's planned bus has got you home (dayState's homeBy), and when
+   *  the day rests for the evening, after which the planner has no trip. */
+  home?: { lastEndMs: number; homeBy?: number; restsMs?: number | null } | null;
   /** A trip to a class: when it starts. */
   classAtMs?: number | null;
   /** The answer and its bus, worked out only when a rule needs them (once). */
@@ -148,7 +149,7 @@ export type OnBus = Aboard | 'missed' | null;
 
 /** Which rule a trip's phase came from, with what the planner needs to word it. */
 export type Verdict =
-  /** A class trip LATE_GRACE_MIN after the class started: the planner has moved on to the next trip. */
+  /** A class trip LATE_GRACE_MIN after the class started, or a trip home once the day rests: the planner has moved on. */
   | { kind: 'past' }
   /** A trip home with no location, long enough after the last class to be home. */
   | { kind: 'home' }
@@ -429,6 +430,9 @@ export async function answerPhase(
 async function phaseAt(t: TripIn, w: Where, c: Clock, look: Lookups, known: Lookups = look): Promise<Verdict> {
   // Never at the request's own time: the planner (nextClass) has moved on by then.
   if (t.classAtMs != null && c.reached(t.classAtMs + LATE_GRACE_MIN * 60_000)) return { kind: 'past' };
+  // Nor once the day rests: the planner rests before it plans any trip
+  // (next.ts isResting), wherever you are and whatever bus you're on.
+  if (t.home?.restsMs != null && c.reached(t.home.restsMs)) return { kind: 'past' };
   // No location, and long enough since the last class to be home by now:
   // its planned bus has got you there, or with none planned, HOME_BY_MIN.
   // On a bus the feed has running later than that (said, or seen ridden),

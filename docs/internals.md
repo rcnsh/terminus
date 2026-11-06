@@ -718,7 +718,8 @@ change and once the second bus has gone (`changesAt`).
   phase, `gone` or the trip itself changes (due, leave-by, the bus taken to
   have gone, the change of buses, the ride's end, the class's trip over,
   the last class ending for the trip home, and with no location, home by
-  its bus's arrival and `HOME_GRACE_MS` or `HOME_BY_MIN` after the class),
+  its bus's arrival and `HOME_GRACE_MS` or `HOME_BY_MIN` after the class,
+  or the day resting first, when the planner drops the trip home),
   not at `staleAt`. A trip whose phase won't change again by itself (a long
   gap's way home once its bus has gone, there early for a class) wakes it
   when the plan moves on (`refreshAt`), for the next trip's "due". At each wake it works out the card
