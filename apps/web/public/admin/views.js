@@ -15,6 +15,7 @@ import {
   S,
   Table,
   Tile,
+  Tiles,
   ago,
   dayLong,
   dayShort,
@@ -107,7 +108,7 @@ export const SECTIONS = [
     'Our own arrival-time model, run in shadow beside the feed: how it would have done, day by day. It answers no one yet.',
   ],
   ['feed', 'Feed & recorder', 'The NUS feed’s health, its outages, and what the timelapse recorder asked of it.'],
-  ['crashes', 'Crash reports', 'Crashes and errors from the apps and the website this week, by fingerprint.'],
+  ['crashes', 'Crash reports', 'Crashes and errors from the apps and the website this week, the same error grouped.'],
   ['reports', 'Reports', '“This was wrong” reports and stop suggestions, newest first.'],
   ['collection', 'Collection', 'What’s collected. Everything is off until turned on here.'],
 ];
@@ -129,7 +130,13 @@ function attention(s, d) {
   // Lower case mid-sentence, but not a word that is all capitals (API).
   const lower = (t) => t.replace(/\S+/g, (w) => (w === w.toUpperCase() ? w : w.toLowerCase()));
   const off = SWITCHES.filter(([k]) => !s.collect?.[k]).map(([, t]) => lower(t));
-  if (off.length) out.push(['info', `Not collecting ${off.join(', ')}.`, '#/collection']);
+  // A setup choice rather than a problem, so a quiet dot; past two, a count reads better than a list.
+  if (off.length)
+    out.push([
+      'quiet',
+      off.length <= 2 ? `Not collecting ${off.join(' or ')}.` : `${off.length} of ${SWITCHES.length} kinds of data aren’t being collected.`,
+      '#/collection',
+    ]);
   return out;
 }
 
@@ -138,24 +145,24 @@ export function Overview({ s, d }) {
   const items = attention(s, d);
   const eta = s.eta && !s.eta.error && s.eta.days?.length ? s.eta.overall : null;
   return html`
-    <div class="tiles">
+    <${Tiles}>
       <${Tile} k="Accounts" n=${a.total} sub=${`+${fmt(a.new7d)} this week`} spark=${d.accountsRun} href="#/accounts" />
       <${Tile} k="Active today" n=${a.active1d} sub=${`${fmt(a.active7d)} this week`} spark=${d.an ? d.active : null} href="#/accounts" />
       <${Tile}
-        k="Answers, last 7 days"
+        k="Answers, 7 days to yesterday"
         n=${d.an ? d.answers7 : null}
         delta=${d.answersChange}
-        sub=${d.an ? 'to yesterday, vs the week before' : null}
+        sub=${d.an ? 'vs the 7 days before' : null}
         spark=${d.an ? d.answers : null}
         href="#/answers"
       />
       <${Tile}
-        k="Error rate, last 7 days"
+        k="Error rate, 7 days to yesterday"
         n=${d.an ? d.rate7 : null}
         show=${(x) => pct(x, 2)}
         delta=${d.an ? d.rateChange : null}
         upGood=${false}
-        sub=${d.an ? 'to yesterday, vs the week before' : null}
+        sub=${d.an ? 'vs the 7 days before' : null}
         spark=${d.an ? d.rate.map((x) => x ?? 0) : null}
         sparkColor="var(--bad)"
         href="#/answers"
@@ -182,7 +189,7 @@ export function Overview({ s, d }) {
         href="#/crashes"
       />
       <${Tile} k="Reports this week" n=${s.feedback?.last7d ?? 0} sub=${`${fmt(s.feedback?.latest?.length ?? 0)} kept`} href="#/reports" />
-    </div>
+    <//>
     <div class="grid two">
       <${Card} title="Needs a look">
         <ul class="attention">
@@ -203,7 +210,11 @@ export function Overview({ s, d }) {
     </div>
     ${
       d.an &&
-      html`<${Card} title="Answers, last 14 days" sub="Errors and the error rate are in each day’s readout." tools=${html`<a class="btn small ghost" href="#/answers">Details</a>`}>
+      html`<${Card}
+        title="Answers, last 14 days"
+        sub=${`${fmt(sum(d.answers))} answers and ${fmt(sum(d.errors))} errors (${pct(share(sum(d.errors), sum(d.answers)), 2)}) in 14 days.`}
+        tools=${html`<a class="btn small ghost" href="#/answers">All answers</a>`}
+      >
       <${Chart}
         height=${220}
         rows=${d.d14.map((x, i) => ({
@@ -257,7 +268,7 @@ function Funnel({ steps }) {
     ${steps.map(
       ([label, n, sub], i) => html`<li>
         <div class="funnel-h"><span>${label}</span><b>${fmt(n)}</b><em>${i ? pct(share(n, first)) : ''}</em></div>
-        <div class="funnel-bar"><i style=${{ width: `${first ? Math.max(1, (n / first) * 100) : 0}%`, background: S(i) }}></i></div>
+        <div class="funnel-bar"><i style=${{ width: `${first ? Math.max(1, (n / first) * 100) : 0}%`, background: 'var(--s1)' }}></i></div>
         ${sub && html`<p class="hint">${sub}</p>`}
       </li>`,
     )}
@@ -270,7 +281,10 @@ const METRICS = [
   ['d30', 'Month'],
 ];
 
-function ActiveAccounts({ d }) {
+/** For a card whose switch is off but whose counts are still there: say they're old. */
+const STALE = ' The counts below are from before it was turned off.';
+
+function ActiveAccounts({ s, d }) {
   const [metric, setMetric] = useState('d1');
   const [by, setBy] = useState('all');
   const [picked, setPicked] = useState(null);
@@ -302,7 +316,7 @@ function ActiveAccounts({ d }) {
   return html`
     <${Card}
       title="Active accounts, last 30 days"
-      sub=${`Accounts that used terminus in the ${metric === 'd1' ? 'day' : metric === 'd7' ? '7 days' : '30 days'} to each date. Counted after midnight, so today is empty.`}
+      sub=${`${s.collect?.active ? '' : `Not collecting: turn on “Active accounts” under Collection to count them.${STALE} `}Accounts that used terminus in the ${metric === 'd1' ? 'day' : metric === 'd7' ? '7 days' : '30 days'} to each date. Counted after midnight, so today is empty.`}
       tools=${html`<${Segmented} label="Window" value=${metric} options=${METRICS} onChange=${setMetric} />
         <${Segmented}
           label="Split"
@@ -347,7 +361,7 @@ export function Accounts({ s, d }) {
   const ap = s.apps ?? {};
   const [cumulative, setCumulative] = useState(false);
   return html`
-    <div class="tiles">
+    <${Tiles}>
       <${Tile} k="Accounts" n=${a.total} spark=${d.accountsRun} />
       <${Tile} k="New this week" n=${a.new7d} sub=${`${fmt(a.new30d)} this month`} />
       <${Tile} k="Active today" n=${a.active1d} sub=${pct(share(a.active1d, a.total)) + ' of accounts'} />
@@ -356,7 +370,7 @@ export function Accounts({ s, d }) {
       <${Tile} k="With home stops" n=${a.withHome} sub=${pct(share(a.withHome, a.total)) + ' of accounts'} />
       <${Tile} k="Without an email" n=${a.anonymous} sub=${pct(share(a.anonymous, a.total)) + ' of accounts'} />
       <${Tile} k="Web sessions this week" n=${a.webSessions7d} />
-    </div>
+    <//>
     <div class="grid two">
       <${Card} title="Sign-ups, last 30 days" tools=${html`<${Segmented}
           label="Show"
@@ -389,7 +403,7 @@ export function Accounts({ s, d }) {
         />
       <//>
     </div>
-    <${ActiveAccounts} d=${d} />
+    <${ActiveAccounts} s=${s} d=${d} />
     <${Settings} s=${s} />
   `;
 }
@@ -417,12 +431,12 @@ export function Devices({ s, d }) {
   const paired = sum(devices.map((x) => x.total));
   const used = sum(devices.map((x) => x.active7));
   return html`
-    <div class="tiles">
+    <${Tiles}>
       <${Tile} k="Paired devices" n=${paired} />
       <${Tile} k="Used this week" n=${used} sub=${`${pct(share(used, paired))} of paired`} />
       <${Tile} k="API keys" n=${s.apiKeys?.total ?? 0} sub=${`${fmt(s.apiKeys?.used7d ?? 0)} used this week`} />
       <${Tile} k="Web sessions this week" n=${s.accounts?.webSessions7d ?? 0} />
-    </div>
+    <//>
     <div class="grid two">
       <${Card} title="Devices by app">
         ${
@@ -462,7 +476,7 @@ export function Devices({ s, d }) {
             { key: 'n', label: '7 days', num: true, meter: true },
             { key: 'd30', label: '30 days', num: true },
             { key: 'd90', label: '90 days', num: true },
-            { key: 'share', label: 'Of the app this week', num: true, fmt: (v) => pct(v) },
+            { key: 'share', label: 'Of its app', num: true, fmt: (v) => pct(v) },
           ]}
           rows=${shown}
           sort=${{ key: 'd90', dir: 'desc' }}
@@ -581,7 +595,7 @@ function Legacy({ s }) {
       sub=${
         s.collect?.legacy
           ? 'Requests in the last 30 days on the old address, the API’s old paths, or from an app too old to serve, by app version and route. When one has none for long enough, it can be switched off.'
-          : 'Not collecting: turn on “Old address and paths” under Collection to count them.'
+          : `Not collecting: turn on “Old address and paths” under Collection to count them.${rows.length ? STALE : ''}`
       }
       tools=${
         kinds.length > 1 &&
@@ -626,38 +640,56 @@ const SETTINGS = {
   notifications: 'Devices taking pushes',
 };
 
-/** How many active accounts have each setting, on the latest day counted (settings.ts). */
+/**
+ * How many active accounts have each setting, on the latest day counted
+ * (settings.ts): a row per setting, its values most common first. Pushes are
+ * counted per app against that app's devices, so their shares aren't parts
+ * of one whole and get no bar.
+ */
 function Settings({ s }) {
   if (!s.analytics || s.analytics.error) return null;
   const all = s.analytics.settings ?? [];
   const latest = all.reduce((m, r) => (day(r) > m ? day(r) : m), '');
-  const rows = all
-    .filter((r) => day(r) === latest)
-    .map((r) => ({
-      ...r,
-      key: `${r.setting} ${r.value}`,
+  const groups = new Map();
+  for (const r of all) {
+    if (day(r) !== latest) continue;
+    const g = groups.get(r.setting) ?? {
+      key: r.setting,
       name: SETTINGS[r.setting] ?? r.setting,
-      n: Number(r.n),
-      share: share(Number(r.n), Number(r.of)),
-    }));
-  const of = rows.find((r) => r.setting !== 'notifications')?.of;
+      whole: r.setting !== 'notifications',
+      values: [],
+    };
+    g.values.push({ value: r.value, n: Number(r.n), of: Number(r.of), share: share(Number(r.n), Number(r.of)) });
+    groups.set(r.setting, g);
+  }
+  const rows = [...groups.values()].map((g) => ({ ...g, values: g.values.sort((x, y) => y.n - x.n), top: g.values[0]?.share ?? 0 }));
+  const of = all.find((r) => day(r) === latest && r.setting !== 'notifications')?.of;
+  const values = (g) => html`<div class="setting-values">
+    ${g.whole && html`<${Stack} parts=${g.values.map((v, i) => ({ name: v.value, n: v.n, color: S(i) }))} />`}
+    <span class="vals">
+      ${g.values.map(
+        (v, i) =>
+          html`<span>${g.whole && html`<i style=${{ background: S(i) }}></i>`}<code>${g.whole ? v.value : platform(v.value)}</code> ${
+            g.whole ? `${fmt(v.n)} · ${pct(v.share)}` : `${fmt(v.n)} of ${fmt(v.of)} devices · ${pct(v.share)}`
+          }</span>`,
+      )}
+    </span>
+  </div>`;
   return html`
     <${Card}
       title="Settings"
       sub=${
         s.collect?.settings
           ? latest
-            ? `Accounts used in the 30 days to ${dayLong(latest)}${of ? ` (${fmt(of)})` : ''}, by each setting’s value; pushes are Android phones, iPhones and web apps, by app. What a device keeps to itself (leave alerts, card style) isn’t sent, so isn’t here.`
+            ? `Accounts used in the 30 days to ${dayLong(latest)}${of ? ` (${fmt(of)})` : ''}, by each setting’s value; pushes are the share of each app’s devices that take them. What a device keeps to itself (leave alerts, card style) isn’t sent, so isn’t here.`
             : 'Counted once a day, after midnight: nothing yet.'
-          : 'Not collecting: turn on “Settings” under Collection to count them.'
+          : `Not collecting: turn on “Settings” under Collection to count them.${latest ? ` The counts below are from ${dayLong(latest)}, before it was turned off.` : ''}`
       }
     >
       <${Table}
         cols=${[
           { key: 'name', label: 'Setting' },
-          { key: 'value', label: 'Value', cell: (r) => html`<code>${r.value}</code>` },
-          { key: 'n', label: 'Count', num: true, meter: true },
-          { key: 'share', label: 'Share', num: true, fmt: (v) => pct(v) },
+          { key: 'top', label: 'Values, most common first', num: false, sort: (g) => g.top, cell: values },
         ]}
         rows=${rows}
         sort=${{ key: 'name', dir: 'asc' }}
@@ -683,6 +715,8 @@ export function Answers({ s, d }) {
   if (s.analytics.error) return html`<${Empty}><span class="bad">${`Analytics Engine: ${s.analytics.error}`}</span><//>`;
   const quality = (d.an.quality ?? []).map((q) => ({ key: q.quality || '—', quality: q.quality || '—', n: Number(q.n) }));
   const qTotal = sum(quality.map((q) => q.n));
+  // Each quality's bar in the table takes its colour in the stack above it.
+  const qColor = new Map(quality.map((q, i) => [q.key, S(i)]));
   const live = quality.find((q) => q.quality === 'live')?.n ?? 0;
   const routes = (d.an.errors ?? []).map((e) => ({ key: e.route, route: e.route, n: Number(e.n) }));
   // How long /api/me/next took, from the request reaching the Worker to the card built (admin.ts nextTook).
@@ -701,11 +735,20 @@ export function Answers({ s, d }) {
           : `${fmt(d.errors[i])} errors of ${fmt(d.answers[i])}`,
   }));
   return html`
-    <div class="tiles">
+    <${Tiles}>
       <${Tile} k="Answers, 14 days" n=${total} sub=${`${fmt(Math.round(total / 14))} a day`} spark=${d.answers} />
-      <${Tile} k="Last 7 days" n=${d.answers7} delta=${d.answersChange} sub="to yesterday, vs the week before" />
+      <${Tile} k="Answers, 7 days to yesterday" n=${d.answers7} delta=${d.answersChange} sub="vs the 7 days before" />
       <${Tile} k="Errors, 14 days" n=${errs} spark=${d.errors} sparkColor="var(--bad)" />
-      <${Tile} k="Error rate, 7 days" n=${d.rate7} show=${(x) => pct(x, 2)} delta=${d.rateChange} upGood=${false} sub="to yesterday, vs the week before" />
+      <${Tile}
+        k="Error rate, 7 days to yesterday"
+        n=${d.rate7}
+        show=${(x) => pct(x, 2)}
+        delta=${d.rateChange}
+        upGood=${false}
+        sub="vs the 7 days before"
+        spark=${d.rate.map((x) => x ?? 0)}
+        sparkColor="var(--bad)"
+      />
       <${Tile} k="Live this week" n=${share(live, qTotal)} show=${(x) => pct(x, 1)} sub=${`${fmt(live)} of ${fmt(qTotal)} answers`} />
       <${Tile}
         k="Time to answer, last 24 h"
@@ -713,7 +756,7 @@ export function Answers({ s, d }) {
         show=${(x) => `${fmt(Math.round(x))} ms`}
         sub=${next ? `median of ${fmt(next.n)} cards · 95% within ${fmt(next.p95)} ms` : 'No cards timed yet.'}
       />
-    </div>
+    <//>
     <${Card}
       title="Per day, last 14 days"
       sub="Singapore days; today’s is so far."
@@ -744,7 +787,7 @@ export function Answers({ s, d }) {
         <${Table}
           cols=${[
             { key: 'quality', label: 'Quality', fmt: (v) => QUALITY[v] ?? v },
-            { key: 'n', label: 'Answers', num: true, meter: true },
+            { key: 'n', label: 'Answers', num: true, meter: (r) => qColor.get(r.key) },
             { key: 'share', label: 'Share', num: true, sort: (r) => r.n, fmt: (_, r) => pct(share(r.n, qTotal), 1) },
           ]}
           rows=${quality}
@@ -800,15 +843,15 @@ export function Arrivals({ s }) {
     .map((x) => ({ ...x, key: x.date, share: share(x.matched, x.predictions) }));
   const hours = eta.hours.map((r) => ({ ...r, key: r.hour, label: `${String(r.hour).padStart(2, '0')}:00` }));
   return html`
-    <div class="tiles">
+    <${Tiles}>
       <${Tile} k="Within a minute" n=${o.within1} show=${(x) => pct(x)} sub="of what the feed said" />
       <${Tile} k="Typical error" n=${late(o.medianS)} sub="+ is later than said" />
       <${Tile} k="Over 2 minutes late" n=${o.late2} show=${(x) => pct(x)} />
       <${Tile} k="Over a minute early" n=${o.early1} show=${(x) => pct(x)} />
       <${Tile} k="Predictions matched" n=${share(matched, predictions)} show=${(x) => pct(x)} sub=${`≈${compact(matched)} of ≈${compact(predictions)}`} />
-      <${Tile} k="Days scored" n=${eta.days.length} sub="of the last 14" />
-    </div>
-    <p class="hint lead">${`Estimates: busy days are sampled. Good to about 15 s either way. Scored ${plural(o.n, 'prediction')} in all.`}</p>
+      <${Tile} k="Predictions scored" n=${o.n} sub="busy days sampled · good to about 15 s" />
+    <//>
+    ${!s.collect?.eta && html`<p class="notice">Not collecting: turn on <a href="#/collection">Arrival-time accuracy</a> to score new days.${STALE}</p>`}
     <${Card} title="By how far ahead it said" sub="Further ahead is less sure.">
       <${Table} cols=${statCols({ key: 'label', label: 'Said', fmt: (v) => v }, max)} rows=${eta.horizons.map((h) => ({ ...h, key: h.label }))} />
     <//>
@@ -854,23 +897,19 @@ export function Arrivals({ s }) {
     <${Card} title="By service">
       <${Table} cols=${statCols({ key: 'svc', label: 'Service' }, max)} rows=${eta.services.map((r) => ({ ...r, key: r.svc }))} sort=${{ key: 'svc', dir: 'asc' }} />
     <//>
-    <div class="grid two">
-      <${Card}
-        title="Matched per day"
-        sub="Predictions that found their bus, of all read."
-      >
-        <${Chart}
-          height=${200}
-          rows=${days.map((x) => ({ label: dayLong(x.date), short: dayShort(x.date), values: [x.matched, x.predictions - x.matched], note: `${pct(x.share)} matched` }))}
-          series=${[
-            { name: 'Matched', color: 'var(--s1)' },
-            { name: 'Not matched', color: 'var(--s4)' },
-          ]}
-          stacked
-          fmt=${(v) => `≈${fmt(v)}`}
-        />
-      <//>
-      <${Card} title="Days scored" sub="How many of the feed’s predictions found their bus.">
+    <${Card} title="Per day" sub=${`${eta.days.length} of the last 14 days scored. Predictions that found their bus, of all the feed made.`}>
+      <${Chart}
+        height=${200}
+        rows=${days.map((x) => ({ label: dayLong(x.date), short: dayShort(x.date), values: [x.matched, x.predictions - x.matched], note: `${pct(x.share)} matched` }))}
+        series=${[
+          { name: 'Matched', color: 'var(--s1)' },
+          { name: 'Not matched', color: 'var(--s4)' },
+        ]}
+        stacked
+        fmt=${(v) => `≈${fmt(v)}`}
+      />
+      <details class="more-table">
+        <summary>Every day as a table</summary>
         <${Table}
           cols=${[
             { key: 'date', label: 'Day', fmt: (v) => dayLong(v), sort: (r) => r.date },
@@ -881,8 +920,8 @@ export function Arrivals({ s }) {
           rows=${days}
           sort=${{ key: 'date', dir: 'desc' }}
         />
-      <//>
-    </div>
+      </details>
+    <//>
   `;
 }
 
@@ -897,6 +936,8 @@ const OUTCOMES = [
 ];
 
 function Recorder({ s, d }) {
+  // Failures are a sliver of each day's polls: on their own, they get a scale they can be seen on.
+  const [only, setOnly] = useState('all');
   if (!s.analytics) return NEEDS_AE;
   if (s.analytics.error || !d.an.timelapse) return null;
   const by = new Map();
@@ -905,6 +946,10 @@ function Recorder({ s, d }) {
     by.set(k, (by.get(k) ?? 0) + Number(r.n));
   }
   const n = (dd, outcome) => by.get(`${dd} ${outcome}`) ?? 0;
+  // Each keeps its place in OUTCOMES, so its colour, when the others are left out.
+  const shownOutcomes = OUTCOMES.map((o, i) => [...o, i]).filter(
+    ([, keys]) => only === 'all' || !keys.some((k) => k === 'upstream' || k === 'hit'),
+  );
   const total = (outcome) => sum(d.d14.map((dd) => n(dd, outcome)));
   const requests = total('upstream') + total('error') + total('retry');
   const polls = requests + total('hit') + total('stale') + total('failed') + total('skipped');
@@ -919,29 +964,40 @@ function Recorder({ s, d }) {
     skipped: n(dd, 'skipped'),
   }));
   return html`
-    <div class="tiles">
+    <${Tiles}>
       <${Tile} k="Requests to NUS, 14 days" n=${requests} sub=${`${fmt(Math.round(requests / 14))} a day`} spark=${table.map((r) => r.requests)} />
       <${Tile} k="Failed" n=${total('error')} tone=${total('error') ? 'bad' : ''} sub=${`${pct(share(total('error'), requests), 1)} of requests`} />
       <${Tile} k="Retries" n=${total('retry')} />
       <${Tile} k="From the cache" n=${total('hit')} sub=${`${pct(share(total('hit'), polls))} of polls`} />
       <${Tile} k="Not asked after a failure" n=${total('stale') + total('failed')} />
       <${Tile} k="Skipped, breaker open" n=${total('skipped')} />
-    </div>
+    <//>
     <${Card}
       title="What each poll did, last 14 days"
-      sub="The only scheduled reads of the live buses (docs/agents/feeds.md): every 30 s per service, 06:30 to 00:30, at most 17,280 polls a day."
-      tools=${html`<a class="btn small ghost" href="#/timelapse">Replay a day</a>`}
+      sub="The only scheduled reads of the live buses: every 30 s per service, 06:30 to 00:30, at most 17,280 polls a day."
+      tools=${html`<${Segmented}
+          label="Show"
+          value=${only}
+          onChange=${setOnly}
+          options=${[
+            ['all', 'Every poll'],
+            ['bad', 'Only failures'],
+          ]}
+        /><a class="btn small ghost" href="#/timelapse">Replay a day</a>`}
     >
       <${Chart}
+        key=${only}
         stacked
         rows=${d.d14.map((dd) => ({
           label: dayLong(dd),
           short: dayShort(dd),
-          values: OUTCOMES.map(([, keys]) => sum(keys.map((k) => n(dd, k)))),
+          values: shownOutcomes.map(([, keys]) => sum(keys.map((k) => n(dd, k)))),
         }))}
-        series=${OUTCOMES.map(([name], i) => ({ name, color: S(i) }))}
-        note=${OUTCOMES.map(([name, , what]) => `${name}: ${what}`).join(' ')}
+        series=${shownOutcomes.map(([name, , , i]) => ({ name, color: S(i) }))}
       />
+      <dl class="facts outcomes">
+        ${shownOutcomes.map(([name, , what]) => html`<dt>${name}</dt><dd>${what}</dd>`)}
+      </dl>
       <details class="more-table">
         <summary>Every day as a table</summary>
         <${Table}
@@ -988,8 +1044,12 @@ export function Feed({ s, d }) {
       <${Card} title="Outages" sub="The latest five, as the status page shows them.">
         <${Table}
           cols=${[
-            { key: 'start', label: 'From', fmt: (v) => when(v) },
-            { key: 'end', label: 'To', fmt: (v) => (v ? when(v) : html`<strong class="bad">ongoing</strong>`) },
+            { key: 'start', label: 'From', fmt: (v) => html`<span class="nowrap">${when(v)}</span>` },
+            {
+              key: 'end',
+              label: 'To',
+              fmt: (v) => (v ? html`<span class="nowrap">${when(v)}</span>` : html`<strong class="bad">ongoing</strong>`),
+            },
             { key: 'length', label: 'Lasted', num: true, fmt: (v) => dur(v) },
             { key: 'cause', label: 'Cause', fmt: (v) => (v === 'version' ? 'New uNivUS version' : 'Feed failed') },
           ]}
@@ -1061,12 +1121,12 @@ export function Crashes({ s, d, query, dismiss }) {
       order === 'last' ? aeIso(y.last).localeCompare(aeIso(x.last)) : order === 'fatal' ? y.fatal - x.fatal || y.n - x.n : y.n - x.n,
     );
   return html`
-    <div class="tiles">
+    <${Tiles}>
       <${Tile} k="Reports this week" n=${d.crashReports} />
       <${Tile} k="Closed the app" n=${d.crashFatal} tone=${d.crashFatal ? 'bad' : ''} />
-      <${Tile} k="Kinds" n=${all.length} sub="by fingerprint (the top 25)" />
+      <${Tile} k="Different errors" n=${all.length} sub="the 25 most reported are kept" />
       ${platforms.map((p) => html`<${Tile} k=${platform(p)} n=${sum(all.filter((e) => e.platform === p).map((e) => e.n))} sub="reports" />`)}
-    </div>
+    <//>
     <div class="toolbar">
       <${Search} value=${q} onChange=${setQ} placeholder="Search type, message, stack, version" />
       <${Chips}
@@ -1080,9 +1140,9 @@ export function Crashes({ s, d, query, dismiss }) {
         value=${order}
         onChange=${setOrder}
         options=${[
-          ['n', 'Most reports'],
-          ['fatal', 'Most crashes'],
-          ['last', 'Latest'],
+          ['n', 'Most reported'],
+          ['fatal', 'Most app closes'],
+          ['last', 'Newest'],
         ]}
       />
     </div>
@@ -1101,7 +1161,7 @@ export function Crashes({ s, d, query, dismiss }) {
                 </div>
                 <div class="item-count">
                   <b>${fmt(e.n)}</b><span>${e.n === 1 ? 'report' : 'reports'}</span>
-                  ${e.fatal ? html`<span class="tag bad">${`${fmt(e.fatal)} crashed`}</span>` : null}
+                  ${e.fatal ? html`<span class="tag bad">${`${fmt(e.fatal)} closed the app`}</span>` : null}
                 </div>
               `}
             >
@@ -1171,17 +1231,20 @@ export function Reports({ s, d, query, remove }) {
     const k = new Date(f.created).toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' });
     perDay.set(k, (perDay.get(k) ?? 0) + 1);
   }
+  // From the oldest report kept (two weeks at least), not a month mostly empty.
+  const firstDay = d.d30.findIndex((x) => perDay.has(x));
+  const chartDays = d.d30.slice(Math.max(0, Math.min(firstDay < 0 ? 0 : firstDay, d.d30.length - 14)));
   return html`
-    <div class="tiles">
+    <${Tiles}>
       <${Tile} k="This week" n=${fb.last7d} />
       <${Tile} k="Kept here" n=${all.length} sub="the latest 25" />
       <${Tile} k="Can be answered" n=${all.filter((f) => f.email || f.replyTo).length} sub="with an email to reply to" />
       <${Tile} k="Stop suggestions" n=${all.filter((f) => f.context?.venue).length} sub="a better stop for a building" />
-    </div>
-    <${Card} title="Reports per day" sub="Of the ones kept here.">
+    <//>
+    <${Card} title="Reports per day" sub="Of the ones kept here, from the oldest.">
       <${Chart}
         height=${150}
-        rows=${d.d30.map((x) => ({ label: dayLong(x), short: dayShort(x), values: [perDay.get(x) ?? 0] }))}
+        rows=${chartDays.map((x) => ({ label: dayLong(x), short: dayShort(x), values: [perDay.get(x) ?? 0] }))}
         series=${[{ name: 'Reports', color: 'var(--accent-bright)' }]}
       />
     <//>
@@ -1190,7 +1253,7 @@ export function Reports({ s, d, query, remove }) {
       <${Chips} label="Reason" value=${reason} onChange=${setReason} options=${[['', 'All', all.length], ...reasons.map((r) => [r, r, all.filter((f) => (f.reason ?? 'Other') === r).length])]} />
       ${
         platforms.length > 1 &&
-        html`<${Chips} label="App" value=${plat} onChange=${setPlat} options=${[['', 'Any app'], ...platforms.map((p) => [p, platform(p), all.filter((f) => f.platform === p).length])]} />`
+        html`<${Segmented} label="App" value=${plat} onChange=${setPlat} options=${[['', 'Any app'], ...platforms.map((p) => [p, platform(p)])]} />`
       }
     </div>
     ${
@@ -1206,7 +1269,7 @@ export function Reports({ s, d, query, remove }) {
                   <div class="meta">
                     <span class="tag">${`${platform(f.platform)}${f.appVersion ? ` ${f.appVersion}` : ''}`}</span>${`${when(f.created)} · ${ago(f.created, d.nowMs)}`}
                   </div>
-                  <div class="title"><b>${f.reason ?? 'Other'}</b>${f.note ? html`<span class="note">${f.note}</span>` : !f.reason ? html`<span class="hint">(no note)</span>` : null}</div>
+                  <div class="title"><b>${f.reason ?? 'Other'}</b>${f.note ? html`<span class="note">${f.note}</span>` : f.answer ? html`<span class="note muted">${f.answer}</span>` : html`<span class="hint">(no note)</span>`}</div>
                 </div>
               `}
             >

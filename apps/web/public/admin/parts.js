@@ -68,10 +68,13 @@ export const S = (i) => `var(--s${(i % 5) + 1})`;
 
 const still = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+/** Whether the dashboard is opening (admin.js): only then do new numbers count up from 0. */
+export const motion = { intro: false };
+
 /** [target], counted up to from where it was over half a second. */
 export function useCount(target) {
   const [v, setV] = useState(target);
-  const from = useRef(0);
+  const from = useRef(motion.intro ? 0 : target);
   useEffect(() => {
     if (typeof target !== 'number' || still()) {
       setV(target);
@@ -119,10 +122,18 @@ export function Tile({ n, show = fmt, k, sub, delta, upGood = true, spark, spark
   return href ? html`<a class="tile link" href=${href}>${body}</a>` : html`<div class="tile">${body}</div>`;
 }
 
+/** A row of tiles, in as many columns as fill its rows evenly when there's room (admin.css), else half as many. */
+export function Tiles({ children }) {
+  const n = [children].flat(Infinity).filter(Boolean).length;
+  const cols = n <= 6 ? n : Math.ceil(n / 2);
+  return html`<div class="tiles" data-cols=${cols} data-alt=${cols % 2 ? null : cols / 2}>${children}</div>`;
+}
+
 /**
  * A table that sorts by any column (a click on its heading; again to turn it
  * round). [cols]: { key, label, num, fmt, sort, cell, meter }. A meter column
- * draws a bar against the column's largest value. Past [limit] rows, a button
+ * draws a bar against the column's largest value, in [meter]'s colour when
+ * it's one, or the row's when it's a function of the row. Past [limit] rows, a button
  * shows the rest.
  */
 export function Table({ cols, rows, sort: initial, empty = 'None.', limit = 0, onRow, isActive, caption }) {
@@ -179,7 +190,7 @@ export function Table({ cols, rows, sort: initial, empty = 'None.', limit = 0, o
                     (c) => html`<td class=${c.num ? 'num' : ''}>
                       ${
                         c.meter
-                          ? html`<span class="with-meter"><span>${(c.fmt ?? fmt)(r[c.key], r)}</span><${Meter} n=${Number(r[c.key]) || 0} max=${max[c.key]} color=${c.meter === true ? undefined : c.meter} /></span>`
+                          ? html`<span class="with-meter"><span>${(c.fmt ?? fmt)(r[c.key], r)}</span><${Meter} n=${Number(r[c.key]) || 0} max=${max[c.key]} color=${c.meter === true ? undefined : typeof c.meter === 'function' ? c.meter(r) : c.meter} /></span>`
                           : c.cell
                             ? c.cell(r)
                             : (c.fmt ?? ((v) => (c.num ? fmt(v) : (v ?? '—'))))(r[c.key], r)

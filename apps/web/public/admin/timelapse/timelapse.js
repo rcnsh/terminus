@@ -432,7 +432,8 @@ function drawOverlay(t, counts) {
   g.font = `700 ${170 * k}px "Space Grotesk", sans-serif`;
   g.fillText(clockAt(t), x - 6 * k, y);
   y += 64 * k;
-  const date = new Date(t).toLocaleDateString('en-SG', {
+  // The recorded day's date, as the day list names it: past midnight is still that day's service.
+  const date = new Date(day?.date ? `${day.date}T12:00:00+08:00` : t).toLocaleDateString('en-SG', {
     timeZone: 'Asia/Singapore',
     weekday: 'long',
     day: 'numeric',
@@ -720,8 +721,10 @@ function Timeline({ v, r, busy, set }) {
     // From the minute the handle shows (clockAt rounds down), so every press moves what's shown.
     move(what, Math.floor(at / MIN) * MIN + step * (e.shiftKey ? 10 : 1) * MIN);
   };
-  // A label near an end of the track keeps inside it.
-  const edge = (t) => ((t - win.a) / span < 0.04 ? 'grip at-a' : (win.b - t) / span < 0.04 ? 'grip at-b' : 'grip');
+  // A label near an end of the track keeps inside it; [room] is how wide it is, as a share of the track.
+  const edge = (t, room = 0.04) => ((t - win.a) / span < room ? 'grip at-a' : (win.b - t) / span < room ? 'grip at-b' : 'grip');
+  // Handles too close for two labels share one, on the start's handle.
+  const near = (r.b - r.a) / span < 0.07;
   const slider = (what, label, t) => ({
     'data-grip': what,
     role: 'slider',
@@ -757,8 +760,10 @@ function Timeline({ v, r, busy, set }) {
               </div>`
             : null
         }
-        <div class=${edge(r.a)} ...${slider('from', 'Start of the video', r.a)}><span>${clockAt(r.a)}</span></div>
-        <div class=${edge(r.b)} ...${slider('to', 'End of the video', r.b)}><span>${clockAt(r.b)}</span></div>
+        <div class=${near ? edge(r.a, 0.08) : edge(r.a)} ...${slider('from', 'Start of the video', r.a)}>
+          <span>${near ? `${clockAt(r.a)}–${clockAt(r.b)}` : clockAt(r.a)}</span>
+        </div>
+        <div class=${edge(r.b)} ...${slider('to', 'End of the video', r.b)}>${near ? null : html`<span>${clockAt(r.b)}</span>`}</div>
         <div class="head" ...${slider('head', 'Moment shown in the preview', head)}><span>${clockAt(head)}</span></div>
       </div>
       <div class="ticks">${ticksOf(win).map((t) => html`<span style=${{ left: pct(t) }}>${clockAt(t)}</span>`)}</div>
