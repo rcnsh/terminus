@@ -347,7 +347,8 @@ test('late whatever you do: the first bus you can catch, then the first second b
 
 /* Following a trip that changes buses (trip.ts, plan.ts). */
 
-import { CHANGE_GRACE_MS, laterChange, leaveOf, rideStage, secondBusOf, secondLeavesMs, tripEnd } from '../src/answer/trip.ts';
+import { laterChange, leaveOf, secondBusOf, tripEnd } from '../src/answer/trip.ts';
+import { CHANGE_GRACE_MS, rideStage, secondLeavesMs } from '../src/answer/phase.ts';
 import { planOfLeave, sameBus } from '../src/answer/plan.ts';
 
 /** A leave-by for K at PGP to Kent Vale, then P to College Green. */

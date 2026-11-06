@@ -275,7 +275,8 @@ test("a stale answer's card counts from the request: its next change is never in
 });
 
 test('a leave-by sliding just ahead of now asks for a refetch no sooner than 30 s', async () => {
-  const { nextPhaseAt, LEAVE_GAP_MS } = await import('../src/answer/card.ts');
+  const { LEAVE_GAP_MS } = await import('../src/answer/card.ts');
+  const { changesAt } = await import('../src/answer/phase.ts');
   const { default: fixture } = await import('../../../fixtures/answers/class-bus.json', { with: { type: 'json' } });
   const { card: _card, refreshAt: _r, ...answer } = fixture;
   const now = Date.parse(answer.asOf);
@@ -285,7 +286,7 @@ test('a leave-by sliding just ahead of now asks for a refetch no sooner than 30 
   const card = cardFor(sliding, false, trip, null, now);
   assert.equal(Date.parse(card.nextChangeAt), now + LEAVE_GAP_MS);
   // The Trip object keeps the exact time (it has its own gap).
-  assert.equal(nextPhaseAt(sliding, trip, now), now + 5_000);
+  assert.equal(changesAt(sliding, trip, now), now + 5_000);
   // A leave-by further off is kept to the second.
   const later = { ...answer, leave: { ...answer.leave, at: new Date(now + 90_000).toISOString() } };
   assert.equal(Date.parse(cardFor(later, false, trip, null, now).nextChangeAt), now + 90_000);

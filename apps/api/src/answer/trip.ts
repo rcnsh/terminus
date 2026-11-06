@@ -1,27 +1,21 @@
 /**
- * The trip engine: what state today's trip is in, the same on every device.
- *
- *   idle → due → heading → waiting → riding → arrived
- *                 └──────────┴──→ missed → (replanned) → due
- *            └──→ skipped
- *
- * The phase is worked out on each request from the answer (its leave-by
- * time, whether you're at the stop or already there) and what the day's
- * signals say: "On the D2", "Missed it", "Not going", "I'm there", a
- * location. The signals live in a Durable Object per user (`Trip`, keyed by
+ * The trip engine: today's trips, the same on every device. Which phase
+ * one is in, and when that changes, is phase.ts's; this is what it reads:
+ * the plan (the bus a trip is about) and what the day's signals say: "On
+ * the D2", "Missed it", "Not going", "I'm there", a location. The signals live in a Durable Object per user (`Trip`, keyed by
  * user id), so a tap on the phone changes the Mac's menu bar too. It holds
  * only today's signals, never a location, and deletes them at the end of the
  * day with an alarm. An idle object costs nothing.
  */
 
-import type { Env, Graph, Leave, MeAnswer } from '../types.ts';
+import type { Env, Graph, Leave } from '../types.ts';
 import type { StepTarget } from './step.ts';
 import { haversineM } from '../geo.ts';
 import { MAX_FIX_ACC_M, WALK, sgt } from '../config.ts';
 import { sgtDate } from '../timetable/calendar.ts';
 import { GRAPH, GRAPH_PUBLIC } from './graph.ts';
 import { indexGraph, rideSpan, rideStops } from './resolve.ts';
-import { headwayMs } from './departures.ts';
+import { HOME_GRACE_MS } from './phase.ts';
 import { routeColor, shapeFor } from '../map/campus.ts';
 import { alongNear } from '../map/buses.ts';
 import { isoSeconds, shortStop } from './format.ts';
@@ -189,40 +183,6 @@ export function laterChange(c: Plan | undefined, reach: string | null | undefine
   return { ...c, board: isoSeconds(there), ...(c.arrive ? { arrive: isoSeconds(Date.parse(c.arrive) + by) } : {}), estimated: true };
 }
 
-/** How long after the second bus's time it's taken to have left with you on it. */
-export const CHANGE_GRACE_MS = 30_000;
-
-/**
- * The latest the second bus of a trip that changes buses can leave: its
- * time, or a headway after it when that time is only a guess (there by
- * then, and a bus within a headway).
- */
-export function secondLeavesMs(c: Plan): number | null {
-  if (!c.board) return null;
-  const at = Date.parse(c.board);
-  if (!c.estimated) return at;
-  // A bus within a headway of the guess. Not bounded by the hours: the
-  // guess was made for a bus that runs, and a time pushed past the close
-  // (laterChange) would otherwise wait for the next morning's.
-  return at + headwayMs(GRAPH, c.svc, at);
-}
-
-/**
- * Where a trip that changes buses is: on the first bus until it gets to the
- * change (`first`), at the change stop until the second bus has left
- * (`change`), then on the second. A trip on one bus is always `first`.
- * `firstLate`: the feed still has the first bus on its way to the change.
- * The second bus's time should be the feed's where it has one (secondBus in
- * next.ts), so a bus still due there keeps you at the change.
- */
-export function rideStage(b: Plan, nowMs: number, firstLate = false): 'first' | 'change' | 'second' {
-  if (!b.change) return 'first';
-  if (firstLate || !b.arrive || nowMs < Date.parse(b.arrive)) return 'first';
-  const leaves = secondLeavesMs(b.change);
-  if (leaves === null || nowMs < leaves + CHANGE_GRACE_MS) return 'change';
-  return 'second';
-}
-
 /** The ride for a progress bar: the stops from boarding to getting off, and the times. */
 export interface Ride {
   svc: string;
@@ -361,17 +321,6 @@ export function tripRev(day: DayRecord | null, key: string): number {
   return day?.revs?.[key] ?? 0;
 }
 
-/** Heads-up window: the trip is "due" this long before its leave-by. */
-export const DUE_MS = 5 * 60_000;
-/** At the stop this long before the leave-by counts as waiting for the bus. */
-export const WAIT_EARLY_MS = 15 * 60_000;
-/** Close enough to the boarding stop to be waiting at it. */
-export const AT_STOP_M = 80;
-/** After the bus you're on should have got you there, you're taken to be there. */
-export const RIDE_GRACE_MS = 10 * 60_000;
-/** Nobody said otherwise this long after the bus left: where you are says
- *  whether you're on it (seenOnBus), or the answer is the next way there. */
-export const ASSUME_MS = 3 * 60_000;
 /** A location this close to the ride's road is on it: a phone's fix on a
  *  moving bus, plus the line's own error. */
 export const ON_RIDE_M = 60;
@@ -392,9 +341,6 @@ export function endOfDayMs(nowMs: number): number {
 export function signalOf(day: DayRecord | null, key: string): TripRecord | undefined {
   return day?.trips[key];
 }
-
-/** A trip home's bus has had this long past its arrival to get you indoors. */
-export const HOME_GRACE_MS = 10 * 60_000;
 
 /** Keys reached or skipped today, and when each planned trip home has got you there, for the planner. */
 export function dayState(day: DayRecord | null): {
@@ -421,32 +367,6 @@ export function dayState(day: DayRecord | null): {
     if (isHomeKey(k) && end && !missed.has(k)) homeBy.set(k, Date.parse(end) + HOME_GRACE_MS);
   }
   return { skipped, done, missed, homeBy, away };
-}
-
-/**
- * The phase of a planned trip, from its answer and the latest signal. A
- * signal wins over the clock: once you say you're on the bus, it doesn't
- * matter that the leave-by passed.
- */
-export function phaseFor(a: MeAnswer, rec: TripRecord | undefined, nowMs: number, at: { lat: number | null; lon: number | null }): Phase {
-  if (a.arrived) return 'arrived';
-  if (rec?.kind === 'boarded') return 'riding';
-  if (rec?.kind === 'missed') return 'missed';
-  if (rec?.kind === 'arrived') return 'arrived';
-  const leaveAt = a.leave?.at ? Date.parse(a.leave.at) : null;
-  // At the plan's boarding stop from a little before the leave-by: waiting,
-  // whatever the clock says. Not hours before it (you may live by that
-  // stop), and not at any other stop (riding past one is not waiting at it).
-  const code = a.leave?.stopCode ?? a.stop.code;
-  if (at.lat !== null && at.lon !== null && code && a.leave?.svc && (leaveAt === null || nowMs >= leaveAt - WAIT_EARLY_MS)) {
-    const s = indexGraph(GRAPH).byCode.get(code);
-    if (s && haversineM(at.lat, at.lon, s.lat, s.lon) <= AT_STOP_M) return 'waiting';
-  }
-  if (rec?.kind === 'left') return 'heading';
-  if (leaveAt === null) return 'idle';
-  if (nowMs >= leaveAt) return 'heading';
-  if (nowMs >= leaveAt - DUE_MS) return 'due';
-  return 'idle';
 }
 
 function stub(env: Env, userId: string): DurableObjectStub | null {

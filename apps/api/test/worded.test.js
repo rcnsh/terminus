@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { cardFor, headingOf, remindAtOf, titleOf } from '../src/answer/card.ts';
 import { dayLine } from '../src/timetable/day.ts';
 import { etaText, thenText, towardsText } from '../src/answer/resolve.ts';
-import { DUE_MS } from '../src/answer/trip.ts';
+import { DUE_MS } from '../src/answer/phase.ts';
 import { withLang } from '../src/i18n.ts';
 
 const load = async (name) => {

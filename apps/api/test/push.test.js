@@ -11,7 +11,8 @@ import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
 import { Trip } from '../src/push/tripdo.ts';
 import { armTrips, remindTerm } from '../src/ops/monitor.ts';
-import { DUE_MS, endOfDayMs, sgtDate } from '../src/answer/trip.ts';
+import { endOfDayMs, sgtDate } from '../src/answer/trip.ts';
+import { DUE_MS } from '../src/answer/phase.ts';
 import { remindUser } from '../src/push/push.ts';
 import { withoutMeasuredHeadways } from './_headways.mjs';
 

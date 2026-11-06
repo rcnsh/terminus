@@ -553,7 +553,7 @@ the change), `waiting` (at the change stop, `phaseText` "Change buses",
 the second bus as the leave-by to catch), then `riding` again on the
 second, with no phase of its own, so an app that knows nothing of changes
 still shows each part right. The plan and the `boarded` record are the
-first bus with the second in `change` (`Plan.change`); `rideStage()`
+first bus with the second in `change` (`Plan.change`); `rideStage()` (phase.ts)
 says which part you're on, from the clock, and from the feed while it still
 has the first bus on its way to the change. Off the first bus, the second
 bus's time is read from the feed at the change stop, and that time decides
@@ -565,7 +565,7 @@ headway after the guess (`secondLeavesMs`). Boarding a later first bus that
 gets to the change after the planned second bus makes the second a guess
 from when you get there (`laterChange`). Still at the
 change stop `ASSUME_MS` after the second bus left: missed, and the answer
-is the next way there from where you are. `nextPhaseAt` wakes the Trip
+is the next way there from where you are. `changesAt` (phase.ts) wakes the Trip
 object at the change and once the second bus has gone.
 
 ### One plan, and push
@@ -690,7 +690,7 @@ object at the change and once the second bus has gone.
 - **Push** ([src/push/push.ts](../apps/api/src/push/push.ts), [src/push/tripdo.ts](../apps/api/src/push/tripdo.ts)).
   When push is set up (`pushEnabled`: `FCM_SERVICE_ACCOUNT` or
   `VAPID_PRIVATE_KEY` usable, or APNs's settings all there), a card served on a class day asks the
-  Trip object to wake at `nextPhaseAt` (due, leave-by, departure, +3 min,
+  Trip object to wake at `changesAt` in phase.ts (due, leave-by, departure, +3 min,
   class start, ride end; not at `staleAt`). At each wake it works out the card
   again, nudges the user's devices (`sessions.push_token`) if the phase
   changed, and schedules the next wake; with no device taking
@@ -2614,7 +2614,8 @@ src/answer/via.ts          The places a bus passes, by names a new student knows
 src/answer/format.ts       label/detail strings, the degrade ladder
 src/answer/public.ts       Public buses in the graph (GRAPH_PUBLIC), route keys, ride metres
 src/answer/next.ts         /api/me/next's answer: the plan, free days, riding, the trip's phase
-src/answer/trip.ts         Trip phases, and the per-user Durable Object with today's signals
+src/answer/trip.ts         Trip plans, and the per-user Durable Object with today's signals
+src/answer/phase.ts        A trip's phase now, and when it next changes by itself
 src/answer/answer.ts       The answer engine: stops near you, their arrivals, the best bus
 src/answer/card.ts         The card every client shows, worded once
 src/answer/leave.ts        When to set off; src/clock.ts clock times and lateness

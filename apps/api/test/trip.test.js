@@ -9,19 +9,8 @@ import assert from 'node:assert/strict';
 import { FROZEN_NOW, installGlobals, makeCtx, makeDurableObjects, makeEnv, makeFetch } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
-import {
-  ASSUME_MS,
-  RIDE_GRACE_MS,
-  TRIP_TIMEOUT_MS,
-  clearTrip,
-  endOfDayMs,
-  loadDay,
-  needsWatch,
-  phaseFor,
-  saveSignals,
-  seenOnBus,
-  sgtDate,
-} from '../src/answer/trip.ts';
+import { TRIP_TIMEOUT_MS, clearTrip, endOfDayMs, loadDay, needsWatch, saveSignals, seenOnBus, sgtDate } from '../src/answer/trip.ts';
+import { ASSUME_MS, RIDE_GRACE_MS, phaseFor } from '../src/answer/phase.ts';
 import { Trip } from '../src/push/tripdo.ts';
 import { tripCardFor } from '../src/accounts/me.ts';
 import { answerFor, collectArrivals } from '../src/answer/answer.ts';

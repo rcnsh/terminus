@@ -10,22 +10,8 @@
 
 import type { Arrival, BusLeg, Crowd, Dest, Leave, MeAnswer, Quality } from '../types.ts';
 import { clockAt, slackText } from '../clock.ts';
-import {
-  ASSUME_MS,
-  type Plan,
-  CHANGE_GRACE_MS,
-  DUE_MS,
-  type Phase,
-  RIDE_GRACE_MS,
-  type Ride,
-  type TripRecord,
-  isHomeKey,
-  offStop,
-  rideOf,
-  secondLeavesMs,
-  tripEnd,
-} from './trip.ts';
-import { LATE_GRACE_MIN } from '../timetable/profile.ts';
+import { type Plan, type Phase, type Ride, type TripRecord, isHomeKey, offStop, rideOf } from './trip.ts';
+import { DUE_MS, changesAt } from './phase.ts';
 import type { Suggestion } from '../accounts/outcomes.ts';
 import type { StepTarget } from './step.ts';
 import { GRAPH } from './graph.ts';
@@ -788,38 +774,6 @@ function slotOf(text: string, make: (t: string) => string): string | null {
 }
 
 /**
- * When the trip's phase next changes by itself: due, the leave-by, the
- * planned bus leaving, taken to be on it (ASSUME_MS later, when nothing
- * said otherwise), the class starting, the ride ending. Null outside a trip. The Trip object
- * wakes at this to push; the card's nextChangeAt also counts going stale.
- */
-export function nextPhaseAt(a: MeAnswer, trip: TripView, nowMs: number, leaveGapMs = 0): number | null {
-  if (!trip.key) return null;
-  const marks: number[] = [];
-  const l = a.leave ?? null;
-  const plan = trip.plan ?? null;
-  if (plan?.board && !trip.rec) marks.push(Date.parse(plan.board), Date.parse(plan.board) + ASSUME_MS);
-  // A trip that changes buses: at the change, once the second bus has left
-  // (with you on it, or still at the stop: missed), and the trip's end.
-  const twoBus = trip.rec?.boarded ?? plan;
-  const c = twoBus?.change;
-  if (twoBus && c) {
-    if (twoBus.arrive) marks.push(Date.parse(twoBus.arrive));
-    const leaves = secondLeavesMs(c);
-    if (leaves !== null) marks.push(leaves + CHANGE_GRACE_MS, leaves + ASSUME_MS);
-    const end = tripEnd(twoBus);
-    if (end) marks.push(Date.parse(end) + RIDE_GRACE_MS);
-  }
-  // The leave-by's marks, no sooner than `leaveGapMs` from now (see LEAVE_GAP_MS).
-  if (l?.at) for (const t of [Date.parse(l.at) - DUE_MS, Date.parse(l.at)]) if (t > nowMs) marks.push(Math.max(t, nowMs + leaveGapMs));
-  if (a.timing?.classAt) marks.push(Date.parse(a.timing.classAt) + LATE_GRACE_MIN * 60_000);
-  const onBus = trip.rec?.boarded ?? (trip.assumed ? plan : null);
-  const rideEnd = trip.rideEnd ?? onBus?.arrive;
-  if (trip.phase === 'riding' && onBus && rideEnd) marks.push(Date.parse(rideEnd) + RIDE_GRACE_MS);
-  return marks.filter((m) => m > nowMs).sort((x, y) => x - y)[0] ?? null;
-}
-
-/**
  * The soonest the card asks to be fetched again for its leave-by. A late bus
  * keeps sliding the leave-by a few seconds ahead of now, and refetching at it
  * would poll every few seconds. The client already says "Leave now" itself
@@ -954,7 +908,7 @@ function phaseFields(a: MeAnswer, card: BaseCard, h12: boolean, trip: TripView, 
 
   // The next moment this card changes by itself: the trip's next phase, or
   // the answer going stale, whichever is sooner.
-  const phaseAt = nextPhaseAt(a, trip, nowMs, LEAVE_GAP_MS);
+  const phaseAt = changesAt(a, trip, nowMs, LEAVE_GAP_MS);
   const next = [phaseAt, card.staleAt ? Date.parse(card.staleAt) : null]
     .filter((m): m is number => m !== null && m > nowMs)
     .sort((x, y) => x - y)[0];
