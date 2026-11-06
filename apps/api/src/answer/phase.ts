@@ -275,7 +275,7 @@ async function onBus(b: Plan, at: At, nowMs: number, look: Lookups): Promise<OnB
 
 /**
  * When the trip's phase next changes by itself: due, the leave-by, the
- * planned bus leaving, taken to be on it (ASSUME_MS later, when nothing
+ * planned bus taken to have gone (ASSUME_MS after it left, when nothing
  * said otherwise), the class starting, the ride ending. Null outside a trip. The Trip object
  * wakes at this to push; the card's nextChangeAt also counts going stale.
  */
@@ -284,7 +284,8 @@ export function changesAt(a: MeAnswer, trip: TripView, nowMs: number, leaveGapMs
   const marks: number[] = [];
   const l = a.leave ?? null;
   const plan = trip.plan ?? null;
-  if (plan?.board && !trip.rec) marks.push(Date.parse(plan.board), Date.parse(plan.board) + ASSUME_MS);
+  // Not as the bus leaves: nothing changes then (`gone` is ASSUME_MS on).
+  if (plan?.board && !trip.rec) marks.push(Date.parse(plan.board) + ASSUME_MS);
   // A trip that changes buses: at the change, once the second bus has left
   // (with you on it, or still at the stop: missed), and the trip's end.
   const twoBus = trip.rec?.boarded ?? plan;

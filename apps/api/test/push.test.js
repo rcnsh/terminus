@@ -1446,14 +1446,16 @@ async function errorsOf(fn) {
 
 test('a message FCM refuses keeps the token; a token FCM says is bad is dropped', async () => {
   let refuse = null;
-  const wrap = (f) => async (url, init) => (refuse && String(url).startsWith(FCM_SEND) ? fcmRefusal(refuse) : f(url, init));
+  let refused = 0;
+  const wrap = (f) => async (url, init) => (refuse && String(url).startsWith(FCM_SEND) ? (refused++, fcmRefusal(refuse)) : f(url, init));
   const { call, phone, next, pushTokens, TRIPS, clock, alarm } = await setup({ wrap });
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
   await next(phone);
   // A bug in our message: every phone would lose its token, so none does.
   refuse = 'message.data';
+  // Until the first refusal: the push it didn't send is tried again at the next wake.
   const logged = await errorsOf(async () => {
-    for (let i = 0; i < 5 && !stored(TRIPS).has('pushed'); i++) {
+    for (let i = 0; i < 5 && !refused; i++) {
       clock(alarm());
       await TRIPS.fireAlarms();
       if (pushTokens().length === 0) break;

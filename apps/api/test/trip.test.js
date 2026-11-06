@@ -702,6 +702,27 @@ test('a trip home taken to be riding wakes the Trip object when its bus arrives,
   assert.equal(card.wakeAt, arrive + RIDE_GRACE_MS);
 });
 
+/** The card the Trip object works out when it wakes (no location), and when it would wake next. */
+async function wakeCard(env, TRIPS) {
+  const trip = TRIPS.get([...TRIPS.instances.keys()][0]);
+  const day = await (await trip.fetch(`https://trip/day?date=${sgtDate(Date.now())}`)).json();
+  return tripCardFor(env, makeCtx(), { answerFor, collectArrivals }, userOf(env), day, Date.now(), async () => {});
+}
+
+test('heading for the bus, the Trip object next wakes when the bus is taken to have gone, not as it leaves', async () => {
+  const { env, phone, next, TRIPS, clock } = await setup();
+  const first = await next(phone);
+  clock(Date.parse(first.leave.at) - 60_000);
+  const due = await next(phone);
+  const board = Date.parse(due.leave.board);
+  clock(Date.parse(due.leave.at) + 30_000);
+  assert.ok(Date.now() < board);
+  const card = await wakeCard(env, TRIPS);
+  assert.equal(card.phase, 'heading');
+  // Nothing changes as the bus leaves; ASSUME_MS later the card says it has gone.
+  assert.equal(card.wakeAt, board + ASSUME_MS);
+});
+
 /* What terminus learns from the answers (outcomes.ts). */
 
 const DAY = 86_400_000;
