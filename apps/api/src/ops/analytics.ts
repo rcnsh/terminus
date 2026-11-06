@@ -25,6 +25,7 @@
 import type { Answer, Env, ScoredOption, StopArrivals } from '../types.ts';
 import { collectingMemo } from './collect.ts';
 import { analyticsEnabled, writeRow } from '../analytics-rows.ts';
+import type { RowFields } from '../analytics-rows.ts';
 
 export { analyticsEnabled };
 
@@ -225,15 +226,8 @@ export function logTripWake(env: Env, r: WakeRow): void {
   });
 }
 
-/** One row of the daily active counts (usage.ts). */
-export interface ActiveRow {
-  scope: 'all' | 'app' | 'version';
-  name: string;
-  day: string;
-  d1: number;
-  d7: number;
-  d30: number;
-}
+/** One row of the daily active counts (usage.ts): ROWS.active's fields, its scope one of three. */
+export type ActiveRow = RowFields<'active'> & { scope: 'all' | 'app' | 'version' };
 
 export function logActive(env: Env, row: ActiveRow): void {
   writeRow(env, 'active', row);
@@ -250,14 +244,8 @@ export function logLegacy(env: Env, r: LegacyRow): void {
   writeRow(env, 'legacy', { what: r.what, client: r.client, route: r.route, n: 1 });
 }
 
-/** One setting's value and how many accounts have it, on a day (settings.ts). */
-export interface SettingRow {
-  setting: string;
-  value: string;
-  day: string;
-  n: number;
-  of: number;
-}
+/** One setting's value and how many accounts have it, on a day (settings.ts): ROWS.settings's fields. */
+export type SettingRow = RowFields<'settings'>;
 
 export function logSetting(env: Env, r: SettingRow): void {
   writeRow(env, 'settings', r);

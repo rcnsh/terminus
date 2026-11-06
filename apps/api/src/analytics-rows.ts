@@ -23,42 +23,95 @@ export function analyticsEnabled(env: Env): boolean {
  * `doubles` double1 on, by position. null is a column the kind keeps empty
  * ('' or 0) so the ones after it stay where queries already read them.
  * `index` is the field that is index1 (the sampling key), or 'kind'.
+ * Every field is required when writing, so a logger that drops one fails
+ * tsc rather than writing a believable '' or 0; `optional` names the
+ * fields a kind may leave out, which then aren't written at all.
  */
 interface RowSpec {
   index: string;
   blobs: readonly (string | null)[];
   doubles: readonly (string | null)[];
+  optional?: readonly string[];
 }
 
 /** The blobs of an 'arrival' row, which 'board' rows share so one query reads both (eta.ts predictionsFor). */
-const ARRIVAL_BLOBS = ['stop', 'svc', 'dest', 'quality', 'plate', 'crowd', null, 'berth'] as const;
+const ARRIVAL_BLOBS = [
+  'stop', // the answer's stop code; a board's own
+  'svc', // service
+  'dest', // the answer's destination stop code; '' on a board
+  'quality', // the answer's: live | scheduled | unknown | stale | ended; 'live' on a board
+  'plate',
+  'crowd', // low | medium | high | ''
+  null, // blob8: always ''
+  'berth', // raw busStopCode, so a route's first stop ends -S
+] as const;
 
 /**
- * Every kind of row, its columns in the order they are written. The layout
- * is frozen: never move, rename into another meaning, or remove a column,
- * or every query written before the change starts lying; a new field takes
- * a position no kind reading the same query uses. Each kind has a section
- * in docs/analytics.md (analytics-rows.test.js checks).
+ * Every kind of row, its columns in the order they are written. Kinds
+ * already give blob2 on and double1 on their own meanings, so a column's
+ * meaning is per kind. Existing positions never move, get renamed into
+ * another meaning or go, or every query written before the change starts
+ * lying. A new field takes a position unused within its own kind and by
+ * any kind read in the same query (arrival and board, answer and arrival).
+ * Each kind has a section in docs/analytics.md (analytics-rows.test.js
+ * checks).
  */
 export const ROWS = {
-  /** The answer someone asked for (logAnswer). blob6 and blob8 are kept '': plate and trip, which answers never had. */
+  /** The answer someone asked for (logAnswer). With no bus, svc is '' and boardS..walkS are -1. */
   answer: {
     index: 'stop',
-    blobs: ['stop', 'svc', 'dest', 'quality', null, 'crowd', null, 'berth', 'via', 'svc2'],
-    doubles: [null, 'boardS', 'rideS', 'totalS', 'hops', 'walkS', 'confidence', 'ambiguousBerth', 'hadCoords', 'walkAllS', 'changeWaitS'],
+    blobs: [
+      'stop', // boarding stop code, 'none' when there is none
+      'svc', // service, '' on an ended answer
+      'dest', // destination stop code, '' for a bare /next
+      'quality', // live | scheduled | unknown | stale | ended
+      null, // blob6: always '' (the plate, on an arrival row)
+      'crowd', // low | medium | high | ''
+      null, // blob8: always '', kept so the columns after it don't shift
+      'berth', // raw busStopCode
+      'via', // the stop a trip changes buses at, '' on one bus
+      'svc2', // the bus after the change, '' on one bus
+    ],
+    doubles: [
+      null, // double1: always 0 (etaS, on an arrival row)
+      'boardS', // seconds until you can board, -1 with no bus
+      'rideS', // -1 with no bus
+      'totalS', // -1 with no bus
+      'hops', // -1 with no bus
+      'walkS', // the walk to the boarding stop, -1 with no bus
+      'confidence', // in the stop chosen, 0..1
+      'ambiguousBerth', // 0 | 1
+      'hadCoords', // 0 | 1: a location was sent
+      'walkAllS', // the whole-way walk, -1 when unknown
+      'changeWaitS', // seconds waiting for the bus after a change, -1 on one bus
+    ],
   },
-  /** A timed bus at an answer's stop (logAnswer), at most MAX_ARRIVAL_ROWS per answer; its doubles are the answer's, but etaS. */
+  /**
+   * A timed bus at an answer's stop (logAnswer), at most MAX_ARRIVAL_ROWS per answer. Its doubles are
+   * the answer's, but etaS, with boardS..walkS and walkAllS always -1 and ambiguousBerth always 0.
+   */
   arrival: {
     index: 'stop',
     blobs: ARRIVAL_BLOBS,
-    doubles: ['etaS', 'boardS', 'rideS', 'totalS', 'hops', 'walkS', 'confidence', 'ambiguousBerth', 'hadCoords', 'walkAllS'],
+    doubles: [
+      'etaS', // seconds to arrival
+      'boardS',
+      'rideS',
+      'totalS',
+      'hops',
+      'walkS',
+      'confidence',
+      'ambiguousBerth',
+      'hadCoords',
+      'walkAllS',
+    ],
   },
   /** A bus on a board just fetched from NUS (logBoard): an 'arrival' row with etaS its only double. */
   board: { index: 'stop', blobs: ARRIVAL_BLOBS, doubles: ['etaS'] },
   /** One /api/me/next answered (logNextTook): tookMs is double12, past every answer column. */
   next: { index: 'kind', blobs: [], doubles: [null, null, null, null, null, null, null, null, null, null, null, 'tookMs'] },
   /** An unhandled error's route, a cron step's 'cron <step>' or the feed's 'feed arrivals' | 'feed buses' with why. */
-  error: { index: 'kind', blobs: ['route', 'reason'], doubles: [] },
+  error: { index: 'kind', blobs: ['route', 'reason'], doubles: [], optional: ['reason'] },
   /** One poll of the timelapse recorder and what it cost NUS (logPoll). */
   timelapse: { index: 'kind', blobs: ['outcome', 'svc'], doubles: ['buses'] },
   /** One Trip object wake (logTripWake). */
@@ -87,8 +140,11 @@ export type RowKind = keyof typeof ROWS;
 type Named<A> = Exclude<A extends readonly (infer T)[] ? T : never, null>;
 type BlobField<K extends RowKind> = Named<(typeof ROWS)[K]['blobs']>;
 type DoubleField<K extends RowKind> = Named<(typeof ROWS)[K]['doubles']>;
-/** A row's fields by name. One left out is written as an empty column, and trailing ones aren't written. */
-export type RowFields<K extends RowKind> = { [F in BlobField<K>]?: string } & { [F in DoubleField<K>]?: number };
+type Optional<K extends RowKind> = (typeof ROWS)[K] extends { optional: readonly (infer O)[] } ? O : never;
+/** A row's fields by name, each required but those the kind declares optional. */
+export type RowFields<K extends RowKind> = { [F in Exclude<BlobField<K>, Optional<K>>]: string } & {
+  [F in Exclude<DoubleField<K>, Optional<K>>]: number;
+} & { [F in BlobField<K> & Optional<K>]?: string } & { [F in DoubleField<K> & Optional<K>]?: number };
 
 /** The column a kind writes each of its fields to ('blob5', 'double12'), and blob1 as `kind`. */
 export type Columns<K extends RowKind> = { readonly [F in BlobField<K> | DoubleField<K> | 'kind']: string };
@@ -125,7 +181,7 @@ export function sharedColumns<K extends RowKind>(...kinds: K[]): { readonly [F i
   return out as unknown as { readonly [F in keyof ColumnsOf<K>]: string };
 }
 
-/** [fields] as the kind's columns, padding what's left out and dropping what trails. */
+/** [fields] as the kind's columns, padding nulls and optional fields left out, and dropping what trails. */
 function layout(names: readonly (string | null)[], fields: Record<string, unknown>, empty: string | number): (string | number)[] {
   let last = -1;
   names.forEach((f, i) => f && fields[f] !== undefined && (last = i));
