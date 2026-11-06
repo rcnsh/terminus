@@ -14,7 +14,7 @@
 
 import { html, render, store, useEffect, useMemo, useRef, useState, useStore } from '/assets/ui.js';
 import { addPasskey, passkeysWork, signIn } from '/admin/passkey.js';
-import { ago, when } from '/admin/parts.js';
+import { ago, motion, when } from '/admin/parts.js';
 import { Model } from '/admin/model.js';
 import { Accounts, Answers, Arrivals, Collection, Crashes, Devices, Feed, Overview, Reports, SECTIONS, derive } from '/admin/views.js';
 
@@ -439,11 +439,14 @@ function useNow(ms = 5_000) {
 function badge(id, s, d) {
   if (!s) return null;
   if (id === 'feed' && s.feed) return html`<span class=${`dot ${s.feed.up ? 'good' : 'bad'}`} title=${s.feed.up ? 'Up' : 'Down'}></span>`;
-  if (id === 'crashes' && d.crashes.length) return html`<span class=${`count ${d.crashFatal ? 'bad' : ''}`}>${d.crashes.length}</span>`;
+  // Crash reports and reports both count this week's, as their pages' first tiles do.
+  if (id === 'crashes' && d.crashReports) return html`<span class=${`count ${d.crashFatal ? 'bad' : ''}`}>${d.crashReports}</span>`;
   if (id === 'reports' && s.feedback?.last7d) return html`<span class="count">${s.feedback.last7d}</span>`;
   if (id === 'collection') {
     const on = Object.values(s.collect ?? {}).filter(Boolean).length;
-    return html`<span class="count quiet">${`${on}/${Object.keys(s.collect ?? {}).length}`}</span>`;
+    // A word, not a count like the ones above it: what's off is a state. Nothing when all is on.
+    if (on === Object.keys(s.collect ?? {}).length) return null;
+    return html`<span class="count quiet">${on ? `${on} on` : 'all off'}</span>`;
   }
   return null;
 }
@@ -482,6 +485,16 @@ function Dashboard({ v, asked }) {
   const [, title, what] = [...SECTIONS, TIMELAPSE].find(([id]) => id === route.id);
   const Page = PAGES[route.id];
   const tl = route.id === 'timelapse';
+  // Entrance motion plays as the dashboard opens, and not again for each section.
+  const [opening, setOpening] = useState(true);
+  const opened = useRef(route.id);
+  useEffect(() => {
+    const id = setTimeout(() => setOpening(false), 900);
+    return () => clearTimeout(id);
+  }, []);
+  if (route.id !== opened.current) opened.current = null;
+  const intro = opening && opened.current !== null;
+  motion.intro = intro;
 
   useEffect(() => {
     document.title = `${title} · Dashboard · terminus`;
@@ -512,7 +525,7 @@ function Dashboard({ v, asked }) {
   }, []);
 
   return html`
-    <div class=${`dash ${v.loading && !tl ? 'loading' : ''} ${narrow ? 'side-rail' : ''}`}>
+    <div class=${`dash ${v.loading && !tl ? 'loading' : ''} ${narrow ? 'side-rail' : ''} ${intro ? 'intro' : ''}`}>
       <div class="progress" aria-hidden="true"></div>
       <aside class="side" id="side" onPointerOver=${placeTip} onfocusin=${placeTip}>
         <div class="side-top">
@@ -560,7 +573,7 @@ function Dashboard({ v, asked }) {
             !only &&
             html`<label class="auto" data-tip="Refresh every minute">
             <input type="checkbox" checked=${auto} onChange=${(e) => setAuto(e.currentTarget.checked)} />
-            <span class="long">Refresh every minute</span><span class="short">Auto</span>
+            <span>Refresh every minute</span>
           </label>`
           }
           <div class="row">

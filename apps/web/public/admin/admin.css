@@ -25,7 +25,7 @@ td .btn { white-space: nowrap; }
   --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4;
   --grid: color-mix(in srgb, var(--line) 80%, transparent);
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --side: 236px;
+  --side: 248px;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) { --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; }
@@ -116,7 +116,6 @@ body.dash-on > main { padding: 0; }
 .side-foot .row { flex-direction: row; }
 .side-foot .btn { flex: 1; }
 .auto { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--muted); font-size: 0.85rem; cursor: pointer; }
-.auto .short { display: none; }
 .auto input { width: auto; accent-color: var(--accent-bright); }
 .keys { font-size: 0.72rem; display: flex; flex-wrap: wrap; gap: 4px 10px; }
 .keys span { white-space: nowrap; }
@@ -129,23 +128,36 @@ kbd {
 .dash-h { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 6px 24px; margin-bottom: 20px; max-width: 96rem; }
 .dash-h h1 { margin: 0 0 4px; font-size: 1.9rem; }
 .asof { font-size: 0.82rem; }
-.page { max-width: 96rem; animation: page-in 0.32s var(--ease); transition: opacity 0.2s ease; }
+.page { max-width: 96rem; transition: opacity 0.2s ease; }
 @keyframes side-in-wide { 0%, 35% { opacity: 0; } }
 @keyframes side-in-rail { 0%, 35% { opacity: 0; } }
+/* The page, its tiles, panels and charts come in once, as the dashboard
+   opens (.intro, admin.js). Moving between sections, often by key, is
+   instant. */
+.dash.intro .page { animation: page-in 0.25s var(--ease); }
 @keyframes page-in { from { opacity: 0; transform: translateY(6px); } }
 
 .dash .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr)); gap: 12px; margin-bottom: 16px; }
+/* The columns Tiles (parts.js) chose, so no row is part-filled, once the
+   page has room for them at 12.5rem each; an even number falls back to half. */
+.dash .page { container: page / inline-size; }
+@container page (width >= 25.75rem) { .dash .tiles[data-alt="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container page (width >= 39rem) { .dash .tiles:is([data-cols="3"], [data-alt="3"]) { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@container page (width >= 52.25rem) { .dash .tiles[data-cols="4"] { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@container page (width >= 65.5rem) { .dash .tiles[data-cols="5"] { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+@container page (width >= 78.75rem) { .dash .tiles[data-cols="6"] { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
 .dash .tile {
   position: relative; display: flex; flex-direction: column; gap: 2px; min-height: 104px; overflow: hidden;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px 12px;
   color: var(--ink); text-decoration: none; transition: border-color 0.15s ease, transform 0.15s var(--ease), box-shadow 0.15s ease;
-  animation: rise 0.4s var(--ease) both;
 }
-.dash .tile:nth-child(2) { animation-delay: 30ms; } .dash .tile:nth-child(3) { animation-delay: 60ms; }
-.dash .tile:nth-child(4) { animation-delay: 90ms; } .dash .tile:nth-child(5) { animation-delay: 120ms; }
-.dash .tile:nth-child(6) { animation-delay: 150ms; } .dash .tile:nth-child(n+7) { animation-delay: 180ms; }
+.dash.intro .tile { animation: rise 0.3s var(--ease) both; }
+.dash.intro .tile:nth-child(2) { animation-delay: 30ms; } .dash.intro .tile:nth-child(3) { animation-delay: 60ms; }
+.dash.intro .tile:nth-child(4) { animation-delay: 90ms; } .dash.intro .tile:nth-child(5) { animation-delay: 120ms; }
+.dash.intro .tile:nth-child(n+6) { animation-delay: 150ms; }
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
-.dash .tile.link:hover { border-color: var(--line-strong); transform: translateY(-2px); box-shadow: var(--shadow); }
+.dash .tile.link:hover { border-color: var(--line-strong); box-shadow: var(--shadow); }
+@media (hover: hover) and (pointer: fine) { .dash .tile.link:hover { transform: translateY(-2px); } }
 .dash .tile .k { color: var(--muted); font-size: 0.82rem; order: -1; }
 .dash .tile .n { font: 700 1.75rem/1.15 var(--display); letter-spacing: -0.03em; }
 .dash .tile .n.good { color: var(--good-ink); } .dash .tile .n.bad { color: var(--bad-ink); }
@@ -157,20 +169,26 @@ kbd {
 
 .spark .stroke, .chart .stroke { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
 .spark .wash, .chart .wash { opacity: 0.1; stroke: none; }
-.spark, .chart .lines { animation: draw 0.9s var(--ease); }
+.dash.intro :is(.spark, .chart .lines) { animation: draw 0.4s var(--ease); }
 @keyframes draw { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 -2% 0 0); } }
 
 .dash .grid { display: grid; gap: 16px; margin-bottom: 16px; }
 .dash .grid.two { grid-template-columns: repeat(auto-fit, minmax(min(26rem, 100%), 1fr)); }
 .dash .grid.inner { margin: 18px 0 0; }
 .dash .grid .panel { margin-bottom: 0; }
-.panel { margin-bottom: 16px; min-width: 0; box-shadow: none; animation: rise 0.45s var(--ease) both; animation-delay: 80ms; }
+.panel { margin-bottom: 16px; min-width: 0; box-shadow: none; }
+.dash.intro .panel { animation: rise 0.3s var(--ease) both; animation-delay: 80ms; }
 .panel-h { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px 16px; margin-bottom: 14px; }
 .panel-h h2 { margin: 0 0 2px; }
 .panel-h .hint { font-size: 0.83rem; max-width: 46rem; }
 .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .section-h { margin: 28px 0 12px; font-size: 1.25rem; }
 .lead { margin: -4px 0 16px; font-size: 0.83rem; }
+/* A page-wide caveat, such as counts that have stopped. */
+.notice {
+  margin: 0 0 16px; padding: 10px 14px; border-radius: 10px; font-size: 0.85rem; color: var(--ink);
+  background: color-mix(in srgb, var(--warn) 10%, transparent); border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
+}
 
 /* Charts */
 .chart { position: relative; }
@@ -182,12 +200,15 @@ kbd {
 .chart .tick.on { fill: var(--ink); font-weight: 700; }
 .chart .band { fill: var(--ink); opacity: 0.045; }
 .chart .picked { fill: var(--accent-bright); opacity: 0.12; }
-.chart .bars { animation: grow 0.6s var(--ease); transform-box: view-box; }
-@keyframes grow { from { transform: scaleY(0); } }
+.chart .bars { transform-box: view-box; }
+.dash.intro .chart .bars { animation: grow 0.3s var(--ease); }
+@keyframes grow { from { transform: scaleY(0.9); opacity: 0; } }
 .chart .col { transition: opacity 0.15s ease; }
 .chart .col.dim { opacity: 0.45; }
 .chart .dot { stroke: var(--surface); stroke-width: 2; }
 .chart-note { margin-top: 8px; font-size: 0.8rem; }
+.facts.outcomes { margin-top: 12px; font-size: 0.8rem; color: var(--muted); }
+.facts.outcomes dt { color: var(--ink); font-weight: 500; }
 .tip {
   position: absolute; top: -6px; transform: translate(-50%, -100%); z-index: 5; pointer-events: none;
   min-width: 150px; padding: 9px 11px; border-radius: 10px; font-size: 0.82rem;
@@ -219,7 +240,16 @@ kbd {
 .stack span.dim { opacity: 0.4; }
 
 /* Tables */
-.table-wrap { overflow-x: auto; }
+/* A table wider than its card scrolls, with a shadow on the side there's more:
+   the covers scroll with the table and hide each shadow at its end. */
+.table-wrap {
+  overflow-x: auto;
+  background:
+    linear-gradient(to right, var(--surface) 30%, transparent) left / 40px 100% no-repeat local,
+    linear-gradient(to left, var(--surface) 30%, transparent) right / 40px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, rgb(0 0 0 / 0.16), transparent) left / 14px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, rgb(0 0 0 / 0.16), transparent) right / 14px 100% no-repeat scroll;
+}
 table.data { font-size: 0.88rem; }
 table.data caption { text-align: left; font-weight: 600; font-size: 0.88rem; padding: 0 0 6px; }
 table.data th { padding: 0; border-bottom: 1px solid var(--line-strong); white-space: nowrap; }
@@ -235,6 +265,8 @@ table.data th[aria-sort="ascending"] .arrow, table.data th[aria-sort="descending
 table.data td { padding: 8px 8px; vertical-align: middle; }
 table.data td:first-child { white-space: nowrap; }
 table.data .num { text-align: right; }
+/* A number or a time breaks badly over two lines: the table scrolls instead. */
+table.data td.num, .nowrap { white-space: nowrap; }
 table.data tbody tr { transition: background 0.12s ease; }
 table.data tbody tr:hover { background: var(--surface-2); }
 table.data tr.pick { cursor: pointer; }
@@ -290,12 +322,14 @@ td:not(.num) .with-meter { justify-content: flex-start; }
   display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; text-decoration: none; color: var(--ink);
   background: var(--surface-2); transition: background 0.15s ease, transform 0.15s var(--ease);
 }
-.attention li > a:hover { transform: translateX(2px); background: color-mix(in srgb, var(--surface-2) 70%, var(--line)); }
+.attention li > a:hover { background: color-mix(in srgb, var(--surface-2) 70%, var(--line)); }
+@media (hover: hover) and (pointer: fine) { .attention li > a:hover { transform: translateX(2px); } }
 .attention a span { flex: 1; }
 .attention b { color: var(--muted); }
 .attention i { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--muted); }
 .attention .bad i { background: var(--bad); } .attention .warn i { background: var(--warn); } .attention .good i { background: var(--good); }
 .attention .info i { background: var(--s1); }
+.attention .quiet i { background: var(--line-strong); }
 .mini { list-style: none; margin: 0; padding: 0; }
 .mini li + li { border-top: 1px solid var(--line); }
 .mini a { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: baseline; padding: 9px 4px; color: var(--ink); text-decoration: none; border-radius: 8px; }
@@ -304,23 +338,33 @@ td:not(.num) .with-meter { justify-content: flex-start; }
 .mini span { color: var(--muted); font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mini time { color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
+/* Settings: a setting's values in one bar, then each in words. */
+.setting-values { display: grid; gap: 6px; min-width: 16rem; }
+.setting-values .stack { margin: 0; height: 8px; }
+.setting-values .vals { display: flex; flex-wrap: wrap; gap: 2px 14px; color: var(--muted); font-size: 0.82rem; font-variant-numeric: tabular-nums; }
+.setting-values .vals span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.setting-values .vals i { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+.setting-values code { color: var(--ink); }
+
 .funnel { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
 .funnel-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
 .funnel-h span { flex: 1; }
 .funnel-h b { font: 700 1.2rem var(--display); }
 .funnel-h em { font-style: normal; color: var(--muted); min-width: 3rem; text-align: right; font-variant-numeric: tabular-nums; }
 .funnel-bar { height: 12px; border-radius: 6px; background: var(--surface-2); overflow: hidden; }
-.funnel-bar i { display: block; height: 100%; border-radius: 6px; animation: fill 0.8s var(--ease) both; transform-origin: left; }
+.funnel-bar i { display: block; height: 100%; border-radius: 6px; transform-origin: left; }
+.dash.intro .funnel-bar i { animation: fill 0.5s var(--ease) both; }
 @keyframes fill { from { transform: scaleX(0); } }
 .funnel .hint { margin-top: 4px; font-size: 0.8rem; }
 
 .status { color: var(--ink); display: flex; gap: 14px; align-items: flex-start; margin-bottom: 14px; }
 .status > i { width: 14px; height: 14px; margin-top: 8px; border-radius: 50%; flex: none; background: var(--bad); }
-.status.good > i { background: var(--good); animation: pulse 2.4s ease-in-out infinite; }
-@keyframes pulse { 50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--good) 0%, transparent); } 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 35%, transparent); } }
+.status.good > i { background: var(--good); }
+.status.warn > i { background: var(--warn); }
+@keyframes pulse { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--good) 0%, transparent); } 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 35%, transparent); } }
 .status div { display: grid; gap: 2px; }
 .status b { font: 700 1.6rem var(--display); }
-.status.good b { color: var(--good-ink); } .status.bad b { color: var(--bad-ink); }
+.status.good b { color: var(--good-ink); } .status.bad b { color: var(--bad-ink); } .status.warn b { color: var(--warn-ink); }
 
 /* Crash reports and reports: a list that opens item by item. */
 .items { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
@@ -336,6 +380,7 @@ td:not(.num) .with-meter { justify-content: flex-start; }
 .item .meta { color: var(--muted); font-size: 0.8rem; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .item .title { overflow-wrap: anywhere; }
 .item .title .note { display: block; color: var(--ink); margin-top: 2px; }
+.item .title .note.muted { color: var(--muted); }
 .item-count { display: grid; justify-items: end; gap: 2px; text-align: right; }
 .item-count b { font: 700 1.35rem/1 var(--display); font-variant-numeric: tabular-nums; }
 .item-count span { color: var(--muted); font-size: 0.75rem; }
@@ -438,7 +483,6 @@ table.data td.best { font-weight: 700; color: var(--good-ink); }
 
 /* A phone or a narrow window: the sidebar becomes a bar across the top. */
 @media (max-width: 56rem) {
-  .auto .short { display: inline; }
   .dash { grid-template-columns: minmax(0, 1fr); }
   .side {
     position: sticky; top: 0; z-index: 20; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center;
@@ -452,7 +496,6 @@ table.data td.best { font-weight: 700; color: var(--good-ink); }
   .side kbd, .keys, .side-toggle, .side .ic { display: none; }
   .side-foot { margin: 0 0 0 auto; padding: 0; grid-auto-flow: column; align-items: center; }
   .side-foot .btn { min-height: 34px; }
-  .auto .long { display: none; }
   .dash .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .dash .tile { padding: 12px; min-height: 92px; }
   .dash .tile .n { font-size: 1.45rem; }
@@ -469,7 +512,8 @@ table.data td.best { font-weight: 700; color: var(--good-ink); }
 .timelapse .rec { margin: 0; justify-self: start; display: inline-flex; align-items: center; gap: 8px; padding: 3px 10px; border-radius: 99px; background: var(--surface-2); border: 1px solid var(--line); color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
 .timelapse .rec::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--line-strong); }
 .timelapse .rec.live { color: var(--good-ink); }
-.timelapse .rec.live::before { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 25%, transparent); }
+/* The one thing on the dashboard that moves by itself: it's happening now. */
+.timelapse .rec.live::before { background: var(--good); animation: pulse 2.4s ease-in-out infinite; }
 .timelapse .tl-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; }
 .timelapse .tl-bar select { width: auto; font-weight: 600; padding-top: 7px; padding-bottom: 7px; }
 .timelapse .tl-bar .sep { width: 1px; height: 24px; background: var(--line); }
@@ -520,7 +564,17 @@ table.data td.best { font-weight: 700; color: var(--good-ink); }
   .timelapse .ticks span:nth-child(2), .timelapse .ticks span:nth-last-child(2) { display: none; }
 }
 
+/* Pressing a control: it gives a little, so the press is felt. */
+.dash :is(.btn, .chips button, .seg button, .switch, .timelapse .play) { transition-property: transform, background, color, border-color, box-shadow, opacity; }
+.dash :is(.btn, .chips button, .seg button, .timelapse .play):not(:disabled):active { transform: scale(0.97); transition-duration: 0.1s; }
+
+/* Less motion: nothing moves, but fades and colour changes stay, which help
+   follow what changed. */
 @media (prefers-reduced-motion: reduce) {
-  .dash *, .dash *::before, .dash *::after { animation: none !important; transition: none !important; }
+  .dash, .dash *, .dash *::before, .dash *::after {
+    animation: none !important;
+    transition-property: opacity, color, background-color, border-color, fill, stroke !important;
+  }
+  .dash :is(.btn, .chips button, .seg button, .timelapse .play):active, .dash .tile.link:hover, .attention li > a:hover { transform: none !important; }
 }
 .muted { color: var(--muted); }

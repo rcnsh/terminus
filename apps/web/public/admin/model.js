@@ -7,7 +7,7 @@
 
 import { html, useState } from '/assets/ui.js';
 import { Chart, Legend } from '/admin/charts.js';
-import { Card, Empty, S, Segmented, Table, Tile, dayLong, dayShort, fmt, pct } from '/admin/parts.js';
+import { Card, Empty, S, Segmented, Table, Tile, Tiles, dayLong, dayShort, fmt, pct } from '/admin/parts.js';
 
 /** Every way of answering, in the model's order, with what each is. */
 export const METHODS = [
@@ -119,23 +119,28 @@ export function Model({ s }) {
   const scored = days.filter((d) => d.coverage > 0 && d.overall?.blend?.n);
   const latest = days.at(-1);
   const historyDays = latest?.built?.days ?? 0;
+  // On, but with nothing to learn from: not a healthy green.
+  const starved = m.on && !s.collect?.eta;
   const status = html`
     <${Card}>
       <div class="model-status">
-        <div class=${`status ${m.on ? 'good' : ''}`}>
+        <div class=${`status ${starved ? 'warn' : m.on ? 'good' : ''}`}>
           <i></i>
           <div>
-            <b>${m.on ? 'In shadow' : 'Off'}</b>
+            <b>${starved ? 'Waiting for input' : m.on ? 'In shadow' : 'Off'}</b>
             <span>
               ${
-                m.on
-                  ? 'It answers every day’s questions beside the feed, and no one sees its times: users get the feed’s.'
-                  : html`Set the <code>ETA_MODEL</code> var to <code>shadow</code> to run it. Nobody would see its times.`
+                starved
+                  ? html`It’s switched on, but it learns from the feed’s scored arrival times, and those aren’t being collected. Turn on <a href="#/collection">Arrival-time accuracy</a>.`
+                  : m.on
+                    ? 'It answers every day’s questions beside the feed, and no one sees its times: users get the feed’s.'
+                    : html`Set the <code>ETA_MODEL</code> var to <code>shadow</code> to run it. Nobody would see its times.`
               }
             </span>
             ${
+              !m.on &&
               !s.collect?.eta &&
-              html`<span class="bad">It also needs <a href="#/collection">Arrival-time accuracy</a> on: the feed’s scored errors are its input.</span>`
+              html`<span class="hint">It also needs <a href="#/collection">Arrival-time accuracy</a> on: the feed’s scored errors are its input.</span>`
             }
           </div>
         </div>
@@ -173,7 +178,7 @@ export function Model({ s }) {
 
   return html`
     ${status}
-    <div class="tiles">
+    <${Tiles}>
       <${Tile} k="Days answered" n=${days.length} sub=${`${fmt(scored.length)} with history to score`} />
       <${Tile} k="Questions scored" n=${questions} sub=${`of ${fmt(days.reduce((t, d) => t + (d.cases ?? 0), 0))} that found their bus`} />
       <${Tile} k="Coverage, latest day" n=${latest.coverage ?? null} show=${(x) => pct(x)} sub="history could answer" />
@@ -197,7 +202,7 @@ export function Model({ s }) {
         sub="against the feed"
         tone=${missGain == null ? '' : missGain > 0 ? 'good' : 'bad'}
       />
-    </div>
+    <//>
     ${
       warming
         ? html`<${Empty}>
