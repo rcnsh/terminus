@@ -20,7 +20,7 @@ import { FROZEN_NOW, installGlobals, makeCtx, makeDurableObjects, makeEnv, makeF
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
 import { Trip } from '../src/push/tripdo.ts';
-import { ASSUME_MS, CHANGE_GRACE_MS, RIDE_GRACE_MS } from '../src/answer/trip.ts';
+import { ASSUME_MS, CHANGE_GRACE_MS, RIDE_GRACE_MS } from '../src/answer/phase.ts';
 import { onRideQuery, rideLength } from './_ride.mjs';
 import { withoutMeasuredHeadways } from './_headways.mjs';
 

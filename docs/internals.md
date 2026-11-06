@@ -519,6 +519,29 @@ phase comes from the answer and the day's signals: `POST /api/me/signal` with
 `away` or `back`, for the trip in progress or the `trip` key a card action or `/api/me/day`
 names. Clients show `card.actions` as buttons and never decide them.
 
+[src/answer/phase.ts](../apps/api/src/answer/phase.ts) decides it:
+`tripPhase` runs the rules (`phaseAt`, in order, the first that holds
+wins) and gives the verdict the planner words, and the moment the phase
+next changes by itself (`changesAt` on the trip). Every rule compares the
+time only through its `Clock`, which notes each moment it's asked about,
+so a transition's time is declared with its condition: the next change is
+the first noted moment at which the same rules say something else (the
+trip, its phase, or whether the bus has gone). The time goes forward; the
+answer, the feed and where the request is stay as they are now. So a
+request with a location counts the moments only a location makes a change
+(waiting at the stop from `WAIT_EARLY_MS` before the leave-by, still at the
+change stop after the second bus left) in the card's `nextChangeAt`. The
+Trip object has no location, so it wakes at `wakesAt`: the same rules from
+nowhere, on what the request planned and read. A phone at the stop is
+`waiting` until its bus goes, but the object still owes the phones "due"
+and "Leave now", and never wakes for a moment only a location sees. The
+object plans from where the timetable puts you, so its leave-by can be
+earlier than a phone's by the stop: a request that saves a plan made from
+its location has the object wake at once, to work out its own. Feed reads
+for the bus you're on come through `Lookups`, asked only when a rule needs
+them; later moments reuse what was read now and take anything not read as
+the plan's times, so working out the next change costs no feed call.
+
 The signals live in a Durable Object per user (`Trip` in
 [src/push/tripdo.ts](../apps/api/src/push/tripdo.ts), reached through
 [src/answer/trip.ts](../apps/api/src/answer/trip.ts), bound as `TRIPS`, keyed by user id, created
@@ -553,7 +576,7 @@ the change), `waiting` (at the change stop, `phaseText` "Change buses",
 the second bus as the leave-by to catch), then `riding` again on the
 second, with no phase of its own, so an app that knows nothing of changes
 still shows each part right. The plan and the `boarded` record are the
-first bus with the second in `change` (`Plan.change`); `rideStage()`
+first bus with the second in `change` (`Plan.change`); phase.ts
 says which part you're on, from the clock, and from the feed while it still
 has the first bus on its way to the change. Off the first bus, the second
 bus's time is read from the feed at the change stop, and that time decides
@@ -565,8 +588,8 @@ headway after the guess (`secondLeavesMs`). Boarding a later first bus that
 gets to the change after the planned second bus makes the second a guess
 from when you get there (`laterChange`). Still at the
 change stop `ASSUME_MS` after the second bus left: missed, and the answer
-is the next way there from where you are. `nextPhaseAt` wakes the Trip
-object at the change and once the second bus has gone.
+is the next way there from where you are. The Trip object wakes at the
+change and once the second bus has gone (`changesAt`).
 
 ### One plan, and push
 
@@ -630,8 +653,9 @@ object at the change and once the second bus has gone.
   not at a stop you're riding past. The headline is then the bus ("D2 at
   9:41"), never "Leave by" or "Leave now".
 - **Home since the last class.** Once a trip home after a class is over
-  (seen home, or with no location its planned bus's arrival plus
-  `HOME_GRACE_MS`, 10 min: `DayState.homeBy`), whatever comes next today
+  (seen home, or with no location its bus's arrival plus `HOME_GRACE_MS`,
+  10 min: `DayState.homeBy`; the bus you said you caught, else the
+  planned one), whatever comes next today
   starts from home, however short the gap (`homeAfter` in profile.ts), and
   Today keeps that trip home, done. A one-off added after you got home is
   planned from there, not from the class. With no bus planned for the trip
@@ -690,8 +714,15 @@ object at the change and once the second bus has gone.
 - **Push** ([src/push/push.ts](../apps/api/src/push/push.ts), [src/push/tripdo.ts](../apps/api/src/push/tripdo.ts)).
   When push is set up (`pushEnabled`: `FCM_SERVICE_ACCOUNT` or
   `VAPID_PRIVATE_KEY` usable, or APNs's settings all there), a card served on a class day asks the
-  Trip object to wake at `nextPhaseAt` (due, leave-by, departure, +3 min,
-  class start, ride end; not at `staleAt`). At each wake it works out the card
+  Trip object to wake at the trip's `wakesAt` (phase.ts): only when its
+  phase, `gone` or the trip itself changes (due, leave-by, the bus taken to
+  have gone, the change of buses, the ride's end, the class's trip over,
+  the last class ending for the trip home, and with no location, home by
+  its bus's arrival and `HOME_GRACE_MS` or `HOME_BY_MIN` after the class,
+  or the day resting first, when the planner drops the trip home),
+  not at `staleAt`. A trip whose phase won't change again by itself (a long
+  gap's way home once its bus has gone, there early for a class) wakes it
+  when the plan moves on (`refreshAt`), for the next trip's "due". At each wake it works out the card
   again, nudges the user's devices (`sessions.push_token`) if the phase
   changed, and schedules the next wake; with no device taking
   push it stops. The day's `watch` is the wake pending, absent once it
@@ -2614,7 +2645,8 @@ src/answer/via.ts          The places a bus passes, by names a new student knows
 src/answer/format.ts       label/detail strings, the degrade ladder
 src/answer/public.ts       Public buses in the graph (GRAPH_PUBLIC), route keys, ride metres
 src/answer/next.ts         /api/me/next's answer: the plan, free days, riding, the trip's phase
-src/answer/trip.ts         Trip phases, and the per-user Durable Object with today's signals
+src/answer/trip.ts         Trip plans, and the per-user Durable Object with today's signals
+src/answer/phase.ts        A trip's phase now, and when it next changes by itself
 src/answer/answer.ts       The answer engine: stops near you, their arrivals, the best bus
 src/answer/card.ts         The card every client shows, worded once
 src/answer/leave.ts        When to set off; src/clock.ts clock times and lateness

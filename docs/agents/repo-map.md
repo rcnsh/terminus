@@ -32,6 +32,7 @@ apps/api/
     card.ts           What every client shows, worded once (the card's lines)
     plan.ts, leave.ts Which bus a trip is about; when to set off
     trip.ts           Today's trip signals and the day's state
+    phase.ts          A trip's phase now, and when it next changes (the Trip object's wake)
     resolve.ts        Stop + bus choice: haversine, directional pairing, scoring
     departures.ts     A service's buses from a stop: its feed rows and berths, live times, then
                       estimates a headway apart

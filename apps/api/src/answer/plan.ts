@@ -14,7 +14,8 @@
 
 import type { Leave } from '../types.ts';
 import { WALK } from '../config.ts';
-import { type Plan, WAIT_EARLY_MS, secondBusOf, tripEnd } from './trip.ts';
+import { type Plan, secondBusOf, tripEnd } from './trip.ts';
+import { WAIT_EARLY_MS } from './phase.ts';
 
 /** Live times move this much from one answer to the next, and it's still the same bus. */
 export const SAME_BUS_MS = 3 * 60_000;

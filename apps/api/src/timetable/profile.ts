@@ -601,12 +601,25 @@ export function isResting(profile: Profile, nowMs: number): boolean {
   return restSide(profile, nowMs) !== null;
 }
 
+/** When today's answers rest for the evening, in minutes: the day's end, or later for a class that ends late. */
+function dayEndMin(profile: Profile, nowMs: number): number {
+  return Math.max(profile.dayEndMin, ...classesOn(profile, nowMs).map((x) => endOf(x) + EVENING_GRACE_MIN));
+}
+
+/** When today's answers rest for the evening (epoch ms), or null when that's midnight or later. */
+export function restsAtMs(profile: Profile, nowMs: number): number | null {
+  const end = dayEndMin(profile, nowMs);
+  if (end >= 1440) return null;
+  const t = sgt(nowMs);
+  return nowMs - (t.minutes * 60_000 + (nowMs % 60_000)) + end * 60_000;
+}
+
 /** Which end of the day we are resting at, with today's effective start. */
 export function restSide(profile: Profile, nowMs: number): { side: 'before' | 'after'; startMin: number } | null {
   const t = sgt(nowMs);
   const today = classesOn(profile, nowMs);
   const start = Math.max(0, Math.min(profile.dayStartMin, ...today.map((x) => x.arriveByMin - MORNING_LEAD_MIN)));
-  const end = Math.max(profile.dayEndMin, ...today.map((x) => endOf(x) + EVENING_GRACE_MIN));
+  const end = dayEndMin(profile, nowMs);
   if (t.minutes < start) return { side: 'before', startMin: start };
   if (t.minutes >= end) return { side: 'after', startMin: start };
   return null;
@@ -622,7 +635,7 @@ export function planChangesAt(profile: Profile, nowMs: number): number {
   const midnight = nowMs - (t.minutes * 60_000 + (nowMs % 60_000));
   const today = classesOn(profile, nowMs);
   const start = Math.max(0, Math.min(profile.dayStartMin, ...today.map((x) => x.arriveByMin - MORNING_LEAD_MIN)));
-  const end = Math.max(profile.dayEndMin, ...today.map((x) => endOf(x) + EVENING_GRACE_MIN));
+  const end = dayEndMin(profile, nowMs);
   const marks = [
     start,
     end,

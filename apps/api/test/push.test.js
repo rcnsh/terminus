@@ -11,8 +11,11 @@ import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
 import { Trip } from '../src/push/tripdo.ts';
 import { armTrips, remindTerm } from '../src/ops/monitor.ts';
-import { DUE_MS, endOfDayMs, sgtDate } from '../src/answer/trip.ts';
+import { endOfDayMs, sgtDate } from '../src/answer/trip.ts';
+import { DUE_MS } from '../src/answer/phase.ts';
 import { remindUser } from '../src/push/push.ts';
+import { GRAPH } from '../src/answer/graph.ts';
+import { indexGraph } from '../src/answer/resolve.ts';
 import { withoutMeasuredHeadways } from './_headways.mjs';
 
 // How a headway guess is used, not how long it is: one guess for every shuttle.
@@ -164,6 +167,81 @@ test('the Trip object wakes when the phase changes and nudges the phone, once pe
   assert.ok(wake > Date.now(), 'it keeps waking');
   assert.equal(fcm.sent.length, before);
   assert.equal(fcm.oauth, 1, 'the access token is reused');
+});
+
+test('a request from the stop before the leave-by still has the Trip object wake to push time to go', async () => {
+  // The leave-by, from an account of its own, so this one's first request is the one at the stop.
+  const pilot = await setup();
+  const leave = (await pilot.next(pilot.phone)).leave;
+  const { call, phone, fcm, clock, alarm, wakeUntil } = await setup();
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  clock(Date.parse(leave.at) - 10 * 60_000);
+  const stop = indexGraph(GRAPH).byCode.get(leave.stopCode);
+  const there = await (await call(`/api/me/next?lat=${stop.lat}&lon=${stop.lon}`, { token: phone })).json();
+  // The phone at the stop is waiting until its bus goes; the object, with no
+  // location, still owes "due" five minutes before the leave-by.
+  assert.equal(there.card.phase, 'waiting');
+  assert.ok(alarm() <= Date.parse(there.leave.at) - DUE_MS);
+  await wakeUntil(() => fcm.sent.length > 0);
+  assert.deepEqual(
+    fcm.sent.map((m) => m.data.phase),
+    ['due'],
+  );
+  assert.equal(fcm.sent[0].android.priority, 'HIGH');
+});
+
+test('a request from near the stop, with a long walk from home, still has the Trip object wake for its own time to go', async () => {
+  // Twelve minutes from home to its stop (one outside any residence): the
+  // object plans from home, so it has to go well before a phone at the stop.
+  const profile = { ...PROFILE, home: { stops: ['KR-MRT'] }, homeWalkMin: 12 };
+  const pilot = await setup();
+  await pilot.call('/api/me/profile', { method: 'PUT', cookie: pilot.cookie, body: profile });
+  const { call, cookie, phone, fcm, clock, alarm, wakeUntil } = await setup();
+  await call('/api/me/profile', { method: 'PUT', cookie, body: profile });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  clock(Date.parse((await pilot.next(pilot.phone)).leave.at) - 10 * 60_000);
+  // The object's view, from another account with no location, and the phone's.
+  const own = (await pilot.next(pilot.phone)).leave;
+  const stop = indexGraph(GRAPH).byCode.get(own.stopCode);
+  const there = await (await call(`/api/me/next?lat=${stop.lat}&lon=${stop.lon}`, { token: phone })).json();
+  assert.equal(there.leave.board, own.board, 'the same bus');
+  assert.ok(Date.parse(there.leave.at) - DUE_MS > Date.parse(own.at), "the phone's due is after the object's leave-by");
+  assert.ok(alarm() <= Date.parse(own.at) - DUE_MS, "the object wakes by its own due, not the phone's");
+  await wakeUntil(() => fcm.sent.length > 0);
+  assert.deepEqual(
+    fcm.sent.map((m) => m.data.phase),
+    ['due'],
+  );
+  assert.equal(fcm.sent[0].android.priority, 'HIGH');
+});
+
+test('through a long gap, the Trip object alone wakes for the class after it and pushes its time to go', async () => {
+  // GEA1000 09:00-10:00, then CS2030 at 15:00: long enough to go home in between, and back from 14:00.
+  const gap = {
+    ...PROFILE,
+    manual: [
+      { day: THU, arriveByMin: 540, endMin: 600, to: 'UTOWN', label: 'GEA1000 @ UTown', venue: '' },
+      { day: THU, arriveByMin: 900, endMin: 960, to: 'COM3', label: 'CS2030 @ COM1', venue: '' },
+    ],
+  };
+  const { call, cookie, phone, next, fcm, TRIPS, clock, alarm } = await setup();
+  await call('/api/me/profile', { method: 'PUT', cookie, body: gap });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  clock(at(10, 16));
+  await next(phone);
+  // No device asks again: the object's own wakes, until the class.
+  const woke = [];
+  while (alarm() !== undefined && alarm() < at(15, 0)) {
+    clock(Math.max(alarm(), Date.now()));
+    woke.push(Date.now());
+    await TRIPS.fireAlarms();
+  }
+  assert.ok(
+    woke.some((t) => t >= at(14, 0)),
+    'awake once the trip is the next class',
+  );
+  const after = fcm.sent.filter((_, i) => i > 0).map((m) => m.data.phase);
+  assert.ok(after.includes('due'), `time to go for CS2030 (pushed: ${fcm.sent.map((m) => m.data.phase).join(' ')})`);
 });
 
 /**
@@ -1445,14 +1523,16 @@ async function errorsOf(fn) {
 
 test('a message FCM refuses keeps the token; a token FCM says is bad is dropped', async () => {
   let refuse = null;
-  const wrap = (f) => async (url, init) => (refuse && String(url).startsWith(FCM_SEND) ? fcmRefusal(refuse) : f(url, init));
+  let refused = 0;
+  const wrap = (f) => async (url, init) => (refuse && String(url).startsWith(FCM_SEND) ? (refused++, fcmRefusal(refuse)) : f(url, init));
   const { call, phone, next, pushTokens, TRIPS, clock, alarm } = await setup({ wrap });
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
   await next(phone);
   // A bug in our message: every phone would lose its token, so none does.
   refuse = 'message.data';
+  // Until the first refusal: the push it didn't send is tried again at the next wake.
   const logged = await errorsOf(async () => {
-    for (let i = 0; i < 5 && !stored(TRIPS).has('pushed'); i++) {
+    for (let i = 0; i < 5 && !refused; i++) {
       clock(alarm());
       await TRIPS.fireAlarms();
       if (pushTokens().length === 0) break;
