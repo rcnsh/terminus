@@ -322,6 +322,9 @@ test("a trip's second bus a day or more ahead is looked for from when the first 
   const d = nextDeparture(GRAPH, board('KR-MRT', now, 'P', []), 'P', from, now);
   assert.ok(d, 'a bus, though more than a day after now');
   assert.deepEqual([d.earliest, d.latest], [from, from + Math.max(60, headwayFor(GRAPH, 'P', from)) * 1000]);
+  // The same asked before P starts today: tomorrow's bus isn't counted from today's start.
+  const early = at('2026-08-27T08:10');
+  assert.deepEqual(nextDeparture(GRAPH, board('KR-MRT', early, 'P', []), 'P', from, early), d);
 });
 
 test('a chosen bus from long ago is no guide to the estimates, and costs nothing to ignore', () => {

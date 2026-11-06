@@ -323,8 +323,9 @@ export function departuresFrom(graph: Graph, board: StopArrivals | ServiceBoard 
     [t, fixed, anchor, opens, partial] = [s, [s, ...chain.filter((f) => f >= s + h && f <= by)], `opens@${s}`, true, false];
   };
   // Not started yet, and starting before you get there: from its start.
+  // Not when you get there a day or more on: that day's start is the one.
   const starts = last || runs(w.now) ? null : serviceResumesAt(graph, svc, w.now);
-  if (starts !== null && starts <= t) startAt(starts);
+  if (starts !== null && starts <= t && t < (serviceEndsAt(graph, svc, starts) ?? Infinity)) startAt(starts);
   for (let n = 1, i = 0; out.length < max && t < until; n++, i++) {
     // Within a day's service, running is being before its close.
     if (closes === null ? !runs(t) : t >= closes) {
