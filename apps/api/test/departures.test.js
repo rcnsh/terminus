@@ -9,8 +9,10 @@ import assert from 'node:assert/strict';
 
 import { GRAPH } from '../src/answer/graph.ts';
 import { departuresFrom } from '../src/answer/departures.ts';
-import { nearbyRow, scoreLeg } from '../src/answer/resolve.ts';
-import { leaveBy } from '../src/answer/leave.ts';
+import { nearbyRow, scoreLeg, scoreOptions } from '../src/answer/resolve.ts';
+import { departureOf, departures, leaveBy } from '../src/answer/leave.ts';
+import { withSteps } from '../src/answer/answer.ts';
+import { SAME_BUS_MS } from '../src/answer/plan.ts';
 import { ON_TIME_SLACK_S } from '../src/timetable/profile.ts';
 
 /** An instant from a Singapore wall-clock time, "2026-08-27T19:40". */
@@ -162,4 +164,23 @@ test('with its hours unknown, a service is guessed for, as far as a day ahead', 
     toText: '',
   };
   assert.equal(nearbyRow(r, NOW, ds).later.length, 2);
+});
+
+test("the card's bus is found among the departures by which bus it is, though its time is the middle of its window", () => {
+  // The feed answered with no D2 at PGP: the card's bus is half a headway in, 247 s at 16:00.
+  const now = at('2026-08-27T16:00');
+  const byStop = new Map([['PGP', board('PGP', now, 'D2', [])]]);
+  const candidates = [{ stop: PGP, distM: 0, walkS: 60, legs: [{ svc: 'D2', hops: 5, to: { code: 'UTOWN', name: 'UTown' } }] }];
+  const options = scoreOptions(GRAPH, candidates, byStop, now);
+  const best = options[0];
+  assert.equal(best.quality, 'scheduled');
+  const f = { options, candidates, byStop, graph: GRAPH, arriveBy: null, walkAllS: null, nowMs: now };
+  const departsAt = new Date(now + best.boardS * 1000).toISOString();
+  const all = departures(f, now + 3600_000);
+  assert.equal(departureOf(all, best), all[0]);
+  assert.ok(Date.parse(departsAt) - Date.parse(all[0].board) > SAME_BUS_MS, "further from its window's start than the feed moves a bus");
+
+  // A trip with no leave-by of its own steps from that bus.
+  const s = withSteps({ departsAt, leave: null }, f, { trip: 'to:UTOWN', target: null }, false, now);
+  assert.ok(s.steps?.later, 'a later bus to step to');
 });

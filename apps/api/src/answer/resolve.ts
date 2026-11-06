@@ -967,6 +967,8 @@ export interface ScoredLeg {
   rideS: number;
   quality: Quality;
   arrival: Arrival | null;
+  /** Which departure it is (departures.ts `id`). */
+  bus: string;
   fetchedAt: number;
   /** Of `boardS`, the wait for the service to start; 0 when it's running. */
   opensInS: number;
@@ -1048,7 +1050,17 @@ export function scoreLeg(
   // From now: the times above count from the fetch, and a cached or
   // stale answer is that much older. Comparing them with a walk that
   // starts now, or with another stop's fresher times, needs one clock.
-  return { boardS: Math.round(boardS - ageS), rideS: legRideS(leg), quality, arrival, fetchedAt, opensInS, ambiguousBerth, paid: pub };
+  return {
+    boardS: Math.round(boardS - ageS),
+    rideS: legRideS(leg),
+    quality,
+    arrival,
+    bus: d.id,
+    fetchedAt,
+    opensInS,
+    ambiguousBerth,
+    paid: pub,
+  };
 }
 
 /** What an option costs as the options are ranked, in seconds to the place itself (see scoreOptions). */
@@ -1105,6 +1117,7 @@ export function scoreOptions(
       // the whole of it a guess, never ranked over a measured single bus.
       quality: worseOf(s1.quality, s2.quality),
       arrival: s1.arrival,
+      bus: s1.bus,
       fetchedAt: Math.min(s1.fetchedAt, s2.fetchedAt),
       fromMs: nowMs,
       ...(s1.opensInS > 0 ? { opensInS: Math.round(s1.opensInS) } : {}),
@@ -1145,6 +1158,7 @@ export function scoreOptions(
         totalS: s.boardS + s.rideS,
         quality: s.quality,
         arrival: s.arrival,
+        bus: s.bus,
         fetchedAt: s.fetchedAt,
         fromMs: nowMs,
         ...(s.opensInS > 0 ? { opensInS: Math.round(s.opensInS) } : {}),

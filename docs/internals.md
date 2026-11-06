@@ -591,8 +591,11 @@ object at the change and once the second bus has gone.
   set off on a trip by bus (a class, home, a favourite, a stop or room),
   `card.step` offers the bus before and after the one shown. Every bus that
   gets you there comes from `departures()` in leave.ts: each service from
-  each stop, live times then one headway at a time, a trip that changes
-  buses by its first bus. They're ordered by when you'd leave, and a step
+  each stop, its departures from `departures.ts`, a trip that changes
+  buses by its first bus. With no leave-by of its own, the bus shown is
+  found among them by which departure it is (the live bus's plate, or the
+  nth estimate after its anchor), not by time: an estimate's card time is
+  the middle of its window, the step's its start. They're ordered by when you'd leave, and a step
   keeps the arrival moving the same way. "Later" stops at the last bus
   that gets a class's room no more than `STEP.lateMaxS` (20 min) late, or
   on any other trip one leaving at most `STEP.laterMaxS` (an hour) after the

@@ -375,6 +375,18 @@ function forTransfer(
   return done(b1, b2, after(b2) > arriveBy.atMs - ON_TIME_SLACK_S * 1000);
 }
 
+/** Which bus each of `departures`' leave-bys is for: its service, stops and departure (departures.ts `id`). */
+const busKeys = new WeakMap<Leave, string>();
+const busKey = (svc: string, stop: string, change: { svc: string; stop: { code: string } } | undefined, bus: string) =>
+  [svc, stop, change?.svc ?? '', change?.stop.code ?? '', bus].join('|');
+
+/** The bus a ranked option is for, among `departures`: the same departure of that service from that stop. */
+export function departureOf(all: Leave[], o: ScoredOption): Leave | null {
+  if (o.bus === undefined) return null;
+  const key = busKey(o.svc, o.stop.code, o.change, o.bus);
+  return all.find((l) => busKeys.get(l) === key) ?? null;
+}
+
 /** Past this many buses of one service from one stop, `departures` stops counting: a day's worth. */
 const MAX_DEPARTURES = 150;
 
@@ -424,7 +436,7 @@ export function departures(f: LeaveInput, untilMs: number, anchor?: { svc: strin
         ? firstBus(f.graph, t.svc, sa2, b.latest + leg.rideS * 1000 + (t.crossS + TRANSFER.changeBufferS) * 1000, f.nowMs)
         : null;
       if (t && !b2) break;
-      out.push({
+      const l: Leave = {
         at: isoSeconds(b.atStop - walk),
         estimated: b.estimated || Boolean(b2?.estimated),
         ...(b.stale || b2?.stale ? { stale: true as const } : {}),
@@ -440,7 +452,9 @@ export function departures(f: LeaveInput, untilMs: number, anchor?: { svc: strin
         ...(!f.arriveBy && endS > 0 ? { endWalkS: endS } : {}),
         ...paidOf(leg),
         ...(t && b2 ? { change: changeOf(t, b.latest + leg.rideS * 1000, b2) } : {}),
-      });
+      };
+      busKeys.set(l, busKey(leg.svc, leg.stop.code, leg.change, d.id));
+      out.push(l);
     }
   }
   return out;
