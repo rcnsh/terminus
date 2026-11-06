@@ -34,7 +34,7 @@ import { buildingStops, footM, stopFootM } from './walk.ts';
 import { footS, mins } from './format.ts';
 import { listOf, m } from '../i18n.ts';
 import { viaFrom } from './via.ts';
-import { type Departure, nextDeparture, serviceBoard } from './departures.ts';
+import { type Departure, type ServiceBoard, nextDeparture, serviceBoard } from './departures.ts';
 import { type StoppedReason, headwayFor, inService, serviceEndsAt, serviceResumesAt, stoppedReason } from './hours.ts';
 import { type HomeWalk, atHome, residenceStops } from './residences.ts';
 
@@ -578,6 +578,10 @@ export function boardAsOf(sas: (StopArrivals | undefined)[], nowMs: number): num
  * with `stopped`, listed after the others as not running, with why and when
  * it starts again. One the feed still gives a time for is running: the feed
  * is what's on the road, the hours only a guide.
+ *
+ * `boards`, when given, gets each service's board as read here, by the
+ * graph's service, so a caller asking more of it (Nearby's guessed buses)
+ * doesn't read the feed's rows again.
  */
 export function boardAt(
   graph: Graph,
@@ -585,13 +589,15 @@ export function boardAt(
   stopCode: string,
   sa: StopArrivals | undefined,
   nowMs: number,
-  opts: { stopped?: boolean } = {},
+  opts: { stopped?: boolean; boards?: Map<string, ServiceBoard> } = {},
 ): BoardRow[] {
   const services = idx.servingStop.get(stopCode) ?? [];
   const out: BoardRow[] = [];
 
   for (const svc of services) {
-    const { paid: pub, available, ambiguousBerth, stale, fetchedAt, live } = serviceBoard(graph, sa, svc, nowMs);
+    const sb = serviceBoard(graph, sa, svc, nowMs);
+    opts.boards?.set(svc, sb);
+    const { paid: pub, available, ambiguousBerth, stale, fetchedAt, live } = sb;
     // The feed's times count from its fetch, and a cached or stale answer is
     // that much older: counted from now, as scoreOptions does, and a bus
     // whose time is well past is gone, not "now".
