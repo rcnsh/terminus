@@ -6,10 +6,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { installGlobals, makeCtx, makeEnv, makeFetch, makeKV, FROZEN_NOW } from './_stubs.mjs';
+import { installGlobals, makeAnalytics, makeCtx, makeEnv, makeFetch, makeKV, FROZEN_NOW } from './_stubs.mjs';
 import { breakerOpen, crowdFromLoad, fetchActiveBuses, fetchArrivals, getArrivals, getBuses, stampLagS } from '../src/feeds/fms.ts';
 import { UpstreamRejected, appVersion, deviceId, redactDetail } from '../src/feeds/auth.ts';
 import { flagged } from '../src/feeds/edgecache.ts';
+import { logBoard } from '../src/ops/analytics.ts';
 
 test('fetchArrivals and fetchActiveBuses retry a rejection once with a fresh token', async () => {
   for (const [name, call] of [
@@ -247,4 +248,47 @@ test('stampLagS reads the forms the feed has sent, inside its envelope too', () 
   assert.equal(stampLagS({ TimeStamp: '2026-08-27T08:58:30+08:00' }, FROZEN_NOW), 90);
   assert.equal(stampLagS({ TimeStamp: '2026-08-27T08:58:29+08:00' }, FROZEN_NOW), 0, 'past MAX_STAMP_LAG_S');
   assert.equal(stampLagS(null, FROZEN_NOW), 0);
+});
+
+test('a board fetched from NUS is handed on once per call, and logged bus by bus while the operator collects eta', async () => {
+  const COM3 = [
+    { name: 'D2', arrivalTime: '4', nextArrivalTime: '14', arrivalTime_veh_plate: 'PA1234A', nextArrivalTime_veh_plate: 'PB5678B' },
+    { name: 'A1', arrivalTime: '-', nextArrivalTime: '-' },
+  ];
+  const board = async (kv) => {
+    const feed = makeFetch({ byStop: { COM3 } });
+    installGlobals(feed);
+    const ae = makeAnalytics();
+    const env = makeEnv(kv, ae);
+    for (let i = 0; i < 3; i++) {
+      const ctx = makeCtx();
+      await getArrivals(env, ctx, 'COM3', FROZEN_NOW, (sa) => ctx.waitUntil(logBoard(env, sa)));
+      await ctx.settle();
+    }
+    return { rows: ae.rows('board'), calls: feed.counts.shuttle };
+  };
+  assert.deepEqual(await board(makeKV()), { rows: [], calls: 1 }, 'not collecting: nothing');
+  const kv = makeKV();
+  await kv.put('config:collect:eta', 'on');
+  const { rows, calls } = await board(kv);
+  assert.equal(calls, 1, 'one call to NUS for three reads');
+  assert.deepEqual(
+    rows.map((r) => [r.blobs[1], r.blobs[2], r.blobs[5], r.doubles[0]]),
+    [
+      ['COM3', 'D2', 'PA1234A', 240],
+      ['COM3', 'D2', 'PB5678B', 840],
+    ],
+    'each bus with a time and a plate, once: "no bus" is not a question',
+  );
+  assert.ok(
+    rows.every((r) => r.blobs[3] === '' && r.doubles.length === 1),
+    'no destination, location or request',
+  );
+  // A hook that throws costs the log, never the board.
+  installGlobals(makeFetch({ byStop: { COM3 } }));
+  const sa = await getArrivals(makeEnv(), makeCtx(), 'COM3', FROZEN_NOW, () => {
+    throw new Error('logging broke');
+  });
+  assert.equal(sa.available, true);
+  assert.equal(sa.arrivals.length >= 2, true);
 });

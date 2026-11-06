@@ -275,7 +275,31 @@ export function aeTime(s: unknown): number {
   return Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(text) ? text : `${text.replace(' ', 'T')}Z`);
 }
 
-/** The predictions logged inside day [date]'s recording window, from Analytics Engine. */
+/**
+ * Analytics Engine's prediction rows with each question once: from the first
+ * 'board' row on, the boards, and the answers' 'arrival' rows only before it
+ * (predictionsFor). A row without a kind is an 'arrival' row. Hours the
+ * operator stopped collecting `eta` after the first board have neither.
+ */
+export function askedOnce<R extends { kind?: unknown; timestamp?: unknown }>(rows: R[]): R[] {
+  let firstBoard = Infinity;
+  for (const r of rows) {
+    const t = aeTime(r.timestamp);
+    if (r.kind === 'board' && t < firstBoard) firstBoard = t;
+  }
+  return rows.filter((r) => {
+    const t = aeTime(r.timestamp);
+    return r.kind === 'board' ? t >= firstBoard : t < firstBoard;
+  });
+}
+
+/**
+ * The predictions logged inside day [date]'s recording window, from
+ * Analytics Engine: the boards as fetched ('board' rows) from the first one
+ * logged, and before it the stops answers chose ('arrival' rows, timed when
+ * the answer was made, up to a cached board's age after the fetch). Never
+ * both at once: they ask the same questions twice.
+ */
 export async function predictionsFor(env: Env, date: string, nowMs: number, fetchImpl: typeof fetch): Promise<Prediction[]> {
   const { open, close } = windowOf(date);
   // Days back to reach the window's start, with one to spare, and whole
@@ -285,12 +309,17 @@ export async function predictionsFor(env: Env, date: string, nowMs: number, fetc
   const dataset = env.AE_DATASET || 'terminus';
   const rows = await aeSql(
     env,
-    `SELECT blob6 AS plate, blob2 AS stop, blob3 AS svc, blob9 AS berth, double1 AS eta, _sample_interval AS w, timestamp FROM ${dataset}
-      WHERE blob1 = 'arrival' AND blob6 != '' AND timestamp > NOW() - INTERVAL '${days}' DAY
+    `SELECT blob1 AS kind, blob6 AS plate, blob2 AS stop, blob3 AS svc, blob9 AS berth, double1 AS eta, _sample_interval AS w, timestamp FROM ${dataset}
+      WHERE blob1 IN ('arrival', 'board') AND blob6 != '' AND timestamp > NOW() - INTERVAL '${days}' DAY
       AND timestamp < NOW() - INTERVAL '${hours}' HOUR`,
     fetchImpl,
   );
-  return rows
+  // The day's own rows first: a board on the day before doesn't say this day had them.
+  const inWindow = rows.filter((r) => {
+    const t = aeTime(r.timestamp);
+    return t >= open && t < close;
+  });
+  return askedOnce(inWindow)
     .map((r) => ({
       t: aeTime(r.timestamp),
       plate: String(r.plate),

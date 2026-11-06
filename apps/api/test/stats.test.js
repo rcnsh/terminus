@@ -13,7 +13,7 @@ import { makeD1 } from './_d1.mjs';
 import worker from '../src/index.ts';
 import { SHAPES } from '../src/map/campus.ts';
 import { buildDayFile, dayKey, encodeBus, gzip, mapSnapshot, windowOf } from '../src/map/timelapse.ts';
-import { etaKey, etaSummary, passingsOf, recordEta, scoreEtas, statsOf } from '../src/ops/eta.ts';
+import { askedOnce, etaKey, etaSummary, passingsOf, predictionsFor, recordEta, scoreEtas, statsOf } from '../src/ops/eta.ts';
 import { countActive, recordActive } from '../src/ops/usage.ts';
 import { fingerprintOf, scrub, scrubStack } from '../src/ops/apperrors.ts';
 import { collecting } from '../src/ops/collect.ts';
@@ -654,7 +654,7 @@ test('the cron scores a closed day once, from the recording and Analytics Engine
   assert.equal(await recordEta(env, now, fetchImpl), null, 'off');
   await env.KV.put('config:collect:eta', 'on');
   assert.equal(await recordEta(env, now, fetchImpl), DATE);
-  assert.match(queries[0], /blob1 = 'arrival'/);
+  assert.match(queries[0], /blob1 IN \('arrival', 'board'\)/);
   assert.match(queries[0], /blob9 AS berth/);
   assert.match(queries[0], /INTERVAL '2' DAY\s+AND timestamp < NOW\(\) - INTERVAL '1' HOUR/, "the day's window, not everything since");
   const kept = JSON.parse(new TextDecoder().decode(bucket._written.get(etaKey(DATE))));
@@ -668,5 +668,39 @@ test('the cron scores a closed day once, from the recording and Analytics Engine
   assert.deepEqual(
     summary.services.map((s) => s.svc),
     ['K'],
+  );
+});
+
+test("a day's questions are the boards as fetched from the first one logged, and the answers' rows only before it", async () => {
+  const { open, close } = windowOf(DATE);
+  const ae = (ms) => new Date(ms).toISOString().replace('T', ' ').slice(0, 19);
+  const row = (kind, ms, plate) => ({ kind, plate, stop: 'COM3', svc: 'D2', eta: 240, w: 1, timestamp: ae(ms) });
+  const asked = (rows) => {
+    const env = { ...makeEnv(), ANALYTICS_TOKEN: 'ae', CF_ACCOUNT_ID: 'acct' };
+    return predictionsFor(env, DATE, close + 3_600_000, async () => new Response(JSON.stringify({ data: rows })));
+  };
+  const answers = [row('arrival', open + 60_000, 'A'), row('arrival', open + 7_200_000, 'B')];
+  assert.deepEqual(
+    (await asked(answers)).map((p) => p.plate),
+    ['A', 'B'],
+    'no boards: the answers',
+  );
+  const mixed = [...answers, row('board', open + 3_600_000, 'C'), row('board', open + 7_200_000, 'D')];
+  assert.deepEqual(
+    (await asked(mixed)).map((p) => p.plate),
+    ['A', 'C', 'D'],
+    'not B: the boards asked it already',
+  );
+  const dayBefore = row('board', open - 86_400_000, 'Y');
+  assert.deepEqual(
+    (await asked([dayBefore, ...answers])).map((p) => p.plate),
+    ['A', 'B'],
+    'a board the day before leaves this day its answers',
+  );
+  const unreadable = { ...row('board', open, 'X'), timestamp: '' };
+  assert.deepEqual(
+    askedOnce([unreadable, ...mixed]).map((p) => p.plate),
+    ['A', 'C', 'D'],
+    'a board without a time moves nothing',
   );
 });

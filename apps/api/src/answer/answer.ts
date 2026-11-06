@@ -11,7 +11,7 @@ import { getPublicArrivals } from '../feeds/lta.ts';
 import { publicCodeOf, shuttleCalls, svcName } from './public.ts';
 import { buildAnswer, shortStop } from './format.ts';
 import { candidateStops, confidence, haversineM, indexGraph, nearestStop, pickAlt, scoreOptions, wholeWalk } from './resolve.ts';
-import { logAnswer } from '../ops/analytics.ts';
+import { logAnswer, logBoard } from '../ops/analytics.ts';
 import { type LeaveInput, departures, leaveBy } from './leave.ts';
 import { sameAs, stepFrom } from './step.ts';
 import { loadCrowdRisk, recordCrowds } from './crowd.ts';
@@ -48,7 +48,7 @@ export async function collectArrivals(
       // would make "we could not reach the feed" indistinguishable from "the
       // feed says no bus is coming", and the second one gets a headway guess.
       const [s, p] = await Promise.all([
-        shuttle ? getArrivals(env, ctx, code, nowMs).catch(() => null) : undefined,
+        shuttle ? getArrivals(env, ctx, code, nowMs, (sa) => ctx.waitUntil(logBoard(env, sa))).catch(() => null) : undefined,
         pub ? getPublicArrivals(env, ctx, graph, code, pub, nowMs).catch(() => null) : undefined,
       ]);
       if (s === undefined) return p ?? unreached(code, nowMs);
