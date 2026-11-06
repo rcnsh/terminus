@@ -26,7 +26,8 @@ const nextHour = (ms: number) => (Math.floor(ms / 3_600_000) + 1) * 3_600_000;
 /** One bus of a service leaving a stop. */
 export interface Departure {
   /**
-   * Which bus: the live bus's plate (or its place in the feed's list), or
+   * Which bus: the live bus's plate (`<plate>@2` for its pass after the
+   * next, when the feed lists both; its place in the feed's list without a plate), or
    * the nth estimate after its anchor (`<plate>+n`, `reach+n`,
    * `opens@<ms>+n`). The same for every caller asking of the same board:
    * the nth bus after you reach the stop is `reach+n` whether or not the
@@ -181,7 +182,7 @@ export function serviceBoard(graph: Graph, sa: StopArrivals | undefined, svc: st
             arrival: a,
           }))
           .sort((a, b) => a.at - b.at)
-          .map((b, i) => ({ ...b, id: b.arrival.plate ?? `#${i}` }))
+          .map(passId)
       : [];
   return {
     svc,
@@ -193,6 +194,19 @@ export function serviceBoard(graph: Graph, sa: StopArrivals | undefined, svc: st
     paid,
     live,
   };
+}
+
+/**
+ * Which bus a live time is, given the ones before it: its plate, or its
+ * place in the feed's list without one. A bus listed twice (one running a
+ * loop alone, its next pass and the one after) is the plate for its next
+ * pass and `<plate>@2` for the one after, so the two never share an id.
+ */
+function passId<B extends { arrival: Arrival }>(b: B, i: number, all: B[]): B & { id: string } {
+  const plate = b.arrival.plate;
+  if (plate == null) return { ...b, id: `#${i}` };
+  const pass = all.slice(0, i).filter((o) => o.arrival.plate === plate).length + 1;
+  return { ...b, id: pass === 1 ? plate : `${plate}@${pass}` };
 }
 
 /** A service's board as given: one already read, or read from its stop's now. */

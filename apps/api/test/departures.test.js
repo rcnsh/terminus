@@ -222,6 +222,15 @@ test('a departure is known by its identity, not by which object it is: a copy is
   assert.ok(!('bus' in s.leave), Object.keys(s.leave).join());
 });
 
+test('a bus the feed lists twice is two departures, each its own, and so are the estimates after it', () => {
+  // A loop one bus runs alone: the feed gives its next pass and the one after, both P1.
+  const now = at('2026-08-27T10:00');
+  const sa = { ...board('PGP', now, 'D2', [at('2026-08-27T10:05'), at('2026-08-27T10:35')]) };
+  sa.arrivals = sa.arrivals.map((a) => ({ ...a, plate: 'P1' }));
+  const ids = departuresFrom(GRAPH, sa, 'D2', { now, from: now, max: 4 }).map((d) => d.id);
+  assert.deepEqual(ids, ['P1', 'P1@2', 'P1@2+1', 'P1@2+2']);
+});
+
 test('a chosen bus from long ago is no guide to the estimates, and costs nothing to ignore', () => {
   const now = at('2026-08-27T16:00');
   const sa = board('PGP', now, 'D2', []);
