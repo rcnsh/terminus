@@ -607,14 +607,31 @@ export function hasList(data: unknown, keys: string[] = ARRIVAL_LIST_KEYS): bool
  * often the clients refresh" true, and it shares the entry between /api/next
  * and /api/trip. A refused version or key (NO_REMINT_CODES) trips the feed's
  * breaker, which stops every stop for breakerS: a fresh token can't fix it.
+ * [onFetched] has the board when this call itself fetched it from NUS (not
+ * a cache hit, nor one another data centre fetched), for logBoard.
  */
-export async function getArrivals(env: Env, ctx: ExecutionContext, code: string, nowMs: number = Date.now()): Promise<StopArrivals> {
+export async function getArrivals(
+  env: Env,
+  ctx: ExecutionContext,
+  code: string,
+  nowMs: number = Date.now(),
+  onFetched?: (sa: StopArrivals) => void,
+): Promise<StopArrivals> {
   return cachedFetch<StopArrivals>({
     ctx,
     nowMs,
     key: `${cacheBase()}/arrivals/${encodeURIComponent(code)}`,
     failKey: `${cacheBase()}/failed/${encodeURIComponent(code)}`,
-    fetch: () => throughGate(env, ctx, `arrivals/${code}`, TTL.arrivalsMs, () => fetchArrivals(env, code, nowMs)),
+    fetch: () =>
+      throughGate(env, ctx, `arrivals/${code}`, TTL.arrivalsMs, async () => {
+        const sa = await fetchArrivals(env, code, nowMs);
+        try {
+          onFetched?.(sa);
+        } catch {
+          // Noting the board must never turn NUS's answer into a failure.
+        }
+        return sa;
+      }),
     freshMs: TTL.arrivalsMs,
     staleMaxS: TTL.staleMaxS,
     failMemoS: TTL.failMemoS,

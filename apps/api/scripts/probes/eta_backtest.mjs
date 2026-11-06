@@ -42,7 +42,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { GRAPH } from '../../src/answer/graph.ts';
-import { HORIZONS, aeTime, departs, passingsOf } from '../../src/ops/eta.ts';
+import { HORIZONS, aeTime, askedOnce, departs, passingsOf } from '../../src/ops/eta.ts';
 import { serviceDate, windowOf } from '../../src/map/timelapse.ts';
 import { SGT_MS } from '../../src/config.ts';
 import {
@@ -157,8 +157,8 @@ for (const path of recordings) {
 /**
  * The feed's predictions in [path]: JSON lines of {t, svc, plate, stop,
  * etaS, berth?}, or Analytics Engine's SQL reply as it comes ({data:
- * [{plate, stop, svc, berth, eta, timestamp}]}, the query in
- * docs/eta-model.md).
+ * [{kind, plate, stop, svc, berth, eta, timestamp}]}, the query in
+ * docs/eta-model.md), each question once (eta.ts askedOnce).
  */
 function predictionsIn(path) {
   const text = readFileSync(path, 'utf8');
@@ -169,7 +169,7 @@ function predictionsIn(path) {
     // JSON lines, then.
   }
   if (Array.isArray(whole?.data)) {
-    return whole.data.map((r) => ({
+    return askedOnce(whole.data).map((r) => ({
       t: aeTime(r.timestamp),
       svc: String(r.svc),
       plate: String(r.plate),

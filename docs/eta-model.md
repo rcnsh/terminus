@@ -34,7 +34,8 @@ All of it is in production, none of it in the repo:
 | What | Where | Shape | Since |
 | --- | --- | --- | --- |
 | Where every bus was, every 30 s | R2 `timelapse/YYYY-MM-DD.json.gz` | `DayFile`: per sample, each bus's plate, position and metres along its line | Since the recorder was turned on (stable site) |
-| What the feed predicted | Analytics Engine, `blob1 = 'arrival'` | per answer, up to 8 arrivals at the chosen stop: plate, stop, service, `etaS` (`analytics.ts`, "the segment-time seed"); sampled at high volume (`_sample_interval`) | AE keeps about 3 months |
+| What the feed predicted | Analytics Engine, `blob1 = 'board'` | every bus on every shuttle board the Worker fetches from NUS, once per call: plate, stop, service, `etaS`, timed from the fetch (`analytics.ts` `logBoard`); only while the operator collects `eta`; sampled at high volume (`_sample_interval`) | AE keeps about 3 months |
+| What the feed predicted, before the boards | Analytics Engine, `blob1 = 'arrival'` | per answer, up to 8 arrivals at the chosen stop, timed when the answer was made, so up to a cached board's age after the fetch (`analytics.ts`, "the segment-time seed"). Scored only before the first `board` row (`eta.ts` `askedOnce`), since both ask the same questions | AE keeps about 3 months |
 | How wrong the feed was | R2 `eta/YYYY-MM-DD.json` | `EtaDay` rows `[service, etaS, errS, hour]` (`src/ops/eta.ts`) | Only while the operator collects `eta` |
 
 There is nothing in D1 or KV, and the repo's only real trace is
@@ -200,8 +201,8 @@ pnpm exec cf r2 object get terminus/timelapse/2026-10-21.json.gz --file /tmp/day
 # The feed's predictions, from Analytics Engine's SQL API (ANALYTICS_TOKEN, CF_ACCOUNT_ID), as it answers:
 curl -s "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/analytics_engine/sql" \
   -H "Authorization: Bearer $ANALYTICS_TOKEN" \
-  --data "SELECT blob6 AS plate, blob2 AS stop, blob3 AS svc, blob9 AS berth, double1 AS eta, timestamp FROM terminus
-          WHERE blob1 = 'arrival' AND blob6 != '' AND timestamp > NOW() - INTERVAL '3' DAY" > /tmp/ae.json
+  --data "SELECT blob1 AS kind, blob6 AS plate, blob2 AS stop, blob3 AS svc, blob9 AS berth, double1 AS eta, timestamp FROM terminus
+          WHERE blob1 IN ('arrival', 'board') AND blob6 != '' AND timestamp > NOW() - INTERVAL '3' DAY" > /tmp/ae.json
 node scripts/probes/eta_backtest.mjs --day /tmp/day-2026-10-20.json.gz --predictions /tmp/ae.json \
   --day /tmp/day-2026-10-21.json.gz --predictions /tmp/ae.json --out /tmp/backtest.md
 ```
