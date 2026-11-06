@@ -126,7 +126,9 @@ function attention(s, d) {
   else if (d.crashReports) out.push(['info', `${plural(d.crashReports, 'error report')} from the apps this week.`, '#/crashes']);
   if (s.feedback?.last7d) out.push(['info', `${plural(s.feedback.last7d, 'report')} from users this week.`, '#/reports']);
   if (s.eta?.error) out.push(['bad', `Arrival times: ${s.eta.error}`, '#/arrivals']);
-  const off = SWITCHES.filter(([k]) => !s.collect?.[k]).map(([, t]) => t.toLowerCase());
+  // Lower case mid-sentence, but not a word that is all capitals (API).
+  const lower = (t) => t.replace(/\S+/g, (w) => (w === w.toUpperCase() ? w : w.toLowerCase()));
+  const off = SWITCHES.filter(([k]) => !s.collect?.[k]).map(([, t]) => lower(t));
   if (off.length) out.push(['info', `Not collecting ${off.join(', ')}.`, '#/collection']);
   return out;
 }
@@ -478,7 +480,7 @@ export function Devices({ s, d }) {
  * requests each made (analytics.keys and keyRoutes, keyuse.ts): today so
  * far, and the 7 full Singapore days to yesterday, as the dashboard's
  * other weeks are. Requests from a key not in the list (revoked, or past
- * the newest 500) have no owner to show, so they are only totalled.
+ * the 500 most lately used) have no owner to show, so they are only totalled.
  */
 export function keyRows(s, d14) {
   const an = s.analytics && !s.analytics.error ? s.analytics : null;
@@ -516,11 +518,13 @@ function ApiKeys({ s, d }) {
   const counting = Boolean(d.an && (s.collect?.keys || counted));
   const needle = q.trim().toLowerCase();
   const shown = rows.filter(
-    (r) => !needle || [r.name, r.email ?? 'no email', r.hint].some((x) => String(x).toLowerCase().includes(needle)),
+    (r) => !needle || [r.name, r.email ?? 'no email', r.userId.slice(0, 8), r.hint].some((x) => String(x).toLowerCase().includes(needle)),
   );
-  const sub = !d.an
+  const sub = !s.analytics
     ? 'Requests per key need Analytics Engine connected.'
-    : `${s.collect?.keys ? 'Requests made with each key, by Singapore day: today so far, and the 7 full days before; turned away means its rate limit refused them; the commonest route counts the last 8 days.' : `Not counting requests: turn on “API key requests” under Collection to count them.${counted ? ' The counts below are from before it was turned off.' : ''}`}${unlisted ? ` ${plural(unlisted, 'request')} in those 8 days came from keys not listed here (revoked, or past the newest 500).` : ''}`;
+    : s.analytics.error
+      ? `Requests per key can’t be read: ${s.analytics.error}`
+      : `${s.collect?.keys ? 'Requests made with each key, by Singapore day: today so far, and the 7 full days before; turned away means its rate limit refused them; the commonest route counts the same 8 days.' : `Not counting requests: turn on “API key requests” under Collection to count them.${counted ? ' The counts below are from before it was turned off.' : ''}`}${unlisted ? ` ${plural(unlisted, 'request')} in those 8 days came from keys not listed here (revoked, or past the 500 most lately used).` : ''}${s.analytics.keysCut ? ' Too many rows came back to count them all: these may be short.' : ''}`;
   return html`
     <${Card}
       title="API keys"
@@ -528,6 +532,7 @@ function ApiKeys({ s, d }) {
       tools=${rows.length > 8 && html`<${Search} value=${q} onChange=${setQ} placeholder="Search name, owner, last four" />`}
     >
       <${Table}
+        key=${counting ? 'counts' : 'keys'}
         cols=${[
           { key: 'name', label: 'Name' },
           {

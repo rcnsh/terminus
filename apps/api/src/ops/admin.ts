@@ -22,6 +22,7 @@ import { collectState } from './collect.ts';
 import { json } from '../http.ts';
 import { etaSummary } from './eta.ts';
 import { shadowSummary } from './etashadow.ts';
+import { sgtDate } from '../timetable/calendar.ts';
 
 const DAY = 86_400_000;
 /** API keys the dashboard lists, most lately used first: five an account, so this is every key for a long while. */
@@ -81,7 +82,7 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
   const [upstream, incidents, analytics, collect, eta, model] = await Promise.all([
     readUpstream(env),
     readIncidents(env),
-    analyticsStats(env, fetchImpl),
+    analyticsStats(env, nowMs, fetchImpl),
     collectState(env),
     etaSummary(env, nowMs).catch((err) => ({ error: err instanceof Error ? err.message : String(err) })),
     shadowSummary(env, nowMs).catch((err) => ({ error: err instanceof Error ? err.message : String(err) })),
@@ -278,10 +279,12 @@ const CRASH_ROWS = 100;
  *  (settings.ts), how long /api/me/next took in the last day and the
  *  requests made with each API key per day (keyuse.ts), from Analytics
  *  Engine's SQL API. */
-async function analyticsStats(env: Env, fetchImpl: typeof fetch): Promise<Record<string, unknown> | null> {
+async function analyticsStats(env: Env, nowMs: number, fetchImpl: typeof fetch): Promise<Record<string, unknown> | null> {
   if (!env.ANALYTICS_TOKEN || !env.CF_ACCOUNT_ID) return null;
   const sql = (q: string) => aeSql(env, q, fetchImpl);
   const dataset = env.AE_DATASET || 'terminus';
+  // The per-key counts cover today and the 7 Singapore days before it, both queries alike.
+  const keysFrom = sgtDate(nowMs - 7 * DAY);
   try {
     const [
       dismissed,
@@ -322,13 +325,13 @@ async function analyticsStats(env: Env, fetchImpl: typeof fetch): Promise<Record
                   quantileExactWeighted(0.95)(double12, _sample_interval) AS p95, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '1' DAY AND blob1 = 'next'`),
         // Requests made with each API key (keyuse.ts), per Singapore day and whether its limit turned them away,
-        // over today and the 7 days before (9 days back covers them in any time zone): at most two rows per key a day.
+        // over today and the 7 days before (9 days back, then the Singapore days): at most two rows per key a day.
         sql(`SELECT blob2 AS keyId, ${SG_DAY} AS day, blob4 AS outcome, SUM(_sample_interval) AS n FROM ${dataset}
-           WHERE timestamp > NOW() - INTERVAL '9' DAY AND blob1 = 'apikey'
+           WHERE timestamp > NOW() - INTERVAL '9' DAY AND blob1 = 'apikey' AND ${SG_DAY} >= '${keysFrom}'
            GROUP BY keyId, day, outcome ORDER BY day DESC LIMIT ${KEY_ROWS}`),
-        // And by route over the last 8 days, for each key's commonest: one row per key and keyed route.
+        // And by route over the same days, for each key's commonest: one row per key and keyed route.
         sql(`SELECT blob2 AS keyId, blob3 AS route, SUM(_sample_interval) AS n FROM ${dataset}
-           WHERE timestamp > NOW() - INTERVAL '8' DAY AND blob1 = 'apikey'
+           WHERE timestamp > NOW() - INTERVAL '9' DAY AND blob1 = 'apikey' AND ${SG_DAY} >= '${keysFrom}'
            GROUP BY keyId, route ORDER BY n DESC LIMIT ${KEY_ROWS}`),
       ]),
     ]);
@@ -344,6 +347,8 @@ async function analyticsStats(env: Env, fetchImpl: typeof fetch): Promise<Record
       next: nextTook(nextMs),
       keys: keyUse,
       keyRoutes,
+      // At the limit, the oldest days or the rarest routes were left out: the dashboard says its counts may be short.
+      keysCut: keyUse.length >= KEY_ROWS || keyRoutes.length >= KEY_ROWS,
     };
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };

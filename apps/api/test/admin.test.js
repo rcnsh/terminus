@@ -27,6 +27,8 @@ test('the dashboard asks Analytics Engine with the token, and says so when it fa
     /blob2 AS keyId[\s\S]*blob1 = 'apikey'[\s\S]*GROUP BY keyId, day, outcome/,
     'the requests made with each API key, by day',
   );
+  // Both cover today and the 7 Singapore days before it.
+  for (const i of [10, 11]) assert.match(asked[i].sql, /formatDateTime\(timestamp, '%Y-%m-%d', 'Asia\/Singapore'\) >= '\d{4}-\d\d-\d\d'/);
   assert.match(asked[11].sql, /blob3 AS route[\s\S]*blob1 = 'apikey'[\s\S]*GROUP BY keyId, route/, "and each key's routes");
   assert.ok(
     asked.every((a) => a.url === 'https://api.cloudflare.com/client/v4/accounts/acct/analytics_engine/sql' && a.auth === 'Bearer ae-token'),
