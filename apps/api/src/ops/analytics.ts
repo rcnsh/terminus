@@ -25,7 +25,7 @@
  *
  *   blob1   kind        'answer' | 'arrival' | 'error' | 'timelapse' | 'signal'
  *                       | 'active' | 'apperror' | 'tripwake' | 'legacy' | 'settings'
-                       | 'next' | 'apikey'
+ *                       | 'next' | 'apikey' | 'board'
  *   blob2   stop        boarding stop code; for 'error', the route (no query),
  *                       or 'cron <step>' for a cron step that failed;
  *                       for 'timelapse', the poll's outcome (see logPoll);
@@ -93,6 +93,14 @@
  *     double1..11 are 0, no blobs past blob1. A row for every answer, a bus
  *     in it or not, so its quantiles are what opening the app costs.
  *
+ *   'board' (logBoard), one bus on a shuttle board, written once per call to
+ *     NUS (fms.ts getArrivals), only while the operator collects `eta`:
+ *     the arrival model's questions (eta.ts predictionsFor), at every stop
+ *     the Worker asks about, timed from when the board was fetched rather
+ *     than when a cached copy was read. As an 'arrival' row, but blob4 is
+ *     '', blob5 'live' and double1 (etaS) the only double: no destination,
+ *     request or location.
+ *
  *   'apikey' (keyuse.ts), one request made with an API key, only while the
  *     operator collects `keys`: blob2 the key's id (api_keys.id);  blob3 the
  *     keyed route ("/api/next"), never a query;  blob4 'ok' | 'limited'
@@ -106,7 +114,8 @@
  * ---------------------------------------------------------------------------
  */
 
-import type { Answer, Env, ScoredOption } from '../types.ts';
+import type { Answer, Env, ScoredOption, StopArrivals } from '../types.ts';
+import { collectingMemo } from './collect.ts';
 
 /** Arrival rows per request. Bounded so one tap cannot write a hundred rows. */
 const MAX_ARRIVAL_ROWS = 8;
@@ -180,6 +189,39 @@ export function logAnswer(env: Env, input: LogInput): void {
     }
   } catch {
     // Deliberately swallowed. Losing a metric is not worth losing an answer.
+  }
+}
+
+/**
+ * Rows per board: two buses a service, for the most services a stop has.
+ * Eight boards (/api/me/stops at most) and an answer's rows stay under
+ * Analytics Engine's 250 writes per invocation.
+ */
+const MAX_BOARD_ROWS = 16;
+
+/**
+ * A shuttle board just fetched from NUS, as 'board' rows (above), when the
+ * operator collects `eta`. Called once per call to NUS, so a cached copy
+ * read again adds nothing. Each time counts from when the row is written,
+ * so a few hundred ms of fetch and switch read don't make the bus look late.
+ */
+export async function logBoard(env: Env, sa: StopArrivals): Promise<void> {
+  if (!analyticsEnabled(env) || !(await collectingMemo(env, 'eta'))) return;
+  try {
+    const lagS = Math.max(0, (Date.now() - sa.fetchedAt) / 1000);
+    let n = 0;
+    for (const a of sa.arrivals) {
+      // A board's "no bus" and a timetabled first bus aren't a bus on the road to check.
+      if (a.etaS == null || !a.plate || a.scheduled) continue;
+      if (++n > MAX_BOARD_ROWS) break;
+      env.AE!.writeDataPoint({
+        blobs: ['board', sa.code, a.svc, '', 'live', a.plate, a.crowd ?? '', '', a.berth ?? ''],
+        doubles: [Math.max(0, a.etaS - lagS)],
+        indexes: [sa.code],
+      });
+    }
+  } catch {
+    // Same rule as above: logging never breaks a response.
   }
 }
 
