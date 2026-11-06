@@ -288,7 +288,7 @@ export class Trip {
     const plans: Promise<unknown>[] = [];
     const savePlan = (key: string, plan: Plan) => {
       const p = this.state.blockConcurrencyWhile(async () => {
-        if (!(await this.cleared())) await this.putPlan(date, key, plan);
+        if (!(await this.cleared())) await this.putPlan(date, key, plan, day);
       });
       plans.push(p);
       return p;
@@ -461,11 +461,18 @@ export class Trip {
     return (await this.storage.get<DayRecord>('day')) ?? null;
   }
 
-  private async putPlan(date: string, key: string, plan: Plan): Promise<DayRecord> {
+  /**
+   * Saves a plan a wake worked out from `read`, the day as it read it before
+   * awaiting D1 and the feed. A POST meanwhile (a step, another device's
+   * plan) is newer: when the trip's plan or step has changed since, the
+   * wake's plan is dropped, and the next answer plans from what's stored.
+   */
+  private async putPlan(date: string, key: string, plan: Plan, read: DayRecord | null): Promise<void> {
     const next = today(await this.storedDay(), date);
+    const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+    if (!same(next.plans?.[key], read?.plans?.[key]) || !same(next.steps?.[key], read?.steps?.[key])) return;
     next.plans = { ...next.plans, [key]: plan };
     await this.storage.put('day', next);
-    return next;
   }
 
   /**

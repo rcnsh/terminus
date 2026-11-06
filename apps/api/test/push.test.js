@@ -166,6 +166,49 @@ test('the Trip object wakes when the phase changes and nudges the phone, once pe
   assert.equal(fcm.oauth, 1, 'the access token is reused');
 });
 
+test('a step made while the Trip object wakes is kept: the wake does not save the plan it worked out before it', async () => {
+  // The feed answers the wake only when the test lets it, so a step can land mid-wake.
+  let hold = null;
+  let reached = () => {};
+  const held = new Promise((r) => (reached = r));
+  const wrap = (f) => async (input, init) => {
+    if (hold && String(typeof input === 'string' ? input : input.url).includes('bus-proxy')) {
+      reached();
+      await hold;
+    }
+    return f(input, init);
+  };
+  const { call, phone, next, TRIPS, clock } = await setup({ wrap });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  const first = await next(phone);
+  assert.equal(first.card.phase, 'idle', 'no plan yet: the wake at time to go saves one');
+  const key = first.card.step?.trip;
+  const to = first.card.step?.later;
+  assert.ok(key && to, 'the card offers a later bus');
+  const storage = () => [...TRIPS.instances.values()][0].storage._map;
+
+  // Woken two minutes before the leave-by: time to go, and the plan is saved.
+  clock(Date.parse(first.leave.at) - 2 * 60_000);
+  storage().set('wakeAt', Date.now());
+  let release = () => {};
+  hold = new Promise((r) => (release = r));
+  const woke = TRIPS.fireAlarms();
+  await held;
+  // "Later bus" on another device while the wake waits for the feed.
+  const res = await TRIPS.get([...TRIPS.instances.keys()][0]).fetch('https://trip/update', {
+    method: 'POST',
+    body: JSON.stringify({ date: sgtDate(Date.now()), steps: { [key]: to }, deleteAt: endOfDayMs(Date.now()) }),
+  });
+  assert.equal(res.status, 200);
+  assert.equal(storage().get('day').plans?.[key], undefined, 'the step drops the old plan');
+  release();
+  await woke;
+
+  const day = storage().get('day');
+  assert.deepEqual(day.steps?.[key], to, 'the step is kept');
+  assert.equal(day.plans?.[key], undefined, 'and the plan from before it is not put back');
+});
+
 test("the Trip object tells an iPhone too: the notification in the account's words, and its Live Activity", async () => {
   const { privateKey } = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
   const der = Buffer.from(await crypto.subtle.exportKey('pkcs8', privateKey)).toString('base64');
