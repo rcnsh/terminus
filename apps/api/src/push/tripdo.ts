@@ -187,7 +187,10 @@ export class Trip {
       bump(next, key);
       changed = true;
     }
-    if (u.watch) {
+    // A watch comes with the plan it was worked out with: a refused plan's
+    // could arm an early wake for a bus that's no longer the trip's.
+    const refused = plansIn.length < Object.keys(u.plans ?? {}).length;
+    if (u.watch && !refused) {
       if ((await this.storage.get<string>('userId')) !== u.watch.userId) await this.storage.put('userId', u.watch.userId);
       // Only ever sooner: a device refreshing after a moment the object still
       // owes a push for (say, "due") mustn't move that wake past it.

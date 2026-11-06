@@ -356,6 +356,36 @@ test('a step made while a request waits for the feed is kept: the request does n
   assert.equal(day.plans?.[key], undefined, 'and the plan from before it is not put back');
 });
 
+test('a request whose plan a step made stale does not arm its wake either', async () => {
+  const feed = heldFeed();
+  const { call, phone, next, TRIPS, clock } = await setup({ wrap: feed.wrap });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  const first = await next(phone);
+  const key = first.card.step?.trip;
+  const to = first.card.step?.later;
+  assert.ok(key && to, 'the card offers a later bus');
+  const storage = () => [...TRIPS.instances.values()][0].storage._map;
+  // No wake pending, so the request asks for one with its plan.
+  storage().delete('wakeAt');
+  const { watch: _w, ...rest } = storage().get('day');
+  storage().set('day', rest);
+
+  clock(Date.parse(first.leave.at) - 2 * 60_000);
+  feed.hold();
+  const asked = call('/api/me/next', { token: phone });
+  await feed.asked('the request');
+  await TRIPS.get([...TRIPS.instances.keys()][0]).fetch('https://trip/update', {
+    method: 'POST',
+    body: JSON.stringify({ date: sgtDate(Date.now()), steps: { [key]: to }, deleteAt: endOfDayMs(Date.now()) }),
+  });
+  feed.release();
+  assert.equal((await asked).status, 200);
+
+  assert.equal(storage().get('day').plans?.[key], undefined, 'the plan from before the step is dropped');
+  assert.equal(storage().get('wakeAt'), undefined, 'and so is the wake worked out with it');
+  assert.equal(storage().get('day').watch, undefined);
+});
+
 test('the Trip object saves a plan only from the revision of the trip it reads: every write moves it on', async () => {
   const { TRIPS } = await setup();
   const TRIP = TRIPS.get('rev-test');
