@@ -6,6 +6,11 @@
 // section can be linked to and the back button works. The stats refresh
 // every minute while the tab is in front, keeping what's drawn until the
 // new numbers arrive. Keys: 1–9 and 0 open a section, r refreshes, / searches.
+//
+// Below them, the Timelapse (#/timelapse, timelapse/timelapse.js, loaded
+// when opened). The TIMELAPSE_TOKEN signs in too, for the machine that
+// renders the videos (render-timelapse.mjs): it opens that section alone,
+// with no stats, since the API answers it nothing else.
 
 import { html, render, store, useEffect, useMemo, useRef, useState, useStore } from '/assets/ui.js';
 import { addPasskey, passkeysWork, signIn } from '/admin/passkey.js';
@@ -14,12 +19,15 @@ import { Model } from '/admin/model.js';
 import { Accounts, Answers, Arrivals, Collection, Crashes, Devices, Feed, Overview, Reports, SECTIONS, derive } from '/admin/views.js';
 
 const KEY = 'terminus-operator-token';
+/** Set beside the token when it's the timelapse token. */
+const ONLY = 'terminus-timelapse-only';
 const AUTO = 'terminus-admin-auto';
 const SIDE = 'terminus-admin-side';
 const EVERY_MS = 60_000;
 
-/** The stats once unlocked, or the token form (with why), or a line saying what went wrong. */
-const view = store({ locked: false, msg: '', stats: null, note: '', loading: false, at: 0 });
+/** The stats once unlocked, or the token form (with why), or a line saying what went wrong.
+ *  `only`: signed in with the timelapse token, so the Timelapse is all there is. */
+const view = store({ locked: false, msg: '', stats: null, note: '', loading: false, at: 0, only: false });
 
 function token() {
   try {
@@ -29,16 +37,28 @@ function token() {
   }
 }
 
-function remember(t) {
+function timelapseOnly() {
+  if (memory) return onlyMemory;
+  try {
+    return sessionStorage.getItem(ONLY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function remember(t, only = false) {
   try {
     if (t) sessionStorage.setItem(KEY, t);
     else sessionStorage.removeItem(KEY);
+    if (t && only) sessionStorage.setItem(ONLY, '1');
+    else sessionStorage.removeItem(ONLY);
   } catch {
     // Without storage the token lasts until the page reloads.
   }
 }
 
 let memory = null;
+let onlyMemory = false;
 /** Bumped by forget(): a stats reply asked for before then is dropped, not shown with the session gone. */
 let session = 0;
 
@@ -46,14 +66,22 @@ let session = 0;
 function forget() {
   remember(null);
   memory = null;
+  onlyMemory = false;
   session++;
+  // The Timelapse's day, video and any export in progress go with the session.
+  timelapse?.then((m) => m.forget()).catch(() => {});
 }
 
-const signedOut = (msg = '') => view.set({ locked: true, msg, stats: null, note: '', loading: false, at: 0 });
+const signedOut = (msg = '') => view.set({ locked: true, msg, stats: null, note: '', loading: false, at: 0, only: false });
 
 async function load() {
   const t = memory ?? token();
   if (!t) return signedOut();
+  // No stats for the timelapse token: the section checks it, and signs out when it's refused.
+  if (timelapseOnly()) {
+    if (!view.get().only) view.set({ locked: false, msg: '', stats: null, note: '', loading: false, at: 0, only: true });
+    return undefined;
+  }
   if (view.get().loading) return undefined;
   view.set((v) => ({ ...v, loading: true }));
   const asked = session;
@@ -73,7 +101,7 @@ async function load() {
   try {
     const stats = await res.json();
     if (asked !== session) return undefined;
-    view.set({ locked: false, msg: '', stats: withoutDeleted(stats), note: '', loading: false, at: Date.now() });
+    view.set({ locked: false, msg: '', stats: withoutDeleted(stats), note: '', loading: false, at: Date.now(), only: false });
   } catch (err) {
     // A stats reply this page can't read: say so, not a blank page.
     view.set((v) => ({ ...v, loading: false, note: `Couldn't show the stats: ${err.message}` }));
@@ -157,19 +185,60 @@ function lock() {
   signedOut();
 }
 
-/** Keeps the session and opens the dashboard; or says what went wrong. */
-async function unlockWith(get, setBusy) {
+/** Keeps the session and opens the dashboard (only the Timelapse, for the timelapse token); or says what went wrong. */
+async function unlockWith(get, setBusy, only = false) {
   setBusy(true);
   view.set((v) => ({ ...v, msg: '' }));
   try {
-    memory = await get();
-    remember(memory);
+    const t = await get();
+    forget();
+    memory = t;
+    onlyMemory = only;
+    remember(t, only);
     await load();
   } catch (err) {
     view.set((v) => ({ ...v, msg: err.message }));
   } finally {
     setBusy(false);
   }
+}
+
+/** The timelapse token, if the API takes it: else it would open a section that can only sign out again. */
+async function checkTimelapseToken(t) {
+  const res = await fetch('/api/timelapse/days', { headers: { 'x-health-token': t }, cache: 'no-store' }).catch(() => null);
+  if (!res) throw new Error("Couldn't reach terminus.");
+  if (res.status === 404) throw new Error('The timelapse token was not accepted.');
+  if (!res.ok) throw new Error(`The server answered ${res.status}.`);
+  return t;
+}
+
+/** The timelapse section's loaded module, once asked for. */
+let timelapse = null;
+
+const timelapseSignedOut = () => {
+  forget();
+  signedOut('Signed out, or the token was not accepted. Sign in again.');
+};
+
+function TimelapsePage() {
+  const [Page, setPage] = useState(null);
+  const [err, setErr] = useState('');
+  useEffect(() => {
+    timelapse ??= import('/admin/timelapse/timelapse.js').then((m) => {
+      m.connect({ token: () => memory ?? token(), signedOut: timelapseSignedOut });
+      return m;
+    });
+    timelapse.then(
+      (m) => setPage(() => m.Timelapse),
+      (e) => {
+        // Tried again on the next visit.
+        timelapse = null;
+        setErr(e.message);
+      },
+    );
+  }, []);
+  if (err) return html`<p class="bad">${`Couldn't load the timelapse: ${err}`}</p>`;
+  return Page ? html`<${Page} />` : html`<p class="hint">Loading…</p>`;
 }
 
 const KEY_ICON = html`<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5" /><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3" /></svg>`;
@@ -190,9 +259,47 @@ function GateCard({ sub, children }) {
 
 function Unlock({ msg }) {
   const box = useRef(null);
+  const tlBox = useRef(null);
   const [busy, setBusy] = useState(false);
-  if (!passkeysWork())
-    return html`<${GateCard} sub="This browser can’t use passkeys. Open the dashboard in a current Chrome, Safari or Firefox." />`;
+  const passkeys = passkeysWork();
+  const forTimelapse = !passkeys || parseHash().id === 'timelapse' || /timelapse/i.test(msg);
+  // The timelapse token needs no passkey: its form is there in any browser.
+  const timelapseForm = html`
+    <details class="add" open=${forTimelapse}>
+      <summary>Only making videos? Use the timelapse token</summary>
+      <form
+        onSubmit=${(e) => {
+          e.preventDefault();
+          const token = tlBox.current.value.trim();
+          tlBox.current.value = '';
+          unlockWith(
+            () =>
+              checkTimelapseToken(token).then((t) => {
+                // Only once it's taken: a refused token leaves the address as it was.
+                if (!location.hash.startsWith('#/timelapse')) location.hash = '#/timelapse';
+                return t;
+              }),
+            setBusy,
+            true,
+          );
+        }}
+      >
+        <label for="timelapse-token">Timelapse token</label>
+        <div class="row">
+          <input id="timelapse-token" ref=${tlBox} type="password" autocomplete="off" required />
+          <button type="submit" class="btn" disabled=${busy}>Open the timelapse</button>
+        </div>
+        <p class="hint">The <code>TIMELAPSE_TOKEN</code> secret. It opens the timelapse and nothing else, until you lock this tab.</p>
+      </form>
+    </details>
+  `;
+  if (!passkeys)
+    return html`<${GateCard} sub="This browser can’t use passkeys. Open the dashboard in a current Chrome, Safari or Firefox.">
+      <div class="unlock">
+        <p class="gate-msg" role="status">${msg}</p>
+        ${timelapseForm}
+      </div>
+    <//>`;
   return html`
     <${GateCard} sub="For the operator of terminus. Sign in with the passkey on this device.">
       <div class="unlock">
@@ -200,7 +307,7 @@ function Unlock({ msg }) {
           ${busy ? 'Waiting for your passkey…' : 'Sign in with a passkey'}
         </button>
         <p class="gate-msg" role="status">${msg}</p>
-        <details class="add" open=${/add one|operator token|token was not/i.test(msg)}>
+        <details class="add" open=${/add one|operator token|that token was not/i.test(msg)}>
           <summary>First time on this device? Add a passkey</summary>
           <form
             onSubmit=${(e) => {
@@ -218,15 +325,19 @@ function Unlock({ msg }) {
             <p class="hint">The <code>HEALTH_TOKEN</code> secret, once per device. It isn’t kept.</p>
           </form>
         </details>
+        ${timelapseForm}
       </div>
     <//>
   `;
 }
 
+/** Below the sections, apart from them: it draws no stats, and the timelapse token opens it alone. */
+const TIMELAPSE = ['timelapse', 'Timelapse', 'Replay a recorded day of shuttles on the map, and export it as a video.'];
+
 /** The section and its options from the address: #/reports?open=fb-1. */
 function parseHash() {
   const [path, qs] = location.hash.replace(/^#\/?/, '').split('?');
-  const id = SECTIONS.some(([s]) => s === path) ? path : 'overview';
+  const id = SECTIONS.some(([s]) => s === path) || path === TIMELAPSE[0] ? path : 'overview';
   return { id, query: Object.fromEntries(new URLSearchParams(qs ?? '')) };
 }
 
@@ -326,6 +437,7 @@ function useNow(ms = 5_000) {
 
 /** The sidebar's count or dot for a section, when it has something to say. */
 function badge(id, s, d) {
+  if (!s) return null;
   if (id === 'feed' && s.feed) return html`<span class=${`dot ${s.feed.up ? 'good' : 'bad'}`} title=${s.feed.up ? 'Up' : 'Down'}></span>`;
   if (id === 'crashes' && d.crashes.length) return html`<span class=${`count ${d.crashFatal ? 'bad' : ''}`}>${d.crashes.length}</span>`;
   if (id === 'reports' && s.feedback?.last7d) return html`<span class="count">${s.feedback.last7d}</span>`;
@@ -355,17 +467,21 @@ const PAGES = {
   crashes: Crashes,
   reports: Reports,
   collection: Collection,
+  timelapse: TimelapsePage,
 };
 
-function Dashboard({ v }) {
+function Dashboard({ v, asked }) {
   const s = v.stats;
-  const route = useRoute();
+  // Also before load() has set it, on a reload: no other section flashes up first.
+  const only = v.only || timelapseOnly();
+  const route = only ? { id: 'timelapse', query: {} } : asked;
   const [auto, setAuto] = useAuto();
   const [narrow, setNarrow] = useSideNarrow();
   const now = useNow();
-  const d = useMemo(() => derive(s), [s]);
-  const [, title, what] = SECTIONS.find(([id]) => id === route.id);
+  const d = useMemo(() => s && derive(s), [s]);
+  const [, title, what] = [...SECTIONS, TIMELAPSE].find(([id]) => id === route.id);
   const Page = PAGES[route.id];
+  const tl = route.id === 'timelapse';
 
   useEffect(() => {
     document.title = `${title} · Dashboard · terminus`;
@@ -378,10 +494,11 @@ function Dashboard({ v }) {
         if (e.key === 'Escape') document.activeElement.blur();
         return;
       }
-      // 1 to 9, then 0 for the tenth.
+      // 1 to 9, then 0 for the tenth. None of them for the timelapse token, which opens no section.
       const n = e.key === '0' ? 10 : Number(e.key);
-      if (n >= 1 && n <= SECTIONS.length) location.hash = `#/${SECTIONS[n - 1][0]}`;
-      else if (e.key === 'r') load();
+      const all = !view.get().only;
+      if (all && n >= 1 && n <= SECTIONS.length) location.hash = `#/${SECTIONS[n - 1][0]}`;
+      else if (all && e.key === 'r') load();
       else if (e.key === '[') setNarrow((n) => !n);
       else if (e.key === '/') {
         const box = document.querySelector('[data-search]');
@@ -395,7 +512,7 @@ function Dashboard({ v }) {
   }, []);
 
   return html`
-    <div class=${`dash ${v.loading ? 'loading' : ''} ${narrow ? 'side-rail' : ''}`}>
+    <div class=${`dash ${v.loading && !tl ? 'loading' : ''} ${narrow ? 'side-rail' : ''}`}>
       <div class="progress" aria-hidden="true"></div>
       <aside class="side" id="side" onPointerOver=${placeTip} onfocusin=${placeTip}>
         <div class="side-top">
@@ -414,8 +531,10 @@ function Dashboard({ v }) {
           </button>
         </div>
         <nav aria-label="Sections">
-          ${SECTIONS.map(
-            ([id, name], i) => html`<a
+          ${
+            !only &&
+            SECTIONS.map(
+              ([id, name], i) => html`<a
               href=${`#/${id}`}
               class=${route.id === id ? 'on' : ''}
               aria-current=${route.id === id ? 'page' : null}
@@ -426,25 +545,37 @@ function Dashboard({ v }) {
                 >${(i + 1) % 10}</kbd
               >
             </a>`,
-          )}
-          <a href="/admin/timelapse/" class="out" data-tip="Timelapse ↗"
-            ><span class="ic">${icon(ICONS.timelapse)}</span><span class="name">Timelapse</span
-            ><span class="arrow" aria-hidden="true">↗</span></a
+            )
+          }
+          <a
+            href="#/timelapse"
+            class=${`${only ? '' : 'apart'} ${tl ? 'on' : ''}`}
+            aria-current=${tl ? 'page' : null}
+            data-tip="Timelapse"
+            ><span class="ic">${icon(ICONS.timelapse)}</span><span class="name">Timelapse</span></a
           >
         </nav>
         <div class="side-foot">
-          <label class="auto" data-tip="Refresh every minute">
+          ${
+            !only &&
+            html`<label class="auto" data-tip="Refresh every minute">
             <input type="checkbox" checked=${auto} onChange=${(e) => setAuto(e.currentTarget.checked)} />
             <span class="long">Refresh every minute</span><span class="short">Auto</span>
-          </label>
+          </label>`
+          }
           <div class="row">
-            <button type="button" class="btn small ghost" onClick=${load} disabled=${v.loading} data-tip="Refresh ( r )">
+            ${
+              !only &&
+              html`<button type="button" class="btn small ghost" onClick=${load} disabled=${v.loading} data-tip="Refresh ( r )">
               ${REFRESH_ICON}<span class="t">${v.loading ? 'Refreshing…' : 'Refresh'}</span>
-            </button>
+            </button>`
+            }
             <button type="button" class="btn small ghost" onClick=${lock} data-tip="Lock">${LOCK_ICON}<span class="t">Lock</span></button>
           </div>
           <p class="hint keys">
-            <span><kbd>1</kbd>–<kbd>0</kbd> section</span><span><kbd>r</kbd> refresh</span><span><kbd>/</kbd> search</span><span><kbd>[</kbd> sidebar</span>
+            ${!only && html`<span><kbd>1</kbd>–<kbd>0</kbd> section</span><span><kbd>r</kbd> refresh</span><span><kbd>/</kbd> search</span>`}<span
+              ><kbd>[</kbd> sidebar</span
+            >
           </p>
         </div>
       </aside>
@@ -454,10 +585,13 @@ function Dashboard({ v }) {
             <h1>${title}</h1>
             <p class="hint">${what}</p>
           </div>
-          <p class="hint asof" role="status">
+          ${
+            !tl &&
+            html`<p class="hint asof" role="status">
             ${v.note ? html`<span class="bad">${v.note}</span>` : html`<span>${`As of ${when(s.now)} Singapore time`}</span>`}
             <span>${` · updated ${ago(new Date(v.at).toISOString(), now)}`}</span>
-          </p>
+          </p>`
+          }
         </header>
         <div class="page" key=${route.id}>
           <${Page} s=${s} d=${d} query=${route.query} flip=${flip} dismiss=${dismiss} remove=${remove} />
@@ -469,16 +603,20 @@ function Dashboard({ v }) {
 
 function Admin() {
   const v = useStore(view);
+  const route = useRoute();
+  // The Timelapse needs no stats: it opens while they load, or when they fail.
+  const tlAlone = !v.locked && route.id === 'timelapse' && Boolean(memory ?? token());
+  const on = !v.locked && Boolean(v.stats || v.only || tlAlone);
   useEffect(() => {
-    document.body.classList.toggle('dash-on', Boolean(v.stats));
-  }, [Boolean(v.stats)]);
+    document.body.classList.toggle('dash-on', on);
+  }, [on]);
   if (v.locked) return html`<${Unlock} msg=${v.msg} />`;
   // The first load failed: the dashboard's own Refresh isn't drawn yet, and nothing tries again by itself.
-  if (!v.stats)
+  if (!v.stats && !v.only && !tlAlone)
     return html`<${GateCard} sub=${v.note || 'Loading…'}>
       ${v.note && html`<button type="button" class="btn" onClick=${load} disabled=${v.loading}>Try again</button>`}
     <//>`;
-  return html`<${Dashboard} v=${v} />`;
+  return html`<${Dashboard} v=${v} asked=${route} />`;
 }
 
 render(html`<${Admin} />`, document.getElementById('admin'));

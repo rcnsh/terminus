@@ -1,5 +1,5 @@
 #!/bin/sh
-# Mediabunny, which the timelapse page (apps/web/public/admin/timelapse/)
+# Mediabunny, which the dashboard's Timelapse (apps/web/public/admin/timelapse/)
 # encodes its video with, copied from npm into apps/web/public/vendor/ and
 # served from our own domain, like MapLibre (scripts/vendor/vendor-map.sh). Its
 # browser build is one self-contained module. MPL-2.0: the licence goes with

@@ -1,5 +1,5 @@
 /**
- * Passkeys for the operator's pages (/admin/, /admin/timelapse/). Adding one
+ * Passkeys for the operator's dashboard (/admin/, its Timelapse too). Adding one
  * needs HEALTH_TOKEN itself; signing in with one gives an operator session in
  * the same x-health-token header for SESSION_MS, so the secret is typed once
  * per device and a leaked session dies on its own. See internals.md,

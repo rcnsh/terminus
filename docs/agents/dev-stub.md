@@ -8,7 +8,7 @@
   stub's stdout.
 - the timelapse recorder on the fake buses. `POST /__stub/timelapse?minutes=N`
   records N minutes at once, moving the clock ahead. Then open
-  `/admin/timelapse/` (token `dev`).
+  `/admin/#/timelapse` (token `dev`).
 - made-up numbers for the dashboard (`/admin/`, token `dev`): accounts,
   answers, crash reports, reports and arrival-time scores
   (`scripts/dev/stub-admin.mjs`). `STUB_ADMIN=empty` shows it as a new install

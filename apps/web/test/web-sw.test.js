@@ -139,7 +139,7 @@ test('Chinese is kept for offline only once it is asked for', () => {
 
 test('the map libraries named in app/map-files.js are the vendored ones', () => {
   // The one place their versions are written: the map, its early fetch,
-  // the timelapse page, and the service worker's clean-up all follow it.
+  // the dashboard's Timelapse, and the service worker's clean-up all follow it.
   const src = read('app/map-files.js');
   for (const name of ['MAPLIBRE', 'PMTILES']) {
     const at = new RegExp(`export const ${name} = '([^']+)'`).exec(src)[1];
