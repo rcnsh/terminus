@@ -444,6 +444,47 @@ test('a step made while the Trip object wakes is pushed once: by the step, not a
   );
 });
 
+test('a tap whose nudge lands after a wake pushed time to go does not make the wake push it again', async () => {
+  let held = null;
+  let reached = () => {};
+  const reachedP = new Promise((r) => (reached = r));
+  const wrap = (f) => async (input, init) => {
+    if (held && String(typeof input === 'string' ? input : input.url).startsWith(FCM_SEND)) {
+      const h = held;
+      held = null;
+      reached();
+      await h;
+    }
+    return f(input, init);
+  };
+  const { call, phone, mac, next, fcm, TRIPS, clock } = await setup({ wrap });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  const first = await next(mac);
+  const key = first.card.step?.trip;
+  assert.ok(key);
+  const storage = () => [...TRIPS.instances.values()][0].storage._map;
+
+  // Just before time to go, "Best bus" on the Mac; its nudge to the phone is slow to send.
+  clock(Date.parse(first.leave.at) - DUE_MS - 20_000);
+  let release = () => {};
+  held = new Promise((r) => (release = r));
+  const tapped = call('/api/me/step', { method: 'POST', token: mac, body: { trip: key, to: null } });
+  await reachedP;
+  // Meanwhile the wake at time to go pushes it.
+  clock(Date.parse((await next(mac)).leave.at) - DUE_MS + 5_000);
+  storage().set('wakeAt', Date.now());
+  await TRIPS.fireAlarms();
+  assert.equal(storage().get('pushed').phase, 'due');
+  release();
+  assert.equal((await tapped).status, 200);
+  assert.equal(storage().get('pushed').phase, 'due', "the tap's older card is not noted over it");
+
+  clock(Date.now() + 30_000);
+  storage().set('wakeAt', Date.now());
+  await TRIPS.fireAlarms();
+  assert.equal(fcm.sent.filter((m) => m.data.phase === 'due').length, 1, 'time to go is pushed once');
+});
+
 test('a request whose plan a step made stale does not arm its wake either', async () => {
   const feed = heldFeed();
   const { call, phone, next, TRIPS, clock } = await setup({ wrap: feed.wrap });

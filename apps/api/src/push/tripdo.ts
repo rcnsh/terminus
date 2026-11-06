@@ -43,6 +43,8 @@ const MAX_RETRY_GAP_MS = 8 * 60_000;
 interface Pushed {
   key: string | null;
   phase: string;
+  /** When the card was worked out: a tap's note that lands after a newer wake's push is dropped. */
+  at?: number;
   /** The card's `gone`: the phase stays `heading` when the bus leaves, but
    *  the phones' "Leave now" must give way to it. */
   gone?: boolean;
@@ -209,12 +211,16 @@ export class Trip {
       }
     }
     if (u.pushed) {
-      // What the phones were last told of the trip; a Live Activity's state
-      // and starts are the wake's own, and stay.
-      const now: Pushed = { ...(await this.storage.get<Pushed>('pushed')), key: u.pushed.key, phase: u.pushed.phase };
-      if (u.pushed.gone) now.gone = true;
-      else delete now.gone;
-      await this.storage.put('pushed', now);
+      // What the phones were last told of the trip, unless a wake has pushed
+      // a newer card while the tap's nudge was sending. A Live Activity's
+      // state and starts are the wake's own, and stay.
+      const last = await this.storage.get<Pushed>('pushed');
+      if (!(last?.at !== undefined && last.at > u.pushed.at)) {
+        const now: Pushed = { ...last, key: u.pushed.key, phase: u.pushed.phase, at: u.pushed.at };
+        if (u.pushed.gone) now.gone = true;
+        else delete now.gone;
+        await this.storage.put('pushed', now);
+      }
     }
     if (changed) await this.storage.put('day', next);
     await this.arm(u.deleteAt);
@@ -395,6 +401,7 @@ export class Trip {
     const now: Pushed = {
       key: card.key,
       phase: card.phase,
+      at: nowMs,
       ...(card.gone ? { gone: true } : {}),
       live: JSON.stringify(live),
       ...(started ? { started } : {}),

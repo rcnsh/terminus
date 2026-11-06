@@ -1610,7 +1610,7 @@ async function nextTrip(env: Env, ctx: ExecutionContext, deps: MeDeps, rider: Ri
   const isPlan = !ask.place && !ask.to;
   // The day's card, as the Trip object's wake works it out (tapNudge); a place's or a stop's isn't.
   const shown: TripUpdate['pushed'] = isPlan
-    ? { key: trip.key, phase: body.card.phase, ...(body.card.gone ? { gone: true } : {}) }
+    ? { key: trip.key, phase: body.card.phase, at: nowMs, ...(body.card.gone ? { gone: true } : {}) }
     : undefined;
   return { body, tripOver: trip.key === null && isPlan, shown };
 }
