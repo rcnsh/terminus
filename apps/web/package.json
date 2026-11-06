@@ -7,7 +7,7 @@
     "node": ">=22.18"
   },
   "scripts": {
-    "test": "node --test test/*.test.js",
+    "test": "node --max-old-space-size=2048 --test --test-timeout=120000 test/*.test.js",
     "check": "pnpm test"
   },
   "devDependencies": {

@@ -109,9 +109,7 @@ node apps/api/scripts/dev/dev-stub.mjs # local Worker on :8787 with a fake feed 
 ```
 
 - Your last step, after your **last** edit, is `pnpm lint` **and**
-  `pnpm check`. A stray `'` inside a single-quoted TS string (`doesn't`)
-  has broken the build before; in `src/openapi/` and similar, write
-  `does not` or use `’`.
+  `pnpm check`. Inside a single-quoted string, write `does not` or `’`.
 - CI also runs `pnpm exec cf deploy --dry-run` in `apps/api` (modules
   workerd won't load) and `node --check` on every file in
   `apps/web/public`.

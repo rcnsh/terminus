@@ -43,8 +43,8 @@ export function holdsHealthToken(env: Env, req: Request): boolean {
 /**
  * Whoever may read the timelapse days: the operator, or a holder of
  * TIMELAPSE_TOKEN, sent in the same header. That token opens /api/timelapse/*
- * and nothing else, so a machine that renders the videos (a VPS, unattended)
- * never holds the key to the dashboard, its reports and their emails.
+ * and nothing else, so a machine left to render the videos unattended never
+ * holds the key to the dashboard, its reports and their emails.
  */
 export async function canReadTimelapse(env: Env, req: Request, nowMs = Date.now()): Promise<boolean> {
   return sentToken(req, env.TIMELAPSE_TOKEN) || (await isOperator(env, req, nowMs));

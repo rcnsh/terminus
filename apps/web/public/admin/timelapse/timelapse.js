@@ -717,7 +717,8 @@ function Timeline({ v, r, busy, set }) {
     e.preventDefault();
     stop();
     const at = what === 'from' ? now.a : what === 'to' ? now.b : now.a + (now.b - now.a) * view.get().scrub;
-    move(what, Math.round(at / MIN) * MIN + step * (e.shiftKey ? 10 : 1) * MIN);
+    // From the minute the handle shows (clockAt rounds down), so every press moves what's shown.
+    move(what, Math.floor(at / MIN) * MIN + step * (e.shiftKey ? 10 : 1) * MIN);
   };
   // A label near an end of the track keeps inside it.
   const edge = (t) => ((t - win.a) / span < 0.04 ? 'grip at-a' : (win.b - t) / span < 0.04 ? 'grip at-b' : 'grip');
