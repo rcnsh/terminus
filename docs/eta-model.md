@@ -208,8 +208,9 @@ node scripts/probes/eta_backtest.mjs --day /tmp/day-2026-10-20.json.gz --predict
 ```
 
 The Cloudflare login on the owner's Mac can read both: `cf r2 objects
-list --bucket-name terminus --prefix timelapse/` and `cf r2 objects get
-<key> --bucket-name terminus > <file>` for the days, and its OAuth token
+list --bucket-name terminus --prefix timelapse/ --per-page 1000` (without
+`--per-page` it lists 20 keys and doesn't say there are more) and `cf r2
+objects get <key> --bucket-name terminus > <file>` for the days, and its OAuth token
 (`oauth_token` in `cf`'s config file) for the SQL API, with
 `_sample_interval AS w` added to the query to weight sampled rows. Every
 day then goes in with `--walk-from`.
