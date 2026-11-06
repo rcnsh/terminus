@@ -311,7 +311,7 @@ async function phaseAt(t: TripIn, c: Clock, look: Lookups): Promise<Verdict> {
   // Still in the day's last class: the way home is the answer, but that trip
   // hasn't started ("Time to get going" in the middle of a lecture), and
   // nothing about its bus is assumed until the class ends.
-  if (t.home && !t.rec && c.ms < t.home.lastEndMs) return { kind: 'held' };
+  if (t.home && !t.rec && !c.reached(t.home.lastEndMs)) return { kind: 'held' };
 
   // Nobody said what happened and the bus left a while ago. Only where you
   // are can say whether you caught it; never assumed without that, or

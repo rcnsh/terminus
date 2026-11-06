@@ -201,6 +201,8 @@ const SIGNALS = {
   boarded: (plan, now) => ({ bus: plan, rec: { kind: 'boarded', at: now, boarded: plan } }),
   left: (plan, now) => ({ bus: plan, rec: { kind: 'left', at: now } }),
   missed: (plan, now) => ({ bus: plan, rec: { kind: 'missed', at: now } }),
+  // A trip home, its last class ending ten minutes before the leave-by.
+  home: (plan, now) => ({ bus: plan, home: { lastEndMs: now - 10 * MIN, homeBy: now + 24 * 60 * MIN } }),
 };
 
 test('for every golden trip, the phase holds until changesAt and differs at it, with a location and without', async () => {

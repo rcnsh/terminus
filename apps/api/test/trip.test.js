@@ -998,6 +998,16 @@ test('there for the last class: the way home is shown, but not "Time to get goin
   assert.notEqual((await t.next(t.phone)).card.phase, 'idle');
 });
 
+test('in the last class, the Trip object wakes as it ends, to say it is time to go home', async () => {
+  const t = await setup({ home: { stops: ['PGPR'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')] });
+  await t.signal(t.phone, { kind: 'arrived', trip: FIRST });
+  t.clock(FROZEN_NOW + 70 * 60_000); // 10:10, in class
+  const card = await wakeCard(t.env, t.TRIPS);
+  assert.equal(card.key, 'home:660');
+  assert.equal(card.phase, 'idle');
+  assert.equal(card.wakeAt, FROZEN_NOW + 120 * 60_000, '11:00, when the class ends');
+});
+
 /* More than class trips. */
 
 test('"Not on campus today" skips every trip left today on every device; "Back on campus" brings them back', async () => {
