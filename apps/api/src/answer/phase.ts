@@ -211,7 +211,7 @@ export interface Clock {
 }
 
 /** A clock at `ms`, noting each later moment it's asked about in `noted` (true when one moves with the leave-by). */
-function clockAt(ms: number, noted: Map<number, boolean>): Clock {
+function noting(ms: number, noted: Map<number, boolean>): Clock {
   return {
     ms,
     reached(atMs, leave = false) {
@@ -273,7 +273,7 @@ async function changesOf<V>(
   same: (a: V, b: V) => boolean,
 ): Promise<{ now: V; next: Change | null }> {
   const noted = new Map<number, boolean>();
-  const now = await decide(clockAt(nowMs, noted));
+  const now = await decide(noting(nowMs, noted));
   let next: Change | null = null;
   let was = now;
   for (let i = 0; noted.size; i++) {
@@ -283,7 +283,7 @@ async function changesOf<V>(
     if (next && at >= nowMs + LEAVE_GAP_MS) break;
     if (i >= MAX_MOMENTS) return { now, next: next ?? { at, leave } };
     const more = new Map<number, boolean>();
-    const then = await decide(clockAt(at, more)).catch(onlyNotPlanned(null));
+    const then = await decide(noting(at, more)).catch(onlyNotPlanned(null));
     if (then === null || !same(was, then)) {
       if (next && !leave) return { now, next: { ...next, firm: at } };
       next ??= { at, leave };
