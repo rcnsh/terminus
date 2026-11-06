@@ -465,19 +465,60 @@ table.data td.best { font-weight: 700; color: var(--good-ink); }
 
 /* The map draws at the video's exact pixel size, out of sight; the preview canvas shows the frames. */
 #stage { position: fixed; left: -100000px; top: 0; }
-.timelapse .studio { display: grid; grid-template-columns: minmax(16rem, 22rem) 1fr; gap: 20px; align-items: start; }
-.timelapse .controls { display: grid; gap: 14px; }
-.timelapse .controls label { display: grid; gap: 6px; font-weight: 600; font-size: 0.9rem; }
-.timelapse .controls .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.timelapse .preview { display: grid; gap: 10px; justify-items: center; background: var(--surface-2, var(--surface)); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
-.timelapse .preview canvas { max-width: 100%; max-height: 72vh; height: auto; border-radius: 10px; box-shadow: var(--shadow); background: #000; }
-.timelapse .preview input[type="range"] { width: 100%; }
-.timelapse .scrub { display: flex; justify-content: space-between; width: 100%; color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
-.timelapse .job { display: grid; gap: 6px; }
-.timelapse .job .bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.timelapse { display: grid; gap: 14px; }
+.timelapse .rec { margin: 0; justify-self: start; display: inline-flex; align-items: center; gap: 8px; padding: 3px 10px; border-radius: 99px; background: var(--surface-2); border: 1px solid var(--line); color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+.timelapse .rec::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--line-strong); }
+.timelapse .rec.live { color: var(--good-ink); }
+.timelapse .rec.live::before { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 25%, transparent); }
+.timelapse .tl-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; }
+.timelapse .tl-bar select { width: auto; font-weight: 600; padding-top: 7px; padding-bottom: 7px; }
+.timelapse .tl-bar .sep { width: 1px; height: 24px; background: var(--line); }
+.timelapse .len { display: inline-flex; align-items: center; gap: 8px; }
+.timelapse .secs { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 0.82rem; }
+.timelapse .secs input { width: 5rem; padding: 6px 8px; font-size: 0.82rem; }
+.timelapse .theatre { display: grid; justify-items: center; gap: 18px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
+.timelapse .screen { display: grid; place-items: center; width: 100%; }
+.timelapse .screen canvas { display: block; max-width: 100%; max-height: 68vh; width: auto; height: auto; border-radius: 10px; box-shadow: var(--shadow); background: #000; }
+.timelapse .timeline { width: 100%; display: grid; grid-template-columns: auto 1fr; column-gap: 14px; }
+.timelapse .timeline .cap { grid-column: 2; margin: 0 0 26px; color: var(--muted); font-size: 0.8rem; }
+.timelapse .play { grid-row: 2; align-self: center; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+.timelapse .play:hover { border-color: var(--line-strong); }
+.timelapse .play svg { width: 15px; height: 15px; fill: currentColor; }
+.timelapse .track { grid-row: 2; grid-column: 2; position: relative; height: 64px; cursor: pointer; touch-action: none; user-select: none; }
+.timelapse .busy .track { cursor: default; opacity: 0.6; }
+.timelapse .bars { position: absolute; inset: 0; display: flex; align-items: flex-end; gap: 1px; }
+.timelapse .bars i { flex: 1; min-width: 0; background: var(--accent-bright); opacity: 0.85; border-radius: 1px 1px 0 0; }
+.timelapse .bars i.out { background: var(--line-strong); opacity: 0.4; }
+.timelapse .bars i.none { height: 0; opacity: 1; background: none; border-top: 1px dashed var(--line-strong); border-radius: 0; }
+.timelapse .grip { position: absolute; top: -6px; bottom: -6px; width: 12px; margin-left: -6px; border-radius: 4px; background: var(--accent-bright); cursor: ew-resize; z-index: 2; }
+.timelapse .grip::after { content: ""; position: absolute; left: 5px; top: 38%; height: 24%; width: 2px; border-radius: 1px; background: rgb(0 0 0 / 0.45); }
+.timelapse .grip span { position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); color: var(--accent); font-size: 0.75rem; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.timelapse .grip.at-a span { left: 0; transform: none; }
+.timelapse .grip.at-b span { left: auto; right: 0; transform: none; }
+.timelapse .head { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--ink); cursor: ew-resize; z-index: 3; }
+.timelapse .head::before { content: ""; position: absolute; top: -5px; left: -5px; width: 12px; height: 12px; border-radius: 50%; background: var(--ink); }
+.timelapse .head span { position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%); padding: 1px 6px; border-radius: 5px; background: var(--ink); color: var(--bg); font-size: 0.75rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.timelapse .grip:focus-visible, .timelapse .head:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+.timelapse .now { position: absolute; top: 0; bottom: 0; border-left: 1px dashed var(--good); pointer-events: none; }
+.timelapse .now span { position: absolute; top: calc(100% + 4px); left: 5px; color: var(--good-ink); font-size: 0.72rem; }
+.timelapse .ticks { grid-column: 2; position: relative; height: 1.3em; margin-top: 34px; color: var(--muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.timelapse .ticks span { position: absolute; transform: translateX(-50%); }
+.timelapse .ticks span:first-child { transform: none; }
+.timelapse .ticks span:last-child { transform: translateX(-100%); }
+.timelapse .export { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); border-radius: var(--radius); padding: 14px 16px; }
+.timelapse .export .what { flex: 1 1 18rem; display: grid; gap: 2px; }
+.timelapse .export strong { font: 600 1.1rem var(--display); }
+.timelapse .export .hint { font-size: 0.83rem; }
+.timelapse .job { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 0; }
+.timelapse .job .bar { flex: 1 1 100%; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
 .timelapse .job .bar > div { height: 100%; background: var(--accent-bright); }
-.timelapse .job .meta { color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
-@media (max-width: 52rem) { .timelapse .studio { grid-template-columns: 1fr; } }
+.timelapse .job .meta { flex: 1; color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+@media (max-width: 40rem) {
+  .timelapse .tl-bar .sep { display: none; }
+  .timelapse .theatre { padding: 14px; }
+  .timelapse .bars { gap: 0; }
+  .timelapse .ticks span:nth-child(2), .timelapse .ticks span:nth-last-child(2) { display: none; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .dash *, .dash *::before, .dash *::after { animation: none !important; transition: none !important; }

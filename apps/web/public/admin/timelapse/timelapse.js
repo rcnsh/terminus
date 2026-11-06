@@ -19,8 +19,8 @@
 // the app's interactive map, with its stores, sheets and live polling. This
 // one is fixed to the video's size, drawn once per frame, and never moves.
 
-import { html, store, useEffect, useRef, useStore } from '/assets/ui.js';
-import { busesAt, clockAt, countBySvc, decodeDay, timeOn } from '/admin/timelapse/replay.js';
+import { html, store, useEffect, useMemo, useRef, useStore } from '/assets/ui.js';
+import { busesAt, busesOut, clockAt, countBySvc, decodeDay, timeOn } from '/admin/timelapse/replay.js';
 import { MAPLIBRE, PMTILES } from '/app/map-files.js';
 import { inkOn } from '/account/dom.js';
 
@@ -28,8 +28,8 @@ import { inkOn } from '/account/dom.js';
 const MEDIABUNNY = '/vendor/mediabunny%401.61.3/mediabunny.min.mjs';
 const FPS = 30;
 const PRESETS = {
-  story: { w: 1080, h: 1920, label: 'Stories, 1080 × 1920' },
-  wide: { w: 1920, h: 1080, label: 'Landscape, 1920 × 1080' },
+  story: { w: 1080, h: 1920, label: 'Stories' },
+  wide: { w: 1920, h: 1080, label: 'Landscape' },
 };
 /** A frame the map hasn't finished in this long is taken as it is (a tile that never came). */
 const SETTLE_MS = 5_000;
@@ -49,10 +49,13 @@ const view = store({
   /** Off: the map and its buses only, centred, for footage cut into another video. */
   overlay: true,
   seconds: 60,
-  from: '',
-  to: '',
+  /** The chosen start and end (epoch ms), or null for the first and last readings. */
+  from: null,
+  to: null,
   /** Where the preview is, 0 to 1 of the chosen range. */
   scrub: 0,
+  /** The preview is playing through the range at the video's speed. */
+  playing: false,
   job: null,
   /** The map is being made or changed: nothing can be drawn from it yet. */
   preparing: false,
@@ -71,7 +74,18 @@ export function forget() {
   const { job } = view.get();
   if (job?.running) job.cancelled = true;
   if (job?.url) URL.revokeObjectURL(job.url);
-  view.set((v) => ({ ...v, days: null, recording: null, date: '', day: null, loading: false, job: null, note: '', scrub: 0 }));
+  view.set((v) => ({
+    ...v,
+    days: null,
+    recording: null,
+    date: '',
+    day: null,
+    loading: false,
+    job: null,
+    note: '',
+    scrub: 0,
+    playing: false,
+  }));
 }
 
 async function api(path) {
@@ -103,7 +117,7 @@ async function loadDays() {
 }
 
 async function pick(date) {
-  view.set((v) => ({ ...v, date, day: null, loading: true, note: '', scrub: 0 }));
+  view.set((v) => ({ ...v, date, day: null, loading: true, note: '', scrub: 0, from: null, to: null, playing: false }));
   try {
     const res = await api(`/api/timelapse/days/${date}`);
     if (!res) return;
@@ -122,9 +136,38 @@ async function pick(date) {
 function range() {
   const { day, from, to } = view.get();
   if (!day) return null;
-  const a = from ? Math.max(day.start, timeOn(day.date, from)) : day.start;
-  const b = to ? Math.min(day.end, timeOn(day.date, to)) : day.end;
+  const a = from == null ? day.start : Math.max(day.start, from);
+  const b = to == null ? day.end : Math.min(day.end, to);
   return b > a ? { a, b } : null;
+}
+
+/** The timeline's span: the recorder's whole window (06:30 to 00:30), so a day still recording shows how much is to come. */
+function windowOf(day) {
+  return { a: Math.min(day.start, timeOn(day.date, '06:30')), b: Math.max(day.end, timeOn(day.date, '00:30')) };
+}
+
+/** Plays the preview through the range at the speed the video will, from where it is (or the start, at the end). */
+function play() {
+  const v = view.get();
+  if (v.playing) return stop();
+  if (!range() || v.job?.running) return;
+  const from = v.scrub >= 1 ? 0 : v.scrub;
+  const t0 = performance.now();
+  view.set((x) => ({ ...x, playing: true, scrub: from }));
+  const tick = () => {
+    const now = view.get();
+    if (!now.playing) return;
+    const scrub = Math.min(1, from + (performance.now() - t0) / (now.seconds * 1000));
+    view.set((x) => ({ ...x, scrub, playing: scrub < 1 }));
+    // preview() draws the latest moment asked for and skips the ones it couldn't keep up with.
+    preview().catch(() => {});
+    if (scrub < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+function stop() {
+  if (view.get().playing) view.set((x) => ({ ...x, playing: false }));
 }
 
 let ml = null;
@@ -501,7 +544,7 @@ async function exportVideo() {
     codec: null,
     size: 0,
   };
-  view.set((v) => ({ ...v, job, note: '' }));
+  view.set((v) => ({ ...v, job, note: '', playing: false }));
   // Not once forget() has dropped it: a stopped export doesn't come back.
   const update = (patch) => view.set((v) => (v.job === job ? { ...v, job: Object.assign(job, patch) } : v));
 
@@ -542,7 +585,7 @@ async function exportVideo() {
     await output.finalize();
     const blob = new Blob([output.target.buffer], { type: avc ? 'video/mp4' : 'video/webm' });
     const name = `terminus-${date}-${preset}${view.get().overlay ? '' : '-clean'}.${avc ? 'mp4' : 'webm'}`;
-    update({ running: false, url: URL.createObjectURL(blob), size: blob.size, name });
+    update({ running: false, url: URL.createObjectURL(blob), size: blob.size, name, took: performance.now() - job.started });
   } catch (err) {
     if (output && output.state !== 'canceled' && output.state !== 'finalized') await output.cancel().catch(() => {});
     update({ running: false, error: err.message ?? String(err) });
@@ -553,7 +596,17 @@ const mins = (ms) => {
   const s = Math.max(0, Math.round(ms / 1000));
   return s >= 60 ? `${Math.floor(s / 60)} min ${s % 60} s` : `${s} s`;
 };
-const mb = (n) => `${(n / 1_048_576).toFixed(1)} MB`;
+const mb = (n) => (n < 1_048_576 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1_048_576).toFixed(1)} MB`);
+/** "Fri 6 Nov", for a day's date. */
+const dayName = (date) =>
+  new Date(`${date}T00:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short' });
+const count = (n) => n.toLocaleString('en-GB');
+
+const MIN = 60_000;
+const SGT_MS = 8 * 3_600_000;
+/** The timeline's chart: ten-minute slices of the 18-hour window. */
+const SLICES = 108;
+const LENGTHS = [30, 60, 90];
 
 function Recording({ r }) {
   if (!r) return null;
@@ -564,12 +617,13 @@ function Recording({ r }) {
     done: 'finished for the day',
     idle: 'not started',
   };
-  return html`<p class="hint">${`Today (${r.date}): ${r.enabled ? (words[r.state] ?? r.state) : 'switched off'}${r.samples ? `, ${r.samples} readings so far` : ''}.`}</p>`;
+  const live = r.enabled && r.state === 'polling';
+  return html`<p class=${live ? 'rec live' : 'rec'}>${`Today: ${r.enabled ? (words[r.state] ?? r.state) : 'switched off'}${r.samples ? ` · ${count(r.samples)} readings so far` : ''}`}</p>`;
 }
 
 function Progress({ job }) {
   if (!job) return null;
-  if (job.error) return html`<p class="bad">${`The export stopped: ${job.error}`}</p>`;
+  if (job.error) return html`<p class="bad job">${`The export stopped: ${job.error}`}</p>`;
   if (job.running) {
     return html`
       <div class="job">
@@ -581,13 +635,134 @@ function Progress({ job }) {
   }
   if (job.url) {
     return html`
-      <div class="job">
-        <div class="meta">${`${job.codec} · ${mb(job.size)} · ${job.total} frames in ${mins(performance.now() - job.started)}`}</div>
+      <div class="job done">
+        <div class="meta">${`Ready: ${job.codec} · ${mb(job.size)} · ${job.total} frames in ${mins(job.took)}`}</div>
         <a class="btn accent" href=${job.url} download=${job.name}>Download the video</a>
       </div>
     `;
   }
-  return html`<p class="hint">Cancelled.</p>`;
+  return html`<p class="hint job">Cancelled.</p>`;
+}
+
+/** Buttons for one choice of a few, the chosen one lit. */
+function Seg({ label, value, options, onPick, disabled }) {
+  return html`
+    <div class="seg" role="group" aria-label=${label}>
+      ${options.map(
+        ([key, text]) =>
+          html`<button type="button" class=${value === key ? 'on' : ''} aria-pressed=${value === key} disabled=${disabled} onClick=${() => value !== key && onPick(key)}>${text}</button>`,
+      )}
+    </div>
+  `;
+}
+
+/** Every three hours on the clock across the window, with its ends, clear of each other. */
+function ticksOf(win) {
+  const step = 3 * 3_600_000;
+  const out = [win.a];
+  for (let t = Math.ceil((win.a + SGT_MS) / step) * step - SGT_MS; t < win.b; t += step) {
+    if (t - win.a > 40 * MIN && win.b - t > 40 * MIN) out.push(t);
+  }
+  return [...out, win.b];
+}
+
+const PLAY = html`<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9.5-5.5z" /></svg>`;
+const PAUSE = html`<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 2.5h3v11h-3zM9.5 2.5h3v11h-3z" /></svg>`;
+
+/**
+ * The day as a chart of buses out, with the video's start and end as handles
+ * to drag and the preview's moment as a line. Dragging a handle previews that
+ * end; a click anywhere else moves the preview there.
+ */
+function Timeline({ v, r, busy, set }) {
+  const box = useRef(null);
+  const drag = useRef(null);
+  const { day } = v;
+  const win = windowOf(day);
+  const counts = useMemo(() => busesOut(day, win.a, win.b, SLICES), [day, win.a, win.b]);
+  const most = Math.max(1, ...counts);
+  const span = win.b - win.a;
+  const pct = (t) => `${((t - win.a) / span) * 100}%`;
+  const live = v.days?.some((d) => d.date === day.date && !d.closed);
+  const head = r.a + (r.b - r.a) * v.scrub;
+
+  const timeAt = (e) => {
+    const rect = box.current.getBoundingClientRect();
+    const k = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    return Math.round((win.a + k * span) / MIN) * MIN;
+  };
+  // From the range as it is now, not as it was drawn: a drag changes it between renders.
+  const move = (what, t) => {
+    const now = range();
+    if (!now) return;
+    if (what === 'from') set({ from: Math.max(day.start, Math.min(t, now.b - MIN)), scrub: 0 });
+    else if (what === 'to') set({ to: Math.min(day.end, Math.max(t, now.a + MIN)), scrub: 1 });
+    else set({ scrub: Math.max(0, Math.min(1, (t - now.a) / (now.b - now.a))) });
+  };
+  const down = (e) => {
+    if (busy || e.button !== 0) return;
+    stop();
+    // A handle under the pointer wins over the line drawn on top of it: at either end of the range they overlap.
+    const under = document.elementsFromPoint(e.clientX, e.clientY).map((el) => el.closest('[data-grip]')?.dataset.grip);
+    drag.current = under.find((g) => g === 'from' || g === 'to') ?? 'head';
+    e.currentTarget.setPointerCapture(e.pointerId);
+    move(drag.current, timeAt(e));
+  };
+  const dragTo = (e) => drag.current && move(drag.current, timeAt(e));
+  const up = () => (drag.current = null);
+  const key = (what) => (e) => {
+    const step = { ArrowLeft: -1, ArrowDown: -1, ArrowRight: 1, ArrowUp: 1 }[e.key];
+    const now = range();
+    if (!step || busy || !now) return;
+    e.preventDefault();
+    stop();
+    const at = what === 'from' ? now.a : what === 'to' ? now.b : now.a + (now.b - now.a) * view.get().scrub;
+    move(what, Math.round(at / MIN) * MIN + step * (e.shiftKey ? 10 : 1) * MIN);
+  };
+  // A label near an end of the track keeps inside it.
+  const edge = (t) => ((t - win.a) / span < 0.04 ? 'grip at-a' : (win.b - t) / span < 0.04 ? 'grip at-b' : 'grip');
+  const slider = (what, label, t) => ({
+    'data-grip': what,
+    role: 'slider',
+    tabindex: busy ? -1 : 0,
+    'aria-label': label,
+    'aria-valuemin': 0,
+    'aria-valuemax': 100,
+    'aria-valuenow': Math.round(((t - win.a) / span) * 100),
+    'aria-valuetext': clockAt(t),
+    style: { left: pct(t) },
+    onKeyDown: key(what),
+  });
+
+  return html`
+    <div class=${busy ? 'timeline busy' : 'timeline'}>
+      <p class="cap">Buses out through the day. Drag the orange handles to choose what the video covers.</p>
+      <button class="play" type="button" disabled=${busy} aria-label=${v.playing ? 'Pause the preview' : 'Play the preview'} onClick=${play}>
+        ${v.playing ? PAUSE : PLAY}
+      </button>
+      <div class="track" ref=${box} onPointerDown=${down} onPointerMove=${dragTo} onPointerUp=${up} onPointerCancel=${up}>
+        <div class="bars">
+          ${counts.map((n, i) => {
+            const t = win.a + ((i + 0.5) * span) / SLICES;
+            // Nothing recorded there: before the first reading, or still to come.
+            if (t < day.start || t > day.end) return html`<i class="none"></i>`;
+            return html`<i class=${t < r.a || t > r.b ? 'out' : ''} style=${{ height: `${Math.max(4, (n / most) * 100)}%` }}></i>`;
+          })}
+        </div>
+        ${
+          live
+            ? html`<div class="now" style=${{ left: pct(day.end) }}>
+                ${Math.abs(head - day.end) > span * 0.04 ? html`<span>now</span>` : null}
+              </div>`
+            : null
+        }
+        <div class=${edge(r.a)} ...${slider('from', 'Start of the video', r.a)}><span>${clockAt(r.a)}</span></div>
+        <div class=${edge(r.b)} ...${slider('to', 'End of the video', r.b)}><span>${clockAt(r.b)}</span></div>
+        <div class="head" ...${slider('head', 'Moment shown in the preview', head)}><span>${clockAt(head)}</span></div>
+      </div>
+      <div class="ticks">${ticksOf(win).map((t) => html`<span style=${{ left: pct(t) }}>${clockAt(t)}</span>`)}</div>
+    </div>
+  `;
 }
 
 function Studio() {
@@ -604,67 +779,91 @@ function Studio() {
     if (redraw === 'setup') setUp().then(preview).catch(failed);
     else preview().catch(failed);
   };
+  const setup = (patch) => {
+    stop();
+    set(patch, 'setup');
+  };
+  const length = (seconds) => {
+    stop();
+    view.set((x) => ({ ...x, seconds }));
+  };
   const r = range();
 
   if (v.days && !v.days.length) {
     return html`<${Recording} r=${v.recording} /><p>No days recorded yet. The recorder runs from 06:30 to 00:30 Singapore time while it's switched on.</p>`;
   }
+  const { w, h } = PRESETS[v.preset];
+  const custom = !LENGTHS.includes(v.seconds);
+  const faster = r ? Math.round((r.b - r.a) / (v.seconds * 1000)) : 0;
   return html`
     <${Recording} r=${v.recording} />
-    <div class="studio">
-      <div class="controls card">
-        <label>Day
-          <select value=${v.date} disabled=${busy} onChange=${(e) => pick(e.currentTarget.value)}>
-            ${(v.days ?? []).map((d) => html`<option value=${d.date}>${d.closed ? `${d.date} · ${mb(d.bytes)}` : `${d.date} · recording, ${d.samples} readings`}</option>`)}
-          </select>
+    <div class="tl-bar">
+      <select aria-label="Day" value=${v.date} disabled=${busy} onChange=${(e) => pick(e.currentTarget.value)}>
+        ${(v.days ?? []).map((d) => html`<option value=${d.date}>${`${dayName(d.date)} · ${d.closed ? mb(d.bytes) : 'recording'}`}</option>`)}
+      </select>
+      <span class="sep"></span>
+      <${Seg}
+        label="Shape of the video"
+        value=${v.preset}
+        options=${Object.entries(PRESETS).map(([key, p]) => [key, p.label])}
+        disabled=${busy}
+        onPick=${(preset) => setup({ preset })}
+      />
+      <${Seg}
+        label="Map"
+        value=${v.theme}
+        options=${[
+          ['dark', 'Dark map'],
+          ['light', 'Light map'],
+        ]}
+        disabled=${busy}
+        onPick=${(theme) => setup({ theme })}
+      />
+      <${Seg}
+        label="Overlay"
+        value=${v.overlay ? 'on' : 'off'}
+        options=${[
+          ['on', 'Clock and counts'],
+          ['off', 'Map only'],
+        ]}
+        disabled=${busy}
+        onPick=${(k) => setup({ overlay: k === 'on' })}
+      />
+      <span class="sep"></span>
+      <span class="len">
+        <${Seg} label="Length of the video" value=${custom ? null : v.seconds} options=${LENGTHS.map((s) => [s, `${s} s`])} disabled=${busy} onPick=${length} />
+        <label class="secs">
+          <input
+            type="number"
+            min="2"
+            max="600"
+            step="1"
+            placeholder="Other"
+            aria-label="Other length, in seconds"
+            value=${custom ? v.seconds : ''}
+            disabled=${busy}
+            onChange=${(e) => {
+              const n = Math.round(Number(e.currentTarget.value));
+              if (n) length(Math.max(2, Math.min(600, n)));
+              else e.currentTarget.value = custom ? v.seconds : '';
+            }}
+          />
+          s
         </label>
-        <label>Size
-          <select value=${v.preset} disabled=${busy} onChange=${(e) => set({ preset: e.currentTarget.value }, 'setup')}>
-            ${Object.entries(PRESETS).map(([key, p]) => html`<option value=${key}>${p.label}</option>`)}
-          </select>
-        </label>
-        <label>Map
-          <select value=${v.theme} disabled=${busy} onChange=${(e) => set({ theme: e.currentTarget.value }, 'setup')}>
-            <option value="dark">Dark</option>
-            <option value="light">Light</option>
-          </select>
-        </label>
-        <label>Overlay
-          <select value=${v.overlay ? 'on' : 'off'} disabled=${busy} onChange=${(e) => set({ overlay: e.currentTarget.value === 'on' }, 'setup')}>
-            <option value="on">Clock, buses out and wordmark</option>
-            <option value="off">None: the map and its buses</option>
-          </select>
-        </label>
-        <label>Length of the video, seconds
-          <input type="number" min="2" max="600" step="1" value=${v.seconds} disabled=${busy} onInput=${(e) => view.set((x) => ({ ...x, seconds: Math.max(2, Math.min(600, Number(e.currentTarget.value) || 60)) }))} />
-          <span class="chips">
-            ${[60, 90].map((s) => html`<button type="button" class=${v.seconds === s ? 'on' : ''} aria-pressed=${v.seconds === s} disabled=${busy} onClick=${() => view.set((x) => ({ ...x, seconds: s }))}>${`${s} s`}</button>`)}
-          </span>
-        </label>
-        <div class="pair">
-          <label>From
-            <input type="time" value=${v.from} disabled=${busy} onChange=${(e) => set({ from: e.currentTarget.value, scrub: 0 })} />
-          </label>
-          <label>To
-            <input type="time" value=${v.to} disabled=${busy} onChange=${(e) => set({ to: e.currentTarget.value, scrub: 0 })} />
-          </label>
-        </div>
-        <p class="hint">${r ? `${clockAt(r.a)} to ${clockAt(r.b)} Singapore time, ${FPS} frames a second, ${Math.round(v.seconds * FPS)} frames. Leave the times empty for the whole day.` : v.day ? 'The end must be after the start, within the recording.' : ''}</p>
-        <button class="btn accent" type="button" disabled=${busy || v.preparing || !r || !v.day} onClick=${exportVideo}>Export the video</button>
-        <${Progress} job=${v.job} />
+      </span>
+    </div>
+    <div class=${`theatre ${v.preset}`}>
+      ${v.loading ? html`<p class="hint">Loading the day…</p>` : null}
+      <div class="screen" ref=${canvas}></div>
+      ${v.day && r ? html`<${Timeline} v=${v} r=${r} busy=${busy} set=${set} />` : null}
+    </div>
+    <div class="export">
+      <div class="what">
+        <strong>${r ? `${v.seconds} s video of ${clockAt(r.a)} to ${clockAt(r.b)}` : v.day ? 'Nothing recorded to export' : 'Choose a day'}</strong>
+        <span class="hint">${`${w} × ${h} · ${count(Math.round(v.seconds * FPS))} frames at ${FPS} a second${faster > 1 ? ` · ${count(faster)} times faster than real time` : ''}`}</span>
       </div>
-      <div class="preview">
-        ${v.loading ? html`<p class="hint">Loading the day…</p>` : null}
-        <div ref=${canvas}></div>
-        ${
-          v.day && r
-            ? html`
-              <input type="range" min="0" max="1000" value=${Math.round(v.scrub * 1000)} disabled=${busy} aria-label="Moment of the day" onInput=${(e) => set({ scrub: Number(e.currentTarget.value) / 1000 })} />
-              <div class="scrub"><span>${clockAt(r.a)}</span><span>${clockAt(r.a + (r.b - r.a) * v.scrub)}</span><span>${clockAt(r.b)}</span></div>
-            `
-            : null
-        }
-      </div>
+      ${busy ? null : html`<button class="btn accent" type="button" disabled=${v.preparing || !r || !v.day} onClick=${exportVideo}>Export the video</button>`}
+      <${Progress} job=${v.job} />
     </div>
   `;
 }

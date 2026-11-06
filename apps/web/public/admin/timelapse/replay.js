@@ -196,6 +196,24 @@ export function countBySvc(buses) {
   return n;
 }
 
+/** Buses out across [a, b) in [n] equal slices: in each, how many buses had a
+ *  reading. The timeline's chart, so a busy stretch of the day shows at a glance. */
+export function busesOut(day, a, b, n) {
+  const out = Array.from({ length: n }, () => 0);
+  const span = (b - a) / n;
+  if (!(span > 0)) return out;
+  for (const track of day.tracks) {
+    let last = -1;
+    for (const p of track.pts) {
+      const i = Math.floor((p.t - a) / span);
+      if (i < 0 || i >= n || i === last) continue;
+      out[i]++;
+      last = i;
+    }
+  }
+  return out;
+}
+
 /**
  * Epoch ms of [hhmm] Singapore time on day [date]'s timeline: a time before
  * [dayStartHhmm] (the recording window's opening) is the next morning, so
