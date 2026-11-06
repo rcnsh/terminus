@@ -48,10 +48,10 @@ const DAY = 86_400_000;
 const HISTORY_DAYS = 28;
 /** A recorded day this many days back not yet run in shadow is still picked up: the whole window, so it fills as it's recorded. */
 const CATCH_UP_DAYS = HISTORY_DAYS;
-/** ShadowDay's version: a day kept by an older one is run again (3: the misses kept). */
-const SHADOW_V = 3;
+/** ShadowDay's version: a day kept by an older one is run again (4: no more buses early than the feed, biasOf and weightsFrom). */
+const SHADOW_V = 4;
 /** Versions whose model answered as this one does: their grids are this blend's, and the dashboard shows them until they're run again. */
-const SAME_MODEL = new Set([2, SHADOW_V]);
+const SAME_MODEL = new Set([SHADOW_V]);
 /** Predictions further ahead than this aren't scored (as eta.ts). */
 const MAX_ETA_S = 30 * 60;
 
@@ -72,7 +72,7 @@ export interface SegmentDay {
 
 /** One day answered by the model the days before it built. */
 export interface ShadowDay {
-  v: 2 | typeof SHADOW_V;
+  v: 2 | 3 | typeof SHADOW_V;
   date: string;
   /** What the model was built from: days with segment times, and stop pairs known. */
   built: { days: number; pairs: number };
