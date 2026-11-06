@@ -28,10 +28,12 @@ apps/api/
     feedwatch.ts      The beta's feed health, from the breakers its own traffic opened
   src/answer/         The answer engine: which bus, from which stop, when to leave
     next.ts           /api/me/next: the plan, free days, riding, the trip's phase
+    rider.ts          The rider's answer: answered for a request, a wake or a reword;
+                      saves what each should and nudges the rider's devices
     answer.ts         Stops near you, arrivals, the best option, worded
     card.ts           What every client shows, worded once (the card's lines)
     plan.ts, leave.ts Which bus a trip is about; when to set off
-    trip.ts           Today's trip signals and the day's state
+    trip.ts           Today's trip signals, the day's state, a signal applied (applySignal)
     phase.ts          A trip's phase now, and when it next changes (the Trip object's wake)
     resolve.ts        Stop + bus choice: haversine, directional pairing, scoring
     departures.ts     A service's buses from a stop: its feed rows and berths, live times, then
