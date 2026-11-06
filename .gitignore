@@ -12,6 +12,8 @@ __pycache__/
 
 # Captured API traffic. Contains live tokens.
 dev/
+# The dev scripts' folder shares the name; its new files are source.
+!apps/api/scripts/dev/
 
 # Impeccable build-review scratch (screenshots), not source
 # Screenshots dropped in the web root by a test run; real images live under assets/.

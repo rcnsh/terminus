@@ -175,6 +175,9 @@ importers:
       oxlint:
         specifier: 1.89.0
         version: 1.89.0
+      playwright:
+        specifier: 1.63.0
+        version: 1.63.0
 
   apps/api:
     dependencies:
@@ -1462,6 +1465,16 @@ packages:
     resolution: {integrity: sha512-0Z++uU8mvB0EvCPAEUq9BGiPcSravzJ+RPdXfjYlzXffqsogisiKRQqI6ctrSSJ6n985vxrgKtQ5n4sRINcJZg==}
     engines: {node: '>=18.0.0'}
 
+  playwright-core@1.63.0:
+    resolution: {integrity: sha512-rYCsBF/M5HjUch52bbtVONEFjv6Xu8sm8h72dNlR5bzIE1fvC/bxgspzkjSfU+MweEMmPM8KJebG6nnyxo5mCg==}
+    engines: {node: '>=20'}
+    hasBin: true
+
+  playwright@1.63.0:
+    resolution: {integrity: sha512-+7ziBLidS4NaNCdt57SUDT+wYmmd5fmiQejUic/kb+YsYSCPyOOE9sebzMjNmQrsnNpDJqd4WHvV/8lfKfUDUg==}
+    engines: {node: '>=20'}
+    hasBin: true
+
   prettier@3.9.9:
     resolution: {integrity: sha512-Z/CJHIkdujO/OtN7nXUii0Rf3VT5SRuhjBA82Xvu2XhBUgX3nhP67T0LHceBdQLex7OOFGTox+Q5Yg8Jk2Qivg==}
     engines: {node: '>=14'}
@@ -2592,6 +2605,12 @@ snapshots:
   picocolors@1.1.1: {}
 
   picospinner@3.1.2: {}
+
+  playwright-core@1.63.0: {}
+
+  playwright@1.63.0:
+    dependencies:
+      playwright-core: 1.63.0
 
   prettier@3.9.9: {}
 

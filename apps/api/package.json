@@ -7,7 +7,7 @@
     "node": ">=22.18"
   },
   "scripts": {
-    "test": "node --test test/*.test.js test/worker.smoke.js",
+    "test": "node --max-old-space-size=2048 --test --test-timeout=120000 test/*.test.js test/worker.smoke.js",
     "typecheck": "tsc --noEmit",
     "dev": "cf dev",
     "deploy": "node scripts/deploy/predeploy.mjs && cf d1 migrations apply 27067356-8691-458f-bc69-fa5ca5bbc374 && cf deploy",

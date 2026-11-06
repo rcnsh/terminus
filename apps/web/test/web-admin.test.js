@@ -107,7 +107,6 @@ test('the dashboard: a failed first load can be tried again, and Lock wins over 
   await settle();
   asked[2].answer(200, STATS);
   await settle();
-  // A boolean: a failing assert would print happy-dom's whole element graph.
   assert.equal(Boolean(button('Lock')), false, 'still locked');
   assert.equal(sessionStorage.getItem('terminus-operator-token'), null);
 });
@@ -128,7 +127,6 @@ test('the timelapse token opens the Timelapse alone: no stats asked for, no othe
   const root = document.getElementById('admin');
   t.after(() => render(null, root));
   await settle();
-  // Booleans and strings only: a failing assert on an element prints happy-dom's whole graph.
   const box = () => root.querySelector('#timelapse-token');
   assert.equal(Boolean(box()), true, "the timelapse token's form, on the timelapse's address");
   assert.equal(Boolean(box().closest('details')?.open), true, 'and open there');
