@@ -166,19 +166,51 @@ test('the Trip object wakes when the phase changes and nudges the phone, once pe
   assert.equal(fcm.oauth, 1, 'the access token is reused');
 });
 
-test('a step made while the Trip object wakes is kept: the wake does not save the plan it worked out before it', async () => {
-  // The feed answers the wake only when the test lets it, so a step can land mid-wake.
+/**
+ * A feed that answers only when the test lets it, so a POST can land while a
+ * request or a wake waits for it. `asked()` fails fast when nothing asks the
+ * feed, rather than hanging the test.
+ */
+function heldFeed() {
   let hold = null;
+  let release = () => {};
   let reached = () => {};
-  const held = new Promise((r) => (reached = r));
+  let reachedP = null;
   const wrap = (f) => async (input, init) => {
     if (hold && String(typeof input === 'string' ? input : input.url).includes('bus-proxy')) {
+      const h = hold;
       reached();
-      await hold;
+      await h;
     }
     return f(input, init);
   };
-  const { call, phone, next, TRIPS, clock } = await setup({ wrap });
+  return {
+    wrap,
+    hold() {
+      hold = new Promise((r) => (release = r));
+      reachedP = new Promise((r) => (reached = r));
+    },
+    release() {
+      hold = null;
+      release();
+    },
+    async asked(who) {
+      let timer;
+      const late = new Promise(
+        (_, no) => (timer = setTimeout(() => no(new assert.AssertionError({ message: `${who} never asked the feed` })), 2000)),
+      );
+      try {
+        await Promise.race([reachedP, late]);
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+  };
+}
+
+test('a step made while the Trip object wakes is kept: the wake does not save the plan it worked out before it', async () => {
+  const feed = heldFeed();
+  const { call, phone, next, TRIPS, clock } = await setup({ wrap: feed.wrap });
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
   const first = await next(phone);
   assert.equal(first.card.phase, 'idle', 'no plan yet: the wake at time to go saves one');
@@ -190,10 +222,9 @@ test('a step made while the Trip object wakes is kept: the wake does not save th
   // Woken two minutes before the leave-by: time to go, and the plan is saved.
   clock(Date.parse(first.leave.at) - 2 * 60_000);
   storage().set('wakeAt', Date.now());
-  let release = () => {};
-  hold = new Promise((r) => (release = r));
+  feed.hold();
   const woke = TRIPS.fireAlarms();
-  await held;
+  await feed.asked('the wake');
   // "Later bus" on another device while the wake waits for the feed.
   const res = await TRIPS.get([...TRIPS.instances.keys()][0]).fetch('https://trip/update', {
     method: 'POST',
@@ -201,7 +232,7 @@ test('a step made while the Trip object wakes is kept: the wake does not save th
   });
   assert.equal(res.status, 200);
   assert.equal(storage().get('day').plans?.[key], undefined, 'the step drops the old plan');
-  release();
+  feed.release();
   await woke;
 
   const day = storage().get('day');
