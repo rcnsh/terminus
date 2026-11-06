@@ -152,6 +152,23 @@ error and the share over 5 minutes off, overall and by horizon, then the
 feed's misses by cause and by horizon. Errors are the actual arrival minus the
 time given: positive is the bus coming later.
 
+"Is it better than the feed?" (`pairedTest`) compares the checked feed and
+the blend with the feed on the same questions, over the days together:
+the change in MAE, in p90 and in **early** buses (the share that came over
+`EARLY_BY_S`, 60 s, sooner than said, so someone who trusted the time
+missed it), each with a 95% interval from resampling whole days. A day has
+a few dozen questions at a horizon, too few to judge on its own, and a bad
+day's questions go wrong together, so whole days are resampled rather than
+questions. **Better** is MAE's interval below zero with neither p90 nor
+early shown to be worse; **worse**, any of the three shown to be worse.
+With fewer than `PAIRED_MIN_DAYS` (7) days there is no interval to trust
+(resampling one day draws that day every time), so the verdict is **too
+few days**. MAE alone counts a bus that came early the same as one that
+came late, and only the first costs anyone their bus. A day of at least 20
+questions on which the feed was over 5 minutes off on more than 20% of
+them (an outage, times stuck) is an **incident**: the test runs with and
+without those days, and a table lists every day.
+
 What counts as the actual arrival (`actualFor`): the first arrival of that
 plate (for a board without plates, any of the service's buses) from the
 moment of asking to 30 minutes after the time said. A bus said to be about
@@ -260,9 +277,11 @@ week in, and judge after about four weeks.
 
 ## Before it answers anyone
 
-- Read the shadow days (`eta/model/*.json`, or the dashboard's Arrival
-  model section, which reads them): the blend should beat the
-  feed's MAE and p90 at every horizon, on most days, not just on average.
+- Run the backtest walked forward over the shadow's days: the method to
+  serve should be **better** in "Is it better than the feed?" at every
+  horizon, without the incident days, and no worse with them. The shadow
+  days (`eta/model/*.json`, or the dashboard's Arrival model section) show
+  each day, but a day is too few questions to decide on.
 - Then it can answer behind a switch, for the `live` times only: a
   `scheduled` time stays a guess, labelled so.
 - What it can't see: a bus about to leave service, a breakdown, a detour,

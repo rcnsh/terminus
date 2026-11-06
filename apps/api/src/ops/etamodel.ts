@@ -932,3 +932,102 @@ export function scoreCases(cases: Case[]): {
     misses: missesOf(full),
   };
 }
+
+/**
+ * A bus that came this much sooner than said: someone who trusted the time
+ * reached the stop after it had gone. Worse than the same error the other
+ * way, which only costs a wait, so it is scored on its own (earlyShare).
+ */
+export const EARLY_BY_S = 60;
+
+/** The share of answers the bus beat by more than EARLY_BY_S; errors are actual minus said. */
+export function earlyShare(errs: number[]): number | null {
+  if (!errs.length) return null;
+  return errs.filter((e) => e < -EARLY_BY_S).length / errs.length;
+}
+
+/**
+ * Fewer days than this give no interval: resampling one day draws that day
+ * every time, and three days have only ten ways to be drawn, so the
+ * interval would be far narrower than the truth. A week of days.
+ */
+export const PAIRED_MIN_DAYS = 7;
+
+/** A method's figure less the feed's on the same questions, with its 95% interval (negative: the method is better); no interval below PAIRED_MIN_DAYS. */
+export interface Paired {
+  diff: number;
+  lo: number | null;
+  hi: number | null;
+}
+
+/** pairedTest's answer: the questions and days it used, each figure's change, and the verdict. */
+export interface PairedTest {
+  n: number;
+  days: number;
+  mae: Paired;
+  p90: Paired;
+  early: Paired;
+  verdict: 'better' | 'worse' | 'unclear' | 'too few days';
+}
+
+/**
+ * Whether [method] beats the feed on [cases], over the days together rather
+ * than day by day: a day has too few questions at a horizon to tell a real
+ * gain from luck. The interval comes from resampling whole days (a bad day's
+ * questions go wrong together, so resampling single questions would claim
+ * too much), with a fixed seed, so the same cases give the same answer.
+ *
+ * Better: MAE's interval below zero, and neither p90 nor the share of early
+ * buses shown to be worse. Worse: any of the three shown to be worse.
+ * Otherwise unclear; and with fewer than PAIRED_MIN_DAYS days, too few days
+ * to say. Cases without both answers are left out.
+ */
+export function pairedTest(
+  cases: Case[],
+  dayOf: (c: Case) => string,
+  method: Method,
+  opts: { rounds?: number; seed?: number } = {},
+): PairedTest | null {
+  const byDay = new Map<string, { m: number[]; f: number[] }>();
+  for (const c of cases) {
+    const m = c.answers[method];
+    const f = c.answers.feed;
+    if (m === null || f === null) continue;
+    const d = byDay.get(dayOf(c)) ?? { m: [], f: [] };
+    d.m.push(c.actualS - m);
+    d.f.push(c.actualS - f);
+    byDay.set(dayOf(c), d);
+  }
+  const days = [...byDay.keys()].sort().map((k) => byDay.get(k)!);
+  if (!days.length) return null;
+  const n = days.reduce((t, d) => t + d.m.length, 0);
+  const r = (x: number) => Math.round(x * 1000) / 1000;
+  const figures = (picked: { m: number[]; f: number[] }[]) => {
+    const m = picked.flatMap((d) => d.m);
+    const f = picked.flatMap((d) => d.f);
+    const mae = (xs: number[]) => xs.reduce((t, x) => t + Math.abs(x), 0) / xs.length;
+    return [mae(m) - mae(f), quantile(m.map(Math.abs), 0.9) - quantile(f.map(Math.abs), 0.9), earlyShare(m)! - earlyShare(f)!];
+  };
+  const point = figures(days);
+  if (days.length < PAIRED_MIN_DAYS) {
+    const [mae, p90, early] = point.map((diff) => ({ diff: r(diff), lo: null, hi: null }));
+    return { n, days: days.length, mae, p90, early, verdict: 'too few days' };
+  }
+  // mulberry32: small, seeded, and the same in every runtime.
+  let s = (opts.seed ?? 1) >>> 0;
+  const random = () => {
+    s = (s + 0x6d2b79f5) >>> 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296;
+  };
+  const draws: number[][] = [[], [], []];
+  for (let round = 0; round < (opts.rounds ?? 2000); round++) {
+    const picked = days.map(() => days[Math.floor(random() * days.length)]);
+    figures(picked).forEach((x, i) => draws[i].push(x));
+  }
+  const [mae, p90, early] = point.map((diff, i) => ({ diff: r(diff), lo: r(quantile(draws[i], 0.025)), hi: r(quantile(draws[i], 0.975)) }));
+  const worse = [mae, p90, early].some((x) => x.lo > 0);
+  return { n, days: days.length, mae, p90, early, verdict: worse ? 'worse' : mae.hi < 0 ? 'better' : 'unclear' };
+}

@@ -14,6 +14,7 @@ import {
   biasS,
   buildTable,
   earlyS,
+  earlyShare,
   busStates,
   casesOf,
   causeOf,
@@ -24,6 +25,7 @@ import {
   historyFor,
   horizonOf,
   passingIndex,
+  pairedTest,
   passingsFromReadings,
   predictS,
   quantile,
@@ -524,4 +526,92 @@ test("the feed's misses by cause: how many, and every method's error on them", (
   assert.equal(scored.misses.wentBy.err.feed, 320);
   assert.equal(scored.misses.other.n, 0, '20 s late: not a miss');
   assert.equal(scored.overall.feed.miss, 0.5);
+});
+
+/** A scored question: the bus came at [actualS]; the feed said [feedS], the blend [blendS]. */
+const asked = (day, actualS, feedS, blendS) => ({
+  day,
+  svc: 'L',
+  stop: 'B',
+  t: 0,
+  feedS,
+  actualS,
+  answers: { feed: feedS, blend: blendS },
+});
+const dayOfAsked = (c) => c.day;
+const days = (n, perDay, f) => Array.from({ length: n }, (_, d) => Array.from({ length: perDay }, (_, i) => f(`d${d}`, i))).flat();
+
+test('early buses: the share an answer said too late, by over a minute', () => {
+  assert.equal(earlyShare([]), null);
+  assert.equal(earlyShare([-61, -60, 0, 300]), 0.25, "a minute sooner is the feed's rounding; over it, a missed bus");
+});
+
+test('the paired test: a method as good as the feed is unclear, one better every day is better', () => {
+  const same = pairedTest(
+    days(10, 20, (d, i) => asked(d, 200 + i * 7, 180, 180)),
+    dayOfAsked,
+    'blend',
+  );
+  assert.deepEqual(same.mae, { diff: 0, lo: 0, hi: 0 });
+  assert.equal(same.verdict, 'unclear');
+  assert.equal(same.n, 200);
+  assert.equal(same.days, 10);
+
+  // The feed 60 s off (the bus later), the blend 20 s off, on every day.
+  const better = pairedTest(
+    days(10, 20, (d, i) => asked(d, 240 + (i % 3), 180, 220)),
+    dayOfAsked,
+    'blend',
+  );
+  assert.equal(better.verdict, 'better');
+  assert.ok(better.mae.hi < 0 && Math.abs(better.mae.diff + 40) < 1, JSON.stringify(better.mae));
+  assert.deepEqual(better.early, { diff: 0, lo: 0, hi: 0 });
+});
+
+test('the paired test: a method that cuts MAE by saying times too late, so buses come early, is worse', () => {
+  // The feed exact; the blend says 90 s later than the bus comes on a third of questions.
+  const t = pairedTest(
+    days(10, 30, (d, i) => asked(d, 300, 300, i % 3 ? 300 : 390)),
+    dayOfAsked,
+    'blend',
+  );
+  assert.ok(t.early.lo > 0, JSON.stringify(t.early));
+  assert.equal(t.verdict, 'worse');
+});
+
+test('the paired test: a gain on one day of ten is not a gain', () => {
+  // Nine days the same; one day the blend fixes a big feed error.
+  const t = pairedTest(
+    days(10, 20, (d, i) => (d === 'd3' ? asked(d, 900, 300, 880) : asked(d, 200 + i, 190, 190))),
+    dayOfAsked,
+    'blend',
+  );
+  assert.ok(t.mae.diff < 0, 'on average it gains');
+  assert.ok(t.mae.hi >= 0, `but not shown to: ${JSON.stringify(t.mae)}`);
+  assert.equal(t.verdict, 'unclear');
+});
+
+test('the paired test: under a week of days there is no interval to trust, so no verdict', () => {
+  // One day: resampling it draws the same day every time, a zero-width interval.
+  const one = pairedTest([asked('d0', 100, 90, 91), asked('d0', 100, 100, 100)], dayOfAsked, 'blend');
+  assert.equal(one.verdict, 'too few days');
+  assert.deepEqual(one.mae, { diff: -0.5, lo: null, hi: null });
+  const six = pairedTest(
+    days(6, 20, (d, i) => asked(d, 240 + (i % 3), 180, 220)),
+    dayOfAsked,
+    'blend',
+  );
+  assert.equal(six.verdict, 'too few days', 'a clear gain, but six days');
+  assert.equal(six.days, 6);
+});
+
+test('the paired test is the same every run, and leaves out questions without both answers', () => {
+  const cs = days(8, 15, (d, i) => asked(d, 200 + ((i * 37) % 90), 200, 200 + ((i * 11) % 40)));
+  assert.notEqual(pairedTest(cs, dayOfAsked, 'blend').mae.lo, null, 'eight days get an interval');
+  assert.deepEqual(pairedTest(cs, dayOfAsked, 'blend'), pairedTest(cs, dayOfAsked, 'blend'));
+  const gap = [...cs, { ...asked('d0', 100, 100, null) }];
+  assert.equal(pairedTest(gap, dayOfAsked, 'blend').n, cs.length);
+  const noFeed = [...cs, { ...asked('d0', 100, null, 100) }];
+  assert.equal(pairedTest(noFeed, dayOfAsked, 'blend').n, cs.length, "nor without the feed's");
+  assert.equal(pairedTest([], dayOfAsked, 'blend'), null);
 });
