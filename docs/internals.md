@@ -2587,6 +2587,8 @@ src/feeds/feedwatch.ts     The beta's feed checks, from the breakers its own tra
 src/feeds/appversion.ts    Finding the new uNivUS version when NUS refuses the old one
 
 src/answer/resolve.ts      Haversine, directional pairing, downstream reachability, scoring
+src/answer/departures.ts   A service's buses from a stop: feed rows, berths, live times, estimates
+src/answer/hours.ts        Operating hours and day kinds; the headway by the hour (headwayFor)
 src/answer/transfer.ts     Changing buses: which change stops to fetch, the two-bus trip
 src/answer/via.ts          The places a bus passes, by names a new student knows (hand-kept)
 src/answer/format.ts       label/detail strings, the degrade ladder

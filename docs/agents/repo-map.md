@@ -33,7 +33,9 @@ apps/api/
     plan.ts, leave.ts Which bus a trip is about; when to set off
     trip.ts           Today's trip signals and the day's state
     resolve.ts        Stop + bus choice: haversine, directional pairing, scoring
-    departures.ts     A service's buses from a stop: live times, then estimates a headway apart
+    departures.ts     A service's buses from a stop: its feed rows and berths, live times, then
+                      estimates a headway apart
+    hours.ts          When a service runs (operating hours, day kinds) and its headway by the hour
     transfer.ts       A trip that changes buses once (TRANSFER in config)
     walk.ts           Walking times along campus paths (walks.json)
     graph.ts          The stop graph: stops.json with hand-kept hours and opposites; GRAPH_PUBLIC

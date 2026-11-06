@@ -20,7 +20,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { passingsOf } from '../../src/ops/eta.ts';
-import { dayKindOf } from '../../src/answer/resolve.ts';
+import { dayKindOf } from '../../src/answer/hours.ts';
 import { termDay } from '../../src/timetable/calendar.ts';
 import { sgt } from '../../src/config.ts';
 

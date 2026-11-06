@@ -30,7 +30,7 @@ import {
 import { getBuses } from '../src/feeds/fms.ts';
 import { alongNear, pointAlong } from '../src/map/buses.ts';
 import { shapeFor } from '../src/map/campus.ts';
-import { inService } from '../src/answer/resolve.ts';
+import { inService } from '../src/answer/hours.ts';
 import { GRAPH } from '../src/answer/graph.ts';
 import { BUNDLED } from '../src/timetable/calendar.ts';
 import { CALENDAR_DATA_KEY, resetCalendar } from '../src/timetable/calendarsync.ts';

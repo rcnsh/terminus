@@ -7,7 +7,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { GRAPH } from '../src/answer/graph.ts';
-import { candidateStops, dayKindOf, headwayFor } from '../src/answer/resolve.ts';
+import { candidateStops } from '../src/answer/resolve.ts';
+import { dayKindOf, headwayFor } from '../src/answer/hours.ts';
 import { departures, leaveBy } from '../src/answer/leave.ts';
 import { departuresFrom } from '../src/answer/departures.ts';
 import { residenceAt } from '../src/answer/residences.ts';

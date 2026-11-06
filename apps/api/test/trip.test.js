@@ -24,7 +24,8 @@ import {
 } from '../src/answer/trip.ts';
 import { Trip } from '../src/push/tripdo.ts';
 import { GRAPH } from '../src/answer/graph.ts';
-import { indexGraph, rideStops, serviceEndsAt } from '../src/answer/resolve.ts';
+import { indexGraph, rideStops } from '../src/answer/resolve.ts';
+import { serviceEndsAt } from '../src/answer/hours.ts';
 import { clockAt } from '../src/clock.ts';
 import { onRide, onRideQuery, rideLength } from './_ride.mjs';
 import { withoutMeasuredHeadways } from './_headways.mjs';

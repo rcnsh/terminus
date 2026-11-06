@@ -371,7 +371,7 @@ export interface ServiceHours {
   sunday?: DayWindow;
 }
 
-/** The kind of day a timetable runs on: Sunday hours on public holidays too (resolve.ts dayKindOf). */
+/** The kind of day a timetable runs on: Sunday hours on public holidays too (hours.ts dayKindOf). */
 export type DayKind = 'weekday' | 'saturday' | 'sunday';
 
 /**

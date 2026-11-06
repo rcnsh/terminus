@@ -7,17 +7,8 @@
  * measured, by the hour" and "Operating hours bound every guess".
  */
 
-import type { Arrival, Graph, StopArrivals } from '../types.ts';
-import {
-  beforeOpening,
-  feedFor,
-  headwayFor,
-  inService,
-  resolveBerths,
-  serviceClosedAt,
-  serviceEndsAt,
-  serviceResumesAt,
-} from './resolve.ts';
+import type { Arrival, FeedState, Graph, StopArrivals } from '../types.ts';
+import { headwayFor, inService, serviceClosedAt, serviceEndsAt, serviceResumesAt } from './hours.ts';
 import { isPublic } from './public.ts';
 
 /** How far ahead of now a bus is looked for: past a day it's no bus, whatever the hours say (or don't). */
@@ -60,6 +51,66 @@ export interface DepartureWindow {
   around?: number;
   /** No more buses than this. */
   max?: number;
+}
+
+/**
+ * How close to its time a feed time for a service that hasn't opened yet is
+ * believed. Outside its hours NUS's feed still lists times hours ahead that
+ * don't match the published start (an A2 at 09:16, when its hours start at
+ * 07:15); this close, it is the first buses getting ready.
+ */
+export const FIRST_BUS_LEAD_S = 30 * 60;
+
+/**
+ * `svc`'s feed times as they can be believed (times from `fetchedAt`).
+ * Outside its hours, a time at or after the service next opens is no bus on
+ * the road: dropped, or kept as a timetable time when it is within
+ * FIRST_BUS_LEAD_S of now. A time before the opening is a bus still out from
+ * the day that just ended, and stays as it is.
+ */
+export function beforeOpening(graph: Graph, svc: string, rows: Arrival[], fetchedAt: number, nowMs: number): Arrival[] {
+  if (!rows.length || inService(graph, svc, nowMs)) return rows;
+  const opens = serviceResumesAt(graph, svc, nowMs);
+  if (opens === null) return rows;
+  const out: Arrival[] = [];
+  for (const a of rows) {
+    const at = a.etaS == null ? null : fetchedAt + a.etaS * 1000;
+    if (at === null || at < opens) out.push(a);
+    else if (at - nowMs <= FIRST_BUS_LEAD_S * 1000) out.push({ ...a, scheduled: true });
+  }
+  return out;
+}
+
+/**
+ * Pick the boardable rows when one service reports under several berths.
+ *
+ * Returns everything unchanged for the ordinary single-berth stop. When the
+ * suffix cannot tell the berths apart, says so instead of guessing: that is
+ * the one case where the earliest ETA might be a bus going the wrong way.
+ */
+export function resolveBerths(rows: Arrival[]): { usable: Arrival[]; ambiguousBerth: boolean } {
+  // Drop the run that TERMINATES here rather than preferring the one marked
+  // -S: route P starts at a bare `KV` and ends at `KV-P-E`, so a start suffix
+  // is not guaranteed but an end suffix is what makes a row unboardable.
+  const notEnding = rows.filter((a) => !a.ends);
+
+  // Every run terminates here and none departs. Show them, but do not pretend
+  // to be confident about a bus that ends its journey as you reach it.
+  if (!notEnding.length) return { usable: rows, ambiguousBerth: rows.length > 0 };
+
+  const distinct = new Set(notEnding.map((a) => a.berth).filter((b) => b != null));
+  return { usable: notEnding, ambiguousBerth: distinct.size > 1 };
+}
+
+/**
+ * The state of the feed a service's arrivals came from. A shelter both the
+ * shuttle and public buses call at was asked of two feeds, and one can be
+ * down or stale while the other answers; a stop asked of one feed is that
+ * feed's state. Undefined when the stop was never asked.
+ */
+export function feedFor(sa: StopArrivals | undefined, pub: boolean): FeedState | undefined {
+  if (!sa) return undefined;
+  return sa.feeds?.[pub ? 'public' : 'shuttle'] ?? sa;
 }
 
 interface LiveBus {
