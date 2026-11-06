@@ -138,3 +138,72 @@ test('undo forgets the record and the outcome; a trip home records none', async 
   assert.equal((await applySignal('arrived', KEY, planned(), null, PROFILE, NOW, lookup)).outcome, 'arrived');
   assert.deepEqual(asked, [], 'only "On it" reads the feed');
 });
+
+/** K from PGP to Kent Vale, then P on to UTown: the second bus as a leave-by's change. */
+const TO_KV = { svc: 'P', from: 'Kent Vale', fromCode: 'KV', stop: 'Kent Vale', stopCode: 'KV', rideS: 600, estimated: false };
+
+test('"On it" on a trip that changes buses moves the second bus by how late the first is', async () => {
+  const two = planned({
+    leave: { ...leave, svc: 'K', arrive: iso(30), change: { ...TO_KV, reach: iso(12), board: iso(15) } },
+  });
+  // The K pulling in 6 minutes after the plan's: at Kent Vale at 18, after the planned P at 15.
+  const { asked, lookup } = plates({ plate: 'PA1234A', at: iso(10) });
+  const { rec, outcome } = await applySignal('boarded', KEY, two, null, PROFILE, NOW, lookup);
+  assert.deepEqual(asked, [{ stopCode: 'PGP', svc: 'K', graph: GRAPH }]);
+  assert.equal(outcome, 'boarded');
+  assert.deepEqual(rec.boarded, {
+    svc: 'K',
+    stop: 'Prince George’s Park',
+    board: iso(10),
+    arrive: iso(18),
+    stopCode: 'PGP',
+    alightCode: 'KV',
+    plate: 'PA1234A',
+    change: {
+      svc: 'P',
+      stop: 'Kent Vale',
+      board: iso(18),
+      arrive: iso(33),
+      stopCode: 'KV',
+      rideS: 600,
+      alightCode: 'UTOWN',
+      estimated: true,
+    },
+  });
+});
+
+test('after the planned bus of a trip that changes buses has left, "On it" is about that plan, both buses', async () => {
+  const plan = {
+    svc: 'K',
+    stop: 'Prince George’s Park',
+    board: iso(0.5),
+    arrive: iso(9),
+    leave: iso(-3),
+    stopCode: 'PGP',
+    alightCode: 'KV',
+    change: { svc: 'P', stop: 'Kent Vale', board: iso(12), arrive: iso(25), stopCode: 'KV', rideS: 600, alightCode: 'UTOWN' },
+  };
+  // The answer has moved on to the next D2; the K that pulls in is 3½ minutes after the plan's.
+  const { asked, lookup } = plates({ plate: 'PA1234A', at: iso(4) });
+  const { rec } = await applySignal('boarded', KEY, planned({}, { plan }), null, PROFILE, NOW, lookup);
+  assert.deepEqual(asked, [{ stopCode: 'PGP', svc: 'K', graph: GRAPH }]);
+  assert.deepEqual(rec.boarded, {
+    svc: 'K',
+    stop: 'Prince George’s Park',
+    board: iso(4),
+    arrive: iso(12.5),
+    stopCode: 'PGP',
+    alightCode: 'KV',
+    plate: 'PA1234A',
+    change: {
+      svc: 'P',
+      stop: 'Kent Vale',
+      board: iso(12.5),
+      arrive: iso(25.5),
+      stopCode: 'KV',
+      rideS: 600,
+      alightCode: 'UTOWN',
+      estimated: true,
+    },
+  });
+});
