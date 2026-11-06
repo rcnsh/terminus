@@ -1,8 +1,8 @@
 /**
  * The Analytics Engine row layout (src/analytics-rows.ts). Rows already
- * written can't be rewritten, so every kind's raw positions are pinned
- * here as they were written before the layout was declared, and the
- * queries that read them are pinned byte for byte.
+ * written can't be rewritten, so the raw rows each kind writes are pinned
+ * here position by position, and the queries that read them byte for
+ * byte.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -52,7 +52,7 @@ const answer = {
   ],
 };
 
-/** Every kind written by its real logger, and the data point it wrote before ROWS existed. */
+/** Every kind written by its real logger, as the raw data points it writes. */
 async function written() {
   const ae = makeAnalytics();
   const kv = makeKV();
@@ -90,7 +90,7 @@ async function written() {
   return ae.events;
 }
 
-const BEFORE = [
+const RAW = [
   {
     blobs: ['answer', 'COM3', 'D2', 'UTOWN', 'live', '', 'high', '', 'COM3-S', 'UTOWN', 'D1'],
     doubles: [0, 240, 480, 1500, 4, 90, 0.9, 1, 1, 1200, 240],
@@ -129,7 +129,7 @@ const BEFORE = [
 test('every kind is written at the positions it always was', async () => {
   const rows = await written();
   // The board's fetchedAt is in the future so its lag is 0: the time is the feed's own.
-  assert.deepEqual(rows, BEFORE);
+  assert.deepEqual(rows, RAW);
   assert.deepEqual(new Set(rows.map((r) => r.blobs[0])), new Set(Object.keys(ROWS)), 'one row of every declared kind');
 });
 

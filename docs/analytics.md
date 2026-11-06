@@ -6,10 +6,13 @@ Dataset: `terminus` (the beta's is `terminus_beta`). Analytics Engine
 names columns only by position (`blob1`..`blob20`, `double1`..`double20`),
 and `blob1` is always the row's kind. Which field each kind keeps where is
 declared once, in `ROWS` in `src/analytics-rows.ts`: the Worker writes and
-reads the rows through it, so read a column's number there. The layout is
-frozen, since rows already written can't be rewritten (they are kept about
-three months): a new field only takes a column nothing uses yet. Each kind
-has a section below (`analytics-rows.test.js` checks).
+reads the rows through it, so read a column's number there, with what it
+holds and its placeholder (-1 for unknown, '' for none) beside it. Kinds
+give `blob2` on and `double1` on their own meanings. Rows already written
+can't be rewritten (they are kept about three months), so existing
+positions never move: a new field takes a position unused within its own
+kind and by any kind read in the same query (`arrival` and `board`). Each
+kind has a section below (`analytics-rows.test.js` checks).
 
 The queries here have no time bound unless they say so, so they read all
 three months; add `AND timestamp > NOW() - INTERVAL '7' DAY` for less.
@@ -141,7 +144,10 @@ One row per error, counted on the dashboard's Answers page: `blob2` is the
 route of a request that failed unhandled (no query, `/api/me/devices/abc`
 as `/api/me/devices`), `cron <step>` for a cron step that failed, or `feed
 arrivals` / `feed buses` for a call to NUS that failed, with why in
-`blob3` (the same failure at most once in 10 minutes per stop or service).
+`blob3`. A feed failure is written at most once in 10 minutes per feed,
+stop or service and reason, remembered in memory by each Worker isolate
+(so each isolate writes its own), and the memory is cleared once it holds
+more than 500.
 
 ```sql
 SELECT blob2 AS route, blob3 AS reason, SUM(_sample_interval) AS n
@@ -343,9 +349,10 @@ with none in 90 days is one no paired device still runs.
 
 ## What the rows hold about people
 
-None holds an account, email, IP address or coordinates, and none is
-indexed by person. An `apikey` row holds a key's id, which the dashboard
-joins to its owner while the key exists. An `answer` or `arrival` row's stop is the one nearest
+No row holds an account id, email, IP address or coordinates. `apikey`
+rows are indexed by the key's id, and a key belongs to one account, which
+the operator's dashboard shows while the key exists; no other row is
+indexed by anything about a person. An `answer` or `arrival` row's stop is the one nearest
 the caller when the app sent a location, `double6` is the walk to it, and
 `blob4` is the destination (a class's venue, a place): together with the
 time, that is a rough idea of where someone was and where they were
