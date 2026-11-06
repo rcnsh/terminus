@@ -10,7 +10,7 @@ import { installGlobals, makeAnalytics, makeCtx, makeEnv, makeFetch, makeKV } fr
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
 import { answerFor, unlogged } from '../src/answer/answer.ts';
-import { tripCardFor } from '../src/accounts/me.ts';
+import { answerWake } from '../src/answer/rider.ts';
 import { GRAPH } from '../src/answer/graph.ts';
 
 const BASE = 'https://bus.example.test';
@@ -86,7 +86,7 @@ test("the Trip object's card is worked out without logging", async () => {
     collectArrivals: async () => new Map(),
   };
   const ctx = makeCtx();
-  const card = await tripCardFor(env, ctx, deps, userId, null, Date.now(), async () => {});
+  const card = await answerWake(env, ctx, deps, userId, null, Date.now(), { savePlan: async () => {} });
   await ctx.settle();
   assert.ok(card, 'a card for a day with classes');
   assert.ok(seen.length > 0);

@@ -22,7 +22,7 @@ import {
 } from '../src/answer/trip.ts';
 import { ASSUME_MS, DUE_MS, RIDE_GRACE_MS, WAIT_EARLY_MS } from '../src/answer/phase.ts';
 import { Trip } from '../src/push/tripdo.ts';
-import { tripCardFor } from '../src/accounts/me.ts';
+import { answerWake } from '../src/answer/rider.ts';
 import { answerFor, collectArrivals } from '../src/answer/answer.ts';
 import { GRAPH } from '../src/answer/graph.ts';
 import { indexGraph, rideStops } from '../src/answer/resolve.ts';
@@ -685,7 +685,9 @@ test('a trip home taken to be riding wakes the Trip object when its bus arrives,
   const arrive = Date.parse(plan.arrive);
   clock(arrive + 60_000);
 
-  const card = await tripCardFor(env, makeCtx(), { answerFor, collectArrivals }, userOf(env), await dayOf(), Date.now(), async () => {});
+  const card = await answerWake(env, makeCtx(), { answerFor, collectArrivals }, userOf(env), await dayOf(), Date.now(), {
+    savePlan: async () => {},
+  });
   assert.equal(card.key, key);
   assert.equal(card.phase, 'riding');
   assert.equal(card.answer.arriveAt, undefined, 'no later bus to guess with');
@@ -697,7 +699,7 @@ test('a trip home taken to be riding wakes the Trip object when its bus arrives,
 async function wakeCard(env, TRIPS) {
   const trip = TRIPS.get([...TRIPS.instances.keys()][0]);
   const day = await (await trip.fetch(`https://trip/day?date=${sgtDate(Date.now())}`)).json();
-  return tripCardFor(env, makeCtx(), { answerFor, collectArrivals }, userOf(env), day, Date.now(), async () => {});
+  return answerWake(env, makeCtx(), { answerFor, collectArrivals }, userOf(env), day, Date.now(), { savePlan: async () => {} });
 }
 
 test('heading for the bus, the Trip object next wakes when the bus is taken to have gone, not as it leaves', async () => {

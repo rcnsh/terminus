@@ -16,6 +16,9 @@ import { DUE_MS } from '../src/answer/phase.ts';
 import { remindUser } from '../src/push/push.ts';
 import { GRAPH } from '../src/answer/graph.ts';
 import { indexGraph } from '../src/answer/resolve.ts';
+import { answerRequest, loadRider } from '../src/answer/rider.ts';
+import { DAY_ASK } from '../src/answer/next.ts';
+import { answerFor, collectArrivals } from '../src/answer/answer.ts';
 import { withoutMeasuredHeadways } from './_headways.mjs';
 
 // How a headway guess is used, not how long it is: one guess for every shuttle.
@@ -140,6 +143,28 @@ test('a device registers its push token; the same token moves with the device', 
   assert.deepEqual(pushTokens(), [{ name: 'MacBook', push_token: 'fcm-1' }]);
   await call('/api/me/push', { method: 'DELETE', token: mac });
   assert.deepEqual(pushTokens(), []);
+});
+
+test("a request's answer nudges the rider's other devices, never the one that asked", async () => {
+  const { env, call, phone, mac, fcm } = await setup();
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  await call('/api/me/push', { method: 'POST', token: mac, body: { token: 'fcm-mac' } });
+  // On the bus: a phase worth pushing (an idle card is never pushed).
+  await call('/api/me/signal', { method: 'POST', token: phone, body: { kind: 'boarded' } });
+  const session = (name) => env.DB._db.prepare('SELECT user_id, token_hash FROM sessions WHERE name = ?').get(name);
+  const { user_id: userId, token_hash: phoneHash } = session('Pixel');
+  const answer = async (nudgeFrom) => {
+    fcm.sent.length = 0;
+    const ctx = makeCtx();
+    const rider = await loadRider(env, userId, Date.now());
+    const body = await answerRequest(env, ctx, { answerFor, collectArrivals }, rider, DAY_ASK, Date.now(), nudgeFrom);
+    await ctx.settle();
+    assert.equal(body.card.phase, 'riding');
+    return fcm.sent.map((m) => m.token);
+  };
+  assert.deepEqual(await answer(phoneHash), ['fcm-mac']);
+  assert.deepEqual(await answer(session('MacBook').token_hash), ['fcm-phone']);
+  assert.deepEqual(await answer(undefined), [], 'nobody is nudged unless asked');
 });
 
 test('the Trip object wakes when the phase changes and nudges the phone, once per change', async () => {

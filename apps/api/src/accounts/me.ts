@@ -6,7 +6,7 @@
 import { mailFeedback, parseFeedback, saveFeedback } from '../ops/feedback.ts';
 import { logNextTook, logSignal, logStep } from '../ops/analytics.ts';
 import { approvable, decide, enterCode, holdAppLogins, mergeAnonymous, pollAppLogin, startAppLogin } from './applogin.ts';
-import type { Answer, Env, Graph, GraphIndex, MeAnswer, ResolveInput, Stop, StopArrivals } from '../types.ts';
+import type { Answer, Env, Graph, GraphIndex, ResolveInput, Stop, StopArrivals } from '../types.ts';
 import {
   ACCOUNT_TTL,
   type SessionInfo,
@@ -56,16 +56,13 @@ import {
   parseProfile,
   reimportReason,
 } from '../timetable/profile.ts';
-import { type Ask, DAY_ASK, type Rider, askOf, hour12, nextFor, planned, resolveTo } from '../answer/next.ts';
+import { askOf, hour12, planned, resolveTo } from '../answer/next.ts';
+import { answerRequest, loadRider, nudgeOthers, prefsFor, requestAnswer, reword, tripDay } from '../answer/rider.ts';
 import { dayPlan } from '../timetable/day.ts';
-import { unlogged } from '../answer/answer.ts';
 import {
-  type Plan,
-  type DayRecord,
   PLATE_WINDOW_S,
   SIGNALS,
   type TripRecord,
-  type TripUpdate,
   clearTrip,
   laterChange,
   leaveOf,
@@ -75,21 +72,10 @@ import {
   sgtDate,
   updateTrip,
 } from '../answer/trip.ts';
-import { type AnswerIn, type Nudge, nudgeUser, pushEnabled, setLiveToken, setPushToken, setStartToken } from '../push/push.ts';
+import { setLiveToken, setPushToken, setStartToken } from '../push/push.ts';
 import { formatApnsToken, looksApns, parseApnsToken } from '../push/apns.ts';
 import { WEB_PREFIX, parseSubscription, vapidPublicKey, webPushEnabled } from '../push/webpush.ts';
-import {
-  NO_PREFS,
-  type PrefKind,
-  type TripPrefs,
-  clearHistory,
-  clearOutcome,
-  historySize,
-  listPrefs,
-  recordOutcome,
-  setPref,
-  tripPrefs,
-} from './outcomes.ts';
+import { NO_PREFS, type PrefKind, clearHistory, clearOutcome, historySize, listPrefs, recordOutcome, setPref } from './outcomes.ts';
 import { ImportInputError, parseShareUrl, resolveTrips } from '../timetable/nusmods.ts';
 import { termName } from '../timetable/calendar.ts';
 import { NEARBY_LATER, boardAsOf, boardAt, displayName, indexGraph, nearbyDest, nearbyRow } from '../answer/resolve.ts';
@@ -97,7 +83,6 @@ import { type ServiceBoard, departuresFrom } from '../answer/departures.ts';
 import { stopVia, viaText } from '../answer/via.ts';
 import { haversineM } from '../geo.ts';
 import { isoSeconds } from '../answer/format.ts';
-import type { Card } from '../answer/card.ts';
 import { termNoticeFor } from '../ops/monitor.ts';
 import { WALK, sgt } from '../config.ts';
 import { landmark } from '../answer/landmarks.ts';
@@ -108,7 +93,7 @@ import { buildingStops, footM, paceSpeed } from '../answer/walk.ts';
 import { clientKey, coords, coordsFrom, json } from '../http.ts';
 import { parseTarget } from '../answer/step.ts';
 import { linkOrigin } from '../origin.ts';
-import { LANG_PREFS, type Lang, type LangPref, lang, m, useProfileLang, withLang } from '../i18n.ts';
+import { LANG_PREFS, type Lang, type LangPref, lang, m, useProfileLang } from '../i18n.ts';
 import { ROUTE_COLORS } from '../map/campus.ts';
 
 export interface MeDeps {
@@ -643,7 +628,7 @@ export const ME_ROUTES: MeRoute[] = [
       });
       if (changed instanceof Response) return changed;
       const rider = await loadRider(env, session.user.id, nowMs, { profile: changed.profile });
-      return json(await nextBody(env, ctx, deps, rider, askOf(url), nowMs));
+      return json(await answerRequest(env, ctx, deps, rider, askOf(url), nowMs));
     },
   },
   {
@@ -765,7 +750,7 @@ export const ME_ROUTES: MeRoute[] = [
     path: '/api/me/next',
     run: async ({ url, env, ctx, nowMs, deps, db, session }) => {
       const profile = await getProfile(db, session.user.id, GRAPH, session.profileJson);
-      const body = await nextBody(env, ctx, deps, await loadRider(env, session.user.id, nowMs, { profile }), askOf(url), nowMs);
+      const body = await answerRequest(env, ctx, deps, await loadRider(env, session.user.id, nowMs, { profile }), askOf(url), nowMs);
       logNextTook(env, Date.now() - nowMs);
       return json(body);
     },
@@ -803,7 +788,7 @@ export const ME_ROUTES: MeRoute[] = [
       // Older Android apps send a location every 20 seconds or so during a
       // trip. It's answered like /api/me/next from there, and nothing is kept.
       if (kind === 'location') {
-        return json(await nextBody(env, ctx, deps, await loadRider(env, session.user.id, nowMs, { profile, day }), here, nowMs));
+        return json(await answerRequest(env, ctx, deps, await loadRider(env, session.user.id, nowMs, { profile, day }), here, nowMs));
       }
       if (kind === 'away' || kind === 'back') {
         // "Not on campus today" skips every trip left today (not the ones
@@ -821,26 +806,7 @@ export const ME_ROUTES: MeRoute[] = [
         const after = items.length ? await saveSignals(env, session.user.id, items, nowMs) : day;
         logSignal(env, kind);
         const rider = await loadRider(env, session.user.id, nowMs, { profile, day: after });
-        const { body: out, tripOver, shown } = await nextTrip(env, ctx, deps, rider, asked, nowMs);
-        const answerIn = rewordFor(env, ctx, deps, rider, asked, nowMs);
-        tapNudge(
-          env,
-          ctx,
-          session.user.id,
-          {
-            phase: out.card.phase,
-            urgent: false,
-            remind: out.card.remind !== false,
-            answer: out,
-            answerIn,
-            clockChosen: profile.clock !== 'auto',
-            tripOver,
-          },
-          nowMs,
-          session.tokenHash,
-          shown,
-        );
-        return json(out);
+        return json(await answerRequest(env, ctx, deps, rider, asked, nowMs, session.tokenHash));
       }
       const now = await planned(env, ctx, deps, { userId: session.user.id, profile, day, prefs: NO_PREFS }, here, nowMs);
       const key = typeof body?.trip === 'string' && body.trip ? body.trip.slice(0, 80) : now.trip.key;
@@ -939,29 +905,10 @@ export const ME_ROUTES: MeRoute[] = [
       // A trip home isn't a class: nothing to learn from skipping it.
       else if (outcome && !/^(gap-)?home:/.test(key)) await recordOutcome(db, session.user.id, key, outcome, nowMs);
       const rider = await loadRider(env, session.user.id, nowMs, { profile, day: next });
-      const { body: out, tripOver, shown } = await nextTrip(env, ctx, deps, rider, asked, nowMs);
       // A tap here changes the other phones' cards now, not at their next
       // refresh; an iPhone pushed in the other language gets the card in its
       // own, and one whose trip the tap ended has its Live Activity ended.
-      const answerIn = rewordFor(env, ctx, deps, rider, asked, nowMs);
-      tapNudge(
-        env,
-        ctx,
-        session.user.id,
-        {
-          phase: out.card.phase,
-          urgent: false,
-          remind: out.card.remind !== false,
-          answer: out,
-          answerIn,
-          clockChosen: profile.clock !== 'auto',
-          tripOver,
-        },
-        nowMs,
-        session.tokenHash,
-        shown,
-      );
-      return json(out);
+      return json(await answerRequest(env, ctx, deps, rider, asked, nowMs, session.tokenHash));
     },
   },
   {
@@ -992,10 +939,10 @@ export const ME_ROUTES: MeRoute[] = [
           ? { ...query, at, place: null, to: trip.slice(3) }
           : { ...query, at };
       const rider = await loadRider(env, session.user.id, nowMs, { profile, day: next });
-      const { body: out, shown } = await nextTrip(env, ctx, deps, rider, asked, nowMs);
       // The other devices' cards and the leave reminder follow now, not at their next refresh.
-      const answerIn = rewordFor(env, ctx, deps, rider, asked, nowMs);
-      tapNudge(
+      const { body: out, shown } = await requestAnswer(env, ctx, deps, rider, asked, nowMs);
+      const answerIn = reword(env, ctx, deps, rider, asked, nowMs);
+      nudgeOthers(
         env,
         ctx,
         session.user.id,
@@ -1566,143 +1513,6 @@ async function dayCached<T>(ctx: ExecutionContext, nowMs: number, inputs: unknow
   return fresh;
 }
 
-/** Today's trip signals, looked up only when there's a trip to track today. */
-async function tripDay(env: Env, userId: string, profile: Profile, nowMs: number): Promise<DayRecord | null> {
-  if (!env.TRIPS || !classesOn(profile, nowMs).length) return null;
-  return loadDay(env, userId, nowMs);
-}
-
-/**
- * Who a request plans for: the saved profile and today's trip signals, unless
- * the request has just changed them (then those), and their trip choices.
- */
-export async function loadRider(
-  env: Env,
-  userId: string,
-  nowMs: number,
-  given: { profile?: Profile; day?: DayRecord | null } = {},
-): Promise<Rider> {
-  const profile = given.profile ?? (await getProfile(env.DB!, userId, GRAPH));
-  const [day, prefs] = await Promise.all([
-    given.day !== undefined ? given.day : tripDay(env, userId, profile, nowMs),
-    prefsFor(env.DB!, userId, profile, nowMs),
-  ]);
-  return { userId, profile, day, prefs };
-}
-
-/** /api/me/next's body, with what it changes sent to the Trip object. */
-async function nextBody(env: Env, ctx: ExecutionContext, deps: MeDeps, rider: Rider, ask: Ask, nowMs: number) {
-  return (await nextTrip(env, ctx, deps, rider, ask, nowMs)).body;
-}
-
-/** nextBody, and whether the answer has no trip: a tap's push then ends the other iPhones' Live Activities. */
-async function nextTrip(env: Env, ctx: ExecutionContext, deps: MeDeps, rider: Rider, ask: Ask, nowMs: number) {
-  const { body, update, trip } = await nextFor(env, ctx, deps, rider, ask, nowMs);
-  if (update.items || update.plans || update.watch) {
-    // The answer doesn't wait for it; a failure loses the plan or a push, not the card.
-    ctx.waitUntil(
-      updateTrip(env, rider.userId, update, nowMs).then(
-        () => undefined,
-        (err: unknown) => console.error('trip state not saved', err instanceof Error ? err.message : typeof err),
-      ),
-    );
-  }
-  // A place or stop asked for has no trip key either, but the day's trip goes on.
-  const isPlan = !ask.place && !ask.to;
-  // The day's card, as the Trip object's wake works it out (tapNudge); a place's or a stop's isn't.
-  const shown: TripUpdate['pushed'] = isPlan
-    ? { key: trip.key, phase: body.card.phase, at: nowMs, ...(body.card.gone ? { gone: true } : {}) }
-    : undefined;
-  return { body, tripOver: trip.key === null && isPlan, shown };
-}
-
-/**
- * A tap's nudge to the user's other devices, noted in the Trip object as
- * pushed once a device has it (or none could be sent to), as a wake notes
- * its own: the wake after the tap (one the tap made stale is 30 s on) then
- * doesn't push the same card again. Not time to go or a missed bus: those
- * are the wake's to push loudly, starting a Live Activity, and a tap's
- * nudge is quiet. Never throws.
- */
-function tapNudge(
-  env: Env,
-  ctx: ExecutionContext,
-  userId: string,
-  nudge: Nudge,
-  nowMs: number,
-  exceptTokenHash: string,
-  shown: TripUpdate['pushed'],
-): void {
-  const note = shown && shown.phase !== 'due' && shown.phase !== 'missed' && pushEnabled(env) ? shown : undefined;
-  ctx.waitUntil(
-    nudgeUser(env, userId, nudge, nowMs, exceptTokenHash).then(async (out) => {
-      if (!note || (out.sent === 0 && out.failed > 0)) return;
-      await updateTrip(env, userId, { pushed: note }, nowMs).catch((err: unknown) =>
-        console.error('trip push not noted', err instanceof Error ? err.message : typeof err),
-      );
-    }),
-  );
-}
-
-/**
- * A tap's answer worded in another language or clock, for an iPhone pushed
- * in that one (push.ts asks only then): worked out as the request did, from
- * the same moment, so its arrivals come from the edge cache, and saving
- * nothing (no plan, no watch, not logged), as the request already has.
- */
-function rewordFor(env: Env, ctx: ExecutionContext, deps: MeDeps, rider: Rider, ask: Ask, nowMs: number): AnswerIn {
-  return (l, h12) => withLang(l, () => nextFor(env, ctx, unlogged(deps), rider, { ...ask, h12 }, nowMs)).then((r) => r.body);
-}
-
-/**
- * The card as a request would get it, for the Trip object when it wakes:
- * which trip, its phase, whether there's a question, when it next changes.
- * Of what the card changes, only the plan is kept (in the Trip object, by
- * `savePlan`): a wake neither ends a trip nor asks itself to watch.
- * Worded with 12-hour times or not (`h12`) unless the account chose.
- */
-export async function tripCardFor(
-  env: Env,
-  ctx: ExecutionContext,
-  deps: MeDeps,
-  userId: string,
-  day: DayRecord | null,
-  nowMs: number,
-  savePlan: (key: string, plan: Plan) => Promise<void>,
-  h12 = false,
-): Promise<{
-  key: string | null;
-  phase: string;
-  gone: boolean;
-  remind: boolean;
-  wakeAt: number | null;
-  /** The leave-by and how sure the answer is, for the wake's freshness log (tripdo.ts). */
-  leaveAt: number | null;
-  quality: string;
-  answer: MeAnswer & { card: Card };
-  /** The account chose 12- or 24-hour times. */
-  clockChosen: boolean;
-} | null> {
-  if (!env.DB) return null;
-  const profile = await getProfile(env.DB, userId, GRAPH);
-  if (!classesOn(profile, nowMs).length) return null;
-  const rider = await loadRider(env, userId, nowMs, { profile, day });
-  const { body, trip, update, wakeAt } = await nextFor(env, ctx, unlogged(deps), rider, { ...DAY_ASK, h12 }, nowMs);
-  // Only a request with a location drops a plan: never a wake.
-  for (const [key, plan] of Object.entries(update.plans ?? {})) if (plan) ctx.waitUntil(savePlan(key, plan));
-  return {
-    key: trip.key,
-    phase: body.card.phase,
-    gone: body.card.gone,
-    remind: body.card.remind !== false,
-    wakeAt,
-    leaveAt: body.leave?.at ? Date.parse(body.leave.at) : null,
-    quality: body.quality,
-    answer: body,
-    clockChosen: profile.clock !== 'auto',
-  };
-}
-
 const CHOICES = ['accept', 'dismiss', 'undo'] as const;
 
 /** The outcome a signal records; the others (a location, "waiting") say nothing about it. */
@@ -1713,20 +1523,6 @@ const OUTCOME_OF: Partial<Record<TripRecord['kind'], 'boarded' | 'missed' | 'ski
   skipped: 'skipped',
   arrived: 'arrived',
 };
-
-const outcomeFailed = (e: unknown) => console.error('trip outcome not saved', e instanceof Error ? e.message : typeof e);
-
-/** The user's trip choices and what terminus has learned, or none if D1 can't say. */
-async function prefsFor(db: D1Database, userId: string, profile: Profile, nowMs: number): Promise<TripPrefs> {
-  const all = [...profile.trips, ...profile.manual];
-  if (!all.length) return NO_PREFS;
-  try {
-    return await tripPrefs(db, userId, nowMs, (key) => all.find((t) => classKey(t) === key)?.label ?? null);
-  } catch (err) {
-    outcomeFailed(err);
-    return NO_PREFS;
-  }
-}
 
 /**
  * Whether the account page should walk someone through setup first: an
