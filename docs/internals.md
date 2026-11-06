@@ -1470,14 +1470,22 @@ cached or stale answer's bus is compared with a walk that starts now, and
 with another stop's fresher times, on one clock. A stale answer's `asOf`
 stays its fetch time. The card is made with the request's now too.
 
-**Operating hours bound every guess.** A headway guess, from the last bus the
-feed lists or from nothing, is dropped once it's after the service stops
-(`serviceEndsAt`), and the leave-by never projects a bus past it. For a class,
+**Operating hours bound every guess.** A headway guess stepped on from the
+last bus the feed lists is an instant, a headway after the bus before it,
+and is dropped once it's after the service stops (`serviceEndsAt`): that was
+the last bus. With no live time to step from, a guess is a bus due somewhere
+in a window a headway wide, from when you can be at the stop, and cut at the
+close, since a bus may still come before it. The card shows the window's
+middle (half a headway's wait) and the leave-by counts on its end (a whole
+headway), so the two read the same guess. For a class the windows end at
+the latest you can board, or meet at the close when the class is after it:
+the last bus before the close is a headway before it. For a class,
 a service that starts before the class is kept, its first bus a headway after
 it starts: at 06:30 the 08:00 class's bus is the D2 from 07:15, not
 "Services ended". The wait for it to start doesn't count against it when
 walking is weighed. With no live times and too late for the usual bus, the
-leave-by boards when you can reach the stop, never in the past.
+leave-by boards when you can be at the stop, and counts on a bus by the end
+of that headway, or by the close.
 
 **Headways are measured, by the hour.** The feed says nothing about a
 shuttle's headway, so `data/headways.json` holds the gaps the buses keep:

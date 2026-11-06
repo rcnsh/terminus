@@ -60,3 +60,30 @@ test('an estimate counts the headway at the bus before it: past an hour, the car
   });
   assert.equal(hhmmss(Date.parse(l.arrive) - rideS * 1000), '20:02:02');
 });
+
+test('with no live times, the card and the leave-by read one window: the card its middle, the leave-by its end, by the close', () => {
+  // D2 closes at 23:00 on a weekday and runs every 873 s at 22:00; the feed answered with nothing.
+  const now = at('2026-08-27T22:45');
+  const sa = board('PGP', now, 'D2', []);
+  const from = now + 80_000;
+  const [w] = departuresFrom(GRAPH, sa, 'D2', { now, from });
+  assert.deepEqual([hhmmss(w.earliest), hhmmss(w.latest)], ['22:46:20', '23:00:00'], 'a bus before the close, if any');
+
+  const s = scoreLeg(GRAPH, leg, sa, now, 80);
+  assert.equal(hhmmss(now + s.boardS * 1000), '22:53:10', 'the middle of what is left');
+
+  const rideS = 600;
+  const option = { svc: 'D2', stop: PGP, walkS: 60, rideS, boardS: s.boardS, totalS: 0, fromMs: now, quality: 'scheduled', hops: 5 };
+  const arriveBy = { atMs: at('2026-08-27T23:30'), venueWalkS: 0 };
+  const l = leaveBy({
+    options: [option],
+    candidates: [],
+    byStop: new Map([['PGP', sa]]),
+    graph: GRAPH,
+    arriveBy,
+    walkAllS: null,
+    nowMs: now,
+  });
+  assert.equal(hhmmss(Date.parse(l.board)), '22:46:20');
+  assert.equal(hhmmss(Date.parse(l.arrive) - rideS * 1000), '23:00:00', 'counted on the end, not a headway past the close');
+});

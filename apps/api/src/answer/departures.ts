@@ -8,7 +8,16 @@
  */
 
 import type { Arrival, Graph, StopArrivals } from '../types.ts';
-import { beforeOpening, feedFor, headwayFor, inService, resolveBerths, serviceResumesAt } from './resolve.ts';
+import {
+  beforeOpening,
+  feedFor,
+  headwayFor,
+  inService,
+  resolveBerths,
+  serviceClosedAt,
+  serviceEndsAt,
+  serviceResumesAt,
+} from './resolve.ts';
 import { isPublic } from './public.ts';
 
 /** How far ahead a bus is looked for: past a day it's no bus. */
@@ -19,7 +28,13 @@ export interface Departure {
   /** Which bus: the live bus's plate (or its place in the feed's list), or `<anchor>+n` for an estimate. */
   id: string;
   kind: 'live' | 'stale' | 'estimate';
-  /** When it leaves, epoch ms: the window it's due in. A time from the feed is one instant. */
+  /**
+   * When it leaves, epoch ms. A time from the feed is one instant, and so
+   * is an estimate stepped on from it, a headway after the bus before. An
+   * estimate with no bus before it to step from is a bus due somewhere in
+   * the window of a headway from when you can be at the stop (or the
+   * service starts): the card shows the middle, the leave-by counts on the end.
+   */
   earliest: number;
   latest: number;
   /** The feed's row, for a time from the feed. */
@@ -55,7 +70,7 @@ interface LiveBus {
  * a public bus's timetabled one (LTA's Monitored 0) is an estimate, and one
  * from a stale feed an old reading, however exact.
  */
-export function liveBuses(graph: Graph, svc: string, sa: StopArrivals | undefined, nowMs: number): LiveBus[] {
+function liveBuses(graph: Graph, svc: string, sa: StopArrivals | undefined, nowMs: number): LiveBus[] {
   const feed = feedFor(sa, isPublic(graph, svc));
   if (!sa || !feed || feed.available === false) return [];
   return beforeOpening(graph, svc, resolveBerths(sa.arrivals.filter((a) => a.svc === svc)).usable, feed.fetchedAt, nowMs)
@@ -71,10 +86,8 @@ export function liveBuses(graph: Graph, svc: string, sa: StopArrivals | undefine
 
 /**
  * `svc`'s departures from the stop whose board is `board`, in order: the
- * live times in the window, then estimates one headway apart while the
- * service runs. With no live times an estimate is a bus somewhere in a
- * headway (`earliest` to `latest`); stepped on from a live bus, it is a
- * headway after it.
+ * live times in the window, then estimates a headway apart while the
+ * service runs.
  */
 export function departuresFrom(graph: Graph, board: StopArrivals | undefined, svc: string, w: DepartureWindow): Departure[] {
   const until = w.until ?? w.from + PROJECT_MS;
@@ -90,10 +103,12 @@ export function departuresFrom(graph: Graph, board: StopArrivals | undefined, sv
     if (b.at >= w.from && b.at <= until) out.push({ id: b.id, kind: b.kind, earliest: b.at, latest: b.at, arrival: b.arrival });
   }
 
-  if (live.length) {
-    // Past the last live time, one headway at a time, while the service runs.
-    const last = live[live.length - 1];
-    for (let n = 1, t = last.at + headwayAt(last.at); t <= until && t <= last.at + PROJECT_MS && out.length < max; n++) {
+  const last = live.at(-1);
+  if (last) {
+    // Past the last live time, one headway at a time while the service
+    // runs: a bus a headway after the one before it, an instant as the
+    // live times are. One due after the close is no bus: that was the last.
+    for (let n = 1, t = last.at + headwayAt(last.at); out.length < max && t <= until && t <= last.at + PROJECT_MS; n++) {
       if (!runs(t)) break;
       if (t >= w.from) out.push({ id: `${last.id}+${n}`, kind: 'estimate', earliest: t, latest: t });
       t += headwayAt(t);
@@ -101,12 +116,17 @@ export function departuresFrom(graph: Graph, board: StopArrivals | undefined, sv
     return out;
   }
 
-  // No live times: there by `from`, and a bus within a headway, once it runs.
-  // Around a chosen bus, the windows meet at it, so it stays among them as
-  // the clock moves on: back from it a headway at a time to `from`.
+  // No live times: a bus somewhere in the headway after you can be at the
+  // stop, the next in the headway after that, and so on. Around a bus
+  // already chosen, the windows meet at it, so it stays among them as the
+  // clock moves on: back from it a headway at a time to `from`.
   let fixed: number[] = [];
   if (w.around !== undefined) {
     let b = w.around;
+    // Closed by then, after running: the windows meet at the close, so the
+    // last one before it is a whole headway, and a bus sure to come.
+    const closed = runs(b) ? null : serviceClosedAt(graph, svc, b);
+    if (closed !== null && closed > w.from) b = closed;
     if (b >= w.from) {
       fixed = [b];
       for (let x = b - headwayAt(b - headwayAt(b)); x >= w.from && fixed.length < 2000; x -= headwayAt(x - headwayAt(x))) fixed.unshift(x);
@@ -115,20 +135,30 @@ export function departuresFrom(graph: Graph, board: StopArrivals | undefined, sv
       fixed = [b];
     }
   }
-  const anchor = fixed.length ? 'around' : 'reach';
+  let anchor = fixed.length ? 'around' : 'reach';
   let t = fixed.length ? fixed[0] : w.from;
-  for (let n = 1, i = 0; out.length < max; n++, i++) {
+  for (let n = 1, i = 0; out.length < max && t <= until; n++, i++) {
     let opens = false;
     if (!runs(t)) {
       const s = serviceResumesAt(graph, svc, t);
-      if (s === null || s > t + PROJECT_MS) break;
-      t = s;
-      opens = true;
-      fixed = [];
+      if (s === null || s > t + PROJECT_MS || s > until) break;
+      // Around a chosen bus, the window it opens in starts with the service.
+      fixed = [s, ...fixed.filter((f) => f > s)];
+      [t, opens, i] = [s, true, 0];
+      if (fixed.length === 1) [fixed, anchor, n] = [[], 'opens', 1];
     }
-    if (t > until) break;
-    const end = i + 1 < fixed.length ? fixed[i + 1] : t + headwayAt(t);
-    out.push({ id: `${anchor}+${n}`, kind: 'estimate', earliest: t, latest: end, ...(opens ? { opens: true as const } : {}) });
+    // A bus may still come before the service closes, not after.
+    const closes = serviceEndsAt(graph, svc, t);
+    const end = Math.min(i + 1 < fixed.length ? fixed[i + 1] : t + headwayAt(t), closes ?? Infinity);
+    if (end >= w.from) {
+      out.push({
+        id: `${anchor}+${n}`,
+        kind: 'estimate',
+        earliest: Math.max(t, w.from),
+        latest: end,
+        ...(opens ? { opens: true as const } : {}),
+      });
+    }
     t = end;
   }
   return out;

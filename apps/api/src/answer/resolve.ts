@@ -38,7 +38,7 @@ import { buildingStops, footM, stopFootM } from './walk.ts';
 import { footS, mins } from './format.ts';
 import { listOf, m } from '../i18n.ts';
 import { viaFrom } from './via.ts';
-import { type Departure, liveBuses, nextDeparture } from './departures.ts';
+import { type Departure, nextDeparture } from './departures.ts';
 import { type HomeWalk, atHome, residenceStops } from './residences.ts';
 
 export { haversineM };
@@ -1013,44 +1013,20 @@ export function scoreLeg(
   const earliest = earliestS + ageS;
   const fromMs = fetchedAt + earliest * 1000;
   const sOf = (ms: number) => (ms - fetchedAt) / 1000;
-  // The width of a guess's window from `atMs`: a headway, as it is then.
-  const headwayS = (atMs: number) => {
-    const d = nextDeparture(graph, undefined, leg.svc, atMs, nowMs);
-    return d ? (d.latest - d.earliest) / 1000 : 0;
-  };
   // A missing entry means we never reached the feed -- not that no bus is
   // coming. Those are different answers and must not collapse into one.
   // A service whose rows didn't read has no data, though the rest of the board does.
   const available = feed !== undefined && feed.available !== false && !sa?.unread?.includes(leg.svc);
-  let boardS: number;
-  let quality: Quality;
-  let arrival = null;
   // Waiting for the service to start, which you can do wherever you are.
   let opensInS = 0;
-  // When the service stops today, for the guesses below: a bus guessed
-  // after it is no bus. Null when its hours are unknown or it isn't running.
   const running = inService(graph, leg.svc, nowMs);
-  const endsAt = serviceEndsAt(graph, leg.svc, nowMs);
-  const pastEnd = (s: number) => endsAt !== null && fetchedAt + s * 1000 > endsAt;
+  const middle = (d: Departure) => sOf((d.earliest + d.latest) / 2);
 
-  const live = liveBuses(graph, leg.svc, sa, nowMs);
   // The first bus you can physically reach, not the first bus listed.
-  const catchable = live.find((b) => b.at >= fromMs);
-  if (catchable) {
-    boardS = sOf(catchable.at);
-    // A time from the operator's timetable (a public bus not yet on the
-    // road) is an estimate, however exact it looks.
-    quality = catchable.arrival.scheduled ? 'scheduled' : 'live';
-    arrival = catchable.arrival;
-  } else if (live.length && running) {
-    // Every listed bus leaves before you can get there: the first one
-    // after the last listed, a headway apart, that you can reach. Not
-    // once the service has closed: the feed still lists its last buses,
-    // and there is no bus after them to guess (below).
-    const next = nextDeparture(graph, sa, leg.svc, fromMs, nowMs);
-    if (!next) return null; // that was the last bus
-    boardS = sOf(next.earliest);
-    quality = 'scheduled';
+  let d = nextDeparture(graph, sa, leg.svc, fromMs, nowMs);
+  let boardS: number;
+  if (d?.arrival) {
+    boardS = sOf(d.earliest);
   } else if (!running) {
     // The published hours are ours, not the feed's, so this holds even
     // when we have no data at all, or only buses you can't reach.
@@ -1058,22 +1034,25 @@ export function scoreLeg(
     if (opens === null || opens > opts.openBy!) return null; // ended, or not started in time
     // It starts before you need it: a bus somewhere in the headway after
     // it does, or after you reach the stop, whichever is later.
-    const startS = sOf(opens);
-    opensInS = Math.max(0, startS - earliest);
-    boardS = Math.max(earliest, startS) + headwayS(opens) / 2;
-    quality = 'scheduled';
+    opensInS = Math.max(0, sOf(opens) - earliest);
+    d = nextDeparture(graph, undefined, leg.svc, Math.max(fromMs, opens), nowMs);
+    if (!d) return null;
+    boardS = middle(d);
   } else {
-    // You'd reach the stop after the last bus.
-    if (pastEnd(earliest)) return null;
-    // The feed answered and had nothing: a headway is the honest guess,
-    // no later than the last bus. Unreached: keep the option -- the
-    // graph still says this service goes where you are going -- but
-    // boardS here is only an ordering key. The formatter must never
-    // print a time for an 'unknown' option.
-    boardS = earliest + headwayS(fromMs) / 2;
-    if (pastEnd(boardS)) boardS = (endsAt! - fetchedAt) / 1000;
-    quality = available ? 'scheduled' : 'unknown';
+    // Past the feed's list, a guess, the middle of its window: half a
+    // headway's wait. None once the service has closed: the feed still
+    // lists its last buses, and there's no bus after them; nor when you'd
+    // reach the stop after the last bus.
+    if (!d || d.opens) return null;
+    boardS = middle(d);
   }
+  // A time from the operator's timetable (a public bus not yet on the
+  // road) is an estimate, however exact it looks. Unreached: keep the
+  // option -- the graph still says this service goes where you are going
+  // -- but boardS here is only an ordering key. The formatter must never
+  // print a time for an 'unknown' option.
+  let quality: Quality = d.arrival ? (d.arrival.scheduled ? 'scheduled' : 'live') : !running || available ? 'scheduled' : 'unknown';
+  const arrival = d.arrival ?? null;
 
   // Only a real arrival goes stale; a headway guess stays a guess, never
   // ranked or worded as measured.
