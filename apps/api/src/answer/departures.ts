@@ -123,7 +123,9 @@ export function departuresFrom(graph: Graph, board: StopArrivals | undefined, sv
   // on. Around a bus already chosen, the windows meet at it, so it stays
   // among them as the clock moves on: back from it a headway at a time to
   // `from`. Before the service starts, or after it has stopped for the
-  // day, the first bus is due within a headway of the next start.
+  // day, the first bus is due within a headway of the next start; after
+  // that one, the windows around a chosen bus carry on as they would with
+  // the service running, so a class's leave-by is the same at 06:30 as at 07:30.
   let fixed: number[] = [];
   if (!last && w.around !== undefined) {
     let b = w.around;
@@ -142,14 +144,21 @@ export function departuresFrom(graph: Graph, board: StopArrivals | undefined, sv
   }
   let anchor = fixed.length ? 'around' : 'reach';
   let opens = false;
+  // The windows around a chosen bus to carry on with after the start's own.
+  let resume: number[] = [];
+  const startAt = (s: number) => {
+    resume = fixed.filter((f) => f >= s + headwayAt(s));
+    [t, fixed, anchor, opens] = [s, [], `opens@${s}`, true];
+  };
   // Not started yet, and starting before you get there: from its start.
   const starts = last || runs(w.now) ? null : serviceResumesAt(graph, svc, w.now);
-  if (starts !== null && starts <= t) [t, fixed, anchor, opens] = [starts, [], `opens@${starts}`, true];
+  if (starts !== null && starts <= t) startAt(starts);
   for (let n = 1, i = 0; out.length < max && t <= until; n++, i++) {
     if (!runs(t)) {
       const s = serviceResumesAt(graph, svc, t);
       if (s === null || s > until) break;
-      [t, fixed, anchor, opens, n, i] = [s, [], `opens@${s}`, true, 1, 0];
+      startAt(s);
+      [n, i] = [1, 0];
     }
     // A bus may still come before the service closes, not after.
     const closes = serviceEndsAt(graph, svc, t);
@@ -165,6 +174,7 @@ export function departuresFrom(graph: Graph, board: StopArrivals | undefined, sv
     }
     opens = false;
     t = end;
+    if (resume.length) [t, fixed, i, resume] = [resume[0], resume, -1, []];
   }
   return out;
 }

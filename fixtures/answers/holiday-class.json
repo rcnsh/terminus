@@ -25,13 +25,13 @@
   },
   "altBus": null,
   "leave": {
-    "at": "2026-11-09T01:18:40Z",
+    "at": "2026-11-09T01:30:10Z",
     "estimated": true,
     "svc": "D2",
     "stop": "PGP",
     "stopCode": "PGP",
-    "board": "2026-11-09T01:24:00Z",
-    "arrive": "2026-11-09T01:45:30Z",
+    "board": "2026-11-09T01:35:30Z",
+    "arrive": "2026-11-09T01:57:00Z",
     "note": null,
     "walkS": 300,
     "rideS": 570,
@@ -43,12 +43,12 @@
     "earlier": {
       "svc": "D2",
       "stop": "PGP",
-      "board": "2026-11-09T01:12:00Z"
+      "board": "2026-11-09T01:24:00Z"
     },
     "later": {
       "svc": "D2",
       "stop": "PGP",
-      "board": "2026-11-09T01:36:00Z"
+      "board": "2026-11-09T01:48:00Z"
     },
     "moved": false
   },
@@ -81,19 +81,19 @@
     "staleAt": "2026-11-09T00:45:00Z",
     "crowd": null,
     "quality": "Estimated time",
-    "leaveBy": "Leave by ~09:18",
-    "leaveVia": "catch the ~09:24 D2 at PGP",
-    "catch": "Catch the ~09:24 D2 at PGP",
-    "arrive": "Arrive ~09:45 · 15 min early",
-    "catchLine": "Catch the ~09:24 D2 at PGP · arrive ~09:45, 15 min early",
+    "leaveBy": "Leave by ~09:30",
+    "leaveVia": "catch the ~09:35 D2 at PGP",
+    "catch": "Catch the ~09:35 D2 at PGP",
+    "arrive": "Arrive ~09:57 · 3 min early",
+    "catchLine": "Catch the ~09:35 D2 at PGP · arrive ~09:57, 3 min early",
     "late": false,
     "goNow": "Or go now: D2 at ~09:06 · arrive ~09:15",
     "note": null,
     "estimate": "Estimated from the usual gap between buses. Live times show nearer the time.",
     "phase": "idle",
     "phaseText": null,
-    "glance": "Leave 09:18",
-    "line": "Leave by ~09:18 · D2 from PGP",
+    "glance": "Leave 09:30",
+    "line": "Leave by ~09:30 · D2 from PGP",
     "actions": [
       {
         "id": "skipped",
@@ -120,23 +120,23 @@
     "notice": null,
     "h12": false,
     "journey": {
-      "leave": "~09:18",
+      "leave": "~09:30",
       "walk": "5 min",
       "bus": {
         "svc": "D2",
         "color": "#8e44c9",
         "stop": "PGP",
-        "board": "~09:24"
+        "board": "~09:35"
       },
-      "boardAt": "2026-11-09T01:24:00Z",
+      "boardAt": "2026-11-09T01:35:30Z",
       "ride": "10 min",
       "off": null,
       "to": "GEA1000 @ UTown",
       "toStop": "UTown",
-      "arrive": "~09:45",
+      "arrive": "~09:57",
       "walkEnd": null,
-      "arriveStop": "~09:45",
-      "slack": "15 min early",
+      "arriveStop": "~09:57",
+      "slack": "3 min early",
       "live": false,
       "backup": {
         "svc": "D2",
@@ -148,14 +148,14 @@
       "change": null,
       "title": "To GEA1000 @ UTown · starts 10:00",
       "place": "GEA1000",
-      "byText": "by ~09:18",
+      "byText": "by ~09:30",
       "walkText": "5 min walk",
       "rideText": "10 min ride",
       "walkEndText": null,
-      "arriveText": "Arrive ~09:45 · 15 min early",
+      "arriveText": "Arrive ~09:57 · 3 min early",
       "arriveWhere": "at UTown",
       "backupText": "Or go now: D2 at ~09:06 from PGP",
-      "summary": "arrive ~09:45 · D2 ~09:24 at PGP"
+      "summary": "arrive ~09:57 · D2 ~09:35 at PGP"
     },
     "upcoming": null,
     "step": {
@@ -163,12 +163,12 @@
       "earlier": {
         "svc": "D2",
         "stop": "PGP",
-        "board": "2026-11-09T01:12:00Z"
+        "board": "2026-11-09T01:24:00Z"
       },
       "later": {
         "svc": "D2",
         "stop": "PGP",
-        "board": "2026-11-09T01:36:00Z"
+        "board": "2026-11-09T01:48:00Z"
       },
       "moved": false,
       "earlierLabel": "Earlier bus",
@@ -177,6 +177,6 @@
     },
     "title": "D2 · ~09:06",
     "heading": "Next class · GEA1000 @ UTown",
-    "remindAt": "2026-11-09T01:13:40Z"
+    "remindAt": "2026-11-09T01:25:10Z"
   }
 }

@@ -25,13 +25,13 @@
   },
   "altBus": null,
   "leave": {
-    "at": "2026-08-26T23:21:40Z",
+    "at": "2026-08-26T23:30:10Z",
     "estimated": true,
     "svc": "D2",
     "stop": "PGP",
     "stopCode": "PGP",
-    "board": "2026-08-26T23:27:00Z",
-    "arrive": "2026-08-26T23:48:30Z",
+    "board": "2026-08-26T23:35:30Z",
+    "arrive": "2026-08-26T23:57:00Z",
     "note": null,
     "walkS": 300,
     "rideS": 570,
@@ -43,7 +43,7 @@
     "earlier": {
       "svc": "D2",
       "stop": "PGP",
-      "board": "2026-08-26T23:15:00Z"
+      "board": "2026-08-26T23:27:00Z"
     },
     "later": {
       "svc": "D2",
@@ -81,19 +81,19 @@
     "staleAt": "2026-08-26T22:45:00Z",
     "crowd": null,
     "quality": "估计时间",
-    "leaveBy": "约 07:21 前出发",
-    "leaveVia": "在 PGP 搭约 07:27 的 D2",
-    "catch": "在 PGP 搭约 07:27 的 D2",
-    "arrive": "约 07:48 到达 · 早到 12 分钟",
-    "catchLine": "在 PGP 搭约 07:27 的 D2 · 约 07:48 到达，早到 12 分钟",
+    "leaveBy": "约 07:30 前出发",
+    "leaveVia": "在 PGP 搭约 07:35 的 D2",
+    "catch": "在 PGP 搭约 07:35 的 D2",
+    "arrive": "约 07:57 到达 · 早到 3 分钟",
+    "catchLine": "在 PGP 搭约 07:35 的 D2 · 约 07:57 到达，早到 3 分钟",
     "late": false,
     "goNow": "或现在走：约 07:21 的 D2 · 约 07:30 到达",
     "note": null,
     "estimate": "根据巴士平常的间隔估计，临近时会显示实时时间。",
     "phase": "idle",
     "phaseText": null,
-    "glance": "07:21 出发",
-    "line": "约 07:21 前出发 · 在 PGP 搭 D2",
+    "glance": "07:30 出发",
+    "line": "约 07:30 前出发 · 在 PGP 搭 D2",
     "actions": [
       {
         "id": "skipped",
@@ -120,23 +120,23 @@
     "notice": null,
     "h12": false,
     "journey": {
-      "leave": "约 07:21",
+      "leave": "约 07:30",
       "walk": "5 分钟",
       "bus": {
         "svc": "D2",
         "color": "#8e44c9",
         "stop": "PGP",
-        "board": "约 07:27"
+        "board": "约 07:35"
       },
-      "boardAt": "2026-08-26T23:27:00Z",
+      "boardAt": "2026-08-26T23:35:30Z",
       "ride": "10 分钟",
       "off": null,
       "to": "GEA1000 @ UTown",
       "toStop": "UTown",
-      "arrive": "约 07:48",
+      "arrive": "约 07:57",
       "walkEnd": null,
-      "arriveStop": "约 07:48",
-      "slack": "早到 12 分钟",
+      "arriveStop": "约 07:57",
+      "slack": "早到 3 分钟",
       "live": false,
       "backup": {
         "svc": "D2",
@@ -148,14 +148,14 @@
       "change": null,
       "title": "去 GEA1000 @ UTown · 08:00 开始",
       "place": "GEA1000",
-      "byText": "约 07:21 前出发",
+      "byText": "约 07:30 前出发",
       "walkText": "步行 5 分钟",
       "rideText": "乘车 10 分钟",
       "walkEndText": null,
-      "arriveText": "约 07:48 到达 · 早到 12 分钟",
+      "arriveText": "约 07:57 到达 · 早到 3 分钟",
       "arriveWhere": "在 UTown",
       "backupText": "或现在走：在 PGP 搭约 07:21 的 D2",
-      "summary": "约 07:48 到达 · 在 PGP 搭约 07:27 的 D2"
+      "summary": "约 07:57 到达 · 在 PGP 搭约 07:35 的 D2"
     },
     "upcoming": null,
     "step": {
@@ -163,7 +163,7 @@
       "earlier": {
         "svc": "D2",
         "stop": "PGP",
-        "board": "2026-08-26T23:15:00Z"
+        "board": "2026-08-26T23:27:00Z"
       },
       "later": {
         "svc": "D2",
@@ -177,6 +177,6 @@
     },
     "title": "D2 · 约 07:21",
     "heading": "下一节课 · GEA1000 @ UTown",
-    "remindAt": "2026-08-26T23:16:40Z"
+    "remindAt": "2026-08-26T23:25:10Z"
   }
 }
