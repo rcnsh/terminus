@@ -28,54 +28,23 @@ for (const id of ['version', 'dl-version']) {
   if (box && !box.firstChild) render(html`<${Version} />`, box);
 }
 
-// The hero's text is centred beside the phone, so opening "How to install"
-// would re-centre it and shove the heading and buttons up, and the taller row
-// would drag the phone and everything below it down. While it's open, both
-// columns are pinned where they were and the row keeps its height, so the
-// steps spill into the empty space under the hero and nothing moves. If they
-// would reach the next heading (narrow two-column widths wrap more), the row
-// grows instead, pushing only what's below. All of it happens in the click,
-// before anything is painted.
+// "How to install" opens as a card over what's under it (its CSS is
+// index.html's), so opening it moves nothing. Like the download menu, a tap
+// anywhere else, Esc, or focus moving on closes it. A pointerdown, as iOS
+// sends no click for a tap on plain text or space.
 const install = document.getElementById('install');
-const twoColumns = window.matchMedia('(min-width: 861px)');
-const setInstall = (open) => {
-  const hero = document.querySelector('.hero');
-  const cols = [...hero.children];
-  const release = () => {
-    hero.style.gridTemplateRows = '';
-    for (const c of cols) {
-      c.style.alignSelf = '';
-      c.style.marginTop = '';
-    }
-  };
-  if (!open || !twoColumns.matches) {
-    release();
-    install.open = open;
-    return;
-  }
-  const padTop = parseFloat(getComputedStyle(hero).paddingTop);
-  const start = hero.getBoundingClientRect().top + padTop;
-  const tops = cols.map((c) => c.getBoundingClientRect().top - start);
-  const rowH = hero.getBoundingClientRect().height - padTop - parseFloat(getComputedStyle(hero).paddingBottom);
-  cols.forEach((c, i) => {
-    c.style.alignSelf = 'start';
-    c.style.marginTop = `${tops[i]}px`;
-  });
-  hero.style.gridTemplateRows = `${rowH}px`;
-  install.open = true;
-  // Reading layout here forces it, still before the next paint.
-  const next = hero.nextElementSibling;
-  if (next && cols[0].getBoundingClientRect().bottom > next.getBoundingClientRect().top - 16) hero.style.gridTemplateRows = '';
-};
-install.querySelector('summary').addEventListener('click', (e) => {
-  e.preventDefault();
-  setInstall(!install.open);
+document.addEventListener('pointerdown', (e) => {
+  if (install.open && !install.contains(e.target)) install.open = false;
 });
-// A held layout is meaningless once the layout changes.
-twoColumns.addEventListener('change', () => {
-  const open = install.open;
-  setInstall(false);
-  install.open = open;
+install.addEventListener('focusout', (e) => {
+  if (e.relatedTarget && !install.contains(e.relatedTarget)) install.open = false;
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || !install.open) return;
+  // Focus goes back to the summary only from inside the card: elsewhere it stays, and the page doesn't jump to the hero.
+  const inside = install.contains(document.activeElement);
+  install.open = false;
+  if (inside) install.querySelector('summary').focus();
 });
 
 // The header's download menu, placed under its button. It closes on scroll
@@ -105,8 +74,8 @@ twoColumns.addEventListener('change', () => {
     document.getElementById('dl-install').addEventListener('click', (e) => {
       e.preventDefault();
       close();
-      if (!install.open) setInstall(true);
-      install.scrollIntoView({ behavior: still() ? 'auto' : 'smooth', block: 'center' });
+      install.open = true;
+      install.querySelector('ol').scrollIntoView({ behavior: still() ? 'auto' : 'smooth', block: 'center' });
     });
   }
 }

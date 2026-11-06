@@ -52,10 +52,20 @@
   .tile svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .cta-note { margin-top: 14px; font-size: 0.85rem; color: var(--muted); }
   .hero-copy { padding-bottom: 56px; }
-  .install { margin-top: 10px; font-size: 0.9rem; color: var(--muted); }
-  .install summary { cursor: pointer; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; padding: 8px 0; }
-  .install ol { margin: 6px 0 0; padding-left: 1.2rem; display: grid; gap: 6px; }
-  .install a { color: var(--ink); }
+  /* The steps open as a card out of the flow, so opening them moves nothing
+     on the page: over the hills under the hero, or over the phone when the
+     hero is one column. The hero rises over the page below while it's open,
+     or the card's lower part would sit under it, its link unclickable.
+     landing.js closes it on a tap elsewhere, Esc, or focus leaving it. */
+  .top:has(.install[open]) { position: relative; z-index: 2; }
+  .install { position: relative; z-index: 3; margin-top: 10px; font-size: 0.9rem; color: var(--muted); }
+  .install summary { cursor: pointer; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; padding: 8px 0; width: fit-content; }
+  .install ol { position: absolute; top: calc(100% + 6px); left: 0; width: min(30rem, calc(100vw - 32px)); box-sizing: border-box; margin: 0; padding: 16px 20px 18px 2.4rem; display: grid; gap: 8px;
+    background: var(--k-bg); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow), 0 20px 50px -20px rgb(0 0 0 / 0.5); }
+  .install[open] ol { animation: install-in 0.16s ease-out; }
+  @keyframes install-in { from { opacity: 0; transform: translateY(-4px); } }
+  @media (prefers-reduced-motion: reduce) { .install[open] ol { animation: none; } }
+  .install strong, .install a { color: var(--ink); }
   /* The phone stands on the road, its foot over the page below. */
   .hero-phone { display: grid; justify-items: center; margin-bottom: -170px; position: relative; z-index: 1; }
   .ground { margin-top: -24px; }
@@ -68,8 +78,8 @@
   .pn-nav { display: flex; align-items: center; gap: 7px; padding: 8px 16px 0; font: 600 1rem/1 var(--display); letter-spacing: -0.03em; }
   .pn-nav img { width: 22px; height: 22px; border-radius: 6px; }
   .pn-nav b { font-weight: inherit; color: var(--accent); }
-  .pn-chips { display: flex; gap: 6px; padding: 10px 14px 0; }
-  .pn-chips span { padding: 4px 11px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--surface); font-size: 11.5px; }
+  .pn-chips { display: flex; gap: 6px; padding: 10px 14px 0; overflow: hidden; }
+  .pn-chips span { flex: none; padding: 4px 11px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--surface); font-size: 11.5px; }
   .pn-chips .on { background: var(--ink); border-color: var(--ink); color: var(--s0); }
   .pn-head { padding: 22px 16px 0; }
   .pn-to { font-size: 11.5px; color: var(--muted); }
@@ -88,6 +98,7 @@
   .steps .what { display: grid; align-content: start; gap: 1px; padding-bottom: 10px; }
   .steps .what strong { font-size: 0.95rem; display: flex; align-items: center; gap: 6px; }
   .steps .what small { color: var(--muted); font-size: 0.78rem; }
+  .steps .what strong small { font-weight: 400; }
   .steps .rail { position: relative; }
   .steps .rail::before { content: ''; position: absolute; z-index: 1; top: 2px; left: 3px; width: 16px; height: 16px; box-sizing: border-box; border-radius: 50%; background: var(--bg); border: 3px solid var(--ink); }
   .steps .start .rail::before { background: var(--accent); border-color: var(--accent); }
@@ -95,7 +106,8 @@
   .steps :is(.walk, .ride) .rail::after { content: ''; position: absolute; top: 19px; bottom: -3px; left: 8px; width: 6px; border-radius: 3px; }
   .steps .walk .rail::after { left: 9px; width: 4px; background: radial-gradient(circle, var(--muted) 1.8px, transparent 2.2px) 50% 0 / 4px 9px repeat-y; }
   .steps .ride .rail::after { background: var(--svc); }
-  .pn-backup { margin-top: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); font-size: 11.5px; }
+  .pn-backup { display: flex; align-items: center; gap: 6px; margin-top: 8px; color: var(--muted); font-size: 11.5px; }
+  .pn-backup svg { flex: none; width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
   .pn-tabs { display: flex; justify-content: space-around; padding: 8px 0 14px; border-top: 1px solid var(--line); font-size: 10px; color: var(--muted); }
   .pn-tabs span { display: grid; justify-items: center; gap: 2px; }
   .pn-tabs .on { color: var(--accent); }
@@ -132,22 +144,28 @@
   .week span.off { background: none; border: 1px dashed var(--line-strong); color: var(--muted); font-weight: 500; }
   .show .pn-lead { font-size: 1.5rem; color: var(--ink); }
   .show .pn-lead em { font-style: normal; color: var(--accent); }
-  .sign { margin: -14px; overflow: hidden; border-radius: 15px; background: var(--surface); }
-  /* A stop's sign, as Nearby draws it: the name plate a shade off the card. */
-  .sign-plate { display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 14px; background: color-mix(in srgb, var(--ink) 5%, var(--surface)); border-bottom: 1px solid var(--line); }
-  .sign-plate strong { flex: 1; font-weight: 700; }
-  .plate-bus { width: 16px; height: 16px; flex: none; fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
-  .plate-walk { font-size: 0.82rem; font-weight: 600; color: var(--muted); }
-  .sign-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; font-variant-numeric: tabular-nums; }
+  /* A stop's sign, as Nearby draws it (app.css .stop-sign): the name plate a
+     shade off the card, then a row per service read like a stop's board:
+     where it's going, its next bus large, and the two after. */
+  .sign { display: grid; grid-template-columns: 2.4rem minmax(0, 1fr) repeat(3, auto); column-gap: 10px; margin: -14px; overflow: hidden; border-radius: 15px; background: var(--surface); font-variant-numeric: tabular-nums; }
+  .sign > * { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center; padding: 0 14px; }
+  .sign .sign-plate { display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 10px 0 14px; background: color-mix(in srgb, var(--ink) 5%, var(--surface)); border-bottom: 1px solid var(--line); }
+  .sign-plate strong { flex: 1; min-width: 0; font-weight: 700; white-space: nowrap; }
+  .sign-plate svg { flex: none; fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .plate-bus { width: 16px; height: 16px; stroke: var(--accent); }
+  .plate-go { display: inline-block; width: 14px; height: 14px; margin-left: 2px; vertical-align: -2px; stroke: var(--muted); stroke-width: 2.2; }
+  .plate-walk { font-size: 0.82rem; font-weight: 600; color: var(--muted); white-space: nowrap; }
+  .plate-star { width: 16px; height: 16px; margin-left: 4px; stroke: var(--muted); stroke-width: 1.9; }
+  .sign-head { padding-block: 8px 2px; color: var(--muted); font-size: 0.62rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+  .sign-head span:nth-child(n + 3) { text-align: right; }
+  .sign-row { min-height: 46px; }
   .sign-row + .sign-row { border-top: 1px solid var(--line); }
-  .sign-row .svc { font-size: 0.8rem; min-width: 2.4rem; }
-  .sign-row .eta { min-width: 4.2rem; text-align: right; font-weight: 800; }
-  .road { position: relative; flex: 1; height: 18px; }
-  .road::before { content: ''; position: absolute; left: 0; right: 10px; top: 8px; height: 2px; background: repeating-linear-gradient(90deg, var(--line-strong) 0 6px, transparent 6px 10px); }
-  .road::after { content: ''; position: absolute; right: 0; top: 3px; width: 12px; height: 12px; box-sizing: border-box; border-radius: 50%; border: 2.5px solid var(--ink); background: var(--surface); }
-  .road i { position: absolute; top: 3px; left: calc((100% - 38px) * (1 - var(--far))); width: 18px; height: 12px; box-sizing: border-box; border-radius: 4px; border: 2px solid var(--svc); }
-  .road i.live { background: var(--svc); }
-  .road i.later { opacity: 0.35; }
+  .sign-row .svc { height: 24px; padding: 0 4px; border-radius: 7px; font-size: 0.8rem; }
+  .sign-row .to { min-width: 0; margin-left: -4px; overflow: hidden; color: var(--muted); font-size: 0.85rem; line-height: 1.25; }
+  .sign-row .to b { display: inline-block; color: var(--ink); font-weight: 600; }
+  .sign-row .t { text-align: right; color: var(--muted); font: 600 0.9rem/1 var(--display); white-space: nowrap; }
+  .sign-row .t.pick { color: var(--ink); font-size: 1.15rem; font-weight: 700; letter-spacing: -0.02em; }
+  .sign-row .t small { margin-left: 1px; font: 500 0.62rem/1 var(--font); }
 
   /* Set up: four numbered cards, each number on a service's colour. */
   .setup { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-top: 28px; counter-reset: step; }
@@ -262,7 +280,7 @@
             <div data-stars></div>
             <div class="pn-status"><span>09:33</span><span>5G</span></div>
             <div class="pn-nav"><img src="/assets/mark.svg" alt=""><span>termi<b>nus</b></span></div>
-            <div class="pn-chips"><span class="on">Next</span><span>Nearby</span></div>
+            <div class="pn-chips"><span class="on">Next</span><span>Nearby</span><span>KR MRT</span><span>UTown</span></div>
             <div class="pn-head">
               <p class="pn-to">To UTown · starts 10:00</p>
               <p class="pn-lead">Leave in <span class="accent-small">6 min</span></p>
@@ -274,15 +292,16 @@
             <p class="pn-road"><span class="svc" style="--svc:#34a853;--svc-ink:#1c1917">R2</span> <span>reaches <b>PGP</b> in 9 min</span></p>
             <ol class="steps">
               <li class="start walk"><span class="time">09:39</span><span class="rail"></span><span class="what"><strong>Leave</strong><small>3 min walk</small></span></li>
-              <li class="ride" style="--svc:#34a853;--svc-ink:#1c1917"><span class="time">09:42</span><span class="rail"></span><span class="what"><strong>PGP <span class="svc" style="--svc:#34a853;--svc-ink:#1c1917">R2</span></strong><small>10 min ride</small></span></li>
+              <li class="ride" style="--svc:#34a853;--svc-ink:#1c1917"><span class="time">09:42</span><span class="rail"></span><span class="what"><strong>PGP <span class="svc" style="--svc:#34a853;--svc-ink:#1c1917">R2</span> <small>in 9 min</small></strong><small>10 min ride</small></span></li>
               <li class="end"><span class="time">09:52</span><span class="rail"></span><span class="what"><strong>UTown</strong></span></li>
             </ol>
-            <p class="pn-backup">Or go now: D2 at 09:37 from PGP</p>
+            <p class="pn-backup"><svg viewBox="0 0 24 24"><rect x="4.5" y="3" width="15" height="15" rx="3"/><path d="M4.5 11h15M8 21v-3M16 21v-3"/><circle cx="8.5" cy="14.5" r="1" fill="currentColor"/><circle cx="15.5" cy="14.5" r="1" fill="currentColor"/></svg><span>Or go now: D2 at 09:37 from PGP</span></p>
           </div>
           <div class="pn-tabs">
             <span class="on"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Now</span>
-            <span><svg viewBox="0 0 24 24"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15"/></svg>Map</span>
-            <span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>Settings</span>
+            <span><svg viewBox="0 0 24 24"><rect x="6" y="2.5" width="12" height="9.5" rx="2.5"/><path d="M12 12v9.5M9 21.5h6M9.5 7.25h5"/></svg>Stops</span>
+            <span><svg viewBox="0 0 24 24"><path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6 9 4Z"/><path d="M9 4v14M15 6v14"/></svg>Map</span>
+            <span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>Settings</span>
           </div>
         </div>
       </div>
@@ -337,9 +356,10 @@
     <div class="half">
       <div class="show" aria-hidden="true">
         <div class="sign">
-          <div class="sign-plate"><svg class="plate-bus" viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="3" width="15" height="15" rx="3"/><path d="M4.5 11h15M8 21v-3M16 21v-3"/><circle cx="8.5" cy="14.5" r="1" fill="currentColor"/><circle cx="15.5" cy="14.5" r="1" fill="currentColor"/></svg><strong>Kent Ridge MRT</strong><span class="plate-walk">3 min walk</span></div>
-          <div class="sign-row"><span class="svc" style="--svc:#8e44c9">D2</span><span class="road"><i class="live" style="--svc:#8e44c9;--far:0.2"></i><i class="live later" style="--svc:#8e44c9;--far:0.8"></i></span><span class="eta">2 min</span></div>
-          <div class="sign-row"><span class="svc" style="--svc:#d32f2f">A1</span><span class="road"><i style="--svc:#d32f2f;--far:0.6"></i></span><span class="eta">~9 min</span></div>
+          <div class="sign-plate"><svg class="plate-bus" viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="3" width="15" height="15" rx="3"/><path d="M4.5 11h15M8 21v-3M16 21v-3"/><circle cx="8.5" cy="14.5" r="1" fill="currentColor"/><circle cx="15.5" cy="14.5" r="1" fill="currentColor"/></svg><strong>KR MRT<svg class="plate-go" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></strong><span class="plate-walk">3 min walk</span><svg class="plate-star" viewBox="0 0 24 24"><path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z"/></svg></div>
+          <div class="sign-head"><span></span><span></span><span>Next</span><span>Then</span><span>After</span></div>
+          <div class="sign-row"><span class="svc" style="--svc:#8e44c9">D2</span><span class="to">via <b>UTown</b></span><span class="t pick">2<small> min</small></span><span class="t">14</span><span class="t">26</span></div>
+          <div class="sign-row"><span class="svc" style="--svc:#d32f2f">A1</span><span class="to">via <b>CLB</b></span><span class="t pick">~9<small> min</small></span><span class="t">~21</span><span class="t">–</span></div>
         </div>
       </div>
       <div><h3>The right side of the road</h3><p>It picks the stop going your way, even when the one across the road is closer. Or check anywhere with one tap.</p></div>
@@ -387,10 +407,11 @@
     <figure>
       <div class="web" aria-hidden="true">
         <div class="sign">
-          <div class="sign-plate"><svg class="plate-bus" viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="3" width="15" height="15" rx="3"/><path d="M4.5 11h15M8 21v-3M16 21v-3"/><circle cx="8.5" cy="14.5" r="1" fill="currentColor"/><circle cx="15.5" cy="14.5" r="1" fill="currentColor"/></svg><strong>UTown</strong><span class="plate-walk">1 min walk</span></div>
-          <div class="sign-row"><span class="svc" style="--svc:#2b9ad6;--svc-ink:#1c1917">K</span><span class="road"><i class="live" style="--svc:#2b9ad6;--far:0.15"></i></span><span class="eta">1 min</span></div>
-          <div class="sign-row"><span class="svc" style="--svc:#f57c1f;--svc-ink:#1c1917">R1</span><span class="road"><i class="live" style="--svc:#f57c1f;--far:0.5"></i></span><span class="eta">6 min</span></div>
-          <div class="sign-row"><span class="svc" style="--svc:#d32f2f">A1</span><span class="road"><i style="--svc:#d32f2f;--far:0.75"></i></span><span class="eta">~11 min</span></div>
+          <div class="sign-plate"><svg class="plate-bus" viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="3" width="15" height="15" rx="3"/><path d="M4.5 11h15M8 21v-3M16 21v-3"/><circle cx="8.5" cy="14.5" r="1" fill="currentColor"/><circle cx="15.5" cy="14.5" r="1" fill="currentColor"/></svg><strong>UTown<svg class="plate-go" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></strong><span class="plate-walk">1 min walk</span><svg class="plate-star" viewBox="0 0 24 24"><path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z"/></svg></div>
+          <div class="sign-head"><span></span><span></span><span>Next</span><span>Then</span><span>After</span></div>
+          <div class="sign-row"><span class="svc" style="--svc:#34a853;--svc-ink:#1c1917">R2</span><span class="to">to <b>Kent Vale</b></span><span class="t pick">1<small> min</small></span><span class="t">13</span><span class="t">25</span></div>
+          <div class="sign-row"><span class="svc" style="--svc:#ec4fa0;--svc-ink:#1c1917">D1</span><span class="to">via <b>CLB</b></span><span class="t pick">6<small> min</small></span><span class="t">18</span><span class="t">30</span></div>
+          <div class="sign-row"><span class="svc" style="--svc:#f57c1f;--svc-ink:#1c1917">R1</span><span class="to">to <b>PGP</b></span><span class="t pick">~11<small> min</small></span><span class="t">~23</span><span class="t">–</span></div>
         </div>
       </div>
       <figcaption><h3>On the web</h3><p>Every bus near you, and the campus map, in any browser. Add it to your home screen like an app.</p></figcaption>
