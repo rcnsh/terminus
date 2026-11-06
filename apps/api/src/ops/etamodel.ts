@@ -836,7 +836,7 @@ export function weightsFrom(grids: WeightGrid[]): number[] {
     const steps = Array.from({ length: WEIGHT_STEPS + 1 }, (_, k) => k);
     const limit = Math.max(
       grids.reduce((sum, g) => sum + g.feedEarly[h], 0),
-      Math.min(...steps.map(earlyAt)),
+      Math.min(...steps.map(earlyAt)), // small: WEIGHT_STEPS + 1 weights
     );
     let best = 0;
     let bestErr = Infinity;
