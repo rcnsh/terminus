@@ -21,7 +21,8 @@
 import { loadCalendar } from '../timetable/calendarsync.ts';
 import type { Env } from '../types.ts';
 import { type Plan, type DayRecord, type TripUpdate, endOfDayMs, sgtDate, tripRev } from '../answer/trip.ts';
-import { type MeDeps, answerWake } from '../answer/rider.ts';
+import type { MeDeps } from '../answer/answer.ts';
+import { answerWake } from '../answer/rider.ts';
 import { type Delivered, nudgeUser, pushAudience, retryLiveStart, updateLive } from './push.ts';
 import { type LiveActivityState, apnsEnabled, liveActivityState } from './apns.ts';
 import { type Lang, withLang } from '../i18n.ts';

@@ -13,19 +13,16 @@
  */
 
 import type { Env, MeAnswer } from '../types.ts';
-import type { MeDeps } from '../accounts/me.ts';
-import { getProfile } from '../accounts/me.ts';
+import { getProfile } from '../accounts/profiles.ts';
 import { NO_PREFS, type TripPrefs, tripPrefs } from '../accounts/outcomes.ts';
 import { type Profile, classKey, classesOn } from '../timetable/profile.ts';
 import { type Ask, DAY_ASK, type Rider, nextFor } from './next.ts';
 import { type DayRecord, type Plan, type TripUpdate, loadDay, updateTrip } from './trip.ts';
-import { unlogged } from './answer.ts';
+import { type MeDeps, unlogged } from './answer.ts';
 import { GRAPH } from './graph.ts';
 import type { Card } from './card.ts';
 import { type AnswerIn, type Nudge, nudgeUser, pushEnabled } from '../push/push.ts';
 import { withLang } from '../i18n.ts';
-
-export type { MeDeps };
 
 /** /api/me/next's body: the answer and its card. */
 export type NextBody = MeAnswer & { card: Card; walkSpeedMs: number };

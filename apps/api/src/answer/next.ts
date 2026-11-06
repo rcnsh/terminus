@@ -5,7 +5,7 @@
  */
 
 import type { Answer, Env, FeedState, Graph, MeAnswer, PlaceChip, ResolveInput, StopArrivals, Why } from '../types.ts';
-import type { MeDeps } from '../accounts/me.ts';
+import type { MeDeps } from './answer.ts';
 import {
   MAX_VENUE_WALK_S,
   type NextTrip,

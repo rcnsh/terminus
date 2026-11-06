@@ -55,6 +55,7 @@ apps/api/
     calendarsync.ts   The academic calendar, refreshed into KV by the cron
   src/accounts/       Who you are: sign-in, sessions, devices
     me.ts             /api/auth, /api/pair, /api/me/* (accounts)
+    profiles.ts       The profile read back from D1 (getProfile), what still holds kept
     accounts.ts       Sign-in codes/links, sessions, anonymous accounts, pairing (D1)
     applogin.ts       App sign-in approved from the email (RFC 8628-like)
     access.ts         Who may call the keyed routes (an API key or a session)

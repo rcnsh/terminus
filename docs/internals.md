@@ -367,7 +367,7 @@ page at `/account` signs in with an emailed code (or the link in the same
 email) and stores one profile per user in D1: timetable, home stops, gap threshold and
 favourites. A saved profile that no longer validates as a whole (a stop
 dropped by the weekly scrape, say) is read back part by part
-(`salvageProfile` in `me.ts`): whatever still holds is kept, so the next save
+(`salvageProfile` in `accounts/profiles.ts`): whatever still holds is kept, so the next save
 doesn't write defaults over the day's hours, usual times or one-off trips.
 Request bodies are read with a hard cap as they arrive (`readCapped`, 64 KB
 for JSON), whether or not they declare a length. Apps hold a device token (`Authorization: Bearer`), which they

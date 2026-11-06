@@ -6,7 +6,7 @@
 import { mailFeedback, parseFeedback, saveFeedback } from '../ops/feedback.ts';
 import { logNextTook, logSignal, logStep } from '../ops/analytics.ts';
 import { approvable, decide, enterCode, holdAppLogins, mergeAnonymous, pollAppLogin, startAppLogin } from './applogin.ts';
-import type { Answer, Env, Graph, GraphIndex, ResolveInput, Stop, StopArrivals } from '../types.ts';
+import type { Env, Graph, GraphIndex, Stop, StopArrivals } from '../types.ts';
 import {
   ACCOUNT_TTL,
   type SessionInfo,
@@ -45,21 +45,12 @@ import {
   sessionCookie,
   PLATFORMS,
 } from './accounts.ts';
-import {
-  CLOCK_PREFS,
-  DEFAULT_PROFILE,
-  PROFILE_LIMITS,
-  type Profile,
-  profileLimits,
-  classKey,
-  classesOn,
-  parseProfile,
-  reimportReason,
-} from '../timetable/profile.ts';
+import { PROFILE_LIMITS, type Profile, profileLimits, classKey, classesOn, parseProfile, reimportReason } from '../timetable/profile.ts';
 import { askOf, hour12, planned, resolveTo } from '../answer/next.ts';
 import { answerRequest, loadRider, prefsFor, tripDay } from '../answer/rider.ts';
 import { dayPlan } from '../timetable/day.ts';
-import { unlogged } from '../answer/answer.ts';
+import { type MeDeps, unlogged } from '../answer/answer.ts';
+import { getProfile, pinnable } from './profiles.ts';
 import {
   PLATE_WINDOW_S,
   type PlateLookup,
@@ -93,13 +84,8 @@ import { buildingStops, footM, paceSpeed } from '../answer/walk.ts';
 import { clientKey, coords, coordsFrom, json } from '../http.ts';
 import { parseTarget } from '../answer/step.ts';
 import { linkOrigin } from '../origin.ts';
-import { LANG_PREFS, type Lang, type LangPref, lang, m, useProfileLang } from '../i18n.ts';
+import { type Lang, type LangPref, lang, m } from '../i18n.ts';
 import { ROUTE_COLORS } from '../map/campus.ts';
-
-export interface MeDeps {
-  answerFor: (env: Env, ctx: ExecutionContext, input: ResolveInput, label: string | null, nowMs: number) => Promise<Answer>;
-  collectArrivals: (env: Env, ctx: ExecutionContext, codes: string[], nowMs: number, graph?: Graph) => Promise<Map<string, StopArrivals>>;
-}
 
 const html = (body: string, status = 200, extra: Record<string, string> = {}) =>
   new Response(body, { status, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', ...extra } });
@@ -300,29 +286,6 @@ async function pairBusy(env: Env): Promise<boolean> {
   return !(await env.RL_PAIR.limit({ key: 'pair:global' })).success;
 }
 
-/** The account's profile, checked against today's stops. `raw`: the saved JSON, when the caller has already read it. */
-export async function getProfile(db: D1Database, userId: string, graph: Graph, raw?: unknown): Promise<Profile> {
-  if (raw === undefined) raw = await loadProfileJson(db, userId);
-  if (!raw) return structuredClone(DEFAULT_PROFILE);
-  const idx = indexGraph(graph);
-  // A stop can vanish from a new scrape. Re-validating on read would reject
-  // the whole profile, so drop only what no longer resolves.
-  const r = parseProfile(
-    raw,
-    (c) => idx.byCode.has(c),
-    (c) => idx.byCode.has(c) || landmark(c) !== null,
-    pinnable(graph),
-  );
-  // The language the account chose wins over the device's, for the rest of this request.
-  if (r.ok) {
-    useProfileLang(r.profile.lang);
-    return r.profile;
-  }
-  const p = raw as Profile;
-  useProfileLang(LANG_PREFS.includes(p.lang) ? p.lang : 'auto');
-  return salvageProfile(p, (c) => idx.byCode.has(c) || landmark(c) !== null, pinnable(graph));
-}
-
 /** The language an iPhone's notifications are worded in: the account's choice, else this request's. */
 async function pushLang(db: D1Database, userId: string): Promise<Lang> {
   const chosen = ((await loadProfileJson(db, userId).catch(() => null)) as { lang?: unknown } | null)?.lang;
@@ -393,51 +356,6 @@ export function ifMatchVersion(req: Request): number | null | undefined {
 }
 
 const versionTag = (v: number | null | undefined) => `"${v ?? 0}"`;
-
-/** A stop a pin may name: one of `graph`'s, or a public bus's stop of its own. */
-function pinnable(graph: Graph): (code: string) => boolean {
-  const idx = indexGraph(graph);
-  const pub = indexGraph(GRAPH_PUBLIC);
-  return (c) => idx.byCode.has(c) || pub.byCode.has(c);
-}
-
-/**
- * A saved profile that no longer validates whole (a stop gone from a new
- * scrape): everything that still holds, so the next save doesn't write the
- * user's hours, usual times or one-off trips back as the defaults.
- */
-export function salvageProfile(p: Profile, ok: (code: string) => boolean, pinnable: (code: string) => boolean = ok): Profile {
-  const minute = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 24 * 60;
-  const hours = minute(p.dayStartMin) && minute(p.dayEndMin) && p.dayStartMin < p.dayEndMin;
-  const places = (p.places ?? []).filter((x) => ok(x.to));
-  const placeKeys = new Set(places.map((x) => x.key));
-  return {
-    ...structuredClone(DEFAULT_PROFILE),
-    gapHours: typeof p.gapHours === 'number' ? p.gapHours : DEFAULT_PROFILE.gapHours,
-    homeWalkMin: typeof p.homeWalkMin === 'number' ? p.homeWalkMin : DEFAULT_PROFILE.homeWalkMin,
-    walkPace: p.walkPace ?? DEFAULT_PROFILE.walkPace,
-    fullBusMargin: p.fullBusMargin ?? DEFAULT_PROFILE.fullBusMargin,
-    publicBuses: p.publicBuses === true,
-    preferBus: p.preferBus !== false,
-    ...(hours ? { dayStartMin: p.dayStartMin, dayEndMin: p.dayEndMin } : {}),
-    seen: Array.isArray(p.seen) ? p.seen : [],
-    home: p.home?.stops?.some(ok) ? { stops: p.home.stops.filter(ok) } : null,
-    trips: (p.trips ?? []).filter((t) => ok(t.to)),
-    manual: (p.manual ?? []).filter((t) => ok(t.to)),
-    places,
-    usual: (Array.isArray(p.usual) ? p.usual : []).filter(
-      (u) => placeKeys.has(u.place) && Number.isInteger(u.day) && u.day >= 0 && u.day <= 6 && minute(u.atMin),
-    ),
-    once: (Array.isArray(p.once) ? p.once : []).filter((o) => typeof o.date === 'string' && minute(o.arriveByMin) && ok(o.to)),
-    share: p.share ?? null,
-    term: p.term ?? null,
-    lang: LANG_PREFS.includes(p.lang) ? p.lang : 'auto',
-    clock: CLOCK_PREFS.includes(p.clock) ? p.clock : 'auto',
-    pinnedStops: (Array.isArray(p.pinnedStops) ? p.pinnedStops : [])
-      .filter((c) => typeof c === 'string' && pinnable(c))
-      .slice(0, PROFILE_LIMITS.pinnedStops),
-  };
-}
 
 interface MeContext {
   req: Request;
