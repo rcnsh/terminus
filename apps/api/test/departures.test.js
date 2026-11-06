@@ -327,6 +327,26 @@ test("a trip's second bus a day or more ahead is looked for from when the first 
   assert.deepEqual(nextDeparture(GRAPH, board('KR-MRT', early, 'P', []), 'P', from, early), d);
 });
 
+test('with no live times and no class, a bus chosen with "Later" stays chosen as the card\'s own bus comes up to it', () => {
+  // D2 every 494 s at 10:00, the feed answers with nothing; the card counts from now, a second a second.
+  const answerAt = (now, target) => {
+    const byStop = new Map([['PGP', board('PGP', now, 'D2', [])]]);
+    const candidates = [{ stop: PGP, distM: 0, walkS: 60, legs: [{ svc: 'D2', hops: 5, to: { code: 'UTOWN', name: 'UTown' } }] }];
+    const options = scoreOptions(GRAPH, candidates, byStop, now);
+    const f = { options, candidates, byStop, graph: GRAPH, arriveBy: null, walkAllS: null, nowMs: now };
+    const departsAt = new Date(now + options[0].boardS * 1000).toISOString();
+    const leave = leaveBy(f);
+    return { leave, ...withSteps({ departsAt, leave }, f, { trip: 'to:UTOWN', target }, false, now) };
+  };
+  const now = at('2026-08-27T10:00');
+  const later = answerAt(now, null).steps.later;
+  for (const s of [5, 60, 120]) {
+    const a = answerAt(now + s * 1000, later);
+    assert.equal(a.leave.board, later.board, `${s} s on: still the bus chosen`);
+    assert.ok(a.steps.moved && a.steps.earlier, `${s} s on: "Best bus" and a bus before it`);
+  }
+});
+
 test('a chosen bus from long ago is no guide to the estimates, and costs nothing to ignore', () => {
   const now = at('2026-08-27T16:00');
   const sa = board('PGP', now, 'D2', []);

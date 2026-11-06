@@ -231,7 +231,11 @@ export function withSteps(
   // The headline among them by which bus it is: with no live time its card
   // shows the middle of its window, the departures its start.
   const headline = !walking && best && answer.departsAt ? departureOf(all, best) : null;
-  const own = answer.leave ? (answer.leave.svc ? answer.leave : null) : headline;
+  // Without a class the leave-by is for that same bus, so it's told from a
+  // chosen one by which bus it is: by time, a guess's card time (the middle
+  // of its window, from now) comes within SAME_BUS_MS of the next bus.
+  const leave = answer.leave && !f.arriveBy && headline ? { ...answer.leave, bus: headline.bus } : answer.leave;
+  const own = leave ? (leave.svc ? leave : null) : headline;
   const s = stepFrom({ trip: step.trip, own, all, target: step.target, lastArriveMs, nowMs });
   if (!s) return { steps: null };
   return s.steps.moved ? { steps: s.steps, leave: publicLeave(s.leave) } : { steps: s.steps };
