@@ -15,6 +15,8 @@ apps/api/
                       schemas, shared parts and the /docs page are in openapi/
     origin.ts         Which Worker this is, stable or beta (isBeta); emailed links' origin
     geo.ts, clock.ts  Distance on the Earth; clock times and lateness, worded once
+    analytics-rows.ts Every Analytics Engine row's columns, declared once (ROWS);
+                      writeRow writes by name, COL gives queries the columns
   src/feeds/          Reading NUS's and LTA's feeds, politely (rule 2). Imports only the
                       top level, never another folder (a test checks)
     fms.ts            NUS feed client + normalisation (see rule 3)
