@@ -11,7 +11,7 @@ import type { Arrival, FeedState, Graph, StopArrivals } from '../types.ts';
 import { headwayFor, inService, serviceClosedAt, serviceEndsAt, serviceResumesAt } from './hours.ts';
 import { isPublic } from './public.ts';
 
-/** How far ahead of now a bus is looked for: past a day it's no bus, whatever the hours say (or don't). */
+/** How far ahead of now a bus is looked for, unless asked up to a later time: past a day it's no bus, whatever the hours say (or don't). */
 const PROJECT_MS = 86_400_000;
 
 /**
@@ -66,7 +66,7 @@ export interface DepartureWindow {
   from: number;
   /**
    * No bus leaving after this: a window ends by it (its `latest`), so a
-   * bus due in it has left by then. Never more than a day after now.
+   * bus due in it has left by then. A day after now when not given.
    */
   until?: number;
   /** With no live time to step from, a time the estimates fall either side of (a bus already chosen). */
@@ -222,11 +222,20 @@ const boardOf = (graph: Graph, board: StopArrivals | ServiceBoard | undefined, s
  * service runs. Pass a `serviceBoard` when asking of it more than once.
  */
 export function departuresFrom(graph: Graph, board: StopArrivals | ServiceBoard | undefined, svc: string, w: DepartureWindow): Departure[] {
-  const until = Math.min(w.until ?? Infinity, w.now + PROJECT_MS);
+  // A class a day or more ahead asks up to its latest board, and gets it.
+  const until = w.until ?? w.now + PROJECT_MS;
   const max = w.max ?? Infinity;
   // Each estimate counts the headway in force at the bus before it, so the
-  // card, the leave-by and Nearby step the same way across an hour.
-  const headwayAt = (ms: number) => headwayMs(graph, svc, ms);
+  // card, the leave-by and Nearby step the same way across an hour. It's
+  // read once an hour, the same through one: a class days ahead asks for
+  // hundreds of windows.
+  const hourly = new Map<number, number>();
+  const headwayAt = (ms: number) => {
+    const hour = Math.floor(ms / 3_600_000);
+    let h = hourly.get(hour);
+    if (h === undefined) hourly.set(hour, (h = headwayMs(graph, svc, ms)));
+    return h;
+  };
   const runs = (ms: number) => inService(graph, svc, ms);
   const live = boardOf(graph, board, svc, w.now).live;
   const out: Departure[] = [];
@@ -266,10 +275,12 @@ export function departuresFrom(graph: Graph, board: StopArrivals | ServiceBoard 
   // so a class's leave-by is the same at 06:30 as at 07:30, and the same
   // whether or not the feed listed buses the night before.
   let chain: number[] = [];
-  // A chosen bus more than a day off (a step target kept, or sent, from
-  // long ago) says nothing of today's buses, and walking to it a headway
-  // at a time would take millions of steps.
-  if (w.around !== undefined && Math.abs(w.around - w.now) <= PROJECT_MS) {
+  // A chosen bus from more than a day ago (a step target kept, or sent,
+  // from long ago) says nothing of today's buses, and walking to it a
+  // headway at a time would take millions of steps; one after `until`
+  // can't be among them. However far ahead, the walk back from it stops
+  // at its day's start.
+  if (w.around !== undefined && w.around >= w.now - PROJECT_MS && w.around <= until) {
     let b = w.around;
     // Closed by then, after running: the windows meet at the close, so the
     // last one before it is a whole headway, and a bus sure to come.
@@ -299,27 +310,32 @@ export function departuresFrom(graph: Graph, board: StopArrivals | ServiceBoard 
   if (aligned) t = Math.max(chain[0], w.from);
   let anchor = 'reach';
   let opens = false;
+  // When the day's service the windows are in closes; null until worked out, or when its hours don't say.
+  let closes: number | null = null;
   // From the start: its own window is the first bus's, a headway at least,
-  // and runs on to the first of the windows around a chosen bus, so they
-  // meet with no gap (it may have the second bus too); then those windows.
+  // and runs on to the first of the windows around a chosen bus in that
+  // day's service, so they meet with no gap (it may have the second bus
+  // too); then those windows. A chosen bus on a later day lines up none of this one's.
   const startAt = (s: number) => {
     const h = headwayAt(s);
-    [t, fixed, anchor, opens, partial] = [s, [s, ...chain.filter((f) => f >= s + h)], `opens@${s}`, true, false];
+    closes = serviceEndsAt(graph, svc, s);
+    const by = closes ?? Infinity;
+    [t, fixed, anchor, opens, partial] = [s, [s, ...chain.filter((f) => f >= s + h && f <= by)], `opens@${s}`, true, false];
   };
   // Not started yet, and starting before you get there: from its start.
   const starts = last || runs(w.now) ? null : serviceResumesAt(graph, svc, w.now);
   if (starts !== null && starts <= t) startAt(starts);
   for (let n = 1, i = 0; out.length < max && t < until; n++, i++) {
-    if (!runs(t)) {
+    // Within a day's service, running is being before its close.
+    if (closes === null ? !runs(t) : t >= closes) {
       const s = serviceResumesAt(graph, svc, t);
       if (s === null || s >= until) break;
       startAt(s);
       [n, i] = [1, 0];
-    }
+    } else if (closes === null) closes = serviceEndsAt(graph, svc, t);
     const cut = partial;
     partial = false;
     // A bus may still come before the service closes, not after.
-    const closes = serviceEndsAt(graph, svc, t);
     const end = Math.min(i + 1 < fixed.length ? fixed[i + 1] : t + headwayAt(t), closes ?? Infinity);
     // Its bus may leave as late as the window's end: past `until`, it and every one after.
     if (end > until) break;

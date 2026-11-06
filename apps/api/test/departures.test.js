@@ -156,14 +156,17 @@ test('no estimate is due after the service closes: the bus before the close was 
   assert.deepEqual(nearbyRow(r, now, all).later, []);
 });
 
-test('with its hours unknown, a service is guessed for, as far as a day ahead', () => {
+test('with its hours unknown, a service is guessed for, as far as a day ahead unless asked further', () => {
   const unknown = { ...GRAPH, serviceHours: {} };
   const sa = board('PGP', NOW, 'D2', [LAST]);
-  const ds = departuresFrom(unknown, sa, 'D2', { now: NOW, from: NOW, until: NOW + 3 * 86_400_000 });
+  const ds = departuresFrom(unknown, sa, 'D2', { now: NOW, from: NOW });
   assert.ok(ds.length > 3);
   assert.ok(ds.at(-1).latest <= NOW + 86_400_000, 'not past a day');
-  const empty = departuresFrom(unknown, board('PGP', NOW, 'D2', []), 'D2', { now: NOW, from: NOW, until: NOW + 3 * 86_400_000 });
-  assert.ok(empty.at(-1).earliest <= NOW + 86_400_000, 'nor with no live times');
+  const empty = departuresFrom(unknown, board('PGP', NOW, 'D2', []), 'D2', { now: NOW, from: NOW });
+  assert.ok(empty.at(-1).latest <= NOW + 86_400_000, 'nor with no live times');
+  // A class two days off asks up to its latest board.
+  const far = departuresFrom(unknown, board('PGP', NOW, 'D2', []), 'D2', { now: NOW, from: NOW, until: NOW + 2 * 86_400_000 });
+  assert.ok(far.at(-1).latest > NOW + 2 * 86_400_000 - 3600_000, 'up to it');
 
   // Nearby: the row says nothing of when the service ends, and still gets its third bus.
   const r = {
@@ -282,6 +285,34 @@ test("tomorrow morning's class leave-by is the same whether or not the feed list
   const empty = leaveFor([]);
   assert.equal(hhmmss(Date.parse(empty.arrive) - rideS * 1000), '07:50:00', 'a window that ends at the latest you can board');
   assert.deepEqual(leaveFor([at('2026-08-27T22:50')]), empty);
+});
+
+test('a class a day or more ahead counts on a window that ends at the latest you can board, however far off', () => {
+  // 10:00 on a Thursday with an empty feed; the class is at 14:00 tomorrow or the day after.
+  const now = at('2026-08-27T10:00');
+  const rideS = 600;
+  for (const day of ['2026-08-28', '2026-08-29']) {
+    const latest = at(`${day}T13:40`);
+    const l = leaveBy({
+      options: [{ svc: 'D2', stop: PGP, walkS: 60, rideS, boardS: 0, totalS: 0, fromMs: now, quality: 'scheduled', hops: 5 }],
+      candidates: [],
+      byStop: new Map([['PGP', board('PGP', now, 'D2', [])]]),
+      graph: GRAPH,
+      arriveBy: { atMs: latest + (ON_TIME_SLACK_S + rideS) * 1000, venueWalkS: 0 },
+      walkAllS: null,
+      nowMs: now,
+    });
+    assert.equal(Date.parse(l.arrive) - rideS * 1000, latest, day);
+    assert.equal(latest - Date.parse(l.board), Math.max(60, headwayFor(GRAPH, 'D2', latest - 1)) * 1000, `${day}: a headway before it`);
+  }
+
+  // The days between are a headway at a time too, from each start, whatever day the windows meet at.
+  const latest = at('2026-09-03T13:40');
+  const ds = departuresFrom(GRAPH, board('PGP', now, 'D2', []), 'D2', { now, from: now, until: latest, around: latest });
+  const friday = ds.filter((d) => d.earliest >= at('2026-08-28T07:15') && d.latest <= at('2026-08-28T23:00'));
+  assert.ok(friday.length > 50, `${friday.length} on the Friday`);
+  for (const d of friday)
+    assert.ok(d.latest - d.earliest <= 2 * Math.max(60, headwayFor(GRAPH, 'D2', d.earliest)) * 1000, hhmmss(d.earliest));
 });
 
 test('a chosen bus from long ago is no guide to the estimates, and costs nothing to ignore', () => {

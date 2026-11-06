@@ -1476,7 +1476,9 @@ with another stop's fresher times, on one clock. A stale answer's `asOf`
 stays its fetch time. The card is made with the request's now too.
 
 **Operating hours bound every guess.** No guess is more than a day ahead,
-and with a service's hours unknown that is the only bound. A headway guess stepped on from the
+unless asked for up to a later time (a class's leave-by, which lines up on
+its latest board however far off), and with a service's hours unknown that
+is the only bound. A headway guess stepped on from the
 last bus the feed lists is an instant, a headway after the bus before it,
 and is dropped once it's after the service stops (`serviceEndsAt`): that was
 the last bus. With no live time to step from, a guess is a bus due somewhere
