@@ -28,7 +28,8 @@ import { indexGraph } from '../answer/resolve.ts';
 import { tripAnswer } from '../answer/next.ts';
 import { unlogged } from '../answer/answer.ts';
 import { GRAPH } from '../answer/graph.ts';
-import { ASSUME_MS, type DayRecord, dayState, leaveOf, offStop, sgtDate } from '../answer/trip.ts';
+import { type DayRecord, dayState, leaveOf, offStop, sgtDate } from '../answer/trip.ts';
+import { ASSUME_MS } from '../answer/phase.ts';
 import { m } from '../i18n.ts';
 
 export type DayStatus = 'done' | 'now' | 'next' | 'later' | 'skipped';

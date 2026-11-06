@@ -10,18 +10,17 @@ import { FROZEN_NOW, installGlobals, makeCtx, makeDurableObjects, makeEnv, makeF
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
 import {
-  ASSUME_MS,
-  RIDE_GRACE_MS,
+  HOME_GRACE_MS,
   TRIP_TIMEOUT_MS,
   clearTrip,
   endOfDayMs,
   loadDay,
   needsWatch,
-  phaseFor,
   saveSignals,
   seenOnBus,
   sgtDate,
 } from '../src/answer/trip.ts';
+import { ASSUME_MS, DUE_MS, RIDE_GRACE_MS, WAIT_EARLY_MS } from '../src/answer/phase.ts';
 import { Trip } from '../src/push/tripdo.ts';
 import { tripCardFor } from '../src/accounts/me.ts';
 import { answerFor, collectArrivals } from '../src/answer/answer.ts';
@@ -394,25 +393,6 @@ test('/api/me/day on a free day says what is next', async () => {
   assert.equal(day.note, 'Next: CS2030 @ COM1, tomorrow 10:00');
 });
 
-test('phases follow the clock until a signal says otherwise', () => {
-  const now = FROZEN_NOW;
-  const leaveAt = (ms) => ({
-    asOf: new Date(now).toISOString(),
-    stop: { code: 'PGP' },
-    leave: { at: new Date(ms).toISOString(), svc: 'D2' },
-    arrived: false,
-  });
-  const nowhere = { lat: null, lon: null };
-  assert.equal(phaseFor(leaveAt(now + 10 * 60_000), undefined, now, nowhere), 'idle');
-  assert.equal(phaseFor(leaveAt(now + 4 * 60_000), undefined, now, nowhere), 'due');
-  assert.equal(phaseFor(leaveAt(now - 60_000), undefined, now, nowhere), 'heading');
-  const pgp = GRAPH.stops.find((s) => s.code === 'PGP');
-  assert.equal(phaseFor(leaveAt(now + 10 * 60_000), undefined, now, { lat: pgp.lat, lon: pgp.lon }), 'waiting', 'at the stop');
-  assert.equal(phaseFor(leaveAt(now - 60_000), { kind: 'boarded', at: now }, now, nowhere), 'riding');
-  assert.equal(phaseFor(leaveAt(now - 60_000), { kind: 'missed', at: now }, now, nowhere), 'missed');
-  assert.equal(phaseFor({ ...leaveAt(now), arrived: true }, undefined, now, nowhere), 'arrived');
-});
-
 test('on the bus only where a location shows it: on its road, further on than a walk since it left', () => {
   // The A2 from PGP Foyer to Opp HSSML, as on a real trip: 894 m of road.
   const board = FROZEN_NOW;
@@ -713,6 +693,66 @@ test('a trip home taken to be riding wakes the Trip object when its bus arrives,
   assert.equal(card.wakeAt, arrive + RIDE_GRACE_MS);
 });
 
+/** The card the Trip object works out when it wakes (no location), and when it would wake next. */
+async function wakeCard(env, TRIPS) {
+  const trip = TRIPS.get([...TRIPS.instances.keys()][0]);
+  const day = await (await trip.fetch(`https://trip/day?date=${sgtDate(Date.now())}`)).json();
+  return tripCardFor(env, makeCtx(), { answerFor, collectArrivals }, userOf(env), day, Date.now(), async () => {});
+}
+
+test('heading for the bus, the Trip object next wakes when the bus is taken to have gone, not as it leaves', async () => {
+  const { env, phone, next, TRIPS, clock } = await setup();
+  const first = await next(phone);
+  clock(Date.parse(first.leave.at) - 60_000);
+  const due = await next(phone);
+  const board = Date.parse(due.leave.board);
+  clock(Date.parse(due.leave.at) + 30_000);
+  assert.ok(Date.now() < board);
+  const card = await wakeCard(env, TRIPS);
+  assert.equal(card.phase, 'heading');
+  // Nothing changes as the bus leaves; ASSUME_MS later the card says it has gone.
+  assert.equal(card.wakeAt, board + ASSUME_MS);
+});
+
+test('after "Missed it", the Trip object next wakes when the class\'s trip is over, not at each later bus', async () => {
+  const { env, phone, next, signal, TRIPS } = await setup();
+  await next(phone);
+  const missed = await (await signal(phone, { kind: 'missed', trip: FIRST })).json();
+  assert.equal(missed.card.phase, 'missed');
+  const card = await wakeCard(env, TRIPS);
+  assert.equal(card.phase, 'missed');
+  // The next bus's leave-by changes nothing: missed stays missed. GEA1000
+  // starts at 10:00, and the trip moves on to the next one LATE_GRACE_MIN later.
+  assert.equal(card.wakeAt, Date.parse('2026-08-27T10:15:00+08:00'));
+});
+
+test('there early for a class, the Trip object still wakes when the plan moves on, for the trip after it', async () => {
+  const { env, phone, next, signal, TRIPS, clock } = await setup();
+  await next(phone);
+  await signal(phone, { kind: 'arrived', trip: FIRST });
+  const there = await wakeCard(env, TRIPS);
+  assert.equal(there.key, FIRST);
+  assert.equal(there.phase, 'arrived');
+  // Nothing about the trip itself changes again; the timetable's next moment is GEA1000 starting.
+  assert.equal(there.wakeAt, Date.parse('2026-08-27T10:00:00+08:00'));
+  clock(there.wakeAt);
+  assert.equal((await wakeCard(env, TRIPS)).key, SECOND);
+});
+
+test('at the stop well before the leave-by, the card says when it turns to waiting there; the Trip object, with no location, does not', async () => {
+  const { env, phone, next, TRIPS, clock } = await setup();
+  const first = await next(phone);
+  clock(Date.parse(first.leave.at) - 18 * 60_000);
+  const s = stopAt(first.leave.stopCode);
+  const there = await next(phone, `?lat=${s.lat}&lon=${s.lon}`);
+  const leaveAt = Date.parse(there.leave.at);
+  assert.equal(there.card.phase, 'idle');
+  assert.ok(leaveAt - WAIT_EARLY_MS > Date.now());
+  assert.equal(Date.parse(there.card.nextChangeAt), leaveAt - WAIT_EARLY_MS);
+  const card = await wakeCard(env, TRIPS);
+  assert.equal(card.wakeAt, Date.parse(card.answer.leave.at) - DUE_MS, 'without a location: when it is due');
+});
+
 /* What terminus learns from the answers (outcomes.ts). */
 
 const DAY = 86_400_000;
@@ -979,6 +1019,54 @@ test('there for the last class: the way home is shown, but not "Time to get goin
   assert.equal(inClass.card.phaseText, null);
   t.clock(FROZEN_NOW + 121 * 60_000); // 11:01, the class is over
   assert.notEqual((await t.next(t.phone)).card.phase, 'idle');
+});
+
+test('after the last class, with no location, the trip home is over once its bus has had time to get you home, and the Trip object wakes then', async () => {
+  const t = await setup({ home: { stops: ['PGPR'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')] });
+  await t.signal(t.phone, { kind: 'arrived', trip: FIRST });
+  t.clock(FROZEN_NOW + 121 * 60_000); // 11:01, the class is over
+  const first = await t.next(t.phone);
+  t.clock(Date.parse(first.leave.at) - 60_000);
+  const due = await t.next(t.phone);
+  assert.equal(due.card.phase, 'due');
+  // Its bus gone, and nothing says whether you're on it.
+  t.clock(Date.parse(due.leave.board) + ASSUME_MS + 60_000);
+  const gone = await wakeCard(t.env, t.TRIPS);
+  assert.equal(gone.key, 'home:660');
+  assert.equal(gone.answer.card.gone, true);
+  const trip = t.TRIPS.get([...t.TRIPS.instances.keys()][0]);
+  const plan = (await (await trip.fetch(`https://trip/day?date=${sgtDate(Date.now())}`)).json()).plans['home:660'];
+  const home = Date.parse(plan.arrive) + HOME_GRACE_MS;
+  assert.equal(gone.wakeAt, home);
+  t.clock(home);
+  assert.equal((await wakeCard(t.env, t.TRIPS)).key, null, 'home by now');
+});
+
+test('a trip home whose bus has gone: the Trip object wakes when the day rests, if that comes before it would be home', async () => {
+  // The class ends at 18:00, so the day rests at 18:45: before the 18:34 D2 home plus HOME_GRACE_MS.
+  const t = await setup({ home: { stops: ['PGPR'] }, manual: [cls(1020, 'UTOWN', 'GEA1000 @ UTown')] });
+  await t.signal(t.phone, { kind: 'arrived', trip: `${THU}:1020:UTOWN` });
+  t.clock(FROZEN_NOW + 9.5 * 3_600_000); // 18:30
+  const due = await t.next(t.phone);
+  assert.equal(due.card.phase, 'due');
+  t.clock(Date.parse(due.leave.board) + ASSUME_MS + 60_000);
+  const gone = await wakeCard(t.env, t.TRIPS);
+  assert.equal(gone.key, 'home:1080');
+  assert.equal(gone.answer.card.gone, true);
+  const rests = Date.parse(gone.answer.refreshAt);
+  assert.equal(gone.wakeAt, rests, 'the trip ends as the day rests: the wake pushes it then');
+  t.clock(rests);
+  assert.equal((await wakeCard(t.env, t.TRIPS)).key, null, 'resting: no trip');
+});
+
+test('in the last class, the Trip object wakes as it ends, to say it is time to go home', async () => {
+  const t = await setup({ home: { stops: ['PGPR'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')] });
+  await t.signal(t.phone, { kind: 'arrived', trip: FIRST });
+  t.clock(FROZEN_NOW + 70 * 60_000); // 10:10, in class
+  const card = await wakeCard(t.env, t.TRIPS);
+  assert.equal(card.key, 'home:660');
+  assert.equal(card.phase, 'idle');
+  assert.equal(card.wakeAt, FROZEN_NOW + 120 * 60_000, '11:00, when the class ends');
 });
 
 /* More than class trips. */
