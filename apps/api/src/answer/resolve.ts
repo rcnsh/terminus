@@ -34,7 +34,7 @@ import { buildingStops, footM, stopFootM } from './walk.ts';
 import { footS, mins } from './format.ts';
 import { listOf, m } from '../i18n.ts';
 import { viaFrom } from './via.ts';
-import { type Departure, beforeOpening, feedFor, nextDeparture, resolveBerths } from './departures.ts';
+import { type Departure, nextDeparture, serviceBoard } from './departures.ts';
 import { type StoppedReason, headwayFor, inService, serviceEndsAt, serviceResumesAt, stoppedReason } from './hours.ts';
 import { type HomeWalk, atHome, residenceStops } from './residences.ts';
 
@@ -591,18 +591,15 @@ export function boardAt(
   const out: BoardRow[] = [];
 
   for (const svc of services) {
-    const pub = isPublic(graph, svc);
-    const feed = feedFor(sa, pub);
-    const available = feed !== undefined && feed.available !== false && !sa?.unread?.includes(svc);
-    const forSvc = (sa?.arrivals ?? []).filter((a) => a.svc === svc);
-    const { usable, ambiguousBerth } = resolveBerths(forSvc);
+    const { paid: pub, available, ambiguousBerth, stale, fetchedAt, live } = serviceBoard(graph, sa, svc, nowMs);
     // The feed's times count from its fetch, and a cached or stale answer is
     // that much older: counted from now, as scoreOptions does, and a bus
     // whose time is well past is gone, not "now".
-    const ageS = feed && available ? Math.max(0, (nowMs - feed.fetchedAt) / 1000) : 0;
-    const etas = beforeOpening(graph, svc, usable, feed?.fetchedAt ?? nowMs, nowMs)
-      .filter((a) => a.etaS != null && (a.etaS as number) - ageS >= -BOARD_GONE_S)
-      .map((a) => ({ ...a, etaS: Math.max(0, Math.round((a.etaS as number) - ageS)) }))
+    const ageS = fetchedAt !== undefined && available ? Math.max(0, (nowMs - fetchedAt) / 1000) : 0;
+    const etas = live
+      .map((b) => b.arrival as Arrival & { etaS: number })
+      .filter((a) => a.etaS - ageS >= -BOARD_GONE_S)
+      .map((a) => ({ ...a, etaS: Math.max(0, Math.round(a.etaS - ageS)) }))
       .sort((a, b) => a.etaS - b.etaS);
 
     let quality: Quality;
@@ -640,7 +637,7 @@ export function boardAt(
       quality = 'scheduled';
     }
     // Only a real arrival goes stale; a guess stays a guess.
-    const aged = (q: Quality): Quality => (feed?.stale && q === 'live' ? 'stale' : q);
+    const aged = (q: Quality): Quality => (stale && q === 'live' ? 'stale' : q);
     quality = aged(quality);
     // Each later bus keeps its own quality: a timetabled one after a live one stays a guess.
     const later = etas.slice(1).map((a) => {
@@ -727,27 +724,20 @@ export function scoreLeg(
   earliestS: number,
   opts: { openBy?: number } = {},
 ): ScoredLeg | null {
-  // At a terminus the feed splits one service into two berths: COM3-D2-S
-  // is the run STARTING here, COM3-D2-E is a run ENDING here. Only the
-  // first is boardable; the departures leave out the -E run (resolveBerths).
-  const { ambiguousBerth } = resolveBerths((sa?.arrivals ?? []).filter((a) => a.svc === leg.svc));
-
   // The feed this service's arrivals came from: at a shelter the shuttle
   // and public buses share, each feed's own fetch time and state.
-  const pub = isPublic(graph, leg.svc);
-  const feed = feedFor(sa, pub);
+  const sb = serviceBoard(graph, sa, leg.svc, nowMs);
   // Times here count from when the arrivals were fetched (departsAt is
   // fetchedAt + boardS), so the walk counts from then too: a bus that
   // left while a cached or stale answer aged can't be caught.
-  const fetchedAt = feed?.fetchedAt ?? nowMs;
+  const fetchedAt = sb.fetchedAt ?? nowMs;
   const ageS = Math.max(0, (nowMs - fetchedAt) / 1000);
   const earliest = earliestS + ageS;
   const fromMs = fetchedAt + earliest * 1000;
   const sOf = (ms: number) => (ms - fetchedAt) / 1000;
   // A missing entry means we never reached the feed -- not that no bus is
   // coming. Those are different answers and must not collapse into one.
-  // A service whose rows didn't read has no data, though the rest of the board does.
-  const available = feed !== undefined && feed.available !== false && !sa?.unread?.includes(leg.svc);
+  const available = sb.available;
   // Waiting for the service to start, which you can do wherever you are.
   let opensInS = 0;
   const running = inService(graph, leg.svc, nowMs);
@@ -755,7 +745,7 @@ export function scoreLeg(
   // The first bus you can physically reach, not the first bus listed; past
   // the feed's list, a guess. None once the service has closed: the feed
   // still lists its last buses, and there's no bus after them.
-  const d = nextDeparture(graph, sa, leg.svc, fromMs, nowMs);
+  const d = nextDeparture(graph, sb, leg.svc, fromMs, nowMs);
   if (!d) return null;
   if (d.opens) {
     // It waits for the service to start, which only a class can do
@@ -776,7 +766,7 @@ export function scoreLeg(
 
   // Only a real arrival goes stale; a headway guess stays a guess, never
   // ranked or worded as measured.
-  if (feed?.stale && quality === 'live') quality = 'stale';
+  if (sb.stale && quality === 'live') quality = 'stale';
 
   // From now: the times above count from the fetch, and a cached or
   // stale answer is that much older. Comparing them with a walk that
@@ -789,8 +779,8 @@ export function scoreLeg(
     bus: d.id,
     fetchedAt,
     opensInS,
-    ambiguousBerth,
-    paid: pub,
+    ambiguousBerth: sb.ambiguousBerth,
+    paid: sb.paid,
   };
 }
 

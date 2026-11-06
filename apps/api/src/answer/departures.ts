@@ -121,38 +121,79 @@ interface LiveBus {
 }
 
 /**
- * A service's buses at a stop: its live times, from the feed this service
- * came from (at a shelter two feeds answer for). Each time keeps what it is:
- * a public bus's timetabled one (LTA's Monitored 0) is an estimate, and one
+ * What the feed says of one service at one stop, read once: everything
+ * asked of that service there (its departures, how sure they are, which
+ * berth) starts from this.
+ */
+export interface ServiceBoard {
+  svc: string;
+  /** When the feed this service came from was fetched; undefined when the stop was never asked. */
+  fetchedAt?: number;
+  /** The feed answered and this service's rows read: nothing listed is no bus, not no data. */
+  available: boolean;
+  stale: boolean;
+  /** The service is listed under several berths here, and they can't be told apart. */
+  ambiguousBerth: boolean;
+  paid: boolean;
+  /** Its live times, in order. */
+  live: LiveBus[];
+}
+
+/**
+ * `svc` as the board at its stop has it, from the feed this service came
+ * from (at a shelter two feeds answer for). Each time keeps what it is: a
+ * public bus's timetabled one (LTA's Monitored 0) is an estimate, and one
  * from a stale feed an old reading, however exact.
  */
-function liveBuses(graph: Graph, svc: string, sa: StopArrivals | undefined, nowMs: number): LiveBus[] {
-  const feed = feedFor(sa, isPublic(graph, svc));
-  if (!sa || !feed || feed.available === false) return [];
-  return beforeOpening(graph, svc, resolveBerths(sa.arrivals.filter((a) => a.svc === svc)).usable, feed.fetchedAt, nowMs)
-    .filter((a) => a.etaS != null)
-    .map((a) => ({
-      at: feed.fetchedAt + (a.etaS as number) * 1000,
-      kind: (a.scheduled ? 'estimate' : feed.stale ? 'stale' : 'live') as Departure['kind'],
-      arrival: a,
-    }))
-    .sort((a, b) => a.at - b.at)
-    .map((b, i) => ({ ...b, id: b.arrival.plate ?? `#${i}` }));
+export function serviceBoard(graph: Graph, sa: StopArrivals | undefined, svc: string, nowMs: number): ServiceBoard {
+  const paid = isPublic(graph, svc);
+  const feed = feedFor(sa, paid);
+  // At a terminus the feed splits one service into two berths: COM3-D2-S
+  // is the run STARTING here, COM3-D2-E is a run ENDING here. Only the
+  // first is boardable.
+  const { usable, ambiguousBerth } = resolveBerths((sa?.arrivals ?? []).filter((a) => a.svc === svc));
+  const answered = sa !== undefined && feed !== undefined && feed.available !== false;
+  const live =
+    answered && feed
+      ? beforeOpening(graph, svc, usable, feed.fetchedAt, nowMs)
+          .filter((a) => a.etaS != null)
+          .map((a) => ({
+            at: feed.fetchedAt + (a.etaS as number) * 1000,
+            kind: (a.scheduled ? 'estimate' : feed.stale ? 'stale' : 'live') as Departure['kind'],
+            arrival: a,
+          }))
+          .sort((a, b) => a.at - b.at)
+          .map((b, i) => ({ ...b, id: b.arrival.plate ?? `#${i}` }))
+      : [];
+  return {
+    svc,
+    ...(feed ? { fetchedAt: feed.fetchedAt } : {}),
+    // A service whose rows didn't read has no data, though the rest of the board does.
+    available: answered && !sa?.unread?.includes(svc),
+    stale: feed?.stale === true,
+    ambiguousBerth,
+    paid,
+    live,
+  };
 }
+
+/** A service's board as given: one already read, or read from its stop's now. */
+const boardOf = (graph: Graph, board: StopArrivals | ServiceBoard | undefined, svc: string, nowMs: number): ServiceBoard =>
+  board && 'live' in board ? board : serviceBoard(graph, board, svc, nowMs);
 
 /**
  * `svc`'s departures from the stop whose board is `board`, in order: the
  * live times in the window, then estimates a headway apart while the
- * service runs.
+ * service runs. Pass a `serviceBoard` when asking of it more than once.
  */
-export function departuresFrom(graph: Graph, board: StopArrivals | undefined, svc: string, w: DepartureWindow): Departure[] {
+export function departuresFrom(graph: Graph, board: StopArrivals | ServiceBoard | undefined, svc: string, w: DepartureWindow): Departure[] {
   const until = Math.min(w.until ?? Infinity, w.now + PROJECT_MS);
   const max = w.max ?? Infinity;
   // Each estimate counts the headway in force at the bus before it, so the
   // card, the leave-by and Nearby step the same way across an hour.
   const headwayAt = (ms: number) => Math.max(60, headwayFor(graph, svc, ms)) * 1000;
   const runs = (ms: number) => inService(graph, svc, ms);
-  const live = liveBuses(graph, svc, board, w.now);
+  const live = boardOf(graph, board, svc, w.now).live;
   const out: Departure[] = [];
   for (const b of live) {
     if (out.length >= max) return out;
@@ -234,6 +275,12 @@ export function departuresFrom(graph: Graph, board: StopArrivals | undefined, sv
 }
 
 /** The first of `svc`'s departures you can be at the stop for by `fromMs`; null when there is none within a day. */
-export function nextDeparture(graph: Graph, board: StopArrivals | undefined, svc: string, fromMs: number, nowMs: number): Departure | null {
+export function nextDeparture(
+  graph: Graph,
+  board: StopArrivals | ServiceBoard | undefined,
+  svc: string,
+  fromMs: number,
+  nowMs: number,
+): Departure | null {
   return departuresFrom(graph, board, svc, { now: nowMs, from: fromMs, max: 1 })[0] ?? null;
 }
