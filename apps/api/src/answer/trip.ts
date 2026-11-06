@@ -340,20 +340,21 @@ export interface TripUpdate {
   watch?: { userId: string; at: number };
 }
 
-/** A trip as an answer read it before planning: its plan and its step. */
+/** A trip as an answer read it before planning: its plan, its step and its signal's record. */
 export interface PlanBasis {
   plan: Plan | null;
   step: StepTarget | null;
+  rec: TripRecord | null;
 }
 
 export function planBasis(day: DayRecord | null, key: string): PlanBasis {
-  return { plan: day?.plans?.[key] ?? null, step: day?.steps?.[key] ?? null };
+  return { plan: day?.plans?.[key] ?? null, step: day?.steps?.[key] ?? null, rec: day?.trips[key] ?? null };
 }
 
 /**
  * Whether a trip is still as `basis` read it. An answer reads the day, then
- * waits for D1 and the feed; a POST meanwhile (a step, another device's
- * plan) is newer, and the plan worked out before it would undo it.
+ * waits for D1 and the feed; a POST meanwhile (a step, a signal or a
+ * reset, another device's plan) is newer, and the plan worked out before it would undo it.
  * Compared as JSON: a key order that differs costs one more round, no more.
  */
 export function sameBasis(day: DayRecord | null, key: string, basis: PlanBasis): boolean {

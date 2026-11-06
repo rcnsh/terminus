@@ -240,6 +240,35 @@ test('a step made while the Trip object wakes is kept: the wake does not save th
   assert.equal(day.plans?.[key], undefined, 'and the plan from before it is not put back');
 });
 
+test('a signal made while the Trip object wakes is kept: the wake does not save the plan it worked out before it', async () => {
+  const feed = heldFeed();
+  const { call, phone, next, TRIPS, clock } = await setup({ wrap: feed.wrap });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  const first = await next(phone);
+  const key = first.card.step?.trip;
+  assert.ok(key);
+  const storage = () => [...TRIPS.instances.values()][0].storage._map;
+
+  clock(Date.parse(first.leave.at) - 2 * 60_000);
+  storage().set('wakeAt', Date.now());
+  feed.hold();
+  const woke = TRIPS.fireAlarms();
+  await feed.asked('the wake');
+  // "I'm on the bus" on another device, on an earlier R2, while the wake waits for the feed.
+  const boarded = { svc: 'R2', stop: 'PGP', stopCode: 'PGP', board: new Date(Date.now() - 60_000).toISOString(), alightCode: 'UTOWN' };
+  const rec = { kind: 'boarded', at: Date.now(), boarded };
+  await TRIPS.get([...TRIPS.instances.keys()][0]).fetch('https://trip/update', {
+    method: 'POST',
+    body: JSON.stringify({ date: sgtDate(Date.now()), items: [{ key, rec }], deleteAt: endOfDayMs(Date.now()) }),
+  });
+  feed.release();
+  await woke;
+
+  const day = storage().get('day');
+  assert.deepEqual(day.trips[key], rec, 'the signal is kept');
+  assert.equal(day.plans?.[key], undefined, 'and the plan worked out before it is not saved');
+});
+
 test('a wake whose plan a step made stale pushes nothing from it, and wakes again soon to work out the card afresh', async () => {
   const feed = heldFeed();
   const { call, phone, next, fcm, TRIPS, clock, alarm } = await setup({ wrap: feed.wrap });
